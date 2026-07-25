@@ -1,28 +1,295 @@
 <!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8"><title>ProxyPAC</title>    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr" class="hybrid-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — ProxyPAC</title>
+<link rel="stylesheet" href="/shared/hybrid-dark.css">
+<style>
+  :root{
+    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
+    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
+    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
+  }
+  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
+  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
+  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
+  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
+  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
+  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
+  .btns{display:flex;flex-wrap:wrap;gap:.4rem}
+  .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
+    color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
+    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
+  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
+  .btn.danger{border-color:var(--red);color:var(--red)}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1rem}
+  .stat-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.7rem;text-align:center;backdrop-filter:blur(10px)}
+  .stat-card .value{font-size:1.15rem;font-weight:bold;text-shadow:0 0 10px currentColor;color:var(--text)}
+  .stat-card .label{font-size:.6rem;color:var(--p31-dim);letter-spacing:.1em;margin-top:.2rem;text-transform:uppercase}
+  .stat-card.ok .value{color:var(--green)} .stat-card.off .value{color:var(--red)} .stat-card.cyan .value{color:var(--cyan)}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+  .row{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border);font-size:.84rem}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--p31-dim)} .row .v{font-variant-numeric:tabular-nums;text-align:right}
+  code{color:var(--cyan);font-size:.78rem;word-break:break-all}
+  ul#rules,ul#candidates{list-style:none;margin:0;padding:0;font-size:.82rem}
+  ul#rules li,ul#candidates li{display:flex;justify-content:space-between;gap:.6rem;align-items:center;
+    padding:.4rem 0;border-bottom:1px solid var(--border)}
+  ul#rules li:last-child,ul#candidates li:last-child{border-bottom:0}
+  .empty{color:var(--p31-dim);font-size:.8rem;font-style:italic}
+  .form-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
+  .form-row input,.form-row select{font-family:inherit;font-size:.78rem;color:var(--text);
+    background:var(--bg-row);border:1px solid var(--border);border-radius:6px;padding:.4rem .5rem}
+  .form-row input{flex:1;min-width:9rem}
+  .note{font-size:.76rem;color:var(--p31-dim);line-height:1.5;margin-top:.5rem}
+  .note code{color:var(--yellow)}
+  .toggle-label{display:flex;align-items:center;gap:.5rem;font-size:.8rem}
+  .switch{position:relative;display:inline-block;width:2.6rem;height:1.4rem}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;cursor:pointer;inset:0;background:var(--bg-row);border:1px solid var(--border);
+    border-radius:1rem;transition:.15s}
+  .slider:before{content:"";position:absolute;height:1rem;width:1rem;left:.15rem;top:.14rem;
+    background:var(--p31-dim);border-radius:50%;transition:.15s}
+  .switch input:checked + .slider{border-color:var(--green)}
+  .switch input:checked + .slider:before{transform:translateX(1.2rem);background:var(--green);box-shadow:0 0 6px var(--green)}
+  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
+    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
+  @media(max-width:768px){.main{margin-left:0}}
+</style>
 </head>
 <body class="hybrid-dark">
-<h1>ProxyPAC — routage mesh</h1>
-<h2>Règles actives</h2><ul id="rules"></ul>
-<h2>Ajouter un override</h2>
-<input id="host" placeholder="host glob (ex: bank.example)">
-<select id="proxy"><option>direct</option><option>socks5</option><option>http</option><option>gateway</option></select>
-<input id="address" placeholder="ip:port (socks5/http)">
-<button onclick="addOverride()">Ajouter</button>
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+  <header class="header">
+    <div>
+      <h1>🧭 ProxyPAC</h1>
+      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
+    </div>
+    <div class="btns">
+      <button class="btn primary" onclick="applyWpad()">⚙ Appliquer WPAD</button>
+      <button class="btn" onclick="loadAll()">↻ Rafraîchir</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="stat-card cyan"><div class="value" id="c-role" style="font-size:.9rem">–</div><div class="label">🎭 Rôle / tier</div></div>
+    <div class="stat-card cyan"><div class="value" id="c-wpad" style="font-size:.85rem">–</div><div class="label">📡 Échelon WPAD</div></div>
+    <div class="stat-card cyan"><div class="value" id="c-socks" style="font-size:.85rem">–</div><div class="label">🧦 SOCKS endpoint</div></div>
+    <div class="stat-card" id="c-transparent"><div class="value">–</div><div class="label">🕶 Transparent</div></div>
+    <div class="stat-card cyan"><div class="value" id="c-lan" style="font-size:.9rem">–</div><div class="label">🖧 IP LAN</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Basculer le mode transparent</h3>
+    <label class="toggle-label">
+      <span class="switch">
+        <input type="checkbox" id="t-transparent" onchange="toggleTransparent(this.checked)">
+        <span class="slider"></span>
+      </span>
+      <span id="t-label">chargement…</span>
+    </label>
+    <div class="note">Transparent ON = redirection nft implicite (pas de config client). Transparent OFF = le client
+      doit utiliser le PAC/SOCKS ci-dessous explicitement.</div>
+  </div>
+
+  <div class="card">
+    <h3>Accès / runbook client</h3>
+    <div class="row"><span class="k">📄 URL du fichier PAC</span><span class="v"><code id="d-pac">—</code></span></div>
+    <div class="row"><span class="k">🌐 URL WPAD</span><span class="v"><code id="d-wpad-url">http://wpad/wpad.dat</code></span></div>
+    <div class="row"><span class="k">🔧 État WPAD (serveur)</span><span class="v" id="d-wpad-state">—</span></div>
+    <div class="note">
+      <strong>Firefox — réglages recommandés (about:config)</strong> :<br>
+      • <code>network.proxy.socks_remote_dns = true</code> — force la résolution DNS à travers le proxy PAC/SOCKS
+      (indispensable pour les hôtes .onion et pour éviter les fuites DNS locales).<br>
+      • <code>network.dns.blockDotOnion = false</code> — autorise Firefox à transmettre les hôtes .onion au résolveur proxy
+      au lieu de les bloquer avant même l'appel PAC.<br>
+      • <code>network.trr.mode = 0</code> — désactive le DoH natif Firefox (Trusted Recursive Resolver) pour que la
+      résolution passe bien par <code>socks_remote_dns</code> et non par un résolveur DoH tiers en dur.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Règles actives</h3>
+    <ul id="rules"><li class="empty">chargement…</li></ul>
+    <h3 style="margin-top:1rem">Ajouter un override</h3>
+    <div class="form-row">
+      <input id="host" placeholder="host glob (ex: bank.example)">
+      <select id="proxy">
+        <option value="direct">direct</option>
+        <option value="socks5">socks5</option>
+        <option value="http">http</option>
+        <option value="gateway">gateway</option>
+      </select>
+      <input id="address" placeholder="ip:port (socks5/http)">
+      <button class="btn primary" onclick="addOverride()">+ Ajouter</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Candidats détectés</h3>
+    <ul id="candidates"><li class="empty">chargement…</li></ul>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
 <script>
+const API = '/api/v1/proxypac';
+const $ = (id) => document.getElementById(id);
+
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function headers(){return {'Content-Type':'application/json'};}
-async function load(){
-  const d = await (await fetch('/api/v1/proxypac/rules',{headers:headers()})).json();
-  document.getElementById('rules').innerHTML =
-    d.rules.map(r=>`<li>${esc(r.host)} → ${esc(r.directive)} <button onclick="del('${esc(r.host)}')">x</button></li>`).join('');
+function token(){ return localStorage.getItem('sbx_token') || ''; }
+function authHeaders(extra){
+  return Object.assign({'Authorization': 'Bearer ' + token()}, extra || {});
 }
+function toast(msg, isErr){
+  const t = $('toast'); t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 2600);
+}
+async function J(path, opts){
+  const o = Object.assign({credentials:'same-origin'}, opts || {});
+  o.headers = authHeaders(o.headers);
+  const url = path.startsWith('/api/') ? path : (API + path);
+  const r = await fetch(url, o);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+function badge(el, on, onT, offT){
+  el.className = 'stat-card ' + (on ? 'ok' : 'off');
+  el.querySelector('.value').textContent = on ? onT : offT;
+}
+
+async function loadStatus(){
+  try {
+    const d = await J('/api/v1/proxypac/status');
+    $('dot').className = 'dot on';
+    $('sub').innerHTML = '<span class="dot on"></span>panneau actif';
+    $('c-role').textContent = (d.role || '—') + ' / ' + (d.tier || '—');
+    $('c-wpad').textContent = d.dns_resolver ? 'résolveur DNS' : (d.role || '—');
+    $('c-socks').textContent = d.socks_endpoint || '—';
+    $('c-lan').textContent = d.lan_ip || '—';
+    const on = !!d.transparent;
+    badge($('c-transparent'), on, 'ON', 'OFF');
+    $('t-transparent').checked = on;
+    $('t-label').textContent = on ? 'Transparent activé (nft)' : 'Transparent désactivé (client explicite)';
+    $('d-pac').textContent = d.pac_url || 'http://' + (d.lan_ip || '<box>') + '/proxy.pac';
+  } catch (e) {
+    $('dot').className = 'dot off';
+    $('sub').innerHTML = '<span class="dot off"></span>statut indisponible (' + esc(e.message) + ')';
+    toast('Statut indisponible : ' + e.message, true);
+  }
+}
+
+async function loadWpadState(){
+  try {
+    const d = await J('/api/v1/proxypac/wpad/state');
+    $('d-wpad-state').textContent = d.error ? d.error : JSON.stringify(d);
+  } catch (e) {
+    $('d-wpad-state').textContent = 'indisponible (' + e.message + ')';
+  }
+}
+
+async function applyWpad(){
+  try {
+    const d = await J('/api/v1/proxypac/wpad/apply', {method:'POST'});
+    toast(d.ok === false ? 'Application WPAD échouée' : 'WPAD appliqué', d.ok === false);
+  } catch (e) {
+    toast('Application WPAD impossible : ' + e.message, true);
+  }
+  loadWpadState();
+}
+
+async function toggleTransparent(on){
+  try {
+    const d = await J('/api/v1/proxypac/transparent', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({on})});
+    if (d.ok === false) { toast('Bascule transparent échouée', true); }
+    else toast('Transparent ' + (on ? 'activé' : 'désactivé'));
+  } catch (e) {
+    toast('Bascule transparent impossible : ' + e.message, true);
+  }
+  loadStatus();
+}
+
+async function loadRules(){
+  try {
+    const d = await J('/api/v1/proxypac/rules');
+    const rules = d.rules || [];
+    $('rules').innerHTML = rules.length ? rules.map(r =>
+      `<li><span>${esc(r.host)} → ${esc(r.directive)}</span>` +
+      `<button class="btn danger" data-action="del-override" data-host="${esc(r.host)}">✕</button></li>`
+    ).join('') : '<li class="empty">aucune règle</li>';
+  } catch (e) {
+    $('rules').innerHTML = '<li class="empty">règles indisponibles (' + esc(e.message) + ')</li>';
+  }
+}
+
+// Délégation d'événements : aucune donnée d'API n'est jamais interpolée dans un
+// attribut d'événement inline (onclick/onchange/...). Les valeurs dynamiques sont
+// portées par des data-* attributs (échappés HTML via esc()) et lues ici via
+// `dataset`, qui renvoie la valeur décodée en tant que STRING JS — jamais
+// réinterprétée comme du code. Empêche toute évasion de chaîne (XSS stockée).
+$('rules').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'del-override') {
+    delOverride(btn.dataset.host);
+  }
+});
+
+async function loadCandidates(){
+  try {
+    const d = await J('/api/v1/proxypac/candidates');
+    const cand = d.candidates || [];
+    $('candidates').innerHTML = cand.length ? cand.map(c => {
+      const host = typeof c === 'string' ? c : (c.host || JSON.stringify(c));
+      return `<li><span>${esc(host)}</span></li>`;
+    }).join('') : '<li class="empty">aucun candidat</li>';
+  } catch (e) {
+    $('candidates').innerHTML = '<li class="empty">candidats indisponibles (' + esc(e.message) + ')</li>';
+  }
+}
+
 async function addOverride(){
-  await fetch('/api/v1/proxypac/override',{method:'POST',headers:headers(),
-    body:JSON.stringify({host:host.value,proxy:proxy.value,address:address.value})});
-  load();
+  const host = $('host').value.trim();
+  if (!host) { toast('Host requis', true); return; }
+  try {
+    await J('/api/v1/proxypac/override', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({host, proxy: $('proxy').value, address: $('address').value.trim()})});
+    toast('Override ajouté');
+    $('host').value = ''; $('address').value = '';
+    loadRules();
+  } catch (e) {
+    toast('Ajout impossible : ' + e.message, true);
+  }
 }
-async function del(h){ await fetch('/api/v1/proxypac/override/'+encodeURIComponent(h),{method:'DELETE',headers:headers()}); load(); }
-load();
+
+async function delOverride(host){
+  try {
+    await J('/api/v1/proxypac/override/' + encodeURIComponent(host), {method:'DELETE'});
+    toast('Override supprimé');
+    loadRules();
+  } catch (e) {
+    toast('Suppression impossible : ' + e.message, true);
+  }
+}
+
+async function loadAll(){
+  loadStatus();
+  loadWpadState();
+  loadRules();
+  loadCandidates();
+}
+loadAll();
 </script>
-</body></html>
+</body>
+</html>

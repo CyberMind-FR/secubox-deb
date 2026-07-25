@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Détecte l'IP LAN du box : override explicite sinon best-effort.
+# Override : /etc/secubox/proxypac/proxypac.toml socks_endpoint="ip:port"
+# ou variable SECUBOX_LAN_IP. Sinon : première IPv4 globale privée sur une
+# interface physique, en excluant wg*/docker*/br-*/lo et les ranges internes.
+set -euo pipefail
+if [ -n "${SECUBOX_LAN_IP:-}" ]; then echo "$SECUBOX_LAN_IP"; exit 0; fi
+TOML=/etc/secubox/proxypac/proxypac.toml
+if [ -r "$TOML" ]; then
+  ip_from_toml=$(sed -n 's/^[[:space:]]*socks_endpoint[[:space:]]*=[[:space:]]*"\{0,1\}\([0-9.]\+\):[0-9]\+"\{0,1\}.*/\1/p' "$TOML" | head -1)
+  if [ -n "$ip_from_toml" ]; then echo "$ip_from_toml"; exit 0; fi
+fi
+ip -o -4 addr show scope global 2>/dev/null \
+  | grep -vE '\b(wg-|docker|br-|veth|lo)\w*' \
+  | awk '{print $2" "$4}' \
+  | grep -vE '^(wg-|docker|br-|veth)' \
+  | awk '{print $2}' | cut -d/ -f1 \
+  | grep -E '^(192\.168|10|172)\.' \
+  | grep -vE '^(10\.99\.|10\.100\.|10\.10\.|172\.17\.)' \
+  | head -1
