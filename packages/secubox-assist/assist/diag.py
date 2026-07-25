@@ -17,7 +17,9 @@ from .catalog import MODULE_ALLOW
 
 _SECRET_KV = re.compile(
     r"(?i)\b(token|secret|password|passwd|api[-_]?key|authorization|bearer)\b"
-    r"\s*[:=]\s*[\"']?[^\s\"']+")
+    r"[\"']?\s*(?:[:=]\s*|\s+)"
+    r"[\"']?(?:(?:bearer|basic)\s+)?"
+    r"[^\s\"',;{}]+")
 _LONG_HEX = re.compile(r"\b[0-9a-fA-F]{40,}\b")
 _EMAIL = re.compile(r"\b[\w.+-]+@([\w-]+\.[\w.-]+)\b")
 
