@@ -17,6 +17,11 @@ DEFAULT_OUT = Path("/var/lib/secubox/proxypac/proxy.pac")
 
 def generate(rules_dir, services, toolbox_directive=None):
     overrides = parse_rules_dir(rules_dir)
+    # Substitute __LAN_SOCKS__ placeholder with configured socks_endpoint
+    from .config import load as _load_cfg
+    ep = _load_cfg().get("socks_endpoint", "127.0.0.1:9050")
+    for r in overrides:
+        r.directive = r.directive.replace("__LAN_SOCKS__", ep)
     svc_rules = service_rules(services)
     toolbox = Rule("*", toolbox_directive, "toolbox") if toolbox_directive else None
     return render(compose(overrides, svc_rules, toolbox))

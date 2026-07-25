@@ -49,8 +49,21 @@ non-blank line is:
 Example (`conf/rules.d/00-onion.rules`, shipped as a seed):
 
 ```
-# secubox-proxypac seed: route .onion via a mesh tor-exit when one is active.
-*.onion socks5 10.10.0.1:9050
+# secubox-proxypac seed: route .onion via le SOCKS Tor LAN du box.
+*.onion socks5 __LAN_SOCKS__
+```
+
+`__LAN_SOCKS__` is a placeholder substituted **at generation time** by
+`proxypac.config.socks_endpoint`. By default it resolves to
+`<detected-LAN-IP>:9050` (the box's LAN Tor SocksPort, reachable from LAN
+and wg-toolbox clients — the mesh SocksPort `10.10.0.1:9050` is not). Override
+it in `/etc/secubox/proxypac/proxypac.toml`:
+
+```toml
+role = "auto"          # auto | master | slave | off
+transparent = true      # .onion transparent for force-routed clients (wg-toolbox+LAN)
+# socks_endpoint = "192.168.1.200:9050"   # override; else <detected-LAN-IP>:9050
+# wpad_domain = "gk2.secubox.in"          # else derived from the hostname
 ```
 
 The WebUI (`POST /override`, `DELETE /override/{host}`) persists

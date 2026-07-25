@@ -12,7 +12,9 @@ ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/proxypac.s
 Restart=on-failure
 RestartSec=5
 UMask=0000
-NoNewPrivileges=true
+# false : l'API délègue root via `sudo -n` (torctl/proxypac-wpad) ; NNP=true
+# ferait échouer silencieusement /transparent et /wpad/apply (ok:false).
+NoNewPrivileges=false
 RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775

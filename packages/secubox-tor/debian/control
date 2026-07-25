@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-tor
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), tor, unbound, nftables
 Description: SecuBox Tor — Tor relay + hidden-services manager
  Manages a local Tor daemon: transparent-proxy + SOCKS modes,
  hidden-service publishing, circuit monitoring, identity rotation,
