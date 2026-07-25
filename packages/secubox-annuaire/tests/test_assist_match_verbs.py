@@ -17,7 +17,8 @@ def _key():
 def test_offer_signed_and_appended(tmp_path):
     j = Journal(str(tmp_path / "j.db"))
     priv, did = _key()
-    entry = verbs.assist_offer(j, priv, ["lora"], None, 1800, offer_id="o1")
+    oid = m.author_prefix(did) + "-o1"
+    entry = verbs.assist_offer(j, priv, ["lora"], None, 1800, offer_id=oid)
     assert entry.op == Op.ASSIST_OFFER.value
     assert verify(public_from_private(priv).hex(), canonical_bytes(entry.payload), entry.sig)
 
@@ -25,11 +26,13 @@ def test_offer_signed_and_appended(tmp_path):
 def test_full_match_ready(tmp_path):
     j = Journal(str(tmp_path / "j.db"))
     ap, ad = _key(); bp, bd = _key()
-    verbs.assist_offer(j, ap, ["lora"], None, 3600, offer_id="o1")
-    verbs.assist_open_request(j, bp, ["lora"], None, 3600, "help", req_id="r1")
-    verbs.assist_match_accept(j, ap, "o1", "r1", "offer")
-    verbs.assist_match_accept(j, bp, "o1", "r1", "request")
+    oid = m.author_prefix(ad) + "-o1"
+    rid = m.author_prefix(bd) + "-r1"
+    verbs.assist_offer(j, ap, ["lora"], None, 3600, offer_id=oid)
+    verbs.assist_open_request(j, bp, ["lora"], None, 3600, "help", req_id=rid)
+    verbs.assist_match_accept(j, ap, oid, rid, "offer")
+    verbs.assist_match_accept(j, bp, oid, rid, "request")
     entries = list(j.iter_entries())
     # exercise the codebase's real "now" shape (model.now_rfc3339()'s
     # isoformat rendering), not a hand-picked Z-suffixed fixture string.
-    assert m.match_ready(entries, m.match_id("o1", "r1"), now_ts=now_rfc3339())
+    assert m.match_ready(entries, m.match_id(oid, rid), now_ts=now_rfc3339())

@@ -282,7 +282,7 @@ def cmd_offer(a) -> int:
     if _dry():
         _dryrun_report("assist_offer", tags=tags, scope=a.scope, ttl_s=a.ttl)
         return 0
-    offer_id = "off-" + secrets.token_hex(8)
+    offer_id = assist_match.author_prefix(_self_did(_key())) + "-" + secrets.token_hex(8)
     try:
         verbs.assist_offer(_journal(), _key(), tags, a.scope, a.ttl, offer_id)
     except ValueError as exc:
@@ -311,7 +311,7 @@ def cmd_request_open(a) -> int:
         _dryrun_report("assist_request_open", tags=tags, scope=a.scope,
                        ttl_s=a.ttl, reason=a.reason)
         return 0
-    req_id = "orq-" + secrets.token_hex(8)
+    req_id = assist_match.author_prefix(_self_did(_key())) + "-" + secrets.token_hex(8)
     try:
         verbs.assist_open_request(_journal(), _key(), tags, a.scope, a.ttl,
                                   a.reason, req_id)

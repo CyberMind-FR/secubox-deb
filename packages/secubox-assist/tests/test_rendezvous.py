@@ -21,23 +21,27 @@ def e(op, author=None, **p):
     return {"op": op.value, "author": author, "payload": p}
 
 
+OID = m.author_prefix(A) + "-o1"
+RID = m.author_prefix(B) + "-r1"
+
+
 def _ready_pair(now="2026-07-25T10:00:00Z"):
-    mid = m.match_id("o1", "r1")
+    mid = m.match_id(OID, RID)
     return [
-        e(Op.ASSIST_OFFER, offer_id="o1", tags=["lora"], scope=None, ttl_s=3600,
+        e(Op.ASSIST_OFFER, offer_id=OID, tags=["lora"], scope=None, ttl_s=3600,
           issued_by=A, created_at=now),
-        e(Op.ASSIST_REQUEST_OPEN, req_id="r1", tags=["lora"], scope=None, ttl_s=3600,
+        e(Op.ASSIST_REQUEST_OPEN, req_id=RID, tags=["lora"], scope=None, ttl_s=3600,
           reason="x", issued_by=B, created_at=now),
-        e(Op.ASSIST_MATCH_ACCEPT, match_id=mid, offer_id="o1", req_id="r1",
+        e(Op.ASSIST_MATCH_ACCEPT, match_id=mid, offer_id=OID, req_id=RID,
           side="offer", issued_by=A),
-        e(Op.ASSIST_MATCH_ACCEPT, match_id=mid, offer_id="o1", req_id="r1",
+        e(Op.ASSIST_MATCH_ACCEPT, match_id=mid, offer_id=OID, req_id=RID,
           side="request", issued_by=B),
     ]
 
 
 def test_should_open_for_requester():
     r = rz.should_open(_ready_pair(), self_did=B, now_ts="2026-07-25T10:10:00Z")
-    assert r and r["offerer_did"] == A and r["req_id"] == "r1"
+    assert r and r["offerer_did"] == A and r["req_id"] == RID
 
 
 def test_sovereignty_offerer_does_not_open():

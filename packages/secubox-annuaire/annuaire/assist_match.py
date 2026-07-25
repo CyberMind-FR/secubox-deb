@@ -18,6 +18,17 @@ AUTHENTICATED `author` (LogEntry.author / dict["author"], set by the Journal
 from the signing key — see log.py). Without this check: (a) anyone could
 revoke anyone else's offer, (b) a single signer could forge both sides of a
 match acceptance, (c) issued_by could be spoofed to a victim's DID.
+
+Ids are author-self-certifying (see author_prefix/_id_matches_author): an
+offer_id/req_id is only admitted for an author whose DID-derived prefix it
+carries. Without this, offer_id/req_id are free-form attacker-chosen
+strings, and `offers_by_id`/`requests_by_id` (keyed by bare id) would
+collapse two different authors' entries onto the same key — a signed peer
+could publish a SHADOW ASSIST_OFFER carrying a victim's exact offer_id,
+win the id lookup (last-writer-wins), pass its own author-check trivially,
+and hijack the victim's real match without the victim ever accepting.
+Requiring the id to carry its author's own prefix makes ids globally
+unique per author, so this shadowing is structurally impossible.
 """
 from __future__ import annotations
 
@@ -42,6 +53,28 @@ def _op_author_payload(entry):
 def match_id(offer_id: str, req_id: str) -> str:
     return hashlib.blake2b(f"{offer_id}|{req_id}".encode("utf-8"),
                            digest_size=32).hexdigest()
+
+
+def author_prefix(did: str) -> str:
+    """12-hex prefix deterministically derived from the author's DID."""
+    return hashlib.blake2b((did or "").encode("utf-8"), digest_size=6).hexdigest()
+
+
+def _id_matches_author(entry_id: str, issued_by: str) -> bool:
+    """An offer_id/req_id is only valid for its author if it carries that
+    author's prefix: "<author_prefix>-<random>". This makes ids globally
+    unique per author — a peer cannot mint an id under a victim's prefix
+    (its own issued_by drives the required prefix), nor shadow a victim's
+    exact id (that id carries the victim's prefix, not the peer's). This is
+    what closes the id-shadowing consent-forgery: a signed peer C publishing
+    ASSIST_OFFER{offer_id=<A's id>, issued_by=C} now fails this check (A's id
+    doesn't carry C's prefix) and is dropped at admission, so the shared
+    offers_by_id/requests_by_id maps can never collapse two different
+    authors' entries onto the same key.
+    """
+    if not entry_id or not issued_by:
+        return False
+    return entry_id.startswith(author_prefix(issued_by) + "-")
 
 
 def _parse_ts(ts: str) -> datetime:
@@ -69,15 +102,20 @@ def _expired(created_at: str, ttl_s: int, now_ts: str) -> bool:
 
 def active_offers(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
     """Offers admitted ONLY when author == issued_by (spoofed issued_by is
-    dropped). A revoke withdraws an offer ONLY when the revoke's own author
-    matches the offer's author — a foreign revoke (any other signer) is
-    ignored, since that signer never owned the offer_id in the first place.
+    dropped) AND the offer_id carries that author's prefix (id-shadowing
+    guard — see _id_matches_author). A revoke withdraws an offer ONLY when
+    the revoke's own author matches the offer's author AND the revoke's own
+    offer_id carries that author's prefix — a foreign revoke (any other
+    signer, or one targeting a well-formed id it doesn't own) is ignored,
+    since that signer never owned the offer_id in the first place.
     """
     # (offer_id, revoke_author) pairs — who actually signed each revoke.
     revoked = set()
     for entry in entries:
         op, author, payload = _op_author_payload(entry)
         if op == Op.ASSIST_OFFER_REVOKE.value:
+            if author is None or not _id_matches_author(payload.get("offer_id"), author):
+                continue  # revoke doesn't carry the revoker's own prefix
             revoked.add((payload.get("offer_id"), author))
 
     out = []
@@ -90,6 +128,8 @@ def active_offers(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
         offer_id = payload.get("offer_id")
         if offer_id is None:
             continue  # fail-closed: no id, can't be revoked or matched safely
+        if not _id_matches_author(offer_id, author):
+            continue  # id-shadowing guard: id doesn't carry this author's prefix
         if (offer_id, author) in revoked:
             continue  # only a same-author revoke can withdraw this offer
         if _expired(payload.get("created_at", ""), payload.get("ttl_s", 0), now_ts):
@@ -100,7 +140,8 @@ def active_offers(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
 
 def active_open_requests(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
     """Requests admitted ONLY when author == issued_by (spoofed issued_by,
-    e.g. naming a victim's DID, is dropped)."""
+    e.g. naming a victim's DID, is dropped) AND the req_id carries that
+    author's prefix (id-shadowing guard — see _id_matches_author)."""
     out = []
     for entry in entries:
         op, author, payload = _op_author_payload(entry)
@@ -108,8 +149,11 @@ def active_open_requests(entries: List[Mapping[str, Any]], now_ts: str) -> List[
             continue
         if author is None or author != payload.get("issued_by"):
             continue  # author-bound: spoofed issued_by rejected
-        if payload.get("req_id") is None:
+        req_id = payload.get("req_id")
+        if req_id is None:
             continue  # fail-closed: no id, can't be matched safely
+        if not _id_matches_author(req_id, author):
+            continue  # id-shadowing guard: id doesn't carry this author's prefix
         if _expired(payload.get("created_at", ""), payload.get("ttl_s", 0), now_ts):
             continue
         out.append(payload)
