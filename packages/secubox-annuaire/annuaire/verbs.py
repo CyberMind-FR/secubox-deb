@@ -31,6 +31,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from . import grants
 from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
@@ -38,6 +39,7 @@ from .model import (
     GENESIS_HASH,
     ApprovalMode,
     ConfigBlob,
+    Grant,
     Identity,
     Invitation,
     MemberState,
@@ -1097,6 +1099,116 @@ def emancipate(
         "remove_anchor": remove_anchor,
         "milestones": milestones,
     }
+
+
+def grant_issue(
+    journal: Journal,
+    box_priv: bytes,
+    box_did: str,
+    center_did: str,
+    scope: str,
+    layer: str,
+    capability: str = "config",
+) -> Dict[str, Any]:
+    """GRANT_ISSUE: delegate config authority over (scope, layer) to a center.
+
+    The box validates the request against the journal's current grant state
+    via grants.validate_issue() BEFORE writing anything:
+      - layer == "local"          -> rejected ("layer-local-not-delegatable")
+      - scope in NON_DELEGATABLE  -> rejected ("scope-not-delegatable")
+      - (scope, layer) already owned by an active grant -> rejected ("already-owned")
+    Ownership is exclusive: validate_issue enforces at most one active grant
+    per (scope, layer) pair.
+
+    Journal contract: payload stored WITHOUT sig/signer_did; sig over
+    canonical_bytes(payload). Same idiom as invite()/propose().
+
+    Args:
+        journal: the append-only Journal.
+        box_priv: issuing box's 32-byte raw Ed25519 private key.
+        box_did: issuing box's did:plc.
+        center_did: did:plc of the center receiving the delegated authority.
+        scope: what the grant covers, e.g. a module name ("firewall").
+        layer: config layer the grant is confined to.
+        capability: what is delegated (default: "config").
+
+    Returns:
+        The signed Grant as a dict (includes sig, signer_did).
+
+    Raises:
+        ValueError: if validate_issue rejects the request (see reasons above).
+    """
+    reason = grants.validate_issue(list(journal.iter_entries()), scope, layer)
+    if reason is not None:
+        raise ValueError(reason)
+
+    grant_id = _rand_hex(32)
+    box_pub_hex = public_from_private(box_priv).hex()
+
+    g = Grant(
+        grant_id=grant_id,
+        center_did=center_did,
+        capability=capability,
+        scope=scope,
+        layer=layer,
+        issued_by=box_did,
+    )
+    full = g.model_dump()
+    payload = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
+    sig_hex = sign(box_priv, canonical_bytes(payload))
+
+    journal.append(
+        op=Op.GRANT_ISSUE,
+        payload_type="Grant",
+        payload=payload,
+        author=box_did,
+        sig=sig_hex,
+        author_pubkey_hex=box_pub_hex,
+    )
+
+    return {**payload, "sig": sig_hex, "signer_did": box_did}
+
+
+def grant_revoke(
+    journal: Journal,
+    box_priv: bytes,
+    box_did: str,
+    grant_id: str,
+) -> Dict[str, Any]:
+    """GRANT_REVOKE: withdraw a previously issued delegated grant.
+
+    Journal contract: payload stored WITHOUT sig/signer_did; sig over
+    canonical_bytes(payload). Same idiom as invite()/propose(). The revoked
+    grant_id is dropped from grants.active_grants() by any later reader —
+    see grants.py for the resolution rule.
+
+    Args:
+        journal: the append-only Journal.
+        box_priv: revoking box's 32-byte raw Ed25519 private key.
+        box_did: revoking box's did:plc.
+        grant_id: the grant_id of a prior GRANT_ISSUE to withdraw.
+
+    Returns:
+        Dict with the signed revocation payload (includes sig, signer_did).
+    """
+    box_pub_hex = public_from_private(box_priv).hex()
+
+    payload: Dict[str, Any] = {
+        "grant_id": grant_id,
+        "issued_by": box_did,
+    }
+    sig_hex = sign(box_priv, canonical_bytes(payload))
+
+    journal.append(
+        op=Op.GRANT_REVOKE,
+        payload_type="GrantRevoke",
+        payload=payload,
+        author=box_did,
+        sig=sig_hex,
+        author_pubkey_hex=box_pub_hex,
+    )
+
+    return {**payload, "sig": sig_hex, "signer_did": box_did}
 
 
 # ---------------------------------------------------------------------------
