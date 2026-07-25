@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-annuaire
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, python3-pydantic, python3-cryptography
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-fastapi | python3-pip, python3-uvicorn | python3-pip, python3-pydantic, python3-cryptography, python3-tomli-w
 Description: SecuBox Annuaire-Miroir — federated self-certifying trust substrate
  The Annuaire-Miroir is the trust directory for SecuBox-DEB, providing a
  BLAKE2b-chained, CONIKS-style append-only audit journal with four protocols:

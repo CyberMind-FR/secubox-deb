@@ -803,7 +803,9 @@ async def pull_log(req: PullLogRequest):
 # shell=True, no string interpolation into a shell command line, so no
 # argument can smuggle a second command). The box key that actually signs
 # GRANT_ISSUE/GRANT_REVOKE journal entries is loaded server-side by that CLI
-# from ANNUAIRE_KEY — it is never accepted as a request field here.
+# from ANNUAIRE_KEY_PATH (the same node identity key as annuairectl and
+# _publish_self_node below — one box, one sovereign identity) — it is never
+# accepted as a request field here.
 # ---------------------------------------------------------------------------
 
 CONFIG_TARGET_DIR = os.environ.get("CONFIG_TARGET_DIR", "/etc/secubox")
@@ -876,7 +878,7 @@ def _self_did_best_effort() -> Optional[str]:
     best-effort resolution in `cmd_route`. Never raises: an absent/malformed
     box key silently yields None rather than 500ing a read endpoint.
     """
-    key_path = os.environ.get("ANNUAIRE_KEY", "/etc/secubox/annuaire/box.key")
+    key_path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
     try:
         from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
         with open(key_path, "r", encoding="ascii") as fh:

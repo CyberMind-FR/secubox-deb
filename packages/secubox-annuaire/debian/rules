@@ -15,6 +15,7 @@ override_dh_auto_install:
 	# nginx static UI route (secubox.d)
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d
 	install -m 644 $(CURDIR)/nginx/annuaire.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d/
+	install -m 644 $(CURDIR)/nginx/centers.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d/
 
 	# Authoritative API route (secubox-routes.d)
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox-routes.d
@@ -28,6 +29,9 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/sbin
 	install -m 755 $(CURDIR)/sbin/annuairectl $(CURDIR)/debian/secubox-annuaire/usr/sbin/annuairectl
 
+	# Box operator CLI — delegated center grants (Centres & Grants, Task 7)
+	install -m 755 $(CURDIR)/sbin/sbx-centersctl $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-centersctl
+
 	# Non-local bind sysctl (nginx binds the wg-mesh IP even if iface is late)
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/sysctl.d
 	install -m 644 $(CURDIR)/sysctl/30-secubox-nonlocal-bind.conf $(CURDIR)/debian/secubox-annuaire/etc/sysctl.d/
@@ -36,9 +40,14 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire
 	cp -r $(CURDIR)/www/annuaire/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/annuaire/
 
+	# Web UI (static) — Centres & Grants panel
+	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/centers
+	cp -r $(CURDIR)/www/centers/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/centers/
+
 # Hub menu entry
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/575-annuaire.json $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d/
+	install -m 644 $(CURDIR)/menu.d/570-centers.json $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d/
 
 	# systemd service
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system
