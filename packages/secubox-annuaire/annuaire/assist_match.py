@@ -56,8 +56,14 @@ def match_id(offer_id: str, req_id: str) -> str:
 
 
 def author_prefix(did: str) -> str:
-    """12-hex prefix deterministically derived from the author's DID."""
-    return hashlib.blake2b((did or "").encode("utf-8"), digest_size=6).hexdigest()
+    """32-hex (128-bit) prefix deterministically derived from the author's DID.
+
+    128 bits so an id is a security-boundary identifier a peer cannot forge by
+    grinding a targeted prefix collision (a 48-bit prefix was brute-forceable in
+    days on a cluster, which would reopen the id-shadowing consent forgery once
+    the live join-path escalates a forged match). See project_assist_dual_marketplace.
+    """
+    return hashlib.blake2b((did or "").encode("utf-8"), digest_size=16).hexdigest()
 
 
 def _id_matches_author(entry_id: str, issued_by: str) -> bool:
