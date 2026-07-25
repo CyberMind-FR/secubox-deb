@@ -10,15 +10,33 @@ coordinator). match_id is a deterministic BLAKE2b of (offer_id|req_id) so both
 sides derive the same id. Expiry is fail-closed (offer/request stale past
 created_at+ttl_s). A match is 'ready' only when BOTH sides have posted a signed
 ASSIST_MATCH_ACCEPT and the underlying offer+request are still active.
+
+Author-bound like the socle resolvers (assist.py/grants.py): any signed mesh
+member can author a well-formed op, so payload fields such as `issued_by` or
+`side` are attacker-controlled and MUST be cross-checked against the entry's
+AUTHENTICATED `author` (LogEntry.author / dict["author"], set by the Journal
+from the signing key — see log.py). Without this check: (a) anyone could
+revoke anyone else's offer, (b) a single signer could forge both sides of a
+match acceptance, (c) issued_by could be spoofed to a victim's DID.
 """
 from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Mapping, Tuple
+from typing import Any, List, Mapping, Optional, Tuple
 
 from .assist import _by  # dict/LogEntry-tolerant op iterator (yields payloads)
+from .grants import _op, _payload  # dict/LogEntry-tolerant op/payload accessors
 from .model import Op
+
+
+def _op_author_payload(entry):
+    """Return (op_str, author, payload), tolerating LogEntry (attributes) and
+    dict. `author` is the AUTHENTICATED signer of this journal entry — NEVER
+    trust payload["issued_by"] as a proxy for it."""
+    if isinstance(entry, dict):
+        return _op(entry), entry.get("author"), _payload(entry)
+    return _op(entry), getattr(entry, "author", None), _payload(entry)
 
 
 def match_id(offer_id: str, req_id: str) -> str:
@@ -50,23 +68,51 @@ def _expired(created_at: str, ttl_s: int, now_ts: str) -> bool:
 
 
 def active_offers(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
-    revoked = {p.get("offer_id") for p in _by(entries, Op.ASSIST_OFFER_REVOKE)}
+    """Offers admitted ONLY when author == issued_by (spoofed issued_by is
+    dropped). A revoke withdraws an offer ONLY when the revoke's own author
+    matches the offer's author — a foreign revoke (any other signer) is
+    ignored, since that signer never owned the offer_id in the first place.
+    """
+    # (offer_id, revoke_author) pairs — who actually signed each revoke.
+    revoked = set()
+    for entry in entries:
+        op, author, payload = _op_author_payload(entry)
+        if op == Op.ASSIST_OFFER_REVOKE.value:
+            revoked.add((payload.get("offer_id"), author))
+
     out = []
-    for p in _by(entries, Op.ASSIST_OFFER):
-        if p.get("offer_id") in revoked:
+    for entry in entries:
+        op, author, payload = _op_author_payload(entry)
+        if op != Op.ASSIST_OFFER.value:
             continue
-        if _expired(p.get("created_at", ""), p.get("ttl_s", 0), now_ts):
+        if author is None or author != payload.get("issued_by"):
+            continue  # author-bound: spoofed issued_by rejected
+        offer_id = payload.get("offer_id")
+        if offer_id is None:
+            continue  # fail-closed: no id, can't be revoked or matched safely
+        if (offer_id, author) in revoked:
+            continue  # only a same-author revoke can withdraw this offer
+        if _expired(payload.get("created_at", ""), payload.get("ttl_s", 0), now_ts):
             continue
-        out.append(p)
+        out.append(payload)
     return out
 
 
 def active_open_requests(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
+    """Requests admitted ONLY when author == issued_by (spoofed issued_by,
+    e.g. naming a victim's DID, is dropped)."""
     out = []
-    for p in _by(entries, Op.ASSIST_REQUEST_OPEN):
-        if _expired(p.get("created_at", ""), p.get("ttl_s", 0), now_ts):
+    for entry in entries:
+        op, author, payload = _op_author_payload(entry)
+        if op != Op.ASSIST_REQUEST_OPEN.value:
             continue
-        out.append(p)
+        if author is None or author != payload.get("issued_by"):
+            continue  # author-bound: spoofed issued_by rejected
+        if payload.get("req_id") is None:
+            continue  # fail-closed: no id, can't be matched safely
+        if _expired(payload.get("created_at", ""), payload.get("ttl_s", 0), now_ts):
+            continue
+        out.append(payload)
     return out
 
 
@@ -85,17 +131,50 @@ def matches(entries: List[Mapping[str, Any]], now_ts: str
     requests = active_open_requests(entries, now_ts)
     out = []
     for o in offers:
+        offer_id = o.get("offer_id")
+        if offer_id is None:
+            continue  # fail-closed: never crash on a malformed offer
         for r in requests:
+            req_id = r.get("req_id")
+            if req_id is None:
+                continue  # fail-closed: never crash on a malformed request
             if _compatible(o, r):
-                out.append((o, r, match_id(o["offer_id"], r["req_id"])))
+                out.append((o, r, match_id(offer_id, req_id)))
     return out
 
 
 def match_ready(entries: List[Mapping[str, Any]], mid: str, now_ts: str) -> bool:
-    accepts = [p for p in _by(entries, Op.ASSIST_MATCH_ACCEPT)
-               if p.get("match_id") == mid]
-    sides = {p.get("side") for p in accepts}
-    if not {"offer", "request"} <= sides:
+    """A match is ready only when BOTH an offer-side and a request-side
+    ASSIST_MATCH_ACCEPT exist for `mid`, each authored by the party that
+    actually owns that side — the offer's author (per active_offers) for
+    side="offer", the request's author (per active_open_requests) for
+    side="request". A single signer posting both sides (forging mutual
+    consent) never satisfies both checks unless they legitimately own both
+    the offer AND the request. The underlying offer+request must also still
+    be active.
+    """
+    offers_by_id = {o["offer_id"]: o for o in active_offers(entries, now_ts)}
+    requests_by_id = {r["req_id"]: r for r in active_open_requests(entries, now_ts)}
+
+    offer_side_ok = False
+    request_side_ok = False
+    for entry in entries:
+        op, author, payload = _op_author_payload(entry)
+        if op != Op.ASSIST_MATCH_ACCEPT.value or payload.get("match_id") != mid:
+            continue
+        side = payload.get("side")
+        if author is None:
+            continue
+        if side == "offer":
+            offer = offers_by_id.get(payload.get("offer_id"))
+            if offer is not None and author == offer.get("issued_by"):
+                offer_side_ok = True
+        elif side == "request":
+            request = requests_by_id.get(payload.get("req_id"))
+            if request is not None and author == request.get("issued_by"):
+                request_side_ok = True
+
+    if not (offer_side_ok and request_side_ok):
         return False
     # underlying offer+request must still be active
     live_mids = {mid_ for _, _, mid_ in matches(entries, now_ts)}
