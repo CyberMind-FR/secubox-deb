@@ -2231,25 +2231,12 @@ def assist_console_revoke(journal: Journal, box_priv: bytes, session_id: str):
 # Assist marketplace (dual offer/request) — sous-projet assist-dual
 # ---------------------------------------------------------------------------
 
-def _assist_match_now_z() -> str:
-    """RFC 3339 'Z' timestamp matching assist_match._expired's strict parser.
-
-    model.now_rfc3339() (the AssistOffer/AssistOpenRequest default_factory)
-    emits datetime.isoformat() — e.g. "...T14:44:12.933568+00:00" — which does
-    NOT match assist_match._expired's `strptime(..., "%Y-%m-%dT%H:%M:%SZ")`
-    and would fail-closed (treated as expired/unparseable) on every offer and
-    open request. Verbs that feed assist_match must stamp created_at in the
-    exact "Z"-suffixed, second-precision form it expects.
-    """
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 def assist_offer(journal: Journal, priv: bytes, tags: List[str], scope: Optional[str],
                   ttl_s: int, offer_id: str):
     """ASSIST_OFFER: publish a signed advertisement of availability to help."""
     did = did_from_pubkey(public_from_private(priv))
     m_ = AssistOffer(offer_id=offer_id, tags=list(tags), scope=scope,
-                     ttl_s=ttl_s, issued_by=did, created_at=_assist_match_now_z())
+                     ttl_s=ttl_s, issued_by=did)
     return _assist_append(journal, priv, Op.ASSIST_OFFER, m_, "AssistOffer")
 
 
@@ -2269,8 +2256,7 @@ def assist_open_request(journal: Journal, priv: bytes, tags: List[str], scope: O
     """ASSIST_REQUEST_OPEN: post a signed, untargeted request for help."""
     did = did_from_pubkey(public_from_private(priv))
     m_ = AssistOpenRequest(req_id=req_id, tags=list(tags), scope=scope,
-                           ttl_s=ttl_s, reason=reason, issued_by=did,
-                           created_at=_assist_match_now_z())
+                           ttl_s=ttl_s, reason=reason, issued_by=did)
     return _assist_append(journal, priv, Op.ASSIST_REQUEST_OPEN, m_, "AssistOpenRequest")
 
 
