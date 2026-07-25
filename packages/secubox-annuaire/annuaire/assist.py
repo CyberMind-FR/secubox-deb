@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, List, Mapping, Optional
 
-from .grants import _op, _payload  # dict/LogEntry-tolerant accessors
+from .grants import _op, _payload, active_grants  # dict/LogEntry-tolerant accessors
 from .model import Op
 
 
@@ -90,8 +90,16 @@ def pending_requests(entries: List[Mapping[str, Any]], self_did: str) -> List[di
 def can_open(entries: List[Mapping[str, Any]], req_id: str,
              self_did: str, now_ts: str) -> tuple[bool, str]:
     """Whether the box may open a session for req_id: request exists, was
-    accepted, is authorized for this box (self-authored, or standing mode),
-    and NO session is currently active (single-session invariant)."""
+    accepted, is authorized for this box (self-authored, or standing mode
+    BACKED BY an active capability="assist" Grant), and NO session is
+    currently active (single-session invariant).
+
+    Per-incident mode: the box-authored ASSIST_REQUEST IS the authority —
+    no grant needed. Standing mode: the request alone is NOT enough; the
+    center must additionally hold an active, SELF-issued (issued_by ==
+    self_did — see active_grants()'s sovereignty filter) capability="assist"
+    grant naming that same center_did, or the open is refused.
+    """
     reqs = {p.get("req_id"): p for p in _by(entries, Op.ASSIST_REQUEST)}
     if req_id not in reqs:
         return False, "no-such-request"
@@ -101,6 +109,14 @@ def can_open(entries: List[Mapping[str, Any]], req_id: str,
     req = reqs[req_id]
     if req.get("issued_by") != self_did and req.get("mode") != "standing":
         return False, "not-authorized"
+    if req.get("mode") == "standing":
+        grants = active_grants(entries, self_did)
+        has_assist_grant = any(
+            g.get("capability") == "assist" and g.get("center_did") == req.get("center_did")
+            for g in grants.values()
+        )
+        if not has_assist_grant:
+            return False, "no-standing-grant"
     if active_session(entries, self_did, now_ts) is not None:
         return False, "session-already-active"
     return True, "ok"
