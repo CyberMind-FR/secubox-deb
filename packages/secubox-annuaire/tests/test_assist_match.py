@@ -58,6 +58,18 @@ def test_revoke_drops_offer():
     assert m.matches(entries, now_ts="2026-07-25T10:30:00Z") == []
 
 
+def test_malformed_ttl_fails_closed():
+    entries = [_offer("o1", ["lora"], ttl="not-a-number"), _req("r1", ["lora"])]
+    assert m.matches(entries, now_ts="2026-07-25T10:30:00Z") == []
+    assert m.active_offers(entries, now_ts="2026-07-25T10:30:00Z") == []
+
+
+def test_malformed_created_at_fails_closed():
+    entries = [_offer("o1", ["lora"], at="garbage"), _req("r1", ["lora"])]
+    assert m.matches(entries, now_ts="2026-07-25T10:30:00Z") == []
+    assert m.active_offers(entries, now_ts="2026-07-25T10:30:00Z") == []
+
+
 def test_match_ready_needs_both_sides():
     mid = m.match_id("o1", "r1")
     base = [_offer("o1", ["lora"]), _req("r1", ["lora"])]
