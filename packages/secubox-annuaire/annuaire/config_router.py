@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from .config_apply import _blake2b_hex, apply_composed, blob_text
+from .config_compose import compose
 from .crypto import canonical_bytes, verify
 from .grants import active_grants, can_push
 from .model import LAYER_ORDER
@@ -120,6 +121,7 @@ def route_config(
     target_dir: str,
     self_did: Optional[str],
     local_dir: str,
+    apply: bool = True,
 ) -> Dict[str, Any]:
     """Verify + apply every routable scope's config; the rest go to proposals.
 
@@ -140,8 +142,20 @@ def route_config(
     itself holds the grant for that (scope, layer) — which is already the
     correct outcome.
 
+    apply (default True, unchanged existing behavior): when False, this is a
+    read-only dry pass — the verified layer texts for every routable scope
+    are still collected and composed (annuaire.config_compose.compose), but
+    apply_composed() is NEVER called, so target_dir is never touched. Each
+    "applied" entry becomes {"status": "would-apply", "scope": ..., "text":
+    <composed text>} (or {"status": "reject"/"unparseable-toml", ...} if the
+    composed text does not even parse as TOML) instead of the real
+    apply_composed() result. "proposals" is identical in both modes — it
+    only reflects CONFIG_PUBLISH entries that were never routable to begin
+    with, apply/no-apply. Used by GET /centers/proposals and GET
+    /centers/effective/{scope} (api/main.py) for a read-only preview.
+
     Returns:
-        {"applied": [<apply_composed result>, ...], "proposals": [...]}
+        {"applied": [...], "proposals": [...]}
     """
     grant_map = active_grants(entries)  # {(scope, layer): grant_payload}
 
@@ -217,6 +231,14 @@ def route_config(
                 ordered_texts.append(cand[1])
         if not ordered_texts:
             continue
-        applied.append(apply_composed(scope, ordered_texts, target_dir))
+        if apply:
+            applied.append(apply_composed(scope, ordered_texts, target_dir))
+        else:
+            try:
+                text = compose(ordered_texts)
+            except Exception:
+                applied.append({"status": "reject", "scope": scope, "reason": "unparseable-toml"})
+                continue
+            applied.append({"status": "would-apply", "scope": scope, "text": text})
 
     return {"applied": applied, "proposals": proposals}

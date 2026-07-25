@@ -199,6 +199,61 @@ def test_route_config_bad_signature_is_proposed_not_applied(tmp_path):
     assert result["proposals"][0]["scope"] == "dns"
 
 
+# ---------------------------------------------------------------------------
+# apply=False — read-only dry pass (Task 8: GET /centers/proposals +
+# GET /centers/effective/{scope} in api/main.py never write to disk).
+# ---------------------------------------------------------------------------
+
+def test_route_config_apply_false_writes_nothing(tmp_path):
+    """apply=False must never touch target_dir, yet still surface the
+    composed text it WOULD have written and the exact same proposals a real
+    (apply=True) route would produce."""
+    journal = Journal(str(tmp_path / "log.db"))
+
+    a_priv, a_pub, a_did = _actor()
+    b_priv, b_pub, b_did = _actor()
+    box_priv, box_pub, box_did = _actor()
+
+    genesis(journal, a_priv)
+    genesis(journal, b_priv)
+    grant_issue(journal, box_priv, box_did, a_did, "firewall", "baseline")
+
+    baseline_text = 'x = 1\n'
+    _publish_config_at(journal, a_priv, a_did, scope="firewall", layer="baseline",
+                        version=1, text=baseline_text)
+    # Ungranted — always a proposal, apply or not.
+    _publish_config_at(journal, b_priv, b_did, scope="firewall", layer="override",
+                        version=1, text="x = 99\n")
+
+    entries = list(journal.iter_entries())
+    target_dir = tmp_path / "target"
+    local_dir = tmp_path / "local"
+    local_dir.mkdir()
+
+    dry = route_config(entries, str(target_dir), self_did=box_did,
+                        local_dir=str(local_dir), apply=False)
+
+    # Nothing was written to target_dir at all.
+    assert not target_dir.exists()
+
+    # The composed text is still surfaced, best-effort, for a read-only preview.
+    applied_by_scope = {r["scope"]: r for r in dry["applied"]}
+    assert applied_by_scope["firewall"]["status"] == "would-apply"
+    doc = tomllib.loads(applied_by_scope["firewall"]["text"])
+    assert doc["x"] == 1
+
+    # Proposals are identical to a real (apply=True) route.
+    wet = route_config(entries, str(target_dir), self_did=box_did,
+                        local_dir=str(local_dir), apply=True)
+    assert dry["proposals"] == wet["proposals"]
+    assert len(dry["proposals"]) == 1
+    assert dry["proposals"][0]["reason"] == "no-grant"
+
+    # The apply=True call above DID write — confirms apply=False's silence
+    # above was not simply because writing is always a no-op for this fixture.
+    assert (target_dir / "firewall.toml").exists()
+
+
 def test_route_config_hash_mismatch_is_proposed_not_applied(tmp_path):
     """A granted, VALIDLY-signed CONFIG_PUBLISH whose content_hash does not
     match its own inline text must be rejected — a valid grant + valid
