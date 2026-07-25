@@ -30,9 +30,9 @@ def _expired(created_at: str, ttl_s: int, now_ts: str) -> bool:
     try:
         c = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         n = datetime.strptime(now_ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-    except ValueError:
+        return n >= c + timedelta(seconds=int(ttl_s))
+    except (ValueError, TypeError):
         return True  # unparseable → fail-closed
-    return n >= c + timedelta(seconds=int(ttl_s))
 
 
 def active_offers(entries: List[Mapping[str, Any]], now_ts: str) -> List[dict]:
@@ -60,7 +60,7 @@ def _compatible(offer: dict, request: dict) -> bool:
     if not (set(offer.get("tags", [])) & set(request.get("tags", []))):
         return False
     os_, rs = offer.get("scope"), request.get("scope")
-    if os_ and rs and os_ != rs:
+    if os_ is not None and rs is not None and os_ != rs:
         return False
     return True
 
