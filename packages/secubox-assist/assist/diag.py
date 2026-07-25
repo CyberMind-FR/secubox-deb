@@ -16,7 +16,7 @@ from typing import Dict, List
 from .catalog import MODULE_ALLOW
 
 _SECRET_KV = re.compile(
-    r"(?i)\b(token|secret|password|passwd|api[-_]?key|authorization|bearer)\b"
+    r"(?i)(?<![A-Za-z0-9])(token|secret|password|passwd|api[-_]?key|authorization|bearer)\b"
     r"[\"']?\s*(?:[:=]\s*|\s+)"
     r"[\"']?(?:(?:bearer|basic)\s+)?"
     r"[^\s\"',;{}]+")
