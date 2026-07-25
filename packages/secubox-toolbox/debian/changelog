@@ -1,3 +1,13 @@
+secubox-toolbox (2.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix(rlevel): le portail lance sbxmitm-policyctl DIRECTEMENT (sans sudo) —
+    peer-rlevel.json est portal-owned et le nft set @rlevel_off ne demande que
+    CAP_NET_ADMIN (déjà accordé). Le portail garde NoNewPrivileges=true + ses
+    caps minimales : zéro réduction de durcissement pour le contrôle webui.
+    Retire le dropin NNP=false et le sudoers devenus inutiles.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 00:30:00 +0200
+
 secubox-toolbox (2.8.7-1~bookworm1) bookworm; urgency=medium
 
   * rlevel-per-peer: package the R-level MITM policy surface (#rlevel-per-peer,
