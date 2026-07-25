@@ -51,3 +51,16 @@ def test_dryrun_writes_nothing(tmp_path):
     r2 = subprocess.run([sys.executable, CTL, "list"], env=env,
                         capture_output=True, text=True)
     assert json.loads(r2.stdout)["pending"] == []
+
+
+def test_request_bad_mode_returns_json_error_not_traceback(tmp_path):
+    env = _env(tmp_path)
+    center = "did:plc:" + "2" * 32
+    r = subprocess.run([sys.executable, CTL, "request", center, "--mode",
+                        "bogus-mode", "--scope", "dns", "--duration", "600",
+                        "--reason", "help"], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    combined = (r.stdout + r.stderr).strip()
+    assert "Traceback" not in combined, combined
+    payload = json.loads(r.stderr.strip() or r.stdout.strip())
+    assert "error" in payload

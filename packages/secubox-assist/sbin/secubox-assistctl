@@ -131,8 +131,12 @@ def cmd_request(a) -> int:
     priv = _key()
     j = _journal()
     req_id = "req-" + secrets.token_hex(8)
-    verbs.assist_request(j, priv, a.center_did, a.mode, a.scope, a.duration,
-                         a.reason, req_id=req_id)
+    try:
+        verbs.assist_request(j, priv, a.center_did, a.mode, a.scope, a.duration,
+                             a.reason, req_id=req_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
     print(json.dumps({"req_id": req_id}))
     return 0
 
@@ -179,8 +183,12 @@ def cmd_close(a) -> int:
     if _dry():
         _dryrun_report("assist_session_close", session_id=a.session_id)
         return 0
-    verbs.assist_session_close(_journal(), _key(), a.session_id,
-                               a.reason or "operator-close")
+    try:
+        verbs.assist_session_close(_journal(), _key(), a.session_id,
+                                   a.reason or "operator-close")
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
     print(json.dumps({"closed": a.session_id}))
     return 0
 
@@ -192,7 +200,11 @@ def cmd_console_grant(a) -> int:
         _dryrun_report("assist_console_grant", session_id=a.session_id,
                        expires_ts=expires_ts)
         return 0
-    verbs.assist_console_grant(_journal(), _key(), a.session_id, expires_ts)
+    try:
+        verbs.assist_console_grant(_journal(), _key(), a.session_id, expires_ts)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
     print(json.dumps({"console": a.session_id, "expires_ts": expires_ts}))
     return 0
 
@@ -201,7 +213,11 @@ def cmd_console_revoke(a) -> int:
     if _dry():
         _dryrun_report("assist_console_revoke", session_id=a.session_id)
         return 0
-    verbs.assist_console_revoke(_journal(), _key(), a.session_id)
+    try:
+        verbs.assist_console_revoke(_journal(), _key(), a.session_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
     print(json.dumps({"console_revoked": a.session_id}))
     return 0
 
