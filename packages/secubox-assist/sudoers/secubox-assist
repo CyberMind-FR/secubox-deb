@@ -1,0 +1,2 @@
+# secubox (webui/API) may invoke ONLY the assist control CLI.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-assistctl

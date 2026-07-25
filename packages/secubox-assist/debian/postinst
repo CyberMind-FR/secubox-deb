@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+if ! getent passwd secubox-assist >/dev/null; then
+    adduser --system --group --no-create-home --home /nonexistent secubox-assist
+fi
+# audit log must be writable by the daemon without touching the shared parent
+touch /var/log/secubox/audit.log 2>/dev/null || true
+chgrp secubox-assist /var/log/secubox/audit.log 2>/dev/null || true
+chmod 0664 /var/log/secubox/audit.log 2>/dev/null || true
+if [ -x /usr/sbin/apparmor_parser ] && [ -f /etc/apparmor.d/secubox-assist ]; then
+    apparmor_parser -r /etc/apparmor.d/secubox-assist 2>/dev/null || true
+fi
+#DEBHELPER#
+systemctl daemon-reload || true
+systemctl enable --now secubox-assist-api.service || true
+systemctl enable --now secubox-assist.service || true
+nft -f /etc/secubox/nft.d/zz-secubox-assist.conf 2>/dev/null || true
+exit 0

@@ -32,6 +32,15 @@ Commands:
   console-revoke <session_id>    ASSIST_CONSOLE_REVOKE.
   list                            {"pending": [...], "active_session": {...}|null}
 
+  diag status|bundle              [privileged] status summary / full redacted
+                                  diagnostic bundle — invoked by the WS daemon
+                                  via `sudo -n`, never called interactively.
+  service restart|toggle <module> [on|off]
+                                  [privileged] systemctl restart/start/stop an
+                                  assist.catalog.MODULE_ALLOW-listed unit.
+  config reload|rollback <scope>  [privileged] delegate to secubox-params
+                                  swap/rollback for an allow-listed scope.
+
 Env (override; keys are NEVER generated here):
   ANNUAIRE_JOURNAL    default /var/lib/secubox/annuaire/journal.db
   ANNUAIRE_KEY_PATH   default /etc/secubox/secrets/annuaire/node.key
@@ -232,6 +241,64 @@ def cmd_list(a) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+# privileged catalog backends — invoked BY the WS daemon (via sudo -n, see
+# sudoers/secubox-assist) as `sudo -n secubox-assistctl <diag|service|config>
+# ...`, never directly by a center. Every target is re-validated here against
+# assist.catalog.MODULE_ALLOW / _scope even though wsserver.dispatch already
+# validated via assist.catalog.resolve — defense in depth: this binary is the
+# actual privilege boundary (root via sudoers), so it must not trust its
+# caller's argv construction alone.
+# --------------------------------------------------------------------------- #
+
+def cmd_diag(a) -> int:
+    from assist import diag
+    if a.what == "status":
+        print(json.dumps(diag.collect(_now())["modules"]))
+    else:
+        print(json.dumps(diag.collect(_now())))
+    return 0
+
+
+def cmd_service(a) -> int:
+    from assist.catalog import MODULE_ALLOW
+    if a.module not in MODULE_ALLOW:
+        _die(f"module not allow-listed: {a.module}")
+        return 1  # unreachable
+    import subprocess as sp
+    if a.op == "restart":
+        sp.run(["systemctl", "restart", a.module], check=False)
+    else:
+        if a.state not in ("on", "off"):
+            _die("toggle needs on|off")
+            return 1  # unreachable
+        sp.run(["systemctl", "start" if a.state == "on" else "stop", a.module], check=False)
+    print(json.dumps({"ok": True, "module": a.module, "op": a.op}))
+    return 0
+
+
+def cmd_config(a) -> int:
+    # Delegates to the project-wide double-buffer/4R config actuator
+    # (secubox-params — see CLAUDE.md "Double-buffer PARAMETERS"); this ctl
+    # never edits config files itself, only triggers the validated swap or
+    # a rollback to the last-known-good snapshot for the given scope.
+    from assist.catalog import _scope, CatalogError
+    try:
+        scope = _scope(a.scope)
+    except CatalogError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    import subprocess as sp
+    if a.op == "reload":
+        argv = ["secubox-params", "swap", "--module", scope, "--validate-zkp"]
+    else:
+        argv = ["secubox-params", "rollback", "--module", scope, "--target", "R1"]
+    r = sp.run(argv, capture_output=True, text=True, check=False)
+    print(json.dumps({"ok": r.returncode == 0, "scope": scope, "op": a.op,
+                      "output": r.stdout, "error": r.stderr}))
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(
         prog="secubox-assistctl",
@@ -273,6 +340,23 @@ def main(argv=None) -> int:
     cr.set_defaults(fn=cmd_console_revoke)
 
     sub.add_parser("list", help="pending requests + active session").set_defaults(fn=cmd_list)
+
+    # Privileged catalog backends — invoked by the WS daemon via sudo -n,
+    # never called interactively by an operator (see sudoers/secubox-assist).
+    d = sub.add_parser("diag", help="[privileged] diagnostic bundle backend")
+    d.add_argument("what", choices=["status", "bundle"])
+    d.set_defaults(fn=cmd_diag)
+
+    sv = sub.add_parser("service", help="[privileged] restart/toggle an allow-listed module")
+    sv.add_argument("op", choices=["restart", "toggle"])
+    sv.add_argument("module")
+    sv.add_argument("state", nargs="?", choices=["on", "off"])
+    sv.set_defaults(fn=cmd_service)
+
+    cf = sub.add_parser("config", help="[privileged] reload/rollback an allow-listed scope")
+    cf.add_argument("op", choices=["reload", "rollback"])
+    cf.add_argument("scope")
+    cf.set_defaults(fn=cmd_config)
 
     args = p.parse_args(argv)
     return args.fn(args)

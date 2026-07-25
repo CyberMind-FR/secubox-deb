@@ -1,0 +1,10 @@
+#include <tunables/global>
+profile secubox-assist /usr/bin/python3 flags=(enforce) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  /usr/lib/secubox/** r,
+  /var/lib/secubox/annuaire/journal.db rk,
+  /var/log/secubox/audit.log a,
+  deny /etc/secubox/secrets/** rwklx,
+  network inet stream,
+}
