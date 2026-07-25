@@ -1,0 +1,15 @@
+Source: secubox-assist
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+
+Package: secubox-assist
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3-fastapi, python3-uvicorn,
+ python3-websockets, secubox-core, secubox-annuaire, sudo, adduser
+Description: SecuBox assistance request — real-time help sessions
+ Consent-gated, audited, revocable live assistance sessions between a box and
+ a federated center, over the wg-mesh, with a bounded action catalog and
+ double-consent console escalation.

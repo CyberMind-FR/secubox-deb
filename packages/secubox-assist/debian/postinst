@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+if ! getent passwd secubox-assist >/dev/null; then
+    adduser --system --group --no-create-home --home /nonexistent secubox-assist
+fi
+# Derive the box's PUBLIC did once from the sovereign private key (readable
+# here as root) and publish it world-readable so the WS daemon (running as
+# secubox-assist, NOT in group secubox, and which must NEVER hold/read the
+# private key itself) can resolve its own identity without touching
+# /etc/secubox/secrets/annuaire/node.key. Only the node.did FILE is created;
+# the shared /etc/secubox/annuaire parent directory is left untouched.
+mkdir -p /etc/secubox/annuaire 2>/dev/null || true
+if [ -r /etc/secubox/secrets/annuaire/node.key ]; then
+    python3 -c "
+import sys
+sys.path.insert(0, '/usr/lib/secubox/annuaire')
+from annuaire.crypto import public_from_private, did_from_pubkey
+raw = bytes.fromhex(open('/etc/secubox/secrets/annuaire/node.key').read().strip())
+print(did_from_pubkey(public_from_private(raw)))
+" > /etc/secubox/annuaire/node.did 2>/dev/null || true
+    chmod 0644 /etc/secubox/annuaire/node.did 2>/dev/null || true
+fi
+# audit log must be writable by the daemon without touching the shared parent
+touch /var/log/secubox/audit.log 2>/dev/null || true
+chgrp secubox-assist /var/log/secubox/audit.log 2>/dev/null || true
+chmod 0664 /var/log/secubox/audit.log 2>/dev/null || true
+#DEBHELPER#
+systemctl daemon-reload || true
+systemctl enable --now secubox-assist-api.service || true
+systemctl enable --now secubox-assist.service || true
+# Durable wg-mesh nft allow (own base chain, policy accept — see
+# nft/secubox-assist.nft for why it can never drop unrelated traffic).
+# dpkg already placed the conffile at /etc/nftables.d/secubox-assist.nft;
+# reload nftables.service so it picks up the include (matches
+# secubox-metrics/secubox-hub/secubox-toolbox precedent), falling back to a
+# direct load if the service isn't running yet.
+if systemctl is-active --quiet nftables.service 2>/dev/null; then
+    systemctl reload nftables.service 2>/dev/null \
+        || nft -f /etc/nftables.d/secubox-assist.nft 2>/dev/null || true
+fi
+exit 0
