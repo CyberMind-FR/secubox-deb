@@ -48,14 +48,33 @@ def _payload(entry: Entry) -> Dict[str, Any]:
     return payload or {}
 
 
-def active_grants(entries: List[Mapping[str, Any]]) -> Dict[GrantKey, Dict[str, Any]]:
-    """Resolve the currently-active grants from a journal entry list.
+def active_grants(
+    entries: List[Mapping[str, Any]], self_did: Optional[str] = None
+) -> Dict[GrantKey, Dict[str, Any]]:
+    """Resolve the currently-active, SOVEREIGN grants from a journal entry list.
 
     Walks entries in order, recording every GRANT_ISSUE by grant_id, then
     dropping any grant_id that a later GRANT_REVOKE names. Returns
     {(scope, layer): grant_payload} for whatever survives — last GRANT_ISSUE
     wins if two issues ever named the same (scope, layer) (write-path
     validation via validate_issue is what actually prevents that).
+
+    Sovereignty filter: a GRANT_ISSUE only confers real delegated authority
+    when it was issued by the box itself (payload["issued_by"] == self_did).
+    Grant ops federate like any other journal entry (export_entries/
+    import_entries via dir_sync) — a mesh peer can author a well-formed,
+    correctly-signed GRANT_ISSUE naming ITS OWN center as owner of some
+    (scope, layer) and it will sync into every node's journal. Without this
+    filter, config_router/owner/can_push would treat that foreign grant as
+    local authority and apply the peer's config — a sovereignty break.
+
+    When *self_did* is given, only grants with payload["issued_by"] ==
+    self_did are kept; grants issued by anyone else are silently ignored
+    (as if absent). When *self_did* is None (default), NO filter is applied
+    — this is the pre-existing, unfiltered behavior, retained ONLY for
+    low-level unit tests that construct journals without a notion of "self".
+    Every real call site (config_router.route_config, api/main.py,
+    sbx-centersctl) MUST pass self_did explicitly.
     """
     issued: Dict[str, Dict[str, Any]] = {}
     revoked_ids: set = set()
@@ -64,6 +83,8 @@ def active_grants(entries: List[Mapping[str, Any]]) -> Dict[GrantKey, Dict[str, 
         op = _op(entry)
         payload = _payload(entry)
         if op == "grant_issue":
+            if self_did is not None and payload.get("issued_by") != self_did:
+                continue
             issued[payload["grant_id"]] = payload
         elif op == "grant_revoke":
             revoked_ids.add(payload["grant_id"])
@@ -76,29 +97,52 @@ def active_grants(entries: List[Mapping[str, Any]]) -> Dict[GrantKey, Dict[str, 
     return result
 
 
-def owner(entries: List[Mapping[str, Any]], scope: str, layer: str) -> Optional[str]:
-    """Return the center_did that currently owns (scope, layer), or None."""
-    grant = active_grants(entries).get((scope, layer))
+def owner(
+    entries: List[Mapping[str, Any]], scope: str, layer: str, self_did: Optional[str] = None
+) -> Optional[str]:
+    """Return the center_did that currently owns (scope, layer), or None.
+
+    Only a grant issued by *self_did* counts as ownership — see
+    active_grants()'s sovereignty filter docstring.
+    """
+    grant = active_grants(entries, self_did).get((scope, layer))
     return grant["center_did"] if grant else None
 
 
-def can_push(entries: List[Mapping[str, Any]], center_did: str, scope: str, layer: str) -> bool:
-    """True iff *center_did* is the exact, exclusive owner of (scope, layer)."""
-    return owner(entries, scope, layer) == center_did
+def can_push(
+    entries: List[Mapping[str, Any]],
+    center_did: str,
+    scope: str,
+    layer: str,
+    self_did: Optional[str] = None,
+) -> bool:
+    """True iff *center_did* is the exact, exclusive, SELF-GRANTED owner of
+    (scope, layer) — a grant issued by anyone other than *self_did* never
+    makes this True. See active_grants()'s sovereignty filter docstring.
+    """
+    return owner(entries, scope, layer, self_did) == center_did
 
 
-def validate_issue(entries: List[Mapping[str, Any]], scope: str, layer: str) -> Optional[str]:
+def validate_issue(
+    entries: List[Mapping[str, Any]], scope: str, layer: str, self_did: Optional[str] = None
+) -> Optional[str]:
     """Return a rejection reason for a prospective GRANT_ISSUE, or None if OK.
 
     Order matters (first hit wins):
       1. layer == "local"        -> "layer-local-not-delegatable"
       2. scope in NON_DELEGATABLE -> "scope-not-delegatable"
       3. (scope, layer) already owned -> "already-owned"
+
+    The "already-owned" check is scoped to *self_did*'s own grants: a
+    federated grant a mesh peer issued for itself does not block this box
+    from issuing its own (sovereign) grant for the same (scope, layer) — see
+    active_grants()'s sovereignty filter docstring. Callers issuing a real
+    grant MUST pass self_did == the issuing box_did.
     """
     if layer == "local":
         return "layer-local-not-delegatable"
     if scope in NON_DELEGATABLE:
         return "scope-not-delegatable"
-    if (scope, layer) in active_grants(entries):
+    if (scope, layer) in active_grants(entries, self_did):
         return "already-owned"
     return None

@@ -300,3 +300,77 @@ def test_route_config_hash_mismatch_is_proposed_not_applied(tmp_path):
     assert result["proposals"][0]["reason"] == "hash-mismatch"
     assert result["proposals"][0]["publisher"] == a_did
     assert result["proposals"][0]["scope"] == "waf"
+
+
+# ---------------------------------------------------------------------------
+# Sovereignty guard — a GRANT_ISSUE federated in from a mesh peer (issued_by
+# != self_did) must never be honored as this box's own delegated authority
+# (CRITICAL finding, souveraineté rompue). This test MUST FAIL before the
+# grants.py/config_router.py self_did filter and PASS after.
+# ---------------------------------------------------------------------------
+
+def test_route_config_foreign_issued_grant_is_not_honored_sovereignty(tmp_path):
+    """A well-formed, plausible-looking GRANT_ISSUE that synced in from the
+    mesh (dir_sync import_entries) — issued_by a PEER box, not this one —
+    must not confer delegated authority here. Without the sovereignty
+    filter, X's correctly-signed, hash-correct CONFIG_PUBLISH would be
+    applied to firewall.toml; with it, X holds no grant THIS box ever
+    issued, so the push is a proposal (reason "no-grant") and nothing is
+    written to disk.
+    """
+    journal = Journal(str(tmp_path / "log.db"))
+
+    x_priv, x_pub, x_did = _actor()        # center X — receives the FOREIGN grant
+    _box_priv, _box_pub, box_did = _actor()  # this box — the sovereign local identity
+    pair_did = "did:plc:" + "f" * 32       # a mesh peer box — NOT this box
+
+    genesis(journal, x_priv)  # X's pubkey resolvable for CONFIG_PUBLISH sig check
+
+    # A GRANT_ISSUE as it would land here via mesh federation: naming X as
+    # owner of firewall/baseline, but issued_by a PEER box's did, not ours.
+    # It never goes through annuaire.verbs.grant_issue() (which always sets
+    # issued_by=box_did of the signer) — it represents an entry synced in
+    # from elsewhere, exactly like the tampered CONFIG_PUBLISH LogEntry built
+    # by hand above.
+    foreign_grant_entry = LogEntry(
+        height=0,
+        op=Op.GRANT_ISSUE,
+        prev_hash=GENESIS_HASH,
+        payload_type="Grant",
+        payload={
+            "grant_id": "g-foreign-1",
+            "center_did": x_did,
+            "capability": "config",
+            "scope": "firewall",
+            "layer": "baseline",
+            "issued_by": pair_did,
+        },
+        author=pair_did,
+        sig="deadbeef" * 8,
+        entry_hash="c" * 64,
+    )
+
+    # X, believing (correctly, on the PEER's own journal) that it holds the
+    # grant, signs and publishes firewall/baseline exactly as a legitimately
+    # granted center would — correct signature, correct content_hash.
+    text = "x = 1\n"
+    _publish_config_at(journal, x_priv, x_did, scope="firewall", layer="baseline",
+                        version=1, text=text)
+
+    entries = list(journal.iter_entries()) + [foreign_grant_entry]
+
+    target_dir = tmp_path / "target"
+    local_dir = tmp_path / "local"
+    local_dir.mkdir()
+
+    result = route_config(entries, str(target_dir), self_did=box_did, local_dir=str(local_dir))
+
+    assert result["applied"] == []
+    assert not (target_dir / "firewall.toml").exists()
+    assert len(result["proposals"]) == 1
+    assert result["proposals"][0]["reason"] == "no-grant"
+    assert result["proposals"][0]["publisher"] == x_did
+    assert result["proposals"][0]["scope"] == "firewall"
+
+    from annuaire import grants  # noqa: PLC0415
+    assert grants.owner(entries, "firewall", "baseline", self_did=box_did) is None

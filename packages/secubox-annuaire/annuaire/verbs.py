@@ -1118,7 +1118,11 @@ def grant_issue(
       - scope in NON_DELEGATABLE  -> rejected ("scope-not-delegatable")
       - (scope, layer) already owned by an active grant -> rejected ("already-owned")
     Ownership is exclusive: validate_issue enforces at most one active grant
-    per (scope, layer) pair.
+    per (scope, layer) pair. self_did=box_did is passed to validate_issue so
+    "already-owned" is judged against THIS box's own sovereign grants only —
+    a federated grant a mesh peer issued for its own center never blocks
+    (or counts toward) this box's grant state (see grants.py sovereignty
+    filter).
 
     Journal contract: payload stored WITHOUT sig/signer_did; sig over
     canonical_bytes(payload). Same idiom as invite()/propose().
@@ -1138,7 +1142,7 @@ def grant_issue(
     Raises:
         ValueError: if validate_issue rejects the request (see reasons above).
     """
-    reason = grants.validate_issue(list(journal.iter_entries()), scope, layer)
+    reason = grants.validate_issue(list(journal.iter_entries()), scope, layer, self_did=box_did)
     if reason is not None:
         raise ValueError(reason)
 
