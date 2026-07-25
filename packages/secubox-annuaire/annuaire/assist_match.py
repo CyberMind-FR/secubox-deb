@@ -152,6 +152,16 @@ def match_ready(entries: List[Mapping[str, Any]], mid: str, now_ts: str) -> bool
     consent) never satisfies both checks unless they legitimately own both
     the offer AND the request. The underlying offer+request must also still
     be active.
+
+    Crucially, an accept's own (offer_id, req_id) pair MUST itself hash to
+    `mid` before it can be credited at all. Without this, an attacker who
+    owns their own active offer/request (o2/r2, passing the author-binding
+    checks trivially) could post accepts carrying `match_id=mid` — some
+    OTHER pair's match id, e.g. A's offer + B's request — while pointing
+    offer_id/req_id at their own o2/r2. That would forge mutual consent for
+    a rendezvous (mid) the attacker was never a party to. Requiring
+    match_id(offer_id, req_id) == mid closes this: an accept can only ever
+    speak for the exact pair that produces the mid it's posted against.
     """
     offers_by_id = {o["offer_id"]: o for o in active_offers(entries, now_ts)}
     requests_by_id = {r["req_id"]: r for r in active_open_requests(entries, now_ts)}
@@ -162,15 +172,21 @@ def match_ready(entries: List[Mapping[str, Any]], mid: str, now_ts: str) -> bool
         op, author, payload = _op_author_payload(entry)
         if op != Op.ASSIST_MATCH_ACCEPT.value or payload.get("match_id") != mid:
             continue
-        side = payload.get("side")
         if author is None:
             continue
+        offer_id = payload.get("offer_id")
+        req_id = payload.get("req_id")
+        if offer_id is None or req_id is None:
+            continue  # fail-closed: no ids, can't be bound to mid
+        if match_id(offer_id, req_id) != mid:
+            continue  # this accept's own ids don't produce mid — not credited
+        side = payload.get("side")
         if side == "offer":
-            offer = offers_by_id.get(payload.get("offer_id"))
+            offer = offers_by_id.get(offer_id)
             if offer is not None and author == offer.get("issued_by"):
                 offer_side_ok = True
         elif side == "request":
-            request = requests_by_id.get(payload.get("req_id"))
+            request = requests_by_id.get(req_id)
             if request is not None and author == request.get("issued_by"):
                 request_side_ok = True
 
