@@ -23,6 +23,14 @@
 # interface index at LOAD time and fail if wg-quick@wg-toolbox has not created
 # the interface yet — the second boot-time abort).
 table inet wg-toolbox {
+    # #rlevel-per-peer (task 4) — IPs of peers whose EFFECTIVE R-level is
+    # "off". Maintained by sbxmitm-policyctl (`nft add/flush element inet
+    # wg-toolbox rlevel_off`), never hand-edited. Empty at boot.
+    set rlevel_off {
+        type ipv4_addr
+        flags interval
+    }
+
     chain input {
         # Accept the incoming WG handshake so peers can connect even when a
         # base input chain elsewhere defaults to drop. Own base chain → no
@@ -39,6 +47,12 @@ table inet wg-toolbox {
 
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
+        # #rlevel-per-peer (task 4) — off-bypass MUST be the first rule of
+        # THIS chain. A `return` issued from a separate nat table does NOT
+        # stop this chain's own dnat rules below: nftables walks every nat
+        # base chain in priority order and only a same-chain return/dnat/
+        # accept decides the packet's fate. A same-chain return here does.
+        ip saddr @rlevel_off return
         # Phase 6.C — interception : redirect peer TCP 443/80 to mitm-wg.
         # mitmproxy in transparent mode listens at 10.99.1.1:8081. The
         # ignore_hosts whitelist (static + dynamic, cert_pin_detect addon)

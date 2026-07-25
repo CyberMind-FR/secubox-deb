@@ -366,7 +366,9 @@ func (px *Proxy) handleTransparent(client net.Conn) {
 		decisionHost = dstHost // no SNI → fall back to the captured dst IP
 	}
 
-	verdict := px.pol.Decide(decisionHost, sni)
+	// Clamped to the calling peer's R-level (#rlevel-per-peer) via the SAME
+	// helper handleConnect uses, so the two accept paths never drift.
+	verdict := px.decideForPeer(peerIP(client), decisionHost, sni)
 
 	if verdict == "splice" {
 		// Passthrough: raw TCP to the REAL captured destination, never the SNI,

@@ -1,3 +1,34 @@
+secubox-toolbox (2.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix(rlevel): le portail lance sbxmitm-policyctl DIRECTEMENT (sans sudo) —
+    peer-rlevel.json est portal-owned et le nft set @rlevel_off ne demande que
+    CAP_NET_ADMIN (déjà accordé). Le portail garde NoNewPrivileges=true + ses
+    caps minimales : zéro réduction de durcissement pour le contrôle webui.
+    Retire le dropin NNP=false et le sudoers devenus inutiles.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 00:30:00 +0200
+
+secubox-toolbox (2.8.7-1~bookworm1) bookworm; urgency=medium
+
+  * rlevel-per-peer: package the R-level MITM policy surface (#rlevel-per-peer,
+    task 8). Ships sbxmitm-policyctl (root-scoped ctl owning peer-rlevel.json +
+    the @rlevel_off nft set), the /rlevel admin+self-service panel and its
+    menu.d entry, and a scoped sudoers.d/secubox-toolbox that only lets the
+    portal (User=secubox-toolbox) invoke the five fixed policyctl subcommands
+    (set-floor|force|set-chosen|set-default|list) — no blanket
+    `sbxmitm-policyctl ALL`. The panel's nftables.d off-bypass (@rlevel_off set
+    in secubox-toolbox-wg.nft + secubox-toolbox-wg-fanout.nft) already ships
+    via the existing nftables.d install block.
+    postinst seeds /var/lib/secubox/toolbox/peer-rlevel.json with
+    defaults.mode="reel" (never overwritten on upgrade) — a DELIBERATE choice
+    to PRESERVE current fleet-wide behaviour (every peer fully MITM'd + the
+    existing block policy honoured) instead of a surprise fleet-wide downgrade
+    to a lighter default at deploy time; operators opt individual peers DOWN
+    afterwards via the panel or the ctl.
+    Depends: + sudo (delegation transport for the ctl).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
+
 secubox-toolbox (2.8.6-1~bookworm2) bookworm; urgency=medium
 
   * autolearn: NEVER-SPLICE guard so ad/tracker networks are never promoted to

@@ -24,8 +24,26 @@
 flush chain inet wg-toolbox prerouting
 
 table inet wg-toolbox {
+    # #rlevel-per-peer (task 4) — same named set as secubox-toolbox-wg.nft
+    # (identical redeclaration is idempotent; this file must stay
+    # self-contained in case it is ever loaded without that file present).
+    # IPs of peers whose EFFECTIVE R-level is "off", maintained by
+    # sbxmitm-policyctl. Empty at boot.
+    set rlevel_off {
+        type ipv4_addr
+        flags interval
+    }
+
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
+
+        # #rlevel-per-peer (task 4) — off-bypass MUST be the first rule of
+        # THIS chain (the one that actually DNATs, since this file flushes
+        # and replaces the base file's prerouting rules). A `return` from a
+        # separate nat table would NOT stop the round-robin dnat below —
+        # nftables walks every nat base chain by priority and only a
+        # same-chain return/dnat/accept fixes the packet's fate.
+        ip saddr @rlevel_off return
 
         # Phase 9 (#501) — 4-worker round-robin DNAT.  numgen returns
         # 0..3 ; the map sends each to one of the 4 worker ports on

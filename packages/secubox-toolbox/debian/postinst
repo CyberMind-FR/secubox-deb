@@ -104,6 +104,28 @@ SBXFILTERS
     mkdir -p /var/lib/secubox/toolbox
     chown secubox-toolbox:secubox-toolbox /var/lib/secubox/toolbox 2>/dev/null || true
     chmod 0750 /var/lib/secubox/toolbox 2>/dev/null || true
+
+    # rlevel-per-peer (#task-8) : seed the per-peer wg-toolbox MITM policy
+    # store consumed by sbxmitm-policyctl + the Go workers (cmd/sbxmitm/
+    # rlevel.go). NEVER overwrite an existing file (would clobber operator
+    # per-peer settings on upgrade — leaf file only, no shared-parent chown).
+    #
+    # default_mode="reel" is a DELIBERATE choice: it PRESERVES today's
+    # behaviour (every wg-toolbox peer fully MITM'd + the existing block
+    # policy honoured), so installing/upgrading this package does NOT
+    # silently downgrade inspection for the whole fleet. Operators/admins
+    # opt individual peers DOWN to active/passive/off afterwards via the
+    # /rlevel panel or sbxmitm-policyctl — this is a privacy-forward
+    # opt-DOWN model, not an opt-in-UP one, to avoid a surprise fleet-wide
+    # relaxation at deploy time.
+    if [ ! -f /var/lib/secubox/toolbox/peer-rlevel.json ]; then
+      cat > /var/lib/secubox/toolbox/peer-rlevel.json <<'SBXRLEVEL'
+{"defaults":{"mode":"reel","floor":"passive"},"peers":{}}
+SBXRLEVEL
+      chown secubox-toolbox:secubox-toolbox /var/lib/secubox/toolbox/peer-rlevel.json 2>/dev/null || true
+      chmod 0640 /var/lib/secubox/toolbox/peer-rlevel.json 2>/dev/null || true
+    fi
+
     # #577 : shared media proxy-cache dir (opt-in via filters ; 2 GB LRU).
     mkdir -p /var/cache/secubox/toolbox/media
     chown secubox-toolbox:secubox-toolbox /var/cache/secubox/toolbox/media 2>/dev/null || true
