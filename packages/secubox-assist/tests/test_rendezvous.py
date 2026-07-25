@@ -13,8 +13,12 @@ A = "did:plc:" + "1" * 32   # offerer
 B = "did:plc:" + "2" * 32   # requester (this node)
 
 
-def e(op, **p):
-    return {"op": op.value, "payload": p}
+def e(op, author=None, **p):
+    """Build a journal-entry dict. `author` is the authenticated signer field
+    (as the real Journal sets it) — defaults to the payload's `issued_by`."""
+    if author is None:
+        author = p.get("issued_by")
+    return {"op": op.value, "author": author, "payload": p}
 
 
 def _ready_pair(now="2026-07-25T10:00:00Z"):
