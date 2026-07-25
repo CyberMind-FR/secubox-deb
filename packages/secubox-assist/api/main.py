@@ -18,7 +18,9 @@ from secubox_core.auth import require_jwt
 sys.path.insert(0, os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire"))
 from annuaire.log import Journal          # noqa: E402
 from annuaire import assist               # noqa: E402
+from annuaire import assist_match         # noqa: E402
 from annuaire.crypto import public_from_private, did_from_pubkey  # noqa: E402
+from assist import rendezvous             # noqa: E402  (local sibling package)
 
 app = FastAPI(title="SecuBox Assist")
 CTL = ["/usr/sbin/secubox-assistctl"]
@@ -131,3 +133,83 @@ async def console_grant(b: ConsoleBody):
 @app.post("/console/revoke", dependencies=[Depends(require_jwt)])
 async def console_revoke(b: SessionRef):
     return _ctl("console-revoke", b.session_id)
+
+
+# --------------------------------------------------------------------------- #
+# Assist marketplace (dual offer/request) — sous-projet assist-dual. Reads are
+# computed in-process from the journal (annuaire.assist_match / rendezvous);
+# writes delegate to secubox-assistctl (signed journal appends).
+# --------------------------------------------------------------------------- #
+
+@app.get("/offers", dependencies=[Depends(require_jwt)])
+async def offers():
+    return assist_match.active_offers(_entries(), _now())
+
+
+@app.get("/requests/open", dependencies=[Depends(require_jwt)])
+async def requests_open():
+    return assist_match.active_open_requests(_entries(), _now())
+
+
+@app.get("/matches", dependencies=[Depends(require_jwt)])
+async def matches():
+    sid = _self_did()
+    if sid is None:
+        return []
+    return rendezvous.ready_matches(_entries(), sid, _now())
+
+
+class OfferBody(BaseModel):
+    tags: list[str]
+    scope: str | None = None
+    ttl_s: int
+
+
+@app.post("/offer", dependencies=[Depends(require_jwt)])
+async def offer(b: OfferBody):
+    return _ctl("offer", "--tags", ",".join(b.tags),
+                *(["--scope", b.scope] if b.scope else []), "--ttl", str(b.ttl_s))
+
+
+class OfferRef(BaseModel):
+    offer_id: str
+
+
+@app.post("/offer/revoke", dependencies=[Depends(require_jwt)])
+async def offer_revoke(b: OfferRef):
+    return _ctl("offer-revoke", b.offer_id)
+
+
+class OpenRequestBody(BaseModel):
+    tags: list[str]
+    scope: str | None = None
+    ttl_s: int
+    reason: str
+
+
+@app.post("/request/open", dependencies=[Depends(require_jwt)])
+async def request_open(b: OpenRequestBody):
+    return _ctl("request-open", "--tags", ",".join(b.tags),
+                *(["--scope", b.scope] if b.scope else []), "--ttl", str(b.ttl_s),
+                "--reason", b.reason)
+
+
+class MatchAcceptBody(BaseModel):
+    offer_id: str
+    req_id: str
+    side: str
+
+
+@app.post("/match/accept", dependencies=[Depends(require_jwt)])
+async def match_accept(b: MatchAcceptBody):
+    return _ctl("match-accept", b.offer_id, b.req_id, b.side)
+
+
+class JoinLinkBody(BaseModel):
+    ref: str
+    ttl_s: int
+
+
+@app.post("/joinlink", dependencies=[Depends(require_jwt)])
+async def joinlink(b: JoinLinkBody):
+    return _ctl("joinlink", "--for", b.ref, "--ttl", str(b.ttl_s))
