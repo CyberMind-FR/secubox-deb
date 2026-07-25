@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # Source-Disclosed License — All rights reserved except as expressly granted.
 # See LICENCE-CMSD-1.0.md for terms.
-from annuaire.model import Op
+from annuaire.model import Op, now_rfc3339
 from annuaire import assist_match as m
 
 A = "did:plc:" + "1" * 32
@@ -68,6 +68,16 @@ def test_malformed_created_at_fails_closed():
     entries = [_offer("o1", ["lora"], at="garbage"), _req("r1", ["lora"])]
     assert m.matches(entries, now_ts="2026-07-25T10:30:00Z") == []
     assert m.active_offers(entries, now_ts="2026-07-25T10:30:00Z") == []
+
+
+def test_matches_with_now_rfc3339_format():
+    # created_at stamped with the real model default_factory shape
+    # (datetime.isoformat(): microseconds + "+00:00" offset), NOT the
+    # "Z"-suffixed, second-precision form the strict parser used to require.
+    stamp = now_rfc3339()
+    entries = [_offer("o1", ["lora"], at=stamp), _req("r1", ["lora"], at=stamp)]
+    ms = m.matches(entries, now_ts=now_rfc3339())
+    assert len(ms) == 1 and ms[0][2] == m.match_id("o1", "r1")
 
 
 def test_match_ready_needs_both_sides():

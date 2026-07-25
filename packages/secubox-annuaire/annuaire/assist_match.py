@@ -26,10 +26,24 @@ def match_id(offer_id: str, req_id: str) -> str:
                            digest_size=32).hexdigest()
 
 
+def _parse_ts(ts: str) -> datetime:
+    """Parse an RFC 3339 timestamp, tz-aware.
+
+    Accepts both the 'Z'-suffixed, second-precision form used in tests/fixtures
+    AND model.now_rfc3339()'s datetime.isoformat() rendering (optional
+    microseconds, explicit '+00:00' offset) — the real shape produced by the
+    AssistOffer/AssistOpenRequest default_factory.
+    """
+    s = ts.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    return datetime.fromisoformat(s)  # tz-aware given a UTC offset is present
+
+
 def _expired(created_at: str, ttl_s: int, now_ts: str) -> bool:
     try:
-        c = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        n = datetime.strptime(now_ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        c = _parse_ts(created_at)
+        n = _parse_ts(now_ts)
         return n >= c + timedelta(seconds=int(ttl_s))
     except (ValueError, TypeError):
         return True  # unparseable → fail-closed

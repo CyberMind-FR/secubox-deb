@@ -6,7 +6,7 @@ import os
 from annuaire.log import Journal
 from annuaire.crypto import canonical_bytes, verify, public_from_private, did_from_pubkey
 from annuaire import verbs, assist_match as m
-from annuaire.model import Op
+from annuaire.model import Op, now_rfc3339
 
 
 def _key():
@@ -30,4 +30,6 @@ def test_full_match_ready(tmp_path):
     verbs.assist_match_accept(j, ap, "o1", "r1", "offer")
     verbs.assist_match_accept(j, bp, "o1", "r1", "request")
     entries = list(j.iter_entries())
-    assert m.match_ready(entries, m.match_id("o1", "r1"), now_ts="2026-07-25T10:00:00Z")
+    # exercise the codebase's real "now" shape (model.now_rfc3339()'s
+    # isoformat rendering), not a hand-picked Z-suffixed fixture string.
+    assert m.match_ready(entries, m.match_id("o1", "r1"), now_ts=now_rfc3339())
