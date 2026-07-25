@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Assistance</title>
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+  body { font-family: 'Courier Prime', monospace; background:#0d1117; color:#e8e6d9; display:flex; }
+  .main { flex:1; margin-left:220px; padding:1.5rem; }
+  .card { background:rgba(30,40,55,.8); border:1px solid rgba(100,150,200,.2); border-radius:8px; padding:1rem; margin-bottom:1rem; }
+  .btn { padding:.4rem .8rem; border-radius:6px; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; }
+  .btn.danger { border-color:#ff4466; color:#ff4466; }
+  .btn.warn { border-color:#ffcc00; color:#ffcc00; }
+  input,select { background:#111a24; color:#e8e6d9; border:1px solid rgba(100,150,200,.2); padding:.35rem; border-radius:5px; }
+  #log { white-space:pre-wrap; font-size:.8rem; max-height:40vh; overflow:auto; }
+</style></head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<div class="main">
+  <h1 style="color:#00d4ff">🆘 Assistance</h1>
+  <div class="card" id="active-card"><h2>Session active</h2><div id="active">—</div>
+    <button class="btn danger" data-act="close">Kill session</button>
+    <button class="btn warn" data-act="console-grant">Autoriser console (2ᵉ consentement)</button>
+    <button class="btn" data-act="console-revoke">Révoquer console</button>
+  </div>
+  <div class="card"><h2>Demander de l'assistance</h2>
+    <div><input id="center" placeholder="did:plc:…" size="48"></div>
+    <div><select id="mode"><option>per-incident</option><option>standing</option></select>
+      <input id="scope" placeholder="scope (ex. dns)"> <input id="dur" type="number" value="1800">
+      <input id="reason" placeholder="motif"></div>
+    <button class="btn" data-act="request">Demander</button>
+  </div>
+  <div class="card"><h2>Journal de session</h2><div id="log"></div></div>
+</div>
+<script src="/shared/sidebar.js"></script>
+<script>
+const T = () => localStorage.getItem('sbx_token') || '';
+const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
+async function refresh() {
+  const r = await fetch('/api/v1/assist/sessions', {headers:H()});
+  if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
+  const d = await r.json();
+  document.getElementById('active').textContent =
+    d.active_session ? JSON.stringify(d.active_session) : 'aucune';
+  document.getElementById('log').textContent = JSON.stringify(d.pending, null, 2);
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'request') {
+    await fetch('/api/v1/assist/request', {method:'POST', headers:H(), body: JSON.stringify({
+      center_did: document.getElementById('center').value,
+      mode: document.getElementById('mode').value,
+      scope: document.getElementById('scope').value,
+      duration_s: parseInt(document.getElementById('dur').value, 10),
+      reason: document.getElementById('reason').value })});
+  } else {
+    const sid = (await (await fetch('/api/v1/assist/sessions', {headers:H()})).json())
+      .active_session?.session_id;
+    if (!sid && act !== 'request') return;
+    const ep = {'close':'/api/v1/assist/close','console-grant':'/api/v1/assist/console/grant',
+                'console-revoke':'/api/v1/assist/console/revoke'}[act];
+    await fetch(ep, {method:'POST', headers:H(), body: JSON.stringify({session_id: sid})});
+  }
+  refresh();
+});
+refresh(); setInterval(refresh, 5000);
+</script>
+</body></html>
