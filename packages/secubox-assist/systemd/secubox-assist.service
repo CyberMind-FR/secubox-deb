@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox Assist — WebSocket data-plane (wg-mesh only)
+After=network-online.target wg-quick@wg-mesh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-assist
+Group=secubox-assist
+ExecStart=/usr/bin/python3 -m assist.daemon
+Environment=PYTHONPATH=/usr/lib/secubox/assist:/usr/lib/secubox/annuaire
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/secubox
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
