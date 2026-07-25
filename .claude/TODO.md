@@ -1,5 +1,35 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-23*
+*Mis à jour : 2026-07-25*
+
+---
+
+## 🧅 Transparent .onion / proxypac — follow-ups fallback WPAD/PAC (2026-07-25, non-bloquant)
+
+> Le mécanisme **transparent** (primaire, wg-toolbox+LAN) est déployé et couvre le
+> cas réel. Ces items ne concernent que le **fallback PAC/WPAD** (clients non
+> force-routés) — pas urgents.
+
+- [ ] **Route HAProxy pour `wpad.gk2.secubox.in`** : le vhost `wpad-vhost.conf` a
+  `listen 80`, mais sur gk2 nginx sert sur `:9080` derrière HAProxy (qui possède
+  `:80`) → `/wpad.dat` renvoie 421. Câbler une route HAProxy `wpad.gk2` → nginx:9080
+  (patron public-vhost [[project_sbxwaf_live_routing]]) + `listen 9080` dans le vhost.
+  La résolution DNS `wpad.gk2` → box marche déjà (record tier2 Unbound).
+- [ ] **MIME strict `/proxy.pac` sur le vhost admin** : renvoie `text/html` car
+  `webui.conf` (vhost admin réel) n'inclut pas `secubox.d/`. Ajouter la `location
+  = /proxy.pac` (MIME `application/x-ns-proxy-autoconfig`) à `webui.conf`, OU router
+  via le vhost wpad ci-dessus.
+- [ ] **Backport source** : la board a l'`api.py` proxypac patchée + le bind Unbound
+  LAN + la règle onion repointée en live ; vérifier que le rebuild depuis la branche
+  mergée (#900) réconcilie tout (aggregator.toml registration incluse).
+
+## 🎚️ R-level par peer — follow-ups (2026-07-25, non-bloquant)
+
+- [ ] **Réconcilier le drift .deb** : la live api.py toolbox est patchée A' (ctl
+  sans sudo, NNP=true préservé) mais le `.deb 2.8.7` installé prédate. Rebuilder
+  `secubox-toolbox` **2.8.8** depuis master (#901 mergée) + redéployer pour durabilité
+  (un reinstall du 2.8.7 régresserait vers le chemin sudo qui ne marche pas).
+- [ ] **Enforcement `reel` — ban/rewrite temps réel** : v1 honore le block existant ;
+  les hooks ban/rewrite par-peer restent à étoffer (hors périmètre v1).
 
 ---
 
