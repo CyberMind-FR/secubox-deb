@@ -81,6 +81,8 @@ def pending_requests(entries: List[Mapping[str, Any]], self_did: str) -> List[di
     for p in _by(entries, Op.ASSIST_REQUEST):
         if p.get("req_id") in accepted:
             continue
+        if p.get("issued_by") != self_did and p.get("mode") != "standing":
+            continue  # per-incident request authored by someone else: not ours
         out.append(p)
     return out
 
@@ -88,13 +90,17 @@ def pending_requests(entries: List[Mapping[str, Any]], self_did: str) -> List[di
 def can_open(entries: List[Mapping[str, Any]], req_id: str,
              self_did: str, now_ts: str) -> tuple[bool, str]:
     """Whether the box may open a session for req_id: request exists, was
-    accepted, and NO session is currently active (single-session invariant)."""
+    accepted, is authorized for this box (self-authored, or standing mode),
+    and NO session is currently active (single-session invariant)."""
     reqs = {p.get("req_id"): p for p in _by(entries, Op.ASSIST_REQUEST)}
     if req_id not in reqs:
         return False, "no-such-request"
     accepted = {p.get("req_id") for p in _by(entries, Op.ASSIST_ACCEPT)}
     if req_id not in accepted:
         return False, "not-accepted"
+    req = reqs[req_id]
+    if req.get("issued_by") != self_did and req.get("mode") != "standing":
+        return False, "not-authorized"
     if active_session(entries, self_did, now_ts) is not None:
         return False, "session-already-active"
     return True, "ok"

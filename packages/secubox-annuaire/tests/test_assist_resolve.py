@@ -65,3 +65,42 @@ def test_multiple_active_sessions_raises():
     ]
     with pytest.raises(assist.AssistError):
         assist.active_session(entries, BOX, now_ts="2026-07-25T12:00:00Z")
+
+
+def test_pending_requests_drops_foreign_per_incident():
+    # a per-incident request authored by some OTHER did must never surface as
+    # "pending" for this box — that would let a federated peer's request
+    # masquerade as ours (sovereignty hole).
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-foreign", center_did=CENTER,
+          mode="per-incident", scope="dns", issued_by=OTHER),
+        e(Op.ASSIST_REQUEST, req_id="r-self", center_did=CENTER,
+          mode="per-incident", scope="dns", issued_by=BOX),
+        e(Op.ASSIST_REQUEST, req_id="r-standing", center_did=CENTER,
+          mode="standing", scope="dns", issued_by=CENTER),
+    ]
+    out = {p["req_id"] for p in assist.pending_requests(entries, BOX)}
+    assert out == {"r-self", "r-standing"}
+    assert "r-foreign" not in out
+
+
+def test_can_open_rejects_foreign_per_incident_request():
+    # accepted, no active session — but issued_by is a foreign did and mode
+    # is per-incident: must be refused, not silently opened.
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-foreign", center_did=CENTER,
+          mode="per-incident", scope="dns", issued_by=OTHER),
+        e(Op.ASSIST_ACCEPT, req_id="r-foreign", issued_by=CENTER),
+    ]
+    ok, reason = assist.can_open(entries, "r-foreign", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert (ok, reason) == (False, "not-authorized")
+
+
+def test_can_open_allows_self_authored_accepted_request():
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-self", center_did=CENTER,
+          mode="per-incident", scope="dns", issued_by=BOX),
+        e(Op.ASSIST_ACCEPT, req_id="r-self", issued_by=CENTER),
+    ]
+    ok, reason = assist.can_open(entries, "r-self", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert (ok, reason) == (True, "ok")
