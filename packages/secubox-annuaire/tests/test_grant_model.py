@@ -30,3 +30,33 @@ def test_configblob_has_layer_default_baseline():
     b = ConfigBlob(config_id="cfg-firewall", publisher="did:plc:"+("a"*32),
                    scope="firewall", version=1, content_hash="deadbeef")
     assert b.layer == "baseline"
+
+
+# ---------------------------------------------------------------------------
+# path traversal via scope — CRITICAL, defense in depth: a Grant/ConfigBlob
+# carrying a traversal scope must be invalid AT CONSTRUCTION, before it ever
+# reaches config_apply.py's filesystem-boundary guard.
+# ---------------------------------------------------------------------------
+
+def test_grant_rejects_traversal_scope():
+    import pydantic
+    import pytest
+    with pytest.raises(pydantic.ValidationError):
+        Grant(grant_id="g1", center_did="did:plc:"+("a"*32), capability="config",
+              scope="../evil", layer="baseline", issued_by="did:plc:"+("b"*32))
+
+
+def test_grant_rejects_slash_scope():
+    import pydantic
+    import pytest
+    with pytest.raises(pydantic.ValidationError):
+        Grant(grant_id="g1", center_did="did:plc:"+("a"*32), capability="config",
+              scope="etc/passwd", layer="baseline", issued_by="did:plc:"+("b"*32))
+
+
+def test_configblob_rejects_traversal_scope():
+    import pydantic
+    import pytest
+    with pytest.raises(pydantic.ValidationError):
+        ConfigBlob(config_id="cfg-x", publisher="did:plc:"+("a"*32),
+                   scope="../../etc/pwned", version=1, content_hash="deadbeef")

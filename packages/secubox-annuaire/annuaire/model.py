@@ -527,7 +527,12 @@ class ConfigBlob(BaseModel):
 
     config_id:    str = Field(..., description="stable id for this config stream, e.g. 'cfg-<scope>'")
     publisher:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
-    scope:        str = Field(..., description="what this configures, e.g. a module name 'yacy'")
+    scope:        str = Field(
+        ...,
+        pattern=r"^[a-z0-9][a-z0-9._-]*$",
+        description="what this configures, e.g. a module name 'yacy' — becomes a bare "
+                    "filename component on disk (config_apply.py), so no '/' or '..'",
+    )
     version:      int = Field(..., ge=0, description="monotonic; higher wins (last-writer-wins)")
     content_hash: str = Field(..., description="BLAKE2b-256 hex of the canonical config content")
     layer:        str = Field(default="baseline", description="config layer; local is box-only")
@@ -563,7 +568,12 @@ class Grant(BaseModel):
     grant_id:   str = Field(..., description="stable id for this grant")
     center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     capability: str = Field(default="config", description="what is delegated, e.g. 'config'")
-    scope:      str = Field(..., description="what this grant covers, e.g. a module name 'firewall'")
+    scope:      str = Field(
+        ...,
+        pattern=r"^[a-z0-9][a-z0-9._-]*$",
+        description="what this grant covers, e.g. a module name 'firewall' — becomes a "
+                    "bare filename component on disk (config_apply.py), so no '/' or '..'",
+    )
     layer:      str = Field(..., description="config layer this grant is confined to")
     issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
     created_at: str = Field(default_factory=now_rfc3339)
