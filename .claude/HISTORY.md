@@ -3,6 +3,28 @@
 
 ---
 
+## 2026-07-25 — R-level: per-peer MITM inspection level (off/passive/active/reel) (PR #901, deployed gk2)
+
+Per-wg-toolbox-peer inspection control on the R3 Go engine (`secubox-toolbox-ng` sbxmitm), with bounded self-service + admin override. Built with subagent-driven-development (8 tasks, two-stage reviews, whole-branch opus review). Merged, deployed live, functionally validated.
+
+- **Four escalating modes** (`off` < `passive` < `active` < `reel`), effective = `forced ?? clamp(chosen, floor, reel)`. Fail-safe passive; board seed `default=reel` to preserve current behaviour (no surprise global downgrade). Self-service peer authenticated by tunnel identity, bounded by floor, cannot lift a `forced`.
+- **Go core** (`cmd/sbxmitm/rlevel.go`): `clampVerdict` wired into `Decide` via `decideForPeer` on BOTH accept paths — **pinned-safe** (a splice-learned host stays splice even in reel; the clamp never forces decryption). `PeerPolicy` joins `wg-peers.json` ip→pubkey, hot-reloads on mtime, fail-safe passive; `nil rlevel` = no-op (parity harness unchanged).
+- **`off` = nft**: named set `@rlevel_off` in `table inet wg-toolbox` + `ip saddr @rlevel_off return` as the FIRST rule in the SAME prerouting chain as the DNAT fanout. **A separate nat table with `return` does NOT stop the DNAT** (the kernel walks every nat base chain; only a same-chain return/dnat decides) — a critical bug caught in review and fixed.
+- **ctl `sbxmitm-policyctl`** (atomic shadow+mv write + `@rlevel_off` set update + audit), run **DIRECTLY by the portal — no sudo**: `peer-rlevel.json` is portal-owned and the nft set needs only CAP_NET_ADMIN (already granted), so the public captive portal keeps `NoNewPrivileges=true` + minimal caps. **This is strictly better than the NNP=false option first considered** (which would also have needed CAP_SETUID/SETGID/AUDIT_WRITE on a public-facing service).
+- **Escalation closed at two levels** (final-review CRITICALs): `_is_public_kbin` (the router also serves the public kbin vhost, DNAT'd L4 past nginx/SSO) AND `_require_admin_source` (rejects a tunnel-peer source). Admin pubkey travels in the body (base64 `/` breaks a path param). Panel uses event delegation (no inline-handler XSS; guard hardened to catch concatenation, not just `${}`).
+- **Deploy**: cross-built arm64 (`-mod=vendor`), **rolling** worker@1..4 restart (never all four at once). Validated: `force off` → IP enters `@rlevel_off`, `force null` → removed. Drift note: live api.py is A'-patched ahead of the installed .deb 2.8.7 — the merge rebuilds it to 2.8.8.
+
+## 2026-07-24 — Transparent `.onion` routing (wg-toolbox+LAN) + WPAD/DHCP autodetect (PR #900, deployed gk2)
+
+`.onion` now routes end-to-end for wg-toolbox/LAN clients, validated live (real onion → HTTP 200). Consolidated into the existing `secubox-proxypac` (the parallel `feat/tor-onion-pac` branch was a duplicate and was abandoned). SDD 8 tasks + final review.
+
+- **Transparent `.onion` (primary, no PAC)** for force-routed clients: Tor `TransPort`/`DNSPort` automap + Unbound onion-forward (`local-zone "onion." transparent` + `domain-insecure` — else Unbound answers authoritative NXDOMAIN per RFC 6761 and never forwards; `private-domain` keeps the automap range) + nft dnat `10.192.0.0/10`→`127.0.0.1:9040` for `iif {wg-toolbox, eth2}`. **`route_localnet` must be set PER incoming iface** (`conf.all` doesn't apply to already-created ifaces) — this was the silent blocker; a sysctl.d dropin makes it reboot-persistent for new ifaces.
+- **PAC/WPAD (fallback)** with passive role autodetect (master DHCP / DNS-resolver / manual), override `proxypac.toml`, rewritten panel (navbar + status + transparent toggle). Onion seed rule repointed from the unreachable mesh SocksPort (`10.10.0.1`) to the LAN SocksPort via a `__LAN_SOCKS__` placeholder substituted at generation.
+- **secubox-tor**: LAN `SocksPort` dropin (**never** a `SocksPolicy` — it's GLOBAL and would break the mesh port; confinement = bind IP + nft) + LAN-IP detect helper + `torctl`.
+- **Prod repairs along the way**: `tor@default` had been `failed` since 2026-07-10 (a `HiddenServiceDir` was 0750; Tor needs 0700); LAN DNS was broken after the operator pointed DHCP DNS at the box (Unbound wasn't listening on the LAN IP — added `interface:` + `access-control`).
+- **Deploy gotchas**: proxypac was absent from `/etc/secubox/aggregator.toml` → its API 404'd (aggregator mounts only listed modules); role.detect false-positived master on the eye-br0 DHCP (`role="slave"` in the toml corrects it — validating the role override). Client: Firefox needs `network.dns.blockDotOnion=false` + `network.trr.mode=0`.
+- **Follow-ups (fallback path, non-blocking)**: HAProxy route for `wpad.gk2` (vhost `listen 80` vs nginx:9080) + strict MIME for `/proxy.pac` on the admin vhost (webui.conf doesn't include secubox.d).
+
 ## 2026-07-23 — rpi400 image: auth runtime deps, `--kiosk` in CI, and a postinst bug that broke every install (branch fix/rpi400-auth-deps-and-kiosk)
 
 The Pi 400 image shipped a webui nobody could log into, and no kiosk. Both root-caused; two latent packaging bugs surfaced along the way.

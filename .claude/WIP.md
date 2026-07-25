@@ -1,5 +1,39 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-23*
+*Mis à jour : 2026-07-25*
+
+---
+
+## ✅ 2026-07-25 : R-level MITM par peer wg-toolbox — off/passive/active/reel (PR #901, déployé gk2)
+
+Niveau d'inspection MITM **par peer** sur le moteur R3 Go (`sbxmitm`), réglable dynamiquement, self-service borné + override admin. SDD 8 tâches (revue 2 étages + revue finale opus). Mergé, déployé, validé fonctionnellement live.
+
+- **4 modes croissants** (`off` bypass nft < `passive` splice < `active` déchiffré < `reel` +enforcement). Effectif = `forced ?? clamp(chosen, floor, reel)`. Défaut/fail-safe passive ; **seed board = reel** (préserve le comportement actuel). Self-service peer authentifié par l'identité tunnel (borné par floor, ne lève pas forced).
+- **Go** : `clampVerdict` **pinné-safe** (un splice-learned reste splice même en reel) branché au call-site `Decide` (2 chemins d'accept) ; `PeerPolicy` (join wg-peers ip→pubkey, hot-reload, fail-safe passive).
+- **`off` = nft same-chain** : named set `@rlevel_off` + `ip saddr @rlevel_off return` **1ère règle de la même chaîne** que le DNAT (une table séparée ne bloque PAS le DNAT — bug noyau corrigé en revue).
+- **ctl sans sudo** : le portail lance `sbxmitm-policyctl` directement (fichier portal-owned + CAP_NET_ADMIN déjà accordé) → **NNP=true préservé**, zéro réduction de durcissement (meilleur que le NNP=false initialement envisagé).
+- **Escalade fermée** (CRITIQUES de revue finale) : `_is_public_kbin` (le router sert aussi le vhost public kbin, DNAT L4) + `_require_admin_source` (rejette une source peer tunnel). Panneau = délégation d'événements (pas d'inline XSS).
+
+### ⬜ Next
+- **Drift .deb** : la live api.py est patchée A' (no-sudo) mais le .deb 2.8.7 installé prédate → le merge rebuild en 2.8.8 réconcilie. Un reinstall du 2.8.7 régresserait — rebuilder depuis master.
+- Enforcement `reel` = block existant honoré ; ban/rewrite temps réel = hooks à étoffer (hors périmètre v1).
+
+---
+
+## ✅ 2026-07-24 : Transparent `.onion` (wg-toolbox+LAN) + WPAD/DHCP autodetect (PR #900, déployé gk2)
+
+`.onion` route de bout en bout pour les clients wg-toolbox/LAN, validé live (onion réel → HTTP 200). Consolidé dans `secubox-proxypac` (la branche `feat/tor-onion-pac` était un doublon, abandonnée). SDD 8 tâches + revue finale.
+
+- **Transparent (primaire, sans PAC)** : Tor TransPort/DNSPort automap + Unbound onion-forward (`local-zone transparent` + `domain-insecure`, sinon NXDOMAIN RFC6761) + nft dnat `10.192.0.0/10`→`9040`. **`route_localnet` par iface** (conf.all ne s'applique pas aux ifaces déjà créées) — c'était le bloqueur silencieux ; sysctl.d reboot-persistant.
+- **PAC/WPAD (fallback)** : autodétection de rôle passive + panneau réécrit ; règle onion repointée du SocksPort mesh (injoignable) vers le SocksPort LAN.
+- **secubox-tor** : SocksPort LAN (**jamais** de SocksPolicy — globale, casserait le port mesh) + torctl.
+- **Réparations prod** : `tor@default` down depuis le 10/07 (HiddenServiceDir 0750→0700) ; DNS LAN cassé par le changement DHCP (Unbound bind IP LAN).
+- **Gotchas déploiement** : proxypac absent d'`aggregator.toml` → API 404 ; role.detect faux-master (DHCP eye-br0) → `role="slave"`. Client Firefox : `network.dns.blockDotOnion=false` + `trr.mode=0`.
+
+### ⬜ Next (fallback, non-bloquant)
+- Route HAProxy `wpad.gk2` (vhost `listen 80` vs nginx:9080) + MIME strict `/proxy.pac` sur le vhost admin (webui.conf n'inclut pas secubox.d). Le transparent primaire couvre le cas réel.
+
+### 🧹 Issues clôturées (session 24-25/07)
+#900/#901 mergées. Backlog nettoyé : **#471, #494** (parent /run/secubox systémique), **#745** (podcaster socket-race #761), **#735** (autolearn faux-positif), **#765** (lyrionctl status-probe), **#743** (egress hors-Tor #797). **#816** gardé ouvert (fix websockets opérationnel seulement, pas de garde source).
 
 ---
 
