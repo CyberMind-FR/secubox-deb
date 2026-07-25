@@ -16,16 +16,21 @@ from typing import Dict, List
 from .catalog import MODULE_ALLOW
 
 _SECRET_KV = re.compile(
-    r"(?i)(?<![A-Za-z0-9])(token|secret|password|passwd|api[-_]?key|authorization|bearer)\b"
+    r"(?i)(?<![A-Za-z0-9])(token|secret|password|passwd|api[-_]?key|"
+    r"private[-_ ]?key|key|authorization|bearer)\b"
     r"[\"']?\s*(?:[:=]\s*|\s+)"
     r"[\"']?(?:(?:bearer|basic)\s+)?"
     r"[^\s\"',;{}]+")
 _LONG_HEX = re.compile(r"\b[0-9a-fA-F]{40,}\b")
 _EMAIL = re.compile(r"\b[\w.+-]+@([\w-]+\.[\w.-]+)\b")
+# URI-embedded credentials, e.g. postgres://user:PASSWORD@host:5432/db —
+# redacts only the password, keeps user/host/path intact for diagnosis.
+_URI_CRED = re.compile(r"(://[^/:@\s]+:)[^/@\s]+(@)")
 
 
 def redact(text: str) -> str:
     text = _SECRET_KV.sub(lambda m: m.group(1) + "=***", text)
+    text = _URI_CRED.sub(r"\1***\2", text)
     text = _LONG_HEX.sub("***", text)
     text = _EMAIL.sub(r"***@\1", text)
     return text
