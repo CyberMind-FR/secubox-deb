@@ -1,8 +1,8 @@
 {
   "id": "assist",
-  "label": "Assistance",
+  "name": "Assistance",
   "icon": "🆘",
   "path": "/assist/",
-  "order": 580,
-  "group": "federation"
+  "category": "mesh",
+  "order": 580
 }
