@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -34,6 +35,20 @@ try:
     import tomllib as _toml  # py3.11+
 except ImportError:  # pragma: no cover
     import tomli as _toml  # type: ignore
+
+from .config_compose import compose
+
+# A scope becomes a filesystem path component (<target_dir>/<scope>.toml).
+# It MUST NOT be able to escape target_dir — no '/', no '..', no empty
+# string. This is the filesystem-boundary guard: it is checked BEFORE any
+# Path is ever constructed from an untrusted scope, in both apply_blob
+# (mesh-sourced ConfigBlob) and apply_composed (grant-routed layers).
+_SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def _valid_scope(scope: Any) -> bool:
+    """True iff *scope* is safe to use as a bare filename component."""
+    return isinstance(scope, str) and bool(_SCOPE_RE.match(scope))
 
 
 def blob_text(payload: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -81,6 +96,9 @@ def apply_blob(
     if not scope or not isinstance(version, int) or not content_hash:
         return {"status": "reject", "scope": scope, "reason": "malformed-blob"}
 
+    if not _valid_scope(scope):
+        return {"status": "reject", "scope": scope, "reason": "invalid-scope"}
+
     cur = state.get(scope, {})
     if isinstance(cur.get("version"), int) and cur["version"] >= version:
         return {"status": "skip", "scope": scope, "reason": "version-not-newer"}
@@ -111,6 +129,55 @@ def apply_blob(
 
     state[scope] = {"version": version, "hash": content_hash}
     return {"status": "applied", "scope": scope, "version": version}
+
+
+def apply_composed(
+    scope: str,
+    ordered_layer_texts: List[str],
+    target_dir: str,
+) -> Dict[str, Any]:
+    """Compose a scope's layered TOML texts and apply via the same 4R buffer.
+
+    ``ordered_layer_texts`` stacks baseline < override < local precedence
+    (see ``config_compose.compose``). The composed text is re-validated as
+    TOML, hashed with BLAKE2b (reusing ``_blake2b_hex``), and compared
+    against the current active file's hash so an unchanged composition is a
+    no-op (idempotent — avoids mesh_sync apply loops). On change, the SAME
+    4R buffer as ``apply_blob`` writes it: shadow → rollback-copy of the
+    previous active → atomic ``os.replace``. Never raises; returns a status
+    dict with status in {applied, skip, reject}.
+    """
+    if not _valid_scope(scope):
+        return {"status": "reject", "scope": scope, "reason": "invalid-scope"}
+
+    try:
+        text = compose(list(ordered_layer_texts))
+        _toml.loads(text)  # re-validate the composed output before writing
+    except Exception:
+        return {"status": "reject", "scope": scope, "reason": "unparseable-toml"}
+
+    h = _blake2b_hex(text)
+    active = Path(target_dir) / f"{scope}.toml"
+    if active.exists():
+        try:
+            current_text = active.read_text()
+        except OSError:
+            current_text = None
+        if current_text is not None and _blake2b_hex(current_text) == h:
+            return {"status": "skip", "scope": scope, "reason": "unchanged"}
+
+    shadow = Path(str(active) + ".sbx-shadow")
+    rollback = Path(str(active) + ".sbx-rollback")
+    try:
+        active.parent.mkdir(parents=True, exist_ok=True)
+        shadow.write_text(text)
+        if active.exists():
+            rollback.write_text(active.read_text())  # R: keep the previous active
+        os.replace(str(shadow), str(active))          # atomic swap
+    except OSError as e:
+        return {"status": "reject", "scope": scope, "reason": f"io:{e}"}
+
+    return {"status": "applied", "scope": scope}
 
 
 def apply_pending(

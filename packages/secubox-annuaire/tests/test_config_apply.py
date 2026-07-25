@@ -83,6 +83,27 @@ def test_apply_rejects_blob_without_inline_text(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# path traversal via scope — CRITICAL: a mesh-sourced ConfigBlob's scope must
+# not be able to write outside target_dir.
+# ---------------------------------------------------------------------------
+
+def test_apply_blob_rejects_dotdot_scope(tmp_path):
+    state = {}
+    text = "x = 1\n"
+    r = apply_blob(_blob("../../../../tmp/pwned", 1, text), str(tmp_path), state)
+    assert r["status"] == "reject" and r["reason"] == "invalid-scope"
+    assert state == {}
+    assert list(tmp_path.rglob("*.toml")) == []
+
+
+def test_apply_blob_rejects_slash_scope(tmp_path):
+    state = {}
+    r = apply_blob(_blob("etc/passwd", 1, "x = 1\n"), str(tmp_path), state)
+    assert r["status"] == "reject" and r["reason"] == "invalid-scope"
+    assert state == {}
+
+
+# ---------------------------------------------------------------------------
 # apply_pending — allowlist + single-writer gating + state persistence
 # ---------------------------------------------------------------------------
 
