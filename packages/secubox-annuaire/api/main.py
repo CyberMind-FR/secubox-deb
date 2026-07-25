@@ -894,11 +894,14 @@ def _self_did_best_effort() -> Optional[str]:
 async def list_centers():
     """Enrolled centers + their delegated (scope, layer) capabilities (public read).
 
-    Derived from annuaire.grants.active_grants(journal) — one entry per
-    center_did that currently holds ≥1 active grant.
+    Derived from annuaire.grants.active_grants(journal, self_did) — one
+    entry per center_did that currently holds ≥1 active grant ISSUED BY THIS
+    BOX. Grant ops federate over the mesh, so a peer's self-issued grant for
+    its own center could otherwise appear here as if this box had delegated
+    it — self_did (best-effort) keeps this matrix sovereignty-scoped.
     """
     from annuaire.grants import active_grants  # noqa: PLC0415
-    active = active_grants(list(get_journal().iter_entries()))
+    active = active_grants(list(get_journal().iter_entries()), _self_did_best_effort())
     by_center: Dict[str, List[Dict[str, Any]]] = {}
     for (scope, layer), grant in active.items():
         center_did = grant.get("center_did")
@@ -917,9 +920,13 @@ async def list_centers():
 
 @app.get("/centers/ownership")
 async def centers_ownership():
-    """(scope, layer) -> owning center matrix (public read), via grants.active_grants."""
+    """(scope, layer) -> owning center matrix (public read), via grants.active_grants.
+
+    Sovereignty-scoped: only shows grants ISSUED BY THIS BOX (self_did,
+    best-effort) — see list_centers() docstring above.
+    """
     from annuaire.grants import active_grants  # noqa: PLC0415
-    active = active_grants(list(get_journal().iter_entries()))
+    active = active_grants(list(get_journal().iter_entries()), _self_did_best_effort())
     matrix = [
         {
             "scope": scope,
@@ -959,7 +966,17 @@ async def centers_effective(scope: str):
     on disk, if any — the two vantage points an operator needs to decide
     whether a local override still diverges from / is still needed on top of
     the granted centers' layers.
+
+    *scope* is a public path parameter and must be validated as a safe bare
+    filename component (same guard as config_apply._valid_scope) BEFORE it is
+    ever used to build a Path — an unvalidated scope containing "/" or ".."
+    could otherwise be joined into CONFIG_LOCAL_DIR and read an arbitrary
+    file off disk.
     """
+    from annuaire.config_apply import _valid_scope  # noqa: PLC0415
+    if not _valid_scope(scope):
+        return {"scope": scope, "status": "invalid-scope"}
+
     from annuaire.config_router import route_config  # noqa: PLC0415
     entries = list(get_journal().iter_entries())
     result = route_config(

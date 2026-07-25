@@ -135,12 +135,21 @@ def route_config(
     content_hash verification, is dropped into "proposals" and never
     applied.
 
-    self_did is accepted for interface symmetry with the apply_pending/
-    apply_blob call sites (self-publish loop guard). It is not used to
-    filter here: grant ownership is exclusive by construction, so a
-    self-authored CONFIG_PUBLISH is only ever a layer source when this node
-    itself holds the grant for that (scope, layer) — which is already the
-    correct outcome.
+    self_did is the SOVEREIGNTY FILTER: only grants this box itself issued
+    (GRANT_ISSUE.payload["issued_by"] == self_did) are honored as delegated
+    authority here (grants.active_grants/can_push). Grant ops federate like
+    any other journal entry — a mesh peer can author a well-formed,
+    correctly-signed GRANT_ISSUE naming its own center as owner of some
+    (scope, layer), and it syncs into this node's journal via dir_sync.
+    Without this filter, a peer's self-issued grant would be indistinguishable
+    from this box's own delegation, letting that peer push firewall/dns/waf/
+    etc config that gets applied here. A CONFIG_PUBLISH whose only supporting
+    grant was issued by someone other than self_did is therefore routed to
+    "proposals" (reason "no-grant"), never applied — same fail-closed posture
+    as an ungranted publisher. self_did may be None (best-effort resolution
+    failure, e.g. no box key on disk) — active_grants()'s own docstring
+    covers that no-filter fallback; it is only meant for that edge case, not
+    a way to intentionally skip the filter.
 
     apply (default True, unchanged existing behavior): when False, this is a
     read-only dry pass — the verified layer texts for every routable scope
@@ -157,7 +166,7 @@ def route_config(
     Returns:
         {"applied": [...], "proposals": [...]}
     """
-    grant_map = active_grants(entries)  # {(scope, layer): grant_payload}
+    grant_map = active_grants(entries, self_did)  # {(scope, layer): grant_payload}, self-issued only
 
     # Newest verified (scope, layer) candidate text, keyed by (scope, layer).
     candidates: Dict[Tuple[str, str], Tuple[int, str]] = {}
@@ -187,7 +196,7 @@ def route_config(
             proposals.append({**proposal, "reason": "malformed-blob"})
             continue
 
-        if not can_push(entries, publisher, scope, layer):
+        if not can_push(entries, publisher, scope, layer, self_did):
             proposals.append({**proposal, "reason": "no-grant"})
             continue
 

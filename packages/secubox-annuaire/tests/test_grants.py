@@ -80,3 +80,45 @@ def test_accepts_mixed_dict_and_logentry_entries():
         _log_entry(1, "grant_revoke", {"grant_id": "g1", "issued_by": B}),
     ]
     assert grants.owner(e, "firewall", "baseline") is None
+
+
+# ---------------------------------------------------------------------------
+# Sovereignty filter (self_did) — a grant is only real delegated authority
+# when THIS box issued it. Grant ops federate (dir_sync), so a mesh peer's
+# self-issued grant for its own center must never be honored as local
+# authority. See grants.active_grants()'s sovereignty-filter docstring.
+# ---------------------------------------------------------------------------
+
+BOX = "did:plc:" + "0" * 32   # this box's own sovereign did
+PAIR = "did:plc:" + "9" * 32  # a mesh peer's did — NOT this box
+
+
+def test_owner_filters_by_self_did_ignores_foreign_grant():
+    e = [_issue("g1", A, "firewall", "baseline")]  # issued_by=B (test fixture's default)
+    # No self_did (compat, low-level tests): unfiltered, as before.
+    assert grants.owner(e, "firewall", "baseline") == A
+    # self_did given but grant issued_by B != self_did -> not honored.
+    assert grants.owner(e, "firewall", "baseline", self_did=BOX) is None
+    assert grants.can_push(e, A, "firewall", "baseline", self_did=BOX) is False
+    # Only honored when self_did matches the grant's issued_by.
+    assert grants.owner(e, "firewall", "baseline", self_did=B) == A
+    assert grants.can_push(e, A, "firewall", "baseline", self_did=B) is True
+
+
+def test_validate_issue_already_owned_is_scoped_to_self_did():
+    """A foreign (peer-issued) grant on (scope, layer) must not block this
+    box's own GRANT_ISSUE for that same (scope, layer) — but this box's OWN
+    prior grant still does."""
+    foreign = {"op": "grant_issue", "payload": {
+        "grant_id": "g1", "center_did": A, "capability": "config",
+        "scope": "firewall", "layer": "baseline", "issued_by": PAIR,
+    }}
+    assert grants.validate_issue([foreign], "firewall", "baseline", self_did=BOX) is None
+
+    own = {"op": "grant_issue", "payload": {
+        "grant_id": "g2", "center_did": A, "capability": "config",
+        "scope": "firewall", "layer": "baseline", "issued_by": BOX,
+    }}
+    assert grants.validate_issue(
+        [foreign, own], "firewall", "baseline", self_did=BOX
+    ) == "already-owned"

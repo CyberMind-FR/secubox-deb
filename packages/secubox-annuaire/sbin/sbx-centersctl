@@ -138,13 +138,25 @@ def _box_identity():
 # commands
 # --------------------------------------------------------------------------- #
 
+def _self_did_or_none():
+    """Best-effort box_did — None if the box key is absent (never dies here;
+    read/preview paths must survive a missing key, see route_config's
+    self_did docstring)."""
+    if not os.path.exists(KEY_PATH):
+        return None
+    _, box_did = _box_identity()
+    return box_did
+
+
 def cmd_grant(args) -> int:
     from annuaire.verbs import grant_issue  # noqa: PLC0415
 
     if _is_dryrun():
         from annuaire import grants  # noqa: PLC0415
         j = _journal()
-        reason = grants.validate_issue(list(j.iter_entries()), args.scope, args.layer)
+        reason = grants.validate_issue(
+            list(j.iter_entries()), args.scope, args.layer, self_did=_self_did_or_none()
+        )
         return _dryrun_report(
             "grant",
             center_did=args.center_did, scope=args.scope, layer=args.layer,
@@ -183,7 +195,7 @@ def cmd_list(args) -> int:
     from annuaire import grants  # noqa: PLC0415
 
     j = _journal()
-    active = grants.active_grants(list(j.iter_entries()))
+    active = grants.active_grants(list(j.iter_entries()), _self_did_or_none())
     matrix = [
         {"scope": scope, "layer": layer, **payload}
         for (scope, layer), payload in sorted(active.items())
@@ -201,21 +213,22 @@ def cmd_route(args) -> int:
         from annuaire import grants  # noqa: PLC0415
 
         j = _journal()
-        grant_map = grants.active_grants(list(j.iter_entries()))
+        grant_map = grants.active_grants(list(j.iter_entries()), _self_did_or_none())
         scopes = {scope for (scope, _layer) in grant_map.keys()}
         local_root = Path(CONFIG_LOCAL_DIR)
         if local_root.is_dir():
             scopes.update(f.stem for f in local_root.glob("*.toml"))
         return _dryrun_report("route", scopes=sorted(scopes), target_dir=CONFIG_TARGET_DIR)
 
-    # self_did is best-effort (interface symmetry with apply_pending's
-    # self-publish loop guard) — route_config works fine without it, and the
-    # box key may legitimately be absent on a node that only ever routes
-    # centers' delegated config (see route_config's docstring in
-    # annuaire/config_router.py).
-    self_did = None
-    if os.path.exists(KEY_PATH):
-        _, self_did = _box_identity()
+    # self_did is the sovereignty filter route_config/grants.active_grants
+    # apply — best-effort (interface symmetry with apply_pending's
+    # self-publish loop guard): the box key may legitimately be absent on a
+    # node that only ever routes centers' delegated config (see
+    # route_config's docstring in annuaire/config_router.py), in which case
+    # ONLY grants issued by this exact box_did are honored as delegated
+    # authority; a mesh peer's self-issued grant for its own center is
+    # never treated as this box's own delegation.
+    self_did = _self_did_or_none()
 
     j = _journal()
     result = route_config(
