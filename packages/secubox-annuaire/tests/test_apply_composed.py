@@ -23,3 +23,34 @@ def test_apply_composed_bad_toml_keeps_lastgood(tmp_path):
     r = apply_composed("s", ['this is = = not toml\n'], str(tmp_path))
     assert r["status"] == "reject"
     assert (tmp_path/"s.toml").read_text() == before   # last-good untouched
+
+
+# ---------------------------------------------------------------------------
+# path traversal via scope — CRITICAL: scope becomes a filename component,
+# so a scope that walks out of target_dir must be rejected BEFORE any Path
+# is ever built from it.
+# ---------------------------------------------------------------------------
+
+def test_apply_composed_rejects_dotdot_scope(tmp_path):
+    r = apply_composed("../../../../tmp/pwned", ["x=1\n"], str(tmp_path))
+    assert r["status"] == "reject"
+    assert r["reason"] == "invalid-scope"
+    # nothing escaped tmp_path: no .toml anywhere outside it, and tmp_path
+    # itself only ever gets what apply_composed legitimately wrote in other
+    # tests in this module (none here) — assert it stayed empty.
+    assert list(tmp_path.rglob("*.toml")) == []
+    assert not Path("/tmp/pwned.toml").exists()
+
+
+def test_apply_composed_rejects_slash_scope(tmp_path):
+    r = apply_composed("etc/passwd", ["x=1\n"], str(tmp_path))
+    assert r["status"] == "reject"
+    assert r["reason"] == "invalid-scope"
+    assert list(tmp_path.rglob("*.toml")) == []
+
+
+def test_apply_composed_rejects_absolute_path_scope(tmp_path):
+    r = apply_composed("/etc/pwned", ["x=1\n"], str(tmp_path))
+    assert r["status"] == "reject"
+    assert r["reason"] == "invalid-scope"
+    assert not Path("/etc/pwned.toml").exists()

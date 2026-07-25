@@ -39,6 +39,13 @@ the box's sovereign identity, provisioned once elsewhere):
   CONFIG_TARGET_DIR  default /etc/secubox               (route)
   CONFIG_LOCAL_DIR   default /etc/secubox/config-local   (route)
   ANNUAIRE_LIB       default /usr/lib/secubox/annuaire  (import root, prod)
+
+  DRYRUN=1           on grant/revoke/route: do NOT append to the journal and
+                      do NOT apply any config -- print the action that WOULD
+                      have been taken as {"dryrun": true, "would": ..., ...}
+                      and exit 0. Nothing is written in this mode (grant/
+                      revoke never touch the journal; route never touches
+                      CONFIG_TARGET_DIR); `list` afterwards is unchanged.
 """
 from __future__ import annotations
 
@@ -60,6 +67,22 @@ CONFIG_LOCAL_DIR = os.environ.get("CONFIG_LOCAL_DIR", "/etc/secubox/config-local
 def _die(msg: str, code: int = 1) -> "None":
     print(json.dumps({"error": msg}), file=sys.stderr)
     raise SystemExit(code)
+
+
+def _is_dryrun() -> bool:
+    """True iff DRYRUN=1 — grant/revoke/route must not write anything."""
+    return os.environ.get("DRYRUN") == "1"
+
+
+def _dryrun_report(would: str, **fields) -> int:
+    """Print the {"dryrun": true, "would": ...} preview and return rc0.
+
+    Used by grant/revoke/route in DRYRUN mode INSTEAD OF the real write path
+    — no journal append, no apply, nothing touched on disk beyond what a
+    read-only preview needs (e.g. listing the current grant matrix).
+    """
+    print(json.dumps({"dryrun": True, "would": would, **fields}, indent=2))
+    return 0
 
 
 def _load_box_priv() -> bytes:
@@ -109,6 +132,16 @@ def _box_identity():
 def cmd_grant(args) -> int:
     from annuaire.verbs import grant_issue  # noqa: PLC0415
 
+    if _is_dryrun():
+        from annuaire import grants  # noqa: PLC0415
+        j = _journal()
+        reason = grants.validate_issue(list(j.iter_entries()), args.scope, args.layer)
+        return _dryrun_report(
+            "grant",
+            center_did=args.center_did, scope=args.scope, layer=args.layer,
+            valid=reason is None, reason=reason,
+        )
+
     box_priv, box_did = _box_identity()
     j = _journal()
     try:
@@ -122,6 +155,9 @@ def cmd_grant(args) -> int:
 
 def cmd_revoke(args) -> int:
     from annuaire.verbs import grant_revoke  # noqa: PLC0415
+
+    if _is_dryrun():
+        return _dryrun_report("revoke", grant_id=args.grant_id)
 
     box_priv, box_did = _box_identity()
     j = _journal()
@@ -149,6 +185,19 @@ def cmd_list(args) -> int:
 
 def cmd_route(args) -> int:
     from annuaire.config_router import route_config  # noqa: PLC0415
+
+    if _is_dryrun():
+        from pathlib import Path  # noqa: PLC0415
+
+        from annuaire import grants  # noqa: PLC0415
+
+        j = _journal()
+        grant_map = grants.active_grants(list(j.iter_entries()))
+        scopes = {scope for (scope, _layer) in grant_map.keys()}
+        local_root = Path(CONFIG_LOCAL_DIR)
+        if local_root.is_dir():
+            scopes.update(f.stem for f in local_root.glob("*.toml"))
+        return _dryrun_report("route", scopes=sorted(scopes), target_dir=CONFIG_TARGET_DIR)
 
     # self_did is best-effort (interface symmetry with apply_pending's
     # self-publish loop guard) — route_config works fine without it, and the

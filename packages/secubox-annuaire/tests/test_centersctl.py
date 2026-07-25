@@ -170,3 +170,74 @@ def test_missing_box_key_fails_clearly(env, center_did):
     err = json.loads(proc.stderr)
     assert "error" in err
     assert "box key" in err["error"]
+
+
+# ---------------------------------------------------------------------------
+# DRYRUN=1 — grant/revoke/route must preview only, writing nothing
+# ---------------------------------------------------------------------------
+
+
+def test_dryrun_grant_writes_nothing(env, center_did):
+    env = {**env, "DRYRUN": "1"}
+    proc = _run(["grant", center_did, "firewall", "baseline"], env)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["dryrun"] is True
+    assert out["would"] == "grant"
+    assert out["scope"] == "firewall"
+    assert out["layer"] == "baseline"
+    assert out["valid"] is True
+
+    proc = _run(["list"], env)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["grants"] == []
+
+
+def test_dryrun_grant_reports_invalid_without_dying(env, center_did):
+    """Even a request that WOULD be rejected previews cleanly (rc0, no journal write)."""
+    env = {**env, "DRYRUN": "1"}
+    proc = _run(["grant", center_did, "auth", "baseline"], env)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["dryrun"] is True
+    assert out["valid"] is False
+    assert out["reason"] == "scope-not-delegatable"
+
+    proc = _run(["list"], env)
+    assert json.loads(proc.stdout)["grants"] == []
+
+
+def test_dryrun_revoke_writes_nothing(env, center_did):
+    proc = _run(["grant", center_did, "firewall", "baseline"], env)
+    assert proc.returncode == 0, proc.stderr
+    grant_id = json.loads(proc.stdout)["grant_id"]
+
+    dry_env = {**env, "DRYRUN": "1"}
+    proc = _run(["revoke", grant_id], dry_env)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["dryrun"] is True
+    assert out["would"] == "revoke"
+    assert out["grant_id"] == grant_id
+
+    # the real grant is still active — DRYRUN never touched the journal
+    proc = _run(["list"], env)
+    matrix = json.loads(proc.stdout)["grants"]
+    assert len(matrix) == 1
+    assert matrix[0]["scope"] == "firewall"
+
+
+def test_dryrun_route_writes_nothing(env, center_did):
+    proc = _run(["grant", center_did, "firewall", "baseline"], env)
+    assert proc.returncode == 0, proc.stderr
+
+    dry_env = {**env, "DRYRUN": "1"}
+    proc = _run(["route"], dry_env)
+    assert proc.returncode == 0, proc.stderr
+    out = json.loads(proc.stdout)
+    assert out["dryrun"] is True
+    assert out["would"] == "route"
+    assert "firewall" in out["scopes"]
+
+    # nothing was applied to CONFIG_TARGET_DIR
+    assert not Path(env["CONFIG_TARGET_DIR"]).exists()

@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -36,6 +37,18 @@ except ImportError:  # pragma: no cover
     import tomli as _toml  # type: ignore
 
 from .config_compose import compose
+
+# A scope becomes a filesystem path component (<target_dir>/<scope>.toml).
+# It MUST NOT be able to escape target_dir — no '/', no '..', no empty
+# string. This is the filesystem-boundary guard: it is checked BEFORE any
+# Path is ever constructed from an untrusted scope, in both apply_blob
+# (mesh-sourced ConfigBlob) and apply_composed (grant-routed layers).
+_SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def _valid_scope(scope: Any) -> bool:
+    """True iff *scope* is safe to use as a bare filename component."""
+    return isinstance(scope, str) and bool(_SCOPE_RE.match(scope))
 
 
 def blob_text(payload: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -82,6 +95,9 @@ def apply_blob(
     content_hash = blob.get("content_hash")
     if not scope or not isinstance(version, int) or not content_hash:
         return {"status": "reject", "scope": scope, "reason": "malformed-blob"}
+
+    if not _valid_scope(scope):
+        return {"status": "reject", "scope": scope, "reason": "invalid-scope"}
 
     cur = state.get(scope, {})
     if isinstance(cur.get("version"), int) and cur["version"] >= version:
@@ -131,6 +147,9 @@ def apply_composed(
     previous active → atomic ``os.replace``. Never raises; returns a status
     dict with status in {applied, skip, reject}.
     """
+    if not _valid_scope(scope):
+        return {"status": "reject", "scope": scope, "reason": "invalid-scope"}
+
     try:
         text = compose(list(ordered_layer_texts))
         _toml.loads(text)  # re-validate the composed output before writing
