@@ -1,2 +1,7 @@
-# secubox (webui/API) may invoke ONLY the assist control CLI.
-secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-assistctl
+# The WS data-plane daemon (secubox-assist.service, User=secubox-assist —
+# see systemd/secubox-assist.service) is what actually runs catalog.py's
+# `sudo -n .../secubox-assistctl service|config ...` argv (wsserver.dispatch
+# is invoked from assist.daemon.handler under that unit's user, NOT the
+# secubox-assist-api.service/webui user). Scoped to the ctl binary only —
+# never NOPASSWD: ALL.
+secubox-assist ALL=(root) NOPASSWD: /usr/sbin/secubox-assistctl
