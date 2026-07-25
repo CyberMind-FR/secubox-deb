@@ -9,12 +9,18 @@ fi
 touch /var/log/secubox/audit.log 2>/dev/null || true
 chgrp secubox-assist /var/log/secubox/audit.log 2>/dev/null || true
 chmod 0664 /var/log/secubox/audit.log 2>/dev/null || true
-if [ -x /usr/sbin/apparmor_parser ] && [ -f /etc/apparmor.d/secubox-assist ]; then
-    apparmor_parser -r /etc/apparmor.d/secubox-assist 2>/dev/null || true
-fi
 #DEBHELPER#
 systemctl daemon-reload || true
 systemctl enable --now secubox-assist-api.service || true
 systemctl enable --now secubox-assist.service || true
-nft -f /etc/secubox/nft.d/zz-secubox-assist.conf 2>/dev/null || true
+# Durable wg-mesh nft allow (own base chain, policy accept — see
+# nft/secubox-assist.nft for why it can never drop unrelated traffic).
+# dpkg already placed the conffile at /etc/nftables.d/secubox-assist.nft;
+# reload nftables.service so it picks up the include (matches
+# secubox-metrics/secubox-hub/secubox-toolbox precedent), falling back to a
+# direct load if the service isn't running yet.
+if systemctl is-active --quiet nftables.service 2>/dev/null; then
+    systemctl reload nftables.service 2>/dev/null \
+        || nft -f /etc/nftables.d/secubox-assist.nft 2>/dev/null || true
+fi
 exit 0
