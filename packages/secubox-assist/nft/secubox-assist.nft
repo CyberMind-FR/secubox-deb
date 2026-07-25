@@ -16,5 +16,6 @@ table inet secubox_assist {
     chain input {
         type filter hook input priority filter; policy accept;
         iifname "wg-mesh" tcp dport 8099 accept
+        iifname "wg-ephemeral" tcp dport 8099 accept
     }
 }
