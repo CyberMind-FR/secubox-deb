@@ -1,3 +1,18 @@
+secubox-annuaire (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: decentralized assist marketplace substrate — annuaire/assist_match.py
+    ships alongside assist.py, adding the OFFER/REQUEST/MATCH_ACCEPT ops and
+    signed verbs a help-seeking box and an offering center use to find each
+    other without a central broker: tag-intersection + scope + expiry
+    matching over the existing journal, match_id(offer_id, request_id)
+    convergent across replicas, and matches() surfaced for the requester's
+    mutual double-accept. Consumed by the new secubox-assist 0.2.0
+    (assist/rendezvous.py, assist/joinlink.py, assist/escalate.py).
+  * packaging: no new install rule needed — assist_match.py ships via the
+    existing `cp -r annuaire/*` glob in debian/rules.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 25 Jul 2026 18:00:00 +0200
+
 secubox-annuaire (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Assist control-plane: ASSIST_* ops, AssistRequest/AssistSession models,
