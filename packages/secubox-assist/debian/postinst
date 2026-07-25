@@ -5,6 +5,23 @@ set -e
 if ! getent passwd secubox-assist >/dev/null; then
     adduser --system --group --no-create-home --home /nonexistent secubox-assist
 fi
+# Derive the box's PUBLIC did once from the sovereign private key (readable
+# here as root) and publish it world-readable so the WS daemon (running as
+# secubox-assist, NOT in group secubox, and which must NEVER hold/read the
+# private key itself) can resolve its own identity without touching
+# /etc/secubox/secrets/annuaire/node.key. Only the node.did FILE is created;
+# the shared /etc/secubox/annuaire parent directory is left untouched.
+mkdir -p /etc/secubox/annuaire 2>/dev/null || true
+if [ -r /etc/secubox/secrets/annuaire/node.key ]; then
+    python3 -c "
+import sys
+sys.path.insert(0, '/usr/lib/secubox/annuaire')
+from annuaire.crypto import public_from_private, did_from_pubkey
+raw = bytes.fromhex(open('/etc/secubox/secrets/annuaire/node.key').read().strip())
+print(did_from_pubkey(public_from_private(raw)))
+" > /etc/secubox/annuaire/node.did 2>/dev/null || true
+    chmod 0644 /etc/secubox/annuaire/node.did 2>/dev/null || true
+fi
 # audit log must be writable by the daemon without touching the shared parent
 touch /var/log/secubox/audit.log 2>/dev/null || true
 chgrp secubox-assist /var/log/secubox/audit.log 2>/dev/null || true

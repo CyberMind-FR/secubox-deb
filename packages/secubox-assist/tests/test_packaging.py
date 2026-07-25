@@ -58,9 +58,69 @@ def test_units_run_as_non_root():
     assert "NoNewPrivileges=" in svc
 
 
+def test_ws_daemon_unit_allows_scoped_sudo_catalog_exec():
+    # catalog.resolve() returns `sudo -n /usr/sbin/secubox-assistctl ...` for
+    # service/config actions, run by THIS unit (secubox-assist.service, see
+    # test_sudoers_principal_is_ws_daemon_user). NoNewPrivileges=true blocks
+    # sudo's setuid transition outright, so every privileged catalog action
+    # silently fails end-to-end. This unit needs NNP=false; other hardening
+    # (ProtectSystem=strict, empty AmbientCapabilities=) stays intact.
+    svc = (ROOT / "systemd" / "secubox-assist.service").read_text()
+    assert "NoNewPrivileges=false" in svc
+    assert "ProtectSystem=strict" in svc
+    assert "AmbientCapabilities=" in svc
+
+
+def test_api_unit_keeps_no_new_privileges_true():
+    # The API unit never sudoes (it delegates mutations to ctl via
+    # subprocess, invoked as itself, not via sudo) — it keeps full NNP
+    # hardening.
+    svc = (ROOT / "systemd" / "secubox-assist-api.service").read_text()
+    assert "NoNewPrivileges=true" in svc
+
+
+def test_console_buttons_are_disabled_and_labelled_not_yet_available():
+    # console.py (guard + pty + keystroke audit) exists but nothing in the
+    # data-plane opens a pty; nothing consumes the CONSOLE_GRANT/REVOKE ops
+    # these buttons write. Ship the control-plane honestly: the buttons must
+    # not look like a live, working escalation channel.
+    html = (ROOT / "www" / "assist" / "index.html").read_text()
+    grant_line = next(l for l in html.splitlines() if 'data-act="console-grant"' in l)
+    revoke_line = next(l for l in html.splitlines() if 'data-act="console-revoke"' in l)
+    assert "disabled" in grant_line
+    assert "disabled" in revoke_line
+    assert "à venir" in grant_line or "en cours" in grant_line
+    assert "à venir" in revoke_line or "en cours" in revoke_line
+
+
 def test_postinst_does_not_chown_shared_parents():
     post = (ROOT / "debian" / "postinst").read_text()
     for parent in ("chown -R secubox-assist /run/secubox",
                    "chown -R secubox-assist /etc/secubox",
                    "chown -R secubox-assist /var/log/secubox"):
         assert parent not in post
+
+
+def test_postinst_derives_public_node_did_guarded_and_never_fails():
+    # The WS daemon (User=secubox-assist, not in group secubox) must never
+    # open the sovereign private key. postinst runs as root and CAN read it,
+    # so it derives the DID once here and publishes it world-readable. A
+    # missing key (annuairectl init not yet run) must not fail the install.
+    post = (ROOT / "debian" / "postinst").read_text()
+    assert "/etc/secubox/secrets/annuaire/node.key" in post
+    assert "did_from_pubkey" in post and "public_from_private" in post
+    assert "/etc/secubox/annuaire/node.did" in post
+    assert "chmod 0644 /etc/secubox/annuaire/node.did" in post
+    # guarded: reading the key is conditioned on it existing, not assumed
+    assert "if [ -r /etc/secubox/secrets/annuaire/node.key ]" in post
+
+
+def test_postinst_node_did_derivation_does_not_chmod_the_shared_parent():
+    # Only the FILE gets a mode; /etc/secubox/annuaire itself (shared with
+    # other consumers) must not be chmod'd/chown'd by this package.
+    post = (ROOT / "debian" / "postinst").read_text()
+    assert "chmod -R" not in post
+    for bad in ("chown /etc/secubox/annuaire", "chown -R /etc/secubox/annuaire",
+                "chmod 0755 /etc/secubox/annuaire", "chmod -R /etc/secubox/annuaire",
+                "chmod 0644 /etc/secubox/annuaire\n"):
+        assert bad not in post
