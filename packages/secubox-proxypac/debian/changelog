@@ -1,3 +1,12 @@
+secubox-proxypac (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Package proxypac.toml (conffile) + proxypac-wpad ctl + scoped sudoers
+    (proxypac-wpad apply|state, torctl transparent on|off); postinst applies
+    the WPAD tier at configure time.
+  * Depends: secubox-tor (provides tor-lan-ip/torctl consumed by proxypac-wpad).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
+
 secubox-proxypac (1.1.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

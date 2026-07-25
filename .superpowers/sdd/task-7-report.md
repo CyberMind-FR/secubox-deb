@@ -1,92 +1,103 @@
-# Task 7 Report — MetaBlogizer Publish Wizard UI
+# Task 7 Report — secubox-proxypac panneau réécrit
 
 **Status:** Done.
 
-(Note: this file previously held an unrelated stale Task-7 report for a
-different plan — "Tor enhancement Phase 1 — webui #tor tab" — overwritten
-here since it did not belong to this plan.)
+(Note: this file previously held a stale report for a different plan's
+Task 7 — "MetaBlogizer Publish Wizard UI" — overwritten here since it did
+not belong to this plan.)
 
-## What was added
+Commit : 240033e1
+Tests : `cd packages/secubox-proxypac && python3 -m pytest tests/ -q` → 45 passed
+Préoccupations : aucune bloquante — voir détails ci-dessous.
 
-- `packages/secubox-metablogizer/www/metablogizer/index.html`:
-  - New `<section class="card" id="publish-wizard">` placed right after the
-    existing Sites card, inside `<main>` (before `</main>`), with the
-    5-step stepper (`#wiz-steps`), name/domain/file inputs, Publish +
-    Download-backup buttons, and a `<pre id="wiz-result" class="result">`
-    output area.
-  - New CSS block appended inside the page's existing `<style>` (after the
-    touch-friendly-buttons media query): `.wizard-steps`, `.wizard-steps
-    span.ok/.fail`, `#wiz-result.result`. Colors for ok/fail reuse the
-    page's existing `var(--green)` / `var(--red)` tokens (the CRT phosphor
-    palette) instead of the brief's hardcoded hex (`#148C66` / `#C04E24`),
-    which would have clashed visually with the rest of the page.
-  - New `<script>` block placed after the page's main `<script>` (which
-    declares `token()` / `API` / `headers()` / `refresh()`) and before
-    `crt-engine.js`. It is an IIFE that:
-    - Reuses the page's real `token()` helper (reads both `sbx_token` and
-      `secubox_token`) instead of the brief's illustrative `tok()` that
-      only reads `sbx_token`.
-    - Reuses the page's `API` constant (`/api/v1/metablogizer`) for the
-      wizard/export URLs rather than hardcoding the full path.
-    - Mirrors the exact multipart-fetch + 401-retry-without-header +
-      redirect-to-login pattern already used by `uploadSiteContent()`
-      elsewhere in the same file, for consistency.
-    - Renders the JSON result via `out.textContent = JSON.stringify(...)`
-      (never `innerHTML`) — safe against XSS from server data.
-    - Calls the page's existing `refresh()` on successful publish so the
-      Sites table picks up the new/updated site immediately.
-  - Inputs use the page's existing bare `<input>` inside `.form-group`
-    (no invented `form-input` class — the file's existing CSS rule
-    `.form-group input { ... }` already styles any `<input>` inside a
-    `.form-group`, so adding an unused class would have been dead weight).
+## Fait
 
-## Endpoint contract verified against source (read-only, no `.py` touched)
+- `packages/secubox-proxypac/tests/test_panel.py` créé (Step 1 du brief),
+  vérifié FAIL avant réécriture (Step 2), puis PASS après (Step 4).
+- `packages/secubox-proxypac/www/proxypac/index.html` réécrit intégralement
+  en hybrid-dark (look inspiré de `secubox-picobrew`, non copié verbatim) :
+  - `<nav class="sidebar" id="sidebar"></nav>` + `/shared/sidebar.js`.
+  - Cartes statut (`.stat-card`) : rôle/tier, échelon WPAD, endpoint SOCKS,
+    transparent ON/OFF, IP LAN — alimentées par `GET /status`.
+  - Toggle transparent (switch CSS) câblé sur `POST /transparent {on}`.
+  - Bloc runbook client : URL PAC (`pac_url` ou fallback `http://<lan_ip>/proxy.pac`),
+    URL WPAD, état WPAD (`GET /wpad/state`), et note Firefox concrète :
+    `network.proxy.socks_remote_dns=true`, `network.dns.blockDotOnion=false`,
+    `network.trr.mode=0` (DoH off).
+  - Bouton "Appliquer WPAD" → `POST /wpad/apply`.
+  - Règles actives (`GET /rules`) + formulaire override (`POST /override`,
+    `DELETE /override/{host}`) : comportement conservé depuis l'ancien panneau.
+  - Bloc candidats (`GET /candidates`), best-effort, liste vide tolérée.
+  - `esc()` conservée pour échapper tout host injecté dans le DOM.
+  - Toasts sur chaque action ; chaque bloc a un fallback "indisponible (…)"
+    en cas d'erreur réseau/API — le panneau ne plante jamais un bloc voisin.
+  - Jeton : `localStorage.getItem('sbx_token')` lu une fois, propagé via
+    `authHeaders()`/`J()` sur **toutes** les requêtes fetch avec
+    `Authorization: Bearer …` + `credentials:'same-origin'`.
 
-Confirmed field names/response shape against
-`packages/secubox-metablogizer/api/routers/publish.py`:
-- `POST {API}/publish/wizard` — multipart fields `name`, `domain` (optional),
-  `file`; JWT via `Depends(require_jwt)` (accepts Bearer **or** SSO session
-  cookie, per `common/secubox_core/auth.py`). Response:
-  `{ok, domain, steps: {content: {index_present}, version, route: {route_ok},
-  cert}}` — matches the JS's `d.steps.content.index_present` /
-  `d.steps.route.route_ok` reads exactly.
-- `GET {API}/publish/export/{name}` — also JWT-gated but accepts the SSO
-  session cookie, so the plain `window.location = ...` navigation (no
-  Authorization header possible on a top-level nav) works because the
-  browser sends the session cookie automatically.
+## Détail technique notable
+
+Les endpoints sont appelés avec des chemins **littéraux complets**
+(`/api/v1/proxypac/status`, `/api/v1/proxypac/rules`, etc.) plutôt que par
+concaténation `API + '/status'`, car le test vérifie la présence de la
+sous-chaîne exacte `/api/v1/proxypac/status` dans le fichier source — une
+concaténation JS runtime ne produit pas cette sous-chaîne littérale dans le
+HTML. `J()` conserve un fallback `API + path` pour compat si un appel futur
+utilise un chemin relatif.
 
 ## Validation
 
-- Extracted the new `<script>` block (the one containing `wiz-go`) via a
-  small Python regex script into a standalone `.js` file and ran
-  `node --check` (node v22.20.0, available in this environment) —
-  **no syntax error**.
-- Also checked: no duplicate `id=` attributes introduced anywhere in the
-  file; `<section>`, `<script>`, `<style>` tag counts balanced
-  (open == close) after the edit.
-- Did not run the app live (Task 11 is the manual/live verification step
-  per the brief); this task's scope is UI-only markup/JS/CSS, and the API
-  side (Task 6) was not modified.
+- `python3 -m pytest tests/test_panel.py -q` → FAIL avant réécriture (navbar
+  manquante), confirmé.
+- `python3 -m pytest tests/ -q` (suite complète du paquet, 45 tests dont
+  `test_panel.py` et `test_webui_panel.py` pré-existant) → **45 passed**.
+- `menu.d/580-proxypac.json` non modifié (déjà conforme : `path == "/proxypac/"`,
+  `id == "proxypac"`).
 
-## Helpers reused (per the "match existing conventions" instruction)
+## Préoccupations
 
-- `token()` — the page's real dual-key localStorage reader (`sbx_token` /
-  `secubox_token`), not the brief's single-key illustrative `tok()`.
-- `API` constant and the existing `refresh()` function.
-- The `uploadSiteContent()` multipart-fetch/401-retry/login-redirect idiom.
-- Existing `.card` / `.btn` / `.btn.primary` / `.form-group` classes; no new
-  classes introduced beyond the wizard-specific `.wizard-steps` / `.result`
-  that the brief itself calls for.
+- Aucune bloquante.
+- Le bloc candidats est en lecture seule (pas de bouton accept/reject dans
+  l'UI bien que l'API expose `/candidate/{host}/accept|reject`) — conforme
+  au brief qui demandait un bloc "best-effort, liste vide OK", sans exiger
+  d'actions dessus.
+- Pas de vérification live (board) effectuée ; validation limitée aux tests
+  unitaires du paquet, conformément au périmètre de la tâche 7.
 
-## Concerns
+## Fix Important — XSS onclick
 
-- None blocking. Two intentional, documented deviations from the brief's
-  literal snippet (both strict improvements for matching the page's real
-  conventions, not functional gaps): `var(--green)`/`var(--red)` instead of
-  hardcoded hex, and reuse of the page's `API` constant instead of a
-  hardcoded absolute path.
-- The wizard's `content`/`route`/`cert` step markers assume the response
-  shapes from `publish/routing.py` / `publish/certs.py` always include the
-  keys the JS reads (`index_present`, `route_ok`); this mirrors the brief's
-  own snippet verbatim and was cross-checked against the actual
-  `publish_wizard()` handler in `api/routers/publish.py`, so no gap found.
+**Vulnérabilité (confirmée)** : `loadRules()` construisait un handler inline
+`onclick="delOverride('${esc(r.host)}')"`. `esc()` échappe les entités HTML,
+mais le navigateur décode les entités d'un attribut AVANT de traiter le
+contenu de `onclick` comme du JS. Un host tel que `x');alert(document.cookie);//`
+(sans espace → passe la seule validation serveur `Override._no_whitespace`)
+s'évade de la chaîne JS et exécute du code arbitraire dans la session de tout
+viewer cliquant le bouton — vol possible de `sbx_token`. XSS stockée via un
+chemin d'entrée légitime (`POST /override`).
+
+**Correctif** : suppression du handler inline interpolé, remplacé par
+délégation d'événements — le bouton porte `data-action="del-override"` et
+`data-host="${esc(r.host)}"` (toujours échappé HTML pour le contenu/attribut,
+mais jamais réinterprété comme JS) ; un unique listener délégué sur `#rules`
+lit `btn.dataset.host` et appelle `delOverride(...)` avec la valeur comme
+STRING JS pure. Revue du reste du fichier : les autres `onclick`/`onchange`
+(`applyWpad()`, `loadAll()`, `addOverride()`, `toggleTransparent(this.checked)`)
+sont à valeur fixe, hors liste rendue dynamiquement — laissés inchangés,
+comportement fonctionnel identique (add/del override, apply wpad, toggle
+transparent, refresh).
+
+**TDD** : ajout de `test_no_inline_handler_interpolates_dynamic_data` dans
+`tests/test_panel.py` — échoue sur le code vulnérable
+(`AssertionError: handler inline interpole une donnée: onclick="delOverride('${esc(r.host)}')"`),
+passe après le correctif.
+
+**Validation** :
+```
+cd packages/secubox-proxypac && python3 -m pytest tests/test_panel.py tests/test_webui_panel.py -q
+.....                                                                    [100%]
+5 passed in 0.07s
+```
+
+**Préoccupations** : aucune bloquante. Le reste du fichier ne contient aucun
+autre handler inline interpolant une donnée dynamique (vérifié par le test,
+qui scanne tout `on(click|change|input|submit)="..."`/`'...'` du fichier).

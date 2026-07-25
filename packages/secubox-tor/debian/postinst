@@ -4,6 +4,11 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-tor.service || true
     systemctl start secubox-tor.service || true
+    sysctl --system || true
+    /usr/sbin/torctl socks-lan ensure || true
+    # transparent activé par défaut (aligné proxypac.toml transparent=true) ;
+    # idempotent, best-effort, réutilise le TransPort toolbox s'il existe.
+    /usr/sbin/torctl transparent on || true
 fi
 #DEBHELPER#
 exit 0

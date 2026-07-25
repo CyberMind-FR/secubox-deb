@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Redirige le trafic vers les IP virtuelles automap Tor (10.192.0.0/10) vers
+# le TransPort local. Portée stricte : seul ce range, seules les ifaces
+# force-routées (wg-toolbox + LAN eth2). Nécessite route_localnet=1.
+table inet secubox-tor-transparent {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        iifname { "wg-toolbox", "eth2" } ip daddr 10.192.0.0/10 tcp dport 1-65535 dnat ip to 127.0.0.1:9040 comment "onion-transparent-tcp"
+    }
+}
