@@ -1,3 +1,15 @@
+secubox-nextcloud (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Fix connection URLs showing http://localhost:8080 instead of the real
+    public domain. /connections only checked ssl_domain (unset in
+    secubox.conf [nextcloud], which carries `domain`) and fell back to
+    localhost; the panel also hardcoded localhost, ignoring status.web_url.
+    New pure _public_base_url() helper (ssl_domain > domain > localhost),
+    used by both /connections and /status; panel now renders status.web_url.
+    Regression tests added (tests/test_public_base_url.py).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
+
 secubox-nextcloud (1.5.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
