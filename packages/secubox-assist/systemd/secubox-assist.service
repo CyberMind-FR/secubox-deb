@@ -1,0 +1,27 @@
+[Unit]
+Description=SecuBox Assist — WebSocket data-plane (wg-mesh only)
+After=network-online.target wg-quick@wg-mesh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-assist
+Group=secubox-assist
+ExecStart=/usr/bin/python3 -m assist.daemon
+Environment=PYTHONPATH=/usr/lib/secubox/assist:/usr/lib/secubox/annuaire
+Restart=on-failure
+RestartSec=5
+# NNP MUST be false: catalog.resolve() dispatches service/config actions as
+# `sudo -n /usr/sbin/secubox-assistctl ...` (scoped sudoers, see
+# sudoers/secubox-assist) run by THIS unit's User=. NoNewPrivileges=true
+# blocks sudo's setuid transition outright, silently failing every
+# privileged catalog action. secubox-assist-api.service never sudoes and
+# keeps NoNewPrivileges=true.
+NoNewPrivileges=false
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/secubox
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
