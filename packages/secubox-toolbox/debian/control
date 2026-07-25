@@ -34,7 +34,8 @@ Depends: ${misc:Depends}, ${python3:Depends},
  python3-qrcode,
  python3-geoip2 | geoipupdate,
  lxc,
- debian-archive-keyring
+ debian-archive-keyring,
+ sudo
 Recommends: bridge-utils,
  tor,
  obfs4proxy,

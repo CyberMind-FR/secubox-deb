@@ -177,6 +177,28 @@ type Proxy struct {
 	// rest to the async sbx-sentinel analyzer. nil-safe and fail-open — a
 	// disabled/erroring hook is a transparent passthrough. See sentinel.go.
 	sentinel *sentinelHook
+
+	// rlevel (#rlevel-per-peer, Task 3) is the per-peer R-level clamp: it
+	// ceilings the verdict px.pol.Decide already computed to what the calling
+	// peer's mode allows (see decideForPeer, rlevel.go's clampVerdict). nil is
+	// a TOTAL NO-OP — every existing test/PoC that builds a Proxy{} without
+	// setting this field keeps today's exact behavior (raw px.pol.Decide).
+	rlevel *PeerPolicy
+}
+
+// decideForPeer resolves the policy verdict for (host, sni) and, if a
+// PeerPolicy is wired in (px.rlevel != nil), clamps it to the calling client's
+// R-level (clientIP). Both accept paths (CONNECT/handleConnect and
+// transparent/handleTransparent) call this SAME helper so they can never
+// drift on how the clamp is applied. px.rlevel == nil is a total no-op:
+// the result is exactly px.pol.Decide(host, sni), preserving current
+// behavior for callers/tests that never set rlevel.
+func (px *Proxy) decideForPeer(clientIP, host, sni string) string {
+	v := px.pol.Decide(host, sni)
+	if px.rlevel != nil {
+		v = clampVerdict(px.rlevel.ModeForIP(clientIP), v)
+	}
+	return v
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -292,9 +314,10 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 	io.WriteString(client, "HTTP/1.1 200 Connection Established\r\n\r\n")
 
-	// Decide once on (host, sni). For the CONNECT PoC the SNI is the CONNECT
-	// host; the transparent engine will splice on the real ClientHello SNI.
-	verdict := px.pol.Decide(host, host)
+	// Decide once on (host, sni), clamped to the calling peer's R-level (#rlevel
+	// -per-peer). For the CONNECT PoC the SNI is the CONNECT host; the
+	// transparent engine will splice on the real ClientHello SNI.
+	verdict := px.decideForPeer(peerIP(client), host, host)
 
 	if verdict == "splice" {
 		// passthrough: raw TCP to upstream, no TLS interception (tls_splice).
@@ -779,6 +802,20 @@ func main() {
 	if *poison && len(jarKey) == 0 {
 		log.Printf("poison requested but jar key %s absent/empty → poison OFF", *jarKeyPath)
 	}
+	// #rlevel-per-peer Task 3 — per-peer R-level clamp. LoadPeerPolicy is
+	// best-effort (like LoadPolicy above): a missing/unreadable/corrupt store
+	// degrades to its own Passive fail-safe rather than erroring, so in
+	// practice this branch is defensive only. On the rare non-nil error we
+	// choose rlevel = nil (total no-op via decideForPeer) over a policy we
+	// have no confidence in, rather than risk fail-closed-passive silently
+	// blanket-splicing every peer.
+	peerRlevelPath := envOr("SECUBOX_PEER_RLEVEL", "/var/lib/secubox/toolbox/peer-rlevel.json")
+	peerWgPeersPath := envOr("SECUBOX_WG_PEERS", wgPeersPath)
+	rlevelPol, err := LoadPeerPolicy(peerRlevelPath, peerWgPeersPath)
+	if err != nil {
+		log.Printf("peer rlevel policy load failed (per-peer clamp disabled): %v", err)
+		rlevelPol = nil
+	}
 	px := &Proxy{
 		ca:      ca,
 		pol:     pol,
@@ -803,6 +840,8 @@ func main() {
 		// SENTINEL_MIRROR_SOCK); unset/false or a failed pack load yields a
 		// disabled no-op hook, so the default build is byte-identical to today.
 		sentinel: newSentinelHook(),
+		// #rlevel-per-peer Task 3 — per-peer R-level clamp (see decideForPeer).
+		rlevel: rlevelPol,
 	}
 	// #812 Task 6 — apply the retention/size-ceil overrides on top of
 	// NewMediaBuffer's defaults. Same-package unexported field access (see
