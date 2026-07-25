@@ -37,6 +37,7 @@
       <input id="scope" placeholder="scope (ex. dns)"> <input id="dur" type="number" value="1800">
       <input id="reason" placeholder="motif"></div>
     <button class="btn" data-act="request">Demander</button>
+    <p class="note">Requête ciblée : tu choisis le centre qui aide (par DID).</p>
   </div>
 
   <div class="card">
@@ -68,6 +69,7 @@
         <input id="reqopen-reason" placeholder="motif">
         <button class="btn" data-act="request-open">Publier demande</button>
       </div>
+      <p class="note">Requête ouverte : publiée au mesh, un offreur compatible se propose (voir Matches).</p>
       <div id="reqopen-list"></div>
     </div>
 
@@ -99,7 +101,7 @@
     </div>
   </div>
 
-  <div class="card"><h2>Journal de session</h2><div id="log"></div></div>
+  <div class="card"><h2>Demandes en attente</h2><div id="log"></div></div>
 </div>
 <script src="/shared/sidebar.js"></script>
 <script>
@@ -124,7 +126,7 @@ function itemEl(fields, actions) {
     actions.forEach(({label, act, data}) => {
       const b = document.createElement('button');
       b.className = 'btn'; b.dataset.act = act; b.textContent = label;
-      Object.entries(data || {}).forEach(([k, v]) => { b.dataset[k] = v; });
+      Object.entries(data || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) b.dataset[k] = v; });
       row.appendChild(b);
     });
     div.appendChild(row);
@@ -135,6 +137,20 @@ function itemEl(fields, actions) {
 function renderList(el, items) {
   el.textContent = '';
   items.forEach(item => el.appendChild(item));
+}
+
+function renderPending(el, pending) {
+  el.textContent = '';
+  if (!pending || !pending.length) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'Aucune demande en attente.';
+    el.appendChild(p);
+    return;
+  }
+  pending.forEach(q => el.appendChild(itemEl(
+    [['req', q.req_id], ['DID', q.center_did], ['mode', q.mode], ['scope', q.scope || '—'], ['motif', q.reason || '—']],
+    [])));
 }
 
 async function refreshOffers() {
@@ -167,14 +183,21 @@ async function refreshMatches() {
      {label:'Accepter (request)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'request'}}])));
 }
 
+let activeMarketTab = 'offer';
+const marketRefreshers = { offer: refreshOffers, reqopen: refreshOpenRequests, matches: refreshMatches };
+function refreshActiveMarketTab() {
+  const fn = marketRefreshers[activeMarketTab];
+  if (fn) fn();
+}
+
 async function refresh() {
   const r = await fetch('/api/v1/assist/sessions', {headers:H()});
   if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
   const d = await r.json();
   document.getElementById('active').textContent =
     d.active_session ? JSON.stringify(d.active_session) : 'aucune';
-  document.getElementById('log').textContent = JSON.stringify(d.pending, null, 2);
-  refreshOffers(); refreshOpenRequests(); refreshMatches();
+  renderPending(document.getElementById('log'), d.pending);
+  refreshActiveMarketTab();
 }
 
 document.getElementById('mtabs').addEventListener('click', (ev) => {
@@ -183,6 +206,8 @@ document.getElementById('mtabs').addEventListener('click', (ev) => {
   document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   document.getElementById('pane-' + t.dataset.tab).classList.add('active');
+  activeMarketTab = t.dataset.tab;
+  refreshActiveMarketTab();
 });
 
 document.addEventListener('click', async (ev) => {
