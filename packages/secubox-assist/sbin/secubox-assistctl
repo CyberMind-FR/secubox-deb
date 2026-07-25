@@ -41,6 +41,30 @@ Commands:
   config reload|rollback <scope>  [privileged] delegate to secubox-params
                                   swap/rollback for an allow-listed scope.
 
+Assist marketplace (dual offer/request — sous-projet assist-dual):
+  offer --tags a,b [--scope s] --ttl <s>
+                                  ASSIST_OFFER: advertise availability to help.
+  offer-revoke <offer_id>         ASSIST_OFFER_REVOKE: withdraw an offer.
+  request-open --tags a [--scope s] --ttl <s> --reason <text>
+                                  ASSIST_REQUEST_OPEN: post an untargeted
+                                  request for help.
+  match-accept <offer_id> <req_id> <offer|request>
+                                  ASSIST_MATCH_ACCEPT: one side's signed
+                                  acceptance of a proposed match.
+  matches                          ready matches (both sides accepted) for
+                                  requests WE issued (annuaire.assist_match +
+                                  assist.rendezvous.ready_matches).
+  joinlink --for <ref> --ttl <s> [--base-url <url>]
+                                  mint a single-use join link. The token
+                                  secret travels ONLY in the printed url;
+                                  only its hash is printed alongside it.
+  join <token> --hash <h> --expires-at <ts> --pubkey <pk> --endpoint <ep>
+       --ip <ip>                  redeem a join link: validates expiry + hash,
+                                  then builds (but does NOT exec) the
+                                  ephemeral identity + WireGuard peer-add argv
+                                  via assist.escalate — real p2p exec is a
+                                  documented follow-up (secubox-p2pctl).
+
 Env (override; keys are NEVER generated here):
   ANNUAIRE_JOURNAL    default /var/lib/secubox/annuaire/journal.db
   ANNUAIRE_KEY_PATH   default /etc/secubox/secrets/annuaire/node.key
@@ -55,6 +79,9 @@ Env (override; keys are NEVER generated here):
   DRYRUN=1            print {"dryrun": true, "would": ...}; write nothing —
                       no journal append, nothing minted, `list` afterwards
                       is unchanged.
+  ASSIST_BASE_URL     default https://assist.local — base url `joinlink`
+                      prefixes the single-use token with (override with
+                      --base-url).
 """
 from __future__ import annotations
 
@@ -69,9 +96,10 @@ sys.path.insert(0, os.environ.get("ASSIST_LIB", "/usr/lib/secubox/assist"))
 sys.path.insert(0, os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire"))
 
 from annuaire.log import Journal  # noqa: E402
-from annuaire import verbs, assist  # noqa: E402
+from annuaire import verbs, assist, assist_match  # noqa: E402
 from annuaire.crypto import public_from_private, did_from_pubkey  # noqa: E402
 from assist import token as _token  # noqa: E402  (sibling package, prod: ASSIST_LIB)
+from assist import rendezvous, joinlink, escalate  # noqa: E402
 
 JOURNAL_PATH = os.environ.get("ANNUAIRE_JOURNAL", "/var/lib/secubox/annuaire/journal.db")
 KEY_PATH = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
@@ -242,6 +270,112 @@ def cmd_list(a) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# Assist marketplace (dual offer/request) — sous-projet assist-dual
+# --------------------------------------------------------------------------- #
+
+def _tags(raw: str) -> list:
+    return [t for t in raw.split(",") if t]
+
+
+def cmd_offer(a) -> int:
+    tags = _tags(a.tags)
+    if _dry():
+        _dryrun_report("assist_offer", tags=tags, scope=a.scope, ttl_s=a.ttl)
+        return 0
+    offer_id = "off-" + secrets.token_hex(8)
+    try:
+        verbs.assist_offer(_journal(), _key(), tags, a.scope, a.ttl, offer_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"offer_id": offer_id}))
+    return 0
+
+
+def cmd_offer_revoke(a) -> int:
+    if _dry():
+        _dryrun_report("assist_offer_revoke", offer_id=a.offer_id)
+        return 0
+    try:
+        verbs.assist_offer_revoke(_journal(), _key(), a.offer_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"offer_revoked": a.offer_id}))
+    return 0
+
+
+def cmd_request_open(a) -> int:
+    tags = _tags(a.tags)
+    if _dry():
+        _dryrun_report("assist_request_open", tags=tags, scope=a.scope,
+                       ttl_s=a.ttl, reason=a.reason)
+        return 0
+    req_id = "orq-" + secrets.token_hex(8)
+    try:
+        verbs.assist_open_request(_journal(), _key(), tags, a.scope, a.ttl,
+                                  a.reason, req_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"req_id": req_id}))
+    return 0
+
+
+def cmd_match_accept(a) -> int:
+    if _dry():
+        _dryrun_report("assist_match_accept", offer_id=a.offer_id, req_id=a.req_id,
+                       side=a.side)
+        return 0
+    try:
+        verbs.assist_match_accept(_journal(), _key(), a.offer_id, a.req_id, a.side)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"match_id": assist_match.match_id(a.offer_id, a.req_id)}))
+    return 0
+
+
+def cmd_matches(a) -> int:
+    priv = _key()
+    entries = list(_journal().iter_entries())
+    self_did = _self_did(priv)
+    print(json.dumps(rendezvous.ready_matches(entries, self_did, _now())))
+    return 0
+
+
+def cmd_joinlink(a) -> int:
+    if _dry():
+        _dryrun_report("assist_joinlink", ref=a.for_, ttl_s=a.ttl, base_url=a.base_url)
+        return 0
+    link = joinlink.mint_join(a.for_, a.ttl, a.base_url)
+    print(json.dumps({"url": link["url"], "token_hash": link["token_hash"],
+                      "expires_at": link["expires_at"]}))
+    return 0
+
+
+def cmd_join(a) -> int:
+    now = _now()
+    if joinlink.is_expired(a.expires_at, now):
+        _die("join link expired")
+        return 1  # unreachable
+    if not joinlink.verify_join(a.token, a.hash):
+        _die("invalid join token")
+        return 1  # unreachable
+    identity = escalate.mint_ephemeral_identity()
+    try:
+        peer_argv = escalate.add_ephemeral_peer(a.pubkey, a.endpoint, a.ip)
+    except escalate.EscalateError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    # Real p2p wiring (exec under sudo via secubox-p2pctl) is a documented
+    # follow-up — secubox-p2pctl does not exist yet. Print the plan so the
+    # redeem path is fully testable without a live exec.
+    print(json.dumps({"identity": identity, "peer_argv": peer_argv}))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 # privileged catalog backends — invoked BY the WS daemon (via sudo -n, see
 # sudoers/secubox-assist) as `sudo -n secubox-assistctl <diag|service|config>
 # ...`, never directly by a center. Every target is re-validated here against
@@ -340,6 +474,49 @@ def main(argv=None) -> int:
     cr.set_defaults(fn=cmd_console_revoke)
 
     sub.add_parser("list", help="pending requests + active session").set_defaults(fn=cmd_list)
+
+    # Assist marketplace (dual offer/request) — sous-projet assist-dual.
+    of = sub.add_parser("offer", help="advertise availability to help")
+    of.add_argument("--tags", required=True, help="comma-separated capability tags")
+    of.add_argument("--scope")
+    of.add_argument("--ttl", type=int, required=True)
+    of.set_defaults(fn=cmd_offer)
+
+    orv = sub.add_parser("offer-revoke", help="withdraw a previously published offer")
+    orv.add_argument("offer_id")
+    orv.set_defaults(fn=cmd_offer_revoke)
+
+    ro = sub.add_parser("request-open", help="post an untargeted request for help")
+    ro.add_argument("--tags", required=True, help="comma-separated capability tags")
+    ro.add_argument("--scope")
+    ro.add_argument("--ttl", type=int, required=True)
+    ro.add_argument("--reason", required=True)
+    ro.set_defaults(fn=cmd_request_open)
+
+    ma = sub.add_parser("match-accept", help="signed acceptance of a proposed match")
+    ma.add_argument("offer_id")
+    ma.add_argument("req_id")
+    ma.add_argument("side", choices=["offer", "request"])
+    ma.set_defaults(fn=cmd_match_accept)
+
+    sub.add_parser("matches", help="ready matches for our own open requests").set_defaults(
+        fn=cmd_matches)
+
+    jl = sub.add_parser("joinlink", help="mint a single-use, time-boxed join link")
+    jl.add_argument("--for", dest="for_", required=True, help="opaque reference (e.g. match_id)")
+    jl.add_argument("--ttl", type=int, required=True)
+    jl.add_argument("--base-url", dest="base_url",
+                    default=os.environ.get("ASSIST_BASE_URL", "https://assist.local"))
+    jl.set_defaults(fn=cmd_joinlink)
+
+    jo = sub.add_parser("join", help="redeem a join link (plans escalate argv, does not exec)")
+    jo.add_argument("token")
+    jo.add_argument("--hash", required=True, help="token_hash printed by `joinlink`")
+    jo.add_argument("--expires-at", required=True, help="expires_at printed by `joinlink`")
+    jo.add_argument("--pubkey", required=True, help="joiner's WireGuard public key")
+    jo.add_argument("--endpoint", required=True, help="joiner's WireGuard endpoint host:port")
+    jo.add_argument("--ip", required=True, help="joiner's ephemeral-range IP")
+    jo.set_defaults(fn=cmd_join)
 
     # Privileged catalog backends — invoked by the WS daemon via sudo -n,
     # never called interactively by an operator (see sudoers/secubox-assist).
