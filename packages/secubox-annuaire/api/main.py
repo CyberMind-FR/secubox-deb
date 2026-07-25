@@ -667,6 +667,7 @@ class PublishConfigRequest(BaseModel):
     payload_uri: Optional[str] = None
     valid_until: Optional[str] = None
     config_id: Optional[str] = None
+    layer: str = "baseline"
 
 
 class RevokeConfigRequest(BaseModel):
@@ -742,7 +743,7 @@ async def post_config_publish(req: PublishConfigRequest):
             get_journal(), priv, req.publisher_did,
             scope=req.scope, version=req.version, content_hash=req.content_hash,
             payload=req.payload, payload_uri=req.payload_uri,
-            valid_until=req.valid_until, config_id=req.config_id,
+            valid_until=req.valid_until, config_id=req.config_id, layer=req.layer,
         )
     except PermissionError as e:
         raise HTTPException(403, str(e))

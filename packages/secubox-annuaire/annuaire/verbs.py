@@ -1778,17 +1778,26 @@ def publish_config(
     payload_uri: Optional[str] = None,
     valid_until: Optional[str] = None,
     config_id: Optional[str] = None,
+    layer: str = "baseline",
 ) -> ConfigBlob:
     """CONFIG_PUBLISH: publish a signed, versioned config blob (self-certifying).
 
     config_id defaults to ``cfg-<scope>`` so later versions supersede earlier
     ones for the same scope (single-writer, last-writer-wins by version).
+
+    ``layer`` is one of ``baseline``/``override`` (``local`` is a box-only
+    file, never published to the mesh — rejected here). Grant enforcement for
+    who is allowed to actually win a given (scope, layer) happens downstream
+    in ``config_router``, not here: this verb only records a self-certifying
+    signed publication.
     """
+    if layer == "local":
+        raise ValueError("publish_config: centers cannot publish the 'local' layer (box-only)")
     cid = config_id or f"cfg-{scope}"
     blob = ConfigBlob(
         config_id=cid, publisher=publisher_did, scope=scope, version=version,
         content_hash=content_hash, payload=payload, payload_uri=payload_uri,
-        valid_until=valid_until,
+        valid_until=valid_until, layer=layer,
     )
     full = blob.model_dump()
     p = {k: v for k, v in full.items() if k not in ("sig", "signer_did")}
