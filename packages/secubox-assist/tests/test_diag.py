@@ -61,6 +61,34 @@ def test_redacts_email_local_part():
     assert "***@example.com" in out
 
 
+def test_redacts_access_token_compound_field():
+    s = '{"access_token": "eyJsecretjwt.payload.sig"}'
+    out = diag.redact(s)
+    assert "eyJsecretjwt.payload.sig" not in out
+    assert "***" in out
+
+
+def test_redacts_refresh_token_compound_field():
+    s = '{"refresh_token":"rt-xxxxxxxxxxxxxxxxxxxx"}'
+    out = diag.redact(s)
+    assert "rt-xxxxxxxxxxxxxxxxxxxx" not in out
+    assert "***" in out
+
+
+def test_redacts_client_secret_compound_field():
+    s = '{"client_secret": "supersecretvalue123"}'
+    out = diag.redact(s)
+    assert "supersecretvalue123" not in out
+    assert "***" in out
+
+
+def test_redacts_generic_underscore_prefixed_password():
+    s = "my_password=hunter3"
+    out = diag.redact(s)
+    assert "hunter3" not in out
+    assert "***" in out
+
+
 def test_collect_has_no_secret_paths(monkeypatch):
     b = diag.collect(now_ts="2026-07-25T12:00:00Z")
     assert "generated_at" in b and "modules" in b and "logs" in b
