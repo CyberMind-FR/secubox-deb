@@ -31,13 +31,15 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from . import grants
+from . import assist, grants
 from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
     BanRecord,
     GENESIS_HASH,
     ApprovalMode,
+    AssistRequest,
+    AssistSession,
     ConfigBlob,
     Grant,
     Identity,
@@ -2113,3 +2115,110 @@ def _find_any_offer(journal: Journal, service_id: str) -> Optional[Dict]:
                     best_height = entry.height
                     best = entry.payload
     return best
+
+
+# ---------------------------------------------------------------------------
+# Support / assistance request (sous-projet 2)
+# ---------------------------------------------------------------------------
+
+def _assist_append(journal: Journal, priv: bytes, op: Op, model_obj, payload_type: str):
+    """Shared: strip sig/signer_did, sign canonical_bytes(payload), append."""
+    payload = model_obj.model_dump(exclude={"sig", "signer_did"})
+    pub_hex = public_from_private(priv).hex()
+    author_did = did_from_pubkey(public_from_private(priv))
+    sig_hex = sign(priv, canonical_bytes(payload))
+    return journal.append(op=op, payload=payload, payload_type=payload_type,
+                          author=author_did, author_pubkey_hex=pub_hex,
+                          sig=sig_hex)
+
+
+def assist_request(
+    journal: Journal,
+    box_priv: bytes,
+    center_did: str,
+    mode: str,
+    scope: str,
+    duration_s: int,
+    reason: str,
+    req_id: str,
+):
+    """ASSIST_REQUEST: a box's signed request for assistance from a center.
+
+    Self-certifying: authored by the box (issued_by == author). Validates the
+    AssistRequest pydantic model before signing/appending.
+    """
+    box_did = did_from_pubkey(public_from_private(box_priv))
+    m = AssistRequest(req_id=req_id, center_did=center_did, mode=mode, scope=scope,
+                      duration_s=duration_s, reason=reason, issued_by=box_did)
+    return _assist_append(journal, box_priv, Op.ASSIST_REQUEST, m, "AssistRequest")
+
+
+def assist_accept(journal: Journal, center_priv: bytes, req_id: str):
+    """ASSIST_ACCEPT: the center accepts a pending AssistRequest."""
+    center_did = did_from_pubkey(public_from_private(center_priv))
+    payload = {"req_id": req_id, "center_did": center_did, "created_at": now_rfc3339()}
+    pub_hex = public_from_private(center_priv).hex()
+    sig_hex = sign(center_priv, canonical_bytes(payload))
+    return journal.append(op=Op.ASSIST_ACCEPT, payload=payload,
+                          payload_type="AssistAccept", author=center_did,
+                          author_pubkey_hex=pub_hex, sig=sig_hex)
+
+
+def assist_session_open(
+    journal: Journal,
+    box_priv: bytes,
+    req_id: str,
+    center_did: str,
+    token_hash: str,
+    expires_ts: str,
+    session_id: str,
+):
+    """ASSIST_SESSION_OPEN: box consent opens a live assistance session.
+
+    Gated by assist.can_open (request exists, accepted, authorized for this
+    box, and no session already active). Raises ValueError if not eligible.
+    """
+    box_did = did_from_pubkey(public_from_private(box_priv))
+    ok, why = assist.can_open(list(journal.iter_entries()), req_id, box_did,
+                              now_ts=now_rfc3339())
+    if not ok:
+        raise ValueError(f"cannot-open: {why}")
+    m = AssistSession(session_id=session_id, req_id=req_id, center_did=center_did,
+                      token_hash=token_hash, expires_ts=expires_ts, issued_by=box_did)
+    return _assist_append(journal, box_priv, Op.ASSIST_SESSION_OPEN, m, "AssistSession")
+
+
+def assist_session_close(journal: Journal, box_priv: bytes, session_id: str, reason: str):
+    """ASSIST_SESSION_CLOSE: end a live assistance session (operator or auto-expiry)."""
+    box_did = did_from_pubkey(public_from_private(box_priv))
+    payload = {"session_id": session_id, "issued_by": box_did, "reason": reason,
+               "created_at": now_rfc3339()}
+    pub_hex = public_from_private(box_priv).hex()
+    sig_hex = sign(box_priv, canonical_bytes(payload))
+    return journal.append(op=Op.ASSIST_SESSION_CLOSE, payload=payload,
+                          payload_type="AssistSessionClose", author=box_did,
+                          author_pubkey_hex=pub_hex, sig=sig_hex)
+
+
+def assist_console_grant(journal: Journal, box_priv: bytes, session_id: str, expires_ts: str):
+    """ASSIST_CONSOLE_GRANT: second box consent escalates a session to console access."""
+    box_did = did_from_pubkey(public_from_private(box_priv))
+    payload = {"session_id": session_id, "issued_by": box_did,
+               "expires_ts": expires_ts, "created_at": now_rfc3339()}
+    pub_hex = public_from_private(box_priv).hex()
+    sig_hex = sign(box_priv, canonical_bytes(payload))
+    return journal.append(op=Op.ASSIST_CONSOLE_GRANT, payload=payload,
+                          payload_type="AssistConsoleGrant", author=box_did,
+                          author_pubkey_hex=pub_hex, sig=sig_hex)
+
+
+def assist_console_revoke(journal: Journal, box_priv: bytes, session_id: str):
+    """ASSIST_CONSOLE_REVOKE: withdraw console escalation for a session."""
+    box_did = did_from_pubkey(public_from_private(box_priv))
+    payload = {"session_id": session_id, "issued_by": box_did,
+               "created_at": now_rfc3339()}
+    pub_hex = public_from_private(box_priv).hex()
+    sig_hex = sign(box_priv, canonical_bytes(payload))
+    return journal.append(op=Op.ASSIST_CONSOLE_REVOKE, payload=payload,
+                          payload_type="AssistConsoleRevoke", author=box_did,
+                          author_pubkey_hex=pub_hex, sig=sig_hex)

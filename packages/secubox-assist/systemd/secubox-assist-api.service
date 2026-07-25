@@ -1,0 +1,18 @@
+[Unit]
+Description=SecuBox Assist — REST API (unix socket)
+After=network.target
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/assist.sock --log-level warning
+WorkingDirectory=/usr/lib/secubox/assist
+Environment=PYTHONPATH=/usr/lib/secubox/assist:/usr/lib/secubox/annuaire
+Restart=on-failure
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

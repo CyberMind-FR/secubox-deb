@@ -79,6 +79,13 @@ class Op(str, Enum):
     # Gondwana threatmesh (#768): bidirectional WAF/threat ban federation.
     BAN_PUBLISH          = "ban_publish"      # a node signs an IP ban → federates
     BAN_REVOKE           = "ban_revoke"       # the publisher lifts its own ban
+    # Support / assistance request (sous-projet 2) — signed control-plane
+    ASSIST_REQUEST        = "assist_request"        # box asks a center for help
+    ASSIST_ACCEPT         = "assist_accept"         # center accepts the request
+    ASSIST_SESSION_OPEN   = "assist_session_open"   # box consents → live session
+    ASSIST_SESSION_CLOSE  = "assist_session_close"  # session ends (op or auto-expiry)
+    ASSIST_CONSOLE_GRANT  = "assist_console_grant"  # 2nd consent → console escalation
+    ASSIST_CONSOLE_REVOKE = "assist_console_revoke" # console withdrawn
 
 
 # ---------------------------------------------------------------------------
@@ -581,6 +588,62 @@ class Grant(BaseModel):
         default=None,
         description="Ed25519 sig over canonical_bytes(payload_without_sig)",
     )
+    signer_did: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Support / assistance request (sous-projet 2) — real-time help sessions
+# ---------------------------------------------------------------------------
+
+ASSIST_MODES = {"per-incident", "standing"}
+
+
+class AssistRequest(BaseModel):
+    """A box's signed request for assistance from a center.
+
+    Self-certifying: authored by the box (entry.author == issued_by). In
+    'per-incident' mode this request IS the ephemeral authority (no standing
+    grant needed); in 'standing' mode an active capability="assist" Grant is
+    required for the center to initiate. sig covers canonical_bytes(payload
+    without sig/signer_did).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    req_id:     str = Field(..., description="stable id for this request")
+    center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    mode:       str = Field(..., description="'per-incident' or 'standing'")
+    scope:      str = Field(..., pattern=r"^[a-z0-9][a-z0-9._-]*$",
+                            description="incident scope hint; bare filename component")
+    duration_s: int = Field(..., ge=60, le=86400, description="requested max session seconds")
+    reason:     str = Field(..., min_length=1, max_length=512)
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+    @field_validator("mode")
+    @classmethod
+    def _mode_known(cls, v: str) -> str:
+        if v not in ASSIST_MODES:
+            raise ValueError(f"mode must be one of {sorted(ASSIST_MODES)}")
+        return v
+
+
+class AssistSession(BaseModel):
+    """A box-consented live assistance session. token_hash is BLAKE2b-hex of
+    the single-use session token; the token secret itself is NEVER journaled.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(..., description="stable id for this session")
+    req_id:     str = Field(..., description="the AssistRequest this opens")
+    center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    token_hash: str = Field(..., pattern=r"^[0-9a-f]{64}$",
+                            description="BLAKE2b-hex of the single-use session token")
+    expires_ts: str = Field(..., description="RFC3339 hard-cap; fail-closed past this")
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
     signer_did: Optional[str] = None
 
 
