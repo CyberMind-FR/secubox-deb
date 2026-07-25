@@ -7,9 +7,10 @@ SecuBox-Deb :: assist.wsserver — per-session WebSocket data-plane.
 
 Binds the wg-mesh interface IP ONLY (never 0.0.0.0). Authenticates the center
 with the single-use session token (hash matched against the journal's
-AssistSession). Dispatches ONLY catalog actions; console actions require a live
-CONSOLE_GRANT. Every action is audited. Fail-closed: no wg-mesh ⇒ BindError ⇒
-the daemon does not serve.
+AssistSession). Dispatches ONLY catalog actions; console escalation (a live
+pty channel) is handled by the separate console module, not gated here.
+Every action is audited. Fail-closed: no wg-mesh ⇒ BindError ⇒ the daemon
+does not serve.
 """
 from __future__ import annotations
 
@@ -53,7 +54,10 @@ async def authorize(tok: str, entries, self_did: str, now_ts: str) -> dict:
     """Return the active session matching tok, else AuthError."""
     if _assist is None:
         raise AuthError("annuaire.assist unavailable")
-    session = _assist.active_session(entries, self_did, now_ts)
+    try:
+        session = _assist.active_session(entries, self_did, now_ts)
+    except _assist.AssistError as exc:
+        raise AuthError("multiple-active-sessions") from exc
     if session and verify_token(tok, session.get("token_hash", "")):
         return session
     raise AuthError("no active session for token")
@@ -61,7 +65,8 @@ async def authorize(tok: str, entries, self_did: str, now_ts: str) -> dict:
 
 async def dispatch(session: dict, action: str, arg: Optional[str], entries,
                    self_did: str, now_ts: str) -> dict:
-    """Run one catalog action; console actions require a live console grant."""
+    """Run one catalog action; console escalation is handled by the separate
+    console module, not by this dispatcher."""
     sid = session["session_id"]
     center = session.get("center_did", "?")
     try:

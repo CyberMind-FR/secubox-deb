@@ -33,3 +33,23 @@ async def test_authorize_rejects_wrong_token():
     with pytest.raises(wsserver.AuthError):
         await wsserver.authorize("bogus", entries, "did:plc:" + "1"*32,
                                  now_ts="2026-07-25T00:00:00Z")
+
+
+@pytest.mark.asyncio
+async def test_authorize_rejects_multiple_active_sessions_as_autherror():
+    tok1, h1 = token.mint()
+    tok2, h2 = token.mint()
+    self_did = "did:plc:" + "1"*32
+    entries = [
+        {"op": "assist_session_open", "payload": {
+            "session_id": "s1", "req_id": "r1", "center_did": "did:plc:" + "2"*32,
+            "issued_by": self_did, "token_hash": h1,
+            "expires_ts": "2999-01-01T00:00:00Z"}},
+        {"op": "assist_session_open", "payload": {
+            "session_id": "s2", "req_id": "r2", "center_did": "did:plc:" + "3"*32,
+            "issued_by": self_did, "token_hash": h2,
+            "expires_ts": "2999-01-01T00:00:00Z"}},
+    ]
+    with pytest.raises(wsserver.AuthError):
+        await wsserver.authorize(tok1, entries, self_did,
+                                 now_ts="2026-07-25T00:00:00Z")
