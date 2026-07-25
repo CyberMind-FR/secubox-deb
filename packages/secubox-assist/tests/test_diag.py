@@ -89,6 +89,40 @@ def test_redacts_generic_underscore_prefixed_password():
     assert "***" in out
 
 
+def test_redacts_wireguard_private_key_journalctl_block():
+    s = (
+        "interface: wg0\n"
+        "  private key: 6PgLIf6qX7C0y6nQKk2rTz4o8u5jK9m1nD3sF7pV8XY=\n"
+        "  public key: abcdefgh\n"
+    )
+    out = diag.redact(s)
+    assert "6PgLIf6qX7C0y6nQKk2rTz4o8u5jK9m1nD3sF7pV8XY=" not in out
+    assert "***" in out
+
+
+def test_redacts_private_key_env_style():
+    s = "PRIVATE_KEY=6PgLIf6qX7C0y6nQKk2rTz4o8u5jK9m1nD3sF7pV8XY="
+    out = diag.redact(s)
+    assert "6PgLIf6qX7C0y6nQKk2rTz4o8u5jK9m1nD3sF7pV8XY=" not in out
+    assert "***" in out
+
+
+def test_redacts_private_key_json_style():
+    s = '{"private_key": "abcSecretKeyValue123"}'
+    out = diag.redact(s)
+    assert "abcSecretKeyValue123" not in out
+    assert "***" in out
+
+
+def test_redacts_uri_embedded_credential_password():
+    s = "postgres://dbuser:s3cr3tdbpass@localhost:5432/appdb"
+    out = diag.redact(s)
+    assert "s3cr3tdbpass" not in out
+    assert "***" in out
+    assert "dbuser" in out
+    assert "localhost:5432/appdb" in out
+
+
 def test_collect_has_no_secret_paths(monkeypatch):
     b = diag.collect(now_ts="2026-07-25T12:00:00Z")
     assert "generated_at" in b and "modules" in b and "logs" in b
