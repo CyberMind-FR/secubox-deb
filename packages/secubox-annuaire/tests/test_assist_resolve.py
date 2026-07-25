@@ -104,3 +104,63 @@ def test_can_open_allows_self_authored_accepted_request():
     ]
     ok, reason = assist.can_open(entries, "r-self", BOX, now_ts="2026-07-25T12:00:00Z")
     assert (ok, reason) == (True, "ok")
+
+
+# ---------------------------------------------------------------------------
+# Standing mode REQUIRES an active capability="assist" Grant for the center
+# (spec: per-incident's own box-authored request IS the authority; standing
+# is NOT — it must be backed by a real, self-issued delegation).
+# ---------------------------------------------------------------------------
+
+def _grant_issue(gid, center_did, capability, scope, issued_by):
+    return {"op": Op.GRANT_ISSUE.value, "payload": {
+        "grant_id": gid, "center_did": center_did, "capability": capability,
+        "scope": scope, "layer": "baseline", "issued_by": issued_by}}
+
+
+def test_can_open_standing_without_grant_is_refused():
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-standing", center_did=CENTER,
+          mode="standing", scope="dns", issued_by=CENTER),
+        e(Op.ASSIST_ACCEPT, req_id="r-standing", issued_by=CENTER),
+    ]
+    ok, reason = assist.can_open(entries, "r-standing", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert (ok, reason) == (False, "no-standing-grant")
+
+
+def test_can_open_standing_with_active_assist_grant_is_allowed():
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-standing", center_did=CENTER,
+          mode="standing", scope="dns", issued_by=CENTER),
+        e(Op.ASSIST_ACCEPT, req_id="r-standing", issued_by=CENTER),
+        _grant_issue("g1", CENTER, "assist", "dns", BOX),
+    ]
+    ok, reason = assist.can_open(entries, "r-standing", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert (ok, reason) == (True, "ok")
+
+
+def test_can_open_standing_ignores_non_assist_capability_grant():
+    # A "config" capability grant for the same center must not satisfy the
+    # standing assist-grant requirement — capability must be exactly "assist".
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-standing", center_did=CENTER,
+          mode="standing", scope="dns", issued_by=CENTER),
+        e(Op.ASSIST_ACCEPT, req_id="r-standing", issued_by=CENTER),
+        _grant_issue("g1", CENTER, "config", "dns", BOX),
+    ]
+    ok, reason = assist.can_open(entries, "r-standing", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert (ok, reason) == (False, "no-standing-grant")
+
+
+def test_can_open_standing_ignores_foreign_issued_grant():
+    # A capability="assist" grant that THIS box never issued (e.g. a mesh
+    # peer's federated grant naming itself) must not count — active_grants'
+    # sovereignty filter already scopes this to issued_by == self_did.
+    entries = [
+        e(Op.ASSIST_REQUEST, req_id="r-standing", center_did=CENTER,
+          mode="standing", scope="dns", issued_by=CENTER),
+        e(Op.ASSIST_ACCEPT, req_id="r-standing", issued_by=CENTER),
+        _grant_issue("g1", CENTER, "assist", "dns", OTHER),
+    ]
+    ok, reason = assist.can_open(entries, "r-standing", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert (ok, reason) == (False, "no-standing-grant")
