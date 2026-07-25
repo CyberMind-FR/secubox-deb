@@ -13,19 +13,39 @@ GRANT_REVOKE carrying the same grant_id. Ownership is exclusive: at most
 one center holds a given (scope, layer) at a time (validate_issue enforces
 this on the write path — the log itself just records what happened).
 
-Entries are consumed as plain mappings with an "op" key and a "payload"
-key — the same shape both the raw journal-append call sites and
-annuaire.log.Journal.iter_entries() rows expose. Op is a str Enum, so
-comparing entry["op"] to the literal "grant_issue"/"grant_revoke" strings
-works whether the caller passes Op members or bare strings.
+Entries may be either plain mappings with "op"/"payload" keys (as used by
+the test fixtures below) or annuaire.log.LogEntry objects — the pydantic
+model that annuaire.log.Journal.iter_entries() actually yields, where "op"
+and "payload" are attributes, not subscripts. Callers can pass
+list(journal.iter_entries()) directly; _op()/_payload() below accept
+either shape transparently. Op is a str Enum, so comparing the resolved
+value to the literal "grant_issue"/"grant_revoke" strings works whether
+the caller passes Op members or bare strings.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from .model import NON_DELEGATABLE
 
 GrantKey = Tuple[str, str]
+Entry = Union[Mapping[str, Any], Any]  # dict (subscript) or LogEntry-like (attribute)
+
+
+def _op(entry: Entry) -> Any:
+    """Return entry.op if present (LogEntry), else entry["op"] (dict)."""
+    op = getattr(entry, "op", None)
+    if op is None and isinstance(entry, dict):
+        op = entry.get("op")
+    return op
+
+
+def _payload(entry: Entry) -> Dict[str, Any]:
+    """Return entry.payload if present (LogEntry), else entry["payload"] (dict)."""
+    payload = getattr(entry, "payload", None)
+    if payload is None and isinstance(entry, dict):
+        payload = entry.get("payload")
+    return payload or {}
 
 
 def active_grants(entries: List[Mapping[str, Any]]) -> Dict[GrantKey, Dict[str, Any]]:
@@ -41,8 +61,8 @@ def active_grants(entries: List[Mapping[str, Any]]) -> Dict[GrantKey, Dict[str, 
     revoked_ids: set = set()
 
     for entry in entries:
-        op = entry["op"]
-        payload = entry["payload"]
+        op = _op(entry)
+        payload = _payload(entry)
         if op == "grant_issue":
             issued[payload["grant_id"]] = payload
         elif op == "grant_revoke":
