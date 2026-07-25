@@ -1,0 +1,7 @@
+secubox-assist (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial socle: assistance request control-plane consumer + data-plane
+    daemon (WebSocket bind wg-mesh only), catalog dispatcher, console
+    double-consent, secubox-assistctl, /assist panel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
