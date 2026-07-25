@@ -1,3 +1,13 @@
+secubox-aggregator (0.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * Watchdog: 480s startup grace before auto-heal restart. The aggregator's
+    in-process cold mount of ~110 modules takes minutes and RuntimeDirectoryPreserve
+    keeps the socket file, so the probe saw "present but unresponsive" and the
+    2-strike auto-heal restarted it before it could bind (self-inflicted loop →
+    board-wide 502). Skip the restart while MainPID uptime < SECUBOX_AGG_WD_GRACE.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
+
 secubox-aggregator (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * #727 auto-heal watchdog: ship secubox-aggregator-watchdog.{sh,service,timer}.
