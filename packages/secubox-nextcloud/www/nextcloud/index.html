@@ -237,9 +237,11 @@
             document.getElementById('data-size').textContent = status.disk_used || '-';
             document.getElementById('version').textContent = status.version || '-';
 
-            const port = status.http_port || 8080;
-            document.getElementById('web-url').textContent = `http://localhost:${port}`;
-            document.getElementById('web-url').href = `http://localhost:${port}`;
+            // Use the public URL the API resolves (real domain behind HAProxy
+            // TLS), not a hardcoded localhost the client can't reach.
+            const webUrl = status.web_url || `http://localhost:${status.http_port || 8080}`;
+            document.getElementById('web-url').textContent = webUrl;
+            document.getElementById('web-url').href = webUrl;
         }
 
         async function loadStorage() {
