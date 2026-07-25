@@ -26,6 +26,31 @@ fi
 touch /var/log/secubox/audit.log 2>/dev/null || true
 chgrp secubox-assist /var/log/secubox/audit.log 2>/dev/null || true
 chmod 0664 /var/log/secubox/audit.log 2>/dev/null || true
+# Ephemeral WG range (10.11.0.0/24, iface wg-ephemeral) for the escalate
+# flow's session-scoped peers (see assist/escalate.py — EscalateError is
+# fail-closed until a peer can actually be added). secubox-p2p does not yet
+# ship an ephemeral-iface CLI (no secubox-p2pctl binary exists); this block
+# is a guarded, idempotent no-op until that lands upstream — it never
+# invents the binary and never touches the shared /etc/secubox parent, only
+# its own etc/secubox/assist/ subdirectory.
+mkdir -p /etc/secubox/assist 2>/dev/null || true
+if [ -x /usr/sbin/secubox-p2pctl ] \
+    && /usr/sbin/secubox-p2pctl ephemeral-init --help >/dev/null 2>&1; then
+    /usr/sbin/secubox-p2pctl ephemeral-init --iface wg-ephemeral \
+        --range 10.11.0.0/24 2>/dev/null || true
+else
+    cat > /etc/secubox/assist/EPHEMERAL-RANGE.note <<'EOF'
+wg-ephemeral / 10.11.0.0/24 (assist/escalate.py EPHEMERAL_RANGE/EPHEMERAL_IFACE)
+is provisioned on demand, per session, by secubox-p2p — not as a standing
+interface created at install time. escalate.add_ephemeral_peer() shells out
+to `secubox-p2pctl peer-add --iface wg-ephemeral --ephemeral ...` via the
+scoped secubox-assistctl sudoers entry; secubox-p2p does not yet implement
+that subcommand, so escalation fails closed (EscalateError) until it does.
+This file is just a breadcrumb — nothing here is a workaround or a
+substitute CLI.
+EOF
+    chmod 0644 /etc/secubox/assist/EPHEMERAL-RANGE.note 2>/dev/null || true
+fi
 #DEBHELPER#
 systemctl daemon-reload || true
 systemctl enable --now secubox-assist-api.service || true

@@ -1,3 +1,34 @@
+secubox-assist (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: decentralized help-request marketplace — assist/rendezvous.py
+    (OFFER/REQUEST/MATCH_ACCEPT ops against secubox-annuaire's assist_match,
+    tag-intersection + scope + expiry matching, mutual double-accept opens
+    a sovereign SESSION_OPEN for the requester) and assist/joinlink.py
+    (single-use, hash-only join links minted from a match). New
+    assist/escalate.py: multi-layer bootstrap for a matched center to reach
+    a box beyond the standing wg-mesh — an ephemeral Ed25519 identity
+    (never promoted to a persistent gondwana member) plus a session-scoped
+    WireGuard peer in the new 10.11.0.0/24 range on a dedicated
+    wg-ephemeral iface, established and torn down via secubox-p2p; builders
+    return argv lists executed only by secubox-assistctl under the existing
+    scoped sudoers entry, never in the web daemon. secubox-assistctl,
+    /assist panel, and the nft drop-in extended accordingly (wg-ephemeral
+    reachable on the same terms as wg-mesh, still a self-contained
+    policy-accept table — see nft/secubox-assist.nft).
+  * deps: secubox-p2p added to Depends (the escalate flow's ephemeral peer
+    is added/revoked through it). secubox-p2p does not yet expose an
+    ephemeral-iface CLI (secubox-p2pctl) — postinst provisions the
+    wg-ephemeral/10.11.0.0/24 range through a guarded, idempotent block
+    that no-ops (leaving a breadcrumb note under
+    /etc/secubox/assist/) when that CLI is absent, so escalation fails
+    closed rather than this package inventing a substitute binary. Follow-up
+    tracked against secubox-p2p.
+  * packaging: no new install globs needed — rendezvous.py/joinlink.py/
+    escalate.py already ship via the existing `assist/*.py` wildcard in
+    secubox-assist.install.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 25 Jul 2026 18:00:00 +0200
+
 secubox-assist (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * fix(daemon): self_did resolved from a PUBLIC source (SECUBOX_SELF_DID env
