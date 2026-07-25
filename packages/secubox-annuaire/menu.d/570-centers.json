@@ -1,0 +1,10 @@
+{
+  "id": "centers",
+  "name": "Centres",
+  "icon": "🏛",
+  "path": "/centers/",
+  "category": "mesh",
+  "order": 570,
+  "description": "Propriété déléguée des scopes de config — matrice, grant/révoque, propositions",
+  "requires": ["secubox-annuaire"]
+}
