@@ -4015,13 +4015,21 @@ def _rlevel_effective(chosen: str, forced: str | None, floor: str) -> str:
 
 
 def _rlevel_ctl(args: list[str], timeout: int = 15):
-    """Delegate a privileged rlevel action to sbxmitm-policyctl via `sudo -n`.
-    Never raises — returns (returncode, stdout, stderr); a transport failure
-    (sudo missing, timeout, ctl absent) yields rc=1 so callers fail closed."""
+    """Run sbxmitm-policyctl DIRECTLY as the portal user (no sudo, no root).
+
+    The ctl's two privileged operations both work with the portal's EXISTING
+    privileges — no escalation, no hardening reduction on this public captive
+    portal: (1) it rewrites /var/lib/secubox/toolbox/peer-rlevel.json, owned by
+    the portal user (secubox-toolbox); (2) it updates the @rlevel_off nft set,
+    which needs only CAP_NET_ADMIN — already granted to the portal for its
+    captive-portal nft management. `sudo` was avoided precisely so the portal
+    can keep NoNewPrivileges=true + its minimal CapabilityBoundingSet.
+    Never raises — returns (rc, stdout, stderr); a failure yields rc=1 so
+    callers fail closed."""
     import subprocess
     try:
         p = subprocess.run(
-            ["sudo", "-n", _RLEVEL_POLICYCTL, *args],
+            [_RLEVEL_POLICYCTL, *args],
             capture_output=True, text=True, timeout=timeout,
         )
         return p.returncode, p.stdout.strip(), p.stderr.strip()

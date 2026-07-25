@@ -35,11 +35,10 @@ override_dh_auto_install:
 	# rlevel-per-peer (task 4/8) : root-scoped ctl owning peer-rlevel.json +
 	# the @rlevel_off nft set (see sbin/sbxmitm-policyctl header).
 	install -m 0755 sbin/sbxmitm-policyctl debian/secubox-toolbox/usr/sbin/
-	# Scoped sudoers: the portal (User=secubox-toolbox) may only invoke the
-	# 5 fixed policyctl subcommands — no wildcard, no arbitrary root command.
-	install -d debian/secubox-toolbox/etc/sudoers.d
-	install -m 0440 debian/secubox-toolbox.sudoers \
-	  debian/secubox-toolbox/etc/sudoers.d/secubox-toolbox
+	# NB: no sudoers — the portal runs sbxmitm-policyctl DIRECTLY as its own user
+	# (peer-rlevel.json is portal-owned, the @rlevel_off nft set needs only the
+	# CAP_NET_ADMIN the portal already has). No sudo → portal keeps NNP=true +
+	# minimal caps. See secubox_toolbox.api._rlevel_ctl.
 	# sbin/ helpers (Phase 5 LXC, Phase 6 R3 WG, Phase 9 fanout, Phase 11 social).
 	# Pre-2.6.0 only db-tune + lxc-provision shipped — the mitm-wg-launch
 	# wrapper had to be hand-installed on the board.  This block ships them
@@ -117,8 +116,6 @@ execute_after_dh_auto_install:
 	install -m 0644 systemd/secubox-toolbox.service.d/20-bind-all.conf \
 	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
 	install -m 0644 systemd/secubox-toolbox.service.d/30-mplcache.conf \
-	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
-	install -m 0644 systemd/secubox-toolbox.service.d/25-rlevel-nnp.conf \
 	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox.service.d/
 	# Phase 7 (#498) : boot-survival — nft drop-in (loaded by nftables.service
 	# at boot) + peer-restore script + oneshot service + unbound listener

@@ -170,7 +170,9 @@ def test_admin_list_peers_unknown_peer_falls_back_to_defaults(tmp_path, monkeypa
 # ── admin: POST /rlevel/peer (pubkey in body — path param rejects '/') ──
 
 def test_admin_set_floor_delegates_to_real_ctl_command(tmp_path, monkeypatch):
-    """Structural: the sudo command line actually invokes sbxmitm-policyctl."""
+    """Structural: the command line invokes sbxmitm-policyctl DIRECTLY (no sudo —
+    the portal runs the ctl as its own user; CAP_NET_ADMIN + file ownership are
+    enough, so NoNewPrivileges stays true). See api._rlevel_ctl."""
     _write_wg_peers(tmp_path, monkeypatch, {PK1: {"ip": "10.99.1.5", "label": "phone-A"}})
     captured = {}
 
@@ -186,9 +188,10 @@ def test_admin_set_floor_delegates_to_real_ctl_command(tmp_path, monkeypatch):
     monkeypatch.setattr("subprocess.run", fake_run)
     r = client.post("/rlevel/peer", json={"pubkey": PK1, "floor": "active"})
     assert r.status_code == 200, r.text
-    assert "sudo" in captured["cmd"]
-    assert "-n" in captured["cmd"]
-    assert any("sbxmitm-policyctl" in c for c in captured["cmd"])
+    # No sudo — the ctl is the FIRST token (invoked directly).
+    assert "sudo" not in captured["cmd"]
+    assert captured["cmd"][0].endswith("sbxmitm-policyctl")
+    assert "set-floor" in captured["cmd"]
     assert "set-floor" in captured["cmd"]
     assert PK1 in captured["cmd"]
     assert "active" in captured["cmd"]
