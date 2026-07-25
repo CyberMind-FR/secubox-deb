@@ -33,3 +33,37 @@ def test_dryrun_writes_nothing(tmp_path):
                         "--ttl", "600", "--reason", "x"], env=env,
                        capture_output=True, text=True)
     assert json.loads(r.stdout).get("dryrun") is True
+
+
+def test_match_accept_bad_side_returns_json_error(tmp_path):
+    env = _env(tmp_path)
+    r = subprocess.run([sys.executable, CTL, "match-accept", "off-a", "orq-b",
+                        "bogus"], env=env, capture_output=True, text=True)
+    assert r.returncode != 0
+    assert "Traceback" not in r.stderr
+    assert "usage:" not in r.stderr
+    out = r.stderr.strip() or r.stdout.strip()
+    payload = json.loads(out)
+    assert "error" in payload
+
+
+def test_join_does_not_leak_private_key(tmp_path):
+    env = _env(tmp_path)
+    jl = subprocess.run([sys.executable, CTL, "joinlink", "--for", "match-xyz",
+                        "--ttl", "600"], env=env, capture_output=True, text=True)
+    assert jl.returncode == 0, jl.stderr
+    link = json.loads(jl.stdout)
+    token = link["url"].rsplit("/", 1)[-1]
+
+    r = subprocess.run([sys.executable, CTL, "join", token, "--hash",
+                        link["token_hash"], "--expires-at", link["expires_at"],
+                        "--pubkey", "abc123pub=", "--endpoint", "1.2.3.4:51820",
+                        "--ip", "10.11.0.5"], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 0, r.stderr
+    assert "priv_hex" not in r.stdout
+    for word in r.stdout.replace('"', ' ').split():
+        stripped = word.strip(",{}[]:")
+        assert not (len(stripped) == 64 and all(c in "0123456789abcdef"
+                                                for c in stripped.lower())), (
+            f"raw 64-hex secret leaked in join output: {stripped!r}")
