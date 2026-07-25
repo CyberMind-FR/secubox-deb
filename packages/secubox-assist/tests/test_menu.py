@@ -44,3 +44,19 @@ def test_panel_has_marketplace_tab_hooks():
         assert path in html
     # XSS guard: dynamic rendering must never use innerHTML string building
     assert "innerHTML" not in html
+
+
+def test_panel_pending_list_has_readable_empty_state_not_raw_json():
+    html = (ROOT / "www" / "assist" / "index.html").read_text()
+    # the pending-requests card must no longer dump a raw JSON array
+    assert "JSON.stringify(d.pending" not in html
+    # readable empty-state text present
+    assert "Aucune demande en attente" in html
+    # section header reflects what it actually shows (pending requests, not a log)
+    assert "Demandes en attente" in html
+
+
+def test_panel_clarifies_targeted_vs_open_request():
+    html = (ROOT / "www" / "assist" / "index.html").read_text()
+    assert "Requête ciblée" in html
+    assert "Requête ouverte" in html
