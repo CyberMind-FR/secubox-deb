@@ -1,234 +1,339 @@
-# Task 8 — Rapport : TLS pour la série Z (nginx dans le LXC, secubox-picobrew)
+# Task 8 — Packaging (secubox-tor, secubox-proxypac) — Report
 
-**Statut :** Terminé.
+## Résumé
 
-(Note : ce fichier contenait précédemment un rapport Task-8 sans rapport avec
-ce plan — sleeper `serve` daemon loop / secubox-profiles, ref #896 — écrasé
-ici car il ne concernait pas ce plan.)
+Les deux paquets `.deb` (arch:all) ont été construits avec succès, tous les
+artefacts des tâches 1-7 sont installés, les invariants (DEBHELPER seul,
+templates aplatis, conffile, sudoers scopé 0440, pas de chown de parent
+partagé) sont respectés.
 
-## Commit
-`bde53fb0` — "feat(picobrew): terminaison TLS dans le LXC pour la série Z"
+## Fichiers modifiés / créés
 
-Fichiers modifiés (scope volontairement limité à ces deux-là) :
-- `packages/secubox-picobrew/sbin/picobrewctl` (modifié)
-- `packages/secubox-picobrew/tests/test_ctl_tls.py` (créé)
+- `packages/secubox-tor/debian/rules` — installe `tor-lan-ip`, `torctl`,
+  les 4 templates aplatis sous `/usr/share/secubox/tor/`, et le dropin
+  sysctl reboot-persistant.
+- `packages/secubox-tor/debian/postinst` — `sysctl --system || true` +
+  `torctl socks-lan ensure || true` + `torctl transparent on || true`
+  (dans le bloc `configure`, avant `#DEBHELPER#`).
+- `packages/secubox-tor/debian/control` — Depends += `tor, unbound, nftables`.
+- `packages/secubox-tor/debian/changelog` — nouvelle entrée `1.1.1-1~bookworm1`.
+- `packages/secubox-tor/debian/secubox-tor-route-localnet.sysctl` (créé) —
+  source du dropin `/etc/sysctl.d/60-secubox-route-localnet.conf`
+  (`net.ipv4.conf.all.route_localnet=1`), pour que les ifaces recréées au
+  boot (wg-toolbox) héritent du réglage que `torctl` pose déjà en live
+  par-iface à `transparent on`.
+- `packages/secubox-proxypac/debian/rules` — installe `conf/proxypac.toml`
+  (conffile), `sbin/proxypac-wpad`, `debian/secubox-proxypac.sudoers`.
+- `packages/secubox-proxypac/debian/postinst` — `proxypac-wpad apply || true`
+  ajouté après la génération PAC existante (avant `#DEBHELPER#`).
+- `packages/secubox-proxypac/debian/control` — Depends += `secubox-tor`.
+- `packages/secubox-proxypac/debian/changelog` — nouvelle entrée `1.2.0-1~bookworm1`.
+- `packages/secubox-proxypac/debian/secubox-proxypac.sudoers` (créé) —
+  `secubox ALL=(root) NOPASSWD: /usr/sbin/proxypac-wpad apply, /usr/sbin/proxypac-wpad state, /usr/sbin/torctl transparent on, /usr/sbin/torctl transparent off`
+  (mode 0440, validé `visudo -cf` → "analyse réussie").
 
-## Séquence TDD
-
-1. Test écrit (`test_ctl_tls.py`, verbatim du brief, 3 cas : TLS sur 443,
-   `proxy_pass` vers `127.0.0.1:80`, absence de `listen 80`).
-2. Run initial → échec confirmé, `__emit-nginx` inconnu :
-   ```
-   FFF
-   AssertionError: usage: picobrewctl {install|start|stop|status [--json]|update <sha>|logs}
-   assert 1 == 0
-   3 failed in 0.08s
-   ```
-3. Implémentation ajoutée (verbatim du brief) avant `usage()` :
-   `_emit_nginx_config` (heredoc `<<'EOF'` — délimiteur **quoté**, donc pas
-   d'interpolation bash de `$host`/`$remote_addr`) et `_ensure_cert`
-   (génération de certificat auto-signé via `lxc_attach`, effet de bord
-   confiné au conteneur, jamais sur l'hôte). Branche
-   `__emit-nginx) _emit_nginx_config ;;` ajoutée dans le `case`, avant `*)`.
-   Câblage dans `cmd_install` juste avant `_install_service_unit` :
-   `_ensure_cert`, écriture de la config dans `sites-available`, symlink vers
-   `sites-enabled`, suppression du vhost `default`, `nginx -t` puis
-   `systemctl enable --now nginx`.
-4. Re-run → vert :
-   ```
-   syntaxe OK
-   ...
-   3 passed in 0.06s
-   ```
-
-## Vérifications obligatoires — sorties réelles
-
-### `cd packages/secubox-picobrew && python3 -m pytest tests/ -q` (suite complète)
-```
-...................                                                      [100%]
-19 passed in 0.34s
-```
-
-### `bash tests/test_picobrewctl_guards.sh`
-```
-PASS accept sha '0123456789abcdef0123456789abcdef01234567'
-PASS reject sha 'HEAD'
-PASS reject sha 'main'
-PASS reject sha '0123456789abcdef0123456789abcdef0123456'
-PASS reject sha '0123456789ABCDEF0123456789ABCDEF01234567'
-PASS reject sha 'v1.0; rm -rf /'
-PASS reject unknown cmd
-```
-7/7 PASS.
-
-### `bash -n sbin/picobrewctl`
-```
-syntaxe OK
-```
-(aucune sortie d'erreur — syntaxe bash valide, `set -e` toujours absent du
-script, `set -uo pipefail` inchangé)
-
-### Sortie réelle de `bash sbin/picobrewctl __emit-nginx` (preuve du non-interpolage)
-```
-# SecuBox-Deb :: PicoBrew — terminaison TLS pour la série Z.
-#
-# picobrew_pico écoute déjà en clair sur :80 — c'est le comportement upstream,
-# et c'est ce que les Pico/Zymatic attendent. nginx ne prend donc QUE le 443 :
-# le faire écouter aussi sur :80 tout en proxifiant vers 127.0.0.1:80 le ferait
-# se parler à lui-même (boucle infinie). Les appareils non-Z continuent de
-# joindre Flask directement en :80.
-server {
-    listen 443 ssl;
-    server_name picobrew.com _;
-    client_max_body_size 32m;
-    ssl_certificate     /etc/picobrew/tls/cert.pem;
-    ssl_certificate_key /etc/picobrew/tls/key.pem;
-    location / {
-        proxy_pass http://127.0.0.1:80;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $remote_addr;
-    }
-}
-```
-`$host` et `$remote_addr` apparaissent **littéralement** dans la sortie (pas
-de substitution bash — ces variables n'existent pas dans le shell hôte, une
-interpolation les aurait remplacées par une chaîne vide). Le heredoc utilise
-le délimiteur quoté `<<'EOF'`, ce qui désactive toute expansion. Confirmé
-aussi dans cette même sortie : `listen 443 ssl` présent une seule fois,
-`proxy_pass http://127.0.0.1:80` présent, et **aucune** occurrence de
-`listen 80`.
-
-## Diff appliqué (`sbin/picobrewctl`)
-
-Conforme verbatim au brief : ajout de `_emit_nginx_config`, `_ensure_cert`,
-branche `__emit-nginx` avant `*)` dans le `case`, et câblage dans
-`cmd_install` juste avant `_install_service_unit`. Vérifié via `git diff` :
-deux blocs d'ajout uniquement, aucune suppression ni altération de code
-existant.
+## Diff (résumé)
 
 ```diff
-@@ cmd_install() { ... } @@
-+    _ensure_cert || { err "génération du certificat échouée"; return 1; }
-+    _emit_nginx_config > "$LXC_PATH/$CONTAINER/rootfs/etc/nginx/sites-available/picobrew"
-+    lxc_attach 'ln -sf /etc/nginx/sites-available/picobrew /etc/nginx/sites-enabled/picobrew
-+                rm -f /etc/nginx/sites-enabled/default
-+                nginx -t >/dev/null 2>&1 && systemctl enable --now nginx' \
-+        || { err "configuration nginx invalide"; return 1; }
+diff --git a/packages/secubox-proxypac/debian/changelog b/packages/secubox-proxypac/debian/changelog
++secubox-proxypac (1.2.0-1~bookworm1) bookworm; urgency=medium
++  * Package proxypac.toml (conffile) + proxypac-wpad ctl + scoped sudoers
++    (proxypac-wpad apply|state, torctl transparent on|off); postinst applies
++    the WPAD tier at configure time.
++  * Depends: secubox-tor (provides tor-lan-ip/torctl consumed by proxypac-wpad).
++ -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
+
+diff --git a/packages/secubox-proxypac/debian/control b/packages/secubox-proxypac/debian/control
+-Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core, secubox-hub, nginx
++Depends: ${misc:Depends}, python3, python3-fastapi, python3-uvicorn, secubox-core, secubox-hub, secubox-tor, nginx
+
+diff --git a/packages/secubox-proxypac/debian/postinst b/packages/secubox-proxypac/debian/postinst
+     nginx -t && systemctl reload nginx || true
++    /usr/sbin/proxypac-wpad apply || true
+ fi
+ #DEBHELPER#
+
+diff --git a/packages/secubox-proxypac/debian/rules b/packages/secubox-proxypac/debian/rules
 +
-     _install_service_unit
-     ...
++	install -D -m 644 conf/proxypac.toml debian/secubox-proxypac/etc/secubox/proxypac/proxypac.toml
++	install -D -m 755 sbin/proxypac-wpad debian/secubox-proxypac/usr/sbin/proxypac-wpad
++	install -D -m 440 debian/secubox-proxypac.sudoers debian/secubox-proxypac/etc/sudoers.d/secubox-proxypac
 
-@@ après cmd_update(), avant usage() @@
-+_emit_nginx_config() {
-+    cat <<'EOF'
-+    ...(config nginx, listen 443 ssl uniquement)...
-+EOF
-+}
+diff --git a/packages/secubox-tor/debian/changelog b/packages/secubox-tor/debian/changelog
++secubox-tor (1.1.1-1~bookworm1) bookworm; urgency=medium
++  * Package tor-lan-ip/torctl helpers + share templates (socks-lan, transparent,
++    onion-forward, nft) under /usr/share/secubox/tor/; postinst wires
++    `torctl socks-lan ensure` + `torctl transparent on` (idempotent, best-effort).
++  * Depends: tor, unbound, nftables.
++  * Ship /etc/sysctl.d/60-secubox-route-localnet.conf so ifaces recreated at
++    boot (wg-toolbox) inherit route_localnet=1 for the transparent DNAT.
++ -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
+
+diff --git a/packages/secubox-tor/debian/control b/packages/secubox-tor/debian/control
+-Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
++Depends: ${misc:Depends}, secubox-core (>= 1.0.0), tor, unbound, nftables
+
+diff --git a/packages/secubox-tor/debian/postinst b/packages/secubox-tor/debian/postinst
+     systemctl start secubox-tor.service || true
++    sysctl --system || true
++    /usr/sbin/torctl socks-lan ensure || true
++    # transparent activé par défaut (aligné proxypac.toml transparent=true) ;
++    # idempotent, best-effort, réutilise le TransPort toolbox s'il existe.
++    /usr/sbin/torctl transparent on || true
+ fi
+ #DEBHELPER#
+ exit 0
+
+diff --git a/packages/secubox-tor/debian/rules b/packages/secubox-tor/debian/rules
 +
-+_ensure_cert() {
-+    lxc_attach 'set -e
-+        mkdir -p /etc/picobrew/tls
-+        [ -s /etc/picobrew/tls/cert.pem ] && exit 0
-+        openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
-+            -subj "/CN=picobrew.com" \
-+            -addext "subjectAltName=DNS:picobrew.com,DNS:*.picobrew.com" \
-+            -keyout /etc/picobrew/tls/key.pem \
-+            -out /etc/picobrew/tls/cert.pem >/dev/null 2>&1
-+        chmod 600 /etc/picobrew/tls/key.pem'
-+}
-
-@@ case "${1:-}" in ... @@
-     __emit-config) _emit_lxc_config ;;
-+    __emit-nginx) _emit_nginx_config ;;
++	# Helpers (torctl copies templates below from /usr/share/secubox/tor/)
++	install -D -m 755 sbin/tor-lan-ip debian/secubox-tor/usr/sbin/tor-lan-ip
++	install -D -m 755 sbin/torctl debian/secubox-tor/usr/sbin/torctl
++	install -d debian/secubox-tor/usr/share/secubox/tor
++	install -m 644 conf/torrc.d/50-secubox-socks-lan.conf conf/torrc.d/60-secubox-transparent.conf debian/secubox-tor/usr/share/secubox/tor/
++	install -m 644 conf/unbound/secubox-onion-forward.conf debian/secubox-tor/usr/share/secubox/tor/
++	install -m 644 nft.d/secubox-tor-transparent.nft debian/secubox-tor/usr/share/secubox/tor/
++
++	# route_localnet reboot-persistence: conf.all inherited by ifaces created
++	# after boot (wg-toolbox); torctl already sets it live per-iface at
++	# `transparent on` time, this dropin covers ifaces recreated later.
++	install -D -m 644 debian/secubox-tor-route-localnet.sysctl debian/secubox-tor/etc/sysctl.d/60-secubox-route-localnet.conf
 ```
 
-## Préoccupations
+## Vérifications
 
-- `_ensure_cert` et le câblage nginx de `cmd_install` (symlink,
-  `nginx -t`, `systemctl enable --now nginx`) dépendent de `lxc_attach`,
-  donc d'un conteneur LXC réellement démarré — non testable en CI hors
-  environnement LXC. Seule `_emit_nginx_config` (sans effet de bord, stdout
-  uniquement, comme exigé) est couverte par des tests automatisés ; c'est le
-  même niveau de couverture que le reste du module (`_emit_lxc_config` /
-  `cmd_install` suivent déjà ce schéma — pas de régression de rigueur).
-- Aucune régression détectée : 19/19 tests pytest du module (dont les 3
-  nouveaux) et 7/7 gardes shell passent après la modification.
+### bash -n + `#DEBHELPER#` seul sur sa ligne (source)
 
----
-
-## Correctif de revue — `enable --now nginx` → `enable && restart` (post-Task 8)
-
-**Statut :** Terminé.
-
-### Défaut relevé en revue
-
-`nginx` figure dans `--include=` du debootstrap ; le paquet Debian
-auto-active son unit via preset. Sur un conteneur fraîchement débootstrappé,
-nginx tourne donc déjà (vhost `default` stock, `listen 80 default_server`)
-avant même l'écriture de la config TLS. `systemctl enable --now nginx` sur
-une unit **déjà active** est un no-op côté (re)démarrage : la nouvelle
-config 443 n'est jamais chargée par le process en mémoire, et nginx reste
-planté sur `:80`, empêchant ensuite `picobrew.service` (Flask) de se lier
-sur ce port. Installation bloquée sur tout conteneur neuf.
-
-### Correctif
-
-Dans `cmd_install`, remplacement de :
-```bash
-nginx -t >/dev/null 2>&1 && systemctl enable --now nginx
 ```
-par :
-```bash
-nginx -t >/dev/null 2>&1 && systemctl enable nginx && systemctl restart nginx
-```
-Commentaire ajouté juste avant le bloc `lxc_attach` expliquant pourquoi
-`restart` (et non `enable --now`) est requis, pour empêcher qu'un futur
-lecteur ne « simplifie » en réintroduisant le bug.
-
-Conservé à l'identique : `nginx -t` avant toute (re)activation, le
-`|| { err "configuration nginx invalide"; return 1; }`, `set -uo pipefail`
-en tête sans `set -e` au niveau du script, et le reste de `cmd_install`
-(ordre `_ensure_cert` → écriture config → nginx → `picobrew.service`).
-
-### Vérifications obligatoires — sorties réelles
-
-`bash -n sbin/picobrewctl` → aucune sortie, syntaxe OK.
-
-`bash tests/test_picobrewctl_guards.sh` (depuis `packages/secubox-picobrew`) :
-```
-PASS accept sha '0123456789abcdef0123456789abcdef01234567'
-PASS reject sha 'HEAD'
-PASS reject sha 'main'
-PASS reject sha '0123456789abcdef0123456789abcdef0123456'
-PASS reject sha '0123456789ABCDEF0123456789ABCDEF01234567'
-PASS reject sha 'v1.0; rm -rf /'
-PASS reject unknown cmd
-```
-7/7 PASS.
-
-`cd packages/secubox-picobrew && python3 -m pytest tests/ -q` :
-```
-...................                                                      [100%]
-19 passed in 0.31s
+$ bash -n packages/secubox-tor/debian/postinst && echo "tor: OK"
+tor: OK
+$ bash -n packages/secubox-proxypac/debian/postinst && echo "proxypac: OK"
+proxypac: OK
+$ grep -n "^#DEBHELPER#$" packages/secubox-tor/debian/postinst
+13:#DEBHELPER#
+$ grep -n "^#DEBHELPER#$" packages/secubox-proxypac/debian/postinst
+14:#DEBHELPER#
 ```
 
-`bash sbin/picobrewctl __emit-nginx` : sortie strictement identique à celle
-documentée plus haut dans ce fichier (mêmes octets, `listen 443 ssl`
-uniquement, `proxy_pass http://127.0.0.1:80`), confirmée par
-`grep -n "listen 80"` → aucune occurrence.
+Vérifié aussi sur les postinst **construits** (après substitution dh) :
+`bash -n` OK sur les deux, section `#DEBHELPER#` remplacée proprement par les
+blocs `dh_installsystemd` — aucune ligne parasite, mon bloc `configure`
+personnalisé reste intact et précède la section auto-générée.
 
-`git diff` sur `packages/secubox-picobrew/sbin/picobrewctl` : diff minimal,
-un commentaire ajouté + une ligne modifiée (`enable --now nginx` →
-`enable nginx && systemctl restart nginx`), aucun autre changement.
+### sudoers
 
-### Préoccupations
+```
+$ visudo -cf packages/secubox-proxypac/debian/secubox-proxypac.sudoers
+packages/secubox-proxypac/debian/secubox-proxypac.sudoers : analyse réussie
+```
 
-- Comme pour le reste du câblage nginx/LXC de ce module, ce chemin dépend de
-  `lxc_attach` (conteneur réellement démarré) et n'est donc pas couvert par
-  un test automatisé direct — même limite déjà documentée plus haut pour
-  `_ensure_cert`/`cmd_install`. Seule la non-régression de `_emit_nginx_config`
-  (sortie statique) est vérifiable en CI, et elle est confirmée inchangée.
-- Le correctif n'a pas été testé en conditions réelles sur un LXC fraîchement
-  débootstrappé (pas d'accès à un tel environnement dans cette session) ;
-  la garantie repose sur la sémantique documentée de `systemctl restart`
-  (fonctionne indifféremment sur une unit active ou arrêtée).
+### Suites de tests (avant build)
+
+```
+$ cd packages/secubox-tor && python3 -m pytest -q tests/
+26 passed, 1 warning in 0.71s
+
+$ cd packages/secubox-proxypac && python3 -m pytest -q tests/
+46 passed in 0.39s   # inclut tests/test_packaging.py
+```
+
+Aucune régression : les tests packaging existants (`test_rules_installs_all_artifacts`,
+`test_postinst_enables_regen_and_seeds_rules`, `test_control_metadata`,
+`test_no_conflicting_compat_file`) passent toujours après modification.
+
+### Build
+
+```
+$ cd packages/secubox-tor && dpkg-buildpackage -us -uc -b 2>&1 | tail -3
+dpkg-deb: construction du paquet « secubox-tor » dans « ../secubox-tor_1.1.1-1~bookworm1_all.deb ».
+...
+dpkg-buildpackage: info: envoi d'un binaire seulement (aucune inclusion de code source)
+
+$ cd packages/secubox-proxypac && dpkg-buildpackage -us -uc -b 2>&1 | tail -3
+dpkg-deb: construction du paquet « secubox-proxypac » dans « ../secubox-proxypac_1.2.0-1~bookworm1_all.deb ».
+...
+dpkg-buildpackage: info: envoi d'un binaire seulement (aucune inclusion de code source)
+```
+
+Les deux `.deb` construits sans erreur (build non-signé `-us -uc`, arch:all).
+
+### `dpkg-deb -c` — présence des artefacts
+
+`secubox-tor_1.1.1-1~bookworm1_all.deb` :
+```
+drwxr-xr-x root/root         0 ./etc/sysctl.d/
+-rw-r--r-- root/root       475 ./etc/sysctl.d/60-secubox-route-localnet.conf
+-rwxr-xr-x root/root      1037 ./usr/sbin/tor-lan-ip
+-rwxr-xr-x root/root      3662 ./usr/sbin/torctl
+drwxr-xr-x root/root         0 ./usr/share/secubox/tor/
+-rw-r--r-- root/root       286 ./usr/share/secubox/tor/50-secubox-socks-lan.conf
+-rw-r--r-- root/root       396 ./usr/share/secubox/tor/60-secubox-transparent.conf
+-rw-r--r-- root/root       651 ./usr/share/secubox/tor/secubox-onion-forward.conf
+-rw-r--r-- root/root       541 ./usr/share/secubox/tor/secubox-tor-transparent.nft
+```
+
+`secubox-proxypac_1.2.0-1~bookworm1_all.deb` :
+```
+-rw-r--r-- root/root       443 ./etc/secubox/proxypac/proxypac.toml
+-r--r----- root/root       247 ./etc/sudoers.d/secubox-proxypac   (0440)
+-rwxr-xr-x root/root      2001 ./usr/sbin/proxypac-wpad
+-rw-r--r-- root/root       112 ./usr/share/secubox/menu.d/580-proxypac.json
+```
+
+### conffiles (auto-détectés par dh, tout ce qui est sous /etc)
+
+- secubox-tor : `/etc/nginx/secubox.d/tor.conf`, `/etc/sysctl.d/60-secubox-route-localnet.conf`
+- secubox-proxypac : `/etc/nginx/secubox.d/proxypac.conf`, `/etc/nginx/sites-available/wpad-vhost.conf`,
+  `/etc/secubox/proxypac/proxypac.toml` (conffile, comme requis), `/etc/secubox/proxypac/rules.d/00-onion.rules`,
+  `/etc/sudoers.d/secubox-proxypac`
+
+### Depends (paquets construits)
+
+- `secubox-tor` : `secubox-core (>= 1.0.0), tor, unbound, nftables`
+- `secubox-proxypac` : `python3, python3-fastapi, python3-uvicorn, secubox-core, secubox-hub, secubox-tor, nginx`
+
+## Invariants respectés
+
+1. `#DEBHELPER#` seul sur sa ligne dans les deux postinst (source ET construit) — vérifié.
+2. Templates aplatis dans `/usr/share/secubox/tor/` (pas d'installation directe
+   de `50-secubox-socks-lan.conf` dans `/etc/tor/torrc.d`) — `torctl` s'en charge
+   à l'exécution (`socks-lan ensure` / `transparent on`).
+3. postinst secubox-tor : `torctl socks-lan ensure || true` puis
+   `torctl transparent on || true`, idempotent (le script détecte un TransPort
+   9040 déjà déclaré par le toolbox et ne duplique pas le dropin).
+4. Dropin `/etc/sysctl.d/60-secubox-route-localnet.conf` (conf.all) livré +
+   `sysctl --system || true` dans le postinst, en complément du réglage live
+   par-iface que fait déjà `torctl transparent on`.
+5. `proxypac.toml` sous `/etc/secubox/proxypac/proxypac.toml` — conffile
+   automatique (dh traite tout `/etc/*` comme conffile), jamais écrasé de force.
+6. Sudoers scopé aux 4 commandes exactes demandées, mode 0440, `visudo -cf` OK.
+7. Aucun chown/chmod de parent partagé ajouté (`/run/secubox`, `/etc/secubox`,
+   `/var/log/secubox` non touchés par ce changement).
+8. Depends croisées ajoutées dans les deux `control`.
+9. Changelogs : `secubox-tor` 1.1.1-1~bookworm1 (tête 1.1.0-1~bookworm2 + 1),
+   `secubox-proxypac` 1.2.0-1~bookworm1 (tête 1.1.0-1~bookworm2), date
+   `Fri, 24 Jul 2026`, signature `Gerald KERMA <devel@cybermind.fr>`.
+
+## Commit
+
+Voir hash dans le message de clôture de la tâche (rapporté séparément).
+Message : "build(proxypac,tor): packaging — dropins, sudoers scopé, postinst
+wiring (socks-lan+transparent+wpad), changelogs".
+
+## Préoccupations / notes
+
+- Le postinst de `secubox-tor` active `transparent on` par défaut à
+  l'installation (intentionnel selon le brief — aligné `proxypac.toml
+  transparent=true`) : sur un board où le toolbox n'a pas encore de TransPort
+  9040 déclaré, ce postinst pose immédiatement le dropin nft
+  `secubox-tor-transparent` sur `wg-toolbox`+`eth2`. `eth2` reste en dur
+  (limitation connue, documentée dans le brief, hors périmètre de cette tâche).
+- `sudo -n` utilisé côté API (`api/main.py`) correspond exactement aux 4
+  entrées sudoers livrées — pas de dérive de commande observée.
+- Build effectué en environnement de dev (amd64), `Architecture: all` donc
+  portable ; pas de dépendance de build manquante rencontrée.
+
+## Fix revue finale
+
+Corrections apportées suite à la revue finale de branche
+`feat/proxypac-wpad-autodetect` (findings #1 à #5).
+
+### #1 (IMPORTANT) — override `role` de proxypac.toml inerte
+
+`sbin/proxypac-wpad` : `role()` ignorait totalement le champ `role` de
+`proxypac.toml` (auto|master|slave|off) — seul `WPAD_ROLE` (test) puis la
+détection auto étaient consultés. Corrigé : après `WPAD_ROLE` (priorité
+conservée pour les tests), le heredoc python charge désormais
+`proxypac.config.load(WPAD_CONFIG)` (nouvelle variable d'env, défaut
+`/etc/secubox/proxypac/proxypac.toml`) et mappe l'override :
+
+- `master` → `master` (court-circuite la détection)
+- `off` → `off` (no-op réseau, catch-all `*)` de `apply()` — vérifié, déjà
+  correct, juste reformulé en commentaire)
+- `slave` → force non-master : `slave-dns` si `role.detect()` voit un
+  résolveur DNS, sinon `slave`
+- `auto`/absent/inconnu → détection complète actuelle (tier→master/slave-dns/slave)
+
+Résolution du chemin Python : `sys.path` reçoit d'abord
+`/usr/lib/secubox/proxypac` (prod) puis, en priorité (insert index 0), la
+racine du paquet dérivée de `dirname` du script (`sbin/..`) — un seul
+heredoc résout donc `from proxypac.config import load` aussi bien en test
+qu'en prod installé, sans dupliquer de logique de chemin.
+
+Test ajouté (`tests/test_wpad.py::test_toml_role_master_override_forces_master`) :
+role=master dans un toml temporaire, PAS de `WPAD_ROLE`, aucun signal DHCP
+réel dans l'environnement de test → doit quand même produire le dropin
+dnsmasq. Confirmé RED avant fix (`AssertionError: role=master du toml doit
+forcer l'échelon master`), GREEN après (5 passed dans `test_wpad.py`).
+
+### #3 (MINEUR) — coordination TransPort suppose DNSPort présent
+
+`sbin/torctl` `transport_already_declared()` ne testait que `TransPort 9040`.
+Durci : "déjà déclaré" exige maintenant `TransPort 9040` **ET** `DNSPort
+9053` tous les deux présents dans `$TORRC_D/*.conf` (regex ancré début de
+ligne, port-agnostique sur l'adresse, inchangé). Si un seul des deux existe,
+notre dropin `60-secubox-transparent.conf` (qui déclare les deux) est posé —
+évite qu'Unbound forwarde vers un DNSPort mort. Message adapté ("TransPort
+9040 + DNSPort 9053 déjà déclarés"). Les fixtures existantes
+(`test_on_skips_transport_dropin_when_one_already_exists`,
+`test_detects_transport_bound_without_ip`) posaient déjà les deux ports —
+inchangées, toujours vertes. Nouveau test
+`test_on_installs_dropin_when_transport_exists_but_dnsport_missing` : TransPort
+seul (sans DNSPort) → notre dropin EST posé.
+
+### #4 (MINEUR) — NoNewPrivileges=true bloque la délégation sudo (unité fallback)
+
+`systemd/secubox-proxypac.service` (unité standalone fallback, pas le chemin
+live via aggregator) : `NoNewPrivileges=true` → `false`, avec commentaire
+expliquant que l'API délègue root via `sudo -n` (torctl/proxypac-wpad) et que
+NNP=true ferait échouer silencieusement `/transparent` et `/wpad/apply`
+(`ok:false`). Aucun test n'assertait NNP=true sur cette unité (vérifié) —
+pas de régression.
+
+### #5 (MINEUR) — esc() manquant sur e.message
+
+`www/proxypac/index.html`, chemin d'erreur `loadStatus` (~ligne 187) :
+`e.message` injecté brut dans `innerHTML` — enveloppé dans `esc(...)` par
+cohérence avec les autres handlers (`rules`, `candidates`). Cosmétique, non
+exploitable (message vient de `fetch`/JSON local, pas d'entrée utilisateur
+distante).
+
+### #2 (MINEUR) — port de socks_endpoint ignoré par le SocksPort LAN
+
+Option retenue : **commentaire documenté**, pas de modification du template
+`50-secubox-socks-lan.conf` ni de `torctl`/`tor-lan-ip`. Raison : le chemin
+d'exécution réel de `torctl socks-lan ensure` dépend de `lan_ip()` qui
+invoque le binaire système absolu `/usr/sbin/tor-lan-ip` (pas de variable
+d'env d'override, contrairement à `TORCTL_TORRC_D`/`TORCTL_SHARE_D`/etc.) —
+ce chemin n'existe pas en environnement de dev/CI, donc toute modification
+touchant `socks_lan_ensure` (dérivation du port + nouveau placeholder
+`__SOCKS_PORT__` dans le template) n'aurait pu être vérifiée par un test
+d'intégration réel sans ajouter un nouveau mécanisme de stub pour
+`tor-lan-ip` — hors périmètre d'un correctif MINEUR et risque de sur-ingénierie
+sur un template déjà testé (`test_socks_lan_dropin.py`). À la place :
+`packages/secubox-proxypac/conf/proxypac.toml` documente désormais
+explicitement que seul le port `:9050` est supporté pour le SocksPort LAN et
+que `socks_endpoint` doit le conserver, tant que ce couplage dur persiste.
+Si le besoin d'un port SOCKS LAN configurable devient réel, prévoir d'abord
+une variable d'env de test pour `tor-lan-ip` dans `torctl` avant de toucher
+au template.
+
+### Suites de tests (après fix)
+
+```console
+$ cd packages/secubox-proxypac && python3 -m pytest tests/ -q
+47 passed in 0.43s
+
+$ cd packages/secubox-tor && python3 -m pytest tests/ -q
+27 passed, 1 warning in 0.75s
+```
+
+### Fichiers modifiés
+
+- `packages/secubox-proxypac/sbin/proxypac-wpad`
+- `packages/secubox-proxypac/tests/test_wpad.py`
+- `packages/secubox-proxypac/systemd/secubox-proxypac.service`
+- `packages/secubox-proxypac/www/proxypac/index.html`
+- `packages/secubox-proxypac/conf/proxypac.toml`
+- `packages/secubox-tor/sbin/torctl`
+- `packages/secubox-tor/tests/test_torctl_transparent.py`
