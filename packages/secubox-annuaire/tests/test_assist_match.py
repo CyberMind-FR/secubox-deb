@@ -128,6 +128,29 @@ def test_forged_mutual_accept_rejected():
     assert not m.match_ready(entries, mid, now_ts="2026-07-25T10:30:00Z")
 
 
+def test_match_ready_rejects_third_party_owned_ids():
+    """Attacker C owns his OWN active offer o2 and request r2 (so the
+    author-binding checks on o2/r2 pass), then posts BOTH
+    ASSIST_MATCH_ACCEPT sides for the REAL mid = match_id(o1, r1) — A's
+    offer and B's request — but with offer_id="o2"/req_id="r2" (his own
+    ids) instead of o1/r1. match_ready must not credit these accepts
+    toward mid: the accept's (offer_id, req_id) pair must itself hash to
+    mid before it can count, and o2/r2 do not. C never accepted on A/B's
+    behalf, so this must NOT forge mutual consent for o1/r1."""
+    mid = m.match_id("o1", "r1")
+    entries = [
+        _offer("o1", ["lora"], by=A),
+        _req("r1", ["lora"], by=B),
+        _offer("o2", ["lora"], by=C),
+        _req("r2", ["lora"], by=C),
+        e(Op.ASSIST_MATCH_ACCEPT, match_id=mid, offer_id="o2", req_id="r2",
+          side="offer", issued_by=C, author=C),
+        e(Op.ASSIST_MATCH_ACCEPT, match_id=mid, offer_id="o2", req_id="r2",
+          side="request", issued_by=C, author=C),
+    ]
+    assert not m.match_ready(entries, mid, now_ts="2026-07-25T10:30:00Z")
+
+
 def test_spoofed_issued_by_dropped():
     """An ASSIST_REQUEST_OPEN authored by A but claiming issued_by=B (victim)
     must be dropped entirely — it must not appear in active_open_requests
