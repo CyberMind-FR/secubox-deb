@@ -1,3 +1,38 @@
+secubox-annuaire (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: Centres & Grants + Remote Config substrate (Task 1-10). A box
+    delegates config authority over a (scope, layer) pair to a center via
+    signed GRANT_ISSUE/GRANT_REVOKE journal entries (annuaire.grants);
+    delegated centers publish CONFIG_PUBLISH{scope,layer} blobs the box
+    composes (annuaire.config_compose: baseline (layer) up to local, local
+    always wins) and applies through the existing CSPN 4R double-buffer
+    (annuaire.config_router -> config_apply). New `sbx-centersctl`
+    (grant/revoke/list/route) is the sole write path for grants and
+    config-routing — the box signing key never enters api/main.py. New
+    read+write REST surface (/centers, /centers/ownership,
+    /centers/proposals, /centers/effective/{scope}, POST
+    /centers/{grant,revoke,proposal/accept}) and a new WebUI panel
+    (/centers/). `auth` and layer `local` are never delegatable (rejected by
+    grants.validate_issue).
+  * fix: reconcile the box signing key sbx-centersctl uses with the box's
+    existing sovereign identity. sbx-centersctl previously defaulted to its
+    own `ANNUAIRE_KEY` at /etc/secubox/annuaire/box.key — a second,
+    never-provisioned key file, distinct from the node identity annuairectl
+    already establishes at /etc/secubox/secrets/annuaire/node.key (env
+    ANNUAIRE_KEY_PATH). Unified: sbx-centersctl and api/main.py's
+    `_self_did_best_effort()` now both read ANNUAIRE_KEY_PATH (same default
+    path) — one box, one Ed25519 identity, provisioned once by
+    `annuairectl init`. This CLI still never generates a key.
+  * deps: python3-tomli-w (annuaire.config_compose composes TOML layers).
+  * packaging: ship sbx-centersctl (0755), www/centers/ (Centres & Grants
+    panel), menu.d/570-centers.json, and the /centers/ static nginx route
+    (nginx/centers.conf, reuses the existing /api/v1/annuaire/ API route —
+    no new backend listener). No sudoers added: sbx-centersctl runs under
+    the same `secubox` user as secubox-annuaire.service and only touches
+    paths that user already owns (journal, node key, /etc/secubox).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
+
 secubox-annuaire (0.4.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

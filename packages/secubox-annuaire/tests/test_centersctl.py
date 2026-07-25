@@ -56,7 +56,7 @@ def env(tmp_path):
     e = os.environ.copy()
     e["ANNUAIRE_LIB"] = str(PKG_ROOT)
     e["ANNUAIRE_JOURNAL"] = str(tmp_path / "journal.db")
-    e["ANNUAIRE_KEY"] = str(key_path)
+    e["ANNUAIRE_KEY_PATH"] = str(key_path)
     e["CONFIG_TARGET_DIR"] = str(tmp_path / "etc")
     e["CONFIG_LOCAL_DIR"] = str(tmp_path / "config-local")
     return e
@@ -148,7 +148,7 @@ def test_route_works_without_box_key(env, center_did):
     """route_config's self_did is best-effort — an absent box key must not
     prevent routing (a node may only ever apply centers' delegated config)."""
     _run(["grant", center_did, "firewall", "baseline"], env)
-    os.remove(env["ANNUAIRE_KEY"])
+    os.remove(env["ANNUAIRE_KEY_PATH"])
 
     proc = _run(["route"], env)
     assert proc.returncode == 0, proc.stderr
@@ -163,7 +163,7 @@ def test_route_works_without_box_key(env, center_did):
 
 
 def test_missing_box_key_fails_clearly(env, center_did):
-    os.remove(env["ANNUAIRE_KEY"])
+    os.remove(env["ANNUAIRE_KEY_PATH"])
 
     proc = _run(["grant", center_did, "firewall", "baseline"], env)
     assert proc.returncode != 0
