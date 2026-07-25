@@ -35,6 +35,8 @@ try:
 except ImportError:  # pragma: no cover
     import tomli as _toml  # type: ignore
 
+from .config_compose import compose
+
 
 def blob_text(payload: Optional[Dict[str, Any]]) -> Optional[str]:
     """Extract the raw config text from a ConfigBlob payload, or None."""
@@ -111,6 +113,52 @@ def apply_blob(
 
     state[scope] = {"version": version, "hash": content_hash}
     return {"status": "applied", "scope": scope, "version": version}
+
+
+def apply_composed(
+    scope: str,
+    ordered_layer_texts: List[str],
+    target_dir: str,
+) -> Dict[str, Any]:
+    """Compose a scope's layered TOML texts and apply via the same 4R buffer.
+
+    ``ordered_layer_texts`` stacks baseline < override < local precedence
+    (see ``config_compose.compose``). The composed text is re-validated as
+    TOML, hashed with BLAKE2b (reusing ``_blake2b_hex``), and compared
+    against the current active file's hash so an unchanged composition is a
+    no-op (idempotent — avoids mesh_sync apply loops). On change, the SAME
+    4R buffer as ``apply_blob`` writes it: shadow → rollback-copy of the
+    previous active → atomic ``os.replace``. Never raises; returns a status
+    dict with status in {applied, skip, reject}.
+    """
+    try:
+        text = compose(list(ordered_layer_texts))
+        _toml.loads(text)  # re-validate the composed output before writing
+    except Exception:
+        return {"status": "reject", "scope": scope, "reason": "unparseable-toml"}
+
+    h = _blake2b_hex(text)
+    active = Path(target_dir) / f"{scope}.toml"
+    if active.exists():
+        try:
+            current_text = active.read_text()
+        except OSError:
+            current_text = None
+        if current_text is not None and _blake2b_hex(current_text) == h:
+            return {"status": "skip", "scope": scope, "reason": "unchanged"}
+
+    shadow = Path(str(active) + ".sbx-shadow")
+    rollback = Path(str(active) + ".sbx-rollback")
+    try:
+        active.parent.mkdir(parents=True, exist_ok=True)
+        shadow.write_text(text)
+        if active.exists():
+            rollback.write_text(active.read_text())  # R: keep the previous active
+        os.replace(str(shadow), str(active))          # atomic swap
+    except OSError as e:
+        return {"status": "reject", "scope": scope, "reason": f"io:{e}"}
+
+    return {"status": "applied", "scope": scope}
 
 
 def apply_pending(
