@@ -16,13 +16,13 @@ Tests:
   - A CONFIG_PUBLISH with a tampered/invalid signature is dropped into
     "proposals", even though its publisher holds the grant.
 
-Publisher pubkey resolution note: annuaire.verbs.publish_config() (task 5,
-gondwana P1) has no `layer` parameter — ConfigBlob.layer always defaults to
-"baseline" through that verb. To publish at other layers (override) these
-tests build+sign the ConfigBlob payload directly with `_publish_config_at`,
-mirroring publish_config's own signing idiom (sig over canonical_bytes of
-the payload without sig/signer_did) and appending it via journal.append() —
-exactly what publish_config does internally, just with layer exposed.
+Publisher pubkey resolution note: annuaire.verbs.publish_config() now takes a
+`layer` parameter (see tests/test_publish_config_layer.py), but these tests
+still build+sign the ConfigBlob payload directly with `_publish_config_at` to
+keep full control over config_id/version/content_hash combinations exercised
+here — mirroring publish_config's own signing idiom (sig over
+canonical_bytes of the payload without sig/signer_did) and appending it via
+journal.append() — exactly what publish_config does internally.
 """
 import tomllib
 
