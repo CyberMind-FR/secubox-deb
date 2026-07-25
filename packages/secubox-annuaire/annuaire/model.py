@@ -74,9 +74,19 @@ class Op(str, Enum):
     NODE_PUBLISH         = "node_publish"     # signed mesh peer registry entry
     CONFIG_PUBLISH       = "config_publish"   # signed, versioned config distribution
     CONFIG_REVOKE        = "config_revoke"
+    GRANT_ISSUE          = "grant_issue"      # a center is granted delegated config authority
+    GRANT_REVOKE         = "grant_revoke"     # a delegated grant is withdrawn
     # Gondwana threatmesh (#768): bidirectional WAF/threat ban federation.
     BAN_PUBLISH          = "ban_publish"      # a node signs an IP ban → federates
     BAN_REVOKE           = "ban_revoke"       # the publisher lifts its own ban
+
+
+# ---------------------------------------------------------------------------
+# Centers/grants — layered config delegation (feat/centers-grants-remote-config)
+# ---------------------------------------------------------------------------
+
+LAYER_ORDER = ["baseline", "override", "local"]
+NON_DELEGATABLE = {"auth", "secrets"}
 
 
 class ProposalType(str, Enum):
@@ -517,9 +527,15 @@ class ConfigBlob(BaseModel):
 
     config_id:    str = Field(..., description="stable id for this config stream, e.g. 'cfg-<scope>'")
     publisher:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
-    scope:        str = Field(..., description="what this configures, e.g. a module name 'yacy'")
+    scope:        str = Field(
+        ...,
+        pattern=r"^[a-z0-9][a-z0-9._-]*$",
+        description="what this configures, e.g. a module name 'yacy' — becomes a bare "
+                    "filename component on disk (config_apply.py), so no '/' or '..'",
+    )
     version:      int = Field(..., ge=0, description="monotonic; higher wins (last-writer-wins)")
     content_hash: str = Field(..., description="BLAKE2b-256 hex of the canonical config content")
+    layer:        str = Field(default="baseline", description="config layer; local is box-only")
     payload:      Optional[Dict[str, Any]] = Field(
         default=None, description="inline config (small blobs); mutually exclusive with payload_uri"
     )
@@ -533,6 +549,39 @@ class ConfigBlob(BaseModel):
         description="Ed25519 sig over canonical_bytes(payload_without_sig)",
     )
     signer_did:   Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Grant — delegated config authority to a center (feat/centers-grants-remote-config)
+# ---------------------------------------------------------------------------
+
+class Grant(BaseModel):
+    """A signed grant of delegated config authority to a center.
+
+    Self-certifying: authored by the issuer (entry.author == issued_by).
+    A center holding a Grant may publish ConfigBlob entries within `scope` at
+    `layer` (never above `layer` in LAYER_ORDER, never for a scope in
+    NON_DELEGATABLE). The sig covers canonical_bytes(payload_without_sig).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    grant_id:   str = Field(..., description="stable id for this grant")
+    center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    capability: str = Field(default="config", description="what is delegated, e.g. 'config'")
+    scope:      str = Field(
+        ...,
+        pattern=r"^[a-z0-9][a-z0-9._-]*$",
+        description="what this grant covers, e.g. a module name 'firewall' — becomes a "
+                    "bare filename component on disk (config_apply.py), so no '/' or '..'",
+    )
+    layer:      str = Field(..., description="config layer this grant is confined to")
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = Field(
+        default=None,
+        description="Ed25519 sig over canonical_bytes(payload_without_sig)",
+    )
+    signer_did: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------

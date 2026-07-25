@@ -16,7 +16,9 @@ Mutating endpoints: require JWT via Depends(require_jwt).
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -667,6 +669,7 @@ class PublishConfigRequest(BaseModel):
     payload_uri: Optional[str] = None
     valid_until: Optional[str] = None
     config_id: Optional[str] = None
+    layer: str = "baseline"
 
 
 class RevokeConfigRequest(BaseModel):
@@ -742,7 +745,7 @@ async def post_config_publish(req: PublishConfigRequest):
             get_journal(), priv, req.publisher_did,
             scope=req.scope, version=req.version, content_hash=req.content_hash,
             payload=req.payload, payload_uri=req.payload_uri,
-            valid_until=req.valid_until, config_id=req.config_id,
+            valid_until=req.valid_until, config_id=req.config_id, layer=req.layer,
         )
     except PermissionError as e:
         raise HTTPException(403, str(e))
@@ -786,6 +789,254 @@ async def pull_log(req: PullLogRequest):
         return {"ingested": 0, "skipped": 0, "rejected": 0, "error": str(e)}
 
     return import_entries(get_journal(), entries)
+
+
+# ---------------------------------------------------------------------------
+# Centers — delegated config-property ownership (feat/centers-grants-remote-config, Task 8)
+#
+# Read endpoints (GET) resolve entirely in-process from the journal
+# (annuaire.grants / annuaire.config_router) — no privileged action, no JWT.
+#
+# Mutating endpoints (POST) NEVER hold or touch the box's signing key
+# in-process: they delegate to `sbx-centersctl` (a root-confined, audited
+# CLI — see sbin/sbx-centersctl) via subprocess with a fixed argv list (no
+# shell=True, no string interpolation into a shell command line, so no
+# argument can smuggle a second command). The box key that actually signs
+# GRANT_ISSUE/GRANT_REVOKE journal entries is loaded server-side by that CLI
+# from ANNUAIRE_KEY_PATH (the same node identity key as annuairectl and
+# _publish_self_node below — one box, one sovereign identity) — it is never
+# accepted as a request field here.
+# ---------------------------------------------------------------------------
+
+CONFIG_TARGET_DIR = os.environ.get("CONFIG_TARGET_DIR", "/etc/secubox")
+CONFIG_LOCAL_DIR = os.environ.get("CONFIG_LOCAL_DIR", "/etc/secubox/config-local")
+
+
+class CenterGrantRequest(BaseModel):
+    center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    scope: str = Field(..., pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    layer: str
+
+
+class CenterRevokeRequest(BaseModel):
+    grant_id: str
+
+
+class CenterProposalAcceptRequest(BaseModel):
+    center_did: str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    scope: str = Field(..., pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    layer: str
+
+
+def _centers_ctl(args: List[str], timeout: int = 25):
+    """Run sbx-centersctl with a fixed argv list; never raises.
+
+    Path is overridable via SBX_CENTERSCTL (tests / non-standard installs);
+    defaults to the packaged location. Returns (returncode, stdout, stderr) —
+    a subprocess/OS failure (binary missing, timeout, ...) is folded into
+    (1, "", "<exception message>") rather than propagating, so callers have
+    one uniform failure shape to check (rc != 0).
+    """
+    ctl_path = os.environ.get("SBX_CENTERSCTL", "/usr/sbin/sbx-centersctl")
+    try:
+        p = subprocess.run(
+            [ctl_path, *args],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        return p.returncode, p.stdout, p.stderr
+    except (OSError, subprocess.SubprocessError) as e:
+        return 1, "", str(e)
+
+
+def _ctl_error_message(stderr: str) -> str:
+    """Best-effort extraction of sbx-centersctl's {"error": "..."} stderr JSON."""
+    import json as _json  # noqa: PLC0415
+    try:
+        msg = _json.loads(stderr).get("error")
+        if msg:
+            return str(msg)
+    except (ValueError, AttributeError):
+        pass
+    return stderr.strip() or "sbx-centersctl failed"
+
+
+def _ctl_json(stdout: str) -> Dict[str, Any]:
+    """Parse sbx-centersctl's stdout JSON; a malformed reply is a 502, not a crash."""
+    import json as _json  # noqa: PLC0415
+    try:
+        return _json.loads(stdout)
+    except ValueError:
+        raise HTTPException(502, "sbx-centersctl returned malformed JSON")
+
+
+def _self_did_best_effort() -> Optional[str]:
+    """Best-effort box did for route_config's self_did (interface symmetry only —
+    see annuaire/config_router.py::route_config docstring; never required for
+    correct proposal/effective resolution). Mirrors sbx-centersctl's own
+    best-effort resolution in `cmd_route`. Never raises: an absent/malformed
+    box key silently yields None rather than 500ing a read endpoint.
+    """
+    key_path = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+    try:
+        from annuaire.crypto import did_from_pubkey, public_from_private  # noqa: PLC0415
+        with open(key_path, "r", encoding="ascii") as fh:
+            priv = bytes.fromhex(fh.read().strip())
+        if len(priv) != 32:
+            return None
+        return did_from_pubkey(public_from_private(priv))
+    except Exception:
+        return None
+
+
+@app.get("/centers")
+async def list_centers():
+    """Enrolled centers + their delegated (scope, layer) capabilities (public read).
+
+    Derived from annuaire.grants.active_grants(journal, self_did) — one
+    entry per center_did that currently holds ≥1 active grant ISSUED BY THIS
+    BOX. Grant ops federate over the mesh, so a peer's self-issued grant for
+    its own center could otherwise appear here as if this box had delegated
+    it — self_did (best-effort) keeps this matrix sovereignty-scoped.
+    """
+    from annuaire.grants import active_grants  # noqa: PLC0415
+    active = active_grants(list(get_journal().iter_entries()), _self_did_best_effort())
+    by_center: Dict[str, List[Dict[str, Any]]] = {}
+    for (scope, layer), grant in active.items():
+        center_did = grant.get("center_did")
+        by_center.setdefault(center_did, []).append({
+            "grant_id": grant.get("grant_id"),
+            "scope": scope,
+            "layer": layer,
+            "capability": grant.get("capability"),
+        })
+    centers = [
+        {"center_did": did, "grants": sorted(g, key=lambda x: (x["scope"], x["layer"]))}
+        for did, g in sorted(by_center.items())
+    ]
+    return {"centers": centers}
+
+
+@app.get("/centers/ownership")
+async def centers_ownership():
+    """(scope, layer) -> owning center matrix (public read), via grants.active_grants.
+
+    Sovereignty-scoped: only shows grants ISSUED BY THIS BOX (self_did,
+    best-effort) — see list_centers() docstring above.
+    """
+    from annuaire.grants import active_grants  # noqa: PLC0415
+    active = active_grants(list(get_journal().iter_entries()), _self_did_best_effort())
+    matrix = [
+        {
+            "scope": scope,
+            "layer": layer,
+            "owner": grant.get("center_did"),
+            "grant_id": grant.get("grant_id"),
+        }
+        for (scope, layer), grant in sorted(active.items())
+    ]
+    return {"ownership": matrix}
+
+
+@app.get("/centers/proposals")
+async def centers_proposals():
+    """CONFIG_PUBLISH entries that failed to route (no grant / bad sig / hash
+    mismatch / malformed) — pending operator review (public read).
+
+    Calls config_router.route_config(apply=False): a read-only dry pass that
+    collects the same "proposals" a real route would produce WITHOUT ever
+    calling apply_composed — nothing on disk is touched by this GET.
+    """
+    from annuaire.config_router import route_config  # noqa: PLC0415
+    entries = list(get_journal().iter_entries())
+    result = route_config(
+        entries, CONFIG_TARGET_DIR, _self_did_best_effort(), CONFIG_LOCAL_DIR, apply=False,
+    )
+    return {"proposals": result["proposals"]}
+
+
+@app.get("/centers/effective/{scope}")
+async def centers_effective(scope: str):
+    """Composed effective config for *scope* vs its local override layer (public read).
+
+    Best-effort diff, dry-run via route_config(apply=False): "effective" is
+    the fully composed baseline+override+local text a real route would write
+    (never actually applied here); "local" is the raw local-layer file text
+    on disk, if any — the two vantage points an operator needs to decide
+    whether a local override still diverges from / is still needed on top of
+    the granted centers' layers.
+
+    *scope* is a public path parameter and must be validated as a safe bare
+    filename component (same guard as config_apply._valid_scope) BEFORE it is
+    ever used to build a Path — an unvalidated scope containing "/" or ".."
+    could otherwise be joined into CONFIG_LOCAL_DIR and read an arbitrary
+    file off disk.
+    """
+    from annuaire.config_apply import _valid_scope  # noqa: PLC0415
+    if not _valid_scope(scope):
+        return {"scope": scope, "status": "invalid-scope"}
+
+    from annuaire.config_router import route_config  # noqa: PLC0415
+    entries = list(get_journal().iter_entries())
+    result = route_config(
+        entries, CONFIG_TARGET_DIR, _self_did_best_effort(), CONFIG_LOCAL_DIR, apply=False,
+    )
+    composed = next((a for a in result["applied"] if a.get("scope") == scope), None)
+    local_file = Path(CONFIG_LOCAL_DIR) / f"{scope}.toml"
+    local_text = local_file.read_text() if local_file.is_file() else None
+    return {
+        "scope": scope,
+        "status": composed.get("status") if composed else "no-layers",
+        "effective": composed.get("text") if composed else None,
+        "local": local_text,
+    }
+
+
+@app.post("/centers/grant", dependencies=[Depends(_require_jwt)])
+async def centers_grant(req: CenterGrantRequest):
+    """Delegate config authority over (scope, layer) to a center.
+
+    Delegates to `sbx-centersctl grant <center_did> <scope> <layer>` — the
+    box's signing key never enters this process. A rejection (non-delegatable
+    scope, layer=="local", already-owned) comes back as ctl rc!=0 with a JSON
+    {"error": reason} on stderr, surfaced here as HTTP 400.
+    """
+    rc, stdout, stderr = _centers_ctl(["grant", req.center_did, req.scope, req.layer])
+    if rc != 0:
+        raise HTTPException(400, _ctl_error_message(stderr))
+    return _ctl_json(stdout)
+
+
+@app.post("/centers/revoke", dependencies=[Depends(_require_jwt)])
+async def centers_revoke(req: CenterRevokeRequest):
+    """Withdraw a previously issued grant (delegates to `sbx-centersctl revoke <grant_id>`)."""
+    rc, stdout, stderr = _centers_ctl(["revoke", req.grant_id])
+    if rc != 0:
+        raise HTTPException(400, _ctl_error_message(stderr))
+    return _ctl_json(stdout)
+
+
+@app.post("/centers/proposal/accept", dependencies=[Depends(_require_jwt)])
+async def centers_proposal_accept(req: CenterProposalAcceptRequest):
+    """Accept a pending proposal: grant the (scope, layer) it needed, then route it.
+
+    Two sequential ctl delegations — `grant` (issues the missing delegated
+    authority) followed by `route` (verifies + applies every now-routable
+    scope, including this one, via the grant matrix). Either step failing
+    (ctl rc != 0) surfaces as HTTP 400 without attempting the next step.
+    """
+    rc, stdout, stderr = _centers_ctl(["grant", req.center_did, req.scope, req.layer])
+    if rc != 0:
+        raise HTTPException(400, _ctl_error_message(stderr))
+    granted = _ctl_json(stdout)
+
+    rc, stdout, stderr = _centers_ctl(["route"])
+    if rc != 0:
+        raise HTTPException(400, _ctl_error_message(stderr))
+    routed = _ctl_json(stdout)
+
+    return {"grant": granted, "route": routed}
 
 
 # ---------------------------------------------------------------------------

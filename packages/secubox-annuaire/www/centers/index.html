@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr" class="hybrid-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Centres</title>
+<link rel="stylesheet" href="/shared/hybrid-dark.css">
+<style>
+  :root{
+    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
+    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
+    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
+  }
+  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
+  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
+  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
+  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
+  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
+  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
+  .btns{display:flex;flex-wrap:wrap;gap:.4rem}
+  .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
+    color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
+    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
+  .btn.primary{border-color:var(--cyan);color:var(--cyan)}
+  .btn.danger{border-color:var(--red);color:var(--red)}
+  .btn.small{padding:.25rem .5rem;font-size:.62rem}
+  .btn[disabled]{opacity:.4;cursor:not-allowed}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+  .note{font-size:.76rem;color:var(--p31-dim);line-height:1.5;margin-top:.5rem}
+  .note code{color:var(--yellow)}
+  table.matrix{width:100%;border-collapse:collapse;font-size:.78rem}
+  table.matrix th,table.matrix td{padding:.5rem .6rem;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+  table.matrix th{color:var(--p31-dim);text-transform:uppercase;font-size:.66rem;letter-spacing:.06em}
+  table.matrix td.scope-col{color:var(--cyan);white-space:nowrap}
+  .owner-badge{display:inline-block;padding:.15rem .45rem;border-radius:4px;background:var(--bg-row);
+    border:1px solid var(--border);font-size:.72rem;color:var(--text)}
+  .owner-badge.local{color:var(--green);border-color:var(--green)}
+  .empty-cell{color:var(--p31-dim);font-style:italic;font-size:.74rem}
+  .cell-inner{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}
+  .form-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
+  .form-row input,.form-row select{font-family:inherit;font-size:.78rem;color:var(--text);
+    background:var(--bg-row);border:1px solid var(--border);border-radius:6px;padding:.4rem .5rem}
+  .form-row input{flex:1;min-width:9rem}
+  ul#proposals-list,ul#centers-list{list-style:none;margin:0;padding:0;font-size:.82rem}
+  ul#proposals-list li,ul#centers-list li{display:flex;justify-content:space-between;gap:.6rem;align-items:center;flex-wrap:wrap;
+    padding:.5rem 0;border-bottom:1px solid var(--border)}
+  ul#proposals-list li:last-child,ul#centers-list li:last-child{border-bottom:0}
+  .empty{color:var(--p31-dim);font-size:.8rem;font-style:italic}
+  .reason-badge{color:var(--yellow);font-size:.7rem}
+  .diff-grid{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.6rem}
+  .diff-grid pre{background:var(--bg-row);border:1px solid var(--border);border-radius:6px;padding:.6rem;
+    font-size:.72rem;white-space:pre-wrap;word-break:break-all;max-height:16rem;overflow:auto;margin:0}
+  .diff-grid .diff-label{font-size:.66rem;color:var(--p31-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
+  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
+    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
+  @media(max-width:768px){.main{margin-left:0} .diff-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+  <header class="header">
+    <div>
+      <h1>🏛 Centres</h1>
+      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
+    </div>
+    <div class="btns">
+      <button class="btn" id="btn-refresh">↻ Rafraîchir</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <h3>Matrice de propriété</h3>
+    <div class="note">Une cellule vide signifie qu'aucun centre ne détient l'autorité de configuration
+      pour ce (scope, calque) — le calque <code>local</code> n'est jamais délégable et reste toujours
+      propriété <code>box-local</code>.</div>
+    <div style="overflow-x:auto;margin-top:.6rem">
+      <table class="matrix">
+        <thead>
+          <tr><th>Scope</th><th>Baseline</th><th>Override</th><th>Local</th></tr>
+        </thead>
+        <tbody id="matrix-body"><tr><td colspan="4" class="empty-cell">chargement…</td></tr></tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:1rem">Nouvel octroi</h3>
+    <div class="form-row">
+      <input id="grant-scope" placeholder="scope (ex: firewall)">
+      <select id="grant-layer">
+        <option value="baseline">baseline</option>
+        <option value="override">override</option>
+      </select>
+      <input id="grant-center-did" placeholder="did:plc:… du centre">
+      <button class="btn primary" id="btn-grant-new">+ Accorder</button>
+    </div>
+    <div class="note">Le calque <code>local</code> n'apparaît pas dans ce formulaire : il ne peut jamais
+      être délégué (rejeté côté <code>sbx-centersctl</code>).</div>
+  </div>
+
+  <div class="card">
+    <h3>Centres accordés</h3>
+    <ul id="centers-list"><li class="empty">chargement…</li></ul>
+  </div>
+
+  <div class="card">
+    <h3>Propositions (pushs non-accordés)</h3>
+    <div class="note">Configurations poussées par un centre pour un (scope, calque) qu'il ne détient pas
+      encore — ou dont la signature/le hash n'a pas pu être vérifié. « Accepter » octroie le (scope,
+      calque) au centre publiant puis route la file.</div>
+    <ul id="proposals-list"><li class="empty">chargement…</li></ul>
+  </div>
+
+  <div class="card">
+    <h3>Diff effectif</h3>
+    <div class="form-row">
+      <input id="eff-scope" placeholder="scope (ex: firewall)">
+      <button class="btn" id="btn-eff-load">Charger le diff</button>
+    </div>
+    <div class="diff-grid">
+      <div>
+        <div class="diff-label">Effectif (composé baseline+override+local)</div>
+        <pre id="eff-effective">—</pre>
+      </div>
+      <div>
+        <div class="diff-label">Local (fichier sur disque)</div>
+        <pre id="eff-local">—</pre>
+      </div>
+    </div>
+    <div class="note" id="eff-status"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/v1/annuaire';
+const $ = (id) => document.getElementById(id);
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function token(){ return localStorage.getItem('sbx_token') || ''; }
+function authHeaders(extra){
+  return Object.assign({'Authorization': 'Bearer ' + token()}, extra || {});
+}
+function toast(msg, isErr){
+  const t = $('toast'); t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 2600);
+}
+async function J(path, opts){
+  const o = Object.assign({credentials: 'same-origin'}, opts || {});
+  o.headers = authHeaders(o.headers);
+  const r = await fetch(API + path, o);
+  if (!r.ok) {
+    let detail = 'HTTP ' + r.status;
+    try { const b = await r.json(); if (b && b.detail) detail = b.detail; } catch (e) { /* ignore */ }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+function shortDid(did){
+  if (!did) return '—';
+  return did.length > 22 ? did.slice(0, 14) + '…' + did.slice(-6) : did;
+}
+
+// ── ownership matrix ───────────────────────────────────────────────────
+
+let _lastOwnership = [];
+
+async function loadOwnership(){
+  try {
+    const d = await J('/centers/ownership');
+    _lastOwnership = d.ownership || [];
+    renderMatrix(_lastOwnership);
+    $('dot').className = 'dot on';
+    $('sub').innerHTML = '<span class="dot on"></span>panneau actif';
+  } catch (e) {
+    $('dot').className = 'dot off';
+    $('sub').innerHTML = '<span class="dot off"></span>matrice indisponible (' + esc(e.message) + ')';
+    $('matrix-body').innerHTML = '<tr><td colspan="4" class="empty-cell">indisponible (' + esc(e.message) + ')</td></tr>';
+    toast('Matrice indisponible : ' + e.message, true);
+  }
+}
+
+function renderMatrix(ownership){
+  const byKey = {};
+  const scopes = new Set();
+  ownership.forEach(o => {
+    byKey[o.scope + '|' + o.layer] = o;
+    scopes.add(o.scope);
+  });
+  const scopeInput = $('grant-scope').value.trim();
+  if (scopeInput) scopes.add(scopeInput);
+
+  if (scopes.size === 0) {
+    $('matrix-body').innerHTML = '<tr><td colspan="4" class="empty-cell">aucun octroi actif</td></tr>';
+    return;
+  }
+
+  $('matrix-body').innerHTML = Array.from(scopes).sort().map(scope => {
+    const cellFor = (layer) => {
+      const g = byKey[scope + '|' + layer];
+      if (!g) return '<span class="empty-cell">— vide —</span>';
+      return '<div class="cell-inner">' +
+        '<span class="owner-badge" title="' + esc(g.owner || '') + '">' + esc(shortDid(g.owner)) + '</span>' +
+        '<button class="btn danger small" data-action="revoke" data-grant-id="' + esc(g.grant_id || '') + '" ' +
+        'data-scope="' + esc(scope) + '" data-layer="' + esc(layer) + '">✕ Révoquer</button>' +
+        '</div>';
+    };
+    return '<tr>' +
+      '<td class="scope-col">' + esc(scope) + '</td>' +
+      '<td>' + cellFor('baseline') + '</td>' +
+      '<td>' + cellFor('override') + '</td>' +
+      '<td><span class="owner-badge local">📦 box-local</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+// Délégation d'événements : aucune donnée d'API n'est jamais interpolée dans
+// un attribut d'événement inline (onclick/onchange/...). Les valeurs
+// dynamiques (grant_id, scope, layer, center_did) sont portées par des
+// data-* attributs (échappés HTML via esc()) et lues ici via `dataset`, qui
+// renvoie la valeur décodée en tant que STRING JS — jamais réinterprétée
+// comme du code. Empêche toute évasion de chaîne (leçon XSS proxypac).
+$('matrix-body').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'revoke') {
+    revokeGrant(btn.dataset.grantId, btn.dataset.scope, btn.dataset.layer);
+  }
+});
+
+async function revokeGrant(grantId, scope, layer){
+  if (!grantId) { toast('grant_id manquant', true); return; }
+  try {
+    await J('/centers/revoke', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({grant_id: grantId})});
+    toast('Octroi révoqué (' + scope + '/' + layer + ')');
+    loadOwnership();
+    loadCenters();
+  } catch (e) {
+    toast('Révocation impossible : ' + e.message, true);
+  }
+}
+
+async function grantNew(){
+  const scope = $('grant-scope').value.trim();
+  const layer = $('grant-layer').value;
+  const centerDid = $('grant-center-did').value.trim();
+  if (!scope || !centerDid) { toast('scope et center_did requis', true); return; }
+  try {
+    await J('/centers/grant', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({center_did: centerDid, scope: scope, layer: layer})});
+    toast('Octroi accordé (' + scope + '/' + layer + ')');
+    $('grant-scope').value = ''; $('grant-center-did').value = '';
+    loadOwnership();
+    loadCenters();
+  } catch (e) {
+    toast('Octroi impossible : ' + e.message, true);
+  }
+}
+
+// ── centers list ───────────────────────────────────────────────────────
+
+async function loadCenters(){
+  try {
+    const d = await J('/centers');
+    const centers = d.centers || [];
+    $('centers-list').innerHTML = centers.length ? centers.map(c => {
+      const grants = (c.grants || []).map(g => esc(g.scope) + '/' + esc(g.layer)).join(', ');
+      return '<li><span title="' + esc(c.center_did) + '">' + esc(shortDid(c.center_did)) + '</span>' +
+        '<span>' + (grants || '<span class="empty">aucun octroi</span>') + '</span></li>';
+    }).join('') : '<li class="empty">aucun centre accordé</li>';
+  } catch (e) {
+    $('centers-list').innerHTML = '<li class="empty">indisponible (' + esc(e.message) + ')</li>';
+  }
+}
+
+// ── proposals ──────────────────────────────────────────────────────────
+
+async function loadProposals(){
+  try {
+    const d = await J('/centers/proposals');
+    const proposals = d.proposals || [];
+    $('proposals-list').innerHTML = proposals.length ? proposals.map(p => {
+      const centerDid = p.publisher || '';
+      return '<li>' +
+        '<span>' + esc(p.scope || '—') + ' / ' + esc(p.layer || '—') +
+        ' <span class="reason-badge">(' + esc(p.reason || '?') + ')</span>' +
+        ' — <span title="' + esc(centerDid) + '">' + esc(shortDid(centerDid)) + '</span></span>' +
+        '<button class="btn primary small" data-action="accept-proposal" ' +
+        'data-center-did="' + esc(centerDid) + '" data-scope="' + esc(p.scope || '') + '" ' +
+        'data-layer="' + esc(p.layer || 'baseline') + '">✓ Accepter</button>' +
+        '</li>';
+    }).join('') : '<li class="empty">aucune proposition en attente</li>';
+  } catch (e) {
+    $('proposals-list').innerHTML = '<li class="empty">indisponible (' + esc(e.message) + ')</li>';
+  }
+}
+
+$('proposals-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'accept-proposal') {
+    acceptProposal(btn.dataset.centerDid, btn.dataset.scope, btn.dataset.layer);
+  }
+});
+
+async function acceptProposal(centerDid, scope, layer){
+  if (!centerDid || !scope) { toast('proposition incomplète', true); return; }
+  try {
+    await J('/centers/proposal/accept', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({center_did: centerDid, scope: scope, layer: layer})});
+    toast('Proposition acceptée (' + scope + '/' + layer + ')');
+    loadProposals();
+    loadOwnership();
+    loadCenters();
+  } catch (e) {
+    toast('Acceptation impossible : ' + e.message, true);
+  }
+}
+
+// ── effective diff ────────────────────────────────────────────────────
+
+async function loadEffective(){
+  const scope = $('eff-scope').value.trim();
+  if (!scope) { toast('scope requis', true); return; }
+  try {
+    const d = await J('/centers/effective/' + encodeURIComponent(scope));
+    $('eff-effective').textContent = d.effective != null ? d.effective : '(vide)';
+    $('eff-local').textContent = d.local != null ? d.local : '(vide)';
+    $('eff-status').textContent = 'statut : ' + (d.status || '—');
+  } catch (e) {
+    $('eff-effective').textContent = '—';
+    $('eff-local').textContent = '—';
+    $('eff-status').textContent = 'indisponible (' + e.message + ')';
+    toast('Diff indisponible : ' + e.message, true);
+  }
+}
+
+$('btn-refresh').addEventListener('click', loadAll);
+$('btn-grant-new').addEventListener('click', grantNew);
+$('btn-eff-load').addEventListener('click', loadEffective);
+
+async function loadAll(){
+  loadOwnership();
+  loadCenters();
+  loadProposals();
+}
+loadAll();
+</script>
+</body>
+</html>
