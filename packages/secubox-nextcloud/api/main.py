@@ -16,6 +16,24 @@ from secubox_core.config import get_config
 app = FastAPI(title="SecuBox Nextcloud")
 config = get_config("nextcloud")
 
+
+def _public_base_url(ssl_domain: str, domain: str, http_port: int) -> str:
+    """Return the URL a client/device uses to reach Nextcloud.
+
+    HAProxy terminates TLS 1.3 in front of every SecuBox vhost, so a real
+    public domain is always reachable over https. Precedence: an explicit
+    ssl_domain wins; otherwise the configured public ``domain`` (skipping the
+    ``cloud.local`` placeholder); only a bare host with no real domain falls
+    back to the container port. Never emit ``localhost`` when a domain exists —
+    that is unreachable from a phone/desktop client (the bug this fixes).
+    """
+    if ssl_domain:
+        return f"https://{ssl_domain}"
+    if "." in domain and domain != "cloud.local":
+        return f"https://{domain}"
+    return f"http://localhost:{http_port}"
+
+
 LXC_NAME = config.get("container_name", "nextcloud")
 LXC_PATH = Path(config.get("lxc_path", "/data/lxc"))
 DATA_PATH = Path(config.get("data_path", "/data/volumes/nextcloud"))
@@ -158,8 +176,7 @@ async def status():
         "disk_used": disk_used,
         # Public URL from the real domain (not localhost) so the dashboard links
         # somewhere reachable; falls back to the container port for a bare host.
-        "web_url": f"https://{domain}" if "." in domain and domain != "cloud.local"
-                   else f"http://localhost:{http_port}",
+        "web_url": _public_base_url(config.get("ssl_domain", ""), domain, http_port),
         "ssl_enabled": config.get("ssl_enabled", False),
         "container_name": LXC_NAME,
     }
@@ -443,12 +460,10 @@ def restore_backup(name: str):
 async def get_connections():
     """Get connection URLs (CalDAV, CardDAV, WebDAV)"""
     http_port = config.get("http_port", 8080)
-    ssl_enabled = config.get("ssl_enabled", False)
+    domain = config.get("domain", "cloud.local")
     ssl_domain = config.get("ssl_domain", "")
 
-    base_url = f"http://localhost:{http_port}"
-    if ssl_enabled and ssl_domain:
-        base_url = f"https://{ssl_domain}"
+    base_url = _public_base_url(ssl_domain, domain, http_port)
 
     return {
         "base_url": base_url,
