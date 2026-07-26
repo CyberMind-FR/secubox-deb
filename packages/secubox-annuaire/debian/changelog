@@ -1,3 +1,15 @@
+secubox-annuaire (0.8.1-1~bookworm1) bookworm; urgency=high
+
+  * fix(assist): session resolvers (active_session/console_active/
+    pending_requests/can_open) bind the VERIFIED entry.author, not the
+    attacker-controllable payload["issued_by"]. A mesh-federated forged
+    ASSIST_SESSION_OPEN{issued_by=victim} no longer counts as the victim's
+    own session (phantom-session -> single-session-invariant DoS closed).
+    Same author-vs-payload class as the active_grants sovereignty fix.
+  * grants: add _author() accessor (verified, dict/LogEntry-tolerant).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 09:36:51 +0200
+
 secubox-annuaire (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(releases): ships annuaire/releases.py — the pure ring resolver
