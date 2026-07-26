@@ -48,6 +48,20 @@ def _payload(entry: Entry) -> Dict[str, Any]:
     return payload or {}
 
 
+def _author(entry: Entry) -> Optional[str]:
+    """Return entry.author if present (LogEntry), else entry["author"] (dict).
+
+    The VERIFIED author is the did whose signing key produced this entry
+    (Journal.append always sets author = did_from_pubkey(signing key); the
+    import path only admits entries whose sig verifies against it). Bare-dict
+    test fixtures may omit it -> None.
+    """
+    author = getattr(entry, "author", None)
+    if author is None and isinstance(entry, dict):
+        author = entry.get("author")
+    return author
+
+
 def active_grants(
     entries: List[Mapping[str, Any]], self_did: Optional[str] = None
 ) -> Dict[GrantKey, Dict[str, Any]]:
@@ -84,6 +98,18 @@ def active_grants(
         payload = _payload(entry)
         if op == "grant_issue":
             if self_did is not None and payload.get("issued_by") != self_did:
+                continue
+            # FAIL-CLOSED self-certification: a GRANT_ISSUE is authored by its
+            # issuer (model.py Grant: entry.author == issued_by). Grant ops
+            # federate (dir_sync), so a mesh peer can validly sign a GRANT_ISSUE
+            # whose payload lies "issued_by=VICTIM" while author=ATTACKER; on
+            # import that entry is well-formed and correctly signed by ATTACKER.
+            # Trusting payload["issued_by"] alone would let the victim believe
+            # it delegated authority it never signed. Bind the VERIFIED author:
+            # skip unless author == payload issued_by. A missing/None author
+            # (bare-dict fixtures only — real/imported entries always carry a
+            # verified author) is unequal -> skipped, which is correct.
+            if _author(entry) != payload.get("issued_by"):
                 continue
             issued[payload["grant_id"]] = payload
         elif op == "grant_revoke":

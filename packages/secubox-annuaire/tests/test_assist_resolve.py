@@ -113,9 +113,12 @@ def test_can_open_allows_self_authored_accepted_request():
 # ---------------------------------------------------------------------------
 
 def _grant_issue(gid, center_did, capability, scope, issued_by):
+    # author == issued_by: a GRANT_ISSUE is self-certifying (Journal.append sets
+    # author from the signing key; model.py Grant requires entry.author == issued_by).
     return {"op": Op.GRANT_ISSUE.value, "payload": {
         "grant_id": gid, "center_did": center_did, "capability": capability,
-        "scope": scope, "layer": "baseline", "issued_by": issued_by}}
+        "scope": scope, "layer": "baseline", "issued_by": issued_by},
+        "author": issued_by}
 
 
 def test_can_open_standing_without_grant_is_refused():

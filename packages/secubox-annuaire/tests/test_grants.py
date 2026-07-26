@@ -9,8 +9,11 @@ from annuaire.model import GENESIS_HASH, LogEntry, Op
 A = "did:plc:" + ("a"*32); B = "did:plc:" + ("b"*32)
 
 def _issue(gid, center, scope, layer):
+    # author == issued_by: a GRANT_ISSUE is self-certifying (Journal.append sets
+    # author from the signing key; model.py Grant requires entry.author == issued_by).
     return {"op": "grant_issue", "payload": {"grant_id": gid, "center_did": center,
-            "capability": "config", "scope": scope, "layer": layer, "issued_by": B}}
+            "capability": "config", "scope": scope, "layer": layer, "issued_by": B},
+            "author": B}
 def _revoke(gid):
     return {"op": "grant_revoke", "payload": {"grant_id": gid, "issued_by": B}}
 
@@ -112,13 +115,39 @@ def test_validate_issue_already_owned_is_scoped_to_self_did():
     foreign = {"op": "grant_issue", "payload": {
         "grant_id": "g1", "center_did": A, "capability": "config",
         "scope": "firewall", "layer": "baseline", "issued_by": PAIR,
-    }}
+    }, "author": PAIR}  # self-certifying: peer authored its own grant
     assert grants.validate_issue([foreign], "firewall", "baseline", self_did=BOX) is None
 
     own = {"op": "grant_issue", "payload": {
         "grant_id": "g2", "center_did": A, "capability": "config",
         "scope": "firewall", "layer": "baseline", "issued_by": BOX,
-    }}
+    }, "author": BOX}  # self-certifying: this box authored its own grant
     assert grants.validate_issue(
         [foreign, own], "firewall", "baseline", self_did=BOX
     ) == "already-owned"
+
+
+# ---------------------------------------------------------------------------
+# Verified-author binding (fail-closed): a GRANT_ISSUE is self-certifying —
+# entry.author == issued_by (model.py Grant). A mesh peer can validly SIGN a
+# GRANT_ISSUE (author=ATTACKER) whose payload LIES "issued_by=VICTIM"; on
+# import it is well-formed and correctly signed. active_grants must bind the
+# VERIFIED author, never the payload's claimed issued_by. See the fail-closed
+# author check in grants.active_grants().
+# ---------------------------------------------------------------------------
+
+def test_forged_grant_issue_author_mismatch_not_honored():
+    from annuaire import releases
+    ATTACKER = "did:plc:" + "a" * 32
+    VICTIM = "did:plc:" + "5" * 32
+    # ATTACKER signs a GRANT_ISSUE granting itself capability=release, but the
+    # payload falsely claims VICTIM issued it. author != issued_by -> forged.
+    forged = {"op": "grant_issue", "payload": {
+        "grant_id": "gforge", "center_did": ATTACKER, "capability": "release",
+        "scope": "release", "layer": "baseline", "issued_by": VICTIM,
+    }, "author": ATTACKER}
+    # VICTIM (self_did) never signed this — it must not appear in its grants.
+    assert grants.active_grants([forged], self_did=VICTIM) == {}
+    assert grants.owner([forged], "release", "baseline", self_did=VICTIM) is None
+    # And the release-grant resolver must reject the forgery too.
+    assert releases.has_release_grant([forged], ATTACKER, VICTIM) is False
