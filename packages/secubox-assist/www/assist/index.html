@@ -113,6 +113,43 @@
 const T = () => localStorage.getItem('sbx_token') || '';
 const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
 
+// Non-blocking feedback banner (success/error) — dynamic text via textContent (XSS-safe).
+function notify(msg, isError) {
+  let n = document.getElementById('sbx-notify');
+  if (!n) {
+    n = document.createElement('div');
+    n.id = 'sbx-notify';
+    n.style.cssText = 'position:fixed;bottom:1rem;right:1rem;max-width:32rem;padding:.6rem .9rem;'
+      + 'border-radius:8px;font-size:.85rem;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);'
+      + 'white-space:pre-wrap;word-break:break-word;';
+    document.body.appendChild(n);
+  }
+  n.style.background = isError ? '#3a1620' : '#123a1f';
+  n.style.border = '1px solid ' + (isError ? '#ff4466' : '#00dd44');
+  n.style.color = isError ? '#ff8199' : '#7dffb0';
+  n.textContent = msg;
+  n.style.display = 'block';
+  clearTimeout(notify._t);
+  notify._t = setTimeout(() => { n.style.display = 'none'; }, isError ? 9000 : 4000);
+}
+
+// POST a marketplace action and surface success/failure (the API returns
+// {"detail": "..."} on error; show it instead of swallowing it silently).
+async function postAction(url, body, okMsg) {
+  try {
+    const r = await fetch(url, {method:'POST', headers:H(), body: JSON.stringify(body)});
+    if (r.ok) { notify(okMsg, false); return await r.json().catch(() => ({})); }
+    let detail = 'HTTP ' + r.status;
+    try { const e = await r.json(); detail = (e && e.detail) ? e.detail : detail; } catch (_) {}
+    if (r.status === 401 || r.status === 403) detail = 'Non authentifié (jeton sbx_token manquant/expiré) — reconnecte-toi.';
+    notify('Échec : ' + detail, true);
+    return null;
+  } catch (e) {
+    notify('Échec réseau : ' + e, true);
+    return null;
+  }
+}
+
 function fmtTags(tags) { return Array.isArray(tags) ? tags.join(', ') : ''; }
 
 function itemEl(fields, actions) {
@@ -219,41 +256,44 @@ document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'request') {
-    await fetch('/api/v1/assist/request', {method:'POST', headers:H(), body: JSON.stringify({
+    await postAction('/api/v1/assist/request', {
       center_did: document.getElementById('center').value,
       mode: document.getElementById('mode').value,
       scope: document.getElementById('scope').value,
       duration_s: parseInt(document.getElementById('dur').value, 10),
-      reason: document.getElementById('reason').value })});
+      reason: document.getElementById('reason').value }, 'Demande ciblée envoyée.');
+    refresh();
   } else if (act === 'offer') {
     const tags = document.getElementById('offer-tags').value.split(',').map(s => s.trim()).filter(Boolean);
-    await fetch('/api/v1/assist/offer', {method:'POST', headers:H(), body: JSON.stringify({
+    if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
+    const d = await postAction('/api/v1/assist/offer', {
       tags, scope: document.getElementById('offer-scope').value || null,
-      ttl_s: parseInt(document.getElementById('offer-ttl').value, 10) })});
-    refreshOffers();
+      ttl_s: parseInt(document.getElementById('offer-ttl').value, 10) },
+      'Disponibilité publiée.');
+    if (d) refreshOffers();
   } else if (act === 'offer-revoke') {
-    await fetch('/api/v1/assist/offer/revoke', {method:'POST', headers:H(), body: JSON.stringify({
-      offer_id: b.dataset.offerId })});
-    refreshOffers();
+    const d = await postAction('/api/v1/assist/offer/revoke', {
+      offer_id: b.dataset.offerId }, 'Disponibilité révoquée.');
+    if (d) refreshOffers();
   } else if (act === 'request-open') {
     const tags = document.getElementById('reqopen-tags').value.split(',').map(s => s.trim()).filter(Boolean);
-    await fetch('/api/v1/assist/request/open', {method:'POST', headers:H(), body: JSON.stringify({
+    if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
+    const d = await postAction('/api/v1/assist/request/open', {
       tags, scope: document.getElementById('reqopen-scope').value || null,
       ttl_s: parseInt(document.getElementById('reqopen-ttl').value, 10),
-      reason: document.getElementById('reqopen-reason').value })});
-    refreshOpenRequests();
+      reason: document.getElementById('reqopen-reason').value }, 'Demande ouverte publiée.');
+    if (d) refreshOpenRequests();
   } else if (act === 'match-accept') {
-    await fetch('/api/v1/assist/match/accept', {method:'POST', headers:H(), body: JSON.stringify({
-      offer_id: b.dataset.offerId, req_id: b.dataset.reqId, side: b.dataset.side })});
-    refreshMatches();
+    const d = await postAction('/api/v1/assist/match/accept', {
+      offer_id: b.dataset.offerId, req_id: b.dataset.reqId, side: b.dataset.side },
+      'Match accepté (' + b.dataset.side + ').');
+    if (d) refreshMatches();
   } else if (act === 'joinlink') {
-    const r = await fetch('/api/v1/assist/joinlink', {method:'POST', headers:H(), body: JSON.stringify({
+    const d = await postAction('/api/v1/assist/joinlink', {
       ref: document.getElementById('invite-ref').value,
-      ttl_s: parseInt(document.getElementById('invite-ttl').value, 10) })});
-    if (r.ok) {
-      const d = await r.json();
-      document.getElementById('invite-url').value = d.url || '';
-    }
+      ttl_s: parseInt(document.getElementById('invite-ttl').value, 10) },
+      'Lien de partage généré.');
+    if (d) document.getElementById('invite-url').value = d.url || '';
     return;
   } else if (act === 'invite-copy') {
     const f = document.getElementById('invite-url');
