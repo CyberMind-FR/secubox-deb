@@ -58,5 +58,17 @@ def test_panel_pending_list_has_readable_empty_state_not_raw_json():
 
 def test_panel_clarifies_targeted_vs_open_request():
     html = (ROOT / "www" / "assist" / "index.html").read_text()
+    # targeted (socle) hint + open-marketplace hint (labels are action-oriented)
     assert "Requête ciblée" in html
-    assert "Requête ouverte" in html
+    assert "publiée au mesh" in html
+
+
+def test_panel_marketplace_actions_are_action_labeled():
+    html = (ROOT / "www" / "assist" / "index.html").read_text()
+    # the marketplace verbs must be discoverable by their action names
+    assert "Proposer de l'aide" in html      # offer
+    assert "Demander de l'aide" in html       # open request
+    assert "Partager un lien" in html         # join-link
+    # data hooks unchanged (JS still wired)
+    for act in ("offer", "request-open", "joinlink"):
+        assert f'data-act="{act}"' in html

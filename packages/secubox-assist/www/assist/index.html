@@ -41,61 +41,66 @@
   </div>
 
   <div class="card">
+    <p class="note">Marketplace d'entraide (mesh) — clique un onglet : <b>Proposer</b> de l'aide, <b>Demander</b> de l'aide au mesh, voir les <b>Matches</b>, ou <b>Partager</b> un lien d'invitation.</p>
     <div class="tabs" id="mtabs">
-      <button class="tab active" data-tab="offer">Disponibilité</button>
-      <button class="tab" data-tab="reqopen">Demander</button>
-      <button class="tab" data-tab="matches">Matches</button>
-      <button class="tab" data-tab="invite">Inviter</button>
-      <button class="tab" data-tab="join">Rejoindre</button>
+      <button class="tab active" data-tab="offer">🙋 Proposer de l'aide</button>
+      <button class="tab" data-tab="reqopen">🆘 Demander de l'aide</button>
+      <button class="tab" data-tab="matches">🔗 Matches</button>
+      <button class="tab" data-tab="invite">📤 Partager un lien</button>
+      <button class="tab" data-tab="join">📥 Rejoindre</button>
     </div>
 
     <div class="pane active" id="pane-offer">
-      <h2>Disponibilité</h2>
+      <h2>🙋 Proposer de l'aide</h2>
+      <p class="note">Annonce ta disponibilité : les box du mesh qui cherchent de l'aide sur ces tags te verront (onglet Matches).</p>
       <div class="row">
-        <input id="offer-tags" placeholder="tags (ex. dns,waf)">
+        <input id="offer-tags" placeholder="tags — ce sur quoi tu peux aider (ex. dns,waf)">
         <input id="offer-scope" placeholder="scope (optionnel)">
-        <input id="offer-ttl" type="number" value="3600" title="ttl (s)">
-        <button class="btn" data-act="offer">Publier disponibilité</button>
+        <input id="offer-ttl" type="number" value="3600" title="durée de validité (s)">
+        <button class="btn primary" data-act="offer">🙋 Proposer</button>
       </div>
       <div id="offer-list"></div>
     </div>
 
     <div class="pane" id="pane-reqopen">
-      <h2>Demander (ouverte)</h2>
+      <h2>🆘 Demander de l'aide (ouverte)</h2>
+      <p class="note">Requête <b>ouverte</b> : publiée au mesh sans cibler personne — un offreur compatible se propose (voir Matches). Pour cibler un centre précis par DID, utilise le formulaire « Demander de l'assistance (ciblée) » en haut.</p>
       <div class="row">
-        <input id="reqopen-tags" placeholder="tags (ex. dns,waf)">
+        <input id="reqopen-tags" placeholder="tags — ce sur quoi tu as besoin d'aide (ex. dns,waf)">
         <input id="reqopen-scope" placeholder="scope (optionnel)">
-        <input id="reqopen-ttl" type="number" value="3600" title="ttl (s)">
+        <input id="reqopen-ttl" type="number" value="3600" title="durée de validité (s)">
         <input id="reqopen-reason" placeholder="motif">
-        <button class="btn" data-act="request-open">Publier demande</button>
+        <button class="btn primary" data-act="request-open">🆘 Demander</button>
       </div>
-      <p class="note">Requête ouverte : publiée au mesh, un offreur compatible se propose (voir Matches).</p>
       <div id="reqopen-list"></div>
     </div>
 
     <div class="pane" id="pane-matches">
-      <h2>Matches</h2>
+      <h2>🔗 Matches</h2>
+      <p class="note">Paires offre↔demande compatibles rapprochées par le mesh. Accepte ta part ; quand les deux côtés ont accepté, la session s'ouvre.</p>
       <div id="matches-list"></div>
     </div>
 
     <div class="pane" id="pane-invite">
-      <h2>Inviter</h2>
+      <h2>📤 Partager un lien d'invitation</h2>
+      <p class="note">Génère un lien à usage unique à partager hors-bande (mail, chat) pour inviter quelqu'un — même hors mesh — à une session d'assistance.</p>
       <div class="row">
-        <input id="invite-ref" placeholder="ref (offer_id / req_id)">
-        <input id="invite-ttl" type="number" value="900" title="ttl (s)">
-        <button class="btn" data-act="joinlink">Générer le lien</button>
+        <input id="invite-ref" placeholder="ref (offer_id / req_id, optionnel)">
+        <input id="invite-ttl" type="number" value="900" title="durée de validité (s)">
+        <button class="btn primary" data-act="joinlink">📤 Générer un lien de partage</button>
       </div>
       <div class="row">
-        <input id="invite-url" readonly size="60">
+        <input id="invite-url" readonly size="60" placeholder="le lien apparaîtra ici">
         <button class="btn" data-act="invite-copy">Copier</button>
       </div>
     </div>
 
     <div class="pane" id="pane-join">
-      <h2>Rejoindre</h2>
+      <h2>📥 Rejoindre via un lien</h2>
+      <p class="note">Colle un lien d'invitation reçu pour rejoindre une session. L'escalade automatique (tunnel WireGuard éphémère) arrive dans une prochaine version.</p>
       <div class="row">
         <input id="join-url" placeholder="coller le lien reçu" size="60">
-        <button class="btn" data-act="join" disabled title="escalade — à venir">Rejoindre (à venir)</button>
+        <button class="btn" data-act="join" disabled title="escalade — à venir">📥 Rejoindre (à venir)</button>
       </div>
       <p class="note">L'escalade depuis un lien reçu est un suivi documenté — non câblée dans cette version.</p>
     </div>
