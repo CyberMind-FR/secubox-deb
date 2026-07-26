@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: secubox-releasectl — release-ring CLI (center/repo/box sides).
+
+Thin CLI over annuaire.verbs.release_* / ring_assign + annuaire.releases
+(pure ring resolvers), plus release.repo (reprepro-copy argv builder) and
+release.boxapply (box-side apt ring 4R swap). Mutations are signed journal
+appends (audit trail) — this binary itself never fabricates ring state,
+it only resolves it from the journal and, for repo/box actuation, shells
+out to reprepro/apt-get via argv lists (never a shell string).
+
+Commands:
+  publish --artifacts <json> --notes <str>
+                                  RELEASE_PUBLISH: register an evolution,
+                                  born in ring "draft". Mints
+                                  evo_id="evo-"+token_hex(8) and prints it.
+  promote <evo_id>                RELEASE_PROMOTE: advance one ring
+                                  (draft->internal->published). Requires a
+                                  capability="release" grant from self_did
+                                  to the caller.
+  demote <evo_id>                 RELEASE_DEMOTE: retreat one ring.
+  assign <box_did> <ring>         RING_ASSIGN: assign a box to a ring.
+  list                            {"evolutions": [{"evo_id", "ring"}, ...]}
+                                  — every published evolution + current ring.
+
+  sync-repo                       [repo host] for every published evolution,
+                                  compute its current ring and run the
+                                  reprepro copy (release.repo.plan_promote)
+                                  from the immediately preceding ring — the
+                                  actual promotion/publication step. A
+                                  RepoError on one evolution (e.g. no arm64
+                                  build) is reported and that evolution is
+                                  skipped; others still proceed.
+  apply                           [box] resolve this box's own assigned ring
+                                  (releases.box_ring(entries, self_did,
+                                  self_did)) and run release.boxapply.apply_4r
+                                  against the live apt ring drop-in, shadow ->
+                                  validate (apt-get update) -> atomic swap ->
+                                  rollback on failure.
+
+Env (override; the signing key is NEVER generated here):
+  ANNUAIRE_JOURNAL    default /var/lib/secubox/annuaire/journal.db
+  ANNUAIRE_KEY_PATH   default /etc/secubox/secrets/annuaire/node.key
+                      (32-byte raw Ed25519 private key, 64 hex chars) — the
+                      node's one sovereign identity.
+  ANNUAIRE_LIB        default /usr/lib/secubox/annuaire (import root, prod)
+  RELEASE_LIB         default /usr/lib/secubox/release  (import root, prod)
+  DRYRUN=1            print {"dryrun": true, "would": ...}; write nothing —
+                      no journal append, no reprepro/apt-get invocation.
+                      `list` afterwards is unchanged.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import secrets
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("RELEASE_LIB", "/usr/lib/secubox/release"))
+sys.path.insert(0, os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire"))
+
+from annuaire.log import Journal  # noqa: E402
+from annuaire import verbs, releases  # noqa: E402
+from annuaire.model import Op  # noqa: E402
+from annuaire.crypto import public_from_private, did_from_pubkey  # noqa: E402
+from annuaire.grants import _op, _payload  # noqa: E402  (payload/op accessors)
+from release import repo, boxapply  # noqa: E402  (sibling package, prod: RELEASE_LIB)
+
+JOURNAL_PATH = os.environ.get("ANNUAIRE_JOURNAL", "/var/lib/secubox/annuaire/journal.db")
+KEY_PATH = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+
+
+def _die(reason: str) -> None:
+    print(json.dumps({"error": reason}), file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _key() -> bytes:
+    try:
+        with open(KEY_PATH, "r", encoding="ascii") as fh:
+            raw = fh.read().strip()
+    except OSError as exc:
+        _die(f"key unreadable at {KEY_PATH}: {exc}")
+        raise  # unreachable — _die raises SystemExit
+    if len(raw) != 64:
+        _die(f"key must be 64 hex chars (32-byte Ed25519), got {len(raw)}")
+        raise  # unreachable
+    try:
+        return bytes.fromhex(raw)
+    except ValueError:
+        _die(f"key at {KEY_PATH} is not valid hex")
+        raise  # unreachable
+
+
+def _journal() -> Journal:
+    return Journal(JOURNAL_PATH)
+
+
+def _self_did(priv: bytes) -> str:
+    return did_from_pubkey(public_from_private(priv))
+
+
+def _dry() -> bool:
+    return os.environ.get("DRYRUN") == "1"
+
+
+def _dryrun_report(would: str, **fields) -> None:
+    print(json.dumps({"dryrun": True, "would": would, **fields}))
+
+
+# --------------------------------------------------------------------------- #
+# center side
+# --------------------------------------------------------------------------- #
+
+def cmd_publish(a) -> int:
+    try:
+        artifacts = json.loads(a.artifacts)
+    except json.JSONDecodeError as exc:
+        _die(f"invalid --artifacts JSON: {exc}")
+        return 1  # unreachable
+    if _dry():
+        _dryrun_report("release_publish", artifacts=artifacts, notes=a.notes)
+        return 0
+    priv = _key()
+    j = _journal()
+    evo_id = "evo-" + secrets.token_hex(8)
+    try:
+        verbs.release_publish(j, priv, artifacts, a.notes, evo_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"evo_id": evo_id}))
+    return 0
+
+
+def cmd_promote(a) -> int:
+    if _dry():
+        _dryrun_report("release_promote", evo_id=a.evo_id)
+        return 0
+    priv = _key()
+    j = _journal()
+    self_did = _self_did(priv)
+    try:
+        verbs.release_promote(j, priv, self_did, a.evo_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"promoted": a.evo_id}))
+    return 0
+
+
+def cmd_demote(a) -> int:
+    if _dry():
+        _dryrun_report("release_demote", evo_id=a.evo_id)
+        return 0
+    priv = _key()
+    j = _journal()
+    self_did = _self_did(priv)
+    try:
+        verbs.release_demote(j, priv, self_did, a.evo_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"demoted": a.evo_id}))
+    return 0
+
+
+def cmd_assign(a) -> int:
+    if _dry():
+        _dryrun_report("ring_assign", box_did=a.box_did, ring=a.ring)
+        return 0
+    priv = _key()
+    j = _journal()
+    self_did = _self_did(priv)
+    try:
+        verbs.ring_assign(j, priv, self_did, a.box_did, a.ring)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"assigned": a.box_did, "ring": a.ring}))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# read
+# --------------------------------------------------------------------------- #
+
+def cmd_list(a) -> int:
+    entries = list(_journal().iter_entries())
+    evo_ids = sorted({p.get("evo_id") for p in
+                      (_payload(e) for e in entries if _op(e) == Op.RELEASE_PUBLISH.value)
+                      if p.get("evo_id")})
+    evolutions = [{"evo_id": e, "ring": releases.current_ring(entries, e)} for e in evo_ids]
+    print(json.dumps({"evolutions": evolutions}))
+    return 0
+
+
+def _evolution_payload(entries, evo_id: str):
+    for e in entries:
+        if _op(e) != Op.RELEASE_PUBLISH.value:
+            continue
+        p = _payload(e)
+        if p.get("evo_id") == evo_id:
+            return p
+    return None
+
+
+# --------------------------------------------------------------------------- #
+# repo side — the actual reprepro-copy actuator (repo host)
+# --------------------------------------------------------------------------- #
+
+def cmd_sync_repo(a) -> int:
+    entries = list(_journal().iter_entries())
+    evo_ids = sorted({p.get("evo_id") for p in
+                      (_payload(e) for e in entries if _op(e) == Op.RELEASE_PUBLISH.value)
+                      if p.get("evo_id")})
+    plan: list = []
+    skipped: list = []
+    for evo_id in evo_ids:
+        ring = releases.current_ring(entries, evo_id)
+        prev = releases.prev_ring(ring) if ring else None
+        if prev is None:
+            continue  # still in draft (or unknown) — nothing to copy from
+        evolution = _evolution_payload(entries, evo_id)
+        if evolution is None:
+            skipped.append({"evo_id": evo_id, "error": "evolution-payload-missing"})
+            continue
+        try:
+            argvs = repo.plan_promote(evolution, prev, ring)
+        except repo.RepoError as exc:
+            skipped.append({"evo_id": evo_id, "error": str(exc)})
+            continue
+        plan.extend(argvs)
+    if _dry():
+        print(json.dumps({"dryrun": True, "would": "sync_repo", "argv": plan,
+                          "skipped": skipped}))
+        return 0
+    for argv in plan:
+        subprocess.run(argv, shell=False, check=False)
+    print(json.dumps({"synced": len(plan), "skipped": skipped}))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# box side — apply this box's assigned ring to the live apt sources drop-in
+# --------------------------------------------------------------------------- #
+
+def _apt_update(shadow_path: str) -> bool:
+    r = subprocess.run(
+        ["apt-get", "-o", f"Dir::Etc::sourcelist={shadow_path}",
+         "-o", "Dir::Etc::sourceparts=-", "update"],
+        shell=False, check=False,
+    )
+    return r.returncode == 0
+
+
+def cmd_apply(a) -> int:
+    priv = _key()
+    entries = list(_journal().iter_entries())
+    self_did = _self_did(priv)
+    ring = releases.box_ring(entries, self_did, self_did)
+    if _dry():
+        _dryrun_report("apply", ring=ring, target=boxapply.RING_LIST_PATH)
+        return 0
+    try:
+        result = boxapply.apply_4r(ring, boxapply.RING_LIST_PATH, apt_update_fn=_apt_update)
+    except (ValueError, boxapply.ApplyError) as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps(result))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(
+        prog="secubox-releasectl",
+        description="Release-ring CLI (publish/promote/demote/assign/list/"
+                    "sync-repo/apply)",
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    pub = sub.add_parser("publish", help="register a new evolution (born draft)")
+    pub.add_argument("--artifacts", required=True, help="JSON list of artifact dicts")
+    pub.add_argument("--notes", required=True)
+    pub.set_defaults(fn=cmd_publish)
+
+    pr = sub.add_parser("promote", help="advance an evolution one ring")
+    pr.add_argument("evo_id")
+    pr.set_defaults(fn=cmd_promote)
+
+    de = sub.add_parser("demote", help="retreat an evolution one ring")
+    de.add_argument("evo_id")
+    de.set_defaults(fn=cmd_demote)
+
+    asg = sub.add_parser("assign", help="assign a box to a ring")
+    asg.add_argument("box_did")
+    asg.add_argument("ring")
+    asg.set_defaults(fn=cmd_assign)
+
+    sub.add_parser("list", help="published evolutions + current ring").set_defaults(fn=cmd_list)
+
+    sub.add_parser("sync-repo", help="[repo host] run pending reprepro copies"
+                   ).set_defaults(fn=cmd_sync_repo)
+
+    sub.add_parser("apply", help="[box] apply this box's assigned ring to apt"
+                   ).set_defaults(fn=cmd_apply)
+
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
