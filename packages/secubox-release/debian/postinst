@@ -1,0 +1,39 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+
+# The `secubox` system user/group and the shared parents (/etc/secubox,
+# /run/secubox, /var/lib/secubox, /var/log/secubox) are created and owned by
+# secubox-core's postinst — this package NEVER chowns/chmods those shared
+# parents (see project_etc_secubox_traversal.md / #468 / #626).
+
+# secubox-releasectl runs as `secubox` (invoked directly by the API, no sudo
+# in that path — see systemd/secubox-release-api.service) and must reach the
+# box signing key at /etc/secubox/secrets/annuaire/node.key to sign
+# publish/promote/demote/assign journal ops. The shared /etc/secubox/secrets
+# parent may be root:secubox-toolbox 0750, which `secubox` cannot traverse.
+# Add o+x (traversal-ONLY, no read/list — the secret subdirs keep their own
+# 0700/0600) so secubox can pass through to annuaire/node.key. Same fix
+# secubox-assist shipped in 0.2.1. NEVER chown/tighten this shared dir.
+if [ -d /etc/secubox/secrets ]; then
+    chmod o+x /etc/secubox/secrets 2>/dev/null || true
+fi
+
+#DEBHELPER#
+
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable --now secubox-release-api.service 2>/dev/null || true
+
+# Pick up the new /releases/ + /api/v1/release/ dropin (nginx/releases.conf,
+# installed to /etc/nginx/secubox.d/). Only reload if nginx is actually
+# running; a stopped/absent nginx is not this package's problem to fix.
+if systemctl is-active --quiet nginx.service 2>/dev/null; then
+    nginx -t >/dev/null 2>&1 && systemctl reload nginx.service 2>/dev/null || true
+fi
+
+# NOTE: the reprepro ring distributions (draft/internal/published) live on
+# the apt host's reprepro config under /data/apt — repo-host state,
+# provisioned once as a separate deploy step, never touched from here.
+
+exit 0
