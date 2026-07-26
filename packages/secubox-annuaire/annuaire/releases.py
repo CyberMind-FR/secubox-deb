@@ -75,7 +75,9 @@ def box_ring(entries: List[Mapping[str, Any]], box_did: str, self_did: str) -> s
         p = _payload(entry)
         if p.get("box_did") != box_did or p.get("ring") not in RINGS:
             continue
-        author = _author(entry) or p.get("issued_by")
+        author = _author(entry)
+        if not author:
+            continue
         if has_release_grant(entries, author, self_did):
             ring = p["ring"]
     return ring

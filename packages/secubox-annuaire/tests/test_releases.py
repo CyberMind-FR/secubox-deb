@@ -55,3 +55,13 @@ def test_evolutions_in_ring():
                e(Op.RELEASE_PROMOTE, evo_id="e1", ring="internal", issued_by=CENTER)]
     assert rl.evolutions_in_ring(entries, "internal") == ["e1"]
     assert rl.evolutions_in_ring(entries, "draft") == ["e2"]
+
+
+def test_box_ring_uses_verified_author_not_payload_issued_by():
+    # CENTER holds a release grant from the box; OTHER does not.
+    # A RING_ASSIGN signed by OTHER but claiming issued_by=CENTER must be ignored.
+    forged = {"op": Op.RING_ASSIGN.value,
+              "payload": {"box_did": BOX, "ring": "internal", "issued_by": CENTER},
+              "author": OTHER}
+    entries = [_grant(CENTER), forged]
+    assert rl.box_ring(entries, BOX, self_did=BOX) == "published"
