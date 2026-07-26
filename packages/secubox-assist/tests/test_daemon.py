@@ -105,19 +105,19 @@ async def test_recheck_rejects_when_operator_reopened_a_new_session(monkeypatch,
     monkeypatch.setattr(audit, "AUDIT_PATH", str(tmp_path / "audit.log"))
     tok, h = token.mint()
 
-    entries_at_connect = [{"op": "assist_session_open", "payload": {
+    entries_at_connect = [{"op": "assist_session_open", "author": SELF, "payload": {
         "session_id": "s1", "req_id": "r1", "center_did": CENTER,
         "issued_by": SELF, "token_hash": h,
         "expires_ts": "2999-01-01T00:00:00Z"}}]
 
     entries_after_reopen = [
-        {"op": "assist_session_open", "payload": {
+        {"op": "assist_session_open", "author": SELF, "payload": {
             "session_id": "s1", "req_id": "r1", "center_did": CENTER,
             "issued_by": SELF, "token_hash": h,
             "expires_ts": "2999-01-01T00:00:00Z"}},
-        {"op": "assist_session_close", "payload": {
+        {"op": "assist_session_close", "author": SELF, "payload": {
             "session_id": "s1", "issued_by": SELF, "reason": "done"}},
-        {"op": "assist_session_open", "payload": {
+        {"op": "assist_session_open", "author": SELF, "payload": {
             "session_id": "s2", "req_id": "r2", "center_did": CENTER,
             "issued_by": SELF, "token_hash": "b" * 64,
             "expires_ts": "2999-01-01T00:00:00Z"}},
@@ -144,7 +144,7 @@ async def test_recheck_allows_the_same_session_to_keep_running(monkeypatch, tmp_
     monkeypatch.setattr(audit, "AUDIT_PATH", str(tmp_path / "audit.log"))
     tok, h = token.mint()
 
-    entries = [{"op": "assist_session_open", "payload": {
+    entries = [{"op": "assist_session_open", "author": SELF, "payload": {
         "session_id": "s1", "req_id": "r1", "center_did": CENTER,
         "issued_by": SELF, "token_hash": h,
         "expires_ts": "2999-01-01T00:00:00Z"}}]
