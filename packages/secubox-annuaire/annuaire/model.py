@@ -91,6 +91,11 @@ class Op(str, Enum):
     RELEASE_PROMOTE = "release_promote"   # advance an evolution one ring
     RELEASE_DEMOTE  = "release_demote"    # retreat an evolution one ring
     RING_ASSIGN     = "ring_assign"       # a center assigns a box's ring
+    # Assist marketplace (dual offer/request rendezvous)
+    ASSIST_OFFER          = "assist_offer"          # advertise availability to help
+    ASSIST_OFFER_REVOKE   = "assist_offer_revoke"
+    ASSIST_REQUEST_OPEN   = "assist_request_open"   # open (untargeted) request for help
+    ASSIST_MATCH_ACCEPT   = "assist_match_accept"   # one side accepts a proposed match
 
 
 # ---------------------------------------------------------------------------
@@ -650,6 +655,60 @@ class AssistSession(BaseModel):
     created_at: str = Field(default_factory=now_rfc3339)
     sig:        Optional[str] = None
     signer_did: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Assist marketplace — offer/request rendezvous (assist-dual)
+# ---------------------------------------------------------------------------
+
+ASSIST_MATCH_SIDES = {"offer", "request"}
+
+
+class AssistOffer(BaseModel):
+    """A signed advertisement of availability to help (marketplace OFFER)."""
+    model_config = ConfigDict(extra="forbid")
+    offer_id:   str = Field(..., description="stable id for this offer")
+    tags:       list[str] = Field(..., min_length=1, description="free-form capability tags")
+    scope:      Optional[str] = Field(default=None, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    ttl_s:      int = Field(..., ge=60, le=86400)
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+
+class AssistOpenRequest(BaseModel):
+    """A signed open (untargeted) request for help (marketplace REQUEST)."""
+    model_config = ConfigDict(extra="forbid")
+    req_id:     str = Field(..., description="stable id for this open request")
+    tags:       list[str] = Field(..., min_length=1)
+    scope:      Optional[str] = Field(default=None, pattern=r"^[a-z0-9][a-z0-9._-]*$")
+    ttl_s:      int = Field(..., ge=60, le=86400)
+    reason:     str = Field(..., min_length=1, max_length=512)
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+
+class AssistMatchAccept(BaseModel):
+    """One side's signed acceptance of a proposed offer↔request match."""
+    model_config = ConfigDict(extra="forbid")
+    match_id:   str = Field(..., pattern=r"^[0-9a-f]{64}$")
+    offer_id:   str = Field(...)
+    req_id:     str = Field(...)
+    side:       str = Field(..., description="'offer' or 'request'")
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+    @field_validator("side")
+    @classmethod
+    def _side_known(cls, v: str) -> str:
+        if v not in ASSIST_MATCH_SIDES:
+            raise ValueError(f"side must be one of {sorted(ASSIST_MATCH_SIDES)}")
+        return v
 
 
 # ---------------------------------------------------------------------------

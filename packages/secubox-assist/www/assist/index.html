@@ -12,6 +12,15 @@
   .btn.warn { border-color:#ffcc00; color:#ffcc00; }
   input,select { background:#111a24; color:#e8e6d9; border:1px solid rgba(100,150,200,.2); padding:.35rem; border-radius:5px; }
   #log { white-space:pre-wrap; font-size:.8rem; max-height:40vh; overflow:auto; }
+  .tabs { display:flex; gap:.4rem; margin-bottom:1rem; flex-wrap:wrap; }
+  .tab { padding:.4rem .9rem; border-radius:6px 6px 0 0; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; }
+  .tab.active { background:rgba(0,212,255,.15); border-color:#00d4ff; color:#00d4ff; }
+  .pane { display:none; }
+  .pane.active { display:block; }
+  .row { display:flex; gap:.4rem; align-items:center; margin:.3rem 0; flex-wrap:wrap; }
+  .item { border:1px solid rgba(100,150,200,.2); border-radius:6px; padding:.5rem; margin-bottom:.5rem; }
+  .item .muted { color:#8a94a6; font-size:.8rem; }
+  .note { color:#8a94a6; font-style:italic; }
 </style></head>
 <body class="hybrid-dark">
 <nav class="sidebar" id="sidebar"></nav>
@@ -22,41 +31,287 @@
     <button class="btn warn" data-act="console-grant" disabled title="canal pty en cours">Escalade console (à venir)</button>
     <button class="btn" data-act="console-revoke" disabled title="canal pty en cours">Révoquer console (à venir)</button>
   </div>
-  <div class="card"><h2>Demander de l'assistance</h2>
+  <div class="card"><h2>Demander de l'assistance (ciblée)</h2>
     <div><input id="center" placeholder="did:plc:…" size="48"></div>
     <div><select id="mode"><option>per-incident</option><option>standing</option></select>
       <input id="scope" placeholder="scope (ex. dns)"> <input id="dur" type="number" value="1800">
-      <input id="reason" placeholder="motif"></div>
+      <input id="reason" placeholder="motif (obligatoire)"></div>
     <button class="btn" data-act="request">Demander</button>
+    <p class="note">Requête ciblée : tu choisis le centre qui aide (par DID).</p>
   </div>
-  <div class="card"><h2>Journal de session</h2><div id="log"></div></div>
+
+  <div class="card">
+    <p class="note">Marketplace d'entraide (mesh) — clique un onglet : <b>Proposer</b> de l'aide, <b>Demander</b> de l'aide au mesh, voir les <b>Matches</b>, ou <b>Partager</b> un lien d'invitation.</p>
+    <div class="tabs" id="mtabs">
+      <button class="tab active" data-tab="offer">🙋 Proposer de l'aide</button>
+      <button class="tab" data-tab="reqopen">🆘 Demander de l'aide</button>
+      <button class="tab" data-tab="matches">🔗 Matches</button>
+      <button class="tab" data-tab="invite">📤 Partager un lien</button>
+      <button class="tab" data-tab="join">📥 Rejoindre</button>
+    </div>
+
+    <div class="pane active" id="pane-offer">
+      <h2>🙋 Proposer de l'aide</h2>
+      <p class="note">Annonce ta disponibilité : les box du mesh qui cherchent de l'aide sur ces tags te verront (onglet Matches).</p>
+      <div class="row">
+        <input id="offer-tags" placeholder="tags — ce sur quoi tu peux aider (ex. dns,waf)">
+        <input id="offer-scope" placeholder="scope (optionnel)">
+        <input id="offer-ttl" type="number" value="3600" title="durée de validité (s)">
+        <button class="btn primary" data-act="offer">🙋 Proposer</button>
+      </div>
+      <div id="offer-list"></div>
+    </div>
+
+    <div class="pane" id="pane-reqopen">
+      <h2>🆘 Demander de l'aide (ouverte)</h2>
+      <p class="note">Requête <b>ouverte</b> : publiée au mesh sans cibler personne — un offreur compatible se propose (voir Matches). Pour cibler un centre précis par DID, utilise le formulaire « Demander de l'assistance (ciblée) » en haut.</p>
+      <div class="row">
+        <input id="reqopen-tags" placeholder="tags — ce sur quoi tu as besoin d'aide (ex. dns,waf)">
+        <input id="reqopen-scope" placeholder="scope (optionnel)">
+        <input id="reqopen-ttl" type="number" value="3600" title="durée de validité (s)">
+        <input id="reqopen-reason" placeholder="motif (obligatoire)">
+        <button class="btn primary" data-act="request-open">🆘 Demander</button>
+      </div>
+      <div id="reqopen-list"></div>
+    </div>
+
+    <div class="pane" id="pane-matches">
+      <h2>🔗 Matches</h2>
+      <p class="note">Paires offre↔demande compatibles rapprochées par le mesh. Accepte ta part ; quand les deux côtés ont accepté, la session s'ouvre.</p>
+      <div id="matches-list"></div>
+    </div>
+
+    <div class="pane" id="pane-invite">
+      <h2>📤 Partager un lien d'invitation</h2>
+      <p class="note">Génère un lien à usage unique à partager hors-bande (mail, chat) pour inviter quelqu'un — même hors mesh — à une session d'assistance.</p>
+      <div class="row">
+        <input id="invite-ref" placeholder="ref (offer_id / req_id, optionnel)">
+        <input id="invite-ttl" type="number" value="900" title="durée de validité (s)">
+        <button class="btn primary" data-act="joinlink">📤 Générer un lien de partage</button>
+      </div>
+      <div class="row">
+        <input id="invite-url" readonly size="60" placeholder="le lien apparaîtra ici">
+        <button class="btn" data-act="invite-copy">Copier</button>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-join">
+      <h2>📥 Rejoindre via un lien</h2>
+      <p class="note">Colle un lien d'invitation reçu pour rejoindre une session. L'escalade automatique (tunnel WireGuard éphémère) arrive dans une prochaine version.</p>
+      <div class="row">
+        <input id="join-url" placeholder="coller le lien reçu" size="60">
+        <button class="btn" data-act="join" disabled title="escalade — à venir">📥 Rejoindre (à venir)</button>
+      </div>
+      <p class="note">L'escalade depuis un lien reçu est un suivi documenté — non câblée dans cette version.</p>
+    </div>
+  </div>
+
+  <div class="card"><h2>Demandes en attente</h2><div id="log"></div></div>
 </div>
 <script src="/shared/sidebar.js"></script>
 <script>
 const T = () => localStorage.getItem('sbx_token') || '';
 const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
+
+// Non-blocking feedback banner (success/error) — dynamic text via textContent (XSS-safe).
+function notify(msg, isError) {
+  let n = document.getElementById('sbx-notify');
+  if (!n) {
+    n = document.createElement('div');
+    n.id = 'sbx-notify';
+    n.style.cssText = 'position:fixed;bottom:1rem;right:1rem;max-width:32rem;padding:.6rem .9rem;'
+      + 'border-radius:8px;font-size:.85rem;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.4);'
+      + 'white-space:pre-wrap;word-break:break-word;';
+    document.body.appendChild(n);
+  }
+  n.style.background = isError ? '#3a1620' : '#123a1f';
+  n.style.border = '1px solid ' + (isError ? '#ff4466' : '#00dd44');
+  n.style.color = isError ? '#ff8199' : '#7dffb0';
+  n.textContent = msg;
+  n.style.display = 'block';
+  clearTimeout(notify._t);
+  notify._t = setTimeout(() => { n.style.display = 'none'; }, isError ? 9000 : 4000);
+}
+
+// POST a marketplace action and surface success/failure (the API returns
+// {"detail": "..."} on error; show it instead of swallowing it silently).
+async function postAction(url, body, okMsg) {
+  try {
+    const r = await fetch(url, {method:'POST', headers:H(), body: JSON.stringify(body)});
+    if (r.ok) { notify(okMsg, false); return await r.json().catch(() => ({})); }
+    let detail = 'HTTP ' + r.status;
+    try { const e = await r.json(); detail = (e && e.detail) ? e.detail : detail; } catch (_) {}
+    if (r.status === 401 || r.status === 403) detail = 'Non authentifié (jeton sbx_token manquant/expiré) — reconnecte-toi.';
+    notify('Échec : ' + detail, true);
+    return null;
+  } catch (e) {
+    notify('Échec réseau : ' + e, true);
+    return null;
+  }
+}
+
+function fmtTags(tags) { return Array.isArray(tags) ? tags.join(', ') : ''; }
+
+function itemEl(fields, actions) {
+  const div = document.createElement('div'); div.className = 'item';
+  fields.forEach(([label, value]) => {
+    const p = document.createElement('div');
+    if (label) p.appendChild(document.createTextNode(label + ': '));
+    const span = document.createElement('span');
+    span.className = 'muted';
+    span.textContent = value == null ? '' : String(value);
+    p.appendChild(span);
+    div.appendChild(p);
+  });
+  if (actions && actions.length) {
+    const row = document.createElement('div'); row.className = 'row';
+    actions.forEach(({label, act, data}) => {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.dataset.act = act; b.textContent = label;
+      Object.entries(data || {}).forEach(([k, v]) => { if (v !== undefined && v !== null) b.dataset[k] = v; });
+      row.appendChild(b);
+    });
+    div.appendChild(row);
+  }
+  return div;
+}
+
+function renderList(el, items) {
+  el.textContent = '';
+  items.forEach(item => el.appendChild(item));
+}
+
+function renderPending(el, pending) {
+  el.textContent = '';
+  if (!pending || !pending.length) {
+    const p = document.createElement('p');
+    p.className = 'note';
+    p.textContent = 'Aucune demande en attente.';
+    el.appendChild(p);
+    return;
+  }
+  pending.forEach(q => el.appendChild(itemEl(
+    [['req', q.req_id], ['DID', q.center_did], ['mode', q.mode], ['scope', q.scope || '—'], ['motif', q.reason || '—']],
+    [])));
+}
+
+async function refreshOffers() {
+  const r = await fetch('/api/v1/assist/offers', {headers:H()});
+  const list = document.getElementById('offer-list');
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const offers = await r.json();
+  renderList(list, offers.map(o => itemEl(
+    [['offer', o.offer_id], ['tags', fmtTags(o.tags)], ['scope', o.scope || '—']],
+    [{label:'Révoquer', act:'offer-revoke', data:{offerId: o.offer_id}}])));
+}
+
+async function refreshOpenRequests() {
+  const r = await fetch('/api/v1/assist/requests/open', {headers:H()});
+  const list = document.getElementById('reqopen-list');
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const reqs = await r.json();
+  renderList(list, reqs.map(q => itemEl(
+    [['req', q.req_id], ['tags', fmtTags(q.tags)], ['scope', q.scope || '—'], ['motif', q.reason || '—']], [])));
+}
+
+async function refreshMatches() {
+  const r = await fetch('/api/v1/assist/matches', {headers:H()});
+  const list = document.getElementById('matches-list');
+  if (!r.ok) { list.textContent = 'auth requise'; return; }
+  const matches = await r.json();
+  renderList(list, matches.map(m => itemEl(
+    [['match', m.match_id], ['offer', m.offer_id], ['req', m.req_id], ['offerer', m.offerer_did]],
+    [{label:'Accepter (offer)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'offer'}},
+     {label:'Accepter (request)', act:'match-accept', data:{offerId: m.offer_id, reqId: m.req_id, side:'request'}}])));
+}
+
+let activeMarketTab = 'offer';
+const marketRefreshers = { offer: refreshOffers, reqopen: refreshOpenRequests, matches: refreshMatches };
+function refreshActiveMarketTab() {
+  const fn = marketRefreshers[activeMarketTab];
+  if (fn) fn();
+}
+
 async function refresh() {
   const r = await fetch('/api/v1/assist/sessions', {headers:H()});
   if (!r.ok) { document.getElementById('active').textContent = 'auth requise'; return; }
   const d = await r.json();
   document.getElementById('active').textContent =
     d.active_session ? JSON.stringify(d.active_session) : 'aucune';
-  document.getElementById('log').textContent = JSON.stringify(d.pending, null, 2);
+  renderPending(document.getElementById('log'), d.pending);
+  refreshActiveMarketTab();
 }
+
+document.getElementById('mtabs').addEventListener('click', (ev) => {
+  const t = ev.target.closest('[data-tab]'); if (!t) return;
+  document.querySelectorAll('#mtabs .tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.pane').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('pane-' + t.dataset.tab).classList.add('active');
+  activeMarketTab = t.dataset.tab;
+  refreshActiveMarketTab();
+});
+
 document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'request') {
-    await fetch('/api/v1/assist/request', {method:'POST', headers:H(), body: JSON.stringify({
-      center_did: document.getElementById('center').value,
+    const center = document.getElementById('center').value.trim();
+    const reason = document.getElementById('reason').value.trim();
+    if (!center) { notify('Renseigne le DID du centre (did:plc:…).', true); return; }
+    if (!reason) { notify('Renseigne un motif.', true); return; }
+    await postAction('/api/v1/assist/request', {
+      center_did: center,
       mode: document.getElementById('mode').value,
       scope: document.getElementById('scope').value,
       duration_s: parseInt(document.getElementById('dur').value, 10),
-      reason: document.getElementById('reason').value })});
+      reason }, 'Demande ciblée envoyée.');
+    refresh();
+  } else if (act === 'offer') {
+    const tags = document.getElementById('offer-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
+    const d = await postAction('/api/v1/assist/offer', {
+      tags, scope: document.getElementById('offer-scope').value || null,
+      ttl_s: parseInt(document.getElementById('offer-ttl').value, 10) },
+      'Disponibilité publiée.');
+    if (d) refreshOffers();
+  } else if (act === 'offer-revoke') {
+    const d = await postAction('/api/v1/assist/offer/revoke', {
+      offer_id: b.dataset.offerId }, 'Disponibilité révoquée.');
+    if (d) refreshOffers();
+  } else if (act === 'request-open') {
+    const tags = document.getElementById('reqopen-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const reason = document.getElementById('reqopen-reason').value.trim();
+    if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
+    if (!reason) { notify('Renseigne un motif (ce dont tu as besoin).', true); return; }
+    const d = await postAction('/api/v1/assist/request/open', {
+      tags, scope: document.getElementById('reqopen-scope').value || null,
+      ttl_s: parseInt(document.getElementById('reqopen-ttl').value, 10),
+      reason }, 'Demande ouverte publiée.');
+    if (d) refreshOpenRequests();
+  } else if (act === 'match-accept') {
+    const d = await postAction('/api/v1/assist/match/accept', {
+      offer_id: b.dataset.offerId, req_id: b.dataset.reqId, side: b.dataset.side },
+      'Match accepté (' + b.dataset.side + ').');
+    if (d) refreshMatches();
+  } else if (act === 'joinlink') {
+    const d = await postAction('/api/v1/assist/joinlink', {
+      ref: document.getElementById('invite-ref').value,
+      ttl_s: parseInt(document.getElementById('invite-ttl').value, 10) },
+      'Lien de partage généré.');
+    if (d) document.getElementById('invite-url').value = d.url || '';
+    return;
+  } else if (act === 'invite-copy') {
+    const f = document.getElementById('invite-url');
+    f.select();
+    try { await navigator.clipboard.writeText(f.value); } catch (e) { /* clipboard optional */ }
+    return;
+  } else if (act === 'join') {
+    return; // escalation flow not wired yet — informational tab only
   } else {
     const sid = (await (await fetch('/api/v1/assist/sessions', {headers:H()})).json())
       .active_session?.session_id;
-    if (!sid && act !== 'request') return;
+    if (!sid) return;
     const ep = {'close':'/api/v1/assist/close','console-grant':'/api/v1/assist/console/grant',
                 'console-revoke':'/api/v1/assist/console/revoke'}[act];
     await fetch(ep, {method:'POST', headers:H(), body: JSON.stringify({session_id: sid})});
