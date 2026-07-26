@@ -69,6 +69,6 @@ def test_postinst_ephemeral_block_only_touches_its_own_subdirectory():
     assert "chmod -R /etc/secubox" not in post
 
 
-def test_changelog_bumped_to_0_2_1():
+def test_changelog_bumped_to_0_2_2():
     changelog = (ROOT / "debian" / "changelog").read_text()
-    assert changelog.startswith("secubox-assist (0.2.1-1~bookworm1)")
+    assert changelog.startswith("secubox-assist (0.2.2-1~bookworm1)")

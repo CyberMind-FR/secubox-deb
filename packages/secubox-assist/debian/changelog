@@ -1,3 +1,13 @@
+secubox-assist (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * packaging: move python3-websockets from Depends to Recommends. The WS
+    daemon needs the websockets lib, but on boards where a newer websockets
+    is provided out of band (pip, to fix a uvicorn version skew) the apt
+    package is deliberately removed; a hard Depends blocked dpkg install
+    there (needed --force-depends). apt still pulls it on a normal install.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 10:35:41 +0200
+
 secubox-assist (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * Marketplace UX: action-oriented labels (Proposer/Demander/Partager) with
