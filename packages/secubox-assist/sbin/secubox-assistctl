@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: secubox-assistctl — box operator CLI for assistance sessions.
+
+Thin CLI over annuaire.verbs.assist_* + annuaire.assist, operating on the BOX
+journal + BOX key (sovereign identity), never a center's (except `accept`,
+which is signed by the center's own key — see ASSIST_CENTER_KEY below).
+Mutations are signed journal appends (audit trail). The privileged catalog
+backends (service/config/diag) are invoked BY the WS daemon under a scoped
+sudoers entry (added alongside them, not by this CLI).
+
+Commands:
+  request <center_did> --mode --scope --duration --reason
+                                  ASSIST_REQUEST: box asks a center for help.
+                                  Mints nothing (that happens at `open`).
+  accept <req_id>                ASSIST_ACCEPT: the center accepts a pending
+                                  request — signed with the CENTER's key
+                                  (ASSIST_CENTER_KEY), not the box's.
+  open <req_id> --center <did> --duration <s>
+                                  ASSIST_SESSION_OPEN: box consent opens a
+                                  live session. Mints a single-use token and
+                                  prints it ONCE on stdout (delivered to the
+                                  center over the mesh channel) — only its
+                                  BLAKE2b hash is journaled.
+  close <session_id> [--reason]  ASSIST_SESSION_CLOSE.
+  console-grant <session_id> --duration <s>
+                                  ASSIST_CONSOLE_GRANT: second consent.
+  console-revoke <session_id>    ASSIST_CONSOLE_REVOKE.
+  list                            {"pending": [...], "active_session": {...}|null}
+
+  diag status|bundle              [privileged] status summary / full redacted
+                                  diagnostic bundle — invoked by the WS daemon
+                                  via `sudo -n`, never called interactively.
+  service restart|toggle <module> [on|off]
+                                  [privileged] systemctl restart/start/stop an
+                                  assist.catalog.MODULE_ALLOW-listed unit.
+  config reload|rollback <scope>  [privileged] delegate to secubox-params
+                                  swap/rollback for an allow-listed scope.
+
+Env (override; keys are NEVER generated here):
+  ANNUAIRE_JOURNAL    default /var/lib/secubox/annuaire/journal.db
+  ANNUAIRE_KEY_PATH   default /etc/secubox/secrets/annuaire/node.key
+                      (32-byte raw Ed25519 private key, 64 hex chars) — the
+                      box's one sovereign identity, provisioned by
+                      `annuairectl init`, never by this CLI.
+  ASSIST_CENTER_KEY   key used by `accept` when this box is itself acting as
+                      a center (rare — normally a center's own tooling calls
+                      `accept`). Defaults to ANNUAIRE_KEY_PATH when unset.
+  ANNUAIRE_LIB        default /usr/lib/secubox/annuaire (import root, prod)
+  ASSIST_LIB          default /usr/lib/secubox/assist   (import root, prod)
+  DRYRUN=1            print {"dryrun": true, "would": ...}; write nothing —
+                      no journal append, nothing minted, `list` afterwards
+                      is unchanged.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import secrets
+import sys
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.environ.get("ASSIST_LIB", "/usr/lib/secubox/assist"))
+sys.path.insert(0, os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire"))
+
+from annuaire.log import Journal  # noqa: E402
+from annuaire import verbs, assist  # noqa: E402
+from annuaire.crypto import public_from_private, did_from_pubkey  # noqa: E402
+from assist import token as _token  # noqa: E402  (sibling package, prod: ASSIST_LIB)
+
+JOURNAL_PATH = os.environ.get("ANNUAIRE_JOURNAL", "/var/lib/secubox/annuaire/journal.db")
+KEY_PATH = os.environ.get("ANNUAIRE_KEY_PATH", "/etc/secubox/secrets/annuaire/node.key")
+CENTER_KEY_PATH = os.environ.get("ASSIST_CENTER_KEY", KEY_PATH)
+
+
+def _die(reason: str) -> None:
+    print(json.dumps({"error": reason}), file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _load_key(path: str, label: str) -> bytes:
+    try:
+        with open(path, "r", encoding="ascii") as fh:
+            raw = fh.read().strip()
+    except OSError as exc:
+        _die(f"{label} key unreadable at {path}: {exc}")
+        raise  # unreachable — _die raises SystemExit
+    if len(raw) != 64:
+        _die(f"{label} key must be 64 hex chars (32-byte Ed25519), got {len(raw)}")
+        raise  # unreachable
+    try:
+        return bytes.fromhex(raw)
+    except ValueError:
+        _die(f"{label} key at {path} is not valid hex")
+        raise  # unreachable
+
+
+def _key() -> bytes:
+    return _load_key(KEY_PATH, "box")
+
+
+def _center_key() -> bytes:
+    return _load_key(CENTER_KEY_PATH, "center")
+
+
+def _journal() -> Journal:
+    return Journal(JOURNAL_PATH)
+
+
+def _self_did(priv: bytes) -> str:
+    return did_from_pubkey(public_from_private(priv))
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _dry() -> bool:
+    return os.environ.get("DRYRUN") == "1"
+
+
+def _dryrun_report(would: str, **fields) -> None:
+    print(json.dumps({"dryrun": True, "would": would, **fields}))
+
+
+# --------------------------------------------------------------------------- #
+# commands
+# --------------------------------------------------------------------------- #
+
+def cmd_request(a) -> int:
+    if _dry():
+        _dryrun_report("assist_request", center_did=a.center_did, mode=a.mode,
+                       scope=a.scope, duration_s=a.duration, reason=a.reason)
+        return 0
+    priv = _key()
+    j = _journal()
+    req_id = "req-" + secrets.token_hex(8)
+    try:
+        verbs.assist_request(j, priv, a.center_did, a.mode, a.scope, a.duration,
+                             a.reason, req_id=req_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"req_id": req_id}))
+    return 0
+
+
+def cmd_accept(a) -> int:
+    if _dry():
+        _dryrun_report("assist_accept", req_id=a.req_id)
+        return 0
+    priv = _center_key()
+    j = _journal()
+    try:
+        verbs.assist_accept(j, priv, a.req_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"accepted": a.req_id}))
+    return 0
+
+
+def cmd_open(a) -> int:
+    if _dry():
+        _dryrun_report("assist_session_open", req_id=a.req_id, center_did=a.center,
+                       duration_s=a.duration)
+        return 0
+    priv = _key()
+    j = _journal()
+    tok, token_hash = _token.mint()
+    expires_ts = (datetime.now(timezone.utc) + timedelta(seconds=a.duration)
+                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    session_id = "sess-" + secrets.token_hex(8)
+    try:
+        verbs.assist_session_open(j, priv, a.req_id, a.center, token_hash,
+                                  expires_ts, session_id=session_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    # token printed ONCE; delivered to the center over the mesh channel —
+    # only token_hash was journaled by assist_session_open above.
+    print(json.dumps({"session_id": session_id, "token": tok, "expires_ts": expires_ts}))
+    return 0
+
+
+def cmd_close(a) -> int:
+    if _dry():
+        _dryrun_report("assist_session_close", session_id=a.session_id)
+        return 0
+    try:
+        verbs.assist_session_close(_journal(), _key(), a.session_id,
+                                   a.reason or "operator-close")
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"closed": a.session_id}))
+    return 0
+
+
+def cmd_console_grant(a) -> int:
+    expires_ts = (datetime.now(timezone.utc) + timedelta(seconds=a.duration)
+                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if _dry():
+        _dryrun_report("assist_console_grant", session_id=a.session_id,
+                       expires_ts=expires_ts)
+        return 0
+    try:
+        verbs.assist_console_grant(_journal(), _key(), a.session_id, expires_ts)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"console": a.session_id, "expires_ts": expires_ts}))
+    return 0
+
+
+def cmd_console_revoke(a) -> int:
+    if _dry():
+        _dryrun_report("assist_console_revoke", session_id=a.session_id)
+        return 0
+    try:
+        verbs.assist_console_revoke(_journal(), _key(), a.session_id)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"console_revoked": a.session_id}))
+    return 0
+
+
+def cmd_list(a) -> int:
+    priv = _key()
+    entries = list(_journal().iter_entries())
+    self_did = _self_did(priv)
+    pending = assist.pending_requests(entries, self_did)
+    session = assist.active_session(entries, self_did, now_ts=_now())
+    print(json.dumps({"pending": pending, "active_session": session}))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# privileged catalog backends — invoked BY the WS daemon (via sudo -n, see
+# sudoers/secubox-assist) as `sudo -n secubox-assistctl <diag|service|config>
+# ...`, never directly by a center. Every target is re-validated here against
+# assist.catalog.MODULE_ALLOW / _scope even though wsserver.dispatch already
+# validated via assist.catalog.resolve — defense in depth: this binary is the
+# actual privilege boundary (root via sudoers), so it must not trust its
+# caller's argv construction alone.
+# --------------------------------------------------------------------------- #
+
+def cmd_diag(a) -> int:
+    from assist import diag
+    if a.what == "status":
+        print(json.dumps(diag.collect(_now())["modules"]))
+    else:
+        print(json.dumps(diag.collect(_now())))
+    return 0
+
+
+def cmd_service(a) -> int:
+    from assist.catalog import MODULE_ALLOW
+    if a.module not in MODULE_ALLOW:
+        _die(f"module not allow-listed: {a.module}")
+        return 1  # unreachable
+    import subprocess as sp
+    if a.op == "restart":
+        sp.run(["systemctl", "restart", a.module], check=False)
+    else:
+        if a.state not in ("on", "off"):
+            _die("toggle needs on|off")
+            return 1  # unreachable
+        sp.run(["systemctl", "start" if a.state == "on" else "stop", a.module], check=False)
+    print(json.dumps({"ok": True, "module": a.module, "op": a.op}))
+    return 0
+
+
+def cmd_config(a) -> int:
+    # Delegates to the project-wide double-buffer/4R config actuator
+    # (secubox-params — see CLAUDE.md "Double-buffer PARAMETERS"); this ctl
+    # never edits config files itself, only triggers the validated swap or
+    # a rollback to the last-known-good snapshot for the given scope.
+    from assist.catalog import _scope, CatalogError
+    try:
+        scope = _scope(a.scope)
+    except CatalogError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    import subprocess as sp
+    if a.op == "reload":
+        argv = ["secubox-params", "swap", "--module", scope, "--validate-zkp"]
+    else:
+        argv = ["secubox-params", "rollback", "--module", scope, "--target", "R1"]
+    r = sp.run(argv, capture_output=True, text=True, check=False)
+    print(json.dumps({"ok": r.returncode == 0, "scope": scope, "op": a.op,
+                      "output": r.stdout, "error": r.stderr}))
+    return 0
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(
+        prog="secubox-assistctl",
+        description="Box operator CLI for assistance sessions "
+                    "(request/accept/open/close/console-grant/console-revoke/list)",
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    q = sub.add_parser("request", help="ask a center for assistance")
+    q.add_argument("center_did")
+    q.add_argument("--mode", required=True)
+    q.add_argument("--scope", required=True)
+    q.add_argument("--duration", type=int, required=True)
+    q.add_argument("--reason", required=True)
+    q.set_defaults(fn=cmd_request)
+
+    ac = sub.add_parser("accept", help="center accepts a pending request")
+    ac.add_argument("req_id")
+    ac.set_defaults(fn=cmd_accept)
+
+    o = sub.add_parser("open", help="box consent opens a live session")
+    o.add_argument("req_id")
+    o.add_argument("--center", required=True)
+    o.add_argument("--duration", type=int, required=True)
+    o.set_defaults(fn=cmd_open)
+
+    c = sub.add_parser("close", help="end a live session")
+    c.add_argument("session_id")
+    c.add_argument("--reason")
+    c.set_defaults(fn=cmd_close)
+
+    cg = sub.add_parser("console-grant", help="second consent escalates to console access")
+    cg.add_argument("session_id")
+    cg.add_argument("--duration", type=int, required=True)
+    cg.set_defaults(fn=cmd_console_grant)
+
+    cr = sub.add_parser("console-revoke", help="withdraw console escalation")
+    cr.add_argument("session_id")
+    cr.set_defaults(fn=cmd_console_revoke)
+
+    sub.add_parser("list", help="pending requests + active session").set_defaults(fn=cmd_list)
+
+    # Privileged catalog backends — invoked by the WS daemon via sudo -n,
+    # never called interactively by an operator (see sudoers/secubox-assist).
+    d = sub.add_parser("diag", help="[privileged] diagnostic bundle backend")
+    d.add_argument("what", choices=["status", "bundle"])
+    d.set_defaults(fn=cmd_diag)
+
+    sv = sub.add_parser("service", help="[privileged] restart/toggle an allow-listed module")
+    sv.add_argument("op", choices=["restart", "toggle"])
+    sv.add_argument("module")
+    sv.add_argument("state", nargs="?", choices=["on", "off"])
+    sv.set_defaults(fn=cmd_service)
+
+    cf = sub.add_parser("config", help="[privileged] reload/rollback an allow-listed scope")
+    cf.add_argument("op", choices=["reload", "rollback"])
+    cf.add_argument("scope")
+    cf.set_defaults(fn=cmd_config)
+
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

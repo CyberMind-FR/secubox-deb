@@ -1,0 +1,20 @@
+# SecuBox assist WS data-plane: reachable ONLY from the wg-mesh, never public.
+#
+# Own base chain with an accept default. A standalone table whose base chain
+# defaults to dropping is terminal for the whole netfilter hook the instant
+# this file loads: it would blackhole SSH, the webui, everything, not just
+# unmatched assist traffic. Mirrors the secubox-toolbox precedent
+# (packages/secubox-toolbox/nftables.d/secubox-toolbox-wg.nft) — a fully
+# self-contained table so load never depends on some other table already
+# existing on this board.
+#
+# Loaded by /etc/nftables.conf via `include "/etc/nftables.d/*.nft"`
+# (packages/secubox-vortex-firewall ships and enables that include — see its
+# postinst) so this survives reboot. The old /etc/secubox/nft.d/ location is
+# NOT included by anything and silently vanished on every reboot.
+table inet secubox_assist {
+    chain input {
+        type filter hook input priority filter; policy accept;
+        iifname "wg-mesh" tcp dport 8099 accept
+    }
+}

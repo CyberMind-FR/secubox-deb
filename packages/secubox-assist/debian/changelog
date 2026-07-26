@@ -1,0 +1,31 @@
+secubox-assist (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix(daemon): self_did resolved from a PUBLIC source (SECUBOX_SELF_DID env
+    or world-readable /etc/secubox/annuaire/node.did), cached once at module
+    load — the WS daemon (User=secubox-assist) never opens the sovereign
+    private key again (was PermissionError on every connection, zero
+    sessions ever authorized); postinst derives node.did once from the key
+    as root, guarded for the key-absent case.
+  * fix(systemd): secubox-assist.service now ships NoNewPrivileges=false —
+    NNP=true was blocking sudo's setuid transition for every scoped
+    `secubox-assistctl` catalog action (service/config); the API unit keeps
+    NoNewPrivileges=true (it never sudoes).
+  * fix(daemon): mid-session recheck now requires the SAME session_id the
+    socket authorized, not merely "a session is active" — closing session
+    s1 and opening s2 no longer lets a socket authorized under s1 keep
+    running under s2's window.
+  * chore(console): console-escalation control-plane (ops, grant/revoke,
+    guard, keystroke audit) is present and tested; the live pty-over-WS
+    channel and its AppArmor launcher are deferred to a follow-up — the
+    /assist panel's console buttons are disabled and relabelled
+    accordingly so nothing looks live before it is.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 25 Jul 2026 12:00:00 +0200
+
+secubox-assist (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial socle: assistance request control-plane consumer + data-plane
+    daemon (WebSocket bind wg-mesh only), catalog dispatcher, console
+    double-consent, secubox-assistctl, /assist panel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
