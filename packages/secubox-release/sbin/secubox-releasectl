@@ -106,6 +106,26 @@ def _self_did(priv: bytes) -> str:
     return did_from_pubkey(public_from_private(priv))
 
 
+def _self_did_public() -> "str | None":
+    """This box's PUBLIC did for read paths — mirrors api/main.py's _self_did().
+
+    Read paths (list, sync-repo) resolve the sovereign self WITHOUT touching the
+    private key: env SECUBOX_SELF_DID else /etc/secubox/annuaire/node.did.
+    Returned did is threaded to releases.current_ring so a federated promote by
+    an ungranted center is not honored.
+    """
+    env = os.environ.get("SECUBOX_SELF_DID")
+    if env:
+        return env
+    path = os.environ.get("ANNUAIRE_DID_PATH", "/etc/secubox/annuaire/node.did")
+    try:
+        with open(path) as f:
+            v = f.read().strip()
+            return v or None
+    except OSError:
+        return None
+
+
 def _dry() -> bool:
     return os.environ.get("DRYRUN") == "1"
 
@@ -193,10 +213,10 @@ def cmd_assign(a) -> int:
 
 def cmd_list(a) -> int:
     entries = list(_journal().iter_entries())
-    evo_ids = sorted({p.get("evo_id") for p in
-                      (_payload(e) for e in entries if _op(e) == Op.RELEASE_PUBLISH.value)
-                      if p.get("evo_id")})
-    evolutions = [{"evo_id": e, "ring": releases.current_ring(entries, e)} for e in evo_ids]
+    self_did = _self_did_public()
+    evo_ids = sorted(releases.published_evo_ids(entries))
+    evolutions = [{"evo_id": e, "ring": releases.current_ring(entries, e, self_did)}
+                  for e in evo_ids]
     print(json.dumps({"evolutions": evolutions}))
     return 0
 
@@ -217,13 +237,12 @@ def _evolution_payload(entries, evo_id: str):
 
 def cmd_sync_repo(a) -> int:
     entries = list(_journal().iter_entries())
-    evo_ids = sorted({p.get("evo_id") for p in
-                      (_payload(e) for e in entries if _op(e) == Op.RELEASE_PUBLISH.value)
-                      if p.get("evo_id")})
+    self_did = _self_did_public()
+    evo_ids = sorted(releases.published_evo_ids(entries))
     plan: list = []
     skipped: list = []
     for evo_id in evo_ids:
-        ring = releases.current_ring(entries, evo_id)
+        ring = releases.current_ring(entries, evo_id, self_did)
         prev = releases.prev_ring(ring) if ring else None
         if prev is None:
             continue  # still in draft (or unknown) — nothing to copy from

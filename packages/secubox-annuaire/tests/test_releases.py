@@ -65,3 +65,36 @@ def test_box_ring_uses_verified_author_not_payload_issued_by():
               "author": OTHER}
     entries = [_grant(CENTER), forged]
     assert rl.box_ring(entries, BOX, self_did=BOX) == "published"
+
+
+# ---------------------------------------------------------------------------
+# current_ring sovereignty filter (self_did): a RELEASE_PROMOTE/DEMOTE counts
+# only when its VERIFIED author holds a release grant from the honoring box.
+# Without it, an ungranted center's federated promote would drive sync-repo's
+# reprepro copy fleet-wide. self_did=None keeps the unfiltered resolver.
+# ---------------------------------------------------------------------------
+
+def test_current_ring_ignores_promote_by_ungranted_author():
+    # OTHER promotes but holds no release grant from BOX -> ignored, stays draft.
+    entries = [e(Op.RELEASE_PUBLISH, evo_id="e1", issued_by=CENTER),
+               e(Op.RELEASE_PROMOTE, evo_id="e1", ring="internal", issued_by=OTHER)]
+    assert rl.current_ring(entries, "e1", self_did=BOX) == "draft"
+    # unfiltered (compat) view still honors it
+    assert rl.current_ring(entries, "e1") == "internal"
+
+
+def test_current_ring_counts_promote_by_granted_author():
+    # CENTER holds a release grant from BOX -> its promote counts.
+    entries = [_grant(CENTER),
+               e(Op.RELEASE_PUBLISH, evo_id="e1", issued_by=CENTER),
+               e(Op.RELEASE_PROMOTE, evo_id="e1", ring="internal", issued_by=CENTER)]
+    assert rl.current_ring(entries, "e1", self_did=BOX) == "internal"
+
+
+def test_current_ring_ignores_authorless_promote_under_self_did():
+    # An entry with no verified author must never count under sovereign view.
+    entries = [_grant(CENTER),
+               e(Op.RELEASE_PUBLISH, evo_id="e1", issued_by=CENTER),
+               {"op": Op.RELEASE_PROMOTE.value,
+                "payload": {"evo_id": "e1", "ring": "internal"}}]  # no author
+    assert rl.current_ring(entries, "e1", self_did=BOX) == "draft"
