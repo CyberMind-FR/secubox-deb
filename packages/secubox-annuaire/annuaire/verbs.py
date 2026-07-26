@@ -31,13 +31,16 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from . import assist, grants, releases
+from . import assist, assist_match, grants, releases
 from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
     BanRecord,
     GENESIS_HASH,
     ApprovalMode,
+    AssistMatchAccept,
+    AssistOffer,
+    AssistOpenRequest,
     AssistRequest,
     AssistSession,
     ConfigBlob,
@@ -2358,3 +2361,48 @@ def ring_assign(journal: Journal, priv: bytes, self_did: str, box_did: str, ring
     m = RingAssign(box_did=box_did, ring=ring,
                    issued_by=did_from_pubkey(public_from_private(priv)))
     return _release_append(journal, priv, Op.RING_ASSIGN, m, "RingAssign")
+
+
+# Assist marketplace (dual offer/request) — sous-projet assist-dual
+# ---------------------------------------------------------------------------
+
+def assist_offer(journal: Journal, priv: bytes, tags: List[str], scope: Optional[str],
+                  ttl_s: int, offer_id: str):
+    """ASSIST_OFFER: publish a signed advertisement of availability to help."""
+    did = did_from_pubkey(public_from_private(priv))
+    m_ = AssistOffer(offer_id=offer_id, tags=list(tags), scope=scope,
+                     ttl_s=ttl_s, issued_by=did)
+    return _assist_append(journal, priv, Op.ASSIST_OFFER, m_, "AssistOffer")
+
+
+def assist_offer_revoke(journal: Journal, priv: bytes, offer_id: str):
+    """ASSIST_OFFER_REVOKE: withdraw a previously published offer."""
+    did = did_from_pubkey(public_from_private(priv))
+    payload = {"offer_id": offer_id, "issued_by": did, "created_at": now_rfc3339()}
+    pub_hex = public_from_private(priv).hex()
+    sig_hex = sign(priv, canonical_bytes(payload))
+    return journal.append(op=Op.ASSIST_OFFER_REVOKE, payload=payload,
+                          payload_type="AssistOfferRevoke", author=did,
+                          author_pubkey_hex=pub_hex, sig=sig_hex)
+
+
+def assist_open_request(journal: Journal, priv: bytes, tags: List[str], scope: Optional[str],
+                        ttl_s: int, reason: str, req_id: str):
+    """ASSIST_REQUEST_OPEN: post a signed, untargeted request for help."""
+    did = did_from_pubkey(public_from_private(priv))
+    m_ = AssistOpenRequest(req_id=req_id, tags=list(tags), scope=scope,
+                           ttl_s=ttl_s, reason=reason, issued_by=did)
+    return _assist_append(journal, priv, Op.ASSIST_REQUEST_OPEN, m_, "AssistOpenRequest")
+
+
+def assist_match_accept(journal: Journal, priv: bytes, offer_id: str, req_id: str, side: str):
+    """ASSIST_MATCH_ACCEPT: one side's signed acceptance of a proposed match.
+
+    match_id is derived deterministically from (offer_id, req_id) so both
+    sides converge on the same id without coordination.
+    """
+    did = did_from_pubkey(public_from_private(priv))
+    mid = assist_match.match_id(offer_id, req_id)
+    m_ = AssistMatchAccept(match_id=mid, offer_id=offer_id, req_id=req_id,
+                           side=side, issued_by=did)
+    return _assist_append(journal, priv, Op.ASSIST_MATCH_ACCEPT, m_, "AssistMatchAccept")

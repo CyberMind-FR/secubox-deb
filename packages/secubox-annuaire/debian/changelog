@@ -1,3 +1,15 @@
+secubox-annuaire (0.9.0-1~bookworm1) bookworm; urgency=high
+
+  * merge: unify the annuaire trust substrate — the assist marketplace layer
+    (annuaire/assist_match.py + ASSIST_OFFER/OFFER_REVOKE/REQUEST_OPEN/
+    MATCH_ACCEPT ops and their signed verbs, from the assist-dual line) now
+    ships together with the release-rings resolver (releases.py) and the
+    assist session-resolver author-binding fix. Resolves the branch divergence
+    where 0.8.1 shipped WITHOUT assist_match, breaking secubox-assist's
+    marketplace/api imports on any box that had the assist-dual layer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 10:20:00 +0200
+
 secubox-annuaire (0.8.1-1~bookworm1) bookworm; urgency=high
 
   * fix(assist): session resolvers (active_session/console_active/
@@ -21,6 +33,21 @@ secubox-annuaire (0.8.0-1~bookworm1) bookworm; urgency=medium
     change needed on this side.
 
  -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 14:00:00 +0200
+
+secubox-annuaire (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: decentralized assist marketplace substrate — annuaire/assist_match.py
+    ships alongside assist.py, adding the OFFER/REQUEST/MATCH_ACCEPT ops and
+    signed verbs a help-seeking box and an offering center use to find each
+    other without a central broker: tag-intersection + scope + expiry
+    matching over the existing journal, match_id(offer_id, request_id)
+    convergent across replicas, and matches() surfaced for the requester's
+    mutual double-accept. Consumed by the new secubox-assist 0.2.0
+    (assist/rendezvous.py, assist/joinlink.py, assist/escalate.py).
+  * packaging: no new install rule needed — assist_match.py ships via the
+    existing `cp -r annuaire/*` glob in debian/rules.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 25 Jul 2026 18:00:00 +0200
 
 secubox-annuaire (0.6.0-1~bookworm1) bookworm; urgency=medium
 
