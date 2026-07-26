@@ -18,8 +18,6 @@ sys.path.insert(0, os.environ.get("ANNUAIRE_LIB", "/usr/lib/secubox/annuaire"))
 sys.path.insert(0, os.environ.get("RELEASE_LIB", "/usr/lib/secubox/release"))
 from annuaire.log import Journal          # noqa: E402
 from annuaire import releases             # noqa: E402
-from annuaire.model import Op             # noqa: E402
-from annuaire.grants import _op, _payload  # noqa: E402  (payload/op accessors)
 
 app = FastAPI(title="SecuBox Release")
 CTL = ["/usr/sbin/secubox-releasectl"]
@@ -73,10 +71,9 @@ async def health():
 @app.get("/evolutions", dependencies=[Depends(require_jwt)])
 async def evolutions():
     entries = _entries()
-    evo_ids = sorted({p.get("evo_id") for p in
-                      (_payload(e) for e in entries if _op(e) == Op.RELEASE_PUBLISH.value)
-                      if p.get("evo_id")})
-    return {"evolutions": [{"evo_id": e, "ring": releases.current_ring(entries, e)}
+    sid = _self_did()  # sovereign view: only granted centers' promotes count
+    evo_ids = sorted(releases.published_evo_ids(entries))
+    return {"evolutions": [{"evo_id": e, "ring": releases.current_ring(entries, e, sid)}
                             for e in evo_ids]}
 
 

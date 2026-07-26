@@ -2298,7 +2298,7 @@ def release_promote(journal: Journal, priv: bytes, self_did: str, evo_id: str):
         ValueError: if publisher lacks a release grant, evolution not found, or already published.
     """
     entries = _require_release_grant(journal, priv, self_did)
-    cur = releases.current_ring(entries, evo_id)
+    cur = releases.current_ring(entries, evo_id, self_did)
     if cur is None:
         raise ValueError("no-such-evolution")
     nxt = releases.next_ring(cur)
@@ -2326,7 +2326,7 @@ def release_demote(journal: Journal, priv: bytes, self_did: str, evo_id: str):
         ValueError: if publisher lacks a release grant, evolution not found, or already draft.
     """
     entries = _require_release_grant(journal, priv, self_did)
-    cur = releases.current_ring(entries, evo_id)
+    cur = releases.current_ring(entries, evo_id, self_did)
     if cur is None:
         raise ValueError("no-such-evolution")
     prv = releases.prev_ring(cur)
