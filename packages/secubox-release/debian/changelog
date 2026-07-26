@@ -1,0 +1,7 @@
+secubox-release (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial socle: reprepro-copy repo actuator (pure argv builders, never a
+    shell string), arm64-guard on promotion (refuses to publish a ring move
+    when the evolution has deb artifacts but no arm64 build).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 12:00:00 +0200
