@@ -79,9 +79,11 @@ Env (override; keys are NEVER generated here):
   DRYRUN=1            print {"dryrun": true, "would": ...}; write nothing —
                       no journal append, nothing minted, `list` afterwards
                       is unchanged.
-  ASSIST_BASE_URL     default https://assist.local — base url `joinlink`
-                      prefixes the single-use token with (override with
-                      --base-url).
+  ASSIST_BASE_URL     public base url `joinlink` prefixes the single-use token
+                      with (override with --base-url). Default: derived from
+                      [api].sso_cookie_domain in secubox.conf -> the public hub
+                      https://admin.<domain>; falls back to https://assist.local
+                      only when no domain is configured.
 """
 from __future__ import annotations
 
@@ -154,6 +156,33 @@ def _dry() -> bool:
 
 def _dryrun_report(would: str, **fields) -> None:
     print(json.dumps({"dryrun": True, "would": would, **fields}))
+
+
+CONF_PATH = os.environ.get("SECUBOX_CONF", "/etc/secubox/secubox.conf")
+
+
+def _default_base_url() -> str:
+    """Public base URL that fronts /assist/join/<tok> — the canonical admin/hub
+    vhost, so a shared join link is reachable over the internet, not just the
+    LAN. A hostname.local link only works on the local segment.
+
+    Precedence: an explicit ASSIST_BASE_URL env wins; else derive the hub from
+    [api].sso_cookie_domain in secubox.conf (".gk2.secubox.in" -> the hub is
+    admin.gk2.secubox.in); else fall back to the LAN-only https://assist.local.
+    """
+    env = os.environ.get("ASSIST_BASE_URL")
+    if env:
+        return env
+    try:
+        import tomllib
+        with open(CONF_PATH, "rb") as fh:
+            conf = tomllib.load(fh)
+        base = str((conf.get("api", {}) or {}).get("sso_cookie_domain", "")).lstrip(".").strip()
+        if base and "." in base:
+            return f"https://admin.{base}"
+    except Exception:
+        pass
+    return "https://assist.local"
 
 
 # --------------------------------------------------------------------------- #
@@ -509,8 +538,7 @@ def main(argv=None) -> int:
     jl = sub.add_parser("joinlink", help="mint a single-use, time-boxed join link")
     jl.add_argument("--for", dest="for_", required=True, help="opaque reference (e.g. match_id)")
     jl.add_argument("--ttl", type=int, required=True)
-    jl.add_argument("--base-url", dest="base_url",
-                    default=os.environ.get("ASSIST_BASE_URL", "https://assist.local"))
+    jl.add_argument("--base-url", dest="base_url", default=_default_base_url())
     jl.set_defaults(fn=cmd_joinlink)
 
     jo = sub.add_parser("join", help="redeem a join link (plans escalate argv, does not exec)")

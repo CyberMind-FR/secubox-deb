@@ -8,8 +8,14 @@ secubox-assist (0.2.1-1~bookworm1) bookworm; urgency=medium
     running as `secubox` via the API, can reach the node signing key to sign
     journal ops (offer/request/session) — the shared parent's root:secubox-toolbox
     0750 blocked it. Never chowns/tightens the parent; subdirs keep 0700.
+  * joinlink: the shared join URL now defaults to the PUBLIC hub
+    (https://admin.<domain>, derived from [api].sso_cookie_domain in
+    secubox.conf) instead of the LAN-only https://assist.local, so an
+    assistance join link is reachable over the internet. ASSIST_BASE_URL /
+    --base-url still override; falls back to assist.local only when no domain
+    is configured.
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Jul 2026 06:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 10:10:00 +0200
 
 secubox-assist (0.2.0-1~bookworm1) bookworm; urgency=medium
 
