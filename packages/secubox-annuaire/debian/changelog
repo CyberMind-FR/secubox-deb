@@ -1,3 +1,15 @@
+secubox-annuaire (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(releases): ships annuaire/releases.py — the pure ring resolver
+    (RINGS, current_ring/next_ring/prev_ring, box_ring sovereignty,
+    evolutions_in_ring, has_release_grant) consumed by the new
+    secubox-release package (RELEASE_PUBLISH/PROMOTE/DEMOTE, RING_ASSIGN
+    verbs + models already carried by annuaire.verbs/annuaire.model).
+    Already globbed by debian/rules' `cp -r annuaire/*` — no packaging
+    change needed on this side.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 14:00:00 +0200
+
 secubox-annuaire (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Assist control-plane: ASSIST_* ops, AssistRequest/AssistSession models,

@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox Release Rings — REST API (unix socket)
+After=network.target
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/release.sock --log-level warning
+WorkingDirectory=/usr/lib/secubox/release
+Environment=PYTHONPATH=/usr/lib/secubox/release:/usr/lib/secubox/annuaire
+Restart=on-failure
+# The API never sudoes: api/main.py execs `/usr/sbin/secubox-releasectl`
+# directly (subprocess.run, no "sudo" in argv) for publish/promote/demote/
+# assign — those ops sign a journal entry with the box's own node key, which
+# this process reaches as itself (secubox), not as root (see the guarded
+# `chmod o+x /etc/secubox/secrets` in debian/postinst — same traversal fix
+# secubox-assist shipped in 0.2.1 for its own ctl-as-secubox path). Unlike
+# secubox-assist's WS daemon (which DOES sudo into its ctl and therefore
+# needs NoNewPrivileges=false), this unit keeps full NNP hardening.
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+release/*.py            usr/lib/secubox/release/release/
+api/*.py                usr/lib/secubox/release/api/
+sbin/secubox-releasectl usr/sbin/
+sbin/secubox-release-repo usr/sbin/
+www/releases/*           usr/share/secubox/www/releases/
+menu.d/*.json            usr/share/secubox/menu.d/
+nginx/releases.conf      etc/nginx/secubox.d/
+systemd/*.service        lib/systemd/system/
+sudoers/secubox-release  etc/sudoers.d/
