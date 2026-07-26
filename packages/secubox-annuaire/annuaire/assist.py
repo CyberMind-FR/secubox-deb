@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, List, Mapping, Optional
 
-from .grants import _op, _payload, active_grants  # dict/LogEntry-tolerant accessors
+from .grants import _author, _op, _payload, active_grants  # dict/LogEntry-tolerant accessors
 from .model import Op
 
 
@@ -28,6 +28,45 @@ def _by(entries, op: Op):
             yield _payload(entry)
 
 
+def _self_by(entries, op: Op, self_did: str):
+    """Yield payloads of `op` entries AUTHORED BY self_did (sovereign + self-cert).
+
+    A self-scoped assist op (SESSION_OPEN/CLOSE, CONSOLE_GRANT/REVOKE) is always
+    authored by the box itself (author == issued_by == self_did — see the verbs).
+    import_entries federates ANY validly-signed op, so a mesh peer can sign one
+    naming issued_by=self_did with its OWN key; trusting payload.issued_by over
+    the authenticated author lets that forged op count (phantom session → the
+    single-session invariant trips → the victim's real sessions are DoS'd).
+    Bind to the verified author, fail-closed on a missing/foreign author."""
+    for entry in entries:
+        if _op(entry) != op.value:
+            continue
+        author = _author(entry)
+        if not author or author != self_did:
+            continue
+        p = _payload(entry)
+        if p.get("issued_by") != self_did:  # self-certification consistency
+            continue
+        yield p
+
+
+def _selfcert_by(entries, op: Op):
+    """Yield payloads of `op` entries whose VERIFIED author == payload issued_by.
+
+    For ops that legitimately carry a non-self issued_by (ASSIST_REQUEST in
+    standing mode is center-authored), the sovereignty scope lives in the
+    caller's issued_by logic — but a forged op claiming a DIFFERENT issued_by
+    than its real signer must never be honored. Fail-closed on missing author."""
+    for entry in entries:
+        if _op(entry) != op.value:
+            continue
+        p = _payload(entry)
+        author = _author(entry)
+        if not author or author != p.get("issued_by"):
+            continue
+        yield p
+
+
 def active_session(entries: List[Mapping[str, Any]], self_did: str,
                    now_ts: str) -> Optional[dict]:
     """Return the single active session opened BY self_did, or None.
@@ -37,11 +76,10 @@ def active_session(entries: List[Mapping[str, Any]], self_did: str,
     lexicographic compare — all timestamps are UTC 'Z', so string order == time
     order). Raises AssistError if more than one is active (invariant breach).
     """
-    closed = {p.get("session_id") for p in _by(entries, Op.ASSIST_SESSION_CLOSE)}
+    closed = {p.get("session_id")
+              for p in _self_by(entries, Op.ASSIST_SESSION_CLOSE, self_did)}
     live = []
-    for p in _by(entries, Op.ASSIST_SESSION_OPEN):
-        if p.get("issued_by") != self_did:
-            continue
+    for p in _self_by(entries, Op.ASSIST_SESSION_OPEN, self_did):
         sid = p.get("session_id")
         if sid in closed:
             continue
@@ -56,12 +94,12 @@ def active_session(entries: List[Mapping[str, Any]], self_did: str,
 def console_active(entries: List[Mapping[str, Any]], session_id: str,
                    now_ts: str) -> bool:
     """True if a CONSOLE_GRANT for session_id is live (no later REVOKE, not expired)."""
-    revoked = {p.get("session_id") for p in _by(entries, Op.ASSIST_CONSOLE_REVOKE)}
+    revoked = {p.get("session_id") for p in _selfcert_by(entries, Op.ASSIST_CONSOLE_REVOKE)}
     if session_id in revoked:
         # a REVOKE after the last GRANT kills it; treat any revoke as terminal
         # (console is short-lived and re-granted explicitly)
         return False
-    for p in _by(entries, Op.ASSIST_CONSOLE_GRANT):
+    for p in _selfcert_by(entries, Op.ASSIST_CONSOLE_GRANT):
         if p.get("session_id") != session_id:
             continue
         if str(now_ts) < str(p.get("expires_ts", "")):
@@ -78,7 +116,7 @@ def pending_requests(entries: List[Mapping[str, Any]], self_did: str) -> List[di
     """
     accepted = {p.get("req_id") for p in _by(entries, Op.ASSIST_ACCEPT)}
     out = []
-    for p in _by(entries, Op.ASSIST_REQUEST):
+    for p in _selfcert_by(entries, Op.ASSIST_REQUEST):
         if p.get("req_id") in accepted:
             continue
         if p.get("issued_by") != self_did and p.get("mode") != "standing":
@@ -100,7 +138,7 @@ def can_open(entries: List[Mapping[str, Any]], req_id: str,
     self_did — see active_grants()'s sovereignty filter) capability="assist"
     grant naming that same center_did, or the open is refused.
     """
-    reqs = {p.get("req_id"): p for p in _by(entries, Op.ASSIST_REQUEST)}
+    reqs = {p.get("req_id"): p for p in _selfcert_by(entries, Op.ASSIST_REQUEST)}
     if req_id not in reqs:
         return False, "no-such-request"
     accepted = {p.get("req_id") for p in _by(entries, Op.ASSIST_ACCEPT)}

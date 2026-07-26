@@ -14,7 +14,7 @@ def test_guard_denies_without_console_grant():
 
 
 def test_guard_allows_with_grant():
-    entries = [{"op": "assist_console_grant", "payload": {
+    entries = [{"op": "assist_console_grant", "author": "did:plc:" + "1"*32, "payload": {
         "session_id": "s1", "issued_by": "did:plc:" + "1"*32,
         "expires_ts": "2999-01-01T00:00:00Z"}}]
     console.guard(entries, "s1", now_ts="2026-07-25T12:00:00Z")  # no raise

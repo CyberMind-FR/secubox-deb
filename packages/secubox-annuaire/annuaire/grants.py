@@ -48,6 +48,17 @@ def _payload(entry: Entry) -> Dict[str, Any]:
     return payload or {}
 
 
+def _author(entry: Entry) -> Any:
+    """Return the VERIFIED entry author (entry.author / entry["author"]).
+
+    This is the signature-authenticated identity, NOT the attacker-controllable
+    payload["issued_by"]. Sovereignty checks must bind to this, not the payload."""
+    author = getattr(entry, "author", None)
+    if author is None and isinstance(entry, dict):
+        author = entry.get("author")
+    return author
+
+
 def active_grants(
     entries: List[Mapping[str, Any]], self_did: Optional[str] = None
 ) -> Dict[GrantKey, Dict[str, Any]]:

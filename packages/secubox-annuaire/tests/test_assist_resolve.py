@@ -12,7 +12,70 @@ OTHER = "did:plc:" + "3" * 32
 
 
 def e(op, **payload):
-    return {"op": op.value if hasattr(op, "value") else op, "payload": payload}
+    # A real journal/imported entry always carries a verified `author` set from
+    # the signing key, and every assist op is self-certifying (author ==
+    # issued_by). Reflect that here so fixtures model reality.
+    return {"op": op.value if hasattr(op, "value") else op, "payload": payload,
+            "author": payload.get("issued_by")}
+
+
+def raw(op, author, **payload):
+    """Build an entry whose verified `author` diverges from payload issued_by —
+    i.e. a FORGED, mesh-imported op (validly signed by `author`, claiming a
+    different issued_by). Used to prove the resolvers bind to the verified
+    author, not the attacker-controllable payload."""
+    return {"op": op.value if hasattr(op, "value") else op, "payload": payload,
+            "author": author}
+
+
+def test_forged_session_open_is_ignored():
+    # attacker (OTHER) signs a SESSION_OPEN claiming issued_by=BOX -> phantom
+    entries = [raw(Op.ASSIST_SESSION_OPEN, OTHER, session_id="sPhantom", req_id="rX",
+                   center_did=CENTER, issued_by=BOX, token_hash="a" * 64,
+                   expires_ts="2026-07-25T23:00:00Z")]
+    assert assist.active_session(entries, BOX, now_ts="2026-07-25T12:00:00Z") is None
+
+
+def test_forged_session_open_cannot_trip_single_session_invariant():
+    entries = [
+        e(Op.ASSIST_SESSION_OPEN, session_id="s1", req_id="r1", center_did=CENTER,
+          issued_by=BOX, token_hash="a" * 64, expires_ts="2026-07-25T23:00:00Z"),
+        raw(Op.ASSIST_SESSION_OPEN, OTHER, session_id="s2", req_id="r2",
+            center_did=CENTER, issued_by=BOX, token_hash="b" * 64,
+            expires_ts="2026-07-25T23:00:00Z"),
+    ]
+    # forged s2 must NOT raise multiple-active-sessions; only the real s1 counts
+    s = assist.active_session(entries, BOX, now_ts="2026-07-25T12:00:00Z")
+    assert s and s["session_id"] == "s1"
+
+
+def test_forged_close_cannot_hide_real_session():
+    entries = [
+        e(Op.ASSIST_SESSION_OPEN, session_id="s1", req_id="r1", center_did=CENTER,
+          issued_by=BOX, token_hash="a" * 64, expires_ts="2026-07-25T23:00:00Z"),
+        raw(Op.ASSIST_SESSION_CLOSE, OTHER, session_id="s1", issued_by=BOX,
+            reason="forged"),
+    ]
+    s = assist.active_session(entries, BOX, now_ts="2026-07-25T12:00:00Z")
+    assert s and s["session_id"] == "s1"
+
+
+def test_forged_console_grant_is_ignored():
+    entries = [raw(Op.ASSIST_CONSOLE_GRANT, OTHER, session_id="s1", issued_by=BOX,
+                   expires_ts="2026-07-25T23:00:00Z")]
+    assert not assist.console_active(entries, "s1", now_ts="2026-07-25T12:00:00Z")
+
+
+def test_forged_request_not_treated_as_own_authority():
+    # attacker forges a per-incident request claiming issued_by=BOX + a matching
+    # accept; can_open must NOT treat it as the box's own authority.
+    entries = [
+        raw(Op.ASSIST_REQUEST, OTHER, req_id="r-forged", center_did=CENTER,
+            mode="per-incident", scope="dns", issued_by=BOX),
+        e(Op.ASSIST_ACCEPT, req_id="r-forged", issued_by=CENTER),
+    ]
+    ok, reason = assist.can_open(entries, "r-forged", BOX, now_ts="2026-07-25T12:00:00Z")
+    assert ok is False and reason == "no-such-request"
 
 
 def test_active_session_single_and_expiry():
