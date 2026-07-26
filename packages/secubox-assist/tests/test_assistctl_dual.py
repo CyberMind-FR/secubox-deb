@@ -67,3 +67,35 @@ def test_join_does_not_leak_private_key(tmp_path):
         assert not (len(stripped) == 64 and all(c in "0123456789abcdef"
                                                 for c in stripped.lower())), (
             f"raw 64-hex secret leaked in join output: {stripped!r}")
+
+
+def _joinlink_base_url(tmp_path, conf_body=None, extra_env=None):
+    env = _env(tmp_path); env["DRYRUN"] = "1"
+    if conf_body is not None:
+        conf = tmp_path / "secubox.conf"; conf.write_text(conf_body)
+        env["SECUBOX_CONF"] = str(conf)
+    else:
+        env["SECUBOX_CONF"] = str(tmp_path / "does-not-exist.conf")
+    env.pop("ASSIST_BASE_URL", None)
+    if extra_env:
+        env.update(extra_env)
+    r = subprocess.run([sys.executable, CTL, "joinlink", "--for", "m1", "--ttl", "600"],
+                       env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout)["base_url"]
+
+
+def test_joinlink_base_url_derived_from_sso_cookie_domain(tmp_path):
+    # a hostname.local link only works on the LAN; derive the public hub instead
+    url = _joinlink_base_url(tmp_path, '[api]\nsso_cookie_domain = ".gk2.secubox.in"\n')
+    assert url == "https://admin.gk2.secubox.in"
+
+
+def test_joinlink_base_url_falls_back_to_local_without_domain(tmp_path):
+    assert _joinlink_base_url(tmp_path, conf_body=None) == "https://assist.local"
+
+
+def test_joinlink_base_url_env_override_wins(tmp_path):
+    url = _joinlink_base_url(tmp_path, '[api]\nsso_cookie_domain = ".gk2.secubox.in"\n',
+                             extra_env={"ASSIST_BASE_URL": "https://custom.example.org"})
+    assert url == "https://custom.example.org"
