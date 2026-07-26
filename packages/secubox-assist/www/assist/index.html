@@ -35,7 +35,7 @@
     <div><input id="center" placeholder="did:plc:…" size="48"></div>
     <div><select id="mode"><option>per-incident</option><option>standing</option></select>
       <input id="scope" placeholder="scope (ex. dns)"> <input id="dur" type="number" value="1800">
-      <input id="reason" placeholder="motif"></div>
+      <input id="reason" placeholder="motif (obligatoire)"></div>
     <button class="btn" data-act="request">Demander</button>
     <p class="note">Requête ciblée : tu choisis le centre qui aide (par DID).</p>
   </div>
@@ -69,7 +69,7 @@
         <input id="reqopen-tags" placeholder="tags — ce sur quoi tu as besoin d'aide (ex. dns,waf)">
         <input id="reqopen-scope" placeholder="scope (optionnel)">
         <input id="reqopen-ttl" type="number" value="3600" title="durée de validité (s)">
-        <input id="reqopen-reason" placeholder="motif">
+        <input id="reqopen-reason" placeholder="motif (obligatoire)">
         <button class="btn primary" data-act="request-open">🆘 Demander</button>
       </div>
       <div id="reqopen-list"></div>
@@ -256,12 +256,16 @@ document.addEventListener('click', async (ev) => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'request') {
+    const center = document.getElementById('center').value.trim();
+    const reason = document.getElementById('reason').value.trim();
+    if (!center) { notify('Renseigne le DID du centre (did:plc:…).', true); return; }
+    if (!reason) { notify('Renseigne un motif.', true); return; }
     await postAction('/api/v1/assist/request', {
-      center_did: document.getElementById('center').value,
+      center_did: center,
       mode: document.getElementById('mode').value,
       scope: document.getElementById('scope').value,
       duration_s: parseInt(document.getElementById('dur').value, 10),
-      reason: document.getElementById('reason').value }, 'Demande ciblée envoyée.');
+      reason }, 'Demande ciblée envoyée.');
     refresh();
   } else if (act === 'offer') {
     const tags = document.getElementById('offer-tags').value.split(',').map(s => s.trim()).filter(Boolean);
@@ -277,11 +281,13 @@ document.addEventListener('click', async (ev) => {
     if (d) refreshOffers();
   } else if (act === 'request-open') {
     const tags = document.getElementById('reqopen-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const reason = document.getElementById('reqopen-reason').value.trim();
     if (!tags.length) { notify('Ajoute au moins un tag.', true); return; }
+    if (!reason) { notify('Renseigne un motif (ce dont tu as besoin).', true); return; }
     const d = await postAction('/api/v1/assist/request/open', {
       tags, scope: document.getElementById('reqopen-scope').value || null,
       ttl_s: parseInt(document.getElementById('reqopen-ttl').value, 10),
-      reason: document.getElementById('reqopen-reason').value }, 'Demande ouverte publiée.');
+      reason }, 'Demande ouverte publiée.');
     if (d) refreshOpenRequests();
   } else if (act === 'match-accept') {
     const d = await postAction('/api/v1/assist/match/accept', {
