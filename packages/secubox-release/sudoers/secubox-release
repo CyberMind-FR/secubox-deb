@@ -1,0 +1,8 @@
+# secubox-release-api.service (User=secubox) execs secubox-releasectl
+# directly for publish/promote/demote/assign — no sudo required there (see
+# systemd/secubox-release-api.service). This scoped grant exists for the
+# repo-host/box-side actuation commands (sync-repo, apply) which shell out
+# to reprepro / apt-get and need root — those are invoked from a cron/timer
+# entry point (sbin/secubox-release-repo) running as the same `secubox`
+# user. Scoped to the ctl binary only — never a blanket NOPASSWD grant.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-releasectl

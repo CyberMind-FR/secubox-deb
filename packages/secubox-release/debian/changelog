@@ -3,5 +3,16 @@ secubox-release (0.1.0-1~bookworm1) bookworm; urgency=medium
   * Initial socle: reprepro-copy repo actuator (pure argv builders, never a
     shell string), arm64-guard on promotion (refuses to publish a ring move
     when the evolution has deb artifacts but no arm64 build).
+  * Packaging: secubox-release-api.service (User=secubox, unix socket
+    /run/secubox/release.sock, NoNewPrivileges=true — the API execs
+    secubox-releasectl directly, never via sudo); scoped sudoers grant
+    (secubox -> /usr/sbin/secubox-releasectl only, for the repo/box-side
+    sync-repo/apply actuation path); postinst enables the API service,
+    reloads nginx for the new /releases/ + /api/v1/release/ dropin, and
+    grants secubox traversal-only access (o+x, guarded) to the shared
+    /etc/secubox/secrets parent so the ctl can reach the box signing key —
+    same fix secubox-assist shipped in 0.2.1. Never chowns any shared
+    parent. The reprepro ring distributions (draft/internal/published) are
+    provisioned on the apt host separately, not by this postinst.
 
  -- Gerald KERMA <devel@cybermind.fr>  Sun, 26 Jul 2026 12:00:00 +0200

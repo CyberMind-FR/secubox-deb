@@ -8,7 +8,7 @@ Standards-Version: 4.6.2
 Package: secubox-release
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-fastapi, python3-uvicorn,
- secubox-core, secubox-annuaire, reprepro
+ secubox-core, secubox-annuaire, reprepro, sudo
 Description: SecuBox release-rings — reprepro-copy promotion actuator
  Op-gated argv builders for promoting packages between apt repo rings
  (draft/internal/published) via reprepro copy, with a hard arm64 guard:
