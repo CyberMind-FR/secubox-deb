@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Releases</title>
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+  body { font-family: 'Courier Prime', monospace; background:#0d1117; color:#e8e6d9; display:flex; }
+  .main { flex:1; margin-left:220px; padding:1.5rem; }
+  .card { background:rgba(30,40,55,.8); border:1px solid rgba(100,150,200,.2); border-radius:8px; padding:1rem; margin-bottom:1rem; }
+  .btn { padding:.4rem .8rem; border-radius:6px; border:1px solid rgba(100,150,200,.2); background:transparent; color:#e8e6d9; cursor:pointer; font-family:inherit; }
+  .btn:hover { border-color:#00d4ff; }
+  .btn.small { padding:.2rem .5rem; font-size:.72rem; margin-right:.3rem; }
+  .btn.warn { border-color:#ffcc00; color:#ffcc00; }
+  .btn.danger { border-color:#ff4466; color:#ff4466; }
+  .btn.primary { border-color:#00d4ff; color:#00d4ff; }
+  input,select,textarea { background:#111a24; color:#e8e6d9; border:1px solid rgba(100,150,200,.2); padding:.35rem; border-radius:5px; font-family:inherit; }
+  textarea { width:100%; min-height:4rem; }
+  table { width:100%; border-collapse:collapse; font-size:.85rem; }
+  th,td { padding:.5rem .6rem; border-bottom:1px solid rgba(100,150,200,.2); text-align:left; }
+  th { color:#6b7b8b; text-transform:uppercase; font-size:.7rem; letter-spacing:.05em; }
+  .ring-badge { padding:.1rem .5rem; border-radius:4px; border:1px solid rgba(100,150,200,.3); font-size:.75rem; }
+  .ring-draft { color:#ffcc00; border-color:#ffcc00; }
+  .ring-internal { color:#00d4ff; border-color:#00d4ff; }
+  .ring-published { color:#00dd44; border-color:#00dd44; }
+  .form-row { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem; align-items:center; }
+  .form-row input { flex:1; min-width:9rem; }
+  #banner { padding:.5rem .8rem; border-radius:6px; margin-bottom:1rem; font-size:.85rem; display:none; }
+  #banner.ok { display:block; background:rgba(0,221,68,.15); border:1px solid #00dd44; color:#00dd44; }
+  #banner.err { display:block; background:rgba(255,68,102,.15); border:1px solid #ff4466; color:#ff4466; }
+  .empty { color:#6b7b8b; font-style:italic; font-size:.85rem; }
+</style></head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<div class="main">
+  <h1 style="color:#00d4ff">🚀 Releases</h1>
+  <div id="banner"></div>
+
+  <div class="card">
+    <h2>Évolutions × rings</h2>
+    <table>
+      <thead><tr><th>Évolution</th><th>Ring</th><th>Actions</th></tr></thead>
+      <tbody id="evo-body"></tbody>
+    </table>
+
+    <h2 style="margin-top:1rem">Publier une évolution</h2>
+    <div class="form-row">
+      <textarea id="pub-artifacts" placeholder='artifacts JSON (ex: ["secubox-core_1.0.0-1_arm64.deb"])'></textarea>
+    </div>
+    <div class="form-row">
+      <input id="pub-notes" placeholder="notes">
+      <button class="btn primary" data-act="publish">Publier</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Box × ring</h2>
+    <h3 style="font-size:.9rem;color:#6b7b8b">Assigner un ring</h3>
+    <div class="form-row">
+      <input id="assign-box-did" placeholder="did:plc:… de la box">
+      <select id="assign-ring">
+        <option value="draft">draft</option>
+        <option value="internal">internal</option>
+        <option value="published">published</option>
+      </select>
+      <button class="btn primary" data-act="assign">Assigner</button>
+    </div>
+  </div>
+</div>
+<script src="/shared/sidebar.js"></script>
+<script>
+const T = () => localStorage.getItem('sbx_token') || '';
+const H = () => ({'Authorization':'Bearer '+T(),'Content-Type':'application/json'});
+const API = '/api/v1/release';
+
+function notify(msg, isError) {
+  const b = document.getElementById('banner');
+  b.textContent = msg;
+  b.className = isError ? 'err' : 'ok';
+}
+
+function clearNotify() {
+  const b = document.getElementById('banner');
+  b.textContent = '';
+  b.className = '';
+}
+
+async function postAction(url, body, okMsg) {
+  let r;
+  try {
+    r = await fetch(url, {method:'POST', headers: H(), body: JSON.stringify(body)});
+  } catch (e) {
+    notify('Requête impossible : ' + e.message, true);
+    return null;
+  }
+  if (r.status === 401) {
+    clearNotify();
+    notify('Session expirée — reconnectez-vous', true);
+    return null;
+  }
+  let data = null;
+  try { data = await r.json(); } catch (e) { /* no body */ }
+  if (!r.ok) {
+    const detail = (data && data.detail) ? data.detail : ('HTTP ' + r.status);
+    notify(detail, true);
+    return null;
+  }
+  notify(okMsg);
+  return data;
+}
+
+function ringClass(ring) {
+  return 'ring-badge ring-' + (ring || 'draft');
+}
+
+function buildEvoRow(evo) {
+  const tr = document.createElement('tr');
+
+  const tdId = document.createElement('td');
+  tdId.textContent = evo.evo_id;
+  tr.appendChild(tdId);
+
+  const tdRing = document.createElement('td');
+  const badge = document.createElement('span');
+  badge.className = ringClass(evo.ring);
+  badge.textContent = evo.ring;
+  tdRing.appendChild(badge);
+  tr.appendChild(tdRing);
+
+  const tdActions = document.createElement('td');
+  const btnPromote = document.createElement('button');
+  btnPromote.className = 'btn small primary';
+  btnPromote.textContent = 'Promote';
+  btnPromote.dataset.act = 'promote';
+  btnPromote.dataset.evo = evo.evo_id;
+  tdActions.appendChild(btnPromote);
+
+  const btnDemote = document.createElement('button');
+  btnDemote.className = 'btn small warn';
+  btnDemote.textContent = 'Demote';
+  btnDemote.dataset.act = 'demote';
+  btnDemote.dataset.evo = evo.evo_id;
+  tdActions.appendChild(btnDemote);
+
+  tr.appendChild(tdActions);
+  return tr;
+}
+
+async function loadEvolutions() {
+  const tbody = document.getElementById('evo-body');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+  let r;
+  try {
+    r = await fetch(API + '/evolutions', {headers: H()});
+  } catch (e) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.className = 'empty';
+    td.textContent = 'indisponible (' + e.message + ')';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  if (r.status === 401) {
+    clearNotify();
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.className = 'empty';
+    td.textContent = 'auth requise';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  if (!r.ok) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.className = 'empty';
+    td.textContent = 'indisponible (HTTP ' + r.status + ')';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  const d = await r.json();
+  const evos = d.evolutions || [];
+  if (evos.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.className = 'empty';
+    td.textContent = 'aucune évolution';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  evos.forEach((evo) => tbody.appendChild(buildEvoRow(evo)));
+}
+
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-act]');
+  if (!b) return;
+  const act = b.dataset.act;
+
+  if (act === 'promote' || act === 'demote') {
+    const evoId = b.dataset.evo;
+    const okMsg = (act === 'promote' ? 'Promue : ' : 'Rétrogradée : ') + evoId;
+    await postAction(API + '/' + act, {evo_id: evoId}, okMsg);
+    loadEvolutions();
+    return;
+  }
+
+  if (act === 'publish') {
+    const rawArtifacts = document.getElementById('pub-artifacts').value.trim();
+    const notes = document.getElementById('pub-notes').value;
+    let artifacts;
+    try {
+      artifacts = rawArtifacts ? JSON.parse(rawArtifacts) : [];
+    } catch (e) {
+      notify('artifacts : JSON invalide', true);
+      return;
+    }
+    const data = await postAction(API + '/publish', {artifacts: artifacts, notes: notes}, 'Évolution publiée');
+    if (data) {
+      document.getElementById('pub-artifacts').value = '';
+      document.getElementById('pub-notes').value = '';
+    }
+    loadEvolutions();
+    return;
+  }
+
+  if (act === 'assign') {
+    const boxDid = document.getElementById('assign-box-did').value.trim();
+    const ring = document.getElementById('assign-ring').value;
+    if (!boxDid) {
+      notify('box_did requis', true);
+      return;
+    }
+    const data = await postAction(API + '/assign', {box_did: boxDid, ring: ring}, 'Ring assigné : ' + boxDid + ' → ' + ring);
+    if (data) {
+      document.getElementById('assign-box-did').value = '';
+    }
+    return;
+  }
+});
+
+loadEvolutions();
+setInterval(loadEvolutions, 10000);
+</script>
+</body></html>

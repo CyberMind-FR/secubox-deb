@@ -1,0 +1,10 @@
+{
+  "id": "releases",
+  "name": "Releases",
+  "icon": "🚀",
+  "path": "/releases/",
+  "category": "mesh",
+  "order": 590,
+  "description": "Rings apt (draft/internal/published) — évolutions, promote/demote, assignation box×ring",
+  "requires": ["secubox-annuaire"]
+}
