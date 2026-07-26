@@ -49,12 +49,13 @@ def _payload(entry: Entry) -> Dict[str, Any]:
 
 
 def _author(entry: Entry) -> Optional[str]:
-    """Return entry.author if present (LogEntry), else entry["author"] (dict).
+    """Return the VERIFIED entry author (entry.author / entry["author"]).
 
-    The VERIFIED author is the did whose signing key produced this entry
+    The signature-authenticated did whose signing key produced this entry
     (Journal.append always sets author = did_from_pubkey(signing key); the
-    import path only admits entries whose sig verifies against it). Bare-dict
-    test fixtures may omit it -> None.
+    import path only admits entries whose sig verifies against it) — NOT the
+    attacker-controllable payload["issued_by"]. Sovereignty checks must bind to
+    this, not the payload. Bare-dict test fixtures may omit it -> None.
     """
     author = getattr(entry, "author", None)
     if author is None and isinstance(entry, dict):
