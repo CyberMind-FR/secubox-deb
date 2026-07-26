@@ -31,7 +31,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from . import assist, grants
+from . import assist, grants, releases
 from .crypto import canonical_bytes, did_from_pubkey, public_from_private, sign, verify
 from .log import Journal
 from .model import (
@@ -41,6 +41,7 @@ from .model import (
     AssistRequest,
     AssistSession,
     ConfigBlob,
+    Evolution,
     Grant,
     Identity,
     Invitation,
@@ -52,6 +53,8 @@ from .model import (
     QuorumRule,
     RevocationNotice,
     RevocationScope,
+    RingAssign,
+    RingState,
     ServiceOffer,
     Subscription,
     SubscriptionState,
@@ -2222,3 +2225,136 @@ def assist_console_revoke(journal: Journal, box_priv: bytes, session_id: str):
     return journal.append(op=Op.ASSIST_CONSOLE_REVOKE, payload=payload,
                           payload_type="AssistConsoleRevoke", author=box_did,
                           author_pubkey_hex=pub_hex, sig=sig_hex)
+
+
+# ---------------------------------------------------------------------------
+# Progressive release rings
+# ---------------------------------------------------------------------------
+
+def _release_append(journal: Journal, priv: bytes, op: Op, model_obj, payload_type: str):
+    """Shared: strip sig/signer_did, sign canonical_bytes(payload), append."""
+    payload = model_obj.model_dump(exclude={"sig", "signer_did"})
+    pub_hex = public_from_private(priv).hex()
+    author = did_from_pubkey(public_from_private(priv))
+    sig = sign(priv, canonical_bytes(payload))
+    return journal.append(op=op, payload=payload, payload_type=payload_type,
+                          author=author, author_pubkey_hex=pub_hex, sig=sig)
+
+
+def release_publish(journal: Journal, priv: bytes, artifacts: List, notes: str, evo_id: str):
+    """RELEASE_PUBLISH: sign an Evolution (born draft; no grant needed to publish own).
+
+    Args:
+        journal: the append-only Journal.
+        priv: publisher's 32-byte raw Ed25519 private key.
+        artifacts: list of artifact dicts (kind, name, version, hash, arch).
+        notes: human-readable notes.
+        evo_id: unique evolution identifier.
+
+    Returns:
+        The appended LogEntry.
+    """
+    did = did_from_pubkey(public_from_private(priv))
+    m = Evolution(evo_id=evo_id, artifacts=list(artifacts), notes=notes, issued_by=did)
+    return _release_append(journal, priv, Op.RELEASE_PUBLISH, m, "Evolution")
+
+
+def _require_release_grant(journal: Journal, priv: bytes, self_did: str):
+    """Check if the publisher has a release grant from self_did.
+
+    Args:
+        journal: the append-only Journal.
+        priv: publisher's 32-byte raw Ed25519 private key.
+        self_did: the target entity (box_did) who issued the grant.
+
+    Returns:
+        List of all journal entries.
+
+    Raises:
+        ValueError: if the publisher lacks a capability="release" grant from self_did.
+    """
+    center = did_from_pubkey(public_from_private(priv))
+    entries = list(journal.iter_entries())
+    if not releases.has_release_grant(entries, center, self_did):
+        raise ValueError("no-release-grant")
+    return entries
+
+
+def release_promote(journal: Journal, priv: bytes, self_did: str, evo_id: str):
+    """RELEASE_PROMOTE: advance an evolution one ring (draft→internal→published).
+
+    Requires a capability="release" grant from self_did to the publisher.
+
+    Args:
+        journal: the append-only Journal.
+        priv: publisher's 32-byte raw Ed25519 private key.
+        self_did: the box_did that issued the release grant.
+        evo_id: the evolution to promote.
+
+    Returns:
+        The appended LogEntry.
+
+    Raises:
+        ValueError: if publisher lacks a release grant, evolution not found, or already published.
+    """
+    entries = _require_release_grant(journal, priv, self_did)
+    cur = releases.current_ring(entries, evo_id)
+    if cur is None:
+        raise ValueError("no-such-evolution")
+    nxt = releases.next_ring(cur)
+    if nxt is None:
+        raise ValueError("already-published")
+    m = RingState(evo_id=evo_id, ring=nxt, issued_by=did_from_pubkey(public_from_private(priv)))
+    return _release_append(journal, priv, Op.RELEASE_PROMOTE, m, "RingState")
+
+
+def release_demote(journal: Journal, priv: bytes, self_did: str, evo_id: str):
+    """RELEASE_DEMOTE: retreat an evolution one ring (published→internal→draft).
+
+    Requires a capability="release" grant from self_did to the publisher.
+
+    Args:
+        journal: the append-only Journal.
+        priv: publisher's 32-byte raw Ed25519 private key.
+        self_did: the box_did that issued the release grant.
+        evo_id: the evolution to demote.
+
+    Returns:
+        The appended LogEntry.
+
+    Raises:
+        ValueError: if publisher lacks a release grant, evolution not found, or already draft.
+    """
+    entries = _require_release_grant(journal, priv, self_did)
+    cur = releases.current_ring(entries, evo_id)
+    if cur is None:
+        raise ValueError("no-such-evolution")
+    prv = releases.prev_ring(cur)
+    if prv is None:
+        raise ValueError("already-draft")
+    m = RingState(evo_id=evo_id, ring=prv, issued_by=did_from_pubkey(public_from_private(priv)))
+    return _release_append(journal, priv, Op.RELEASE_DEMOTE, m, "RingState")
+
+
+def ring_assign(journal: Journal, priv: bytes, self_did: str, box_did: str, ring: str):
+    """RING_ASSIGN: assign a box to a release ring.
+
+    Requires a capability="release" grant from self_did to the publisher.
+
+    Args:
+        journal: the append-only Journal.
+        priv: assigner's 32-byte raw Ed25519 private key.
+        self_did: the box_did that issued the release grant.
+        box_did: the box to assign to a ring.
+        ring: one of RINGS ("draft", "internal", "published").
+
+    Returns:
+        The appended LogEntry.
+
+    Raises:
+        ValueError: if assigner lacks a release grant or ring is invalid.
+    """
+    _require_release_grant(journal, priv, self_did)
+    m = RingAssign(box_did=box_did, ring=ring,
+                   issued_by=did_from_pubkey(public_from_private(priv)))
+    return _release_append(journal, priv, Op.RING_ASSIGN, m, "RingAssign")
