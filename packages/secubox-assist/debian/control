@@ -8,8 +8,15 @@ Standards-Version: 4.6.2
 Package: secubox-assist
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-fastapi, python3-uvicorn,
- python3-websockets, secubox-core, secubox-annuaire, secubox-p2p, sudo, adduser
+ secubox-core, secubox-annuaire, secubox-p2p, sudo, adduser
+Recommends: python3-websockets
 Description: SecuBox assistance request — real-time help sessions
+ .
+ python3-websockets is a Recommends, not a Depends: the WS daemon needs the
+ websockets library, but on boards where a newer websockets is provided out
+ of band (pip, to satisfy a uvicorn version skew) the apt package is
+ deliberately absent — a hard Depends would then block dpkg install. apt
+ still pulls it on a normal install; dpkg -i does not enforce it.
  Consent-gated, audited, revocable live assistance sessions between a box and
  a federated center, over the wg-mesh, with a bounded action catalog and
  double-consent console escalation.
