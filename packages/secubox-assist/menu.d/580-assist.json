@@ -1,0 +1,8 @@
+{
+  "id": "assist",
+  "name": "Assistance",
+  "icon": "🆘",
+  "path": "/assist/",
+  "category": "mesh",
+  "order": 580
+}
