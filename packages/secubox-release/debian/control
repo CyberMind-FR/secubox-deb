@@ -1,0 +1,17 @@
+Source: secubox-release
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all
+Standards-Version: 4.6.2
+
+Package: secubox-release
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3-fastapi, python3-uvicorn,
+ secubox-core, secubox-annuaire, reprepro
+Description: SecuBox release-rings — reprepro-copy promotion actuator
+ Op-gated argv builders for promoting packages between apt repo rings
+ (draft/internal/published) via reprepro copy, with a hard arm64 guard:
+ an evolution carrying deb artifacts with no arm64 build is refused,
+ never published amd64-only (arm64 is the only production arch and
+ would otherwise be bricked).
