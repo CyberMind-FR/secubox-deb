@@ -86,6 +86,11 @@ class Op(str, Enum):
     ASSIST_SESSION_CLOSE  = "assist_session_close"  # session ends (op or auto-expiry)
     ASSIST_CONSOLE_GRANT  = "assist_console_grant"  # 2nd consent → console escalation
     ASSIST_CONSOLE_REVOKE = "assist_console_revoke" # console withdrawn
+    # Progressive release rings (center-driven artifact delivery)
+    RELEASE_PUBLISH = "release_publish"   # register an evolution (born in draft)
+    RELEASE_PROMOTE = "release_promote"   # advance an evolution one ring
+    RELEASE_DEMOTE  = "release_demote"    # retreat an evolution one ring
+    RING_ASSIGN     = "ring_assign"       # a center assigns a box's ring
 
 
 # ---------------------------------------------------------------------------
@@ -673,6 +678,80 @@ class BanRecord(BaseModel):
     sig:        Optional[str] = Field(
         default=None, description="Ed25519 sig over canonical_bytes(payload_without_sig)")
     signer_did: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Progressive Release Rings (center-driven artifact delivery)
+# ---------------------------------------------------------------------------
+
+RINGS = ["draft", "internal", "published"]
+_ARTIFACT_KINDS = {"deb", "image", "www"}
+
+
+class Artifact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind:    str = Field(..., description="'deb' | 'image' | 'www'")
+    name:    str = Field(..., min_length=1)
+    version: str = Field(..., min_length=1)
+    hash:    str = Field(..., min_length=1, description="content hash")
+    arch:    Optional[str] = Field(default=None, description="e.g. 'arm64'; None for www")
+
+    @field_validator("kind")
+    @classmethod
+    def _kind_known(cls, v: str) -> str:
+        if v not in _ARTIFACT_KINDS:
+            raise ValueError(f"kind must be one of {sorted(_ARTIFACT_KINDS)}")
+        return v
+
+
+def _ring_validator(v: str) -> str:
+    if v not in RINGS:
+        raise ValueError(f"ring must be one of {RINGS}")
+    return v
+
+
+class Evolution(BaseModel):
+    """A signed, versioned artifact set promoted through rings (born in draft)."""
+    model_config = ConfigDict(extra="forbid")
+    evo_id:     str = Field(..., description="stable id for this evolution")
+    artifacts:  list[Artifact] = Field(..., min_length=1)
+    notes:      str = Field(default="", max_length=1024)
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+
+class RingState(BaseModel):
+    """A signed ring transition for an evolution (promote/demote target)."""
+    model_config = ConfigDict(extra="forbid")
+    evo_id:     str = Field(...)
+    ring:       str = Field(...)
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+    @field_validator("ring")
+    @classmethod
+    def _ring(cls, v: str) -> str:
+        return _ring_validator(v)
+
+
+class RingAssign(BaseModel):
+    """A signed per-box ring assignment issued by a center."""
+    model_config = ConfigDict(extra="forbid")
+    box_did:    str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    ring:       str = Field(...)
+    issued_by:  str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    created_at: str = Field(default_factory=now_rfc3339)
+    sig:        Optional[str] = None
+    signer_did: Optional[str] = None
+
+    @field_validator("ring")
+    @classmethod
+    def _ring(cls, v: str) -> str:
+        return _ring_validator(v)
 
 
 # ---------------------------------------------------------------------------
