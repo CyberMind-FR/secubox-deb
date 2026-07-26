@@ -26,6 +26,15 @@ fi
 touch /var/log/secubox/audit.log 2>/dev/null || true
 chgrp secubox-assist /var/log/secubox/audit.log 2>/dev/null || true
 chmod 0664 /var/log/secubox/audit.log 2>/dev/null || true
+# The assist ctl runs as `secubox` (invoked by the API) and must reach the box
+# signing key at /etc/secubox/secrets/annuaire/node.key to sign journal ops
+# (offer/request/session). The shared /etc/secubox/secrets parent may be
+# root:secubox-toolbox 0750, which `secubox` cannot traverse. Add o+x
+# (traversal-ONLY, no read/list — the secret subdirs keep their own 0700) so
+# secubox can pass through to its own annuaire/ subdir. NEVER chown/tighten it.
+if [ -d /etc/secubox/secrets ]; then
+    chmod o+x /etc/secubox/secrets 2>/dev/null || true
+fi
 # Ephemeral WG range (10.11.0.0/24, iface wg-ephemeral) for the escalate
 # flow's session-scoped peers (see assist/escalate.py — EscalateError is
 # fail-closed until a peer can actually be added). secubox-p2p does not yet

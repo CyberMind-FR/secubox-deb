@@ -1,3 +1,16 @@
+secubox-assist (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Marketplace UX: action-oriented labels (Proposer/Demander/Partager) with
+    emoji + inline hints so the offer/open-request/join-link verbs are
+    discoverable; success/error feedback banner on every marketplace POST
+    (was silent — a backend error or missing JWT showed nothing).
+  * postinst: chmod o+x /etc/secubox/secrets (traversal-only) so the ctl,
+    running as `secubox` via the API, can reach the node signing key to sign
+    journal ops (offer/request/session) — the shared parent's root:secubox-toolbox
+    0750 blocked it. Never chowns/tightens the parent; subdirs keep 0700.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 26 Jul 2026 06:00:00 +0200
+
 secubox-assist (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * feat: decentralized help-request marketplace — assist/rendezvous.py
