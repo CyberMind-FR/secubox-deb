@@ -1,0 +1,5 @@
+# secubox-assist's escalate.py (running its ctl as the `secubox` user, via
+# secubox-assistctl) needs to sudo into secubox-p2pctl — the ONLY privileged
+# surface for the wg-ephemeral iface (Task 2/3). Scoped to the ctl binary
+# only, exact path, no wildcard, no unrestricted grant.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-p2pctl

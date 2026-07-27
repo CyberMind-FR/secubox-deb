@@ -1,3 +1,31 @@
+secubox-p2p (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat: session-scoped ephemeral WireGuard peer CLI (secubox-p2pctl) on a
+    dedicated wg-ephemeral iface (10.11.0.0/24, udp/51825) — the only
+    privileged surface secubox-assist's escalate flow sudos into
+    (peer-add/peer-del/ephemeral-revoke/iface-up/sweep; guards fail closed
+    on out-of-range or non-ephemeral requests; ephemeral peers never enter
+    the persistent gondwana mesh state; boot_flush() tears down/rebuilds
+    the iface if the kernel rebooted since the registry was last written).
+  * packaging: new secubox-p2p-ephemeral-sweep.service/.timer (root
+    oneshot, OnUnitActiveSec=60s) — a TTL backstop that removes expired
+    ephemeral peers even if the assist-side session teardown never runs.
+    New scoped sudoers/secubox-p2p-ephemeral (secubox ALL=(root) NOPASSWD:
+    /usr/sbin/secubox-p2pctl — exact path, no wildcard). New own-table nft
+    drop-in (inet secubox_p2p_ephemeral, policy accept, udp dport 51825)
+    shipped to /etc/nftables.d/, reload-on-install like secubox-assist's.
+  * postinst: install -d /var/lib/secubox/p2p (root-owned, never chowns
+    the shared parent); generates /etc/secubox/secrets/p2p/wg-ephemeral.key
+    once via `wg genkey` if absent (0600, guarded — wg may be absent in a
+    build container); runs `secubox-p2pctl iface-up` guarded; enables the
+    sweep timer; reloads nftables to pick up the new drop-in.
+  * Cross-package note: the Freebox/router UDP 51825 forward is an
+    out-of-package deploy prerequisite for a remote center to actually
+    reach wg-ephemeral live (mirrors the existing wg-mesh 51822 forward);
+    the nft INPUT allow itself ships in this package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 27 Jul 2026 11:00:00 +0200
+
 secubox-p2p (1.10.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

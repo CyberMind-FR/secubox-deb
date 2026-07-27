@@ -1,3 +1,18 @@
+secubox-assist (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat(escalate): the `join` path now actually execs secubox-p2pctl —
+    escalate.py's builders (peer-add/ephemeral-revoke argv, --did carried
+    through) are run via `sudo -n /usr/sbin/secubox-p2pctl ...` under the
+    scoped sudoers entry secubox-p2p now ships
+    (sudoers/secubox-p2p-ephemeral, Depends already present). Previously
+    the CLI didn't exist upstream, so escalation failed closed; the
+    guarded ephemeral-init postinst breadcrumb
+    (/etc/secubox/assist/EPHEMERAL-RANGE.note) is now moot on boards
+    running an updated secubox-p2p, since the CLI's own postinst
+    provisions the wg-ephemeral key/iface/sweep-timer directly.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 27 Jul 2026 11:15:00 +0200
+
 secubox-assist (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * packaging: move python3-websockets from Depends to Recommends. The WS
