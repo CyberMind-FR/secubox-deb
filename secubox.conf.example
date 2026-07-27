@@ -187,3 +187,19 @@ classifier_override = false
 # functional         = ["^app_theme$"]
 # analytics          = ["^my_analytics_"]
 # marketing          = ["^my_ad_id$"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fleet metrics (fleet-metrics) — secubox-annuaire
+# ─────────────────────────────────────────────────────────────────────────────
+# secubox-metrics-publish.timer runs `sbx-fleetctl publish` every 60s, which
+# signs a MetricSnapshot (CPU/mem/disk/load/uptime/modules_down/counters)
+# with this box's own node key and persists it locally at
+# /var/lib/secubox/annuaire/fleet/self.json. The annuaire API serves it
+# verbatim on GET /fleet/self (public, mesh-only :8799 — mirrors /log/export)
+# and aggregates self + verified peers on the JWT-gated GET /fleet, backing
+# the /fleet panel.
+[metrics]
+# Set to false to opt this box OUT of publishing fleet metrics entirely —
+# sbx-fleetctl publish becomes a documented no-op (rc0, {"skipped": ...}).
+# The timer stays enabled either way; this is the operator's kill switch.
+fleet_publish = true

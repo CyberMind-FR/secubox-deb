@@ -16,6 +16,7 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d
 	install -m 644 $(CURDIR)/nginx/annuaire.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d/
 	install -m 644 $(CURDIR)/nginx/centers.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d/
+	install -m 644 $(CURDIR)/nginx/fleet.conf $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox.d/
 
 	# Authoritative API route (secubox-routes.d)
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/nginx/secubox-routes.d
@@ -32,6 +33,9 @@ override_dh_auto_install:
 	# Box operator CLI — delegated center grants (Centres & Grants, Task 7)
 	install -m 755 $(CURDIR)/sbin/sbx-centersctl $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-centersctl
 
+	# Box operator CLI — fleet metrics publish (fleet-metrics, Task 5)
+	install -m 755 $(CURDIR)/sbin/sbx-fleetctl $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-fleetctl
+
 	# Non-local bind sysctl (nginx binds the wg-mesh IP even if iface is late)
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/sysctl.d
 	install -m 644 $(CURDIR)/sysctl/30-secubox-nonlocal-bind.conf $(CURDIR)/debian/secubox-annuaire/etc/sysctl.d/
@@ -44,10 +48,15 @@ override_dh_auto_install:
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/centers
 	cp -r $(CURDIR)/www/centers/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/centers/
 
+	# Web UI (static) — Flotte / fleet metrics panel (fleet-metrics, Task 5)
+	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/fleet
+	install -m 644 $(CURDIR)/www/fleet/* $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/www/fleet/
+
 # Hub menu entry
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d
 	install -m 644 $(CURDIR)/menu.d/575-annuaire.json $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d/
 	install -m 644 $(CURDIR)/menu.d/570-centers.json $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d/
+	install -m 644 $(CURDIR)/menu.d/595-fleet.json $(CURDIR)/debian/secubox-annuaire/usr/share/secubox/menu.d/
 
 	# systemd service
 	install -d $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system
@@ -63,6 +72,9 @@ override_dh_auto_install:
 	install -m 755 $(CURDIR)/sbin/sbx-threatmesh-bridge $(CURDIR)/debian/secubox-annuaire/usr/sbin/sbx-threatmesh-bridge
 	install -m 644 $(CURDIR)/systemd/secubox-threatmesh-bridge.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/secubox-threatmesh-bridge.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	# Fleet metrics publish timer + oneshot (fleet-metrics, Task 5)
+	install -m 644 $(CURDIR)/systemd/secubox-metrics-publish.service $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-metrics-publish.timer $(CURDIR)/debian/secubox-annuaire/usr/lib/systemd/system/
 	install -d $(CURDIR)/debian/secubox-annuaire/etc/secubox
 	install -m 644 $(CURDIR)/conf/annuaire-apply.conf.example $(CURDIR)/debian/secubox-annuaire/etc/secubox/
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox Annuaire — publish this node's signed fleet metrics snapshot (fleet-metrics)
+Documentation=file:///usr/share/doc/secubox-annuaire/README
+After=secubox-annuaire.service
+Wants=secubox-annuaire.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+# Signs with the box's own node.key (owned by secubox) — never root. A
+# missing/disabled config degrades to a no-op (see sbx-fleetctl --help).
+ExecStart=/usr/sbin/sbx-fleetctl publish
