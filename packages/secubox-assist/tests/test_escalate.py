@@ -22,8 +22,16 @@ def test_peer_ip_must_be_in_ephemeral_range():
     argv = esc.add_ephemeral_peer("PUBKEY=", "1.2.3.4:51820", "10.11.0.7")
     assert isinstance(argv, list) and "10.11.0.7" in argv
     assert not any(";" in a for a in argv)  # never a shell string
+    assert argv[-2:] == ["--did", ""]  # back-compat default did="" still appends the flag
     with pytest.raises(esc.EscalateError):
         esc.add_ephemeral_peer("PUBKEY=", "1.2.3.4:51820", "10.99.1.5")  # wrong range
+
+
+def test_peer_add_appends_did_for_registry_revoke():
+    did = "did:plc:" + "b" * 32
+    argv = esc.add_ephemeral_peer("PUBKEY=", "1.2.3.4:51820", "10.11.0.7", did)
+    assert argv[-2:] == ["--did", did]
+    assert "--ip" in argv and "--allowed-ip" in argv  # both kept, --allowed-ip authoritative
 
 
 def test_teardown_returns_argv_lists():
