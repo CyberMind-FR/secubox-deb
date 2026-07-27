@@ -21,7 +21,6 @@ BOX_ADDR = "10.11.0.1/24"
 LISTEN_PORT = 51825
 REGISTRY_PATH = "/var/lib/secubox/p2p/ephemeral.json"
 BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id"
-_EMPTY = {"boot_id": None, "peers": []}
 
 
 def in_range(ip: str) -> bool:
@@ -46,12 +45,12 @@ def load(path: str = REGISTRY_PATH) -> Dict[str, Any]:
         with open(path) as fh:
             reg = json.load(fh)
         if not isinstance(reg, dict) or "peers" not in reg:
-            return dict(_EMPTY)
+            return {"boot_id": None, "peers": []}
         reg.setdefault("boot_id", None)
         reg.setdefault("peers", [])
         return reg
     except (OSError, ValueError):
-        return dict(_EMPTY)
+        return {"boot_id": None, "peers": []}
 
 
 def save(reg: Dict[str, Any], path: str = REGISTRY_PATH) -> None:
@@ -83,9 +82,9 @@ def remove_by_did(reg, did) -> List[Dict[str, Any]]:
 def expired(reg, now_ts: str) -> List[Dict[str, Any]]:
     out = []
     for p in reg.get("peers", []):
-        ts = p.get("expires_ts") or ""
-        # fail-closed: empty/malformed -> treat as expired (never sticky).
-        if not ts or len(ts) != 20 or not ts.endswith("Z"):
+        ts = p.get("expires_ts")
+        # fail-closed: missing / non-string / malformed -> treat as expired.
+        if not isinstance(ts, str) or len(ts) != 20 or not ts.endswith("Z"):
             out.append(p)
             continue
         if ts <= now_ts:  # RFC3339 Z is lexicographically ordered
