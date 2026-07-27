@@ -189,6 +189,43 @@ def test_fleet_peer_fetch_raising_does_not_500(client, tmp_path, monkeypatch):
     assert nodes == {did}
 
 
+def test_fleet_aggregates_peers_concurrently_and_drops_failures(client, tmp_path, monkeypatch):
+    """Multiple peers are pulled via asyncio.gather(to_thread(...)); a raising
+    peer and a None-returning peer are both dropped, only the verified peer
+    survives alongside self (proves the concurrent-fetch + drop-on-failure
+    path introduced to stop /fleet from serially blocking the shared loop)."""
+    tc, apimain = client
+    priv, _pub, did = _actor()
+    self_rec = _signed(priv, did)
+    fleet_store.write(self_rec, path=str(tmp_path / "self.json"))
+
+    good_priv, _good_pub, good_did = _actor()
+    good_rec = _signed(good_priv, good_did)
+
+    monkeypatch.setattr(
+        apimain.mesh_sync, "read_mesh_peers",
+        lambda *a, **k: [
+            {"mesh_ip": "10.10.0.2", "name": "good"},
+            {"mesh_ip": "10.10.0.9", "name": "raiser"},
+            {"mesh_ip": "10.10.0.5", "name": "none-peer"},
+        ],
+    )
+
+    def _fetch(url, timeout=2):
+        if "10.10.0.2" in url:
+            return good_rec
+        if "10.10.0.9" in url:
+            raise TimeoutError("no route to host")
+        return None  # "none-peer"
+
+    monkeypatch.setattr(apimain, "_fetch_fleet_peer", _fetch)
+
+    r = tc.get("/fleet")
+    assert r.status_code == 200
+    nodes = {n["node_did"] for n in r.json()["nodes"]}
+    assert nodes == {did, good_did}
+
+
 def test_fleet_no_peers_no_self_returns_empty_nodes(client, monkeypatch):
     tc, apimain = client
     monkeypatch.setattr(apimain.mesh_sync, "read_mesh_peers", lambda *a, **k: [])
