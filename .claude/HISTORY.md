@@ -3,6 +3,15 @@
 
 ---
 
+## 2026-07-27 — Trilogy sub-projects 1-2 finalized + p2p-ephemeral foundation (deployed gk2)
+
+Large session across three deployed deliverables (all merged to master, SDD + opus final reviews):
+
+- **release-rings (#909)** — center-driven progressive artifact delivery `draft→internal→published` (grant `capability="release"`). NEW `secubox-release 0.1.0` + `secubox-annuaire 0.9.0`. Final review closed the recurring author-vs-payload sovereignty class at the SHARED `active_grants` substrate (`_author`==issued_by, fail-closed) — also hardens Centres&Grants config-delegation; `current_ring` sovereignty-filtered. reprepro-copy repo actuator (arm64 guard) + 4R box actuator + `/releases` panel. Deploy drift: API route needs a manual `webui.conf` location (secubox.d dropin inert on the admin vhost).
+- **assist fixes** — (1) socle session resolvers bind the verified `entry.author` not `payload.issued_by` (#910, phantom-session DoS closed); (2) join-link URL now the public hub (`https://admin.<sso_cookie_domain>`) not `assist.local`; (3) `python3-websockets` Depends→Recommends (installs clean on gk2's pip-websockets policy).
+- **Incident (resolved):** deploying annuaire 0.8.1 (master) over 0.7.0 (unmerged assist-dual) dropped `assist_match.py` → assist API 502; recovered by merging assist-dual→master (annuaire 0.9.0 superset). Lesson recorded: never deploy a shared lib over a deployed-but-unmerged branch.
+- **p2p-ephemeral (#911)** — greenfield `secubox-p2pctl` + persistent-silent `wg-ephemeral` iface (10.11.0.0/24, udp/51825), session-scoped WG peers for assist escalation, auto-revoked via TTL backstop sweep; assist `join` now execs via `sudo -n`. `secubox-p2p 1.11.0` + `secubox-assist 0.2.3`. opus: MERGEABLE (8/8 invariants; sudo env_reset blocks fake-wg substitution). Follow-up: CLOSE-path teardown unwired (sweep-only). Deploy prereq: Freebox UDP/51825 forward.
+
 ## 2026-07-25 — R-level: per-peer MITM inspection level (off/passive/active/reel) (PR #901, deployed gk2)
 
 Per-wg-toolbox-peer inspection control on the R3 Go engine (`secubox-toolbox-ng` sbxmitm), with bounded self-service + admin override. Built with subagent-driven-development (8 tasks, two-stage reviews, whole-branch opus review). Merged, deployed live, functionally validated.

@@ -1,5 +1,22 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-25*
+*Mis à jour : 2026-07-27*
+
+---
+
+## ✅ 2026-07-26/27 : Trilogie « auto-centre » — release-rings + assist (fixes) + p2p-ephemeral (déployés gk2)
+
+Grosse session : sous-projets 1-2 de la trilogie finalisés/durcis + déployés, plus le socle p2p éphémère (fondation escalade assist). Tous mergés master + déployés + vérifiés live.
+
+- **release-rings (PR #909, annuaire 0.8.x→0.9.0 + secubox-release 0.1.0 NEUF, déployé)** : livraison progressive d'artifacts par rings `draft→internal→published` pilotés centre (grant `capability="release"`). 9 tâches SDD + revue opus. Revue finale a rattrapé la classe **author-vs-payload au substrat partagé `active_grants`** (un pair mesh forge un GRANT_ISSUE`{issued_by=victime}` avec sa clé) → fixé fail-closed (`_author`==issued_by), **durcit aussi Centres&Grants**. `current_ring` filtré souveraineté. Actuateur repo reprepro-copy (garde arm64) + actuateur box 4R + panneau `/releases`. Prérequis : distributions reprepro provisionnées `/data/apt/conf/distributions`. Route API = **location manuelle webui.conf** (dropin secubox.d inerte sur vhost admin — gotcha lyrion/billets).
+- **assist — 3 fixes déployés** : (1) **socle session-resolvers author-binding (PR #910)** — même classe author-vs-payload (phantom-session DoS via `ASSIST_SESSION_OPEN{issued_by=victime}` fédéré) fixé (`_self_by`/`_selfcert_by`) ; (2) **join-link URL publique** — `secubox-assistctl joinlink` dérive le hub `https://admin.<sso_cookie_domain>` au lieu de `assist.local` (LAN-only) ; (3) **python3-websockets Depends→Recommends** — installe propre sur gk2 (pip websockets 16.0).
+- **INCIDENT (résolu)** : déployer annuaire 0.8.1 (master) par-dessus 0.7.0 (assist-dual non-mergé) a **droppé `assist_match.py`** → assist API 502. Réparé en mergeant assist-dual→master (annuaire **0.9.0** superset). Leçon en mémoire : ne jamais déployer une lib partagée par-dessus une branche déployée-non-mergée.
+- **p2p-ephemeral (PR #911, secubox-p2p 1.11.0 + secubox-assist 0.2.3, déployé)** : `secubox-p2pctl` (CLI root neuf) + iface `wg-ephemeral` persistante-silencieuse (10.11.0.0/24, udp/51825), peers WG scopés-session pour l'escalade assist, auto-révoqués (backstop TTL sweep). L'assist `join` **exec** enfin via `sudo -n`. 4 tâches SDD + revue opus MERGEABLE. Bonus sécu : sudo `env_reset` strippe les `P2P_*` (pas de substitution de faux `wg`). Installé via `--force-depends` (aiohttp/websockets fournis par pip). Iface up + silencieuse vérifiée live.
+
+### ⬜ Next
+- **Sous-projet 3/3 — métriques centralisées+meshed** (dernier de la trilogie) : brainstorm à démarrer.
+- **Fast-follow p2p-ephemeral** : câbler `cmd_close`→`escalate.teardown` (actuellement sweep-only, peer vit jusqu'au TTL ≤4h/reboot) ; commentaire caveat `env_keep` au sudoers. **Phase 2** : rendezvous HTTPS `/assist/join/<token>`.
+- **Prérequis deploy** : Freebox UDP/**51825** forward → gk2 (escalade externe réelle). reprepro `sync-repo` reste manuel (passphrase GPG).
+- **Dette Depends pip-shadow** : `secubox-p2p` (aiohttp), `secubox-eye-square`/`secubox-soc-gateway` (websockets) ont le même hard-Depends absent sur gk2 → passer en Recommends (comme assist 0.2.2).
 
 ---
 
