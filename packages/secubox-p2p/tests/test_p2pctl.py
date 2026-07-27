@@ -72,3 +72,14 @@ def test_dryrun_writes_nothing(tmp_path):
     assert json.loads(r.stdout).get("dryrun") is True
     assert not (tmp_path / "ephemeral.json").exists()
     assert not rec.exists()
+
+
+def test_peer_add_save_failure_is_json_not_traceback(tmp_path):
+    env, _ = _env(tmp_path)
+    env["P2P_EPHEMERAL_REGISTRY"] = str(tmp_path / "nonexistent-dir" / "ephemeral.json")
+    r = subprocess.run([sys.executable, CTL, "peer-add", "--iface", "wg-ephemeral",
+                        "--ephemeral", "--pubkey", "PK", "--endpoint", "1.2.3.4:51820",
+                        "--allowed-ip", "10.11.0.2/32"], env=env, capture_output=True, text=True)
+    assert r.returncode == 1
+    assert "Traceback" not in r.stderr
+    assert json.loads(r.stderr)["error"]
