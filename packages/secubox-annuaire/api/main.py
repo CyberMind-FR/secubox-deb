@@ -15,6 +15,7 @@ Mutating endpoints: require JWT via Depends(require_jwt).
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -851,18 +852,25 @@ async def get_fleet():
         self_rec = fleet_store.read()
         peers = mesh_sync.read_mesh_peers()
 
+        urls = [
+            f"http://{peer['mesh_ip']}:{mesh_sync.DEFAULT_MESH_PORT}/api/v1/annuaire/fleet/self"
+            for peer in peers
+            if peer.get("mesh_ip")
+        ]
         peer_recs: List[Dict[str, Any]] = []
-        for peer in peers:
-            ip = peer.get("mesh_ip")
-            if not ip:
-                continue
-            url = f"http://{ip}:{mesh_sync.DEFAULT_MESH_PORT}/api/v1/annuaire/fleet/self"
-            try:
-                rec = _fetch_fleet_peer(url)
-            except Exception:
-                rec = None
-            if rec:
-                peer_recs.append(rec)
+        if urls:
+            # Offload each blocking urllib call to a thread and run them
+            # concurrently — this API is served in-process by the aggregator
+            # (a shared event loop across ~110 modules), so a serial loop of
+            # synchronous fetches would block it for up to timeout*len(urls).
+            # return_exceptions=True turns a raising peer into a value instead
+            # of aborting the gather; non-dict results (None or Exception) are
+            # dropped below.
+            results = await asyncio.gather(
+                *[asyncio.to_thread(_fetch_fleet_peer, u) for u in urls],
+                return_exceptions=True,
+            )
+            peer_recs = [r for r in results if isinstance(r, dict)]
 
         snaps = fleet.fleet_snapshots(self_rec, peer_recs)
 
