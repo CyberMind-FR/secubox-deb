@@ -47,3 +47,24 @@ override_dh_auto_install:
 
 	# Create runtime directory
 	install -d $(CURDIR)/debian/secubox-p2p/run/secubox
+
+	# Install ephemeral CLI (root-only surface for wg-ephemeral, Task 2)
+	install -d $(CURDIR)/debian/secubox-p2p/usr/sbin
+	install -m 755 $(CURDIR)/sbin/secubox-p2pctl $(CURDIR)/debian/secubox-p2p/usr/sbin/
+
+	# Install ephemeral sweep timer/service (TTL backstop, Task 4)
+	install -d $(CURDIR)/debian/secubox-p2p/lib/systemd/system
+	install -m 644 $(CURDIR)/systemd/secubox-p2p-ephemeral-sweep.service \
+		$(CURDIR)/debian/secubox-p2p/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/secubox-p2p-ephemeral-sweep.timer \
+		$(CURDIR)/debian/secubox-p2p/lib/systemd/system/
+
+	# Install scoped sudoers (secubox -> secubox-p2pctl, exact path only)
+	install -d $(CURDIR)/debian/secubox-p2p/etc/sudoers.d
+	install -m 440 $(CURDIR)/sudoers/secubox-p2p-ephemeral \
+		$(CURDIR)/debian/secubox-p2p/etc/sudoers.d/
+
+	# Install nft drop-in (own table, policy accept, udp/51825)
+	install -d $(CURDIR)/debian/secubox-p2p/etc/nftables.d
+	install -m 644 $(CURDIR)/nft/secubox-p2p-ephemeral.nft \
+		$(CURDIR)/debian/secubox-p2p/etc/nftables.d/

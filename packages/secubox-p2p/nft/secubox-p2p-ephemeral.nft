@@ -1,0 +1,21 @@
+# SecuBox p2p ephemeral WireGuard listener (wg-ephemeral, 10.11.0.0/24).
+# Session-scoped assist escalation peers reach this box on udp/51825.
+#
+# Own base chain with an accept default — a standalone table whose base
+# chain defaults to dropping is terminal for the whole netfilter hook the
+# instant this file loads: it would blackhole SSH, the webui, everything,
+# not just unmatched p2p-ephemeral traffic. Mirrors the secubox-assist /
+# secubox-toolbox precedent (packages/secubox-assist/nft/secubox-assist.nft)
+# — a fully self-contained table so load never depends on some other table
+# already existing on this board. This file must never issue a global
+# ruleset reset and never touches the main firewall.
+#
+# Loaded by /etc/nftables.conf via `include "/etc/nftables.d/*.nft"`
+# (packages/secubox-vortex-firewall ships and enables that include) so
+# this survives reboot.
+table inet secubox_p2p_ephemeral {
+    chain input {
+        type filter hook input priority filter; policy accept;
+        udp dport 51825 accept
+    }
+}

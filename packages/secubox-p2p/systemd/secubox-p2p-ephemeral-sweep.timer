@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic sweep of expired secubox-p2p ephemeral WireGuard peers
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+Unit=secubox-p2p-ephemeral-sweep.service
+
+[Install]
+WantedBy=timers.target
