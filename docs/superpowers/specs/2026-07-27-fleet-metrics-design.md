@@ -6,7 +6,11 @@
 
 ## Goal
 
-Every node federates a compact, signed **snapshot** of its own state onto the existing annuaire journal; a `/fleet` panel shows the whole gondwana mesh at a glance ("all my boxes at once"). Metrics become both **meshed** (federated over the sovereign signed journal, like NodeRecord/bans) and **centralized** (one fleet view on any node).
+Every node maintains a compact, **signed current snapshot** of its own state in a dedicated last-wins store; peers pull each other's current snapshot over the existing gondwana mesh listener (`<mesh_ip>:8799`); a `/fleet` panel shows the whole mesh at a glance ("all my boxes at once"). Metrics become both **meshed** (each snapshot is Ed25519-signed by the node key and pulled peer-to-peer over wg-mesh) and **centralized** (one fleet view on any node).
+
+## Transport decision (why NOT the journal)
+
+The annuaire journal is a **BLAKE2b-chained, append-only, immutable SQLite log** (CSPN audit posture — no UPDATE/DELETE; `verify_chain()` detects tampering). Appending a 60s metric snapshot as a journal op would grow the immutable security-audit log **unboundedly** and could never be pruned (deleting any entry breaks the chain). Therefore fleet snapshots do **NOT** live in the journal. Instead each node keeps exactly **one current signed snapshot** (overwritten each publish → bounded to 1 record/node), and the fleet resolver **pulls** each peer's current snapshot over the existing `:8799` mesh read-path and verifies its signature. Sovereignty/author-binding are preserved (Ed25519 sig by the node key, verified `signer_did == node_did`); the CSPN journal stays clean.
 
 ## Non-goals (out of scope)
 
@@ -17,30 +21,31 @@ Every node federates a compact, signed **snapshot** of its own state onto the ex
 
 ## Inherited invariants
 
-- Sovereign signed journal: every snapshot op is signed with the node key; the resolver binds to the VERIFIED `entry.author` == `payload.issued_by` (fail-closed — the same author-vs-payload hardening as the `active_grants`/assist fixes). A peer cannot forge another node's snapshot.
+- Sovereign signing: every snapshot record is Ed25519-signed with the node key; the resolver verifies the sig AND binds identity to the VERIFIED signer — `signer_did == node_did == issued_by` (fail-closed — the same author-vs-payload hardening as the `active_grants`/assist fixes). A peer cannot forge or overwrite another node's snapshot (each node serves only its OWN signed self-snapshot; a pulled snapshot claiming did X but signed by key Y is rejected).
 - No privileged action in-process; the publisher runs as `secubox` (signs with the box key it already owns), never root.
-- Transport is the existing `mesh_sync` over wg-mesh only.
+- Transport is a peer pull over wg-mesh only, via the existing `:8799` gondwana mesh read-path (same allow-10.10.0.0/24 + deny-all posture as `mesh_sync`). No new inter-node port.
 - Double-cache pattern for the local collection (stats-heavy → background refresh + cache file), per the project convention.
 - Fail-closed: a malformed or stale snapshot is ignored by the resolver, never trusted.
 - Never chown the shared parents.
 
 ## Architecture
 
-```
-each node (gk2 / c3box / amd64)                       any node's /fleet panel
+```text
+each node (gk2 / c3box / amd64)
   secubox-metrics-publish.timer (~60s)
-      │ metricsctl publish
+      │ metricsctl publish   (honors the [metrics] fleet_publish opt-in)
       │   • collect vitals   (secubox-metrics cache /var/cache/secubox/metrics)
       │   • module health    (systemctl is-active secubox-*)
       │   • counters         (annuaire: active bans / assist sessions / SOC alerts)
-      │   • sign + append  METRIC_SNAPSHOT{node_did,...}  ──┐
-      ▼                                                     │  mesh_sync (wg-mesh,
-   annuaire journal (Ed25519/BLAKE2b, append-only) ◀────────┘  signed, federates)
-      │                                                     
-      │  compaction: prune snapshots superseded by a newer one from the same author
+      │   • sign  MetricSnapshot{node_did,...}  → OVERWRITE fleet/self.json (bounded, 1/node)
       ▼
-   aggregator (in-process)  fleet_snapshots(entries) -> {node_did: latest}
-      │
+   :8799 gondwana mesh read-path  GET /fleet/self  →  serves the local signed self.json
+
+any node's /fleet view:
+   fleet.collect(self.json + pull each peer's :8799 /fleet/self over wg-mesh)
+      │  verify each sig; keep only signer_did == claimed node_did (fail-closed)
+      ▼
+   fleet_snapshots -> {node_did: snapshot}   (self + verified peers; unreachable peer = last-known/stale)
       ▼
    /fleet panel: matrix node × (vitals / health / counters), colour-coded, "seen Ns ago"
 ```
@@ -49,14 +54,15 @@ each node (gk2 / c3box / amd64)                       any node's /fleet panel
 
 | Unit | Responsibility |
 |------|----------------|
-| `annuaire/model.py` (extend) | `Op.METRIC_SNAPSHOT`; `MetricSnapshot` model (fixed shape, `extra=forbid`) |
-| `annuaire/fleet.py` (new, pure) | `fleet_snapshots(entries) -> {node_did: snapshot}` (last-wins per verified author), `is_stale(snapshot, now, ttl)`, health/colour helpers |
-| `annuaire/verbs.py` (extend) | `publish_metric(journal, priv, snapshot_fields)` — sign + append (mirrors `publish_ban`/NodeRecord signing) |
+| `annuaire/model.py` (extend) | `MetricSnapshot` model (fixed shape, `extra=forbid`) — a standalone signed record, NOT a journal op (no new `Op`) |
+| `annuaire/fleet.py` (new, pure) | `sign_snapshot(priv, fields) -> dict` / `verify_snapshot(rec) -> bool` (sig + `signer_did==node_did`, fail-closed); `fleet_snapshots(self_rec, peer_recs) -> {node_did: snapshot}` (verify each, keep verified); `is_stale(snapshot, now, ttl)`; health/colour helpers |
 | `annuaire/metrics_collect.py` (new, pure-ish) | `collect_snapshot()` — gather vitals + module health + counters from local sources into the `MetricSnapshot` shape (injectable readers for tests) |
-| `sbin/…ctl` `publish` subcommand (extend the annuaire ctl) | `metricsctl publish` = `collect_snapshot()` → `publish_metric()`; honors the opt-in toggle |
+| `annuaire/fleet_store.py` (new) | write/read the local signed self-snapshot at `/var/lib/secubox/annuaire/fleet/self.json` (atomic overwrite, last-wins) |
+| mesh `:8799` read-path `GET /fleet/self` (extend the gondwana listener) | serves the local signed `self.json` verbatim (signed → safe to serve publicly on the mesh) |
+| `sbin/…ctl` `publish` subcommand (extend the annuaire ctl) | `metricsctl publish` = `collect_snapshot()` → `sign_snapshot()` → `fleet_store.write()`; honors the opt-in toggle |
 | `systemd/secubox-metrics-publish.{service,timer}` (new) | ~60s publisher; `User=secubox` |
 | `www/fleet/index.html` + `menu.d/…-fleet.json` + `nginx/fleet.conf` (new) | the `/fleet` panel + menu + static route (aggregator serves the API in-process, like `/centers`) |
-| API `/fleet` endpoints (extend the annuaire API) | `GET /fleet` (JWT) → `fleet_snapshots` from the journal in-process |
+| API `/fleet` endpoint (extend the annuaire API) | `GET /fleet` (JWT) → reads local `self.json` + pulls each mesh peer's `:8799/fleet/self` (injected fetch, short timeout) → `fleet_snapshots` |
 
 ## Snapshot shape
 
@@ -73,26 +79,25 @@ uptime_s: int
 modules_up: int
 modules_down: list[str]     # names of down secubox-* units (bounded, e.g. cap 20)
 counters: {bans: int, assist_sessions: int, soc_alerts: int}
-issued_by: str (DID)        # == node_did, == verified author
+issued_by: str (DID)        # == node_did (the box's own identity)
+sig: str                    # Ed25519 over canonical_bytes(record_without_sig/signer_did)
+signer_did: str             # derived from the signing key; MUST equal node_did on verify
 ```
 
 ## Data flow & resolution
 
-- **Publish:** the timer runs `metricsctl publish`; `collect_snapshot()` reads the per-box `secubox-metrics` cache for vitals (no re-computation — reuse the existing double-cached values), `systemctl is-active` for module health, and the annuaire resolvers for the counters; `publish_metric` signs a `METRIC_SNAPSHOT` and appends it. It federates via the existing `mesh_sync`.
-- **Resolve:** `fleet_snapshots(entries)` walks the journal, keeps the LATEST `METRIC_SNAPSHOT` per verified author (`_author(entry) == payload.issued_by`, else skip — fail-closed), returns `{node_did: snapshot}`. The `/fleet` API calls it in-process (read-only, never crashes → `{}` on error).
-- **Present:** the panel renders one row per node, colour-coded (a down module → red, high load → amber), with a "seen Ns ago" freshness derived from `ts`; a snapshot older than a staleness TTL (e.g. 5×publish-interval) is greyed as "stale/offline".
+- **Publish:** the timer runs `metricsctl publish` (skips silently when `fleet_publish` is off); `collect_snapshot()` reads the per-box `secubox-metrics` cache for vitals (no re-computation — reuse the existing double-cached values), `systemctl is-active` for module health, and the annuaire resolvers for the counters; `sign_snapshot()` Ed25519-signs the record; `fleet_store.write()` **atomically overwrites** `fleet/self.json` (last-wins — one record).
+- **Serve:** the `:8799` gondwana mesh read-path serves `GET /fleet/self` = the local signed `self.json` verbatim (it is signed, so serving it to mesh peers leaks nothing forgeable).
+- **Resolve:** the `/fleet` API reads the local `self.json` and pulls each mesh peer's `:8799/fleet/self` (short timeout, injected fetch for tests); `fleet_snapshots` **verifies each record's sig and that `signer_did == node_did`** (fail-closed — a record failing verification, or claiming a did it didn't sign, is dropped), returns `{node_did: snapshot}`. Read-only, never crashes → partial/`{}` on error; an unreachable peer yields no fresh record and shows as stale.
+- **Present:** the panel renders one row per node, colour-coded (a down module → red, high load → amber), with a "seen Ns ago" freshness from `ts`; a snapshot older than a staleness TTL (e.g. 5×publish-interval) is greyed as "stale/offline".
 
-## Bounded growth (append-only journal)
+## Bounded by design
 
-`METRIC_SNAPSHOT` ops carry no durable authority (unlike grants/bans), so they are **compactable**: only the latest per author matters. The design keeps growth bounded by:
-1. Low publish frequency (~60s).
-2. A **compaction pass** that prunes `METRIC_SNAPSHOT` entries superseded by a newer one from the same author.
-
-The exact compaction mechanism depends on what the annuaire journal supports (whether it can prune/rewrite append-only entries without breaking per-entry signature verification — each entry self-verifies against its own author sig, so dropping a superseded snapshot does not invalidate others). **The implementation plan must verify the journal's compaction capability first**; if the journal cannot prune, the fallback is a dedicated last-wins mesh-synced snapshot store (one current record per node, federated like NodeRecord) instead of appending to the main journal. Either way the resolver contract (`fleet_snapshots -> {node_did: latest}`) is unchanged.
+Each node holds exactly **one** current snapshot, overwritten in place each publish — storage is O(number of nodes), not O(time). The immutable CSPN journal is never touched. No compaction/pruning problem exists.
 
 ## Sovereignty / consent
 
-A node shares **its own** vitals — a symmetric, opt-in model, not a delegated authority. No `capability` grant is required (unlike config/assist, where a *center* acts *on* a box). Consent is a per-node **publish toggle** (config `[metrics] fleet_publish = true`, default on); when off, the node publishes nothing and simply doesn't appear in others' `/fleet`. Every mesh member sees every published snapshot — a shared fleet view. The resolver's author-binding prevents a peer from forging or overwriting another node's snapshot.
+A node shares **its own** vitals — a symmetric, opt-in model, not a delegated authority. No `capability` grant is required (unlike config/assist, where a *center* acts *on* a box). Consent is a per-node **publish toggle** (config `[metrics] fleet_publish = true`, default on); when off, the node publishes nothing and simply doesn't appear in others' `/fleet`. Every mesh member can pull every node's published snapshot — a shared fleet view. Forgery/overwrite is prevented structurally: a node serves only its OWN signed `self.json`, and the resolver drops any pulled record whose sig fails or whose `signer_did != node_did`, so a malicious peer cannot publish a snapshot under another node's identity.
 
 ## Error handling
 
@@ -104,11 +109,12 @@ A node shares **its own** vitals — a symmetric, opt-in model, not a delegated 
 
 - `fleet.py` pure: `fleet_snapshots` last-wins per author, author-binding (forged `issued_by` != verified author → skipped), `is_stale` boundary, colour/health helpers. Unit-tested with dict fixtures.
 - `metrics_collect.collect_snapshot` with injected readers (fake cache/systemctl/counters) → correct fixed-shape record; graceful on missing sources.
-- `publish_metric` signs verifiably (journal.append re-verifies) and round-trips through `fleet_snapshots`.
-- ctl `publish` DRYRUN writes nothing; honors the opt-in toggle (off → no append).
+- `sign_snapshot`/`verify_snapshot` round-trip: a signed record verifies; a tampered field or a record whose `signer_did != node_did` fails (fail-closed); `fleet_snapshots` drops forged/foreign-signed peer records and keeps verified ones.
+- ctl `publish` DRYRUN writes nothing; honors the opt-in toggle (off → no self.json write).
+- `/fleet` API with an injected peer-fetch: assembles self + verified peers; an unreachable/timing-out peer degrades to stale, never crashes.
 - Panel/menu: `sbx_token`, `/shared/sidebar.js`, no inline `on*=`/`innerHTML`, valid menu schema.
 - Packaging: publisher unit `User=secubox`; no shared-parent chown; `#DEBHELPER#` alone.
 
 ## Deploy notes
 
-Rides the existing `mesh_sync` (no new inter-node transport, no new forwarded port). Publisher enabled by default (opt-in on). The `/fleet` API route may need a manual `webui.conf` location on gk2's admin vhost (the recurring `secubox.d`-dropin-inert gotcha — same as `/releases`), confirmed at deploy.
+Reuses the existing `:8799` gondwana mesh listener (allow-10.10.0.0/24 + deny-all) for the peer pull — no new inter-node port, no new Freebox forward. Publisher enabled by default (opt-in on). The `/fleet` API route may need a manual `webui.conf` location on gk2's admin vhost (the recurring `secubox.d`-dropin-inert gotcha — same as `/releases`), confirmed at deploy. The plan must locate the `:8799` listener's server code to add the `/fleet/self` read-path.
