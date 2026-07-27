@@ -1,3 +1,21 @@
+secubox-annuaire (0.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat(fleet): fleet metrics — every node signs a MetricSnapshot
+    (CPU/mem/disk/load1/uptime/modules_down/counters) with its own sovereign
+    node key and publishes it via secubox-metrics-publish.timer (60s,
+    User=secubox, sbx-fleetctl publish) into a dedicated last-writer-wins
+    store (/var/lib/secubox/annuaire/fleet/self.json). Peers pull it
+    verbatim over the existing :8799 mesh listener (GET /fleet/self, public
+    — mirrors /log/export); GET /fleet (JWT) aggregates self + verified
+    peers with health/stale annotations. Ships the /fleet panel (matrix of
+    nodes, health dot, cpu/mem/disk bars, "vu il y a Ns", XSS-strict:
+    createElement/textContent only, no innerHTML, no inline handlers) and
+    the menu.d/595-fleet.json entry. `sbx-fleetctl` now actually installs to
+    /usr/sbin (fixes the prior task's install gap); [metrics] fleet_publish
+    documented in secubox.conf.example as the per-box opt-out.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 27 Jul 2026 11:00:00 +0200
+
 secubox-annuaire (0.9.0-1~bookworm1) bookworm; urgency=high
 
   * merge: unify the annuaire trust substrate — the assist marketplace layer

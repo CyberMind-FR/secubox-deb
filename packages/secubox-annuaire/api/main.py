@@ -15,6 +15,7 @@ Mutating endpoints: require JWT via Depends(require_jwt).
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -42,6 +43,14 @@ except ImportError:
 def require_jwt():
     """Return the real or stub JWT dependency."""
     return Depends(_require_jwt)
+
+
+# ---------------------------------------------------------------------------
+# Fleet metrics (feat/fleet-metrics, Task 4) — pure modules, no FS/DB touched
+# on import, safe to bind at module scope (and lets tests monkeypatch
+# apimain.fleet_store / apimain.mesh_sync directly, mirroring apimain._centers_ctl).
+# ---------------------------------------------------------------------------
+from annuaire import fleet, fleet_store, mesh_sync  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -789,6 +798,91 @@ async def pull_log(req: PullLogRequest):
         return {"ingested": 0, "skipped": 0, "rejected": 0, "error": str(e)}
 
     return import_entries(get_journal(), entries)
+
+
+# ---------------------------------------------------------------------------
+# Fleet metrics (feat/fleet-metrics, Task 4)
+#
+# /fleet/self mirrors /log/export: public, no JWT — it serves this node's own
+# SIGNED MetricSnapshot verbatim, exactly what a peer pulls on :8799 (safe to
+# expose: the record is signed, a reader must still verify_snapshot() it).
+#
+# /fleet is the JWT-gated aggregate view: self + every mesh peer's snapshot,
+# pulled live and verified, annotated with health/stale. Read-only and must
+# NEVER 500 — an unreachable, timing-out, or malicious peer is dropped, not
+# fatal to the endpoint.
+# ---------------------------------------------------------------------------
+
+_FLEET_TTL_S = 5 * 60  # 5x the publish interval (sbx-fleetctl publish timer)
+
+
+@app.get("/fleet/self")
+async def get_fleet_self():
+    """This node's own signed MetricSnapshot, or {} if not yet published (public)."""
+    return fleet_store.read() or {}
+
+
+def _fetch_fleet_peer(url: str, timeout: int = 2) -> Optional[Dict[str, Any]]:
+    """Pull a peer's /fleet/self record (production fetcher, injectable for tests).
+
+    Returns the parsed record dict, or None on ANY error (unreachable peer,
+    timeout, non-200, malformed JSON, non-dict body) — the caller treats None
+    as "skip this peer", never as fatal.
+    """
+    import json as _json          # noqa: PLC0415
+    import urllib.request         # noqa: PLC0415
+
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (mesh-local)
+            data = _json.loads(resp.read())
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+@app.get("/fleet", dependencies=[Depends(_require_jwt)])
+async def get_fleet():
+    """Aggregate fleet view: self + verified mesh peers, with health/stale.
+
+    Never raises — any unexpected failure (corrupt local store, peer list
+    unreadable, etc.) degrades to {"nodes": []} rather than a 500.
+    """
+    try:
+        self_rec = fleet_store.read()
+        peers = mesh_sync.read_mesh_peers()
+
+        urls = [
+            f"http://{peer['mesh_ip']}:{mesh_sync.DEFAULT_MESH_PORT}/api/v1/annuaire/fleet/self"
+            for peer in peers
+            if peer.get("mesh_ip")
+        ]
+        peer_recs: List[Dict[str, Any]] = []
+        if urls:
+            # Offload each blocking urllib call to a thread and run them
+            # concurrently — this API is served in-process by the aggregator
+            # (a shared event loop across ~110 modules), so a serial loop of
+            # synchronous fetches would block it for up to timeout*len(urls).
+            # return_exceptions=True turns a raising peer into a value instead
+            # of aborting the gather; non-dict results (None or Exception) are
+            # dropped below.
+            results = await asyncio.gather(
+                *[asyncio.to_thread(_fetch_fleet_peer, u) for u in urls],
+                return_exceptions=True,
+            )
+            peer_recs = [r for r in results if isinstance(r, dict)]
+
+        snaps = fleet.fleet_snapshots(self_rec, peer_recs)
+
+        from annuaire.model import now_rfc3339  # noqa: PLC0415
+        now = now_rfc3339()
+        nodes = [
+            {**snap, "health": fleet.health(snap), "stale": fleet.is_stale(snap, now, _FLEET_TTL_S)}
+            for snap in snaps.values()
+        ]
+        return {"nodes": nodes}
+    except Exception:
+        return {"nodes": []}
 
 
 # ---------------------------------------------------------------------------
