@@ -44,12 +44,12 @@ def _in_range(ip: str) -> bool:
         return False
 
 
-def add_ephemeral_peer(pubkey: str, endpoint: str, ip: str) -> List[str]:
+def add_ephemeral_peer(pubkey: str, endpoint: str, ip: str, did: str = "") -> List[str]:
     if not _in_range(ip):
         raise EscalateError(f"ip {ip!r} outside ephemeral range {EPHEMERAL_RANGE}")
     return [_P2P, "peer-add", "--iface", EPHEMERAL_IFACE, "--ephemeral",
             "--pubkey", pubkey, "--endpoint", endpoint,
-            "--ip", ip, "--allowed-ip", f"{ip}/32"]
+            "--ip", ip, "--allowed-ip", f"{ip}/32", "--did", did]
 
 
 def teardown(ip: str, did: str) -> List[List[str]]:

@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox P2P — ephemeral wg-ephemeral peer sweep (TTL backstop)
+After=network.target
+
+[Service]
+Type=oneshot
+# Root oneshot: secubox-p2pctl manages the wg-ephemeral kernel iface
+# (wg/ip calls) and its own registry file — no User= line here, matches
+# the sudoers principal being root, not the secubox service user.
+ExecStart=/usr/sbin/secubox-p2pctl sweep

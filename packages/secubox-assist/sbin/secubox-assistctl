@@ -91,6 +91,7 @@ import argparse
 import json
 import os
 import secrets
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -393,18 +394,23 @@ def cmd_join(a) -> int:
         return 1  # unreachable
     identity = escalate.mint_ephemeral_identity()
     try:
-        peer_argv = escalate.add_ephemeral_peer(a.pubkey, a.endpoint, a.ip)
+        peer_argv = escalate.add_ephemeral_peer(a.pubkey, a.endpoint, a.ip, identity["did"])
     except escalate.EscalateError as exc:
         _die(str(exc))
         return 1  # unreachable
-    # Real p2p wiring (exec under sudo via secubox-p2pctl) is a documented
-    # follow-up — secubox-p2pctl does not exist yet. Print the plan so the
-    # redeem path is fully testable without a live exec. NEVER print the raw
-    # ephemeral private key (priv_hex) — it must not land in shell history,
-    # journald, or any stdout capture; only non-secret identity fields are
-    # surfaced here.
-    safe_identity = {k: v for k, v in identity.items() if k != "priv_hex"}
-    print(json.dumps({"identity": safe_identity, "peer_argv": peer_argv}))
+    # NEVER print the raw ephemeral private key (priv_hex) — it must not land
+    # in shell history, journald, or any stdout capture; only non-secret
+    # identity fields are surfaced, here and below.
+    if _dry():
+        safe_identity = {k: v for k, v in identity.items() if k != "priv_hex"}
+        _dryrun_report("assist_join", identity=safe_identity, peer_argv=peer_argv)
+        return 0
+    res = subprocess.run(["sudo", "-n", *peer_argv], shell=False,
+                         capture_output=True, text=True)
+    if res.returncode != 0:
+        _die(res.stderr.strip() or "p2pctl failed")
+        return 1  # unreachable
+    print(json.dumps({"joined": True, "ip": a.ip, "did": identity["did"]}))
     return 0
 
 

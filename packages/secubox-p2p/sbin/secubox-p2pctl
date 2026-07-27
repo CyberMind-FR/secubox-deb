@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""
+SecuBox-Deb :: secubox-p2pctl — root CLI for ephemeral WireGuard peers.
+
+The ONLY privileged surface for the wg-ephemeral iface: does the actual
+`wg`/`ip` calls and delegates bookkeeping to api.ephemeral (pure registry +
+guards, no subprocess there). secubox-assist's escalate.py sudos to this
+binary (Task 3) rather than shelling out to wg/ip itself.
+
+Commands:
+  iface-up                        idempotently ensure wg-ephemeral exists,
+                                  is addressed/keyed/up; boot_flush() first —
+                                  if the kernel rebooted since the registry
+                                  was last written, the iface (and any stale
+                                  peers it might still hold) is torn down and
+                                  rebuilt from an empty registry.
+  peer-add --iface wg-ephemeral --ephemeral --pubkey <pk> --endpoint <ep>
+           [--ip <ip>] --allowed-ip <ip>/32 [--did <did>] [--ttl <s>]
+                                  brings the iface up, `wg set ... peer ...`,
+                                  then records the peer in the registry with
+                                  an expiry ttl seconds from now (default
+                                  4h, hard-capped at 24h).
+  peer-del --iface wg-ephemeral --allowed-ip <ip>/32
+                                  removes the peer for that /32 from wg (if
+                                  present) and the registry. No-op success if
+                                  absent (idempotent).
+  ephemeral-revoke --did <did>    removes every peer recorded for that did
+                                  from wg + registry. Idempotent.
+  sweep                           removes every expired peer from wg + the
+                                  registry — safe to run with the iface down
+                                  (wg failures are ignored either way).
+
+Guards (security-critical, peer-add): `--iface` MUST be wg-ephemeral;
+`--ephemeral` MUST be passed; the /32 in `--allowed-ip` MUST resolve
+in-range via ephemeral.in_range(); if `--ip` is also given it MUST equal
+that same host (allowed-ip is authoritative). Fail closed on any mismatch.
+
+Env (override; all paths are test/lab knobs — production ships the
+defaults baked into api.ephemeral):
+  P2P_LIB                 default /usr/lib/secubox/p2p (import root, prod)
+  P2P_EPHEMERAL_REGISTRY  default ephemeral.REGISTRY_PATH
+  P2P_BOOT_ID             default: read ephemeral.BOOT_ID_PATH
+  P2P_WG_BIN              default "wg"   — wg(8) binary
+  P2P_IP_BIN              default "ip"   — ip(8) binary
+  P2P_WG_KEY              default /etc/secubox/secrets/p2p/wg-ephemeral.key
+                          — path only; the ctl never reads its contents,
+                          wg(8) itself reads the file via `private-key`.
+  DRYRUN=1                print {"dryrun": true, "would": ...}; touches
+                          neither wg/ip nor the registry file.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.environ.get("P2P_LIB", "/usr/lib/secubox/p2p"))
+
+from api import ephemeral  # noqa: E402
+
+DEFAULT_TTL_S = 4 * 3600
+MAX_TTL_S = 24 * 3600
+WG_KEY_PATH = os.environ.get("P2P_WG_KEY", "/etc/secubox/secrets/p2p/wg-ephemeral.key")
+
+
+def _die(reason: str) -> None:
+    print(json.dumps({"error": reason}), file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _dry() -> bool:
+    return os.environ.get("DRYRUN") == "1"
+
+
+def _dryrun_report(would: str, **fields) -> None:
+    print(json.dumps({"dryrun": True, "would": would, **fields}))
+
+
+def _reg_path() -> str:
+    return os.environ.get("P2P_EPHEMERAL_REGISTRY", ephemeral.REGISTRY_PATH)
+
+
+def _boot_id() -> str:
+    env = os.environ.get("P2P_BOOT_ID")
+    if env:
+        return env
+    with open(ephemeral.BOOT_ID_PATH, encoding="ascii") as fh:
+        return fh.read().strip()
+
+
+def _now_z() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _run(bin_env: str, default_bin: str, args, ignore_failure: bool = False):
+    argv = [os.environ.get(bin_env, default_bin), *args]
+    r = subprocess.run(argv, shell=False, capture_output=True, text=True, check=False)
+    if r.returncode != 0 and not ignore_failure:
+        raise OSError(f"{argv[0]} {' '.join(args)} failed: {r.stderr.strip() or r.stdout.strip()}")
+    return r
+
+
+def _wg(*args, ignore_failure: bool = False):
+    return _run("P2P_WG_BIN", "wg", args, ignore_failure=ignore_failure)
+
+
+def _ip(*args, ignore_failure: bool = False):
+    return _run("P2P_IP_BIN", "ip", args, ignore_failure=ignore_failure)
+
+
+def _iface_up(reg):
+    """Ensure wg-ephemeral exists/addressed/keyed/up; boot-flush stale state.
+
+    Returns the (possibly boot-flushed) registry. Caller is responsible for
+    saving it — this only touches the kernel iface, never the registry file.
+    """
+    reg, flushed = ephemeral.boot_flush(reg, _boot_id())
+    if flushed:
+        _ip("link", "del", "dev", ephemeral.EPHEMERAL_IFACE, ignore_failure=True)
+    _ip("link", "add", "dev", ephemeral.EPHEMERAL_IFACE, "type", "wireguard",
+        ignore_failure=True)
+    _wg("set", ephemeral.EPHEMERAL_IFACE, "listen-port", str(ephemeral.LISTEN_PORT),
+        "private-key", WG_KEY_PATH)
+    _ip("address", "replace", ephemeral.BOX_ADDR, "dev", ephemeral.EPHEMERAL_IFACE)
+    _ip("link", "set", ephemeral.EPHEMERAL_IFACE, "up")
+    return reg
+
+
+# --------------------------------------------------------------------------- #
+# commands
+# --------------------------------------------------------------------------- #
+
+def cmd_iface_up(a) -> int:
+    if _dry():
+        _dryrun_report("iface_up")
+        return 0
+    reg = ephemeral.load(_reg_path())
+    try:
+        reg = _iface_up(reg)
+        ephemeral.save(reg, _reg_path())
+    except (ValueError, OSError) as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"iface": ephemeral.EPHEMERAL_IFACE, "up": True}))
+    return 0
+
+
+def cmd_peer_add(a) -> int:
+    if a.iface != ephemeral.EPHEMERAL_IFACE:
+        _die(f"--iface must be {ephemeral.EPHEMERAL_IFACE}")
+        return 1  # unreachable
+    if not a.ephemeral:
+        _die("--ephemeral is required")
+        return 1  # unreachable
+    try:
+        host = ephemeral.host_of(a.allowed_ip)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    if not ephemeral.in_range(host):
+        _die(f"{host} is out of the ephemeral range {ephemeral.EPHEMERAL_RANGE}")
+        return 1  # unreachable
+    if a.ip and a.ip != host:
+        _die(f"--ip {a.ip} does not match --allowed-ip host {host}")
+        return 1  # unreachable
+    ttl = DEFAULT_TTL_S if a.ttl is None else max(0, min(a.ttl, MAX_TTL_S))
+    if _dry():
+        _dryrun_report("peer-add", iface=a.iface, pubkey=a.pubkey, endpoint=a.endpoint,
+                       ip=host, allowed_ip=a.allowed_ip, ttl_s=ttl)
+        return 0
+    expires_ts = (datetime.now(timezone.utc) + timedelta(seconds=ttl)
+                 ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    reg = ephemeral.load(_reg_path())
+    try:
+        reg = _iface_up(reg)
+        _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", a.pubkey, "endpoint", a.endpoint,
+            "allowed-ips", a.allowed_ip)
+        ephemeral.record_peer(reg, a.pubkey, host, a.did or "", a.endpoint, expires_ts)
+        ephemeral.save(reg, _reg_path())
+    except (ValueError, OSError) as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"added": host}))
+    return 0
+
+
+def cmd_peer_del(a) -> int:
+    if a.iface != ephemeral.EPHEMERAL_IFACE:
+        _die(f"--iface must be {ephemeral.EPHEMERAL_IFACE}")
+        return 1  # unreachable
+    try:
+        host = ephemeral.host_of(a.allowed_ip)
+    except ValueError as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    if _dry():
+        _dryrun_report("peer-del", iface=a.iface, allowed_ip=a.allowed_ip)
+        return 0
+    reg = ephemeral.load(_reg_path())
+    try:
+        removed = ephemeral.remove_by_ip(reg, host)
+        for p in removed:
+            _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", p["pubkey"], "remove",
+                ignore_failure=True)
+        ephemeral.save(reg, _reg_path())
+    except (ValueError, OSError) as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"removed": [p["ip"] for p in removed]}))
+    return 0
+
+
+def cmd_ephemeral_revoke(a) -> int:
+    if _dry():
+        _dryrun_report("ephemeral-revoke", did=a.did)
+        return 0
+    reg = ephemeral.load(_reg_path())
+    try:
+        removed = ephemeral.remove_by_did(reg, a.did)
+        for p in removed:
+            _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", p["pubkey"], "remove",
+                ignore_failure=True)
+        ephemeral.save(reg, _reg_path())
+    except (ValueError, OSError) as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"revoked": [p["ip"] for p in removed]}))
+    return 0
+
+
+def cmd_sweep(a) -> int:
+    if _dry():
+        _dryrun_report("sweep")
+        return 0
+    reg = ephemeral.load(_reg_path())
+    try:
+        exp = ephemeral.expired(reg, _now_z())
+        for p in exp:
+            _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", p["pubkey"], "remove",
+                ignore_failure=True)
+            ephemeral.remove_by_ip(reg, p["ip"])
+        ephemeral.save(reg, _reg_path())
+    except (ValueError, OSError) as exc:
+        _die(str(exc))
+        return 1  # unreachable
+    print(json.dumps({"swept": [p["ip"] for p in exp]}))
+    return 0
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(
+        prog="secubox-p2pctl",
+        description="Root CLI for ephemeral WireGuard peers on wg-ephemeral "
+                    "(iface-up/peer-add/peer-del/ephemeral-revoke/sweep)",
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("iface-up", help="idempotently ensure wg-ephemeral is up"
+                   ).set_defaults(fn=cmd_iface_up)
+
+    pa = sub.add_parser("peer-add", help="add an ephemeral peer (guards enforced)")
+    pa.add_argument("--iface", required=True)
+    pa.add_argument("--ephemeral", action="store_true")
+    pa.add_argument("--pubkey", required=True)
+    pa.add_argument("--endpoint", required=True)
+    pa.add_argument("--ip")
+    pa.add_argument("--allowed-ip", required=True)
+    pa.add_argument("--did", default="")
+    pa.add_argument("--ttl", type=int)
+    pa.set_defaults(fn=cmd_peer_add)
+
+    pd = sub.add_parser("peer-del", help="remove an ephemeral peer (idempotent)")
+    pd.add_argument("--iface", required=True)
+    pd.add_argument("--allowed-ip", required=True)
+    pd.set_defaults(fn=cmd_peer_del)
+
+    er = sub.add_parser("ephemeral-revoke", help="remove every peer for a did (idempotent)")
+    er.add_argument("--did", required=True)
+    er.set_defaults(fn=cmd_ephemeral_revoke)
+
+    sub.add_parser("sweep", help="remove every expired peer from wg + registry"
+                   ).set_defaults(fn=cmd_sweep)
+
+    args = p.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
