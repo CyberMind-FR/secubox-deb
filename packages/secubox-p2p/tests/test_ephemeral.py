@@ -55,3 +55,24 @@ def test_boot_flush():
 def test_load_missing_is_failsafe(tmp_path):
     reg = e.load(str(tmp_path / "nope.json"))
     assert reg == {"boot_id": None, "peers": []}
+
+
+def test_in_range_excludes_network_and_broadcast():
+    assert e.in_range("10.11.0.0") is False      # network address
+    assert e.in_range("10.11.0.255") is False     # broadcast
+    assert e.in_range("10.11.0.1") is True         # box addr allowed
+
+
+def test_expired_failclosed_on_non_string_ts():
+    reg = {"boot_id": "b", "peers": [
+        {"pubkey": "P", "ip": "10.11.0.2", "did": "d", "endpoint": "e",
+         "expires_ts": 12345},                      # non-string malformed
+    ]}
+    # must NOT raise, and must sweep the malformed entry
+    assert e.expired(reg, "2026-07-27T12:00:00Z") == reg["peers"]
+
+
+def test_load_missing_returns_independent_dicts(tmp_path):
+    r1 = e.load(str(tmp_path / "a.json")); r2 = e.load(str(tmp_path / "b.json"))
+    r1["peers"].append({"x": 1})
+    assert r2["peers"] == []                        # not contaminated
