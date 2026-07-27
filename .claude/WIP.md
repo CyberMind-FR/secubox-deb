@@ -12,9 +12,14 @@ Grosse session : sous-projets 1-2 de la trilogie finalisés/durcis + déployés,
 - **INCIDENT (résolu)** : déployer annuaire 0.8.1 (master) par-dessus 0.7.0 (assist-dual non-mergé) a **droppé `assist_match.py`** → assist API 502. Réparé en mergeant assist-dual→master (annuaire **0.9.0** superset). Leçon en mémoire : ne jamais déployer une lib partagée par-dessus une branche déployée-non-mergée.
 - **p2p-ephemeral (PR #911, secubox-p2p 1.11.0 + secubox-assist 0.2.3, déployé)** : `secubox-p2pctl` (CLI root neuf) + iface `wg-ephemeral` persistante-silencieuse (10.11.0.0/24, udp/51825), peers WG scopés-session pour l'escalade assist, auto-révoqués (backstop TTL sweep). L'assist `join` **exec** enfin via `sudo -n`. 4 tâches SDD + revue opus MERGEABLE. Bonus sécu : sudo `env_reset` strippe les `P2P_*` (pas de substitution de faux `wg`). Installé via `--force-depends` (aiohttp/websockets fournis par pip). Iface up + silencieuse vérifiée live.
 
+### ✅ 2026-07-27 : fleet-metrics — métriques centralisées+meshed (sous-projet 3/3, PR #912, déployé gk2)
+
+Dernier de la trilogie. Chaque nœud signe un `MetricSnapshot` (vitals+santé+compteurs) dans un store dédié last-wins `self.json` (PAS le journal CSPN immuable) ; les pairs se tirent mutuellement sur `:8799` (`/fleet/self` public signé, mirror `/log/export`) ; panneau `/fleet`. 5 tâches SDD + revue opus. `secubox-annuaire 0.10.0`, 424 tests. Bloquant rattrapé en revue finale : le listener `:8799` (allow-list exact-match) n'exposait pas `/fleet/self` → pulls 403 (moitié meshed inerte) — corrigé + tests. Déployé+vérifié gk2 : `/fleet`=401 JWT, panneau=200, `:8799/fleet/self`=200, timer publie ~60s. **TRILOGIE COMPLÈTE** (Centres&Grants ✅ + assist ✅ + fleet-metrics ✅, tous déployés).
+
 ### ⬜ Next
-- **Sous-projet 3/3 — métriques centralisées+meshed** (dernier de la trilogie) : brainstorm à démarrer.
-- **Fast-follow p2p-ephemeral** : câbler `cmd_close`→`escalate.teardown` (actuellement sweep-only, peer vit jusqu'au TTL ≤4h/reboot) ; commentaire caveat `env_keep` au sudoers. **Phase 2** : rendezvous HTTPS `/assist/join/<token>`.
+- **fleet-metrics** : déployer aussi c3box + amd64 (les 2 autres nœuds mesh) ; **health-noise** — `metrics_collect` compte tout unit `secubox-*` non-active comme "down" (incl. oneshots/timers by-design) → filtrer sur état `failed` ; sources disk_pct/soc_alerts (=0 actuellement).
+- **Fast-follow p2p-ephemeral** : câbler `cmd_close`→`escalate.teardown` (sweep-only, peer vit jusqu'au TTL ≤4h/reboot) ; caveat `env_keep` au sudoers ; **Phase 2** rendezvous HTTPS `/assist/join/<token>`.
+- **Dette Depends pip-shadow** : `secubox-p2p` (aiohttp), `secubox-eye-square`/`secubox-soc-gateway` (websockets) → passer en Recommends (comme assist 0.2.2).
 - **Prérequis deploy** : Freebox UDP/**51825** forward → gk2 (escalade externe réelle). reprepro `sync-repo` reste manuel (passphrase GPG).
 - **Dette Depends pip-shadow** : `secubox-p2p` (aiohttp), `secubox-eye-square`/`secubox-soc-gateway` (websockets) ont le même hard-Depends absent sur gk2 → passer en Recommends (comme assist 0.2.2).
 
