@@ -1,0 +1,10 @@
+{
+  "id": "fleet",
+  "name": "Flotte",
+  "icon": "🛰",
+  "path": "/fleet/",
+  "category": "mesh",
+  "order": 595,
+  "description": "Vue mesh des instantanés de métriques signés par nœud — CPU/mém/disque/load, modules down, compteurs",
+  "requires": ["secubox-annuaire"]
+}

@@ -6,6 +6,12 @@ case "$1" in
         install -d -m 0755 /var/lib/secubox/annuaire /var/log/secubox/annuaire 2>/dev/null || true
         chown -R secubox:secubox /var/lib/secubox/annuaire /var/log/secubox/annuaire 2>/dev/null || true
 
+        # Fleet metrics store (fleet-metrics, Task 5): secubox-metrics-publish.timer
+        # runs sbx-fleetctl publish as User=secubox, so this specific leaf dir
+        # (never the shared /var/lib/secubox parent) must be secubox-owned for
+        # it to write self.json.
+        install -d -o secubox -g secubox -m 0755 /var/lib/secubox/annuaire/fleet 2>/dev/null || true
+
         # Node-key secret dir (annuairectl init writes node.key here, 0600 secubox).
         # CSPN: secrets under /etc/secubox/secrets/, 0700, owned by the service user.
         install -d -m 0700 /etc/secubox/secrets/annuaire 2>/dev/null || true
@@ -98,6 +104,11 @@ case "$1" in
         # The WAF hook: bridge local crowdsec bans into the mesh. Safe no-op
         # where crowdsec is absent, so enabling by default is fine.
         systemctl enable --now secubox-threatmesh-bridge.timer 2>/dev/null || true
+        # Fleet metrics publish (fleet-metrics, Task 5): signs + persists this
+        # box's own MetricSnapshot every 60s. [metrics] fleet_publish=false in
+        # secubox.conf makes sbx-fleetctl publish a documented no-op, so
+        # enabling the timer by default is safe.
+        systemctl enable --now secubox-metrics-publish.timer 2>/dev/null || true
         if systemctl is-active --quiet nginx 2>/dev/null; then
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi
