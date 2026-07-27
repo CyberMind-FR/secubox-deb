@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<html lang="fr" class="hybrid-dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Flotte</title>
+<link rel="stylesheet" href="/shared/hybrid-dark.css">
+<style>
+  :root{
+    --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
+    --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
+    --cyan:#00d4ff; --red:#ff4466; --green:#00dd44; --yellow:#ffcc00;
+  }
+  body{font-family:'Courier Prime',monospace;color:var(--text);background:var(--bg-dark)}
+  .header{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:1rem}
+  .header h1{font-size:1.3rem;color:var(--cyan);text-shadow:0 0 10px var(--cyan);margin:0}
+  .header .sub{font-size:.72rem;color:var(--p31-dim);margin-top:.2rem}
+  .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--p31-dim);margin-right:.35rem;vertical-align:middle}
+  .dot.on{background:var(--green);box-shadow:0 0 6px var(--green)} .dot.off{background:var(--red)}
+  .dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+  .dot.warn{background:var(--yellow);box-shadow:0 0 6px var(--yellow)}
+  .dot.down{background:var(--red);box-shadow:0 0 6px var(--red)}
+  .dot.stale{background:var(--p31-dim);box-shadow:none}
+  .btns{display:flex;flex-wrap:wrap;gap:.4rem}
+  .btn{font-family:inherit;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;
+    color:var(--text);background:var(--bg-row);border:1px solid var(--border);border-radius:6px;
+    padding:.45rem .8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+  .btn:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,212,255,.4)}
+  .btn.small{padding:.2rem .45rem;font-size:.62rem}
+  .card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1rem;backdrop-filter:blur(10px)}
+  .card h3{font-size:.8rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+  .note{font-size:.76rem;color:var(--p31-dim);line-height:1.5;margin-top:.5rem}
+  table.matrix{width:100%;border-collapse:collapse;font-size:.78rem}
+  table.matrix th,table.matrix td{padding:.5rem .6rem;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+  table.matrix th{color:var(--p31-dim);text-transform:uppercase;font-size:.66rem;letter-spacing:.06em}
+  .empty-cell{color:var(--p31-dim);font-style:italic;font-size:.74rem}
+  tr.node-row.is-stale{opacity:.45}
+  .bar-wrap{display:inline-block;width:5rem;height:.5rem;background:var(--bg-row);border:1px solid var(--border);border-radius:3px;overflow:hidden;vertical-align:middle;margin-right:.4rem}
+  .bar-fill{display:block;height:100%;background:var(--cyan)}
+  .bar-fill.warn{background:var(--yellow)}
+  .bar-fill.crit{background:var(--red)}
+  .cell-inner{display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
+  .counter-badge{display:inline-block;padding:.1rem .35rem;border-radius:4px;background:var(--bg-row);
+    border:1px solid var(--border);font-size:.66rem;color:var(--text);margin-right:.25rem}
+  .counter-badge.nonzero{color:var(--yellow);border-color:var(--yellow)}
+  .module-badge{display:inline-block;padding:.1rem .35rem;border-radius:4px;background:var(--bg-row);
+    border:1px solid var(--red);color:var(--red);font-size:.66rem;margin:.1rem .2rem 0 0}
+  .empty{color:var(--p31-dim);font-size:.8rem;font-style:italic}
+  .hostname-col{color:var(--cyan);white-space:nowrap}
+  .toast{position:fixed;bottom:1rem;right:1rem;background:var(--cyan);color:#07121a;padding:.6rem 1rem;border-radius:6px;
+    font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+  .toast.show{opacity:1} .toast.error{background:var(--red);color:#fff}
+  @media(max-width:768px){.main{margin-left:0}}
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+  <header class="header">
+    <div>
+      <h1>🛰 Flotte</h1>
+      <div class="sub" id="sub"><span class="dot" id="dot"></span>chargement…</div>
+    </div>
+    <div class="btns">
+      <button class="btn" id="btn-refresh">↻ Rafraîchir</button>
+    </div>
+  </header>
+
+  <div class="card">
+    <h3>Nœuds mesh</h3>
+    <div class="note">Un instantané signé par nœud (dernier gagne) — publié toutes les 60s par
+      <code>secubox-metrics-publish.timer</code>, agrégé et vérifié ici. Une ligne grisée /
+      « hors-ligne » signifie un instantané périmé (aucune preuve fraîche de vie).</div>
+    <div style="overflow-x:auto;margin-top:.6rem">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Nœud</th><th>CPU</th><th>Mém.</th><th>Disque</th><th>Load1</th>
+            <th>Uptime</th><th>Compteurs</th><th>Modules down</th><th>Vu</th>
+          </tr>
+        </thead>
+        <tbody id="fleet-body"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/v1/annuaire';
+const REFRESH_MS = 10000;
+const $ = (id) => document.getElementById(id);
+
+function token(){ return localStorage.getItem('sbx_token') || ''; }
+function authHeaders(extra){
+  return Object.assign({'Authorization': 'Bearer ' + token()}, extra || {});
+}
+function toast(msg, isErr){
+  const t = $('toast'); t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 2600);
+}
+async function J(path, opts){
+  const o = Object.assign({credentials: 'same-origin'}, opts || {});
+  o.headers = authHeaders(o.headers);
+  const r = await fetch(API + path, o);
+  if (!r.ok) {
+    let detail = 'HTTP ' + r.status;
+    try { const b = await r.json(); if (b && b.detail) detail = b.detail; } catch (e) { /* ignore */ }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+// Toutes les valeurs issues de l'API sont posées via textContent/dataset
+// uniquement — JAMAIS en assignant du HTML brut à un noeud (garde XSS plus
+// stricte que le panneau /centers). Aucune donnée d'API n'apparaît dans un
+// attribut d'événement inline ; les actions passent par un unique
+// addEventListener délégué qui lit `dataset`.
+
+function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+function agoStr(ts){
+  if (!ts) return '—';
+  const then = Date.parse(ts);
+  if (Number.isNaN(then)) return '—';
+  const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (s < 90) return 'il y a ' + s + 's';
+  if (s < 5400) return 'il y a ' + Math.round(s / 60) + 'm';
+  return 'il y a ' + Math.round(s / 3600) + 'h';
+}
+
+function fmtUptime(sec){
+  sec = Number(sec) || 0;
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return d + 'j ' + h + 'h';
+  if (h > 0) return h + 'h ' + m + 'm';
+  return m + 'm';
+}
+
+function pctBarClass(pct){
+  if (pct >= 90) return 'crit';
+  if (pct >= 70) return 'warn';
+  return '';
+}
+
+function healthDot(healthState, isStale){
+  const dot = document.createElement('span');
+  dot.className = 'dot ' + (isStale ? 'stale' : (healthState || 'ok'));
+  return dot;
+}
+
+function pctCell(pct){
+  const wrap = document.createElement('span');
+  wrap.className = 'cell-inner';
+  const barWrap = document.createElement('span');
+  barWrap.className = 'bar-wrap';
+  const fill = document.createElement('span');
+  const v = Math.max(0, Math.min(100, Number(pct) || 0));
+  fill.className = 'bar-fill ' + pctBarClass(v);
+  fill.style.width = v + '%';
+  barWrap.appendChild(fill);
+  const label = document.createElement('span');
+  label.textContent = v.toFixed(0) + '%';
+  wrap.appendChild(barWrap);
+  wrap.appendChild(label);
+  return wrap;
+}
+
+function countersCell(counters){
+  const wrap = document.createElement('span');
+  const c = counters || {};
+  ['bans', 'assist_sessions', 'soc_alerts'].forEach((key) => {
+    const v = c[key] || 0;
+    const badge = document.createElement('span');
+    badge.className = 'counter-badge' + (v > 0 ? ' nonzero' : '');
+    badge.textContent = key + ':' + v;
+    wrap.appendChild(badge);
+  });
+  return wrap;
+}
+
+function modulesDownCell(modulesDown){
+  const wrap = document.createElement('span');
+  const list = modulesDown || [];
+  if (list.length === 0) {
+    const ok = document.createElement('span');
+    ok.className = 'empty';
+    ok.textContent = 'aucun';
+    wrap.appendChild(ok);
+    return wrap;
+  }
+  list.forEach((name) => {
+    const badge = document.createElement('span');
+    badge.className = 'module-badge';
+    badge.textContent = name;
+    wrap.appendChild(badge);
+  });
+  return wrap;
+}
+
+function buildRow(node){
+  const tr = document.createElement('tr');
+  tr.className = 'node-row' + (node.stale ? ' is-stale' : '');
+  tr.dataset.nodeDid = node.node_did || '';
+
+  const hostTd = document.createElement('td');
+  hostTd.className = 'hostname-col';
+  const inner = document.createElement('span');
+  inner.className = 'cell-inner';
+  inner.appendChild(healthDot(node.health, node.stale));
+  const hostSpan = document.createElement('span');
+  hostSpan.textContent = node.hostname || '(inconnu)';
+  inner.appendChild(hostSpan);
+  hostTd.appendChild(inner);
+  tr.appendChild(hostTd);
+
+  const cpuTd = document.createElement('td'); cpuTd.appendChild(pctCell(node.cpu_pct)); tr.appendChild(cpuTd);
+  const memTd = document.createElement('td'); memTd.appendChild(pctCell(node.mem_pct)); tr.appendChild(memTd);
+  const diskTd = document.createElement('td'); diskTd.appendChild(pctCell(node.disk_pct)); tr.appendChild(diskTd);
+
+  const loadTd = document.createElement('td');
+  loadTd.textContent = (Number(node.load1) || 0).toFixed(2);
+  tr.appendChild(loadTd);
+
+  const upTd = document.createElement('td');
+  upTd.textContent = fmtUptime(node.uptime_s);
+  tr.appendChild(upTd);
+
+  const countersTd = document.createElement('td');
+  countersTd.appendChild(countersCell(node.counters));
+  tr.appendChild(countersTd);
+
+  const modulesTd = document.createElement('td');
+  modulesTd.appendChild(modulesDownCell(node.modules_down));
+  tr.appendChild(modulesTd);
+
+  const seenTd = document.createElement('td');
+  seenTd.textContent = node.stale ? 'hors-ligne' : agoStr(node.ts);
+  tr.appendChild(seenTd);
+
+  return tr;
+}
+
+function renderNodes(nodes){
+  const body = $('fleet-body');
+  clear(body);
+  if (!nodes || nodes.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 9;
+    td.className = 'empty-cell';
+    td.textContent = 'aucun nœud publié';
+    tr.appendChild(td);
+    body.appendChild(tr);
+    return;
+  }
+  nodes
+    .slice()
+    .sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''))
+    .forEach((node) => body.appendChild(buildRow(node)));
+}
+
+// Délégation d'événements : aucune interaction ne dépend d'un attribut
+// on*="..." inline ; data-node-did porte l'identifiant (jamais interprété
+// comme code, lu via dataset).
+$('fleet-body').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-node-did]');
+  if (!row) return;
+  // Réservé pour une future vue détaillée par nœud (data-node-did disponible).
+});
+
+async function loadFleet(){
+  try {
+    const d = await J('/fleet');
+    renderNodes(d.nodes || []);
+    $('dot').className = 'dot on';
+    const sub = $('sub');
+    clear(sub);
+    const dot = document.createElement('span');
+    dot.className = 'dot on';
+    sub.appendChild(dot);
+    sub.appendChild(document.createTextNode((d.nodes || []).length + ' nœud(s)'));
+  } catch (e) {
+    $('dot').className = 'dot off';
+    const sub = $('sub');
+    clear(sub);
+    const dot = document.createElement('span');
+    dot.className = 'dot off';
+    sub.appendChild(dot);
+    sub.appendChild(document.createTextNode('flotte indisponible (' + e.message + ')'));
+    renderNodes([]);
+    toast('Flotte indisponible : ' + e.message, true);
+  }
+}
+
+$('btn-refresh').addEventListener('click', loadFleet);
+
+loadFleet();
+setInterval(loadFleet, REFRESH_MS);
+</script>
+</body>
+</html>
