@@ -3,6 +3,14 @@
 
 ---
 
+## 2026-07-27 — fleet-metrics: centralized+meshed node snapshots (trilogy 3/3, #912, deployed gk2)
+
+Last sub-project of the "auto-centre" trilogy. Each node signs a compact `MetricSnapshot` (vitals + module health + counters) with its sovereign node key into a dedicated last-wins store `/var/lib/secubox/annuaire/fleet/self.json` (NOT the immutable CSPN journal — it can't be pruned); peers pull each other's over the existing `:8799` gondwana mesh read-path (`GET /fleet/self`, public signed, mirrors `/log/export`); `GET /fleet` (JWT) aggregates self + verified peers concurrently (asyncio.gather + to_thread — never blocks the aggregator loop); a `/fleet` panel renders the mesh. Built SDD (5 tasks + opus whole-branch review). `secubox-annuaire 0.10.0`, 424 tests.
+
+- **Security:** `verify_snapshot` fail-closed 4-way DID binding (`did_from_pubkey(signer_pub)==signer_did==node_did==issued_by` + Ed25519); a peer can't serve a snapshot under another node's DID. `sign_snapshot` signs the normalized model payload. Publisher `User=secubox` (node key, non-root); opt-in `[metrics] fleet_publish`.
+- **Final-review blocking fix:** the `:8799` listener template is an exact-match allow-list — `/fleet/self` was missing → peer pulls 403, the meshed half inert (tests all mocked the fetch). Added the location (mirror `/log/export`, postinst-rendered) + 2 regression tests; re-review MERGEABLE.
+- **Deployed gk2:** `/fleet`=401 JWT, panel=200, `:8799/fleet/self`=200, publisher timer ~60s, signed self.json. Trilogy complete (Centres&Grants + assist + fleet-metrics, all deployed). Follow-ups: deploy c3box/amd64; module-health counts oneshots as "down" (filter to `failed`); disk_pct/soc_alerts sources.
+
 ## 2026-07-27 — Trilogy sub-projects 1-2 finalized + p2p-ephemeral foundation (deployed gk2)
 
 Large session across three deployed deliverables (all merged to master, SDD + opus final reviews):
