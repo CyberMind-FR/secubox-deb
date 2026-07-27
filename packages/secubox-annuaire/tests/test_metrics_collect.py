@@ -252,3 +252,49 @@ def test_default_counter_reader_missing_db_returns_zeros(tmp_path, monkeypatch):
     monkeypatch.setenv("ANNUAIRE_DB_PATH", str(tmp_path / "does-not-exist" / "journal.db"))
     out = metrics_collect._default_counter_reader()
     assert out == {"bans": 0, "assist_sessions": 0, "soc_alerts": 0}
+
+
+# ---------------------------------------------------------------------------
+# T4 contract fix: hostname optional, defaults to socket.gethostname()
+# ---------------------------------------------------------------------------
+
+def test_collect_snapshot_hostname_defaults_to_gethostname(monkeypatch):
+    """Single-arg call (no hostname) sources hostname from socket.gethostname()."""
+    monkeypatch.setattr("socket.gethostname", lambda: "test-box")
+    rec = metrics_collect.collect_snapshot(
+        NODE_DID,
+        cache_reader=_fake_cache(),
+        unit_lister=_fake_units(),
+        counter_reader=_fake_counters(),
+    )
+    assert rec["hostname"] == "test-box"
+    MetricSnapshot(**rec)
+
+
+def test_collect_snapshot_hostname_explicit_overrides_gethostname(monkeypatch):
+    """Explicit hostname arg takes precedence over socket.gethostname()."""
+    monkeypatch.setattr("socket.gethostname", lambda: "auto-box")
+    rec = metrics_collect.collect_snapshot(
+        NODE_DID,
+        "explicit-box",
+        cache_reader=_fake_cache(),
+        unit_lister=_fake_units(),
+        counter_reader=_fake_counters(),
+    )
+    assert rec["hostname"] == "explicit-box"
+
+
+def test_collect_snapshot_hostname_gethostname_fails_degrades(monkeypatch):
+    """If socket.gethostname() raises, hostname defaults to 'unknown'."""
+    def _boom():
+        raise OSError("gethostname failed")
+
+    monkeypatch.setattr("socket.gethostname", _boom)
+    rec = metrics_collect.collect_snapshot(
+        NODE_DID,
+        cache_reader=_fake_cache(),
+        unit_lister=_fake_units(),
+        counter_reader=_fake_counters(),
+    )
+    assert rec["hostname"] == "unknown"
+    MetricSnapshot(**rec)

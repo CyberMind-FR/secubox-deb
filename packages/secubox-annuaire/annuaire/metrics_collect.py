@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
@@ -159,7 +160,7 @@ def _default_counter_reader() -> Dict[str, int]:
 
 def collect_snapshot(
     node_did: str,
-    hostname: str,
+    hostname: str | None = None,
     *,
     cache_reader=_default_cache_reader,
     unit_lister=_default_unit_lister,
@@ -170,6 +171,13 @@ def collect_snapshot(
     Never raises — each reader is individually guarded and a failure there
     degrades to safe zero values rather than aborting the publish cycle.
     """
+    # Default hostname to local system hostname if not provided
+    if hostname is None:
+        try:
+            hostname = socket.gethostname()
+        except Exception:
+            hostname = "unknown"
+
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     try:
