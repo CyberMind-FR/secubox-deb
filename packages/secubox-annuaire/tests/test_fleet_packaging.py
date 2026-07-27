@@ -90,6 +90,55 @@ def test_annuaire_source_modules_exist_on_disk():
         assert (ROOT / "annuaire" / mod).exists(), f"missing annuaire/{mod}"
 
 
+# ── mesh listener (:8799) allow-list ─────────────────────────────────────
+
+def test_mesh_listener_exposes_fleet_self():
+    """BLOCKING fix: the :8799 Gondwana mesh listener must allow-list
+    /api/v1/annuaire/fleet/self, or GET /fleet can never pull a peer's
+    snapshot (_fetch_fleet_peer gets 403 from the exact-match template and
+    no peer ever appears in the fleet-wide view — only `self` shows)."""
+    tpl = (ROOT / "nginx" / "annuaire-mesh.conf.tpl").read_text()
+    assert "location = /api/v1/annuaire/fleet/self" in tpl
+    # sanity: the sibling we mirrored is still there, and the new block sits
+    # before the terminal catch-all deny.
+    assert "location = /api/v1/annuaire/log/export" in tpl
+    deny_idx = tpl.index("location / { return 403; }")
+    fleet_idx = tpl.index("location = /api/v1/annuaire/fleet/self")
+    assert fleet_idx < deny_idx
+
+
+def test_mesh_listener_fleet_self_mirrors_log_export():
+    """The new block must be shaped exactly like /log/export: GET-only,
+    same rewrite, same unix-socket proxy_pass, same include."""
+    tpl = (ROOT / "nginx" / "annuaire-mesh.conf.tpl").read_text()
+
+    def _block(path: str) -> str:
+        start = tpl.index(f"location = {path} {{")
+        # Walk braces to find the location block's own closing '}' — the
+        # block contains a nested `limit_except GET { deny all; }`.
+        depth = 0
+        for i, ch in enumerate(tpl[start:], start=start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return tpl[start:i]
+        raise AssertionError(f"unterminated location block for {path!r}")
+
+    log_export = _block("/api/v1/annuaire/log/export")
+    fleet_self = _block("/api/v1/annuaire/fleet/self")
+    for needle in (
+        "limit_except GET { deny all; }",
+        "rewrite ^/api/v1/annuaire/(.*)$ /$1 break;",
+        "proxy_pass http://unix:/run/secubox/annuaire.sock;",
+        "include /etc/nginx/snippets/secubox-proxy.conf;",
+        "proxy_intercept_errors on;",
+    ):
+        assert needle in log_export
+        assert needle in fleet_self
+
+
 # ── changelog ─────────────────────────────────────────────────────────────
 
 def test_changelog_bumped_for_fleet_metrics():
