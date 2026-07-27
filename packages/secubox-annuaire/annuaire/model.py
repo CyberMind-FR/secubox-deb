@@ -740,6 +740,59 @@ class BanRecord(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# MetricSnapshot — signed node metrics snapshot (fleet-metrics)
+# ---------------------------------------------------------------------------
+
+class MetricSnapshot(BaseModel):
+    """A signed snapshot of node operational metrics.
+
+    Self-certifying: authored by the node itself (entry.author == node_did).
+    Captures CPU, memory, disk, load, module state, and aggregated counters
+    at a point in time. Meshed nodes collect and replay these for fleet
+    observability. The sig covers canonical_bytes(payload_without_sig).
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    node_did:        str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    hostname:        str = Field(...)
+    ts:              str = Field(..., description="RFC 3339 timestamp")
+    cpu_pct:         float = Field(..., ge=0.0, le=100.0)
+    mem_pct:         float = Field(..., ge=0.0, le=100.0)
+    disk_pct:        float = Field(..., ge=0.0, le=100.0)
+    load1:           float = Field(..., ge=0.0)
+    uptime_s:        int = Field(..., ge=0)
+    modules_up:      int = Field(..., ge=0)
+    modules_down:    List[str] = Field(default_factory=list)
+    counters:        Dict[str, int] = Field(default_factory=dict)
+    issued_by:       str = Field(..., pattern=r"^did:plc:[0-9a-f]{32}$")
+    sig:             Optional[str] = Field(
+        default=None,
+        description="Ed25519 sig over canonical_bytes(payload_without_sig)",
+    )
+    signer_did:      Optional[str] = Field(default=None)
+    signer_pub:      Optional[str] = Field(
+        default=None,
+        description="Ed25519 public key (hex) of the signer, allows offline verification",
+    )
+
+    @field_validator("modules_down")
+    @classmethod
+    def cap_modules_down(cls, v: List[str]) -> List[str]:
+        """Truncate modules_down to first 20 entries."""
+        return v[:20]
+
+    @field_validator("counters")
+    @classmethod
+    def counters_with_defaults(cls, v: Dict[str, Any]) -> Dict[str, int]:
+        """Ensure counters dict has keys bans/assist_sessions/soc_alerts, each defaulting to 0."""
+        result = dict(v)  # copy input
+        for key in ["bans", "assist_sessions", "soc_alerts"]:
+            if key not in result:
+                result[key] = 0
+        return result
+
+
+# ---------------------------------------------------------------------------
 # Progressive Release Rings (center-driven artifact delivery)
 # ---------------------------------------------------------------------------
 
