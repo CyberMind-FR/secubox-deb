@@ -47,8 +47,19 @@ def test_match_accept_bad_side_returns_json_error(tmp_path):
     assert "error" in payload
 
 
+def _fake_sudo(tmp_path, env, rc=0):
+    """Prepend a fake `sudo` to PATH that logs argv and exits `rc`."""
+    calls = tmp_path / "sudocalls.log"
+    fake = tmp_path / "sudo"
+    fake.write_text("#!/bin/sh\necho \"$*\" >> " + str(calls) + "\nexit " + str(rc) + "\n")
+    fake.chmod(0o755)
+    env["PATH"] = str(tmp_path) + os.pathsep + env["PATH"]
+    return calls
+
+
 def test_join_does_not_leak_private_key(tmp_path):
     env = _env(tmp_path)
+    calls = _fake_sudo(tmp_path, env)
     jl = subprocess.run([sys.executable, CTL, "joinlink", "--for", "match-xyz",
                         "--ttl", "600"], env=env, capture_output=True, text=True)
     assert jl.returncode == 0, jl.stderr
@@ -67,6 +78,48 @@ def test_join_does_not_leak_private_key(tmp_path):
         assert not (len(stripped) == 64 and all(c in "0123456789abcdef"
                                                 for c in stripped.lower())), (
             f"raw 64-hex secret leaked in join output: {stripped!r}")
+    # join must actually exec secubox-p2pctl via sudo -n, not just print a plan
+    assert calls.exists(), "join did not invoke sudo at all"
+    call_line = calls.read_text()
+    assert "secubox-p2pctl" in call_line and "peer-add" in call_line
+    assert "--did" in call_line
+    payload = json.loads(r.stdout)
+    assert payload.get("joined") is True
+    assert payload.get("did", "").startswith("did:plc:")
+    assert "priv_hex" not in payload
+
+
+def test_join_bogus_token_refused_without_sudo_call(tmp_path):
+    env = _env(tmp_path)
+    calls = _fake_sudo(tmp_path, env)
+    r = subprocess.run([sys.executable, CTL, "join", "TOKENBOGUS", "--hash", "deadbeef",
+                        "--expires-at", "2999-01-01T00:00:00Z", "--pubkey", "PK",
+                        "--endpoint", "1.2.3.4:51820", "--ip", "10.11.0.2"],
+                       env=env, capture_output=True, text=True)
+    assert r.returncode == 1
+    assert json.loads(r.stderr)["error"]
+    assert not calls.exists(), "bogus token must never reach sudo exec"
+
+
+def test_join_sudo_failure_reported_as_json_error(tmp_path):
+    env = _env(tmp_path)
+    calls = _fake_sudo(tmp_path, env, rc=1)
+    jl = subprocess.run([sys.executable, CTL, "joinlink", "--for", "match-xyz",
+                        "--ttl", "600"], env=env, capture_output=True, text=True)
+    assert jl.returncode == 0, jl.stderr
+    link = json.loads(jl.stdout)
+    token = link["url"].rsplit("/", 1)[-1]
+
+    r = subprocess.run([sys.executable, CTL, "join", token, "--hash",
+                        link["token_hash"], "--expires-at", link["expires_at"],
+                        "--pubkey", "abc123pub=", "--endpoint", "1.2.3.4:51820",
+                        "--ip", "10.11.0.5"], env=env, capture_output=True,
+                       text=True)
+    assert r.returncode == 1
+    assert "Traceback" not in r.stderr
+    payload = json.loads(r.stderr)
+    assert "error" in payload
+    assert calls.exists()
 
 
 def _joinlink_base_url(tmp_path, conf_body=None, extra_env=None):
