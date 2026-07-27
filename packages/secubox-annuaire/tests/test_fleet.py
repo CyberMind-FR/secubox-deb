@@ -47,3 +47,15 @@ def test_is_stale_failclosed():
     assert fleet.is_stale({"ts": "garbage"}, "2026-07-27T10:00:00Z", 300) is True
     assert fleet.is_stale({"ts": "2026-07-27T10:00:00Z"}, "2026-07-27T10:02:00Z", 300) is False
     assert fleet.is_stale({"ts": "2026-07-27T10:00:00Z"}, "2026-07-27T10:10:00Z", 300) is True
+
+
+def test_sign_normalizes_before_signing():
+    """Regression: sign_snapshot must apply model validators (cap/defaults) before signing."""
+    priv = os.urandom(32)
+    did = did_from_pubkey(public_from_private(priv))
+    fields = {**FIELDS, "node_did": did, "issued_by": did,
+              "modules_down": [f"m{i}" for i in range(40)], "counters": {}}
+    rec = fleet.sign_snapshot(priv, fields)
+    assert len(rec["modules_down"]) == 20                      # model cap applied
+    assert rec["counters"] == {"bans": 0, "assist_sessions": 0, "soc_alerts": 0}  # defaults
+    assert fleet.verify_snapshot(rec) is True                  # still verifies (sign==verify)

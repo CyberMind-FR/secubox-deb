@@ -49,8 +49,9 @@ def sign_snapshot(priv: bytes, fields: Dict[str, Any]) -> Dict[str, Any]:
     signer_did = crypto.did_from_pubkey(pub)
 
     payload = {k: v for k, v in fields.items() if k not in _EXCLUDED_FROM_PAYLOAD}
-    # Validate shape — raises on bad input (fail loud on the sign side).
-    MetricSnapshot(**payload)
+    # Validate and normalize — the model's validators apply here (cap modules_down, default counters).
+    m = MetricSnapshot(**payload)
+    payload = m.model_dump(exclude={"sig", "signer_did", "signer_pub"})
 
     sig = crypto.sign(priv, crypto.canonical_bytes(payload))
     return {**payload, "sig": sig, "signer_did": signer_did, "signer_pub": pub.hex()}
