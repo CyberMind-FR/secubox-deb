@@ -144,10 +144,10 @@ def cmd_iface_up(a) -> int:
     reg = ephemeral.load(_reg_path())
     try:
         reg = _iface_up(reg)
+        ephemeral.save(reg, _reg_path())
     except (ValueError, OSError) as exc:
         _die(str(exc))
         return 1  # unreachable
-    ephemeral.save(reg, _reg_path())
     print(json.dumps({"iface": ephemeral.EPHEMERAL_IFACE, "up": True}))
     return 0
 
@@ -170,7 +170,7 @@ def cmd_peer_add(a) -> int:
     if a.ip and a.ip != host:
         _die(f"--ip {a.ip} does not match --allowed-ip host {host}")
         return 1  # unreachable
-    ttl = min(a.ttl or DEFAULT_TTL_S, MAX_TTL_S)
+    ttl = DEFAULT_TTL_S if a.ttl is None else max(0, min(a.ttl, MAX_TTL_S))
     if _dry():
         _dryrun_report("peer-add", iface=a.iface, pubkey=a.pubkey, endpoint=a.endpoint,
                        ip=host, allowed_ip=a.allowed_ip, ttl_s=ttl)
@@ -183,10 +183,10 @@ def cmd_peer_add(a) -> int:
         _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", a.pubkey, "endpoint", a.endpoint,
             "allowed-ips", a.allowed_ip)
         ephemeral.record_peer(reg, a.pubkey, host, a.did or "", a.endpoint, expires_ts)
+        ephemeral.save(reg, _reg_path())
     except (ValueError, OSError) as exc:
         _die(str(exc))
         return 1  # unreachable
-    ephemeral.save(reg, _reg_path())
     print(json.dumps({"added": host}))
     return 0
 
@@ -209,10 +209,10 @@ def cmd_peer_del(a) -> int:
         for p in removed:
             _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", p["pubkey"], "remove",
                 ignore_failure=True)
+        ephemeral.save(reg, _reg_path())
     except (ValueError, OSError) as exc:
         _die(str(exc))
         return 1  # unreachable
-    ephemeral.save(reg, _reg_path())
     print(json.dumps({"removed": [p["ip"] for p in removed]}))
     return 0
 
@@ -227,10 +227,10 @@ def cmd_ephemeral_revoke(a) -> int:
         for p in removed:
             _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", p["pubkey"], "remove",
                 ignore_failure=True)
+        ephemeral.save(reg, _reg_path())
     except (ValueError, OSError) as exc:
         _die(str(exc))
         return 1  # unreachable
-    ephemeral.save(reg, _reg_path())
     print(json.dumps({"revoked": [p["ip"] for p in removed]}))
     return 0
 
@@ -246,10 +246,10 @@ def cmd_sweep(a) -> int:
             _wg("set", ephemeral.EPHEMERAL_IFACE, "peer", p["pubkey"], "remove",
                 ignore_failure=True)
             ephemeral.remove_by_ip(reg, p["ip"])
+        ephemeral.save(reg, _reg_path())
     except (ValueError, OSError) as exc:
         _die(str(exc))
         return 1  # unreachable
-    ephemeral.save(reg, _reg_path())
     print(json.dumps({"swept": [p["ip"] for p in exp]}))
     return 0
 
