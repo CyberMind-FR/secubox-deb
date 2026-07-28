@@ -37,10 +37,16 @@ if [ -f "$SENTINEL" ]; then log "already provisioned; skipping create"; else
   # secubox-peertube).
   lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" -- \
     --dist debian --release bookworm --arch "$(dpkg --print-architecture)"
-  # unprivileged idmap + static IP on br-lxc (config appended)
+  # idmap: the download template copies /etc/lxc/default.conf, which on gk2
+  # already provides the unprivileged u/g 0->100000 65536 mapping. Only add it
+  # if absent — a DUPLICATE mapping makes newuidmap fail ("write to uid_map
+  # failed: Invalid argument") and the container ABORTS at start.
+  if ! grep -q '^lxc.idmap' "$LXC_PATH/$LXC_NAME/config"; then
+    printf 'lxc.idmap = u 0 %s 65536\nlxc.idmap = g 0 %s 65536\n' \
+      "$LXC_ROOT_UID" "$LXC_ROOT_UID" >> "$LXC_PATH/$LXC_NAME/config"
+  fi
+  # static IP on br-lxc (config appended)
   cat >> "$LXC_PATH/$LXC_NAME/config" <<EOF
-lxc.idmap = u 0 $LXC_ROOT_UID 65536
-lxc.idmap = g 0 $LXC_ROOT_UID 65536
 lxc.net.0.type = veth
 lxc.net.0.link = $LXC_BRIDGE
 lxc.net.0.flags = up
