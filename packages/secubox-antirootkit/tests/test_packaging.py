@@ -145,3 +145,16 @@ def test_changelog_version_and_distribution():
     changelog = _read("debian/changelog")
     assert changelog.startswith("secubox-antirootkit (0.1.0-1~bookworm1) bookworm;")
     assert "Gérald Kerma <devel@cybermind.fr>" in changelog
+
+
+def test_execscan_emits_raw_not_interpreted():
+    # parse_ausearch expects raw auditd (numeric uid, hex/quoted exe). The ctl
+    # execscan verb must NOT pass -i (interpreted) or the parser matches zero
+    # events. Regression guard for the 2026-07-28 on-hardware finding.
+    ctl = _read("sbin/secubox-antirootkitctl")
+    # find the execscan ausearch line
+    assert "execscan)" in ctl
+    aus = [ln for ln in ctl.splitlines() if "ausearch" in ln and "checkpoint" in ln]
+    assert aus, "execscan must invoke ausearch --checkpoint"
+    for ln in aus:
+        assert " -i" not in ln and not ln.rstrip().endswith("-i")

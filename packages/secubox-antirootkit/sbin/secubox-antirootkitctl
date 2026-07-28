@@ -30,8 +30,12 @@ case "$verb" in
         # --checkpoint continuity (verified on gk2, 2026-07-28). Consumed by
         # the daemon (api/daemon._ausearch_since). No args (fixed key/paths) so
         # the sudoers rule can pin it exactly.
+        # NO -i (interpret): -i renders uid as a NAME (uid=root) and the exe as
+        # a decoded path, but api/execwatch.parse_ausearch expects the RAW
+        # auditd format (numeric uid=0, hex-or-quoted exe=). With -i the parser
+        # matches zero events. Emit raw records.
         exec ausearch --input-logs --checkpoint \
-          /var/lib/secubox/antirootkit/ausearch.checkpoint -k sbx_exec -i ;;
+          /var/lib/secubox/antirootkit/ausearch.checkpoint -k sbx_exec ;;
   quarantine-prep)
         [[ $# -eq 2 ]] || { echo "usage: $0 quarantine-prep <path>" >&2; exit 2; }
         path="${2:?path}"; [[ -n "$path" ]] || exit 2
