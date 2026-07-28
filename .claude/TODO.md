@@ -1,7 +1,15 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-25*
+*Mis à jour : 2026-07-28*
 
 ---
+
+## 🚨 Incident 2026-07-28 — malware C2 + WAN mvpp2 (URGENT)
+
+- [ ] **Sweep IOC malware fleet** (#914) : sur **amd64 secubox-live (192.168.1.9 / 10.10.0.3, x86-64 → la charge TOURNERAIT)** puis **c3box (10.10.0.2)** — chercher `/usr/local/bin/notwork-monitoring`, l'unit `notwork-monitoring.service`, connexions actives vers `5.182.207.11`. SHA-256 `f2ca2b2051c2a98e23b80aab601369474006f6a6dd1dfb8f212f51a726b23dcc`.
+- [ ] **Vecteur d'accès initial** ~2026-06-09 : qu'exposait gk2 vers Internet ? Revue surface + rotation secrets/clés par prudence. Confirmer la clé `deploy@server` dans `authorized_keys` root.
+- [ ] **RE de l'échantillon** sur VM x86-64 isolée (`upx -d` + VirusTotal + sandbox) — bundle `/root/notwork-incident-2026-07-27.tar.gz` (+ copie locale scratchpad). Ne JAMAIS exécuter en prod.
+- [ ] **Détection fleet-wide** : ajouter ces IOC (filename/hash/unit/C2 IP+domaine+ASN) aux règles SecuBox. Signalement abus AS213250 possible.
+- [ ] **WAN mvpp2** : confirmer le recovery **unbind/rebind `f2000000.ethernet`** (playbook `docs/FAQ-NETWORK-WAN-RECOVERY.md`), puis finaliser **#913** (netplan `.200` statique coexist DHCP, board + `secubox-net-detect`). Rappel : U-Boot pinge OK → HW sain, bug driver Linux.
 
 ## 🧅 Transparent .onion / proxypac — follow-ups fallback WPAD/PAC (2026-07-25, non-bloquant)
 

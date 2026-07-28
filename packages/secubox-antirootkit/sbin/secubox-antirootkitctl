@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+set -euo pipefail
+
+verb="${1:-}"
+case "$verb" in
+  jail) [[ $# -eq 2 ]] || { echo "usage: $0 jail <pid>" >&2; exit 2; }
+        pid="${2:?pid}"; [[ "$pid" =~ ^[0-9]+$ ]] || exit 2
+        # move the pid into the slice's cgroup
+        mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
+        echo "$pid" > /sys/fs/cgroup/sbx-untrusted.slice/cgroup.procs ;;
+  nft-load)
+        # nft resolves the cgroupv2 path in the rule ("sbx-untrusted.slice")
+        # at LOAD time — if /sys/fs/cgroup/sbx-untrusted.slice does not exist
+        # yet the load fails ("cgroupv2 path fails: No such file or directory").
+        # The static slice's cgroup is only created lazily (first jail), so
+        # create it here first (mkdir in the unified cgroupfs = create cgroup).
+        mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
+        exec nft -f /usr/share/secubox-antirootkit/secubox-antiescape.nft ;;
+  execscan)
+        # Emit NEW sbx_exec audit records since the last call (incremental via
+        # --checkpoint, which also follows log rotation). MUST run as root
+        # (via the scoped sudoers rule): ausearch reads /etc/audit/auditd.conf
+        # (root:root) to resolve the rotated log set — a non-root caller falls
+        # back to a single "built-in" log path, which silently breaks
+        # --checkpoint continuity (verified on gk2, 2026-07-28). Consumed by
+        # the daemon (api/daemon._ausearch_since). No args (fixed key/paths) so
+        # the sudoers rule can pin it exactly.
+        # NO -i (interpret): -i renders uid as a NAME (uid=root) and the exe as
+        # a decoded path, but api/execwatch.parse_ausearch expects the RAW
+        # auditd format (numeric uid=0, hex-or-quoted exe=). With -i the parser
+        # matches zero events. Emit raw records.
+        exec ausearch --input-logs --checkpoint \
+          /var/lib/secubox/antirootkit/ausearch.checkpoint -k sbx_exec ;;
+  quarantine-prep)
+        [[ $# -eq 2 ]] || { echo "usage: $0 quarantine-prep <path>" >&2; exit 2; }
+        path="${2:?path}"; [[ -n "$path" ]] || exit 2
+        # PLAN ONLY — never executes chmod/cp/nft/systemctl here.
+        # Emits the operator-confirmable plan; run each line by hand to act.
+        mkdir -p /root/quarantine
+        plan_file="/root/quarantine/plan-$(basename -- "$path").txt"
+        {
+          echo "# quarantine plan for: $path"
+          echo "# generated: $(date -u +%FT%TZ) — REVIEW BEFORE RUNNING ANY LINE"
+          echo "chmod 000 $(printf '%q' "$path")"
+          echo "cp -a $(printf '%q' "$path") /root/quarantine/"
+          echo "sha256sum $(printf '%q' "$path")"
+        } | tee "$plan_file"
+        logger -t secubox-antirootkitctl "quarantine-prep: plan written to $plan_file (no action taken)" ;;
+  *) echo "usage: $0 {jail <pid>|nft-load|execscan|quarantine-prep <path>}" >&2; exit 2 ;;
+esac

@@ -1,0 +1,19 @@
+# SecuBox anti-rootkit process-watch (exec surveillance) — ref #915
+#
+# WHY A BROAD execve SYSCALL RULE (not targeted -w dir -p x watches):
+# Verified on gk2 (aarch64, kernel 6.x, audit 1.0.6, 2026-07-28):
+#   * `-w <dir> -p x` watches the directory INODE — it does NOT fire on
+#     execs of files *within* the dir. A malware dropped in /usr/local/bin
+#     and executed produced ZERO sbx_exec records.
+#   * `-a always,exit -S execve -F dir=<dir>` does NOT filter execve by the
+#     target executable's path either (0 records, confirmed on the raw log).
+# The only form that reliably records every exec is a bare execve syscall
+# rule. Scope is therefore enforced in USERSPACE by the daemon
+# (api/execwatch.decide = dpkg-backing + allowlist; api/policy = enforce flag
+# + jail_dirs), NOT by the audit rule. Volume on a populated board is
+# ~150 exec/s with lost=0 (auditd backlog 8192 absorbs it); the daemon only
+# persists the flagged (non-dpkg) minority to its append-only ExecLog.
+#
+# x86-64 drop-ins on this arm64 host (e.g. #914 notwork) run via binfmt/qemu,
+# whose native aarch64 execve of the interpreter is caught by arch=b64.
+-a always,exit -F arch=b64 -S execve -k sbx_exec

@@ -1,0 +1,21 @@
+# SecuBox anti-escape nftables rules — drop egress from sbx-untrusted cgroup
+#
+# Idempotent teardown: `add table` guarantees the table exists (no-op if it
+# already does) so the unconditional `delete table` right after it never
+# errors out; the full definition below then recreates it from scratch. This
+# makes `nft -f secubox-antiescape.nft` safe to re-run (e.g. from postinst on
+# every upgrade) without ever appending duplicate sets/chains/rules.
+add table inet secubox_antiescape
+delete table inet secubox_antiescape
+
+table inet secubox_antiescape {
+  set lan_safe { type ipv4_addr; flags interval; elements = { 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } }
+  chain output {
+    type filter hook output priority filter; policy accept;
+    # 'level 1' = the slice sits directly under the unified cgroup root:
+    # /sys/fs/cgroup/sbx-untrusted.slice/cgroup.procs (see secubox-antirootkitctl 'jail').
+    # If the slice is ever nested (e.g. under system.slice), this level must change or the match silently never fires.
+    socket cgroupv2 level 1 "sbx-untrusted.slice" ip daddr @lan_safe accept
+    socket cgroupv2 level 1 "sbx-untrusted.slice" counter drop
+  }
+}

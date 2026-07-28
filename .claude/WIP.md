@@ -1,5 +1,26 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-27*
+*Mis à jour : 2026-07-28*
+
+---
+
+## 🚨 2026-07-28 : Incident gk2 — malware C2 + WAN injoignable (bug driver mvpp2 Linux, prouvé par U-Boot)
+
+Session incident. Partie d'un diag réseau, a déterré une **backdoor** puis isolé la panne WAN au **driver mvpp2 Linux**.
+
+- **Malware `notwork-monitoring` (#914)** — backdoor C2 Go x86-64 UPX (SHA `f2ca2b20…`), installée hors-dpkg le **2026-06-09**, beacon `5.182.207.11` (bunq-helpdesk.dns04.com, AS213250 bulletproof). **Inerte sur ARM64** (mauvaise arch → n'a jamais tourné) mais **tournerait sur l'amd64**. Contenue : disable+quarantaine chmod 000 + unit `.evidence` + **nft DROP** + bundle exfiltré en série (SHA vérifié) + alerte + draft Gmail. Mémoire `project_notwork_monitoring_c2_incident`.
+- **WAN injoignable — cause = driver mvpp2 Linux, PAS le HW.** ARP-résout-mais-tout-unicast-mort (eth2 **et** lan0). Tout le soft éliminé (nft flush total, tc/DPI/offloads/conntrack/NAT/XDP/policy-routing), + cold-boot + câble neuf + reboot Freebox = rien. **Test décisif U-Boot (Tow-Boot)** : `setenv ethact mvpp2-2; ping 192.168.1.254` → **`host is alive`** → port/PHY/câble/Freebox **tous sains**. Playbook : `docs/FAQ-NETWORK-WAN-RECOVERY.md`. Fix candidat = **unbind/rebind mvpp2** (`f2000000.ethernet`) — à confirmer (box en fsck /data après `reboot -f`).
+
+### ✅ Fait (suite incident, 2026-07-28)
+
+- **WAN gk2 RÉSOLU + guard permanent** — cause = 3 couches empilées (flow-control + négo marginale via hub + route lan0 parasite). `secubox-wan-link-guard` (service boot + timer 30s) installé, idempotent. FAQ à jour. gk2 stable en ligne.
+- **503 board-wide RÉSOLU** — `secubox-waf-ng` (sbxwaf) crash-loopait sur cookie-audit non-inscriptible ; chown → `secubox-waf`. Mémoire `project_sbxwaf_cookieaudit_503`.
+- **Anti-rootkit #915 déployé + fonctionnel** (branche `feat/antirootkit-spec`, PR #916, 94 tests) — scanner alerte-seule live, panel `admin.gk2.secubox.in/antirootkit/`. Mémoire `project_antirootkit_deployed`.
+
+### ⬜ Next (incident)
+
+- **Reboot gk2 + analyse full runtime** (en cours) — vérifier que tout redémarre : WAN guard, anti-rootkit (1 seul daemon, scanner OK), 503-fix persistant, tous les `secubox-*`.
+- **⚠️ Sweep IOC amd64 (192.168.1.9, x86-64 = la charge tournerait) + c3box** : `notwork-monitoring` présent ? beacon `5.182.207.11` actif ? Confirmer clé `deploy@server`. Vecteur ~2026-06-09.
+- **PR #916 anti-rootkit** — revue finale whole-branch + merge user ; puis follow-ups v1.1 (integrity timer, backport WAN guard #913, enforce après tuning allowlist).
 
 ---
 
