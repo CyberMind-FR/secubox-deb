@@ -56,6 +56,14 @@ case "$1" in
         systemctl start secubox-antirootkit.service || true
         systemctl enable sbx-antirootkitd.service || true
         systemctl start sbx-antirootkitd.service || true
+
+        # Reload nginx so the /antirootkit panel + API route (installed into
+        # /etc/nginx/secubox-routes.d, which the hub's webui.conf includes)
+        # become live. Only reload if the config still tests clean, and never
+        # fail the install on a pre-existing unrelated nginx error.
+        if command -v nginx > /dev/null 2>&1 && nginx -t > /dev/null 2>&1; then
+            systemctl reload nginx 2>/dev/null || true
+        fi
         ;;
 esac
 

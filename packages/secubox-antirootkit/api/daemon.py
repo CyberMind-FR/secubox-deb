@@ -39,6 +39,7 @@ from api.allowlist import load as load_allowlist
 from api.cgroup import jail_pid
 from api.dpkg_backing import is_backed_cached
 from api.execlog import ExecLog
+from api.policy import load_policy, should_jail
 
 CONF_PATH = "/etc/secubox/antirootkit.toml"
 DB_PATH = "/var/lib/secubox/antirootkit/execlog.db"
@@ -114,35 +115,65 @@ def poll_once(fetch_fn, parse_fn, handle_fn, cursor):
 
 
 def make_log_fn(log: ExecLog, alert_store: AlertStore):
-    """Build the run_once `log_fn`: records every decision to the forensic
-    ExecLog (unchanged v1 behaviour) and, additionally, appends a
-    lightweight alert to the shared (SQLite-backed, cross-process)
-    alert_store whenever a process is jailed — so GET /alerts, served by a
-    SEPARATE process (secubox-antirootkit.service, api/main.py), reflects
-    real anti-escape events instead of a permanently-empty stub. Alert
-    scoring is intentionally minimal here (the daemon has none of
-    heuristics.score()'s inputs — unit_flags, failed_count — cheaply on
-    hand); the durable, detailed record stays the ExecLog row itself.
+    """Build the run_once `log_fn`: persists FLAGGED execs (verdict "jail" =
+    non-dpkg, non-allowlisted) to the forensic append-only ExecLog and appends
+    a lightweight alert to the shared (SQLite-backed, cross-process)
+    alert_store — so GET /alerts, served by a SEPARATE process
+    (secubox-antirootkit.service, api/main.py), reflects real scanner hits.
+
+    "allow" decisions (dpkg-backed or allowlisted) are NOT persisted: under
+    the broad execve audit rule the daemon observes ~150 execs/s, almost all
+    legitimate, and recording every one would balloon the ExecLog to millions
+    of rows/day with zero forensic value. The ExecLog is the record of
+    SUSPICIOUS execs, not a full-system exec journal (auditd keeps the raw
+    trail). Alert scoring is intentionally minimal here (the daemon lacks
+    heuristics.score()'s inputs); the durable detail is the ExecLog row.
+
+    Note "jail" verdict means FLAGGED, not necessarily jailed: whether a
+    flagged exec is actually jailed is the enforcement policy's call
+    (api/policy, applied in main()'s jail_fn), independent of this record.
     """
 
     def _log_fn(ev, verdict: str) -> None:
-        log.record(ev, verdict, pkg=None if verdict == "jail" else "dpkg")
-        if verdict == "jail":
-            alert = build_alert(ev, score=2, reasons=["non-dpkg-egress-jailed"])
-            alert_store.append(alert)
+        if verdict != "jail":
+            return
+        log.record(ev, verdict, pkg=None)
+        alert = build_alert(ev, score=2, reasons=["non-dpkg-exec-flagged"])
+        alert_store.append(alert)
 
     return _log_fn
 
 
+def make_jail_fn(enforce: bool, jail_dirs):
+    """Build run_once's `jail_fn` from the enforcement policy.
+
+    Called (by run_once) with the whole ExecEvent for every FLAGGED exec.
+    Actually jails (cgroup + nft egress drop, via api.cgroup.jail_pid) ONLY
+    when policy says so — enforce=true AND the executable under a jail_dir.
+    In the default alert-only mode this is a no-op: the exec was already
+    logged + alerted by log_fn, so the scanner still sees it, but no egress
+    is cut. This is what keeps enabling the broad execve rule safe on a
+    populated host full of legitimate non-dpkg binaries.
+    """
+
+    def _jail_fn(ev) -> None:
+        if should_jail(ev.exe, enforce, jail_dirs):
+            jail_pid(ev.pid)
+
+    return _jail_fn
+
+
 def main() -> None:
     allow = load_allowlist(CONF_PATH)
+    enforce, jail_dirs = load_policy(CONF_PATH)
     log = ExecLog(DB_PATH, check_same_thread=True)
     alert_store = AlertStore(ALERTS_DB_PATH)
     log_fn = make_log_fn(log, alert_store)
+    jail_fn = make_jail_fn(enforce, jail_dirs)
     cursor = None
 
     def handle(events) -> None:
-        execwatch.run_once(events, allow, is_backed_cached, jail_pid, log_fn)
+        execwatch.run_once(events, allow, is_backed_cached, jail_fn, log_fn)
 
     while True:
         cursor = poll_once(_ausearch_since, execwatch.parse_ausearch, handle, cursor)

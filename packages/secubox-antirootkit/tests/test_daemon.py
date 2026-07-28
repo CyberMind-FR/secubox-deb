@@ -106,7 +106,9 @@ def test_make_log_fn_does_not_alert_on_allow(tmp_path):
     ev = execwatch.ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/yacy", argv=[], success=True)
     log_fn(ev, "allow")
 
-    assert log.count() == 1
+    # new policy: allow (dpkg/allowlisted) is NOT persisted — ExecLog is the
+    # record of SUSPICIOUS execs only (broad execve rule => ~150 execs/s)
+    assert log.count() == 0
     assert astore.recent() == []
 
 
@@ -124,10 +126,45 @@ def test_daemon_jails_unknown_proc_and_alert_names_its_exe(tmp_path):
     jailed = []
 
     def handle(events):
-        execwatch.run_once(events, set(), lambda p: False, jailed.append, log_fn)
+        execwatch.run_once(events, set(), lambda p: False, lambda ev: jailed.append(ev.pid), log_fn)
 
     poll_once(lambda c: EV1, execwatch.parse_ausearch, handle, None)
 
     assert jailed == [999]
     names = [a["exe"] for a in astore.recent()]
     assert "/tmp/x" in names
+
+
+def test_make_jail_fn_alert_only_is_noop():
+    """Default alert-only mode (enforce=False): jail_fn must NOT jail, even
+    for an exe under a jail_dir. Proven by jail_pid never being called."""
+    from api.daemon import make_jail_fn
+    from api import execwatch
+
+    called = []
+    import api.daemon as dmod
+    orig = dmod.jail_pid
+    dmod.jail_pid = lambda pid: called.append(pid)
+    try:
+        jf = make_jail_fn(enforce=False, jail_dirs=["/tmp"])
+        jf(execwatch.ExecEvent(pid=5, ppid=1, uid=0, exe="/tmp/evil", argv=[]))
+        assert called == []
+    finally:
+        dmod.jail_pid = orig
+
+
+def test_make_jail_fn_enforce_jails_in_scope_only():
+    from api.daemon import make_jail_fn
+    from api import execwatch
+
+    called = []
+    import api.daemon as dmod
+    orig = dmod.jail_pid
+    dmod.jail_pid = lambda pid: called.append(pid)
+    try:
+        jf = make_jail_fn(enforce=True, jail_dirs=["/tmp"])
+        jf(execwatch.ExecEvent(pid=5, ppid=1, uid=0, exe="/tmp/evil", argv=[]))
+        jf(execwatch.ExecEvent(pid=6, ppid=1, uid=0, exe="/usr/sbin/legit", argv=[]))
+        assert called == [5]  # only the in-scope /tmp exec jailed
+    finally:
+        dmod.jail_pid = orig

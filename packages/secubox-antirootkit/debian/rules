@@ -46,10 +46,14 @@ override_dh_auto_install:
 	install -m 644 $(CURDIR)/conf/antirootkit.toml \
 		$(CURDIR)/debian/secubox-antirootkit/etc/secubox/antirootkit.toml
 
-	# Install nginx route (dedicated socket, no aggregator dependency)
-	install -d $(CURDIR)/debian/secubox-antirootkit/etc/nginx/secubox.d
+	# Install nginx route into secubox-routes.d — the dir the hub's webui.conf
+	# actually `include`s inside the admin server block. /etc/nginx/secubox.d
+	# is NOT included by the admin vhost, so a route dropped there is inert
+	# (panel returns nothing). The route holds server-context `location`
+	# blocks (API -> dedicated /run/secubox/antirootkit.sock, + static panel).
+	install -d $(CURDIR)/debian/secubox-antirootkit/etc/nginx/secubox-routes.d
 	install -m 644 $(CURDIR)/nginx/antirootkit.conf \
-		$(CURDIR)/debian/secubox-antirootkit/etc/nginx/secubox.d/
+		$(CURDIR)/debian/secubox-antirootkit/etc/nginx/secubox-routes.d/
 
 	# Install web panel
 	install -d $(CURDIR)/debian/secubox-antirootkit/usr/share/secubox/www/antirootkit
