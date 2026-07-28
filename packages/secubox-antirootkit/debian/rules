@@ -17,15 +17,18 @@ override_dh_auto_install:
 	install -m 644 $(CURDIR)/nft/secubox-antiescape.nft \
 		$(CURDIR)/debian/secubox-antirootkit/usr/share/secubox-antirootkit/
 
-	# Install systemd units: FastAPI daemon, exec-watcher daemon, untrusted
-	# slice (top-level — NOT nested under system.slice, see the slice unit).
-	install -d $(CURDIR)/debian/secubox-antirootkit/lib/systemd/system
-	install -m 644 $(CURDIR)/debian/secubox-antirootkit.service \
-		$(CURDIR)/debian/secubox-antirootkit/lib/systemd/system/
+	# Install systemd units. NOTE: debian/secubox-antirootkit.service is
+	# auto-installed by dh_installsystemd (it is named debian/<pkg>.service) to
+	# /usr/lib/systemd/system — do NOT also install it manually to
+	# /lib/systemd/system: on merged-usr (bookworm) those aliased paths collide
+	# and dpkg fails ("unable to open .service.dpkg-new"). Only the two units
+	# under systemd/ (not <pkg>.service-named) need a manual install here.
+	# The untrusted slice is top-level (NOT nested under system.slice).
+	install -d $(CURDIR)/debian/secubox-antirootkit/usr/lib/systemd/system
 	install -m 644 $(CURDIR)/systemd/sbx-antirootkitd.service \
-		$(CURDIR)/debian/secubox-antirootkit/lib/systemd/system/
+		$(CURDIR)/debian/secubox-antirootkit/usr/lib/systemd/system/
 	install -m 644 $(CURDIR)/systemd/sbx-untrusted.slice \
-		$(CURDIR)/debian/secubox-antirootkit/lib/systemd/system/
+		$(CURDIR)/debian/secubox-antirootkit/usr/lib/systemd/system/
 
 	# Install scoped sudoers (secubox-antirootkit -> secubox-antirootkitctl,
 	# exact verbs only)
