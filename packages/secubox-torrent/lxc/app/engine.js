@@ -10,23 +10,56 @@ export class Engine {
     this.webrtc = webrtc;
     // webrtc=false (spike fallback) tells WebTorrent to skip the WebRTC transport.
     this.client = new WebTorrentCtor(webrtc ? {} : { tracker: { wrtc: false } });
+    // A bad magnet/URL/.torrent (or a peer/tracker fault) makes WebTorrent
+    // emit 'error' on the CLIENT — unhandled it crashes the whole process.
+    // Swallow it here (per-add errors are surfaced by add()'s own handler).
+    if (typeof this.client.on === 'function') this.client.on('error', () => {});
   }
-  add(magnet) {
+  // torrentId is anything WebTorrent's add() accepts: a magnet URI, an http(s)
+  // URL to a .torrent file (fetched by WebTorrent), a .torrent Buffer, or an
+  // infohash. The API layer decides which of those it received.
+  add(torrentId) {
     if (this.client.torrents.length >= this.maxActive) {
       return Promise.reject(new Error('max active torrents reached'));
     }
     return new Promise((resolve, reject) => {
-      const to = setTimeout(() => reject(new Error('metadata timeout')), 60000);
-      const t = this.client.add(magnet, { path: this.downloadDir }, () => {});
+      let settled = false;
+      // Resolve as soon as the torrent has an infohash — do NOT block the HTTP
+      // request on the full metadata fetch (magnets can take tens of seconds,
+      // longer than the WAF/proxy read timeout → the caller gets a gateway
+      // error). Metadata + files populate in the background; /files and /stream
+      // reflect them once ready. A short guard timeout only covers the rare
+      // case where even the infohash never materialises.
+      const to = setTimeout(() => {
+        if (!settled) { settled = true; reject(new Error('torrent add timeout')); }
+      }, 30000);
+      const t = this.client.add(torrentId, { path: this.downloadDir }, () => {});
       const done = () => {
-        clearTimeout(to);
+        if (settled) return;
+        settled = true; clearTimeout(to);
         resolve({
-          infohash: t.infoHash, name: t.name,
-          files: t.files.map((f, i) => ({ idx: i, name: f.name, length: f.length, type: ext(f.name) })),
+          infohash: t.infoHash, name: t.name || (t.infoHash || 'torrent'),
+          // canonical magnet — stored by the library regardless of the source
+          // (magnet / .torrent URL / uploaded file) so a kept torrent can be
+          // re-added by resumeLibrary() after a restart.
+          magnetURI: t.magnetURI || (t.infoHash ? 'magnet:?xt=urn:btih:' + t.infoHash : undefined),
+          files: (t.files || []).map((f, i) => ({ idx: i, name: f.name, length: f.length, type: ext(f.name) })),
         });
       };
+      t.on('error', (err) => {
+        if (settled) return;
+        settled = true; clearTimeout(to);
+        reject(err instanceof Error ? err : new Error(String(err || 'torrent error')));
+      });
+      // WebTorrent sets t.infoHash a tick AFTER add() returns (in _onTorrentId),
+      // then emits 'infoHash' — that is the earliest point we can answer the
+      // add without waiting for the (slow) full metadata fetch. 'metadata' is
+      // the fallback for sources that skip straight to it.
+      t.on('infoHash', done);
       t.on('metadata', done);
-      if (t.files && t.files.length) done();
+      // Fake torrents (tests) and .torrent Buffers expose infoHash/files
+      // synchronously → resolve immediately.
+      if (t.infoHash || (t.files && t.files.length)) done();
     });
   }
   get(infohash) { return this.client.get(infohash); }
