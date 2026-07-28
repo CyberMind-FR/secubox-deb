@@ -1,0 +1,9 @@
+# SecuBox anti-escape nftables rules — drop egress from sbx-untrusted cgroup
+table inet secubox_antiescape {
+  set lan_safe { type ipv4_addr; flags interval; elements = { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } }
+  chain output {
+    type filter hook output priority filter; policy accept;
+    socket cgroupv2 level 1 "sbx-untrusted.slice" ip daddr @lan_safe accept
+    socket cgroupv2 level 1 "sbx-untrusted.slice" counter drop
+  }
+}
