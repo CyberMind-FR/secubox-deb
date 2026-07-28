@@ -1,0 +1,12 @@
+# SecuBox: the mvpp2 eth2 MAC TX wedges when the upstream (Freebox) floods
+# flow-control PAUSE frames — good_octets_sent stays at 0 and all unicast dies.
+# Confirmed fix 2026-07-28: disable flow-control pause at the .link level so it
+# is applied by udevd the moment eth2 appears (covers boot-time DHCP, before the
+# guard timer's first tick). See /usr/share/doc/secubox/FAQ-NETWORK-WAN-RECOVERY.md
+[Match]
+OriginalName=eth2
+
+[Link]
+AutoNegotiationFlowControl=no
+RXFlowControl=no
+TXFlowControl=no

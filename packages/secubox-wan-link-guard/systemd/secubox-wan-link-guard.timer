@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox WAN link guard — periodic check
+
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=30
+
+[Install]
+WantedBy=timers.target

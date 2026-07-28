@@ -1,0 +1,12 @@
+secubox-wan-link-guard (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial packaging: backport the live gk2 WAN link guard into source (#913).
+    Ships /usr/sbin/secubox-wan-link-guard (mvpp2 eth2 pause-off + renegotiate +
+    lan0 parasite route/addr cleanup, no `ip link down/up`), its .service +
+    boot/30s .timer, the 10-secubox-eth2-noflowctl.link (flow-control off at
+    eth2 appearance), and the secubox-eth2-flowctl-off backstop unit.
+    Tunable via /etc/default/secubox-wan-link-guard. postinst migrates the
+    pre-dpkg hand-placed copies out of /etc/systemd and /usr/local/sbin so the
+    packaged units are authoritative.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 19:30:00 +0200
