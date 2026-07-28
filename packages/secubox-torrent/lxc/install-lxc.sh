@@ -75,7 +75,18 @@ APP_SRC="${SECUBOX_APP_SRC:-/usr/lib/secubox/torrent/app}"
 la mkdir -p /opt/secubox-torrent/app /opt/secubox-torrent/www
 tar -C "$APP_SRC" -cf - . | la tar -C /opt/secubox-torrent/app -xf -
 tar -C /usr/share/secubox/www/torrent -cf - . | la tar -C /opt/secubox-torrent/www -xf -
-la bash -lc 'cd /opt/secubox-torrent/app && npm ci --omit=dev || npm install --omit=dev'
+# npm ci wipes + rebuilds node_modules, which recompiles the native deps
+# (@roamhq/wrtc's node-datachannel is ~10min on arm64). Only pay that on a
+# code-only upgrade when the lockfile actually changed — otherwise the
+# already-built node_modules is fine and we just reload the JS.
+LOCK_HASH="$(sha256sum "$APP_SRC/package-lock.json" 2>/dev/null | awk '{print $1}')"
+if [ -n "$LOCK_HASH" ] && [ "$LOCK_HASH" = "$(cat "$STATE_DIR/.npm-lock-hash" 2>/dev/null)" ] \
+   && la test -f /opt/secubox-torrent/app/node_modules/better-sqlite3/build/Release/better_sqlite3.node; then
+  log "deps unchanged (lockfile hash match) — skipping npm ci"
+else
+  la bash -lc 'cd /opt/secubox-torrent/app && npm ci --omit=dev || npm install --omit=dev'
+  [ -n "$LOCK_HASH" ] && printf '%s\n' "$LOCK_HASH" > "$STATE_DIR/.npm-lock-hash"
+fi
 # env file from host TOML values (exported by postinst into these vars)
 la bash -c "cat > /opt/secubox-torrent/torrent.env <<EOF
 TORRENT_DOWNLOAD_DIR=/data/torrent
@@ -89,5 +100,9 @@ EOF"
 # /usr/lib/secubox/torrent/ dir so $(dirname "$0") resolves on the board)
 tar -C "$(dirname "$0")" -cf - secubox-torrent.service | la tar -C /etc/systemd/system -xf -
 la systemctl daemon-reload
-la systemctl enable --now secubox-torrent.service
+la systemctl enable secubox-torrent.service
+# `enable --now` does NOT restart an already-running unit — so an in-place app
+# upgrade (re-copied code above) would keep serving the OLD code. Restart so
+# the new code is actually loaded (start-if-stopped is covered by restart too).
+la systemctl restart secubox-torrent.service
 log "torrent LXC app deployed + started on $LXC_IP:8090"

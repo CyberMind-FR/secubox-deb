@@ -10,6 +10,10 @@ export class Engine {
     this.webrtc = webrtc;
     // webrtc=false (spike fallback) tells WebTorrent to skip the WebRTC transport.
     this.client = new WebTorrentCtor(webrtc ? {} : { tracker: { wrtc: false } });
+    // A bad magnet/URL/.torrent (or a peer/tracker fault) makes WebTorrent
+    // emit 'error' on the CLIENT — unhandled it crashes the whole process.
+    // Swallow it here (per-add errors are surfaced by add()'s own handler).
+    if (typeof this.client.on === 'function') this.client.on('error', () => {});
   }
   // torrentId is anything WebTorrent's add() accepts: a magnet URI, an http(s)
   // URL to a .torrent file (fetched by WebTorrent), a .torrent Buffer, or an
@@ -32,6 +36,10 @@ export class Engine {
           files: t.files.map((f, i) => ({ idx: i, name: f.name, length: f.length, type: ext(f.name) })),
         });
       };
+      t.on('error', (err) => {
+        clearTimeout(to);
+        reject(err instanceof Error ? err : new Error(String(err || 'torrent error')));
+      });
       t.on('metadata', done);
       if (t.files && t.files.length) done();
     });
