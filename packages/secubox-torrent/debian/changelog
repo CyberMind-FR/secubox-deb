@@ -1,3 +1,17 @@
+secubox-torrent (2.1.2-1~bookworm1) bookworm; urgency=high
+
+  * Fix remove/files/stream 500 + broken stats: WebTorrent 2.x's client.get()
+    is async (returns a Promise), but engine.get() used it as if sync — every
+    caller (remove → t.destroy, /files → t.files, /stream, stats → t.progress)
+    then operated on a Promise instead of the Torrent, giving a 500 (remove,
+    files) or garbage (stats), and streaming never resolved its file. Match on
+    the synchronous client.torrents array instead. The FakeWebTorrent test
+    double had a sync get() that masked this; it is now async to model reality,
+    with regression tests asserting engine.get() is sync and remove() works.
+    (ref #917)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 18:45:00 +0200
+
 secubox-torrent (2.1.1-1~bookworm1) bookworm; urgency=high
 
   * Fix add-torrent hang / 502: pin uint8-util to 2.2.6 via npm overrides.

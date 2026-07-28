@@ -62,7 +62,11 @@ export class Engine {
       if (t.infoHash || (t.files && t.files.length)) done();
     });
   }
-  get(infohash) { return this.client.get(infohash); }
+  // WebTorrent 2.x's client.get() is ASYNC (returns a Promise) — using it as if
+  // it were sync makes every caller (stats/remove/files/stream) operate on a
+  // Promise instead of a Torrent (t.destroy/t.files/t.progress → 500 or garbage).
+  // client.torrents is a plain array, so match on it synchronously instead.
+  get(infohash) { return this.client.torrents.find(t => t.infoHash === infohash) || null; }
   stats(infohash) {
     const t = this.get(infohash); if (!t) return null;
     return { progress: t.progress, downloadSpeed: t.downloadSpeed, uploadSpeed: t.uploadSpeed,
