@@ -41,3 +41,29 @@ def test_append_only_no_update(tmp_path):
     lg = ExecLog(str(tmp_path / "e.db"))
     # schema must not be relied on for UPDATE; verify recorded rows are immutable by design (insert-only API)
     assert not hasattr(lg, "update")
+
+
+def test_check_same_thread_false_usable_cross_thread(tmp_path):
+    # FastAPI sync routes run in a threadpool worker; the API module's ExecLog
+    # singleton must be constructible with check_same_thread=False and remain
+    # usable from a different thread than the one that created it.
+    import threading
+
+    lg = ExecLog(str(tmp_path / "e2.db"), check_same_thread=False)
+    errors = []
+
+    def _write():
+        try:
+            lg.record(
+                ExecEvent(pid=2, ppid=0, uid=0, exe="/tmp/y", argv=[], success=True),
+                "allow",
+                "somepkg",
+            )
+        except Exception as exc:  # pragma: no cover - failure path
+            errors.append(exc)
+
+    t = threading.Thread(target=_write)
+    t.start()
+    t.join()
+    assert not errors
+    assert lg.recent()[0]["exe"] == "/tmp/y"

@@ -21,9 +21,20 @@ DDL = "CREATE TABLE IF NOT EXISTS execlog (ts REAL, pid INT, ppid INT, uid INT, 
 class ExecLog:
     """Append-only SQLite forensic log for execve events."""
 
-    def __init__(self, db_path: str):
-        """Open/create SQLite db in WAL mode, initialize execlog table."""
-        self.db = sqlite3.connect(db_path)
+    def __init__(self, db_path: str, check_same_thread: bool = True):
+        """Open/create SQLite db in WAL mode, initialize execlog table.
+
+        Args:
+            db_path: filesystem path to the SQLite database
+            check_same_thread: sqlite3's default (True) forbids using the
+                connection from a thread other than the one that created it.
+                FastAPI's sync `def` routes run in a threadpool worker thread,
+                so the API module must construct its ExecLog singleton with
+                check_same_thread=False (single-writer append-only log; the
+                sqlite3 module serializes access internally). Default True
+                preserves prior callers/tests unchanged.
+        """
+        self.db = sqlite3.connect(db_path, check_same_thread=check_same_thread)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute(DDL)

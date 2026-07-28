@@ -1,0 +1,9 @@
+{
+  "id": "antirootkit",
+  "name": "Anti-Rootkit",
+  "icon": "🧟",
+  "path": "/antirootkit/",
+  "category": "wall",
+  "order": 595,
+  "description": "Exec forensic log, IOC alerts & manual quarantine"
+}
