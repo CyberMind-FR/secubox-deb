@@ -16,9 +16,14 @@ export class Library {
   }
   add({ infohash, name, magnet, path }) {
     const now = Math.floor(Date.now() / 1000);
-    this.db.prepare(`INSERT OR REPLACE INTO torrents
+    // ON CONFLICT touches last_played_at only — re-adding an already-known
+    // infohash (e.g. a kept magnet pasted again) must NOT clobber its
+    // `kept` flag or `added_at`, or the purge sweep would later delete it.
+    this.db.prepare(`INSERT INTO torrents
       (infohash,name,magnet,path,added_at,last_played_at,kept)
-      VALUES (?,?,?,?,?,?,0)`).run(infohash, name, magnet, path, now, now);
+      VALUES (?,?,?,?,?,?,0)
+      ON CONFLICT(infohash) DO UPDATE SET last_played_at=excluded.last_played_at`)
+      .run(infohash, name, magnet, path, now, now);
   }
   list() { return this.db.prepare('SELECT * FROM torrents ORDER BY added_at DESC').all(); }
   get(infohash) { return this.db.prepare('SELECT * FROM torrents WHERE infohash=?').get(infohash) || null; }

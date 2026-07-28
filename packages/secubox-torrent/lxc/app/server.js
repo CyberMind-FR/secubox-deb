@@ -43,6 +43,44 @@ export function diskFreeBytesOnData() {
   }
 }
 
+/**
+ * Re-sync the WebTorrent engine with the library DB at startup. Kept rows
+ * survive a service/LXC restart only in the DB (the engine's in-memory
+ * torrent list is empty on every process start) — re-add them so /stream
+ * and purge see them again. Ephemeral (kept=0) rows can't be meaningfully
+ * resumed (no seek/priority state was persisted) and would otherwise leak
+ * their downloaded bytes forever once runPurge's engine.remove() becomes a
+ * no-op for a torrent the engine never re-learned about — so they're
+ * dropped from the library and their download dir is reclaimed here
+ * instead of waiting on a purge sweep that can no longer see them.
+ */
+export function resumeLibrary(engine, library, { rmrf = defaultRmrf } = {}) {
+  for (const row of library.list()) {
+    if (row.kept) {
+      try {
+        // engine.add() is async in the real Engine (Promise) but the fake
+        // used in tests may be sync — handle both without letting either
+        // path abort the loop or leave an unhandled rejection.
+        const result = engine.add(row.magnet);
+        if (result && typeof result.catch === 'function') {
+          result.catch((e) =>
+            console.error(`secubox-torrent: resume failed for ${row.infohash}: ${e.message}`));
+        }
+      } catch (e) {
+        console.error(`secubox-torrent: resume failed for ${row.infohash}: ${e.message}`);
+      }
+    } else {
+      library.remove(row.infohash);
+      try { rmrf(row.path); }
+      catch (e) { console.error(`secubox-torrent: cleanup failed for ${row.path}: ${e.message}`); }
+    }
+  }
+}
+
+function defaultRmrf(p) {
+  if (p) fs.rmSync(p, { recursive: true, force: true });
+}
+
 export async function start() {
   const cfg = {
     downloadDir: process.env.TORRENT_DOWNLOAD_DIR || '/data/torrent',
@@ -57,6 +95,8 @@ export async function start() {
   const engine = new Engine({ WebTorrentCtor: WebTorrent, ...cfg });
   const library = new Library(`${cfg.downloadDir}/library.db`);
   const diskFreeBytes = diskFreeBytesOnData;
+
+  resumeLibrary(engine, library);
 
   const app = buildApi({ engine, library, diskFreeBytes });
 

@@ -23,7 +23,7 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     try { meta = await engine.add(magnet); }
     catch (e) { return reply.code(504).send({ error: e.message }); }
     library.add({ infohash: meta.infohash, name: meta.name, magnet,
-      path: path.join(engine.downloadDir, 'tmp', meta.infohash) });
+      path: path.join(engine.downloadDir, meta.infohash) });
     return meta;
   });
 
@@ -39,7 +39,7 @@ export function buildApi({ engine, library, diskFreeBytes }) {
   app.post('/api/v1/torrent/keep/:infohash', async (req, reply) => {
     const ih = req.params.infohash;
     if (!library.get(ih)) return reply.code(404).send({ error: 'not found' });
-    library.keep(ih, path.join(engine.downloadDir, 'library', ih));
+    library.keep(ih, path.join(engine.downloadDir, ih));
     return { status: 'kept' };
   });
 

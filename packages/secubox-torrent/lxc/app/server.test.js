@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runPurge } from './server.js';
+import { runPurge, resumeLibrary } from './server.js';
 import { Library } from './library.js';
 
 test('purge removes expired ephemeral and calls engine.remove', () => {
@@ -59,4 +59,41 @@ test('purge below the disk floor also sweeps fresh ephemeral entries (but never 
   assert.deepEqual(removed, ['fresh']);
   assert.equal(lib.get('fresh'), null);
   assert.ok(lib.get('keeper'));
+});
+
+test('resumeLibrary re-adds kept torrents to the engine and reaps ephemeral ones', () => {
+  const lib = new Library(':memory:');
+  lib.add({ infohash: 'keeper', name: 'K', magnet: 'magnet:keeper', path: '/data/torrent/keeper' });
+  lib.keep('keeper', '/data/torrent/keeper');
+  lib.add({ infohash: 'eph', name: 'E', magnet: 'magnet:eph', path: '/data/torrent/eph' });
+
+  const added = [];
+  const engine = { add: (magnet) => { added.push(magnet); } };
+  const rmrfCalls = [];
+  const rmrf = (p) => rmrfCalls.push(p);
+
+  resumeLibrary(engine, lib, { rmrf });
+
+  assert.deepEqual(added, ['magnet:keeper']);
+  assert.ok(lib.get('keeper'));
+  assert.equal(lib.get('eph'), null);
+  assert.deepEqual(rmrfCalls, ['/data/torrent/eph']);
+});
+
+test('resumeLibrary does not abort the loop if engine.add throws for one kept row', () => {
+  const lib = new Library(':memory:');
+  lib.add({ infohash: 'bad', name: 'B', magnet: 'magnet:bad', path: '/data/torrent/bad' });
+  lib.keep('bad', '/data/torrent/bad');
+  lib.add({ infohash: 'good', name: 'G', magnet: 'magnet:good', path: '/data/torrent/good' });
+  lib.keep('good', '/data/torrent/good');
+
+  const added = [];
+  const engine = {
+    add: (magnet) => {
+      if (magnet === 'magnet:bad') throw new Error('boom');
+      added.push(magnet);
+    },
+  };
+  resumeLibrary(engine, lib, { rmrf: () => {} });
+  assert.deepEqual(added, ['magnet:good']);
 });
