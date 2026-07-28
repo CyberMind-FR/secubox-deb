@@ -4,8 +4,6 @@
 //
 // WebTorrent engine wrapper: lifecycle, metadata, stats, peer/wire inspection.
 
-import path from 'node:path';
-
 export class Engine {
   constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc }) {
     this.downloadDir = downloadDir; this.maxActive = maxActive;
