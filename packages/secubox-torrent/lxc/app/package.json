@@ -3,12 +3,16 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=18" },
-  "scripts": { "test": "node --test" },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
   "dependencies": {
-    "webtorrent": "^2.5.1",
     "@roamhq/wrtc": "^0.8.0",
-    "fastify": "^4.28.1",
-    "better-sqlite3": "^11.3.0"
+    "better-sqlite3": "^11.3.0",
+    "fastify": "^4.29.1",
+    "webtorrent": "^2.5.1"
   }
 }
