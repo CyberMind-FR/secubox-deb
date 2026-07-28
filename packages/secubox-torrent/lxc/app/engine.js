@@ -11,17 +11,24 @@ export class Engine {
     // webrtc=false (spike fallback) tells WebTorrent to skip the WebRTC transport.
     this.client = new WebTorrentCtor(webrtc ? {} : { tracker: { wrtc: false } });
   }
-  add(magnet) {
+  // torrentId is anything WebTorrent's add() accepts: a magnet URI, an http(s)
+  // URL to a .torrent file (fetched by WebTorrent), a .torrent Buffer, or an
+  // infohash. The API layer decides which of those it received.
+  add(torrentId) {
     if (this.client.torrents.length >= this.maxActive) {
       return Promise.reject(new Error('max active torrents reached'));
     }
     return new Promise((resolve, reject) => {
       const to = setTimeout(() => reject(new Error('metadata timeout')), 60000);
-      const t = this.client.add(magnet, { path: this.downloadDir }, () => {});
+      const t = this.client.add(torrentId, { path: this.downloadDir }, () => {});
       const done = () => {
         clearTimeout(to);
         resolve({
           infohash: t.infoHash, name: t.name,
+          // canonical magnet — stored by the library regardless of the source
+          // (magnet / .torrent URL / uploaded file) so a kept torrent can be
+          // re-added by resumeLibrary() after a restart.
+          magnetURI: t.magnetURI,
           files: t.files.map((f, i) => ({ idx: i, name: f.name, length: f.length, type: ext(f.name) })),
         });
       };

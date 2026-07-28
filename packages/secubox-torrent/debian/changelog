@@ -1,3 +1,13 @@
+secubox-torrent (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Add torrent by .torrent URL and by uploaded .torrent file (webui mode
+    selector magnet/URL/file). engine.add() accepts magnet, .torrent URL or
+    .torrent Buffer uniformly; library stores the canonical magnetURI so a
+    kept torrent resumes regardless of source. New POST /add-file (raw
+    application/x-bittorrent, 5MiB cap) + torrentUrl on /add. (ref #917)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 17:00:00 +0200
+
 secubox-torrent (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Pivot from Transmission to WebTorrent streaming (LXC-native, #917).
