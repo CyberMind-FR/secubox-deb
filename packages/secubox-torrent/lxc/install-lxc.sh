@@ -45,7 +45,7 @@ EOF
   lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
   sleep 5
   la apt-get update
-  la apt-get install -y --no-install-recommends nodejs npm ca-certificates
+  la apt-get install -y --no-install-recommends nodejs npm ca-certificates python3 build-essential
   touch "$SENTINEL"
 fi
 log "node version: $(la node --version 2>/dev/null || echo MISSING)"

@@ -7,7 +7,7 @@ Standards-Version: 4.6.2
 
 Package: secubox-torrent
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), lxc, debootstrap, nftables
+Depends: ${misc:Depends}, secubox-core (>= 1.0), secubox-hub, lxc, debootstrap, nftables
 Description: WebTorrent streaming for SecuBox (LXC-native)
  Paste a magnet and stream it in the browser (HTTP Range) while it downloads.
  Ephemeral by default with an optional Keep to a persistent library on /data.
