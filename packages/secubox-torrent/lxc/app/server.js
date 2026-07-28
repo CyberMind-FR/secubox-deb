@@ -82,6 +82,19 @@ function defaultRmrf(p) {
 }
 
 export async function start() {
+  // WebTorrent can THROW synchronously deep in its tick handlers on some
+  // malformed input (e.g. a bad magnet → arr2hex(undefined) in _onTorrentId),
+  // which is NOT an emitted 'error' event so the engine's error listeners
+  // cannot catch it. Without this net one bad /add crashes the whole process
+  // (the user then sees 502). Log and keep serving. Installed here (not at
+  // module scope) so `node --test` importing this file is unaffected.
+  process.on('uncaughtException', (err) => {
+    console.error('[torrent] uncaughtException (kept alive):', err && err.message);
+  });
+  process.on('unhandledRejection', (err) => {
+    console.error('[torrent] unhandledRejection (kept alive):', err && (err.message || err));
+  });
+
   const cfg = {
     downloadDir: process.env.TORRENT_DOWNLOAD_DIR || '/data/torrent',
     maxActive: Number(process.env.TORRENT_MAX_ACTIVE || 5),

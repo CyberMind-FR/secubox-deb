@@ -27,7 +27,11 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     let meta;
     try { meta = await engine.add(torrentId); }
     catch (e) { return reply.code(504).send({ error: e.message }); }
-    library.add({ infohash: meta.infohash, name: meta.name, magnet: meta.magnetURI,
+    // Never store an undefined/empty magnet: resumeLibrary() re-adds kept rows
+    // via engine.add(row.magnet), and a bad value crashes WebTorrent on the
+    // next restart. Fall back to a canonical magnet derived from the infohash.
+    const magnet = meta.magnetURI || ('magnet:?xt=urn:btih:' + meta.infohash);
+    library.add({ infohash: meta.infohash, name: meta.name, magnet,
       path: path.join(engine.downloadDir, meta.infohash) });
     return meta;
   }
