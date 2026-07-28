@@ -1,14 +1,16 @@
-#!/bin/bash
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 set -e
 case "$1" in
-  remove|upgrade)
-    # Remove nginx location config
-    rm -f /etc/nginx/secubox.d/torrent.conf
-    # Stop and disable service
-    systemctl stop    secubox-torrent.service 2>/dev/null || true
-    systemctl disable secubox-torrent.service 2>/dev/null || true
-    # Reload nginx to remove location
-    systemctl reload nginx 2>/dev/null || true
+  remove|upgrade|deconfigure)
+    # No host-side daemon to stop (the WebTorrent engine runs inside the
+    # dedicated LXC, not as a host systemd unit). Just unwire the vhost.
+    rm -f /etc/nginx/sites-enabled/torrent.conf
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
     ;;
 esac
 #DEBHELPER#
+exit 0
