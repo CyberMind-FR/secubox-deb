@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox: disable eth2 flow-control pause (mvpp2 MAC TX wedge workaround)
+Documentation=file:///usr/share/doc/secubox/FAQ-NETWORK-WAN-RECOVERY.md
+After=sys-subsystem-net-devices-eth2.device
+Wants=sys-subsystem-net-devices-eth2.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ethtool -A eth2 autoneg off rx off tx off
+
+[Install]
+WantedBy=multi-user.target
