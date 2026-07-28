@@ -64,11 +64,17 @@ def _ausearch_since(cursor) -> str:
     """
     ts_arg = "recent" if cursor is None else str(int(cursor[0]))
     try:
+        # `--input-logs` is REQUIRED: verified on gk2 (auditd 3.0.9), a plain
+        # `ausearch -k sbx_exec` returns "<no matches>" even though the raw
+        # /var/log/audit/audit.log clearly holds key="sbx_exec" records —
+        # ausearch's default input source reads nothing here. `--input-logs`
+        # forces it to read the configured log files (audit.log + rotated).
+        # Without this flag the scanner is silently blind.
         r = subprocess.run(
-            ["ausearch", "-k", "sbx_exec", "-ts", ts_arg, "-i"],
+            ["ausearch", "--input-logs", "-k", "sbx_exec", "-ts", ts_arg, "-i"],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=15,
         )
         return r.stdout or ""
     except Exception:
