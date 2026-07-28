@@ -10,6 +10,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@fastify/static": "^7.0.0",
     "@roamhq/wrtc": "^0.8.0",
     "better-sqlite3": "^11.3.0",
     "fastify": "^4.29.1",
