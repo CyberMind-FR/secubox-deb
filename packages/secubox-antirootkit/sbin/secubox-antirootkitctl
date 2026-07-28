@@ -14,5 +14,20 @@ case "$verb" in
         mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
         echo "$pid" > /sys/fs/cgroup/sbx-untrusted.slice/cgroup.procs ;;
   nft-load) exec nft -f /usr/share/secubox-antirootkit/secubox-antiescape.nft ;;
-  *) echo "usage: $0 {jail <pid>|nft-load}" >&2; exit 2 ;;
+  quarantine-prep)
+        [[ $# -eq 2 ]] || { echo "usage: $0 quarantine-prep <path>" >&2; exit 2; }
+        path="${2:?path}"; [[ -n "$path" ]] || exit 2
+        # PLAN ONLY — never executes chmod/cp/nft/systemctl here.
+        # Emits the operator-confirmable plan; run each line by hand to act.
+        mkdir -p /root/quarantine
+        plan_file="/root/quarantine/plan-$(basename -- "$path").txt"
+        {
+          echo "# quarantine plan for: $path"
+          echo "# generated: $(date -u +%FT%TZ) — REVIEW BEFORE RUNNING ANY LINE"
+          echo "chmod 000 $(printf '%q' "$path")"
+          echo "cp -a $(printf '%q' "$path") /root/quarantine/"
+          echo "sha256sum $(printf '%q' "$path")"
+        } | tee "$plan_file"
+        logger -t secubox-antirootkitctl "quarantine-prep: plan written to $plan_file (no action taken)" ;;
+  *) echo "usage: $0 {jail <pid>|nft-load|quarantine-prep <path>}" >&2; exit 2 ;;
 esac
