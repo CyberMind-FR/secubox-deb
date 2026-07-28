@@ -7,6 +7,7 @@
 SecuBox-Deb :: antirootkit dpkg backing resolver
 """
 
+import glob
 import subprocess
 from functools import lru_cache
 
@@ -71,5 +72,52 @@ def is_backed(path: str, runner=subprocess.run) -> bool:
 
 @lru_cache(maxsize=4096)
 def is_backed_cached(path: str) -> bool:
-    """Cached version of is_backed using default subprocess.run."""
+    """Cached version of is_backed using default subprocess.run.
+
+    Kept for low-volume callers/tests. The daemon uses DpkgIndex instead —
+    at ~150 execs/s a `dpkg -S` subprocess per event (30-50 ms) cannot keep
+    up and the scanner falls permanently behind.
+    """
     return is_backed(path)
+
+
+def _load_dpkg_paths(info_glob: str = "/var/lib/dpkg/info/*.list") -> set[str]:
+    """Read every dpkg-owned file path from the package file lists.
+
+    Direct file reads (no subprocess) — this is the whole point: one in-memory
+    set answers is_backed() in O(1) instead of forking `dpkg -S` per exec.
+    """
+    paths: set[str] = set()
+    for listfile in glob.glob(info_glob):
+        try:
+            with open(listfile, encoding="utf-8", errors="surrogateescape") as fh:
+                for line in fh:
+                    p = line.rstrip("\n")
+                    if p:
+                        paths.add(p)
+        except OSError:
+            continue
+    return paths
+
+
+class DpkgIndex:
+    """In-memory index of dpkg-owned paths for O(1) is_backed() lookups.
+
+    Built once at daemon startup (a restart refreshes it after package
+    changes). Honours merged-usr aliasing the same way resolve_pkg does, so
+    an audit-reported /usr/bin/grep matches dpkg's recorded /bin/grep.
+    """
+
+    def __init__(self, paths: set[str] | None = None):
+        self._paths = paths if paths is not None else _load_dpkg_paths()
+
+    def __len__(self) -> int:
+        return len(self._paths)
+
+    def is_backed(self, path: str) -> bool:
+        if not path:
+            return False
+        for candidate in _merged_usr_candidates(path):
+            if candidate in self._paths:
+                return True
+        return False

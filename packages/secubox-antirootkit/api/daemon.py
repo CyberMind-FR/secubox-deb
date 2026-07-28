@@ -38,7 +38,7 @@ from api.alerts import build_alert
 from api.alertstore import AlertStore
 from api.allowlist import load as load_allowlist
 from api.cgroup import jail_pid
-from api.dpkg_backing import is_backed_cached
+from api.dpkg_backing import DpkgIndex
 from api.execlog import ExecLog
 from api.policy import load_policy, should_jail
 
@@ -195,12 +195,13 @@ def main() -> None:
     alert_store = AlertStore(ALERTS_DB_PATH)
     log_fn = make_log_fn(log, alert_store)
     jail_fn = make_jail_fn(enforce, jail_dirs)
+    dpkg = DpkgIndex()  # preload dpkg-owned paths once: O(1) is_backed at 150/s
     cursor = None
 
     _seed_checkpoint()
 
     def handle(events) -> None:
-        execwatch.run_once(events, allow, is_backed_cached, jail_fn, log_fn)
+        execwatch.run_once(events, allow, dpkg.is_backed, jail_fn, log_fn)
 
     while True:
         cursor = poll_once(_ausearch_since, execwatch.parse_ausearch, handle, cursor)
