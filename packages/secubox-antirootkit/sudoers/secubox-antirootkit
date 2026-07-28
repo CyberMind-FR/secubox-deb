@@ -1,0 +1,2 @@
+secubox-antirootkit ALL=(root) NOPASSWD: /usr/sbin/secubox-antirootkitctl jail [0-9]*, /usr/sbin/secubox-antirootkitctl nft-load
+Defaults!/usr/sbin/secubox-antirootkitctl !requiretty

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+set -euo pipefail
+
+verb="${1:-}"
+case "$verb" in
+  jail) pid="${2:?pid}"; [[ "$pid" =~ ^[0-9]+$ ]] || exit 2
+        systemctl set-property --runtime sbx-untrusted.slice 2>/dev/null || true
+        # move the pid into the slice's cgroup
+        mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
+        echo "$pid" > /sys/fs/cgroup/sbx-untrusted.slice/cgroup.procs ;;
+  nft-load) exec nft -f /usr/share/secubox-antirootkit/secubox-antiescape.nft ;;
+  *) echo "usage: $0 {jail <pid>|nft-load}" >&2; exit 2 ;;
+esac
