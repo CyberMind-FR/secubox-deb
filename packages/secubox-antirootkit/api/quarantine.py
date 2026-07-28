@@ -39,11 +39,11 @@ def prepare(
         "copy": f"cp -a {quoted_path} /root/quarantine/",
         "sha256": sha_fn(path) if sha_fn is not None else None,
         "nft_block": (
-            f"nft add rule inet filter output ip daddr {c2_ip} drop"
+            f"nft add rule inet filter output ip daddr {shlex.quote(c2_ip)} drop"
             if c2_ip is not None
             else None
         ),
         "disable_unit": (
-            f"systemctl disable --now {unit}" if unit is not None else None
+            f"systemctl disable --now {shlex.quote(unit)}" if unit is not None else None
         ),
     }
