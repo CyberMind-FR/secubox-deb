@@ -61,6 +61,9 @@ lxc.mount.entry = $DATA_DIR data/torrent none bind,create=dir 0 0
 EOF
   lxc-start -n "$LXC_NAME" -P "$LXC_PATH"
   sleep 5
+  # Seed DNS: the download-template rootfs ships no resolver, so apt/npm can't
+  # resolve deb.debian.org / the npm registry. Matches secubox-peertube.
+  la sh -c 'rm -f /etc/resolv.conf; printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf'
   la apt-get update
   la apt-get install -y --no-install-recommends nodejs npm ca-certificates python3 build-essential
   touch "$SENTINEL"
