@@ -8,8 +8,8 @@ set -euo pipefail
 
 verb="${1:-}"
 case "$verb" in
-  jail) pid="${2:?pid}"; [[ "$pid" =~ ^[0-9]+$ ]] || exit 2
-        systemctl set-property --runtime sbx-untrusted.slice 2>/dev/null || true
+  jail) [[ $# -eq 2 ]] || { echo "usage: $0 jail <pid>" >&2; exit 2; }
+        pid="${2:?pid}"; [[ "$pid" =~ ^[0-9]+$ ]] || exit 2
         # move the pid into the slice's cgroup
         mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
         echo "$pid" > /sys/fs/cgroup/sbx-untrusted.slice/cgroup.procs ;;
