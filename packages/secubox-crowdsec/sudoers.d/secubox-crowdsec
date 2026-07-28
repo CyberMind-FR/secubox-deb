@@ -25,3 +25,10 @@ secubox ALL=(root) NOPASSWD: /usr/bin/cscli decisions list -o json
 secubox ALL=(root) NOPASSWD: /usr/bin/cscli alerts list -o json
 secubox ALL=(root) NOPASSWD: /usr/bin/cscli console status
 secubox ALL=(root) NOPASSWD: /usr/sbin/nft list tables
+
+# Enrollment write-ops — crowdsec panel capi/enroll + console enroll/disable (2026-07-28)
+# Without these the panel's "Enroll" button hits `sudo cscli ...` with no NOPASSWD
+# rule -> "sudo: a password is required" in the non-interactive FastAPI context.
+secubox ALL=(root) NOPASSWD: /usr/bin/cscli capi register
+secubox ALL=(root) NOPASSWD: /usr/bin/cscli console enroll *
+secubox ALL=(root) NOPASSWD: /usr/bin/cscli console disable
