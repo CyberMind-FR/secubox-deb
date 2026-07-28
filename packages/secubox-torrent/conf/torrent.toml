@@ -1,0 +1,28 @@
+# /etc/secubox/torrent.toml — SecuBox Torrent module configuration
+#
+# Operator-facing override of the package defaults. Edit values then re-run
+# install-lxc.sh (Task 8's postinst exports these into TORRENT_* env vars
+# consumed by lxc/install-lxc.sh, which writes them into the in-LXC
+# /opt/secubox-torrent/torrent.env read by server.js).
+
+# ── LXC ─────────────────────────────────────────────────────────────────
+[lxc]
+name  = "torrent"
+ip    = "10.100.0.160"
+gateway = "10.100.0.1"
+bridge  = "br-lxc"
+path    = "/data/lxc"
+
+# ── WebTorrent engine (inside the LXC) ─────────────────────────────────
+[engine]
+max_active = 5
+webrtc      = true     # set false to force BitTorrent-only (no @roamhq/wrtc)
+
+# ── Ephemeral retention (purge sweep, server.js runPurge) ──────────────
+[retention]
+ephemeral_ttl_hours = 6
+disk_floor_gb        = 5
+
+# ── Public exposure (nginx vhost :9080 → LXC :8090; HAProxy SNI ACL) ───
+[exposure]
+public_hostname = "torrent.gk2.secubox.in"

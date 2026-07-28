@@ -4,14 +4,10 @@
 name: secubox-torrent
 category: misc
 tier: lite
-description: "BitTorrent client management for SecuBox"
+description: "WebTorrent streaming for SecuBox (LXC-native)"
 
 depends:
   - secubox-core
-
-api:
-  socket: /run/secubox/torrent.sock
-  health: /api/v1/torrent/health
 
 ui:
   path: /srv/secubox/www/torrent

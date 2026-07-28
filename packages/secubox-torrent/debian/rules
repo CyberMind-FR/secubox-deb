@@ -3,18 +3,37 @@
 	dh $@
 
 override_dh_auto_install:
-	# API files
-	install -d debian/secubox-torrent/usr/lib/secubox/torrent/
-	cp -r api debian/secubox-torrent/usr/lib/secubox/torrent/
-	# Static www files
-	install -d debian/secubox-torrent/usr/share/secubox/www
-	[ -d www ] && cp -r www/. debian/secubox-torrent/usr/share/secubox/www/ || true
-	# Menu definitions
+	# WebTorrent LXC app source. Ships package-lock.json (needed by
+	# `npm ci` at provision time inside the LXC) but NOT node_modules
+	# (gitignored dev artifact; install-lxc.sh runs npm ci in the LXC).
+	install -d debian/secubox-torrent/usr/lib/secubox/torrent/app
+	cp -r lxc/app/. debian/secubox-torrent/usr/lib/secubox/torrent/app/
+	rm -rf debian/secubox-torrent/usr/lib/secubox/torrent/app/node_modules
+	# LXC bootstrap script + in-LXC systemd unit (installed side by side so
+	# install-lxc.sh's $(dirname "$0") resolves the unit file on the board).
+	install -m 755 lxc/install-lxc.sh debian/secubox-torrent/usr/lib/secubox/torrent/install-lxc.sh
+	install -m 644 lxc/secubox-torrent.service debian/secubox-torrent/usr/lib/secubox/torrent/secubox-torrent.service
+	# Webui (browser player)
+	install -d debian/secubox-torrent/usr/share/secubox/www/torrent
+	cp -r www/torrent/. debian/secubox-torrent/usr/share/secubox/www/torrent/
+	# Menu definition
 	install -d debian/secubox-torrent/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. debian/secubox-torrent/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
-	install -d debian/secubox-torrent/etc/nginx/secubox.d
-	[ -f nginx/torrent.conf ] && cp nginx/torrent.conf debian/secubox-torrent/etc/nginx/secubox.d/ || true
-	# Systemd service
-	install -d debian/secubox-torrent/lib/systemd/system
-	[ -f systemd/secubox-torrent.service ] && cp systemd/secubox-torrent.service debian/secubox-torrent/lib/systemd/system/ || true
+	install -m 644 menu.d/612-torrent.json debian/secubox-torrent/usr/share/secubox/menu.d/
+	# Config
+	install -d debian/secubox-torrent/etc/secubox
+	install -m 644 conf/torrent.toml debian/secubox-torrent/etc/secubox/torrent.toml
+	# Public vhost: full standalone server{} block (own server_name), so it
+	# MUST land in sites-available/ (+ postinst symlink into sites-enabled),
+	# NOT etc/nginx/secubox.d/ — that dir is location-only snippets merged
+	# into the shared hub server block (see nginx/torrent.conf header and
+	# packages/secubox-peertube/debian/rules for the verified pattern).
+	install -d debian/secubox-torrent/etc/nginx/sites-available
+	install -m 644 nginx/torrent.conf debian/secubox-torrent/etc/nginx/sites-available/torrent.conf
+	# nft egress scope: ship straight to /etc/nftables.d/ with a zz- prefix
+	# so it sorts after any table-creator base file (repo convention; see
+	# secubox-p2p/secubox-toolbox/secubox-threatmesh debian/rules+postinst).
+	# NOTE: /etc/secubox/nft.d/ is not an include path anywhere on the board
+	# (/etc/nftables.conf only does `include "/etc/nftables.d/*.nft"`) — the
+	# original task brief's path would ship a rule that never loads.
+	install -d debian/secubox-torrent/etc/nftables.d
+	install -m 644 nft/torrent-egress.nft debian/secubox-torrent/etc/nftables.d/zz-torrent-egress.nft
