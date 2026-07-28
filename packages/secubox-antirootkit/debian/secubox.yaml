@@ -1,0 +1,16 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-antirootkit
+category: wall
+tier: pro
+description: "SecuBox Anti-Rootkit - host-IDS anti-escape + exec scanner"
+
+depends: []
+
+api:
+  socket: /run/secubox/antirootkit.sock
+  health: /api/v1/antirootkit/status
+
+ui:
+  path: /srv/secubox/www/antirootkit
