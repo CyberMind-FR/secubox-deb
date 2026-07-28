@@ -92,8 +92,13 @@ def create_app(execlog: Optional[ExecLog] = None) -> FastAPI:
 
     @app.get("/status")
     def get_status():
-        """Small status blob for the panel header/sidebar badge."""
-        return {"execlog_rows": len(log.recent(limit=100))}
+        """Small status blob for the panel header/sidebar badge.
+
+        Uses log.count() (the true table size), not len(recent()) — the
+        latter is capped at its `limit` and would freeze the badge at 100
+        once the log grows past that on a live host.
+        """
+        return {"execlog_rows": log.count()}
 
     @app.get("/execlog")
     def get_execlog(limit: int = 100):
