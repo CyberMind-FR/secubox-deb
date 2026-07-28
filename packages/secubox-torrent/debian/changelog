@@ -1,3 +1,15 @@
+secubox-torrent (2.1.1-1~bookworm1) bookworm; urgency=high
+
+  * Fix add-torrent hang / 502: pin uint8-util to 2.2.6 via npm overrides.
+    uint8-util 2.3.0 rewrote arr2hex() to require a TypedArray (data.buffer),
+    which throws when webtorrent 2.8.5 passes it parse-torrent's hex-string
+    infoHash in _onTorrentId — crashing the add before infoHash resolves so
+    the request blocked past the proxy timeout (502). The committed lockfile
+    had drifted to the broken uint8-util under webtorrent's ^2.2.5 range.
+    (ref #917)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 18:10:00 +0200
+
 secubox-torrent (2.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Add torrent by .torrent URL and by uploaded .torrent file (webui mode
