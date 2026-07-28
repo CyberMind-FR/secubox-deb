@@ -27,9 +27,28 @@ class ExecEvent:
     success: bool = True
 
 
-_SYS = re.compile(r'type=SYSCALL .*?ppid=(\d+) pid=(\d+) .*?uid=(\d+) .*?exe="([^"]+)"')
+# auditd emits any field containing a space/quote/control byte UNQUOTED and
+# hex-encoded instead of double-quoted (e.g. exe=2F746D702F2E78206576696C for
+# "/tmp/.x evil"). Both exe= and aN= must accept EITHER form, or an attacker
+# can bypass jailing simply by naming their binary with a space.
+_SYS = re.compile(
+    r'type=SYSCALL .*?ppid=(\d+) pid=(\d+) .*?uid=(\d+) .*?'
+    r'exe=(?:"([^"]*)"|([0-9A-Fa-f]+))'
+)
 _SUC = re.compile(r'success=(yes|no)')
-_A = re.compile(r'a\d+="([^"]*)"')
+_A = re.compile(r'a\d+=(?:"([^"]*)"|([0-9A-Fa-f]+))')
+
+
+def _auditd_field(quoted, hexval):
+    """Decode an auditd field that may be double-quoted or hex-encoded."""
+    if quoted is not None:
+        return quoted
+    if hexval:
+        try:
+            return bytes.fromhex(hexval).decode("utf-8", "surrogateescape")
+        except ValueError:
+            return hexval
+    return None
 
 
 def parse_ausearch(text: str) -> list:
@@ -41,13 +60,14 @@ def parse_ausearch(text: str) -> list:
         if not m:
             continue
         suc = _SUC.search(b)
-        argv = _A.findall(b)
+        exe = _auditd_field(m.group(4), m.group(5))
+        argv = [_auditd_field(am.group(1), am.group(2)) for am in _A.finditer(b)]
         out.append(
             ExecEvent(
                 pid=int(m.group(2)),
                 ppid=int(m.group(1)),
                 uid=int(m.group(3)),
-                exe=m.group(4),
+                exe=exe,
                 argv=argv,
                 success=(suc.group(1) == "yes" if suc else True),
             )
@@ -63,11 +83,20 @@ def decide(ev: ExecEvent, allow: set, is_backed_fn) -> str:
 
 
 def run_once(events, allow, is_backed_fn, jail_fn, log_fn) -> int:
-    """Process a batch of ExecEvents; jail unknowns; return #jailed."""
+    """Process a batch of ExecEvents; jail unknowns; return #jailed.
+
+    Fail-closed: if deciding an event raises (e.g. is_backed_fn blows up),
+    the event is treated as unknown ("jail") rather than silently skipped.
+    A single event's failure never aborts the rest of the batch.
+    """
     n = 0
     for ev in events:
-        d = decide(ev, allow, is_backed_fn)
-        log_fn(ev, d)
+        try:
+            d = decide(ev, allow, is_backed_fn)
+            log_fn(ev, d)
+        except Exception:
+            d = "jail"
+            log_fn(ev, d)
         if d == "jail" and ev.success:
             jail_fn(ev.pid)
             n += 1
