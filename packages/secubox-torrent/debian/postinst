@@ -1,27 +1,53 @@
-#!/bin/bash
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 set -e
 case "$1" in
   configure)
-    # Ensure secubox user exists
+    # Ensure secubox user exists (shared across all secubox-* modules).
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
+
+    # Runtime + state directories (shared conventions; do not chown the
+    # /etc/secubox parent here — secubox-core owns it).
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
-    install -d -o secubox -g secubox -m 750 /var/cache/secubox/torrent
-    # Create data directories
-    install -d -m 755 /srv/torrent/config
-    install -d -m 755 /srv/torrent/downloads
-    install -d -m 755 /srv/torrent/watch
-    # Ensure nginx secubox.d directory exists
-    install -d -m 755 /etc/nginx/secubox.d
-    # Enable and start service
-    systemctl daemon-reload
-    systemctl enable secubox-torrent.service
-    systemctl start  secubox-torrent.service || true
-    # Reload nginx to pick up new location
-    systemctl reload nginx 2>/dev/null || true
+    [ -d /etc/secubox ] || install -d -o secubox -g secubox -m 755 /etc/secubox
+
+    # Parse the operator-facing TOML into the env vars install-lxc.sh (via
+    # lxc/install-lxc.sh's torrent.env writer) expects. Minimal grep parse —
+    # matches the flat `key = value` lines under [engine]/[retention].
+    TORRENT_MAX_ACTIVE=$(grep -E '^max_active' /etc/secubox/torrent.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    TORRENT_WEBRTC=$(grep -E '^webrtc' /etc/secubox/torrent.toml 2>/dev/null | grep -oE 'true|false' | head -1)
+    TORRENT_TTL=$(grep -E '^ephemeral_ttl_hours' /etc/secubox/torrent.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    TORRENT_FLOOR=$(grep -E '^disk_floor_gb' /etc/secubox/torrent.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    export TORRENT_MAX_ACTIVE TORRENT_WEBRTC TORRENT_TTL TORRENT_FLOOR
+
+    # Provision/refresh the dedicated WebTorrent LXC (idempotent: creates
+    # the container once, then redeploys the app + restarts the in-LXC
+    # unit on every upgrade). Never fail the postinst if LXC tooling isn't
+    # ready yet (e.g. first apt run before /data is mounted).
+    bash /usr/lib/secubox/torrent/install-lxc.sh \
+      || echo "secubox-torrent: LXC provisioning deferred (run /usr/lib/secubox/torrent/install-lxc.sh manually)"
+
+    # Load the egress visibility scope for the torrent LXC's veth.
+    if [ -f /etc/nftables.d/zz-torrent-egress.nft ]; then
+      nft -f /etc/nftables.d/zz-torrent-egress.nft 2>/dev/null || true
+    fi
+
+    # Symlink the public vhost into sites-enabled (idempotent). Proxies
+    # torrent.gk2.secubox.in -> torrent LXC at 10.100.0.160:8090. Operator
+    # wires the HAProxy SNI ACL + ACME cert + sbxwaf route separately.
+    if [ -f /etc/nginx/sites-available/torrent.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+      ln -sf ../sites-available/torrent.conf /etc/nginx/sites-enabled/torrent.conf
+    fi
+
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
     ;;
 esac
+
 #DEBHELPER#
+exit 0
