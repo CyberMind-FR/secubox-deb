@@ -1,9 +1,9 @@
 {
   "name": "Torrent",
   "path": "/torrent/",
-  "icon": "📥",
-  "category": "mesh",
+  "icon": "🌊",
+  "category": "media",
   "order": 612,
-  "description": "BitTorrent client management",
+  "description": "WebTorrent streaming (torrent.gk2.secubox.in)",
   "id": "torrent"
 }
