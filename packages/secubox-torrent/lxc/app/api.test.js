@@ -43,3 +43,42 @@ test('keep flips kept=1', async () => {
   const list = await app.inject({ method: 'GET', url: '/api/v1/torrent/list' });
   assert.equal(list.json()[0].kept, 1);
 });
+
+function buildWith() {
+  const engine = new Engine({ WebTorrentCtor: FakeWebTorrent, downloadDir: '/tmp', maxActive: 5, webrtc: true });
+  const library = new Library(':memory:');
+  return { app: buildApi({ engine, library, diskFreeBytes: () => 10 * 1e9 }), engine };
+}
+
+test('add by torrentUrl hands the URL to the engine', async () => {
+  const { app, engine } = buildWith();
+  const url = 'https://example.org/x.torrent';
+  const r = await app.inject({ method: 'POST', url: '/api/v1/torrent/add', payload: { torrentUrl: url } });
+  assert.equal(r.statusCode, 200);
+  assert.ok(engine.client.added.includes(url));
+  const list = await app.inject({ method: 'GET', url: '/api/v1/torrent/list' });
+  assert.equal(list.json().length, 1);
+});
+
+test('add-file hands the raw .torrent Buffer to the engine', async () => {
+  const { app, engine } = buildWith();
+  const buf = Buffer.from('d8:announce...e'); // stand-in bencoded bytes
+  const r = await app.inject({ method: 'POST', url: '/api/v1/torrent/add-file',
+    headers: { 'content-type': 'application/x-bittorrent' }, payload: buf });
+  assert.equal(r.statusCode, 200);
+  const passed = engine.client.added[0];
+  assert.ok(Buffer.isBuffer(passed) && passed.equals(buf));
+});
+
+test('add with neither magnet nor torrentUrl is 400', async () => {
+  const app = build();
+  const r = await app.inject({ method: 'POST', url: '/api/v1/torrent/add', payload: {} });
+  assert.equal(r.statusCode, 400);
+});
+
+test('add-file with empty body is 400', async () => {
+  const app = build();
+  const r = await app.inject({ method: 'POST', url: '/api/v1/torrent/add-file',
+    headers: { 'content-type': 'application/x-bittorrent' }, payload: Buffer.alloc(0) });
+  assert.equal(r.statusCode, 400);
+});
