@@ -9,15 +9,19 @@ export class FakeFile {
 }
 
 export class FakeTorrent {
-  constructor(infoHash, name, files, { failMeta = false } = {}) {
+  constructor(infoHash, name, files, { failMeta = false, emitError = false } = {}) {
     this.infoHash = infoHash; this.name = name;
     this.magnetURI = 'magnet:?xt=urn:btih:' + infoHash;
     this.files = files.map((f, i) => Object.assign(new FakeFile(f.name, f.length), { idx: i }));
     this.progress = 0.1; this.downloadSpeed = 1000; this.uploadSpeed = 500;
     this.numPeers = 3; this.wires = [{ type: 'webrtc' }, { type: 'tcp' }];
-    this._failMeta = failMeta; this._handlers = {}; this._client = null;
+    this._failMeta = failMeta; this._emitError = emitError; this._handlers = {}; this._client = null;
   }
-  on(ev, cb) { this._handlers[ev] = cb; if (ev === 'metadata' && !this._failMeta) queueMicrotask(cb); }
+  on(ev, cb) {
+    this._handlers[ev] = cb;
+    if (ev === 'error' && this._emitError) queueMicrotask(() => cb(new Error('bad torrent')));
+    if (ev === 'metadata' && !this._failMeta && !this._emitError) queueMicrotask(cb);
+  }
   destroy(_opts, cb) {
     if (this._client) {
       const idx = this._client.torrents.indexOf(this);
@@ -35,5 +39,6 @@ export class FakeWebTorrent {
     t._client = this; this.torrents.push(t); if (cb) queueMicrotask(() => cb(t)); return t;
   }
   get(infohash) { return this.torrents.find(t => t.infoHash === infohash) || null; }
+  on() {} // real WebTorrent client is an EventEmitter; engine attaches 'error'
   destroy(cb) { if (cb) cb(); }
 }
