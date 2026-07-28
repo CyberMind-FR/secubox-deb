@@ -392,7 +392,14 @@
             // CAPI Card - distinguish between enrolled, not enrolled, and error
             const capiCard = document.getElementById('card-capi');
             const capiError = data.capi_error;
-            if (data.capi_registered) {
+            if (data.capi_sovereign) {
+                // online_client intentionally disabled (sovereign mode #728) —
+                // CrowdSec runs local-only, no CAPI/Console signal sharing.
+                // Not an error, not "not enrolled" — a deliberate posture.
+                capiCard.className = 'agent-card ok';
+                document.getElementById('capi-status-text').textContent = '🛡 Sovereign';
+                document.getElementById('capi-detail').textContent = 'CAPI off by design';
+            } else if (data.capi_registered) {
                 capiCard.className = 'agent-card ok';
                 document.getElementById('capi-status-text').textContent = '● Enrolled';
                 document.getElementById('capi-detail').textContent = 'Community Intel';
@@ -406,16 +413,17 @@
                 document.getElementById('capi-detail').textContent = 'Community Intel';
             }
 
-            // Add CAPI enroll button if not enrolled (but not if API error)
+            // Add CAPI enroll button ONLY if not enrolled and not sovereign
+            // (sovereign mode cannot enroll — no online_client config).
             const existingBtn = document.getElementById('capi-enroll-btn');
-            if (!data.capi_registered && !capiError && !existingBtn) {
+            if (!data.capi_registered && !capiError && !data.capi_sovereign && !existingBtn) {
                 const btn = document.createElement('button');
                 btn.id = 'capi-enroll-btn';
                 btn.className = 'repair-btn';
                 btn.textContent = '🔑 Enroll';
                 btn.onclick = enrollCAPI;
                 capiCard.appendChild(btn);
-            } else if (data.capi_registered || capiError) {
+            } else if (data.capi_registered || capiError || data.capi_sovereign) {
                 if (existingBtn) existingBtn.remove();
             }
 
