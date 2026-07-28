@@ -1,0 +1,4 @@
+[Unit]
+Description=SecuBox anti-rootkit: untrusted (egress-blocked) process jail
+
+[Slice]

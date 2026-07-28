@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox Anti-Rootkit exec-watcher (auditd sbx_exec -> jail unknown execs)
+After=auditd.service network.target
+Requires=auditd.service
+
+[Service]
+Type=simple
+User=secubox-antirootkit
+Group=secubox-antirootkit
+# The daemon reads the audit trail via `ausearch -k sbx_exec`, which reads
+# /var/log/audit/audit.log (mode 0640 root:adm). Without adm membership the
+# read returns nothing and the scanner is silently blind. `adm` grants
+# read-only access to system logs — the daemon never writes them.
+SupplementaryGroups=adm
+# NoNewPrivileges=no: the daemon jails unbacked execs via
+# `sudo -n secubox-antirootkitctl jail <pid>` (api/cgroup.py), scoped by the
+# exact-path sudoers rule shipped in sudoers/secubox-antirootkit. NNP=yes
+# would block that sudo call.
+NoNewPrivileges=no
+ExecStart=/usr/bin/python3 -m api.daemon
+WorkingDirectory=/usr/lib/secubox/antirootkit
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

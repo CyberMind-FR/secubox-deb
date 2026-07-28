@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox — Anti-Rootkit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <style>
+        :root {
+            --p31-dim: #6b7b8b;
+            --bg-dark: #0d1117;
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row: rgba(20, 30, 45, 0.6);
+            --border: rgba(100, 150, 200, 0.2);
+            --text: #e8e6d9;
+            --cyan: #00d4ff;
+            --red: #ff4466;
+            --orange: #ff9944;
+            --yellow: #ffcc00;
+            --green: #00dd44;
+            --blue: #4488ff;
+            --purple: #a371f7;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+        .header .sub { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.2rem; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem; text-align: center; backdrop-filter: blur(5px); }
+        .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
+        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.red .value { color: var(--red); }
+        .stat-card.green .value { color: var(--green); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .card h3 { color: var(--cyan); font-size: 0.9rem; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+        .form-group { flex: 1; min-width: 160px; }
+        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input { width: 100%; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .form-group input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
+        .list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 420px; overflow-y: auto; }
+        .row-item { display: grid; grid-template-columns: 1.4em 1fr auto; align-items: center; gap: 0.6rem; padding: 0.4rem 0.5rem; background: var(--bg-row); border-radius: 4px; font-size: 0.75rem; border-left: 3px solid var(--border); }
+        .row-item.legit { border-left-color: var(--green); }
+        .row-item.suspect { border-left-color: var(--red); background: rgba(255,68,102,0.08); }
+        .row-item .glyph { text-align: center; font-size: 1em; }
+        .row-item .main-col { min-width: 0; }
+        .row-item .exe { color: var(--cyan); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .row-item .meta { font-size: 0.65rem; color: var(--p31-dim); }
+        .row-item .time { font-size: 0.65rem; color: var(--p31-dim); text-align: right; white-space: nowrap; }
+        .alert-item { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem 0.6rem; background: var(--bg-row); border-radius: 4px; border-left: 3px solid var(--orange); font-size: 0.75rem; }
+        .alert-item .top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .alert-item .exe { color: var(--cyan); font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+        .alert-item .score { color: var(--orange); font-weight: bold; }
+        .alert-item .reasons { color: var(--p31-dim); font-size: 0.65rem; }
+        .alert-item .dest { color: var(--red); font-size: 0.65rem; }
+        .empty-note { color: var(--p31-dim); font-size: 0.75rem; padding: 0.5rem; }
+        .plan-box { background: rgba(20,30,45,0.9); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.75rem; }
+        .plan-box .plan-row { display: flex; gap: 0.5rem; padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
+        .plan-box .plan-row:last-child { border-bottom: none; }
+        .plan-box .plan-key { color: var(--p31-dim); min-width: 100px; text-transform: uppercase; font-size: 0.65rem; }
+        .plan-box .plan-val { color: var(--cyan); word-break: break-all; }
+        .plan-box .plan-val.empty { color: var(--p31-dim); }
+        .plan-note { color: var(--orange); font-size: 0.65rem; margin-top: 0.5rem; }
+        .toast { position: fixed; bottom: 70px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding-top: 60px; }
+            .row-item { grid-template-columns: 1em 1fr; }
+            .row-item .time { display: none; }
+        }
+    </style>
+</head>
+<body class="hybrid-dark">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <main class="main">
+        <header class="header">
+            <div>
+                <h1>🧟 Anti-Rootkit</h1>
+                <div class="sub" id="subline">loading…</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" id="refreshBtn">↻ Refresh</button>
+            </div>
+        </header>
+
+        <div class="grid">
+            <div class="stat-card cyan"><div class="value" id="statRows">–</div><div class="label">Exec Rows</div></div>
+            <div class="stat-card red"><div class="value" id="statAlerts">–</div><div class="label">Alerts</div></div>
+        </div>
+
+        <div class="card">
+            <h3>🔒 Manual Quarantine-Prep</h3>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="qpPath">Binary path</label>
+                    <input type="text" id="qpPath" placeholder="/usr/local/bin/notwork-monitoring">
+                </div>
+                <div class="form-group">
+                    <label for="qpC2">C2 IP (optional)</label>
+                    <input type="text" id="qpC2" placeholder="5.182.207.11">
+                </div>
+                <div class="form-group">
+                    <label for="qpUnit">systemd unit (optional)</label>
+                    <input type="text" id="qpUnit" placeholder="notwork-monitoring.service">
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn primary" id="qpBtn">🔒 Prepare Quarantine Plan</button>
+            </div>
+            <div class="plan-note">This only computes a PLAN — nothing is executed. Review and run the commands manually.</div>
+            <div id="planBox"></div>
+        </div>
+
+        <div class="card">
+            <h3>⚠️ Alert Queue</h3>
+            <div class="list" id="alertList"></div>
+        </div>
+
+        <div class="card">
+            <h3>📜 Exec Timeline</h3>
+            <div class="list" id="execList"></div>
+        </div>
+    </main>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API = '/api/v1/antirootkit';
+
+        function authHeaders() {
+            const tok = localStorage.getItem('sbx_token');
+            return tok ? { 'Authorization': 'Bearer ' + tok } : {};
+        }
+
+        function toast(msg, isError) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show' + (isError ? ' error' : '');
+            if (!isError) {
+                setTimeout(() => { t.className = 'toast'; }, 3000);
+            }
+        }
+
+        function clearChildren(el) {
+            while (el.firstChild) el.removeChild(el.firstChild);
+        }
+
+        function fmtTime(ts) {
+            if (!ts) return '';
+            try {
+                return new Date(ts * 1000).toLocaleString();
+            } catch (e) {
+                return String(ts);
+            }
+        }
+
+        function renderExecList(rows) {
+            const el = document.getElementById('execList');
+            clearChildren(el);
+            if (!rows || !rows.length) {
+                const note = document.createElement('div');
+                note.className = 'empty-note';
+                note.textContent = 'No exec events recorded yet.';
+                el.appendChild(note);
+                return;
+            }
+            rows.forEach(row => {
+                const legit = row.pkg != null && row.pkg !== '';
+                const item = document.createElement('div');
+                item.className = 'row-item ' + (legit ? 'legit' : 'suspect');
+
+                const glyph = document.createElement('div');
+                glyph.className = 'glyph';
+                glyph.textContent = legit ? '✓' : '✗';
+                item.appendChild(glyph);
+
+                const mainCol = document.createElement('div');
+                mainCol.className = 'main-col';
+                const exeEl = document.createElement('div');
+                exeEl.className = 'exe';
+                exeEl.textContent = row.exe || '(unknown)';
+                mainCol.appendChild(exeEl);
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+                meta.textContent = 'pid ' + (row.pid != null ? row.pid : '?') +
+                    ' · parent ' + (row.ppid != null ? row.ppid : '?') +
+                    ' · ' + (legit ? ('pkg: ' + row.pkg) : 'unbacked') +
+                    ' · verdict: ' + (row.verdict || '?');
+                mainCol.appendChild(meta);
+                item.appendChild(mainCol);
+
+                const time = document.createElement('div');
+                time.className = 'time';
+                time.textContent = fmtTime(row.ts);
+                item.appendChild(time);
+
+                el.appendChild(item);
+            });
+        }
+
+        function renderAlertList(alerts) {
+            const el = document.getElementById('alertList');
+            clearChildren(el);
+            if (!alerts || !alerts.length) {
+                const note = document.createElement('div');
+                note.className = 'empty-note';
+                note.textContent = 'No active alerts.';
+                el.appendChild(note);
+                return;
+            }
+            alerts.forEach(a => {
+                const item = document.createElement('div');
+                item.className = 'alert-item';
+
+                const top = document.createElement('div');
+                top.className = 'top';
+                const exeEl = document.createElement('span');
+                exeEl.className = 'exe';
+                exeEl.textContent = a.exe || '(unknown)';
+                top.appendChild(exeEl);
+                const scoreEl = document.createElement('span');
+                scoreEl.className = 'score';
+                scoreEl.textContent = 'score ' + (a.score != null ? a.score : '?');
+                top.appendChild(scoreEl);
+                item.appendChild(top);
+
+                if (a.reasons && a.reasons.length) {
+                    const reasons = document.createElement('div');
+                    reasons.className = 'reasons';
+                    reasons.textContent = a.reasons.join(', ');
+                    item.appendChild(reasons);
+                }
+
+                if (a.dest) {
+                    const dest = document.createElement('div');
+                    dest.className = 'dest';
+                    dest.textContent = '→ ' + a.dest + (a.ioc ? ' (IOC match)' : '');
+                    item.appendChild(dest);
+                }
+
+                const btnRow = document.createElement('div');
+                btnRow.className = 'btn-group';
+                const btn = document.createElement('button');
+                btn.className = 'btn danger sm';
+                btn.textContent = '🔒 Quarantine';
+                btn.setAttribute('data-act', 'quarantine-from-alert');
+                btn.setAttribute('data-exe', a.exe || '');
+                btn.setAttribute('data-dest', a.dest || '');
+                btnRow.appendChild(btn);
+                item.appendChild(btnRow);
+
+                el.appendChild(item);
+            });
+        }
+
+        function renderPlan(plan) {
+            const box = document.getElementById('planBox');
+            clearChildren(box);
+            const wrap = document.createElement('div');
+            wrap.className = 'plan-box';
+            Object.keys(plan).forEach(key => {
+                const row = document.createElement('div');
+                row.className = 'plan-row';
+                const k = document.createElement('div');
+                k.className = 'plan-key';
+                k.textContent = key;
+                row.appendChild(k);
+                const v = document.createElement('div');
+                const val = plan[key];
+                v.className = 'plan-val' + (val == null ? ' empty' : '');
+                v.textContent = val == null ? '(none)' : String(val);
+                row.appendChild(v);
+                wrap.appendChild(row);
+            });
+            box.appendChild(wrap);
+        }
+
+        async function loadStatus() {
+            try {
+                const res = await fetch(API + '/status');
+                if (!res.ok) throw new Error('status ' + res.status);
+                const data = await res.json();
+                document.getElementById('statRows').textContent = data.execlog_rows != null ? data.execlog_rows : '–';
+                return data;
+            } catch (e) {
+                document.getElementById('subline').textContent = '⚠️ status unavailable';
+                return null;
+            }
+        }
+
+        async function loadExecLog() {
+            try {
+                const res = await fetch(API + '/execlog?limit=100');
+                if (!res.ok) throw new Error('execlog ' + res.status);
+                const rows = await res.json();
+                renderExecList(rows);
+                return rows;
+            } catch (e) {
+                renderExecList([]);
+                return [];
+            }
+        }
+
+        async function loadAlerts() {
+            try {
+                const res = await fetch(API + '/alerts');
+                if (!res.ok) throw new Error('alerts ' + res.status);
+                const alerts = await res.json();
+                document.getElementById('statAlerts').textContent = alerts.length;
+                renderAlertList(alerts);
+                return alerts;
+            } catch (e) {
+                document.getElementById('statAlerts').textContent = '–';
+                renderAlertList([]);
+                return [];
+            }
+        }
+
+        async function requestQuarantinePrep(path, c2Ip, unit) {
+            if (!path) {
+                toast('⚠️ Binary path is required', true);
+                return;
+            }
+            try {
+                const res = await fetch(API + '/quarantine-prep', {
+                    method: 'POST',
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+                    body: JSON.stringify({ path: path, c2_ip: c2Ip || null, unit: unit || null }),
+                });
+                if (!res.ok) {
+                    toast('🔒 Request failed (' + res.status + ')', true);
+                    return;
+                }
+                const plan = await res.json();
+                renderPlan(plan);
+                toast('Plan ready — review before running anything');
+            } catch (e) {
+                toast('🔒 Network error preparing plan', true);
+            }
+        }
+
+        async function refresh() {
+            const sub = document.getElementById('subline');
+            sub.textContent = 'refreshing…';
+            await Promise.all([loadStatus(), loadExecLog(), loadAlerts()]);
+            sub.textContent = 'live · manual quarantine-prep never executes';
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', refresh);
+
+        document.getElementById('qpBtn').addEventListener('click', () => {
+            const path = document.getElementById('qpPath').value.trim();
+            const c2 = document.getElementById('qpC2').value.trim();
+            const unit = document.getElementById('qpUnit').value.trim();
+            requestQuarantinePrep(path, c2, unit);
+        });
+
+        // Event delegation: alert-row "Quarantine" buttons are generated
+        // dynamically and never carry inline onclick handlers.
+        document.getElementById('alertList').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-act="quarantine-from-alert"]');
+            if (!btn) return;
+            const exe = btn.getAttribute('data-exe');
+            const dest = btn.getAttribute('data-dest');
+            document.getElementById('qpPath').value = exe || '';
+            document.getElementById('qpC2').value = dest || '';
+            requestQuarantinePrep(exe, dest, '');
+        });
+
+        refresh();
+    </script>
+</body>
+</html>
