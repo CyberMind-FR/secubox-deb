@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        rm -rf /var/lib/secubox/antirootkit
+        rm -f /etc/sudoers.d/secubox-antirootkit
+        rm -f /etc/audit/rules.d/99-sbx-procwatch.rules
+        augenrules --load 2>/dev/null || true
+        if getent passwd secubox-antirootkit > /dev/null 2>&1; then
+            deluser --system secubox-antirootkit 2>/dev/null || true
+        fi
+        if getent group secubox-antirootkit > /dev/null 2>&1; then
+            delgroup --system secubox-antirootkit 2>/dev/null || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

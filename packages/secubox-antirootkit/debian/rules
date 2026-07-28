@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install API module (as api/ subdirectory for uvicorn api.main:app)
+	install -d $(CURDIR)/debian/secubox-antirootkit/usr/lib/secubox/antirootkit/api
+	cp -r $(CURDIR)/api/*.py $(CURDIR)/debian/secubox-antirootkit/usr/lib/secubox/antirootkit/api/
+
+	# Install root-only ctl (jail/nft-load/quarantine-prep)
+	install -d $(CURDIR)/debian/secubox-antirootkit/usr/sbin
+	install -m 755 $(CURDIR)/sbin/secubox-antirootkitctl $(CURDIR)/debian/secubox-antirootkit/usr/sbin/
+
+	# Install nft anti-escape table (path matches the ctl's nft-load verb)
+	install -d $(CURDIR)/debian/secubox-antirootkit/usr/share/secubox-antirootkit
+	install -m 644 $(CURDIR)/nft/secubox-antiescape.nft \
+		$(CURDIR)/debian/secubox-antirootkit/usr/share/secubox-antirootkit/
+
+	# Install systemd units: FastAPI daemon, exec-watcher daemon, untrusted
+	# slice (top-level — NOT nested under system.slice, see the slice unit).
+	install -d $(CURDIR)/debian/secubox-antirootkit/lib/systemd/system
+	install -m 644 $(CURDIR)/debian/secubox-antirootkit.service \
+		$(CURDIR)/debian/secubox-antirootkit/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/sbx-antirootkitd.service \
+		$(CURDIR)/debian/secubox-antirootkit/lib/systemd/system/
+	install -m 644 $(CURDIR)/systemd/sbx-untrusted.slice \
+		$(CURDIR)/debian/secubox-antirootkit/lib/systemd/system/
+
+	# Install scoped sudoers (secubox-antirootkit -> secubox-antirootkitctl,
+	# exact verbs only)
+	install -d $(CURDIR)/debian/secubox-antirootkit/etc/sudoers.d
+	install -m 440 $(CURDIR)/sudoers/secubox-antirootkit \
+		$(CURDIR)/debian/secubox-antirootkit/etc/sudoers.d/
+
+	# Install auditd targeted watches (low volume, key sbx_exec)
+	install -d $(CURDIR)/debian/secubox-antirootkit/etc/audit/rules.d
+	install -m 640 $(CURDIR)/conf/99-sbx-procwatch.rules \
+		$(CURDIR)/debian/secubox-antirootkit/etc/audit/rules.d/
+
+	# Install module config (allowlist + IOC seed)
+	install -d $(CURDIR)/debian/secubox-antirootkit/etc/secubox
+	install -m 644 $(CURDIR)/conf/antirootkit.toml \
+		$(CURDIR)/debian/secubox-antirootkit/etc/secubox/antirootkit.toml
+
+	# Install nginx route (dedicated socket, no aggregator dependency)
+	install -d $(CURDIR)/debian/secubox-antirootkit/etc/nginx/secubox.d
+	install -m 644 $(CURDIR)/nginx/antirootkit.conf \
+		$(CURDIR)/debian/secubox-antirootkit/etc/nginx/secubox.d/
+
+	# Install web panel
+	install -d $(CURDIR)/debian/secubox-antirootkit/usr/share/secubox/www/antirootkit
+	cp -r $(CURDIR)/www/antirootkit/* \
+		$(CURDIR)/debian/secubox-antirootkit/usr/share/secubox/www/antirootkit/
+
+	# Install dashboard menu entry
+	install -d $(CURDIR)/debian/secubox-antirootkit/usr/share/secubox/menu.d
+	install -m 644 $(CURDIR)/menu.d/595-antirootkit.json \
+		$(CURDIR)/debian/secubox-antirootkit/usr/share/secubox/menu.d/
+
+	# Create runtime directory placeholder (tmpfiles.d/systemd own it live;
+	# see the "never chown /run/secubox" rule)
+	install -d $(CURDIR)/debian/secubox-antirootkit/run/secubox

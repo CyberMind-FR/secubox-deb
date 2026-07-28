@@ -1,0 +1,26 @@
+[Unit]
+Description=SecuBox Anti-Rootkit API (exec forensic log, alerts, quarantine-prep)
+After=network.target
+
+[Service]
+Type=simple
+User=secubox-antirootkit
+Group=secubox-antirootkit
+RuntimeDirectory=secubox
+RuntimeDirectoryPreserve=yes
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/antirootkit.sock --workers 1
+WorkingDirectory=/usr/lib/secubox/antirootkit
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening. NoNewPrivileges stays default (yes): this service only
+# reads the forensic log/alerts and computes the quarantine plan — it never
+# shells out to sudo (unlike sbx-antirootkitd.service, which jails pids).
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/run/secubox /var/lib/secubox/antirootkit
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,64 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create the confined system user/group if absent (idempotent).
+        # The daemon never runs as root: privileged actions (jail/nft-load/
+        # quarantine-prep) go through the scoped sudoers rule below.
+        if ! getent group secubox-antirootkit > /dev/null 2>&1; then
+            addgroup --system secubox-antirootkit
+        fi
+        if ! getent passwd secubox-antirootkit > /dev/null 2>&1; then
+            adduser --system --ingroup secubox-antirootkit --no-create-home \
+                --home /var/lib/secubox/antirootkit secubox-antirootkit
+        fi
+
+        # State dir: own antirootkit/ (the sqlite forensic log lives here),
+        # but NEVER chown the shared /var/lib/secubox parent (#494/#511) —
+        # only ensure it exists with the normal 0755 traversal mode.
+        mkdir -p /var/lib/secubox
+        chmod 0755 /var/lib/secubox
+        install -d -o secubox-antirootkit -g secubox-antirootkit -m 0750 \
+            /var/lib/secubox/antirootkit
+
+        # Runtime dir fallback: never chown/chmod the shared /run/secubox
+        # parent — tmpfiles.d / secubox-runtime own it (see project memory:
+        # RuntimeDirectory=secubox is shared by ~100 units).
+        mkdir -p /run/secubox
+
+        # Validate the scoped sudoers file BEFORE trusting it. A syntax
+        # error here must never be silently installed — visudo -cf fails
+        # closed (dpkg leaves the postinst non-zero) rather than shipping a
+        # broken/unparseable sudoers drop-in.
+        visudo -cf /etc/sudoers.d/secubox-antirootkit
+
+        # Load the anti-escape nft table via the ctl (root, exact path,
+        # matches the sudoers rule and the ctl's own nft-load verb).
+        /usr/sbin/secubox-antirootkitctl nft-load 2>/dev/null || true
+
+        # Load the targeted auditd exec-watch rules (idempotent; augenrules
+        # merges /etc/audit/rules.d/*.rules and reloads the running auditd).
+        augenrules --load 2>/dev/null || true
+        if systemctl is-active --quiet auditd 2>/dev/null; then
+            systemctl try-restart auditd 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload || true
+
+        # sbx-untrusted.slice MUST live at the cgroup root (top-level slice,
+        # not nested under system.slice) — the nft rule matches
+        # `socket cgroupv2 level 1 "sbx-untrusted.slice"`, which only fires
+        # when the slice sits directly under the unified cgroup root.
+        systemctl start sbx-untrusted.slice || true
+
+        systemctl enable secubox-antirootkit.service || true
+        systemctl start secubox-antirootkit.service || true
+        systemctl enable sbx-antirootkitd.service || true
+        systemctl start sbx-antirootkitd.service || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

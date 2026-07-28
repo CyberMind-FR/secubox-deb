@@ -1,0 +1,7 @@
+# SecuBox anti-rootkit process-watch (exec surveillance) — ref #915
+-w /usr/local/bin -p x -k sbx_exec
+-w /usr/local/sbin -p x -k sbx_exec
+-w /tmp -p x -k sbx_exec
+-w /dev/shm -p x -k sbx_exec
+-w /opt -p x -k sbx_exec
+-w /usr/lib/jvm -p x -k sbx_exec
