@@ -122,9 +122,16 @@
   </div>
 
   <div class="card">
-    <h3>➕ Ajouter un magnet</h3>
+    <h3>➕ Ajouter un torrent</h3>
     <div class="add-row">
+      <select id="addMode" title="Source">
+        <option value="magnet">🧲 Magnet</option>
+        <option value="url">🔗 URL .torrent</option>
+        <option value="file">📄 Fichier .torrent</option>
+      </select>
       <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:…">
+      <input type="text" id="urlInput" placeholder="https://…/fichier.torrent" style="display:none">
+      <input type="file" id="fileInput" accept=".torrent,application/x-bittorrent" style="display:none">
       <button class="btn primary" id="btnAdd">➕ Add</button>
     </div>
   </div>
@@ -356,19 +363,34 @@
     }
   }
 
+  function onAdded(meta) {
+    toast('➕ Torrent ajouté: ' + (meta.name || meta.infohash || 'ok'));
+    document.getElementById('fileInput').value = '';
+    refreshList();
+  }
+  function onAddErr(e) { errorToast('Échec de l\'ajout: ' + e.message); }
+
   function addTorrent() {
-    var input = document.getElementById('magnetInput');
-    var magnet = input.value.trim();
-    if (!magnet) { errorToast('Lien magnet requis'); return; }
+    var mode = document.getElementById('addMode').value;
     var btn = document.getElementById('btnAdd');
+    if (mode === 'file') {
+      var f = document.getElementById('fileInput').files[0];
+      if (!f) { errorToast('Fichier .torrent requis'); return; }
+      btn.disabled = true;
+      f.arrayBuffer().then(function (buf) {
+        return api(API + '/add-file', { method: 'POST',
+          headers: { 'Content-Type': 'application/x-bittorrent' }, body: buf });
+      }).then(onAdded).catch(onAddErr).finally(function () { btn.disabled = false; });
+      return;
+    }
+    var input = document.getElementById(mode === 'url' ? 'urlInput' : 'magnetInput');
+    var val = input.value.trim();
+    if (!val) { errorToast(mode === 'url' ? 'URL .torrent requise' : 'Lien magnet requis'); return; }
+    var body = mode === 'url' ? { torrentUrl: val } : { magnet: val };
     btn.disabled = true;
-    api(API + '/add', { method: 'POST', body: JSON.stringify({ magnet: magnet }) }).then(function (meta) {
-      toast('➕ Torrent ajouté: ' + (meta.name || meta.infohash || 'ok'));
-      input.value = '';
-      refreshList();
-    }).catch(function (e) {
-      errorToast('Échec de l\'ajout: ' + e.message);
-    }).finally(function () { btn.disabled = false; });
+    api(API + '/add', { method: 'POST', body: JSON.stringify(body) })
+      .then(function (meta) { input.value = ''; onAdded(meta); })
+      .catch(onAddErr).finally(function () { btn.disabled = false; });
   }
 
   function refresh() {
@@ -378,7 +400,16 @@
 
   document.getElementById('btnRefresh').addEventListener('click', refresh);
   document.getElementById('btnAdd').addEventListener('click', addTorrent);
+  document.getElementById('addMode').addEventListener('change', function () {
+    var m = this.value;
+    document.getElementById('magnetInput').style.display = m === 'magnet' ? '' : 'none';
+    document.getElementById('urlInput').style.display = m === 'url' ? '' : 'none';
+    document.getElementById('fileInput').style.display = m === 'file' ? '' : 'none';
+  });
   document.getElementById('magnetInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addTorrent();
+  });
+  document.getElementById('urlInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') addTorrent();
   });
   document.getElementById('list').addEventListener('click', onListClick);
