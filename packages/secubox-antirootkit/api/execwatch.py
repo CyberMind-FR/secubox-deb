@@ -97,7 +97,14 @@ def decide(ev: ExecEvent, allow: set, is_backed_fn) -> str:
 
 
 def run_once(events, allow, is_backed_fn, jail_fn, log_fn) -> int:
-    """Process a batch of ExecEvents; jail unknowns; return #jailed.
+    """Process a batch of ExecEvents; hand flagged ones to jail_fn; return
+    the count handed over.
+
+    jail_fn is called with the whole ExecEvent (not just the pid) so the
+    caller's enforcement policy (api/policy: enforce flag + jail_dirs) can
+    decide, from the executable path, whether to actually jail. A jail_fn
+    that alert-only-mode passes may choose to do nothing; the count returned
+    still reflects how many events reached the "jail" verdict.
 
     Fail-closed: if deciding an event raises (e.g. is_backed_fn blows up),
     the event is treated as unknown ("jail") rather than silently skipped.
@@ -112,6 +119,6 @@ def run_once(events, allow, is_backed_fn, jail_fn, log_fn) -> int:
             d = "jail"
             log_fn(ev, d)
         if d == "jail" and ev.success:
-            jail_fn(ev.pid)
+            jail_fn(ev)
             n += 1
     return n

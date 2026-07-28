@@ -1,3 +1,15 @@
+[policy]
+# enforce=false = ALERT-ONLY "process scanner": flagged (non-dpkg,
+# non-allowlisted) execs are logged + alerted but NEVER auto-jailed. This is
+# the SAFE default — a broad execve audit rule (see conf/99-sbx-procwatch.rules)
+# means the daemon sees every exec, and many legitimate SecuBox binaries are
+# non-dpkg; auto-jailing them would cut their egress. Build the allowlist from
+# real observed traffic first, THEN set enforce=true.
+enforce = false
+# When enforce=true, auto-jail a flagged exec ONLY if its executable lives
+# under one of these dirs (omit to use api/policy.DEFAULT_JAIL_DIRS).
+jail_dirs = ["/tmp", "/dev/shm", "/var/tmp", "/run", "/usr/local/bin", "/usr/local/sbin", "/opt", "/usr/lib/jvm", "/home"]
+
 [allowlist]
 exec_paths = ["/usr/local/bin/certbot", "/usr/local/bin/jws", "/usr/local/bin/acme-*"]
 

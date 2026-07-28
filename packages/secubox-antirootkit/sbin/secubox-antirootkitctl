@@ -13,7 +13,14 @@ case "$verb" in
         # move the pid into the slice's cgroup
         mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
         echo "$pid" > /sys/fs/cgroup/sbx-untrusted.slice/cgroup.procs ;;
-  nft-load) exec nft -f /usr/share/secubox-antirootkit/secubox-antiescape.nft ;;
+  nft-load)
+        # nft resolves the cgroupv2 path in the rule ("sbx-untrusted.slice")
+        # at LOAD time — if /sys/fs/cgroup/sbx-untrusted.slice does not exist
+        # yet the load fails ("cgroupv2 path fails: No such file or directory").
+        # The static slice's cgroup is only created lazily (first jail), so
+        # create it here first (mkdir in the unified cgroupfs = create cgroup).
+        mkdir -p /sys/fs/cgroup/sbx-untrusted.slice
+        exec nft -f /usr/share/secubox-antirootkit/secubox-antiescape.nft ;;
   quarantine-prep)
         [[ $# -eq 2 ]] || { echo "usage: $0 quarantine-prep <path>" >&2; exit 2; }
         path="${2:?path}"; [[ -n "$path" ]] || exit 2

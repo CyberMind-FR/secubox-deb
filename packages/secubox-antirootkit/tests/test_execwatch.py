@@ -31,7 +31,7 @@ def test_run_once_jails_and_logs():
     e = ew.ExecEvent(pid=7, ppid=1, uid=0, exe="/tmp/x", argv=[], success=True)
     jailed = []
     logged = []
-    n = ew.run_once([e], set(), lambda p: False, jailed.append, lambda ev, d: logged.append(d))
+    n = ew.run_once([e], set(), lambda p: False, lambda ev: jailed.append(ev.pid), lambda ev, d: logged.append(d))
     assert n == 1 and jailed == [7] and logged == ["jail"]
 
 
@@ -76,7 +76,7 @@ def test_run_once_fail_closed_on_raise():
     jailed = []
     logged = []
     n = ew.run_once(
-        [e1, e2], set(), flaky_is_backed, jailed.append, lambda ev, d: logged.append(d)
+        [e1, e2], set(), flaky_is_backed, lambda ev: jailed.append(ev.pid), lambda ev, d: logged.append(d)
     )
     assert n == 2
     assert jailed == [101, 102]

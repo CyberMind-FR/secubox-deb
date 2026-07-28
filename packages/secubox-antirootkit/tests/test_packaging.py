@@ -105,22 +105,17 @@ def test_rules_installs_nft_sudoers_and_audit_files():
     assert "secubox-antirootkitctl" in rules
 
 
-def test_audit_rule_file_targeted_watches():
+def test_audit_rule_is_broad_execve_syscall():
+    # Targeted `-w <dir> -p x` watches do NOT fire on execs of files *within*
+    # the dir (verified on gk2 aarch64); the only rule form that reliably
+    # records every exec is a broad execve syscall rule. Scope is enforced in
+    # userspace (api/policy). See conf/99-sbx-procwatch.rules header.
     rules = _read("conf/99-sbx-procwatch.rules")
-    assert "-p x" in rules
-    assert "sbx_exec" in rules
-    for path in (
-        "/usr/local/bin",
-        "/usr/local/sbin",
-        "/tmp",
-        "/dev/shm",
-        "/opt",
-        "/usr/lib/jvm",
-        # /home matches heuristics.SUSPECT_DIRS — without a watch here a
-        # /home payload would be flagged-if-seen but never actually seen.
-        "/home",
-    ):
-        assert path in rules
+    active = [ln for ln in rules.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    assert any("sbx_exec" in ln and "-S execve" in ln and "arch=b64" in ln for ln in active)
+    assert all("always,exit" in ln for ln in active)
+    # the broken directory-inode watches must be gone from the ACTIVE rules
+    assert not any(ln.lstrip().startswith("-w ") or "-p x" in ln for ln in active)
 
 
 def test_compat_level_13():

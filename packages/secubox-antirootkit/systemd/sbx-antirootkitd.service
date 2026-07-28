@@ -7,6 +7,11 @@ Requires=auditd.service
 Type=simple
 User=secubox-antirootkit
 Group=secubox-antirootkit
+# The daemon reads the audit trail via `ausearch -k sbx_exec`, which reads
+# /var/log/audit/audit.log (mode 0640 root:adm). Without adm membership the
+# read returns nothing and the scanner is silently blind. `adm` grants
+# read-only access to system logs — the daemon never writes them.
+SupplementaryGroups=adm
 # NoNewPrivileges=no: the daemon jails unbacked execs via
 # `sudo -n secubox-antirootkitctl jail <pid>` (api/cgroup.py), scoped by the
 # exact-path sudoers rule shipped in sudoers/secubox-antirootkit. NNP=yes
