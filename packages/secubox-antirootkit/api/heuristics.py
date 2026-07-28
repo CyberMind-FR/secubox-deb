@@ -16,7 +16,7 @@ Pure function to score an exec event for suspicion based on:
 SUSPECT_DIRS = ("/usr/local/bin", "/usr/local/sbin", "/tmp", "/dev/shm", "/opt", "/home")
 
 
-def score(ev, pkg, unit_flags, failed_count):
+def score(ev, pkg: str | None, unit_flags: dict, failed_count: int) -> tuple[int, list[str]]:
     """
     Score an exec event for suspicion.
 
