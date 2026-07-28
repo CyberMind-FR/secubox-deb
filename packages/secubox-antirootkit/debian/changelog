@@ -13,9 +13,10 @@ secubox-antirootkit (0.1.0-1~bookworm1) bookworm; urgency=medium
       on overlapping ausearch windows); unknown/non-dpkg-backed execs are
       jailed via secubox-antirootkitctl (scoped sudoers, exact-path
       NOPASSWD) and appended to the append-only exec forensic log.
-    - Alerts (LIVE, alert-only): the daemon records an alert in the
-      shared in-process store whenever it jails a process; GET /alerts
-      returns it. Quarantine stays alert-only: POST /quarantine-prep
+    - Alerts (LIVE, alert-only): the daemon records an alert in a
+      SQLite-backed store (/var/lib/secubox/antirootkit/alerts.db)
+      whenever it jails a process; GET /alerts, served by the separate
+      API process, returns it. Quarantine stays alert-only: POST /quarantine-prep
       never executes chmod/cp/nft/systemctl itself, it only returns an
       operator-reviewable plan (api/quarantine.py).
     - Integrity wrap (SCAFFOLDED, v1.1 follow-up): debsums/aide/rkhunter/

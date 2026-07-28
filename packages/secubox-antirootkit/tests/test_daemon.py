@@ -8,10 +8,14 @@ SecuBox-Deb :: secubox-antirootkit :: api/daemon.py tests (ref #915 review)
 
 Covers the poll cursor (each audit record processed exactly once even when
 successive ausearch windows overlap or are byte-for-byte identical) and the
-daemon -> alertstore wiring on jail.
+daemon -> AlertStore wiring on jail (a real SQLite-backed AlertStore, per
+tmp_path, standing in for the real cross-process /var/lib/secubox/
+antirootkit/alerts.db — see tests/test_alertstore.py for the dedicated
+cross-process proof).
 """
 
-from api import alertstore, execwatch
+from api import execwatch
+from api.alertstore import AlertStore
 from api.daemon import make_log_fn, poll_once
 from api.execlog import ExecLog
 
@@ -81,40 +85,41 @@ def test_poll_once_advances_cursor_to_latest_ts_serial():
 
 
 def test_make_log_fn_records_and_alerts_on_jail(tmp_path):
-    alertstore.clear()
     log = ExecLog(str(tmp_path / "execlog.db"))
-    log_fn = make_log_fn(log)
+    astore = AlertStore(str(tmp_path / "alerts.db"))
+    log_fn = make_log_fn(log, astore)
 
     ev = execwatch.ExecEvent(pid=7, ppid=1, uid=0, exe="/tmp/evil", argv=[], success=True)
     log_fn(ev, "jail")
 
     assert log.count() == 1
-    alerts = alertstore.recent()
+    alerts = astore.recent()
     assert len(alerts) == 1
     assert alerts[0]["exe"] == "/tmp/evil"
-    alertstore.clear()
 
 
 def test_make_log_fn_does_not_alert_on_allow(tmp_path):
-    alertstore.clear()
     log = ExecLog(str(tmp_path / "execlog.db"))
-    log_fn = make_log_fn(log)
+    astore = AlertStore(str(tmp_path / "alerts.db"))
+    log_fn = make_log_fn(log, astore)
 
     ev = execwatch.ExecEvent(pid=1, ppid=1, uid=0, exe="/usr/bin/yacy", argv=[], success=True)
     log_fn(ev, "allow")
 
     assert log.count() == 1
-    assert alertstore.recent() == []
-    alertstore.clear()
+    assert astore.recent() == []
 
 
 def test_daemon_jails_unknown_proc_and_alert_names_its_exe(tmp_path):
     """End-to-end (minus subprocess/cgroup): run_once() over a batch
     produced by poll_once() must both log the jail AND leave an alert in
-    the shared store naming the jailed exe — closing the /alerts stub."""
-    alertstore.clear()
+    the shared AlertStore naming the jailed exe — closing the /alerts
+    stub (see test_alertstore.py for proof this store is visible across
+    two independent connections, i.e. across the daemon/API process
+    boundary)."""
     log = ExecLog(str(tmp_path / "execlog.db"))
-    log_fn = make_log_fn(log)
+    astore = AlertStore(str(tmp_path / "alerts.db"))
+    log_fn = make_log_fn(log, astore)
 
     jailed = []
 
@@ -124,6 +129,5 @@ def test_daemon_jails_unknown_proc_and_alert_names_its_exe(tmp_path):
     poll_once(lambda c: EV1, execwatch.parse_ausearch, handle, None)
 
     assert jailed == [999]
-    names = [a["exe"] for a in alertstore.recent()]
+    names = [a["exe"] for a in astore.recent()]
     assert "/tmp/x" in names
-    alertstore.clear()

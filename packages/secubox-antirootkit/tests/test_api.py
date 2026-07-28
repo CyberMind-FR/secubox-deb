@@ -13,21 +13,10 @@ import subprocess
 import pytest
 from fastapi.testclient import TestClient
 
-from api import alertstore
+from api.alertstore import AlertStore
 from api.execlog import ExecLog
 from api.execwatch import ExecEvent
 from api.main import create_app
-
-
-@pytest.fixture(autouse=True)
-def _clean_alertstore():
-    # api.alertstore is a module-level singleton shared with api/daemon.py;
-    # clear it around every test so one test's alerts never leak into
-    # another's (e.g. test_alerts_returns_200_list would otherwise see
-    # whatever a previous test appended).
-    alertstore.clear()
-    yield
-    alertstore.clear()
 
 
 @pytest.fixture
@@ -36,12 +25,13 @@ def env(tmp_path):
     # threadpool worker thread, different from the one that opens this
     # connection (see api/execlog.py + Task 10 brief).
     log = ExecLog(str(tmp_path / "execlog.db"), check_same_thread=False)
-    app = create_app(execlog=log)
-    return TestClient(app), log
+    astore = AlertStore(str(tmp_path / "alerts.db"))
+    app = create_app(execlog=log, alertstore=astore)
+    return TestClient(app), log, astore
 
 
 def test_status_returns_int_execlog_rows(env):
-    client, _log = env
+    client, _log, _astore = env
     r = client.get("/status")
     assert r.status_code == 200
     body = r.json()
@@ -50,7 +40,7 @@ def test_status_returns_int_execlog_rows(env):
 
 
 def test_execlog_shows_recorded_event(env):
-    client, log = env
+    client, log, _astore = env
     log.record(
         ExecEvent(pid=42, ppid=1, uid=0, exe="/tmp/suspect", argv=["suspect"], success=True),
         "jail",
@@ -67,7 +57,7 @@ def test_execlog_shows_recorded_event(env):
 
 
 def test_execlog_respects_limit_param(env):
-    client, log = env
+    client, log, _astore = env
     for i in range(5):
         log.record(
             ExecEvent(pid=i, ppid=1, uid=0, exe=f"/tmp/x{i}", argv=[], success=True),
@@ -83,7 +73,7 @@ def test_status_execlog_rows_is_true_count_not_capped_by_recent_limit(env):
     # /status must report the real table size (ExecLog.count()), not
     # len(recent(limit=100)) — otherwise the dashboard badge would freeze
     # once the log grows past 100 rows on a live host.
-    client, log = env
+    client, log, _astore = env
     for i in range(5):
         log.record(
             ExecEvent(pid=i, ppid=1, uid=0, exe=f"/tmp/y{i}", argv=[], success=True),
@@ -96,7 +86,7 @@ def test_status_execlog_rows_is_true_count_not_capped_by_recent_limit(env):
 
 
 def test_alerts_returns_200_list(env):
-    client, _log = env
+    client, _log, _astore = env
     r = client.get("/alerts")
     assert r.status_code == 200
     assert isinstance(r.json(), list)
@@ -104,11 +94,12 @@ def test_alerts_returns_200_list(env):
 
 
 def test_alerts_reflects_real_jail_events_not_hardcoded_empty(env):
-    # GET /alerts must surface what api.alertstore actually holds (as the
-    # exec-watch daemon populates it on jail — api/daemon.py make_log_fn),
-    # not a permanently-empty stub.
-    client, _log = env
-    alertstore.append(
+    # GET /alerts must surface what the injected AlertStore actually holds
+    # (as the exec-watch daemon populates it on jail, via a SEPARATE
+    # process sharing the same db_path — api/daemon.py make_log_fn), not a
+    # permanently-empty stub.
+    client, _log, astore = env
+    astore.append(
         {
             "exe": "/usr/local/bin/notwork-monitoring",
             "pid": 999,
@@ -126,7 +117,7 @@ def test_alerts_reflects_real_jail_events_not_hardcoded_empty(env):
 
 
 def test_quarantine_prep_returns_plan(env):
-    client, _log = env
+    client, _log, _astore = env
     r = client.post(
         "/quarantine-prep",
         json={"path": "/usr/local/bin/notwork-monitoring", "c2_ip": "5.182.207.11"},
@@ -139,7 +130,7 @@ def test_quarantine_prep_returns_plan(env):
 
 
 def test_quarantine_prep_never_executes(env, monkeypatch):
-    client, _log = env
+    client, _log, _astore = env
     # Guard every side-effecting primitive the route could plausibly
     # regress into calling — the request must still succeed via the
     # side-effect-free api.quarantine.prepare() plan builder.
@@ -162,7 +153,7 @@ def test_quarantine_prep_never_executes(env, monkeypatch):
 
 
 def test_quarantine_prep_optional_fields_default_none(env):
-    client, _log = env
+    client, _log, _astore = env
     r = client.post("/quarantine-prep", json={"path": "/tmp/x"})
     assert r.status_code == 200
     plan = r.json()
