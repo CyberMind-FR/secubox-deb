@@ -8,4 +8,6 @@ def test_antiescape_rule():
     assert "drop" in txt
     # LAN carve-out so a jailed proc can still reach the local mgmt net (no exfil, but debuggable)
     assert "192.168.0.0/16" in txt or "@lan_safe" in txt
+    # Loopback carve-out to prevent breaking jailed process's local DNS/loopback services
+    assert "127.0.0.0/8" in txt
     assert "hook output" in txt
