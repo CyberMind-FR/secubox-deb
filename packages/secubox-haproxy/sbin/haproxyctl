@@ -670,6 +670,12 @@ EOF
             local domain=$(echo "$section" | grep -E '^domain\s*=' | cut -d'"' -f2)
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+            # Opt-in, per-vhost WAF bypass. Sanctioned exception for services the
+            # inspection chain breaks (large uploads / WebDAV / media streaming /
+            # federation — nc, photoprism, matrix, torrent). Requires an explicit
+            # `waf_bypass = true` AND a real `backend` (nginx_vhosts) in the vhost
+            # block, so it is declarative and auditable — never a silent default.
+            local waf_bypass=$(echo "$section" | grep -E '^waf_bypass\s*=' | grep -q 'true' && echo "1" || echo "0")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
             if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
@@ -677,10 +683,10 @@ EOF
             # short-circuited &&-chain (e.g. a non-SSL vhost) aborts generation.
             if [ "$enabled" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
-                if [ "$waf_enabled" = "1" ]; then
+                if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
-                    echo "    use_backend $backend if host_$name"
+                    echo "    use_backend ${backend:-nginx_vhosts} if host_$name"
                 fi
             fi
         done >> "$out"
@@ -720,16 +726,18 @@ EOF
             local backend=$(echo "$section" | grep -E '^backend\s*=' | cut -d'"' -f2)
             local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
             local enabled=$(echo "$section" | grep -E '^enabled\s*=' | grep -q 'false' && echo "0" || echo "1")
+            # Per-vhost WAF bypass (declarative, opt-in) — see the http-in loop.
+            local waf_bypass=$(echo "$section" | grep -E '^waf_bypass\s*=' | grep -q 'true' && echo "1" || echo "0")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
             if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
             # if/then/fi (not `&& { }`) — set -e safe for non-SSL vhosts.
             if [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
-                if [ "$waf_enabled" = "1" ]; then
+                if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
-                    echo "    use_backend $backend if host_$name"
+                    echo "    use_backend ${backend:-nginx_vhosts} if host_$name"
                 fi
             fi
         done >> "$out"

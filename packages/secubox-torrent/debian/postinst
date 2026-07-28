@@ -37,14 +37,50 @@ case "$1" in
     fi
 
     # Symlink the public vhost into sites-enabled (idempotent). Proxies
-    # torrent.gk2.secubox.in -> torrent LXC at 10.100.0.160:8090. Operator
-    # wires the HAProxy SNI ACL + ACME cert + sbxwaf route separately.
+    # torrent.<host>.<suffix> -> torrent LXC at 10.100.0.160:8090.
     if [ -f /etc/nginx/sites-available/torrent.conf ] && [ -d /etc/nginx/sites-enabled ]; then
       ln -sf ../sites-available/torrent.conf /etc/nginx/sites-enabled/torrent.conf
     fi
 
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
       systemctl reload nginx 2>/dev/null || true
+    fi
+
+    # Register the HAProxy exposure DURABLY (was previously a hand-edit that a
+    # `haproxyctl generate` would wipe). Torrent is a WAF-bypass vhost by design
+    # — like nc/photoprism/matrix, the mitmproxy inspection chain breaks its
+    # Range streaming / large transfers — so it declares `waf_bypass = true`
+    # (the sanctioned, auditable opt-in honoured by haproxyctl) and routes
+    # straight to the host nginx (nginx_vhosts), never through sbxwaf. This
+    # writes the declaration into /etc/secubox/haproxy.toml; the actual regen is
+    # drift-guarded (it refuses when the board still holds un-migrated hand-edit
+    # vhosts, leaving the live cfg untouched, and succeeds on a fresh board).
+    if [ -f /etc/secubox/haproxy.toml ]; then
+      # Canonical vhost name/domain from the board identity (falls back to gk2).
+      if [ -f /etc/default/secubox ]; then
+        . /etc/default/secubox 2>/dev/null || true
+      fi
+      SBX_HOST="${SECUBOX_HOSTNAME:-gk2}"; SBX_SUFFIX="${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
+      T_DOMAIN="torrent.${SBX_HOST}.${SBX_SUFFIX}"
+      T_NAME="torrent_$(echo "${SBX_HOST}.${SBX_SUFFIX}" | tr '.' '_')"
+      if ! grep -q "^\[vhosts\.${T_NAME}\]" /etc/secubox/haproxy.toml; then
+        {
+          printf '\n[vhosts.%s]\n' "$T_NAME"
+          printf 'domain = "%s"\n' "$T_DOMAIN"
+          printf 'backend = "nginx_vhosts"\n'
+          printf 'waf_bypass = true\n'
+          printf 'ssl = true\n'
+          printf 'ssl_redirect = true\n'
+          printf 'enabled = true\n'
+        } >> /etc/secubox/haproxy.toml
+      fi
+      if command -v haproxyctl >/dev/null 2>&1; then
+        if haproxyctl generate >/dev/null 2>&1; then
+          systemctl reload haproxy 2>/dev/null || true
+        else
+          echo "secubox-torrent: haproxy.toml updated; deferred regen (drift-guarded — run 'haproxyctl generate' once the board's hand-edit vhosts are migrated)" >&2
+        fi
+      fi
     fi
     ;;
 esac

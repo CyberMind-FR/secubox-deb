@@ -1,3 +1,16 @@
+secubox-torrent (2.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Make the HAProxy exposure durable (was a hand-edit a `haproxyctl generate`
+    would wipe). postinst now registers the vhost in /etc/secubox/haproxy.toml
+    declaratively with `waf_bypass = true` (routes straight to nginx_vhosts —
+    torrent's Range streaming / large transfers break through the mitmproxy
+    inspection chain, same class as nc/photoprism/matrix). Regen is invoked but
+    drift-guarded (refuses on a board with un-migrated hand-edit vhosts, leaving
+    the live cfg intact; succeeds on a fresh board). Requires the companion
+    haproxyctl change that honours the per-vhost waf_bypass flag. (ref #917)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 20:15:00 +0200
+
 secubox-torrent (2.1.2-1~bookworm1) bookworm; urgency=high
 
   * Fix remove/files/stream 500 + broken stats: WebTorrent 2.x's client.get()
