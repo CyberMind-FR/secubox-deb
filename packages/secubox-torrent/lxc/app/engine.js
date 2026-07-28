@@ -51,9 +51,14 @@ export class Engine {
         settled = true; clearTimeout(to);
         reject(err instanceof Error ? err : new Error(String(err || 'torrent error')));
       });
+      // WebTorrent sets t.infoHash a tick AFTER add() returns (in _onTorrentId),
+      // then emits 'infoHash' — that is the earliest point we can answer the
+      // add without waiting for the (slow) full metadata fetch. 'metadata' is
+      // the fallback for sources that skip straight to it.
+      t.on('infoHash', done);
       t.on('metadata', done);
-      // A magnet/infohash exposes infoHash synchronously (no metadata needed to
-      // answer the add); a .torrent has files immediately. Either → resolve now.
+      // Fake torrents (tests) and .torrent Buffers expose infoHash/files
+      // synchronously → resolve immediately.
       if (t.infoHash || (t.files && t.files.length)) done();
     });
   }
