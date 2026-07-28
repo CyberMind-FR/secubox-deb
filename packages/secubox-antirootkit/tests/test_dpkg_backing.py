@@ -62,3 +62,25 @@ def test_truly_unbacked_stays_none():
         return types.SimpleNamespace(returncode=1, stdout="")
 
     assert resolve_pkg("/usr/local/bin/notwork", runner=none_runner) is None
+
+
+def test_dpkg_index_membership_and_merged_usr(tmp_path):
+    """DpkgIndex answers is_backed from an in-memory set (no subprocess) and
+    honours merged-usr aliasing."""
+    from api.dpkg_backing import DpkgIndex
+    # dpkg records /bin/grep; audit reports /usr/bin/grep
+    idx = DpkgIndex(paths={"/bin/grep", "/usr/lib/x/foo.so"})
+    assert idx.is_backed("/usr/bin/grep") is True   # via merged-usr alias
+    assert idx.is_backed("/bin/grep") is True
+    assert idx.is_backed("/usr/local/bin/notwork") is False
+    assert idx.is_backed("") is False
+    assert idx.is_backed(None) is False
+
+
+def test_load_dpkg_paths_reads_list_files(tmp_path):
+    from api.dpkg_backing import _load_dpkg_paths
+    (tmp_path / "coreutils.list").write_text("/bin/ls\n/usr/share/doc/coreutils\n")
+    (tmp_path / "grep.list").write_text("/bin/grep\n")
+    paths = _load_dpkg_paths(str(tmp_path / "*.list"))
+    assert "/bin/ls" in paths and "/bin/grep" in paths
+    assert len(paths) == 3
