@@ -43,6 +43,26 @@ test('remove frees capacity for new add', async () => {
   assert.equal(r2.infohash, 'b'.repeat(40));
 });
 
+test('get returns a torrent synchronously (not a Promise) so callers work', async () => {
+  const eng = new Engine({ WebTorrentCtor: FakeWebTorrent, downloadDir: '/tmp/x', maxActive: 5, webrtc: true });
+  const r = await eng.add('magnet:?xt=urn:btih:' + 'a'.repeat(40));
+  const t = eng.get(r.infohash);
+  // Regression: real webtorrent client.get() is async — engine must NOT return a
+  // Promise here or stats/remove/files/stream all operate on the wrong object.
+  assert.equal(typeof t.then, 'undefined');
+  assert.equal(t.infoHash, 'a'.repeat(40));
+  assert.ok(Array.isArray(t.files));
+});
+
+test('remove drops the torrent from the client without throwing', async () => {
+  const eng = new Engine({ WebTorrentCtor: FakeWebTorrent, downloadDir: '/tmp/x', maxActive: 5, webrtc: true });
+  const r = await eng.add('magnet:?xt=urn:btih:' + 'a'.repeat(40));
+  assert.equal(eng.client.torrents.length, 1);
+  eng.remove(r.infohash, { deleteData: true }); // must not throw (t.destroy on a Torrent, not a Promise)
+  assert.equal(eng.client.torrents.length, 0);
+  assert.equal(eng.get(r.infohash), null);
+});
+
 test('add rejects (never hangs/crashes) when the torrent emits error', async () => {
   const client = new FakeWebTorrent();
   const eng = new Engine({ WebTorrentCtor: function () { return client; },
