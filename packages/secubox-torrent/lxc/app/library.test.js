@@ -26,6 +26,18 @@ test('keep flips kept and updates path', () => {
   assert.equal(lib.get('a').path, '/data/torrent/library/a');
 });
 
+test('re-adding an already-kept infohash does not un-keep it', () => {
+  const lib = mk();
+  lib.add({ infohash: 'a', name: 'A', magnet: 'm', path: '/tmp/a' });
+  lib.touchAt('a', 1000);
+  lib.keep('a', '/data/torrent/a');
+  const addedAtBefore = lib.get('a').added_at;
+  lib.add({ infohash: 'a', name: 'A', magnet: 'm', path: '/tmp/a' });
+  const row = lib.get('a');
+  assert.equal(row.kept, 1);
+  assert.equal(row.added_at, addedAtBefore);
+});
+
 test('expiredEphemeral returns only stale unkept torrents', () => {
   const lib = mk();
   lib.add({ infohash: 'old', name: 'O', magnet: 'm', path: '/tmp/o' });
