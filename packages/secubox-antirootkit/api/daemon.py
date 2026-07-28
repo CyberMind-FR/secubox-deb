@@ -29,6 +29,7 @@ so it can run as a systemd service (systemd/sbx-antirootkitd.service).
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 
@@ -44,41 +45,53 @@ from api.policy import load_policy, should_jail
 CONF_PATH = "/etc/secubox/antirootkit.toml"
 DB_PATH = "/var/lib/secubox/antirootkit/execlog.db"
 ALERTS_DB_PATH = "/var/lib/secubox/antirootkit/alerts.db"
+CHECKPOINT_PATH = "/var/lib/secubox/antirootkit/ausearch.checkpoint"
 POLL_SECONDS = 5
 
+# ausearch invocation, verified on gk2 (auditd 3.0.9), see _ausearch_since.
+_AUSEARCH = ["ausearch", "--input-logs", "--checkpoint", CHECKPOINT_PATH,
+             "-k", "sbx_exec", "-i"]
 
-def _ausearch_since(cursor) -> str:
-    """Return raw ausearch text for sbx_exec events since `cursor`.
 
-    `cursor` is either None (first ever poll: use ausearch's "recent"
-    keyword, i.e. its default ~10-minute window) or a (ts, serial) tuple —
-    the latest event already handled — in which case we re-query from that
-    timestamp. Never raises — degrades to empty output on any ausearch
-    failure (missing binary, no perms, etc).
+def _ausearch_since(cursor=None) -> str:
+    """Return raw ausearch text for the sbx_exec events NEW since last call.
 
-    Note: ausearch's -ts granularity is whole seconds, so the returned
-    window may still overlap with the previous poll. That's fine: poll_once
-    below is the layer that guarantees each (ts, serial) audit record is
-    only ever handled once, regardless of how much these raw windows
-    overlap.
+    Uses `ausearch --checkpoint` — the purpose-built incremental mode for a
+    polling consumer: each call emits only records that appeared since the
+    previous call (the checkpoint file records the last-seen event + inode),
+    and it transparently follows log rotation. This replaced a `-ts`
+    time-window approach that proved unworkable on the target (auditd 3.0.9,
+    gk2, 2026-07-28):
+      * plain `ausearch -k` reads nothing — `--input-logs` is mandatory;
+      * `-ts <epoch>` is rejected ("Invalid start date"); ausearch wants a
+        MM/DD/YYYY HH:MM:SS pair, which is brittle across timezones/midnight;
+      * `-ts recent` returns the whole ~10-min window (~30k events at 150/s),
+        so every poll re-scanned tens of thousands of records.
+    `cursor` is accepted (poll_once passes it) but unused — the checkpoint
+    file, not an in-memory cursor, is the durable position and survives daemon
+    restarts. poll_once's (ts,serial) de-dup remains a harmless second layer.
+    Never raises — degrades to empty output on any failure. rc 10 = "no new
+    events" (normal), which subprocess surfaces as empty stdout, not an error.
     """
-    ts_arg = "recent" if cursor is None else str(int(cursor[0]))
     try:
-        # `--input-logs` is REQUIRED: verified on gk2 (auditd 3.0.9), a plain
-        # `ausearch -k sbx_exec` returns "<no matches>" even though the raw
-        # /var/log/audit/audit.log clearly holds key="sbx_exec" records —
-        # ausearch's default input source reads nothing here. `--input-logs`
-        # forces it to read the configured log files (audit.log + rotated).
-        # Without this flag the scanner is silently blind.
-        r = subprocess.run(
-            ["ausearch", "--input-logs", "-k", "sbx_exec", "-ts", ts_arg, "-i"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
+        r = subprocess.run(_AUSEARCH, capture_output=True, text=True, timeout=20)
         return r.stdout or ""
     except Exception:
         return ""
+
+
+def _seed_checkpoint() -> None:
+    """On the very first daemon start (no checkpoint yet), prime the checkpoint
+    from ~now so we do NOT replay pre-daemon exec history (up to tens of
+    thousands of records). A live scanner is forward-looking; historical execs
+    are already in the audit trail. The checkpoint then persists across
+    restarts, so this one-time discard never repeats."""
+    if os.path.exists(CHECKPOINT_PATH):
+        return
+    try:
+        subprocess.run(_AUSEARCH, capture_output=True, text=True, timeout=30)
+    except Exception:
+        pass
 
 
 def poll_once(fetch_fn, parse_fn, handle_fn, cursor):
@@ -177,6 +190,8 @@ def main() -> None:
     log_fn = make_log_fn(log, alert_store)
     jail_fn = make_jail_fn(enforce, jail_dirs)
     cursor = None
+
+    _seed_checkpoint()
 
     def handle(events) -> None:
         execwatch.run_once(events, allow, is_backed_cached, jail_fn, log_fn)
