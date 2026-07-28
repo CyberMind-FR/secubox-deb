@@ -1,0 +1,24 @@
+Source: secubox-wan-link-guard
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-wan-link-guard
+Architecture: all
+Depends: ${misc:Depends}, ethtool, iproute2, iputils-ping
+Description: WAN mvpp2 marginal-link guard for SecuBox (MOCHAbin)
+ Board-specific watchdog for the MOCHAbin (Marvell Armada, mvpp2) WAN port,
+ which recurrently goes dead on gk2 through three stacked faults: the MAC TX
+ wedges under upstream flow-control PAUSE frames, gigabit auto-negotiation is
+ marginal through the intermediate hub, and a parasite default route/duplicate
+ host IP appears on lan0.
+ .
+ Ships a oneshot guard (ethtool pause-off + renegotiate + route/addr cleanup —
+ never `ip link down/up`, which wedges the comphy), a boot+30s timer, a
+ systemd .link that disables flow-control the moment eth2 appears, and a
+ flow-control backstop unit. Tunable via /etc/default/secubox-wan-link-guard.
+ .
+ MOCHAbin-only: on other boards eth2/lan0 do not match and the guard is a
+ no-op. See /usr/share/doc/secubox/FAQ-NETWORK-WAN-RECOVERY.md (ref #913).

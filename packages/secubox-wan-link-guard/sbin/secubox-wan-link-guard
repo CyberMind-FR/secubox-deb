@@ -1,0 +1,58 @@
+#!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-wan-link-guard
+# MOCHAbin (Marvell Armada mvpp2) WAN marginal-link workaround. Three stacked
+# problems on gk2 (see /usr/share/doc/secubox/FAQ-NETWORK-WAN-RECOVERY.md):
+#   (1) the mvpp2 MAC TX wedges when the upstream floods flow-control PAUSE
+#       frames  -> disable pause (idempotent, non-disruptive);
+#   (2) gigabit auto-negotiation is marginal through the hub -> renegotiate
+#       (ethtool -r) until the gateway answers again;
+#   (3) a parasite default route / duplicate host IP appears on lan0 -> drop it
+#       and force the default via the WAN iface.
+#
+# NEVER `ip link set <wan> down/up` here: that wedges the comphy and needs a
+# cold boot. Recovery uses ONLY ethtool -r / -A and route/addr fixes.
+#
+# set +e on purpose: every step is best-effort and idempotent; a failing step
+# must never abort the recovery sequence.
+set +e
+
+# Board defaults (gk2 / mochabin). Override in /etc/default/secubox-wan-link-guard.
+IFACE=eth2
+GW=192.168.1.254
+FALLBACK_ADDR=192.168.1.200/24
+PARASITE_IFACE=lan0
+RENEGO_TRIES=6
+# shellcheck disable=SC1091
+[ -r /etc/default/secubox-wan-link-guard ] && . /etc/default/secubox-wan-link-guard
+
+# (1) flow-control pause off (idempotent, non disruptif)
+ethtool -A "$IFACE" autoneg off rx off tx off 2>/dev/null
+
+# (3) tuer la route/IP parasite portée par $PARASITE_IFACE + forcer le default via $IFACE
+ip route del default dev "$PARASITE_IFACE" 2>/dev/null
+ip addr del "$FALLBACK_ADDR" dev "$PARASITE_IFACE" 2>/dev/null
+ip route show default | grep -q "dev $IFACE" \
+  || ip route replace default via "$GW" dev "$IFACE" 2>/dev/null
+
+# (2) si la gateway ne répond pas -> renégocier jusqu'à accroche
+if ! ping -c1 -W2 "$GW" >/dev/null 2>&1; then
+  t=0
+  while [ "$t" -lt "$RENEGO_TRIES" ]; do
+    t=$((t + 1))
+    ethtool -r "$IFACE" 2>/dev/null
+    sleep 4
+    ethtool -A "$IFACE" autoneg off rx off tx off 2>/dev/null
+    ip route replace default via "$GW" dev "$IFACE" 2>/dev/null
+    if ping -c1 -W2 "$GW" >/dev/null 2>&1; then
+      logger -t sbx-wan-guard "link recovered after $t renego"
+      break
+    fi
+  done
+fi
+
+exit 0

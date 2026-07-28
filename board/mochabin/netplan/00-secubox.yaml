@@ -15,6 +15,18 @@ network:
       dhcp4-overrides:
         use-routes: true
         route-metric: 100
+      # Static fallback so the box is always reachable at 192.168.1.200 even
+      # when DHCP never leases (issue #913). Kept at a HIGHER route-metric than
+      # the DHCP route (100) so the lease wins whenever it exists; the static
+      # default only carries traffic when DHCP is down. This IP belongs on the
+      # WAN (eth2), never on lan0 — secubox-wan-link-guard strips any parasite
+      # copy that appears on lan0.
+      addresses:
+        - 192.168.1.200/24
+      routes:
+        - to: default
+          via: 192.168.1.254
+          metric: 200
     lan0: {optional: true}
     lan1: {optional: true}
     lan2: {optional: true}

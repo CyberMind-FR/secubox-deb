@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-wan-link-guard/usr/sbin
+	install -m 755 sbin/secubox-wan-link-guard debian/secubox-wan-link-guard/usr/sbin/secubox-wan-link-guard
+	# systemd units — placed explicitly in usr/lib/systemd/system. Enable/start
+	# is handled below (timer) and by postinst; the oneshots are NOT started at
+	# install time (the guard mutates routing — let the timer/boot drive it).
+	install -d debian/secubox-wan-link-guard/usr/lib/systemd/system
+	install -m 644 systemd/secubox-wan-link-guard.service debian/secubox-wan-link-guard/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-wan-link-guard.timer   debian/secubox-wan-link-guard/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-eth2-flowctl-off.service debian/secubox-wan-link-guard/usr/lib/systemd/system/
+	# networkd .link (applied by udevd when eth2 appears)
+	install -d debian/secubox-wan-link-guard/usr/lib/systemd/network
+	install -m 644 network/10-secubox-eth2-noflowctl.link debian/secubox-wan-link-guard/usr/lib/systemd/network/
+
+override_dh_installsystemd:
+	# Suppress dh's auto enable/start (it would run the oneshot guard at install
+	# and enable the flowctl backstop the live board keeps disabled). postinst
+	# does the precise enabling; #DEBHELPER# still emits daemon-reload + the
+	# stop-on-remove hooks for all shipped units.
+	dh_installsystemd --no-enable --no-start
