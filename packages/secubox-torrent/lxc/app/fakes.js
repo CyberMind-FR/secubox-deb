@@ -38,7 +38,9 @@ export class FakeWebTorrent {
     const t = this._next || new FakeTorrent('a'.repeat(40), 'Fake', [{ name: 'movie.mp4', length: 100 }]);
     t._client = this; this.torrents.push(t); if (cb) queueMicrotask(() => cb(t)); return t;
   }
-  get(infohash) { return this.torrents.find(t => t.infoHash === infohash) || null; }
+  // Real WebTorrent 2.x client.get() is async (Promise) — model that so no code
+  // may treat it as sync again. Engine matches on the sync `torrents` array.
+  async get(infohash) { return this.torrents.find(t => t.infoHash === infohash) || null; }
   on() {} // real WebTorrent client is an EventEmitter; engine attaches 'error'
   destroy(cb) { if (cb) cb(); }
 }
