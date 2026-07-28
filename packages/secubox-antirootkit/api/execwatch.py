@@ -25,6 +25,12 @@ class ExecEvent:
     exe: str
     argv: list = field(default_factory=list)
     success: bool = True
+    # Audit record identity (msg=audit(ts:serial)) — None for hand-built
+    # events (tests, etc). Used by the daemon's poll cursor (Task 915 fix)
+    # to tell exactly which events were already processed, independent of
+    # how much two successive ausearch windows overlap.
+    ts: float | None = None
+    serial: int | None = None
 
 
 # auditd emits any field containing a space/quote/control byte UNQUOTED and
@@ -37,6 +43,11 @@ _SYS = re.compile(
 )
 _SUC = re.compile(r'success=(yes|no)')
 _A = re.compile(r'a\d+=(?:"([^"]*)"|([0-9A-Fa-f]+))')
+# msg=audit(TS:SERIAL) is the audit record's unique identity. Each block
+# (split on `(?=type=SYSCALL )`) starts with the SYSCALL line, so the FIRST
+# match in the block is always the SYSCALL record's own timestamp:serial,
+# even though the EXECVE line further down repeats the same audit(...) pair.
+_TS = re.compile(r'msg=audit\((\d+(?:\.\d+)?):(\d+)\)')
 
 
 def _auditd_field(quoted, hexval):
@@ -62,6 +73,7 @@ def parse_ausearch(text: str) -> list:
         suc = _SUC.search(b)
         exe = _auditd_field(m.group(4), m.group(5))
         argv = [_auditd_field(am.group(1), am.group(2)) for am in _A.finditer(b)]
+        tsm = _TS.search(b)
         out.append(
             ExecEvent(
                 pid=int(m.group(2)),
@@ -70,6 +82,8 @@ def parse_ausearch(text: str) -> list:
                 exe=exe,
                 argv=argv,
                 success=(suc.group(1) == "yes" if suc else True),
+                ts=float(tsm.group(1)) if tsm else None,
+                serial=int(tsm.group(2)) if tsm else None,
             )
         )
     return out

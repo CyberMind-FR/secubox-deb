@@ -13,9 +13,21 @@ import subprocess
 import pytest
 from fastapi.testclient import TestClient
 
+from api import alertstore
 from api.execlog import ExecLog
 from api.execwatch import ExecEvent
 from api.main import create_app
+
+
+@pytest.fixture(autouse=True)
+def _clean_alertstore():
+    # api.alertstore is a module-level singleton shared with api/daemon.py;
+    # clear it around every test so one test's alerts never leak into
+    # another's (e.g. test_alerts_returns_200_list would otherwise see
+    # whatever a previous test appended).
+    alertstore.clear()
+    yield
+    alertstore.clear()
 
 
 @pytest.fixture
@@ -88,6 +100,29 @@ def test_alerts_returns_200_list(env):
     r = client.get("/alerts")
     assert r.status_code == 200
     assert isinstance(r.json(), list)
+    assert r.json() == []
+
+
+def test_alerts_reflects_real_jail_events_not_hardcoded_empty(env):
+    # GET /alerts must surface what api.alertstore actually holds (as the
+    # exec-watch daemon populates it on jail — api/daemon.py make_log_fn),
+    # not a permanently-empty stub.
+    client, _log = env
+    alertstore.append(
+        {
+            "exe": "/usr/local/bin/notwork-monitoring",
+            "pid": 999,
+            "score": 2,
+            "reasons": ["non-dpkg-egress-jailed"],
+            "dest": None,
+            "ioc": False,
+        }
+    )
+    r = client.get("/alerts")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["exe"] == "/usr/local/bin/notwork-monitoring"
 
 
 def test_quarantine_prep_returns_plan(env):
