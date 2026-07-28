@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    # Migration: the guard was first deployed on gk2 by hand, OUTSIDE dpkg
+    # (units in /etc/systemd/system, script in /usr/local/sbin). Those shadow
+    # the packaged copies (/etc wins over /usr/lib for systemd; PATH picks
+    # /usr/local/sbin first) — remove them so the package is authoritative.
+    for u in secubox-wan-link-guard.service secubox-wan-link-guard.timer secubox-eth2-flowctl-off.service; do
+      if [ -e "/etc/systemd/system/$u" ]; then
+        systemctl disable "$u" >/dev/null 2>&1 || true
+        rm -f "/etc/systemd/system/$u"
+      fi
+    done
+    rm -f /etc/systemd/network/10-secubox-eth2-noflowctl.link
+    rm -f /usr/local/sbin/secubox-wan-link-guard
+
+    systemctl daemon-reload || true
+    # The periodic guard: enable + start the timer (boot + every 30s). The
+    # oneshot guard.service is triggered BY the timer; the flowctl backstop
+    # stays disabled (the .link supersedes it, matching the live board).
+    systemctl enable --now secubox-wan-link-guard.timer >/dev/null 2>&1 || true
+    # Apply once now so the flow-control/route fix takes effect without waiting
+    # for the first timer tick or a reboot (idempotent, safe to re-run).
+    systemctl start secubox-wan-link-guard.service >/dev/null 2>&1 || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

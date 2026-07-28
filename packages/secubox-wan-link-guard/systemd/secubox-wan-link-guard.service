@@ -1,0 +1,11 @@
+[Unit]
+Description=SecuBox WAN link guard (mvpp2 eth2: pause-off + renegotiate + route)
+Documentation=file:///usr/share/doc/secubox/FAQ-NETWORK-WAN-RECOVERY.md
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-wan-link-guard
+
+[Install]
+WantedBy=multi-user.target
