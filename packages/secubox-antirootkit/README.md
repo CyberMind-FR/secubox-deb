@@ -28,8 +28,12 @@ manual quarantine.
   targeted, not global, to keep audit volume low on a box running ~200
   services.
 - **Alert-only quarantine-prep (C):** whenever the daemon jails a process it
-  also appends an alert (`api/alerts.build_alert`) to the shared in-process
-  store (`api/alertstore.py`); `GET /alerts` returns it, most-recent-first.
+  also appends an alert (`api/alerts.build_alert`) to the shared SQLite-backed
+  store (`api/alertstore.py`, `/var/lib/secubox/antirootkit/alerts.db`) —
+  the daemon (`sbx-antirootkitd.service`) and the API
+  (`secubox-antirootkit.service`) are separate processes, so this store
+  cannot be a plain in-memory list; `GET /alerts` returns it,
+  most-recent-first.
   `POST /quarantine-prep` NEVER executes chmod/cp/nft/systemctl itself — it
   only returns an operator-reviewable plan (`api/quarantine.py`) that a
   human runs by hand. The web panel is served at `/antirootkit/`.

@@ -32,8 +32,9 @@ from __future__ import annotations
 import subprocess
 import time
 
-from api import alertstore, execwatch
+from api import execwatch
 from api.alerts import build_alert
+from api.alertstore import AlertStore
 from api.allowlist import load as load_allowlist
 from api.cgroup import jail_pid
 from api.dpkg_backing import is_backed_cached
@@ -41,6 +42,7 @@ from api.execlog import ExecLog
 
 CONF_PATH = "/etc/secubox/antirootkit.toml"
 DB_PATH = "/var/lib/secubox/antirootkit/execlog.db"
+ALERTS_DB_PATH = "/var/lib/secubox/antirootkit/alerts.db"
 POLL_SECONDS = 5
 
 
@@ -111,22 +113,23 @@ def poll_once(fetch_fn, parse_fn, handle_fn, cursor):
     return newest if cursor is None else max(cursor, newest)
 
 
-def make_log_fn(log: ExecLog):
+def make_log_fn(log: ExecLog, alert_store: AlertStore):
     """Build the run_once `log_fn`: records every decision to the forensic
     ExecLog (unchanged v1 behaviour) and, additionally, appends a
-    lightweight alert to the shared alert store whenever a process is
-    jailed — so GET /alerts (api/main.py) reflects real anti-escape events
-    instead of a permanently-empty stub. Alert scoring is intentionally
-    minimal here (the daemon has none of heuristics.score()'s inputs —
-    unit_flags, failed_count — cheaply on hand); the durable, detailed
-    record stays the ExecLog row itself.
+    lightweight alert to the shared (SQLite-backed, cross-process)
+    alert_store whenever a process is jailed — so GET /alerts, served by a
+    SEPARATE process (secubox-antirootkit.service, api/main.py), reflects
+    real anti-escape events instead of a permanently-empty stub. Alert
+    scoring is intentionally minimal here (the daemon has none of
+    heuristics.score()'s inputs — unit_flags, failed_count — cheaply on
+    hand); the durable, detailed record stays the ExecLog row itself.
     """
 
     def _log_fn(ev, verdict: str) -> None:
         log.record(ev, verdict, pkg=None if verdict == "jail" else "dpkg")
         if verdict == "jail":
             alert = build_alert(ev, score=2, reasons=["non-dpkg-egress-jailed"])
-            alertstore.append(alert)
+            alert_store.append(alert)
 
     return _log_fn
 
@@ -134,7 +137,8 @@ def make_log_fn(log: ExecLog):
 def main() -> None:
     allow = load_allowlist(CONF_PATH)
     log = ExecLog(DB_PATH, check_same_thread=True)
-    log_fn = make_log_fn(log)
+    alert_store = AlertStore(ALERTS_DB_PATH)
+    log_fn = make_log_fn(log, alert_store)
     cursor = None
 
     def handle(events) -> None:
