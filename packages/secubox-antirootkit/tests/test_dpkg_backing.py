@@ -29,3 +29,36 @@ def test_resolve_pkg_diversion():
 def test_is_backed_true_false():
     assert dpkg_backing.is_backed("/usr/bin/yacy", runner=fake_runner(True, "secubox-yacy: /usr/bin/yacy\n")) is True
     assert dpkg_backing.is_backed("/usr/local/bin/x", runner=fake_runner(False)) is False
+
+
+def test_merged_usr_alias_resolves():
+    """merged-usr: audit reports /usr/bin/grep but dpkg owns /bin/grep. The
+    resolver must try the alias and find it (else a legit binary looks
+    non-dpkg -> false-positive flood). Regression guard, gk2 2026-07-28."""
+    from api.dpkg_backing import resolve_pkg
+
+    class FakeRun:
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, argv, **kw):
+            path = argv[-1]
+            self.calls.append(path)
+            import types
+            if path == "/bin/grep":
+                return types.SimpleNamespace(returncode=0, stdout="grep: /bin/grep\n")
+            return types.SimpleNamespace(returncode=1, stdout="")
+
+    fake = FakeRun()
+    assert resolve_pkg("/usr/bin/grep", runner=fake) == "grep"
+    assert "/usr/bin/grep" in fake.calls and "/bin/grep" in fake.calls
+
+
+def test_truly_unbacked_stays_none():
+    from api.dpkg_backing import resolve_pkg
+    import types
+
+    def none_runner(argv, **kw):
+        return types.SimpleNamespace(returncode=1, stdout="")
+
+    assert resolve_pkg("/usr/local/bin/notwork", runner=none_runner) is None
