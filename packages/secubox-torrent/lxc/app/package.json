@@ -15,5 +15,8 @@
     "better-sqlite3": "^11.3.0",
     "fastify": "^4.29.1",
     "webtorrent": "^2.5.1"
+  },
+  "overrides": {
+    "uint8-util": "2.2.6"
   }
 }
