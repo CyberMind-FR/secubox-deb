@@ -22,18 +22,23 @@ export async function handleStream(engine, req, res) {
   const range = req.headers.range;
   if (!range) {
     res.writeHead(200, { 'Content-Length': total, 'Content-Type': type, 'Accept-Ranges': 'bytes' });
-    file.stream({ start: 0, end: total - 1 }).pipe(res);
+    const stream = file.createReadStream({ start: 0, end: total - 1 });
+    stream.on('error', () => { try { res.destroy(); } catch {} });
+    stream.pipe(res);
     return;
   }
   const m = /bytes=(\d+)-(\d*)/.exec(range);
-  const start = m ? Number(m[1]) : 0;
-  const end = m && m[2] ? Number(m[2]) : total - 1;
-  if (start >= total || end >= total || start > end) {
+  let start = m ? Number(m[1]) : 0;
+  let end = m && m[2] ? Number(m[2]) : total - 1;
+  if (end >= total) end = total - 1;
+  if (start >= total || start > end) {
     res.writeHead(416, { 'Content-Range': `bytes */${total}` }); res.end(); return;
   }
   res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${total}`,
     'Content-Length': end - start + 1, 'Content-Type': type, 'Accept-Ranges': 'bytes' });
-  file.stream({ start, end }).pipe(res);
+  const stream = file.createReadStream({ start, end });
+  stream.on('error', () => { try { res.destroy(); } catch {} });
+  stream.pipe(res);
 }
 
 function mimeOf(name) { const e = (/\.([A-Za-z0-9]+)$/.exec(name) || [])[1]; return MIME[(e || '').toLowerCase()] || 'application/octet-stream'; }

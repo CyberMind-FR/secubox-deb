@@ -27,7 +27,7 @@ function fakeRes() {
 const lower = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k.toLowerCase(), v]));
 function fakeEngine(len = 100) {
   const file = { name: 'movie.mp4', length: len,
-    stream: ({ start, end }) => Readable.from([`bytes[${start}-${end}]`]) };
+    createReadStream: ({ start, end }) => Readable.from([`bytes[${start}-${end}]`]) };
   return { get: () => ({ files: [file] }) };
 }
 
@@ -56,5 +56,19 @@ test('unsatisfiable range returns 416', async () => {
 test('unknown infohash returns 404', async () => {
   const res = fakeRes();
   await handleStream({ get: () => null }, { params: { infohash: 'z', fileIdx: '0' }, headers: {} }, res);
+  assert.equal(res.statusCode, 404);
+});
+
+test('range clamping: bytes=50-999999 on 100-byte file returns 206 with clamped end', async () => {
+  const res = fakeRes();
+  await handleStream(fakeEngine(100), { params: { infohash: 'a', fileIdx: '0' }, headers: { range: 'bytes=50-999999' } }, res);
+  assert.equal(res.statusCode, 206);
+  assert.equal(res.headers['content-range'], 'bytes 50-99/100');
+  assert.equal(res.headers['content-length'], 50);
+});
+
+test('out-of-range fileIdx returns 404', async () => {
+  const res = fakeRes();
+  await handleStream(fakeEngine(100), { params: { infohash: 'a', fileIdx: '5' }, headers: {} }, res);
   assert.equal(res.statusCode, 404);
 });
