@@ -9,7 +9,9 @@ Détecter, alerter et **préparer** la neutralisation des persistances non autor
 ## Décisions validées (brainstorming)
 
 - **Home + base de détection** : nouveau paquet Debian `secubox-antirootkit` qui **orchestre des outils éprouvés** (`debsums`, `aide`, `rkhunter`, `chkrootkit`) + une **couche SecuBox** (heuristiques C2, baseline, alerte mesh, préparation quarantaine).
-- **Posture de réponse** : **alerte SEULE — jamais d'auto-neutralisation.** Le module détecte, alerte, et *prépare* la commande de quarantaine ; l'opérateur valide chaque neutralisation. (Justifié : gk2 a 200+ services ; un faux positif auto-neutralisé casserait du légitime.)
+- **Posture de réponse — deux niveaux distincts :**
+  - **Anti-escape (egress) = AUTO-BLOQUE.** Un process **hors-dpkg** qui tente une connexion sortante est **bloqué immédiatement** (le C2/exfil meurt avant son 1er beacon) + alerte. C'est sûr : bloquer l'egress d'un inconnu ne casse quasi jamais du légitime. **C'est la capacité prioritaire (« super anti-escape »).**
+  - **Neutralisation du process (kill/quarantaine) = ALERTE SEULE.** Le module *prépare* la séquence de quarantaine ; l'opérateur valide. (Justifié : gk2 a 200+ services ; un faux positif tué casserait du légitime.)
 - **Traçage des exec (cœur du process scanner)** : **auditd** (`-S execve`), qui logue chaque exec **tenté ET réussi/échoué** (forensic, standard CSPN).
 
 ## Prérequis (bloquant install, dette existante)
@@ -38,6 +40,26 @@ Paquet `secubox-antirootkit` : daemon Python + API FastAPI sur socket Unix `/run
   - exe hors-dpkg **+ connexion sortante** (corrélation avec `secubox-netstats`/conntrack) ;
   - exe dont l'unit systemd a `Restart=always` **+** `StandardOutput/Error=null` (logs silencés).
 
+### A2. Process Network Sentinel — anti-escape (cœur v1, capacité PRIORITAIRE)
+
+**Responsabilité** : empêcher tout process **inconnu (hors-dpkg)** de communiquer vers l'extérieur — stopper le C2/exfil avant le 1er paquet.
+
+**Mécanisme (élégant, piloté par A)** : le scanner exec (auditd, §A) détecte l'exec d'un binaire dont `dpkg_pkg IS NULL` (hors-dpkg) → le daemon place immédiatement le PID (et ses enfants) dans un **cgroup v2 `sbx-untrusted.slice`** → une règle **nftables** droppe l'egress de ce cgroup :
+```
+table inet secubox_antiescape {
+  chain output {
+    type filter hook output priority filter; policy accept;
+    socket cgroupv2 level 2 "sbx-untrusted.slice" ip daddr != @lan_safe drop
+  }
+}
+```
+- Un binaire **dpkg-backed** (YaCy, threat-analyst, tous les `secubox-*`) n'est **jamais** mis dans `sbx-untrusted` → egress libre. **Zéro impact sur le légitime.**
+- Un binaire **hors-dpkg** (profil `notwork`, un dropper dans `/tmp`…) → egress **bloqué dès le connect** + alerte enrichie (destination, IOC match).
+- **Allow-list d'exceptions** (TOML) pour les scripts `/usr/local/bin` légitimes non-dpkg identifiés (ex : `certbot`, `acme-*`, `jws` — déjà audités sur gk2) → sortis de `sbx-untrusted`.
+- Corrélation destination : match IOC connus (`cyberfeed`/`threatmesh`), résolution du process propriétaire du socket (via le PID cgroup-jailé), log dans l'execlog.
+
+**Pourquoi ça aurait tué #914** : `notwork-monitoring` (hors-dpkg) aurait été cgroup-jailé dès son 1er exec → son beacon vers `5.182.207.11` droppé avant d'aboutir, + alerte immédiate. (Et sur gk2 il ne s'exécutait même pas — arch ; mais sur l'amd64 il aurait été neutralisé côté réseau instantanément.)
+
 ### B. Integrity Scanner (wrap outils — v1 léger)
 
 **Responsabilité** : intégrité des fichiers et points de persistance.
@@ -57,10 +79,13 @@ Paquet `secubox-antirootkit` : daemon Python + API FastAPI sur socket Unix `/run
 ## Flux de données
 
 ```
-auditd (execve) ─┐
-aide/debsums/rk ─┼─→ sbx daemon ─→ SQLite append-only ─→ moteur de règles ─┬─→ alerte SOC/mail/mesh
-authorized_keys ─┘        (résolution dpkg, score)                          └─→ bouton quarantaine (manuel)
-                                                                            └─→ API/panneau /antirootkit
+auditd (execve) ──→ sbx daemon ──┬─ dpkg-backed ? ─── oui ─→ egress libre
+                                 │                    non ─→ cgroup sbx-untrusted.slice
+                                 │                            └─→ nft DROP egress (anti-escape) + alerte
+                                 ├─→ SQLite append-only (execlog: qui/quoi/quand/où/parent/dpkg)
+                                 └─→ moteur de règles ─┬─→ alerte SOC/mail/mesh (+ IOC match)
+aide/debsums/rkhunter/keys ──────┘                     └─→ bouton quarantaine process (MANUEL)
+                                                       └─→ API/panneau /antirootkit
 ```
 
 ## Gestion d'erreurs
@@ -77,7 +102,8 @@ authorized_keys ─┘        (résolution dpkg, score)                         
 
 ## Tests
 
-- **Rejeu du profil #914** : binaire hors-dpkg dans `/usr/local/bin` + unit `Restart=always` + `Standard*=null` + (simulateur de) beacon → **doit lever une alerte FORTE** et apparaître comme non-dpkg dans l'execlog.
+- **⭐ Anti-escape (priorité)** : un binaire hors-dpkg qui tente une connexion sortante → **egress DROPPÉ dès le connect** (cgroup `sbx-untrusted` + nft), le beacon n'aboutit jamais, alerte émise. Un binaire dpkg-backed (YaCy/`secubox-*`) qui sort → **jamais bloqué**.
+- **Rejeu du profil #914** : binaire hors-dpkg dans `/usr/local/bin` + unit `Restart=always` + `Standard*=null` + (simulateur de) beacon → **doit lever une alerte FORTE**, apparaître non-dpkg dans l'execlog, ET son egress être bloqué.
 - **Non-régression légitime (0 faux positif)** : YaCy (`secubox-yacy`, java) + `secubox-threat-analyst` (Python) → **verdict légitime** (dpkg-backed), aucune alerte, jamais quarantinés.
 - **Crash-loop** : unit qui échoue à l'exec en boucle → détecté via `success=no` récurrent.
 - **Intégrité** : altérer un fichier dpkg → `debsums` le détecte ; ajouter une clé à `authorized_keys` → dérive baseline détectée.
@@ -86,8 +112,8 @@ authorized_keys ─┘        (résolution dpkg, score)                         
 
 ## Hors périmètre (v1)
 
-- Auto-neutralisation (posture = alerte seule).
-- eBPF (auditd retenu ; eBPF = évolution possible v2 pour le sub-ms live).
+- Auto-**kill/quarantaine** du process (posture = alerte seule). ⚠️ NB : l'auto-**blocage egress** (anti-escape §A2), lui, EST dans le périmètre v1 — c'est une action sûre et prioritaire, à ne pas confondre avec la neutralisation du process.
+- eBPF (auditd retenu pour l'exec ; l'anti-escape v1 = cgroup+nft. eBPF `cgroup/connect` = évolution v2 pour bloquer au connect() avec plus de finesse).
 - Sweep fleet inter-nœuds (le module est host-local ; la fédération passe par `threatmesh`/SOC existants).
 - Réparation de l'état apt / `/boot` (prérequis de maintenance, hors module).
 
