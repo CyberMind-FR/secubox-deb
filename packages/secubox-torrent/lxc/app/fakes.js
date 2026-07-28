@@ -14,17 +14,23 @@ export class FakeTorrent {
     this.files = files.map((f, i) => Object.assign(new FakeFile(f.name, f.length), { idx: i }));
     this.progress = 0.1; this.downloadSpeed = 1000; this.uploadSpeed = 500;
     this.numPeers = 3; this.wires = [{ type: 'webrtc' }, { type: 'tcp' }];
-    this._failMeta = failMeta; this._handlers = {};
+    this._failMeta = failMeta; this._handlers = {}; this._client = null;
   }
   on(ev, cb) { this._handlers[ev] = cb; if (ev === 'metadata' && !this._failMeta) queueMicrotask(cb); }
-  destroy(_opts, cb) { if (cb) cb(); }
+  destroy(_opts, cb) {
+    if (this._client) {
+      const idx = this._client.torrents.indexOf(this);
+      if (idx !== -1) this._client.torrents.splice(idx, 1);
+    }
+    if (cb) cb();
+  }
 }
 
 export class FakeWebTorrent {
   constructor() { this.torrents = []; }
   add(magnet, _opts, cb) {
     const t = this._next || new FakeTorrent('a'.repeat(40), 'Fake', [{ name: 'movie.mp4', length: 100 }]);
-    this.torrents.push(t); if (cb) queueMicrotask(() => cb(t)); return t;
+    t._client = this; this.torrents.push(t); if (cb) queueMicrotask(() => cb(t)); return t;
   }
   get(infohash) { return this.torrents.find(t => t.infoHash === infohash) || null; }
   destroy(cb) { if (cb) cb(); }

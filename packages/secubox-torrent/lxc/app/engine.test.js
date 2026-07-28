@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Engine } from './engine.js';
-import { FakeWebTorrent } from './fakes.js';
+import { FakeWebTorrent, FakeTorrent } from './fakes.js';
 
 test('add returns infohash, name and typed file list', async () => {
   const eng = new Engine({ WebTorrentCtor: FakeWebTorrent, downloadDir: '/tmp/x', maxActive: 5, webrtc: true });
@@ -31,4 +31,14 @@ test('maxActive cap rejects beyond limit', async () => {
   await eng.add('magnet:?xt=urn:btih:' + 'a'.repeat(40));
   eng.client.torrents.push({ infoHash: 'b'.repeat(40) }); // simulate a second active
   await assert.rejects(() => eng.add('magnet:?xt=urn:btih:' + 'c'.repeat(40)), /max active/);
+});
+
+test('remove frees capacity for new add', async () => {
+  const eng = new Engine({ WebTorrentCtor: FakeWebTorrent, downloadDir: '/tmp/x', maxActive: 1, webrtc: true });
+  const r1 = await eng.add('magnet:?xt=urn:btih:' + 'a'.repeat(40));
+  eng.remove(r1.infohash);
+  // Set up FakeWebTorrent to return a different torrent for the second add
+  eng.client._next = new FakeTorrent('b'.repeat(40), 'Fake2', [{ name: 'video.mp4', length: 200 }]);
+  const r2 = await eng.add('magnet:?xt=urn:btih:' + 'b'.repeat(40));
+  assert.equal(r2.infohash, 'b'.repeat(40));
 });
