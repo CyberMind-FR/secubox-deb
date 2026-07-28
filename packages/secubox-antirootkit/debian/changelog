@@ -1,24 +1,35 @@
 secubox-antirootkit (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: anti-rootkit host-IDS (ref #915).
-    - Anti-escape: sbx-untrusted.slice (top-level cgroup) + nft
+    - Anti-escape (LIVE): sbx-untrusted.slice (top-level cgroup) + nft
       secubox_antiescape table drops all egress from jailed processes
-      except lan_safe destinations (socket cgroupv2 level 1 match).
-    - Exec scanner: auditd targeted watches (/usr/local/bin,
-      /usr/local/sbin, /tmp, /dev/shm, /opt, /usr/lib/jvm, key sbx_exec)
-      feed api/execwatch.py; unknown/non-dpkg-backed execs are jailed via
-      secubox-antirootkitctl (scoped sudoers, exact-path NOPASSWD).
-    - Integrity wrap around debsums/aide/rkhunter/chkrootkit (Recommends,
-      soft dependencies — the module degrades gracefully when absent).
-    - Alert-only manual quarantine: POST /quarantine-prep never executes
-      chmod/cp/nft/systemctl itself, it only returns an operator-reviewable
-      plan (api/quarantine.py).
+      except lan_safe destinations (socket cgroupv2 level 1 match); the
+      nft ruleset is now idempotent (add+delete+redefine) so reloading it
+      never appends duplicate rules.
+    - Exec scanner (LIVE): auditd targeted watches (/usr/local/bin,
+      /usr/local/sbin, /tmp, /dev/shm, /opt, /usr/lib/jvm, /home, key
+      sbx_exec) feed api/execwatch.py via a real polling cursor (each
+      audit record is processed exactly once, never re-jailed/re-logged
+      on overlapping ausearch windows); unknown/non-dpkg-backed execs are
+      jailed via secubox-antirootkitctl (scoped sudoers, exact-path
+      NOPASSWD) and appended to the append-only exec forensic log.
+    - Alerts (LIVE, alert-only): the daemon records an alert in the
+      shared in-process store whenever it jails a process; GET /alerts
+      returns it. Quarantine stays alert-only: POST /quarantine-prep
+      never executes chmod/cp/nft/systemctl itself, it only returns an
+      operator-reviewable plan (api/quarantine.py).
+    - Integrity wrap (SCAFFOLDED, v1.1 follow-up): debsums/aide/rkhunter/
+      chkrootkit wrappers exist in api/integrity.py and are Recommends,
+      but no timer schedules them yet in this release — do not assume
+      automatic integrity scanning is running.
     - FastAPI dashboard on its own /run/secubox/antirootkit.sock (no
       aggregator dependency); web panel at /antirootkit/.
     - Packaging: postinst creates the secubox-antirootkit system user,
       installs -d (never chown) the shared /var/lib/secubox parent, loads
       the nft table and audit rules, and starts sbx-untrusted.slice at
       the cgroup root (not nested under system.slice, so the nft
-      `cgroupv2 level 1` match holds).
+      `cgroupv2 level 1` match holds). Depends now includes sudo and
+      nftables (the jail path and the anti-escape rely on them and would
+      otherwise silently no-op if absent).
 
  -- Gérald Kerma <devel@cybermind.fr>  Mon, 28 Jul 2026 12:00:00 +0200

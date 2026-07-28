@@ -5,3 +5,4 @@
 -w /dev/shm -p x -k sbx_exec
 -w /opt -p x -k sbx_exec
 -w /usr/lib/jvm -p x -k sbx_exec
+-w /home -p x -k sbx_exec

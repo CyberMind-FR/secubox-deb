@@ -4,7 +4,9 @@ Host-based intrusion detection module for SecuBox-Deb — anti-escape
 containment + exec-surveillance scanner + integrity wrap + alert-only
 manual quarantine.
 
-## What it does
+## What it does — v1 scope
+
+### LIVE
 
 - **Anti-escape (A2):** any process not resolvable to a dpkg-backed
   executable is moved into `sbx-untrusted.slice`, a top-level cgroup whose
@@ -16,22 +18,29 @@ manual quarantine.
 - **Exec scanner (A):** targeted auditd watches
   (`conf/99-sbx-procwatch.rules`, key `sbx_exec`) on the common unbacked-exec
   surface — `/usr/local/bin`, `/usr/local/sbin`, `/tmp`, `/dev/shm`, `/opt`,
-  `/usr/lib/jvm` — feed `api/execwatch.py`, which decides allow-vs-jail using
-  the dpkg-backing resolver (`api/dpkg_backing.py`) plus a TOML allowlist
-  (`api/allowlist.py`, `/etc/secubox/antirootkit.toml`) and appends every
-  decision to an append-only SQLite forensic log (`api/execlog.py`). The
-  watch list is deliberately targeted, not global, to keep audit volume low
-  on a box running ~200 services.
-- **Integrity wrap (B):** the module Recommends `aide`, `rkhunter` and
-  `chkrootkit` alongside a hard `debsums` dependency; these are soft
-  (Recommends) so the module degrades gracefully — reporting reduced
-  coverage rather than failing — when one of the classic rootkit-hunter
-  tools is absent.
-- **Alert + manual quarantine (C):** `GET /alerts` surfaces IOC hits (seeded
-  in `[ioc]` of `antirootkit.toml`); `POST /quarantine-prep` NEVER executes
-  chmod/cp/nft/systemctl itself — it only returns an operator-reviewable
-  plan (`api/quarantine.py`) that a human runs by hand. The web panel is
-  served at `/antirootkit/`.
+  `/usr/lib/jvm`, `/home` — feed `api/execwatch.py`, which decides
+  allow-vs-jail using the dpkg-backing resolver (`api/dpkg_backing.py`) plus
+  a TOML allowlist (`api/allowlist.py`, `/etc/secubox/antirootkit.toml`) and
+  appends every decision to an append-only SQLite forensic log
+  (`api/execlog.py`). The daemon (`api/daemon.py`) tracks a real polling
+  cursor so each audit record is processed exactly once, even when two
+  successive `ausearch` windows overlap. The watch list is deliberately
+  targeted, not global, to keep audit volume low on a box running ~200
+  services.
+- **Alert-only quarantine-prep (C):** whenever the daemon jails a process it
+  also appends an alert (`api/alerts.build_alert`) to the shared in-process
+  store (`api/alertstore.py`); `GET /alerts` returns it, most-recent-first.
+  `POST /quarantine-prep` NEVER executes chmod/cp/nft/systemctl itself — it
+  only returns an operator-reviewable plan (`api/quarantine.py`) that a
+  human runs by hand. The web panel is served at `/antirootkit/`.
+
+### SCAFFOLDED — v1.1 follow-up (not yet running automatically)
+
+- **Integrity wrap (B):** `api/integrity.py` wraps `debsums`/`rkhunter` and
+  the module Recommends `aide`, `rkhunter` and `chkrootkit` alongside a hard
+  `debsums` dependency, but **no `.timer` schedules a scan yet** in this
+  release. Do not assume integrity scanning runs automatically until that
+  timer ships.
 
 ## Runtime topology
 

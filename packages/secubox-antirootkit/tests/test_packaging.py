@@ -28,6 +28,10 @@ def test_control_depends_and_recommends():
     depends = m.group(1)
     assert "auditd" in depends
     assert "debsums" in depends
+    # The jail path shells out to `sudo -n` and the anti-escape containment
+    # is an nft table; without these two the anti-escape silently no-ops.
+    assert "sudo" in depends
+    assert "nftables" in depends
 
     m = re.search(r"^Recommends:\s*(.+)$", control, re.MULTILINE)
     assert m, "control has no Recommends field"
@@ -112,6 +116,9 @@ def test_audit_rule_file_targeted_watches():
         "/dev/shm",
         "/opt",
         "/usr/lib/jvm",
+        # /home matches heuristics.SUSPECT_DIRS — without a watch here a
+        # /home payload would be flagged-if-seen but never actually seen.
+        "/home",
     ):
         assert path in rules
 

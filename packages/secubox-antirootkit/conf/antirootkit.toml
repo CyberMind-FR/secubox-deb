@@ -1,9 +1,6 @@
 [allowlist]
 exec_paths = ["/usr/local/bin/certbot", "/usr/local/bin/jws", "/usr/local/bin/acme-*"]
 
-[procwatch]
-mode = "targeted"   # targeted | full
-
 [ioc]
 hashes = ["f2ca2b2051c2a98e23b80aab601369474006f6a6dd1dfb8f212f51a726b23dcc"]
 ips = ["5.182.207.11"]

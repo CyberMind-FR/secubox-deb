@@ -33,7 +33,7 @@ from fastapi import Depends, FastAPI
 from pydantic import BaseModel
 
 from api.execlog import ExecLog
-from api import quarantine
+from api import alertstore, quarantine
 
 # ---------------------------------------------------------------------------
 # Optional JWT dependency — gracefully degrade when secubox_core is not
@@ -106,14 +106,15 @@ def create_app(execlog: Optional[ExecLog] = None) -> FastAPI:
         return log.recent(limit=limit)
 
     @app.get("/alerts")
-    def get_alerts():
-        """Current alert queue.
+    def get_alerts(limit: int = 100):
+        """Current alert queue (most recent first).
 
-        v1 stub: alert persistence/aggregation lands in a later task; the
-        route must exist and return 200 with a JSON list so the panel's
-        alert queue can render (empty until wired to api.alerts).
+        Backed by api.alertstore: the exec-watch daemon (api/daemon.py)
+        appends an alert here whenever it jails an unknown/non-dpkg-backed
+        process (api.alerts.build_alert), so this reflects real anti-escape
+        events rather than a hardcoded empty stub.
         """
-        return []
+        return alertstore.recent(limit=limit)
 
     @app.post("/quarantine-prep", dependencies=[require_jwt()])
     def post_quarantine_prep(req: QuarantinePrepRequest):
