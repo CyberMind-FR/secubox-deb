@@ -48,33 +48,39 @@ ALERTS_DB_PATH = "/var/lib/secubox/antirootkit/alerts.db"
 CHECKPOINT_PATH = "/var/lib/secubox/antirootkit/ausearch.checkpoint"
 POLL_SECONDS = 5
 
-# ausearch invocation, verified on gk2 (auditd 3.0.9), see _ausearch_since.
-_AUSEARCH = ["ausearch", "--input-logs", "--checkpoint", CHECKPOINT_PATH,
-             "-k", "sbx_exec", "-i"]
+# The daemon reads the audit trail through the scoped-sudo ctl (execscan verb),
+# NOT ausearch directly: ausearch must read /etc/audit/auditd.conf (root:root)
+# to resolve the rotated log set, so it MUST run as root. A non-root ausearch
+# falls back to a single "built-in" log path and silently breaks --checkpoint
+# continuity (verified on gk2, 2026-07-28). Same delegation pattern as jail
+# (api/cgroup.jail_pid -> sudo ctl). The ctl runs:
+#   ausearch --input-logs --checkpoint <CHECKPOINT_PATH> -k sbx_exec -i
+CTL = "/usr/sbin/secubox-antirootkitctl"
+_EXECSCAN = ["sudo", "-n", CTL, "execscan"]
 
 
 def _ausearch_since(cursor=None) -> str:
     """Return raw ausearch text for the sbx_exec events NEW since last call.
 
-    Uses `ausearch --checkpoint` — the purpose-built incremental mode for a
+    Delegates to `sudo -n secubox-antirootkitctl execscan`, which runs
+    `ausearch --checkpoint` as root — the purpose-built incremental mode for a
     polling consumer: each call emits only records that appeared since the
-    previous call (the checkpoint file records the last-seen event + inode),
-    and it transparently follows log rotation. This replaced a `-ts`
-    time-window approach that proved unworkable on the target (auditd 3.0.9,
-    gk2, 2026-07-28):
+    previous call (the checkpoint records the last-seen event + inode) and it
+    transparently follows log rotation. This replaced a `-ts` time-window
+    approach that proved unworkable on the target (auditd 3.0.9, gk2):
       * plain `ausearch -k` reads nothing — `--input-logs` is mandatory;
-      * `-ts <epoch>` is rejected ("Invalid start date"); ausearch wants a
-        MM/DD/YYYY HH:MM:SS pair, which is brittle across timezones/midnight;
-      * `-ts recent` returns the whole ~10-min window (~30k events at 150/s),
-        so every poll re-scanned tens of thousands of records.
+      * `-ts <epoch>` is rejected ("Invalid start date");
+      * `-ts recent` returns the whole ~10-min window (~30k events at 150/s);
+      * running ausearch as the non-root daemon user breaks --checkpoint
+        (can't read auditd.conf -> single-log fallback) -> hence the ctl.
     `cursor` is accepted (poll_once passes it) but unused — the checkpoint
     file, not an in-memory cursor, is the durable position and survives daemon
     restarts. poll_once's (ts,serial) de-dup remains a harmless second layer.
     Never raises — degrades to empty output on any failure. rc 10 = "no new
-    events" (normal), which subprocess surfaces as empty stdout, not an error.
+    events" (normal) surfaces as empty stdout, not an error.
     """
     try:
-        r = subprocess.run(_AUSEARCH, capture_output=True, text=True, timeout=20)
+        r = subprocess.run(_EXECSCAN, capture_output=True, text=True, timeout=25)
         return r.stdout or ""
     except Exception:
         return ""
@@ -89,7 +95,7 @@ def _seed_checkpoint() -> None:
     if os.path.exists(CHECKPOINT_PATH):
         return
     try:
-        subprocess.run(_AUSEARCH, capture_output=True, text=True, timeout=30)
+        subprocess.run(_EXECSCAN, capture_output=True, text=True, timeout=30)
     except Exception:
         pass
 
