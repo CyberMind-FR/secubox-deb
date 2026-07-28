@@ -1,3 +1,11 @@
+secubox-torrent (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pivot from Transmission to WebTorrent streaming (LXC-native, #917).
+  * Browser player (HTTP Range), ephemeral-by-default + Keep library on /data.
+  * Hybrid WebRTC+BitTorrent engine isolated in a dedicated LXC.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 14:00:00 +0200
+
 secubox-torrent (1.1.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
