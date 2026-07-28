@@ -22,14 +22,25 @@ readonly LXC_VETH="${SECUBOX_LXC_VETH:-veth-torrent0}"
 readonly DATA_DIR="${SECUBOX_DATA_DIR:-/data/torrent}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/var/lib/secubox/torrent}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
+# Unprivileged LXC: container-root maps to this host UID (idmap below). The
+# bind-mounted /data/torrent must be owned by it so the container can write.
+readonly LXC_ROOT_UID="${SECUBOX_LXC_ROOT_UID:-100000}"
 log() { printf '[torrent-install] %s\n' "$*"; }
 la()  { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- "$@"; }
 
 mkdir -p "$STATE_DIR" "$DATA_DIR"
+chown -R "$LXC_ROOT_UID:$LXC_ROOT_UID" "$DATA_DIR"
 if [ -f "$SENTINEL" ]; then log "already provisioned; skipping create"; else
-  lxc-create -n "$LXC_NAME" -P "$LXC_PATH" -t debian -- -r bookworm -a arm64
-  # network: static IP on br-lxc (config appended to the container config)
+  # Use the DOWNLOAD template (not -t debian): gk2 runs UNPRIVILEGED containers
+  # and the debian template refuses ("can't be used for unprivileged
+  # containers"). Download template + idmap is the working pattern (matches
+  # secubox-peertube).
+  lxc-create -n "$LXC_NAME" -t download -P "$LXC_PATH" -- \
+    --dist debian --release bookworm --arch "$(dpkg --print-architecture)"
+  # unprivileged idmap + static IP on br-lxc (config appended)
   cat >> "$LXC_PATH/$LXC_NAME/config" <<EOF
+lxc.idmap = u 0 $LXC_ROOT_UID 65536
+lxc.idmap = g 0 $LXC_ROOT_UID 65536
 lxc.net.0.type = veth
 lxc.net.0.link = $LXC_BRIDGE
 lxc.net.0.flags = up
