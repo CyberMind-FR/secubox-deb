@@ -239,7 +239,8 @@ secubox-deb/
 ## 🔑 Règles impératives
 
 ### Réseau / Sécurité
-- **JAMAIS** de waf_bypass ni de port ouvert inutile
+- **JAMAIS** de bypass WAF hand-edité ni de port ouvert inutile (seul le
+  `waf_bypass = true` déclaratif du `haproxy.toml` est autorisé — cf. §WAF Bypass)
 - nftables DEFAULT DROP — ouvrir explicitement seulement ce qui est nécessaire
 - HAProxy en frontal TLS 1.3 pour toute exposition externe
 - AppArmor profile enforce pour chaque service
@@ -317,14 +318,20 @@ distinctes sans collision.
 
 ## 🔒 Security Policies — Héritées de secubox-openwrt, adaptées Debian
 
-### WAF Bypass — Interdiction absolue
+### WAF Bypass — Interdit par défaut, exception déclarative uniquement
 
-* **JAMAIS de `waf_bypass` dans une config HAProxy** — tout le trafic DOIT passer
-  par mitmproxy pour inspection
-* Quand tu ajoutes un nouveau vhost, route systématiquement via le backend
-  `mitmproxy_inspector` dans HAProxy
-* Si un service nécessite WebSocket ou long-polling, configure mitmproxy
-  pour forward correctement — ne pas bypasser le WAF
+* **Défaut : JAMAIS de bypass** — tout le trafic DOIT passer par mitmproxy/sbxwaf
+  pour inspection. Quand tu ajoutes un nouveau vhost, route systématiquement via
+  le backend `mitmproxy_inspector` dans HAProxy.
+* Si un service nécessite WebSocket ou long-polling, configure d'abord
+  mitmproxy pour forward correctement — n'atteins le bypass qu'en dernier recours.
+* **Seule exception sanctionnée : `waf_bypass = true` déclaratif par-vhost** dans
+  `/etc/secubox/haproxy.toml`, honoré par `haproxyctl` (backend `nginx_vhosts`,
+  droit vers nginx). Réservé aux services que la chaîne d'inspection casse
+  prouvablement — gros uploads / WebDAV / streaming média Range / fédération
+  (ex. `nc`, `photoprism`, `matrix`, `torrent`). Opt-in explicite, déclaratif,
+  auditable, versionné — **jamais un hand-edit du `haproxy.cfg` généré** (qui
+  serait écrasé au prochain `haproxyctl generate`) et jamais un défaut silencieux.
 * Après ajout d'un backend HAProxy, mettre à jour `/srv/mitmproxy/haproxy-routes.json`
   ET `/srv/mitmproxy-in/haproxy-routes.json` :
 ```json
