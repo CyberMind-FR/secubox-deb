@@ -23,25 +23,38 @@ export class Engine {
       return Promise.reject(new Error('max active torrents reached'));
     }
     return new Promise((resolve, reject) => {
-      const to = setTimeout(() => reject(new Error('metadata timeout')), 60000);
+      let settled = false;
+      // Resolve as soon as the torrent has an infohash — do NOT block the HTTP
+      // request on the full metadata fetch (magnets can take tens of seconds,
+      // longer than the WAF/proxy read timeout → the caller gets a gateway
+      // error). Metadata + files populate in the background; /files and /stream
+      // reflect them once ready. A short guard timeout only covers the rare
+      // case where even the infohash never materialises.
+      const to = setTimeout(() => {
+        if (!settled) { settled = true; reject(new Error('torrent add timeout')); }
+      }, 30000);
       const t = this.client.add(torrentId, { path: this.downloadDir }, () => {});
       const done = () => {
-        clearTimeout(to);
+        if (settled) return;
+        settled = true; clearTimeout(to);
         resolve({
-          infohash: t.infoHash, name: t.name,
+          infohash: t.infoHash, name: t.name || (t.infoHash || 'torrent'),
           // canonical magnet — stored by the library regardless of the source
           // (magnet / .torrent URL / uploaded file) so a kept torrent can be
           // re-added by resumeLibrary() after a restart.
-          magnetURI: t.magnetURI,
-          files: t.files.map((f, i) => ({ idx: i, name: f.name, length: f.length, type: ext(f.name) })),
+          magnetURI: t.magnetURI || (t.infoHash ? 'magnet:?xt=urn:btih:' + t.infoHash : undefined),
+          files: (t.files || []).map((f, i) => ({ idx: i, name: f.name, length: f.length, type: ext(f.name) })),
         });
       };
       t.on('error', (err) => {
-        clearTimeout(to);
+        if (settled) return;
+        settled = true; clearTimeout(to);
         reject(err instanceof Error ? err : new Error(String(err || 'torrent error')));
       });
       t.on('metadata', done);
-      if (t.files && t.files.length) done();
+      // A magnet/infohash exposes infoHash synchronously (no metadata needed to
+      // answer the add); a .torrent has files immediately. Either → resolve now.
+      if (t.infoHash || (t.files && t.files.length)) done();
     });
   }
   get(infohash) { return this.client.get(infohash); }

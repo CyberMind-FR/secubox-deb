@@ -47,6 +47,7 @@ test('add rejects (never hangs/crashes) when the torrent emits error', async () 
   const client = new FakeWebTorrent();
   const eng = new Engine({ WebTorrentCtor: function () { return client; },
     downloadDir: '/tmp', maxActive: 5, webrtc: true });
-  client._next = new FakeTorrent('e'.repeat(40), 'Bad', [], { emitError: true });
+  // no infohash + no files → add() cannot resolve early and must reject on error
+  client._next = new FakeTorrent(null, 'Bad', [], { emitError: true });
   await assert.rejects(() => eng.add('magnet:?xt=urn:btih:bad'), /bad torrent/);
 });
