@@ -67,3 +67,18 @@ def test_check_same_thread_false_usable_cross_thread(tmp_path):
     t.join()
     assert not errors
     assert lg.recent()[0]["exe"] == "/tmp/y"
+
+
+def test_count_not_capped_by_recent_limit(tmp_path):
+    # count() must reflect the true table size, unlike recent(limit=...)
+    # which truncates — the /status badge uses count() so it doesn't freeze
+    # at the limit once the log grows past it on a live host.
+    lg = ExecLog(str(tmp_path / "e3.db"))
+    for i in range(5):
+        lg.record(
+            ExecEvent(pid=i, ppid=0, uid=0, exe=f"/tmp/z{i}", argv=[], success=True),
+            "allow",
+            "somepkg",
+        )
+    assert lg.count() == 5
+    assert len(lg.recent(limit=2)) == 2

@@ -79,6 +79,13 @@ class ExecLog:
         )
         return [dict(r) for r in cur.fetchall()]
 
+    def count(self) -> int:
+        """Return the true total number of execlog rows (unbounded by any
+        `limit`, unlike `recent()`) — used for the /status monitoring badge
+        so it doesn't freeze at 100 once the log grows past that size."""
+        cur = self.db.execute("SELECT COUNT(*) c FROM execlog")
+        return cur.fetchone()["c"]
+
     def failed_exec_count(self, exe: str, window_s: int, now=time.time) -> int:
         """Count failed exec attempts for exe within time window.
 

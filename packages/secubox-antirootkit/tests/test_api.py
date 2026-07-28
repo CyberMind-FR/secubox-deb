@@ -67,6 +67,22 @@ def test_execlog_respects_limit_param(env):
     assert len(r.json()) == 2
 
 
+def test_status_execlog_rows_is_true_count_not_capped_by_recent_limit(env):
+    # /status must report the real table size (ExecLog.count()), not
+    # len(recent(limit=100)) — otherwise the dashboard badge would freeze
+    # once the log grows past 100 rows on a live host.
+    client, log = env
+    for i in range(5):
+        log.record(
+            ExecEvent(pid=i, ppid=1, uid=0, exe=f"/tmp/y{i}", argv=[], success=True),
+            "allow",
+            "somepkg",
+        )
+    # /execlog queried with a small limit must not influence /status
+    assert len(client.get("/execlog?limit=2").json()) == 2
+    assert client.get("/status").json()["execlog_rows"] == 5
+
+
 def test_alerts_returns_200_list(env):
     client, _log = env
     r = client.get("/alerts")
