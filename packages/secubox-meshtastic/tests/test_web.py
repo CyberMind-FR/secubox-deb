@@ -197,6 +197,37 @@ def test_grid_good_value_delegates_to_ctl(client, ctl_calls):
 
 
 # ---------------------------------------------------------------------------
+# GET /channel-url — sharable join link (discloses the channel key)
+# ---------------------------------------------------------------------------
+
+def test_channel_url_requires_jwt_when_not_overridden():
+    app = web.create_app(FakeCache(dict(STATE)), lambda c, t: {}, lambda v, **kw: {},
+                         lambda: {"url": "x"})
+    c = TestClient(app)
+    assert c.get("/api/v1/meshtastic/channel-url").status_code == 401
+
+
+def test_channel_url_returns_url_from_cb():
+    app = web.create_app(FakeCache(dict(STATE)), lambda c, t: {}, lambda v, **kw: {},
+                         lambda: {"url": "https://meshtastic.org/e/#ABC"})
+    c = TestClient(app)
+    c.app.dependency_overrides[web.require_jwt] = _noop_jwt
+    resp = c.get("/api/v1/meshtastic/channel-url")
+    assert resp.status_code == 200
+    assert resp.json() == {"url": "https://meshtastic.org/e/#ABC"}
+    c.app.dependency_overrides.clear()
+
+
+def test_channel_url_503_when_no_cb():
+    # No channel_url_cb wired (radio absent at wiring time) -> 503, not 500.
+    app = web.create_app(FakeCache(dict(STATE)), lambda c, t: {}, lambda v, **kw: {})
+    c = TestClient(app)
+    c.app.dependency_overrides[web.require_jwt] = _noop_jwt
+    assert c.get("/api/v1/meshtastic/channel-url").status_code == 503
+    c.app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
 # no direct radio/systemctl/subprocess access from web.py
 # ---------------------------------------------------------------------------
 

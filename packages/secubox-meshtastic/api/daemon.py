@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -176,6 +177,22 @@ def _ctl_cb(verb: str, **kwargs) -> dict:
     return {"status": "error", "stderr": (proc.stderr or proc.stdout).strip()[:300]}
 
 
+def _qr_svg(text: str):
+    """Offline QR as inline SVG markup (segno, pure-python, optional). Inline
+    SVG (not a data: URI) keeps it CSP-safe for the panel. Returns None if segno
+    isn't installed — the caller degrades to url-only."""
+    try:
+        import io
+        import segno
+        buf = io.BytesIO()  # segno's SVG writer emits bytes
+        segno.make(text, error="m").save(
+            buf, kind="svg", scale=4, border=2,
+            dark="#0a1f14", light="#c9f5e0", xmldecl=False, svgns=True)
+        return buf.getvalue().decode("utf-8")
+    except Exception:
+        return None
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
@@ -221,7 +238,22 @@ def main() -> None:
             engine.record_sent(channel, text)
             return {"status": "sent", "channel": channel}
 
-        app = web.create_app(engine.cache, send_cb, _ctl_cb)
+        def channel_url_cb() -> dict:
+            if engine.radio is None:
+                return {"status": "radio-absent"}
+            url = getattr(engine.radio, "channel_url", lambda: None)()
+            out = {"url": url}
+            # Render an offline QR (inline SVG) so a phone can scan it to JOIN
+            # the mesh. segno is pure-python and optional — degrade to url-only.
+            if url:
+                out["qr_svg"] = _qr_svg(url)
+            # The URL carries the channel key — record the disclosure (journald
+            # is this non-root daemon's durable audit trail).
+            print("[meshtastic] channel-url (join link) disclosed",
+                  file=sys.stderr, flush=True)
+            return out
+
+        app = web.create_app(engine.cache, send_cb, _ctl_cb, channel_url_cb)
         cache.start_refresh(engine.snapshot, CACHE_REFRESH_INTERVAL, stop)
         try:
             uvicorn.run(app, uds=SOCKET_PATH, log_level="warning")
