@@ -1,3 +1,11 @@
+secubox-peertube (1.2.1-1~bookworm2) bookworm; urgency=medium
+  * peertubectl: new `upload <file> <title> [channelId] [privacy]` verb — uploads
+    a video file (on the host) to PeerTube via the HTTP API (OAuth root token,
+    the Host header MUST be public_hostname or PeerTube 403s). Basis for the
+    torrent → PeerTube "conserve" flow. Verified end-to-end on gk2.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 29 Jul 2026 09:30:00 +0200
+
 secubox-peertube (1.2.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
