@@ -51,6 +51,7 @@ class Node:
     snr: float | None = None
     first_heard: float = 0.0
     last_heard: float = 0.0
+    is_self: bool = False
 
 
 class MeshState:
@@ -91,6 +92,23 @@ class MeshState:
         n.short = u.get("shortName", n.short)
         n.long = u.get("longName", n.long)
         n.role = u.get("role", n.role)
+        # A seeded device node-DB entry also carries position / battery / snr —
+        # fold them in so seeded nodes are as rich as packet-heard ones.
+        pos = info.get("position") or {}
+        lat, lon = pos.get("latitude"), pos.get("longitude")
+        if lat is not None and lon is not None:
+            n.pos = (lat, lon)
+        batt = (info.get("deviceMetrics") or {}).get("batteryLevel")
+        if batt is not None:
+            n.battery = batt
+        if info.get("snr") is not None:
+            n.snr = info.get("snr")
+        if info.get("is_self"):
+            n.is_self = True
+
+    def add_message(self, channel: int, entry: dict) -> None:
+        """Record a message (inbound OR our own outbound) on a channel."""
+        self.messages.setdefault(int(channel), []).append(entry)
 
     def to_dict(self) -> dict:
         return {

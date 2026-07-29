@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-from .model import MeshState, parse_packet
+from .model import MeshState, parse_packet, _nid
 
 log = logging.getLogger("secubox.meshtastic.daemon")
 
@@ -25,6 +25,30 @@ class Engine:
         self.capture, self.bridge, self.clock = capture, bridge, clock
         self.state = MeshState()
         self.present = radio is not None
+        self.my_num = None
+
+    def seed_from_radio(self, radio) -> None:
+        """Seed mesh state from the device's node DB at connect, so the panel
+        shows the local node (+ any already-known peers) immediately instead of
+        staying empty until fresh packets arrive."""
+        now = self.clock()
+        self.my_num = getattr(radio, "my_num", lambda: None)()
+        for info in getattr(radio, "node_db", lambda: [])():
+            self.state.apply_nodeinfo(info, now)
+        self.cache.update(self.snapshot())
+
+    def on_node(self, info: dict) -> None:
+        """Live NODEINFO update from the device ('node' event)."""
+        self.state.apply_nodeinfo(info or {}, self.clock())
+        self.cache.update(self.snapshot())
+
+    def record_sent(self, channel: int, text: str) -> None:
+        """Record our own outbound text so the panel shows sent messages
+        (they never come back through on_receive)."""
+        frm = _nid(self.my_num) if self.my_num else "!self"
+        self.state.add_message(channel, {"from": frm, "text": text,
+                                         "ts": self.clock(), "outbound": True})
+        self.cache.update(self.snapshot())
 
     def channel_name(self, idx: int) -> str:
         if 0 <= idx < len(self.cfg.channels):
@@ -178,6 +202,8 @@ def main() -> None:
 
     if radio is not None:
         radio.on("receive", engine.on_receive)
+        radio.on("node", engine.on_node)
+        engine.seed_from_radio(radio)
 
     stop = threading.Event()
 
@@ -192,6 +218,7 @@ def main() -> None:
             if engine.radio is None:
                 return {"status": "radio-absent"}
             engine.radio.send_text(text, channel)
+            engine.record_sent(channel, text)
             return {"status": "sent", "channel": channel}
 
         app = web.create_app(engine.cache, send_cb, _ctl_cb)
