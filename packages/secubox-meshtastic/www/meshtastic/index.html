@@ -208,6 +208,17 @@
             <div id="tab-channels" class="tab-content">
                 <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.75rem">Toggle which grids each configured channel bridges to (off / shared / on), then Save. Changes are delegated to the privileged ctl (never applied in-process).</p>
                 <div id="channelList"><div class="empty-note">Loading…</div></div>
+
+                <h3 style="margin:1.4rem 0 0.4rem">🔗 Lien de partage du mesh</h3>
+                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.6rem">Ouvre ce lien (ou scanne le QR) dans l'app Meshtastic pour <strong>rejoindre ce mesh</strong>. ⚠ Il encode la clé du canal — ne le partage qu'avec des pairs de confiance (chaque génération est journalisée).</p>
+                <div class="btn-group">
+                    <button class="btn primary" id="shareBtn">🔗 Générer le lien de jonction</button>
+                    <button class="btn" id="shareCopyBtn" style="display:none">📋 Copier</button>
+                </div>
+                <div id="shareUrlBox" style="display:none;margin-top:0.7rem">
+                    <input type="text" id="shareUrl" readonly style="width:100%;font-size:0.62rem;padding:0.35rem;background:var(--panel);color:var(--cyan);border:1px solid var(--border)">
+                    <div id="shareQr" style="margin-top:0.7rem;max-width:220px;background:#c9f5e0;padding:0.4rem;border-radius:4px;display:inline-block"></div>
+                </div>
             </div>
 
             <!-- Sniffer tab -->
@@ -498,6 +509,33 @@
         document.getElementById('sendBtn').addEventListener('click', sendMessage);
         document.getElementById('sendText').addEventListener('keydown', e => {
             if (e.key === 'Enter') sendMessage();
+        });
+
+        // --- Channel share link + QR (the "lien" to join the mesh) --------------
+
+        async function loadShareLink() {
+            const btn = document.getElementById('shareBtn');
+            btn.disabled = true; btn.textContent = '⏳ Génération…';
+            try {
+                const d = await api('/channel-url');
+                if (!d || !d.url) { toast('Lien indisponible (radio absente ?)'); return; }
+                document.getElementById('shareUrl').value = d.url;
+                // Inline SVG QR (CSP-safe: no data: URI, no external resource).
+                document.getElementById('shareQr').innerHTML = d.qr_svg || '';
+                document.getElementById('shareUrlBox').style.display = 'block';
+                document.getElementById('shareCopyBtn').style.display = '';
+            } catch (e) {
+                toast('Erreur: ' + (e && e.message ? e.message : e));
+            } finally {
+                btn.disabled = false; btn.textContent = '🔗 Générer le lien de jonction';
+            }
+        }
+        document.getElementById('shareBtn').addEventListener('click', loadShareLink);
+        document.getElementById('shareCopyBtn').addEventListener('click', () => {
+            const u = document.getElementById('shareUrl');
+            u.select();
+            if (navigator.clipboard) navigator.clipboard.writeText(u.value).then(() => toast('Lien copié'));
+            else { document.execCommand('copy'); toast('Lien copié'); }
         });
 
         // --- Channels tab (grid policy) ----------------------------------------
