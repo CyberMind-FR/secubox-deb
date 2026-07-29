@@ -1,45 +1,22 @@
-secubox-meshtastic (0.1.3-1~bookworm1) bookworm; urgency=medium
+secubox-meshtastic (0.1.4-1~bookworm1) bookworm; urgency=medium
 
-  * Daemon survives a restart with a stale socket: uvicorn/uvloop refuses to
-    rebind an existing UDS ("Address already in use"), causing a crash-loop on
-    restart. Add ExecStartPre=+/bin/rm -f the socket (runs as root, clears it
-    regardless of owner in the sticky /run/secubox) before ExecStart.
+  * Fix "radio absent" despite a working radio (#918). Root cause was NOT the
+    radio (the RAK4631 opens + handshakes fine): the leaf dirs
+    /var/cache/secubox/meshtastic and /var/log/secubox/meshtastic had drifted to
+    owner `secubox` (not `secubox-meshtastic`), so the daemon could not write
+    state.json — the refresh loop swallowed the PermissionError and the panel
+    served a 2-day-stale cached `radio: absent`. postinst now ENFORCES leaf-dir
+    ownership on every configure (install -d only sets it on create); leaf dirs
+    only, never the shared parents.
+  * Fix config-permission crash-loop: /etc/secubox/meshtastic.toml could be left
+    root:root (group-unreadable) → ConfigError → the unit crash-loops (dies on
+    reboot). postinst now chgrp+g+r on every configure.
+  * radio.py: open the serial with a bounded retry (release the orphaned pyserial
+    FD via gc between attempts) and log the open lifecycle to stderr — the
+    logging module is unusable here because meshtastic reconfigures the root
+    logger on import, which had made a real failure invisible.
+  * cache.py: the refresh loop no longer swallows write errors silently — it logs
+    them to stderr/journald so a frozen cache is diagnosable.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Jul 2026 14:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 29 Jul 2026 07:35:00 +0200
 
-secubox-meshtastic (0.1.2-1~bookworm1) bookworm; urgency=high
-
-  * SECURITY/regression fix: the postinst used `install -d -o root -g root` on
-    the SHARED parents, which (a) chowned /etc/secubox to root:root — breaking
-    the auth/users engine's atomic users.json write → OTP login failed with a
-    500 (JSON.parse error), and (b) set /etc/secubox/secrets to 0755, exposing
-    all modules' secrets. Now: chmod-only (never chown) on existing shared
-    parents, create-if-absent; /etc/secubox/secrets left 0700 (never re-moded).
-
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Jul 2026 13:30:00 +0200
-
-secubox-meshtastic (0.1.1-1~bookworm1) bookworm; urgency=medium
-
-  * Fix daemon crash-loop when a configured MQTT broker is down at startup
-    (deploy #897): the opt-in private mosquitto is not running by default, and
-    Bridge.start() / the paho adapter's synchronous connect() raised
-    ConnectionRefusedError → the daemon died. Bridge.start() now skips an
-    unreachable broker (logs + continues), and the paho adapter uses
-    connect_async + loop_start (non-blocking, auto-reconnect).
-
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 22 Jul 2026 12:30:00 +0200
-
-secubox-meshtastic (0.1.0-1~bookworm1) bookworm; urgency=medium
-
-  * Initial release: multi-grid Meshtastic LoRa node integration (ref #897).
-    Config loader, state model, StateCache double-cache, RadioInterface
-    (MockRadio + lazy real-serial), grid policy + nft egress allow-list,
-    host-side MQTT bridge, passive capture pipeline, daemon engine,
-    secubox-meshtasticctl (webui->ctl, sudoers), FastAPI webui backend +
-    panel, systemd unit (own socket, never aggregator-served), nginx route,
-    menu entry, private "shared_grid" mosquitto broker topology.
-  * Debian packaging finalized: install list, postinst (user creation,
-    0755-shared-parent / restricted-leaf-dir perms, default config seed,
-    enable+start), prerm, README.
-
- -- Gérald Kerma <devel@cybermind.fr>  Wed, 22 Jul 2026 12:00:00 +0000

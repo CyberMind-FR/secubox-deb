@@ -36,6 +36,16 @@ case "$1" in
         install -d -o secubox-meshtastic -g secubox-meshtastic -m 0700 /etc/secubox/secrets/meshtastic
         install -d -o secubox-meshtastic -g secubox-meshtastic -m 0750 /var/cache/secubox/meshtastic
         install -d -o secubox-meshtastic -g secubox-meshtastic -m 0750 /var/log/secubox/meshtastic
+        # ENFORCE leaf-dir ownership on EVERY configure. `install -d` only sets
+        # owner/mode when it CREATES the dir — a dir left from an earlier install
+        # or mass-reinstall can be owned by the WRONG user (seen live: `secubox`
+        # not `secubox-meshtastic`), and then the daemon cannot write state.json
+        # / packets.jsonl. The refresh loop swallows that PermissionError, so the
+        # cache silently freezes and the panel shows a STALE `radio: absent` even
+        # though the radio opened fine. Leaf dirs ONLY — never the shared parents.
+        chown -R secubox-meshtastic:secubox-meshtastic \
+            /var/cache/secubox/meshtastic /var/log/secubox/meshtastic \
+            /etc/secubox/secrets/meshtastic 2>/dev/null || true
 
         # Seed the default config on first install only — never clobber an
         # operator-edited /etc/secubox/meshtastic.toml on upgrade.
@@ -43,6 +53,17 @@ case "$1" in
             install -o root -g secubox-meshtastic -m 0640 \
                 /usr/share/secubox/meshtastic/meshtastic.toml.example \
                 /etc/secubox/meshtastic.toml
+        fi
+
+        # Ensure the daemon (member of group secubox-meshtastic) can ALWAYS read
+        # its config — on EVERY configure, not just first seed. A prior install
+        # or mass-reinstall can leave the file root:root (group-unreadable) →
+        # config.load() PermissionError → ConfigError → the unit crash-loops
+        # (would die on the next reboot). Fix the group + group-read only; never
+        # world-readable, never touch the operator's content.
+        if [ -e /etc/secubox/meshtastic.toml ]; then
+            chgrp secubox-meshtastic /etc/secubox/meshtastic.toml 2>/dev/null || true
+            chmod g+r /etc/secubox/meshtastic.toml 2>/dev/null || true
         fi
 
         # Own dedicated socket, own service — never served by the aggregator
