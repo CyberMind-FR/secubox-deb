@@ -72,6 +72,7 @@ def create_app(
     cache: Any,
     send_cb: Callable[[int, str], dict],
     ctl_cb: Callable[..., dict],
+    channel_url_cb: Callable[[], dict] | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="SecuBox Meshtastic API",
@@ -105,6 +106,15 @@ def create_app(
     @app.post(f"{PREFIX}/send")
     async def send_message(body: SendBody, _claims=Depends(require_jwt)):
         return send_cb(body.channel, body.text)
+
+    @app.get(f"{PREFIX}/channel-url")
+    async def get_channel_url(_claims=Depends(require_jwt)):
+        # Sharable Meshtastic channel URL (encodes name + PSK + LoRa config) so
+        # another device / phone can JOIN this mesh. It reveals the channel key
+        # by design — JWT-gated, and the daemon audit-logs each disclosure.
+        if channel_url_cb is None:
+            raise HTTPException(status_code=503, detail="radio absent")
+        return channel_url_cb()
 
     @app.post(f"{PREFIX}/mode")
     async def set_mode(body: ModeBody, _claims=Depends(require_jwt)):

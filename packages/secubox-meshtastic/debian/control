@@ -20,7 +20,7 @@ Depends: ${misc:Depends},
  python3-paho-mqtt,
  secubox-core,
  sudo
-Recommends: mosquitto
+Recommends: mosquitto, python3-segno
 Description: SecuBox-Deb Meshtastic LoRa node integration
  Native Python module for managing Meshtastic LoRa mesh nodes: radio/cache/
  passive-listener/MQTT-bridge daemon (secubox-meshtasticd), privileged CLI

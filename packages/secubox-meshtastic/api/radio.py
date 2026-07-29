@@ -31,6 +31,9 @@ class MockRadio:
     def my_num(self):
         return self._my_num
 
+    def channel_url(self, include_all: bool = True):
+        return "https://meshtastic.org/e/#MOCKCHANNELURL"
+
     def on(self, event: str, cb: Callable) -> None:
         self._cbs.setdefault(event, []).append(cb)
 
@@ -112,6 +115,14 @@ class _SerialRadio:
     def my_num(self):
         try:
             return self._iface.myInfo.my_node_num
+        except Exception:
+            return None
+
+    def channel_url(self, include_all: bool = True):
+        """The device's sharable channel-set URL (name + PSK + LoRa config) —
+        scan/open it on another device to JOIN this mesh."""
+        try:
+            return self._iface.localNode.getURL(includeAll=include_all)
         except Exception:
             return None
 
