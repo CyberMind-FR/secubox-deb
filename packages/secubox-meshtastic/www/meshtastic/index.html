@@ -233,7 +233,15 @@
             <!-- Grid (radio/mode) tab -->
             <div id="tab-grid" class="tab-content">
                 <div id="gridRadioBanner" class="banner" style="margin-bottom:1rem"></div>
-                <h3 style="margin-bottom:0.5rem">🎛 Operating mode</h3>
+
+                <h3 style="margin-bottom:0.5rem">⚙ Configuration du device</h3>
+                <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.6rem">Config lue en direct sur le RAK (firmware, région, modem, rôle, Bluetooth, canaux).</p>
+                <div class="btn-group" style="margin-bottom:0.6rem">
+                    <button class="btn" id="deviceCfgBtn">↻ Lire la config du RAK</button>
+                </div>
+                <table class="agg-table" id="deviceCfgTable"><tbody><tr><td class="empty-note">Clique pour lire la configuration du device.</td></tr></tbody></table>
+
+                <h3 style="margin:1.4rem 0 0.5rem">🎛 Operating mode</h3>
                 <p class="note" style="color:var(--p31-dim);font-size:0.7rem;margin-bottom:0.75rem">Current mode: <strong id="curModeLabel">–</strong>. Switching mode is delegated to the privileged ctl.</p>
                 <div class="btn-group">
                     <select id="modeSelect">
@@ -537,6 +545,36 @@
             if (navigator.clipboard) navigator.clipboard.writeText(u.value).then(() => toast('Lien copié'));
             else { document.execCommand('copy'); toast('Lien copié'); }
         });
+
+        // --- Device configuration (read live from the RAK) ---------------------
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+
+        async function loadDeviceConfig() {
+            const btn = document.getElementById('deviceCfgBtn');
+            btn.disabled = true; btn.textContent = '⏳ Lecture…';
+            try {
+                const d = await api('/device-config');
+                if (!d || d.status === 'radio-absent') { toast('Radio absente'); return; }
+                const rows = [
+                    ['Firmware', d.firmware], ['Modèle', d.hw_model], ['Node', d.node_id],
+                    ['Nom', (d.long_name || '') + (d.short_name ? (' (' + d.short_name + ')') : '')],
+                    ['Région', d.region], ['Preset modem', d.modem_preset],
+                    ['Hop limit', d.hop_limit], ['TX', d.tx_enabled ? '✅ activé' : '⛔ désactivé'],
+                    ['Rôle', d.role],
+                    ['Bluetooth', d.ble_enabled ? ('✅ activé — PIN ' + (d.ble_pin != null ? d.ble_pin : '?') + ' (' + (d.ble_mode || '') + ')') : '⛔ désactivé'],
+                    ['WiFi', d.wifi_enabled ? '✅ activé' : '⛔ désactivé'],
+                    ['Canaux', (d.channels || []).join(', ') || '–'],
+                ];
+                document.getElementById('deviceCfgTable').innerHTML = '<tbody>' + rows.map(r =>
+                    '<tr><th style="width:42%">' + esc(r[0]) + '</th><td>' + (r[1] == null || r[1] === '' ? '–' : esc(r[1])) + '</td></tr>').join('') + '</tbody>';
+            } catch (e) {
+                toast('Erreur: ' + (e && e.message ? e.message : e));
+            } finally {
+                btn.disabled = false; btn.textContent = '↻ Lire la config du RAK';
+            }
+        }
+        document.getElementById('deviceCfgBtn').addEventListener('click', loadDeviceConfig);
 
         // --- Channels tab (grid policy) ----------------------------------------
 

@@ -1,19 +1,17 @@
-secubox-meshtastic (0.1.5-1~bookworm1) bookworm; urgency=medium
+secubox-meshtastic (0.1.6-1~bookworm1) bookworm; urgency=medium
 
-  * Usability: the panel is no longer empty when the radio is present.
-    - seed the mesh state from the device node DB at connect (local node +
-      already-known peers) and subscribe to live 'node' events, so /nodes shows
-      the local node (is_self) immediately instead of waiting for packets.
-    - record our own outbound text messages (POST /send) into the state so
-      /messages shows sent messages (they never come back via on_receive).
-    - Node model gains is_self + seeds position/battery/snr from the node DB.
-  * Channel join link ("lien") + QR: new GET /api/v1/meshtastic/channel-url
-    returns the device's sharable Meshtastic channel URL (name + PSK + LoRa
-    config, from localNode.getURL) plus an offline inline-SVG QR (segno, in
-    Recommends) — scan/open it to JOIN the mesh from a phone/second node. The
-    URL discloses the channel key, so it is JWT-gated and the daemon logs each
-    disclosure. Panel: a "Générer le lien de jonction" button on the Channels
-    tab shows the URL + QR.
+  * Device config view: new GET /api/v1/meshtastic/device-config returns the
+    RAK's live configuration read from the radio — firmware, hw model, node
+    id/name, region, modem preset, hop limit, TX enabled, role, Bluetooth
+    (enabled + pairing mode + fixed PIN), WiFi, channels — with all protobuf
+    enums decoded to names (EU_868 / LONG_FAST / RAK4631 / CLIENT / FIXED_PIN).
+    Panel: a "Config du device" section on the Grid tab. Read-only, JWT-gated.
+    (This is also where the phone-pairing Bluetooth PIN is now visible.)
+  * Harden the intermittent restart crash: uvicorn os.remove(uds) on a stale
+    foreign-owned socket in the 1777-sticky /run/secubox raised PermissionError
+    and killed the daemon. main() now clears its own stale socket before
+    uvicorn binds (ExecStartPre=+/bin/rm still covers the foreign case).
+    Verified: two back-to-back restarts, NRestarts=0, zero socket errors.
 
- -- Gerald KERMA <devel@cybermind.fr>  Wed, 29 Jul 2026 08:10:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 29 Jul 2026 08:45:00 +0200
 

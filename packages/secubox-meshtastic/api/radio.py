@@ -34,6 +34,11 @@ class MockRadio:
     def channel_url(self, include_all: bool = True):
         return "https://meshtastic.org/e/#MOCKCHANNELURL"
 
+    def device_info(self) -> dict:
+        return {"firmware": "0.0.0-mock", "hw_model": "MOCK",
+                "region": "EU_868", "modem_preset": "LONG_FAST",
+                "ble_enabled": True, "ble_pin": 123456}
+
     def on(self, event: str, cb: Callable) -> None:
         self._cbs.setdefault(event, []).append(cb)
 
@@ -125,6 +130,48 @@ class _SerialRadio:
             return self._iface.localNode.getURL(includeAll=include_all)
         except Exception:
             return None
+
+    def device_info(self) -> dict:
+        """Human-readable device configuration (firmware, hw, region, modem,
+        role, Bluetooth, channels) — enums decoded to their protobuf names."""
+        info: dict = {}
+        try:
+            from meshtastic import config_pb2, mesh_pb2
+
+            def name(enum, v):
+                try:
+                    return enum.Name(v)
+                except Exception:
+                    return v
+
+            i = self._iface
+            md = getattr(i, "metadata", None)
+            if md is not None:
+                info["firmware"] = getattr(md, "firmware_version", None)
+                info["hw_model"] = name(mesh_pb2.HardwareModel, getattr(md, "hw_model", None))
+            my = self.my_num()
+            info["node_num"] = my
+            info["node_id"] = f"!{my:08x}" if my is not None else None
+            u = (((getattr(i, "nodes", None) or {}).get(my) or {}).get("user", {})
+                 if my is not None else {})
+            info["long_name"] = u.get("longName")
+            info["short_name"] = u.get("shortName")
+            ln = i.localNode
+            c = ln.localConfig
+            info["region"] = name(config_pb2.Config.LoRaConfig.RegionCode, c.lora.region)
+            info["modem_preset"] = name(config_pb2.Config.LoRaConfig.ModemPreset, c.lora.modem_preset)
+            info["hop_limit"] = c.lora.hop_limit
+            info["tx_enabled"] = c.lora.tx_enabled
+            info["role"] = name(config_pb2.Config.DeviceConfig.Role, c.device.role)
+            info["ble_enabled"] = bool(c.bluetooth.enabled)
+            info["ble_mode"] = name(config_pb2.Config.BluetoothConfig.PairingMode, c.bluetooth.mode)
+            info["ble_pin"] = c.bluetooth.fixed_pin if c.bluetooth.enabled else None
+            info["wifi_enabled"] = bool(getattr(c.network, "wifi_enabled", False))
+            info["channels"] = [ (ch.settings.name or "LongFast")
+                                 for ch in ln.channels if ch.role ]
+        except Exception:
+            pass
+        return info
 
     def node_db(self) -> list[dict]:
         """Snapshot the device's node DB (self + every node it already knows).
