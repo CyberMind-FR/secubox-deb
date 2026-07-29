@@ -64,6 +64,46 @@ _write_result() {
 # _jq <file> <filter> — read a field from a request file (jq is available on the host).
 _jq() { jq -r "$2" < "$1" 2>/dev/null; }
 
+# _pt_token — OAuth access token for the root admin (HTTP API). The Host header
+# MUST be the configured public_hostname: PeerTube 403s oauth-clients requests
+# whose Host is the raw LXC IP. Password is passed via a 0600 temp file, never
+# on the command line.
+_pt_token() {
+    local B="http://${LXC_IP}:${HTTP_PORT}" H="Host: ${PUBLIC_HOSTNAME}"
+    local cl cid csec pwf at
+    cl=$(curl -s --max-time 10 -H "$H" "$B/api/v1/oauth-clients/local") || return 1
+    cid=$(printf '%s' "$cl" | jq -r '.client_id // empty')
+    csec=$(printf '%s' "$cl" | jq -r '.client_secret // empty')
+    [ -n "$cid" ] && [ -n "$csec" ] || { err "peertube oauth-clients failed (Host header / reachability?)"; return 1; }
+    pwf=$(mktemp); chmod 600 "$pwf"; cat "$ADMIN_SECRET" > "$pwf" 2>/dev/null
+    at=$(curl -s --max-time 10 -H "$H" -d client_id="$cid" -d client_secret="$csec" \
+         -d grant_type=password -d username=root --data-urlencode "password@$pwf" \
+         "$B/api/v1/users/token" | jq -r '.access_token // empty')
+    rm -f "$pwf"
+    [ -n "$at" ] || { err "peertube auth failed — stale admin secret? re-sync it"; return 1; }
+    printf '%s' "$at"
+}
+
+# cmd_upload <file> <title> [channelId] [privacy] — upload a video file (on the
+# HOST) to PeerTube. privacy: 1=public 2=unlisted 3=private 4=internal. Prints a
+# JSON result with the watch URL. Used by the torrent "conserve to PeerTube" flow.
+cmd_upload() {
+    local file="${1:-}" title="${2:-}" channel="${3:-1}" privacy="${4:-2}"
+    [ -n "$file" ] && [ -f "$file" ] || { err "usage: peertubectl upload <file> <title> [channelId] [privacy]"; return 1; }
+    [ -n "$title" ] || title=$(basename "$file")
+    local B="http://${LXC_IP}:${HTTP_PORT}" H="Host: ${PUBLIC_HOSTNAME}" at resp uuid url
+    at=$(_pt_token) || return 1
+    log "uploading $(basename "$file") to PeerTube (channel $channel, privacy $privacy)…"
+    resp=$(curl -s --max-time 7200 -H "$H" -H "Authorization: Bearer $at" \
+        -F name="$title" -F channelId="$channel" -F privacy="$privacy" \
+        -F videofile=@"$file" "$B/api/v1/videos/upload")
+    uuid=$(printf '%s' "$resp" | jq -r '.video.shortUUID // empty')
+    [ -n "$uuid" ] || { err "upload failed: $resp"; return 1; }
+    url="https://${PUBLIC_HOSTNAME}/w/$uuid"
+    log "uploaded: $url"
+    printf '{"status":"done","shortUUID":"%s","url":"%s"}\n' "$uuid" "$url"
+}
+
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
@@ -266,6 +306,7 @@ Usage: peertubectl <verb> [args]
   set-youtube-cookies <file>    Install browser-exported YouTube cookies.txt so
                                 yt-dlp import works (YouTube blocks server IPs)
   logs [N]                      Tail N lines of peertube journal (default 50)
+  upload <file> <title> [ch] [priv]  Upload a video to PeerTube (priv 2=unlisted)
   reload                        Reload host nginx (after vhost changes)
   process-ops                   (root) drain the /run ops spool
   help                          This message
@@ -280,6 +321,7 @@ main() {
     case "$noun" in
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
+        upload) cmd_upload "$@" ;;
         process-ops) cmd_process_ops "$@" ;;
         reset-admin-password) cmd_reset_admin_password "$@" ;;
         upgrade) cmd_upgrade "$@" ;;
