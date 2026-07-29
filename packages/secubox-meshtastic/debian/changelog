@@ -1,22 +1,12 @@
-secubox-meshtastic (0.1.4-1~bookworm1) bookworm; urgency=medium
+secubox-meshtastic (0.1.5-1~bookworm1) bookworm; urgency=medium
 
-  * Fix "radio absent" despite a working radio (#918). Root cause was NOT the
-    radio (the RAK4631 opens + handshakes fine): the leaf dirs
-    /var/cache/secubox/meshtastic and /var/log/secubox/meshtastic had drifted to
-    owner `secubox` (not `secubox-meshtastic`), so the daemon could not write
-    state.json — the refresh loop swallowed the PermissionError and the panel
-    served a 2-day-stale cached `radio: absent`. postinst now ENFORCES leaf-dir
-    ownership on every configure (install -d only sets it on create); leaf dirs
-    only, never the shared parents.
-  * Fix config-permission crash-loop: /etc/secubox/meshtastic.toml could be left
-    root:root (group-unreadable) → ConfigError → the unit crash-loops (dies on
-    reboot). postinst now chgrp+g+r on every configure.
-  * radio.py: open the serial with a bounded retry (release the orphaned pyserial
-    FD via gc between attempts) and log the open lifecycle to stderr — the
-    logging module is unusable here because meshtastic reconfigures the root
-    logger on import, which had made a real failure invisible.
-  * cache.py: the refresh loop no longer swallows write errors silently — it logs
-    them to stderr/journald so a frozen cache is diagnosable.
+  * Usability: the panel is no longer empty when the radio is present.
+    - seed the mesh state from the device node DB at connect (local node +
+      already-known peers) and subscribe to live 'node' events, so /nodes shows
+      the local node (is_self) immediately instead of waiting for packets.
+    - record our own outbound text messages (POST /send) into the state so
+      /messages shows sent messages (they never come back via on_receive).
+    - Node model gains is_self + seeds position/battery/snr from the node DB.
 
- -- Gerald KERMA <devel@cybermind.fr>  Wed, 29 Jul 2026 07:35:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 29 Jul 2026 08:10:00 +0200
 
