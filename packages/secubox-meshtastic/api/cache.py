@@ -2,7 +2,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """SecuBox-Deb :: meshtastic — double-cache (in-mem + state.json + bg thread)."""
 from __future__ import annotations
-import copy, json, os, tempfile, threading
+import copy, json, os, sys, tempfile, threading
 from pathlib import Path
 from typing import Callable
 
@@ -36,8 +36,14 @@ class StateCache:
         while not stop.is_set():
             try:
                 self.update(producer())
-            except Exception:
-                pass
+            except Exception as e:
+                # Do NOT swallow silently: a write failure here (e.g. the leaf
+                # cache dir left owned by the wrong user) freezes state.json, so
+                # the panel then shows a STALE snapshot forever with no clue why.
+                # Surface it on stderr → journald (the logging module is unusable
+                # here — meshtastic reconfigures the root logger on import).
+                print(f"[meshtastic] cache refresh write failed: {e!r}",
+                      file=sys.stderr, flush=True)
             stop.wait(interval)
 
     def _write_atomic(self, state: dict) -> None:
