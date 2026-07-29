@@ -5,7 +5,10 @@
 The real SerialRadio imports `meshtastic` LAZILY inside open_serial() so the
 test suite (which uses MockRadio) never needs the library or a serial port."""
 from __future__ import annotations
+import gc
 import os
+import sys
+import time
 from typing import Callable, Protocol
 
 
@@ -34,20 +37,49 @@ class MockRadio:
         pass
 
 
-def open_serial(dev: str) -> RadioInterface | None:
-    """Return a live radio, or None if the device is absent (radio: absent)."""
+def _dbg(msg: str) -> None:
+    # Diagnostics go to stderr (journald), NOT the logging module: importing
+    # meshtastic reconfigures the root logger, which silently swallows
+    # logging-module output from this path (a real "radio absent" was
+    # invisible in the journal for exactly this reason).
+    print(f"[meshtastic] {msg}", file=sys.stderr, flush=True)
+
+
+def open_serial(dev: str, *, attempts: int = 3, delay: float = 2.0) -> RadioInterface | None:
+    """Return a live radio, or None if the device is absent (radio: absent).
+
+    The open is retried. On a service restart the previous instance may still
+    be releasing the serial port (its SerialInterface background thread + the
+    pyserial FD outlive the SIGTERM by a moment), so the first handshake can
+    land on a locked or half-reset device. A SerialInterface() that raises
+    mid-``__init__`` also LEAKS the pyserial FD it already opened (the object
+    is dropped before we get a reference), which would keep the port locked for
+    every later attempt — ``gc.collect()`` finalises that orphan so the retry
+    can re-lock and re-handshake.
+    """
     if dev != "auto" and not os.path.exists(dev):
+        _dbg(f"radio path absent: {dev}")
         return None
     try:
         from meshtastic.serial_interface import SerialInterface  # lazy
         from pubsub import pub
-    except Exception:
+    except Exception as e:  # library not installed / broken
+        _dbg(f"meshtastic lib import failed: {e!r}")
         return None
-    try:
-        iface = SerialInterface(devPath=None if dev == "auto" else dev)
-    except Exception:
-        return None
-    return _SerialRadio(iface, pub)
+    last: Exception | None = None
+    for i in range(1, attempts + 1):
+        try:
+            iface = SerialInterface(devPath=None if dev == "auto" else dev)
+            _dbg(f"radio opened on attempt {i} (dev={dev})")
+            return _SerialRadio(iface, pub)
+        except Exception as e:
+            last = e
+            _dbg(f"radio open attempt {i}/{attempts} failed: {e!r}")
+            gc.collect()  # release the orphaned pyserial FD so the next attempt can lock the port
+            if i < attempts:
+                time.sleep(delay)
+    _dbg(f"radio absent after {attempts} attempts: {last!r}")
+    return None
 
 
 class _SerialRadio:
