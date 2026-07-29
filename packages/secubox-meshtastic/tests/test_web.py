@@ -228,6 +228,36 @@ def test_channel_url_503_when_no_cb():
 
 
 # ---------------------------------------------------------------------------
+# GET /device-config — live device configuration
+# ---------------------------------------------------------------------------
+
+def test_device_config_requires_jwt_when_not_overridden():
+    app = web.create_app(FakeCache(dict(STATE)), lambda c, t: {}, lambda v, **kw: {},
+                         None, lambda: {"firmware": "x"})
+    c = TestClient(app)
+    assert c.get("/api/v1/meshtastic/device-config").status_code == 401
+
+
+def test_device_config_returns_cb():
+    app = web.create_app(FakeCache(dict(STATE)), lambda c, t: {}, lambda v, **kw: {},
+                         None, lambda: {"firmware": "2.7.15", "region": "EU_868", "ble_enabled": True})
+    c = TestClient(app)
+    c.app.dependency_overrides[web.require_jwt] = _noop_jwt
+    resp = c.get("/api/v1/meshtastic/device-config")
+    assert resp.status_code == 200
+    assert resp.json()["region"] == "EU_868"
+    c.app.dependency_overrides.clear()
+
+
+def test_device_config_503_when_no_cb():
+    app = web.create_app(FakeCache(dict(STATE)), lambda c, t: {}, lambda v, **kw: {})
+    c = TestClient(app)
+    c.app.dependency_overrides[web.require_jwt] = _noop_jwt
+    assert c.get("/api/v1/meshtastic/device-config").status_code == 503
+    c.app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
 # no direct radio/systemctl/subprocess access from web.py
 # ---------------------------------------------------------------------------
 
