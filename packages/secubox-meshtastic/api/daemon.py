@@ -4,6 +4,7 @@
 from __future__ import annotations
 import json
 import logging
+import os
 import subprocess
 import sys
 import threading
@@ -253,8 +254,25 @@ def main() -> None:
                   file=sys.stderr, flush=True)
             return out
 
-        app = web.create_app(engine.cache, send_cb, _ctl_cb, channel_url_cb)
+        def device_config_cb() -> dict:
+            if engine.radio is None:
+                return {"status": "radio-absent"}
+            return getattr(engine.radio, "device_info", lambda: {})()
+
+        app = web.create_app(engine.cache, send_cb, _ctl_cb,
+                             channel_url_cb, device_config_cb)
         cache.start_refresh(engine.snapshot, CACHE_REFRESH_INTERVAL, stop)
+        # uvicorn does os.remove(uds) before binding; in the 1777-sticky
+        # /run/secubox a socket left over from a prior run can make that raise
+        # (PermissionError if it is foreign-owned) and crash the daemon on
+        # restart. Clear our own stale socket first (best-effort) so uvicorn
+        # binds a clean path. (ExecStartPre=+/bin/rm covers the foreign case.)
+        try:
+            if os.path.exists(SOCKET_PATH):
+                os.unlink(SOCKET_PATH)
+        except OSError as e:
+            print(f"[meshtastic] could not clear stale socket {SOCKET_PATH}: {e!r}",
+                  file=sys.stderr, flush=True)
         try:
             uvicorn.run(app, uds=SOCKET_PATH, log_level="warning")
         finally:

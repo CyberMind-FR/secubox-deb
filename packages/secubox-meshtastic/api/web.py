@@ -73,6 +73,7 @@ def create_app(
     send_cb: Callable[[int, str], dict],
     ctl_cb: Callable[..., dict],
     channel_url_cb: Callable[[], dict] | None = None,
+    device_config_cb: Callable[[], dict] | None = None,
 ) -> FastAPI:
     app = FastAPI(
         title="SecuBox Meshtastic API",
@@ -115,6 +116,14 @@ def create_app(
         if channel_url_cb is None:
             raise HTTPException(status_code=503, detail="radio absent")
         return channel_url_cb()
+
+    @app.get(f"{PREFIX}/device-config")
+    async def get_device_config(_claims=Depends(require_jwt)):
+        # Live device configuration (firmware, hw, region, modem, role,
+        # Bluetooth, channels) read from the radio — read-only, JWT-gated.
+        if device_config_cb is None:
+            raise HTTPException(status_code=503, detail="radio absent")
+        return device_config_cb()
 
     @app.post(f"{PREFIX}/mode")
     async def set_mode(body: ModeBody, _claims=Depends(require_jwt)):
