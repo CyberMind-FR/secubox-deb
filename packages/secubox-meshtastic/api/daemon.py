@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 
-from .model import MeshState, parse_packet
+from .model import MeshState, parse_packet, _nid
 
 log = logging.getLogger("secubox.meshtastic.daemon")
 
@@ -25,6 +26,30 @@ class Engine:
         self.capture, self.bridge, self.clock = capture, bridge, clock
         self.state = MeshState()
         self.present = radio is not None
+        self.my_num = None
+
+    def seed_from_radio(self, radio) -> None:
+        """Seed mesh state from the device's node DB at connect, so the panel
+        shows the local node (+ any already-known peers) immediately instead of
+        staying empty until fresh packets arrive."""
+        now = self.clock()
+        self.my_num = getattr(radio, "my_num", lambda: None)()
+        for info in getattr(radio, "node_db", lambda: [])():
+            self.state.apply_nodeinfo(info, now)
+        self.cache.update(self.snapshot())
+
+    def on_node(self, info: dict) -> None:
+        """Live NODEINFO update from the device ('node' event)."""
+        self.state.apply_nodeinfo(info or {}, self.clock())
+        self.cache.update(self.snapshot())
+
+    def record_sent(self, channel: int, text: str) -> None:
+        """Record our own outbound text so the panel shows sent messages
+        (they never come back through on_receive)."""
+        frm = _nid(self.my_num) if self.my_num else "!self"
+        self.state.add_message(channel, {"from": frm, "text": text,
+                                         "ts": self.clock(), "outbound": True})
+        self.cache.update(self.snapshot())
 
     def channel_name(self, idx: int) -> str:
         if 0 <= idx < len(self.cfg.channels):
@@ -152,6 +177,22 @@ def _ctl_cb(verb: str, **kwargs) -> dict:
     return {"status": "error", "stderr": (proc.stderr or proc.stdout).strip()[:300]}
 
 
+def _qr_svg(text: str):
+    """Offline QR as inline SVG markup (segno, pure-python, optional). Inline
+    SVG (not a data: URI) keeps it CSP-safe for the panel. Returns None if segno
+    isn't installed — the caller degrades to url-only."""
+    try:
+        import io
+        import segno
+        buf = io.BytesIO()  # segno's SVG writer emits bytes
+        segno.make(text, error="m").save(
+            buf, kind="svg", scale=4, border=2,
+            dark="#0a1f14", light="#c9f5e0", xmldecl=False, svgns=True)
+        return buf.getvalue().decode("utf-8")
+    except Exception:
+        return None
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
@@ -178,6 +219,8 @@ def main() -> None:
 
     if radio is not None:
         radio.on("receive", engine.on_receive)
+        radio.on("node", engine.on_node)
+        engine.seed_from_radio(radio)
 
     stop = threading.Event()
 
@@ -192,9 +235,25 @@ def main() -> None:
             if engine.radio is None:
                 return {"status": "radio-absent"}
             engine.radio.send_text(text, channel)
+            engine.record_sent(channel, text)
             return {"status": "sent", "channel": channel}
 
-        app = web.create_app(engine.cache, send_cb, _ctl_cb)
+        def channel_url_cb() -> dict:
+            if engine.radio is None:
+                return {"status": "radio-absent"}
+            url = getattr(engine.radio, "channel_url", lambda: None)()
+            out = {"url": url}
+            # Render an offline QR (inline SVG) so a phone can scan it to JOIN
+            # the mesh. segno is pure-python and optional — degrade to url-only.
+            if url:
+                out["qr_svg"] = _qr_svg(url)
+            # The URL carries the channel key — record the disclosure (journald
+            # is this non-root daemon's durable audit trail).
+            print("[meshtastic] channel-url (join link) disclosed",
+                  file=sys.stderr, flush=True)
+            return out
+
+        app = web.create_app(engine.cache, send_cb, _ctl_cb, channel_url_cb)
         cache.start_refresh(engine.snapshot, CACHE_REFRESH_INTERVAL, stop)
         try:
             uvicorn.run(app, uds=SOCKET_PATH, log_level="warning")

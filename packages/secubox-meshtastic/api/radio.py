@@ -19,9 +19,20 @@ class RadioInterface(Protocol):
 
 
 class MockRadio:
-    def __init__(self) -> None:
+    def __init__(self, node_db=None, my_num=None) -> None:
         self._cbs: dict[str, list[Callable]] = {}
         self.sent: list[tuple[str, int]] = []
+        self._node_db = list(node_db or [])
+        self._my_num = my_num
+
+    def node_db(self) -> list[dict]:
+        return list(self._node_db)
+
+    def my_num(self):
+        return self._my_num
+
+    def channel_url(self, include_all: bool = True):
+        return "https://meshtastic.org/e/#MOCKCHANNELURL"
 
     def on(self, event: str, cb: Callable) -> None:
         self._cbs.setdefault(event, []).append(cb)
@@ -100,6 +111,44 @@ class _SerialRadio:
 
     def send_text(self, text: str, channel: int = 0) -> None:
         self._iface.sendText(text, channelIndex=channel)
+
+    def my_num(self):
+        try:
+            return self._iface.myInfo.my_node_num
+        except Exception:
+            return None
+
+    def channel_url(self, include_all: bool = True):
+        """The device's sharable channel-set URL (name + PSK + LoRa config) —
+        scan/open it on another device to JOIN this mesh."""
+        try:
+            return self._iface.localNode.getURL(includeAll=include_all)
+        except Exception:
+            return None
+
+    def node_db(self) -> list[dict]:
+        """Snapshot the device's node DB (self + every node it already knows).
+        Lets the panel show the local node + known peers immediately on connect,
+        instead of staying empty until fresh packets arrive."""
+        out: list[dict] = []
+        try:
+            my = self.my_num()
+            for val in (getattr(self._iface, "nodes", None) or {}).values():
+                u = val.get("user") or {}
+                num = val.get("num")
+                out.append({
+                    "num": num,
+                    "user": {"shortName": u.get("shortName", ""),
+                             "longName": u.get("longName", ""),
+                             "role": u.get("role", "")},
+                    "position": val.get("position") or {},
+                    "deviceMetrics": val.get("deviceMetrics") or {},
+                    "snr": val.get("snr"),
+                    "is_self": num is not None and num == my,
+                })
+        except Exception:
+            pass
+        return out
 
     def close(self) -> None:
         try: self._iface.close()
