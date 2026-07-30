@@ -5,9 +5,10 @@
 // WebTorrent engine wrapper: lifecycle, metadata, stats, peer/wire inspection.
 
 export class Engine {
-  constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc }) {
+  constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc, onDone }) {
     this.downloadDir = downloadDir; this.maxActive = maxActive;
     this.webrtc = webrtc;
+    this.onDone = typeof onDone === 'function' ? onDone : () => {};
     // webrtc=false (spike fallback) tells WebTorrent to skip the WebRTC transport.
     this.client = new WebTorrentCtor(webrtc ? {} : { tracker: { wrtc: false } });
     // A bad magnet/URL/.torrent (or a peer/tracker fault) makes WebTorrent
@@ -57,6 +58,10 @@ export class Engine {
       // the fallback for sources that skip straight to it.
       t.on('infoHash', done);
       t.on('metadata', done);
+      // Mark the library row complete when the download finishes → the restart
+      // reconcile stops re-adding it (it becomes lazy). Already-complete files
+      // fire 'done' shortly after add too, so re-adds also self-heal the flag.
+      t.on('done', () => { try { this.onDone(t.infoHash); } catch (e) { /* noop */ } });
       // Fake torrents (tests) and .torrent Buffers expose infoHash/files
       // synchronously → resolve immediately.
       if (t.infoHash || (t.files && t.files.length)) done();
