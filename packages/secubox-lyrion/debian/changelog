@@ -1,3 +1,25 @@
+secubox-lyrion (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * lyrionctl: new `medialib` verb (detect | mount <path> | unmount | status),
+    always JSON. `detect` enumerates external mountpoints (under /media, /mnt,
+    /data/external + removable mounts from /proc/mounts) that CONTAIN audio
+    files (mp3/flac/m4a/ogg/wav/aac) and returns them as candidates — it NEVER
+    mounts. `mount <path>` (after the operator confirms in the webui) adds a
+    READ-ONLY `lxc.mount.entry` binding <path> to medialib/external inside the
+    Lyrion LXC, live-mounts it RO if the container runs, persists
+    `external_medialib = "<path>"` in lyrion.toml so it re-binds on boot, and
+    triggers an LMS rescan. `unmount` reverses all of it. Auto-detect +
+    opt-in confirm — never mount blind.
+  * api/main.py: JWT-gated (nginx auth_request) endpoints delegating to the ctl —
+    GET /medialib (status + detected candidates), POST /medialib/mount ({path}),
+    POST /medialib/unmount. Blocking ctl work (fs scan, bind, rescan) is offloaded
+    to a worker thread to keep the shared event loop free.
+  * www/lyrion/index.html: new "Médiathèque externe" panel — current mount +
+    detected candidates with a per-candidate "Monter" (confirm → RO bind) button
+    and a "Démonter" button for the active mount.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 11:00:00 +0200
+
 secubox-lyrion (1.1.2-1~bookworm1) bookworm; urgency=medium
 
   * lyrionctl: new `check-upgrade` (LMS-Community stable tags, current vs latest;

@@ -14,6 +14,7 @@ spec.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
@@ -22,7 +23,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import FastAPI, HTTPException, Header, Response
+from fastapi import Body, FastAPI, HTTPException, Header, Response
 
 VERSION = "1.1.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
@@ -167,3 +168,64 @@ def rescan() -> Dict[str, Any]:
     # LMS returns {} on success for rescan — empty result is a positive
     # ack as long as the RPC round-trip succeeded.
     return {"ok": True, "result": res}
+
+
+# ── External media library (auto-detect + opt-in confirm) ─────────────────────
+# Delegates to `lyrionctl medialib …`, which always emits JSON (even for its
+# own error cases). The ctl work — a bounded filesystem scan for `detect`, a
+# bind-mount + rescan for `mount` — is blocking, so it runs in a worker thread
+# to keep the shared event loop free.
+async def _ctl_medialib(*args: str) -> Dict[str, Any]:
+    def _run() -> Dict[str, Any]:
+        cmd = [CTL, "medialib", *args]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, timeout=90)
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail=f"lyrionctl not found at {CTL}")
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=504, detail="lyrionctl medialib timed out")
+        out = proc.stdout.decode() if proc.stdout else ""
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            err = proc.stderr.decode() if proc.stderr else ""
+            raise HTTPException(
+                status_code=500,
+                detail=f"medialib emitted non-JSON: out={out!r} err={err!r}",
+            )
+
+    return await asyncio.to_thread(_run)
+
+
+@app.get("/medialib")
+async def medialib() -> Dict[str, Any]:
+    """Current external-media mount + detected candidates.
+
+    Combines `medialib status` (the persisted/live mount) with
+    `medialib detect` (audio-containing external mountpoints). Detection
+    NEVER mounts — the webui offers an explicit opt-in per candidate."""
+    st = await _ctl_medialib("status")
+    det = await _ctl_medialib("detect")
+    return {
+        "external": st.get("external"),
+        "mounted": bool(st.get("mounted")),
+        "candidates": det.get("candidates", []),
+    }
+
+
+@app.post("/medialib/mount")
+async def medialib_mount(payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
+    """Read-only-bind a confirmed host path into the Lyrion LXC.
+
+    Body: {"path": "<host path>"}. The path must already appear as a
+    detected candidate the operator confirmed in the UI."""
+    path = (payload or {}).get("path", "")
+    if not isinstance(path, str) or not path.strip():
+        raise HTTPException(status_code=400, detail='body must be {"path": "<host path>"}')
+    return await _ctl_medialib("mount", path)
+
+
+@app.post("/medialib/unmount")
+async def medialib_unmount() -> Dict[str, Any]:
+    """Remove the external-media RO bind + persisted key, then rescan."""
+    return await _ctl_medialib("unmount")

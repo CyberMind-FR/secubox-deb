@@ -3,15 +3,53 @@
 	dh $@
 
 override_dh_auto_install:
-	# API files
-	install -d debian/secubox-jellyfin/usr/lib/secubox/jellyfin/
+	# Host control plane (FastAPI)
+	install -d debian/secubox-jellyfin/usr/lib/secubox/jellyfin
 	cp -r api debian/secubox-jellyfin/usr/lib/secubox/jellyfin/
-	# Static www files
+	# CTL (owned by the actuator agent — installed to /usr/sbin)
+	install -d debian/secubox-jellyfin/usr/sbin
+	install -m 755 sbin/jellyfinctl debian/secubox-jellyfin/usr/sbin/jellyfinctl
+	# LXC bootstrap (owned by the actuator agent). Installed to BOTH:
+	#   /usr/lib/secubox/jellyfin/  — run by the provision oneshot
+	#   /usr/share/secubox/lib/jellyfin/ — the path jellyfinctl's INSTALL_LIB
+	#                                      expects for `jellyfinctl install`
+	install -d debian/secubox-jellyfin/usr/share/secubox/lib/jellyfin
+	[ -f lib/jellyfin/install-lxc.sh ] && \
+	    install -m 755 lib/jellyfin/install-lxc.sh \
+	        debian/secubox-jellyfin/usr/lib/secubox/jellyfin/install-lxc.sh && \
+	    install -m 755 lib/jellyfin/install-lxc.sh \
+	        debian/secubox-jellyfin/usr/share/secubox/lib/jellyfin/install-lxc.sh || true
+	# Scoped sudoers (0440) — single privileged surface
+	install -d debian/secubox-jellyfin/etc/sudoers.d
+	install -m 440 debian/secubox-jellyfin.sudoers \
+	    debian/secubox-jellyfin/etc/sudoers.d/secubox-jellyfin
+	# nft egress observation drop-in for the veth
+	install -d debian/secubox-jellyfin/etc/nftables.d
+	install -m 644 conf/jellyfin.nft \
+	    debian/secubox-jellyfin/etc/nftables.d/secubox-jellyfin.nft
+	# systemd units (API + provision oneshot) — handled manually
+	install -d debian/secubox-jellyfin/usr/lib/systemd/system
+	install -m 644 debian/secubox-jellyfin.service \
+	    debian/secubox-jellyfin/usr/lib/systemd/system/secubox-jellyfin.service
+	install -m 644 debian/secubox-jellyfin-provision.service \
+	    debian/secubox-jellyfin/usr/lib/systemd/system/secubox-jellyfin-provision.service
+	# Web UI
 	install -d debian/secubox-jellyfin/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-jellyfin/usr/share/secubox/www/ || true
-	# Menu definitions
+	# Menu entry
 	install -d debian/secubox-jellyfin/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-jellyfin/usr/share/secubox/menu.d/ || true
-	# Modular nginx config
+	# nginx snippet — install to BOTH secubox.d/ and secubox-routes.d/
 	install -d debian/secubox-jellyfin/etc/nginx/secubox.d
-	[ -f nginx/jellyfin.conf ] && cp nginx/jellyfin.conf debian/secubox-jellyfin/etc/nginx/secubox.d/ || true
+	[ -f nginx/jellyfin.conf ] && cp nginx/jellyfin.conf debian/secubox-jellyfin/etc/nginx/secubox.d/ && (install -d debian/secubox-jellyfin/etc/nginx/secubox-routes.d && cp nginx/jellyfin.conf debian/secubox-jellyfin/etc/nginx/secubox-routes.d/) || true
+	# Public vhost (sites-available — operator opts in via ln -s; postinst does it)
+	install -d debian/secubox-jellyfin/etc/nginx/sites-available
+	[ -f nginx/jellyfin-vhost.conf ] && cp nginx/jellyfin-vhost.conf debian/secubox-jellyfin/etc/nginx/sites-available/jellyfin.conf || true
+	# Config example
+	install -d debian/secubox-jellyfin/etc/secubox
+	[ -f conf/jellyfin.toml.example ] && cp conf/jellyfin.toml.example debian/secubox-jellyfin/etc/secubox/jellyfin.toml.example || true
+
+override_dh_installsystemd:
+	# We install/enable the units manually (postinst) — skip dh auto-wiring so
+	# the --no-block provision start and the try-restart upgrade logic hold.
+	true

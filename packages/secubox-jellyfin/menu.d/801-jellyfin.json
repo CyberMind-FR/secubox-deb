@@ -1,9 +1,0 @@
-{
-  "id": "jellyfin",
-  "name": "Jellyfin",
-  "path": "/jellyfin/",
-  "icon": "🎬",
-  "category": "mesh",
-  "order": 801,
-  "description": "Media server management"
-}

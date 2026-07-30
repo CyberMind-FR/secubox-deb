@@ -1,18 +1,35 @@
 Source: secubox-jellyfin
-Section: net
+Section: admin
 Priority: optional
 Maintainer: Gerald KERMA <devel@cybermind.fr>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
 
 Package: secubox-jellyfin
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip
-Recommends: docker.io | podman
-Description: Jellyfin media server management
- SecuBox module for managing Jellyfin media server via Docker.
- Provides container management, library configuration,
- backup/restore, and hardware acceleration support.
+Depends: ${misc:Depends},
+         secubox-core (>= 1.0),
+         lxc,
+         lxc-templates,
+         debootstrap,
+         nftables,
+         sudo,
+         python3-uvicorn,
+         python3-fastapi,
+         python3-toml,
+         curl,
+         jq
+Description: SecuBox Jellyfin — LXC-native media server (MIND layer)
+ Runs Jellyfin in a Debian bookworm LXC at 10.100.0.170 on br-lxc, behind the
+ SecuBox chain (HAProxy TLS 1.3 → sbxwaf → nginx). Replaces the earlier
+ Docker/Podman-based 1.0.0 host-API stub with the peertube/lyrion LXC model.
  .
- Ported from OpenWRT luci-app-jellyfin.
- Provides FastAPI backend on /api/v1/jellyfin/ via Unix socket.
+ The unprivileged host API (/api/v1/jellyfin/, JWT-gated) delegates every
+ privileged action to the audited root helper jellyfinctl over scoped sudo:
+ LXC start/stop/restart, library scans, and Jellyfin/version upgrades.
+ .
+ Partner auto-wire detects the sibling SecuBox media services (photoprism,
+ nextcloud, torrent, lyrion) by the presence of their media directory and
+ read-only bind-mounts each into the Jellyfin LXC as a virtual-folder library
+ (peertube stays a deep link). Wiring is independently toggleable per partner.

@@ -1,562 +1,246 @@
-"""secubox-jellyfin — FastAPI application for media server management.
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
 
-Ported from OpenWRT luci-app-jellyfin RPCD backend.
-Provides Jellyfin Docker container management.
 """
-import asyncio
-import shutil
-import subprocess
-from datetime import datetime
-from pathlib import Path
-from typing import List, Optional, Dict, Any
+SecuBox-Deb :: secubox-jellyfin — host control plane API (LXC-native).
+CyberMind — https://cybermind.fr
 
-from fastapi import FastAPI, APIRouter, Depends, HTTPException
+FastAPI on /run/secubox/jellyfin.sock, proxied by nginx at /api/v1/jellyfin/.
+DEDICATED socket (secubox-jellyfin.service) — NOT the aggregator: this API
+(a) sudo's the root `jellyfinctl` actuator (needs NoNewPrivileges=no, which the
+aggregator does not grant) and (b) runs a background /status cache refresher on
+startup (mounted sub-apps never get a lifespan on the aggregator loop). See the
+`WebUI-delegates-to-confined-ctl` rule in MODULE-COMPLIANCE.md: this API does
+NO privileged work itself — every state change is delegated to `jellyfinctl`,
+the single audited root surface.
+
+Endpoints (all JWT-gated except /health):
+  GET  /health          public liveness ({status, module})
+  GET  /status          jellyfinctl status — 60 s double-cached (bg refresh)
+  GET  /partners        jellyfinctl partner list
+  GET  /library/status  jellyfinctl library status
+  POST /partner/wire    {name?, all?}  → jellyfinctl partner wire <name|--all>
+  POST /partner/unwire  {name}         → jellyfinctl partner unwire <name>
+  POST /control         {action}       → jellyfinctl start|stop|restart
+  POST /library/scan    jellyfinctl library scan
+  GET  /check-upgrade   jellyfinctl check-upgrade
+  POST /upgrade         jellyfinctl upgrade
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import subprocess
+import time
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 
-from secubox_core.auth import router as auth_router, require_jwt
-from secubox_core.logger import get_logger
+from secubox_core.auth import require_jwt
 
-app = FastAPI(title="secubox-jellyfin", version="1.0.0", root_path="/api/v1/jellyfin")
+VERSION = "2.0.0"
 
-# ══════════════════════════════════════════════════════════════════
-# Health Check Endpoint (public, no auth)
-# ══════════════════════════════════════════════════════════════════
+# The single privileged surface. The panel/API is unprivileged (User=secubox);
+# every actuation is `sudo -n /usr/sbin/jellyfinctl <verb>` (scoped sudoers,
+# see debian/secubox-jellyfin.sudoers). jellyfinctl emits a JSON payload on
+# stdout for each verb (the machine-readable contract this API parses).
+CTL = "/usr/sbin/jellyfinctl"
 
-@app.get("/health")
-async def health_check():
-    """Public health check endpoint for sidebar status."""
-    return {"status": "ok", "module": "deb"}
+# Double-caching (CLAUDE.md § Performance Patterns): /status is refreshed in the
+# background every 60 s and mirrored to a JSON file so the panel never blocks on
+# the (LXC-touching) ctl call and survives an API restart with a warm value.
+CACHE_DIR = Path("/var/cache/secubox/jellyfin")
+STATUS_CACHE_FILE = CACHE_DIR / "status.json"
+STATUS_TTL = 60.0
 
-app.include_router(auth_router, prefix="/auth")
-router = APIRouter()
-log = get_logger("jellyfin")
+log = logging.getLogger("secubox-jellyfin")
 
-# Configuration
-CONFIG_FILE = Path("/etc/secubox/jellyfin.toml")
-CONTAINER_NAME = "secbx-jellyfin"
-DEFAULT_CONFIG = {
-    "enabled": False,
-    "image": "jellyfin/jellyfin:latest",
-    "port": 8096,
-    "data_path": "/srv/jellyfin",
-    "timezone": "Europe/Paris",
-    "hw_accel": False,
-    "domain": "jellyfin.secubox.local",
-    "haproxy": False,
-    "wizard_complete": False,
-}
+app = FastAPI(
+    title="SecuBox Jellyfin",
+    version=VERSION,
+    root_path="/api/v1/jellyfin",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+# In-memory status cache, kept warm by the background refresher.
+_status_cache: Dict[str, Any] = {"data": None, "ts": 0.0}
 
 
-# ============================================================================
-# Models
-# ============================================================================
+# ── ctl runners ──────────────────────────────────────────────────────────────
+def _run_ctl(*args: str, timeout: int = 30):
+    """Low-level: `sudo -n jellyfinctl <args>` → (returncode, stdout, stderr).
 
-class JellyfinConfig(BaseModel):
-    enabled: bool = False
-    image: str = "jellyfin/jellyfin:latest"
-    port: int = 8096
-    data_path: str = "/srv/jellyfin"
-    timezone: str = "Europe/Paris"
-    hw_accel: bool = False
-    domain: str = "jellyfin.secubox.local"
-    haproxy: bool = False
-
-
-class MediaPath(BaseModel):
-    name: str
-    path: str
-    type: str = "movies"  # movies, tvshows, music, photos
-
-
-class RestoreRequest(BaseModel):
-    path: str
-
-
-# ============================================================================
-# Helpers
-# ============================================================================
-
-def get_config() -> dict:
-    """Load jellyfin configuration."""
-    if CONFIG_FILE.exists():
-        try:
-            import tomllib
-            return tomllib.loads(CONFIG_FILE.read_text())
-        except Exception:
-            pass
-    return DEFAULT_CONFIG.copy()
-
-
-def save_config(config: dict):
-    """Save jellyfin configuration."""
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    lines = ["# Jellyfin configuration"]
-    for k, v in config.items():
-        if isinstance(v, bool):
-            lines.append(f"{k} = {str(v).lower()}")
-        elif isinstance(v, int):
-            lines.append(f"{k} = {v}")
-        elif isinstance(v, list):
-            lines.append(f'{k} = {v}')
-        else:
-            lines.append(f'{k} = "{v}"')
-    CONFIG_FILE.write_text("\n".join(lines) + "\n")
-
-
-def detect_runtime() -> Optional[str]:
-    """Detect container runtime."""
-    if shutil.which("podman"):
-        return "podman"
-    if shutil.which("docker"):
-        return "docker"
-    return None
-
-
-def get_container_status() -> dict:
-    """Get Jellyfin container status."""
-    rt = detect_runtime()
-    if not rt:
-        return {"status": "no_runtime", "uptime": ""}
-
+    Never raises — a missing/slow/erroring ctl must degrade the panel, not
+    crash the request handler."""
     try:
-        # Check if running
-        result = subprocess.run(
-            [rt, "ps", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=5
+        p = subprocess.run(
+            ["sudo", "-n", CTL, *args],
+            capture_output=True, text=True, timeout=timeout,
         )
-        if result.stdout.strip():
-            return {"status": "running", "uptime": result.stdout.strip()}
+        return p.returncode, p.stdout, p.stderr
+    except subprocess.TimeoutExpired:
+        return 1, "", f"jellyfinctl {' '.join(args)} timed out after {timeout}s"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return 1, "", f"jellyfinctl invocation failed: {exc}"
 
-        # Check if exists but stopped
-        result = subprocess.run(
-            [rt, "ps", "-a", "--filter", f"name={CONTAINER_NAME}", "--format", "{{.Status}}"],
-            capture_output=True, text=True, timeout=5
+
+def _ctl_json(*args: str, timeout: int = 30) -> Dict[str, Any]:
+    """Run the ctl and return its parsed JSON stdout.
+
+    Raises HTTPException(500) with the ctl's stderr on any failure (non-zero
+    exit, invocation error, or non-JSON output)."""
+    rc, out, err = _run_ctl(*args, timeout=timeout)
+    if rc != 0:
+        detail = (err or out or f"jellyfinctl exited {rc}").strip()[:500]
+        raise HTTPException(status_code=500, detail=detail)
+    out = out.strip()
+    if not out:
+        return {}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail=f"jellyfinctl emitted non-JSON: {out[:300]!r}",
         )
-        if result.stdout.strip():
-            return {"status": "stopped", "uptime": ""}
-
-        return {"status": "not_installed", "uptime": ""}
-    except Exception:
-        return {"status": "error", "uptime": ""}
 
 
-def is_running() -> bool:
-    """Check if Jellyfin container is running."""
-    return get_container_status()["status"] == "running"
+# ── /status double-cache ─────────────────────────────────────────────────────
+def _refresh_status() -> Dict[str, Any]:
+    """Blocking status fetch (runs off-loop via asyncio.to_thread). Updates the
+    in-memory cache and mirrors to CACHE_DIR. Raises on ctl failure."""
+    data = _ctl_json("status")
+    _status_cache["data"] = data
+    _status_cache["ts"] = time.time()
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        STATUS_CACHE_FILE.write_text(json.dumps(data))
+    except OSError as exc:
+        log.warning("status cache write failed: %s", exc)
+    return data
 
 
-def get_media_paths() -> List[dict]:
-    """Get configured media paths."""
-    media_file = Path("/etc/secubox/jellyfin-media.json")
-    if media_file.exists():
+async def _status_refresher() -> None:
+    """Background task: refresh the status cache every STATUS_TTL seconds."""
+    while True:
         try:
-            import json
-            return json.loads(media_file.read_text())
-        except Exception:
+            await asyncio.to_thread(_refresh_status)
+        except HTTPException as exc:
+            log.warning("status refresh failed: %s", exc.detail)
+        except Exception as exc:  # noqa: BLE001 — never let the loop die
+            log.warning("status refresh error: %s", exc)
+        await asyncio.sleep(STATUS_TTL)
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    # Warm the in-memory cache from the on-disk mirror so the first /status
+    # after a restart is served instantly instead of blocking on the ctl.
+    if _status_cache["data"] is None and STATUS_CACHE_FILE.is_file():
+        try:
+            _status_cache["data"] = json.loads(STATUS_CACHE_FILE.read_text())
+        except (OSError, json.JSONDecodeError):
             pass
-    return []
+    asyncio.create_task(_status_refresher())
 
 
-def save_media_paths(paths: List[dict]):
-    """Save media paths configuration."""
-    media_file = Path("/etc/secubox/jellyfin-media.json")
-    media_file.parent.mkdir(parents=True, exist_ok=True)
-    import json
-    media_file.write_text(json.dumps(paths, indent=2))
+# ── request bodies ───────────────────────────────────────────────────────────
+class WireBody(BaseModel):
+    name: Optional[str] = None
+    all: bool = False
 
 
-# ============================================================================
-# Public Endpoints
-# ============================================================================
+class UnwireBody(BaseModel):
+    name: str
 
-@router.get("/health")
-async def health():
-    """Health check."""
+
+class ControlBody(BaseModel):
+    action: str
+
+
+_CONTROL_ACTIONS = {"start", "stop", "restart"}
+
+
+# ── endpoints ────────────────────────────────────────────────────────────────
+@app.get("/health")
+async def health() -> Dict[str, str]:
+    """Public liveness — no auth (used by the sidebar / watchdog)."""
     return {"status": "ok", "module": "jellyfin"}
 
 
-@router.get("/status")
-def status():
-    """Get Jellyfin service status."""
-    cfg = get_config()
-    rt = detect_runtime()
-    container = get_container_status()
-    media_paths = get_media_paths()
+@app.get("/status", dependencies=[Depends(require_jwt)])
+async def status() -> Dict[str, Any]:
+    """LXC state + jellyfin health + libraries + sessions, 60 s double-cached.
 
-    # Disk usage
-    disk_usage = ""
-    data_path = Path(cfg.get("data_path", "/srv/jellyfin"))
-    if data_path.exists():
-        try:
-            result = subprocess.run(
-                ["du", "-sh", str(data_path)],
-                capture_output=True, text=True, timeout=10
-            )
-            disk_usage = result.stdout.split()[0] if result.stdout else ""
-        except Exception:
-            pass
-
-    return {
-        "enabled": cfg.get("enabled", False),
-        "image": cfg.get("image", "jellyfin/jellyfin:latest"),
-        "port": cfg.get("port", 8096),
-        "data_path": cfg.get("data_path", "/srv/jellyfin"),
-        "timezone": cfg.get("timezone", "Europe/Paris"),
-        "hw_accel": cfg.get("hw_accel", False),
-        "domain": cfg.get("domain", "jellyfin.secubox.local"),
-        "haproxy": cfg.get("haproxy", False),
-        "docker_available": rt is not None,
-        "runtime": rt or "none",
-        "container_status": container["status"],
-        "container_uptime": container["uptime"],
-        "disk_usage": disk_usage,
-        "media_paths": media_paths,
-        "wizard_complete": cfg.get("wizard_complete", False),
-    }
+    Served from the in-memory cache kept warm by the background refresher; on a
+    cold cache we fetch once off-loop so we never block the event loop."""
+    if _status_cache["data"] is not None:
+        return _status_cache["data"]
+    return await asyncio.to_thread(_refresh_status)
 
 
-# ============================================================================
-# Protected Endpoints
-# ============================================================================
-
-@router.get("/config")
-async def get_jellyfin_config(user=Depends(require_jwt)):
-    """Get Jellyfin configuration."""
-    return get_config()
+@app.get("/partners", dependencies=[Depends(require_jwt)])
+def partners() -> Dict[str, Any]:
+    """Sibling media services + whether each is present/wired as a library."""
+    return _ctl_json("partner", "list")
 
 
-@router.post("/config")
-async def set_jellyfin_config(config: JellyfinConfig, user=Depends(require_jwt)):
-    """Update Jellyfin configuration."""
-    cfg = get_config()
-    cfg.update(config.dict())
-    save_config(cfg)
-    log.info(f"Config updated by {user.get('sub', 'unknown')}")
-    return {"success": True}
+@app.get("/library/status", dependencies=[Depends(require_jwt)])
+def library_status() -> Dict[str, Any]:
+    """Jellyfin library summary (virtual folders + last scan)."""
+    return _ctl_json("library", "status")
 
 
-@router.get("/wizard")
-async def get_wizard_status(user=Depends(require_jwt)):
-    """Get setup wizard status."""
-    cfg = get_config()
-    container = get_container_status()
-    media_paths = get_media_paths()
-
-    installed = container["status"] != "not_installed"
-    running = container["status"] == "running"
-    wizard_complete = cfg.get("wizard_complete", False)
-
-    return {
-        "installed": installed,
-        "running": running,
-        "media_count": len(media_paths),
-        "wizard_complete": wizard_complete,
-        "show_wizard": installed and not wizard_complete,
-    }
+@app.post("/partner/wire", dependencies=[Depends(require_jwt)])
+def partner_wire(body: WireBody) -> Dict[str, Any]:
+    """Wire one partner (RO bind + Jellyfin virtual folder) or every present
+    partner with `all: true`. Wiring may take a while (bind + scan)."""
+    if body.all:
+        return _ctl_json("partner", "wire", "--all", timeout=180)
+    if not body.name:
+        raise HTTPException(status_code=400, detail="'name' or 'all' is required")
+    return _ctl_json("partner", "wire", body.name, timeout=180)
 
 
-@router.post("/wizard/complete")
-async def set_wizard_complete(user=Depends(require_jwt)):
-    """Mark setup wizard as complete."""
-    cfg = get_config()
-    cfg["wizard_complete"] = True
-    save_config(cfg)
-    return {"success": True}
+@app.post("/partner/unwire", dependencies=[Depends(require_jwt)])
+def partner_unwire(body: UnwireBody) -> Dict[str, Any]:
+    """Remove a partner's virtual folder + RO bind."""
+    if not body.name:
+        raise HTTPException(status_code=400, detail="'name' is required")
+    return _ctl_json("partner", "unwire", body.name, timeout=120)
 
 
-# ============================================================================
-# Media Path Management
-# ============================================================================
-
-@router.get("/media")
-async def list_media_paths(user=Depends(require_jwt)):
-    """List configured media paths."""
-    return {"paths": get_media_paths()}
-
-
-@router.post("/media")
-async def add_media_path(media: MediaPath, user=Depends(require_jwt)):
-    """Add a media path."""
-    paths = get_media_paths()
-
-    # Check for duplicate
-    for p in paths:
-        if p["path"] == media.path:
-            return {"success": False, "error": "Path already exists"}
-
-    paths.append({
-        "id": f"media_{len(paths)+1}",
-        "name": media.name,
-        "path": media.path,
-        "type": media.type,
-    })
-    save_media_paths(paths)
-
-    log.info(f"Media path added: {media.path} by {user.get('sub', 'unknown')}")
-    return {"success": True}
-
-
-@router.delete("/media/{media_id}")
-async def remove_media_path(media_id: str, user=Depends(require_jwt)):
-    """Remove a media path."""
-    paths = get_media_paths()
-    new_paths = [p for p in paths if p.get("id") != media_id]
-
-    if len(new_paths) == len(paths):
-        return {"success": False, "error": "Path not found"}
-
-    save_media_paths(new_paths)
-    log.info(f"Media path removed: {media_id} by {user.get('sub', 'unknown')}")
-    return {"success": True}
-
-
-# ============================================================================
-# Service Control
-# ============================================================================
-
-@router.post("/install")
-def install_jellyfin(user=Depends(require_jwt)):
-    """Install Jellyfin container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime (docker/podman) found"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/jellyfin"))
-
-    # Create directories
-    (data_path / "config").mkdir(parents=True, exist_ok=True)
-    (data_path / "cache").mkdir(parents=True, exist_ok=True)
-
-    # Pull image
-    image = cfg.get("image", "jellyfin/jellyfin:latest")
-    log.info(f"Installing Jellyfin ({image}) by {user.get('sub', 'unknown')}")
-
-    try:
-        result = subprocess.run(
-            [rt, "pull", image],
-            capture_output=True, text=True, timeout=300
+@app.post("/control", dependencies=[Depends(require_jwt)])
+def control(body: ControlBody) -> Dict[str, Any]:
+    """Start / stop / restart the Jellyfin LXC."""
+    if body.action not in _CONTROL_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"action must be one of {sorted(_CONTROL_ACTIONS)}",
         )
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr.strip(), "output": result.stdout}
-
-        return {"success": True, "output": "Image pulled successfully"}
-    except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Pull timeout"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    return _ctl_json(body.action, timeout=120)
 
 
-@router.post("/start")
-async def start_jellyfin(user=Depends(require_jwt)):
-    """Start Jellyfin container."""
-    if is_running():
-        return {"success": False, "error": "Already running"}
-
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/jellyfin"))
-    port = cfg.get("port", 8096)
-    image = cfg.get("image", "jellyfin/jellyfin:latest")
-    tz = cfg.get("timezone", "Europe/Paris")
-
-    # Ensure directories exist
-    (data_path / "config").mkdir(parents=True, exist_ok=True)
-    (data_path / "cache").mkdir(parents=True, exist_ok=True)
-
-    # Build run command
-    cmd = [
-        rt, "run", "-d",
-        "--name", CONTAINER_NAME,
-        "-v", f"{data_path}/config:/config",
-        "-v", f"{data_path}/cache:/cache",
-        "-e", f"TZ={tz}",
-        "-p", f"127.0.0.1:{port}:8096",
-        "--restart", "unless-stopped",
-    ]
-
-    # Add media paths
-    for mp in get_media_paths():
-        path = mp.get("path")
-        name = mp.get("name", "media").replace(" ", "_").lower()
-        if path and Path(path).exists():
-            cmd.extend(["-v", f"{path}:/media/{name}:ro"])
-
-    # Hardware acceleration
-    if cfg.get("hw_accel"):
-        # VAAPI for Intel/AMD
-        if Path("/dev/dri").exists():
-            cmd.extend(["--device", "/dev/dri:/dev/dri"])
-
-    cmd.append(image)
-
-    log.info(f"Starting Jellyfin by {user.get('sub', 'unknown')}")
-
-    try:
-        # Remove existing stopped container
-        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
-
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        await asyncio.sleep(3)
-
-        if is_running():
-            return {"success": True}
-        else:
-            return {"success": False, "error": result.stderr.strip() or "Failed to start"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+@app.post("/library/scan", dependencies=[Depends(require_jwt)])
+def library_scan() -> Dict[str, Any]:
+    """Trigger a Jellyfin library scan (runs in the background inside the LXC)."""
+    return _ctl_json("library", "scan", timeout=60)
 
 
-@router.post("/stop")
-async def stop_jellyfin(user=Depends(require_jwt)):
-    """Stop Jellyfin container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    log.info(f"Stopping Jellyfin by {user.get('sub', 'unknown')}")
-
-    try:
-        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+@app.get("/check-upgrade", dependencies=[Depends(require_jwt)])
+def check_upgrade() -> Dict[str, Any]:
+    """Compare the installed Jellyfin version against the latest available."""
+    return _ctl_json("check-upgrade", timeout=60)
 
 
-@router.post("/restart")
-async def restart_jellyfin(user=Depends(require_jwt)):
-    """Restart Jellyfin container."""
-    await stop_jellyfin(user)
-    await asyncio.sleep(2)
-    return await start_jellyfin(user)
-
-
-@router.post("/uninstall")
-def uninstall_jellyfin(user=Depends(require_jwt)):
-    """Uninstall Jellyfin container."""
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    log.info(f"Uninstalling Jellyfin by {user.get('sub', 'unknown')}")
-
-    try:
-        subprocess.run([rt, "stop", CONTAINER_NAME], capture_output=True, timeout=30)
-        subprocess.run([rt, "rm", "-f", CONTAINER_NAME], capture_output=True, timeout=10)
-        return {"success": True}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-@router.post("/update")
-async def update_jellyfin(user=Depends(require_jwt)):
-    """Update Jellyfin to latest image."""
-    cfg = get_config()
-    rt = detect_runtime()
-    if not rt:
-        return {"success": False, "error": "No container runtime"}
-
-    image = cfg.get("image", "jellyfin/jellyfin:latest")
-    log.info(f"Updating Jellyfin ({image}) by {user.get('sub', 'unknown')}")
-
-    try:
-        # Pull new image
-        result = subprocess.run(
-            [rt, "pull", image],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr.strip()}
-
-        # Restart if running
-        if is_running():
-            await restart_jellyfin(user)
-
-        return {"success": True, "output": "Update complete"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-# ============================================================================
-# Backup/Restore
-# ============================================================================
-
-@router.post("/backup")
-def backup_jellyfin(user=Depends(require_jwt)):
-    """Backup Jellyfin configuration."""
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/jellyfin"))
-    config_path = data_path / "config"
-
-    if not config_path.exists():
-        return {"success": False, "error": "No config to backup"}
-
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    backup_file = f"/tmp/jellyfin-backup-{timestamp}.tar.gz"
-
-    log.info(f"Creating backup by {user.get('sub', 'unknown')}")
-
-    try:
-        result = subprocess.run(
-            ["tar", "-czf", backup_file, "-C", str(data_path), "config"],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
-            return {"success": True, "path": backup_file}
-        else:
-            return {"success": False, "error": result.stderr.strip()}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-@router.post("/restore")
-async def restore_jellyfin(req: RestoreRequest, user=Depends(require_jwt)):
-    """Restore Jellyfin configuration from backup."""
-    if not Path(req.path).exists():
-        return {"success": False, "error": "Backup file not found"}
-
-    cfg = get_config()
-    data_path = Path(cfg.get("data_path", "/srv/jellyfin"))
-
-    log.info(f"Restoring backup {req.path} by {user.get('sub', 'unknown')}")
-
-    # Stop container first
-    if is_running():
-        await stop_jellyfin(user)
-        await asyncio.sleep(2)
-
-    try:
-        result = subprocess.run(
-            ["tar", "-xzf", req.path, "-C", str(data_path)],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
-            return {"success": True}
-        else:
-            return {"success": False, "error": result.stderr.strip()}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-@router.get("/logs")
-def get_logs(lines: int = 50, user=Depends(require_jwt)):
-    """Get container logs."""
-    rt = detect_runtime()
-    if not rt:
-        return {"logs": "No container runtime"}
-
-    try:
-        result = subprocess.run(
-            [rt, "logs", "--tail", str(lines), CONTAINER_NAME],
-            capture_output=True, text=True, timeout=10
-        )
-        logs = result.stdout + result.stderr
-        return {"logs": logs}
-    except Exception:
-        return {"logs": "No logs available"}
-
-
-app.include_router(router)
+@app.post("/upgrade", dependencies=[Depends(require_jwt)])
+def upgrade() -> Dict[str, Any]:
+    """Upgrade Jellyfin inside the LXC to the latest pinned release."""
+    return _ctl_json("upgrade", timeout=600)

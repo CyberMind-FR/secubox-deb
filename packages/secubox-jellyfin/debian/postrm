@@ -1,0 +1,27 @@
+#!/bin/sh
+# SecuBox Jellyfin — post-remove
+set -e
+
+case "$1" in
+    remove)
+        # Drop the nginx wiring so a removed module doesn't leave a dangling
+        # vhost/route. Config + LXC survive plain remove (only purge clears them).
+        rm -f /etc/nginx/secubox.d/jellyfin.conf \
+              /etc/nginx/secubox-routes.d/jellyfin.conf \
+              /etc/nginx/sites-enabled/jellyfin.conf
+        # Tear down our own nft table (never touches other tables).
+        command -v nft >/dev/null 2>&1 && \
+            nft 'delete table inet secubox-jellyfin' 2>/dev/null || true
+        systemctl reload nginx 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
+        ;;
+    purge)
+        rm -f /etc/secubox/jellyfin.toml /etc/secubox/jellyfin.toml.example
+        rm -f /etc/nginx/sites-available/jellyfin.conf
+        rm -rf /var/lib/secubox/jellyfin /var/cache/secubox/jellyfin
+        # LXC is left intact: operator removes it explicitly (future ctl verb).
+        ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -1,3 +1,32 @@
+secubox-jellyfin (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * LXC-native rewrite (retires the 1.0.0 Docker/Podman host-API stub).
+    Jellyfin now runs in a Debian bookworm LXC at 10.100.0.170 on br-lxc,
+    behind HAProxy TLS 1.3 → sbxwaf → nginx, following the peertube/lyrion
+    model. arch:all — the arch-specific work happens inside the container.
+  * api/main.py: unprivileged host control plane on /run/secubox/jellyfin.sock
+    (dedicated socket, NOT the aggregator). Every action delegates to the root
+    jellyfinctl via `sudo -n` (WebUI-delegates-to-confined-ctl). Endpoints:
+    GET /health (public), GET /status (60 s double-cached), GET /partners,
+    GET /library/status, POST /partner/{wire,unwire}, POST /control,
+    POST /library/scan, GET /check-upgrade, POST /upgrade. JWT on every
+    non-health endpoint via secubox_core.require_jwt.
+  * Partner auto-wire: jellyfinctl partner list/wire/unwire read-only
+    bind-mounts each present sibling media service (photoprism, nextcloud,
+    torrent, lyrion) into the LXC and adds it as a Jellyfin virtual folder;
+    peertube stays a deep link. `partner wire --all` wires every present
+    partner; each is independently toggleable.
+  * secubox-jellyfin.service: User=secubox, NoNewPrivileges=no (required so the
+    API can sudo jellyfinctl), RuntimeDirectoryPreserve=yes. Provisioning moved
+    to a --no-block oneshot secubox-jellyfin-provision.service so dpkg is never
+    blocked by the container bring-up.
+  * Packaging: scoped sudoers (/etc/sudoers.d/secubox-jellyfin), nft egress
+    observation drop-in on the veth, public vhost jellyfin.gk2.secubox.in,
+    menu.d entry (🍿, MIND), /etc/secubox/jellyfin.toml seeded from example.
+    Drops the docker.io|podman Recommends.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 12:00:00 +0200
+
 secubox-jellyfin (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
