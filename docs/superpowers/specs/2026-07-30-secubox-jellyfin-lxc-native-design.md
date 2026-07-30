@@ -85,6 +85,23 @@ New `lyrionctl medialib detect|mount <path>|unmount|status`:
 - Webui: a "Médiathèque externe" panel showing detected candidates + a Monter
   button per candidate (confirm), and the current mount with an Unmount button.
 
+## Navbar management + SecuBox integration
+
+- **Webui navbar**: the control webui is a single-page shell with a **navbar**
+  (tabs) switching between sections — `Statut · Partenaires · Bibliothèques ·
+  Médiathèque externe · Réglages` — hash-routed, no full reload, active-tab
+  highlight, `sbx_token` carried on every fetch. Matches WEBUI-PANEL-GUIDELINES.
+- **SecuBox nav integration**: ship `menu.d/8xx-jellyfin.json` so the module
+  registers in the hub/global navbar (icon 🍿, MIND group), and register the
+  vhost in the WAF `haproxy-routes.json` + nginx. The companion module.json is
+  the PWA-side nav entry. One canonical label/icon across all three surfaces
+  (hub menu.d, companion cardlet, module webui navbar) so the service reads the
+  same everywhere.
+- **Partner integration surfacing**: the Partenaires tab is the integration hub —
+  each detected sibling shows its status pill, a wire/unwire toggle, and a
+  deep-link to that partner's own webui, so Jellyfin is the cross-module media
+  entry point.
+
 ## Companion cardlet
 
 Add a `jellyfin` module (module.json + view.js) — icon 🍿, MIND, favourite.
