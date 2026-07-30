@@ -252,10 +252,43 @@ HELP
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
+_ly_latest() {
+    # Stable Lyrion releases are plain-semver tags (X.Y.Z); 'ueml/…' tags are
+    # experimental and must be ignored.
+    curl -s --max-time 10 'https://api.github.com/repos/LMS-Community/slimserver/tags' 2>/dev/null \
+        | jq -r '.[].name' 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+}
+_ly_current() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- dpkg-query -W -f='${Version}' lyrionmusicserver 2>/dev/null; }
+
+# check-upgrade — non-destructive: prints JSON {current, latest, available, major_jump}.
+cmd_check_upgrade() {
+    local cur latest available=false major=false
+    cur=$(_ly_current); latest=$(_ly_latest)
+    if [ -n "$latest" ] && [ -n "$cur" ] && [ "$latest" != "$cur" ]; then
+        available=true; [ "${latest%%.*}" != "${cur%%.*}" ] && major=true
+    fi
+    printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s}\n' "$cur" "${latest:-$cur}" "$available" "$major"
+}
+
+# upgrade — download the new _all.deb and dpkg -i it (low risk: single package).
+cmd_upgrade() {
+    local cur latest; cur=$(_ly_current); latest=$(_ly_latest)
+    [ -n "$latest" ] && [ "$latest" != "$cur" ] || { echo "Already up to date (${cur})"; return 0; }
+    echo "Upgrading Lyrion ${cur} → ${latest}…"
+    local url="https://downloads.lms-community.org/LyrionMusicServer_v${latest}/lyrionmusicserver_${latest}_all.deb"
+    if ! lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -lc \
+        "cd /tmp && wget -q '${url}' -O lms.deb && systemctl stop lyrionmusicserver 2>/dev/null; DEBIAN_FRONTEND=noninteractive dpkg -i lms.deb || apt-get -f install -y; systemctl start lyrionmusicserver; rm -f lms.deb"; then
+        err "lyrion upgrade failed"; return 1
+    fi
+    echo "Upgraded to ${latest}."
+}
+
 main() {
     local noun="${1:-help}"
     shift || true
     case "$noun" in
+        check-upgrade) cmd_check_upgrade ;;
+        upgrade) cmd_upgrade ;;
         components|status|access|install|reload) "cmd_${noun}" "$@" ;;
         # The remaining nouns are stubs in v1.0.0 — see #230 task G5 for
         # full implementation. They print a clear "not implemented yet" so
