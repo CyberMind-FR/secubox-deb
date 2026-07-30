@@ -5,16 +5,51 @@
 // WebTorrent engine wrapper: lifecycle, metadata, stats, peer/wire inspection.
 
 export class Engine {
-  constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc, onDone }) {
+  constructor({ WebTorrentCtor, downloadDir, maxActive, webrtc, onDone, maxConns = 20, seed = false, idleMs = 900000 }) {
     this.downloadDir = downloadDir; this.maxActive = maxActive;
-    this.webrtc = webrtc;
+    this.webrtc = webrtc; this.seed = seed; this.idleMs = idleMs;
     this.onDone = typeof onDone === 'function' ? onDone : () => {};
+    // Cap peer connections. WebTorrent SEEDS a completed torrent to every peer
+    // that wants it, with no limit by default — on a small ARM board a popular
+    // movie pegs the single JS event loop (100% CPU, HTTP 503) indefinitely.
+    // maxConns bounds the per-torrent wires so seeding can't monopolise a core.
+    const opts = { maxConns };
     // webrtc=false (spike fallback) tells WebTorrent to skip the WebRTC transport.
-    this.client = new WebTorrentCtor(webrtc ? {} : { tracker: { wrtc: false } });
+    if (!webrtc) opts.tracker = { wrtc: false };
+    this.client = new WebTorrentCtor(opts);
+    // SAS, NOT a seedbox. Seeding policy (unless TORRENT_SEED=full): upload is
+    // capped at HALF the current download bandwidth while downloading (enough
+    // tit-for-tat to not get choked), and drops to ZERO once a torrent hits
+    // 100% — so a completed movie never re-uploads and pegs the box. Start at 0;
+    // tuneUpload() raises it during active downloads.
+    if (typeof this.client.throttleUpload === 'function') this.client.throttleUpload(0);
     // A bad magnet/URL/.torrent (or a peer/tracker fault) makes WebTorrent
     // emit 'error' on the CLIENT — unhandled it crashes the whole process.
     // Swallow it here (per-add errors are surfaced by add()'s own handler).
     if (typeof this.client.on === 'function') this.client.on('error', () => {});
+  }
+  // Upload = 50% of the bandwidth we're currently DOWNLOADING with; 0 when
+  // nothing is downloading (i.e. everything is complete → no seeding). Called
+  // periodically. TORRENT_SEED=full disables the cap (real seedbox opt-in).
+  tuneUpload() {
+    if (this.seed === 'full' || !this.client.throttleUpload) return;
+    let dl = 0;
+    for (const t of this.client.torrents) if ((t.progress || 0) < 1) dl += (t.downloadSpeed || 0);
+    this.client.throttleUpload(Math.max(0, Math.floor(dl * 0.5)));
+  }
+  // Note when a torrent was last actively used (streamed/loaded) so the idle
+  // reaper can unload it — the "transit lounge" model: hold in the engine only
+  // what is being watched; the library keeps the row + file for a later stream.
+  touch(infohash) { const t = this.get(infohash); if (t) t._sbxAccess = Date.now(); }
+  // Unload (KEEP data) torrents idle longer than idleMs so a viewed-then-left
+  // torrent stops occupying the engine (and, if seeding is on, stops seeding).
+  reapIdle(idleMs = this.idleMs) {
+    const now = Date.now();
+    for (const t of [...this.client.torrents]) {
+      if (now - (t._sbxAccess || 0) > idleMs) {
+        try { t.destroy({ destroyStore: false }, () => {}); } catch (e) { /* noop */ }
+      }
+    }
   }
   // torrentId is anything WebTorrent's add() accepts: a magnet URI, an http(s)
   // URL to a .torrent file (fetched by WebTorrent), a .torrent Buffer, or an
@@ -38,6 +73,7 @@ export class Engine {
       const done = () => {
         if (settled) return;
         settled = true; clearTimeout(to);
+        t._sbxAccess = Date.now();   // fresh add — don't let the idle reaper drop it
         resolve({
           infohash: t.infoHash, name: t.name || (t.infoHash || 'torrent'),
           // canonical magnet — stored by the library regardless of the source
@@ -78,10 +114,12 @@ export class Engine {
   // is actively viewed — so a restart never re-verifies N files at once.
   async ensureLoaded(infohash, magnet) {
     const existing = this.get(infohash);
-    if (existing) return existing;
+    if (existing) { existing._sbxAccess = Date.now(); return existing; }
     if (!magnet) return null;
     await this.add(magnet);
-    return this.get(infohash);
+    const t = this.get(infohash);
+    if (t) t._sbxAccess = Date.now();
+    return t;
   }
   stats(infohash) {
     const t = this.get(infohash); if (!t) return null;
