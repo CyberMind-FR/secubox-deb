@@ -1,3 +1,18 @@
+secubox-torrent (2.2.4-1~bookworm1) bookworm; urgency=high
+
+  * PERF FIX (event-loop peg / board-wide slowdown / torrent 503): the engine
+    kept every streamed torrent loaded and SEEDED completed movies to peers with
+    no upload cap, pegging the single JS event loop at 100% CPU for hours.
+    We are a viewing SAS, NOT a seedbox:
+    - upload is capped at HALF the live download bandwidth, and drops to 0 once a
+      torrent is 100% (tuneUpload every 5s) — no seeding of finished content;
+    - maxConns capped (default 20);
+    - idle torrents are unloaded from the engine after 15min (data kept) —
+      transit-lounge model. TORRENT_SEED=full re-enables real seeding.
+  * rename app entry server.js -> webtorrent-server.js (clarity).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 17:30:00 +0200
+
 secubox-torrent (2.2.3-1~bookworm1) bookworm; urgency=medium
 
   * api: /status now also returns library headline counts (conserved /

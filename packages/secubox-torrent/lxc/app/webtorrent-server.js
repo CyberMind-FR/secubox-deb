@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-// SecuBox-Deb :: secubox-torrent :: server.js — CyberMind https://cybermind.fr
+// SecuBox-Deb :: secubox-torrent :: webtorrent-server.js — CyberMind https://cybermind.fr
 //
 // Wires env → Engine/Library/buildApi, serves the player webui, and schedules
 // the ephemeral-torrent purge sweep. `webtorrent` and `@fastify/static` are
@@ -109,6 +109,13 @@ export async function start() {
     port: Number(process.env.TORRENT_PORT || 8090),
     ttl: Number(process.env.TORRENT_EPHEMERAL_TTL_HOURS || 6) * 3600,
     floor: Number(process.env.TORRENT_DISK_FLOOR_GB || 5) * 1e9,
+    // Perf / anti-seedbox knobs (see engine.js):
+    maxConns: Number(process.env.TORRENT_MAX_CONNS || 20),
+    // 'full' = real seedbox (uncapped); anything else = seed at ½ download BW
+    // while downloading and 0 once complete.
+    seed: process.env.TORRENT_SEED === 'full' ? 'full' : false,
+    // Unload a torrent from the engine after this long with no stream (data kept).
+    idleMs: Number(process.env.TORRENT_IDLE_MIN || 15) * 60000,
   };
 
   const { default: WebTorrent } = await import('webtorrent');
@@ -126,14 +133,20 @@ export async function start() {
   const fastifyStatic = await import('@fastify/static');
   await app.register(fastifyStatic.default, { root: '/opt/secubox-torrent/www' });
 
+  // Fast tick: keep upload capped at ½ the live download bandwidth (→ 0 once
+  // everything is complete, so a finished movie never seeds/pegs the core).
+  setInterval(() => { try { engine.tuneUpload(); } catch (e) { /* noop */ } }, 5000).unref();
+  // Slow tick: opt-in purge (expired ephemerals + disk floor) AND unload idle
+  // torrents from the engine (transit-lounge model — data stays in the library).
   setInterval(() => {
     runPurge(engine, library, { diskFloorBytes: cfg.floor, diskFreeBytes });
+    try { engine.reapIdle(); } catch (e) { /* noop */ }
   }, 300000);
 
   await app.listen({ host: '0.0.0.0', port: cfg.port });
   return app;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('server.js')) {
+if (process.argv[1] && process.argv[1].endsWith('webtorrent-server.js')) {
   start().catch((err) => { console.error(err); process.exit(1); });
 }

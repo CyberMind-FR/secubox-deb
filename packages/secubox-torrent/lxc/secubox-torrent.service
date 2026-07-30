@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 WorkingDirectory=/opt/secubox-torrent/app
 EnvironmentFile=/opt/secubox-torrent/torrent.env
-ExecStart=/usr/bin/node server.js
+ExecStart=/usr/bin/node webtorrent-server.js
 Restart=on-failure
 RestartSec=5
 
