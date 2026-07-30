@@ -855,10 +855,53 @@ Examples:
 EOF
 }
 
+# ============================================================================
+# Upgrade (detection + safe apply)
+# ============================================================================
+
+# Extract "Nextcloud X.Y.Z is available" from occ update:check.
+_nc_avail() { occ update:check 2>/dev/null | grep -oiE 'Nextcloud [0-9]+\.[0-9]+\.[0-9]+ is available' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
+_nc_current() { occ --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1; }
+
+# check-upgrade — non-destructive: prints JSON {current, latest, available, major_jump}.
+cmd_check_upgrade() {
+    if ! lxc_running; then echo '{"available":false,"error":"container not running"}'; return; fi
+    local cur avail available=false major=false
+    cur=$(_nc_current); avail=$(_nc_avail)
+    if [ -n "$avail" ]; then available=true; [ "${avail%%.*}" != "${cur%%.*}" ] && major=true; fi
+    printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s}\n' "$cur" "${avail:-$cur}" "$available" "$major"
+}
+
+# upgrade — apply via Nextcloud's OFFICIAL updater.phar (handles backup + code
+# swap + app + migrations, and NEVER crosses a major on its own). We still
+# refuse an available cross-major explicitly so the operator does majors by hand.
+cmd_upgrade() {
+    lxc_running || { error "container not running"; return 1; }
+    local cur avail; cur=$(_nc_current); avail=$(_nc_avail)
+    [ -n "$avail" ] || { log "Already up to date (${cur})"; return 0; }
+    if [ "${avail%%.*}" != "${cur%%.*}" ]; then
+        error "Refusing cross-major upgrade ${cur} → ${avail} — Nextcloud requires sequential majors; run the updater manually."
+        return 1
+    fi
+    log "Upgrading Nextcloud ${cur} → ${avail} via the official updater…"
+    if ! lxc_attach "test -f /var/www/nextcloud/updater/updater.phar"; then
+        error "updater.phar not found — cannot upgrade safely"; return 1
+    fi
+    # The updater takes its own backup under data/updater-*/backups and applies
+    # the release + occ upgrade. maintenance mode is handled by it.
+    lxc_attach "cd /var/www/nextcloud && sudo -u www-data php updater/updater.phar --no-interaction" \
+        || { error "updater failed — check occ maintenance:mode and the updater backup"; return 1; }
+    occ upgrade --no-interaction 2>/dev/null || true
+    occ maintenance:mode --off 2>/dev/null || true
+    log "Upgraded. Verify: nextcloudctl occ status"
+}
+
 case "${1:-}" in
     components) cmd_components ;;
     status) cmd_status ;;
     access) cmd_access ;;
+    check-upgrade) cmd_check_upgrade ;;
+    upgrade) cmd_upgrade ;;
     install) cmd_install ;;
     setup) shift; cmd_setup "$@" ;;
     uninstall) cmd_uninstall ;;
