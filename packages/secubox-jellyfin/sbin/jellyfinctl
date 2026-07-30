@@ -263,17 +263,21 @@ _partner_media_path() {
             toml_get_sec /etc/secubox/lyrion.toml library path "/data/music"
             ;;
         peertube)
-            # PeerTube stores its on-disk videos under storage/videos. Prefer an
-            # explicit key in peertube.toml, then a storage base, else the
-            # confirmed host default (/data/peertube/storage bound into the LXC).
+            # PeerTube stores its web-optimised videos under storage/web-videos
+            # (older layouts used storage/videos). Prefer an explicit key in
+            # peertube.toml, then a storage base, else the confirmed host default.
             local v base
             v=$(toml_get /etc/secubox/peertube.toml videos "")
             [ -z "$v" ] && v=$(toml_get /etc/secubox/peertube.toml videos_dir "")
             if [ -n "$v" ]; then echo "$v"; return; fi
             base=$(toml_get /etc/secubox/peertube.toml storage "")
             [ -z "$base" ] && base=$(toml_get /etc/secubox/peertube.toml storage_dir "")
-            if [ -n "$base" ]; then echo "${base%/}/videos"; return; fi
-            echo "/data/peertube/storage/videos"
+            if [ -z "$base" ]; then base="/data/peertube/storage"; fi
+            base="${base%/}"
+            # web-videos is the current PeerTube layout; fall back to videos.
+            if [ -d "$base/web-videos" ]; then echo "$base/web-videos"
+            elif [ -d "$base/videos" ]; then echo "$base/videos"
+            else echo "$base/web-videos"; fi
             ;;
         *)
             echo ""
@@ -499,6 +503,34 @@ cmd_install() {
     jq -nc '{ok:true}'
 }
 
+# Self-provision an API key WITHOUT any admin password, by inserting it straight
+# into Jellyfin's ApiKeys table (the module owns the LXC as root — this is the
+# point of a SecuBox module). Jellyfin caches keys in memory, so the service is
+# bounced to pick it up. Used by install-lxc first-run as the robust fallback
+# when the HTTP /Startup/* wizard flow can't mint one (Jellyfin 10.11 quirk).
+cmd_apikey_mint() {
+    local name="${1:-secubox}"
+    local db="$LXC_PATH/$LXC_NAME/rootfs/var/lib/jellyfin/data/jellyfin.db"
+    command -v sqlite3 >/dev/null 2>&1 || { err "sqlite3 not found on host"; exit 2; }
+    [ -f "$db" ] || { err "jellyfin.db not found ($db) — LXC provisioned?"; exit 2; }
+    local token now was_running=false
+    token=$(openssl rand -hex 16)
+    now=$(date -u +"%Y-%m-%d %H:%M:%S.0000000")
+    lxc_running && was_running=true || true
+    [ "$was_running" = true ] && lxc-attach -n "$LXC_NAME" -- systemctl stop jellyfin >/dev/null 2>&1 || true
+    sleep 2
+    if ! sqlite3 "$db" "DELETE FROM ApiKeys WHERE Name='$name'; INSERT INTO ApiKeys (DateCreated,DateLastActivity,Name,AccessToken) VALUES ('$now','$now','$name','$token');"; then
+        err "sqlite insert failed"
+        [ "$was_running" = true ] && lxc-attach -n "$LXC_NAME" -- systemctl start jellyfin >/dev/null 2>&1 || true
+        exit 1
+    fi
+    ( umask 077; printf '%s' "$token" > "$APIKEY_FILE" )
+    chown secubox-jellyfin:secubox-jellyfin "$APIKEY_FILE" 2>/dev/null || true
+    chmod 600 "$APIKEY_FILE"
+    [ "$was_running" = true ] && lxc-attach -n "$LXC_NAME" -- systemctl start jellyfin >/dev/null 2>&1 || true
+    jq -nc --arg n "$name" '{ok:true, name:$n, minted:true}'
+}
+
 cmd_help() {
     cat <<EOF
 jellyfinctl $VERSION — SecuBox Jellyfin (native-LXC) controller
@@ -514,6 +546,8 @@ Usage: jellyfinctl <verb> [args]   (every verb emits JSON on stdout)
   partner unwire <name>          Remove the bind + virtual folder + state
   check-upgrade                  {current, latest, available, major_jump}
   upgrade                        apt-upgrade jellyfin in the LXC (refuses cross-major)
+  apikey-mint [name]             Self-provision an API key via the Jellyfin DB (no
+                                 admin password needed; root LXC control) — bounces jellyfin
   install                        Provision the LXC + install Jellyfin (idempotent)
   help                           This message
 
@@ -548,6 +582,7 @@ main() {
             esac ;;
         check-upgrade) cmd_check_upgrade "$@" ;;
         upgrade)       cmd_upgrade "$@" ;;
+        apikey-mint)   cmd_apikey_mint "$@" ;;
         install)       cmd_install "$@" ;;
         --version|-V)  echo "jellyfinctl $VERSION" ;;
         help|-h|--help|"") cmd_help ;;
