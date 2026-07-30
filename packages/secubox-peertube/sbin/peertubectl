@@ -104,6 +104,19 @@ cmd_upload() {
     printf '{"status":"done","shortUUID":"%s","url":"%s"}\n' "$uuid" "$url"
 }
 
+# cmd_check_upgrade — non-destructive: installed (peertube-latest/package.json)
+# vs the latest GitHub release. Prints JSON {current, latest, available, major_jump}.
+# The actual upgrade is cmd_upgrade (via process-ops), already wired.
+cmd_check_upgrade() {
+    local cur latest available=false major=false
+    cur=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c 'cat /var/www/peertube/peertube-latest/package.json 2>/dev/null' 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
+    latest=$(curl -s --max-time 10 https://api.github.com/repos/Chocobozzz/PeerTube/releases/latest 2>/dev/null | jq -r '.tag_name // empty' | sed 's/^v//')
+    if [ -n "$latest" ] && [ -n "$cur" ] && [ "$latest" != "$cur" ]; then
+        available=true; [ "${latest%%.*}" != "${cur%%.*}" ] && major=true
+    fi
+    printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s}\n' "$cur" "${latest:-$cur}" "$available" "$major"
+}
+
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {
     lxc-info -n "$LXC_NAME" -P "$LXC_PATH" 2>/dev/null \
@@ -322,6 +335,7 @@ main() {
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         upload) cmd_upload "$@" ;;
+        check-upgrade) cmd_check_upgrade "$@" ;;
         process-ops) cmd_process_ops "$@" ;;
         reset-admin-password) cmd_reset_admin_password "$@" ;;
         upgrade) cmd_upgrade "$@" ;;
