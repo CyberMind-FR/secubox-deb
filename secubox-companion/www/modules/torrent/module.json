@@ -9,7 +9,8 @@
   "capabilities": ["read", "write"],
   "routes": [{ "path": "", "label": "Bibliothèque" }],
   "metrics": [
-    { "key": "active", "label": "actifs" },
-    { "key": "webrtc", "label": "WebRTC" }
+    { "key": "conserved", "label": "conservés" },
+    { "key": "downloading", "label": "en cours" },
+    { "key": "to_peertube", "label": "→ peertube" }
   ]
 }
