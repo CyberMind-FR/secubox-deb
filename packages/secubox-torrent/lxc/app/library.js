@@ -87,6 +87,18 @@ export class Library {
     return this.db.prepare('SELECT infohash, magnet FROM torrents WHERE complete=0 OR complete IS NULL').all();
   }
 
+  // Library headline counts for the dashboard cardlet (conserved / still
+  // downloading / linked to PeerTube). Single query, all real rows.
+  counts() {
+    const r = this.db.prepare(`SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN kept=1 THEN 1 ELSE 0 END) AS conserved,
+        SUM(CASE WHEN complete=0 OR complete IS NULL THEN 1 ELSE 0 END) AS downloading,
+        SUM(CASE WHEN peertube_status IS NOT NULL AND peertube_status <> '' THEN 1 ELSE 0 END) AS to_peertube
+      FROM torrents`).get();
+    return { total: r.total | 0, conserved: r.conserved | 0, downloading: r.downloading | 0, to_peertube: r.to_peertube | 0 };
+  }
+
   remove(infohash) { this.db.prepare('DELETE FROM torrents WHERE infohash=?').run(infohash); }
 
   // Torrents whose opt-in purge time has passed — the ONLY rows the sweep deletes.
