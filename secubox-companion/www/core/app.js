@@ -66,7 +66,7 @@ function toggleTheme() {
 
 // ── favourites (parameterizable, localStorage) ─────────────────────
 // Default = the current base modules + photoprism (peertube is already in).
-const DEFAULT_FAVS = ['waf', 'system', 'billets', 'podcasteur', 'peertube', 'exposure', 'wireguard', 'photoprism'];
+const DEFAULT_FAVS = ['waf', 'system', 'billets', 'podcasteur', 'peertube', 'torrent', 'exposure', 'wireguard', 'photoprism'];
 function getFavs() {
   try { const f = JSON.parse(localStorage.getItem('sbx-favs')); if (Array.isArray(f)) return new Set(f); } catch (e) { /* noop */ }
   return new Set(DEFAULT_FAVS);
