@@ -214,7 +214,11 @@
 
   function api(path, opts) {
     opts = opts || {};
-    var headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers, authHeaders());
+    // Only advertise a JSON body when we actually send one — a POST with
+    // Content-Type: application/json but no body makes Fastify 400
+    // (FST_ERR_CTP_EMPTY_JSON_BODY), which broke keep/remove/conserve.
+    var headers = Object.assign({}, opts.headers, authHeaders());
+    if (opts.body != null) headers['Content-Type'] = 'application/json';
     return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
       if (res.status === 401) {
         errorToast('🔒 Login required');
@@ -296,6 +300,7 @@
               (eph ? ' <span class="muted">(purge ' + fmtWhen(eph) + ')</span>' : '') +
             '</div>' +
             '<div class="row-actions">' +
+              (pct == null ? '<button class="btn sm" data-action="resume" title="Charger / reprendre">▶ Reprendre</button>' : '') +
               ptHtml + purgeHtml +
               '<button class="btn sm danger" data-action="remove">🗑</button>' +
             '</div>' +
@@ -384,6 +389,13 @@
         toast('📌 Torrent conservé');
         refreshList();
       }).catch(function (e) { errorToast('Échec: ' + e.message); });
+      return;
+    }
+    if (action === 'resume') {
+      api(API + '/resume/' + encodeURIComponent(ih), { method: 'POST' }).then(function (res) {
+        toast(res && res.status === 'resuming' ? '▶ Reprise du téléchargement…' : '▶ Chargé');
+        refreshList();
+      }).catch(function (e) { errorToast('Reprendre: ' + e.message); });
       return;
     }
     if (action === 'conserve') {

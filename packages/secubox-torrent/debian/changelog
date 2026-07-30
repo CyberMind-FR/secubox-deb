@@ -1,26 +1,17 @@
-secubox-torrent (2.2.0-1~bookworm1) bookworm; urgency=medium
+secubox-torrent (2.2.1-1~bookworm1) bookworm; urgency=high
 
-  * Torrent is now a "sas" (staging area): downloads are CONSERVED BY DEFAULT —
-    nothing auto-disappears anymore (fixes "yesterday's transfers vanished").
-    Purge is OPT-IN: POST /api/v1/torrent/ephemeral/<ih> {seconds} marks a
-    torrent to auto-delete after a delay; the sweep only ever deletes torrents
-    whose opt-in purge time has passed (disk-floor safety valve reclaims marked-
-    ephemeral only, never conserved content).
-  * Library keep-by-default + ephemeral_until model (+ migration that flips
-    legacy kept=0 rows to conserved, so an upgrade never purges existing data)
-    + peertube_status/peertube_url columns for the coming PeerTube conserve.
-  * resumeLibrary no longer re-adds every torrent to the engine on restart
-    (that re-verified/re-hashed each file — the CPU storm that saturated the
-    loop). The library keeps every conserved row; the engine loads a torrent
-    LAZILY the first time it is streamed (Engine.ensureLoaded on /stream and
-    /files). Restart-survival + no re-hash verified live on gk2.
-  * Conserve to PeerTube: POST /api/v1/torrent/conserve/<ih> drops an upload
-    request on the shared /data volume for a NEW host-side processor
-    (secubox-torrent-conserve.timer) which holds the PeerTube creds (via
-    peertubectl) and uploads the completed video (unlisted), then drops a
-    result the LXC folds into the library (peertube_url). Panel: "📼 Conserver"
-    per torrent (+ a link once done) and a "⏳ Purger dans…" delay picker.
-    Conserved torrents show "chargé à la lecture" (lazy) instead of a bogus 0%.
+  * Fix "Bad Request" on keep/remove/conserve: the panel sent
+    Content-Type: application/json with no body, which Fastify 400s
+    (FST_ERR_CTP_EMPTY_JSON_BODY). The webui now only sets that header when it
+    sends a body, and the server tolerates an empty json body.
+  * Fix "les torrents ne repartent pas": incomplete downloads now RESUME after a
+    restart. A `complete` flag (set on the WebTorrent 'done' event, kept in sync
+    on /list) lets resumeLibrary re-add ONLY still-downloading torrents (complete
+    ones stay lazy — no boot re-hash storm). New POST /resume/<ih> +  a
+    "▶ Reprendre" panel button loads/resumes a lazy torrent on demand and
+    corrects its flag (covers torrents from before the flag existed). Migration
+    marks pre-existing rows complete=1 (no storm); use ▶ Reprendre once to
+    resume an old unfinished download.
 
- -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 09:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 10:00:00 +0200
 
