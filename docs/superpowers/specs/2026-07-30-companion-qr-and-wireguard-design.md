@@ -34,3 +34,26 @@
 - APK already exists (in.secubox.companion, Android TV + phone). WG embed = new
   plugin + native build; QR = pure www.
 - Deferred: iOS WG (NetworkExtension), multi-box tunnel routing.
+
+## Decisions (2026-07-30)
+- WireGuard: PHASED — v1 delegate to official WG app, v2 embed VpnService plugin.
+- QR pairing: implement AFTER Jellyfin lands (avoid companion file conflicts).
+- QR codes: render with an EMOJI in the centre (branded QR, per-resource emoji).
+
+## Distribution (answer)
+- **Direct from companion.gk2.secubox.in = YES, already live** (APK hosted +
+  URL-installable). This is the sovereign channel — no Google gatekeeper, fits
+  the appliance model. Add a download page + a QR to the .apk for phones, and
+  sideload/adb for Android TV (Freebox). RECOMMENDED primary channel.
+- **Full offline = YES**: PWA service-worker caches the shell; the APK also
+  bundles www as assets, so the UI runs with no network. Live data still needs
+  the box reachable (directly on LAN, or via the WG tunnel when remote).
+- **Autoconnect = YES**: after first pairing the (URL+token) is stored and the
+  app auto-connects on launch; QR pairing removes the typing step on a TV. A
+  build can also bake a default box URL so a fleet APK autoconnects out-of-box.
+- **Play Store = POSSIBLE, with overhead**: needs a Play Developer account, a
+  RELEASE-signed AAB (not debug), privacy policy, target-API + content rating,
+  TV quality-tier for Android TV, and review may flag a WebView-wrapper that
+  points at a private box (minimum-functionality policy; needs test creds).
+  Feasible for reach, but runs against the sovereign ethos — recommend direct
+  distribution now, optional Play/AAB later if public reach is wanted.
