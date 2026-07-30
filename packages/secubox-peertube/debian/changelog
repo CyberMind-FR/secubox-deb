@@ -1,3 +1,11 @@
+secubox-peertube (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * peertubectl: new `check-upgrade` verb (non-destructive: current package.json
+    version vs latest GitHub release, available/major_jump). Companion upgrade
+    detection. 'Upgrade when present.'
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 10:00:00 +0200
+
 secubox-peertube (1.2.1-1~bookworm2) bookworm; urgency=medium
   * peertubectl: new `upload <file> <title> [channelId] [privacy]` verb — uploads
     a video file (on the host) to PeerTube via the HTTP API (OAuth root token,
