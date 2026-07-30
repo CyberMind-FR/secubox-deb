@@ -1,0 +1,108 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+case "$1" in
+  configure)
+    # Ensure secubox user exists (shared across all secubox-* modules).
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+
+    # Dedicated per-module system user (CSPN privilege separation). Holds the
+    # host-side state dir; the in-LXC app runs under the container's own root
+    # (idmap), not this user.
+    id -u secubox-ytsas >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox/ytsas --shell /usr/sbin/nologin secubox-ytsas
+
+    # Runtime + state directories (shared conventions; do NOT chown the
+    # /etc/secubox, /var/lib/secubox or /data PARENTS here — only leaf dirs).
+    install -d -o root -g root -m 1777 /run/secubox
+    [ -d /var/lib/secubox ] || install -d -o secubox -g secubox -m 755 /var/lib/secubox
+    [ -d /etc/secubox ] || install -d -o secubox -g secubox -m 755 /etc/secubox
+    # Leaf dirs owned by the dedicated module user (host state) — parents untouched.
+    install -d -o secubox-ytsas -g secubox-ytsas -m 755 /var/lib/secubox/ytsas
+    # /data may not be a mount yet on first apt run — best-effort, install-lxc.sh
+    # re-creates + chowns it to the LXC idmap uid when it provisions.
+    install -d -m 755 /data/ytsas 2>/dev/null || true
+
+    # Parse the operator-facing TOML into the env vars install-lxc.sh expects.
+    # Minimal grep parse — matches the flat `key = value` lines.
+    YTSAS_MAX_ACTIVE=$(grep -E '^max_active' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    YTSAS_TTL=$(grep -E '^ephemeral_ttl_hours' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    YTSAS_FLOOR=$(grep -E '^disk_floor_gb' /etc/secubox/ytsas.toml 2>/dev/null | grep -oE '[0-9]+' | head -1)
+    export YTSAS_MAX_ACTIVE YTSAS_TTL YTSAS_FLOOR
+
+    # Provision/refresh the dedicated yt-dlp LXC. This is SLOW (debootstrap +
+    # pip install yt-dlp/fastapi/uvicorn) so detach it as a transient oneshot
+    # (--no-block) instead of blocking dpkg for minutes; falls back to a direct
+    # synchronous run when systemd-run is unavailable. Never fail the postinst.
+    if command -v systemd-run >/dev/null 2>&1; then
+      systemd-run --no-block --collect --unit=secubox-ytsas-provision \
+        --setenv=YTSAS_MAX_ACTIVE="${YTSAS_MAX_ACTIVE:-3}" \
+        --setenv=YTSAS_TTL="${YTSAS_TTL:-6}" \
+        --setenv=YTSAS_FLOOR="${YTSAS_FLOOR:-5}" \
+        bash /usr/lib/secubox/ytsas/install-lxc.sh \
+        || echo "secubox-ytsas: LXC provisioning deferred (run /usr/lib/secubox/ytsas/install-lxc.sh manually)"
+    else
+      bash /usr/lib/secubox/ytsas/install-lxc.sh \
+        || echo "secubox-ytsas: LXC provisioning deferred (run /usr/lib/secubox/ytsas/install-lxc.sh manually)"
+    fi
+
+    # Load the egress visibility scope for the ytsas LXC's veth.
+    if [ -f /etc/nftables.d/zz-ytsas-egress.nft ]; then
+      nft -f /etc/nftables.d/zz-ytsas-egress.nft 2>/dev/null || true
+    fi
+
+    # Symlink the public vhost into sites-enabled (idempotent). Proxies
+    # ytsas.<host>.<suffix> -> ytsas LXC at 10.100.0.180:8091.
+    if [ -f /etc/nginx/sites-available/ytsas.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+      ln -sf ../sites-available/ytsas.conf /etc/nginx/sites-enabled/ytsas.conf
+    fi
+
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+
+    # Register the HAProxy exposure DURABLY. ytsas is a WAF-bypass vhost by
+    # design — like torrent/nc/photoprism/matrix, the mitmproxy inspection chain
+    # breaks its Range streaming / large media transfers — so it declares
+    # `waf_bypass = true` (the sanctioned, auditable opt-in honoured by
+    # haproxyctl) and routes straight to host nginx (nginx_vhosts). The regen is
+    # drift-guarded (refuses when un-migrated hand-edit vhosts remain).
+    if [ -f /etc/secubox/haproxy.toml ]; then
+      if [ -f /etc/default/secubox ]; then
+        . /etc/default/secubox 2>/dev/null || true
+      fi
+      SBX_HOST="${SECUBOX_HOSTNAME:-gk2}"; SBX_SUFFIX="${SECUBOX_DOMAIN_SUFFIX:-secubox.in}"
+      Y_DOMAIN="ytsas.${SBX_HOST}.${SBX_SUFFIX}"
+      Y_NAME="ytsas_$(echo "${SBX_HOST}.${SBX_SUFFIX}" | tr '.' '_')"
+      if ! grep -q "^\[vhosts\.${Y_NAME}\]" /etc/secubox/haproxy.toml; then
+        {
+          printf '\n[vhosts.%s]\n' "$Y_NAME"
+          printf 'domain = "%s"\n' "$Y_DOMAIN"
+          printf 'backend = "nginx_vhosts"\n'
+          printf 'waf_bypass = true\n'
+          printf 'ssl = true\n'
+          printf 'ssl_redirect = true\n'
+          printf 'enabled = true\n'
+        } >> /etc/secubox/haproxy.toml
+      fi
+      if command -v haproxyctl >/dev/null 2>&1; then
+        if haproxyctl generate >/dev/null 2>&1; then
+          systemctl reload haproxy 2>/dev/null || true
+        else
+          echo "secubox-ytsas: haproxy.toml updated; deferred regen (drift-guarded — run 'haproxyctl generate' once the board's hand-edit vhosts are migrated)" >&2
+        fi
+      fi
+    fi
+
+    # Enable the host-side "conserve to PeerTube" queue processor timer.
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now secubox-ytsas-conserve.timer >/dev/null 2>&1 || true
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

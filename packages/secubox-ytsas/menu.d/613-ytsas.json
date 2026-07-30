@@ -1,0 +1,9 @@
+{
+  "name": "YouTube SAS",
+  "path": "/ytsas/",
+  "icon": "🎞️",
+  "category": "mind",
+  "order": 613,
+  "description": "YouTube/web-media SAS (ytsas.gk2.secubox.in)",
+  "id": "ytsas"
+}

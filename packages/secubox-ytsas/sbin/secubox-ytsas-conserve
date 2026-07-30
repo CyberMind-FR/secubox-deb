@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-ytsas-conserve
+# Host-side drain of the ytsas "conserve to PeerTube" queue. The ytsas LXC drops
+# a request in $DATA/.conserve-queue (it has the video file but NOT the PeerTube
+# creds); this host job — which DOES have the creds via peertubectl — uploads the
+# file and drops a result in $DATA/.conserve-results the LXC reads. The whole
+# point of the split is to keep PeerTube creds off the LXC.
+set -uo pipefail
+readonly MODULE="ytsas-conserve"
+
+DATA="${SECUBOX_YTSAS_DATA:-/data/ytsas}"
+QDIR="$DATA/.conserve-queue"
+RDIR="$DATA/.conserve-results"
+TOML="${SECUBOX_YTSAS_TOML:-/etc/secubox/ytsas.toml}"
+# PeerTube channel/privacy: env override → ytsas.toml [peertube] → default.
+_toml() { grep -E "^[[:space:]]*$1[[:space:]]*=" "$TOML" 2>/dev/null | grep -oE '[0-9]+' | head -1; }
+CHANNEL="${SECUBOX_YTSAS_PEERTUBE_CHANNEL:-$(_toml channel)}"; CHANNEL="${CHANNEL:-1}"
+PRIVACY="${SECUBOX_YTSAS_PEERTUBE_PRIVACY:-$(_toml privacy)}"; PRIVACY="${PRIVACY:-2}"
+# LXC app runs as the container's root → host uid 100000 (idmap). Result files
+# the host writes must be owned by it so the app can read them.
+LXC_UID="${SECUBOX_YTSAS_LXC_UID:-100000}"
+
+log() { logger -t sbx-"$MODULE" "$*"; }
+
+[ -d "$QDIR" ] || exit 0
+if ! command -v peertubectl >/dev/null 2>&1; then
+  log "peertubectl not installed (secubox-peertube) — leaving queue for later"
+  exit 0
+fi
+mkdir -p "$RDIR"
+# Both dirs must be OWNED by the LXC app (idmap uid), not by host-root: the LXC
+# writes queue files and unlinks drained results, which needs write on the DIR
+# itself (a host-root-owned dir shows up as nobody/unwritable inside the
+# unprivileged container). root (this job) can write into a 100000-owned dir
+# regardless, so 100000-ownership satisfies both sides.
+chown "$LXC_UID:$LXC_UID" "$QDIR" "$RDIR" 2>/dev/null || true
+
+_result() {  # <id> <json>
+  printf '%s' "$2" > "$RDIR/$1.json"
+  chown "$LXC_UID:$LXC_UID" "$RDIR/$1.json" 2>/dev/null || true
+  chmod 0644 "$RDIR/$1.json" 2>/dev/null || true
+}
+
+shopt -s nullglob
+for req in "$QDIR"/*.json; do
+  id=$(jq -r '.id // empty' "$req" 2>/dev/null)
+  name=$(jq -r '.name // .title // empty' "$req" 2>/dev/null)
+  file=$(jq -r '.file // empty' "$req" 2>/dev/null)
+  rm -f "$req"
+  [ -n "$id" ] || continue
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    _result "$id" '{"status":"error","error":"video file not found"}'
+    log "file missing for $id"; continue
+  fi
+  [ -n "$name" ] || name="$(basename "$file")"
+  res=$(peertubectl upload "$file" "$name" "$CHANNEL" "$PRIVACY" 2>/dev/null | tail -1)
+  url=$(printf '%s' "$res" | jq -r '.url // empty' 2>/dev/null)
+  if [ -n "$url" ]; then
+    _result "$id" "$(printf '{"status":"done","url":"%s"}' "$url")"
+    log "conserved $id -> $url"
+  else
+    _result "$id" '{"status":"error","error":"peertube upload failed"}'
+    log "upload FAILED for $id"
+  fi
+done

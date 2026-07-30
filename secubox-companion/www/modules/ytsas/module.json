@@ -1,0 +1,16 @@
+{
+  "id": "ytsas",
+  "name": "YouTube SAS",
+  "module": "MIND",
+  "icon": "🎞️",
+  "description": "SAS de récupération & lecture web-média: lien → yt-dlp → lecture, garder/purger.",
+  "api_base": "/api/v1/ytsas",
+  "status_endpoint": "/api/v1/ytsas/status",
+  "capabilities": ["read", "write"],
+  "routes": [{ "path": "", "label": "Bibliothèque" }],
+  "metrics": [
+    { "key": "conserved", "label": "conservés" },
+    { "key": "downloading", "label": "en cours" },
+    { "key": "to_peertube", "label": "→ peertube" }
+  ]
+}

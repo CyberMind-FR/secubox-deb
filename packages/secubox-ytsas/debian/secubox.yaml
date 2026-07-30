@@ -1,0 +1,13 @@
+# debian/secubox.yaml
+# Auto-generated from debian/control
+
+name: secubox-ytsas
+category: mind
+tier: lite
+description: "YouTube/web-media SAS for SecuBox (LXC-native)"
+
+depends:
+  - secubox-core
+
+ui:
+  path: /srv/secubox/www/ytsas

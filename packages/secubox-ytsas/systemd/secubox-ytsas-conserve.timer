@@ -1,0 +1,9 @@
+[Unit]
+Description=SecuBox ytsas conserve — drain the PeerTube upload queue
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=60
+
+[Install]
+WantedBy=timers.target

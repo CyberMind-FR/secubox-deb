@@ -1,0 +1,26 @@
+# SecuBox-Deb :: secubox-ytsas :: host nft egress scope
+# CyberMind — https://cybermind.fr
+#
+# Scopes the ytsas LXC's egress. FORWARD/OUTPUT are policy-accept repo-wide
+# (see CLAUDE.md nftables rules) — no blanket DROP is introduced here. yt-dlp
+# needs broad HTTPS egress to reach YouTube and every yt-dlp-supported site, so
+# this is an explicit visibility tap (LOG on new connections) on the LXC's
+# veth, not an allow/deny gate.
+#
+# Own, fully self-contained table + base chain (mirrors the torrent /
+# secubox-p2p egress drop-ins): loads independently of any other table already
+# present on the board, and never issues a global ruleset reset.
+#
+# Matches the exact veth pair name pinned by install-lxc.sh
+# (`lxc.net.0.veth.pair = veth-ytsas0`) — LXC otherwise assigns a random
+# vethXXXXXX name on every start, which a static nft rule can't target.
+#
+# Loaded by /etc/nftables.conf via `include "/etc/nftables.d/*.nft"`. Shipped
+# as zz-ytsas-egress.nft at install time so it sorts after any table-creator
+# base file, per repo convention (feedback_nft_layered_dropins_persistence).
+table inet secubox_ytsas {
+    chain forward_ytsas {
+        type filter hook forward priority 0; policy accept;
+        iifname "veth-ytsas0" ct state new log prefix "[SECUBOX-YTSAS] " level info
+    }
+}

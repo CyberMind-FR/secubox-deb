@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# yt-dlp SAS LXC app source (FastAPI). install-lxc.sh runs the pip install
+	# (yt-dlp + fastapi + uvicorn) inside the LXC at provision time — no vendored
+	# deps ship here. Strip any __pycache__ dev artifact.
+	install -d debian/secubox-ytsas/usr/lib/secubox/ytsas/app
+	cp -r lxc/app/. debian/secubox-ytsas/usr/lib/secubox/ytsas/app/
+	find debian/secubox-ytsas/usr/lib/secubox/ytsas/app -type d -name __pycache__ -prune -exec rm -rf {} +
+	# LXC bootstrap script + in-LXC systemd unit (installed side by side so
+	# install-lxc.sh's $(dirname "$0") resolves the unit file on the board).
+	install -m 755 lxc/install-lxc.sh debian/secubox-ytsas/usr/lib/secubox/ytsas/install-lxc.sh
+	install -m 644 lxc/secubox-ytsas.service debian/secubox-ytsas/usr/lib/secubox/ytsas/secubox-ytsas.service
+	# Webui (browser player)
+	install -d debian/secubox-ytsas/usr/share/secubox/www/ytsas
+	cp -r www/ytsas/. debian/secubox-ytsas/usr/share/secubox/www/ytsas/
+	# Menu definition
+	install -d debian/secubox-ytsas/usr/share/secubox/menu.d
+	install -m 644 menu.d/613-ytsas.json debian/secubox-ytsas/usr/share/secubox/menu.d/
+	# Config
+	install -d debian/secubox-ytsas/etc/secubox
+	install -m 644 conf/ytsas.toml debian/secubox-ytsas/etc/secubox/ytsas.toml
+	# Public vhost: full standalone server{} block (own server_name), so it
+	# MUST land in sites-available/ (+ postinst symlink into sites-enabled),
+	# NOT etc/nginx/secubox.d/ — same rationale as the torrent vhost.
+	install -d debian/secubox-ytsas/etc/nginx/sites-available
+	install -m 644 nginx/ytsas.conf debian/secubox-ytsas/etc/nginx/sites-available/ytsas.conf
+	# nft egress scope: ship to /etc/nftables.d/ with a zz- prefix so it sorts
+	# after any table-creator base file (repo convention).
+	install -d debian/secubox-ytsas/etc/nftables.d
+	install -m 644 nft/ytsas-egress.nft debian/secubox-ytsas/etc/nftables.d/zz-ytsas-egress.nft
+	# Host-side "conserve to PeerTube" queue processor + timer. The ytsas app
+	# (in the LXC) drops upload requests on the shared /data volume; this host
+	# job holds the PeerTube creds (via peertubectl) and does the upload.
+	install -d debian/secubox-ytsas/usr/sbin
+	install -m 755 sbin/secubox-ytsas-conserve debian/secubox-ytsas/usr/sbin/secubox-ytsas-conserve
+	install -d debian/secubox-ytsas/usr/lib/systemd/system
+	install -m 644 systemd/secubox-ytsas-conserve.service debian/secubox-ytsas/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-ytsas-conserve.timer debian/secubox-ytsas/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Suppress auto enable/start of the in-LXC unit shipped under usr/lib/secubox;
+	# the conserve timer is enabled by postinst. (secubox-ytsas.service proper
+	# runs INSIDE the LXC, not on the host.)
+	dh_installsystemd --no-enable --no-start secubox-ytsas-conserve.timer
+	dh_installsystemd --no-enable --no-start secubox-ytsas-conserve.service
