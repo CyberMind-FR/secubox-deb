@@ -1,14 +1,14 @@
-#!/bin/bash
+#!/bin/sh
+# SecuBox Jellyfin — pre-remove
 set -e
+
 case "$1" in
-  remove|upgrade)
-    # Remove nginx location config
-    rm -f /etc/nginx/secubox.d/jellyfin.conf
-    # Stop and disable service
-    systemctl stop    secubox-jellyfin.service 2>/dev/null || true
-    systemctl disable secubox-jellyfin.service 2>/dev/null || true
-    # Reload nginx to remove location
-    systemctl reload nginx 2>/dev/null || true
-    ;;
+    remove|deconfigure|upgrade)
+        systemctl stop secubox-jellyfin.service 2>/dev/null || true
+        systemctl disable secubox-jellyfin.service 2>/dev/null || true
+        # We do not destroy the LXC here — purge does that via postrm if asked.
+        ;;
 esac
+
 #DEBHELPER#
+exit 0

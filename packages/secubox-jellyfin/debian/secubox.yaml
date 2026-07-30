@@ -1,10 +1,8 @@
 # debian/secubox.yaml
-# Auto-generated from debian/control
-
 name: secubox-jellyfin
 category: media
 tier: pro
-description: "Jellyfin media server management"
+description: "Jellyfin media server in a Debian LXC (partner library auto-wire)"
 
 depends:
   - secubox-core
@@ -14,4 +12,4 @@ api:
   health: /api/v1/jellyfin/health
 
 ui:
-  path: /srv/secubox/www/jellyfin
+  path: /jellyfin/

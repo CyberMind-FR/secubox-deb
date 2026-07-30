@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Jellyfin — initial container provisioning (idempotent, once).
+#
+# Started --no-block by the postinst: "installing the package" activates the
+# appliance. The provisioning (debootstrap + Jellyfin .deb install + config +
+# start, minutes, needs the network) runs IN THE BACKGROUND rather than blocking
+# dpkg (MODULE-COMPLIANCE.md § Install activates). install-lxc.sh is idempotent;
+# the marker below makes the unit a safe no-op after a successful bring-up.
+[Unit]
+Description=SecuBox Jellyfin — initial container provisioning (idempotent, once)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network-online.target
+Wants=network-online.target
+# install-lxc.sh writes this sentinel ONLY on a fully successful bring-up
+# (set -euo pipefail exits before mark_provisioned on any failure), so the
+# unit is a safe no-op after success (reboot / upgrade / re-install) and
+# re-runs if a prior attempt failed. Same marker `jellyfinctl install` uses.
+ConditionPathExists=!/etc/secubox/jellyfin/.lxc-provisioned
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/secubox/jellyfin/install-lxc.sh
+# Heavy provisioning: don't kill it prematurely (debootstrap + dpkg).
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

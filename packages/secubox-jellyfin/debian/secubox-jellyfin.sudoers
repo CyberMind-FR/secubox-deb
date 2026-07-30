@@ -1,0 +1,6 @@
+# SecuBox Jellyfin — the unprivileged panel/API (user `secubox`) drives the
+# Jellyfin LXC through jellyfinctl. This is the SINGLE privileged surface of the
+# module (LXC start/stop/restart, partner wire/unwire, library scan, upgrade),
+# confined and audited by the ctl itself. Command-only grant (any verb/args),
+# matching secubox-picobrew — the ctl validates its own inputs.
+secubox ALL=(root) NOPASSWD: /usr/sbin/jellyfinctl

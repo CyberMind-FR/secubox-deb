@@ -1,0 +1,10 @@
+{
+  "subtitle": "Media server",
+  "icon": "🍿",
+  "order": 81,
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "path": "/jellyfin/",
+  "category": "mind",
+  "description": "LXC-native Jellyfin media server with partner library auto-wire"
+}

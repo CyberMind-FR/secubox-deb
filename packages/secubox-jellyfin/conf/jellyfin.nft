@@ -1,0 +1,21 @@
+# /etc/nftables.d/secubox-jellyfin.nft
+# Egress observation drop-in for the Jellyfin LXC (10.100.0.170 on br-lxc).
+# Installed by secubox-jellyfin; loaded by the systemd nftables.service (which
+# reads everything under /etc/nftables.d) and re-applied idempotently by the
+# postinst.
+#
+# CSPN surface-minimisation hook. It lives in its OWN dedicated table so it can
+# never weaken the board's base `inet filter` DEFAULT DROP posture: the base
+# forward chain (priority 0, policy drop) remains authoritative. This chain
+# hooks BEFORE it (priority filter - 10) purely to COUNT the container's
+# outbound — no accept/drop verdict of its own — giving the operator a named
+# counter and a ready place to tighten Jellyfin's egress to an explicit DROP
+# later. Purely additive and non-fatal.
+table inet secubox-jellyfin {
+    counter jellyfin_egress { }
+
+    chain egress {
+        type filter hook forward priority filter - 10; policy accept;
+        iifname "br-lxc" ip saddr 10.100.0.170 counter name jellyfin_egress
+    }
+}

@@ -1,0 +1,32 @@
+# /etc/secubox/jellyfin.toml — SecuBox Jellyfin (Media Server, LXC-native)
+
+[lxc]
+name         = "jellyfin"
+ip           = "10.100.0.170"
+gateway      = "10.100.0.1"
+bridge       = "br-lxc"
+path         = "/data/lxc"
+debian_suite = "bookworm"
+
+[jellyfin]
+# Jellyfin listens on :8096 inside the LXC. The official upstream .deb is
+# installed by install-lxc.sh (arch-specific work happens in the container;
+# the package itself is arch:all).
+port    = 8096
+version = ""    # empty = latest stable at provision, then pinned (ctl upgrade)
+
+[exposure]
+# Public vhost served via HAProxy(TLS1.3) → sbxwaf → nginx → LXC :8096.
+# Empty = LAN only. The public vhost lives in
+# /etc/nginx/sites-available/jellyfin.conf (operator opts in via ln -s).
+public_domain = "jellyfin.gk2.secubox.in"
+waf_inspect   = true
+
+[media]
+# External media roots to expose as Jellyfin libraries, in addition to the
+# auto-detected SecuBox partners (photoprism / nextcloud / torrent / lyrion),
+# which are wired via `jellyfinctl partner wire`. Each entry is RO-bind-mounted
+# into the LXC under /media/<name>. Jellyfin never writes partner media.
+# Example:
+#   roots = ["/data/media/movies", "/data/media/tv"]
+roots = []
