@@ -27,9 +27,14 @@ readonly JELLYFIN_PORT="${SECUBOX_JELLYFIN_PORT:-8096}"
 readonly STATE_DIR="${SECUBOX_STATE_DIR:-/etc/secubox/jellyfin}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
 readonly APIKEY_FILE="${SECUBOX_JELLYFIN_APIKEY:-$SECRETS_DIR/jellyfin-apikey}"
+readonly ADMIN_SECRET_FILE="${SECUBOX_JELLYFIN_ADMIN:-$SECRETS_DIR/jellyfin-admin}"
 readonly LIBRARIES_JSON="${SECUBOX_JELLYFIN_LIBRARIES:-$STATE_DIR/libraries.json}"
 readonly APIKEY_OWNER="${SECUBOX_JELLYFIN_USER:-secubox-jellyfin}"
 readonly SENTINEL="$STATE_DIR/.lxc-provisioned"
+readonly WIZARD_SENTINEL="$STATE_DIR/.wizard-done"
+readonly JELLYFIN_URL="http://${LXC_IP}:${JELLYFIN_PORT}"
+# X-Emby-Authorization for the unauthenticated AuthenticateByName call.
+readonly JF_CLIENT_HDR='X-Emby-Authorization: MediaBrowser Client="SecuBox", Device="gk2", DeviceId="secubox-jellyfin", Version="1.0"'
 
 log()  { printf '[jellyfin-install] %s\n' "$*"; }
 fail() { printf '[jellyfin-install] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -202,6 +207,147 @@ start_jellyfin_service() {
         || lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart jellyfin.service 2>/dev/null || true
 }
 
+# ── First-run wizard automation ───────────────────────────────────────────────
+# A fresh Jellyfin answers 503 on every /Users, /Library, /Auth call until its
+# startup wizard is completed, so partner-wiring can never work out of the box.
+# This step drives the UNAUTHENTICATED /Startup/* API to complete the wizard,
+# creates the admin user, mints a persistent API key, and stores both secrets
+# 0600 owned by the module user. It is idempotent (guarded by a sentinel and by
+# the server's own StartupWizardCompleted flag) and strictly NON-FATAL: any
+# failure logs a warning and leaves the sentinel absent so the next run retries,
+# but never aborts container bring-up. The admin password is NEVER logged.
+
+# Poll the LXC HTTP endpoint until /System/Info/Public answers (arm64 is slow).
+wait_for_jellyfin_http() {
+    log "first-run: waiting for Jellyfin HTTP on ${JELLYFIN_URL} ..."
+    local i
+    for i in $(seq 1 60); do
+        if curl -fsS --max-time 5 "${JELLYFIN_URL}/System/Info/Public" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+# Store a secret 0600 owned by the module user (fallback root:root).
+_store_secret() { # <file> <value>
+    local f="$1" v="$2"
+    ( umask 077; printf '%s\n' "$v" > "$f" )
+    chown "$APIKEY_OWNER":"$APIKEY_OWNER" "$f" 2>/dev/null \
+        || chown root:root "$f" 2>/dev/null || true
+    chmod 0600 "$f"
+}
+
+first_run_wizard() {
+    if [ -f "$WIZARD_SENTINEL" ]; then
+        log "first-run: already completed (sentinel present) — skipping"
+        return 0
+    fi
+    command -v curl >/dev/null 2>&1 || { log "first-run: WARNING curl absent — skipping (retry next run)"; return 0; }
+    command -v jq   >/dev/null 2>&1 || { log "first-run: WARNING jq absent — skipping (retry next run)"; return 0; }
+
+    if ! wait_for_jellyfin_http; then
+        log "first-run: WARNING Jellyfin did not answer on ${JELLYFIN_URL} — skipping (retry next run)"
+        return 0
+    fi
+
+    # If a human (or a prior run) already finished the wizard, just mark done.
+    local pub completed=false
+    pub=$(curl -fsS --max-time 10 "${JELLYFIN_URL}/System/Info/Public" 2>/dev/null || true)
+    completed=$(printf '%s' "$pub" | jq -r '.StartupWizardCompleted // false' 2>/dev/null || echo false)
+    if [ "$completed" = "true" ]; then
+        log "first-run: server reports StartupWizardCompleted=true — marking sentinel"
+        date -Iseconds > "$WIZARD_SENTINEL"
+        return 0
+    fi
+
+    # 1. Admin password (reuse if already stored so re-runs stay consistent).
+    local pw
+    if [ -s "$ADMIN_SECRET_FILE" ]; then
+        pw=$(cat "$ADMIN_SECRET_FILE")
+    else
+        pw=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | cut -c1-24)
+        [ -n "$pw" ] || { log "first-run: WARNING could not generate password — skipping"; return 0; }
+        _store_secret "$ADMIN_SECRET_FILE" "$pw"
+        log "first-run: admin password stored -> $ADMIN_SECRET_FILE (0600 $APIKEY_OWNER)"
+    fi
+
+    log "first-run: completing Jellyfin startup wizard ..."
+
+    # 2. Startup wizard sequence (all unauthenticated /Startup/*).
+    _jf_startup_post() { # <path> <json>
+        curl -fsS --max-time 30 --retry 3 --retry-delay 2 -X POST \
+            -H 'Content-Type: application/json' \
+            "${JELLYFIN_URL}$1" -d "$2" >/dev/null 2>&1
+    }
+
+    # Prime the wizard (Jellyfin expects the initial GET before POSTing).
+    curl -fsS --max-time 15 --retry 3 --retry-delay 2 \
+        "${JELLYFIN_URL}/Startup/Configuration" >/dev/null 2>&1 || true
+
+    if ! _jf_startup_post /Startup/User \
+        "$(jq -nc --arg n admin --arg p "$pw" '{Name:$n, Password:$p}')"; then
+        log "first-run: WARNING /Startup/User failed — leaving sentinel absent (retry next run)"
+        return 0
+    fi
+    _jf_startup_post /Startup/Configuration \
+        '{"UICulture":"fr-FR","MetadataCountryCode":"FR","PreferredMetadataLanguage":"fr"}' \
+        || log "first-run: WARNING /Startup/Configuration (locale) failed — continuing"
+    _jf_startup_post /Startup/RemoteAccess \
+        '{"EnableRemoteAccess":true,"EnableAutomaticPortMapping":false}' \
+        || log "first-run: WARNING /Startup/RemoteAccess failed — continuing"
+    if ! _jf_startup_post /Startup/Complete '{}'; then
+        log "first-run: WARNING /Startup/Complete failed — leaving sentinel absent (retry next run)"
+        return 0
+    fi
+    log "first-run: startup wizard submitted (admin user + fr-FR locale + remote access)"
+
+    # 3. Authenticate as admin -> AccessToken.
+    local auth token
+    auth=$(curl -fsS --max-time 30 --retry 3 --retry-delay 2 -X POST \
+        -H "$JF_CLIENT_HDR" -H 'Content-Type: application/json' \
+        "${JELLYFIN_URL}/Users/AuthenticateByName" \
+        -d "$(jq -nc --arg u admin --arg p "$pw" '{Username:$u, Pw:$p}')" 2>/dev/null || true)
+    token=$(printf '%s' "$auth" | jq -r '.AccessToken // empty' 2>/dev/null || true)
+    if [ -z "$token" ]; then
+        log "first-run: WARNING AuthenticateByName returned no AccessToken — leaving sentinel absent (retry next run)"
+        return 0
+    fi
+
+    # 4. Mint a persistent API key (App=secubox); read it back, fallback to the
+    #    login token if the read-back is unavailable.
+    curl -fsS --max-time 30 --retry 2 --retry-delay 2 -X POST \
+        -H "X-Emby-Token: $token" \
+        "${JELLYFIN_URL}/Auth/Keys?App=secubox" >/dev/null 2>&1 || true
+    local keys apikey
+    keys=$(curl -fsS --max-time 20 --retry 2 --retry-delay 2 \
+        -H "X-Emby-Token: $token" "${JELLYFIN_URL}/Auth/Keys" 2>/dev/null || true)
+    apikey=$(printf '%s' "$keys" \
+        | jq -r '(.Items // [])[] | select(.AppName=="secubox") | .AccessToken' 2>/dev/null \
+        | head -1 || true)
+    if [ -z "$apikey" ]; then
+        log "first-run: /Auth/Keys read-back empty — storing login token as API key (fallback)"
+        apikey="$token"
+    fi
+    _store_secret "$APIKEY_FILE" "$apikey"
+    log "first-run: API key stored -> $APIKEY_FILE (0600 $APIKEY_OWNER)"
+
+    # 5. SecuBox master-users convention: 'admin' is the wizard user (required);
+    #    additionally provision a 'gk2' admin best-effort (non-fatal).
+    if curl -fsS --max-time 30 --retry 2 --retry-delay 2 -X POST \
+        -H "X-Emby-Token: $token" -H 'Content-Type: application/json' \
+        "${JELLYFIN_URL}/Users/New" \
+        -d "$(jq -nc --arg n gk2 --arg p "$pw" '{Name:$n, Password:$p}')" >/dev/null 2>&1; then
+        log "first-run: additional master user 'gk2' created (shares stored admin password)"
+    else
+        log "first-run: 'gk2' master user not created (non-fatal)"
+    fi
+
+    date -Iseconds > "$WIZARD_SENTINEL"
+    log "first-run: DONE — Jellyfin ready for partner-wiring"
+}
+
 mark_provisioned() {
     install -d -m 0755 -o root -g root "$STATE_DIR"
     date -Iseconds > "$SENTINEL"
@@ -221,9 +367,11 @@ main() {
     install_jellyfin_in_lxc
     mint_apikey
     start_jellyfin_service
+    first_run_wizard
     mark_provisioned
     log "OK — LXC '$LXC_NAME' at $LXC_IP, Jellyfin provisioned + running."
     log "  · Web UI (LXC)  : http://$LXC_IP:$JELLYFIN_PORT/"
+    log "  · Admin secret  : $ADMIN_SECRET_FILE (0600 $APIKEY_OWNER)"
     log "  · API key       : $APIKEY_FILE (0600 $APIKEY_OWNER)"
     log "  · Libraries     : $LIBRARIES_JSON"
     log "  · Wire partners : jellyfinctl partner wire --all"
