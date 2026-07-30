@@ -41,6 +41,16 @@ _AUTH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A "no usable format" failure is, in practice, most often an age-restricted /
+# private / geo-gated video: without auth yt-dlp gets a stripped manifest with no
+# downloadable format. When we have NO cookies yet, steer the user to the cookie
+# vault instead of showing the cryptic raw format error.
+_FORMAT_RE = re.compile(
+    r"requested format (?:is )?not available|no video formats found|"
+    r"only images are available|requested format is not available",
+    re.IGNORECASE,
+)
+
 _VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".m4v", ".mov", ".avi", ".flv", ".ts")
 
 
@@ -143,6 +153,17 @@ class Engine:
                 self.cookies_stale = True
                 raise AuthRequired("cookies périmés — ré-exporte tes cookies")
             raise AuthRequired("auth requise — dépose tes cookies")
+        # "No usable format" is, in practice, gated content (age/private/geo).
+        if _FORMAT_RE.search(stderr):
+            if self._has_cookies():
+                self.cookies_stale = True
+                raise AuthRequired(
+                    "aucun format disponible — vidéo âge-restreinte/privée et tes "
+                    "cookies ne l'autorisent pas : ré-exporte des cookies frais "
+                    "d'un compte connecté (18+) dans le panneau Authentification")
+            raise AuthRequired(
+                "aucun format disponible — souvent une vidéo âge-restreinte/privée : "
+                "dépose ton cookies.txt (panneau Authentification)")
         # Trim to keep any surfaced message short and non-leaky.
         raise EngineError(msg[:200])
 

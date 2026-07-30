@@ -82,6 +82,17 @@ la pip3 install --break-system-packages --upgrade yt-dlp fastapi uvicorn \
   || log "WARN pip install/upgrade failed (network?) — keeping existing versions"
 log "yt-dlp version: $(la yt-dlp --version 2>/dev/null || echo MISSING)"
 
+# --- deno JS runtime: yt-dlp now REQUIRES a JS runtime for YouTube extraction
+# ("extraction without a JS runtime has been deprecated"); without it many
+# videos fail with "Requested format is not available". Install once + symlink
+# onto PATH so yt-dlp auto-detects it. ---
+if ! la test -x /usr/local/bin/deno; then
+  la sh -c 'curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- -y' \
+    || log "WARN deno install failed — YouTube extraction may be degraded"
+fi
+la ln -sf /usr/local/bin/deno /usr/bin/deno 2>/dev/null || true
+log "deno version: $(la deno --version 2>/dev/null | head -1 || echo MISSING)"
+
 # Cookie vault dir INSIDE the LXC (age-gated/private auth cookies uploaded via
 # the webui land here; stays in the container, never on the host). Leaf dir.
 la mkdir -p /var/lib/secubox/ytsas
