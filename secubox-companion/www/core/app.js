@@ -75,6 +75,12 @@ function saveFavs(set) { try { localStorage.setItem('sbx-favs', JSON.stringify([
 function getView() { try { return localStorage.getItem('sbx-view') || 'favs'; } catch (e) { return 'favs'; } }
 function setViewPref(v) { try { localStorage.setItem('sbx-view', v); } catch (e) { /* noop */ } }
 
+// ── type signalling (emoji per service category) ──────────────────
+// The big tile emoji is the module's own identity; this is the *type* badge —
+// which family the service belongs to (WALL security, MIND media/apps, …).
+const TYPE_EMOJI = { AUTH: '🔑', WALL: '🛡️', BOOT: '⚙️', MIND: '🧠', ROOT: '🚀', MESH: '🔗' };
+function typeLabel(mod) { return `${TYPE_EMOJI[mod] || '🔷'} ${mod}`; }
+
 // ── dashboard ─────────────────────────────────────────────────────
 async function dashboard() {
   const root = clear(view());
@@ -124,7 +130,7 @@ async function dashboard() {
       star,
       el('div.cardlet-top', {}, [
         el('span.emoji', { text: m.icon || '🔷' }),
-        el('div.cardlet-id', {}, [el('div.kicker', { text: m.module }), el('h3', { text: m.name })]),
+        el('div.cardlet-id', {}, [el('div.kicker', { text: typeLabel(m.module) }), el('h3', { text: m.name })]),
       ]),
       el('div.muted', { style: 'font-size:.74rem;min-height:2em', text: m.description || '' }),
       el('div.cardlet-metrics'),
@@ -160,16 +166,26 @@ function fillMetrics(host, defs, s) {
   if (cells.length) host.replaceChildren(...cells);
 }
 
-function statusText(s) {
-  if (!s || typeof s !== 'object') return 'ok';
-  return s.status || (s.ok ? 'ok' : null) || Object.entries(s).slice(0, 2).map(([k, v]) => `${k}:${v}`).join(' · ') || 'ok';
+// Three-state service signal. A module that answered /status with no explicit
+// failure is online — most modules report health via their own fields, not a
+// uniform "status:ok", so treating "answered & not-failed" as up is what keeps
+// wireguard/podcaster/system green instead of a false idle.
+function pillState(s) {
+  if (s == null || typeof s !== 'object') return 'down';
+  const st = String(s.status || '').toLowerCase();
+  if (s.error || s.installed === false || s.active === false
+    || ['stopped', 'down', 'error', 'dead', 'failed', 'inactive'].includes(st)) return 'down';
+  if (s.sleeping || ['idle', 'sleeping', 'veille', 'paused', 'asleep'].includes(st)) return 'idle';
+  return 'up';
 }
+const PILL_EMOJI = { up: '🟢', idle: '🟡', down: '🔴' };
+const PILL_LABEL = { up: 'en ligne', idle: 'veille', down: 'hors-ligne' };
 function setPill(pill, s) {
-  const online = !!(s && (s.status === 'ok' || s.status === 'running' || s.status === 'ready'
-    || s.ok || s.active || s.enabled || s.http_reachable || s.radio === 'present'));
-  const txt = s ? statusText(s) : (navigator.onLine ? 'injoignable' : 'offline');
-  pill.className = 'pill ' + (s == null ? 'down' : (online ? 'up' : 'idle'));
-  pill.replaceChildren(el('span.dot'), document.createTextNode(' ' + txt));
+  const state = pillState(s);
+  const txt = (s == null && !navigator.onLine) ? 'offline'
+    : (s == null ? 'injoignable' : PILL_LABEL[state]);
+  pill.className = 'pill ' + state;
+  pill.replaceChildren(document.createTextNode(`${PILL_EMOJI[state]} ${txt}`));
 }
 
 // ── module view ───────────────────────────────────────────────────
