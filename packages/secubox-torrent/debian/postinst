@@ -82,6 +82,10 @@ case "$1" in
         fi
       fi
     fi
+
+    # Enable the host-side "conserve to PeerTube" queue processor timer.
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now secubox-torrent-conserve.timer >/dev/null 2>&1 || true
     ;;
 esac
 

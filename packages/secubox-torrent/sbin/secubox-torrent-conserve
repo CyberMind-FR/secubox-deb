@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-torrent-conserve
+# Host-side drain of the torrent "conserve to PeerTube" queue. The torrent LXC
+# drops a request in $DATA/.conserve-queue (it has the video file but NOT the
+# PeerTube creds); this host job — which DOES have the creds via peertubectl —
+# uploads the file and drops a result in $DATA/.conserve-results the LXC reads.
+# The whole point of the split is to keep PeerTube creds off the LXC.
+set -uo pipefail
+readonly MODULE="torrent-conserve"
+
+DATA="${SECUBOX_TORRENT_DATA:-/data/torrent}"
+QDIR="$DATA/.conserve-queue"
+RDIR="$DATA/.conserve-results"
+CHANNEL="${SECUBOX_TORRENT_PEERTUBE_CHANNEL:-1}"     # PeerTube channel id
+PRIVACY="${SECUBOX_TORRENT_PEERTUBE_PRIVACY:-2}"     # 1=public 2=unlisted 3=private
+# LXC app runs as the container's root → host uid 100000 (idmap). Result files
+# the host writes must be owned by it so the app can read them.
+LXC_UID="${SECUBOX_TORRENT_LXC_UID:-100000}"
+
+log() { logger -t sbx-"$MODULE" "$*"; }
+
+[ -d "$QDIR" ] || exit 0
+if ! command -v peertubectl >/dev/null 2>&1; then
+  log "peertubectl not installed (secubox-peertube) — leaving queue for later"
+  exit 0
+fi
+mkdir -p "$RDIR"
+# Both dirs must be OWNED by the LXC app (idmap uid), not by host-root: the LXC
+# writes queue files and unlinks drained results, which needs write on the DIR
+# itself (a host-root-owned dir shows up as nobody/unwritable inside the
+# unprivileged container). root (this job) can write into a 100000-owned dir
+# regardless, so 100000-ownership satisfies both sides.
+chown "$LXC_UID:$LXC_UID" "$QDIR" "$RDIR" 2>/dev/null || true
+
+_result() {  # <infohash> <json>
+  printf '%s' "$2" > "$RDIR/$1.json"
+  chown "$LXC_UID:$LXC_UID" "$RDIR/$1.json" 2>/dev/null || true
+  chmod 0644 "$RDIR/$1.json" 2>/dev/null || true
+}
+
+shopt -s nullglob
+for req in "$QDIR"/*.json; do
+  ih=$(jq -r '.infohash // empty' "$req" 2>/dev/null)
+  name=$(jq -r '.name // empty' "$req" 2>/dev/null)
+  file=$(jq -r '.file // empty' "$req" 2>/dev/null)
+  rm -f "$req"
+  [ -n "$ih" ] || continue
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    _result "$ih" '{"status":"error","error":"video file not found"}'
+    log "file missing for $ih"; continue
+  fi
+  [ -n "$name" ] || name="$(basename "$file")"
+  res=$(peertubectl upload "$file" "$name" "$CHANNEL" "$PRIVACY" 2>/dev/null | tail -1)
+  url=$(printf '%s' "$res" | jq -r '.url // empty' 2>/dev/null)
+  if [ -n "$url" ]; then
+    _result "$ih" "$(printf '{"status":"done","url":"%s"}' "$url")"
+    log "conserved $ih -> $url"
+  else
+    _result "$ih" '{"status":"error","error":"peertube upload failed"}'
+    log "upload FAILED for $ih"
+  fi
+done

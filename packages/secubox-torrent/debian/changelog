@@ -1,83 +1,26 @@
-secubox-torrent (2.1.3-1~bookworm1) bookworm; urgency=medium
+secubox-torrent (2.2.0-1~bookworm1) bookworm; urgency=medium
 
-  * Make the HAProxy exposure durable (was a hand-edit a `haproxyctl generate`
-    would wipe). postinst now registers the vhost in /etc/secubox/haproxy.toml
-    declaratively with `waf_bypass = true` (routes straight to nginx_vhosts —
-    torrent's Range streaming / large transfers break through the mitmproxy
-    inspection chain, same class as nc/photoprism/matrix). Regen is invoked but
-    drift-guarded (refuses on a board with un-migrated hand-edit vhosts, leaving
-    the live cfg intact; succeeds on a fresh board). Requires the companion
-    haproxyctl change that honours the per-vhost waf_bypass flag. (ref #917)
+  * Torrent is now a "sas" (staging area): downloads are CONSERVED BY DEFAULT —
+    nothing auto-disappears anymore (fixes "yesterday's transfers vanished").
+    Purge is OPT-IN: POST /api/v1/torrent/ephemeral/<ih> {seconds} marks a
+    torrent to auto-delete after a delay; the sweep only ever deletes torrents
+    whose opt-in purge time has passed (disk-floor safety valve reclaims marked-
+    ephemeral only, never conserved content).
+  * Library keep-by-default + ephemeral_until model (+ migration that flips
+    legacy kept=0 rows to conserved, so an upgrade never purges existing data)
+    + peertube_status/peertube_url columns for the coming PeerTube conserve.
+  * resumeLibrary no longer re-adds every torrent to the engine on restart
+    (that re-verified/re-hashed each file — the CPU storm that saturated the
+    loop). The library keeps every conserved row; the engine loads a torrent
+    LAZILY the first time it is streamed (Engine.ensureLoaded on /stream and
+    /files). Restart-survival + no re-hash verified live on gk2.
+  * Conserve to PeerTube: POST /api/v1/torrent/conserve/<ih> drops an upload
+    request on the shared /data volume for a NEW host-side processor
+    (secubox-torrent-conserve.timer) which holds the PeerTube creds (via
+    peertubectl) and uploads the completed video (unlisted), then drops a
+    result the LXC folds into the library (peertube_url). Panel: "📼 Conserver"
+    per torrent (+ a link once done) and a "⏳ Purger dans…" delay picker.
+    Conserved torrents show "chargé à la lecture" (lazy) instead of a bogus 0%.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 20:15:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 09:00:00 +0200
 
-secubox-torrent (2.1.2-1~bookworm1) bookworm; urgency=high
-
-  * Fix remove/files/stream 500 + broken stats: WebTorrent 2.x's client.get()
-    is async (returns a Promise), but engine.get() used it as if sync — every
-    caller (remove → t.destroy, /files → t.files, /stream, stats → t.progress)
-    then operated on a Promise instead of the Torrent, giving a 500 (remove,
-    files) or garbage (stats), and streaming never resolved its file. Match on
-    the synchronous client.torrents array instead. The FakeWebTorrent test
-    double had a sync get() that masked this; it is now async to model reality,
-    with regression tests asserting engine.get() is sync and remove() works.
-    (ref #917)
-
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 18:45:00 +0200
-
-secubox-torrent (2.1.1-1~bookworm1) bookworm; urgency=high
-
-  * Fix add-torrent hang / 502: pin uint8-util to 2.2.6 via npm overrides.
-    uint8-util 2.3.0 rewrote arr2hex() to require a TypedArray (data.buffer),
-    which throws when webtorrent 2.8.5 passes it parse-torrent's hex-string
-    infoHash in _onTorrentId — crashing the add before infoHash resolves so
-    the request blocked past the proxy timeout (502). The committed lockfile
-    had drifted to the broken uint8-util under webtorrent's ^2.2.5 range.
-    (ref #917)
-
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 18:10:00 +0200
-
-secubox-torrent (2.1.0-1~bookworm1) bookworm; urgency=medium
-
-  * Add torrent by .torrent URL and by uploaded .torrent file (webui mode
-    selector magnet/URL/file). engine.add() accepts magnet, .torrent URL or
-    .torrent Buffer uniformly; library stores the canonical magnetURI so a
-    kept torrent resumes regardless of source. New POST /add-file (raw
-    application/x-bittorrent, 5MiB cap) + torrentUrl on /add. (ref #917)
-
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 17:00:00 +0200
-
-secubox-torrent (2.0.0-1~bookworm1) bookworm; urgency=medium
-
-  * Pivot from Transmission to WebTorrent streaming (LXC-native, #917).
-  * Browser player (HTTP Range), ephemeral-by-default + Keep library on /data.
-  * Hybrid WebRTC+BitTorrent engine isolated in a dedicated LXC.
-
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 28 Jul 2026 14:00:00 +0200
-
-secubox-torrent (1.1.0-1~bookworm2) bookworm; urgency=medium
-
-  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
-    (remove the hard cascade-stop when secubox-core restarts/fails).
-
- -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
-
-secubox-torrent (1.0.0-1~bookworm2) bookworm; urgency=medium
-
-  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
-
-secubox-torrent (1.0.0-1~bookworm1) bookworm; urgency=medium
-
-  * Initial release.
-  * Features:
-    - Transmission Docker container management
-    - Torrent add/remove/pause/resume
-    - Download/upload statistics
-    - Speed limiting and scheduling
-    - RSS feed subscriptions
-    - Category/label management
-    - P31 Phosphor light theme web UI
-
- -- Gerald KERMA <devel@cybermind.fr>  Fri, 04 Apr 2026 10:00:00 +0200

@@ -19,12 +19,17 @@ import { buildApi } from './api.js';
  * ephemeral torrent regardless of age (kept torrents are NEVER swept).
  * Returns the list of infohashes removed.
  */
-export function runPurge(engine, library, { ttlSeconds, diskFloorBytes, diskFreeBytes }) {
+export function runPurge(engine, library, { diskFloorBytes, diskFreeBytes }) {
   const now = Math.floor(Date.now() / 1000);
-  let victims = library.expiredEphemeral(ttlSeconds, now);
+  // Sas model: the ONLY torrents deleted are those the user opted into purging
+  // (ephemeral_until set) whose time has passed. Conserved content is never
+  // auto-deleted.
+  let victims = library.expiredEphemeral(now);
   if (diskFreeBytes() < diskFloorBytes) {
-    const extra = library.list().filter(r => r.kept === 0).map(r => r.infohash);
-    victims = [...new Set([...victims, ...extra])];
+    // Disk-floor safety valve: reclaim EVERY user-marked-ephemeral torrent
+    // (even before its time) — never conserved content. If disk is still low
+    // after that, we keep the conserved data and rely on the operator.
+    victims = [...new Set([...victims, ...library.markedEphemeral()])];
   }
   for (const ih of victims) {
     engine.remove(ih, { deleteData: true });
@@ -44,33 +49,21 @@ export function diskFreeBytesOnData() {
 }
 
 /**
- * Re-sync the WebTorrent engine with the library DB at startup. Kept rows
- * survive a service/LXC restart only in the DB (the engine's in-memory
- * torrent list is empty on every process start) — re-add them so /stream
- * and purge see them again. Ephemeral (kept=0) rows can't be meaningfully
- * resumed (no seek/priority state was persisted) and would otherwise leak
- * their downloaded bytes forever once runPurge's engine.remove() becomes a
- * no-op for a torrent the engine never re-learned about — so they're
- * dropped from the library and their download dir is reclaimed here
- * instead of waiting on a purge sweep that can no longer see them.
+ * At startup, reconcile the library with reality — WITHOUT re-adding torrents
+ * to the engine. Re-adding re-verifies (re-hashes) each file, and doing that
+ * for every conserved torrent on boot is the CPU storm that saturated the
+ * event loop. Under the sas model the library keeps every conserved row
+ * (metadata + on-disk file); the engine stays empty and loads a torrent
+ * LAZILY the first time it is streamed (Engine.ensureLoaded). The only thing
+ * to do here is reclaim torrents whose opt-in purge time has already passed
+ * (a restart may have skipped the sweep window).
  */
 export function resumeLibrary(engine, library, { rmrf = defaultRmrf } = {}) {
-  for (const row of library.list()) {
-    if (row.kept) {
-      try {
-        // engine.add() is async in the real Engine (Promise) but the fake
-        // used in tests may be sync — handle both without letting either
-        // path abort the loop or leave an unhandled rejection.
-        const result = engine.add(row.magnet);
-        if (result && typeof result.catch === 'function') {
-          result.catch((e) =>
-            console.error(`secubox-torrent: resume failed for ${row.infohash}: ${e.message}`));
-        }
-      } catch (e) {
-        console.error(`secubox-torrent: resume failed for ${row.infohash}: ${e.message}`);
-      }
-    } else {
-      library.remove(row.infohash);
+  const now = Math.floor(Date.now() / 1000);
+  for (const ih of library.expiredEphemeral(now)) {
+    const row = library.get(ih);
+    library.remove(ih);
+    if (row && row.path) {
       try { rmrf(row.path); }
       catch (e) { console.error(`secubox-torrent: cleanup failed for ${row.path}: ${e.message}`); }
     }
@@ -117,7 +110,7 @@ export async function start() {
   await app.register(fastifyStatic.default, { root: '/opt/secubox-torrent/www' });
 
   setInterval(() => {
-    runPurge(engine, library, { ttlSeconds: cfg.ttl, diskFloorBytes: cfg.floor, diskFreeBytes });
+    runPurge(engine, library, { diskFloorBytes: cfg.floor, diskFreeBytes });
   }, 300000);
 
   await app.listen({ host: '0.0.0.0', port: cfg.port });

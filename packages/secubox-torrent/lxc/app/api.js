@@ -7,11 +7,39 @@
 
 import Fastify from 'fastify';
 import path from 'node:path';
+import fs from 'node:fs';
 import { handleStream } from './stream.js';
 
 // Uploaded .torrent files are small; cap the raw body well below anything that
 // could be abused. 5 MiB comfortably covers even huge multi-file torrents.
 const TORRENT_UPLOAD_LIMIT = 5 * 1024 * 1024;
+
+const VIDEO_RE = /\.(mp4|mkv|webm|avi|mov|m4v|ts|flv)$/i;
+
+// Conserve-to-PeerTube uses a file-drop queue on the shared /data volume: the
+// LXC drops a request, a HOST timer (secubox-torrent-conserve) runs the upload
+// with the PeerTube admin creds it holds, then drops a result the LXC reads.
+// Keeping the creds host-side is the whole point of the split.
+function conserveDirs(downloadDir) {
+  return { queue: path.join(downloadDir, '.conserve-queue'),
+           results: path.join(downloadDir, '.conserve-results') };
+}
+
+// Fold any host-written upload results into the library (called on /list so the
+// panel picks up completions without a second poller in the LXC).
+function drainConserveResults(library, downloadDir) {
+  const { results } = conserveDirs(downloadDir);
+  let files = [];
+  try { files = fs.readdirSync(results).filter(f => f.endsWith('.json')); } catch { return; }
+  for (const f of files) {
+    const ih = f.replace(/\.json$/, '');
+    try {
+      const r = JSON.parse(fs.readFileSync(path.join(results, f), 'utf8'));
+      library.setPeertube(ih, r.status || 'done', r.url || null);
+    } catch { /* ignore malformed result */ }
+    try { fs.unlinkSync(path.join(results, f)); } catch { /* ignore */ }
+  }
+}
 
 export function buildApi({ engine, library, diskFreeBytes }) {
   const app = Fastify({ logger: false, bodyLimit: TORRENT_UPLOAD_LIMIT });
@@ -57,20 +85,71 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     return addTorrent(reply, buf);
   });
 
-  app.get('/api/v1/torrent/list', async () =>
-    library.list().map(r => ({ ...r, stats: engine.stats(r.infohash) })));
+  app.get('/api/v1/torrent/list', async () => {
+    drainConserveResults(library, engine.downloadDir);  // pick up host upload results
+    return library.list().map(r => ({ ...r, stats: engine.stats(r.infohash) }));
+  });
+
+  // Conserve to PeerTube: drop an upload request for the HOST processor. The
+  // download must be complete (no partial/corrupt uploads). We resolve the
+  // actual video file path here (from the loaded torrent) since only the engine
+  // knows where WebTorrent laid the files down.
+  app.post('/api/v1/torrent/conserve/:infohash', async (req, reply) => {
+    const ih = req.params.infohash;
+    const row = library.get(ih);
+    if (!row) return reply.code(404).send({ error: 'not found' });
+    const t = await engine.ensureLoaded(ih, row.magnet);
+    if (!t || !t.files || !t.files.length) return reply.code(409).send({ error: 'torrent not ready' });
+    if (typeof t.progress === 'number' && t.progress < 1) {
+      return reply.code(409).send({ error: 'download not complete' });
+    }
+    const vids = t.files.filter(f => VIDEO_RE.test(f.name));
+    const pick = (vids.length ? vids : t.files).slice().sort((a, b) => b.length - a.length)[0];
+    const abs = path.join(engine.downloadDir, pick.path);
+    const { queue } = conserveDirs(engine.downloadDir);
+    try {
+      fs.mkdirSync(queue, { recursive: true });
+      fs.writeFileSync(path.join(queue, ih + '.json'),
+        JSON.stringify({ infohash: ih, name: row.name || t.name || ih, file: abs }));
+    } catch (e) {
+      return reply.code(500).send({ error: 'queue write failed: ' + e.message });
+    }
+    library.setPeertube(ih, 'queued', null);
+    return { status: 'queued', file: pick.name };
+  });
 
   app.get('/api/v1/torrent/files/:infohash', async (req, reply) => {
-    const t = engine.get(req.params.infohash);
+    const ih = req.params.infohash;
+    const row = library.get(ih);
+    // Lazy-load: a conserved torrent isn't in the engine until it's first
+    // touched (the sas keeps everything in the library, the engine holds only
+    // what's actively viewed). Re-add it from its magnet (reusing on-disk data).
+    const t = await engine.ensureLoaded(ih, row && row.magnet);
     if (!t) return reply.code(404).send({ error: 'not found' });
     return t.files.map((f, i) => ({ idx: i, name: f.name, length: f.length }));
   });
 
+  // Conserve indefinitely (default state, but also cancels an opt-in purge).
   app.post('/api/v1/torrent/keep/:infohash', async (req, reply) => {
     const ih = req.params.infohash;
     if (!library.get(ih)) return reply.code(404).send({ error: 'not found' });
     library.keep(ih, path.join(engine.downloadDir, ih));
     return { status: 'kept' };
+  });
+
+  // Opt-in purge: POST {seconds} → auto-delete this torrent after `seconds`.
+  // seconds<=0 (or absent) cancels the purge (conserve).
+  app.post('/api/v1/torrent/ephemeral/:infohash', async (req, reply) => {
+    const ih = req.params.infohash;
+    if (!library.get(ih)) return reply.code(404).send({ error: 'not found' });
+    const s = Number((req.body || {}).seconds);
+    if (!Number.isFinite(s) || s <= 0) {
+      library.keep(ih);
+      return { status: 'conserved' };
+    }
+    const until = Math.floor(Date.now() / 1000) + s;
+    library.setEphemeral(ih, until);
+    return { status: 'ephemeral', ephemeral_until: until };
   });
 
   app.post('/api/v1/torrent/remove/:infohash', async (req) => {
@@ -79,8 +158,11 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     return { status: 'removed' };
   });
 
-  app.get('/stream/:infohash/:fileIdx', (req, reply) => {
-    library.touch(req.params.infohash);
+  app.get('/stream/:infohash/:fileIdx', async (req, reply) => {
+    const ih = req.params.infohash;
+    library.touch(ih);
+    const row = library.get(ih);
+    await engine.ensureLoaded(ih, row && row.magnet);  // lazy-load before streaming
     return handleStream(engine, req, reply.raw)
       .then(() => { reply.hijack(); });
   });
