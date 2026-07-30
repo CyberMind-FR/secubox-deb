@@ -1,3 +1,14 @@
+secubox-ytsas (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * install-lxc: install the deno JS runtime — yt-dlp now REQUIRES one for
+    YouTube ("extraction without a JS runtime has been deprecated"); without it
+    videos fail "Requested format is not available".
+  * engine: a no-usable-format failure is surfaced as a clear cookie/auth hint
+    (age-restricted/private → deposit or re-export fresh cookies), not the raw
+    yt-dlp format error.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 20:30:00 +0200
+
 secubox-ytsas (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: YouTube/web-media SAS gateway (LXC-native, yt-dlp).
