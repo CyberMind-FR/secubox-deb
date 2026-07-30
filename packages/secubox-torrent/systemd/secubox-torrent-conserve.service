@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox torrent → PeerTube conserve queue processor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-torrent-conserve
+
+[Install]
+WantedBy=multi-user.target
