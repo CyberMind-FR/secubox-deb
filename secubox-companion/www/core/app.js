@@ -31,6 +31,7 @@ function chrome() {
         ['SecuBox ', el('small', { text: 'Companion' })]),
       el('span.spacer'),
       net, q,
+      el('button.btn.sm', { id: 'theme-btn', title: 'Thème clair / sombre', text: themeIcon(), onclick: toggleTheme }),
       el('button.btn.sm', { title: 'Lock', text: '🔒', onclick: lock }),
     ]),
     el('main.main', { id: 'view' }),
@@ -50,6 +51,18 @@ async function refreshChrome() {
 }
 
 function lock() { location.hash = '#/'; boot(true); }
+
+// ── theme (light default, opt-in dark, persisted) ──────────────────
+function currentTheme() { try { return localStorage.getItem('sbx-theme') || 'light'; } catch (e) { return 'light'; } }
+function themeIcon() { return currentTheme() === 'dark' ? '☀️' : '🌙'; }
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  if (next === 'dark') document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('sbx-theme', next); } catch (e) { /* noop */ }
+  const btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = themeIcon();
+}
 
 // ── favourites (parameterizable, localStorage) ─────────────────────
 // Default = the current base modules + photoprism (peertube is already in).

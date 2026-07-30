@@ -190,3 +190,21 @@ body.has-queue .queued-bar { display: block; }
 .pill.up { color: var(--root); border-color: var(--root); } .pill.up .dot { background: var(--root); }
 .pill.idle { color: var(--wall); border-color: var(--wall); } .pill.idle .dot { background: var(--wall); }
 .pill.down { color: var(--boot); border-color: var(--boot); } .pill.down .dot { background: var(--boot); }
+
+/* ── Dark theme (opt-in via data-theme="dark") ───────────────────── */
+:root[data-theme="dark"]{
+  --bg:#07070c; --surf:#10121c; --surf-2:#161a29; --border:#232a42; --text:#e9ecf5; --muted:#8b93ad;
+  --auth:#ff6a3d; --wall:#ffb638; --boot:#ff7a4d; --mind:#a78bff; --root:#00ff8b; --mesh:#3bd0ff;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 30px rgba(0,0,0,.55);
+}
+:root[data-theme="dark"] body{
+  background:
+    radial-gradient(1100px 640px at 82% -8%, rgba(0,212,255,.09), transparent 60%),
+    radial-gradient(820px 560px at 8% 108%, rgba(138,99,255,.10), transparent 55%),
+    var(--bg);
+}
+:root[data-theme="dark"] .card{ background:linear-gradient(180deg,var(--surf-2),var(--surf)); }
+:root[data-theme="dark"] .card.link:hover{ box-shadow:0 12px 30px -14px rgba(0,0,0,.85); }
+:root[data-theme="dark"] .topbar{ background:rgba(7,7,12,.72); backdrop-filter:blur(8px); }
+:root[data-theme="dark"] .seg button.on{ background:linear-gradient(135deg,rgba(0,212,255,.20),rgba(167,139,255,.18)); }
+:root[data-theme="dark"] .fav.on{ color:var(--wall); text-shadow:0 0 10px rgba(255,182,56,.5); }
