@@ -1,3 +1,12 @@
+secubox-jellyfin (2.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * jellyfinctl status: expose startup_wizard_completed + setup_required, and fix
+    version parse (.version camelCase, was .Version -> always null).
+  * webui Statut: surface "configuration initiale requise" with a link to complete
+    the Jellyfin wizard, instead of a silent 503.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 16:00:00 +0200
+
 secubox-jellyfin (2.0.1-1~bookworm1) bookworm; urgency=medium
 
   * jellyfinctl: fix `partner wire` crash (unbound $name in single-line local under

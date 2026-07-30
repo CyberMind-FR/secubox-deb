@@ -370,6 +370,18 @@
       clearInline("statut-msg");
       try {
         var d = await apiGet("/status");
+        // First-run: Jellyfin answers but its setup wizard isn't done → API is 503
+        // and no partner wiring works. Surface it here with a call to action.
+        if (d.setup_required) {
+          document.getElementById("statut-msg").innerHTML =
+            '<div class="note" style="border-left:3px solid var(--gold,#c9a84c);padding:10px 12px">'
+            + '⏳ <b>Configuration initiale requise</b> — Jellyfin est démarré mais son assistant '
+            + 'de configuration n\'est pas terminé (l\'API reste en 503, aucun branchement de bibliothèque '
+            + 'possible tant que ce n\'est pas fait). '
+            + '<a href="https://jellyfin.gk2.secubox.in" target="_blank" rel="noopener">Compléter la configuration ↗</a> '
+            + '(ou sur le LAN : <code>http://10.100.0.170:8096</code>). Crée l\'admin, puis reviens ici.'
+            + '</div>';
+        }
         var libs = (typeof d.libraries === "number") ? d.libraries
                  : (Array.isArray(d.libraries) ? d.libraries.length : (d.libraries_count != null ? d.libraries_count : "—"));
         var sessions = (d.sessions != null)
@@ -389,6 +401,11 @@
           ["État LXC", '<span class="pill ' + (running ? "green" : "red") + '">' + esc(d.lxc_state || "?") + "</span>"],
           ["Jellyfin", d.jellyfin_reachable ? '<span class="pill green">● joignable</span>' : '<span class="pill red">○ injoignable</span>'],
           ["Version", esc(d.version || "—")],
+          ["Configuration", d.jellyfin_reachable
+            ? (d.setup_required
+                ? '<span class="pill red">⏳ setup requis</span>'
+                : '<span class="pill green">● configuré</span>')
+            : '<span class="pill">—</span>'],
           ["Bibliothèques", esc(libs)],
           ["Sessions actives", esc(sessions)]
         ];

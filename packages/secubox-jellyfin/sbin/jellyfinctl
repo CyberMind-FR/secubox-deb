@@ -297,10 +297,12 @@ cmd_status() {
     local st reachable=false version=null sessions=null libs
     st=$(lxc_running && echo running || echo stopped)
 
-    local info=""
+    local info="" wizard=false
     if info=$(curl -fsS --max-time 5 "${JELLYFIN_URL}/System/Info/Public" 2>/dev/null); then
         reachable=true
-        version=$(printf '%s' "$info" | jq -c '.Version // null' 2>/dev/null || echo null)
+        # API returns camelCase (.version/.startupWizardCompleted); tolerate both.
+        version=$(printf '%s' "$info" | jq -c '.Version // .version // null' 2>/dev/null || echo null)
+        wizard=$(printf '%s' "$info" | jq -c '(.StartupWizardCompleted // .startupWizardCompleted) // false' 2>/dev/null || echo false)
     fi
 
     local key; key=$(_apikey)
@@ -321,8 +323,10 @@ cmd_status() {
         --argjson version "${version:-null}" \
         --argjson libraries "${libs:-0}" \
         --argjson sessions "${sessions:-null}" \
+        --argjson wizard "${wizard:-false}" \
         '{status:"ok", lxc_state:$st, jellyfin_reachable:$reachable, port:$port,
-          version:$version, libraries:$libraries, sessions:$sessions}'
+          version:$version, libraries:$libraries, sessions:$sessions,
+          startup_wizard_completed:$wizard, setup_required:($reachable and ($wizard|not))}'
 }
 
 cmd_start() {
