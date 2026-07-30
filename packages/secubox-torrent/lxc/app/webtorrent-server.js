@@ -133,11 +133,9 @@ export async function start() {
   const fastifyStatic = await import('@fastify/static');
   await app.register(fastifyStatic.default, { root: '/opt/secubox-torrent/www' });
 
-  // Fast tick: keep upload capped at ½ the live download bandwidth (→ 0 once
-  // everything is complete, so a finished movie never seeds/pegs the core).
-  setInterval(() => { try { engine.tuneUpload(); } catch (e) { /* noop */ } }, 5000).unref();
   // Slow tick: opt-in purge (expired ephemerals + disk floor) AND unload idle
-  // torrents from the engine (transit-lounge model — data stays in the library).
+  // COMPLETE torrents from the engine (transit-lounge model — data stays in the
+  // library; in-progress downloads are never unloaded, so they finish).
   setInterval(() => {
     runPurge(engine, library, { diskFloorBytes: cfg.floor, diskFreeBytes });
     try { engine.reapIdle(); } catch (e) { /* noop */ }

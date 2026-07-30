@@ -17,25 +17,17 @@ export class Engine {
     // webrtc=false (spike fallback) tells WebTorrent to skip the WebRTC transport.
     if (!webrtc) opts.tracker = { wrtc: false };
     this.client = new WebTorrentCtor(opts);
-    // SAS, NOT a seedbox. Seeding policy (unless TORRENT_SEED=full): upload is
-    // capped at HALF the current download bandwidth while downloading (enough
-    // tit-for-tat to not get choked), and drops to ZERO once a torrent hits
-    // 100% — so a completed movie never re-uploads and pegs the box. Start at 0;
-    // tuneUpload() raises it during active downloads.
-    if (typeof this.client.throttleUpload === 'function') this.client.throttleUpload(0);
+    // SAS, NOT a seedbox — but we must NOT throttle upload to 0: the BitTorrent
+    // handshake and piece REQUESTS are themselves "uploads", so a 0 cap blocks
+    // the protocol and nothing ever connects/downloads (0 peers). Anti-seedbox
+    // is enforced structurally instead: reapIdle() UNLOADS a torrent once it is
+    // COMPLETE and idle, so finished content stops seeding (and stops pegging a
+    // core) without ever starving an in-progress download. TORRENT_SEED=full
+    // keeps completed torrents loaded (real seedbox opt-in).
     // A bad magnet/URL/.torrent (or a peer/tracker fault) makes WebTorrent
     // emit 'error' on the CLIENT — unhandled it crashes the whole process.
     // Swallow it here (per-add errors are surfaced by add()'s own handler).
     if (typeof this.client.on === 'function') this.client.on('error', () => {});
-  }
-  // Upload = 50% of the bandwidth we're currently DOWNLOADING with; 0 when
-  // nothing is downloading (i.e. everything is complete → no seeding). Called
-  // periodically. TORRENT_SEED=full disables the cap (real seedbox opt-in).
-  tuneUpload() {
-    if (this.seed === 'full' || !this.client.throttleUpload) return;
-    let dl = 0;
-    for (const t of this.client.torrents) if ((t.progress || 0) < 1) dl += (t.downloadSpeed || 0);
-    this.client.throttleUpload(Math.max(0, Math.floor(dl * 0.5)));
   }
   // Note when a torrent was last actively used (streamed/loaded) so the idle
   // reaper can unload it — the "transit lounge" model: hold in the engine only
@@ -46,6 +38,7 @@ export class Engine {
   // NEVER reaped — it must stay loaded to finish downloading (that was the bug
   // where added torrents silently stopped at 0% after 15min).
   reapIdle(idleMs = this.idleMs) {
+    if (this.seed === 'full') return;   // real seedbox: keep completed torrents loaded
     const now = Date.now();
     for (const t of [...this.client.torrents]) {
       const complete = (t.progress || 0) >= 1 || t.done;
