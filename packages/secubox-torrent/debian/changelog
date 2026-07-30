@@ -1,3 +1,15 @@
+secubox-torrent (2.2.8-1~bookworm1) bookworm; urgency=high
+
+  * FIX no download / 0 peers: throttleUpload(0) blocked the BitTorrent handshake
+    and piece requests (both are "uploads"), so nothing ever connected. Removed
+    the upload throttle + the ½-BW tuner (they also deadlocked: 0 download → 0
+    upload → 0 download). Anti-seedbox is now purely structural — reapIdle unloads
+    COMPLETE idle torrents (finished content stops seeding), while in-progress
+    downloads keep normal upload (protocol works) and finish. TORRENT_SEED=full
+    keeps completed torrents loaded (real seedbox).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 19:35:00 +0200
+
 secubox-torrent (2.2.7-1~bookworm1) bookworm; urgency=high
 
   * FIX added torrents stuck at 0%%/never download: reapIdle unloaded INCOMPLETE
