@@ -1,3 +1,11 @@
+secubox-torrent (2.2.7-1~bookworm1) bookworm; urgency=high
+
+  * FIX added torrents stuck at 0%%/never download: reapIdle unloaded INCOMPLETE
+    torrents after 15min idle, killing in-progress downloads. Now only COMPLETE
+    torrents are reaped — an unfinished download stays loaded to finish.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 19:15:00 +0200
+
 secubox-torrent (2.2.6-1~bookworm1) bookworm; urgency=medium
 
   * webui: fix .torrent FILE upload (Bad Request) — the api() helper clobbered

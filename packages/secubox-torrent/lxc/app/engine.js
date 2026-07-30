@@ -41,12 +41,15 @@ export class Engine {
   // reaper can unload it — the "transit lounge" model: hold in the engine only
   // what is being watched; the library keeps the row + file for a later stream.
   touch(infohash) { const t = this.get(infohash); if (t) t._sbxAccess = Date.now(); }
-  // Unload (KEEP data) torrents idle longer than idleMs so a viewed-then-left
-  // torrent stops occupying the engine (and, if seeding is on, stops seeding).
+  // Unload (KEEP data) COMPLETE torrents idle longer than idleMs so a
+  // viewed-then-left movie stops occupying the engine. An INCOMPLETE download is
+  // NEVER reaped — it must stay loaded to finish downloading (that was the bug
+  // where added torrents silently stopped at 0% after 15min).
   reapIdle(idleMs = this.idleMs) {
     const now = Date.now();
     for (const t of [...this.client.torrents]) {
-      if (now - (t._sbxAccess || 0) > idleMs) {
+      const complete = (t.progress || 0) >= 1 || t.done;
+      if (complete && now - (t._sbxAccess || 0) > idleMs) {
         try { t.destroy({ destroyStore: false }, () => {}); } catch (e) { /* noop */ }
       }
     }
