@@ -2,98 +2,83 @@
 // Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 // SecuBox-Deb :: secubox-torrent :: server.test.js — CyberMind https://cybermind.fr
 //
-// Unit tests for the purge sweep (runPurge) only. server.js's start() imports
-// webtorrent/@fastify/static dynamically inside the function body, so this
-// file never pulls those heavy/native deps in — no network, no real disk.
+// Unit tests for the sas purge sweep (runPurge) + restart reconcile
+// (resumeLibrary). server.js's start() imports webtorrent/@fastify/static
+// dynamically inside the function body, so this file never pulls those
+// heavy/native deps in — no network, no real disk.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runPurge, resumeLibrary } from './server.js';
 import { Library } from './library.js';
 
-test('purge removes expired ephemeral and calls engine.remove', () => {
+const now = () => Math.floor(Date.now() / 1000);
+
+test('purge removes torrents whose opt-in purge time has passed', () => {
   const lib = new Library(':memory:');
-  lib.add({ infohash: 'old', name: 'O', magnet: 'm', path: '/tmp/o' });
-  lib.touchAt('old', 0);
+  lib.add({ infohash: 'due', name: 'O', magnet: 'm', path: '/tmp/o' });
+  lib.setEphemeral('due', now() - 10);  // already due
   const removed = [];
   const engine = { remove: (ih) => removed.push(ih) };
-  const swept = runPurge(engine, lib, { ttlSeconds: 10, diskFloorBytes: 0, diskFreeBytes: () => 1e12 });
-  assert.deepEqual(swept, ['old']);
-  assert.deepEqual(removed, ['old']);
-  assert.equal(lib.get('old'), null);
+  const swept = runPurge(engine, lib, { diskFloorBytes: 0, diskFreeBytes: () => 1e12 });
+  assert.deepEqual(swept, ['due']);
+  assert.deepEqual(removed, ['due']);
+  assert.equal(lib.get('due'), null);
 });
 
-test('purge keeps fresh ephemeral torrents under the disk floor', () => {
+test('purge keeps torrents marked for a FUTURE purge', () => {
   const lib = new Library(':memory:');
-  lib.add({ infohash: 'fresh', name: 'F', magnet: 'm', path: '/tmp/f' });
-  const removed = [];
-  const engine = { remove: (ih) => removed.push(ih) };
-  const swept = runPurge(engine, lib, { ttlSeconds: 3600, diskFloorBytes: 0, diskFreeBytes: () => 1e12 });
+  lib.add({ infohash: 'later', name: 'F', magnet: 'm', path: '/tmp/f' });
+  lib.setEphemeral('later', now() + 3600);
+  const engine = { remove: () => { throw new Error('should not remove'); } };
+  const swept = runPurge(engine, lib, { diskFloorBytes: 0, diskFreeBytes: () => 1e12 });
   assert.deepEqual(swept, []);
-  assert.deepEqual(removed, []);
-  assert.ok(lib.get('fresh'));
+  assert.ok(lib.get('later'));
 });
 
-test('purge never sweeps kept torrents even when stale', () => {
+test('purge never sweeps conserved (default) torrents', () => {
   const lib = new Library(':memory:');
-  lib.add({ infohash: 'keeper', name: 'K', magnet: 'm', path: '/tmp/k' });
-  lib.keep('keeper', '/tmp/k-kept');
-  lib.touchAt('keeper', 0);
-  const removed = [];
-  const engine = { remove: (ih) => removed.push(ih) };
-  const swept = runPurge(engine, lib, { ttlSeconds: 10, diskFloorBytes: 0, diskFreeBytes: () => 1e12 });
+  lib.add({ infohash: 'keeper', name: 'K', magnet: 'm', path: '/tmp/k' });  // conserved by default
+  const engine = { remove: () => { throw new Error('should not remove'); } };
+  const swept = runPurge(engine, lib, { diskFloorBytes: 0, diskFreeBytes: () => 1e12 });
   assert.deepEqual(swept, []);
-  assert.deepEqual(removed, []);
   assert.ok(lib.get('keeper'));
 });
 
-test('purge below the disk floor also sweeps fresh ephemeral entries (but never kept ones)', () => {
+test('disk-floor safety sweeps ALL marked-ephemeral (even future) but never conserved', () => {
   const lib = new Library(':memory:');
-  lib.add({ infohash: 'fresh', name: 'F', magnet: 'm', path: '/tmp/f' });
-  lib.add({ infohash: 'keeper', name: 'K', magnet: 'm', path: '/tmp/k' });
-  lib.keep('keeper', '/tmp/k-kept');
+  lib.add({ infohash: 'future-eph', name: 'F', magnet: 'm', path: '/tmp/f' });
+  lib.setEphemeral('future-eph', now() + 99999);
+  lib.add({ infohash: 'keeper', name: 'K', magnet: 'm', path: '/tmp/k' });  // conserved
   const removed = [];
   const engine = { remove: (ih) => removed.push(ih) };
-  const swept = runPurge(engine, lib, { ttlSeconds: 3600, diskFloorBytes: 10e9, diskFreeBytes: () => 1e9 });
-  assert.deepEqual(swept, ['fresh']);
-  assert.deepEqual(removed, ['fresh']);
-  assert.equal(lib.get('fresh'), null);
+  const swept = runPurge(engine, lib, { diskFloorBytes: 10e9, diskFreeBytes: () => 1e9 });
+  assert.deepEqual(swept, ['future-eph']);
+  assert.deepEqual(removed, ['future-eph']);
+  assert.equal(lib.get('future-eph'), null);
   assert.ok(lib.get('keeper'));
 });
 
-test('resumeLibrary re-adds kept torrents to the engine and reaps ephemeral ones', () => {
+test('resumeLibrary does NOT re-add torrents to the engine (no re-hash storm)', () => {
   const lib = new Library(':memory:');
   lib.add({ infohash: 'keeper', name: 'K', magnet: 'magnet:keeper', path: '/data/torrent/keeper' });
-  lib.keep('keeper', '/data/torrent/keeper');
-  lib.add({ infohash: 'eph', name: 'E', magnet: 'magnet:eph', path: '/data/torrent/eph' });
-
   const added = [];
   const engine = { add: (magnet) => { added.push(magnet); } };
   const rmrfCalls = [];
-  const rmrf = (p) => rmrfCalls.push(p);
-
-  resumeLibrary(engine, lib, { rmrf });
-
-  assert.deepEqual(added, ['magnet:keeper']);
-  assert.ok(lib.get('keeper'));
-  assert.equal(lib.get('eph'), null);
-  assert.deepEqual(rmrfCalls, ['/data/torrent/eph']);
+  resumeLibrary(engine, lib, { rmrf: (p) => rmrfCalls.push(p) });
+  assert.deepEqual(added, []);        // nothing re-added → no re-hash storm
+  assert.ok(lib.get('keeper'));       // conserved row survives the restart
+  assert.deepEqual(rmrfCalls, []);    // nothing reclaimed
 });
 
-test('resumeLibrary does not abort the loop if engine.add throws for one kept row', () => {
+test('resumeLibrary reclaims torrents whose opt-in purge time already passed', () => {
   const lib = new Library(':memory:');
-  lib.add({ infohash: 'bad', name: 'B', magnet: 'magnet:bad', path: '/data/torrent/bad' });
-  lib.keep('bad', '/data/torrent/bad');
-  lib.add({ infohash: 'good', name: 'G', magnet: 'magnet:good', path: '/data/torrent/good' });
-  lib.keep('good', '/data/torrent/good');
-
-  const added = [];
-  const engine = {
-    add: (magnet) => {
-      if (magnet === 'magnet:bad') throw new Error('boom');
-      added.push(magnet);
-    },
-  };
-  resumeLibrary(engine, lib, { rmrf: () => {} });
-  assert.deepEqual(added, ['magnet:good']);
+  lib.add({ infohash: 'due', name: 'E', magnet: 'magnet:eph', path: '/data/torrent/due' });
+  lib.setEphemeral('due', now() - 10);
+  lib.add({ infohash: 'keeper', name: 'K', magnet: 'magnet:keeper', path: '/data/torrent/keeper' });
+  const rmrfCalls = [];
+  resumeLibrary({ add: () => {} }, lib, { rmrf: (p) => rmrfCalls.push(p) });
+  assert.equal(lib.get('due'), null);
+  assert.ok(lib.get('keeper'));
+  assert.deepEqual(rmrfCalls, ['/data/torrent/due']);
 });
