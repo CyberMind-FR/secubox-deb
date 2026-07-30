@@ -1,3 +1,11 @@
+secubox-lyrion (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * lyrionctl: new `check-upgrade` (LMS-Community stable tags, current vs latest;
+    the experimental 'ueml/…' tags are ignored) and `upgrade` (download the
+    _all.deb + dpkg -i) verbs. 'Upgrade when present.'
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 10:00:00 +0200
+
 secubox-lyrion (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
