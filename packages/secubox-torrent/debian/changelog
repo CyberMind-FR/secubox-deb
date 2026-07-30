@@ -1,3 +1,10 @@
+secubox-torrent (2.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * /add: tolerant input — accept magnet/torrentUrl/url/link + a bare string body,
+    so a valid magnet/URL never 400s on a field-name mismatch.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 18:15:00 +0200
+
 secubox-torrent (2.2.4-1~bookworm1) bookworm; urgency=high
 
   * PERF FIX (event-loop peg / board-wide slowdown / torrent 503): the engine

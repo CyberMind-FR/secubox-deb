@@ -81,9 +81,16 @@ export function buildApi({ engine, library, diskFreeBytes }) {
 
   // Add by magnet URI or by http(s) URL to a .torrent file.
   app.post('/api/v1/torrent/add', async (req, reply) => {
-    const { magnet, torrentUrl } = req.body || {};
-    const torrentId = magnet || torrentUrl;
-    if (!torrentId) return reply.code(400).send({ error: 'magnet or torrentUrl required' });
+    // Tolerant input: the webui's source selector posts under different field
+    // names (magnet / url / .torrent link), and a client may send a bare string
+    // body — accept them all so a valid magnet/URL never 400s on a field-name
+    // mismatch. WebTorrent's add() takes a magnet URI, an http(s) .torrent URL,
+    // or an infohash.
+    let b = req.body;
+    if (typeof b === 'string') b = { magnet: b };
+    const { magnet, torrentUrl, url, link } = b || {};
+    const torrentId = (magnet || torrentUrl || url || link || '').toString().trim();
+    if (!torrentId) return reply.code(400).send({ error: 'magnet or torrent URL required' });
     return addTorrent(reply, torrentId);
   });
 
