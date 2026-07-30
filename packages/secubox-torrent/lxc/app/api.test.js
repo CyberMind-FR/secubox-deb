@@ -25,13 +25,30 @@ test('health returns ok', async () => {
   assert.equal(r.json().status, 'ok');
 });
 
-test('add then list returns the torrent', async () => {
+test('add then list returns the torrent (conserved by default)', async () => {
   const app = build();
   await app.inject({ method: 'POST', url: '/api/v1/torrent/add',
     payload: { magnet: 'magnet:?xt=urn:btih:' + 'a'.repeat(40) } });
   const r = await app.inject({ method: 'GET', url: '/api/v1/torrent/list' });
   assert.equal(r.json().length, 1);
-  assert.equal(r.json()[0].kept, 0);
+  assert.equal(r.json()[0].kept, 1);                 // sas: conserved by default
+  assert.equal(r.json()[0].ephemeral_until, null);   // no opt-in purge marker
+});
+
+test('ephemeral sets a purge marker; ephemeral 0 conserves again', async () => {
+  const app = build();
+  const ih = 'a'.repeat(40);
+  await app.inject({ method: 'POST', url: '/api/v1/torrent/add',
+    payload: { magnet: 'magnet:?xt=urn:btih:' + ih } });
+  const e = await app.inject({ method: 'POST', url: '/api/v1/torrent/ephemeral/' + ih,
+    payload: { seconds: 3600 } });
+  assert.equal(e.json().status, 'ephemeral');
+  assert.ok(e.json().ephemeral_until > Math.floor(Date.now() / 1000));
+  const back = await app.inject({ method: 'POST', url: '/api/v1/torrent/ephemeral/' + ih,
+    payload: { seconds: 0 } });
+  assert.equal(back.json().status, 'conserved');
+  const list = await app.inject({ method: 'GET', url: '/api/v1/torrent/list' });
+  assert.equal(list.json()[0].ephemeral_until, null);
 });
 
 test('keep flips kept=1', async () => {

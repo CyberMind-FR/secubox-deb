@@ -61,16 +61,37 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     library.list().map(r => ({ ...r, stats: engine.stats(r.infohash) })));
 
   app.get('/api/v1/torrent/files/:infohash', async (req, reply) => {
-    const t = engine.get(req.params.infohash);
+    const ih = req.params.infohash;
+    const row = library.get(ih);
+    // Lazy-load: a conserved torrent isn't in the engine until it's first
+    // touched (the sas keeps everything in the library, the engine holds only
+    // what's actively viewed). Re-add it from its magnet (reusing on-disk data).
+    const t = await engine.ensureLoaded(ih, row && row.magnet);
     if (!t) return reply.code(404).send({ error: 'not found' });
     return t.files.map((f, i) => ({ idx: i, name: f.name, length: f.length }));
   });
 
+  // Conserve indefinitely (default state, but also cancels an opt-in purge).
   app.post('/api/v1/torrent/keep/:infohash', async (req, reply) => {
     const ih = req.params.infohash;
     if (!library.get(ih)) return reply.code(404).send({ error: 'not found' });
     library.keep(ih, path.join(engine.downloadDir, ih));
     return { status: 'kept' };
+  });
+
+  // Opt-in purge: POST {seconds} → auto-delete this torrent after `seconds`.
+  // seconds<=0 (or absent) cancels the purge (conserve).
+  app.post('/api/v1/torrent/ephemeral/:infohash', async (req, reply) => {
+    const ih = req.params.infohash;
+    if (!library.get(ih)) return reply.code(404).send({ error: 'not found' });
+    const s = Number((req.body || {}).seconds);
+    if (!Number.isFinite(s) || s <= 0) {
+      library.keep(ih);
+      return { status: 'conserved' };
+    }
+    const until = Math.floor(Date.now() / 1000) + s;
+    library.setEphemeral(ih, until);
+    return { status: 'ephemeral', ephemeral_until: until };
   });
 
   app.post('/api/v1/torrent/remove/:infohash', async (req) => {
@@ -79,8 +100,11 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     return { status: 'removed' };
   });
 
-  app.get('/stream/:infohash/:fileIdx', (req, reply) => {
-    library.touch(req.params.infohash);
+  app.get('/stream/:infohash/:fileIdx', async (req, reply) => {
+    const ih = req.params.infohash;
+    library.touch(ih);
+    const row = library.get(ih);
+    await engine.ensureLoaded(ih, row && row.magnet);  // lazy-load before streaming
     return handleStream(engine, req, reply.raw)
       .then(() => { reply.hijack(); });
   });

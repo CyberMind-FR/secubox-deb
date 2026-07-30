@@ -67,6 +67,17 @@ export class Engine {
   // Promise instead of a Torrent (t.destroy/t.files/t.progress → 500 or garbage).
   // client.torrents is a plain array, so match on it synchronously instead.
   get(infohash) { return this.client.torrents.find(t => t.infoHash === infohash) || null; }
+  // Lazily bring a conserved torrent into the engine (from its magnet, reusing
+  // whatever is already on disk in downloadDir) the first time it is streamed.
+  // The sas keeps every torrent in the library but the engine holds only what
+  // is actively viewed — so a restart never re-verifies N files at once.
+  async ensureLoaded(infohash, magnet) {
+    const existing = this.get(infohash);
+    if (existing) return existing;
+    if (!magnet) return null;
+    await this.add(magnet);
+    return this.get(infohash);
+  }
   stats(infohash) {
     const t = this.get(infohash); if (!t) return null;
     return { progress: t.progress, downloadSpeed: t.downloadSpeed, uploadSpeed: t.uploadSpeed,
