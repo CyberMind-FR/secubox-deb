@@ -48,6 +48,16 @@ export function buildApi({ engine, library, diskFreeBytes }) {
   app.addContentTypeParser('application/x-bittorrent', { parseAs: 'buffer' },
     (_req, body, done) => done(null, body));
 
+  // Tolerate an EMPTY application/json body: several POSTs (keep/remove/conserve)
+  // carry no body, and Fastify's default json parser 400s on an empty body
+  // (FST_ERR_CTP_EMPTY_JSON_BODY) whenever a client still sends the header.
+  app.addContentTypeParser('application/json', { parseAs: 'string' },
+    (_req, body, done) => {
+      if (!body || !body.trim()) return done(null, {});
+      try { done(null, JSON.parse(body)); }
+      catch (e) { e.statusCode = 400; done(e); }
+    });
+
   // Shared add path: engine.add accepts a magnet, a .torrent URL, or a
   // .torrent Buffer identically. The library always stores the canonical
   // magnetURI so a kept torrent resumes after a restart regardless of source.
@@ -87,7 +97,26 @@ export function buildApi({ engine, library, diskFreeBytes }) {
 
   app.get('/api/v1/torrent/list', async () => {
     drainConserveResults(library, engine.downloadDir);  // pick up host upload results
+    // Keep the `complete` flag in sync with reality for engine-loaded torrents,
+    // so the restart reconcile resumes only what is still downloading.
+    for (const t of engine.client.torrents) {
+      try { library.setComplete(t.infoHash, (t.progress >= 1 || t.done) ? 1 : 0); } catch (e) { /* noop */ }
+    }
     return library.list().map(r => ({ ...r, stats: engine.stats(r.infohash) }));
+  });
+
+  // Resume / load a torrent into the engine on demand. For an incomplete
+  // download this restarts it; for a conserved-lazy one it just loads it (so it
+  // can be streamed). Also corrects the `complete` flag from observed progress.
+  app.post('/api/v1/torrent/resume/:infohash', async (req, reply) => {
+    const ih = req.params.infohash;
+    const row = library.get(ih);
+    if (!row) return reply.code(404).send({ error: 'not found' });
+    const t = await engine.ensureLoaded(ih, row.magnet);
+    if (!t) return reply.code(409).send({ error: 'could not load torrent' });
+    const complete = (t.progress >= 1 || t.done);
+    library.setComplete(ih, complete ? 1 : 0);
+    return { status: complete ? 'loaded' : 'resuming', progress: t.progress || 0 };
   });
 
   // Conserve to PeerTube: drop an upload request for the HOST processor. The

@@ -29,6 +29,15 @@ export class Library {
     add('ephemeral_until', 'INTEGER');
     add('peertube_status', 'TEXT');
     add('peertube_url', 'TEXT');
+    // `complete`=1 once the download finished. Incomplete torrents are re-added
+    // to the engine on restart so they RESUME downloading; complete ones stay
+    // lazy (loaded on stream) to avoid the boot re-hash storm.
+    const hadComplete = new Set(this.db.prepare(`PRAGMA table_info(torrents)`).all().map(c => c.name)).has('complete');
+    add('complete', 'INTEGER DEFAULT 0');
+    // First upgrade to the complete-tracking schema: assume EXISTING conserved
+    // rows are complete (avoids re-hashing e.g. a 10 GB file on the next boot).
+    // Freshly added torrents get complete=0 and flip to 1 on their 'done' event.
+    if (!hadComplete) this.db.exec(`UPDATE torrents SET complete=1`);
     // Legacy rows were kept=0 (ephemeral-by-default). Under the sas model they
     // become conserved: keep them, no ephemeral_until → never auto-purged.
     this.db.exec(`UPDATE torrents SET kept=1 WHERE kept=0 AND ephemeral_until IS NULL`);
@@ -67,6 +76,15 @@ export class Library {
   setPeertube(infohash, status, url) {
     this.db.prepare('UPDATE torrents SET peertube_status=?, peertube_url=COALESCE(?,peertube_url) WHERE infohash=?')
       .run(status, url ?? null, infohash);
+  }
+
+  setComplete(infohash, v = 1) {
+    this.db.prepare('UPDATE torrents SET complete=? WHERE infohash=?').run(v ? 1 : 0, infohash);
+  }
+
+  // Rows still downloading — re-added to the engine on restart so they resume.
+  incomplete() {
+    return this.db.prepare('SELECT infohash, magnet FROM torrents WHERE complete=0 OR complete IS NULL').all();
   }
 
   remove(infohash) { this.db.prepare('DELETE FROM torrents WHERE infohash=?').run(infohash); }
