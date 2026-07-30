@@ -24,9 +24,7 @@
     }
   ],
   "metrics": [
-    {
-      "key": "video_count",
-      "label": "vidéos"
-    }
+    { "key": "channels", "label": "chaînes" },
+    { "key": "followers", "label": "abonnés" }
   ]
 }

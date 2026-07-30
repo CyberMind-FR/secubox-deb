@@ -16,13 +16,7 @@
     }
   ],
   "metrics": [
-    {
-      "key": "http_reachable",
-      "label": "accessible"
-    },
-    {
-      "key": "port",
-      "label": "port"
-    }
+    { "key": "library_stats.total_photos", "label": "photos" },
+    { "key": "library_stats.total_albums", "label": "albums" }
   ]
 }
