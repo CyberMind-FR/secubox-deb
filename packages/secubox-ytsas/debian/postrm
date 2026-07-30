@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+case "$1" in
+  purge)
+    # Destroy the dedicated yt-dlp LXC and its provisioning sentinel.
+    # Downloaded/kept media on /data/ytsas is left in place (operator data,
+    # not package state) — same convention as other LXC-native modules
+    # (torrent, peertube, picobrew).
+    lxc-stop    -n ytsas -P /data/lxc 2>/dev/null || true
+    lxc-destroy -n ytsas -P /data/lxc 2>/dev/null || true
+    rm -f /var/lib/secubox/ytsas/.lxc-provisioned 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

@@ -1,0 +1,10 @@
+[Unit]
+Description=SecuBox ytsas → PeerTube conserve queue processor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-ytsas-conserve
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+case "$1" in
+  remove|upgrade|deconfigure)
+    # No host-side daemon to stop (the yt-dlp engine runs inside the dedicated
+    # LXC, not as a host systemd unit). Just unwire the vhost.
+    rm -f /etc/nginx/sites-enabled/ytsas.conf
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

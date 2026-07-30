@@ -1,0 +1,16 @@
+secubox-ytsas (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release: YouTube/web-media SAS gateway (LXC-native, yt-dlp).
+    Mirrors the torrent SAS shape — dedicated unprivileged `ytsas` LXC at
+    10.100.0.180:8091 serving a FastAPI /api/v1/ytsas/*; downloads under
+    /data/ytsas/<id>/, library.db at /data/ytsas/library.db, cookie vault at
+    /var/lib/secubox/ytsas/cookies.txt inside the LXC (age-gated/private auth).
+  * install-lxc.sh: idempotent create + app deploy; installs Python + yt-dlp
+    (pip, auto-updated every run since sites change) + FastAPI/uvicorn in the LXC.
+  * Host-mediated conserve → PeerTube (secubox-ytsas-conserve + timer): drains
+    /data/ytsas/.conserve-queue via peertubectl upload, writes results to
+    /data/ytsas/.conserve-results. PeerTube creds stay OFF the LXC.
+  * Public vhost ytsas.gk2.secubox.in (Range + large files), nft egress tap on
+    veth-ytsas0, menu.d cardlet (category mind), Companion cardlet 🎞️.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 20:00:00 +0200

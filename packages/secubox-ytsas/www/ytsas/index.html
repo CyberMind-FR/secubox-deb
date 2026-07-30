@@ -1,0 +1,491 @@
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     SecuBox-Deb :: secubox-ytsas :: www/ytsas/index.html — CyberMind https://cybermind.fr
+     Player webui — self-contained module vhost variant of the SecuBox WebUI
+     Panel Guidelines (cyan hybrid-dark terminal): no /shared/, no external
+     URLs (offline-clean, WAF-safe), palette + component classes inlined verbatim.
+     Sibling of the torrent SAS webui — yt-dlp fetch engine + cookie auth. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — YT-SAS</title>
+<style>
+  :root {
+    --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
+    --bg-row:  rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2);
+    --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
+    --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    background: var(--bg-dark); color: var(--text); margin: 0; min-height: 100vh;
+    background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
+  }
+  a { color: var(--cyan); }
+  .main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1.2rem 4rem; }
+  .header { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border); }
+  .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+  .header .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .25rem; }
+  .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+    text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
+    border-radius: 6px; padding: .5rem .9rem; cursor: pointer; transition: border-color .15s, box-shadow .15s;
+    display: inline-flex; align-items: center; gap: .35rem; }
+  .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.4); }
+  .btn.primary { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.12); }
+  .btn.danger { border-color: var(--red); color: var(--red); background: rgba(255,68,102,.12); }
+  .btn.good { border-color: var(--green); color: var(--green); background: rgba(0,221,68,.12); }
+  .btn.sm { padding: .3rem .55rem; font-size: .68rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: .75rem; margin-bottom: 1.2rem; }
+  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: .75rem; text-align: center; backdrop-filter: blur(10px); }
+  .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor;
+    font-variant-numeric: tabular-nums; color: var(--text); }
+  .stat-card .label { font-size: .6rem; color: var(--p31-dim); letter-spacing: .1em; margin-top: .2rem; text-transform: uppercase; }
+  .stat-card.cyan .value { color: var(--cyan); }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.orange .value { color: var(--orange); }
+  .stat-card.purple .value { color: var(--purple); }
+  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .62rem;
+    text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--border); }
+  .badge.kept { border-color: var(--green); color: var(--green); }
+  .badge.eph { border-color: var(--orange); color: var(--orange); }
+  .badge.ok { border-color: var(--green); color: var(--green); }
+  .badge.warn { border-color: var(--orange); color: var(--orange); }
+  .badge.off { border-color: var(--red); color: var(--red); }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.1rem 1.2rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+  .card h3 { margin: 0 0 .8rem; font-size: .95rem; color: var(--cyan); letter-spacing: .03em; }
+  .card .hint { color: var(--p31-dim); font-size: .72rem; margin: .1rem 0 .7rem; line-height: 1.5; }
+  .add-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .add-row input[type=text] { flex: 1 1 22rem; }
+  input[type=text] { font-family: inherit; background: var(--bg-row); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: .6rem .7rem; font-size: .85rem; }
+  input[type=text]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,.25); }
+  input[type=file] { font-family: inherit; font-size: .74rem; color: var(--p31-dim); max-width: 100%; }
+  .cookie-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+  .item { background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 5px;
+    padding: .6rem .8rem; margin-bottom: .5rem; }
+  .item.kept { border-left-color: var(--green); }
+  .item.ephemeral { border-left-color: var(--orange); }
+  .item.downloading { border-left-color: var(--cyan); }
+  .item.error { border-left-color: var(--red); }
+  .item-top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .item .title { color: var(--text); font-size: .88rem; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 26rem; }
+  .item .meta { color: var(--p31-dim); font-size: .68rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
+  .item .row-actions { display: flex; gap: .35rem; flex: none; flex-wrap: wrap; align-items: center; }
+  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
+  .progress-bar .fill { height: 100%; background: var(--cyan); transition: width .3s; }
+  .item.kept .progress-bar .fill { background: var(--green); }
+  .player { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--border); display: none; }
+  .player.open { display: block; }
+  .player video { width: 100%; max-height: 60vh; background: #000; border-radius: 6px; }
+  .muted { color: var(--p31-dim); font-size: .8rem; }
+  .toast { position: fixed; bottom: 1rem; right: 1rem; max-width: 22rem; background: var(--cyan);
+    color: #07121a; padding: .65rem 1rem; border-radius: 6px; font-size: .78rem; opacity: 0;
+    pointer-events: none; transition: opacity .2s; z-index: 50; }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast.error { background: var(--red); color: #fff; }
+  .toast .x { float: right; margin-left: .6rem; cursor: pointer; font-weight: bold; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+  @media (max-width: 768px) {
+    .main { padding: 1rem .8rem; }
+    .item .title { max-width: 12rem; }
+  }
+</style>
+</head>
+<body>
+<main class="main">
+  <header class="header">
+    <div>
+      <h1>🎞️ YT-SAS</h1>
+      <div class="sub" id="sub">Passerelle média web (yt-dlp) · chargement…</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" id="btnRefresh">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="grid" id="statGrid">
+    <div class="stat-card cyan"><div class="value" id="statActive">–</div><div class="label">⏳ En cours</div></div>
+    <div class="stat-card green"><div class="value" id="statDisk">–</div><div class="label">💾 Disque libre</div></div>
+    <div class="stat-card"><div class="value" id="statKept">–</div><div class="label">📌 Conservés</div></div>
+    <div class="stat-card purple"><div class="value" id="statPeertube">–</div><div class="label">📼 → PeerTube</div></div>
+  </div>
+
+  <div class="card">
+    <h3>➕ Coller un lien</h3>
+    <div class="add-row">
+      <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=… (tout site supporté par yt-dlp)">
+      <button class="btn primary" id="btnAdd">➕ Récupérer</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🔒 Authentification (cookies)</h3>
+    <p class="hint">Les vidéos avec restriction d'âge, privées ou réservées aux membres exigent
+      les cookies de ton navigateur. Exporte un <code>cookies.txt</code> au format Netscape
+      (extension « Get cookies.txt » / « cookies.txt ») pendant que tu es connecté, puis dépose-le ici.
+      Les cookies restent sur la box (0600), ne sont jamais journalisés.</p>
+    <div class="cookie-row">
+      <span id="cookieState" class="badge">…</span>
+      <span class="muted" id="cookieMeta"></span>
+    </div>
+    <div class="cookie-row" style="margin-top:.7rem">
+      <input type="file" id="cookieFile" accept=".txt,text/plain">
+      <button class="btn primary" id="btnCookie">⬆ Déposer les cookies</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📚 Médiathèque</h3>
+    <div id="list"><p class="muted">Chargement…</p></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var API = '/api/v1/ytsas';
+  var openPlayers = Object.create(null); // id -> bool (inline player expanded)
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
+      return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c];
+    });
+  }
+
+  // Relative time for a scheduled purge (unix ts).
+  function fmtWhen(ts) {
+    var d = ts * 1000 - Date.now();
+    if (d <= 0) return 'imminente';
+    var m = Math.round(d / 60000);
+    if (m < 60) return 'dans ' + m + ' min';
+    var h = Math.round(d / 3600000);
+    if (h < 24) return 'dans ' + h + ' h';
+    return 'dans ' + Math.round(h / 24) + ' j';
+  }
+
+  function fmtBytes(n) {
+    if (n == null || !isFinite(n)) return '–';
+    if (n === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+    return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+  }
+
+  // progress may arrive as 0..1 fraction or 0..100 percent — normalise to %.
+  function pctOf(p) {
+    if (p == null || !isFinite(p)) return null;
+    return p <= 1 ? Math.round(p * 100) : Math.round(p);
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = 'toast'; }, 3000);
+  }
+  function errorToast(msg) {
+    var t = document.getElementById('toast');
+    clearTimeout(toastTimer);
+    t.innerHTML = '';
+    t.appendChild(document.createTextNode('⚠ ' + msg));
+    var x = document.createElement('span');
+    x.className = 'x';
+    x.textContent = '✕';
+    x.addEventListener('click', function () { t.className = 'toast'; });
+    t.appendChild(x);
+    t.className = 'toast show error';
+  }
+
+  function authHeaders() {
+    var h = {};
+    var tok = localStorage.getItem('sbx_token');
+    if (tok) h['Authorization'] = 'Bearer ' + tok;
+    return h;
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = Object.assign({}, opts.headers, authHeaders());
+    // Default to a JSON body ONLY when the caller hasn't set a Content-Type AND
+    // isn't sending a multipart/FormData body. A cookies.txt upload sends its own
+    // Content-Type (multipart boundary or text/plain) and must NOT be clobbered to
+    // json — that would hand a binary/text upload to the json parser → 400.
+    if (opts.body != null && !headers['Content-Type'] && !(opts.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
+      if (res.status === 401) {
+        errorToast('🔒 Login required');
+        throw new Error('unauthorized');
+      }
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
+        return body;
+      });
+    });
+  }
+
+  function refreshStatus() {
+    return api(API + '/status').then(function (s) {
+      document.getElementById('statActive').textContent =
+        s.active != null ? s.active : (s.downloading != null ? s.downloading : '–');
+      document.getElementById('statDisk').textContent = fmtBytes(s.disk_free);
+      document.getElementById('statKept').textContent = s.kept != null ? s.kept : '–';
+      document.getElementById('statPeertube').textContent =
+        s.peertube != null ? s.peertube : (s.conserved != null ? s.conserved : '–');
+      var active = s.active != null ? s.active : (s.downloading || 0);
+      document.getElementById('sub').textContent = active
+        ? 'Passerelle média web (yt-dlp) · ' + active + ' job(s) en cours'
+        : 'Passerelle média web (yt-dlp) · prêt';
+    }).catch(function (e) { console.error(e); });
+  }
+
+  function refreshCookies() {
+    return api(API + '/cookies/status').then(function (c) {
+      var el = document.getElementById('cookieState');
+      var meta = document.getElementById('cookieMeta');
+      // status: 'present' | 'expired' | 'absent'  (accept a few synonyms)
+      var st = (c.status || (c.present ? (c.expired ? 'expired' : 'present') : 'absent')).toLowerCase();
+      if (st === 'present' || st === 'ok') {
+        el.className = 'badge ok'; el.textContent = '✅ présent';
+      } else if (st === 'expired' || st === 'stale') {
+        el.className = 'badge warn'; el.textContent = '⚠ périmé';
+      } else {
+        el.className = 'badge off'; el.textContent = '⛔ absent';
+      }
+      var bits = [];
+      if (c.updated_at) bits.push('déposé ' + esc(String(c.updated_at)));
+      if (c.count != null) bits.push(c.count + ' cookies');
+      if (c.domains != null) bits.push(c.domains + ' domaines');
+      meta.textContent = bits.join(' · ');
+    }).catch(function (e) { console.error(e); });
+  }
+
+  function renderList(rows) {
+    var el = document.getElementById('list');
+    rows = Array.isArray(rows) ? rows : (rows && rows.items) || [];
+    if (!rows.length) {
+      el.innerHTML = '<p class="muted">Rien pour l\'instant — colle un lien ci-dessus.</p>';
+      return;
+    }
+    el.innerHTML = rows.map(function (r) {
+      var id = r.id;
+      var pct = pctOf(r.progress);
+      var complete = r.complete === true || r.status === 'complete' || r.status === 'done' || pct === 100;
+      var errored = r.status === 'error' || !!r.error;
+      var eph = r.ephemeral_until;                    // unix ts, or null → conservé
+      var kept = !eph;                                // kept-by-default
+      var pt = r.peertube_status;                     // 'done' | 'queued' | 'error' | null
+      var playerOpen = !!openPlayers[id];
+
+      var cls = errored ? 'error' : (!complete ? 'downloading' : (eph ? 'ephemeral' : 'kept'));
+
+      // State badge
+      var stateBadge = eph
+        ? '<span class="badge eph">⏳ purge ' + esc(fmtWhen(eph)) + '</span>'
+        : '<span class="badge kept">📌 gardé</span>';
+
+      // PeerTube conserve badge / action (complete only)
+      var ptHtml = '';
+      if (complete) {
+        if (pt === 'done' && r.peertube_url) {
+          ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
+        } else if (pt === 'queued' || pt === 'uploading') {
+          ptHtml = '<span class="btn sm muted">📼 upload…</span>';
+        } else {
+          ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver dans PeerTube">📼 Garder → PeerTube</button>' +
+            (pt === 'error' ? ' <span class="muted" title="échec upload">⚠</span>' : '');
+        }
+      }
+
+      // Purge control (complete only): ephemeral → cancel; kept → schedule
+      var purgeHtml = '';
+      if (complete) {
+        purgeHtml = eph
+          ? '<button class="btn sm good" data-action="keep" title="Reprendre garde (annuler la purge)">📌 Reprendre garde</button>'
+          : '<select class="btn sm" data-action="purge-in" title="Programmer une purge">' +
+              '<option value="">⏳ Purger dans…</option>' +
+              '<option value="3600">1 h</option>' +
+              '<option value="21600">6 h</option>' +
+              '<option value="86400">24 h</option>' +
+              '<option value="604800">7 j</option>' +
+            '</select>';
+      }
+
+      var playBtn = (complete && !errored)
+        ? '<button class="btn sm" data-action="toggle-play" title="Lire dans le navigateur">' +
+            (playerOpen ? '⏹ Fermer' : '▶ Lire') + '</button>'
+        : '';
+
+      var body;
+      if (errored) {
+        body = '<div class="meta" style="color:var(--red)">⚠ échec : ' + esc(r.error || 'erreur yt-dlp') +
+          (r.needs_cookies ? ' — dépose tes cookies ci-dessus' : '') + '</div>';
+      } else if (!complete) {
+        var pfill = pct == null ? 0 : pct;
+        body = '<div class="progress-bar"><div class="fill" style="width:' + pfill + '%"></div></div>' +
+          '<div class="meta">⏳ téléchargement ' + (pct == null ? '…' : pct + '%') +
+          (r.eta ? ' · ETA ' + esc(String(r.eta)) : '') +
+          (r.speed ? ' · ' + fmtBytes(r.speed) + '/s' : '') + '</div>';
+      } else {
+        body = '<div class="meta">✅ prêt' + (r.size != null ? ' · ' + fmtBytes(r.size) : '') +
+          (r.duration ? ' · ' + esc(String(r.duration)) : '') + '</div>';
+      }
+
+      var playerHtml = '<div class="player' + (playerOpen ? ' open' : '') + '" data-role="player">' +
+        (playerOpen
+          ? '<video controls autoplay preload="metadata" src="' + esc(API + '/stream/' + encodeURIComponent(id)) + '"></video>'
+          : '') +
+        '</div>';
+
+      return (
+        '<div class="item ' + cls + '" data-id="' + esc(id) + '">' +
+          '<div class="item-top">' +
+            '<div class="title" title="' + esc(r.title || r.url || id) + '">' +
+              esc(r.title || r.url || ('#' + id)) + '</div>' +
+            '<div class="row-actions">' +
+              (complete && !errored ? stateBadge : '') +
+              playBtn + ptHtml + purgeHtml +
+              '<button class="btn sm danger" data-action="remove" title="Supprimer">🗑</button>' +
+            '</div>' +
+          '</div>' +
+          body +
+          playerHtml +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function refreshList() {
+    return api(API + '/list').then(renderList).catch(function (e) {
+      document.getElementById('list').innerHTML = '<p class="muted">Erreur de chargement.</p>';
+      console.error(e);
+    });
+  }
+
+  function onListClick(ev) {
+    var actionEl = ev.target.closest('[data-action]');
+    if (!actionEl) return;
+    var itemEl = ev.target.closest('.item');
+    if (!itemEl) return;
+    var id = itemEl.getAttribute('data-id');
+    var action = actionEl.getAttribute('data-action');
+
+    if (action === 'toggle-play') {
+      openPlayers[id] = !openPlayers[id];
+      refreshList();
+      return;
+    }
+    if (action === 'keep') {
+      api(API + '/keep/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
+        toast('📌 Garde reprise');
+        refreshList();
+      }).catch(function (e) { errorToast('Reprendre garde : ' + e.message); });
+      return;
+    }
+    if (action === 'conserve') {
+      api(API + '/conserve/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
+        toast('📼 Envoi vers PeerTube en file d’attente…');
+        refreshList();
+      }).catch(function (e) { errorToast('Garder → PeerTube : ' + e.message); });
+      return;
+    }
+    if (action === 'remove') {
+      if (!confirm('Supprimer cette vidéo et ses données ?')) return;
+      api(API + '/remove/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
+        toast('🗑 Supprimé');
+        delete openPlayers[id];
+        refreshList();
+      }).catch(function (e) { errorToast('Suppression : ' + e.message); });
+      return;
+    }
+  }
+
+  function onListChange(ev) {
+    var sel = ev.target.closest('[data-action="purge-in"]');
+    if (!sel) return;
+    var itemEl = ev.target.closest('.item');
+    if (!itemEl) return;
+    var id = itemEl.getAttribute('data-id');
+    var secs = Number(sel.value);
+    if (!secs) return;
+    api(API + '/ephemeral/' + encodeURIComponent(id),
+      { method: 'POST', body: JSON.stringify({ seconds: secs }) }).then(function () {
+      toast('⏳ Purge programmée ' + fmtWhen(Math.floor(Date.now() / 1000) + secs));
+      refreshList();
+    }).catch(function (e) { errorToast('Purge : ' + e.message); });
+  }
+
+  function addVideo() {
+    var input = document.getElementById('urlInput');
+    var btn = document.getElementById('btnAdd');
+    var val = input.value.trim();
+    if (!val) { errorToast('Lien requis'); return; }
+    btn.disabled = true;
+    api(API + '/add', { method: 'POST', body: JSON.stringify({ url: val }) })
+      .then(function (meta) {
+        input.value = '';
+        toast('➕ Ajouté : ' + (meta.title || meta.id || 'ok'));
+        refreshList();
+        refreshStatus();
+      })
+      .catch(function (e) { errorToast('Échec de l\'ajout : ' + e.message); })
+      .finally(function () { btn.disabled = false; });
+  }
+
+  function uploadCookies() {
+    var f = document.getElementById('cookieFile').files[0];
+    var btn = document.getElementById('btnCookie');
+    if (!f) { errorToast('Fichier cookies.txt requis'); return; }
+    btn.disabled = true;
+    // Send the cookies.txt as RAW TEXT — the backend writes the raw body straight
+    // to the vault (it accepts raw text or a JSON envelope, not multipart).
+    f.text().then(function (txt) {
+      return api(API + '/cookies', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: txt });
+    })
+      .then(function () {
+        document.getElementById('cookieFile').value = '';
+        toast('🔒 Cookies enregistrés');
+        refreshCookies();
+      })
+      .catch(function (e) { errorToast('Dépôt cookies : ' + e.message); })
+      .finally(function () { btn.disabled = false; });
+  }
+
+  function refresh() {
+    refreshStatus();
+    refreshCookies();
+    refreshList();
+  }
+
+  document.getElementById('btnRefresh').addEventListener('click', refresh);
+  document.getElementById('btnAdd').addEventListener('click', addVideo);
+  document.getElementById('urlInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addVideo();
+  });
+  document.getElementById('btnCookie').addEventListener('click', uploadCookies);
+  document.getElementById('list').addEventListener('click', onListClick);
+  document.getElementById('list').addEventListener('change', onListChange);
+
+  refresh();
+  setInterval(refresh, 15000);
+})();
+</script>
+</body>
+</html>

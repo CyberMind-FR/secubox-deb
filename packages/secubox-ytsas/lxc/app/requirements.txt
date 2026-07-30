@@ -1,0 +1,10 @@
+# SecuBox-Deb :: secubox-ytsas — in-LXC Python app deps (pip-installed in the LXC)
+# CyberMind — https://cybermind.fr
+#
+# Runtime also needs the `ffmpeg` binary (apt) for `--merge-output-format mp4`
+# muxing of separate bestvideo+bestaudio streams. The install-lxc.sh (owned by
+# the packaging agent) installs ffmpeg via apt and should auto-update yt-dlp
+# (sites change often).
+fastapi>=0.110
+uvicorn>=0.27
+yt-dlp>=2024.1.1
