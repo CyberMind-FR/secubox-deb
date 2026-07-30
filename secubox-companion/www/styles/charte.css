@@ -208,3 +208,9 @@ body.has-queue .queued-bar { display: block; }
 :root[data-theme="dark"] .topbar{ background:rgba(7,7,12,.72); backdrop-filter:blur(8px); }
 :root[data-theme="dark"] .seg button.on{ background:linear-gradient(135deg,rgba(0,212,255,.20),rgba(167,139,255,.18)); }
 :root[data-theme="dark"] .fav.on{ color:var(--wall); text-shadow:0 0 10px rgba(255,182,56,.5); }
+
+/* cardlet live metrics (real values from the module's /status) */
+.cardlet-metrics { display:flex; gap:14px; flex-wrap:wrap; margin-top:8px; }
+.cardlet-metrics:empty { display:none; }
+.cmetric .cv { font-family:var(--font-mono); font-weight:700; font-size:1.08rem; color:var(--accent,var(--text)); font-variant-numeric:tabular-nums; line-height:1; }
+.cmetric .ck { font-size:.56rem; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; margin-top:3px; }

@@ -6,6 +6,23 @@
   "description": "Bibliothèque photo IA : albums, visages, lieux, originaux.",
   "api_base": "/api/v1/photoprism",
   "status_endpoint": "/api/v1/photoprism/status",
-  "capabilities": ["read"],
-  "routes": [{ "path": "", "label": "Aperçu" }]
+  "capabilities": [
+    "read"
+  ],
+  "routes": [
+    {
+      "path": "",
+      "label": "Aperçu"
+    }
+  ],
+  "metrics": [
+    {
+      "key": "http_reachable",
+      "label": "accessible"
+    },
+    {
+      "key": "port",
+      "label": "port"
+    }
+  ]
 }

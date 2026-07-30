@@ -127,14 +127,35 @@ async function dashboard() {
         el('div.cardlet-id', {}, [el('div.kicker', { text: m.module }), el('h3', { text: m.name })]),
       ]),
       el('div.muted', { style: 'font-size:.74rem;min-height:2em', text: m.description || '' }),
+      el('div.cardlet-metrics'),
       el('div.row', { style: 'margin-top:8px' }, [pill]),
     ]);
     grid.append(card);
+    const metricsEl = card.querySelector('.cardlet-metrics');
     if (m.status_endpoint) {
-      api.get(m.status_endpoint).then(s => setPill(pill, s)).catch(() => setPill(pill, null));
+      api.get(m.status_endpoint)
+        .then(s => { setPill(pill, s); fillMetrics(metricsEl, m.metrics, s); })
+        .catch(() => setPill(pill, null));
     } else setPill(pill, { status: 'ready' });
   }
   applyFilter();
+}
+
+// Render the module's declared metrics from its live status response. Only
+// numbers/strings the status actually returns are shown — no fabricated data;
+// a module without a `metrics` manifest (or an unreachable status) shows just
+// the pill.
+function fillMetrics(host, defs, s) {
+  if (!host || !Array.isArray(defs) || !s || typeof s !== 'object') return;
+  const cells = [];
+  for (const d of defs) {
+    const raw = s[d.key];
+    if (raw == null) continue;
+    const val = typeof raw === 'number' ? raw.toLocaleString('fr-FR')
+      : (raw === true ? '✓' : raw === false ? '✕' : String(raw));
+    cells.push(el('div.cmetric', {}, [el('div.cv', { text: val }), el('div.ck', { text: d.label })]));
+  }
+  if (cells.length) host.replaceChildren(...cells);
 }
 
 function statusText(s) {
@@ -142,7 +163,8 @@ function statusText(s) {
   return s.status || (s.ok ? 'ok' : null) || Object.entries(s).slice(0, 2).map(([k, v]) => `${k}:${v}`).join(' · ') || 'ok';
 }
 function setPill(pill, s) {
-  const online = !!(s && (s.status === 'ok' || s.status === 'running' || s.status === 'ready' || s.ok || s.active || s.radio === 'present'));
+  const online = !!(s && (s.status === 'ok' || s.status === 'running' || s.status === 'ready'
+    || s.ok || s.active || s.enabled || s.http_reachable || s.radio === 'present'));
   const txt = s ? statusText(s) : (navigator.onLine ? 'injoignable' : 'offline');
   pill.className = 'pill ' + (s == null ? 'down' : (online ? 'up' : 'idle'));
   pill.replaceChildren(el('span.dot'), document.createTextNode(' ' + txt));
