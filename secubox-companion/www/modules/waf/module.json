@@ -6,6 +6,23 @@
   "description": "Web firewall: traffic, threats, MITM filters.",
   "api_base": "/api/v1/waf",
   "status_endpoint": "/api/v1/waf/status",
-  "capabilities": ["read"],
-  "routes": [{ "path": "", "label": "Overview" }]
+  "capabilities": [
+    "read"
+  ],
+  "routes": [
+    {
+      "path": "",
+      "label": "Overview"
+    }
+  ],
+  "metrics": [
+    {
+      "key": "total_rules",
+      "label": "règles"
+    },
+    {
+      "key": "active_categories",
+      "label": "catégories"
+    }
+  ]
 }
