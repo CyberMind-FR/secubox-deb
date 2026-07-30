@@ -7,5 +7,10 @@
   "api_base": "/api/v1/exposure",
   "status_endpoint": "/api/v1/exposure/status",
   "capabilities": ["read", "write"],
-  "routes": [{ "path": "", "label": "Services" }]
+  "routes": [{ "path": "", "label": "Services" }],
+  "metrics": [
+    { "key": "services.external", "label": "exposés" },
+    { "key": "tor.count", "label": "Tor" },
+    { "key": "ssl.count", "label": "SSL" }
+  ]
 }
