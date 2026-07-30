@@ -8,7 +8,7 @@ Homepage: https://github.com/CyberMind-FR/secubox-deb
 
 Package: secubox-aggregator
 Architecture: all
-Depends: ${python3:Depends},
+Depends: ${python3:Depends}, python3-httpx,
          ${misc:Depends},
          python3,
          python3-fastapi,

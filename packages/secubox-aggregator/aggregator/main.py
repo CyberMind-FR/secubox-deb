@@ -28,12 +28,14 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 import sys
 import tomllib
 from pathlib import Path
 from typing import Dict, List
 
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, Request, Response
 
 log = logging.getLogger("secubox.aggregator")
 
@@ -247,6 +249,44 @@ def _build_app() -> FastAPI:
             "mounted": len(_MOUNTED),
             "failed": len(_LOAD_ERRORS),
         }
+
+    # ── Selective concentrator ───────────────────────────────────────────────
+    # A module NOT mounted in-process but running on its own
+    # /run/secubox/<name>.sock is reached transparently here, so EVERY module is
+    # addressable at /api/v1/<name>/… through the gateway — no per-vhost nginx
+    # location and no HAProxy drift needed. Mounted modules never reach this
+    # route (their Mount matches first). The sub-app serves its routes at the
+    # STRIPPED path (root_path is cosmetic), so /api/v1/jellyfin/partners is
+    # forwarded to the socket as /partners.
+    _RUN = "/run/secubox"
+
+    @app.api_route(
+        f"{API_PREFIX}/{{name}}/{{path:path}}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    )
+    async def _dedicated_socket_proxy(name: str, path: str, request: Request) -> Response:
+        if name in _MOUNTED:
+            return Response(status_code=404)
+        sock = f"{_RUN}/{name}.sock"
+        if not os.path.exists(sock):
+            return Response(status_code=404)
+        url = f"http://localhost/{path}"
+        if request.url.query:
+            url += f"?{request.url.query}"
+        body = await request.body()
+        fwd = {k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")}
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(uds=sock), timeout=60.0
+            ) as client:
+                r = await client.request(request.method, url, content=body, headers=fwd)
+        except Exception as e:  # socket gone / module down
+            log.warning("[proxy] %s%s/%s -> %s failed: %s", API_PREFIX, "/" + name, path, sock, e)
+            return Response(status_code=502)
+        drop = {"content-length", "transfer-encoding", "connection"}
+        out = {k: v for k, v in r.headers.items() if k.lower() not in drop}
+        return Response(content=r.content, status_code=r.status_code, headers=out,
+                        media_type=r.headers.get("content-type"))
 
     return app
 

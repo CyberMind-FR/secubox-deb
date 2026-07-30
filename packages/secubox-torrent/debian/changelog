@@ -1,3 +1,11 @@
+secubox-torrent (2.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * webui: fix .torrent FILE upload (Bad Request) — the api() helper clobbered
+    the caller Content-Type to application/json, so the binary hit the json
+    parser and 400d. Now only defaults to json when no Content-Type is set.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 18:45:00 +0200
+
 secubox-torrent (2.2.5-1~bookworm1) bookworm; urgency=medium
 
   * /add: tolerant input — accept magnet/torrentUrl/url/link + a bare string body,
