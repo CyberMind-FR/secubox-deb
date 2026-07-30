@@ -1,3 +1,10 @@
+secubox-torrent (2.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * api: /status now also returns status:'ok', so the SecuBox Companion cardlet
+    reads the module as online (the pill had no status field to key off).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 10:00:00 +0200
+
 secubox-torrent (2.2.1-1~bookworm1) bookworm; urgency=high
 
   * Fix "Bad Request" on keep/remove/conserve: the panel sent
