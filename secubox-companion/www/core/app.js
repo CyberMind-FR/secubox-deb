@@ -51,38 +51,88 @@ async function refreshChrome() {
 
 function lock() { location.hash = '#/'; boot(true); }
 
+// ── favourites (parameterizable, localStorage) ─────────────────────
+// Default = the current base modules + photoprism (peertube is already in).
+const DEFAULT_FAVS = ['waf', 'system', 'billets', 'podcasteur', 'peertube', 'exposure', 'wireguard', 'photoprism'];
+function getFavs() {
+  try { const f = JSON.parse(localStorage.getItem('sbx-favs')); if (Array.isArray(f)) return new Set(f); } catch (e) { /* noop */ }
+  return new Set(DEFAULT_FAVS);
+}
+function saveFavs(set) { try { localStorage.setItem('sbx-favs', JSON.stringify([...set])); } catch (e) { /* noop */ } }
+function getView() { try { return localStorage.getItem('sbx-view') || 'favs'; } catch (e) { return 'favs'; } }
+function setViewPref(v) { try { localStorage.setItem('sbx-view', v); } catch (e) { /* noop */ } }
+
 // ── dashboard ─────────────────────────────────────────────────────
 async function dashboard() {
   const root = clear(view());
-  const mods = registry.all();
-  if (!mods.length) { root.append(el('div.empty', { text: 'No modules installed. Drop a folder in www/modules/ and add its id to index.json.' })); return; }
+  const mods = registry.all().filter(m => m.module !== 'AUTH');   // the gate is not a tile
+  if (!mods.length) { root.append(el('div.empty', { text: 'Aucun module. Dépose un dossier dans www/modules/ et ajoute son id à index.json.' })); return; }
 
-  const grid = el('div.grid');
-  root.append(el('div.panel-head', {}, [el('h2', { text: 'Modules' })]), grid);
+  const favs = getFavs();
+  let vw = getView();
+
+  const seg = el('div.seg', {}, [
+    el('button', { dataset: { view: 'favs' }, text: '⭐ Favoris', class: vw === 'favs' ? 'on' : '' }),
+    el('button', { dataset: { view: 'all' }, text: '⊞ Tout', class: vw === 'all' ? 'on' : '' }),
+  ]);
+  const grid = el('div.grid.cardlets');
+  const empty = el('div.empty', { style: 'display:none', text: '⭐ Aucun favori — passe en « Tout » et clique l’étoile d’une carte pour l’épingler.' });
+  root.append(el('div.panel-head', {}, [el('h2', { text: 'Tableau de bord' }), el('span.spacer'), seg]), grid, empty);
+
+  function applyFilter() {
+    let shown = 0;
+    grid.querySelectorAll('.card').forEach(c => {
+      const vis = (vw === 'all') || favs.has(c.dataset.id);
+      c.style.display = vis ? '' : 'none';
+      if (vis) shown++;
+    });
+    empty.style.display = (vw === 'favs' && shown === 0) ? '' : 'none';
+  }
+  seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    vw = b.dataset.view; setViewPref(vw);
+    seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.view === vw));
+    applyFilter();
+  }));
 
   for (const m of mods) {
-    const status = el('span.status', { text: '…' });
-    const card = el('div.card.link', {
-      dataset: { module: m.module },
+    const pill = el('span.pill.idle', {}, [el('span.dot'), ' …']);
+    const star = el('button.fav', { title: 'Favori', text: favs.has(m.id) ? '★' : '☆', class: favs.has(m.id) ? 'fav on' : 'fav' });
+    star.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (favs.has(m.id)) favs.delete(m.id); else favs.add(m.id);
+      star.textContent = favs.has(m.id) ? '★' : '☆';
+      star.classList.toggle('on', favs.has(m.id));
+      saveFavs(favs); applyFilter();
+    });
+    const card = el('div.card.link.cardlet', {
+      dataset: { module: m.module, id: m.id },
       onclick: () => { location.hash = `#/m/${m.id}`; },
     }, [
-      el('div.kicker', { text: m.module }),
-      el('h3', {}, [m.icon ? el('span', { text: m.icon }) : null, esc(m.name)]),
-      el('div.muted', { style: 'font-size:.78rem;min-height:2.2em', text: m.description || '' }),
-      el('div.row', { style: 'margin-top:8px' }, [status]),
+      star,
+      el('div.cardlet-top', {}, [
+        el('span.emoji', { text: m.icon || '🔷' }),
+        el('div.cardlet-id', {}, [el('div.kicker', { text: m.module }), el('h3', { text: m.name })]),
+      ]),
+      el('div.muted', { style: 'font-size:.74rem;min-height:2em', text: m.description || '' }),
+      el('div.row', { style: 'margin-top:8px' }, [pill]),
     ]);
     grid.append(card);
-    // best-effort live status
     if (m.status_endpoint) {
-      api.get(m.status_endpoint).then(s => {
-        status.textContent = statusText(s);
-      }).catch(() => { status.textContent = navigator.onLine ? 'unreachable' : 'offline'; });
-    } else status.textContent = 'ready';
+      api.get(m.status_endpoint).then(s => setPill(pill, s)).catch(() => setPill(pill, null));
+    } else setPill(pill, { status: 'ready' });
   }
+  applyFilter();
 }
+
 function statusText(s) {
   if (!s || typeof s !== 'object') return 'ok';
   return s.status || (s.ok ? 'ok' : null) || Object.entries(s).slice(0, 2).map(([k, v]) => `${k}:${v}`).join(' · ') || 'ok';
+}
+function setPill(pill, s) {
+  const online = !!(s && (s.status === 'ok' || s.status === 'running' || s.status === 'ready' || s.ok || s.active || s.radio === 'present'));
+  const txt = s ? statusText(s) : (navigator.onLine ? 'injoignable' : 'offline');
+  pill.className = 'pill ' + (s == null ? 'down' : (online ? 'up' : 'idle'));
+  pill.replaceChildren(el('span.dot'), document.createTextNode(' ' + txt));
 }
 
 // ── module view ───────────────────────────────────────────────────

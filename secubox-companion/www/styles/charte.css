@@ -165,3 +165,28 @@ body.has-queue .queued-bar { display: block; }
 .mono-sm { font-family: var(--font-mono); font-size: .72rem; }
 @media (max-width: 520px) { .main { padding: 12px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ── Dashboard cardlets + favourites (Companion redesign) ─────────── */
+.grid.cardlets { grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); }
+.card.cardlet { position: relative; }
+.card.cardlet[data-module="AUTH"]{--accent:var(--auth)} .card.cardlet[data-module="WALL"]{--accent:var(--wall)}
+.card.cardlet[data-module="BOOT"]{--accent:var(--boot)} .card.cardlet[data-module="MIND"]{--accent:var(--mind)}
+.card.cardlet[data-module="ROOT"]{--accent:var(--root)} .card.cardlet[data-module="MESH"]{--accent:var(--mesh)}
+.cardlet-top { display: flex; align-items: center; gap: 10px; }
+.cardlet .emoji { width: 40px; height: 40px; flex: none; border-radius: 11px; display: grid; place-items: center; font-size: 1.3rem;
+  background: color-mix(in srgb, var(--accent, var(--muted)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, var(--muted)) 32%, transparent); }
+.cardlet-id h3 { margin: 2px 0 0; }
+.cardlet-id .kicker { margin: 0; }
+.card .fav { position: absolute; top: 8px; right: 9px; z-index: 2; cursor: pointer; background: none; border: none;
+  font-size: 1rem; line-height: 1; color: var(--border); padding: 2px; transition: transform .15s, color .15s; }
+.card .fav:hover { transform: scale(1.2); color: var(--muted); }
+.card .fav.on { color: var(--wall); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--surf); }
+.seg button { background: none; border: none; font: inherit; font-size: .74rem; font-weight: 600; color: var(--muted); padding: 5px 11px; cursor: pointer; }
+.seg button.on { background: var(--surf-2); color: var(--text); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: .68rem; padding: 2px 8px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted); }
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.pill.up { color: var(--root); border-color: var(--root); } .pill.up .dot { background: var(--root); }
+.pill.idle { color: var(--wall); border-color: var(--wall); } .pill.idle .dot { background: var(--wall); }
+.pill.down { color: var(--boot); border-color: var(--boot); } .pill.down .dot { background: var(--boot); }
