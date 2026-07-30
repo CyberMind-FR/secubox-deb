@@ -37,3 +37,18 @@ override_dh_auto_install:
 	# original task brief's path would ship a rule that never loads.
 	install -d debian/secubox-torrent/etc/nftables.d
 	install -m 644 nft/torrent-egress.nft debian/secubox-torrent/etc/nftables.d/zz-torrent-egress.nft
+	# Host-side "conserve to PeerTube" queue processor + timer. The torrent app
+	# (in the LXC) drops upload requests on the shared /data volume; this host
+	# job holds the PeerTube creds (via peertubectl) and does the upload.
+	install -d debian/secubox-torrent/usr/sbin
+	install -m 755 sbin/secubox-torrent-conserve debian/secubox-torrent/usr/sbin/secubox-torrent-conserve
+	install -d debian/secubox-torrent/usr/lib/systemd/system
+	install -m 644 systemd/secubox-torrent-conserve.service debian/secubox-torrent/usr/lib/systemd/system/
+	install -m 644 systemd/secubox-torrent-conserve.timer debian/secubox-torrent/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Suppress auto enable/start of the in-LXC unit shipped under usr/lib/secubox;
+	# the conserve timer is enabled by postinst. (secubox-torrent.service proper
+	# runs INSIDE the LXC, not on the host.)
+	dh_installsystemd --no-enable --no-start secubox-torrent-conserve.timer
+	dh_installsystemd --no-enable --no-start secubox-torrent-conserve.service
