@@ -14,6 +14,13 @@ secubox-torrent (2.2.0-1~bookworm1) bookworm; urgency=medium
     loop). The library keeps every conserved row; the engine loads a torrent
     LAZILY the first time it is streamed (Engine.ensureLoaded on /stream and
     /files). Restart-survival + no re-hash verified live on gk2.
+  * Conserve to PeerTube: POST /api/v1/torrent/conserve/<ih> drops an upload
+    request on the shared /data volume for a NEW host-side processor
+    (secubox-torrent-conserve.timer) which holds the PeerTube creds (via
+    peertubectl) and uploads the completed video (unlisted), then drops a
+    result the LXC folds into the library (peertube_url). Panel: "📼 Conserver"
+    per torrent (+ a link once done) and a "⏳ Purger dans…" delay picker.
+    Conserved torrents show "chargé à la lecture" (lazy) instead of a bogus 0%.
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 09:00:00 +0200
 

@@ -162,6 +162,15 @@
     });
   }
 
+  // Relative time for a scheduled purge (unix ts).
+  function fmtWhen(ts) {
+    var d = ts * 1000 - Date.now();
+    if (d <= 0) return 'imminente';
+    var h = Math.round(d / 3600000);
+    if (h < 24) return 'dans ' + h + ' h';
+    return 'dans ' + Math.round(h / 24) + ' j';
+  }
+
   function extOf(name) {
     var m = /\.([A-Za-z0-9]+)$/.exec(name || '');
     return m ? m[1].toLowerCase() : '';
@@ -248,22 +257,53 @@
       return;
     }
     el.innerHTML = rows.map(function (r) {
-      var pct = r.stats ? Math.round((r.stats.progress || 0) * 100) : 0;
-      var kept = r.kept === 1;
+      // stats come from the engine, which under the sas model is EMPTY for
+      // conserved-but-not-streaming torrents (lazy). So a null stats = loaded
+      // on demand, not "0% downloaded". Completeness is enforced server-side by
+      // /conserve (it loads the torrent and checks) — the button stays enabled.
+      var pct = r.stats ? Math.round((r.stats.progress || 0) * 100) : null;
+      var eph = r.ephemeral_until;      // unix ts, or null → conserved
+      var pt = r.peertube_status;       // 'done' | 'queued' | 'error' | null
       var filesOpen = !!openFiles[r.infohash];
+
+      // PeerTube conserve badge / action
+      var ptHtml;
+      if (pt === 'done' && r.peertube_url) {
+        ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
+      } else if (pt === 'queued') {
+        ptHtml = '<span class="btn sm muted">📼 upload…</span>';
+      } else {
+        ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver dans PeerTube (téléchargement complet requis)">📼 Conserver</button>' +
+          (pt === 'error' ? ' <span class="muted" title="échec upload">⚠</span>' : '');
+      }
+
+      // Purge control: conserved → offer a delay; marked → offer to cancel
+      var purgeHtml = eph
+        ? '<button class="btn sm good" data-action="keep" title="Annuler la purge">📌 Conserver</button>'
+        : '<select class="btn sm" data-action="purge-in" title="Programmer une purge">' +
+            '<option value="">⏳ Purger dans…</option>' +
+            '<option value="3600">1 h</option>' +
+            '<option value="21600">6 h</option>' +
+            '<option value="86400">24 h</option>' +
+            '<option value="604800">7 j</option>' +
+          '</select>';
+
       return (
-        '<div class="item ' + (kept ? 'kept' : 'ephemeral') + '" data-ih="' + esc(r.infohash) + '">' +
+        '<div class="item ' + (eph ? 'ephemeral' : 'kept') + '" data-ih="' + esc(r.infohash) + '">' +
           '<div class="item-top">' +
             '<div class="title" data-action="toggle-files" title="' + esc(r.name) + '">' +
-              (kept ? '📌 ' : '⏳ ') + esc(r.name) +
+              (eph ? '⏳ ' : '📌 ') + esc(r.name) +
+              (eph ? ' <span class="muted">(purge ' + fmtWhen(eph) + ')</span>' : '') +
             '</div>' +
             '<div class="row-actions">' +
-              (kept ? '' : '<button class="btn sm good" data-action="keep">📌 Garder</button>') +
+              ptHtml + purgeHtml +
               '<button class="btn sm danger" data-action="remove">🗑</button>' +
             '</div>' +
           '</div>' +
-          '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
-          '<div class="meta">' + statsLine(r.stats) + '</div>' +
+          (pct == null
+            ? '<div class="meta muted">📌 conservé — chargé à la lecture</div>'
+            : '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+              '<div class="meta">' + statsLine(r.stats) + '</div>') +
           '<div class="files' + (filesOpen ? ' open' : '') + '" data-role="files">' +
             '<p class="muted">Chargement des fichiers…</p>' +
           '</div>' +
@@ -346,6 +386,13 @@
       }).catch(function (e) { errorToast('Échec: ' + e.message); });
       return;
     }
+    if (action === 'conserve') {
+      api(API + '/conserve/' + encodeURIComponent(ih), { method: 'POST' }).then(function (res) {
+        toast('📼 Envoi vers PeerTube en file d’attente…');
+        refreshList();
+      }).catch(function (e) { errorToast('Conserver: ' + e.message); });
+      return;
+    }
     if (action === 'remove') {
       if (!confirm('Supprimer ce torrent et ses données ?')) return;
       api(API + '/remove/' + encodeURIComponent(ih), { method: 'POST' }).then(function () {
@@ -413,6 +460,21 @@
     if (e.key === 'Enter') addTorrent();
   });
   document.getElementById('list').addEventListener('click', onListClick);
+  // Purge-delay dropdown (change, not click).
+  document.getElementById('list').addEventListener('change', function (ev) {
+    var sel = ev.target.closest('[data-action="purge-in"]');
+    if (!sel) return;
+    var itemEl = ev.target.closest('.item');
+    if (!itemEl) return;
+    var ih = itemEl.getAttribute('data-ih');
+    var secs = Number(sel.value);
+    if (!secs) return;
+    api(API + '/ephemeral/' + encodeURIComponent(ih),
+      { method: 'POST', body: JSON.stringify({ seconds: secs }) }).then(function () {
+      toast('⏳ Purge programmée ' + fmtWhen(Math.floor(Date.now() / 1000) + secs));
+      refreshList();
+    }).catch(function (e) { errorToast('Purge: ' + e.message); });
+  });
 
   refresh();
   setInterval(refresh, 15000);
