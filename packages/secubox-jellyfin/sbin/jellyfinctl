@@ -105,18 +105,20 @@ _apikey() { [ -s "$APIKEY_FILE" ] && cat "$APIKEY_FILE" 2>/dev/null || true; }
 # collectionType for the Jellyfin virtual folder, derived from partner kind.
 # Jellyfin groups photos under "homevideos" (there is no pure photos type).
 _kind_ct() {
-    case "$1" in
+    case "${1:-}" in
         photos)   echo "homevideos" ;;
         music)    echo "music" ;;
         files)    echo "movies" ;;
         torrents) echo "movies" ;;
+        videos)   echo "movies" ;;
         *)        echo "mixed" ;;
     esac
 }
 
 # _jf_add_library <name> <collectionType> <container_path>
 _jf_add_library() {
-    local name="$1" ct="$2" path="$3" key
+    local name="${1:-}" ct="${2:-}" path="${3:-}" key
+    [ -n "$name" ] && [ -n "$path" ] || return 1
     key=$(_apikey)
     [ -n "$key" ] || { warn "no jellyfin api key ($APIKEY_FILE); virtual folder for '$name' NOT created"; return 1; }
     lxc_running || { warn "jellyfin not running; virtual folder for '$name' deferred to next scan"; return 1; }
@@ -128,7 +130,8 @@ _jf_add_library() {
 
 # _jf_del_library <name>
 _jf_del_library() {
-    local name="$1" key
+    local name="${1:-}" key
+    [ -n "$name" ] || return 1
     key=$(_apikey)
     [ -n "$key" ] || return 1
     lxc_running || return 1
@@ -162,7 +165,8 @@ _partner_wired() {
 
 # _record_lib <name> <container_path> <host_path> <kind> <collectionType>
 _record_lib() {
-    local name="$1" path="$2" host="$3" kind="$4" ct="$5" tmp
+    local name="${1:-}" path="${2:-}" host="${3:-}" kind="${4:-}" ct="${5:-}" tmp
+    [ -n "$name" ] || return 1
     _ensure_lib_store
     tmp=$(mktemp)
     jq --arg n "$name" --arg p "$path" --arg h "$host" --arg k "$kind" --arg c "$ct" \
@@ -172,7 +176,8 @@ _record_lib() {
 }
 
 _drop_lib() {
-    local name="$1" tmp
+    local name="${1:-}" tmp
+    [ -n "$name" ] || return 1
     _ensure_lib_store
     tmp=$(mktemp)
     jq --arg n "$name" '.libraries = ((.libraries // []) | map(select(.name != $n)))' \
@@ -184,7 +189,8 @@ _lxc_config() { echo "$LXC_PATH/$LXC_NAME/config"; }
 
 # _add_bind <host_path> <name> — idempotent RO bind entry in the LXC config.
 _add_bind() {
-    local host="$1" name="$2" cfg
+    local host="${1:-}" name="${2:-}" cfg
+    [ -n "$host" ] && [ -n "$name" ] || { err "_add_bind: missing host/name"; return 1; }
     cfg=$(_lxc_config)
     [ -f "$cfg" ] || { err "LXC config not found: $cfg (provision the LXC first)"; return 1; }
     grep -qF " media/${name} none bind" "$cfg" && return 0
@@ -192,7 +198,8 @@ _add_bind() {
 }
 
 _remove_bind() {
-    local name="$1" cfg
+    local name="${1:-}" cfg
+    [ -n "$name" ] || return 0
     cfg=$(_lxc_config)
     [ -f "$cfg" ] || return 0
     sed -i "\# media/${name} none bind#d" "$cfg" 2>/dev/null || true
@@ -201,7 +208,9 @@ _remove_bind() {
 # _live_mount <host_path> <name> — best-effort RO bind into the running rootfs
 # so no restart is needed. Durable across boots via the config bind entry.
 _live_mount() {
-    local host="$1" name="$2" target="$LXC_PATH/$LXC_NAME/rootfs/media/$name"
+    local host="${1:-}" name="${2:-}"
+    [ -n "$host" ] && [ -n "$name" ] || return 0
+    local target="$LXC_PATH/$LXC_NAME/rootfs/media/$name"
     mkdir -p "$target" 2>/dev/null || true
     if ! mountpoint -q "$target" 2>/dev/null; then
         mount --bind "$host" "$target" 2>/dev/null || return 0
@@ -210,7 +219,9 @@ _live_mount() {
 }
 
 _live_umount() {
-    local name="$1" target="$LXC_PATH/$LXC_NAME/rootfs/media/$name"
+    local name="${1:-}"
+    [ -n "$name" ] || return 0
+    local target="$LXC_PATH/$LXC_NAME/rootfs/media/$name"
     mountpoint -q "$target" 2>/dev/null && umount "$target" 2>/dev/null || true
 }
 
@@ -218,20 +229,20 @@ _live_umount() {
 readonly PARTNERS="photoprism nextcloud torrent lyrion peertube"
 
 _partner_kind() {
-    case "$1" in
+    case "${1:-}" in
         photoprism) echo "photos" ;;
         nextcloud)  echo "files" ;;
         torrent)    echo "torrents" ;;
         lyrion)     echo "music" ;;
-        peertube)   echo "link" ;;
+        peertube)   echo "videos" ;;
         *)          echo "" ;;
     esac
 }
 
-# _partner_media_path <name> — host media dir (empty for peertube / link-only).
+# _partner_media_path <name> — host media dir for the RO bind.
 # Reads the real path from each module's TOML, falls back to a documented default.
 _partner_media_path() {
-    case "$1" in
+    case "${1:-}" in
         photoprism)
             toml_get /etc/secubox/photoprism.toml originals "/data/shared/photos"
             ;;
@@ -252,7 +263,17 @@ _partner_media_path() {
             toml_get_sec /etc/secubox/lyrion.toml library path "/data/music"
             ;;
         peertube)
-            echo ""
+            # PeerTube stores its on-disk videos under storage/videos. Prefer an
+            # explicit key in peertube.toml, then a storage base, else the
+            # confirmed host default (/data/peertube/storage bound into the LXC).
+            local v base
+            v=$(toml_get /etc/secubox/peertube.toml videos "")
+            [ -z "$v" ] && v=$(toml_get /etc/secubox/peertube.toml videos_dir "")
+            if [ -n "$v" ]; then echo "$v"; return; fi
+            base=$(toml_get /etc/secubox/peertube.toml storage "")
+            [ -z "$base" ] && base=$(toml_get /etc/secubox/peertube.toml storage_dir "")
+            if [ -n "$base" ]; then echo "${base%/}/videos"; return; fi
+            echo "/data/peertube/storage/videos"
             ;;
         *)
             echo ""
@@ -261,9 +282,10 @@ _partner_media_path() {
 }
 
 _partner_present() {
-    local name="$1"
+    local name="${1:-}"
     if [ "$name" = "peertube" ]; then
-        [ -f /etc/secubox/peertube.toml ] && echo true || echo false
+        # PeerTube present when its on-disk storage root exists on the host.
+        [ -d /data/peertube/storage ] && echo true || echo false
     else
         local mp; mp=$(_partner_media_path "$name")
         { [ -n "$mp" ] && [ -d "$mp" ]; } && echo true || echo false
@@ -354,11 +376,7 @@ cmd_partner_list() {
         kind=$(_partner_kind "$p")
         present=$(_partner_present "$p")
         wired=$(_partner_wired "$p")
-        if [ "$p" = "peertube" ]; then
-            mp=""
-        else
-            mp=$(_partner_media_path "$p")
-        fi
+        mp=$(_partner_media_path "$p")
         obj=$(jq -nc \
             --arg name "$p" \
             --argjson present "$present" \
@@ -388,11 +406,9 @@ cmd_partner_wire() {
 
     local wired=() skipped=() p kind mp ct
     for p in $list; do
+        [ -n "$p" ] || continue
         kind=$(_partner_kind "$p")
         if [ -z "$kind" ]; then warn "unknown partner: $p"; skipped+=("$p"); continue; fi
-        if [ "$p" = "peertube" ] || [ "$kind" = "link" ]; then
-            skipped+=("$p"); continue   # link-only, never a filesystem library
-        fi
         mp=$(_partner_media_path "$p")
         if [ -z "$mp" ] || [ ! -d "$mp" ]; then
             warn "partner '$p' media dir absent (${mp:-none}) — skipping"
@@ -406,9 +422,12 @@ cmd_partner_wire() {
         wired+=("$p")
     done
 
+    # NOTE: expand possibly-empty arrays with the ${arr[@]+…} guard so `set -u`
+    # never trips on a zero-length array (e.g. `partner wire torrent` when the
+    # torrent dir is absent leaves `wired` empty).
     local w_json s_json
-    w_json=$(_json_arr "${wired[@]}")
-    s_json=$(_json_arr "${skipped[@]}")
+    w_json=$(_json_arr "${wired[@]+"${wired[@]}"}")
+    s_json=$(_json_arr "${skipped[@]+"${skipped[@]}"}")
     jq -nc --argjson wired "$w_json" --argjson skipped "$s_json" \
         '{ok:true, wired:$wired, skipped:$skipped}'
 }

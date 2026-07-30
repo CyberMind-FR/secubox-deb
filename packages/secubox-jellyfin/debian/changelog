@@ -1,3 +1,15 @@
+secubox-jellyfin (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * jellyfinctl: fix `partner wire` crash (unbound $name in single-line local under
+    set -u); guard all positionals + safe empty-array expansion.
+  * partner auto-wire: peertube is now a real Jellyfin library (movies,
+    /data/peertube/storage/videos) instead of link-only.
+  * install-lxc: automate the Jellyfin first-run wizard (Startup API -> admin
+    user + API key in /etc/secubox/secrets), so the API leaves 503 and partner
+    wiring works out of the box. Idempotent (.wizard-done sentinel), non-fatal.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 15:30:00 +0200
+
 secubox-jellyfin (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * LXC-native rewrite (retires the 1.0.0 Docker/Podman host-API stub).
