@@ -68,6 +68,20 @@ export function resumeLibrary(engine, library, { rmrf = defaultRmrf } = {}) {
       catch (e) { console.error(`secubox-torrent: cleanup failed for ${row.path}: ${e.message}`); }
     }
   }
+  // Re-add torrents that are STILL DOWNLOADING so they RESUME (complete ones
+  // stay lazy — loaded on stream — to avoid the boot re-hash storm). This is a
+  // bounded set (only unfinished downloads), not every conserved torrent.
+  for (const row of library.incomplete()) {
+    if (!row.magnet) continue;
+    try {
+      const r = engine.add(row.magnet);
+      if (r && typeof r.catch === 'function') {
+        r.catch((e) => console.error(`secubox-torrent: resume failed for ${row.infohash}: ${e.message}`));
+      }
+    } catch (e) {
+      console.error(`secubox-torrent: resume failed for ${row.infohash}: ${e.message}`);
+    }
+  }
 }
 
 function defaultRmrf(p) {
@@ -98,8 +112,11 @@ export async function start() {
   };
 
   const { default: WebTorrent } = await import('webtorrent');
-  const engine = new Engine({ WebTorrentCtor: WebTorrent, ...cfg });
   const library = new Library(`${cfg.downloadDir}/library.db`);
+  // Flip the library row to complete when a torrent finishes downloading, so
+  // the restart reconcile stops re-adding it and it becomes lazy.
+  const engine = new Engine({ WebTorrentCtor: WebTorrent, ...cfg,
+    onDone: (ih) => { try { library.setComplete(ih, 1); } catch (e) { /* noop */ } } });
   const diskFreeBytes = diskFreeBytesOnData;
 
   resumeLibrary(engine, library);

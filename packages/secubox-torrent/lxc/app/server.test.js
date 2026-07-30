@@ -59,16 +59,19 @@ test('disk-floor safety sweeps ALL marked-ephemeral (even future) but never cons
   assert.ok(lib.get('keeper'));
 });
 
-test('resumeLibrary does NOT re-add torrents to the engine (no re-hash storm)', () => {
+test('resumeLibrary re-adds only INCOMPLETE torrents (complete stay lazy — no re-hash storm)', () => {
   const lib = new Library(':memory:');
-  lib.add({ infohash: 'keeper', name: 'K', magnet: 'magnet:keeper', path: '/data/torrent/keeper' });
+  lib.add({ infohash: 'done', name: 'D', magnet: 'magnet:done', path: '/data/torrent/done' });
+  lib.setComplete('done', 1);   // finished → stays lazy (loaded on stream)
+  lib.add({ infohash: 'dl', name: 'L', magnet: 'magnet:dl', path: '/data/torrent/dl' });  // complete=0 → resume
   const added = [];
   const engine = { add: (magnet) => { added.push(magnet); } };
   const rmrfCalls = [];
   resumeLibrary(engine, lib, { rmrf: (p) => rmrfCalls.push(p) });
-  assert.deepEqual(added, []);        // nothing re-added → no re-hash storm
-  assert.ok(lib.get('keeper'));       // conserved row survives the restart
-  assert.deepEqual(rmrfCalls, []);    // nothing reclaimed
+  assert.deepEqual(added, ['magnet:dl']);  // only the still-downloading one is re-added
+  assert.ok(lib.get('done'));              // both survive the restart
+  assert.ok(lib.get('dl'));
+  assert.deepEqual(rmrfCalls, []);
 });
 
 test('resumeLibrary reclaims torrents whose opt-in purge time already passed', () => {
