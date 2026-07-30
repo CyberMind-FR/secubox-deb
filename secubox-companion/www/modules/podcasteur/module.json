@@ -10,5 +10,10 @@
   "routes": [
     { "path": "", "label": "Containers" },
     { "path": "add", "label": "Add" }
+  ],
+  "metrics": [
+    { "key": "feeds", "label": "flux" },
+    { "key": "episodes", "label": "épisodes" },
+    { "key": "downloaded", "label": "téléchargés" }
   ]
 }
