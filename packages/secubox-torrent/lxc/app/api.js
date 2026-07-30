@@ -76,7 +76,8 @@ export function buildApi({ engine, library, diskFreeBytes }) {
 
   app.get('/api/v1/torrent/health', async () => ({ status: 'ok' }));
   app.get('/api/v1/torrent/status', async () => ({
-    status: 'ok', active: engine.client.torrents.length, disk_free: diskFreeBytes(), webrtc: engine.webrtc !== false }));
+    status: 'ok', active: engine.client.torrents.length, disk_free: diskFreeBytes(), webrtc: engine.webrtc !== false,
+    ...library.counts() }));
 
   // Add by magnet URI or by http(s) URL to a .torrent file.
   app.post('/api/v1/torrent/add', async (req, reply) => {
