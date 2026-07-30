@@ -7,5 +7,10 @@
   "api_base": "/api/v1/wireguard",
   "status_endpoint": "/api/v1/wireguard/status",
   "capabilities": ["read"],
-  "routes": [{ "path": "", "label": "Peers" }]
+  "routes": [{ "path": "", "label": "Peers" }],
+  "metrics": [
+    { "key": "interface_count", "label": "tunnels" },
+    { "key": "active_peers", "label": "pairs actifs" },
+    { "key": "total_peers", "label": "pairs" }
+  ]
 }

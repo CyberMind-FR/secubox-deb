@@ -1,0 +1,15 @@
+{
+  "id": "torrent",
+  "name": "Torrent",
+  "module": "MIND",
+  "icon": "🧲",
+  "description": "SAS de récupération & streaming: magnet → fichiers → lecture, garder/purger.",
+  "api_base": "/api/v1/torrent",
+  "status_endpoint": "/api/v1/torrent/status",
+  "capabilities": ["read", "write"],
+  "routes": [{ "path": "", "label": "Bibliothèque" }],
+  "metrics": [
+    { "key": "active", "label": "actifs" },
+    { "key": "webrtc", "label": "WebRTC" }
+  ]
+}

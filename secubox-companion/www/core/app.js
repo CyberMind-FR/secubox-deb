@@ -66,7 +66,7 @@ function toggleTheme() {
 
 // ── favourites (parameterizable, localStorage) ─────────────────────
 // Default = the current base modules + photoprism (peertube is already in).
-const DEFAULT_FAVS = ['waf', 'system', 'billets', 'podcasteur', 'peertube', 'exposure', 'wireguard', 'photoprism'];
+const DEFAULT_FAVS = ['waf', 'system', 'billets', 'podcasteur', 'peertube', 'torrent', 'exposure', 'wireguard', 'photoprism'];
 function getFavs() {
   try { const f = JSON.parse(localStorage.getItem('sbx-favs')); if (Array.isArray(f)) return new Set(f); } catch (e) { /* noop */ }
   return new Set(DEFAULT_FAVS);
@@ -149,7 +149,9 @@ function fillMetrics(host, defs, s) {
   if (!host || !Array.isArray(defs) || !s || typeof s !== 'object') return;
   const cells = [];
   for (const d of defs) {
-    const raw = s[d.key];
+    // dotted keys ("services.total") walk into nested status objects;
+    // a plain key is just a one-segment path.
+    const raw = String(d.key).split('.').reduce((o, k) => (o == null ? o : o[k]), s);
     if (raw == null) continue;
     const val = typeof raw === 'number' ? raw.toLocaleString('fr-FR')
       : (raw === true ? '✓' : raw === false ? '✕' : String(raw));
