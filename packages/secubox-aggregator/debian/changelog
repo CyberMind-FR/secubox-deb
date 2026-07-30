@@ -1,3 +1,11 @@
+secubox-aggregator (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Selective concentrator: forward /api/v1/<name>/ to /run/secubox/<name>.sock
+    for modules on a dedicated socket (jellyfin, …) not mounted in-process.
+    Adds python3-httpx.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 18:50:00 +0200
+
 secubox-aggregator (0.2.4-1~bookworm1) bookworm; urgency=medium
 
   * Watchdog: 480s startup grace before auto-heal restart. The aggregator's
