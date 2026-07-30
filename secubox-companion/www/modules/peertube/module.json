@@ -6,10 +6,27 @@
   "description": "Video instance: library, channels, transcoding, federation.",
   "api_base": "/api/v1/peertube",
   "status_endpoint": "/api/v1/peertube/status",
-  "capabilities": ["read"],
+  "capabilities": [
+    "read"
+  ],
   "routes": [
-    { "path": "", "label": "Overview" },
-    { "path": "videos", "label": "Videos" },
-    { "path": "federation", "label": "Federation" }
+    {
+      "path": "",
+      "label": "Overview"
+    },
+    {
+      "path": "videos",
+      "label": "Videos"
+    },
+    {
+      "path": "federation",
+      "label": "Federation"
+    }
+  ],
+  "metrics": [
+    {
+      "key": "video_count",
+      "label": "vidéos"
+    }
   ]
 }
