@@ -3,6 +3,14 @@
 
 ---
 
+## 2026-07-30 — Companion : métriques live sur les cardlets + module Torrent + détection upgrades
+
+- **Upgrades allow-when-present (#933, mergé).** Verbes `check-upgrade` (non-destructif → `{current,latest,available,major_jump}`) + `upgrade` gardés pour les 3 apps lourdes : nextcloud (`occ update:check` + updater.phar officiel, refuse le cross-major), peertube (release GitHub + process-ops existant), lyrion (tags stables LMS-Community + `.deb dpkg -i`). Détection vérifiée live : nc 32.0.10→32.0.13, pt 8.2.2→8.2.3, ly 9.1.0→9.1.1. **Aucun upgrade réel exécuté.**
+- **Companion — métriques réelles sur les cardlets favoris (#934, mergé).** Chaque métrique pointe un champ que le `/status` du module renvoie déjà (aucune donnée fabriquée) : system (santé%/cœurs/RAM libre), podcaster (flux/épisodes/téléchargés), exposure (services.external/tor.count/ssl.count), wireguard (tunnels/pairs actifs/pairs). `fillMetrics()` résout désormais les **clés pointées** (`services.external`) dans les objets imbriqués. Vérifié live : wireguard 3/558/0, podcaster 5/118/118.
+- **Companion — module Torrent ajouté (#934).** Torrent manquait totalement (ni index, ni proxy). Ajout : cardlet favori (actifs/WebRTC), vue module (statut + bibliothèque gardé/éphémère + deep-link SAS), **proxy nginx** `/api/v1/torrent/` → LXC torrent `10.100.0.160:8090` (bridge br-lxc propre, hors agrégateur), et `/status` renvoie `status:'ok'` pour la pastille online. Patché live dans le LXC + service redémarré. SW cache v14→v16.
+
+---
+
 ## 2026-07-28 (suite) — WAN guard 3-couches + 503 sbxwaf résolu + anti-rootkit #915 déployé & fonctionnel
 
 Suite de la session incident : WAN durci définitivement, un 503 board-wide résolu, et le nouveau module anti-rootkit construit (SDD) + déployé + validé on-hardware sur gk2.
