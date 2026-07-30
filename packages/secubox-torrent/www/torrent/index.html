@@ -218,7 +218,10 @@
     // Content-Type: application/json but no body makes Fastify 400
     // (FST_ERR_CTP_EMPTY_JSON_BODY), which broke keep/remove/conserve.
     var headers = Object.assign({}, opts.headers, authHeaders());
-    if (opts.body != null) headers['Content-Type'] = 'application/json';
+    // Default to JSON only when the caller hasn't set a Content-Type — the
+    // .torrent file upload sends application/x-bittorrent and must NOT be
+    // clobbered to json (that made the binary hit the json parser → 400).
+    if (opts.body != null && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
     return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
       if (res.status === 401) {
         errorToast('🔒 Login required');
