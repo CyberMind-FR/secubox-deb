@@ -1,22 +1,87 @@
-#!/bin/bash
+#!/bin/sh
+# SecuBox Jellyfin — post-install
 set -e
+
 case "$1" in
-  configure)
-    # Ensure secubox user exists
-    id -u secubox >/dev/null 2>&1 || \
-      adduser --system --group --no-create-home \
-        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
-    install -d -o root -g root -m 1777 /run/secubox
-    install -d -o secubox -g secubox -m 755 /var/lib/secubox
-    # Ensure nginx secubox.d directory exists
-    install -d -m 755 /etc/nginx/secubox.d
-    # Enable and start service
-    systemctl daemon-reload
-    systemctl enable secubox-jellyfin.service
-    systemctl start  secubox-jellyfin.service || true
-    # Reload nginx to pick up new location
-    systemctl reload nginx 2>/dev/null || true
-    ;;
+    configure)
+        # secubox system user/group (idempotent, matches sibling modules)
+        getent group secubox >/dev/null || groupadd --system secubox
+        getent passwd secubox >/dev/null || useradd --system --gid secubox \
+            --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
+
+        # Runtime + state dirs. NEVER chown a shared parent — only own the leaf.
+        if [ -d /run/secubox ]; then chmod 1777 /run/secubox 2>/dev/null || true
+        else install -d -m 1777 /run/secubox; fi
+        [ -d /etc/secubox ] || install -d -m 0755 -o secubox -g secubox /etc/secubox
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox
+        install -d -m 0755 -o secubox -g secubox /var/lib/secubox/jellyfin
+        install -d -m 0755 -o secubox -g secubox /var/log/secubox
+        # /var/cache/secubox parent stays root:0755 (shared); own only the leaf.
+        [ -d /var/cache/secubox ] || install -d -m 0755 /var/cache/secubox
+        install -d -m 0755 -o secubox -g secubox /var/cache/secubox/jellyfin
+        # nginx snippet directory
+        install -d -m 0755 /etc/nginx/secubox.d
+
+        # Seed config from example if no live config exists.
+        if [ ! -f /etc/secubox/jellyfin.toml ] && [ -f /etc/secubox/jellyfin.toml.example ]; then
+            cp /etc/secubox/jellyfin.toml.example /etc/secubox/jellyfin.toml
+            chmod 640 /etc/secubox/jellyfin.toml
+            chown root:secubox /etc/secubox/jellyfin.toml
+        fi
+
+        # Validate + honour the scoped sudoers (visudo check; never fatal — a
+        # syntax error must not brick sudo, just skip activating our grant).
+        if [ -f /etc/sudoers.d/secubox-jellyfin ]; then
+            if command -v visudo >/dev/null 2>&1; then
+                visudo -c -f /etc/sudoers.d/secubox-jellyfin >/dev/null 2>&1 || \
+                    echo "secubox-jellyfin: WARNING sudoers file failed visudo -c" >&2
+            fi
+        fi
+
+        # nft egress observation drop-in for the Jellyfin veth. Own dedicated
+        # table (never touches the base DEFAULT DROP posture). Idempotent +
+        # non-fatal: delete our table then re-apply from the file.
+        if command -v nft >/dev/null 2>&1 && [ -f /etc/nftables.d/secubox-jellyfin.nft ]; then
+            nft 'delete table inet secubox-jellyfin' 2>/dev/null || true
+            nft -f /etc/nftables.d/secubox-jellyfin.nft 2>/dev/null || true
+        fi
+
+        # Symlink the public vhost into sites-enabled (idempotent). The vhost
+        # proxies jellyfin.gk2.secubox.in (:9080) → Jellyfin LXC :8096. Operator
+        # wires the HAProxy SNI ACL + ACME cert + the WAF route separately.
+        #   WAF route (operator): add jellyfin.gk2.secubox.in to
+        #   /etc/secubox/waf/haproxy-routes.json → 127.0.0.1:9080, then reload sbxwaf.
+        if [ -f /etc/nginx/sites-available/jellyfin.conf ] && [ -d /etc/nginx/sites-enabled ]; then
+            ln -sf ../sites-available/jellyfin.conf /etc/nginx/sites-enabled/jellyfin.conf
+        fi
+
+        # Reload nginx if it's running and the config parses.
+        if systemctl is-active --quiet nginx 2>/dev/null; then
+            nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload 2>/dev/null || true
+        # Tolerate a masked unit (operator choice / prior install) — unmask so
+        # `enable` doesn't fail the postinst under set -e, then best-effort.
+        systemctl unmask secubox-jellyfin.service 2>/dev/null || true
+        systemctl enable secubox-jellyfin.service 2>/dev/null || true
+
+        # Preserve runtime state across upgrades: try-restart if already up,
+        # else start fresh. The API is a thin ctl client — safe to run before
+        # the LXC exists (it just reports the container as absent).
+        if systemctl is-active --quiet secubox-jellyfin.service 2>/dev/null; then
+            systemctl try-restart secubox-jellyfin.service 2>/dev/null || true
+        else
+            systemctl start secubox-jellyfin.service 2>/dev/null || true
+        fi
+
+        # "Installing the package" activates the appliance: the LXC bring-up
+        # (debootstrap + Jellyfin .deb, minutes, network) runs --no-block via the
+        # guarded provision oneshot so dpkg is never blocked.
+        systemctl enable secubox-jellyfin-provision.service 2>/dev/null || true
+        systemctl start --no-block secubox-jellyfin-provision.service 2>/dev/null || true
+        ;;
 esac
+
 #DEBHELPER#
+exit 0

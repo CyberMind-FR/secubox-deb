@@ -1,0 +1,23 @@
+{
+  "id": "jellyfin",
+  "name": "Jellyfin",
+  "module": "MIND",
+  "icon": "🍿",
+  "description": "Serveur média : bibliothèques, partenaires, lecture.",
+  "api_base": "/api/v1/jellyfin",
+  "status_endpoint": "/api/v1/jellyfin/status",
+  "capabilities": [
+    "read",
+    "write"
+  ],
+  "routes": [
+    {
+      "path": "",
+      "label": "Aperçu"
+    }
+  ],
+  "metrics": [
+    { "key": "libraries", "label": "biblios" },
+    { "key": "sessions", "label": "flux actifs" }
+  ]
+}
