@@ -244,6 +244,12 @@ Music-server nouns (v1.1.0):
   lyrionctl playlist     list|add <name>|remove <name>|tracks <name>
   lyrionctl plugin       list|install <name>|uninstall <name>
 
+External media library (v1.1.3, always emits JSON):
+  lyrionctl medialib detect            # candidate external mounts w/ audio (NEVER mounts)
+  lyrionctl medialib mount <path>      # RO-bind <path> into the LXC + persist + rescan
+  lyrionctl medialib unmount           # remove bind + config + rescan
+  lyrionctl medialib status            # {"external":"<path|null>","mounted":bool}
+
   (--json on any verb returns machine-readable output)
 
 For grammar details: /usr/share/doc/secubox-lyrion/README.gz
@@ -283,6 +289,176 @@ cmd_upgrade() {
     echo "Upgraded to ${latest}."
 }
 
+# ── medialib — external media (auto-detect + opt-in confirm) ──────────────────
+# Additions here are written strict-mode-clean (safe under `set -euo pipefail`):
+# every pipeline / substitution is guarded so no defensive assumption from the
+# module-level `set -u` is required. NOTE: the file-level `set` stays `set -u`
+# on purpose — flipping it to errexit would break the grep-based config_get
+# (grep no-match → rc 1 in a command-substitution assignment).
+#
+# RO bind target inside the LXC rootfs. Detect NEVER mounts.
+readonly MEDIALIB_TARGET="medialib/external"
+
+_medialib_cfg()   { printf '%s\n' "$LXC_PATH/$LXC_NAME/config"; }
+_medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET"; }
+
+# JSON string encoder — paths may carry spaces / quotes.
+_json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+# Count audio files under a path (bounded so `detect` stays responsive).
+_medialib_audio_count() {
+    local path="$1" n=0
+    n=$(find "$path" -maxdepth 6 -type f \( \
+            -iname '*.mp3' -o -iname '*.flac' -o -iname '*.m4a' \
+            -o -iname '*.ogg' -o -iname '*.wav' -o -iname '*.aac' \
+        \) 2>/dev/null | head -n 5000 | wc -l | tr -d ' ')
+    printf '%s\n' "${n:-0}"
+}
+
+# Enumerate candidate mountpoints: immediate children of the external roots +
+# removable/media mounts parsed from /proc/mounts. Prints one path per line.
+_medialib_candidates() {
+    local roots=(/media /mnt /data/external) r d mp
+    for r in "${roots[@]}"; do
+        [ -d "$r" ] || continue
+        printf '%s\n' "$r"
+        for d in "$r"/*; do
+            [ -d "$d" ] || continue
+            printf '%s\n' "$d"
+        done
+    done
+    if [ -r /proc/mounts ]; then
+        # field 2 = mountpoint (octal-escaped); keep only external-ish mounts.
+        awk '$2 ~ /^\/(media|mnt|run\/media|data\/external)/ {print $2}' /proc/mounts \
+            2>/dev/null | while IFS= read -r mp; do
+                [ -n "$mp" ] && printf '%b\n' "$mp"
+            done
+    fi
+}
+
+# Strip any prior medialib bind line from the LXC config (idempotent).
+_medialib_strip_cfg() {
+    local cfg="$1" tmp
+    [ -f "$cfg" ] || return 0
+    tmp=$(mktemp) || return 1
+    grep -vE "^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*${MEDIALIB_TARGET}([[:space:]]|$)" \
+        "$cfg" > "$tmp" 2>/dev/null || true
+    cat "$tmp" > "$cfg"
+    rm -f "$tmp"
+}
+
+# Persist / drop the external_medialib key in lyrion.toml.
+_medialib_toml_set() {
+    local path="$1" tmp
+    [ -f "$CONFIG_FILE" ] || return 0
+    tmp=$(mktemp) || return 1
+    grep -vE '^[[:space:]]*external_medialib[[:space:]]*=' "$CONFIG_FILE" > "$tmp" 2>/dev/null || true
+    cat "$tmp" > "$CONFIG_FILE"
+    rm -f "$tmp"
+    [ -n "$path" ] && printf 'external_medialib = "%s"\n' "$path" >> "$CONFIG_FILE"
+    return 0
+}
+
+# Best-effort LMS rescan (same jsonrpc the /rescan endpoint uses).
+_medialib_trigger_scan() {
+    lxc_running || return 0
+    curl -s --max-time 5 -H 'Content-Type: application/json' \
+        -d '{"id":1,"method":"slim.request","params":["",["rescan"]]}' \
+        "http://${LXC_IP}:9000/jsonrpc.js" >/dev/null 2>&1 || true
+    return 0
+}
+
+medialib_detect() {
+    local first=1 path label n
+    printf '{"candidates":['
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        [ -d "$path" ] || continue
+        n=$(_medialib_audio_count "$path")
+        [ "${n:-0}" -gt 0 ] || continue
+        label=$(basename -- "$path")
+        [ "$first" -eq 1 ] || printf ','
+        first=0
+        printf '{"path":%s,"label":%s,"audio_files":%s}' \
+            "$(_json_str "$path")" "$(_json_str "$label")" "$n"
+    done < <(_medialib_candidates | sort -u)
+    printf ']}\n'
+}
+
+medialib_mount() {
+    local path="$1" cfg mntpt entry
+    if [ -z "$path" ]; then
+        printf '{"ok":false,"error":"no path given"}\n'; return 1
+    fi
+    if [ ! -d "$path" ]; then
+        printf '{"ok":false,"error":%s}\n' "$(_json_str "path not found: $path")"; return 1
+    fi
+    cfg=$(_medialib_cfg)
+    if [ ! -f "$cfg" ]; then
+        printf '{"ok":false,"error":%s}\n' "$(_json_str "lxc config not found: $cfg")"; return 1
+    fi
+    # READ-ONLY bind, create the target dir on start; idempotent.
+    entry="lxc.mount.entry = $path $MEDIALIB_TARGET none bind,ro,create=dir 0 0"
+    _medialib_strip_cfg "$cfg"
+    printf '%s\n' "$entry" >> "$cfg"
+    _medialib_toml_set "$path"
+    # Live-mount (RO) if the container is already running.
+    if lxc_running; then
+        mntpt=$(_medialib_mntpt)
+        mkdir -p "$mntpt" 2>/dev/null || true
+        if ! mountpoint -q "$mntpt" 2>/dev/null; then
+            mount --bind "$path" "$mntpt" 2>/dev/null \
+                && mount -o remount,ro,bind "$mntpt" 2>/dev/null || true
+        fi
+    fi
+    _medialib_trigger_scan
+    printf '{"ok":true,"mounted":%s}\n' "$(_json_str "$path")"
+}
+
+medialib_unmount() {
+    local cfg mntpt
+    cfg=$(_medialib_cfg)
+    _medialib_strip_cfg "$cfg"
+    _medialib_toml_set ""
+    mntpt=$(_medialib_mntpt)
+    if mountpoint -q "$mntpt" 2>/dev/null; then
+        umount "$mntpt" 2>/dev/null || umount -l "$mntpt" 2>/dev/null || true
+    fi
+    _medialib_trigger_scan
+    printf '{"ok":true}\n'
+}
+
+medialib_status() {
+    local ext mounted=false mntpt
+    ext=$(config_get "external_medialib" "")
+    mntpt=$(_medialib_mntpt)
+    mountpoint -q "$mntpt" 2>/dev/null && mounted=true
+    if [ -n "$ext" ]; then
+        printf '{"external":%s,"mounted":%s}\n' "$(_json_str "$ext")" "$mounted"
+    else
+        printf '{"external":null,"mounted":%s}\n' "$mounted"
+    fi
+}
+
+# All medialib output is JSON regardless of a trailing --json (the host API's
+# _ctl_json appends it). The first non---json argument to `mount` is the path.
+cmd_medialib() {
+    local sub="${1:-status}" path=""
+    shift || true
+    local a
+    for a in "$@"; do
+        [ "$a" = "--json" ] && continue
+        [ -z "$path" ] && path="$a"
+    done
+    case "$sub" in
+        detect)         medialib_detect ;;
+        mount)          medialib_mount "$path" ;;
+        unmount|umount) medialib_unmount ;;
+        status|--json)  medialib_status ;;
+        *) err "unknown verb for 'medialib': $sub"; exit 1 ;;
+    esac
+}
+
 main() {
     local noun="${1:-help}"
     shift || true
@@ -290,6 +466,7 @@ main() {
         check-upgrade) cmd_check_upgrade ;;
         upgrade) cmd_upgrade ;;
         components|status|access|install|reload) "cmd_${noun}" "$@" ;;
+        medialib) cmd_medialib "$@" ;;
         # The remaining nouns are stubs in v1.0.0 — see #230 task G5 for
         # full implementation. They print a clear "not implemented yet" so
         # the help/grammar surface is consistent now and the API contract

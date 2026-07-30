@@ -1,23 +1,35 @@
 [Unit]
-Description=SecuBox Jellyfin API
-After=network.target secubox-core.service secubox-runtime.service docker.service
-Requires=secubox-runtime.service
-Wants=docker.service
-# Only start if explicitly enabled (LXC/container configured)
-ConditionPathExists=/etc/secubox/jellyfin/enabled
+Description=SecuBox Jellyfin — host control plane API
+Documentation=file:///usr/share/doc/secubox-jellyfin/README
+After=network.target secubox-core.service
+Wants=secubox-core.service
 
 [Service]
+UMask=0007
 Type=simple
-User=root
-Group=root
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/lib/secubox/jellyfin
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ExecStartPre=+/bin/mkdir -p /etc/secubox /var/cache/secubox/jellyfin
+ExecStartPre=+/bin/chown secubox:secubox /var/cache/secubox/jellyfin
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/jellyfin.sock --log-level warning
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/jellyfin.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/jellyfin.sock
 Restart=on-failure
 RestartSec=5
-PrivateTmp=true
+# NoNewPrivileges=no is REQUIRED here: the API does NO privileged work itself —
+# it delegates every state change to the root `jellyfinctl` via `sudo -n`
+# (debian/secubox-jellyfin.sudoers grants exactly that). With
+# NoNewPrivileges=yes, sudo is neutralised and the module's only privileged
+# surface (LXC start/stop, partner wiring, upgrade) stops working. This is why
+# jellyfin is a DEDICATED-socket module and is NOT folded into the aggregator
+# (which runs NoNewPrivileges=yes). Matches secubox-picobrew.
+NoNewPrivileges=no
+ProtectHome=read-only
+LogsDirectory=secubox
+LogsDirectoryMode=0755
+ReadWritePaths=/run/secubox /var/lib/secubox /var/cache/secubox /etc/secubox /var/log/secubox
 
 [Install]
 WantedBy=multi-user.target

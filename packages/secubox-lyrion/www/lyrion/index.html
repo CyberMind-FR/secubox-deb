@@ -123,6 +123,21 @@
     </p>
   </section>
 
+  <section class="card" style="margin-top: 1rem;">
+    <h3>💽 Médiathèque externe</h3>
+    <div id="medialib-current" class="v" style="margin-bottom: 0.75rem;">loading…</div>
+    <div id="medialib-candidates">
+      <div class="empty">loading…</div>
+    </div>
+    <p class="hint">
+      SecuBox détecte les points de montage externes (sous <code>/media</code>,
+      <code>/mnt</code>, <code>/data/external</code> et supports amovibles)
+      contenant des fichiers audio. Rien n'est monté sans votre confirmation :
+      cliquez « Monter » pour lier le dossier en <strong>lecture seule</strong>
+      dans la LXC Lyrion, puis une réindexation est déclenchée.
+    </p>
+  </section>
+
 </main>
 
 <script src="/shared/sidebar.js"></script>
@@ -258,12 +273,90 @@
     }
   }
 
+  async function loadMedialib() {
+    const cur = document.getElementById("medialib-current");
+    const cand = document.getElementById("medialib-candidates");
+    try {
+      const d = await api("/medialib");
+      // Current mount
+      if (d.external) {
+        cur.innerHTML =
+          `<div class="row"><span class="k">Montée</span>` +
+          `<span class="val">${escapeHtml(d.external)} ` +
+          `${d.mounted ? "✓ live" : "⏸ config only"}</span></div>` +
+          `<div class="actions-row">` +
+          `<button class="btn" id="btn-medialib-unmount" type="button">Démonter</button></div>`;
+        const ub = document.getElementById("btn-medialib-unmount");
+        if (ub) ub.addEventListener("click", unmountExternal);
+      } else {
+        cur.innerHTML = `<div class="empty">aucune médiathèque externe montée</div>`;
+      }
+      // Candidates
+      const list = (d.candidates || []);
+      if (!list.length) {
+        cand.innerHTML = `<div class="empty">aucun candidat détecté (branchez un support ou vérifiez /media, /mnt, /data/external)</div>`;
+        return;
+      }
+      cand.innerHTML =
+        '<table class="table"><thead><tr>' +
+        '<th>Dossier</th><th>Chemin</th><th>Fichiers audio</th><th></th>' +
+        '</tr></thead><tbody>' +
+        list.map(c => {
+          const mounted = d.external === c.path;
+          return `<tr><td>${escapeHtml(c.label)}</td>` +
+            `<td>${escapeHtml(c.path)}</td>` +
+            `<td>${escapeHtml(c.audio_files)}</td>` +
+            `<td>${mounted
+              ? '<span class="status-pill green">montée</span>'
+              : `<button class="btn primary btn-medialib-mount" type="button" data-path="${escapeHtml(c.path)}">Monter</button>`
+            }</td></tr>`;
+        }).join("") +
+        '</tbody></table>';
+      cand.querySelectorAll(".btn-medialib-mount").forEach(b =>
+        b.addEventListener("click", () => mountPath(b.getAttribute("data-path"))));
+    } catch (e) {
+      cur.innerHTML = `<span class="empty">${escapeHtml(e.message)}</span>`;
+      cand.innerHTML = "";
+    }
+  }
+
+  async function mountPath(path) {
+    if (!path) return;
+    if (!confirm(`Monter « ${path} » en lecture seule dans la LXC Lyrion, puis réindexer la médiathèque ?`)) return;
+    try {
+      const r = await api("/medialib/mount", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      if (r && r.ok === false) alert("Échec : " + (r.error || "erreur inconnue"));
+    } catch (e) {
+      alert("Échec du montage : " + e.message);
+    }
+    loadMedialib();
+  }
+
+  async function unmountExternal() {
+    if (!confirm("Démonter la médiathèque externe et réindexer ?")) return;
+    try {
+      await api("/medialib/unmount", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+    } catch (e) {
+      alert("Échec du démontage : " + e.message);
+    }
+    loadMedialib();
+  }
+
   function loadAll() {
     loadStatus();
     loadComponents();
     loadAccess();
     loadNowPlaying();
     loadPlayers();
+    loadMedialib();
   }
 
   document.getElementById("btn-rescan").addEventListener("click", rescan);
