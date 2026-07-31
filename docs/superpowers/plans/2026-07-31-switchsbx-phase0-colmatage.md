@@ -4,7 +4,7 @@
 
 **Goal:** Fermer quatre failles actives du plan d'authentification et supprimer un défaut de performance sur le chemin chaud, sans introduire SwitchSBX.
 
-**Architecture:** Toutes les corrections vivent dans `common/secubox_core/` (partagé par les 144 services) plus trois paquets. Le point central est que `secubox_core.auth` a des défauts **permissifs** qui ne sont corrigés que dans le processus `secubox-auth` ; les 119 services à socket dédiée gardent ces défauts. On rend les défauts *fail-closed* et on fournit un magasin de sessions partagé lisible par tous.
+**Architecture:** Toutes les corrections vivent dans `common/secubox_core/` (partagé par tous les services) plus trois paquets. Le point central est que `secubox_core.auth` a des défauts **permissifs** qui ne sont corrigés que dans le processus `secubox-auth` ; les 44 modules routés vers leur socket dédiée gardent ces défauts (l'agrégateur, lui, monte 113 modules dont `auth`, donc il est couvert). On rend les défauts *fail-closed* et on fournit un magasin de sessions partagé lisible par tous.
 
 **Tech Stack:** Python 3.11, FastAPI, python-jose (HS256), argon2-cffi, pytest, nginx, systemd.
 
@@ -41,7 +41,7 @@ from secubox_core import auth
 
 @pytest.fixture(autouse=True)
 def _permissive_session(monkeypatch):
-    """Reproduit le défaut des 119 modules autonomes : validateur permissif."""
+    """Reproduit le défaut des 44 modules à socket dédiée : validateur permissif."""
     auth.set_session_validator(lambda jti: True)
     monkeypatch.setattr(auth.user_store, "is_enabled", lambda u: True)
 
@@ -169,7 +169,7 @@ sans scope passent."
 
 ### Task 2 : validateur de session fail-closed + magasin partagé
 
-`_session_validator` vaut `lambda jti: True` par défaut et n'est remplacé que par `secubox-auth`. Les 119 services à socket dédiée ne révoquent donc jamais rien.
+`_session_validator` vaut `lambda jti: True` par défaut et n'est remplacé que par `secubox-auth`. Les 44 modules routés vers leur socket dédiée ne révoquent donc jamais rien.
 
 **Files:**
 - Create: `common/secubox_core/session_store.py`
@@ -257,7 +257,7 @@ Two properties matter and are load-bearing:
 
 - **Fail-closed.** A missing or corrupt file means nobody is let in. The
   previous default (`lambda jti: True`) meant the opposite, so revocation was
-  silently a no-op on the ~119 services that run in their own interpreter.
+  silently a no-op on the 44 modules routed to their own dedicated socket.
 - **Parsed once.** The file is re-read only when its mtime moves, so the hot
   path is a set lookup, never a read() + json.loads().
 """
@@ -357,7 +357,7 @@ git add common/secubox_core/session_store.py common/secubox_core/auth.py \
         packages/secubox-auth/tests/test_session_visibility.py
 git commit -m "fix(core): validateur de session fail-closed et partagé par tous les services
 
-Le défaut était lambda jti: True, et seul secubox-auth le remplaçait. Les ~119
+Le défaut était lambda jti: True, et seul secubox-auth le remplaçait. Les 44
 services tournant dans leur propre interpréteur acceptaient donc n'importe quel
 jti : logout, revoke_session et la révocation sur changement de mot de passe
 n'avaient aucun effet chez eux.
@@ -735,7 +735,7 @@ IP pour couvrir le balayage multi-comptes."
 
 ### Task 6 : cacher `users.json` sur le chemin chaud
 
-`user_store.get_user()` fait `json.loads(USERS_PATH.read_text())` sans cache. Chaque requête authentifiée, sur chacun des ~119 processus, relit et reparse le fichier.
+`user_store.get_user()` fait `json.loads(USERS_PATH.read_text())` sans cache. Chaque requête authentifiée, dans l'agrégateur comme dans chacun des 44 processus dédiés, relit et reparse le fichier.
 
 **Files:**
 - Modify: `common/secubox_core/user_store.py:29-37`
@@ -813,8 +813,8 @@ def _load_users_json() -> Optional[Dict[str, Any]]:
 
     This sits on the hot path: every authenticated request reaches it through
     require_jwt → is_enabled → get_user. Without the mtime guard each request
-    re-read and re-parsed the whole file, on each of the ~119 service
-    processes.
+    re-read and re-parsed the whole file, in the aggregator and in each of
+    the 44 dedicated service processes.
     """
     global _cache_doc, _cache_mtime, _cache_loaded
     try:
@@ -871,7 +871,7 @@ git commit -m "perf(core): ne plus reparser users.json à chaque requête authen
 
 get_user() faisait json.loads(read_text()) sans cache, et il est sur le chemin
 chaud : require_jwt → is_enabled → get_user, à chaque requête, sur chacun des
-~119 processus de service. Le fichier n'est relu que quand son mtime bouge ;
+chaque processus de service. Le fichier n'est relu que quand son mtime bouge ;
 _atomic_write_users invalide le cache après écriture."
 ```
 
