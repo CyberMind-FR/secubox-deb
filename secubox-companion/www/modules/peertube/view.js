@@ -18,6 +18,7 @@ const EP = {
   channels:  (b) => `${b}/channels`,                  // {channels:[…],total}
   storage:   (b) => `${b}/storage/stats`,             // {stats:{total,videos,thumbnails,torrents,streaming_playlists}}
   jobs:      (b) => `${b}/transcoding/jobs`,          // {jobs:[…],total}
+  backlog:   (b) => `${b}/transcoding/backlog`,       // {available,states:[…],pending,unplayable,cache_age_seconds}
   followers: (b) => `${b}/federation/followers`,      // {followers:[…],total}
   following: (b) => `${b}/federation/following`,      // {following:[…],total}
 };
@@ -126,6 +127,35 @@ export default async function mount(ctx) {
         for (const [label, v] of rows)
           if (v) card.append(el('div.item', {}, [
             el('div.meta', {}, [el('b', { text: label }), el('span', { text: v })])]));
+        return card;
+      });
+
+      // The backlog comes BEFORE the job list on purpose: an empty job queue
+      // with 88 videos still lacking an HLS playlist reads as "all good" while
+      // nothing is actually watchable. web_videos is disabled on this box, so
+      // PeerTube serves HLS only — no playlist means unplayable, not merely
+      // un-optimised.
+      await section(host, () => api.get(EP.backlog(base)), (d) => {
+        if (!d.available) return el('div.card', {}, [
+          el('h3', { text: '📼 Backlog' }),
+          el('p.muted', { text: `Indisponible — ${esc(d.reason || 'cache absent')}` }),
+        ]);
+        const card = el('div.card', {}, [el('h3', { text: '📼 Backlog' })]);
+        card.append(d.unplayable > 0
+          ? el('div.badge.err', { text: `⚠️ ${fmtCount(d.unplayable)} vidéo(s) sans playlist HLS — injouables` })
+          : el('div.badge.ok', { text: '✅ Toutes les vidéos ont une playlist HLS' }));
+        for (const s of d.states || [])
+          card.append(el('div.item', {}, [
+            el('div.meta', {}, [
+              el('b', { text: s.label }),
+              el('span', { text: s.without_hls
+                ? `${fmtCount(s.videos)} · ${fmtCount(s.without_hls)} sans HLS`
+                : fmtCount(s.videos) }),
+            ]),
+          ]));
+        if (d.cache_age_seconds != null)
+          card.append(el('p.muted', { style: 'font-size:.75rem;margin:.4rem 0 0',
+                                      text: `mesuré il y a ${d.cache_age_seconds}s` }));
         return card;
       });
 
