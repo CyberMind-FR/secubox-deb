@@ -205,7 +205,15 @@ class Engine:
                 "--restrict-filenames",
                 # Pull the EJS solver so YouTube's n-challenge yields real formats.
                 "--remote-components", "ejs:github",
-                "-f", "bv*+ba/b",
+                # Prefer H.264 + AAC. "bv*+ba" grabs YouTube's best, which today
+                # means AV1/VP9 video + Opus audio — codecs PeerTube's quick
+                # transcode path REFUSES, forcing a full re-encode of every
+                # imported video (expensive on ARM, and AV1 decode doubly so).
+                # With avc1+mp4a, PeerTube transmuxes (-c copy) instead.
+                # The ladder degrades gracefully so a download never fails:
+                # avc1+mp4a → avc1+any → any progressive mp4 → whatever exists.
+                "-f", "bv*[vcodec^=avc1]+ba[acodec^=mp4a]/bv*[vcodec^=avc1]+ba/"
+                      "b[ext=mp4]/bv*+ba/b",
                 "--merge-output-format", "mp4",
                 "-o", out_tmpl,
                 *self._cookie_args(),
