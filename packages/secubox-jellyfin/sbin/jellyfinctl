@@ -226,7 +226,7 @@ _live_umount() {
 }
 
 # ── Partner registry ──────────────────────────────────────────────────────────
-readonly PARTNERS="photoprism nextcloud torrent lyrion peertube"
+readonly PARTNERS="photoprism nextcloud torrent lyrion peertube podcaster"
 
 _partner_kind() {
     case "${1:-}" in
@@ -235,6 +235,7 @@ _partner_kind() {
         torrent)    echo "torrents" ;;
         lyrion)     echo "music" ;;
         peertube)   echo "videos" ;;
+        podcaster)  echo "music" ;;
         *)          echo "" ;;
     esac
 }
@@ -278,6 +279,18 @@ _partner_media_path() {
             if [ -d "$base/web-videos" ]; then echo "$base/web-videos"
             elif [ -d "$base/videos" ]; then echo "$base/videos"
             else echo "$base/web-videos"; fi
+            ;;
+        podcaster)
+            # podcaster.toml's media_path is /var/lib/secubox/podcaster/media,
+            # which is a SYMLINK to the SSD (/data/secubox/podcaster/media) —
+            # the eMMC cannot hold the episodes. An LXC bind entry must name the
+            # real directory: a symlink source is not resolved by lxc.mount.entry
+            # and the mount fails (or silently follows a stale target after a
+            # package reinstall recreates the link). Resolve it here.
+            local m
+            m=$(toml_get /etc/secubox/podcaster.toml media_path "/var/lib/secubox/podcaster/media")
+            [ -e "$m" ] && m=$(readlink -f "$m" 2>/dev/null || echo "$m")
+            echo "$m"
             ;;
         *)
             echo ""
