@@ -1,5 +1,26 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-28*
+*Mis à jour : 2026-07-31*
+
+---
+
+## 2026-07-30 → 07-31 — Marathon média/perf (release v2.16.0)
+
+### ✅ Fait
+- **Jellyfin LXC-native 2.0.3** (#938) — refonte, 5 biblios auto-wire, self-mint clé API (DB), routé, wizard, mode léger. apt-synced.
+- **Torrent 2.2.8** — peg event-loop tué (no-seed@100% + reapIdle complets only), 0-pair fixé (retrait throttleUpload(0)), /add tolérant + upload fichier, `webtorrent-server.js`. apt-synced.
+- **Résidus MITM Python virés** — toolbox-mitm(R2)/mitmproxy/waf-watchdog.timer disable + LXC stop ; sbxwaf+sbxmitm(Go) intacts. Board **load 97→~20**.
+- **Concentrateur agrégateur 0.3.0** — forward `/api/v1/<mod>/`→`<mod>.sock` (jellyfin & co) ; fini les locations nginx par module.
+- **YouTube SAS 0.1.2 (NOUVEAU)** — LXC yt-dlp+deno+EJS+cookies, SAS kept/éphémère/conserve→peertube, webui+cardlet 🎞️. Âge-restreint 720p téléchargé e2e. apt-synced.
+- **Companion** — métriques mockup-parity + emoji état/type + cardlets torrent/jellyfin/ytsas ; **APK v1.2** (Android TV) SW v20.
+
+### ⬜ Next Up (queue de fin de marathon)
+- **502 brandé global** — les 2 tentatives ont cassé `nginx -t` (revert propre). Approche par-bloc-serveur soignée (script python balanced-brace + `nginx -t`).
+- **Ré-import library torrent** — mes films effacés par erreur (fichiers intacts /data + visibles Jellyfin) ; seed local → régénère infohash/magnet.
+- **Paquets enregistrent leur vhost dans haproxy.toml** (directive user) — tue le drift HAProxy ; déclarer aussi les 2 backends spéciaux (gitea_ssh tcp, toolbox_landing). Fin des hand-add jellyfin/ytsas.
+- **Jellyfin** : auto-wizard 10.11 (création admin), intégration `users` (gk2/admin), catégorie photoprism (photos vs homevideos).
+- **QoS dynamique + veille-sur-accès** + **watchdog circuit-breaker** (noter oops→alerte→pause, pas relancer) — cf. `project_resource_governance_vision`.
+- **Companion QR pairing** (emoji central) + **WG tunnel** phasé — cf. `project_companion_qr_wg_distribution`.
+- **Cible : split-box mesh** quand mesh-stable.
 
 ---
 
