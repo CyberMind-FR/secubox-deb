@@ -31,6 +31,7 @@ function chrome() {
         ['SecuBox ', el('small', { text: 'Companion' })]),
       el('span.spacer'),
       net, q,
+      el('a.btn.sm', { href: './secubox-companion.apk', download: '', title: 'Installer l’app Android (APK)', text: '📲' }),
       el('button.btn.sm', { id: 'theme-btn', title: 'Thème clair / sombre', text: themeIcon(), onclick: toggleTheme }),
       el('button.btn.sm', { title: 'Lock', text: '🔒', onclick: lock }),
     ]),
