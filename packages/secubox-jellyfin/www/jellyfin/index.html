@@ -13,6 +13,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SecuBox — Jellyfin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shared/hybrid-skin.css">
   <style>
     :root {
       --p31-dim: #6b7b8b;
@@ -36,7 +39,8 @@
       line-height: 1.5;
     }
     a { color: var(--cyan); }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 1.25rem 1.5rem 3rem; }
+    /* Shared sidebar is 220px wide and fixed — offset the content like /certs/. */
+    .main { margin-left: 220px; padding: 60px 1.5rem 3rem; min-height: 100vh; }
 
     /* Header */
     .header {
@@ -170,13 +174,15 @@
     .toast .x { cursor: pointer; font-weight: 700; margin-left: auto; }
 
     @media (max-width: 600px) {
-      .wrap { padding: 1rem; }
+      .main { margin-left: 0; padding: 60px 1rem 2rem; }
       .header h1 { font-size: 1.2rem; }
     }
   </style>
 </head>
-<body>
-  <div class="wrap">
+<body class="hybrid-dark">
+  <nav class="sidebar" id="sidebar"></nav>
+  <script src="/shared/sidebar.js"></script>
+  <main class="main">
     <header class="header">
       <div>
         <h1>🍿 Jellyfin — SecuBox</h1>
@@ -273,7 +279,7 @@
         <p class="note">Dérivé de <code>jellyfin.toml</code> via <code>/status</code>. Édition réservée à l'opérateur.</p>
       </article>
     </section>
-  </div>
+  </main>
 
   <div class="toast" id="toast"><span id="toast-msg"></span><span class="x" id="toast-x">✕</span></div>
 
@@ -549,14 +555,17 @@
         var name = (typeof l === "string") ? l : (l.name || l.Name || "?");
         var kind = (typeof l === "object") ? (l.kind || l.type || l.CollectionType || "") : "";
         var count = (typeof l === "object" && l.count != null) ? (l.count + " éléments") : "";
+        var path = (typeof l === "object") ? (l.path || "") : "";
         return '<div class="lib-row"><span class="lib-name">📚 ' + esc(name) + '</span>' +
-          '<span class="lib-meta">' + esc([kind, count].filter(Boolean).join(" · ")) + '</span></div>';
+          '<span class="lib-meta">' + esc([kind, path, count].filter(Boolean).join(" · ")) + '</span></div>';
       }).join("");
     }
     async function loadLibraries() {
       clearInline("lib-msg");
       try {
-        var d = await apiGet("/status");
+        // /status returns `libraries` as a COUNT (a number) — the list lives on
+        // /library/status, which is also ~10x faster (no jellyfin API round-trip).
+        var d = await apiGet("/library/status");
         var libs = Array.isArray(d.libraries) ? d.libraries : [];
         renderLibraries(libs);
       } catch (e) {
