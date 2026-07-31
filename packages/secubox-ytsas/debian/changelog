@@ -1,3 +1,14 @@
+secubox-ytsas (0.1.2-1~bookworm1) bookworm; urgency=high
+
+  * FIX age-restricted / gated YouTube downloads: pass --remote-components
+    ejs:github so deno pulls the EJS challenge-solver script and yt-dlp gets real
+    formats (was "only images / Requested format is not available"). Verified: an
+    age-restricted 720p video downloads with fresh cookies + deno + EJS.
+  * webui progress bar: drop --no-progress (it suppressed the [download] N%%
+    lines, sticking the bar at 0 even while downloading).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 08:45:00 +0200
+
 secubox-ytsas (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * install-lxc: install the deno JS runtime — yt-dlp now REQUIRES one for

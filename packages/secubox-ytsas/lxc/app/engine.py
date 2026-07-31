@@ -124,6 +124,10 @@ class Engine:
     async def _probe(self, url):
         """Fetch id + title without downloading. Raises AuthRequired/EngineError."""
         argv = [self.ytdlp_bin, "-j", "--no-download", "--no-playlist",
+                # YouTube gates real formats behind a JS "n challenge"; deno alone
+                # is skipped without the EJS solver script — pull it from GitHub so
+                # actual video/audio formats are returned (else "only images").
+                "--remote-components", "ejs:github",
                 *self._cookie_args(), url]
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -195,8 +199,12 @@ class Engine:
             # Output template inside the per-id dir; predictable id-based name.
             out_tmpl = os.path.join(item_dir, "%(id)s.%(ext)s")
             argv = [
-                self.ytdlp_bin, "--newline", "--no-playlist", "--no-progress",
+                # --newline (one progress line per update) WITHOUT --no-progress,
+                # else yt-dlp emits no "[download] N%" lines and the bar sticks at 0.
+                self.ytdlp_bin, "--newline", "--no-playlist",
                 "--restrict-filenames",
+                # Pull the EJS solver so YouTube's n-challenge yields real formats.
+                "--remote-components", "ejs:github",
                 "-f", "bv*+ba/b",
                 "--merge-output-format", "mp4",
                 "-o", out_tmpl,
