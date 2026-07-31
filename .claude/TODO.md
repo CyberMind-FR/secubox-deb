@@ -1,5 +1,18 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-28*
+*Mis à jour : 2026-07-31*
+
+---
+
+## 🎬 Média/perf — suite marathon v2.16.0 (2026-07-31)
+
+- [ ] **502 brandé global** : câbler le snippet `secubox-errorpages.conf` dans chaque `server{}` (script python balanced-brace + `nginx -t` avant reload) ; les 2 tentatives naïves (sed) ont cassé `nginx -t`.
+- [ ] **Ré-import library torrent** : les 5 films (Marsupilami/Nautilus/Supergirl/Fantastic Four/Jack Ryan) — fichiers intacts sur `/data/torrent`, effacés de `library.db` par erreur. Seed local → régénère infohash/magnet, réinsère complete=1.
+- [ ] **Paquets → vhost dans haproxy.toml** (directive user, LE fix du drift) : chaque postinst enregistre son vhost dans le toml ; déclarer aussi `gitea_ssh` (tcp) + `toolbox_landing` (http custom) pour que `haproxyctl generate` redevienne utilisable → fin des hand-add (jellyfin.gk2, ytsas.gk2).
+- [ ] **Jellyfin** : (a) auto-wizard 10.11 (séquence `/Startup/*` — POST sert la page HTML, pas du JSON) ; (b) intégration `users` (gk2/admin provisionnés comme les autres) ; (c) photoprism en biblio **photos** (pas homevideos).
+- [ ] **QoS dynamique + veille-sur-accès** : boost cpu.weight à l'accès, freeze/scale-to-zero des idle, wake à la 1ʳᵉ requête. Kernel gk2 **sans `CONFIG_CFS_BANDWIDTH`** → pas de `cpu.max` ; utiliser `cpu.idle` (SCHED_IDLE) + `cpu.weight`. Cf. `project_resource_governance_vision`.
+- [ ] **Watchdog circuit-breaker** : noter l'oops/OOM → alerter → **pause (ne plus relancer)** après N répétitions, au lieu du restart-loop.
+- [ ] **Companion QR pairing** (QR brandé emoji central) + **WG tunnel** phasé (déléguer→embarquer VpnService). Cf. `project_companion_qr_wg_distribution`.
+- [ ] **Split-box mesh** (cible) : répartir les ~20 LXC sur 2 boards quand mesh-stable.
 
 ---
 
