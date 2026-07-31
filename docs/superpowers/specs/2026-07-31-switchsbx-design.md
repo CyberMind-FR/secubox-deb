@@ -53,9 +53,11 @@ vulnérabilités du code en production. Elles conditionnent l'ordre du plan (§1
 ([`auth.py:128-143`](../../../common/secubox_core/auth.py)). Le seul garde-fou est
 `_session_validator`, dont le **défaut est permissif** (`lambda jti: True`,
 [`auth.py:32`](../../../common/secubox_core/auth.py)) et que **seul** `secubox-auth`
-remplace ([`main.py:220`](../../../packages/secubox-auth/api/main.py)). Or **119 des
-144 services tournent dans leur propre processus** et gardent donc le défaut.
-Conséquences sur ces 119 modules :
+remplace ([`main.py:220`](../../../packages/secubox-auth/api/main.py)). L'agrégateur
+monte **113 modules dans un seul interpréteur**, et `auth` en fait partie : son
+`set_session_validator()` protège donc tout ce processus. Restent **44 modules routés
+par nginx vers leur socket dédiée**, qui gardent le défaut permissif.
+Conséquences sur ces 44 modules :
 
 - Le `mfa_token`, émis *avant* vérification TOTP
   ([`main.py:303`](../../../packages/secubox-auth/api/main.py)), y ouvre un accès
@@ -82,7 +84,7 @@ incompatible** (dict plat vs schéma v2) : toute écriture écrase le magasin ca
 et rétrograde argon2 → **SHA-256 non salé**. Elle crée un compte `admin` / mot de
 passe `secubox` par défaut si le fichier manque
 ([`main.py:166-176`](../../../packages/secubox-portal/api/main.py)), et signe ses
-jetons avec le **même secret partagé**, avec un `jti` — donc acceptés par les 119
+jetons avec le **même secret partagé**, avec un `jti` — donc acceptés par les 44
 modules au validateur permissif.
 
 **(D) Le rôle n'est pas dans le token.** Le JWT ne porte que `sub`/`iat`/`exp`/`jti`.
@@ -95,7 +97,8 @@ USER par défaut n'est donc pas sûr aujourd'hui.**
 `_validate_token()` appelle `user_store.is_enabled()`
 ([`auth.py:141`](../../../common/secubox_core/auth.py)), qui exécute
 `json.loads(USERS_PATH.read_text())` ([`user_store.py:32`](../../../common/secubox_core/user_store.py))
-**sans aucun cache**. Chaque requête authentifiée, sur chacun des 119 processus, relit
+**sans aucun cache**. Chaque requête authentifiée, dans l'agrégateur comme dans chacun
+des 44 processus dédiés, relit
 et reparse intégralement `/etc/secubox/users.json`. Coût non mesuré à ce jour ; à
 chiffrer en phase 0.
 
@@ -171,7 +174,7 @@ naturellement deux entrées. Aucune modélisation supplémentaire n'est nécessa
 (`/var/lib/secubox/switchsbx/registry.db`) — cohérent avec la préférence SQLite du
 projet et adapté à la file d'admission. La bibliothèque lit un **instantané JSON**
 (`snapshot.json` : appareils actifs, empreintes révoquées, politique) produit par le
-daemon et surveillé par `inotify`. Aucun des 119 processus n'ouvre SQLite : pas de
+daemon et surveillé par `inotify`. Aucun processus consommateur n'ouvre SQLite : pas de
 contention de verrous.
 
 L'instantané suit le **double-buffer 4R** imposé par le projet (`active/`, `shadow/`,
@@ -298,7 +301,7 @@ déjà imposé par le projet aux dashboards, appliqué à la décision d'accès.
 
 L'**instantané est parsé une fois**, au démarrage, rechargé uniquement sur événement
 `inotify`. Le même traitement s'applique à `users.json`, ce qui corrige au passage le
-défaut §1.3 pour les 119 modules.
+défaut §1.3 pour tous les modules.
 
 **Dégradation :**
 
@@ -393,7 +396,7 @@ et 1 sont indépendantes de SwitchSBX et peuvent partir immédiatement.
 **Phase 0 — Colmatage.** Rejet des jetons porteurs d'un `scope` dans
 `_validate_token()` ; `require_jwt` gagne un paramètre `scope` explicite. Validateur
 de session par défaut → `False` (*fail-closed*) + **magasin de sessions partagé**
-fourni par `secubox_core`, pour que les 119 modules valident et révoquent réellement.
+fourni par `secubox_core`, pour que les 44 modules dédiés valident et révoquent réellement.
 Ce magasin réutilise le mécanisme d'instantané de la §6 — `sessions.json` écrit par
 `secubox-auth`, lu une fois et rechargé sur `inotify` par chaque module — plutôt qu'un
 appel IPC par requête. Il préfigure ainsi l'instantané SwitchSBX de la phase 2.
