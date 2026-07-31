@@ -818,6 +818,115 @@ Services bloqués        tous les autres
 
 ---
 
+---
+
+# L. POST-SCRIPTUM — RÉSULTATS DE L'ÉTAPE 0 (2026-07-31, après rapport)
+
+L'étape 0 a été exécutée. Elle **infirme une hypothèse du §B.7 et en révèle une pire**.
+
+## L.1 Les masters nginx concurrents n'étaient pas la cause
+
+Le master détenant **toutes** les sockets d'écoute était bien `11829`, celui de systemd,
+avec des workers frais. Les deux autres (`4861`, `7811`) ne détenaient aucun listener ni
+aucune connexion établie. La configuration servie **était** celle du disque.
+
+Les deux orphelins ont été arrêtés proprement (`SIGQUIT`, puis `SIGTERM` pour le
+dernier). **Il ne reste qu'un master.** Les vhosts répondent normalement — un 000
+transitoire sur yacy s'est révélé être un réveil de backend scale-to-zero, confirmé par
+deux essais suivants à 200.
+
+## L.2 `realip` fonctionne — le §B.7 se trompait de piste
+
+Preuve directe par le journal d'accès : une requête portant
+`X-Forwarded-For: 203.0.113.77` depuis 127.0.0.1 est journalisée avec
+`$remote_addr = 203.0.113.77`. La réécriture s'applique.
+
+**Conséquence corrigée :** il n'y a pas de contournement par en-tête depuis Internet.
+HAProxy **ajoute** l'IP source réelle, `real_ip_recursive on` retient la première
+adresse non fiable en partant de la droite — donc l'adresse réelle. Le risque
+« usurpation d'IP par en-tête proxy » du §F passe de **critique/non conclu** à **moyen**,
+avec deux réserves qui subsistent :
+
+- `set_real_ip_from 10.100.0.0/24` : **tout conteneur LXC peut forger son adresse
+  apparente** et se faire passer pour un client du LAN.
+- nginx écoute sur `0.0.0.0:9080` : tout hôte du LAN ou d'un tunnel peut l'atteindre
+  **directement, sans passer par HAProxy ni sbxwaf**. La menace « accès direct au
+  backend » du §F est donc confirmée au niveau nginx.
+
+## L.3 Le vrai trou : le garde est un opt-in par vhost, et 25 vhosts sur 30 ne l'ont pas
+
+En cherchant pourquoi le garde n'avait jamais refusé, la cause est apparue — et elle
+n'a rien à voir avec les IP.
+
+Le stub `/__sbx_auth_verify` protège les routes **par chemin** (`admin.gk2/yacy/`)
+déclarées dans le bloc `server` mutualisé du hub. Mais chaque **vhost dédié** est un
+`server{}` autonome dans `sites-enabled/`, qui doit **re-déclarer** le garde pour en
+bénéficier. Le commentaire d'en-tête de `ytsas.conf` documente d'ailleurs explicitement
+cette obligation.
+
+`yacy.conf` ne le fait pas :
+
+```nginx
+server {
+    server_name yacy.gk2.secubox.in;
+    location / {
+        proxy_pass http://10.100.0.80:8090/;   # aucun auth_request
+    }
+}
+```
+
+**Recensement des 30 vhosts autonomes : 5 déclarent le garde** (lyrion, nextcloud,
+torrent, ytsas, zigbee) — **25 ne le déclarent pas**, dont yacy, spiderfoot, photoprism,
+peertube, picobrew, podcaster, boot (netboot), dork, companion, wpad, gitea, jellyfin.
+
+Le garde par chemin est donc contournable **en utilisant le nom de vhost au lieu du
+chemin**. Ce n'est pas une faille de configuration isolée : c'est un modèle où la
+protection est un opt-in silencieux, et l'oubli ne produit aucun signal.
+
+## L.4 Vérifié : SpiderFoot est ouvert et routé publiquement
+
+Depuis `10.98.0.1` (wg-admin — hors de toute zone de confiance), **sans aucun
+identifiant** :
+
+```
+GET spiderfoot.gk2.secubox.in/scanlist
+[["0E2FA977", "secubox.in", "gk2.secubox.in", "2026-07-12 13:05:32", …, "FINI…
+GET spiderfoot.gk2.secubox.in/modules
+[{"name": "sfp_abstractapi", …
+```
+
+L'API de SpiderFoot répond intégralement : historique des scans, cibles, modules
+disponibles. Le vhost est **présent dans `haproxy-routes.json`**, donc joignable depuis
+Internet. SpiderFoot n'a pas d'authentification intégrée par défaut : le garde nginx
+était la seule barrière, et ce vhost ne le déclare pas.
+
+Autres vhosts ouverts sans garde et **routés publiquement** : `yacy` (page de
+recherche ; les pages d'administration n'ont pas répondu, non conclu), `picobrew`,
+`podcaster`. Ouverts mais LAN-only : `boot` (netboot), `dork`, `peertube`, `photoprism`.
+
+## L.5 Conséquences sur le rapport
+
+| Élément | Avant étape 0 | Après étape 0 |
+|---|---|---|
+| Usurpation XFF depuis le WAN | critique / non conclu | **moyen** — `realip` correct ; reste le LXC de confiance |
+| Configuration non observable | élevé | **résolu** — master unique |
+| Garde vhost | « test d'IP » | **« test d'IP, et seulement sur 5 vhosts sur 30 »** |
+| Accès direct au backend | non audité | **confirmé** — nginx sur `0.0.0.0:9080` |
+| SpiderFoot exposé | inconnu | **critique, vérifié** |
+
+L'écart n°6 de la matrice §D reste le bon correctif, mais son énoncé doit changer : il
+ne s'agit pas seulement de remplacer un test d'IP par une décision d'identité, il faut
+**rendre le garde non contournable par construction** — appliqué en amont des blocs
+`server` (au niveau de sbxwaf ou d'un `include` obligatoire), et non re-déclaré à la
+main dans chaque fichier de vhost.
+
+**Mitigation immédiate proposée, non appliquée** (décision utilisateur) : retirer
+`spiderfoot.gk2.secubox.in` des routes publiques HAProxy, ou ajouter les deux locations
+du garde à `spiderfoot.gk2.conf`. Le second est préférable — il rétablit la posture
+prévue au lieu de la contourner.
+
+---
+
 ## Annexe — Vérifications effectuées
 
 **Dans le dépôt** : `auth.py` (lu intégralement), `user_store.py`, `secubox-auth/api/main.py`
