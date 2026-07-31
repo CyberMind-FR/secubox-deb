@@ -32,6 +32,7 @@ function chrome() {
       el('span.spacer'),
       net, q,
       el('a.btn.sm', { href: './secubox-companion.apk', download: '', title: 'Installer l’app Android (APK)', text: '📲' }),
+      el('button.btn.sm', { title: 'Installer sur iOS (écran d’accueil)', text: '🍎', onclick: iosInstallHint }),
       el('button.btn.sm', { id: 'theme-btn', title: 'Thème clair / sombre', text: themeIcon(), onclick: toggleTheme }),
       el('button.btn.sm', { title: 'Lock', text: '🔒', onclick: lock }),
     ]),
@@ -52,6 +53,28 @@ async function refreshChrome() {
 }
 
 function lock() { location.hash = '#/'; boot(true); }
+
+// iOS can't be prompted to install a PWA programmatically — Safari's "Add to
+// Home Screen" is manual. This overlay walks the user through it (the iOS
+// equivalent of the Android 📲 APK button). No-op is fine on other platforms.
+function iosInstallHint() {
+  const old = document.getElementById('ios-hint');
+  if (old) { old.remove(); return; }
+  const close = () => { const n = document.getElementById('ios-hint'); if (n) n.remove(); };
+  const card = el('div', { id: 'ios-hint', style: 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(3px)', onclick: (e) => { if (e.target.id === 'ios-hint') close(); } }, [
+    el('div', { style: 'max-width:22rem;margin:1rem;background:var(--surf,#12121a);color:var(--text,#e8e6d9);border:1px solid var(--border,#2a2a3a);border-radius:12px;padding:1.1rem 1.2rem;box-shadow:0 12px 40px rgba(0,0,0,.6)' }, [
+      el('div', { style: 'font-size:1.05rem;font-weight:700;margin-bottom:.5rem', text: '🍎 Installer sur iOS' }),
+      el('p', { style: 'font-size:.85rem;margin:.2rem 0 .6rem;opacity:.85', text: 'Ouvre cette page dans Safari, puis :' }),
+      el('ol', { style: 'font-size:.86rem;line-height:1.5;padding-left:1.1rem;margin:0 0 .8rem' }, [
+        el('li', { text: 'Touche le bouton Partager ⎋ (barre du bas)' }),
+        el('li', { text: 'Choisis « Sur l’écran d’accueil » ➕' }),
+        el('li', { text: 'Valide « Ajouter » — l’app apparaît sur l’écran d’accueil' }),
+      ]),
+      el('button.btn.sm.primary', { style: 'width:100%', text: 'Compris', onclick: close }),
+    ]),
+  ]);
+  document.body.appendChild(card);
+}
 
 // ── theme (light default, opt-in dark, persisted) ──────────────────
 function currentTheme() { try { return localStorage.getItem('sbx-theme') || 'light'; } catch (e) { return 'light'; } }
