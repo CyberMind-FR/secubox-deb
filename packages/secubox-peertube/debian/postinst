@@ -72,6 +72,13 @@ if [ "$1" = "configure" ]; then
     deb-systemd-helper enable peertube-ops.path >/dev/null 2>&1 || true
     deb-systemd-invoke start peertube-ops.path >/dev/null 2>&1 || true
 
+    # Transcoding backlog cache (#940): root timer writes
+    # /var/cache/secubox/peertube/backlog.json, the unprivileged dashboard only
+    # reads it — so the panel can report "N videos have no HLS playlist yet,
+    # i.e. are not playable" without any sudo grant.
+    deb-systemd-helper enable peertube-backlog.timer >/dev/null 2>&1 || true
+    deb-systemd-invoke start peertube-backlog.timer >/dev/null 2>&1 || true
+
     # Reload nginx to pick up the /api/v1/peertube/ + /peertube/ locations
     # and the public vhost. NOTE: PeerTube itself is NOT installed by this
     # postinst — run `peertubectl install` to provision the LXC.

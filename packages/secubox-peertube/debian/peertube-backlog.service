@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Refresh the PeerTube transcoding backlog cache (root)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/940
+
+[Service]
+Type=oneshot
+# Root (no User=) so peertubectl can lxc-attach into the container to query
+# postgres. The dashboard stays unprivileged and NoNewPrivileges=true: it only
+# READS the file this unit writes, so no sudo grant is introduced.
+#
+# This is the project's double-cache pattern applied to a status surface — the
+# expensive side (lxc-attach + SQL, ~2 s) runs out of band, the request path is
+# a file read.
+#
+# Written via tmp + mv so a reader never sees a half-written file, and only
+# on success so a transient failure keeps the last good value instead of
+# blanking the panel. Only the module's own subdirectory is created:
+# /var/cache/secubox is shared by ~29 modules and must keep its
+# secubox:secubox 0755 ownership — never let a unit chown a shared parent.
+TimeoutStartSec=60
+ExecStart=/bin/sh -c 'install -d -m 0755 /var/cache/secubox/peertube && \
+  /usr/sbin/peertubectl backlog > /var/cache/secubox/peertube/.backlog.tmp && \
+  mv /var/cache/secubox/peertube/.backlog.tmp /var/cache/secubox/peertube/backlog.json'
+StandardError=journal

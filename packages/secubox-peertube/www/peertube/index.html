@@ -557,6 +557,12 @@
                 </form>
             </div>
             <div class="card">
+                <h3>📼 Backlog — vidéos en attente</h3>
+                <div id="transcodingBacklog">
+                    <p style="color: var(--text-dim);">Chargement…</p>
+                </div>
+            </div>
+            <div class="card">
                 <h3>Transcoding Queue</h3>
                 <div id="transcodingJobs">
                     <p style="color: var(--text-dim);">Loading jobs...</p>
@@ -670,7 +676,7 @@
             else if (name === 'channels') loadChannels();
             else if (name === 'users') loadUsers();
             else if (name === 'federation') { loadFollowing(); loadFollowers(); }
-            else if (name === 'transcoding') { loadTranscoding(); loadJobs(); loadStorage(); }
+            else if (name === 'transcoding') { loadTranscoding(); loadBacklog(); loadJobs(); loadStorage(); }
             else if (name === 'plugins') loadPlugins();
             else if (name === 'logs') loadLogs();
         }
@@ -1167,6 +1173,39 @@
                 }
             } catch (e) {
                 toast('Failed', 'error');
+            }
+        }
+
+        async function loadBacklog() {
+            const c = document.getElementById('transcodingBacklog');
+            try {
+                const d = await api('/transcoding/backlog');
+                if (!d.available) {
+                    c.innerHTML = `<p style="color: var(--text-dim);">Indisponible — ${d.reason || 'cache absent'}</p>`;
+                    return;
+                }
+                // `unplayable` is the headline: web_videos is disabled, so a video
+                // without an HLS playlist cannot be watched at all.
+                const warn = d.unplayable > 0;
+                const age = d.cache_age_seconds != null ? `il y a ${d.cache_age_seconds}s` : '';
+                const rows = (d.states || []).map(s => `
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem; border-bottom: 1px solid var(--border);">
+                        <span>${s.label}</span>
+                        <span>${s.videos} vidéo${s.videos > 1 ? 's' : ''}${
+                            s.without_hls ? ` · <strong style="color: var(--danger, #ff4466)">${s.without_hls} sans HLS</strong>` : ''
+                        }</span>
+                    </div>`).join('');
+                c.innerHTML = `
+                    <div style="margin-bottom: 0.75rem; font-size: 1.1rem;">
+                        ${warn
+                            ? `⚠️ <strong>${d.unplayable}</strong> vidéo${d.unplayable > 1 ? 's' : ''} sans playlist HLS — <strong>non lisible${d.unplayable > 1 ? 's' : ''}</strong>`
+                            : '✅ Toutes les vidéos ont une playlist HLS'}
+                    </div>
+                    ${rows}
+                    <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem;">Mesuré ${age}</p>`;
+            } catch (e) {
+                c.innerHTML = '<p style="color: var(--text-dim);">Indisponible</p>';
+                console.error(e);
             }
         }
 

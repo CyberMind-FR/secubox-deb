@@ -707,6 +707,58 @@ async def get_transcoding_jobs(user=Depends(require_jwt)):
     return {"jobs": [], "total": 0}
 
 
+BACKLOG_CACHE = Path("/var/cache/secubox/peertube/backlog.json")
+
+# PeerTube video.state, as stored in the DB.
+_VIDEO_STATES = {1: "published", 2: "to_transcode", 3: "to_import",
+                 4: "waiting_for_live", 5: "live_ended",
+                 6: "to_move_to_external_storage", 7: "transcoding_failed",
+                 8: "to_edit"}
+
+
+@router.get("/transcoding/backlog")
+async def get_transcoding_backlog(user=Depends(require_jwt)):
+    """How many videos are still waiting, and how many are not yet PLAYABLE.
+
+    `without_hls` is the number that matters: with web_videos disabled PeerTube
+    only ever serves HLS, so a video with no playlist is unplayable — not merely
+    un-optimised. Neither `/status` nor the PeerTube job list surfaces this, so
+    a full queue used to look like a healthy instance.
+
+    Served from the cache written by peertube-backlog.timer (root, lxc-attach +
+    SQL, ~2 s). The request path is a file read: the dashboard stays
+    unprivileged and NoNewPrivileges=true.
+    """
+    try:
+        raw = json.loads(BACKLOG_CACHE.read_text())
+    except FileNotFoundError:
+        return {"available": False, "reason": "cache not written yet",
+                "states": [], "pending": 0, "unplayable": 0}
+    except (OSError, ValueError) as exc:
+        log.warning("backlog cache unreadable: %s", exc)
+        return {"available": False, "reason": "cache unreadable",
+                "states": [], "pending": 0, "unplayable": 0}
+
+    rows = raw.get("states") or []
+    out = []
+    for r in rows:
+        out.append({
+            "state": r.get("state"),
+            "label": _VIDEO_STATES.get(r.get("state"), f"state_{r.get('state')}"),
+            "videos": r.get("videos", 0),
+            "without_hls": r.get("without_hls", 0),
+        })
+    pending = sum(r["videos"] for r in out if r["state"] == 2)
+    unplayable = sum(r["without_hls"] for r in out if r["state"] != 1)
+    age = None
+    try:
+        age = int(time.time() - BACKLOG_CACHE.stat().st_mtime)
+    except OSError:
+        pass
+    return {"available": True, "states": out, "pending": pending,
+            "unplayable": unplayable, "cache_age_seconds": age}
+
+
 @router.get("/transcoding/settings")
 async def get_transcoding_settings(user=Depends(require_jwt)):
     cfg = get_config()
