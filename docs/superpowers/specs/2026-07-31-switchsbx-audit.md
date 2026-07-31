@@ -883,26 +883,76 @@ Le garde par chemin est donc contournable **en utilisant le nom de vhost au lieu
 chemin**. Ce n'est pas une faille de configuration isolée : c'est un modèle où la
 protection est un opt-in silencieux, et l'oubli ne produit aucun signal.
 
-## L.4 Vérifié : SpiderFoot est ouvert et routé publiquement
+## L.4 CORRECTION — SpiderFoot n'est PAS exposé sur Internet
 
-Depuis `10.98.0.1` (wg-admin — hors de toute zone de confiance), **sans aucun
-identifiant** :
+**Une première version de cette section affirmait que l'API SpiderFoot était ouverte
+depuis Internet. C'était faux.** L'erreur : j'avais testé depuis `10.98.0.1` (wg-admin)
+en la croyant hors zone de confiance, alors que le vhost applique un **second mécanisme
+de garde** que je n'avais pas vu — un snippet d'exposition dont l'allow-list couvre
+`10.0.0.0/8`, donc mon adresse de test.
+
+```nginx
+# /etc/nginx/snippets/exposure/spiderfoot.gk2.secubox.in.conf
+allow 127.0.0.1; allow 10.0.0.0/8; allow 172.16.0.0/12; allow 192.168.0.0/16; deny all;
+```
+
+Test refait correctement, en émulant un client WAN (XFF depuis le proxy de confiance,
+`realip` réécrit l'adresse — journal à l'appui) :
 
 ```
-GET spiderfoot.gk2.secubox.in/scanlist
-[["0E2FA977", "secubox.in", "gk2.secubox.in", "2026-07-12 13:05:32", …, "FINI…
-GET spiderfoot.gk2.secubox.in/modules
-[{"name": "sfp_abstractapi", …
+client=203.0.113.77  GET /scanlist → 403
+client=8.8.8.8       GET /scanlist → 403
+client=10.98.0.1     GET /scanlist → 200
 ```
 
-L'API de SpiderFoot répond intégralement : historique des scans, cibles, modules
-disponibles. Le vhost est **présent dans `haproxy-routes.json`**, donc joignable depuis
-Internet. SpiderFoot n'a pas d'authentification intégrée par défaut : le garde nginx
-était la seule barrière, et ce vhost ne le déclare pas.
+**Le garde fonctionne. SpiderFoot est inaccessible depuis Internet.**
 
-Autres vhosts ouverts sans garde et **routés publiquement** : `yacy` (page de
-recherche ; les pages d'administration n'ont pas répondu, non conclu), `picobrew`,
-`podcaster`. Ouverts mais LAN-only : `boot` (netboot), `dork`, `peertube`, `photoprism`.
+### Ce qui reste vrai, et qui est plus étroit
+
+L'allow-list ouvre **tout `10.0.0.0/8`**. Cela englobe `wg-toolbox` (10.99),
+`wg-admin` (10.98), `wg-mesh` (10.10 — donc **les autres boîtes du mesh**), et tous les
+sous-réseaux LXC. Pour une application **sans authentification native**, dont l'API
+permet de lister et lancer des scans, « LAN-only » tel que documenté dans l'en-tête du
+vhost signifie en réalité « LAN + tous les tunnels + tous les pairs du mesh ». L'écart
+entre l'intention écrite et la règle appliquée est le vrai défaut ici.
+
+## L.4bis Recomptage honnête des vhosts
+
+Le §L.3 comptait « 25 sur 30 sans garde ». C'est **inexact** : il existe **deux**
+mécanismes de garde, et je n'en avais recensé qu'un.
+
+| Mécanisme | Vhosts |
+|---|---|
+| `auth_request /__sbx_auth_verify` | nc, torrent, ytsas, zigbee (+ lyrion) |
+| snippet d'exposition (allow-list) | boot, picobrew, spiderfoot, zigbee |
+| **aucun des deux** | **23** |
+
+Parmi ces 23, la majorité est **légitimement publique** (apt, billets, les sites
+ganimed/maegia, companion, podcaster) ou dispose de sa **propre authentification**
+(gitea/git, nextcloud, peertube, photoprism, jellyfin). L'absence de garde nginx n'y est
+pas un défaut.
+
+**Le résidu concret est `yacy.gk2.secubox.in`** : routé publiquement, ni `auth_request`,
+ni snippet d'exposition. Testé en client WAN :
+
+```
+/                  200   (page de recherche — acceptable)
+/Status.html       200   (état du nœud, exposé)
+/ConfigBasic.html  200   (configuration de base, exposée)
+/Crawler_p.html    401   (les pages « _p » sont protégées par YaCy lui-même)
+```
+
+YaCy protège nativement ses pages privées, mais `Status.html` et `ConfigBasic.html`
+restent lisibles depuis Internet. Sévérité **moyenne**, pas critique.
+
+### Ce que la correction change au diagnostic d'ensemble
+
+Le constat structurel du §L.3 **tient toujours** : la protection est un opt-in par
+fichier de vhost, avec désormais **deux** mécanismes concurrents (`auth_request` par
+identité-de-façade, allow-list par IP) qu'aucune règle ne rend obligatoires et dont
+l'oubli ne produit aucun signal. C'est le modèle qui est fragile, pas seulement un
+fichier. Mais **l'ampleur annoncée dans la première version était surévaluée** : le
+système est nettement mieux tenu que ce que ce rapport a d'abord affirmé.
 
 ## L.5 Conséquences sur le rapport
 
