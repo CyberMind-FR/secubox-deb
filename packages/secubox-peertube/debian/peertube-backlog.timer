@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Refresh the PeerTube transcoding backlog cache every 2 minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+# The backlog only moves as fast as ffmpeg finishes a video — polling harder
+# would just add lxc-attach churn on a box that is already CPU-tight.
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

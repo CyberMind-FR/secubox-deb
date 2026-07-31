@@ -307,6 +307,36 @@ cmd_upgrade() {
     rm -f "$ulog"
 }
 
+# Transcoding backlog — how many videos are still waiting, and how many of
+# those have NO HLS playlist yet.
+#
+# That second number is the one that matters: with web_videos disabled,
+# PeerTube only ever serves HLS, so a video without a playlist is not merely
+# "not optimised" — it is unplayable. `peertubectl status` reports the LXC and
+# the service, never this, so a full queue looked like a healthy instance.
+#
+# Read-only, single SQL round-trip, no ffprobe — safe to poll.
+cmd_backlog() {
+    if ! lxc_running; then
+        printf '{"error":"lxc not running","states":[]}\n'
+        return 1
+    fi
+    local rows
+    rows=$(printf '%s\n' "
+select coalesce(json_agg(row_to_json(t)), '[]'::json) from (
+  select v.state::int as state,
+         count(*)::int as videos,
+         (count(*) filter (where coalesce(h.n,0) = 0))::int as without_hls
+  from video v
+  left join (select \"videoId\", count(*) n from \"videoStreamingPlaylist\" group by \"videoId\") h
+    on h.\"videoId\" = v.id
+  group by v.state order by v.state
+) t;" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -tA -f -"' 2>/dev/null)
+    [ -n "$rows" ] || rows='[]'
+    printf '{"states":%s}\n' "$rows"
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
@@ -319,6 +349,8 @@ Usage: peertubectl <verb> [args]
   set-youtube-cookies <file>    Install browser-exported YouTube cookies.txt so
                                 yt-dlp import works (YouTube blocks server IPs)
   logs [N]                      Tail N lines of peertube journal (default 50)
+  backlog                       (json) videos per state + how many still lack an
+                                HLS playlist — i.e. are not yet playable at all
   upload <file> <title> [ch] [priv]  Upload a video to PeerTube (priv 2=unlisted)
   reload                        Reload host nginx (after vhost changes)
   process-ops                   (root) drain the /run ops spool
@@ -333,6 +365,7 @@ main() {
     local noun="${1:-help}"; shift || true
     case "$noun" in
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
+        backlog) cmd_backlog "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         upload) cmd_upload "$@" ;;
         check-upgrade) cmd_check_upgrade "$@" ;;
