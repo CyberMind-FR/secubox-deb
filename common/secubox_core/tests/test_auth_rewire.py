@@ -57,13 +57,28 @@ def test_create_token_includes_scope_when_given(good_admin):
     assert payload["scope"] == "set-password"
 
 
+class _Req:
+    """Minimal stand-in for fastapi.Request.
+
+    `require_jwt` gained a mandatory `request` argument with SSO-lite (#400)
+    so it can fall back to the session cookie; these three tests still called
+    it the old way and had been failing ever since. Surfaced while working on
+    #942 (a PermissionError on /etc/secubox/secubox.conf used to mask the
+    TypeError on dev workstations).
+    """
+
+    def __init__(self, cookies=None):
+        self.cookies = cookies or {}
+        self.headers = {}
+
+
 @pytest.mark.asyncio
 async def test_require_jwt_rejects_unknown_jti(good_admin, monkeypatch):
     auth.set_session_validator(lambda jti: False)  # all jti unknown
     tok = auth.create_token("admin")
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=tok)
     with pytest.raises(HTTPException) as ei:
-        await auth.require_jwt(creds=creds)
+        await auth.require_jwt(_Req(), creds)
     assert ei.value.status_code == 401
 
 
@@ -72,7 +87,7 @@ async def test_require_jwt_accepts_known_jti(good_admin):
     auth.set_session_validator(lambda jti: True)
     tok = auth.create_token("admin")
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=tok)
-    out = await auth.require_jwt(creds=creds)
+    out = await auth.require_jwt(_Req(), creds)
     assert out["sub"] == "admin"
 
 
@@ -87,4 +102,4 @@ async def test_require_jwt_rejects_disabled_user(tmp_path: Path, monkeypatch):
     tok = auth.create_token("admin")
     creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=tok)
     with pytest.raises(HTTPException):
-        await auth.require_jwt(creds=creds)
+        await auth.require_jwt(_Req(), creds)
