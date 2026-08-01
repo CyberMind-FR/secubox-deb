@@ -363,10 +363,12 @@ cmd_app_list() {
             [ -f "$app_dir/$candidate" ] && main_py="$candidate" && break
         done
 
-        # Check if running (by checking port)
+        # Check if running (by checking port INSIDE the LXC)
         local running="false"
         local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
-        [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running="true"
+        if _app_running "$name"; then
+            running="true"
+        fi
 
         $first || echo ","
         first=false

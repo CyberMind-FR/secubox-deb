@@ -73,3 +73,73 @@ def test_json_escapes_app_name_with_backslash(tmp_path):
     assert len(out["apps"]) == 1
     app = out["apps"][0]
     assert app["name"] == app_name, f"Expected {app_name}, got {app['name']}"
+
+
+def test_uses_app_running_function_not_ss(tmp_path):
+    """cmd_app_list must call _app_running(), not use ss -tln directly.
+
+    This test verifies the detection happens INSIDE the LXC (via _app_running),
+    not on the host (via ss). We mock _app_running to control its verdict.
+    """
+    apps_dir = tmp_path / "apps"
+    idle_dir = tmp_path / "idle"
+    apps_dir.mkdir()
+    idle_dir.mkdir()
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("[idle]\ntimeout_minutes = 30\n")
+
+    # Create app 'demo' with port 8501
+    demo_dir = apps_dir / "demo"
+    demo_dir.mkdir()
+    (demo_dir / "app.py").write_text("import streamlit\n")
+    (demo_dir / ".streamlit.toml").write_text("port = 8501\n")
+
+    # Create a bash wrapper that mocks _app_running to always return "running"
+    ctl_wrapper = tmp_path / "streamlitctl_wrapper.sh"
+    ctl_path = str(CTL)
+    wrapper_script = """#!/bin/bash
+set -e
+
+# Source the real streamlitctl
+source {ctl}
+
+# Mock _app_running to return 0 (running) for app "demo"
+_app_running() {{
+    local name="$1"
+    if [ "$name" = "demo" ]; then
+        return 0  # running
+    fi
+    return 1  # not running
+}}
+
+# Now run the list command
+cmd_app_list
+""".format(ctl=ctl_path)
+
+    ctl_wrapper.write_text(wrapper_script)
+    ctl_wrapper.chmod(0o755)
+
+    env = {
+        "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        "SECUBOX_STREAMLIT_APPS_PATH": str(apps_dir),
+        "SECUBOX_STREAMLIT_IDLE_DIR": str(idle_dir),
+        "SECUBOX_STREAMLIT_CONF": str(conf),
+    }
+
+    r = subprocess.run(["bash", str(ctl_wrapper)],
+                       capture_output=True, text=True, env=env, timeout=30)
+
+    # The sourced script outputs a banner, so extract just the JSON
+    # (JSON always starts with { and ends with })
+    output = r.stdout
+    json_start = output.find('{"apps"')
+    assert json_start >= 0, f"JSON not found in output: {output}"
+    json_part = output[json_start:]
+
+    out = json.loads(json_part)
+
+    # The mock returned 0 (running), so running should be true
+    app = out["apps"][0]
+    assert app["name"] == "demo"
+    assert app["running"] is True, "running must be true (via mocked _app_running returning 0)"
+    assert app["state"] == "running", "state must be 'running' (consistent with running=true)"
