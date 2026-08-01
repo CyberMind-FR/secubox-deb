@@ -1,3 +1,24 @@
+secubox-users (1.5.1-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY: the per-session Revoke button never revoked anything. It shelled
+    out to `curl -X DELETE .../session/{id}` on auth.sock — a route
+    secubox-auth has never exposed (its verb is
+    `POST /revoke_session?session_id=...`), so every call 404'd. Success was
+    then read off curl's exit status, and `curl -s` exits 0 on a 404, so the
+    endpoint always answered success:true and the UI reported
+    "Session revoked" while the session stayed live.
+    Now calls the real route over httpx on the unix socket, forwards the
+    CALLER's credentials (secubox-auth requires a JWT and audits `by: <sub>`,
+    and #942 allows exactly one writer on the store), and reports the real
+    HTTP status.
+  * SECURITY: `Revoke All` wrote an OBJECT into sessions.json
+    ({"sessions": [], "revoked_at": ...}). The store's only valid shape is a
+    list: iterating a dict yields its keys, so secubox-auth's validator raised
+    AttributeError on every authenticated request. The panic button broke the
+    auth module. Now writes an empty list. (ref #944)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 20:15:00 +0200
+
 secubox-users (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

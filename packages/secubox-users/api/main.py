@@ -5,6 +5,7 @@ Roles, Permissions, Access Control Lists, and Active Sessions
 """
 import subprocess
 import json
+import httpx
 import logging
 import os
 from datetime import datetime
@@ -1189,21 +1190,63 @@ async def get_sessions():
     }
 
 
-@app.delete("/session/{session_id}", dependencies=[Depends(require_jwt)])
-def revoke_session(session_id: str):
-    """Revoke a specific session."""
-    try:
-        result = subprocess.run(
-            ["curl", "-s", "-X", "DELETE", "--unix-socket", "/run/secubox/auth.sock",
-             f"http://localhost/session/{session_id}"],
-            capture_output=True, text=True, timeout=5
-        )
-        if result.returncode == 0:
-            return {"success": True, "session_id": session_id}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+AUTH_SOCKET = "/run/secubox/auth.sock"
 
-    return {"success": False, "error": "Failed to revoke session"}
+
+def _auth_credentials(request: Request) -> dict:
+    """Headers carrying the CALLER's identity, for a call to secubox-auth.
+
+    `POST /revoke_session` requires a JWT and records `by: <sub>` in the audit
+    trail, so the revocation must travel under the admin's own credential.
+    Anything else would either be an anonymous revocation or force a second
+    writer on sessions.json — which #942 forbids: exactly one writer.
+    """
+    headers = {}
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        headers["Authorization"] = auth_header
+    cookie = request.headers.get("Cookie")
+    if cookie:
+        headers["Cookie"] = cookie
+    return headers
+
+
+@app.delete("/session/{session_id}", dependencies=[Depends(require_jwt)])
+async def revoke_session(session_id: str, request: Request):
+    """Revoke a specific session, through the module that owns the store.
+
+    Rewritten in #944. The previous version shelled out to
+    `curl -X DELETE .../session/{id}` — a route secubox-auth has never
+    exposed (its verb is `POST /revoke_session?session_id=…`), so every call
+    got a 404. Worse, success was read off `curl`'s exit status, and `curl -s`
+    exits 0 on a 404: the endpoint always answered `success: true` and the UI
+    reported "✅ Session revoked" while nothing had happened.
+    """
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(uds=AUTH_SOCKET), timeout=10.0
+        ) as client:
+            resp = await client.post(
+                "http://localhost/api/v1/auth/revoke_session",
+                params={"session_id": session_id},
+                headers=_auth_credentials(request),
+            )
+    except Exception as e:
+        _log.warning("revoke_session: auth module unreachable: %s", e)
+        raise HTTPException(status_code=502, detail=f"Module auth injoignable : {e}")
+
+    if resp.status_code != 200:
+        # Surface the real failure instead of claiming success.
+        _log.warning("revoke_session: auth returned %s for %s", resp.status_code, session_id)
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"Le module auth a refusé la révocation (HTTP {resp.status_code})",
+        )
+
+    body = resp.json() if resp.content else {}
+    if not body.get("success"):
+        return {"success": False, "error": body.get("error", "Session introuvable")}
+    return {"success": True, "session_id": session_id}
 
 
 @app.post("/sessions/revoke-all", dependencies=[Depends(require_jwt)])
@@ -1224,8 +1267,15 @@ def revoke_all_sessions():
             else:
                 revoked = len(data.get("sessions", []))
 
-            # Write empty sessions
-            Path(SESSIONS_FILE).write_text(json.dumps({"sessions": [], "revoked_at": datetime.now().isoformat()}))
+            # Write an empty LIST — the store's only shape (#944).
+            #
+            # This used to write {"sessions": [], "revoked_at": …}. Both
+            # secubox-auth and secubox_core.sessions iterate the file as a
+            # list; iterating a dict yields its keys, so
+            # `any(s.get("id") == jti for s in rows)` raised
+            # `AttributeError: 'str' object has no attribute 'get'` — the panic
+            # button broke secubox-auth on every authenticated request.
+            Path(SESSIONS_FILE).write_text(json.dumps([]))
         except Exception as e:
             errors.append(f"Failed to clear sessions file: {e}")
 
