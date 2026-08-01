@@ -91,6 +91,29 @@ _json_escape() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# AUDIT HELPERS (#956) — cross-reference disk / declared / running
+# ─────────────────────────────────────────────────────────────────────
+
+# Liste des processus streamlit, une ligne par appli en cours.
+# SECUBOX_STREAMLIT_PS_SOURCE permet de tester sans conteneur.
+_ps_lines() {
+    if [ -n "${SECUBOX_STREAMLIT_PS_SOURCE:-}" ]; then
+        cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
+        return
+    fi
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
+}
+
+# Nom d'appli déduit d'un chemin de script : "a/app.py" -> "a", "b.py" -> "b".
+_app_name_of_script() {
+    case "$1" in
+        */*) printf '%s' "${1%%/*}" ;;
+        *)   printf '%s' "${1%.py}" ;;
+    esac
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # CONTAINER MANAGEMENT
 # ─────────────────────────────────────────────────────────────────────
 
@@ -392,6 +415,155 @@ EOF
     done
 
     echo ']}'
+}
+
+# app audit — croise disque (répertoires ET scripts .py à plat), déclarations
+# ([apps.*] du CONF_PATH) et processus en cours (_ps_lines). Lecture seule :
+# ne crée, ne modifie, ne supprime rien, ne démarre/arrête rien (#956).
+cmd_app_audit() {
+    local -A disk_shape=()      # name -> dir|script
+    local -A disk_path=()       # name -> chemin disque absolu
+    local -A declared=()        # name -> 1 si section [apps.name] présente
+    local -A run_port=()        # name -> port observé dans les process
+    local -A run_token=()       # name -> chemin de script tel que lancé
+    local -A run_seen=()        # name -> 1 si un process tourne pour ce nom
+
+    # 1) Entrées disque : répertoires et scripts .py à plat sous APPS_PATH.
+    if [ -d "$APPS_PATH" ]; then
+        local entry base
+        for entry in "$APPS_PATH"/*; do
+            [ -e "$entry" ] || continue
+            base=$(basename "$entry")
+            if [ -d "$entry" ]; then
+                disk_shape["$base"]="dir"
+                disk_path["$base"]="$entry"
+            elif [ "${base%.py}" != "$base" ]; then
+                local sname="${base%.py}"
+                disk_shape["$sname"]="script"
+                disk_path["$sname"]="$entry"
+            fi
+            # Toute autre entrée (non-dir, non-.py) n'est pas une appli.
+        done
+    fi
+
+    # 2) Applis déclarées : sections [apps.NAME] du config central.
+    if [ -f "$CONF_PATH" ]; then
+        local line name
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] && declared["$name"]=1
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+
+    # 3) Processus en ligne, croisés par nom d'appli.
+    local ps_line script port app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
+        app=$(_app_name_of_script "$script")
+        run_seen["$app"]=1
+        run_token["$app"]="$script"
+        run_port["$app"]="${port:-0}"
+    done < <(_ps_lines)
+
+    # Union de tous les noms connus (disque ∪ déclarés ∪ en ligne).
+    local -A seen_names=()
+    local n
+    for n in "${!disk_shape[@]}"; do seen_names["$n"]=1; done
+    for n in "${!declared[@]}"; do seen_names["$n"]=1; done
+    for n in "${!run_seen[@]}"; do seen_names["$n"]=1; done
+
+    local names_sorted
+    names_sorted=$(printf '%s\n' "${!seen_names[@]}" | sort)
+
+    local total=0 running_count=0
+    local out="["
+    local first=true
+
+    while IFS= read -r n; do
+        [ -z "$n" ] && continue
+        total=$(( total + 1 ))
+
+        local shape="${disk_shape[$n]:-}"
+        local dpath="${disk_path[$n]:-}"
+        local is_declared=false
+        [ -n "${declared[$n]:-}" ] && is_declared=true
+        local is_running=false
+        [ -n "${run_seen[$n]:-}" ] && is_running=true
+        [ "$is_running" = "true" ] && running_count=$(( running_count + 1 ))
+
+        local entrypoint="" persisted_port=""
+        if [ "$shape" = "dir" ]; then
+            local c
+            for c in app.py main.py streamlit_app.py; do
+                [ -f "$dpath/$c" ] && entrypoint="$c" && break
+            done
+            persisted_port=$(grep -E "^port\s*=" "$dpath/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+        elif [ "$shape" = "script" ]; then
+            entrypoint=$(basename "$dpath")
+        elif [ -n "${run_token[$n]:-}" ]; then
+            # Pas d'entrée disque : on ne connaît l'appli que par un process
+            # en cours (ou une déclaration) — la forme du chemin lancé donne
+            # la meilleure estimation de forme disponible.
+            case "${run_token[$n]}" in
+                */*) shape="dir" ;;
+                *)   shape="script" ;;
+            esac
+            entrypoint="${run_token[$n]}"
+        else
+            # Ni disque, ni process : déclarée seule (fantôme). On retombe
+            # sur le modèle historique (répertoire) faute de mieux.
+            shape="dir"
+        fi
+
+        local port=0
+        if [ "$is_running" = "true" ]; then
+            port="${run_port[$n]:-0}"
+        elif [ -n "$persisted_port" ]; then
+            port="$persisted_port"
+        fi
+
+        local exists_observed=false
+        { [ -n "$dpath" ] || [ "$is_running" = "true" ]; } && exists_observed=true
+
+        local -a issue_list=()
+        [ "$shape" = "dir" ] && [ -n "$dpath" ] && [ -z "$entrypoint" ] && issue_list+=("no-entrypoint")
+        [ "$exists_observed" = "true" ] && [ "$is_declared" = "false" ] && issue_list+=("not-declared")
+        [ "$exists_observed" = "false" ] && [ "$is_declared" = "true" ] && issue_list+=("declared-missing")
+        if [ -n "$persisted_port" ]; then
+            if [ "$is_running" = "false" ] || [ "$persisted_port" != "${run_port[$n]:-}" ]; then
+                issue_list+=("stale-port")
+            fi
+        fi
+        [ "$is_running" = "true" ] && [ "$shape" = "script" ] && issue_list+=("running-unlisted")
+
+        local issues="[" ifirst=true
+        local i
+        for i in "${issue_list[@]:-}"; do
+            [ -z "$i" ] && continue
+            $ifirst || issues+=","
+            ifirst=false
+            issues+="\"$i\""
+        done
+        issues+="]"
+
+        local ename eentry
+        ename=$(_json_escape "$n")
+        eentry=$(_json_escape "$entrypoint")
+
+        $first || out+=","
+        first=false
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"declared\":$is_declared,\"running\":$is_running,\"port\":$port,\"issues\":$issues}"
+    done <<< "$names_sorted"
+
+    out+="]"
+
+    cat <<EOF
+{"apps":$out,"summary":{"total":$total,"running":$running_count}}
+EOF
 }
 
 # app info <name> — print metadata + runtime state from manifest + pid file (#182)
@@ -886,6 +1058,7 @@ case "${1:-}" in
     app)
         case "${2:-}" in
             list)       cmd_app_list ;;
+            audit)      cmd_app_audit ;;
             idle-check) cmd_app_idle_check ;;
             wake)       cmd_app_wake "$3" "$4" ;;
             start)  cmd_app_start "$3" "$4" ;;
@@ -895,7 +1068,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
         esac
         ;;
 
@@ -938,7 +1111,8 @@ Container:
   restart       Restart container
 
 Apps:
-  app list              List all apps
+  app list              List all apps (directories only, legacy)
+  app audit             Cross-reference disk/declared/running (JSON, read-only)
   app start <name> [port]   Start an app
   app stop <name>           Stop an app
   app deploy <zip> [name]   Deploy from ZIP
