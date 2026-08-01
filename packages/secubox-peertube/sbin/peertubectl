@@ -316,11 +316,50 @@ cmd_upgrade() {
 # the service, never this, so a full queue looked like a healthy instance.
 #
 # Read-only, single SQL round-trip, no ffprobe — safe to poll.
+# Number of transcoding jobs really in flight: bull's queued/active/delayed
+# states PLUS any live ffmpeg. Bull namespaces keys `bull-<hostname>:<queue>:
+# <state>` — a `bull:*` scan matches nothing and would always read as "idle".
+_jobs_in_flight() {
+    local total=0 n k
+    for q in video-transcoding transcoding-job-builder; do
+        for s in wait active delayed paused; do
+            k="bull-${PUBLIC_HOSTNAME}:${q}:${s}"
+            n=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c \
+                "t=\$(redis-cli -n 0 type '$k' 2>/dev/null);
+                 case \"\$t\" in
+                   list) redis-cli -n 0 llen '$k' 2>/dev/null ;;
+                   zset) redis-cli -n 0 zcard '$k' 2>/dev/null ;;
+                   set)  redis-cli -n 0 scard '$k' 2>/dev/null ;;
+                   *) echo 0 ;;
+                 esac" 2>/dev/null)
+            total=$(( total + ${n:-0} ))
+        done
+    done
+    total=$(( total + $(pgrep -c ffmpeg 2>/dev/null || echo 0) ))
+    printf '%s' "$total"
+}
+
+# Rows whose pendingTranscode counter says a job owns them.
+_pending_counters() {
+    local n
+    n=$(printf '%s\n' 'select count(*) from "videoJobInfo" where "pendingTranscode" > 0;' \
+        | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+          env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -tA -f -"' 2>/dev/null)
+    printf '%s' "${n:-0}"
+}
+
 cmd_backlog() {
     if ! lxc_running; then
         printf '{"error":"lxc not running","states":[]}\n'
         return 1
     fi
+    # Counters that outlive their jobs are the failure mode that silently
+    # froze the whole queue (#943). Surface it HERE — in the panel and the
+    # companion — rather than in a log nobody reads.
+    local flight counters stuck=false
+    flight=$(_jobs_in_flight)
+    counters=$(_pending_counters)
+    [ "$counters" -gt 0 ] && [ "$flight" -eq 0 ] && stuck=true
     local rows
     rows=$(printf '%s\n' "
 select coalesce(json_agg(row_to_json(t)), '[]'::json) from (
@@ -334,7 +373,8 @@ select coalesce(json_agg(row_to_json(t)), '[]'::json) from (
 ) t;" | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
         env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -tA -f -"' 2>/dev/null)
     [ -n "$rows" ] || rows='[]'
-    printf '{"states":%s}\n' "$rows"
+    printf '{"states":%s,"jobs_in_flight":%s,"pending_counters":%s,"stuck":%s}\n' \
+        "$rows" "$flight" "$counters" "$stuck"
 }
 
 # Detect (and optionally clear) orphaned transcoding counters.
@@ -357,35 +397,9 @@ cmd_unstick() {
     [ "${1:-}" = "--apply" ] && apply=1
     if ! lxc_running; then err "lxc not running"; return 1; fi
 
-    # Bull namespaces its keys `bull-<instance hostname>:<queue>:<state>`, NOT
-    # `bull:*` — a `bull:*` scan returns 0 even on a busy instance, which would
-    # make the guard below always pass and clear counters of RUNNING jobs.
-    # Count the states that mean "a job still owns this counter".
-    local bull=0 n k
-    for q in video-transcoding transcoding-job-builder; do
-        for s in wait active delayed paused; do
-            k="bull-${PUBLIC_HOSTNAME}:${q}:${s}"
-            n=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c \
-                "t=\$(redis-cli -n 0 type '$k' 2>/dev/null);
-                 case \"\$t\" in
-                   list) redis-cli -n 0 llen '$k' 2>/dev/null ;;
-                   zset) redis-cli -n 0 zcard '$k' 2>/dev/null ;;
-                   set)  redis-cli -n 0 scard '$k' 2>/dev/null ;;
-                   *) echo 0 ;;
-                 esac" 2>/dev/null)
-            bull=$(( bull + ${n:-0} ))
-        done
-    done
-    # Second, independent guard: a live ffmpeg means a transcode is in flight
-    # even if the queue bookkeeping says otherwise.
-    local ff
-    ff=$(pgrep -c ffmpeg 2>/dev/null || echo 0)
-    [ "$ff" -gt 0 ] && bull=$(( bull + ff ))
-    local stuck
-    stuck=$(printf '%s\n' 'select count(*) from "videoJobInfo" where "pendingTranscode" > 0;' \
-        | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
-          env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -tA -f -"' 2>/dev/null)
-    stuck=${stuck:-0}
+    local bull stuck
+    bull=$(_jobs_in_flight)
+    stuck=$(_pending_counters)
 
     log "jobs in flight (queued/active/ffmpeg) : $bull"
     log "rows with pendingTranscode > 0        : $stuck"
