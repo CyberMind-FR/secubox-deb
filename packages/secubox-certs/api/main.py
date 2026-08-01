@@ -11,8 +11,25 @@ import re
 import ssl
 import socket
 
+from secubox_core.auth import require_jwt
+from secubox_core import user_store
+
 app = FastAPI(title="secubox-certs", version="1.0.0", root_path="/api/v1/certs")
 router = APIRouter()
+public_router = APIRouter()
+
+
+def require_admin(user=Depends(require_jwt)) -> dict:
+    """Admin gate for the destructive verbs (#942).
+
+    Issuing or revoking a certificate changes what the whole box presents to
+    the world; an ordinary session should not be able to do it. Same idiom as
+    secubox-auth's /settings.
+    """
+    who = user_store.get_user(user.get("sub")) or {}
+    if who.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin requis")
+    return user
 
 # Configuration
 CERTS_DIR = Path("/data/haproxy/certs")
@@ -462,7 +479,8 @@ def check_domain(req: CertRequest):
 
 
 @router.post("/issue")
-def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
+def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks,
+                      _admin=Depends(require_admin)):
     """Issue a new certificate via ACME."""
     domain = req.domain
 
@@ -532,7 +550,7 @@ def issue_certificate(req: CertRequest, background_tasks: BackgroundTasks):
 
 
 @router.post("/renew/{domain}")
-async def renew_certificate(domain: str):
+async def renew_certificate(domain: str, _admin=Depends(require_admin)):
     """Renew a specific certificate."""
     # Find existing cert
     pem_path = CERTS_DIR / f"{domain}.pem"
@@ -593,7 +611,7 @@ async def renew_all_expiring():
 
 
 @router.delete("/revoke/{domain}")
-def revoke_certificate(domain: str):
+def revoke_certificate(domain: str, _admin=Depends(require_admin)):
     """Revoke and delete a certificate."""
     pem_path = CERTS_DIR / f"{domain}.pem"
     if not pem_path.exists():
@@ -657,13 +675,21 @@ async def get_metrics():
     }
 
 
-@router.get("/health")
+@public_router.get("/health")
 async def health():
-    """Health check endpoint."""
+    """Health check endpoint. Deliberately unauthenticated — liveness probes
+    and the watchdog poll it, and it discloses nothing."""
     return {"status": "ok", "module": "certs", "version": "1.0.0"}
 
 
-app.include_router(router)
+# Everything except /health requires a valid session (#942). Until then this
+# module imported `Depends` without ever using it: `GET /list`, `POST /issue`
+# and `DELETE /revoke/{domain}` answered any caller, and it was verified in
+# production that `/list` returned 200 to an unauthenticated LAN client
+# through the full HAProxy → sbxwaf → nginx chain. Any device on the LAN could
+# issue or revoke the box's TLS certificates.
+app.include_router(public_router)
+app.include_router(router, dependencies=[Depends(require_jwt)])
 
 
 # Background cache refresh
