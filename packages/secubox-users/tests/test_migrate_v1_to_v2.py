@@ -43,11 +43,22 @@ def test_migrate_discards_sha256_hash_and_forces_must_change(tmp_path: Path):
     assert u["email"] == "gandalf@gk2.net"  # array wins over legacy
 
 
-def test_migrate_creates_v1_bak(tmp_path: Path):
+def test_migrate_snapshots_before_rewriting(tmp_path: Path):
+    """A snapshot must exist before the store is rewritten.
+
+    Was `test_migrate_creates_v1_bak`, asserting a FIXED `users.json.v1.bak`.
+    That fixed name is the defect #945 fixes: a second migration overwrote the
+    only good copy with the already-damaged file. The snapshot is now
+    timestamped, so every run leaves its own recoverable copy.
+    """
     p = tmp_path / "users.json"
-    p.write_text(json.dumps(_v1_doc()))
+    original = json.dumps(_v1_doc())
+    p.write_text(original)
     M.migrate(p, auth_toml_path=None)
-    assert (tmp_path / "users.json.v1.bak").exists()
+
+    snaps = list(tmp_path.glob("users.json.pre-migrate.*"))
+    assert len(snaps) == 1
+    assert json.loads(snaps[0].read_text()) == json.loads(original)
 
 
 def test_migrate_is_idempotent(tmp_path: Path):
