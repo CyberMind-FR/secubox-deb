@@ -1,3 +1,15 @@
+secubox-portal (2.2.4-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY: this module is a second authentication stack pointing at the
+    same /etc/secubox/users.json as secubox-auth, in an incompatible shape.
+    Every write rewrote the v2 store flat and downgraded argon2 hashes to
+    UNSALTED SHA-256. _save_users() now refuses with 501 — user management
+    belongs to secubox-auth / secubox-users.
+  * SECURITY: no longer provisions a default admin/secubox account when
+    users.json is missing. (ref #942)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 19:30:00 +0200
+
 secubox-portal (2.2.3-1~bookworm1) bookworm; urgency=medium
 
   * login.html: full TOTP flow in the browser so the admin-2FA "ON" state is
