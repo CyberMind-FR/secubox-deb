@@ -1,3 +1,16 @@
+secubox-certs (1.0.1-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY: the API had NO authentication — `Depends` was imported and
+    require_jwt never called. Verified in production: GET /list returned 200 to
+    an unauthenticated LAN client through the full HAProxy chain, and POST
+    /issue and DELETE /revoke sat on the same router. Any LAN device could
+    issue or revoke the box's TLS certificates.
+    Every route now requires a session; /health stays public for probes;
+    /issue, /renew, /renew-all and /revoke additionally require role=admin.
+    (ref #942)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 19:30:00 +0200
+
 secubox-certs (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

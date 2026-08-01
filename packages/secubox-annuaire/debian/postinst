@@ -17,6 +17,17 @@ case "$1" in
         install -d -m 0700 /etc/secubox/secrets/annuaire 2>/dev/null || true
         chown secubox:secubox /etc/secubox/secrets/annuaire 2>/dev/null || true
 
+        # The parent must be TRAVERSABLE by the service user (#952). Six
+        # packages write the mode of this shared directory and the last one
+        # installed wins; on gk2 it ended up 0700 root:root, so `secubox` could
+        # not reach its own key and secubox-metrics-publish failed for good
+        # with a misleading "no box key" — the key was there, the path was not.
+        #
+        # o+x only: traversal, never listing. Sub-directories keep their 0700
+        # and the secrets their 0600, so crossing this directory grants
+        # nothing. Same geste as secubox-assist, which hit this before us.
+        chmod o+x /etc/secubox/secrets 2>/dev/null || true
+
         # Allow nginx to bind the wg-mesh IP even when the interface is down at
         # boot (wg-quick@wg-mesh may start after nginx). Without this, a
         # specific-IP `listen` fails and takes nginx down board-wide. This is
