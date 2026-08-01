@@ -1,3 +1,15 @@
+secubox-jellyfin (2.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * partner podcaster: NEW — the podcaster episodes now show up in the Partenaires
+    tab and wire as a Jellyfin `music` library (mp3/m4a + cover art).
+  * partner podcaster: resolve podcaster.toml's `media_path` through readlink -f.
+    It points at /var/lib/secubox/podcaster/media, a SYMLINK to the SSD
+    (/data/secubox/podcaster/media) because the eMMC cannot hold the episodes;
+    lxc.mount.entry does not resolve a symlinked source, so the bind would fail.
+    (ref #939)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 18:20:00 +0200
+
 secubox-jellyfin (2.0.3-1~bookworm1) bookworm; urgency=medium
 
   * jellyfinctl: NEW `apikey-mint` — self-provision a Jellyfin API key by inserting

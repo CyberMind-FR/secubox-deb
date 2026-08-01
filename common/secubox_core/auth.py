@@ -20,6 +20,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
+from . import sessions as _sessions
 from . import user_store
 from .config import get_config
 from .logger import get_logger
@@ -29,7 +30,19 @@ _bearer = HTTPBearer(auto_error=False)
 
 # Session callbacks ─────────────────────────────────────────────────────
 _session_callback: Optional[Callable[[str, str, Dict[str, Any]], None]] = None
-_session_validator: Callable[[str], bool] = lambda jti: True
+
+# Default validator — FAIL-CLOSED since #942.
+#
+# It used to be `lambda jti: True`. Only `secubox-auth` ever calls
+# `set_session_validator()`, so every module served on its own socket (44 of
+# them on gk2) accepted revoked sessions forever, and the 116 mounted in the
+# aggregator were covered only by the side effect of `auth` being imported
+# into the same interpreter — a protection that silently vanished whenever
+# that import failed.
+#
+# The shared read-only store answers the same question without an IPC hop.
+# `secubox-auth` still overrides this with its own writer-side validator.
+_session_validator: Callable[[str], bool] = _sessions.is_valid
 
 
 def set_session_callback(cb: Callable[[str, str, Dict[str, Any]], None]) -> None:
@@ -54,10 +67,27 @@ def _emit_session_event(event: str, username: str, details: Optional[Dict[str, A
 
 # JWT helpers ────────────────────────────────────────────────────────────
 def _secret() -> str:
-    cfg = get_config("api")
-    s = cfg.get("jwt_secret", "")
+    """The HS256 signing secret. Raises when unset — never signs with a default.
+
+    Until #942 this fell back to a hard-coded placeholder, so a node whose
+    config had not been provisioned would boot happily and sign every token
+    in the fleet with a string published in the source tree. A missing secret
+    is a provisioning failure and must stop the service, not degrade it.
+    """
+    try:
+        cfg = get_config("api")
+    except OSError as exc:
+        # Unreadable config is not a reason to fall back to a weaker secret;
+        # try the environment, then fail.
+        log.warning("config unreadable while reading jwt_secret: %s", exc)
+        cfg = {}
+    s = cfg.get("jwt_secret", "") or os.environ.get("SECUBOX_JWT_SECRET", "")
     if not s:
-        s = os.environ.get("SECUBOX_JWT_SECRET", "CHANGEME_INSECURE")
+        raise RuntimeError(
+            "jwt_secret is not configured: set api.jwt_secret in "
+            "/etc/secubox/secubox.conf or SECUBOX_JWT_SECRET in the unit. "
+            "Refusing to sign tokens with a default."
+        )
     return s
 
 
@@ -125,15 +155,38 @@ def _decode_token(token: str) -> Dict[str, Any]:
         )
 
 
+def _is_scope_token(payload: Dict[str, Any]) -> bool:
+    """A `scope` claim marks an INTENT token, never an access token (#942).
+
+    `create_token(scope=...)` mints three of them: `mfa-challenge` (issued
+    after the password check but BEFORE the TOTP check), `set-password`
+    (issued against an EMPTY password when must_change_password is set) and
+    `totp-enroll`. `_validate_token` never looked at the claim, so any of
+    them opened a full session on every module keeping the permissive
+    validator — a 2FA bypass with the password alone, and a passwordless
+    entry for a freshly provisioned account.
+
+    They are redeemed by `secubox-auth`'s own `_check_scope()`, which
+    verifies the exact expected scope. They must never reach `require_jwt`.
+    """
+    return bool(payload.get("scope"))
+
+
 def _validate_token(token: str) -> Optional[Dict[str, Any]]:
-    """Decode + session/enabled checks. Returns the payload if the token is
-    fully valid, else None — never raises. Used to try multiple credential
+    """Decode + scope/session/enabled checks. Returns the payload if the token
+    is fully valid, else None — never raises. Used to try multiple credential
     sources (Bearer, cookie) without the first failure aborting the request."""
     try:
         payload = jwt.decode(token, _secret(), algorithms=["HS256"])
     except JWTError:
         return None
     if not payload.get("sub"):
+        return None
+    if _is_scope_token(payload):
+        log.warning(
+            "rejected scope token (scope=%s, sub=%s) presented as an access token",
+            payload.get("scope"), payload.get("sub"),
+        )
         return None
     jti = payload.get("jti")
     if not jti or not _session_validator(jti):
@@ -249,6 +302,13 @@ async def verify(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="no session")
     # _decode_token raises 401 on invalid/expired.
     payload = _decode_token(tok)
+    # Same rule as require_jwt (#942): an intent token is not a session.
+    if _is_scope_token(payload):
+        log.warning(
+            "rejected scope token (scope=%s) at the nginx auth_request target",
+            payload.get("scope"),
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="jeton hors scope")
     jti = payload.get("jti")
     if not jti or not _session_validator(jti):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="session révoquée")

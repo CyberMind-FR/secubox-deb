@@ -1,3 +1,14 @@
+secubox-auth (1.1.1-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY: sessions.json was drwxrwxrwx / rw-rw-rw- on gk2 — any local
+    account could append a row and forge a live session, which since #942 the
+    whole fleet trusts. postinst now owns it secubox:secubox and closes write
+    to the owner. Read is left open on purpose: 12 services run under their own
+    user and several call require_jwt, so 0640 would trade a forgery hole for
+    an outage. (ref #942)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 19:30:00 +0200
+
 secubox-auth (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
