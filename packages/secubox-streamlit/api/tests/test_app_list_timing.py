@@ -75,11 +75,12 @@ def test_json_escapes_app_name_with_backslash(tmp_path):
     assert app["name"] == app_name, f"Expected {app_name}, got {app['name']}"
 
 
-def test_uses_app_running_function_not_ss(tmp_path):
-    """cmd_app_list must call _app_running(), not use ss -tln directly.
+def test_uses_ps_lines_for_detection(tmp_path):
+    """cmd_app_list must use _ps_lines() for efficient detection inside LXC.
 
-    This test verifies the detection happens INSIDE the LXC (via _app_running),
-    not on the host (via ss). We mock _app_running to control its verdict.
+    This test verifies the detection happens via _ps_lines() (one lxc-attach call),
+    not by calling _app_running for each app. We mock _ps_lines to provide a
+    process output showing app "demo" is running.
     """
     apps_dir = tmp_path / "apps"
     idle_dir = tmp_path / "idle"
@@ -94,27 +95,22 @@ def test_uses_app_running_function_not_ss(tmp_path):
     (demo_dir / "app.py").write_text("import streamlit\n")
     (demo_dir / ".streamlit.toml").write_text("port = 8501\n")
 
-    # Create a bash wrapper that mocks _app_running to always return "running"
+    # Create a bash wrapper that mocks _ps_lines to return "demo" as running
     ctl_wrapper = tmp_path / "streamlitctl_wrapper.sh"
     ctl_path = str(CTL)
+    ps_source_file = tmp_path / "ps_source.txt"
+    # Format: streamlit run <script_path>
+    ps_source_file.write_text("streamlit run /srv/apps/demo/app.py\n")
+
     wrapper_script = """#!/bin/bash
 set -e
 
 # Source the real streamlitctl
 source {ctl}
 
-# Mock _app_running to return 0 (running) for app "demo"
-_app_running() {{
-    local name="$1"
-    if [ "$name" = "demo" ]; then
-        return 0  # running
-    fi
-    return 1  # not running
-}}
-
-# Now run the list command
-cmd_app_list
-""".format(ctl=ctl_path)
+# Now run the list command with injected PS_SOURCE
+SECUBOX_STREAMLIT_PS_SOURCE="{ps_source}" cmd_app_list
+""".format(ctl=ctl_path, ps_source=ps_source_file)
 
     ctl_wrapper.write_text(wrapper_script)
     ctl_wrapper.chmod(0o755)
@@ -138,8 +134,109 @@ cmd_app_list
 
     out = json.loads(json_part)
 
-    # The mock returned 0 (running), so running should be true
+    # _ps_lines provided "demo" as running, so running should be true
     app = out["apps"][0]
     assert app["name"] == "demo"
-    assert app["running"] is True, "running must be true (via mocked _app_running returning 0)"
+    assert app["running"] is True, "running must be true (via _ps_lines returning demo process)"
     assert app["state"] == "running", "state must be 'running' (consistent with running=true)"
+
+
+def test_lxc_attach_called_only_once_for_many_apps(tmp_path):
+    """cmd_app_list must call lxc-attach only ONCE, even with many apps.
+
+    This test creates 3+ apps and verifies that lxc-attach is invoked only
+    once (via _ps_lines), not once-per-app. We wrap lxc-attach to count calls.
+    """
+    apps_dir = tmp_path / "apps"
+    idle_dir = tmp_path / "idle"
+    apps_dir.mkdir()
+    idle_dir.mkdir()
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("[idle]\ntimeout_minutes = 30\n")
+
+    # Create 3 apps
+    for i, app_name in enumerate(["app1", "app2", "app3"], start=1):
+        app_dir = apps_dir / app_name
+        app_dir.mkdir()
+        (app_dir / "app.py").write_text("import streamlit\n")
+        (app_dir / ".streamlit.toml").write_text(f"port = {8500 + i}\n")
+
+    # Create a mock lxc-attach that counts invocations
+    lxc_attach_mock = tmp_path / "lxc-attach"
+    lxc_attach_mock.write_text("""#!/bin/bash
+# Count each invocation
+call_file="{call_count_file}"
+mkdir -p "$(dirname "$call_file")"
+count=$(cat "$call_file" 2>/dev/null || echo 0)
+count=$((count + 1))
+echo "$count" > "$call_file"
+
+# Return empty ps output (no apps running)
+exit 0
+""".format(call_count_file=tmp_path / "lxc_attach_calls.txt"))
+    lxc_attach_mock.chmod(0o755)
+
+    # Create wrapper script with custom PATH
+    ctl_wrapper = tmp_path / "streamlitctl_wrapper.sh"
+    ctl_path = str(CTL)
+    wrapper_script = """#!/bin/bash
+set -e
+
+# Create a mock ps that returns empty (no running apps)
+ps_mock="{tmp_dir}/ps"
+mkdir -p "$(dirname "$ps_mock")"
+cat > "$ps_mock" << 'PSMOCK'
+#!/bin/bash
+# Simulate ps output with no running streamlit apps
+exit 0
+PSMOCK
+chmod +x "$ps_mock"
+
+# Point to our mock lxc-attach and ps in the PATH
+export PATH="{tmp_dir}:$PATH"
+
+# Also inject a mock _ps_lines that uses our fake lxc-attach
+source {ctl}
+
+# Override _ps_lines to use the mocked lxc-attach
+_ps_lines() {{
+    if [ -n "${{SECUBOX_STREAMLIT_PS_SOURCE:-}}" ]; then
+        cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
+        return
+    fi
+    lxc-attach -n "$LXC_NAME" -- \\
+        ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
+}}
+
+# Now run the list command
+cmd_app_list
+""".format(tmp_dir=tmp_path, ctl=ctl_path)
+
+    ctl_wrapper.write_text(wrapper_script)
+    ctl_wrapper.chmod(0o755)
+
+    env = {
+        "PATH": str(tmp_path) + ":/usr/bin:/bin:/usr/sbin:/sbin",
+        "SECUBOX_STREAMLIT_APPS_PATH": str(apps_dir),
+        "SECUBOX_STREAMLIT_IDLE_DIR": str(idle_dir),
+        "SECUBOX_STREAMLIT_CONF": str(conf),
+    }
+
+    r = subprocess.run(["bash", str(ctl_wrapper)],
+                       capture_output=True, text=True, env=env, timeout=30)
+
+    # Extract JSON
+    output = r.stdout
+    json_start = output.find('{"apps"')
+    assert json_start >= 0, f"JSON not found in output: {output}"
+
+    # Count lxc-attach invocations
+    call_count_file = tmp_path / "lxc_attach_calls.txt"
+    if call_count_file.exists():
+        call_count = int(call_count_file.read_text().strip())
+    else:
+        call_count = 0
+
+    # With _ps_lines optimization, lxc-attach should be called only once
+    # (or not at all if no apps are running in the mock)
+    assert call_count <= 1, f"lxc-attach was called {call_count} times, expected <= 1"

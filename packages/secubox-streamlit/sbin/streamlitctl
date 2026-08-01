@@ -378,6 +378,20 @@ cmd_app_list() {
     echo '{"apps":['
     local first=true
 
+    # Fetch all running streamlit processes in one lxc-attach call (performance)
+    local running_apps=" "  # prefix/suffix space for safe regex matching
+    while IFS= read -r ps_line; do
+        # Extract app name from streamlit run path: /srv/apps/demo/app.py -> demo
+        # sed extracts the script path from the ps line, then we get the parent dir
+        local script; script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        if [ -n "$script" ]; then
+            # Get directory name (e.g., /srv/apps/demo/app.py -> demo)
+            # Remove .py filename, then extract last directory component
+            local app_name; app_name=$(printf '%s' "$script" | sed 's|/[^/]*\.py$||; s|.*/||')
+            [ -n "$app_name" ] && running_apps="$running_apps$app_name "
+        fi
+    done < <(_ps_lines)
+
     for app_dir in "$APPS_PATH"/*/; do
         [ -d "$app_dir" ] || continue
         local name=$(basename "$app_dir")
@@ -389,10 +403,10 @@ cmd_app_list() {
             [ -f "$app_dir/$candidate" ] && main_py="$candidate" && break
         done
 
-        # Check if running (by checking port INSIDE the LXC)
+        # Check if running (membership in running_apps list with delimiters)
         local running="false"
         local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
-        if _app_running "$name"; then
+        if [[ "$running_apps" =~ " $name " ]]; then
             running="true"
         fi
 
