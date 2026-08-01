@@ -14,8 +14,10 @@ Une seule capture à la fois : deux chromium concurrents ne tiennent pas dans le
 Aucun appel bloquant ne s'exécute directement dans une coroutine : le
 sous-processus chromium est piloté via `asyncio.create_subprocess_exec` (lectures
 de pipe natives à la boucle d'événements, réellement annulables par
-`asyncio.wait_for`), et le seul appel HTTP synchrone restant (résolution du port
-DevTools) est déporté dans un exécuteur.
+`asyncio.wait_for`) ; l'appel HTTP synchrone (résolution du port DevTools) et
+la suppression du profil temporaire (`shutil.rmtree`, potentiellement des
+dizaines de petits fichiers Cache/GPUCache/blob_storage/sqlite) sont tous deux
+déportés dans un exécuteur.
 """
 from __future__ import annotations
 
@@ -106,7 +108,12 @@ async def _capture_once(url: str, width: int, height: int) -> bytes:
                 await asyncio.wait_for(proc.wait(), timeout=10)
             except asyncio.TimeoutError:
                 proc.kill()
-        shutil.rmtree(profile, ignore_errors=True)
+        # Un profil chromium contient potentiellement des dizaines de petits
+        # fichiers (Cache, GPUCache, blob_storage, sqlite...) : la suppression
+        # est bornée mais synchrone — déportée dans un exécuteur pour ne
+        # jamais bloquer directement la coroutine, comme l'appel urlopen().
+        await asyncio.get_running_loop().run_in_executor(
+            None, shutil.rmtree, profile, True)
 
 
 async def _fetch_devtools_ws_url(port: str) -> str | None:

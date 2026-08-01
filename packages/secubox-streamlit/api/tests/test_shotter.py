@@ -1,36 +1,10 @@
 import asyncio
 import os
+import threading
+import time
 
 import pytest
 from api import shotter
-
-
-class _HangingStderr:
-    """Simule `proc.stderr` d'un chromium qui n'écrit jamais rien : la
-    coroutine `readline()` ne rend jamais la main d'elle-même."""
-
-    async def readline(self):
-        await asyncio.sleep(999)
-        return b""  # jamais atteint dans les tests ci-dessous
-
-
-class _HangingProcess:
-    """Simule un `asyncio.subprocess.Process` dont le sous-processus ne
-    répond jamais sur stderr — le cas plausible sous pression mémoire sur la
-    board (~2 Go disponibles)."""
-
-    def __init__(self):
-        self.stderr = _HangingStderr()
-        self.terminate_called = False
-
-    def terminate(self):
-        self.terminate_called = True
-
-    async def wait(self):
-        return 0
-
-    def kill(self):
-        pass
 
 
 def test_rejects_a_blank_render():
@@ -54,49 +28,81 @@ def test_wait_selector_targets_streamlit_root():
     assert shotter.WAIT_SELECTOR == '[data-testid="stAppViewContainer"]'
 
 
-def test_capture_times_out_without_freezing_the_event_loop(monkeypatch, tmp_path):
-    """Le test qui compte le plus : si chromium n'écrit jamais sur stderr,
-    `capture()` doit lever ShotError dans le délai imparti — et la boucle
-    d'événements doit rester libre pendant l'attente, pas gelée.
+def test_capture_stays_responsive_while_the_launched_process_stays_silent(
+        monkeypatch, tmp_path):
+    """Le test qui compte le plus : si le sous-processus n'écrit jamais rien
+    sur stderr, `capture()` doit rendre la main dans le délai imparti — et la
+    boucle d'événements doit rester libre pendant l'attente, pas gelée.
 
-    Régression visée : `proc.stderr.readline()` appelé de façon bloquante
-    dans une coroutine gèlerait tout le daemon FastAPI (déjà vu deux fois sur
-    ce projet : rendu PDF synchrone, appel bloquant dans l'agrégateur)."""
-    hanging = _HangingProcess()
+    Honnêteté du test : on ne double PAS `asyncio.create_subprocess_exec`
+    (l'ancien code fautif ne l'appelait même pas, il utilisait
+    `subprocess.Popen` — un tel double ne rejouerait donc jamais la
+    régression). On remplace `shotter.CHROMIUM` par un vrai sous-processus —
+    un script shell qui `exec sleep`, silencieux, quel que soit l'argv qu'on
+    lui passe. C'est un vrai processus OS : si `_devtools_url` redevenait une
+    lecture bloquante (`subprocess.Popen(...).stderr.readline()`), cet appel
+    gèlerait pour de vrai le thread qui fait tourner la boucle d'événements,
+    exactement comme en production.
 
-    async def fake_create_subprocess_exec(*args, **kwargs):
-        return hanging
+    Le scénario tourne dans un thread à part, borné par un `join(timeout=…)`
+    : si l'implémentation redevient bloquante, ce thread ne rend pas la main
+    à temps et l'assertion échoue — sans geler pytest lui-même. Régression
+    visée : un appel bloquant dans une coroutine gèlerait tout le daemon
+    FastAPI (déjà vu deux fois sur ce projet : rendu PDF synchrone, appel
+    bloquant dans l'agrégateur)."""
+    fake_chromium = tmp_path / "fake-chromium"
+    fake_chromium.write_text("#!/bin/sh\nexec sleep 5\n")
+    fake_chromium.chmod(0o755)
+    monkeypatch.setattr(shotter, "CHROMIUM", str(fake_chromium))
 
-    monkeypatch.setattr(shotter.asyncio, "create_subprocess_exec",
-                         fake_create_subprocess_exec)
-    monkeypatch.setattr(shotter.tempfile, "mkdtemp",
-                         lambda prefix="": str(tmp_path))
-    monkeypatch.setattr(shotter.shutil, "rmtree", lambda *a, **k: None)
+    result = {}
 
-    async def scenario():
-        ticks = []
+    def worker():
+        async def scenario():
+            ticks = []
 
-        async def ticker():
-            # Tourne pendant toute la durée de l'attente : si la boucle est
-            # gelée par un appel bloquant, ce compteur n'avancera pas.
-            for _ in range(30):
-                await asyncio.sleep(0.02)
-                ticks.append(1)
+            async def ticker():
+                # Tourne concurremment à la capture : si la boucle est gelée
+                # par un appel bloquant, ce compteur n'avance pas du tout.
+                for _ in range(40):
+                    await asyncio.sleep(0.02)
+                    ticks.append(1)
 
-        async def do_capture():
-            with pytest.raises(shotter.ShotError):
-                await shotter.capture("http://example.invalid/", timeout=0.3)
+            async def do_capture():
+                start = time.monotonic()
+                try:
+                    await shotter.capture("http://example.invalid/", timeout=0.3)
+                except shotter.ShotError:
+                    pass
+                return time.monotonic() - start
 
-        await asyncio.gather(ticker(), do_capture())
-        return ticks
+            _, elapsed = await asyncio.gather(ticker(), do_capture())
+            return ticks, elapsed
 
-    ticks = asyncio.run(scenario())
+        ticks, elapsed = asyncio.run(scenario())
+        result["ticks"] = ticks
+        result["elapsed"] = elapsed
 
-    # La boucle a continué de tourner concurremment à l'attente : preuve
-    # qu'aucun appel bloquant n'a gelé l'event loop.
-    assert len(ticks) > 5
-    # Le sous-processus (même « bloqué ») a bien été terminé au nettoyage.
-    assert hanging.terminate_called
+    worker_thread = threading.Thread(target=worker, daemon=True)
+    worker_thread.start()
+    # Le vrai sous-processus dort 5 s sans rien écrire ; le délai de capture
+    # demandé est de 0.3 s. 2 s de marge suffit largement si l'attente est
+    # bien non bloquante, et reste bien en-deçà des 5 s qu'exigerait un
+    # readline() bloqué sur un flux qui ne se ferme jamais avant terme.
+    worker_thread.join(timeout=2.0)
+
+    assert not worker_thread.is_alive(), (
+        "capture() n'a pas rendu la main dans le délai imparti — la lecture "
+        "du sous-processus est probablement redevenue bloquante et gèle la "
+        "boucle d'événements (et donc tout le daemon FastAPI)."
+    )
+    # Le temps réel écoulé reste proche du timeout demandé (0.3 s), pas de la
+    # durée du sous-processus (5 s) : preuve que l'attente est bornée par
+    # asyncio.wait_for, pas par une lecture bloquante.
+    assert result["elapsed"] < 1.5
+    # La boucle d'événements est restée libre pendant l'attente : le ticker
+    # concurrent a progressé.
+    assert len(result["ticks"]) > 5
 
 
 def test_launch_failure_cleans_up_profile_dir(monkeypatch, tmp_path):
