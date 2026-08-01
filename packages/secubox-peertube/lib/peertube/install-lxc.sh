@@ -221,8 +221,24 @@ id -u peertube >/dev/null 2>&1 || useradd -m -d /var/www/peertube -s /bin/bash p
 
 echo '[4/8] postgres + redis + database'
 service postgresql start || systemctl start postgresql || true
+# Redis must persist with an append-only file (#943). PeerTube keeps its job
+# QUEUE in redis but the "a job is pending" COUNTER in postgres
+# (videoJobInfo.pendingTranscode). Debian's default is `appendonly no`, so a
+# container restart loses every queued job while the counters survive —
+# PeerTube then answers 409 video_already_being_transcoded to every relaunch,
+# forever, and the videos stay in TO_TRANSCODE with no HLS playlist:
+# unplayable, silently. Cost us 87 videos on gk2, stuck since 2026-07-14.
+# `appendfsync everysec` is Debian's default and is the right trade-off here.
+if ! grep -qE '^appendonly yes' /etc/redis/redis.conf 2>/dev/null; then
+    sed -i 's/^appendonly no/appendonly yes/' /etc/redis/redis.conf 2>/dev/null || true
+    grep -qE '^appendonly yes' /etc/redis/redis.conf 2>/dev/null || \
+        echo 'appendonly yes' >> /etc/redis/redis.conf
+fi
 service redis-server start || systemctl start redis-server || true
 sleep 3
+# Belt and braces: enable it live too, in case redis was already running with
+# the old config (upgrade path — no restart needed, no queue lost).
+redis-cli config set appendonly yes >/dev/null 2>&1 || true
 sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='peertube'" | grep -q 1 || \
     sudo -u postgres psql -c "CREATE USER peertube WITH PASSWORD '${DB_PW}';"
 sudo -u postgres psql -c "ALTER USER peertube WITH PASSWORD '${DB_PW}';"
