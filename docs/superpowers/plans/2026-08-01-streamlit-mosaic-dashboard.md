@@ -351,6 +351,7 @@ _app_name_of_script() {
 scripts `.py`), les sections `[apps.*]` du TOML, et les lignes de processus ;
 il émet un objet par appli avec ses `issues`, puis un `summary`.
 
+
 - [ ] **Step 4 : lancer les tests**
 
 Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/ -v`
@@ -477,6 +478,7 @@ conteneur racine de Streamlit, puis capturer.
 
 Une seule capture à la fois : deux chromium concurrents ne tiennent pas dans les
 ~2 Go disponibles sur la board.
+
 """
 from __future__ import annotations
 
@@ -577,6 +579,21 @@ async def _wait_for_selector(ws_url: str, tries: int = 60) -> None:
         await asyncio.sleep(1.0)
     raise ShotError(f"sélecteur {WAIT_SELECTOR} jamais apparu")
 ```
+
+**AVERTISSEMENT — défaut du code ci-dessus, corrigé en ronde 1.** Le
+`proc.stderr.readline()` de `_devtools_url()` est un appel **bloquant** au
+milieu d'une coroutine. Tel quel il gèle la boucle d'événements du daemon
+FastAPI entier — plus aucune requête servie, d'aucun module — et il neutralise
+`asyncio.wait_for`, dont l'annulation ne peut être délivrée qu'à un point
+`await`. Le délai de 90 s n'est alors pas garanti, et un chromium bloqué laisse
+un processus et un répertoire temporaire derrière lui.
+
+Ce projet a déjà subi deux pannes de cette nature exacte. Toute lecture
+bloquante doit être déportée dans un exécuteur. Deux autres défauts du même
+extrait ont été corrigés en même temps : le répertoire temporaire créé hors du
+`try` fuit si le lancement échoue, et les échecs de bas niveau (chromium
+absent, websocket injoignable) doivent ressortir en `ShotError` pour que le
+contrat de l'interface soit tenu.
 
 - [ ] **Step 4 : lancer les tests**
 
