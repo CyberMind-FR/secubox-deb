@@ -1,3 +1,17 @@
+secubox-annuaire (0.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix: make /etc/secubox/secrets traversable by the service user. The unit
+    runs as `secubox` and its node.key is secubox-owned, but the shared parent
+    ended up 0700 root:root, so secubox-metrics-publish failed permanently with
+    a misleading "no box key" — the key was there, the path was not.
+    `chmod o+x` grants traversal only, never listing: sub-directories keep
+    their 0700 and the secrets their 0600. Same geste as secubox-assist.
+    Six packages write the mode of that shared directory and the last one
+    installed wins; posting the rule once (in secubox-core) is the real fix and
+    is tracked separately. (ref #952)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 01 Aug 2026 09:50:00 +0200
+
 secubox-annuaire (0.10.0-1~bookworm1) bookworm; urgency=medium
 
   * feat(fleet): fleet metrics — every node signs a MetricSnapshot
