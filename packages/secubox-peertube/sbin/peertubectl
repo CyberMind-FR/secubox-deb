@@ -337,6 +337,57 @@ select coalesce(json_agg(row_to_json(t)), '[]'::json) from (
     printf '{"states":%s}\n' "$rows"
 }
 
+# Detect (and optionally clear) orphaned transcoding counters.
+#
+# PeerTube guards `POST /videos/{id}/transcoding` with
+# videoJobInfo.pendingTranscode: non-zero means "a job already exists". That
+# counter lives in postgres while the jobs themselves live in redis/bull. Lose
+# redis — a crash, a flush, a container rebuild — and the counters survive with
+# nothing left to decrement them. PeerTube then refuses every relaunch with
+# 409 video_already_being_transcoded, forever, and the videos stay stuck in
+# TO_TRANSCODE with no HLS playlist: unplayable, silently.
+#
+# Observed on gk2 2026-08-01: 109 videos pending, 0 bull keys.
+#
+# `unstick` reports the mismatch. `unstick --apply` clears the counters, and
+# ONLY when the bull queue is genuinely empty — otherwise it would let a
+# duplicate job be queued alongside a running one.
+cmd_unstick() {
+    local apply=0
+    [ "${1:-}" = "--apply" ] && apply=1
+    if ! lxc_running; then err "lxc not running"; return 1; fi
+
+    local bull
+    bull=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        redis-cli -n 0 --scan --pattern 'bull:*' 2>/dev/null | wc -l)
+    local stuck
+    stuck=$(printf '%s\n' 'select count(*) from "videoJobInfo" where "pendingTranscode" > 0;' \
+        | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+          env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -tA -f -"' 2>/dev/null)
+    stuck=${stuck:-0}
+
+    log "bull queue keys : $bull"
+    log "pendingTranscode > 0 : $stuck"
+
+    if [ "$stuck" -eq 0 ]; then
+        log "nothing stuck"
+        return 0
+    fi
+    if [ "$bull" -ne 0 ]; then
+        warn "bull queue is NOT empty — counters may be legitimate, refusing to clear"
+        return 1
+    fi
+    warn "$stuck orphaned counter(s): jobs are gone but PeerTube still thinks they run"
+    if [ "$apply" -eq 0 ]; then
+        log "re-run with --apply to clear them"
+        return 0
+    fi
+    printf '%s\n' 'update "videoJobInfo" set "pendingTranscode"=0, "pendingMove"=0;' \
+        | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+          env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -f -"' >/dev/null 2>&1
+    log "counters cleared — relaunch transcoding from the webui or the PeerTube API"
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
@@ -351,6 +402,9 @@ Usage: peertubectl <verb> [args]
   logs [N]                      Tail N lines of peertube journal (default 50)
   backlog                       (json) videos per state + how many still lack an
                                 HLS playlist — i.e. are not yet playable at all
+  unstick [--apply]             Detect transcoding counters left behind by a lost
+                                redis queue (PeerTube then 409s every relaunch);
+                                --apply clears them, only if bull is empty
   upload <file> <title> [ch] [priv]  Upload a video to PeerTube (priv 2=unlisted)
   reload                        Reload host nginx (after vhost changes)
   process-ops                   (root) drain the /run ops spool
@@ -366,6 +420,7 @@ main() {
     case "$noun" in
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
         backlog) cmd_backlog "$@" ;;
+        unstick) cmd_unstick "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         upload) cmd_upload "$@" ;;
         check-upgrade) cmd_check_upgrade "$@" ;;
