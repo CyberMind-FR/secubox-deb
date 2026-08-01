@@ -1,0 +1,38 @@
+# /etc/nftables.d/secubox-peertube.nft
+# RTMP ingest for PeerTube live (#954).
+#
+# Live is enabled in PeerTube and the daemon listens on 1935 — but INSIDE the
+# LXC (10.100.0.120). The board itself had nothing on 1935 and no rule to get
+# there, so `rtmp://peertube.gk2.secubox.in` hit the board and found no one.
+# This drop-in is the missing hop.
+#
+# Own dedicated table, like secubox-jellyfin: it can never weaken the board's
+# base posture. Nothing else is required — `inet filter forward` is
+# policy accept (the DEFAULT DROP applies to `input`), and the return path is
+# handled by the DNAT's conntrack entry, so the client keeps seeing
+# 192.168.1.200:1935 as the peer.
+#
+# EXPOSURE: internal zones only, and that is deliberate. RTMP is cleartext —
+# the stream key travels in clear on every connection. Publishing 1935 to the
+# Internet would broadcast that key to every hop. Streaming from outside is a
+# job for RTMPS (1936, TLS), not for opening this port.
+#
+# Zones are named rather than lumped into 10.0.0.0/8 (same reasoning as the
+# yacy admin gate, #941): wg-toolbox carries browsing clients and wg-mesh
+# carries other boxes — neither has any business publishing a live stream here.
+table inet secubox-peertube {
+    set rtmp_allowed {
+        type ipv4_addr
+        flags interval
+        elements = {
+            192.168.1.0/24,     # LAN principal
+            192.168.255.0/24,   # segment lan3
+            10.98.0.0/24,       # wg-admin
+        }
+    }
+
+    chain rtmp_dnat {
+        type nat hook prerouting priority dstnat; policy accept;
+        ip saddr @rtmp_allowed tcp dport 1935 dnat ip to 10.100.0.120:1935
+    }
+}

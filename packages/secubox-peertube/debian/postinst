@@ -54,6 +54,14 @@ if [ "$1" = "configure" ]; then
     # Enable + start the API daemon. Tolerate masked units (per wazuh fix
     # 63284497): if the operator deliberately masked the service, leave it
     # alone instead of failing the postinst.
+    # RTMP ingest for PeerTube live (#954). Own dedicated table, so it can
+    # never weaken the board's base posture. Idempotent + non-fatal: drop our
+    # table then re-apply from the file. Same idiom as secubox-jellyfin.
+    if command -v nft >/dev/null 2>&1 && [ -f /etc/nftables.d/secubox-peertube.nft ]; then
+        nft 'delete table inet secubox-peertube' 2>/dev/null || true
+        nft -f /etc/nftables.d/secubox-peertube.nft 2>/dev/null || true
+    fi
+
     systemctl daemon-reload
     if [ "$(systemctl is-enabled secubox-peertube.service 2>/dev/null)" != "masked" ]; then
       systemctl enable secubox-peertube.service || true
