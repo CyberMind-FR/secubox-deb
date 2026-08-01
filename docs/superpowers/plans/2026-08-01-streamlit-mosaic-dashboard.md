@@ -197,148 +197,29 @@ n'est testable que sur la board."
 
 ---
 
-### Task 2 : exclure le captureur du compteur d'activité
+### Task 2 : ABANDONNÉE — exclusion du captureur du compteur d'activité
 
-`_app_active_conns` compte **toutes** les connexions établies au port. Sans exclusion, chaque capture repousserait la mise en veille — et le premier passage sur le parc rendrait le scale-to-zero inopérant.
+**Décision du 2026-08-01 : cette tâche est retirée du plan.** Elle avait été
+implémentée puis annulée avant revue.
 
-**Files:**
-- Modify: `packages/secubox-streamlit/sbin/streamlitctl` (fonction `_app_active_conns`)
-- Test: `packages/secubox-streamlit/api/tests/test_conns_exclusion.py`
+Le raisonnement d'origine : la capture ouvre une connexion vers l'appli, donc
+`_app_active_conns` la compte, donc elle repousse la mise en veille.
 
-**Interfaces:**
-- Consumes: rien
-- Produces: `_app_active_conns <nom>` ignore les connexions provenant de `$SHOT_CLIENT_ADDR` (dérivé de la config, défaut : passerelle du bridge).
+Ce qui l'invalide : **on ne photographie que des applis éveillées, et les seuls
+déclencheurs retenus sont déjà des moments d'activité réelle** — un réveil
+provoqué par un utilisateur, ou un clic sur « recapturer ». Dans les deux cas
+l'appli est de toute façon maintenue éveillée par l'usage qui a déclenché la
+photo. Traiter la capture comme une non-activité aurait ajouté une clé de
+configuration, une fonction et quatre tests pour un effet nul dans les
+conditions réelles d'emploi.
 
-- [ ] **Step 1 : écrire le test qui échoue**
+Le seul cas où l'effet serait mesurable est le premier passage sur les applis
+déjà éveillées (Task 5, étape 5) : plusieurs captures d'affilée repoussent
+d'autant de mises en veille. Si cela pose problème, la réponse est d'étaler ce
+passage dans le temps — pas d'ajouter un mécanisme d'exclusion permanent.
 
-Le test attaque la logique de filtrage sans dépendre de `ss` : on extrait le filtre dans une fonction pure et on la teste sur des lignes réelles de `ss`.
-
-```python
-# packages/secubox-streamlit/api/tests/test_conns_exclusion.py
-import subprocess
-from pathlib import Path
-
-CTL = Path(__file__).resolve().parents[2] / "sbin" / "streamlitctl"
-
-# Sortie réelle de `ss -tn state established "sport = :8501"` : en-tête + 3 lignes.
-SS_OUTPUT = """Recv-Q Send-Q Local Address:Port Peer Address:Port Process
-0      0      10.100.0.50:8501   192.168.1.42:51234
-0      0      10.100.0.50:8501   10.100.0.1:51235
-0      0      10.100.0.50:8501   192.168.1.77:51236
-"""
-
-
-def _count(ss_output, exclude):
-    """Appelle la fonction de filtrage du ctl sur une sortie ss donnée."""
-    script = f'source {CTL} --source-only 2>/dev/null; _count_conns "{exclude}"'
-    r = subprocess.run(["bash", "-c", script], input=ss_output,
-                       capture_output=True, text=True, timeout=15)
-    return int(r.stdout.strip() or -1)
-
-
-def test_counts_all_when_nothing_excluded():
-    assert _count(SS_OUTPUT, "") == 3
-
-
-def test_excludes_the_capturer_address():
-    """La connexion du captureur (10.100.0.1) ne doit pas compter."""
-    assert _count(SS_OUTPUT, "10.100.0.1") == 2
-
-
-def test_exclusion_matches_address_not_substring():
-    """10.100.0.1 ne doit pas exclure 10.100.0.150."""
-    ss = SS_OUTPUT + "0      0      10.100.0.50:8501   10.100.0.150:51237\n"
-    assert _count(ss, "10.100.0.1") == 3
-```
-
-- [ ] **Step 2 : lancer le test pour vérifier qu'il échoue**
-
-Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/test_conns_exclusion.py -v`
-Expected : FAIL — `_count_conns` n'existe pas.
-
-- [ ] **Step 3 : extraire le filtrage et l'appliquer**
-
-Ajouter dans `streamlitctl`, juste avant `_app_active_conns` :
-
-```bash
-# Compte les connexions d'une sortie `ss` lue sur stdin, en ignorant celles
-# venant de $1. Extrait en fonction pure pour être testable sans `ss` ni LXC.
-#
-# L'exclusion porte sur l'adresse DISTANTE (colonne 4) et compare l'adresse
-# entière, pas un préfixe : 10.100.0.1 ne doit pas exclure 10.100.0.150.
-_count_conns() {
-    local exclude="${1:-}"
-    awk -v ex="$exclude" '
-        NR > 1 {
-            peer = $4
-            sub(/:[0-9]+$/, "", peer)
-            if (ex != "" && peer == ex) next
-            n++
-        }
-        END { print n + 0 }
-    '
-}
-```
-
-Puis remplacer le corps de `_app_active_conns` :
-
-```bash
-_app_active_conns() {
-    local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-    [ -z "$port" ] && { echo 0; return; }
-    lxc_running || { echo 0; return; }
-    # Le captureur d'écran se connecte comme n'importe quel client ; sans cette
-    # exclusion il repousserait la mise en veille de chaque appli qu'il photographie,
-    # ce qui viderait le scale-to-zero de son sens.
-    local shot_addr; shot_addr=$(_idle_config "shot_client_addr" "")
-    lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
-        | _count_conns "$shot_addr"
-}
-```
-
-- [ ] **Step 4 : permettre le `--source-only` utilisé par le test**
-
-Tout en bas de `streamlitctl`, avant l'appel `main "$@"`, insérer :
-
-```bash
-# Permet à `source streamlitctl --source-only` de charger les fonctions sans
-# exécuter de commande — indispensable pour tester les fonctions pures.
-[ "${1:-}" = "--source-only" ] && return 0 2>/dev/null
-```
-
-- [ ] **Step 5 : lancer les tests**
-
-Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/ -v`
-Expected : PASS.
-
-- [ ] **Step 6 : documenter la clé de configuration**
-
-Dans `packages/secubox-streamlit/config/streamlit.toml.example`, section `[idle]` :
-
-```toml
-# Adresse depuis laquelle le captureur d'écran joint les applis (passerelle du
-# bridge LXC). Ses connexions sont ignorées par le compteur d'inactivité — sans
-# quoi photographier une appli l'empêcherait de s'endormir.
-shot_client_addr = "10.100.0.1"
-```
-
-- [ ] **Step 7 : commit**
-
-```bash
-git add packages/secubox-streamlit/sbin/streamlitctl \
-        packages/secubox-streamlit/config/streamlit.toml.example \
-        packages/secubox-streamlit/api/tests/test_conns_exclusion.py
-git commit -m "fix(streamlit): le captureur ne doit pas compter comme un utilisateur actif
-
-_app_active_conns comptait toutes les connexions établies au port, sans filtrer
-la source. Photographier une appli aurait donc repoussé sa mise en veille, et le
-premier passage sur le parc aurait rendu le scale-to-zero inopérant.
-
-Le filtrage est extrait en fonction pure (_count_conns) pour être testable sans
-ss ni conteneur, et compare l'adresse entière — 10.100.0.1 ne doit pas exclure
-10.100.0.150."
-```
+`_app_active_conns` reste donc inchangée, et la fonctionnalité devient
+**purement additive** : elle ne modifie aucune fonction du chemin d'inactivité.
 
 ---
 
@@ -1202,7 +1083,6 @@ et les PNG ne sont rechargés que si captured_at a changé : 64 tuiles qui
 ## Critères de sortie
 
 - [ ] `GET /apps` renvoie `state`, `last_active`, `idle_seconds`, `sleep_after_seconds` par appli.
-- [ ] Une capture ne modifie pas le résultat de `_app_active_conns` — l'invariant du scale-to-zero.
 - [ ] Le captureur produit un PNG > 20 Ko sur une appli réelle, et **lève** sur une page blanche.
 - [ ] Une capture en échec conserve l'image précédente.
 - [ ] Réveiller une appli à la vignette périmée la recapture ; une vignette fraîche n'est pas recapturée.
