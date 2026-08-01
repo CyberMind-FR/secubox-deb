@@ -197,6 +197,198 @@ n'est testable que sur la board."
 
 ---
 
+### Task 1b : `streamlitctl app audit` — cartographier avant de réparer
+
+**Ajoutée le 2026-08-01, après confrontation du plan à la board.** Le plan
+supposait qu'une appli est un répertoire portant un `app.py` et un
+`.streamlit.toml` avec son port. L'inventaire réel dit autre chose :
+
+| | |
+|---|---|
+| Entrées sous `apps/` | 87 |
+| — répertoires | 32 |
+| — **scripts `.py` à plat** | **43** |
+| — répertoires avec un fichier principal | 17 |
+| Listées par `app list` | 31 |
+| **Processus en ligne** | **15** |
+| — dont scripts à plat | **12** |
+
+`cmd_app_list` itère `"$APPS_PATH"/*/` : **les répertoires uniquement**. Les 43
+scripts à plat lui sont invisibles, dont 12 des 15 applis qui tournent
+réellement. Et `.streamlit.toml` n'existe que pour 10 applis, avec des ports
+périmés, parce qu'il n'est écrit que quand `streamlitctl` démarre lui-même
+l'appli.
+
+Cette tâche ne répare rien : elle **établit la carte**, en lecture seule, pour
+que la réparation vise juste.
+
+**Files:**
+- Modify: `packages/secubox-streamlit/sbin/streamlitctl` (nouveau verbe `app audit`)
+- Test: `packages/secubox-streamlit/api/tests/test_app_audit.py`
+
+**Interfaces:**
+- Consumes: `_idle_config`, `_json_escape` (existants)
+- Produces: `streamlitctl app audit` → JSON
+  `{"apps":[{"name","shape","entrypoint","declared","running","port","issues":[]}],"summary":{...}}`
+  avec `shape` ∈ `dir`|`script`, et `issues` parmi
+  `no-entrypoint`, `not-declared`, `declared-missing`, `stale-port`, `running-unlisted`.
+
+- [ ] **Step 1 : écrire le test qui échoue**
+
+```python
+# packages/secubox-streamlit/api/tests/test_app_audit.py
+import json
+import subprocess
+from pathlib import Path
+
+CTL = Path(__file__).resolve().parents[2] / "sbin" / "streamlitctl"
+
+
+def _audit(tmp_path, dirs=(), scripts=(), declared=()):
+    apps = tmp_path / "apps"; apps.mkdir()
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("".join(f'[apps.{n}]\n' for n in declared))
+    for name, main in dirs:
+        d = apps / name; d.mkdir()
+        if main:
+            (d / main).write_text("import streamlit\n")
+    for name in scripts:
+        (apps / name).write_text("import streamlit\n")
+    env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+           "SECUBOX_STREAMLIT_APPS_PATH": str(apps),
+           "SECUBOX_STREAMLIT_CONF": str(conf),
+           "SECUBOX_STREAMLIT_IDLE_DIR": str(tmp_path / "idle"),
+           "SECUBOX_STREAMLIT_PS_SOURCE": str(tmp_path / "ps.txt")}
+    (tmp_path / "ps.txt").touch()
+    r = subprocess.run(["bash", str(CTL), "app", "audit"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    return json.loads(r.stdout)
+
+
+def test_sees_bare_scripts_not_only_directories(tmp_path):
+    """43 des 87 entrées de la board sont des scripts à plat, et 12 d'entre
+    elles tournent. Les ignorer était la cause du mur vide."""
+    out = _audit(tmp_path, dirs=[("avec_dir", "app.py")], scripts=["a_plat.py"])
+    names = {a["name"]: a["shape"] for a in out["apps"]}
+    assert names == {"avec_dir": "dir", "a_plat": "script"}
+
+
+def test_flags_directory_without_entrypoint(tmp_path):
+    out = _audit(tmp_path, dirs=[("vide", None)])
+    app = out["apps"][0]
+    assert app["entrypoint"] == ""
+    assert "no-entrypoint" in app["issues"]
+
+
+def test_flags_declared_but_missing(tmp_path):
+    out = _audit(tmp_path, declared=["fantome"])
+    ghost = [a for a in out["apps"] if a["name"] == "fantome"][0]
+    assert "declared-missing" in ghost["issues"]
+
+
+def test_flags_present_but_undeclared(tmp_path):
+    out = _audit(tmp_path, scripts=["orphelin.py"])
+    app = out["apps"][0]
+    assert "not-declared" in app["issues"]
+
+
+def test_running_is_read_from_the_process_source(tmp_path):
+    apps = tmp_path / "apps"; apps.mkdir()
+    (apps / "vivant.py").write_text("import streamlit\n")
+    (tmp_path / "ps.txt").write_text("streamlit run vivant.py --server.port 8599\n")
+    conf = tmp_path / "streamlit.toml"; conf.write_text("[apps.vivant]\n")
+    env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+           "SECUBOX_STREAMLIT_APPS_PATH": str(apps),
+           "SECUBOX_STREAMLIT_CONF": str(conf),
+           "SECUBOX_STREAMLIT_IDLE_DIR": str(tmp_path / "idle"),
+           "SECUBOX_STREAMLIT_PS_SOURCE": str(tmp_path / "ps.txt")}
+    r = subprocess.run(["bash", str(CTL), "app", "audit"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    app = json.loads(r.stdout)["apps"][0]
+    assert app["running"] is True
+    assert app["port"] == 8599
+
+
+def test_summary_counts_match_the_app_list(tmp_path):
+    out = _audit(tmp_path, dirs=[("d1", "app.py"), ("d2", None)], scripts=["s1.py"])
+    assert out["summary"]["total"] == len(out["apps"]) == 3
+    assert out["summary"]["running"] == 0
+```
+
+- [ ] **Step 2 : lancer le test pour vérifier qu'il échoue**
+
+Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/test_app_audit.py -v`
+Expected : FAIL — le verbe `audit` n'existe pas, `main` sort en erreur « unknown verb ».
+
+- [ ] **Step 3 : implémenter le verbe**
+
+Trois sources croisées. La liste des processus vient de `lxc-attach … ps`, mais
+passe par une variable d'environnement `SECUBOX_STREAMLIT_PS_SOURCE` quand elle
+est définie — sans quoi la fonction n'est pas testable hors board.
+
+```bash
+# Liste des processus streamlit, une ligne par appli en cours.
+# SECUBOX_STREAMLIT_PS_SOURCE permet de tester sans conteneur.
+_ps_lines() {
+    if [ -n "${SECUBOX_STREAMLIT_PS_SOURCE:-}" ]; then
+        cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
+        return
+    fi
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
+}
+
+# Nom d'appli déduit d'un chemin de script : "a/app.py" -> "a", "b.py" -> "b".
+_app_name_of_script() {
+    case "$1" in
+        */*) printf '%s' "${1%%/*}" ;;
+        *)   printf '%s' "${1%.py}" ;;
+    esac
+}
+```
+
+`cmd_app_audit` parcourt ensuite les entrées du disque (répertoires **et**
+scripts `.py`), les sections `[apps.*]` du TOML, et les lignes de processus ;
+il émet un objet par appli avec ses `issues`, puis un `summary`.
+
+- [ ] **Step 4 : lancer les tests**
+
+Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/ -v`
+Expected : PASS — les 6 nouveaux plus les 9 existants.
+
+- [ ] **Step 5 : passer l'audit sur la board**
+
+```bash
+scp packages/secubox-streamlit/sbin/streamlitctl root@192.168.1.200:/usr/sbin/streamlitctl
+ssh root@192.168.1.200 'chmod 755 /usr/sbin/streamlitctl
+  /usr/sbin/streamlitctl app audit | python3 -m json.tool | head -40'
+```
+
+Expected : les 15 applis en ligne apparaissent avec `running: true` et leur
+port réel, dont les 12 scripts à plat qu'`app list` ne voyait pas.
+
+- [ ] **Step 6 : commit**
+
+```bash
+git add packages/secubox-streamlit/sbin/streamlitctl \
+        packages/secubox-streamlit/api/tests/test_app_audit.py
+git commit -m "feat(streamlit): app audit — croiser disque, déclarations et processus
+
+Le modèle d'appli ne connaissait qu'une forme : un répertoire portant un
+app.py. La board en compte deux — 32 répertoires et 43 scripts .py à plat — et
+12 des 15 applis réellement en ligne sont des scripts à plat, donc invisibles à
+app list qui n'itère que les répertoires.
+
+S'y ajoutent 15 répertoires sans point d'entrée et un .streamlit.toml présent
+pour 10 applis sur 87, avec des ports périmés : il n'est écrit que lorsque
+streamlitctl démarre lui-même l'appli.
+
+audit ne répare rien — il établit la carte, en lecture seule, en croisant les
+entrées du disque, les sections déclarées et les processus en cours."
+```
+
+---
+
 ### Task 2 : ABANDONNÉE — exclusion du captureur du compteur d'activité
 
 **Décision du 2026-08-01 : cette tâche est retirée du plan.** Elle avait été
