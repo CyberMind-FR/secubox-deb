@@ -1,3 +1,24 @@
+secubox-core (1.1.11-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY: reject `scope` tokens presented as access tokens. create_token
+    mints mfa-challenge (issued BEFORE the TOTP check), set-password (issued
+    against an EMPTY password) and totp-enroll; _validate_token never read the
+    claim, so any of them opened a full session on every module keeping the
+    permissive validator — a 2FA bypass with the password alone. Enforced in
+    _validate_token and in /auth/verify, the nginx auth_request target.
+  * SECURITY: the default session validator is now FAIL-CLOSED. It was
+    `lambda jti: True`, and only secubox-auth ever replaces it, so the 44
+    modules served on their own socket accepted revoked sessions forever.
+  * NEW secubox_core.sessions: shared read-only view of sessions.json, one
+    stat() per call, full parse only when the file changed, deny on any error.
+    No IPC on the hot path. Rollback switch:
+    SECUBOX_AUTH_PERMISSIVE_SESSIONS=1 (temporary, tracked in #942).
+  * SECURITY: no more CHANGEME_INSECURE fallback for the JWT secret — a
+    missing secret now raises at startup instead of signing the whole fleet's
+    tokens with a string published in the source tree. (ref #942)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 19:30:00 +0200
+
 secubox-core (1.1.10-1~bookworm1) bookworm; urgency=medium
 
   * #421/#494: secubox-dirs-guard now also re-asserts /run/secubox to

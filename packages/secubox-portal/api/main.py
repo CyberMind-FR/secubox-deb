@@ -157,30 +157,40 @@ def _save_json(filepath: Path, data):
 
 
 def _load_users() -> dict:
-    """Load users from config file, creating default if missing."""
+    """Load users from the canonical store, read-only.
+
+    This module is a SECOND authentication stack pointing at the same
+    /etc/secubox/users.json as secubox-auth, in an incompatible shape (flat
+    dict vs the v2 schema) — see #942. It used to provision a default
+    `admin`/`secubox` account when the file was missing. Removed: creating a
+    well-known account as a side effect of a failed read is how a box ends up
+    with a published password.
+    """
     if USERS_FILE.exists():
         try:
             return json.loads(USERS_FILE.read_text())
         except (json.JSONDecodeError, IOError) as e:
             log.error("Failed to load users.json: %s", e)
-
-    default_users = {
-        "admin": {
-            "password_hash": hashlib.sha256("secubox".encode()).hexdigest(),
-            "email": "admin@secubox.local",
-            "role": "admin",
-            "created": datetime.now().isoformat()
-        }
-    }
-    _save_users(default_users)
-    log.info("Created default admin user (password: secubox)")
-    return default_users
+    return {}
 
 
 def _save_users(users: dict):
-    """Save users to config file."""
-    USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    USERS_FILE.write_text(json.dumps(users, indent=2))
+    """Refuse to write. The canonical store belongs to secubox-auth (#942).
+
+    Every write from here rewrote the v2 store in this module's flat shape and
+    downgraded argon2 hashes to UNSALTED SHA-256 for the accounts it touched.
+    User management lives in secubox-auth / secubox-users; this module keeps
+    read access only, until its fate is decided (removal, or reduction to a
+    frontend with no auth logic).
+    """
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "secubox-portal ne gère plus les comptes : le magasin canonique "
+            "appartient à secubox-auth (#942). Utilisez /api/v1/auth ou "
+            "/api/v1/users."
+        ),
+    )
 
 
 def _load_history() -> List[Dict[str, Any]]:

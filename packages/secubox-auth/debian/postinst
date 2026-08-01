@@ -7,6 +7,30 @@ case "$1" in
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
+
+    # Session store (#942). Found on gk2 as drwxrwxrwx / rw-rw-rw-: any local
+    # account could append a row and FORGE a live session — and since #942 the
+    # whole fleet reads this file to decide whether a jti is still valid, so
+    # that forgery would now be fleet-wide.
+    #
+    # Write is closed to the owner. Read is deliberately left open, and that is
+    # a considered trade-off, not an oversight: 12 SecuBox services run under
+    # their own user (secubox-toolbox, secubox-waf, secubox-assist,
+    # secubox-antirootkit, secubox-mesh, secubox-meshtastic) and several of
+    # them call require_jwt. With 0640 secubox:secubox they would fail closed
+    # on every request — the batch would trade a forgery hole for an outage.
+    # Reading buys an attacker little: a jti is not a credential, forging a
+    # token still requires the HS256 secret. Tightening read belongs with the
+    # move to a `secubox` supplementary group, which is its own change.
+    #
+    # 0755 on the directory only, NEVER on /var/lib/secubox itself: that parent
+    # is shared and tightening it has already broken unrelated modules.
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox/auth
+    if [ -f /var/lib/secubox/auth/sessions.json ]; then
+        chown secubox:secubox /var/lib/secubox/auth/sessions.json
+        chmod 644 /var/lib/secubox/auth/sessions.json
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-auth.service
     systemctl start  secubox-auth.service || true
