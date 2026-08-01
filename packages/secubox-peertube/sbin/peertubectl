@@ -357,24 +357,45 @@ cmd_unstick() {
     [ "${1:-}" = "--apply" ] && apply=1
     if ! lxc_running; then err "lxc not running"; return 1; fi
 
-    local bull
-    bull=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
-        redis-cli -n 0 --scan --pattern 'bull:*' 2>/dev/null | wc -l)
+    # Bull namespaces its keys `bull-<instance hostname>:<queue>:<state>`, NOT
+    # `bull:*` — a `bull:*` scan returns 0 even on a busy instance, which would
+    # make the guard below always pass and clear counters of RUNNING jobs.
+    # Count the states that mean "a job still owns this counter".
+    local bull=0 n k
+    for q in video-transcoding transcoding-job-builder; do
+        for s in wait active delayed paused; do
+            k="bull-${PUBLIC_HOSTNAME}:${q}:${s}"
+            n=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c \
+                "t=\$(redis-cli -n 0 type '$k' 2>/dev/null);
+                 case \"\$t\" in
+                   list) redis-cli -n 0 llen '$k' 2>/dev/null ;;
+                   zset) redis-cli -n 0 zcard '$k' 2>/dev/null ;;
+                   set)  redis-cli -n 0 scard '$k' 2>/dev/null ;;
+                   *) echo 0 ;;
+                 esac" 2>/dev/null)
+            bull=$(( bull + ${n:-0} ))
+        done
+    done
+    # Second, independent guard: a live ffmpeg means a transcode is in flight
+    # even if the queue bookkeeping says otherwise.
+    local ff
+    ff=$(pgrep -c ffmpeg 2>/dev/null || echo 0)
+    [ "$ff" -gt 0 ] && bull=$(( bull + ff ))
     local stuck
     stuck=$(printf '%s\n' 'select count(*) from "videoJobInfo" where "pendingTranscode" > 0;' \
         | lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
           env LC_ALL=C sh -c 'cd /tmp && su postgres -c "psql -q -d peertube_prod -tA -f -"' 2>/dev/null)
     stuck=${stuck:-0}
 
-    log "bull queue keys : $bull"
-    log "pendingTranscode > 0 : $stuck"
+    log "jobs in flight (queued/active/ffmpeg) : $bull"
+    log "rows with pendingTranscode > 0        : $stuck"
 
     if [ "$stuck" -eq 0 ]; then
         log "nothing stuck"
         return 0
     fi
     if [ "$bull" -ne 0 ]; then
-        warn "bull queue is NOT empty — counters may be legitimate, refusing to clear"
+        warn "$bull job(s) still in flight — these counters are legitimate, refusing to clear"
         return 1
     fi
     warn "$stuck orphaned counter(s): jobs are gone but PeerTube still thinks they run"
