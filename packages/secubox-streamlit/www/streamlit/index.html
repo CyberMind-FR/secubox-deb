@@ -6,307 +6,162 @@
     <title>SecuBox - Streamlit Platform</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --p31-dim: #6b7b8b;      /* labels discrets */
+            --bg-dark: #0d1117;      /* fond de page */
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row:  rgba(20, 30, 45, 0.6);
+            --border:  rgba(100, 150, 200, 0.2);
+            --text:    #e8e6d9;
+            --cyan:    #00d4ff;      /* accent PRINCIPAL — titres, actif, bouton primaire */
+            --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
+            --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
+            background: var(--bg-dark);
+            color: var(--text);
             display: flex;
             min-height: 100vh;
         }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); letter-spacing: 0.05em; }
+        .header .sub { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.2rem; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-family: 'Courier Prime', monospace; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.success, .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.25rem 0.6rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; }
+        .tab { padding: 0.75rem 1.25rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; backdrop-filter: blur(10px); }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.2rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+        .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.running { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.stopped { background: rgba(139,148,158,0.2); color: var(--text-dim); }
-        .badge.installed { background: rgba(88,166,255,0.2); color: var(--primary); }
-        .badge.missing { background: rgba(248,81,73,0.2); color: var(--red); }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        th { color: var(--p31-dim); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+        tr:hover td { background: rgba(0,212,255,0.03); }
+
+        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid; }
+        .badge.running { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .badge.stopped { background: rgba(107,123,139,0.15); border-color: var(--p31-dim); color: var(--p31-dim); }
+        .badge.installed { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .badge.missing { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .badge.badge-yellow { background: rgba(255,204,0,0.15); border-color: var(--yellow); color: var(--yellow); }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 500px; }
+        .modal-content { background: rgba(20,30,45,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; max-width: 500px; backdrop-filter: blur(10px); }
+        .modal-content h3 { color: var(--cyan); margin-bottom: 1rem; }
         .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .form-group label { display: block; margin-bottom: 0.3rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-row); color: var(--text); font-family: 'Courier Prime', monospace; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
         .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; }
-        .upload-zone:hover { border-color: var(--primary); }
-        .upload-zone.dragover { border-color: var(--green); background: rgba(63,185,80,0.1); }
+
+        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; color: var(--p31-dim); }
+        .upload-zone:hover { border-color: var(--cyan); }
+        .upload-zone.dragover { border-color: var(--green); background: rgba(0,221,68,0.1); }
         input[type="file"] { display: none; }
-        .access-item { background: var(--bg-dark); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
-        .access-item a { color: var(--primary); text-decoration: none; }
+
+        .access-item { background: var(--bg-row); padding: 0.75rem 1rem; border-radius: 6px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+        .access-item a { color: var(--cyan); text-decoration: none; }
         .access-item a:hover { text-decoration: underline; }
+
         .component-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
         .component-row:last-child { border-bottom: none; }
         .component-info { flex: 1; }
-        .component-name { font-weight: 500; }
-        .component-desc { font-size: 0.8rem; color: var(--text-dim); }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
+        .component-name { font-weight: 500; color: var(--text); }
+        .component-desc { font-size: 0.8rem; color: var(--p31-dim); }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 0.75rem 1.25rem; background: var(--bg-card); border: 1px solid var(--cyan); border-radius: 6px; color: var(--cyan); font-size: 0.85rem; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transform: translateY(20px); transition: all 0.3s; backdrop-filter: blur(10px); pointer-events: none; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { border-color: var(--red); color: var(--red); }
 
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        /* Mosaic tab — app fleet tiles. NEVER an iframe: a tile that loaded
+           the app in place would keep it awake, defeating sleep/wake. */
+        .mosaic-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+        .mosaic-summary { font-size: 0.8rem; color: var(--p31-dim); }
+        .mosaic-summary strong { color: var(--cyan); }
+        .mosaic-summary .anomaly-count { color: var(--orange); }
+        .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+        .mosaic-tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; backdrop-filter: blur(10px); transition: all 0.2s; display: flex; flex-direction: column; }
+        .mosaic-tile:hover { border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,212,255,0.15); }
+        .mosaic-thumb { aspect-ratio: 16 / 10; background: var(--bg-row); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden; }
+        .mosaic-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .mosaic-thumb.sleeping { filter: grayscale(1) brightness(0.6); }
+        .mosaic-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+        .mosaic-name { color: var(--cyan); font-weight: 700; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mosaic-meta { font-size: 0.7rem; color: var(--p31-dim); display: flex; justify-content: space-between; gap: 0.5rem; }
+        .mosaic-issues { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+        .mosaic-issue { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; letter-spacing: 0.03em; }
+        .mosaic-footer { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
+        .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
+        .mosaic-footer a:hover { text-decoration: underline; }
+        .mosaic-empty { color: var(--p31-dim); padding: 1rem; }
 
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
 
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-        }
+        @media (max-width: 768px) { .main { margin-left: 0; padding-top: 60px; } }
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <h1>Streamlit Platform</h1>
             <div>
+                <h1>📊 Streamlit Platform</h1>
+                <div class="sub">Applications data-science déployées</div>
+            </div>
+            <div class="btn-group">
                 <button class="btn success" onclick="showDeploy()">+ Deploy App</button>
-                <button class="btn" onclick="refresh()">Refresh</button>
+                <button class="btn" onclick="refresh()">↻ Refresh</button>
             </div>
         </header>
 
         <div class="tabs">
+            <div class="tab" onclick="showTab('mosaic')">🧩 Mosaïque</div>
             <div class="tab active" onclick="showTab('status')">Status</div>
             <div class="tab" onclick="showTab('access')">Access</div>
             <div class="tab" onclick="showTab('apps')">Apps</div>
             <div class="tab" onclick="showTab('instances')">Instances</div>
             <div class="tab" onclick="showTab('actions')">Actions</div>
+        </div>
+
+        <!-- MOSAIC TAB -->
+        <div class="tab-content" id="tab-mosaic">
+            <div class="card">
+                <div class="mosaic-toolbar">
+                    <div class="mosaic-summary" id="mosaic-summary">Chargement…</div>
+                    <button class="btn" onclick="loadMosaic()">↻ Rafraîchir</button>
+                </div>
+                <div class="mosaic-grid" id="mosaic-grid">
+                    <div class="mosaic-empty">Chargement du parc d'applis (audit disque + processus, ~10s)…</div>
+                </div>
+            </div>
         </div>
 
         <!-- STATUS TAB -->
@@ -331,7 +186,7 @@
         <div class="tab-content" id="tab-access">
             <div class="card">
                 <h2>Running Applications</h2>
-                <p style="color:var(--text-dim);margin-bottom:1rem;font-size:0.9rem">Click links to open running Streamlit apps</p>
+                <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.9rem">Click links to open running Streamlit apps</p>
                 <div id="access-list">Loading...</div>
             </div>
         </div>
@@ -342,7 +197,7 @@
                 <h2>Deploy App</h2>
                 <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
                     <p>Drag & drop a ZIP file or click to browse</p>
-                    <p style="font-size:0.8rem;color:var(--text-dim);margin-top:0.5rem">ZIP should contain app.py or main.py</p>
+                    <p style="font-size:0.8rem;color:var(--p31-dim);margin-top:0.5rem">ZIP should contain app.py or main.py</p>
                 </div>
                 <input type="file" id="file-input" accept=".zip" onchange="deployApp()">
                 <div id="deploy-status" style="margin-top:1rem;"></div>
@@ -360,7 +215,7 @@
         <div class="tab-content" id="tab-instances">
             <div class="card">
                 <h2>App Instances</h2>
-                <p style="color:var(--text-dim);margin-bottom:1rem;font-size:0.9rem">Multiple instances can run the same app on different ports</p>
+                <p style="color:var(--p31-dim);margin-bottom:1rem;font-size:0.9rem">Multiple instances can run the same app on different ports</p>
                 <table>
                     <thead><tr><th>ID</th><th>App</th><th>Port</th><th>Status</th><th>Actions</th></tr></thead>
                     <tbody id="instance-list"><tr><td colspan="5">Loading...</td></tr></tbody>
@@ -372,11 +227,11 @@
         <div class="tab-content" id="tab-actions">
             <div class="card">
                 <h2>Power Management</h2>
-                <p style="margin-bottom:1rem;color:var(--text-dim)">Sleep/wake optimization - pause container to save resources</p>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Sleep/wake optimization - pause container to save resources</p>
                 <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
                     <div id="power-status" style="display:flex;align-items:center;gap:0.5rem">
                         <span class="badge" id="power-state-badge">loading</span>
-                        <span id="power-idle-time" style="color:var(--text-dim);font-size:0.85rem"></span>
+                        <span id="power-idle-time" style="color:var(--p31-dim);font-size:0.85rem"></span>
                     </div>
                 </div>
                 <div id="power-actions">
@@ -387,7 +242,7 @@
             </div>
             <div class="card">
                 <h2>Container Management</h2>
-                <p style="margin-bottom:1rem;color:var(--text-dim)">Manage the Streamlit LXC container</p>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Manage the Streamlit LXC container</p>
                 <div id="container-actions">
                     <button class="btn success" onclick="containerStart()">Start Container</button>
                     <button class="btn danger" onclick="containerStop()">Stop Container</button>
@@ -396,12 +251,12 @@
             </div>
             <div class="card">
                 <h2>Migration</h2>
-                <p style="margin-bottom:1rem;color:var(--text-dim)">Import apps from OpenWrt SecuBox</p>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Import apps from OpenWrt SecuBox</p>
                 <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
             </div>
             <div class="card">
                 <h2>Gitea Integration</h2>
-                <p style="margin-bottom:1rem;color:var(--text-dim)">Clone or push apps to Gitea repositories</p>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Clone or push apps to Gitea repositories</p>
                 <button class="btn" onclick="showGiteaClone()">Clone from Gitea</button>
             </div>
         </div>
@@ -458,10 +313,16 @@
         </div>
     </div>
 
+    <div class="toast" id="toast"></div>
+
     <script>
         const API = '/api/v1/streamlit';
         const token = () => localStorage.getItem('sbx_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
 
         async function api(path, opts = {}) {
             try {
@@ -476,6 +337,7 @@
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
             document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'mosaic' && !mosaicLoaded) { loadMosaic(); }
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
@@ -484,17 +346,93 @@
         function showMigrate() { showModal('migrate-modal'); }
         function showGiteaClone() { showModal('gitea-modal'); }
 
+        // ═══════════════════════════════════════════════════════════════
+        // Mosaic — app fleet tiles. Data only, never an iframe/embed: a
+        // tile that loaded the app in place would keep it awake, which is
+        // the opposite of the sleep/wake goal this view exists to serve.
+        // No auto-refresh: the audit endpoint takes ~10s on the board, a
+        // periodic poll would be harmful. Loaded lazily on first tab view,
+        // and on demand via the "Rafraîchir" button.
+        // ═══════════════════════════════════════════════════════════════
+        let mosaicLoaded = false;
+        const MOSAIC_ISSUE_LABELS = {
+            'not-declared': "non déclarée",
+            'no-entrypoint': "sans point d'entrée",
+            'stale-port': 'port périmé',
+            'running-unlisted': 'en ligne, non listée',
+            'declared-missing': 'déclarée, absente',
+            'duplicate-path': 'chemin en double',
+        };
+
+        async function loadMosaic() {
+            mosaicLoaded = true;
+            const grid = document.getElementById('mosaic-grid');
+            const summary = document.getElementById('mosaic-summary');
+            grid.innerHTML = '<div class="mosaic-empty">Chargement du parc d\'applis (audit disque + processus, ~10s)…</div>';
+            summary.textContent = 'Chargement…';
+
+            const d = await api('/apps/audit');
+            const apps = d.apps || [];
+            const s = d.summary || {};
+            const total = s.total ?? apps.length;
+            const running = s.running ?? apps.filter(a => a.running).length;
+            const withIssues = apps.filter(a => (a.issues || []).length > 0).length;
+
+            summary.innerHTML = '<strong>' + total + '</strong> applis · <strong>' + running + '</strong> en ligne' +
+                (withIssues ? ' · <span class="anomaly-count">' + withIssues + ' avec anomalie' + (withIssues > 1 ? 's' : '') + '</span>' : '');
+
+            if (!apps.length) {
+                grid.innerHTML = '<div class="mosaic-empty">Aucune application détectée</div>';
+                return;
+            }
+
+            const sorted = apps.slice().sort((a, b) => {
+                const ra = !!a.running, rb = !!b.running;
+                if (ra !== rb) return ra ? -1 : 1;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            });
+
+            grid.innerHTML = sorted.map(renderMosaicTile).join('');
+        }
+
+        function renderMosaicTile(a) {
+            const name = esc(a.name || '?');
+            const running = !!a.running;
+            const port = Number.isInteger(a.port) ? a.port : parseInt(a.port, 10);
+            const hasPort = Number.isFinite(port) && port > 0;
+            const shape = esc(a.shape || '-');
+            const issues = a.issues || [];
+            const url = running && hasPort ? `http://${location.hostname}:${port}` : null;
+
+            const meta = shape + (running && hasPort ? ' · :' + port : '');
+
+            return '<div class="mosaic-tile">' +
+                '<div class="mosaic-thumb' + (running ? '' : ' sleeping') + '">🧩</div>' +
+                '<div class="mosaic-body">' +
+                    '<div class="mosaic-name" title="' + name + '">' + name + '</div>' +
+                    '<div class="mosaic-meta">' +
+                        '<span>' + (running ? '🟢 en ligne' : '😴 endormie') + '</span>' +
+                        '<span>' + esc(meta) + '</span>' +
+                    '</div>' +
+                    (issues.length
+                        ? '<div class="mosaic-issues">' + issues.map(i => '<span class="mosaic-issue">' + esc(MOSAIC_ISSUE_LABELS[i] || i) + '</span>').join('') + '</div>'
+                        : '') +
+                '</div>' +
+                (url ? '<div class="mosaic-footer"><a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a></div>' : '') +
+            '</div>';
+        }
+
         // Components
         async function loadComponents() {
             const d = await api('/components');
             const list = document.getElementById('components-list');
             const components = d.components || [];
-            if (!components.length) { list.innerHTML = '<p style="color:var(--text-dim)">No components</p>'; return; }
+            if (!components.length) { list.innerHTML = '<p style="color:var(--p31-dim)">No components</p>'; return; }
             list.innerHTML = components.map(c => `
                 <div class="component-row">
                     <div class="component-info">
-                        <div class="component-name">${c.name}</div>
-                        <div class="component-desc">${c.description}</div>
+                        <div class="component-name">${esc(c.name)}</div>
+                        <div class="component-desc">${esc(c.description)}</div>
                     </div>
                     <span class="badge ${c.installed || c.exists ? 'installed' : 'missing'}">${c.installed || c.exists ? 'Installed' : 'Missing'}</span>
                 </div>
@@ -518,8 +456,8 @@
             const list = document.getElementById('health-checks');
             list.innerHTML = Object.entries(checks).map(([k, v]) => `
                 <div class="component-row">
-                    <span>${k}</span>
-                    <span class="badge ${v === 'ok' || v === 'running' ? 'running' : 'stopped'}">${v}</span>
+                    <span>${esc(k)}</span>
+                    <span class="badge ${v === 'ok' || v === 'running' ? 'running' : 'stopped'}">${esc(v)}</span>
                 </div>
             `).join('');
         }
@@ -529,15 +467,15 @@
             const d = await api('/access');
             const list = document.getElementById('access-list');
             const access = d.access || [];
-            if (!access.length) { list.innerHTML = '<p style="color:var(--text-dim)">No running apps</p>'; return; }
+            if (!access.length) { list.innerHTML = '<p style="color:var(--p31-dim)">No running apps</p>'; return; }
             list.innerHTML = access.map(a => {
                 const url = a.url.replace('{{hostname}}', location.hostname);
                 return `<div class="access-item">
                     <div>
-                        <strong>${a.name}</strong>
-                        <span style="color:var(--text-dim);margin-left:1rem">${a.type} - port ${a.port}</span>
+                        <strong>${esc(a.name)}</strong>
+                        <span style="color:var(--p31-dim);margin-left:1rem">${esc(a.type)} - port ${esc(a.port)}</span>
                     </div>
-                    <a href="${url}" target="_blank">${url}</a>
+                    <a href="${esc(url)}" target="_blank">${esc(url)}</a>
                 </div>`;
             }).join('');
         }
@@ -547,18 +485,18 @@
             const d = await api('/apps');
             const list = document.getElementById('app-list');
             const apps = d.apps || [];
-            if (!apps.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No apps deployed</td></tr>'; return; }
+            if (!apps.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--p31-dim)">No apps deployed</td></tr>'; return; }
             list.innerHTML = apps.map(a => `<tr>
-                <td><strong>${a.name}</strong></td>
-                <td style="color:var(--text-dim)">${a.main || '-'}</td>
-                <td>${a.port || '-'}</td>
+                <td><strong>${esc(a.name)}</strong></td>
+                <td style="color:var(--p31-dim)">${esc(a.main || '-')}</td>
+                <td>${esc(a.port || '-')}</td>
                 <td><span class="badge ${a.running ? 'running' : 'stopped'}">${a.running ? 'Running' : 'Stopped'}</span></td>
                 <td>
                     ${a.running
-                        ? `<button class="btn danger" onclick="stopApp('${a.name}')" style="padding:2px 8px;font-size:0.7rem">Stop</button>
-                           <button class="btn" onclick="window.open('http://'+location.hostname+':${a.port}')" style="padding:2px 8px;font-size:0.7rem">Open</button>`
-                        : `<button class="btn success" onclick="promptStartApp('${a.name}')" style="padding:2px 8px;font-size:0.7rem">Start</button>`}
-                    <button class="btn danger" onclick="deleteApp('${a.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
+                        ? `<button class="btn danger sm" onclick="stopApp('${esc(a.name)}')">Stop</button>
+                           <button class="btn sm" onclick="window.open('http://'+location.hostname+':${esc(a.port)}')">Open</button>`
+                        : `<button class="btn success sm" onclick="promptStartApp('${esc(a.name)}')">Start</button>`}
+                    <button class="btn danger sm" onclick="deleteApp('${esc(a.name)}')">Delete</button>
                 </td>
             </tr>`).join('');
         }
@@ -568,16 +506,16 @@
             const d = await api('/instances');
             const list = document.getElementById('instance-list');
             const instances = d.instances || [];
-            if (!instances.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim)">No instances configured</td></tr>'; return; }
+            if (!instances.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--p31-dim)">No instances configured</td></tr>'; return; }
             list.innerHTML = instances.map(i => `<tr>
-                <td><strong>${i.id}</strong></td>
-                <td>${i.app || '-'}</td>
-                <td>${i.port || '-'}</td>
+                <td><strong>${esc(i.id)}</strong></td>
+                <td>${esc(i.app || '-')}</td>
+                <td>${esc(i.port || '-')}</td>
                 <td><span class="badge ${i.running ? 'running' : 'stopped'}">${i.running ? 'Running' : 'Stopped'}</span></td>
                 <td>
                     ${i.running
-                        ? `<button class="btn danger" onclick="stopInstance('${i.id}')" style="padding:2px 8px;font-size:0.7rem">Stop</button>`
-                        : `<button class="btn success" onclick="startInstance('${i.id}')" style="padding:2px 8px;font-size:0.7rem">Start</button>`}
+                        ? `<button class="btn danger sm" onclick="stopInstance('${esc(i.id)}')">Stop</button>`
+                        : `<button class="btn success sm" onclick="startInstance('${esc(i.id)}')">Start</button>`}
                 </td>
             </tr>`).join('');
         }
@@ -613,7 +551,7 @@
             const input = document.getElementById('file-input');
             if (!input.files.length) return;
             const status = document.getElementById('deploy-status');
-            status.innerHTML = '<span style="color:var(--primary)">Deploying...</span>';
+            status.innerHTML = '<span style="color:var(--cyan)">Deploying...</span>';
             const form = new FormData();
             form.append('file', input.files[0]);
             const name = document.getElementById('deploy-name').value;
@@ -622,7 +560,7 @@
             if (port) form.append('port', port);
             const res = await fetch(API + '/deploy', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token() }, body: form });
             const d = await res.json();
-            status.innerHTML = d.success ? '<span style="color:var(--green)">Deployed!</span>' : '<span style="color:var(--red)">Failed: ' + (d.error || 'Unknown') + '</span>';
+            status.innerHTML = d.success ? '<span style="color:var(--green)">Deployed!</span>' : '<span style="color:var(--red)">Failed: ' + esc(d.error || 'Unknown') + '</span>';
             refresh();
         }
 
@@ -636,7 +574,7 @@
         async function containerInstall() {
             if (!confirm('Install Streamlit container? This may take several minutes.')) return;
             await api('/container/install', { method: 'POST' });
-            alert('Installation started in background. Check status in a few minutes.');
+            showToast('Installation started in background. Check status in a few minutes.', 'info');
         }
 
         // Migration
@@ -644,14 +582,14 @@
             const source = document.getElementById('migrate-source').value;
             await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
             hideModal('migrate-modal');
-            alert('Migration started. Apps will appear shortly.');
+            showToast('Migration started. Apps will appear shortly.', 'success');
         }
 
         // Gitea
         async function doGiteaClone() {
             const name = document.getElementById('gitea-name').value;
             const repo = document.getElementById('gitea-repo').value;
-            if (!name || !repo) { alert('Name and repo URL required'); return; }
+            if (!name || !repo) { showToast('Name and repo URL required', 'error'); return; }
             await api(`/gitea/clone/${name}`, { method: 'POST', body: JSON.stringify({ repo }) });
             hideModal('gitea-modal');
             refresh();
@@ -729,16 +667,11 @@
         }
 
         function showToast(msg, type = 'info') {
-            const toast = document.createElement('div');
-            toast.style.cssText = `
-                position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
-                background: var(--bg-card); border: 1px solid ${type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--primary)'};
-                border-radius: 6px; color: ${type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--text)'};
-                z-index: 9999; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            `;
+            const toast = document.getElementById('toast');
             toast.textContent = msg;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
+            toast.className = 'toast show' + (type === 'error' ? ' error' : '');
+            clearTimeout(showToast._t);
+            showToast._t = setTimeout(() => toast.classList.remove('show'), 4000);
         }
 
         function refresh() {
@@ -752,6 +685,5 @@
         }
         refresh();
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

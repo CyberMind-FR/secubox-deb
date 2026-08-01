@@ -456,6 +456,12 @@ async def list_apps():
     return {"apps": _get_apps()}
 
 
+@router.get("/apps/audit")
+async def apps_audit():
+    """Inventaire croisé disque / déclarations / processus (public, lecture seule)."""
+    return _run_ctl("app", "audit", timeout=60)
+
+
 @router.get("/app/{name}")
 async def get_app(name: str, user=Depends(require_jwt)):
     """Get app details."""
