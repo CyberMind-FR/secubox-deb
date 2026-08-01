@@ -9,8 +9,14 @@ case "$1" in
             --home /var/lib/secubox --no-create-home --shell /usr/sbin/nologin secubox
         install -d -o secubox -g secubox -m 755 /etc/secubox
 
-        # Run v1 → v2 migration (idempotent)
-        python3 - <<'PYEOF' || echo 'WARN: migration step failed — investigate /etc/secubox/users.json'
+        # Run v1 → v2 migration (idempotent).
+        #
+        # NOT tolerant of failure (#945). This step rewrites the credential
+        # store; swallowing its exit code with `|| echo WARN` is how an upgrade
+        # can leave a box with no password hashes and still report success.
+        # A failure here must stop the install so the operator sees it while
+        # the pre-migrate snapshot is still fresh.
+        python3 - <<'PYEOF'
 import sys
 sys.path.insert(0, '/usr/lib/secubox/users')
 from api.migrate_v1_to_v2 import migrate
