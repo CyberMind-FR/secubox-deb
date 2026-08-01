@@ -423,6 +423,18 @@ EOF
 # app audit — croise disque (répertoires ET scripts .py à plat), déclarations
 # ([apps.*] du CONF_PATH) et processus en cours (_ps_lines). Lecture seule :
 # ne crée, ne modifie, ne supprime rien, ne démarre/arrête rien (#956).
+#
+# Valeurs possibles de "issues" par appli :
+#   no-entrypoint    répertoire présent sur disque sans app.py/main.py/streamlit_app.py
+#   not-declared     appli observée (disque ou process) mais sans section [apps.*]
+#   declared-missing appli déclarée mais introuvable ailleurs (ni disque, ni process)
+#   stale-port       .streamlit.toml par-appli présent dont le port ne correspond
+#                    pas au port réellement observé (ou l'appli n'est plus en ligne)
+#   running-unlisted appli en cours d'exécution mais de forme "script" — donc
+#                    invisible pour l'ancien app list qui n'itère que les répertoires
+#   duplicate-path   le "path = ..." déclaré est partagé par plusieurs sections
+#                    [apps.*] (config malformée) ; portée par CHACUNE des sections
+#                    concernées — aucune n'est éliminée de la sortie pour autant
 cmd_app_audit() {
     local -A disk_shape=()      # name -> dir|script
     local -A disk_path=()       # name -> chemin disque absolu
@@ -453,6 +465,8 @@ cmd_app_audit() {
     #    éventuel "path = ..." — le lien fiable nom-déclaré <-> script lancé
     #    (vérifié sur la board : `path = "metabolizer.py"` sous [apps.*]).
     local -A path_to_name=()    # path déclaré ("path = ...") -> name, pour le matching process
+    local -A path_owners=()     # path déclaré -> liste (espace-séparée) des noms qui le déclarent
+    local -A dup_path=()        # name -> 1 si son path déclaré est partagé par une autre section
     if [ -f "$CONF_PATH" ]; then
         local line name
         while IFS= read -r line; do
@@ -465,7 +479,25 @@ cmd_app_audit() {
             local p
             p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
                 | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
-            [ -n "$p" ] && path_to_name["$p"]="$name"
+            if [ -n "$p" ]; then
+                path_to_name["$p"]="$name"
+                path_owners["$p"]="${path_owners[$p]:-}$name "
+            fi
+        done
+
+        # Un même path déclaré par plusieurs sections [apps.*] est une
+        # config malformée : il ne doit ni faire disparaître une appli, ni
+        # être avalé en silence — chacune des sections concernées est
+        # marquée (issue "duplicate-path" plus bas), aucune n'est éliminée.
+        local path owner
+        for path in "${!path_owners[@]}"; do
+            local -a owners=()
+            read -ra owners <<< "${path_owners[$path]}"
+            if [ "${#owners[@]}" -gt 1 ]; then
+                for owner in "${owners[@]}"; do
+                    dup_path["$owner"]=1
+                done
+            fi
         done
     fi
 
@@ -558,6 +590,7 @@ cmd_app_audit() {
             fi
         fi
         [ "$is_running" = "true" ] && [ "$shape" = "script" ] && issue_list+=("running-unlisted")
+        [ -n "${dup_path[$n]:-}" ] && issue_list+=("duplicate-path")
 
         local issues="[" ifirst=true
         local i

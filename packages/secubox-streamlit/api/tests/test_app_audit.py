@@ -140,3 +140,29 @@ def test_running_process_matched_via_declared_path_not_filename_heuristic(tmp_pa
     app = out["apps"][0]
     assert app["running"] is True
     assert app["port"] == 8520
+
+
+def test_duplicate_declared_path_flags_both_apps_without_dropping_either(tmp_path):
+    """Board reality (verified): out of 40 declared paths, tong_shu_app.py
+    appears in two different [apps.*] sections. That's a malformed config,
+    not a theoretical edge case — the audit must surface it, not silently let
+    the second declaration win and make the first app vanish from the map."""
+    apps = tmp_path / "apps"; apps.mkdir()
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text(
+        '[apps.premiere]\npath = "shared.py"\n'
+        '[apps.seconde]\npath = "shared.py"\n'
+    )
+    env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+           "SECUBOX_STREAMLIT_APPS_PATH": str(apps),
+           "SECUBOX_STREAMLIT_CONF": str(conf),
+           "SECUBOX_STREAMLIT_IDLE_DIR": str(tmp_path / "idle"),
+           "SECUBOX_STREAMLIT_PS_SOURCE": str(tmp_path / "ps.txt")}
+    (tmp_path / "ps.txt").touch()
+    r = subprocess.run(["bash", str(CTL), "app", "audit"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    out = json.loads(r.stdout)
+    names = {a["name"] for a in out["apps"]}
+    assert names == {"premiere", "seconde"}
+    for a in out["apps"]:
+        assert "duplicate-path" in a["issues"]
