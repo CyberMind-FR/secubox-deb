@@ -1,3 +1,26 @@
+secubox-users (1.5.2-1~bookworm1) bookworm; urgency=high
+
+  * SECURITY/DATA-LOSS: the v1->v2 migration destroyed credentials. On gk2 the
+    1.4.2 -> 1.5.1 upgrade wiped the argon2 hashes of all three accounts and
+    the admin TOTP; the Companion then refused every login with "Aucun mot de
+    passe local".
+    Cause: `_is_v2()` requires a `version` key, and users.json can lose it to
+    any writer that serialises without one. The store then took the v1
+    conversion path, which rebuilt each account from a blank template and
+    copied only email/role/created — nulling password_hash and forcing
+    must_change_password on accounts that were already migrated.
+    An array entry is already v2, so it is now overlaid WHOLESALE, secrets
+    included. Legacy flat blocks still lose their hash on purpose: those are
+    unsalted SHA-256 from auth.toml and cannot become argon2id.
+  * The pre-migration backup is now TIMESTAMPED
+    (users.json.pre-migrate.<ns>). The old fixed `.v1.bak` name meant a second
+    migration overwrote the only good copy with the already-damaged file — on
+    gk2 that copy was the one thing that made recovery possible.
+  * postinst no longer swallows a migration failure with `|| echo WARN`: a
+    step that rewrites the credential store must fail the install, loudly,
+    while the snapshot is still fresh. (ref #945)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 01 Aug 2026 09:30:00 +0200
 secubox-users (1.5.1-1~bookworm1) bookworm; urgency=high
 
   * SECURITY: the per-session Revoke button never revoked anything. It shelled

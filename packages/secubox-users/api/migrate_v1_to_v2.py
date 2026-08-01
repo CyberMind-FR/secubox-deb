@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import shutil
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -50,6 +51,26 @@ def _is_v2(doc: Dict[str, Any]) -> bool:
     return doc.get("version") == 2 and isinstance(doc.get("users"), list)
 
 
+def _snapshot(path: Path) -> Optional[Path]:
+    """Timestamped copy taken before any rewrite (#945).
+
+    Nanosecond suffix on purpose: the previous code copied to a FIXED
+    `.v1.bak`, so a second migration overwrote the only good copy with the
+    already-damaged file. On gk2 that copy was the one thing that made
+    recovery possible — it must not be a single slot.
+    """
+    if not path.exists():
+        return None
+    dest = path.with_name(f"{path.name}.pre-migrate.{time.time_ns()}")
+    try:
+        shutil.copy2(path, dest)
+        log.info("migrate: snapshot %s", dest)
+        return dest
+    except OSError as exc:
+        log.error("migrate: could NOT snapshot %s (%s) — refusing to migrate", path, exc)
+        raise
+
+
 def migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
     """Convert users.json to v2 in place. Idempotent."""
     users_path = Path(users_path)
@@ -71,10 +92,9 @@ def migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
         _atomic_write(users_path, doc)
         return
 
-    # v1 → v2 conversion.
-    log.info("migrate: converting %s v1 → v2", users_path)
-    if users_path.exists():
-        shutil.copy2(users_path, users_path.with_suffix(users_path.suffix + ".v1.bak"))
+    # About to rewrite the credential store — snapshot first, always.
+    log.info("migrate: converting %s → v2", users_path)
+    _snapshot(users_path)
 
     legacy_users: Dict[str, Dict[str, Any]] = {}
     array_users: Dict[str, Dict[str, Any]] = {}
@@ -94,18 +114,24 @@ def migrate(users_path: Path, auth_toml_path: Optional[Path]) -> None:
         u["email"] = legacy.get("email", u["email"])
         u["role"] = legacy.get("role", u["role"])
         u["created"] = legacy.get("created", u["created"])
-        # Array entries win for non-secret fields.
-        arr = array_users.get(username, {})
-        if arr.get("email"):
-            u["email"] = arr["email"]
-        if "enabled" in arr:
-            u["enabled"] = bool(arr["enabled"])
-        u["services"] = arr.get("services", u["services"])
-        u["created"] = arr.get("created", u["created"])
-        # Hashes are discarded — they're SHA-256 from the legacy admin block,
-        # can't be converted to argon2id without re-prompt.
+        # Legacy flat blocks carry UNSALTED SHA-256 inherited from auth.toml.
+        # Those cannot become argon2id without a re-prompt, so they are
+        # dropped and the account is forced through a password reset.
         u["password_hash"] = None
         u["must_change_password"] = True
+
+        # An array entry is ALREADY v2: its fields are authoritative, secrets
+        # included. Overlaying it wholesale is what #945 fixes — the previous
+        # code copied only email/enabled/services/created from here and then
+        # nulled the hash unconditionally, so every already-migrated account
+        # lost its argon2 hash and its TOTP the moment the `version` key went
+        # missing.
+        arr = array_users.get(username, {})
+        for field, value in arr.items():
+            if field == "username":
+                continue
+            u[field] = value
+
         merged_users[username] = u
 
     v2 = {
