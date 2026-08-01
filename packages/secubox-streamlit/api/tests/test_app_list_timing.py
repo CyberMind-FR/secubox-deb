@@ -55,3 +55,21 @@ def test_never_seen_app_reports_zero_not_absent(tmp_path):
 def test_state_is_sleeping_when_port_is_closed(tmp_path):
     out = _run_app_list(tmp_path, {"demo": 8501}, {})
     assert out["apps"][0]["state"] == "sleeping"
+
+
+def test_json_escapes_app_name_with_double_quote(tmp_path):
+    """App name containing double quote must not corrupt JSON."""
+    app_name = 'app"with"quotes'
+    out = _run_app_list(tmp_path, {app_name: 8502}, {})
+    assert len(out["apps"]) == 1
+    app = out["apps"][0]
+    assert app["name"] == app_name, f"Expected {app_name}, got {app['name']}"
+
+
+def test_json_escapes_app_name_with_backslash(tmp_path):
+    """App name containing backslash must not corrupt JSON."""
+    app_name = r'app\with\backslash'
+    out = _run_app_list(tmp_path, {app_name: 8503}, {})
+    assert len(out["apps"]) == 1
+    app = out["apps"][0]
+    assert app["name"] == app_name, f"Expected {app_name}, got {app['name']}"

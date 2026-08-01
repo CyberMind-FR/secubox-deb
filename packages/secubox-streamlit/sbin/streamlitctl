@@ -81,6 +81,15 @@ _app_touch_active() {
     touch "$IDLE_STATE_DIR/$name.state"
 }
 
+# Escape a string for safe JSON insertion (backlash and double quote)
+_json_escape() {
+    local s="$1"
+    # Escape backslashes first, then double quotes
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    echo "$s"
+}
+
 # ─────────────────────────────────────────────────────────────────────
 # CONTAINER MANAGEMENT
 # ─────────────────────────────────────────────────────────────────────
@@ -370,8 +379,11 @@ cmd_app_list() {
         [ "$last" -gt 0 ] && idle=$(( now - last ))
         local tmo; tmo=$(_idle_config "timeout_minutes" "30")
 
+        local escaped_name; escaped_name=$(_json_escape "$name")
+        local escaped_main; escaped_main=$(_json_escape "$main_py")
+
         cat << EOF
-  {"name": "$name", "main": "$main_py", "running": $running, "port": ${port:-0},
+  {"name": "$escaped_name", "main": "$escaped_main", "running": $running, "port": ${port:-0},
    "state": "$state", "last_active": $last, "idle_seconds": $idle,
    "sleep_after_seconds": $(( tmo * 60 ))}
 EOF
