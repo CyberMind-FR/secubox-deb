@@ -101,7 +101,10 @@ _ps_lines() {
         cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
         return
     fi
-    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+    # No -P here: it would force a specific lxcpath. lxc-attach must resolve
+    # the container's own lxc.lxcpath (see /etc/lxc/lxc.conf on the board) —
+    # hardcoding one here duplicated (and drifted from) that configuration.
+    lxc-attach -n "$LXC_NAME" -- \
         ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
 }
 
@@ -446,7 +449,10 @@ cmd_app_audit() {
         done
     fi
 
-    # 2) Applis déclarées : sections [apps.NAME] du config central.
+    # 2) Applis déclarées : sections [apps.NAME] du config central, avec leur
+    #    éventuel "path = ..." — le lien fiable nom-déclaré <-> script lancé
+    #    (vérifié sur la board : `path = "metabolizer.py"` sous [apps.*]).
+    local -A path_to_name=()    # path déclaré ("path = ...") -> name, pour le matching process
     if [ -f "$CONF_PATH" ]; then
         local line name
         while IFS= read -r line; do
@@ -454,16 +460,29 @@ cmd_app_audit() {
             name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
             [ -n "$name" ] && declared["$name"]=1
         done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+
+        for name in "${!declared[@]}"; do
+            local p
+            p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+                | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+            [ -n "$p" ] && path_to_name["$p"]="$name"
+        done
     fi
 
-    # 3) Processus en ligne, croisés par nom d'appli.
+    # 3) Processus en ligne, croisés par nom d'appli. On préfère le lien
+    #    déclaré (path_to_name) quand il existe ; à défaut on retombe sur
+    #    l'heuristique du nom de fichier (_app_name_of_script).
     local ps_line script port app
     while IFS= read -r ps_line; do
         [ -z "$ps_line" ] && continue
         script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
         [ -z "$script" ] && continue
         port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
-        app=$(_app_name_of_script "$script")
+        if [ -n "${path_to_name[$script]:-}" ]; then
+            app="${path_to_name[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
         run_seen["$app"]=1
         run_token["$app"]="$script"
         run_port["$app"]="${port:-0}"
