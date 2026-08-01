@@ -1,3 +1,22 @@
+secubox-peertube (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat: route the RTMP ingest for PeerTube live. Live was enabled and the
+    daemon listened on 1935 — but inside the LXC (10.100.0.120). The board had
+    nothing on 1935 and no rule to get there, so rtmp://peertube.gk2.secubox.in
+    hit the board and found no one; OBS could not publish.
+    New /etc/nftables.d/secubox-peertube.nft: own dedicated table, single DNAT
+    to the container. Nothing else is needed — `inet filter forward` is policy
+    accept (the DEFAULT DROP applies to `input`) and the return path rides the
+    DNAT conntrack entry.
+  * Exposure is internal-only and deliberately so: RTMP is cleartext, the
+    stream key travels in clear on every connection. Allowed sources are the
+    LAN, lan3 and wg-admin; wg-toolbox (browsing clients) and wg-mesh (other
+    boxes) are excluded — same named-zone reasoning as the yacy admin gate.
+    Streaming from outside is a job for RTMPS (1936, TLS), not for opening
+    this port. (ref #954)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 01 Aug 2026 16:10:00 +0200
+
 secubox-peertube (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * peertubectl: new `check-upgrade` verb (non-destructive: current package.json
