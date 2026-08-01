@@ -10,6 +10,12 @@ conteneur racine de Streamlit, puis capturer.
 
 Une seule capture à la fois : deux chromium concurrents ne tiennent pas dans les
 ~2 Go disponibles sur la board.
+
+Aucun appel bloquant ne s'exécute directement dans une coroutine : le
+sous-processus chromium est piloté via `asyncio.create_subprocess_exec` (lectures
+de pipe natives à la boucle d'événements, réellement annulables par
+`asyncio.wait_for`), et le seul appel HTTP synchrone restant (résolution du port
+DevTools) est déporté dans un exécuteur.
 """
 from __future__ import annotations
 
@@ -17,7 +23,6 @@ import asyncio
 import base64
 import json
 import shutil
-import subprocess
 import tempfile
 import urllib.request
 
@@ -51,22 +56,34 @@ async def _cdp(ws_url: str, method: str, params: dict, msg_id: int) -> dict:
 
 async def capture(url: str, *, timeout: float = 90.0,
                   width: int = 1280, height: int = 800) -> bytes:
-    """Navigue vers `url`, attend le rendu Streamlit, renvoie le PNG."""
+    """Navigue vers `url`, attend le rendu Streamlit, renvoie le PNG.
+
+    Lève `ShotError` dans tous les cas d'échec — y compris un dépassement du
+    délai `timeout`, pour tenir le contrat de l'interface : un appelant qui ne
+    rattrape que `ShotError` ne doit jamais se faire surprendre.
+    """
     async with _lock:
-        return await asyncio.wait_for(
-            _capture_once(url, width, height), timeout=timeout)
+        try:
+            return await asyncio.wait_for(
+                _capture_once(url, width, height), timeout=timeout)
+        except asyncio.TimeoutError as exc:
+            raise ShotError(f"délai dépassé ({timeout}s)") from exc
 
 
 async def _capture_once(url: str, width: int, height: int) -> bytes:
     import websockets  # noqa: F401  (échoue tôt si absent)
+    # Le répertoire de profil est créé avant le `try` qui couvre le lancement
+    # du sous-processus : si celui-ci échoue (binaire absent, ENOMEM au fork
+    # sous pression mémoire...), le `finally` doit quand même le nettoyer.
     profile = tempfile.mkdtemp(prefix="sbx-shot-")
-    proc = subprocess.Popen(
-        [CHROMIUM, "--headless=new", "--disable-gpu", "--no-sandbox",
-         "--disable-dev-shm-usage", "--hide-scrollbars",
-         f"--window-size={width},{height}",
-         "--remote-debugging-port=0", f"--user-data-dir={profile}", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    proc = None
     try:
+        proc = await asyncio.create_subprocess_exec(
+            CHROMIUM, "--headless=new", "--disable-gpu", "--no-sandbox",
+            "--disable-dev-shm-usage", "--hide-scrollbars",
+            f"--window-size={width},{height}",
+            "--remote-debugging-port=0", f"--user-data-dir={profile}", "about:blank",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
         ws_url = await _devtools_url(proc)
         await _cdp(ws_url, "Page.navigate", {"url": url}, 1)
         await _wait_for_selector(ws_url)
@@ -74,27 +91,61 @@ async def _capture_once(url: str, width: int, height: int) -> bytes:
         png = base64.b64decode(result.get("data", ""))
         _reject_blank(png)
         return png
+    except ShotError:
+        raise
+    except Exception as exc:
+        # Contrat de l'interface : « lève ShotError en cas d'échec ». Un
+        # FileNotFoundError (chromium absent), une erreur de connexion
+        # websocket ou un message CDP malformé doivent aussi passer par là —
+        # la cause d'origine est conservée via `from exc`.
+        raise ShotError(f"capture échouée : {exc}") from exc
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if proc is not None:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                proc.kill()
         shutil.rmtree(profile, ignore_errors=True)
 
 
+async def _fetch_devtools_ws_url(port: str) -> str | None:
+    """Résout l'URL websocket DevTools pour `port`.
+
+    L'appel HTTP est synchrone (`urllib`) : il est déporté dans un exécuteur
+    pour ne jamais bloquer directement la boucle d'événements.
+    """
+    def _fetch() -> list[dict]:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=10) as r:
+            return json.load(r)
+
+    loop = asyncio.get_running_loop()
+    pages = await loop.run_in_executor(None, _fetch)
+    for p in pages:
+        if p.get("type") == "page":
+            return p["webSocketDebuggerUrl"]
+    return None
+
+
 async def _devtools_url(proc) -> str:
-    """Lit le port de debug annoncé par chromium sur stderr, puis l'URL websocket."""
+    """Lit le port de debug annoncé par chromium sur stderr, puis l'URL websocket.
+
+    `proc.stderr` est un `asyncio.StreamReader` (sous-processus lancé via
+    `asyncio.create_subprocess_exec`) : `readline()` est une coroutine réellement
+    annulable, contrairement à une lecture bloquante sur un `subprocess.Popen`
+    classique — c'est ce qui permet à `asyncio.wait_for` de tenir son délai
+    même si chromium n'écrit jamais rien.
+    """
     for _ in range(100):
-        line = proc.stderr.readline().decode("utf-8", "replace")
-        if "DevTools listening on" in line:
-            port = line.strip().split(":")[-1].split("/")[0]
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=10) as r:
-                pages = json.load(r)
-            for p in pages:
-                if p.get("type") == "page":
-                    return p["webSocketDebuggerUrl"]
-        await asyncio.sleep(0.1)
+        line = await proc.stderr.readline()
+        text = line.decode("utf-8", "replace")
+        if "DevTools listening on" in text:
+            port = text.strip().split(":")[-1].split("/")[0]
+            ws_url = await _fetch_devtools_ws_url(port)
+            if ws_url:
+                return ws_url
+        if not line:
+            await asyncio.sleep(0.1)
     raise ShotError("chromium n'a pas annoncé son port de debug")
 
 
