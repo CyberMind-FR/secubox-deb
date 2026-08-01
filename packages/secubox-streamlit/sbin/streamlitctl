@@ -9,8 +9,8 @@ VERSION="1.1.0"
 LXC_NAME="streamlit"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
 DATA_PATH="/srv/streamlit"
-APPS_PATH="$DATA_PATH/apps"
-CONF_PATH="/etc/secubox/streamlit.toml"
+APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$DATA_PATH/apps}"
+CONF_PATH="${SECUBOX_STREAMLIT_CONF:-/etc/secubox/streamlit.toml}"
 LOG_FILE="/var/log/secubox/streamlit.log"
 
 # Logging
@@ -33,7 +33,7 @@ lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 # IDLE-TRACKING HELPERS (#331)
 # ─────────────────────────────────────────────────────────────────────
 
-IDLE_STATE_DIR="/var/lib/secubox/streamlit/idle"
+IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-/var/lib/secubox/streamlit/idle}"
 
 # Read [idle] settings from /etc/secubox/streamlit.toml with safe defaults.
 # Note: `grep | head | cut | tr` always exits 0 (tr's status) even when grep
@@ -362,8 +362,18 @@ cmd_app_list() {
         $first || echo ","
         first=false
 
+        local state="sleeping"
+        [ "$running" = "true" ] && state="running"
+        local last; last=$(_app_last_active "$name")
+        local now; now=$(date +%s)
+        local idle=0
+        [ "$last" -gt 0 ] && idle=$(( now - last ))
+        local tmo; tmo=$(_idle_config "timeout_minutes" "30")
+
         cat << EOF
-  {"name": "$name", "main": "$main_py", "running": $running, "port": ${port:-0}}
+  {"name": "$name", "main": "$main_py", "running": $running, "port": ${port:-0},
+   "state": "$state", "last_active": $last, "idle_seconds": $idle,
+   "sleep_after_seconds": $(( tmo * 60 ))}
 EOF
     done
 
@@ -839,6 +849,12 @@ cmd_gitea_clone() {
 # ─────────────────────────────────────────────────────────────────────
 
 load_config
+
+# Re-apply environment variable overrides after load_config()
+# (load_config may have modified APPS_PATH based on data_path from config file)
+APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$APPS_PATH}"
+CONF_PATH="${SECUBOX_STREAMLIT_CONF:-$CONF_PATH}"
+IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-$IDLE_STATE_DIR}"
 
 case "${1:-}" in
     # Three-fold architecture
