@@ -141,6 +141,11 @@ export default async function mount(ctx) {
           el('p.muted', { text: `Indisponible — ${esc(d.reason || 'cache absent')}` }),
         ]);
         const card = el('div.card', {}, [el('h3', { text: '📼 Backlog' })]);
+        // #943: counters claiming pending jobs while nothing runs means PeerTube
+        // will 409 every relaunch — the queue is frozen, not busy.
+        if (d.stuck) card.append(el('div.badge.err', {
+          text: `🧊 File gelée — ${d.pending_counters} compteur(s) sans job. peertubectl unstick --apply`,
+        }));
         card.append(d.unplayable > 0
           ? el('div.badge.err', { text: `⚠️ ${fmtCount(d.unplayable)} vidéo(s) sans playlist HLS — injouables` })
           : el('div.badge.ok', { text: '✅ Toutes les vidéos ont une playlist HLS' }));

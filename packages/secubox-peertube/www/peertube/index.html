@@ -1195,7 +1195,16 @@
                             s.without_hls ? ` · <strong style="color: var(--danger, #ff4466)">${s.without_hls} sans HLS</strong>` : ''
                         }</span>
                     </div>`).join('');
-                c.innerHTML = `
+                // #943: counters claiming pending jobs while nothing runs means
+                // PeerTube will 409 every relaunch — the queue is frozen, not busy.
+                const stuck = d.stuck
+                    ? `<div style="margin-bottom:0.75rem;padding:0.6rem;border:1px solid var(--danger,#ff4466);border-radius:6px;">
+                         🧊 <strong>File gelée</strong> — ${d.pending_counters} compteur(s) annoncent des jobs
+                         en attente alors qu'aucun ne tourne. PeerTube refusera toute relance.
+                         Débloquer : <code>peertubectl unstick --apply</code>
+                       </div>`
+                    : '';
+                c.innerHTML = stuck + `
                     <div style="margin-bottom: 0.75rem; font-size: 1.1rem;">
                         ${warn
                             ? `⚠️ <strong>${d.unplayable}</strong> vidéo${d.unplayable > 1 ? 's' : ''} sans playlist HLS — <strong>non lisible${d.unplayable > 1 ? 's' : ''}</strong>`

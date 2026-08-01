@@ -755,8 +755,15 @@ async def get_transcoding_backlog(user=Depends(require_jwt)):
         age = int(time.time() - BACKLOG_CACHE.stat().st_mtime)
     except OSError:
         pass
+    # `stuck` is the #943 failure mode: counters claim jobs are pending while
+    # nothing is queued or running. It froze the whole queue for 18 days
+    # without a single surface reporting it — so it is reported here, where
+    # the panel and the companion already look.
     return {"available": True, "states": out, "pending": pending,
-            "unplayable": unplayable, "cache_age_seconds": age}
+            "unplayable": unplayable, "cache_age_seconds": age,
+            "stuck": bool(raw.get("stuck")),
+            "jobs_in_flight": raw.get("jobs_in_flight"),
+            "pending_counters": raw.get("pending_counters")}
 
 
 @router.get("/transcoding/settings")
