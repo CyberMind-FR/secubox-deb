@@ -1,3 +1,19 @@
+secubox-yacy (1.0.13-1~bookworm1) bookworm; urgency=medium
+
+  * SECURITY vhost: restrict the YaCy admin surface (Status, Config*, Network,
+    Performance*, Settings*, ViewLog, Table_*, Index*, Crawl*, …) to internal
+    zones. The vhost is publicly routed and YaCy only authenticates its `_p`
+    pages, so node state, base configuration and peer topology were readable
+    from the Internet. The search portal (/, /index.html, /yacysearch*,
+    /suggest.json, /env/*) stays public — YaCy admin pages are CamelCase, the
+    portal ones are not, so the regex does not touch them.
+  * The allow-list names zones (LAN, lan3, br-lxc, wg-admin) instead of opening
+    all of 10.0.0.0/8 like the exposure snippets do: wg-toolbox (browsing
+    clients) and wg-mesh (other boxes) have no business reading this node's
+    configuration. (ref #941)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 31 Jul 2026 18:40:00 +0200
+
 secubox-yacy (1.0.12-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
