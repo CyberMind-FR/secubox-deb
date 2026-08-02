@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Refresh the Streamlit app-fleet audit cache every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+# The inventory only moves at the pace of app starts/stops — polling harder
+# would just add disk-scan + lxc-attach churn on a box that is already
+# CPU-tight.
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

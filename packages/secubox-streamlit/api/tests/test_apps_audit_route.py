@@ -1,50 +1,99 @@
 """Tests for GET /apps/audit — the route consumed by the Mosaic tab (#956).
 
-The endpoint is a thin, deliberately public (no JWT) passthrough to
-`streamlitctl app audit`, run with a 60s timeout since the command takes
-~11s on the board. These tests only lock down the wiring: that it shells
-out to the right sub-command/timeout and returns the ctl's JSON verbatim,
-without requiring authentication.
+The endpoint used to shell out to `streamlitctl app audit` on every request
+(~11s locally, ~31s through the aggregator — unusable for a dashboard tab).
+It now serves a pre-computed cache written out-of-band by
+streamlit-audit.timer (double-cache pattern, same as the PeerTube
+transcoding backlog). These tests lock down the file-read contract: cache
+absent, cache unreadable/corrupt, and a valid cache with age computed —
+and that a cache miss never falls back to invoking the ctl (that fallback
+would silently reintroduce the 31s the cache exists to remove).
 """
-from unittest.mock import MagicMock, patch
+import json
+import os
+import time
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from api.main import app
 
 
-def test_apps_audit_is_public_and_returns_ctl_payload():
-    """No Authorization header required; JSON stdout from streamlitctl is
-    returned as-is."""
-    payload = (
-        b'{"apps": [{"name": "fabricator", "shape": "dir", "entrypoint": "app.py", '
-        b'"declared": true, "running": true, "port": 8520, "issues": ["stale-port"]}], '
-        b'"summary": {"total": 66, "running": 15}}'
-    )
-    fake = MagicMock(returncode=0, stdout=payload.decode(), stderr="")
-    with patch("api.main.subprocess.run", return_value=fake) as run_mock:
+def test_apps_audit_reports_unavailable_when_cache_missing(tmp_path):
+    missing = tmp_path / "audit.json"
+    with patch("api.main.APPS_AUDIT_CACHE", missing), \
+         patch("api.main.subprocess.run") as run_mock:
         client = TestClient(app)
         r = client.get("/apps/audit")
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["summary"] == {"total": 66, "running": 15}
-    assert body["apps"][0]["name"] == "fabricator"
-
-    args = run_mock.call_args.args[0]
-    assert args[:2] == ["sudo", "-n"]
-    assert "app" in args and "audit" in args
-    assert run_mock.call_args.kwargs.get("timeout") == 60
+    assert body["available"] is False
+    assert body["reason"] == "cache not written yet"
+    assert body["apps"] == []
+    # A cache miss must never fall back to the (slow) ctl invocation.
+    run_mock.assert_not_called()
 
 
-def test_apps_audit_survives_ctl_timeout():
-    """If streamlitctl hangs past 60s, the route reports the error instead
-    of raising — same contract as the other _run_ctl-backed routes."""
-    import subprocess
-
-    with patch("api.main.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="streamlitctl", timeout=60)):
+def test_apps_audit_reports_unavailable_when_cache_is_corrupt(tmp_path):
+    corrupt = tmp_path / "audit.json"
+    corrupt.write_text("{not valid json")
+    with patch("api.main.APPS_AUDIT_CACHE", corrupt), \
+         patch("api.main.subprocess.run") as run_mock:
         client = TestClient(app)
         r = client.get("/apps/audit")
 
     assert r.status_code == 200, r.text
-    assert r.json().get("error") == "timeout"
+    body = r.json()
+    assert body["available"] is False
+    assert body["reason"] == "cache unreadable"
+    run_mock.assert_not_called()
+
+
+def test_apps_audit_reports_unavailable_when_cache_is_not_an_object(tmp_path):
+    """The cache file must contain a JSON object; a bare list or scalar is
+    treated the same as corruption rather than raising."""
+    not_an_object = tmp_path / "audit.json"
+    not_an_object.write_text("[1, 2, 3]")
+    with patch("api.main.APPS_AUDIT_CACHE", not_an_object):
+        client = TestClient(app)
+        r = client.get("/apps/audit")
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["available"] is False
+    assert body["reason"] == "cache unreadable"
+
+
+def test_apps_audit_serves_cached_payload_with_age(tmp_path):
+    cache = tmp_path / "audit.json"
+    payload = {
+        "apps": [{"name": "fabricator", "shape": "dir", "entrypoint": "app.py",
+                   "declared": True, "running": True, "port": 8520,
+                   "issues": ["stale-port"]}],
+        "summary": {"total": 66, "running": 15},
+    }
+    cache.write_text(json.dumps(payload))
+    # Backdate mtime so cache_age_seconds is deterministically non-zero.
+    old = time.time() - 120
+    os.utime(cache, (old, old))
+
+    with patch("api.main.APPS_AUDIT_CACHE", cache):
+        client = TestClient(app)
+        r = client.get("/apps/audit")
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["available"] is True
+    assert body["apps"][0]["name"] == "fabricator"
+    assert body["summary"] == {"total": 66, "running": 15}
+    assert body["cache_age_seconds"] >= 100
+
+
+def test_apps_audit_is_public_no_auth_required(tmp_path):
+    cache = tmp_path / "audit.json"
+    cache.write_text(json.dumps({"apps": [], "summary": {}}))
+    with patch("api.main.APPS_AUDIT_CACHE", cache):
+        client = TestClient(app)
+        r = client.get("/apps/audit")
+    assert r.status_code == 200, r.text

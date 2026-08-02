@@ -22,6 +22,11 @@ override_dh_auto_install:
 	# Systemd service drop-in for NoNewPrivileges
 	install -d debian/secubox-streamlit/usr/lib/systemd/system/secubox-streamlit.service.d
 	[ -f debian/secubox-streamlit.service.d/allow-lxc.conf ] && install -m 644 debian/secubox-streamlit.service.d/allow-lxc.conf debian/secubox-streamlit/usr/lib/systemd/system/secubox-streamlit.service.d/ || true
+	# App-fleet audit cache (#956): root timer refreshes the Mosaic tab's
+	# double-cache so the request path is a file read instead of a ~31s
+	# streamlitctl invocation through the aggregator.
+	install -m 644 debian/streamlit-audit.service debian/secubox-streamlit/usr/lib/systemd/system/
+	install -m 644 debian/streamlit-audit.timer debian/secubox-streamlit/usr/lib/systemd/system/
 	# Example config
 	install -d debian/secubox-streamlit/usr/share/doc/secubox-streamlit/examples
 	[ -f config/streamlit.toml.example ] && install -m 644 config/streamlit.toml.example debian/secubox-streamlit/usr/share/doc/secubox-streamlit/examples/ || true

@@ -28,6 +28,12 @@ case "$1" in
     systemctl enable secubox-streamlit.service
     systemctl start secubox-streamlit.service || true
     systemctl enable --now secubox-streamlit-idle.timer || true
+
+    # App-fleet audit cache (#956): root timer writes
+    # /var/cache/secubox/streamlit/audit.json, the unprivileged dashboard only
+    # reads it — so the Mosaic tab stops paying the ~31s streamlitctl audit
+    # cost on every request.
+    systemctl enable --now streamlit-audit.timer || true
     ;;
 esac
 #DEBHELPER#

@@ -159,7 +159,7 @@
                     <button class="btn" onclick="loadMosaic()">↻ Rafraîchir</button>
                 </div>
                 <div class="mosaic-grid" id="mosaic-grid">
-                    <div class="mosaic-empty">Chargement du parc d'applis (audit disque + processus, ~10s)…</div>
+                    <div class="mosaic-empty">Chargement du parc d'applis…</div>
                 </div>
             </div>
         </div>
@@ -350,9 +350,11 @@
         // Mosaic — app fleet tiles. Data only, never an iframe/embed: a
         // tile that loaded the app in place would keep it awake, which is
         // the opposite of the sleep/wake goal this view exists to serve.
-        // No auto-refresh: the audit endpoint takes ~10s on the board, a
-        // periodic poll would be harmful. Loaded lazily on first tab view,
-        // and on demand via the "Rafraîchir" button.
+        //
+        // /apps/audit is a cache read (streamlit-audit.timer refreshes it
+        // every 5 minutes out-of-band via lxc-attach) — the request itself
+        // is fast, so a refresh here is cheap. It still isn't live: the
+        // summary always shows how old the underlying measurement is.
         // ═══════════════════════════════════════════════════════════════
         let mosaicLoaded = false;
         const MOSAIC_ISSUE_LABELS = {
@@ -364,22 +366,40 @@
             'duplicate-path': 'chemin en double',
         };
 
+        function formatCacheAge(seconds) {
+            if (seconds == null) return '';
+            if (seconds < 90) return 'mesuré il y a ' + seconds + 's';
+            const minutes = Math.round(seconds / 60);
+            return 'mesuré il y a ' + minutes + 'min';
+        }
+
         async function loadMosaic() {
             mosaicLoaded = true;
             const grid = document.getElementById('mosaic-grid');
             const summary = document.getElementById('mosaic-summary');
-            grid.innerHTML = '<div class="mosaic-empty">Chargement du parc d\'applis (audit disque + processus, ~10s)…</div>';
+            grid.innerHTML = '<div class="mosaic-empty">Chargement du parc d\'applis…</div>';
             summary.textContent = 'Chargement…';
 
             const d = await api('/apps/audit');
+
+            if (!d.available) {
+                summary.textContent = '';
+                grid.innerHTML = '<div class="mosaic-empty">Inventaire pas encore calculé' +
+                    (d.reason ? ' (' + esc(d.reason) + ')' : '') +
+                    ' — le relevé s\'exécute toutes les 5 minutes en tâche de fond, réessayez dans un instant.</div>';
+                return;
+            }
+
             const apps = d.apps || [];
             const s = d.summary || {};
             const total = s.total ?? apps.length;
             const running = s.running ?? apps.filter(a => a.running).length;
             const withIssues = apps.filter(a => (a.issues || []).length > 0).length;
+            const age = formatCacheAge(d.cache_age_seconds);
 
             summary.innerHTML = '<strong>' + total + '</strong> applis · <strong>' + running + '</strong> en ligne' +
-                (withIssues ? ' · <span class="anomaly-count">' + withIssues + ' avec anomalie' + (withIssues > 1 ? 's' : '') + '</span>' : '');
+                (withIssues ? ' · <span class="anomaly-count">' + withIssues + ' avec anomalie' + (withIssues > 1 ? 's' : '') + '</span>' : '') +
+                (age ? ' · <span title="ancienneté du relevé">' + esc(age) + '</span>' : '');
 
             if (!apps.length) {
                 grid.innerHTML = '<div class="mosaic-empty">Aucune application détectée</div>';

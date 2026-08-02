@@ -456,10 +456,43 @@ async def list_apps():
     return {"apps": _get_apps()}
 
 
+APPS_AUDIT_CACHE = Path("/var/cache/secubox/streamlit/audit.json")
+
+
 @router.get("/apps/audit")
 async def apps_audit():
-    """Inventaire croisé disque / déclarations / processus (public, lecture seule)."""
-    return _run_ctl("app", "audit", timeout=60)
+    """Inventaire croisé disque / déclarations / processus (public, lecture seule).
+
+    Servi depuis le cache écrit par streamlit-audit.timer (root, disque +
+    TOML + lxc-attach ps, ~11s en direct / ~31s à travers l'agrégateur). Le
+    chemin de requête est une lecture de fichier : ne JAMAIS retomber sur
+    `streamlitctl app audit` en direct ici, ce serait réintroduire le délai
+    que ce cache existe pour supprimer (#956).
+    """
+    try:
+        raw = json.loads(APPS_AUDIT_CACHE.read_text())
+        if not isinstance(raw, dict):
+            raise ValueError("cache content is not a JSON object")
+    except FileNotFoundError:
+        return {"available": False, "reason": "cache not written yet",
+                "apps": [], "summary": {}}
+    except (OSError, ValueError) as exc:
+        log.warning("apps audit cache unreadable: %s", exc)
+        return {"available": False, "reason": "cache unreadable",
+                "apps": [], "summary": {}}
+
+    age = None
+    try:
+        age = int(time.time() - APPS_AUDIT_CACHE.stat().st_mtime)
+    except OSError:
+        pass
+
+    return {
+        "available": True,
+        "apps": raw.get("apps", []),
+        "summary": raw.get("summary", {}),
+        "cache_age_seconds": age,
+    }
 
 
 @router.get("/app/{name}")
