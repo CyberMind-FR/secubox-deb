@@ -597,15 +597,20 @@ def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
 
     Status codes:
       - 200: app is up (status="running" or "started")
-      - 404: app does not exist on disk
+      - 404: app does not exist (streamlitctl found no resolvable entrypoint
+        for it — directory or flat script, ref #959)
       - 502: streamlitctl binary missing
       - 504: wake failed or timed out
+
+    Existence is delegated entirely to `streamlitctl app wake` rather than
+    re-checked here: this endpoint used to require `APPS_PATH/{name}` to be
+    a directory, which 404'd every flat-script app (most of the fleet) even
+    though streamlitctl itself already knew how to resolve them. Keeping a
+    second, narrower existence check here is exactly what let the two
+    diverge (#959) — the ctl is the single source of truth.
     """
     if not Path(CTL).exists():
         raise HTTPException(502, "streamlitctl missing")
-    app_dir = Path(APPS_PATH) / name
-    if not app_dir.is_dir():
-        raise HTTPException(404, f"app not found: {name}")
 
     start = time.monotonic()
     try:
@@ -621,6 +626,9 @@ def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
         status = "running" if b"already running" in result.stderr else "started"
         log.info("wake: %s status=%s duration_ms=%d", name, status, duration_ms)
         return WakeResult(name=name, status=status, duration_ms=duration_ms)
+
+    if result.returncode == 2:
+        raise HTTPException(404, f"app not found: {name}")
 
     stderr_snippet = result.stderr.decode(errors="replace")[:200]
     log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
