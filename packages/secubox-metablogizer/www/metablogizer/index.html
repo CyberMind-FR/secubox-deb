@@ -430,14 +430,17 @@
             const domain = esc(s.domain || '');
             const published = !!s.published;
             const emoji = tileEmoji(s);
-            const thumbSrc = esc('/api/v1/metablogizer/site/' + encodeURIComponent(s.name || '') + '/thumbnail');
+            const thumbSrc = esc('/api/v1/metablogizer/site/' + encodeURIComponent(s.name || '') + '/screenshot');
             const openUrl = s.domain ? esc('https://' + s.domain + '/') : '';
 
             return '<div class="mosaic-tile' + (published ? '' : ' unpublished') + '">' +
                 '<div class="mosaic-thumb">' +
                     '<span class="mosaic-thumb-emoji">' + emoji + '</span>' +
-                    // No vignette endpoint exists yet server-side: this 404s by
-                    // design today. onerror removes the <img>, leaving the emoji
+                    // The vignette is captured out-of-band by
+                    // metablog-shots.timer (#956) and only ever fills in
+                    // progressively (172 sites, one capture per 2 minutes) —
+                    // a fresh install or a not-yet-reached site 404s here by
+                    // design. onerror removes the <img>, leaving the emoji
                     // span (already in the DOM, underneath) as the fallback —
                     // the tile never breaks or shows a broken-image icon.
                     '<img loading="lazy" alt="" src="' + thumbSrc + '" onerror="this.remove()">' +

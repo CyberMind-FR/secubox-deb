@@ -26,6 +26,12 @@ systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true
 
+# Mosaic tab thumbnail queue (#956): provision the cache subtree (owner
+# secubox, NOT the shared /var/cache/secubox parent — see the .tmpfiles
+# file) then enable the 2-minute capture timer.
+systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-metablogizer.conf 2>/dev/null || true
+systemctl enable --now metablog-shots.timer 2>/dev/null || true
+
 # Publisher wizard: the sbxwaf/haproxy/cert steps run through the
 # secubox-publishctl root helper, authorized by this sudoers drop-in.
 chmod 0755 /usr/sbin/secubox-publishctl 2>/dev/null || true

@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: metablog-shotter — captures ONE metablogizer site thumbnail
+
+Rappelé toutes les 2 minutes par `metablog-shots.timer` (#956). Toute la
+logique (sélection du site, garde de charge, verrou d'exclusion, capture)
+vit dans `api/shots.py` — importable et testé indépendamment de ce point
+d'entrée. Ce script ne fait que placer `api/` sur `sys.path` puis appeler
+`shots.main()`.
+
+Ne capture JAMAIS plus d'un site par exécution : c'est le timer qui étale la
+charge sur les 172 sites du parc, jamais une boucle interne — voir la
+docstring de `shots.py`.
+
+Chemins et seuil surchargeables par l'environnement (voir `shots.main`) :
+  METABLOG_LIB                     défaut /usr/lib/secubox/metablogizer/api
+  METABLOG_SITES_ROOT               défaut /srv/metablogizer/sites
+  METABLOG_SHOTS_CACHE              défaut /var/cache/secubox/metablogizer/shots
+  METABLOG_SHOTS_LOAD_THRESHOLD     défaut 40
+"""
+import os
+import sys
+
+LIB = os.environ.get("METABLOG_LIB", "/usr/lib/secubox/metablogizer/api")
+if LIB not in sys.path:
+    sys.path.insert(0, LIB)
+
+import shots  # noqa: E402  (sys.path must be set up first)
+
+if __name__ == "__main__":
+    raise SystemExit(shots.main())

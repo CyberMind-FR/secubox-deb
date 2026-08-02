@@ -21,9 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, UploadFile, File, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from secubox_core import screenshots as _screenshots
 
 app = FastAPI(title="SecuBox MetaBlogizer", version="1.2.0")
 config = get_config("metablogizer")
@@ -31,6 +33,10 @@ config = get_config("metablogizer")
 SITES_ROOT = Path(config.get("sites_root", "/srv/metablogizer/sites") if config else "/srv/metablogizer/sites")
 AUTO_PUBLISH = config.get("auto_publish", True) if config else True
 DATA_PATH = Path(config.get("data_path", "/srv/metablogizer") if config else "/srv/metablogizer")
+# Vignettes du mur mosaïque (#956) : produites hors-ligne par
+# metablog-shots.timer (voir api/shots.py), jamais par ce process. Ce chemin
+# ne fait QUE les servir — voir get_site_screenshot() ci-dessous.
+SHOTS_CACHE_DIR = Path(os.environ.get("METABLOG_SHOTS_CACHE", "/var/cache/secubox/metablogizer/shots"))
 NGINX_VHOST_DIR = Path("/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path("/etc/nginx/sites-enabled")
 NGINX_METABLOGS_CONF = Path("/etc/nginx/sites-enabled/metablogizer")
@@ -431,6 +437,40 @@ def get_access_detailed():
         })
 
     return {"sites": detailed, "count": len(detailed)}
+
+
+# =============================================================================
+# SCREENSHOTS — Mosaic tab thumbnails (#956)
+# =============================================================================
+
+@app.get("/site/{name}/screenshot")
+async def get_site_screenshot(name: str):
+    """Serve the conserved thumbnail for the Mosaic tab.
+
+    PUBLIC — no auth: the wall isn't expected to authenticate just to show an
+    image, same call already made (and settled) for the equivalent Streamlit
+    endpoint. This route only ever READS a file already produced by
+    `metablog-shots.timer` (api/shots.py) — it never triggers a capture, so a
+    burst of requests never spends chromium time.
+
+    `Cache-Control: no-cache` forces the browser to revalidate on every load
+    instead of trusting a stale local copy blindly; FastAPI's `FileResponse`
+    still attaches `Last-Modified`/`ETag` from the file's own stat, so a
+    revalidation that finds nothing changed comes back as a cheap 304 rather
+    than re-downloading the PNG. `X-Captured-At` mirrors the same timestamp
+    in a form the frontend can read directly.
+    """
+    try:
+        p = _screenshots.png_path(SHOTS_CACHE_DIR, name)
+    except ValueError:
+        raise HTTPException(404, "unknown site")
+    if not p.exists():
+        raise HTTPException(404, "no screenshot yet")
+    meta = _screenshots.read_meta(SHOTS_CACHE_DIR, name)
+    return FileResponse(p, media_type="image/png", headers={
+        "Cache-Control": "no-cache",
+        "X-Captured-At": str(meta.get("captured_at", "")),
+    })
 
 
 # =============================================================================
