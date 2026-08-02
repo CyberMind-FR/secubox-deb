@@ -9,8 +9,8 @@ VERSION="1.1.0"
 LXC_NAME="streamlit"
 LXC_PATH="/var/lib/lxc/$LXC_NAME"
 DATA_PATH="/srv/streamlit"
-APPS_PATH="$DATA_PATH/apps"
-CONF_PATH="/etc/secubox/streamlit.toml"
+APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$DATA_PATH/apps}"
+CONF_PATH="${SECUBOX_STREAMLIT_CONF:-/etc/secubox/streamlit.toml}"
 LOG_FILE="/var/log/secubox/streamlit.log"
 
 # Logging
@@ -33,7 +33,7 @@ lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 # IDLE-TRACKING HELPERS (#331)
 # ─────────────────────────────────────────────────────────────────────
 
-IDLE_STATE_DIR="/var/lib/secubox/streamlit/idle"
+IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-/var/lib/secubox/streamlit/idle}"
 
 # Read [idle] settings from /etc/secubox/streamlit.toml with safe defaults.
 # Note: `grep | head | cut | tr` always exits 0 (tr's status) even when grep
@@ -79,6 +79,275 @@ _app_touch_active() {
     local name="$1"
     mkdir -p "$IDLE_STATE_DIR"
     touch "$IDLE_STATE_DIR/$name.state"
+}
+
+# Escape a string for safe JSON insertion (backlash and double quote)
+_json_escape() {
+    local s="$1"
+    # Escape backslashes first, then double quotes
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    echo "$s"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# AUDIT HELPERS (#956) — cross-reference disk / declared / running
+# ─────────────────────────────────────────────────────────────────────
+
+# Liste des processus streamlit, une ligne par appli en cours.
+# SECUBOX_STREAMLIT_PS_SOURCE permet de tester sans conteneur.
+_ps_lines() {
+    if [ -n "${SECUBOX_STREAMLIT_PS_SOURCE:-}" ]; then
+        cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
+        return
+    fi
+    # No -P here: it would force a specific lxcpath. lxc-attach must resolve
+    # the container's own lxc.lxcpath (see /etc/lxc/lxc.conf on the board) —
+    # hardcoding one here duplicated (and drifted from) that configuration.
+    lxc-attach -n "$LXC_NAME" -- \
+        ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
+}
+
+# Nom d'appli déduit d'un chemin de script : "a/app.py" -> "a", "b.py" -> "b".
+_app_name_of_script() {
+    case "$1" in
+        */*) printf '%s' "${1%%/*}" ;;
+        *)   printf '%s' "${1%.py}" ;;
+    esac
+}
+
+# Entrées de $APPS_PATH à exclure de l'inventaire (#956) : ce ne sont
+# jamais des applis, elles ne doivent apparaître ni comme appli ni comme
+# anomalie (a fortiori ne jamais être proposées à la suppression).
+#   __pycache__  cache bytecode Python, généré à l'exécution — jamais un
+#                point d'entrée.
+#   pages        convention Streamlit multi-page : sous-dossier des
+#                sous-pages d'une appli EXISTANTE (vérifié sur la board :
+#                1_editor.py, 2_posts.py, 3_media.py, 4_settings.py, tous
+#                référencés par metabolizer.py). Ce n'est pas une appli à
+#                part entière et la supprimer casserait metabolizer.
+_EXCLUDED_ENTRY_NAMES=(
+    "__pycache__"
+    "pages"
+)
+
+# Vrai si $1 (nom de base, sans chemin) ne doit jamais être traité comme
+# une appli ni comme un candidat de point d'entrée : la liste ci-dessus,
+# plus tout nom commençant par un point (dotfiles/dossiers cachés, ex.
+# .git, .streamlit, .deploy.json).
+_is_excluded_entry() {
+    local base="$1"
+    case "$base" in
+        .*) return 0 ;;
+    esac
+    local ex
+    for ex in "${_EXCLUDED_ENTRY_NAMES[@]}"; do
+        [ "$base" = "$ex" ] && return 0
+    done
+    return 1
+}
+
+# Détection du point d'entrée d'une appli-répertoire (#956). L'ancienne
+# détection ne cherchait que app.py/main.py/streamlit_app.py à la racine,
+# ce qui faisait passer pour "sans point d'entrée" des applis bien
+# vivantes, simplement nommées autrement (vérifié sur la board :
+# Photo_cloud_streamlit_main/photo_cloud_streamlit.py, control/src/app.py,
+# yijing/yijing-oracle/app.py...). Règles, dans l'ordre, sans jamais
+# deviner en cas d'ambiguïté :
+#   1. noms conventionnels Streamlit à la racine (priorité)
+#   2. à défaut, un unique fichier .py à la racine
+#   3. à défaut, un niveau plus bas : mêmes règles 1+2 appliquées dans
+#      chacun des sous-répertoires (hors exclusions ci-dessus) ; retenu
+#      seulement si UN SEUL sous-répertoire produit un candidat
+#   4. sinon : aucune supposition — pas de point d'entrée retenu, mais le
+#      nombre de candidats .py concurrents est renvoyé pour trancher
+#      humain (_EP_CANDIDATES)
+# Résultat renvoyé via les globales _EP_RESULT (chemin relatif au
+# répertoire de l'appli, ou "" si non résolu) et _EP_CANDIDATES (0 si non
+# ambigu, sinon le nombre de candidats concurrents trouvés).
+_detect_entrypoint() {
+    local dir="$1"
+    _EP_RESULT=""
+    _EP_CANDIDATES=0
+
+    local c
+    for c in app.py main.py streamlit_app.py; do
+        if [ -f "$dir/$c" ]; then
+            _EP_RESULT="$c"
+            return
+        fi
+    done
+
+    local -a root_py=()
+    local f
+    for f in "$dir"/*.py; do
+        [ -f "$f" ] || continue
+        root_py+=("$(basename "$f")")
+    done
+
+    if [ "${#root_py[@]}" -eq 1 ]; then
+        _EP_RESULT="${root_py[0]}"
+        return
+    fi
+
+    # Un niveau plus bas, mêmes règles 1+2 appliquées à chaque sous-dossier.
+    local -a sub_hits=()
+    local sd sbase
+    for sd in "$dir"/*/; do
+        [ -d "$sd" ] || continue
+        sbase=$(basename "$sd")
+        _is_excluded_entry "$sbase" && continue
+
+        local found=""
+        local sc
+        for sc in app.py main.py streamlit_app.py; do
+            [ -f "$sd$sc" ] && found="$sc" && break
+        done
+        if [ -z "$found" ]; then
+            local -a sub_py=()
+            local sf
+            for sf in "$sd"*.py; do
+                [ -f "$sf" ] || continue
+                sub_py+=("$(basename "$sf")")
+            done
+            [ "${#sub_py[@]}" -eq 1 ] && found="${sub_py[0]}"
+        fi
+        [ -n "$found" ] && sub_hits+=("${sbase}/${found}")
+    done
+
+    if [ "${#sub_hits[@]}" -eq 1 ]; then
+        _EP_RESULT="${sub_hits[0]}"
+        return
+    fi
+
+    if [ "${#sub_hits[@]}" -gt 1 ]; then
+        _EP_CANDIDATES="${#sub_hits[@]}"
+        return
+    fi
+
+    # Rien de résolu : s'il y avait plusieurs .py concurrents à la racine
+    # sans nom conventionnel, c'est l'ambiguïté à signaler (règle 4) —
+    # ne jamais choisir arbitrairement lequel est le "bon".
+    if [ "${#root_py[@]}" -gt 1 ]; then
+        _EP_CANDIDATES="${#root_py[@]}"
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# ARCHIVE HELPERS (#956) — an archived app is repaired-and-known but never
+# auto-started: `archived = true` must actually be honoured (unlike the
+# pre-existing `enabled` field, which was declarative-only decoration read
+# nowhere for apps — see cmd_instance_list for the one place `enabled` was
+# ever consulted, and it wasn't this one).
+# ─────────────────────────────────────────────────────────────────────
+
+# Vrai si $1 possède une section [apps.NAME] dans CONF_PATH.
+_app_declared() {
+    local name="$1"
+    [ -f "$CONF_PATH" ] || return 1
+    grep -qE "^\[apps\.${name}\]" "$CONF_PATH" 2>/dev/null
+}
+
+# Valeur brute (guillemets retirés) de la clé $3 dans la section
+# [apps.$2] de $1, ou vide si absente.
+_toml_section_value() {
+    local file="$1" name="$2" key="$3"
+    [ -f "$file" ] || return
+    sed -n "/^\[apps\.${name}\]/,/^\[/p" "$file" 2>/dev/null \
+        | grep -E "^${key}[ \t]*=" | head -1 \
+        | sed -E "s/^${key}[ \t]*=[ \t]*//" | tr -d '"'
+}
+
+# Vrai si $1 est déclarée avec archived = true.
+_app_archived() {
+    local name="$1"
+    [ "$(_toml_section_value "$CONF_PATH" "$name" archived)" = "true" ]
+}
+
+# Vrai si un process streamlit tourne actuellement pour l'appli $1. Même
+# logique de rattachement que `app audit`/`app repair` (priorité au
+# "path = ..." déclaré, repli sur l'heuristique du nom de fichier) —
+# dupliquée ici à dessein plutôt que factorisée dans cmd_app_audit/
+# cmd_app_repair, pour ne rien risquer sur les deux verbes déjà couverts
+# par tests.
+_app_currently_running() {
+    local target="$1"
+    local -A path_to_name=()
+    if [ -f "$CONF_PATH" ]; then
+        local line name p
+        while IFS= read -r line; do
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] || continue
+            p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+                | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+            [ -n "$p" ] && path_to_name["$p"]="$name"
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+    local ps_line script app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        if [ -n "${path_to_name[$script]:-}" ]; then
+            app="${path_to_name[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
+        [ "$app" = "$target" ] && return 0
+    done < <(_ps_lines)
+    return 1
+}
+
+# Crée un fichier temporaire dans le MÊME répertoire que $1, jamais dans
+# /tmp. /tmp et /etc (entre autres) sont des systèmes de fichiers
+# distincts : un `mv` entre les deux n'est pas un rename(2) mais un
+# copie+suppression, donc ni atomique ni protégé contre une interruption
+# en cours de copie. Un temporaire voisin garantit que le `mv` final reste
+# sur le même filesystem.
+_toml_mktemp() {
+    local file="$1"
+    mktemp "${file}.XXXXXX"
+}
+
+# Termine une réécriture "temporaire + mv" : restaure le mode et le
+# propriétaire du fichier remplacé (mktemp crée toujours en 0600, ce qui
+# a déjà cassé la lecture de streamlit.toml par l'agrégateur — voir #956
+# post-mortem), puis renomme. $tmp étant dans le même répertoire que
+# $file (cf. _toml_mktemp), ce renommage est un vrai rename(2) atomique.
+_toml_atomic_replace() {
+    local file="$1" tmp="$2"
+    if [ -e "$file" ]; then
+        chmod --reference="$file" "$tmp" 2>/dev/null || true
+        chown --reference="$file" "$tmp" 2>/dev/null || true
+    fi
+    mv -f "$tmp" "$file"
+}
+
+# Remplace (ou insère si absente) la ligne "$3 = $4" dans la section
+# [apps.$2] de $1. Réécriture complète via temporaire voisin + mv, mode
+# et propriétaire d'origine préservés — même discipline que
+# _set_toml_path_in_section.
+_set_toml_key_in_section() {
+    local file="$1" name="$2" key="$3" value="$4" tmp
+    tmp=$(_toml_mktemp "$file")
+    awk -v want="[apps.${name}]" -v key="$key" -v val="$value" '
+        BEGIN { in_sec=0; done=0 }
+        {
+            if ($0 == want) { print; in_sec=1; done=0; next }
+            if (in_sec && /^\[/) {
+                if (!done) print key " = " val
+                in_sec=0
+            }
+            if (in_sec && $0 ~ "^"key"[ \t]*=") {
+                print key " = " val
+                done=1
+                next
+            }
+            print
+        }
+        END { if (in_sec && !done) print key " = " val }
+    ' "$file" > "$tmp"
+    _toml_atomic_replace "$file" "$tmp"
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -343,6 +612,20 @@ cmd_app_list() {
     echo '{"apps":['
     local first=true
 
+    # Fetch all running streamlit processes in one lxc-attach call (performance)
+    local running_apps=" "  # prefix/suffix space for safe regex matching
+    while IFS= read -r ps_line; do
+        # Extract app name from streamlit run path: /srv/apps/demo/app.py -> demo
+        # sed extracts the script path from the ps line, then we get the parent dir
+        local script; script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        if [ -n "$script" ]; then
+            # Get directory name (e.g., /srv/apps/demo/app.py -> demo)
+            # Remove .py filename, then extract last directory component
+            local app_name; app_name=$(printf '%s' "$script" | sed 's|/[^/]*\.py$||; s|.*/||')
+            [ -n "$app_name" ] && running_apps="$running_apps$app_name "
+        fi
+    done < <(_ps_lines)
+
     for app_dir in "$APPS_PATH"/*/; do
         [ -d "$app_dir" ] || continue
         local name=$(basename "$app_dir")
@@ -354,20 +637,732 @@ cmd_app_list() {
             [ -f "$app_dir/$candidate" ] && main_py="$candidate" && break
         done
 
-        # Check if running (by checking port)
+        # Check if running (membership in running_apps list with delimiters)
         local running="false"
         local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
-        [ -n "$port" ] && ss -tln "sport = :$port" 2>/dev/null | grep -q "$port" && running="true"
+        if [[ "$running_apps" =~ " $name " ]]; then
+            running="true"
+        fi
 
         $first || echo ","
         first=false
 
+        local state="sleeping"
+        [ "$running" = "true" ] && state="running"
+        local last; last=$(_app_last_active "$name")
+        local now; now=$(date +%s)
+        local idle=0
+        [ "$last" -gt 0 ] && idle=$(( now - last ))
+        local tmo; tmo=$(_idle_config "timeout_minutes" "30")
+
+        local escaped_name; escaped_name=$(_json_escape "$name")
+        local escaped_main; escaped_main=$(_json_escape "$main_py")
+
         cat << EOF
-  {"name": "$name", "main": "$main_py", "running": $running, "port": ${port:-0}}
+  {"name": "$escaped_name", "main": "$escaped_main", "running": $running, "port": ${port:-0},
+   "state": "$state", "last_active": $last, "idle_seconds": $idle,
+   "sleep_after_seconds": $(( tmo * 60 ))}
 EOF
     done
 
     echo ']}'
+}
+
+# app audit — croise disque (répertoires ET scripts .py à plat), déclarations
+# ([apps.*] du CONF_PATH) et processus en cours (_ps_lines). Lecture seule :
+# ne crée, ne modifie, ne supprime rien, ne démarre/arrête rien (#956).
+#
+# Valeurs possibles de "issues" par appli :
+#   no-entrypoint    répertoire présent sur disque sans point d'entrée résolu
+#                    (voir _detect_entrypoint) ; si l'absence vient d'une
+#                    ambiguïté entre plusieurs .py concurrents, le champ
+#                    "entrypoint_candidates" porte leur nombre — jamais de
+#                    choix arbitraire
+#   not-declared     appli observée (disque ou process) mais sans section [apps.*]
+#   declared-missing appli déclarée mais introuvable ailleurs (ni disque, ni process)
+#   stale-port       .streamlit.toml par-appli présent dont le port ne correspond
+#                    pas au port réellement observé (ou l'appli n'est plus en ligne)
+#   running-unlisted appli en cours d'exécution mais de forme "script" — donc
+#                    invisible pour l'ancien app list qui n'itère que les répertoires
+#   duplicate-path   le "path = ..." déclaré est partagé par plusieurs sections
+#                    [apps.*] (config malformée) ; portée par CHACUNE des sections
+#                    concernées — aucune n'est éliminée de la sortie pour autant
+#
+# __pycache__ et pages/ (convention multi-page Streamlit) ainsi que tout nom
+# commençant par un point sont exclus de l'inventaire (_is_excluded_entry) :
+# ce ne sont jamais des applis, cf. #956.
+#
+# Champs de tempo (#956 lot 1, mêmes noms/sémantique que cmd_app_list) :
+#   last_active         horodatage epoch ABSOLU de la dernière activité connue
+#                        (mtime du fichier d'état sous IDLE_STATE_DIR), 0 si
+#                        jamais observée — jamais un décompte, le navigateur
+#                        calcule le compte à rebours localement
+#   idle_seconds         now - last_active, 0 si last_active vaut 0
+#   sleep_after_seconds   timeout_minutes configuré (× 60), identique pour
+#                        toutes les applis
+cmd_app_audit() {
+    local -A disk_shape=()      # name -> dir|script
+    local -A disk_path=()       # name -> chemin disque absolu
+    local -A declared=()        # name -> 1 si section [apps.name] présente
+    local -A run_port=()        # name -> port observé dans les process
+    local -A run_token=()       # name -> chemin de script tel que lancé
+    local -A run_seen=()        # name -> 1 si un process tourne pour ce nom
+
+    # 1) Entrées disque : répertoires et scripts .py à plat sous APPS_PATH.
+    #    _is_excluded_entry filtre __pycache__/pages/dotfiles (#956) : ce ne
+    #    sont jamais des applis, ni comme entrée ni comme anomalie.
+    if [ -d "$APPS_PATH" ]; then
+        local entry base
+        for entry in "$APPS_PATH"/*; do
+            [ -e "$entry" ] || continue
+            base=$(basename "$entry")
+            _is_excluded_entry "$base" && continue
+            if [ -d "$entry" ]; then
+                disk_shape["$base"]="dir"
+                disk_path["$base"]="$entry"
+            elif [ "${base%.py}" != "$base" ]; then
+                local sname="${base%.py}"
+                disk_shape["$sname"]="script"
+                disk_path["$sname"]="$entry"
+            fi
+            # Toute autre entrée (non-dir, non-.py) n'est pas une appli.
+        done
+    fi
+
+    # 2) Applis déclarées : sections [apps.NAME] du config central, avec leur
+    #    éventuel "path = ..." — le lien fiable nom-déclaré <-> script lancé
+    #    (vérifié sur la board : `path = "metabolizer.py"` sous [apps.*]).
+    local -A path_to_name=()    # path déclaré ("path = ...") -> name, pour le matching process
+    local -A path_owners=()     # path déclaré -> liste (espace-séparée) des noms qui le déclarent
+    local -A dup_path=()        # name -> 1 si son path déclaré est partagé par une autre section
+    local -A declared_archived=()  # name -> 1 si archived = true (#956)
+    if [ -f "$CONF_PATH" ]; then
+        local line name
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] && declared["$name"]=1
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+
+        for name in "${!declared[@]}"; do
+            local p arch
+            p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+                | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+            if [ -n "$p" ]; then
+                path_to_name["$p"]="$name"
+                path_owners["$p"]="${path_owners[$p]:-}$name "
+            fi
+            arch=$(_toml_section_value "$CONF_PATH" "$name" archived)
+            [ "$arch" = "true" ] && declared_archived["$name"]=1
+        done
+
+        # Un même path déclaré par plusieurs sections [apps.*] est une
+        # config malformée : il ne doit ni faire disparaître une appli, ni
+        # être avalé en silence — chacune des sections concernées est
+        # marquée (issue "duplicate-path" plus bas), aucune n'est éliminée.
+        local path owner
+        for path in "${!path_owners[@]}"; do
+            local -a owners=()
+            read -ra owners <<< "${path_owners[$path]}"
+            if [ "${#owners[@]}" -gt 1 ]; then
+                for owner in "${owners[@]}"; do
+                    dup_path["$owner"]=1
+                done
+            fi
+        done
+    fi
+
+    # 3) Processus en ligne, croisés par nom d'appli. On préfère le lien
+    #    déclaré (path_to_name) quand il existe ; à défaut on retombe sur
+    #    l'heuristique du nom de fichier (_app_name_of_script).
+    local ps_line script port app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
+        if [ -n "${path_to_name[$script]:-}" ]; then
+            app="${path_to_name[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
+        run_seen["$app"]=1
+        run_token["$app"]="$script"
+        run_port["$app"]="${port:-0}"
+    done < <(_ps_lines)
+
+    # Union de tous les noms connus (disque ∪ déclarés ∪ en ligne).
+    local -A seen_names=()
+    local n
+    for n in "${!disk_shape[@]}"; do seen_names["$n"]=1; done
+    for n in "${!declared[@]}"; do seen_names["$n"]=1; done
+    for n in "${!run_seen[@]}"; do seen_names["$n"]=1; done
+
+    local names_sorted
+    names_sorted=$(printf '%s\n' "${!seen_names[@]}" | sort)
+
+    local total=0 running_count=0 archived_count=0
+    local out="["
+    local first=true
+
+    # Tempo de veille (#956 lot 1) — même calcul que cmd_app_list, hissé hors
+    # de la boucle : `now` et le timeout configuré ne changent pas par appli,
+    # seul `_app_last_active` (un `stat` par appli, négligeable) en dépend.
+    # Surtout : AUCUN appel lxc-attach par appli ici — `_ps_lines` reste
+    # appelé une seule fois plus haut, ce qui avait fait chuter cmd_app_list
+    # de 17s à 8s ; le réintroduire par appli ferait regonfler app audit.
+    local now; now=$(date +%s)
+    local tmo; tmo=$(_idle_config "timeout_minutes" "30")
+    local sleep_after=$(( tmo * 60 ))
+
+    while IFS= read -r n; do
+        [ -z "$n" ] && continue
+        total=$(( total + 1 ))
+
+        local shape="${disk_shape[$n]:-}"
+        local dpath="${disk_path[$n]:-}"
+        local is_declared=false
+        [ -n "${declared[$n]:-}" ] && is_declared=true
+        local is_running=false
+        [ -n "${run_seen[$n]:-}" ] && is_running=true
+        [ "$is_running" = "true" ] && running_count=$(( running_count + 1 ))
+        local is_archived=false
+        [ -n "${declared_archived[$n]:-}" ] && is_archived=true
+        [ "$is_archived" = "true" ] && archived_count=$(( archived_count + 1 ))
+        # Réparée et connue, mais jamais démarrée : un état à part, ni
+        # running ni sleeping (#956) — running reste prioritaire si
+        # l'appli tourne malgré tout (ex. archivée --force pendant
+        # qu'elle était en cours).
+        local state="sleeping"
+        [ "$is_archived" = "true" ] && state="archived"
+        [ "$is_running" = "true" ] && state="running"
+
+        # last_active reste un horodatage epoch ABSOLU, jamais un décompte —
+        # c'est ce qui permet au panneau d'égrener les secondes côté
+        # navigateur sans rappeler le serveur. Une appli jamais vue (aucun
+        # fichier d'état sous IDLE_STATE_DIR) renvoie 0 via _app_last_active,
+        # jamais une erreur : le panneau doit l'afficher comme "jamais vue".
+        local last; last=$(_app_last_active "$n")
+        local idle=0
+        [ "$last" -gt 0 ] && idle=$(( now - last ))
+
+        local entrypoint="" persisted_port="" entrypoint_candidates=0
+        if [ "$shape" = "dir" ]; then
+            _detect_entrypoint "$dpath"
+            entrypoint="$_EP_RESULT"
+            entrypoint_candidates="$_EP_CANDIDATES"
+            persisted_port=$(grep -E "^port\s*=" "$dpath/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+        elif [ "$shape" = "script" ]; then
+            entrypoint=$(basename "$dpath")
+        elif [ -n "${run_token[$n]:-}" ]; then
+            # Pas d'entrée disque : on ne connaît l'appli que par un process
+            # en cours (ou une déclaration) — la forme du chemin lancé donne
+            # la meilleure estimation de forme disponible.
+            case "${run_token[$n]}" in
+                */*) shape="dir" ;;
+                *)   shape="script" ;;
+            esac
+            entrypoint="${run_token[$n]}"
+        else
+            # Ni disque, ni process : déclarée seule (fantôme). On retombe
+            # sur le modèle historique (répertoire) faute de mieux.
+            shape="dir"
+        fi
+
+        local port=0
+        if [ "$is_running" = "true" ]; then
+            port="${run_port[$n]:-0}"
+        elif [ -n "$persisted_port" ]; then
+            port="$persisted_port"
+        fi
+
+        local exists_observed=false
+        { [ -n "$dpath" ] || [ "$is_running" = "true" ]; } && exists_observed=true
+
+        local -a issue_list=()
+        [ "$shape" = "dir" ] && [ -n "$dpath" ] && [ -z "$entrypoint" ] && issue_list+=("no-entrypoint")
+        [ "$exists_observed" = "true" ] && [ "$is_declared" = "false" ] && issue_list+=("not-declared")
+        [ "$exists_observed" = "false" ] && [ "$is_declared" = "true" ] && issue_list+=("declared-missing")
+        if [ -n "$persisted_port" ]; then
+            if [ "$is_running" = "false" ] || [ "$persisted_port" != "${run_port[$n]:-}" ]; then
+                issue_list+=("stale-port")
+            fi
+        fi
+        [ "$is_running" = "true" ] && [ "$shape" = "script" ] && issue_list+=("running-unlisted")
+        [ -n "${dup_path[$n]:-}" ] && issue_list+=("duplicate-path")
+
+        local issues="[" ifirst=true
+        local i
+        for i in "${issue_list[@]:-}"; do
+            [ -z "$i" ] && continue
+            $ifirst || issues+=","
+            ifirst=false
+            issues+="\"$i\""
+        done
+        issues+="]"
+
+        local ename eentry
+        ename=$(_json_escape "$n")
+        eentry=$(_json_escape "$entrypoint")
+
+        $first || out+=","
+        first=false
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after}"
+    done <<< "$names_sorted"
+
+    out+="]"
+
+    cat <<EOF
+{"apps":$out,"summary":{"total":$total,"running":$running_count,"archived":$archived_count}}
+EOF
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# app repair — helpers d'écriture TOML (#956). Réécrivent tout le fichier
+# via un temporaire voisin + mv, mode/propriétaire d'origine préservés,
+# jamais d'édition in-place (cf. _toml_mktemp / _toml_atomic_replace
+# ci-dessus).
+# ─────────────────────────────────────────────────────────────────────
+
+# Retire entièrement la section [apps.NAME] (jusqu'à la prochaine section
+# ou la fin de fichier) d'un fichier TOML.
+_remove_toml_section() {
+    local file="$1" name="$2" tmp
+    tmp=$(_toml_mktemp "$file")
+    awk -v want="[apps.${name}]" '
+        $0 == want { skip=1; next }
+        skip && /^\[/ { skip=0 }
+        skip { next }
+        { print }
+    ' "$file" > "$tmp"
+    _toml_atomic_replace "$file" "$tmp"
+}
+
+# Remplace la ligne "path = ..." de la section [apps.NAME] par le chemin
+# corrigé donné.
+_set_toml_path_in_section() {
+    local file="$1" name="$2" new_path="$3" tmp
+    tmp=$(_toml_mktemp "$file")
+    awk -v want="[apps.${name}]" -v newp="$new_path" '
+        $0 == want { print; in_sec=1; next }
+        in_sec && /^\[/ { in_sec=0 }
+        in_sec && /^path[ \t]*=/ { print "path = \"" newp "\""; next }
+        { print }
+    ' "$file" > "$tmp"
+    _toml_atomic_replace "$file" "$tmp"
+}
+
+# Remplace (ou ajoute) la ligne "port = ..." d'un .streamlit.toml par-appli.
+_set_app_port() {
+    local file="$1" new_port="$2" tmp
+    tmp=$(_toml_mktemp "$file")
+    if [ -f "$file" ] && grep -qE '^port[ \t]*=' "$file"; then
+        awk -v p="$new_port" '/^port[ \t]*=/ { print "port = " p; next } { print }' "$file" > "$tmp"
+    else
+        { [ -f "$file" ] && cat "$file"; printf 'port = %s\n' "$new_port"; } > "$tmp"
+    fi
+    _toml_atomic_replace "$file" "$tmp"
+}
+
+# app repair [--apply] — corrige des références de configuration erronées
+# sans jamais supprimer un fichier ni un répertoire (#956). Mode
+# simulation par défaut : sans --apply, rien n'est écrit, seule la liste
+# des actions PROPOSÉES est renvoyée. Avec --apply, chaque fichier de
+# configuration modifié est d'abord sauvegardé (suffixe horodaté) puis
+# réécrit.
+#
+# Cas traités (tous vérifiés sur la board) :
+#   orphan-declaration  section [apps.NAME] du CONF_PATH sans rien nulle
+#                        part ailleurs (ni disque, ni process en cours) ->
+#                        proposer de retirer la section. Exemple observé :
+#                        [apps.test_app] alors que test_app est absent du
+#                        disque.
+#   wrong-path           un "path = ..." déclaré est partagé par une autre
+#                        section [apps.*] (config malformée, copier-coller)
+#                        ET un FICHIER portant le nom de CETTE appli existe
+#                        sur disque -> proposer de corriger la déclaration
+#                        vers ce fichier. Seule la section dont le path
+#                        déclaré ne correspond PAS déjà à son propre
+#                        fichier est corrigée. Exemple observé :
+#                        [apps.wuyun_liuqi] path="tong_shu_app.py" (en
+#                        double avec [apps.tong_shu_app]) alors que
+#                        wuyun_liuqi.py existe sur disque.
+#   stale-port           le .streamlit.toml par-appli déclare un port qui
+#                        ne correspond pas à celui du processus RÉELLEMENT
+#                        en cours -> proposer de le mettre à jour depuis le
+#                        processus observé. Sans processus en cours il n'y
+#                        a pas de vérité de référence : rien n'est proposé
+#                        (l'anomalie stale-port de `app audit` reste seule
+#                        juge dans ce cas).
+#
+# Ce verbe ne touche JAMAIS aux fichiers/répertoires d'appli eux-mêmes,
+# uniquement à CONF_PATH et aux .streamlit.toml par-appli.
+cmd_app_repair() {
+    local apply=false
+    [ "${1:-}" = "--apply" ] && apply=true
+
+    # ── 1) Sections déclarées + leur "path = ..." ───────────────────────
+    local -A declared=() declared_path=() path_owners=()
+    if [ -f "$CONF_PATH" ]; then
+        local line name
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] && declared["$name"]=1
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+
+        for name in "${!declared[@]}"; do
+            local p
+            p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+                | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+            if [ -n "$p" ]; then
+                declared_path["$name"]="$p"
+                path_owners["$p"]="${path_owners[$p]:-}$name "
+            fi
+        done
+    fi
+
+    # ── 2) Entrées disque (exclusions #956 appliquées) ─────────────────
+    local -A disk_shape=() disk_path=()
+    if [ -d "$APPS_PATH" ]; then
+        local entry base
+        for entry in "$APPS_PATH"/*; do
+            [ -e "$entry" ] || continue
+            base=$(basename "$entry")
+            _is_excluded_entry "$base" && continue
+            if [ -d "$entry" ]; then
+                disk_shape["$base"]="dir"
+                disk_path["$base"]="$entry"
+            elif [ "${base%.py}" != "$base" ]; then
+                disk_shape["${base%.py}"]="script"
+                disk_path["${base%.py}"]="$entry"
+            fi
+        done
+    fi
+
+    # ── 3) Processus en ligne (nom -> port), même logique que l'audit ──
+    local -A path_to_name=()
+    local pn
+    for pn in "${!declared_path[@]}"; do
+        path_to_name["${declared_path[$pn]}"]="$pn"
+    done
+    local -A run_port=() run_seen=()
+    local ps_line script port app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
+        if [ -n "${path_to_name[$script]:-}" ]; then
+            app="${path_to_name[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
+        run_seen["$app"]=1
+        run_port["$app"]="${port:-0}"
+    done < <(_ps_lines)
+
+    local -A backed_up=()
+    local backup_suffix; backup_suffix=$(date +%Y%m%dT%H%M%S)
+    local out="[" first=true total=0 applied=0
+
+    # ── Cas 1 : déclaration orpheline ───────────────────────────────────
+    local name
+    for name in $(printf '%s\n' "${!declared[@]}" | sort); do
+        local on_disk=false
+        [ -n "${disk_shape[$name]:-}" ] && on_disk=true
+        local running=false
+        [ -n "${run_seen[$name]:-}" ] && running=true
+        [ "$on_disk" = "true" ] && continue
+        [ "$running" = "true" ] && continue
+
+        local did=false
+        if [ "$apply" = "true" ]; then
+            if [ -z "${backed_up[$CONF_PATH]:-}" ]; then
+                cp -p "$CONF_PATH" "${CONF_PATH}.bak.${backup_suffix}"
+                backed_up["$CONF_PATH"]=1
+            fi
+            _remove_toml_section "$CONF_PATH" "$name"
+            did=true
+            applied=$(( applied + 1 ))
+        fi
+        total=$(( total + 1 ))
+        $first || out+=","
+        first=false
+        out+="{\"type\":\"orphan-declaration\",\"app\":\"$(_json_escape "$name")\",\"file\":\"$(_json_escape "$CONF_PATH")\",\"action\":\"remove section [apps.$(_json_escape "$name")]\",\"applied\":$did}"
+    done
+
+    # ── Cas 2 : chemin déclaré en double, corrigible vers le fichier
+    #    propre de l'appli ─────────────────────────────────────────────
+    local dup_path
+    for dup_path in $(printf '%s\n' "${!path_owners[@]}" | sort); do
+        local -a owners=()
+        read -ra owners <<< "${path_owners[$dup_path]}"
+        [ "${#owners[@]}" -gt 1 ] || continue
+
+        local owner
+        for owner in "${owners[@]}"; do
+            [ "${disk_shape[$owner]:-}" = "script" ] || continue
+            local correct="${owner}.py"
+            [ "${declared_path[$owner]}" = "$correct" ] && continue
+
+            local did=false
+            if [ "$apply" = "true" ]; then
+                if [ -z "${backed_up[$CONF_PATH]:-}" ]; then
+                    cp -p "$CONF_PATH" "${CONF_PATH}.bak.${backup_suffix}"
+                    backed_up["$CONF_PATH"]=1
+                fi
+                _set_toml_path_in_section "$CONF_PATH" "$owner" "$correct"
+                did=true
+                applied=$(( applied + 1 ))
+            fi
+            total=$(( total + 1 ))
+            $first || out+=","
+            first=false
+            out+="{\"type\":\"wrong-path\",\"app\":\"$(_json_escape "$owner")\",\"file\":\"$(_json_escape "$CONF_PATH")\",\"from\":\"$(_json_escape "${declared_path[$owner]}")\",\"to\":\"$(_json_escape "$correct")\",\"applied\":$did}"
+        done
+    done
+
+    # ── Cas 3 : port périmé dans le .streamlit.toml par-appli, corrigible
+    #    seulement s'il existe un processus réel à citer comme vérité ──
+    for name in $(printf '%s\n' "${!disk_shape[@]}" | sort); do
+        [ "${disk_shape[$name]}" = "dir" ] || continue
+        [ "${run_seen[$name]:-}" = "1" ] || continue
+        local toml="${disk_path[$name]}/.streamlit.toml"
+        [ -f "$toml" ] || continue
+        local persisted; persisted=$(grep -E '^port\s*=' "$toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+        local real="${run_port[$name]:-}"
+        [ -z "$persisted" ] && continue
+        [ -z "$real" ] && continue
+        [ "$persisted" = "$real" ] && continue
+
+        local did=false
+        if [ "$apply" = "true" ]; then
+            if [ -z "${backed_up[$toml]:-}" ]; then
+                cp -p "$toml" "${toml}.bak.${backup_suffix}"
+                backed_up["$toml"]=1
+            fi
+            _set_app_port "$toml" "$real"
+            did=true
+            applied=$(( applied + 1 ))
+        fi
+        total=$(( total + 1 ))
+        $first || out+=","
+        first=false
+        out+="{\"type\":\"stale-port\",\"app\":\"$(_json_escape "$name")\",\"file\":\"$(_json_escape "$toml")\",\"from\":$persisted,\"to\":$real,\"applied\":$did}"
+    done
+
+    out+="]"
+
+    cat <<EOF
+{"apply":$apply,"actions":$out,"summary":{"total":$total,"applied":$applied}}
+EOF
+}
+
+# app archive <name> [--apply] [--force] — bascule une appli DÉJÀ DÉCLARÉE
+# vers archived = true, enabled = false (#956). Convention `app repair`
+# exacte : simulation par défaut (rien n'est écrit sans --apply), sortie
+# JSON {"apply":...,"actions":[...],"summary":{...}}, sauvegarde horodatée
+# de CONF_PATH avant toute écriture. Ne touche jamais aux fichiers/
+# répertoires d'appli — archiver n'est pas supprimer.
+#
+# Une appli en cours d'exécution n'est jamais arrêtée par ce verbe : sans
+# --force, l'action est signalée bloquée ("running, use --force...")
+# plutôt qu'appliquée. Une appli déjà archivée est un no-op signalé
+# ("already archived"), pas une erreur.
+cmd_app_archive() {
+    local name="" apply=false force=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --apply) apply=true ;;
+            --force) force=true ;;
+            *) [ -z "$name" ] && name="$a" ;;
+        esac
+    done
+
+    [ -z "$name" ] && { error "Usage: streamlitctl app archive <name> [--apply] [--force]"; return 1; }
+
+    if ! _app_declared "$name"; then
+        error "App non déclarée : $name (déclarez-la d'abord, ou utilisez 'app archive --undeclared' pour l'archivage groupé)"
+        return 1
+    fi
+
+    local already=false
+    _app_archived "$name" && already=true
+    local running=false
+    _app_currently_running "$name" && running=true
+
+    local blocked=false reason=""
+    if [ "$already" = "true" ]; then
+        blocked=true
+        reason="already archived"
+    elif [ "$running" = "true" ] && [ "$force" = "false" ]; then
+        blocked=true
+        reason="running, use --force to archive anyway (the app itself is left untouched)"
+    fi
+
+    local did=false
+    if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+        cp -p "$CONF_PATH" "${CONF_PATH}.bak.$(date +%Y%m%dT%H%M%S)"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "archived" "true"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "enabled" "false"
+        did=true
+    fi
+
+    local applied=0
+    [ "$did" = "true" ] && applied=1
+
+    cat <<EOF
+{"apply":$apply,"actions":[{"type":"archive","app":"$(_json_escape "$name")","file":"$(_json_escape "$CONF_PATH")","running":$running,"blocked":$blocked,"reason":"$(_json_escape "$reason")","applied":$did}],"summary":{"total":1,"applied":$applied}}
+EOF
+}
+
+# app unarchive <name> [--apply] — l'inverse de `app archive` : archived =
+# false, enabled = true. Ne démarre rien — l'appli redevient simplement
+# démarrable via `app start`. Même convention simulation/--apply que
+# `app repair`.
+cmd_app_unarchive() {
+    local name="" apply=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --apply) apply=true ;;
+            *) [ -z "$name" ] && name="$a" ;;
+        esac
+    done
+
+    [ -z "$name" ] && { error "Usage: streamlitctl app unarchive <name> [--apply]"; return 1; }
+
+    if ! _app_declared "$name"; then
+        error "App non déclarée : $name"
+        return 1
+    fi
+
+    local was_archived=false
+    _app_archived "$name" && was_archived=true
+
+    local blocked=false reason=""
+    [ "$was_archived" = "false" ] && { blocked=true; reason="not archived"; }
+
+    local did=false
+    if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+        cp -p "$CONF_PATH" "${CONF_PATH}.bak.$(date +%Y%m%dT%H%M%S)"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "archived" "false"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "enabled" "true"
+        did=true
+    fi
+
+    local applied=0
+    [ "$did" = "true" ] && applied=1
+
+    cat <<EOF
+{"apply":$apply,"actions":[{"type":"unarchive","app":"$(_json_escape "$name")","file":"$(_json_escape "$CONF_PATH")","blocked":$blocked,"reason":"$(_json_escape "$reason")","applied":$did}],"summary":{"total":1,"applied":$applied}}
+EOF
+}
+
+# app archive --undeclared [--apply] [--force] — déclare, directement en
+# état archivé, toutes les applis présentes sur APPS_PATH mais absentes de
+# CONF_PATH (#956 : 29 relevées sur la board). Réutilise la détection de
+# point d'entrée de `app audit` (_detect_entrypoint) : sans point d'entrée
+# résolu, l'appli est tout de même déclarée archivée (sans "path = ..."),
+# `app audit`/`app repair` restant seuls juges de cette anomalie séparée.
+#
+# Même garde-fou que `app archive <name>` : une appli déjà en cours
+# d'exécution n'est jamais arrêtée, et n'est déclarée que si --force est
+# passé. Mêmes conventions repair : simulation par défaut, JSON, backup
+# horodaté unique pour tout le lot avant la première écriture.
+cmd_app_archive_undeclared() {
+    local apply=false force=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --apply) apply=true ;;
+            --force) force=true ;;
+        esac
+    done
+
+    local -A declared=()
+    if [ -f "$CONF_PATH" ]; then
+        local line name
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] && declared["$name"]=1
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+
+    local -A disk_shape=() disk_path=()
+    if [ -d "$APPS_PATH" ]; then
+        local entry base
+        for entry in "$APPS_PATH"/*; do
+            [ -e "$entry" ] || continue
+            base=$(basename "$entry")
+            _is_excluded_entry "$base" && continue
+            if [ -d "$entry" ]; then
+                disk_shape["$base"]="dir"
+                disk_path["$base"]="$entry"
+            elif [ "${base%.py}" != "$base" ]; then
+                disk_shape["${base%.py}"]="script"
+                disk_path["${base%.py}"]="$entry"
+            fi
+        done
+    fi
+
+    local backup_done=false
+    local backup_suffix; backup_suffix=$(date +%Y%m%dT%H%M%S)
+    local out="[" first=true total=0 applied=0
+
+    local name
+    for name in $(printf '%s\n' "${!disk_shape[@]}" | sort); do
+        [ -n "${declared[$name]:-}" ] && continue   # déjà déclarée : hors périmètre
+
+        local shape="${disk_shape[$name]}"
+        local dpath="${disk_path[$name]}"
+        local path_field=""
+        if [ "$shape" = "dir" ]; then
+            _detect_entrypoint "$dpath"
+            [ -n "$_EP_RESULT" ] && path_field="${name}/${_EP_RESULT}"
+        else
+            path_field="${name}.py"
+        fi
+
+        local running=false
+        _app_currently_running "$name" && running=true
+        local blocked=false reason=""
+        if [ "$running" = "true" ] && [ "$force" = "false" ]; then
+            blocked=true
+            reason="running, use --force to archive anyway (the app itself is left untouched)"
+        fi
+
+        local did=false
+        if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+            if [ "$backup_done" = "false" ]; then
+                [ -f "$CONF_PATH" ] && cp -p "$CONF_PATH" "${CONF_PATH}.bak.${backup_suffix}"
+                backup_done=true
+            fi
+            {
+                printf '\n[apps.%s]\n' "$name"
+                printf 'name = "%s"\n' "$name"
+                [ -n "$path_field" ] && printf 'path = "%s"\n' "$path_field"
+                printf 'archived = true\n'
+                printf 'enabled = false\n'
+            } >> "$CONF_PATH"
+            did=true
+            applied=$(( applied + 1 ))
+        fi
+
+        total=$(( total + 1 ))
+        $first || out+=","
+        first=false
+        out+="{\"type\":\"archive-undeclared\",\"app\":\"$(_json_escape "$name")\",\"file\":\"$(_json_escape "$CONF_PATH")\",\"path\":\"$(_json_escape "$path_field")\",\"shape\":\"$(_json_escape "$shape")\",\"running\":$running,\"blocked\":$blocked,\"reason\":\"$(_json_escape "$reason")\",\"applied\":$did}"
+    done
+
+    out+="]"
+
+    cat <<EOF
+{"apply":$apply,"actions":$out,"summary":{"total":$total,"applied":$applied}}
+EOF
 }
 
 # app info <name> — print metadata + runtime state from manifest + pid file (#182)
@@ -421,6 +1416,13 @@ cmd_app_start() {
 
     [ -z "$name" ] && { error "Usage: streamlitctl app start <name> [port]"; return 1; }
     [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 1; }
+
+    # Archivée = repérée et connue, mais jamais démarrée sans geste explicite
+    # de désarchivage (#956). Refus net plutôt qu'un démarrage silencieux.
+    if _app_archived "$name"; then
+        error "App archivée : $name — désarchivez-la d'abord (streamlitctl app unarchive $name --apply)"
+        return 1
+    fi
 
     if ! lxc_running; then
         error "Container not running. Start it first."
@@ -630,6 +1632,9 @@ cmd_autostart() {
     if [ -f "$CONF_PATH" ]; then
         local apps=$(grep -E '^\[apps\.' "$CONF_PATH" | sed 's/\[apps\.//;s/\]//')
         for name in $apps; do
+            # Une appli archivée n'est jamais démarrée par le chemin groupé
+            # (#956) — seul un `app unarchive` explicite la rend éligible.
+            _app_archived "$name" && continue
             local autostart=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^autostart\s*=' | grep -q 'true' && echo "true" || echo "false")
             local port=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^port\s*=' | cut -d'=' -f2 | tr -d ' ')
             if [ "$autostart" = "true" ] && [ -n "$port" ]; then
@@ -840,6 +1845,12 @@ cmd_gitea_clone() {
 
 load_config
 
+# Re-apply environment variable overrides after load_config()
+# (load_config may have modified APPS_PATH based on data_path from config file)
+APPS_PATH="${SECUBOX_STREAMLIT_APPS_PATH:-$APPS_PATH}"
+CONF_PATH="${SECUBOX_STREAMLIT_CONF:-$CONF_PATH}"
+IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-$IDLE_STATE_DIR}"
+
 case "${1:-}" in
     # Three-fold architecture
     components) cmd_components ;;
@@ -856,6 +1867,16 @@ case "${1:-}" in
     app)
         case "${2:-}" in
             list)       cmd_app_list ;;
+            audit)      cmd_app_audit ;;
+            repair)     cmd_app_repair "$3" ;;
+            archive)
+                if [ "${3:-}" = "--undeclared" ]; then
+                    cmd_app_archive_undeclared "$4" "$5"
+                else
+                    cmd_app_archive "$3" "$4" "$5"
+                fi
+                ;;
+            unarchive)  cmd_app_unarchive "$3" "$4" ;;
             idle-check) cmd_app_idle_check ;;
             wake)       cmd_app_wake "$3" "$4" ;;
             start)  cmd_app_start "$3" "$4" ;;
@@ -865,7 +1886,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
         esac
         ;;
 
@@ -908,7 +1929,12 @@ Container:
   restart       Restart container
 
 Apps:
-  app list              List all apps
+  app list              List all apps (directories only, legacy)
+  app audit             Cross-reference disk/declared/running (JSON, read-only)
+  app repair [--apply]  Fix orphan/wrong-path/stale-port config refs (dry-run by default)
+  app archive <name> [--apply] [--force]   Mark an app archived=true, enabled=false (dry-run by default)
+  app archive --undeclared [--apply] [--force]  Declare+archive all undeclared on-disk apps
+  app unarchive <name> [--apply]           Reverse of archive (dry-run by default)
   app start <name> [port]   Start an app
   app stop <name>           Stop an app
   app deploy <zip> [name]   Deploy from ZIP

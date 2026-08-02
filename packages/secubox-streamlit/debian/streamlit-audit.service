@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Refresh the Streamlit app-fleet audit cache (root)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/956
+
+[Service]
+Type=oneshot
+# Root (no User=) so streamlitctl can lxc-attach into the container to read
+# its process list, alongside the disk scan and TOML cross-reference.
+#
+# This is the project's double-cache pattern applied to the Mosaic tab — the
+# expensive side (disk scan + TOML + lxc-attach ps, ~11 s locally, ~31 s
+# through the aggregator) runs out of band, the request path is a file read.
+#
+# Written via tmp + mv so a reader never sees a half-written file, and only
+# on success so a transient failure keeps the last good value instead of
+# blanking the wall. Only the module's own subdirectory is created:
+# /var/cache/secubox is shared by ~29 modules and must keep its
+# secubox:secubox 0755 ownership — never let a unit chown a shared parent.
+TimeoutStartSec=60
+ExecStart=/bin/sh -c 'install -d -m 0755 /var/cache/secubox/streamlit && \
+  /usr/sbin/streamlitctl app audit > /var/cache/secubox/streamlit/.audit.tmp && \
+  mv /var/cache/secubox/streamlit/.audit.tmp /var/cache/secubox/streamlit/audit.json'
+StandardError=journal

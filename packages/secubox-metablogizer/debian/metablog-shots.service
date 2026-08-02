@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Capture one metablogizer site thumbnail for the Mosaic tab
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/956
+
+[Service]
+Type=oneshot
+# Unprivileged: chromium runs with --no-sandbox already (see
+# secubox_core/shotter.py) and only needs network access + write access to
+# this module's own cache subtree, which secubox:secubox already owns.
+# No lxc-attach, no sudo — unlike streamlit-audit/peertube-backlog, this one
+# doesn't need root.
+User=secubox
+Group=secubox
+NoNewPrivileges=true
+# One chromium capture measured at 54s on a loaded board, and the internal
+# capture() timeout defaults to 240s (see shotter.py) — leave headroom above
+# that rather than race it.
+TimeoutStartSec=300
+ExecStart=/usr/sbin/metablog-shotter
+# A failed capture is expected and tolerated (see api/shots.py) — never
+# restart automatically, the timer's own 2-minute cadence already provides
+# the next attempt, on whichever site is next in line.
+Restart=no
+StandardError=journal

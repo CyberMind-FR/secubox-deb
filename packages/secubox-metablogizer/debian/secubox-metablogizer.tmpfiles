@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Mosaic tab thumbnail cache (#956). Declared explicitly (owner secubox,
+# not the shared /var/cache/secubox parent — that one stays secubox:secubox
+# 0755 and is never touched here) so metablog-shots.service can run
+# unprivileged (User=secubox) regardless of who currently owns the shared
+# parent: systemd-tmpfiles applies this as root at package-install time.
+d /var/cache/secubox/metablogizer 0755 secubox secubox -
+d /var/cache/secubox/metablogizer/shots 0755 secubox secubox -
