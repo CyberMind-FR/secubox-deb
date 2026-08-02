@@ -104,6 +104,40 @@ def test_png_write_is_atomic_no_stray_temp_files_left_behind(tmp_path):
     assert names == ["screenshot.json", "screenshot.png"]
 
 
+def test_written_png_is_group_and_world_readable_within_the_process_umask(tmp_path):
+    """`tempfile.mkstemp()` (used internally by `_atomic_write_bytes`) always
+    creates its file in 0600, bypassing the umask by design -- fine for a
+    file only its own writer ever reads, but wrong here: the vignette is
+    meant to be produced by a root timer and served by the aggregator
+    running as `secubox`. Verified on the board: thumbnails were
+    `-rw------- secubox secubox` -- harmless today only because producer
+    and reader happen to be the same user; the moment a root-run producer
+    lands, the aggregator can no longer read them. The write must end with
+    an explicit, readable mode, still capped by whatever the process umask
+    forbids."""
+    import os
+    import stat
+
+    test_umask = 0o022
+    original_umask = os.umask(test_umask)
+    try:
+        screenshots.record(tmp_path, "myapp", b"final-content", "fp-1", ok=True)
+    finally:
+        os.umask(original_umask)
+
+    png_mode = stat.S_IMODE(screenshots.png_path(tmp_path, "myapp").stat().st_mode)
+    meta_mode = stat.S_IMODE(screenshots.meta_path(tmp_path, "myapp").stat().st_mode)
+
+    expected = 0o644 & ~test_umask
+    assert png_mode == expected, (
+        f"screenshot.png mode is {oct(png_mode)}, expected {oct(expected)} -- "
+        "mkstemp's hardcoded 0600 must not survive the atomic replace"
+    )
+    assert meta_mode == expected, (
+        f"screenshot.json mode is {oct(meta_mode)}, expected {oct(expected)}"
+    )
+
+
 def test_write_failure_never_leaves_a_partial_file_and_preserves_the_original(
         tmp_path, monkeypatch):
     """Simule un échec au milieu de l'écriture (ex. disque plein au moment du

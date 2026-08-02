@@ -43,6 +43,17 @@ from pathlib import Path
 PNG_NAME = "screenshot.png"
 META_NAME = "screenshot.json"
 
+# Mode explicite appliqué au PNG et aux métadonnées avant remplacement.
+# `tempfile.mkstemp()` crée toujours son fichier temporaire en 0600 (il
+# ignore délibérément l'umask, pensé pour un fichier que seul son auteur
+# lit) : sans ce chmod, ce 0600 aurait survécu jusqu'au fichier final.
+# Vérifié sur la board : les vignettes étaient `-rw------- secubox secubox` —
+# sans conséquence tant que producteur et lecteur sont le même utilisateur,
+# mais le producteur Streamlit prévu tourne en root (timer) alors que le
+# lecteur (l'agrégateur) tourne en secubox. 0o644 reste réduit par l'umask du
+# processus, comme n'importe quelle création de fichier normale.
+_DEFAULT_FILE_MODE = 0o644
+
 
 def _safe_key(key: str) -> str:
     """Rejette une clé qui échapperait à son répertoire (`../`, séparateur de
@@ -107,6 +118,13 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-")
     try:
+        # mkstemp() always creates in 0600, ignoring the process umask by
+        # design. Restore a normal, readable mode (still capped by the
+        # umask, same as any regular file creation) before it becomes
+        # visible under its final name.
+        umask = os.umask(0)
+        os.umask(umask)
+        os.fchmod(fd, _DEFAULT_FILE_MODE & ~umask)
         with os.fdopen(fd, "wb") as f:
             f.write(data)
             f.flush()

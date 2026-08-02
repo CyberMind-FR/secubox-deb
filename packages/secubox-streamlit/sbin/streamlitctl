@@ -298,12 +298,38 @@ _app_currently_running() {
     return 1
 }
 
+# Crée un fichier temporaire dans le MÊME répertoire que $1, jamais dans
+# /tmp. /tmp et /etc (entre autres) sont des systèmes de fichiers
+# distincts : un `mv` entre les deux n'est pas un rename(2) mais un
+# copie+suppression, donc ni atomique ni protégé contre une interruption
+# en cours de copie. Un temporaire voisin garantit que le `mv` final reste
+# sur le même filesystem.
+_toml_mktemp() {
+    local file="$1"
+    mktemp "${file}.XXXXXX"
+}
+
+# Termine une réécriture "temporaire + mv" : restaure le mode et le
+# propriétaire du fichier remplacé (mktemp crée toujours en 0600, ce qui
+# a déjà cassé la lecture de streamlit.toml par l'agrégateur — voir #956
+# post-mortem), puis renomme. $tmp étant dans le même répertoire que
+# $file (cf. _toml_mktemp), ce renommage est un vrai rename(2) atomique.
+_toml_atomic_replace() {
+    local file="$1" tmp="$2"
+    if [ -e "$file" ]; then
+        chmod --reference="$file" "$tmp" 2>/dev/null || true
+        chown --reference="$file" "$tmp" 2>/dev/null || true
+    fi
+    mv -f "$tmp" "$file"
+}
+
 # Remplace (ou insère si absente) la ligne "$3 = $4" dans la section
-# [apps.$2] de $1. Réécriture complète via temporaire + mv (atomique),
-# jamais d'édition in-place — même discipline que _set_toml_path_in_section.
+# [apps.$2] de $1. Réécriture complète via temporaire voisin + mv, mode
+# et propriétaire d'origine préservés — même discipline que
+# _set_toml_path_in_section.
 _set_toml_key_in_section() {
     local file="$1" name="$2" key="$3" value="$4" tmp
-    tmp=$(mktemp)
+    tmp=$(_toml_mktemp "$file")
     awk -v want="[apps.${name}]" -v key="$key" -v val="$value" '
         BEGIN { in_sec=0; done=0 }
         {
@@ -321,7 +347,7 @@ _set_toml_key_in_section() {
         }
         END { if (in_sec && !done) print key " = " val }
     ' "$file" > "$tmp"
-    mv "$tmp" "$file"
+    _toml_atomic_replace "$file" "$tmp"
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -893,47 +919,49 @@ EOF
 
 # ─────────────────────────────────────────────────────────────────────
 # app repair — helpers d'écriture TOML (#956). Réécrivent tout le fichier
-# via un temporaire + mv (atomique), jamais d'édition in-place.
+# via un temporaire voisin + mv, mode/propriétaire d'origine préservés,
+# jamais d'édition in-place (cf. _toml_mktemp / _toml_atomic_replace
+# ci-dessus).
 # ─────────────────────────────────────────────────────────────────────
 
 # Retire entièrement la section [apps.NAME] (jusqu'à la prochaine section
 # ou la fin de fichier) d'un fichier TOML.
 _remove_toml_section() {
     local file="$1" name="$2" tmp
-    tmp=$(mktemp)
+    tmp=$(_toml_mktemp "$file")
     awk -v want="[apps.${name}]" '
         $0 == want { skip=1; next }
         skip && /^\[/ { skip=0 }
         skip { next }
         { print }
     ' "$file" > "$tmp"
-    mv "$tmp" "$file"
+    _toml_atomic_replace "$file" "$tmp"
 }
 
 # Remplace la ligne "path = ..." de la section [apps.NAME] par le chemin
 # corrigé donné.
 _set_toml_path_in_section() {
     local file="$1" name="$2" new_path="$3" tmp
-    tmp=$(mktemp)
+    tmp=$(_toml_mktemp "$file")
     awk -v want="[apps.${name}]" -v newp="$new_path" '
         $0 == want { print; in_sec=1; next }
         in_sec && /^\[/ { in_sec=0 }
         in_sec && /^path[ \t]*=/ { print "path = \"" newp "\""; next }
         { print }
     ' "$file" > "$tmp"
-    mv "$tmp" "$file"
+    _toml_atomic_replace "$file" "$tmp"
 }
 
 # Remplace (ou ajoute) la ligne "port = ..." d'un .streamlit.toml par-appli.
 _set_app_port() {
     local file="$1" new_port="$2" tmp
-    tmp=$(mktemp)
+    tmp=$(_toml_mktemp "$file")
     if [ -f "$file" ] && grep -qE '^port[ \t]*=' "$file"; then
         awk -v p="$new_port" '/^port[ \t]*=/ { print "port = " p; next } { print }' "$file" > "$tmp"
     else
         { [ -f "$file" ] && cat "$file"; printf 'port = %s\n' "$new_port"; } > "$tmp"
     fi
-    mv "$tmp" "$file"
+    _toml_atomic_replace "$file" "$tmp"
 }
 
 # app repair [--apply] — corrige des références de configuration erronées

@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import itertools
 import json
 import shutil
@@ -296,18 +297,33 @@ async def _capture_once(url: str, width: int, height: int,
         raise ShotError(
             f"capture échouée pendant « {progress.phase} » : {exc}") from exc
     finally:
-        if proc is not None:
-            proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=10)
-            except asyncio.TimeoutError:
-                proc.kill()
-        # Un profil chromium contient potentiellement des dizaines de petits
-        # fichiers (Cache, GPUCache, blob_storage, sqlite...) : la suppression
-        # est bornée mais synchrone — déportée dans un exécuteur pour ne
-        # jamais bloquer directement la coroutine, comme l'appel urlopen().
-        await asyncio.get_running_loop().run_in_executor(
-            None, shutil.rmtree, profile, True)
+        # Le nettoyage du profil (bloc `finally` interne ci-dessous) doit
+        # s'exécuter quoi qu'il arrive dans l'arrêt du sous-processus — y
+        # compris un échec qu'on n'aurait pas anticipé. `proc.terminate()`
+        # lève `ProcessLookupError` si chromium est déjà mort au moment du
+        # nettoyage (OOM sur une board à ~2 Go libres, bibliothèque absente
+        # après mise à jour) : observé en production, ça faisait fuir le
+        # répertoire temporaire ET remplaçait le ShotError en cours par une
+        # exception brute, cassant le contrat de l'interface.
+        try:
+            if proc is not None:
+                with contextlib.suppress(ProcessLookupError):
+                    proc.terminate()
+                try:
+                    await asyncio.wait_for(proc.wait(), timeout=10)
+                except asyncio.TimeoutError:
+                    with contextlib.suppress(ProcessLookupError):
+                        proc.kill()
+        finally:
+            # Un profil chromium contient potentiellement des dizaines de
+            # petits fichiers (Cache, GPUCache, blob_storage, sqlite...) : la
+            # suppression est bornée mais synchrone — déportée dans un
+            # exécuteur pour ne jamais bloquer directement la coroutine,
+            # comme l'appel urlopen(). Bloc indépendant du nettoyage du
+            # sous-processus ci-dessus : il s'exécute même si celui-ci a
+            # échoué de façon imprévue.
+            await asyncio.get_running_loop().run_in_executor(
+                None, shutil.rmtree, profile, True)
 
 
 async def _fetch_devtools_ws_url(port: str) -> str | None:

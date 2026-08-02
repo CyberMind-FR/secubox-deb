@@ -520,6 +520,64 @@ def test_launch_failure_cleans_up_profile_dir(monkeypatch, tmp_path):
     assert not os.path.exists(created[0])
 
 
+class _FakeProcDeadOnTerminate:
+    """Simule un chromium déjà mort au moment du nettoyage : `terminate()`
+    lève `ProcessLookupError`, exactement le crash observé sur une board
+    à ~2 Go de mémoire libre (OOM) ou après une bibliothèque manquante
+    suite à une mise à jour."""
+
+    async def wait(self):
+        return 0
+
+    def terminate(self):
+        raise ProcessLookupError("process introuvable")
+
+    def kill(self):
+        raise ProcessLookupError("process introuvable")
+
+
+def test_terminate_on_an_already_dead_process_still_cleans_up_and_raises_shoterror(
+        monkeypatch, tmp_path):
+    """Cas réel : chromium meurt avant que le nettoyage n'ait lieu.
+    `proc.terminate()` lève alors `ProcessLookupError` dans le `finally` —
+    cela ne doit ni faire fuir le répertoire de profil temporaire (le
+    `rmtree` qui suit ne doit jamais être sauté), ni laisser échapper une
+    exception brute qui romprait le contrat « capture() lève ShotError en
+    cas d'échec »."""
+    created = []
+
+    def spy_mkdtemp(prefix=""):
+        d = tmp_path / f"{prefix}spy"
+        d.mkdir()
+        created.append(str(d))
+        return str(d)
+
+    fake_proc = _FakeProcDeadOnTerminate()
+
+    async def fake_create_subprocess_exec(*args, **kwargs):
+        return fake_proc
+
+    async def fake_devtools_url(proc):
+        # Le processus est mort avant d'avoir jamais annoncé son port de
+        # debug : c'est ce qui déclenche le ShotError d'origine que le
+        # `finally` ne doit pas masquer.
+        raise ConnectionRefusedError("chromium déjà mort, pas de port de debug")
+
+    monkeypatch.setattr(shotter.tempfile, "mkdtemp", spy_mkdtemp)
+    monkeypatch.setattr(shotter.asyncio, "create_subprocess_exec",
+                         fake_create_subprocess_exec)
+    monkeypatch.setattr(shotter, "_devtools_url", fake_devtools_url)
+
+    with pytest.raises(shotter.ShotError):
+        asyncio.run(shotter.capture("http://example.invalid/", timeout=1.0))
+
+    assert created, "le répertoire de profil aurait dû être créé"
+    assert not os.path.exists(created[0]), (
+        "le répertoire de profil temporaire a fuité : terminate() a levé "
+        "ProcessLookupError et interrompu le `finally` avant le rmtree"
+    )
+
+
 def test_low_level_failure_is_wrapped_as_shot_error(monkeypatch, tmp_path):
     """Le contrat de l'interface promet ShotError « en cas d'échec » — un
     échec de bas niveau (chromium absent, websocket injoignable, message CDP
