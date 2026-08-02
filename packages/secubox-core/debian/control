@@ -9,6 +9,11 @@ Rules-Requires-Root: no
 
 Package: secubox-core
 Architecture: all
+# NE PAS ajouter python3-websockets ici. secubox_core.shotter en a besoin,
+# mais le paquet apt est en 10.4 alors qu'uvicorn exige websockets>=13.0 : sa
+# présence a déjà fait planter l'agrégateur en 502 par ImportError. La version
+# utilisée (16.0) vient de pip, dans /usr/local/lib/python3.11/dist-packages.
+# Vérifié le 2026-08-02 : apt candidat 10.4-1, pip installé 16.0.
 Depends: ${misc:Depends}, ${python3:Depends},
  python3-fastapi | python3-pip,
  python3-uvicorn | python3-pip,

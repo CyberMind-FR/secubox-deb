@@ -1,3 +1,15 @@
+secubox-metablogizer (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Mosaic tab thumbnails (#956): GET /site/{name}/screenshot serves the
+    conserved PNG (public, 404 until first capture — never triggers one).
+    New metablog-shots.timer captures a single site every 2 minutes,
+    load-guarded (skips above load 40), file-locked against overlap, and
+    picks the site whose thumbnail is missing or stalest by publish date; a
+    failed capture keeps the previous image and falls behind in the queue
+    instead of blocking it.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 02 Aug 2026 12:00:00 +0200
+
 secubox-metablogizer (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

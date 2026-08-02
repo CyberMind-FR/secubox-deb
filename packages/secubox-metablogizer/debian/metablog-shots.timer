@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Capture one metablogizer site thumbnail every 2 minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=2min
+# One site per tick, load-guarded (see api/shots.py) — at this cadence the
+# 172-site fleet fills in progressively over a few hours without ever
+# leaning on a board that spends its days above load 60.
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

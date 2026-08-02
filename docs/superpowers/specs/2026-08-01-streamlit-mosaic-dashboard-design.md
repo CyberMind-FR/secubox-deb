@@ -91,33 +91,24 @@ ok             la capture a-t-elle réussi
 deux diffère de l'état courant, l'image est périmée. Deux `stat` suffisent donc
 à le savoir — **sans jamais interroger l'appli**.
 
-### 3.3 Le captureur doit être invisible au compteur d'inactivité
+### 3.3 La capture compte comme une activité — et c'est voulu
 
-`_app_active_conns` compte **toutes** les connexions établies au port, sans
-filtrer la source :
+Une version antérieure de ce design excluait le captureur du compteur
+d'inactivité, au motif que sa connexion repousse la mise en veille.
 
-```bash
-lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" \
-    | awk 'NR>1' | wc -l
-```
+**Abandonné le 2026-08-01.** On ne photographie que des applis éveillées, et
+les déclencheurs retenus (§3.1) sont tous des moments d'activité réelle : un
+réveil provoqué par un utilisateur, ou un clic délibéré sur « recapturer ».
+L'appli est déjà maintenue éveillée par l'usage qui a déclenché la photo ;
+exclure la connexion n'aurait rien changé d'observable.
 
-Sans exclusion, chaque capture repousserait la mise en veille — et le premier
-passage sur le parc rendrait le scale-to-zero inopérant.
+`_app_active_conns` reste inchangée. La fonctionnalité est **purement
+additive** — elle ne touche aucune fonction du chemin d'inactivité, ce qui
+supprime son seul point de risque de régression.
 
-Chromium tourne sur **l'hôte** et joint l'appli via le bridge `br-lxc` ; ses
-connexions arrivent donc avec l'adresse de passerelle du bridge comme source.
-Le filtre exclut cette adresse :
-
-```bash
-lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" \
-    | awk -v gw="$BRIDGE_GW" 'NR>1 && $4 !~ gw' | wc -l
-```
-
-L'adresse est dérivée de la configuration, jamais codée en dur. Le filtre porte
-sur l'adresse **distante** (colonne 4 de `ss`), qui est celle du client.
-
-C'est le seul point où la fonctionnalité n'est pas purement additive : elle
-modifie une fonction existante du chemin d'inactivité.
+Réserve assumée : le premier passage sur les applis déjà éveillées (§3.5)
+repousse d'autant de mises en veille. Si cela gêne, on étalera ce passage
+dans le temps plutôt que d'introduire un mécanisme d'exclusion permanent.
 
 ### 3.4 Le client CDP
 

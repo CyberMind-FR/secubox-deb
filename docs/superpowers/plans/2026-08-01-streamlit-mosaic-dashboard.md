@@ -197,148 +197,222 @@ n'est testable que sur la board."
 
 ---
 
-### Task 2 : exclure le captureur du compteur d'activité
+### Task 1b : `streamlitctl app audit` — cartographier avant de réparer
 
-`_app_active_conns` compte **toutes** les connexions établies au port. Sans exclusion, chaque capture repousserait la mise en veille — et le premier passage sur le parc rendrait le scale-to-zero inopérant.
+**Ajoutée le 2026-08-01, après confrontation du plan à la board.** Le plan
+supposait qu'une appli est un répertoire portant un `app.py` et un
+`.streamlit.toml` avec son port. L'inventaire réel dit autre chose :
+
+| | |
+|---|---|
+| Entrées sous `apps/` | 87 |
+| — répertoires | 32 |
+| — **scripts `.py` à plat** | **43** |
+| — répertoires avec un fichier principal | 17 |
+| Listées par `app list` | 31 |
+| **Processus en ligne** | **15** |
+| — dont scripts à plat | **12** |
+
+`cmd_app_list` itère `"$APPS_PATH"/*/` : **les répertoires uniquement**. Les 43
+scripts à plat lui sont invisibles, dont 12 des 15 applis qui tournent
+réellement. Et `.streamlit.toml` n'existe que pour 10 applis, avec des ports
+périmés, parce qu'il n'est écrit que quand `streamlitctl` démarre lui-même
+l'appli.
+
+Cette tâche ne répare rien : elle **établit la carte**, en lecture seule, pour
+que la réparation vise juste.
 
 **Files:**
-- Modify: `packages/secubox-streamlit/sbin/streamlitctl` (fonction `_app_active_conns`)
-- Test: `packages/secubox-streamlit/api/tests/test_conns_exclusion.py`
+- Modify: `packages/secubox-streamlit/sbin/streamlitctl` (nouveau verbe `app audit`)
+- Test: `packages/secubox-streamlit/api/tests/test_app_audit.py`
 
 **Interfaces:**
-- Consumes: rien
-- Produces: `_app_active_conns <nom>` ignore les connexions provenant de `$SHOT_CLIENT_ADDR` (dérivé de la config, défaut : passerelle du bridge).
+- Consumes: `_idle_config`, `_json_escape` (existants)
+- Produces: `streamlitctl app audit` → JSON
+  `{"apps":[{"name","shape","entrypoint","declared","running","port","issues":[]}],"summary":{...}}`
+  avec `shape` ∈ `dir`|`script`, et `issues` parmi
+  `no-entrypoint`, `not-declared`, `declared-missing`, `stale-port`, `running-unlisted`.
 
 - [ ] **Step 1 : écrire le test qui échoue**
 
-Le test attaque la logique de filtrage sans dépendre de `ss` : on extrait le filtre dans une fonction pure et on la teste sur des lignes réelles de `ss`.
-
 ```python
-# packages/secubox-streamlit/api/tests/test_conns_exclusion.py
+# packages/secubox-streamlit/api/tests/test_app_audit.py
+import json
 import subprocess
 from pathlib import Path
 
 CTL = Path(__file__).resolve().parents[2] / "sbin" / "streamlitctl"
 
-# Sortie réelle de `ss -tn state established "sport = :8501"` : en-tête + 3 lignes.
-SS_OUTPUT = """Recv-Q Send-Q Local Address:Port Peer Address:Port Process
-0      0      10.100.0.50:8501   192.168.1.42:51234
-0      0      10.100.0.50:8501   10.100.0.1:51235
-0      0      10.100.0.50:8501   192.168.1.77:51236
-"""
+
+def _audit(tmp_path, dirs=(), scripts=(), declared=()):
+    apps = tmp_path / "apps"; apps.mkdir()
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("".join(f'[apps.{n}]\n' for n in declared))
+    for name, main in dirs:
+        d = apps / name; d.mkdir()
+        if main:
+            (d / main).write_text("import streamlit\n")
+    for name in scripts:
+        (apps / name).write_text("import streamlit\n")
+    env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+           "SECUBOX_STREAMLIT_APPS_PATH": str(apps),
+           "SECUBOX_STREAMLIT_CONF": str(conf),
+           "SECUBOX_STREAMLIT_IDLE_DIR": str(tmp_path / "idle"),
+           "SECUBOX_STREAMLIT_PS_SOURCE": str(tmp_path / "ps.txt")}
+    (tmp_path / "ps.txt").touch()
+    r = subprocess.run(["bash", str(CTL), "app", "audit"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    return json.loads(r.stdout)
 
 
-def _count(ss_output, exclude):
-    """Appelle la fonction de filtrage du ctl sur une sortie ss donnée."""
-    script = f'source {CTL} --source-only 2>/dev/null; _count_conns "{exclude}"'
-    r = subprocess.run(["bash", "-c", script], input=ss_output,
-                       capture_output=True, text=True, timeout=15)
-    return int(r.stdout.strip() or -1)
+def test_sees_bare_scripts_not_only_directories(tmp_path):
+    """43 des 87 entrées de la board sont des scripts à plat, et 12 d'entre
+    elles tournent. Les ignorer était la cause du mur vide."""
+    out = _audit(tmp_path, dirs=[("avec_dir", "app.py")], scripts=["a_plat.py"])
+    names = {a["name"]: a["shape"] for a in out["apps"]}
+    assert names == {"avec_dir": "dir", "a_plat": "script"}
 
 
-def test_counts_all_when_nothing_excluded():
-    assert _count(SS_OUTPUT, "") == 3
+def test_flags_directory_without_entrypoint(tmp_path):
+    out = _audit(tmp_path, dirs=[("vide", None)])
+    app = out["apps"][0]
+    assert app["entrypoint"] == ""
+    assert "no-entrypoint" in app["issues"]
 
 
-def test_excludes_the_capturer_address():
-    """La connexion du captureur (10.100.0.1) ne doit pas compter."""
-    assert _count(SS_OUTPUT, "10.100.0.1") == 2
+def test_flags_declared_but_missing(tmp_path):
+    out = _audit(tmp_path, declared=["fantome"])
+    ghost = [a for a in out["apps"] if a["name"] == "fantome"][0]
+    assert "declared-missing" in ghost["issues"]
 
 
-def test_exclusion_matches_address_not_substring():
-    """10.100.0.1 ne doit pas exclure 10.100.0.150."""
-    ss = SS_OUTPUT + "0      0      10.100.0.50:8501   10.100.0.150:51237\n"
-    assert _count(ss, "10.100.0.1") == 3
+def test_flags_present_but_undeclared(tmp_path):
+    out = _audit(tmp_path, scripts=["orphelin.py"])
+    app = out["apps"][0]
+    assert "not-declared" in app["issues"]
+
+
+def test_running_is_read_from_the_process_source(tmp_path):
+    apps = tmp_path / "apps"; apps.mkdir()
+    (apps / "vivant.py").write_text("import streamlit\n")
+    (tmp_path / "ps.txt").write_text("streamlit run vivant.py --server.port 8599\n")
+    conf = tmp_path / "streamlit.toml"; conf.write_text("[apps.vivant]\n")
+    env = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+           "SECUBOX_STREAMLIT_APPS_PATH": str(apps),
+           "SECUBOX_STREAMLIT_CONF": str(conf),
+           "SECUBOX_STREAMLIT_IDLE_DIR": str(tmp_path / "idle"),
+           "SECUBOX_STREAMLIT_PS_SOURCE": str(tmp_path / "ps.txt")}
+    r = subprocess.run(["bash", str(CTL), "app", "audit"],
+                       capture_output=True, text=True, env=env, timeout=30)
+    app = json.loads(r.stdout)["apps"][0]
+    assert app["running"] is True
+    assert app["port"] == 8599
+
+
+def test_summary_counts_match_the_app_list(tmp_path):
+    out = _audit(tmp_path, dirs=[("d1", "app.py"), ("d2", None)], scripts=["s1.py"])
+    assert out["summary"]["total"] == len(out["apps"]) == 3
+    assert out["summary"]["running"] == 0
 ```
 
 - [ ] **Step 2 : lancer le test pour vérifier qu'il échoue**
 
-Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/test_conns_exclusion.py -v`
-Expected : FAIL — `_count_conns` n'existe pas.
+Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/test_app_audit.py -v`
+Expected : FAIL — le verbe `audit` n'existe pas, `main` sort en erreur « unknown verb ».
 
-- [ ] **Step 3 : extraire le filtrage et l'appliquer**
+- [ ] **Step 3 : implémenter le verbe**
 
-Ajouter dans `streamlitctl`, juste avant `_app_active_conns` :
+Trois sources croisées. La liste des processus vient de `lxc-attach … ps`, mais
+passe par une variable d'environnement `SECUBOX_STREAMLIT_PS_SOURCE` quand elle
+est définie — sans quoi la fonction n'est pas testable hors board.
 
 ```bash
-# Compte les connexions d'une sortie `ss` lue sur stdin, en ignorant celles
-# venant de $1. Extrait en fonction pure pour être testable sans `ss` ni LXC.
-#
-# L'exclusion porte sur l'adresse DISTANTE (colonne 4) et compare l'adresse
-# entière, pas un préfixe : 10.100.0.1 ne doit pas exclure 10.100.0.150.
-_count_conns() {
-    local exclude="${1:-}"
-    awk -v ex="$exclude" '
-        NR > 1 {
-            peer = $4
-            sub(/:[0-9]+$/, "", peer)
-            if (ex != "" && peer == ex) next
-            n++
-        }
-        END { print n + 0 }
-    '
+# Liste des processus streamlit, une ligne par appli en cours.
+# SECUBOX_STREAMLIT_PS_SOURCE permet de tester sans conteneur.
+_ps_lines() {
+    if [ -n "${SECUBOX_STREAMLIT_PS_SOURCE:-}" ]; then
+        cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
+        return
+    fi
+    lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- \
+        ps -eo args 2>/dev/null | grep "streamlit run" | grep -v grep
+}
+
+# Nom d'appli déduit d'un chemin de script : "a/app.py" -> "a", "b.py" -> "b".
+_app_name_of_script() {
+    case "$1" in
+        */*) printf '%s' "${1%%/*}" ;;
+        *)   printf '%s' "${1%.py}" ;;
+    esac
 }
 ```
 
-Puis remplacer le corps de `_app_active_conns` :
+`cmd_app_audit` parcourt ensuite les entrées du disque (répertoires **et**
+scripts `.py`), les sections `[apps.*]` du TOML, et les lignes de processus ;
+il émet un objet par appli avec ses `issues`, puis un `summary`.
 
-```bash
-_app_active_conns() {
-    local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-    [ -z "$port" ] && { echo 0; return; }
-    lxc_running || { echo 0; return; }
-    # Le captureur d'écran se connecte comme n'importe quel client ; sans cette
-    # exclusion il repousserait la mise en veille de chaque appli qu'il photographie,
-    # ce qui viderait le scale-to-zero de son sens.
-    local shot_addr; shot_addr=$(_idle_config "shot_client_addr" "")
-    lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
-        | _count_conns "$shot_addr"
-}
-```
 
-- [ ] **Step 4 : permettre le `--source-only` utilisé par le test**
-
-Tout en bas de `streamlitctl`, avant l'appel `main "$@"`, insérer :
-
-```bash
-# Permet à `source streamlitctl --source-only` de charger les fonctions sans
-# exécuter de commande — indispensable pour tester les fonctions pures.
-[ "${1:-}" = "--source-only" ] && return 0 2>/dev/null
-```
-
-- [ ] **Step 5 : lancer les tests**
+- [ ] **Step 4 : lancer les tests**
 
 Run : `cd packages/secubox-streamlit && ../../.venv/bin/pytest api/tests/ -v`
-Expected : PASS.
+Expected : PASS — les 6 nouveaux plus les 9 existants.
 
-- [ ] **Step 6 : documenter la clé de configuration**
+- [ ] **Step 5 : passer l'audit sur la board**
 
-Dans `packages/secubox-streamlit/config/streamlit.toml.example`, section `[idle]` :
-
-```toml
-# Adresse depuis laquelle le captureur d'écran joint les applis (passerelle du
-# bridge LXC). Ses connexions sont ignorées par le compteur d'inactivité — sans
-# quoi photographier une appli l'empêcherait de s'endormir.
-shot_client_addr = "10.100.0.1"
+```bash
+scp packages/secubox-streamlit/sbin/streamlitctl root@192.168.1.200:/usr/sbin/streamlitctl
+ssh root@192.168.1.200 'chmod 755 /usr/sbin/streamlitctl
+  /usr/sbin/streamlitctl app audit | python3 -m json.tool | head -40'
 ```
 
-- [ ] **Step 7 : commit**
+Expected : les 15 applis en ligne apparaissent avec `running: true` et leur
+port réel, dont les 12 scripts à plat qu'`app list` ne voyait pas.
+
+- [ ] **Step 6 : commit**
 
 ```bash
 git add packages/secubox-streamlit/sbin/streamlitctl \
-        packages/secubox-streamlit/config/streamlit.toml.example \
-        packages/secubox-streamlit/api/tests/test_conns_exclusion.py
-git commit -m "fix(streamlit): le captureur ne doit pas compter comme un utilisateur actif
+        packages/secubox-streamlit/api/tests/test_app_audit.py
+git commit -m "feat(streamlit): app audit — croiser disque, déclarations et processus
 
-_app_active_conns comptait toutes les connexions établies au port, sans filtrer
-la source. Photographier une appli aurait donc repoussé sa mise en veille, et le
-premier passage sur le parc aurait rendu le scale-to-zero inopérant.
+Le modèle d'appli ne connaissait qu'une forme : un répertoire portant un
+app.py. La board en compte deux — 32 répertoires et 43 scripts .py à plat — et
+12 des 15 applis réellement en ligne sont des scripts à plat, donc invisibles à
+app list qui n'itère que les répertoires.
 
-Le filtrage est extrait en fonction pure (_count_conns) pour être testable sans
-ss ni conteneur, et compare l'adresse entière — 10.100.0.1 ne doit pas exclure
-10.100.0.150."
+S'y ajoutent 15 répertoires sans point d'entrée et un .streamlit.toml présent
+pour 10 applis sur 87, avec des ports périmés : il n'est écrit que lorsque
+streamlitctl démarre lui-même l'appli.
+
+audit ne répare rien — il établit la carte, en lecture seule, en croisant les
+entrées du disque, les sections déclarées et les processus en cours."
 ```
+
+---
+
+### Task 2 : ABANDONNÉE — exclusion du captureur du compteur d'activité
+
+**Décision du 2026-08-01 : cette tâche est retirée du plan.** Elle avait été
+implémentée puis annulée avant revue.
+
+Le raisonnement d'origine : la capture ouvre une connexion vers l'appli, donc
+`_app_active_conns` la compte, donc elle repousse la mise en veille.
+
+Ce qui l'invalide : **on ne photographie que des applis éveillées, et les seuls
+déclencheurs retenus sont déjà des moments d'activité réelle** — un réveil
+provoqué par un utilisateur, ou un clic sur « recapturer ». Dans les deux cas
+l'appli est de toute façon maintenue éveillée par l'usage qui a déclenché la
+photo. Traiter la capture comme une non-activité aurait ajouté une clé de
+configuration, une fonction et quatre tests pour un effet nul dans les
+conditions réelles d'emploi.
+
+Le seul cas où l'effet serait mesurable est le premier passage sur les applis
+déjà éveillées (Task 5, étape 5) : plusieurs captures d'affilée repoussent
+d'autant de mises en veille. Si cela pose problème, la réponse est d'étaler ce
+passage dans le temps — pas d'ajouter un mécanisme d'exclusion permanent.
+
+`_app_active_conns` reste donc inchangée, et la fonctionnalité devient
+**purement additive** : elle ne modifie aucune fonction du chemin d'inactivité.
 
 ---
 
@@ -404,6 +478,7 @@ conteneur racine de Streamlit, puis capturer.
 
 Une seule capture à la fois : deux chromium concurrents ne tiennent pas dans les
 ~2 Go disponibles sur la board.
+
 """
 from __future__ import annotations
 
@@ -504,6 +579,21 @@ async def _wait_for_selector(ws_url: str, tries: int = 60) -> None:
         await asyncio.sleep(1.0)
     raise ShotError(f"sélecteur {WAIT_SELECTOR} jamais apparu")
 ```
+
+**AVERTISSEMENT — défaut du code ci-dessus, corrigé en ronde 1.** Le
+`proc.stderr.readline()` de `_devtools_url()` est un appel **bloquant** au
+milieu d'une coroutine. Tel quel il gèle la boucle d'événements du daemon
+FastAPI entier — plus aucune requête servie, d'aucun module — et il neutralise
+`asyncio.wait_for`, dont l'annulation ne peut être délivrée qu'à un point
+`await`. Le délai de 90 s n'est alors pas garanti, et un chromium bloqué laisse
+un processus et un répertoire temporaire derrière lui.
+
+Ce projet a déjà subi deux pannes de cette nature exacte. Toute lecture
+bloquante doit être déportée dans un exécuteur. Deux autres défauts du même
+extrait ont été corrigés en même temps : le répertoire temporaire créé hors du
+`try` fuit si le lancement échoue, et les échecs de bas niveau (chromium
+absent, websocket injoignable) doivent ressortir en `ShotError` pour que le
+contrat de l'interface soit tenu.
 
 - [ ] **Step 4 : lancer les tests**
 
@@ -1202,7 +1292,6 @@ et les PNG ne sont rechargés que si captured_at a changé : 64 tuiles qui
 ## Critères de sortie
 
 - [ ] `GET /apps` renvoie `state`, `last_active`, `idle_seconds`, `sleep_after_seconds` par appli.
-- [ ] Une capture ne modifie pas le résultat de `_app_active_conns` — l'invariant du scale-to-zero.
 - [ ] Le captureur produit un PNG > 20 Ko sur une appli réelle, et **lève** sur une page blanche.
 - [ ] Une capture en échec conserve l'image précédente.
 - [ ] Réveiller une appli à la vignette périmée la recapture ; une vignette fraîche n'est pas recapturée.

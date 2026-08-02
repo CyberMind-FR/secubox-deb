@@ -6,429 +6,271 @@
     <title>SecuBox - MetaBlogizer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/crt-light.css">
-    <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
+    <link rel="stylesheet" href="/shared/hybrid-skin.css">
     <style>
         :root {
-            /* P31 Phosphor spectrum */
-            --p31-peak: #00dd44;
-            --p31-hot: #00ff55;
-            --p31-mid: #009933;
-            --p31-dim: #006622;
-            --p31-ghost: #003311;
-            --p31-decay: #ffb347;
-            --p31-decay-dim: #cc7722;
-            /* Tube glass */
-            --tube-light: #e8f5e9;
-            --tube-pale: #c8e6c9;
-            --tube-soft: #a5d6a7;
-            /* Legacy mappings */
-            --bg-dark: var(--tube-light);
-            --bg-card: var(--tube-pale);
-            --bg-sidebar: var(--tube-black);
-            --border: var(--tube-soft);
-            --text: var(--tube-dark);
-            --text-dim: var(--p31-dim);
-            --primary: var(--p31-peak);
-            --cyan: var(--p31-peak);
-            --green: var(--p31-peak);
-            --red: #ff4466;
-            --yellow: var(--p31-decay);
-            --orange: var(--p31-decay-dim);
-            --purple: #a371f7;
-            /* Bloom effects */
-            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
-            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
+            --p31-dim: #6b7b8b;      /* labels discrets */
+            --bg-dark: #0d1117;      /* fond de page */
+            --bg-card: rgba(30, 40, 55, 0.8);
+            --bg-row:  rgba(20, 30, 45, 0.6);
+            --border:  rgba(100, 150, 200, 0.2);
+            --text:    #e8e6d9;
+            --cyan:    #00d4ff;      /* accent PRINCIPAL — titres, actif, bouton primaire */
+            --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
+            --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Courier Prime', 'Courier New', monospace;
-            background: var(--tube-light);
-            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
-            color: var(--tube-dark);
+            background: var(--bg-dark);
+            color: var(--text);
             display: flex;
             min-height: 100vh;
         }
-        .sidebar { width: 220px; background: var(--bg-dark); border-right: 1px solid var(--border); position: fixed; height: 100vh; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .header h1 { font-size: 1.5rem; }
-        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; margin-left: 0.5rem; }
-        .btn:hover { background: var(--bg-dark); }
-        .btn.primary { background: rgba(88,166,255,0.1); border-color: var(--primary); color: var(--primary); }
-        .btn.success { background: rgba(63,185,80,0.1); border-color: var(--green); color: var(--green); }
-        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
-        .tab { padding: 0.75rem 1.5rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-dim); }
-        .tab:hover { color: var(--text); }
-        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); letter-spacing: 0.05em; }
+        .header .sub { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.2rem; }
+        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s; }
+        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
+        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+        .btn.success, .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
+        .btn.sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Stat tiles */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; text-align: center; backdrop-filter: blur(10px); }
+        .stat-card .value { font-size: 1.6rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.62rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.2rem; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.orange .value { color: var(--orange); }
+        .stat-card.blue .value { color: var(--blue); }
+
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; }
+        .tab { padding: 0.6rem 1.1rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.2s; }
+        .tab:hover { color: var(--cyan); }
+        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--purple); }
-        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); }
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
-        .card h2 { font-size: 1rem; margin-bottom: 1rem; }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem; margin-bottom: 1.25rem; backdrop-filter: blur(10px); }
+        .card h2 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+        /* Filter bar (shared: mosaic + sites) */
+        .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
+        .filter-bar input { flex: 1; min-width: 200px; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
+        .filter-bar input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
+        .filter-count { font-size: 0.7rem; color: var(--p31-dim); white-space: nowrap; }
+
         table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.875rem; }
-        th { color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; }
-        .badge { padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; }
-        .badge.published { background: rgba(63,185,80,0.2); color: var(--green); }
-        .badge.draft { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        th, td { padding: 0.55rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+        th { color: var(--p31-dim); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; }
+        tr:hover td { background: rgba(0,212,255,0.03); }
         th[data-sort] { cursor: pointer; user-select: none; }
-        th[data-sort]:hover { color: var(--primary); }
-        .sort-ind { font-size: 0.8em; color: var(--primary); }
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
+        th[data-sort]:hover { color: var(--cyan); }
+        .sort-ind { font-size: 0.8em; color: var(--cyan); }
+        table a { color: var(--cyan); text-decoration: none; }
+        table a:hover { text-decoration: underline; }
+
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid; white-space: nowrap; }
+        .badge.published { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
+        .badge.draft { background: rgba(107,123,139,0.15); border-color: var(--p31-dim); color: var(--p31-dim); }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; }
         .modal.show { display: flex; }
-        .modal-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 400px; }
-        .form-group { margin-bottom: 1rem; }
-        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.8rem; color: var(--text-dim); }
-        .form-group input { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-dark); color: var(--text); }
+        .modal-content { background: rgba(20,30,45,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; min-width: 380px; max-width: 90vw; backdrop-filter: blur(10px); }
+        .modal-content h3 { color: var(--cyan); margin-bottom: 1rem; }
+        .form-group { margin-bottom: 0.9rem; }
+        .form-group label { display: block; margin-bottom: 0.25rem; font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        .form-group input, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-row); color: var(--text); font-family: 'Courier Prime', monospace; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
         .form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
-    
-        /* CRT Enhancements */
-        .main { margin-left: 220px; padding: 1.5rem; }
 
-        .header h1 {
-            color: var(--p31-hot);
-            text-shadow: var(--bloom-text);
-            font-weight: 700;
-            letter-spacing: 0.05em;
-        }
+        /* Mosaic tab — sites as tiles. NEVER an iframe: the tile only carries
+           a thumbnail image + an "open" link that targets a new tab. */
+        .mosaic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 1rem; }
+        .mosaic-tile { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; backdrop-filter: blur(10px); transition: all 0.2s; display: flex; flex-direction: column; }
+        .mosaic-tile:hover { border-color: var(--cyan); box-shadow: 0 0 12px rgba(0,212,255,0.15); }
+        .mosaic-tile.unpublished { opacity: 0.75; }
+        .mosaic-thumb { position: relative; aspect-ratio: 16 / 10; background: var(--bg-row); display: flex; align-items: center; justify-content: center; font-size: 2.4rem; overflow: hidden; }
+        .mosaic-thumb-emoji { position: relative; z-index: 0; }
+        .mosaic-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; background: var(--bg-row); }
+        .mosaic-body { padding: 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
+        .mosaic-name { color: var(--cyan); font-weight: 700; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mosaic-domain { font-size: 0.68rem; color: var(--p31-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mosaic-footer { padding: 0.5rem 0.7rem; border-top: 1px solid var(--border); }
+        .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
+        .mosaic-footer a:hover { text-decoration: underline; }
+        .mosaic-empty { color: var(--p31-dim); padding: 1rem; grid-column: 1 / -1; }
+        .mosaic-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
 
-        .badge {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            border: 1px solid;
-        }
-        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
-        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
-        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
-        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
-        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
-        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
+        /* Deploy list */
+        .deploy-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 550px; overflow-y: auto; }
+        .deploy-row { display: grid; grid-template-columns: 6.5em 1fr auto auto auto; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; background: var(--bg-row); border-radius: 4px; font-size: 0.75rem; border-left: 3px solid var(--blue); }
+        .deploy-row.webhook { border-left-color: var(--purple); }
+        .deploy-source { color: var(--p31-dim); font-size: 0.68rem; text-transform: uppercase; }
+        .deploy-site { color: var(--cyan); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .deploy-sha { color: var(--p31-dim); font-size: 0.7rem; font-family: monospace; }
+        .deploy-duration { color: var(--p31-dim); font-size: 0.7rem; text-align: right; }
+        .deploy-when { color: var(--p31-dim); font-size: 0.7rem; text-align: right; min-width: 70px; }
+        .deploy-flag { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; }
 
-        .btn {
-            font-family: 'Courier Prime', monospace;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border: 1px solid var(--tube-soft);
-            background: var(--tube-pale);
-            color: var(--p31-mid);
-            transition: all 0.2s;
-        }
-        .btn:hover {
-            border-color: var(--p31-dim);
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            box-shadow: 0 0 12px rgba(51,255,102,0.1);
-        }
-        .btn-green, .btn-primary, .btn.primary, .btn.success {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-            background: rgba(51,255,102,0.1);
-        }
-        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
-            background: rgba(51,255,102,0.2);
-            box-shadow: 0 0 16px rgba(51,255,102,0.2);
-        }
-        .btn-red, .btn.danger {
-            border-color: #ff4466;
-            color: #ff4466;
-            background: rgba(255,68,102,0.1);
-        }
-        .btn-red:hover, .btn.danger:hover {
-            background: rgba(255,68,102,0.2);
-        }
-        .btn-blue {
-            border-color: var(--p31-mid);
-            color: var(--p31-mid);
-            background: rgba(51,255,102,0.05);
-        }
-        .btn-blue:hover {
-            border-color: var(--p31-peak);
-            color: var(--p31-peak);
-        }
-
-        .card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card:hover {
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
-        }
-        .card-title, .card-header h2 {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }
-
-        .stat-card {
-            background: var(--tube-pale);
-            border: 1px solid var(--tube-soft);
-        }
-        .stat-value, .stat-card .value {
-            text-shadow: 0 0 10px currentColor;
-        }
-        .stat-label, .stat-card .label {
-            color: var(--p31-dim);
-            letter-spacing: 0.15em;
-        }
-        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
-        .stat-card.yellow .value { color: var(--p31-decay); }
-        .stat-card.red .value { color: #ff4466; }
-
-        table, .table {
-            font-family: 'Courier Prime', monospace;
-        }
-        th, .table th {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.15em;
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        td, .table td {
-            border-bottom: 1px solid var(--p31-ghost);
-            color: var(--p31-mid);
-        }
-        tr:hover, .table tr:hover {
-            background: rgba(51,255,102,0.03);
-        }
-
-        .status-dot.active, .status-running {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-        }
-        .status-dot.active {
-            background: var(--p31-peak);
-            box-shadow: 0 0 8px var(--p31-peak);
-        }
-
-        .toast {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            font-family: 'Courier Prime', monospace;
-        }
-        .toast-success { border-color: var(--p31-peak); }
-        .toast-error { border-color: #ff4466; }
-
-        .modal {
-            background: rgba(0,0,0,0.85);
-        }
-        .modal-content {
-            background: var(--tube-pale);
-            border: 1px solid var(--p31-dim);
-            box-shadow: 0 0 30px rgba(51,255,102,0.1);
-        }
-        .modal-title {
-            color: var(--p31-decay);
-            text-shadow: var(--bloom-amber);
-            letter-spacing: 0.1em;
-        }
-
-        .tabs {
-            background: var(--tube-pale);
-            border-bottom: 1px solid var(--p31-ghost);
-        }
-        .tab {
-            color: var(--p31-dim);
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            font-size: 0.8rem;
-        }
-        .tab:hover { color: var(--p31-mid); }
-        .tab.active {
-            color: var(--p31-peak);
-            text-shadow: var(--bloom-soft);
-            border-bottom-color: var(--p31-peak);
-        }
-
-        input, select, textarea {
-            font-family: 'Courier Prime', monospace;
-            background: var(--tube-light);
-            border: 1px solid var(--tube-soft);
-            color: var(--p31-mid);
-            padding: 0.5rem;
-        }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: var(--p31-dim);
-            box-shadow: 0 0 8px rgba(51,255,102,0.1);
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: var(--tube-light); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
-        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
-
-        /* Empty states */
-        .empty { color: var(--p31-dim); }
-
-        /* Mobile responsive header tools */
-        .header-tools {
-            display: flex;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-        }
-
-        @media (max-width: 768px) {
-            .main { margin-left: 0; }
-
-            .header {
-                flex-direction: column;
-                gap: 1rem;
-                align-items: stretch;
-            }
-
-            .header h1 {
-                font-size: 1.2rem;
-                text-align: center;
-            }
-
-            .header-tools {
-                justify-content: center;
-            }
-
-            .header-tools .btn {
-                flex: 1;
-                min-width: 100px;
-                text-align: center;
-                padding: 0.75rem 0.5rem;
-            }
-
-            .stats-row {
-                grid-template-columns: 1fr;
-            }
-
-            .tabs {
-                overflow-x: auto;
-                flex-wrap: nowrap;
-            }
-
-            .tab {
-                flex-shrink: 0;
-                padding: 0.75rem 1rem;
-            }
-
-            table {
-                display: block;
-                overflow-x: auto;
-            }
-
-            th, td {
-                white-space: nowrap;
-                min-width: 80px;
-            }
-        }
-
-        /* Touch-friendly buttons */
-        @media (pointer: coarse) {
-            .btn {
-                min-height: 44px;
-                padding: 0.75rem 1rem;
-            }
-
-            .tab {
-                min-height: 44px;
-            }
-        }
+        /* Settings */
+        .value-ok { color: var(--green); }
+        .value-bad { color: var(--red); }
 
         /* Publish wizard */
         .wizard-steps { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
-        .wizard-steps span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: .8rem; opacity: .7; }
+        .wizard-steps span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: .75rem; opacity: .7; color: var(--p31-dim); }
         .wizard-steps span.ok { border-color: var(--green); color: var(--green); opacity: 1; }
         .wizard-steps span.fail { border-color: var(--red); color: var(--red); opacity: 1; }
-        #wiz-result.result { max-height: 240px; overflow: auto; background: var(--bg-dark); padding: 10px; border-radius: 8px; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; }
+        #wiz-result.result { max-height: 240px; overflow: auto; background: var(--bg-row); padding: 10px; border-radius: 8px; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; color: var(--text); margin-top: 0.5rem; }
+
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 0.75rem 1.25rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); pointer-events: none; }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); pointer-events: auto; }
+        .toast .dismiss { margin-left: 0.75rem; cursor: pointer; font-weight: bold; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+
+        @media (max-width: 768px) {
+            .main { margin-left: 0; padding-top: 60px; }
+            table { display: block; overflow-x: auto; }
+            th, td { white-space: nowrap; }
+            .deploy-row { grid-template-columns: 5em 1fr auto; }
+            .deploy-row .deploy-duration, .deploy-row .deploy-flag { display: none; }
+        }
     </style>
 </head>
-<body class="crt-light hybrid-dark">
+<body class="hybrid-dark">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <h1>MetaBlogizer - Static Sites</h1>
-            <div class="header-tools">
-                <button class="btn primary" onclick="republishAll()" title="Republish all sites">⟲ Republish All</button>
-                <button class="btn success" onclick="showCreateSite()">+ New Site</button>
-                <button class="btn" onclick="refresh()">↻ Refresh</button>
+            <div>
+                <h1>📝 MetaBlogizer</h1>
+                <div class="sub">Publication de sites statiques</div>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="republishAll()">⟲ Republier tout</button>
+                <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
+                <button class="btn primary" onclick="showCreateSite()">+ Nouveau site</button>
             </div>
         </header>
 
-        <div class="tabs">
-            <div class="tab active" onclick="showTab('sites')">Sites</div>
+        <!-- Stat tiles -->
+        <div class="grid">
+            <div class="stat-card cyan">
+                <div class="value" id="stat-total">-</div>
+                <div class="label">📰 Sites</div>
+            </div>
+            <div class="stat-card green">
+                <div class="value" id="stat-published">-</div>
+                <div class="label">✅ Publiés</div>
+            </div>
+            <div class="stat-card cyan" id="stat-card-domain">
+                <div class="value" id="stat-domain">-</div>
+                <div class="label">🌐 Avec domaine</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="value" id="stat-deploys">-</div>
+                <div class="label">🚀 Déploiements/24h</div>
+            </div>
         </div>
 
-        <div class="tab-content active" id="tab-sites">
-            <div class="stats-row">
-                <div class="stat-card"><div class="value" id="site-count">-</div><div class="label">Total Sites</div></div>
-                <div class="stat-card"><div class="value" id="published-count">-</div><div class="label">Published</div></div>
-                <div class="stat-card"><div class="value" id="nginx-status">-</div><div class="label">Nginx</div></div>
+        <div class="tabs">
+            <div class="tab active" data-tab="mosaic" onclick="showTab('mosaic')">🧩 Mosaïque</div>
+            <div class="tab" data-tab="sites" onclick="showTab('sites')">📋 Sites</div>
+            <div class="tab" data-tab="deploys" onclick="showTab('deploys')">🚀 Déploiements</div>
+        </div>
+
+        <!-- MOSAIC TAB -->
+        <div class="tab-content active" id="tab-mosaic">
+            <div class="card">
+                <div class="filter-bar">
+                    <input type="search" id="mosaic-filter" placeholder="🔍 Filtrer par nom ou domaine…" oninput="renderMosaic()">
+                    <span class="filter-count" id="mosaic-filter-count"></span>
+                </div>
+                <div class="mosaic-grid" id="mosaic-grid">
+                    <div class="mosaic-empty">Chargement des sites…</div>
+                </div>
             </div>
+        </div>
+
+        <!-- SITES TAB -->
+        <div class="tab-content" id="tab-sites">
             <div class="card">
                 <h2>Sites</h2>
-                <div class="filter-row" style="margin-bottom:0.5rem">
-                    <input type="search" id="filter" placeholder="Filter by name or domain…"
-                           oninput="applyFilter()"
-                           style="width:100%;padding:0.5rem;background:var(--bg-dark);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">
+                <div class="filter-bar">
+                    <input type="search" id="sites-filter" placeholder="🔍 Filtrer par nom ou domaine…" oninput="renderSitesTable()">
+                    <span class="filter-count" id="sites-filter-count"></span>
                 </div>
                 <table>
                     <thead><tr>
-                        <th data-sort="name" onclick="sortBy('name', this)">Name <span class="sort-ind"></span></th>
-                        <th data-sort="domain" onclick="sortBy('domain', this)">Domain <span class="sort-ind"></span></th>
+                        <th data-sort="name" onclick="sortBy('name', this)">Nom <span class="sort-ind"></span></th>
+                        <th data-sort="domain" onclick="sortBy('domain', this)">Domaine <span class="sort-ind"></span></th>
                         <th data-sort="version" onclick="sortBy('version', this)">Version <span class="sort-ind"></span></th>
-                        <th>Streamlit</th>
-                        <th data-sort="last_updated" onclick="sortBy('last_updated', this)">Updated <span class="sort-ind"></span></th>
-                        <th>Status</th>
-                        <th>Size</th>
+                        <th data-sort="last_updated" onclick="sortBy('last_updated', this)">Mis à jour <span class="sort-ind"></span></th>
+                        <th>Statut</th>
+                        <th>Taille</th>
                         <th>Actions</th>
                     </tr></thead>
-                    <tbody id="site-list"><tr><td colspan="8">Loading...</td></tr></tbody>
+                    <tbody id="site-list"><tr><td colspan="7">Chargement…</td></tr></tbody>
                 </table>
             </div>
+
+            <section class="card" id="publish-wizard">
+                <h2>🚀 Publier un site</h2>
+                <div class="wizard-steps" id="wiz-steps">
+                    <span data-step="content">1 · Contenu</span>
+                    <span data-step="version">2 · Version</span>
+                    <span data-step="route">3 · Route</span>
+                    <span data-step="cert">4 · Certificat</span>
+                    <span data-step="backup">5 · Sauvegarde</span>
+                </div>
+                <div class="form-group"><label>Nom du site</label>
+                    <input id="wiz-name" placeholder="zem"></div>
+                <div class="form-group"><label>Domaine</label>
+                    <input id="wiz-domain" placeholder="zem.gk2.secubox.in"></div>
+                <div class="form-group"><label>Contenu (.zip ou .html)</label>
+                    <input id="wiz-file" type="file" accept=".zip,.html"></div>
+                <button class="btn primary" id="wiz-go">Publier</button>
+                <button class="btn" id="wiz-backup" disabled>⬇ Télécharger la sauvegarde</button>
+                <pre id="wiz-result" class="result"></pre>
+            </section>
         </div>
 
-        <section class="card" id="publish-wizard">
-            <h2>🚀 Publish a site</h2>
-            <div class="wizard-steps" id="wiz-steps">
-                <span data-step="content">1 · Content</span>
-                <span data-step="version">2 · Version</span>
-                <span data-step="route">3 · Route</span>
-                <span data-step="cert">4 · Cert</span>
-                <span data-step="backup">5 · Backup</span>
+        <!-- DEPLOYS TAB -->
+        <div class="tab-content" id="tab-deploys">
+            <div class="card">
+                <h2>Déploiements récents</h2>
+                <div class="deploy-list" id="deploy-list">Chargement…</div>
             </div>
-            <div class="form-group"><label>Site name</label>
-                <input id="wiz-name" placeholder="zem"></div>
-            <div class="form-group"><label>Domain</label>
-                <input id="wiz-domain" placeholder="zem.gk2.secubox.in"></div>
-            <div class="form-group"><label>Content (.zip or .html)</label>
-                <input id="wiz-file" type="file" accept=".zip,.html"></div>
-            <button class="btn primary" id="wiz-go">Publish</button>
-            <button class="btn" id="wiz-backup" disabled>⬇ Download backup</button>
-            <pre id="wiz-result" class="result"></pre>
-        </section>
+        </div>
 
     </main>
 
     <div class="modal" id="create-modal">
         <div class="modal-content">
-            <h3>Create Site</h3>
-            <div class="form-group"><label>Site Name</label><input type="text" id="new-name" placeholder="my-blog"></div>
-            <div class="form-group"><label>Domain</label><input type="text" id="new-domain" placeholder="blog.example.com"></div>
+            <h3>Créer un site</h3>
+            <div class="form-group"><label>Nom du site</label><input type="text" id="new-name" placeholder="mon-blog"></div>
+            <div class="form-group"><label>Domaine</label><input type="text" id="new-domain" placeholder="blog.example.com"></div>
             <div class="form-actions">
-                <button class="btn" onclick="hideModal('create-modal')">Cancel</button>
-                <button class="btn success" onclick="createSite()">Create</button>
+                <button class="btn" onclick="hideModal('create-modal')">Annuler</button>
+                <button class="btn success" onclick="createSite()">Créer</button>
             </div>
         </div>
     </div>
+
+    <div class="toast" id="toast"></div>
 
     <script>
         const API = '/api/v1/metablogizer';
@@ -436,6 +278,10 @@
         // reading only sbx_token missed a valid token stored under secubox_token.
         const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
 
         async function api(path, opts = {}) {
             try {
@@ -452,50 +298,185 @@
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {
                     console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
+                    if (!res.ok) errorToast('Erreur API ' + path + ' (' + res.status + ')');
                     return {};
                 }
                 return await res.json();
-            } catch (e) { console.warn('api()', path, 'threw', e); return {}; }
+            } catch (e) { console.warn('api()', path, 'threw', e); errorToast('Requête impossible: ' + path); return {}; }
         }
 
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg);
+            t.className = 'toast show';
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // Fatal/API errors stay until dismissed — never a flash the user can miss.
+        function errorToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg) + '<span class="dismiss" onclick="this.parentElement.classList.remove(\'show\')">✕</span>';
+            t.className = 'toast show error';
+            clearTimeout(toast._t);
+        }
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+        function showCreateSite() { showModal('create-modal'); }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Tabs — lazy-loaded: nothing is fetched for a tab until it is
+        // opened. Mosaïque is the default tab, so its data loads at init.
+        // ═══════════════════════════════════════════════════════════════
         function showTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.querySelector('.tab[data-tab="' + name + '"]').classList.add('active');
             document.getElementById('tab-' + name).classList.add('active');
+            if (name === 'mosaic') loadMosaic();
+            else if (name === 'sites') loadSitesTab();
+            else if (name === 'deploys') loadDeploys();
+        }
+
+        // ─── Shared site cache (Mosaïque + Sites tabs both consume it) ───
+        let allSites = null;
+        let sitesLoading = null;
+
+        async function ensureSites(force) {
+            if (force) { allSites = null; }
+            if (allSites) return allSites;
+            if (sitesLoading) return sitesLoading;
+            sitesLoading = api('/sites').then(d => {
+                allSites = d.sites || [];
+                sitesLoading = null;
+                updateDomainStat(allSites);
+                return allSites;
+            });
+            return sitesLoading;
         }
 
         async function loadStatus() {
             const d = await api('/status');
-            document.getElementById('site-count').textContent = d.site_count || 0;
-            document.getElementById('published-count').textContent = d.published_count || 0;
-            document.getElementById('nginx-status').textContent = d.running ? 'Running' : 'Stopped';
-            document.getElementById('nginx-status').style.color = d.running ? 'var(--green)' : 'var(--red)';
+            document.getElementById('stat-total').textContent = d.site_count ?? '-';
+            document.getElementById('stat-published').textContent = d.published_count ?? '-';
         }
 
-        // ─── Sort + filter + polling state ───
+        // "Avec domaine" doubles as an integrity check: every site the backend
+        // returns is expected to carry a resolvable domain (auto-assigned if not
+        // configured explicitly). If the count drops below the total, some
+        // site.json is malformed — surfaced here in orange rather than silently
+        // dropped.
+        function updateDomainStat(sites) {
+            const withDomain = sites.filter(s => !!(s.domain && s.domain.trim())).length;
+            document.getElementById('stat-domain').textContent = withDomain + '/' + sites.length;
+            const card = document.getElementById('stat-card-domain');
+            card.classList.toggle('orange', withDomain < sites.length);
+            card.classList.toggle('cyan', withDomain >= sites.length);
+        }
+
+        function matchesFilter(s, q) {
+            if (!q) return true;
+            const name = (s.name || '').toLowerCase();
+            const domain = (s.domain || '').toLowerCase();
+            return name.includes(q) || domain.includes(q);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Mosaïque — one tile per site. NEVER an iframe/embed: the tile
+        // carries a thumbnail placeholder + an "ouvrir" link that opens the
+        // site in a new tab. These are static sites, always served — there
+        // is no sleep/wake concept here (unlike the Streamlit fleet).
+        // ═══════════════════════════════════════════════════════════════
+        let mosaicLoaded = false;
+
+        async function loadMosaic(force) {
+            mosaicLoaded = true;
+            const grid = document.getElementById('mosaic-grid');
+            if (!allSites) grid.innerHTML = '<div class="mosaic-empty">Chargement des sites…</div>';
+            await ensureSites(force);
+            renderMosaic();
+        }
+
+        function tileEmoji(s) {
+            const cat = (s.category || '').toLowerCase();
+            const domain = (s.domain || '').toLowerCase();
+            if (s.streamlit_app) return '📊';
+            if (cat.includes('portfolio') || domain.includes('portfolio')) return '🎨';
+            if (cat.includes('doc')) return '📚';
+            if (cat.includes('blog') || domain.includes('blog')) return '📰';
+            if (cat.includes('shop') || cat.includes('boutique')) return '🛒';
+            return '🌐';
+        }
+
+        function renderMosaic() {
+            const grid = document.getElementById('mosaic-grid');
+            const countEl = document.getElementById('mosaic-filter-count');
+            if (!allSites) return;
+            const q = (document.getElementById('mosaic-filter').value || '').toLowerCase().trim();
+            const filtered = allSites.filter(s => matchesFilter(s, q));
+            countEl.textContent = filtered.length + ' / ' + allSites.length;
+
+            if (!filtered.length) {
+                grid.innerHTML = '<div class="mosaic-empty">Aucun site ne correspond au filtre</div>';
+                return;
+            }
+            const sorted = filtered.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+            grid.innerHTML = sorted.map(renderMosaicTile).join('');
+        }
+
+        function renderMosaicTile(s) {
+            const name = esc(s.name || '?');
+            const domain = esc(s.domain || '');
+            const published = !!s.published;
+            const emoji = tileEmoji(s);
+            const thumbSrc = esc('/api/v1/metablogizer/site/' + encodeURIComponent(s.name || '') + '/screenshot');
+            const openUrl = s.domain ? esc('https://' + s.domain + '/') : '';
+
+            return '<div class="mosaic-tile' + (published ? '' : ' unpublished') + '">' +
+                '<div class="mosaic-thumb">' +
+                    '<span class="mosaic-thumb-emoji">' + emoji + '</span>' +
+                    // The vignette is captured out-of-band by
+                    // metablog-shots.timer (#956) and only ever fills in
+                    // progressively (172 sites, one capture per 2 minutes) —
+                    // a fresh install or a not-yet-reached site 404s here by
+                    // design. onerror removes the <img>, leaving the emoji
+                    // span (already in the DOM, underneath) as the fallback —
+                    // the tile never breaks or shows a broken-image icon.
+                    '<img loading="lazy" alt="" src="' + thumbSrc + '" onerror="this.remove()">' +
+                '</div>' +
+                '<div class="mosaic-body">' +
+                    '<div class="mosaic-name" title="' + name + '">' + name + '</div>' +
+                    '<div class="mosaic-domain" title="' + domain + '">' + (domain || '—') + '</div>' +
+                    '<span class="badge ' + (published ? 'published' : 'draft') + '">' + (published ? '✅ publié' : '📝 non publié') + '</span>' +
+                '</div>' +
+                (openUrl ? '<div class="mosaic-footer"><a href="' + openUrl + '" target="_blank" rel="noopener">↗ ouvrir</a></div>' : '') +
+            '</div>';
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Sites tab — sortable/filterable table + row actions.
+        // ═══════════════════════════════════════════════════════════════
+        let sitesTabLoaded = false;
         let currentSort = { field: null, dir: 'asc' };
-        let pollTimer = null;
+
+        async function loadSitesTab(force) {
+            sitesTabLoaded = true;
+            const list = document.getElementById('site-list');
+            if (!allSites) list.innerHTML = '<tr><td colspan="7">Chargement…</td></tr>';
+            await ensureSites(force);
+            renderSitesTable();
+        }
 
         function relativeTime(iso) {
             if (!iso) return '—';
             const d = new Date(iso);
             const diff = (Date.now() - d.getTime()) / 1000;
             if (isNaN(diff)) return iso;
-            if (diff < 60) return `${Math.floor(diff)}s ago`;
-            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-            return `${Math.floor(diff / 86400)}d ago`;
-        }
-
-        function applyFilter() {
-            const q = (document.getElementById('filter')?.value || '').toLowerCase().trim();
-            document.querySelectorAll('.site-row').forEach(tr => {
-                const name = (tr.dataset.name || '').toLowerCase();
-                const domain = (tr.dataset.domain || '').toLowerCase();
-                const match = !q || name.includes(q) || domain.includes(q);
-                tr.style.display = match ? '' : 'none';
-            });
+            if (diff < 60) return Math.floor(diff) + 's';
+            if (diff < 3600) return Math.floor(diff / 60) + 'min';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+            return Math.floor(diff / 86400) + 'j';
         }
 
         function sortBy(field, thEl) {
@@ -507,138 +488,112 @@
             document.querySelectorAll('th[data-sort] .sort-ind').forEach(s => s.textContent = '');
             const ind = thEl.querySelector('.sort-ind');
             if (ind) ind.textContent = currentSort.dir === 'asc' ? ' ▲' : ' ▼';
-            applySortToDOM();
-        }
-
-        function applySortToDOM() {
-            const tbody = document.getElementById('site-list');
-            if (!tbody) return;
-            const rows = Array.from(tbody.querySelectorAll('tr.site-row'));
-            const field = currentSort.field;
-            const dir = currentSort.dir === 'asc' ? 1 : -1;
-            rows.sort((a, b) => {
-                const av = (a.dataset[field] || '') + '';
-                const bv = (b.dataset[field] || '') + '';
-                if (av === '' && bv !== '') return 1;
-                if (bv === '' && av !== '') return -1;
-                return av.localeCompare(bv, undefined, { numeric: true }) * dir;
-            });
-            rows.forEach(r => tbody.appendChild(r));
-        }
-
-        function installPolling() {
-            if (pollTimer) return;
-            pollTimer = setInterval(() => {
-                if (!document.hidden) refresh();
-            }, 60000);
-        }
-
-        function escAttr(s) {
-            return String(s == null ? '' : s)
-                .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            renderSitesTable();
         }
 
         function siteTooltip(s) {
             const lines = [];
-            lines.push(`📛 Name: ${s.name}`);
-            lines.push(`🌐 Domain: ${s.domain}`);
-            lines.push(`🚦 Status: ${s.published ? '✅ Published' : '📝 Draft'}`);
-            if (s.version) lines.push(`🏷️ Version: ${s.version}`);
-            if (s.title) lines.push(`📰 Title: ${s.title}`);
-            if (s.description) lines.push(`📝 ${s.description}`);
-            if (s.category) lines.push(`📂 Category: ${s.category}`);
-            if (Array.isArray(s.tags) && s.tags.length) lines.push(`🏷️ Tags: ${s.tags.join(', ')}`);
-            if (s.streamlit_app) lines.push(`🎨 Streamlit: ${s.streamlit_app}`);
-            if (s.port) lines.push(`🔌 Port: ${s.port}`);
-            if (s.size) lines.push(`📦 Size: ${s.size}`);
-            if (s.last_updated) lines.push(`🕐 Updated: ${s.last_updated}`);
-            return escAttr(lines.join('\n'));
+            lines.push('📛 Nom: ' + (s.name || ''));
+            lines.push('🌐 Domaine: ' + (s.domain || ''));
+            lines.push('🚦 Statut: ' + (s.published ? '✅ Publié' : '📝 Brouillon'));
+            if (s.version) lines.push('🏷️ Version: ' + s.version);
+            if (s.title) lines.push('📰 Titre: ' + s.title);
+            if (s.description) lines.push('📝 ' + s.description);
+            if (s.category) lines.push('📂 Catégorie: ' + s.category);
+            if (Array.isArray(s.tags) && s.tags.length) lines.push('🏷️ Tags: ' + s.tags.join(', '));
+            if (s.size) lines.push('📦 Taille: ' + s.size);
+            if (s.last_updated) lines.push('🕐 Mis à jour: ' + s.last_updated);
+            return esc(lines.join('\n'));
         }
 
-        async function loadSites() {
-            const d = await api('/sites');
+        function renderSitesTable() {
+            if (!allSites) return;
             const list = document.getElementById('site-list');
-            const sites = d.sites || [];
-            if (!sites.length) { list.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">No sites</td></tr>'; return; }
-            list.innerHTML = sites.map(s => {
-                const tip = siteTooltip(s);
-                const url = `http://${s.domain}`;
-                const streamlitCell = s.streamlit_app
-                    ? `<a href="https://gitea.gk2.secubox.in/gandalf/${s.streamlit_app}" target="_blank" title="${s.streamlit_app}">🎨</a>`
-                    : '<span style="color:var(--text-dim)">—</span>';
-                const versionCell = s.version
-                    ? `<a href="https://gitea.gk2.secubox.in/gandalf/metablog-${s.name}/releases" target="_blank"><code style="color:var(--primary)">${s.version}</code></a>`
-                    : '<span style="color:var(--text-dim)">—</span>';
-                const updatedCell = s.last_updated
-                    ? `<span title="${s.last_updated}">${relativeTime(s.last_updated)}</span>`
-                    : '<span style="color:var(--text-dim)">—</span>';
-                return `<tr class="site-row" title="${tip}" data-name="${s.name}" data-domain="${s.domain}" data-version="${s.version || ''}" data-last_updated="${s.last_updated || ''}">
-                    <td><strong><a href="site.html?name=${s.name}" style="color:var(--text)">${s.name}</a></strong></td>
-                    <td><a href="${url}" target="_blank" rel="noopener" style="color:var(--p31-mid);text-decoration:none" title="${tip}">🌐 ${s.domain} ↗</a></td>
-                    <td>${versionCell}</td>
-                    <td style="text-align:center">${streamlitCell}</td>
-                    <td>${updatedCell}</td>
-                    <td><span class="badge ${s.published ? 'published' : 'draft'}">${s.published ? '✅ Published' : '📝 Draft'}</span></td>
-                    <td>${s.size || '-'}</td>
-                    <td>
-                        ${s.published ?
-                            `<a href="${url}" target="_blank" class="btn" style="padding:2px 8px;font-size:0.7rem">View</a>
-                             <button class="btn" onclick="unpublishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Unpublish</button>` :
-                            `<button class="btn success" onclick="publishSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Publish</button>`}
-                        <button class="btn" onclick="deploySite('${s.name}')" title="Update content — git pull from repo" style="padding:2px 8px;font-size:0.7rem">🔄</button>
-                        <button class="btn" onclick="uploadSiteContent('${s.name}')" title="Upgrade content — upload .zip / .tar.gz / .html" style="padding:2px 8px;font-size:0.7rem">⬆</button>
-                        <button class="btn danger" onclick="deleteSite('${s.name}')" style="padding:2px 8px;font-size:0.7rem">Delete</button>
-                    </td>
-                </tr>`;
-            }).join('');
-            if (currentSort.field) applySortToDOM();
-            applyFilter();
-        }
+            const countEl = document.getElementById('sites-filter-count');
+            const q = (document.getElementById('sites-filter').value || '').toLowerCase().trim();
+            let filtered = allSites.filter(s => matchesFilter(s, q));
+            countEl.textContent = filtered.length + ' / ' + allSites.length;
 
-        function showModal(id) { document.getElementById(id).classList.add('show'); }
-        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
-        function showCreateSite() { showModal('create-modal'); }
-
-        async function createSite() {
-            const name = document.getElementById('new-name').value.trim();
-            const domain = document.getElementById('new-domain').value.trim() || undefined;
-            const r = await api('/site', { method: 'POST', body: JSON.stringify({ name, domain }) });
-            if (r.success) { hideModal('create-modal'); refresh(); }
-            else alert('Error: ' + (r.detail || 'Failed'));
-        }
-
-        async function publishSite(name) {
-            const r = await api('/site/' + name + '/publish', { method: 'POST' });
-            if (r.success) refresh();
-        }
-
-        async function unpublishSite(name) {
-            const r = await api('/site/' + name + '/unpublish', { method: 'POST' });
-            if (r.success) refresh();
-        }
-
-        async function deleteSite(name) {
-            if (!confirm('Delete site ' + name + '?')) return;
-            const r = await api('/site/' + name, { method: 'DELETE' });
-            if (r.success) refresh();
-        }
-
-        // Quick-access: pull latest content from the site's git repo (same as
-        // the Gitea webhook, triggered on demand).
-        async function deploySite(name) {
-            const r = await api('/site/' + name + '/deploy', { method: 'POST' });
-            if (r && r.success) {
-                alert(r.updated
-                    ? '✓ ' + name + ' updated: ' + String(r.from).slice(0, 8) + ' → ' + String(r.to).slice(0, 8)
-                    : '• ' + name + ' already up to date');
-                refresh();
-            } else {
-                alert('Update failed for ' + name + (r && r.detail ? ': ' + r.detail : ''));
+            if (currentSort.field) {
+                const field = currentSort.field;
+                const dir = currentSort.dir === 'asc' ? 1 : -1;
+                filtered = filtered.slice().sort((a, b) => {
+                    const av = (a[field] ?? '') + '';
+                    const bv = (b[field] ?? '') + '';
+                    if (av === '' && bv !== '') return 1;
+                    if (bv === '' && av !== '') return -1;
+                    return av.localeCompare(bv, undefined, { numeric: true }) * dir;
+                });
             }
+
+            if (!filtered.length) {
+                list.innerHTML = '<tr><td colspan="7" style="color:var(--p31-dim)">Aucun site</td></tr>';
+                return;
+            }
+
+            list.innerHTML = filtered.map(s => {
+                const tip = siteTooltip(s);
+                const name = esc(s.name || '');
+                const domain = esc(s.domain || '');
+                const url = esc('https://' + (s.domain || ''));
+                const versionCell = s.version ? '<code>' + esc(s.version) + '</code>' : '<span style="color:var(--p31-dim)">—</span>';
+                const updatedCell = s.last_updated
+                    ? '<span title="' + esc(s.last_updated) + '">' + esc(relativeTime(s.last_updated)) + '</span>'
+                    : '<span style="color:var(--p31-dim)">—</span>';
+                const actions = (s.published
+                    ? '<a href="' + url + '" target="_blank" rel="noopener" class="btn sm">Ouvrir</a>' +
+                      '<button class="btn sm" data-action="unpublish">Dépublier</button>'
+                    : '<button class="btn sm success" data-action="publish">Publier</button>') +
+                    '<button class="btn sm" data-action="deploy" title="Mettre à jour — git pull">🔄</button>' +
+                    '<button class="btn sm" data-action="upload" title="Charger un contenu">⬆</button>' +
+                    '<button class="btn sm danger" data-action="delete">🗑️</button>';
+
+                return '<tr class="site-row" title="' + tip + '" data-name="' + name + '">' +
+                    '<td><strong><a href="site.html?name=' + encodeURIComponent(s.name || '') + '">' + name + '</a></strong></td>' +
+                    '<td><a href="' + url + '" target="_blank" rel="noopener">🌐 ' + domain + ' ↗</a></td>' +
+                    '<td>' + versionCell + '</td>' +
+                    '<td>' + updatedCell + '</td>' +
+                    '<td><span class="badge ' + (s.published ? 'published' : 'draft') + '">' + (s.published ? '✅ Publié' : '📝 Brouillon') + '</span></td>' +
+                    '<td>' + esc(s.size || '-') + '</td>' +
+                    '<td>' + actions + '</td>' +
+                '</tr>';
+            }).join('');
         }
 
-        // Quick-access: upgrade content by uploading a .zip / .tar.gz / .html.
+        // Row actions — delegated listener, name read from data-name (never
+        // hand-interpolated into an onclick string).
+        document.getElementById('site-list').addEventListener('click', async (ev) => {
+            const btn = ev.target.closest('button[data-action]');
+            if (!btn) return;
+            const tr = btn.closest('tr.site-row');
+            const name = tr && tr.dataset.name;
+            if (!name) return;
+            const action = btn.dataset.action;
+
+            if (action === 'publish') {
+                const r = await api('/site/' + encodeURIComponent(name) + '/publish', { method: 'POST' });
+                if (r.success) { toast('✅ ' + name + ' publié'); await ensureSites(true); renderSitesTable(); if (mosaicLoaded) renderMosaic(); }
+            } else if (action === 'unpublish') {
+                const r = await api('/site/' + encodeURIComponent(name) + '/unpublish', { method: 'POST' });
+                if (r.success) { toast('📝 ' + name + ' dépublié'); await ensureSites(true); renderSitesTable(); if (mosaicLoaded) renderMosaic(); }
+            } else if (action === 'deploy') {
+                const r = await api('/site/' + encodeURIComponent(name) + '/deploy', { method: 'POST' });
+                if (r && r.success) {
+                    toast(r.updated ? '✓ ' + name + ' mis à jour: ' + String(r.from).slice(0, 8) + ' → ' + String(r.to).slice(0, 8) : '• ' + name + ' déjà à jour');
+                    await ensureSites(true); renderSitesTable();
+                } else {
+                    errorToast('Échec de mise à jour pour ' + name + (r && r.detail ? ': ' + r.detail : ''));
+                }
+            } else if (action === 'upload') {
+                uploadSiteContent(name);
+            } else if (action === 'delete') {
+                if (!confirm('Supprimer le site ' + name + ' ?')) return;
+                const r = await api('/site/' + encodeURIComponent(name), { method: 'DELETE' });
+                if (r.success) { toast('🗑️ ' + name + ' supprimé'); await ensureSites(true); renderSitesTable(); if (mosaicLoaded) renderMosaic(); }
+                else errorToast('Échec de suppression pour ' + name);
+            }
+        });
+
         // Uses a transient hidden file input; the multipart POST needs the raw
         // FormData body (no JSON Content-Type), so it calls fetch directly with
         // the same auth headers/cookie strategy as api().
@@ -654,35 +609,46 @@
                 const t = token();
                 const auth = t ? { 'Authorization': 'Bearer ' + t } : {};
                 try {
-                    let res = await fetch(API + '/site/' + name + '/upload',
+                    let res = await fetch(API + '/site/' + encodeURIComponent(name) + '/upload',
                         { method: 'POST', headers: auth, body: fd, credentials: 'same-origin' });
                     if (res.status === 401) {
-                        res = await fetch(API + '/site/' + name + '/upload',
+                        res = await fetch(API + '/site/' + encodeURIComponent(name) + '/upload',
                             { method: 'POST', body: fd, credentials: 'same-origin' });
                     }
                     if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
                     const d = await res.json().catch(() => ({}));
-                    if (res.ok && d.success) { alert('✓ ' + name + ' content upgraded (' + (d.kind || 'ok') + ')'); refresh(); }
-                    else alert('Upload failed for ' + name + (d.detail ? ': ' + d.detail : ''));
+                    if (res.ok && d.success) { toast('✓ ' + name + ' — contenu mis à jour (' + (d.kind || 'ok') + ')'); await ensureSites(true); renderSitesTable(); }
+                    else errorToast('Échec du chargement pour ' + name + (d.detail ? ': ' + d.detail : ''));
                 } catch (e) {
-                    alert('Upload failed for ' + name + ': ' + e);
+                    errorToast('Échec du chargement pour ' + name + ': ' + e);
                 }
             };
             input.click();
         }
 
+        async function createSite() {
+            const name = document.getElementById('new-name').value.trim();
+            const domain = document.getElementById('new-domain').value.trim() || undefined;
+            const r = await api('/site', { method: 'POST', body: JSON.stringify({ name, domain }) });
+            if (r.success) { hideModal('create-modal'); toast('✅ Site créé'); await ensureSites(true); if (sitesTabLoaded) renderSitesTable(); if (mosaicLoaded) renderMosaic(); loadStatus(); }
+            else errorToast('Erreur: ' + (r.detail || 'échec de la création'));
+        }
+
         async function republishAll() {
             const btn = event.target;
             const origText = btn.textContent;
-            btn.textContent = '⟲ Publishing...';
+            btn.textContent = '⟲ Publication…';
             btn.disabled = true;
             try {
                 const r = await api('/republish-all', { method: 'POST' });
                 if (r.success) {
-                    alert('✓ Published ' + r.sites_published + ' sites');
-                    refresh();
+                    toast('✓ ' + r.sites_published + ' sites publiés');
+                    await ensureSites(true);
+                    if (sitesTabLoaded) renderSitesTable();
+                    if (mosaicLoaded) renderMosaic();
+                    loadStatus();
                 } else {
-                    alert('Error: ' + (r.message || 'Failed to republish'));
+                    errorToast('Erreur: ' + (r.message || 'échec de republication'));
                 }
             } finally {
                 btn.textContent = origText;
@@ -690,15 +656,88 @@
             }
         }
 
-        function refresh() { loadStatus(); loadSites(); }
-        refresh();
-        installPolling();
+        // ═══════════════════════════════════════════════════════════════
+        // Déploiements tab
+        // ═══════════════════════════════════════════════════════════════
+        let deploysData = null;
+
+        function formatEpoch(seconds) {
+            if (seconds == null) return '—';
+            const diff = Date.now() / 1000 - seconds;
+            if (diff < 60) return Math.floor(diff) + 's';
+            if (diff < 3600) return Math.floor(diff / 60) + 'min';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+            return Math.floor(diff / 86400) + 'j';
+        }
+
+        function updateDeployStat(deploys) {
+            const now = Date.now() / 1000;
+            const recent = deploys.filter(d => (now - (d.timestamp || 0)) < 86400).length;
+            document.getElementById('stat-deploys').textContent = recent;
+        }
+
+        async function loadDeploys(force) {
+            if (deploysData && !force) { renderDeploys(); return; }
+            const list = document.getElementById('deploy-list');
+            if (!deploysData) list.innerHTML = 'Chargement…';
+            const d = await api('/deploys');
+            deploysData = d.deploys || [];
+            updateDeployStat(deploysData);
+            renderDeploys();
+        }
+
+        function renderDeployRow(d) {
+            const isWebhook = d.source === 'webhook';
+            const site = esc(d.site || '?');
+            const source = isWebhook ? '🪝 webhook' : '🖐 manuel';
+            const from = esc(String(d.from || '').slice(0, 8));
+            const to = esc(String(d.to || '').slice(0, 8));
+            const duration = d.duration_ms != null ? d.duration_ms + ' ms' : '-';
+            const when = formatEpoch(d.timestamp);
+            const changed = d.domain_changed ? '<span class="deploy-flag">domaine modifié</span>' : '<span></span>';
+            return '<div class="deploy-row' + (isWebhook ? ' webhook' : '') + '">' +
+                '<span class="deploy-source">' + source + '</span>' +
+                '<span class="deploy-site" title="' + site + '">' + site + '</span>' +
+                '<span class="deploy-sha">' + from + ' → ' + to + '</span>' +
+                '<span class="deploy-duration">' + duration + '</span>' +
+                changed +
+                '<span class="deploy-when" title="il y a ' + esc(when) + '">' + esc(when) + '</span>' +
+            '</div>';
+        }
+
+        function renderDeploys() {
+            const list = document.getElementById('deploy-list');
+            if (!deploysData || !deploysData.length) {
+                list.innerHTML = '<div class="mosaic-empty">Aucun déploiement enregistré</div>';
+                return;
+            }
+            list.innerHTML = deploysData.map(renderDeployRow).join('');
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Réglages tab
+        // ═══════════════════════════════════════════════════════════════
+
+        // ═══════════════════════════════════════════════════════════════
+        // Init + periodic refresh (only the currently visible tab refetches)
+        // ═══════════════════════════════════════════════════════════════
+        function refresh() {
+            loadStatus();
+            const active = document.querySelector('.tab.active');
+            const name = active ? active.dataset.tab : 'mosaic';
+            if (name === 'mosaic') loadMosaic(true);
+            else if (name === 'sites') loadSitesTab(true);
+            else if (name === 'deploys') loadDeploys(true);
+        }
+
+        loadStatus();
+        loadMosaic();
+
+        setInterval(() => { if (!document.hidden) refresh(); }, 60000);
     </script>
+    <!-- Publish wizard: multipart upload to the wizard endpoint, then an
+         on-demand backup download. Reuses token()/API/esc() from above. -->
     <script>
-        // Publish wizard: multipart upload to the Task-6 wizard endpoint, then
-        // an on-demand backup download. Reuses the page's token()/API globals
-        // (same realm as the script above) and the same manual-fetch + 401
-        // fallback pattern as uploadSiteContent() for the multipart POST.
         (function () {
             function mark(step, ok) {
                 var el = document.querySelector('#wiz-steps [data-step="' + step + '"]');
@@ -710,9 +749,9 @@
                 var domain = document.getElementById('wiz-domain').value.trim();
                 var f = document.getElementById('wiz-file').files[0];
                 var out = document.getElementById('wiz-result');
-                if (!name || !f) { out.textContent = 'name and file required'; return; }
+                if (!name || !f) { out.textContent = 'nom et fichier requis'; return; }
                 document.querySelectorAll('#wiz-steps span').forEach(function (s) { s.classList.remove('ok', 'fail'); });
-                out.textContent = 'Publishing…';
+                out.textContent = 'Publication…';
                 var fd = new FormData();
                 fd.append('name', name); if (domain) fd.append('domain', domain); fd.append('file', f);
                 var t = token();
@@ -730,15 +769,18 @@
                     if (d.steps) { ['content', 'version', 'route', 'cert'].forEach(function (s) {
                         var v = d.steps[s]; mark(s, s === 'content' ? v.index_present : s === 'route' ? v.route_ok : true);
                     }); }
-                    if (d.ok) { mark('backup', true); lastName = name;
-                        document.getElementById('wiz-backup').disabled = false; refresh(); }
-                } catch (e) { out.textContent = 'error: ' + e; }
+                    if (d.ok) {
+                        mark('backup', true); lastName = name;
+                        document.getElementById('wiz-backup').disabled = false;
+                        toast('✅ ' + name + ' publié');
+                        allSites = null; if (mosaicLoaded) loadMosaic(true); if (sitesTabLoaded) loadSitesTab(true); loadStatus();
+                    }
+                } catch (e) { out.textContent = 'erreur: ' + e; }
             });
             document.getElementById('wiz-backup').addEventListener('click', function () {
                 if (lastName) window.location = API + '/publish/export/' + encodeURIComponent(lastName);
             });
         })();
     </script>
-    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>

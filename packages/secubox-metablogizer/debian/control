@@ -8,5 +8,13 @@ Standards-Version: 4.6.2
 Package: secubox-metablogizer
 Architecture: all
 Depends: ${misc:Depends}, secubox-core, python3, nginx, python3-jsonschema
+# chromium powers the Mosaic tab thumbnail capture (metablog-shots.timer,
+# #956 — see api/shots.py / common/secubox_core/shotter.py). Recommends, not
+# Depends: without it, captures fail gracefully (a site just keeps its emoji
+# placeholder) — nothing else in the package needs it. python3-websockets is
+# deliberately NOT declared here either, same rationale already documented
+# in secubox-core/debian/control (apt's 10.4 breaks uvicorn; the working
+# 16.0 comes from pip).
+Recommends: chromium
 Description: SecuBox MetaBlogizer - Static Site Publisher
  Static site publishing and management for SecuBox.
