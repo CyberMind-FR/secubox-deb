@@ -49,7 +49,7 @@ _idle_config() {
 # Returns 0 if the app is listening on its port INSIDE the LXC, else 1.
 _app_running() {
     local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+    local port; port=$(grep -E "^port\s*=" "$(_app_port_file "$name")" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
     [ -z "$port" ] && return 1
     lxc_running || return 1
     lxc-attach -n "$LXC_NAME" -- ss -tln "sport = :$port" 2>/dev/null \
@@ -59,7 +59,7 @@ _app_running() {
 # Returns the count of ESTABLISHED connections to the app's port (inside LXC).
 _app_active_conns() {
     local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+    local port; port=$(grep -E "^port\s*=" "$(_app_port_file "$name")" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
     [ -z "$port" ] && { echo 0; return; }
     lxc_running || { echo 0; return; }
     lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
@@ -79,6 +79,23 @@ _app_touch_active() {
     local name="$1"
     mkdir -p "$IDLE_STATE_DIR"
     touch "$IDLE_STATE_DIR/$name.state"
+}
+
+# Chemin du .streamlit.toml par-appli (port persisté), lu par _app_running/
+# _app_active_conns et écrit par cmd_app_start/cmd_app_restart. Appli-
+# répertoire : fichier DANS le répertoire de l'appli (comportement
+# historique, inchangé). Appli-script à plat : fichier caché VOISIN sous
+# APPS_PATH — jamais un répertoire fantôme homonyme du script, qui
+# apparaîtrait comme une entrée disque en double dans `app audit`/`app
+# list` (#959 : la moitié des applis de la board sont des scripts .py à
+# plat, pas des répertoires).
+_app_port_file() {
+    local name="$1"
+    if [ -d "$APPS_PATH/$name" ]; then
+        printf '%s' "$APPS_PATH/$name/.streamlit.toml"
+    else
+        printf '%s' "$APPS_PATH/.streamlit-$name.toml"
+    fi
 }
 
 # Escape a string for safe JSON insertion (backlash and double quote)
@@ -231,6 +248,54 @@ _detect_entrypoint() {
     if [ "${#root_py[@]}" -gt 1 ]; then
         _EP_CANDIDATES="${#root_py[@]}"
     fi
+}
+
+# Résout le point d'entrée d'une appli connue par SON NOM, qu'elle soit un
+# script .py à plat sous APPS_PATH ou un répertoire (délègue alors à
+# _detect_entrypoint) (#959). Seule source de vérité pour "l'appli X
+# existe et son point d'entrée est Y" dans tout le fichier —
+# cmd_app_audit, cmd_app_start et cmd_app_wake s'y réfèrent tous, pour ne
+# jamais faire diverger deux logiques de résolution différentes comme
+# c'était le cas avant #959 (audit savait résoudre un script à plat ou un
+# entrypoint non-conventionnel, start/wake ne connaissaient qu'un
+# répertoire contenant app.py).
+#
+# Résultat renvoyé via les globales _EP_RESULT (chemin de l'entrypoint
+# RELATIF À APPS_PATH — ex. "foo.py" pour un script à plat, "bar/app.py"
+# pour un répertoire, y compris quand l'entrypoint du répertoire est
+# lui-même imbriqué, ex. "bar/sub/app.py") et _EP_CANDIDATES (nombre de
+# candidats concurrents ambigus, seulement pertinent pour les
+# répertoires — cf. _detect_entrypoint).
+#
+# Code de retour :
+#   0  résolu, _EP_RESULT non vide
+#   3  appli inconnue : ni script "$name.py", ni répertoire "$name" sous
+#      APPS_PATH
+#   4  appli connue (répertoire présent) mais point d'entrée non résolu —
+#      _EP_CANDIDATES porte l'ambiguïté éventuelle
+_app_entrypoint() {
+    local name="$1"
+    _EP_RESULT=""
+    _EP_CANDIDATES=0
+
+    local script="$APPS_PATH/$name.py"
+    local dir="$APPS_PATH/$name"
+
+    if [ -f "$script" ]; then
+        _EP_RESULT="$name.py"
+        return 0
+    fi
+
+    if [ -d "$dir" ]; then
+        _detect_entrypoint "$dir"
+        if [ -n "$_EP_RESULT" ]; then
+            _EP_RESULT="$name/$_EP_RESULT"
+            return 0
+        fi
+        return 4
+    fi
+
+    return 3
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -848,12 +913,20 @@ cmd_app_audit() {
 
         local entrypoint="" persisted_port="" entrypoint_candidates=0
         if [ "$shape" = "dir" ]; then
-            _detect_entrypoint "$dpath"
-            entrypoint="$_EP_RESULT"
+            # Même résolution qu'un `app start`/`app wake` sur cette appli
+            # (#959) — _app_entrypoint retourne un chemin relatif à
+            # APPS_PATH ("$n/..."), on retire ce préfixe pour retrouver le
+            # champ "entrypoint" historique, relatif au répertoire de
+            # l'appli elle-même.
+            local ep_rc=0
+            _app_entrypoint "$n" || ep_rc=$?
             entrypoint_candidates="$_EP_CANDIDATES"
+            [ "$ep_rc" -eq 0 ] && entrypoint="${_EP_RESULT#"$n"/}"
             persisted_port=$(grep -E "^port\s*=" "$dpath/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
         elif [ "$shape" = "script" ]; then
-            entrypoint=$(basename "$dpath")
+            local ep_rc=0
+            _app_entrypoint "$n" || ep_rc=$?
+            [ "$ep_rc" -eq 0 ] && entrypoint="$_EP_RESULT"
         elif [ -n "${run_token[$n]:-}" ]; then
             # Pas d'entrée disque : on ne connaît l'appli que par un process
             # en cours (ou une déclaration) — la forme du chemin lancé donne
@@ -1371,7 +1444,10 @@ cmd_app_info() {
     [ -z "$name" ] && { error "Usage: streamlitctl app info <name>"; return 1; }
     local d="$APPS_PATH/$name"
     [ -d "$d" ] || { error "app not found: $name"; return 1; }
-    # Entry point detection (same logic as cmd_app_start)
+    # NOTE: directory-only, conventional-names-only lookup — pre-#959
+    # narrowness kept here on purpose (not covered by this fix's tests);
+    # `app start`/`app wake`/`app audit` all resolve via _app_entrypoint,
+    # this one doesn't yet.
     local entry=""
     for c in app.py main.py streamlit_app.py; do
         [ -f "$d/$c" ] && entry="$c" && break
@@ -1404,9 +1480,11 @@ cmd_app_restart() {
     cmd_app_stop "$name" || true
     sleep 1
     # Recover the previous port from .streamlit.toml so restart preserves it
+    # (cf. _app_port_file : répertoire ou script à plat, #959)
+    local port_file; port_file=$(_app_port_file "$name")
     local port=""
-    [ -f "$APPS_PATH/$name/.streamlit.toml" ] && \
-        port=$(grep -E "^port" "$APPS_PATH/$name/.streamlit.toml" 2>/dev/null | cut -d= -f2 | tr -d ' ')
+    [ -f "$port_file" ] && \
+        port=$(grep -E "^port" "$port_file" 2>/dev/null | cut -d= -f2 | tr -d ' ')
     cmd_app_start "$name" "${port:-8501}"
 }
 
@@ -1415,7 +1493,22 @@ cmd_app_start() {
     local port="${2:-8501}"
 
     [ -z "$name" ] && { error "Usage: streamlitctl app start <name> [port]"; return 1; }
-    [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 1; }
+
+    # Une appli existe si elle a un point d'entrée résoluble — répertoire
+    # OU script .py à plat — jamais seulement "c'est un répertoire" (#959,
+    # même résolution que `app audit`, via _app_entrypoint). Les deux échecs
+    # distincts gardent des messages distincts : appli inconnue (aucune
+    # trace sur disque) vs appli connue sans entrypoint déterminable.
+    local ep_rc=0
+    _app_entrypoint "$name" || ep_rc=$?
+    if [ "$ep_rc" -eq 3 ]; then
+        error "App not found: $name"
+        return 1
+    elif [ "$ep_rc" -eq 4 ]; then
+        error "No entrypoint found in $name"
+        return 1
+    fi
+    local rel_entrypoint="$_EP_RESULT"
 
     # Archivée = repérée et connue, mais jamais démarrée sans geste explicite
     # de désarchivage (#956). Refus net plutôt qu'un démarrage silencieux.
@@ -1429,23 +1522,25 @@ cmd_app_start() {
         return 1
     fi
 
-    # Find entrypoint
-    local entrypoint=""
-    for candidate in app.py main.py streamlit_app.py; do
-        [ -f "$APPS_PATH/$name/$candidate" ] && entrypoint="$candidate" && break
-    done
-
-    [ -z "$entrypoint" ] && { error "No entrypoint found in $name"; return 1; }
-
-    # Save port config
-    mkdir -p "$APPS_PATH/$name"
-    echo "port = $port" > "$APPS_PATH/$name/.streamlit.toml"
+    # Save port config — cf. _app_port_file : dans le répertoire de l'appli
+    # pour une appli-répertoire (inchangé), fichier caché voisin sous
+    # APPS_PATH pour un script à plat (jamais un répertoire fantôme
+    # homonyme du script, qui polluerait `app audit`/`app list`).
+    local port_file; port_file=$(_app_port_file "$name")
+    mkdir -p "$(dirname "$port_file")"
+    echo "port = $port" > "$port_file"
 
     log "Starting app $name on port $port..."
 
+    # Répertoire de travail = APPS_PATH (monté /srv/apps dans le conteneur),
+    # jamais le sous-répertoire de l'appli : c'est ce que montrent les
+    # process réellement en ligne sur la board (`streamlit run
+    # <chemin relatif à /srv/apps>`, parfois imbriqué comme
+    # "secubox_evolution/app.py") — et c'est le format qu'attendent
+    # _app_name_of_script et le matching de `app audit`/`app list` (#959).
     lxc-attach -n "$LXC_NAME" -- sh -c "
-        cd /srv/apps/$name
-        nohup streamlit run $entrypoint \
+        cd /srv/apps
+        nohup streamlit run $rel_entrypoint \
             --server.port=$port \
             --server.headless=true \
             --server.address=0.0.0.0 \
@@ -1521,7 +1616,15 @@ cmd_app_wake() {
     local name="$1"
     local wait_sec="${2:-30}"
     [ -z "$name" ] && { error "Usage: streamlitctl app wake <name> [wait_seconds]"; return 2; }
-    [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 2; }
+
+    # Même garde d'existence que `app start` (#959) : un script à plat est
+    # une appli valide, pas seulement un répertoire. On ne distingue ici
+    # que "appli inconnue" (retour 2, mappé sur 404 côté API) — un
+    # répertoire sans entrypoint résoluble est laissé à cmd_app_start
+    # ci-dessous, qui produira son propre message distinct.
+    local ep_rc=0
+    _app_entrypoint "$name" || ep_rc=$?
+    [ "$ep_rc" -eq 3 ] && { error "App not found: $name"; return 2; }
 
     if _app_running "$name"; then
         _app_touch_active "$name"

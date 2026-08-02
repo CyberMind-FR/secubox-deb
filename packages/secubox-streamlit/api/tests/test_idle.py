@@ -41,10 +41,18 @@ def client(tmp_path, monkeypatch):
 
 
 def test_wake_missing_app_returns_404(client):
-    """When the app directory does not exist under APPS_PATH, return 404."""
+    """When streamlitctl reports the app as unknown (rc=2), return 404.
+
+    Existence is delegated to streamlitctl (#959) — the route no longer
+    re-checks APPS_PATH/{name} itself, so this exercises the rc=2 mapping
+    instead of a pre-emptive directory check.
+    """
     test_client, _apps_dir = client
-    # No app directory created — request should 404
-    r = test_client.post("/apps/nope/wake")
+
+    fake = MagicMock(returncode=2, stderr=b"ERROR: App not found: nope\n", stdout=b"")
+    with patch("api.main.subprocess.run", return_value=fake):
+        r = test_client.post("/apps/nope/wake")
+
     assert r.status_code == 404, r.text
     assert "not found" in r.json()["detail"].lower()
 
