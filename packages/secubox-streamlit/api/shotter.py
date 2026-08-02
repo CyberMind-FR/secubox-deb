@@ -26,6 +26,17 @@ un seuil plancher ET soit stable entre deux relevés consécutifs — voir
 Une seule capture à la fois : deux chromium concurrents ne tiennent pas dans les
 ~2 Go disponibles sur la board.
 
+Une seule autorité gouverne la durée totale : le paramètre `timeout` de
+`capture()`. Les phases d'attente (port de debug, conteneur, contenu) ne
+portent aucun plafond interne — elles tournent jusqu'à ce que leur condition
+soit remplie ou que `asyncio.wait_for` les annule. Un plafond interne calibré
+sur une mesure de board (chargée un jour, au repos un autre) est soit trop
+court, soit trop long, et se dispute silencieusement la décision avec
+`timeout` : exactement le bug observé en ronde 4, où `_wait_for_selector`
+abandonnait à 60 tries (~60s) avant même que `timeout=600s` n'ait voix au
+chapitre. Le diagnostic de phase (« bloqué à quelle étape ») est conservé —
+voir `_Progress` — mais plus le pouvoir de décision.
+
 Aucun appel bloquant ne s'exécute directement dans une coroutine : le
 sous-processus chromium est piloté via `asyncio.create_subprocess_exec` (lectures
 de pipe natives à la boucle d'événements, réellement annulables par
@@ -56,19 +67,29 @@ MIN_PNG_BYTES = 20000
 MIN_VISIBLE_TEXT_CHARS = 40
 # Deux relevés consécutifs, espacés de cet intervalle, doivent rapporter la
 # même longueur de texte visible avant de juger le contenu stable — sinon on
-# risque de capturer un rendu partiel, en cours de production.
+# risque de capturer un rendu partiel, en cours de production. Ce n'est PAS un
+# plafond de durée : la boucle qui utilise cet intervalle n'abandonne jamais
+# d'elle-même, voir la docstring du module.
 CONTENT_POLL_INTERVAL = 1.0
-# Nombre de relevés maximum avant d'abandonner. Borne indépendante de
-# l'attente du conteneur (WAIT_SELECTOR ci-dessus) : ça permet de distinguer,
-# à l'échec, un diagnostic « conteneur jamais apparu » d'un diagnostic
-# « contenu jamais stabilisé ».
-CONTENT_WAIT_TRIES = 180
 
 _lock = asyncio.Lock()
 
 
 class ShotError(RuntimeError):
     """Capture impossible, ou rendu jugé vide."""
+
+
+class _Progress:
+    """Trace la dernière phase entamée par `_capture_once`.
+
+    Seul rôle : enrichir le diagnostic si `timeout` expire — savoir *où* ça a
+    coincé (port de debug ? conteneur ? contenu ?). Ne participe à aucune
+    décision de durée : ce n'est pas un budget, juste une étiquette lue après
+    coup par `capture()` dans son `except asyncio.TimeoutError`.
+    """
+
+    def __init__(self) -> None:
+        self.phase = "lancement du sous-processus chromium"
 
 
 def _reject_blank(png: bytes) -> None:
@@ -101,15 +122,19 @@ async def capture(url: str, *, timeout: float = 240.0,
     capture est un événement rare, jamais une boucle : une marge large coûte
     peu et évite des vignettes rejetées par MIN_PNG_BYTES faute de temps.
     """
+    progress = _Progress()
     async with _lock:
         try:
             return await asyncio.wait_for(
-                _capture_once(url, width, height), timeout=timeout)
+                _capture_once(url, width, height, progress), timeout=timeout)
         except asyncio.TimeoutError as exc:
-            raise ShotError(f"délai dépassé ({timeout}s)") from exc
+            raise ShotError(
+                f"délai dépassé ({timeout}s) — bloqué à la phase : "
+                f"{progress.phase}") from exc
 
 
-async def _capture_once(url: str, width: int, height: int) -> bytes:
+async def _capture_once(url: str, width: int, height: int,
+                        progress: _Progress) -> bytes:
     import websockets  # noqa: F401  (échoue tôt si absent)
     # Le répertoire de profil est créé avant le `try` qui couvre le lancement
     # du sous-processus : si celui-ci échoue (binaire absent, ENOMEM au fork
@@ -123,10 +148,15 @@ async def _capture_once(url: str, width: int, height: int) -> bytes:
             f"--window-size={width},{height}",
             "--remote-debugging-port=0", f"--user-data-dir={profile}", "about:blank",
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        progress.phase = "attente du port de debug chromium (stderr)"
         ws_url = await _devtools_url(proc)
+        progress.phase = "navigation vers l'URL cible"
         await _cdp(ws_url, "Page.navigate", {"url": url}, 1)
+        progress.phase = "attente du conteneur racine Streamlit"
         await _wait_for_selector(ws_url)
+        progress.phase = "attente de la production du contenu"
         await _wait_for_content(ws_url)
+        progress.phase = "capture d'écran"
         result = await _cdp(ws_url, "Page.captureScreenshot", {"format": "png"}, 3)
         png = base64.b64decode(result.get("data", ""))
         _reject_blank(png)
@@ -138,7 +168,8 @@ async def _capture_once(url: str, width: int, height: int) -> bytes:
         # FileNotFoundError (chromium absent), une erreur de connexion
         # websocket ou un message CDP malformé doivent aussi passer par là —
         # la cause d'origine est conservée via `from exc`.
-        raise ShotError(f"capture échouée : {exc}") from exc
+        raise ShotError(
+            f"capture échouée pendant « {progress.phase} » : {exc}") from exc
     finally:
         if proc is not None:
             proc.terminate()
@@ -180,8 +211,12 @@ async def _devtools_url(proc) -> str:
     annulable, contrairement à une lecture bloquante sur un `subprocess.Popen`
     classique — c'est ce qui permet à `asyncio.wait_for` de tenir son délai
     même si chromium n'écrit jamais rien.
+
+    Boucle non bornée : aucun plafond interne. La seule autorité sur la durée
+    totale est `timeout` dans `capture()`, qui interrompt cette attente par
+    annulation si nécessaire — voir la docstring du module.
     """
-    for _ in range(100):
+    while True:
         line = await proc.stderr.readline()
         text = line.decode("utf-8", "replace")
         if "DevTools listening on" in text:
@@ -191,25 +226,25 @@ async def _devtools_url(proc) -> str:
                 return ws_url
         if not line:
             await asyncio.sleep(0.1)
-    raise ShotError("chromium n'a pas annoncé son port de debug")
 
 
-async def _wait_for_selector(ws_url: str, tries: int = 60) -> None:
+async def _wait_for_selector(ws_url: str) -> None:
     """Interroge le DOM jusqu'à ce que le conteneur racine Streamlit existe.
 
     Ceci ne prouve pas que le contenu est produit : voir `_wait_for_content`,
-    appelé juste après par `_capture_once`. C'est un échec distinct
-    (« conteneur jamais apparu ») de celui de `_wait_for_content`
-    (« contenu jamais stabilisé »).
+    appelé juste après par `_capture_once`.
+
+    Boucle non bornée : aucun plafond interne, voir la docstring du module.
     """
     expr = f'!!document.querySelector({WAIT_SELECTOR!r})'
-    for i in range(tries):
+    msg_id = 100
+    while True:
         res = await _cdp(ws_url, "Runtime.evaluate",
-                         {"expression": expr, "returnByValue": True}, 100 + i)
+                         {"expression": expr, "returnByValue": True}, msg_id)
+        msg_id += 1
         if res.get("result", {}).get("value") is True:
             return
         await asyncio.sleep(1.0)
-    raise ShotError(f"sélecteur {WAIT_SELECTOR} jamais apparu")
 
 
 async def _wait_for_content(ws_url: str) -> None:
@@ -227,17 +262,18 @@ async def _wait_for_content(ws_url: str) -> None:
     Streamlit (`stStatusWidget` ou équivalent) : c'est un détail
     d'implémentation qui change entre versions, alors que le texte visible de
     la page est un signal stable dans le temps.
+
+    Boucle non bornée : aucun plafond interne, voir la docstring du module.
     """
     expr = "(document.body && document.body.innerText || '').length"
     previous_length = None
-    for i in range(CONTENT_WAIT_TRIES):
+    msg_id = 300
+    while True:
         res = await _cdp(ws_url, "Runtime.evaluate",
-                         {"expression": expr, "returnByValue": True}, 300 + i)
+                         {"expression": expr, "returnByValue": True}, msg_id)
+        msg_id += 1
         length = res.get("result", {}).get("value") or 0
         if length >= MIN_VISIBLE_TEXT_CHARS and length == previous_length:
             return
         previous_length = length
         await asyncio.sleep(CONTENT_POLL_INTERVAL)
-    raise ShotError(
-        f"contenu jamais stabilisé (moins de {MIN_VISIBLE_TEXT_CHARS} "
-        f"caractères visibles, ou instable) après {CONTENT_WAIT_TRIES} relevés")
