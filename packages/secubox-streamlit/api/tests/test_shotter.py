@@ -28,6 +28,86 @@ def test_wait_selector_targets_streamlit_root():
     assert shotter.WAIT_SELECTOR == '[data-testid="stAppViewContainer"]'
 
 
+def test_content_threshold_and_interval_are_explicit_constants():
+    """Comme MIN_PNG_BYTES : ajustables sans fouiller le code."""
+    assert shotter.MIN_VISIBLE_TEXT_CHARS == 40
+    assert shotter.CONTENT_POLL_INTERVAL == 1.0
+    assert shotter.CONTENT_WAIT_TRIES == 180
+
+
+def test_default_capture_timeout_leaves_a_real_margin():
+    """Mesuré sur la board sous charge : le conteneur met déjà plus de 60s à
+    apparaître. 90s (l'ancien défaut) était trop court en pratique."""
+    import inspect
+    default = inspect.signature(shotter.capture).parameters["timeout"].default
+    assert default == 240.0
+
+
+def test_content_stuck_below_threshold_never_produces_a_capture(monkeypatch):
+    """Le texte reste bloqué à 4 caractères (le bouton "Stop" affiché tant
+    que le script Streamlit s'exécute) : _wait_for_content ne doit JAMAIS
+    rendre la main normalement — seulement épuiser ses relevés et lever
+    ShotError. C'est le défaut réellement mesuré : conteneur présent, texte
+    encore "Stop" à t=60s."""
+    monkeypatch.setattr(shotter, "CONTENT_WAIT_TRIES", 5)
+    monkeypatch.setattr(shotter, "CONTENT_POLL_INTERVAL", 0)
+
+    calls = []
+
+    async def fake_cdp(ws_url, method, params, msg_id):
+        calls.append(msg_id)
+        return {"result": {"value": 4}}  # "Stop", stable, jamais au-dessus du seuil
+
+    monkeypatch.setattr(shotter, "_cdp", fake_cdp)
+
+    with pytest.raises(shotter.ShotError, match="jamais stabilisé"):
+        asyncio.run(shotter._wait_for_content("ws://fake"))
+
+    # Les CONTENT_WAIT_TRIES relevés ont bien tous été consommés : aucune
+    # sortie anticipée sur un texte sous le seuil, même stable.
+    assert len(calls) == 5
+
+
+def test_unstable_text_keeps_waiting_instead_of_capturing(monkeypatch):
+    """Le texte franchit le seuil mais change à chaque relevé (rendu encore
+    en cours) : _wait_for_content doit continuer à patienter — jamais
+    accepter un relevé isolé au-dessus du seuil comme preuve de contenu
+    produit."""
+    monkeypatch.setattr(shotter, "CONTENT_WAIT_TRIES", 6)
+    monkeypatch.setattr(shotter, "CONTENT_POLL_INTERVAL", 0)
+
+    # Toujours au-dessus du seuil (40) dès le 2e relevé, mais jamais deux
+    # valeurs consécutives identiques : simule un rendu qui continue de
+    # produire du texte, jamais figé.
+    lengths = iter([10, 50, 90, 130, 170, 210])
+
+    async def fake_cdp(ws_url, method, params, msg_id):
+        return {"result": {"value": next(lengths)}}
+
+    monkeypatch.setattr(shotter, "_cdp", fake_cdp)
+
+    with pytest.raises(shotter.ShotError, match="jamais stabilisé"):
+        asyncio.run(shotter._wait_for_content("ws://fake"))
+
+
+def test_stable_text_above_threshold_is_accepted(monkeypatch):
+    """Contre-épreuve positive : une fois le texte à la fois au-dessus du
+    seuil et identique à deux relevés consécutifs, _wait_for_content doit
+    rendre la main normalement (ni lever, ni attendre inutilement)."""
+    monkeypatch.setattr(shotter, "CONTENT_WAIT_TRIES", 10)
+    monkeypatch.setattr(shotter, "CONTENT_POLL_INTERVAL", 0)
+
+    # "Stop" stable (4, 4) puis contenu réel stable au-dessus du seuil (45, 45).
+    lengths = iter([4, 4, 45, 45])
+
+    async def fake_cdp(ws_url, method, params, msg_id):
+        return {"result": {"value": next(lengths)}}
+
+    monkeypatch.setattr(shotter, "_cdp", fake_cdp)
+
+    asyncio.run(shotter._wait_for_content("ws://fake"))  # ne doit pas lever
+
+
 def test_capture_stays_responsive_while_the_launched_process_stays_silent(
         monkeypatch, tmp_path):
     """Le test qui compte le plus : si le sous-processus n'écrit jamais rien

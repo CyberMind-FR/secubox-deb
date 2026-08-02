@@ -6,7 +6,22 @@ et push du serveur. Mesuré sur gk2 : 58 à 94 s pour un PNG de 4 à 6 Ko en
 1280x800 — une page blanche.
 
 On pilote donc chromium par le protocole DevTools : naviguer, ATTENDRE le
-conteneur racine de Streamlit, puis capturer.
+conteneur racine de Streamlit, puis ATTENDRE que le contenu soit réellement
+produit, puis capturer.
+
+Ces deux attentes sont distinctes et ne doivent pas être confondues.
+Diagnostic mesuré sur une vraie appli, board sous charge :
+
+    t=10s  readyState=interactive  texte visible=0   conteneur ABSENT
+    t=30s  readyState=interactive  texte visible=0   conteneur ABSENT
+    t=60s  readyState=complete     texte visible=4   conteneur PRÉSENT
+
+Au moment où le conteneur apparaît, le seul texte visible est « Stop » (4
+caractères) — le bouton que Streamlit affiche pendant que le script s'exécute
+encore. Attendre la seule apparition du conteneur capture donc ce bouton, pas
+le rendu. Il faut attendre, après le conteneur, que le texte visible dépasse
+un seuil plancher ET soit stable entre deux relevés consécutifs — voir
+`_wait_for_content`.
 
 Une seule capture à la fois : deux chromium concurrents ne tiennent pas dans les
 ~2 Go disponibles sur la board.
@@ -34,6 +49,21 @@ WAIT_SELECTOR = '[data-testid="stAppViewContainer"]'
 # blanche qu'on cherche précisément à ne plus archiver.
 MIN_PNG_BYTES = 20000
 
+# Le bouton « Stop » affiché par Streamlit pendant l'exécution du script fait
+# 4 caractères — c'est le seul texte visible au moment où le conteneur racine
+# apparaît (mesuré sur une vraie appli, voir docstring du module). Le seuil
+# doit dépasser largement ce faux positif sans exiger une appli bavarde.
+MIN_VISIBLE_TEXT_CHARS = 40
+# Deux relevés consécutifs, espacés de cet intervalle, doivent rapporter la
+# même longueur de texte visible avant de juger le contenu stable — sinon on
+# risque de capturer un rendu partiel, en cours de production.
+CONTENT_POLL_INTERVAL = 1.0
+# Nombre de relevés maximum avant d'abandonner. Borne indépendante de
+# l'attente du conteneur (WAIT_SELECTOR ci-dessus) : ça permet de distinguer,
+# à l'échec, un diagnostic « conteneur jamais apparu » d'un diagnostic
+# « contenu jamais stabilisé ».
+CONTENT_WAIT_TRIES = 180
+
 _lock = asyncio.Lock()
 
 
@@ -56,13 +86,20 @@ async def _cdp(ws_url: str, method: str, params: dict, msg_id: int) -> dict:
                 return msg.get("result", {})
 
 
-async def capture(url: str, *, timeout: float = 90.0,
+async def capture(url: str, *, timeout: float = 240.0,
                   width: int = 1280, height: int = 800) -> bytes:
     """Navigue vers `url`, attend le rendu Streamlit, renvoie le PNG.
 
     Lève `ShotError` dans tous les cas d'échec — y compris un dépassement du
     délai `timeout`, pour tenir le contrat de l'interface : un appelant qui ne
     rattrape que `ShotError` ne doit jamais se faire surprendre.
+
+    `timeout` par défaut à 240 s : mesuré sur la board sous charge, le
+    conteneur racine Streamlit met déjà plus de 60 s à apparaître, et le
+    texte visible n'a encore que 4 caractères (« Stop ») à ce même t=60s — le
+    contenu réel prend donc encore plus longtemps à se stabiliser au-delà. Une
+    capture est un événement rare, jamais une boucle : une marge large coûte
+    peu et évite des vignettes rejetées par MIN_PNG_BYTES faute de temps.
     """
     async with _lock:
         try:
@@ -89,6 +126,7 @@ async def _capture_once(url: str, width: int, height: int) -> bytes:
         ws_url = await _devtools_url(proc)
         await _cdp(ws_url, "Page.navigate", {"url": url}, 1)
         await _wait_for_selector(ws_url)
+        await _wait_for_content(ws_url)
         result = await _cdp(ws_url, "Page.captureScreenshot", {"format": "png"}, 3)
         png = base64.b64decode(result.get("data", ""))
         _reject_blank(png)
@@ -157,13 +195,49 @@ async def _devtools_url(proc) -> str:
 
 
 async def _wait_for_selector(ws_url: str, tries: int = 60) -> None:
-    """Interroge le DOM jusqu'à ce que le conteneur Streamlit existe."""
+    """Interroge le DOM jusqu'à ce que le conteneur racine Streamlit existe.
+
+    Ceci ne prouve pas que le contenu est produit : voir `_wait_for_content`,
+    appelé juste après par `_capture_once`. C'est un échec distinct
+    (« conteneur jamais apparu ») de celui de `_wait_for_content`
+    (« contenu jamais stabilisé »).
+    """
     expr = f'!!document.querySelector({WAIT_SELECTOR!r})'
     for i in range(tries):
         res = await _cdp(ws_url, "Runtime.evaluate",
                          {"expression": expr, "returnByValue": True}, 100 + i)
         if res.get("result", {}).get("value") is True:
-            await asyncio.sleep(1.5)   # laisser peindre après apparition
             return
         await asyncio.sleep(1.0)
     raise ShotError(f"sélecteur {WAIT_SELECTOR} jamais apparu")
+
+
+async def _wait_for_content(ws_url: str) -> None:
+    """Attend que le texte visible de la page dépasse un seuil plancher ET
+    soit stable entre deux relevés consécutifs.
+
+    Le conteneur racine Streamlit apparaît bien avant que le script ait fini
+    de s'exécuter : pendant ce temps, le seul texte visible est le bouton
+    « Stop » (`MIN_VISIBLE_TEXT_CHARS` est calibré pour dépasser largement ces
+    4 caractères — voir la docstring du module pour la mesure). La condition
+    de stabilité évite en plus de capturer un rendu partiel, en cours de
+    production.
+
+    Volontairement indépendant de tout indicateur d'exécution interne à
+    Streamlit (`stStatusWidget` ou équivalent) : c'est un détail
+    d'implémentation qui change entre versions, alors que le texte visible de
+    la page est un signal stable dans le temps.
+    """
+    expr = "(document.body && document.body.innerText || '').length"
+    previous_length = None
+    for i in range(CONTENT_WAIT_TRIES):
+        res = await _cdp(ws_url, "Runtime.evaluate",
+                         {"expression": expr, "returnByValue": True}, 300 + i)
+        length = res.get("result", {}).get("value") or 0
+        if length >= MIN_VISIBLE_TEXT_CHARS and length == previous_length:
+            return
+        previous_length = length
+        await asyncio.sleep(CONTENT_POLL_INTERVAL)
+    raise ShotError(
+        f"contenu jamais stabilisé (moins de {MIN_VISIBLE_TEXT_CHARS} "
+        f"caractères visibles, ou instable) après {CONTENT_WAIT_TRIES} relevés")
