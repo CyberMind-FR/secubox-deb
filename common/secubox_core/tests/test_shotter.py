@@ -5,7 +5,7 @@ import threading
 import time
 
 import pytest
-from api import shotter
+from secubox_core import shotter
 
 
 def test_rejects_a_blank_render():
@@ -35,16 +35,6 @@ def test_content_threshold_and_interval_are_explicit_constants():
     assert shotter.CONTENT_POLL_INTERVAL == 1.0
 
 
-def test_wait_phases_carry_no_internal_cap():
-    """Ronde 4 : deux budgets qui se disputent la décision sont une source de
-    bugs sans fin. `_wait_for_selector` et `_wait_for_content` ne doivent
-    plus accepter de paramètre de plafond (`tries`, `CONTENT_WAIT_TRIES`...) —
-    la seule autorité sur la durée est `timeout` dans `capture()`."""
-    import inspect
-    assert "tries" not in inspect.signature(shotter._wait_for_selector).parameters
-    assert not hasattr(shotter, "CONTENT_WAIT_TRIES")
-
-
 def test_default_capture_timeout_leaves_a_real_margin():
     """Mesuré sur la board sous charge : le conteneur met déjà plus de 60s à
     apparaître. 90s (l'ancien défaut) était trop court en pratique."""
@@ -52,6 +42,178 @@ def test_default_capture_timeout_leaves_a_real_margin():
     default = inspect.signature(shotter.capture).parameters["timeout"].default
     assert default == 240.0
 
+
+def test_wait_strategy_is_pluggable_with_streamlit_as_the_historical_default():
+    """`capture()` accepte une stratégie d'attente branchable. Le défaut doit
+    rester le comportement historique de ce module (Streamlit) pour ne pas
+    surprendre les appelants existants ; `wait_static_ready` doit exister
+    comme second choix nommé explicitement pour les pages statiques."""
+    import inspect
+    default = inspect.signature(shotter.capture).parameters["wait"].default
+    assert default is shotter.wait_streamlit_ready
+    assert shotter.wait_static_ready is not shotter.wait_streamlit_ready
+    assert asyncio.iscoroutinefunction(shotter.wait_static_ready)
+    assert asyncio.iscoroutinefunction(shotter.wait_streamlit_ready)
+
+
+def test_wait_phases_carry_no_internal_cap():
+    """Ronde 4 : deux budgets qui se disputent la décision sont une source de
+    bugs sans fin. Aucune des stratégies fournies, ni la condition de
+    contenu qu'elles partagent, ne doit accepter de paramètre de plafond
+    (`tries`, `CONTENT_WAIT_TRIES`...) — la seule autorité sur la durée est
+    `timeout` dans `capture()`."""
+    import inspect
+    for fn in (shotter.wait_static_ready, shotter.wait_streamlit_ready,
+               shotter._wait_stable_visible_text):
+        params = inspect.signature(fn).parameters
+        assert "tries" not in params
+        assert "max_tries" not in params
+    assert not hasattr(shotter, "CONTENT_WAIT_TRIES")
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Stratégies d'attente, testées directement contre un `evaluate` factice —
+# sans `_cdp`, sans websocket, sans chromium.
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_wait_static_ready_waits_for_ready_state_then_stable_content(monkeypatch):
+    """readyState doit passer à "complete" avant même de regarder le texte,
+    puis le texte doit être stable au-dessus du seuil."""
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+
+    ready_states = iter(["loading", "loading", "complete"])
+    text_lengths = iter([4, 4, 45, 45])
+    calls = []
+
+    async def evaluate(expr):
+        calls.append(expr)
+        if "readyState" in expr:
+            return next(ready_states, "complete")
+        return next(text_lengths)
+
+    progress = shotter._Progress()
+    asyncio.run(shotter.wait_static_ready(evaluate, progress))
+
+    # Les relevés readyState précèdent tous les relevés de texte.
+    text_started_at = next(i for i, e in enumerate(calls) if "innerText" in e)
+    assert all("readyState" in e for e in calls[:text_started_at])
+    assert progress.phase == "attente de la stabilité du contenu visible"
+
+
+def test_wait_static_ready_ignores_readyState_until_complete(monkeypatch):
+    """Tant que readyState n'est pas "complete", le texte ne doit jamais être
+    interrogé — l'ordre des deux conditions est un contrat, pas un détail.
+    `evaluate` fait respecter cet ordre lui-même (assertion interne) plutôt
+    que de compter des appels : toute violation remonte comme une erreur."""
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+    calls = {"n": 0}
+
+    async def evaluate(expr):
+        assert "innerText" not in expr, "texte interrogé avant readyState complet"
+        calls["n"] += 1
+        return "complete" if calls["n"] >= 5 else "loading"
+
+    progress = shotter._Progress()
+    # `evaluate` fait respecter l'ordre lui-même : dès que readyState est
+    # "complete" (au 5e relevé), wait_static_ready passe au texte visible et
+    # l'assertion interne à `evaluate` lève — la preuve que le texte n'est
+    # JAMAIS interrogé avant. Une violation de l'ordre ferait lever
+    # l'assertion bien plus tôt (avec calls["n"] < 5).
+    with pytest.raises(AssertionError, match="texte interrogé avant"):
+        asyncio.run(shotter.wait_static_ready(evaluate, progress))
+    assert calls["n"] >= 5
+
+
+def test_wait_streamlit_ready_waits_for_container_then_stable_content(monkeypatch):
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+
+    container_present = iter([False, False, True])
+    text_lengths = iter([4, 4, 45, 45])
+    calls = []
+
+    async def evaluate(expr):
+        calls.append(expr)
+        if "querySelector" in expr:
+            return next(container_present, True)
+        return next(text_lengths)
+
+    progress = shotter._Progress()
+    asyncio.run(shotter.wait_streamlit_ready(evaluate, progress))
+
+    text_started_at = next(i for i, e in enumerate(calls) if "innerText" in e)
+    assert all("querySelector" in e for e in calls[:text_started_at])
+    assert progress.phase == "attente de la production du contenu"
+
+
+def test_wait_streamlit_ready_targets_the_declared_selector(monkeypatch):
+    """La stratégie Streamlit doit interroger précisément WAIT_SELECTOR, pas
+    un sélecteur codé en dur en double de la constante publique."""
+    seen_exprs = []
+
+    async def evaluate(expr):
+        seen_exprs.append(expr)
+        return True  # conteneur présent d'emblée
+
+    monkeypatch.setattr(shotter, "_wait_stable_visible_text",
+                         _noop_async_one_arg)
+    progress = shotter._Progress()
+    asyncio.run(shotter.wait_streamlit_ready(evaluate, progress))
+    assert shotter.WAIT_SELECTOR in seen_exprs[0]
+
+
+async def _instant_sleep(_delay):
+    return None
+
+
+async def _noop_async_one_arg(_evaluate):
+    return None
+
+
+def test_wait_stable_visible_text_stuck_below_threshold_never_returns():
+    """Contre-épreuve : bloqué à 4 caractères ("Stop"), la fonction ne doit
+    jamais rendre la main — bornée ici par un `wait_for` de test, pas par un
+    plafond interne à la fonction elle-même."""
+    async def evaluate(_expr):
+        return 4
+
+    async def run_bounded():
+        await asyncio.wait_for(shotter._wait_stable_visible_text(evaluate), timeout=0.3)
+
+    with pytest.raises(asyncio.TimeoutError):
+        asyncio.run(run_bounded())
+
+
+def test_wait_stable_visible_text_rejects_a_single_reading_above_threshold():
+    """Un relevé isolé au-dessus du seuil ne suffit pas : il faut deux
+    relevés consécutifs identiques."""
+    counter = {"n": 0}
+
+    async def evaluate(_expr):
+        counter["n"] += 50
+        return counter["n"]  # toujours croissant, jamais stable
+
+    async def run_bounded():
+        await asyncio.wait_for(shotter._wait_stable_visible_text(evaluate), timeout=0.3)
+
+    with pytest.raises(asyncio.TimeoutError):
+        asyncio.run(run_bounded())
+    assert counter["n"] > shotter.MIN_VISIBLE_TEXT_CHARS
+
+
+def test_wait_stable_visible_text_accepts_when_stable_above_threshold(monkeypatch):
+    monkeypatch.setattr(shotter, "CONTENT_POLL_INTERVAL", 0)
+    lengths = iter([4, 4, 45, 45])
+
+    async def evaluate(_expr):
+        return next(lengths)
+
+    asyncio.run(shotter._wait_stable_visible_text(evaluate))  # ne doit pas lever
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# `capture()` bout en bout, sous_processus/CDP simulés — un chromium
+# factice n'est jamais lancé.
+# ─────────────────────────────────────────────────────────────────────────
 
 class _FakeProc:
     """Sous-processus chromium factice : juste assez pour que `_capture_once`
@@ -70,11 +232,9 @@ class _FakeProc:
         pass
 
 
-def _patch_launch_and_selector(monkeypatch, *, container_appears=True):
-    """Neutralise le lancement du sous-processus, la résolution DevTools et
-    l'attente du conteneur (qui apparaît immédiatement) — pour isoler le
-    comportement de `_wait_for_content`, seul point sous test dans les deux
-    scénarios ci-dessous. Retourne le double de `_cdp` à compléter."""
+def _patch_launch(monkeypatch):
+    """Neutralise le lancement du sous-processus et la résolution DevTools —
+    seul le comportement de la stratégie d'attente reste sous test."""
     fake_proc = _FakeProc()
 
     async def fake_create_subprocess_exec(*args, **kwargs):
@@ -91,15 +251,16 @@ def _patch_launch_and_selector(monkeypatch, *, container_appears=True):
     return fake_proc
 
 
-def test_content_stuck_below_threshold_never_produces_a_capture(monkeypatch):
+def test_streamlit_strategy_content_stuck_below_threshold_never_produces_a_capture(monkeypatch):
     """Le texte reste bloqué à 4 caractères (le bouton "Stop" affiché tant
     que le script Streamlit s'exécute) : la capture ne doit JAMAIS aboutir.
 
-    `_wait_for_content` ne porte plus de plafond interne (ronde 4) : seul le
-    `timeout` global de `capture()` peut désormais l'interrompre. On le fixe
-    donc court pour ce test et on vérifie que l'échec survient bien dans ce
-    délai — pas de capture, quel que soit le temps qu'on lui laisserait."""
-    _patch_launch_and_selector(monkeypatch)
+    Aucune des deux boucles ne porte de plafond interne (ronde 4) : seul le
+    `timeout` global de `capture()` peut désormais interrompre l'attente. On
+    le fixe donc court pour ce test et on vérifie que l'échec survient bien
+    dans ce délai — pas de capture, quel que soit le temps qu'on lui
+    laisserait."""
+    _patch_launch(monkeypatch)
 
     async def fake_cdp(ws_url, method, params, msg_id):
         if method == "Runtime.evaluate":
@@ -126,7 +287,7 @@ def test_unstable_text_keeps_waiting_instead_of_capturing(monkeypatch):
     """Le texte franchit le seuil mais change à chaque relevé (rendu encore
     en cours) : la capture ne doit jamais aboutir sur un relevé isolé au-dessus
     du seuil — seul le délai global peut mettre fin à l'attente."""
-    _patch_launch_and_selector(monkeypatch)
+    _patch_launch(monkeypatch)
 
     counter = {"n": 0}
 
@@ -136,9 +297,6 @@ def test_unstable_text_keeps_waiting_instead_of_capturing(monkeypatch):
             if "querySelector" in expr:
                 return {"result": {"value": True}}
             if "innerText" in expr:
-                # +50 dès le premier relevé : dépasse le seuil (40) tout de
-                # suite, pour que même un seul relevé effectué avant
-                # l'annulation (délai serré = 0.3s) suffise à le prouver.
                 counter["n"] += 50
                 return {"result": {"value": counter["n"]}}  # toujours croissant, jamais stable
         return {}
@@ -152,26 +310,61 @@ def test_unstable_text_keeps_waiting_instead_of_capturing(monkeypatch):
     elapsed = time.monotonic() - start
 
     assert elapsed < 2.0
-    # Le texte a bel et bien dépassé le seuil pendant l'attente — la seule
-    # raison de l'échec est l'instabilité, pas un seuil jamais atteint.
     assert counter["n"] > shotter.MIN_VISIBLE_TEXT_CHARS
 
 
-def test_stable_text_above_threshold_is_accepted(monkeypatch):
-    """Contre-épreuve positive : une fois le texte à la fois au-dessus du
-    seuil et identique à deux relevés consécutifs, _wait_for_content doit
-    rendre la main normalement (ni lever, ni attendre inutilement)."""
-    monkeypatch.setattr(shotter, "CONTENT_POLL_INTERVAL", 0)
-
-    # "Stop" stable (4, 4) puis contenu réel stable au-dessus du seuil (45, 45).
-    lengths = iter([4, 4, 45, 45])
+def test_static_strategy_stuck_on_ready_state_never_produces_a_capture(monkeypatch):
+    """Contre-épreuve côté page statique : readyState ne passe jamais à
+    "complete" — la capture ne doit jamais aboutir, échec identifié à la
+    bonne phase, borné par le seul timeout global."""
+    _patch_launch(monkeypatch)
 
     async def fake_cdp(ws_url, method, params, msg_id):
-        return {"result": {"value": next(lengths)}}
+        if method == "Runtime.evaluate":
+            expr = params.get("expression", "")
+            if "readyState" in expr:
+                return {"result": {"value": "loading"}}
+        return {}
 
     monkeypatch.setattr(shotter, "_cdp", fake_cdp)
 
-    asyncio.run(shotter._wait_for_content("ws://fake"))  # ne doit pas lever
+    start = time.monotonic()
+    with pytest.raises(shotter.ShotError,
+                       match="attente du chargement de la page"):
+        asyncio.run(shotter.capture("http://example.invalid/", timeout=0.3,
+                                    wait=shotter.wait_static_ready))
+    elapsed = time.monotonic() - start
+    assert elapsed < 2.0
+
+
+def test_static_strategy_succeeds_once_loaded_and_stable(monkeypatch):
+    """Contre-épreuve positive côté page statique, bout en bout via
+    `capture()` : readyState complet puis texte stable au-dessus du seuil
+    doit produire un PNG accepté."""
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+    _patch_launch(monkeypatch)
+
+    ready_calls = {"n": 0}
+    text_lengths = iter([4, 4, 45, 45])
+
+    async def fake_cdp(ws_url, method, params, msg_id):
+        if method == "Runtime.evaluate":
+            expr = params.get("expression", "")
+            if "readyState" in expr:
+                ready_calls["n"] += 1
+                return {"result": {"value": "complete" if ready_calls["n"] >= 3 else "loading"}}
+            if "innerText" in expr:
+                return {"result": {"value": next(text_lengths, 45)}}
+        if method == "Page.captureScreenshot":
+            payload = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 60000)
+            return {"data": payload.decode("ascii")}
+        return {}
+
+    monkeypatch.setattr(shotter, "_cdp", fake_cdp)
+
+    png = asyncio.run(shotter.capture("http://example.invalid/", timeout=30.0,
+                                      wait=shotter.wait_static_ready))
+    assert len(png) >= shotter.MIN_PNG_BYTES
 
 
 def test_late_success_still_succeeds_beyond_the_former_internal_caps(monkeypatch):
@@ -179,8 +372,8 @@ def test_late_success_still_succeeds_beyond_the_former_internal_caps(monkeypatch
     suppression des plafonds internes est réelle, pas seulement documentée.
 
     Le conteneur n'apparaît qu'après 90 relevés (l'ancien plafond de
-    `_wait_for_selector` était 60) et le contenu ne se stabilise qu'après 250
-    relevés (l'ancien plafond de `_wait_for_content` était 180). Avec un
+    l'attente du sélecteur était 60) et le contenu ne se stabilise qu'après
+    250 relevés (l'ancien plafond de l'attente de contenu était 180). Avec un
     délai global généreux, la capture doit malgré tout aboutir. Si un plafond
     interne était réintroduit dans l'une ou l'autre boucle, ce test
     échouerait sur "sélecteur jamais apparu" ou "contenu jamais stabilisé"
@@ -191,11 +384,8 @@ def test_late_success_still_succeeds_beyond_the_former_internal_caps(monkeypatch
     le temps réel. `asyncio.wait_for` s'appuie sur ses propres minuteries
     internes, indépendantes de `asyncio.sleep()` — le délai global reste donc
     réellement appliqué si jamais le scénario ne convergeait pas."""
-    async def instant_sleep(_delay):
-        return None
-    monkeypatch.setattr(shotter.asyncio, "sleep", instant_sleep)
-
-    _patch_launch_and_selector(monkeypatch)
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+    _patch_launch(monkeypatch)
 
     SELECTOR_APPEARS_AT = 90     # > l'ancien plafond de 60
     CONTENT_STABLE_AT = 250      # > l'ancien plafond de 180
