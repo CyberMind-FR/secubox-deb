@@ -121,10 +121,6 @@
         .deploy-flag { font-size: 0.6rem; padding: 0.1rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; }
 
         /* Settings */
-        .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
-        .settings-item { background: var(--bg-row); border-radius: 6px; padding: 0.6rem 0.75rem; }
-        .settings-item .k { font-size: 0.62rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.08em; }
-        .settings-item .v { font-size: 0.9rem; margin-top: 0.2rem; }
         .value-ok { color: var(--green); }
         .value-bad { color: var(--red); }
 
@@ -164,6 +160,7 @@
                 <div class="sub">Publication de sites statiques</div>
             </div>
             <div class="btn-group">
+                <button class="btn" onclick="republishAll()">⟲ Republier tout</button>
                 <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
                 <button class="btn primary" onclick="showCreateSite()">+ Nouveau site</button>
             </div>
@@ -193,7 +190,6 @@
             <div class="tab active" data-tab="mosaic" onclick="showTab('mosaic')">🧩 Mosaïque</div>
             <div class="tab" data-tab="sites" onclick="showTab('sites')">📋 Sites</div>
             <div class="tab" data-tab="deploys" onclick="showTab('deploys')">🚀 Déploiements</div>
-            <div class="tab" data-tab="settings" onclick="showTab('settings')">⚙️ Réglages</div>
         </div>
 
         <!-- MOSAIC TAB -->
@@ -260,25 +256,6 @@
             </div>
         </div>
 
-        <!-- SETTINGS TAB -->
-        <div class="tab-content" id="tab-settings">
-            <div class="card">
-                <h2>État du module</h2>
-                <div class="settings-grid">
-                    <div class="settings-item"><div class="k">Version</div><div class="v" id="settings-version">-</div></div>
-                    <div class="settings-item"><div class="k">Racine des sites</div><div class="v" id="settings-sites-root">-</div></div>
-                    <div class="settings-item"><div class="k">Nginx</div><div class="v" id="settings-nginx">-</div></div>
-                    <div class="settings-item"><div class="k">Auto-publication</div><div class="v" id="settings-autopublish">-</div></div>
-                </div>
-                <button class="btn primary" onclick="republishAll()">⟲ Republier tous les sites</button>
-            </div>
-            <div class="card">
-                <h2>Migration depuis OpenWrt</h2>
-                <p style="color:var(--p31-dim);margin-bottom:0.75rem;font-size:0.85rem">Importe les sites depuis une instance SecuBox OpenWrt existante.</p>
-                <div class="form-group" style="max-width:320px"><label>IP source</label><input type="text" id="migrate-source" value="192.168.255.1"></div>
-                <button class="btn" onclick="doMigrate()">Démarrer la migration</button>
-            </div>
-        </div>
     </main>
 
     <div class="modal" id="create-modal">
@@ -360,7 +337,6 @@
             if (name === 'mosaic') loadMosaic();
             else if (name === 'sites') loadSitesTab();
             else if (name === 'deploys') loadDeploys();
-            else if (name === 'settings') loadSettings();
         }
 
         // ─── Shared site cache (Mosaïque + Sites tabs both consume it) ───
@@ -677,13 +653,6 @@
             }
         }
 
-        async function doMigrate() {
-            const source = document.getElementById('migrate-source').value.trim();
-            const r = await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
-            if (r.success) toast('Migration démarrée depuis ' + source);
-            else errorToast('Échec du démarrage de la migration');
-        }
-
         // ═══════════════════════════════════════════════════════════════
         // Déploiements tab
         // ═══════════════════════════════════════════════════════════════
@@ -745,15 +714,6 @@
         // ═══════════════════════════════════════════════════════════════
         // Réglages tab
         // ═══════════════════════════════════════════════════════════════
-        async function loadSettings() {
-            const d = await api('/status');
-            document.getElementById('settings-version').textContent = d.version || '-';
-            document.getElementById('settings-sites-root').textContent = d.sites_root || '-';
-            const nginxEl = document.getElementById('settings-nginx');
-            nginxEl.textContent = d.running ? '🟢 actif' : '🔴 arrêté';
-            nginxEl.className = 'v ' + (d.running ? 'value-ok' : 'value-bad');
-            document.getElementById('settings-autopublish').textContent = d.enabled ? 'activée' : 'désactivée';
-        }
 
         // ═══════════════════════════════════════════════════════════════
         // Init + periodic refresh (only the currently visible tab refetches)
@@ -765,7 +725,6 @@
             if (name === 'mosaic') loadMosaic(true);
             else if (name === 'sites') loadSitesTab(true);
             else if (name === 'deploys') loadDeploys(true);
-            else if (name === 'settings') loadSettings();
         }
 
         loadStatus();
