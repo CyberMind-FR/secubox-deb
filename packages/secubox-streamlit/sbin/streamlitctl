@@ -665,6 +665,15 @@ EOF
 # __pycache__ et pages/ (convention multi-page Streamlit) ainsi que tout nom
 # commençant par un point sont exclus de l'inventaire (_is_excluded_entry) :
 # ce ne sont jamais des applis, cf. #956.
+#
+# Champs de tempo (#956 lot 1, mêmes noms/sémantique que cmd_app_list) :
+#   last_active         horodatage epoch ABSOLU de la dernière activité connue
+#                        (mtime du fichier d'état sous IDLE_STATE_DIR), 0 si
+#                        jamais observée — jamais un décompte, le navigateur
+#                        calcule le compte à rebours localement
+#   idle_seconds         now - last_active, 0 si last_active vaut 0
+#   sleep_after_seconds   timeout_minutes configuré (× 60), identique pour
+#                        toutes les applis
 cmd_app_audit() {
     local -A disk_shape=()      # name -> dir|script
     local -A disk_path=()       # name -> chemin disque absolu
@@ -770,6 +779,16 @@ cmd_app_audit() {
     local out="["
     local first=true
 
+    # Tempo de veille (#956 lot 1) — même calcul que cmd_app_list, hissé hors
+    # de la boucle : `now` et le timeout configuré ne changent pas par appli,
+    # seul `_app_last_active` (un `stat` par appli, négligeable) en dépend.
+    # Surtout : AUCUN appel lxc-attach par appli ici — `_ps_lines` reste
+    # appelé une seule fois plus haut, ce qui avait fait chuter cmd_app_list
+    # de 17s à 8s ; le réintroduire par appli ferait regonfler app audit.
+    local now; now=$(date +%s)
+    local tmo; tmo=$(_idle_config "timeout_minutes" "30")
+    local sleep_after=$(( tmo * 60 ))
+
     while IFS= read -r n; do
         [ -z "$n" ] && continue
         total=$(( total + 1 ))
@@ -791,6 +810,15 @@ cmd_app_audit() {
         local state="sleeping"
         [ "$is_archived" = "true" ] && state="archived"
         [ "$is_running" = "true" ] && state="running"
+
+        # last_active reste un horodatage epoch ABSOLU, jamais un décompte —
+        # c'est ce qui permet au panneau d'égrener les secondes côté
+        # navigateur sans rappeler le serveur. Une appli jamais vue (aucun
+        # fichier d'état sous IDLE_STATE_DIR) renvoie 0 via _app_last_active,
+        # jamais une erreur : le panneau doit l'afficher comme "jamais vue".
+        local last; last=$(_app_last_active "$n")
+        local idle=0
+        [ "$last" -gt 0 ] && idle=$(( now - last ))
 
         local entrypoint="" persisted_port="" entrypoint_candidates=0
         if [ "$shape" = "dir" ]; then
@@ -853,7 +881,7 @@ cmd_app_audit() {
 
         $first || out+=","
         first=false
-        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"issues\":$issues}"
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after}"
     done <<< "$names_sorted"
 
     out+="]"

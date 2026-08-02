@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import time
 from pathlib import Path
 
 CTL = Path(__file__).resolve().parents[2] / "sbin" / "streamlitctl"
@@ -32,6 +34,36 @@ def test_sees_bare_scripts_not_only_directories(tmp_path):
     out = _audit(tmp_path, dirs=[("avec_dir", "app.py")], scripts=["a_plat.py"])
     names = {a["name"]: a["shape"] for a in out["apps"]}
     assert names == {"avec_dir": "dir", "a_plat": "script"}
+
+
+def test_never_seen_app_reports_last_active_zero_without_failing(tmp_path):
+    """An app with no state file under IDLE_STATE_DIR (never started, or the
+    idle tracker never touched it) must report last_active: 0 — an absolute
+    "never seen" marker, not an error and not a bogus countdown. The command
+    must still succeed and produce valid JSON for every other app."""
+    out = _audit(tmp_path, dirs=[("jamais_vue", "app.py")])
+    app = out["apps"][0]
+    assert app["last_active"] == 0
+    assert app["idle_seconds"] == 0
+    assert app["sleep_after_seconds"] > 0
+
+
+def test_last_active_reflects_the_idle_state_file_mtime(tmp_path):
+    """last_active must be the ABSOLUTE epoch timestamp of the state file's
+    mtime (never a countdown) — the browser derives the countdown from it
+    client-side, per #956 lot 1. _audit() wires SECUBOX_STREAMLIT_IDLE_DIR
+    to tmp_path/"idle" — backdate a state file there before invoking it."""
+    idle_dir = tmp_path / "idle"
+    idle_dir.mkdir()
+    state_file = idle_dir / "recente.state"
+    state_file.touch()
+    two_minutes_ago = int(time.time()) - 120
+    os.utime(state_file, (two_minutes_ago, two_minutes_ago))
+
+    out = _audit(tmp_path, dirs=[("recente", "app.py")])
+    app = out["apps"][0]
+    assert app["last_active"] == two_minutes_ago
+    assert app["idle_seconds"] >= 120
 
 
 def test_flags_directory_without_entrypoint(tmp_path):
