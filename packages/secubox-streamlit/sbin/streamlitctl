@@ -1532,14 +1532,28 @@ cmd_app_start() {
 
     log "Starting app $name on port $port..."
 
-    # Répertoire de travail = APPS_PATH (monté /srv/apps dans le conteneur),
+    # Répertoire de travail = le répertoire des applis TEL QUE LE VOIT LE
+    # CONTENEUR. Il était codé en dur à "/srv/apps", qui n'existe pas : le `cd`
+    # échouait, le `sh -c` avortait avant `streamlit run`, et pas même un
+    # fichier de log n'était créé. `streamlitctl app start` n'a donc jamais
+    # fonctionné — ce qui explique que les applis en ligne aient été lancées
+    # autrement et n'aient pas de .streamlit.toml (#959).
+    #
+    # On dérive de DATA_PATH plutôt que d'APPS_PATH : ce dernier est
+    # surchargeable par l'environnement pour les tests, et pointerait alors sur
+    # un chemin de l'hôte qui n'a aucun sens à l'intérieur du conteneur.
+    # Vérifié sur la board : /srv/streamlit/apps est aussi le cwd de tous les
+    # processus streamlit en cours.
+    local lxc_apps="${DATA_PATH:-/srv/streamlit}/apps"
+    # Répertoire de travail = APPS_PATH (monté dans le conteneur),
     # jamais le sous-répertoire de l'appli : c'est ce que montrent les
     # process réellement en ligne sur la board (`streamlit run
     # <chemin relatif à /srv/apps>`, parfois imbriqué comme
     # "secubox_evolution/app.py") — et c'est le format qu'attendent
     # _app_name_of_script et le matching de `app audit`/`app list` (#959).
     lxc-attach -n "$LXC_NAME" -- sh -c "
-        cd /srv/apps
+        mkdir -p /var/log/streamlit
+        cd "$lxc_apps"
         nohup streamlit run $rel_entrypoint \
             --server.port=$port \
             --server.headless=true \

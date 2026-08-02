@@ -98,7 +98,7 @@ def test_wake_flat_script_succeeds(tmp_path):
 
     launched = capture.read_text()
     assert "streamlit run billets.py" in launched
-    assert "cd /srv/apps" in launched
+    assert "cd /srv/streamlit/apps" in launched
     assert "cd /srv/apps/billets" not in launched
 
     # Port persisted next to the script, never as a phantom "billets/" dir
@@ -137,7 +137,7 @@ def test_start_directory_app_with_non_conventional_entrypoint_succeeds(tmp_path)
     assert r.returncode == 0, r.stderr
     launched = capture.read_text()
     assert "streamlit run control/test_dashboard.py" in launched
-    assert "cd /srv/apps" in launched
+    assert "cd /srv/streamlit/apps" in launched
     assert "cd /srv/apps/control" not in launched
 
     port_file = d / ".streamlit.toml"
