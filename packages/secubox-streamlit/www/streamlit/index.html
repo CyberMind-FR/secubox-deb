@@ -29,7 +29,7 @@
         }
         .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
         .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 0.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
         .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); letter-spacing: 0.05em; }
         .header .sub { font-size: 0.75rem; color: var(--p31-dim); margin-top: 0.2rem; }
         .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -41,6 +41,23 @@
         .btn.sm { padding: 0.25rem 0.6rem; font-size: 0.7rem; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+        /* Top-level fleet stat tiles (persistent header widget, shared by
+           every tab — not tab content, so it loads eagerly at init). Colour
+           encodes STATE, never decoration: cyan=total (neutral), green=en
+           ligne, blue=endormies (secondary/informational), purple=archivées
+           (matches .mosaic-tile.archived below), orange/green=anomalies
+           (toggled by count — green when zero). */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; backdrop-filter: blur(10px); }
+        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.2rem; }
+        .stat-card.cyan .value { color: var(--cyan); }
+        .stat-card.green .value { color: var(--green); }
+        .stat-card.blue .value { color: var(--blue); }
+        .stat-card.purple .value { color: var(--purple); }
+        .stat-card.orange .value { color: var(--orange); }
+        .fleet-note { font-size: 0.72rem; color: var(--p31-dim); margin: -0.4rem 0 1rem; min-height: 1em; }
+
         .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; }
         .tab { padding: 0.75rem 1.25rem; cursor: pointer; border-bottom: 2px solid transparent; color: var(--p31-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.2s; }
         .tab:hover { color: var(--cyan); }
@@ -49,9 +66,6 @@
         .tab-content.active { display: block; }
 
         .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; backdrop-filter: blur(10px); }
-        .stat-card .value { font-size: 2rem; font-weight: bold; color: var(--cyan); text-shadow: 0 0 10px currentColor; }
-        .stat-card .label { font-size: 0.65rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.2rem; }
 
         .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
         .card h2 { font-size: 0.9rem; color: var(--cyan); margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -93,9 +107,10 @@
         .component-name { font-weight: 500; color: var(--text); }
         .component-desc { font-size: 0.8rem; color: var(--p31-dim); }
 
-        .toast { position: fixed; bottom: 20px; right: 20px; padding: 0.75rem 1.25rem; background: var(--bg-card); border: 1px solid var(--cyan); border-radius: 6px; color: var(--cyan); font-size: 0.85rem; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transform: translateY(20px); transition: all 0.3s; backdrop-filter: blur(10px); pointer-events: none; }
+        .toast { position: fixed; bottom: 20px; right: 20px; padding: 0.75rem 1.25rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); pointer-events: none; }
         .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { border-color: var(--red); color: var(--red); }
+        .toast.error { background: var(--red); color: #fff; box-shadow: 0 0 20px rgba(255,68,102,0.4); pointer-events: auto; }
+        .toast .dismiss { margin-left: 0.75rem; cursor: pointer; font-weight: bold; }
 
         /* Mosaic tab — app fleet tiles. NEVER an iframe: a tile that loaded
            the app in place would keep it awake, defeating sleep/wake. */
@@ -117,12 +132,16 @@
         .mosaic-name { color: var(--cyan); font-weight: 700; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .mosaic-meta { font-size: 0.7rem; color: var(--p31-dim); display: flex; justify-content: space-between; gap: 0.5rem; }
         .mosaic-state.archived { color: var(--purple); }
+        .mosaic-tempo { font-size: 0.68rem; color: var(--p31-dim); }
+        .mosaic-tempo.running { color: var(--green); }
+        .mosaic-tempo.warn { color: var(--orange); }
         .mosaic-issues { display: flex; flex-wrap: wrap; gap: 0.3rem; }
         .mosaic-issue { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; letter-spacing: 0.03em; }
         .mosaic-footer { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
         .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
         .mosaic-footer a:hover { text-decoration: underline; }
-        .mosaic-empty { color: var(--p31-dim); padding: 1rem; }
+        .mosaic-footer button.btn { width: 100%; }
+        .mosaic-empty { color: var(--p31-dim); padding: 1rem; grid-column: 1 / -1; }
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
@@ -147,13 +166,40 @@
             </div>
         </header>
 
+        <!-- Fleet-wide stat tiles — from /apps/audit (cached, sees the whole
+             park: 63 apps, not just the directories the slow /apps sees).
+             Persistent across tabs, loaded once at init, not tab content. -->
+        <div class="grid">
+            <div class="stat-card cyan">
+                <div class="value" id="stat-total">-</div>
+                <div class="label">🧩 Applis</div>
+            </div>
+            <div class="stat-card green">
+                <div class="value" id="stat-running">-</div>
+                <div class="label">🟢 En ligne</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="value" id="stat-sleeping">-</div>
+                <div class="label">😴 Endormies</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="value" id="stat-archived">-</div>
+                <div class="label">📦 Archivées</div>
+            </div>
+            <div class="stat-card green" id="stat-card-issues">
+                <div class="value" id="stat-issues">-</div>
+                <div class="label">⚠️ Avec anomalie</div>
+            </div>
+        </div>
+        <div class="fleet-note" id="fleet-note"></div>
+
         <div class="tabs">
-            <div class="tab" onclick="showTab('mosaic')">🧩 Mosaïque</div>
-            <div class="tab active" onclick="showTab('status')">Status</div>
-            <div class="tab" onclick="showTab('access')">Access</div>
-            <div class="tab" onclick="showTab('apps')">Apps</div>
-            <div class="tab" onclick="showTab('instances')">Instances</div>
-            <div class="tab" onclick="showTab('actions')">Actions</div>
+            <div class="tab" data-tab="mosaic" onclick="showTab('mosaic')">🧩 Mosaïque</div>
+            <div class="tab active" data-tab="status" onclick="showTab('status')">Status</div>
+            <div class="tab" data-tab="access" onclick="showTab('access')">Access</div>
+            <div class="tab" data-tab="apps" onclick="showTab('apps')">Apps</div>
+            <div class="tab" data-tab="instances" onclick="showTab('instances')">Instances</div>
+            <div class="tab" data-tab="actions" onclick="showTab('actions')">Actions</div>
         </div>
 
         <!-- MOSAIC TAB -->
@@ -161,7 +207,7 @@
             <div class="card">
                 <div class="mosaic-toolbar">
                     <div class="mosaic-summary" id="mosaic-summary">Chargement…</div>
-                    <button class="btn" onclick="loadMosaic()">↻ Rafraîchir</button>
+                    <button class="btn" onclick="loadMosaic(true)">↻ Rafraîchir</button>
                 </div>
                 <div class="mosaic-grid" id="mosaic-grid">
                     <div class="mosaic-empty">Chargement du parc d'applis…</div>
@@ -322,7 +368,9 @@
 
     <script>
         const API = '/api/v1/streamlit';
-        const token = () => localStorage.getItem('sbx_token');
+        // Read BOTH token keys like every working module (hub/portal set both);
+        // reading only sbx_token missed a valid token stored under secubox_token.
+        const token = () => localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
         function esc(s) {
@@ -331,18 +379,57 @@
 
         async function api(path, opts = {}) {
             try {
-                const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
-                return res.json();
-            } catch { return {}; }
+                let res = await fetch(API + path, { ...opts, headers: headers(), credentials: 'same-origin' });
+                if (res.status === 401) {
+                    // A stale localStorage Bearer can shadow a valid SSO session
+                    // cookie — retry cookie-only WITHOUT destroying the token.
+                    res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
+                }
+                if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
+                const ct = res.headers.get('content-type') || '';
+                if (!res.ok || !ct.includes('application/json')) {
+                    console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
+                    if (!res.ok) errorToast('Erreur API ' + path + ' (' + res.status + ')');
+                    return {};
+                }
+                return await res.json();
+            } catch (e) { console.warn('api()', path, 'threw', e); errorToast('Requête impossible: ' + path); return {}; }
         }
+
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg);
+            t.className = 'toast show';
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        // Fatal/API errors stay until dismissed — never a flash the user can miss.
+        function errorToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = esc(msg) + '<span class="dismiss" onclick="this.parentElement.classList.remove(\'show\')">✕</span>';
+            t.className = 'toast show error';
+            clearTimeout(toast._t);
+        }
+
+        // Back-compat shim for the pre-existing English-language call sites
+        // below (deploy/migrate/gitea/power) — dispatches to toast()/errorToast().
+        function showToast(msg, type) { (type === 'error' ? errorToast : toast)(msg); }
 
         function showTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector(`[onclick="showTab('${name}')"]`).classList.add('active');
+            document.querySelector('.tab[data-tab="' + name + '"]').classList.add('active');
             document.getElementById('tab-' + name).classList.add('active');
-            if (name === 'mosaic' && !mosaicLoaded) { loadMosaic(); }
+            // Lazy per-tab loading: nothing is fetched for a tab until it is
+            // opened. The countdown ticker only runs while Mosaïque is visible.
+            if (name !== 'mosaic') stopMosaicTick();
+            if (name === 'mosaic') loadMosaic();
+            else if (name === 'status') { loadStatus(); loadHealth(); loadComponents(); }
+            else if (name === 'access') loadAccess();
+            else if (name === 'apps') loadApps();
+            else if (name === 'instances') loadInstances();
+            else if (name === 'actions') loadPowerStatus();
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
@@ -352,16 +439,21 @@
         function showGiteaClone() { showModal('gitea-modal'); }
 
         // ═══════════════════════════════════════════════════════════════
-        // Mosaic — app fleet tiles. Data only, never an iframe/embed: a
-        // tile that loaded the app in place would keep it awake, which is
-        // the opposite of the sleep/wake goal this view exists to serve.
+        // Fleet-wide audit — /apps/audit is a cache read (streamlit-audit.timer
+        // refreshes it every 5 minutes out-of-band via lxc-attach), so the
+        // request itself is fast and cheap: it backs BOTH the persistent top
+        // stat grid (all tabs) and the Mosaïque tab tiles, memoized here so
+        // opening tabs never re-fetches redundantly.
         //
-        // /apps/audit is a cache read (streamlit-audit.timer refreshes it
-        // every 5 minutes out-of-band via lxc-attach) — the request itself
-        // is fast, so a refresh here is cheap. It still isn't live: the
-        // summary always shows how old the underlying measurement is.
+        // NEVER an iframe/embed on any tile: a tile that loaded the app in
+        // place would keep it awake, the opposite of the sleep/wake goal
+        // this view exists to serve.
         // ═══════════════════════════════════════════════════════════════
-        let mosaicLoaded = false;
+        let auditData = null;
+        let auditLoading = null;
+        let mosaicTempoTargets = [];
+        let mosaicTickTimer = null;
+
         const MOSAIC_ISSUE_LABELS = {
             'not-declared': "non déclarée",
             'no-entrypoint': "sans point d'entrée",
@@ -371,6 +463,19 @@
             'duplicate-path': 'chemin en double',
         };
 
+        async function ensureAudit(force) {
+            if (force) auditData = null;
+            if (auditData) { renderFleetStats(); return auditData; }
+            if (auditLoading) return auditLoading;
+            auditLoading = api('/apps/audit').then(d => {
+                auditData = d;
+                auditLoading = null;
+                renderFleetStats();
+                return auditData;
+            });
+            return auditLoading;
+        }
+
         function formatCacheAge(seconds) {
             if (seconds == null) return '';
             if (seconds < 90) return 'mesuré il y a ' + seconds + 's';
@@ -378,81 +483,179 @@
             return 'mesuré il y a ' + minutes + 'min';
         }
 
-        async function loadMosaic() {
-            mosaicLoaded = true;
-            const grid = document.getElementById('mosaic-grid');
+        function appState(a) {
+            // Defensive fallback for a cache written by a version of
+            // streamlitctl predating the "state" field — should not happen
+            // in practice (state has shipped since #956's first audit
+            // commit) but never crash the panel over a stale field.
+            return a.state || (a.running ? 'running' : (a.archived ? 'archived' : 'sleeping'));
+        }
+
+        // Fleet-wide stat tiles — always visible, independent of which tab
+        // is open. Tolerates the cache being entirely absent (first boot,
+        // timer not fired yet) with a clear message instead of an empty grid.
+        function renderFleetStats() {
+            const ids = ['stat-total', 'stat-running', 'stat-sleeping', 'stat-archived', 'stat-issues'];
+            const note = document.getElementById('fleet-note');
+            const issuesCard = document.getElementById('stat-card-issues');
+            if (!auditData) return; // not fetched yet — leave the "-" placeholders
+
+            if (!auditData.available) {
+                ids.forEach(id => document.getElementById(id).textContent = '—');
+                issuesCard.classList.remove('orange');
+                issuesCard.classList.add('green');
+                note.textContent = 'Inventaire pas encore calculé' +
+                    (auditData.reason ? ' (' + auditData.reason + ')' : '') +
+                    ' — le relevé s\'exécute toutes les 5 minutes en tâche de fond, réessayez dans un instant.';
+                renderMosaicSummary();
+                return;
+            }
+
+            const apps = auditData.apps || [];
+            const running = apps.filter(a => appState(a) === 'running').length;
+            const sleeping = apps.filter(a => appState(a) === 'sleeping').length;
+            const archived = apps.filter(a => appState(a) === 'archived').length;
+            const withIssues = apps.filter(a => (a.issues || []).length > 0).length;
+
+            document.getElementById('stat-total').textContent = apps.length;
+            document.getElementById('stat-running').textContent = running;
+            document.getElementById('stat-sleeping').textContent = sleeping;
+            document.getElementById('stat-archived').textContent = archived;
+            document.getElementById('stat-issues').textContent = withIssues;
+            issuesCard.classList.toggle('orange', withIssues > 0);
+            issuesCard.classList.toggle('green', withIssues === 0);
+
+            note.textContent = formatCacheAge(auditData.cache_age_seconds);
+            renderMosaicSummary();
+        }
+
+        function renderMosaicSummary() {
             const summary = document.getElementById('mosaic-summary');
-            grid.innerHTML = '<div class="mosaic-empty">Chargement du parc d\'applis…</div>';
-            summary.textContent = 'Chargement…';
+            if (!auditData || !auditData.available) { summary.textContent = ''; return; }
+            const apps = auditData.apps || [];
+            const running = apps.filter(a => appState(a) === 'running').length;
+            const sleeping = apps.filter(a => appState(a) === 'sleeping').length;
+            const archived = apps.filter(a => appState(a) === 'archived').length;
+            const withIssues = apps.filter(a => (a.issues || []).length > 0).length;
+            const age = formatCacheAge(auditData.cache_age_seconds);
 
-            const d = await api('/apps/audit');
+            summary.innerHTML = '<strong>' + apps.length + '</strong> applis · <strong>' + running + '</strong> en ligne · ' +
+                sleeping + ' endormie' + (sleeping > 1 ? 's' : '') +
+                (archived ? ' · <span class="archived-count">' + archived + ' archivée' + (archived > 1 ? 's' : '') + '</span>' : '') +
+                (withIssues ? ' · <span class="anomaly-count">' + withIssues + ' avec anomalie' + (withIssues > 1 ? 's' : '') + '</span>' : '') +
+                (age ? ' · <span title="ancienneté du relevé">' + esc(age) + '</span>' : '');
+        }
 
-            if (!d.available) {
-                summary.textContent = '';
+        async function loadMosaic(force) {
+            const grid = document.getElementById('mosaic-grid');
+            if (!auditData) grid.innerHTML = '<div class="mosaic-empty">Chargement du parc d\'applis…</div>';
+            await ensureAudit(force);
+            renderMosaic();
+        }
+
+        function formatDuration(seconds) {
+            seconds = Math.max(0, Math.floor(seconds));
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            if (h > 0) return h + 'h' + String(m).padStart(2, '0') + 'm';
+            return m + 'm' + String(s).padStart(2, '0') + 's';
+        }
+
+        // The server NEVER counts down: last_active is an ABSOLUTE epoch
+        // timestamp, and the countdown is recomputed here every second with
+        // zero network traffic (#956). A cache written by a streamlitctl
+        // version predating lot 1 simply won't carry last_active/
+        // sleep_after_seconds — tolerate that silently (state still shows,
+        // just without a countdown) rather than break the tile.
+        function tempoLabel(a) {
+            if (appState(a) === 'archived') return null;
+            const hasTempo = typeof a.last_active === 'number' && typeof a.sleep_after_seconds === 'number';
+            if (!hasTempo) return null;
+            if (!a.last_active) return 'jamais vue';
+            const idle = Date.now() / 1000 - a.last_active;
+            if (appState(a) === 'running') {
+                const left = a.sleep_after_seconds - idle;
+                return left > 0 ? 'veille dans ' + formatDuration(left) : 'veille imminente';
+            }
+            return 'endormie depuis ' + formatDuration(idle);
+        }
+
+        function tempoClass(a, label) {
+            if (appState(a) === 'running') return label === 'veille imminente' ? ' warn' : ' running';
+            return '';
+        }
+
+        function renderMosaic() {
+            const grid = document.getElementById('mosaic-grid');
+            if (!auditData) { grid.innerHTML = '<div class="mosaic-empty">Chargement du parc d\'applis…</div>'; return; }
+
+            if (!auditData.available) {
+                stopMosaicTick();
                 grid.innerHTML = '<div class="mosaic-empty">Inventaire pas encore calculé' +
-                    (d.reason ? ' (' + esc(d.reason) + ')' : '') +
+                    (auditData.reason ? ' (' + esc(auditData.reason) + ')' : '') +
                     ' — le relevé s\'exécute toutes les 5 minutes en tâche de fond, réessayez dans un instant.</div>';
                 return;
             }
 
-            const apps = d.apps || [];
-            const s = d.summary || {};
-            const total = s.total ?? apps.length;
-            const running = s.running ?? apps.filter(a => a.running).length;
-            const archived = s.archived ?? apps.filter(a => a.archived).length;
-            const withIssues = apps.filter(a => (a.issues || []).length > 0).length;
-            const age = formatCacheAge(d.cache_age_seconds);
-
-            summary.innerHTML = '<strong>' + total + '</strong> applis · <strong>' + running + '</strong> en ligne' +
-                (archived ? ' · <span class="archived-count">' + archived + ' archivée' + (archived > 1 ? 's' : '') + '</span>' : '') +
-                (withIssues ? ' · <span class="anomaly-count">' + withIssues + ' avec anomalie' + (withIssues > 1 ? 's' : '') + '</span>' : '') +
-                (age ? ' · <span title="ancienneté du relevé">' + esc(age) + '</span>' : '');
-
+            const apps = auditData.apps || [];
             if (!apps.length) {
+                stopMosaicTick();
                 grid.innerHTML = '<div class="mosaic-empty">Aucune application détectée</div>';
                 return;
             }
 
+            // en ligne d'abord, puis endormies, archivées en dernier — les
+            // archivées sont un choix délibéré, jamais démarrées seules.
+            const rank = s => s === 'running' ? 0 : s === 'sleeping' ? 1 : 2;
             const sorted = apps.slice().sort((a, b) => {
-                const ra = !!a.running, rb = !!b.running;
-                if (ra !== rb) return ra ? -1 : 1;
+                const ra = rank(appState(a)), rb = rank(appState(b));
+                if (ra !== rb) return ra - rb;
                 return String(a.name || '').localeCompare(String(b.name || ''));
             });
 
             grid.innerHTML = sorted.map(renderMosaicTile).join('');
+            mosaicTempoTargets = sorted
+                .map(a => ({ app: a, el: grid.querySelector('[data-tempo="' + CSS.escape(a.name || '') + '"]') }))
+                .filter(t => t.el);
+            startMosaicTick();
         }
 
         function renderMosaicTile(a) {
-            const name = esc(a.name || '?');
-            const running = !!a.running;
-            // Archivée = réparée et connue, mais délibérément jamais démarrée
-            // (#956) — distincte d'une simple veille, qui peut se réveiller
-            // seule. Ne jamais confondre les deux dans l'UI : couleur violette
-            // dédiée (pas le cyan, réservé à l'accent principal) et emoji 📦
-            // distinct de 😴.
-            const archived = !running && !!a.archived;
+            const rawName = a.name || '?';
+            const name = esc(rawName);
+            const state = appState(a);
             const port = Number.isInteger(a.port) ? a.port : parseInt(a.port, 10);
             const hasPort = Number.isFinite(port) && port > 0;
             const shape = esc(a.shape || '-');
             const issues = a.issues || [];
-            const url = running && hasPort ? `http://${location.hostname}:${port}` : null;
-
-            const meta = shape + (running && hasPort ? ' · :' + port : '');
+            const url = state === 'running' && hasPort ? `http://${location.hostname}:${port}` : null;
+            const meta = shape + (state === 'running' && hasPort ? ' · :' + port : '');
 
             let thumbClass = '';
             let stateLabel = '🟢 en ligne';
-            if (!running) {
-                if (archived) {
-                    thumbClass = ' archived';
-                    stateLabel = '📦 archivée';
-                } else {
-                    thumbClass = ' sleeping';
-                    stateLabel = '😴 endormie';
-                }
+            if (state === 'archived') {
+                thumbClass = ' archived';
+                stateLabel = '📦 archivée';
+            } else if (state !== 'running') {
+                thumbClass = ' sleeping';
+                stateLabel = '😴 endormie';
             }
-            const stateClass = 'mosaic-state' + (archived ? ' archived' : '');
+            const stateClass = 'mosaic-state' + (state === 'archived' ? ' archived' : '');
 
-            return '<div class="mosaic-tile' + (archived ? ' archived' : '') + '">' +
+            const tempo = tempoLabel(a);
+            const tempoHtml = tempo != null
+                ? '<div class="mosaic-tempo' + tempoClass(a, tempo) + '" data-tempo="' + name + '">' + esc(tempo) + '</div>'
+                : '';
+
+            let footer = '';
+            if (url) {
+                footer = '<div class="mosaic-footer"><a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a></div>';
+            } else if (state === 'sleeping') {
+                footer = '<div class="mosaic-footer"><button class="btn sm" data-wake="' + name + '">☕ réveiller</button></div>';
+            }
+
+            return '<div class="mosaic-tile' + (state === 'archived' ? ' archived' : '') + '">' +
                 '<div class="mosaic-thumb' + thumbClass + '">🧩</div>' +
                 '<div class="mosaic-body">' +
                     '<div class="mosaic-name" title="' + name + '">' + name + '</div>' +
@@ -460,13 +663,64 @@
                         '<span class="' + stateClass + '">' + stateLabel + '</span>' +
                         '<span>' + esc(meta) + '</span>' +
                     '</div>' +
+                    tempoHtml +
                     (issues.length
                         ? '<div class="mosaic-issues">' + issues.map(i => '<span class="mosaic-issue">' + esc(MOSAIC_ISSUE_LABELS[i] || i) + '</span>').join('') + '</div>'
                         : '') +
                 '</div>' +
-                (url ? '<div class="mosaic-footer"><a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a></div>' : '') +
+                footer +
             '</div>';
         }
+
+        // Countdown ticker — only runs while the Mosaïque tab is visible.
+        // Recomputes labels locally from the already-fetched auditData; no
+        // network call, ever (that's the whole point of an absolute
+        // last_active timestamp).
+        function startMosaicTick() {
+            stopMosaicTick();
+            if (!mosaicTempoTargets.length) return;
+            mosaicTickTimer = setInterval(() => {
+                if (document.hidden) return;
+                mosaicTempoTargets.forEach(({ app, el }) => {
+                    const label = tempoLabel(app);
+                    if (label == null) return;
+                    el.textContent = label;
+                    el.className = 'mosaic-tempo' + tempoClass(app, label);
+                });
+            }, 1000);
+        }
+
+        function stopMosaicTick() {
+            if (mosaicTickTimer) { clearInterval(mosaicTickTimer); mosaicTickTimer = null; }
+        }
+
+        // Wake a sleeping app on demand (POST /apps/{name}/wake). Delegated
+        // listener + data-* attribute — never hand-interpolated into onclick.
+        document.getElementById('mosaic-grid').addEventListener('click', async (ev) => {
+            const btn = ev.target.closest('button[data-wake]');
+            if (!btn) return;
+            const name = btn.dataset.wake;
+            const orig = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ réveil…';
+            const r = await api('/apps/' + encodeURIComponent(name) + '/wake', { method: 'POST' });
+            if (r && r.status) {
+                toast('☕ ' + name + ' réveillée (' + r.status + ')');
+                // Optimistic local patch: streamlit-audit.timer only refreshes
+                // the cache every 5 minutes server-side — reflect the wake
+                // immediately here instead of waiting for the next cycle.
+                if (auditData && auditData.apps) {
+                    const app = auditData.apps.find(x => x.name === name);
+                    if (app) { app.state = 'running'; app.running = true; app.last_active = Date.now() / 1000; }
+                }
+                renderMosaic();
+                renderFleetStats();
+            } else {
+                errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
+                btn.disabled = false;
+                btn.textContent = orig;
+            }
+        });
 
         // Components
         async function loadComponents() {
@@ -712,24 +966,30 @@
             }
         }
 
-        function showToast(msg, type = 'info') {
-            const toast = document.getElementById('toast');
-            toast.textContent = msg;
-            toast.className = 'toast show' + (type === 'error' ? ' error' : '');
-            clearTimeout(showToast._t);
-            showToast._t = setTimeout(() => toast.classList.remove('show'), 4000);
+        // ═══════════════════════════════════════════════════════════════
+        // Init + periodic refresh — only the currently visible tab refetches,
+        // plus the persistent fleet stat grid (cheap, cached endpoint).
+        // ═══════════════════════════════════════════════════════════════
+        function refresh() {
+            ensureAudit(true);
+            const active = document.querySelector('.tab.active');
+            const name = active ? active.dataset.tab : 'status';
+            if (name === 'mosaic') loadMosaic(true);
+            else if (name === 'status') { loadStatus(); loadHealth(); loadComponents(); }
+            else if (name === 'access') loadAccess();
+            else if (name === 'apps') loadApps();
+            else if (name === 'instances') loadInstances();
+            else if (name === 'actions') loadPowerStatus();
         }
 
-        function refresh() {
-            loadComponents();
-            loadStatus();
-            loadHealth();
-            loadAccess();
-            loadApps();
-            loadInstances();
-            loadPowerStatus();
-        }
-        refresh();
+        // Status is the default-active tab, so its data loads immediately;
+        // the other tabs (including Mosaïque) wait until first opened.
+        ensureAudit();
+        loadStatus();
+        loadHealth();
+        loadComponents();
+
+        setInterval(() => { if (!document.hidden) refresh(); }, 60000);
     </script>
 </body>
 </html>
