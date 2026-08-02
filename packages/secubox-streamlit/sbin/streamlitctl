@@ -234,6 +234,97 @@ _detect_entrypoint() {
 }
 
 # ─────────────────────────────────────────────────────────────────────
+# ARCHIVE HELPERS (#956) — an archived app is repaired-and-known but never
+# auto-started: `archived = true` must actually be honoured (unlike the
+# pre-existing `enabled` field, which was declarative-only decoration read
+# nowhere for apps — see cmd_instance_list for the one place `enabled` was
+# ever consulted, and it wasn't this one).
+# ─────────────────────────────────────────────────────────────────────
+
+# Vrai si $1 possède une section [apps.NAME] dans CONF_PATH.
+_app_declared() {
+    local name="$1"
+    [ -f "$CONF_PATH" ] || return 1
+    grep -qE "^\[apps\.${name}\]" "$CONF_PATH" 2>/dev/null
+}
+
+# Valeur brute (guillemets retirés) de la clé $3 dans la section
+# [apps.$2] de $1, ou vide si absente.
+_toml_section_value() {
+    local file="$1" name="$2" key="$3"
+    [ -f "$file" ] || return
+    sed -n "/^\[apps\.${name}\]/,/^\[/p" "$file" 2>/dev/null \
+        | grep -E "^${key}[ \t]*=" | head -1 \
+        | sed -E "s/^${key}[ \t]*=[ \t]*//" | tr -d '"'
+}
+
+# Vrai si $1 est déclarée avec archived = true.
+_app_archived() {
+    local name="$1"
+    [ "$(_toml_section_value "$CONF_PATH" "$name" archived)" = "true" ]
+}
+
+# Vrai si un process streamlit tourne actuellement pour l'appli $1. Même
+# logique de rattachement que `app audit`/`app repair` (priorité au
+# "path = ..." déclaré, repli sur l'heuristique du nom de fichier) —
+# dupliquée ici à dessein plutôt que factorisée dans cmd_app_audit/
+# cmd_app_repair, pour ne rien risquer sur les deux verbes déjà couverts
+# par tests.
+_app_currently_running() {
+    local target="$1"
+    local -A path_to_name=()
+    if [ -f "$CONF_PATH" ]; then
+        local line name p
+        while IFS= read -r line; do
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] || continue
+            p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+                | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+            [ -n "$p" ] && path_to_name["$p"]="$name"
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+    local ps_line script app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        if [ -n "${path_to_name[$script]:-}" ]; then
+            app="${path_to_name[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
+        [ "$app" = "$target" ] && return 0
+    done < <(_ps_lines)
+    return 1
+}
+
+# Remplace (ou insère si absente) la ligne "$3 = $4" dans la section
+# [apps.$2] de $1. Réécriture complète via temporaire + mv (atomique),
+# jamais d'édition in-place — même discipline que _set_toml_path_in_section.
+_set_toml_key_in_section() {
+    local file="$1" name="$2" key="$3" value="$4" tmp
+    tmp=$(mktemp)
+    awk -v want="[apps.${name}]" -v key="$key" -v val="$value" '
+        BEGIN { in_sec=0; done=0 }
+        {
+            if ($0 == want) { print; in_sec=1; done=0; next }
+            if (in_sec && /^\[/) {
+                if (!done) print key " = " val
+                in_sec=0
+            }
+            if (in_sec && $0 ~ "^"key"[ \t]*=") {
+                print key " = " val
+                done=1
+                next
+            }
+            print
+        }
+        END { if (in_sec && !done) print key " = " val }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
+# ─────────────────────────────────────────────────────────────────────
 # CONTAINER MANAGEMENT
 # ─────────────────────────────────────────────────────────────────────
 
@@ -609,6 +700,7 @@ cmd_app_audit() {
     local -A path_to_name=()    # path déclaré ("path = ...") -> name, pour le matching process
     local -A path_owners=()     # path déclaré -> liste (espace-séparée) des noms qui le déclarent
     local -A dup_path=()        # name -> 1 si son path déclaré est partagé par une autre section
+    local -A declared_archived=()  # name -> 1 si archived = true (#956)
     if [ -f "$CONF_PATH" ]; then
         local line name
         while IFS= read -r line; do
@@ -618,13 +710,15 @@ cmd_app_audit() {
         done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
 
         for name in "${!declared[@]}"; do
-            local p
+            local p arch
             p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
                 | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
             if [ -n "$p" ]; then
                 path_to_name["$p"]="$name"
                 path_owners["$p"]="${path_owners[$p]:-}$name "
             fi
+            arch=$(_toml_section_value "$CONF_PATH" "$name" archived)
+            [ "$arch" = "true" ] && declared_archived["$name"]=1
         done
 
         # Un même path déclaré par plusieurs sections [apps.*] est une
@@ -672,7 +766,7 @@ cmd_app_audit() {
     local names_sorted
     names_sorted=$(printf '%s\n' "${!seen_names[@]}" | sort)
 
-    local total=0 running_count=0
+    local total=0 running_count=0 archived_count=0
     local out="["
     local first=true
 
@@ -687,6 +781,16 @@ cmd_app_audit() {
         local is_running=false
         [ -n "${run_seen[$n]:-}" ] && is_running=true
         [ "$is_running" = "true" ] && running_count=$(( running_count + 1 ))
+        local is_archived=false
+        [ -n "${declared_archived[$n]:-}" ] && is_archived=true
+        [ "$is_archived" = "true" ] && archived_count=$(( archived_count + 1 ))
+        # Réparée et connue, mais jamais démarrée : un état à part, ni
+        # running ni sleeping (#956) — running reste prioritaire si
+        # l'appli tourne malgré tout (ex. archivée --force pendant
+        # qu'elle était en cours).
+        local state="sleeping"
+        [ "$is_archived" = "true" ] && state="archived"
+        [ "$is_running" = "true" ] && state="running"
 
         local entrypoint="" persisted_port="" entrypoint_candidates=0
         if [ "$shape" = "dir" ]; then
@@ -749,13 +853,13 @@ cmd_app_audit() {
 
         $first || out+=","
         first=false
-        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"running\":$is_running,\"port\":$port,\"issues\":$issues}"
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"issues\":$issues}"
     done <<< "$names_sorted"
 
     out+="]"
 
     cat <<EOF
-{"apps":$out,"summary":{"total":$total,"running":$running_count}}
+{"apps":$out,"summary":{"total":$total,"running":$running_count,"archived":$archived_count}}
 EOF
 }
 
@@ -999,6 +1103,212 @@ cmd_app_repair() {
 EOF
 }
 
+# app archive <name> [--apply] [--force] — bascule une appli DÉJÀ DÉCLARÉE
+# vers archived = true, enabled = false (#956). Convention `app repair`
+# exacte : simulation par défaut (rien n'est écrit sans --apply), sortie
+# JSON {"apply":...,"actions":[...],"summary":{...}}, sauvegarde horodatée
+# de CONF_PATH avant toute écriture. Ne touche jamais aux fichiers/
+# répertoires d'appli — archiver n'est pas supprimer.
+#
+# Une appli en cours d'exécution n'est jamais arrêtée par ce verbe : sans
+# --force, l'action est signalée bloquée ("running, use --force...")
+# plutôt qu'appliquée. Une appli déjà archivée est un no-op signalé
+# ("already archived"), pas une erreur.
+cmd_app_archive() {
+    local name="" apply=false force=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --apply) apply=true ;;
+            --force) force=true ;;
+            *) [ -z "$name" ] && name="$a" ;;
+        esac
+    done
+
+    [ -z "$name" ] && { error "Usage: streamlitctl app archive <name> [--apply] [--force]"; return 1; }
+
+    if ! _app_declared "$name"; then
+        error "App non déclarée : $name (déclarez-la d'abord, ou utilisez 'app archive --undeclared' pour l'archivage groupé)"
+        return 1
+    fi
+
+    local already=false
+    _app_archived "$name" && already=true
+    local running=false
+    _app_currently_running "$name" && running=true
+
+    local blocked=false reason=""
+    if [ "$already" = "true" ]; then
+        blocked=true
+        reason="already archived"
+    elif [ "$running" = "true" ] && [ "$force" = "false" ]; then
+        blocked=true
+        reason="running, use --force to archive anyway (the app itself is left untouched)"
+    fi
+
+    local did=false
+    if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+        cp -p "$CONF_PATH" "${CONF_PATH}.bak.$(date +%Y%m%dT%H%M%S)"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "archived" "true"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "enabled" "false"
+        did=true
+    fi
+
+    local applied=0
+    [ "$did" = "true" ] && applied=1
+
+    cat <<EOF
+{"apply":$apply,"actions":[{"type":"archive","app":"$(_json_escape "$name")","file":"$(_json_escape "$CONF_PATH")","running":$running,"blocked":$blocked,"reason":"$(_json_escape "$reason")","applied":$did}],"summary":{"total":1,"applied":$applied}}
+EOF
+}
+
+# app unarchive <name> [--apply] — l'inverse de `app archive` : archived =
+# false, enabled = true. Ne démarre rien — l'appli redevient simplement
+# démarrable via `app start`. Même convention simulation/--apply que
+# `app repair`.
+cmd_app_unarchive() {
+    local name="" apply=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --apply) apply=true ;;
+            *) [ -z "$name" ] && name="$a" ;;
+        esac
+    done
+
+    [ -z "$name" ] && { error "Usage: streamlitctl app unarchive <name> [--apply]"; return 1; }
+
+    if ! _app_declared "$name"; then
+        error "App non déclarée : $name"
+        return 1
+    fi
+
+    local was_archived=false
+    _app_archived "$name" && was_archived=true
+
+    local blocked=false reason=""
+    [ "$was_archived" = "false" ] && { blocked=true; reason="not archived"; }
+
+    local did=false
+    if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+        cp -p "$CONF_PATH" "${CONF_PATH}.bak.$(date +%Y%m%dT%H%M%S)"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "archived" "false"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "enabled" "true"
+        did=true
+    fi
+
+    local applied=0
+    [ "$did" = "true" ] && applied=1
+
+    cat <<EOF
+{"apply":$apply,"actions":[{"type":"unarchive","app":"$(_json_escape "$name")","file":"$(_json_escape "$CONF_PATH")","blocked":$blocked,"reason":"$(_json_escape "$reason")","applied":$did}],"summary":{"total":1,"applied":$applied}}
+EOF
+}
+
+# app archive --undeclared [--apply] [--force] — déclare, directement en
+# état archivé, toutes les applis présentes sur APPS_PATH mais absentes de
+# CONF_PATH (#956 : 29 relevées sur la board). Réutilise la détection de
+# point d'entrée de `app audit` (_detect_entrypoint) : sans point d'entrée
+# résolu, l'appli est tout de même déclarée archivée (sans "path = ..."),
+# `app audit`/`app repair` restant seuls juges de cette anomalie séparée.
+#
+# Même garde-fou que `app archive <name>` : une appli déjà en cours
+# d'exécution n'est jamais arrêtée, et n'est déclarée que si --force est
+# passé. Mêmes conventions repair : simulation par défaut, JSON, backup
+# horodaté unique pour tout le lot avant la première écriture.
+cmd_app_archive_undeclared() {
+    local apply=false force=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --apply) apply=true ;;
+            --force) force=true ;;
+        esac
+    done
+
+    local -A declared=()
+    if [ -f "$CONF_PATH" ]; then
+        local line name
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$name" ] && declared["$name"]=1
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+
+    local -A disk_shape=() disk_path=()
+    if [ -d "$APPS_PATH" ]; then
+        local entry base
+        for entry in "$APPS_PATH"/*; do
+            [ -e "$entry" ] || continue
+            base=$(basename "$entry")
+            _is_excluded_entry "$base" && continue
+            if [ -d "$entry" ]; then
+                disk_shape["$base"]="dir"
+                disk_path["$base"]="$entry"
+            elif [ "${base%.py}" != "$base" ]; then
+                disk_shape["${base%.py}"]="script"
+                disk_path["${base%.py}"]="$entry"
+            fi
+        done
+    fi
+
+    local backup_done=false
+    local backup_suffix; backup_suffix=$(date +%Y%m%dT%H%M%S)
+    local out="[" first=true total=0 applied=0
+
+    local name
+    for name in $(printf '%s\n' "${!disk_shape[@]}" | sort); do
+        [ -n "${declared[$name]:-}" ] && continue   # déjà déclarée : hors périmètre
+
+        local shape="${disk_shape[$name]}"
+        local dpath="${disk_path[$name]}"
+        local path_field=""
+        if [ "$shape" = "dir" ]; then
+            _detect_entrypoint "$dpath"
+            [ -n "$_EP_RESULT" ] && path_field="${name}/${_EP_RESULT}"
+        else
+            path_field="${name}.py"
+        fi
+
+        local running=false
+        _app_currently_running "$name" && running=true
+        local blocked=false reason=""
+        if [ "$running" = "true" ] && [ "$force" = "false" ]; then
+            blocked=true
+            reason="running, use --force to archive anyway (the app itself is left untouched)"
+        fi
+
+        local did=false
+        if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+            if [ "$backup_done" = "false" ]; then
+                [ -f "$CONF_PATH" ] && cp -p "$CONF_PATH" "${CONF_PATH}.bak.${backup_suffix}"
+                backup_done=true
+            fi
+            {
+                printf '\n[apps.%s]\n' "$name"
+                printf 'name = "%s"\n' "$name"
+                [ -n "$path_field" ] && printf 'path = "%s"\n' "$path_field"
+                printf 'archived = true\n'
+                printf 'enabled = false\n'
+            } >> "$CONF_PATH"
+            did=true
+            applied=$(( applied + 1 ))
+        fi
+
+        total=$(( total + 1 ))
+        $first || out+=","
+        first=false
+        out+="{\"type\":\"archive-undeclared\",\"app\":\"$(_json_escape "$name")\",\"file\":\"$(_json_escape "$CONF_PATH")\",\"path\":\"$(_json_escape "$path_field")\",\"shape\":\"$(_json_escape "$shape")\",\"running\":$running,\"blocked\":$blocked,\"reason\":\"$(_json_escape "$reason")\",\"applied\":$did}"
+    done
+
+    out+="]"
+
+    cat <<EOF
+{"apply":$apply,"actions":$out,"summary":{"total":$total,"applied":$applied}}
+EOF
+}
+
 # app info <name> — print metadata + runtime state from manifest + pid file (#182)
 cmd_app_info() {
     local name="$1"
@@ -1050,6 +1360,13 @@ cmd_app_start() {
 
     [ -z "$name" ] && { error "Usage: streamlitctl app start <name> [port]"; return 1; }
     [ -d "$APPS_PATH/$name" ] || { error "App not found: $name"; return 1; }
+
+    # Archivée = repérée et connue, mais jamais démarrée sans geste explicite
+    # de désarchivage (#956). Refus net plutôt qu'un démarrage silencieux.
+    if _app_archived "$name"; then
+        error "App archivée : $name — désarchivez-la d'abord (streamlitctl app unarchive $name --apply)"
+        return 1
+    fi
 
     if ! lxc_running; then
         error "Container not running. Start it first."
@@ -1259,6 +1576,9 @@ cmd_autostart() {
     if [ -f "$CONF_PATH" ]; then
         local apps=$(grep -E '^\[apps\.' "$CONF_PATH" | sed 's/\[apps\.//;s/\]//')
         for name in $apps; do
+            # Une appli archivée n'est jamais démarrée par le chemin groupé
+            # (#956) — seul un `app unarchive` explicite la rend éligible.
+            _app_archived "$name" && continue
             local autostart=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^autostart\s*=' | grep -q 'true' && echo "true" || echo "false")
             local port=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^port\s*=' | cut -d'=' -f2 | tr -d ' ')
             if [ "$autostart" = "true" ] && [ -n "$port" ]; then
@@ -1493,6 +1813,14 @@ case "${1:-}" in
             list)       cmd_app_list ;;
             audit)      cmd_app_audit ;;
             repair)     cmd_app_repair "$3" ;;
+            archive)
+                if [ "${3:-}" = "--undeclared" ]; then
+                    cmd_app_archive_undeclared "$4" "$5"
+                else
+                    cmd_app_archive "$3" "$4" "$5"
+                fi
+                ;;
+            unarchive)  cmd_app_unarchive "$3" "$4" ;;
             idle-check) cmd_app_idle_check ;;
             wake)       cmd_app_wake "$3" "$4" ;;
             start)  cmd_app_start "$3" "$4" ;;
@@ -1502,7 +1830,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|audit|repair|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
         esac
         ;;
 
@@ -1548,6 +1876,9 @@ Apps:
   app list              List all apps (directories only, legacy)
   app audit             Cross-reference disk/declared/running (JSON, read-only)
   app repair [--apply]  Fix orphan/wrong-path/stale-port config refs (dry-run by default)
+  app archive <name> [--apply] [--force]   Mark an app archived=true, enabled=false (dry-run by default)
+  app archive --undeclared [--apply] [--force]  Declare+archive all undeclared on-disk apps
+  app unarchive <name> [--apply]           Reverse of archive (dry-run by default)
   app start <name> [port]   Start an app
   app stop <name>           Stop an app
   app deploy <zip> [name]   Deploy from ZIP
