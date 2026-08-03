@@ -26,3 +26,13 @@ disk_floor_gb        = 5
 # ── Public exposure (nginx vhost :9080 → LXC :8090; HAProxy SNI ACL) ───
 [exposure]
 public_hostname = "torrent.gk2.secubox.in"
+
+# ── Conserve routing (host-side secubox-torrent-conserve) ──────────────
+# Destination partner per media category, by file extension (mp3/flac/…
+# audio vs mp4/mkv/… video — see classify_media() in the script for the
+# exact rules, including the ambiguous-container cases). "peertube" is a
+# video platform; "lyrion" is the music server. "none" (or any other
+# value) leaves matching items queued instead of guessing.
+[conserve]
+video = "peertube"
+audio = "lyrion"

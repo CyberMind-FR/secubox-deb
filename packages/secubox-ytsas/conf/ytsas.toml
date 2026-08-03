@@ -3,8 +3,8 @@
 # Operator-facing override of the package defaults. Edit values then re-run
 # install-lxc.sh (the postinst exports these into YTSAS_* env vars consumed by
 # lxc/install-lxc.sh, which writes them into the in-LXC
-# /opt/secubox-ytsas/ytsas.env read by the FastAPI app). The [peertube] section
-# is read by the host-side secubox-ytsas-conserve drain.
+# /opt/secubox-ytsas/ytsas.env read by the FastAPI app). The [conserve] and
+# [peertube] sections are read by the host-side secubox-ytsas-conserve drain.
 
 # ── LXC ─────────────────────────────────────────────────────────────────
 [lxc]
@@ -27,6 +27,16 @@ disk_floor_gb        = 5
 # ── Public exposure (nginx vhost :9080 → LXC :8091; HAProxy SNI ACL) ───
 [exposure]
 public_domain = "ytsas.gk2.secubox.in"
+
+# ── Conserve routing (host-side secubox-ytsas-conserve) ────────────────
+# Destination partner per media category, by file extension (mp3/flac/…
+# audio vs mp4/mkv/… video — see classify_media() in the script for the
+# exact rules, including the ambiguous-container cases). "peertube" is a
+# video platform; "lyrion" is the music server. "none" (or any other
+# value) leaves matching items queued instead of guessing.
+[conserve]
+video = "peertube"
+audio = "lyrion"
 
 # ── Conserve → PeerTube (host-side secubox-ytsas-conserve) ─────────────
 [peertube]

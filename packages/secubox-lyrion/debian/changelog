@@ -1,3 +1,18 @@
+secubox-lyrion (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * lyrionctl: new `ingest <file>` verb — the Lyrion-side half of the
+    torrent/ytsas "conserve" partner pipeline (ref #967). Copies <file> into
+    [library].path/conserve (the same tree already RO-bound into the LXC) and
+    nudges an LMS rescan; always emits JSON, {"ok":false,...} when the LXC
+    isn't running so callers know to leave the item queued rather than lose
+    it or misroute it. Requires the LXC to be RUNNING (not just provisioned)
+    before touching the filesystem, so a failure never leaves a half-placed
+    file nobody will scan.
+  * Added toml_get_sec() (ported from jellyfinctl) so [library].path resolves
+    correctly — config_get()'s flat grep would otherwise match [lxc] path.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 03 Aug 2026 14:00:00 +0200
+
 secubox-lyrion (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * lyrionctl: new `medialib` verb (detect | mount <path> | unmount | status),
