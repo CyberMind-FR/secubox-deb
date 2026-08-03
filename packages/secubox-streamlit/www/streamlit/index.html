@@ -137,11 +137,25 @@
         .mosaic-tempo.warn { color: var(--orange); }
         .mosaic-issues { display: flex; flex-wrap: wrap; gap: 0.3rem; }
         .mosaic-issue { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; letter-spacing: 0.03em; }
+        /* Vignette périmée / échec de capture (#958) — jamais un trou :
+           l'ancienne image (ou l'emoji de repli) reste affichée, ces
+           badges se contentent de la signaler. */
+        .mosaic-shot-flags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+        .mosaic-shot-flag { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .mosaic-shot-flag.stale { background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); }
+        .mosaic-shot-flag.failed { background: rgba(255,68,102,0.15); border: 1px solid var(--red); color: var(--red); }
         .mosaic-footer { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
         .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
         .mosaic-footer a:hover { text-decoration: underline; }
         .mosaic-footer button.btn { width: 100%; }
-        .mosaic-footer.mosaic-unpublished { color: var(--p31-dim); font-size: 0.7rem; font-style: italic; }
+        /* Appli en ligne : lien "ouvrir" (ou repli "non publiée") ET
+           bouton "recapturer" côte à côte — ni l'un ni l'autre ne doit
+           alors prendre toute la largeur. */
+        .mosaic-footer.two-up { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
+        .mosaic-footer.two-up a,
+        .mosaic-footer.two-up .mosaic-unpublished { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mosaic-footer.two-up button.btn { width: auto; flex: 0 0 auto; }
+        .mosaic-unpublished { color: var(--p31-dim); font-size: 0.7rem; font-style: italic; }
         .mosaic-empty { color: var(--p31-dim); padding: 1rem; grid-column: 1 / -1; }
 
         ::-webkit-scrollbar { width: 5px; }
@@ -657,17 +671,54 @@
                 ? '<div class="mosaic-tempo' + tempoClass(a, tempo) + '" data-tempo="' + name + '">' + esc(tempo) + '</div>'
                 : '';
 
+            // Vignette conservée (#958) — jamais de case vide : pas
+            // d'image -> l'emoji de repli (déjà le comportement par
+            // défaut ci-dessous). `?t=captured_at` fait de l'URL elle-même
+            // la clé de cache : tant que captured_at ne change pas, c'est
+            // OCTET POUR OCTET le même contenu, et le navigateur le sert
+            // depuis son propre cache sans réseau — voir le
+            // Cache-Control de la route côté serveur. Sur 56 tuiles
+            // rafraîchies toutes les 60s, c'est ce qui évite de
+            // retélécharger une seule image tant qu'elle n'a pas changé.
+            const hasShot = !!a.screenshot_available;
+            // encodeURIComponent() alone makes this HTML-attribute-safe (no
+            // raw &/</>/" can survive it) — no separate esc() needed.
+            const shotToken = encodeURIComponent(a.screenshot_captured_at || '');
+            const thumbInner = hasShot
+                ? '<img src="' + API + '/apps/' + encodeURIComponent(rawName) +
+                  '/screenshot?t=' + shotToken + '" alt="" loading="lazy">'
+                : '🧩';
+
+            // Dégradation attendue (#957 §3.6) : une vignette périmée ou
+            // issue d'une capture en échec reste affichée — ces badges se
+            // contentent de le signaler, jamais de la remplacer par un trou.
+            const shotFlags = [];
+            if (hasShot && a.screenshot_stale) {
+                shotFlags.push('<span class="mosaic-shot-flag stale" title="la source a changé depuis cette capture">⏳ périmée</span>');
+            }
+            if (a.screenshot_ok === false) {
+                shotFlags.push('<span class="mosaic-shot-flag failed" title="dernière tentative de capture en échec — image précédente conservée">⚠ échec capture</span>');
+            }
+            const shotFlagsHtml = shotFlags.length
+                ? '<div class="mosaic-shot-flags">' + shotFlags.join('') + '</div>'
+                : '';
+
             let footer = '';
-            if (url) {
-                footer = '<div class="mosaic-footer"><a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a></div>';
+            if (state === 'running') {
+                // Toujours un bouton "recapturer" pour une appli en ligne
+                // (#958) — à côté du lien "ouvrir" quand il existe, sinon
+                // à côté du repli "non publiée".
+                const openPart = url
+                    ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a>'
+                    : '<span class="mosaic-unpublished">non publiée</span>';
+                footer = '<div class="mosaic-footer two-up">' + openPart +
+                    '<button class="btn sm" data-recapture="' + name + '">📷 recapturer</button></div>';
             } else if (state === 'sleeping') {
                 footer = '<div class="mosaic-footer"><button class="btn sm" data-wake="' + name + '">☕ réveiller</button></div>';
-            } else if (state === 'running') {
-                footer = '<div class="mosaic-footer mosaic-unpublished">non publiée</div>';
             }
 
             return '<div class="mosaic-tile' + (state === 'archived' ? ' archived' : '') + '">' +
-                '<div class="mosaic-thumb' + thumbClass + '">🧩</div>' +
+                '<div class="mosaic-thumb' + thumbClass + '">' + thumbInner + '</div>' +
                 '<div class="mosaic-body">' +
                     '<div class="mosaic-name" title="' + name + '">' + name + '</div>' +
                     '<div class="mosaic-meta">' +
@@ -675,6 +726,7 @@
                         '<span>' + esc(meta) + '</span>' +
                     '</div>' +
                     tempoHtml +
+                    shotFlagsHtml +
                     (issues.length
                         ? '<div class="mosaic-issues">' + issues.map(i => '<span class="mosaic-issue">' + esc(MOSAIC_ISSUE_LABELS[i] || i) + '</span>').join('') + '</div>'
                         : '') +
@@ -708,28 +760,54 @@
         // Wake a sleeping app on demand (POST /apps/{name}/wake). Delegated
         // listener + data-* attribute — never hand-interpolated into onclick.
         document.getElementById('mosaic-grid').addEventListener('click', async (ev) => {
-            const btn = ev.target.closest('button[data-wake]');
-            if (!btn) return;
-            const name = btn.dataset.wake;
-            const orig = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = '⏳ réveil…';
-            const r = await api('/apps/' + encodeURIComponent(name) + '/wake', { method: 'POST' });
-            if (r && r.status) {
-                toast('☕ ' + name + ' réveillée (' + r.status + ')');
-                // Optimistic local patch: streamlit-audit.timer only refreshes
-                // the cache every 5 minutes server-side — reflect the wake
-                // immediately here instead of waiting for the next cycle.
-                if (auditData && auditData.apps) {
-                    const app = auditData.apps.find(x => x.name === name);
-                    if (app) { app.state = 'running'; app.running = true; app.last_active = Date.now() / 1000; }
+            const wakeBtn = ev.target.closest('button[data-wake]');
+            const recapBtn = ev.target.closest('button[data-recapture]');
+
+            if (wakeBtn) {
+                const name = wakeBtn.dataset.wake;
+                const orig = wakeBtn.textContent;
+                wakeBtn.disabled = true;
+                wakeBtn.textContent = '⏳ réveil…';
+                const r = await api('/apps/' + encodeURIComponent(name) + '/wake', { method: 'POST' });
+                if (r && r.status) {
+                    toast('☕ ' + name + ' réveillée (' + r.status + ')');
+                    // Optimistic local patch: streamlit-audit.timer only refreshes
+                    // the cache every 5 minutes server-side — reflect the wake
+                    // immediately here instead of waiting for the next cycle.
+                    if (auditData && auditData.apps) {
+                        const app = auditData.apps.find(x => x.name === name);
+                        if (app) { app.state = 'running'; app.running = true; app.last_active = Date.now() / 1000; }
+                    }
+                    renderMosaic();
+                    renderFleetStats();
+                } else {
+                    errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
+                    wakeBtn.disabled = false;
+                    wakeBtn.textContent = orig;
                 }
-                renderMosaic();
-                renderFleetStats();
-            } else {
-                errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
-                btn.disabled = false;
-                btn.textContent = orig;
+                return;
+            }
+
+            if (recapBtn) {
+                // Déclencheur MANUEL (#958, spec §3.1). La capture tourne
+                // dans un processus détaché côté serveur (jusqu'à ~240s) —
+                // cette requête ne l'attend PAS : elle revient dès que le
+                // processus est lancé. La nouvelle vignette n'apparaîtra
+                // qu'au prochain rafraîchissement de l'audit (60s) une fois
+                // captured_at effectivement changé ; on ne bloque jamais le
+                // bouton en attendant.
+                const name = recapBtn.dataset.recapture;
+                const orig = recapBtn.textContent;
+                recapBtn.disabled = true;
+                recapBtn.textContent = '⏳…';
+                const r = await api('/apps/' + encodeURIComponent(name) + '/recapture', { method: 'POST' });
+                if (r && r.triggered) {
+                    toast('📷 capture de ' + name + ' lancée — visible au prochain rafraîchissement');
+                } else {
+                    errorToast('Échec du déclenchement de capture pour ' + name + (r && r.detail ? ' : ' + r.detail : ''));
+                }
+                recapBtn.disabled = false;
+                recapBtn.textContent = orig;
             }
         });
 
