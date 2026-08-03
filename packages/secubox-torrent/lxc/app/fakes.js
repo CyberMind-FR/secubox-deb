@@ -5,14 +5,18 @@
 // Fake WebTorrent client + torrent objects for unit tests (no real network, no wrtc).
 
 export class FakeFile {
-  constructor(name, length) { this.name = name; this.length = length; }
+  // `relPath` mirrors real WebTorrent's file.path: the on-disk path relative
+  // to downloadDir (may include subfolders), which can differ from the bare
+  // `name`. Defaults to `name` when the caller doesn't care about the
+  // distinction (most existing tests).
+  constructor(name, length, relPath) { this.name = name; this.length = length; this.path = relPath || name; }
 }
 
 export class FakeTorrent {
   constructor(infoHash, name, files, { failMeta = false, emitError = false } = {}) {
     this.infoHash = infoHash; this.name = name;
     this.magnetURI = 'magnet:?xt=urn:btih:' + infoHash;
-    this.files = files.map((f, i) => Object.assign(new FakeFile(f.name, f.length), { idx: i }));
+    this.files = files.map((f, i) => Object.assign(new FakeFile(f.name, f.length, f.path), { idx: i }));
     this.progress = 0.1; this.downloadSpeed = 1000; this.uploadSpeed = 500;
     this.numPeers = 3; this.wires = [{ type: 'webrtc' }, { type: 'tcp' }];
     this._failMeta = failMeta; this._emitError = emitError; this._handlers = {}; this._client = null;
