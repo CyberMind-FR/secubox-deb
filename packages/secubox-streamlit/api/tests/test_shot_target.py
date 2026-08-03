@@ -163,6 +163,62 @@ def test_running_process_with_port_passed_as_a_separate_argument(tmp_path):
     assert '"url":"http://10.20.30.42:8509/"' in r.stdout
 
 
+def test_two_apps_sharing_a_port_never_resolve_to_the_same_url(tmp_path):
+    """Board reality (#958): among the declared apps, several pairs share
+    a port (e.g. two both configured for 8501). `_scan_running_apps` reads
+    the port straight off each process's OWN `--server.port` argument
+    (`_ps_lines` stays a single `lxc-attach` for the whole fleet, #958 —
+    no PID-level ownership check is added here), so if both processes are
+    genuinely alive with that same claimed port, this verb would otherwise
+    hand back the identical URL for two different app names: capturing the
+    second would silently photograph the first under the wrong name. A
+    port claimed by more than one currently-running app must fail
+    explicitly instead — never a fabricated, possibly-wrong target."""
+    apps_dir = tmp_path / "apps"; apps_dir.mkdir()
+    (apps_dir / "app_a.py").write_text("import streamlit\n")
+    (apps_dir / "app_b.py").write_text("import streamlit\n")
+    idle_dir = tmp_path / "idle"; idle_dir.mkdir()
+    conf = tmp_path / "streamlit.toml"; conf.write_text("")
+    ps_file = tmp_path / "ps.txt"
+    ps_file.write_text(
+        "streamlit run app_a.py --server.port=8501\n"
+        "streamlit run app_b.py --server.port=8501\n"
+    )
+    _mock_lxc_info(tmp_path)
+
+    r_a = _run_shot_target("app_a", apps_dir, conf, idle_dir,
+                            extra_path=str(tmp_path), ps_file=ps_file)
+    r_b = _run_shot_target("app_b", apps_dir, conf, idle_dir,
+                            extra_path=str(tmp_path), ps_file=ps_file)
+
+    for r in (r_a, r_b):
+        assert r.returncode not in (0,), r.stdout + r.stderr
+        assert '"ok":false' in r.stdout
+        assert '"url"' not in r.stdout
+
+
+def test_unrelated_apps_on_distinct_ports_are_unaffected_by_the_conflict_check(tmp_path):
+    """The port-conflict guard must only ever refuse a genuinely shared
+    port — two apps on their own distinct ports must resolve normally."""
+    apps_dir = tmp_path / "apps"; apps_dir.mkdir()
+    (apps_dir / "alone.py").write_text("import streamlit\n")
+    (apps_dir / "other.py").write_text("import streamlit\n")
+    idle_dir = tmp_path / "idle"; idle_dir.mkdir()
+    conf = tmp_path / "streamlit.toml"; conf.write_text("")
+    ps_file = tmp_path / "ps.txt"
+    ps_file.write_text(
+        "streamlit run alone.py --server.port=8550\n"
+        "streamlit run other.py --server.port=8551\n"
+    )
+    _mock_lxc_info(tmp_path, ip="10.20.30.50")
+
+    r = _run_shot_target("alone", apps_dir, conf, idle_dir,
+                          extra_path=str(tmp_path), ps_file=ps_file)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '"url":"http://10.20.30.50:8550/"' in r.stdout
+
+
 def test_running_but_lxc_ip_unavailable_reports_error_not_a_url(tmp_path):
     """If the container's IP can't be resolved (e.g. it stopped between
     the running-check and the IP lookup), the verb must fail cleanly,

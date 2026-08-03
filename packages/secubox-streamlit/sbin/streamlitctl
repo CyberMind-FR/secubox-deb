@@ -1814,9 +1814,31 @@ cmd_app_idle_check() {
     log "idle-check: active=$active idle=$idle stopped=$stopped"
 }
 
+# Budget par défaut (secondes) de `app wake` quand l'appelant ne fournit
+# PAS explicitement de budget (2e argument positionnel de la commande,
+# `app wake <name> <seconds>`, qui reste toujours prioritaire — c'est déjà
+# le canal CLI de configurabilité). Mesuré sur la board sous charge
+# moyenne 45-90 (#958) : les réveils prennent couramment 26 à 78s, parfois
+# plus. L'ancien plafond enfoui de 30s — utilisé par tout appelant qui
+# omet le 2e argument, dont le script de la passe de capture — échouait
+# donc systématiquement dès que la board travaillait. 300s laisse une
+# marge large sans magic number : surchageable par [wake].budget_seconds
+# dans $CONF_PATH (second canal de configurabilité, lu via _idle_config —
+# générique malgré son nom, une seule paire clé/valeur quelque part dans
+# le TOML, cf. sa docstring).
+#
+# Le canal CLI reste la SEULE limite qui gouverne la boucle d'attente
+# ci-dessous (`while [ "$elapsed" -lt "$wait_sec" ]`) : aucun compteur
+# d'essais indépendant n'y est ajouté. C'est précisément le piège déjà
+# corrigé ailleurs sur ce projet (cf. secubox_core/shotter.py) — une
+# boucle interne avec son propre plafond calibré finit par se disputer
+# silencieusement la décision avec le budget demandé par l'appelant.
+WAKE_DEFAULT_BUDGET_SECONDS=300
+
 cmd_app_wake() {
     local name="$1"
-    local wait_sec="${2:-30}"
+    local wait_sec="${2:-}"
+    [ -z "$wait_sec" ] && wait_sec=$(_idle_config "budget_seconds" "$WAKE_DEFAULT_BUDGET_SECONDS")
     [ -z "$name" ] && { error "Usage: streamlitctl app wake <name> [wait_seconds]"; return 2; }
 
     # Même garde d'existence que `app start` (#959) : un script à plat est
@@ -1882,6 +1904,7 @@ cmd_app_wake() {
 #   3  appli connue mais endormie
 #   4  port inconnu (le process est vu mais sans --server.port reconnu)
 #   5  IP de conteneur indisponible (conteneur arrêté entre deux checks)
+#   6  port partagé avec une AUTRE appli actuellement en ligne (#958)
 cmd_app_shot_target() {
     local name="$1"
     [ -z "$name" ] && { error "Usage: streamlitctl app shot-target <name>"; return 2; }
@@ -1908,6 +1931,24 @@ cmd_app_shot_target() {
         printf '{"ok":false,"error":"port unknown"}\n'
         return 4
     fi
+
+    # Deux applis déclarées sur le même port existent sur la board (#958,
+    # réassignation hors chantier ici). `_scan_running_apps` ne connaît le
+    # port de chaque appli QUE via son propre `--server.port` (aucun PID
+    # remonté par `_ps_lines` — délibérément un seul `lxc-attach` pour tout
+    # le parc, ne pas le complexifier ici) : rien ici ne permet de savoir
+    # laquelle des deux détient RÉELLEMENT le port en écoute. S'y fier
+    # renverrait la même URL pour les deux noms — une capture de l'une
+    # sous le nom de l'autre, silencieuse. Tant que le conflit existe sur
+    # la board, c'est un échec explicite, jamais une résolution au hasard.
+    local rn
+    for rn in "${!_RUN_PORT[@]}"; do
+        [ "$rn" = "$name" ] && continue
+        if [ "${_RUN_PORT[$rn]}" = "$port" ]; then
+            printf '{"ok":false,"error":"port %s shared with another running app"}\n' "$port"
+            return 6
+        fi
+    done
 
     local ip
     ip=$(_lxc_ip) || { printf '{"ok":false,"error":"lxc ip unavailable"}\n'; return 5; }
