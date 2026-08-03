@@ -1,11 +1,23 @@
-"""Tests for `streamlitctl app shot-target` (#958).
+"""Tests for `streamlitctl app shot-target` (#958). Detection mechanism
+reworked as part of the same issue, cf. header note below.
 
 This verb resolves the capture target (direct container URL + absolute
 source path) for ONE app, and is the single place that knows how to reach
 a Streamlit app from the host (container IP via `lxc-info`, port from the
-persisted `.streamlit.toml`). `api/shots.py` calls it rather than
-re-deriving entrypoint/port/IP itself, so it can never diverge the way
-app start/wake/audit did before #959.
+process itself). `api/shots.py` calls it rather than re-deriving
+entrypoint/port/IP itself, so it can never diverge the way app
+start/wake/audit did before #959.
+
+"running" and the port used to come from `_app_running`/`_app_port_file`
+(the per-app `.streamlit.toml`, checked with a live `ss`). #958 replaced
+that with `_scan_running_apps` — the same `_ps_lines()`-based matcher
+`app list`/`app audit` use — because the two disagreed on the board: the
+persisted config file only exists for apps started via `app
+start`/`wake`, so any process alive some other way made `app list` say
+"running":true while this verb said "not running" for the exact same app.
+Tests below inject the process signal via SECUBOX_STREAMLIT_PS_SOURCE
+(same idiom as test_app_audit.py / test_app_list_timing.py) instead of
+mocking `ss`.
 
 The test that matters most here is `test_sleeping_app_never_gets_a_url`:
 this verb must NEVER hand back a capturable URL for an app that isn't
@@ -42,35 +54,22 @@ exit 1
 """.format(ip=ip))
 
 
-def _mock_lxc_attach_listening(tmp_path: Path) -> None:
-    """Stands in for `lxc-attach -n <name> -- ss -tln "sport = :N"` and
-    always reports the requested port as LISTENing."""
-    _write_exec(tmp_path / "lxc-attach", """#!/bin/bash
-shift 2  # drop -n <name>
-shift    # drop --
-if [ "$1" = "ss" ]; then
-    port=$(printf '%s' "$3" | grep -oE '[0-9]+$')
-    printf 'State  Recv-Q Send-Q Local Address:Port  Peer Address:Port\\n'
-    printf 'LISTEN 0      128    0.0.0.0:%s          0.0.0.0:*\\n' "$port"
-    exit 0
-fi
-exit 0
-""")
-
-
-def _env(apps_dir, conf, idle_dir, extra_path=None):
+def _env(apps_dir, conf, idle_dir, extra_path=None, ps_file=None):
     base = "/usr/bin:/bin:/usr/sbin:/sbin"
     path = "{}:{}".format(extra_path, base) if extra_path else base
-    return {
+    env = {
         "PATH": path,
         "SECUBOX_STREAMLIT_APPS_PATH": str(apps_dir),
         "SECUBOX_STREAMLIT_CONF": str(conf),
         "SECUBOX_STREAMLIT_IDLE_DIR": str(idle_dir),
     }
+    if ps_file is not None:
+        env["SECUBOX_STREAMLIT_PS_SOURCE"] = str(ps_file)
+    return env
 
 
-def _run_shot_target(name, apps_dir, conf, idle_dir, extra_path=None):
-    env = _env(apps_dir, conf, idle_dir, extra_path)
+def _run_shot_target(name, apps_dir, conf, idle_dir, extra_path=None, ps_file=None):
+    env = _env(apps_dir, conf, idle_dir, extra_path, ps_file)
     return subprocess.run(["bash", str(CTL), "app", "shot-target", name],
                            capture_output=True, text=True, env=env, timeout=30)
 
@@ -109,13 +108,14 @@ def test_sleeping_app_never_gets_a_url(tmp_path):
 def test_running_flat_script_resolves_ip_port_and_source(tmp_path):
     apps_dir = tmp_path / "apps"; apps_dir.mkdir()
     (apps_dir / "billets.py").write_text("import streamlit\n")
-    (apps_dir / ".streamlit-billets.toml").write_text("port = 8530\n")
     idle_dir = tmp_path / "idle"; idle_dir.mkdir()
     conf = tmp_path / "streamlit.toml"; conf.write_text("")
+    ps_file = tmp_path / "ps.txt"
+    ps_file.write_text("streamlit run billets.py --server.port=8530\n")
     _mock_lxc_info(tmp_path, ip="10.20.30.40")
-    _mock_lxc_attach_listening(tmp_path)
 
-    r = _run_shot_target("billets", apps_dir, conf, idle_dir, extra_path=str(tmp_path))
+    r = _run_shot_target("billets", apps_dir, conf, idle_dir,
+                          extra_path=str(tmp_path), ps_file=ps_file)
 
     assert r.returncode == 0, r.stdout + r.stderr
     assert '"ok":true' in r.stdout
@@ -127,17 +127,40 @@ def test_running_directory_app_source_includes_relative_entrypoint(tmp_path):
     apps_dir = tmp_path / "apps"; apps_dir.mkdir()
     d = apps_dir / "control"; d.mkdir()
     (d / "app.py").write_text("import streamlit\n")
-    (d / ".streamlit.toml").write_text("port = 8600\n")
     idle_dir = tmp_path / "idle"; idle_dir.mkdir()
     conf = tmp_path / "streamlit.toml"; conf.write_text("")
+    ps_file = tmp_path / "ps.txt"
+    ps_file.write_text("streamlit run control/app.py --server.port=8600\n")
     _mock_lxc_info(tmp_path, ip="10.20.30.41")
-    _mock_lxc_attach_listening(tmp_path)
 
-    r = _run_shot_target("control", apps_dir, conf, idle_dir, extra_path=str(tmp_path))
+    r = _run_shot_target("control", apps_dir, conf, idle_dir,
+                          extra_path=str(tmp_path), ps_file=ps_file)
 
     assert r.returncode == 0, r.stdout + r.stderr
     assert '"url":"http://10.20.30.41:8600/"' in r.stdout
     assert str(d / "app.py") in r.stdout
+
+
+def test_running_process_with_port_passed_as_a_separate_argument(tmp_path):
+    """Board reality (#958): processes not started via this file's own
+    launch path (which always uses `--server.port=$port`) show up with the
+    port as a separate ps argument — `--server.port 8509`, space-separated,
+    not `=`. Both forms must resolve to the same target."""
+    apps_dir = tmp_path / "apps"; apps_dir.mkdir()
+    (apps_dir / "bazi_complete.py").write_text("import streamlit\n")
+    idle_dir = tmp_path / "idle"; idle_dir.mkdir()
+    conf = tmp_path / "streamlit.toml"; conf.write_text("")
+    ps_file = tmp_path / "ps.txt"
+    ps_file.write_text(
+        "/usr/bin/python3 /usr/local/bin/streamlit run bazi_complete.py "
+        "--server.port 8509 --server.address 0.0.0.0\n")
+    _mock_lxc_info(tmp_path, ip="10.20.30.42")
+
+    r = _run_shot_target("bazi_complete", apps_dir, conf, idle_dir,
+                          extra_path=str(tmp_path), ps_file=ps_file)
+
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert '"url":"http://10.20.30.42:8509/"' in r.stdout
 
 
 def test_running_but_lxc_ip_unavailable_reports_error_not_a_url(tmp_path):
@@ -146,9 +169,10 @@ def test_running_but_lxc_ip_unavailable_reports_error_not_a_url(tmp_path):
     never fabricate a URL."""
     apps_dir = tmp_path / "apps"; apps_dir.mkdir()
     (apps_dir / "flaky.py").write_text("import streamlit\n")
-    (apps_dir / ".streamlit-flaky.toml").write_text("port = 8540\n")
     idle_dir = tmp_path / "idle"; idle_dir.mkdir()
     conf = tmp_path / "streamlit.toml"; conf.write_text("")
+    ps_file = tmp_path / "ps.txt"
+    ps_file.write_text("streamlit run flaky.py --server.port=8540\n")
 
     # lxc-info reports RUNNING for -s, but returns nothing for -i (no IP).
     _write_exec(tmp_path / "lxc-info", """#!/bin/bash
@@ -156,9 +180,9 @@ shift 2
 if [ "$1" = "-s" ]; then echo "State: RUNNING"; exit 0; fi
 exit 0
 """)
-    _mock_lxc_attach_listening(tmp_path)
 
-    r = _run_shot_target("flaky", apps_dir, conf, idle_dir, extra_path=str(tmp_path))
+    r = _run_shot_target("flaky", apps_dir, conf, idle_dir,
+                          extra_path=str(tmp_path), ps_file=ps_file)
 
     assert r.returncode == 5
     assert '"ok":false' in r.stdout
