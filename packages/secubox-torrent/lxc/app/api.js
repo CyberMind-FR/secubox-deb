@@ -9,6 +9,8 @@ import Fastify from 'fastify';
 import path from 'node:path';
 import fs from 'node:fs';
 import { handleStream } from './stream.js';
+import { isValidInfohash, safeFilePath, buildZipArchive } from './zip.js';
+import { sanitizeFilename, contentDispositionHeader } from './filenames.js';
 
 // Uploaded .torrent files are small; cap the raw body well below anything that
 // could be abused. 5 MiB comfortably covers even huge multi-file torrents.
@@ -202,6 +204,67 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     await engine.ensureLoaded(ih, row && row.magnet);  // lazy-load before streaming
     return handleStream(engine, req, reply.raw)
       .then(() => { reply.hijack(); });
+  });
+
+  // Download a completed torrent's whole folder as one ZIP archive. Built
+  // and sent AS A STREAM (archiver pipes each file's fs.createReadStream
+  // straight into the response) — a torrent can be many GB, and this box has
+  // already gone down from disk saturation, so the archive is never
+  // materialised on disk nor held whole in memory.
+  //
+  // store:true (no deflate): torrent payloads are almost always already
+  // -compressed media (mp4/mkv/mp3/...), so spending CPU on deflate buys
+  // ~0% size reduction while burning cycles this board doesn't have to
+  // spare (load average regularly 45-90). STORE just frames+CRCs the bytes.
+  app.get('/api/v1/torrent/zip/:infohash', async (req, reply) => {
+    const ih = req.params.infohash;
+    if (!isValidInfohash(ih)) return reply.code(400).send({ error: 'invalid infohash' });
+    const row = library.get(ih);
+    if (!row) return reply.code(404).send({ error: 'not found' });
+    const t = await engine.ensureLoaded(ih, row.magnet);
+    if (!t) return reply.code(404).send({ error: 'not found' });
+    if (!t.files || !t.files.length) return reply.code(409).send({ error: 'no files to archive' });
+    // Same completeness gate as /conserve — no partial/corrupt archives.
+    if (typeof t.progress === 'number' && t.progress < 1) {
+      return reply.code(409).send({ error: 'download not complete' });
+    }
+
+    // The REAL path-traversal gate: each file.path comes from the torrent's
+    // own metadata (remote/untrusted), not from this request's infohash. A
+    // hostile torrent could declare a file outside downloadDir; refuse the
+    // whole archive rather than silently drop or follow it.
+    //
+    // The ZIP entry name is derived from the SAME resolved+validated abs
+    // path (path.relative back against downloadDir), not re-used verbatim
+    // from the untrusted f.path string. It's still the real torrent
+    // tree/name — resolve() only normalises it (e.g. collapses a harmless
+    // "sub/../file" down to "file") — but never contains a literal ".."
+    // segment, which also rules out zip-slip on whatever tool the user later
+    // extracts the archive with.
+    const base = path.resolve(engine.downloadDir);
+    const resolved = [];
+    for (const f of t.files) {
+      const abs = safeFilePath(engine.downloadDir, f.path || f.name);
+      if (!abs) return reply.code(500).send({ error: 'unsafe file path in torrent data' });
+      const entryName = path.relative(base, abs).split(path.sep).join('/');
+      resolved.push({ abs, name: entryName });
+    }
+
+    // Confirm the data is actually still on disk — library/engine state can
+    // drift from reality (purged out-of-band, moved, etc). Stat only (no
+    // reads), so this stays cheap even for a torrent with many files.
+    const stats = await Promise.all(resolved.map((f) => fs.promises.stat(f.abs).catch(() => null)));
+    if (stats.every((s) => !s)) return reply.code(404).send({ error: 'no data on disk' });
+    if (stats.some((s) => !s)) return reply.code(409).send({ error: 'torrent data incomplete on disk' });
+
+    const zipName = sanitizeFilename(row.name || t.name, ih) + '.zip';
+    reply.header('Content-Type', 'application/zip');
+    reply.header('Content-Disposition', contentDispositionHeader(zipName));
+    reply.header('X-Content-Type-Options', 'nosniff');
+
+    return buildZipArchive(resolved, {
+      onError: (err) => req.log.error({ err }, 'zip archive stream failed'),
+    });
   });
 
   return app;

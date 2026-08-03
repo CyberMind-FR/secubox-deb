@@ -8,6 +8,8 @@
  * CyberMind — https://cybermind.fr
  */
 
+import { sanitizeFilename, contentDispositionHeader } from './filenames.js';
+
 const MIME = { mp4: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska',
   m4v: 'video/mp4', mp3: 'audio/mpeg', m4a: 'audio/mp4', ogg: 'audio/ogg',
   flac: 'audio/flac', wav: 'audio/wav' };
@@ -20,8 +22,19 @@ export async function handleStream(engine, req, res) {
   const type = mimeOf(file.name);
   const total = file.length;
   const range = req.headers.range;
+  // The suggested filename for a save/download action. `file.name` is the
+  // torrent's own metadata (from a remote peer/tracker) — untrusted, so it
+  // goes through sanitizeFilename before ever reaching an HTTP header.
+  // disposition-type is 'inline' (not 'attachment'): this same endpoint also
+  // backs <video>/<audio> src for in-page playback, and 'attachment' would
+  // force a download there instead of playing. The filename hint still
+  // applies whenever the browser DOES save (explicit download click, or
+  // "Save video as…").
+  const fallbackName = `${req.params.infohash}-${idx}`;
+  const dispo = contentDispositionHeader(sanitizeFilename(file.name, fallbackName), { type: 'inline' });
   if (!range) {
-    res.writeHead(200, { 'Content-Length': total, 'Content-Type': type, 'Accept-Ranges': 'bytes' });
+    res.writeHead(200, { 'Content-Length': total, 'Content-Type': type, 'Accept-Ranges': 'bytes',
+      'Content-Disposition': dispo });
     const stream = file.createReadStream({ start: 0, end: total - 1 });
     stream.on('error', () => { try { res.destroy(); } catch {} });
     stream.pipe(res);
@@ -35,7 +48,8 @@ export async function handleStream(engine, req, res) {
     res.writeHead(416, { 'Content-Range': `bytes */${total}` }); res.end(); return;
   }
   res.writeHead(206, { 'Content-Range': `bytes ${start}-${end}/${total}`,
-    'Content-Length': end - start + 1, 'Content-Type': type, 'Accept-Ranges': 'bytes' });
+    'Content-Length': end - start + 1, 'Content-Type': type, 'Accept-Ranges': 'bytes',
+    'Content-Disposition': dispo });
   const stream = file.createReadStream({ start, end });
   stream.on('error', () => { try { res.destroy(); } catch {} });
   stream.pipe(res);
