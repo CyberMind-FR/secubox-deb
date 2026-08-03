@@ -48,7 +48,7 @@ def _mock_lxc_attach_instant(tmp_path: Path) -> None:
     _write_exec(tmp_path / "lxc-attach", """#!/bin/bash
 shift 2  # drop -n <name>
 shift    # drop --
-if [ "$1" = "sh" ]; then
+if [ "$1" = "systemctl" ]; then
     exit 0
 fi
 if [ "$1" = "ss" ]; then
@@ -77,7 +77,11 @@ def _setup(tmp_path, conf_text):
     idle_dir = tmp_path / "idle"
     idle_dir.mkdir()
     conf = tmp_path / "streamlit.toml"
-    conf.write_text(conf_text)
+    # `app wake` never takes a port argument — a resolvable port has to
+    # come from somewhere else. A declared [apps.cc_osint].port keeps
+    # these tests focused purely on the wait-budget computation, never
+    # tripping the (unrelated) "no port configured" refusal.
+    conf.write_text(conf_text + "\n[apps.cc_osint]\nport = 8501\n")
     _mock_lxc_info(tmp_path)
     _mock_lxc_attach_instant(tmp_path)
     return apps_dir, conf, idle_dir

@@ -56,9 +56,10 @@ def _mock_lxc_attach(tmp_path: Path, stop_log: Path, established_ports=()) -> No
     """Stands in for lxc-attach for the two calls `idle-check` makes once
     it has resolved a port via `_scan_running_apps`: the `ss -tn state
     established "sport = :N"` liveness probe (`_port_active_conns`), and
-    the `sh -c ...` that `cmd_app_stop` issues when a candidate is
-    actually stopped. `_ps_lines` itself never reaches this binary — it is
-    short-circuited by SECUBOX_STREAMLIT_PS_SOURCE.
+    the `systemctl stop streamlit-app@<name>.service` that `cmd_app_stop`
+    issues when a candidate is actually stopped. `_ps_lines` itself never
+    reaches this binary — it is short-circuited by
+    SECUBOX_STREAMLIT_PS_SOURCE.
 
     `established_ports`: ports that must be reported as having a live
     ESTABLISHED connection (the app is "active", never a stop candidate).
@@ -77,8 +78,8 @@ if [ "$1" = "ss" ]; then
     esac
     exit 0
 fi
-if [ "$1" = "sh" ]; then
-    printf '%s\\n' "$3" >> "{stop_log}"
+if [ "$1" = "systemctl" ]; then
+    printf '%s\\n' "$*" >> "{stop_log}"
     exit 0
 fi
 exit 0

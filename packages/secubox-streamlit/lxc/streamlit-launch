@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-streamlit :: streamlit-launch
+# CyberMind — https://cybermind.fr
+#
+# ExecStart target of streamlit-app@.service (see streamlit-app@.service in
+# this same directory) — runs INSIDE the streamlit LXC container, one
+# process per app instance. Reads the port + entrypoint streamlitctl
+# already resolved and persisted on the HOST side (per-app
+# .streamlit.toml, written by `streamlitctl app start`/`app wake`/`app
+# repair --apply`/`app autostart ... --apply` — see ../sbin/streamlitctl's
+# _app_port_file/_app_entrypoint), visible here only through the APPS_PATH
+# bind mount.
+#
+# Deliberately does NOT re-derive the entrypoint from scratch, nor pick a
+# port on its own: this project already hit the bug class of two
+# independently-written resolution algorithms silently disagreeing about
+# which app owns which port (#958, #959) — streamlitctl's
+# _app_entrypoint/_app_port_file stay the ONLY place that logic lives.
+# This script only ever refuses to start on missing/invalid/conflicting
+# data; it never guesses, and it never reassigns a port.
+#
+# `exec`s streamlit in place at the end so systemd (Type=simple) tracks
+# the real streamlit PID directly — no wrapper process left dangling
+# between systemd and the app, so `systemctl stop` delivers SIGTERM to
+# the actual streamlit process, not to a shell that then has to relay it.
+set -euo pipefail
+
+STREAMLIT_BIN="${STREAMLIT_BIN:-streamlit}"
+APPS_PATH="${STREAMLIT_APPS_PATH:-/srv/streamlit/apps}"
+
+name="${1:-}"
+if [ -z "$name" ]; then
+    echo "streamlit-launch: usage: streamlit-launch <app-name>" >&2
+    exit 2
+fi
+
+if [ ! -d "$APPS_PATH" ]; then
+    echo "streamlit-launch: APPS_PATH not found: $APPS_PATH" >&2
+    exit 2
+fi
+
+# Same two shapes as _app_port_file() in sbin/streamlitctl: a directory
+# app keeps its port file INSIDE the app directory, a flat script keeps a
+# hidden file NEXT TO it under APPS_PATH — never a phantom directory
+# sharing the script's own name.
+if [ -d "$APPS_PATH/$name" ]; then
+    port_file="$APPS_PATH/$name/.streamlit.toml"
+else
+    port_file="$APPS_PATH/.streamlit-$name.toml"
+fi
+
+if [ ! -f "$port_file" ]; then
+    echo "streamlit-launch: no config for '$name' ($port_file) — this app was never started via streamlitctl (app start/wake/repair --apply), refusing to guess" >&2
+    exit 5
+fi
+
+entrypoint=$(grep -E '^entrypoint[ \t]*=' "$port_file" 2>/dev/null | head -1 \
+    | sed -E 's/^entrypoint[ \t]*=[ \t]*//' | tr -d '"' || true)
+port=$(grep -E '^port[ \t]*=' "$port_file" 2>/dev/null | head -1 \
+    | cut -d'=' -f2 | tr -d ' "' || true)
+
+if [ -z "$entrypoint" ]; then
+    echo "streamlit-launch: no entrypoint recorded for '$name' in $port_file — refusing to start" >&2
+    exit 4
+fi
+
+if [ -z "$port" ] || [ "$port" = "0" ]; then
+    echo "streamlit-launch: no port recorded for '$name' in $port_file — refusing to start" >&2
+    exit 5
+fi
+
+if [ ! -f "$APPS_PATH/$entrypoint" ]; then
+    echo "streamlit-launch: recorded entrypoint missing on disk: $APPS_PATH/$entrypoint — refusing to start" >&2
+    exit 4
+fi
+
+# Defense in depth: streamlitctl already refuses to call `systemctl start`
+# on a conflicting port (see cmd_app_start), but this unit can also be
+# started directly (`systemctl start streamlit-app@<name>`, boot-time
+# `enable`, a human bypassing streamlitctl) — so the same guard is
+# repeated here, from inside the container, against whatever is actually
+# listening right now. Never starts on a port that belongs to another app.
+if command -v ss >/dev/null 2>&1; then
+    if ss -tln "sport = :$port" 2>/dev/null | awk 'NR>1{f=1} END{exit f?0:1}'; then
+        echo "streamlit-launch: port $port is already in use — refusing to start '$name' on a conflicting port" >&2
+        exit 6
+    fi
+fi
+
+cd "$APPS_PATH"
+exec "$STREAMLIT_BIN" run "$entrypoint" \
+    --server.port="$port" \
+    --server.headless=true \
+    --server.address=0.0.0.0
