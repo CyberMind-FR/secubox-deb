@@ -27,10 +27,36 @@ cibles connues à ce jour :
   visible se stabilise dès le 5ᵉ relevé, pour un PNG final de 120 800 octets.
   Aucun sélecteur applicatif à connaître.
 - `wait_streamlit_ready` (le défaut historique de ce module) : le conteneur
-  `[data-testid="stAppViewContainer"]` apparaît vers 60 s, mais la page ne
-  contient alors que « Stop » — le bouton affiché pendant l'exécution du
-  script. Il faut attendre le conteneur PUIS la production du contenu.
-  Diagnostic mesuré sur une vraie appli, board sous charge :
+  `[data-testid="stAppViewContainer"]` apparaît dès le tout début du rendu —
+  avant même que le script de l'appli n'ait produit quoi que ce soit. Ronde
+  5 (issue #958) : une passe sur 15 applis éveillées a donné 5 réussites et
+  10 rendus vides (5 400 à 9 900 octets, `MIN_PNG_BYTES`=20000 a rejeté à
+  raison). Une capture manuelle d'un échec, gardes-fous désactivés,
+  montrait le squelette de chargement Streamlit — barres grises arrondies,
+  aucun texte. Le conteneur seul ne prouve donc rien sur l'état peint de la
+  page ; attendre en plus que le texte visible dépasse un seuil et se
+  stabilise ne suffit pas non plus, car la barre d'outils Streamlit (chrome
+  React monté indépendamment du script applicatif — hamburger, bouton
+  Deploy) peint tôt, dépasse déjà `MIN_VISIBLE_TEXT_CHARS` et reste stable
+  pendant que la zone de contenu affiche encore le squelette. Il faut donc
+  un signal qui porte spécifiquement sur l'état du squelette et de
+  l'exécution, vérifié dans le bundle JS compilé de Streamlit
+  (`static/js/index.*.js`, versions 1.50 à 1.55) :
+
+  - `SKELETON_SELECTOR` (`[data-testid="stAppSkeleton"]`) : élément racine
+    du squelette, monté tant que le premier rendu réel n'est pas arrivé
+    (`RawAppSkeleton`/`AppSkeleton` dans le bundle) ;
+  - `STATUS_WIDGET_SELECTOR` (`[data-testid="stStatusWidget"]`) :
+    indicateur « Running... » + bouton Stop, monté avec `unmountOnExit`
+    uniquement pendant que le script s'exécute ou qu'une reprise est
+    demandée (`ScriptRunState.RUNNING`/`RERUN_REQUESTED`) — son absence
+    signale la fin d'exécution, y compris pour un rerun qui ne réaffiche
+    pas le squelette initial.
+
+  La stratégie attend donc : conteneur présent, PUIS squelette absent, PUIS
+  indicateur d'exécution absent, PUIS la même condition de contenu que
+  `wait_static_ready`. Diagnostic mesuré sur une vraie appli, board sous
+  charge, avant ce correctif :
 
       t=10s  readyState=interactive  texte visible=0   conteneur ABSENT
       t=30s  readyState=interactive  texte visible=0   conteneur ABSENT
@@ -81,6 +107,20 @@ CHROMIUM = shutil.which("chromium") or "/usr/bin/chromium"
 # `wait_streamlit_ready`. Conservé comme constante de module (et pas
 # recalculé à chaque appel) : c'est un contrat public, testé explicitement.
 WAIT_SELECTOR = '[data-testid="stAppViewContainer"]'
+
+# Squelette de chargement Streamlit (barres grises arrondies, aucun texte),
+# monté tant que le premier rendu réel n'est pas arrivé. Vérifié dans le
+# bundle JS compilé de Streamlit (`static/js/index.*.js`, versions 1.50 à
+# 1.55) : `RawAppSkeleton` rend `data-testid="stAppSkeleton"` sur son
+# élément racine — voir la docstring du module pour le diagnostic complet.
+SKELETON_SELECTOR = '[data-testid="stAppSkeleton"]'
+
+# Indicateur d'exécution en cours de Streamlit (« Running... » + bouton
+# Stop). Vérifié dans le même bundle : monté avec `unmountOnExit` tant que
+# `scriptRunState` vaut `RUNNING` ou `RERUN_REQUESTED` — son absence signale
+# la fin d'exécution du script, y compris pour un rerun qui ne réaffiche pas
+# le squelette initial (`SKELETON_SELECTOR`).
+STATUS_WIDGET_SELECTOR = '[data-testid="stStatusWidget"]'
 
 # Un rendu réel (Streamlit ou page statique) pèse au minimum plusieurs
 # dizaines de Ko. En dessous de ce seuil, c'est la page blanche qu'on cherche
@@ -206,22 +246,40 @@ async def wait_static_ready(evaluate, progress: _Progress) -> None:
 async def wait_streamlit_ready(evaluate, progress: _Progress) -> None:
     """Stratégie d'attente pour une appli Streamlit.
 
-    Le conteneur racine `WAIT_SELECTOR` apparaît (mesuré sur la board, page
-    sous charge) vers t=60s — mais à cet instant la page ne contient que le
-    bouton « Stop » (4 caractères), affiché tant que le script s'exécute
-    encore. Il faut donc attendre le conteneur PUIS la même condition de
-    contenu que `wait_static_ready` : texte visible au-dessus du seuil,
-    stable entre deux relevés. Volontairement indépendant de tout indicateur
-    d'exécution interne à Streamlit (`stStatusWidget` ou équivalent) : c'est
-    un détail d'implémentation qui change entre versions, alors que le texte
-    visible de la page est un signal stable dans le temps.
+    Le conteneur racine `WAIT_SELECTOR` apparaît dès le tout début du
+    rendu — avant même que le script de l'appli ait produit quoi que ce
+    soit. Ronde 5 (issue #958) : l'attendre seul, puis se fier au texte
+    visible, ne suffit pas — la barre d'outils Streamlit (chrome React monté
+    indépendamment du script applicatif) peint tôt, dépasse déjà
+    `MIN_VISIBLE_TEXT_CHARS` et reste stable pendant que la zone de contenu
+    affiche encore le squelette de chargement. Diagnostic complet, mesures
+    et vérification des sélecteurs dans le bundle JS compilé : voir la
+    docstring du module.
+
+    La stratégie attend donc, dans l'ordre : le conteneur racine, PUIS la
+    disparition du squelette (`SKELETON_SELECTOR`), PUIS la disparition de
+    l'indicateur d'exécution (`STATUS_WIDGET_SELECTOR`), PUIS la même
+    condition de contenu que `wait_static_ready` : texte visible au-dessus
+    du seuil, stable entre deux relevés — un dernier filet de sécurité si un
+    autre widget que le squelette applicatif retarde encore le rendu.
 
     Boucle non bornée : aucun plafond interne, voir la docstring du module.
     """
     progress.phase = "attente du conteneur racine Streamlit"
-    selector_expr = f'!!document.querySelector({WAIT_SELECTOR!r})'
-    while not await evaluate(selector_expr):
+    container_expr = f'!!document.querySelector({WAIT_SELECTOR!r})'
+    while not await evaluate(container_expr):
         await asyncio.sleep(1.0)
+
+    progress.phase = "attente de la disparition du squelette de chargement"
+    skeleton_gone_expr = f'!document.querySelector({SKELETON_SELECTOR!r})'
+    while not await evaluate(skeleton_gone_expr):
+        await asyncio.sleep(1.0)
+
+    progress.phase = "attente de la fin d'exécution du script Streamlit"
+    status_gone_expr = f'!document.querySelector({STATUS_WIDGET_SELECTOR!r})'
+    while not await evaluate(status_gone_expr):
+        await asyncio.sleep(1.0)
+
     progress.phase = "attente de la production du contenu"
     await _wait_stable_visible_text(evaluate)
 

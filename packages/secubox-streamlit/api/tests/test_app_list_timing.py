@@ -99,8 +99,11 @@ def test_uses_ps_lines_for_detection(tmp_path):
     ctl_wrapper = tmp_path / "streamlitctl_wrapper.sh"
     ctl_path = str(CTL)
     ps_source_file = tmp_path / "ps_source.txt"
-    # Format: streamlit run <script_path>
-    ps_source_file.write_text("streamlit run /srv/apps/demo/app.py\n")
+    # Format: streamlit run <script_path>, relative to APPS_PATH — the only
+    # form the app-launch path in this file produces, and the only one
+    # observed on the board (#958: real ps lines are e.g. "bazi_complete.py"
+    # or "secubox_evolution/app.py", never an absolute /srv/apps/... path).
+    ps_source_file.write_text("streamlit run demo/app.py\n")
 
     wrapper_script = """#!/bin/bash
 set -e

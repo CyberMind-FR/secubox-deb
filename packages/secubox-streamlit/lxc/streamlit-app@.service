@@ -1,0 +1,59 @@
+# streamlit-app@.service — one instance per Streamlit application.
+#
+# Replaces the single all-or-nothing streamlit-all.service (Type=forking,
+# MainPID lost -> 0, ExecStop=pkill -f streamlit killing the whole fleet,
+# enabled -> every app started on every boot whether used or not). Runs
+# INSIDE the `streamlit` LXC container, installed by streamlitctl's
+# `install`/repair path (see ../sbin/streamlitctl, cmd_install) — never
+# shipped as a host-side Debian unit.
+#
+# %i is the app name — matches a directory or a flat .py script under the
+# APPS_PATH bind mount (see ../sbin/streamlitctl's _app_port_file for the
+# exact two shapes). ExecStart delegates all port/entrypoint resolution to
+# streamlit-launch, which reads the SAME per-app .streamlit.toml
+# streamlitctl already writes — never a second, independently-derived
+# notion of "what this app's entrypoint/port is" (that class of bug bit
+# this project twice already, see streamlitctl's _scan_running_apps
+# docstring, #958/#959).
+#
+# Restart=no is a deliberate design decision, not an oversight:
+#
+#   The one hard requirement driving this whole change is "a stopped app
+#   stays stopped" — the entire idle-sleep/wake feature depends on it.
+#   `systemctl stop` (used by `streamlitctl app stop` / idle-check) never
+#   triggers Restart= — that policy only fires when the tracked process
+#   exits WHILE the unit is still supposed to be up, never on an
+#   intentional stop. So on that narrow axis alone, the "restart only on
+#   failure" policy would technically already be safe.
+#
+#   But a crash-loop retry (OOM on an already RAM/CPU-constrained board, a
+#   broken deploy, a port yanked out from under it by another app) has no
+#   business silently retrying itself. Recovery belongs to an operator or
+#   to streamlitctl (`app wake`, idle-check's own re-arm logic), not to an
+#   implicit systemd policy — an automatically-restarting unit is exactly
+#   the failure class this change replaces (streamlit-all.service
+#   restarting the ENTIRE FLEET because ONE app was stopped, NRestarts=3
+#   matching three manual shutdown attempts). Restart=no makes "stopped
+#   stays stopped" true unconditionally, for every exit reason, without
+#   having to reason about which exit codes/signals systemd would
+#   consider a "failure" versus a clean stop.
+[Unit]
+Description=Streamlit app: %i
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/streamlit-launch %i
+Restart=no
+# Belt-and-suspenders alongside Restart=no: even a manual `systemctl
+# start` loop from outside can't turn into a hot retry storm.
+StartLimitIntervalSec=0
+
+# Not started by default. An app is switched on either on demand
+# (`streamlitctl app wake <name>`, driving `systemctl start` for this
+# exact instance) or, for the apps declared `autostart = true` in
+# /etc/secubox/streamlit.toml, by `systemctl enable` — the declarative,
+# per-instance opt-in that makes it survive a container reboot. Nothing
+# in this file enables every instance in bulk.
+[Install]
+WantedBy=multi-user.target

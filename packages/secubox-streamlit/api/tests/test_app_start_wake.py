@@ -29,22 +29,23 @@ exit 0
 
 
 def _mock_lxc_attach(tmp_path: Path, capture_file: Path, started_flag: Path) -> None:
-    """Stands in for lxc-attach for both the start invocation (`sh -c ...`)
-    and the wake readiness poll (`ss -tln "sport = :N"`).
+    """Stands in for lxc-attach for both the start invocation
+    (`systemctl start streamlit-app@<name>.service`) and the wake
+    readiness poll (`ss -tln "sport = :N"`).
 
     Real invocations are `lxc-attach -n <name> -- <cmd...>` — this strips
-    the `-n <name> --` prefix and dispatches on what follows. The `sh -c`
-    branch records the launched command line (so tests can assert on the
-    exact `streamlit run <path>` invoked) and flips a flag; the `ss`
-    branch reports the app's port as listening only once that flag is
-    set, so `_app_running`'s poll loop genuinely observes "not running,
-    then running" across a real start.
+    the `-n <name> --` prefix and dispatches on what follows. The
+    `systemctl` branch records the invocation (so tests can assert
+    exactly which unit was started) and flips a flag; the `ss` branch
+    reports the app's port as listening only once that flag is set, so
+    `_app_running`'s poll loop genuinely observes "not running, then
+    running" across a real start.
     """
     _write_exec(tmp_path / "lxc-attach", """#!/bin/bash
 shift 2  # drop -n <name>
 shift    # drop --
-if [ "$1" = "sh" ]; then
-    printf '%s\\n' "$3" >> "{capture}"
+if [ "$1" = "systemctl" ]; then
+    printf '%s\\n' "$*" >> "{capture}"
     touch "{flag}"
     exit 0
 fi
@@ -74,14 +75,19 @@ def _env(apps_dir, conf, idle_dir, extra_path=None):
 def test_wake_flat_script_succeeds(tmp_path):
     """A flat .py script under APPS_PATH is a valid app: wake must bring it
     up, not bounce with "app not found" (pre-#959 required a directory —
-    12 of the 15 apps online on the board are flat scripts)."""
+    12 of the 15 apps online on the board are flat scripts).
+
+    `app wake` never takes a port argument (only a wait-seconds one), so
+    a resolvable port has to come from somewhere else: a declared
+    [apps.billets].port, exactly the persisted/declared source
+    `cmd_app_start` now requires (never a silent default)."""
     apps_dir = tmp_path / "apps"
     apps_dir.mkdir()
     (apps_dir / "billets.py").write_text("import streamlit\n")
     idle_dir = tmp_path / "idle"
     idle_dir.mkdir()
     conf = tmp_path / "streamlit.toml"
-    conf.write_text("")
+    conf.write_text("[apps.billets]\nport = 8501\n")
 
     capture = tmp_path / "captured_cmd.txt"
     flag = tmp_path / "started.flag"
@@ -94,20 +100,22 @@ def test_wake_flat_script_succeeds(tmp_path):
 
     assert r.returncode == 0, r.stderr
     assert "not found" not in r.stderr.lower()
-    assert flag.exists(), "streamlit run was never invoked: " + r.stderr
+    assert flag.exists(), "the per-app unit was never started: " + r.stderr
 
     launched = capture.read_text()
-    assert "streamlit run billets.py" in launched
-    assert "cd /srv/streamlit/apps" in launched
-    assert "cd /srv/apps/billets" not in launched
+    assert "systemctl start streamlit-app@billets.service" in launched
 
     # Port persisted next to the script, never as a phantom "billets/" dir
     # sharing the script's own name — that would show up as a duplicate,
-    # entrypoint-less disk entry in `app audit`/`app list`.
+    # entrypoint-less disk entry in `app audit`/`app list`. The entrypoint
+    # is persisted alongside it: it is the ONLY thing lxc/streamlit-launch
+    # reads to know what to run inside the container.
     assert not (apps_dir / "billets").exists()
     port_file = apps_dir / ".streamlit-billets.toml"
     assert port_file.exists()
-    assert "port = 8501" in port_file.read_text()
+    port_text = port_file.read_text()
+    assert "port = 8501" in port_text
+    assert 'entrypoint = "billets.py"' in port_text
 
 
 def test_start_directory_app_with_non_conventional_entrypoint_succeeds(tmp_path):
@@ -136,13 +144,13 @@ def test_start_directory_app_with_non_conventional_entrypoint_succeeds(tmp_path)
 
     assert r.returncode == 0, r.stderr
     launched = capture.read_text()
-    assert "streamlit run control/test_dashboard.py" in launched
-    assert "cd /srv/streamlit/apps" in launched
-    assert "cd /srv/apps/control" not in launched
+    assert "systemctl start streamlit-app@control.service" in launched
 
     port_file = d / ".streamlit.toml"
     assert port_file.exists()
-    assert "port = 8600" in port_file.read_text()
+    port_text = port_file.read_text()
+    assert "port = 8600" in port_text
+    assert 'entrypoint = "control/test_dashboard.py"' in port_text
 
 
 def test_start_archived_app_is_still_refused(tmp_path):
