@@ -35,6 +35,14 @@ lxc_exists() { [ -d "$LXC_PATH/rootfs" ]; }
 
 IDLE_STATE_DIR="${SECUBOX_STREAMLIT_IDLE_DIR:-/var/lib/secubox/streamlit/idle}"
 
+# Répertoire des vignettes capturées (#958) — écrit par `streamlit-shotter`
+# (api/shots.py, secubox_core.screenshots), jamais par ce script : ce
+# dernier ne fait que LIRE la métadonnée pour l'exposer dans `app audit`
+# (champs screenshot_*, voir plus bas). Ne dépend pas de `load_config` /
+# data_path, donc pas de ré-application après `load_config()` comme
+# APPS_PATH/CONF_PATH/IDLE_STATE_DIR plus bas dans MAIN.
+SHOTS_DIR="${SECUBOX_STREAMLIT_SHOTS_DIR:-/var/cache/secubox/streamlit/shots}"
+
 # Read [idle] settings from /etc/secubox/streamlit.toml with safe defaults.
 # Note: `grep | head | cut | tr` always exits 0 (tr's status) even when grep
 # matched nothing, so a trailing `|| echo $default` never fires and missing
@@ -105,6 +113,43 @@ _json_escape() {
     s="${s//\\/\\\\}"
     s="${s//\"/\\\"}"
     echo "$s"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# SCREENSHOT HELPERS (#958) — target resolution for the capturer, and
+# read-only exposure of its results in `app audit`.
+# ─────────────────────────────────────────────────────────────────────
+
+# IP interne du conteneur LXC streamlit sur son bridge (br-lan, #958). Le
+# chromium qui capture les vignettes tourne sur l'HÔTE, jamais dans le
+# conteneur (~2 Go de RAM disponibles sur la board ne tiennent pas deux
+# chromium, #957 §3.4) : c'est cette IP directe, jamais le vhost public,
+# qui doit servir de cible. Deux raisons l'imposent : (1) la chaîne
+# WAF/mitmproxy casse la mise à niveau WebSocket dont Streamlit dépend pour
+# peindre quoi que ce soit — le rendu réel n'apparaît qu'après connexion
+# websocket (#957 §2) ; (2) 4 des domaines déclarés ne sont même pas
+# routés côté WAF (421). Le conteneur est sur le LAN (DHCP), pas sur un
+# réseau isolé à IP fixe comme d'autres modules — d'où une résolution
+# dynamique via lxc-info plutôt qu'un calcul.
+_lxc_ip() {
+    lxc_running || return 1
+    local ip
+    ip=$(lxc-info -n "$LXC_NAME" -i -H 2>/dev/null | grep -v '^127\.' | head -1)
+    [ -n "$ip" ] || return 1
+    printf '%s' "$ip"
+}
+
+# Extrait la valeur (guillemets retirés) de la clé $2 dans le fichier JSON
+# $1 — écrit par secubox_core.screenshots (json.dumps(meta, indent=2), une
+# paire clé/valeur par ligne). Pas de jq : jamais introduit comme
+# dépendance dans ce fichier, et le format produit ici est fixe, propre à
+# ce projet — un grep/sed ciblé suffit et reste cohérent avec le reste du
+# fichier (TOML lu de la même façon).
+_shot_meta_value() {
+    local file="$1" key="$2"
+    [ -f "$file" ] || return
+    grep -E "\"${key}\"[ \t]*:" "$file" 2>/dev/null | head -1 \
+        | sed -E "s/.*\"${key}\"[ \t]*:[ \t]*//; s/,[[:space:]]*\$//" | tr -d '"'
 }
 
 # ─────────────────────────────────────────────────────────────────────
@@ -1010,14 +1055,49 @@ cmd_app_audit() {
         # vide si l'appli n'a aucune instance déclarée avec un domaine.
         local domain="${app_domain[$n]:-}"
 
-        local ename eentry edomain
+        # Vignette conservée (#958) — lue depuis SHOTS_DIR, jamais calculée
+        # ici : ce bloc ne fait QUE rapporter ce que streamlit-shotter a
+        # déjà écrit, à AUCUN moment il ne déclenche une capture. Réutilise
+        # $shape/$entrypoint déjà résolus ci-dessus (jamais une seconde
+        # résolution d'entrypoint, cf. _app_entrypoint comme source unique).
+        # "stale" compare l'empreinte enregistrée (mtime:taille au moment
+        # de la capture) à celle du fichier source ACTUEL : les deux côtés
+        # (ici et api/shots.py) doivent produire le même format
+        # "<mtime>:<taille>" — stat -c '%Y:%s' côté bash, f"{mtime}:{size}"
+        # côté Python — pour que la comparaison ait un sens.
+        local shot_available=false shot_ok=false shot_stale=true shot_captured=""
+        if [ -n "$entrypoint" ]; then
+            local shot_src=""
+            if [ "$shape" = "dir" ]; then
+                shot_src="$APPS_PATH/$n/$entrypoint"
+            else
+                shot_src="$APPS_PATH/$entrypoint"
+            fi
+            [ -f "$SHOTS_DIR/$n/screenshot.png" ] && shot_available=true
+            local shot_meta="$SHOTS_DIR/$n/screenshot.json"
+            if [ -f "$shot_meta" ]; then
+                local shot_ok_raw; shot_ok_raw=$(_shot_meta_value "$shot_meta" "ok")
+                [ "$shot_ok_raw" = "true" ] && shot_ok=true
+                shot_captured=$(_shot_meta_value "$shot_meta" "captured_at")
+                local shot_stored_fp shot_current_fp
+                shot_stored_fp=$(_shot_meta_value "$shot_meta" "fingerprint")
+                shot_current_fp=""
+                [ -f "$shot_src" ] && shot_current_fp=$(stat -c '%Y:%s' "$shot_src" 2>/dev/null)
+                if [ "$shot_ok" = "true" ] && [ -n "$shot_current_fp" ] && [ "$shot_current_fp" = "$shot_stored_fp" ]; then
+                    shot_stale=false
+                fi
+            fi
+        fi
+
+        local ename eentry edomain eshotcap
         ename=$(_json_escape "$n")
         eentry=$(_json_escape "$entrypoint")
         edomain=$(_json_escape "$domain")
+        eshotcap=$(_json_escape "$shot_captured")
 
         $first || out+=","
         first=false
-        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"domain\":\"$edomain\",\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after}"
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"domain\":\"$edomain\",\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after,\"screenshot_available\":$shot_available,\"screenshot_ok\":$shot_ok,\"screenshot_stale\":$shot_stale,\"screenshot_captured_at\":\"$eshotcap\"}"
     done <<< "$names_sorted"
 
     out+="]"
@@ -1701,6 +1781,59 @@ cmd_app_wake() {
     return 1
 }
 
+# app shot-target <name> — résout la cible de capture d'une appli EN
+# LIGNE (#958) : son URL directe (IP du conteneur : port — jamais le vhost
+# public, voir _lxc_ip ci-dessus) et le chemin ABSOLU côté hôte de son
+# fichier source, pour l'empreinte mtime+taille que compare
+# secubox_core.screenshots. N'existe QUE pour une appli déjà éveillée —
+# invariant central du design (#957 §3.5) : une appli endormie renvoie
+# "not running", jamais un réveil déclenché depuis ici. Seule source de
+# vérité pour cette résolution ; api/shots.py (côté secubox-streamlit)
+# s'y appelle plutôt que de redériver elle-même entrypoint/port/IP, pour
+# ne jamais diverger de app start/wake/audit comme c'était le cas avant
+# #959.
+#
+# Sortie JSON {"ok":true,"url":"...","source":"..."} ou
+# {"ok":false,"error":"..."}. Codes de retour (non lus par l'appelant
+# Python, qui ne parse que le JSON, mais tenus cohérents avec app wake) :
+#   2  appli inconnue, ou connue sans point d'entrée résoluble
+#   3  appli connue mais endormie
+#   4  port inconnu (pas de .streamlit.toml persistant malgré _app_running)
+#   5  IP de conteneur indisponible (conteneur arrêté entre deux checks)
+cmd_app_shot_target() {
+    local name="$1"
+    [ -z "$name" ] && { error "Usage: streamlitctl app shot-target <name>"; return 2; }
+
+    local ep_rc=0
+    _app_entrypoint "$name" || ep_rc=$?
+    if [ "$ep_rc" -eq 3 ]; then
+        printf '{"ok":false,"error":"app not found"}\n'
+        return 2
+    elif [ "$ep_rc" -eq 4 ]; then
+        printf '{"ok":false,"error":"no entrypoint"}\n'
+        return 2
+    fi
+    local rel_entrypoint="$_EP_RESULT"
+
+    if ! _app_running "$name"; then
+        printf '{"ok":false,"error":"not running"}\n'
+        return 3
+    fi
+
+    local port
+    port=$(grep -E "^port\s*=" "$(_app_port_file "$name")" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+    if [ -z "$port" ]; then
+        printf '{"ok":false,"error":"port unknown"}\n'
+        return 4
+    fi
+
+    local ip
+    ip=$(_lxc_ip) || { printf '{"ok":false,"error":"lxc ip unavailable"}\n'; return 5; }
+
+    printf '{"ok":true,"url":"http://%s:%s/","source":"%s"}\n' \
+        "$ip" "$port" "$(_json_escape "$APPS_PATH/$rel_entrypoint")"
+}
+
 cmd_app_deploy() {
     local zip_file="$1"
     local name="$2"
@@ -2033,6 +2166,7 @@ case "${1:-}" in
             unarchive)  cmd_app_unarchive "$3" "$4" ;;
             idle-check) cmd_app_idle_check ;;
             wake)       cmd_app_wake "$3" "$4" ;;
+            shot-target) cmd_app_shot_target "$3" ;;
             start)  cmd_app_start "$3" "$4" ;;
             stop)   cmd_app_stop "$3" ;;
             deploy) cmd_app_deploy "$3" "$4" ;;
@@ -2040,7 +2174,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check|wake} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check|wake|shot-target} [args]" ;;
         esac
         ;;
 
