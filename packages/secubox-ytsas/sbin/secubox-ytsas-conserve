@@ -34,24 +34,34 @@ LXC_UID="${SECUBOX_YTSAS_LXC_UID:-100000}"
 
 log() { logger -t sbx-"$MODULE" "$*"; }
 
-# _toml_str <key> <default> — best-effort flat TOML string read (same idiom
-# used across the project's *ctl tools; see lyrionctl/jellyfinctl config_get).
-# Separate from _toml() above (which is numeric-only, for channel/privacy).
-_toml_str() {
-  local key="$1" default="${2:-}" raw
-  raw=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$TOML" 2>/dev/null | head -1)
-  [ -n "$raw" ] || { printf '%s' "$default"; return; }
+# _toml_sec <section> <key> <default> — section-aware scalar read of $TOML.
+# Separate from _toml() above (flat/numeric, for channel/privacy). Section-
+# aware on purpose: a flat reader would silently return the wrong value if
+# "video"/"audio" ever appear as keys under some other section — same class
+# of bug toml_get_sec() in lyrionctl/jellyfinctl exists to avoid for
+# [lxc].path vs [library].path.
+_toml_sec() {
+  local section="$1" key="$2" default="${3:-}"
+  [ -f "$TOML" ] || { printf '%s' "$default"; return; }
   local val
-  val=$(printf '%s' "$raw" | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' \
-    | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' | tr -d '"' | tr -d "'")
+  val=$(awk -v section="$section" -v key="$key" '
+    /^[[:space:]]*\[/ { s=$0; gsub(/[][[:space:]]/,"",s); cur=s; next }
+    cur==section {
+        line=$0; k=line; sub(/=.*/,"",k); gsub(/[[:space:]]/,"",k)
+        if (k==key) {
+            v=line; sub(/^[^=]*=/,"",v); sub(/#.*/,"",v)
+            gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); gsub(/["'\''"]/,"",v)
+            print v; exit
+        }
+    }' "$TOML" 2>/dev/null || true)
   [ -n "$val" ] && printf '%s' "$val" || printf '%s' "$default"
 }
 
 # ── Conserve routing (declarative — [conserve] in ytsas.toml) ──────────────
 # "peertube" | "lyrion" | "none" (or any other value) — "none"/unrecognised
 # leaves matching items queued rather than guessing a destination.
-CONSERVE_VIDEO_DEST="${SECUBOX_YTSAS_CONSERVE_VIDEO:-$(_toml_str video peertube)}"
-CONSERVE_AUDIO_DEST="${SECUBOX_YTSAS_CONSERVE_AUDIO:-$(_toml_str audio lyrion)}"
+CONSERVE_VIDEO_DEST="${SECUBOX_YTSAS_CONSERVE_VIDEO:-$(_toml_sec conserve video peertube)}"
+CONSERVE_AUDIO_DEST="${SECUBOX_YTSAS_CONSERVE_AUDIO:-$(_toml_sec conserve audio lyrion)}"
 
 # ── Audio/video classification ──────────────────────────────────────────────
 # Extension is the primary signal — cheap and correct for the overwhelming
@@ -170,7 +180,15 @@ for req in "$QDIR"/*.json; do
       fi
       ;;
     *)
-      log "no destination configured for $id (dest='$dest') — leaving queued"
+      # An operator-set "none" (deliberate opt-out) or a typo'd/unknown
+      # value both land here. Unlike a partner outage this can never
+      # resolve itself on a later retry, so treat it as a terminal skip
+      # (dequeue + record) rather than leave the item queued forever —
+      # the latter would grow $QDIR without bound and spam this log every
+      # tick for a persistent, intentional configuration.
+      rm -f "$req"
+      _result "$id" "$(printf '{"status":"skipped","reason":"conserve disabled for this media type (dest=%s)"}' "$dest")"
+      log "no destination configured for $id (dest='$dest') — skipped"
       ;;
   esac
 done

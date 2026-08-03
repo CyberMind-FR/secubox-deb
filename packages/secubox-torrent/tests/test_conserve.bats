@@ -4,6 +4,8 @@
 # never goes to either, and an absent partner tool leaves the item queued
 # instead of losing it or misrouting it.
 
+bats_require_minimum_version 1.5.0
+
 load helpers
 
 @test "empty queue: script exits cleanly, does nothing" {
@@ -19,7 +21,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "lyrionctl ingest $TMP/dl/song.mp3" "$STUB_LOG"
-    ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
 
     [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-mp3.json" ]
     [ "$(result_status ih-mp3)" = "done" ]
@@ -33,7 +35,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "lyrionctl ingest $TMP/dl/album.flac" "$STUB_LOG"
-    ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
 
     [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-flac.json" ]
     [ "$(result_status ih-flac)" = "done" ]
@@ -51,7 +53,7 @@ load helpers
     for ext in ogg opus m4a wav; do
         grep -q "lyrionctl ingest $TMP/dl/track.$ext" "$STUB_LOG"
     done
-    ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
 }
 
 @test "mp4 video still goes to peertube, never touches lyrionctl" {
@@ -62,7 +64,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "peertubectl upload $TMP/dl/movie.mp4" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
 
     [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-mp4.json" ]
     [ "$(result_status ih-mp4)" = "done" ]
@@ -75,8 +77,8 @@ load helpers
     run "$CONSERVE"
     [ "$status" -eq 0 ]
 
-    ! grep -q "peertubectl" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
 
     # Terminal error recorded and dequeued — re-running would never change
     # the verdict for a genuinely unrecognised extension.
@@ -91,8 +93,8 @@ load helpers
     run "$CONSERVE"
     [ "$status" -eq 0 ]
 
-    ! grep -q "peertubectl" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
     [ "$(result_status ih-noext)" = "error" ]
 }
 
@@ -105,7 +107,7 @@ load helpers
     run "$CONSERVE"
     [ "$status" -eq 0 ]
 
-    ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
     # Request untouched — no result written, nothing removed from the queue.
     [ -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-nolyr.json" ]
     [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-results/ih-nolyr.json" ]
@@ -123,7 +125,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "lyrionctl ingest $TMP/dl/song.mp3" "$STUB_LOG"
-    ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
     [ -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-lyrfail.json" ]
     [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-results/ih-lyrfail.json" ]
 }
@@ -168,7 +170,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "peertubectl upload $TMP/dl/clip.mkv" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
 }
 
 @test "mkv without a video stream (ffprobe available, audio-only) goes to lyrion" {
@@ -180,7 +182,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "lyrionctl ingest $TMP/dl/audiorip.mkv" "$STUB_LOG"
-    ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
 }
 
 @test "mkv with no ffprobe available defaults to peertube (preserves existing video path)" {
@@ -192,7 +194,7 @@ load helpers
     [ "$status" -eq 0 ]
 
     grep -q "peertubectl upload $TMP/dl/unknown.mkv" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
 }
 
 @test "video destination is declaratively overridable via torrent.toml" {
@@ -203,10 +205,27 @@ load helpers
     run "$CONSERVE"
     [ "$status" -eq 0 ]
 
-    ! grep -q "peertubectl" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
-    # "none" leaves it queued (an intentional operator opt-out), not errored.
-    [ -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-cfgvideo.json" ]
+    run ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
+    # "none" is an intentional, permanent operator opt-out — it terminally
+    # skips (dequeues + records) rather than retrying forever, which would
+    # otherwise grow the queue dir without bound.
+    [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-cfgvideo.json" ]
+    [ "$(result_status ih-cfgvideo)" = "skipped" ]
+}
+
+@test "[conserve] section-awareness: a same-named key under another section does not leak in" {
+    # video/audio would collide with a flat (non-section-aware) TOML reader
+    # if this ever appeared above [conserve] in the file.
+    printf '[decoy]\naudio = "peertube"\n\n[conserve]\naudio = "lyrion"\n' > "$SECUBOX_TORRENT_TOML"
+    make_file "$TMP/dl/song.mp3"
+    queue_item "ih-secaware" "Song" "$TMP/dl/song.mp3"
+
+    run "$CONSERVE"
+    [ "$status" -eq 0 ]
+
+    grep -q "lyrionctl ingest $TMP/dl/song.mp3" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
 }
 
 @test "missing source file is a terminal error like before" {
@@ -215,8 +234,8 @@ load helpers
     run "$CONSERVE"
     [ "$status" -eq 0 ]
 
-    ! grep -q "peertubectl" "$STUB_LOG"
-    ! grep -q "lyrionctl" "$STUB_LOG"
+    run ! grep -q "peertubectl" "$STUB_LOG"
+    run ! grep -q "lyrionctl" "$STUB_LOG"
     [ ! -f "$SECUBOX_TORRENT_DATA/.conserve-queue/ih-missing.json" ]
     [ "$(result_status ih-missing)" = "error" ]
 }

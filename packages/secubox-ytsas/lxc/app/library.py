@@ -9,12 +9,14 @@ CyberMind — https://cybermind.fr
 
 SQLite-backed yt-dlp media library — the "sas" (staging area). A downloaded
 video is CONSERVED BY DEFAULT (nothing auto-disappears); purge is opt-in: set
-`ephemeral_until` and only then does the sweep delete it, at that time. A video
-can also be conserved permanently in PeerTube (peertube_* columns).
+`ephemeral_until` and only then does the sweep delete it, at that time. An
+item can also be conserved permanently — to PeerTube for video (peertube_*
+columns) or to Lyrion for audio (lyrion_* columns); the host conserve drain
+picks the destination per file type (issue #967).
 
 Semantics mirror the torrent SAS (packages/secubox-torrent/lxc/app/library.js)
 exactly: kept-by-default, opt-in ephemeral TTL, disk-floor safety valve that
-touches ONLY ephemerals, and a host-mediated conserve → PeerTube pipeline.
+touches ONLY ephemerals, and a host-mediated conserve pipeline.
 """
 
 import sqlite3
@@ -70,6 +72,8 @@ class Library:
         add("ephemeral_until", "INTEGER")
         add("peertube_status", "TEXT")
         add("peertube_url", "TEXT")
+        add("lyrion_status", "TEXT")
+        add("lyrion_path", "TEXT")
         add("complete", "INTEGER DEFAULT 0")
         # Legacy rows stored kept=0 (ephemeral-by-default). Under the sas model
         # they become conserved: keep them, no ephemeral_until → never purged.
@@ -122,6 +126,17 @@ class Library:
             self.db.execute(
                 "UPDATE items SET peertube_status=?, peertube_url=COALESCE(?,peertube_url) WHERE id=?",
                 (status, url, id),
+            )
+            self.db.commit()
+
+    def set_lyrion(self, id: str, status: str, path: str = None):
+        """Lyrion conserve result (audio) — mirrors set_peertube(), separate
+        columns so a video's PeerTube history and an audio's Lyrion history
+        never collide."""
+        with self._lock:
+            self.db.execute(
+                "UPDATE items SET lyrion_status=?, lyrion_path=COALESCE(?,lyrion_path) WHERE id=?",
+                (status, path, id),
             )
             self.db.commit()
 
