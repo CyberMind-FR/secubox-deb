@@ -35,6 +35,21 @@
  * ═══════════════════════════════════════════════════════════════
  */
 
+/* ── LAYOUT CONSTANTS ── */
+/* Single source of truth for the fixed global top bar's height.
+ * #global-menu-bar (injected by sidebar.js) reads this to size itself,
+ * and every content-offset rule below reads it to push panel content
+ * clear of the bar. Change the bar's height ONLY here — do not
+ * hardcode 48px (or any other value) anywhere else. Several modules
+ * (fmrelay, lyrion, security-posture, sentinelle-gsm, threat-analyst,
+ * threats, zigbee, hub/health.css) already define their own local
+ * --gmb-h fallback for the same reason; keep this value in sync with
+ * theirs (48px) if it ever changes.
+ */
+:root {
+    --gmb-h: 48px;
+}
+
 /* ── BASE RESET & BODY ── */
 /* !important used to override inline module styles */
 body.hybrid-skin,
@@ -1681,7 +1696,7 @@ body.hybrid-skin .map {
     left: 220px !important;
     right: 0 !important;
     padding: 0 1.5rem !important;
-    height: 48px !important;
+    height: var(--gmb-h) !important;
     background: linear-gradient(180deg, rgba(20, 26, 36, 0.98) 0%, rgba(10, 14, 20, 0.95) 100%) !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
@@ -1760,11 +1775,18 @@ body.hybrid-skin .map {
     .global-menu-bar { left: 0 !important; }
 }
 
-/* Adjust main content padding to account for top menu bar */
+/* Adjust main content padding to account for the fixed top menu bar.
+ * --gmb-h is the bar's actual height (defined once, top of file);
+ * the +8px is breathing room, not part of the clearance itself.
+ * `.layout > .container` covers the handful of iframe-shell modules
+ * (grafana, mqtt, rustdesk) that don't use a .main/.main-content
+ * wrapper — the child combinator keeps this from also matching the
+ * unrelated nested `.container` cards used elsewhere as a panel style. */
 .hybrid-skin .main,
 .hybrid-skin .main-content,
-.hybrid-skin main {
-    padding-top: 56px !important;
+.hybrid-skin main,
+.hybrid-skin .layout > .container {
+    padding-top: calc(var(--gmb-h) + 8px) !important;
     margin-top: 0 !important;
 }
 
