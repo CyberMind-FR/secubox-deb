@@ -144,7 +144,7 @@ def _app(tmp_path):
     return src
 
 
-def test_main_skips_without_capturing_when_target_not_ok(tmp_path, monkeypatch):
+def test_main_never_captures_when_target_not_ok(tmp_path, monkeypatch):
     """Mirrors the invariant pinned in test_shot_target.py: a sleeping (or
     unknown) app must never be captured — here at the orchestration
     level, regardless of what streamlitctl actually said."""
@@ -161,8 +161,30 @@ def test_main_skips_without_capturing_when_target_not_ok(tmp_path, monkeypatch):
 
     rc = shots.main(["demo"])
 
-    assert rc == 0
     assert calls == []
+
+
+def test_main_unresolvable_target_is_never_a_silent_success(tmp_path, monkeypatch, capsys):
+    """#958: a batch run over 27 apps logged 25 "successes" while only 17
+    PNGs existed on disk — an unresolvable target (app not woken yet, not
+    found, port unknown, container IP unavailable...) returned exit 0 just
+    like a real capture, indistinguishable to a caller checking $? without
+    parsing JSON. This must never happen again: an unresolvable target is
+    its own outcome, with its own exit code, distinct from both a written
+    capture (0) and a rejected one (1) — and distinct in the JSON too, so a
+    caller doesn't have to parse free-text "error" strings to tell them
+    apart."""
+    monkeypatch.setenv("SECUBOX_STREAMLIT_SHOTS_CACHE", str(tmp_path / "cache"))
+    monkeypatch.setattr(shots, "resolve_target", lambda name, ctl=None: {"ok": False, "error": "not running"})
+
+    rc = shots.main(["demo"])
+
+    assert rc != 0
+    assert rc not in (shots.EXIT_OK, shots.EXIT_REJECTED), \
+        "must be distinguishable from both a written and a rejected capture"
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["outcome"] == "target-unavailable"
+    assert payload["ok"] is False
 
 
 def test_main_skips_when_fresh_without_force(tmp_path, monkeypatch):
@@ -218,7 +240,7 @@ def test_main_force_captures_even_when_fresh(tmp_path, monkeypatch):
     assert len(calls) == 1
 
 
-def test_main_captures_when_stale(tmp_path, monkeypatch):
+def test_main_captures_when_stale(tmp_path, monkeypatch, capsys):
     from secubox_core import screenshots
 
     cache_dir = tmp_path / "cache"
@@ -239,11 +261,19 @@ def test_main_captures_when_stale(tmp_path, monkeypatch):
 
     rc = shots.main(["demo"])
 
-    assert rc == 0
+    assert rc == shots.EXIT_OK
     assert len(calls) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["outcome"] == "written", \
+        "a caller must be able to tell a written capture apart from every other outcome without parsing free text"
 
 
-def test_main_returns_1_when_capture_fails(tmp_path, monkeypatch):
+def test_main_rejected_capture_is_distinguishable_from_target_unavailable(tmp_path, monkeypatch, capsys):
+    """#958: a capture that was ATTEMPTED (target resolved fine) but
+    rejected by the render/validation pipeline is a different failure mode
+    than a target that could never be resolved in the first place — mixing
+    them under the same exit code would recreate the exact ambiguity this
+    issue is about, just one level down."""
     monkeypatch.setenv("SECUBOX_STREAMLIT_SHOTS_CACHE", str(tmp_path / "cache"))
     src = _app(tmp_path)
 
@@ -257,7 +287,10 @@ def test_main_returns_1_when_capture_fails(tmp_path, monkeypatch):
 
     rc = shots.main(["demo"])
 
-    assert rc == 1
+    assert rc == shots.EXIT_REJECTED
+    assert rc != shots.EXIT_TARGET_UNAVAILABLE
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["outcome"] == "rejected"
 
 
 def test_main_skips_when_another_capture_holds_the_lock(tmp_path, monkeypatch):

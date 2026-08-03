@@ -51,6 +51,29 @@ DEFAULT_SHOTS_CACHE_DIR = "/var/cache/secubox/streamlit/shots"
 DEFAULT_CTL = "/usr/sbin/streamlitctl"
 LOCK_NAME = ".lock"
 
+# ─────────────────────────────────────────────────────────────────────────
+# Codes de sortie de `main()` (#958) — un appelant qui n'écrit AUCUNE image
+# ne doit jamais renvoyer le même code qu'une capture réellement écrite.
+# Un batch sur 27 applis a un jour journalisé 25 « succès » (rc=0) alors
+# que 17 PNG seulement existaient sur le disque : "cible introuvable"
+# (appli pas encore réveillée, disparue, port/IP indisponible) partageait
+# alors le rc=0 d'une vraie capture. Chaque issue distincte a maintenant
+# son propre code — ET son propre champ "outcome" dans le JSON, pour un
+# appelant qui préfère lire du JSON plutôt que $? :
+#   EXIT_OK                 capture écrite maintenant, OU image déjà
+#                            fraîche sur disque (rien à faire) — l'appelant
+#                            peut compter sur la présence du fichier
+#   EXIT_REJECTED            capture TENTÉE (cible résolue) mais rejetée
+#                            par le pipeline de rendu/validation
+#   EXIT_USAGE               erreur d'appel (nom d'appli manquant)
+#   EXIT_TARGET_UNAVAILABLE  cible introuvable : appli pas en ligne,
+#                            inconnue, port ou IP indisponible — jamais de
+#                            tentative de capture
+EXIT_OK = 0
+EXIT_REJECTED = 1
+EXIT_USAGE = 2
+EXIT_TARGET_UNAVAILABLE = 3
+
 
 # ─────────────────────────────────────────────────────────────────────────
 # Empreinte de fraîcheur — mtime + taille du fichier source
@@ -196,9 +219,18 @@ def main(argv=None) -> int:
       SECUBOX_STREAMLIT_SHOTS_CACHE   défaut /var/cache/secubox/streamlit/shots
       SECUBOX_STREAMLIT_CTL           défaut /usr/sbin/streamlitctl
 
-    Code de sortie : 0 si rien à faire (skip) ou capture réussie ; 1 si une
-    capture a été tentée et a échoué — jamais lu par un timer (il n'y en a
-    pas), seulement visible dans le journal d'un lancement manuel.
+    Code de sortie (#958 — voir les constantes EXIT_* en tête de module) :
+    une exécution qui n'écrit AUCUNE image ne renvoie JAMAIS 0. Une cible
+    introuvable (appli pas en ligne, inconnue, port/IP indisponible)
+    renvoie EXIT_TARGET_UNAVAILABLE, jamais EXIT_OK — même si, du point de
+    vue du DÉCLENCHEUR (un wake qui vient de réussir), ce n'est pas une
+    erreur bruyante à faire remonter : cette distinction est désormais
+    portée par le code de sortie et le champ JSON "outcome", pas par un rc
+    unique qui gommait la différence entre "rien à photographier" et "j'ai
+    photographié". `EXIT_OK` couvre à la fois une capture fraîchement
+    écrite et un skip "déjà à jour" (fresh) ou "verrou tenu ailleurs"
+    (locked) : dans les deux cas, une image valide reste (ou était déjà)
+    sur le disque — c'est ce qui les distingue d'une cible introuvable.
     """
     import asyncio
 
@@ -206,8 +238,9 @@ def main(argv=None) -> int:
     force = "--force" in argv
     positional = [a for a in argv if a != "--force"]
     if len(positional) != 1:
-        print(json.dumps({"ok": False, "error": "usage: streamlit-shotter <name> [--force]"}))
-        return 2
+        print(json.dumps({"ok": False, "outcome": "usage-error",
+                           "error": "usage: streamlit-shotter <name> [--force]"}))
+        return EXIT_USAGE
     name = positional[0]
 
     cache_dir = Path(os.environ.get("SECUBOX_STREAMLIT_SHOTS_CACHE", DEFAULT_SHOTS_CACHE_DIR))
@@ -215,15 +248,16 @@ def main(argv=None) -> int:
 
     lock = acquire_lock(cache_dir / LOCK_NAME)
     if lock is None:
-        print(json.dumps({"skipped": "locked", "name": name}))
-        return 0
+        print(json.dumps({"ok": True, "outcome": "locked", "skipped": "locked", "name": name}))
+        return EXIT_OK
 
     try:
         target = resolve_target(name, ctl=ctl)
         if not target.get("ok"):
-            print(json.dumps({"skipped": "target-unavailable", "name": name,
+            print(json.dumps({"ok": False, "outcome": "target-unavailable",
+                               "skipped": "target-unavailable", "name": name,
                                "reason": target.get("error")}))
-            return 0
+            return EXIT_TARGET_UNAVAILABLE
 
         url = target["url"]
         source = Path(target["source"])
@@ -232,12 +266,13 @@ def main(argv=None) -> int:
             from secubox_core import screenshots
             fingerprint = source_fingerprint(source)
             if not screenshots.is_stale(cache_dir, name, fingerprint):
-                print(json.dumps({"skipped": "fresh", "name": name}))
-                return 0
+                print(json.dumps({"ok": True, "outcome": "fresh", "skipped": "fresh", "name": name}))
+                return EXIT_OK
 
         result = asyncio.run(capture_app(cache_dir, name, url, source))
+        result["outcome"] = "written" if result.get("ok") else "rejected"
         print(json.dumps(result))
-        return 0 if result.get("ok") else 1
+        return EXIT_OK if result.get("ok") else EXIT_REJECTED
     finally:
         lock.release()
 
