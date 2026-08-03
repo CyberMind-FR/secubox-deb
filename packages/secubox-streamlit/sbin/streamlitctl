@@ -837,6 +837,38 @@ cmd_app_audit() {
         done
     fi
 
+    # 2bis) Domaine public déclaré via [instances.*], cross-référencé par le
+    # champ "app" de chaque instance (#960). Le mur mosaïque construisait
+    # jusqu'ici un lien "ouvrir" en assemblant http://<hôte-du-panneau>:<port>
+    # — une URL qui ne peut jamais fonctionner : les applis écoutent DANS la
+    # LXC (pas sur l'hôte du panneau), et le pare-feu y est en DROP par
+    # défaut. Seul le domaine réellement émancipé (déclaré sous
+    # [instances.*], champ "domain") constitue une destination valide ; une
+    # appli qui n'en a pas ne doit renvoyer qu'une chaîne vide — jamais une
+    # autre URL fabriquée. Si plusieurs instances déclarent le même "app",
+    # le premier domaine rencontré est retenu, sans en faire une erreur.
+    local -A app_domain=()   # nom d'appli (champ "app" d'une instance) -> domaine
+    if [ -f "$CONF_PATH" ]; then
+        local iline iid isection iapp idomain
+        while IFS= read -r iline; do
+            [ -z "$iline" ] && continue
+            iid=$(printf '%s' "$iline" | sed 's/^\[instances\.//;s/\]$//')
+            [ -n "$iid" ] || continue
+            # Pas de `head -n -1` ici (contrairement à cmd_instance_list) :
+            # quand l'instance est la DERNIÈRE section du fichier, sed
+            # imprime jusqu'à la fin, et `head -n -1` couperait alors la
+            # dernière ligne réelle de la section (souvent "domain = ...")
+            # au lieu de l'éventuel en-tête de section suivant qui n'existe
+            # pas. On laisse la plage inclure l'en-tête de la section
+            # suivante quand il existe : il ne matche jamais "^app\s*="
+            # ni "^domain\s*=" plus bas, donc sans effet.
+            isection=$(sed -n "/^\[instances\.${iid}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null)
+            iapp=$(printf '%s\n' "$isection" | grep -E '^app\s*=' | head -1 | cut -d'"' -f2)
+            idomain=$(printf '%s\n' "$isection" | grep -E '^domain\s*=' | head -1 | cut -d'"' -f2)
+            [ -n "$iapp" ] && [ -n "$idomain" ] && [ -z "${app_domain[$iapp]:-}" ] && app_domain["$iapp"]="$idomain"
+        done < <(grep -E '^\[instances\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+
     # 3) Processus en ligne, croisés par nom d'appli. On préfère le lien
     #    déclaré (path_to_name) quand il existe ; à défaut on retombe sur
     #    l'heuristique du nom de fichier (_app_name_of_script).
@@ -974,13 +1006,18 @@ cmd_app_audit() {
         done
         issues+="]"
 
-        local ename eentry
+        # Domaine public émancipé (#960), jamais une URL fabriquée : chaîne
+        # vide si l'appli n'a aucune instance déclarée avec un domaine.
+        local domain="${app_domain[$n]:-}"
+
+        local ename eentry edomain
         ename=$(_json_escape "$n")
         eentry=$(_json_escape "$entrypoint")
+        edomain=$(_json_escape "$domain")
 
         $first || out+=","
         first=false
-        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after}"
+        out+="{\"name\":\"$ename\",\"shape\":\"$shape\",\"entrypoint\":\"$eentry\",\"entrypoint_candidates\":$entrypoint_candidates,\"declared\":$is_declared,\"archived\":$is_archived,\"state\":\"$state\",\"running\":$is_running,\"port\":$port,\"domain\":\"$edomain\",\"issues\":$issues,\"last_active\":$last,\"idle_seconds\":$idle,\"sleep_after_seconds\":$sleep_after}"
     done <<< "$names_sorted"
 
     out+="]"

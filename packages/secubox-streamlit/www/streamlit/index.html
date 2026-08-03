@@ -141,6 +141,7 @@
         .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
         .mosaic-footer a:hover { text-decoration: underline; }
         .mosaic-footer button.btn { width: 100%; }
+        .mosaic-footer.mosaic-unpublished { color: var(--p31-dim); font-size: 0.7rem; font-style: italic; }
         .mosaic-empty { color: var(--p31-dim); padding: 1rem; grid-column: 1 / -1; }
 
         ::-webkit-scrollbar { width: 5px; }
@@ -629,7 +630,15 @@
             const hasPort = Number.isFinite(port) && port > 0;
             const shape = esc(a.shape || '-');
             const issues = a.issues || [];
-            const url = state === 'running' && hasPort ? `http://${location.hostname}:${port}` : null;
+            // Never rebuild http://<panel-host>:<port> here (#960): apps
+            // listen INSIDE the streamlit LXC, not on the panel's host, and
+            // the firewall is DROP by default — that URL can never work.
+            // The only valid destination is the domain the app was actually
+            // emancipated under (declared in [instances.*], surfaced by
+            // `streamlitctl app audit` as the "domain" field). No domain ->
+            // no link, ever — never a substitute URL.
+            const domain = a.domain || '';
+            const url = state === 'running' && domain ? `https://${domain}/` : null;
             const meta = shape + (state === 'running' && hasPort ? ' · :' + port : '');
 
             let thumbClass = '';
@@ -653,6 +662,8 @@
                 footer = '<div class="mosaic-footer"><a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a></div>';
             } else if (state === 'sleeping') {
                 footer = '<div class="mosaic-footer"><button class="btn sm" data-wake="' + name + '">☕ réveiller</button></div>';
+            } else if (state === 'running') {
+                footer = '<div class="mosaic-footer mosaic-unpublished">non publiée</div>';
             }
 
             return '<div class="mosaic-tile' + (state === 'archived' ? ' archived' : '') + '">' +
@@ -762,31 +773,51 @@
             `).join('');
         }
 
-        // Access
+        // Access — never rebuild http://<panel-host>:<port> (#960): apps
+        // listen INSIDE the streamlit LXC, not on the panel's host, behind
+        // a default-DROP firewall. Only the declared public domain (already
+        // carried per-instance by /access) is a valid link target; without
+        // one, say so instead of offering a link that cannot work.
         async function loadAccess() {
             const d = await api('/access');
             const list = document.getElementById('access-list');
             const access = d.access || [];
             if (!access.length) { list.innerHTML = '<p style="color:var(--p31-dim)">No running apps</p>'; return; }
             list.innerHTML = access.map(a => {
-                const url = a.url.replace('{{hostname}}', location.hostname);
+                const domain = a.domain || '';
+                const link = domain
+                    ? `<a href="${esc('https://' + domain + '/')}" target="_blank" rel="noopener">${esc(domain)}</a>`
+                    : '<span style="color:var(--p31-dim);font-style:italic">non publiée</span>';
                 return `<div class="access-item">
                     <div>
                         <strong>${esc(a.name)}</strong>
                         <span style="color:var(--p31-dim);margin-left:1rem">${esc(a.type)} - port ${esc(a.port)}</span>
                     </div>
-                    <a href="${esc(url)}" target="_blank">${esc(url)}</a>
+                    ${link}
                 </div>`;
             }).join('');
         }
 
-        // Apps
+        // Apps — same discipline as the mosaic wall (#960): the "Open"
+        // action only ever points at the app's declared public domain,
+        // sourced from the same /apps/audit cache the mosaic tiles use
+        // (memoized via ensureAudit — no extra round trip on repeat visits).
+        // Never http://<panel-host>:<port>, which cannot reach an app that
+        // only listens inside the streamlit LXC.
         async function loadApps() {
-            const d = await api('/apps');
+            const [d] = await Promise.all([api('/apps'), ensureAudit()]);
             const list = document.getElementById('app-list');
             const apps = d.apps || [];
+            const domainByName = new Map(
+                ((auditData && auditData.apps) || []).map(x => [x.name, x.domain || ''])
+            );
             if (!apps.length) { list.innerHTML = '<tr><td colspan="5" style="color:var(--p31-dim)">No apps deployed</td></tr>'; return; }
-            list.innerHTML = apps.map(a => `<tr>
+            list.innerHTML = apps.map(a => {
+                const domain = domainByName.get(a.name) || '';
+                const openAction = domain
+                    ? `<a class="btn sm" href="${esc('https://' + domain + '/')}" target="_blank" rel="noopener">Open</a>`
+                    : '<span style="color:var(--p31-dim);font-style:italic;font-size:0.75rem">non publiée</span>';
+                return `<tr>
                 <td><strong>${esc(a.name)}</strong></td>
                 <td style="color:var(--p31-dim)">${esc(a.main || '-')}</td>
                 <td>${esc(a.port || '-')}</td>
@@ -794,11 +825,12 @@
                 <td>
                     ${a.running
                         ? `<button class="btn danger sm" onclick="stopApp('${esc(a.name)}')">Stop</button>
-                           <button class="btn sm" onclick="window.open('http://'+location.hostname+':${esc(a.port)}')">Open</button>`
+                           ${openAction}`
                         : `<button class="btn success sm" onclick="promptStartApp('${esc(a.name)}')">Start</button>`}
                     <button class="btn danger sm" onclick="deleteApp('${esc(a.name)}')">Delete</button>
                 </td>
-            </tr>`).join('');
+            </tr>`;
+            }).join('');
         }
 
         // Instances
