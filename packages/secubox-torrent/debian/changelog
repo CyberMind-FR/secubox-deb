@@ -1,3 +1,19 @@
+secubox-torrent (2.2.9-1~bookworm1) bookworm; urgency=medium
+
+  * FIX conserved MP3/FLAC (and other common audio) went to PeerTube — a video
+    platform — because secubox-torrent-conserve uploaded every conserved file
+    through peertubectl regardless of type. It now classifies each file
+    (extension-based; ambiguous .mkv is content-probed via ffprobe when
+    available) and routes audio to Lyrion (`lyrionctl ingest`) while video
+    keeps going to PeerTube unchanged. Destination per category is declarative
+    — [conserve] video/audio in torrent.toml — not hardcoded. An unrecognised
+    file type is never routed anywhere (terminal error, dequeued); an absent
+    or unreachable Lyrion leaves the item queued for a later retry, exactly
+    like the existing "peertubectl not installed" degrade path (ref #967).
+  * Recommends: secubox-lyrion, ffmpeg (ffprobe resolves ambiguous containers).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 03 Aug 2026 14:00:00 +0200
+
 secubox-torrent (2.2.8-1~bookworm1) bookworm; urgency=high
 
   * FIX no download / 0 peers: throttleUpload(0) blocked the BitTorrent handshake

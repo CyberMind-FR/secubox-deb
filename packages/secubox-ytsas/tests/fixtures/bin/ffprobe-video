@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Stub ffprobe that reports a video stream present (csv codec_type output).
+echo "video"

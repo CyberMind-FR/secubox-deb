@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Stub ffprobe that reports no video stream (audio-only container).
+exit 0
