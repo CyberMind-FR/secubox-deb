@@ -690,67 +690,165 @@ async def get_logs(name: str, lines: int = 100, user=Depends(require_jwt)):
 
 
 # ── WAKE ───────────────────────────────────────────────────────────────
-# Lazy restart an idle-stopped streamlit app (ref #331)
+# Lazy restart an idle-stopped streamlit app (ref #331, budget/blocking
+# fix ref #958).
 
 class WakeResult(BaseModel):
     name: str
-    status: str  # "running" | "started"
-    duration_ms: int
+    status: str  # "running" (already up) | "waking" (just triggered, or
+                 # already in flight — poll POST .../wake again, or the
+                 # live GET /apps / GET /app/{name} the wall already
+                 # consumes, until "running")
+    duration_ms: int  # cost of resolving THIS response (the fast liveness
+                       # check below) — never the wake itself, which may
+                       # still be running long after this response ships.
+
+
+# Réveils actuellement en vol, par nom d'appli (#958 follow-up). Même
+# motif que le verrou par-module de secubox-waker
+# (packages/secubox-profiles/api/waker.py::_locks/_lock) : dédier UN
+# réveil à la fois par nom, jamais une seconde tentative concurrente tant
+# que la première n'a pas fini — la libération se fait dans le `finally`
+# de `_do_wake_in_background`, jamais par le handler HTTP lui-même (qui
+# rend la main bien avant que le réveil ne se termine). Un vrai
+# `threading.Lock`, pas seulement l'atomicité du GIL sur `set` : la prise
+# se fait sur le thread de la boucle d'événements, la libération sur un
+# thread du threadpool (voir plus bas) — deux threads différents touchent
+# le même ensemble.
+_wake_claim_mutex = threading.Lock()
+_WAKE_IN_PROGRESS: set = set()
+
+
+def _wake_try_claim(name: str) -> bool:
+    """Réclame `name` pour un nouveau réveil en fond, ou refuse si un
+    réveil est déjà en vol pour cette appli."""
+    with _wake_claim_mutex:
+        if name in _WAKE_IN_PROGRESS:
+            return False
+        _WAKE_IN_PROGRESS.add(name)
+        return True
+
+
+def _wake_release(name: str) -> None:
+    with _wake_claim_mutex:
+        _WAKE_IN_PROGRESS.discard(name)
+
+
+def _do_wake_in_background(name: str) -> None:
+    """Exécute le réveil RÉEL (`streamlitctl app wake <name>`) — jusqu'à
+    [wake].budget_seconds (300s par défaut, /etc/secubox/streamlit.toml,
+    cf. `cmd_app_wake`) sur une board chargée, mesuré 26 à 78s, parfois
+    plus.
+
+    Tourne dans le threadpool que Starlette utilise pour toute
+    `BackgroundTasks.add_task` d'une fonction SYNCHRONE (voir son appel
+    dans `wake_app` ci-dessous) — jamais sur la boucle d'événements que
+    l'agrégateur partage avec ~110 autres modules. C'est la même
+    discipline déjà appliquée à `container_install` ci-dessus (`install`,
+    jusqu'à 600s, même mécanisme) : un `subprocess.run` synchrone est sans
+    risque ICI précisément parce qu'il tourne hors de la boucle
+    d'événements — c'est un `subprocess.run` exécuté DIRECTEMENT dans un
+    handler `async def`, comme le faisait l'ancienne version de cette
+    route, qui gelait l'agrégateur pour tout le monde pendant la durée du
+    réveil.
+
+    AUCUN argument de secondes n'est passé à `streamlitctl app wake` ici :
+    le budget vit dans un seul endroit, [wake].budget_seconds, résolu par
+    `cmd_app_wake` lui-même. Dupliquer ce nombre ici — même comme timeout
+    Python — recréerait exactement le défaut que ce correctif referme :
+    deux constantes qui finissent par diverger.
+    """
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", CTL, "app", "wake", name],
+            capture_output=True, check=False,
+        )
+        if result.returncode == 0:
+            log.info("wake: %s woke successfully (background)", name)
+            # Capture paresseuse (#958, spec §3.1/§3.5) : SI la vignette
+            # est périmée. On n'arrive ici qu'APRÈS un réveil qui vient de
+            # réussir pour sa propre raison — jamais un réveil déclenché
+            # pour photographier. `_spawn_shotter` rend la main tout de
+            # suite : ce thread de fond n'attend jamais les ~240s d'une
+            # capture en plus des ~300s déjà passées à réveiller.
+            _spawn_shotter(name, force=False)
+        else:
+            stderr_snippet = result.stderr.decode(errors="replace")[:200]
+            log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
+    except OSError as exc:
+        log.warning("wake: %s failed to launch: %s", name, exc)
+    finally:
+        _wake_release(name)
 
 
 @router.post("/apps/{name}/wake", response_model=WakeResult)
-def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
-    """Wake an idle-stopped streamlit app.
+async def wake_app(name: str, background_tasks: BackgroundTasks, user=Depends(require_jwt)) -> WakeResult:
+    """Wake an idle-stopped streamlit app — never blocks on the wake itself.
 
-    Blocks until the port comes up or 30 s elapse. Idempotent — returns
-    immediately with status="running" if the app is already up.
+    The actual wake (`streamlitctl app wake <name>`) can take up to
+    [wake].budget_seconds on a loaded board (300s default, measured 26 to
+    78s, sometimes more) — this handler never awaits it. It only:
+
+      1. Runs a FAST, bounded liveness check (`streamlitctl app list` — one
+         `lxc-attach ps` scan for the whole fleet, same cost class as
+         `app_recapture`'s own pre-check just above, NOT the specifically
+         unbounded wait-loop `cmd_app_wake` used to run in-request). If the
+         app is already running, returns immediately with status="running"
+         — no background task needed.
+      2. Otherwise, claims the per-app in-flight lock (`_wake_try_claim`)
+         and hands the real wake off to `_do_wake_in_background` via
+         `BackgroundTasks` — which Starlette runs in its threadpool, off
+         the shared event loop (see that function's docstring) — and
+         returns status="waking" immediately.
+
+    A caller polling this same route again for an app still waking gets
+    status="waking" again (the lock refuses a second background task);
+    once the wake completes, the very next fast liveness check (here, or
+    via the existing GET /apps / GET /app/{name} the wall already
+    consumes) reports "running". No new state channel was invented for
+    this — see the docstring above and the follow-up report for #958.
 
     Status codes:
-      - 200: app is up (status="running" or "started")
-      - 404: app does not exist (streamlitctl found no resolvable entrypoint
-        for it — directory or flat script, ref #959)
+      - 200: status="running" (already up) or "waking" (just triggered, or
+        a wake for this app was already in flight)
+      - 404: app does not exist (per the same `app list` used for the
+        liveness check — unified with `cmd_app_wake`'s own notion of
+        "exists" since #958's `_app_entrypoint`/`_scan_running_apps`
+        unification; the #959 "two existence checks that diverge" trap
+        this route used to avoid by delegating everything to
+        `streamlitctl app wake` no longer applies, because `app list` and
+        `app wake` now share the exact same resolution helpers)
       - 502: streamlitctl binary missing
-      - 504: wake failed or timed out
 
-    Existence is delegated entirely to `streamlitctl app wake` rather than
-    re-checked here: this endpoint used to require `APPS_PATH/{name}` to be
-    a directory, which 404'd every flat-script app (most of the fleet) even
-    though streamlitctl itself already knew how to resolve them. Keeping a
-    second, narrower existence check here is exactly what let the two
-    diverge (#959) — the ctl is the single source of truth.
+    Concurrency with `secubox-waker`/`secubox-wakectl` (packages/
+    secubox-profiles): that pair wakes a whole MODULE (the secubox-streamlit
+    LXC/service itself) on external vhost access, a coarser granularity
+    than this route (one app process inside an already-running module) —
+    see the #958 follow-up report for what was verified about this from
+    the repo and what could not be.
     """
     if not Path(CTL).exists():
         raise HTTPException(502, "streamlitctl missing")
 
     start = time.monotonic()
-    try:
-        result = subprocess.run(
-            ["sudo", "-n", CTL, "app", "wake", name, "30"],
-            capture_output=True, timeout=35, check=False,
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(504, "wake exceeded 35s wall-clock")
-
+    apps_by_name = {a.get("name"): a for a in _get_apps()}
+    app_row = apps_by_name.get(name)
     duration_ms = int((time.monotonic() - start) * 1000)
-    if result.returncode == 0:
-        status = "running" if b"already running" in result.stderr else "started"
-        log.info("wake: %s status=%s duration_ms=%d", name, status, duration_ms)
-        # Capture paresseuse (#958, spec §3.1/§3.5) : SI la vignette est
-        # périmée. Couvre "première inscription" et "mise à jour" avec un
-        # seul mécanisme, sans jamais réveiller une appli endormie pour la
-        # photographier — on n'arrive ici qu'APRÈS un réveil qui a déjà eu
-        # lieu pour sa propre raison (l'utilisateur, ou déjà en ligne).
-        # `_spawn_shotter` rend la main tout de suite : la réponse du
-        # réveil n'attend jamais les ~240s d'une capture.
-        _spawn_shotter(name, force=False)
-        return WakeResult(name=name, status=status, duration_ms=duration_ms)
 
-    if result.returncode == 2:
+    if app_row is None:
         raise HTTPException(404, f"app not found: {name}")
 
-    stderr_snippet = result.stderr.decode(errors="replace")[:200]
-    log.warning("wake: %s failed rc=%d stderr=%s", name, result.returncode, stderr_snippet)
-    raise HTTPException(504, f"wake failed: {stderr_snippet}")
+    if app_row.get("running"):
+        _spawn_shotter(name, force=False)
+        return WakeResult(name=name, status="running", duration_ms=duration_ms)
+
+    if not _wake_try_claim(name):
+        log.info("wake: %s already in flight, not triggering a second one", name)
+        return WakeResult(name=name, status="waking", duration_ms=duration_ms)
+
+    background_tasks.add_task(_do_wake_in_background, name)
+    log.info("wake: %s triggered in background, duration_ms=%d (liveness check only)", name, duration_ms)
+    return WakeResult(name=name, status="waking", duration_ms=duration_ms)
 
 
 # ═══════════════════════════════════════════════════════════════════════

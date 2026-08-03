@@ -39,10 +39,15 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(api_main, "_spawn_shotter",
                          lambda name, force: spawned.append((name, force)))
 
+    # Wake claims are process-global state (ref #958's per-app dedup lock)
+    # — never let one test's claim leak into the next.
+    api_main._WAKE_IN_PROGRESS.clear()
+
     app.dependency_overrides[require_jwt] = lambda: {"sub": "tester"}
     try:
         yield TestClient(app), shots_dir, spawned
     finally:
+        api_main._WAKE_IN_PROGRESS.clear()
         app.dependency_overrides.clear()
 
 
@@ -147,46 +152,76 @@ def test_recapture_sleeping_app_returns_409_and_never_spawns(client):
 
 # ─────────────────────────────────────────────────────────────────────────
 # POST /apps/{name}/wake — lazy capture hook
+#
+# The wake itself is no longer synchronous (ref #958 follow-up — see
+# test_wake_background.py for the non-blocking/lock coverage in depth), so
+# these tests drive `_get_apps` (the fast liveness pre-check) directly
+# rather than a single shared `subprocess.run` stand-in for both the
+# pre-check and the (now backgrounded) wake call.
 # ─────────────────────────────────────────────────────────────────────────
 
 def test_wake_success_fires_a_lazy_non_forced_capture(client):
+    """A background wake that succeeds still fires the lazy capture hook —
+    TestClient runs BackgroundTasks to completion before returning, so this
+    exercises the real `_do_wake_in_background`, not a stub."""
     test_client, _shots_dir, spawned = client
-    fake = MagicMock(returncode=0, stderr=b"wake: foo started\n", stdout=b"")
-    with patch("api.main.subprocess.run", return_value=fake):
+
+    def fake_run(cmd, **kw):
+        if "wake" in cmd:
+            return MagicMock(returncode=0, stdout=b"", stderr=b"wake: foo started\n")
+        return MagicMock(returncode=0, stdout=b'{"apps":[{"name":"foo","running":false}]}', stderr=b"")
+
+    with patch.object(api_main, "_get_apps", return_value=[{"name": "foo", "running": False}]), \
+         patch("api.main.subprocess.run", side_effect=fake_run):
         r = test_client.post("/apps/foo/wake")
 
     assert r.status_code == 200, r.text
+    assert r.json()["status"] == "waking"
     assert spawned == [("foo", False)], "wake must trigger a lazy (non-forced) capture attempt"
 
 
 def test_wake_already_running_still_fires_lazy_capture(client):
     """An idempotent wake of an already-running app is still a legitimate
     moment to check staleness (spec §3.1's "update" trigger can only be
-    caught this way if the app never actually went to sleep)."""
+    caught this way if the app never actually went to sleep) — this is the
+    FAST path, answered from the liveness pre-check alone, no background
+    task involved."""
     test_client, _shots_dir, spawned = client
-    fake = MagicMock(returncode=0, stderr=b"wake: foo already running\n", stdout=b"")
-    with patch("api.main.subprocess.run", return_value=fake):
+
+    with patch.object(api_main, "_get_apps", return_value=[{"name": "foo", "running": True}]):
         r = test_client.post("/apps/foo/wake")
 
     assert r.status_code == 200, r.text
+    assert r.json()["status"] == "running"
     assert spawned == [("foo", False)]
 
 
 def test_wake_not_found_never_fires_a_capture(client):
     test_client, _shots_dir, spawned = client
-    fake = MagicMock(returncode=2, stderr=b"ERROR: App not found: nope\n", stdout=b"")
-    with patch("api.main.subprocess.run", return_value=fake):
+
+    with patch.object(api_main, "_get_apps", return_value=[]):
         r = test_client.post("/apps/nope/wake")
 
     assert r.status_code == 404
     assert spawned == [], "a wake that fails to resolve the app must never trigger a capture"
 
 
-def test_wake_timeout_never_fires_a_capture(client):
+def test_wake_background_failure_never_fires_a_capture(client):
+    """A background wake that never manages to bring the app up must never
+    fire a capture — same invariant as before, exercised on the
+    background-task path now that the failure is no longer observed
+    synchronously by the request itself."""
     test_client, _shots_dir, spawned = client
-    fake = MagicMock(returncode=1, stderr=b"wake: foo did not come up within 30s\n", stdout=b"")
-    with patch("api.main.subprocess.run", return_value=fake):
+
+    def fake_run(cmd, **kw):
+        if "wake" in cmd:
+            return MagicMock(returncode=1, stdout=b"", stderr=b"wake: foo did not come up\n")
+        return MagicMock(returncode=0, stdout=b'{"apps":[{"name":"foo","running":false}]}', stderr=b"")
+
+    with patch.object(api_main, "_get_apps", return_value=[{"name": "foo", "running": False}]), \
+         patch("api.main.subprocess.run", side_effect=fake_run):
         r = test_client.post("/apps/foo/wake")
 
-    assert r.status_code == 504
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "waking"
     assert spawned == [], "a failed wake must never trigger a capture"
