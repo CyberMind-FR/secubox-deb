@@ -161,6 +161,87 @@ def test_wait_streamlit_ready_targets_the_declared_selector(monkeypatch):
     assert shotter.WAIT_SELECTOR in seen_exprs[0]
 
 
+def test_wait_streamlit_ready_rejects_the_loading_skeleton(monkeypatch):
+    """Défaut #958 : sur 15 applis capturées, 10 rendus vides — tous montrant
+    le squelette de chargement Streamlit (barres grises arrondies, aucun
+    texte). Le conteneur `WAIT_SELECTOR` apparaît dès le début du rendu, et
+    la barre d'outils Streamlit (chrome, pas contenu applicatif) suffit à
+    elle seule à dépasser `MIN_VISIBLE_TEXT_CHARS` et à rester stable — un
+    faux positif si l'attente ne consulte que conteneur + texte. Ce piège
+    est reproduit ici : le texte visible est déjà stable au-dessus du seuil
+    DÈS LE PREMIER relevé, alors que le squelette (`SKELETON_SELECTOR`,
+    `data-testid="stAppSkeleton"` — vérifié dans le bundle JS compilé de
+    Streamlit) reste présent plusieurs relevés avant de disparaître. La
+    stratégie ne doit rendre la main qu'une fois le squelette absent — pas
+    avant, quel que soit l'état du texte visible."""
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+
+    skeleton_present = iter([True, True, True, False])
+    calls = []
+
+    async def evaluate(expr):
+        calls.append(expr)
+        if shotter.WAIT_SELECTOR in expr:
+            return True  # conteneur présent dès le premier relevé
+        if shotter.SKELETON_SELECTOR in expr:
+            # expr teste l'ABSENCE du squelette : True une fois qu'il n'y a
+            # plus rien à consommer dans skeleton_present (squelette parti).
+            return not next(skeleton_present, False)
+        if shotter.STATUS_WIDGET_SELECTOR in expr:
+            return True  # indicateur d'exécution déjà absent
+        # texte visible : stable au-dessus du seuil dès le premier relevé —
+        # exactement le piège (chrome Streamlit déjà peint et immobile).
+        return 45
+
+    progress = shotter._Progress()
+    asyncio.run(shotter.wait_streamlit_ready(evaluate, progress))
+
+    skeleton_calls = [e for e in calls if shotter.SKELETON_SELECTOR in e]
+    assert len(skeleton_calls) >= 4, (
+        "la stratégie n'a pas attendu la disparition du squelette avant de "
+        "rendre la main"
+    )
+
+
+def test_streamlit_capture_waits_for_skeleton_to_clear_before_succeeding(monkeypatch):
+    """Même piège que ci-dessus, mais bout en bout via `capture()` : le
+    squelette reste présent pendant plusieurs relevés CDP simulés alors que
+    conteneur et texte satisferaient déjà l'ancienne condition — la capture
+    ne doit produire son PNG qu'une fois le squelette retiré du DOM."""
+    monkeypatch.setattr(shotter.asyncio, "sleep", _instant_sleep)
+    _patch_launch(monkeypatch)
+
+    skeleton_calls = {"n": 0}
+    SKELETON_CLEARS_AT = 5
+
+    async def fake_cdp(ws_url, method, params, msg_id):
+        if method == "Runtime.evaluate":
+            expr = params.get("expression", "")
+            if shotter.WAIT_SELECTOR in expr:
+                return {"result": {"value": True}}
+            if shotter.SKELETON_SELECTOR in expr:
+                skeleton_calls["n"] += 1
+                still_present = skeleton_calls["n"] < SKELETON_CLEARS_AT
+                return {"result": {"value": not still_present}}  # expr = absence
+            if shotter.STATUS_WIDGET_SELECTOR in expr:
+                return {"result": {"value": True}}  # déjà absent
+            if "innerText" in expr:
+                return {"result": {"value": 45}}  # chrome stable, au-dessus du seuil
+        if method == "Page.captureScreenshot":
+            payload = base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\x00" * 60000)
+            return {"data": payload.decode("ascii")}
+        return {}
+
+    monkeypatch.setattr(shotter, "_cdp", fake_cdp)
+
+    png = asyncio.run(shotter.capture("http://example.invalid/", timeout=30.0))
+    assert len(png) >= shotter.MIN_PNG_BYTES
+    assert skeleton_calls["n"] >= SKELETON_CLEARS_AT, (
+        "capture() a abouti sans jamais consulter le sélecteur du squelette "
+        "— exactement le défaut qui archive des vignettes de squelette"
+    )
+
+
 async def _instant_sleep(_delay):
     return None
 
