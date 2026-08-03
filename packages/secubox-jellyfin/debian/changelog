@@ -1,3 +1,25 @@
+secubox-jellyfin (2.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * jellyfinctl: NEW `playback status` / `playback apply` — declarative
+    per-user playback policy (video/audio transcoding, remuxing), driven by
+    a new [playback] section in jellyfin.toml instead of Jellyfin's built-in
+    per-user default (transcoding on). Full Policy object is read-modify-
+    written per user; a partial PATCH would silently drop unrelated policy
+    fields (parental controls, folder access, ...).
+  * install-lxc.sh: apply the [playback] policy at the end of every run —
+    covers a fresh install AND doubles as the supported way to apply the
+    policy to an already-provisioned install (`jellyfinctl install`).
+    Tolerates Jellyfin's API not being ready yet (polls, then defers to the
+    timer instead of failing silently).
+  * NEW secubox-jellyfin-playback-policy.{service,timer} — periodic
+    reconciliation so a Jellyfin user created after the fact does not keep
+    Jellyfin's transcoding-enabled default indefinitely.
+  * postinst: seed [playback] into a pre-existing jellyfin.toml that
+    predates this feature, and start the reconciliation once (--no-block)
+    so a plain package upgrade reaches an already-running Jellyfin. (ref #964)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 03 Aug 2026 12:00:00 +0200
+
 secubox-jellyfin (2.0.4-1~bookworm1) bookworm; urgency=medium
 
   * partner podcaster: NEW — the podcaster episodes now show up in the Partenaires

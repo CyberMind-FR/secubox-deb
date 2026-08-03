@@ -348,6 +348,45 @@ first_run_wizard() {
     log "first-run: DONE — Jellyfin ready for partner-wiring"
 }
 
+# ── Playback policy (declarative, [playback] in jellyfin.toml) ────────────────
+# Runs on EVERY invocation of this script — NOT gated by first_run_wizard's own
+# WIZARD_SENTINEL, nor by the provisioning $SENTINEL checked by the systemd
+# unit. This is deliberate, for two reasons:
+#   1. A fresh install must produce the right playback behaviour immediately,
+#      without a manual step.
+#   2. `jellyfinctl install` (which runs this same script) is documented as
+#      idempotent/safe-to-re-run — so it doubles as THE supported way to apply
+#      a policy change to an ALREADY-provisioned container. Editing this file
+#      alone never reaches an existing install on its own: the systemd unit's
+#      ConditionPathExists=!$SENTINEL only fires the first time, a documented
+#      trap on this project (see MODULE-COMPLIANCE.md). Re-running
+#      `jellyfinctl install` (or waiting for the periodic reconciliation
+#      timer, secubox-jellyfin-playback-policy.timer) is what actually
+#      reaches it.
+#
+# Jellyfin's HTTP API can take a while to answer right after the service
+# (re)starts, especially on this arm64 board — wait_for_jellyfin_http polls
+# for up to 2 minutes. A failure here is logged loudly (never silent) and
+# left for the timer to retry; it never aborts provisioning.
+apply_playback_policy() {
+    command -v jellyfinctl >/dev/null 2>&1 || {
+        log "playback-policy: WARNING jellyfinctl not on PATH — NOT applied (apply manually later: jellyfinctl playback apply)"
+        return 0
+    }
+    if ! wait_for_jellyfin_http; then
+        log "playback-policy: WARNING Jellyfin did not answer on ${JELLYFIN_URL} — NOT applied (transcoding policy may still be at Jellyfin defaults). Retried by the periodic timer and by re-running 'jellyfinctl install'."
+        return 0
+    fi
+    local out ok
+    out=$(jellyfinctl playback apply 2>/dev/null || true)
+    ok=$(printf '%s' "$out" | jq -r '.ok // false' 2>/dev/null || echo false)
+    if [ "$ok" = "true" ]; then
+        log "playback-policy: applied to all current Jellyfin users"
+    else
+        log "playback-policy: WARNING not fully applied to every user (some may still have transcoding enabled) — retried by the periodic timer"
+    fi
+}
+
 mark_provisioned() {
     install -d -m 0755 -o root -g root "$STATE_DIR"
     date -Iseconds > "$SENTINEL"
@@ -368,6 +407,7 @@ main() {
     mint_apikey
     start_jellyfin_service
     first_run_wizard
+    apply_playback_policy
     mark_provisioned
     log "OK — LXC '$LXC_NAME' at $LXC_IP, Jellyfin provisioned + running."
     log "  · Web UI (LXC)  : http://$LXC_IP:$JELLYFIN_PORT/"
@@ -375,6 +415,7 @@ main() {
     log "  · API key       : $APIKEY_FILE (0600 $APIKEY_OWNER)"
     log "  · Libraries     : $LIBRARIES_JSON"
     log "  · Wire partners : jellyfinctl partner wire --all"
+    log "  · Playback pol. : jellyfinctl playback status  (see [playback] in /etc/secubox/jellyfin.toml)"
 }
 
 main "$@"

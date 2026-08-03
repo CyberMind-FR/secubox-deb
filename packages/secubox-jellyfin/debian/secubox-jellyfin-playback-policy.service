@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Jellyfin — reconcile per-user playback policy (transcoding).
+#
+# Jellyfin stores the video/audio transcoding + remux toggles PER USER, with
+# no server-wide default: a user created after the initial provisioning (or
+# after an operator edits [playback] in jellyfin.toml) starts from Jellyfin's
+# own defaults, i.e. transcoding back ON. This unit re-applies the declarative
+# [playback] policy to every current user so that drift is caught without a
+# human remembering to re-run `jellyfinctl playback apply` by hand. See the
+# secubox-jellyfin-playback-policy.timer companion unit for the schedule.
+[Unit]
+Description=SecuBox Jellyfin — reconcile per-user playback policy (transcoding)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=secubox-jellyfin.service
+Wants=secubox-jellyfin.service
+
+[Service]
+Type=oneshot
+# Best-effort and idempotent: no-ops cleanly (ok:false with a reason, never a
+# crash) when the LXC is stopped, Jellyfin is unreachable, or the API key is
+# absent — jellyfinctl itself never logs the key.
+ExecStart=/usr/sbin/jellyfinctl playback apply
