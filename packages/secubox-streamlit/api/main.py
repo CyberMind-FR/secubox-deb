@@ -10,10 +10,18 @@ import time
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.config import get_config
 from secubox_core.logger import get_logger
+# secubox_core.screenshots ne fait QUE lire/servir un PNG déjà produit
+# (voir app_screenshot ci-dessous) — jamais de capture in-process : celle-
+# ci vit exclusivement dans le processus détaché `streamlit-shotter`
+# (api/shots.py), lancé via `_spawn_shotter`, jamais importé ici. C'est ce
+# qui garantit qu'un chromium enlisé ne peut jamais affecter la boucle
+# d'événements partagée par l'agrégateur (#958).
+from secubox_core import screenshots as _screenshots
 
 app = FastAPI(title="secubox-streamlit", version="1.0.0", root_path="/api/v1/streamlit")
 
@@ -96,6 +104,24 @@ APPS_DIR = "/srv/streamlit/apps"
 LXC_NAME = "streamlit"
 CTL = "/usr/sbin/streamlitctl"
 
+# Vignettes capturées (#958) — répertoire de cache DÉDIÉ, jamais à
+# l'intérieur de APPS_PATH : la moitié du parc est constituée de scripts
+# .py à plat (#959), qui n'ont aucun répertoire où poser "une image à côté
+# de l'appli", et pour les applis-répertoire ça polluerait potentiellement
+# un dépôt git source. Même schéma de stockage que secubox-metablogizer
+# (secubox_core.screenshots), sous sa propre clé de module.
+SHOTS_CACHE_DIR = Path(os.environ.get("SECUBOX_STREAMLIT_SHOTS_CACHE",
+                                       "/var/cache/secubox/streamlit/shots"))
+# Le binaire qui pilote réellement chromium (api/shots.py). Toujours lancé
+# en process DÉTACHÉ (voir _spawn_shotter) — jamais importé/appelé
+# in-process ici, précisément pour que la capture (jusqu'à ~240s,
+# secubox_core.shotter) ne puisse jamais geler la boucle d'événements
+# partagée par tous les modules quand l'agrégateur les sert en process
+# unique (#958 — incident récurrent de ce projet, cf. mémoire "aggregator
+# wedge SPOF").
+SHOTTER_BIN = os.environ.get("SECUBOX_STREAMLIT_SHOTTER_BIN",
+                              "/usr/sbin/streamlit-shotter")
+
 
 def _cfg():
     cfg = get_config("streamlit")
@@ -129,6 +155,31 @@ def _run_ctl(*args, timeout: int = 30) -> dict:
         return {"error": "timeout", "success": False}
     except Exception as e:
         return {"error": str(e), "success": False}
+
+
+def _spawn_shotter(name: str, *, force: bool) -> None:
+    """Lance `streamlit-shotter` en tâche DÉTACHÉE et rend la main
+    immédiatement (#958).
+
+    `subprocess.Popen(...)` retourne dès le fork+exec (millisecondes) — il
+    n'attend JAMAIS l'issue du processus fils. Toute la résolution de
+    cible (l'appli tourne-t-elle ? sur quel port ? IP du conteneur ?) et la
+    capture elle-même (jusqu'à ~240s, chromium piloté par CDP) se déroulent
+    dans ce processus fils, entièrement hors de ce service et de sa boucle
+    d'événements : même un chromium qui s'enliserait ne peut affecter que
+    ce processus détaché, jamais l'agrégateur qui sert ce module (et ~110
+    autres) en process unique.
+
+    Ne lève jamais : appelée après un réveil déjà réussi ou un clic
+    "recapturer" déjà validé, un échec de lancement ne doit dégrader ni
+    l'un ni l'autre — seulement finir au journal.
+    """
+    args = [SHOTTER_BIN, name] + (["--force"] if force else [])
+    try:
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                          start_new_session=True)
+    except OSError as exc:
+        log.warning("shotter spawn failed for %s: %s", name, exc)
 
 
 def _lxc_running() -> bool:
@@ -495,6 +546,65 @@ async def apps_audit():
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# SCREENSHOTS — Mosaic tile thumbnails (#958)
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/apps/{name}/screenshot")
+def app_screenshot(name: str):
+    """Sert la vignette conservée. PUBLIC — sans JWT : un `<img src>` ne
+    porte pas d'en-tête Authorization, et le mur affiche 56 vignettes sans
+    session ouverte vers quoi que ce soit (même choix, déjà réglé, que la
+    route équivalente de secubox-metablogizer).
+
+    Route de LECTURE SEULE : ne déclenche jamais de capture, quel que soit
+    le nombre de requêtes reçues — la vignette est déjà là ou elle ne l'est
+    pas (`sync def` : FastAPI la sert depuis le threadpool, un simple accès
+    fichier, jamais de subprocess ici).
+
+    `Cache-Control: public, max-age=604800, immutable` — délibérément PAS
+    `no-cache` : le panneau ajoute déjà `?t=<captured_at>` à l'URL (voir
+    `www/streamlit/index.html`), donc l'URL elle-même change quand le
+    contenu change. Tant que `captured_at` ne bouge pas, c'est
+    STRICTEMENT le même contenu — laisser le navigateur servir sa copie
+    locale sans même revalider est exactement ce qui évite de retélécharger
+    56 PNG à chaque rafraîchissement de 60s (#958 point 5).
+    """
+    try:
+        p = _screenshots.png_path(SHOTS_CACHE_DIR, name)
+    except ValueError:
+        raise HTTPException(404, "unknown app")
+    if not p.exists():
+        raise HTTPException(404, "no screenshot yet")
+    meta = _screenshots.read_meta(SHOTS_CACHE_DIR, name)
+    return FileResponse(p, media_type="image/png", headers={
+        "Cache-Control": "public, max-age=604800, immutable",
+        "X-Captured-At": str(meta.get("captured_at", "")),
+    })
+
+
+@router.post("/apps/{name}/recapture")
+def app_recapture(name: str, user=Depends(require_jwt)):
+    """Déclencheur MANUEL (spec §3.1) — le bouton "recapturer" d'une tuile.
+
+    Valide la cible ICI (rapide : entrypoint + port + `lxc-info`, pas de
+    chromium) pour donner un retour immédiat et exact au bouton — 404 si
+    l'appli est inconnue, 409 si elle est endormie ou sans cible
+    exploitable. Ce pré-check n'est PAS fait sur le chemin de réveil (voir
+    `wake_app`) : là, l'appli vient déjà de se réveiller avec succès, le
+    coût d'une seconde résolution serait payé pour rien.
+
+    Rend la main dès le lancement du processus détaché — jamais après la
+    capture elle-même (~240s), voir `_spawn_shotter`.
+    """
+    target = _run_ctl("app", "shot-target", name)
+    if not target.get("ok"):
+        reason = str(target.get("error") or "capture impossible")
+        raise HTTPException(404 if "not found" in reason else 409, reason)
+    _spawn_shotter(name, force=True)
+    return {"ok": True, "triggered": True, "name": name}
+
+
 @router.get("/app/{name}")
 async def get_app(name: str, user=Depends(require_jwt)):
     """Get app details."""
@@ -625,6 +735,14 @@ def wake_app(name: str, user=Depends(require_jwt)) -> WakeResult:
     if result.returncode == 0:
         status = "running" if b"already running" in result.stderr else "started"
         log.info("wake: %s status=%s duration_ms=%d", name, status, duration_ms)
+        # Capture paresseuse (#958, spec §3.1/§3.5) : SI la vignette est
+        # périmée. Couvre "première inscription" et "mise à jour" avec un
+        # seul mécanisme, sans jamais réveiller une appli endormie pour la
+        # photographier — on n'arrive ici qu'APRÈS un réveil qui a déjà eu
+        # lieu pour sa propre raison (l'utilisateur, ou déjà en ligne).
+        # `_spawn_shotter` rend la main tout de suite : la réponse du
+        # réveil n'attend jamais les ~240s d'une capture.
+        _spawn_shotter(name, force=False)
         return WakeResult(name=name, status=status, duration_ms=duration_ms)
 
     if result.returncode == 2:

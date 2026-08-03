@@ -8,7 +8,13 @@ Standards-Version: 4.6.2
 Package: secubox-streamlit
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip, python3-psutil, lxc, debootstrap
-Recommends: streamlit
+# chromium powers the Mosaic tab thumbnail capture (streamlit-shotter,
+# #958 — see api/shots.py / common/secubox_core/shotter.py), triggered on
+# wake and on manual "recapturer" clicks, never by a timer. Recommends,
+# not Depends: without it, captures fail gracefully (an app just keeps
+# its emoji placeholder tile) — nothing else in the package needs it.
+# Same rationale as secubox-metablogizer's own Recommends: chromium.
+Recommends: streamlit, chromium
 Description: SecuBox Streamlit Platform
  Plateforme d'applications Streamlit avec support LXC.
  Port Debian bookworm de luci-app-streamlit (SecuBox OpenWrt).
