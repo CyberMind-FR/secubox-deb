@@ -26,6 +26,5 @@ def _backend() -> Backend:
             assistant_message="message-content.model-response-text",
             login_indicator='div.ql-editor[contenteditable="true"]',
         ),
-        submit_mode="enter",
         line_break_key="Shift+Enter",
     )
