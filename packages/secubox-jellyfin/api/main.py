@@ -27,6 +27,8 @@ Endpoints (all JWT-gated except /health):
   POST /library/scan    jellyfinctl library scan
   GET  /check-upgrade   jellyfinctl check-upgrade
   POST /upgrade         jellyfinctl upgrade
+  GET  /playback        jellyfinctl playback status
+  POST /playback/apply  jellyfinctl playback apply
 """
 from __future__ import annotations
 
@@ -244,3 +246,23 @@ def check_upgrade() -> Dict[str, Any]:
 def upgrade() -> Dict[str, Any]:
     """Upgrade Jellyfin inside the LXC to the latest pinned release."""
     return _ctl_json("upgrade", timeout=600)
+
+
+@app.get("/playback", dependencies=[Depends(require_jwt)])
+def playback_status() -> Dict[str, Any]:
+    """Per-user transcoding/remux policy vs. the declared [playback] config.
+
+    Disabling transcoding is a real tradeoff (a file the client cannot
+    decode natively will refuse to play instead of degrading through a
+    software re-encode) — see jellyfin.toml / README for the rationale."""
+    return _ctl_json("playback", "status", timeout=20)
+
+
+@app.post("/playback/apply", dependencies=[Depends(require_jwt)])
+def playback_apply() -> Dict[str, Any]:
+    """Push the declared [playback] policy onto every current Jellyfin user.
+
+    A user created after the fact keeps Jellyfin's own default (transcoding
+    enabled) until this runs — also swept periodically by the
+    secubox-jellyfin-playback-policy timer."""
+    return _ctl_json("playback", "apply", timeout=60)
