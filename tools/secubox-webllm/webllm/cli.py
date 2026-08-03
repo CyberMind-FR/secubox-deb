@@ -64,8 +64,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=120,
-        help="Délai maximal d'attente de la réponse, en secondes (défaut : 120).",
+        default=300,
+        help="Délai maximal d'attente de la réponse, en secondes (défaut : 300).",
     )
     parser.add_argument(
         "prompt",
@@ -86,7 +86,7 @@ def _read_prompt(args: argparse.Namespace) -> str:
 
 
 def _build_config(args: argparse.Namespace) -> Config:
-    config = Config(headless=args.headless, timeout_ms=args.timeout * 1000)
+    config = Config(headless=args.headless, answer_timeout_ms=args.timeout * 1000)
     if args.profile is not None:
         config = replace(config, profile_root=args.profile)
     return config

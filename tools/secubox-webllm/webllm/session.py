@@ -46,12 +46,29 @@ class EmptyResponseError(RuntimeError):
 
 @dataclass(frozen=True)
 class Config:
-    """Paramètres génériques d'une session. Rien ici ne dépend du fournisseur."""
+    """Paramètres génériques d'une session. Rien ici ne dépend du fournisseur.
+
+    Valeurs alignées sur celles éprouvées en usage réel par le client
+    d'origine (mono-backend claude) : `stability_polls=4`,
+    `poll_interval_ms=400`, `answer_timeout_ms=300_000`,
+    `login_timeout_ms=300_000`. Deux divergences assumées :
+
+    - Pas de champ `ready_timeout` distinct : l'original en avait un
+      (45s) séparé de `login_timeout` (300s) ; sans certitude sur son rôle
+      exact (probablement un délai de chargement de page avant le premier
+      check de login) et sans effet observable reconstituable, une seule
+      boucle bornée par `login_timeout_ms` couvre le même besoin.
+    - `send_button_timeout_ms=1500` est nouveau (nommé explicitement) mais
+      correspond exactement au délai `is_enabled(timeout=1500)` de
+      l'original.
+    """
 
     headless: bool = False
-    timeout_ms: int = 120_000
-    poll_interval_ms: int = 700
-    stability_polls: int = 3
+    stability_polls: int = 4
+    poll_interval_ms: int = 400
+    answer_timeout_ms: int = 300_000
+    login_timeout_ms: int = 300_000
+    send_button_timeout_ms: int = 1500
     profile_root: Path = field(
         default_factory=lambda: Path.home() / ".secubox" / "webllm"
     )
@@ -183,19 +200,22 @@ class WebLLMSession:
         """Vérifie qu'une session connectée existe, ou l'obtient (mode headed).
 
         En headless sans session valide : échec explicite immédiat — jamais
-        d'attente infinie sur un login qui ne peut structurellement pas se
-        produire sans affichage.
+        d'attente, même bornée. Aucune interaction humaine n'étant possible
+        sans affichage, attendre ne peut rien changer ; c'est une divergence
+        assumée par rapport à l'original (qui semble laisser jusqu'à
+        `ready_timeout` avant de conclure), strictement meilleure pour des
+        scripts appelants.
         """
         await self._page.goto(self._backend.url)
         if await self._is_logged_in():
             return
         if self._config.headless:
             raise SessionNotReadyError(
-                f"aucune session {self._backend.name!r} valide dans "
-                f"{self.profile_dir} — relancez une première fois sans "
-                "--headless pour vous connecter manuellement"
+                f"composer introuvable en headless ({self._backend.name}) : "
+                "session probablement expirée. Relancez une fois en mode "
+                f"headed pour vous reconnecter (profil : {self.profile_dir})."
             )
-        deadline = time.monotonic() + self._config.timeout_ms / 1000
+        deadline = time.monotonic() + self._config.login_timeout_ms / 1000
         while not await self._is_logged_in():
             if time.monotonic() >= deadline:
                 raise SessionNotReadyError(
@@ -214,23 +234,80 @@ class WebLLMSession:
         await self._page.goto(self._backend.url)
 
     async def ask(self, prompt: str) -> str:
-        """Soumet un prompt et attend la réponse complète (par stabilité)."""
+        """Soumet un prompt et attend la réponse complète (par stabilité).
+
+        Entre la soumission et le polling de stabilité, `_wait_new_answer`
+        attend qu'une NOUVELLE réponse ait réellement commencé (nouveau
+        message assistant ou streaming démarré). Sans cette garde, un appel
+        `ask()` juste après un tour précédent verrait le dernier message
+        assistant déjà stable (celui du tour d'avant) et renverrait aussitôt
+        cette réponse périmée — un bug réel de l'implémentation naïve.
+        """
+        previous_count = await self._assistant_message_count()
         await self._submit(prompt)
+        await self._wait_new_answer(previous_count)
         return await self._wait_for_completion()
 
     async def _submit(self, prompt: str) -> None:
         selectors = self._backend.selectors
         composer = self._page.locator(selectors.composer)
         await composer.click()
+        await composer.fill("")  # vide le composer avant de retaper le prompt
         lines = split_prompt_lines(prompt)
         for index, line in enumerate(lines):
             if index:
+                # Shift+Enter ENTRE les lignes, jamais avant la première :
+                # dans ProseMirror, un Entrée seul déclenche l'envoi.
                 await composer.press(self._backend.line_break_key)
             await composer.type(line)
-        if self._backend.submit_mode == "enter":
-            await composer.press("Enter")
-        else:
-            await self._page.locator(selectors.send_button).click()
+        await self._trigger_send()
+
+    async def _trigger_send(self) -> None:
+        """Tente le bouton d'envoi ; se rabat sur Entrée s'il est indisponible.
+
+        `is_enabled` peut lever (bouton absent/non attaché dans le délai) ou
+        renvoyer False (présent mais désactivé) : dans les deux cas, repli.
+        """
+        send_button = self._page.locator(self._backend.selectors.send_button)
+        try:
+            enabled = await send_button.is_enabled(
+                timeout=self._config.send_button_timeout_ms
+            )
+        except Exception:
+            enabled = False
+        if enabled:
+            await send_button.click()
+            return
+        await self._page.locator(self._backend.selectors.composer).press("Enter")
+
+    async def _assistant_message_count(self) -> int:
+        return await self._page.locator(
+            self._backend.selectors.assistant_message
+        ).count()
+
+    async def _is_streaming(self) -> bool:
+        """Bouton stop visible = génération en cours ; absent/indéterminé = False."""
+        try:
+            return await self._page.locator(
+                self._backend.selectors.stop_button
+            ).is_visible(timeout=200)
+        except Exception:
+            return False
+
+    async def _wait_new_answer(self, previous_count: int) -> None:
+        """Attend qu'une nouvelle réponse démarre avant de guetter sa stabilité.
+
+        Condition de sortie : le nombre de messages assistant a dépassé
+        `previous_count`, OU le streaming a démarré (bouton stop visible).
+        """
+        deadline = time.monotonic() + self._config.answer_timeout_ms / 1000
+        while True:
+            count = await self._assistant_message_count()
+            if count > previous_count or await self._is_streaming():
+                return
+            if time.monotonic() >= deadline:
+                raise TimeoutError("aucune nouvelle réponse n'a démarré")
+            await asyncio.sleep(self._config.poll_interval_ms / 1000)
 
     async def _wait_for_completion(self) -> str:
         selectors = self._backend.selectors
@@ -245,6 +322,6 @@ class WebLLMSession:
         return await wait_stable(
             poll,
             stability_polls=self._config.stability_polls,
-            timeout_s=self._config.timeout_ms / 1000,
+            timeout_s=self._config.answer_timeout_ms / 1000,
             poll_interval_s=self._config.poll_interval_ms / 1000,
         )

@@ -38,12 +38,20 @@ défaut) : connectez-vous manuellement, la session est alors persistée dans
 le profil pour les lancements suivants — y compris `--headless`.
 
 `--headless` sans session valide échoue immédiatement avec un message
-explicite (jamais d'attente infinie) :
+explicite (jamais d'attente, même bornée) :
 
 ```
-erreur : aucune session 'claude' valide dans /home/.../profile — relancez
-une première fois sans --headless pour vous connecter manuellement
+erreur : composer introuvable en headless (claude) : session probablement
+expirée. Relancez une fois en mode headed pour vous reconnecter
+(profil : /home/.../.secubox/webllm/claude/profile).
 ```
+
+**Changement de chemin de profil** : l'ancien client mono-backend stockait
+sa session dans `~/.secubox/claude-web/profile`. Ce n'est **pas** migré
+automatiquement — `claude_web.py` (le shim, voir plus bas) affiche un
+avertissement si l'ancien profil existe mais que le nouveau n'a pas encore
+de session, mais ne copie rien. Reconnectez-vous une fois en mode headed
+avec le nouveau chemin.
 
 ## Usage
 
@@ -60,6 +68,10 @@ secubox-webllm --backend gemini --new "nouvelle question"
 # Headless (session déjà connectée), timeout personnalisé, profil alternatif
 secubox-webllm --backend claude --headless --timeout 180 --profile /data/webllm "..."
 ```
+
+`--timeout` (défaut 300s) borne l'attente de la réponse — c'est
+`Config.answer_timeout_ms`, aligné sur la valeur `answer_timeout=300.0`
+éprouvée par le client d'origine.
 
 `claude_web.py` (racine du package) est un **shim de compatibilité** : la
 classe `ClaudeWeb` et sa CLI historique délèguent intégralement à
@@ -79,14 +91,41 @@ Préférer directement `secubox-webllm --backend claude`.
 - `webllm/cli.py` — CLI unifiée, ignore tout ce qui est spécifique à un
   fournisseur (résolu via `get_backend(args.backend)`).
 
-### Détection de fin de génération
+### Cycle d'un `ask()`
 
-Le principe hérité du client d'origine : une réponse est jugée complète
-quand l'`innerText` du dernier message assistant est identique à la lecture
-précédente **et** que le bouton d'arrêt (stop) est absent, pendant
-`Config.stability_polls` lectures consécutives. Tout changement de texte ou
-toute réapparition du bouton stop repart de zéro. Voir
-`webllm.session.StabilityTracker` et `webllm.session.wait_stable`.
+1. **Soumission** (`_submit`) : clic sur le composer, `fill("")` pour le
+   vider, puis pour chaque ligne du prompt — `Shift+Enter` **entre** les
+   lignes (jamais avant la première : dans ProseMirror, un Entrée seul
+   déclenche l'envoi et tronquerait le prompt à sa 1re ligne), `type(line)`.
+2. **Envoi** (`_trigger_send`) : tente le bouton d'envoi
+   (`is_enabled(timeout=Config.send_button_timeout_ms)`, 1500ms par défaut)
+   et le clique s'il est disponible ; sinon (absent, désactivé, ou la
+   vérification expire) se rabat sur la touche Entrée dans le composer.
+3. **Attente d'une NOUVELLE réponse** (`_wait_new_answer`) : avant de guetter
+   la stabilité, attend que le nombre de messages assistant dépasse celui
+   d'avant soumission, OU que le streaming démarre (bouton stop visible).
+   Sans cette garde, un `ask()` enchaîné dans la même conversation verrait
+   le dernier message du tour précédent déjà stable et le renverrait tel
+   quel, périmé — un bug réel que `tests/test_session.py` démontre
+   explicitement (`test_wait_for_completion_alone_would_return_the_stale_previous_answer`
+   vs `test_ask_never_returns_the_stale_previous_answer`).
+4. **Détection de fin de génération** (`_wait_for_completion`) : principe
+   hérité du client d'origine — une réponse est jugée complète quand
+   l'`innerText` du dernier message assistant est identique à la lecture
+   précédente **et** que le bouton stop est absent, pendant
+   `Config.stability_polls` lectures consécutives. Tout changement de texte
+   ou toute réapparition du bouton stop repart de zéro. Voir
+   `webllm.session.StabilityTracker` et `webllm.session.wait_stable`.
+
+**Divergence assumée sur le timeout** : à l'expiration de
+`answer_timeout_ms`, l'implémentation d'origine renvoyait le texte déjà lu
+plutôt que d'échouer. Ce package **lève `TimeoutError`** à la place — un
+appelant qui reçoit une réponse veut savoir si elle est complète ou
+tronquée par un timeout ; masquer la différence en silence a semblé plus
+dangereux qu'utile, d'autant que rien n'empêche l'appelant de traiter
+`TimeoutError` comme un signal « best effort disponible » s'il le souhaite
+via son propre `try/except`. C'est un changement de comportement assumé,
+pas un oubli.
 
 ## Ajouter un backend (moins de 20 lignes, zéro fichier existant modifié)
 
@@ -110,10 +149,13 @@ def _backend() -> Backend:
             assistant_message="div.message.assistant",
             login_indicator='div[contenteditable="true"]',
         ),
-        submit_mode="enter",       # ou "button" pour un clic explicite
-        line_break_key="Shift+Enter",
+        line_break_key="Shift+Enter",  # touche de saut de ligne, entre les lignes
     )
 ```
+
+Pas de champ « submit_mode » à choisir : `session.py` tente toujours le
+bouton d'envoi et se rabat automatiquement sur Entrée s'il est
+indisponible — un seul mécanisme, valable pour tout fournisseur.
 
 C'est tout : `webllm/backends/__init__.py` importe automatiquement tout
 fichier de ce répertoire (`pkgutil.iter_modules`), `session.py` et `cli.py`
@@ -123,11 +165,15 @@ autre modification.
 
 ## Corriger un sélecteur cassé
 
-Les sélecteurs de `webllm/backends/{claude,openai,gemini}.py` sont
-**best-effort** — reconstruits sans accès à une version antérieure
-retrouvée ou fournie, à partir de la structure connue des interfaces au
-moment de l'écriture. **Aucun des trois n'est garanti fonctionner tel
-quel** : les fournisseurs changent leur front-end sans préavis.
+- `webllm/backends/claude.py` : sélecteurs **repris de l'implémentation
+  d'origine**, éprouvés en usage réel (mono-backend claude, avant cette
+  industrialisation). Fiables au moment de l'écriture, mais pas immunisés
+  contre un changement futur de l'UI claude.ai — même vigilance requise
+  dans la durée.
+- `webllm/backends/{openai,gemini}.py` : sélecteurs **best-effort**,
+  reconstruits à partir de la structure connue des interfaces, jamais
+  validés en conditions réelles. Ne pas leur accorder plus de confiance
+  qu'à un point de départ à vérifier.
 
 Pour corriger :
 

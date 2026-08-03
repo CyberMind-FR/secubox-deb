@@ -26,6 +26,5 @@ def _backend() -> Backend:
             assistant_message='div[data-message-author-role="assistant"]',
             login_indicator="#prompt-textarea",
         ),
-        submit_mode="enter",
         line_break_key="Shift+Enter",
     )

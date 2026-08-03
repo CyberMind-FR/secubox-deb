@@ -59,7 +59,7 @@ def test_headless_flag_propagates_into_config():
 def test_timeout_seconds_converted_to_milliseconds():
     args = build_parser().parse_args(["--timeout", "42", "hi"])
     config = _build_config(args)
-    assert config.timeout_ms == 42_000
+    assert config.answer_timeout_ms == 42_000
 
 
 def test_profile_override_replaces_default_root(tmp_path):

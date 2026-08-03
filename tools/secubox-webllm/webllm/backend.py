@@ -43,12 +43,17 @@ class Selectors:
 
 @dataclass(frozen=True)
 class Backend:
-    """Déclaration complète d'un fournisseur de chat web piloté par webllm."""
+    """Déclaration complète d'un fournisseur de chat web piloté par webllm.
+
+    Pas de champ « submit_mode » : `session.py` tente toujours le bouton
+    d'envoi et se rabat automatiquement sur la touche Entrée s'il est
+    indisponible (voir `WebLLMSession._trigger_send`) — comportement éprouvé
+    de l'implémentation d'origine, valable pour tout fournisseur.
+    """
 
     name: str
     url: str
     selectors: Selectors
-    submit_mode: str = "enter"  # "enter" (Entrée valide) | "button" (clic explicite)
     line_break_key: str = "Shift+Enter"  # saut de ligne dans le composer sans envoyer
 
 
