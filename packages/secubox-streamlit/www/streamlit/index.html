@@ -720,6 +720,55 @@
 
         // Wake a sleeping app on demand (POST /apps/{name}/wake). Delegated
         // listener + data-* attribute — never hand-interpolated into onclick.
+        //
+        // #958 follow-up: the server no longer blocks this request until the
+        // app is actually up (a wake can take up to five minutes on a loaded
+        // board — holding the request open that long risks a gateway timeout
+        // well before that, see the follow-up report). It answers
+        // status="running" (already up) or "waking" (just triggered, or
+        // already in flight) almost immediately instead. For "waking", this
+        // handler re-POSTs the SAME idempotent route every few seconds — the
+        // server's per-app lock guarantees a second click (or this poll)
+        // never fires a second wake — until it reports "running". No new
+        // endpoint: this is the exact channel the wall already used to read
+        // wake outcomes, just polled instead of read once.
+        const WAKE_POLL_INTERVAL_MS = 5000;
+        const WAKE_POLL_MAX_ATTEMPTS = 80; // ~400s of polling — comfortably above the 300s server-side default budget
+
+        async function pollWakeUntilRunning(name, wakeBtn, orig, attempt) {
+            const r = await api('/apps/' + encodeURIComponent(name) + '/wake', { method: 'POST' });
+            if (!r || !r.status) {
+                errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
+                wakeBtn.disabled = false;
+                wakeBtn.textContent = orig;
+                return;
+            }
+            if (r.status === 'running') {
+                toast('☕ ' + name + ' réveillée');
+                // Optimistic local patch: streamlit-audit.timer only refreshes
+                // the cache every 5 minutes server-side — reflect the wake
+                // immediately here instead of waiting for the next cycle.
+                if (auditData && auditData.apps) {
+                    const app = auditData.apps.find(x => x.name === name);
+                    if (app) { app.state = 'running'; app.running = true; app.last_active = Date.now() / 1000; }
+                }
+                renderMosaic();
+                renderFleetStats();
+                return;
+            }
+            // status === 'waking': keep polling, bounded, only while the
+            // button is still in the DOM (tab could have been re-rendered).
+            if (attempt >= WAKE_POLL_MAX_ATTEMPTS || !document.body.contains(wakeBtn)) {
+                errorToast(name + ' ne répond toujours pas après ' +
+                    Math.round(WAKE_POLL_MAX_ATTEMPTS * WAKE_POLL_INTERVAL_MS / 1000) + 's — réessayer plus tard');
+                wakeBtn.disabled = false;
+                wakeBtn.textContent = orig;
+                return;
+            }
+            wakeBtn.textContent = '⏳ réveil… (' + attempt + ')';
+            setTimeout(() => pollWakeUntilRunning(name, wakeBtn, orig, attempt + 1), WAKE_POLL_INTERVAL_MS);
+        }
+
         document.getElementById('mosaic-grid').addEventListener('click', async (ev) => {
             const wakeBtn = ev.target.closest('button[data-wake]');
             const recapBtn = ev.target.closest('button[data-recapture]');
@@ -729,23 +778,7 @@
                 const orig = wakeBtn.textContent;
                 wakeBtn.disabled = true;
                 wakeBtn.textContent = '⏳ réveil…';
-                const r = await api('/apps/' + encodeURIComponent(name) + '/wake', { method: 'POST' });
-                if (r && r.status) {
-                    toast('☕ ' + name + ' réveillée (' + r.status + ')');
-                    // Optimistic local patch: streamlit-audit.timer only refreshes
-                    // the cache every 5 minutes server-side — reflect the wake
-                    // immediately here instead of waiting for the next cycle.
-                    if (auditData && auditData.apps) {
-                        const app = auditData.apps.find(x => x.name === name);
-                        if (app) { app.state = 'running'; app.running = true; app.last_active = Date.now() / 1000; }
-                    }
-                    renderMosaic();
-                    renderFleetStats();
-                } else {
-                    errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
-                    wakeBtn.disabled = false;
-                    wakeBtn.textContent = orig;
-                }
+                await pollWakeUntilRunning(name, wakeBtn, orig, 1);
                 return;
             }
 
