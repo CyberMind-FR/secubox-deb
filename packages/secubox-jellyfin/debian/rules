@@ -33,6 +33,10 @@ override_dh_auto_install:
 	    debian/secubox-jellyfin/usr/lib/systemd/system/secubox-jellyfin.service
 	install -m 644 debian/secubox-jellyfin-provision.service \
 	    debian/secubox-jellyfin/usr/lib/systemd/system/secubox-jellyfin-provision.service
+	install -m 644 debian/secubox-jellyfin-playback-policy.service \
+	    debian/secubox-jellyfin/usr/lib/systemd/system/secubox-jellyfin-playback-policy.service
+	install -m 644 debian/secubox-jellyfin-playback-policy.timer \
+	    debian/secubox-jellyfin/usr/lib/systemd/system/secubox-jellyfin-playback-policy.timer
 	# Web UI
 	install -d debian/secubox-jellyfin/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-jellyfin/usr/share/secubox/www/ || true

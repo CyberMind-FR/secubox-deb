@@ -30,3 +30,22 @@ waf_inspect   = true
 # Example:
 #   roots = ["/data/media/movies", "/data/media/tv"]
 roots = []
+
+[playback]
+# Per-user playback policy, pushed onto every Jellyfin account by
+# `jellyfinctl playback apply` (installer, timer, and on demand).
+#
+# This board has no /dev/dri: there is no hardware encoder, so every
+# transcoded stream burns a full ARM core in software x264. With Jellyfin and
+# PeerTube's own ffmpeg competing for the same 4 cores, a single film only
+# played back intermittently. Disabling transcoding is a real tradeoff, not a
+# free win: a file the client cannot decode natively (wrong codec, profile,
+# or bit depth) will now refuse to play at all, instead of limping through a
+# software re-encode. Re-enable below if that cost is not acceptable for you.
+#
+# Remuxing (repackaging into a compatible container WITHOUT re-encoding) is
+# kept independently enabled: its CPU cost is negligible and it widens what
+# plays without a full transcode, so there is little reason to turn it off.
+allow_video_transcoding = false
+allow_audio_transcoding = false
+allow_remuxing          = true

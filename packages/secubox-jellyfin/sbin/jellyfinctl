@@ -463,6 +463,112 @@ cmd_partner_unwire() {
     jq -nc '{ok:true}'
 }
 
+# ── Playback policy (per-user transcoding toggle) ─────────────────────────────
+# Declarative, NOT hardcoded: values come from [playback] in $CONFIG_FILE so
+# re-enabling transcoding is an operator edit, not a script patch. Jellyfin
+# stores this per USER (there is no server-wide default), so `playback apply`
+# must walk every account and PUSH THE FULL Policy object back (a partial
+# PATCH is not supported by /Users/{id}/Policy — only fields present in the
+# body would survive, so we always read-modify-write the whole object).
+#
+# CAVEAT the operator must know: disabling transcoding is not "play worse" —
+# a file the client cannot decode natively (wrong codec/profile/bit depth)
+# will refuse to play at all instead of degrading through a software
+# re-encode. Remuxing (container change only, no re-encode) is independent
+# and cheap; it stays on by default.
+_playback_video() { toml_get_sec "$CONFIG_FILE" playback allow_video_transcoding "false"; }
+_playback_audio() { toml_get_sec "$CONFIG_FILE" playback allow_audio_transcoding "false"; }
+_playback_remux() { toml_get_sec "$CONFIG_FILE" playback allow_remuxing "true"; }
+
+# _bool_json <toml-scalar> — normalize to a JSON bool literal. Unrecognized
+# input defaults to false (fail toward the CPU-protective setting, not
+# toward silently re-enabling transcoding on a typo).
+_bool_json() {
+    case "${1:-}" in
+        true|True|TRUE|1|yes|Yes) echo true ;;
+        *) echo false ;;
+    esac
+}
+
+# _jf_users <key> — GET /Users, or empty string on any failure (no api key,
+# LXC stopped, unreachable). Callers must treat "" as "could not fetch".
+_jf_users() {
+    local key="$1"
+    curl -fsS --max-time 10 -H "X-Emby-Token: $key" "${JELLYFIN_URL}/Users" 2>/dev/null || true
+}
+
+cmd_playback_status() {
+    local key users vt at rm
+    key=$(_apikey)
+    [ -n "$key" ] || { jq -nc '{ok:false, reason:"no api key"}'; return 0; }
+    lxc_running || { jq -nc '{ok:false, reason:"jellyfin not running"}'; return 0; }
+    users=$(_jf_users "$key")
+    [ -n "$users" ] || { jq -nc '{ok:false, reason:"jellyfin unreachable"}'; return 0; }
+
+    vt=$(_bool_json "$(_playback_video)")
+    at=$(_bool_json "$(_playback_audio)")
+    rm=$(_bool_json "$(_playback_remux)")
+
+    printf '%s' "$users" | jq -c \
+        --argjson vt "$vt" --argjson at "$at" --argjson rm "$rm" \
+        '{ok: true,
+          desired: {video_transcoding:$vt, audio_transcoding:$at, remuxing:$rm},
+          users: [ .[] | {
+              id: .Id, name: .Name,
+              video_transcoding: .Policy.EnableVideoPlaybackTranscoding,
+              audio_transcoding: .Policy.EnableAudioPlaybackTranscoding,
+              remuxing: .Policy.EnablePlaybackRemuxing,
+              compliant: (.Policy.EnableVideoPlaybackTranscoding == $vt
+                          and .Policy.EnableAudioPlaybackTranscoding == $at
+                          and .Policy.EnablePlaybackRemuxing == $rm)
+          } ] }
+        | .all_compliant = ([ .users[].compliant ] | all)' \
+        2>/dev/null || jq -nc '{ok:false, reason:"jellyfin returned unparsable /Users"}'
+}
+
+cmd_playback_apply() {
+    local key users vt at rm
+    key=$(_apikey)
+    [ -n "$key" ] || { jq -nc '{ok:false, reason:"no api key"}'; return 0; }
+    lxc_running || { jq -nc '{ok:false, reason:"jellyfin not running"}'; return 0; }
+    users=$(_jf_users "$key")
+    [ -n "$users" ] || { jq -nc '{ok:false, reason:"jellyfin unreachable"}'; return 0; }
+
+    vt=$(_bool_json "$(_playback_video)")
+    at=$(_bool_json "$(_playback_audio)")
+    rm=$(_bool_json "$(_playback_remux)")
+
+    local applied=() failed=() id name policy body
+    while IFS=$'\t' read -r id name; do
+        [ -n "$id" ] || continue
+        policy=$(printf '%s' "$users" | jq -c --arg id "$id" '(.[] | select(.Id==$id) | .Policy) // empty' 2>/dev/null || true)
+        if [ -z "$policy" ] || [ "$policy" = "null" ]; then failed+=("$name"); continue; fi
+        body=$(printf '%s' "$policy" | jq -c \
+            --argjson vt "$vt" --argjson at "$at" --argjson rm "$rm" \
+            '.EnableVideoPlaybackTranscoding=$vt | .EnableAudioPlaybackTranscoding=$at | .EnablePlaybackRemuxing=$rm' 2>/dev/null || true)
+        if [ -z "$body" ]; then failed+=("$name"); continue; fi
+        # Full object PUT-via-POST — Jellyfin's /Users/{id}/Policy replaces the
+        # whole policy, so a partial body would silently reset every other
+        # field (parental controls, folder access, ...) to its zero value.
+        if curl -fsS --max-time 15 -X POST \
+            -H "X-Emby-Token: $key" -H "Content-Type: application/json" \
+            "${JELLYFIN_URL}/Users/${id}/Policy" -d "$body" >/dev/null 2>&1; then
+            applied+=("$name")
+        else
+            failed+=("$name")
+        fi
+    done < <(printf '%s' "$users" | jq -r '.[] | [.Id, .Name] | @tsv' 2>/dev/null || true)
+
+    local a_json f_json
+    a_json=$(_json_arr "${applied[@]+"${applied[@]}"}")
+    f_json=$(_json_arr "${failed[@]+"${failed[@]}"}")
+    jq -nc --argjson vt "$vt" --argjson at "$at" --argjson rm "$rm" \
+        --argjson applied "$a_json" --argjson failed "$f_json" \
+        '{ok: ($failed | length == 0),
+          desired: {video_transcoding:$vt, audio_transcoding:$at, remuxing:$rm},
+          applied:$applied, failed:$failed}'
+}
+
 # ── Upgrade (mirror peertubectl check-upgrade JSON exactly) ────────────────────
 _jf_current() {
     local v
@@ -557,6 +663,8 @@ Usage: jellyfinctl <verb> [args]   (every verb emits JSON on stdout)
   partner list                   Probe siblings (present/media_path/kind/wired)
   partner wire <name>|--all      RO-bind present partner media as a Jellyfin library
   partner unwire <name>          Remove the bind + virtual folder + state
+  playback status                Per-user transcoding/remux policy vs. [playback] config
+  playback apply                 Push [playback] policy onto every current user
   check-upgrade                  {current, latest, available, major_jump}
   upgrade                        apt-upgrade jellyfin in the LXC (refuses cross-major)
   apikey-mint [name]             Self-provision an API key via the Jellyfin DB (no
@@ -592,6 +700,13 @@ main() {
                 wire)   cmd_partner_wire "$@" ;;
                 unwire) cmd_partner_unwire "$@" ;;
                 *) err "usage: jellyfinctl partner list|wire <name>|unwire <name>"; exit 1 ;;
+            esac ;;
+        playback)
+            local psub="${1:-}"; shift || true
+            case "$psub" in
+                status) cmd_playback_status "$@" ;;
+                apply)  cmd_playback_apply "$@" ;;
+                *) err "usage: jellyfinctl playback status|apply"; exit 1 ;;
             esac ;;
         check-upgrade) cmd_check_upgrade "$@" ;;
         upgrade)       cmd_upgrade "$@" ;;
