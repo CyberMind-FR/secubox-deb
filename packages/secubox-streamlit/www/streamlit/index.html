@@ -214,7 +214,6 @@
             <div class="tab" data-tab="access" onclick="showTab('access')">Access</div>
             <div class="tab" data-tab="apps" onclick="showTab('apps')">Apps</div>
             <div class="tab" data-tab="instances" onclick="showTab('instances')">Instances</div>
-            <div class="tab" data-tab="actions" onclick="showTab('actions')">Actions</div>
         </div>
 
         <!-- MOSAIC TAB -->
@@ -289,43 +288,6 @@
             </div>
         </div>
 
-        <!-- ACTIONS TAB -->
-        <div class="tab-content" id="tab-actions">
-            <div class="card">
-                <h2>Power Management</h2>
-                <p style="margin-bottom:1rem;color:var(--p31-dim)">Sleep/wake optimization - pause container to save resources</p>
-                <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-                    <div id="power-status" style="display:flex;align-items:center;gap:0.5rem">
-                        <span class="badge" id="power-state-badge">loading</span>
-                        <span id="power-idle-time" style="color:var(--p31-dim);font-size:0.85rem"></span>
-                    </div>
-                </div>
-                <div id="power-actions">
-                    <button class="btn success" id="btn-wake" onclick="powerWake()" style="display:none">Wake Up</button>
-                    <button class="btn" id="btn-pause" onclick="powerPause()">Pause (Sleep)</button>
-                    <button class="btn primary" onclick="powerToggle()">Toggle Power</button>
-                </div>
-            </div>
-            <div class="card">
-                <h2>Container Management</h2>
-                <p style="margin-bottom:1rem;color:var(--p31-dim)">Manage the Streamlit LXC container</p>
-                <div id="container-actions">
-                    <button class="btn success" onclick="containerStart()">Start Container</button>
-                    <button class="btn danger" onclick="containerStop()">Stop Container</button>
-                    <button class="btn primary" onclick="containerInstall()">Install Container</button>
-                </div>
-            </div>
-            <div class="card">
-                <h2>Migration</h2>
-                <p style="margin-bottom:1rem;color:var(--p31-dim)">Import apps from OpenWrt SecuBox</p>
-                <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
-            </div>
-            <div class="card">
-                <h2>Gitea Integration</h2>
-                <p style="margin-bottom:1rem;color:var(--p31-dim)">Clone or push apps to Gitea repositories</p>
-                <button class="btn" onclick="showGiteaClone()">Clone from Gitea</button>
-            </div>
-        </div>
     </main>
 
     <!-- Deploy Modal -->
@@ -444,7 +406,6 @@
             else if (name === 'access') loadAccess();
             else if (name === 'apps') loadApps();
             else if (name === 'instances') loadInstances();
-            else if (name === 'actions') loadPowerStatus();
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
@@ -1017,65 +978,6 @@
             }
         });
 
-        // Power Management
-        async function loadPowerStatus() {
-            const d = await api('/power/status');
-            const badge = document.getElementById('power-state-badge');
-            const idleTime = document.getElementById('power-idle-time');
-            const btnWake = document.getElementById('btn-wake');
-            const btnPause = document.getElementById('btn-pause');
-
-            if (d.state === 'running') {
-                badge.textContent = 'RUNNING';
-                badge.className = 'badge running';
-                idleTime.textContent = `Idle: ${d.idle_formatted || '0s'}`;
-                btnWake.style.display = 'none';
-                btnPause.style.display = 'inline-block';
-            } else if (d.state === 'paused') {
-                badge.textContent = 'PAUSED';
-                badge.className = 'badge badge-yellow';
-                idleTime.textContent = d.paused_at ? `Since: ${new Date(d.paused_at).toLocaleTimeString()}` : '';
-                btnWake.style.display = 'inline-block';
-                btnPause.style.display = 'none';
-            } else {
-                badge.textContent = d.state || 'STOPPED';
-                badge.className = 'badge stopped';
-                idleTime.textContent = '';
-                btnWake.style.display = 'inline-block';
-                btnPause.style.display = 'none';
-            }
-        }
-
-        async function powerWake() {
-            const d = await api('/power/wake', { method: 'POST' });
-            if (d.success) {
-                showToast('Container waking up...', 'success');
-                setTimeout(refresh, 2000);
-            } else {
-                showToast('Failed to wake: ' + (d.detail || 'Unknown error'), 'error');
-            }
-        }
-
-        async function powerPause() {
-            const d = await api('/power/pause', { method: 'POST' });
-            if (d.success) {
-                showToast('Container paused (sleeping)', 'success');
-                refresh();
-            } else {
-                showToast('Failed to pause: ' + (d.detail || 'Unknown error'), 'error');
-            }
-        }
-
-        async function powerToggle() {
-            const d = await api('/power/toggle', { method: 'POST' });
-            if (d.success) {
-                showToast('Power state: ' + d.state, 'success');
-                setTimeout(refresh, d.state === 'running' ? 2000 : 500);
-            } else {
-                showToast('Failed to toggle: ' + (d.detail || 'Unknown error'), 'error');
-            }
-        }
-
         // ═══════════════════════════════════════════════════════════════
         // Init + periodic refresh — only the currently visible tab refetches,
         // plus the persistent fleet stat grid (cheap, cached endpoint).
@@ -1089,7 +991,6 @@
             else if (name === 'access') loadAccess();
             else if (name === 'apps') loadApps();
             else if (name === 'instances') loadInstances();
-            else if (name === 'actions') loadPowerStatus();
         }
 
         // Status is the default-active tab, so its data loads immediately;
