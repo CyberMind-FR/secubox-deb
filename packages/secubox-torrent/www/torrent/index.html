@@ -162,6 +162,17 @@
     });
   }
 
+  // Mirrors the server's sanitizeFilename (filenames.js): the real filename
+  // is torrent metadata (untrusted), so strip path separators/control chars
+  // before it ever becomes a suggested download name. The server's
+  // Content-Disposition header is authoritative; this is a belt-and-suspenders
+  // fallback for browsers that resolve the download attribute before the
+  // response headers even arrive.
+  function sanitizeFname(name) {
+    var n = String(name == null ? '' : name).replace(/[/\\]/g, '_').replace(/[\x00-\x1f\x7f]/g, '').trim();
+    return n || 'file';
+  }
+
   // Relative time for a scheduled purge (unix ts).
   function fmtWhen(ts) {
     var d = ts * 1000 - Date.now();
@@ -272,6 +283,14 @@
       var eph = r.ephemeral_until;      // unix ts, or null → conserved
       var pt = r.peertube_status;       // 'done' | 'queued' | 'error' | null
       var filesOpen = !!openFiles[r.infohash];
+      // ZIP download only makes sense once the download actually finished —
+      // r.complete is the library's own flag (survives the torrent being
+      // lazily unloaded from the engine, unlike r.stats/pct which go null
+      // for a conserved-but-idle torrent).
+      var zipHtml = r.complete
+        ? '<a class="btn sm" data-action="zip" href="' + API + '/zip/' + encodeURIComponent(r.infohash) +
+            '" download title="Télécharger tout le dossier en ZIP">🗜️ ZIP</a>'
+        : '';
 
       // PeerTube conserve badge / action
       var ptHtml;
@@ -304,7 +323,7 @@
             '</div>' +
             '<div class="row-actions">' +
               (pct == null ? '<button class="btn sm" data-action="resume" title="Charger / reprendre">▶ Reprendre</button>' : '') +
-              ptHtml + purgeHtml +
+              zipHtml + ptHtml + purgeHtml +
               '<button class="btn sm danger" data-action="remove">🗑</button>' +
             '</div>' +
           '</div>' +
@@ -348,9 +367,10 @@
             '<span class="muted">' + fmtBytes(f.length) + '</span></div>';
         }
         var href = '/stream/' + encodeURIComponent(infohash) + '/' + f.idx;
+        var dlName = esc(sanitizeFname(f.name));
         return '<div class="file-row">' +
           '<span class="fname">' + esc(f.name) + '</span>' +
-          '<a class="btn sm" href="' + href + '" download>⬇ Download</a></div>';
+          '<a class="btn sm" href="' + href + '" download="' + dlName + '">⬇ Download</a></div>';
       }).join('');
     }).catch(function (e) {
       filesEl.innerHTML = '<p class="muted">Erreur de chargement des fichiers.</p>';
@@ -415,6 +435,17 @@
         delete openFiles[ih];
         refreshList();
       }).catch(function (e) { errorToast('Échec: ' + e.message); });
+      return;
+    }
+    if (action === 'zip') {
+      // Don't preventDefault: this is a real <a href download> and the
+      // browser's own download machinery streams it straight to disk (never
+      // buffered in this page's JS). A multi-GB archive can take a while to
+      // start flowing once the download hits the wire (the server may need
+      // to re-verify a conserved-but-idle torrent's data first), so give
+      // immediate feedback here — otherwise a slow start reads as "nothing
+      // happened" and invites repeated clicks.
+      toast('🗜️ Préparation de l’archive ZIP… le téléchargement va démarrer.');
       return;
     }
     if (action === 'play') {
