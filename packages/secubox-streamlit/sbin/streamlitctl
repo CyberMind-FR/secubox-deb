@@ -178,6 +178,89 @@ _app_name_of_script() {
     esac
 }
 
+# Table "path déclaré (champ 'path = ...' d'une section [apps.NAME]) ->
+# nom d'appli", à partir de CONF_PATH. Sert de priorité déclarée avant de
+# retomber sur l'heuristique du nom de fichier lors du rattachement
+# processus <-> appli (cf. _scan_running_apps ci-dessous). Résultat via le
+# tableau associatif global _DECLARED_PATH_TO_NAME (remis à zéro à chaque
+# appel).
+_declared_path_to_name() {
+    declare -gA _DECLARED_PATH_TO_NAME=()
+    [ -f "$CONF_PATH" ] || return
+    local line name p
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        name=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+        [ -n "$name" ] || continue
+        p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+            | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+        # `if` explicite, jamais un `[ ... ] && affectation` en fin de
+        # boucle : sous `set -e`, ce serait le dernier statut de la
+        # dernière itération qui deviendrait celui de la boucle
+        # while ELLE-MÊME (donc de cette fonction) — un plantage sec dès
+        # la première section [apps.*] déclarée SANS "path = ..." (le cas
+        # courant), avant même d'atteindre le code appelant.
+        if [ -n "$p" ]; then
+            _DECLARED_PATH_TO_NAME["$p"]="$name"
+        fi
+    done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+}
+
+# Appariement UNIQUE processus streamlit <-> nom d'appli + port réel
+# (#958). Avant ce correctif, `app list` (matching maison, port lu dans le
+# .streamlit.toml par-appli) et `app shot-target` (via _app_running : port
+# lu dans le même .streamlit.toml, présence vérifiée par un `ss` PAR APPLI
+# dans la LXC) se contredisaient sur la board : `app list` annonçait une
+# appli "running":true avec "port":0, `app shot-target` répondait "not
+# running" pour cette même appli au même instant — deux logiques
+# parallèles jamais recroisées, chacune correcte sur son propre terrain et
+# fausse sur l'autre. Cette fonction est désormais la SEULE source de
+# vérité pour "quelles applis tournent, sur quel port", partagée par
+# cmd_app_list, cmd_app_audit, cmd_app_repair et cmd_app_shot_target.
+#
+# Gère les deux formes de passage du port observées sur la board
+# (`--server.port 8509`, séparé par une espace, et `--server.port=8509` —
+# seule forme produite par le chemin de lancement de ce fichier ; les
+# process déjà vivants sur la board n'ont pas tous été lancés par ce
+# chemin) et les deux formes de point d'entrée (script à plat "app.py" et
+# sous-répertoire "dir/app.py", via _app_name_of_script).
+#
+# Résultat via les tableaux associatifs globaux _RUN_SEEN (nom -> 1),
+# _RUN_PORT (nom -> port observé, "0" si non extrait de la ligne process)
+# et _RUN_TOKEN (nom -> chemin de script tel que lancé) — tous remis à
+# zéro à chaque appel. Un seul appel à `_ps_lines` (donc un seul
+# lxc-attach) par appel de cette fonction : ne JAMAIS la boucler par
+# appli, cf. note perf de `_ps_lines`.
+_scan_running_apps() {
+    declare -gA _RUN_SEEN=() _RUN_PORT=() _RUN_TOKEN=()
+    _declared_path_to_name
+
+    local ps_line script port app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
+        if [ -n "${_DECLARED_PATH_TO_NAME[$script]:-}" ]; then
+            app="${_DECLARED_PATH_TO_NAME[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
+        # _app_name_of_script attend un chemin RELATIF à APPS_PATH (le seul
+        # format que produit le chemin de lancement de ce fichier — cf.
+        # cmd_app_start — et le seul observé sur la board). Un chemin
+        # absolu ferait remonter une chaîne vide (`${1%%/*}` sur un chemin
+        # commençant par "/"), qui plante tout appariement en clé de
+        # tableau associatif ("[]" n'est pas un indice valide) : ignorer la
+        # ligne plutôt que planter tout `app list`/`app audit` sur un
+        # unique process mal formé.
+        [ -z "$app" ] && continue
+        _RUN_SEEN["$app"]=1
+        _RUN_TOKEN["$app"]="$script"
+        _RUN_PORT["$app"]="${port:-0}"
+    done < <(_ps_lines)
+}
+
 # Entrées de $APPS_PATH à exclure de l'inventaire (#956) : ce ne sont
 # jamais des applis, elles ne doivent apparaître ni comme appli ni comme
 # anomalie (a fortiori ne jamais être proposées à la suppression).
@@ -722,37 +805,49 @@ cmd_app_list() {
     echo '{"apps":['
     local first=true
 
-    # Fetch all running streamlit processes in one lxc-attach call (performance)
-    local running_apps=" "  # prefix/suffix space for safe regex matching
-    while IFS= read -r ps_line; do
-        # Extract app name from streamlit run path: /srv/apps/demo/app.py -> demo
-        # sed extracts the script path from the ps line, then we get the parent dir
-        local script; script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
-        if [ -n "$script" ]; then
-            # Get directory name (e.g., /srv/apps/demo/app.py -> demo)
-            # Remove .py filename, then extract last directory component
-            local app_name; app_name=$(printf '%s' "$script" | sed 's|/[^/]*\.py$||; s|.*/||')
-            [ -n "$app_name" ] && running_apps="$running_apps$app_name "
-        fi
-    done < <(_ps_lines)
+    # Appariement processus <-> appli unique (#958) — un seul appel à
+    # _ps_lines (donc un seul lxc-attach) pour tout le parc, partagé avec
+    # cmd_app_audit/cmd_app_repair/cmd_app_shot_target. Avant ce correctif,
+    # cette fonction avait sa propre logique (port lu dans le
+    # .streamlit.toml par-appli, jamais dans le process réel) qui
+    # contredisait celle de `app shot-target` pour la même appli.
+    _scan_running_apps
 
-    for app_dir in "$APPS_PATH"/*/; do
-        [ -d "$app_dir" ] || continue
-        local name=$(basename "$app_dir")
-        [ "$name" = "*" ] && continue
-
-        # Find main py file
-        local main_py=""
-        for candidate in app.py main.py streamlit_app.py; do
-            [ -f "$app_dir/$candidate" ] && main_py="$candidate" && break
+    # Entrées disque (répertoires ET scripts .py à plat, #956/#959) — les
+    # scripts à plat étaient ignorés ici avant #958, ce qui faisait
+    # disparaître la moitié des applis de la board du mur mosaïque.
+    # __pycache__/pages/dotfiles exclus via _is_excluded_entry, jamais
+    # traités comme une appli.
+    local -A disk_names=()
+    if [ -d "$APPS_PATH" ]; then
+        local entry base
+        for entry in "$APPS_PATH"/*; do
+            [ -e "$entry" ] || continue
+            base=$(basename "$entry")
+            _is_excluded_entry "$base" && continue
+            if [ -d "$entry" ]; then
+                disk_names["$base"]=1
+            elif [ "${base%.py}" != "$base" ]; then
+                disk_names["${base%.py}"]=1
+            fi
         done
+    fi
 
-        # Check if running (membership in running_apps list with delimiters)
+    local now; now=$(date +%s)
+    local tmo; tmo=$(_idle_config "timeout_minutes" "30")
+
+    local name
+    for name in $(printf '%s\n' "${!disk_names[@]}" | sort); do
+        # Point d'entrée résolu par la seule source de vérité du fichier
+        # (#959) — script à plat ou répertoire, conventionnel ou non.
+        local ep_rc=0
+        _app_entrypoint "$name" || ep_rc=$?
+        local main_py=""
+        [ "$ep_rc" -eq 0 ] && main_py="${_EP_RESULT#"$name"/}"
+
         local running="false"
-        local port=$(grep -E "^port\s*=" "$app_dir/.streamlit.toml" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "")
-        if [[ "$running_apps" =~ " $name " ]]; then
-            running="true"
-        fi
+        [ -n "${_RUN_SEEN[$name]:-}" ] && running="true"
+        local port="${_RUN_PORT[$name]:-0}"
 
         $first || echo ","
         first=false
@@ -760,10 +855,8 @@ cmd_app_list() {
         local state="sleeping"
         [ "$running" = "true" ] && state="running"
         local last; last=$(_app_last_active "$name")
-        local now; now=$(date +%s)
         local idle=0
         [ "$last" -gt 0 ] && idle=$(( now - last ))
-        local tmo; tmo=$(_idle_config "timeout_minutes" "30")
 
         local escaped_name; escaped_name=$(_json_escape "$name")
         local escaped_main; escaped_main=$(_json_escape "$main_py")
@@ -814,9 +907,9 @@ cmd_app_audit() {
     local -A disk_shape=()      # name -> dir|script
     local -A disk_path=()       # name -> chemin disque absolu
     local -A declared=()        # name -> 1 si section [apps.name] présente
-    local -A run_port=()        # name -> port observé dans les process
-    local -A run_token=()       # name -> chemin de script tel que lancé
-    local -A run_seen=()        # name -> 1 si un process tourne pour ce nom
+    # run_port/run_token/run_seen : remplis plus bas (étape 3) depuis
+    # _scan_running_apps (#958) — seule source de vérité processus <->
+    # appli, partagée avec cmd_app_list/cmd_app_repair/cmd_app_shot_target.
 
     # 1) Entrées disque : répertoires et scripts .py à plat sous APPS_PATH.
     #    _is_excluded_entry filtre __pycache__/pages/dotfiles (#956) : ce ne
@@ -842,7 +935,10 @@ cmd_app_audit() {
     # 2) Applis déclarées : sections [apps.NAME] du config central, avec leur
     #    éventuel "path = ..." — le lien fiable nom-déclaré <-> script lancé
     #    (vérifié sur la board : `path = "metabolizer.py"` sous [apps.*]).
-    local -A path_to_name=()    # path déclaré ("path = ...") -> name, pour le matching process
+    #    Le lien path -> name lui-même (pour le matching process) est
+    #    reconstruit par _scan_running_apps (#958, cf. étape 3 plus bas) ;
+    #    ce bloc ne construit plus que ce dont il a besoin en propre :
+    #    path_owners/dup_path pour l'issue "duplicate-path".
     local -A path_owners=()     # path déclaré -> liste (espace-séparée) des noms qui le déclarent
     local -A dup_path=()        # name -> 1 si son path déclaré est partagé par une autre section
     local -A declared_archived=()  # name -> 1 si archived = true (#956)
@@ -858,10 +954,7 @@ cmd_app_audit() {
             local p arch
             p=$(sed -n "/^\[apps\.${name}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
                 | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
-            if [ -n "$p" ]; then
-                path_to_name["$p"]="$name"
-                path_owners["$p"]="${path_owners[$p]:-}$name "
-            fi
+            [ -n "$p" ] && path_owners["$p"]="${path_owners[$p]:-}$name "
             arch=$(_toml_section_value "$CONF_PATH" "$name" archived)
             [ "$arch" = "true" ] && declared_archived["$name"]=1
         done
@@ -914,24 +1007,16 @@ cmd_app_audit() {
         done < <(grep -E '^\[instances\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
     fi
 
-    # 3) Processus en ligne, croisés par nom d'appli. On préfère le lien
-    #    déclaré (path_to_name) quand il existe ; à défaut on retombe sur
-    #    l'heuristique du nom de fichier (_app_name_of_script).
-    local ps_line script port app
-    while IFS= read -r ps_line; do
-        [ -z "$ps_line" ] && continue
-        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
-        [ -z "$script" ] && continue
-        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
-        if [ -n "${path_to_name[$script]:-}" ]; then
-            app="${path_to_name[$script]}"
-        else
-            app=$(_app_name_of_script "$script")
-        fi
-        run_seen["$app"]=1
-        run_token["$app"]="$script"
-        run_port["$app"]="${port:-0}"
-    done < <(_ps_lines)
+    # 3) Processus en ligne, croisés par nom d'appli — appariement unique
+    #    (#958), partagé avec cmd_app_list/cmd_app_repair/cmd_app_shot_target
+    #    (single source of truth : ne jamais laisser deux logiques de
+    #    matching diverger comme avant #958).
+    _scan_running_apps
+    local -A run_port=() run_token=() run_seen=()
+    local rn
+    for rn in "${!_RUN_SEEN[@]}"; do run_seen["$rn"]=1; done
+    for rn in "${!_RUN_PORT[@]}"; do run_port["$rn"]="${_RUN_PORT[$rn]}"; done
+    for rn in "${!_RUN_TOKEN[@]}"; do run_token["$rn"]="${_RUN_TOKEN[$rn]}"; done
 
     # Union de tous les noms connus (disque ∪ déclarés ∪ en ligne).
     local -A seen_names=()
@@ -1230,27 +1315,13 @@ cmd_app_repair() {
         done
     fi
 
-    # ── 3) Processus en ligne (nom -> port), même logique que l'audit ──
-    local -A path_to_name=()
-    local pn
-    for pn in "${!declared_path[@]}"; do
-        path_to_name["${declared_path[$pn]}"]="$pn"
-    done
+    # ── 3) Processus en ligne (nom -> port) — appariement unique (#958),
+    #    partagé avec cmd_app_list/cmd_app_audit/cmd_app_shot_target ──
+    _scan_running_apps
     local -A run_port=() run_seen=()
-    local ps_line script port app
-    while IFS= read -r ps_line; do
-        [ -z "$ps_line" ] && continue
-        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
-        [ -z "$script" ] && continue
-        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
-        if [ -n "${path_to_name[$script]:-}" ]; then
-            app="${path_to_name[$script]}"
-        else
-            app=$(_app_name_of_script "$script")
-        fi
-        run_seen["$app"]=1
-        run_port["$app"]="${port:-0}"
-    done < <(_ps_lines)
+    local rn
+    for rn in "${!_RUN_SEEN[@]}"; do run_seen["$rn"]=1; done
+    for rn in "${!_RUN_PORT[@]}"; do run_port["$rn"]="${_RUN_PORT[$rn]}"; done
 
     local -A backed_up=()
     local backup_suffix; backup_suffix=$(date +%Y%m%dT%H%M%S)
@@ -1793,12 +1864,23 @@ cmd_app_wake() {
 # ne jamais diverger de app start/wake/audit comme c'était le cas avant
 # #959.
 #
+# "running" et le port viennent de _scan_running_apps (#958) — EXACTEMENT
+# la même lecture des process que `app list`/`app audit`. Avant #958, ce
+# verbe passait par _app_running/_app_port_file (port lu dans le
+# .streamlit.toml par-appli, présence vérifiée par un `ss` ciblé) : sur la
+# board, ce fichier n'existe ou n'est à jour QUE pour les applis démarrées
+# par `app start`/`app wake` — les autres process déjà vivants (démarrés
+# autrement, ou avant le déploiement de ce contrôle) n'en ont pas, si bien
+# que ce verbe répondait "not running" pour une appli que `app list`
+# venait de signaler "running":true au même instant. Router les deux sur
+# la même fonction élimine la contradiction par construction.
+#
 # Sortie JSON {"ok":true,"url":"...","source":"..."} ou
 # {"ok":false,"error":"..."}. Codes de retour (non lus par l'appelant
 # Python, qui ne parse que le JSON, mais tenus cohérents avec app wake) :
 #   2  appli inconnue, ou connue sans point d'entrée résoluble
 #   3  appli connue mais endormie
-#   4  port inconnu (pas de .streamlit.toml persistant malgré _app_running)
+#   4  port inconnu (le process est vu mais sans --server.port reconnu)
 #   5  IP de conteneur indisponible (conteneur arrêté entre deux checks)
 cmd_app_shot_target() {
     local name="$1"
@@ -1815,14 +1897,14 @@ cmd_app_shot_target() {
     fi
     local rel_entrypoint="$_EP_RESULT"
 
-    if ! _app_running "$name"; then
+    _scan_running_apps
+    if [ -z "${_RUN_SEEN[$name]:-}" ]; then
         printf '{"ok":false,"error":"not running"}\n'
         return 3
     fi
 
-    local port
-    port=$(grep -E "^port\s*=" "$(_app_port_file "$name")" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-    if [ -z "$port" ]; then
+    local port="${_RUN_PORT[$name]:-}"
+    if [ -z "$port" ] || [ "$port" = "0" ]; then
         printf '{"ok":false,"error":"port unknown"}\n'
         return 4
     fi
