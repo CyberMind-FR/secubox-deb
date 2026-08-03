@@ -7,7 +7,11 @@ secubox-lyrion (1.2.0-1~bookworm1) bookworm; urgency=medium
     isn't running so callers know to leave the item queued rather than lose
     it or misroute it. Requires the LXC to be RUNNING (not just provisioned)
     before touching the filesystem, so a failure never leaves a half-placed
-    file nobody will scan.
+    file nobody will scan. The destination is namespaced by a hash of the
+    SOURCE PATH (not just the basename) so two unrelated conserved files
+    sharing a filename (eg. two different torrents both producing
+    "01 - Track.mp3") never silently overwrite each other; re-ingesting the
+    same source path stays idempotent (overwrites only its own prior copy).
   * Added toml_get_sec() (ported from jellyfinctl) so [library].path resolves
     correctly — config_get()'s flat grep would otherwise match [lxc] path.
 

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stub curl — the rescan nudge hits this; log the call, always succeed.
+printf 'curl %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+exit 0

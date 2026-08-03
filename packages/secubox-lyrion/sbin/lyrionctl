@@ -261,7 +261,7 @@ cmd_reload() {
 # means "Lyrion is absent or unreachable right now, try again later",
 # never a half-done copy sitting in a directory nobody is scanning yet.
 cmd_ingest() {
-    local src="${1:-}" lib dest_dir dest
+    local src="${1:-}" lib dest_dir dest src_hash
     if [ -z "$src" ] || [ ! -f "$src" ]; then
         printf '{"ok":false,"error":"source file not found"}\n'
         return 1
@@ -271,7 +271,14 @@ cmd_ingest() {
         return 1
     fi
     lib=$(toml_get_sec "$CONFIG_FILE" library path "/data/music")
-    dest_dir="${lib%/}/${CONSERVE_SUBDIR}"
+    # Namespace by a hash of the SOURCE PATH (not content — cheap, and stable
+    # across retries of the same request): two unrelated conserved files that
+    # happen to share a basename (eg. two different torrents both producing
+    # "01 - Track.mp3") must never silently overwrite each other in the
+    # library. Same source path always hashes the same, so a retried/re-run
+    # ingest of the same file is idempotent (re-copies over itself, no dupes).
+    src_hash=$(printf '%s' "$src" | sha1sum | cut -c1-10)
+    dest_dir="${lib%/}/${CONSERVE_SUBDIR}/${src_hash}"
     if ! install -d -m 0755 "$dest_dir" 2>/dev/null; then
         printf '{"ok":false,"error":"library path not writable"}\n'
         return 1
