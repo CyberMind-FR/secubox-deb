@@ -7,10 +7,10 @@ from pathlib import Path
 CTL = Path(__file__).resolve().parents[2] / "sbin" / "streamlitctl"
 
 
-def _audit(tmp_path, dirs=(), scripts=(), declared=()):
+def _audit(tmp_path, dirs=(), scripts=(), declared=(), extra_conf=""):
     apps = tmp_path / "apps"; apps.mkdir()
     conf = tmp_path / "streamlit.toml"
-    conf.write_text("".join(f'[apps.{n}]\n' for n in declared))
+    conf.write_text("".join(f'[apps.{n}]\n' for n in declared) + extra_conf)
     for name, main in dirs:
         d = apps / name; d.mkdir()
         if main:
@@ -198,3 +198,73 @@ def test_duplicate_declared_path_flags_both_apps_without_dropping_either(tmp_pat
     assert names == {"premiere", "seconde"}
     for a in out["apps"]:
         assert "duplicate-path" in a["issues"]
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Public domain field (#960) — the mosaic wall's "open" link used to be
+# built as http://<panel-host>:<port>, which can never work: apps listen
+# INSIDE the streamlit LXC (not on the panel host) and the firewall is
+# DROP by default. The only valid destination is the domain an app was
+# emancipated under, declared in [instances.*] and cross-referenced by
+# that section's "app" field.
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_declared_domain_is_reported_for_the_matching_app(tmp_path):
+    out = _audit(
+        tmp_path, dirs=[("diapvid", "app.py")], declared=["diapvid"],
+        extra_conf=(
+            '[instances.diapvid]\n'
+            'app = "diapvid"\n'
+            'port = "8505"\n'
+            'emancipated = true\n'
+            'domain = "diapvid.gk2.secubox.in"\n'
+        ),
+    )
+    app = [a for a in out["apps"] if a["name"] == "diapvid"][0]
+    assert app["domain"] == "diapvid.gk2.secubox.in"
+
+
+def test_app_without_a_declared_instance_reports_empty_domain(tmp_path):
+    """An app that was never emancipated has no domain — the field must
+    still be present (empty string), never absent, and must never fail the
+    command or corrupt the JSON output."""
+    out = _audit(tmp_path, dirs=[("jamais_publiee", "app.py")])
+    app = out["apps"][0]
+    assert app["domain"] == ""
+
+
+def test_json_escapes_a_hostile_domain(tmp_path):
+    """A domain value carrying a backslash must not corrupt the JSON
+    output — same discipline _json_escape already applies to name and
+    entrypoint."""
+    out = _audit(
+        tmp_path, dirs=[("app1", "app.py")], declared=["app1"],
+        extra_conf=(
+            '[instances.i1]\n'
+            'app = "app1"\n'
+            'port = "8506"\n'
+            'domain = "mal\\icious.example.com"\n'
+        ),
+    )
+    app = [a for a in out["apps"] if a["name"] == "app1"][0]
+    assert app["domain"] == "mal\\icious.example.com"
+
+
+def test_hostile_app_name_is_escaped_and_still_matches_its_domain(tmp_path):
+    """A disk app name containing a backslash is legal on a Linux
+    filesystem — it must not corrupt the JSON output, and the app_domain
+    lookup must still resolve it correctly."""
+    name = "weird\\app"
+    out = _audit(
+        tmp_path, dirs=[(name, "app.py")],
+        extra_conf=(
+            f'[instances.i2]\n'
+            f'app = "{name}"\n'
+            'port = "8507"\n'
+            'domain = "weird.example.com"\n'
+        ),
+    )
+    assert len(out["apps"]) == 1
+    app = out["apps"][0]
+    assert app["name"] == name
+    assert app["domain"] == "weird.example.com"
