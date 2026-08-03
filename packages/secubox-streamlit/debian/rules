@@ -5,6 +5,14 @@
 override_dh_auto_install:
 	install -d debian/secubox-streamlit/usr/lib/secubox/streamlit/
 	cp -r api debian/secubox-streamlit/usr/lib/secubox/streamlit/
+	# Per-app systemd unit template + its launcher (structural fix,
+	# replaces streamlit-all.service) — deployed INSIDE the streamlit LXC
+	# container by streamlitctl (cmd_install for a fresh container; see
+	# also the manual adoption sequence for an already-provisioned one),
+	# never installed as host-side systemd units themselves.
+	install -d debian/secubox-streamlit/usr/lib/secubox/streamlit/lxc
+	[ -d lxc ] && install -m 644 "lxc/streamlit-app@.service" debian/secubox-streamlit/usr/lib/secubox/streamlit/lxc/ || true
+	[ -d lxc ] && install -m 755 lxc/streamlit-launch debian/secubox-streamlit/usr/lib/secubox/streamlit/lxc/ || true
 	install -d debian/secubox-streamlit/usr/share/secubox/www
 	[ -d www ] && cp -r www/. debian/secubox-streamlit/usr/share/secubox/www/ || true
 	install -d debian/secubox-streamlit/usr/share/secubox/menu.d

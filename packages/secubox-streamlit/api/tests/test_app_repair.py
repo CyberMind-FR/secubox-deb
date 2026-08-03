@@ -202,18 +202,33 @@ def test_stale_port_is_updated_with_apply_and_backed_up(tmp_path):
     out = _repair(tmp_path, env, apply=True)
     action = _action(out, "stale-port", "running_app")
     assert action["applied"] is True
-    assert toml.read_text().strip() == "port = 8600"
+    # This fixture's .streamlit.toml also has no "entrypoint = ..." line
+    # (an old-format file, from before the per-app systemd unit fix), so
+    # the same --apply pass also runs case 4 (missing-entrypoint-record)
+    # against the very same file — both land in it.
+    port_text = toml.read_text()
+    assert "port = 8600" in port_text
+    assert 'entrypoint = "running_app/app.py"' in port_text
 
+    # A single backup captures the file exactly as it was before EITHER
+    # case touched it — case 4 must never create a second backup once
+    # case 3 already has.
     backups = list(toml.parent.glob(".streamlit.toml.bak.*"))
     assert len(backups) == 1
     assert backups[0].read_text() == "port = 8501\n"
 
 
 def test_matching_port_is_not_flagged(tmp_path):
+    """"matching port" refers specifically to the stale-port case: a
+    correctly-recorded port must never be reported stale. This fixture's
+    file still has no "entrypoint = ..." line, so it legitimately remains
+    a missing-entrypoint-record candidate — a distinct anomaly, not a
+    regression of this one."""
     apps, conf, ps, toml = _stale_port_setup(tmp_path, declared_port="8600", real_port="8600")
     env = _env(tmp_path, apps_dir=apps, conf=conf, ps=ps)
     out = _repair(tmp_path, env, apply=False)
-    assert [a for a in out["actions"] if a["app"] == "running_app"] == []
+    actions = [a for a in out["actions"] if a["app"] == "running_app"]
+    assert all(a["type"] != "stale-port" for a in actions)
 
 
 def test_stale_port_without_a_running_process_is_not_repaired(tmp_path):
@@ -294,3 +309,89 @@ def test_repair_never_removes_app_files_or_directories(tmp_path):
         if p.name != ".streamlit.toml" and ".bak." not in p.name
     )
     assert disk_entries_before == disk_entries_after
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Case 4: missing-entrypoint-record — the per-app systemd unit migration
+# step. lxc/streamlit-launch refuses to start an app whose .streamlit.toml
+# has no "entrypoint = ..." line (never re-derives it itself, #958). Most
+# of the fleet was started some other way and has no port file at all;
+# `app repair --apply` is how it gets one, sourced from the port the
+# process is ACTUALLY listening on — never a guessed port.
+# ─────────────────────────────────────────────────────────────────────
+
+def test_running_flat_script_with_no_port_file_gets_one_created(tmp_path):
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "billets.py").write_text("import streamlit\n")
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("")
+    env = _env(tmp_path, apps_dir=apps, conf=conf,
+                ps="streamlit run billets.py --server.port=8517\n")
+
+    out = _repair(tmp_path, env, apply=False)
+    action = _action(out, "missing-entrypoint-record", "billets")
+    assert action["port"] == 8517
+    assert action["entrypoint"] == "billets.py"
+    assert action["applied"] is False
+    assert not (apps / ".streamlit-billets.toml").exists()
+
+    out2 = _repair(tmp_path, env, apply=True)
+    action2 = _action(out2, "missing-entrypoint-record", "billets")
+    assert action2["applied"] is True
+    port_file = apps / ".streamlit-billets.toml"
+    assert port_file.exists()
+    text = port_file.read_text()
+    assert "port = 8517" in text
+    assert 'entrypoint = "billets.py"' in text
+
+
+def test_running_directory_app_with_no_port_file_gets_one_created(tmp_path):
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    d = apps / "control"
+    d.mkdir()
+    (d / "test_dashboard.py").write_text("import streamlit\n")
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("")
+    env = _env(tmp_path, apps_dir=apps, conf=conf,
+                ps="streamlit run control/test_dashboard.py --server.port=8600\n")
+
+    out = _repair(tmp_path, env, apply=True)
+    action = _action(out, "missing-entrypoint-record", "control")
+    assert action["applied"] is True
+    text = (d / ".streamlit.toml").read_text()
+    assert "port = 8600" in text
+    assert 'entrypoint = "control/test_dashboard.py"' in text
+
+
+def test_app_not_running_and_without_a_port_file_is_left_alone(tmp_path):
+    """No live process = no reference port to record from; nothing is
+    invented. The app remains a plain "sleeping, never configured"
+    anomaly for `app audit` to report — not something repair guesses at."""
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "dormant.py").write_text("import streamlit\n")
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("")
+    env = _env(tmp_path, apps_dir=apps, conf=conf, ps="")
+
+    out = _repair(tmp_path, env, apply=False)
+    assert [a for a in out["actions"] if a["app"] == "dormant"] == []
+
+
+def test_app_already_fully_recorded_is_not_flagged_again(tmp_path):
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "done.py").write_text("import streamlit\n")
+    (apps / ".streamlit-done.toml").write_text(
+        'port = 8501\nentrypoint = "done.py"\n'
+    )
+    conf = tmp_path / "streamlit.toml"
+    conf.write_text("")
+    env = _env(tmp_path, apps_dir=apps, conf=conf,
+                ps="streamlit run done.py --server.port=8501\n")
+
+    out = _repair(tmp_path, env, apply=False)
+    assert [a for a in out["actions"]
+            if a["app"] == "done" and a["type"] == "missing-entrypoint-record"] == []

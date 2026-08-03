@@ -111,6 +111,73 @@ _app_port_file() {
     fi
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# SYSTEMD PER-APP UNIT HELPERS (structural fix — replaces streamlit-all.
+# service) — one `streamlit-app@<name>.service` instance per app, running
+# INSIDE the LXC (lxc/streamlit-app@.service + lxc/streamlit-launch).
+# `cmd_app_start`/`cmd_app_stop`/`cmd_app_wake`/`cmd_app_idle_check` drive
+# these units via `systemctl` instead of a detached `nohup`; the unit's
+# own ExecStart (streamlit-launch) reads the exact same per-app
+# .streamlit.toml this script already writes.
+# ─────────────────────────────────────────────────────────────────────
+
+# Systemd instance name for app $1. No escaping: app names are directory/
+# file basenames already used unescaped as bash associative-array keys
+# and TOML section names ([apps.$name]) throughout this file — the same
+# assumption is extended here rather than introducing a THIRD naming
+# convention (raw vs systemd-escaped) for the same app name.
+_unit_instance() {
+    printf 'streamlit-app@%s.service' "$1"
+}
+
+# Port already recorded for app $1, from the highest-priority source
+# available: an explicit CLI argument ($2, may be empty), then the
+# persisted per-app .streamlit.toml (_app_port_file — written by a prior
+# `app start`/`app wake`/`app repair --apply`), then a declared
+# `[apps.$1].port` in CONF_PATH. Never a hardcoded default: an app with
+# none of these returns empty, which callers must treat as "refuse to
+# start" — never silently pick 8501 (exactly how 5 apps ended up sharing
+# that port on the board).
+_resolve_app_port() {
+    local name="$1" explicit="${2:-}"
+    if [ -n "$explicit" ] && [ "$explicit" != "0" ]; then
+        printf '%s' "$explicit"
+        return 0
+    fi
+    local port_file; port_file=$(_app_port_file "$name")
+    local persisted=""
+    [ -f "$port_file" ] && persisted=$(grep -E '^port[ \t]*=' "$port_file" 2>/dev/null \
+        | head -1 | cut -d'=' -f2 | tr -d ' "')
+    if [ -n "$persisted" ] && [ "$persisted" != "0" ]; then
+        printf '%s' "$persisted"
+        return 0
+    fi
+    if _app_declared "$name"; then
+        local declared; declared=$(_toml_section_value "$CONF_PATH" "$name" port)
+        if [ -n "$declared" ] && [ "$declared" != "0" ]; then
+            printf '%s' "$declared"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# True if port $2 is currently held by a RUNNING app other than $1, per
+# _scan_running_apps (the same single lxc-attach/_ps_lines source of
+# truth `app list`/`app audit`/`app shot-target` already use — #958). An
+# app is never "in conflict with itself": restarting an app already
+# running on its own persisted port must proceed.
+_port_conflicts_with_another_app() {
+    local name="$1" port="$2"
+    _scan_running_apps
+    local other
+    for other in "${!_RUN_PORT[@]}"; do
+        [ "$other" = "$name" ] && continue
+        [ "${_RUN_PORT[$other]}" = "$port" ] && return 0
+    done
+    return 1
+}
+
 # Escape a string for safe JSON insertion (backlash and double quote)
 _json_escape() {
     local s="$1"
@@ -552,6 +619,11 @@ _set_toml_key_in_section() {
 # CONTAINER MANAGEMENT
 # ─────────────────────────────────────────────────────────────────────
 
+# Where lxc/streamlit-app@.service + lxc/streamlit-launch ship once
+# packaged (see debian/rules) — overridable so this can be pointed at the
+# source tree's own lxc/ during development.
+LXC_ASSETS_PATH="${SECUBOX_STREAMLIT_LXC_ASSETS_PATH:-/usr/lib/secubox/streamlit/lxc}"
+
 cmd_install() {
     if lxc_exists; then
         log "Container already exists. Use 'update' to upgrade."
@@ -561,19 +633,30 @@ cmd_install() {
     log "Installing Streamlit LXC container..."
     mkdir -p "$DATA_PATH" "$APPS_PATH" "$(dirname $LOG_FILE)"
 
-    # Create Alpine-based LXC container
+    # Debian bookworm, not Alpine: the per-app systemd units this
+    # container hosts (streamlit-app@<name>.service, structural fix
+    # replacing streamlit-all.service) need systemd, which Alpine does not
+    # ship. Matches every other LXC-hosted module in this repo (see
+    # packages/secubox-torrent/lxc/install-lxc.sh) and the board's actual
+    # running container, which already exhibits systemd-specific behavior
+    # (MainPID tracking, `enabled`/`WantedBy`) an Alpine/OpenRC container
+    # could never produce.
     lxc-create -n "$LXC_NAME" -t download -- \
-        -d alpine -r 3.19 -a arm64 || {
+        --dist debian --release bookworm --arch "$(dpkg --print-architecture)" || {
         error "Failed to create LXC container"
         return 1
     }
 
-    # Configure container
+    # Configure container. Identity bind mount (DATA_PATH at the SAME
+    # absolute path inside the container, not remapped to /srv/apps):
+    # matches the board's actual running container, where
+    # /srv/streamlit/apps is confirmed to be the cwd of every streamlit
+    # process (see cmd_app_start's own note) — lxc/streamlit-launch relies
+    # on that same path by default.
     cat >> "$LXC_PATH/config" << EOF
 
-# Streamlit bind mounts
-lxc.mount.entry = $APPS_PATH srv/apps none bind,create=dir 0 0
-lxc.mount.entry = $DATA_PATH/logs var/log/streamlit none bind,create=dir 0 0
+# Streamlit bind mounts (identity: same absolute path inside and outside)
+lxc.mount.entry = $DATA_PATH ${DATA_PATH#/} none bind,create=dir 0 0
 
 # Network
 lxc.net.0.type = veth
@@ -592,13 +675,36 @@ EOF
 
     log "Installing packages inside container..."
     lxc-attach -n "$LXC_NAME" -- sh -c '
-        apk update
-        apk add python3 py3-pip py3-virtualenv git bash curl
+        rm -f /etc/resolv.conf
+        printf "nameserver 1.1.1.1\nnameserver 9.9.9.9\n" > /etc/resolv.conf
+        apt-get update
+        apt-get install -y --no-install-recommends python3 python3-pip python3-venv git curl ca-certificates iproute2
         pip3 install --break-system-packages streamlit pandas numpy plotly altair pillow
-        mkdir -p /srv/apps /var/log/streamlit
+        mkdir -p /var/log/streamlit
     '
 
-    # Create hello world app
+    # Deploy the per-app systemd unit template + its launcher (structural
+    # fix — replaces streamlit-all.service). Nothing is enabled or
+    # started here: an app comes up on demand (`app wake`) or, for the
+    # ones declared `[apps.<name>].autostart = true`, via `systemctl
+    # enable` (see cmd_autostart) — never all of them, never by default.
+    if [ -f "$LXC_ASSETS_PATH/streamlit-app@.service" ] && [ -f "$LXC_ASSETS_PATH/streamlit-launch" ]; then
+        tar -C "$LXC_ASSETS_PATH" -cf - "streamlit-app@.service" streamlit-launch \
+            | lxc-attach -n "$LXC_NAME" -- tar -C /tmp -xf -
+        lxc-attach -n "$LXC_NAME" -- sh -c '
+            install -m 644 "/tmp/streamlit-app@.service" /etc/systemd/system/
+            install -m 755 /tmp/streamlit-launch /usr/local/bin/streamlit-launch
+            rm -f "/tmp/streamlit-app@.service" /tmp/streamlit-launch
+            systemctl daemon-reload
+        '
+    else
+        error "install: lxc unit assets not found under $LXC_ASSETS_PATH — per-app units not deployed"
+    fi
+
+    # Create hello world app (dormant: no port declared, never started
+    # automatically — an operator must `app start hello <port>` or
+    # declare [apps.hello].port before it can run).
+    mkdir -p "$APPS_PATH/hello"
     cat > "$APPS_PATH/hello/app.py" << 'PYEOF'
 import streamlit as st
 
@@ -1244,6 +1350,22 @@ _set_app_port() {
     _toml_atomic_replace "$file" "$tmp"
 }
 
+# Remplace (ou ajoute) la ligne "entrypoint = "..."" d'un .streamlit.toml
+# par-appli (fichier PLAT, sans section — même format que _set_app_port,
+# jamais _set_toml_key_in_section qui vise les sections [apps.NAME] du
+# CONF_PATH central). $new_value est écrit TEL QUEL (déjà entre guillemets
+# par l'appelant) — cf. cmd_app_repair, seul appelant à ce jour.
+_set_app_entrypoint() {
+    local file="$1" new_value="$2" tmp
+    tmp=$(_toml_mktemp "$file")
+    if [ -f "$file" ] && grep -qE '^entrypoint[ \t]*=' "$file"; then
+        awk -v v="$new_value" '/^entrypoint[ \t]*=/ { print "entrypoint = " v; next } { print }' "$file" > "$tmp"
+    else
+        { [ -f "$file" ] && cat "$file"; printf 'entrypoint = %s\n' "$new_value"; } > "$tmp"
+    fi
+    _toml_atomic_replace "$file" "$tmp"
+}
+
 # app repair [--apply] — corrige des références de configuration erronées
 # sans jamais supprimer un fichier ni un répertoire (#956). Mode
 # simulation par défaut : sans --apply, rien n'est écrit, seule la liste
@@ -1416,6 +1538,77 @@ cmd_app_repair() {
         $first || out+=","
         first=false
         out+="{\"type\":\"stale-port\",\"app\":\"$(_json_escape "$name")\",\"file\":\"$(_json_escape "$toml")\",\"from\":$persisted,\"to\":$real,\"applied\":$did}"
+    done
+
+    # ── Cas 4 : appli EN LIGNE dont le .streamlit.toml par-appli est
+    #    absent, OU existe mais n'a pas encore de ligne "entrypoint = ..."
+    #    (fichiers écrits par une version de ce script antérieure au
+    #    lanceur systemd par-appli — #958 structural fix). Sans cette
+    #    ligne, lxc/streamlit-launch refuse de démarrer l'appli : il ne
+    #    redérive plus jamais l'entrypoint tout seul (cf. son propre
+    #    commentaire — la classe de bug "deux résolutions divergentes"
+    #    déjà vue en #958/#959). C'est le pas de migration : sur la board,
+    #    la grande majorité des applis en ligne n'ont jamais été démarrées
+    #    via `app start`, donc n'ont aucun fichier du tout.
+    #
+    #    Le port utilisé est TOUJOURS celui RÉELLEMENT observé
+    #    (_scan_running_apps), jamais choisi/deviné — cette appli ne perd
+    #    ni ne gagne de port, elle obtient juste l'enregistrement de celui
+    #    qu'elle utilise déjà. Sans processus en cours pour citer un port
+    #    de référence, rien n'est proposé ici (l'appli reste une anomalie
+    #    "missing-port-file" ordinaire d'`app audit` tant qu'elle n'a
+    #    jamais tourné sous ce contrôle).
+    for name in $(printf '%s\n' "${!disk_shape[@]}" | sort); do
+        local shape="${disk_shape[$name]}"
+        local dpath="${disk_path[$name]}"
+        local toml
+        if [ "$shape" = "dir" ]; then
+            toml="$dpath/.streamlit.toml"
+        else
+            toml="$APPS_PATH/.streamlit-${name}.toml"
+        fi
+
+        local has_entrypoint=false
+        [ -f "$toml" ] && grep -qE '^entrypoint[ \t]*=' "$toml" 2>/dev/null && has_entrypoint=true
+        [ "$has_entrypoint" = "true" ] && continue
+
+        local real_port="${run_port[$name]:-}"
+        [ -z "$real_port" ] && continue
+        [ "$real_port" = "0" ] && continue
+
+        local ep_rc=0
+        _app_entrypoint "$name" || ep_rc=$?
+        [ "$ep_rc" -eq 0 ] || continue
+        # _EP_RESULT is already relative to APPS_PATH (e.g.
+        # "control/test_dashboard.py" for a directory app, "billets.py"
+        # for a flat script) — the exact format lxc/streamlit-launch
+        # expects (it `cd`s to APPS_PATH before exec'ing streamlit run),
+        # and the exact format cmd_app_start already persists. No
+        # stripping here — a second, subtly different format for the
+        # same field is exactly the kind of divergence #958/#959 already
+        # burned this project on once.
+        local ep_for_file="$_EP_RESULT"
+
+        local did=false
+        if [ "$apply" = "true" ]; then
+            mkdir -p "$(dirname "$toml")"
+            if [ -f "$toml" ]; then
+                if [ -z "${backed_up[$toml]:-}" ]; then
+                    cp -p "$toml" "${toml}.bak.${backup_suffix}"
+                    backed_up["$toml"]=1
+                fi
+                _set_app_port "$toml" "$real_port"
+            else
+                printf 'port = %s\n' "$real_port" > "$toml"
+            fi
+            _set_app_entrypoint "$toml" "\"$ep_for_file\""
+            did=true
+            applied=$(( applied + 1 ))
+        fi
+        total=$(( total + 1 ))
+        $first || out+=","
+        first=false
+        out+="{\"type\":\"missing-entrypoint-record\",\"app\":\"$(_json_escape "$name")\",\"file\":\"$(_json_escape "$toml")\",\"port\":$real_port,\"entrypoint\":\"$(_json_escape "$ep_for_file")\",\"applied\":$did}"
     done
 
     out+="]"
@@ -1631,6 +1824,64 @@ cmd_app_archive_undeclared() {
 EOF
 }
 
+# app autostart <name> <on|off> [--apply] — the declarative "always on"
+# toggle (structural fix): sets [apps.<name>].autostart in CONF_PATH,
+# following the exact dry-run/--apply/JSON/timestamped-backup convention
+# as `app archive`. With --apply and the LXC running, also reconciles the
+# unit's own systemd enablement right away (`systemctl enable`/`disable
+# streamlit-app@<name>.service`) — the SAME flag `cmd_autostart` reads for
+# its reconciliation sweep and `app idle-check` reads to exempt the app
+# from being stopped (see both above). Switching ON is refused outright
+# when the app has no resolvable port yet: never enable a unit that would
+# just refuse to start (lxc/streamlit-launch's own guard).
+cmd_app_autostart_set() {
+    local name="${1:-}" mode="${2:-}" apply=false
+    [ "${3:-}" = "--apply" ] && apply=true
+
+    if [ -z "$name" ] || { [ "$mode" != "on" ] && [ "$mode" != "off" ]; }; then
+        error "Usage: streamlitctl app autostart <name> <on|off> [--apply]"
+        return 1
+    fi
+
+    if ! _app_declared "$name"; then
+        error "App non déclarée : $name (ajoutez d'abord une section [apps.$name] dans $CONF_PATH)"
+        return 1
+    fi
+
+    local want="false"
+    [ "$mode" = "on" ] && want="true"
+
+    local blocked=false reason=""
+    if [ "$want" = "true" ]; then
+        local resolved
+        if ! resolved=$(_resolve_app_port "$name" ""); then
+            blocked=true
+            reason="no port configured — declare [apps.$name].port first (never enabling a unit that would just refuse to start)"
+        fi
+    fi
+
+    local did=false
+    if [ "$blocked" = "false" ] && [ "$apply" = "true" ]; then
+        cp -p "$CONF_PATH" "${CONF_PATH}.bak.$(date +%Y%m%dT%H%M%S)"
+        _set_toml_key_in_section "$CONF_PATH" "$name" "autostart" "$want"
+        if lxc_running; then
+            if [ "$want" = "true" ]; then
+                lxc-attach -n "$LXC_NAME" -- systemctl enable "$(_unit_instance "$name")" >/dev/null 2>&1 || true
+            else
+                lxc-attach -n "$LXC_NAME" -- systemctl disable "$(_unit_instance "$name")" >/dev/null 2>&1 || true
+            fi
+        fi
+        did=true
+    fi
+
+    local applied=0
+    [ "$did" = "true" ] && applied=1
+
+    cat <<EOF
+{"apply":$apply,"actions":[{"type":"autostart","app":"$(_json_escape "$name")","file":"$(_json_escape "$CONF_PATH")","autostart":$want,"blocked":$blocked,"reason":"$(_json_escape "$reason")","applied":$did}],"summary":{"total":1,"applied":$applied}}
+EOF
+}
+
 # app info <name> — print metadata + runtime state from manifest + pid file (#182)
 cmd_app_info() {
     local name="$1"
@@ -1672,18 +1923,35 @@ cmd_app_restart() {
     [ -z "$name" ] && { error "Usage: streamlitctl app restart <name>"; return 1; }
     cmd_app_stop "$name" || true
     sleep 1
-    # Recover the previous port from .streamlit.toml so restart preserves it
-    # (cf. _app_port_file : répertoire ou script à plat, #959)
+    # Recover the previous port from .streamlit.toml so restart preserves
+    # it (cf. _app_port_file : répertoire ou script à plat, #959). No
+    # ${port:-8501} fallback here any more: if nothing was ever persisted,
+    # cmd_app_start's own resolution (declared port, or explicit refusal)
+    # decides — never a silently-guessed port.
     local port_file; port_file=$(_app_port_file "$name")
     local port=""
     [ -f "$port_file" ] && \
         port=$(grep -E "^port" "$port_file" 2>/dev/null | cut -d= -f2 | tr -d ' ')
-    cmd_app_start "$name" "${port:-8501}"
+    if [ -n "$port" ]; then
+        cmd_app_start "$name" "$port"
+    else
+        cmd_app_start "$name"
+    fi
 }
 
+# app start <name> [port] — starts the app's dedicated
+# `streamlit-app@<name>.service` unit inside the LXC (structural fix:
+# replaces the old detached `nohup streamlit run ...`, which is exactly
+# how streamlit-all.service ended up owning every app's process instead
+# of systemd — MainPID=0, a stop of one app read as "the whole service
+# failed", relaunching the entire fleet).
+#
+# streamlitctl never launches `streamlit run` itself any more — that is
+# lxc/streamlit-launch's job, executed BY the unit. This function only
+# ever resolves/validates the port and asks systemd to start the unit.
 cmd_app_start() {
     local name="$1"
-    local port="${2:-8501}"
+    local explicit_port="${2:-}"
 
     [ -z "$name" ] && { error "Usage: streamlitctl app start <name> [port]"; return 1; }
 
@@ -1715,50 +1983,64 @@ cmd_app_start() {
         return 1
     fi
 
-    # Save port config — cf. _app_port_file : dans le répertoire de l'appli
-    # pour une appli-répertoire (inchangé), fichier caché voisin sous
-    # APPS_PATH pour un script à plat (jamais un répertoire fantôme
-    # homonyme du script, qui polluerait `app audit`/`app list`).
+    # Port resolution — NEVER a default. The old `local port="${2:-8501}"`
+    # silently picked 8501 whenever the caller (including `app wake`,
+    # which never passes one) omitted it: exactly how 5 apps ended up
+    # sharing that single port on the board. An app with no explicit
+    # argument, no persisted .streamlit.toml, and no declared
+    # [apps.$name].port simply cannot start — that is a real gap in the
+    # fleet's config (13 apps on the board), not something to guess past.
+    local port
+    if ! port=$(_resolve_app_port "$name" "$explicit_port"); then
+        error "No port configured for $name — declare [apps.$name].port in $CONF_PATH or pass one explicitly (streamlitctl app start $name <port>)"
+        return 1
+    fi
+
+    # Conflict guard: refuse rather than let two apps fight over the same
+    # socket. Checked against the REAL process table (_scan_running_apps,
+    # same single lxc-attach call `app list`/`app audit` already use),
+    # never against other apps' merely-declared ports — declaring the
+    # same port twice is exactly the board's current (out-of-scope-to-fix)
+    # reality for 5 apps; only an ACTUAL collision is refused.
+    if _port_conflicts_with_another_app "$name" "$port"; then
+        local other=""
+        local o
+        for o in "${!_RUN_PORT[@]}"; do
+            [ "$o" != "$name" ] && [ "${_RUN_PORT[$o]}" = "$port" ] && other="$o" && break
+        done
+        error "Port $port is already in use by running app '$other' — refusing to start $name on a conflicting port"
+        return 1
+    fi
+
+    # Persist port + entrypoint — cf. _app_port_file : dans le répertoire
+    # de l'appli pour une appli-répertoire (inchangé), fichier caché
+    # voisin sous APPS_PATH pour un script à plat (jamais un répertoire
+    # fantôme homonyme du script, qui polluerait `app audit`/`app list`).
+    # This file is the ONLY thing lxc/streamlit-launch reads inside the
+    # container (via the APPS_PATH bind mount) — never a second,
+    # independently-derived resolution of entrypoint/port (#958/#959).
     local port_file; port_file=$(_app_port_file "$name")
     mkdir -p "$(dirname "$port_file")"
-    echo "port = $port" > "$port_file"
+    {
+        printf 'port = %s\n' "$port"
+        printf 'entrypoint = "%s"\n' "$rel_entrypoint"
+    } > "$port_file"
 
     log "Starting app $name on port $port..."
-
-    # Répertoire de travail = le répertoire des applis TEL QUE LE VOIT LE
-    # CONTENEUR. Il était codé en dur à "/srv/apps", qui n'existe pas : le `cd`
-    # échouait, le `sh -c` avortait avant `streamlit run`, et pas même un
-    # fichier de log n'était créé. `streamlitctl app start` n'a donc jamais
-    # fonctionné — ce qui explique que les applis en ligne aient été lancées
-    # autrement et n'aient pas de .streamlit.toml (#959).
-    #
-    # On dérive de DATA_PATH plutôt que d'APPS_PATH : ce dernier est
-    # surchargeable par l'environnement pour les tests, et pointerait alors sur
-    # un chemin de l'hôte qui n'a aucun sens à l'intérieur du conteneur.
-    # Vérifié sur la board : /srv/streamlit/apps est aussi le cwd de tous les
-    # processus streamlit en cours.
-    local lxc_apps="${DATA_PATH:-/srv/streamlit}/apps"
-    # Répertoire de travail = APPS_PATH (monté dans le conteneur),
-    # jamais le sous-répertoire de l'appli : c'est ce que montrent les
-    # process réellement en ligne sur la board (`streamlit run
-    # <chemin relatif à /srv/apps>`, parfois imbriqué comme
-    # "secubox_evolution/app.py") — et c'est le format qu'attendent
-    # _app_name_of_script et le matching de `app audit`/`app list` (#959).
-    lxc-attach -n "$LXC_NAME" -- sh -c "
-        mkdir -p /var/log/streamlit
-        cd "$lxc_apps"
-        nohup streamlit run $rel_entrypoint \
-            --server.port=$port \
-            --server.headless=true \
-            --server.address=0.0.0.0 \
-            > /var/log/streamlit/$name.log 2>&1 &
-        echo \$! > /var/run/streamlit-$name.pid
-    "
+    if ! lxc-attach -n "$LXC_NAME" -- systemctl start "$(_unit_instance "$name")"; then
+        error "systemd unit failed to start for $name (see journalctl -u $(_unit_instance "$name") inside the LXC)"
+        return 1
+    fi
 
     log "App $name started"
     _app_touch_active "$name"
 }
 
+# app stop <name> — stops the app's dedicated unit. `systemctl stop` only
+# ever touches THIS instance: unlike the old `pkill -f "streamlit.*$name"`
+# (which could match more than intended) and unlike stopping the old
+# streamlit-all.service (whose ExecStop, `pkill -f streamlit`, killed
+# every app in the fleet), this can never take another app down with it.
 cmd_app_stop() {
     local name="$1"
     [ -z "$name" ] && { error "Usage: streamlitctl app stop <name>"; return 1; }
@@ -1768,15 +2050,7 @@ cmd_app_stop() {
     fi
 
     log "Stopping app $name..."
-
-    lxc-attach -n "$LXC_NAME" -- sh -c "
-        if [ -f /var/run/streamlit-$name.pid ]; then
-            kill \$(cat /var/run/streamlit-$name.pid) 2>/dev/null || true
-            rm -f /var/run/streamlit-$name.pid
-        fi
-        pkill -f \"streamlit.*$name\" 2>/dev/null || true
-    "
-
+    lxc-attach -n "$LXC_NAME" -- systemctl stop "$(_unit_instance "$name")" || true
     log "App $name stopped"
 }
 
@@ -1841,6 +2115,18 @@ cmd_app_idle_check() {
     local stopped=0 active=0 idle=0
     local name
     for name in "${!_RUN_SEEN[@]}"; do
+        # Declared always-on (`[apps.$name].autostart = true`, the same
+        # flag `cmd_autostart` uses to `systemctl enable` this app's
+        # unit) is never a stop candidate — under Restart=no an idle-stop
+        # here would never come back on its own, defeating the whole
+        # point of declaring the app always-on in the first place.
+        if _app_declared "$name" && [ "$(_toml_section_value "$CONF_PATH" "$name" autostart)" = "true" ]; then
+            log "idle-check: $name is declared autostart — never a stop candidate"
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
+
         local port="${_RUN_PORT[$name]:-0}"
         if [ -z "$port" ] || [ "$port" = "0" ]; then
             # Process vu (streamlit run ...) mais --server.port non
@@ -2119,18 +2405,35 @@ cmd_app_logs() {
     fi
 }
 
+# app autostart — the declarative "always on" flag: `[apps.<name>]
+# autostart = true` (+ a resolvable port) both starts the app now (if the
+# LXC is up) AND `systemctl enable`s its dedicated unit so it survives a
+# container reboot on its own — systemd itself starts an enabled instance
+# at boot, no bulk imperative "start everything" step is required for
+# that part. autostart=false/absent never enables anything: nothing here
+# starts the whole fleet by default (the defect being fixed).
+#
+# The SAME flag also exempts the app from `app idle-check` (see below):
+# a declared always-on app that idle-check silently stopped would, under
+# Restart=no, never come back on its own.
 cmd_autostart() {
-    # Start apps marked for autostart in config
     if [ -f "$CONF_PATH" ]; then
-        local apps=$(grep -E '^\[apps\.' "$CONF_PATH" | sed 's/\[apps\.//;s/\]//')
+        local apps; apps=$(grep -E '^\[apps\.' "$CONF_PATH" | sed 's/\[apps\.//;s/\]//')
+        local name
         for name in $apps; do
             # Une appli archivée n'est jamais démarrée par le chemin groupé
             # (#956) — seul un `app unarchive` explicite la rend éligible.
             _app_archived "$name" && continue
-            local autostart=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^autostart\s*=' | grep -q 'true' && echo "true" || echo "false")
-            local port=$(grep -A5 "^\[apps\.$name\]" "$CONF_PATH" | grep -E '^port\s*=' | cut -d'=' -f2 | tr -d ' ')
-            if [ "$autostart" = "true" ] && [ -n "$port" ]; then
-                cmd_app_start "$name" "$port" 2>/dev/null || true
+            local autostart; autostart=$(_toml_section_value "$CONF_PATH" "$name" autostart)
+            [ "$autostart" = "true" ] || continue
+            local port; port=$(_toml_section_value "$CONF_PATH" "$name" port)
+            if [ -z "$port" ] || [ "$port" = "0" ]; then
+                error "autostart: $name has no port declared — skipping (never guessing a port)"
+                continue
+            fi
+            cmd_app_start "$name" "$port" 2>/dev/null || true
+            if lxc_running; then
+                lxc-attach -n "$LXC_NAME" -- systemctl enable "$(_unit_instance "$name")" >/dev/null 2>&1 || true
             fi
         done
     fi
@@ -2369,6 +2672,7 @@ case "${1:-}" in
                 fi
                 ;;
             unarchive)  cmd_app_unarchive "$3" "$4" ;;
+            autostart)  cmd_app_autostart_set "$3" "$4" "$5" ;;
             idle-check) cmd_app_idle_check "$3" ;;
             wake)       cmd_app_wake "$3" "$4" ;;
             shot-target) cmd_app_shot_target "$3" ;;
@@ -2379,7 +2683,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|autostart|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target} [args]" ;;
         esac
         ;;
 
@@ -2428,8 +2732,9 @@ Apps:
   app archive <name> [--apply] [--force]   Mark an app archived=true, enabled=false (dry-run by default)
   app archive --undeclared [--apply] [--force]  Declare+archive all undeclared on-disk apps
   app unarchive <name> [--apply]           Reverse of archive (dry-run by default)
-  app start <name> [port]   Start an app
-  app stop <name>           Stop an app
+  app autostart <name> <on|off> [--apply]  Declarative always-on: systemd enable + idle-check exempt
+  app start <name> [port]   Start an app (drives streamlit-app@<name>.service; refuses without a resolvable port)
+  app stop <name>           Stop an app (drives streamlit-app@<name>.service)
   app deploy <zip> [name]   Deploy from ZIP
   app remove <name>         Remove an app
   app logs <name> [lines]   View app logs
