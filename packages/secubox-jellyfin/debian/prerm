@@ -6,6 +6,8 @@ case "$1" in
     remove|deconfigure|upgrade)
         systemctl stop secubox-jellyfin.service 2>/dev/null || true
         systemctl disable secubox-jellyfin.service 2>/dev/null || true
+        systemctl stop secubox-jellyfin-playback-policy.timer 2>/dev/null || true
+        systemctl disable secubox-jellyfin-playback-policy.timer 2>/dev/null || true
         # We do not destroy the LXC here — purge does that via postrm if asked.
         ;;
 esac

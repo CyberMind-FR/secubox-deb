@@ -29,6 +29,29 @@ case "$1" in
             chown root:secubox /etc/secubox/jellyfin.toml
         fi
 
+        # A live config predating this feature has no [playback] section — a
+        # plain upgrade never overwrites an existing jellyfin.toml (see the
+        # guard just above), so without this the declarative toggle would be
+        # invisible to the operator even though jellyfinctl already falls
+        # back to the same values. Idempotent: only appends when absent.
+        if [ -f /etc/secubox/jellyfin.toml ] && ! grep -q '^\[playback\]' /etc/secubox/jellyfin.toml; then
+            {
+                echo ""
+                echo "[playback]"
+                echo "# Real-time transcoding is CPU-heavy and this board has no /dev/dri (no"
+                echo "# hardware encoder): every transcoded stream burns a full ARM core in"
+                echo "# software x264. Disabling it means a file the client cannot decode"
+                echo "# natively will refuse to play instead of degrading through a software"
+                echo "# transcode — an accepted tradeoff, not a bug. Remuxing (container change"
+                echo "# only, no re-encode) stays independently enabled: its CPU cost is"
+                echo "# negligible and it widens what plays without a full transcode."
+                echo "allow_video_transcoding = false"
+                echo "allow_audio_transcoding = false"
+                echo "allow_remuxing          = true"
+            } >> /etc/secubox/jellyfin.toml
+            echo "secubox-jellyfin: [playback] section added to jellyfin.toml (declarative transcoding policy)" >&2
+        fi
+
         # Validate + honour the scoped sudoers (visudo check; never fatal — a
         # syntax error must not brick sudo, just skip activating our grant).
         if [ -f /etc/sudoers.d/secubox-jellyfin ]; then
@@ -80,6 +103,19 @@ case "$1" in
         # guarded provision oneshot so dpkg is never blocked.
         systemctl enable secubox-jellyfin-provision.service 2>/dev/null || true
         systemctl start --no-block secubox-jellyfin-provision.service 2>/dev/null || true
+
+        # Playback policy (transcoding on/off, remux on) — reconciled onto
+        # every current Jellyfin user:
+        #   - once now, --no-block, so an UPGRADE of an already-provisioned
+        #     install (the common case on this board) picks up a changed
+        #     [playback] section without any manual step. On a container
+        #     that isn't up yet this quietly no-ops (ok:false) — non-fatal,
+        #     the provisioning flow and the timer below both retry it;
+        #   - periodically after, via the timer, so a user created later
+        #     never keeps Jellyfin's transcoding-enabled default for long.
+        systemctl enable secubox-jellyfin-playback-policy.timer 2>/dev/null || true
+        systemctl start secubox-jellyfin-playback-policy.timer 2>/dev/null || true
+        systemctl start --no-block secubox-jellyfin-playback-policy.service 2>/dev/null || true
         ;;
 esac
 
