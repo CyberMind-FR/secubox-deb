@@ -64,11 +64,15 @@ _app_running() {
         | awk -v p="$port" 'NR>1 && $4 ~ ":"p"$" {found=1} END {exit found?0:1}'
 }
 
-# Returns the count of ESTABLISHED connections to the app's port (inside LXC).
-_app_active_conns() {
-    local name="$1"
-    local port; port=$(grep -E "^port\s*=" "$(_app_port_file "$name")" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-    [ -z "$port" ] && { echo 0; return; }
+# Returns the count of ESTABLISHED connections to a given port (inside
+# LXC). Takes the port directly rather than an app name + _app_port_file
+# lookup (cf. cmd_app_idle_check, #958 follow-up): the port used here MUST
+# come from _scan_running_apps (the process itself), never from the
+# per-app .streamlit.toml, which on the board only exists for apps that
+# were started via `app start`/`app wake` — most of the fleet wasn't.
+_port_active_conns() {
+    local port="$1"
+    [ -z "$port" ] || [ "$port" = "0" ] && { echo 0; return; }
     lxc_running || { echo 0; return; }
     lxc-attach -n "$LXC_NAME" -- ss -tn state established "sport = :$port" 2>/dev/null \
         | awk 'NR>1' | wc -l
@@ -89,8 +93,9 @@ _app_touch_active() {
     touch "$IDLE_STATE_DIR/$name.state"
 }
 
-# Chemin du .streamlit.toml par-appli (port persisté), lu par _app_running/
-# _app_active_conns et écrit par cmd_app_start/cmd_app_restart. Appli-
+# Chemin du .streamlit.toml par-appli (port persisté), lu par _app_running
+# (encore utilisé par `app wake` pour son polling post-lancement, cf. ce
+# fichier plus bas) et écrit par cmd_app_start/cmd_app_restart. Appli-
 # répertoire : fichier DANS le répertoire de l'appli (comportement
 # historique, inchangé). Appli-script à plat : fichier caché VOISIN sous
 # APPS_PATH — jamais un répertoire fantôme homonyme du script, qui
@@ -1775,7 +1780,55 @@ cmd_app_stop() {
     log "App $name stopped"
 }
 
+# app idle-check [--dry-run] — arrête les applis dont l'inactivité dépasse
+# [idle].timeout_minutes (#331 ; détection unifiée, #958 follow-up).
+#
+# Avant ce correctif, ce verbe itérait UNIQUEMENT sur les sous-répertoires
+# de APPS_PATH (`for app_dir in "$APPS_PATH"/*/`) et jugeait "en cours"
+# via _app_running/_app_port_file — port lu dans le .streamlit.toml
+# par-appli, écrit SEULEMENT par le chemin `app start`/`app wake`. Mesuré
+# sur la board : 24 applis Streamlit réellement en cours (dont des
+# scripts à plat sous APPS_PATH, jamais vus par ce glob répertoire-seul)
+# mais seulement 17 fichiers .streamlit.toml — idle-check rapportait donc
+# systématiquement `active=0 idle=0 stopped=0`, aveugle au parc réel :
+# exactement le défaut déjà identifié et corrigé pour `app list`/`app
+# shot-target` par #958 (cf. _scan_running_apps ci-dessus). Router ce
+# verbe sur la même fonction élimine la troisième logique de détection
+# parallèle que ce correctif visait précisément à éviter — et évite de
+# réintroduire un avatar de la classe de bug déjà vue deux fois sur ce
+# même verbe (extraction de port boguée, changelog 1.2.4-1~bookworm1).
+#
+# --dry-run : calcule et RAPPORTE les candidates à l'arrêt (une ligne de
+# log par décision, plus le résumé habituel) SANS jamais appeler
+# cmd_app_stop ni toucher l'horodatage IDLE_STATE_DIR d'une candidate —
+# une exécution en simulation reste rejouable à l'identique juste après.
+# Pensé pour valider manuellement sur la board avant de laisser le timer
+# systemd (secubox-streamlit-idle.timer) agir pour de vrai : rendre ce
+# verbe soudain voyant lui donne d'un coup toutes les candidates qu'il ne
+# voyait jamais avant (24 sur la board mesurée) — un mauvais calcul
+# d'inactivité éteindrait donc en masse des applis en cours d'usage.
+#
+# Horodatage de dernière activité absent (aucun fichier IDLE_STATE_DIR
+# pour cette appli), nul (epoch 0) ou dans le futur (horloge en dérive,
+# fichier d'état corrompu) : JAMAIS traité comme "inactif depuis
+# toujours". Dans les trois cas l'appli est réarmée (touch) et comptée
+# "active" ce tour-ci, sans jamais être arrêtée — elle ne redevient
+# candidate à l'arrêt qu'à un tour suivant, une fois qu'un horodatage de
+# référence fiable s'est écoulé. Le cas "absent" reprend le choix déjà
+# fait avant ce correctif (jamais changé : une appli tout juste vue pour
+# la première fois par idle-check mérite une période de grâce, pas une
+# extinction immédiate sur défaut de données) ; le cas "futur" est traité
+# explicitement plutôt que de compter sur l'arithmétique signée de
+# `$(( now - last ))` pour rester accidentellement sûre.
 cmd_app_idle_check() {
+    local dry_run=false
+    local a
+    for a in "$@"; do
+        case "$a" in
+            --dry-run) dry_run=true ;;
+        esac
+    done
+
     local enabled; enabled=$(_idle_config "enabled" "true")
     [ "$enabled" = "true" ] || { log "idle-check disabled in $CONF_PATH"; return 0; }
 
@@ -1783,15 +1836,26 @@ cmd_app_idle_check() {
     local timeout_sec=$(( timeout_min * 60 ))
     local now; now=$(date +%s)
 
+    _scan_running_apps
+
     local stopped=0 active=0 idle=0
-    for app_dir in "$APPS_PATH"/*/; do
-        [ -d "$app_dir" ] || continue
-        local name; name=$(basename "$app_dir")
-        [ "$name" = "*" ] && continue
+    local name
+    for name in "${!_RUN_SEEN[@]}"; do
+        local port="${_RUN_PORT[$name]:-0}"
+        if [ -z "$port" ] || [ "$port" = "0" ]; then
+            # Process vu (streamlit run ...) mais --server.port non
+            # reconnu dans la ligne process (cf. _scan_running_apps) :
+            # impossible de vérifier les connexions ESTABLISHED. Ne
+            # jamais désigner à l'arrêt une appli qu'on ne peut pas
+            # inspecter — même traitement de grâce que l'horodatage
+            # manquant ci-dessous.
+            log "idle-check: $name has no resolvable port — treating as active (cannot verify)"
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
 
-        _app_running "$name" || continue
-
-        local conns; conns=$(_app_active_conns "$name")
+        local conns; conns=$(_port_active_conns "$port")
         if [ "$conns" -gt 0 ]; then
             _app_touch_active "$name"
             active=$(( active + 1 ))
@@ -1799,19 +1863,37 @@ cmd_app_idle_check() {
         fi
 
         local last; last=$(_app_last_active "$name")
-        [ "$last" -eq 0 ] && { _app_touch_active "$name"; continue; }
+        if [ "$last" -le 0 ]; then
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
+        if [ "$last" -gt "$now" ]; then
+            log "idle-check: $name last-active timestamp is in the future ($last > $now, clock skew or corrupt state) — granting grace period"
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
         local idle_sec=$(( now - last ))
 
         if [ "$idle_sec" -ge "$timeout_sec" ]; then
-            log "idle-stop: $name (idle ${idle_sec}s >= ${timeout_sec}s)"
-            cmd_app_stop "$name" >/dev/null 2>&1 || true
+            if [ "$dry_run" = "true" ]; then
+                log "idle-check: [dry-run] would stop $name (idle ${idle_sec}s >= ${timeout_sec}s)"
+            else
+                log "idle-stop: $name (idle ${idle_sec}s >= ${timeout_sec}s)"
+                cmd_app_stop "$name" >/dev/null 2>&1 || true
+            fi
             stopped=$(( stopped + 1 ))
         else
             idle=$(( idle + 1 ))
         fi
     done
 
-    log "idle-check: active=$active idle=$idle stopped=$stopped"
+    if [ "$dry_run" = "true" ]; then
+        log "idle-check: [dry-run] active=$active idle=$idle would-stop=$stopped"
+    else
+        log "idle-check: active=$active idle=$idle stopped=$stopped"
+    fi
 }
 
 # Budget par défaut (secondes) de `app wake` quand l'appelant ne fournit
@@ -2287,7 +2369,7 @@ case "${1:-}" in
                 fi
                 ;;
             unarchive)  cmd_app_unarchive "$3" "$4" ;;
-            idle-check) cmd_app_idle_check ;;
+            idle-check) cmd_app_idle_check "$3" ;;
             wake)       cmd_app_wake "$3" "$4" ;;
             shot-target) cmd_app_shot_target "$3" ;;
             start)  cmd_app_start "$3" "$4" ;;
@@ -2297,7 +2379,7 @@ case "${1:-}" in
             logs)   cmd_app_logs "$3" "$4" ;;
             info)   cmd_app_info "$3" ;;
             restart) cmd_app_restart "$3" ;;
-            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check|wake|shot-target} [args]" ;;
+            *)      echo "Usage: streamlitctl app {list|audit|repair|archive|unarchive|start|stop|restart|deploy|remove|logs|info|idle-check [--dry-run]|wake|shot-target} [args]" ;;
         esac
         ;;
 
