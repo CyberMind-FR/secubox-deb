@@ -3,13 +3,13 @@
 // SecuBox-Deb :: secubox-torrent :: server.test.js — CyberMind https://cybermind.fr
 //
 // Unit tests for the sas purge sweep (runPurge) + restart reconcile
-// (resumeLibrary). server.js's start() imports webtorrent/@fastify/static
+// (resumeLibrary). webtorrent-server.js's start() imports webtorrent/@fastify/static
 // dynamically inside the function body, so this file never pulls those
 // heavy/native deps in — no network, no real disk.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runPurge, resumeLibrary } from './server.js';
+import { runPurge, resumeLibrary } from './webtorrent-server.js';
 import { Library } from './library.js';
 
 const now = () => Math.floor(Date.now() / 1000);
