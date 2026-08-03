@@ -162,6 +162,17 @@
     });
   }
 
+  // Mirrors the server's sanitizeFilename (filenames.js): the real filename
+  // is torrent metadata (untrusted), so strip path separators/control chars
+  // before it ever becomes a suggested download name. The server's
+  // Content-Disposition header is authoritative; this is a belt-and-suspenders
+  // fallback for browsers that resolve the download attribute before the
+  // response headers even arrive.
+  function sanitizeFname(name) {
+    var n = String(name == null ? '' : name).replace(/[/\\]/g, '_').replace(/[\x00-\x1f\x7f]/g, '').trim();
+    return n || 'file';
+  }
+
   // Relative time for a scheduled purge (unix ts).
   function fmtWhen(ts) {
     var d = ts * 1000 - Date.now();
@@ -356,9 +367,10 @@
             '<span class="muted">' + fmtBytes(f.length) + '</span></div>';
         }
         var href = '/stream/' + encodeURIComponent(infohash) + '/' + f.idx;
+        var dlName = esc(sanitizeFname(f.name));
         return '<div class="file-row">' +
           '<span class="fname">' + esc(f.name) + '</span>' +
-          '<a class="btn sm" href="' + href + '" download>⬇ Download</a></div>';
+          '<a class="btn sm" href="' + href + '" download="' + dlName + '">⬇ Download</a></div>';
       }).join('');
     }).catch(function (e) {
       filesEl.innerHTML = '<p class="muted">Erreur de chargement des fichiers.</p>';

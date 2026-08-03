@@ -12,7 +12,10 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-import { isValidInfohash, safeFilePath, sanitizeFilename, contentDispositionHeader, buildZipArchive } from './zip.js';
+import { isValidInfohash, safeFilePath, buildZipArchive } from './zip.js';
+
+// sanitizeFilename / contentDispositionHeader moved to filenames.js (shared
+// with /stream) — see filenames.test.js for their tests.
 
 test('isValidInfohash accepts a 40-char hex string, rejects everything else', () => {
   assert.equal(isValidInfohash('a'.repeat(40)), true);
@@ -66,28 +69,6 @@ test('safeFilePath allows a relPath that merely LOOKS suspicious but stays insid
 test('safeFilePath rejects empty/non-string input', () => {
   assert.equal(safeFilePath('/data/torrent', ''), null);
   assert.equal(safeFilePath('/data/torrent', undefined), null);
-});
-
-test('sanitizeFilename strips separators and control chars, falls back when empty', () => {
-  assert.equal(sanitizeFilename('My Movie (2024)', 'x'), 'My Movie (2024)');
-  assert.equal(sanitizeFilename('a/b\\c', 'x'), 'a_b_c');
-  assert.equal(sanitizeFilename('evil\r\nX-Injected: 1', 'x'), 'evilX-Injected: 1');
-  assert.equal(sanitizeFilename('', 'fallback-ih'), 'fallback-ih');
-  assert.equal(sanitizeFilename(null, 'fallback-ih'), 'fallback-ih');
-  assert.equal(sanitizeFilename('   ', 'fallback-ih'), 'fallback-ih');
-});
-
-test('sanitizeFilename caps length', () => {
-  const long = 'x'.repeat(500);
-  assert.equal(sanitizeFilename(long, 'x').length, 150);
-});
-
-test('contentDispositionHeader has no raw CR/LF and carries both ascii and utf-8 forms', () => {
-  const h = contentDispositionHeader('Café Ünïcode.zip');
-  assert.ok(!/[\r\n]/.test(h));
-  assert.ok(h.includes('attachment; filename='));
-  assert.ok(h.includes("filename*=UTF-8''"));
-  assert.ok(h.includes(encodeURIComponent('Café Ünïcode.zip')));
 });
 
 // --- buildZipArchive: proves the archive STREAMS as it is consumed, rather

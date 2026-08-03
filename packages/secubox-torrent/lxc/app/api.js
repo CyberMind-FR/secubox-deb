@@ -9,7 +9,8 @@ import Fastify from 'fastify';
 import path from 'node:path';
 import fs from 'node:fs';
 import { handleStream } from './stream.js';
-import { isValidInfohash, safeFilePath, sanitizeFilename, contentDispositionHeader, buildZipArchive } from './zip.js';
+import { isValidInfohash, safeFilePath, buildZipArchive } from './zip.js';
+import { sanitizeFilename, contentDispositionHeader } from './filenames.js';
 
 // Uploaded .torrent files are small; cap the raw body well below anything that
 // could be abused. 5 MiB comfortably covers even huge multi-file torrents.
@@ -232,11 +233,21 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     // own metadata (remote/untrusted), not from this request's infohash. A
     // hostile torrent could declare a file outside downloadDir; refuse the
     // whole archive rather than silently drop or follow it.
+    //
+    // The ZIP entry name is derived from the SAME resolved+validated abs
+    // path (path.relative back against downloadDir), not re-used verbatim
+    // from the untrusted f.path string. It's still the real torrent
+    // tree/name — resolve() only normalises it (e.g. collapses a harmless
+    // "sub/../file" down to "file") — but never contains a literal ".."
+    // segment, which also rules out zip-slip on whatever tool the user later
+    // extracts the archive with.
+    const base = path.resolve(engine.downloadDir);
     const resolved = [];
     for (const f of t.files) {
       const abs = safeFilePath(engine.downloadDir, f.path || f.name);
       if (!abs) return reply.code(500).send({ error: 'unsafe file path in torrent data' });
-      resolved.push({ abs, name: f.path || f.name });
+      const entryName = path.relative(base, abs).split(path.sep).join('/');
+      resolved.push({ abs, name: entryName });
     }
 
     // Confirm the data is actually still on disk — library/engine state can
