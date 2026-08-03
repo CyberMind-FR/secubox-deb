@@ -48,6 +48,14 @@ presence_events = true
 metoblizer_log = false
 metoblizer_endpoint = "http://localhost:9300/api/v1/metoblizer/ingest"
 
+[wake]
+# How long `streamlitctl app wake <name>` waits for the app's port to
+# start listening when the caller doesn't pass an explicit budget as a
+# 3rd CLI argument (`app wake <name> <seconds>` always overrides this).
+# Measured on a loaded board (average load 45-90): wakes commonly take
+# 26 to 78s, sometimes more. Default 300.
+budget_seconds = 300
+
 [idle]
 # Stop streamlit apps that haven't served any ESTABLISHED connection
 # for this many minutes. Set to 0 to disable. Default 30.
