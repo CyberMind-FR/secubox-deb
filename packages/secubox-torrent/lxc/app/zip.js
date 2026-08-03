@@ -3,9 +3,10 @@
 // SecuBox-Deb :: secubox-torrent :: zip.js — CyberMind https://cybermind.fr
 //
 // Helpers for the ZIP-download route: infohash format validation, the real
-// path-traversal gate, and filename sanitizing. Kept pure/synchronous (no fs,
-// no network) so they're trivial to unit-test in isolation from Fastify and
-// WebTorrent.
+// path-traversal gate, and the streaming archive builder. Filename
+// sanitizing / Content-Disposition building live in filenames.js (shared
+// with /stream). Kept pure/synchronous where possible (no fs, no network) so
+// they're trivial to unit-test in isolation from Fastify and WebTorrent.
 
 import path from 'node:path';
 import archiver from 'archiver';
@@ -31,28 +32,6 @@ export function safeFilePath(downloadDir, relPath) {
   const target = path.resolve(base, relPath);
   if (target !== base && !target.startsWith(base + path.sep)) return null;
   return target;
-}
-
-// Suggested download filename, derived from the torrent name: no path
-// separators (can't smuggle a directory), no control chars (no CR/LF header
-// injection into Content-Disposition), trimmed, length-capped, and never
-// empty (falls back to the infohash).
-export function sanitizeFilename(name, fallback) {
-  let n = String(name || '')
-    .replace(/[/\\]/g, '_')
-    .replace(/[\x00-\x1f\x7f]/g, '')
-    .trim();
-  if (!n) n = fallback || 'torrent';
-  if (n.length > 150) n = n.slice(0, 150);
-  return n;
-}
-
-// Build a Content-Disposition value that's safe even if the sanitized name
-// still contains non-ASCII: an ASCII-only fallback for old clients plus the
-// RFC 5987 filename* form for the real (UTF-8) name.
-export function contentDispositionHeader(filename) {
-  const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, "'");
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 // Build a ZIP archive stream from already-resolved+validated {abs, name}
