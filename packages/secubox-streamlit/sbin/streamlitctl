@@ -107,6 +107,16 @@ _json_escape() {
     echo "$s"
 }
 
+# Escape a string's ERE metacharacters for safe embedding in a `pkill -f`
+# pattern (#961). A resolved entrypoint always contains at least one
+# unescaped "." (the .py extension), which in a regex matches ANY
+# character — left unescaped, "control/app.py" would also match a
+# hypothetical "control/appXpy". Used by cmd_app_stop to build an exact
+# pattern instead of the previous bare-substring "streamlit.*$name".
+_ere_escape() {
+    printf '%s' "$1" | sed -e 's/[][\.^$*+?(){}|]/\\&/g'
+}
+
 # ─────────────────────────────────────────────────────────────────────
 # AUDIT HELPERS (#956) — cross-reference disk / declared / running
 # ─────────────────────────────────────────────────────────────────────
@@ -1613,15 +1623,109 @@ cmd_app_stop() {
 
     log "Stopping app $name..."
 
-    lxc-attach -n "$LXC_NAME" -- sh -c "
-        if [ -f /var/run/streamlit-$name.pid ]; then
-            kill \$(cat /var/run/streamlit-$name.pid) 2>/dev/null || true
-            rm -f /var/run/streamlit-$name.pid
-        fi
-        pkill -f \"streamlit.*$name\" 2>/dev/null || true
-    "
+    # Repli par motif EXACT sur le point d'entrée réel de l'appli (#961) —
+    # l'ancien "streamlit.*$name" matchait toute appli dont le nom du
+    # process CONTIENT $name en sous-chaîne : arrêter "control" tuait
+    # aussi "secubox_control", "bazi_calculator" tuait
+    # "bazi_calculator_1", "gk2_lumiere" tuait "fanzine_gk2_lumiere_1",
+    # "yijing" tuait 3 applis distinctes — 9 collisions relevées sur la
+    # board. _app_entrypoint est la même source de vérité que `app
+    # start`/`app audit` pour "quel fichier cette appli a-t-elle
+    # réellement lancé" (#959) ; ancré juste après "streamlit run " et
+    # échappé (_ere_escape), un autre nom ne peut jamais y matcher en
+    # sous-chaîne. Sans entrypoint résoluble (appli disparue du disque,
+    # etc.) on n'a rien d'exact à cibler : pas de repli par motif dans ce
+    # cas, seul le fichier de PID (tenté ci-dessous, inconditionnellement)
+    # reste une option.
+    local pkill_pattern=""
+    local ep_rc=0
+    _app_entrypoint "$name" || ep_rc=$?
+    [ "$ep_rc" -eq 0 ] && pkill_pattern="streamlit run $(_ere_escape "$_EP_RESULT") "
+
+    # $name et le motif passent par l'environnement plutôt que par
+    # interpolation dans le script — jamais de recomposition de commande
+    # shell à partir d'un nom d'appli non maîtrisé.
+    lxc-attach -n "$LXC_NAME" -- env \
+        SBX_STOP_NAME="$name" SBX_STOP_PATTERN="$pkill_pattern" \
+        sh -c '
+            if [ -f "/var/run/streamlit-$SBX_STOP_NAME.pid" ]; then
+                kill "$(cat "/var/run/streamlit-$SBX_STOP_NAME.pid")" 2>/dev/null || true
+                rm -f "/var/run/streamlit-$SBX_STOP_NAME.pid"
+            fi
+            if [ -n "$SBX_STOP_PATTERN" ]; then
+                pkill -f "$SBX_STOP_PATTERN" 2>/dev/null || true
+            fi
+        ' 2>/dev/null
 
     log "App $name stopped"
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# IDLE-CHECK BULK SNAPSHOT (#961) — un seul appel au conteneur pour toute
+# la boucle d'inactivité, jamais un par appli. L'ancien code lisait le
+# port depuis le .streamlit.toml par-appli (_app_port_file) puis faisait
+# un lxc-attach par appli pour `ss` — mais ce fichier n'existe que pour
+# 10 des 87 applis de la board (il n'est écrit que par `app start`, resté
+# cassé jusqu'à avant-hier, #959) : port absent se lisait silencieusement
+# "zéro connexion", et une appli activement utilisée pouvait être
+# arrêtée à tort. Le port réel est celui du PROCESS EN COURS — même
+# association que cmd_app_audit construit déjà depuis _ps_lines ("path =
+# ..." déclaré en priorité, sinon _app_name_of_script) — et le signal
+# "quelqu'un est connecté" vient d'un unique `ss -tn state established`
+# récupéré dans LE MÊME appel au conteneur que la liste des process,
+# jamais un second aller-retour par appli : une version antérieure
+# faisant un lxc-attach par appli mettait 17s pour ~60 applis, exactement
+# le motif que _ps_lines a été introduit pour éliminer sur `app list`/
+# `app audit` — le réintroduire ici aurait le même effet.
+# ─────────────────────────────────────────────────────────────────────
+
+_IDLE_SNAPSHOT_FETCHED=false
+_IDLE_SNAPSHOT_PS=""
+_IDLE_SNAPSHOT_SS=""
+
+# Remplit _IDLE_SNAPSHOT_PS / _IDLE_SNAPSHOT_SS depuis un seul appel au
+# conteneur, mémoïsé (les appels suivants dans la même exécution sont
+# gratuits — au plus UN lxc-attach par exécution de `app idle-check`,
+# quel que soit le nombre d'applis). SECUBOX_STREAMLIT_PS_SOURCE /
+# SECUBOX_STREAMLIT_SS_SOURCE (même convention que _ps_lines) permettent
+# de fournir ces deux flux séparément en test, sans conteneur.
+_idle_snapshot_ensure() {
+    $_IDLE_SNAPSHOT_FETCHED && return
+    _IDLE_SNAPSHOT_FETCHED=true
+
+    if [ -n "${SECUBOX_STREAMLIT_PS_SOURCE:-}" ] || [ -n "${SECUBOX_STREAMLIT_SS_SOURCE:-}" ]; then
+        return
+    fi
+    lxc_running || return 0
+
+    local raw
+    raw=$(lxc-attach -n "$LXC_NAME" -- sh -c '
+        echo "@@SBX-PS@@"
+        ps -eo args
+        echo "@@SBX-SS@@"
+        ss -tn state established
+    ' 2>/dev/null)
+    _IDLE_SNAPSHOT_PS=$(printf '%s\n' "$raw" \
+        | sed -n '/^@@SBX-PS@@$/,/^@@SBX-SS@@$/{/^@@SBX-PS@@$/d;/^@@SBX-SS@@$/d;p;}')
+    _IDLE_SNAPSHOT_SS=$(printf '%s\n' "$raw" | sed -n '/^@@SBX-SS@@$/,$p' | sed '1d')
+}
+
+_idle_ps_lines() {
+    if [ -n "${SECUBOX_STREAMLIT_PS_SOURCE:-}" ]; then
+        cat "$SECUBOX_STREAMLIT_PS_SOURCE" 2>/dev/null
+        return
+    fi
+    _idle_snapshot_ensure
+    printf '%s\n' "$_IDLE_SNAPSHOT_PS"
+}
+
+_idle_established_lines() {
+    if [ -n "${SECUBOX_STREAMLIT_SS_SOURCE:-}" ]; then
+        cat "$SECUBOX_STREAMLIT_SS_SOURCE" 2>/dev/null
+        return
+    fi
+    _idle_snapshot_ensure
+    printf '%s\n' "$_IDLE_SNAPSHOT_SS"
 }
 
 cmd_app_idle_check() {
@@ -1632,15 +1736,120 @@ cmd_app_idle_check() {
     local timeout_sec=$(( timeout_min * 60 ))
     local now; now=$(date +%s)
 
+    # Le snapshot DOIT être récupéré ici, dans ce shell — jamais laissé au
+    # premier appel de _idle_ps_lines/_idle_established_lines ci-dessous.
+    # Ces deux fonctions sont consommées via `< <(...)`  (substitution de
+    # process), qui exécute chaque appel dans un SOUS-shell séparé : la
+    # mémoïsation de _idle_snapshot_ensure (variables globales mutées) ne
+    # survivrait pas à la sortie du premier sous-shell, et le second
+    # relancerait un lxc-attach — exactement le double appel que #961
+    # interdit. Appelée ici, dans le shell principal de la fonction, elle
+    # ne s'exécute qu'UNE fois ; les deux sous-shells n'auront plus qu'à
+    # lire des variables déjà peuplées (héritées en lecture).
+    _idle_snapshot_ensure
+
+    # ── Association nom déclaré <-> path (identique à cmd_app_audit) ───
+    local -A path_to_name=()
+    if [ -f "$CONF_PATH" ]; then
+        local line dname p
+        while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            dname=$(printf '%s' "$line" | sed 's/^\[apps\.//;s/\]$//')
+            [ -n "$dname" ] || continue
+            p=$(sed -n "/^\[apps\.${dname}\]/,/^\[/p" "$CONF_PATH" 2>/dev/null \
+                | grep -E '^path\s*=' | head -1 | cut -d'"' -f2)
+            [ -n "$p" ] && path_to_name["$p"]="$dname"
+        done < <(grep -E '^\[apps\.[^]]+\]' "$CONF_PATH" 2>/dev/null)
+    fi
+
+    # ── Process en cours et port RÉEL de chacun (#961), depuis le
+    #    snapshot unique ci-dessus — jamais depuis .streamlit.toml.
+    local -A run_port=() run_seen=()
+    local ps_line script port app
+    while IFS= read -r ps_line; do
+        [ -z "$ps_line" ] && continue
+        printf '%s\n' "$ps_line" | grep -q "streamlit run" || continue
+        script=$(printf '%s\n' "$ps_line" | sed -n 's/.*streamlit run \([^ ]*\).*/\1/p')
+        [ -z "$script" ] && continue
+        port=$(printf '%s\n' "$ps_line" | sed -n 's/.*--server\.port[= ]*\([0-9]*\).*/\1/p')
+        if [ -n "${path_to_name[$script]:-}" ]; then
+            app="${path_to_name[$script]}"
+        else
+            app=$(_app_name_of_script "$script")
+        fi
+        run_seen["$app"]=1
+        run_port["$app"]="${port:-}"
+    done < <(_idle_ps_lines)
+
+    # ── Connexions ESTABLISHED par port, du même snapshot ───────────────
+    local -A established=()
+    local ss_line lport
+    while IFS= read -r ss_line; do
+        [ -z "$ss_line" ] && continue
+        case "$ss_line" in
+            State*|Netid*) continue ;;
+        esac
+        lport=$(printf '%s\n' "$ss_line" | awk '{print $4}')
+        lport="${lport##*:}"
+        case "$lport" in ''|*[!0-9]*) continue ;; esac
+        established["$lport"]=$(( ${established[$lport]:-0} + 1 ))
+    done < <(_idle_established_lines)
+
     local stopped=0 active=0 idle=0
-    for app_dir in "$APPS_PATH"/*/; do
-        [ -d "$app_dir" ] || continue
-        local name; name=$(basename "$app_dir")
-        [ "$name" = "*" ] && continue
 
-        _app_running "$name" || continue
+    # ── Toutes les applis présentes sur disque — répertoires ET scripts
+    #    .py à plat (#961, défaut 1 : la boucle n'itérait avant que les
+    #    répertoires, laissant 43 scripts sur 63 hors de portée de la
+    #    veille). Même classification que cmd_app_audit/cmd_app_repair :
+    #    _is_excluded_entry filtre __pycache__/pages/dotfiles, jamais des
+    #    applis (#956).
+    local entry base
+    for entry in "$APPS_PATH"/*; do
+        [ -e "$entry" ] || continue
+        base=$(basename "$entry")
+        _is_excluded_entry "$base" && continue
 
-        local conns; conns=$(_app_active_conns "$name")
+        local name=""
+        if [ -d "$entry" ]; then
+            name="$base"
+        elif [ "${base%.py}" != "$base" ]; then
+            name="${base%.py}"
+        else
+            continue
+        fi
+
+        # Point d'entrée résoluble ? Même résolution que `app
+        # start`/`app audit` (_app_entrypoint, #959) — une appli sans
+        # entrypoint ne peut de toute façon jamais être un process en
+        # cours ; on ne réinvente pas ici une quatrième définition de
+        # "qu'est-ce qu'une appli".
+        local ep_rc=0
+        _app_entrypoint "$name" >/dev/null || ep_rc=$?
+        [ "$ep_rc" -eq 0 ] || continue
+
+        # Applis archivées : jamais touchées par cette boucle (#956/#961)
+        # — elles ne tournent pas, et leur arrêt éventuel relève d'un
+        # geste explicite (`app archive`), jamais de l'automatique.
+        _app_archived "$name" && continue
+
+        # Pas de process en cours pour cette appli : déjà endormie, rien
+        # à faire.
+        [ -n "${run_seen[$name]:-}" ] || continue
+
+        # En cas de doute, ne pas endormir (#961) : si l'appli tourne mais
+        # que son port réel n'a pas pu être extrait de la ligne de
+        # commande observée, on la traite comme active plutôt que de
+        # risquer de l'arrêter à tort — se tromper en la laissant tourner
+        # coûte du CPU, se tromper en l'arrêtant coûte le travail de
+        # quelqu'un.
+        local port="${run_port[$name]:-}"
+        if [ -z "$port" ]; then
+            _app_touch_active "$name"
+            active=$(( active + 1 ))
+            continue
+        fi
+
+        local conns="${established[$port]:-0}"
         if [ "$conns" -gt 0 ]; then
             _app_touch_active "$name"
             active=$(( active + 1 ))
