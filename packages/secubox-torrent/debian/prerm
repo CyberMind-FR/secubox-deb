@@ -5,8 +5,22 @@ set -e
 case "$1" in
   remove|upgrade|deconfigure)
     # No host-side daemon to stop (the WebTorrent engine runs inside the
-    # dedicated LXC, not as a host systemd unit). Just unwire the vhost.
+    # dedicated LXC, not as a host systemd unit). Just unwire the vhost. The
+    # public vhost symlink isn't a package-shipped file (postinst recreates
+    # it every run), so it must be removed by hand on every trigger
+    # including upgrade.
     rm -f /etc/nginx/sites-enabled/torrent.conf
+
+    case "$1" in
+      remove|deconfigure)
+        # Unlike the symlink above, the admin-vhost route is a real
+        # dh_install-managed conffile: dpkg already keeps/updates it across
+        # upgrades on its own, so only remove it by hand here — same
+        # remove|deconfigure-only pattern as secubox-hub's hub.conf.
+        rm -f /etc/nginx/secubox-routes.d/torrent-routes.conf
+        ;;
+    esac
+
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
       systemctl reload nginx 2>/dev/null || true
     fi

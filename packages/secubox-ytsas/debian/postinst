@@ -61,6 +61,11 @@ case "$1" in
       ln -sf ../sites-available/ytsas.conf /etc/nginx/sites-enabled/ytsas.conf
     fi
 
+    # The admin-vhost route (etc/nginx/secubox-routes.d/ytsas-routes.conf) is
+    # a plain dh_install-managed conffile — already on disk by the time this
+    # script runs, nothing to render here. Validated by the nginx -t below
+    # like everything else; a failure here just skips the reload and leaves
+    # nginx running the previous, still-valid config.
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
       systemctl reload nginx 2>/dev/null || true
     fi
