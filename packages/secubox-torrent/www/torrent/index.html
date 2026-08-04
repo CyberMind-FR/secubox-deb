@@ -1,15 +1,22 @@
 <!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
      Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
      SecuBox-Deb :: secubox-torrent :: www/torrent/index.html — CyberMind https://cybermind.fr
-     Player webui — self-contained module vhost variant of the SecuBox WebUI
-     Panel Guidelines (cyan hybrid-dark terminal): no /shared/, no external
-     URLs (offline-clean), palette + component classes inlined verbatim. -->
+     Player webui — this module is dual-served: aggregator-hosted (/torrent/
+     on the hub, static alias) AND on its own public vhost
+     (torrent.gk2.secubox.in, which already proxies /shared/ for LAN
+     clients — see nginx/torrent.conf). Loads the shared SecuBox WebUI Panel
+     Guidelines chassis (cyan hybrid-dark terminal: /shared/sidebar.js +
+     /shared/hybrid-skin.css) so the page is reachable from — and can return
+     to — the rest of the admin. No external/CDN URLs: palette + component
+     classes stay inlined verbatim, font falls back to local Courier Prime
+     (offline-clean, WAF-safe). -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — Torrent</title>
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
   :root {
     --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
@@ -24,12 +31,23 @@
     background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
   }
   a { color: var(--cyan); }
-  .main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1.2rem 4rem; }
-  .header { display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border); }
+  /* Shared chassis: fixed 220px sidebar (populated by /shared/sidebar.js) +
+     content pushed clear of it. hybrid-skin.css reinforces this (and the
+     top bar clearance via its own --gmb-h var) once it tags the body
+     .hybrid-skin — this local rule just avoids a layout jump/overlap
+     before that JS/CSS lands. */
+  .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
+  .main { max-width: 60rem; margin: 0 auto 0 220px; padding: 1.5rem 1.2rem 4rem; }
+  /* .header now wraps ONLY the page title. sidebar.js's global top bar
+     replaces per-page headers by hiding .header entirely (display:none) —
+     the title text lives on in the injected top bar instead. Actions and
+     the live status line therefore must NOT live inside .header (they'd
+     vanish with it): they live in .toolbar, a sibling, below. */
+  .header { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
   .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-  .header .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .25rem; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; }
+  .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; }
   .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
   .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
     text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
@@ -95,22 +113,24 @@
   ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
   @media (max-width: 768px) {
-    .main { padding: 1rem .8rem; }
+    .main { margin-left: 0; padding: 1rem .8rem; }
     .item .title { max-width: 12rem; }
   }
 </style>
 </head>
-<body>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
 <main class="main">
   <header class="header">
-    <div>
-      <h1>📥 Torrent</h1>
-      <div class="sub" id="sub">BitTorrent + WebTorrent player · chargement…</div>
-    </div>
+    <h1>📥 Torrent</h1>
+  </header>
+  <div class="toolbar">
+    <div class="sub" id="sub">BitTorrent + WebTorrent player · chargement…</div>
     <div class="btn-group">
       <button class="btn" id="btnRefresh">↻ Refresh</button>
     </div>
-  </header>
+  </div>
 
   <div class="grid" id="statGrid">
     <div class="stat-card cyan"><div class="value" id="statActive">–</div><div class="label">📦 Actifs</div></div>
