@@ -199,6 +199,26 @@ def test_read_cache_missing_sites_key_is_reported(tmp_path):
     assert result["reason"] == "cache unreadable"
 
 
+def test_read_cache_null_sites_value_is_reported_not_raised(tmp_path):
+    """A cache payload with `"sites": null` (e.g. a writer bug, or JSON
+    serialized from a None) must be reported like any other malformed
+    cache — never raise a TypeError out of read_cache(), which is
+    documented to never raise."""
+    cache = tmp_path / "sites.json"
+    cache.write_text(json.dumps({"sites": None}))
+    result = sites_scan.read_cache(cache)
+    assert result["available"] is False
+    assert result["reason"] == "cache unreadable"
+
+
+def test_read_cache_non_list_sites_value_is_reported(tmp_path):
+    cache = tmp_path / "sites.json"
+    cache.write_text(json.dumps({"sites": {"not": "a list"}}))
+    result = sites_scan.read_cache(cache)
+    assert result["available"] is False
+    assert result["reason"] == "cache unreadable"
+
+
 def test_read_cache_valid_payload_reports_available_true(tmp_path):
     cache = tmp_path / "sites.json"
     cache.write_text(json.dumps({"sites": [{"name": "a"}, {"name": "b"}]}))

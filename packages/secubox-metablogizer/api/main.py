@@ -104,11 +104,46 @@ _SITES_CACHE_AT: float = 0.0
 _SITES_CACHE_TTL: float = 30.0
 
 
+def _trigger_sites_cache_refresh() -> Optional[str]:
+    """Fire-and-forget `systemctl --no-block start metablog-audit.service`
+    (#974). Shared by every write path (via `_invalidate_sites_cache()`
+    below) and by `POST /sites/refresh`. Deliberately NEVER calls
+    `sites_scan.scan_sites()` / `.main()` inline — that would just move the
+    blocking recompute into whichever request happens to trigger it.
+    Repeated triggers (e.g. several writes in a row) coalesce: systemd
+    ignores/queues a `start` on a unit that's already starting rather than
+    running it twice in parallel — same fire-and-forget pattern as
+    secubox-hub's `_trigger_cache_refresh()`.
+
+    Returns `None` on success, an error string on failure (sudo/systemctl
+    missing — expected in a dev/test sandbox, tolerated everywhere).
+    """
+    try:
+        subprocess.Popen(
+            ["sudo", "-n", "/usr/bin/systemctl", "--no-block", "start",
+             "metablog-audit.service"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return None
+    except (FileNotFoundError, OSError) as e:
+        logger.warning("sites cache refresh trigger failed: %s", e)
+        return str(e)
+
+
 def _invalidate_sites_cache() -> None:
-    """Drop the cached site list. Call after any site directory change."""
+    """Drop the cached site list and kick off an out-of-band cache refresh.
+
+    Without the refresh trigger, a write (create/publish/delete/upload/
+    deploy) would be invisible in the Mosaic/Sites tabs for up to 5 minutes
+    (the metablog-audit.timer cadence) even though the change is already
+    live on disk — the in-memory `_SITES_CACHE` this drops is NOT what
+    GET /sites reads anymore (#974), only the on-disk cache is. Triggering
+    a rescan here keeps writes visible within a few seconds instead.
+    """
     global _SITES_CACHE, _SITES_CACHE_AT
     _SITES_CACHE = None
     _SITES_CACHE_AT = 0.0
+    _trigger_sites_cache_refresh()
 
 
 def load_sites() -> List[dict]:
@@ -477,24 +512,20 @@ async def refresh_sites_cache():
     """Trigger an out-of-band refresh of the GET /sites cache, without
     waiting for the next metablog-audit.timer tick (#974).
 
-    Fire-and-forget `systemctl --no-block start metablog-audit.service` —
-    same pattern as secubox-hub's `_trigger_cache_refresh()`. Deliberately
+    Thin wrapper around `_trigger_sites_cache_refresh()` — the same
+    fire-and-forget trigger every write path (create/publish/delete/…)
+    already fires via `_invalidate_sites_cache()`. Exposed as its own
+    endpoint for the Mosaic tab's manual "🔄 Rafraîchir" button, for when
+    nothing changed on this module but the operator still wants a rescan
+    (e.g. after fixing a site.json by hand outside the API). Deliberately
     NEVER calls `sites_scan.scan_sites()`/`main()` inline: doing the scan
     here would just move the blocking recompute from GET /sites to this
-    endpoint, defeating the point of the cache. The scan itself still takes
-    several seconds — the caller should expect the cache to update shortly
-    after this returns, not immediately.
+    endpoint, defeating the point of the cache.
     """
-    try:
-        subprocess.Popen(
-            ["sudo", "-n", "/usr/bin/systemctl", "--no-block", "start",
-             "metablog-audit.service"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+    error = _trigger_sites_cache_refresh()
+    if error is None:
         return {"triggered": True}
-    except (FileNotFoundError, OSError) as e:
-        logger.warning("sites cache refresh trigger failed: %s", e)
-        return {"triggered": False, "error": str(e)}
+    return {"triggered": False, "error": error}
 
 
 @app.get("/site/{name}", dependencies=[Depends(require_jwt)])
