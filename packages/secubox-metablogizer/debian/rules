@@ -13,12 +13,17 @@ override_dh_auto_install:
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-metablogizer/usr/sbin/ || true
 	install -d debian/secubox-metablogizer/etc/sudoers.d
 	[ -f debian/secubox-publish-wizard.sudoers ] && install -m 0440 debian/secubox-publish-wizard.sudoers debian/secubox-metablogizer/etc/sudoers.d/secubox-publish-wizard || true
+	[ -f debian/secubox-metablog-audit.sudoers ] && install -m 0440 debian/secubox-metablog-audit.sudoers debian/secubox-metablogizer/etc/sudoers.d/secubox-metablog-audit || true
 	# Mosaic tab thumbnail queue (#956): root-provisioned cache subtree +
 	# 2-minute timer that captures one site at a time (never a loop, never
 	# triggered by a web request — see api/shots.py).
 	install -d debian/secubox-metablogizer/usr/lib/systemd/system
 	install -m 644 debian/metablog-shots.service debian/secubox-metablogizer/usr/lib/systemd/system/
 	install -m 644 debian/metablog-shots.timer debian/secubox-metablogizer/usr/lib/systemd/system/
+	# Mosaic tab site-list cache (#974): double-buffer cache for GET /sites —
+	# see api/sites_scan.py. 5-minute timer, unprivileged (secubox).
+	install -m 644 debian/metablog-audit.service debian/secubox-metablogizer/usr/lib/systemd/system/
+	install -m 644 debian/metablog-audit.timer debian/secubox-metablogizer/usr/lib/systemd/system/
 	install -d debian/secubox-metablogizer/usr/lib/tmpfiles.d
 	install -m 644 debian/secubox-metablogizer.tmpfiles debian/secubox-metablogizer/usr/lib/tmpfiles.d/secubox-metablogizer.conf
 	# Example config

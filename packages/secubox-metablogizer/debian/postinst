@@ -32,12 +32,23 @@ systemctl start secubox-metablogizer 2>/dev/null || true
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-metablogizer.conf 2>/dev/null || true
 systemctl enable --now metablog-shots.timer 2>/dev/null || true
 
+# Mosaic tab site-list cache (#974): same provisioning as the thumbnail
+# queue above, for GET /sites — see api/sites_scan.py + metablog-audit.timer.
+systemctl enable --now metablog-audit.timer 2>/dev/null || true
+
 # Publisher wizard: the sbxwaf/haproxy/cert steps run through the
 # secubox-publishctl root helper, authorized by this sudoers drop-in.
 chmod 0755 /usr/sbin/secubox-publishctl 2>/dev/null || true
 if [ -f /etc/sudoers.d/secubox-publish-wizard ]; then
   chmod 0440 /etc/sudoers.d/secubox-publish-wizard
   visudo -cf /etc/sudoers.d/secubox-publish-wizard >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-publish-wizard
+fi
+
+# Manual site-list cache refresh (POST /sites/refresh, #974): authorizes
+# secubox to start metablog-audit.service without waiting for the timer.
+if [ -f /etc/sudoers.d/secubox-metablog-audit ]; then
+  chmod 0440 /etc/sudoers.d/secubox-metablog-audit
+  visudo -cf /etc/sudoers.d/secubox-metablog-audit >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-metablog-audit
 fi
 
 exit 0

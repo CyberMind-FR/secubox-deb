@@ -66,6 +66,7 @@
         .filter-bar input { flex: 1; min-width: 200px; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
         .filter-bar input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
         .filter-count { font-size: 0.7rem; color: var(--p31-dim); white-space: nowrap; }
+        .filter-count.orange { color: var(--orange); }
 
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 0.55rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
@@ -198,6 +199,8 @@
                 <div class="filter-bar">
                     <input type="search" id="mosaic-filter" placeholder="🔍 Filtrer par nom ou domaine…" oninput="renderMosaic()">
                     <span class="filter-count" id="mosaic-filter-count"></span>
+                    <span class="filter-count" id="mosaic-cache-status"></span>
+                    <button class="btn sm" id="mosaic-refresh-btn" onclick="refreshSites()">🔄 Rafraîchir</button>
                 </div>
                 <div class="mosaic-grid" id="mosaic-grid">
                     <div class="mosaic-empty">Chargement des sites…</div>
@@ -340,8 +343,15 @@
         }
 
         // ─── Shared site cache (Mosaïque + Sites tabs both consume it) ───
+        // GET /sites is itself backed by an out-of-band cache refreshed by
+        // metablog-audit.timer (#974, ~14.6s scan measured on the board —
+        // never run inline). `sitesCacheMeta` carries that cache's own
+        // state (available/reason/age) so the UI can tell "cache not
+        // written yet" apart from "genuinely zero sites" instead of just
+        // reading `sites: []` at face value.
         let allSites = null;
         let sitesLoading = null;
+        let sitesCacheMeta = { available: null, reason: null, cache_age_seconds: null };
 
         async function ensureSites(force) {
             if (force) { allSites = null; }
@@ -349,11 +359,39 @@
             if (sitesLoading) return sitesLoading;
             sitesLoading = api('/sites').then(d => {
                 allSites = d.sites || [];
+                sitesCacheMeta = {
+                    available: d.available ?? true,
+                    reason: d.reason ?? null,
+                    cache_age_seconds: d.cache_age_seconds ?? null,
+                };
                 sitesLoading = null;
                 updateDomainStat(allSites);
                 return allSites;
             });
             return sitesLoading;
+        }
+
+        // Manual refresh (#974): fires the out-of-band scan without
+        // blocking on it — the endpoint itself never recomputes inline, so
+        // this returns immediately and the cache updates a few seconds
+        // later. Re-polls once after a short delay so the tab catches the
+        // new cache without the user having to reopen it.
+        async function refreshSites() {
+            const btn = document.getElementById('mosaic-refresh-btn');
+            btn.disabled = true;
+            const r = await api('/sites/refresh', { method: 'POST' });
+            if (r.triggered) {
+                toast('🔄 Rafraîchissement du cache lancé…');
+                setTimeout(async () => {
+                    await ensureSites(true);
+                    if (mosaicLoaded) renderMosaic();
+                    if (sitesTabLoaded) renderSitesTable();
+                    btn.disabled = false;
+                }, 20000);
+            } else {
+                errorToast('Rafraîchissement indisponible: ' + (r.error || 'inconnu'));
+                btn.disabled = false;
+            }
         }
 
         async function loadStatus() {
@@ -409,16 +447,55 @@
             return '🌐';
         }
 
+        function renderCacheStatus() {
+            const el = document.getElementById('mosaic-cache-status');
+            if (sitesCacheMeta.available === false) {
+                const reason = sitesCacheMeta.reason === 'cache not written yet'
+                    ? 'cache pas encore généré' : 'cache illisible';
+                el.textContent = '⚠️ ' + reason;
+                el.classList.add('orange');
+            } else if (typeof sitesCacheMeta.cache_age_seconds === 'number') {
+                const age = sitesCacheMeta.cache_age_seconds;
+                const label = age < 60 ? age + 's' : Math.floor(age / 60) + 'min';
+                el.textContent = '🕒 maj il y a ' + label;
+                // A cache older than 3x the 5-minute timer cadence means the
+                // timer likely stopped running — surface it rather than
+                // silently showing stale data as if it were live.
+                el.classList.toggle('orange', age > 900);
+            } else {
+                el.textContent = '';
+                el.classList.remove('orange');
+            }
+        }
+
         function renderMosaic() {
             const grid = document.getElementById('mosaic-grid');
             const countEl = document.getElementById('mosaic-filter-count');
             if (!allSites) return;
+            renderCacheStatus();
+
+            // A cache that was never written (or is unreadable) must NEVER
+            // render the same way as a real empty fleet — that would read
+            // as "no sites" when the truth is "no data yet" (#974).
+            if (sitesCacheMeta.available === false) {
+                grid.innerHTML = '<div class="mosaic-empty">'
+                    + '⚠️ Liste des sites indisponible ('
+                    + (sitesCacheMeta.reason === 'cache not written yet'
+                        ? 'cache pas encore généré — patientez ou cliquez sur Rafraîchir'
+                        : 'cache illisible — cliquez sur Rafraîchir')
+                    + ')</div>';
+                countEl.textContent = '';
+                return;
+            }
+
             const q = (document.getElementById('mosaic-filter').value || '').toLowerCase().trim();
             const filtered = allSites.filter(s => matchesFilter(s, q));
             countEl.textContent = filtered.length + ' / ' + allSites.length;
 
             if (!filtered.length) {
-                grid.innerHTML = '<div class="mosaic-empty">Aucun site ne correspond au filtre</div>';
+                grid.innerHTML = allSites.length
+                    ? '<div class="mosaic-empty">Aucun site ne correspond au filtre</div>'
+                    : '<div class="mosaic-empty">Aucun site publié pour l’instant</div>';
                 return;
             }
             const sorted = filtered.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
@@ -510,6 +587,18 @@
             if (!allSites) return;
             const list = document.getElementById('site-list');
             const countEl = document.getElementById('sites-filter-count');
+
+            // Same cache-unavailable guard as the Mosaic tab (#974): don't
+            // let an empty backing array read as "no sites" when the real
+            // state is "no cache yet".
+            if (sitesCacheMeta.available === false) {
+                list.innerHTML = '<tr><td colspan="7" style="color:var(--orange)">⚠️ Liste des sites indisponible ('
+                    + (sitesCacheMeta.reason === 'cache not written yet' ? 'cache pas encore généré' : 'cache illisible')
+                    + ')</td></tr>';
+                countEl.textContent = '';
+                return;
+            }
+
             const q = (document.getElementById('sites-filter').value || '').toLowerCase().trim();
             let filtered = allSites.filter(s => matchesFilter(s, q));
             countEl.textContent = filtered.length + ' / ' + allSites.length;

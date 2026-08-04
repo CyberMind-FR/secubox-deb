@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Refresh the MetaBlogizer site-list cache every 5 minutes
+
+[Timer]
+OnBootSec=150s
+OnUnitActiveSec=5min
+# Measured cost: ~14.6s for 172 sites on a board at load ~160 (see
+# api/sites_scan.py) — comfortably inside a 5-minute window even on a bad
+# day. 5 minutes matches secubox-streamlit's streamlit-audit.timer (same
+# double-cache pattern, same class of problem). Freshness is not the
+# limiting factor here either way: the Mosaic thumbnails themselves only
+# complete a full sweep over several hours (metablog-shots.timer, one site
+# per 2 minutes), so a site-list cache a few minutes old is invisible next
+# to that. OnBootSec offset (150s) deliberately differs from
+# metablog-shots.timer (90s) and streamlit-audit.timer (2min) to avoid
+# stacking fork bursts at the same wall-clock instant — this board has
+# already hit ~2341 forks in 30s from synchronized timers.
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
