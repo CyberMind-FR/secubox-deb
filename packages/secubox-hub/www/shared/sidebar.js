@@ -23,7 +23,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.39.0';
+    const VERSION = 'v2.40.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
@@ -625,12 +625,31 @@
                 '</div>';
             document.body.insertBefore(menuBar, document.body.firstChild);
 
-            // Hide original page headers
+            // Hide original page headers — but never at the cost of losing a
+            // module's own action buttons. Most module headers pack their
+            // title (h1/h2/h3) together with real controls (button/a/input/
+            // select) in the same <header>. If we blanket-hide the whole
+            // element, those controls vanish along with the title.
+            //
+            // Rule: a header with no interactive control is pure chrome —
+            // hide it entirely (avoids the duplicate title, matches prior
+            // behavior). A header that *does* contain a control is kept
+            // visible, but its title node(s) are hidden individually so the
+            // module name isn't shown twice while every button/link/input
+            // stays reachable.
             setTimeout(function() {
                 document.querySelectorAll('.page-header, .header, header:not(.global-menu-bar)').forEach(function(h) {
-                    if (!h.classList.contains('global-menu-bar') && !h.closest('.global-menu-bar')) {
+                    if (h.classList.contains('global-menu-bar') || h.closest('.global-menu-bar')) return;
+
+                    var hasControls = h.querySelector('button, a, input, select, textarea');
+                    if (!hasControls) {
                         h.style.display = 'none';
+                        return;
                     }
+
+                    h.querySelectorAll('h1, h2, h3').forEach(function(title) {
+                        title.style.display = 'none';
+                    });
                 });
             }, 50);
 
