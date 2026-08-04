@@ -1,3 +1,14 @@
+secubox-torrent (2.2.9-1~bookworm1) bookworm; urgency=medium
+
+  * Package the admin-panel API route (ref #979): torrent is LXC-native (no
+    in-process aggregator module), so /api/v1/torrent/ from the admin vhost
+    404'd — only the companion vhost had the matching proxy_pass. Ships
+    nginx/torrent-routes.conf to /etc/nginx/secubox-routes.d/, wired through
+    postinst's existing nginx -t + reload and unwired cleanly in prerm on
+    remove/deconfigure (upgrade is left to dpkg's normal conffile handling).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 04 Aug 2026 16:55:00 +0200
+
 secubox-torrent (2.2.8-1~bookworm1) bookworm; urgency=high
 
   * FIX no download / 0 peers: throttleUpload(0) blocked the BitTorrent handshake
