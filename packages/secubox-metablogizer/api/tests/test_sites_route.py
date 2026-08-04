@@ -179,3 +179,40 @@ def test_refresh_survives_missing_systemctl(client):
         resp = c.post("/sites/refresh")
     assert resp.status_code == 200, resp.text
     assert resp.json()["triggered"] is False
+
+
+def test_refresh_reports_error_detail_on_failure(client):
+    c, _cache, m = client
+    with patch.object(m.subprocess, "Popen", side_effect=FileNotFoundError("no sudo")):
+        resp = c.post("/sites/refresh")
+    assert resp.json() == {"triggered": False, "error": "no sudo"}
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Write paths must not leave the on-disk cache stale for a full 5-minute
+# timer cycle — every mutation triggers the same out-of-band rescan (#974
+# review follow-up).
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_invalidate_sites_cache_triggers_out_of_band_refresh(client):
+    """The in-memory _SITES_CACHE this drops is NOT what GET /sites reads
+    (that's the on-disk cache) — without also triggering a rescan here, a
+    site create/publish/delete would be invisible in the Mosaic tab for up
+    to 5 minutes even though the change already landed on disk."""
+    c, _cache, m = client
+    with patch.object(m.subprocess, "Popen") as popen_mock:
+        m._invalidate_sites_cache()
+
+    popen_mock.assert_called_once()
+    args = popen_mock.call_args[0][0]
+    assert "--no-block" in args and "start" in args
+    assert any("metablog-audit" in a for a in args)
+
+
+def test_invalidate_sites_cache_still_drops_in_memory_cache(client):
+    c, _cache, m = client
+    m._SITES_CACHE = [{"name": "stale"}]
+    m._SITES_CACHE_AT = 999999999.0
+    with patch.object(m.subprocess, "Popen"):
+        m._invalidate_sites_cache()
+    assert m._SITES_CACHE is None

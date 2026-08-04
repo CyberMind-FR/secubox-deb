@@ -129,7 +129,12 @@ def scan_sites(
     base_port: int = DEFAULT_BASE_PORT,
 ) -> List[dict]:
     """Full synchronous scan of `sites_root` — same shape/rules as the
-    former `api/main.py:load_sites()` body. ~14.6s for 172 sites on a
+    former `api/main.py:load_sites()` body (domain rewriting, published
+    detection, size, schema-overlay fields). One deliberate difference:
+    directories are visited in sorted() order before the final sort-by-port,
+    so same-port entries tie-break alphabetically instead of arbitrary
+    filesystem iteration order — a stricter, deterministic superset of the
+    old behaviour, not a functional regression. ~14.6s for 172 sites on a
     loaded board (measured); only ever called out of band (metablog-audit)
     or from write paths that need a live, authoritative view."""
     sites: List[dict] = []
@@ -237,7 +242,7 @@ def read_cache(cache_path: Path) -> Dict[str, Any]:
     """
     try:
         raw = json.loads(cache_path.read_text())
-        if not isinstance(raw, dict) or "sites" not in raw:
+        if not isinstance(raw, dict) or not isinstance(raw.get("sites"), list):
             raise ValueError("cache content is not a sites payload")
     except FileNotFoundError:
         return {
