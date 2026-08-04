@@ -2,8 +2,8 @@
   "name": "Torrent",
   "path": "/torrent/",
   "icon": "🌊",
-  "category": "media",
-  "order": 612,
+  "category": "mesh",
+  "order": 613,
   "description": "WebTorrent streaming (torrent.gk2.secubox.in)",
   "id": "torrent"
 }
