@@ -37,6 +37,10 @@ DATA_PATH = Path(config.get("data_path", "/srv/metablogizer") if config else "/s
 # metablog-shots.timer (voir api/shots.py), jamais par ce process. Ce chemin
 # ne fait QUE les servir — voir get_site_screenshot() ci-dessous.
 SHOTS_CACHE_DIR = Path(os.environ.get("METABLOG_SHOTS_CACHE", "/var/cache/secubox/metablogizer/shots"))
+# Site-list cache (#974): produced hors-ligne par metablog-audit.timer
+# (api/sites_scan.py), never by this process — GET /sites below only ever
+# READS it. Same rationale/pattern as SHOTS_CACHE_DIR above.
+SITES_CACHE_PATH = Path(os.environ.get("METABLOG_SITES_CACHE", "/var/cache/secubox/metablogizer/sites.json"))
 NGINX_VHOST_DIR = Path("/etc/nginx/sites-available")
 NGINX_ENABLED_DIR = Path("/etc/nginx/sites-enabled")
 NGINX_METABLOGS_CONF = Path("/etc/nginx/sites-enabled/metablogizer")
@@ -46,7 +50,7 @@ DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 NGINX_BACKEND_IP = "192.168.1.200"
 
 import logging
-from site_schema import enrich as _schema_enrich, validate as _schema_validate
+import sites_scan
 from rmtree import force_remove as _rmtree_force
 from webhook import (
     classify_payload,
@@ -81,105 +85,84 @@ def nginx_running() -> bool:
     return success
 
 
-def _load_site_json(site_dir):
-    """Read site.json (if any), enrich from git, validate (warn-only).
-
-    Always returns a dict containing at least `name`. Missing/malformed
-    files are tolerated — the API stays up.
-    """
-    name = site_dir.name
-    config_file = site_dir / "site.json"
-    doc = {}
-    if config_file.exists():
-        try:
-            doc = json.loads(config_file.read_text())
-        except json.JSONDecodeError as e:
-            logger.warning("site.json malformed for %s: %s", name, e)
-            doc = {}
-    # Always anchor the name field to the dir name (defensive)
-    doc["name"] = name
-    doc = _schema_enrich(doc, site_dir)
-    ok, errs = _schema_validate(doc)
-    if not ok:
-        logger.warning("site.json schema violations for %s: %s", name, errs)
-    return doc
+# Moved to sites_scan.read_site_config() (#974) — kept as a thin alias here
+# because _read_domain() and a handful of per-site detail routes below still
+# need a single site's config outside of a full scan.
+_load_site_json = sites_scan.read_site_config
 
 
 # In-memory cache for load_sites(). 166 sites × (enrich+validate+du -sh)
-# is ~5-10s per call; the dashboard polls 3 endpoints every 60s and the
-# single uvicorn worker queues them. Cache for 30s, invalidated by
-# _invalidate_sites_cache() in every write path (POST/DELETE/publish).
+# is ~5-10s per call (measured ~14.6s / 172 sites on the board under load —
+# see sites_scan.py docstring). This live path is ONLY for write flows that
+# need an up-to-the-second view right after a mutation (site create/delete/
+# publish, nginx regen, startup) — never for read-only display, which is
+# GET /sites below, served from the out-of-band cache instead (#974).
+# Cache for 30s, invalidated by _invalidate_sites_cache() in every write
+# path (POST/DELETE/publish).
 _SITES_CACHE: Optional[List[dict]] = None
 _SITES_CACHE_AT: float = 0.0
 _SITES_CACHE_TTL: float = 30.0
 
 
+def _trigger_sites_cache_refresh() -> Optional[str]:
+    """Fire-and-forget `systemctl --no-block start metablog-audit.service`
+    (#974). Shared by every write path (via `_invalidate_sites_cache()`
+    below) and by `POST /sites/refresh`. Deliberately NEVER calls
+    `sites_scan.scan_sites()` / `.main()` inline — that would just move the
+    blocking recompute into whichever request happens to trigger it.
+    Repeated triggers (e.g. several writes in a row) coalesce: systemd
+    ignores/queues a `start` on a unit that's already starting rather than
+    running it twice in parallel — same fire-and-forget pattern as
+    secubox-hub's `_trigger_cache_refresh()`.
+
+    Returns `None` on success, an error string on failure (sudo/systemctl
+    missing — expected in a dev/test sandbox, tolerated everywhere).
+    """
+    try:
+        subprocess.Popen(
+            ["sudo", "-n", "/usr/bin/systemctl", "--no-block", "start",
+             "metablog-audit.service"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        return None
+    except (FileNotFoundError, OSError) as e:
+        logger.warning("sites cache refresh trigger failed: %s", e)
+        return str(e)
+
+
 def _invalidate_sites_cache() -> None:
-    """Drop the cached site list. Call after any site directory change."""
+    """Drop the cached site list and kick off an out-of-band cache refresh.
+
+    Without the refresh trigger, a write (create/publish/delete/upload/
+    deploy) would be invisible in the Mosaic/Sites tabs for up to 5 minutes
+    (the metablog-audit.timer cadence) even though the change is already
+    live on disk — the in-memory `_SITES_CACHE` this drops is NOT what
+    GET /sites reads anymore (#974), only the on-disk cache is. Triggering
+    a rescan here keeps writes visible within a few seconds instead.
+    """
     global _SITES_CACHE, _SITES_CACHE_AT
     _SITES_CACHE = None
     _SITES_CACHE_AT = 0.0
+    _trigger_sites_cache_refresh()
 
 
 def load_sites() -> List[dict]:
-    """Load all sites from directory (cached, 30s TTL)."""
+    """Live, synchronous full scan (cached in-process, 30s TTL).
+
+    Only call this from write paths that need current truth right after a
+    mutation (regenerate_nginx_config, startup auto-publish, /republish-all)
+    — it forks git+du per site and WILL block the event loop for seconds on
+    a loaded board. Read-only display (the Mosaic tab, the Sites tab, the
+    dashboard header) must use GET /sites, which reads the out-of-band
+    cache written by metablog-audit.timer instead — see sites_scan.py.
+    """
     global _SITES_CACHE, _SITES_CACHE_AT
     import time
     now = time.monotonic()
     if _SITES_CACHE is not None and (now - _SITES_CACHE_AT) < _SITES_CACHE_TTL:
         return _SITES_CACHE
 
-    sites = []
-    if not SITES_ROOT.exists():
-        _SITES_CACHE = sites
-        _SITES_CACHE_AT = now
-        return sites
-
-    for site_dir in SITES_ROOT.iterdir():
-        if not site_dir.is_dir() or site_dir.name.startswith("."):
-            continue
-
-        name = site_dir.name
-        domain = f"{name}{DEFAULT_DOMAIN_SUFFIX}"  # Use .gk2.secubox.in instead of .local
-        port = BASE_PORT
-        published = False
-
-        # Read site config (via the schema-aware helper).
-        cfg = _load_site_json(site_dir)
-        saved_domain = cfg.get("domain", "") or ""
-        if saved_domain.endswith(".local"):
-            domain = saved_domain.replace(".local", DEFAULT_DOMAIN_SUFFIX)
-        elif saved_domain:
-            domain = saved_domain
-        port = cfg.get("port", BASE_PORT)
-
-        # Check if published (in unified config)
-        if NGINX_METABLOGS_CONF.exists():
-            content = NGINX_METABLOGS_CONF.read_text()
-            published = f"root {site_dir}" in content or f"root {site_dir}/public" in content
-
-        # Get size
-        size = "0"
-        success, out, _ = run_cmd(["du", "-sh", str(site_dir)])
-        if success:
-            size = out.split()[0]
-
-        entry = {
-            "name": name,
-            "domain": domain,
-            "port": port,
-            "published": published,
-            "directory": str(site_dir),
-            "size": size,
-        }
-        # Overlay schema-enriched fields (version, last_updated, etc.)
-        for key in ("version", "title", "description", "category",
-                    "streamlit_app", "tags", "last_updated"):
-            if key in cfg and cfg[key] is not None:
-                entry[key] = cfg[key]
-        sites.append(entry)
-
-    sites_sorted = sorted(sites, key=lambda x: x.get("port", BASE_PORT))
+    sites_sorted = sites_scan.scan_sites(SITES_ROOT, NGINX_METABLOGS_CONF)
     _SITES_CACHE = sites_sorted
     _SITES_CACHE_AT = now
     return sites_sorted
@@ -283,8 +266,15 @@ async def startup_event():
 
 @app.get("/status")
 async def status():
-    """Get unified MetaBlogizer status (public endpoint)"""
-    sites = load_sites()
+    """Get unified MetaBlogizer status (public endpoint).
+
+    Site counts are served from the out-of-band cache (#974), same as
+    GET /sites below — this header renders on every tab of the same page,
+    so it shares the exact bug/fix as the Mosaic tab (recomputing here was
+    part of the same 90s+ hang).
+    """
+    cache = sites_scan.read_cache(SITES_CACHE_PATH)
+    sites = cache["sites"]
     published = sum(1 for s in sites if s.get("published"))
 
     return {
@@ -301,6 +291,8 @@ async def status():
         "site_count": len(sites),
         "published_count": published,
         "sites_root": str(SITES_ROOT),
+        "sites_cache_available": cache["available"],
+        "sites_cache_age_seconds": cache["cache_age_seconds"],
         "running": nginx_running(),
         "installed": True,
     }
@@ -490,9 +482,50 @@ class SiteUpdate(BaseModel):
 
 @app.get("/sites", dependencies=[Depends(require_jwt)])
 async def list_sites():
-    """List all sites"""
-    sites = load_sites()
-    return {"sites": sites, "count": len(sites)}
+    """List all sites — feeds the Mosaic tab and the Sites tab (#974).
+
+    Served from the cache written out-of-band by metablog-audit.timer
+    (`sites_scan.py`: git x2 + du per site, ~14.6s for 172 sites measured
+    on the board under load, 77% of it forking git). This handler is a
+    file read ONLY — it must NEVER fall back to `load_sites()` /
+    `sites_scan.scan_sites()` on a cache miss, that would silently
+    reintroduce the exact multi-request pileup (single uvicorn worker,
+    fully blocking event loop) that made the Mosaic tab time out past 60s.
+
+    `available=False` (cache never written yet, or unreadable) is reported
+    explicitly rather than folded into `sites: []` — the frontend must be
+    able to tell "no cache yet" apart from "genuinely zero sites".
+    """
+    cache = sites_scan.read_cache(SITES_CACHE_PATH)
+    return {
+        "sites": cache["sites"],
+        "count": cache["count"],
+        "available": cache["available"],
+        "reason": cache["reason"],
+        "cache_age_seconds": cache["cache_age_seconds"],
+        "generated_at": cache["generated_at"],
+    }
+
+
+@app.post("/sites/refresh", dependencies=[Depends(require_jwt)])
+async def refresh_sites_cache():
+    """Trigger an out-of-band refresh of the GET /sites cache, without
+    waiting for the next metablog-audit.timer tick (#974).
+
+    Thin wrapper around `_trigger_sites_cache_refresh()` — the same
+    fire-and-forget trigger every write path (create/publish/delete/…)
+    already fires via `_invalidate_sites_cache()`. Exposed as its own
+    endpoint for the Mosaic tab's manual "🔄 Rafraîchir" button, for when
+    nothing changed on this module but the operator still wants a rescan
+    (e.g. after fixing a site.json by hand outside the API). Deliberately
+    NEVER calls `sites_scan.scan_sites()`/`main()` inline: doing the scan
+    here would just move the blocking recompute from GET /sites to this
+    endpoint, defeating the point of the cache.
+    """
+    error = _trigger_sites_cache_refresh()
+    if error is None:
+        return {"triggered": True}
+    return {"triggered": False, "error": error}
 
 
 @app.get("/site/{name}", dependencies=[Depends(require_jwt)])

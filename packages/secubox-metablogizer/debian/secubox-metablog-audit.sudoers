@@ -1,0 +1,5 @@
+# Installed to /etc/sudoers.d/secubox-metablog-audit (mode 0440).
+# Lets the metablogizer API (running as secubox) trigger an out-of-band
+# refresh of the site-list cache on demand (POST /sites/refresh, #974)
+# without waiting for the next metablog-audit.timer tick.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemctl --no-block start metablog-audit.service
