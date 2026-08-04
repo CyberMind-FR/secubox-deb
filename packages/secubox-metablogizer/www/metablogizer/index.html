@@ -507,7 +507,17 @@
             const domain = esc(s.domain || '');
             const published = !!s.published;
             const emoji = tileEmoji(s);
-            const thumbSrc = esc('/api/v1/metablogizer/site/' + encodeURIComponent(s.name || '') + '/screenshot');
+            // #977: nginx now serves this URL directly (alias on the
+            // capture cache dir, see nginx/metablogizer.conf) with a long
+            // `immutable` Cache-Control — safe ONLY because captured_at is
+            // baked into the URL. A recapture changes screenshot_captured_at
+            // (api/sites_scan.py), which changes this URL, so a browser can
+            // never keep serving a vignette past its own recapture. No
+            // captured_at yet (never captured) means no `?v=` — same bare
+            // URL as before, 404s exactly like it always did.
+            const capturedAt = s.screenshot_captured_at || '';
+            const thumbSrc = esc('/api/v1/metablogizer/site/' + encodeURIComponent(s.name || '') + '/screenshot' +
+                (capturedAt ? '?v=' + encodeURIComponent(capturedAt) : ''));
             const openUrl = s.domain ? esc('https://' + s.domain + '/') : '';
 
             return '<div class="mosaic-tile' + (published ? '' : ' unpublished') + '">' +
@@ -520,6 +530,8 @@
                     // design. onerror removes the <img>, leaving the emoji
                     // span (already in the DOM, underneath) as the fallback —
                     // the tile never breaks or shows a broken-image icon.
+                    // loading="lazy" defers the request for tiles below the
+                    // fold entirely, native to the browser, no JS needed.
                     '<img loading="lazy" alt="" src="' + thumbSrc + '" onerror="this.remove()">' +
                 '</div>' +
                 '<div class="mosaic-body">' +

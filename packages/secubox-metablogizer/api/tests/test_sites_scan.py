@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 
 import sites_scan
+from secubox_core import screenshots
 
 
 def _site(root: Path, name: str, *, domain=None, port=None) -> Path:
@@ -99,6 +100,63 @@ def test_scan_sites_unpublished_when_not_in_nginx_conf(tmp_path):
     _site(root, "draft")
     result = sites_scan.scan_sites(root, tmp_path / "nginx.conf")
     assert result[0]["published"] is False
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# screenshot_captured_at — mosaic-wall cache-busting key (#977). Read here,
+# out of band (metablog-audit.timer, every 5 minutes), never from a request
+# handler — a single JSON stat+read per site, nothing like the git/du forks
+# above, but the point of #974's whole cache is that request handlers never
+# touch the filesystem for the fleet at all. The frontend appends this value
+# as `?v=` on the screenshot URL so a stale browser cache can never survive a
+# recapture, while still allowing nginx to serve it with a long, immutable
+# Cache-Control (see nginx/metablogizer.conf).
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_scan_sites_includes_screenshot_captured_at_when_captured(tmp_path):
+    root = tmp_path / "sites"
+    _site(root, "shot")
+    shots = tmp_path / "shots"
+    screenshots.record(shots, "shot", b"\x89PNG", "fp-1", ok=True)
+
+    result = sites_scan.scan_sites(root, tmp_path / "nginx.conf", shots_cache_dir=shots)
+
+    assert result[0]["screenshot_captured_at"]
+
+
+def test_scan_sites_omits_screenshot_captured_at_when_never_captured(tmp_path):
+    root = tmp_path / "sites"
+    _site(root, "noshot")
+    shots = tmp_path / "shots"
+
+    result = sites_scan.scan_sites(root, tmp_path / "nginx.conf", shots_cache_dir=shots)
+
+    assert "screenshot_captured_at" not in result[0]
+
+
+def test_scan_sites_omits_screenshot_captured_at_after_failed_capture(tmp_path):
+    """A failed capture (ok=False) keeps the previous PNG on disk (see
+    secubox_core.screenshots), but must not advertise a fresh
+    screenshot_captured_at — the frontend would build a URL for a capture
+    that never actually completed."""
+    root = tmp_path / "sites"
+    _site(root, "flaky")
+    shots = tmp_path / "shots"
+    screenshots.record(shots, "flaky", None, "fp-1", ok=False)
+
+    result = sites_scan.scan_sites(root, tmp_path / "nginx.conf", shots_cache_dir=shots)
+
+    assert "screenshot_captured_at" not in result[0]
+
+
+def test_scan_sites_defaults_shots_cache_dir_when_not_passed(tmp_path, monkeypatch):
+    """Callers that don't care about screenshots (most existing tests above)
+    must keep working unmodified — shots_cache_dir is optional."""
+    root = tmp_path / "sites"
+    _site(root, "bare")
+    result = sites_scan.scan_sites(root, tmp_path / "nginx.conf")
+    assert result[0]["name"] == "bare"
+    assert "screenshot_captured_at" not in result[0]
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -267,3 +325,21 @@ def test_main_scans_and_writes_cache(tmp_path, monkeypatch, capsys):
     assert cache_path.exists()
     payload = json.loads(cache_path.read_text())
     assert payload["count"] == 1
+
+
+def test_main_wires_shots_cache_env_into_scan(tmp_path, monkeypatch, capsys):
+    sites_root = tmp_path / "sites"
+    _site(sites_root, "one")
+    cache_path = tmp_path / "cache" / "sites.json"
+    shots = tmp_path / "shots"
+    screenshots.record(shots, "one", b"\x89PNG", "fp-1", ok=True)
+    monkeypatch.setenv("METABLOG_SITES_ROOT", str(sites_root))
+    monkeypatch.setenv("METABLOG_SITES_CACHE", str(cache_path))
+    monkeypatch.setenv("METABLOG_NGINX_CONF", str(tmp_path / "nginx.conf"))
+    monkeypatch.setenv("METABLOG_SHOTS_CACHE", str(shots))
+
+    rc = sites_scan.main([])
+
+    assert rc == 0
+    payload = json.loads(cache_path.read_text())
+    assert payload["sites"][0]["screenshot_captured_at"]
