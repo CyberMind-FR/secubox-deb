@@ -162,7 +162,8 @@ def load_sites() -> List[dict]:
     if _SITES_CACHE is not None and (now - _SITES_CACHE_AT) < _SITES_CACHE_TTL:
         return _SITES_CACHE
 
-    sites_sorted = sites_scan.scan_sites(SITES_ROOT, NGINX_METABLOGS_CONF)
+    sites_sorted = sites_scan.scan_sites(SITES_ROOT, NGINX_METABLOGS_CONF,
+                                          shots_cache_dir=SHOTS_CACHE_DIR)
     _SITES_CACHE = sites_sorted
     _SITES_CACHE_AT = now
     return sites_sorted
@@ -445,12 +446,25 @@ async def get_site_screenshot(name: str):
     `metablog-shots.timer` (api/shots.py) — it never triggers a capture, so a
     burst of requests never spends chromium time.
 
+    In production this route is a fallback, never actually hit: nginx serves
+    the same file directly from the cache directory via `alias` (see
+    `nginx/metablogizer.conf`, #977) before the request ever reaches this
+    module's socket — 172 tiles is 172 static-file reads, which nginx does
+    without waking this event loop once. This handler stays for local dev
+    (`uvicorn --reload`, no nginx in front) and as documentation of the
+    contract nginx's static rule must match (404 when absent, never a
+    capture).
+
     `Cache-Control: no-cache` forces the browser to revalidate on every load
     instead of trusting a stale local copy blindly; FastAPI's `FileResponse`
     still attaches `Last-Modified`/`ETag` from the file's own stat, so a
     revalidation that finds nothing changed comes back as a cheap 304 rather
     than re-downloading the PNG. `X-Captured-At` mirrors the same timestamp
-    in a form the frontend can read directly.
+    in a form the frontend can read directly. nginx's copy of this route
+    trades the revalidation for a long `immutable` Cache-Control instead,
+    made safe by the `?v=<captured_at>` the frontend appends to the URL
+    (see GET /sites: `screenshot_captured_at`) — a recapture changes the
+    URL, so a stale browser cache can never outlive it.
     """
     try:
         p = _screenshots.png_path(SHOTS_CACHE_DIR, name)

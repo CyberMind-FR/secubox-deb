@@ -36,6 +36,14 @@ systemctl enable --now metablog-shots.timer 2>/dev/null || true
 # queue above, for GET /sites — see api/sites_scan.py + metablog-audit.timer.
 systemctl enable --now metablog-audit.timer 2>/dev/null || true
 
+# Mosaic wall thumbnails served directly by nginx (#977): reload so the
+# shipped location (nginx/metablogizer.conf) picks up without a manual
+# `systemctl reload nginx` — same pattern as secubox-hub/secubox-cdn.
+# `nginx -t` first: never reload into a config nginx itself considers
+# broken, an upgrade must not be the thing that takes nginx down.
+install -d -m 755 /etc/nginx/secubox.d
+nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
+
 # Publisher wizard: the sbxwaf/haproxy/cert steps run through the
 # secubox-publishctl root helper, authorized by this sudoers drop-in.
 chmod 0755 /usr/sbin/secubox-publishctl 2>/dev/null || true

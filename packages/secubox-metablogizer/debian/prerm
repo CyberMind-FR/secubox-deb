@@ -4,4 +4,15 @@ systemctl stop secubox-metablogizer 2>/dev/null || true
 systemctl disable secubox-metablogizer 2>/dev/null || true
 systemctl disable --now metablog-shots.timer 2>/dev/null || true
 systemctl disable --now metablog-audit.timer 2>/dev/null || true
+case "$1" in
+  remove|deconfigure)
+    # Mosaic wall thumbnail route (#977): drop it immediately rather than
+    # wait for dpkg's own conffile cleanup, same pattern as secubox-hub.
+    rm -f /etc/nginx/secubox.d/metablogizer.conf
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+  upgrade)
+    # Don't remove nginx config on upgrade — postinst reinstalls it.
+    ;;
+esac
 exit 0
