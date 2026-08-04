@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+[Unit]
+Description=Refresh the MetaBlogizer site-list cache for the Mosaic tab
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/974
+
+[Service]
+Type=oneshot
+# Unprivileged: the scan only forks `git`/`du` and reads files already
+# owned by secubox (SITES_ROOT, see debian/postinst) and writes into this
+# module's own cache subtree (/var/cache/secubox/metablogizer, already
+# secubox:secubox 0755 — see secubox-metablogizer.tmpfiles). No lxc-attach,
+# no root — unlike secubox-streamlit's app-audit, which needs root to
+# lxc-attach into containers.
+User=secubox
+Group=secubox
+NoNewPrivileges=true
+# Measured ~14.6s for 172 sites on a board at load ~160 (see
+# api/sites_scan.py docstring); TimeoutStartSec leaves generous headroom
+# above that rather than race a worse-than-measured board state.
+TimeoutStartSec=120
+ExecStart=/usr/sbin/metablog-audit
+# A failed scan (e.g. SITES_ROOT transiently unavailable) is unexpected but
+# must never spiral into a restart loop fighting for CPU on an already
+# oversubscribed board — the timer's own 5-minute cadence provides the next
+# attempt.
+Restart=no
+StandardError=journal

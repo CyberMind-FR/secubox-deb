@@ -1,3 +1,21 @@
+secubox-metablogizer (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Mosaic tab site-list cache (#974): GET /sites and GET /status used to
+    recompute the whole fleet on every request (git x2 + du per site,
+    ~14.6s measured for 172 sites on the board under load, blocking the
+    module's single-worker event loop and observed hanging past 90s under
+    concurrent traffic). New api/sites_scan.py + metablog-audit.timer
+    (5 minutes) move that scan out of band, with an atomic same-directory
+    tmp+rename write; GET /sites now only reads the cache and reports
+    `available: false` explicitly when it hasn't been written yet or is
+    unreadable, instead of returning an empty list indistinguishable from a
+    genuinely empty fleet. POST /sites/refresh triggers an out-of-band
+    rescan on demand (fire-and-forget, never inline). Mosaic + Sites tabs
+    surface cache freshness/unavailability instead of silently showing
+    stale or blank data.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 04 Aug 2026 12:00:00 +0200
+
 secubox-metablogizer (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Mosaic tab thumbnails (#956): GET /site/{name}/screenshot serves the

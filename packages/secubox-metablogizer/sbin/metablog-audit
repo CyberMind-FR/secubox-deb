@@ -1,0 +1,33 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: metablog-audit — refreshes the GET /sites cache
+
+Rappelé toutes les 5 minutes par `metablog-audit.timer` (#974), et sur
+demande par `POST /sites/refresh` (`api/main.py`, déclenchement
+fire-and-forget). Toute la logique (scan, écriture atomique) vit dans
+`api/sites_scan.py` — importable et testée indépendamment de ce point
+d'entrée. Ce script ne fait que placer `api/` sur `sys.path` puis appeler
+`sites_scan.main()`.
+
+Chemins surchargeables par l'environnement (voir `sites_scan.main`) :
+  METABLOG_LIB           défaut /usr/lib/secubox/metablogizer/api
+  METABLOG_SITES_ROOT     défaut /srv/metablogizer/sites
+  METABLOG_SITES_CACHE    défaut /var/cache/secubox/metablogizer/sites.json
+  METABLOG_NGINX_CONF     défaut /etc/nginx/sites-enabled/metablogizer
+"""
+import os
+import sys
+
+LIB = os.environ.get("METABLOG_LIB", "/usr/lib/secubox/metablogizer/api")
+if LIB not in sys.path:
+    sys.path.insert(0, LIB)
+
+import sites_scan  # noqa: E402  (sys.path must be set up first)
+
+if __name__ == "__main__":
+    raise SystemExit(sites_scan.main())
