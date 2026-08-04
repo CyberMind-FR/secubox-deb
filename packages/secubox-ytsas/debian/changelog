@@ -1,3 +1,14 @@
+secubox-ytsas (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Package the admin-panel API route (ref #979): ytsas is LXC-native (no
+    in-process aggregator module), so /api/v1/ytsas/ from the admin vhost
+    404'd — only the companion vhost had the matching proxy_pass. Ships
+    nginx/ytsas-routes.conf to /etc/nginx/secubox-routes.d/, wired through
+    postinst's existing nginx -t + reload and unwired cleanly in prerm on
+    remove/deconfigure (upgrade is left to dpkg's normal conffile handling).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 04 Aug 2026 16:55:00 +0200
+
 secubox-ytsas (0.1.2-1~bookworm1) bookworm; urgency=high
 
   * FIX age-restricted / gated YouTube downloads: pass --remote-components

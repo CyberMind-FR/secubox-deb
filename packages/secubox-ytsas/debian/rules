@@ -27,6 +27,11 @@ override_dh_auto_install:
 	# NOT etc/nginx/secubox.d/ — same rationale as the torrent vhost.
 	install -d debian/secubox-ytsas/etc/nginx/sites-available
 	install -m 644 nginx/ytsas.conf debian/secubox-ytsas/etc/nginx/sites-available/ytsas.conf
+	# Admin vhost route (secubox-routes.d): ytsas is LXC-native, so the
+	# aggregator has no in-process module to serve /api/v1/ytsas/ — without
+	# this snippet the admin panel 404s (only the companion vhost had it).
+	install -d debian/secubox-ytsas/etc/nginx/secubox-routes.d
+	install -m 644 nginx/ytsas-routes.conf debian/secubox-ytsas/etc/nginx/secubox-routes.d/
 	# nft egress scope: ship to /etc/nftables.d/ with a zz- prefix so it sorts
 	# after any table-creator base file (repo convention).
 	install -d debian/secubox-ytsas/etc/nftables.d

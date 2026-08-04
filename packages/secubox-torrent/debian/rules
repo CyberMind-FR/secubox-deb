@@ -29,6 +29,11 @@ override_dh_auto_install:
 	# packages/secubox-peertube/debian/rules for the verified pattern).
 	install -d debian/secubox-torrent/etc/nginx/sites-available
 	install -m 644 nginx/torrent.conf debian/secubox-torrent/etc/nginx/sites-available/torrent.conf
+	# Admin vhost route (secubox-routes.d): torrent is LXC-native, so the
+	# aggregator has no in-process module to serve /api/v1/torrent/ — without
+	# this snippet the admin panel 404s (only the companion vhost had it).
+	install -d debian/secubox-torrent/etc/nginx/secubox-routes.d
+	install -m 644 nginx/torrent-routes.conf debian/secubox-torrent/etc/nginx/secubox-routes.d/
 	# nft egress scope: ship straight to /etc/nftables.d/ with a zz- prefix
 	# so it sorts after any table-creator base file (repo convention; see
 	# secubox-p2p/secubox-toolbox/secubox-threatmesh debian/rules+postinst).
