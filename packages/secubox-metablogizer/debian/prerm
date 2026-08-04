@@ -3,4 +3,5 @@ set -e
 systemctl stop secubox-metablogizer 2>/dev/null || true
 systemctl disable secubox-metablogizer 2>/dev/null || true
 systemctl disable --now metablog-shots.timer 2>/dev/null || true
+systemctl disable --now metablog-audit.timer 2>/dev/null || true
 exit 0
