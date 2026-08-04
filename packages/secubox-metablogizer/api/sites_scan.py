@@ -67,6 +67,7 @@ from typing import Any, Dict, List, Optional
 # by sbin/metablog-audit (which only puts THIS file's directory on the path).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from site_schema import enrich as _schema_enrich, validate as _schema_validate  # noqa: E402
+from secubox_core import screenshots as _screenshots  # noqa: E402
 
 logger = logging.getLogger("metablogizer.sites_scan")
 
@@ -75,6 +76,11 @@ DEFAULT_CACHE_PATH = "/var/cache/secubox/metablogizer/sites.json"
 DEFAULT_NGINX_CONF = "/etc/nginx/sites-enabled/metablogizer"
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 DEFAULT_BASE_PORT = 8900
+# Mosaic wall thumbnails (#956/#977): produced out-of-band by
+# metablog-shots.timer, never by this process. Only read here to expose
+# `screenshot_captured_at` — the cache-busting key the frontend appends to
+# the (now nginx-served, never proxied) screenshot URL.
+DEFAULT_SHOTS_CACHE_DIR = "/var/cache/secubox/metablogizer/shots"
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -127,6 +133,7 @@ def scan_sites(
     nginx_conf: Path,
     domain_suffix: str = DEFAULT_DOMAIN_SUFFIX,
     base_port: int = DEFAULT_BASE_PORT,
+    shots_cache_dir: Optional[Path] = None,
 ) -> List[dict]:
     """Full synchronous scan of `sites_root` — same shape/rules as the
     former `api/main.py:load_sites()` body (domain rewriting, published
@@ -136,10 +143,21 @@ def scan_sites(
     filesystem iteration order — a stricter, deterministic superset of the
     old behaviour, not a functional regression. ~14.6s for 172 sites on a
     loaded board (measured); only ever called out of band (metablog-audit)
-    or from write paths that need a live, authoritative view."""
+    or from write paths that need a live, authoritative view.
+
+    `shots_cache_dir` (default `DEFAULT_SHOTS_CACHE_DIR`) adds one more
+    field per site, `screenshot_captured_at` (#977) — a single JSON stat+
+    read from `secubox_core.screenshots`, nothing like the git/du forks
+    above. Present only when a screenshot was ever captured successfully;
+    the frontend uses it to cache-bust the (nginx-served) thumbnail URL, so
+    it must never be set on a capture that failed (the old PNG, if any, is
+    still being served, not a new one — see screenshots.is_stale)."""
     sites: List[dict] = []
     if not sites_root.exists():
         return sites
+
+    shots_dir = Path(shots_cache_dir) if shots_cache_dir is not None \
+        else Path(DEFAULT_SHOTS_CACHE_DIR)
 
     nginx_content = ""
     if nginx_conf.exists():
@@ -186,6 +204,14 @@ def scan_sites(
                     "streamlit_app", "tags", "last_updated"):
             if key in cfg and cfg[key] is not None:
                 entry[key] = cfg[key]
+
+        try:
+            shot_meta = _screenshots.read_meta(shots_dir, name)
+        except ValueError:
+            shot_meta = {}
+        if shot_meta.get("ok"):
+            entry["screenshot_captured_at"] = shot_meta.get("captured_at", "")
+
         sites.append(entry)
 
     return sorted(sites, key=lambda x: x.get("port", base_port))
@@ -295,12 +321,14 @@ def main(argv: Optional[list] = None) -> int:
       METABLOG_SITES_ROOT   default /srv/metablogizer/sites
       METABLOG_SITES_CACHE  default /var/cache/secubox/metablogizer/sites.json
       METABLOG_NGINX_CONF   default /etc/nginx/sites-enabled/metablogizer
+      METABLOG_SHOTS_CACHE  default /var/cache/secubox/metablogizer/shots
     """
     sites_root = Path(os.environ.get("METABLOG_SITES_ROOT", DEFAULT_SITES_ROOT))
     cache_path = Path(os.environ.get("METABLOG_SITES_CACHE", DEFAULT_CACHE_PATH))
     nginx_conf = Path(os.environ.get("METABLOG_NGINX_CONF", DEFAULT_NGINX_CONF))
+    shots_cache_dir = Path(os.environ.get("METABLOG_SHOTS_CACHE", DEFAULT_SHOTS_CACHE_DIR))
 
-    sites = scan_sites(sites_root, nginx_conf)
+    sites = scan_sites(sites_root, nginx_conf, shots_cache_dir=shots_cache_dir)
     write_cache_atomic(cache_path, sites)
     print(json.dumps({"sites": len(sites), "cache": str(cache_path)}))
     return 0

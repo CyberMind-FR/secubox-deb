@@ -26,6 +26,12 @@ override_dh_auto_install:
 	install -m 644 debian/metablog-audit.timer debian/secubox-metablogizer/usr/lib/systemd/system/
 	install -d debian/secubox-metablogizer/usr/lib/tmpfiles.d
 	install -m 644 debian/secubox-metablogizer.tmpfiles debian/secubox-metablogizer/usr/lib/tmpfiles.d/secubox-metablogizer.conf
+	# Mosaic wall thumbnails (#977): nginx serves them directly from the
+	# capture cache (alias), never proxied to this module's socket — ship
+	# the route in the package so a reinstall never erases it (previous
+	# incidents: routes hand-added on the board get wiped on upgrade).
+	install -d debian/secubox-metablogizer/etc/nginx/secubox.d
+	[ -f nginx/metablogizer.conf ] && cp nginx/metablogizer.conf debian/secubox-metablogizer/etc/nginx/secubox.d/ || true
 	# Example config
 	install -d debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples
 	[ -f config/metablogizer.toml.example ] && install -m 644 config/metablogizer.toml.example debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples/ || true
