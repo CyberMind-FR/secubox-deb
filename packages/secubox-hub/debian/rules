@@ -19,6 +19,11 @@ override_dh_auto_install:
 	install -d debian/secubox-hub/etc/nginx/secubox-routes.d
 	[ -f nginx/zz-sbx-authgate.conf ] && cp nginx/zz-sbx-authgate.conf debian/secubox-hub/etc/nginx/secubox.d/ || true
 	[ -f nginx/zz-sbx-authgate.conf ] && cp nginx/zz-sbx-authgate.conf debian/secubox-hub/etc/nginx/secubox-routes.d/ || true
+	# Vhost principal du panneau (#987). Sous /etc : dpkg le traite en
+	# conffile, donc une modification locale est conservée lors d'une mise à
+	# jour au lieu d'être écrasée en silence.
+	install -d debian/secubox-hub/etc/nginx/sites-available
+	install -m 0644 nginx/webui.conf debian/secubox-hub/etc/nginx/sites-available/webui.conf
 	install -d debian/secubox-hub/etc/nginx/conf.d
 	[ -f nginx/secubox-lan-geo.conf ] && cp nginx/secubox-lan-geo.conf debian/secubox-hub/etc/nginx/conf.d/ || true
 	# Nginx snippets (shared CORS config)

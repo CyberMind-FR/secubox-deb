@@ -11,7 +11,20 @@ case "$1" in
     systemctl enable secubox-hub.service
     systemctl start  secubox-hub.service || true
     install -d -m 755 /etc/nginx/secubox.d
-    systemctl reload nginx 2>/dev/null || true
+    # Activer le vhost du panneau s'il ne l'est pas déjà (idempotent, et
+    # jamais forcé : un lien existant vers autre chose est respecté).
+    if [ -f /etc/nginx/sites-available/webui.conf ] && \
+       [ ! -e /etc/nginx/sites-enabled/webui.conf ]; then
+      ln -s ../sites-available/webui.conf /etc/nginx/sites-enabled/webui.conf
+    fi
+    # `nginx -t` AVANT tout rechargement : une configuration invalide passée à
+    # un reload laisse nginx sur l'ancienne sans le dire, et le défaut ne
+    # surgit qu'au redémarrage suivant — c'est-à-dire au pire moment.
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    else
+      echo "secubox-hub: nginx -t échoue — rechargement NON effectué" >&2
+    fi
     # #758 — deploy + load the network-stats input policy-drop tap
     if [ -f /usr/share/secubox/hub/nftables.d/zz-secubox-netstats-tap.nft ]; then
         install -d -m 0755 /etc/nftables.d
