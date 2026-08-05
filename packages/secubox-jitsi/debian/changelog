@@ -1,3 +1,32 @@
+secubox-jitsi (2.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * media-expose --apply est idempotent : la table est supprimee avant
+    rechargement. `nft -f` AJOUTE les regles, il ne remplace pas la table —
+    un second --apply empilait une DNAT identique (mesure sur la board).
+    Inoffensif pour le trafic, mais le compteur devenait illisible, et c'est
+    lui qui sert a diagnostiquer un media qui ne passe pas. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 17:45:00 +0200
+
+secubox-jitsi (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * jitsictl: nouveau verbe `media-expose [--apply|--revoke]`. La redirection
+    UDP/10000 etait posee a la main sur la board et n'appartenait a aucun
+    paquet — exactement la derive que ce depot passe son temps a reparer, et
+    celle-la je l'avais creee moi-meme en 2.0.5. Le CONTENU de la regle est
+    empaquete ; le verbe ne fait que la deposer la ou nftables la charge au
+    demarrage. La decision d'exposition reste explicite (une commande, pas un
+    effet de bord d'`apt install`), mais le fichier devient tracable.
+  * Sans argument, `media-expose` rapporte l'etat sans rien changer : un verbe
+    d'exposition doit pouvoir etre interroge sans risque.
+  * Une regle refusee par nft n'est pas laissee sur le disque — elle serait
+    rechargee au demarrage suivant et echouerait de nouveau, en silence.
+  * jitsictl: VERSION alignee sur le changelog (2.0.0 -> 2.1.0). Un `status`
+    annoncant une version obsolete rend tout diagnostic a distance trompeur.
+    (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 17:30:00 +0200
+
 secubox-jitsi (2.0.5-1~bookworm1) bookworm; urgency=medium
 
   * nft: le drop-in ne porte plus qu'UNE règle, la DNAT. L'ACCEPT en input

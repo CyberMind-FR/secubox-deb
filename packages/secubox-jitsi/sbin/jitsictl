@@ -22,7 +22,9 @@
 set -euo pipefail
 
 readonly MODULE="jitsi"
-readonly VERSION="2.0.0"
+# Tenue en phase avec debian/changelog : un status qui annonce une version
+# obsolete rend tout diagnostic a distance trompeur.
+readonly VERSION="2.1.0"
 readonly CONFIG_FILE="${SECUBOX_JITSI_CONFIG:-/etc/secubox/jitsi.toml}"
 readonly INSTALL_LIB="${SECUBOX_INSTALL_LIB:-/usr/share/secubox/lib/jitsi/install-lxc.sh}"
 readonly STATE_DIR="${SECUBOX_JITSI_STATE_DIR:-/etc/secubox/jitsi}"
@@ -237,6 +239,72 @@ cmd_set_public_ip() {
     echo "{\"success\": true, \"public_address\": \"$(json_escape "$ip")\"}"
 }
 
+# ── media-expose ─────────────────────────────────────────────────────────────
+#
+# Installe (ou retire) la règle nft qui redirige UDP/10000 vers le conteneur.
+#
+# Pourquoi un verbe plutôt qu'un effet du postinst : ouvrir un port UDP entrant
+# vers un service média est une décision d'exposition, pas un effet de bord
+# d'un `apt install`. Mais la laisser à la main produit exactement la dérive
+# que ce dépôt passe son temps à réparer — un fichier vivant sur la board,
+# appartenant à aucun paquet, qui disparaît sans que personne le voie.
+#
+# Le contenu de la règle est donc EMPAQUETÉ (conf/jitsi.nft), et ce verbe ne
+# fait que le déposer là où nftables le charge au démarrage. La décision reste
+# explicite, le fichier reste traçable.
+#
+# Rappel utile : une seule règle suffit. Après DNAT en prerouting la
+# destination n'est plus locale, le paquet emprunte FORWARD (policy accept) et
+# ne traverse jamais INPUT — la politique drop de la chaîne input ne s'y
+# applique pas.
+readonly NFT_SRC="${SECUBOX_JITSI_NFT_SRC:-/usr/share/doc/secubox-jitsi/examples/jitsi.nft}"
+readonly NFT_DST="${SECUBOX_JITSI_NFT_DST:-/etc/nftables.d/secubox-jitsi-dnat.nft}"
+
+cmd_media_expose() {
+    local action="${1:-}"
+    case "$action" in
+        --apply)
+            [ -f "$NFT_SRC" ] || { echo "{\"success\": false, \"error\": \"règle absente: $NFT_SRC\"}"; return 1; }
+            install -d -m 0755 "$(dirname "$NFT_DST")"
+            install -m 0644 "$NFT_SRC" "$NFT_DST"
+            # La table est SUPPRIMÉE avant rechargement : `nft -f` ajoute les
+            # règles, il ne remplace pas la table. Sans ça, un second --apply
+            # duplique la règle — mesuré, deux DNAT identiques empilées. Une
+            # duplication de DNAT est inoffensive en soi (la première gagne),
+            # mais elle rend le compteur illisible, et c'est justement le
+            # compteur qui sert à diagnostiquer un média qui ne passe pas.
+            nft delete table inet secubox-jitsi 2>/dev/null || true
+            if nft -f "$NFT_DST" 2>/dev/null; then
+                echo "{\"success\": true, \"applied\": \"$(json_escape "$NFT_DST")\", \"port\": $JVB_PORT}"
+            else
+                rm -f "$NFT_DST"
+                echo '{"success": false, "error": "nft a refusé la règle — rien appliqué"}'
+                return 1
+            fi
+            ;;
+        --revoke)
+            nft delete table inet secubox-jitsi 2>/dev/null || true
+            rm -f "$NFT_DST"
+            echo '{"success": true, "revoked": true}'
+            ;;
+        *)
+            # Sans argument : rapporte l'état, ne change rien.
+            local installed=false live=false
+            [ -f "$NFT_DST" ] && installed=true
+            nft list table inet secubox-jitsi >/dev/null 2>&1 && live=true
+            cat <<EOF
+{
+  "file_installed": $installed,
+  "rule_live": $live,
+  "file": "$(json_escape "$NFT_DST")",
+  "udp_port": $JVB_PORT,
+  "hint": "jitsictl media-expose --apply | --revoke"
+}
+EOF
+            ;;
+    esac
+}
+
 cmd_install() {
     [ -x "$INSTALL_LIB" ] || { echo "{\"success\": false, \"error\": \"install lib missing: $INSTALL_LIB\"}"; return 1; }
     log "Provisioning Jitsi LXC (this pulls the official Jitsi apt repo) ..."
@@ -272,6 +340,9 @@ jitsictl v$VERSION — Jitsi Meet (LXC-native)
                             (prosody|jicofo|jitsi-videobridge2|nginx)
   set-public-ip <addr>      Adresse annoncée par le videobridge aux pairs
   install                   Provisionne le conteneur (idempotent)
+  media-expose [--apply|--revoke]
+                            Redirection UDP/10000 vers le conteneur. Sans
+                            argument : rapporte l'etat sans rien changer.
   logs <unit> [lines]       Journal d'un service
 EOF
 }
@@ -285,6 +356,7 @@ case "${1:-help}" in
     service-restart)  cmd_service_restart "${2:-}" ;;
     set-public-ip)    cmd_set_public_ip "${2:-}" ;;
     install)          cmd_install ;;
+    media-expose)     cmd_media_expose "${2:-}" ;;
     logs)             cmd_logs "${2:-}" "${3:-}" ;;
     help|--help|-h)   cmd_help ;;
     *)                cmd_help; exit 1 ;;
