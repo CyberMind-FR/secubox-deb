@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Jitsi — provisionnement initial du conteneur (idempotent, une fois).
+#
+# Démarré --no-block par le postinst : « installer le paquet » active
+# l'appliance. Le provisionnement (debootstrap + dépôt apt Jitsi + install des
+# quatre services, plusieurs minutes, réseau requis) tourne EN ARRIÈRE-PLAN
+# plutôt que de bloquer dpkg.
+[Unit]
+Description=SecuBox Jitsi — provisionnement initial du conteneur (idempotent, une fois)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network-online.target
+Wants=network-online.target
+# install-lxc.sh n'écrit ce témoin QU'après une mise en route entièrement
+# réussie (set -euo pipefail sort avant mark_provisioned au moindre échec) :
+# l'unité est donc un no-op sûr après succès, et re-tente si une passe
+# précédente a échoué.
+ConditionPathExists=!/etc/secubox/jitsi/.lxc-provisioned
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/secubox/jitsi/install-lxc.sh
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

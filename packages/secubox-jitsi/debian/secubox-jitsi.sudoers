@@ -1,0 +1,6 @@
+# SecuBox Jitsi — le panneau/API non privilégié (utilisateur `secubox`) pilote
+# le LXC Jitsi via jitsictl. C'est la SEULE surface privilégiée du module
+# (cycle de vie du conteneur, redémarrage d'un service, adresse publique du
+# videobridge), confinée et validée par le ctl lui-même — qui valide ses
+# propres entrées (adresse IPv4, liste blanche d'unités).
+secubox ALL=(root) NOPASSWD: /usr/sbin/jitsictl

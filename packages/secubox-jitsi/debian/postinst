@@ -2,24 +2,50 @@
 set -e
 case "$1" in
   configure)
-    # Ensure secubox user exists
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
+
+    # Répertoires partagés : le parent garde ses droits (1777 / 0755 selon le
+    # cas). Un module qui resserre un parent partagé casse tous les autres —
+    # leçon déjà payée sur /run/secubox et /var/log/secubox.
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
-    # Create Jitsi data directory
-    install -d -o root -g root -m 755 /srv/jitsi
-    install -d -o root -g root -m 755 /srv/jitsi/recordings
-    # Ensure nginx secubox.d directory exists
+    install -d -o root -g root -m 755 /etc/secubox
+    install -d -o root -g root -m 755 /etc/secubox/jitsi
+    install -d -o secubox -g secubox -m 755 /var/cache/secubox/jitsi
     install -d -m 755 /etc/nginx/secubox.d
-    # Enable and start service
+
+    if [ ! -f /etc/secubox/jitsi.toml ]; then
+      if [ -f /usr/share/doc/secubox-jitsi/examples/jitsi.toml.example ]; then
+        cp /usr/share/doc/secubox-jitsi/examples/jitsi.toml.example /etc/secubox/jitsi.toml
+        chown root:secubox /etc/secubox/jitsi.toml
+        chmod 640 /etc/secubox/jitsi.toml
+      fi
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-jitsi.service
-    systemctl start secubox-jitsi.service || true
-    # Reload nginx to pick up new location
+    # try-restart plutôt que start : sur une mise à jour, dpkg a déjà envoyé
+    # SIGTERM à l'unité. try-restart relance ce qui tournait et respecte un
+    # service délibérément arrêté ; le start n'est qu'un repli de première
+    # installation.
+    systemctl try-restart secubox-jitsi.service 2>/dev/null || \
+      systemctl start secubox-jitsi.service || true
+
+    # Provisionnement du conteneur EN ARRIÈRE-PLAN : debootstrap + dépôt apt
+    # Jitsi + quatre services, plusieurs minutes et du réseau. Bloquer dpkg
+    # là-dessus rendrait toute installation hasardeuse. L'unité est un no-op
+    # après une mise en route réussie (ConditionPathExists sur son témoin).
+    systemctl enable secubox-jitsi-provision.service 2>/dev/null || true
+    systemctl start --no-block secubox-jitsi-provision.service 2>/dev/null || true
+
     systemctl reload nginx 2>/dev/null || true
+
+    # DÉLIBÉRÉ : le drop-in nftables (UDP/10000 depuis l'extérieur vers le
+    # videobridge) n'est PAS appliqué ici. Ouvrir un port UDP entrant est une
+    # décision d'exposition, pas un effet de bord d'un `apt install`. Livré en
+    # exemple : /usr/share/doc/secubox-jitsi/examples/jitsi.nft
     ;;
 esac
 #DEBHELPER#

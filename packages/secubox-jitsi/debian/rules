@@ -18,3 +18,21 @@ override_dh_auto_install:
 	# Systemd service
 	install -d debian/secubox-jitsi/usr/lib/systemd/system
 	[ -f systemd/secubox-jitsi.service ] && cp systemd/secubox-jitsi.service debian/secubox-jitsi/usr/lib/systemd/system/ || true
+	# Confined root actuator — the module's single privileged surface.
+	install -d debian/secubox-jitsi/usr/sbin
+	install -m 755 sbin/jitsictl debian/secubox-jitsi/usr/sbin/
+	# LXC provisioning library (run by the provision unit / `jitsictl install`).
+	install -d debian/secubox-jitsi/usr/lib/secubox/jitsi
+	install -m 755 lib/jitsi/install-lxc.sh debian/secubox-jitsi/usr/lib/secubox/jitsi/
+	install -d debian/secubox-jitsi/usr/share/secubox/lib/jitsi
+	install -m 755 lib/jitsi/install-lxc.sh debian/secubox-jitsi/usr/share/secubox/lib/jitsi/
+	# Scoped sudoers grant (secubox -> jitsictl).
+	install -d debian/secubox-jitsi/etc/sudoers.d
+	install -m 440 debian/secubox-jitsi.sudoers debian/secubox-jitsi/etc/sudoers.d/secubox-jitsi
+	# Provisioning unit.
+	install -m 644 debian/secubox-jitsi-provision.service debian/secubox-jitsi/usr/lib/systemd/system/
+	# Example config + nftables drop-in (NOT applied automatically: it opens a
+	# UDP port from the outside, see conf/jitsi.nft).
+	install -d debian/secubox-jitsi/usr/share/doc/secubox-jitsi/examples
+	install -m 644 conf/jitsi.toml.example debian/secubox-jitsi/usr/share/doc/secubox-jitsi/examples/
+	install -m 644 conf/jitsi.nft debian/secubox-jitsi/usr/share/doc/secubox-jitsi/examples/
