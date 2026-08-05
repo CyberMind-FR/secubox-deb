@@ -9,6 +9,7 @@ Package: secubox-peertube
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
  lxc, lxc-templates, nftables, openssl
+Recommends: yt-dlp
 Description: SecuBox PeerTube — federated video platform (native LXC)
  Dashboard + FastAPI backend for a PeerTube video-hosting instance
  installed NATIVELY inside a dedicated Debian LXC (its own
@@ -24,6 +25,7 @@ Description: SecuBox PeerTube — federated video platform (native LXC)
  Features:
   - LXC lifecycle via peertubectl (install, status, start, stop, restart, logs)
   - Public nginx vhost (:9080 → LXC :9000) bypassing the WAF (gitea pattern)
+  - Video and playlist import (single URL or full playlist, sequential, resumable)
   - Video and channel management
   - User creation and role assignment (admin/moderator/user)
   - Federation (ActivityPub) — follow/followers
