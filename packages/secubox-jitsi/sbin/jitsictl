@@ -223,8 +223,11 @@ cmd_set_public_ip() {
     install -d -m 0755 "$STATE_DIR"
     printf '%s\n' "$ip" > "$STATE_DIR/public-ip"
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -c "
+        # Créé s'il manque : jitsi-videobridge2 2.3 ne livre plus ce fichier
+        # mais le lit toujours (SC_HOME_DIR_LOCATION/NAME dans son unité).
         props=/etc/jitsi/videobridge/sip-communicator.properties
-        [ -f \"\$props\" ] || exit 3
+        [ -d /etc/jitsi/videobridge ] || exit 3
+        touch \"\$props\"
         sed -i '/NAT_HARVESTER_LOCAL_ADDRESS/d;/NAT_HARVESTER_PUBLIC_ADDRESS/d' \"\$props\"
         printf 'org.ice4j.ice.harvest.NAT_HARVESTER_LOCAL_ADDRESS=%s\n' '$LXC_IP' >> \"\$props\"
         printf 'org.ice4j.ice.harvest.NAT_HARVESTER_PUBLIC_ADDRESS=%s\n' '$ip' >> \"\$props\"

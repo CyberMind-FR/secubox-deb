@@ -88,7 +88,30 @@ lxc_state() {
         | awk -F: '/^State:/ { gsub(/ /,"",$2); print tolower($2) }' || true
 }
 
+# Une création interrompue (SIGTERM en plein lxc-create, coupure réseau,
+# manque de place) laisse un répertoire de conteneur AVEC un verrou de
+# création. `lxc-start` y répond « Ongoing container creation detected » et
+# toute relance échoue de la même façon, indéfiniment — l'idempotence naïve
+# « le répertoire existe donc c'est bon » transforme alors un échec ponctuel en
+# panne permanente qu'il faut dénouer à la main.
+#
+# lxc pose lui-même un fichier `partial` dans le répertoire du conteneur
+# pendant la création et le retire à la fin : c'est exactement le marqueur sur
+# lequel `lxc-start` refuse ensuite de démarrer. On teste donc CE marqueur, et
+# non une heuristique — plus le garde de repli « config sans rootfs » pour le
+# cas où le répertoire aurait été mutilé autrement.
+clean_partial_lxc() {
+    local dir="$LXC_PATH/$LXC_NAME"
+    [ -d "$dir" ] || return 0
+    if [ ! -e "$dir/partial" ] && [ -f "$dir/config" ] && [ -d "$dir/rootfs" ]; then
+        return 0
+    fi
+    log "Reliquat de création détecté ($dir) — nettoyage avant nouvelle tentative"
+    lxc-destroy -n "$LXC_NAME" -P "$LXC_PATH" -f 2>/dev/null || rm -rf "$dir"
+}
+
 create_lxc() {
+    clean_partial_lxc
     if [ -d "$LXC_PATH/$LXC_NAME/rootfs" ]; then
         log "LXC '$LXC_NAME' already exists — skipping debootstrap"
         return
@@ -238,8 +261,15 @@ configure_jvb_nat() {
 
     lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- bash -e <<INNER
         set -euo pipefail
+        # jitsi-videobridge2 2.3 ne LIVRE PLUS ce fichier (il n'installe que
+        # jvb.conf), mais il le LIT toujours : son unité passe
+        # -Dnet.java.sip.communicator.SC_HOME_DIR_LOCATION=/etc/jitsi et
+        # SC_HOME_DIR_NAME=videobridge, ce qui pointe exactement ici. Le
+        # créer est donc la manœuvre correcte — exiger qu'il préexiste faisait
+        # échouer le provisionnement sur une pile par ailleurs saine.
         props=/etc/jitsi/videobridge/sip-communicator.properties
-        [ -f "\$props" ] || { echo "videobridge properties absent — is jitsi-meet installed?"; exit 1; }
+        [ -d /etc/jitsi/videobridge ] || { echo "jitsi-videobridge non installé"; exit 1; }
+        touch "\$props"
         # Idempotent: drop any previous harvester lines, then re-add.
         sed -i '/NAT_HARVESTER_LOCAL_ADDRESS/d;/NAT_HARVESTER_PUBLIC_ADDRESS/d' "\$props"
         {

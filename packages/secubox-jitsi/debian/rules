@@ -36,3 +36,8 @@ override_dh_auto_install:
 	install -d debian/secubox-jitsi/usr/share/doc/secubox-jitsi/examples
 	install -m 644 conf/jitsi.toml.example debian/secubox-jitsi/usr/share/doc/secubox-jitsi/examples/
 	install -m 644 conf/jitsi.nft debian/secubox-jitsi/usr/share/doc/secubox-jitsi/examples/
+	# Public vhost served by the HOST nginx (packaged, not hand-written: a
+	# hand-placed route vanishes on reinstall and nobody notices until it
+	# breaks).
+	install -d debian/secubox-jitsi/etc/nginx/sites-available
+	install -m 644 nginx/jitsi-vhost.conf debian/secubox-jitsi/etc/nginx/sites-available/jitsi.conf
