@@ -82,6 +82,17 @@ type Routes struct {
 	widgetHosts  []string
 	bannerOrigin string
 
+	// #746: onUpstreamError, when non-nil, gets first refusal on an upstream
+	// failure before the themed error page is written. It returns true when it
+	// has fully answered the request (the caller must then write nothing).
+	//
+	// This is the seam that lets the scale-to-zero wake path reach the cached
+	// proxies' ErrorHandler, which is built here in buildEntries where the
+	// *Server — and therefore its on-demand set and waker proxy — is not in
+	// scope. Set in main() after LoadRoutes; read inside the closure at request
+	// time, never captured, so hot-reloaded proxies see it too.
+	onUpstreamError func(w http.ResponseWriter, req *http.Request, code int, host string) bool
+
 	// watcher handles mtime tracking + Apply callbacks (throttle=0 → eager).
 	watcher *reload.Watcher
 }
@@ -193,7 +204,16 @@ func (r *Routes) buildEntries(parsed map[string][2]string) map[string]routeEntry
 				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
 					reqHost = bare
 				}
+				reqHost = strings.ToLower(strings.TrimSpace(reqHost))
 				log.Printf("sbxwaf: upstream error host=%s path=%s -> %d: %v", reqHost, req.URL.Path, code, err)
+				// #746: give the wake hook first refusal. Read from r at
+				// request time, not captured at buildEntries time — same
+				// discipline as r.cookieAudit above, so a hook wired in
+				// main() after LoadRoutes is visible to proxies built at
+				// startup AND to those built by a hot reload.
+				if h := r.onUpstreamError; h != nil && h(w, req, code, reqHost) {
+					return
+				}
 				writeErrorPage(w, code, reqHost)
 			}
 			r.proxyCache.Store(key, p)

@@ -24,6 +24,48 @@ import (
 	"strings"
 )
 
+// wakeOnRefusal reports whether an upstream failure for host must be answered
+// by the waker rather than by a themed error page (#746).
+//
+// #896 shipped one trigger — an on-demand vhost with no live route. A
+// Streamlit app fails the other way round: its route is permanent
+// (haproxy-routes.json maps the host to the container's ip:port whether the
+// app runs or not), so Lookup succeeds and only the dial fails. Without this
+// second trigger such a vhost receives a 502 that no amount of waiting will
+// ever resolve.
+//
+// Only 502 qualifies. A 504 means the upstream ANSWERED, slowly — it is alive,
+// and waking it is at best a no-op, at worst a wake storm aimed at a service
+// that is merely overloaded, on a board that is CPU-constrained by
+// construction. Anything else (503) is an error class we cannot attribute to
+// "nobody is listening".
+func (s *Server) wakeOnRefusal(code int, host string) bool {
+	if code != http.StatusBadGateway {
+		return false
+	}
+	if s.onDemand == nil {
+		return false
+	}
+	return s.onDemand.Contains(host)
+}
+
+// wakeUpstreamFailure is the Routes.onUpstreamError hook: it answers with the
+// waker splash and reports true, or declines and reports false so the caller
+// writes its usual themed error page.
+//
+// Wired identically into both proxy paths — the cached proxies built in
+// routes.go and the handler's fallback proxy — so a vhost behaves the same way
+// whichever one serves it. Two code paths disagreeing about the same decision
+// is precisely the defect class this module has already paid for twice
+// (#958, #959).
+func (s *Server) wakeUpstreamFailure(w http.ResponseWriter, r *http.Request, code int, host string) bool {
+	if !s.wakeOnRefusal(code, host) {
+		return false
+	}
+	s.wakerProxy().ServeHTTP(w, r)
+	return true
+}
+
 // defaultWakerSocket is the production path to the waker's unix socket.
 // Server.wakerSocket overrides this (tests inject a stub socket path).
 const defaultWakerSocket = "/run/secubox/waker.sock"
