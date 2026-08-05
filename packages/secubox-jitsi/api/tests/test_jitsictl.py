@@ -189,3 +189,104 @@ def test_start_on_a_missing_container_fails_cleanly(tmp_path):
     r = _run(["start"], _env(tmp_path, conf, state_dir))
     assert r.returncode == 1
     assert json.loads(r.stdout)["success"] is False
+
+
+def _mock_nft(tmp_path: Path, capture: Path, ok: bool = True) -> None:
+    _write_exec(tmp_path / "nft", """#!/bin/bash
+printf '%s\\n' "$*" >> "{capture}"
+exit {rc}
+""".format(capture=capture, rc=0 if ok else 1))
+
+
+def test_media_expose_without_argument_reports_without_changing_anything(tmp_path):
+    """Un verbe d'exposition doit pouvoir etre INTERROGE sans risque. Sans
+    argument il rapporte l'etat et ne touche ni au fichier ni aux regles."""
+    conf, state_dir = _setup(tmp_path)
+    capture = tmp_path / "cap.txt"
+    _mock_lxc(tmp_path, capture)
+    _mock_nft(tmp_path, capture)
+    dst = tmp_path / "nftables.d" / "secubox-jitsi-dnat.nft"
+
+    env = _env(tmp_path, conf, state_dir)
+    env["SECUBOX_JITSI_NFT_DST"] = str(dst)
+    r = _run(["media-expose"], env)
+
+    assert r.returncode == 0, r.stderr
+    data = json.loads(r.stdout)
+    assert data["file_installed"] is False
+    assert data["udp_port"] == 10000
+    assert not dst.exists(), "l'interrogation ne doit rien installer"
+
+
+def test_media_expose_apply_installs_the_packaged_rule(tmp_path):
+    """La regle est EMPAQUETEE, pas ecrite ici : ce verbe la depose ou nftables
+    la charge au demarrage. Sans ca, la regle vit a la main sur la board et
+    disparait sans que personne le voie — la derive meme que ce depot passe
+    son temps a reparer."""
+    conf, state_dir = _setup(tmp_path)
+    capture = tmp_path / "cap.txt"
+    _mock_lxc(tmp_path, capture)
+    _mock_nft(tmp_path, capture)
+    src = tmp_path / "jitsi.nft"
+    src.write_text("table inet secubox-jitsi {}\n")
+    dst = tmp_path / "nftables.d" / "secubox-jitsi-dnat.nft"
+
+    env = _env(tmp_path, conf, state_dir)
+    env["SECUBOX_JITSI_NFT_SRC"] = str(src)
+    env["SECUBOX_JITSI_NFT_DST"] = str(dst)
+    r = _run(["media-expose", "--apply"], env)
+
+    assert r.returncode == 0, r.stderr
+    assert json.loads(r.stdout)["success"] is True
+    assert dst.exists(), "la regle empaquetee doit etre deposee"
+    assert dst.read_text() == src.read_text(), "le contenu doit venir du paquet"
+
+
+def test_media_expose_apply_leaves_nothing_behind_when_nft_refuses(tmp_path):
+    """Une regle refusee par nft ne doit pas rester sur le disque : au prochain
+    demarrage elle serait rechargee et echouerait de nouveau, silencieusement."""
+    conf, state_dir = _setup(tmp_path)
+    capture = tmp_path / "cap.txt"
+    _mock_lxc(tmp_path, capture)
+    _mock_nft(tmp_path, capture, ok=False)
+    src = tmp_path / "jitsi.nft"
+    src.write_text("table inet secubox-jitsi {}\n")
+    dst = tmp_path / "nftables.d" / "secubox-jitsi-dnat.nft"
+
+    env = _env(tmp_path, conf, state_dir)
+    env["SECUBOX_JITSI_NFT_SRC"] = str(src)
+    env["SECUBOX_JITSI_NFT_DST"] = str(dst)
+    r = _run(["media-expose", "--apply"], env)
+
+    assert r.returncode == 1
+    assert not dst.exists(), "un echec ne doit rien laisser derriere lui"
+
+
+def test_media_expose_apply_is_idempotent(tmp_path):
+    """`nft -f` AJOUTE les regles, il ne remplace pas la table : sans
+    suppression prealable, un second --apply empile une DNAT identique.
+    Mesure sur la board avant correctif : deux regles pour un seul appel de
+    trop. Inoffensif pour le trafic (la premiere gagne) mais le compteur
+    devient illisible — et c'est lui qui sert a diagnostiquer un media qui ne
+    passe pas."""
+    conf, state_dir = _setup(tmp_path)
+    capture = tmp_path / "cap.txt"
+    _mock_lxc(tmp_path, capture)
+    nft_calls = tmp_path / "nft.txt"
+    _mock_nft(tmp_path, nft_calls)
+    src = tmp_path / "jitsi.nft"
+    src.write_text("table inet secubox-jitsi {}\n")
+    dst = tmp_path / "nftables.d" / "secubox-jitsi-dnat.nft"
+
+    env = _env(tmp_path, conf, state_dir)
+    env["SECUBOX_JITSI_NFT_SRC"] = str(src)
+    env["SECUBOX_JITSI_NFT_DST"] = str(dst)
+    _run(["media-expose", "--apply"], env)
+
+    calls = nft_calls.read_text()
+    assert "delete table inet secubox-jitsi" in calls, (
+        "la table doit etre supprimee avant rechargement, sinon --apply empile"
+    )
+    assert calls.index("delete table") < calls.index("-f "), (
+        "la suppression doit preceder le chargement"
+    )
