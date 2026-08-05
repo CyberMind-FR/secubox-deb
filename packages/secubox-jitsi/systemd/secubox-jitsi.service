@@ -36,7 +36,12 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/jitsi
-ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/jitsi.sock --log-level warning
+# `python3 -m uvicorn`, PAS /usr/bin/uvicorn : ce binaire n'existe pas sur la
+# board (uvicorn y est installé comme module Python). L'unité 1.0.0 portait
+# déjà ce défaut, invisible puisque sa ConditionPathExists l'empêchait de
+# démarrer — au premier démarrage réel, 203/EXEC. 38 unités du parc utilisent
+# la forme ci-dessous.
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/jitsi.sock --log-level warning
 Restart=on-failure
 RestartSec=5
 

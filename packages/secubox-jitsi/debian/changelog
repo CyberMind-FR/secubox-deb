@@ -1,3 +1,62 @@
+secubox-jitsi (2.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * postinst: retirer le jeton de substitution debhelper écrit en toutes
+    lettres dans un commentaire. Il est remplacé PARTOUT où il apparaît, y
+    compris au milieu d'une phrase : la fin de la ligne devenait du shell
+    exécutable et le postinst sortait en 127 (« un: command not found », plus
+    un deb-systemd-invoke lancé sans argument par des backticks). (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:55:00 +0200
+
+secubox-jitsi (2.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * nginx: empaqueter le vhost public (sites-available/jitsi.conf + lien dans
+    le postinst) plutôt que de le poser à la main — une route non empaquetée
+    disparaît à la réinstallation sans que personne s'en aperçoive avant la
+    panne.
+  * Le vhost proxifie vers le :443 DU CONTENEUR : le vhost généré par
+    jitsi-meet n'écoute en clair que pour rediriger en 301, et le réécrire
+    serait écrasé à sa prochaine mise à jour. proxy_ssl_verify off — le
+    certificat interne est auto-signé et le saut reste local ; le vrai
+    certificat est présenté par HAProxy en amont.
+  * Mise à niveau WebSocket explicite (map $http_upgrade) et délais portés à
+    900 s : la signalisation XMPP de Jitsi est une WebSocket tenue ouverte
+    toute la durée de la conférence, le défaut de 60 s la couperait en pleine
+    réunion.
+  * postinst: `nginx -t` avant tout reload. Une conf invalide passée à un
+    reload laisse nginx sur l'ancienne sans le dire, et le défaut ne surgit
+    qu'au redémarrage suivant. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:45:00 +0200
+
+secubox-jitsi (2.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * jvb NAT: créer sip-communicator.properties s'il manque au lieu d'exiger
+    qu'il préexiste. jitsi-videobridge2 2.3 ne livre plus ce fichier (il
+    n'installe que jvb.conf) mais le LIT toujours — son unité passe
+    SC_HOME_DIR_LOCATION=/etc/jitsi et SC_HOME_DIR_NAME=videobridge, ce qui
+    pointe exactement là. Le provisionnement échouait donc sur une pile par
+    ailleurs saine, les quatre services étant actifs. Même correction dans
+    jitsictl set-public-ip. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:35:00 +0200
+
+secubox-jitsi (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * unit: ExecStart utilise `python3 -m uvicorn` — /usr/bin/uvicorn n'existe
+    pas sur la board (203/EXEC au premier démarrage réel). Le défaut venait de
+    la 1.0.0 mais restait invisible : sa ConditionPathExists l'empêchait de
+    démarrer.
+  * postinst: le provisionnement démarre APRÈS le bloc debhelper. Démarré
+    avant, il se faisait tuer par le `deb-systemd-invoke restart` que
+    dh_installsystemd injecte — SIGTERM à 4 s, en plein lxc-create, laissant un
+    conteneur à moitié créé.
+  * install-lxc.sh: détecte et détruit un reliquat de création interrompue. Sans
+    ça, « Ongoing container creation detected » rendait toute relance
+    impossible — un échec ponctuel devenait une panne permanente. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:25:00 +0200
+
 secubox-jitsi (2.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Refonte LXC-native. Jitsi tourne désormais dans un LXC Debian non
