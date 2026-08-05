@@ -11,10 +11,12 @@ CyberMind -- https://cybermind.fr
 Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 """
+import asyncio
 import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -138,6 +140,18 @@ class VideoImport(BaseModel):
     target_url: str = Field(..., min_length=4)
     channel_id: Optional[int] = None      # default channel if omitted
     name: Optional[str] = None            # title; PeerTube derives one if omitted
+    privacy: int = 1                      # 1=public 2=unlisted 3=private 4=internal
+
+
+class PlaylistImport(BaseModel):
+    """Import every video of a playlist/channel/showcase URL (#981).
+
+    Each video still goes through PeerTube's own native HTTP import one at a
+    time — see _process_playlist_job for why this is sequential, never fired
+    all at once."""
+    target_url: str = Field(..., min_length=4)
+    channel_id: Optional[int] = None
+    name_prefix: Optional[str] = None     # prefixed to each video's own title
     privacy: int = 1                      # 1=public 2=unlisted 3=private 4=internal
 
 
@@ -505,6 +519,25 @@ async def list_imports(user=Depends(require_jwt)):
     return {"imports": [], "total": 0, "error": result.get("error", "import list failed")}
 
 
+async def _submit_import(target_url: str, channel_id: Optional[int], privacy: int,
+                          name: Optional[str], token: str) -> dict:
+    """POST /videos/imports for ONE video. The actual curl call is blocking
+    (pt_api uses subprocess.run), so it is offloaded to a worker thread —
+    this helper is also called in a loop from the playlist worker, which
+    would otherwise stall the whole event loop for as long as a playlist
+    takes to process (CLAUDE.md: never block the loop)."""
+    payload = {"targetUrl": target_url, "channelId": channel_id, "privacy": privacy}
+    if name:
+        payload["name"] = name
+    result = await asyncio.to_thread(pt_api, "/videos/imports", "POST", payload, token, 60)
+    if result.get("success"):
+        d = result.get("data") or {}
+        vid = (d.get("video") or {})
+        return {"success": True, "import_id": d.get("id"),
+                "video_uuid": vid.get("uuid"), "state": (d.get("state") or {})}
+    return {"success": False, "error": result.get("error", "import failed")}
+
+
 @router.post("/import")
 async def import_video(req: VideoImport, user=Depends(require_jwt)):
     """Download a video from a URL into PeerTube (yt-dlp under the hood).
@@ -519,21 +552,381 @@ async def import_video(req: VideoImport, user=Depends(require_jwt)):
     channel_id = req.channel_id or default_channel_id(token)
     if not channel_id:
         return {"success": False, "error": "could not resolve a target channel"}
-    payload = {
-        "targetUrl": req.target_url,
-        "channelId": channel_id,
-        "privacy": req.privacy,
-    }
-    if req.name:
-        payload["name"] = req.name
     log.info(f"Importing {req.target_url} → channel {channel_id} by {user.get('sub', 'unknown')}")
-    result = pt_api("/videos/imports", method="POST", data=payload, token=token, timeout=60)
-    if result.get("success"):
-        d = result.get("data") or {}
-        vid = (d.get("video") or {})
-        return {"success": True, "import_id": d.get("id"),
-                "video_uuid": vid.get("uuid"), "state": (d.get("state") or {})}
-    return {"success": False, "error": result.get("error", "import failed")}
+    return await _submit_import(req.target_url, channel_id, req.privacy, req.name, token)
+
+
+# ============================================================================
+# Playlist Import (#981) — expand a playlist/channel URL into N single-video
+# native imports, submitted ONE AT A TIME.
+#
+# PeerTube's native HTTP import only ever takes one video per call; there is
+# no upstream "import a whole playlist" endpoint. Expansion happens HOST-side
+# with a metadata-only `yt-dlp --flat-playlist` probe (no download — the
+# actual fetch + the fixed H.264/AAC format selection still happen entirely
+# inside PeerTube's own import job, untouched by this module).
+#
+# Concurrency bound: the worker below AWAITS each submitted import reaching a
+# terminal PeerTube state before submitting the next — for both items of one
+# job AND across every queued playlist job (one global worker/queue). That
+# guarantees at most one playlist-triggered yt-dlp/ffmpeg pipeline is ever
+# running at a time, regardless of playlist size or how many playlists are
+# queued — the board's load already swings 45-101 (see CLAUDE.md), so this is
+# the conservative choice: correctness and a hard cap over throughput.
+# ============================================================================
+
+YTDLP_BIN = "yt-dlp"
+PLAYLIST_JOBS_FILE = Path("/var/lib/secubox/peertube/playlist-jobs.json")
+PLAYLIST_PROBE_TIMEOUT = 90     # seconds — metadata-only, no download
+PLAYLIST_ITEM_TIMEOUT = 1800    # seconds — ceiling per video (fetch + transcode)
+PLAYLIST_POLL_INTERVAL = 5      # seconds between import-state polls
+
+_playlist_jobs: Dict[str, dict] = {}
+_playlist_queue: Optional["asyncio.Queue[str]"] = None
+_playlist_worker_task = None
+
+_TERMINAL_IMPORT_LABELS = {"success", "failed", "rejected", "cancelled", "canceled"}
+
+# Playlist-shaped URL syntax across the sites yt-dlp commonly sees here
+# (YouTube list=/playlist, SoundCloud /sets/, Vimeo /album/, YouTube channel
+# playlists tab). Cheap pre-filter only — the real answer comes from the
+# yt-dlp probe below; this just spares a subprocess for the common case of a
+# lone video URL.
+_PLAYLIST_URL_RE = re.compile(
+    r"[?&]list=|/playlist(?:[/?]|$)|/sets/|/album/|/playlists(?:[/?]|$)",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_playlist_url(url: str) -> bool:
+    """Fast, no-subprocess pre-filter — NOT the authority on what is/isn't a
+    playlist (the yt-dlp probe is); this only decides whether it's worth
+    spending a probe at all."""
+    return bool(_PLAYLIST_URL_RE.search(url or ""))
+
+
+def _is_playlist_result(meta: dict) -> bool:
+    """True if a `yt-dlp --flat-playlist --dump-single-json` result is an
+    actual playlist/collection (has entries) rather than a lone video (a
+    single video probed the same way carries no "entries" key at all)."""
+    entries = meta.get("entries") if isinstance(meta, dict) else None
+    return isinstance(entries, list) and len(entries) > 0
+
+
+def _playlist_entries(meta: dict) -> List[dict]:
+    """Ordered [{url, title, source_id}] extracted from a flat-playlist probe.
+    source_id is stable across re-probes (used for the resume/skip logic) even
+    when a title changes upstream."""
+    out: List[dict] = []
+    for e in (meta.get("entries") or []):
+        if not isinstance(e, dict):
+            continue
+        vid = str(e.get("id") or "").strip()
+        url = e.get("url") or e.get("webpage_url")
+        if not url and vid:
+            # --flat-playlist on a channel/tab extraction often yields a bare
+            # id with no url/webpage_url — reconstruct a canonical watch URL
+            # (only safe for extractors we know the URL shape of).
+            ie = (e.get("ie_key") or "").lower()
+            if not ie or "youtube" in ie:
+                url = f"https://www.youtube.com/watch?v={vid}"
+        if not url:
+            continue
+        title = (e.get("title") or vid or url).strip()
+        out.append({"url": url, "title": title, "source_id": vid or url})
+    return out
+
+
+async def _probe_playlist(url: str) -> dict:
+    """Metadata-only yt-dlp probe (no download). Raises RuntimeError with a
+    user-safe message on failure/timeout/missing yt-dlp."""
+    if not shutil.which(YTDLP_BIN):
+        raise RuntimeError(
+            "yt-dlp not found on host — install it (secubox-peertube Recommends: yt-dlp)")
+    argv = [YTDLP_BIN, "--flat-playlist", "--dump-single-json", "--no-warnings", url]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=PLAYLIST_PROBE_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise RuntimeError("playlist probe timed out")
+    except FileNotFoundError:
+        raise RuntimeError("yt-dlp not found on host")
+    if proc.returncode != 0:
+        tail = err.decode("utf-8", "replace").strip().splitlines()
+        raise RuntimeError((tail[-1] if tail else "yt-dlp probe failed")[:200])
+    try:
+        return json.loads(out.decode("utf-8", "replace"))
+    except ValueError:
+        raise RuntimeError("unreadable playlist metadata")
+
+
+async def _await_import_terminal(import_id, token: str,
+                                  timeout: int = PLAYLIST_ITEM_TIMEOUT,
+                                  poll_interval: int = PLAYLIST_POLL_INTERVAL) -> dict:
+    """Poll PeerTube's own import list until OUR import_id reaches a terminal
+    state (success/failed/rejected/cancelled) or `timeout` elapses.
+
+    This IS the concurrency bound in practice: the worker blocks HERE
+    (via asyncio.sleep, never busy-waiting) instead of firing the next
+    import — so the event loop stays free for every other request while a
+    playlist grinds through, and PeerTube never sees more than one
+    playlist-triggered import in flight."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        result = await asyncio.to_thread(
+            pt_api, "/users/me/videos/imports?count=50&sort=-createdAt", "GET", None, token, 20)
+        if result.get("success") and isinstance(result.get("data"), dict):
+            for row in (result["data"].get("data") or []):
+                if row.get("id") == import_id:
+                    label = ((row.get("state") or {}).get("label") or "").strip().lower()
+                    if label in _TERMINAL_IMPORT_LABELS:
+                        vid = (row.get("video") or {})
+                        return {"terminal": True, "success": label == "success",
+                                "label": label, "video_uuid": vid.get("uuid")}
+                    break
+        await asyncio.sleep(poll_interval)
+    return {"terminal": False, "success": False, "label": "timeout", "video_uuid": None}
+
+
+def _atomic_write_json(path: Path, data) -> None:
+    """Write JSON atomically: temp file in the SAME directory as the target,
+    then os.replace() — never through /tmp (CLAUDE.md)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + f".tmp{os.getpid()}")
+    tmp.write_text(json.dumps(data))
+    os.replace(tmp, path)
+
+
+def _save_playlist_jobs():
+    try:
+        _atomic_write_json(PLAYLIST_JOBS_FILE, list(_playlist_jobs.values()))
+    except Exception as e:
+        log.error(f"playlist jobs save failed: {e}")
+
+
+def _load_playlist_jobs():
+    if not PLAYLIST_JOBS_FILE.exists():
+        return
+    try:
+        for j in json.loads(PLAYLIST_JOBS_FILE.read_text()):
+            if j.get("status") in ("running", "queued"):
+                # Stale from a previous daemon run/crash. Items already
+                # marked "done" stay done (resume honors them via
+                # _carry_forward_done); the job itself is surfaced as
+                # interrupted rather than silently vanishing.
+                j["status"] = "error"
+                j["error"] = "interrupted (daemon restart)"
+            _playlist_jobs[j["id"]] = j
+    except Exception as e:
+        log.error(f"playlist jobs load failed: {e}")
+
+
+def _carry_forward_done(target_url: str, entries: List[dict]) -> List[dict]:
+    """Resume support: any entry already marked 'done' in a PREVIOUS job for
+    this exact playlist URL is carried forward as done — not re-submitted.
+    Matched by source_id, which stays stable even if a title changes."""
+    done_by_source: Dict[str, dict] = {}
+    for job in _playlist_jobs.values():
+        if job.get("target_url") != target_url:
+            continue
+        for it in job.get("items", []):
+            if it.get("status") == "done" and it.get("source_id"):
+                done_by_source[it["source_id"]] = it
+    items = []
+    for e in entries:
+        prior = done_by_source.get(e["source_id"])
+        if prior:
+            items.append({**e, "status": "done", "video_uuid": prior.get("video_uuid"),
+                          "import_id": prior.get("import_id"), "error": None})
+        else:
+            items.append({**e, "status": "pending", "video_uuid": None,
+                          "import_id": None, "error": None})
+    return items
+
+
+def _item_name(job: dict, item: dict) -> Optional[str]:
+    prefix = job.get("name_prefix")
+    return f"{prefix} — {item['title']}" if prefix else None
+
+
+def _ensure_playlist_worker():
+    """Lazily start the single global playlist worker. secubox-peertube runs
+    as its own standalone uvicorn process (own systemd unit + socket, not
+    aggregator-mounted), so @app.on_event("startup") does fire here — but
+    lazy-start is defensive, matches the pattern already used by
+    secubox-mediaflow's clone worker, and lets tests avoid a real
+    background task."""
+    global _playlist_worker_task, _playlist_queue
+    if _playlist_queue is None:
+        _playlist_queue = asyncio.Queue()
+    if not _playlist_jobs and PLAYLIST_JOBS_FILE.exists():
+        _load_playlist_jobs()
+    if _playlist_worker_task is None or _playlist_worker_task.done():
+        _playlist_worker_task = asyncio.create_task(_playlist_worker())
+
+
+async def _playlist_worker():
+    """Single global consumer: playlist JOBS are processed one at a time too
+    (not interleaved) — see the module docstring above for why."""
+    while True:
+        job_id = await _playlist_queue.get()
+        try:
+            await _process_playlist_job(job_id)
+        except Exception as e:
+            job = _playlist_jobs.get(job_id)
+            if job:
+                job["status"] = "error"
+                job["error"] = str(e)
+                _save_playlist_jobs()
+            log.error(f"playlist job {job_id} crashed: {e}")
+        finally:
+            _playlist_queue.task_done()
+
+
+async def _process_playlist_job(job_id: str):
+    """Sequentially submit + await each pending item. One item's failure is
+    recorded and the loop MOVES ON — it never aborts the rest of the
+    playlist. Cancellation is checked before each item so a cancel takes
+    effect promptly without needing to interrupt an item already submitted
+    to PeerTube (which has no reliable cancel-in-flight of its own)."""
+    job = _playlist_jobs.get(job_id)
+    if not job:
+        return
+    token = get_admin_token()
+    if not token:
+        job["status"] = "error"
+        job["error"] = "no admin credentials at /etc/secubox/secrets/peertube-admin"
+        _save_playlist_jobs()
+        return
+    if job.get("status") != "cancelling":
+        job["status"] = "running"
+    _save_playlist_jobs()
+    for idx, item in enumerate(job["items"]):
+        if job.get("status") == "cancelling":
+            break
+        if item.get("status") == "done":
+            continue
+        job["current_index"] = idx
+        item["status"] = "running"
+        _save_playlist_jobs()
+        sub = await _submit_import(item["url"], job.get("channel_id"),
+                                    job.get("privacy", 1), _item_name(job, item), token)
+        if not sub.get("success"):
+            item["status"] = "error"
+            item["error"] = sub.get("error", "import failed")
+            _save_playlist_jobs()
+            continue  # one failure never aborts the playlist
+        res = await _await_import_terminal(sub.get("import_id"), token)
+        if res.get("success"):
+            item["status"] = "done"
+            item["video_uuid"] = res.get("video_uuid")
+            item["import_id"] = sub.get("import_id")
+            item["error"] = None
+        else:
+            item["status"] = "error"
+            item["import_id"] = sub.get("import_id")
+            item["error"] = res.get("label", "failed")
+        _save_playlist_jobs()
+    job["current_index"] = -1
+    job["status"] = "cancelled" if job.get("status") == "cancelling" else "complete"
+    _save_playlist_jobs()
+
+
+def _playlist_job_summary(job: dict) -> dict:
+    items = job.get("items", [])
+    done = sum(1 for i in items if i["status"] == "done")
+    errors = sum(1 for i in items if i["status"] == "error")
+    cur = job.get("current_index", -1)
+    current_title = items[cur]["title"] if items and 0 <= cur < len(items) else None
+    return {"id": job["id"], "target_url": job.get("target_url"), "title": job.get("title"),
+            "status": job.get("status"), "total": len(items), "done": done, "errors": errors,
+            "current_title": current_title, "created_at": job.get("created_at"),
+            "error": job.get("error")}
+
+
+@router.post("/playlist/import")
+async def import_playlist(req: PlaylistImport, user=Depends(require_jwt)):
+    """Queue every video of a playlist URL for sequential native import.
+
+    A URL that doesn't even look playlist-shaped never spends a yt-dlp probe
+    (see _looks_like_playlist_url) — use /import for a single video instead."""
+    if not is_running():
+        return {"success": False, "error": "PeerTube not reachable"}
+    if not _looks_like_playlist_url(req.target_url):
+        return {"success": False, "is_playlist": False,
+                "error": "URL does not look like a playlist — use Import for a single video"}
+    token = get_admin_token()
+    if not token:
+        return {"success": False,
+                "error": "No admin credentials at /etc/secubox/secrets/peertube-admin"}
+    try:
+        meta = await _probe_playlist(req.target_url)
+    except RuntimeError as e:
+        return {"success": False, "error": str(e)}
+    if not _is_playlist_result(meta):
+        return {"success": False, "is_playlist": False,
+                "error": "not a playlist (single video) — use Import instead"}
+    entries = _playlist_entries(meta)
+    if not entries:
+        return {"success": False, "is_playlist": True,
+                "error": "playlist has no downloadable entries"}
+    channel_id = req.channel_id or default_channel_id(token)
+    if not channel_id:
+        return {"success": False, "error": "could not resolve a target channel"}
+    if not _playlist_jobs and PLAYLIST_JOBS_FILE.exists():
+        _load_playlist_jobs()
+    items = _carry_forward_done(req.target_url, entries)
+    job_id = secrets.token_hex(8)
+    job = {
+        "id": job_id, "target_url": req.target_url,
+        "title": (meta.get("title") or req.target_url).strip(),
+        "channel_id": channel_id, "privacy": req.privacy, "name_prefix": req.name_prefix,
+        "created_at": int(time.time()), "status": "queued", "current_index": -1,
+        "items": items, "error": None,
+    }
+    _playlist_jobs[job_id] = job
+    _save_playlist_jobs()
+    already_done = sum(1 for i in items if i["status"] == "done")
+    _ensure_playlist_worker()
+    await _playlist_queue.put(job_id)
+    log.info(f"Queued playlist import ({len(items)} videos, {already_done} already done) "
+             f"{req.target_url} by {user.get('sub', 'unknown')}")
+    return {"success": True, "job_id": job_id, "total": len(items),
+            "already_done": already_done, "title": job["title"]}
+
+
+@router.get("/playlist/jobs")
+async def playlist_jobs(user=Depends(require_jwt)):
+    if not _playlist_jobs and PLAYLIST_JOBS_FILE.exists():
+        _load_playlist_jobs()
+    jobs = sorted(_playlist_jobs.values(), key=lambda j: j.get("created_at", 0), reverse=True)
+    return {"jobs": [_playlist_job_summary(j) for j in jobs]}
+
+
+@router.get("/playlist/jobs/{job_id}")
+async def playlist_job_detail(job_id: str, user=Depends(require_jwt)):
+    job = _playlist_jobs.get(job_id)
+    if not job:
+        if PLAYLIST_JOBS_FILE.exists():
+            _load_playlist_jobs()
+        job = _playlist_jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "playlist job not found")
+    return job
+
+
+@router.post("/playlist/jobs/{job_id}/cancel")
+async def cancel_playlist_job(job_id: str, user=Depends(require_jwt)):
+    job = _playlist_jobs.get(job_id)
+    if not job:
+        return {"success": False, "error": "not found"}
+    if job.get("status") in ("complete", "cancelled", "error"):
+        return {"success": True, "message": "already finished"}
+    job["status"] = "cancelling"
+    _save_playlist_jobs()
+    log.info(f"Cancelling playlist job {job_id} by {user.get('sub', 'unknown')}")
+    return {"success": True}
 
 
 # Spool the dashboard (unprivileged secubox) writes; the root-run
