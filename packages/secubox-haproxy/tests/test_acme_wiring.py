@@ -71,3 +71,49 @@ def test_acme_port_is_configurable_with_a_default():
     src = _src()
     assert "acme_port" in src
     assert "acme_port=8880" in src.replace(" ", "")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# ssl_redirect (#988) — declare partout, lu nulle part jusqu'ici
+# ─────────────────────────────────────────────────────────────────────
+
+def test_generator_reads_ssl_redirect():
+    """`vhost add` ecrivait `ssl_redirect = true` dans chaque bloc et le
+    generateur ne l'a jamais lu : 18 vhosts le declaraient, zero redirection
+    etait produite. Un operateur relisant haproxy.toml croyait legitimement
+    que ses vhosts redirigeaient."""
+    src = _src()
+    assert "redirect scheme https code 301" in src, (
+        "le generateur doit emettre la redirection que ssl_redirect declare"
+    )
+    assert "grep -E '^ssl_redirect" in src, (
+        "ssl_redirect doit etre LU depuis la section du vhost, pas seulement ecrit"
+    )
+
+
+def test_ssl_redirect_never_captures_acme_challenges():
+    """L'exclusion la plus importante du fichier.
+
+    HAProxy evalue les regles `redirect` AVANT `use_backend`. Sans
+    `!is_acme_challenge`, la redirection prendrait le pas sur le routage ACME
+    emis en tete de frontend : les defis Let's Encrypt partiraient en HTTPS et
+    le renouvellement echouerait — la panne meme que #986 vient de reparer,
+    reintroduite par la porte d'a cote."""
+    src = _src()
+    line = [l for l in src.splitlines() if "redirect scheme https code 301" in l]
+    assert line, "regle de redirection absente"
+    for l in line:
+        assert "!is_acme_challenge" in l, (
+            "la redirection doit exclure les defis ACME : " + l.strip()
+        )
+
+
+def test_ssl_redirect_requires_ssl():
+    """Rediriger vers HTTPS un vhost sans certificat enverrait le visiteur sur
+    une page injoignable. La condition porte sur les deux drapeaux."""
+    src = _src()
+    i = src.index("redirect scheme https code 301")
+    window = src[max(0, i - 400):i]
+    assert '"$ssl_redirect" = "1"' in window and '"$ssl" = "1"' in window, (
+        "la redirection doit exiger ssl ET ssl_redirect"
+    )

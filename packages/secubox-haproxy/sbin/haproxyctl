@@ -694,6 +694,12 @@ EOF
             # `waf_bypass = true` AND a real `backend` (nginx_vhosts) in the vhost
             # block, so it is declarative and auditable — never a silent default.
             local waf_bypass=$(echo "$section" | grep -E '^waf_bypass\s*=' | grep -q 'true' && echo "1" || echo "0")
+            # #988 : ssl_redirect etait ecrit par `vhost add` dans chaque bloc et
+            # n'etait LU nulle part — 18 vhosts le declaraient, zero redirection
+            # etait produite. Un operateur relisant haproxy.toml croyait
+            # legitimement que ses vhosts redirigeaient.
+            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
+            local ssl_redirect=$(echo "$section" | grep -E '^ssl_redirect\s*=' | grep -q 'true' && echo "1" || echo "0")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
             if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
@@ -701,6 +707,18 @@ EOF
             # short-circuited &&-chain (e.g. a non-SSL vhost) aborts generation.
             if [ "$enabled" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
+                # Redirection vers HTTPS (#988), conditionnee a ssl = true : un
+                # vhost sans certificat renverrait vers une page injoignable.
+                #
+                # !is_acme_challenge n'est PAS optionnel. HAProxy evalue les
+                # regles `redirect` AVANT `use_backend` : sans cette exclusion,
+                # la redirection prendrait le pas sur le routage ACME emis en
+                # tete de frontend, les defis Let's Encrypt seraient renvoyes
+                # en HTTPS et le renouvellement echouerait — c'est-a-dire
+                # exactement la panne que #986 vient de reparer.
+                if [ "$ssl_redirect" = "1" ] && [ "$ssl" = "1" ]; then
+                    echo "    redirect scheme https code 301 if host_$name !is_acme_challenge"
+                fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
