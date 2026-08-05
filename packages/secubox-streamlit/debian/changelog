@@ -1,3 +1,15 @@
+secubox-streamlit (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * streamlit-app@.service: move StartLimitIntervalSec=0 from [Service] to
+    [Unit], where it belongs. Under [Service] systemd rejects the line
+    outright ("Unknown key 'StartLimitIntervalSec' in section [Service],
+    ignoring", logged at every instance start on the board) and the
+    start-rate guard silently did nothing since #963 — the unit read as
+    protected against an external `systemctl start` loop while nothing
+    enforced it. Restart=no was unaffected. (ref #982)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 09:45:00 +0200
+
 secubox-streamlit (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Ship the per-app LXC assets under /usr/lib/secubox/streamlit/lxc/:
