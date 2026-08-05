@@ -1,3 +1,27 @@
+secubox-jitsi (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refonte LXC-native. Jitsi tourne désormais dans un LXC Debian non
+    privilégié (prosody + jicofo + jitsi-videobridge2 + nginx interne), une
+    unité systemd par service, sur le modèle de secubox-jellyfin.
+  * L'API 1.0.0 générait un docker-compose.yml et pilotait docker/podman
+    depuis le chemin de requête : deux règles du projet enfreintes (modules
+    natifs dans leur LXC ; le webui ne fait jamais le travail privilégié
+    lui-même). Remplacée par une API déléguante + `jitsictl`, seule surface
+    root, auditée et validant ses propres entrées.
+  * jitsictl : status (les 4 services rapportés séparément), stats (compteurs
+    colibri), start/stop/restart, service-restart (un service sans cycler le
+    conteneur), set-public-ip (harvester NAT du videobridge), logs, install.
+  * Retiré délibérément : /rooms et /room/* (Jitsi n'expose pas les noms de
+    salons ; ces handlers répondaient « not available via API »), /recordings
+    et /jibri/* (jibri non déployé), POST /config et /auth (le domaine est
+    gravé dans quatre services au provisionnement — le changer par une requête
+    laisserait les quatre en désaccord).
+  * Le drop-in nftables ouvrant UDP/10000 est livré en exemple, jamais appliqué
+    par le postinst : une exposition entrante est une décision, pas un effet de
+    bord d'installation. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 11:30:00 +0200
+
 secubox-jitsi (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

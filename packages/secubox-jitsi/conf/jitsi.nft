@@ -1,0 +1,28 @@
+# SecuBox Jitsi — drop-in nftables.
+#
+# Deux règles, deux rôles distincts :
+#
+#   1. ACCEPT en entrée sur UDP/10000 — sans quoi la politique DROP par défaut
+#      de la board jette le média avant qu'il n'atteigne le DNAT.
+#   2. DNAT vers le conteneur — le videobridge écoute dans le LXC, pas sur
+#      l'hôte.
+#
+# Le préfixe `zz-` du nom de fichier est délibéré : le drop-in doit être trié
+# APRÈS le fichier qui crée la table, sinon la règle est chargée dans le vide
+# (leçon déjà payée sur les drop-ins nft en couches).
+#
+# ATTENTION — ceci ouvre un port UDP depuis l'extérieur vers un service de
+# média. À appliquer sciemment, après avoir vérifié que la redirection du
+# routeur FAI pointe bien ici.
+
+table inet filter {
+    chain input {
+        udp dport 10000 counter accept comment "secubox-jitsi: videobridge media"
+    }
+}
+
+table ip nat {
+    chain prerouting {
+        udp dport 10000 counter dnat to 10.100.0.190:10000 comment "secubox-jitsi: media to LXC"
+    }
+}
