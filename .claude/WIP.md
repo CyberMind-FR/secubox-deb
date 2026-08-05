@@ -1,5 +1,67 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-31*
+*Mis à jour : 2026-08-05*
+
+---
+
+## 2026-08-03 → 08-05 — Marathon perf & fiabilité : mur mosaïque, certificats, châssis, playlists
+
+Session très dense. Plusieurs défauts de fond trouvés sous des symptômes anodins, chacun masquant le suivant.
+
+### ✅ Fait — fusionné et déployé
+
+- **Mur mosaïque Streamlit** (PR #963, issue #958 close) — quatre défauts enchaînés :
+  détection unifiée (3 applis vues sur 15 → **23 avec leur vrai port**) ; attente du rendu
+  réel (les captures photographiaient le **squelette de chargement**, sélecteurs vérifiés
+  dans les bundles Streamlit 1.50-1.55) ; budget de réveil configurable (30 s en dur alors
+  que les réveils prennent **26 à 78 s**) ; `idle-check` qui rapportait `active=0` avec
+  24 applis en cours → `active=17 would-stop=6`. **18 vignettes servies**, 0 auparavant.
+- **Châssis partagé** (PR #972) — la barre globale recouvrait le contenu, et `sidebar.js`
+  **supprimait** (`display:none`) les en-têtes de page : les boutons d'action de ~112 modules
+  sur 143 disparaissaient. Mesuré : waf 13→18, crowdsec 10→12, wireguard 10→11.
+  Corrigé par `--gmb-h` unique. **Était déployé à la main depuis la veille sans être fusionné** —
+  un rebuild aurait tout régressé.
+- **Certificats Let's Encrypt** — `sliders.maegia.tv` à **4 jours** de l'expiration, renouvellement
+  automatique cassé depuis toujours : nginx servait `/usr/share/secubox/www`, certbot écrivait
+  dans `/var/www/html`. Chaque challenge tombait en 404. Corrigé, `sliders` valide au 2 novembre,
+  `money.maegia.tv` émis, 4 `webroot_path` alignés, **essai à blanc vert sur 5/5**.
+- **Metablogizer** (PR #976 puis #978) — `GET /sites` forkait **2 `git` + 1 `du` par site**,
+  soit +500 processus pour 172 sites : **502 après 43 s → 28 ms**. Puis les vignettes servies
+  directement par nginx : **36,7 s → 0,2 s** pour le mur complet.
+- **Torrent** (PR #966) — téléchargement ZIP en flux (jamais de fichier temporaire, l'eMMC pleine
+  met la board en 502) ; vrai vecteur de traversée trouvé dans `file.path` **venant d'un pair
+  distant**, pas dans l'URL. Noms de fichiers réels : `stream.js` ne posait aucun
+  `Content-Disposition`, le navigateur nommait les fichiers d'après l'index numérique.
+- **Jellyfin** (PR #965) — transcodage désactivé, remuxage conservé. Pas de `/dev/dri`, encodage
+  logiciel sur 4 cœurs ARM en concurrence avec les `ffmpeg` de PeerTube : un film ne se lisait
+  que par intermittence. Durable via `jellyfinctl playback`, TOML et minuterie.
+- **Navbar torrent + ytsas** (PR #973) — pages sans châssis, culs-de-sac sans retour.
+  torrent 4→16 éléments interactifs, ytsas 5→17. Catégorie `media` invalide corrigée.
+- **Routes nginx d'administration** (PR #980) — ytsas et torrent sont LXC-natifs, aucune app
+  côté hôte : leurs webui appelaient dans le vide. Routes empaquetées.
+- **PeerTube playlists** (PR #983) — l'import traitait une playlist comme une vidéo unique.
+  Worker unique, une vidéo à la fois, plafond 30 min/élément.
+
+### ⬜ Next Up
+
+- **Migration unités Streamlit par appli** — code fusionné, **non appliqué au conteneur**.
+  `streamlit-all.service` (`Type=forking`, `MainPID=0`, `NRestarts=3`) relance le parc entier
+  dès qu'une appli meurt : rien n'est endormissable, cause de fond de #946.
+  ⚠️ **Ne JAMAIS `systemctl stop streamlit-all`** — son `ExecStop=pkill -f streamlit` tue tout
+  le parc. Neutraliser par drop-in vidant `ExecStop`. Séquence en 6 étapes dans le rapport de #958.
+  ⚠️ `secubox-streamlit-idle.timer` est **arrêtée à la main** — ne survivrait pas à un reboot.
+- **Route metablogizer orphelines** — `nginx/metablogizer.conf` n'est pas installé par son
+  `debian/rules` (constat de #980). Ne survit pas à une réinstallation.
+- **`metrics` brûle 15 % de CPU en continu** — 1 thread, 8 h cumulées, 244 Mo, sans enfant ni
+  connexion visible. Cause non établie. Préalable à la hiérarchie de priorités CPU.
+- **Hiérarchie CPU déclarative** — flux > admin > observation, via `Nice=`/`CPUWeight=`.
+  L'agrégateur doit rester réactif mais céder (directive user).
+- **401 sur `/profiles/` et `/toolbox/`** — attend l'inspection réseau du navigateur :
+  la requête porte-t-elle un `Authorization` divergeant du cookie ?
+- **Branches prêtes non fusionnées** : Lyrion audio (#967), webllm (#969/#970).
+- **13 applis Streamlit sans port**, 5 partageaient le 8501 (désormais refusé explicitement).
+- **Page 502 soignée** (module endormi / réveil / socket absent) — #979 en attente.
+- **Sessions : liste blanche + approbation à distance** (#975) — conception posée.
+- **SOGo** en alternative à Horde, arrêté (#968) ; Zimbra écarté (pas d'ARM64, 8 Go RAM).
 
 ---
 

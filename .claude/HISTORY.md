@@ -3,6 +3,45 @@
 
 ---
 
+## 2026-08-03 → 08-05 — Perf & fiabilité : mosaïques, certificats, châssis, playlists
+
+Session dense. La plupart des gains viennent de **causes racines trouvées sous des symptômes
+anodins** — chaque défaut en masquait un autre.
+
+**Chiffres marquants**
+
+| Sujet | Avant | Après |
+|---|---|---|
+| Metablogizer `GET /sites` | 502 après 43 s | 28 ms |
+| Mur metablogizer complet | 36,7 s | 0,2 s |
+| Détection applis Streamlit | 3 vues sur 15 | 23 avec leur port |
+| Vignettes Streamlit servies | 0 | 18 |
+| `idle-check` | `active=0` (24 en cours) | `active=17 would-stop=6` |
+| Boutons module (waf) | 13 | 18 |
+| `sliders.maegia.tv` | expirait dans 4 j | valide au 2 novembre |
+
+**Causes racines établies**
+
+- Le renouvellement des certificats échouait **depuis toujours** : nginx servait les challenges
+  ACME depuis `/usr/share/secubox/www`, certbot les écrivait dans `/var/www/html`. 404 systématique.
+- `GET /sites` de metablogizer forkait **2 `git` + 1 `du` par site** — plus de 500 processus
+  par affichage sur 172 sites, en synchrone dans le gestionnaire.
+- `sidebar.js` **supprimait** les en-têtes de page, faisant disparaître les boutons d'action
+  de ~112 modules sur 143. Ce n'était pas un recouvrement CSS mais un `display:none`.
+- Les captures Streamlit photographiaient le **squelette de chargement** : la condition d'attente
+  relâchait sur le conteneur de l'appli, qui apparaît avant que le contenu ne peigne.
+- `streamlit-all.service`, avec `MainPID=0` et `Restart=on-failure`, **relance le parc entier**
+  dès qu'une appli meurt — d'où l'impossibilité d'endormir quoi que ce soit (cause de fond de #946).
+- Le vrai vecteur de traversée de chemin du ZIP torrent était `file.path` **issu d'un pair distant**,
+  pas l'infohash de l'URL.
+- ytsas et torrent sont **LXC-natifs** : sans app côté hôte, leurs webui appelaient dans le vide
+  depuis le vhost d'administration.
+
+**PR fusionnées** : #963, #965, #966, #972, #973, #976, #978, #980, #983.
+**Issues ouvertes** : #967, #968, #969, #970, #971, #974, #975, #977, #979, #981.
+
+---
+
 ## 2026-07-30 → 07-31 — Marathon : Jellyfin LXC-native + torrent réparé + mitm nettoyé + concentrateur agrégateur + YouTube SAS  (release v2.16.0)
 
 Session monumentale. Board **load 97 → ~20**, RAM libre **88 Mo → 1,6 Go**, deux root-causes CPU éliminées, un nouveau module média, une refonte, et une nouvelle brique d'architecture.
