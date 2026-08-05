@@ -1,3 +1,22 @@
+secubox-haproxy (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * generate: LIRE ssl_redirect et emettre la redirection correspondante.
+    `vhost add` l'ecrivait dans chaque bloc depuis toujours et le generateur
+    ne l'a jamais lu : 18 vhosts la declaraient, zero redirection etait
+    produite. Un operateur relisant haproxy.toml croyait legitimement que ses
+    vhosts redirigeaient.
+  * La regle porte `!is_acme_challenge`, et ce n'est pas optionnel : HAProxy
+    evalue les regles `redirect` AVANT `use_backend`. Sans cette exclusion, la
+    redirection prendrait le pas sur le routage ACME emis en tete de frontend,
+    les defis partiraient en HTTPS et le renouvellement des certificats
+    echouerait — exactement la panne que 1.5.0 vient de reparer.
+  * Conditionnee a `ssl = true` : rediriger un vhost sans certificat enverrait
+    le visiteur sur une page injoignable.
+  * Verifie avant deploiement qu'un client APT suit la redirection : le
+    transport HTTPS de apt.secubox.in fonctionne. (ref #988)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 17:00:00 +0200
+
 secubox-haproxy (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * generate: émettre le routage ACME HTTP-01 (ACL + use_backend dans
