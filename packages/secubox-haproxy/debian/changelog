@@ -1,3 +1,22 @@
+secubox-haproxy (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * generate: émettre le routage ACME HTTP-01 (ACL + use_backend dans
+    frontend http-in, backend acme_challenge). Ce câblage n'existait QUE dans
+    le haproxy.cfg vivant de la board, ajouté à la main : une régénération
+    réussie l'aurait supprimé en silence, et le défaut ne serait apparu qu'au
+    renouvellement suivant des certificats, sous forme d'expiration.
+  * C'est aussi l'une des deux entrées qui faisaient refuser la garde
+    anti-dérive (#626), avec pour effet de bord que TOUTE modification
+    déclarative de haproxy.toml restait inerte — sans que rien n'échoue
+    bruyamment.
+  * L'ACL est émise AVANT la boucle des vhosts : un défi arrive sur le domaine
+    du certificat demandé, et une règle de vhost évaluée d'abord le capterait
+    pour l'envoyer au service applicatif, qui répondrait 404.
+  * Port du serveur de défis configurable (`acme_port` dans haproxy.toml),
+    défaut 8880 — la valeur câblée à la main jusqu'ici. (ref #986)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 15:10:00 +0200
+
 secubox-haproxy (1.4.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

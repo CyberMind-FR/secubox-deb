@@ -595,6 +595,11 @@ cmd_generate() {
     local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "1" || echo "0")
     local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
     local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
+    # Port du serveur nginx dédié aux défis ACME HTTP-01 (#986). Surchargeable
+    # par `acme_port` dans haproxy.toml ; 8880 est la valeur qui était câblée à
+    # la main sur la board avant que ce routage ne soit généré.
+    local acme_port=$(grep -E '^acme_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    [ -n "$acme_port" ] || acme_port=8880
 
     mkdir -p "$CONFIG_DIR" /run/haproxy "$EXTRA_CFG_DIR"
 
@@ -643,6 +648,19 @@ frontend stats
 frontend http-in
     bind *:${http_port}
     mode http
+    # ACME HTTP-01 (#986) — les défis vont au serveur nginx dédié (:${acme_port}).
+    #
+    # ÉMIS EN PREMIER, avant toute règle de vhost : un défi arrive sur le
+    # domaine du certificat demandé, donc une règle de vhost placée avant
+    # l'attraperait et l'enverrait au service applicatif, qui répondrait 404.
+    # Le renouvellement échouerait alors sans bruit jusqu'à expiration.
+    #
+    # Émis par le générateur depuis #986. Auparavant ce câblage n'existait
+    # QUE dans le haproxy.cfg vivant, ajouté à la main : toute régénération
+    # réussie l'aurait supprimé en silence. C'est la raison pour laquelle la
+    # garde anti-dérive refusait de régénérer — elle protégeait exactement ça.
+    acl is_acme_challenge path_beg /.well-known/acme-challenge/
+    use_backend acme_challenge if is_acme_challenge
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
@@ -812,6 +830,16 @@ EOF
     # waf_enabled gate or user TOML — #286: vhosts can reference these even
     # when waf_enabled=0 (e.g. nginx_vhosts for non-WAF passthrough,
     # webui_direct for the SECUBOX_HOSTNAME obfuscation regex).
+    # Cible du routage ACME émis dans frontend http-in (#986). Émis ici, avec
+    # les autres backends canoniques, pour la même raison qu'eux : une règle
+    # `use_backend` sans backend correspondant rend la configuration invalide
+    # et `haproxy -c` la rejette — la génération échouerait entièrement.
+    grep -q '^backend acme_challenge$' "$out" || cat >> "$out" << EOF
+
+backend acme_challenge
+    mode http
+    server acme1 127.0.0.1:${acme_port}
+EOF
     grep -q '^backend nginx_vhosts$' "$out" || cat >> "$out" << EOF
 
 backend nginx_vhosts
