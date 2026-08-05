@@ -250,6 +250,51 @@ def test_shipped_unit_never_restarts_itself():
         assert bad not in text
 
 
+def _unit_sections(text):
+    """Split an INI-style unit file into {section: [directive lines]}.
+    Comment lines are dropped: a directive quoted inside a comment must
+    never count as being declared in that section."""
+    sections, current = {}, None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1]
+            sections.setdefault(current, [])
+        elif current is not None:
+            sections[current].append(line)
+    return sections
+
+
+def test_start_limit_directives_live_in_the_unit_section():
+    """StartLimitIntervalSec is a [Unit] key. Declared under [Service],
+    systemd does not merely tolerate it — it rejects the line outright
+    ("Unknown key 'StartLimitIntervalSec' in section [Service],
+    ignoring", observed on the board's container at every instance
+    start) and the rate-limit guard silently does nothing.
+
+    That guard is the belt-and-suspenders half of the restart policy:
+    Restart=no already keeps systemd from retrying on its own, but only
+    the start-limit makes an EXTERNAL `systemctl start` loop (an
+    operator, a script, a wake path retrying) unable to become a hot
+    retry storm on a board that is already CPU-constrained. A directive
+    that is parsed away is worse than an absent one: the unit reads as
+    protected while nothing enforces it."""
+    assert UNIT_FILE.exists(), "lxc/streamlit-app@.service must exist"
+    sections = _unit_sections(UNIT_FILE.read_text())
+    service = " ".join(sections.get("Service", []))
+    unit = " ".join(sections.get("Unit", []))
+    assert "StartLimitIntervalSec" not in service, (
+        "StartLimitIntervalSec under [Service] is rejected by systemd and "
+        "the guard never applies"
+    )
+    assert "StartLimitBurst" not in service, (
+        "StartLimitBurst is a [Unit] key too — same rejection"
+    )
+    assert "StartLimitIntervalSec=0" in unit
+
+
 def test_shipped_unit_is_not_wanted_by_default_for_every_instance():
     """WantedBy exists (so an operator CAN `systemctl enable` a specific
     instance for boot persistence) but nothing in the unit itself, nor in
