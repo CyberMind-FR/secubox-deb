@@ -1,5 +1,21 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-07-31*
+*Mis à jour : 2026-08-05*
+
+---
+
+## 2026-08-05 — Streamlit : bascule vers les unités par appli (#982)
+
+### ✅ Fait
+- **Parc vidangé : 23 processus résidents → 0, charge 31.7 → 15.9.** Séquence en 6 étapes, chacune vérifiée avant la suivante — rapport `docs/superpowers/runs/2026-08-05-streamlit-bascule-unites-par-appli.md`.
+- **`app repair --apply` 28/28** — 15 applis en cours n'avaient aucun `.streamlit.toml`, 8 portaient `port = 8501` sans `entrypoint` : les 23 étaient irréveillables. Capture de la vérité vivante avant toute extinction. 23/23 concordantes après coup.
+- **`secubox-streamlit 1.4.0-1~bookworm1`** — les assets LXC de #963 n'avaient jamais été empaquetés (board en 1.2.4 + `streamlitctl` copié à la main). apt-synced.
+- **`streamlit-all.service` neutralisé** (drop-in `ExecStop=` vidé + `Restart=no`) puis désactivé ; vidange par `systemctl stop`, portée au cgroup — le témoin déjà adopté est resté en HTTP 200 pendant la chute des 22 autres.
+- **Réveil à la demande vérifié** : `prompt_forge` 6 s, `cc_osint` 4 s, HTTP 200 — les deux formes de point d'entrée. **`secubox-streamlit-idle.timer` active + enabled** (fin de l'arrêt manuel non persistant). 18 vignettes conservées.
+
+### ⬜ Next Up
+- **`autostart = true` désaccordé du réel** — `diapvid`, `files_51`, `enhance_app` le déclarent, **aucune ne tournait avant la bascule**. Rien démarré de ce chef. `streamlitctl autostart` les démarrerait + `enable`rait : décision à prendre, pas à supposer.
+- **#746 — réveil à l'accès URL** : toujours ouverte. Une appli endormie sollicitée par son vhost public répond en erreur ; seul le lien du mur réveille.
+- **Route nginx metablogizer orpheline** — `nginx/metablogizer.conf` jamais installé par son `debian/rules`, ne survit qu'à la main (noté dans #980).
 
 ---
 
