@@ -1,3 +1,22 @@
+secubox-jitsi (2.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * nft: le drop-in ne porte plus qu'UNE règle, la DNAT. L'ACCEPT en input
+    qu'il contenait était inutile et trompeur : après DNAT en prerouting la
+    destination n'est plus locale, le paquet emprunte FORWARD (policy accept)
+    et ne traverse jamais INPUT. Un lecteur cherchant ce qui est réellement
+    exposé y voyait une ouverture qui n'en était pas une.
+  * nft: interface non épinglée sauf exclusion de br-lxc, au motif de
+    secubox-lyrion-dnat — coder une interface en dur fait échouer la
+    redirection silencieusement (le LAN de gk2 arrive sur eth2, pas lan0).
+    Table dédiée `inet secubox-jitsi` plutôt qu'une règle greffée sur
+    `inet nat`, pour pouvoir la recharger sans toucher aux autres modules.
+  * nft: `counter` sur la règle — sans lui, « la redirection ne mord pas » et
+    « elle mord mais ne traduit pas » sont indiscernables, alors que le
+    symptôme utilisateur des deux est le même : la conférence se forme et
+    reste muette. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 13:15:00 +0200
+
 secubox-jitsi (2.0.4-1~bookworm1) bookworm; urgency=medium
 
   * postinst: retirer le jeton de substitution debhelper écrit en toutes
