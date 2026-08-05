@@ -353,18 +353,22 @@
         <!-- Import URL Tab (yt-dlp via PeerTube native HTTP import) -->
         <div id="tab-import" class="tab-content">
             <div class="card">
-                <h3>Import a video from a URL</h3>
+                <h3>Import a video — or a playlist — from a URL</h3>
                 <p style="color: var(--text-dim); margin-bottom: 1rem;">
                     Downloads a video from YouTube, Vimeo, a direct file link, etc.
                     straight into this PeerTube instance (yt-dlp under the hood).
+                    A playlist URL (list=, /playlist, /sets/…) is expanded and
+                    imported video-by-video — see the Playlists panel below for
+                    progress; one item failing never stops the rest, and
+                    relaunching the same playlist URL skips what's already done.
                 </p>
                 <form id="importForm" onsubmit="importVideo(event)">
                     <div class="form-group">
-                        <label>Video URL</label>
-                        <input type="url" id="importUrl" placeholder="https://www.youtube.com/watch?v=..." required>
+                        <label>Video or playlist URL</label>
+                        <input type="url" id="importUrl" placeholder="https://www.youtube.com/watch?v=... or .../playlist?list=..." required>
                     </div>
                     <div class="form-group">
-                        <label>Title (optional — PeerTube derives one if empty)</label>
+                        <label>Title (optional — PeerTube derives one if empty; used as a prefix for each video of a playlist)</label>
                         <input type="text" id="importName" placeholder="My imported video">
                     </div>
                     <div class="form-group">
@@ -388,6 +392,18 @@
                 <table>
                     <thead><tr><th>Target URL</th><th>Video</th><th>State</th><th>Created</th></tr></thead>
                     <tbody id="importsTable"><tr><td colspan="4" style="color: var(--text-dim);">Loading...</td></tr></tbody>
+                </table>
+            </div>
+            <div class="card">
+                <h3>Playlists</h3>
+                <p style="color: var(--text-dim); margin-bottom: 1rem;">
+                    Playlist imports run one video at a time (never in parallel) so
+                    a large playlist can't overload the board. Progress refreshes
+                    automatically while this tab is open.
+                </p>
+                <table>
+                    <thead><tr><th>Playlist</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="playlistJobsTable"><tr><td colspan="4" style="color: var(--text-dim);">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -672,7 +688,7 @@
 
             // Load tab-specific data
             if (name === 'videos') loadVideos();
-            else if (name === 'import') { loadImportChannels(); loadImports(); }
+            else if (name === 'import') { loadImportChannels(); loadImports(); loadPlaylistJobs(); }
             else if (name === 'channels') loadChannels();
             else if (name === 'users') loadUsers();
             else if (name === 'federation') { loadFollowing(); loadFollowers(); }
@@ -907,6 +923,11 @@
             }
         }
 
+        // Mirrors the server-side heuristic (api/main.py::_looks_like_playlist_url)
+        // — a cheap client-side hint only; the backend's yt-dlp probe is the
+        // real authority and falls back to a plain "not a playlist" answer.
+        const PLAYLIST_URL_RE = /[?&]list=|\/playlist(?:[/?]|$)|\/sets\/|\/album\/|\/playlists(?:[/?]|$)/i;
+
         async function importVideo(event) {
             event.preventDefault();
             const target_url = document.getElementById('importUrl').value.trim();
@@ -914,6 +935,34 @@
             const channel_id = parseInt(document.getElementById('importChannel').value, 10);
             const privacy = parseInt(document.getElementById('importPrivacy').value, 10);
             if (!target_url) { toast('URL required', 'error'); return; }
+
+            if (PLAYLIST_URL_RE.test(target_url)) {
+                const body = { target_url, privacy };
+                if (name) body.name_prefix = name;
+                if (!isNaN(channel_id)) body.channel_id = channel_id;
+                try {
+                    const res = await api('/playlist/import', { method: 'POST', body: JSON.stringify(body) });
+                    if (res.success) {
+                        const skipped = res.already_done ? ` (${res.already_done} already done, skipped)` : '';
+                        toast(`Playlist queued — ${res.total} video(s)${skipped}. See the Playlists panel below.`);
+                        document.getElementById('importForm').reset();
+                        loadPlaylistJobs();
+                        return;
+                    }
+                    if (res.is_playlist === false) {
+                        // Looked playlist-shaped but yt-dlp says it's really a
+                        // single video (e.g. watch?v=...&list=RD... radio mix)
+                        // — fall through to the normal single-video import.
+                    } else {
+                        toast(res.error || 'Playlist import failed', 'error');
+                        return;
+                    }
+                } catch (e) {
+                    toast('Playlist import failed: ' + e.message, 'error');
+                    return;
+                }
+            }
+
             const body = { target_url, privacy };
             if (name) body.name = name;
             if (!isNaN(channel_id)) body.channel_id = channel_id;
@@ -928,6 +977,50 @@
                 }
             } catch (e) {
                 toast('Import failed: ' + e.message, 'error');
+            }
+        }
+
+        async function loadPlaylistJobs() {
+            const tbody = document.getElementById('playlistJobsTable');
+            try {
+                const data = await api('/playlist/jobs');
+                const jobs = data.jobs || [];
+                if (jobs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-dim);">No playlist imports yet</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = jobs.map(j => {
+                    const pct = j.total ? Math.round(100 * j.done / j.total) : 0;
+                    const progress = `${j.done}/${j.total}${j.errors ? ` (${j.errors} failed)` : ''}`
+                        + (j.status === 'running' && j.current_title ? ` — ${j.current_title}` : '');
+                    const cancellable = ['queued', 'running'].includes(j.status);
+                    const actions = cancellable
+                        ? `<button class="btn btn-sm btn-danger" onclick="cancelPlaylistJob('${j.id}')">Stop</button>`
+                        : '-';
+                    return `<tr>
+                        <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;" title="${j.target_url || ''}">${j.title || j.target_url || '-'}</td>
+                        <td>${progress} (${pct}%)</td>
+                        <td>${j.status}${j.error ? `: ${j.error}` : ''}</td>
+                        <td>${actions}</td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="color: var(--error);">Error loading playlists</td></tr>';
+            }
+        }
+
+        async function cancelPlaylistJob(id) {
+            if (!confirm('Stop this playlist import? Videos already imported are kept; the rest is skipped.')) return;
+            try {
+                const res = await api('/playlist/jobs/' + id + '/cancel', { method: 'POST' });
+                if (res.success) {
+                    toast('Playlist import stopping…');
+                    loadPlaylistJobs();
+                } else {
+                    toast(res.error || 'Could not stop playlist import', 'error');
+                }
+            } catch (e) {
+                toast('Failed: ' + e.message, 'error');
             }
         }
 
