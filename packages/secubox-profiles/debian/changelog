@@ -1,3 +1,23 @@
+secubox-profiles (0.11.2-1~bookworm1) bookworm; urgency=medium
+
+  * nginx-sync declare aussi la regle 5xx DANS les blocs qui la surchargent.
+    Un error_page declare dans un bloc REMPLACE ceux herites du serveur, il ne
+    s'y ajoute pas : tout vhost protege par auth_request declare
+    `error_page 401 = @sbx_auth_login;` dans son `location /` et annulait donc
+    silencieusement la regle posee par l'include. Le fragment ne pouvait pas
+    fonctionner sur ces vhosts — c'est-a-dire la majorite d'entre eux :
+    l'include etait bien present, la page d'attente n'apparaissait jamais, et
+    rien ne le signalait.
+  * La regle de bloc est BORNEE au server{} qui porte l'include. @sbx_wake
+    n'y est defini que la : l'ajouter dans un autre bloc produit une reference
+    a une location inexistante, `nginx -t` echoue, et nginx-sync annule tout.
+    Constate sur la board (7 cables puis ROLLBACK).
+  * unwire retire les DEUX marqueurs : retirer l'include seul laisserait des
+    regles pointant vers un @sbx_wake disparu, et nginx refuserait de
+    recharger.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 21:10:00 +0200
+
 secubox-profiles (0.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Un 5xx DECLENCHE le reveil au lieu de seulement l'annoncer (#999).

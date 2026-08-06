@@ -32,6 +32,24 @@ from .wafsync import ondemand_vhosts
 MARKER = "secubox-waking.conf"
 _INCLUDE = "    include snippets/secubox-waking.conf;  # secubox phase-2 wake splash (nginx-sync)"
 
+# PIEGE NGINX : un `error_page` declare dans un bloc REMPLACE ceux herites du
+# serveur, il ne s'y ajoute pas. Or tout vhost protege par `auth_request`
+# declare `error_page 401 = @sbx_auth_login;` dans son `location /` — et
+# annulait donc silencieusement le `error_page 502 503 504` pose au niveau
+# serveur par l'include. Le fragment ne pouvait pas fonctionner sur ces
+# vhosts, c'est-a-dire la majorite d'entre eux : l'include etait present, la
+# page d'attente n'apparaissait jamais, et rien ne le signalait.
+#
+# On redeclare donc la regle 5xx la ou le 401 est declare.
+_LOC_MARKER = "secubox phase-2 wake (location)"
+_LOC_LINE = ("        error_page 502 503 504 = @sbx_wake;"
+             "  # " + _LOC_MARKER)
+
+
+def _declares_401(line: str) -> bool:
+    s = line.split("#", 1)[0].strip()
+    return s.startswith("error_page") and "401" in s.split("=")[0]
+
 
 def _is_server_name_line(line: str, domain: str) -> bool:
     s = line.split("#", 1)[0].strip()
@@ -79,18 +97,50 @@ def wire(path: Path, domain: str) -> bool:
             done = True
     if not done:
         return False
-    _write_atomic(path, "\n".join(out) + "\n")
+
+    # Deuxieme passe : redeclarer la regle 5xx dans les blocs qui declarent un
+    # error_page 401 (cf. _LOC_MARKER). Sans elle, l'include ci-dessus est
+    # inerte sur tout vhost protege par auth_request.
+    #
+    # BORNEE AU BLOC `server` QUI VIENT D'ETRE CABLE. Un fichier peut contenir
+    # plusieurs blocs server, et `@sbx_wake` n'est defini que dans celui qui
+    # porte l'include : ajouter la regle ailleurs produit une reference a une
+    # location inexistante, et `nginx -t` echoue. Constate sur la board — la
+    # synchronisation a du tout annuler.
+    final: list[str] = []
+    depth = 0
+    inside = False
+    for idx, line in enumerate(out):
+        final.append(line)
+        if line is _INCLUDE or (not inside and _INCLUDE in line):
+            inside, depth = True, 1   # on entre dans le bloc cable
+            continue
+        if inside:
+            depth += line.count("{") - line.count("}")
+            if depth <= 0:
+                inside = False
+                continue
+            if _declares_401(line):
+                nxt = out[idx + 1] if idx + 1 < len(out) else ""
+                if _LOC_MARKER not in nxt:
+                    final.append(_LOC_LINE)
+
+    _write_atomic(path, "\n".join(final) + "\n")
     return True
 
 
-def unwire(path: Path) -> bool:
+def unwire(path: Path) -> bool:  # noqa: D401 — retire include ET regles de bloc
     """Retire la/les ligne(s) d'include phase-2 (marqueur). Réversibilité sans
     `.bak`. Retourne True si le fichier a changé."""
     path = Path(path)
     text = path.read_text(encoding="utf-8")
-    if MARKER not in text:
+    if MARKER not in text and _LOC_MARKER not in text:
         return False
-    kept = [ln for ln in text.splitlines() if MARKER not in ln]
+    # Les DEUX marqueurs : retirer seulement l'include laisserait derriere lui
+    # des regles de bloc pointant vers un @sbx_wake qui n'existe plus — nginx
+    # refuserait alors de recharger.
+    kept = [ln for ln in text.splitlines()
+            if MARKER not in ln and _LOC_MARKER not in ln]
     _write_atomic(path, "\n".join(kept) + "\n")
     return True
 
