@@ -362,9 +362,14 @@ _medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET";
 _json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
 
 # Count audio files under a path (bounded so `detect` stays responsive).
+# Le balayage est BORNE DANS LE TEMPS. Sur un disque USB de 931 Go (HFS+), il
+# prend des minutes : `head -n 5000` limite le nombre de resultats, pas la
+# duree de la marche. Sans borne, un support volumineux immobilise un scan
+# pendant tout le temps qu'il faut.
 _medialib_audio_count() {
     local path="$1" n=0
-    n=$(find "$path" -maxdepth 6 -type f \( \
+    n=$(timeout "${MEDIALIB_SCAN_TIMEOUT:-20}" \
+        find "$path" -maxdepth 6 -type f \( \
             -iname '*.mp3' -o -iname '*.flac' -o -iname '*.m4a' \
             -o -iname '*.ogg' -o -iname '*.wav' -o -iname '*.aac' \
         \) 2>/dev/null | head -n 5000 | wc -l | tr -d ' ')
@@ -453,7 +458,73 @@ _medialib_trigger_scan() {
     return 0
 }
 
+# detect — CACHE ET VERROU (#993).
+#
+# Ce que la premiere version coutait : chaque appel relançait un `find` sur
+# tous les supports. Le panneau interrogeant l'endpoint en boucle, les scans
+# s'EMPILAIENT — 7 `find` concurrents sur un disque USB de 931 Go ont ete
+# observes sur la board, sur 4 coeurs deja charges. Tant que la fonctionnalite
+# etait cassee (elle l'etait, cf. #993), le defaut restait invisible.
+#
+# Deux gardes, dans cet ordre :
+#
+#   1. Un VERROU exclusif : deux appels simultanes ne lancent jamais deux
+#      balayages. Le second attend et resservira le cache.
+#   2. Un CACHE horodate : la composition d'un support ne change pas d'une
+#      seconde a l'autre, et le pattern du projet l'impose pour tout endpoint
+#      qui agrege (cf. CLAUDE.md, « Performance Patterns »).
 medialib_detect() {
+    local cache="${MEDIALIB_CACHE:-/var/cache/secubox/lyrion/medialib-detect.json}"
+    local ttl="${MEDIALIB_CACHE_TTL:-300}"
+    local lock="${cache}.lock"
+    mkdir -p "$(dirname "$cache")" 2>/dev/null || true
+
+    _cache_fresh() {
+        [ -s "$cache" ] || return 1
+        local age; age=$(( $(date +%s) - $(stat -c %Y "$cache" 2>/dev/null || echo 0) ))
+        [ "$age" -lt "$ttl" ]
+    }
+
+    if [ "${MEDIALIB_FORCE:-0}" != "1" ] && _cache_fresh; then
+        cat "$cache"; return 0
+    fi
+
+    # Le verrou attend plutot que d'echouer : un appelant qui trouve le verrou
+    # pris veut le RESULTAT, pas une erreur. Il resservira le cache que le
+    # detenteur vient d'ecrire.
+    if exec 9>"$lock" 2>/dev/null && flock -w "${MEDIALIB_LOCK_WAIT:-30}" 9 2>/dev/null; then
+        # Re-verification APRES le verrou : sans elle, N appelants bloques
+        # relancent N balayages a la suite, chacun a son tour, alors que le
+        # premier vient d'ecrire le cache.
+        if [ "${MEDIALIB_FORCE:-0}" != "1" ] && _cache_fresh; then
+            flock -u 9 2>/dev/null
+            cat "$cache"; return 0
+        fi
+        local tmp="${cache}.tmp.$$"
+        if _medialib_detect_scan > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+            mv -f "$tmp" "$cache"
+            flock -u 9 2>/dev/null
+            cat "$cache"; return 0
+        fi
+        rm -f "$tmp" 2>/dev/null
+        flock -u 9 2>/dev/null
+    else
+        # PAS DE VERROU POSSIBLE (repertoire non inscriptible, par exemple).
+        # On balaie quand meme, sans mettre en cache : renvoyer « rien trouve »
+        # parce qu'on n'a pas pu ecrire un fichier de verrou serait un mensonge
+        # — et c'est indiscernable d'un support vide cote panneau.
+        _medialib_detect_scan && return 0
+    fi
+
+    if [ -s "$cache" ]; then
+        # Cache perime, mais un resultat ancien vaut mieux qu'une reponse vide.
+        cat "$cache"
+    else
+        printf '{"candidates":[],"devices":[],"stale":true}\n'
+    fi
+}
+
+_medialib_detect_scan() {
     local first=1 path label n
     printf '{"candidates":['
     while IFS= read -r path; do
