@@ -1,3 +1,22 @@
+secubox-peertube (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * version-status + cache + minuteur quotidien, meme dispositif que Lyrion
+    (#993). check-upgrade interroge l'API GitHub : l'appeler dans le chemin de
+    requete du panneau le rendrait dependant d'une limite de debit ou d'une
+    panne DNS, a chaque affichage.
+  * Un echec reseau n'est JAMAIS memorise comme « a jour » — ce serait faire
+    disparaitre une mise a jour disponible en silence, le pire mode de
+    defaillance pour une fonction dont le seul role est de signaler.
+  * `current` se replie sur le cache quand la lecture live echoue : l'API
+    tourne en `secubox` et ne peut pas interroger la LXC.
+  * API : /version-status (GET, cache), /check-upgrade (POST, releve immediat),
+    /upgrade (POST). L'application reste manuelle et n'est jamais declenchee
+    par le minuteur : un upgrade PeerTube migre la base et reconstruit.
+  * RandomizedDelaySec sur le minuteur : l'API GitHub limite par adresse, une
+    flotte entiere ne doit pas frapper a la meme seconde. (ref #993)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 09:00:00 +0200
+
 secubox-peertube (1.2.3-1~bookworm1) bookworm; urgency=medium
 
   * feat: route the RTMP ingest for PeerTube live. Live was enabled and the

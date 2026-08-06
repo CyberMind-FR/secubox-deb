@@ -63,6 +63,9 @@ if [ "$1" = "configure" ]; then
     fi
 
     systemctl daemon-reload
+    # Releve de version : savoir qu'une mise a jour existe, sans jamais
+    # l'appliquer seul (#993).
+    systemctl enable --now secubox-peertube-version-check.timer 2>/dev/null || true
     if [ "$(systemctl is-enabled secubox-peertube.service 2>/dev/null)" != "masked" ]; then
       systemctl enable secubox-peertube.service || true
       systemctl start  secubox-peertube.service || true
