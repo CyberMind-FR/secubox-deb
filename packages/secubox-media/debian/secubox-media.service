@@ -19,7 +19,20 @@ PrivateTmp=true
 # une erreur visible dans le panneau. Le reste du durcissement reste.
 NoNewPrivileges=false
 ProtectSystem=strict
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
+# /media : racine des points de montage des supports externes. Sans elle,
+# ProtectSystem=strict rend le repertoire en lecture seule DANS l'espace de
+# noms du service, et le montage echoue sur « mkdir failed » — alors que la
+# meme commande reussit depuis un shell root, ce qui egare le diagnostic.
+#
+# /data : destinations declarees des transferts (mediatheques).
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /media /data
+
+# Les montages faits par ce service doivent etre visibles du RESTE du systeme.
+# PrivateTmp et ProtectSystem donnent a l'unite un espace de noms de montage
+# prive : sans propagation partagee, un support monte ici resterait invisible
+# du minuteur de drainage (unite distincte) et des mediatheques, et les
+# transferts echoueraient sans rien dire.
+MountFlags=shared
 
 [Install]
 WantedBy=multi-user.target

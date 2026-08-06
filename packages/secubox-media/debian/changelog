@@ -1,3 +1,23 @@
+secubox-media (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Corriger « Montage : mkdir failed ». ProtectSystem=strict rendait /media
+    en lecture seule dans l'espace de noms du service, alors que la meme
+    commande reussissait depuis un shell root — ce qui egarait le diagnostic.
+  * MountFlags=shared : sans propagation partagee, un support monte par le
+    service restait invisible du minuteur de drainage (unite distincte) et des
+    mediatheques, et les transferts auraient echoue sans rien dire.
+  * /data ajoute aux chemins inscriptibles (destinations des transferts).
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 14:10:00 +0200
+
+secubox-media (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Un 401 emmene a la connexion au lieu d'afficher « connexion requise »
+    devant un panneau inerte. Les 83 autres panneaux redirigent deja vers
+    /login.html en preservant le chemin courant ; celui-ci ne le faisait pas.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 13:30:00 +0200
+
 secubox-media (1.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Declarer les relais en Recommends : rsync, exfat-fuse, exfatprogs, ntfs-3g.
