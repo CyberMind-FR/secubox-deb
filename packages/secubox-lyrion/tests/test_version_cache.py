@@ -88,3 +88,20 @@ def test_current_falls_back_to_cache_when_live_read_is_unavailable(tmp_path):
     assert 'd["current"] = cur or d.get("current") or ""' in window, (
         "current doit se replier sur le cache quand la lecture live echoue"
     )
+
+
+def test_action_endpoints_require_a_token(tmp_path):
+    """`upgrade` redemarre le serveur de musique et coupe toute lecture en
+    cours. Le reste de cette API est volontairement sans jeton — decision
+    anterieure du module, protegee par la porte LAN de nginx — mais une action
+    de cette portee ne doit pas etre declenchable par le seul fait d'etre sur
+    le reseau local.
+
+    Constate en verifiant : POST /api/v1/lyrion/check-upgrade repondait 200
+    sans aucun jeton, la ou l'equivalent PeerTube repondait 401."""
+    api = Path(__file__).resolve().parents[1] / "api" / "main.py"
+    src = api.read_text()
+    for verb in ("check-upgrade", "upgrade"):
+        i = src.index(f'@app.post("/{verb}")')
+        sig = src[i:i + 240]
+        assert "Depends(require_jwt)" in sig, f"/{verb} doit exiger un jeton"
