@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Corrige a la main (#999).
+#
+# La version derivee par `profilectl scan` decrivait un runtime `native` avec
+# une unite hote inexistante, sans conteneur ni domaine portail. Le module
+# etait donc injoignable par le waker : son vhost rendait une page brute au
+# lieu d'etre reveille. Le fichier derive invite lui-meme a cette correction.
+id        = "peertube"
+category  = "media"
+runtime   = "lxc"
+lxc       = "peertube"
+exposure  = "public"
+units     = []
+lifecycle = "on-demand"
+priority  = 40
+portal    = { domain = "peertube.gk2.secubox.in" }
