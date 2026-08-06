@@ -13,3 +13,8 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-backup/etc/nginx/secubox.d
 	install -m 644 nginx/backup.conf $(CURDIR)/debian/secubox-backup/etc/nginx/secubox.d/backup.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul
+	# repertoire que le vhost principal inclut (#989). Livree dans
+	# secubox.d/ uniquement, elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-backup/etc/nginx/secubox-routes.d
+	install -m 644 nginx/backup.conf $(CURDIR)/debian/secubox-backup/etc/nginx/secubox-routes.d/backup.conf

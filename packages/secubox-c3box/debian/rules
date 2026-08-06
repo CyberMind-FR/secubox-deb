@@ -13,3 +13,8 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-c3box/etc/nginx/secubox.d
 	install -m 644 nginx/c3box.conf $(CURDIR)/debian/secubox-c3box/etc/nginx/secubox.d/c3box.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul
+	# repertoire que le vhost principal inclut (#989). Livree dans
+	# secubox.d/ uniquement, elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-c3box/etc/nginx/secubox-routes.d
+	install -m 644 nginx/c3box.conf $(CURDIR)/debian/secubox-c3box/etc/nginx/secubox-routes.d/c3box.conf
