@@ -24,21 +24,36 @@ set -euo pipefail
 readonly VERSION="1.1.0"
 readonly CERTS_DIR="${SECUBOX_CERTS_DIR:-/data/haproxy/certs}"
 readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
+# Certbot gere une partie du parc (ganimed.fr, mail.maegia.tv, …). La garantie
+# doit etre UNIFORME : un certificat renouvele doit atteindre HAProxy quel que
+# soit l outil qui l a emis. Sinon la moitie du parc reste sur le mecanisme qui
+# avait laisse 36 certificats expirer.
+readonly CERTBOT_LIVE="${SECUBOX_CERTBOT_LIVE:-/etc/letsencrypt/live}"
 readonly RELOAD_CMD="${SECUBOX_CERTS_RELOAD:-systemctl reload haproxy}"
 
 log() { printf '[certsctl] %s\n' "$*" >&2; }
 
-# Repertoire du magasin acme.sh pour $1, ou rien. acme.sh suffixe _ecc les
-# certificats a courbe elliptique, qui sont le defaut depuis des annees — les
-# deux formes sont donc essayees.
+# Magasin pour $1, tous outils confondus. Emet "<chaine>\t<cle>" sur stdout.
+#
+# acme.sh suffixe _ecc les certificats a courbe elliptique, qui sont le defaut
+# depuis des annees — les deux formes sont essayees. Certbot, lui, range sous
+# live/<domaine>/ avec des noms fixes.
+#
+# ORDRE : acme.sh d abord. Il gere la grande majorite du parc ; un domaine
+# present dans les deux magasins est presume gere par acme.sh, et prendre
+# l autre risquerait de deployer un certificat qui ne sera plus renouvele.
 _store_for() {
     local dom="$1" c
     for c in "${dom}_ecc" "$dom"; do
         if [ -f "$ACME_HOME/$c/fullchain.cer" ] && [ -f "$ACME_HOME/$c/$dom.key" ]; then
-            printf '%s' "$ACME_HOME/$c"
+            printf '%s\t%s' "$ACME_HOME/$c/fullchain.cer" "$ACME_HOME/$c/$dom.key"
             return 0
         fi
     done
+    if [ -f "$CERTBOT_LIVE/$dom/fullchain.pem" ] && [ -f "$CERTBOT_LIVE/$dom/privkey.pem" ]; then
+        printf '%s\t%s' "$CERTBOT_LIVE/$dom/fullchain.pem" "$CERTBOT_LIVE/$dom/privkey.pem"
+        return 0
+    fi
     return 1
 }
 
@@ -55,7 +70,7 @@ cmd_deploy() {
     [ "${1:-}" = "--apply" ] && apply=true
 
     local updated=0 uptodate=0 unmanaged=0 failed=0 changed=false
-    local pem dom store new_e cur_e tmp
+    local pem dom store chain keyf new_e cur_e tmp
 
     for pem in "$CERTS_DIR"/*.pem; do
         [ -f "$pem" ] || continue
@@ -64,7 +79,9 @@ cmd_deploy() {
             unmanaged=$((unmanaged + 1))
             continue
         fi
-        new_e=$(_end_epoch "$store/fullchain.cer" || true)
+        chain=${store%%$'\t'*}
+        keyf=${store#*$'\t'}
+        new_e=$(_end_epoch "$chain" || true)
         cur_e=$(_end_epoch "$pem" || true)
         # Une date illisible n'autorise JAMAIS un remplacement : mieux vaut
         # laisser un certificat en place que d'en installer un qu'on n'a pas su
@@ -86,9 +103,9 @@ cmd_deploy() {
             # preserves : HAProxy tourne sous son propre utilisateur et un
             # certificat devenu illisible pour lui est une panne totale.
             tmp=$(mktemp "$CERTS_DIR/.certsctl.XXXXXX")
-            cat "$store/fullchain.cer" > "$tmp"
+            cat "$chain" > "$tmp"
             printf '\n' >> "$tmp"
-            cat "$store/$dom.key" >> "$tmp"
+            cat "$keyf" >> "$tmp"
             chown --reference="$pem" "$tmp" 2>/dev/null || true
             chmod --reference="$pem" "$tmp" 2>/dev/null || true
             mv -f "$tmp" "$pem"

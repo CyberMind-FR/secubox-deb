@@ -1,3 +1,17 @@
+secubox-certs (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * certsctl couvre aussi le magasin certbot (/etc/letsencrypt/live). La
+    garantie devient uniforme : un certificat renouvele atteint HAProxy quel
+    que soit l outil qui l a emis. Sinon une partie du parc (ganimed.fr,
+    mail.maegia.tv) restait sur le mecanisme qui avait laisse 36 certificats
+    expirer.
+  * acme.sh est essaye EN PREMIER : un domaine present dans les deux magasins
+    est presume gere par acme.sh, qui gere la grande majorite du parc.
+    Deployer l autre risquerait d installer un certificat que plus rien ne
+    renouvelle. Verifie par test. (ref #991)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 06:45:00 +0200
+
 secubox-certs (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * certsctl : nouveau ctl, et le maillon qui manquait entre acme.sh et

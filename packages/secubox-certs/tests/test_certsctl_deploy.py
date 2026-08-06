@@ -170,3 +170,69 @@ def test_status_counts_expired_certificates(tmp_path):
     data = json.loads(r.stdout)
     assert data["valid"] == 1
     assert data["expired"] == 0
+
+
+def _certbot_store(root: Path, dom: str, days: int):
+    """Arborescence certbot : live/<domaine>/{fullchain,privkey}.pem."""
+    d = root / dom
+    d.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+         "-keyout", str(d / "privkey.pem"), "-out", str(d / "fullchain.pem"),
+         "-days", str(days), "-subj", f"/CN={dom}"],
+        check=True, capture_output=True, timeout=60)
+    return d
+
+
+def _env_certbot(tmp_path, certs, acme, certbot):
+    e = _env(tmp_path, certs, acme)
+    e["SECUBOX_CERTBOT_LIVE"] = str(certbot)
+    return e
+
+
+def test_certbot_managed_domain_is_deployed_too(tmp_path):
+    """La garantie doit etre UNIFORME : un certificat renouvele doit atteindre
+    HAProxy quel que soit l'outil qui l'a emis. Sinon la moitie du parc reste
+    sur le mecanisme qui avait laisse 36 certificats expirer."""
+    certs = tmp_path / "certs"; certs.mkdir()
+    acme = tmp_path / "acme"; acme.mkdir()
+    certbot = tmp_path / "letsencrypt"
+    dom = "ganimed.example"
+    old_key, old_crt = _selfsigned(tmp_path / "old", dom, 1)
+    _pem_from(old_key, old_crt, certs / f"{dom}.pem")
+    _certbot_store(certbot, dom, 90)
+
+    r = _run(["deploy", "--apply"], _env_certbot(tmp_path, certs, acme, certbot))
+    assert r.returncode == 0, r.stderr
+    data = json.loads(r.stdout)
+    assert data["updated"] == 1, data
+    assert data["unmanaged"] == 0
+    body = (certs / f"{dom}.pem").read_text()
+    assert "BEGIN CERTIFICATE" in body and "PRIVATE KEY" in body
+
+
+def test_acme_store_wins_when_a_domain_exists_in_both(tmp_path):
+    """Un domaine present dans les deux magasins est presume gere par acme.sh,
+    qui gere la grande majorite du parc. Deployer l'autre risquerait
+    d'installer un certificat que plus rien ne renouvelle."""
+    certs = tmp_path / "certs"; certs.mkdir()
+    acme = tmp_path / "acme"
+    certbot = tmp_path / "letsencrypt"
+    dom = "double.example"
+    old_key, old_crt = _selfsigned(tmp_path / "old", dom, 1)
+    _pem_from(old_key, old_crt, certs / f"{dom}.pem")
+    _selfsigned(acme / f"{dom}_ecc", dom, 60)     # acme.sh : 60 jours
+    _certbot_store(certbot, dom, 200)             # certbot : 200 jours
+
+    r = _run(["deploy", "--apply"], _env_certbot(tmp_path, certs, acme, certbot))
+    assert json.loads(r.stdout)["updated"] == 1
+
+    end = subprocess.run(["openssl", "x509", "-noout", "-enddate", "-in",
+                          str(certs / f"{dom}.pem")],
+                         capture_output=True, text=True).stdout
+    end_dt = datetime.datetime.strptime(end.strip().split("=")[1], "%b %d %H:%M:%S %Y %Z").replace(tzinfo=datetime.timezone.utc)
+    days = (end_dt - datetime.datetime.now(datetime.timezone.utc)).days
+    assert days < 100, (
+        f"c'est le certificat acme.sh (60 j) qui doit etre deploye, pas celui "
+        f"de certbot (200 j) — obtenu {days} j"
+    )
