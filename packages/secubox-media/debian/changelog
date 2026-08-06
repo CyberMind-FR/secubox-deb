@@ -1,3 +1,14 @@
+secubox-media (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Declarer les relais en Recommends : rsync, exfat-fuse, exfatprogs, ntfs-3g.
+    exFAT est le format courant des gros disques USB et ce noyau ne le lit pas
+    lui-meme ; sans le relais, un tel disque est detecte mais reste illisible.
+    Recommends et non Depends : le module reste utile sans eux (ext4, vfat).
+  * hfsfuse n'existe pas dans bookworm : HFS+ reste non montable, et le module
+    le dit desormais explicitement.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 10:05:00 +0200
+
 secubox-media (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Dire POURQUOI un support ne peut pas etre monte, au lieu d'un refus opaque.
