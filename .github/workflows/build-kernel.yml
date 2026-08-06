@@ -97,10 +97,12 @@ jobs:
         run: |
           cd /tmp/build/linux-${KERNEL_VERSION}
           make ARCH=arm64 defconfig
-          # Merge order: upstream defconfig <- OpenWrt-merged base <- ZRAM (last write wins).
+          # Merge order: upstream defconfig <- OpenWrt-merged base <- ZRAM <- filesystems
+          # (last write wins).
           scripts/kconfig/merge_config.sh -m .config \
             "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12-openwrt-merged.fragment" \
-            "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment"
+            "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment" \
+            "${GITHUB_WORKSPACE}/board/mochabin/kernel/config-6.12.85-secubox-filesystems.fragment"
           # Resolve deps + olddefconfig FIRST, then override the ZRAM
           # compressor choice via sed. olddefconfig is what we're fighting:
           # it re-resolves any kconfig `choice` block back to its declared
@@ -134,6 +136,13 @@ jobs:
 
           # Sanity-check key configs landed.
           grep -q "CONFIG_LEDS_IS31FL319X=m" .config || (echo "FAIL: LED module missing" && exit 1)
+          # Sans ces modules un support externe est detecte mais reste illisible,
+          # et le defaut ne se voit qu'au branchement d'une cle — donc trop tard.
+          for fs in EXFAT_FS HFSPLUS_FS NTFS3_FS UDF_FS ISO9660_FS F2FS_FS XFS_FS; do
+            grep -q "^CONFIG_${fs}=m" .config || (echo "FAIL: systeme de fichiers manquant: $fs" && exit 1)
+          done
+          grep -q "^CONFIG_SMB_SERVER=m" .config || (echo "FAIL: ksmbd manquant" && exit 1)
+          grep -q "^CONFIG_CIFS=m" .config || (echo "FAIL: client CIFS manquant" && exit 1)
           grep -q "CONFIG_ZRAM=m" .config           || (echo "FAIL: ZRAM module missing" && exit 1)
           grep -q "^CONFIG_ZRAM_DEF_COMP_ZSTD=y" .config || (echo "FAIL: ZRAM zstd default missing" && exit 1)
 

@@ -65,6 +65,7 @@ log "merge_config.sh -m .config + fragments"
 scripts/kconfig/merge_config.sh -m .config \
     "$REPO_ROOT/board/mochabin/kernel/config-6.12-openwrt-merged.fragment" \
     "$REPO_ROOT/board/mochabin/kernel/config-6.12.85-secubox-zram.fragment" \
+    "$REPO_ROOT/board/mochabin/kernel/config-6.12.85-secubox-filesystems.fragment" \
     >/dev/null
 
 # ── 4. enable supporting non-choice symbols ─────────────────────────────────
@@ -88,18 +89,31 @@ fi
 # ── 6. sanity check ─────────────────────────────────────────────────────────
 log "asserting required configs landed"
 grep -q '^CONFIG_LEDS_IS31FL319X=m' .config        || fail "LED module missing"
+# Sans ces modules, un support externe est detecte mais reste illisible, et le
+# defaut ne se voit qu'au branchement d'une cle — donc trop tard.
+for fs in EXFAT_FS HFSPLUS_FS NTFS3_FS UDF_FS ISO9660_FS F2FS_FS XFS_FS; do
+    grep -q "^CONFIG_${fs}=m" .config || fail "systeme de fichiers manquant : $fs"
+done
+grep -q '^CONFIG_SMB_SERVER=m' .config           || fail "ksmbd manquant (partage SMB)"
+grep -q '^CONFIG_CIFS=m' .config                 || fail "client CIFS manquant"
 grep -q '^CONFIG_ZRAM=m' .config                   || fail "ZRAM module missing"
 grep -q '^CONFIG_ZRAM_DEF_COMP_ZSTD=y' .config     || fail "ZRAM zstd default missing"
 
 # ── 7. cross-build the .deb via bindeb-pkg ──────────────────────────────────
 log "bindeb-pkg starts (j$(nproc)) — this is the long step (~10-15 min on amd64)"
-# KBUILD_PKG_DPKG_OPTS=-d → pass -d to dpkg-buildpackage, skipping
-# checkbuilddeps. Cross-build only needs libssl-dev:amd64 (host-side
-# sign-file), not libssl-dev:arm64.
+# DPKG_FLAGS=-d → pass -d to dpkg-buildpackage, skipping checkbuilddeps.
+# Cross-build only needs libssl-dev:amd64 (host-side sign-file), pas
+# libssl-dev:arm64 — que checkbuilddeps reclame pourtant, puisque le paquet
+# est construit -a arm64.
+#
+# La variable etait KBUILD_PKG_DPKG_OPTS, que scripts/Makefile.package
+# n'honore pas : le nom attendu est DPKG_FLAGS (cf. la regle bindeb-pkg).
+# Le commentaire decrivait donc une intention que le code n'appliquait pas,
+# et le build echouait sur « Dependances de construction non satisfaites ».
 make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
      -j"$(nproc)" \
      KDEB_PKGVERSION="${KDEB_PKGVERSION}" \
-     KBUILD_PKG_DPKG_OPTS="-d" \
+     DPKG_FLAGS="-d" \
      bindeb-pkg
 
 # ── 8. collect ──────────────────────────────────────────────────────────────
