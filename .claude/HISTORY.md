@@ -3,6 +3,46 @@
 
 ---
 
+## 2026-08-06 (suite) — secubox-media 1.2.x + noyau 4secubox (#995, #996)
+
+**Module medias 1.1.0 -> 1.2.2**
+
+- `/media` ajoute aux ReadWritePaths : `ProtectSystem=strict` le rendait en
+  lecture seule DANS l'espace de noms du service (« mkdir failed »), alors que
+  la meme commande reussissait depuis un shell root — diagnostic egare.
+- `MountFlags=shared` : sans propagation, un support monte serait reste
+  invisible du minuteur de drainage (unite distincte) et des mediatheques.
+- Racines declarees (`/etc/secubox/media.roots`, conffile) = source UNIQUE du
+  confinement. Exclus volontairement : rootfs des conteneurs (secrets des
+  services) et sauvegardes (exfiltration vers cle USB).
+- Montage en ecriture opt-in ; mediatheque de service refusee comme
+  destination (un fichier depose a la main n'entre pas dans la base du
+  service).
+- Deux alertes rendues honnetes : l'alerte de bus comptait toutes les
+  deconnexions depuis le boot (des changements de cle deliberes ressemblaient
+  a une panne) ; « deja monte » taisait le mode reel.
+- 401 -> redirection vers /login.html comme les 83 autres panneaux.
+
+Chaine verifiee de bout en bout sur un disque ext4 de 2 To : montage, lecture,
+export mediatheque -> cle USB, md5 identiques, source intacte. 26 tests.
+
+**Noyau 6.12.85-4secubox**
+
+Le noyau secubox etait construit sur `defconfig` : aucun systeme de fichiers au
+dela d'ext4/vfat. Un disque HFS+ etait detecte mais impossible a monter.
+Fragment `config-6.12.85-secubox-filesystems.fragment` : exfat, hfs, hfsplus,
+ntfs3, udf, isofs, f2fs, xfs, jfs, nilfs2, erofs — **tous en module** — plus
+**ksmbd** (serveur SMB dans le noyau) et le client CIFS. Cable dans le build
+local ET la CI, avec assertions.
+
+Deux defauts de `scripts/build-kernel-local.sh` corriges : `libssl-dev` absent,
+et `KBUILD_PKG_DPKG_OPTS` qui n'existe pas — le nom honore est `DPKG_FLAGS`.
+Le commentaire decrivait une intention que le code n'appliquait pas.
+
+Image produite et verifiee (les 9 modules presents). `linux-headers` echoue
+encore (en-tetes multiarch cote hote) — sans effet sur le support des systemes
+de fichiers. **Deploiement en attente : il exige un redemarrage.**
+
 ## 2026-08-06 — secubox-media 1.1.x : dire pourquoi un support est illisible (#995)
 
 Le premier vrai disque branche (GK2021, HFS+) a repondu « montage refuse » sans
