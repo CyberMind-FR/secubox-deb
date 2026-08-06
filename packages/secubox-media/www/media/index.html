@@ -48,6 +48,11 @@ h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); m
 .dev.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
 .dev-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .dev-name { color: var(--cyan); font-weight: 700; }
+.dev-blocked {
+    margin-top: 8px; padding: 7px 9px; border-radius: 6px;
+    background: rgba(255,90,90,.08); border: 1px solid rgba(255,90,90,.25);
+    color: #ff9b9b; font-size: 11.5px; line-height: 1.45;
+}
 .dev-meta { color: var(--p31-dim); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 .chip { font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px;
@@ -237,7 +242,20 @@ function devChips(d) {
     else c.push('<span class="chip c-orange">non monté</span>');
     if (d.removable) c.push('<span class="chip c-blue">amovible</span>');
     if (d.readonly) c.push('<span class="chip c-dim">lecture seule</span>');
+    if (d.mountable === false) c.push('<span class="chip c-red">illisible ici</span>');
     return c.join('');
+}
+
+// Un bouton qui ne peut pas aboutir invite a un echec. Quand le noyau ne sait
+// pas lire le systeme de fichiers, on remplace le bouton par le motif : c'est
+// une limite de la machine, pas une erreur de l'utilisateur, et re-cliquer n'y
+// changera rien.
+function devAction(d) {
+    if (d.mounted) return '';
+    if (d.mountable === false) {
+        return `<div class="dev-blocked">${esc(d.unsupported_reason || 'système de fichiers non pris en charge')}</div>`;
+    }
+    return `<button class="mnt" data-mount="${esc(d.device)}">Monter (lecture seule)</button>`;
 }
 
 function renderDevices(data) {
@@ -254,7 +272,7 @@ function renderDevices(data) {
               <span class="dev-meta">${esc(d.size)}</span></div>
             <div class="dev-meta">${esc(d.device)} · ${esc(d.fstype)} · ${esc(d.transport || 'interne')}</div>
             <div class="chips">${devChips(d)}</div>
-            ${d.mounted ? '' : '<button class="mnt" data-mount="' + esc(d.device) + '">Monter (lecture seule)</button>'}
+            ${devAction(d)}
           </div>`).join('');
     }
     // Les sélecteurs ne proposent que ce qui est MONTÉ : offrir un support non

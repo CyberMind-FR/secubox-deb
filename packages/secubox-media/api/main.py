@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from secubox_core.auth import require_jwt
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 CTL = "/usr/sbin/mediactl"
 
 log = logging.getLogger("secubox-media")

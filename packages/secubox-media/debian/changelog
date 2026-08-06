@@ -1,3 +1,17 @@
+secubox-media (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Dire POURQUOI un support ne peut pas etre monte, au lieu d'un refus opaque.
+    Le noyau 6.12.85 de la board n'a ni hfsplus ni exfat : le premier vrai
+    disque branche (Apple HFS+) repondait « montage refuse » sans motif, ce qui
+    envoie chercher le defaut dans le module alors qu'il est dans le noyau.
+  * detect rend un verdict de montabilite par peripherique (mountable,
+    unsupported_reason) : le panneau decide AVANT le clic.
+  * Relais FUSE cable pour ntfs/exfat/hfsplus quand l'outil est present.
+    Toujours en lecture seule — la regle ne change pas parce que le pilote change.
+  * Le panneau remplace le bouton mort par le motif.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 09:40:00 +0200
+
 secubox-media (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release.
