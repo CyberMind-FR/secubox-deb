@@ -12,6 +12,11 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-streamforge/etc/nginx/secubox.d
 	[ -f nginx/streamforge.conf ] && cp nginx/streamforge.conf debian/secubox-streamforge/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-streamforge/etc/nginx/secubox-routes.d
+	[ -f nginx/streamforge.conf ] && cp nginx/streamforge.conf debian/secubox-streamforge/etc/nginx/secubox-routes.d/ || true
 	# streamforgectl (#183)
 	install -d debian/secubox-streamforge/usr/sbin
 	install -m 755 sbin/streamforgectl debian/secubox-streamforge/usr/sbin/

@@ -32,6 +32,11 @@ override_dh_auto_install:
 	# incidents: routes hand-added on the board get wiped on upgrade).
 	install -d debian/secubox-metablogizer/etc/nginx/secubox.d
 	[ -f nginx/metablogizer.conf ] && cp nginx/metablogizer.conf debian/secubox-metablogizer/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-metablogizer/etc/nginx/secubox-routes.d
+	[ -f nginx/metablogizer.conf ] && cp nginx/metablogizer.conf debian/secubox-metablogizer/etc/nginx/secubox-routes.d/ || true
 	# Example config
 	install -d debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples
 	[ -f config/metablogizer.toml.example ] && install -m 644 config/metablogizer.toml.example debian/secubox-metablogizer/usr/share/doc/secubox-metablogizer/examples/ || true

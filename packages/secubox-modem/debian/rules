@@ -16,6 +16,11 @@ override_dh_auto_install:
 	# Nginx config
 	install -d $(CURDIR)/debian/secubox-modem/etc/nginx/secubox.d
 	install -m 644 nginx/modem.conf $(CURDIR)/debian/secubox-modem/etc/nginx/secubox.d/
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-modem/etc/nginx/secubox-routes.d
+	install -m 644 nginx/modem.conf $(CURDIR)/debian/secubox-modem/etc/nginx/secubox-routes.d/modem.conf
 
 	# Menu entry
 	install -d $(CURDIR)/debian/secubox-modem/usr/share/secubox/menu.d
