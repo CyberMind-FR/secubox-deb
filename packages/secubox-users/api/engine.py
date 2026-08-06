@@ -31,8 +31,29 @@ def _now_iso() -> str:
 class Engine:
     """Atomic, single-file mutation engine."""
 
-    def __init__(self, users_path: Path):
+    #: Etat d'anti-rejeu TOTP. DELIBEREMENT hors du magasin d'utilisateurs
+    #: (#990) : `last_step` est de l'etat d'execution, pas de la configuration,
+    #: et /etc/secubox appartient a root alors que le service auth tourne en
+    #: `secubox`. Ecrire l'anti-rejeu dans le magasin faisait echouer en 500
+    #: tout code VALIDE — `_save` n'etant appele que dans la branche de succes,
+    #: un mauvais code repondait proprement 401 et un bon code plantait.
+    DEFAULT_REPLAY_PATH = Path("/var/lib/secubox/totp-replay.json")
+
+    def __init__(self, users_path: Path, replay_path: Optional[Path] = None):
         self.users_path = Path(users_path)
+        # Surcharge par SECUBOX_TOTP_REPLAY_PATH : sans elle, tout Engine
+        # construit sans argument explicite ecrit dans un fichier SYSTEME
+        # partage. En production c'est voulu ; dans une suite de tests c'est un
+        # etat qui fuit d'un test a l'autre et rend les resultats dependants de
+        # la machine — constate en ecrivant ce correctif, un test existant
+        # s'est mis a echouer parce qu'un run precedent avait laisse une entree.
+        env_override = os.environ.get("SECUBOX_TOTP_REPLAY_PATH")
+        if replay_path:
+            self.replay_path = Path(replay_path)
+        elif env_override:
+            self.replay_path = Path(env_override)
+        else:
+            self.replay_path = self.DEFAULT_REPLAY_PATH
         self._revoke_cb: Optional[Callable[[str], int]] = None
         self._audit_cb: Optional[Callable[[str, str, Dict[str, Any]], None]] = None
 
@@ -233,6 +254,29 @@ class Engine:
         self._audit("totp_enrolled", username, {})
         return plain
 
+    # ── Anti-rejeu TOTP (#990) ────────────────────────────────────────
+    #
+    # Stocke le dernier pas consomme par utilisateur, dans un fichier que le
+    # service auth peut ecrire. Best-effort en LECTURE (un fichier absent ou
+    # corrompu ne doit pas empecher de se connecter), strict en ECRITURE : si
+    # l'etat ne peut pas etre persiste, l'erreur remonte — sans lui, un code
+    # redevient rejouable dans sa fenetre, et c'est la seule raison d'etre de
+    # ce mecanisme.
+
+    def _replay_load(self) -> Dict[str, Any]:
+        try:
+            return json.loads(self.replay_path.read_text())
+        except (OSError, ValueError):
+            return {}
+
+    def _replay_record(self, username: str, step: int) -> None:
+        state = self._replay_load()
+        state[username] = step
+        self.replay_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.replay_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state))
+        os.replace(tmp, self.replay_path)
+
     def verify_totp_for_user(self, username: str, code: str, window: int = 1) -> bool:
         import pyotp
         import time
@@ -243,7 +287,13 @@ class Engine:
             return False
 
         secret = u["totp"]["secret"]
-        last_step = u["totp"].get("last_step")
+        # Plancher = le plus RECENT des deux sources. Le last_step herite de
+        # users.json doit continuer de compter apres migration, sinon les codes
+        # deja consommes redeviendraient acceptables.
+        legacy_step = u["totp"].get("last_step")
+        replay_step = self._replay_load().get(username)
+        candidates = [x for x in (legacy_step, replay_step) if x is not None]
+        last_step = max(candidates) if candidates else None
         step_size = 30
         now = int(time.time())
         current = now // step_size
@@ -253,8 +303,10 @@ class Engine:
             if pyotp.TOTP(secret).at(step * step_size) == code:
                 if last_step is not None and step <= last_step:
                     return False
-                u["totp"]["last_step"] = step
-                self._save(doc)
+                # JAMAIS self._save(doc) ici : la verification est un chemin de
+                # lecture, et le magasin appartient a root (mutations reservees
+                # a `sudo usersctl`, cf. la docstring de _save).
+                self._replay_record(username, step)
                 self._audit("totp_verified", username, {"step": step, "window": window})
                 return True
         return False
