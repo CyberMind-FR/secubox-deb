@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: PeerTube — relevé quotidien de la version disponible (#993).
+#
+# SAVOIR, PAS AGIR. Un upgrade PeerTube est une opération longue (migrations de
+# base, reconstruction) : elle reste déclenchée par l'opérateur.
+[Unit]
+Description=SecuBox PeerTube — relevé quotidien de la version disponible
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/peertubectl check-upgrade

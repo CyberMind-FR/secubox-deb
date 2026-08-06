@@ -107,6 +107,14 @@ cmd_upload() {
 # cmd_check_upgrade — non-destructive: installed (peertube-latest/package.json)
 # vs the latest GitHub release. Prints JSON {current, latest, available, major_jump}.
 # The actual upgrade is cmd_upgrade (via process-ops), already wired.
+# Cache de la derniere version connue (#993, meme dispositif que Lyrion).
+#
+# `check-upgrade` interroge l'API GitHub. Appele depuis le chemin de requete du
+# panneau, il le prendrait en otage a chaque affichage et le rendrait dependant
+# d'une limite de debit GitHub ou d'une panne DNS. Le minuteur quotidien ecrit
+# ici, le panneau lit.
+readonly PT_VERSION_CACHE="${SECUBOX_PEERTUBE_VERSION_CACHE:-/var/cache/secubox/peertube/version.json}"
+
 cmd_check_upgrade() {
     local cur latest available=false major=false
     cur=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c 'cat /var/www/peertube/peertube-latest/package.json 2>/dev/null' 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
@@ -114,7 +122,44 @@ cmd_check_upgrade() {
     if [ -n "$latest" ] && [ -n "$cur" ] && [ "$latest" != "$cur" ]; then
         available=true; [ "${latest%%.*}" != "${cur%%.*}" ] && major=true
     fi
-    printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s}\n' "$cur" "${latest:-$cur}" "$available" "$major"
+    local payload
+    payload=$(printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s,"checked_at":"%s"}' \
+        "$cur" "${latest:-$cur}" "$available" "$major" "$(date -Is)")
+    # Ecrit UNIQUEMENT si la version distante a reellement ete obtenue :
+    # memoriser un « latest = current » issu d'un echec reseau ferait
+    # disparaitre une mise a jour disponible du panneau, en silence.
+    if [ -n "$latest" ]; then
+        mkdir -p "$(dirname "$PT_VERSION_CACHE")" 2>/dev/null || true
+        printf '%s\n' "$payload" > "$PT_VERSION_CACHE" 2>/dev/null || true
+    fi
+    printf '%s\n' "$payload"
+}
+
+# version-status — lit le cache, sans jamais sortir vers le reseau.
+cmd_version_status() {
+    local cur
+    cur=$(lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c 'cat /var/www/peertube/peertube-latest/package.json 2>/dev/null' 2>/dev/null | jq -r '.version // empty' 2>/dev/null)
+    if [ -r "$PT_VERSION_CACHE" ]; then
+        python3 - "$PT_VERSION_CACHE" "${cur:-}" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+cur = sys.argv[2]
+# Live d'abord (il peut refleter un upgrade que le cache ignore), cache
+# ensuite, jamais le blanc : l'API tourne en `secubox` et ne peut pas
+# interroger la LXC — sans repli le panneau afficherait un champ vide.
+d["current"] = cur or d.get("current") or ""
+latest = d.get("latest") or d["current"]
+d["latest"] = latest
+d["available"] = bool(latest and d["current"] and latest != d["current"])
+d["cached"] = True
+print(json.dumps(d))
+PY
+    else
+        printf '{"current":"%s","latest":null,"available":false,"cached":false,"checked_at":null}\n' "${cur:-}"
+    fi
 }
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
@@ -459,6 +504,7 @@ main() {
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         upload) cmd_upload "$@" ;;
         check-upgrade) cmd_check_upgrade "$@" ;;
+        version-status) cmd_version_status ;;
         process-ops) cmd_process_ops "$@" ;;
         reset-admin-password) cmd_reset_admin_password "$@" ;;
         upgrade) cmd_upgrade "$@" ;;
