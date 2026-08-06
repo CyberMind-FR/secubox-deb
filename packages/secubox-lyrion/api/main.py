@@ -23,7 +23,15 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import Body, FastAPI, HTTPException, Header, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
+
+# Les VERBES D'ACTION ajoutes en #993 exigent un jeton. Le reste de cette API
+# n'en demande pas — decision anterieure du module, protegee par la porte LAN
+# de nginx — mais `upgrade` redemarre le serveur de musique et coupe toute
+# lecture en cours : une action de cette portee ne doit pas etre declenchable
+# par le simple fait d'etre sur le reseau local. `check-upgrade` sort vers
+# l'exterieur, il est gate pour la meme raison.
+from secubox_core.auth import require_jwt
 
 VERSION = "1.1.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
@@ -266,14 +274,14 @@ async def version_status() -> Dict[str, Any]:
 
 
 @app.post("/check-upgrade")
-async def check_upgrade() -> Dict[str, Any]:
+async def check_upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
     """Releve immediat, a la demande. Sort vers le reseau et rafraichit le
     cache — d'ou un POST : ce n'est pas une lecture sans effet."""
     return await _ctl_verb("check-upgrade", timeout=120)
 
 
 @app.post("/upgrade")
-async def upgrade() -> Dict[str, Any]:
+async def upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
     """Applique la mise a jour dans la LXC.
 
     DELIBEREMENT manuel : l'operation redemarre le serveur et coupe toute

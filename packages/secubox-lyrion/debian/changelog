@@ -1,3 +1,17 @@
+secubox-lyrion (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * SECURITE : /check-upgrade et /upgrade exigent desormais un jeton. Cette
+    API n'en demandait aucun — decision anterieure du module, protegee par la
+    porte LAN de nginx — mais /upgrade redemarre le serveur de musique et
+    coupe toute lecture en cours. Une action de cette portee ne doit pas etre
+    declenchable par le seul fait d'etre sur le reseau local.
+  * Constate en verifiant : POST /api/v1/lyrion/check-upgrade repondait 200
+    SANS jeton, la ou l'equivalent PeerTube repondait 401. L'asymetrie venait
+    de moi : j'avais ajoute l'action la plus lourde du module sans la gater.
+  * Les verbes de lecture restent inchanges. (ref #993)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 09:20:00 +0200
+
 secubox-lyrion (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * version-status : `current` se replie sur le cache quand la lecture live
