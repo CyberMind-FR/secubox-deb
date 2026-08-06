@@ -1,3 +1,14 @@
+secubox-media (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refuser les partitions systeme au montage. detect les masquait deja, mais
+    masquer n'est pas refuser : apres un redemarrage reel les lettres /dev/sdX
+    ont change, et un /dev/sdb1 memorise designait la partition EFI — qui a
+    bien ete montee.
+  * detect expose un identifiant STABLE (/dev/disk/by-uuid/...) : le panneau ne
+    doit pas memoriser une lettre de peripherique.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 15:45:00 +0200
+
 secubox-media (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * Un « deja monte » dit desormais le mode reel. Cliquer « Monter (lecture

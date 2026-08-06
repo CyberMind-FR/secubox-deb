@@ -343,3 +343,22 @@ def test_already_mounted_reports_the_actual_mode():
     head = fn[:fn.index("mkdir -p")]
     assert "mismatch" in head, "un mode different doit etre signale"
     assert "findmnt" in head, "le mode reel doit etre lu, pas suppose"
+
+
+def test_mount_refuses_a_system_partition():
+    """Masquer n'est pas refuser.
+
+    detect ecarte deja les partitions systeme de l'affichage, mais les lettres
+    /dev/sdX changent d'un demarrage a l'autre : apres un redemarrage reel, un
+    /dev/sdb1 memorise designait la partition EFI — et elle a ete montee."""
+    fn = _func("cmd_mount")
+    head = fn[:fn.index("_fs_support")]
+    assert "/boot/efi" in head and "EFI" in head, \
+        "les partitions systeme doivent etre refusees AVANT toute tentative"
+
+
+def test_detect_exposes_a_stable_identifier():
+    """Le panneau ne doit pas memoriser une lettre de peripherique."""
+    src = CTL.read_text()
+    assert "/dev/disk/by-uuid/" in src
+    assert '"uuid"' in src
