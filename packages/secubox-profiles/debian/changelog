@@ -1,3 +1,25 @@
+secubox-profiles (0.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Un 5xx DECLENCHE le reveil au lieu de seulement l'annoncer (#999).
+    error_page 502/503/504 route desormais vers le waker : la meme requete tire
+    le reveil ET rend la page d'attente. Le fragment servait auparavant un
+    fichier statique — une belle page, et rien derriere : un vhost tombe par
+    accident (conteneur arrete apres un redemarrage) l'affichait indefiniment
+    sans que rien ne le releve. Constate le 2026-08-06 : 11 conteneurs arretes,
+    aucun releve.
+  * Un vhost NON DECLARE reçoit la page d'attente au lieu d'un 404 — le 404
+    remontait a nginx comme une page brute. Son nom est journalise : ce journal
+    est la liste de ce qu'il reste a declarer. Aucun reveil n'est declenche
+    pour autant : wake() refuse les modules inconnus, et c'est une garde
+    voulue — un 5xx n'est pas un droit de demarrer un service arbitraire.
+  * Un module always-on/manual continue de remonter une VRAIE erreur : lui
+    servir une page d'attente ferait croire a un reveil que personne ne
+    declenchera.
+  * Repli statique si le waker est lui-meme indisponible — sans lui, une panne
+    du waker rendrait chaque 502 nu, exactement ce qu'on cherche a supprimer.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 20:20:00 +0200
+
 secubox-profiles (0.10.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-sleeper ships DISABLED by default (--no-enable + postinst no longer
