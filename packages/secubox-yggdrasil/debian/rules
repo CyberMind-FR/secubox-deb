@@ -20,6 +20,11 @@ override_dh_auto_install:
 
 	# Install nginx config
 	install -m 644 nginx/mesh.conf $(CURDIR)/debian/secubox-yggdrasil/etc/nginx/secubox.d/
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-yggdrasil/etc/nginx/secubox-routes.d
+	install -m 644 nginx/mesh.conf $(CURDIR)/debian/secubox-yggdrasil/etc/nginx/secubox-routes.d/mesh.conf
 
 	# Install menu entry
 	install -m 644 menu.d/580-mesh.json $(CURDIR)/debian/secubox-yggdrasil/usr/share/secubox/menu.d/

@@ -1,3 +1,14 @@
+secubox-rezapp (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
+    le seul repertoire que le vhost principal inclut. Livree dans secubox.d/
+    uniquement, la route n'etait JAMAIS lue, et il fallait la recopier a la
+    main pour que le module fonctionne.
+  * Source du depot realignee sur la version VIVANTE, a l'octet pres : les
+    deux avaient diverge. (ref #989)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 07:40:00 +0200
+
 secubox-rezapp (1.0.0-2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

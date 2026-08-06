@@ -18,5 +18,10 @@ override_dh_auto_install:
 	# Nginx config
 	install -d debian/secubox-users/etc/nginx/secubox.d
 	[ -f nginx/users.conf ] && cp nginx/users.conf debian/secubox-users/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-users/etc/nginx/secubox-routes.d
+	[ -f nginx/users.conf ] && cp nginx/users.conf debian/secubox-users/etc/nginx/secubox-routes.d/ || true
 	# Users data directory
 	install -d debian/secubox-users/etc/secubox

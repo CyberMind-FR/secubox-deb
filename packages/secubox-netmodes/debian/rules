@@ -15,3 +15,8 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-netmodes/etc/nginx/secubox.d
 	[ -f nginx/netmodes.conf ] && cp nginx/netmodes.conf debian/secubox-netmodes/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-netmodes/etc/nginx/secubox-routes.d
+	[ -f nginx/netmodes.conf ] && cp nginx/netmodes.conf debian/secubox-netmodes/etc/nginx/secubox-routes.d/ || true
