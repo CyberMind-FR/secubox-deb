@@ -36,6 +36,25 @@ Type=simple
 User=secubox-waf
 Group=secubox-waf
 
+# AUTO-REPARATION AVANT CHAQUE DEMARRAGE.
+#
+# sbxwaf PANIQUE si le registre cookie-audit ne lui appartient pas :
+#
+#   panic: cookieaudit: open /var/log/secubox/cookie-audit/server.jsonl:
+#          permission denied
+#
+# Il boucle alors en redemarrage et TOUS les vhosts publics tombent en 503 —
+# `admin.gk2` reste a 200 car il contourne le WAF, et ce contraste est le seul
+# indice. La panne est survenue au moins deux fois (2026-07-28, 2026-08-06).
+#
+# Le postinst pose deja les bons proprietaires, mais quelque chose recree le
+# repertoire en `secubox` entre deux demarrages. Corriger a l'installation ne
+# suffit donc pas : on repare a CHAQUE demarrage, avant de lancer le binaire.
+#
+# `+` : execute en root malgre User=secubox-waf.
+ExecStartPre=+/bin/mkdir -p /var/log/secubox/cookie-audit
+ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/cookie-audit
+ExecStartPre=+/bin/chmod 0750 /var/log/secubox/cookie-audit
 ExecStart=/usr/sbin/sbxwaf \
   --listen 127.0.0.1:8085 \
   --routes /etc/secubox/waf/haproxy-routes.json \
