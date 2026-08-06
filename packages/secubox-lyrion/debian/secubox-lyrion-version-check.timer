@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Lyrion — minuteur du relevé de version (#993).
+[Unit]
+Description=SecuBox Lyrion — relevé quotidien de la version disponible
+
+[Timer]
+OnCalendar=*-*-* 04:40:00
+# Rattrape un passage manque : une board eteinte la nuit doit quand meme
+# apprendre qu'une version est sortie.
+Persistent=true
+# Un depot commun a toute une flotte : sans dispersion, tous les noeuds
+# frappent a la meme seconde.
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target
