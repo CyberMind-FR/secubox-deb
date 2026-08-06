@@ -1,0 +1,23 @@
+[Unit]
+Description=Attente du reseau SecuBox avant les frontaux
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/998
+DefaultDependencies=no
+After=systemd-networkd.service
+Before=haproxy.service nginx.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/secubox-wait-network.sh
+
+# Le script sort toujours en succes (cf. son en-tete). SuccessExitStatus est
+# neanmoins declare : un assistant d'attente ne doit JAMAIS faire echouer le
+# demarrage, meme si une version future oubliait ce principe.
+SuccessExitStatus=0 1 2
+
+# 45 s cote script + marge. L'ancienne valeur de 180 s laissait le demarrage
+# suspendu trois minutes avant meme d'echouer.
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target

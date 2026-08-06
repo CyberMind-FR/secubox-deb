@@ -11,7 +11,16 @@ network:
     eth2:
       dhcp4: true
       dhcp6: false
-      optional: true
+      # PAS `optional: true` — c'est l'interface de GESTION (#998).
+      #
+      # `optional: true` fait emettre RequiredForOnline=no, donc
+      # systemd-networkd-wait-online ne compte JAMAIS cette interface comme en
+      # ligne : l'unite expirait et echouait a chaque demarrage, meme avec
+      # --any, meme quand eth2 etait parfaitement `routable (configured)`.
+      #
+      # lan0..lan3 gardent `optional: true` a juste titre : ce sont les ports
+      # du switch, sans cable la plupart du temps.
+      optional: false
       dhcp4-overrides:
         use-routes: true
         route-metric: 100
