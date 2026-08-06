@@ -1,3 +1,19 @@
+secubox-lyrion (1.5.0-1~bookworm1) bookworm; urgency=high
+
+  * PLUSIEURS mediatheques externes a la fois. La cible etait unique
+    (`medialib/external`) et chaque montage REMPLAÇAIT le precedent : avec une
+    cle et un disque de 2 To branches, Lyrion ne voyait que la cle. Un point de
+    montage par support desormais, derive de son etiquette (assainie).
+  * MONTER N'EST PAS DECLARER. Le bind rendait le support visible dans le
+    conteneur, mais LMS ne scanne que les chemins listes dans sa preference
+    `mediadirs` : la reindexation portait sur un repertoire dont LMS n'avait
+    jamais entendu parler. Le chemin est desormais declare, avec LMS arrete —
+    le serveur reecrit ses prefs en sortant et ecraserait une modification
+    faite a chaud.
+  * `medialib unmount <chemin>` detache un support sans perdre les autres.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 18:30:00 +0200
+
 secubox-lyrion (1.4.0-1~bookworm1) bookworm; urgency=high
 
   * medialib detect : CACHE + VERROU + balayage borne. Chaque appel relançait
