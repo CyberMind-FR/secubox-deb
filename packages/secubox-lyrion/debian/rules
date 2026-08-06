@@ -3,6 +3,8 @@
 	dh $@
 
 override_dh_auto_install:
+	install -d debian/secubox-lyrion/etc/sudoers.d
+	install -m 0440 debian/secubox-lyrion.sudoers debian/secubox-lyrion/etc/sudoers.d/secubox-lyrion
 	# Host control plane (FastAPI)
 	install -d debian/secubox-lyrion/usr/lib/secubox/lyrion
 	cp -r api debian/secubox-lyrion/usr/lib/secubox/lyrion/

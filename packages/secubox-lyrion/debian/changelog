@@ -1,3 +1,17 @@
+secubox-lyrion (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * La mediatheque externe n'avait JAMAIS pu fonctionner : l'API appelait
+    lyrionctl sans sudo, aucun fichier sudoers n'etait livre, et l'unite posait
+    NoNewPrivileges=true — qui neutralise sudo. /data/lxc/<nom> appartient a
+    l'idmap du conteneur (100000:100000, drwxrwx---) et n'est pas meme
+    traversable par `secubox`, d'ou « lxc config not found » pour un fichier
+    qui existe.
+  * Delegation confinee : sudoers borne a `lyrionctl medialib *`.
+  * Message honnete : « absente » et « inaccessible » sont deux pannes
+    differentes, et les confondre fait chercher un fichier qui est la.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 16:40:00 +0200
+
 secubox-lyrion (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * SECURITE : /check-upgrade et /upgrade exigent desormais un jeton. Cette

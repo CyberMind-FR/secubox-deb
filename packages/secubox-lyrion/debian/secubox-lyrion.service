@@ -18,7 +18,11 @@ ExecStartPre=+/bin/chown secubox:secubox /etc/secubox
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/lyrion.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=true
+# NoNewPrivileges=true neutralise sudo — « the "no new privileges" flag is
+# set, which prevents sudo from running as root ». Or le panneau DOIT
+# deleguer a lyrionctl en root : /data/lxc/<nom> appartient a l'idmap du
+# conteneur et n'est pas meme traversable par `secubox`.
+NoNewPrivileges=false
 LogsDirectory=secubox
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox
