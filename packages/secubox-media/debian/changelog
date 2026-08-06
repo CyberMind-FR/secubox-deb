@@ -1,0 +1,5 @@
+secubox-media (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 09:22:18 +0200

@@ -179,8 +179,10 @@ override_dh_auto_install:
 RULES
 chmod +x "$PKG_DIR/debian/rules"
 
-# ── debian/compat ──
-echo "13" > "$PKG_DIR/debian/compat"
+# debian/compat n'est PLUS genere : le declarer en meme temps que le
+# build-dep debhelper-compat fait echouer dh des le `clean`
+# (« compat level specified both in debian/compat and via build-dependency »).
+# Tout paquet echafaude ici butait dessus a sa premiere construction.
 
 # ── debian/changelog ──
 cat > "$PKG_DIR/debian/changelog" <<CHLOG
@@ -257,12 +259,21 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/${NAME}
-ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/${NAME}.sock --log-level warning
-ExecStartPost=/bin/chmod 660 /run/secubox/${NAME}.sock
+# `python3 -m uvicorn`, PAS /usr/bin/uvicorn : ce binaire n'existe pas
+# sur la board (uvicorn y est un module Python) — tout paquet echafaude
+# echouait en 203/EXEC a son premier demarrage.
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/${NAME}.sock --log-level warning
+# Pas de chmod post-demarrage : User=secubox cree deja le socket avec le
+# bon proprietaire, et un chmod sur un socket pas encore ouvert fait
+# tomber l'unite (status=1/FAILURE).
 Restart=on-failure
 RestartSec=5
 PrivateTmp=true
-NoNewPrivileges=true
+# false, et NON true : cette API sudo son ctl confine (webui -> ctl).
+# NoNewPrivileges=true neutralise sudo — « the "no new privileges" flag is
+# set, which prevents sudo from running as root » — et toute action devient
+# une erreur visible dans le panneau. Le reste du durcissement reste.
+NoNewPrivileges=false
 ProtectSystem=strict
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox
 
