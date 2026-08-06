@@ -31,7 +31,7 @@
 
 set -uo pipefail
 
-readonly VERSION="1.2.2"
+readonly VERSION="1.3.0"
 readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
 readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
 readonly QUEUE_DIR="$STATE_DIR/queue"
@@ -195,7 +195,7 @@ def fs_support(fs):
 
 def lsblk():
     out = subprocess.run(
-        ["lsblk", "-P", "-o", "NAME,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,TYPE,TRAN,RO"],
+        ["lsblk", "-P", "-o", "NAME,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,TYPE,TRAN,RO,UUID"],
         capture_output=True, text=True, timeout=15).stdout
     rows = []
     for line in out.splitlines():
@@ -227,7 +227,12 @@ for d in rows:
     system = mp in SYSTEM_MOUNTS or label in SYSTEM_LABELS or not d.get("FSTYPE")
     support, why = fs_support(d.get("FSTYPE", ""))
     devices.append({
-        "device": "/dev/" + name,
+        # Identifiant STABLE. Les lettres /dev/sdX changent d'un demarrage a
+        # l'autre : apres un redemarrage, un /dev/sdb1 memorise designait la
+        # partition EFI. Le panneau doit manipuler l'UUID, pas la lettre.
+        "device": ("/dev/disk/by-uuid/" + d["UUID"]) if d.get("UUID") else ("/dev/" + name),
+        "devnode": "/dev/" + name,
+        "uuid": d.get("UUID", ""),
         "label": label or name,
         "size": d.get("SIZE", ""),
         "fstype": d.get("FSTYPE", ""),
@@ -327,6 +332,22 @@ cmd_mount() {
     # Verdict AVANT d'essayer. Ce noyau n'a ni hfsplus ni exfat ; « montage
     # refusé » sans motif fait chercher le défaut dans le module alors qu'il est
     # dans le noyau, et laisse l'utilisateur re-cliquer sans espoir.
+    # Une partition SYSTEME ne se monte pas depuis ce panneau. detect les masque
+    # deja, mais masquer n'est pas refuser : les lettres /dev/sdX changent d'un
+    # demarrage a l'autre — apres un redemarrage, un /dev/sdb1 memorise par
+    # l'interface a designe la partition EFI, qui a bien ete montee.
+    local mp label_sys
+    mp=$(lsblk -no MOUNTPOINT "$dev" 2>/dev/null | head -1 | tr -d ' ')
+    label_sys=$(lsblk -no LABEL "$dev" 2>/dev/null | head -1 | tr -d ' ')
+    case "$mp" in
+        /|/boot|/boot/efi|/data)
+            printf '{"ok":false,"error":%s}\n' "$(_json "partition système ($mp) — refusé")"; return 2 ;;
+    esac
+    case "$label_sys" in
+        EFI|boot|rootfs)
+            printf '{"ok":false,"error":%s}\n' "$(_json "partition système (étiquette $label_sys) — refusé")"; return 2 ;;
+    esac
+
     local fs support
     fs=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1 | tr -d ' ')
     support=$(_fs_support "$fs")
