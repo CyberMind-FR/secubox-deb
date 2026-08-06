@@ -1,0 +1,343 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: mediactl — supports externes : détection, navigation, transfert
+# CyberMind — https://cybermind.fr
+#
+# Seule surface privilégiée du module (webui -> ctl confiné). Le panneau tourne
+# en `secubox` et n'écrit rien lui-même : il POSTe, ce ctl monte, liste, copie,
+# et rend du JSON.
+#
+# QUATRE RÈGLES tenues par construction, chacune née d'un mode de panne réel :
+#
+#   1. La source est montée en LECTURE SEULE. Un support qu'on vient de brancher
+#      n'a pas à être écrit pour être lu, et un système de fichiers étranger
+#      (HFS+, exFAT) monté en écriture sous Linux est un risque connu.
+#
+#   2. COPIE, jamais déplacement, depuis un amovible. Le port 3-1.1.1 de cette
+#      board déconnecte en boucle : un débranchement pendant un déplacement
+#      laisserait le fichier nulle part.
+#
+#   3. Tout chemin est CONFINÉ aux racines autorisées. Ces chemins viennent
+#      d'une requête HTTP ; sans confinement, `../../etc` est une lecture
+#      arbitraire du disque système.
+#
+#   4. Les transferts sortent du chemin de requête. Une copie de plusieurs
+#      centaines de Mo ne tient pas dans une requête HTTP — file d'attente et
+#      drainage, sur le modèle torrent -> PeerTube.
+
+set -uo pipefail
+
+readonly VERSION="1.0.0"
+readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
+readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
+readonly QUEUE_DIR="$STATE_DIR/queue"
+readonly JOBS_DIR="$STATE_DIR/jobs"
+# Destinations inscriptibles déclarées. Une destination n'est PAS libre : elle
+# est choisie dans cette liste, ce qui évite qu'une requête écrive où elle veut.
+readonly EXTRA_ROOTS="${SECUBOX_MEDIA_EXTRA_ROOTS:-/data/lyrion/music:/data/media}"
+
+_json() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+err()   { printf '[mediactl] %s\n' "$*" >&2; }
+
+# ── Confinement ──────────────────────────────────────────────────────────────
+#
+# Résout les liens et vérifie l'appartenance à une racine autorisée. Le
+# préfixe est compare sur le chemin RÉSOLU, jamais sur la chaîne fournie : sans
+# ça, un lien symbolique posé sur le support suffirait à sortir de la racine.
+_allowed_roots() {
+    printf '%s\n' "$MOUNT_ROOT"
+    local r
+    IFS=':' read -ra _extra <<< "$EXTRA_ROOTS"
+    for r in "${_extra[@]}"; do [ -n "$r" ] && printf '%s\n' "$r"; done
+}
+
+_resolve_in_roots() {
+    local p="$1" real root
+    real=$(readlink -f -- "$p" 2>/dev/null) || return 1
+    [ -n "$real" ] || return 1
+    while IFS= read -r root; do
+        [ -n "$root" ] || continue
+        local rroot; rroot=$(readlink -f -- "$root" 2>/dev/null) || continue
+        if [ "$real" = "$rroot" ] || [ "${real#"$rroot"/}" != "$real" ]; then
+            printf '%s' "$real"; return 0
+        fi
+    done < <(_allowed_roots)
+    return 1
+}
+
+# ── detect ───────────────────────────────────────────────────────────────────
+#
+# Les partitions système sont marquées `system` et non proposées : monter la
+# partition EFI ou la racine n'a pas de sens et la proposer serait une invite à
+# l'erreur.
+cmd_detect() {
+    python3 - "$MOUNT_ROOT" <<'PY'
+import json, re, subprocess, sys
+
+mount_root = sys.argv[1]
+
+def lsblk():
+    out = subprocess.run(
+        ["lsblk", "-P", "-o", "NAME,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,TYPE,TRAN,RO"],
+        capture_output=True, text=True, timeout=15).stdout
+    rows = []
+    for line in out.splitlines():
+        d = dict(re.findall(r'(\w+)="([^"]*)"', line))
+        if d:
+            rows.append(d)
+    return rows
+
+# Transport hérité du disque parent : lsblk ne le porte que sur le disque, pas
+# sur ses partitions — sans cette propagation, un disque USB apparaît comme
+# interne, ce qui change la règle « copie, jamais déplacement ».
+tran_by_disk, rows = {}, lsblk()
+for d in rows:
+    if d.get("TYPE") == "disk":
+        tran_by_disk[d.get("NAME", "")] = d.get("TRAN", "")
+
+SYSTEM_MOUNTS = ("/", "/boot", "/boot/efi", "/data")
+SYSTEM_LABELS = ("EFI", "boot", "rootfs")
+
+devices = []
+for d in rows:
+    if d.get("TYPE") != "part":
+        continue
+    name = d.get("NAME", "")
+    parent = re.sub(r"p?\d+$", "", name)
+    tran = d.get("TRAN") or tran_by_disk.get(parent, "")
+    mp = d.get("MOUNTPOINT", "")
+    label = d.get("LABEL", "")
+    system = mp in SYSTEM_MOUNTS or label in SYSTEM_LABELS or not d.get("FSTYPE")
+    devices.append({
+        "device": "/dev/" + name,
+        "label": label or name,
+        "size": d.get("SIZE", ""),
+        "fstype": d.get("FSTYPE", ""),
+        "transport": tran,
+        "removable": d.get("RM") == "1" or tran == "usb",
+        "mountpoint": mp or None,
+        "mounted": bool(mp),
+        "readonly": d.get("RO") == "1",
+        "managed": bool(mp) and mp.startswith(mount_root),
+        "system": system,
+    })
+
+# Instabilité du bus : des déconnexions répétées sur un même port expliquent un
+# support qui « n'apparaît pas ». L'afficher évite de chercher le défaut dans
+# l'interface alors qu'il est dans le câble ou l'alimentation.
+alerts = []
+try:
+    dm = subprocess.run(["dmesg", "-T"], capture_output=True, text=True, timeout=15).stdout
+    ports = {}
+    for line in dm.splitlines():
+        m = re.search(r"usb ([\d.\-]+): USB disconnect", line)
+        if m:
+            ports[m.group(1)] = ports.get(m.group(1), 0) + 1
+    for port, n in sorted(ports.items(), key=lambda kv: -kv[1]):
+        if n >= 2:
+            alerts.append({
+                "kind": "unstable_port", "port": port, "disconnects": n,
+                "message": f"Le port {port} a déconnecté {n} fois — "
+                           "un support branché dessus peut disparaître en cours de transfert.",
+            })
+except Exception:
+    pass
+
+print(json.dumps({"devices": devices, "alerts": alerts}))
+PY
+}
+
+# ── mount / unmount ──────────────────────────────────────────────────────────
+cmd_mount() {
+    local dev="${1:-}"
+    [ -b "$dev" ] || { printf '{"ok":false,"error":%s}\n' "$(_json "pas un périphérique bloc : $dev")"; return 2; }
+    local label name mntpt
+    label=$(lsblk -no LABEL "$dev" 2>/dev/null | head -1 | tr -d ' ')
+    name=$(basename -- "$dev")
+    [ -n "$label" ] || label="$name"
+    # L'étiquette vient du SUPPORT, donc d'une source non maîtrisée, et compose
+    # un chemin : elle est assainie.
+    label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '_')
+    mntpt="$MOUNT_ROOT/$label"
+    if mountpoint -q "$mntpt" 2>/dev/null; then
+        printf '{"ok":true,"already":true,"mountpoint":%s}\n' "$(_json "$mntpt")"; return 0
+    fi
+    mkdir -p "$mntpt" || { printf '{"ok":false,"error":"mkdir failed"}\n'; return 1; }
+    if mount -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>/dev/null; then
+        printf '{"ok":true,"mountpoint":%s,"readonly":true}\n' "$(_json "$mntpt")"
+    else
+        rmdir "$mntpt" 2>/dev/null
+        printf '{"ok":false,"error":%s}\n' "$(_json "montage refusé pour $dev")"; return 1
+    fi
+}
+
+cmd_unmount() {
+    local p="${1:-}" real
+    # Seul un point de montage que CE module a créé peut être démonté : on ne
+    # démonte jamais un support monté par l'opérateur ou par un autre module.
+    real=$(readlink -f -- "$p" 2>/dev/null)
+    case "$real" in
+        "$MOUNT_ROOT"/*) ;;
+        *) printf '{"ok":false,"error":%s}\n' "$(_json "hors des montages gérés : $p")"; return 2 ;;
+    esac
+    umount "$real" 2>/dev/null && rmdir "$real" 2>/dev/null
+    printf '{"ok":true}\n'
+}
+
+# ── browse ───────────────────────────────────────────────────────────────────
+cmd_browse() {
+    local p="${1:-$MOUNT_ROOT}" real
+    if ! real=$(_resolve_in_roots "$p"); then
+        printf '{"ok":false,"error":%s}\n' "$(_json "chemin hors des racines autorisées : $p")"; return 2
+    fi
+    python3 - "$real" <<'PY'
+import json, os, sys
+p = sys.argv[1]
+if not os.path.isdir(p):
+    print(json.dumps({"ok": False, "error": "pas un répertoire"})); raise SystemExit
+entries = []
+try:
+    with os.scandir(p) as it:
+        for e in it:
+            if e.name.startswith("."):
+                continue
+            try:
+                st = e.stat(follow_symlinks=False)
+                size = st.st_size
+            except OSError:
+                size = 0
+            entries.append({"name": e.name, "dir": e.is_dir(follow_symlinks=False),
+                            "size": size})
+except PermissionError:
+    print(json.dumps({"ok": False, "error": "lecture refusée"})); raise SystemExit
+# Répertoires d'abord, puis alphabétique : un listing mélangé se parcourt mal.
+entries.sort(key=lambda x: (not x["dir"], x["name"].lower()))
+print(json.dumps({"ok": True, "path": p, "entries": entries[:2000],
+                  "truncated": len(entries) > 2000}))
+PY
+}
+
+# ── copy / sync — mise en file ───────────────────────────────────────────────
+#
+# `sync` aligne la destination sur la source SANS jamais supprimer : un
+# --delete sur une destination mal choisie effacerait une médiathèque entière.
+_enqueue() {
+    local mode="$1" src="$2" dst="$3" rsrc rdst id
+    if ! rsrc=$(_resolve_in_roots "$src"); then
+        printf '{"ok":false,"error":%s}\n' "$(_json "source hors racines : $src")"; return 2; fi
+    if ! rdst=$(_resolve_in_roots "$dst"); then
+        printf '{"ok":false,"error":%s}\n' "$(_json "destination hors racines : $dst")"; return 2; fi
+    [ -e "$rsrc" ] || { printf '{"ok":false,"error":"source introuvable"}\n'; return 2; }
+    [ -d "$rdst" ] || { printf '{"ok":false,"error":"destination inexistante"}\n'; return 2; }
+    # Une destination en lecture seule doit etre refusee TOT : sinon le job part
+    # en file et echoue plus tard, sans que l'utilisateur comprenne pourquoi.
+    [ -w "$rdst" ] || { printf '{"ok":false,"error":"destination non inscriptible"}\n'; return 2; }
+    mkdir -p "$QUEUE_DIR" "$JOBS_DIR"
+    id="$(date +%s)-$$-$RANDOM"
+    python3 - "$QUEUE_DIR/$id.json" "$id" "$mode" "$rsrc" "$rdst" <<'PY'
+import json, sys
+path, jid, mode, src, dst = sys.argv[1:6]
+json.dump({"id": jid, "mode": mode, "src": src, "dst": dst,
+           "state": "queued", "copied": 0, "total": 0}, open(path, "w"))
+PY
+    printf '{"ok":true,"job":%s,"mode":%s}\n' "$(_json "$id")" "$(_json "$mode")"
+}
+
+cmd_copy() { _enqueue copy "${1:-}" "${2:-}"; }
+cmd_sync() { _enqueue sync "${1:-}" "${2:-}"; }
+
+# compare — lit les écarts, n'écrit rien. `rsync --dry-run` est l'outil juste :
+# il applique exactement les règles du transfert réel.
+cmd_compare() {
+    local rsrc rdst
+    rsrc=$(_resolve_in_roots "${1:-}") || { printf '{"ok":false,"error":"source hors racines"}\n'; return 2; }
+    rdst=$(_resolve_in_roots "${2:-}") || { printf '{"ok":false,"error":"destination hors racines"}\n'; return 2; }
+    local out; out=$(rsync -rn --itemize-changes -- "$rsrc/" "$rdst/" 2>/dev/null | head -500)
+    python3 - <<PY
+import json
+lines = """$out""".splitlines()
+print(json.dumps({"ok": True, "differences": len([l for l in lines if l.strip()]),
+                  "sample": [l for l in lines if l.strip()][:50]}))
+PY
+}
+
+# ── jobs / drain ─────────────────────────────────────────────────────────────
+cmd_jobs() {
+    python3 - "$QUEUE_DIR" "$JOBS_DIR" <<'PY'
+import glob, json, os, sys
+out = []
+for d in sys.argv[1:3]:
+    for f in sorted(glob.glob(os.path.join(d, "*.json"))):
+        try:
+            out.append(json.load(open(f)))
+        except Exception:
+            pass
+print(json.dumps({"jobs": out[-50:]}))
+PY
+}
+
+# drain — consommé par le minuteur. rsync porte la copie : reprise, préservation
+# des dates, et --partial pour qu'une coupure de bus ne reparte pas de zéro.
+cmd_drain() {
+    mkdir -p "$QUEUE_DIR" "$JOBS_DIR"
+    local f id mode src dst
+    for f in "$QUEUE_DIR"/*.json; do
+        [ -f "$f" ] || continue
+        id=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$f" 2>/dev/null) || continue
+        mode=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["mode"])' "$f")
+        src=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["src"])' "$f")
+        dst=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["dst"])' "$f")
+        err "drain $id: $mode $src -> $dst"
+        # JAMAIS --delete, meme en mode sync : aligner ne doit pas pouvoir
+        # effacer une mediatheque parce qu'une source a ete mal choisie.
+        if rsync -a --partial --info=progress2 -- "$src" "$dst/" >/dev/null 2>&1; then
+            python3 - "$f" "$JOBS_DIR/$id.json" done <<'PY'
+import json, os, sys
+src, dstf, state = sys.argv[1], sys.argv[2], sys.argv[3]
+d = json.load(open(src)); d["state"] = state
+json.dump(d, open(dstf, "w")); os.unlink(src)
+PY
+        else
+            python3 - "$f" "$JOBS_DIR/$id.json" failed <<'PY'
+import json, os, sys
+src, dstf, state = sys.argv[1], sys.argv[2], sys.argv[3]
+d = json.load(open(src)); d["state"] = state
+json.dump(d, open(dstf, "w")); os.unlink(src)
+PY
+        fi
+    done
+    printf '{"ok":true}\n'
+}
+
+cmd_help() {
+    cat <<EOF
+mediactl v$VERSION — supports externes
+
+  detect                  Supports + alertes de stabilité du bus (JSON)
+  browse <chemin>         Contenu d'un répertoire (confiné aux racines autorisées)
+  mount <périphérique>    Monte en LECTURE SEULE sous $MOUNT_ROOT
+  unmount <point>         Démonte — uniquement un montage géré par ce module
+  copy <src> <dst>        Met en file une copie
+  sync <src> <dst>        Aligne la destination (sans jamais supprimer)
+  compare <src> <dst>     Liste les écarts, n'écrit rien
+  jobs                    État de la file
+  drain                   Exécute la file (minuteur)
+EOF
+}
+
+case "${1:-help}" in
+    detect)  cmd_detect ;;
+    browse)  cmd_browse "${2:-}" ;;
+    mount)   cmd_mount "${2:-}" ;;
+    unmount) cmd_unmount "${2:-}" ;;
+    copy)    cmd_copy "${2:-}" "${3:-}" ;;
+    sync)    cmd_sync "${2:-}" "${3:-}" ;;
+    compare) cmd_compare "${2:-}" "${3:-}" ;;
+    jobs)    cmd_jobs ;;
+    drain)   cmd_drain ;;
+    *)       cmd_help ;;
+esac

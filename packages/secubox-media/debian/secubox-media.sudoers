@@ -1,0 +1,6 @@
+# SecuBox Media — le panneau/API non privilégié (utilisateur `secubox`) délègue
+# tout à mediactl : c'est la SEULE surface privilégiée du module. Le
+# confinement des chemins, le montage en lecture seule et le refus de supprimer
+# vivent dans le ctl, qui valide ses propres entrées — une garde posée dans la
+# couche HTTP serait contournable par tout autre appelant.
+secubox ALL=(root) NOPASSWD: /usr/sbin/mediactl

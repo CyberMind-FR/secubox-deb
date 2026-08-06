@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: médias externes — drainage de la file de transfert (#995).
+#
+# Un transfert de plusieurs centaines de Mo ne tient pas dans une requête HTTP.
+# L'API met en file et rend la main ; ce service copie, avec rsync --partial
+# pour qu'une coupure de bus ne fasse pas repartir de zéro.
+[Unit]
+Description=SecuBox Médias externes — drainage de la file de transfert
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/mediactl drain

@@ -1,0 +1,10 @@
+{
+  "subtitle": "External media",
+  "icon": "💽",
+  "order": 150,
+  "id": "media",
+  "name": "Médias externes",
+  "path": "/media/",
+  "category": "root",
+  "description": "Détection, navigation et transfert entre supports USB"
+}
