@@ -1,3 +1,18 @@
+secubox-mitmproxy (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * logrotate du cookie-audit : `create 0640 secubox-waf secubox-waf` + `su`,
+    au lieu d'un utilisateur `mitmproxy` qui n'existe pas sur l'hote. Ce
+    journal est ecrit par sbxwaf depuis la bascule WAF ; la directive datait de
+    la LXC mitmproxy decommissionnee.
+  * Consequence mesuree le 2026-08-06 : logrotate sortait en « unknown user »
+    et SAUTAIT le fichier — 684 Mo pour un maxsize declare a 50M. Le repertoire
+    etant retombe en secubox:secubox, sbxwaf ne pouvait plus ouvrir son propre
+    journal : panic au demarrage, pas d'ecoute sur :8085, et TOUT vhost
+    inspecte en 503 pendant que ceux en waf_bypass repondaient — un tableau
+    trompeur qui fait chercher du cote du service signale. (ref #992)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 06:30:00 +0200
+
 secubox-mitmproxy (1.1.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
