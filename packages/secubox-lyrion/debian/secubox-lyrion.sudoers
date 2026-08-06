@@ -1,0 +1,9 @@
+# SecuBox-Deb :: secubox-lyrion — delegation confinee
+#
+# Le panneau tourne en `secubox` et n'a aucun droit sur les conteneurs :
+# /data/lxc/<nom> appartient a l'idmap du conteneur (100000:100000,
+# drwxrwx---), donc meme la TRAVERSEE du repertoire lui est refusee.
+#
+# La delegation est bornee au sous-commande `medialib` : le panneau ne peut
+# pas invoquer lyrionctl dans son ensemble.
+secubox ALL=(root) NOPASSWD: /usr/sbin/lyrionctl medialib *

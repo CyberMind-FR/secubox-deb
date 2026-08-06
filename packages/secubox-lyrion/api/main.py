@@ -179,13 +179,16 @@ def rescan() -> Dict[str, Any]:
 
 
 # ── External media library (auto-detect + opt-in confirm) ─────────────────────
+# Delegue a `sudo -n lyrionctl medialib …`. Le sudo n'est pas cosmetique :
+# /data/lxc/<nom> appartient a l'idmap du conteneur (100000:100000,
+# drwxrwx---), donc `secubox` ne peut pas meme le traverser.
 # Delegates to `lyrionctl medialib …`, which always emits JSON (even for its
 # own error cases). The ctl work — a bounded filesystem scan for `detect`, a
 # bind-mount + rescan for `mount` — is blocking, so it runs in a worker thread
 # to keep the shared event loop free.
 async def _ctl_medialib(*args: str) -> Dict[str, Any]:
     def _run() -> Dict[str, Any]:
-        cmd = [CTL, "medialib", *args]
+        cmd = ["sudo", "-n", CTL, "medialib", *args]
         try:
             proc = subprocess.run(cmd, capture_output=True, timeout=90)
         except FileNotFoundError:

@@ -528,8 +528,17 @@ medialib_mount() {
         printf '{"ok":false,"error":%s}\n' "$(_json_str "path not found: $path")"; return 1
     fi
     cfg=$(_medialib_cfg)
+    # « introuvable » et « illisible » sont deux pannes differentes, et les
+    # confondre envoie chercher un fichier absent qui est en fait la. Le
+    # repertoire du conteneur appartient a l'idmap (100000:100000, drwxrwx---)
+    # et n'est traversable que par root.
+    if [ ! -e "$cfg" ] && [ ! -r "$(dirname "$cfg")" ]; then
+        printf '{"ok":false,"error":%s}\n' \
+            "$(_json_str "config LXC inaccessible ($cfg) — lyrionctl doit tourner en root (sudo)")"
+        return 1
+    fi
     if [ ! -f "$cfg" ]; then
-        printf '{"ok":false,"error":%s}\n' "$(_json_str "lxc config not found: $cfg")"; return 1
+        printf '{"ok":false,"error":%s}\n' "$(_json_str "config LXC absente : $cfg")"; return 1
     fi
     # READ-ONLY bind, create the target dir on start; idempotent.
     entry="lxc.mount.entry = $path $MEDIALIB_TARGET none bind,ro,create=dir 0 0"
