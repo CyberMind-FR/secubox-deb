@@ -213,3 +213,22 @@ def test_rule_is_scoped_to_the_wired_server_block(tmp_path):
         "la regle ne doit exister que dans le bloc cable"
     assert out.index("@sbx_wake") < out.index("autre.gk2"), \
         "elle doit etre dans le PREMIER bloc, celui qui porte l'include"
+
+
+def test_all_mode_covers_proxying_vhosts_only(tmp_path):
+    """Sans --all, 24 vhosts gardaient la page BRUTE de nginx sur un 502.
+
+    Les redirections pures sont exclues : sans backend, la regle y serait sans
+    effet."""
+    from api import nginxgen
+    (tmp_path / "proxy.conf").write_text(
+        "server {\n    server_name app.gk2;\n    location / {\n"
+        "        proxy_pass http://127.0.0.1:1;\n    }\n}\n")
+    (tmp_path / "redirect.conf").write_text(
+        "server {\n    server_name vieux.gk2;\n    return 301 https://app.gk2$request_uri;\n}\n")
+    (tmp_path / "site.conf.bak.1").write_text(
+        "server {\n    server_name sauvegarde.gk2;\n    location / { proxy_pass http://x; }\n}\n")
+    doms = nginxgen.proxying_domains(tmp_path)
+    assert "app.gk2" in doms
+    assert "vieux.gk2" not in doms, "une redirection n'a pas de backend"
+    assert "sauvegarde.gk2" not in doms, "les .bak ne sont pas charges par nginx"

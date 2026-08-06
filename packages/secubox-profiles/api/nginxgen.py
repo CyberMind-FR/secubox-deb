@@ -160,7 +160,38 @@ def _write_atomic(path: Path, text: str) -> None:
         raise
 
 
-def sync_and_reload(*, manifests, sites_dir: Path, run) -> dict:
+def proxying_domains(sites_dir: Path) -> list[str]:
+    """Domaines de TOUS les vhosts qui relaient vers un backend.
+
+    Le mode par defaut ne cable que les modules « a la demande ». Tous les
+    autres vhosts gardent donc la page BRUTE de nginx sur un 502 — ce que
+    l'utilisateur voit. Or le waker rend desormais une page soignee meme pour
+    un vhost non declare : rien ne justifie de les en priver.
+
+    Les vhosts de pure REDIRECTION sont ignores (pas de `proxy_pass`) : ils
+    n'ont aucun backend qui puisse tomber, la regle y serait sans effet.
+    """
+    doms: list[str] = []
+    for p in sorted(Path(sites_dir).iterdir()):
+        if not p.is_file() or any(x in p.name for x in (".bak", ".dpkg", ".pre-", "~")):
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if "proxy_pass" not in text:
+            continue
+        for line in text.splitlines():
+            st = line.split("#", 1)[0].strip()
+            if not st.startswith("server_name"):
+                continue
+            for tok in st[len("server_name"):].rstrip(";").split():
+                if tok not in ("_", "localhost") and "." in tok and tok not in doms:
+                    doms.append(tok)
+    return doms
+
+
+def sync_and_reload(*, manifests, sites_dir: Path, run, all_vhosts: bool = False) -> dict:
     """Câble l'include phase-2 dans chaque vhost on-demand, valide via
     `nginx -t`, puis recharge nginx — transactionnel : si `nginx -t` échoue,
     restaure tous les fichiers touchés depuis leur contenu original (gardé en
@@ -169,7 +200,7 @@ def sync_and_reload(*, manifests, sites_dir: Path, run) -> dict:
     `run(argv) -> (rc, out)` est injecté (nginx -t / reload), testable.
     Retourne {wired, already, no_config, reloaded, rolled_back}."""
     sites_dir = Path(sites_dir)
-    domains = ondemand_vhosts(manifests)
+    domains = proxying_domains(sites_dir) if all_vhosts else ondemand_vhosts(manifests)
     originals: dict[Path, str] = {}
     wired: list[str] = []
     already: list[str] = []

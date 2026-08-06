@@ -102,6 +102,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--json", action="store_true")
     sp2 = sub.add_parser("nginx-sync")
     sp2.add_argument("--sites", default="/etc/nginx/sites-available")
+    # Sans --all, seuls les modules « a la demande » sont cables : tous les
+    # autres vhosts gardent la page BRUTE de nginx sur un 502.
+    sp2.add_argument("--all", action="store_true",
+                     help="cabler TOUS les vhosts qui relaient, pas seulement les on-demand")
     sp3 = sub.add_parser("waf-sync")
     sp3.add_argument("--out", default="/etc/secubox/waf/on-demand-vhosts.json")
     sp4 = sub.add_parser("health-sync")
@@ -115,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         rep = nginxgen.sync_and_reload(
             manifests=load_all(Path(args.root) / "modules.d"),
-            sites_dir=Path(args.sites), run=_run)
+            sites_dir=Path(args.sites), run=_run, all_vhosts=args.all)
         print(f"nginx-sync: {len(rep['wired'])} câblé(s), {len(rep['already'])} déjà, "
               f"{len(rep['no_config'])} sans vhost"
               + (" — ROLLBACK (nginx -t a échoué)" if rep["rolled_back"] else ""))
