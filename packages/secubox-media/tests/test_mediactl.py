@@ -362,3 +362,32 @@ def test_detect_exposes_a_stable_identifier():
     src = CTL.read_text()
     assert "/dev/disk/by-uuid/" in src
     assert '"uuid"' in src
+
+
+def test_mount_operations_run_in_the_host_namespace():
+    """Le service tourne dans un espace de noms de montage PRIVE.
+
+    `MountFlags=shared` ne suffit pas : sa racine est `shared:N master:1`,
+    donc ESCLAVE de l'hote — il reçoit les montages de l'hote mais ne lui en
+    renvoie aucun. Consequence observee : un support monte depuis le panneau
+    etait invisible de ksmbd (partage vide), du minuteur de drainage, et du
+    conteneur Lyrion — qui ne voyait donc pas le disque."""
+    src = CTL.read_text()
+    assert "nsenter -t 1 -m" in src, "les montages doivent viser l'espace de l'hote"
+    for fn_name in ("cmd_mount", "cmd_unmount"):
+        fn = _func(fn_name)
+        for verb in ("mount ", "umount ", "mkdir -p", "rmdir "):
+            for line in fn.splitlines():
+                st = line.strip()
+                if st.startswith("#") or verb not in st:
+                    continue
+                if st.startswith(("case", "local", "printf", "[", "for")):
+                    continue
+                assert "_host_ns" in st, f"{fn_name}: hors espace hote -> {st}"
+
+
+def test_host_ns_is_a_noop_when_already_on_the_host():
+    """Appele depuis un shell root ordinaire, le ctl doit marcher sans nsenter."""
+    fn = _func("_host_ns")
+    assert "_in_host_mountns" in fn
+    assert 'command -v nsenter' in fn, "absence de nsenter ne doit pas tout casser"
