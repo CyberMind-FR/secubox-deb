@@ -267,13 +267,63 @@ _ly_latest() {
 _ly_current() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- dpkg-query -W -f='${Version}' lyrionmusicserver 2>/dev/null; }
 
 # check-upgrade — non-destructive: prints JSON {current, latest, available, major_jump}.
+# Cache de la derniere version connue (#993).
+#
+# `_ly_latest` sort vers le reseau. Appele depuis le chemin de requete du
+# panneau, il le prendrait en otage a chaque affichage — et le rendrait
+# dependant d'une panne DNS ou d'un depot lent. Le minuteur quotidien ecrit
+# ici, le panneau lit.
+readonly LY_VERSION_CACHE="${SECUBOX_LYRION_VERSION_CACHE:-/var/cache/secubox/lyrion/version.json}"
+
 cmd_check_upgrade() {
     local cur latest available=false major=false
     cur=$(_ly_current); latest=$(_ly_latest)
     if [ -n "$latest" ] && [ -n "$cur" ] && [ "$latest" != "$cur" ]; then
         available=true; [ "${latest%%.*}" != "${cur%%.*}" ] && major=true
     fi
-    printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s}\n' "$cur" "${latest:-$cur}" "$available" "$major"
+    local payload
+    payload=$(printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s,"checked_at":"%s"}' \
+        "$cur" "${latest:-$cur}" "$available" "$major" "$(date -Is)")
+    # Le cache n'est ecrit que si la version distante a REELLEMENT ete obtenue :
+    # memoriser un « latest = current » issu d'un echec reseau ferait disparaitre
+    # une mise a jour disponible du panneau, en silence.
+    if [ -n "$latest" ]; then
+        mkdir -p "$(dirname "$LY_VERSION_CACHE")" 2>/dev/null || true
+        printf '%s\n' "$payload" > "$LY_VERSION_CACHE" 2>/dev/null || true
+    fi
+    printf '%s\n' "$payload"
+}
+
+# version — lit le cache, sans jamais sortir vers le reseau. C'est ce que le
+# panneau interroge.
+cmd_version_status() {
+    local cur; cur=$(_ly_current)
+    if [ -r "$LY_VERSION_CACHE" ]; then
+        python3 - "$LY_VERSION_CACHE" "$cur" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+cur = sys.argv[2]
+# `current` est relu en direct QUAND C'EST POSSIBLE : le cache peut dater
+# d'avant un upgrade, et afficher une version obsolete apres coup serait pire
+# que ne rien afficher.
+#
+# Mais l'API tourne en `secubox` et ne peut pas interroger la LXC : la lecture
+# live y revient VIDE. Sans ce repli, le panneau afficherait une version
+# courante vide — mesure sur la board. On prefere donc le live, puis le cache,
+# et jamais le blanc.
+d["current"] = cur or d.get("current") or ""
+latest = d.get("latest") or cur
+d["latest"] = latest
+d["available"] = bool(latest and cur and latest != cur)
+d["cached"] = True
+print(json.dumps(d))
+PY
+    else
+        printf '{"current":"%s","latest":null,"available":false,"cached":false,"checked_at":null}\n' "$cur"
+    fi
 }
 
 # upgrade — download the new _all.deb and dpkg -i it (low risk: single package).
@@ -299,6 +349,12 @@ cmd_upgrade() {
 # RO bind target inside the LXC rootfs. Detect NEVER mounts.
 readonly MEDIALIB_TARGET="medialib/external"
 
+# Racine des montages que CE module cree lui-meme. Separee des points de
+# montage de l'operateur (/mnt, /media/<autre>) pour que `unmount` sache
+# exactement ce qu'il a le droit de demonter : on ne demonte jamais un support
+# qu'on n'a pas monte.
+readonly MEDIALIB_MOUNT_ROOT="${SECUBOX_LYRION_MOUNT_ROOT:-/media/secubox-lyrion}"
+
 _medialib_cfg()   { printf '%s\n' "$LXC_PATH/$LXC_NAME/config"; }
 _medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET"; }
 
@@ -313,6 +369,35 @@ _medialib_audio_count() {
             -o -iname '*.ogg' -o -iname '*.wav' -o -iname '*.aac' \
         \) 2>/dev/null | head -n 5000 | wc -l | tr -d ' ')
     printf '%s\n' "${n:-0}"
+}
+
+# Partitions porteuses d'un systeme de fichiers et NON montees (#993).
+#
+# La detection d'origine n'examinait que des repertoires DEJA montes : une cle
+# USB fraichement branchee, qu'aucun automontage ne prend en charge, restait
+# donc invisible — c'etait le trou signale par « aucun candidat detecte » alors
+# qu'un disque etiquete etait bien present.
+#
+# Emis en TSV : device, label, taille, systeme de fichiers, amovible(0/1).
+# Le comptage de fichiers audio n'est PAS possible ici sans monter, donc un
+# candidat bloc est rapporte tel quel — a l'utilisateur de decider. Monter pour
+# regarder serait exactement ce que le panneau promet de ne pas faire.
+_medialib_block_candidates() {
+    command -v lsblk >/dev/null 2>&1 || return 0
+    # PATH est DELIBEREMENT absent de la liste : `lsblk -P` emet
+    # `PATH="/dev/sda1"`, et l'evaluer ecraserait le PATH du shell — toute
+    # commande externe appelee ensuite dans la boucle deviendrait introuvable.
+    # Le chemin du peripherique est reconstruit depuis NAME.
+    lsblk -P -o NAME,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,TYPE 2>/dev/null | while IFS= read -r line; do
+        NAME=""; LABEL=""; SIZE=""; FSTYPE=""; MOUNTPOINT=""; RM=""; TYPE=""
+        eval "$line" 2>/dev/null || continue
+        [ "${TYPE:-}" = "part" ] || continue
+        [ -n "${FSTYPE:-}" ] || continue
+        [ -z "${MOUNTPOINT:-}" ] || continue
+        [ -n "${NAME:-}" ] || continue
+        printf '%s\t%s\t%s\t%s\t%s\n' \
+            "/dev/${NAME}" "${LABEL:-}" "${SIZE:-}" "${FSTYPE:-}" "${RM:-0}"
+    done
 }
 
 # Enumerate candidate mountpoints: immediate children of the external roots +
@@ -382,13 +467,62 @@ medialib_detect() {
         printf '{"path":%s,"label":%s,"audio_files":%s}' \
             "$(_json_str "$path")" "$(_json_str "$label")" "$n"
     done < <(_medialib_candidates | sort -u)
+    printf '],"devices":['
+    # Peripheriques non montes (#993). Rapportes SEPAREMENT des `candidates` :
+    # un chemin deja monte est pret a etre lie, un peripherique demande d'abord
+    # un montage hote. Les confondre ferait promettre au panneau une action qui
+    # echouerait.
+    local dfirst=1 dev dlabel dsize dfs drm
+    while IFS=$'\t' read -r dev dlabel dsize dfs drm; do
+        [ -n "$dev" ] || continue
+        [ "$dfirst" -eq 1 ] || printf ','
+        dfirst=0
+        printf '{"device":%s,"label":%s,"size":%s,"fstype":%s,"removable":%s,"mounted":false}' \
+            "$(_json_str "$dev")" "$(_json_str "$dlabel")" "$(_json_str "$dsize")" \
+            "$(_json_str "$dfs")" "$([ "${drm:-0}" = "1" ] && echo true || echo false)"
+    done < <(_medialib_block_candidates)
     printf ']}\n'
+}
+
+# Monte un peripherique bloc en LECTURE SEULE sous la racine du module, et
+# emet le point de montage. Le ro est tenu de bout en bout : une mediatheque
+# n'a pas a etre ecrite par le serveur, et HFS+ en ecriture sous Linux est un
+# risque connu.
+_medialib_mount_device() {
+    local dev="$1" label name mntpt
+    [ -b "$dev" ] || { printf '{"ok":false,"error":%s}\n' "$(_json_str "not a block device: $dev")" >&2; return 1; }
+    label=$(lsblk -no LABEL "$dev" 2>/dev/null | head -1 | tr -d ' ')
+    name=$(basename -- "$dev")
+    [ -n "$label" ] || label="$name"
+    # Nom de repertoire assaini : une etiquette vient du support, donc d'une
+    # source non maitrisee, et finit dans un chemin.
+    label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '_')
+    mntpt="$MEDIALIB_MOUNT_ROOT/$label"
+    if mountpoint -q "$mntpt" 2>/dev/null; then
+        printf '%s\n' "$mntpt"; return 0
+    fi
+    mkdir -p "$mntpt" || return 1
+    if ! mount -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>/dev/null; then
+        rmdir "$mntpt" 2>/dev/null || true
+        return 1
+    fi
+    printf '%s\n' "$mntpt"
 }
 
 medialib_mount() {
     local path="$1" cfg mntpt entry
     if [ -z "$path" ]; then
         printf '{"ok":false,"error":"no path given"}\n'; return 1
+    fi
+    # Un peripherique bloc est d'abord monte cote HOTE, en lecture seule, puis
+    # lie dans la LXC. Sans cette etape, « Monter » echouait sur tout support
+    # qu'aucun automontage n'avait pris en charge (#993).
+    if [ -b "$path" ]; then
+        local mounted_at
+        if ! mounted_at=$(_medialib_mount_device "$path"); then
+            printf '{"ok":false,"error":%s}\n' "$(_json_str "host mount failed for device: $path")"; return 1
+        fi
+        path="$mounted_at"
     fi
     if [ ! -d "$path" ]; then
         printf '{"ok":false,"error":%s}\n' "$(_json_str "path not found: $path")"; return 1
@@ -464,6 +598,7 @@ main() {
     shift || true
     case "$noun" in
         check-upgrade) cmd_check_upgrade ;;
+        version-status) cmd_version_status ;;
         upgrade) cmd_upgrade ;;
         components|status|access|install|reload) "cmd_${noun}" "$@" ;;
         medialib) cmd_medialib "$@" ;;
