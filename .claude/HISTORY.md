@@ -3,6 +3,22 @@
 
 ---
 
+## 2026-08-05 → 08-06 — Jitsi refondu, quatre dérives de packaging débusquées, 36 certificats expirés rattrapés
+
+Session en deux jours, partie d'une bascule Streamlit et terminée sur une convention écrite. Fil rouge : **des correctifs posés à la main sur la board qui ne remontaient jamais dans un paquet**, et personne pour le signaler.
+
+- **Streamlit — parc vidangé (#982).** 23 processus résidents → 0, charge 31.7 → 6.4. Le point bloquant n'était dans aucun plan : les 23 applis en cours étaient **irréveillables** (15 sans `.streamlit.toml`, 8 avec `port = 8501` et sans `entrypoint`). `app repair --apply` a capturé la vérité vivante avant toute extinction. Le piège du `pkill -f streamlit` global a été désamorcé **et prouvé** : le témoin déjà adopté est resté servi pendant la chute des 22 autres. `secubox-streamlit 1.4.1` (dont `StartLimitIntervalSec` déplacé en `[Unit]`, où systemd le lit enfin).
+- **Jitsi refondu LXC-native (#985, 2.1.1).** Le module 1.0.0 générait un `docker-compose.yml` et pilotait docker depuis le chemin de requête ; son service était `inactive` à cause d'un `ConditionPathExists` sur un fichier qu'aucun postinst ne créait. Remplacé par un LXC (10.100.0.190) + `jitsictl` confiné. HTTPS 200 et **WebSocket 101** vérifiés — et **pas de `waf_bypass`** : contrairement à ma conception initiale, sbxwaf relaie les mises à niveau depuis #796, l'inspection reste active. DNAT UDP/10000 empaquetée derrière `media-expose`, idempotente.
+- **Dérive HAProxy (#986).** `haproxyctl generate` refusait de régénérer depuis six jours : **toute modification déclarative de `haproxy.toml` était inerte**, sans que rien n'échoue. Deux entrées vivantes absentes des sources — le routage ACME (dont la suppression silencieuse aurait fait expirer les certificats) et `toolbox_landing`. Régénération rétablie : **0 route modifiée, 0 hôte perdu**. J'ai causé un 503 board-wide en route (backend WAF pointé sur la LXC décommissionnée), restauré en secondes ; la leçon est dans ma méthode — je comparais les noms, pas les contenus ni les associations.
+- **`ssl_redirect` n'était lu nulle part (#988).** 18 vhosts le déclaraient, 0 redirection produite. Implémenté avec `!is_acme_challenge` — sans cette exclusion la redirection aurait capté les défis ACME et cassé le renouvellement, soit la panne que #986 venait de réparer.
+- **TOTP : un code VALIDE échouait en 500 (#990).** L'anti-rejeu écrivait dans `/etc/secubox`, root, alors qu'auth tourne en `secubox`. `_save` n'étant appelé qu'en cas de succès, un **mauvais** code répondait proprement 401 et un **bon** code plantait. État déplacé vers `/var/lib/secubox/`. Le 500 était rendu en HTML par un `error_page` de niveau serveur : l'utilisateur voyait `JSON.parse`, pas une erreur serveur.
+- **36 certificats expirés servis en production (#991).** acme.sh renouvelait correctement ; **rien ne portait le résultat jusqu'à HAProxy** — aucun hook, les pem dataient du 7 mai. 76 redéployés (0 expiré, 84 valides), puis `certsctl deploy` + minuteur empaquetés, étendus au magasin certbot.
+- **503 board-wide (#992).** sbxwaf en boucle de panic : le logrotate du cookie-audit référençait l'utilisateur `mitmproxy`, qui n'existe pas sur l'hôte. Rotation jamais exécutée → **684 Mo pour un `maxsize 50M`**.
+- **Dérive nginx systémique (#989).** Les paquets installaient leur route dans `secubox.d/`, que le vhost **n'inclut pas** : la route empaquetée n'était jamais lue, il fallait la recopier à la main. 45 modules migrés en trois lots vérifiés, orphelins 74 → 30. Convention figée dans `MODULE-COMPLIANCE.md` — dont l'ancienne rédaction recommandait précisément le hand-edit fautif.
+- **`webui.conf` empaqueté (#987).** Vhost principal de la board, ~350 lignes, appartenant à aucun paquet depuis des mois. Repris à l'octet près dans `secubox-hub`, en conffile.
+
+---
+
 ## 2026-08-03 → 08-05 — Perf & fiabilité : mosaïques, certificats, châssis, playlists
 
 Session dense. La plupart des gains viennent de **causes racines trouvées sous des symptômes
