@@ -31,7 +31,7 @@
 
 set -uo pipefail
 
-readonly VERSION="1.1.1"
+readonly VERSION="1.1.3"
 readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
 readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
 readonly QUEUE_DIR="$STATE_DIR/queue"

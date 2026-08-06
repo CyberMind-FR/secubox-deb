@@ -247,3 +247,31 @@ def test_panel_replaces_the_button_by_the_reason():
     html = (CTL.parents[1] / "www" / "media" / "index.html").read_text()
     assert "devAction" in html
     assert "d.mountable === false" in html
+
+
+def test_panel_sends_the_token_and_redirects_on_401():
+    """Un 401 doit emmener à la connexion, pas laisser un panneau inerte.
+
+    Les trois POST portent l'en-tête ; sans redirection, l'utilisateur lit
+    « connexion requise » sans savoir où aller — c'est ce qui est arrivé au
+    premier clic sur « Monter »."""
+    html = (CTL.parents[1] / "www" / "media" / "index.html").read_text()
+    assert "localStorage.getItem('sbx_token')" in html, "clé de jeton du projet"
+    assert html.count("headers: hdrs()") >= 3, "chaque POST doit porter le jeton"
+    assert "login.html?redirect=" in html, "un 401 doit rediriger vers la connexion"
+
+
+def test_service_can_write_the_mount_root_and_propagates_mounts():
+    """Deux gardes nees du meme echec : « Montage : mkdir failed ».
+
+    ProtectSystem=strict rend /media en lecture seule DANS l'espace de noms du
+    service — la meme commande reussit depuis un shell root, ce qui egare le
+    diagnostic. Et comme PrivateTmp/ProtectSystem donnent a l'unite un espace
+    de noms de montage prive, un support monte sans propagation partagee
+    resterait invisible du minuteur de drainage (unite distincte) : les
+    transferts echoueraient sans rien dire."""
+    unit = (CTL.parents[1] / "debian" / "secubox-media.service").read_text()
+    rw = next(l for l in unit.splitlines() if l.startswith("ReadWritePaths="))
+    assert "/media" in rw, "la racine des montages doit etre inscriptible"
+    assert "MountFlags=shared" in unit, \
+        "sans propagation partagee, le montage est invisible hors du service"

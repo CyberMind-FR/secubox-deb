@@ -210,7 +210,17 @@ const errorToast = m => toast(m, true);
 
 async function api(path, opts) {
     const r = await fetch(API + path, opts || {});
-    if (r.status === 401) { errorToast('🔒 Connexion requise'); throw new Error('401'); }
+    if (r.status === 401) {
+        // Comme les 83 autres panneaux : on emmène à la connexion au lieu de
+        // dire « connexion requise » et de laisser l'utilisateur devant un
+        // panneau inerte. Le chemin courant est préservé pour revenir ici.
+        errorToast('🔒 Connexion requise — redirection…');
+        setTimeout(() => {
+            window.location.href = '/login.html?redirect=' +
+                encodeURIComponent(window.location.pathname);
+        }, 900);
+        throw new Error('401');
+    }
     let d = null;
     try { d = await r.json(); } catch (e) { /* corps non JSON */ }
     if (!r.ok) throw new Error((d && d.detail) || ('HTTP ' + r.status));
