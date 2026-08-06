@@ -1,3 +1,26 @@
+secubox-certs (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * certsctl : nouveau ctl, et le maillon qui manquait entre acme.sh et
+    HAProxy. acme.sh renouvelait correctement mais rien ne portait le resultat
+    jusqu'aux pem servis — aucun Le_ReloadCmd, aucun chemin d'installation.
+    Les pem de /data/haproxy/certs avaient ete fabriques UNE FOIS a la main le
+    7 mai 2026. Constat du 6 aout : 36 certificats EXPIRES en production,
+    39 expirant sous 21 jours, 10 valides sur 85 — alors que le magasin
+    acme.sh en detenait des valides jusqu'en novembre.
+  * `deploy` est idempotent et ne recharge HAProxy que si un pem a change : un
+    reload par passage de minuteur, sans raison, coupe des connexions pour
+    rien. Sans --apply il simule, pour pouvoir relire avant de toucher a la
+    production.
+  * Deux refus stricts, verifies par mutation : jamais de remplacement par un
+    certificat PLUS ANCIEN (une restauration du magasin regresserait vers
+    l'expiration), et jamais de deploiement quand une date est illisible — un
+    balayage ecrit trop vite avait deja masque 35 certificats expires en
+    avalant silencieusement les dates non analysables.
+  * Minuteur quotidien a 03:15, apres le cron acme.sh de 02:00, Persistent=true
+    pour rattraper un passage manque. (ref #991)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 06:00:00 +0200
+
 secubox-certs (1.0.1-1~bookworm1) bookworm; urgency=high
 
   * SECURITY: the API had NO authentication — `Depends` was imported and

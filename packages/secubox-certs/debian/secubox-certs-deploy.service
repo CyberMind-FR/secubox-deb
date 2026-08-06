@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: deploiement des certificats renouveles vers HAProxy (#991).
+#
+# acme.sh renouvelle ; ce service porte le resultat jusqu'aux pem servis. Sans
+# lui, le renouvellement reussit et personne ne le voit : constat du 6 aout
+# 2026, 36 certificats expires en production alors que le magasin en detenait
+# des valides jusqu'en novembre.
+[Unit]
+Description=SecuBox — deploiement des certificats renouveles vers HAProxy
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Idempotent : ne recharge HAProxy que si un pem a reellement change.
+ExecStart=/usr/sbin/certsctl deploy --apply
