@@ -1,4 +1,4 @@
-secubox-profiles (0.11.2-1~bookworm1) bookworm; urgency=medium
+secubox-profiles (0.12.0-1~bookworm1) bookworm; urgency=medium
 
   * nginx-sync declare aussi la regle 5xx DANS les blocs qui la surchargent.
     Un error_page declare dans un bloc REMPLACE ceux herites du serveur, il ne
@@ -8,6 +8,11 @@ secubox-profiles (0.11.2-1~bookworm1) bookworm; urgency=medium
     fonctionner sur ces vhosts — c'est-a-dire la majorite d'entre eux :
     l'include etait bien present, la page d'attente n'apparaissait jamais, et
     rien ne le signalait.
+  * `nginx-sync --all` : cabler TOUS les vhosts qui relaient, pas seulement
+    les modules « a la demande ». 24 vhosts gardaient la page BRUTE de nginx
+    sur un 502. Le waker rend desormais une page soignee meme pour un vhost
+    non declare — rien ne justifiait de les en priver. Les redirections pures
+    sont exclues : sans backend, la regle y serait sans effet.
   * La regle de bloc est BORNEE au server{} qui porte l'include. @sbx_wake
     n'y est defini que la : l'ajouter dans un autre bloc produit une reference
     a une location inexistante, `nginx -t` echoue, et nginx-sync annule tout.
