@@ -356,7 +356,20 @@ readonly MEDIALIB_TARGET="medialib/external"
 readonly MEDIALIB_MOUNT_ROOT="${SECUBOX_LYRION_MOUNT_ROOT:-/media/secubox-lyrion}"
 
 _medialib_cfg()   { printf '%s\n' "$LXC_PATH/$LXC_NAME/config"; }
-_medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET"; }
+# UN POINT DE MONTAGE PAR SUPPORT.
+#
+# La premiere version n'avait qu'une cible unique (`medialib/external`) et
+# `medialib mount` REMPLAÇAIT la precedente : brancher un second disque faisait
+# disparaitre le premier de Lyrion. Constate avec une cle et un disque de 2 To
+# — seule la cle etait visible.
+#
+# Le nom vient de l'etiquette du support, donc d'une source non maitrisee, et
+# compose un chemin : il est assaini.
+_medialib_slug() {
+    printf '%s' "$(basename -- "${1:-}")" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-40
+}
+_medialib_target() { printf '%s/%s' "$MEDIALIB_TARGET" "$(_medialib_slug "$1")"; }
+_medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$(_medialib_target "${1:-}")"; }
 
 # JSON string encoder — paths may carry spaces / quotes.
 _json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
@@ -427,12 +440,19 @@ _medialib_candidates() {
 }
 
 # Strip any prior medialib bind line from the LXC config (idempotent).
+# Ne retire QUE l'entree du support vise (ou toutes si aucun n'est donne).
+# Retirer aveuglement toutes les entrees faisait disparaitre les autres
+# supports a chaque nouveau montage.
 _medialib_strip_cfg() {
-    local cfg="$1" tmp
+    local cfg="$1" only="${2:-}" tmp pat
     [ -f "$cfg" ] || return 0
     tmp=$(mktemp) || return 1
-    grep -vE "^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*${MEDIALIB_TARGET}([[:space:]]|$)" \
-        "$cfg" > "$tmp" 2>/dev/null || true
+    if [ -n "$only" ]; then
+        pat="^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*$(_medialib_target "$only")([[:space:]]|$)"
+    else
+        pat="^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*${MEDIALIB_TARGET}/([[:space:]]|$|[^[:space:]]*[[:space:]])"
+    fi
+    grep -vE "$pat" "$cfg" > "$tmp" 2>/dev/null || true
     cat "$tmp" > "$cfg"
     rm -f "$tmp"
 }
@@ -447,6 +467,76 @@ _medialib_toml_set() {
     rm -f "$tmp"
     [ -n "$path" ] && printf 'external_medialib = "%s"\n' "$path" >> "$CONFIG_FILE"
     return 0
+}
+
+# ── Declarer le chemin aupres de LMS ────────────────────────────────────────
+#
+# MONTER N'EST PAS DECLARER. Le bind fait apparaitre le support dans le
+# conteneur, mais LMS ne scanne que les repertoires listes dans sa preference
+# `mediadirs`. Sans cette declaration, `medialib mount` repondait « monte » et
+# lançait une reindexation — d'un repertoire dont LMS n'avait jamais entendu
+# parler. Cote utilisateur : le disque est la, et Lyrion ne voit rien.
+#
+# La preference est editee AVEC LMS ARRETE : le serveur reecrit ses prefs en
+# sortant, et ecraserait une modification faite a chaud.
+_medialib_lms_prefs() {
+    printf '%s/%s/rootfs/var/lib/squeezeboxserver/prefs/server.prefs' "$LXC_PATH" "$LXC_NAME"
+}
+
+_medialib_lms_declare() {
+    local action="$1" src="${2:-}" target prefs changed=0
+    target="/$(_medialib_target "$src")"
+    target="/${target#/}"
+    prefs=$(_medialib_lms_prefs)
+    [ -f "$prefs" ] || { err "prefs LMS introuvables : $prefs"; return 1; }
+
+    changed=$(python3 - "$prefs" "$target" "$action" <<'PY'
+import re, sys
+prefs, target, action = sys.argv[1:4]
+lines = open(prefs).read().splitlines()
+out, i, inside, seen, changed = [], 0, False, False, 0
+while i < len(lines):
+    line = lines[i]
+    if line.startswith("mediadirs:"):
+        inside = True
+        out.append(line)
+        i += 1
+        # Collecte les entrees existantes de la liste.
+        items = []
+        while i < len(lines) and lines[i].startswith("- "):
+            items.append(lines[i][2:].strip())
+            i += 1
+        if action == "add":
+            if target not in items:
+                items.append(target); changed = 1
+        else:
+            if target in items:
+                items = [x for x in items if x != target]; changed = 1
+        out.extend("- " + x for x in items)
+        continue
+    out.append(line)
+    i += 1
+if changed:
+    open(prefs, "w").write("\n".join(out) + "\n")
+print(changed)
+PY
+) || return 1
+
+    if [ "${changed:-0}" = "1" ]; then
+        return 0
+    fi
+    return 2   # deja dans l'etat voulu
+}
+
+# Redemarre LMS pour que la preference soit relue, puis reindexe.
+_medialib_lms_restart() {
+    local svc
+    for svc in lyrionmusicserver logitechmediaserver; do
+        if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+            lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart "$svc" 2>/dev/null && return 0
+        fi
+    done
+    return 1
 }
 
 # Best-effort LMS rescan (same jsonrpc the /rescan endpoint uses).
@@ -612,13 +702,20 @@ medialib_mount() {
         printf '{"ok":false,"error":%s}\n' "$(_json_str "config LXC absente : $cfg")"; return 1
     fi
     # READ-ONLY bind, create the target dir on start; idempotent.
-    entry="lxc.mount.entry = $path $MEDIALIB_TARGET none bind,ro,create=dir 0 0"
-    _medialib_strip_cfg "$cfg"
+    entry="lxc.mount.entry = $path $(_medialib_target "$path") none bind,ro,create=dir 0 0"
+    _medialib_strip_cfg "$cfg" "$path"
     printf '%s\n' "$entry" >> "$cfg"
     _medialib_toml_set "$path"
+
+    # MONTER N'EST PAS DECLARER : sans cette etape, LMS reindexe un repertoire
+    # qu'il ne scanne pas, et l'utilisateur voit un disque monte dont Lyrion
+    # n'affiche rien.
+    if _medialib_lms_declare add "$path"; then
+        _medialib_lms_restart || err "LMS non redemarre — la preference sera relue au prochain demarrage"
+    fi
     # Live-mount (RO) if the container is already running.
     if lxc_running; then
-        mntpt=$(_medialib_mntpt)
+        mntpt=$(_medialib_mntpt "$path")
         mkdir -p "$mntpt" 2>/dev/null || true
         if ! mountpoint -q "$mntpt" 2>/dev/null; then
             mount --bind "$path" "$mntpt" 2>/dev/null \
@@ -630,16 +727,56 @@ medialib_mount() {
 }
 
 medialib_unmount() {
-    local cfg mntpt
+    # Un support precis, ou tous si aucun n'est donne. Sans argument, l'ancienne
+    # version retirait la seule cible existante ; avec plusieurs supports, il
+    # faut pouvoir en detacher un sans perdre les autres.
+    local cfg mntpt path="${1:-}"
     cfg=$(_medialib_cfg)
-    _medialib_strip_cfg "$cfg"
-    _medialib_toml_set ""
-    mntpt=$(_medialib_mntpt)
-    if mountpoint -q "$mntpt" 2>/dev/null; then
-        umount "$mntpt" 2>/dev/null || umount -l "$mntpt" 2>/dev/null || true
+    if [ -n "$path" ]; then
+        _medialib_lms_declare remove "$path" >/dev/null 2>&1 && _medialib_lms_restart
+        _medialib_strip_cfg "$cfg" "$path"
+        mntpt=$(_medialib_mntpt "$path")
+        if mountpoint -q "$mntpt" 2>/dev/null; then
+            umount "$mntpt" 2>/dev/null || umount -l "$mntpt" 2>/dev/null || true
+        fi
+    else
+        local m
+        for m in "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET"/*; do
+            [ -d "$m" ] || continue
+            mountpoint -q "$m" 2>/dev/null && { umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null || true; }
+        done
+        _medialib_strip_cfg "$cfg"
+        _medialib_lms_declare_purge >/dev/null 2>&1 && _medialib_lms_restart
     fi
+    _medialib_toml_set ""
     _medialib_trigger_scan
     printf '{"ok":true}\n'
+}
+
+# Retire toutes les mediatheques externes des prefs LMS.
+_medialib_lms_declare_purge() {
+    local prefs; prefs=$(_medialib_lms_prefs)
+    [ -f "$prefs" ] || return 1
+    python3 - "$prefs" "/${MEDIALIB_TARGET#/}" <<'PY'
+import sys
+prefs, prefix = sys.argv[1:3]
+lines = open(prefs).read().splitlines()
+out, i, changed = [], 0, 0
+while i < len(lines):
+    if lines[i].startswith("mediadirs:"):
+        out.append(lines[i]); i += 1
+        items = []
+        while i < len(lines) and lines[i].startswith("- "):
+            items.append(lines[i][2:].strip()); i += 1
+        kept = [x for x in items if not x.startswith(prefix + "/")]
+        changed = int(len(kept) != len(items))
+        out.extend("- " + x for x in kept)
+        continue
+    out.append(lines[i]); i += 1
+if changed:
+    open(prefs, "w").write("\n".join(out) + "\n")
+raise SystemExit(0 if changed else 1)
+PY
 }
 
 medialib_status() {
@@ -667,7 +804,7 @@ cmd_medialib() {
     case "$sub" in
         detect)         medialib_detect ;;
         mount)          medialib_mount "$path" ;;
-        unmount|umount) medialib_unmount ;;
+        unmount|umount) medialib_unmount "${3:-}" ;;
         status|--json)  medialib_status ;;
         *) err "unknown verb for 'medialib': $sub"; exit 1 ;;
     esac
