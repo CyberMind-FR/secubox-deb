@@ -1,3 +1,15 @@
+secubox-hub (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * webui.conf : l'error_page 5xx rejoint les 4xx dans les seules locations de
+    navigation. Au niveau serveur elle remplacait le corps de TOUTE reponse 5xx
+    par la page HTML, y compris sur les routes /api/. C'est ce qui a masque le
+    vrai defaut du TOTP (#990) : un code valide provoquait un 500 et
+    l'utilisateur voyait "JSON.parse: unexpected character" — une erreur
+    serveur maquillee en erreur de parsing, qui envoie chercher du cote du
+    client pendant des heures. (ref #990)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 05:35:00 +0200
+
 secubox-hub (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Empaqueter webui.conf, le vhost principal du panneau (:9080). Il vivait
