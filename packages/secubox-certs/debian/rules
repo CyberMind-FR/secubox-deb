@@ -18,3 +18,10 @@ override_dh_auto_install:
 	install -m 644 nginx/certs.conf debian/secubox-certs/etc/nginx/secubox.d/certs.conf
 	install -d debian/secubox-certs/etc/nginx/secubox-routes.d
 	install -m 644 nginx/certs.conf debian/secubox-certs/etc/nginx/secubox-routes.d/certs.conf
+	# Deploiement des certificats vers HAProxy (#991) : le maillon qui
+	# manquait entre acme.sh et les pem servis.
+	install -d debian/secubox-certs/usr/sbin
+	install -m 0755 sbin/certsctl debian/secubox-certs/usr/sbin/certsctl
+	install -d debian/secubox-certs/usr/lib/systemd/system
+	install -m 0644 debian/secubox-certs-deploy.service debian/secubox-certs/usr/lib/systemd/system/
+	install -m 0644 debian/secubox-certs-deploy.timer debian/secubox-certs/usr/lib/systemd/system/
