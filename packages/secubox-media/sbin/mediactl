@@ -31,13 +31,14 @@
 
 set -uo pipefail
 
-readonly VERSION="1.1.3"
+readonly VERSION="1.2.2"
 readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
 readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
 readonly QUEUE_DIR="$STATE_DIR/queue"
 readonly JOBS_DIR="$STATE_DIR/jobs"
 # Destinations inscriptibles déclarées. Une destination n'est PAS libre : elle
 # est choisie dans cette liste, ce qui évite qu'une requête écrive où elle veut.
+readonly ROOTS_FILE="${SECUBOX_MEDIA_ROOTS_FILE:-/etc/secubox/media.roots}"
 readonly EXTRA_ROOTS="${SECUBOX_MEDIA_EXTRA_ROOTS:-/data/lyrion/music:/data/media}"
 
 _json() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
@@ -65,11 +66,56 @@ err()   { printf '[mediactl] %s\n' "$*" >&2; }
 # Résout les liens et vérifie l'appartenance à une racine autorisée. Le
 # préfixe est compare sur le chemin RÉSOLU, jamais sur la chaîne fournie : sans
 # ça, un lien symbolique posé sur le support suffirait à sortir de la racine.
+# Les racines declarees sont la SOURCE UNIQUE du confinement : ce qui n'est pas
+# declare est inaccessible. Le fichier documente aussi ce qui est volontairement
+# exclu (rootfs des conteneurs, sauvegardes) — voir etc/media.roots.
+_declared_roots() {
+    [ -r "$ROOTS_FILE" ] || return 0
+    local line label path mode
+    while IFS='|' read -r label path mode; do
+        case "$label" in ''|\#*) continue ;; esac
+        label=$(printf '%s' "$label" | sed 's/^ *//; s/ *$//')
+        path=$(printf '%s' "$path"  | sed 's/^ *//; s/ *$//')
+        mode=$(printf '%s' "$mode"  | sed 's/^ *//; s/ *$//')
+        [ -n "$path" ] || continue
+        printf '%s\t%s\t%s\n' "$label" "$path" "${mode:-ro}"
+    done < "$ROOTS_FILE"
+}
+
 _allowed_roots() {
     printf '%s\n' "$MOUNT_ROOT"
+    _declared_roots | cut -f2
     local r
     IFS=':' read -ra _extra <<< "$EXTRA_ROOTS"
     for r in "${_extra[@]}"; do [ -n "$r" ] && printf '%s\n' "$r"; done
+}
+
+# Une destination doit etre declaree INSCRIPTIBLE. Un support externe monte en
+# lecture seule ne peut pas recevoir de fichiers, et une mediatheque de service
+# ne doit pas etre ecrite par un explorateur : PeerTube ou Nextcloud tiennent
+# une base de donnees que deposer un fichier a la main ne met pas a jour.
+_root_is_writable() {
+    local target="$1" real rroot
+    real=$(readlink -f -- "$target" 2>/dev/null) || return 1
+    # Un support externe monte en ecriture est inscriptible.
+    if [ "${real#"$MOUNT_ROOT"/}" != "$real" ] || [ "$real" = "$MOUNT_ROOT" ]; then
+        findmnt -no OPTIONS --target "$real" 2>/dev/null | grep -qw ro && return 1
+        return 0
+    fi
+    while IFS=$'\t' read -r _label rpath rmode; do
+        [ "$rmode" = "rw" ] || continue
+        rroot=$(readlink -f -- "$rpath" 2>/dev/null) || continue
+        [ "$real" = "$rroot" ] || [ "${real#"$rroot"/}" != "$real" ] && return 0
+    done < <(_declared_roots)
+    # Racines de test passees par l'environnement.
+    local r
+    IFS=':' read -ra _extra <<< "$EXTRA_ROOTS"
+    for r in "${_extra[@]}"; do
+        [ -n "$r" ] || continue
+        rroot=$(readlink -f -- "$r" 2>/dev/null) || continue
+        [ "$real" = "$rroot" ] || [ "${real#"$rroot"/}" != "$real" ] && return 0
+    done
+    return 1
 }
 
 _resolve_in_roots() {
@@ -91,11 +137,37 @@ _resolve_in_roots() {
 # Les partitions système sont marquées `system` et non proposées : monter la
 # partition EFI ou la racine n'a pas de sens et la proposer serait une invite à
 # l'erreur.
+# roots — les racines declarees, telles que le panneau doit les proposer.
+# Le panneau ne devine aucun chemin : il affiche ce que le ctl declare, donc
+# ce que le confinement autorise. Une seule source de verite.
+cmd_roots() {
+    python3 - <<PY
+import json, os
+rows = []
+$(_declared_roots | while IFS=$'\t' read -r l pth m; do
+    printf 'rows.append((%s, %s, %s))\n' "\"$l\"" "\"$pth\"" "\"$m\""
+done)
+out = []
+for label, path, mode in rows:
+    ok = os.path.isdir(path)
+    n = 0
+    if ok:
+        try:
+            n = len(os.listdir(path))
+        except OSError:
+            ok = False
+    out.append({"label": label, "path": path, "mode": mode,
+                "writable": mode == "rw", "exists": ok, "entries": n})
+print(json.dumps({"ok": True, "roots": out}))
+PY
+}
+
 cmd_detect() {
     python3 - "$MOUNT_ROOT" "$(command -v ntfs-3g >/dev/null 2>&1 && echo 1 || echo 0)" \
             "$(command -v hfsfuse >/dev/null 2>&1 && echo 1 || echo 0)" \
             "$(command -v mount.exfat-fuse >/dev/null 2>&1 && echo 1 || echo 0)" <<'PY'
 import json, re, subprocess, sys
+from datetime import datetime
 
 mount_root = sys.argv[1]
 have_ntfs3g, have_hfsfuse, have_exfat = (a == "1" for a in sys.argv[2:5])
@@ -171,24 +243,54 @@ for d in rows:
         "unsupported_reason": why or None,
     })
 
-# Instabilité du bus : des déconnexions répétées sur un même port expliquent un
-# support qui « n'apparaît pas ». L'afficher évite de chercher le défaut dans
-# l'interface alors qu'il est dans le câble ou l'alimentation.
+# Instabilité du bus.
+#
+# UN DEBRANCHEMENT N'EST PAS UNE PANNE. La premiere version comptait toutes les
+# deconnexions depuis le demarrage : six changements de cle deliberes
+# ressemblaient alors a un port defaillant, et l'alerte criait au loup — ce qui
+# la rend vite ignorable, y compris le jour ou elle dit vrai.
+#
+# Le vrai battement a une signature : des coupures RAPPROCHEES. Un port qui
+# lache sous la charge se reconnecte et relache en quelques secondes, la ou un
+# debranchement humain est isole dans le temps. On ne signale donc qu'une rafale
+# — au moins deux coupures separees de moins d'une minute — et on dit quand.
 alerts = []
 try:
     dm = subprocess.run(["dmesg", "-T"], capture_output=True, text=True, timeout=15).stdout
-    ports = {}
+    stamps = {}
     for line in dm.splitlines():
-        m = re.search(r"usb ([\d.\-]+): USB disconnect", line)
-        if m:
-            ports[m.group(1)] = ports.get(m.group(1), 0) + 1
-    for port, n in sorted(ports.items(), key=lambda kv: -kv[1]):
-        if n >= 2:
-            alerts.append({
-                "kind": "unstable_port", "port": port, "disconnects": n,
-                "message": f"Le port {port} a déconnecté {n} fois — "
-                           "un support branché dessus peut disparaître en cours de transfert.",
-            })
+        m = re.search(r"^\[(.+?)\] usb ([\d.\-]+): USB disconnect", line)
+        if not m:
+            continue
+        try:
+            t = datetime.strptime(m.group(1).strip(), "%a %b %d %H:%M:%S %Y")
+        except ValueError:
+            continue
+        stamps.setdefault(m.group(2), []).append(t)
+
+    now = datetime.now()
+    for port, ts in sorted(stamps.items()):
+        ts.sort()
+        windows = [(sum(1 for u in ts if 0 <= (u - t).total_seconds() <= 60),
+                    max(u for u in ts if 0 <= (u - t).total_seconds() <= 60))
+                   for t in ts]
+        burst, last = max(windows, key=lambda w: (w[0], w[1]), default=(0, None))
+        if burst < 2:
+            continue                      # coupures isolees = manipulations
+        mins = int((now - last).total_seconds() // 60)
+        quand = ("a l'instant" if mins < 2 else
+                 f"il y a {mins} min" if mins < 90 else
+                 f"il y a {mins // 60} h")
+        alerts.append({
+            "kind": "unstable_port", "port": port,
+            "disconnects": len(ts), "burst": burst,
+            "isolated_since": len([u for u in ts if u > last]),
+            "last_minutes_ago": mins,
+            "stale": mins > 30,
+            "message": (f"Le port {port} a laché {burst} fois en moins d'une minute "
+                        f"(dernière rafale {quand}) — un support branché dessus "
+                        "peut disparaître en cours de transfert."),
+        })
 except Exception:
     pass
 
@@ -198,7 +300,7 @@ PY
 
 # ── mount / unmount ──────────────────────────────────────────────────────────
 cmd_mount() {
-    local dev="${1:-}"
+    local dev="${1:-}" rw="${2:-}"
     [ -b "$dev" ] || { printf '{"ok":false,"error":%s}\n' "$(_json "pas un périphérique bloc : $dev")"; return 2; }
     local label name mntpt
     label=$(lsblk -no LABEL "$dev" 2>/dev/null | head -1 | tr -d ' ')
@@ -209,7 +311,18 @@ cmd_mount() {
     label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '_')
     mntpt="$MOUNT_ROOT/$label"
     if mountpoint -q "$mntpt" 2>/dev/null; then
-        printf '{"ok":true,"already":true,"mountpoint":%s}\n' "$(_json "$mntpt")"; return 0
+        local cur_ro=true
+        findmnt -no OPTIONS --target "$mntpt" 2>/dev/null | grep -qw rw && cur_ro=false
+        local want_ro=true; [ "$rw" = "--rw" ] && want_ro=false
+        if [ "$cur_ro" != "$want_ro" ]; then
+            printf '{"ok":true,"already":true,"mountpoint":%s,"readonly":%s,"mismatch":true,"note":%s}\n' \
+                "$(_json "$mntpt")" "$cur_ro" \
+                "$(_json "déjà monté en $([ "$cur_ro" = true ] && echo "lecture seule" || echo "écriture") — démontez-le d'abord pour changer de mode")"
+            return 0
+        fi
+        printf '{"ok":true,"already":true,"mountpoint":%s,"readonly":%s}\n' \
+            "$(_json "$mntpt")" "$cur_ro"
+        return 0
     fi
     # Verdict AVANT d'essayer. Ce noyau n'a ni hfsplus ni exfat ; « montage
     # refusé » sans motif fait chercher le défaut dans le module alors qu'il est
@@ -228,22 +341,29 @@ cmd_mount() {
 
     # Relais FUSE quand le noyau ne sait pas lire lui-même. Toujours en lecture
     # seule : la règle ne change pas parce que le pilote change.
+    # Lecture seule PAR DEFAUT. L'ecriture est un choix explicite : elle sert a
+    # exporter vers une cle, pas a subir une modification d'un support qu'on
+    # vient de brancher. Le panneau l'affiche comme une action distincte.
+    local mopts="ro,noexec,nosuid,nodev"
+    [ "$rw" = "--rw" ] && mopts="rw,noexec,nosuid,nodev"
+
     local mounted=1 mount_err
     case "$support" in
         fuse)
             case "$fs" in
-                ntfs|ntfs3)  mount_err=$(ntfs-3g -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
-                exfat)       mount_err=$(mount.exfat-fuse -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
-                hfsplus|hfs) mount_err=$(hfsfuse -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                ntfs|ntfs3)  mount_err=$(ntfs-3g -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                exfat)       mount_err=$(mount.exfat-fuse -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                hfsplus|hfs) mount_err=$(hfsfuse -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
             esac
             ;;
         *)
-            mount_err=$(mount -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+            mount_err=$(mount -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
     esac
 
     if [ "$mounted" -eq 0 ]; then
-        printf '{"ok":true,"mountpoint":%s,"readonly":true,"fstype":%s,"via":%s}\n' \
-            "$(_json "$mntpt")" "$(_json "$fs")" "$(_json "$support")"
+        printf '{"ok":true,"mountpoint":%s,"readonly":%s,"fstype":%s,"via":%s}\n' \
+            "$(_json "$mntpt")" "$([ "$rw" = "--rw" ] && echo false || echo true)" \
+            "$(_json "$fs")" "$(_json "$support")"
     else
         rmdir "$mntpt" 2>/dev/null
         printf '{"ok":false,"error":%s,"fstype":%s}\n' \
@@ -313,6 +433,16 @@ _enqueue() {
     # Une destination en lecture seule doit etre refusee TOT : sinon le job part
     # en file et echoue plus tard, sans que l'utilisateur comprenne pourquoi.
     [ -w "$rdst" ] || { printf '{"ok":false,"error":"destination non inscriptible"}\n'; return 2; }
+    # Et surtout : la destination doit etre DECLAREE inscriptible. Le systeme de
+    # fichiers ne dit rien de la politique — /data/peertube est writable sur le
+    # disque, mais y deposer un fichier a la main ne l'inscrit pas dans la base
+    # de PeerTube : le fichier serait invisible du service et occuperait la
+    # place. Une mediatheque de service est une SOURCE, pas une destination.
+    if ! _root_is_writable "$rdst"; then
+        printf '{"ok":false,"error":%s}\n' \
+            "$(_json "destination non declaree inscriptible : $rdst — une médiathèque de service s'alimente par le service, pas par copie de fichiers")"
+        return 2
+    fi
     mkdir -p "$QUEUE_DIR" "$JOBS_DIR"
     id="$(date +%s)-$$-$RANDOM"
     python3 - "$QUEUE_DIR/$id.json" "$id" "$mode" "$rsrc" "$rdst" <<'PY'
@@ -409,7 +539,8 @@ EOF
 case "${1:-help}" in
     detect)  cmd_detect ;;
     browse)  cmd_browse "${2:-}" ;;
-    mount)   cmd_mount "${2:-}" ;;
+    mount)   cmd_mount "${2:-}" "${3:-}" ;;
+    roots)   cmd_roots ;;
     unmount) cmd_unmount "${2:-}" ;;
     copy)    cmd_copy "${2:-}" "${3:-}" ;;
     sync)    cmd_sync "${2:-}" "${3:-}" ;;

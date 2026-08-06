@@ -48,6 +48,15 @@ h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); m
 .dev.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
 .dev-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .dev-name { color: var(--cyan); font-weight: 700; }
+.mnt.alt { background: transparent; color: var(--p31-dim); margin-left: 6px; }
+.mnt.alt:hover { color: var(--cyan); border-color: var(--cyan); }
+.nav {
+    padding: 2px 8px; font-size: 13px; line-height: 1.5;
+    background: var(--p31-bg2); border: 1px solid var(--p31-line);
+    color: var(--p31-fg); border-radius: 5px; cursor: pointer;
+}
+.nav:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.nav:disabled { opacity: .35; cursor: default; }
 .dev-blocked {
     margin-top: 8px; padding: 7px 9px; border-radius: 6px;
     background: rgba(255,90,90,.08); border: 1px solid rgba(255,90,90,.25);
@@ -131,6 +140,8 @@ button[disabled] { opacity: 0.4; cursor: not-allowed; }
         <div class="pane-head">
           <span class="label">Source</span>
           <select id="src-sel" aria-label="Support source"></select>
+          <button class="nav" id="src-up" title="Dossier parent" aria-label="Dossier parent">⬆</button>
+          <button class="nav" id="src-home" title="Revenir à la racine" aria-label="Racine">⌂</button>
         </div>
         <div class="crumb" id="src-crumb">—</div>
         <div class="list" id="src-list"></div>
@@ -149,6 +160,8 @@ button[disabled] { opacity: 0.4; cursor: not-allowed; }
         <div class="pane-head">
           <span class="label">Destination</span>
           <select id="dst-sel" aria-label="Support destination"></select>
+          <button class="nav" id="dst-up" title="Dossier parent" aria-label="Dossier parent">⬆</button>
+          <button class="nav" id="dst-home" title="Revenir à la racine" aria-label="Racine">⌂</button>
         </div>
         <div class="crumb" id="dst-crumb">—</div>
         <div class="list" id="dst-list"></div>
@@ -228,7 +241,8 @@ async function api(path, opts) {
 }
 
 // ── état ──────────────────────────────────────────────────────────────────
-const st = { devices: [], src: null, dst: null, srcPath: null, dstPath: null, sel: new Set() };
+const st = { devices: [], src: null, dst: null, srcPath: null, dstPath: null,
+             srcRoot: null, dstRoot: null, roots: [], sel: new Set() };
 
 function renderAlerts(alerts) {
     const el = document.getElementById('alerts');
@@ -261,11 +275,17 @@ function devChips(d) {
 // une limite de la machine, pas une erreur de l'utilisateur, et re-cliquer n'y
 // changera rien.
 function devAction(d) {
-    if (d.mounted) return '';
+    if (d.mounted) {
+        // Retirer une clé sans démonter perd ce qu'on vient d'y écrire : le
+        // bouton doit être là où le support est affiché.
+        return `<button class="mnt alt" data-unmount="${esc(d.mountpoint)}">Démonter</button>`;
+    }
     if (d.mountable === false) {
         return `<div class="dev-blocked">${esc(d.unsupported_reason || 'système de fichiers non pris en charge')}</div>`;
     }
-    return `<button class="mnt" data-mount="${esc(d.device)}">Monter (lecture seule)</button>`;
+    return `<button class="mnt" data-mount="${esc(d.device)}">Monter (lecture seule)</button>` +
+           `<button class="mnt alt" data-mount-rw="${esc(d.device)}" ` +
+           `title="Nécessaire pour copier VERS ce support">Monter en écriture</button>`;
 }
 
 function renderDevices(data) {
@@ -287,8 +307,18 @@ function renderDevices(data) {
     }
     // Les sélecteurs ne proposent que ce qui est MONTÉ : offrir un support non
     // monté ferait échouer la navigation sans expliquer pourquoi.
-    const opts = st.devices.filter(d => d.mounted)
-        .map(d => `<option value="${esc(d.mountpoint)}">${esc(d.label)} — ${esc(d.mountpoint)}</option>`).join('');
+    // Deux familles dans le même sélecteur : les supports externes montés et
+    // les médiathèques déclarées. Elles se naviguent pareil, et c'est tout
+    // l'intérêt — copier d'un disque USB vers Musique, ou l'inverse.
+    const usb = st.devices.filter(d => d.mounted)
+        .map(d => `<option value="${esc(d.mountpoint)}">💽 ${esc(d.label)} — ${esc(d.mountpoint)}</option>`).join('');
+    // Une médiathèque absente du disque n'est pas proposée : la choisir ne
+    // donnerait qu'une erreur de lecture.
+    const libs = (st.roots || []).filter(r => r.exists)
+        .map(r => `<option value="${esc(r.path)}">${r.writable ? '📥' : '📚'} ${esc(r.label)}` +
+                  `${r.writable ? '' : ' (lecture seule)'}</option>`).join('');
+    const opts = (usb ? `<optgroup label="Supports externes">${usb}</optgroup>` : '') +
+                 (libs ? `<optgroup label="Médiathèques">${libs}</optgroup>` : '');
     for (const id of ['src-sel', 'dst-sel']) {
         const s = document.getElementById(id);
         const keep = s.value;
@@ -299,6 +329,13 @@ function renderDevices(data) {
 
 async function refresh() {
     try {
+        // Les racines d'abord : renderDevices les affiche dans les sélecteurs,
+        // et un sélecteur reconstruit sans elles perdrait la médiathèque
+        // choisie à chaque rafraîchissement.
+        try {
+            const r = await api('/roots');
+            if (r && r.ok) st.roots = r.roots || [];
+        } catch (e) { /* les supports restent utilisables sans médiathèques */ }
         const d = await api('/detect');
         cache.detect = d;
         renderAlerts(d.alerts); renderDevices(d);
@@ -338,6 +375,7 @@ async function browse(side, path) {
         errorToast('Navigation : ' + e.message);
     }
     updateActions();
+    syncNav(side);
 }
 
 function updateActions() {
@@ -386,16 +424,30 @@ async function loadJobs() {
 
 // ── écouteurs délégués (§6 : jamais d'onclick interpolé) ──────────────────
 document.addEventListener('click', async ev => {
-    const mnt = ev.target.closest('[data-mount]');
+    const mnt = ev.target.closest('[data-mount], [data-mount-rw]');
     if (mnt) {
         ev.stopPropagation();
+        const rw = 'mountRw' in mnt.dataset;
+        const dev = rw ? mnt.dataset.mountRw : mnt.dataset.mount;
         try {
             const d = await api('/mount', { method: 'POST', headers: hdrs(),
-                body: JSON.stringify({ path: mnt.dataset.mount }) });
+                body: JSON.stringify({ path: dev, rw }) });
             if (!d.ok) throw new Error(d.error || 'montage refusé');
-            toast('Monté en lecture seule : ' + d.mountpoint);
+            toast((rw ? 'Monté en écriture : ' : 'Monté en lecture seule : ') + d.mountpoint);
             refresh();
         } catch (e) { errorToast('Montage : ' + e.message); }
+        return;
+    }
+    const um = ev.target.closest('[data-unmount]');
+    if (um) {
+        ev.stopPropagation();
+        try {
+            const d = await api('/unmount', { method: 'POST', headers: hdrs(),
+                body: JSON.stringify({ path: um.dataset.unmount }) });
+            if (!d.ok) throw new Error(d.error || 'démontage refusé');
+            toast('Démonté — le support peut être retiré');
+            refresh();
+        } catch (e) { errorToast('Démontage : ' + e.message); }
         return;
     }
     const row = ev.target.closest('.row');
@@ -412,8 +464,39 @@ document.addEventListener('click', async ev => {
     }
 });
 document.getElementById('refresh').onclick = refresh;
-document.getElementById('src-sel').onchange = e => { st.sel.clear(); browse('src', e.target.value); };
-document.getElementById('dst-sel').onchange = e => browse('dst', e.target.value);
+// Le volet retient SA racine : remonter ne doit jamais sortir du support
+// choisi. Le ctl refuserait de toute façon, mais échouer en silence sur un
+// clic de flèche donnerait l'impression d'un panneau cassé.
+function setRoot(side, path) {
+    st[side + 'Root'] = path || null;
+    browse(side, path);
+}
+function parentOf(path, root) {
+    if (!path || !root || path === root) return null;
+    const p = path.replace(/\/+$/, '');
+    const up = p.slice(0, p.lastIndexOf('/'));
+    if (!up || up.length < root.length) return root;
+    return up;
+}
+function syncNav(side) {
+    const up = document.getElementById(side + '-up');
+    const home = document.getElementById(side + '-home');
+    const at = st[side + 'Path'], root = st[side + 'Root'];
+    up.disabled = !parentOf(at, root);
+    home.disabled = !root || at === root;
+}
+for (const side of ['src', 'dst']) {
+    document.getElementById(side + '-up').onclick = () => {
+        const up = parentOf(st[side + 'Path'], st[side + 'Root']);
+        if (up) { if (side === 'src') st.sel.clear(); browse(side, up); }
+    };
+    document.getElementById(side + '-home').onclick = () => {
+        if (side === 'src') st.sel.clear();
+        browse(side, st[side + 'Root']);
+    };
+}
+document.getElementById('src-sel').onchange = e => { st.sel.clear(); setRoot('src', e.target.value); };
+document.getElementById('dst-sel').onchange = e => setRoot('dst', e.target.value);
 document.getElementById('act-copy').onclick = () => transfer('copy');
 document.getElementById('act-sync').onclick = () => transfer('sync');
 document.getElementById('act-compare').onclick = async () => {
@@ -425,10 +508,12 @@ document.getElementById('act-compare').onclick = async () => {
 };
 
 refresh().then(() => {
+    // setRoot et non browse : sans racine memorisee, les fleches de navigation
+    // resteraient inertes au chargement.
     const s = document.getElementById('src-sel').value;
     const t = document.getElementById('dst-sel').value;
-    if (s) browse('src', s);
-    if (t) browse('dst', t);
+    if (s) setRoot('src', s);
+    if (t) setRoot('dst', t);
 });
 loadJobs();
 setInterval(refresh, 15000);

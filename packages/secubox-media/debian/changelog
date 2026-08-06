@@ -1,3 +1,42 @@
+secubox-media (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Un « deja monte » dit desormais le mode reel. Cliquer « Monter (lecture
+    seule) » sur un support deja monte en ecriture repondait ok sans rien
+    signaler : fausse assurance sur une propriete de surete.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 15:20:00 +0200
+
+secubox-media (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Dater la RAFALE et non la derniere coupure. L'alerte annoncait un compte de
+    rafale ancien avec l'heure d'un debranchement isole recent, ce qui faisait
+    croire a un defaut en cours.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 15:00:00 +0200
+
+secubox-media (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Racines declarees (/etc/secubox/media.roots, conffile) : mediatheques des
+    services accessibles dans les deux colonnes — PeerTube, PhotoPrism,
+    Nextcloud, Podcaster, Torrent en source ; Musique, Medias, Partage en
+    destination. Le fichier est la SOURCE UNIQUE du confinement et documente
+    ce qui est volontairement exclu : rootfs des conteneurs (secrets des
+    services) et sauvegardes (chemin d'exfiltration vers une cle USB).
+  * Montage en ECRITURE, opt-in explicite : necessaire pour exporter vers une
+    cle. Le defaut reste la lecture seule.
+  * Demontage depuis le panneau : retirer une cle sans demonter perd ce qu'on
+    vient d'y ecrire.
+  * Navigation : dossier parent et retour racine, bornes au support choisi.
+  * Une mediatheque de service est refusee comme DESTINATION : y deposer un
+    fichier a la main ne l'inscrit pas dans la base du service — il serait
+    invisible et occuperait la place.
+  * Alerte de bus corrigee : elle comptait toutes les deconnexions depuis le
+    demarrage, donc six changements de cle deliberes ressemblaient a un port
+    defaillant. Seule une RAFALE est signalee (>= 2 coupures en moins d'une
+    minute), avec la date de la derniere.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 14:45:00 +0200
+
 secubox-media (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Corriger « Montage : mkdir failed ». ProtectSystem=strict rendait /media

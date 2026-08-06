@@ -18,6 +18,10 @@ override_dh_auto_install:
 	# Surface privilégiée unique du module.
 	install -d debian/secubox-media/usr/sbin
 	install -m 0755 sbin/mediactl debian/secubox-media/usr/sbin/mediactl
+	# Racines declarees : source unique du confinement. Conffile — une
+	# racine ajoutee par l'administrateur survit aux mises a jour.
+	install -d debian/secubox-media/etc/secubox
+	install -m 0644 etc/media.roots debian/secubox-media/etc/secubox/media.roots
 	install -d debian/secubox-media/etc/sudoers.d
 	install -m 0440 debian/secubox-media.sudoers debian/secubox-media/etc/sudoers.d/secubox-media
 	# Route nginx dans les DEUX répertoires (#989) : le vhost principal

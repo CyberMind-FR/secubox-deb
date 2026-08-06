@@ -138,18 +138,31 @@ def test_drain_never_passes_delete_to_rsync(tmp_path):
         assert "--delete" not in line, f"--delete ne doit jamais etre passe a rsync : {line.strip()}"
 
 
-def test_mount_is_read_only(tmp_path):
-    """TOUTE invocation de montage est en lecture seule, sans exception.
+def test_mount_defaults_to_read_only(tmp_path):
+    """Le DEFAUT est la lecture seule ; l'ecriture est un choix explicite.
 
-    Vérifié sur l'ensemble de la fonction plutôt que sur une fenêtre de
-    caractères : une fenêtre laisse passer un montage ajouté plus bas, ce qui
-    est exactement ce qui arrive quand on câble un relais FUSE."""
+    L'invariant a change en 1.2.0 : exporter vers une cle USB exige de pouvoir
+    ecrire. Ce qui reste garanti, c'est qu'un support fraichement branche n'est
+    jamais monte en ecriture sans qu'on l'ait demande."""
+    fn = _func("cmd_mount")
+    default = next(l for l in fn.splitlines() if "mopts=" in l and "--rw" not in l)
+    assert "ro," in default, f"le defaut doit etre ro : {default.strip()}"
+    rw = next(l for l in fn.splitlines() if "--rw" in l and "mopts=" in l)
+    assert "rw," in rw, "l'ecriture doit etre conditionnee a --rw"
+
+
+def test_no_mount_invocation_hardcodes_write_access(tmp_path):
+    """Aucun montage ne doit contourner $mopts.
+
+    Verifie sur TOUTE la fonction : une fenetre de caracteres laisserait passer
+    un montage ajoute plus bas, ce qui est exactement ce qui est arrive en
+    cablant les relais FUSE."""
     fn = _func("cmd_mount")
     invocations = [l.strip() for l in fn.splitlines()
-                   if (" -o " in l and ("mount" in l or "ntfs-3g" in l or "hfsfuse" in l))]
-    assert invocations, "aucune invocation de montage trouvée"
+                   if " -o " in l and any(c in l for c in ("mount", "ntfs-3g", "hfsfuse"))]
+    assert invocations, "aucune invocation de montage trouvee"
     for line in invocations:
-        assert "ro," in line, f"montage sans lecture seule : {line}"
+        assert '"$mopts"' in line, f"montage hors politique : {line}"
 
 
 def test_device_label_is_sanitised_before_composing_a_path(tmp_path):
@@ -226,13 +239,13 @@ def test_mount_refuses_unsupported_filesystem_with_a_reason():
         "le verdict doit précéder la création du point de montage"
 
 
-def test_fuse_relay_is_still_read_only():
-    """La règle « lecture seule » ne change pas parce que le pilote change."""
+def test_fuse_relays_follow_the_same_policy():
+    """La politique de montage ne change pas parce que le pilote change."""
     fn = _func("cmd_mount")
     for relay in ("ntfs-3g", "mount.exfat-fuse", "hfsfuse"):
         line = next((l for l in fn.splitlines() if relay in l and " -o " in l), None)
-        assert line, f"{relay} doit être câblé"
-        assert "ro," in line, f"{relay} monté sans ro : {line.strip()}"
+        assert line, f"{relay} doit etre cable"
+        assert '"$mopts"' in line, f"{relay} hors politique : {line.strip()}"
 
 
 def test_detect_computes_the_verdict_for_every_device():
@@ -275,3 +288,58 @@ def test_service_can_write_the_mount_root_and_propagates_mounts():
     assert "/media" in rw, "la racine des montages doit etre inscriptible"
     assert "MountFlags=shared" in unit, \
         "sans propagation partagee, le montage est invisible hors du service"
+
+
+# ── Racines declarees : le confinement suit la declaration ───────────────────
+
+def _roots_env(tmp_path, content):
+    rf = tmp_path / "media.roots"
+    rf.write_text(content)
+    env = _env(tmp_path)
+    env["SECUBOX_MEDIA_ROOTS_FILE"] = str(rf)
+    env["SECUBOX_MEDIA_EXTRA_ROOTS"] = ""
+    return env
+
+
+def test_a_service_library_is_a_source_not_a_destination(tmp_path):
+    """Deposer un fichier dans /data/peertube ne l'inscrit pas dans sa base.
+
+    Le systeme de fichiers autorise l'ecriture ; la politique non. Sans cette
+    garde, un transfert « reussi » produirait un fichier invisible du service
+    et occupant la place."""
+    lib = tmp_path / "lib"; lib.mkdir()
+    src = tmp_path / "src"; src.mkdir(); (src / "a.txt").write_text("x")
+    env = _roots_env(tmp_path, f"Biblio | {lib} | ro\nDepot | {src} | rw\n")
+    r = _run(["copy", str(src / "a.txt"), str(lib)], env)
+    d = json.loads(r.stdout)
+    assert d["ok"] is False
+    assert "declaree inscriptible" in d["error"]
+
+
+def test_a_declared_writable_root_accepts_the_transfer(tmp_path):
+    """La garde ne doit pas tout refuser : une destination declaree rw passe."""
+    dest = tmp_path / "dest"; dest.mkdir()
+    src = tmp_path / "src"; src.mkdir(); (src / "a.txt").write_text("x")
+    env = _roots_env(tmp_path, f"Source | {src} | ro\nDepot | {dest} | rw\n")
+    r = _run(["copy", str(src / "a.txt"), str(dest)], env)
+    assert json.loads(r.stdout)["ok"] is True
+
+
+def test_an_undeclared_path_stays_out_of_reach(tmp_path):
+    """Ce qui n'est pas declare reste inaccessible — rootfs, sauvegardes."""
+    env = _roots_env(tmp_path, "Depot | /tmp | rw\n")
+    d = json.loads(_run(["browse", "/etc"], env).stdout)
+    assert d["ok"] is False
+
+
+def test_already_mounted_reports_the_actual_mode():
+    """« Deja monte » doit dire le mode REEL, pas repondre ok sans rien dire.
+
+    Cliquer « Monter (lecture seule) » sur un support deja monte en ecriture
+    repondait ok : l'utilisateur croyait le support protege alors qu'il etait
+    inscriptible. Une fausse assurance sur une propriete de surete est pire
+    qu'un refus."""
+    fn = _func("cmd_mount")
+    head = fn[:fn.index("mkdir -p")]
+    assert "mismatch" in head, "un mode different doit etre signale"
+    assert "findmnt" in head, "le mode reel doit etre lu, pas suppose"
