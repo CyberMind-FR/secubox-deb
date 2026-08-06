@@ -13,4 +13,4 @@ exposure  = "public"
 units     = []
 lifecycle = "on-demand"
 priority  = 40
-portal    = { domain = "yacy.maegia.tv" }
+portal    = { domain = "yacy.gk2.secubox.in" }
