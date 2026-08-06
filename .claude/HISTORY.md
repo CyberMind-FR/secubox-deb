@@ -3,6 +3,32 @@
 
 ---
 
+## 2026-08-06 — secubox-media 1.1.x : dire pourquoi un support est illisible (#995)
+
+Le premier vrai disque branche (GK2021, HFS+) a repondu « montage refuse » sans
+motif. La cause n'etait pas dans le module : le noyau 6.12.85 de la board n'a ni
+`hfsplus`, ni `exfat`, ni `ntfs`, ni `udf`.
+
+- `detect` rend un verdict par peripherique (`mountable`, `unsupported_reason`) :
+  le panneau decide AVANT le clic, au lieu d'offrir un bouton qui ne peut pas
+  aboutir.
+- `mount` consulte ce verdict avant le `mkdir` : un refus previsible ne laisse
+  plus de point de montage vide derriere lui.
+- Relais FUSE cable pour ntfs/exfat/hfsplus, toujours en lecture seule, et
+  declare en `Recommends` (rsync, exfat-fuse, exfatprogs, ntfs-3g). `ntfs-3g`
+  etait deja installe sur la board sans etre utilise ; `exfat-fuse` a ete
+  installe — exFAT est le format courant des gros disques USB.
+- `hfsfuse` n'existe pas dans bookworm : HFS+ reste illisible, ce que le module
+  affiche desormais explicitement.
+
+Verdicts verifies en ligne : exfat/ntfs -> fuse, ext4/vfat -> kernel,
+hfsplus -> none. 19 tests, trois gardes nouvelles mutation-testees.
+`test_mount_is_read_only` verifie desormais TOUTE invocation de montage au lieu
+d'une fenetre de 1500 caracteres — fenetre qui laissait passer un montage ajoute
+plus bas, exactement le cas du relais FUSE.
+
+Reste : aucun transfert reel exerce, faute d'un support lisible monte.
+
 ## 2026-08-03 → 08-05 — Perf & fiabilité : mosaïques, certificats, châssis, playlists
 
 Session dense. La plupart des gains viennent de **causes racines trouvées sous des symptômes
