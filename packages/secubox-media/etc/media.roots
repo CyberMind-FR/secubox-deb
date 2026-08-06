@@ -1,0 +1,34 @@
+# SecuBox — racines declarees du module medias externes
+#
+# Format : etiquette | chemin | mode      (mode = ro ou rw)
+#
+# CE FICHIER EST LA SOURCE UNIQUE DU CONFINEMENT. mediactl refuse tout chemin
+# qui n'est pas sous l'une de ces racines : ce qui n'est pas declare ici est
+# inaccessible, y compris via un lien symbolique pose sur un support externe.
+#
+# CE QUI N'EST VOLONTAIREMENT PAS DECLARE, ET POURQUOI :
+#
+#   /data/lxc/<nom>      rootfs des conteneurs — contient leur /etc et leurs
+#                        secrets. Le declarer donnerait, depuis un panneau web,
+#                        une lecture des identifiants de chaque service.
+#   /data/secubox-backups, /data/secubox
+#                        sauvegardes et configurations. Les rendre copiables
+#                        vers une cle USB est un chemin d'exfiltration direct —
+#                        exactement ce qu'une evaluation CSPN examine en
+#                        premier. Une sauvegarde s'exporte par un outil qui
+#                        chiffre et journalise, pas par un explorateur de
+#                        fichiers.
+#
+# Ajouter une racine ici est une decision de securite, pas de confort.
+
+# ── Mediatheques des services (sources) ─────────────────────────────────────
+PeerTube    | /data/peertube           | ro
+PhotoPrism  | /data/photoprism         | ro
+Nextcloud   | /data/volumes/nextcloud  | ro
+Podcaster   | /data/secubox/podcaster  | ro
+Torrent     | /data/torrent            | ro
+
+# ── Destinations inscriptibles ──────────────────────────────────────────────
+Musique     | /data/music              | rw
+Medias      | /data/media              | rw
+Partage     | /data/shared             | rw

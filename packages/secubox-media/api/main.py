@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from secubox_core.auth import require_jwt
 
-VERSION = "1.1.3"
+VERSION = "1.2.2"
 CTL = "/usr/sbin/mediactl"
 
 log = logging.getLogger("secubox-media")
@@ -79,6 +79,13 @@ class PathBody(BaseModel):
     path: str
 
 
+class MountBody(BaseModel):
+    path: str
+    # Ecriture = choix explicite. Le defaut protege un support fraichement
+    # branche d'une modification non demandee ; l'opt-in sert a exporter.
+    rw: bool = False
+
+
 class TransferBody(BaseModel):
     src: str
     dst: str
@@ -103,10 +110,20 @@ async def browse(path: str = "") -> Dict[str, Any]:
     return await _ctl("browse", path, timeout=45)
 
 
+@app.get("/roots")
+async def roots() -> Dict[str, Any]:
+    """Racines déclarées : médiathèques des services et destinations.
+
+    Le panneau ne devine aucun chemin — il affiche ce que le ctl déclare, donc
+    exactement ce que le confinement autorise."""
+    return await _ctl("roots", timeout=30)
+
+
 @app.post("/mount")
-async def mount(body: PathBody, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
-    """Monte un périphérique en lecture seule. Action : jeton requis."""
-    return await _ctl("mount", body.path, timeout=60)
+async def mount(body: MountBody, _: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    """Monte un périphérique. Lecture seule sauf `rw` explicite."""
+    args = ["mount", body.path] + (["--rw"] if body.rw else [])
+    return await _ctl(*args, timeout=60)
 
 
 @app.post("/unmount")
