@@ -31,7 +31,7 @@
 
 set -uo pipefail
 
-readonly VERSION="1.0.0"
+readonly VERSION="1.1.0"
 readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
 readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
 readonly QUEUE_DIR="$STATE_DIR/queue"
@@ -41,6 +41,23 @@ readonly JOBS_DIR="$STATE_DIR/jobs"
 readonly EXTRA_ROOTS="${SECUBOX_MEDIA_EXTRA_ROOTS:-/data/lyrion/music:/data/media}"
 
 _json() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+# Un systeme de fichiers est montable si le noyau le connait, s'il est
+# chargeable, ou si un relais FUSE existe. Repondre AVANT le clic vaut mieux
+# que d'echouer apres : ce noyau n'a ni hfsplus ni exfat, et « montage refuse »
+# sans motif envoie chercher le defaut dans le module.
+_fs_support() {
+    local fs="$1"
+    [ -n "$fs" ] || { printf 'unknown'; return; }
+    if grep -qw -- "$fs" /proc/filesystems 2>/dev/null; then printf 'kernel'; return; fi
+    if modinfo -- "$fs" >/dev/null 2>&1; then printf 'module'; return; fi
+    case "$fs" in
+        ntfs|ntfs3) command -v ntfs-3g   >/dev/null 2>&1 && { printf 'fuse'; return; } ;;
+        exfat)      command -v mount.exfat-fuse >/dev/null 2>&1 && { printf 'fuse'; return; } ;;
+        hfsplus|hfs) command -v hfsfuse  >/dev/null 2>&1 && { printf 'fuse'; return; } ;;
+    esac
+    printf 'none'
+}
 err()   { printf '[mediactl] %s\n' "$*" >&2; }
 
 # ── Confinement ──────────────────────────────────────────────────────────────
@@ -75,10 +92,34 @@ _resolve_in_roots() {
 # partition EFI ou la racine n'a pas de sens et la proposer serait une invite à
 # l'erreur.
 cmd_detect() {
-    python3 - "$MOUNT_ROOT" <<'PY'
+    python3 - "$MOUNT_ROOT" "$(command -v ntfs-3g >/dev/null 2>&1 && echo 1 || echo 0)" \
+            "$(command -v hfsfuse >/dev/null 2>&1 && echo 1 || echo 0)" \
+            "$(command -v mount.exfat-fuse >/dev/null 2>&1 && echo 1 || echo 0)" <<'PY'
 import json, re, subprocess, sys
 
 mount_root = sys.argv[1]
+have_ntfs3g, have_hfsfuse, have_exfat = (a == "1" for a in sys.argv[2:5])
+
+try:
+    kernel_fs = {l.split()[-1] for l in open("/proc/filesystems") if l.strip()}
+except OSError:
+    kernel_fs = set()
+
+def fs_support(fs):
+    """Verdict rendu AVANT le clic. Un bouton qui ne peut pas aboutir doit le
+    dire — ce noyau n'a ni hfsplus ni exfat, et « montage refuse » sans motif
+    fait chercher le defaut dans le module."""
+    if not fs:
+        return "unknown", "système de fichiers inconnu"
+    if fs in kernel_fs:
+        return "kernel", ""
+    if fs in ("ntfs", "ntfs3") and have_ntfs3g:
+        return "fuse", ""
+    if fs in ("hfsplus", "hfs") and have_hfsfuse:
+        return "fuse", ""
+    if fs == "exfat" and have_exfat:
+        return "fuse", ""
+    return "none", f"système de fichiers {fs} non pris en charge par ce noyau"
 
 def lsblk():
     out = subprocess.run(
@@ -112,6 +153,7 @@ for d in rows:
     mp = d.get("MOUNTPOINT", "")
     label = d.get("LABEL", "")
     system = mp in SYSTEM_MOUNTS or label in SYSTEM_LABELS or not d.get("FSTYPE")
+    support, why = fs_support(d.get("FSTYPE", ""))
     devices.append({
         "device": "/dev/" + name,
         "label": label or name,
@@ -124,6 +166,9 @@ for d in rows:
         "readonly": d.get("RO") == "1",
         "managed": bool(mp) and mp.startswith(mount_root),
         "system": system,
+        "support": support,
+        "mountable": support in ("kernel", "fuse"),
+        "unsupported_reason": why or None,
     })
 
 # Instabilité du bus : des déconnexions répétées sur un même port expliquent un
@@ -166,12 +211,44 @@ cmd_mount() {
     if mountpoint -q "$mntpt" 2>/dev/null; then
         printf '{"ok":true,"already":true,"mountpoint":%s}\n' "$(_json "$mntpt")"; return 0
     fi
+    # Verdict AVANT d'essayer. Ce noyau n'a ni hfsplus ni exfat ; « montage
+    # refusé » sans motif fait chercher le défaut dans le module alors qu'il est
+    # dans le noyau, et laisse l'utilisateur re-cliquer sans espoir.
+    local fs support
+    fs=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1 | tr -d ' ')
+    support=$(_fs_support "$fs")
+    if [ "$support" = "none" ] || [ "$support" = "unknown" ]; then
+        printf '{"ok":false,"error":%s,"fstype":%s,"support":%s}\n' \
+            "$(_json "système de fichiers ${fs:-inconnu} non pris en charge par ce noyau")" \
+            "$(_json "$fs")" "$(_json "$support")"
+        return 1
+    fi
+
     mkdir -p "$mntpt" || { printf '{"ok":false,"error":"mkdir failed"}\n'; return 1; }
-    if mount -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>/dev/null; then
-        printf '{"ok":true,"mountpoint":%s,"readonly":true}\n' "$(_json "$mntpt")"
+
+    # Relais FUSE quand le noyau ne sait pas lire lui-même. Toujours en lecture
+    # seule : la règle ne change pas parce que le pilote change.
+    local mounted=1 mount_err
+    case "$support" in
+        fuse)
+            case "$fs" in
+                ntfs|ntfs3)  mount_err=$(ntfs-3g -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                exfat)       mount_err=$(mount.exfat-fuse -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                hfsplus|hfs) mount_err=$(hfsfuse -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+            esac
+            ;;
+        *)
+            mount_err=$(mount -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+    esac
+
+    if [ "$mounted" -eq 0 ]; then
+        printf '{"ok":true,"mountpoint":%s,"readonly":true,"fstype":%s,"via":%s}\n' \
+            "$(_json "$mntpt")" "$(_json "$fs")" "$(_json "$support")"
     else
         rmdir "$mntpt" 2>/dev/null
-        printf '{"ok":false,"error":%s}\n' "$(_json "montage refusé pour $dev")"; return 1
+        printf '{"ok":false,"error":%s,"fstype":%s}\n' \
+            "$(_json "${mount_err:-montage refusé pour $dev}")" "$(_json "$fs")"
+        return 1
     fi
 }
 
