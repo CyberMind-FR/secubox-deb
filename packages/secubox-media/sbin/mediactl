@@ -31,7 +31,7 @@
 
 set -uo pipefail
 
-readonly VERSION="1.3.0"
+readonly VERSION="1.4.0"
 readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
 readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
 readonly QUEUE_DIR="$STATE_DIR/queue"
@@ -60,6 +60,33 @@ _fs_support() {
     printf 'none'
 }
 err()   { printf '[mediactl] %s\n' "$*" >&2; }
+
+# ── Espace de noms de montage ────────────────────────────────────────────────
+#
+# Le service tourne dans un espace de noms de montage PRIVE (consequence de
+# ProtectSystem= et PrivateTmp=). `MountFlags=shared` ne suffit pas : la racine
+# du service est `shared:N master:1`, c'est-a-dire ESCLAVE de l'hote. Il RECOIT
+# les montages de l'hote, mais ne lui en renvoie AUCUN.
+#
+# Consequence observee : un support monte depuis le panneau etait invisible de
+# tout le reste — de ksmbd (partage vide cote client), du minuteur de drainage,
+# et du conteneur Lyrion, qui ne voyait donc pas le disque.
+#
+# On execute donc les operations de montage dans l'espace de noms de PID 1.
+# `nsenter` n'est utilise QUE si l'on n'y est pas deja : appele depuis un shell
+# root ordinaire, le ctl doit fonctionner sans dependance supplementaire.
+_in_host_mountns() {
+    [ "$(readlink /proc/self/ns/mnt 2>/dev/null)" = "$(readlink /proc/1/ns/mnt 2>/dev/null)" ]
+}
+
+# Exécute une commande dans l'espace de noms de montage de l'hote.
+_host_ns() {
+    if _in_host_mountns || ! command -v nsenter >/dev/null 2>&1; then
+        "$@"
+    else
+        nsenter -t 1 -m -- "$@"
+    fi
+}
 
 # ── Confinement ──────────────────────────────────────────────────────────────
 #
@@ -358,7 +385,7 @@ cmd_mount() {
         return 1
     fi
 
-    mkdir -p "$mntpt" || { printf '{"ok":false,"error":"mkdir failed"}\n'; return 1; }
+    _host_ns mkdir -p "$mntpt" || { printf '{"ok":false,"error":"mkdir failed"}\n'; return 1; }
 
     # Relais FUSE quand le noyau ne sait pas lire lui-même. Toujours en lecture
     # seule : la règle ne change pas parce que le pilote change.
@@ -372,13 +399,13 @@ cmd_mount() {
     case "$support" in
         fuse)
             case "$fs" in
-                ntfs|ntfs3)  mount_err=$(ntfs-3g -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
-                exfat)       mount_err=$(mount.exfat-fuse -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
-                hfsplus|hfs) mount_err=$(hfsfuse -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                ntfs|ntfs3)  mount_err=$(_host_ns ntfs-3g -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                exfat)       mount_err=$(_host_ns mount.exfat-fuse -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+                hfsplus|hfs) mount_err=$(_host_ns hfsfuse -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
             esac
             ;;
         *)
-            mount_err=$(mount -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
+            mount_err=$(_host_ns mount -o "$mopts" "$dev" "$mntpt" 2>&1) && mounted=0 ;;
     esac
 
     if [ "$mounted" -eq 0 ]; then
@@ -386,7 +413,7 @@ cmd_mount() {
             "$(_json "$mntpt")" "$([ "$rw" = "--rw" ] && echo false || echo true)" \
             "$(_json "$fs")" "$(_json "$support")"
     else
-        rmdir "$mntpt" 2>/dev/null
+        _host_ns rmdir "$mntpt" 2>/dev/null
         printf '{"ok":false,"error":%s,"fstype":%s}\n' \
             "$(_json "${mount_err:-montage refusé pour $dev}")" "$(_json "$fs")"
         return 1
@@ -402,7 +429,7 @@ cmd_unmount() {
         "$MOUNT_ROOT"/*) ;;
         *) printf '{"ok":false,"error":%s}\n' "$(_json "hors des montages gérés : $p")"; return 2 ;;
     esac
-    umount "$real" 2>/dev/null && rmdir "$real" 2>/dev/null
+    _host_ns umount "$real" 2>/dev/null && _host_ns rmdir "$real" 2>/dev/null
     printf '{"ok":true}\n'
 }
 

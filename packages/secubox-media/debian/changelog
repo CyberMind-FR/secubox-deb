@@ -1,3 +1,16 @@
+secubox-media (1.4.0-1~bookworm1) bookworm; urgency=high
+
+  * Les montages ont lieu dans l'espace de noms de PID 1. Le service tourne
+    dans un espace de noms PRIVE et MountFlags=shared ne suffit pas : sa racine
+    est `shared:N master:1`, donc ESCLAVE de l'hote — il reçoit les montages de
+    l'hote mais ne lui en renvoie aucun. Un support monte depuis le panneau
+    etait donc invisible de ksmbd (partage vide cote client), du minuteur de
+    drainage, et du conteneur Lyrion — qui ne voyait pas le disque.
+  * Le demontage et le nettoyage visent le meme espace : un rmdir hors espace
+    hote laisserait un repertoire fantome, expose en ecriture par le partage.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 18:10:00 +0200
+
 secubox-media (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Refuser les partitions systeme au montage. detect les masquait deja, mais
