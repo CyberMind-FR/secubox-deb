@@ -1,3 +1,40 @@
+secubox-media (1.5.0-1~bookworm1) bookworm; urgency=high
+
+  * Un pilote CHARGEABLE compte comme montable. `_fs_support` renvoyait
+    « module » pour un pilote disponible mais pas encore en memoire, et cet
+    etat manquait de la liste des montables : tout support redevenait
+    « illisible » apres chaque redemarrage, jusqu'au premier modprobe manuel.
+    hfsplus a disparu de l'interface pour cette seule raison.
+  * cmd_mount charge le pilote avant de renoncer.
+  * La verification « deja monte » interroge l'espace de noms de l'HOTE. Le
+    service a le sien, et un montage pose par nsenter y est invisible : le ctl
+    croyait le support libre et relançait un montage — « already mounted on
+    /media/secubox-media/... ». Correctif incomplet de 1.4.0.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 07 Aug 2026 08:30:00 +0200
+
+secubox-media (1.4.2-1~bookworm1) bookworm; urgency=high
+
+  * 1.4.1 definissait le choix du point de montage sans le brancher : le site
+    d'appel n'avait pas ete modifie, le defaut etait donc toujours la. Le test
+    qui l'accompagnait verifiait l'existence des fonctions, pas leur usage — il
+    passait avec le bug. Il verifie desormais l'appel.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 19:05:00 +0200
+
+secubox-media (1.4.1-1~bookworm1) bookworm; urgency=high
+
+  * detect annonçait le mauvais point de montage. Un peripherique peut en avoir
+    PLUSIEURS — le notre sous /media/secubox-media, et les binds poses ailleurs,
+    par exemple dans le rootfs d'un conteneur (Lyrion lie chaque support dans
+    /medialib/external/<nom>). lsblk n'en rapporte qu'UN, le dernier : le
+    panneau recevait /data/lxc/lyrion/rootfs/... et la navigation echouait sur
+    « chemin hors des racines autorisees ». Le confinement avait raison, la
+    detection avait tort. On choisit desormais le point de montage GERE par ce
+    module.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 18:55:00 +0200
+
 secubox-media (1.4.0-1~bookworm1) bookworm; urgency=high
 
   * Les montages ont lieu dans l'espace de noms de PID 1. Le service tourne

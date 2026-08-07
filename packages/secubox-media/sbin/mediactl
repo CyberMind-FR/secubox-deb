@@ -31,7 +31,7 @@
 
 set -uo pipefail
 
-readonly VERSION="1.4.0"
+readonly VERSION="1.5.0"
 readonly MOUNT_ROOT="${SECUBOX_MEDIA_MOUNT_ROOT:-/media/secubox-media}"
 readonly STATE_DIR="${SECUBOX_MEDIA_STATE_DIR:-/var/lib/secubox/media}"
 readonly QUEUE_DIR="$STATE_DIR/queue"
@@ -220,6 +220,37 @@ def fs_support(fs):
         return "fuse", ""
     return "none", f"système de fichiers {fs} non pris en charge par ce noyau"
 
+# Un peripherique peut avoir PLUSIEURS points de montage : le notre, sous
+# MOUNT_ROOT, et les binds poses ailleurs — par exemple dans le rootfs d'un
+# conteneur (Lyrion lie chaque support dans /medialib/external/<nom>).
+#
+# `lsblk` n'en rapporte qu'UN, le dernier. Il annonçait donc au panneau un
+# chemin comme /data/lxc/lyrion/rootfs/medialib/external/GK2021, que le
+# confinement refusait a juste titre : « chemin hors des racines autorisees ».
+# Le confinement avait raison, la detection avait tort.
+def mountpoints_by_source():
+    out = subprocess.run(["findmnt", "-rno", "SOURCE,TARGET"],
+                         capture_output=True, text=True, timeout=15).stdout
+    m = {}
+    for line in out.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) == 2:
+            m.setdefault(parts[0], []).append(parts[1])
+    return m
+
+
+def preferred_mountpoint(dev, fallback, root):
+    """Le point de montage GERE par ce module, s'il existe.
+
+    Sans ce choix, le panneau propose un chemin hors racines et la navigation
+    echoue sur une erreur de confinement — alors que le support est bien
+    monte."""
+    for t in MOUNTS.get(dev, []):
+        if t == root or t.startswith(root + "/"):
+            return t
+    return fallback
+
+
 def lsblk():
     out = subprocess.run(
         ["lsblk", "-P", "-o", "NAME,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,TYPE,TRAN,RO,UUID"],
@@ -234,6 +265,7 @@ def lsblk():
 # Transport hérité du disque parent : lsblk ne le porte que sur le disque, pas
 # sur ses partitions — sans cette propagation, un disque USB apparaît comme
 # interne, ce qui change la règle « copie, jamais déplacement ».
+MOUNTS = mountpoints_by_source()
 tran_by_disk, rows = {}, lsblk()
 for d in rows:
     if d.get("TYPE") == "disk":
@@ -249,7 +281,7 @@ for d in rows:
     name = d.get("NAME", "")
     parent = re.sub(r"p?\d+$", "", name)
     tran = d.get("TRAN") or tran_by_disk.get(parent, "")
-    mp = d.get("MOUNTPOINT", "")
+    mp = preferred_mountpoint("/dev/" + name, d.get("MOUNTPOINT", ""), mount_root)
     label = d.get("LABEL", "")
     system = mp in SYSTEM_MOUNTS or label in SYSTEM_LABELS or not d.get("FSTYPE")
     support, why = fs_support(d.get("FSTYPE", ""))
@@ -271,7 +303,11 @@ for d in rows:
         "managed": bool(mp) and mp.startswith(mount_root),
         "system": system,
         "support": support,
-        "mountable": support in ("kernel", "fuse"),
+        # « module » compte : un pilote chargeable est montable, il suffit de le
+        # charger. L'omettre rendait tout support « illisible » apres chaque
+        # redemarrage, jusqu'au premier modprobe manuel — hfsplus a disparu de
+        # l'interface pour cette seule raison.
+        "mountable": support in ("kernel", "module", "fuse"),
         "unsupported_reason": why or None,
     })
 
@@ -342,9 +378,12 @@ cmd_mount() {
     # un chemin : elle est assainie.
     label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '_')
     mntpt="$MOUNT_ROOT/$label"
-    if mountpoint -q "$mntpt" 2>/dev/null; then
+    # Dans l'espace de noms de l'HOTE : le service a le sien, et un montage
+    # pose par nsenter y est invisible. Sans cela le ctl croit le support
+    # libre et relance un montage — « already mounted on ... ».
+    if _host_ns mountpoint -q "$mntpt" 2>/dev/null; then
         local cur_ro=true
-        findmnt -no OPTIONS --target "$mntpt" 2>/dev/null | grep -qw rw && cur_ro=false
+        _host_ns findmnt -no OPTIONS --target "$mntpt" 2>/dev/null | grep -qw rw && cur_ro=false
         local want_ro=true; [ "$rw" = "--rw" ] && want_ro=false
         if [ "$cur_ro" != "$want_ro" ]; then
             printf '{"ok":true,"already":true,"mountpoint":%s,"readonly":%s,"mismatch":true,"note":%s}\n' \
@@ -378,6 +417,14 @@ cmd_mount() {
     local fs support
     fs=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -1 | tr -d ' ')
     support=$(_fs_support "$fs")
+    # Charger le pilote s'il est disponible mais pas encore en memoire : sans
+    # cela le premier montage apres un redemarrage echoue, alors que le noyau
+    # sait parfaitement lire ce systeme de fichiers.
+    if [ "$support" = "module" ]; then
+        _host_ns modprobe "$fs" 2>/dev/null || true
+        support=$(_fs_support "$fs")
+    fi
+
     if [ "$support" = "none" ] || [ "$support" = "unknown" ]; then
         printf '{"ok":false,"error":%s,"fstype":%s,"support":%s}\n' \
             "$(_json "système de fichiers ${fs:-inconnu} non pris en charge par ce noyau")" \

@@ -391,3 +391,52 @@ def test_host_ns_is_a_noop_when_already_on_the_host():
     fn = _func("_host_ns")
     assert "_in_host_mountns" in fn
     assert 'command -v nsenter' in fn, "absence de nsenter ne doit pas tout casser"
+
+
+def test_detect_prefers_the_mountpoint_it_manages():
+    """Un peripherique peut avoir PLUSIEURS points de montage.
+
+    Lyrion lie chaque support dans le rootfs de son conteneur ; lsblk n'en
+    rapporte qu'un, le dernier. detect annonçait alors
+    /data/lxc/lyrion/rootfs/... et la navigation echouait sur « chemin hors
+    des racines autorisees » — le confinement avait raison, la detection avait
+    tort."""
+    src = CTL.read_text()
+    assert "preferred_mountpoint" in src and "mountpoints_by_source" in src
+    assert 'findmnt", "-rno", "SOURCE,TARGET"' in src, \
+        "il faut TOUS les points de montage, pas celui que lsblk choisit"
+    # La fonction doit etre APPELEE, pas seulement definie. La premiere version
+    # de ce test verifiait l'existence et passait avec le site d'appel non
+    # branche : le bug etait toujours la, et le test le declarait corrige.
+    assert "mp = preferred_mountpoint(" in src, \
+        "detect doit UTILISER le choix, pas seulement le definir"
+    assert 'mp = d.get("MOUNTPOINT"' not in src, \
+        "le point de montage brut de lsblk ne doit plus etre utilise tel quel"
+
+
+def test_a_loadable_driver_counts_as_mountable():
+    """« module » = pilote disponible mais pas encore charge.
+
+    L'omettre de la liste des etats montables rendait tout support
+    « illisible » apres chaque redemarrage, jusqu'au premier modprobe manuel :
+    hfsplus a disparu de l'interface pour cette seule raison, alors que le
+    noyau savait parfaitement le lire."""
+    src = CTL.read_text()
+    assert '"mountable": support in ("kernel", "module", "fuse")' in src
+
+
+def test_mount_loads_the_driver_before_giving_up():
+    """Sinon le premier montage apres un redemarrage echoue sans raison."""
+    fn = _func("cmd_mount")
+    assert "modprobe" in fn
+    assert fn.index("modprobe") < fn.index("non pris en charge"), \
+        "il faut tenter le chargement AVANT de declarer non supporte"
+
+
+def test_already_mounted_check_runs_in_the_host_namespace():
+    """Le service a son propre espace de noms ; un montage pose par nsenter y
+    est invisible. Sans cette correction, le ctl croit le support libre et
+    relance un montage — « already mounted on ... »."""
+    fn = _func("cmd_mount")
+    line = next(l for l in fn.splitlines() if "mountpoint -q" in l)
+    assert "_host_ns" in line, f"verification hors espace hote : {line.strip()}"
