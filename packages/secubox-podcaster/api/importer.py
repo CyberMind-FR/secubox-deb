@@ -238,7 +238,18 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
             return
         JOB["total"] = len(entries)
         series = entries[0].get("playlist") or entries[0]["title"]
-        feed_url = f"youtube:{_slugify(series)}"
+        # IDENTITE PAR L'URL SOURCE, le slug n'est qu'un repli.
+        #
+        # Le slug vient du TITRE rendu par yt-dlp, qui varie selon l'URL
+        # fournie : `playlist?list=Y` et `watch?v=X&list=Y` designent la meme
+        # serie mais donnent des titres — donc des slugs — differents. Le
+        # 2026-08-07, un import lance depuis une URL `watch` a cree un second
+        # flux « le-bureau-des-complots » a cote de « bureau-des-complots » et
+        # retelecharge 34 episodes, soit 2,3 Go.
+        existing = store.feed_by_site(url)
+        feed_url = existing["url"] if existing else f"youtube:{_slugify(series)}"
+        if existing:
+            _jlog(f"flux existant retrouve par son URL source : {feed_url}")
         _jlog(f"{len(entries)} item(s): {series}")
 
         conf = _pt_conf() if mirror_peertube else None

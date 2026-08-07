@@ -99,3 +99,27 @@ def test_every_run_import_call_matches_the_signature():
         assert len(passed) == len(required), (
             f"ligne {node.lineno}: run_import attend {len(required)} arguments "
             f"{required}, l'appel en passe {len(passed)}")
+
+
+def test_feed_identity_comes_from_the_source_url_not_the_slug():
+    """Le slug vient du TITRE rendu par yt-dlp, qui varie selon l'URL fournie.
+
+    `playlist?list=Y` et `watch?v=X&list=Y` designent la MEME serie mais
+    donnent des titres — donc des slugs — differents. Le 2026-08-07, un import
+    lance depuis une URL `watch` a cree un second flux a cote du premier et
+    retelecharge 34 episodes, soit 2,3 Go."""
+    s = _src("importer.py")
+    assert "store.feed_by_site(url)" in s
+    idx_lookup = s.index("store.feed_by_site(url)")
+    idx_slug = s.index('f"youtube:{_slugify(series)}"')
+    assert idx_lookup < idx_slug, "la recherche par URL source doit PRECEDER le repli sur le slug"
+
+
+def test_playlist_id_is_what_identifies_a_series():
+    """Deux URL de la meme playlist doivent mener au meme flux."""
+    import re
+    s = _src("store.py")
+    fn = s[s.index("def feed_by_site"):s.index("def feed_site(")]
+    assert "list=" in fn, "l'identifiant de playlist doit servir de cle"
+    # la cle doit etre extraite, pas l'URL comparee telle quelle
+    assert "re.search" in fn or "_re.search" in fn
