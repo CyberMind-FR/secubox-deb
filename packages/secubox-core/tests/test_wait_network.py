@@ -80,3 +80,28 @@ def test_unit_timeout_is_bounded():
     """180 s suspendaient le demarrage trois minutes avant meme d'echouer."""
     m = re.search(r"^TimeoutStartSec=(\d+)", UNIT.read_text(), re.M)
     assert m and int(m.group(1)) <= 120, "l'attente doit rester bornee"
+
+
+def test_haproxy_is_pulled_by_network_online_not_only_multi_user():
+    """Un frontal TLS ne doit dependre d'AUCUNE cible tardive.
+
+    multi-user.target n'est atteinte qu'apres TOUS les services qu'elle
+    rassemble. Le 2026-08-07 un service lent (crowdsec) a tenu son job pendant
+    tout son demarrage : la cible n'a jamais ete atteinte et le job d'HAProxy
+    n'a JAMAIS ete tente — journal vide, 443 muet. La veille, c'etait une
+    boucle netboot. Le point commun n'est pas le service fautif, c'est la
+    DEPENDANCE."""
+    post = (ROOT / "debian" / "postinst").read_text()
+    assert "network-online.target.wants/haproxy.service" in post, \
+        "le lien doit etre cree explicitement : un [Install] en drop-in n'est " \
+        "pas honore par systemctl enable"
+
+
+def test_haproxy_ordering_is_reduced_to_the_network():
+    """secubox-streamlit-routes n'a rien a faire devant un frontal TLS."""
+    conf = HAPROXY_DROPIN.read_text()
+    after = [l for l in conf.splitlines() if l.startswith("After=")]
+    assert "After=" in after, "la liste heritee doit etre reinitialisee"
+    kept = [l for l in after if l != "After="]
+    assert kept and "streamlit" not in " ".join(kept)
+    assert "network-online.target" in " ".join(kept)
