@@ -1,3 +1,102 @@
+secubox-lyrion (1.5.0-1~bookworm1) bookworm; urgency=high
+
+  * PLUSIEURS mediatheques externes a la fois. La cible etait unique
+    (`medialib/external`) et chaque montage REMPLAÇAIT le precedent : avec une
+    cle et un disque de 2 To branches, Lyrion ne voyait que la cle. Un point de
+    montage par support desormais, derive de son etiquette (assainie).
+  * MONTER N'EST PAS DECLARER. Le bind rendait le support visible dans le
+    conteneur, mais LMS ne scanne que les chemins listes dans sa preference
+    `mediadirs` : la reindexation portait sur un repertoire dont LMS n'avait
+    jamais entendu parler. Le chemin est desormais declare, avec LMS arrete —
+    le serveur reecrit ses prefs en sortant et ecraserait une modification
+    faite a chaud.
+  * `medialib unmount <chemin>` detache un support sans perdre les autres.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 18:30:00 +0200
+
+secubox-lyrion (1.4.0-1~bookworm1) bookworm; urgency=high
+
+  * medialib detect : CACHE + VERROU + balayage borne. Chaque appel relançait
+    un `find` sur tous les supports ; le panneau interrogeant l'endpoint en
+    boucle, les scans s'EMPILAIENT — 7 `find` concurrents observes sur un
+    disque USB de 931 Go, sur 4 coeurs deja charges, charge moyenne 29.
+    Tant que la fonctionnalite etait cassee (1.3.0), le defaut restait
+    invisible : la reparer l'a libere.
+    - verrou exclusif, avec re-verification du cache APRES obtention (sinon N
+      appelants bloques relancent N balayages a la suite) ;
+    - cache horodate, conformement au pattern impose par CLAUDE.md pour tout
+      endpoint qui agrege ;
+    - `timeout` sur le find : `head -n 5000` bornait le nombre de resultats,
+      pas la duree de la marche — sur 931 Go en USB elle prend des minutes.
+  * Si le cache n'est pas inscriptible, le balayage a lieu quand meme, sans
+    cache. Renvoyer « rien trouve » parce qu'un fichier de verrou n'a pas pu
+    etre ecrit serait indiscernable, cote panneau, d'un support vide.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 17:40:00 +0200
+
+secubox-lyrion (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * La mediatheque externe n'avait JAMAIS pu fonctionner : l'API appelait
+    lyrionctl sans sudo, aucun fichier sudoers n'etait livre, et l'unite posait
+    NoNewPrivileges=true — qui neutralise sudo. /data/lxc/<nom> appartient a
+    l'idmap du conteneur (100000:100000, drwxrwx---) et n'est pas meme
+    traversable par `secubox`, d'ou « lxc config not found » pour un fichier
+    qui existe.
+  * Delegation confinee : sudoers borne a `lyrionctl medialib *`.
+  * Message honnete : « absente » et « inaccessible » sont deux pannes
+    differentes, et les confondre fait chercher un fichier qui est la.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 16:40:00 +0200
+
+secubox-lyrion (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * SECURITE : /check-upgrade et /upgrade exigent desormais un jeton. Cette
+    API n'en demandait aucun — decision anterieure du module, protegee par la
+    porte LAN de nginx — mais /upgrade redemarre le serveur de musique et
+    coupe toute lecture en cours. Une action de cette portee ne doit pas etre
+    declenchable par le seul fait d'etre sur le reseau local.
+  * Constate en verifiant : POST /api/v1/lyrion/check-upgrade repondait 200
+    SANS jeton, la ou l'equivalent PeerTube repondait 401. L'asymetrie venait
+    de moi : j'avais ajoute l'action la plus lourde du module sans la gater.
+  * Les verbes de lecture restent inchanges. (ref #993)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 09:20:00 +0200
+
+secubox-lyrion (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * version-status : `current` se replie sur le cache quand la lecture live
+    echoue. L'API tourne en `secubox` et ne peut pas interroger la LXC — la
+    lecture live y revient vide, et le panneau affichait une version courante
+    VIDE (mesure sur la board). Ordre retenu : live d'abord, cache ensuite,
+    jamais le blanc. (ref #993)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 08:45:00 +0200
+
+secubox-lyrion (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * medialib : detecter aussi les partitions NON montees (lsblk). La detection
+    n'examinait que des repertoires deja montes — une cle USB fraichement
+    branchee, qu'aucun automontage ne prend en charge, restait invisible. Le
+    panneau annoncait « aucun candidat detecte » alors qu'un disque etiquete
+    etait present.
+  * medialib mount accepte un peripherique : montage hote en LECTURE SEULE
+    (ro,noexec,nosuid,nodev) sous /media/secubox-lyrion/<label>, puis bind ro
+    dans la LXC. Auparavant `mount` n'ajoutait qu'un lxc.mount.entry et
+    echouait donc sur tout support non deja monte.
+  * L'etiquette du support est assainie avant de composer un chemin : elle
+    vient du media, donc d'une source non maitrisee.
+  * PATH volontairement exclu de `lsblk -P` : ce champ, evalue, ecraserait le
+    PATH du shell.
+  * version-status + cache : `check-upgrade` sort vers le reseau et ne doit pas
+    etre appele dans le chemin de requete du panneau. Minuteur quotidien qui
+    releve, panneau qui lit. Un echec reseau n'est JAMAIS memorise comme « a
+    jour » — ce serait faire disparaitre une mise a jour disponible en silence.
+  * API : /version-status, /check-upgrade, /upgrade. L'application reste
+    manuelle : elle redemarre le serveur et coupe toute lecture en cours.
+    (ref #993)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 08:30:00 +0200
+
 secubox-lyrion (1.1.3-1~bookworm1) bookworm; urgency=medium
 
   * lyrionctl: new `medialib` verb (detect | mount <path> | unmount | status),

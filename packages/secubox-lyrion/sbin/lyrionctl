@@ -267,13 +267,63 @@ _ly_latest() {
 _ly_current() { lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- dpkg-query -W -f='${Version}' lyrionmusicserver 2>/dev/null; }
 
 # check-upgrade — non-destructive: prints JSON {current, latest, available, major_jump}.
+# Cache de la derniere version connue (#993).
+#
+# `_ly_latest` sort vers le reseau. Appele depuis le chemin de requete du
+# panneau, il le prendrait en otage a chaque affichage — et le rendrait
+# dependant d'une panne DNS ou d'un depot lent. Le minuteur quotidien ecrit
+# ici, le panneau lit.
+readonly LY_VERSION_CACHE="${SECUBOX_LYRION_VERSION_CACHE:-/var/cache/secubox/lyrion/version.json}"
+
 cmd_check_upgrade() {
     local cur latest available=false major=false
     cur=$(_ly_current); latest=$(_ly_latest)
     if [ -n "$latest" ] && [ -n "$cur" ] && [ "$latest" != "$cur" ]; then
         available=true; [ "${latest%%.*}" != "${cur%%.*}" ] && major=true
     fi
-    printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s}\n' "$cur" "${latest:-$cur}" "$available" "$major"
+    local payload
+    payload=$(printf '{"current":"%s","latest":"%s","available":%s,"major_jump":%s,"checked_at":"%s"}' \
+        "$cur" "${latest:-$cur}" "$available" "$major" "$(date -Is)")
+    # Le cache n'est ecrit que si la version distante a REELLEMENT ete obtenue :
+    # memoriser un « latest = current » issu d'un echec reseau ferait disparaitre
+    # une mise a jour disponible du panneau, en silence.
+    if [ -n "$latest" ]; then
+        mkdir -p "$(dirname "$LY_VERSION_CACHE")" 2>/dev/null || true
+        printf '%s\n' "$payload" > "$LY_VERSION_CACHE" 2>/dev/null || true
+    fi
+    printf '%s\n' "$payload"
+}
+
+# version — lit le cache, sans jamais sortir vers le reseau. C'est ce que le
+# panneau interroge.
+cmd_version_status() {
+    local cur; cur=$(_ly_current)
+    if [ -r "$LY_VERSION_CACHE" ]; then
+        python3 - "$LY_VERSION_CACHE" "$cur" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+cur = sys.argv[2]
+# `current` est relu en direct QUAND C'EST POSSIBLE : le cache peut dater
+# d'avant un upgrade, et afficher une version obsolete apres coup serait pire
+# que ne rien afficher.
+#
+# Mais l'API tourne en `secubox` et ne peut pas interroger la LXC : la lecture
+# live y revient VIDE. Sans ce repli, le panneau afficherait une version
+# courante vide — mesure sur la board. On prefere donc le live, puis le cache,
+# et jamais le blanc.
+d["current"] = cur or d.get("current") or ""
+latest = d.get("latest") or cur
+d["latest"] = latest
+d["available"] = bool(latest and cur and latest != cur)
+d["cached"] = True
+print(json.dumps(d))
+PY
+    else
+        printf '{"current":"%s","latest":null,"available":false,"cached":false,"checked_at":null}\n' "$cur"
+    fi
 }
 
 # upgrade — download the new _all.deb and dpkg -i it (low risk: single package).
@@ -299,20 +349,73 @@ cmd_upgrade() {
 # RO bind target inside the LXC rootfs. Detect NEVER mounts.
 readonly MEDIALIB_TARGET="medialib/external"
 
+# Racine des montages que CE module cree lui-meme. Separee des points de
+# montage de l'operateur (/mnt, /media/<autre>) pour que `unmount` sache
+# exactement ce qu'il a le droit de demonter : on ne demonte jamais un support
+# qu'on n'a pas monte.
+readonly MEDIALIB_MOUNT_ROOT="${SECUBOX_LYRION_MOUNT_ROOT:-/media/secubox-lyrion}"
+
 _medialib_cfg()   { printf '%s\n' "$LXC_PATH/$LXC_NAME/config"; }
-_medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET"; }
+# UN POINT DE MONTAGE PAR SUPPORT.
+#
+# La premiere version n'avait qu'une cible unique (`medialib/external`) et
+# `medialib mount` REMPLAÇAIT la precedente : brancher un second disque faisait
+# disparaitre le premier de Lyrion. Constate avec une cle et un disque de 2 To
+# — seule la cle etait visible.
+#
+# Le nom vient de l'etiquette du support, donc d'une source non maitrisee, et
+# compose un chemin : il est assaini.
+_medialib_slug() {
+    printf '%s' "$(basename -- "${1:-}")" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-40
+}
+_medialib_target() { printf '%s/%s' "$MEDIALIB_TARGET" "$(_medialib_slug "$1")"; }
+_medialib_mntpt() { printf '%s\n' "$LXC_PATH/$LXC_NAME/rootfs/$(_medialib_target "${1:-}")"; }
 
 # JSON string encoder — paths may carry spaces / quotes.
 _json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
 
 # Count audio files under a path (bounded so `detect` stays responsive).
+# Le balayage est BORNE DANS LE TEMPS. Sur un disque USB de 931 Go (HFS+), il
+# prend des minutes : `head -n 5000` limite le nombre de resultats, pas la
+# duree de la marche. Sans borne, un support volumineux immobilise un scan
+# pendant tout le temps qu'il faut.
 _medialib_audio_count() {
     local path="$1" n=0
-    n=$(find "$path" -maxdepth 6 -type f \( \
+    n=$(timeout "${MEDIALIB_SCAN_TIMEOUT:-20}" \
+        find "$path" -maxdepth 6 -type f \( \
             -iname '*.mp3' -o -iname '*.flac' -o -iname '*.m4a' \
             -o -iname '*.ogg' -o -iname '*.wav' -o -iname '*.aac' \
         \) 2>/dev/null | head -n 5000 | wc -l | tr -d ' ')
     printf '%s\n' "${n:-0}"
+}
+
+# Partitions porteuses d'un systeme de fichiers et NON montees (#993).
+#
+# La detection d'origine n'examinait que des repertoires DEJA montes : une cle
+# USB fraichement branchee, qu'aucun automontage ne prend en charge, restait
+# donc invisible — c'etait le trou signale par « aucun candidat detecte » alors
+# qu'un disque etiquete etait bien present.
+#
+# Emis en TSV : device, label, taille, systeme de fichiers, amovible(0/1).
+# Le comptage de fichiers audio n'est PAS possible ici sans monter, donc un
+# candidat bloc est rapporte tel quel — a l'utilisateur de decider. Monter pour
+# regarder serait exactement ce que le panneau promet de ne pas faire.
+_medialib_block_candidates() {
+    command -v lsblk >/dev/null 2>&1 || return 0
+    # PATH est DELIBEREMENT absent de la liste : `lsblk -P` emet
+    # `PATH="/dev/sda1"`, et l'evaluer ecraserait le PATH du shell — toute
+    # commande externe appelee ensuite dans la boucle deviendrait introuvable.
+    # Le chemin du peripherique est reconstruit depuis NAME.
+    lsblk -P -o NAME,LABEL,SIZE,FSTYPE,MOUNTPOINT,RM,TYPE 2>/dev/null | while IFS= read -r line; do
+        NAME=""; LABEL=""; SIZE=""; FSTYPE=""; MOUNTPOINT=""; RM=""; TYPE=""
+        eval "$line" 2>/dev/null || continue
+        [ "${TYPE:-}" = "part" ] || continue
+        [ -n "${FSTYPE:-}" ] || continue
+        [ -z "${MOUNTPOINT:-}" ] || continue
+        [ -n "${NAME:-}" ] || continue
+        printf '%s\t%s\t%s\t%s\t%s\n' \
+            "/dev/${NAME}" "${LABEL:-}" "${SIZE:-}" "${FSTYPE:-}" "${RM:-0}"
+    done
 }
 
 # Enumerate candidate mountpoints: immediate children of the external roots +
@@ -337,12 +440,19 @@ _medialib_candidates() {
 }
 
 # Strip any prior medialib bind line from the LXC config (idempotent).
+# Ne retire QUE l'entree du support vise (ou toutes si aucun n'est donne).
+# Retirer aveuglement toutes les entrees faisait disparaitre les autres
+# supports a chaque nouveau montage.
 _medialib_strip_cfg() {
-    local cfg="$1" tmp
+    local cfg="$1" only="${2:-}" tmp pat
     [ -f "$cfg" ] || return 0
     tmp=$(mktemp) || return 1
-    grep -vE "^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*${MEDIALIB_TARGET}([[:space:]]|$)" \
-        "$cfg" > "$tmp" 2>/dev/null || true
+    if [ -n "$only" ]; then
+        pat="^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*$(_medialib_target "$only")([[:space:]]|$)"
+    else
+        pat="^[[:space:]]*lxc\.mount\.entry[[:space:]]*=.*${MEDIALIB_TARGET}/([[:space:]]|$|[^[:space:]]*[[:space:]])"
+    fi
+    grep -vE "$pat" "$cfg" > "$tmp" 2>/dev/null || true
     cat "$tmp" > "$cfg"
     rm -f "$tmp"
 }
@@ -359,6 +469,76 @@ _medialib_toml_set() {
     return 0
 }
 
+# ── Declarer le chemin aupres de LMS ────────────────────────────────────────
+#
+# MONTER N'EST PAS DECLARER. Le bind fait apparaitre le support dans le
+# conteneur, mais LMS ne scanne que les repertoires listes dans sa preference
+# `mediadirs`. Sans cette declaration, `medialib mount` repondait « monte » et
+# lançait une reindexation — d'un repertoire dont LMS n'avait jamais entendu
+# parler. Cote utilisateur : le disque est la, et Lyrion ne voit rien.
+#
+# La preference est editee AVEC LMS ARRETE : le serveur reecrit ses prefs en
+# sortant, et ecraserait une modification faite a chaud.
+_medialib_lms_prefs() {
+    printf '%s/%s/rootfs/var/lib/squeezeboxserver/prefs/server.prefs' "$LXC_PATH" "$LXC_NAME"
+}
+
+_medialib_lms_declare() {
+    local action="$1" src="${2:-}" target prefs changed=0
+    target="/$(_medialib_target "$src")"
+    target="/${target#/}"
+    prefs=$(_medialib_lms_prefs)
+    [ -f "$prefs" ] || { err "prefs LMS introuvables : $prefs"; return 1; }
+
+    changed=$(python3 - "$prefs" "$target" "$action" <<'PY'
+import re, sys
+prefs, target, action = sys.argv[1:4]
+lines = open(prefs).read().splitlines()
+out, i, inside, seen, changed = [], 0, False, False, 0
+while i < len(lines):
+    line = lines[i]
+    if line.startswith("mediadirs:"):
+        inside = True
+        out.append(line)
+        i += 1
+        # Collecte les entrees existantes de la liste.
+        items = []
+        while i < len(lines) and lines[i].startswith("- "):
+            items.append(lines[i][2:].strip())
+            i += 1
+        if action == "add":
+            if target not in items:
+                items.append(target); changed = 1
+        else:
+            if target in items:
+                items = [x for x in items if x != target]; changed = 1
+        out.extend("- " + x for x in items)
+        continue
+    out.append(line)
+    i += 1
+if changed:
+    open(prefs, "w").write("\n".join(out) + "\n")
+print(changed)
+PY
+) || return 1
+
+    if [ "${changed:-0}" = "1" ]; then
+        return 0
+    fi
+    return 2   # deja dans l'etat voulu
+}
+
+# Redemarre LMS pour que la preference soit relue, puis reindexe.
+_medialib_lms_restart() {
+    local svc
+    for svc in lyrionmusicserver logitechmediaserver; do
+        if lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+            lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- systemctl restart "$svc" 2>/dev/null && return 0
+        fi
+    done
+    return 1
+}
+
 # Best-effort LMS rescan (same jsonrpc the /rescan endpoint uses).
 _medialib_trigger_scan() {
     lxc_running || return 0
@@ -368,7 +548,73 @@ _medialib_trigger_scan() {
     return 0
 }
 
+# detect — CACHE ET VERROU (#993).
+#
+# Ce que la premiere version coutait : chaque appel relançait un `find` sur
+# tous les supports. Le panneau interrogeant l'endpoint en boucle, les scans
+# s'EMPILAIENT — 7 `find` concurrents sur un disque USB de 931 Go ont ete
+# observes sur la board, sur 4 coeurs deja charges. Tant que la fonctionnalite
+# etait cassee (elle l'etait, cf. #993), le defaut restait invisible.
+#
+# Deux gardes, dans cet ordre :
+#
+#   1. Un VERROU exclusif : deux appels simultanes ne lancent jamais deux
+#      balayages. Le second attend et resservira le cache.
+#   2. Un CACHE horodate : la composition d'un support ne change pas d'une
+#      seconde a l'autre, et le pattern du projet l'impose pour tout endpoint
+#      qui agrege (cf. CLAUDE.md, « Performance Patterns »).
 medialib_detect() {
+    local cache="${MEDIALIB_CACHE:-/var/cache/secubox/lyrion/medialib-detect.json}"
+    local ttl="${MEDIALIB_CACHE_TTL:-300}"
+    local lock="${cache}.lock"
+    mkdir -p "$(dirname "$cache")" 2>/dev/null || true
+
+    _cache_fresh() {
+        [ -s "$cache" ] || return 1
+        local age; age=$(( $(date +%s) - $(stat -c %Y "$cache" 2>/dev/null || echo 0) ))
+        [ "$age" -lt "$ttl" ]
+    }
+
+    if [ "${MEDIALIB_FORCE:-0}" != "1" ] && _cache_fresh; then
+        cat "$cache"; return 0
+    fi
+
+    # Le verrou attend plutot que d'echouer : un appelant qui trouve le verrou
+    # pris veut le RESULTAT, pas une erreur. Il resservira le cache que le
+    # detenteur vient d'ecrire.
+    if exec 9>"$lock" 2>/dev/null && flock -w "${MEDIALIB_LOCK_WAIT:-30}" 9 2>/dev/null; then
+        # Re-verification APRES le verrou : sans elle, N appelants bloques
+        # relancent N balayages a la suite, chacun a son tour, alors que le
+        # premier vient d'ecrire le cache.
+        if [ "${MEDIALIB_FORCE:-0}" != "1" ] && _cache_fresh; then
+            flock -u 9 2>/dev/null
+            cat "$cache"; return 0
+        fi
+        local tmp="${cache}.tmp.$$"
+        if _medialib_detect_scan > "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+            mv -f "$tmp" "$cache"
+            flock -u 9 2>/dev/null
+            cat "$cache"; return 0
+        fi
+        rm -f "$tmp" 2>/dev/null
+        flock -u 9 2>/dev/null
+    else
+        # PAS DE VERROU POSSIBLE (repertoire non inscriptible, par exemple).
+        # On balaie quand meme, sans mettre en cache : renvoyer « rien trouve »
+        # parce qu'on n'a pas pu ecrire un fichier de verrou serait un mensonge
+        # — et c'est indiscernable d'un support vide cote panneau.
+        _medialib_detect_scan && return 0
+    fi
+
+    if [ -s "$cache" ]; then
+        # Cache perime, mais un resultat ancien vaut mieux qu'une reponse vide.
+        cat "$cache"
+    else
+        printf '{"candidates":[],"devices":[],"stale":true}\n'
+    fi
+}
+
+_medialib_detect_scan() {
     local first=1 path label n
     printf '{"candidates":['
     while IFS= read -r path; do
@@ -382,7 +628,46 @@ medialib_detect() {
         printf '{"path":%s,"label":%s,"audio_files":%s}' \
             "$(_json_str "$path")" "$(_json_str "$label")" "$n"
     done < <(_medialib_candidates | sort -u)
+    printf '],"devices":['
+    # Peripheriques non montes (#993). Rapportes SEPAREMENT des `candidates` :
+    # un chemin deja monte est pret a etre lie, un peripherique demande d'abord
+    # un montage hote. Les confondre ferait promettre au panneau une action qui
+    # echouerait.
+    local dfirst=1 dev dlabel dsize dfs drm
+    while IFS=$'\t' read -r dev dlabel dsize dfs drm; do
+        [ -n "$dev" ] || continue
+        [ "$dfirst" -eq 1 ] || printf ','
+        dfirst=0
+        printf '{"device":%s,"label":%s,"size":%s,"fstype":%s,"removable":%s,"mounted":false}' \
+            "$(_json_str "$dev")" "$(_json_str "$dlabel")" "$(_json_str "$dsize")" \
+            "$(_json_str "$dfs")" "$([ "${drm:-0}" = "1" ] && echo true || echo false)"
+    done < <(_medialib_block_candidates)
     printf ']}\n'
+}
+
+# Monte un peripherique bloc en LECTURE SEULE sous la racine du module, et
+# emet le point de montage. Le ro est tenu de bout en bout : une mediatheque
+# n'a pas a etre ecrite par le serveur, et HFS+ en ecriture sous Linux est un
+# risque connu.
+_medialib_mount_device() {
+    local dev="$1" label name mntpt
+    [ -b "$dev" ] || { printf '{"ok":false,"error":%s}\n' "$(_json_str "not a block device: $dev")" >&2; return 1; }
+    label=$(lsblk -no LABEL "$dev" 2>/dev/null | head -1 | tr -d ' ')
+    name=$(basename -- "$dev")
+    [ -n "$label" ] || label="$name"
+    # Nom de repertoire assaini : une etiquette vient du support, donc d'une
+    # source non maitrisee, et finit dans un chemin.
+    label=$(printf '%s' "$label" | tr -c 'A-Za-z0-9._-' '_')
+    mntpt="$MEDIALIB_MOUNT_ROOT/$label"
+    if mountpoint -q "$mntpt" 2>/dev/null; then
+        printf '%s\n' "$mntpt"; return 0
+    fi
+    mkdir -p "$mntpt" || return 1
+    if ! mount -o ro,noexec,nosuid,nodev "$dev" "$mntpt" 2>/dev/null; then
+        rmdir "$mntpt" 2>/dev/null || true
+        return 1
+    fi
+    printf '%s\n' "$mntpt"
 }
 
 medialib_mount() {
@@ -390,21 +675,47 @@ medialib_mount() {
     if [ -z "$path" ]; then
         printf '{"ok":false,"error":"no path given"}\n'; return 1
     fi
+    # Un peripherique bloc est d'abord monte cote HOTE, en lecture seule, puis
+    # lie dans la LXC. Sans cette etape, « Monter » echouait sur tout support
+    # qu'aucun automontage n'avait pris en charge (#993).
+    if [ -b "$path" ]; then
+        local mounted_at
+        if ! mounted_at=$(_medialib_mount_device "$path"); then
+            printf '{"ok":false,"error":%s}\n' "$(_json_str "host mount failed for device: $path")"; return 1
+        fi
+        path="$mounted_at"
+    fi
     if [ ! -d "$path" ]; then
         printf '{"ok":false,"error":%s}\n' "$(_json_str "path not found: $path")"; return 1
     fi
     cfg=$(_medialib_cfg)
+    # « introuvable » et « illisible » sont deux pannes differentes, et les
+    # confondre envoie chercher un fichier absent qui est en fait la. Le
+    # repertoire du conteneur appartient a l'idmap (100000:100000, drwxrwx---)
+    # et n'est traversable que par root.
+    if [ ! -e "$cfg" ] && [ ! -r "$(dirname "$cfg")" ]; then
+        printf '{"ok":false,"error":%s}\n' \
+            "$(_json_str "config LXC inaccessible ($cfg) — lyrionctl doit tourner en root (sudo)")"
+        return 1
+    fi
     if [ ! -f "$cfg" ]; then
-        printf '{"ok":false,"error":%s}\n' "$(_json_str "lxc config not found: $cfg")"; return 1
+        printf '{"ok":false,"error":%s}\n' "$(_json_str "config LXC absente : $cfg")"; return 1
     fi
     # READ-ONLY bind, create the target dir on start; idempotent.
-    entry="lxc.mount.entry = $path $MEDIALIB_TARGET none bind,ro,create=dir 0 0"
-    _medialib_strip_cfg "$cfg"
+    entry="lxc.mount.entry = $path $(_medialib_target "$path") none bind,ro,create=dir 0 0"
+    _medialib_strip_cfg "$cfg" "$path"
     printf '%s\n' "$entry" >> "$cfg"
     _medialib_toml_set "$path"
+
+    # MONTER N'EST PAS DECLARER : sans cette etape, LMS reindexe un repertoire
+    # qu'il ne scanne pas, et l'utilisateur voit un disque monte dont Lyrion
+    # n'affiche rien.
+    if _medialib_lms_declare add "$path"; then
+        _medialib_lms_restart || err "LMS non redemarre — la preference sera relue au prochain demarrage"
+    fi
     # Live-mount (RO) if the container is already running.
     if lxc_running; then
-        mntpt=$(_medialib_mntpt)
+        mntpt=$(_medialib_mntpt "$path")
         mkdir -p "$mntpt" 2>/dev/null || true
         if ! mountpoint -q "$mntpt" 2>/dev/null; then
             mount --bind "$path" "$mntpt" 2>/dev/null \
@@ -416,16 +727,56 @@ medialib_mount() {
 }
 
 medialib_unmount() {
-    local cfg mntpt
+    # Un support precis, ou tous si aucun n'est donne. Sans argument, l'ancienne
+    # version retirait la seule cible existante ; avec plusieurs supports, il
+    # faut pouvoir en detacher un sans perdre les autres.
+    local cfg mntpt path="${1:-}"
     cfg=$(_medialib_cfg)
-    _medialib_strip_cfg "$cfg"
-    _medialib_toml_set ""
-    mntpt=$(_medialib_mntpt)
-    if mountpoint -q "$mntpt" 2>/dev/null; then
-        umount "$mntpt" 2>/dev/null || umount -l "$mntpt" 2>/dev/null || true
+    if [ -n "$path" ]; then
+        _medialib_lms_declare remove "$path" >/dev/null 2>&1 && _medialib_lms_restart
+        _medialib_strip_cfg "$cfg" "$path"
+        mntpt=$(_medialib_mntpt "$path")
+        if mountpoint -q "$mntpt" 2>/dev/null; then
+            umount "$mntpt" 2>/dev/null || umount -l "$mntpt" 2>/dev/null || true
+        fi
+    else
+        local m
+        for m in "$LXC_PATH/$LXC_NAME/rootfs/$MEDIALIB_TARGET"/*; do
+            [ -d "$m" ] || continue
+            mountpoint -q "$m" 2>/dev/null && { umount "$m" 2>/dev/null || umount -l "$m" 2>/dev/null || true; }
+        done
+        _medialib_strip_cfg "$cfg"
+        _medialib_lms_declare_purge >/dev/null 2>&1 && _medialib_lms_restart
     fi
+    _medialib_toml_set ""
     _medialib_trigger_scan
     printf '{"ok":true}\n'
+}
+
+# Retire toutes les mediatheques externes des prefs LMS.
+_medialib_lms_declare_purge() {
+    local prefs; prefs=$(_medialib_lms_prefs)
+    [ -f "$prefs" ] || return 1
+    python3 - "$prefs" "/${MEDIALIB_TARGET#/}" <<'PY'
+import sys
+prefs, prefix = sys.argv[1:3]
+lines = open(prefs).read().splitlines()
+out, i, changed = [], 0, 0
+while i < len(lines):
+    if lines[i].startswith("mediadirs:"):
+        out.append(lines[i]); i += 1
+        items = []
+        while i < len(lines) and lines[i].startswith("- "):
+            items.append(lines[i][2:].strip()); i += 1
+        kept = [x for x in items if not x.startswith(prefix + "/")]
+        changed = int(len(kept) != len(items))
+        out.extend("- " + x for x in kept)
+        continue
+    out.append(lines[i]); i += 1
+if changed:
+    open(prefs, "w").write("\n".join(out) + "\n")
+raise SystemExit(0 if changed else 1)
+PY
 }
 
 medialib_status() {
@@ -453,7 +804,7 @@ cmd_medialib() {
     case "$sub" in
         detect)         medialib_detect ;;
         mount)          medialib_mount "$path" ;;
-        unmount|umount) medialib_unmount ;;
+        unmount|umount) medialib_unmount "${3:-}" ;;
         status|--json)  medialib_status ;;
         *) err "unknown verb for 'medialib': $sub"; exit 1 ;;
     esac
@@ -464,6 +815,7 @@ main() {
     shift || true
     case "$noun" in
         check-upgrade) cmd_check_upgrade ;;
+        version-status) cmd_version_status ;;
         upgrade) cmd_upgrade ;;
         components|status|access|install|reload) "cmd_${noun}" "$@" ;;
         medialib) cmd_medialib "$@" ;;

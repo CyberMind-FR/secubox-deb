@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: PeerTube — minuteur du relevé de version (#993).
+[Unit]
+Description=SecuBox PeerTube — relevé quotidien de la version disponible
+
+[Timer]
+OnCalendar=*-*-* 04:50:00
+Persistent=true
+# L'API GitHub limite le débit par adresse : sans dispersion, toute une flotte
+# frapperait à la même seconde.
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target
