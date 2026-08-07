@@ -1,4 +1,4 @@
-# 🧪 Metabolizer
+# 🧪 Metalogizer
 
 Log processor and analyzer
 
@@ -6,7 +6,7 @@ Log processor and analyzer
 
 ## Screenshot
 
-![Metabolizer](../../docs/screenshots/vm/metabolizer.png)
+![Metalogizer](../../docs/screenshots/vm/metalogizer.png)
 
 ## Features
 
@@ -22,17 +22,17 @@ Log processor and analyzer
 curl -fsSL https://apt.secubox.in/install.sh | sudo bash
 
 # Install package
-sudo apt install secubox-metabolizer
+sudo apt install secubox-metalogizer
 ```
 
 ## Configuration
 
-Configuration file: `/etc/secubox/metabolizer.toml`
+Configuration file: `/etc/secubox/metalogizer.toml`
 
 ## API Endpoints
 
-- `GET /api/v1/metabolizer/status` - Module status
-- `GET /api/v1/metabolizer/health` - Health check
+- `GET /api/v1/metalogizer/status` - Module status
+- `GET /api/v1/metalogizer/health` - Health check
 
 ## License
 

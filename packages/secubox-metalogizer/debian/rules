@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-metalogizer/usr/lib/secubox/metalogizer/
+	cp -r api debian/secubox-metalogizer/usr/lib/secubox/metalogizer/
+	install -d debian/secubox-metalogizer/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-metalogizer/usr/share/secubox/www/ || true
+	install -d debian/secubox-metalogizer/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metalogizer/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	# nginx n'inclut QUE secubox-routes.d/ (cf. webui.conf). Un module qui ne
+	# pose sa route que dans secubox.d/ est installe, actif, avec sa socket —
+	# et son API repond 502, parce que personne ne la route. Derive systemique,
+	# cf. MODULE-COMPLIANCE.md. On installe donc dans LES DEUX.
+	install -d debian/secubox-metalogizer/etc/nginx/secubox.d
+	install -d debian/secubox-metalogizer/etc/nginx/secubox-routes.d
+	[ -f nginx/metalogizer.conf ] && cp nginx/metalogizer.conf debian/secubox-metalogizer/etc/nginx/secubox.d/ || true
+	[ -f nginx/metalogizer.conf ] && cp nginx/metalogizer.conf debian/secubox-metalogizer/etc/nginx/secubox-routes.d/ || true
