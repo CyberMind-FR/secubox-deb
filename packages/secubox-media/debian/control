@@ -1,0 +1,14 @@
+Source: secubox-media
+Section: net
+Priority: optional
+Maintainer: Gandalf / CyberMind <gk@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-media
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn
+Recommends: rsync, exfat-fuse, exfatprogs, ntfs-3g
+Description: SecuBox External Media Manager
+ Port Debian bookworm du module luci-app-media de SecuBox OpenWrt.
+ Provides FastAPI backend on /api/v1/media/ via Unix socket.
