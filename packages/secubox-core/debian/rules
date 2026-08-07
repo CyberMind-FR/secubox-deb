@@ -47,6 +47,19 @@ override_dh_auto_install:
 	# the /data ext4 mount hadn't happened yet — 12+ LXCs stayed STOPPED
 	# despite lxc.start.auto = 1. RequiresMountsFor=/data lets systemd
 	# resolve the right mount unit and order lxc.service after it.
+	# Fiabilite du demarrage (#998). Une board redemarree restait sans HTTPS :
+	# HAProxy dependait par Requires= d'un assistant d'attente qui echouait,
+	# et son job etait abandonne sans la moindre trace au journal.
+	install -m 755 usr/bin/secubox-wait-network.sh \
+	               debian/secubox-core/usr/bin/secubox-wait-network.sh
+	install -m 644 systemd/secubox-network-ready.service \
+	               debian/secubox-core/usr/lib/systemd/system/
+	install -d debian/secubox-core/etc/systemd/system/haproxy.service.d
+	install -m 644 systemd/haproxy.service.d/secubox-wait-network.conf \
+	               debian/secubox-core/etc/systemd/system/haproxy.service.d/secubox-wait-network.conf
+	install -d debian/secubox-core/etc/systemd/system/systemd-networkd-wait-online.service.d
+	install -m 644 systemd/systemd-networkd-wait-online.service.d/secubox-any.conf \
+	               debian/secubox-core/etc/systemd/system/systemd-networkd-wait-online.service.d/secubox-any.conf
 	install -d debian/secubox-core/etc/systemd/system/lxc.service.d
 	install -m 644 systemd/lxc.service.d/wait-for-data.conf \
 	               debian/secubox-core/etc/systemd/system/lxc.service.d/wait-for-data.conf
