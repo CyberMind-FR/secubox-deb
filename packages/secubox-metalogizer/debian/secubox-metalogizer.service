@@ -1,5 +1,5 @@
 [Unit]
-Description=SecuBox Metabolizer - Log processor and analyzer API
+Description=SecuBox Metalogizer - Log processor and analyzer API
 After=network.target secubox-core.service
 Wants=secubox-core.service
 
@@ -8,9 +8,9 @@ UMask=0000
 Type=simple
 User=secubox
 Group=secubox
-WorkingDirectory=/usr/lib/secubox/metabolizer
+WorkingDirectory=/usr/lib/secubox/metalogizer
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
-    --uds /run/secubox/metabolizer.sock \
+    --uds /run/secubox/metalogizer.sock \
     --log-level warning
 Restart=on-failure
 RestartSec=5

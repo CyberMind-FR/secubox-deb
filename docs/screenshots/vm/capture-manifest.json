@@ -702,18 +702,6 @@
       "timestamp": "2026-06-26T09:54:02.386596"
     },
     {
-      "module_id": "metoblizer",
-      "module_name": "Metoblizer",
-      "category": "Other",
-      "path": "/metoblizer/",
-      "screenshot_path": "docs/screenshots/vm/metoblizer.png",
-      "thumbnail_path": "docs/screenshots/thumbnails/metoblizer-thumb.png",
-      "success": true,
-      "status_code": 200,
-      "error": null,
-      "timestamp": "2026-06-26T09:54:06.223576"
-    },
-    {
       "module_id": "metrics",
       "module_name": "Metrics",
       "category": "Dashboard",

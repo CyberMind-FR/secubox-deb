@@ -1,9 +1,9 @@
 {
-  "id": "metabolizer",
-  "name": "Metabolizer",
+  "id": "metalogizer",
+  "name": "Metalogizer",
   "category": "mind",
   "icon": "&#128202;",
-  "path": "/metabolizer/",
+  "path": "/metalogizer/",
   "order": 480,
   "description": "Log processor and analyzer - patterns, errors, statistics"
 }

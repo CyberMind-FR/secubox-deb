@@ -1,5 +1,5 @@
 """
-SecuBox-Deb :: Metabolizer
+SecuBox-Deb :: Metalogizer
 CyberMind - https://cybermind.fr
 Author: Gerald KERMA <devel@cybermind.fr>
 License: Proprietary / ANSSI CSPN candidate
@@ -21,7 +21,7 @@ import subprocess
 import re
 from collections import defaultdict
 
-app = FastAPI(title="secubox-metabolizer", version="1.0.0", root_path="/api/v1/metabolizer")
+app = FastAPI(title="secubox-metalogizer", version="1.0.0", root_path="/api/v1/metalogizer")
 
 # ══════════════════════════════════════════════════════════════════
 # Health Check Endpoint (public, no auth)
@@ -34,15 +34,15 @@ async def health_check():
 
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
-log = get_logger("metabolizer")
+log = get_logger("metalogizer")
 
 # Configuration
-CACHE_FILE = Path("/var/cache/secubox/metabolizer/stats.json")
+CACHE_FILE = Path("/var/cache/secubox/metalogizer/stats.json")
 LOG_DIRS = ["/var/log", "/var/log/secubox"]
 SECUBOX_SERVICES = [
     "secubox-hub", "secubox-crowdsec", "secubox-wireguard", "secubox-dpi",
     "secubox-nac", "secubox-qos", "secubox-system", "secubox-reporter",
-    "secubox-metabolizer", "secubox-netdata", "secubox-vhost", "secubox-auth",
+    "secubox-metalogizer", "secubox-netdata", "secubox-vhost", "secubox-auth",
     "secubox-cdn", "secubox-netmodes", "secubox-mediaflow",
 ]
 
@@ -392,7 +392,7 @@ def _get_available_services() -> list[dict]:
 @router.get("/health")
 async def health():
     """Health check endpoint (public)."""
-    return {"status": "ok", "module": "metabolizer", "version": "1.0.0"}
+    return {"status": "ok", "module": "metalogizer", "version": "1.0.0"}
 
 
 @router.get("/status")
@@ -412,7 +412,7 @@ async def status(user=Depends(require_jwt)):
             services.add(unit)
 
     return {
-        "module": "metabolizer",
+        "module": "metalogizer",
         "version": "1.0.0",
         "status": "running",
         "last_hour": {
@@ -771,7 +771,7 @@ async def refresh_cache():
 async def startup():
     """Startup tasks."""
     asyncio.create_task(refresh_cache())
-    log.info("SecuBox Metabolizer started")
+    log.info("SecuBox Metalogizer started")
 
 
 app.include_router(router)
