@@ -1,3 +1,74 @@
+secubox-profiles (0.14.1-1~bookworm1) bookworm; urgency=medium
+
+  * nginx-sync declare aussi la regle 5xx DANS les blocs qui la surchargent.
+    Un error_page declare dans un bloc REMPLACE ceux herites du serveur, il ne
+    s'y ajoute pas : tout vhost protege par auth_request declare
+    `error_page 401 = @sbx_auth_login;` dans son `location /` et annulait donc
+    silencieusement la regle posee par l'include. Le fragment ne pouvait pas
+    fonctionner sur ces vhosts — c'est-a-dire la majorite d'entre eux :
+    l'include etait bien present, la page d'attente n'apparaissait jamais, et
+    rien ne le signalait.
+  * GARDE DE PEREMPTION sur les signaux d'activite du sleeper.
+    Le demon existait deja (api/sleeper_daemon.py, livre DESACTIVE a dessein) :
+    un fichier de signaux ABSENT rend {} et rien ne dort, contrat deja sur.
+    Mais un fichier PRESENT ET FIGE rend des horodatages anciens, qui
+    ressemblent exactement a de l'inactivite — et l'inactivite fait STOPPER.
+    Le 2026-08-07 ce fichier datait de ONZE JOURS : /var/cache/secubox/waf
+    appartenait a `secubox` alors que sbxwaf tourne en `secubox-waf` et ne
+    pouvait pas l'ecrire. Activer le sleeper aurait ETEINT LA BOARD ENTIERE,
+    en toute logique. « Perime » est desormais traite comme « absent » : un
+    fichier fige ne dit pas « tout est inactif », il dit « je ne sais pas ».
+  * `secubox-wakectl lxc-stagger` : etaler le demarrage des conteneurs.
+    23 conteneurs declaraient lxc.start.auto = 1 SANS ordre ni delai — ils
+    partaient tous ensemble, chacun montant une pile systemd complete sur
+    4 coeurs. Mesure au redemarrage du 2026-08-07 : charge 120, 27 jobs
+    systemd en attente, multi-user.target jamais atteint, HAProxy jamais
+    lance. Ce n'est pas un probleme de lenteur mais de SIMULTANEITE.
+    L'ordre vient de la `priority` du manifeste (une seule source de verite),
+    le delai est gradue par tranche. Simulation par defaut, --apply pour
+    ecrire, idempotent.
+    Un ordre pose A LA MAIN et plus eleve n'est JAMAIS retrograde : toolbox-mitm
+    et toolbox-mitm-wg portaient 110 et 120, deliberement, alors que la plupart
+    des manifestes gardent la priorite par defaut (50) — appliquer la priorite
+    telle quelle aurait casse une intention dont la trace n'existe que dans le
+    fichier du conteneur.
+  * `nginx-sync --all` : cabler TOUS les vhosts qui relaient, pas seulement
+    les modules « a la demande ». 24 vhosts gardaient la page BRUTE de nginx
+    sur un 502. Le waker rend desormais une page soignee meme pour un vhost
+    non declare — rien ne justifiait de les en priver. Les redirections pures
+    sont exclues : sans backend, la regle y serait sans effet.
+  * La regle de bloc est BORNEE au server{} qui porte l'include. @sbx_wake
+    n'y est defini que la : l'ajouter dans un autre bloc produit une reference
+    a une location inexistante, `nginx -t` echoue, et nginx-sync annule tout.
+    Constate sur la board (7 cables puis ROLLBACK).
+  * unwire retire les DEUX marqueurs : retirer l'include seul laisserait des
+    regles pointant vers un @sbx_wake disparu, et nginx refuserait de
+    recharger.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 21:10:00 +0200
+
+secubox-profiles (0.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Un 5xx DECLENCHE le reveil au lieu de seulement l'annoncer (#999).
+    error_page 502/503/504 route desormais vers le waker : la meme requete tire
+    le reveil ET rend la page d'attente. Le fragment servait auparavant un
+    fichier statique — une belle page, et rien derriere : un vhost tombe par
+    accident (conteneur arrete apres un redemarrage) l'affichait indefiniment
+    sans que rien ne le releve. Constate le 2026-08-06 : 11 conteneurs arretes,
+    aucun releve.
+  * Un vhost NON DECLARE reçoit la page d'attente au lieu d'un 404 — le 404
+    remontait a nginx comme une page brute. Son nom est journalise : ce journal
+    est la liste de ce qu'il reste a declarer. Aucun reveil n'est declenche
+    pour autant : wake() refuse les modules inconnus, et c'est une garde
+    voulue — un 5xx n'est pas un droit de demarrer un service arbitraire.
+  * Un module always-on/manual continue de remonter une VRAIE erreur : lui
+    servir une page d'attente ferait croire a un reveil que personne ne
+    declenchera.
+  * Repli statique si le waker est lui-meme indisponible — sans lui, une panne
+    du waker rendrait chaque 502 nu, exactement ce qu'on cherche a supprimer.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 20:20:00 +0200
+
 secubox-profiles (0.10.1-1~bookworm1) bookworm; urgency=medium
 
   * secubox-sleeper ships DISABLED by default (--no-enable + postinst no longer

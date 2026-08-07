@@ -130,3 +130,105 @@ def test_wire_covers_multiple_ondemand_blocks_in_one_file(tmp_path):
     ai = next(n for n, l in enumerate(lines) if "server_name a.gk2" in l)
     bi = next(n for n, l in enumerate(lines) if "server_name b.gk2" in l)
     assert "secubox-waking.conf" in lines[ai + 1] and "secubox-waking.conf" in lines[bi + 1]
+
+
+# ── error_page de bloc : le piege qui rendait l'include inerte (#999) ────────
+
+def test_wire_also_declares_the_rule_where_a_401_overrides_it(tmp_path):
+    """Un error_page declare dans un bloc REMPLACE ceux herites du serveur.
+
+    Tout vhost protege par auth_request declare `error_page 401 =
+    @sbx_auth_login;` dans son `location /`, ce qui annulait silencieusement le
+    error_page 5xx pose au niveau serveur. L'include etait present, la page
+    d'attente n'apparaissait jamais, et rien ne le signalait."""
+    from api import nginxgen
+    f = tmp_path / "site.conf"
+    f.write_text(
+        "server {\n"
+        "    server_name demo.gk2;\n"
+        "    location / {\n"
+        "        auth_request /__sbx_auth_verify;\n"
+        "        error_page 401 = @sbx_auth_login;\n"
+        "        proxy_pass http://127.0.0.1:9999;\n"
+        "    }\n"
+        "}\n")
+    assert nginxgen.wire(f, "demo.gk2") is True
+    out = f.read_text()
+    assert "include snippets/secubox-waking.conf" in out
+    assert "error_page 502 503 504 = @sbx_wake;" in out
+    # La regle doit suivre le 401, dans le meme bloc.
+    assert out.index("error_page 401") < out.index("error_page 502 503 504")
+
+
+def test_wire_is_idempotent_on_the_block_rule(tmp_path):
+    from api import nginxgen
+    f = tmp_path / "site.conf"
+    f.write_text(
+        "server {\n    server_name demo.gk2;\n    location / {\n"
+        "        error_page 401 = @sbx_auth_login;\n    }\n}\n")
+    nginxgen.wire(f, "demo.gk2")
+    first = f.read_text()
+    nginxgen.wire(f, "demo.gk2")
+    assert f.read_text() == first, "un second passage ne doit rien ajouter"
+
+
+def test_unwire_removes_both_markers(tmp_path):
+    """Retirer l'include seul laisserait des regles pointant vers un
+    @sbx_wake disparu — nginx refuserait de recharger."""
+    from api import nginxgen
+    f = tmp_path / "site.conf"
+    f.write_text(
+        "server {\n    server_name demo.gk2;\n    location / {\n"
+        "        error_page 401 = @sbx_auth_login;\n    }\n}\n")
+    nginxgen.wire(f, "demo.gk2")
+    assert nginxgen.unwire(f) is True
+    out = f.read_text()
+    assert "secubox-waking.conf" not in out and "@sbx_wake" not in out
+
+
+def test_rule_is_scoped_to_the_wired_server_block(tmp_path):
+    """@sbx_wake n'est defini que dans le bloc portant l'include.
+
+    Ajouter la regle dans un AUTRE bloc server produit une reference a une
+    location inexistante : `nginx -t` echoue et la synchronisation annule tout
+    — constate sur la board."""
+    from api import nginxgen
+    f = tmp_path / "site.conf"
+    f.write_text(
+        "server {\n"
+        "    server_name demo.gk2;\n"
+        "    location / {\n"
+        "        error_page 401 = @sbx_auth_login;\n"
+        "    }\n"
+        "}\n"
+        "server {\n"
+        "    server_name autre.gk2;\n"
+        "    location / {\n"
+        "        error_page 401 = @sbx_auth_login;\n"
+        "    }\n"
+        "}\n")
+    nginxgen.wire(f, "demo.gk2")
+    out = f.read_text()
+    assert out.count("error_page 502 503 504 = @sbx_wake;") == 1, \
+        "la regle ne doit exister que dans le bloc cable"
+    assert out.index("@sbx_wake") < out.index("autre.gk2"), \
+        "elle doit etre dans le PREMIER bloc, celui qui porte l'include"
+
+
+def test_all_mode_covers_proxying_vhosts_only(tmp_path):
+    """Sans --all, 24 vhosts gardaient la page BRUTE de nginx sur un 502.
+
+    Les redirections pures sont exclues : sans backend, la regle y serait sans
+    effet."""
+    from api import nginxgen
+    (tmp_path / "proxy.conf").write_text(
+        "server {\n    server_name app.gk2;\n    location / {\n"
+        "        proxy_pass http://127.0.0.1:1;\n    }\n}\n")
+    (tmp_path / "redirect.conf").write_text(
+        "server {\n    server_name vieux.gk2;\n    return 301 https://app.gk2$request_uri;\n}\n")
+    (tmp_path / "site.conf.bak.1").write_text(
+        "server {\n    server_name sauvegarde.gk2;\n    location / { proxy_pass http://x; }\n}\n")
+    doms = nginxgen.proxying_domains(tmp_path)
+    assert "app.gk2" in doms
+    assert "vieux.gk2" not in doms, "une redirection n'a pas de backend"
+    assert "sauvegarde.gk2" not in doms, "les .bak ne sont pas charges par nginx"
