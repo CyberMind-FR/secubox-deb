@@ -1,0 +1,150 @@
+secubox-media (1.5.0-1~bookworm1) bookworm; urgency=high
+
+  * Un pilote CHARGEABLE compte comme montable. `_fs_support` renvoyait
+    « module » pour un pilote disponible mais pas encore en memoire, et cet
+    etat manquait de la liste des montables : tout support redevenait
+    « illisible » apres chaque redemarrage, jusqu'au premier modprobe manuel.
+    hfsplus a disparu de l'interface pour cette seule raison.
+  * cmd_mount charge le pilote avant de renoncer.
+  * La verification « deja monte » interroge l'espace de noms de l'HOTE. Le
+    service a le sien, et un montage pose par nsenter y est invisible : le ctl
+    croyait le support libre et relançait un montage — « already mounted on
+    /media/secubox-media/... ». Correctif incomplet de 1.4.0.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 07 Aug 2026 08:30:00 +0200
+
+secubox-media (1.4.2-1~bookworm1) bookworm; urgency=high
+
+  * 1.4.1 definissait le choix du point de montage sans le brancher : le site
+    d'appel n'avait pas ete modifie, le defaut etait donc toujours la. Le test
+    qui l'accompagnait verifiait l'existence des fonctions, pas leur usage — il
+    passait avec le bug. Il verifie desormais l'appel.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 19:05:00 +0200
+
+secubox-media (1.4.1-1~bookworm1) bookworm; urgency=high
+
+  * detect annonçait le mauvais point de montage. Un peripherique peut en avoir
+    PLUSIEURS — le notre sous /media/secubox-media, et les binds poses ailleurs,
+    par exemple dans le rootfs d'un conteneur (Lyrion lie chaque support dans
+    /medialib/external/<nom>). lsblk n'en rapporte qu'UN, le dernier : le
+    panneau recevait /data/lxc/lyrion/rootfs/... et la navigation echouait sur
+    « chemin hors des racines autorisees ». Le confinement avait raison, la
+    detection avait tort. On choisit desormais le point de montage GERE par ce
+    module.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 18:55:00 +0200
+
+secubox-media (1.4.0-1~bookworm1) bookworm; urgency=high
+
+  * Les montages ont lieu dans l'espace de noms de PID 1. Le service tourne
+    dans un espace de noms PRIVE et MountFlags=shared ne suffit pas : sa racine
+    est `shared:N master:1`, donc ESCLAVE de l'hote — il reçoit les montages de
+    l'hote mais ne lui en renvoie aucun. Un support monte depuis le panneau
+    etait donc invisible de ksmbd (partage vide cote client), du minuteur de
+    drainage, et du conteneur Lyrion — qui ne voyait pas le disque.
+  * Le demontage et le nettoyage visent le meme espace : un rmdir hors espace
+    hote laisserait un repertoire fantome, expose en ecriture par le partage.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 18:10:00 +0200
+
+secubox-media (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refuser les partitions systeme au montage. detect les masquait deja, mais
+    masquer n'est pas refuser : apres un redemarrage reel les lettres /dev/sdX
+    ont change, et un /dev/sdb1 memorise designait la partition EFI — qui a
+    bien ete montee.
+  * detect expose un identifiant STABLE (/dev/disk/by-uuid/...) : le panneau ne
+    doit pas memoriser une lettre de peripherique.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 15:45:00 +0200
+
+secubox-media (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Un « deja monte » dit desormais le mode reel. Cliquer « Monter (lecture
+    seule) » sur un support deja monte en ecriture repondait ok sans rien
+    signaler : fausse assurance sur une propriete de surete.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 15:20:00 +0200
+
+secubox-media (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Dater la RAFALE et non la derniere coupure. L'alerte annoncait un compte de
+    rafale ancien avec l'heure d'un debranchement isole recent, ce qui faisait
+    croire a un defaut en cours.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 15:00:00 +0200
+
+secubox-media (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Racines declarees (/etc/secubox/media.roots, conffile) : mediatheques des
+    services accessibles dans les deux colonnes — PeerTube, PhotoPrism,
+    Nextcloud, Podcaster, Torrent en source ; Musique, Medias, Partage en
+    destination. Le fichier est la SOURCE UNIQUE du confinement et documente
+    ce qui est volontairement exclu : rootfs des conteneurs (secrets des
+    services) et sauvegardes (chemin d'exfiltration vers une cle USB).
+  * Montage en ECRITURE, opt-in explicite : necessaire pour exporter vers une
+    cle. Le defaut reste la lecture seule.
+  * Demontage depuis le panneau : retirer une cle sans demonter perd ce qu'on
+    vient d'y ecrire.
+  * Navigation : dossier parent et retour racine, bornes au support choisi.
+  * Une mediatheque de service est refusee comme DESTINATION : y deposer un
+    fichier a la main ne l'inscrit pas dans la base du service — il serait
+    invisible et occuperait la place.
+  * Alerte de bus corrigee : elle comptait toutes les deconnexions depuis le
+    demarrage, donc six changements de cle deliberes ressemblaient a un port
+    defaillant. Seule une RAFALE est signalee (>= 2 coupures en moins d'une
+    minute), avec la date de la derniere.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 14:45:00 +0200
+
+secubox-media (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Corriger « Montage : mkdir failed ». ProtectSystem=strict rendait /media
+    en lecture seule dans l'espace de noms du service, alors que la meme
+    commande reussissait depuis un shell root — ce qui egarait le diagnostic.
+  * MountFlags=shared : sans propagation partagee, un support monte par le
+    service restait invisible du minuteur de drainage (unite distincte) et des
+    mediatheques, et les transferts auraient echoue sans rien dire.
+  * /data ajoute aux chemins inscriptibles (destinations des transferts).
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 14:10:00 +0200
+
+secubox-media (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Un 401 emmene a la connexion au lieu d'afficher « connexion requise »
+    devant un panneau inerte. Les 83 autres panneaux redirigent deja vers
+    /login.html en preservant le chemin courant ; celui-ci ne le faisait pas.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 13:30:00 +0200
+
+secubox-media (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Declarer les relais en Recommends : rsync, exfat-fuse, exfatprogs, ntfs-3g.
+    exFAT est le format courant des gros disques USB et ce noyau ne le lit pas
+    lui-meme ; sans le relais, un tel disque est detecte mais reste illisible.
+    Recommends et non Depends : le module reste utile sans eux (ext4, vfat).
+  * hfsfuse n'existe pas dans bookworm : HFS+ reste non montable, et le module
+    le dit desormais explicitement.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 10:05:00 +0200
+
+secubox-media (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Dire POURQUOI un support ne peut pas etre monte, au lieu d'un refus opaque.
+    Le noyau 6.12.85 de la board n'a ni hfsplus ni exfat : le premier vrai
+    disque branche (Apple HFS+) repondait « montage refuse » sans motif, ce qui
+    envoie chercher le defaut dans le module alors qu'il est dans le noyau.
+  * detect rend un verdict de montabilite par peripherique (mountable,
+    unsupported_reason) : le panneau decide AVANT le clic.
+  * Relais FUSE cable pour ntfs/exfat/hfsplus quand l'outil est present.
+    Toujours en lecture seule — la regle ne change pas parce que le pilote change.
+  * Le panneau remplace le bouton mort par le motif.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 09:40:00 +0200
+
+secubox-media (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Initial release.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 09:22:18 +0200

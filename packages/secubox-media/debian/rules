@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files
+	install -d debian/secubox-media/usr/lib/secubox/media/
+	cp -r api debian/secubox-media/usr/lib/secubox/media/
+	# Static www files
+	install -d debian/secubox-media/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-media/usr/share/secubox/www/ || true
+	# Menu definitions
+	install -d debian/secubox-media/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-media/usr/share/secubox/menu.d/ || true
+	# Modular nginx config
+	install -d debian/secubox-media/etc/nginx/secubox.d
+	[ -f nginx/media.conf ] && cp nginx/media.conf debian/secubox-media/etc/nginx/secubox.d/ || true
+	# Surface privilégiée unique du module.
+	install -d debian/secubox-media/usr/sbin
+	install -m 0755 sbin/mediactl debian/secubox-media/usr/sbin/mediactl
+	# Racines declarees : source unique du confinement. Conffile — une
+	# racine ajoutee par l'administrateur survit aux mises a jour.
+	install -d debian/secubox-media/etc/secubox
+	install -m 0644 etc/media.roots debian/secubox-media/etc/secubox/media.roots
+	install -d debian/secubox-media/etc/sudoers.d
+	install -m 0440 debian/secubox-media.sudoers debian/secubox-media/etc/sudoers.d/secubox-media
+	# Route nginx dans les DEUX répertoires (#989) : le vhost principal
+	# n'inclut que secubox-routes.d.
+	install -d debian/secubox-media/etc/nginx/secubox.d debian/secubox-media/etc/nginx/secubox-routes.d
+	install -m 0644 nginx/media.conf debian/secubox-media/etc/nginx/secubox.d/media.conf
+	install -m 0644 nginx/media.conf debian/secubox-media/etc/nginx/secubox-routes.d/media.conf
+	# Drainage de la file de transfert.
+	install -d debian/secubox-media/usr/lib/systemd/system
+	install -m 0644 debian/secubox-media-drain.service debian/secubox-media/usr/lib/systemd/system/
+	install -m 0644 debian/secubox-media-drain.timer debian/secubox-media/usr/lib/systemd/system/

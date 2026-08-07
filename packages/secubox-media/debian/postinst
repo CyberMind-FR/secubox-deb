@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    # Ensure secubox user exists
+    id -u secubox >/dev/null 2>&1 || \
+      adduser --system --group --no-create-home \
+        --home /var/lib/secubox --shell /usr/sbin/nologin secubox
+    # Create runtime directories.
+    # NOTE (#623): these are SHARED parents — keep them traversable for every
+    # secubox-* daemon. /run/secubox MUST stay 1777 (world-writable sticky, all
+    # services drop sockets there, ref #471); /var/lib/secubox MUST stay 0755.
+    # NEVER set a shared parent to 0750/0700 — it breaks traversal for non-secubox
+    # users (kbin/toolbox 500). Module-private leaves (/var/lib/secubox/secubox-media)
+    # may be 0750. Re-asserting 0755/1777 here is idempotent + self-healing.
+    install -d -o root -g root -m 1777 /run/secubox
+    install -d -o secubox -g secubox -m 755 /var/lib/secubox
+    # Ensure nginx secubox.d directory exists
+    install -d -m 755 /etc/nginx/secubox.d
+    # Enable and start service
+    install -d -o root -g root -m 0755 /media/secubox-media
+    install -d -o root -g root -m 0755 /var/lib/secubox/media
+    systemctl daemon-reload
+    systemctl enable --now secubox-media-drain.timer 2>/dev/null || true
+    systemctl enable secubox-media.service
+    systemctl start  secubox-media.service || true
+    # Reload nginx to pick up new location
+    systemctl reload nginx 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#

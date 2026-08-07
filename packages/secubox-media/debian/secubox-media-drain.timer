@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: médias externes — minuteur de drainage (#995).
+[Unit]
+Description=SecuBox Médias externes — drainage périodique de la file
+
+[Timer]
+# Court intervalle : un transfert demandé depuis le panneau doit démarrer vite.
+# Le drainage est un no-op quand la file est vide.
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target

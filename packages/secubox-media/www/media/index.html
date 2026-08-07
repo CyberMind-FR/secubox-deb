@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     SecuBox-Deb :: secubox-media :: www/media/index.html
+     Charte : WEBUI-PANEL-GUIDELINES §2 palette, §3 typographie, §6 comportement,
+     §7 parité des deux facettes. Variante autoportante (vhost de module). -->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox — Médias externes</title>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/crt-light.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<link rel="stylesheet" href="/shared/hybrid-dark.css">
+<style>
+:root {
+    --p31-dim: #6b7b8b;
+    --bg-dark: #0d1117;
+    --bg-card: rgba(30, 40, 55, 0.8);
+    --bg-row:  rgba(20, 30, 45, 0.6);
+    --border:  rgba(100, 150, 200, 0.2);
+    --text:    #e8e6d9;
+    --cyan:    #00d4ff;
+    --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
+    --green:   #00dd44;  --blue:   #4488ff;   --purple: #a371f7;
+    --gap: 14px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 18px; background: var(--bg-dark); color: var(--text);
+       font-family: 'Courier Prime', 'Courier New', monospace; font-size: 14px; line-height: 1.5; }
+main.main { margin-left: 220px; }
+@media (max-width: 900px) { .sidebar { display: none; } main.main { margin-left: 0; } }
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; text-wrap: balance; }
+.sub { color: var(--p31-dim); font-size: 0.78rem; margin: 4px 0 0; }
+.label { text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.62rem; color: var(--p31-dim); }
+.card { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border);
+        border-radius: 8px; padding: 14px; }
+.alert { display: flex; gap: 12px; align-items: flex-start; border-left: 3px solid var(--red); }
+.alert .ico { font-size: 1.1rem; line-height: 1.2; }
+.alert b { color: var(--red); }
+.alert code { background: var(--bg-row); padding: 1px 5px; border-radius: 3px; font-size: 0.82em; }
+.devices { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--gap); }
+.dev { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px;
+       padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+.dev:hover { border-color: var(--cyan); }
+.dev.sel { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan) inset; }
+.dev-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dev-name { color: var(--cyan); font-weight: 700; }
+.mnt.alt { background: transparent; color: var(--p31-dim); margin-left: 6px; }
+.mnt.alt:hover { color: var(--cyan); border-color: var(--cyan); }
+.nav {
+    padding: 2px 8px; font-size: 13px; line-height: 1.5;
+    background: var(--p31-bg2); border: 1px solid var(--p31-line);
+    color: var(--p31-fg); border-radius: 5px; cursor: pointer;
+}
+.nav:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.nav:disabled { opacity: .35; cursor: default; }
+.dev-blocked {
+    margin-top: 8px; padding: 7px 9px; border-radius: 6px;
+    background: rgba(255,90,90,.08); border: 1px solid rgba(255,90,90,.25);
+    color: #ff9b9b; font-size: 11.5px; line-height: 1.45;
+}
+.dev-meta { color: var(--p31-dim); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 7px;
+        border-radius: 999px; border: 1px solid currentColor; }
+.c-green { color: var(--green); } .c-orange { color: var(--orange); }
+.c-dim { color: var(--p31-dim); }  .c-red { color: var(--red); } .c-blue { color: var(--blue); }
+.panes { display: grid; grid-template-columns: 1fr auto 1fr; gap: var(--gap); align-items: stretch; }
+@media (max-width: 860px) { .panes { grid-template-columns: 1fr; } .actions { flex-direction: row !important; justify-content: center; flex-wrap: wrap; } }
+.pane { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.pane-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+select { background: var(--bg-row); color: var(--text); border: 1px solid var(--border); border-radius: 5px;
+         padding: 5px 8px; font-family: inherit; font-size: 0.8rem; max-width: 100%; }
+select:focus-visible, button:focus-visible, .row:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.crumb { color: var(--p31-dim); font-size: 0.72rem; overflow-x: auto; white-space: nowrap; padding-bottom: 2px; }
+.crumb b { color: var(--text); }
+.list { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; display: flex;
+        flex-direction: column; max-height: 340px; overflow-y: auto; }
+.row { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center;
+       padding: 7px 10px; background: var(--bg-row); border-bottom: 1px solid var(--border);
+       font-size: 0.82rem; cursor: pointer; }
+.row:last-child { border-bottom: none; }
+.row.on { background: rgba(0, 212, 255, 0.09); }
+.row .sz { color: var(--p31-dim); font-variant-numeric: tabular-nums; font-size: 0.74rem; }
+.row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir .nm { color: var(--blue); }
+.mark { color: var(--cyan); }
+.empty { padding: 26px 12px; text-align: center; color: var(--p31-dim); background: var(--bg-row); font-size: 0.8rem; }
+.empty .big { display: block; font-size: 1.5rem; margin-bottom: 6px; opacity: 0.7; }
+.actions { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+button { background: var(--bg-row); color: var(--text); font-family: inherit; border: 1px solid var(--border);
+         border-radius: 5px; padding: 7px 12px; font-size: 0.78rem; cursor: pointer; white-space: nowrap; }
+button:hover:not([disabled]) { border-color: var(--cyan); color: var(--cyan); }
+button.primary { border-color: var(--cyan); color: var(--cyan); }
+button.primary:hover:not([disabled]) { background: rgba(0, 212, 255, 0.12); }
+button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+        flex-wrap: wrap; font-size: 0.76rem; color: var(--p31-dim); }
+.bar { height: 4px; background: var(--bg-row); border-radius: 999px; overflow: hidden; flex: 1; min-width: 120px; }
+.bar i { display: block; height: 100%; background: var(--cyan); }
+.note { color: var(--p31-dim); font-size: 0.72rem; }
+.note b { color: var(--text); }
+#toasts { position: fixed; right: 16px; bottom: 16px; display: flex; flex-direction: column;
+          gap: 8px; z-index: 50; max-width: min(420px, 90vw); }
+.toast { background: var(--bg-card); backdrop-filter: blur(10px); border: 1px solid var(--border);
+         border-left: 3px solid var(--cyan); border-radius: 6px; padding: 9px 12px; font-size: 0.8rem;
+         display: flex; gap: 10px; align-items: flex-start; }
+.toast.err { border-left-color: var(--red); }
+.toast button { border: none; background: none; color: var(--p31-dim); padding: 0 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body class="crt-light hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+<main class="main">
+<div class="wrap">
+
+  <header>
+    <h1>💽 Médias externes</h1>
+    <p class="sub">Deux volets, transfert et synchronisation entre supports</p>
+  </header>
+
+  <div id="alerts"></div>
+
+  <section class="card">
+    <div class="foot" style="margin-bottom:10px">
+      <span class="label">Supports détectés · <span id="devcount">…</span></span>
+      <button id="refresh" title="Relire les supports">↻ Relire</button>
+    </div>
+    <div class="devices" id="devices"></div>
+  </section>
+
+  <section class="card">
+    <div class="panes">
+      <div class="pane">
+        <div class="pane-head">
+          <span class="label">Source</span>
+          <select id="src-sel" aria-label="Support source"></select>
+          <button class="nav" id="src-up" title="Dossier parent" aria-label="Dossier parent">⬆</button>
+          <button class="nav" id="src-home" title="Revenir à la racine" aria-label="Racine">⌂</button>
+        </div>
+        <div class="crumb" id="src-crumb">—</div>
+        <div class="list" id="src-list"></div>
+        <div class="foot"><span id="src-foot">—</span></div>
+      </div>
+
+      <div class="actions">
+        <button class="primary" id="act-copy" disabled title="Copier la sélection vers la destination">Copier &nbsp;→</button>
+        <button id="act-copy-back" disabled title="Copier depuis la destination vers la source">←&nbsp; Copier</button>
+        <button id="act-sync" disabled title="Aligner la destination sur la source, sans rien supprimer">Synchroniser ⇄</button>
+        <button id="act-compare" disabled title="Lister les écarts sans rien écrire">Comparer</button>
+        <button id="act-move" disabled title="Indisponible depuis un support amovible">Déplacer →</button>
+      </div>
+
+      <div class="pane">
+        <div class="pane-head">
+          <span class="label">Destination</span>
+          <select id="dst-sel" aria-label="Support destination"></select>
+          <button class="nav" id="dst-up" title="Dossier parent" aria-label="Dossier parent">⬆</button>
+          <button class="nav" id="dst-home" title="Revenir à la racine" aria-label="Racine">⌂</button>
+        </div>
+        <div class="crumb" id="dst-crumb">—</div>
+        <div class="list" id="dst-list"></div>
+        <div class="foot"><span id="dst-foot">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label" style="margin-bottom:10px">File de transfert</div>
+    <div id="jobs"><div class="note">Aucun transfert en cours.</div></div>
+    <div class="note" style="margin-top:10px">
+      Copie, jamais déplacement, quand la source est amovible : un débranchement
+      en cours de transfert ne doit pas laisser un fichier nulle part. Le montage
+      source reste en <b>lecture seule</b>, et une synchronisation ne supprime
+      jamais à destination.
+    </div>
+  </section>
+</div>
+</main>
+<div id="toasts"></div>
+
+<script>
+'use strict';
+const API = '/api/v1/media';
+// Cache client (WEBUI-PANEL-GUIDELINES §7, double cache) : la dernière réponse
+// reste affichée pendant qu'une nouvelle charge. Sans elle, chaque rafraîchis-
+// sement vide le panneau puis le remplit — un clignotement qui donne
+// l'impression que les supports disparaissent.
+const cache = { detect: null, browse: {} };
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+    c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const fmt = n => {
+    if (!n && n !== 0) return '';
+    const u = ['o','Ko','Mo','Go','To']; let i = 0, v = Number(n);
+    while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+    return (i ? v.toFixed(1) : v) + ' ' + u[i];
+};
+function tok() { return localStorage.getItem('sbx_token'); }
+function hdrs() {
+    const h = { 'Content-Type': 'application/json' };
+    const t = tok(); if (t) h['Authorization'] = 'Bearer ' + t;
+    return h;
+}
+// §6 : le transitoire s'efface, le fatal reste jusqu'à ce qu'on le ferme.
+function toast(m, err) {
+    const d = document.createElement('div');
+    d.className = 'toast' + (err ? ' err' : '');
+    d.innerHTML = '<span>' + esc(m) + '</span>';
+    if (err) {
+        const b = document.createElement('button');
+        b.textContent = '✕'; b.onclick = () => d.remove();
+        d.appendChild(b);
+    } else { setTimeout(() => d.remove(), 3000); }
+    document.getElementById('toasts').appendChild(d);
+}
+const errorToast = m => toast(m, true);
+
+async function api(path, opts) {
+    const r = await fetch(API + path, opts || {});
+    if (r.status === 401) {
+        // Comme les 83 autres panneaux : on emmène à la connexion au lieu de
+        // dire « connexion requise » et de laisser l'utilisateur devant un
+        // panneau inerte. Le chemin courant est préservé pour revenir ici.
+        errorToast('🔒 Connexion requise — redirection…');
+        setTimeout(() => {
+            window.location.href = '/login.html?redirect=' +
+                encodeURIComponent(window.location.pathname);
+        }, 900);
+        throw new Error('401');
+    }
+    let d = null;
+    try { d = await r.json(); } catch (e) { /* corps non JSON */ }
+    if (!r.ok) throw new Error((d && d.detail) || ('HTTP ' + r.status));
+    return d;
+}
+
+// ── état ──────────────────────────────────────────────────────────────────
+const st = { devices: [], src: null, dst: null, srcPath: null, dstPath: null,
+             srcRoot: null, dstRoot: null, roots: [], sel: new Set() };
+
+function renderAlerts(alerts) {
+    const el = document.getElementById('alerts');
+    if (!alerts || !alerts.length) { el.innerHTML = ''; return; }
+    el.innerHTML = alerts.map(a => `
+      <div class="card alert">
+        <span class="ico">⚠️</span>
+        <div><b>Le port <code>${esc(a.port)}</code> déconnecte en boucle</b> —
+          ${esc(a.disconnects)} coupures relevées.
+          <div class="note" style="margin-top:6px">Un support branché dessus peut
+          disparaître en cours de transfert. Un hub auto-alimenté, ou un port direct
+          sur la board, lève généralement ce défaut.</div>
+        </div>
+      </div>`).join('');
+}
+
+function devChips(d) {
+    const c = [];
+    if (d.system) c.push('<span class="chip c-dim">système</span>');
+    if (d.mounted) c.push(`<span class="chip c-green">monté · ${esc(d.mountpoint)}</span>`);
+    else c.push('<span class="chip c-orange">non monté</span>');
+    if (d.removable) c.push('<span class="chip c-blue">amovible</span>');
+    if (d.readonly) c.push('<span class="chip c-dim">lecture seule</span>');
+    if (d.mountable === false) c.push('<span class="chip c-red">illisible ici</span>');
+    return c.join('');
+}
+
+// Un bouton qui ne peut pas aboutir invite a un echec. Quand le noyau ne sait
+// pas lire le systeme de fichiers, on remplace le bouton par le motif : c'est
+// une limite de la machine, pas une erreur de l'utilisateur, et re-cliquer n'y
+// changera rien.
+function devAction(d) {
+    if (d.mounted) {
+        // Retirer une clé sans démonter perd ce qu'on vient d'y écrire : le
+        // bouton doit être là où le support est affiché.
+        return `<button class="mnt alt" data-unmount="${esc(d.mountpoint)}">Démonter</button>`;
+    }
+    if (d.mountable === false) {
+        return `<div class="dev-blocked">${esc(d.unsupported_reason || 'système de fichiers non pris en charge')}</div>`;
+    }
+    return `<button class="mnt" data-mount="${esc(d.device)}">Monter (lecture seule)</button>` +
+           `<button class="mnt alt" data-mount-rw="${esc(d.device)}" ` +
+           `title="Nécessaire pour copier VERS ce support">Monter en écriture</button>`;
+}
+
+function renderDevices(data) {
+    st.devices = (data.devices || []).filter(d => !d.system);
+    document.getElementById('devcount').textContent = st.devices.length;
+    const el = document.getElementById('devices');
+    if (!st.devices.length) {
+        el.innerHTML = '<div class="empty"><span class="big">🔌</span>' +
+            'Aucun support externe détecté — branchez une clé ou un disque.</div>';
+    } else {
+        el.innerHTML = st.devices.map(d => `
+          <div class="dev" data-dev="${esc(d.device)}" tabindex="0">
+            <div class="dev-top"><span class="dev-name">${esc(d.label)}</span>
+              <span class="dev-meta">${esc(d.size)}</span></div>
+            <div class="dev-meta">${esc(d.device)} · ${esc(d.fstype)} · ${esc(d.transport || 'interne')}</div>
+            <div class="chips">${devChips(d)}</div>
+            ${devAction(d)}
+          </div>`).join('');
+    }
+    // Les sélecteurs ne proposent que ce qui est MONTÉ : offrir un support non
+    // monté ferait échouer la navigation sans expliquer pourquoi.
+    // Deux familles dans le même sélecteur : les supports externes montés et
+    // les médiathèques déclarées. Elles se naviguent pareil, et c'est tout
+    // l'intérêt — copier d'un disque USB vers Musique, ou l'inverse.
+    const usb = st.devices.filter(d => d.mounted)
+        .map(d => `<option value="${esc(d.mountpoint)}">💽 ${esc(d.label)} — ${esc(d.mountpoint)}</option>`).join('');
+    // Une médiathèque absente du disque n'est pas proposée : la choisir ne
+    // donnerait qu'une erreur de lecture.
+    const libs = (st.roots || []).filter(r => r.exists)
+        .map(r => `<option value="${esc(r.path)}">${r.writable ? '📥' : '📚'} ${esc(r.label)}` +
+                  `${r.writable ? '' : ' (lecture seule)'}</option>`).join('');
+    const opts = (usb ? `<optgroup label="Supports externes">${usb}</optgroup>` : '') +
+                 (libs ? `<optgroup label="Médiathèques">${libs}</optgroup>` : '');
+    for (const id of ['src-sel', 'dst-sel']) {
+        const s = document.getElementById(id);
+        const keep = s.value;
+        s.innerHTML = opts || '<option value="">aucun support monté</option>';
+        if (keep) s.value = keep;
+    }
+}
+
+async function refresh() {
+    try {
+        // Les racines d'abord : renderDevices les affiche dans les sélecteurs,
+        // et un sélecteur reconstruit sans elles perdrait la médiathèque
+        // choisie à chaque rafraîchissement.
+        try {
+            const r = await api('/roots');
+            if (r && r.ok) st.roots = r.roots || [];
+        } catch (e) { /* les supports restent utilisables sans médiathèques */ }
+        const d = await api('/detect');
+        cache.detect = d;
+        renderAlerts(d.alerts); renderDevices(d);
+    } catch (e) {
+        if (cache.detect) { renderAlerts(cache.detect.alerts); renderDevices(cache.detect); }
+        errorToast('Détection impossible : ' + e.message);
+    }
+}
+
+async function browse(side, path) {
+    const listEl = document.getElementById(side + '-list');
+    const crumb = document.getElementById(side + '-crumb');
+    const foot = document.getElementById(side + '-foot');
+    if (!path) { listEl.innerHTML = '<div class="empty">Choisissez un support.</div>';
+                 crumb.textContent = '—'; foot.textContent = '—'; return; }
+    try {
+        const d = await api('/browse?path=' + encodeURIComponent(path));
+        if (!d.ok) throw new Error(d.error || 'lecture impossible');
+        cache.browse[path] = d;
+        st[side + 'Path'] = d.path;
+        crumb.innerHTML = '<b>' + esc(d.path) + '</b>';
+        if (!d.entries.length) {
+            listEl.innerHTML = '<div class="empty"><span class="big">📂</span>Répertoire vide.</div>';
+        } else {
+            listEl.innerHTML = d.entries.map(e => `
+              <div class="row ${e.dir ? 'dir' : ''}" data-side="${side}"
+                   data-name="${esc(e.name)}" data-isdir="${e.dir ? 1 : 0}" tabindex="0">
+                <span class="mark"></span>
+                <span class="nm">${e.dir ? '📁' : '🎵'} ${esc(e.name)}</span>
+                <span class="sz">${e.dir ? '' : esc(fmt(e.size))}</span>
+              </div>`).join('');
+        }
+        foot.textContent = d.entries.length + ' éléments' + (d.truncated ? ' (tronqué)' : '');
+    } catch (e) {
+        const c = cache.browse[path];
+        if (!c) listEl.innerHTML = '<div class="empty">Lecture impossible.</div>';
+        errorToast('Navigation : ' + e.message);
+    }
+    updateActions();
+    syncNav(side);
+}
+
+function updateActions() {
+    const has = st.sel.size > 0 && st.srcPath && st.dstPath;
+    for (const id of ['act-copy', 'act-sync', 'act-compare'])
+        document.getElementById(id).disabled = !has;
+    document.getElementById('act-copy-back').disabled = !(st.srcPath && st.dstPath);
+    // « Déplacer » reste refusé : la source est amovible et montée en lecture
+    // seule. Un bouton qui ne peut pas aboutir doit le dire, pas échouer.
+    document.getElementById('act-move').disabled = true;
+}
+
+async function transfer(verb) {
+    if (!st.sel.size) return;
+    const names = [...st.sel];
+    let ok = 0;
+    for (const n of names) {
+        try {
+            await api('/' + verb, { method: 'POST', headers: hdrs(),
+                body: JSON.stringify({ src: st.srcPath + '/' + n, dst: st.dstPath }) });
+            ok++;
+        } catch (e) { errorToast(n + ' : ' + e.message); }
+    }
+    if (ok) toast(ok + ' élément(s) mis en file');
+    st.sel.clear();
+    document.querySelectorAll('.row.on').forEach(r => {
+        r.classList.remove('on'); r.querySelector('.mark').textContent = '';
+    });
+    updateActions(); loadJobs();
+}
+
+async function loadJobs() {
+    try {
+        const d = await api('/jobs');
+        const el = document.getElementById('jobs');
+        const jobs = (d.jobs || []).slice(-6).reverse();
+        if (!jobs.length) { el.innerHTML = '<div class="note">Aucun transfert en cours.</div>'; return; }
+        el.innerHTML = jobs.map(j => {
+            const cls = j.state === 'failed' ? 'c-red' : j.state === 'done' ? 'c-green' : 'c-orange';
+            return `<div class="foot" style="margin-bottom:6px">
+              <span>${esc(j.src.split('/').pop())} → ${esc(j.dst.split('/').pop())}</span>
+              <span class="chip ${cls}">${esc(j.state)}</span></div>`;
+        }).join('');
+    } catch (e) { /* la file n'est pas critique pour l'affichage */ }
+}
+
+// ── écouteurs délégués (§6 : jamais d'onclick interpolé) ──────────────────
+document.addEventListener('click', async ev => {
+    const mnt = ev.target.closest('[data-mount], [data-mount-rw]');
+    if (mnt) {
+        ev.stopPropagation();
+        const rw = 'mountRw' in mnt.dataset;
+        const dev = rw ? mnt.dataset.mountRw : mnt.dataset.mount;
+        try {
+            const d = await api('/mount', { method: 'POST', headers: hdrs(),
+                body: JSON.stringify({ path: dev, rw }) });
+            if (!d.ok) throw new Error(d.error || 'montage refusé');
+            toast((rw ? 'Monté en écriture : ' : 'Monté en lecture seule : ') + d.mountpoint);
+            refresh();
+        } catch (e) { errorToast('Montage : ' + e.message); }
+        return;
+    }
+    const um = ev.target.closest('[data-unmount]');
+    if (um) {
+        ev.stopPropagation();
+        try {
+            const d = await api('/unmount', { method: 'POST', headers: hdrs(),
+                body: JSON.stringify({ path: um.dataset.unmount }) });
+            if (!d.ok) throw new Error(d.error || 'démontage refusé');
+            toast('Démonté — le support peut être retiré');
+            refresh();
+        } catch (e) { errorToast('Démontage : ' + e.message); }
+        return;
+    }
+    const row = ev.target.closest('.row');
+    if (row) {
+        const side = row.dataset.side;
+        if (row.dataset.isdir === '1' && ev.detail === 2) {
+            browse(side, st[side + 'Path'] + '/' + row.dataset.name); return;
+        }
+        if (side !== 'src') return;
+        const n = row.dataset.name;
+        if (st.sel.has(n)) { st.sel.delete(n); row.classList.remove('on'); row.querySelector('.mark').textContent = ''; }
+        else { st.sel.add(n); row.classList.add('on'); row.querySelector('.mark').textContent = '✓'; }
+        updateActions();
+    }
+});
+document.getElementById('refresh').onclick = refresh;
+// Le volet retient SA racine : remonter ne doit jamais sortir du support
+// choisi. Le ctl refuserait de toute façon, mais échouer en silence sur un
+// clic de flèche donnerait l'impression d'un panneau cassé.
+function setRoot(side, path) {
+    st[side + 'Root'] = path || null;
+    browse(side, path);
+}
+function parentOf(path, root) {
+    if (!path || !root || path === root) return null;
+    const p = path.replace(/\/+$/, '');
+    const up = p.slice(0, p.lastIndexOf('/'));
+    if (!up || up.length < root.length) return root;
+    return up;
+}
+function syncNav(side) {
+    const up = document.getElementById(side + '-up');
+    const home = document.getElementById(side + '-home');
+    const at = st[side + 'Path'], root = st[side + 'Root'];
+    up.disabled = !parentOf(at, root);
+    home.disabled = !root || at === root;
+}
+for (const side of ['src', 'dst']) {
+    document.getElementById(side + '-up').onclick = () => {
+        const up = parentOf(st[side + 'Path'], st[side + 'Root']);
+        if (up) { if (side === 'src') st.sel.clear(); browse(side, up); }
+    };
+    document.getElementById(side + '-home').onclick = () => {
+        if (side === 'src') st.sel.clear();
+        browse(side, st[side + 'Root']);
+    };
+}
+document.getElementById('src-sel').onchange = e => { st.sel.clear(); setRoot('src', e.target.value); };
+document.getElementById('dst-sel').onchange = e => setRoot('dst', e.target.value);
+document.getElementById('act-copy').onclick = () => transfer('copy');
+document.getElementById('act-sync').onclick = () => transfer('sync');
+document.getElementById('act-compare').onclick = async () => {
+    try {
+        const d = await api('/compare', { method: 'POST', headers: hdrs(),
+            body: JSON.stringify({ src: st.srcPath, dst: st.dstPath }) });
+        toast(d.differences + ' écart(s) entre les deux volets');
+    } catch (e) { errorToast('Comparaison : ' + e.message); }
+};
+
+refresh().then(() => {
+    // setRoot et non browse : sans racine memorisee, les fleches de navigation
+    // resteraient inertes au chargement.
+    const s = document.getElementById('src-sel').value;
+    const t = document.getElementById('dst-sel').value;
+    if (s) setRoot('src', s);
+    if (t) setRoot('dst', t);
+});
+loadJobs();
+setInterval(refresh, 15000);
+setInterval(loadJobs, 5000);
+</script>
+</body>
+</html>
