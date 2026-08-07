@@ -102,11 +102,43 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--json", action="store_true")
     sp2 = sub.add_parser("nginx-sync")
     sp2.add_argument("--sites", default="/etc/nginx/sites-available")
+    # Sans --all, seuls les modules « a la demande » sont cables : tous les
+    # autres vhosts gardent la page BRUTE de nginx sur un 502.
+    sp2.add_argument("--all", action="store_true",
+                     help="cabler TOUS les vhosts qui relaient, pas seulement les on-demand")
     sp3 = sub.add_parser("waf-sync")
     sp3.add_argument("--out", default="/etc/secubox/waf/on-demand-vhosts.json")
+    sp5 = sub.add_parser("lxc-stagger",
+                         help="etaler le demarrage des conteneurs (ordre + delai)")
+    sp5.add_argument("--lxc-path", default="/data/lxc")
+    # Simulation par defaut : ecrire dans 23 configs de conteneurs sans avoir
+    # montre ce qu'on change serait un geste aveugle.
+    sp5.add_argument("--apply", action="store_true")
     sp4 = sub.add_parser("health-sync")
     sp4.add_argument("--out", default="/etc/secubox/health/sleepable-modules.json")
     args = p.parse_args(argv)
+    if args.cmd == "lxc-stagger":
+        from . import lxcstagger
+        from pathlib import Path as _P
+        ms = load_all(_P(args.root) / "modules.d")
+        rows = lxcstagger.plan(ms, lxc_path=_P(args.lxc_path))
+        window = sum(r["delay"] for r in rows)
+        for r in rows:
+            mark = "*" if r["changed"] else " "
+            note = "  (ordre manuel conserve)" if r.get("kept_manual_order") else ""
+            print(f"  {mark} {r['module']:<14} order={r['order']:<4} delay={r['delay']}s{note}")
+        print(f"  {len(rows)} conteneurs en autostart — "
+              f"etalement total {window}s ({window // 60} min {window % 60}s)")
+        if not args.apply:
+            print("  SIMULATION — ajoutez --apply pour ecrire.")
+            return 0
+        if not _running_as_root():
+            print("lxc-stagger --apply doit etre lance en root.", file=sys.stderr)
+            return 1
+        done = lxcstagger.apply(ms, lxc_path=_P(args.lxc_path))
+        print(f"  ecrit: {len(done)} config(s) — {' '.join(done) if done else 'aucune'}")
+        return 0
+
     if args.cmd == "nginx-sync":
         from . import nginxgen
         if not _running_as_root():
@@ -115,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         rep = nginxgen.sync_and_reload(
             manifests=load_all(Path(args.root) / "modules.d"),
-            sites_dir=Path(args.sites), run=_run)
+            sites_dir=Path(args.sites), run=_run, all_vhosts=args.all)
         print(f"nginx-sync: {len(rep['wired'])} câblé(s), {len(rep['already'])} déjà, "
               f"{len(rep['no_config'])} sans vhost"
               + (" — ROLLBACK (nginx -t a échoué)" if rep["rolled_back"] else ""))

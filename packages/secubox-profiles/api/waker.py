@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import subprocess
 import threading
@@ -53,6 +54,9 @@ _WAKE_ACTIVE_TTL_S = 90.0
 
 _locks: dict[str, asyncio.Lock] = {}
 _last_wake: dict[str, float] = {}
+
+
+log = logging.getLogger("secubox-waker")
 
 
 def _root() -> Path:
@@ -138,10 +142,24 @@ def create_app() -> FastAPI:
         manifests = load_all(_root() / "modules.d")
         mid = _resolve(vhost, manifests)
         if mid is None:
-            return Response(status_code=404)
+            # VHOST NON DECLARE. Un 404 ici remontait a nginx comme une page
+            # brute — c'est ce que l'utilisateur voyait sur les vhosts tombes
+            # apres un redemarrage. On rend la page d'attente, et on JOURNALISE
+            # le nom : ce journal est la liste de ce qu'il reste a declarer.
+            #
+            # On ne reveille rien pour autant : `wake()` refuse les modules
+            # inconnus, et c'est une garde voulue — un 5xx ne doit pas devenir
+            # un droit de demarrer un service arbitraire.
+            log.warning("wake: vhost non declare, aucun reveil possible: %s", vhost)
+            return _splash(vhost, 0.0, retry=10)
         m = manifests[mid]
         if effective_lifecycle(m) in ("always-on", "manual"):
-            return Response(status_code=502)   # not a sleepable vhost -> real error
+            # Backend cense tourner en permanence : ce n'est pas un endormi,
+            # c'est une VRAIE panne. La page d'attente mentirait — personne ne
+            # va le relever. On laisse remonter l'erreur.
+            log.warning("wake: %s est %s, pas un module endormi — panne reelle",
+                        mid, effective_lifecycle(m))
+            return Response(status_code=502)
         if is_on(_observe_one(m)):
             return Response(status_code=200, headers={"X-Sbx-Wake": "up"})
         async with _lock(mid):

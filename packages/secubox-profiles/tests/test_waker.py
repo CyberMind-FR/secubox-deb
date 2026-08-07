@@ -47,12 +47,19 @@ def test_waker_down_backend_serves_splash_and_fires_one_wake(monkeypatch, tmp_pa
     assert fired == ["demo"]                 # exactly one wake fired
 
 
-def test_waker_unknown_vhost_404(monkeypatch, tmp_path):
+def test_waker_unknown_vhost_serves_a_page(monkeypatch, tmp_path):
+    """L'invariant a CHANGE en #999, deliberement.
+
+    Le 404 remontait a nginx comme une page brute — c'est ce que voyait
+    l'utilisateur sur les vhosts tombes apres un redemarrage. Ce qui reste
+    garanti, et que verifie
+    test_undeclared_vhost_gets_the_splash_not_a_404, c'est qu'aucun reveil
+    n'est declenche pour un module inconnu."""
     import api.waker as waker
     monkeypatch.setenv("SECUBOX_PROFILES_ROOT", str(tmp_path))
     (tmp_path / "modules.d").mkdir()
     c = TestClient(waker.app)
-    assert c.get("/_wake/nope.gk2").status_code == 404
+    assert c.get("/_wake/nope.gk2").status_code == 503
 
 
 def test_wake_writes_active_state_file(monkeypatch, tmp_path):
@@ -171,3 +178,52 @@ def test_fire_wake_wraps_in_systemd_run_fire_and_forget(monkeypatch):
                     "/usr/sbin/secubox-wakectl", "wake", "demo", "--json"]
     assert "--wait" not in argv
     assert "--pipe" not in argv
+
+
+
+# ── 5xx -> reveil, et une page dans tous les cas (#999) ─────────────────────
+
+def test_undeclared_vhost_gets_the_splash_not_a_404(monkeypatch, tmp_path):
+    """Un 404 remontait a nginx comme une page brute.
+
+    C'est ce que voyait l'utilisateur sur les vhosts tombes apres un
+    redemarrage. On rend la page d'attente — sans reveiller quoi que ce soit :
+    wake() refuse les modules inconnus, et c'est une garde voulue."""
+    import api.waker as waker
+    monkeypatch.setenv("SECUBOX_PROFILES_ROOT", str(tmp_path))
+    (tmp_path / "modules.d").mkdir()
+    fired = []
+    monkeypatch.setattr(waker, "_fire_wake", lambda mid: fired.append(mid))
+    c = TestClient(waker.app)
+    r = c.get("/_wake/inconnu.gk2")
+    assert r.status_code == 503, "page d'attente attendue, pas 404"
+    assert "text/html" in r.headers.get("content-type", "")
+    assert r.headers.get("Retry-After")
+    # La garde reste entiere : un 5xx n'est pas un droit de demarrer un
+    # service arbitraire.
+    assert fired == [], "aucun reveil ne doit partir pour un vhost inconnu"
+
+
+def test_always_on_vhost_still_reports_a_real_failure(monkeypatch, tmp_path):
+    """Un backend cense tourner en permanence n'est pas un endormi : lui servir
+    une page d'attente ferait croire a un reveil que personne ne declenchera."""
+    import api.waker as waker
+    monkeypatch.setenv("SECUBOX_PROFILES_ROOT", str(tmp_path))
+    (tmp_path / "modules.d").mkdir()
+    (tmp_path / "modules.d" / "demo.toml").write_text(
+        'id="demo"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
+        'units=["demo.service"]\nlifecycle="always-on"\n[portal]\ndomain="demo.gk2"\n')
+    c = TestClient(waker.app)
+    assert c.get("/_wake/demo.gk2").status_code == 502
+
+
+def test_nginx_snippet_routes_errors_to_the_waker():
+    """Le fragment servait un fichier statique : une belle page, et rien
+    derriere. Le reveil n'avait lieu que pour les vhosts deja connus."""
+    from pathlib import Path
+    conf = (Path(__file__).resolve().parents[1] / "nginx"
+            / "secubox-waking.conf").read_text()
+    assert "error_page 502 503 504 = @sbx_wake;" in conf
+    assert "waker.sock" in conf, "l'erreur doit atteindre le waker"
+    assert "@sbx_waking_static" in conf, \
+        "repli statique requis : une panne du waker rendrait chaque 502 nu"
