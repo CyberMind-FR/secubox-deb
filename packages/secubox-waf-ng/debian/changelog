@@ -1,3 +1,18 @@
+secubox-waf-ng (1.3.0-1~bookworm1) bookworm; urgency=high
+
+  * Auto-reparation du registre cookie-audit AVANT chaque demarrage. sbxwaf
+    panique si le registre ne lui appartient pas, boucle en redemarrage, et
+    TOUS les vhosts publics tombent en 503 — `admin.gk2` reste a 200 car il
+    contourne le WAF, et ce contraste est le seul indice. La panne est survenue
+    au moins deux fois (2026-07-28, 2026-08-06). Le postinst posait deja les
+    bons proprietaires, mais quelque chose recree le repertoire en `secubox`
+    entre deux demarrages : corriger a l'installation ne suffisait pas.
+  * tmpfiles.d : systemd reapplique les proprietaires a chaque demarrage. Le
+    parent /var/log/secubox reste en 0755 — le passer en 0750 casse la
+    traversee pour les autres services.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 19:40:00 +0200
+
 secubox-waf-ng (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * #896 WAF-drift reconcile: ship a SINGLE HARDENED unit (secubox-waf-ng.service,
