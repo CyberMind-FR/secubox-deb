@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,7 +21,14 @@ import (
 //go:embed migrations/*.sql
 var migrationFS embed.FS
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db *sql.DB
+	// root est le repertoire qui CONTIENT la base. content/ et files/ vivent a
+	// cote d'elle, et c'est ce repertoire entier qui constitue le BBS : le
+	// copier, c'est tout emporter. La base n'est qu'un fichier de plus dedans,
+	// et le seul qu'on puisse jeter sans rien perdre.
+	root string
+}
 
 // Open ouvre la base et applique les migrations en attente.
 func Open(path string) (*Store, error) {
@@ -34,7 +42,7 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("ouverture %s : %w", path, err)
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, root: filepath.Dir(path)}
 	if err := s.Migrate(); err != nil {
 		db.Close()
 		return nil, err
