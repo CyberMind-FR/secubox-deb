@@ -133,8 +133,6 @@ def _cfg():
         "auto_pause": power_cfg.get("auto_pause", False),
         "auto_pause_minutes": power_cfg.get("auto_pause_minutes", 30),
         "presence_events": power_cfg.get("presence_events", True),
-        "metoblizer_log": power_cfg.get("metoblizer_log", False),
-        "metoblizer_endpoint": power_cfg.get("metoblizer_endpoint", "http://localhost:9300/api/v1/metoblizer/ingest"),
     }
 
 
@@ -955,7 +953,7 @@ def _get_idle_seconds() -> float:
     return time.time() - last
 
 def _emit_presence_event(event: str, details: Optional[Dict[str, Any]] = None):
-    """Emit presence event for banner injection and metoblizer logging.
+    """Emit presence event for banner injection.
 
     Events: 'wake', 'sleep', 'activity'
     """
@@ -973,24 +971,6 @@ def _emit_presence_event(event: str, details: Optional[Dict[str, Any]] = None):
         presence_file.parent.mkdir(parents=True, exist_ok=True)
         presence_file.write_text(json.dumps(event_data, indent=2))
         log.info("Presence event: %s", event)
-
-    # Send to metoblizer if configured
-    if cfg.get("metoblizer_log"):
-        try:
-            import urllib.request
-
-            endpoint = cfg.get("metoblizer_endpoint")
-            if endpoint:
-                req = urllib.request.Request(
-                    endpoint,
-                    data=json.dumps(event_data).encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="POST"
-                )
-                urllib.request.urlopen(req, timeout=5)
-                log.debug("Metoblizer log sent: %s", event)
-        except Exception as e:
-            log.warning("Metoblizer log failed: %s", e)
 
 
 def _load_streamlit_config() -> dict:
