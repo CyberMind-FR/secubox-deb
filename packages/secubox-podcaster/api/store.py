@@ -103,6 +103,32 @@ def known_guids(fid: int) -> set[str]:
                 c.execute("SELECT guid FROM episodes WHERE feed_id=?", (fid,))}
 
 
+def feed_by_site(url: str) -> dict | None:
+    """Flux dont l'URL SOURCE correspond, ou None.
+
+    L'identite d'un flux importe ne peut pas reposer sur le slug de son titre :
+    yt-dlp rend un titre legerement different selon l'URL fournie (playlist ou
+    watch?v=...&list=...), le slug change, et l'import cree un NOUVEAU flux au
+    lieu de mettre a jour l'ancien. Constate : 34 episodes retelecharges en
+    doublon, 2,3 Go.
+
+    L'URL source, elle, est stable. On compare sur l'identifiant de playlist
+    quand il existe — `watch?v=X&list=Y` et `playlist?list=Y` designent la
+    meme serie."""
+    import re as _re
+    def key(u: str) -> str:
+        m = _re.search(r"[?&]list=([A-Za-z0-9_-]+)", u or "")
+        return m.group(1) if m else (u or "")
+    k = key(url)
+    if not k:
+        return None
+    with _conn() as c:
+        for row in c.execute("SELECT * FROM feeds WHERE site IS NOT NULL AND site <> ''"):
+            if key(row["site"]) == k:
+                return dict(row)
+    return None
+
+
 def feed_site(fid: int) -> str | None:
     """URL SOURCE d'un flux synthetique, ou None.
 
