@@ -314,10 +314,52 @@ async def _refresher() -> None:
     while True:
         await asyncio.sleep(max(5, int(CFG.get("refresh_minutes", 60))) * 60)
         for fid, url in store.all_feed_urls():
+            # Les flux SYNTHETIQUES ne sont pas des sources HTTP.
+            #
+            # `youtube:<serie>` et `audiobook:<titre>` sont des conteneurs
+            # crees localement (importeur yt-dlp, endpoint d'ajout) pour
+            # regrouper des episodes. Les passer a un client HTTP produit, a
+            # chaque cycle :
+            #
+            #   Request URL is missing an 'http://' or 'https://' protocol
+            #
+            # Quatre des cinq flux de cette board sont dans ce cas : le
+            # rafraichisseur tournait, mais echouait sur tout sauf le seul vrai
+            # RSS. Plus rien n'a ete telecharge depuis le 2026-07-25.
+            if not url.startswith(("http://", "https://")):
+                await _refresh_synthetic(fid, url)
+                continue
             try:
                 await fetch_and_store(url)
             except Exception as e:
                 log.error(f"refresh feed {fid} failed: {e}")
+
+
+async def _refresh_synthetic(fid: int, url: str) -> None:
+    """Rafraichit un flux synthetique en relançant son import d'origine.
+
+    Ne fait rien si l'URL source n'est pas connue : un flux importe avant que
+    `site` ne soit enregistre n'a plus de trace de son origine, et il n'y a
+    rien a re-interroger. On le dit UNE FOIS, en info, plutot que d'echouer en
+    boucle a chaque cycle."""
+    if not url.startswith("youtube:"):
+        return                      # audiobook: n'a pas de source a re-lire
+    src = store.feed_site(fid)
+    if not src or not src.startswith(("http://", "https://")):
+        log.info(f"feed {fid} ({url}): pas d'URL source enregistree, "
+                 "rafraichissement impossible — reimportez-le une fois")
+        return
+    if importer.JOB.get("running"):
+        return                      # un seul import a la fois
+    try:
+        # Signature complete : run_import(url, media_dir, mirror_peertube,
+        # create_billets). Un appel a trois arguments passe la revue de code
+        # et le controle syntaxique, puis echoue en TypeError au premier
+        # cycle — c'est-a-dire une heure apres le deploiement, quand plus
+        # personne ne regarde.
+        await asyncio.to_thread(importer.run_import, src, str(MEDIA), False, False)
+    except Exception as e:
+        log.error(f"reimport feed {fid} ({src}) failed: {e}")
 
 
 def _ensure_worker() -> None:

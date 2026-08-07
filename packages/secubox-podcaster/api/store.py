@@ -96,6 +96,23 @@ def bump_attempts(ep_id: int) -> int:
 
 
 # ── feeds ──────────────────────────────────────────────────────────
+def known_guids(fid: int) -> set[str]:
+    """Guids deja presents pour ce flux — pour sauter avant de telecharger."""
+    with _conn() as c:
+        return {r["guid"] for r in
+                c.execute("SELECT guid FROM episodes WHERE feed_id=?", (fid,))}
+
+
+def feed_site(fid: int) -> str | None:
+    """URL SOURCE d'un flux synthetique, ou None.
+
+    Sans elle, un flux `youtube:` ne peut pas etre rafraichi : son URL propre
+    n'est qu'un slug de serie, il n'y a rien a re-interroger."""
+    with _conn() as c:
+        row = c.execute("SELECT site FROM feeds WHERE id=?", (fid,)).fetchone()
+        return row["site"] if row and row["site"] else None
+
+
 def add_feed(url: str, meta: dict, auto_dl: int = 0) -> int:
     with _conn() as c:
         cur = c.execute(
