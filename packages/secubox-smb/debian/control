@@ -1,0 +1,17 @@
+Source: secubox-smb
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-smb
+Architecture: all
+Depends: ${misc:Depends}, ksmbd-tools, nftables
+Recommends: avahi-daemon
+Description: SecuBox — partage SMB servi par le noyau (ksmbd)
+ Expose les supports USB montes (/media/secubox-media) et /data en SMB3,
+ cantonne au reseau local par nftables, sans acces invite.
+ .
+ ksmbd sert les fichiers depuis l'espace noyau : pas d'aller-retour vers un
+ processus utilisateur a chaque lecture, contrairement a smbd.

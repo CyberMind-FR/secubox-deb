@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: smbctl — partage SMB servi par le noyau (ksmbd)
+# CyberMind — https://cybermind.fr
+#
+# Seule surface privilegiee du module. Rend du JSON pour rester consommable par
+# un panneau, comme les autres ctl du projet.
+#
+# CE QUE CE CTL NE FAIT PAS, ET POURQUOI :
+#
+#   Il ne pose AUCUN mot de passe lui-meme et n'en genere aucun. Un secret
+#   genere par un outil finit dans un journal, un historique de shell ou un
+#   depot ; il est saisi par l'operateur ou il n'existe pas.
+#
+#   Il n'ouvre aucun port : le cantonnement au LAN vit dans le drop-in nft,
+#   pas ici. Une garde posee dans un outil d'administration serait contournee
+#   par tout autre appelant.
+
+set -uo pipefail
+
+readonly VERSION="1.0.0"
+readonly CONF="${SECUBOX_SMB_CONF:-/etc/ksmbd/ksmbd.conf}"
+readonly USERDB="${SECUBOX_SMB_USERDB:-/etc/ksmbd/ksmbdpwd.db}"
+
+_json() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+
+# ── status ──────────────────────────────────────────────────────────────────
+#
+# Trois choses distinctes peuvent manquer, et les confondre egare : le MODULE
+# noyau, le SERVICE, et l'ECOUTE effective. Un service « active » dont le
+# module n'est pas charge ne sert rien.
+cmd_status() {
+    local mod=false svc="inactive" listen=false users=0
+    lsmod 2>/dev/null | grep -q '^ksmbd ' && mod=true
+    svc=$(systemctl is-active ksmbd 2>/dev/null | head -1)
+    [ -n "$svc" ] || svc="inactive"
+    ss -tln 2>/dev/null | grep -q ':445 ' && listen=true
+    [ -r "$USERDB" ] && users=$(grep -c ':' "$USERDB" 2>/dev/null || echo 0)
+
+    python3 - "$mod" "$svc" "$listen" "$users" "$CONF" <<'PY'
+import json, re, sys, os
+mod, svc, listen, users, conf = sys.argv[1:6]
+shares = []
+try:
+    cur = None
+    for line in open(conf):
+        line = line.strip()
+        if line.startswith(';') or line.startswith('#'):
+            continue
+        m = re.match(r'^\[(.+)\]$', line)
+        if m:
+            cur = m.group(1)
+            if cur != "global":
+                shares.append({"name": cur, "path": None, "readonly": None})
+            continue
+        if shares and cur and cur != "global" and '=' in line:
+            k, v = (x.strip() for x in line.split('=', 1))
+            if k == "path":
+                shares[-1]["path"] = v
+                shares[-1]["exists"] = os.path.isdir(v)
+            elif k == "read only":
+                shares[-1]["readonly"] = v.lower() in ("yes", "true", "1")
+except OSError:
+    # Une configuration illisible ne doit pas faire disparaitre le reste du
+    # diagnostic : l'etat du module et du service reste utile.
+    shares = []
+
+print(json.dumps({
+    "ok": True,
+    "module_loaded": mod == "true",
+    "service": svc,
+    "listening": listen == "true",
+    "users": int(users),
+    # Un partage declare mais sans compte n'est joignable par personne : le
+    # dire evite de chercher le defaut dans le reseau ou le pare-feu.
+    "usable": mod == "true" and svc == "active" and listen == "true" and int(users) > 0,
+    "shares": shares,
+}))
+PY
+}
+
+# ── user-add ────────────────────────────────────────────────────────────────
+#
+# Le mot de passe est LU SUR L'ENTREE STANDARD, jamais passe en argument : un
+# argument apparait dans la table des processus et dans l'historique du shell.
+cmd_user_add() {
+    local user="${1:-}"
+    [ -n "$user" ] || { printf '{"ok":false,"error":"nom d utilisateur requis"}\n'; return 2; }
+    command -v ksmbd.adduser >/dev/null 2>&1 || {
+        printf '{"ok":false,"error":"ksmbd-tools absent (apt install ksmbd-tools)"}\n'; return 1; }
+    if [ -t 0 ]; then
+        printf '{"ok":false,"error":"mot de passe attendu sur stdin — jamais en argument"}\n'; return 2
+    fi
+    local pw; IFS= read -r pw
+    [ -n "$pw" ] || { printf '{"ok":false,"error":"mot de passe vide"}\n'; return 2; }
+    mkdir -p "$(dirname "$USERDB")"
+    # SANS -p : cette option placerait le mot de passe dans la ligne de
+    # commande, donc dans la table des processus, lisible par tout utilisateur
+    # de la machine. ksmbd.adduser sait le demander — on le lui donne sur
+    # l'entree standard, deux fois (saisie + confirmation).
+    local out rc mode="-a"
+    grep -q "^$user:" "$USERDB" 2>/dev/null && mode="-u"
+    out=$(printf '%s\n%s\n' "$pw" "$pw" | ksmbd.adduser "$mode" "$user" -i "$USERDB" 2>&1)
+    rc=$?
+    if [ $rc -eq 0 ]; then
+        printf '{"ok":true,"user":%s}\n' "$(_json "$user")"
+    else
+        printf '{"ok":false,"error":%s}\n' "$(_json "${out:0:200}")"
+    fi
+}
+
+cmd_users() {
+    python3 - "$USERDB" <<'PY'
+import json, os, sys
+db = sys.argv[1]
+names = []
+if os.path.isfile(db):
+    try:
+        for line in open(db):
+            if ':' in line:
+                names.append(line.split(':', 1)[0].strip())
+    except OSError:
+        pass
+print(json.dumps({"ok": True, "users": sorted(set(n for n in names if n))}))
+PY
+}
+
+# ── sync-shares ─────────────────────────────────────────────────────────────
+#
+# Un partage par support REELLEMENT monte.
+#
+# ksmbd ne traverse pas les points de montage a l'interieur d'un partage :
+# verifie sur cette board, un montage lie place sous la racine partagee
+# apparait VIDE cote client. Un partage unique sur /media/secubox-media
+# montrerait donc les noms des supports et rien dedans.
+#
+# Et un point de montage NON MONTE reste un repertoire ordinaire du systeme de
+# fichiers racine : expose en ecriture, un client y deposant des fichiers
+# croirait remplir sa cle alors qu'il remplirait l'eMMC. On ne partage donc que
+# ce qui est monte, jamais un repertoire d'attente.
+cmd_sync_shares() {
+    local root="${SECUBOX_SMB_MEDIA_ROOT:-/media/secubox-media}"
+    local block="" n=0 mp name ro
+    while IFS= read -r mp; do
+        [ -n "$mp" ] || continue
+        name=$(basename -- "$mp")
+        # Le nom vient de l'etiquette du support, donc d'une source non
+        # maitrisee, et devient un nom de partage : il est assaini.
+        name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-40)
+        [ -n "$name" ] || continue
+        # Un support monte en lecture seule le reste en SMB : le partage
+        # n'outrepasse pas le mode de montage, il le refleterait a tort.
+        ro=yes
+        findmnt -no OPTIONS --target "$mp" 2>/dev/null | grep -qw rw && ro=no
+        block="${block}
+[${name}]
+	comment = Support externe ($([ "$ro" = yes ] && echo "lecture seule" || echo "écriture"))
+	path = ${mp}
+	read only = ${ro}
+	guest ok = no
+"
+        n=$((n + 1))
+    done < <(findmnt -rno TARGET 2>/dev/null | grep "^${root}/" | sort)
+
+    python3 - "$CONF" "$block" "$n" <<'PY'
+import json, sys
+conf, block, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
+BEG = "; >>> SECUBOX-SMB AUTO-SHARES >>>"
+END = "; <<< SECUBOX-SMB AUTO-SHARES <<<"
+try:
+    s = open(conf).read()
+except OSError as e:
+    print(json.dumps({"ok": False, "error": str(e)})); raise SystemExit(1)
+if BEG not in s or END not in s:
+    print(json.dumps({"ok": False,
+                      "error": "marqueurs AUTO-SHARES absents de la configuration"}))
+    raise SystemExit(1)
+head, rest = s.split(BEG, 1)
+_, tail = rest.split(END, 1)
+new = head + BEG + "\n" + block + END + tail
+if new != s:
+    open(conf, "w").write(new)
+print(json.dumps({"ok": True, "shares": n, "changed": new != s}))
+PY
+}
+
+# ── reload ──────────────────────────────────────────────────────────────────
+cmd_reload() {
+    systemctl reload ksmbd 2>/dev/null || systemctl restart ksmbd 2>/dev/null
+    sleep 1
+    if systemctl is-active --quiet ksmbd; then
+        printf '{"ok":true,"service":"active"}\n'
+    else
+        printf '{"ok":false,"error":%s}\n' \
+            "$(_json "$(journalctl -u ksmbd -n 3 --no-pager 2>/dev/null | tail -1)")"
+        return 1
+    fi
+}
+
+cmd_help() {
+    cat <<'EOF'
+smbctl — partage SMB servi par le noyau (ksmbd)
+
+  status              Module, service, ecoute, comptes et partages
+  users               Comptes SMB declares
+  user-add <nom>      Ajoute/modifie un compte — MOT DE PASSE SUR STDIN
+  sync-shares         Un partage par support monte (ksmbd ne traverse
+                      pas les points de montage)
+  reload              Recharge la configuration
+
+Le mot de passe n'est jamais passe en argument : un argument apparait dans la
+table des processus et dans l'historique du shell.
+
+  printf '%s' 'secret' | smbctl user-add gk2
+EOF
+}
+
+case "${1:-help}" in
+    status)   cmd_status ;;
+    users)    cmd_users ;;
+    user-add) shift; cmd_user_add "${1:-}" ;;
+    sync-shares) cmd_sync_shares ;;
+    reload)   cmd_reload ;;
+    version)  printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;
+    *)        cmd_help ;;
+esac
