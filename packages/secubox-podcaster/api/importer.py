@@ -247,7 +247,13 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
             _jlog("peertube mirror requested but auth unavailable — skipping video upload")
 
         # feed
-        store.add_feed(feed_url, {"title": series, "description": f"Import: {series}"})
+        # `site` porte l'URL SOURCE. Sans elle le flux est un cul-de-sac :
+        # son url propre n'est qu'un slug (`youtube:<serie>`), et aucun
+        # rafraichissement ulterieur ne sait quoi re-interroger. C'est ce qui a
+        # fige les series importees — plus rien depuis le 2026-07-25.
+        store.add_feed(feed_url, {"title": series,
+                                  "description": f"Import: {series}",
+                                  "site": url})
         fid = None
         for f in store.list_feeds():
             if f["url"] == feed_url:
@@ -255,8 +261,18 @@ def run_import(url: str, media_dir: str, mirror_peertube: bool, create_billets: 
                 break
         JOB["feed_id"] = fid
 
+        # Episodes deja connus, lus UNE fois : le saut doit avoir lieu AVANT le
+        # telechargement. L'insertion est certes idempotente
+        # (INSERT OR IGNORE sur guid), mais le fichier est telecharge avant
+        # d'y arriver — un reimport retelechargerait la serie entiere, ce qui
+        # interdisait tout rafraichissement automatique.
+        known = store.known_guids(fid)
+
         for i, e in enumerate(entries):
             vid, title = e["id"], e["title"]
+            if f"yt:{vid}" in known:
+                JOB["done"] = JOB.get("done", 0) + 1
+                continue
             JOB["current"] = f"{i+1}/{len(entries)}: {title[:60]}"
             _jlog(JOB["current"])
             try:

@@ -1,3 +1,27 @@
+secubox-podcaster (1.1.1-1~bookworm2) bookworm; urgency=high
+
+  * Le reimport automatique appelait run_import avec TROIS arguments au lieu
+    de quatre : il aurait echoue en TypeError au premier cycle, une heure
+    apres le deploiement. Attrape en declenchant l'import a la main.
+  * Plus aucun episode telecharge depuis le 2026-07-25. Quatre flux sur cinq ne
+    sont pas des sources HTTP mais des conteneurs crees localement
+    (`youtube:<serie>`, `audiobook:<titre>`) ; le rafraichisseur les passait a
+    un client HTTP, qui les refusait a chaque cycle :
+      Request URL is missing an 'http://' or 'https://' protocol
+    Il tournait donc bien, mais echouait sur tout sauf le seul vrai RSS.
+  * Defaut plus grave derriere : un flux `youtube:` ne pouvait PAS etre
+    rafraichi. Son url propre n'est qu'un slug de serie et la colonne `site`
+    restait vide — l'URL source etait perdue, il n'y avait rien a
+    re-interroger. Elle est desormais enregistree.
+  * La boucle d'import saute les videos deja connues AVANT de telecharger.
+    L'insertion etait idempotente (INSERT OR IGNORE sur guid), mais le fichier
+    etait telecharge avant d'y arriver : un reimport retelechargeait la serie
+    entiere, ce qui interdisait tout rafraichissement automatique.
+  * Un flux importe avant ce correctif n'a pas de source : c'est dit une fois,
+    en info, plutot qu'echoue en boucle. Il faut le reimporter une fois.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 07 Aug 2026 09:30:00 +0200
+
 secubox-podcaster (1.0.3-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
