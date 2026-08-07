@@ -157,9 +157,8 @@ FUZZY_CLUSTERS: dict[str, list[str]] = {
     "stream*": ["secubox-streamforge", "secubox-streamlit"],
     "meta*": [
         "secubox-metablogizer",
-        "secubox-metabolizer",
+        "secubox-metalogizer",
         "secubox-metacatalog",
-        "secubox-metoblizer",  # presumed typo of metablogizer
     ],
     "mesh*": [
         "secubox-mesh",

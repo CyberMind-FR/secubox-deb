@@ -125,7 +125,6 @@
 | 🧠 **KSM Optimizer** | System | 内核同页内存（KSM）优化仪表板 |
 | 🪞 **MagicMirror** | Apps | MagicMirror 智能显示管理 |
 | 🧪 **Metabolizer** | Monitoring | 日志处理与分析器 |
-| 🗄️ **Metoblizer** | Monitoring | 集中式日志聚合器 |
 | 📇 **Metacatalog** | Services | 服务目录与注册表 |
 | 🍺 **PicoBrew** | IoT | 自酿 / 发酵控制器 |
 | 🎙️ **Podcaster** | Media | 现代播客管理器 |
@@ -662,13 +661,11 @@ Netifyd深度包检测
 
 ![Metabolizer](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metabolizer.png)
 
-#### 🗄️ Metoblizer
 
 集中式日志聚合器
 
 **功能:** 日志收集, 中央存储, 搜索, 保留
 
-![Metoblizer](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metoblizer.png)
 
 ---
 

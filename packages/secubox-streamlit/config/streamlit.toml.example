@@ -44,9 +44,6 @@ auto_pause = false
 auto_pause_minutes = 30
 # presence_events enables banner injection on wake/sleep
 presence_events = true
-# metoblizer_log enables activity logging to metoblizer
-metoblizer_log = false
-metoblizer_endpoint = "http://localhost:9300/api/v1/metoblizer/ingest"
 
 [wake]
 # How long `streamlitctl app wake <name>` waits for the app's port to

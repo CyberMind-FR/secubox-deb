@@ -1795,7 +1795,6 @@ MODULES = {
             "zh": ["日志解析", "模式分析", "管道", "丰富化"]
         }
     },
-    "metoblizer": {
         "name": "Metoblizer", "icon": "🗄️", "category": "Monitoring",
         "description": {
             "en": "Centralized log aggregator",

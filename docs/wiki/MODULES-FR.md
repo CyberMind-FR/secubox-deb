@@ -125,7 +125,6 @@
 | 🧠 **KSM Optimizer** | System | Tableau d'optimisation mémoire KSM (kernel same-page) |
 | 🪞 **MagicMirror** | Apps | Gestion de l'affichage intelligent MagicMirror |
 | 🧪 **Metabolizer** | Monitoring | Processeur et analyseur de logs |
-| 🗄️ **Metoblizer** | Monitoring | Agrégateur de logs centralisé |
 | 📇 **Metacatalog** | Services | Catalogue et registre de services |
 | 🍺 **PicoBrew** | IoT | Contrôleur de brassage / fermentation |
 | 🎙️ **Podcaster** | Media | Gestionnaire de podcasts moderne |
@@ -662,13 +661,11 @@ Processeur et analyseur de logs
 
 ![Metabolizer](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metabolizer.png)
 
-#### 🗄️ Metoblizer
 
 Agrégateur de logs centralisé
 
 **Fonctionnalités:** Collecte de logs, Stockage central, Recherche, Rétention
 
-![Metoblizer](https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/docs/screenshots/vm/metoblizer.png)
 
 ---
 

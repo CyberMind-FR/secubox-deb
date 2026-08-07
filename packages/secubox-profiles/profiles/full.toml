@@ -10,7 +10,6 @@ on = [
   "health-doctor", "health-prober", "hub", "identity", "interceptor", "ipblock",
   "ksm", "led-heartbeat", "led-trigger", "leds", "localrecall", "lyrion",
   "mail", "mcp-server", "mesh", "meshname", "metablogizer", "metabolizer",
-  "metacatalog", "metoblizer", "metrics", "mirror", "mitmproxy", "modem",
   "module-prober", "mqtt", "nac", "ndpid", "netboot", "netdata",
   "netdiag", "netifyd", "netmodes", "nettweak", "network-anomaly", "network-ready",
   "nextcloud", "p2p", "peertube", "photoprism", "podcaster", "portal",
