@@ -87,3 +87,19 @@ CONFIG_CRYPTO_CMAC=y
 CONFIG_CRYPTO_SHA512=y
 CONFIG_CRYPTO_GCM=y
 CONFIG_CRYPTO_CCM=y
+
+# ── Limitation CPU des conteneurs ───────────────────────────────────────────
+#
+# CONFIG_CFS_BANDWIDTH manquait. Le controleur `cpu` etait bien la
+# (CGROUP_SCHED + FAIR_GROUP_SCHED), mais `cpu.max` — la limitation de bande
+# passante — en depend. Sans lui, tout conteneur declarant
+# `lxc.cgroup2.cpu.max` REFUSE DE DEMARRER :
+#
+#   cgfsng_setup_limits: Failed to set "cpu.max" to "60000 100000"
+#   lxc_spawn: Failed to setup cgroup limits — container failed to start
+#
+# Sept conteneurs de cette board le declarent (gitea, mail, matrix, nextcloud,
+# photoprism, streamlit, yacy) : apres le redemarrage du 2026-08-06 ils sont
+# tous restes a terre, et rien ne l'a signale. C'est la moitie des conteneurs
+# manquants ce jour-la.
+CONFIG_CFS_BANDWIDTH=y
