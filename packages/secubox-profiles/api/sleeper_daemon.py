@@ -84,6 +84,11 @@ _RUN_TIMEOUT_S = 30
 # monkeypatchable en test (même motif que api.waker._WAKE_ACTIVE_PATH).
 VHOST_SIGNALS_PATH = Path("/var/cache/secubox/waf/vhost-signals.json")
 
+# Au-dela, le snapshot n'est plus une observation mais un souvenir. Tres en
+# deca du seuil d'inactivite (900 s) : on ne peut pas endormir sur la foi de
+# donnees plus vieilles que la decision elle-meme.
+SIGNALS_MAX_AGE_S = 180.0
+
 
 def _root() -> Path:
     """Racine de config — surchargeable en test via SECUBOX_PROFILES_ROOT
@@ -110,6 +115,30 @@ def _read_snapshot_file(path: Path) -> dict[str, dict[str, Any]]:
     `_read_wake_locked` dans sleeper.py : fichier absent, illisible, ou JSON
     corrompu/de forme inattendue => {}, JAMAIS une exception qui ferait
     mourir la boucle du sleeper."""
+    # PEREMPTION : un fichier FIGE est plus dangereux qu'un fichier absent.
+    #
+    # Absent => {} => aucun Signal => rien ne dort : le contrat ci-dessus est
+    # deja sur. Mais un fichier PRESENT et fige rend des horodatages anciens,
+    # qui ressemblent exactement a de l'inactivite — et l'inactivite fait
+    # STOPPER.
+    #
+    # Constate le 2026-08-07 : ce fichier datait de ONZE JOURS parce que
+    # /var/cache/secubox/waf appartenait a `secubox` alors que sbxwaf tourne en
+    # `secubox-waf` et ne pouvait pas l'ecrire. Tous les vhosts y paraissaient
+    # inactifs. Le sleeper aurait eteint la board entiere, et en toute logique.
+    #
+    # On traite donc « perime » comme « absent » : un fichier fige ne dit pas
+    # « tout est inactif », il dit « je ne sais pas ».
+    try:
+        age = time.time() - path.stat().st_mtime
+    except OSError:
+        return {}
+    if age > SIGNALS_MAX_AGE_S:
+        _LOG.warning(
+            "signaux perimes (%ds > %ds) dans %s — sbxwaf n'ecrit plus ; "
+            "aucun module ne sera endormi", int(age), int(SIGNALS_MAX_AGE_S), path)
+        return {}
+
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
