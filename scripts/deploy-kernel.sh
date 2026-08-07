@@ -81,6 +81,20 @@ ssh "$HOST" "set -e
 log "transfert du paquet"
 scp -q "$DEB" "$HOST:/tmp/$(basename "$DEB")"
 
+# L'image BRUTE ne se trouve pas dans le paquet : elle vient de l'arbre de
+# compilation. Sans elle, extlinux boote un vmlinuz gzip que booti refuse.
+IMGNAME="${PKGVER##*-}"
+RAW_IMAGE="${RAW_IMAGE:-$(dirname "$DEB")/../linux-$REL/arch/arm64/boot/Image}"
+RAW_IMAGE_REMOTE="/tmp/Image-$IMGNAME"
+if [ -f "$RAW_IMAGE" ]; then
+    log "transfert de l'image brute ($(du -h "$RAW_IMAGE" | cut -f1))"
+    scp -q "$RAW_IMAGE" "$HOST:$RAW_IMAGE_REMOTE"
+else
+    warn "IMAGE BRUTE INTROUVABLE ($RAW_IMAGE) — extlinux ne pourra PAS demarrer"
+    warn "ce noyau : booti n'accepte pas un vmlinuz compresse. Passez RAW_IMAGE=."
+    RAW_IMAGE=""
+fi
+
 log "extraction et mise en place"
 ssh "$HOST" "set -e
     rm -rf /tmp/kdeploy && mkdir -p /tmp/kdeploy
@@ -93,6 +107,22 @@ ssh "$HOST" "set -e
 
     # Puis /boot. cp et non install/link : VFAT ne connait pas les liens durs.
     cp -f /tmp/kdeploy/boot/vmlinuz-$REL /boot/vmlinuz-$REL
+
+    # ── IMAGE BRUTE, indispensable ──────────────────────────────────────────
+    #
+    # `vmlinuz-*` est une image COMPRESSEE gzip. `booti` (arm64) ne sait pas la
+    # demarrer : l'entree extlinux qui pointait dessus echouait EN SILENCE et
+    # U-Boot retombait sur l'entree suivante — un noyau de juin. Trois
+    # deploiements successifs n'ont ainsi jamais pris, alors que le fichier
+    # installe etait bien le bon (md5 identique).
+    #
+    # Le paquet linux-image ne contient que vmlinuz ; l'image brute vient de
+    # l'arbre de compilation. Sans elle, ce script installe un noyau qui ne
+    # demarrera pas.
+    if [ -n "${RAW_IMAGE:-}" ] && [ -f "$RAW_IMAGE_REMOTE" ]; then
+        cp -f "$RAW_IMAGE_REMOTE" /boot/Image-$IMGNAME
+        echo "  image brute: /boot/Image-$IMGNAME"
+    fi
     for f in System.map config; do
         [ -f \"/tmp/kdeploy/boot/\$f-$REL\" ] && cp -f \"/tmp/kdeploy/boot/\$f-$REL\" \"/boot/\$f-$REL\" || true
     done
@@ -113,6 +143,12 @@ ssh "$HOST" "set -e
     grep -A3 \"^DEFAULT\" /boot/extlinux/extlinux.conf | head -2 | sed 's/^/    /'
 "
 
+# Rappel : l'entree extlinux par defaut doit pointer sur l'image BRUTE.
+ssh "$HOST" "grep -A3 \"^DEFAULT\" /boot/extlinux/extlinux.conf | head -4 | sed 's/^/    /'" 2>/dev/null || true
+
 log "installe. Le noyau ne sera actif qu'apres REDEMARRAGE."
+warn "Verifiez que l'entree DEFAULT d'extlinux pointe sur /Image-* (brute),"
+warn "PAS sur /vmlinuz-* : booti n'accepte pas une image compressee, l'entree"
+warn "echoue en silence et U-Boot retombe sur la suivante."
 warn "En cas d'echec au demarrage : console serie, choisir une entree de repli"
 warn "dans le menu (TIMEOUT 3 s), puis restaurer depuis /data/backup/."
