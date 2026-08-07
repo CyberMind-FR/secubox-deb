@@ -1,4 +1,4 @@
-secubox-profiles (0.12.0-1~bookworm1) bookworm; urgency=medium
+secubox-profiles (0.13.1-1~bookworm1) bookworm; urgency=medium
 
   * nginx-sync declare aussi la regle 5xx DANS les blocs qui la surchargent.
     Un error_page declare dans un bloc REMPLACE ceux herites du serveur, il ne
@@ -8,6 +8,20 @@ secubox-profiles (0.12.0-1~bookworm1) bookworm; urgency=medium
     fonctionner sur ces vhosts — c'est-a-dire la majorite d'entre eux :
     l'include etait bien present, la page d'attente n'apparaissait jamais, et
     rien ne le signalait.
+  * `secubox-wakectl lxc-stagger` : etaler le demarrage des conteneurs.
+    23 conteneurs declaraient lxc.start.auto = 1 SANS ordre ni delai — ils
+    partaient tous ensemble, chacun montant une pile systemd complete sur
+    4 coeurs. Mesure au redemarrage du 2026-08-07 : charge 120, 27 jobs
+    systemd en attente, multi-user.target jamais atteint, HAProxy jamais
+    lance. Ce n'est pas un probleme de lenteur mais de SIMULTANEITE.
+    L'ordre vient de la `priority` du manifeste (une seule source de verite),
+    le delai est gradue par tranche. Simulation par defaut, --apply pour
+    ecrire, idempotent.
+    Un ordre pose A LA MAIN et plus eleve n'est JAMAIS retrograde : toolbox-mitm
+    et toolbox-mitm-wg portaient 110 et 120, deliberement, alors que la plupart
+    des manifestes gardent la priorite par defaut (50) — appliquer la priorite
+    telle quelle aurait casse une intention dont la trace n'existe que dans le
+    fichier du conteneur.
   * `nginx-sync --all` : cabler TOUS les vhosts qui relaient, pas seulement
     les modules « a la demande ». 24 vhosts gardaient la page BRUTE de nginx
     sur un 502. Le waker rend desormais une page soignee meme pour un vhost
