@@ -44,6 +44,9 @@ override_dh_auto_build:
 override_dh_auto_test:
 
 override_dh_auto_install:
+	install -d debian/secubox-waf-ng/usr/lib/tmpfiles.d
+	install -m 644 tmpfiles.d/secubox-waf-ng.conf \
+	               debian/secubox-waf-ng/usr/lib/tmpfiles.d/secubox-waf-ng.conf
 	# Intentionally empty: actual installation handled by
 	# execute_after_dh_auto_install below (see note at top of file).
 
