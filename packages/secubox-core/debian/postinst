@@ -89,6 +89,54 @@ case "$1" in
     systemctl enable --now secubox-dirs-guard.timer 2>/dev/null || true
     systemctl start secubox-dirs-guard.service 2>/dev/null || true
 
+    # HAProxy tire par network-online.target, pas seulement par
+    # multi-user.target (#998). Un [Install] pose en drop-in n'est pas honore
+    # par `systemctl enable` : le lien doit etre cree explicitement.
+    #
+    # Sans cela, un seul service lent (crowdsec le 2026-08-07, une boucle
+    # netboot la veille) empeche multi-user.target d'etre atteint, et le job
+    # d'HAProxy n'est jamais tente — journal vide, 443 muet.
+    if [ -f /lib/systemd/system/haproxy.service ]; then
+        mkdir -p /etc/systemd/system/network-online.target.wants
+        ln -sf /lib/systemd/system/haproxy.service \
+               /etc/systemd/system/network-online.target.wants/haproxy.service
+        echo "secubox-core: HAProxy rattache a network-online.target" >&2
+    fi
+
+    # ── Fiabilite du demarrage : reprise de la derive (#998) ──
+    #
+    # Ces trois fichiers ont ete poses a la main sur les boards, hors de tout
+    # paquet. Ils ne sont pas simplement obsoletes : ceux d'/etc MASQUENT ceux
+    # que ce paquet installe dans /usr/lib, donc sans cette reprise la
+    # correction n'aurait aucun effet.
+    #
+    # Ce qu'ils cassaient : HAProxy dependait par `Requires=` d'un assistant
+    # d'attente ecrit pour une autre topologie (il attendait l'adresse de
+    # gestion sur `lan0`, un port sans porteuse sur cette board). L'assistant
+    # echouait, le job d'HAProxy etait abandonne SANS AUCUNE TRACE, et la
+    # board restait sans HTTPS apres chaque redemarrage.
+    for stale in \
+        /etc/systemd/system/secubox-network-ready.service \
+        /etc/systemd/system/haproxy.service.d/wait-network.conf \
+        /usr/local/bin/secubox-wait-network.sh
+    do
+        if [ -e "$stale" ]; then
+            mv -f "$stale" "$stale.remplace-par-secubox-core" 2>/dev/null || rm -f "$stale"
+            echo "secubox-core: derive reprise -> $stale" >&2
+        fi
+    done
+
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable secubox-network-ready.service 2>/dev/null || true
+
+    # HAProxy a pu rester mort depuis le dernier redemarrage sans que rien ne
+    # le signale : le relancer s'il est active mais arrete.
+    if systemctl is-enabled --quiet haproxy 2>/dev/null \
+       && ! systemctl is-active --quiet haproxy 2>/dev/null; then
+        echo "secubox-core: HAProxy etait arrete — demarrage" >&2
+        systemctl start haproxy 2>/dev/null || true
+    fi
+
     # ── Python dependencies (ensure compatible versions) ──
     # Debian bookworm ships old pydantic v1 and fastapi, upgrade via pip
     if command -v pip3 >/dev/null 2>&1; then

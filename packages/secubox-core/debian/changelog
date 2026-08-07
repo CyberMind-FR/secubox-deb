@@ -1,3 +1,42 @@
+secubox-core (1.3.0-1~bookworm1) bookworm; urgency=high
+
+  * LE FRONTAL TLS NE DEPEND PLUS D'UNE CIBLE TARDIVE (#998). HAProxy etait
+    tire par multi-user.target seule — cible atteinte seulement apres TOUS les
+    services qu'elle rassemble. Le 2026-08-07, un service lent (crowdsec) a
+    tenu son job pendant tout son demarrage : la cible n'a jamais ete atteinte
+    et le job d'HAProxy n'a JAMAIS ete tente. Journal vide, 443 muet, board
+    sans HTTPS jusqu'a intervention manuelle. La veille, meme panne par une
+    boucle netboot. Le point commun n'est pas le service fautif, c'est la
+    DEPENDANCE. HAProxy est desormais rattache a network-online.target — la
+    seule chose dont un frontal ait reellement besoin — et son ordre est
+    reduit au reseau (secubox-streamlit-routes n'a rien a faire devant lui).
+  * FIABILITE DU DEMARRAGE (#998). Un redemarrage laissait la board SANS
+    HTTPS : le 2026-08-06, 53 minutes sans que rien ne le signale.
+    - HAProxy dependait par `Requires=` d'un assistant d'attente. Quand celui-ci
+      echoue, systemd ABANDONNE le job d'HAProxy sans qu'il journalise quoi que
+      ce soit — la panne etait donc indiagnosticable apres coup. `Wants=`
+      desormais : un frontal TLS demarre meme sans reseau, il ecoutera des que
+      le reseau viendra ; mort, il n'ecoutera jamais.
+    - L'assistant attendait l'adresse de gestion sur `lan0`, un port du switch
+      SANS PORTEUSE sur cette board (l'adresse est sur eth2). Il attendait donc
+      80 s en vain, puis en repli faisait `ip addr add 192.168.1.200/24 dev
+      lan0` : il posait l'adresse de gestion sur un port mort, a chaque
+      demarrage. L'interface est desormais DETECTEE, jamais codee en dur, et
+      aucune adresse de gestion n'est posee au hasard.
+    - systemd-networkd-wait-online attendait TOUTES les interfaces, dont
+      lan0..lan3 sans cable : echec a chaque demarrage. `--any` desormais.
+    - Ces trois fichiers vivaient hors de tout paquet (/usr/local/bin,
+      /etc/systemd/system). Ils sont repris par le postinst : ceux d'/etc
+      MASQUAIENT ceux du paquet, la correction serait restee sans effet.
+    - Le postinst relance HAProxy s'il est active mais arrete — il a pu rester
+      mort depuis le dernier redemarrage.
+  * L'alias de bouclage 192.168.255.1 (utilise par nginx) est pose par le
+    script, idempotemment : il venait d'un fragment ifupdown `lo:0`, syntaxe
+    abandonnee sur Debian moderne, qui faisait echouer networking.service alors
+    que la machine utilise netplan/networkd.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 17:00:00 +0200
+
 secubox-core (1.1.11-1~bookworm1) bookworm; urgency=high
 
   * SECURITY: reject `scope` tokens presented as access tokens. create_token
