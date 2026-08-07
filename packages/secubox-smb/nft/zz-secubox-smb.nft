@@ -1,0 +1,39 @@
+# SecuBox-Deb :: secubox-smb :: acces SMB cantonne au LAN
+# CyberMind — https://cybermind.fr
+#
+# Table + chaine de base autonomes : se charge independamment de toute autre
+# table deja presente, et n'emet jamais de reinitialisation globale du ruleset
+# (convention du depot, cf. secubox-p2p et secubox-torrent).
+#
+# Prefixe zz- pour trier APRES tout fichier createur de table.
+#
+# CE QUE CETTE REGLE GARANTIT : le port 445 n'est joignable que depuis le
+# reseau local. C'est la condition qui rend defendable l'exposition de /data
+# (#997) — ce repertoire contient sauvegardes, configurations et rootfs des
+# conteneurs. Sans ce cantonnement, le partage serait indefendable.
+#
+# La politique du depot est ACCEPT sur input pour le LAN ; ce qui compte ici
+# est le DROP explicite de tout ce qui n'est pas LAN, y compris les bridges
+# LXC et les interfaces WireGuard, sur lesquels ksmbd n'a rien a faire.
+
+table inet secubox_smb {
+	chain input {
+		type filter hook input priority filter + 10; policy accept;
+
+		# LAN : autorise.
+		iifname "eth2" ip saddr 192.168.1.0/24 tcp dport 445 accept \
+			comment "SMB depuis le LAN"
+
+		# Tout le reste : refuse. reject plutot que drop — un client SMB
+		# qui tombe dans un trou noir reessaie longuement, ce qui se
+		# diagnostique mal ; un refus est immediat et lisible.
+		tcp dport 445 reject with tcp reset \
+			comment "SMB hors LAN — refuse (#997)"
+		# mDNS / Bonjour : annonce du service sur le lien local. Protocole
+		# de LIEN LOCAL — il ne franchit pas le routeur. L'annonce ne
+		# donne aucun acces : ksmbd exige toujours une authentification.
+		iifname "eth2" udp dport 5353 accept comment "mDNS depuis le LAN"
+
+		udp dport { 137, 138 } drop comment "NetBIOS herite — inutile en SMB3"
+	}
+}

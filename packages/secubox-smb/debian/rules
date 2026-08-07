@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-smb/etc/ksmbd
+	install -m 0644 etc/ksmbd.conf debian/secubox-smb/etc/ksmbd/ksmbd.conf
+	install -d debian/secubox-smb/etc/nftables.d
+	install -m 0644 nft/zz-secubox-smb.nft debian/secubox-smb/etc/nftables.d/zz-secubox-smb.nft
+	install -d debian/secubox-smb/etc/avahi/services
+	install -m 0644 avahi/secubox-smb.service debian/secubox-smb/etc/avahi/services/secubox-smb.service
+	install -d debian/secubox-smb/usr/sbin
+	install -m 0755 sbin/smbctl debian/secubox-smb/usr/sbin/smbctl
+
+# arch:all — dh_strip et dh_shlibdeps n'ont rien a traiter et echouent sur
+# certains environnements de build.
+override_dh_strip:
+override_dh_shlibdeps:

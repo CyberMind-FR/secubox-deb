@@ -1,0 +1,21 @@
+secubox-smb (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * UN PARTAGE PAR SUPPORT MONTE. ksmbd ne traverse pas les points de montage
+    a l'interieur d'un partage : verifie sur la board, un montage lie place
+    sous la racine partagee apparait VIDE cote client. Un partage unique sur
+    /media/secubox-media montrait donc les noms des supports et rien dedans.
+  * Un point de montage NON MONTE n'est plus expose : c'est un repertoire
+    ordinaire du systeme de fichiers racine, et un client y ecrivant croirait
+    remplir sa cle alors qu'il remplirait l'eMMC.
+  * Annonce Bonjour / mDNS : la board apparait par son nom dans les
+    explorateurs, sans avoir a connaitre son adresse IP.
+
+  * Partage SMB via ksmbd : /media/secubox-media (tout support USB monte y
+    apparait automatiquement) et /data.
+  * Cantonne au LAN par drop-in nft, SMB3 minimum, signature obligatoire,
+    aucun acces invite.
+  * smbctl : status, users, user-add (mot de passe sur stdin), reload.
+  * user-add n'utilise PAS -p : cette option placerait le secret dans la table
+    des processus. Le mot de passe est donne a ksmbd.adduser sur stdin.
+
+ -- Gandalf / CyberMind <gk@cybermind.fr>  Thu, 06 Aug 2026 16:10:00 +0200

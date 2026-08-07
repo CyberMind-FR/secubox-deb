@@ -1,0 +1,41 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Le module noyau doit etre charge au demarrage : sans lui, le service
+        # demarre et n'ecoute rien — panne silencieuse et deroutante.
+        echo ksmbd > /etc/modules-load.d/secubox-smb.conf
+        modprobe ksmbd 2>/dev/null || true
+
+        # Regle nft : cantonnement au LAN. Chargee avec le reste au boot via
+        # /etc/nftables.conf ; appliquee tout de suite ici pour que
+        # l'exposition ne precede jamais sa restriction.
+        if command -v nft >/dev/null 2>&1; then
+            nft -f /etc/nftables.d/zz-secubox-smb.nft 2>/dev/null || true
+        fi
+
+        systemctl daemon-reload 2>/dev/null || true
+        systemctl enable ksmbd 2>/dev/null || true
+        # try-restart et non restart : ne pas demarrer un partage que
+        # l'administrateur aurait deliberement arrete.
+        if systemctl is-enabled --quiet ksmbd 2>/dev/null; then
+            systemctl restart ksmbd 2>/dev/null || true
+        fi
+
+        # Un partage par support monte : ksmbd ne traverse pas les points
+        # de montage, un partage unique sur la racine serait vide cote client.
+        /usr/sbin/smbctl sync-shares >/dev/null 2>&1 || true
+        systemctl reload ksmbd 2>/dev/null || systemctl restart ksmbd 2>/dev/null || true
+        systemctl reload avahi-daemon 2>/dev/null || true
+
+        if [ ! -s /etc/ksmbd/ksmbdpwd.db ]; then
+            echo "secubox-smb: aucun compte SMB — le partage n'est joignable par personne." >&2
+            echo "             printf '%s' 'motdepasse' | smbctl user-add <nom>" >&2
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -1,0 +1,31 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  SecuBox-Deb :: annonce Bonjour / mDNS du partage SMB
+  CyberMind — https://cybermind.fr
+
+  Sans cette annonce, la board n'apparait dans aucun explorateur de fichiers :
+  il faut connaitre et saisir son adresse IP. Or l'adresse peut changer, et
+  c'est precisement ce qu'un partage domestique ne doit pas exiger.
+
+  PORTEE : mDNS est un protocole de LIEN LOCAL — il ne franchit pas le
+  routeur, et le drop-in nft ne l'accepte que depuis l'interface LAN. Annoncer
+  un service ne l'ouvre pas : l'authentification reste exigee par ksmbd.
+
+  _device-info._tcp donne l'icone affichee par le Finder. Sans lui, macOS
+  montre un ecran d'ordinateur generique ; avec, un serveur.
+-->
+<service-group>
+  <name replace-wildcards="yes">SecuBox (%h)</name>
+
+  <service>
+    <type>_smb._tcp</type>
+    <port>445</port>
+  </service>
+
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=RackMac</txt-record>
+  </service>
+</service-group>
