@@ -95,6 +95,8 @@ for fs in EXFAT_FS HFSPLUS_FS NTFS3_FS UDF_FS ISO9660_FS F2FS_FS XFS_FS; do
     grep -q "^CONFIG_${fs}=m" .config || fail "systeme de fichiers manquant : $fs"
 done
 grep -q '^CONFIG_SMB_SERVER=m' .config           || fail "ksmbd manquant (partage SMB)"
+# Sans lui, tout conteneur declarant lxc.cgroup2.cpu.max refuse de demarrer.
+grep -q '^CONFIG_CFS_BANDWIDTH=y' .config        || fail "CFS_BANDWIDTH manquant (cpu.max des conteneurs)"
 grep -q '^CONFIG_CIFS=m' .config                 || fail "client CIFS manquant"
 grep -q '^CONFIG_ZRAM=m' .config                   || fail "ZRAM module missing"
 grep -q '^CONFIG_ZRAM_DEF_COMP_ZSTD=y' .config     || fail "ZRAM zstd default missing"
@@ -118,6 +120,10 @@ make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
 
 # ── 8. collect ──────────────────────────────────────────────────────────────
 log "collecting .deb artifacts to $BUILD_ROOT"
-ls -la "$BUILD_ROOT"/linux-{image,headers,libc-dev}-*.deb 2>/dev/null || fail "no .deb produced"
+img=$(ls "$BUILD_ROOT"/linux-image-*.deb 2>/dev/null | tail -1)
+[ -n "$img" ] || fail "no linux-image .deb produced"
+ls -la "$BUILD_ROOT"/linux-image-*.deb "$BUILD_ROOT"/linux-headers-*.deb \
+       "$BUILD_ROOT"/linux-libc-dev_*.deb 2>/dev/null
+log "image: $(basename "$img")"
 
 log "DONE. Image: $(ls $BUILD_ROOT/linux-image-*_arm64.deb 2>/dev/null | head -1)"
