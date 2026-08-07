@@ -3,6 +3,8 @@
 	dh $@
 
 override_dh_auto_install:
+	install -d debian/secubox-lyrion/etc/sudoers.d
+	install -m 0440 debian/secubox-lyrion.sudoers debian/secubox-lyrion/etc/sudoers.d/secubox-lyrion
 	# Host control plane (FastAPI)
 	install -d debian/secubox-lyrion/usr/lib/secubox/lyrion
 	cp -r api debian/secubox-lyrion/usr/lib/secubox/lyrion/
@@ -30,3 +32,7 @@ override_dh_auto_install:
 	# install-lxc.sh must be executable (cp -r doesn't always preserve +x from git)
 	[ -f debian/secubox-lyrion/usr/share/secubox/lib/lyrion/install-lxc.sh ] && \
 	    chmod 755 debian/secubox-lyrion/usr/share/secubox/lib/lyrion/install-lxc.sh
+	# Releve quotidien de la version disponible (#993).
+	install -d debian/secubox-lyrion/usr/lib/systemd/system
+	install -m 0644 debian/secubox-lyrion-version-check.service debian/secubox-lyrion/usr/lib/systemd/system/
+	install -m 0644 debian/secubox-lyrion-version-check.timer debian/secubox-lyrion/usr/lib/systemd/system/

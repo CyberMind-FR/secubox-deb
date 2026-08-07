@@ -23,7 +23,15 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import Body, FastAPI, HTTPException, Header, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
+
+# Les VERBES D'ACTION ajoutes en #993 exigent un jeton. Le reste de cette API
+# n'en demande pas — decision anterieure du module, protegee par la porte LAN
+# de nginx — mais `upgrade` redemarre le serveur de musique et coupe toute
+# lecture en cours : une action de cette portee ne doit pas etre declenchable
+# par le simple fait d'etre sur le reseau local. `check-upgrade` sort vers
+# l'exterieur, il est gate pour la meme raison.
+from secubox_core.auth import require_jwt
 
 VERSION = "1.1.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
@@ -171,13 +179,16 @@ def rescan() -> Dict[str, Any]:
 
 
 # ── External media library (auto-detect + opt-in confirm) ─────────────────────
+# Delegue a `sudo -n lyrionctl medialib …`. Le sudo n'est pas cosmetique :
+# /data/lxc/<nom> appartient a l'idmap du conteneur (100000:100000,
+# drwxrwx---), donc `secubox` ne peut pas meme le traverser.
 # Delegates to `lyrionctl medialib …`, which always emits JSON (even for its
 # own error cases). The ctl work — a bounded filesystem scan for `detect`, a
 # bind-mount + rescan for `mount` — is blocking, so it runs in a worker thread
 # to keep the shared event loop free.
 async def _ctl_medialib(*args: str) -> Dict[str, Any]:
     def _run() -> Dict[str, Any]:
-        cmd = [CTL, "medialib", *args]
+        cmd = ["sudo", "-n", CTL, "medialib", *args]
         try:
             proc = subprocess.run(cmd, capture_output=True, timeout=90)
         except FileNotFoundError:
@@ -197,6 +208,31 @@ async def _ctl_medialib(*args: str) -> Dict[str, Any]:
     return await asyncio.to_thread(_run)
 
 
+# Verbe ctl arbitraire, hors du chemin `medialib`, exécuté hors boucle
+# d'événements (#993). `_ctl_json` est synchrone et plafonné à 15 s : suffisant
+# pour `status`, pas pour un relevé réseau ni pour un upgrade qui télécharge et
+# installe un paquet dans la LXC.
+async def _ctl_verb(*args: str, timeout: int = 120) -> Dict[str, Any]:
+    def _run() -> Dict[str, Any]:
+        try:
+            proc = subprocess.run([CTL, *args], capture_output=True, timeout=timeout)
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail=f"lyrionctl not found at {CTL}")
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=504,
+                                detail=f"lyrionctl {' '.join(args)} timed out after {timeout}s")
+        out = (proc.stdout or b"").decode()
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            err = (proc.stderr or b"").decode()
+            raise HTTPException(status_code=500,
+                                detail=f"lyrionctl {' '.join(args)} emitted non-JSON: "
+                                       f"out={out[:200]!r} err={err[:200]!r}")
+
+    return await asyncio.to_thread(_run)
+
+
 @app.get("/medialib")
 async def medialib() -> Dict[str, Any]:
     """Current external-media mount + detected candidates.
@@ -210,6 +246,11 @@ async def medialib() -> Dict[str, Any]:
         "external": st.get("external"),
         "mounted": bool(st.get("mounted")),
         "candidates": det.get("candidates", []),
+        # Peripheriques non montes (#993). Rapportes SEPAREMENT : un candidate
+        # est un chemin pret a lier, un device demande d'abord un montage hote.
+        # Les fondre en une liste ferait proposer au panneau une action qui
+        # echouerait sur la moitie des entrees.
+        "devices": det.get("devices", []),
     }
 
 
@@ -223,6 +264,46 @@ async def medialib_mount(payload: Dict[str, Any] = Body(default=None)) -> Dict[s
     if not isinstance(path, str) or not path.strip():
         raise HTTPException(status_code=400, detail='body must be {"path": "<host path>"}')
     return await _ctl_medialib("mount", path)
+
+
+@app.get("/version-status")
+async def version_status() -> Dict[str, Any]:
+    """Version installee + derniere version connue, depuis le CACHE.
+
+    Ne sort jamais vers le reseau : `check-upgrade` le fait, une fois par jour,
+    par minuteur. Interroger le depot amont dans le chemin de requete rendrait
+    l'affichage du panneau dependant d'une panne DNS ou d'un depot lent."""
+    return await _ctl_verb("version-status", timeout=20)
+
+
+@app.post("/check-upgrade")
+async def check_upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    """Releve immediat, a la demande. Sort vers le reseau et rafraichit le
+    cache — d'ou un POST : ce n'est pas une lecture sans effet."""
+    return await _ctl_verb("check-upgrade", timeout=120)
+
+
+@app.post("/upgrade")
+async def upgrade(_: Any = Depends(require_jwt)) -> Dict[str, Any]:
+    """Applique la mise a jour dans la LXC.
+
+    DELIBEREMENT manuel : l'operation redemarre le serveur et coupe toute
+    lecture en cours. Le minuteur quotidien sert a SAVOIR qu'une version
+    existe, jamais a l'appliquer."""
+    def _run() -> Dict[str, Any]:
+        try:
+            proc = subprocess.run([CTL, "upgrade"], capture_output=True, timeout=900)
+        except subprocess.TimeoutExpired:
+            raise HTTPException(status_code=504, detail="upgrade timed out after 900s")
+        out = (proc.stdout or b"").decode()
+        if proc.returncode != 0:
+            err = (proc.stderr or b"").decode()
+            raise HTTPException(status_code=500, detail=(err or out).strip()[:500])
+        # `upgrade` n'emet pas de JSON : c'est un flux de progression dpkg. On
+        # renvoie ses dernieres lignes plutot que de pretendre le contraire.
+        return {"ok": True, "output": out.strip().splitlines()[-3:]}
+
+    return await asyncio.to_thread(_run)
 
 
 @app.post("/medialib/unmount")

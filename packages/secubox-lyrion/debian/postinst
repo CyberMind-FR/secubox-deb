@@ -25,7 +25,10 @@ case "$1" in
             nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
         fi
 
-        systemctl daemon-reload 2>/dev/null || true
+        systemctl daemon-reload
+    # Releve de version : savoir qu'une mise a jour existe, sans jamais
+    # l'appliquer seul (#993).
+    systemctl enable --now secubox-lyrion-version-check.timer 2>/dev/null || true 2>/dev/null || true
         systemctl enable secubox-lyrion.service 2>/dev/null || true
 
         # The nginx route proxies /api/v1/lyrion/ to our dedicated socket

@@ -1269,6 +1269,54 @@ def _peertubectl(verb: str, timeout: int = 30) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def _peertubectl_json(verb: str, timeout: int = 30) -> dict:
+    """Verbe ctl dont la sortie est du JSON (#993).
+
+    `_peertubectl` renvoie stdout brut ; pour version-status et check-upgrade
+    le panneau attend l'objet lui-meme, pas une enveloppe."""
+    r = _peertubectl(verb, timeout=timeout)
+    if not r.get("success"):
+        raise HTTPException(status_code=500,
+                            detail=(r.get("stderr") or r.get("error") or "peertubectl failed")[:500])
+    try:
+        return json.loads(r.get("stdout") or "{}")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500,
+                            detail=f"peertubectl {verb} emitted non-JSON: {(r.get('stdout') or '')[:200]!r}")
+
+
+@router.get("/version-status")
+async def version_status(user=Depends(require_jwt)):
+    """Version installee + derniere version connue, depuis le CACHE.
+
+    Ne sort jamais vers le reseau : c'est le minuteur quotidien qui interroge
+    GitHub. Le faire dans le chemin de requete rendrait l'affichage du panneau
+    dependant d'une limite de debit GitHub."""
+    return _peertubectl_json("version-status", timeout=30)
+
+
+@router.post("/check-upgrade")
+async def check_upgrade(user=Depends(require_jwt)):
+    """Releve immediat, a la demande. Sort vers le reseau et rafraichit le
+    cache — d'ou un POST : ce n'est pas une lecture sans effet."""
+    return _peertubectl_json("check-upgrade", timeout=60)
+
+
+@router.post("/upgrade")
+async def upgrade_peertube(user=Depends(require_jwt)):
+    """Applique la mise a jour.
+
+    DELIBEREMENT manuel et non declenche par le minuteur : un upgrade PeerTube
+    migre la base et reconstruit — c'est long, et une lecture en cours est
+    coupee. Le releve quotidien sert a SAVOIR, jamais a AGIR."""
+    log.info(f"PeerTube upgrade requested by {user.get('sub', 'unknown')}")
+    r = _peertubectl("upgrade", timeout=3600)
+    if not r.get("success"):
+        raise HTTPException(status_code=500,
+                            detail=(r.get("stderr") or r.get("error") or "upgrade failed")[:500])
+    return {"success": True, "output": (r.get("stdout") or "").strip().splitlines()[-5:]}
+
+
 @router.get("/container/status")
 async def container_status():
     """LXC + reachability status (kept under /container/* for webui back-compat)."""

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: Lyrion — releve quotidien de la version disponible (#993).
+#
+# SAVOIR, PAS AGIR. Ce service ne met rien a jour : il interroge la version
+# publiee et l'ecrit dans le cache que le panneau lit. Un upgrade redemarre le
+# serveur et coupe toute lecture en cours — cette decision reste a l'operateur.
+[Unit]
+Description=SecuBox Lyrion — relevé quotidien de la version disponible
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/lyrionctl check-upgrade
