@@ -1,0 +1,80 @@
+{{define "corps"}}
+<div class="crumb"><a href="/" style="color:inherit">Forums</a> › <a href="/c/{{.Cat.Slug}}" style="color:inherit">{{.Cat.Title}}</a></div>
+<div class="ph"><div>
+  <h1 class="serif" style="font-size:23px">{{.T.Title}}</h1>
+  <p>
+    {{if eq .T.Visibility "public"}}<span class="pill p-pub">fil public</span>{{else}}<span class="pill p-local">fil local</span>{{end}}
+    {{if .T.Published}}<span class="pill p-billet">✦ publié en billet</span>{{end}}
+    ouvert par {{.T.Author}}
+  </p>
+</div>
+{{if and .V.Connecte (eq .V.Role "sysop")}}<div class="row" style="margin-left:auto">
+  {{if eq .T.Visibility "public"}}
+    {{if .T.Published}}
+      <a class="btn sm" href="{{.T.Published}}">Voir le billet</a>
+    {{else}}
+      <form method="post" action="/t/{{.T.ID}}/publier">
+        <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <button class="btn sm pinkish" type="submit">✦ Publier en billet</button>
+      </form>
+    {{end}}
+  {{else}}
+    <span class="pill p-local" title="Un fil local n'a pas de bouton publier">local — non publiable</span>
+  {{end}}
+</div>{{end}}
+</div>
+
+<div class="card">
+{{range .Posts}}
+  <article class="post{{if eq .Visibility "local"}} localnote{{end}}">
+    <div class="who"><div class="av">{{.Initiales}}</div><small>{{.Author}}</small></div>
+    <div class="bd">
+      <div class="hd">{{date .CreatedAt}}
+        {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>
+        {{else}}<span class="pill p-local">local — ne sort pas</span>{{end}}</div>
+      {{rendu .Body}}
+    </div>
+  </article>
+{{end}}
+</div>
+
+{{if .V.Connecte}}
+<h3 style="font-size:14px;margin:20px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Répondre</h3>
+<form method="post" action="/t/{{.T.ID}}/reply">
+<input type="hidden" name="csrf" value="{{.V.CSRF}}">
+<div class="editor">
+  <div class="tools" id="tools">
+    <button class="tool" type="button" data-w="**" title="Gras"><b>B</b></button>
+    <button class="tool" type="button" data-w="*" title="Italique"><i>I</i></button>
+    <button class="tool" type="button" data-p="## " title="Titre">H2</button>
+    <button class="tool" type="button" data-p="- " title="Liste">☰</button>
+    <button class="tool" type="button" data-p="&gt; " title="Citation">❝</button>
+    <button class="tool mono" type="button" data-w="`" title="Code">&lt;/&gt;</button>
+    <span class="sep"></span>
+    <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
+  </div>
+  <textarea name="body" class="area" rows="6" required
+            style="width:100%;border:0;outline:none;background:none;color:inherit;font:inherit;resize:vertical"
+            placeholder="Écrivez ici…"></textarea>
+  <div class="foot">
+    <span style="font-size:12.5px;color:var(--dim)">Visibilité&nbsp;:</span>
+    {{if eq .T.Visibility "public"}}
+      <label class="btn sm"><input type="radio" name="visibility" value="local" checked> Local</label>
+      <label class="btn sm"><input type="radio" name="visibility" value="public"> Public</label>
+    {{else}}
+      <input type="hidden" name="visibility" value="local">
+      <span class="pill p-local">local — le fil ne sort pas</span>
+    {{end}}
+    <div style="margin-left:auto" class="row"><button class="btn primary" type="submit">Envoyer</button></div>
+  </div>
+</div>
+</form>
+<div class="note m" style="margin-top:14px">
+  <b>Ce que vous écrivez devient un fichier.</b>
+  Le message part sur le disque en Markdown ; la base ne fait que l'indexer.
+</div>
+<script src="/static/editeur.js" defer></script>
+{{else}}
+<div class="note v" style="margin-top:18px"><b>Connectez-vous pour répondre.</b> L'inscription se fait sur invitation.</div>
+{{end}}
+{{end}}
