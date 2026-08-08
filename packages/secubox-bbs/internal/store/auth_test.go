@@ -235,3 +235,32 @@ func TestSessionCreeeApresDesactivationEstRefusee(t *testing.T) {
 		t.Error("une session creee apres desactivation ouvre l'acces")
 	}
 }
+
+func TestLeFichierDeHashesSuitLeProprietaireDuDossier(t *testing.T) {
+	// Ne peut PAS verifier le chown lui-meme : les tests ne tournent pas en
+	// root. Ce qu'il verifie, c'est que l'ecriture reste correcte quand le
+	// realignement de proprietaire ne s'applique pas — le cas de tous les
+	// developpeurs, et celui ou une regression passerait inapercue.
+	//
+	// Le chown reel est exerce au deploiement : c'est son absence qui a
+	// empeche le service de demarrer la premiere fois, les comptes ayant ete
+	// crees par un outil lance en root.
+	dir := t.TempDir()
+	a, err := OpenAuth(filepath.Join(dir, "passwd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.SetPassword(1, "une phrase de passe assez longue"); err != nil {
+		t.Fatalf("ecriture refusee : %v", err)
+	}
+	fi, err := os.Stat(filepath.Join(dir, "passwd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Errorf("mode du fichier de hashes : %o", fi.Mode().Perm())
+	}
+	if !a.Verify(1, "une phrase de passe assez longue") {
+		t.Error("le mot de passe ecrit n'est pas relu")
+	}
+}

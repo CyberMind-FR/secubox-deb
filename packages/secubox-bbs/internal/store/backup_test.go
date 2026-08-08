@@ -196,3 +196,28 @@ func TestUnSecretsPlaceDANSLeContenuEstQuandMemeExclu(t *testing.T) {
 		t.Error("un secret place dans content/ se retrouve dans l'archive")
 	}
 }
+
+func TestLaBaseEtSesJournauxRestentEcrivablesParLeService(t *testing.T) {
+	// Ne peut pas verifier le chown (les tests ne tournent pas en root), mais
+	// fige le contrat : apres Open, la base ET ses journaux existent et sont
+	// ecrivables par celui qui vient de les ouvrir.
+	//
+	// Le defaut reel etait plus vicieux qu'un simple refus : le service lisait
+	// la base sans pouvoir y ecrire. L'authentification reussissait, la
+	// creation de session echouait, et l'utilisateur recevait la page de
+	// connexion — un mot de passe faux repondant 401, un mot de passe juste
+	// paraissant « ne rien faire ».
+	dir := t.TempDir()
+	s, err := Open(filepath.Join(dir, "index.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	uid, err := s.CreateUser("gk2", "G", RoleSysop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NewSession(uid, "", ""); err != nil {
+		t.Fatalf("creation de session impossible : %v", err)
+	}
+}

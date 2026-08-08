@@ -8,6 +8,20 @@ Wants=secubox-billets.service
 
 [Service]
 Type=exec
+
+# LE « + » FAIT TOURNER CETTE LIGNE EN ROOT, malgre User= plus bas.
+#
+# /run/secubox porte le bit collant (1777) et est partage par une centaine
+# d'unites : dans un tel repertoire, seul le PROPRIETAIRE d'un fichier peut
+# l'effacer. Une socket morte laissee par un autre compte — l'agregateur, une
+# version anterieure — ne peut donc pas etre retiree par notre service, qui
+# echoue alors sur « address already in use » sans pouvoir rien y faire.
+#
+# Constate au deploiement : le service redemarrait en boucle a cause d'un
+# fichier de socket sans aucun processus derriere.
+#
+# Le « - » supplementaire tolere l'absence du fichier, cas normal.
+ExecStartPre=+-/bin/rm -f /run/secubox/bbs.sock
 User=secubox-bbs
 Group=secubox
 ExecStart=/usr/sbin/secubox-bbsd \

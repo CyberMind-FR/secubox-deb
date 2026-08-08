@@ -10,10 +10,12 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	_ "modernc.org/sqlite"
 )
@@ -47,7 +49,44 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// L'OUTIL D'ADMINISTRATION TOURNE EN ROOT, LE SERVICE SOUS SON PROPRE
+	// COMPTE. Sans ce realignement, `bbsctl user-add` cree un index.db
+	// appartenant a root, et le service — qui peut le LIRE mais pas l'ECRIRE —
+	// authentifie correctement puis echoue a ouvrir une session. Le symptome
+	// est trompeur : un mot de passe faux repond 401, un mot de passe JUSTE
+	// renvoie la page de connexion.
+	//
+	// Les fichiers -wal et -shm comptent autant : SQLite ecrit d'abord dedans.
+	for _, suffixe := range []string{"", "-wal", "-shm"} {
+		adopteProprietaireDuDossier(path + suffixe)
+	}
 	return s, nil
+}
+
+// adopteProprietaireDuDossier donne au fichier le proprietaire de son
+// repertoire, quand on tourne en root.
+//
+// POURQUOI : l'outil d'administration s'execute en root, le service sous son
+// propre compte. Un fichier de hashes cree par root en 0600 est ILLISIBLE par
+// le service — il refuse alors de demarrer, et le message parle de permissions
+// sur un fichier que root voit tres bien.
+//
+// C'est exactement ce qui s'est produit au premier deploiement : comptes crees,
+// service incapable de demarrer. Le repertoire, lui, appartient deja au bon
+// compte ; on s'aligne sur lui plutot que de coder un nom d'utilisateur en dur.
+func adopteProprietaireDuDossier(fichier string) error {
+	if os.Geteuid() != 0 {
+		return nil // rien a faire : le fichier appartient deja a qui l'a ecrit
+	}
+	fi, err := os.Stat(filepath.Dir(fichier))
+	if err != nil {
+		return nil
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil
+	}
+	return os.Chown(fichier, int(st.Uid), int(st.Gid))
 }
 
 func (s *Store) Close() error { return s.db.Close() }
