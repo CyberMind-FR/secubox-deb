@@ -18,9 +18,23 @@ case "$1" in
 
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/zz-secubox-bbs.conf >/dev/null 2>&1 || true
 
-    # Le parent /etc/secubox/secrets reste en 0755 : plusieurs modules y ont
-    # chacun leur sous-repertoire, et le resserrer ici les couperait tous.
-    # Seul NOTRE sous-repertoire est restreint.
+    # /etc/secubox/secrets est ferme : `group::---`, seuls le proprietaire et
+    # des identifiants NOMMES par ACL peuvent le traverser. C'est voulu — le
+    # repertoire contient les secrets de tous les modules.
+    #
+    # Notre service tourne sous son propre compte (separation de privileges),
+    # il n'est donc ni le proprietaire ni membre utile du groupe. On lui ajoute
+    # une ACL de TRAVERSEE SEULE (--x) : il peut descendre dans son propre
+    # sous-repertoire sans pouvoir LISTER le contenu du parent, donc sans
+    # apprendre quels autres modules y rangent quoi.
+    #
+    # L'alternative — desserrer le mode du parent, ou faire tourner le service
+    # sous `secubox` — ouvrirait les secrets des autres modules pour resoudre
+    # un probleme qui ne concerne que le notre.
+    if [ -d /etc/secubox/secrets ] && command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:secubox-bbs:--x /etc/secubox/secrets 2>/dev/null || \
+            echo "secubox-bbs : ACL de traversee non posee sur /etc/secubox/secrets"
+    fi
     if [ -d /etc/secubox/secrets/bbs ]; then
         chown secubox-bbs:secubox /etc/secubox/secrets/bbs
         chmod 0700 /etc/secubox/secrets/bbs

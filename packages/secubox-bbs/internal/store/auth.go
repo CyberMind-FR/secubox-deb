@@ -253,7 +253,10 @@ func (a *Auth) flush() error {
 	if err := os.WriteFile(tmp, []byte(b.String()), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, a.path)
+	if err := os.Rename(tmp, a.path); err != nil {
+		return err
+	}
+	return adopteProprietaireDuDossier(a.path)
 }
 
 // UserByHandle resout un pseudonyme. Ne rend JAMAIS un compte desactive.

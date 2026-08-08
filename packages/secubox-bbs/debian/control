@@ -9,7 +9,7 @@ Rules-Requires-Root: no
 
 Package: secubox-bbs
 Architecture: arm64
-Depends: ${misc:Depends}, adduser
+Depends: ${misc:Depends}, adduser, acl
 Recommends: nginx
 Suggests: secubox-billets
 Description: SecuBox-Deb — BBS auto-heberge (forums, bibliotheque, publication)

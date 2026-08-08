@@ -42,6 +42,10 @@ override_dh_auto_install:
 	# Route nginx : secubox-routes.d/ est le SEUL repertoire inclus.
 	install -d debian/secubox-bbs/etc/nginx/secubox-routes.d
 	install -m 0644 nginx/bbs.conf debian/secubox-bbs/etc/nginx/secubox-routes.d/
+	# Vhost membre : livre dans sites-available, PAS active. Activer un vhost
+	# demande aussi HAProxy et le DNS — un paquet ne decide pas cela seul.
+	install -d debian/secubox-bbs/etc/nginx/sites-available
+	install -m 0644 nginx/bbs-vhost.conf debian/secubox-bbs/etc/nginx/sites-available/bbs.gk2.conf
 	install -d debian/secubox-bbs/usr/lib/tmpfiles.d
 	install -m 0644 tmpfiles/zz-secubox-bbs.conf debian/secubox-bbs/usr/lib/tmpfiles.d/
 	install -d debian/secubox-bbs/usr/share/doc/secubox-bbs
@@ -56,5 +60,15 @@ override_dh_auto_clean:
 # le demarrer exposerait un BBS ou personne ne peut entrer et ou l'API
 # d'administration reste fermee faute de secret. L'operateur cree un compte
 # sysop, puis active — la sequence est dans le README.
+# --restart-after-upgrade EST INDISPENSABLE avec --no-start.
+#
+# Sans lui, dh_installsystemd arrete le service pendant la mise a jour et ne le
+# relance JAMAIS : chaque `dpkg -i` laissait un service arrete alors que
+# l'operateur l'avait active. Constate au premier deploiement — le service
+# paraissait planter alors qu'il etait simplement stoppe par son propre paquet.
+#
+# --no-enable reste juste : au PREMIER install il n'y a aucun compte, donc rien
+# a servir. Mais « ne pas activer d'office » et « couper ce qui tourne » sont
+# deux choses differentes.
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start
+	dh_installsystemd --no-enable --no-start --restart-after-upgrade
