@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: bbs — compilation croisee arm64, hors ligne.
+#
+# Les dependances sont VENDOREES et versionnees : le binaire se compile sans
+# reseau (GOPROXY=off, -mod=vendor). Elles sont toutes en Go pur —
+# modernc.org/sqlite n'a pas besoin de libsqlite3 — donc CGO_ENABLED=0 tient et
+# le binaire n'a aucune dependance partagee sur la board.
+
+export DH_VERBOSE = 1
+export GOOS = linux
+export GOARCH = arm64
+export CGO_ENABLED = 0
+export GOFLAGS = -mod=vendor
+export GOPROXY = off
+export GOTOOLCHAIN = local
+export GOCACHE = $(CURDIR)/_gocache
+export GOPATH  = $(CURDIR)/_gopath
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go build -trimpath -ldflags=-s -o secubox-bbsd ./cmd/secubox-bbsd
+	go build -trimpath -ldflags=-s -o bbsctl      ./cmd/bbsctl
+
+# Les tests tournent en integration continue sur l'architecture hote : un
+# binaire arm64 ne s'execute pas ici.
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/secubox-bbs/usr/sbin
+	install -m 0755 secubox-bbsd debian/secubox-bbs/usr/sbin/secubox-bbsd
+	install -m 0755 bbsctl       debian/secubox-bbs/usr/sbin/bbsctl
+	# Panneau sysop servi par l'agregateur (admin.gk2/bbs/).
+	install -d debian/secubox-bbs/usr/share/secubox/www/bbs
+	install -m 0644 www/bbs/index.html debian/secubox-bbs/usr/share/secubox/www/bbs/
+	# Entree de menu : la barre laterale partagee se dessine a partir de ce
+	# fichier. Aucun <ul> de liens n'est ecrit a la main.
+	install -d debian/secubox-bbs/usr/share/secubox/menu.d
+	install -m 0644 menu.d/74-bbs.json debian/secubox-bbs/usr/share/secubox/menu.d/
+	# Route nginx : secubox-routes.d/ est le SEUL repertoire inclus.
+	install -d debian/secubox-bbs/etc/nginx/secubox-routes.d
+	install -m 0644 nginx/bbs.conf debian/secubox-bbs/etc/nginx/secubox-routes.d/
+	install -d debian/secubox-bbs/usr/lib/tmpfiles.d
+	install -m 0644 tmpfiles/zz-secubox-bbs.conf debian/secubox-bbs/usr/lib/tmpfiles.d/
+	install -d debian/secubox-bbs/usr/share/doc/secubox-bbs
+	install -m 0644 www/mockup.html debian/secubox-bbs/usr/share/doc/secubox-bbs/maquette.html
+	install -m 0644 README.md debian/secubox-bbs/usr/share/doc/secubox-bbs/README.md
+
+override_dh_auto_clean:
+	rm -f secubox-bbsd bbsctl
+	rm -rf _gocache _gopath
+
+# LIVREE MAIS NON ACTIVEE. Le service n'a aucun compte au premier jour :
+# le demarrer exposerait un BBS ou personne ne peut entrer et ou l'API
+# d'administration reste fermee faute de secret. L'operateur cree un compte
+# sysop, puis active — la sequence est dans le README.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

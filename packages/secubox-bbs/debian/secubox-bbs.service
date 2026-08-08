@@ -1,0 +1,51 @@
+[Unit]
+Description=SecuBox BBS — forums, bibliotheque, publication
+Documentation=file:///usr/share/doc/secubox-bbs/README.md
+After=network.target
+# `Wants` et non `Requires` : billets peut etre arrete sans que le BBS cesse de
+# fonctionner. Seule la publication devient indisponible, et elle le dit.
+Wants=secubox-billets.service
+
+[Service]
+Type=exec
+User=secubox-bbs
+Group=secubox
+ExecStart=/usr/sbin/secubox-bbsd \
+    --root /var/lib/secubox/bbs \
+    --secrets /etc/secubox/secrets/bbs \
+    --socket /run/secubox/bbs.sock \
+    --backup-dir /var/backups/secubox
+Restart=on-failure
+RestartSec=5
+
+# RuntimeDirectory n'est PAS declare : /run/secubox est partage par une
+# centaine d'unites, et un `RuntimeDirectory=secubox` ici effacerait au
+# redemarrage les sockets de toutes les autres. Le repertoire est pose par
+# tmpfiles.d.
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+# AF_UNIX seul : le service n'a aucune raison d'ouvrir une socket reseau. Il
+# parle a billets par une socket de fichier et recoit ses requetes de nginx par
+# la sienne.
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/secubox/bbs /run/secubox /var/backups/secubox
+# Les secrets sont montes EN LECTURE SEULE : le service verifie des mots de
+# passe, il n'a pas a reecrire le fichier hors d'une action explicite.
+ReadWritePaths=/etc/secubox/secrets/bbs
+
+[Install]
+WantedBy=multi-user.target

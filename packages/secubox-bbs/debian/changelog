@@ -1,0 +1,12 @@
+secubox-bbs (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiere version : socle comptes/sessions/invitations, forums a
+    double visibilite, bibliotheque, sauvegarde transportable et controle
+    d'integrite.
+  * Interface membre conforme a la maquette validee (www/mockup.html).
+  * Panneau sysop conforme a WEBUI-PANEL-GUIDELINES.md (terminal cyan).
+  * Pont de publication vers le module billets, avec lien croise.
+  * Unite systemd LIVREE MAIS NON ACTIVEE : le service ne demarre qu'apres
+    creation d'un premier compte sysop (voir README.md).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 08 Aug 2026 12:00:00 +0200

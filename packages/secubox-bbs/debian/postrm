@@ -1,0 +1,14 @@
+#!/bin/sh
+# SecuBox-Deb :: secubox-bbs — postrm
+set -e
+case "$1" in
+  purge)
+    # LE CONTENU N'EST JAMAIS SUPPRIME, meme sur purge. /var/lib/secubox/bbs
+    # contient les messages ecrits par des humains ; les effacer parce qu'un
+    # paquet est retire serait une perte irreversible decidee par un outil.
+    # De meme pour les secrets : les retirer casserait une reinstallation.
+    echo "secubox-bbs purge — le contenu reste dans /var/lib/secubox/bbs (a supprimer a la main si voulu)"
+    ;;
+esac
+#DEBHELPER#
+exit 0

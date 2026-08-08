@@ -34,6 +34,8 @@ import (
 //go:embed templates/*.html static/*
 var assets embed.FS
 
+const Version = "0.1.0"
+
 const (
 	cookieSession = "sbx_bbs"
 	cookieCSRF    = "sbx_bbs_csrf"
@@ -52,6 +54,8 @@ type Options struct {
 	// au moment de l'appel.
 	BilletsSocket string
 	JWTSecret     string
+	// BackupDir : ou deposer les archives declenchees depuis le panneau.
+	BackupDir string
 }
 
 type Server struct {
@@ -89,6 +93,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 		s.bil = billets.NewUnix(opt.BilletsSocket, opt.JWTSecret)
 	}
 	s.routes()
+	s.routesAPI()
 	return s, nil
 }
 
@@ -123,6 +128,18 @@ type visiteur struct {
 	Connecte bool
 	CSRF     string
 }
+
+// Sysop : METHODE et non comparaison dans le gabarit.
+//
+// `{{if eq .V.Role "sysop"}}` echoue a l'execution : les gabarits Go refusent
+// de comparer un type nomme (store.Role) a une chaine litterale. L'erreur
+// n'apparait qu'a l'affichage, sur toutes les pages vues par un membre
+// connecte — et elle est passee inapercue parce que les tests n'exercaient que
+// le chemin anonyme.
+func (v visiteur) Sysop() bool { return v.Role == store.RoleSysop }
+
+// Initiales pour la pastille du bandeau.
+func (v visiteur) Initiales() string { return initiales(v.Handle) }
 
 // qui identifie l'appelant. Un jeton inconnu, expire ou appartenant a un compte
 // desactive rend un visiteur anonyme — jamais une erreur : une page publique

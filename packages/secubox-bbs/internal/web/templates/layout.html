@@ -19,7 +19,7 @@
   <div class="railhead">Salons</div>
   {{range .Cats}}<a class="nav" style="--c:var(--violet)" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
 
-  {{if .V.Connecte}}{{if eq .V.Role "sysop"}}
+  {{if .V.Connecte}}{{if .V.Sysop}}
   <div class="railhead">Console</div>
   <a class="nav" style="--c:var(--coral)" href="/sysop"><span class="ic">⚿</span>Sysop</a>
   {{end}}{{end}}
@@ -34,7 +34,7 @@
   <div class="sp"></div>
   {{if .V.Connecte}}
     <div class="me"><span class="av">{{.V.Initiales}}</span>{{.V.Handle}}
-      {{if eq .V.Role "sysop"}}<span class="pill p-warn">sysop</span>{{end}}</div>
+      {{if .V.Sysop}}<span class="pill p-warn">sysop</span>{{end}}</div>
     <form method="post" action="/logout" style="display:inline">
       <input type="hidden" name="csrf" value="{{.V.CSRF}}">
       <button class="iconbtn" type="submit">Quitter</button>

@@ -1,0 +1,65 @@
+#!/bin/sh
+# SecuBox-Deb :: secubox-bbs — postinst
+set -e
+
+case "$1" in
+  configure)
+    # Compte de service dedie, sans shell ni repertoire personnel : le BBS ne
+    # tourne pas en root, et son compte ne doit pas pouvoir servir a se
+    # connecter a la machine.
+    if ! getent passwd secubox-bbs >/dev/null; then
+        adduser --system --group --no-create-home --home /var/lib/secubox/bbs \
+                --shell /usr/sbin/nologin secubox-bbs >/dev/null
+    fi
+    # Le groupe `secubox` est partage : nginx doit pouvoir lire la socket.
+    if getent group secubox >/dev/null; then
+        adduser secubox-bbs secubox >/dev/null 2>&1 || true
+    fi
+
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/zz-secubox-bbs.conf >/dev/null 2>&1 || true
+
+    # Le parent /etc/secubox/secrets reste en 0755 : plusieurs modules y ont
+    # chacun leur sous-repertoire, et le resserrer ici les couperait tous.
+    # Seul NOTRE sous-repertoire est restreint.
+    if [ -d /etc/secubox/secrets/bbs ]; then
+        chown secubox-bbs:secubox /etc/secubox/secrets/bbs
+        chmod 0700 /etc/secubox/secrets/bbs
+    fi
+
+    systemctl daemon-reload >/dev/null 2>&1 || true
+
+    # PRESERVER L'ETAT : dpkg a envoye SIGTERM au service pendant la mise a
+    # jour. `try-restart` le relance s'il tournait, et ne le demarre pas s'il
+    # etait volontairement arrete. Un `start` inconditionnel ressusciterait un
+    # service que l'operateur avait coupe.
+    if systemctl is-enabled secubox-bbs.service >/dev/null 2>&1; then
+        systemctl try-restart secubox-bbs.service >/dev/null 2>&1 || true
+    fi
+
+    # La route nginx n'est rechargee que si la configuration est valide : un
+    # `reload` sur une configuration cassee coupe TOUS les vhosts de la board.
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+
+    if [ -z "$2" ]; then
+        cat <<'FIN'
+
+  secubox-bbs installe — le service n'est PAS demarre.
+
+  Il n'a encore aucun compte : le demarrer ouvrirait un BBS ou personne ne
+  peut entrer. Creez un sysop, puis activez :
+
+    printf '%s' 'une phrase de passe assez longue' | bbsctl user-add gk2 sysop
+    bbsctl salon atelier 'Atelier' 'Ce qui se repare le samedi'
+    systemctl enable --now secubox-bbs
+
+  L'inscription des autres se fait sur invitation :  bbsctl invite
+
+FIN
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0
