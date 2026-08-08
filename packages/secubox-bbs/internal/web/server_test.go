@@ -332,3 +332,75 @@ func TestUnSysopAtteintSaConsole(t *testing.T) {
 		t.Error("page tronquee")
 	}
 }
+
+func TestLesFichiersStatiquesSontRevalides(t *testing.T) {
+	// SANS EN-TETE DE CACHE, le navigateur decide seul — et il garde. Une
+	// feuille de style servie une fois reste servie longtemps, meme apres
+	// plusieurs deploiements : la page s'affiche alors avec un CSS d'une
+	// version anterieure, sans erreur, sans indice.
+	//
+	// C'est ce qui s'est produit : une version de bbs.css momentanement privee
+	// de ses classes utilitaires est restee en cache, et la mise en page
+	// paraissait cassee alors que le serveur envoyait la bonne feuille.
+	//
+	// `no-cache` ne veut pas dire « ne pas mettre en cache » mais « revalider
+	// avant de reutiliser ». Avec un ETag, la revalidation coute une reponse
+	// 304 vide.
+	srv, _ := banc(t)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/static/bbs.css", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("feuille de style absente : %d", w.Code)
+	}
+	if cc := w.Header().Get("Cache-Control"); !strings.Contains(cc, "no-cache") {
+		t.Errorf("Cache-Control = %q — le navigateur gardera une version perimee", cc)
+	}
+	if w.Header().Get("ETag") == "" {
+		t.Error("aucun ETag : chaque revalidation retelechargera tout le fichier")
+	}
+}
+
+func TestLaFeuilleDeStyleEstAppeleeAvecSonEmpreinte(t *testing.T) {
+	// LE WAF DE LA BOARD SUPPRIME `Cache-Control` ET `ETag` : verifie sur
+	// gk2, la socket et nginx les envoient, sbxwaf ne les transmet pas. Aucun
+	// module ne peut donc demander une revalidation au navigateur, qui garde
+	// alors ce qu'il a — y compris une feuille de style d'une version
+	// anterieure, sans erreur ni indice.
+	//
+	// Le seul levier qui reste passe par l'ADRESSE : une empreinte du contenu
+	// dans la requete. Le fichier change, l'adresse change, le navigateur le
+	// considere comme une autre ressource. Cela ne depend d'aucun en-tete.
+	srv, _ := banc(t)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	body := w.Body.String()
+
+	if !strings.Contains(body, "/static/bbs.css?v=") {
+		t.Errorf("la feuille est appelee sans empreinte — un cache perime restera")
+	}
+	if strings.Contains(body, `/static/bbs.css"`) {
+		t.Error("appel sans empreinte encore present")
+	}
+	// L'empreinte doit etre stable d'un rendu a l'autre, sinon le navigateur
+	// retelecharge a chaque page et le cache ne sert plus a rien.
+	w2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w2, httptest.NewRequest("GET", "/", nil))
+	v1 := entre(body, "/static/bbs.css?v=", `"`)
+	v2 := entre(w2.Body.String(), "/static/bbs.css?v=", `"`)
+	if v1 == "" || v1 != v2 {
+		t.Errorf("empreinte instable : %q puis %q", v1, v2)
+	}
+}
+
+func entre(s, deb, fin string) string {
+	i := strings.Index(s, deb)
+	if i < 0 {
+		return ""
+	}
+	r := s[i+len(deb):]
+	j := strings.Index(r, fin)
+	if j < 0 {
+		return ""
+	}
+	return r[:j]
+}

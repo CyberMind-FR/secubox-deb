@@ -2,6 +2,8 @@ package web
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -39,6 +41,16 @@ type page struct {
 	Runs                      []store.IngestRun
 	Comptes                   []store.Compte
 	Moi                       store.Compte
+	// VCSS : empreinte de la feuille de style, posee dans son adresse.
+	//
+	// LE WAF DE LA BOARD SUPPRIME `Cache-Control` ET `ETag` — verifie sur gk2 :
+	// la socket et nginx les envoient, sbxwaf ne les transmet pas. Aucun module
+	// ne peut donc demander une revalidation, et le navigateur garde ce qu'il a,
+	// y compris une feuille d'une version anterieure — sans erreur, sans indice.
+	//
+	// L'adresse, elle, passe. Le fichier change, l'empreinte change, le
+	// navigateur voit une autre ressource. Cela ne depend d'aucun en-tete.
+	VCSS string
 }
 
 type postView struct {
@@ -53,7 +65,7 @@ type card struct {
 type pill struct{ Class, Text string }
 
 func (s *Server) routes() {
-	s.mux.Handle("/static/", http.FileServer(http.FS(assets)))
+	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
@@ -88,7 +100,7 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 		ini = strings.ToUpper(site[:1])
 	}
 	return page{
-		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v,
+		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v, VCSS: s.vCSS,
 		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true},
 		Stats: st, Cats: cats, Titre: site,
 	}, pub
@@ -674,4 +686,33 @@ func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// statique sert les fichiers embarques avec une revalidation obligatoire.
+//
+// SANS EN-TETE DE CACHE, LE NAVIGATEUR DECIDE SEUL — ET IL GARDE. Une feuille
+// de style servie une fois le reste longtemps, y compris apres plusieurs
+// deploiements : la page s'affiche avec un CSS d'une version anterieure, sans
+// erreur et sans indice. C'est arrive ici, et le temps perdu a chercher cote
+// serveur un defaut qui vivait dans le cache d'un navigateur a ete
+// considerable.
+//
+// `no-cache` ne signifie pas « ne pas mettre en cache » mais « revalider avant
+// de reutiliser ». L'ETag, calcule sur le contenu, rend cette revalidation
+// gratuite : tant que le fichier n'a pas change, la reponse est un 304 vide.
+func (s *Server) statique(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nom := strings.TrimPrefix(r.URL.Path, "/")
+		if b, err := assets.ReadFile(nom); err == nil {
+			sum := sha256.Sum256(b)
+			etag := `"` + base64.RawURLEncoding.EncodeToString(sum[:9]) + `"`
+			w.Header().Set("ETag", etag)
+			if r.Header.Get("If-None-Match") == etag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		h.ServeHTTP(w, r)
+	})
 }
