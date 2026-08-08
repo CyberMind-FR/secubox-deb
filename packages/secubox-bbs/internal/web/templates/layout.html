@@ -48,7 +48,7 @@
   <div class="sp"></div>
   {{if .V.Connecte}}
     <a class="me s15cb695" href="/compte" title="Mon compte"><span class="av">{{.V.Initiales}}</span>{{.V.Handle}}
-      {{if .V.Sysop}}<span class="pill p-warn">sysop</span>{{end}}</div>
+      {{if .V.Sysop}}<span class="pill p-warn">sysop</span>{{end}}</a>
     <form method="post" action="/logout" class="s6b8b63d">
       <input type="hidden" name="csrf" value="{{.V.CSRF}}">
       <button class="iconbtn" type="submit">Quitter</button>
