@@ -137,3 +137,39 @@ func contientTexte(h, n string) bool {
 	}
 	return false
 }
+
+func TestEmettreUneInvitationSansEmetteurConnu(t *testing.T) {
+	// `bbsctl invite` tourne en ligne de commande, sans session : il n'a aucun
+	// utilisateur a qui attribuer l'invitation. Le premier jet passait 0, qui
+	// n'est l'identifiant de personne — clef etrangere violee, invitation
+	// jamais creee, et un message d'erreur qui ne disait pas pourquoi.
+	s, _ := auth(t)
+	code, err := s.NewInviteFor(0, "cedre")
+	if err != nil {
+		t.Fatalf("invitation refusee sans emetteur : %v", err)
+	}
+	if len(code) < 16 {
+		t.Errorf("code trop court : %q", code)
+	}
+	inv, err := s.Invites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inv) != 1 || inv[0].Label != "cedre" {
+		t.Fatalf("libelle perdu : %+v", inv)
+	}
+	if inv[0].Code != "" {
+		t.Error("le code est conserve en clair dans la base")
+	}
+}
+
+func TestUneInvitationEmisePourQuelquUnResteUtilisableParQuiLaDetient(t *testing.T) {
+	// Le libelle est INDICATIF. Le code n'est lie a personne : pretendre le
+	// contraire donnerait une fausse assurance, alors que quiconque a le lien
+	// peut s'en servir.
+	s, _ := auth(t)
+	code, _ := s.NewInviteFor(0, "cedre")
+	if _, err := s.RedeemInvite(code, "quelquun-dautre", "Autre"); err != nil {
+		t.Errorf("invitation refusee a un autre pseudonyme : %v", err)
+	}
+}

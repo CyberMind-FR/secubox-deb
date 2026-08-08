@@ -104,7 +104,27 @@ func (s *Store) UserBySession(token string) (int64, error) {
 
 // ── Invitations ─────────────────────────────────────────────────────────
 
+// NewInvite emet une invitation attribuee a son emetteur.
 func (s *Store) NewInvite(issuedBy int64) (string, error) {
+	return s.NewInviteFor(issuedBy, "")
+}
+
+// NewInviteFor emet une invitation, avec un libelle indicatif et un emetteur
+// FACULTATIF.
+//
+// L'emetteur est facultatif parce que `bbsctl` tourne sans session : il n'a
+// personne a qui attribuer l'invitation. Le premier jet passait 0 — qui n'est
+// l'identifiant de personne — et se heurtait a la clef etrangere sans que le
+// message n'explique rien.
+//
+// Le libelle ne LIE PAS l'invitation a quelqu'un : quiconque detient le code
+// peut s'en servir. Il sert a savoir laquelle revoquer, sans quoi une console
+// qui annonce « 3 invitations ouvertes » ne permet de decider rien du tout.
+func (s *Store) NewInviteFor(issuedBy int64, label string) (string, error) {
+	var emetteur any
+	if issuedBy > 0 {
+		emetteur = issuedBy
+	}
 	raw := make([]byte, 16)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -112,9 +132,9 @@ func (s *Store) NewInvite(issuedBy int64) (string, error) {
 	code := base64.RawURLEncoding.EncodeToString(raw)
 	sum := sha256.Sum256([]byte(code))
 	_, err := s.db.Exec(
-		`INSERT INTO invites(code_sha256, issued_by, issued_at, expires_at)
-		 VALUES(?,?,unixepoch(),unixepoch()+?)`,
-		sum[:], issuedBy, int64(inviteTTL/time.Second))
+		`INSERT INTO invites(code_sha256, issued_by, issued_at, expires_at, label)
+		 VALUES(?,?,unixepoch(),unixepoch()+?,?)`,
+		sum[:], emetteur, int64(inviteTTL/time.Second), nilSiVide(label))
 	if err != nil {
 		return "", err
 	}
@@ -385,6 +405,44 @@ func (s *Store) Users() ([]Compte, error) {
 		}
 		c.Role = Role(role)
 		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// nilSiVide rend NULL plutot qu'une chaine vide : en base, « inconnu » et
+// « vide » ne sont pas la meme chose, et une colonne pleine de chaines vides
+// empeche de distinguer les deux plus tard.
+func nilSiVide(s string) any {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.TrimSpace(s)
+}
+
+// Invitation : ce qu'une console peut montrer. Le CODE N'Y EST PAS — seule son
+// empreinte est conservee, et le rendre ici reviendrait a la garder en clair.
+type Invitation struct {
+	Code      string // toujours vide : rappel explicite que le code n'est pas conservable
+	Label     string
+	IssuedAt  int64
+	ExpiresAt int64
+	Used      bool
+}
+
+func (s *Store) Invites() ([]Invitation, error) {
+	rows, err := s.db.Query(`SELECT COALESCE(label,''), issued_at, expires_at,
+		used_at IS NOT NULL FROM invites ORDER BY issued_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Invitation
+	for rows.Next() {
+		var i Invitation
+		if err := rows.Scan(&i.Label, &i.IssuedAt, &i.ExpiresAt, &i.Used); err != nil {
+			return nil, err
+		}
+		out = append(out, i)
 	}
 	return out, rows.Err()
 }
