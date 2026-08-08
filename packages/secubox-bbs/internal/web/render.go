@@ -113,6 +113,7 @@ func Render(src string) template.HTML {
 func inline(s string) template.HTML {
 	e := template.HTMLEscapeString(s)
 	e = liens(e)
+	e = adressesNues(e)
 	e = paires(e, "**", "<strong>", "</strong>")
 	e = paires(e, "`", "<code>", "</code>")
 	e = paires(e, "*", "<em>", "</em>")
@@ -181,4 +182,87 @@ func liens(s string) string {
 	}
 	b.WriteString(s)
 	return b.String()
+}
+
+// adressesNues transforme « https://… » ecrit tel quel en lien.
+//
+// Les corps importes en sont pleins — « Retrouvez le podcast sur
+// https://bit.ly/… ». Sans cela elles s'affichent en texte mort : il faut les
+// selectionner et les recopier, ce qui sur un telephone revient a dire qu'elles
+// n'existent pas.
+//
+// S'execute APRES `liens()`, et saute ce qui est deja dans un `href` : sans ce
+// garde-fou, une adresse deja transformee serait reconnue une seconde fois et
+// le lien se retrouverait imbrique dans lui-meme.
+func adressesNues(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); {
+		j := indexSchema(s[i:])
+		if j < 0 {
+			b.WriteString(s[i:])
+			break
+		}
+		deb := i + j
+		b.WriteString(s[i:deb])
+		// Deja dans un attribut : on laisse tel quel.
+		if dansAttribut(s, deb) {
+			fin := deb + 8
+			b.WriteString(s[deb:min(fin, len(s))])
+			i = min(fin, len(s))
+			continue
+		}
+		fin := deb
+		for fin < len(s) && !estSeparateur(s[fin]) {
+			fin++
+		}
+		url := s[deb:fin]
+		// La ponctuation finale termine la phrase, pas l'adresse.
+		for len(url) > 0 && strings.ContainsRune(".,;:!?)]}'\"", rune(url[len(url)-1])) {
+			url = url[:len(url)-1]
+			fin--
+		}
+		if lienSur(url) && len(url) > 10 {
+			b.WriteString(`<a href="` + url + `" rel="noopener noreferrer">` + url + `</a>`)
+		} else {
+			b.WriteString(url)
+		}
+		i = fin
+	}
+	return b.String()
+}
+
+// indexSchema trouve la prochaine adresse en schema autorise.
+//
+// SEULS http:// et https:// sont reconnus automatiquement. `mailto:` est admis
+// quand il est ecrit explicitement, mais le deviner dans du texte produirait
+// des liens la ou l'auteur citait simplement une adresse.
+func indexSchema(s string) int {
+	best := -1
+	for _, sch := range []string{"https://", "http://"} {
+		if i := strings.Index(s, sch); i >= 0 && (best < 0 || i < best) {
+			best = i
+		}
+	}
+	return best
+}
+
+func estSeparateur(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '<' || c == '"' || c == '\''
+}
+
+// dansAttribut : l'adresse suit-elle un `href="` ou `src="` ?
+func dansAttribut(s string, i int) bool {
+	deb := i - 12
+	if deb < 0 {
+		deb = 0
+	}
+	avant := s[deb:i]
+	return strings.Contains(avant, `href="`) || strings.Contains(avant, `src="`)
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

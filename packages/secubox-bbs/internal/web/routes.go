@@ -51,6 +51,8 @@ type page struct {
 	// L'adresse, elle, passe. Le fichier change, l'empreinte change, le
 	// navigateur voit une autre ressource. Cela ne depend d'aucun en-tete.
 	VCSS string
+	// Base : origine publique du site, pour afficher une adresse partageable.
+	Base string
 }
 
 type postView struct {
@@ -82,6 +84,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/sysop/qr", s.qr)
 	s.mux.HandleFunc("/compte", s.compte)
 	s.mux.HandleFunc("/compte/", s.compteAction)
+	s.mux.HandleFunc("/media/ep/", s.mediaEpisode)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -101,6 +104,7 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	}
 	return page{
 		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v, VCSS: s.vCSS,
+		Base:  "https://" + r.Host,
 		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true},
 		Stats: st, Cats: cats, Titre: site,
 	}, pub
@@ -169,6 +173,9 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 		return
 	case strings.HasSuffix(r.URL.Path, "/publier"):
 		s.publier(w, r, id)
+		return
+	case strings.HasSuffix(r.URL.Path, "/qr"):
+		s.qrFil(w, r, id)
 		return
 	}
 
@@ -715,4 +722,35 @@ func (s *Server) statique(h http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		h.ServeHTTP(w, r)
 	})
+}
+
+// qrFil rend le code QR d'un fil, pour passer sur un telephone sans recopier
+// l'adresse.
+//
+// L'ADRESSE EST CONSTRUITE ICI a partir du seul identifiant. Accepter une
+// adresse en parametre ferait de cette page un generateur de QR vers n'importe
+// ou, commode pour faire scanner un lien piege depuis un domaine de confiance.
+//
+// LA VISIBILITE EST VERIFIEE : un fil local ne rend pas de code QR pour un
+// visiteur qui n'a pas le droit de le lire. Sans cela, l'image confirmerait
+// l'existence d'un fil que la page refuse d'afficher.
+func (s *Server) qrFil(w http.ResponseWriter, r *http.Request, id int64) {
+	v := s.qui(r)
+	t, err := s.st.ThreadByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !v.Connecte && t.Visibility != store.VisPublic {
+		http.NotFound(w, r)
+		return
+	}
+	svg, err := qrTexte("https://" + r.Host + "/t/" + itoa64(id))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "private, max-age=600")
+	w.Write(svg)
 }

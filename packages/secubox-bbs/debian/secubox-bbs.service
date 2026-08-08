@@ -39,7 +39,9 @@ ExecStart=/usr/sbin/secubox-bbsd \
     --root /var/lib/secubox/bbs \
     --secrets /etc/secubox/secrets/bbs \
     --socket /run/secubox/bbs.sock \
-    --backup-dir /var/backups/secubox
+    --backup-dir /var/backups/secubox \
+    --peertube-origine https://peertube.gk2.secubox.in \
+    --podcast-racine /var/lib/secubox/podcaster/media,/data/secubox/podcaster
 Restart=on-failure
 RestartSec=5
 
@@ -71,6 +73,11 @@ ReadWritePaths=/var/lib/secubox/bbs /run/secubox /var/backups/secubox
 # Les secrets sont montes EN LECTURE SEULE : le service verifie des mots de
 # passe, il n'a pas a reecrire le fichier hors d'une action explicite.
 ReadWritePaths=/etc/secubox/secrets/bbs
+# Le parc du podcaster est lu, jamais ecrit : les episodes sont deja
+# telecharges, on les sert. ProtectSystem=strict laisse le reste du systeme
+# lisible, aucune declaration supplementaire n'est necessaire — mais ce
+# commentaire dit ou l'on va chercher, pour que personne ne l'oublie en
+# durcissant davantage.
 
 [Install]
 WantedBy=multi-user.target

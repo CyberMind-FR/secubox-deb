@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -151,9 +152,14 @@ func DepuisPeerTube(base string, limite int) ([]Item, error) {
 		if v.Duree > 0 {
 			corps = fmt.Sprintf("%s\n\n*Durée : %d min*", corps, v.Duree/60)
 		}
-		lien := strings.TrimRight(base, "/") + "/w/" + firstNonEmpty(v.ShortUUID, v.UUID)
+		court := firstNonEmpty(v.ShortUUID, v.UUID)
+		lien := strings.TrimRight(base, "/") + "/w/" + court
+		// L'adresse d'INTEGRATION, pas celle de la page : on encadre le
+		// lecteur, on n'ouvre pas PeerTube dans un cadre.
 		out = append(out, Item{Ref: ref, Titre: v.Nom, Corps: corps,
-			Lien: lien, Date: dateRFC(v.Publie)})
+			Lien: lien, Date: dateRFC(v.Publie),
+			Media: strings.TrimRight(base, "/") + "/videos/embed/" + court,
+			Kind:  "video"})
 	}
 	return out, nil
 }
@@ -181,8 +187,9 @@ func DepuisPodcaster(chemin string, limite int) ([]Item, error) {
 	// premier jet lisait une colonne `published` qui n'existe pas, et la
 	// requete echouait entierement. Un nom de colonne se verifie contre le
 	// schema reel, jamais contre celui qu'on imagine.
-	rows, err := db.Query(`SELECT e.guid, e.title, COALESCE(e.description,''),
-		COALESCE(e.pubdate,''), COALESCE(f.title,''), COALESCE(f.site,'')
+	rows, err := db.Query(`SELECT e.id, e.guid, e.title, COALESCE(e.description,''),
+		COALESCE(e.pubdate,''), COALESCE(f.title,''), COALESCE(f.site,''),
+		COALESCE(e.local_path,'')
 		FROM episodes e LEFT JOIN feeds f ON f.id = e.feed_id
 		ORDER BY e.id DESC LIMIT ?`, limite)
 	if err != nil {
@@ -192,16 +199,26 @@ func DepuisPodcaster(chemin string, limite int) ([]Item, error) {
 
 	var out []Item
 	for rows.Next() {
-		var guid, titre, desc, pubdate, flux, site string
-		if err := rows.Scan(&guid, &titre, &desc, &pubdate, &flux, &site); err != nil {
+		var guid, titre, desc, pubdate, flux, site, local string
+		var epID int64
+		if err := rows.Scan(&epID, &guid, &titre, &desc, &pubdate, &flux, &site,
+			&local); err != nil {
 			return nil, err
 		}
 		corps := texteDepuisHTML(desc)
 		if flux != "" {
 			corps = "**" + flux + "**\n\n" + corps
 		}
-		out = append(out, Item{Ref: guid, Titre: titre, Corps: corps,
-			Lien: site, Date: dateRFC(pubdate)})
+		it := Item{Ref: guid, Titre: titre, Corps: corps,
+			Lien: site, Date: dateRFC(pubdate)}
+		// SEULEMENT si le fichier a ete telecharge. Sans lui il n'y a rien a
+		// jouer, et pointer l'enclosure d'origine enverrait chaque auditeur
+		// chez un tiers depuis une page de la maison.
+		if local != "" {
+			it.Media = "/media/ep/" + strconv.FormatInt(epID, 10)
+			it.Kind = "audio"
+		}
+		out = append(out, it)
 	}
 	return out, rows.Err()
 }

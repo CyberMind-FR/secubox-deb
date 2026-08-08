@@ -72,6 +72,14 @@ type Options struct {
 	// `unsafe-hashes` — que le message du navigateur suggere — n'a pas lieu
 	// d'etre. L'ajouter autoriserait d'un coup tous les styles en ligne.
 	BanniereStyle string
+	// PeerTubeOrigine : instance autorisee a fournir le lecteur video. Vide,
+	// `frame-src` reste ferme et aucune video ne s'integre.
+	PeerTubeOrigine string
+	// PodcastRacine : parc media du podcaster. Sert de CONFINEMENT — aucun
+	// fichier hors de ce repertoire n'est servi, quoi que dise sa base.
+	PodcastRacine string
+	// PodcastDB : base du podcaster, ouverte en lecture seule.
+	PodcastDB string
 }
 
 type Server struct {
@@ -85,6 +93,8 @@ type Server struct {
 	// adresse. Voir routes.go — le WAF de la board supprime les en-tetes de
 	// cache, l'adresse est le seul levier qui reste.
 	vCSS string
+	// resoudreEpisode : id d'episode -> fichier local. Remplace en test.
+	resoudreEpisode resolveur
 }
 
 func New(st *store.Store, opt Options) (*Server, error) {
@@ -112,6 +122,9 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	if b, err := assets.ReadFile("static/bbs.css"); err == nil {
 		sum := sha256.Sum256(b)
 		s.vCSS = base64.RawURLEncoding.EncodeToString(sum[:6])
+	}
+	if opt.PodcastDB != "" {
+		s.resoudreEpisode = resolveurPodcaster(opt.PodcastDB)
 	}
 	if opt.BilletsSocket != "" {
 		s.bil = billets.NewUnix(opt.BilletsSocket)
@@ -141,6 +154,13 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 	script := "'self'"
 	connect := "'self'"
 	style := "'self'"
+	// `frame-src 'none'` par defaut : aucune page tierce ne s'integre. Seule
+	// une instance PeerTube explicitement configuree ouvre cette porte, et
+	// UNIQUEMENT pour un cadre — pas pour des scripts.
+	frame := "'none'"
+	if o := strings.TrimSpace(s.opt.PeerTubeOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		frame = o
+	}
 	if e := strings.TrimSpace(s.opt.BanniereStyle); empreinteValide.MatchString(e) {
 		style += " '" + e + "'"
 	}
@@ -161,6 +181,7 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 		hd.Set("Content-Security-Policy",
 			"default-src 'self'; img-src 'self' data:; style-src "+style+"; "+
 				"script-src "+script+"; connect-src "+connect+"; "+
+				"frame-src "+frame+"; media-src 'self'; "+
 				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")

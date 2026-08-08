@@ -113,21 +113,22 @@ func (s *Store) insertPost(tx *sql.Tx, threadID, authorID int64, body string, vi
 	id, _ := res.LastInsertId()
 
 	rel := filepath.Join("content", strconv.FormatInt(threadID, 10), strconv.FormatInt(id, 10)+".md")
-	var handle, catSlug, title, source, ref string
+	var handle, catSlug, title, source, ref, media, kind string
 	var created int64
 	if err := tx.QueryRow(`SELECT u.handle, c.slug, t.title, p.created_at,
-		COALESCE(t.source,''), COALESCE(t.source_ref,'')
+		COALESCE(t.source,''), COALESCE(t.source_ref,''),
+		COALESCE(t.media_url,''), COALESCE(t.media_kind,'')
 		FROM posts p JOIN threads t ON t.id = p.thread_id
 		JOIN categories c ON c.id = t.category_id
 		JOIN users u ON u.id = p.author_id WHERE p.id = ?`, id).
-		Scan(&handle, &catSlug, &title, &created, &source, &ref); err != nil {
+		Scan(&handle, &catSlug, &title, &created, &source, &ref, &media, &kind); err != nil {
 		return 0, err
 	}
 
 	if err := writeBody(filepath.Join(s.root, rel), entete{
 		Thread: threadID, Category: catSlug, Author: handle,
 		Visibility: vis, Created: created, Title: title,
-		Source: source, Ref: ref,
+		Source: source, Ref: ref, Media: media, Kind: kind,
 	}, body); err != nil {
 		return 0, err
 	}
@@ -214,6 +215,11 @@ type entete struct {
 	// « Le disque fait foi » n'est vrai que si le disque porte tout.
 	Source string
 	Ref    string
+	// Media et Kind : meme raison que Source/Ref. La reconstruction lit le
+	// DISQUE ; ce qui n'y figure pas est perdu. L'origine avait deja ete
+	// perdue une fois faute d'etre ecrite ici.
+	Media string
+	Kind  string
 }
 
 // normaliseCorps est la SEULE definition de ce qu'est un corps.
@@ -244,6 +250,9 @@ func writeBody(abs string, h entete, body string) error {
 	fmt.Fprintf(&b, "title: %s\n", strings.NewReplacer("\n", " ", "\r", " ").Replace(h.Title))
 	if h.Source != "" {
 		fmt.Fprintf(&b, "source: %s\nsource_ref: %s\n", h.Source, h.Ref)
+	}
+	if h.Media != "" {
+		fmt.Fprintf(&b, "media: %s\nmedia_kind: %s\n", h.Media, h.Kind)
 	}
 	b.WriteString("---\n")
 	b.WriteString(body)
@@ -310,6 +319,10 @@ func readBody(abs string) (entete, string, error) {
 				h.Source = v
 			case "source_ref":
 				h.Ref = v
+			case "media":
+				h.Media = v
+			case "media_kind":
+				h.Kind = v
 			}
 		default:
 			body.WriteString(line)
@@ -419,11 +432,15 @@ func (s *Store) Reindex() error {
 			if f.h.Source != "" {
 				src, ref = f.h.Source, f.h.Ref
 			}
+			var med, knd any
+			if f.h.Media != "" {
+				med, knd = f.h.Media, f.h.Kind
+			}
 			if _, err := tx.Exec(`INSERT INTO threads(id,category_id,author_id,slug,
-				title,visibility,source,source_ref,created_at,last_post_at)
-				VALUES(?,?,?,?,?,?,?,?,?,?)`,
+				title,visibility,source,source_ref,media_url,media_kind,created_at,last_post_at)
+				VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
 				f.h.Thread, cat, au, slug, f.h.Title,
-				string(visOr(f.h.Visibility)), src, ref,
+				string(visOr(f.h.Visibility)), src, ref, med, knd,
 				f.h.Created, f.h.Created); err != nil {
 				return fmt.Errorf("fil %d (%s) : %w", f.h.Thread, bref(f.h.Title), err)
 			}

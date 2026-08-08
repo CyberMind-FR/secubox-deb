@@ -83,3 +83,62 @@ func contains(h, n string) bool {
 	}
 	return false
 }
+
+func TestUneAdresseNueDevientUnLien(t *testing.T) {
+	// Les corps importes sont pleins d'adresses ecrites telles quelles —
+	// « Retrouvez le podcast sur https://bit.ly/… ». Sans reconnaissance
+	// automatique, elles s'affichent en texte mort : il faut les selectionner
+	// et les recopier. Sur un telephone, autant dire qu'elles n'existent pas.
+	out := string(Render("Retrouvez le podcast sur https://bit.ly/bureaudescomplots et dites-nous."))
+	if !contains(out, `href="https://bit.ly/bureaudescomplots"`) {
+		t.Errorf("adresse nue non reconnue : %s", out)
+	}
+	if !contains(out, "et dites-nous") {
+		t.Errorf("le texte qui suit a ete avale : %s", out)
+	}
+}
+
+func TestLaPonctuationFinaleNEntrePasDansLeLien(t *testing.T) {
+	// « Voir https://exemple.fr. » — le point termine la phrase, il ne fait pas
+	// partie de l'adresse. Idem pour une parenthese fermante ou une virgule.
+	for _, cas := range []struct{ src, veut string }{
+		{"Voir https://exemple.fr.", `href="https://exemple.fr"`},
+		{"Voir https://exemple.fr, puis", `href="https://exemple.fr"`},
+		{"(https://exemple.fr)", `href="https://exemple.fr"`},
+	} {
+		out := string(Render(cas.src))
+		if !contains(out, cas.veut) {
+			t.Errorf("%q -> %s", cas.src, out)
+		}
+	}
+}
+
+func TestUneAdresseNueEnSchemaInterditNEstPasUnLien(t *testing.T) {
+	// La meme liste blanche que pour les liens ecrits : reconnaitre
+	// automatiquement ne doit pas ouvrir une porte que la syntaxe explicite
+	// tient fermee.
+	for _, mauvais := range []string{
+		"javascript:alert(1)", "data:text/html,<script>", "vbscript:x", "file:///etc/passwd",
+	} {
+		if out := string(Render("essai " + mauvais)); contains(out, "href=") {
+			t.Errorf("%s a produit un lien : %s", mauvais, out)
+		}
+	}
+}
+
+func TestUneAdresseDejaDansUnLienNEstPasDoublee(t *testing.T) {
+	out := string(Render("[le site](https://cybermind.fr)"))
+	if n := compte(out, "href="); n != 1 {
+		t.Errorf("%d liens au lieu d'un : %s", n, out)
+	}
+}
+
+func compte(h, n string) int {
+	c := 0
+	for i := 0; i+len(n) <= len(h); i++ {
+		if h[i:i+len(n)] == n {
+			c++
+		}
+	}
+	return c
+}

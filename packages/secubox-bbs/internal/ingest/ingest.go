@@ -27,6 +27,12 @@ type Item struct {
 	Corps string
 	Lien  string
 	Date  int64
+	// Media : adresse JOUABLE. Pour une video, l'adresse d'integration ; pour
+	// un episode, celle que le BBS sert lui-meme depuis le fichier deja
+	// telecharge — pas l'enclosure d'origine, qui enverrait chaque auditeur
+	// chez un tiers.
+	Media string
+	Kind  string
 }
 
 type Source struct {
@@ -73,8 +79,8 @@ func Importer(s *store.Store, src Source, items []Item) (Resultat, error) {
 		if it.Lien != "" {
 			corps = strings.TrimRight(corps, "\n") + "\n\n[Voir chez " + src.Nom + "](" + it.Lien + ")\n"
 		}
-		cree, maj, err := s.UpsertSourced(src.Categorie, src.Auteur, it.Titre, corps, vis,
-			src.Nom, it.Ref, it.Date)
+		cree, maj, err := s.UpsertSourcedMedia(src.Categorie, src.Auteur, it.Titre, corps, vis,
+			src.Nom, it.Ref, it.Date, it.Media, it.Kind)
 		switch {
 		case err != nil:
 			// UN ITEM DEFECTUEUX N'INTERROMPT PAS LES AUTRES. Un import qui

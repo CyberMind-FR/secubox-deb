@@ -28,6 +28,8 @@ type Thread struct {
 	Source     string
 	Posts      int
 	LastPostAt int64
+	MediaURL   string
+	MediaKind  string
 	Published  string // adresse du billet tire de ce fil, vide sinon
 }
 
@@ -58,7 +60,8 @@ func (s *Store) Threads(catID int64, publicOnly bool) ([]Thread, error) {
 	        COALESCE(t.source,''), t.last_post_at,
 	        (SELECT count(*) FROM posts p
 	          WHERE p.thread_id = t.id AND p.deleted_at IS NULL` + visClause(publicOnly, "p") + `),
-	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),'')
+	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),''),
+	        COALESCE(t.media_url,''), COALESCE(t.media_kind,'')
 	      FROM threads t JOIN users u ON u.id = t.author_id
 	      WHERE t.category_id = ?` + visClause(publicOnly, "t") + `
 	      ORDER BY t.pinned DESC, t.last_post_at DESC, t.id DESC`
@@ -71,7 +74,8 @@ func (s *Store) Recent(limit int, publicOnly bool) ([]Thread, error) {
 	        COALESCE(t.source,''), t.last_post_at,
 	        (SELECT count(*) FROM posts p
 	          WHERE p.thread_id = t.id AND p.deleted_at IS NULL` + visClause(publicOnly, "p") + `),
-	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),'')
+	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),''),
+	        COALESCE(t.media_url,''), COALESCE(t.media_kind,'')
 	      FROM threads t JOIN users u ON u.id = t.author_id
 	      WHERE 1=1` + visClause(publicOnly, "t") + `
 	      ORDER BY t.last_post_at DESC, t.id DESC LIMIT ?`
@@ -101,7 +105,8 @@ func (s *Store) scanThreads(q string, arg any) ([]Thread, error) {
 		var t Thread
 		var vis string
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Author, &vis,
-			&t.Source, &t.LastPostAt, &t.Posts, &t.Published); err != nil {
+			&t.Source, &t.LastPostAt, &t.Posts, &t.Published,
+			&t.MediaURL, &t.MediaKind); err != nil {
 			return nil, err
 		}
 		t.Visibility = Visibility(vis)
@@ -116,10 +121,12 @@ func (s *Store) ThreadByID(id int64) (Thread, error) {
 	var vis string
 	err := s.db.QueryRow(`SELECT t.id,t.category_id,t.slug,t.title,u.handle,t.visibility,
 		COALESCE(t.source,''),t.last_post_at,0,
-		COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),'')
+		COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),''),
+		COALESCE(t.media_url,''), COALESCE(t.media_kind,'')
 		FROM threads t JOIN users u ON u.id = t.author_id WHERE t.id = ?`, id).
 		Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Author, &vis,
-			&t.Source, &t.LastPostAt, &t.Posts, &t.Published)
+			&t.Source, &t.LastPostAt, &t.Posts, &t.Published,
+			&t.MediaURL, &t.MediaKind)
 	t.Visibility = Visibility(vis)
 	if err == sql.ErrNoRows {
 		return t, err
@@ -219,6 +226,20 @@ func (s *Store) NewSourcedThread(catID, authorID int64, title, body string,
 func (s *Store) UpsertSourced(catID, authorID int64, title, body string,
 	vis Visibility, source, ref string, date int64) (cree, misAJour bool, err error) {
 	return s.upsertSourced(catID, authorID, title, body, vis, source, ref, date)
+}
+
+// UpsertSourcedMedia : comme UpsertSourced, en attachant un media jouable.
+func (s *Store) UpsertSourcedMedia(catID, authorID int64, title, body string,
+	vis Visibility, source, ref string, date int64, media, kind string) (bool, bool, error) {
+	cree, maj, err := s.upsertSourced(catID, authorID, title, body, vis, source, ref, date)
+	if err != nil {
+		return cree, maj, err
+	}
+	if media != "" {
+		_, err = s.db.Exec(`UPDATE threads SET media_url = ?, media_kind = ?
+			WHERE source = ? AND source_ref = ?`, media, kind, source, ref)
+	}
+	return cree, maj, err
 }
 
 func (s *Store) upsertSourced(catID, authorID int64, title, body string,

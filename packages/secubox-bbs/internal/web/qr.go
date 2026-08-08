@@ -31,6 +31,22 @@ func qrSVG(donnee string) ([]byte, error) {
 	if !codeValide.MatchString(donnee) {
 		return nil, errors.New("donnee refusee pour un code QR")
 	}
+	return qrBrut(donnee)
+}
+
+// urlValide : une adresse de CE site, construite par nous. Le motif reste
+// etroit — pas de fragment, pas de parametres, pas de caracteres inattendus.
+var urlValide = regexp.MustCompile(`^https://[a-zA-Z0-9.\-]{3,80}/t/[0-9]{1,12}$`)
+
+// qrTexte rend le code QR d'une adresse de fil.
+func qrTexte(url string) ([]byte, error) {
+	if !urlValide.MatchString(url) {
+		return nil, errors.New("adresse refusee pour un code QR")
+	}
+	return qrBrut(url)
+}
+
+func qrBrut(donnee string) ([]byte, error) {
 	ctx, annule := contexteBref()
 	defer annule()
 	// -t SVG : une image vectorielle, nette a toute taille et sans dependance
