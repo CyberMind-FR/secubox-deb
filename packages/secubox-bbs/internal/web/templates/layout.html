@@ -10,18 +10,18 @@
     <div><b>{{.Site}}</b><small>{{.Hote}}</small></div>
   </div>
   <div class="railhead">Actifs</div>
-  <a class="nav" style="--c:var(--sky)" {{if eq .Vue "forums"}}aria-current="page"{{end}} href="/"><span class="ic">◈</span>Forums<span class="n">{{.Stats.Threads}}</span></a>
-  {{if .Mod.Media}}<a class="nav" style="--c:var(--amber)" {{if eq .Vue "media"}}aria-current="page"{{end}} href="/media"><span class="ic">▶</span>Média</a>{{end}}
-  {{if .Mod.Biblio}}<a class="nav" style="--c:var(--mint)" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">▤</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
-  {{if and .V.Connecte .Mod.MP}}<a class="nav" style="--c:var(--coral)" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages</a>{{end}}
-  {{if .Mod.Billets}}<a class="nav" style="--c:var(--pink)" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">✦</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
+  <a class="nav s791fdb1" {{if eq .Vue "forums"}}aria-current="page"{{end}} href="/"><span class="ic">◈</span>Forums<span class="n">{{.Stats.Threads}}</span></a>
+  {{if .Mod.Media}}<a class="nav s6622767" {{if eq .Vue "media"}}aria-current="page"{{end}} href="/media"><span class="ic">▶</span>Média</a>{{end}}
+  {{if .Mod.Biblio}}<a class="nav s09c487b" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">▤</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
+  {{if and .V.Connecte .Mod.MP}}<a class="nav sf017a92" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages</a>{{end}}
+  {{if .Mod.Billets}}<a class="nav sfe562e2" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">✦</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
 
   <div class="railhead">Salons</div>
-  {{range .Cats}}<a class="nav" style="--c:var(--violet)" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
+  {{range .Cats}}<a class="nav sb908d7d" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
 
   {{if .V.Connecte}}{{if .V.Sysop}}
   <div class="railhead">Console</div>
-  <a class="nav" style="--c:var(--coral)" href="/sysop"><span class="ic">⚿</span>Sysop</a>
+  <a class="nav sf017a92" href="/sysop"><span class="ic">⚿</span>Sysop</a>
   {{end}}{{end}}
 </nav>
 <div>
@@ -29,13 +29,13 @@
   <form class="search" method="get" action="/rechercher">
     <span>⌕</span>
     <input name="q" value="{{.Q}}" placeholder="Rechercher dans les fils…"
-           style="border:0;background:none;color:inherit;font:inherit;flex:1;outline:none">
+           class="sc146614">
   </form>
   <div class="sp"></div>
   {{if .V.Connecte}}
-    <div class="me"><span class="av">{{.V.Initiales}}</span>{{.V.Handle}}
+    <a class="me" href="/compte" class="s15cb695" title="Mon compte"><span class="av">{{.V.Initiales}}</span>{{.V.Handle}}
       {{if .V.Sysop}}<span class="pill p-warn">sysop</span>{{end}}</div>
-    <form method="post" action="/logout" style="display:inline">
+    <form method="post" action="/logout" class="s6b8b63d">
       <input type="hidden" name="csrf" value="{{.V.CSRF}}">
       <button class="iconbtn" type="submit">Quitter</button>
     </form>

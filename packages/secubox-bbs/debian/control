@@ -10,7 +10,7 @@ Rules-Requires-Root: no
 Package: secubox-bbs
 Architecture: arm64
 Depends: ${misc:Depends}, adduser, acl
-Recommends: nginx
+Recommends: nginx, qrencode
 Suggests: secubox-billets
 Description: SecuBox-Deb — BBS auto-heberge (forums, bibliotheque, publication)
  Un BBS moderne pour une SecuBox : salons, fils, bibliotheque de fichiers,

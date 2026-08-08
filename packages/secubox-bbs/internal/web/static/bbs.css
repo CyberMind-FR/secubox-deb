@@ -269,3 +269,67 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 .wave i:nth-child(3n+1){height:52%}
 .wave i:nth-child(3n+2){height:74%}
 .wave i:nth-child(-n+5){opacity:1}
+
+/* ==== styles extraits des gabarits (scripts/styles-en-classes.py) ==== */
+/* Genere. Ne pas editer a la main : relancer le script. */
+.s09c487b{--c:var(--mint)}
+.s15cb695{text-decoration:none;color:inherit}
+.s24a7a9f{font-size:14px;margin-bottom:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.s296d727{max-width:640px}
+.s2bdf8e4{margin-top:18px}
+.s33ee298{font-size:11px}
+.s3608041{font-size:11.5px;color:var(--dim)}
+.s381c37d{gap:14px;align-items:flex-start;margin-top:8px}
+.s39203eb{background:#fff;border-radius:10px;padding:6px;flex:0 0 auto}
+.s3fb7839{font-size:12px;color:var(--dim)}
+.s42a6ced{margin-bottom:14px}
+.s43459be{min-width:180px}
+.s4430722{opacity:.5}
+.s491198d{gap:8px}
+.s4b54525{margin-bottom:18px}
+.s51eedcb{margin-top:6px;font-size:12px}
+.s5f32656{text-align:right}
+.s621f16f{max-width:720px}
+.s63eb706{word-break:break-all;font-size:12.5px}
+.s6622767{--c:var(--amber)}
+.s6b8b63d{display:inline}
+.s791fdb1{--c:var(--sky)}
+.s7b1eb4e{font-size:15px;margin-bottom:9px}
+.s883d028{margin-top:6px;font-size:11.5px;color:var(--dim)}
+.s8bad342{margin-top:8px;font-size:12px}
+.s92c18f6{margin-top:16px}
+.s92ca4fb{max-width:400px;margin:40px auto}
+.sa2d3b14{margin-bottom:14px;border-color:var(--coral);background:var(--coral-soft)}
+.sa3970b9{font-size:15px}
+.sa49cca5{font-size:12px}
+.sa9ef1c9{width:100%;margin-top:4px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:inherit;font:inherit}
+.sab2784b{font-size:14px;margin:20px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sb0455c2{color:var(--dim)}
+.sb908d7d{--c:var(--violet)}
+.sbe9c346{font-size:14px;margin:22px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.sbf2a49c{color:var(--dim);font-size:12.5px;margin-top:2px}
+.sbf4a218{margin-bottom:16px}
+.sc146614{border:0;background:none;color:inherit;font:inherit;flex:1;outline:none}
+.sc53ea1d{margin-top:14px}
+.sc9cd860{color:var(--pink)}
+.sca6fc03{margin-left:auto}
+.sdf3b93c{font-size:12.5px;color:var(--dim)}
+.sdf92814{margin-top:10px}
+.se2e86c5{color:inherit}
+.se3ffd0e{font-size:23px}
+.se78b7e7{width:100%;border:0;outline:none;background:none;color:inherit;font:inherit;resize:vertical}
+.sf017a92{--c:var(--coral)}
+.sf381ae3{--bs:var(--sky-soft);--bc:var(--sky)}
+.sf85c702{margin-bottom:6px}
+.sf9f81af{margin-top:11px}
+.sfe562e2{--c:var(--pink)}
+
+/* Etats semantiques.
+ *
+ * Des CLASSES conditionnelles plutot que des attributs `style` calcules : la
+ * politique de securite interdit les styles en ligne, et un etat qui porte un
+ * nom se relit mieux qu'une couleur codee dans le gabarit. */
+.etat-ok        { color: var(--mint); }
+.etat-attention { color: var(--amber); }
+.etat-mauvais   { color: var(--coral); }
+.compte-inactif { opacity: .5; }

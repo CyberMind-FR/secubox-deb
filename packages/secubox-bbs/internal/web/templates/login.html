@@ -1,16 +1,16 @@
 {{define "corps"}}
-<div style="max-width:400px;margin:40px auto">
+<div class="s92ca4fb">
   <div class="ph"><div><h1 class="serif">Se connecter</h1>
   <p>{{if .Invite}}Invitation valide — choisissez votre pseudonyme.{{else}}L'inscription se fait sur invitation.{{end}}</p></div></div>
-  {{if .Err}}<div class="note" style="margin-bottom:14px;border-color:var(--coral);background:var(--coral-soft)"><b>{{.Err}}</b></div>{{end}}
+  {{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
   <form method="post" action="{{if .Invite}}/invite/{{.Invite}}{{else}}/login{{end}}" class="card pad stack">
     <input type="hidden" name="csrf" value="{{.V.CSRF}}">
-    <label style="font-size:12px;color:var(--dim)">Pseudonyme
-      <input name="handle" required autofocus style="width:100%;margin-top:4px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:inherit;font:inherit"></label>
-    {{if .Invite}}<label style="font-size:12px;color:var(--dim)">Nom affiché
-      <input name="display" style="width:100%;margin-top:4px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:inherit;font:inherit"></label>{{end}}
-    <label style="font-size:12px;color:var(--dim)">Mot de passe
-      <input name="password" type="password" required style="width:100%;margin-top:4px;padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:inherit;font:inherit"></label>
+    <label class="s3fb7839">Pseudonyme
+      <input name="handle" required autofocus class="sa9ef1c9"></label>
+    {{if .Invite}}<label class="s3fb7839">Nom affiché
+      <input name="display" class="sa9ef1c9"></label>{{end}}
+    <label class="s3fb7839">Mot de passe
+      <input name="password" type="password" required class="sa9ef1c9"></label>
     <button class="btn primary" type="submit">{{if .Invite}}Créer le compte{{else}}Entrer{{end}}</button>
   </form>
 </div>
