@@ -1,0 +1,902 @@
+<title>SecuBox BBS — maquette modulaire</title>
+<style>
+:root{
+  --ink:#0d1b24; --paper:#eef4f7; --panel:#ffffff; --line:#d3dee4;
+  --soft:#e7eff4; --dim:#5b727f; --text:#12242e;
+  --coral:#f2543d; --coral-soft:#ffe4de;
+  --mint:#0fa47a;  --mint-soft:#d6f5ea;
+  --amber:#d98a00; --amber-soft:#ffeecc;
+  --violet:#6d4aff;--violet-soft:#e8e2ff;
+  --sky:#1f7fd4;   --sky-soft:#dbecfb;
+  --pink:#d8318a;  --pink-soft:#ffe0f0;
+  --shadow:0 1px 2px rgba(13,27,36,.06), 0 8px 24px -12px rgba(13,27,36,.28);
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --ink:#f2f6f8; --paper:#0a151d; --panel:#12242e; --line:#223d4b;
+  --soft:#182f3b; --dim:#8aa3b0; --text:#e6eef2;
+  --coral:#ff7a63; --coral-soft:#3a1d18;
+  --mint:#3ddba7;  --mint-soft:#0e3329;
+  --amber:#f5b445; --amber-soft:#3a2a0c;
+  --violet:#a48cff;--violet-soft:#241c44;
+  --sky:#5fb0f2;   --sky-soft:#0f2c42;
+  --pink:#ff7ac0;  --pink-soft:#3d1229;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  --ink:#f2f6f8; --paper:#0a151d; --panel:#12242e; --line:#223d4b;
+  --soft:#182f3b; --dim:#8aa3b0; --text:#e6eef2;
+  --coral:#ff7a63; --coral-soft:#3a1d18;
+  --mint:#3ddba7;  --mint-soft:#0e3329;
+  --amber:#f5b445; --amber-soft:#3a2a0c;
+  --violet:#a48cff;--violet-soft:#241c44;
+  --sky:#5fb0f2;   --sky-soft:#0f2c42;
+  --pink:#ff7ac0;  --pink-soft:#3d1229;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--text); min-height:100vh;
+  font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.86em}
+h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-.02em}
+a{color:inherit}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:6px}
+
+/* ── enveloppe ────────────────────────────────────────────────────────── */
+.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+@media (max-width:900px){ .shell{grid-template-columns:1fr} .rail{display:none} }
+
+.rail{
+  background:var(--panel); border-right:1px solid var(--line);
+  display:flex;flex-direction:column;gap:2px;padding:14px 10px;position:sticky;top:0;height:100vh;overflow:auto;
+}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
+.brand .mark{
+  width:34px;height:34px;border-radius:10px;flex:0 0 auto;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--violet),var(--pink));color:#fff;font-weight:800;font-size:15px;
+  box-shadow:0 6px 16px -6px var(--violet);
+}
+.brand b{font-size:15px;letter-spacing:-.02em;display:block;line-height:1.2}
+.brand small{color:var(--dim);font-size:11.5px}
+
+.railhead{
+  font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);
+  padding:14px 10px 6px;font-weight:700;
+}
+.nav{
+  display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  border:0;background:none;padding:7px 10px;border-radius:9px;color:var(--text);
+}
+.nav:hover{background:var(--soft)}
+.nav[aria-current="page"]{background:var(--soft);font-weight:650}
+.nav .ic{
+  width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;
+  font-size:12px;background:var(--soft);
+}
+.nav[aria-current="page"] .ic{background:var(--c,var(--violet));color:#fff}
+.nav .n{margin-left:auto;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.nav.off{opacity:.42}
+.nav.off .n{font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+
+/* ── barre haute ──────────────────────────────────────────────────────── */
+.top{
+  position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--panel) 88%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:11px 20px;
+}
+.search{
+  flex:1;max-width:420px;display:flex;align-items:center;gap:8px;
+  background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:6px 11px;color:var(--dim);font-size:13.5px;
+}
+.top .sp{flex:1}
+.iconbtn{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:6px 10px;font-size:13px}
+.iconbtn:hover{background:var(--soft)}
+.me{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.av{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;
+    background:linear-gradient(135deg,var(--mint),var(--sky))}
+
+main{padding:22px 26px 70px;max-width:1180px}
+.view{display:none} .view.on{display:block}
+
+.ph{display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.ph h1{font-size:26px;font-weight:750}
+.ph p{margin:2px 0 0;color:var(--dim);font-size:13.5px;max-width:60ch}
+
+/* ── briques ──────────────────────────────────────────────────────────── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.pad{padding:16px 18px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+.pill{
+  display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  padding:2.5px 9px;border-radius:999px;letter-spacing:.01em;white-space:nowrap;
+}
+.p-local {background:var(--soft);color:var(--dim)}
+.p-pub   {background:var(--mint-soft);color:var(--mint)}
+.p-billet{background:var(--pink-soft);color:var(--pink)}
+.p-src   {background:var(--violet-soft);color:var(--violet)}
+.p-new   {background:var(--coral-soft);color:var(--coral)}
+.p-warn  {background:var(--amber-soft);color:var(--amber)}
+.p-sky   {background:var(--sky-soft);color:var(--sky)}
+
+.btn{
+  border:1px solid var(--line);background:var(--panel);border-radius:9px;
+  padding:7px 14px;font-size:13.5px;font-weight:600;
+}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--violet);border-color:var(--violet);color:#fff}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.pinkish{background:var(--pink);border-color:var(--pink);color:#fff}
+.btn.pinkish:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 10px;font-size:12.5px}
+
+/* ── forums ───────────────────────────────────────────────────────────── */
+.board{
+  display:flex;gap:13px;padding:13px 16px;border-bottom:1px solid var(--line);align-items:flex-start;
+}
+.board:last-child{border-bottom:0}
+.board:hover{background:var(--soft)}
+.board .ic{
+  width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:15px;flex:0 0 auto;
+  background:var(--bs,var(--soft));color:var(--bc,var(--dim));
+}
+.board b{font-size:14.5px;display:block}
+.board .d{color:var(--dim);font-size:12.5px;margin-top:1px}
+.board .meta{margin-left:auto;text-align:right;color:var(--dim);font-size:11.5px;white-space:nowrap;flex:0 0 auto}
+
+.thread{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);align-items:flex-start}
+.thread:last-child{border-bottom:0}
+.thread:hover{background:var(--soft)}
+.thread .t{font-weight:640;font-size:14.5px}
+.thread .sub{color:var(--dim);font-size:12px;margin-top:2px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.thread .cnt{margin-left:auto;text-align:right;font-size:11.5px;color:var(--dim);flex:0 0 auto}
+
+/* ── fil ──────────────────────────────────────────────────────────────── */
+.post{display:grid;grid-template-columns:52px 1fr;gap:14px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.post:last-of-type{border-bottom:0}
+.post .who{text-align:center}
+.post .who .av{width:38px;height:38px;border-radius:11px;margin:0 auto 5px;font-size:13px}
+.post .who small{font-size:10.5px;color:var(--dim);display:block;line-height:1.25}
+.post .bd{font-size:14.5px}
+.post .bd p{margin:0 0 9px}
+.post .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.post.localnote{background:color-mix(in srgb,var(--amber-soft) 42%,transparent)}
+
+/* ── éditeur ──────────────────────────────────────────────────────────── */
+.editor{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+.tools{display:flex;gap:2px;padding:7px 9px;border-bottom:1px solid var(--line);background:var(--soft);flex-wrap:wrap;align-items:center}
+.tool{border:0;background:none;padding:5px 9px;border-radius:7px;font-size:13.5px;min-width:31px}
+.tool:hover{background:var(--panel)}
+.tool.act{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+.sep{width:1px;height:19px;background:var(--line);margin:0 5px}
+.area{padding:14px 16px;min-height:130px;font-size:14.5px}
+.area p{margin:0 0 9px}
+.area .ph2{color:var(--dim)}
+.foot{display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--line);background:var(--soft);flex-wrap:wrap}
+
+/* ── modules ──────────────────────────────────────────────────────────── */
+.mod{padding:15px 17px;display:flex;gap:13px;align-items:flex-start}
+.mod .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:16px;flex:0 0 auto;
+         background:var(--bs,var(--soft));color:var(--bc,var(--dim))}
+.mod b{font-size:14.5px;display:block}
+.mod .d{color:var(--dim);font-size:12.5px;margin-top:2px}
+.mod .k{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+
+.sw{width:40px;height:23px;border-radius:999px;background:var(--line);position:relative;flex:0 0 auto;border:0;padding:0;transition:background .16s}
+.sw::after{content:"";position:absolute;top:2.5px;left:2.5px;width:18px;height:18px;border-radius:50%;background:#fff;
+           box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .16s}
+.sw[aria-checked="true"]{background:var(--mint)}
+.sw[aria-checked="true"]::after{transform:translateX(17px)}
+
+/* ── companion ────────────────────────────────────────────────────────── */
+.phone{
+  width:250px;flex:0 0 auto;border:9px solid var(--ink);border-radius:30px;overflow:hidden;
+  background:var(--paper);box-shadow:var(--shadow)
+}
+.phone .st{background:var(--ink);color:var(--paper);font-size:9.5px;padding:3px 12px;display:flex;justify-content:space-between}
+.phone .bdy{padding:11px}
+.appcard{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:10px;margin-bottom:8px}
+.appcard b{font-size:12.5px;display:block}
+.appcard .d{font-size:10.5px;color:var(--dim);margin-top:1px}
+.bar{height:5px;border-radius:999px;background:var(--soft);overflow:hidden;margin-top:7px}
+.bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--violet),var(--pink))}
+
+/* ── table ────────────────────────────────────────────────────────────── */
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--line)}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-weight:700}
+tbody tr:hover{background:var(--soft)}
+td.num{font-variant-numeric:tabular-nums;text-align:right}
+
+.note{
+  border-left:3px solid var(--amber);background:var(--amber-soft);
+  padding:11px 15px;border-radius:0 10px 10px 0;font-size:13px;
+}
+.note b{display:block;margin-bottom:2px}
+.note.v{border-color:var(--violet);background:var(--violet-soft)}
+.note.m{border-color:var(--mint);background:var(--mint-soft)}
+
+.kv{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--dim)}
+.kv b{font-variant-numeric:tabular-nums}
+.stat{padding:14px 16px}
+.stat .n{font-size:25px;font-weight:750;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat .l{font-size:11.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+.crumb{font-size:12.5px;color:var(--dim);margin-bottom:9px}
+.crumb b{color:var(--text)}
+
+.loop{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}
+.lp{
+  flex:1 1 150px;background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--lc,var(--violet));
+  border-radius:12px;padding:11px 14px;box-shadow:var(--shadow)
+}
+.lp b{display:block;font-size:13.5px;color:var(--lc,var(--violet))}
+.lp span{font-size:12px;color:var(--dim)}
+.ar{align-self:center;color:var(--dim);font-size:17px}
+@media (max-width:700px){ .ar{display:none} }
+
+.player .scrn{
+  aspect-ratio:16/9;display:grid;place-items:center;font-size:34px;color:#fff;
+  background:linear-gradient(135deg,var(--sky),var(--mint));border-radius:13px 13px 0 0;
+}
+.wave{display:flex;align-items:flex-end;gap:2.5px;height:26px;margin-top:9px}
+.wave i{flex:1;background:var(--violet);border-radius:2px;opacity:.5}
+.wave i:nth-child(3n){height:100%;opacity:1}
+.wave i:nth-child(3n+1){height:52%}
+.wave i:nth-child(3n+2){height:74%}
+.wave i:nth-child(-n+5){opacity:1}
+</style>
+
+<div class="shell">
+<!-- ══ rail ══════════════════════════════════════════════════════════ -->
+<nav class="rail">
+  <div class="brand">
+    <div class="mark">B</div>
+    <div><b>Le Bureau</b><small>bbs.gk2.secubox.in</small></div>
+  </div>
+
+  <div class="railhead">Actifs</div>
+  <button class="nav" style="--c:var(--sky)"    aria-current="page" data-go="forums"><span class="ic">◈</span>Forums<span class="n">14</span></button>
+  <button class="nav" style="--c:var(--mint)"   data-go="biblio"><span class="ic">▤</span>Bibliothèque<span class="n">208</span></button>
+  <button class="nav" style="--c:var(--coral)"  data-go="mp"><span class="ic">✉</span>Messages<span class="n">3</span></button>
+  <button class="nav" style="--c:var(--amber)"  data-go="media"><span class="ic">▶</span>Média<span class="n">51</span></button>
+  <button class="nav" style="--c:var(--pink)"   data-go="billets"><span class="ic">✦</span>Billets<span class="n">7</span></button>
+
+  <div class="railhead">Passerelles</div>
+  <button class="nav" style="--c:var(--violet)" data-go="modules"><span class="ic">◐</span>Podcaster<span class="n">42</span></button>
+  <button class="nav" style="--c:var(--violet)" data-go="modules"><span class="ic">▷</span>PeerTube<span class="n">9</span></button>
+  <button class="nav off"                        data-go="modules"><span class="ic">♫</span>Lyrion<span class="n">off</span></button>
+
+  <div class="railhead">Console</div>
+  <button class="nav" style="--c:var(--amber)"  data-go="modules"><span class="ic">⬒</span>Modules</button>
+  <button class="nav" style="--c:var(--sky)"    data-go="companion"><span class="ic">▯</span>Companion<span class="n">2</span></button>
+  <button class="nav" style="--c:var(--coral)"  data-go="sysop"><span class="ic">⚿</span>Sysop</button>
+</nav>
+
+<div>
+<!-- ══ barre haute ═══════════════════════════════════════════════════ -->
+<header class="top">
+  <div class="search">⌕ <span>Rechercher dans les fils, fichiers, billets…</span></div>
+  <div class="sp"></div>
+  <button class="iconbtn" id="theme" title="Thème clair / sombre">◐</button>
+  <button class="iconbtn">＋ Nouveau fil</button>
+  <div class="me"><span class="av">GK</span>gk2 <span class="pill p-warn">sysop</span></div>
+</header>
+
+<main>
+<!-- ══ FORUMS ════════════════════════════════════════════════════════ -->
+<section class="view on" id="v-forums">
+  <div class="ph">
+    <div>
+      <h1 class="serif">Forums</h1>
+      <p>Quatre salons humains, deux alimentés par des modules. Le badge dit d'où vient chaque fil.</p>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-bottom:16px">
+    <div class="card stat"><div class="n">14</div><div class="l">fils actifs</div></div>
+    <div class="card stat"><div class="n">312</div><div class="l">messages</div></div>
+    <div class="card stat"><div class="n" style="color:var(--pink)">7</div><div class="l">billets publiés</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
+    <div class="board" style="--bs:var(--sky-soft);--bc:var(--sky)">
+      <div class="ic">⌂</div>
+      <div><b>Atelier</b><div class="d">Brassage, électronique, ce qui se répare le samedi</div></div>
+      <div class="meta">6 fils<br>il y a 2 h</div>
+    </div>
+    <div class="board" style="--bs:var(--coral-soft);--bc:var(--coral)">
+      <div class="ic">✧</div>
+      <div><b>Place publique</b><div class="d">Le seul salon exporté vers l'extérieur <span class="pill p-pub">public</span></div></div>
+      <div class="meta">4 fils<br>hier</div>
+    </div>
+    <div class="board" style="--bs:var(--amber-soft);--bc:var(--amber)">
+      <div class="ic">◆</div>
+      <div><b>Intendance</b><div class="d">Board, réseau, sauvegardes — entre nous</div></div>
+      <div class="meta">3 fils<br>il y a 5 h</div>
+    </div>
+    <div class="board" style="--bs:var(--violet-soft);--bc:var(--violet)">
+      <div class="ic">◐</div>
+      <div><b>Émissions</b><div class="d">Ouvert par le podcaster à chaque épisode <span class="pill p-src">module</span></div></div>
+      <div class="meta">42 fils<br>il y a 20 min</div>
+    </div>
+  </div>
+
+  <h3 style="font-size:14px;margin-bottom:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Derniers fils</h3>
+  <div class="card">
+    <div class="thread">
+      <div>
+        <div class="t">Fermentation bloquée à 18 °C — le barboteur ne bouge plus</div>
+        <div class="sub"><span class="pill p-local">local</span> Atelier · gk2 · 11 réponses</div>
+      </div>
+      <div class="cnt">il y a 2 h</div>
+    </div>
+    <div class="thread">
+      <div>
+        <div class="t">Ce qu'on a appris en coupant le Wi-Fi une semaine</div>
+        <div class="sub"><span class="pill p-pub">public</span> <span class="pill p-billet">✦ billet</span> Place publique · 7 réponses</div>
+      </div>
+      <div class="cnt">hier</div>
+    </div>
+    <div class="thread">
+      <div>
+        <div class="t">Épisode 42 — « Les câbles sous la mer »</div>
+        <div class="sub"><span class="pill p-src">podcaster</span> Émissions · 3 réponses</div>
+      </div>
+      <div class="cnt">il y a 20 min</div>
+    </div>
+    <div class="thread">
+      <div>
+        <div class="t">Sauvegarde du 6 août : 2 supports sur 3</div>
+        <div class="sub"><span class="pill p-local">local</span> Intendance · 2 réponses</div>
+      </div>
+      <div class="cnt">il y a 5 h</div>
+    </div>
+  </div>
+
+  <div class="note v" style="margin-top:16px">
+    <b>Un fil local ne sort jamais, même partiellement.</b>
+    L'export vérifie la visibilité du fil <em>et</em> celle du message. Un message marqué public dans un
+    fil local reste dedans : sans cette règle, un fil deviendrait public par inadvertance, un message à la fois.
+  </div>
+</section>
+
+<!-- ══ FIL ═══════════════════════════════════════════════════════════ -->
+<section class="view" id="v-fil">
+  <div class="crumb">Forums › <b>Place publique</b></div>
+  <div class="ph">
+    <div>
+      <h1 class="serif" style="font-size:23px">Ce qu'on a appris en coupant le Wi-Fi une semaine</h1>
+      <p><span class="pill p-pub">fil public</span> <span class="pill p-billet">✦ publié en billet</span> ouvert par gk2 · 7 réponses</p>
+    </div>
+    <div class="row" style="margin-left:auto">
+      <button class="btn sm">Épingler</button>
+      <button class="btn sm pinkish" data-go="billets">✦ Publier en billet</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <article class="post">
+      <div class="who"><div class="av">GK</div><small>gk2<br>sysop</small></div>
+      <div class="bd">
+        <div class="hd">6 août, 09:12 <span class="pill p-pub">public</span></div>
+        <p>Sept jours sans Wi-Fi à la maison. Tout est passé au câble, y compris les
+        deux postes de l'atelier. Ce que je retiens tient en trois points.</p>
+        <p>Le premier surprend : la latence a chuté au point que la visio est
+        devenue utilisable dans la grange, là où elle ne l'était jamais.</p>
+      </div>
+    </article>
+    <article class="post">
+      <div class="who"><div class="av" style="background:linear-gradient(135deg,var(--amber),var(--coral))">MA</div><small>marie<br>membre</small></div>
+      <div class="bd">
+        <div class="hd">6 août, 14:40 <span class="pill p-pub">public</span></div>
+        <p>Le point sur la grange me parle. Est-ce que tu as mesuré, ou c'est du ressenti ?</p>
+      </div>
+    </article>
+    <article class="post localnote">
+      <div class="who"><div class="av" style="background:linear-gradient(135deg,var(--violet),var(--sky))">TH</div><small>thomas<br>membre</small></div>
+      <div class="bd">
+        <div class="hd">6 août, 15:02 <span class="pill p-local">local — ne sort pas</span></div>
+        <p>Avant de publier : l'adresse de la grange apparaît sur la photo du câblage.
+        On la recadre ?</p>
+        <div class="row" style="margin-top:7px;font-size:12px;color:var(--dim)">
+          ↳ Ce message reste dans la maison. Ni l'export, ni le billet ne le reprennent.
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <h3 style="font-size:14px;margin:20px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Répondre</h3>
+  <div class="editor">
+    <div class="tools">
+      <button class="tool act" title="Gras"><b>B</b></button>
+      <button class="tool" title="Italique"><i>I</i></button>
+      <button class="tool" title="Barré"><s>S</s></button>
+      <span class="sep"></span>
+      <button class="tool" title="Titre">H2</button>
+      <button class="tool" title="Liste">☰</button>
+      <button class="tool" title="Citation">❝</button>
+      <button class="tool mono" title="Code">&lt;/&gt;</button>
+      <span class="sep"></span>
+      <button class="tool" title="Lien">⛓</button>
+      <button class="tool" title="Depuis la bibliothèque">▤</button>
+      <button class="tool" title="Téléverser">↥</button>
+      <div style="margin-left:auto" class="row">
+        <span class="pill p-local">↓ enregistré en local</span>
+      </div>
+    </div>
+    <div class="area">
+      <p>Mesuré — <b>17 ms contre 240 ms</b> en Wi-Fi, sur dix essais.</p>
+      <p class="ph2">Écrivez ici…</p>
+    </div>
+    <div class="foot">
+      <span style="font-size:12.5px;color:var(--dim)">Visibilité&nbsp;:</span>
+      <button class="btn sm">Local</button>
+      <button class="btn sm primary">Public</button>
+      <span class="mono" style="color:var(--dim);font-size:11.5px">→ content/2/58.md</span>
+      <div style="margin-left:auto" class="row">
+        <button class="btn sm">Aperçu</button>
+        <button class="btn primary">Envoyer</button>
+      </div>
+    </div>
+  </div>
+  <div class="note m" style="margin-top:14px">
+    <b>Ce que vous écrivez devient un fichier.</b>
+    Chaque message part sur le disque en Markdown, sous <span class="mono">content/</span>.
+    La base ne fait que l'indexer — elle se reconstruit entièrement à partir de ces fichiers.
+  </div>
+</section>
+
+
+<!-- ══ MÉDIA ═════════════════════════════════════════════════════════ -->
+<section class="view" id="v-media">
+  <div class="ph">
+    <div><h1 class="serif">Média</h1>
+    <p>Ce qu'on écoute et regarde, au même endroit que ce qu'on en dit.
+    Trois sources, un seul lecteur : les vidéos PeerTube de la maison, les épisodes du
+    podcaster, et n'importe quel dossier de la bibliothèque.</p></div>
+  </div>
+
+  <div class="loop">
+    <div class="lp" style="--lc:var(--amber)"><b>1 · Écouter</b><span>flux, vidéo, dossier</span></div>
+    <div class="ar">→</div>
+    <div class="lp" style="--lc:var(--sky)"><b>2 · En parler</b><span>un fil s'ouvre, à plusieurs</span></div>
+    <div class="ar">→</div>
+    <div class="lp" style="--lc:var(--violet)"><b>3 · Écrire</b><span>auteuring collaboratif</span></div>
+    <div class="ar">→</div>
+    <div class="lp" style="--lc:var(--pink)"><b>4 · Publier</b><span>billet référencé</span></div>
+  </div>
+
+  <div class="row" style="margin:16px 0 12px;gap:7px">
+    <button class="btn sm primary">Tout</button>
+    <button class="btn sm">▷ PeerTube <span class="pill p-sky">9</span></button>
+    <button class="btn sm">◐ Podcaster <span class="pill p-src">42</span></button>
+    <button class="btn sm">▤ Dossier</button>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="player">
+        <div class="scrn">▶</div>
+        <div class="pad" style="padding:13px 15px">
+          <div class="row" style="margin-bottom:5px"><span class="pill p-sky">▷ PeerTube</span><span class="pill p-pub">public</span></div>
+          <b style="font-size:14.5px">Poser une antenne en trois soirs</b>
+          <div class="d" style="color:var(--dim);font-size:12.5px;margin-top:2px">18 min · publié le 28 juillet</div>
+          <div class="row" style="margin-top:11px">
+            <button class="btn sm" data-go="fil">◈ 9 réponses</button>
+            <button class="btn sm pinkish" data-go="billets">✦ Publier en billet</button>
+            <span style="margin-left:auto" class="row" title="Réactions du billet publié">
+              <span class="pill p-billet">♥ 12</span><span class="pill p-local">★ 4</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="player">
+        <div class="scrn" style="background:linear-gradient(135deg,var(--violet),var(--sky))">◐</div>
+        <div class="pad" style="padding:13px 15px">
+          <div class="row" style="margin-bottom:5px"><span class="pill p-src">◐ Podcaster</span><span class="pill p-new">nouveau</span></div>
+          <b style="font-size:14.5px">Épisode 42 — Les câbles sous la mer</b>
+          <div class="d" style="color:var(--dim);font-size:12.5px;margin-top:2px">54 min · il y a 20 min</div>
+          <div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="row" style="margin-top:11px">
+            <button class="btn sm" data-go="fil">◈ 3 réponses</button>
+            <button class="btn sm pinkish" data-go="billets">✦ Publier en billet</button>
+            <span style="margin-left:auto;font-size:11.5px;color:var(--dim)" class="mono">12:04 / 54:31</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note m" style="margin-top:16px">
+    <b>Le média n'est pas recopié dans le BBS.</b>
+    Le module lit le flux du podcaster et le catalogue PeerTube là où ils sont déjà.
+    Dupliquer 400 Mo par épisode remplirait le disque pour rien, et il faudrait ensuite
+    décider laquelle des deux copies fait foi.
+  </div>
+</section>
+
+<!-- ══ BILLETS ═══════════════════════════════════════════════════════ -->
+<section class="view" id="v-billets">
+  <div class="ph">
+    <div>
+      <h1 class="serif">Du fil au billet</h1>
+      <p>Le BBS est l'endroit où l'on écrit à plusieurs. <b>billets</b> est l'endroit où l'on publie.
+      Un fil mûr devient un billet, et garde le lien vers la conversation qui l'a produit.</p>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-bottom:16px">
+    <div class="card pad">
+      <div class="row" style="margin-bottom:10px">
+        <span class="pill p-pub">fil public</span> <span style="color:var(--dim)">→</span> <span class="pill p-billet">✦ billet</span>
+      </div>
+      <h3 style="font-size:15px;margin-bottom:6px">Ce qu'on a appris en coupant le Wi-Fi une semaine</h3>
+      <div class="kv"><span>Publié le</span><b>7 août 2026</b></div>
+      <div class="kv"><span>Adresse</span><b class="mono" style="font-size:11.5px">billets.gk2/wifi-coupe</b></div>
+      <div class="kv"><span>Messages repris</span><b>6 sur 8</b></div>
+      <div class="kv"><span>Retenus en local</span><b style="color:var(--amber)">2</b></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn sm">Voir le billet</button>
+        <button class="btn sm" data-go="fil">Revenir au fil</button>
+        <button class="btn sm">Republier</button>
+      </div>
+    </div>
+
+    <div class="card pad">
+      <h3 style="font-size:15px;margin-bottom:8px">Ce qui se passe à la publication</h3>
+      <div class="kv"><span>1. Sélection</span><b>messages publics du fil public</b></div>
+      <div class="kv"><span>2. Assemblage</span><b>un billet, par ordre d'écriture</b></div>
+      <div class="kv"><span>3. Attribution</span><b>chaque voix nommée</b></div>
+      <div class="kv"><span>4. Référence</span><b>lien croisé dans les deux sens</b></div>
+      <div class="note" style="margin-top:12px">
+        <b>La publication ne change aucune visibilité.</b>
+        Elle ne reprend que ce qui était déjà public. Un fil local n'a pas de bouton
+        « publier » — il faut d'abord le rendre public, explicitement, et ce geste est journalisé.
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:14px;margin-bottom:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Billets tirés du BBS</h3>
+  <div class="card tw">
+    <table>
+      <thead><tr><th>Billet</th><th>Fil d'origine</th><th>Repris</th><th>Retenus</th><th>Publié</th></tr></thead>
+      <tbody>
+        <tr><td><b>Wi-Fi coupé, une semaine</b></td><td>Place publique</td><td class="num">6</td><td class="num" style="color:var(--amber)">2</td><td>7 août</td></tr>
+        <tr><td><b>Réparer un mitigeur de 1978</b></td><td>Atelier</td><td class="num">4</td><td class="num">0</td><td>2 août</td></tr>
+        <tr><td><b>Trois soirs sur une antenne</b></td><td>Atelier</td><td class="num">9</td><td class="num" style="color:var(--amber)">3</td><td>28 juil.</td></tr>
+        <tr><td><b>Épisode 41 — notes d'après</b></td><td>Émissions <span class="pill p-src">podcaster</span></td><td class="num">5</td><td class="num">1</td><td>24 juil.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:14px;margin:22px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Réactions sur les billets</h3>
+  <div class="grid g2">
+    <div class="card pad">
+      <h3 style="font-size:15px;margin-bottom:9px">Ce que le public peut faire</h3>
+      <div class="kv"><span>♥ J'aime</span><b>sans compte — un cookie</b></div>
+      <div class="kv"><span>★ Favori</span><b>sans compte — un cookie</b></div>
+      <div class="kv"><span>✎ Commenter</span><b>sans compte, mis en attente</b></div>
+      <div class="kv"><span>Cookie posé</span><b class="mono" style="font-size:11.5px">sbx_billet — 1 an</b></div>
+      <div class="note v" style="margin-top:12px">
+        <b>Un cookie local, et rien d'autre.</b>
+        Il ne porte qu'un identifiant tiré au hasard, sur ce domaine seul : de quoi
+        éviter qu'on aime deux fois, pas de quoi reconnaître quelqu'un ailleurs.
+        Ce serait malvenu, sur une board dont le métier est de bloquer les traqueurs.
+      </div>
+    </div>
+
+    <div class="card pad">
+      <div class="row" style="margin-bottom:9px">
+        <h3 style="font-size:15px">En attente de relecture</h3>
+        <span class="pill p-warn" style="margin-left:auto">3</span>
+      </div>
+      <div class="kv"><span>« Vous auriez le schéma ? »</span><b>Wi-Fi coupé</b></div>
+      <div class="kv"><span>« lien vers un site de pari »</span><b style="color:var(--coral)">signalé</b></div>
+      <div class="kv"><span>« Merci pour l'épisode 42 »</span><b>Épisode 41</b></div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn sm primary">Relire</button>
+        <button class="btn sm">Tout publier</button>
+      </div>
+      <div class="note" style="margin-top:12px">
+        <b>Aucun commentaire n'apparaît sans relecture.</b>
+        Un espace de commentaires ouvert sur internet se remplit de liens en une nuit ;
+        la file d'attente est ce qui évite d'avoir à modérer après coup, en public.
+      </div>
+    </div>
+  </div>
+
+  <div class="note m" style="margin-top:16px">
+    <b>Les deux sens sont ouverts.</b>
+    Un épisode du podcaster ouvre un fil, le fil devient un billet ; et un commentaire
+    laissé sous le billet revient dans le fil, où les membres lui répondent.
+    Le BBS est l'atelier, billets est la vitrine — la même conversation vue des deux côtés.
+  </div>
+</section>
+
+<!-- ══ BIBLIOTHÈQUE ══════════════════════════════════════════════════ -->
+<section class="view" id="v-biblio">
+  <div class="ph">
+    <div><h1 class="serif">Bibliothèque</h1>
+    <p>Les fichiers vivent sous <span class="mono">files/</span>, à côté des messages. Le même rsync emporte les deux.</p></div>
+    <div class="row" style="margin-left:auto"><button class="btn primary">↥ Déposer</button></div>
+  </div>
+
+  <div class="grid g3" style="margin-bottom:16px">
+    <div class="card stat"><div class="n">208</div><div class="l">fichiers</div></div>
+    <div class="card stat"><div class="n">6,4 <span style="font-size:15px">Go</span></div><div class="l">sur 20 Go</div></div>
+    <div class="card stat"><div class="n" style="color:var(--mint)">SSD</div><div class="l">/data — pas l'eMMC</div></div>
+  </div>
+
+  <div class="card tw">
+    <table>
+      <thead><tr><th>Fichier</th><th>Rayon</th><th>Déposé par</th><th>Taille</th><th>Visibilité</th></tr></thead>
+      <tbody>
+        <tr><td>⌁ <b>schema-brassage-v3.pdf</b></td><td>Atelier</td><td>gk2</td><td class="num">1,2 Mo</td><td><span class="pill p-local">local</span></td></tr>
+        <tr><td>▤ <b>cablage-grange.jpg</b></td><td>Atelier</td><td>thomas</td><td class="num">3,8 Mo</td><td><span class="pill p-warn">à recadrer</span></td></tr>
+        <tr><td>♫ <b>ep42-master.flac</b></td><td>Émissions</td><td><span class="pill p-src">podcaster</span></td><td class="num">412 Mo</td><td><span class="pill p-pub">public</span></td></tr>
+        <tr><td>⌂ <b>plan-reseau-2026.svg</b></td><td>Intendance</td><td>gk2</td><td class="num">88 Ko</td><td><span class="pill p-local">local</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note" style="margin-top:16px">
+    <b>Le quota est par personne, pas global.</b>
+    Un quota global se remplit d'un seul dépôt et bloque tout le monde ;
+    personne ne sait à qui demander de faire le ménage.
+  </div>
+</section>
+
+<!-- ══ MESSAGES ══════════════════════════════════════════════════════ -->
+<section class="view" id="v-mp">
+  <div class="ph"><div><h1 class="serif">Messages</h1>
+  <p>Entre membres. Stockés comme les fils — mêmes fichiers, même sauvegarde, jamais dans un export.</p></div></div>
+  <div class="card">
+    <div class="thread"><div><div class="t">marie — « Pour la photo du câblage »</div>
+      <div class="sub"><span class="pill p-new">non lu</span> 2 messages</div></div><div class="cnt">il y a 40 min</div></div>
+    <div class="thread"><div><div class="t">thomas — « Clé de la grange »</div>
+      <div class="sub">4 messages</div></div><div class="cnt">hier</div></div>
+    <div class="thread"><div><div class="t">admin — « Invitation acceptée : claire »</div>
+      <div class="sub"><span class="pill p-src">système</span></div></div><div class="cnt">2 août</div></div>
+  </div>
+  <div class="note v" style="margin-top:16px">
+    <b>Chiffrés au repos, pas de bout en bout.</b>
+    Le sysop administre la machine : prétendre qu'il ne peut pas lire serait faux.
+    Pour ce qui ne doit pas transiter par le BBS, il y a le tunnel du companion.
+  </div>
+</section>
+
+<!-- ══ MODULES ═══════════════════════════════════════════════════════ -->
+<section class="view" id="v-modules">
+  <div class="ph">
+    <div><h1 class="serif">Modules</h1>
+    <p>Le BBS n'est qu'un socle : comptes, fils, fichiers, invitations.
+    Tout le reste s'ajoute et se retire — et ce qui est retiré ne tourne pas.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card mod" style="--bs:var(--sky-soft);--bc:var(--sky)">
+      <div class="ic">◈</div>
+      <div style="flex:1">
+        <b>Forums</b><span class="pill p-warn" style="margin-left:6px">socle</span>
+        <div class="d">Salons, fils, messages, visibilité double.</div>
+        <div class="k"><span class="pill p-local">non désactivable</span></div>
+      </div>
+      <button class="sw" aria-checked="true" role="switch" disabled style="opacity:.5"></button>
+    </div>
+
+    <div class="card mod" style="--bs:var(--mint-soft);--bc:var(--mint)">
+      <div class="ic">▤</div>
+      <div style="flex:1"><b>Bibliothèque</b>
+        <div class="d">Dépôts par rayon, quotas par personne.</div>
+        <div class="k"><span class="pill p-sky">208 fichiers</span><span class="pill p-local">6,4 Go</span></div>
+      </div>
+      <button class="sw" aria-checked="true" role="switch"></button>
+    </div>
+
+    <div class="card mod" style="--bs:var(--amber-soft);--bc:var(--amber)">
+      <div class="ic">▶</div>
+      <div style="flex:1"><b>Média</b>
+        <div class="d">Lit PeerTube, le podcaster et un dossier — sans recopier les fichiers.</div>
+        <div class="k"><span class="pill p-sky">9 vidéos</span><span class="pill p-src">42 épisodes</span></div>
+      </div>
+      <button class="sw" aria-checked="true" role="switch"></button>
+    </div>
+
+    <div class="card mod" style="--bs:var(--pink-soft);--bc:var(--pink)">
+      <div class="ic">✦</div>
+      <div style="flex:1"><b>Billets</b>
+        <div class="d">Publie un fil mûr vers <span class="mono">billets.gk2</span>, avec lien croisé. Réactions et commentaires relus.</div>
+        <div class="k"><span class="pill p-billet">7 publiés</span><span class="pill p-pub">sortie publique</span></div>
+      </div>
+      <button class="sw" aria-checked="true" role="switch"></button>
+    </div>
+
+    <div class="card mod" style="--bs:var(--violet-soft);--bc:var(--violet)">
+      <div class="ic">◐</div>
+      <div style="flex:1"><b>Passerelle podcaster</b>
+        <div class="d">Un fil par épisode, ouvert automatiquement.</div>
+        <div class="k"><span class="pill p-src">42 fils</span><span class="pill p-local">lecture seule</span></div>
+      </div>
+      <button class="sw" aria-checked="true" role="switch"></button>
+    </div>
+
+    <div class="card mod" style="--bs:var(--violet-soft);--bc:var(--violet)">
+      <div class="ic">▷</div>
+      <div style="flex:1"><b>Passerelle PeerTube</b>
+        <div class="d">Un fil par vidéo publiée.</div>
+        <div class="k"><span class="pill p-src">9 fils</span></div>
+      </div>
+      <button class="sw" aria-checked="true" role="switch"></button>
+    </div>
+
+    <div class="card mod" style="opacity:.62">
+      <div class="ic">♫</div>
+      <div style="flex:1"><b>Passerelle Lyrion</b>
+        <div class="d">Fils d'écoute partagée. Éteint : ni service, ni entrée de menu.</div>
+        <div class="k"><span class="pill p-local">retiré</span></div>
+      </div>
+      <button class="sw" aria-checked="false" role="switch"></button>
+    </div>
+  </div>
+
+  <div class="note" style="margin-top:18px">
+    <b>Éteindre, c'est éteindre pour de bon.</b>
+    Un module retiré perd son entrée de menu, sa route, et son service —
+    il ne reste pas un panneau vide derrière une porte fermée. Ses fichiers, eux, restent
+    sur le disque : on retire une fonction, on ne détruit pas ce qui a été écrit.
+  </div>
+</section>
+
+<!-- ══ COMPANION ═════════════════════════════════════════════════════ -->
+<section class="view" id="v-companion">
+  <div class="ph">
+    <div><h1 class="serif">Companion</h1>
+    <p>Les modules du BBS apparaissent dans l'application, et s'y mettent à jour.
+    L'application reste petite : c'est la board qui pousse ce qu'elle sait faire.</p></div>
+  </div>
+
+  <div class="row" style="align-items:flex-start;gap:22px">
+    <div class="phone">
+      <div class="st"><span>9:41</span><span>▮▮▮ ▲</span></div>
+      <div class="bdy">
+        <div class="row" style="gap:7px;margin-bottom:10px">
+          <div class="mark" style="width:26px;height:26px;border-radius:8px;font-size:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--violet),var(--pink));color:#fff;font-weight:800">B</div>
+          <b style="font-size:12.5px">Le Bureau</b>
+          <span class="pill p-pub" style="margin-left:auto;font-size:9.5px">tunnel</span>
+        </div>
+
+        <div class="appcard">
+          <div class="row"><b>Forums</b><span class="pill p-new" style="margin-left:auto;font-size:9.5px">4</span></div>
+          <div class="d">Atelier · Place publique</div>
+        </div>
+        <div class="appcard">
+          <div class="row"><b>Billets</b><span class="pill p-billet" style="margin-left:auto;font-size:9.5px">✦ 7</span></div>
+          <div class="d">Dernier : Wi-Fi coupé</div>
+        </div>
+        <div class="appcard" style="border-color:var(--violet)">
+          <div class="row"><b>Bibliothèque</b><span class="pill p-src" style="margin-left:auto;font-size:9.5px">maj</span></div>
+          <div class="d">Dépôt hors ligne — 1,2 Mo</div>
+          <div class="bar"><i style="width:64%"></i></div>
+        </div>
+        <div class="appcard" style="opacity:.5">
+          <div class="row"><b>Lyrion</b><span class="d" style="margin-left:auto">retiré</span></div>
+          <div class="d">Disparu du menu</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack" style="flex:1;min-width:290px">
+      <div class="card pad">
+        <h3 style="font-size:15px;margin-bottom:9px">Ce que la board pousse</h3>
+        <div class="kv"><span>Modules annoncés</span><b>5 actifs, 1 retiré</b></div>
+        <div class="kv"><span>Format</span><b>manifeste signé</b></div>
+        <div class="kv"><span>Transport</span><b>tunnel WireGuard</b></div>
+        <div class="kv"><span>Appareils appairés</span><b>2</b></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn sm primary">Pousser le manifeste</button>
+          <button class="btn sm">Appairer (QR)</button>
+        </div>
+      </div>
+
+      <div class="card pad">
+        <h3 style="font-size:15px;margin-bottom:9px">Extensions installées</h3>
+        <div class="tw"><table>
+          <thead><tr><th>Extension</th><th>Version</th><th>État</th></tr></thead>
+          <tbody>
+            <tr><td><b>Forums</b></td><td class="mono">1.0.0</td><td><span class="pill p-pub">à jour</span></td></tr>
+            <tr><td><b>Billets</b></td><td class="mono">0.3.0</td><td><span class="pill p-pub">à jour</span></td></tr>
+            <tr><td><b>Bibliothèque</b></td><td class="mono">1.1.0</td><td><span class="pill p-src">en cours</span></td></tr>
+            <tr><td><b>Lyrion</b></td><td class="mono">—</td><td><span class="pill p-local">retiré</span></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="note v">
+        <b>Une extension n'est pas du code envoyé sur le téléphone.</b>
+        Le manifeste décrit des écrans et des routes ; l'application sait déjà les afficher.
+        Pousser du code exécutable ferait de chaque board une voie d'entrée sur chaque téléphone appairé.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ SYSOP ═════════════════════════════════════════════════════════ -->
+<section class="view" id="v-sysop">
+  <div class="ph"><div><h1 class="serif">Console sysop</h1>
+  <p>Inscription sur invitation. Comptes désactivés, jamais supprimés.</p></div></div>
+
+  <div class="grid g3" style="margin-bottom:16px">
+    <div class="card stat"><div class="n">9</div><div class="l">membres</div></div>
+    <div class="card stat"><div class="n" style="color:var(--amber)">3</div><div class="l">invitations ouvertes</div></div>
+    <div class="card stat"><div class="n" style="color:var(--mint)">✓</div><div class="l">index reconstructible</div></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card pad">
+      <h3 style="font-size:15px;margin-bottom:9px">Invitations</h3>
+      <div class="kv"><span class="mono">a3f9-…-2b</span><b>claire — expire dans 5 j</b></div>
+      <div class="kv"><span class="mono">7c21-…-e0</span><b>non attribuée — 12 j</b></div>
+      <div class="kv"><span class="mono">1d88-…-4f</span><b style="color:var(--dim)">utilisée le 2 août</b></div>
+      <button class="btn sm primary" style="margin-top:11px">Émettre une invitation</button>
+      <div class="note m" style="margin-top:11px">
+        Le code n'est montré <b>qu'une fois</b>. Seule son empreinte est conservée :
+        une base lue par un tiers ne doit pas livrer d'entrée valide.
+      </div>
+    </div>
+
+    <div class="card pad">
+      <h3 style="font-size:15px;margin-bottom:9px">Intégrité</h3>
+      <div class="kv"><span>Messages sur disque</span><b>312</b></div>
+      <div class="kv"><span>Indexés</span><b>312</b></div>
+      <div class="kv"><span>Divergences</span><b style="color:var(--mint)">0</b></div>
+      <div class="kv"><span>Dernière reconstruction</span><b>7 août, 02:00</b></div>
+      <button class="btn sm" style="margin-top:11px">Reconstruire l'index</button>
+      <div class="note" style="margin-top:11px">
+        Reconstruire ne touche pas au disque : l'index se refait à partir des fichiers.
+        C'est ce qui rend la base jetable — et la sauvegarde par rsync honnête.
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+</div>
+</div>
+
+<script>
+  const root = document.documentElement;
+  document.getElementById('theme').addEventListener('click', () => {
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const cur = root.dataset.theme || (dark ? 'dark' : 'light');
+    root.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+  });
+  function go(id){
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === 'v'+'-'+id));
+    document.querySelectorAll('.nav').forEach(n => n.removeAttribute('aria-current'));
+    const n = document.querySelector('.nav[data-go="'+id+'"]');
+    if (n) n.setAttribute('aria-current','page');
+    scrollTo(0,0);
+  }
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-go]');
+    if (t) { go(t.dataset.go); return; }
+    if (e.target.closest('.thread')) { go('fil'); return; }
+    const sw = e.target.closest('.sw');
+    if (sw && !sw.disabled) sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') !== 'true');
+  });
+</script>
