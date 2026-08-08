@@ -5,7 +5,7 @@
 <div class="grid g3 sbf4a218">
   <div class="card stat"><div class="n">{{.Stats.Members}}</div><div class="l">membres</div></div>
   <div class="card stat"><div class="n">{{.Stats.Threads}}</div><div class="l">fils</div></div>
-  <div class="card stat"><div class="n" class="{{if .Sain}}etat-ok{{else}}etat-mauvais{{end}}">{{if .Sain}}✓{{else}}!{{end}}</div><div class="l">intégrité</div></div>
+  <div class="card stat"><div class="n {{if .Sain}}etat-ok{{else}}etat-mauvais{{end}}">{{if .Sain}}✓{{else}}!{{end}}</div><div class="l">intégrité</div></div>
 </div>
 
 <div class="grid g2">

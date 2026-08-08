@@ -267,3 +267,38 @@ func TestLaReconstructionSurvitAuxTitresEnDouble(t *testing.T) {
 		t.Errorf("apres reconstruction : %d divergents, %d absents", in.Diverging, in.Missing)
 	}
 }
+
+func TestLaReconstructionPreserveLOrigineDesFilsImportes(t *testing.T) {
+	// « LE DISQUE FAIT FOI » n'est vrai que si le disque porte TOUT. L'entete
+	// ne contenait ni `source` ni `source_ref` : apres une reconstruction, 253
+	// fils importes redevenaient des fils « humains » — et le prochain import,
+	// ne les reconnaissant plus, en aurait recree 252 en double.
+	//
+	// C'est precisement le scenario que l'index unique devait empecher, rendu
+	// possible par une reconstruction qui perdait la clef.
+	s := ouvre(t)
+	cat, uid := salon(t, s)
+	if _, _, err := s.UpsertSourced(cat, uid, "Episode 42", "corps", VisLocal,
+		"podcaster", "guid-42", 1700000000); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Reindex(); err != nil {
+		t.Fatal(err)
+	}
+	th, _ := s.Recent(10, false)
+	if len(th) != 1 {
+		t.Fatalf("%d fils", len(th))
+	}
+	if th[0].Source != "podcaster" {
+		t.Errorf("source perdue a la reconstruction : %q", th[0].Source)
+	}
+	// La preuve qui compte : un import ulterieur ne doit PAS creer de doublon.
+	cree, _, err := s.UpsertSourced(cat, uid, "Episode 42", "corps", VisLocal,
+		"podcaster", "guid-42", 1700000000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cree {
+		t.Error("l'import a recree le fil : la reference n'a pas survecu")
+	}
+}

@@ -113,19 +113,21 @@ func (s *Store) insertPost(tx *sql.Tx, threadID, authorID int64, body string, vi
 	id, _ := res.LastInsertId()
 
 	rel := filepath.Join("content", strconv.FormatInt(threadID, 10), strconv.FormatInt(id, 10)+".md")
-	var handle, catSlug, title string
+	var handle, catSlug, title, source, ref string
 	var created int64
-	if err := tx.QueryRow(`SELECT u.handle, c.slug, t.title, p.created_at
+	if err := tx.QueryRow(`SELECT u.handle, c.slug, t.title, p.created_at,
+		COALESCE(t.source,''), COALESCE(t.source_ref,'')
 		FROM posts p JOIN threads t ON t.id = p.thread_id
 		JOIN categories c ON c.id = t.category_id
 		JOIN users u ON u.id = p.author_id WHERE p.id = ?`, id).
-		Scan(&handle, &catSlug, &title, &created); err != nil {
+		Scan(&handle, &catSlug, &title, &created, &source, &ref); err != nil {
 		return 0, err
 	}
 
 	if err := writeBody(filepath.Join(s.root, rel), entete{
 		Thread: threadID, Category: catSlug, Author: handle,
 		Visibility: vis, Created: created, Title: title,
+		Source: source, Ref: ref,
 	}, body); err != nil {
 		return 0, err
 	}
@@ -206,6 +208,12 @@ type entete struct {
 	Visibility Visibility
 	Created    int64
 	Title      string
+	// Source et Ref identifient un fil venu d'un module. SANS EUX SUR LE
+	// DISQUE, une reconstruction les perd : les fils redeviennent « humains »
+	// et le prochain import, ne les reconnaissant plus, les recree en double.
+	// « Le disque fait foi » n'est vrai que si le disque porte tout.
+	Source string
+	Ref    string
 }
 
 // normaliseCorps est la SEULE definition de ce qu'est un corps.
@@ -234,6 +242,9 @@ func writeBody(abs string, h entete, body string) error {
 	// Le titre est echappe en une ligne : un titre multi-ligne casserait
 	// l'entete, et avec lui la reconstruction.
 	fmt.Fprintf(&b, "title: %s\n", strings.NewReplacer("\n", " ", "\r", " ").Replace(h.Title))
+	if h.Source != "" {
+		fmt.Fprintf(&b, "source: %s\nsource_ref: %s\n", h.Source, h.Ref)
+	}
 	b.WriteString("---\n")
 	b.WriteString(body)
 	// Ecriture atomique : un fichier a moitie ecrit serait indexe comme
@@ -295,6 +306,10 @@ func readBody(abs string) (entete, string, error) {
 				h.Created, _ = strconv.ParseInt(v, 10, 64)
 			case "title":
 				h.Title = v
+			case "source":
+				h.Source = v
+			case "source_ref":
+				h.Ref = v
 			}
 		default:
 			body.WriteString(line)
@@ -400,10 +415,16 @@ func (s *Store) Reindex() error {
 			if err != nil {
 				return err
 			}
+			var src, ref any
+			if f.h.Source != "" {
+				src, ref = f.h.Source, f.h.Ref
+			}
 			if _, err := tx.Exec(`INSERT INTO threads(id,category_id,author_id,slug,
-				title,visibility,created_at,last_post_at) VALUES(?,?,?,?,?,?,?,?)`,
+				title,visibility,source,source_ref,created_at,last_post_at)
+				VALUES(?,?,?,?,?,?,?,?,?,?)`,
 				f.h.Thread, cat, au, slug, f.h.Title,
-				string(visOr(f.h.Visibility)), f.h.Created, f.h.Created); err != nil {
+				string(visOr(f.h.Visibility)), src, ref,
+				f.h.Created, f.h.Created); err != nil {
 				return fmt.Errorf("fil %d (%s) : %w", f.h.Thread, bref(f.h.Title), err)
 			}
 		}
