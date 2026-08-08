@@ -15,7 +15,7 @@
   <div class="card stat"><div class="n sc9cd860">{{.Stats.Billets}}</div><div class="l">billets publiés</div></div>
 </div>
 <div class="card s4b54525">
-  {{range .Cats}}<a class="board" href="/c/{{.Slug}}" class="s15cb695">
+  {{range .Cats}}<a class="board s15cb695" href="/c/{{.Slug}}">
     <div class="ic sf381ae3">◆</div>
     <div><b>{{.Title}}</b><div class="d">{{.Desc}}</div></div>
     <div class="meta">{{.Threads}} fils</div>
@@ -25,7 +25,7 @@
 {{end}}
 
 <div class="card">
-  {{range .Threads}}<a class="thread" href="/t/{{.ID}}" class="s15cb695">
+  {{range .Threads}}<a class="thread s15cb695" href="/t/{{.ID}}">
     <div>
       <div class="t">{{.Title}}</div>
       <div class="sub">
