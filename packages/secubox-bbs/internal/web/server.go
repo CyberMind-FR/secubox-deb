@@ -23,6 +23,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -56,6 +57,16 @@ type Options struct {
 	JWTSecret     string
 	// BackupDir : ou deposer les archives declenchees depuis le panneau.
 	BackupDir string
+	// BanniereOrigine / BanniereHash : la banniere de sante que le WAF de la
+	// board injecte dans toutes les pages. Elle arrive APRES notre reponse, on
+	// ne peut donc pas lui poser de nonce — on l'autorise precisement, par son
+	// origine et l'empreinte exacte de son chargeur.
+	//
+	// Vides, la politique reste fermee et la banniere ne s'affiche pas. C'est
+	// le bon defaut pour une surface publique : la banniere interroge des API
+	// d'administration et revele au passage ou se trouve la console.
+	BanniereOrigine string
+	BanniereHash    string
 }
 
 type Server struct {
@@ -98,22 +109,42 @@ func New(st *store.Store, opt Options) (*Server, error) {
 }
 
 func (s *Server) Auth() *store.Auth     { return s.auth }
-func (s *Server) Handler() http.Handler { return entetes(s.mux) }
+func (s *Server) Handler() http.Handler { return s.entetes(s.mux) }
 func (s *Server) Store() *store.Store   { return s.st }
 
 // entetes : les memes en-tetes pour toute reponse, y compris les erreurs.
 //
 // Les poser dans chaque gestionnaire garantit qu'un jour l'un d'eux sera
 // oublie — et ce sera celui qui rend du contenu ecrit par un membre.
-func entetes(h http.Handler) http.Handler {
+// empreinteValide : une empreinte CSP bien formee, et rien d'autre.
+//
+// Une valeur erronee ne doit pas produire une politique invalide : un
+// navigateur qui n'arrive pas a lire la politique peut l'ignorer ENTIEREMENT,
+// ce qui est le pire resultat possible — on croit etre protege et on ne l'est
+// plus du tout.
+var empreinteValide = regexp.MustCompile(`^sha(256|384|512)-[A-Za-z0-9+/=]+$`)
+
+func (s *Server) entetes(h http.Handler) http.Handler {
+	script := "'self'"
+	connect := "'self'"
+	if o := strings.TrimSpace(s.opt.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		script += " " + o
+		connect += " " + o
+		if e := strings.TrimSpace(s.opt.BanniereHash); empreinteValide.MatchString(e) {
+			script += " '" + e + "'"
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := w.Header()
 		// La politique interdit tout script en ligne et toute origine externe.
 		// Le rendu Markdown ne peut deja pas produire de balise <script> ; ceci
 		// est la seconde barriere, celle qui tient si la premiere cede.
+		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
+		// c'est-a-dire exactement ce contre quoi elle protege.
 		hd.Set("Content-Security-Policy",
 			"default-src 'self'; img-src 'self' data:; style-src 'self'; "+
-				"script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+				"script-src "+script+"; connect-src "+connect+"; "+
+				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("X-Frame-Options", "DENY")
