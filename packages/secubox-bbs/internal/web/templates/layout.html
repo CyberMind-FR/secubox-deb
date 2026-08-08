@@ -1,6 +1,20 @@
 {{define "layout"}}<!doctype html><html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Titre}} — {{.Site}}</title>
+<!-- La banniere de sante du WAF ne s'affiche PAS ici, et c'est voulu.
+
+     Ce vhost est la surface MEMBRE, ouverte au public. La banniere interroge
+     des API d'administration et revele au passage ou se trouve la console —
+     du bruit pour un lecteur, une indication pour qui cherche.
+
+     Elle s'inserait en « mode barre laterale » et recouvrait la colonne de
+     droite. Autoriser ses deux empreintes reglait l'affichage mais laissait la
+     banniere sur une page publique, et liait notre politique a sa version : a
+     chaque mise a jour de sbxwaf, les empreintes auraient derive.
+
+     Ce refus la ecarte la banniere A LA SOURCE. La politique redevient
+     strictement fermee : aucune origine externe, aucune empreinte a suivre. -->
+<meta name="sbx-no-health-banner">
 <link rel="stylesheet" href="/static/bbs.css">
 </head><body>
 <div class="shell">
