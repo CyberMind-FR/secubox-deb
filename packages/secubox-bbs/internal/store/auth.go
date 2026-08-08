@@ -269,18 +269,20 @@ func (s *Store) UserByHandle(handle string) (int64, error) {
 
 // UserInfo : ce qu'il faut pour afficher un bandeau, rien de plus.
 type UserInfo struct {
-	ID      int64
-	Handle  string
-	Display string
-	Role    Role
+	ID        int64
+	Handle    string
+	Display   string
+	Role      Role
+	LastLogin int64
 }
 
 func (s *Store) UserInfo(id int64) (UserInfo, error) {
 	var u UserInfo
 	var role string
 	err := s.db.QueryRow(
-		`SELECT id, handle, display_name, role FROM users
-		 WHERE id = ? AND disabled_at IS NULL`, id).Scan(&u.ID, &u.Handle, &u.Display, &role)
+		`SELECT id, handle, display_name, role, COALESCE(last_login_at,0) FROM users
+		 WHERE id = ? AND disabled_at IS NULL`, id).
+		Scan(&u.ID, &u.Handle, &u.Display, &role, &u.LastLogin)
 	u.Role = Role(role)
 	return u, err
 }
@@ -290,4 +292,99 @@ func (s *Store) CloseSession(token string) error {
 	sum := sha256.Sum256([]byte(token))
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE token_sha256 = ?`, sum[:])
 	return err
+}
+
+// ChangePassword remplace un mot de passe APRES verification de l'ancien.
+//
+// La session prouve qu'on est entre ; elle ne prouve pas qu'on est le
+// titulaire. Sans cette verification, un navigateur laisse ouvert suffit a
+// verrouiller le compte de son proprietaire.
+func (a *Auth) ChangePassword(userID int64, ancien, nouveau string) error {
+	if !a.Verify(userID, ancien) {
+		return errors.New("mot de passe actuel incorrect")
+	}
+	// Longueur plutot que regles de composition : une phrase longue resiste
+	// mieux qu'un mot court decore de symboles, et ne finit pas sur un post-it.
+	if len(nouveau) < 12 {
+		return errors.New("nouveau mot de passe trop court — 12 caracteres au minimum")
+	}
+	if nouveau == ancien {
+		return errors.New("le nouveau mot de passe est identique a l'ancien")
+	}
+	return a.SetPassword(userID, nouveau)
+}
+
+// RevokeOtherSessions ferme toutes les sessions SAUF celle qui agit.
+//
+// On change son mot de passe surtout quand on craint qu'il ait fuite. Laisser
+// vivre les sessions ouvertes ailleurs viderait le geste de son sens : celui
+// qui detient le mot de passe vole resterait connecte.
+//
+// La session courante SURVIT : la revoquer deconnecterait l'utilisateur au
+// moment ou il vient de faire ce qu'il fallait.
+func (s *Store) RevokeOtherSessions(userID int64, garder string) error {
+	sum := sha256.Sum256([]byte(garder))
+	_, err := s.db.Exec(
+		`DELETE FROM sessions WHERE user_id = ? AND token_sha256 <> ?`, userID, sum[:])
+	return err
+}
+
+// NoteLogin enregistre une connexion reussie.
+//
+// UNE seule adresse est conservee, pas un historique : garder la trace de tous
+// les acces d'un membre serait une surveillance que personne n'a demandee, et
+// ferait de cette base une cible.
+func (s *Store) NoteLogin(userID int64, ip string) error {
+	if i := strings.LastIndexByte(ip, ':'); i > 0 && strings.Count(ip, ":") == 1 {
+		ip = ip[:i] // retirer le port, sans casser une adresse IPv6
+	}
+	_, err := s.db.Exec(
+		`UPDATE users SET last_login_at = unixepoch(), last_login_ip = ? WHERE id = ?`,
+		ip, userID)
+	return err
+}
+
+// EnableUser reactive un compte. Desactiver doit rester REVERSIBLE, sinon
+// personne n'ose desactiver et les comptes s'accumulent.
+func (s *Store) EnableUser(userID int64) error {
+	_, err := s.db.Exec(`UPDATE users SET disabled_at = NULL WHERE id = ?`, userID)
+	return err
+}
+
+// Compte : ce qu'une console d'administration a besoin de montrer.
+// Aucun element d'authentification n'y figure, meme tronque.
+type Compte struct {
+	ID        int64
+	Handle    string
+	Display   string
+	Role      Role
+	Disabled  bool
+	LastLogin int64
+	LastIP    string
+	Sessions  int
+	CreatedAt int64
+}
+
+func (s *Store) Users() ([]Compte, error) {
+	rows, err := s.db.Query(`SELECT u.id, u.handle, u.display_name, u.role,
+		u.disabled_at IS NOT NULL, COALESCE(u.last_login_at,0), COALESCE(u.last_login_ip,''),
+		(SELECT count(*) FROM sessions x WHERE x.user_id = u.id AND x.expires_at > unixepoch()),
+		u.created_at
+		FROM users u ORDER BY u.disabled_at IS NOT NULL, u.handle`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Compte
+	for rows.Next() {
+		var c Compte
+		var role string
+		if err := rows.Scan(&c.ID, &c.Handle, &c.Display, &role, &c.Disabled,
+			&c.LastLogin, &c.LastIP, &c.Sessions, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		c.Role = Role(role)
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }

@@ -37,6 +37,8 @@ type page struct {
 	Integ                     store.Integrity
 	Sain                      bool
 	Runs                      []store.IngestRun
+	Comptes                   []store.Compte
+	Moi                       store.Compte
 }
 
 type postView struct {
@@ -65,6 +67,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/nouveau", s.nouveau)
 	s.mux.HandleFunc("/sysop", s.sysop)
 	s.mux.HandleFunc("/sysop/", s.sysopAction)
+	s.mux.HandleFunc("/sysop/qr", s.qr)
+	s.mux.HandleFunc("/compte", s.compte)
+	s.mux.HandleFunc("/compte/", s.compteAction)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -250,6 +255,7 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 		s.rend(w, r, "login", p)
 		return
 	}
+	s.st.NoteLogin(id, r.RemoteAddr)
 	jeton, err := s.st.NewSession(id, r.RemoteAddr, r.UserAgent())
 	if err != nil {
 		p.Err = "Session impossible."
@@ -532,8 +538,9 @@ func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
 	p.Code = r.URL.Query().Get("code")
 	p.Msg = r.URL.Query().Get("msg")
 	p.Integ, _ = s.st.Integrity()
-	p.Sain = p.Integ.Diverging == 0 && p.Integ.Missing == 0
+	p.Sain = p.Integ.Diverging == 0 && p.Integ.Missing == 0 && p.Integ.Unreadable == 0
 	p.Runs, _ = s.st.IngestRuns(12)
+	p.Comptes, _ = s.st.Users()
 	s.rend(w, r, "sysop", p)
 }
 
@@ -561,6 +568,30 @@ func (s *Server) sysopAction(w http.ResponseWriter, r *http.Request) {
 		// Le code passe par l'adresse UNE fois, pour etre affiche. Il n'est
 		// stocke nulle part en clair — ni en base, ni en session.
 		http.Redirect(w, r, "/sysop?code="+url.QueryEscape(code), http.StatusSeeOther)
+	case "compte":
+		var id int64
+		fmt.Sscanf(r.PostFormValue("id"), "%d", &id)
+		var err error
+		msg := ""
+		switch r.PostFormValue("action") {
+		case "disable":
+			// SE DESACTIVER SOI-MEME est refuse : le dernier sysop se
+			// fermerait la porte, et il faudrait alors passer par la ligne de
+			// commande sur la board pour rouvrir.
+			if id == v.ID {
+				msg = "vous ne pouvez pas desactiver votre propre compte"
+			} else {
+				err, msg = s.st.DisableUser(id), "compte desactive"
+			}
+		case "enable":
+			err, msg = s.st.EnableUser(id), "compte reactive"
+		default:
+			msg = "action inconnue"
+		}
+		if err != nil {
+			msg = "echec : " + err.Error()
+		}
+		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 	case "reindex":
 		msg := "index reconstruit"
 		if err := s.st.Reindex(); err != nil {
@@ -574,6 +605,72 @@ func (s *Server) sysopAction(w http.ResponseWriter, r *http.Request) {
 			msg = "sauvegarde impossible : " + err.Error()
 		}
 		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+// compte : la page d'un membre sur lui-meme.
+func (s *Server) compte(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	p, _ := s.base(r, "compte")
+	p.Titre = "Mon compte"
+	p.Msg = r.URL.Query().Get("msg")
+	p.Err = r.URL.Query().Get("err")
+	// On ne lit QUE son propre compte : la liste complete est reservee a la
+	// console sysop.
+	if cs, err := s.st.Users(); err == nil {
+		for _, c := range cs {
+			if c.ID == v.ID {
+				p.Moi = c
+			}
+		}
+	}
+	s.rend(w, r, "compte", p)
+}
+
+func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	jeton := ""
+	if c, err := r.Cookie(cookieSession); err == nil {
+		jeton = c.Value
+	}
+
+	switch strings.TrimPrefix(r.URL.Path, "/compte/") {
+	case "motdepasse":
+		err := s.auth.ChangePassword(v.ID,
+			r.PostFormValue("ancien"), r.PostFormValue("nouveau"))
+		if err != nil {
+			http.Redirect(w, r, "/compte?err="+url.QueryEscape(err.Error()),
+				http.StatusSeeOther)
+			return
+		}
+		// Le changement FERME les autres sessions. On change son mot de passe
+		// surtout quand on craint qu'il ait fuite ; laisser vivre les sessions
+		// ouvertes ailleurs viderait le geste de son sens.
+		s.st.RevokeOtherSessions(v.ID, jeton)
+		http.Redirect(w, r, "/compte?msg="+url.QueryEscape(
+			"mot de passe change — vos autres sessions ont ete fermees"), http.StatusSeeOther)
+	case "sessions":
+		s.st.RevokeOtherSessions(v.ID, jeton)
+		http.Redirect(w, r, "/compte?msg="+url.QueryEscape("autres sessions fermees"),
+			http.StatusSeeOther)
 	default:
 		http.NotFound(w, r)
 	}

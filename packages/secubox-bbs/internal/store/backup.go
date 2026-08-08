@@ -140,7 +140,13 @@ func estExclu(rel string) bool {
 // pas le jour de la restauration.
 type Integrity struct {
 	OnDisk, Indexed, Diverging, Missing int
-	Details                             []string
+	// Unreadable est distinct de Diverging. « Divergent » veut dire que le
+	// contenu ne correspond plus a l'index ; un fichier qu'on ne peut pas
+	// OUVRIR est un probleme de droits. Confondre les deux envoie chercher une
+	// corruption la ou il n'y a qu'un droit manquant — ce qui est arrive : la
+	// console annoncait 252 divergents pour 252 fichiers illisibles.
+	Unreadable int
+	Details    []string
 }
 
 func (s *Store) Integrity() (Integrity, error) {
@@ -165,6 +171,12 @@ func (s *Store) Integrity() (Integrity, error) {
 		}
 		r.OnDisk++
 		if _, err := s.Body(p); err != nil {
+			if os.IsPermission(err) {
+				r.Unreadable++
+				r.Details = append(r.Details,
+					"illisible (droits) : "+rel+" — verifiez le proprietaire")
+				continue
+			}
 			r.Diverging++
 			r.Details = append(r.Details, err.Error())
 		}

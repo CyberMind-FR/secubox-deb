@@ -129,7 +129,7 @@ func (s *Store) insertPost(tx *sql.Tx, threadID, authorID int64, body string, vi
 	}, body); err != nil {
 		return 0, err
 	}
-	sum := sha256.Sum256([]byte(body))
+	sum := sha256.Sum256([]byte(normaliseCorps(body)))
 	if _, err := tx.Exec(`UPDATE posts SET body_path = ?, body_sha256 = ? WHERE id = ?`,
 		rel, sum[:], id); err != nil {
 		return 0, err
@@ -208,7 +208,22 @@ type entete struct {
 	Title      string
 }
 
+// normaliseCorps est la SEULE definition de ce qu'est un corps.
+//
+// L'empreinte etait calculee sur le texte recu, mais la lecture retirait le
+// saut de ligne final — les passerelles, qui ajoutent un lien en fin de corps,
+// produisaient donc 186 messages annonces « divergents » sans que rien n'ait
+// diverge. Une alerte d'integrite qui crie au loup est pire qu'une absence
+// d'alerte : on cesse de la lire, et le jour ou elle a raison, personne ne
+// regarde.
+//
+// Ecriture, lecture et empreinte passent desormais toutes par ici.
+func normaliseCorps(s string) string {
+	return strings.TrimRight(strings.ReplaceAll(s, "\r\n", "\n"), "\n \t")
+}
+
 func writeBody(abs string, h entete, body string) error {
+	body = normaliseCorps(body)
 	if err := os.MkdirAll(filepath.Dir(abs), 0o750); err != nil {
 		return err
 	}
@@ -228,7 +243,17 @@ func writeBody(abs string, h entete, body string) error {
 	if err := os.WriteFile(tmp, []byte(b.String()), 0o640); err != nil {
 		return err
 	}
-	return os.Rename(tmp, abs)
+	if err := os.Rename(tmp, abs); err != nil {
+		return err
+	}
+	// MEME CAUSE QUE POUR LA BASE ET LES HASHES : l'outil d'administration
+	// tourne en root, le service sous son propre compte. `bbsctl ingest` a
+	// ainsi ecrit 252 corps de messages appartenant a root, que le service ne
+	// pouvait plus lire — la console signalait « 252 divergents » alors que
+	// rien n'avait diverge : les fichiers etaient simplement illisibles.
+	//
+	// Le repertoire, lui, appartient deja au bon compte ; on s'aligne sur lui.
+	return adopteProprietaireDuDossier(abs)
 }
 
 func readBody(abs string) (entete, string, error) {
@@ -282,7 +307,7 @@ func readBody(abs string) (entete, string, error) {
 	if state != 2 {
 		return h, "", fmt.Errorf("%s : entete non terminee", filepath.Base(abs))
 	}
-	return h, strings.TrimSuffix(body.String(), "\n"), nil
+	return h, normaliseCorps(body.String()), nil
 }
 
 // ── reconstruction ──────────────────────────────────────────────────────────
@@ -358,13 +383,31 @@ func (s *Store) Reindex() error {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO threads(id,category_id,author_id,slug,
-			title,visibility,created_at,last_post_at) VALUES(?,?,?,?,?,?,?,?)`,
-			f.h.Thread, cat, au, slugify(f.h.Title), f.h.Title,
-			string(visOr(f.h.Visibility)), f.h.Created, f.h.Created); err != nil {
-			return err
+		// PAS d'`INSERT OR IGNORE` ICI.
+		//
+		// Le slug est unique par salon. Des fils importes partagent souvent un
+		// titre — 186 sur cette board — donc le meme slug. `OR IGNORE` sautait
+		// alors le fil EN SILENCE, et le message qui suivait referencait un fil
+		// inexistant : la reconstruction echouait sur une clef etrangere, en
+		// annoncant un probleme d'integrite la ou il n'y avait qu'une collision
+		// de nom.
+		//
+		// On demande un slug libre, comme a la creation. Et on n'ignore rien :
+		// une erreur ici doit remonter.
+		if deja := 0; tx.QueryRow(`SELECT count(*) FROM threads WHERE id = ?`,
+			f.h.Thread).Scan(&deja) == nil && deja == 0 {
+			slug, err := slugLibre(tx, cat, slugify(f.h.Title))
+			if err != nil {
+				return err
+			}
+			if _, err := tx.Exec(`INSERT INTO threads(id,category_id,author_id,slug,
+				title,visibility,created_at,last_post_at) VALUES(?,?,?,?,?,?,?,?)`,
+				f.h.Thread, cat, au, slug, f.h.Title,
+				string(visOr(f.h.Visibility)), f.h.Created, f.h.Created); err != nil {
+				return fmt.Errorf("fil %d (%s) : %w", f.h.Thread, bref(f.h.Title), err)
+			}
 		}
-		sum := sha256.Sum256([]byte(f.body))
+		sum := sha256.Sum256([]byte(normaliseCorps(f.body)))
 		if _, err := tx.Exec(`INSERT INTO posts(id,thread_id,author_id,body_path,
 			body_sha256,visibility,created_at) VALUES(?,?,?,?,?,?,?)`,
 			f.post, f.h.Thread, au, f.rel, sum[:], string(visOr(f.h.Visibility)),
@@ -456,3 +499,10 @@ func slugify(s string) string {
 }
 
 func nowUnix() int64 { return time.Now().Unix() }
+
+func bref(s string) string {
+	if len(s) > 40 {
+		return s[:40] + "…"
+	}
+	return s
+}

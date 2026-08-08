@@ -4,28 +4,28 @@
   <p>{{if .Cat.Desc}}{{.Cat.Desc}}{{else}}
     {{if .V.Connecte}}Tout ce qui s'écrit ici. Le badge dit d'où vient chaque fil.
     {{else}}Ce qui est ouvert au public. Les membres voient davantage.{{end}}{{end}}</p>
-</div>{{if .V.Connecte}}<div class="row" style="margin-left:auto">
+</div>{{if .V.Connecte}}<div class="row sca6fc03">
   <a class="btn primary" href="/nouveau{{if .Cat.Slug}}?c={{.Cat.Slug}}{{end}}">＋ Nouveau fil</a>
 </div>{{end}}</div>
 
 {{if not .Cat.Title}}
-<div class="grid g3" style="margin-bottom:16px">
+<div class="grid g3 sbf4a218">
   <div class="card stat"><div class="n">{{.Stats.Threads}}</div><div class="l">fils</div></div>
   <div class="card stat"><div class="n">{{.Stats.Posts}}</div><div class="l">messages</div></div>
-  <div class="card stat"><div class="n" style="color:var(--pink)">{{.Stats.Billets}}</div><div class="l">billets publiés</div></div>
+  <div class="card stat"><div class="n sc9cd860">{{.Stats.Billets}}</div><div class="l">billets publiés</div></div>
 </div>
-<div class="card" style="margin-bottom:18px">
-  {{range .Cats}}<a class="board" href="/c/{{.Slug}}" style="text-decoration:none;color:inherit">
-    <div class="ic" style="--bs:var(--sky-soft);--bc:var(--sky)">◆</div>
+<div class="card s4b54525">
+  {{range .Cats}}<a class="board" href="/c/{{.Slug}}" class="s15cb695">
+    <div class="ic sf381ae3">◆</div>
     <div><b>{{.Title}}</b><div class="d">{{.Desc}}</div></div>
     <div class="meta">{{.Threads}} fils</div>
-  </a>{{else}}<div class="pad" style="color:var(--dim)">Aucun salon pour l'instant.</div>{{end}}
+  </a>{{else}}<div class="pad sb0455c2">Aucun salon pour l'instant.</div>{{end}}
 </div>
-<h3 style="font-size:14px;margin-bottom:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Derniers fils</h3>
+<h3 class="s24a7a9f">Derniers fils</h3>
 {{end}}
 
 <div class="card">
-  {{range .Threads}}<a class="thread" href="/t/{{.ID}}" style="text-decoration:none;color:inherit">
+  {{range .Threads}}<a class="thread" href="/t/{{.ID}}" class="s15cb695">
     <div>
       <div class="t">{{.Title}}</div>
       <div class="sub">
@@ -37,7 +37,7 @@
     </div>
     <div class="cnt">{{date .LastPostAt}}</div>
   </a>{{else}}
-  <div class="pad" style="color:var(--dim)">
+  <div class="pad sb0455c2">
     {{if .V.Connecte}}Aucun fil ici pour l'instant.
     {{else}}Rien de public pour l'instant. Les membres connectés en voient davantage.{{end}}
   </div>
@@ -45,7 +45,7 @@
 </div>
 
 {{if not .V.Connecte}}
-<div class="note v" style="margin-top:16px">
+<div class="note v s92c18f6">
   <b>Vous voyez la partie publique.</b>
   Les fils locaux ne sont ni listés ici, ni accessibles par leur adresse.
   L'inscription se fait sur invitation.

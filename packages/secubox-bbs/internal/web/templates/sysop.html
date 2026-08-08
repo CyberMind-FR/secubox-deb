@@ -2,53 +2,95 @@
 <div class="ph"><div><h1 class="serif">Console sysop</h1>
 <p>Inscription sur invitation. Comptes désactivés, jamais supprimés.</p></div></div>
 
-<div class="grid g3" style="margin-bottom:16px">
+<div class="grid g3 sbf4a218">
   <div class="card stat"><div class="n">{{.Stats.Members}}</div><div class="l">membres</div></div>
   <div class="card stat"><div class="n">{{.Stats.Threads}}</div><div class="l">fils</div></div>
-  <div class="card stat"><div class="n" style="color:{{if .Sain}}var(--mint){{else}}var(--coral){{end}}">{{if .Sain}}✓{{else}}!{{end}}</div><div class="l">intégrité</div></div>
+  <div class="card stat"><div class="n" class="{{if .Sain}}etat-ok{{else}}etat-mauvais{{end}}">{{if .Sain}}✓{{else}}!{{end}}</div><div class="l">intégrité</div></div>
 </div>
 
 <div class="grid g2">
   <div class="card pad">
-    <h3 style="font-size:15px;margin-bottom:9px">Invitations</h3>
+    <h3 class="s7b1eb4e">Invitations</h3>
     {{if .Code}}
       <div class="note m"><b>Code émis — il n'est affiché qu'une fois.</b>
-        <div class="mono" style="margin-top:6px;word-break:break-all;font-size:13px">{{.Code}}</div>
-        <div style="margin-top:6px;font-size:12px">Adresse à transmettre&nbsp;:
-          <span class="mono">/invite/{{.Code}}</span></div>
+        <div class="row s381c37d">
+          <img src="/sysop/qr?code={{.Code}}" alt="Code QR de l'invitation"
+               width="150" height="150"
+               class="s39203eb">
+          <div class="s43459be">
+            <div class="mono s63eb706">{{.Code}}</div>
+            <div class="s51eedcb">Adresse&nbsp;:
+              <span class="mono">/invite/{{.Code}}</span></div>
+            <div class="s883d028">
+              Le code QR porte cette invitation à usage unique. Ni lui ni la
+              page ne sont mis en cache.</div>
+          </div>
+        </div>
       </div>
     {{end}}
-    <form method="post" action="/sysop/invite" style="margin-top:10px">
+    <form method="post" action="/sysop/invite" class="sdf92814">
       <input type="hidden" name="csrf" value="{{.V.CSRF}}">
       <button class="btn primary" type="submit">Émettre une invitation</button>
     </form>
-    <div class="note" style="margin-top:11px">
+    <div class="note sf9f81af">
       Seule l'empreinte du code est conservée : ni un listing ultérieur, ni une
       lecture de la base ne permettent de le retrouver.
     </div>
   </div>
 
   <div class="card pad">
-    <h3 style="font-size:15px;margin-bottom:9px">Intégrité</h3>
+    <h3 class="s7b1eb4e">Intégrité</h3>
     <div class="kv"><span>Messages indexés</span><b>{{.Integ.Indexed}}</b></div>
     <div class="kv"><span>Présents sur le disque</span><b>{{.Integ.OnDisk}}</b></div>
-    <div class="kv"><span>Divergents</span><b style="color:{{if .Integ.Diverging}}var(--coral){{else}}var(--mint){{end}}">{{.Integ.Diverging}}</b></div>
-    <div class="kv"><span>Absents du disque</span><b style="color:{{if .Integ.Missing}}var(--coral){{else}}var(--mint){{end}}">{{.Integ.Missing}}</b></div>
-    {{range .Integ.Details}}<div class="note" style="margin-top:8px;font-size:12px">{{.}}</div>{{end}}
-    <div class="row" style="margin-top:11px">
+    <div class="kv"><span>Divergents</span><b class="{{if .Integ.Diverging}}etat-mauvais{{else}}etat-ok{{end}}">{{.Integ.Diverging}}</b></div>
+    <div class="kv"><span>Illisibles (droits)</span><b class="{{if .Integ.Unreadable}}etat-attention{{else}}etat-ok{{end}}">{{.Integ.Unreadable}}</b></div>
+    <div class="kv"><span>Absents du disque</span><b class="{{if .Integ.Missing}}etat-mauvais{{else}}etat-ok{{end}}">{{.Integ.Missing}}</b></div>
+    {{range .Integ.Details}}<div class="note s8bad342">{{.}}</div>{{end}}
+    <div class="row sf9f81af">
       <form method="post" action="/sysop/reindex"><input type="hidden" name="csrf" value="{{.V.CSRF}}">
         <button class="btn sm" type="submit">Reconstruire l'index</button></form>
       <form method="post" action="/sysop/backup"><input type="hidden" name="csrf" value="{{.V.CSRF}}">
         <button class="btn sm" type="submit">Sauvegarder</button></form>
     </div>
-    <div class="note" style="margin-top:11px">
+    <div class="note sf9f81af">
       Reconstruire ne touche pas au disque : l'index se refait à partir des
       fichiers. C'est ce qui rend la base jetable.
     </div>
   </div>
 </div>
 
-<h3 style="font-size:14px;margin:22px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Passerelles</h3>
+<h3 class="sbe9c346">Comptes</h3>
+<div class="card tw s42a6ced">
+  <table>
+    <thead><tr><th>Compte</th><th>Rôle</th><th>Dernière connexion</th><th>Sessions</th><th></th></tr></thead>
+    <tbody>
+    {{range .Comptes}}<tr{{if .Disabled}} class="s4430722"{{end}}>
+      <td><b>{{.Handle}}</b>{{if .Disabled}} <span class="pill p-local">désactivé</span>{{end}}</td>
+      <td>{{if eq .Role "sysop"}}<span class="pill p-warn">sysop</span>{{else}}membre{{end}}</td>
+      <td>{{if .LastLogin}}{{date .LastLogin}}{{if .LastIP}} · <span class="mono s33ee298">{{.LastIP}}</span>{{end}}{{else}}<span class="sb0455c2">jamais</span>{{end}}</td>
+      <td class="num">{{.Sessions}}</td>
+      <td class="s5f32656">
+        <form method="post" action="/sysop/compte" class="s6b8b63d">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          {{if .Disabled}}
+            <button class="btn sm" name="action" value="enable" type="submit">Réactiver</button>
+          {{else}}
+            <button class="btn sm" name="action" value="disable" type="submit">Désactiver</button>
+          {{end}}
+        </form>
+      </td>
+    </tr>{{end}}
+    </tbody>
+  </table>
+</div>
+<div class="note s4b54525">
+  <b>Désactiver, jamais supprimer.</b> Supprimer un compte emporterait
+  l'attribution de ses écrits et trouerait les fils. La désactivation ferme
+  aussi ses sessions en cours, et reste réversible.
+</div>
+
+<h3 class="sbe9c346">Passerelles</h3>
 <div class="card tw">
   <table>
     <thead><tr><th>Source</th><th>Quand</th><th>Vus</th><th>Créés</th><th>Ignorés</th></tr></thead>
@@ -57,9 +99,9 @@
       <td><span class="pill p-src">{{.Source}}</span></td>
       <td>{{date .RanAt}}</td>
       <td class="num">{{.Seen}}</td><td class="num">{{.Created}}</td><td class="num">{{.Skipped}}</td>
-    </tr>{{else}}<tr><td colspan="5" style="color:var(--dim)">Aucun import enregistré.</td></tr>{{end}}
+    </tr>{{else}}<tr><td colspan="5" class="sb0455c2">Aucun import enregistré.</td></tr>{{end}}
     </tbody>
   </table>
 </div>
-{{if .Msg}}<div class="note m" style="margin-top:14px"><b>{{.Msg}}</b></div>{{end}}
+{{if .Msg}}<div class="note m sc53ea1d"><b>{{.Msg}}</b></div>{{end}}
 {{end}}

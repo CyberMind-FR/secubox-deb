@@ -1,21 +1,21 @@
 {{define "corps"}}
-<div class="crumb"><a href="/" style="color:inherit">Forums</a> › <a href="/c/{{.Cat.Slug}}" style="color:inherit">{{.Cat.Title}}</a></div>
+<div class="crumb"><a href="/" class="se2e86c5">Forums</a> › <a href="/c/{{.Cat.Slug}}" class="se2e86c5">{{.Cat.Title}}</a></div>
 <div class="ph"><div>
-  <h1 class="serif" style="font-size:23px">{{.T.Title}}</h1>
+  <h1 class="serif se3ffd0e">{{.T.Title}}</h1>
   <p>
     {{if eq .T.Visibility "public"}}<span class="pill p-pub">fil public</span>{{else}}<span class="pill p-local">fil local</span>{{end}}
     {{if .T.Published}}<span class="pill p-billet">✦ publié en billet</span>{{end}}
     ouvert par {{.T.Author}}
   </p>
 </div>
-{{if .V.Sysop}}<div class="row" style="margin-left:auto">
+{{if .V.Sysop}}<div class="row sca6fc03">
   {{if eq .T.Visibility "public"}}
     {{if .T.Published}}
       <a class="btn sm" href="{{.T.Published}}">Voir le billet</a>
     {{else}}
-      <form method="post" action="/t/{{.T.ID}}/publier" class="row" style="gap:8px">
+      <form method="post" action="/t/{{.T.ID}}/publier" class="row s491198d">
         <input type="hidden" name="csrf" value="{{.V.CSRF}}">
-        <label style="font-size:11.5px;color:var(--dim)" title="Par défaut, les pseudonymes ne sont pas publiés">
+        <label class="s3608041" title="Par défaut, les pseudonymes ne sont pas publiés">
           <input type="checkbox" name="attribuer" value="1"> nommer les auteurs</label>
         <button class="btn sm pinkish" type="submit">✦ Publier en billet</button>
       </form>
@@ -41,7 +41,7 @@
 </div>
 
 {{if .V.Connecte}}
-<h3 style="font-size:14px;margin:20px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Répondre</h3>
+<h3 class="sab2784b">Répondre</h3>
 <form method="post" action="/t/{{.T.ID}}/reply">
 <input type="hidden" name="csrf" value="{{.V.CSRF}}">
 <div class="editor">
@@ -56,10 +56,10 @@
     <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
   </div>
   <textarea name="body" class="area" rows="6" required
-            style="width:100%;border:0;outline:none;background:none;color:inherit;font:inherit;resize:vertical"
+            class="se78b7e7"
             placeholder="Écrivez ici…"></textarea>
   <div class="foot">
-    <span style="font-size:12.5px;color:var(--dim)">Visibilité&nbsp;:</span>
+    <span class="sdf3b93c">Visibilité&nbsp;:</span>
     {{if eq .T.Visibility "public"}}
       <label class="btn sm"><input type="radio" name="visibility" value="local" checked> Local</label>
       <label class="btn sm"><input type="radio" name="visibility" value="public"> Public</label>
@@ -67,16 +67,16 @@
       <input type="hidden" name="visibility" value="local">
       <span class="pill p-local">local — le fil ne sort pas</span>
     {{end}}
-    <div style="margin-left:auto" class="row"><button class="btn primary" type="submit">Envoyer</button></div>
+    <div class="row sca6fc03"><button class="btn primary" type="submit">Envoyer</button></div>
   </div>
 </div>
 </form>
-<div class="note m" style="margin-top:14px">
+<div class="note m sc53ea1d">
   <b>Ce que vous écrivez devient un fichier.</b>
   Le message part sur le disque en Markdown ; la base ne fait que l'indexer.
 </div>
 <script src="/static/editeur.js" defer></script>
 {{else}}
-<div class="note v" style="margin-top:18px"><b>Connectez-vous pour répondre.</b> L'inscription se fait sur invitation.</div>
+<div class="note v s2bdf8e4"><b>Connectez-vous pour répondre.</b> L'inscription se fait sur invitation.</div>
 {{end}}
 {{end}}

@@ -210,3 +210,60 @@ func TestUneEnteteAbimeeRetombeSurLocal(t *testing.T) {
 		t.Errorf("%d message(s) exposes depuis une entete illisible", len(pub))
 	}
 }
+
+func TestUnCorpsTerminantParUneLigneVideNeDivergePas(t *testing.T) {
+	s := ouvre(t)
+	cat, uid := salon(t, s)
+	// Les passerelles ajoutent un lien en fin de corps, donc un saut de ligne
+	// final. La lecture le retirait alors que l'empreinte avait ete calculee
+	// AVEC : 186 messages importes etaient annonces « divergents » sans que
+	// rien n'ait diverge. Une alerte d'integrite qui crie au loup est pire
+	// qu'une absence d'alerte — on cesse de la lire.
+	th, err := s.NewThread(cat, uid, "Fil", "un corps\n\n[Voir chez billets](https://b/x)\n", VisPublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts, _ := s.PostsOf(th)
+	if _, err := s.Body(posts[0]); err != nil {
+		t.Errorf("corps declare divergent alors qu'il ne l'est pas : %v", err)
+	}
+	in, _ := s.Integrity()
+	if in.Diverging != 0 {
+		t.Errorf("%d divergents", in.Diverging)
+	}
+}
+
+func TestLaReconstructionSurvitAuxTitresEnDouble(t *testing.T) {
+	// LA GARANTIE CENTRALE DU PROJET tombait sur la vraie base : 186 fils
+	// importes partageant un titre entraient en collision de slug, le fil etait
+	// SILENCIEUSEMENT ignore par un `INSERT OR IGNORE`, puis son message
+	// referencait un fil inexistant — « FOREIGN KEY constraint failed ».
+	//
+	// Le test d'origine reconstruisait deux fils aux titres distincts : il ne
+	// pouvait pas voir le probleme. Troisieme fois qu'`INSERT OR IGNORE` cache
+	// un echec dans ce paquet.
+	s := ouvre(t)
+	cat, uid := salon(t, s)
+	for i, ref := range []string{"a", "b", "c"} {
+		if _, _, err := s.UpsertSourced(cat, uid, "Retrouvez le podcast",
+			"corps "+ref, VisPublic, "billets", ref, int64(1700000000+i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	avant, _ := s.Recent(50, false)
+	if len(avant) != 3 {
+		t.Fatalf("%d fils avant", len(avant))
+	}
+
+	if err := s.Reindex(); err != nil {
+		t.Fatalf("reconstruction impossible : %v", err)
+	}
+	apres, _ := s.Recent(50, false)
+	if len(apres) != 3 {
+		t.Fatalf("%d fils apres reconstruction, attendu 3", len(apres))
+	}
+	in, _ := s.Integrity()
+	if in.Diverging != 0 || in.Missing != 0 {
+		t.Errorf("apres reconstruction : %d divergents, %d absents", in.Diverging, in.Missing)
+	}
+}

@@ -221,3 +221,36 @@ func TestLaBaseEtSesJournauxRestentEcrivablesParLeService(t *testing.T) {
 		t.Fatalf("creation de session impossible : %v", err)
 	}
 }
+
+func TestUnCorpsIllisibleEstSignaleCommeTelPasCommeDivergent(t *testing.T) {
+	// « Divergent » veut dire « le contenu ne correspond plus a l'index ».
+	// Un fichier qu'on ne peut pas OUVRIR est un probleme different — de
+	// permissions — et le confondre avec une divergence envoie chercher une
+	// corruption la ou il n'y a qu'un droit manquant.
+	//
+	// C'est exactement ce qui s'est produit : la console annoncait « 252
+	// divergents » pour 252 fichiers simplement illisibles.
+	s := ouvre(t)
+	cat, uid := salon(t, s)
+	s.NewThread(cat, uid, "Fil", "corps", VisLocal)
+	posts, _ := s.PostsOf(1)
+	p := filepath.Join(s.root, posts[0].BodyPath)
+	if err := os.Chmod(p, 0o000); err != nil {
+		t.Skip("impossible de retirer les droits sur cette machine")
+	}
+	defer os.Chmod(p, 0o640)
+	if os.Geteuid() == 0 {
+		t.Skip("root lit tout — ce test n'a de sens que sans privileges")
+	}
+
+	in, err := s.Integrity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Unreadable != 1 {
+		t.Errorf("%d illisibles, attendu 1", in.Unreadable)
+	}
+	if in.Diverging != 0 {
+		t.Errorf("%d divergents — un fichier illisible est compte comme corrompu", in.Diverging)
+	}
+}
