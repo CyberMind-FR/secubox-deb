@@ -1,0 +1,65 @@
+{{define "corps"}}
+<div class="ph"><div><h1 class="serif">Console sysop</h1>
+<p>Inscription sur invitation. Comptes désactivés, jamais supprimés.</p></div></div>
+
+<div class="grid g3" style="margin-bottom:16px">
+  <div class="card stat"><div class="n">{{.Stats.Members}}</div><div class="l">membres</div></div>
+  <div class="card stat"><div class="n">{{.Stats.Threads}}</div><div class="l">fils</div></div>
+  <div class="card stat"><div class="n" style="color:{{if .Sain}}var(--mint){{else}}var(--coral){{end}}">{{if .Sain}}✓{{else}}!{{end}}</div><div class="l">intégrité</div></div>
+</div>
+
+<div class="grid g2">
+  <div class="card pad">
+    <h3 style="font-size:15px;margin-bottom:9px">Invitations</h3>
+    {{if .Code}}
+      <div class="note m"><b>Code émis — il n'est affiché qu'une fois.</b>
+        <div class="mono" style="margin-top:6px;word-break:break-all;font-size:13px">{{.Code}}</div>
+        <div style="margin-top:6px;font-size:12px">Adresse à transmettre&nbsp;:
+          <span class="mono">/invite/{{.Code}}</span></div>
+      </div>
+    {{end}}
+    <form method="post" action="/sysop/invite" style="margin-top:10px">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <button class="btn primary" type="submit">Émettre une invitation</button>
+    </form>
+    <div class="note" style="margin-top:11px">
+      Seule l'empreinte du code est conservée : ni un listing ultérieur, ni une
+      lecture de la base ne permettent de le retrouver.
+    </div>
+  </div>
+
+  <div class="card pad">
+    <h3 style="font-size:15px;margin-bottom:9px">Intégrité</h3>
+    <div class="kv"><span>Messages indexés</span><b>{{.Integ.Indexed}}</b></div>
+    <div class="kv"><span>Présents sur le disque</span><b>{{.Integ.OnDisk}}</b></div>
+    <div class="kv"><span>Divergents</span><b style="color:{{if .Integ.Diverging}}var(--coral){{else}}var(--mint){{end}}">{{.Integ.Diverging}}</b></div>
+    <div class="kv"><span>Absents du disque</span><b style="color:{{if .Integ.Missing}}var(--coral){{else}}var(--mint){{end}}">{{.Integ.Missing}}</b></div>
+    {{range .Integ.Details}}<div class="note" style="margin-top:8px;font-size:12px">{{.}}</div>{{end}}
+    <div class="row" style="margin-top:11px">
+      <form method="post" action="/sysop/reindex"><input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <button class="btn sm" type="submit">Reconstruire l'index</button></form>
+      <form method="post" action="/sysop/backup"><input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <button class="btn sm" type="submit">Sauvegarder</button></form>
+    </div>
+    <div class="note" style="margin-top:11px">
+      Reconstruire ne touche pas au disque : l'index se refait à partir des
+      fichiers. C'est ce qui rend la base jetable.
+    </div>
+  </div>
+</div>
+
+<h3 style="font-size:14px;margin:22px 0 9px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em">Passerelles</h3>
+<div class="card tw">
+  <table>
+    <thead><tr><th>Source</th><th>Quand</th><th>Vus</th><th>Créés</th><th>Ignorés</th></tr></thead>
+    <tbody>
+    {{range .Runs}}<tr>
+      <td><span class="pill p-src">{{.Source}}</span></td>
+      <td>{{date .RanAt}}</td>
+      <td class="num">{{.Seen}}</td><td class="num">{{.Created}}</td><td class="num">{{.Skipped}}</td>
+    </tr>{{else}}<tr><td colspan="5" style="color:var(--dim)">Aucun import enregistré.</td></tr>{{end}}
+    </tbody>
+  </table>
+</div>
+{{if .Msg}}<div class="note m" style="margin-top:14px"><b>{{.Msg}}</b></div>{{end}}
+{{end}}

@@ -13,8 +13,10 @@
     {{if .T.Published}}
       <a class="btn sm" href="{{.T.Published}}">Voir le billet</a>
     {{else}}
-      <form method="post" action="/t/{{.T.ID}}/publier">
+      <form method="post" action="/t/{{.T.ID}}/publier" class="row" style="gap:8px">
         <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <label style="font-size:11.5px;color:var(--dim)" title="Par défaut, les pseudonymes ne sont pas publiés">
+          <input type="checkbox" name="attribuer" value="1"> nommer les auteurs</label>
         <button class="btn sm pinkish" type="submit">✦ Publier en billet</button>
       </form>
     {{end}}

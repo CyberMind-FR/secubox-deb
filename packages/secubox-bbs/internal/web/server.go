@@ -80,7 +80,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	// silence — toutes les pages afficheraient alors le meme contenu.
 	fn := template.FuncMap{"rendu": Render, "date": humain, "taille": octets}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {
@@ -90,7 +90,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	}
 	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux()}
 	if opt.BilletsSocket != "" {
-		s.bil = billets.NewUnix(opt.BilletsSocket, opt.JWTSecret)
+		s.bil = billets.NewUnix(opt.BilletsSocket)
 	}
 	s.routes()
 	s.routesAPI()
