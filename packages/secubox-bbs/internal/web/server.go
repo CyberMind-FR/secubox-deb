@@ -67,6 +67,11 @@ type Options struct {
 	// d'administration et revele au passage ou se trouve la console.
 	BanniereOrigine string
 	BanniereHash    string
+	// BanniereStyle : empreinte de la balise <style> que la banniere injecte.
+	// C'est un ELEMENT, pas un attribut : une empreinte simple suffit, et
+	// `unsafe-hashes` — que le message du navigateur suggere — n'a pas lieu
+	// d'etre. L'ajouter autoriserait d'un coup tous les styles en ligne.
+	BanniereStyle string
 }
 
 type Server struct {
@@ -127,6 +132,10 @@ var empreinteValide = regexp.MustCompile(`^sha(256|384|512)-[A-Za-z0-9+/=]+$`)
 func (s *Server) entetes(h http.Handler) http.Handler {
 	script := "'self'"
 	connect := "'self'"
+	style := "'self'"
+	if e := strings.TrimSpace(s.opt.BanniereStyle); empreinteValide.MatchString(e) {
+		style += " '" + e + "'"
+	}
 	if o := strings.TrimSpace(s.opt.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		script += " " + o
 		connect += " " + o
@@ -142,7 +151,7 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
 		// c'est-a-dire exactement ce contre quoi elle protege.
 		hd.Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; style-src 'self'; "+
+			"default-src 'self'; img-src 'self' data:; style-src "+style+"; "+
 				"script-src "+script+"; connect-src "+connect+"; "+
 				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		hd.Set("X-Content-Type-Options", "nosniff")
