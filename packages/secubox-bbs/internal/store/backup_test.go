@@ -163,3 +163,36 @@ func extraire(arc, dest string) error {
 		out.Close()
 	}
 }
+
+func TestUnSecretsPlaceDANSLeContenuEstQuandMemeExclu(t *testing.T) {
+	// La liste blanche (content, files) suffit tant que secrets/ vit A COTE.
+	// Elle ne dit plus rien si un repertoire sensible apparait DEDANS — cas
+	// improbable jusqu'a ce qu'un module y depose son cache.
+	//
+	// Le premier jet de ce fichier croyait tester `exclus` ; il testait en
+	// realite la liste blanche. Retirer "secrets" d'`exclus` ne cassait rien.
+	// Ce test-ci exerce la seconde barriere pour de bon.
+	s := ouvre(t)
+	cat, uid := salon(t, s)
+	s.NewThread(cat, uid, "Fil", "corps", VisLocal)
+
+	dans := filepath.Join(s.root, "content", "secrets")
+	if err := os.MkdirAll(dans, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dans, "jeton"), []byte("MOTDEPASSE-argon2id"), 0o600)
+
+	arc := filepath.Join(t.TempDir(), "s.tar.gz")
+	if err := s.Backup(arc); err != nil {
+		t.Fatal(err)
+	}
+	noms, corps := lireArchive(t, arc)
+	for _, n := range noms {
+		if strings.Contains(n, "secrets") {
+			t.Errorf("content/secrets/ archive : %s", n)
+		}
+	}
+	if strings.Contains(corps, "MOTDEPASSE") {
+		t.Error("un secret place dans content/ se retrouve dans l'archive")
+	}
+}

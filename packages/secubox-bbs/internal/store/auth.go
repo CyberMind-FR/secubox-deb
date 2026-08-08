@@ -255,3 +255,36 @@ func (a *Auth) flush() error {
 	}
 	return os.Rename(tmp, a.path)
 }
+
+// UserByHandle resout un pseudonyme. Ne rend JAMAIS un compte desactive.
+func (s *Store) UserByHandle(handle string) (int64, error) {
+	var id int64
+	err := s.db.QueryRow(
+		`SELECT id FROM users WHERE handle = ? AND disabled_at IS NULL`, handle).Scan(&id)
+	return id, err
+}
+
+// UserInfo : ce qu'il faut pour afficher un bandeau, rien de plus.
+type UserInfo struct {
+	ID      int64
+	Handle  string
+	Display string
+	Role    Role
+}
+
+func (s *Store) UserInfo(id int64) (UserInfo, error) {
+	var u UserInfo
+	var role string
+	err := s.db.QueryRow(
+		`SELECT id, handle, display_name, role FROM users
+		 WHERE id = ? AND disabled_at IS NULL`, id).Scan(&u.ID, &u.Handle, &u.Display, &role)
+	u.Role = Role(role)
+	return u, err
+}
+
+// CloseSession revoque une session precise (deconnexion).
+func (s *Store) CloseSession(token string) error {
+	sum := sha256.Sum256([]byte(token))
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE token_sha256 = ?`, sum[:])
+	return err
+}

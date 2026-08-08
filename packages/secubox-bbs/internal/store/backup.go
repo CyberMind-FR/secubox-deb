@@ -29,7 +29,14 @@ import (
 	"strings"
 )
 
-// exclus : ce qui ne doit JAMAIS entrer dans une archive de contenu.
+// LA PROTECTION DES SECRETS N'EST PAS `exclus` : c'est la LISTE BLANCHE des
+// sous-repertoires parcourus (content, files). secrets/ vit a cote d'eux et
+// n'est jamais atteint. Une liste noire protege de ce qu'on a pense a y mettre ;
+// une liste blanche protege aussi de ce a quoi on n'a pas pense.
+//
+// `exclus` est la seconde barriere : elle attrape un secrets/ ou un cache/
+// place A L'INTERIEUR de content/ ou files/, ou la liste blanche ne dit plus
+// rien. Ce cas parait improbable jusqu'a ce qu'un module y depose son cache.
 var exclus = []string{"secrets", "tmp", "cache"}
 
 func (s *Store) Backup(dest string) error {

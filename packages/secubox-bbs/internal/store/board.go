@@ -147,3 +147,30 @@ func (s *Store) Stats() (Stats, error) {
 		Scan(&st.Threads, &st.Posts, &st.Files, &st.Members, &st.Billets)
 	return st, err
 }
+
+// MarkPublished enregistre le lien fil -> billet.
+//
+// N'est appelee QU'APRES une reponse favorable de billets. L'ecrire avant
+// afficherait un lien vers une page qui n'existe pas, et personne ne s'en
+// apercevrait avant qu'un lecteur ne clique.
+func (s *Store) MarkPublished(threadID int64, billetID, url string, pris, retenus int) error {
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO billets
+		(thread_id,billet_id,url,published_at,taken,held)
+		VALUES(?,?,?,unixepoch(),?,?)`, threadID, billetID, url, pris, retenus)
+	return err
+}
+
+// CreateCategory cree un salon, ou rend l'existant s'il porte deja ce slug.
+func (s *Store) CreateCategory(slug, title, desc string) (int64, error) {
+	var id int64
+	if err := s.db.QueryRow(`SELECT id FROM categories WHERE slug = ?`, slug).
+		Scan(&id); err == nil {
+		return id, nil
+	}
+	res, err := s.db.Exec(
+		`INSERT INTO categories(slug,title,description) VALUES(?,?,?)`, slug, title, desc)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
