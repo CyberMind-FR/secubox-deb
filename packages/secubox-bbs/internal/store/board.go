@@ -61,7 +61,7 @@ func (s *Store) Threads(catID int64, publicOnly bool) ([]Thread, error) {
 	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),'')
 	      FROM threads t JOIN users u ON u.id = t.author_id
 	      WHERE t.category_id = ?` + visClause(publicOnly, "t") + `
-	      ORDER BY t.pinned DESC, t.last_post_at DESC`
+	      ORDER BY t.pinned DESC, t.last_post_at DESC, t.id DESC`
 	return s.scanThreads(q, catID)
 }
 
@@ -74,7 +74,7 @@ func (s *Store) Recent(limit int, publicOnly bool) ([]Thread, error) {
 	        COALESCE((SELECT b.url FROM billets b WHERE b.thread_id = t.id),'')
 	      FROM threads t JOIN users u ON u.id = t.author_id
 	      WHERE 1=1` + visClause(publicOnly, "t") + `
-	      ORDER BY t.last_post_at DESC LIMIT ?`
+	      ORDER BY t.last_post_at DESC, t.id DESC LIMIT ?`
 	return s.scanThreads(q, limit)
 }
 

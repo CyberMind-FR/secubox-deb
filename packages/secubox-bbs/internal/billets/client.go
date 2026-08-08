@@ -21,8 +21,6 @@ package billets
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -41,11 +39,17 @@ type Message struct {
 }
 
 type Fil struct {
+	// Session : le jeton de session SecuBox de L'OPERATEUR qui declenche la
+	// publication. Le BBS n'a pas d'identite propre chez billets.
+	Session  string
 	ID       int64
 	Titre    string
 	Public   bool
 	Messages []Message
 	Retour   string // adresse du fil dans le BBS, pour le lien croise
+	// Attribuer nomme les auteurs dans le billet. FAUX par defaut : voir
+	// l'assemblage du corps ci-dessous.
+	Attribuer bool
 }
 
 type Resultat struct {
@@ -56,21 +60,20 @@ type Resultat struct {
 }
 
 type Client struct {
-	Base   string // http://unix ou http://127.0.0.1:PORT
-	Socket string // chemin de la socket unix, si l'appel passe par elle
-	Secret string // secret HS256 partage (api.jwt_secret)
-	HTTP   *http.Client
+	Base    string // http://unix ou http://127.0.0.1:PORT
+	Socket  string // chemin de la socket unix, si l'appel passe par elle
+	Session string // session d'operateur par defaut (essais uniquement)
+	HTTP    *http.Client
 }
 
 // NewUnix construit un client parlant a billets par sa socket unix.
 //
 // Socket et non port TCP : un port ecoute pour tout le monde sur la machine,
 // une socket obeit aux permissions du systeme de fichiers.
-func NewUnix(socket, secret string) *Client {
+func NewUnix(socket string) *Client {
 	return &Client{
 		Base:   "http://billets",
 		Socket: socket,
-		Secret: secret,
 		HTTP: &http.Client{
 			Timeout: 15 * time.Second,
 			Transport: &http.Transport{
@@ -87,13 +90,21 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 	if !f.Public {
 		return r, errors.New("fil local : rendez-le public explicitement avant de le publier")
 	}
-	// DEUX GARDES REDONDANTES pour le secret, ici et dans jeton(). La mutation
-	// le montre : retirer l'une laisse l'autre tenir, aucun test ne les
-	// distingue. C'est voulu et non un oubli — celle-ci refuse AVANT de
-	// construire la charge utile, jeton() refuse avant de signer. Un futur
-	// appelant qui appellerait jeton() directement reste couvert.
-	if strings.TrimSpace(c.Secret) == "" {
-		return r, errors.New("aucun secret de signature configure — publication refusee")
+	// LE BBS N'A PAS D'IDENTITE PROPRE CHEZ BILLETS, et c'est une bonne chose.
+	//
+	// Le noyau SecuBox exige d'un jeton qu'il porte un `jti` correspondant a
+	// une session VIVANTE et un `sub` present dans l'annuaire des comptes. Un
+	// jeton de service forge par le BBS ne peut donc pas passer — la garde
+	// existe precisement pour empecher qu'un module s'invente une autorite.
+	//
+	// La publication se fait donc sous l'autorite de L'OPERATEUR : sa session
+	// SecuBox est relayee telle quelle. Sans elle, on n'envoie rien.
+	session := strings.TrimSpace(f.Session)
+	if session == "" {
+		session = strings.TrimSpace(c.Session)
+	}
+	if session == "" {
+		return r, errors.New("aucune session SecuBox — connectez-vous a l'administration avant de publier")
 	}
 
 	var b strings.Builder
@@ -103,9 +114,21 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 			continue
 		}
 		r.Pris++
-		// L'attribution est portee dans le corps : billets ne connait pas les
-		// comptes du BBS, et un texte publie sans ses voix perd son sens.
-		fmt.Fprintf(&b, "**%s** — %s\n\n", m.Auteur, strings.TrimSpace(m.Corps))
+		// L'AUTORITE DE L'OPERATEUR EST ANONYMISANTE — c'est le coeur de
+		// l'interet du dispositif, pas une omission.
+		//
+		// Les membres ecrivent a l'interieur sous leur pseudonyme, entre gens
+		// qui se connaissent. Ce qui SORT est publie sous l'autorite de celui
+		// qui publie. Sans cela, repondre a une question dans un salon
+		// reviendrait a accepter d'etre cite nominativement sur internet un
+		// jour — ce que personne n'a demande.
+		//
+		// Nommer reste possible, mais c'est une DECISION explicite.
+		if f.Attribuer {
+			fmt.Fprintf(&b, "**%s** — %s\n\n", m.Auteur, strings.TrimSpace(m.Corps))
+		} else {
+			fmt.Fprintf(&b, "%s\n\n", strings.TrimSpace(m.Corps))
+		}
 	}
 	if r.Pris == 0 {
 		return r, errors.New("aucun message public dans ce fil")
@@ -114,14 +137,21 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 		fmt.Fprintf(&b, "\n---\n\n[Discuter ce billet sur le BBS](%s)\n", f.Retour)
 	}
 
+	// LE CONTRAT DE BILLETS : `body`, `ref_url`, `embed_url`, `style`, `status`.
+	//
+	// billets est un MICRO-BLOG : il n'a pas de champ titre. Le premier jet
+	// envoyait `title` et `url` — des champs qu'il ignore silencieusement. La
+	// requete aurait ete acceptee, un billet vide cree, et le BBS aurait
+	// enregistre un lien vers lui. Le titre vit donc DANS le corps.
+	texte := "## " + strings.TrimSpace(f.Titre) + "\n\n" + b.String()
 	charge, _ := json.Marshal(map[string]any{
-		"title": f.Titre,
-		"body":  b.String(),
-		"url":   f.Retour,
-		// `ref` et non `embed` : le billet renvoie vers la conversation, il ne
-		// l'incorpore pas.
-		"url_kind": "ref",
-		"status":   "published",
+		"body": texte,
+		// `ref_url` et non `embed_url` : le billet RENVOIE vers la
+		// conversation, il ne l'incorpore pas. Incorporer un fil de BBS dans
+		// une page publique y ferait entrer des pseudonymes et des reponses
+		// que personne n'a relus pour cet usage.
+		"ref_url": f.Retour,
+		"status":  "published",
 	})
 
 	req, err := http.NewRequest("POST", strings.TrimRight(c.Base, "/")+"/admin/api/billets",
@@ -129,11 +159,11 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 	if err != nil {
 		return r, err
 	}
-	jeton, err := c.jeton()
-	if err != nil {
-		return r, err
-	}
-	req.Header.Set("Authorization", "Bearer "+jeton)
+	// La session est relayee EN COOKIE, comme le navigateur l'aurait envoyee.
+	// billets la valide aupres du noyau exactement comme pour une requete
+	// directe : le BBS n'ajoute aucune autorite, il transmet celle qu'on lui a
+	// presentee.
+	req.Header.Set("Cookie", "secubox_session="+session)
 	req.Header.Set("Content-Type", "application/json")
 
 	cl := c.HTTP
@@ -161,27 +191,6 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 	r.BilletID, r.URL = out.ID, out.URL
 	return r, nil
 }
-
-// jeton forge un JWT HS256 de courte duree.
-//
-// Court volontairement : il ne sert qu'a UN appel. Un jeton de service valable
-// des heures traine dans les journaux et les captures reseau bien apres que
-// l'appel qu'il autorisait soit termine.
-func (c *Client) jeton() (string, error) {
-	if strings.TrimSpace(c.Secret) == "" {
-		return "", errors.New("secret de signature absent")
-	}
-	now := time.Now().Unix()
-	entete := b64(`{"alg":"HS256","typ":"JWT"}`)
-	charge := b64(fmt.Sprintf(
-		`{"sub":"secubox-bbs","role":"sysop","iat":%d,"exp":%d}`, now, now+60))
-	sig := hmac.New(sha256.New, []byte(c.Secret))
-	sig.Write([]byte(entete + "." + charge))
-	return entete + "." + charge + "." +
-		base64.RawURLEncoding.EncodeToString(sig.Sum(nil)), nil
-}
-
-func b64(s string) string { return base64.RawURLEncoding.EncodeToString([]byte(s)) }
 
 func min(a, b int) int {
 	if a < b {

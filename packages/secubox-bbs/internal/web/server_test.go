@@ -235,3 +235,100 @@ func TestUneErreurDeGabaritDonneUn500PasUnePageTronquee(t *testing.T) {
 		t.Errorf("un gabarit manquant repond %d", w.Code)
 	}
 }
+
+func TestOuvrirUnFilDepuisLInterface(t *testing.T) {
+	// Le gabarit proposait « Nouveau fil » depuis le debut ; la ROUTE n'a
+	// jamais existe. Le bouton menait a une page introuvable — un defaut que
+	// seule une visite de l'interface revele, et qu'aucun test ne couvrait
+	// puisque tous partaient de fils crees en base.
+	srv, s := banc(t)
+	uid, _ := peuple(t, s)
+	jeton, _ := s.NewSession(uid, "", "")
+	csrf := "jeton-de-test-assez-long"
+
+	f := url.Values{
+		"csrf": {csrf}, "categorie": {"1"},
+		"title": {"Un fil tout neuf"}, "body": {"Le premier message."},
+		"visibility": {"public"},
+	}
+	r := httptest.NewRequest("POST", "/nouveau", strings.NewReader(f.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.AddCookie(&http.Cookie{Name: cookieSession, Value: jeton})
+	r.AddCookie(&http.Cookie{Name: cookieCSRF, Value: csrf})
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("creation refusee : code %d — %s", w.Code, w.Body.String())
+	}
+	th, _ := s.Recent(10, false)
+	var cree *store.Thread
+	for i := range th {
+		if th[i].Title == "Un fil tout neuf" {
+			cree = &th[i]
+		}
+	}
+	if cree == nil {
+		t.Fatalf("le fil n'a pas ete cree : %+v", th)
+	}
+	if cree.Visibility != store.VisPublic {
+		t.Errorf("visibilite : %q", cree.Visibility)
+	}
+}
+
+func TestUnVisiteurNePeutPasOuvrirDeFil(t *testing.T) {
+	srv, s := banc(t)
+	peuple(t, s)
+	f := url.Values{"categorie": {"1"}, "title": {"Intrus"}, "body": {"x"}}
+	r := httptest.NewRequest("POST", "/nouveau", strings.NewReader(f.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+	// On n'asserte PAS le code : rediriger vers la page de connexion est une
+	// reponse legitime, et c'est un 303 comme un succes. Ce qui compte est
+	// qu'AUCUN fil n'ait ete ecrit.
+	th, _ := s.Recent(20, false)
+	for _, x := range th {
+		if x.Title == "Intrus" {
+			t.Error("un visiteur non connecte a ouvert un fil")
+		}
+	}
+}
+
+func TestLaConsoleSysopEstFermeeAuxNonSysops(t *testing.T) {
+	// Le lien /sysop n'apparait que pour un sysop, mais l'ADRESSE est
+	// devinable. « Ce n'est pas dans le menu » n'a jamais ferme une porte.
+	srv, s := banc(t)
+	uid, _ := s.CreateUser("membre", "Membre", store.RoleMember)
+	jeton, _ := s.NewSession(uid, "", "")
+
+	r := httptest.NewRequest("GET", "/sysop", nil)
+	r.AddCookie(&http.Cookie{Name: cookieSession, Value: jeton})
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+	if w.Code == http.StatusOK {
+		t.Errorf("un membre ordinaire atteint la console sysop (code %d)", w.Code)
+	}
+
+	w2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w2, httptest.NewRequest("GET", "/sysop", nil))
+	if w2.Code == http.StatusOK {
+		t.Errorf("un visiteur anonyme atteint la console sysop (code %d)", w2.Code)
+	}
+}
+
+func TestUnSysopAtteintSaConsole(t *testing.T) {
+	srv, s := banc(t)
+	uid, _ := peuple(t, s)
+	jeton, _ := s.NewSession(uid, "", "")
+	r := httptest.NewRequest("GET", "/sysop", nil)
+	r.AddCookie(&http.Cookie{Name: cookieSession, Value: jeton})
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("console refusee au sysop : %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "</html>") {
+		t.Error("page tronquee")
+	}
+}

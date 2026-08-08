@@ -2,9 +2,12 @@ package web
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/billets"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
@@ -30,6 +33,10 @@ type page struct {
 	Intro, Vide               string
 	Note                      string
 	Cards                     []card
+	Code, Msg                 string
+	Integ                     store.Integrity
+	Sain                      bool
+	Runs                      []store.IngestRun
 }
 
 type postView struct {
@@ -55,6 +62,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
 	s.mux.HandleFunc("/mp", s.simple("mp"))
 	s.mux.HandleFunc("/billets", s.simple("billets"))
+	s.mux.HandleFunc("/nouveau", s.nouveau)
+	s.mux.HandleFunc("/sysop", s.sysop)
+	s.mux.HandleFunc("/sysop/", s.sysopAction)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -397,8 +407,17 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 		http.Error(w, "lecture du fil impossible", http.StatusInternalServerError)
 		return
 	}
-	f := billets.Fil{ID: id, Titre: t.Title, Public: true,
-		Retour: "https://" + r.Host + "/t/" + itoa64(id)}
+	// La session SecuBox de l'operateur est relayee : le BBS n'a pas d'identite
+	// propre chez billets, il transmet l'autorite qu'on lui a presentee.
+	var session string
+	if c, err := r.Cookie("secubox_session"); err == nil {
+		session = c.Value
+	}
+	f := billets.Fil{ID: id, Titre: t.Title, Public: true, Session: session,
+		// L'attribution nominative est une DECISION, jamais le defaut :
+		// l'autorite de l'operateur est anonymisante.
+		Attribuer: r.PostFormValue("attribuer") == "1",
+		Retour:    "https://" + r.Host + "/t/" + itoa64(id)}
 	for _, p := range posts {
 		corps, err := s.st.Body(p)
 		if err != nil {
@@ -416,7 +435,12 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 
 	res, err := s.bil.Publier(f)
 	if err != nil {
-		http.Error(w, "publication refusee : "+err.Error(), http.StatusBadGateway)
+		// PAS 502. nginx intercepte 502/503/504 (`secubox-waking.conf`) et les
+		// remplace par la page de reveil — qui n'accepte que GET et repond 405
+		// a un POST. L'erreur reelle etait donc masquee par un « Method Not
+		// Allowed » incomprehensible, et j'ai cherche du cote de billets un
+		// defaut qui n'y etait pas. 409 dit la meme chose sans etre avale.
+		http.Error(w, "publication refusee : "+err.Error(), http.StatusConflict)
 		return
 	}
 	if err := s.st.MarkPublished(id, res.BilletID, res.URL, res.Pris, res.Retenus); err != nil {
@@ -425,4 +449,132 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// nouveau : ouvrir un fil.
+//
+// LA ROUTE MANQUAIT. Le gabarit proposait « Nouveau fil » depuis le premier
+// jour et menait a une page introuvable — un defaut que seule une visite de
+// l'interface revele, et qu'aucun test ne couvrait puisque tous partaient de
+// fils crees directement en base.
+func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	p, _ := s.base(r, "forums")
+	p.Titre = "Ouvrir un fil"
+	if r.Method != http.MethodPost {
+		s.rend(w, r, "nouveau", p)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	titre := strings.TrimSpace(r.PostFormValue("title"))
+	corps := strings.TrimSpace(r.PostFormValue("body"))
+	if titre == "" || corps == "" {
+		p.Err = "Un titre et un premier message sont nécessaires."
+		s.rend(w, r, "nouveau", p)
+		return
+	}
+	var cat int64
+	fmt.Sscanf(r.PostFormValue("categorie"), "%d", &cat)
+	// Le salon doit exister ET etre visible de l'appelant : un identifiant
+	// choisi au hasard ne doit pas permettre d'ecrire dans un salon qu'on ne
+	// voit pas.
+	valide := false
+	for _, c := range p.Cats {
+		if c.ID == cat {
+			valide = true
+		}
+	}
+	if !valide {
+		p.Err = "Salon inconnu."
+		s.rend(w, r, "nouveau", p)
+		return
+	}
+	vis := store.VisLocal
+	if r.PostFormValue("visibility") == "public" {
+		vis = store.VisPublic
+	}
+	id, err := s.st.NewThread(cat, v.ID, titre, corps, vis)
+	if err != nil {
+		p.Err = "Enregistrement impossible : " + err.Error()
+		s.rend(w, r, "nouveau", p)
+		return
+	}
+	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// sysopOK : la console est fermee a tout ce qui n'est pas sysop.
+//
+// Le lien n'apparait que pour un sysop, mais l'ADRESSE est devinable.
+// « Ce n'est pas dans le menu » n'a jamais ferme une porte.
+func (s *Server) sysopOK(w http.ResponseWriter, r *http.Request) (visiteur, bool) {
+	v := s.qui(r)
+	if !v.Connecte || v.Role != store.RoleSysop {
+		// 404 et non 403 : un 403 confirmerait que la page existe.
+		http.NotFound(w, r)
+		return v, false
+	}
+	return v, true
+}
+
+func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.sysopOK(w, r); !ok {
+		return
+	}
+	p, _ := s.base(r, "sysop")
+	p.Titre = "Console sysop"
+	p.Code = r.URL.Query().Get("code")
+	p.Msg = r.URL.Query().Get("msg")
+	p.Integ, _ = s.st.Integrity()
+	p.Sain = p.Integ.Diverging == 0 && p.Integ.Missing == 0
+	p.Runs, _ = s.st.IngestRuns(12)
+	s.rend(w, r, "sysop", p)
+}
+
+func (s *Server) sysopAction(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.sysopOK(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	switch strings.TrimPrefix(r.URL.Path, "/sysop/") {
+	case "invite":
+		code, err := s.st.NewInvite(v.ID)
+		if err != nil {
+			http.Redirect(w, r, "/sysop?msg="+url.QueryEscape("invitation impossible : "+err.Error()),
+				http.StatusSeeOther)
+			return
+		}
+		// Le code passe par l'adresse UNE fois, pour etre affiche. Il n'est
+		// stocke nulle part en clair — ni en base, ni en session.
+		http.Redirect(w, r, "/sysop?code="+url.QueryEscape(code), http.StatusSeeOther)
+	case "reindex":
+		msg := "index reconstruit"
+		if err := s.st.Reindex(); err != nil {
+			msg = "reconstruction impossible : " + err.Error()
+		}
+		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+	case "backup":
+		dest := s.opt.BackupDir + "/bbs-" + time.Now().Format("20060102-150405") + ".tar.gz"
+		msg := "archive écrite : " + dest
+		if err := s.st.Backup(dest); err != nil {
+			msg = "sauvegarde impossible : " + err.Error()
+		}
+		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+	default:
+		http.NotFound(w, r)
+	}
 }
