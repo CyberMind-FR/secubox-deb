@@ -268,7 +268,7 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 	id, err := s.st.UserByHandle(handle)
 	// MEME REPONSE pour un compte inconnu et un mot de passe faux. Distinguer
 	// les deux transformerait le formulaire en annuaire des membres.
-	if err != nil || !s.auth.Verify(id, r.PostFormValue("password")) {
+	if err != nil || !s.verifie(handle, id, r.PostFormValue("password")) {
 		p.Err = "Pseudonyme ou mot de passe incorrect."
 		w.WriteHeader(http.StatusUnauthorized)
 		s.rend(w, r, "login", p)
@@ -753,4 +753,26 @@ func (s *Server) qrFil(w http.ResponseWriter, r *http.Request, id int64) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "private, max-age=600")
 	w.Write(svg)
+}
+
+// verifie choisit QUI valide le mot de passe, selon l'origine du compte.
+//
+// Un membre venu par invitation a son mot de passe ICI ; l'envoyer a
+// secubox-auth le divulguerait a un service qui n'a rien a en faire. Un compte
+// synchronise depuis SecuBox n'a AUCUNE empreinte locale : seule la delegation
+// peut l'ouvrir.
+//
+// Aucun repli d'un mode sur l'autre : chaque compte a une origine, une seule.
+func (s *Server) verifie(handle string, id int64, motDePasse string) bool {
+	src, err := s.st.AuthSource(handle)
+	if err != nil {
+		return false
+	}
+	if src == "secubox" {
+		if s.authAmont == nil {
+			return false
+		}
+		return s.authAmont(handle, motDePasse)
+	}
+	return s.auth.Verify(id, motDePasse)
 }

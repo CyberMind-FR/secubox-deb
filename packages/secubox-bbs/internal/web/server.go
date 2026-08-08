@@ -80,6 +80,10 @@ type Options struct {
 	PodcastRacine string
 	// PodcastDB : base du podcaster, ouverte en lecture seule.
 	PodcastDB string
+	// AuthSocket : socket de secubox-auth. Vide, les comptes synchronises ne
+	// peuvent pas se connecter — ils n'ont pas de mot de passe local, et c'est
+	// le comportement voulu plutot qu'un repli silencieux.
+	AuthSocket string
 }
 
 type Server struct {
@@ -95,6 +99,9 @@ type Server struct {
 	vCSS string
 	// resoudreEpisode : id d'episode -> fichier local. Remplace en test.
 	resoudreEpisode resolveur
+	// authAmont : verificateur de mot de passe pour les comptes d'origine
+	// SecuBox. Nil = aucun compte SecuBox ne peut se connecter.
+	authAmont authAmont
 }
 
 func New(st *store.Store, opt Options) (*Server, error) {
@@ -122,6 +129,9 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	if b, err := assets.ReadFile("static/bbs.css"); err == nil {
 		sum := sha256.Sum256(b)
 		s.vCSS = base64.RawURLEncoding.EncodeToString(sum[:6])
+	}
+	if opt.AuthSocket != "" {
+		s.authAmont = clientAuthSocket(opt.AuthSocket)
 	}
 	if opt.PodcastDB != "" {
 		s.resoudreEpisode = resolveurPodcaster(opt.PodcastDB)

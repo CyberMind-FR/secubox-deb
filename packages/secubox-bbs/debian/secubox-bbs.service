@@ -40,6 +40,7 @@ ExecStart=/usr/sbin/secubox-bbsd \
     --secrets /etc/secubox/secrets/bbs \
     --socket /run/secubox/bbs.sock \
     --backup-dir /var/backups/secubox \
+    --auth-socket /run/secubox/auth.sock \
     --peertube-origine https://peertube.gk2.secubox.in \
     --podcast-racine /var/lib/secubox/podcaster/media,/data/secubox/podcaster
 Restart=on-failure
