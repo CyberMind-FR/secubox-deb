@@ -81,6 +81,10 @@ type Server struct {
 	tpl  map[string]*template.Template
 	mux  *http.ServeMux
 	bil  *billets.Client
+	// vCSS : empreinte du contenu de la feuille de style, ajoutee a son
+	// adresse. Voir routes.go — le WAF de la board supprime les en-tetes de
+	// cache, l'adresse est le seul levier qui reste.
+	vCSS string
 }
 
 func New(st *store.Store, opt Options) (*Server, error) {
@@ -105,6 +109,10 @@ func New(st *store.Store, opt Options) (*Server, error) {
 		pages[nom] = t
 	}
 	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux()}
+	if b, err := assets.ReadFile("static/bbs.css"); err == nil {
+		sum := sha256.Sum256(b)
+		s.vCSS = base64.RawURLEncoding.EncodeToString(sum[:6])
+	}
 	if opt.BilletsSocket != "" {
 		s.bil = billets.NewUnix(opt.BilletsSocket)
 	}
