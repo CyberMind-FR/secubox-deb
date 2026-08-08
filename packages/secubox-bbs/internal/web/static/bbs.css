@@ -62,7 +62,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 
 /* ── enveloppe ────────────────────────────────────────────────────────── */
 .shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-@media (max-width:900px){ .shell{grid-template-columns:1fr} .rail{display:none} }
+/* La regle mobile ne vit PLUS ici : voir la fin du fichier.
+ *
+ * Elle y etait AVANT la definition de `.rail`, qui declare `display:flex`. Une
+ * media query n'ajoute aucune specificite : a specificite egale, la derniere
+ * regle gagne. Le rail ne se masquait donc jamais sur telephone — il occupait
+ * toute la largeur et repoussait le contenu hors de l'ecran.
+ *
+ * Les regles adaptatives doivent venir APRES ce qu'elles corrigent. */
 
 .rail{
   background:var(--panel); border-right:1px solid var(--line);
@@ -333,3 +340,49 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 .etat-attention { color: var(--amber); }
 .etat-mauvais   { color: var(--coral); }
 .compte-inactif { opacity: .5; }
+
+
+/* ── adaptatif : telephone ────────────────────────────────────────────────
+ *
+ * EN DERNIER, DELIBEREMENT. Ces regles corrigent des composants definis plus
+ * haut ; placees avant eux, elles seraient annulees a specificite egale — ce
+ * qui est exactement ce qui s'est produit.
+ *
+ * LE RAIL N'EST PAS MASQUE, il devient une barre horizontale. Le masquer
+ * laisserait un telephone sans aucune navigation : ni salons, ni console, ni
+ * moyen de revenir. Une largeur reduite ne justifie pas d'amputer le site. */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+
+  .rail {
+    position: static; height: auto; flex-direction: row; align-items: center;
+    gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 10px 12px;
+    border-right: 0; border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+
+  /* Les intertitres de section n'ont pas de sens sur une seule ligne. */
+  .railhead { display: none; }
+  .brand { padding: 0 10px 0 0; flex: 0 0 auto; border-right: 1px solid var(--line); margin-right: 4px; }
+  .brand small { display: none; }
+
+  .nav { width: auto; flex: 0 0 auto; white-space: nowrap; padding: 6px 10px; }
+  .nav .n { margin-left: 6px; }
+
+  .top { padding: 9px 12px; gap: 8px; }
+  .top .search { max-width: none; }
+  main { padding: 16px 14px 60px; }
+
+  /* Une pastille de compte suffit ; le pseudonyme prend une place qu'on n'a
+   * pas, et il est deja sur la page « Mon compte ». */
+  .me { font-size: 0; gap: 0; }
+  .me .av { font-size: 11px; }
+  .me .pill { display: none; }
+}
+
+@media (max-width: 560px) {
+  .grid.g3, .grid.g2 { grid-template-columns: 1fr; }
+  .thread .cnt, .board .meta { display: none; }
+  .ph h1 { font-size: 21px; }
+}
