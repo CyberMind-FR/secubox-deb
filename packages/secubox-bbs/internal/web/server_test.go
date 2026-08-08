@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -404,3 +405,71 @@ func entre(s, deb, fin string) string {
 	}
 	return r[:j]
 }
+
+func TestLeHtmlServiEstBienForme(t *testing.T) {
+	// UNE BALISE MAL FERMEE NE PRODUIT AUCUNE ERREUR : le navigateur repare a
+	// sa maniere, et ce qui suit se retrouve avale par l'element ouvert. Ici
+	// une ancre fermee par `</div>` engloutissait le bouton de deconnexion PUIS
+	// tout le contenu de la page — un trou de 700 pixels et un bouton egare en
+	// bas a gauche.
+	//
+	// Le defaut n'apparaissait QUE connecte, et toutes mes verifications
+	// passaient par des pages anonymes. Ce test parcourt les deux.
+	srv, s := banc(t)
+	uid, _ := peuple(t, s)
+	jeton, _ := s.NewSession(uid, "", "")
+
+	for _, cas := range []struct {
+		nom, chemin string
+		connecte    bool
+	}{
+		{"accueil anonyme", "/", false},
+		{"accueil connecte", "/", true},
+		{"salon connecte", "/c/atelier", true},
+		{"fil connecte", "/t/1", true},
+		{"compte", "/compte", true},
+		{"sysop", "/sysop", true},
+		{"nouveau fil", "/nouveau", true},
+	} {
+		r := httptest.NewRequest("GET", cas.chemin, nil)
+		if cas.connecte {
+			r.AddCookie(&http.Cookie{Name: cookieSession, Value: jeton})
+		}
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, r)
+		if w.Code != http.StatusOK {
+			continue
+		}
+		if mal := malFormees(w.Body.String()); len(mal) > 0 {
+			t.Errorf("%s (%s) : balises mal fermees %v", cas.nom, cas.chemin, mal)
+		}
+	}
+}
+
+// malFormees rend les balises fermees par un nom different de celui ouvert.
+func malFormees(h string) []string {
+	var pile, mal []string
+	vides := map[string]bool{"br": true, "img": true, "input": true, "meta": true,
+		"link": true, "hr": true, "source": true}
+	for _, m := range baliseRe.FindAllStringSubmatch(h, -1) {
+		nom := strings.ToLower(m[2])
+		if vides[nom] || strings.HasSuffix(m[0], "/>") {
+			continue
+		}
+		if m[1] == "/" {
+			if len(pile) > 0 && pile[len(pile)-1] == nom {
+				pile = pile[:len(pile)-1]
+			} else {
+				mal = append(mal, "</"+nom+">")
+			}
+			continue
+		}
+		pile = append(pile, nom)
+	}
+	for _, n := range pile {
+		mal = append(mal, "<"+n+"> jamais ferme")
+	}
+	return mal
+}
+
+var baliseRe = regexp.MustCompile(`<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>`)
