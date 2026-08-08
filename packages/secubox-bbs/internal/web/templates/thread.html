@@ -26,6 +26,27 @@
 </div>{{end}}
 </div>
 
+{{if .T.MediaURL}}
+<div class="card lecteur">
+  {{if eq .T.MediaKind "video"}}
+    <div class="cadre-video">
+      <iframe src="{{.T.MediaURL}}" title="{{.T.Title}}" allowfullscreen
+              referrerpolicy="no-referrer" loading="lazy"></iframe>
+    </div>
+  {{else}}
+    <div class="pad">
+      <audio controls preload="none" src="{{.T.MediaURL}}" class="lecteur-audio"></audio>
+    </div>
+  {{end}}
+  <div class="partage">
+    <span class="pill p-src">{{.T.Source}}</span>
+    <span class="lien-partage mono">{{.Base}}/t/{{.T.ID}}</span>
+    <a class="btn sm" href="/t/{{.T.ID}}/qr" title="Ouvrir sur un téléphone">▦ QR</a>
+    {{if .T.MediaURL}}<a class="btn sm" href="{{.T.MediaURL}}">↗ Source</a>{{end}}
+  </div>
+</div>
+{{end}}
+
 <div class="card">
 {{range .Posts}}
   <article class="post{{if eq .Visibility "local"}} localnote{{end}}">
