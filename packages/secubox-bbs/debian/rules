@@ -71,4 +71,8 @@ override_dh_auto_clean:
 # a servir. Mais « ne pas activer d'office » et « couper ce qui tourne » sont
 # deux choses differentes.
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start --restart-after-upgrade
+	dh_installsystemd --no-enable --no-start --restart-after-upgrade --name=secubox-bbs
+	# La minuterie d import est livree DESACTIVEE elle aussi : elle ecrirait
+	# dans un BBS qui n a peut-etre pas encore de salons.
+	dh_installsystemd --no-enable --no-start --name=secubox-bbs-ingest secubox-bbs-ingest.service
+	dh_installsystemd --no-enable --no-start --name=secubox-bbs-ingest secubox-bbs-ingest.timer

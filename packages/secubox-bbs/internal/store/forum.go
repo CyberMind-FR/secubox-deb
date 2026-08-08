@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Visibility string
@@ -59,9 +60,13 @@ func (s *Store) NewThread(catID, authorID int64, title, body string, vis Visibil
 	}
 	defer tx.Rollback()
 
+	slug, err := slugLibre(tx, catID, slugify(title))
+	if err != nil {
+		return 0, err
+	}
 	res, err := tx.Exec(`INSERT INTO threads(category_id,author_id,slug,title,visibility,
 		created_at,last_post_at) VALUES(?,?,?,?,?,unixepoch(),unixepoch())`,
-		catID, authorID, slugify(title), title, string(vis))
+		catID, authorID, slug, title, string(vis))
 	if err != nil {
 		return 0, err
 	}
@@ -401,6 +406,37 @@ func upsertID(tx *sql.Tx, sel, ins string, key string, args ...any) (int64, erro
 	return res.LastInsertId()
 }
 
+// slugLibre rend un slug encore disponible dans ce salon, en suffixant.
+//
+// Le slug est UNIQUE par salon (contrainte du schema). Or « Question du jour »
+// sera ecrit dix fois : refuser le second fil parce que son slug existe deja
+// serait une regle du programme, pas du forum. On suffixe donc plutot que de
+// refuser.
+//
+// La boucle est bornee : au-dela, on laisse la contrainte parler. Chercher
+// indefiniment transformerait un salon charge en attente sans fin.
+func slugLibre(tx *sql.Tx, catID int64, base string) (string, error) {
+	if base == "" {
+		base = "fil"
+	}
+	for i := 0; i < 200; i++ {
+		essai := base
+		if i > 0 {
+			essai = base + "-" + strconv.Itoa(i+1)
+		}
+		var n int
+		err := tx.QueryRow(`SELECT count(*) FROM threads WHERE category_id = ? AND slug = ?`,
+			catID, essai).Scan(&n)
+		if err != nil {
+			return "", err
+		}
+		if n == 0 {
+			return essai, nil
+		}
+	}
+	return "", errors.New("aucun slug libre pour ce titre dans ce salon")
+}
+
 func slugify(s string) string {
 	var b strings.Builder
 	prev := false
@@ -418,3 +454,5 @@ func slugify(s string) string {
 	}
 	return strings.Trim(b.String(), "-")
 }
+
+func nowUnix() int64 { return time.Now().Unix() }

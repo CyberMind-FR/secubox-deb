@@ -192,3 +192,10 @@ func versionOf(name string) (int, error) {
 	}
 	return v, nil
 }
+
+// QueryRowScan : une echappatoire etroite pour les cas que l'API typee ne
+// couvre pas encore. Volontairement limitee a UNE valeur : elle ne doit pas
+// devenir la porte par laquelle du SQL arbitraire entre dans les appelants.
+func (s *Store) QueryRowScan(dest any, query string, args ...any) error {
+	return s.db.QueryRow(query, args...).Scan(dest)
+}
