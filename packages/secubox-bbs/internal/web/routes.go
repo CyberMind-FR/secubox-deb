@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"log"
 	"net/http"
 	"strings"
 
@@ -77,20 +79,31 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	}, pub
 }
 
+// rend ecrit la page dans un TAMPON avant de l'envoyer.
+//
+// Ecrire directement dans la reponse parait plus economique, et c'est un piege :
+// une erreur survenue au milieu du gabarit arrive APRES que l'en-tete 200 est
+// parti. Le navigateur recoit alors un document tronque presente comme valide.
+// C'est exactement ce qui s'est produit ici — une comparaison de types dans le
+// gabarit coupait toutes les pages des membres connectes, en silence.
+//
+// Avec un tampon : soit la page entiere part, soit une erreur franche.
 func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page) {
-	s.poseCSRF(w, p.V.CSRF)
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	t, ok := s.tpl[nom]
 	if !ok {
-		http.Error(w, "gabarit inconnu", 500)
+		log.Printf("gabarit inconnu : %s", nom)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
 		return
 	}
-	if err := t.ExecuteTemplate(w, "layout", p); err != nil {
-		// L'erreur arrive apres le debut de l'ecriture : on ne peut plus
-		// changer le code HTTP. On la journalise plutot que d'ecrire une
-		// seconde reponse par-dessus la premiere.
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "layout", p); err != nil {
+		log.Printf("rendu de %s : %v", nom, err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
 		return
 	}
+	s.poseCSRF(w, p.V.CSRF)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
 }
 
 func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {

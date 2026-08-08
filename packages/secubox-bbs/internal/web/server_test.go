@@ -184,3 +184,54 @@ func itoa(i int64) string {
 	}
 	return string(b)
 }
+
+func TestUnMembreConnecteVoitLesFilsLocaux(t *testing.T) {
+	// Ce test manquait, et son absence a coute deux defauts reels, trouves par
+	// un essai de bout en bout et non par la suite de tests :
+	//
+	//   1. le gabarit comparait `.V.Role` (type store.Role) a la chaine
+	//      "sysop". Les gabarits Go refusent de comparer deux types
+	//      differents : le rendu s'arretait la, sur TOUTE page vue par un
+	//      membre connecte.
+	//
+	//   2. l'erreur de gabarit etait avalee en silence et la page PARTIELLE
+	//      etait servie avec un code 200. Un defaut de rendu se presentait donc
+	//      comme une page vide mais valide.
+	//
+	// Tous les tests precedents n'exercaient que le chemin anonyme.
+	srv, s := banc(t)
+	uid, _ := peuple(t, s)
+	jeton, _ := s.NewSession(uid, "", "")
+
+	r := httptest.NewRequest("GET", "/", nil)
+	r.AddCookie(&http.Cookie{Name: cookieSession, Value: jeton})
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d pour un membre connecte", w.Code)
+	}
+	body := w.Body.String()
+	for _, veut := range []string{"Fil visible de dehors", "Coordonnees privees"} {
+		if !strings.Contains(body, veut) {
+			t.Errorf("un membre connecte ne voit pas %q", veut)
+		}
+	}
+	// La page doit etre COMPLETE : une erreur de gabarit tronque le document
+	// sans que le code HTTP ne change.
+	if !strings.Contains(body, "</html>") {
+		t.Error("page tronquee — le gabarit a echoue en cours de rendu")
+	}
+}
+
+func TestUneErreurDeGabaritDonneUn500PasUnePageTronquee(t *testing.T) {
+	// Servir un document a moitie ecrit avec un code 200, c'est affirmer que
+	// tout va bien en montrant le contraire. Le rendu passe donc par un tampon :
+	// soit la page entiere part, soit une erreur franche.
+	srv, _ := banc(t)
+	w := httptest.NewRecorder()
+	srv.rend(w, httptest.NewRequest("GET", "/", nil), "gabarit-inexistant", page{})
+	if w.Code == http.StatusOK {
+		t.Errorf("un gabarit manquant repond %d", w.Code)
+	}
+}

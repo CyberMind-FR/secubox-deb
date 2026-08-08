@@ -8,7 +8,7 @@
     ouvert par {{.T.Author}}
   </p>
 </div>
-{{if and .V.Connecte (eq .V.Role "sysop")}}<div class="row" style="margin-left:auto">
+{{if .V.Sysop}}<div class="row" style="margin-left:auto">
   {{if eq .T.Visibility "public"}}
     {{if .T.Published}}
       <a class="btn sm" href="{{.T.Published}}">Voir le billet</a>

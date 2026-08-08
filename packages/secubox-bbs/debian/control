@@ -1,0 +1,26 @@
+Source: secubox-bbs
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://cybermind.fr/secubox
+Rules-Requires-Root: no
+
+Package: secubox-bbs
+Architecture: arm64
+Depends: ${misc:Depends}, adduser
+Recommends: nginx
+Suggests: secubox-billets
+Description: SecuBox-Deb — BBS auto-heberge (forums, bibliotheque, publication)
+ Un BBS moderne pour une SecuBox : salons, fils, bibliotheque de fichiers,
+ messagerie interne, et publication d'un fil vers le module billets.
+ .
+ LE DISQUE FAIT FOI. Chaque message est un fichier Markdown sous content/ ;
+ la base SQLite n'en est que l'index, entierement reconstructible. Le BBS
+ tient donc dans un repertoire copiable a chaud par rsync, sans arreter le
+ service, et reste lisible sans ce logiciel.
+ .
+ L'inscription se fait SUR INVITATION. Les mots de passe ne sont pas dans la
+ base : ils vivent a part, hors de l'arborescence de contenu, pour qu'une
+ archive de contenu ne les emporte jamais.
