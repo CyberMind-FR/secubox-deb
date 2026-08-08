@@ -6,6 +6,19 @@ After=network.target
 # fonctionner. Seule la publication devient indisponible, et elle le dit.
 Wants=secubox-billets.service
 
+# LA BANNIERE DE SANTE. Le WAF de la board l'injecte dans toutes les pages,
+# APRES notre reponse : impossible de lui poser un nonce. On l'autorise donc
+# precisement — son origine et l'empreinte exacte de son chargeur — plutot que
+# d'ouvrir la politique a tout script en ligne.
+#
+# CETTE EMPREINTE PEUT DERIVER. Si sbxwaf change son chargeur, la banniere
+# cessera de s'afficher (le navigateur le dira dans sa console) et il faudra la
+# mettre a jour. C'est le prix d'une politique qui ne ment pas.
+#
+# SUR UNE SURFACE PUBLIQUE, envisagez de retirer ces deux options : la banniere
+# interroge des API d'administration et revele au passage ou se trouve la
+# console. Vides, la politique reste fermee et rien ne s'affiche.
+
 [Service]
 Type=exec
 
@@ -28,7 +41,9 @@ ExecStart=/usr/sbin/secubox-bbsd \
     --root /var/lib/secubox/bbs \
     --secrets /etc/secubox/secrets/bbs \
     --socket /run/secubox/bbs.sock \
-    --backup-dir /var/backups/secubox
+    --backup-dir /var/backups/secubox \
+    --banniere-origine https://admin.gk2.secubox.in \
+    --banniere-empreinte sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs=
 Restart=on-failure
 RestartSec=5
 
