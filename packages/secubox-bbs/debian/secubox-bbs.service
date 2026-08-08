@@ -43,7 +43,8 @@ ExecStart=/usr/sbin/secubox-bbsd \
     --socket /run/secubox/bbs.sock \
     --backup-dir /var/backups/secubox \
     --banniere-origine https://admin.gk2.secubox.in \
-    --banniere-empreinte sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs=
+    --banniere-empreinte sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs= \
+    --banniere-style sha256-2HVN0jyg43/7tFpU8UVAi4XD067D/50XDOJYznR2CIo=
 Restart=on-failure
 RestartSec=5
 

@@ -11,6 +11,7 @@ func csp(t *testing.T, opt Options) string {
 	srv, _ := banc(t)
 	srv.opt.BanniereOrigine = opt.BanniereOrigine
 	srv.opt.BanniereHash = opt.BanniereHash
+	srv.opt.BanniereStyle = opt.BanniereStyle
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	return w.Header().Get("Content-Security-Policy")
@@ -70,5 +71,30 @@ func TestUneEmpreinteMalFormeeEstIgnoree(t *testing.T) {
 	p := csp(t, Options{BanniereOrigine: "https://a.example", BanniereHash: "n importe quoi"})
 	if strings.Contains(p, "n importe quoi") {
 		t.Errorf("empreinte non validee reprise telle quelle : %s", p)
+	}
+}
+
+func TestLEmpreinteDeStyleNAutorisePasUnsafeHashes(t *testing.T) {
+	// La banniere injecte aussi une balise <style>. C'est un ELEMENT, pas un
+	// attribut : une empreinte simple suffit. `unsafe-hashes` — que le message
+	// du navigateur suggere — ne sert qu'aux attributs `style=`, et l'ajouter
+	// ici autoriserait d'un coup tous les styles en ligne dont on vient
+	// justement de debarrasser les gabarits.
+	p := csp(t, Options{
+		BanniereOrigine: "https://admin.gk2.secubox.in",
+		BanniereStyle:   "sha256-2HVN0jyg43/7tFpU8UVAi4XD067D/50XDOJYznR2CIo=",
+	})
+	if !strings.Contains(p, "style-src 'self' 'sha256-2HVN0jyg43") {
+		t.Errorf("empreinte de style absente de style-src : %s", p)
+	}
+	if strings.Contains(p, "unsafe-hashes") {
+		t.Errorf("unsafe-hashes ajoute : %s", p)
+	}
+}
+
+func TestUneEmpreinteDeStyleMalFormeeEstIgnoree(t *testing.T) {
+	p := csp(t, Options{BanniereStyle: "pas-une-empreinte"})
+	if strings.Contains(p, "pas-une-empreinte") {
+		t.Errorf("empreinte non validee reprise : %s", p)
 	}
 }
