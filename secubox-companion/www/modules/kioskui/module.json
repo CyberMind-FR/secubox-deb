@@ -1,0 +1,14 @@
+{
+  "id": "kioskui",
+  "name": "Kiosque",
+  "module": "ROOT",
+  "icon": "🖥️",
+  "description": "Ecran attache a la board : etat, activation X11 ou Wayland, capacites materielles.",
+  "api_base": "/api/v1/system",
+  "status_endpoint": "/api/v1/system/kiosk/status",
+  "capabilities": ["read", "write"],
+  "routes": [
+    { "path": "", "label": "Kiosque" },
+    { "path": "board", "label": "Materiel" }
+  ]
+}
