@@ -42,6 +42,32 @@ type errJeton string
 
 func (e errJeton) Error() string { return string(e) }
 
+// Claims : ce que le BBS lit d'un jeton. Volontairement etroit.
+type Claims struct {
+	Sub string `json:"sub"`
+	Exp int64  `json:"exp"`
+}
+
+// claimsJeton valide la signature ET rend le sujet.
+//
+// `verifieJeton` ne rendait qu'une erreur : suffisant pour une console
+// d'administration, insuffisant pour agir AU NOM DE quelqu'un.
+func (s *Server) claimsJeton(entete string) (Claims, error) {
+	var c Claims
+	if err := s.verifieJeton(entete); err != nil {
+		return c, err
+	}
+	parts := strings.Split(strings.TrimPrefix(entete, "Bearer "), ".")
+	brut, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return c, errJeton("charge illisible")
+	}
+	if err := json.Unmarshal(brut, &c); err != nil {
+		return c, errJeton("charge illisible")
+	}
+	return c, nil
+}
+
 // verifieJeton valide un JWT HS256.
 //
 // L'ALGORITHME EST IMPOSE, PAS LU DANS LE JETON. Faire confiance au champ

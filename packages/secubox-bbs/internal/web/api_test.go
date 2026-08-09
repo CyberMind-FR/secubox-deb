@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+func jetonHS256Sub(secret, sub, role string, expire time.Duration) string {
+	e := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
+	now := time.Now().Unix()
+	c := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(
+		`{"sub":"%s","role":"%s","iat":%d,"exp":%d}`, sub, role, now, now+int64(expire.Seconds()))))
+	m := hmac.New(sha256.New, []byte(secret))
+	m.Write([]byte(e + "." + c))
+	return e + "." + c + "." + base64.RawURLEncoding.EncodeToString(m.Sum(nil))
+}
+
 func jetonHS256(secret, role string, expire time.Duration) string {
 	e := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
 	now := time.Now().Unix()

@@ -143,6 +143,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	}
 	s.routes()
 	s.routesAPI()
+	s.routesMembre()
 	return s, nil
 }
 
