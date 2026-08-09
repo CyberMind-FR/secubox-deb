@@ -745,7 +745,7 @@ func (s *Server) qrFil(w http.ResponseWriter, r *http.Request, id int64) {
 		http.NotFound(w, r)
 		return
 	}
-	svg, err := qrTexte("https://" + r.Host + "/t/" + itoa64(id))
+	svg, err := s.encoder("https://" + r.Host + "/t/" + itoa64(id))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
