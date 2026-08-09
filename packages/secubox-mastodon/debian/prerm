@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-mastodon.service >/dev/null 2>&1 || true
+    ;;
+  upgrade)
+    # RIEN a l'upgrade : un arret explicite ferait perdre l'information « ce
+    # service tournait », que le postinst utilise pour decider de le relancer.
+    ;;
+esac
+#DEBHELPER#
+exit 0

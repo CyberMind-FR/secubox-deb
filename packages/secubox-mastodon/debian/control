@@ -1,0 +1,30 @@
+Source: secubox-mastodon
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+
+Package: secubox-mastodon
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip,
+ lxc, lxc-templates, nftables, openssl, curl
+Recommends: nginx
+Description: SecuBox Mastodon — reseau social federe (LXC natif)
+ Panneau d'administration et API pour une instance Mastodon installee
+ NATIVEMENT dans un LXC Debian dedie : Ruby, PostgreSQL, Redis, Sidekiq et
+ Puma, geres par systemd DANS le conteneur.
+ .
+ Le demon sur l'hote est leger et TOUJOURS joignable : il sert le panneau et
+ rend l'etat meme quand le conteneur est arrete. C'est ce qui permet de
+ distinguer « le module est absent » de « l'instance est eteinte » — deux
+ situations qui appellent des gestes differents.
+ .
+ Natif-dans-LXC plutot que Docker : un LXC non privilegie ne monte pas
+ fiablement un pont CNI sur les cartes Marvell arm64, et l'installation
+ systemd native est le chemin suivi par les autres modules du parc.
+ .
+ L'INSTALLATION N'EST PAS FAITE PAR LE PAQUET. `mastodonctl install`
+ provisionne le conteneur a la demande : la pile pese plusieurs gigaoctets et
+ demande une adresse publique decidee par l'operateur.

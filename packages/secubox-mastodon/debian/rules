@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-mastodon/usr/lib/secubox/mastodon
+	cp -r api debian/secubox-mastodon/usr/lib/secubox/mastodon/
+	install -d debian/secubox-mastodon/usr/sbin
+	install -m 0755 sbin/mastodonctl debian/secubox-mastodon/usr/sbin/mastodonctl
+	install -d debian/secubox-mastodon/usr/share/secubox/lib/mastodon
+	install -m 0755 lib/mastodon/install-lxc.sh debian/secubox-mastodon/usr/share/secubox/lib/mastodon/
+	install -d debian/secubox-mastodon/usr/share/secubox/www/mastodon
+	install -m 0644 www/mastodon/index.html debian/secubox-mastodon/usr/share/secubox/www/mastodon/
+	install -d debian/secubox-mastodon/usr/share/secubox/menu.d
+	install -m 0644 menu.d/815-mastodon.json debian/secubox-mastodon/usr/share/secubox/menu.d/
+	install -d debian/secubox-mastodon/etc/nginx/secubox-routes.d
+	install -m 0644 nginx/mastodon.conf debian/secubox-mastodon/etc/nginx/secubox-routes.d/
+	# Vhost de l'instance : LIVRE, NON ACTIVE. Activer demande aussi HAProxy et
+	# le DNS, qu'un paquet ne decide pas seul.
+	install -d debian/secubox-mastodon/etc/nginx/sites-available
+	install -m 0644 conf/mastodon.nginx.conf debian/secubox-mastodon/etc/nginx/sites-available/mastodon.conf
+	install -d debian/secubox-mastodon/etc/secubox
+	install -m 0644 conf/mastodon.toml.example debian/secubox-mastodon/etc/secubox/mastodon.toml.example
+	install -d debian/secubox-mastodon/usr/share/doc/secubox-mastodon
+	install -m 0644 README.md debian/secubox-mastodon/usr/share/doc/secubox-mastodon/
+
+# LIVREE MAIS NON ACTIVEE, et --restart-after-upgrade est INDISPENSABLE avec
+# --no-start : sans lui, chaque `dpkg -i` laisse le service arrete alors que
+# l'operateur l'avait active. « Ne pas activer d'office » et « couper ce qui
+# tourne » sont deux choses differentes.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --restart-after-upgrade
