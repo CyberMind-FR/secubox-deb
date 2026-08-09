@@ -1,0 +1,31 @@
+[Unit]
+Description=SecuBox Mastodon — API d'etat du module
+Documentation=file:///usr/share/doc/secubox-mastodon/README.md
+After=network.target
+
+[Service]
+Type=exec
+User=secubox
+Group=secubox
+# Le « + » fait tourner cette ligne en root malgre User= : /run/secubox porte
+# le bit collant et est partage par une centaine d'unites ; seul le
+# proprietaire d'un fichier peut l'y effacer.
+ExecStartPre=+-/bin/rm -f /run/secubox/mastodon.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
+    --uds /run/secubox/mastodon.sock --no-access-log --workers 1
+WorkingDirectory=/usr/lib/secubox/mastodon
+Restart=on-failure
+RestartSec=5
+
+# NoNewPrivileges=false : le demon appelle mastodonctl par sudo, qui manipule
+# le conteneur. Avec NNP, sudo echoue sans message clair.
+NoNewPrivileges=false
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+# PAS de RuntimeDirectory=secubox : ce repertoire est partage, et le declarer
+# ici effacerait au redemarrage les sockets de toutes les autres unites.
+
+[Install]
+WantedBy=multi-user.target

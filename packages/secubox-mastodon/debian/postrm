@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+case "$1" in
+  purge)
+    # LE CONTENEUR N'EST JAMAIS SUPPRIME, ni les secrets. Il contient une
+    # instance federee : des comptes, des messages, et des relations avec
+    # d'autres serveurs. Les effacer parce qu'un paquet est retire serait une
+    # perte irreversible decidee par un outil.
+    echo "secubox-mastodon purge — le conteneur et /etc/secubox/secrets/mastodon restent en place"
+    ;;
+esac
+#DEBHELPER#
+exit 0

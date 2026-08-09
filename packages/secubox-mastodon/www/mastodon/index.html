@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Mastodon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+/* Charte des panneaux d'administration (WEBUI-PANEL-GUIDELINES.md) :
+   terminal cyan, Courier Prime, un seul accent. */
+:root {
+    --p31-dim: #6b7b8b;
+    --bg-dark: #0d1117;
+    --bg-card: rgba(30, 40, 55, 0.8);
+    --bg-row:  rgba(20, 30, 45, 0.6);
+    --border:  rgba(100, 150, 200, 0.2);
+    --text:    #e8e6d9;
+    --cyan:    #00d4ff;
+    --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
+    --green:   #00dd44;  --blue:   #4488ff;  --purple: #a371f7;
+}
+body.hybrid-dark { background: var(--bg-dark); color: var(--text);
+    font-family: 'Courier Prime', monospace; margin: 0; }
+.main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
+@media (max-width: 800px) { .main { margin-left: 0; } }
+.header { display: flex; justify-content: space-between; align-items: flex-end;
+    flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+.header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; }
+.header .sub { color: var(--p31-dim); font-size: .75rem; margin-top: .25rem; }
+.btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
+.btn { background: var(--bg-row); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
+    padding: .45rem .9rem; border-radius: 6px; cursor: pointer; }
+.btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
+.btn.primary { color: var(--cyan); border-color: var(--cyan); }
+.btn.danger  { color: var(--red); border-color: rgba(255,68,102,.5); }
+.btn:disabled { opacity: .5; cursor: default; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
+    gap: .75rem; margin-bottom: 1.5rem; }
+.stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: .9rem; backdrop-filter: blur(10px); text-align: center; }
+.stat-card .value { font-size: 1.3rem; font-weight: 700; text-shadow: 0 0 10px currentColor; }
+.stat-card .label { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--p31-dim); margin-top: .25rem; }
+.stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
+.stat-card.red .value { color: var(--red); } .stat-card.orange .value { color: var(--orange); }
+.stat-card.dim .value { color: var(--p31-dim); }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.1rem; backdrop-filter: blur(10px); margin-bottom: 1rem; }
+.card h3 { color: var(--cyan); font-size: .85rem; margin: 0 0 .75rem;
+    text-transform: uppercase; letter-spacing: .08em; }
+.row { background: var(--bg-row); border-left: 3px solid var(--p31-dim);
+    padding: .5rem .75rem; margin-bottom: .35rem; border-radius: 0 5px 5px 0;
+    display: flex; gap: .75rem; align-items: center; font-size: .75rem; }
+.row.ok { border-left-color: var(--green); }
+.row.warn { border-left-color: var(--orange); }
+.row.bad { border-left-color: var(--red); }
+.row .name { color: var(--cyan); flex: 1; }
+.row .meta { color: var(--p31-dim); font-size: .68rem; text-align: right; }
+.note { color: var(--p31-dim); font-size: .7rem; line-height: 1.6; margin-top: .6rem; }
+.note b { color: var(--text); }
+.code { background: var(--bg-row); border: 1px solid var(--border); border-radius: 5px;
+    padding: .6rem .8rem; font-size: .75rem; color: var(--cyan); word-break: break-all;
+    margin-top: .5rem; }
+.toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--cyan); color: #04202b;
+    padding: .6rem 1rem; border-radius: 6px; font-size: .75rem; opacity: 0;
+    transition: opacity .2s; pointer-events: none; max-width: 60ch; }
+.toast.show { opacity: 1; } .toast.error { background: var(--red); color: #fff; }
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+<header class="header">
+  <div><h1>🐘 Mastodon</h1><div class="sub" id="subline">chargement…</div></div>
+  <div class="btn-group">
+    <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
+    <button class="btn primary" id="b-install" onclick="installer()">⬇ Installer</button>
+    <button class="btn" id="b-start" onclick="act('start')">▶ Allumer</button>
+    <button class="btn danger" id="b-stop" onclick="act('stop')">■ Éteindre</button>
+    <button class="btn primary" onclick="inviter()">✉ Inviter</button>
+  </div>
+</header>
+
+<div class="grid" id="stats"></div>
+
+<div class="card">
+  <h3>🧬 Chaîne de démarrage</h3>
+  <div id="chaine">…</div>
+  <div class="note">
+    <b>Quatre choses distinctes, et les confondre égare.</b> Le paquet peut être
+    installé sans conteneur ; le conteneur peut tourner sans que Puma réponde ;
+    l'instance peut répondre sans domaine configuré. Chaque manque appelle un
+    geste différent.
+  </div>
+</div>
+
+<div class="card" id="carte-invitation" style="display:none">
+  <h3>✉ Invitation émise</h3>
+  <div class="code" id="code-invitation"></div>
+  <div class="note">
+    <b>Valable 7 jours, affichée une seule fois.</b> Les inscriptions sont
+    fermées par défaut : une instance ouverte sur internet se remplit de comptes
+    automatisés en quelques heures, et la modération retombe sur quelqu'un.
+  </div>
+</div>
+
+<div class="card">
+  <h3>⚠ Ce que le paquet ne fait pas</h3>
+  <div class="note">
+    <b>L'installation n'est pas automatique jusqu'au bout.</b> Le
+    provisionnement pose le conteneur, les dépendances, la base et les secrets.
+    Restent la compilation des gemmes (plus d'une heure sur cette carte), la
+    création du schéma, et le premier compte propriétaire — qui demandent un nom
+    et un courriel qu'un script ne doit pas choisir à votre place.
+    <br><br>
+    <b>Le domaine ne se change plus après la première fédération :</b> il est
+    gravé dans chaque adresse d'utilisateur et dans les signatures échangées
+    avec les autres instances.
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/v1/mastodon';
+function jeton() { return localStorage.getItem('sbx_token') || ''; }
+
+async function api(chemin, methode) {
+  const r = await fetch(API + chemin, {
+    method: methode || 'GET',
+    headers: { 'Authorization': 'Bearer ' + jeton() },
+  });
+  const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
+  if (!r.ok) throw new Error(j.detail || j.error || ('HTTP ' + r.status));
+  return j;
+}
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 5000);
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function stat(v, l, c) {
+  return `<div class="stat-card ${c || 'cyan'}"><div class="value">${esc(v)}</div><div class="label">${l}</div></div>`;
+}
+function ligne(ok, nom, meta, cls) {
+  return `<div class="row ${cls || (ok ? 'ok' : 'bad')}">
+    <span class="name">${ok ? '✓' : '✗'} ${esc(nom)}</span>
+    <span class="meta">${esc(meta)}</span></div>`;
+}
+
+async function refresh() {
+  try {
+    const s = await api('/status');
+    const c = s.conteneur || {}, i = s.instance || {};
+    document.getElementById('subline').textContent =
+      `v${s.version} · conteneur ${c.nom} · ${c.ip}`;
+
+    document.getElementById('stats').innerHTML =
+      stat(c.etat || '—', 'conteneur', c.etat === 'running' ? 'green' : 'dim') +
+      stat(i.joignable ? 'oui' : 'non', 'instance répond', i.joignable ? 'green' : 'red') +
+      stat(i.version || '—', 'version', 'cyan') +
+      stat(s.pret ? 'prêt' : 'incomplet', 'état', s.pret ? 'green' : 'orange');
+
+    // On montre la chaîne ENTIÈRE, pas seulement le premier maillon rompu :
+    // savoir ce qui tient déjà évite de tout reprendre depuis le début.
+    document.getElementById('chaine').innerHTML =
+      ligne(s.configure, 'configuration présente', '/etc/secubox/mastodon.toml') +
+      ligne(!!i.domaine, 'domaine défini', i.domaine || 'aucun — requis avant installation') +
+      ligne(c.etat !== 'absent', 'conteneur créé', c.etat === 'absent' ? 'à provisionner' : c.nom) +
+      ligne(c.etat === 'running', 'conteneur allumé', c.etat || '—') +
+      ligne(i.joignable, 'instance joignable', i.joignable ? `port 3000 sur ${c.ip}` : 'aucune réponse');
+
+    document.getElementById('b-install').disabled = c.etat !== 'absent';
+    document.getElementById('b-start').disabled = c.etat === 'running' || c.etat === 'absent';
+    document.getElementById('b-stop').disabled = c.etat !== 'running';
+  } catch (e) {
+    document.getElementById('subline').textContent = e.message;
+    document.getElementById('chaine').innerHTML = ligne(false, 'module injoignable', e.message);
+  }
+}
+
+async function installer() {
+  if (!confirm("Provisionner le conteneur Mastodon ?\n\nPlusieurs gigaoctets, et le domaine configuré ne pourra plus être changé après la première fédération.")) return;
+  try { const r = await api('/install', 'POST'); toast(r.message || 'provisionnement lancé'); }
+  catch (e) { toast(e.message, true); }
+  finally { setTimeout(refresh, 2000); }
+}
+async function act(quoi) {
+  try { await api('/' + quoi, 'POST'); toast(quoi === 'start' ? 'conteneur allumé' : 'conteneur éteint'); }
+  catch (e) { toast(e.message, true); }
+  // ON RELIT TOUJOURS : l'appel peut réussir sans que l'instance suive.
+  finally { refresh(); }
+}
+async function inviter() {
+  try {
+    const r = await api('/invite', 'POST');
+    document.getElementById('code-invitation').textContent = r.invitation || '(vide)';
+    document.getElementById('carte-invitation').style.display = '';
+    toast('invitation émise — affichée une seule fois');
+  } catch (e) { toast(e.message, true); }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</main>
+</body>
+</html>

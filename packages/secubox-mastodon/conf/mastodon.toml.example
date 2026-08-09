@@ -1,0 +1,31 @@
+# SecuBox-Deb :: /etc/secubox/mastodon.toml
+#
+# Le domaine est la SEULE valeur qu'on ne peut pas changer apres coup : il est
+# grave dans chaque adresse d'utilisateur et dans les signatures echangees avec
+# les autres instances. Le modifier apres la premiere federation casse les
+# comptes distants qui vous suivent — ce n'est pas un renommage, c'est un
+# demenagement.
+[instance]
+domain      = "social.gk2.secubox.in"
+titre       = "SecuBox Social"
+description = "Instance federee du noeud"
+# Inscriptions FERMEES par defaut. Une instance ouverte sur internet se remplit
+# de comptes automatises en quelques heures, et la moderation retombe sur
+# quelqu'un.
+inscriptions = "invitation"     # invitation | fermees | ouvertes
+
+[lxc]
+nom  = "mastodon"
+ip   = "10.100.0.200"
+# Mastodon demande davantage que les autres modules : Ruby, PostgreSQL, Redis
+# et Sidekiq tournent ensemble. En dessous de 2 Go l'installation aboutit mais
+# Sidekiq se fait tuer par le noyau des la premiere file chargee.
+memoire_mo = 2048
+
+[courriel]
+# Sans envoi de courriel, aucune confirmation d'inscription ni reinitialisation
+# de mot de passe. Laisser vide desactive ces fonctions plutot que de les faire
+# echouer en silence.
+smtp_hote = ""
+smtp_port = 587
+smtp_de   = ""

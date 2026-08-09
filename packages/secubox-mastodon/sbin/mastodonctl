@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+# SecuBox-Deb :: mastodonctl — seule surface privilegiee du module.
+#
+# Rend du JSON, comme les autres ctl du projet : ce qui est lisible par un
+# humain doit rester consommable par un panneau.
+#
+# CE QU'IL NE FAIT PAS, ET POURQUOI :
+#
+#   Il ne genere aucun mot de passe et n'en affiche aucun qu'il aurait invente.
+#   Un secret produit par un outil finit dans un journal, un historique de shell
+#   ou une capture d'ecran. Les secrets de l'instance sont generes DANS le
+#   conteneur et restent dans /etc/secubox/secrets, chmod 600.
+#
+#   Il n'ouvre aucun port. Le cantonnement vit dans nftables et HAProxy ; une
+#   garde posee dans un outil d'administration serait contournee par tout autre
+#   appelant.
+
+set -uo pipefail
+
+readonly VERSION="0.1.0"
+readonly CONF="${SECUBOX_MASTODON_CONF:-/etc/secubox/mastodon.toml}"
+readonly LXC_PATH="${SECUBOX_LXC_PATH:-/data/lxc}"
+readonly INSTALL="${SECUBOX_MASTODON_INSTALL:-/usr/share/secubox/lib/mastodon/install-lxc.sh}"
+
+_toml() { # _toml section cle defaut
+    python3 - "$CONF" "$1" "$2" "$3" <<'PY'
+import sys, re
+chemin, section, cle, defaut = sys.argv[1:5]
+cur, val = "", None
+try:
+    for l in open(chemin):
+        l = l.strip()
+        if l.startswith("#") or not l: continue
+        m = re.match(r"^\[(.+)\]$", l)
+        if m: cur = m.group(1); continue
+        if cur == section and "=" in l:
+            k, v = (x.strip() for x in l.split("=", 1))
+            if k == cle: val = v.strip('"\'').split("#")[0].strip()
+except OSError:
+    pass
+print(val if val else defaut)
+PY
+}
+
+_nom()  { _toml lxc nom mastodon; }
+_ip()   { _toml lxc ip 10.100.0.200; }
+_dom()  { _toml instance domain ""; }
+
+_lxc_etat() {
+    lxc-info -n "$(_nom)" -P "$LXC_PATH" -s 2>/dev/null | awk '{print tolower($2)}' | head -1
+}
+
+# ── status ──────────────────────────────────────────────────────────────────
+#
+# QUATRE CHOSES DISTINCTES, et les confondre egare :
+#   le paquet est-il installe, le CONTENEUR existe-t-il, TOURNE-t-il, et
+#   l'instance REPOND-elle ? Un conteneur allume dont Puma est mort n'est pas
+#   « en marche » ; le dire evite de chercher la panne dans le reseau.
+cmd_status() {
+    local nom ip dom etat joignable=false vers=""
+    nom=$(_nom); ip=$(_ip); dom=$(_dom)
+    etat=$(_lxc_etat); [ -n "$etat" ] || etat="absent"
+    if [ "$etat" = "running" ]; then
+        curl -fsS --max-time 4 "http://$ip:3000/api/v1/instance" -o /tmp/.mstd.$$ 2>/dev/null && joignable=true
+        [ -s /tmp/.mstd.$$ ] && vers=$(python3 -c "
+import json;print(json.load(open('/tmp/.mstd.$$')).get('version',''))" 2>/dev/null)
+        rm -f /tmp/.mstd.$$
+    fi
+    python3 - "$nom" "$ip" "$dom" "$etat" "$joignable" "$vers" "$VERSION" "$CONF" <<'PY'
+import json, os, sys
+nom, ip, dom, etat, joignable, vers, v, conf = sys.argv[1:9]
+print(json.dumps({
+    "ok": True, "version": v,
+    "conteneur": {"nom": nom, "ip": ip, "etat": etat},
+    "instance": {"domaine": dom, "joignable": joignable == "true", "version": vers or None},
+    "configure": os.path.exists(conf),
+    # `pret` ne dit PAS « tout va bien » : il dit que les quatre conditions
+    # sont reunies. Chacune manquante appelle un geste different, et le panneau
+    # les montre separement.
+    "pret": etat == "running" and joignable == "true" and bool(dom),
+}, ensure_ascii=False))
+PY
+}
+
+# ── install ─────────────────────────────────────────────────────────────────
+cmd_install() {
+    [ -f "$CONF" ] || { printf '{"ok":false,"error":"%s absent — copiez mastodon.toml.example et renseignez le domaine"}\n' "$CONF"; return 2; }
+    local dom; dom=$(_dom)
+    # LE DOMAINE EST IRREVERSIBLE : il est grave dans chaque adresse
+    # d'utilisateur et dans les signatures echangees avec les autres instances.
+    # Refuser ici coute une minute ; s'en apercevoir apres la premiere
+    # federation coute les comptes distants qui vous suivent.
+    [ -n "$dom" ] || { printf '{"ok":false,"error":"aucun domaine configure — il ne pourra plus etre change apres la premiere federation"}\n'; return 2; }
+    [ -x "$INSTALL" ] || { printf '{"ok":false,"error":"script d installation absent: %s"}\n' "$INSTALL"; return 1; }
+    printf '{"ok":true,"message":"provisionnement lance — suivez: journalctl -t mastodon-install -f"}\n'
+    SECUBOX_LXC_NAME="$(_nom)" SECUBOX_LXC_IP="$(_ip)" SECUBOX_MASTODON_DOMAIN="$dom" \
+        setsid "$INSTALL" >/dev/null 2>&1 &
+}
+
+cmd_start()   { lxc-start -n "$(_nom)" -P "$LXC_PATH" 2>/dev/null; sleep 2; cmd_status; }
+cmd_stop()    { lxc-stop  -n "$(_nom)" -P "$LXC_PATH" -t 30 2>/dev/null; cmd_status; }
+
+# ── invite ──────────────────────────────────────────────────────────────────
+#
+# Les inscriptions sont fermees par defaut : une instance ouverte sur internet
+# se remplit de comptes automatises en quelques heures, et la moderation retombe
+# sur quelqu'un.
+cmd_invite() {
+    [ "$(_lxc_etat)" = "running" ] || { printf '{"ok":false,"error":"conteneur arrete"}\n'; return 1; }
+    local out
+    out=$(lxc-attach -n "$(_nom)" -P "$LXC_PATH" -- su - mastodon -c \
+        'cd /home/mastodon/live && RAILS_ENV=production bin/tootctl invites generate --expires-in 604800' 2>&1 | tail -1)
+    python3 -c "
+import json,sys; print(json.dumps({'ok': bool(sys.argv[1].strip()), 'invitation': sys.argv[1].strip(),
+ 'note': 'valable 7 jours, affichee une seule fois'}, ensure_ascii=False))" "$out"
+}
+
+cmd_help() {
+    cat <<'EOF'
+mastodonctl — instance Mastodon federee (LXC natif)
+
+  status              Paquet, conteneur, marche, instance joignable — separement
+  install             Provisionne le conteneur (long : plusieurs Go)
+  start | stop        Allume / eteint le conteneur
+  invite              Emet une invitation (7 jours, affichee une fois)
+  version
+
+Le DOMAINE de /etc/secubox/mastodon.toml ne peut plus etre change apres la
+premiere federation : il est grave dans chaque adresse d'utilisateur et dans
+les signatures echangees avec les autres instances.
+EOF
+}
+
+case "${1:-help}" in
+    status)  cmd_status ;;
+    install) cmd_install ;;
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    invite)  cmd_invite ;;
+    version) printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;
+    *)       cmd_help ;;
+esac
