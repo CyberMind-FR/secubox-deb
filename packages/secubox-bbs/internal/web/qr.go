@@ -63,16 +63,28 @@ func qrBrut(donnee string) ([]byte, error) {
 
 // qr sert le code QR d'une invitation.
 //
-// L'URL COMPLETE EST CONSTRUITE ICI, a partir du seul code. Accepter une URL
-// entiere en parametre ferait de cette page un generateur de QR vers n'importe
-// quelle adresse — commode pour qui voudrait faire scanner un lien piege
-// depuis un domaine de confiance.
+// IL PORTE UNE ADRESSE, PAS LE CODE NU. Un QR qui ne contient qu'un code est
+// inutilisable : le telephone affiche une chaine inerte, sans rien a toucher.
+// Il faudrait la recopier a la main dans la barre d'adresse en devinant le
+// chemin — ce que personne ne fera.
+//
+// (Le premier jet encodait le code seul alors que ce commentaire affirmait
+// deja construire l'adresse. Il decrivait une intention, pas le code.)
+//
+// L'ADRESSE EST ASSEMBLEE ICI a partir du seul code et de l'hote de la
+// requete. Accepter une adresse entiere en parametre ferait de cette page un
+// generateur de QR vers n'importe ou — commode pour faire scanner un lien
+// piege depuis un domaine de confiance.
 func (s *Server) qr(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.sysopOK(w, r); !ok {
 		return
 	}
 	code := r.URL.Query().Get("code")
-	svg, err := qrSVG(code)
+	if !codeValide.MatchString(code) {
+		http.Error(w, "code refuse pour un code QR", http.StatusBadRequest)
+		return
+	}
+	svg, err := s.encoder("https://" + r.Host + "/invite/" + code)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -88,4 +100,17 @@ func (s *Server) qr(w http.ResponseWriter, r *http.Request) {
 // immobiliserait une requete, et le service n'a qu'une poignee de travailleurs.
 func contexteBref() (context.Context, func()) {
 	return context.WithTimeout(context.Background(), 3*time.Second)
+}
+
+// encoder : l'encodeur effectif, remplacable en test.
+//
+// Sans ce point d'insertion, verifier CE QUE le QR contient imposerait de
+// decoder une image — donc un outil de plus, et un test qui ne tournerait pas
+// partout. Ici on verifie la donnee transmise, qui est justement ce qui etait
+// faux.
+func (s *Server) encoder(donnee string) ([]byte, error) {
+	if s.encodeQR != nil {
+		return s.encodeQR(donnee)
+	}
+	return qrBrut(donnee)
 }

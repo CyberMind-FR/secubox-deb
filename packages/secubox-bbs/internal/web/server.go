@@ -102,6 +102,8 @@ type Server struct {
 	// authAmont : verificateur de mot de passe pour les comptes d'origine
 	// SecuBox. Nil = aucun compte SecuBox ne peut se connecter.
 	authAmont authAmont
+	// encodeQR : remplace en test pour verifier CE QUE le QR contient.
+	encodeQR func(string) ([]byte, error)
 }
 
 func New(st *store.Store, opt Options) (*Server, error) {

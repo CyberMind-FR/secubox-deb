@@ -328,3 +328,10 @@ func (s *Store) IngestRuns(limit int) ([]IngestRun, error) {
 	}
 	return out, rows.Err()
 }
+
+// SetRoleSysopPourTest promeut un compte. Reserve aux tests : la promotion
+// d'un membre en production passe par la console, avec sa trace.
+func (s *Store) SetRoleSysopPourTest(id int64) error {
+	_, err := s.db.Exec(`UPDATE users SET role = 'sysop' WHERE id = ?`, id)
+	return err
+}
