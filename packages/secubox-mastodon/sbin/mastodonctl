@@ -64,7 +64,13 @@ cmd_status() {
     nom=$(_nom); ip=$(_ip); dom=$(_dom)
     etat=$(_lxc_etat); [ -n "$etat" ] || etat="absent"
     if [ "$etat" = "running" ]; then
-        curl -fsS --max-time 4 "http://$ip:3000/api/v1/instance" -o /tmp/.mstd.$$ 2>/dev/null && joignable=true
+        # L'EN-TETE Host EST INDISPENSABLE : Rails refuse un hote inattendu
+        # (403), et Mastodon redirige vers HTTPS (301) sans X-Forwarded-Proto.
+        # Sans ces deux en-tetes la sonde conclut « injoignable » sur une
+        # instance parfaitement vivante — et le panneau ment.
+        curl -fsS --max-time 6 \
+            -H "Host: ${dom:-localhost}" -H "X-Forwarded-Proto: https" \
+            "http://$ip:3000/api/v1/instance" -o /tmp/.mstd.$$ 2>/dev/null && joignable=true
         [ -s /tmp/.mstd.$$ ] && vers=$(python3 -c "
 import json;print(json.load(open('/tmp/.mstd.$$')).get('version',''))" 2>/dev/null)
         rm -f /tmp/.mstd.$$
