@@ -643,6 +643,19 @@ frontend stats
 frontend http-in
     bind *:${http_port}
     mode http
+
+    # ACME EN PREMIER, AVANT TOUTE REDIRECTION.
+    #
+    # La validation HTTP-01 se fait en CLAIR sur le port 80 : rediriger le
+    # challenge vers HTTPS le fait echouer, et le certificat cesse d'etre
+    # renouvele — trois mois plus tard, sans avertissement.
+    #
+    # Ce cablage n'existait QUE dans le haproxy.cfg vivant, ajoute a la main.
+    # Toute regeneration reussie l'aurait supprime en silence : c'est
+    # exactement ce que la garde anti-derive protegeait en refusant de
+    # regenerer. Elle avait raison, et le vrai defaut etait ici.
+    acl is_acme_challenge path_beg /.well-known/acme-challenge/
+    use_backend acme_challenge if is_acme_challenge
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
@@ -681,8 +694,19 @@ EOF
 
             # NB: use if/then/fi, not `[ ] && [ ] && { }` — under `set -e` a
             # short-circuited &&-chain (e.g. a non-SSL vhost) aborts generation.
+            # `ssl_redirect = true` etait DEJA declare dans le TOML pour 20
+            # vhosts, et le generateur ne l'a jamais lu : les redirections
+            # presentes dans le fichier vivant y avaient ete ajoutees a la
+            # main, une par une, et disparaissaient a chaque regeneration.
+            #
+            # L'exception `!is_acme_challenge` est indispensable : sans elle le
+            # challenge HTTP-01 part en HTTPS et le renouvellement echoue.
+            local ssl_redirect=$(echo "$section" | grep -E '^ssl_redirect\s*=' | grep -q 'true' && echo "1" || echo "0")
             if [ "$enabled" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
+                if [ "$ssl_redirect" = "1" ]; then
+                    echo "    redirect scheme https code 301 if host_$name !is_acme_challenge"
+                fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
@@ -756,7 +780,19 @@ backend mitmproxy_inspector
     mode http
     option forwardfor
     http-request set-header X-Real-IP %[src]
-    http-request set-uri http://%[req.hdr(Host)]%[path]%[query]
+    # %[url] et NON %[path]%[query].
+    #
+    # Dans HAProxy, `query` rend la chaine SANS son point d'interrogation.
+    # `%[path]%[query]` produisait donc « /recherchemot=x » au lieu de
+    # « /recherche?mot=x » : le chemin devenait introuvable et TOUT vhost passant
+    # par l'inspection rendait 404 des qu'une URL portait des parametres.
+    #
+    # Recherche, pagination, filtres, retours d'authentification — tout ce qui
+    # s'appuie sur une chaine de requete etait casse, en silence, derriere le
+    # WAF. Constate sur bbs.gk2 puis reproduit sur billets.gk2.
+    #
+    # `url` rend le chemin ET la chaine, ponctuation comprise.
+    http-request set-uri http://%[req.hdr(Host)]%[url]
     server waf ${waf_ip}:${waf_port} check
 
 EOF
@@ -800,6 +836,21 @@ EOF
             echo "" >> "$out"
         done
     fi
+
+    # Backend ACME.
+    #
+    # Emis INCONDITIONNELLEMENT, comme les backends canoniques plus bas :
+    # `use_backend acme_challenge` est reference dans le frontend http-in, et
+    # une reference sans backend rend la configuration invalide — HAProxy
+    # refuserait alors de demarrer, ce qui coupe TOUT.
+    #
+    # Le port 8880 est celui que nginx sert pour /.well-known/acme-challenge/.
+    cat >> "$out" << EOF
+backend acme_challenge
+    mode http
+    server acme1 127.0.0.1:8880
+
+EOF
 
     # Fallback backend
     cat >> "$out" << EOF
