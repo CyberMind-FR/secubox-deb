@@ -243,6 +243,10 @@ main() {
     application
     nftables_ouvrir
     log "=== base posee ==="
+    log "RAPPEL : .env.production doit porter RAILS_SERVE_STATIC_FILES=true."
+    log "  nginx est sur l'HOTE, les fichiers sont DANS le conteneur : sans ce"
+    log "  reglage la page se charge mais tous les .js repondent 404 — logo sur"
+    log "  fond blanc, et rien d'autre."
     log "RESTE A FAIRE, ET VOLONTAIREMENT PAS AUTOMATISE :"
     log "  1. bundle install + assets:precompile dans le conteneur (plus d'une heure sur cette carte)"
     log "  2. RAILS_ENV=production bin/rails db:setup"
