@@ -792,7 +792,12 @@ backend mitmproxy_inspector
     mode http
     option forwardfor
     http-request set-header X-Real-IP %[src]
-    http-request set-uri http://%[req.hdr(Host)]%[path]%[query]
+    # %[query] rend la chaine de requete SANS le « ? » qui l'introduit : une
+    # URL « /a.css?v=3 » etait reecrite « /a.cssv=3 » et le backend repondait
+    # 404. La panne touchait TOUT le trafic inspecte portant une chaine de
+    # requete — donc chaque ressource versionnee du parc. %[url] rend le
+    # chemin ET la requete, separateur compris.
+    http-request set-uri http://%[req.hdr(Host)]%[url]
     server waf ${waf_ip}:${waf_port} check
 
 EOF
