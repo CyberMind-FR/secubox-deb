@@ -595,6 +595,11 @@ cmd_generate() {
     local waf_enabled=$(grep -E '^waf_enabled\s*=' "$CONF_PATH" 2>/dev/null | grep -q 'true' && echo "1" || echo "0")
     local waf_port=$(grep -E '^waf_backend_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ' || echo "8080")
     local waf_ip=$(grep -E '^waf_backend_ip\s*=' "$CONF_PATH" 2>/dev/null | cut -d'"' -f2 || echo "10.100.0.60")
+    # Port du serveur nginx dédié aux défis ACME HTTP-01 (#986). Surchargeable
+    # par `acme_port` dans haproxy.toml ; 8880 est la valeur qui était câblée à
+    # la main sur la board avant que ce routage ne soit généré.
+    local acme_port=$(grep -E '^acme_port\s*=' "$CONF_PATH" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    [ -n "$acme_port" ] || acme_port=8880
 
     mkdir -p "$CONFIG_DIR" /run/haproxy "$EXTRA_CFG_DIR"
 
@@ -643,6 +648,19 @@ frontend stats
 frontend http-in
     bind *:${http_port}
     mode http
+    # ACME HTTP-01 (#986) — les défis vont au serveur nginx dédié (:${acme_port}).
+    #
+    # ÉMIS EN PREMIER, avant toute règle de vhost : un défi arrive sur le
+    # domaine du certificat demandé, donc une règle de vhost placée avant
+    # l'attraperait et l'enverrait au service applicatif, qui répondrait 404.
+    # Le renouvellement échouerait alors sans bruit jusqu'à expiration.
+    #
+    # Émis par le générateur depuis #986. Auparavant ce câblage n'existait
+    # QUE dans le haproxy.cfg vivant, ajouté à la main : toute régénération
+    # réussie l'aurait supprimé en silence. C'est la raison pour laquelle la
+    # garde anti-dérive refusait de régénérer — elle protégeait exactement ça.
+    acl is_acme_challenge path_beg /.well-known/acme-challenge/
+    use_backend acme_challenge if is_acme_challenge
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
@@ -676,6 +694,12 @@ EOF
             # `waf_bypass = true` AND a real `backend` (nginx_vhosts) in the vhost
             # block, so it is declarative and auditable — never a silent default.
             local waf_bypass=$(echo "$section" | grep -E '^waf_bypass\s*=' | grep -q 'true' && echo "1" || echo "0")
+            # #988 : ssl_redirect etait ecrit par `vhost add` dans chaque bloc et
+            # n'etait LU nulle part — 18 vhosts le declaraient, zero redirection
+            # etait produite. Un operateur relisant haproxy.toml croyait
+            # legitimement que ses vhosts redirigeaient.
+            local ssl=$(echo "$section" | grep -E '^ssl\s*=' | grep -q 'true' && echo "1" || echo "0")
+            local ssl_redirect=$(echo "$section" | grep -E '^ssl_redirect\s*=' | grep -q 'true' && echo "1" || echo "0")
             # WebUI strict-regex already covers admin.${SECUBOX_HOSTNAME}.${SECUBOX_DOMAIN_SUFFIX}
             if [ -n "$_admin_skip_domain" ] && [ "$domain" = "$_admin_skip_domain" ]; then continue; fi
 
@@ -683,6 +707,18 @@ EOF
             # short-circuited &&-chain (e.g. a non-SSL vhost) aborts generation.
             if [ "$enabled" = "1" ] && [ -n "$domain" ]; then
                 echo "    acl host_$name hdr(host) -i $domain"
+                # Redirection vers HTTPS (#988), conditionnee a ssl = true : un
+                # vhost sans certificat renverrait vers une page injoignable.
+                #
+                # !is_acme_challenge n'est PAS optionnel. HAProxy evalue les
+                # regles `redirect` AVANT `use_backend` : sans cette exclusion,
+                # la redirection prendrait le pas sur le routage ACME emis en
+                # tete de frontend, les defis Let's Encrypt seraient renvoyes
+                # en HTTPS et le renouvellement echouerait — c'est-a-dire
+                # exactement la panne que #986 vient de reparer.
+                if [ "$ssl_redirect" = "1" ] && [ "$ssl" = "1" ]; then
+                    echo "    redirect scheme https code 301 if host_$name !is_acme_challenge"
+                fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
                 else
@@ -756,7 +792,12 @@ backend mitmproxy_inspector
     mode http
     option forwardfor
     http-request set-header X-Real-IP %[src]
-    http-request set-uri http://%[req.hdr(Host)]%[path]%[query]
+    # %[query] rend la chaine de requete SANS le « ? » qui l'introduit : une
+    # URL « /a.css?v=3 » etait reecrite « /a.cssv=3 » et le backend repondait
+    # 404. La panne touchait TOUT le trafic inspecte portant une chaine de
+    # requete — donc chaque ressource versionnee du parc. %[url] rend le
+    # chemin ET la requete, separateur compris.
+    http-request set-uri http://%[req.hdr(Host)]%[url]
     server waf ${waf_ip}:${waf_port} check
 
 EOF
@@ -812,6 +853,16 @@ EOF
     # waf_enabled gate or user TOML — #286: vhosts can reference these even
     # when waf_enabled=0 (e.g. nginx_vhosts for non-WAF passthrough,
     # webui_direct for the SECUBOX_HOSTNAME obfuscation regex).
+    # Cible du routage ACME émis dans frontend http-in (#986). Émis ici, avec
+    # les autres backends canoniques, pour la même raison qu'eux : une règle
+    # `use_backend` sans backend correspondant rend la configuration invalide
+    # et `haproxy -c` la rejette — la génération échouerait entièrement.
+    grep -q '^backend acme_challenge$' "$out" || cat >> "$out" << EOF
+
+backend acme_challenge
+    mode http
+    server acme1 127.0.0.1:${acme_port}
+EOF
     grep -q '^backend nginx_vhosts$' "$out" || cat >> "$out" << EOF
 
 backend nginx_vhosts

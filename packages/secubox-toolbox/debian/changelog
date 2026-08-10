@@ -1,3 +1,13 @@
+secubox-toolbox (2.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * Empaqueter le backend HAProxy `toolbox_landing` dans /etc/haproxy/cfg.d/.
+    Il n'existait que dans le haproxy.cfg vivant, ajouté à la main : une
+    régénération l'aurait effacé et le vhost kbin.gk2.secubox.in serait tombé.
+    C'est le paquet qui fournit le portail qui déclare désormais sa route.
+    (ref #986)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 15:10:00 +0200
+
 secubox-toolbox (2.8.8-1~bookworm1) bookworm; urgency=medium
 
   * fix(rlevel): le portail lance sbxmitm-policyctl DIRECTEMENT (sans sudo) —
