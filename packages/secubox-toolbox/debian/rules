@@ -173,3 +173,10 @@ execute_after_dh_auto_install:
 	install -d debian/secubox-toolbox/etc/nginx/conf.d
 	install -m 0644 nginx/secubox-toolbox-limits.conf \
 	  debian/secubox-toolbox/etc/nginx/conf.d/
+	# Backend HAProxy du portail toolbox (#986). Concatené par
+	# `haproxyctl generate` depuis cfg.d/ : le paquet qui fournit le service
+	# déclare sa route, au lieu de la laisser vivre à la main dans le
+	# haproxy.cfg généré où une régénération l'effacerait.
+	install -d debian/secubox-toolbox/etc/haproxy/cfg.d
+	install -m 0644 haproxy/30-toolbox-landing.cfg \
+	  debian/secubox-toolbox/etc/haproxy/cfg.d/

@@ -3,6 +3,57 @@
 
 ---
 
+## 2026-08-10 — HAProxy : la generation redevient la source de verite (#986, #988)
+
+**Trois cablages n'existaient QUE dans le `haproxy.cfg` vivant**, ajoutes a la
+main : le routage ACME HTTP-01, les redirections HTTPS, et la reecriture d'URI
+vers l'inspecteur. Une regeneration reussie les aurait effaces en silence.
+
+- **Routage ACME genere** (#986) — l'ACL `is_acme_challenge`, sa regle
+  `use_backend` et le backend `acme_challenge` sont desormais emis par
+  `haproxyctl`. L'ACL est emise EN PREMIER : un defi arrive sur le domaine du
+  certificat demande, donc une regle de vhost placee avant l'attraperait et
+  repondrait 404. Le renouvellement aurait echoue sans bruit jusqu'a expiration
+  — le pire delai de detection possible. Port configurable par `acme_port`.
+- **C'est ce que protegeait la garde anti-derive** (#626) : le vivant contenait
+  un backend absent des sources. Elle a fonctionne, mais son effet de bord est
+  que TOUTE modification declarative de `haproxy.toml` est restee inerte
+  plusieurs jours sans qu'aucune commande n'echoue bruyamment.
+- **`ssl_redirect` enfin lu** (#988) — la cle etait ecrite par `vhost add` dans
+  chaque bloc et **lue nulle part** : 18 vhosts la declaraient, zero redirection
+  etait produite. Un operateur relisant `haproxy.toml` croyait legitimement que
+  ses vhosts redirigeaient. Conditionnee a `ssl = true` (rediriger un vhost sans
+  certificat renvoie vers une page injoignable) et portant `!is_acme_challenge`
+  (HAProxy evalue `redirect` AVANT `use_backend` : sans l'exclusion, la
+  redirection prendrait le pas sur le routage ACME).
+- **`%[query]` omet le « ? »** — `mitmproxy_inspector` reecrivait
+  `%[path]%[query]`, transformant « /a.css?v=3 » en « /a.cssv=3 » : 404 sur
+  **tout** le trafic inspecte portant une chaine de requete, donc chaque
+  ressource versionnee du parc. Remplace par `%[url]`. Verrouille par un test de
+  mutation qui interdit aussi la reapparition de la forme fautive.
+- **`toolbox_landing` empaquete** (#986) — le backend vivait lui aussi hors des
+  sources.
+
+Erreur de methode a retenir : le correctif ACME/`ssl_redirect` a failli etre
+reecrit une seconde fois parce que le diagnostic avait ete pose depuis le
+depot (branche `fix/964`, paquet 1.4.0) **sans regarder le generateur installe
+sur la board** (1.6.0), qui le contenait deja — en mieux. Deux branches non
+fusionnees portaient du code vivant. Voir la regle : verifier l'artefact
+deploye, jamais l'arbre local.
+
+Verifie apres regeneration et rechargement : 230 ACL, 7 backends, backend ACME
+present, 10 redirections (celles dont le vhost declare `ssl = true`),
+configuration valide. `social`, `bbs`, `admin`, `billets`, `kbin` et
+`chess.ganimed.fr` repondent 200 ; `billets.css?v=3` repond 200 ; le defi ACME
+reste en clair (404, pas 301). 21 tests. Paquet 1.6.1 sur apt.secubox.in.
+
+**Reste declaratif** : 10 vhosts declarent `ssl_redirect = true` sans `ssl =
+true` (`bbs`, `social`, `nc`, `sso`, `zigbee`, `picobrew`, `zem`, `shiptest`,
+`wiztest2`, `wiztest3`) et ne redirigent donc pas. Ajouter `ssl = true` dans
+leur bloc si la redirection est voulue — pas de modification du generateur.
+
+---
+
 ## 2026-08-06 (suite) — secubox-media 1.2.x + noyau 4secubox (#995, #996)
 
 **Module medias 1.1.0 -> 1.2.2**

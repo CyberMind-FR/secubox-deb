@@ -3,6 +3,18 @@
 
 ---
 
+## HAProxy — suites de #986/#988 (2026-08-10)
+
+- [ ] Décider, vhost par vhost, si les 10 qui déclarent `ssl_redirect = true`
+      sans `ssl = true` doivent rediriger (`bbs`, `social`, `nc`, `sso`,
+      `zigbee`, `picobrew`, `zem`, `shiptest`, `wiztest2`, `wiztest3`).
+      Correctif = ajouter `ssl = true` dans leur bloc de `haproxy.toml`.
+- [ ] Reconstruire et redéployer `secubox-toolbox` : `30-toolbox-landing.cfg`
+      est empaqueté depuis #986 mais le backend vit encore hors des sources
+      sur la board.
+- [ ] Fusionner les branches de worktree qui portent du code **déjà vivant**
+      sur la board : c'est ce qui a fait rediagnostiquer #986/#988 à l'aveugle.
+
 ## 🎬 Média/perf — suite marathon v2.16.0 (2026-07-31)
 
 - [ ] **502 brandé global** : câbler le snippet `secubox-errorpages.conf` dans chaque `server{}` (script python balanced-brace + `nginx -t` avant reload) ; les 2 tentatives naïves (sed) ont cassé `nginx -t`.

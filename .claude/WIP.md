@@ -1,5 +1,34 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-05*
+*Mis à jour : 2026-08-10*
+
+---
+
+## 2026-08-10 — HAProxy : la génération redevient la source de vérité
+
+### ✅ Fait — fusionné (v2.17.0), déployé, publié sur apt
+
+- **Routage ACME généré** (#986) — l'ACL, la règle `use_backend` et le backend
+  `acme_challenge` n'existaient que dans le `haproxy.cfg` vivant. Une
+  régénération réussie les aurait effacés **en silence** : la panne ne serait
+  apparue qu'à l'expiration des certificats, des semaines plus tard.
+- **`ssl_redirect` enfin lu** (#988) — écrit par `vhost add` dans chaque bloc,
+  **lu nulle part**. 18 vhosts le déclaraient, zéro redirection était produite.
+- **`%[query]` omet le « ? »** — `/a.css?v=3` réécrit `/a.cssv=3` : 404 sur tout
+  le trafic inspecté portant une chaîne de requête. Corrigé en `%[url]`,
+  verrouillé par un test de mutation. Paquet **1.6.1**.
+- **La garde anti-dérive avait raison** — elle protégeait exactement ça, mais
+  son effet de bord a rendu `haproxy.toml` inerte plusieurs jours sans qu'aucune
+  commande n'échoue bruyamment.
+
+### ⬜ Next Up
+
+- **10 vhosts déclarent `ssl_redirect = true` sans `ssl = true`** (`bbs`,
+  `social`, `nc`, `sso`, `zigbee`, `picobrew`, `zem`, `shiptest`, `wiztest2`,
+  `wiztest3`) : ils ne redirigent pas. Décider vhost par vhost, puis ajouter
+  `ssl = true` dans leur bloc — **jamais** en modifiant le générateur.
+- **`secubox-toolbox` embarque désormais `30-toolbox-landing.cfg`** (#986) :
+  le paquet n'a pas été reconstruit ni redéployé, le backend vit encore hors
+  des sources sur la board.
 
 ---
 
