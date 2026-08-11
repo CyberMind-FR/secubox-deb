@@ -1,24 +1,58 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-jitsi — API de plan de contrôle (socket dédié).
+#
+# Quatre choses ont changé par rapport à la 1.0.0, chacune pour une raison
+# vérifiée sur la board :
+#
+#   ConditionPathExists=/etc/secubox/jitsi/enabled  — RETIRÉ. Ce fichier n'a
+#   jamais été créé par le postinst : l'unité était donc `enabled` mais ne
+#   démarrait jamais, ce qui se lit « service inactif » sans qu'aucun journal
+#   n'explique pourquoi. C'est l'état dans lequel le module a été trouvé.
+#
+#   User=root — REMPLACÉ par secubox. L'API ne fait aucun travail privilégié :
+#   elle sudo le ctl, qui est la seule surface root du module. Tourner root
+#   « au cas où » retire au ctl sa raison d'être.
+#
+#   docker.service — RETIRÉ des dépendances. Il n'y a plus de conteneur Docker
+#   dans ce module.
+#
+#   Requires=secubox-runtime.service — ASSOUPLI en Wants=. Un Requires= fait
+#   tomber ce service en cascade quand la dépendance redémarre (phase 2 du
+#   projet : 87 unités converties pour cette raison).
+#
+# Le socket est créé DIRECTEMENT avec le bon propriétaire (User=secubox),
+# jamais chown'é après coup : un chown post-démarrage laisse une fenêtre où le
+# socket appartient à root, et un client qui tombe dedans reçoit un 502 sur un
+# service pourtant sain — exactement la panne « contenu perdu » de podcaster.
+
 [Unit]
-# Only start if explicitly enabled (backend installed)
-ConditionPathExists=/etc/secubox/jitsi/enabled
 Description=SecuBox Jitsi API
-After=network.target secubox-core.service secubox-runtime.service docker.service
-Requires=secubox-runtime.service
-Wants=docker.service
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network.target secubox-core.service secubox-runtime.service
+Wants=secubox-core.service secubox-runtime.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=secubox
+Group=secubox
 WorkingDirectory=/usr/lib/secubox/jitsi
-ExecStart=/usr/bin/uvicorn api.main:app --uds /run/secubox/jitsi.sock --log-level warning
-ExecStartPost=-/bin/sleep 1
-ExecStartPost=-/bin/chmod 660 /run/secubox/jitsi.sock
-ExecStartPost=-/bin/chown secubox:secubox /run/secubox/jitsi.sock
+# `python3 -m uvicorn`, PAS /usr/bin/uvicorn : ce binaire n'existe pas sur la
+# board (uvicorn y est installé comme module Python). L'unité 1.0.0 portait
+# déjà ce défaut, invisible puisque sa ConditionPathExists l'empêchait de
+# démarrer — au premier démarrage réel, 203/EXEC. 38 unités du parc utilisent
+# la forme ci-dessous.
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/jitsi.sock --log-level warning
 Restart=on-failure
 RestartSec=5
+
+# false, et non true : l'API sudo `jitsictl` (webui -> ctl confiné).
+# NoNewPrivileges=true neutraliserait sudo et toute action deviendrait un 500.
+NoNewPrivileges=false
+
 PrivateTmp=true
 RuntimeDirectory=secubox
+# yes : ce répertoire est partagé par ~95 unités. Sans cette ligne, l'arrêt de
+# CE service effacerait /run/secubox et donc les sockets de tous les autres.
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 

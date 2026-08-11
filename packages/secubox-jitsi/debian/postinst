@@ -2,24 +2,80 @@
 set -e
 case "$1" in
   configure)
-    # Ensure secubox user exists
     id -u secubox >/dev/null 2>&1 || \
       adduser --system --group --no-create-home \
         --home /var/lib/secubox --shell /usr/sbin/nologin secubox
-    # Create runtime directories
+
+    # Répertoires partagés : le parent garde ses droits (1777 / 0755 selon le
+    # cas). Un module qui resserre un parent partagé casse tous les autres —
+    # leçon déjà payée sur /run/secubox et /var/log/secubox.
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
-    # Create Jitsi data directory
-    install -d -o root -g root -m 755 /srv/jitsi
-    install -d -o root -g root -m 755 /srv/jitsi/recordings
-    # Ensure nginx secubox.d directory exists
+    install -d -o root -g root -m 755 /etc/secubox
+    install -d -o root -g root -m 755 /etc/secubox/jitsi
+    install -d -o secubox -g secubox -m 755 /var/cache/secubox/jitsi
     install -d -m 755 /etc/nginx/secubox.d
-    # Enable and start service
+
+    if [ ! -f /etc/secubox/jitsi.toml ]; then
+      if [ -f /usr/share/doc/secubox-jitsi/examples/jitsi.toml.example ]; then
+        cp /usr/share/doc/secubox-jitsi/examples/jitsi.toml.example /etc/secubox/jitsi.toml
+        chown root:secubox /etc/secubox/jitsi.toml
+        chmod 640 /etc/secubox/jitsi.toml
+      fi
+    fi
+
     systemctl daemon-reload
     systemctl enable secubox-jitsi.service
-    systemctl start secubox-jitsi.service || true
-    # Reload nginx to pick up new location
-    systemctl reload nginx 2>/dev/null || true
+    # try-restart plutôt que start : sur une mise à jour, dpkg a déjà envoyé
+    # SIGTERM à l'unité. try-restart relance ce qui tournait et respecte un
+    # service délibérément arrêté ; le start n'est qu'un repli de première
+    # installation.
+    systemctl try-restart secubox-jitsi.service 2>/dev/null || \
+      systemctl start secubox-jitsi.service || true
+
+    # Activer le vhost public (idempotent).
+    if [ -f /etc/nginx/sites-available/jitsi.conf ] && \
+       [ ! -e /etc/nginx/sites-enabled/jitsi.conf ]; then
+      ln -s ../sites-available/jitsi.conf /etc/nginx/sites-enabled/jitsi.conf
+    fi
+    # `nginx -t` AVANT de recharger : une conf invalide poussée dans un reload
+    # laisse nginx sur l'ancienne config sans le dire, et le défaut ne se
+    # manifeste qu'au prochain redémarrage — c'est-à-dire au pire moment.
+    if nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx 2>/dev/null || true
+    else
+      echo "secubox-jitsi: nginx -t échoue — rechargement NON effectué, vhost à vérifier" >&2
+    fi
+
+    # DÉLIBÉRÉ : le drop-in nftables (UDP/10000 depuis l'extérieur vers le
+    # videobridge) n'est PAS appliqué ici. Ouvrir un port UDP entrant est une
+    # décision d'exposition, pas un effet de bord d'un `apt install`. Livré en
+    # exemple : /usr/share/doc/secubox-jitsi/examples/jitsi.nft
     ;;
 esac
 #DEBHELPER#
+
+# Le provisionnement est démarré APRÈS le bloc debhelper, délibérément.
+#
+# dh_installsystemd injecte à cet endroit un "deb-systemd-invoke restart" sur
+# les unités du paquet. Démarré AVANT ce bloc, le provisionnement se fait donc
+# tuer par ce restart — mesuré : SIGTERM à 4 s, en plein lxc-create, laissant
+# un conteneur à moitié créé ; la relance immédiate échoue alors sur "Ongoing
+# container creation detected" et l'installation se solde par un conteneur
+# inutilisable qu'il faut détruire à la main.
+#
+# NOTE : ne jamais écrire le jeton de substitution debhelper en toutes lettres
+# dans un commentaire de ce fichier. Il est remplacé PARTOUT où il apparaît, y
+# compris au milieu d'une phrase — la fin de la ligne devient alors du shell
+# exécutable. C'est exactement ce qui a fait sortir ce postinst en 127.
+#
+# En arrière-plan (--no-block) : debootstrap + dépôt apt Jitsi + quatre
+# services, plusieurs minutes et du réseau. Bloquer dpkg là-dessus rendrait
+# toute installation hasardeuse. L'unité est un no-op après une mise en route
+# réussie (ConditionPathExists sur son témoin).
+case "$1" in
+  configure)
+    systemctl enable secubox-jitsi-provision.service 2>/dev/null || true
+    systemctl start --no-block secubox-jitsi-provision.service 2>/dev/null || true
+    ;;
+esac

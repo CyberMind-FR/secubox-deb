@@ -10,19 +10,23 @@ Package: secubox-jitsi
 Architecture: all
 Depends: ${misc:Depends},
  secubox-core (>= 1.0),
- python3-uvicorn | python3-pip
-Recommends: docker.io | podman, docker-compose | podman-compose, nginx
-Description: SecuBox Jitsi Meet - Video Conferencing
- Docker-based Jitsi Meet video conferencing for SecuBox.
- Provides secure, scalable video meetings with screen sharing.
+ python3-uvicorn | python3-pip,
+ lxc,
+ curl
+Recommends: nginx
+Description: SecuBox Jitsi Meet - Video Conferencing (LXC-native)
+ Jitsi Meet running natively in an unprivileged Debian LXC: prosody (XMPP),
+ jicofo (focus), jitsi-videobridge2 (media) and an internal nginx serving the
+ web app. The host only routes: HAProxy terminates TLS for the public
+ hostname and proxies to the container.
+ .
+ Replaces the 1.0.0 module, which generated a docker-compose.yml and drove
+ docker/podman from the API request path.
  .
  Features:
-  - Full Jitsi Meet Docker stack (Web, Prosody, Jicofo, JVB)
-  - JWT, LDAP, or internal authentication
-  - Jibri recording and streaming support
-  - SRTP/SRTCP encryption
-  - Breakout rooms and lobby
-  - CRT-light P31 phosphor theme dashboard
+  - Native LXC deployment, one systemd unit per Jitsi service
+  - jitsictl: the single audited root surface (WebUI delegates, never acts)
+  - Videobridge NAT harvester wiring for media behind two NATs
+  - Per-service restart without cycling the container
  .
- Ported from OpenWRT luci-app-jitsi concept.
  Provides FastAPI backend on /api/v1/jitsi/ via Unix socket.

@@ -1,0 +1,44 @@
+# /etc/nftables.d/secubox-jitsi-dnat.nft
+#
+# DNAT du média du videobridge (UDP :10000) vers le LXC Jitsi.
+#
+# UNE SEULE RÈGLE SUFFIT, et c'est contre-intuitif : après DNAT en prerouting
+# la destination n'est plus locale, donc le paquet emprunte la chaîne FORWARD
+# et non INPUT. La politique `drop` de la chaîne input ne s'y applique jamais,
+# et forward est en `policy accept` — il n'y a aucune règle d'acceptation à
+# ajouter. (Une première version de ce fichier ouvrait UDP/10000 en input :
+# inutile, et trompeur pour qui relit la configuration en cherchant ce qui est
+# réellement exposé.)
+#
+# Interface volontairement NON épinglée, sauf pour exclure le bridge LXC :
+# même correction que secubox-lyrion-dnat, dont le fichier .pre-ifacefix garde
+# la trace de l'erreur — le LAN de gk2 arrive sur eth2 et non sur lan0, et
+# coder une interface en dur fait échouer la redirection silencieusement.
+# Exclure br-lxc empêche le trafic sortant du conteneur d'être re-DNAT'é sur
+# lui-même.
+#
+# `counter` n'est pas décoratif : sans lui, une redirection qui ne mord pas
+# est indiscernable d'une redirection qui mord mais ne traduit pas — et le
+# symptôme utilisateur des deux est identique (la conférence se forme et
+# reste muette). C'est le seul moyen simple de vérifier que le paquet
+# arrive bien jusqu'ici.
+#
+# Table dédiée plutôt qu'une règle ajoutée à `inet nat` : le fichier peut être
+# rechargé, remplacé ou retiré sans toucher aux règles des autres modules.
+#
+# CE FICHIER N'EST PAS APPLIQUÉ PAR LE POSTINST. Ouvrir un port UDP entrant
+# vers un service média est une décision d'exposition, pas un effet de bord
+# d'un `apt install`. Pour l'activer :
+#   install -m 644 jitsi.nft /etc/nftables.d/secubox-jitsi-dnat.nft
+#   nft -f /etc/nftables.d/secubox-jitsi-dnat.nft
+#
+# Côté routeur FAI : soit une redirection UDP/10000 vers cette machine, soit
+# une DMZ pointant dessus. La DMZ dispense de la redirection mais PAS de cette
+# règle : elle amène le paquet jusqu'à la machine, pas jusqu'au conteneur.
+
+table inet secubox-jitsi {
+    chain prerouting {
+        type nat hook prerouting priority dstnat; policy accept;
+        iifname != "br-lxc" udp dport 10000 counter dnat ip to 10.100.0.190:10000 comment "jitsi-videobridge-media"
+    }
+}
