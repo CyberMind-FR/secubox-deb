@@ -17,11 +17,12 @@ set -euo pipefail
 readonly HERE="$(cd "$(dirname "$0")/.." && pwd)"   # packages/secubox-netboot
 readonly KEYHINT="secubox-netboot"
 
-board=""; uboot_bin=""; uboot_src=""; key_dir="$HERE/keys"; out="$HERE/staging"
+board=""; uboot_bin=""; uboot_src=""; towboot=""; key_dir="$HERE/keys"; out="$HERE/staging"
 while [ $# -gt 0 ]; do case "$1" in
   --board)     board="$2"; shift 2;;
   --uboot-bin) uboot_bin="$2"; shift 2;;
   --uboot-src) uboot_src="$2"; shift 2;;
+  --tow-boot)  towboot="$2"; shift 2;;
   --key-dir)   key_dir="$2"; shift 2;;
   --out)       out="$2"; shift 2;;
   *) echo "arg inconnu: $1" >&2; exit 2;;
@@ -48,6 +49,13 @@ fi
 if [ ! -f "$key_dir/$KEYHINT.crt" ]; then
   openssl req -batch -new -x509 -key "$key_dir/$KEYHINT.key" \
     -out "$key_dir/$KEYHINT.crt" -subj "/CN=$KEYHINT/" 2>/dev/null || true
+fi
+
+# ── --tow-boot: consommer un répertoire d'artefacts Tow-Boot pré-construit ─────
+if [ -n "$towboot" ] && [ -z "$uboot_bin" ]; then
+  if [ -s "$towboot/u-boot.bin" ]; then uboot_bin="$towboot/u-boot.bin"
+  elif [ -s "$towboot/Tow-Boot.spi.bin" ]; then uboot_bin="$towboot/Tow-Boot.spi.bin"
+  else echo "--tow-boot: pas de u-boot.bin ou Tow-Boot.spi.bin dans $towboot" >&2; exit 1; fi
 fi
 
 # ── obtenir u-boot.bin ───────────────────────────────────────────────────────

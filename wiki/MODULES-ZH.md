@@ -139,6 +139,7 @@
 | 🧰 **ToolBoX (Cabine)** | Security | 强制门户 AP + 知情同意的 MITM 隐私分析器 |
 | 💻 **VM Manager** | System | 虚拟化管理 |
 | 🔎 **YaCy** | Network | 点对点搜索引擎 |
+| 🥾 **网络启动** | System | HTTP/TFTP网络启动配置 + 签名FIT安装程序（Tow-Boot） |
 
 ---
 
