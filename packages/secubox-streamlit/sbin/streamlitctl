@@ -2203,6 +2203,100 @@ cmd_app_idle_check() {
 # silencieusement la décision avec le budget demandé par l'appelant.
 WAKE_DEFAULT_BUDGET_SECONDS=300
 
+# Nom de l'appli dont le .streamlit.toml persisté revendique le port $1, ou
+# retour non nul si aucune. Lit EXACTEMENT les mêmes fichiers que
+# lxc/streamlit-launch et que ceux qu'écrit `app repair` — jamais la table
+# [instances.*], qui porte sa propre notion de port, contredit celle-ci sur
+# cinq entrées de la board, et déclare même deux fois la même appli sur deux
+# ports. Introduire ici une résolution indépendante rejouerait exactement la
+# classe de bug de #958/#959.
+_app_owning_port() {
+    local want="$1" entry base name toml p
+    [ -d "$APPS_PATH" ] || return 1
+    for entry in "$APPS_PATH"/*; do
+        [ -e "$entry" ] || continue
+        base=$(basename "$entry")
+        _is_excluded_entry "$base" && continue
+        if [ -d "$entry" ]; then
+            name="$base"; toml="$entry/.streamlit.toml"
+        elif [ "${base%.py}" != "$base" ]; then
+            name="${base%.py}"; toml="$APPS_PATH/.streamlit-${name}.toml"
+        else
+            continue
+        fi
+        [ -f "$toml" ] || continue
+        p=$(grep -E '^port[ \t]*=' "$toml" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "')
+        if [ -n "$p" ] && [ "$p" = "$want" ]; then
+            printf '%s' "$name"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# app wake-by-port <port> [wait] — réveille l'appli QUI POSSÈDE ce port (#746).
+#
+# C'est le verbe qu'emprunte le réveil-sur-accès. Le chemin public ne connaît
+# qu'un port : sbxwaf a résolu le Host du visiteur vers 10.100.0.50:<port> par
+# haproxy-routes.json, n'a trouvé personne à l'écoute, et a passé la main au
+# waker. Demander « réveille ce qui possède le port P » plutôt que « réveille
+# l'appli X » est délibéré : aucun nom d'appli fourni par un tiers n'atteint
+# jamais systemctl — un appelant ne peut solliciter que l'appli propriétaire du
+# vhost qu'il a demandé.
+#
+# Trois issues distinctes, parce que l'appelant doit pouvoir les distinguer :
+#   0  réveillée (ou déjà en cours)
+#   2  aucune appli ne possède ce port — rien à réveiller, attendre est vain
+#      (cinq vhosts de la board sont dans cet état en permanence)
+#   3  port invalide
+# Le port est VALIDÉ ici, pas supposé : il arrive d'un chemin exposé au réseau,
+# et un nom d'appli passé en guise de port ne doit jamais devenir un nom
+# d'instance systemd.
+cmd_app_wake_by_port() {
+    local port="${1:-}"
+    local wait_sec="${2:-}"
+    local check_only=false
+
+    # --check : résout et rapporte le propriétaire SANS rien démarrer. Sert au
+    # waker, qui doit distinguer « endormie, patiente » de « rien ici, attendre
+    # est vain » AVANT de servir une page d'attente. Volontairement sans
+    # privilège : la résolution ne fait que lire des fichiers déjà lisibles par
+    # secubox, donc l'appelant n'a pas à passer par sudo pour poser la question
+    # — seul le démarrage effectif l'exige.
+    if [ "$wait_sec" = "--check" ]; then
+        check_only=true
+        wait_sec=""
+    fi
+
+    case "$port" in
+        ''|*[!0-9]*)
+            error "Usage: streamlitctl app wake-by-port <port> [wait_seconds]"
+            return 3
+            ;;
+    esac
+    if [ "$port" -le 0 ] || [ "$port" -gt 65535 ]; then
+        error "wake-by-port: port hors plage: $port"
+        return 3
+    fi
+
+    local name
+    if ! name=$(_app_owning_port "$port"); then
+        error "wake-by-port: aucune appli ne possède le port $port — rien à réveiller"
+        return 2
+    fi
+
+    if [ "$check_only" = "true" ]; then
+        printf '%s\n' "$name"
+        return 0
+    fi
+
+    if [ -n "$wait_sec" ]; then
+        cmd_app_wake "$name" "$wait_sec"
+    else
+        cmd_app_wake "$name"
+    fi
+}
+
 cmd_app_wake() {
     local name="$1"
     local wait_sec="${2:-}"
@@ -2675,6 +2769,7 @@ case "${1:-}" in
             autostart)  cmd_app_autostart_set "$3" "$4" "$5" ;;
             idle-check) cmd_app_idle_check "$3" ;;
             wake)       cmd_app_wake "$3" "$4" ;;
+            wake-by-port) cmd_app_wake_by_port "$3" "$4" ;;
             shot-target) cmd_app_shot_target "$3" ;;
             start)  cmd_app_start "$3" "$4" ;;
             stop)   cmd_app_stop "$3" ;;
@@ -2735,6 +2830,7 @@ Apps:
   app autostart <name> <on|off> [--apply]  Declarative always-on: systemd enable + idle-check exempt
   app start <name> [port]   Start an app (drives streamlit-app@<name>.service; refuses without a resolvable port)
   app stop <name>           Stop an app (drives streamlit-app@<name>.service)
+  app wake-by-port <port> [wait]  Wake whatever app owns <port> (on-access path, #746; exit 2 = no owner)
   app deploy <zip> [name]   Deploy from ZIP
   app remove <name>         Remove an app
   app logs <name> [lines]   View app logs
