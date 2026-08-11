@@ -4184,6 +4184,42 @@ Service: secubox-fallback-display.service
 Display: /usr/lib/secubox-eye/agent/display/fallback/fallback_manager.py
 API: http://10.55.0.1:8000/api/v1/system/metrics
 ```
+## 2026-05-11
+
+### Session 144 — HyperPixel Display Init Fixes + Methodology Rules
+
+**Problem:** HyperPixel 2.1 Round display not initializing on Pi Zero W, especially on MOCHAbin.
+
+**Root Causes Identified:**
+1. **Systemd ordering cycle** — `pigpiod After=multi-user.target` created cycle with `hyperpixel2r-init`
+2. **pigpiod IPv6-only** — `-l` flag made it listen on `[::1]:8888` only, Python couldn't connect
+3. **Duplicate interfaces** — RNDIS + ECM gadget causing two network interfaces on host
+4. **USB timing** — Insufficient delays before gadget initialization
+
+**Fixes Applied:**
+- Changed pigpiod to `After=basic.target sysinit.target` (no cycle)
+- Removed `-l` flag from pigpiod (listens on IPv4)
+- Added 8-second delays for stability
+- Removed old duplicate `secubox-otg-gadget.service`
+- Created `install-eye-remote.sh` with all fixes
+
+**Methodology Errors Made (Learning):**
+- ❌ Committed directly to master instead of branch
+- ❌ Created new install script without checking existing `build-eye-remote-image.sh`
+- ❌ Modified `files/` without updating embedded definitions in build script
+- ❌ Started downloading image without checking local files first
+
+**Methodology Rules Added to WIP.md:**
+- Always work on branches, never direct master commits
+- Check existing files before creating new ones
+- Propose before rebuilding
+- Integrate fixes into build scripts (not just files/)
+
+**GitHub Issue:** #77
+
+**Branch:** `fix/issue-77-hyperpixel-init`
+
+**TODO:** Integrate fixes into `build-eye-remote-image.sh` and test full build
 
 ---
 ## 2026-05-09

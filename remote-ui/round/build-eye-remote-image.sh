@@ -332,15 +332,36 @@ if [[ -f "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" ]]; then
 Description=HyperPixel 2.1 Round LCD Display Initialization
 After=pigpiod.service
 Requires=pigpiod.service
+Before=secubox-fb-dashboard.service
 
 [Service]
 Type=oneshot
+# Wait 3 seconds for pigpiod to be fully ready
+ExecStartPre=/bin/sleep 3
 ExecStart=/usr/local/sbin/hyperpixel2r-init
 RemainAfterExit=yes
+# CRITICAL: NO restart - one-time init only (restart causes kernel panic)
 
 [Install]
 WantedBy=multi-user.target
 HPSERVICE
+
+    # Create pigpiod override to fix IPv6-only binding and add delay
+    # Fixes: systemd cycle + pigpiod listening on IPv6 only
+    mkdir -p "$ROOT_MNT/etc/systemd/system/pigpiod.service.d"
+    cat > "$ROOT_MNT/etc/systemd/system/pigpiod.service.d/override.conf" << 'PIGPIOOVERRIDE'
+[Unit]
+# Use basic.target to avoid ordering cycle with multi-user.target
+After=basic.target sysinit.target
+
+[Service]
+ExecStart=
+# Wait 8 seconds for DPI overlay to stabilize before GPIO access
+ExecStartPre=/bin/sleep 8
+# No -l flag: must listen on IPv4 for Python pigpio library
+ExecStart=/usr/bin/pigpiod
+PIGPIOOVERRIDE
+    log "Created pigpiod override for IPv4 binding and delay"
 
     # Enable services (pigpiod + hyperpixel2r-init)
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
@@ -420,6 +441,10 @@ fi
 # Hide blinking cursor on framebuffer (keep tty for console access)
 if [[ ! "$CMDLINE" == *"vt.global_cursor_default"* ]]; then
     sed -i 's/$/ vt.global_cursor_default=0/' "$BOOT_MNT/cmdline.txt"
+fi
+# Disable USB autosuspend for stable MOCHAbin connection
+if [[ ! "$CMDLINE" == *"usbcore.autosuspend"* ]]; then
+    sed -i 's/$/ usbcore.autosuspend=-1/' "$BOOT_MNT/cmdline.txt"
 fi
 
 log "config.txt configured: overlay=$HP_OVERLAY (legacy DPI mode)"
@@ -607,7 +632,12 @@ EOF
 
 # Modprobe config
 mkdir -p "$ROOT_MNT/etc/modprobe.d"
-echo "options dwc2 dr_mode=peripheral" > "$ROOT_MNT/etc/modprobe.d/secubox-otg.conf"
+cat > "$ROOT_MNT/etc/modprobe.d/secubox-otg.conf" << 'MODPROBECONF'
+# SecuBox Eye Remote USB Gadget Mode
+options dwc2 dr_mode=peripheral
+# Disable USB autosuspend for stable connection
+options usbcore autosuspend=-1
+MODPROBECONF
 
 # NOTE: configfs is mounted by gadget-setup.sh on demand, not via fstab
 # Adding it to fstab can cause boot failures if module isn't loaded early enough
