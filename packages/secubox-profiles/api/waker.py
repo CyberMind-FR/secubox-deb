@@ -39,6 +39,13 @@ DEFAULT_ROOT = Path("/etc/secubox")
 # dans un chemin chaud.
 _TEMPLATE_TEXT = (Path(__file__).resolve().parent.parent / "templates"
                  / "waking.html").read_text(encoding="utf-8")
+
+# Page des VRAIES pannes. Distincte de la page d'attente, et c'est tout
+# l'enjeu : un module always-on qui ne repond pas ne sera reveille par
+# personne. Lui servir la page d'attente ferait esperer un reveil qui
+# n'arriverait jamais.
+_DOWN_TEXT = (Path(__file__).resolve().parent.parent / "templates"
+              / "down.html").read_text(encoding="utf-8")
 _WAKE_MIN_INTERVAL_S = 20.0
 
 # Chemin partagé avec api.sleeper.WAKE_LOCK_FILE (même valeur littérale — pas
@@ -157,9 +164,14 @@ def create_app() -> FastAPI:
             # Backend cense tourner en permanence : ce n'est pas un endormi,
             # c'est une VRAIE panne. La page d'attente mentirait — personne ne
             # va le relever. On laisse remonter l'erreur.
+            # 502 NU = page brute cote navigateur. C'est ce que voyait
+            # l'utilisateur sur zigbee : un corps vide, aucune explication.
+            # Le raisonnement (ne pas mentir avec une page d'attente) etait
+            # juste ; il manquait la troisieme page.
             log.warning("wake: %s est %s, pas un module endormi — panne reelle",
                         mid, effective_lifecycle(m))
-            return Response(status_code=502)
+            return HTMLResponse(_DOWN_TEXT, status_code=502,
+                                headers={"Cache-Control": "no-store"})
         if is_on(_observe_one(m)):
             return Response(status_code=200, headers={"X-Sbx-Wake": "up"})
         async with _lock(mid):
