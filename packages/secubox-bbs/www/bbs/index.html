@@ -204,17 +204,29 @@ const API = '/api/v1/bbs';
 
 function jeton() { return localStorage.getItem('sbx_token') || ''; }
 
+// UN JETON EXPIRE N'EST PAS UNE ERREUR A AFFICHER, c'est une session a refaire.
+// Le panneau montrait « jeton expiré » dans chaque carte : exact, et inutile —
+// il ne dit pas quoi faire, et l'on croit a une panne du module.
+//
+// MAIS RENVOYER VERS /login.html SANS DIRE D'OU L'ON VIENT est un aller simple :
+// la connexion reussit et depose l'utilisateur sur l'accueil, pas sur la page
+// qu'il avait demandee. Il doit alors retrouver le module a la main — et si son
+// jeton expire souvent, il a l'impression que la page est inaccessible.
+//
+// `login.html` sait revenir : il lit `?redirect=` et n'accepte qu'un chemin
+// interne (pas de `//`, pas d'URL absolue), ce qui interdit d'en faire un
+// tremplin vers un site tiers.
+function versConnexion() {
+  const ici = window.location.pathname + window.location.search;
+  window.location = '/login.html?redirect=' + encodeURIComponent(ici);
+}
+
 async function api(chemin, methode) {
   const r = await fetch(API + chemin, {
     method: methode || 'GET',
     headers: { 'Authorization': 'Bearer ' + jeton() },
   });
-  // UN JETON EXPIRE N'EST PAS UNE ERREUR A AFFICHER, c'est une session a
-  // refaire. Le panneau montrait « jeton expiré » dans chaque carte : un
-  // message exact, et inutile — il ne dit pas quoi faire, et l'on croit a une
-  // panne du module. Les autres panneaux du parc renvoient vers /login.html ;
-  // celui-ci ne le faisait pas.
-  if (r.status === 401) { window.location = '/login.html'; return null; }
+  if (r.status === 401) { versConnexion(); return null; }
   const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   return j;
@@ -226,7 +238,7 @@ async function poste(chemin, corps) {
     headers: { 'Authorization': 'Bearer ' + jeton(), 'Content-Type': 'application/json' },
     body: JSON.stringify(corps || {}),
   });
-  if (r.status === 401) { window.location = '/login.html'; return null; }
+  if (r.status === 401) { versConnexion(); return null; }
   const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
   return j;

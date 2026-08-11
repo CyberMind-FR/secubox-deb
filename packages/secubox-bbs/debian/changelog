@@ -1,3 +1,14 @@
+secubox-bbs (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau d'administration : la redirection vers /login.html porte desormais
+    `?redirect=` vers la page demandee. Sans lui, un jeton expire faisait
+    quitter /bbs/ pour deposer l'utilisateur sur l'accueil apres connexion : il
+    devait retrouver le module a la main, et avec un jeton expirant souvent le
+    panneau donnait l'impression d'etre inaccessible. `login.html` n'accepte
+    qu'un chemin interne, ce qui interdit d'en faire un tremplin externe.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 11 Aug 2026 21:45:00 +0200
+
 secubox-bbs (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * POINTS D'ENTREE RECONSTRUITS. `.gitignore` portait deux motifs NUS
