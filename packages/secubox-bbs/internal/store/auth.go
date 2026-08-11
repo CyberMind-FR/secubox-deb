@@ -307,8 +307,13 @@ func (a *Auth) SetPassword(userID int64, password string) error {
 // seule sait s'il s'agit d'un depannage (le titulaire est present) ou d'une
 // reprise en main (il faut tout couper). Le magasin ne peut pas trancher.
 func (a *Auth) ResetPassword(userID int64, nouveau string) error {
-	if len(nouveau) < 12 {
-		return errors.New("mot de passe trop court — 12 caracteres au minimum")
+	// AUCUNE LONGUEUR MINIMALE — retiree sur demande de l'exploitant.
+	//
+	// Seul le mot de passe VIDE reste refuse, et ce n'est pas une limite de
+	// longueur : c'est la difference entre avoir un mot de passe et ne pas en
+	// avoir. L'accepter creerait un compte ou la chaine vide authentifie.
+	if nouveau == "" {
+		return errors.New("mot de passe vide")
 	}
 	return a.SetPassword(userID, nouveau)
 }
@@ -410,10 +415,13 @@ func (a *Auth) ChangePassword(userID int64, ancien, nouveau string) error {
 	if !a.Verify(userID, ancien) {
 		return errors.New("mot de passe actuel incorrect")
 	}
-	// Longueur plutot que regles de composition : une phrase longue resiste
-	// mieux qu'un mot court decore de symboles, et ne finit pas sur un post-it.
-	if len(nouveau) < 12 {
-		return errors.New("nouveau mot de passe trop court — 12 caracteres au minimum")
+	// AUCUNE LONGUEUR MINIMALE — retiree sur demande de l'exploitant.
+	//
+	// Seul le mot de passe VIDE reste refuse, et ce n'est pas une limite de
+	// longueur : c'est la difference entre avoir un mot de passe et ne pas en
+	// avoir. L'accepter creerait un compte ou la chaine vide authentifie.
+	if nouveau == "" {
+		return errors.New("nouveau mot de passe vide")
 	}
 	if nouveau == ancien {
 		return errors.New("le nouveau mot de passe est identique a l'ancien")
