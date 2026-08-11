@@ -225,5 +225,50 @@ def test_nginx_snippet_routes_errors_to_the_waker():
             / "secubox-waking.conf").read_text()
     assert "error_page 502 503 504 = @sbx_wake;" in conf
     assert "waker.sock" in conf, "l'erreur doit atteindre le waker"
-    assert "@sbx_waking_static" in conf, \
-        "repli statique requis : une panne du waker rendrait chaque 502 nu"
+    # Volontairement PAS d'error_page dans @sbx_wake : il interceptait aussi
+    # les 502 DELIBERES du waker (panne reelle d'un always-on) et jetait leur
+    # corps — l'utilisateur recevait la page brute de nginx, exactement ce que
+    # ce fragment existe pour supprimer.
+    wake = conf[conf.index("location @sbx_wake"):]
+    wake = wake[:wake.index("\n}")]
+    # LES COMMENTAIRES SONT ECARTES AVANT DE CONCLURE. Le premier jet cherchait
+    # la chaine dans le bloc entier — et le commentaire qui EXPLIQUE l'absence
+    # de `error_page` contient forcement le mot. Le test echouait donc sur la
+    # documentation de ce qu'il verifiait, et le faire passer aurait demande de
+    # retirer l'explication : exactement le mauvais mouvement.
+    directives = [l.strip() for l in wake.splitlines()
+                  if l.strip() and not l.strip().startswith("#")]
+    assert not any("error_page" in d for d in directives), (
+        "une directive error_page dans @sbx_wake intercepterait les 502 "
+        "DELIBERES du waker et jetterait leur corps")
+
+
+def test_always_on_failure_returns_a_page_not_an_empty_502(monkeypatch, tmp_path):
+    """Un 502 nu s'affiche comme une page brute cote navigateur.
+
+    C'est ce que voyait l'utilisateur sur zigbee : un corps VIDE, aucune
+    explication. Le raisonnement etait pourtant juste — un module always-on
+    qui ne repond pas ne sera reveille par personne, et lui servir la page
+    d'attente ferait esperer un reveil qui n'arriverait jamais. Il manquait
+    simplement la troisieme page."""
+    import api.waker as waker
+    monkeypatch.setenv("SECUBOX_PROFILES_ROOT", str(tmp_path))
+    (tmp_path / "modules.d").mkdir()
+    (tmp_path / "modules.d" / "demo.toml").write_text(
+        'id="demo"\ncategory="infra"\nruntime="native"\nexposure="public"\n'
+        'units=["demo.service"]\nlifecycle="always-on"\n[portal]\ndomain="demo.gk2"\n')
+    c = TestClient(waker.app)
+    r = c.get("/_wake/demo.gk2")
+    assert r.status_code == 502
+    assert len(r.content) > 200, "un corps vide n'explique rien"
+    assert "text/html" in r.headers.get("content-type", "")
+
+
+def test_the_failure_page_says_no_wake_is_coming():
+    """Le point de la page : ne pas laisser rafraichir dans le vide."""
+    from pathlib import Path as _P
+    import api.waker as waker
+    txt = (_P(waker.__file__).resolve().parent.parent / "templates"
+           / "down.html").read_text()
+    assert "panne" in txt.lower()
+    assert "relever" in txt.lower() or "reveil" in txt.lower() or "réveil" in txt.lower()

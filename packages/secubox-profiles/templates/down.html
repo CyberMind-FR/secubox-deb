@@ -1,0 +1,58 @@
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 -->
+<!-- Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
+<!-- Source-Disclosed License — All rights reserved except as expressly granted. -->
+<!-- See LICENCE-CMSD-1.0.md for terms. -->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SecuBox — service indisponible</title>
+<style>
+  :root{
+    --bg:#05060a; --panel:#0a0d14; --edge:#3a1216;
+    --cyan:#00d4ff; --gold:#c9a84c; --red:#e63946;
+    --dim:#5a6b73; --txt:#cfe9f2;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:radial-gradient(ellipse at 50% 30%,#1a0b0f 0%,var(--bg) 70%);
+    color:var(--txt);
+    font-family:"JetBrains Mono","Courier Prime",ui-monospace,monospace;
+    display:flex;align-items:center;justify-content:center;padding:4vmin;
+  }
+  .card{
+    background:var(--panel); border:1px solid var(--edge); border-radius:10px;
+    padding:clamp(20px,5vmin,40px); max-width:34rem; width:100%;
+    box-shadow:0 0 40px rgba(230,57,70,.08);
+  }
+  h1{margin:0 0 .6rem; font-size:clamp(1.1rem,3.4vmin,1.5rem); color:var(--red);
+     letter-spacing:.02em; text-wrap:balance}
+  p{margin:.55rem 0; line-height:1.6; color:var(--txt)}
+  .why{color:var(--dim); font-size:.86rem; border-left:2px solid var(--edge);
+       padding-left:.8rem; margin-top:1.1rem}
+  code{color:var(--gold)}
+  a{color:var(--cyan)}
+</style>
+</head>
+<body>
+  <div class="card" role="alert">
+    <h1>⚠ Ce service ne répond pas</h1>
+
+    <p>Il est déclaré <strong>toujours actif</strong> : il devrait donc tourner
+       en permanence. Son absence de réponse est une <strong>panne réelle</strong>,
+       pas une mise en veille.</p>
+
+    <p>Rien ne va le relever tout seul. Rafraîchir cette page n'y changera rien.</p>
+
+    <p class="why">Un service à la demande afficherait ici une page d'attente et
+       serait réveillé par votre visite. Ce n'est pas le cas de celui-ci — le lui
+       faire croire vous ferait attendre un réveil qui n'arriverait jamais.</p>
+
+    <p style="margin-top:1.2rem">Vérifiez son état dans
+       <a href="/profiles/">les profils de modules</a>.</p>
+  </div>
+</body>
+</html>

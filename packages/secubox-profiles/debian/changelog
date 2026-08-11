@@ -1,4 +1,4 @@
-secubox-profiles (0.14.1-1~bookworm1) bookworm; urgency=medium
+secubox-profiles (0.15.1-1~bookworm1) bookworm; urgency=medium
 
   * nginx-sync declare aussi la regle 5xx DANS les blocs qui la surchargent.
     Un error_page declare dans un bloc REMPLACE ceux herites du serveur, il ne
@@ -8,6 +8,18 @@ secubox-profiles (0.14.1-1~bookworm1) bookworm; urgency=medium
     fonctionner sur ces vhosts — c'est-a-dire la majorite d'entre eux :
     l'include etait bien present, la page d'attente n'apparaissait jamais, et
     rien ne le signalait.
+  * Retrait du repli `error_page` dans @sbx_wake. Il visait un waker
+    injoignable, mais interceptait aussi les 502 DELIBERES du waker et jetait
+    leur corps : l'utilisateur recevait la page brute de nginx, exactement ce
+    que ce fragment existe pour supprimer. Les deux cas arrivent en 502 et sont
+    indiscernables ; on laisse passer la reponse du waker, qui est le cas
+    frequent et le seul qui porte une explication.
+  * TROISIEME PAGE : la vraie panne. Un module always-on qui ne repond pas
+    recevait un 502 NU — corps vide, aucune explication, page brute cote
+    navigateur. C'est ce que l'utilisateur voyait sur zigbee. Le raisonnement
+    etait pourtant juste : lui servir la page d'attente ferait esperer un
+    reveil qui n'arriverait jamais, puisque rien ne le relevera. Il manquait
+    la page qui le DIT.
   * GARDE DE PEREMPTION sur les signaux d'activite du sleeper.
     Le demon existait deja (api/sleeper_daemon.py, livre DESACTIVE a dessein) :
     un fichier de signaux ABSENT rend {} et rien ne dort, contrat deja sur.
