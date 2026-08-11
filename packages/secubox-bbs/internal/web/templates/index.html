@@ -1,0 +1,54 @@
+{{define "corps"}}
+<div class="ph"><div>
+  <h1 class="serif">{{if .Cat.Title}}{{.Cat.Title}}{{else}}Forums{{end}}</h1>
+  <p>{{if .Cat.Desc}}{{.Cat.Desc}}{{else}}
+    {{if .V.Connecte}}Tout ce qui s'écrit ici. Le badge dit d'où vient chaque fil.
+    {{else}}Ce qui est ouvert au public. Les membres voient davantage.{{end}}{{end}}</p>
+</div>{{if .V.Connecte}}<div class="row sca6fc03">
+  <a class="btn primary" href="/nouveau{{if .Cat.Slug}}?c={{.Cat.Slug}}{{end}}">＋ Nouveau fil</a>
+</div>{{end}}</div>
+
+{{if not .Cat.Title}}
+<div class="grid g3 sbf4a218">
+  <div class="card stat"><div class="n">{{.Stats.Threads}}</div><div class="l">fils</div></div>
+  <div class="card stat"><div class="n">{{.Stats.Posts}}</div><div class="l">messages</div></div>
+  <div class="card stat"><div class="n sc9cd860">{{.Stats.Billets}}</div><div class="l">billets publiés</div></div>
+</div>
+<div class="card s4b54525">
+  {{range .Cats}}<a class="board s15cb695" href="/c/{{.Slug}}">
+    <div class="ic sf381ae3">◆</div>
+    <div><b>{{.Title}}</b><div class="d">{{.Desc}}</div></div>
+    <div class="meta">{{.Threads}} fils</div>
+  </a>{{else}}<div class="pad sb0455c2">Aucun salon pour l'instant.</div>{{end}}
+</div>
+<h3 class="s24a7a9f">Derniers fils</h3>
+{{end}}
+
+<div class="card">
+  {{range .Threads}}<a class="thread s15cb695" href="/t/{{.ID}}">
+    <div>
+      <div class="t">{{.Title}}</div>
+      <div class="sub">
+        {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>{{else}}<span class="pill p-local">local</span>{{end}}
+        {{if .Published}}<span class="pill p-billet">✦ billet</span>{{end}}
+        {{if .Source}}<span class="pill p-src">{{.Source}}</span>{{end}}
+        {{.Author}} · {{.Posts}} message{{if gt .Posts 1}}s{{end}}
+      </div>
+    </div>
+    <div class="cnt">{{date .LastPostAt}}</div>
+  </a>{{else}}
+  <div class="pad sb0455c2">
+    {{if .V.Connecte}}Aucun fil ici pour l'instant.
+    {{else}}Rien de public pour l'instant. Les membres connectés en voient davantage.{{end}}
+  </div>
+  {{end}}
+</div>
+
+{{if not .V.Connecte}}
+<div class="note v s92c18f6">
+  <b>Vous voyez la partie publique.</b>
+  Les fils locaux ne sont ni listés ici, ni accessibles par leur adresse.
+  L'inscription se fait sur invitation.
+</div>
+{{end}}
+{{end}}

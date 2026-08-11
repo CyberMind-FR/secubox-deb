@@ -1,0 +1,17 @@
+{{define "corps"}}
+<div class="s92ca4fb">
+  <div class="ph"><div><h1 class="serif">Se connecter</h1>
+  <p>{{if .Invite}}Invitation valide — choisissez votre pseudonyme.{{else}}L'inscription se fait sur invitation.{{end}}</p></div></div>
+  {{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
+  <form method="post" action="{{if .Invite}}/invite/{{.Invite}}{{else}}/login{{end}}" class="card pad stack">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <label class="s3fb7839">Pseudonyme
+      <input name="handle" required autofocus class="sa9ef1c9"></label>
+    {{if .Invite}}<label class="s3fb7839">Nom affiché
+      <input name="display" class="sa9ef1c9"></label>{{end}}
+    <label class="s3fb7839">Mot de passe
+      <input name="password" type="password" required class="sa9ef1c9"></label>
+    <button class="btn primary" type="submit">{{if .Invite}}Créer le compte{{else}}Entrer{{end}}</button>
+  </form>
+</div>
+{{end}}

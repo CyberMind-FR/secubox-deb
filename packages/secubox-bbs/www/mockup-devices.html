@@ -1,0 +1,375 @@
+<title>SecuBox BBS — smartphone &amp; affichage ambiant</title>
+<style>
+/* SecuBox BBS — maquette deux écrans.
+ *
+ * CE QUI A ETE CORRIGE PAR RAPPORT AU PREMIER JET
+ *
+ * Les deux écrans étaient coupés en plein milieu d'un élément. La cause est la
+ * même des deux côtés : une hauteur FIXE (704px pour le téléphone, un rapport
+ * 16/9 pour la TV) remplie d'un contenu plus haut qu'elle, avec un
+ * `overflow:hidden` qui tranche là où il tombe.
+ *
+ *   - Téléphone : la zone défilante défile VRAIMENT (overflow-y:auto), et une
+ *     ombre en bas dit qu'il reste quelque chose. Une maquette qui coupe une
+ *     carte en deux se lit comme un bogue, pas comme un choix.
+ *
+ *   - TV : chaque enfant de grille porte `min-height:0`. Sans lui, une piste
+ *     `1fr` refuse de descendre sous la taille de son contenu — c'est le
+ *     défaut de CSS Grid le plus courant — et les colonnes débordaient PAR
+ *     DESSUS la Tribune. Le contenu est aussi calibré pour tenir : sur un
+ *     affichage ambiant, on ne défile pas.
+ *
+ * Aucune police distante : la politique de sécurité des artefacts bloque les
+ * CDN, et une police qui ne charge pas se remplace en silence par une autre,
+ * ce qui défait la maquette sans prévenir. Piles système uniquement.
+ */
+:root{
+  --papier:#F2EFE7; --encre:#161512; --alpin:#2F5AA8; --pierre:#8C8A82;
+  --direct:#2F8F5B; --noir:#0A0A0B; --blanc:#EDEDEA; --tv-dim:#6E6E6A;
+  --ombre:4px 4px 0 var(--encre);
+  --titre:"Archivo","Helvetica Neue",Inter,system-ui,sans-serif;
+  --texte:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --pixel:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#DEDBD2;font-family:var(--texte);color:var(--encre);padding:44px 20px 72px}
+.plateau{max-width:1360px;margin:0 auto}
+.entete{margin-bottom:36px}
+.entete .marque{font-family:var(--pixel);font-size:13px;letter-spacing:2px;color:var(--alpin)}
+.entete h1{font-family:var(--titre);font-weight:700;font-size:clamp(26px,4vw,40px);letter-spacing:-.02em;margin-top:6px;text-wrap:balance}
+.entete p{color:#5a584f;margin-top:8px;max-width:64ch}
+.scene{display:flex;gap:48px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+.etiquette{font-family:var(--pixel);font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:#57554c;margin:0 0 12px 4px}
+
+/* ── barre de titre System 7 ─────────────────────────────────────────── */
+.barre{position:relative;height:26px;border-bottom:2px solid var(--encre);
+  display:flex;align-items:center;justify-content:center;background:var(--papier);flex:none}
+.barre::before{content:"";position:absolute;inset:6px 8px;
+  background:repeating-linear-gradient(to bottom,var(--encre) 0 1px,transparent 1px 3.5px);opacity:.85}
+.barre .titre{position:relative;background:var(--papier);padding:0 10px;
+  font-family:var(--titre);font-weight:600;font-size:12.5px}
+.barre .case{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  width:12px;height:12px;border:2px solid var(--encre);background:var(--papier);z-index:1}
+
+.fenetre{border:2px solid var(--encre);background:#fff;box-shadow:var(--ombre)}
+.fenetre + .fenetre{margin-top:14px}
+.fenetre .corps{padding:11px 13px}
+
+/* ── téléphone ───────────────────────────────────────────────────────── */
+.telephone{width:340px;background:var(--encre);border-radius:44px;padding:12px;
+  box-shadow:0 24px 60px rgba(0,0,0,.28)}
+.ecran{background:var(--papier);border-radius:34px;overflow:hidden;
+  height:704px;display:flex;flex-direction:column;position:relative}
+.statut{display:flex;justify-content:space-between;align-items:center;flex:none;
+  padding:14px 26px 6px;font-family:var(--titre);font-weight:600;font-size:13px}
+.encoche{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  width:110px;height:26px;background:var(--encre);border-radius:14px;z-index:2}
+.app-entete{padding:14px 20px 8px;flex:none}
+.app-entete .marque{font-family:var(--pixel);font-size:12px;letter-spacing:1.5px;color:var(--alpin)}
+.app-entete h2{font-family:var(--titre);font-weight:700;font-size:23px;letter-spacing:-.02em;margin-top:2px}
+.app-entete .sous{font-size:12.5px;color:#6b695f;margin-top:3px}
+
+/* LA ZONE DEFILANTE DEFILE. `min-height:0` est indispensable : sans lui, un
+ * enfant flex refuse de retrecir sous la taille de son contenu et deborde du
+ * telephone au lieu de defiler. */
+.defile{flex:1 1 auto;min-height:0;overflow-y:auto;padding:6px 18px 16px;
+  scrollbar-width:none}
+.defile::-webkit-scrollbar{display:none}
+/* Ombre de pied : dit qu'il reste du contenu, plutot que de laisser croire a
+ * une carte coupee. */
+.zone{position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.zone::after{content:"";position:absolute;left:0;right:0;bottom:0;height:26px;pointer-events:none;
+  background:linear-gradient(to top,var(--papier),transparent)}
+
+.ligne{display:flex;align-items:center;gap:10px;padding:9px 2px;border-top:1px solid #E4E1D6;font-size:13px}
+.ligne:first-child{border-top:0}
+.glyphe{width:26px;height:26px;border:2px solid var(--encre);flex:none;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--pixel);font-size:12px;background:var(--papier)}
+.ligne .txt{flex:1;min-width:0}
+.ligne .txt b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ligne .txt span{font-size:11.5px;color:#77756a}
+.pastille{font-family:var(--titre);font-weight:700;font-size:11px;
+  border:2px solid var(--encre);background:var(--alpin);color:#fff;padding:1px 7px;flex:none}
+
+.direct{background:var(--encre);color:var(--blanc)}
+.direct .corps{padding:13px}
+.direct .drapeau{display:flex;align-items:center;gap:8px;font-family:var(--pixel);
+  font-size:11px;letter-spacing:1.6px;color:#9fdcbb}
+.point{width:9px;height:9px;border-radius:50%;background:var(--direct);animation:bat 1.6s infinite}
+@keyframes bat{50%{opacity:.25}}
+.direct h3{font-family:var(--titre);font-weight:600;font-size:15.5px;margin-top:8px;line-height:1.3}
+.direct .canal{font-size:12px;color:#a5a49c;margin-top:4px}
+.mire{margin-top:11px;height:70px;border:2px solid var(--blanc);position:relative;overflow:hidden;
+  background:linear-gradient(90deg,#EDEDEA 0 14.2%,#d8d341 0 28.4%,#41c8c1 0 42.6%,
+    #3ba54f 0 56.8%,#b0489e 0 71%,#c23b3b 0 85.2%,#2F5AA8 0 100%)}
+.mire::after{content:"▶";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:21px;color:var(--encre);background:rgba(242,239,231,.55)}
+
+.dock{border-top:2px solid var(--encre);background:var(--papier);flex:none;
+  display:flex;justify-content:space-around;padding:9px 8px 20px}
+.dock .item{display:flex;flex-direction:column;align-items:center;gap:4px;
+  font-family:var(--pixel);font-size:9.5px;letter-spacing:.4px;color:#6b695f}
+.dock .item .glyphe{width:30px;height:30px;font-size:13px}
+.dock .item.actif{color:var(--encre)}
+.dock .item.actif .glyphe{background:var(--encre);color:var(--papier)}
+
+.msg{border:2px solid var(--encre);background:#fff;box-shadow:3px 3px 0 var(--encre);
+  padding:10px 12px;font-size:13px;margin:12px 0}
+.msg .qui{display:flex;justify-content:space-between;font-family:var(--titre);
+  font-weight:600;font-size:12px;margin-bottom:5px}
+.msg .qui span{color:#8a887d;font-weight:500}
+.msg.moi{background:var(--alpin);color:#fff}
+.msg.moi .qui span{color:#c9d6ee}
+.saisie{display:flex;gap:8px;padding:10px 16px;border-top:2px solid var(--encre);background:var(--papier);flex:none}
+.saisie input{flex:1;min-width:0;border:2px solid var(--encre);background:#fff;padding:9px 12px;
+  font-family:var(--texte);font-size:13px}
+.saisie button{border:2px solid var(--encre);background:var(--encre);color:var(--papier);
+  font-family:var(--pixel);font-size:12px;padding:0 15px;box-shadow:2px 2px 0 rgba(22,21,18,.35)}
+.marge-bas{height:18px;background:var(--papier);flex:none}
+
+/* ── TV / affichage ambiant ──────────────────────────────────────────── */
+.tv-col{flex:1 1 620px;max-width:760px;min-width:320px}
+.tv{background:#000;border-radius:14px;padding:14px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.tv-ecran{background:var(--noir);color:var(--blanc);aspect-ratio:16/9;border-radius:4px;
+  padding:30px 34px 22px;display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+  gap:18px;overflow:hidden;position:relative}
+.tv .socle{width:180px;height:8px;background:#1c1c1c;margin:10px auto 0;border-radius:0 0 8px 8px}
+
+.tv-haut{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;min-height:0}
+.tv-horloge{font-family:var(--titre);font-weight:500;font-size:clamp(30px,5.4vw,50px);letter-spacing:-.02em;line-height:1}
+.tv-date{color:var(--tv-dim);font-size:clamp(11px,1.5vw,14px);margin-top:5px}
+.tv-noeud{text-align:right;font-size:clamp(10px,1.35vw,12.5px);color:var(--tv-dim);line-height:1.65}
+.tv-noeud .marque{font-family:var(--pixel);font-size:clamp(11px,1.5vw,13px);letter-spacing:2px;color:var(--blanc)}
+.tv-noeud .ok{color:#7CC79F}
+
+/* `minmax(0,1fr)` sur la piste ET `min-height:0` sur chaque module : c'est la
+ * paire qui empeche une colonne de pousser sous la Tribune. */
+.tv-milieu{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:22px;min-height:0;overflow:hidden}
+.module{min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.module h4{font-family:var(--pixel);font-weight:400;font-size:clamp(9px,1.25vw,11px);letter-spacing:2px;
+  color:var(--tv-dim);text-transform:uppercase;border-bottom:1px solid #2a2a2a;
+  padding-bottom:6px;margin-bottom:9px;display:flex;align-items:center;gap:7px;flex:none}
+.tv-ligne{display:flex;gap:9px;font-size:clamp(10.5px,1.45vw,13px);padding:4px 0;color:#CFCFC9;min-width:0}
+.tv-ligne .q{color:var(--tv-dim);flex:none;width:42px;font-variant-numeric:tabular-nums}
+.tv-ligne b{font-weight:500;color:var(--blanc)}
+.tv-ligne small{display:block;color:var(--tv-dim);font-size:clamp(9px,1.15vw,11px);margin-top:1px}
+.tv-direct{border:1px solid #2F8F5B;padding:10px 12px;margin-bottom:10px;background:rgba(47,143,91,.07);flex:none}
+.tv-direct .drapeau{display:flex;align-items:center;gap:7px;font-family:var(--pixel);
+  font-size:clamp(9px,1.2vw,10.5px);letter-spacing:2px;color:#7CC79F}
+.tv-direct h5{font-family:var(--titre);font-weight:500;font-size:clamp(12px,1.75vw,15.5px);margin-top:5px;line-height:1.3}
+.tv-direct .canal{color:var(--tv-dim);font-size:clamp(9.5px,1.2vw,11.5px);margin-top:2px}
+
+.tv-bas{border-top:1px solid #2a2a2a;padding-top:10px;display:flex;align-items:center;gap:12px;
+  font-size:clamp(10px,1.3vw,12.5px);color:var(--tv-dim);min-width:0;min-height:0}
+.tv-bas .tik{font-family:var(--pixel);font-size:clamp(9px,1.15vw,10.5px);letter-spacing:2px;color:var(--blanc);flex:none}
+.piste{flex:1;min-width:0;overflow:hidden;white-space:nowrap}
+.piste .defilant{display:inline-block;padding-left:100%;animation:file 30s linear infinite}
+@keyframes file{to{transform:translateX(-100%)}}
+
+.legende{margin-top:16px;font-size:13px;color:#5a584f;line-height:1.6;max-width:70ch}
+@media (prefers-reduced-motion:reduce){.point,.piste .defilant{animation:none}
+  .piste .defilant{padding-left:0}}
+@media (max-width:760px){
+  .tv-ecran{aspect-ratio:auto;padding:16px}
+  .tv-milieu{grid-template-columns:1fr;gap:14px}
+}
+</style>
+
+<div class="plateau">
+  <div class="entete">
+    <div class="marque">SECUBOX BBS</div>
+    <h1>La place du village, sur deux écrans</h1>
+    <p>Même identité — barres de titre System 7, traits noirs, ombres franches — déclinée
+       en clair sur mobile et en négatif sur l'affichage ambiant.</p>
+  </div>
+
+  <div class="scene">
+
+    <!-- ══ téléphone · accueil ══════════════════════════════════════ -->
+    <div>
+      <p class="etiquette">Smartphone · Accueil</p>
+      <div class="telephone">
+        <div class="ecran">
+          <div class="encoche"></div>
+          <div class="statut"><span>9:41</span><span>▲ gk2 · local</span></div>
+
+          <div class="app-entete">
+            <div class="marque">SECUBOX BBS</div>
+            <h2>Place du village</h2>
+            <div class="sous">Nœud <b>gk2.local</b> · 14 membres · 3 connectés</div>
+          </div>
+
+          <div class="zone">
+            <div class="defile">
+              <div class="fenetre direct">
+                <div class="corps">
+                  <div class="drapeau"><span class="point"></span> EN DIRECT · WEB TV</div>
+                  <h3>Enfants de notre Terre bleue — épisode 4</h3>
+                  <div class="canal">Canal Éducation · 12 spectateurs</div>
+                  <div class="mire"></div>
+                </div>
+              </div>
+
+              <div class="fenetre">
+                <div class="barre"><span class="case"></span><span class="titre">Forums</span></div>
+                <div class="corps">
+                  <div class="ligne">
+                    <span class="glyphe">◈</span>
+                    <span class="txt"><b>Atelier autohébergement</b><span>Gandalf · il y a 12 min</span></span>
+                    <span class="pastille">3</span>
+                  </div>
+                  <div class="ligne">
+                    <span class="glyphe">✦</span>
+                    <span class="txt"><b>Entraide réseau &amp; Wi-Fi</b><span>Mireille · il y a 1 h</span></span>
+                    <span class="pastille">1</span>
+                  </div>
+                  <div class="ligne">
+                    <span class="glyphe">♪</span>
+                    <span class="txt"><b>Musique &amp; podcasts du coin</b><span>Théo · hier</span></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fenetre">
+                <div class="barre"><span class="case"></span><span class="titre">Événements</span></div>
+                <div class="corps">
+                  <div class="ligne">
+                    <span class="glyphe">◆</span>
+                    <span class="txt"><b>Permanence radio &amp; réparation</b><span>Samedi 10 h · salle des fêtes</span></span>
+                  </div>
+                  <div class="ligne">
+                    <span class="glyphe">▶</span>
+                    <span class="txt"><b>Projection : ciel de Maurienne</b><span>Mardi 20 h 30 · Web TV</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dock">
+            <div class="item actif"><span class="glyphe">⌂</span>Place</div>
+            <div class="item"><span class="glyphe">◈</span>Forums</div>
+            <div class="item"><span class="glyphe">▶</span>Web&nbsp;TV</div>
+            <div class="item"><span class="glyphe">✉</span>Courrier</div>
+            <div class="item"><span class="glyphe">▤</span>Fichiers</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ téléphone · fil ══════════════════════════════════════════ -->
+    <div>
+      <p class="etiquette">Smartphone · Fil de discussion</p>
+      <div class="telephone">
+        <div class="ecran">
+          <div class="encoche"></div>
+          <div class="statut"><span>9:43</span><span>▲ gk2 · local</span></div>
+
+          <div class="app-entete">
+            <div class="fenetre">
+              <div class="barre"><span class="case"></span><span class="titre">Atelier autohébergement</span></div>
+            </div>
+          </div>
+
+          <div class="zone">
+            <div class="defile">
+              <div class="msg">
+                <div class="qui">Mireille <span>9 h 12</span></div>
+                Ma box coupe le Wi-Fi tous les soirs à 22 h, c'est normal docteur ?
+              </div>
+              <div class="msg moi">
+                <div class="qui">Gandalf (SysOp) <span>9 h 20</span></div>
+                C'est la planification d'économie d'énergie. Je te montre samedi à la
+                permanence — apporte la box.
+              </div>
+              <div class="msg">
+                <div class="qui">Théo <span>9 h 26</span></div>
+                J'ai déposé le guide PDF dans la bibliothèque → <u>Fichiers / Réseau</u>.
+              </div>
+              <div class="msg">
+                <div class="qui">Mireille <span>9 h 31</span></div>
+                Merci ! Vous êtes plus rapides que la hotline.
+              </div>
+            </div>
+          </div>
+
+          <div class="saisie">
+            <input placeholder="Écrire à l'atelier…">
+            <button>Poster</button>
+          </div>
+          <div class="marge-bas"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TV / affichage ambiant ═══════════════════════════════════ -->
+    <div class="tv-col">
+      <p class="etiquette">TV &amp; miroir · Affichage ambiant</p>
+      <div class="tv">
+        <div class="tv-ecran">
+
+          <div class="tv-haut">
+            <div>
+              <div class="tv-horloge">18:42</div>
+              <div class="tv-date">Samedi 8 août — Notre-Dame-du-Cruet</div>
+            </div>
+            <div class="tv-noeud">
+              <div class="marque">SECUBOX BBS</div>
+              nœud gk2.local · <span class="ok">● en service</span><br>
+              14 membres · fédération : 3 nœuds reliés
+            </div>
+          </div>
+
+          <div class="tv-milieu">
+            <div class="module">
+              <h4>▶ Web TV</h4>
+              <div class="tv-direct">
+                <div class="drapeau"><span class="point"></span> EN DIRECT</div>
+                <h5>Enfants de notre Terre bleue — épisode 4</h5>
+                <div class="canal">Canal Éducation · 12 spectateurs</div>
+              </div>
+              <div class="tv-ligne"><span class="q">20:30</span>
+                <span><b>Projection : ciel de Maurienne</b><small>mardi · direct + rediffusion</small></span></div>
+            </div>
+
+            <div class="module">
+              <h4>◈ Forums</h4>
+              <div class="tv-ligne"><span class="q">12 min</span>
+                <span><b>Atelier autohébergement</b><small>3 nouvelles réponses</small></span></div>
+              <div class="tv-ligne"><span class="q">1 h</span>
+                <span><b>Entraide réseau &amp; Wi-Fi</b><small>Mireille a répondu</small></span></div>
+              <div class="tv-ligne"><span class="q">hier</span>
+                <span><b>Musique &amp; podcasts</b><small>2 fichiers déposés</small></span></div>
+            </div>
+
+            <div class="module">
+              <h4>◆ Village</h4>
+              <div class="tv-ligne"><span class="q">sam.</span>
+                <span><b>Permanence radio</b><small>10 h · salle des fêtes</small></span></div>
+              <div class="tv-ligne"><span class="q">✉</span>
+                <span><b>2 messages privés</b><small>pour Gandalf</small></span></div>
+              <div class="tv-ligne"><span class="q">▤</span>
+                <span><b>Bibliothèque : + guide Wi-Fi</b><small>déposé par Théo</small></span></div>
+            </div>
+          </div>
+
+          <div class="tv-bas">
+            <span class="tik">◇ TRIBUNE</span>
+            <span class="piste"><span class="defilant">Bienvenue à Lucien, 14ᵉ membre du nœud gk2 · Samedi : apportez vos box à réparer · La rediffusion de l'épisode 3 est disponible dans la bibliothèque · Fédération : le nœud « vallee-arvan » vient de se relier</span></span>
+          </div>
+
+        </div>
+        <div class="socle"></div>
+      </div>
+
+      <p class="legende">
+        Mode ambiant : noir profond, typographie fine, zéro interaction — l'écran se lit à trois
+        mètres. Les mêmes glyphes et le vocabulaire de l'app (Place, Forums, Web&nbsp;TV, Courrier,
+        Fichiers) assurent la continuité. Le bandeau « Tribune » défile avec la vie du nœud ; le vert
+        n'apparaît que pour le direct et l'état de service.
+      </p>
+    </div>
+
+  </div>
+</div>

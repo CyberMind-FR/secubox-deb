@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — BBS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+/* Charte des panneaux d'administration (WEBUI-PANEL-GUIDELINES.md) :
+   terminal cyan, Courier Prime, un seul accent.
+
+   VOLONTAIREMENT DIFFERENT de l'interface membre (maquette coloree). Deux
+   publics, deux langages : les membres lisent, le sysop pilote. Un tableau de
+   bord habille comme un salon de lecture se lit mal quand il faut comprendre
+   vite pourquoi l'index diverge. */
+:root {
+    --p31-dim: #6b7b8b;
+    --bg-dark: #0d1117;
+    --bg-card: rgba(30, 40, 55, 0.8);
+    --bg-row:  rgba(20, 30, 45, 0.6);
+    --border:  rgba(100, 150, 200, 0.2);
+    --text:    #e8e6d9;
+    --cyan:    #00d4ff;
+    --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
+    --green:   #00dd44;  --blue:   #4488ff;  --purple: #a371f7;
+}
+body.hybrid-dark { background: var(--bg-dark); color: var(--text);
+    font-family: 'Courier Prime', monospace; margin: 0; }
+.main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
+@media (max-width: 800px) { .main { margin-left: 0; } }
+.header { display: flex; justify-content: space-between; align-items: flex-end;
+    flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+.header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; }
+.header .sub { color: var(--p31-dim); font-size: 0.75rem; margin-top: .25rem; }
+.btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
+.btn { background: var(--bg-row); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
+    padding: .45rem .9rem; border-radius: 6px; cursor: pointer; }
+.btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
+.btn.primary { color: var(--cyan); border-color: var(--cyan); }
+.btn.danger  { color: var(--red); border-color: rgba(255,68,102,.5); }
+.btn:disabled { opacity: .5; cursor: default; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr));
+    gap: .75rem; margin-bottom: 1.5rem; }
+.stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: .9rem; backdrop-filter: blur(10px); text-align: center; }
+.stat-card .value { font-size: 1.6rem; font-weight: 700; text-shadow: 0 0 10px currentColor;
+    font-variant-numeric: tabular-nums; }
+.stat-card .label { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--p31-dim); margin-top: .25rem; }
+.stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
+.stat-card.blue .value { color: var(--blue); } .stat-card.purple .value { color: var(--purple); }
+.stat-card.orange .value { color: var(--orange); } .stat-card.red .value { color: var(--red); }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.1rem; backdrop-filter: blur(10px); margin-bottom: 1rem; }
+.card h3 { color: var(--cyan); font-size: .85rem; margin: 0 0 .75rem;
+    text-transform: uppercase; letter-spacing: .08em; }
+.row { background: var(--bg-row); border-left: 3px solid var(--p31-dim);
+    padding: .5rem .75rem; margin-bottom: .35rem; border-radius: 0 5px 5px 0;
+    display: flex; gap: .75rem; align-items: center; font-size: .75rem; }
+.row:hover { background: rgba(0,212,255,.06); transform: translateX(2px); }
+.row.ok   { border-left-color: var(--green); }
+.row.warn { border-left-color: var(--orange); }
+.row.bad  { border-left-color: var(--red); }
+.row .name { color: var(--cyan); flex: 1; }
+.row .meta { color: var(--p31-dim); font-size: .68rem; text-align: right;
+    font-variant-numeric: tabular-nums; }
+
+  /* Onglets (#1008) : la console sysop du BBS, rendue ici pour ne pas obliger
+   * l'exploitant a changer de site — et a detenir deux authentifications —
+   * pour desactiver un compte. */
+  .onglets { display: flex; gap: 6px; margin: 0 0 16px; flex-wrap: wrap; }
+  .onglet {
+    background: none; border: 1px solid var(--line, #1e3a4a); color: inherit;
+    padding: 7px 14px; border-radius: 999px; cursor: pointer; font: inherit;
+    font-size: 13px; opacity: .65;
+  }
+  .onglet.actif { opacity: 1; border-color: var(--cyan, #00d4ff); }
+  .sysop-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sysop-table th { text-align: left; font-weight: 600; opacity: .6; padding: 6px 8px; }
+  .sysop-table td { padding: 6px 8px; border-top: 1px solid var(--line, #1e3a4a); vertical-align: middle; }
+  .sysop-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sysop-table input[type=password] { width: 150px; }
+  .sysop-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .reglages { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
+  .reglages label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; opacity: .8; }
+  .reglages input { padding: 7px 10px; }
+  .etiq { padding: 1px 8px; border-radius: 999px; font-size: 11.5px; border: 1px solid currentColor; opacity: .8; }
+.tag { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em;
+    padding: .1rem .45rem; border-radius: 3px; border: 1px solid var(--border); }
+.tag.pub { color: var(--green); border-color: rgba(0,221,68,.4); }
+.tag.loc { color: var(--p31-dim); }
+.tag.bil { color: var(--purple); border-color: rgba(163,113,247,.4); }
+.tag.src { color: var(--blue); border-color: rgba(68,136,255,.4); }
+.note { color: var(--p31-dim); font-size: .7rem; line-height: 1.6; margin-top: .6rem; }
+.note b { color: var(--text); }
+.code { background: var(--bg-row); border: 1px solid var(--border); border-radius: 5px;
+    padding: .6rem .8rem; font-size: .75rem; color: var(--cyan); word-break: break-all;
+    margin-top: .5rem; }
+.toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--cyan); color: #04202b;
+    padding: .6rem 1rem; border-radius: 6px; font-size: .75rem; opacity: 0;
+    transition: opacity .2s; pointer-events: none; max-width: 60ch; }
+.toast.show { opacity: 1; } .toast.error { background: var(--red); color: #fff; }
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+<header class="header">
+  <div>
+    <h1>📟 BBS</h1>
+    <div class="sub" id="subline">chargement…</div>
+  </div>
+  <div class="btn-group">
+    <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
+    <button class="btn primary" onclick="inviter()">✉ Inviter</button>
+    <button class="btn" onclick="sauvegarder()">💾 Sauvegarder</button>
+    <button class="btn danger" onclick="reconstruire()">⟲ Reconstruire l'index</button>
+  </div>
+</header>
+
+<div class="onglets">
+  <button class="onglet actif" type="button" data-vue="exploitation">📊 Exploitation</button>
+  <button class="onglet" type="button" data-vue="sysop">⚿ Sysop</button>
+</div>
+
+<div class="vue" data-vue="exploitation">
+<div class="grid" id="stats"></div>
+
+<div class="card">
+  <h3>🧬 Intégrité</h3>
+  <div id="integrite">…</div>
+  <div class="note">
+    <b>Le disque fait foi.</b> L'index se reconstruit entièrement depuis
+    <code>content/</code> — c'est ce qui rend la base jetable et la sauvegarde
+    par rsync honnête. Un écart doit se voir ici, pas le jour de la restauration.
+  </div>
+</div>
+
+<div class="card">
+  <h3>💬 Derniers fils</h3>
+  <div id="fils">…</div>
+</div>
+
+<div class="card" id="carte-invitation" style="display:none">
+  <h3>✉ Invitation émise</h3>
+  <div class="code" id="code-invitation"></div>
+  <div class="note">
+    <b>Ce code n'est affiché qu'une fois.</b> Seule son empreinte est conservée :
+    ni un listing ultérieur, ni une lecture de la base ne permettent de le
+    retrouver. Transmettez-le maintenant.
+  </div>
+</div>
+
+</div><!-- /vue exploitation -->
+
+<div class="vue" data-vue="sysop" hidden>
+  <div class="card">
+    <h3>👥 Comptes</h3>
+    <div id="comptes">…</div>
+    <div class="note">
+      <b>Un compte n'est jamais supprimé, seulement désactivé.</b> Désactiver
+      ferme aussi ses sessions et lui retire le droit d'inviter. Un compte
+      <i>délégué</i> tient son mot de passe de secubox-auth : il se change
+      là-bas, et le réinitialiser ici n'aurait aucun effet à la connexion.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>✉ Invitations</h3>
+    <div id="invitations">…</div>
+    <div class="note">
+      <b>Tout membre peut inviter</b>, sans quota. La colonne « émise par » est
+      la seule façon de remonter une inscription en cascade — seule l'empreinte
+      du code est conservée, jamais le code.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🐘 Mastodon</h3>
+    <div class="reglages">
+      <label>Adresse de l'instance
+        <input id="masto-instance" type="url" placeholder="https://social.exemple.fr"></label>
+      <label>Lien d'invitation
+        <input id="masto-invitation" type="url" placeholder="https://social.exemple.fr/invite/xxxx"></label>
+      <button class="btn primary" type="button" onclick="enregistrerReglages()">Enregistrer</button>
+    </div>
+    <div class="note">
+      Le lien se crée dans Mastodon, puis se colle ici. Il n'est montré qu'aux
+      membres <b>connectés</b> du BBS : une invitation Mastodon sert plusieurs
+      fois et ne se révoque pas d'ici. Vider un champ retire le réglage.
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/v1/bbs';
+
+function jeton() { return localStorage.getItem('sbx_token') || ''; }
+
+async function api(chemin, methode) {
+  const r = await fetch(API + chemin, {
+    method: methode || 'GET',
+    headers: { 'Authorization': 'Bearer ' + jeton() },
+  });
+  // UN JETON EXPIRE N'EST PAS UNE ERREUR A AFFICHER, c'est une session a
+  // refaire. Le panneau montrait « jeton expiré » dans chaque carte : un
+  // message exact, et inutile — il ne dit pas quoi faire, et l'on croit a une
+  // panne du module. Les autres panneaux du parc renvoient vers /login.html ;
+  // celui-ci ne le faisait pas.
+  if (r.status === 401) { window.location = '/login.html'; return null; }
+  const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+async function poste(chemin, corps) {
+  const r = await fetch(API + chemin, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + jeton(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(corps || {}),
+  });
+  if (r.status === 401) { window.location = '/login.html'; return null; }
+  const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+function toast(msg, err) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => { t.className = 'toast'; }, 4000);
+}
+
+function stat(v, l, c) {
+  return `<div class="stat-card ${c||'cyan'}"><div class="value">${v}</div><div class="label">${l}</div></div>`;
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Bascule d'onglet. Les donnees sysop ne sont chargees qu'a l'ouverture de
+// l'onglet : lister les comptes et les invitations a chaque affichage du
+// panneau ferait deux requetes de plus pour une vue que l'on n'ouvre pas
+// souvent.
+document.addEventListener('click', function (e) {
+  const b = e.target.closest('.onglet');
+  if (!b) return;
+  const vue = b.dataset.vue;
+  document.querySelectorAll('.onglet').forEach(o => o.classList.toggle('actif', o === b));
+  document.querySelectorAll('.vue').forEach(v => { v.hidden = v.dataset.vue !== vue; });
+  if (vue === 'sysop') chargerSysop();
+});
+
+async function chargerSysop() {
+  try {
+    const r = await api('/users');
+    if (!r) return;
+    const lignes = (r.users || []).map(u => {
+      const delegue = u.source === 'secubox';
+      const motdepasse = delegue
+        ? '<span class="etiq">délégué</span>'
+        : `<input type="password" minlength="12" placeholder="nouveau mot de passe"
+             id="pw-${u.id}"><button class="btn" type="button"
+             onclick="reinitialiser(${u.id})">Réinitialiser</button>`;
+      return `<tr>
+        <td><b>${esc(u.handle)}</b>${u.desactive ? ' <span class="etiq">désactivé</span>' : ''}</td>
+        <td>${esc(u.role)}</td>
+        <td>${u.derniere_connexion ? new Date(u.derniere_connexion * 1000).toLocaleString('fr-FR') : '—'}</td>
+        <td class="num">${u.sessions}</td>
+        <td><div class="sysop-actions">
+          <button class="btn" type="button" onclick="basculerCompte(${u.id}, ${u.desactive ? 'false' : 'true'})">
+            ${u.desactive ? 'Réactiver' : 'Désactiver'}</button>
+          ${motdepasse}
+        </div></td></tr>`;
+    }).join('');
+    document.getElementById('comptes').innerHTML = lignes
+      ? `<table class="sysop-table"><thead><tr><th>Compte</th><th>Rôle</th>
+         <th>Dernière connexion</th><th class="num">Sessions</th><th></th></tr></thead>
+         <tbody>${lignes}</tbody></table>`
+      : '<div class="row"><span class="name">aucun compte</span></div>';
+  } catch (e) { document.getElementById('comptes').textContent = e.message; }
+
+  try {
+    const r = await api('/invites');
+    if (!r) return;
+    const lignes = (r.invites || []).map(i => `<tr>
+      <td>${i.emetteur ? esc(i.emetteur) : '<span class="etiq">console</span>'}</td>
+      <td>${i.beneficiaire ? esc(i.beneficiaire) : '—'}</td>
+      <td>${i.utilisee ? 'utilisée' : 'ouverte'}</td>
+      <td>${new Date(i.emise_le * 1000).toLocaleDateString('fr-FR')}</td></tr>`).join('');
+    document.getElementById('invitations').innerHTML = lignes
+      ? `<table class="sysop-table"><thead><tr><th>Émise par</th><th>Utilisée par</th>
+         <th>État</th><th>Le</th></tr></thead><tbody>${lignes}</tbody></table>`
+      : '<div class="row"><span class="name">aucune invitation</span></div>';
+  } catch (e) { document.getElementById('invitations').textContent = e.message; }
+
+  try {
+    const r = await api('/settings');
+    if (!r) return;
+    document.getElementById('masto-instance').value = r.instance || '';
+    document.getElementById('masto-invitation').value = r.invitation || '';
+  } catch (e) { toast('réglages : ' + e.message, true); }
+}
+
+async function basculerCompte(id, desactiver) {
+  try {
+    const r = await poste('/users/' + (desactiver ? 'disable' : 'enable'), { id: id });
+    if (!r) return;
+    toast(desactiver ? 'compte désactivé — ses sessions sont fermées' : 'compte réactivé');
+    chargerSysop();
+  } catch (e) { toast('compte : ' + e.message, true); }
+}
+
+async function reinitialiser(id) {
+  const champ = document.getElementById('pw-' + id);
+  if (!champ || !champ.value) { toast('saisissez le nouveau mot de passe', true); return; }
+  try {
+    const r = await poste('/users/password', { id: id, password: champ.value });
+    if (!r) return;
+    champ.value = '';
+    toast('mot de passe réinitialisé — les sessions du compte sont fermées');
+    chargerSysop();
+  } catch (e) { toast('mot de passe : ' + e.message, true); }
+}
+
+async function enregistrerReglages() {
+  try {
+    const r = await poste('/settings', {
+      instance: document.getElementById('masto-instance').value,
+      invitation: document.getElementById('masto-invitation').value,
+    });
+    if (!r) return;
+    toast('réglages enregistrés');
+  } catch (e) { toast('réglages : ' + e.message, true); }
+}
+
+async function refresh() {
+  try {
+    const s = await api('/status');
+    document.getElementById('subline').textContent =
+      s.titre + ' · v' + s.version + ' · ' + s.salons + ' salons';
+    document.getElementById('stats').innerHTML =
+      stat(s.stats.Threads, 'fils', 'cyan') +
+      stat(s.stats.Posts, 'messages', 'blue') +
+      stat(s.stats.Members, 'membres', 'green') +
+      stat(s.stats.Files, 'fichiers', 'purple') +
+      stat(s.stats.Billets, 'billets', 'orange');
+  } catch (e) { toast('état : ' + e.message, true); }
+
+  try {
+    const i = (await api('/integrity')).integrite;
+    const sain = i.Diverging === 0 && i.Missing === 0;
+    document.getElementById('integrite').innerHTML =
+      `<div class="row ${sain ? 'ok' : 'bad'}">
+         <span class="name">${sain ? 'disque et index concordent' : 'ÉCART DÉTECTÉ'}</span>
+         <span class="meta">${i.Indexed} indexés · ${i.OnDisk} sur disque ·
+           ${i.Diverging} divergents · ${i.Missing} absents</span></div>` +
+      (i.Details || []).slice(0, 10).map(d =>
+        `<div class="row bad"><span class="name">${esc(d)}</span></div>`).join('');
+  } catch (e) {
+    document.getElementById('integrite').innerHTML =
+      `<div class="row bad"><span class="name">${esc(e.message)}</span></div>`;
+  }
+
+  try {
+    const f = (await api('/threads')).fils || [];
+    document.getElementById('fils').innerHTML = f.length ? f.slice(0, 25).map(t => {
+      const tags = [
+        t.Visibility === 'public' ? '<span class="tag pub">public</span>'
+                                  : '<span class="tag loc">local</span>',
+        t.Published ? '<span class="tag bil">billet</span>' : '',
+        t.Source ? `<span class="tag src">${esc(t.Source)}</span>` : '',
+      ].join(' ');
+      return `<div class="row ${t.Visibility === 'public' ? 'ok' : ''}">
+        <span class="name">${esc(t.Title)}</span>${tags}
+        <span class="meta">${esc(t.Author)} · ${t.Posts} msg</span></div>`;
+    }).join('') : '<div class="row"><span class="name">aucun fil</span></div>';
+  } catch (e) { document.getElementById('fils').textContent = e.message; }
+}
+
+async function inviter() {
+  try {
+    const r = await api('/invite', 'POST');
+    document.getElementById('code-invitation').textContent = r.code;
+    document.getElementById('carte-invitation').style.display = '';
+    toast('invitation émise — le code n’est affiché qu’une fois');
+  } catch (e) { toast('invitation : ' + e.message, true); }
+}
+
+async function sauvegarder() {
+  toast('sauvegarde en cours…');
+  try {
+    const r = await api('/backup', 'POST');
+    toast('archive écrite : ' + r.archive);
+  } catch (e) { toast('sauvegarde : ' + e.message, true); }
+}
+
+async function reconstruire() {
+  // Reconstruire ne touche pas au disque — mais l'opération peut durer sur un
+  // gros BBS, et une confirmation evite de la declencher d'un clic distrait.
+  if (!confirm("Reconstruire l'index depuis content/ ?\n\nLe disque n'est pas modifié.")) return;
+  toast('reconstruction…');
+  try {
+    await api('/reindex', 'POST');
+    toast('index reconstruit');
+    refresh();
+  } catch (e) { toast('reconstruction : ' + e.message, true); }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

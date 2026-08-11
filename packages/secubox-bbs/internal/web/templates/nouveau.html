@@ -1,0 +1,46 @@
+{{define "corps"}}
+<div class="s621f16f">
+<div class="ph"><div><h1 class="serif">Ouvrir un fil</h1>
+<p>Le premier message part sur le disque en Markdown ; la base ne fait que l'indexer.</p></div></div>
+{{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
+<form method="post" action="/nouveau">
+<input type="hidden" name="csrf" value="{{.V.CSRF}}">
+<div class="card pad stack s42a6ced">
+  <label class="s3fb7839">Salon
+    <select name="categorie" class="sa9ef1c9">
+      {{range .Cats}}<option value="{{.ID}}">{{.Title}}</option>{{end}}
+    </select></label>
+  <label class="s3fb7839">Titre
+    <input name="title" required autofocus maxlength="200"
+      class="sa9ef1c9"></label>
+</div>
+<div class="editor">
+  <div class="tools" id="tools">
+    <button class="tool" type="button" data-w="**" title="Gras"><b>B</b></button>
+    <button class="tool" type="button" data-w="*" title="Italique"><i>I</i></button>
+    <button class="tool" type="button" data-p="## " title="Titre">H2</button>
+    <button class="tool" type="button" data-p="- " title="Liste">☰</button>
+    <button class="tool" type="button" data-p="&gt; " title="Citation">❝</button>
+    <button class="tool mono" type="button" data-w="`" title="Code">&lt;/&gt;</button>
+    <span class="sep"></span>
+    <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
+  </div>
+  <textarea class="area se78b7e7" name="body" rows="9" required
+   
+    placeholder="Écrivez le premier message…"></textarea>
+  <div class="foot">
+    <span class="sdf3b93c">Visibilité&nbsp;:</span>
+    <label class="btn sm"><input type="radio" name="visibility" value="local" checked> Local</label>
+    <label class="btn sm"><input type="radio" name="visibility" value="public"> Public</label>
+    <div class="sca6fc03"><button class="btn primary" type="submit">Ouvrir le fil</button></div>
+  </div>
+</div>
+</form>
+<div class="note v sc53ea1d">
+  <b>Public veut dire lisible depuis internet.</b>
+  Un fil local reste dans la maison : il n'est ni listé, ni accessible par son
+  adresse. Seul un fil public peut ensuite devenir un billet.
+</div>
+</div>
+<script src="/static/editeur.js" defer></script>
+{{end}}

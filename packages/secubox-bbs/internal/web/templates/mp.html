@@ -1,0 +1,91 @@
+{{define "corps"}}
+<div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
+{{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
+{{if .Msg}}<div class="note m s42a6ced"><b>{{.Msg}}</b></div>{{end}}
+
+<div class="mp">
+  <aside class="mp-liste">
+    <div class="railhead">Conversations</div>
+    {{if .Convs}}{{range .Convs}}
+      <a class="mp-conv{{if eq .Handle $.Avec.Handle}} actif{{end}}" href="/mp/{{.Handle}}">
+        <span class="av">{{.Handle}}</span>
+        <span class="mp-conv-txt">
+          <b>{{.Nom}}</b>
+          <span class="d">{{.Dernier}}</span>
+        </span>
+        {{if .NonLus}}<span class="pill p-new">{{.NonLus}}</span>{{end}}
+      </a>
+    {{end}}{{else}}
+      <div class="note">{{.Vide}}</div>
+    {{end}}
+
+    <div class="railhead">Écrire à</div>
+    {{if .Corres}}
+      <div class="mp-choix">
+        {{range .Corres}}<a class="mp-membre" href="/mp/{{.Handle}}">{{.Display}}</a>{{end}}
+      </div>
+    {{else}}
+      <div class="note">Aucun autre membre pour l'instant.</div>
+    {{end}}
+  </aside>
+
+  <section class="mp-fil">
+  {{if .Avec.ID}}
+    <div class="mp-entete">
+      <span class="av">{{.Avec.Handle}}</span>
+      <b>{{.Avec.Display}}</b>
+      {{if .Avec.Disabled}}<span class="pill p-warn">compte fermé</span>{{end}}
+    </div>
+
+    <div class="mp-bulles">
+      {{range .Fil}}
+        <div class="bulle{{if eq .De $.V.ID}} moi{{end}}">
+          <div class="bulle-corps">{{rendu .Body}}</div>
+          <div class="bulle-pied d">{{if .Auteur}}{{.Auteur}}{{else}}compte supprimé{{end}} · {{date .SentAt}}</div>
+        </div>
+      {{else}}
+        <div class="note">Rien encore. Le premier message est à vous.</div>
+      {{end}}
+    </div>
+
+    {{if .Avec.Disabled}}
+      <div class="note sa2d3b14">Ce compte est fermé : il ne recevra plus de message.</div>
+    {{else}}
+      <form method="post" action="/mp/envoyer" class="mp-ecrire">
+        <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <input type="hidden" name="vers" value="{{.Avec.Handle}}">
+        <div class="editor">
+          <div class="tools">
+            <button class="tool" type="button" data-w="**" title="Gras"><b>B</b></button>
+            <button class="tool" type="button" data-w="*" title="Italique"><i>I</i></button>
+            <button class="tool" type="button" data-p="- " title="Liste">☰</button>
+            <button class="tool" type="button" data-p="&gt; " title="Citation">❝</button>
+            <button class="tool mono" type="button" data-w="`" title="Code">&lt;/&gt;</button>
+            <span class="sep"></span>
+            <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
+          </div>
+          <textarea class="area" name="corps" rows="4" required
+            placeholder="Votre message…"></textarea>
+          <div class="foot">
+            <span class="sdf3b93c">Markdown — ce qui part sur le disque reste du texte.</span>
+            <div class="sca6fc03"><button class="btn primary" type="submit">Envoyer</button></div>
+          </div>
+        </div>
+      </form>
+    {{end}}
+  {{else}}
+    <div class="card pad sb0455c2">
+      Choisissez une conversation, ou écrivez à un membre.
+    </div>
+  {{end}}
+  </section>
+</div>
+
+<div class="note m s92c18f6">
+  Les messages privés vivent en base et <b>ne sont pas repris dans la
+  sauvegarde</b>, qui n'emporte que le contenu publiable. C'est délibéré : une
+  archive circule — disque externe, autre machine, dépannage — et une
+  conversation privée n'a pas à voyager avec.
+</div>
+<script src="/static/editeur.js" defer></script>
+{{end}}

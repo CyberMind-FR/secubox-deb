@@ -1,0 +1,103 @@
+{{define "corps"}}
+<div class="crumb"><a href="/" class="se2e86c5">Forums</a> › <a href="/c/{{.Cat.Slug}}" class="se2e86c5">{{.Cat.Title}}</a></div>
+<div class="ph"><div>
+  <h1 class="serif se3ffd0e">{{.T.Title}}</h1>
+  <p>
+    {{if eq .T.Visibility "public"}}<span class="pill p-pub">fil public</span>{{else}}<span class="pill p-local">fil local</span>{{end}}
+    {{if .T.Published}}<span class="pill p-billet">✦ publié en billet</span>{{end}}
+    ouvert par {{.T.Author}}
+  </p>
+</div>
+{{if .V.Sysop}}<div class="row sca6fc03">
+  {{if eq .T.Visibility "public"}}
+    {{if .T.Published}}
+      <a class="btn sm" href="{{.T.Published}}">Voir le billet</a>
+    {{else}}
+      <form method="post" action="/t/{{.T.ID}}/publier" class="row s491198d">
+        <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <label class="s3608041" title="Par défaut, les pseudonymes ne sont pas publiés">
+          <input type="checkbox" name="attribuer" value="1"> nommer les auteurs</label>
+        <button class="btn sm pinkish" type="submit">✦ Publier en billet</button>
+      </form>
+    {{end}}
+  {{else}}
+    <span class="pill p-local" title="Un fil local n'a pas de bouton publier">local — non publiable</span>
+  {{end}}
+</div>{{end}}
+</div>
+
+{{if .T.MediaURL}}
+<div class="card lecteur">
+  {{if eq .T.MediaKind "video"}}
+    <div class="cadre-video">
+      <iframe src="{{.T.MediaURL}}" title="{{.T.Title}}" allowfullscreen
+              referrerpolicy="no-referrer" loading="lazy"></iframe>
+    </div>
+  {{else}}
+    <div class="pad">
+      <audio controls preload="none" src="{{.T.MediaURL}}" class="lecteur-audio"></audio>
+    </div>
+  {{end}}
+  <div class="partage">
+    <span class="pill p-src">{{.T.Source}}</span>
+    <span class="lien-partage mono">{{.Base}}/t/{{.T.ID}}</span>
+    <a class="btn sm" href="/t/{{.T.ID}}/qr" title="Ouvrir sur un téléphone">▦ QR</a>
+    {{if .T.MediaURL}}<a class="btn sm" href="{{.T.MediaURL}}">↗ Source</a>{{end}}
+  </div>
+</div>
+{{end}}
+
+<div class="card">
+{{range .Posts}}
+  <article class="post{{if eq .Visibility "local"}} localnote{{end}}">
+    <div class="who"><div class="av">{{.Initiales}}</div><small>{{.Author}}</small></div>
+    <div class="bd">
+      <div class="hd">{{date .CreatedAt}}
+        {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>
+        {{else}}<span class="pill p-local">local — ne sort pas</span>{{end}}</div>
+      {{rendu .Body}}
+    </div>
+  </article>
+{{end}}
+</div>
+
+{{if .V.Connecte}}
+<h3 class="sab2784b">Répondre</h3>
+<form method="post" action="/t/{{.T.ID}}/reply">
+<input type="hidden" name="csrf" value="{{.V.CSRF}}">
+<div class="editor">
+  <div class="tools" id="tools">
+    <button class="tool" type="button" data-w="**" title="Gras"><b>B</b></button>
+    <button class="tool" type="button" data-w="*" title="Italique"><i>I</i></button>
+    <button class="tool" type="button" data-p="## " title="Titre">H2</button>
+    <button class="tool" type="button" data-p="- " title="Liste">☰</button>
+    <button class="tool" type="button" data-p="&gt; " title="Citation">❝</button>
+    <button class="tool mono" type="button" data-w="`" title="Code">&lt;/&gt;</button>
+    <span class="sep"></span>
+    <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
+  </div>
+  <textarea class="area se78b7e7" name="body" rows="6" required
+           
+            placeholder="Écrivez ici…"></textarea>
+  <div class="foot">
+    <span class="sdf3b93c">Visibilité&nbsp;:</span>
+    {{if eq .T.Visibility "public"}}
+      <label class="btn sm"><input type="radio" name="visibility" value="local" checked> Local</label>
+      <label class="btn sm"><input type="radio" name="visibility" value="public"> Public</label>
+    {{else}}
+      <input type="hidden" name="visibility" value="local">
+      <span class="pill p-local">local — le fil ne sort pas</span>
+    {{end}}
+    <div class="row sca6fc03"><button class="btn primary" type="submit">Envoyer</button></div>
+  </div>
+</div>
+</form>
+<div class="note m sc53ea1d">
+  <b>Ce que vous écrivez devient un fichier.</b>
+  Le message part sur le disque en Markdown ; la base ne fait que l'indexer.
+</div>
+<script src="/static/editeur.js" defer></script>
+{{else}}
+<div class="note v s2bdf8e4"><b>Connectez-vous pour répondre.</b> L'inscription se fait sur invitation.</div>
+{{end}}
+{{end}}
