@@ -25,3 +25,17 @@ def tmp_sessions_json(tmp_path: Path) -> Path:
     path = tmp_path / "sessions.json"
     path.write_text("[]")
     return path
+
+
+@pytest.fixture(autouse=True)
+def _isolate_totp_replay_store(tmp_path, monkeypatch):
+    """Isole l'etat d'anti-rejeu TOTP (#990).
+
+    Sans ca, tout Engine construit sans replay_path explicite ecrit dans
+    /var/lib/secubox/totp-replay.json — un fichier SYSTEME partage. Constate en
+    ecrivant le correctif : un test existant s'est mis a echouer parce qu'un run
+    precedent y avait laisse une entree pour le meme utilisateur. Un etat qui
+    fuit d'un test a l'autre rend la suite dependante de la machine.
+    """
+    monkeypatch.setenv("SECUBOX_TOTP_REPLAY_PATH",
+                       str(tmp_path / "totp-replay.json"))
