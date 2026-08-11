@@ -268,6 +268,17 @@ anodins** — chaque défaut en masquait un autre.
 
 **PR fusionnées** : #963, #965, #966, #972, #973, #976, #978, #980, #983.
 **Issues ouvertes** : #967, #968, #969, #970, #971, #974, #975, #977, #979, #981.
+## 2026-08-05 — Streamlit : bascule du parc vivant vers les unités par appli (#982)
+
+Le code de #963 était dans master ; la bascule sur le conteneur vivant n'avait jamais été jouée. Faite ce jour. **23 processus Streamlit résidents → 0, charge 31.7 → 15.9.**
+
+- **Le point bloquant, découvert au relevé** : aucune des 23 applis en cours n'était redémarrable par les nouvelles unités — 15 sans aucun `.streamlit.toml`, les 8 autres avec `port = 8501` (le vieux défaut) et sans ligne `entrypoint`. Tuer le parc d'abord les aurait rendues irréveillables. `streamlitctl app repair` couvrait déjà les deux cas : **28/28 appliqués**, 23/23 applis concordantes avec la table des processus réelle. Aucun code nouveau.
+- **`secubox-streamlit 1.4.0-1~bookworm1`** — `lxc/streamlit-app@.service` + `lxc/streamlit-launch` étaient dans master avec leur `debian/rules`, mais **aucun paquet ne les avait jamais portés** : la board tournait en 1.2.4 avec le `streamlitctl` du master copié à la main. Même classe de dérive que la route nginx metablogizer. apt-synced.
+- **Le piège désamorcé, et prouvé** : drop-in vidant `ExecStop` (l'ancien `pkill -f streamlit` était global au parc et aurait tué aussi les unités par appli, hors de son cgroup) + `Restart=no` + `disable`. Vidange par `systemctl stop`, portée au cgroup — **l'appli témoin déjà adoptée est restée servie en HTTP 200** pendant que les 22 autres tombaient.
+- **Réveil à la demande vérifié** sur les deux formes de point d'entrée : `prompt_forge` (script à plat) 6 s, `cc_osint` (répertoire) 4 s, HTTP 200 les deux. Unités avec un vrai `MainPID`, là où l'ancien service avait perdu le sien à 0.
+- **`secubox-streamlit-idle.timer` active + enabled** — plus d'arrêt manuel non persistant à retenir. Les 18 vignettes du mur sont conservées.
+- **Deux constats laissés à décider** : `autostart = true` déclaré par 3 applis (`diapvid`, `files_51`, `enhance_app`) dont **aucune ne tournait avant** — rien démarré de ce chef ; et #746 toujours ouverte, l'accès direct à l'URL ne réveille pas (le mur, si).
+- Rapport : `docs/superpowers/runs/2026-08-05-streamlit-bascule-unites-par-appli.md`.
 
 ---
 

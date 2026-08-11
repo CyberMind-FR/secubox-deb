@@ -15,6 +15,33 @@ secubox-streamlit (1.4.0-1~bookworm1) bookworm; urgency=medium
     deux avaient diverge. (ref #989)
 
  -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 07:40:00 +0200
+secubox-streamlit (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * streamlit-app@.service: move StartLimitIntervalSec=0 from [Service] to
+    [Unit], where it belongs. Under [Service] systemd rejects the line
+    outright ("Unknown key 'StartLimitIntervalSec' in section [Service],
+    ignoring", logged at every instance start on the board) and the
+    start-rate guard silently did nothing since #963 — the unit read as
+    protected against an external `systemctl start` loop while nothing
+    enforced it. Restart=no was unaffected. (ref #982)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 09:45:00 +0200
+
+secubox-streamlit (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Ship the per-app LXC assets under /usr/lib/secubox/streamlit/lxc/:
+    streamlit-app@.service (one systemd instance per app, Restart=no) and
+    streamlit-launch (its ExecStart, reads the per-app .streamlit.toml
+    streamlitctl already writes). Merged in #963 but never packaged: the
+    board still carried 1.2.4 with the new streamlitctl hand-copied over
+    it, so streamlitctl's install/adoption path had no assets to deploy.
+  * No behaviour change on the host side — these files are deployed INSIDE
+    the streamlit container, never enabled as host units.
+  * Version bump rather than a rebuild of 1.3.0: same version with
+    different content would leave apt.secubox.in serving stale bytes.
+    (ref #982)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 05:30:00 +0200
 
 secubox-streamlit (1.3.0-1~bookworm2) bookworm; urgency=medium
 
