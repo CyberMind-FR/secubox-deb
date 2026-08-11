@@ -1,5 +1,16 @@
 # Rotate the cookie_audit JSONL ledger (issue #156).
-# Install path inside the mitmproxy LXC: /etc/logrotate.d/secubox-cookie-audit
+#
+# ECRIT DESORMAIS PAR sbxwaf (Go), SUR L'HOTE, EN `secubox-waf` — plus par la
+# LXC mitmproxy, decommissionnee (#992). L'ancienne directive
+# `create 0644 mitmproxy mitmproxy` designait un utilisateur qui n'existe pas
+# sur l'hote : logrotate sortait en « unknown user » puis SAUTAIT le fichier.
+# Resultat mesure le 2026-08-06 : 684 Mo pour un maxsize declare a 50M, et un
+# repertoire retombe en secubox:secubox — sbxwaf ne pouvait plus ouvrir son
+# propre journal, plantait au demarrage, et TOUT vhost inspecte repondait 503.
+#
+# `su` est indispensable en plus de `create` : sans lui logrotate manipule le
+# repertoire en root et recree le fichier avec un proprietaire que le service
+# ne peut pas rouvrir — la panne se rejouerait a la rotation suivante.
 /var/log/secubox/cookie-audit/server.jsonl {
     daily
     rotate 14
@@ -9,5 +20,6 @@
     compress
     delaycompress
     copytruncate
-    create 0644 mitmproxy mitmproxy
+    su secubox-waf secubox-waf
+    create 0640 secubox-waf secubox-waf
 }
