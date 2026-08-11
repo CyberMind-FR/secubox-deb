@@ -3,6 +3,46 @@
 
 ---
 
+## 2026-08-11 (fin) — Nettoyage, et une TROISIEME poche de code vivant hors sources
+
+**45 worktrees retires, 110 branches locales supprimees.** Le nettoyage a
+d'abord ete un inventaire : `git branch -d` (et non `-D`) refuse toute branche
+non entierement fusionnee — c'est ce refus qui rend l'operation sure.
+
+Neuf branches ont resiste, et la raison n'etait pas celle qu'on croit : `-d`
+compare avec l'AMONT de la branche (`origin/<branche>`), pas avec master. Elles
+avaient des commits jamais pousses sur leur propre remote, tous presents dans
+master. Verifie branche par branche (`master..branche` = 0) avant de forcer.
+
+**Trois worktrees portaient du travail non commite, et les trois cas etaient
+differents :**
+
+- `999` — **du code deja DEPLOYE sur gk2 depuis le 6 aout, en 0.15.1, jamais
+  commite** ; master en etait a 0.14.1. Troisieme occurrence du meme mecanisme
+  dans la journee, apres #986/#988 et #989. Il s'agit de la « troisieme page »
+  du waker : un module always-on en panne recevait un 502 NU, corps vide, page
+  brute cote navigateur (constate sur zigbee). Refuser la page d'attente etait
+  juste — personne ne relevera un always-on — mais il manquait la page qui DIT
+  la panne. Commite, teste (309 tests), fusionne.
+- `998` — un fragment noyau non suivi, TRONQUE : il ne portait que
+  `CONFIG_CFS_BANDWIDTH`, ampute des 89 lignes sur les systemes de fichiers.
+  Master porte deja les 37 directives, celle-ci comprise. Verifie ligne a ligne
+  qu'il n'apportait rien d'unique, puis supprime — le commiter aurait EFFACE la
+  configuration des systemes de fichiers.
+- `832` — des brouillons de session (`.superpowers/sdd/`) ecrases par une
+  execution ulterieure sans rapport : « Global Tor exit-country » devenu « Safe
+  Content Extraction ». Contenu suivi retabli ; master ne suit plus ces fichiers.
+
+**Un test avait tort et a ete corrige, pas contourne** : il cherchait
+`error_page` dans le bloc `@sbx_wake` ENTIER, donc dans le commentaire qui
+explique precisement pourquoi la directive est absente. Le faire passer aurait
+demande de retirer l'explication. Les commentaires sont desormais ecartes avant
+de conclure, et la mutation (directive reintroduite) reste attrapee.
+
+Espace : 3,4 Go -> 2,8 Go. Les 9 remises (`git stash`) sont preservees.
+
+---
+
 ## 2026-08-11 (suite) — BBS 0.3.0 et rattrapage de 21 branches non fusionnees (#1008)
 
 **secubox-bbs 0.3.0**
