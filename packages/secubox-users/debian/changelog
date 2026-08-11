@@ -21,7 +21,6 @@ secubox-users (1.6.0-1~bookworm1) bookworm; urgency=medium
     existant s'est mis a echouer a cause d'un etat laisse par un run precedent.
     (ref #990)
 
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 05:30:00 +0200
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
     le seul repertoire que le vhost principal inclut. Livree dans secubox.d/
     uniquement, la route n'etait JAMAIS lue, et il fallait la recopier a la
