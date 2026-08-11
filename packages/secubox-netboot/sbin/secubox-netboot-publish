@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-netboot-publish (#737, Phase 2 — côté SERVEUR)
+# Publie les artefacts de boot d'une board (id = MAC sans ':') dans les racines
+# TFTP et HTTP servies par CE serveur (gk2 reste untouched côté boot — on ne fait
+# QUE déposer des fichiers + signer un FIT). Deux usages :
+#   1) brut (repli TFTP) : --id <mac> --kernel Image --dtb board.dtb [--initrd img]
+#   2) signé (HTTP/FIT)  : --id <mac> --boot-fit boot.fit   (déjà construit+signé)
+#      ou --id <mac> --kernel … --dtb … --initrd … --sign   (construit+signe ici)
+# Dépose aussi l'overlay 2ᵉ U-Boot si fourni : --overlay-fit sbx-uboot.fit --scr sbx-boot.scr
+set -euo pipefail
+readonly HERE="$(cd "$(dirname "$0")/.." && pwd 2>/dev/null || echo /usr/share/secubox/netboot)"
+readonly ROOT=/srv/secubox/netboot
+readonly TFTP="$ROOT/tftp" HTTP="$ROOT/http"
+readonly KEYDIR=/etc/secubox/netboot/keys
+readonly KEYHINT=secubox-netboot
+readonly ITS_TMPL="${NETBOOT_SHARE:-/usr/share/secubox/netboot}/boot/boot-fit.its.tmpl"
+
+id="" kernel="" dtb="" initrd="" boot_fit="" overlay_fit="" scr="" sign=no
+kload=0x02080000 kentry=0x02080000 fdtload=0x06f00000 rdload=0x07000000 desc="SecuBox netboot"
+while [ $# -gt 0 ]; do case "$1" in
+  --id) id="${2//:/}"; shift 2;;
+  --kernel) kernel="$2"; shift 2;;
+  --dtb) dtb="$2"; shift 2;;
+  --initrd) initrd="$2"; shift 2;;
+  --boot-fit) boot_fit="$2"; shift 2;;
+  --overlay-fit) overlay_fit="$2"; shift 2;;
+  --scr) scr="$2"; shift 2;;
+  --sign) sign=yes; shift;;
+  --desc) desc="$2"; shift 2;;
+  --addrs) # shellcheck disable=SC1090
+           . "$2"; kload="$KLOAD"; kentry="$KENTRY"; fdtload="$FDTLOAD"; rdload="$RDLOAD"; shift 2;;
+  *) echo "arg inconnu: $1" >&2; exit 2;;
+esac; done
+[ -n "$id" ] || { echo "--id <mac> requis" >&2; exit 2; }
+
+mkdir -p "$TFTP/$id" "$HTTP/$id"
+
+# overlay 2ᵉ U-Boot (servi en HTTP/TFTP pour la pose à distance éventuelle)
+[ -n "$overlay_fit" ] && install -m0644 "$overlay_fit" "$HTTP/$id/sbx-uboot.fit" && cp -f "$overlay_fit" "$TFTP/$id/sbx-uboot.fit"
+[ -n "$scr" ]         && install -m0644 "$scr"         "$HTTP/$id/sbx-boot.scr" && cp -f "$scr" "$TFTP/$id/sbx-boot.scr"
+
+# repli TFTP : binaires bruts
+[ -n "$kernel" ] && install -m0644 "$kernel" "$TFTP/$id/Image"
+[ -n "$dtb" ]    && install -m0644 "$dtb"    "$TFTP/$id/board.dtb"
+[ -n "$initrd" ] && install -m0644 "$initrd" "$TFTP/$id/initrd.img"
+
+# voie HTTP : boot.fit signé
+if [ -n "$boot_fit" ]; then
+  install -m0644 "$boot_fit" "$HTTP/$id/boot.fit"
+elif [ "$sign" = yes ] && [ -n "$kernel" ] && [ -n "$dtb" ] && [ -n "$initrd" ]; then
+  command -v mkimage >/dev/null || { echo "mkimage requis pour --sign" >&2; exit 1; }
+  [ -d "$KEYDIR" ] || { echo "clé absente: $KEYDIR (générer via build-uboot-overlay.sh)" >&2; exit 1; }
+  tmp="$(mktemp -d)"; its="$tmp/boot.its"
+  sed -e "s#@KERNEL@#$kernel#" -e "s#@DTB@#$dtb#" -e "s#@INITRD@#$initrd#" \
+      -e "s#@KLOAD@#$kload#" -e "s#@KENTRY@#$kentry#" -e "s#@FDTLOAD@#$fdtload#" -e "s#@RDLOAD@#$rdload#" \
+      -e "s#@KEYHINT@#$KEYHINT#" -e "s#@DESC@#$desc#" "$ITS_TMPL" > "$its"
+  mkimage -f "$its" "$tmp/boot.fit" >/dev/null
+  mkimage -F -k "$KEYDIR" -r "$tmp/boot.fit" >/dev/null
+  install -m0644 "$tmp/boot.fit" "$HTTP/$id/boot.fit"
+  rm -rf "$tmp"
+fi
+
+echo "[publish] board $id :"
+ls -l "$TFTP/$id" "$HTTP/$id" 2>/dev/null

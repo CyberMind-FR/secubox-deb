@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-netboot/usr/lib/secubox/netboot
+	cp -r api debian/secubox-netboot/usr/lib/secubox/netboot/
+	install -d debian/secubox-netboot/usr/sbin
+	install -m0755 sbin/secubox-netboot-probe    debian/secubox-netboot/usr/sbin/
+	install -m0755 sbin/secubox-netboot-overlay  debian/secubox-netboot/usr/sbin/
+	install -m0755 sbin/secubox-netboot-triggers debian/secubox-netboot/usr/sbin/
+	install -m0755 sbin/secubox-netboot-serve    debian/secubox-netboot/usr/sbin/
+	install -m0755 sbin/secubox-netboot-publish  debian/secubox-netboot/usr/sbin/
+	install -d debian/secubox-netboot/usr/share/secubox/netboot
+	cp -r boot board scripts docs installer debian/secubox-netboot/usr/share/secubox/netboot/
+	# vhost de boot + location servis par le rôle serveur (posés par 'serve up')
+	install -d debian/secubox-netboot/usr/share/secubox/netboot/nginx
+	install -m0644 nginx/boot-vhost.conf nginx/netboot-server.conf debian/secubox-netboot/usr/share/secubox/netboot/nginx/
+	install -d debian/secubox-netboot/usr/share/secubox/www
+	cp -r www/. debian/secubox-netboot/usr/share/secubox/www/
+	install -d debian/secubox-netboot/usr/share/secubox/menu.d
+	cp menu.d/*.json debian/secubox-netboot/usr/share/secubox/menu.d/
+	install -d debian/secubox-netboot/etc/nginx/secubox.d
+	install -m0644 nginx/netboot.conf debian/secubox-netboot/etc/nginx/secubox.d/
+	install -d debian/secubox-netboot/usr/share/secubox/netboot/conf
+	install -m0644 conf/netboot.toml conf/profiles.example.json debian/secubox-netboot/usr/share/secubox/netboot/conf/
+	install -d debian/secubox-netboot/usr/share/secubox/netboot/hooks
+	cp hooks/README.md hooks/post-overlay.d.example debian/secubox-netboot/usr/share/secubox/netboot/hooks/
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-netboot
+	dh_installsystemd --name=secubox-netboot-confirm-healthy

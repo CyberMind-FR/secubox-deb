@@ -1,0 +1,99 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: installeur netboot (#737, niveau B3) — /init de l'initramfs.
+#
+# Flux : monter l'essentiel → réseau (DHCP) → télécharger image+signature →
+# VÉRIFIER la signature détachée (clé publique embarquée) → écrire sur eMMC →
+# repasser en boot LOCAL persistant → reboot. Tout échec = halte SÛRE (pas
+# d'écriture sur signature invalide ; jamais de boucle qui brique).
+#
+# Paramètres via la ligne de commande kernel (cmdline) :
+#   sbx_srv=<ip>          serveur de boot (défaut: serverip DHCP via /proc/net)
+#   sbx_id=<board-id>     identifiant board (sinon MAC eth0)
+#   sbx_image=<name>      nom de l'image (sert <name>.img + <name>.img.sig)
+#   sbx_target=<dev>      cible (défaut /dev/mmcblk0)
+#   sbx_mode=install|rescue   (rescue = shell, aucune écriture)
+set -u
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+PUBKEY=/etc/secubox/netboot-image.pub
+
+log(){ echo "[sbx-installer] $*"; }
+fail(){ log "ERREUR: $*"; log "Halte sûre. Reboot dans 20 s (retour amorce appelante)."; sleep 20; reboot -f; }
+shell(){ log "mode rescue → shell"; exec /bin/sh; }
+
+mount -t proc     proc /proc      2>/dev/null
+mount -t sysfs    sys  /sys       2>/dev/null
+mount -t devtmpfs dev  /dev       2>/dev/null
+mkdir -p /tmp /etc/secubox
+
+# ── lire la cmdline ──────────────────────────────────────────────────────────
+read CMDLINE < /proc/cmdline
+for tok in $CMDLINE; do case "$tok" in
+  sbx_srv=*)    SRV="${tok#sbx_srv=}";;
+  sbx_id=*)     ID="${tok#sbx_id=}";;
+  sbx_image=*)  IMG="${tok#sbx_image=}";;
+  sbx_target=*) TGT="${tok#sbx_target=}";;
+  sbx_mode=*)   MODE="${tok#sbx_mode=}";;
+esac; done
+: "${TGT:=/dev/mmcblk0}"; : "${MODE:=install}"
+[ "$MODE" = rescue ] && shell
+
+# ── réseau ───────────────────────────────────────────────────────────────────
+log "réseau (DHCP)…"
+ip link set lo up 2>/dev/null
+IF=$(ls /sys/class/net | grep -E '^(eth|en|eno|enp)' | head -1)
+[ -n "$IF" ] || fail "aucune interface réseau"
+ip link set "$IF" up
+udhcpc -i "$IF" -n -q -t 6 2>/dev/null || fail "DHCP KO sur $IF"
+[ -n "${ID:-}" ] || ID=$(cat /sys/class/net/"$IF"/address | tr -d ':')
+[ -n "${SRV:-}" ] || SRV=$(awk '/^default/{print $2; exit}' /proc/net/route >/dev/null 2>&1; ip route | awk '/default/{print $3; exit}')
+[ -n "${SRV:-}" ] || fail "serveur de boot inconnu (passer sbx_srv=)"
+[ -n "${IMG:-}" ] || fail "image non spécifiée (passer sbx_image=)"
+BASE="http://$SRV/$ID"
+log "serveur=$SRV board=$ID image=$IMG cible=$TGT"
+
+# ── téléchargement image + signature ─────────────────────────────────────────
+log "téléchargement $BASE/$IMG.img …"
+wget -O /tmp/img "$BASE/$IMG.img"       || fail "DL image KO"
+wget -O /tmp/sig "$BASE/$IMG.img.sig"   || fail "DL signature KO"
+
+# ── VÉRIFICATION de la signature détachée (anti supply-chain, doctrine CSPN) ──
+[ -s "$PUBKEY" ] || fail "clé publique absente ($PUBKEY) — initramfs mal construit"
+log "vérification signature (sha256, clé embarquée)…"
+if openssl dgst -sha256 -verify "$PUBKEY" -signature /tmp/sig /tmp/img >/dev/null 2>&1; then
+  log "signature VALIDE."
+else
+  fail "SIGNATURE INVALIDE — écriture refusée."
+fi
+
+# ── garde-fous avant écriture ────────────────────────────────────────────────
+[ -b "$TGT" ] || fail "cible $TGT absente / pas un périphérique bloc"
+# refuser d'écrire sur un device monté (le serveur ne doit JAMAIS être une cible)
+if grep -q "^$TGT" /proc/mounts; then fail "$TGT est monté — refus (sécurité)"; fi
+
+# ── écriture image → eMMC ────────────────────────────────────────────────────
+log "écriture sur $TGT (ne pas couper l'alimentation)…"
+if command -v pv >/dev/null 2>&1; then
+  pv /tmp/img | dd of="$TGT" bs=4M conv=fsync 2>/dev/null || fail "écriture KO"
+else
+  dd if=/tmp/img of="$TGT" bs=4M conv=fsync 2>/dev/null || fail "écriture KO"
+fi
+sync; log "écriture terminée."
+
+# ── repasser en boot LOCAL persistant ────────────────────────────────────────
+# L'installeur a été netbooté via l'overlay ; une fois l'OS écrit, on veut un
+# boot LOCAL persistant. Si fw_setenv + la config env sont dispo, on restaure
+# l'amorce usine (qui boote l'eMMC fraîchement écrite). Sinon, le premier boot de
+# l'image installée s'en chargera (hook firstboot).
+if command -v fw_setenv >/dev/null 2>&1 && [ -r /etc/fw_env.config ]; then
+  FB=$(fw_printenv -n factory_bootcmd 2>/dev/null || true)
+  if [ -n "$FB" ]; then
+    fw_setenv bootcmd "$FB" && fw_setenv sbx_persist 0 && fw_setenv bootcount 0 \
+      && log "amorce locale persistante restaurée (factory_bootcmd)."
+  fi
+else
+  log "fw_setenv indisponible — le firstboot de l'image installée fixera l'amorce locale."
+fi
+
+log "installation OK → reboot dans 5 s sur le système installé."
+sync; sleep 5; reboot -f

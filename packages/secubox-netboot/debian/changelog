@@ -1,0 +1,56 @@
+secubox-netboot (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Profils : endpoint /boards (modèles depuis board/<name>/) ; sélecteur de
+    modèle de l'UI alimenté dynamiquement (mochabin + espressobin-v7 intégrés) ;
+    profils d'exemple pour les deux boards ; parseur addrs.env durci (commentaires
+    inline). (#737)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 16:40:00 +0000
+
+secubox-netboot (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Intégration navbar (#737) : entrée NetBoot dans la section BOOT (menu.d, order
+    40) ET sidebar partagée + health-banner intégrés dans la page /netboot/
+    (crt-light.css, sidebar-light.css, sidebar.js, health-banner.js).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 16:00:00 +0000
+
+secubox-netboot (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Installeur B3 (#737) : installer/init (initramfs) — réseau DHCP, téléchargement
+    image+signature, VÉRIFICATION de la signature détachée (clé publique embarquée,
+    refus d'écriture si invalide), écriture eMMC (dd conv=fsync), retour boot LOCAL
+    persistant (fw_setenv factory_bootcmd) + reboot. Haltes sûres, jamais de boucle.
+  * scripts/build-installer-initrd.sh : assemble l'initramfs arm64 (busybox + openssl
+    + clé + init → cpio.gz). Validé sur gk2 (arm64) : initrd 4.1M, busybox ARM
+    aarch64, round-trip de signature « Verified OK ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 15:30:00 +0000
+
+secubox-netboot (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rôle SERVEUR complet (#737) : secubox-netboot-serve (TFTP+HTTP non-invasif,
+    vhost boot.<board>.secubox.in HTTP simple hors WAF, intégrité par signature),
+    secubox-netboot-publish (artefacts par board selon le niveau).
+  * Profils board + remote config WebUI : CRUD profils, niveaux de boot B0..B3
+    (sourcer × valider, cf docs/BOOT-LEVELS.md), publish par board, état serveur.
+  * Persistance du boot : overlay persist (verrouillage amorce permanente après
+    validation) + confirm-healthy (bootcount=0 par boot sain) → l'overlay persiste
+    tant que l'OS boote ; env en flash + artefacts /boot eMMC = persistants.
+  * docs/TEST-TOPOLOGY.md : test 2 MOCHAbin (gk2 serveur untouched + DUT).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 14:30:00 +0000
+
+secubox-netboot (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Phase 2 (#737) : module de provisioning réseau + overlay U-Boot chainloadé.
+    - probe (read-only) board/SoC/média/A-B + calibration fw_env + capacités U-Boot.
+    - overlay apply/revert/confirm-healthy : double-buffer /boot, détournement
+      bootcmd avec bootcount/altbootcmd (rollback usine auto anti-brick).
+    - build-uboot-overlay.sh : FIT signé (sbx-uboot.fit) + sbx-boot.scr, par board.
+    - templates FIT (.its) overlay U-Boot + boot.fit (kernel/dtb/initrd signés).
+    - API FastAPI standalone (netboot.sock) gated confirm=true + UI suivi/contrôle.
+    - triggers de cycle de vie + audit append-only CSPN.
+    Aucun flash SPI/eMMC-boot (Phase 3).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 25 Jun 2026 13:00:00 +0000

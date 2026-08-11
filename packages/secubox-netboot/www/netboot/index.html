@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0 — SecuBox-Deb :: netboot (#737) -->
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SecuBox · NetBoot</title>
+<link rel="stylesheet" href="/shared/crt-light.css">
+<link rel="stylesheet" href="/shared/sidebar-light.css">
+<style>
+  .main.main-content{margin-left:220px}
+  @media (max-width:900px){.sidebar{display:none}.main.main-content{margin-left:0}}
+  :root{--cosmos:#0a0a0f;--gold:#c9a84c;--cinnabar:#e63946;--matrix:#00ff41;
+        --cyan:#00d4ff;--void:#6e40c9;--text:#e8e6d9;--muted:#6b6b7a;}
+  *{box-sizing:border-box} body{margin:0;background:var(--cosmos);color:var(--text);
+    font:14px/1.5 system-ui,-apple-system,sans-serif}
+  .main{padding:18px 22px;max-width:1100px;margin:0 auto}
+  h1{font-size:1.3rem;color:var(--gold);margin:.2em 0}
+  h2{font-size:1rem;color:var(--cyan);margin:.4em 0;border-bottom:1px solid #1c1c28;padding-bottom:4px}
+  .card{background:#11111a;border:1px solid #1c1c28;border-radius:8px;padding:14px;margin:12px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .kv{font-family:JetBrains Mono,monospace;font-size:.82rem}
+  .kv b{color:var(--muted);font-weight:400;display:inline-block;min-width:130px}
+  .badge{padding:1px 7px;border-radius:4px;font-size:.72rem;border:1px solid}
+  .ok{color:var(--matrix);border-color:var(--matrix)} .no{color:var(--cinnabar);border-color:var(--cinnabar)}
+  .warn{color:var(--gold);border-color:var(--gold)}
+  button{background:transparent;color:var(--cyan);border:1px solid var(--cyan);border-radius:5px;
+    padding:5px 12px;font:inherit;cursor:pointer;margin:3px}
+  button.danger{color:var(--cinnabar);border-color:var(--cinnabar)}
+  button.go{color:var(--matrix);border-color:var(--matrix)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  pre{background:#0c0c14;border:1px solid #1c1c28;border-radius:6px;padding:10px;overflow:auto;
+    font-size:.78rem;color:var(--muted);max-height:240px}
+  .pill{font-size:.7rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<nav class="sidebar" id="sidebar"></nav>
+<main class="main main-content">
+  <h1>🛰️ NetBoot <span class="pill" id="ver"></span></h1>
+  <p class="pill">Provisioning réseau · overlay U-Boot chainloadé (#737, Phase 2).
+     Aucune action destructive sans confirmation. Flash A/B = Phase 3 (désactivé).</p>
+
+  <div class="card">
+    <h2>Board</h2>
+    <div class="grid" id="board"><div class="kv">Chargement…</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Overlay U-Boot</h2>
+    <div class="grid" id="overlay"></div>
+    <div style="margin-top:10px">
+      <button onclick="act('probe')">Probe</button>
+      <button onclick="apply(false)">Apply (dry-run)</button>
+      <button class="go" id="btnApply" onclick="apply(true)" disabled title="env non calibré">Apply (commit)</button>
+      <button onclick="confirmHealthy()">Confirmer sain</button>
+      <button class="go" onclick="persist()" title="Verrouiller en amorce permanente (après validation)">Persist</button>
+      <button class="danger" onclick="revert()">Revert overlay</button>
+      <button disabled title="Phase 3">Auto-flash A/B</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Shadow buffer (artefacts prêts)</h2>
+    <pre id="shadow">—</pre>
+  </div>
+
+  <div class="card">
+    <h2>🌐 Serveur de boot (TFTP + HTTP) <span class="pill" id="srvState"></span></h2>
+    <div class="grid" id="server"></div>
+    <div style="margin-top:8px">
+      <button class="go" onclick="serverUp()">Activer le serveur (up)</button>
+      <span class="pill">gk2 reste untouched : ce host ne fait QUE servir (aucun overlay/flash local).</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🗂️ Profils board (remote config)</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+      <thead><tr style="color:var(--muted);text-align:left">
+        <th>Board (MAC)</th><th>Modèle</th><th>Image</th><th>Niveau</th><th>Serveur</th><th></th></tr></thead>
+      <tbody id="profiles"></tbody>
+    </table>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <input id="pId" placeholder="MAC (aa:bb:..)" style="width:130px">
+      <input id="pModel" placeholder="modèle" list="models" style="width:140px">
+      <datalist id="models"></datalist>
+      <input id="pImage" placeholder="image (ex: secubox-2.39.0)" style="width:170px">
+      <select id="pLevel" title="niveau de boot">
+        <option value="B0">B0 local</option><option value="B1">B1 tftp-brut</option>
+        <option value="B2" selected>B2 http-signé</option><option value="B3">B3 install-signé</option>
+      </select>
+      <input id="pSrv" placeholder="serveur (IP)" value="192.168.1.200" style="width:120px">
+      <button onclick="saveProfile()">Enregistrer le profil</button>
+    </div>
+    <p class="pill">B0 local (untouched) · B1 TFTP brut (test) · B2 HTTP signé FIT (prod) · B3 install signé. Voir docs/BOOT-LEVELS.md.</p>
+  </div>
+
+  <div class="card">
+    <h2>Audit</h2>
+    <pre id="audit">—</pre>
+  </div>
+</main>
+<style>input,select{background:#0c0c14;color:var(--text);border:1px solid #1c1c28;border-radius:4px;padding:4px 6px;font:inherit}
+td,th{padding:4px 6px;border-bottom:1px solid #15151f}</style>
+
+<script>
+const API='/api/v1/netboot';
+const sbxToken=()=>localStorage.getItem('sbx_token');
+async function api(p,opt){try{opt=opt||{};const t=sbxToken();opt.headers=Object.assign({},opt.headers,t?{'Authorization':'Bearer '+t}:{});const r=await fetch(API+p,Object.assign({credentials:'include'},opt));return await r.json();}catch(e){return {error:String(e)};}}
+function b(v,good){const c=v===good?'ok':(v==='unknown'||v==='likely'?'warn':'no');return `<span class="badge ${c}">${v}</span>`;}
+function kv(k,v){return `<div class="kv"><b>${k}</b>${v}</div>`;}
+
+async function refresh(){
+  const inv=await api('/inventory');
+  const bo=(inv.board||{}); const ov=(inv.overlay||{});
+  const bd=bo.board||{}, fw=bo.firmware||{}, md=bo.media||{}, cap=bo.capabilities||{};
+  document.getElementById('board').innerHTML=[
+    kv('Modèle', bd.model||'?'), kv('SoC', bd.soc||'?'),
+    kv('TF-A', fw.tfa||'?'), kv('U-Boot', fw.uboot_version||'<i>inconnu (série requis)</i>'),
+    kv('Média', (md.spi_firmware_mtd||'?')+' / eMMC '+(md.emmc||'?')),
+    kv('Slots A/B', b(md.emmc_ab_slots||'no','yes')),
+    kv('wget', b(cap.wget||'unknown')), kv('bootm FIT', b(cap.bootm_fit||'unknown')),
+    kv('overlay_ready', b(String(bo.overlay_ready),'true')),
+  ].join('');
+  document.getElementById('overlay').innerHTML=[
+    kv('env calibré', b(ov.env_ok||'no','yes')),
+    kv('overlay actif', b(ov.overlay_active||'no','yes')),
+    kv('persisté', b(ov.persisted||'no','yes')),
+    kv('FIT déployé', b(ov.fit_deployed||'no','yes')),
+    kv('bootcount', ov.bootcount||'—'),
+    kv('backup usine', b(ov.has_factory_backup||'no','yes')),
+  ].join('');
+  document.getElementById('btnApply').disabled = (ov.env_ok!=='yes');
+  document.getElementById('btnApply').title = (ov.env_ok!=='yes')?'env non calibré (banc série requis)':'';
+  const sh=await api('/shadow');
+  document.getElementById('shadow').textContent=(sh.items&&sh.items.length)
+    ? sh.items.map(i=>`${i.name}  (${i.size} o)`).join('\n') : 'vide — builder l\'overlay (build-uboot-overlay.sh) puis déposer en shadow';
+  const au=await api('/audit?limit=40');
+  document.getElementById('audit').textContent=(au.audit&&au.audit.length)?au.audit.join('\n'):'—';
+  await renderServer(); await renderProfiles();
+}
+
+async function renderServer(){
+  const s=(await api('/server')).server||{};
+  document.getElementById('srvState').textContent=
+    'tftpd:'+(s.tftpd||'?')+' · nginx:'+(s.nginx_sbxboot||'?')+' · boards:'+(s.published_boards??'?');
+  document.getElementById('server').innerHTML=[
+    kv('TFTP root', s.tftp_root||'—'), kv('HTTP root', s.http_root||'—'),
+    kv('tftpd', b(s.tftpd||'absent','active')), kv('nginx /sbxboot', b(s.nginx_sbxboot||'no','yes')),
+    kv('boards publiées', s.published_boards??'—'),
+  ].join('');
+}
+async function serverUp(){ const r=await api('/server/up',{method:'POST'}); alert('SERVER UP\n'+JSON.stringify(r.server||r.error||r,null,1).slice(0,500)); renderServer(); }
+
+const LVL={B0:'B0 local',B1:'B1 tftp',B2:'B2 http-signé',B3:'B3 install'};
+async function renderProfiles(){
+  const ps=(await api('/profiles')).profiles||[];
+  const tb=document.getElementById('profiles');
+  if(!ps.length){ tb.innerHTML='<tr><td colspan="6" class="pill">aucun profil — ajouter ci-dessous</td></tr>'; return; }
+  tb.innerHTML=ps.map(p=>`<tr>
+    <td style="font-family:monospace">${esc(p.id)}</td><td>${esc(p.model||'')}</td>
+    <td>${esc(p.image||'—')}</td><td>${b(p.boot_level||'B0', 'B2')}</td><td>${esc(p.srv||'DHCP')}</td>
+    <td style="white-space:nowrap">
+      <button onclick="publish('${esc(p.id)}')" ${p.boot_level==='B0'?'disabled title=B0':''}>Publish</button>
+      <button class="danger" onclick="delProfile('${esc(p.id)}')">✕</button>
+    </td></tr>`).join('');
+}
+async function saveProfile(){
+  const body={id:val('pId'),model:val('pModel')||null,image:val('pImage')||null,boot_level:val('pLevel'),srv:val('pSrv')||null};
+  if(!body.id){alert('MAC requis');return;}
+  const r=await api('/profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.error||r.detail) alert('Erreur: '+(r.detail||r.error)); renderProfiles();
+}
+async function delProfile(id){ if(!confirm('Supprimer le profil '+id+' ?'))return; await api('/profiles/'+encodeURIComponent(id),{method:'DELETE'}); renderProfiles(); }
+async function publish(id){
+  const r=await api('/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({board_id:id})});
+  alert('PUBLISH '+id+'\n'+JSON.stringify(r.result||r.detail||r,null,1).slice(0,600)); renderServer();
+}
+function val(i){return (document.getElementById(i).value||'').trim();}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+async function act(){ await refresh(); }
+async function apply(commit){
+  if(commit && !confirm('Poser l\'overlay et détourner bootcmd ?\nRollback auto vers l\'usine si échec ×3.')) return;
+  const r=await api('/overlay/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:!!commit})});
+  alert((commit?'APPLY':'DRY-RUN')+'\n'+JSON.stringify(r.result||r.error||r,null,1).slice(0,600)); refresh();
+}
+async function revert(){
+  if(!confirm('Restaurer l\'amorce USINE (retirer l\'overlay) ?')) return;
+  const r=await api('/overlay/revert',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})});
+  alert('REVERT\n'+JSON.stringify(r.result||r.error||r,null,1).slice(0,600)); refresh();
+}
+async function confirmHealthy(){ await api('/overlay/confirm-healthy',{method:'POST'}); refresh(); }
+async function persist(){
+  if(!confirm('Verrouiller l\'overlay en amorce PERMANENTE ?\n(à faire seulement après l\'avoir prouvé au banc — retire le compteur de révocation, garde le repli usine runtime)')) return;
+  const r=await api('/overlay/persist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:true})});
+  alert('PERSIST\n'+JSON.stringify(r.result||r.error||r,null,1).slice(0,500)); refresh();
+}
+async function loadBoards(){
+  const d=await api('/boards'); const dl=document.getElementById('models');
+  const boards=(d.boards||[]);
+  dl.innerHTML=boards.map(b=>`<option value="${esc(b.model)}">`).join('');
+  // info-bulle modèles supportés
+  document.getElementById('pModel').title='modèles: '+boards.map(b=>b.model).join(', ');
+}
+loadBoards();
+refresh(); setInterval(refresh, 10000);
+</script>
+<script src="/shared/sidebar.js"></script>
+<script src="/shared/health-banner.js"></script>
+</body>
+</html>
