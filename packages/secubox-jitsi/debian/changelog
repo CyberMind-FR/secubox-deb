@@ -1,3 +1,134 @@
+secubox-jitsi (2.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * media-expose --apply est idempotent : la table est supprimee avant
+    rechargement. `nft -f` AJOUTE les regles, il ne remplace pas la table —
+    un second --apply empilait une DNAT identique (mesure sur la board).
+    Inoffensif pour le trafic, mais le compteur devenait illisible, et c'est
+    lui qui sert a diagnostiquer un media qui ne passe pas. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 17:45:00 +0200
+
+secubox-jitsi (2.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * jitsictl: nouveau verbe `media-expose [--apply|--revoke]`. La redirection
+    UDP/10000 etait posee a la main sur la board et n'appartenait a aucun
+    paquet — exactement la derive que ce depot passe son temps a reparer, et
+    celle-la je l'avais creee moi-meme en 2.0.5. Le CONTENU de la regle est
+    empaquete ; le verbe ne fait que la deposer la ou nftables la charge au
+    demarrage. La decision d'exposition reste explicite (une commande, pas un
+    effet de bord d'`apt install`), mais le fichier devient tracable.
+  * Sans argument, `media-expose` rapporte l'etat sans rien changer : un verbe
+    d'exposition doit pouvoir etre interroge sans risque.
+  * Une regle refusee par nft n'est pas laissee sur le disque — elle serait
+    rechargee au demarrage suivant et echouerait de nouveau, en silence.
+  * jitsictl: VERSION alignee sur le changelog (2.0.0 -> 2.1.0). Un `status`
+    annoncant une version obsolete rend tout diagnostic a distance trompeur.
+    (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 17:30:00 +0200
+
+secubox-jitsi (2.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * nft: le drop-in ne porte plus qu'UNE règle, la DNAT. L'ACCEPT en input
+    qu'il contenait était inutile et trompeur : après DNAT en prerouting la
+    destination n'est plus locale, le paquet emprunte FORWARD (policy accept)
+    et ne traverse jamais INPUT. Un lecteur cherchant ce qui est réellement
+    exposé y voyait une ouverture qui n'en était pas une.
+  * nft: interface non épinglée sauf exclusion de br-lxc, au motif de
+    secubox-lyrion-dnat — coder une interface en dur fait échouer la
+    redirection silencieusement (le LAN de gk2 arrive sur eth2, pas lan0).
+    Table dédiée `inet secubox-jitsi` plutôt qu'une règle greffée sur
+    `inet nat`, pour pouvoir la recharger sans toucher aux autres modules.
+  * nft: `counter` sur la règle — sans lui, « la redirection ne mord pas » et
+    « elle mord mais ne traduit pas » sont indiscernables, alors que le
+    symptôme utilisateur des deux est le même : la conférence se forme et
+    reste muette. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 13:15:00 +0200
+
+secubox-jitsi (2.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * postinst: retirer le jeton de substitution debhelper écrit en toutes
+    lettres dans un commentaire. Il est remplacé PARTOUT où il apparaît, y
+    compris au milieu d'une phrase : la fin de la ligne devenait du shell
+    exécutable et le postinst sortait en 127 (« un: command not found », plus
+    un deb-systemd-invoke lancé sans argument par des backticks). (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:55:00 +0200
+
+secubox-jitsi (2.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * nginx: empaqueter le vhost public (sites-available/jitsi.conf + lien dans
+    le postinst) plutôt que de le poser à la main — une route non empaquetée
+    disparaît à la réinstallation sans que personne s'en aperçoive avant la
+    panne.
+  * Le vhost proxifie vers le :443 DU CONTENEUR : le vhost généré par
+    jitsi-meet n'écoute en clair que pour rediriger en 301, et le réécrire
+    serait écrasé à sa prochaine mise à jour. proxy_ssl_verify off — le
+    certificat interne est auto-signé et le saut reste local ; le vrai
+    certificat est présenté par HAProxy en amont.
+  * Mise à niveau WebSocket explicite (map $http_upgrade) et délais portés à
+    900 s : la signalisation XMPP de Jitsi est une WebSocket tenue ouverte
+    toute la durée de la conférence, le défaut de 60 s la couperait en pleine
+    réunion.
+  * postinst: `nginx -t` avant tout reload. Une conf invalide passée à un
+    reload laisse nginx sur l'ancienne sans le dire, et le défaut ne surgit
+    qu'au redémarrage suivant. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:45:00 +0200
+
+secubox-jitsi (2.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * jvb NAT: créer sip-communicator.properties s'il manque au lieu d'exiger
+    qu'il préexiste. jitsi-videobridge2 2.3 ne livre plus ce fichier (il
+    n'installe que jvb.conf) mais le LIT toujours — son unité passe
+    SC_HOME_DIR_LOCATION=/etc/jitsi et SC_HOME_DIR_NAME=videobridge, ce qui
+    pointe exactement là. Le provisionnement échouait donc sur une pile par
+    ailleurs saine, les quatre services étant actifs. Même correction dans
+    jitsictl set-public-ip. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:35:00 +0200
+
+secubox-jitsi (2.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * unit: ExecStart utilise `python3 -m uvicorn` — /usr/bin/uvicorn n'existe
+    pas sur la board (203/EXEC au premier démarrage réel). Le défaut venait de
+    la 1.0.0 mais restait invisible : sa ConditionPathExists l'empêchait de
+    démarrer.
+  * postinst: le provisionnement démarre APRÈS le bloc debhelper. Démarré
+    avant, il se faisait tuer par le `deb-systemd-invoke restart` que
+    dh_installsystemd injecte — SIGTERM à 4 s, en plein lxc-create, laissant un
+    conteneur à moitié créé.
+  * install-lxc.sh: détecte et détruit un reliquat de création interrompue. Sans
+    ça, « Ongoing container creation detected » rendait toute relance
+    impossible — un échec ponctuel devenait une panne permanente. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 12:25:00 +0200
+
+secubox-jitsi (2.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refonte LXC-native. Jitsi tourne désormais dans un LXC Debian non
+    privilégié (prosody + jicofo + jitsi-videobridge2 + nginx interne), une
+    unité systemd par service, sur le modèle de secubox-jellyfin.
+  * L'API 1.0.0 générait un docker-compose.yml et pilotait docker/podman
+    depuis le chemin de requête : deux règles du projet enfreintes (modules
+    natifs dans leur LXC ; le webui ne fait jamais le travail privilégié
+    lui-même). Remplacée par une API déléguante + `jitsictl`, seule surface
+    root, auditée et validant ses propres entrées.
+  * jitsictl : status (les 4 services rapportés séparément), stats (compteurs
+    colibri), start/stop/restart, service-restart (un service sans cycler le
+    conteneur), set-public-ip (harvester NAT du videobridge), logs, install.
+  * Retiré délibérément : /rooms et /room/* (Jitsi n'expose pas les noms de
+    salons ; ces handlers répondaient « not available via API »), /recordings
+    et /jibri/* (jibri non déployé), POST /config et /auth (le domaine est
+    gravé dans quatre services au provisionnement — le changer par une requête
+    laisserait les quatre en désaccord).
+  * Le drop-in nftables ouvrant UDP/10000 est livré en exemple, jamais appliqué
+    par le postinst : une exposition entrante est une décision, pas un effet de
+    bord d'installation. (ref #985)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 11:30:00 +0200
+
 secubox-jitsi (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

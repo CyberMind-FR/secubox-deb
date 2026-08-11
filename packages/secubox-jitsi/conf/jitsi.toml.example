@@ -1,0 +1,21 @@
+# SecuBox Jitsi Meet — /etc/secubox/jitsi.toml
+#
+# Jitsi tourne NATIVEMENT dans un LXC Debian non privilégié : prosody + jicofo
+# + jitsi-videobridge2 + un nginx interne. L'hôte ne fait que router.
+
+lxc_name = "jitsi"
+lxc_ip   = "10.100.0.190"
+
+# Domaine public. IMPORTANT : il est gravé dans quatre services au moment du
+# provisionnement (préconfiguration debconf). Le changer ici après coup ne
+# suffit PAS — il faut re-provisionner, sinon prosody, jicofo, le videobridge
+# et nginx ne s'accordent plus et aucune conférence ne se forme.
+domain = "meet.gk2.secubox.in"
+
+# Tier web servi par le nginx interne au conteneur ; HAProxy termine le TLS.
+web_port = 80
+
+# Port média du videobridge. Doit être joignable en UDP depuis l'extérieur
+# pour que la visio fonctionne hors LAN — redirection sur le routeur FAI +
+# DNAT nft (voir conf/jitsi.nft).
+jvb_port = 10000
