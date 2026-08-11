@@ -57,6 +57,29 @@ diff de fusion, sans regarder la board.)*
 
 ---
 
+## 2026-08-05 → 08-06 — Dérives de packaging et certificats
+
+### ✅ Fait
+- **Streamlit vidangé (#982)** — 23 résidents → 0, charge 31.7 → 6.4 ; les 23 applis étaient irréveillables avant `app repair`. `1.4.1` apt-synced.
+- **Jitsi LXC-native (#985, 2.1.1)** — remplace le pilotage Docker ; HTTPS 200 + WebSocket 101, sans `waf_bypass` (sbxwaf relaie les upgrades). DNAT UDP/10000 derrière `media-expose`.
+- **HAProxy régénérable à nouveau (#986)** — ACME et `toolbox_landing` générés au lieu d'être posés à la main ; 0 route modifiée, 0 perdue.
+- **`ssl_redirect` implémenté (#988)** — 18 vhosts le déclaraient, 0 redirection existait. Exclusion ACME obligatoire.
+- **TOTP réparé (#990)** — un code VALIDE échouait en 500 ; anti-rejeu sorti de `/etc/secubox`.
+- **84 certificats valides (#991)** — 36 étaient expirés ; `certsctl deploy` + minuteur, acme.sh **et** certbot.
+- **503 board-wide (#992)** — logrotate référençant un utilisateur inexistant ; 684 Mo de journal jamais tourné.
+- **`webui.conf` empaqueté (#987)** ; **45 modules migrés vers `secubox-routes.d` (#989)**, convention figée dans `MODULE-COMPLIANCE.md`.
+
+### ⬜ Next Up
+- **#989 — 25 routes sans source** dans le dépôt : empaqueter ou constater mortes (cas par cas).
+- **#989 — 3 idiomes de `rules` non reconnus** : `mitmproxy`, `ipblock`, `p2p`.
+- **#985 étape 6** — appel Jitsi à deux pairs dont un hors LAN (demande deux humains).
+- **`secubox-yggdrasil` ne s'installe pas** — conflit de fichier avec `secubox-mesh` sur `/usr/share/secubox/www/mesh/index.html`, sans `Replaces`. Jamais installé (`<none>`).
+- **Agrégateur SPOF confirmé** — une salve d'installations le redémarre, ~110 modules dans une boucle, 502 board-wide pendant le démarrage à froid.
+- **`_wildcard_` retiré** ; `exposure`, `gitea`, `mail` en 500 applicatif (routes identiques à avant migration).
+- **Volume cookie-audit** — 684 Mo en trois mois, la rotation le contient mais le débit mériterait un regard.
+
+---
+
 ## 2026-08-03 → 08-05 — Marathon perf & fiabilité : mur mosaïque, certificats, châssis, playlists
 
 Session très dense. Plusieurs défauts de fond trouvés sous des symptômes anodins, chacun masquant le suivant.

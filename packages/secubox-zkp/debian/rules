@@ -15,6 +15,11 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox.d
 	install -m 644 nginx/zkp.conf $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox.d/
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox-routes.d
+	install -m 644 nginx/zkp.conf $(CURDIR)/debian/secubox-zkp/etc/nginx/secubox-routes.d/zkp.conf
 
 	# Install menu entry
 	install -d $(CURDIR)/debian/secubox-zkp/etc/secubox/menu.d

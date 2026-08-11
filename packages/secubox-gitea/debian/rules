@@ -15,6 +15,11 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d
 	install -m 644 nginx/gitea.conf $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox.d/gitea.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox-routes.d
+	install -m 644 nginx/gitea.conf $(CURDIR)/debian/secubox-gitea/etc/nginx/secubox-routes.d/gitea.conf
 
 	# Install conf/ templates (used by postinst for idempotent routing setup)
 	install -d $(CURDIR)/debian/secubox-gitea/usr/share/secubox-gitea/conf

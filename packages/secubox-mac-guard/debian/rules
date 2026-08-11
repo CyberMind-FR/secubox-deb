@@ -12,6 +12,11 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-mac-guard/etc/nginx/secubox.d
 	[ -f nginx/mac-guard.conf ] && cp nginx/mac-guard.conf debian/secubox-mac-guard/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-mac-guard/etc/nginx/secubox-routes.d
+	[ -f nginx/mac-guard.conf ] && cp nginx/mac-guard.conf debian/secubox-mac-guard/etc/nginx/secubox-routes.d/ || true
 	# Systemd service
 	install -d debian/secubox-mac-guard/usr/lib/systemd/system
 	[ -f systemd/secubox-mac-guard.service ] && cp systemd/secubox-mac-guard.service debian/secubox-mac-guard/usr/lib/systemd/system/ || true

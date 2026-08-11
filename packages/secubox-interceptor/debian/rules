@@ -19,3 +19,8 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-interceptor/etc/nginx/secubox.d
 	install -m 644 nginx/interceptor.conf $(CURDIR)/debian/secubox-interceptor/etc/nginx/secubox.d/interceptor.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-interceptor/etc/nginx/secubox-routes.d
+	install -m 644 nginx/interceptor.conf $(CURDIR)/debian/secubox-interceptor/etc/nginx/secubox-routes.d/interceptor.conf

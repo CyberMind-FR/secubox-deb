@@ -30,6 +30,11 @@ override_dh_auto_install:
 
 	# Install nginx config
 	install -m 644 nginx/hardening.conf $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox.d/hardening.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox-routes.d
+	install -m 644 nginx/hardening.conf $(CURDIR)/debian/secubox-hardening/etc/nginx/secubox-routes.d/hardening.conf
 
 override_dh_installsystemd:
 	dh_installsystemd --name=secubox-hardening
