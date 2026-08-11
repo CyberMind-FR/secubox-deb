@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: certsctl — deploiement des certificats vers HAProxy
+# CyberMind — https://cybermind.fr
+#
+# LE MAILLON QUI MANQUAIT (#991).
+#
+# acme.sh renouvelle correctement, mais rien ne portait le resultat jusqu'a
+# HAProxy : aucun Le_ReloadCmd, aucun chemin d'installation. Les pem de
+# /data/haproxy/certs avaient ete fabriques UNE FOIS a la main le 7 mai 2026 et
+# n'avaient plus bouge. Constat du 6 aout : 36 certificats expires servis en
+# production, alors que le magasin acme.sh en detenait des valides jusqu'en
+# novembre. Le moniteur criait juste ; il lit les pem deployes, pas le magasin.
+#
+# Ce ctl synchronise magasin -> pem, et ne recharge HAProxy que si quelque
+# chose a change. Idempotent : le rejouer sans renouvellement ne fait rien.
+
+set -euo pipefail
+
+readonly VERSION="1.1.0"
+readonly CERTS_DIR="${SECUBOX_CERTS_DIR:-/data/haproxy/certs}"
+readonly ACME_HOME="${SECUBOX_ACME_HOME:-/root/.acme.sh}"
+# Certbot gere une partie du parc (ganimed.fr, mail.maegia.tv, …). La garantie
+# doit etre UNIFORME : un certificat renouvele doit atteindre HAProxy quel que
+# soit l outil qui l a emis. Sinon la moitie du parc reste sur le mecanisme qui
+# avait laisse 36 certificats expirer.
+readonly CERTBOT_LIVE="${SECUBOX_CERTBOT_LIVE:-/etc/letsencrypt/live}"
+readonly RELOAD_CMD="${SECUBOX_CERTS_RELOAD:-systemctl reload haproxy}"
+
+log() { printf '[certsctl] %s\n' "$*" >&2; }
+
+# Magasin pour $1, tous outils confondus. Emet "<chaine>\t<cle>" sur stdout.
+#
+# acme.sh suffixe _ecc les certificats a courbe elliptique, qui sont le defaut
+# depuis des annees — les deux formes sont essayees. Certbot, lui, range sous
+# live/<domaine>/ avec des noms fixes.
+#
+# ORDRE : acme.sh d abord. Il gere la grande majorite du parc ; un domaine
+# present dans les deux magasins est presume gere par acme.sh, et prendre
+# l autre risquerait de deployer un certificat qui ne sera plus renouvele.
+_store_for() {
+    local dom="$1" c
+    for c in "${dom}_ecc" "$dom"; do
+        if [ -f "$ACME_HOME/$c/fullchain.cer" ] && [ -f "$ACME_HOME/$c/$dom.key" ]; then
+            printf '%s\t%s' "$ACME_HOME/$c/fullchain.cer" "$ACME_HOME/$c/$dom.key"
+            return 0
+        fi
+    done
+    if [ -f "$CERTBOT_LIVE/$dom/fullchain.pem" ] && [ -f "$CERTBOT_LIVE/$dom/privkey.pem" ]; then
+        printf '%s\t%s' "$CERTBOT_LIVE/$dom/fullchain.pem" "$CERTBOT_LIVE/$dom/privkey.pem"
+        return 0
+    fi
+    return 1
+}
+
+_end_epoch() {
+    local end
+    end=$(openssl x509 -noout -enddate -in "$1" 2>/dev/null | cut -d= -f2) || return 1
+    [ -n "$end" ] || return 1
+    date -d "$end" +%s 2>/dev/null
+}
+
+# deploy [--apply] — sans --apply, simule et n'ecrit rien.
+cmd_deploy() {
+    local apply=false
+    [ "${1:-}" = "--apply" ] && apply=true
+
+    local updated=0 uptodate=0 unmanaged=0 failed=0 changed=false
+    local pem dom store chain keyf new_e cur_e tmp
+
+    for pem in "$CERTS_DIR"/*.pem; do
+        [ -f "$pem" ] || continue
+        dom=$(basename "$pem" .pem)
+        if ! store=$(_store_for "$dom"); then
+            unmanaged=$((unmanaged + 1))
+            continue
+        fi
+        chain=${store%%$'\t'*}
+        keyf=${store#*$'\t'}
+        new_e=$(_end_epoch "$chain" || true)
+        cur_e=$(_end_epoch "$pem" || true)
+        # Une date illisible n'autorise JAMAIS un remplacement : mieux vaut
+        # laisser un certificat en place que d'en installer un qu'on n'a pas su
+        # dater. Un balayage ecrit trop vite avait deja masque 35 certificats
+        # expires en avalant silencieusement les dates non analysables.
+        if [ -z "$new_e" ] || [ -z "$cur_e" ]; then
+            failed=$((failed + 1))
+            log "date illisible, ignore : $dom"
+            continue
+        fi
+        if [ "$new_e" -le "$cur_e" ]; then
+            uptodate=$((uptodate + 1))
+            continue
+        fi
+        updated=$((updated + 1))
+        changed=true
+        if [ "$apply" = "true" ]; then
+            # Ecriture atomique, droits et proprietaire du pem existant
+            # preserves : HAProxy tourne sous son propre utilisateur et un
+            # certificat devenu illisible pour lui est une panne totale.
+            tmp=$(mktemp "$CERTS_DIR/.certsctl.XXXXXX")
+            cat "$chain" > "$tmp"
+            printf '\n' >> "$tmp"
+            cat "$keyf" >> "$tmp"
+            chown --reference="$pem" "$tmp" 2>/dev/null || true
+            chmod --reference="$pem" "$tmp" 2>/dev/null || true
+            mv -f "$tmp" "$pem"
+        fi
+    done
+
+    if [ "$apply" = "true" ] && [ "$changed" = "true" ]; then
+        # Rechargement UNIQUEMENT si quelque chose a change : un reload par
+        # passage de minuteur, sans raison, coupe des connexions pour rien.
+        if haproxy -c -f /etc/haproxy/haproxy.cfg >/dev/null 2>&1; then
+            $RELOAD_CMD >/dev/null 2>&1 || log "rechargement HAProxy en echec"
+        else
+            log "haproxy -c en echec — rechargement NON effectue"
+        fi
+    fi
+
+    cat <<EOF
+{
+  "applied": $apply,
+  "updated": $updated,
+  "up_to_date": $uptodate,
+  "unmanaged": $unmanaged,
+  "unreadable": $failed,
+  "reloaded": $([ "$apply" = "true" ] && [ "$changed" = "true" ] && echo true || echo false)
+}
+EOF
+}
+
+# status — combien de certificats deployes sont expires ou proches de l'etre.
+cmd_status() {
+    local exp=0 soon=0 ok=0 pem
+    for pem in "$CERTS_DIR"/*.pem; do
+        [ -f "$pem" ] || continue
+        if ! openssl x509 -noout -checkend 0 -in "$pem" >/dev/null 2>&1; then
+            exp=$((exp + 1))
+        elif ! openssl x509 -noout -checkend 1814400 -in "$pem" >/dev/null 2>&1; then
+            soon=$((soon + 1))
+        else
+            ok=$((ok + 1))
+        fi
+    done
+    printf '{"expired": %d, "expiring_21d": %d, "valid": %d}\n' "$exp" "$soon" "$ok"
+}
+
+case "${1:-help}" in
+    deploy) cmd_deploy "${2:-}" ;;
+    status) cmd_status ;;
+    *) cat <<EOF
+certsctl v$VERSION — deploiement des certificats vers HAProxy
+
+  deploy [--apply]   Synchronise magasin acme.sh -> $CERTS_DIR.
+                     Sans --apply : simule. Recharge HAProxy uniquement si
+                     quelque chose a change.
+  status             Compte les certificats deployes expires / proches / valides
+EOF
+    ;;
+esac

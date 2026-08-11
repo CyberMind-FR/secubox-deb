@@ -5,6 +5,10 @@ if [ "$1" = "configure" ]; then
     install -d -m 0755 /var/cache/secubox/certs
     systemctl daemon-reload || true
     systemctl enable --now secubox-certs.service || true
+    # Minuteur de deploiement (#991) : le maillon qui manquait entre acme.sh et
+    # les pem servis par HAProxy. `--now` pour que le premier passage ramasse
+    # tout ce qu'acme.sh a deja renouvele sans avoir jamais pu le livrer.
+    systemctl enable --now secubox-certs-deploy.timer || true
 fi
 #DEBHELPER#
 exit 0
