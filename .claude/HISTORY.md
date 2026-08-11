@@ -3,6 +3,57 @@
 
 ---
 
+## 2026-08-11 (fin de journee) — Verification, 11 fusions de plus, et deux refus
+
+**VERIFICATION D'ABORD.** La bonne question n'etait pas « quelle branche est
+vivante » mais **quel paquet de la board est en avance sur master**. Reponse
+apres les fusions du jour : **zero**, sur les 162 paquets installes. Verifie
+ensuite au CONTENU sur 19 paquets a risque : les trois ecarts apparents
+venaient de mon fichier temoin (`__init__.py` trouve au mauvais endroit), pas
+d'une divergence reelle. Master couvre tout ce qui tourne.
+
+**11 fusions supplementaires.** Les conflits de journaux se resolvent
+mecaniquement — les deux cotes ajoutent une entree en tete, il n'y a rien a
+arbitrer. Deux cas pourtant, et la difference compte : versions distinctes, on
+garde les deux blocs ; MEME version, il faut fusionner les puces sous l'en-tete
+unique, sinon le corps orphelin rend le journal illisible pour dpkg.
+
+**Mon premier resolveur perdait l'apport de la branche en silence.** Il
+reconstruisait les lignes de marqueurs pour retrouver la region a remplacer, et
+se trompait de region. Pris en defaut par le controle que j'avais heureusement
+ecrit : l'entree de `fix/826-c2-rare-alone-fp` avait disparu du resultat.
+Reecrit par substitution, puis re-verifie — les deux apports survivent.
+
+**DEUX REFUS ASSUMES :**
+
+- `fix/961-toutes-applis-endormissables` — master et la branche ont unifie la
+  detection en parallele. J'ai garde master et pris les tests de la branche,
+  qui ont **echoue 9 fois**. Les docstrings sont explicites : ces tests sont
+  ECRITS pour echouer contre le code d'avant #961. Master laisse donc l'idle
+  loop arreter une appli `archived = true`, et arreter une appli dont le port
+  est indeterminable. C'est une vraie integration a trois voies dans un script
+  QUI ARRETE DES APPLICATIONS — pas quelque chose a bacler en fin de serie.
+- `archive/429-b715-occ-direct` — SUPPRIMEE, non fusionnee. Elle redefinissait
+  `_public_base_url` sans arguments : apres fusion, deux definitions
+  coexistaient et la seconde ecrasait la premiere, cassant tous les appels a
+  trois arguments. Son intention est deja satisfaite — master interroge le
+  conteneur (12 appels occ/lxc-attach) et est a 1.5.2, comme la board.
+
+**secubox-nac etait DEJA rouge** (33 tests) avant mes fusions : verifie sur le
+premier parent ET sur la branche seule. Ce n'est pas une regression de la
+fusion, c'est une dette qui preexistait dans master.
+
+**INCIDENT DE MANIPULATION.** J'ai lance `git stash` sur un arbre propre — donc
+sans rien creer — puis `git stash pop`, qui a depile **la remise de
+l'utilisateur**. Rattrape sans perte : `pop` ne supprime pas la remise en cas
+de conflit. Les 9 remises sont intactes, contenu verifie. A ne pas refaire :
+verifier qu'un `stash` a bien cree une entree avant de depiler.
+
+Etat : 22 branches restantes, toutes en conflit de code reel, aucune ne portant
+de code vivant.
+
+---
+
 ## 2026-08-11 (fin) — Nettoyage, et une TROISIEME poche de code vivant hors sources
 
 **45 worktrees retires, 110 branches locales supprimees.** Le nettoyage a
