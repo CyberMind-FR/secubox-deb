@@ -354,16 +354,60 @@ on full success**; never leaves a half-provisioned container marked ready.
 version. Updates happen only on an explicit `ctl update`, and a module with a
 live operation (a brew in progress, a job running) **refuses** the update.
 
-**Routing caveat (gk2).** The real admin vhost (`sites-enabled/webui.conf`,
-exact `server_name`) serves panels statically from `root` and routes `/api/` to
-the aggregator; it does **not** include `secubox.d/`. A **dedicated-socket**
-module therefore needs an explicit `location /api/v1/<module>/ { rewrite … ;
-proxy_pass http://unix:/run/secubox/<module>.sock; }` added to `webui.conf`
-(the `waf` pattern) — the package's own `secubox.d` drop-in is inert there.
-Prefer **aggregator-serving** unless the module genuinely needs its own socket.
+**Routing.** See *Nginx route — where a module declares it* below. In short:
+ship the route to `secubox-routes.d/`, never hand-add a location to
+`webui.conf`. Prefer **aggregator-serving** unless the module genuinely needs
+its own socket.
 
 Reference implementation: **secubox-picobrew** (LXC + `picobrewctl install`
 provision oneshot + panel-over-API).
+
+---
+
+## Nginx route — where a module declares it (Required)
+
+**Ship the route to `/etc/nginx/secubox-routes.d/`.** That is the only
+directory the admin vhost includes. A route delivered to `secubox.d/` alone is
+**never read** — the module appears broken while its package looks correct.
+
+```make
+# debian/rules — install into BOTH directories.
+# secubox-routes.d/ is what the vhost reads; secubox.d/ is kept for the
+# handful of legacy vhosts that still include it.
+install -d debian/secubox-<mod>/etc/nginx/secubox.d
+install -d debian/secubox-<mod>/etc/nginx/secubox-routes.d
+install -m 644 nginx/<mod>.conf debian/secubox-<mod>/etc/nginx/secubox.d/
+install -m 644 nginx/<mod>.conf debian/secubox-<mod>/etc/nginx/secubox-routes.d/
+```
+
+**Never hand-add a location to `webui.conf`.** It is packaged (`secubox-hub`)
+and a hand-edit is lost at the next install. This was the previous advice, and
+it is what produced the drift documented in #989: 74 route files living on the
+board owned by no package, 64 of them silently diverged from their packaged
+twin — one proxying to a dedicated socket that no longer existed.
+
+**Route content: API only.** The vhost already serves `/usr/share/secubox/www`
+from its root, so a `location /<mod>/ { alias /usr/share/secubox/www/<mod>/; }`
+in the drop-in is redundant, and becomes a duplicate `location` the day both
+directories are included.
+
+**Errors must stay JSON.** Panels call these routes with `fetch()` and parse
+the body unconditionally. Do not add `error_page` to an API location: an HTML
+error body reaches the browser as `JSON.parse: unexpected character at line 1
+column 1`, which sends the reader hunting in the client while the real fault is
+a 401 or a 500 upstream (#987, #990).
+
+**Verify, don't assume.** After install:
+
+```bash
+dpkg -S /etc/nginx/secubox-routes.d/<mod>.conf   # must name your package
+nginx -t && systemctl reload nginx
+curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+     -H "Host: admin.<host>" http://127.0.0.1:9080/api/v1/<mod>/status
+```
+
+An orphan file at that path means the route works only until someone
+reinstalls.
 
 ---
 

@@ -1,3 +1,17 @@
+secubox-cdn (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/. C'est le
+    seul repertoire que le vhost principal inclut ; livree dans secubox.d/
+    uniquement, la route n'etait JAMAIS lue. Pour que le module fonctionne, il
+    fallait recopier sa route a la main — d'ou une version vivante orpheline,
+    et une version empaquetee qui divergeait sans que personne le voie.
+  * La source du depot est realignee sur la version VIVANTE, a l'octet pres.
+    Elles avaient diverge : la version empaquetee proxifiait parfois vers un
+    socket dedie inexistant la ou la vivante passe par l'agregateur — la
+    deployer telle quelle aurait casse la route. (ref #989)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 07:15:00 +0200
+
 secubox-cdn (1.1.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit

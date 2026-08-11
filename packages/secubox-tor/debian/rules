@@ -13,6 +13,11 @@ override_dh_auto_install:
 	# Install nginx config
 	install -d $(CURDIR)/debian/secubox-tor/etc/nginx/secubox.d
 	install -m 644 nginx/tor.conf $(CURDIR)/debian/secubox-tor/etc/nginx/secubox.d/tor.conf
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d $(CURDIR)/debian/secubox-tor/etc/nginx/secubox-routes.d
+	install -m 644 nginx/tor.conf $(CURDIR)/debian/secubox-tor/etc/nginx/secubox-routes.d/tor.conf
 
 	# Helpers (torctl copies templates below from /usr/share/secubox/tor/)
 	install -D -m 755 sbin/tor-lan-ip debian/secubox-tor/usr/sbin/tor-lan-ip

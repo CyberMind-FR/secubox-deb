@@ -12,6 +12,11 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-droplet/etc/nginx/secubox.d
 	[ -f nginx/droplet.conf ] && cp nginx/droplet.conf debian/secubox-droplet/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-droplet/etc/nginx/secubox-routes.d
+	[ -f nginx/droplet.conf ] && cp nginx/droplet.conf debian/secubox-droplet/etc/nginx/secubox-routes.d/ || true
 	# dropletctl — static publisher (rewritten for issue #196 — superseded #181)
 	install -d debian/secubox-droplet/usr/sbin
 	install -m 755 sbin/dropletctl debian/secubox-droplet/usr/sbin/

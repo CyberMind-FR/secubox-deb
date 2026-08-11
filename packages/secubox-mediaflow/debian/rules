@@ -12,6 +12,11 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-mediaflow/etc/nginx/secubox.d
 	[ -f nginx/mediaflow.conf ] && cp nginx/mediaflow.conf debian/secubox-mediaflow/etc/nginx/secubox.d/ || true
+	# Route AUSSI installee dans secubox-routes.d/ : c est le seul repertoire
+	# que le vhost principal inclut (#989). Livree dans secubox.d/ uniquement,
+	# elle n etait jamais lue.
+	install -d debian/secubox-mediaflow/etc/nginx/secubox-routes.d
+	[ -f nginx/mediaflow.conf ] && cp nginx/mediaflow.conf debian/secubox-mediaflow/etc/nginx/secubox-routes.d/ || true
 	# R4 cloner helper (#736): keep yt-dlp current for Discovered Media
 	install -d debian/secubox-mediaflow/usr/sbin
 	install -m 0755 sbin/secubox-yt-dlp-refresh debian/secubox-mediaflow/usr/sbin/
