@@ -1,5 +1,6 @@
 api/*.py               usr/lib/secubox/profiles/api/
 templates/waking.html  usr/lib/secubox/profiles/templates/
+templates/down.html  usr/lib/secubox/profiles/templates/
 profiles/*.toml        usr/share/secubox/profiles/
 sbin/secubox-profilectl usr/sbin/
 sbin/secubox-wakectl   usr/sbin/
