@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: minuteur de deploiement des certificats (#991).
+[Unit]
+Description=SecuBox — deploiement quotidien des certificats renouveles
+
+[Timer]
+# Apres le cron acme.sh (02:00), pour ramasser ce qu'il vient de renouveler.
+OnCalendar=*-*-* 03:15:00
+# Rattrape un passage manque : une board eteinte la nuit ne doit pas laisser
+# des certificats expirer faute d'avoir vu passer l'heure.
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
