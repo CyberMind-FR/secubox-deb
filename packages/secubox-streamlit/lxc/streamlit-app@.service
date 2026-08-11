@@ -40,14 +40,21 @@
 [Unit]
 Description=Streamlit app: %i
 After=network.target
+# Belt-and-suspenders alongside Restart=no: even a manual `systemctl
+# start` loop from outside can't turn into a hot retry storm.
+#
+# This directive belongs to [Unit], not [Service]. Under [Service]
+# systemd does not merely tolerate it — it rejects the line ("Unknown
+# key 'StartLimitIntervalSec' in section [Service], ignoring", logged at
+# every instance start on the board) and the guard silently does
+# nothing, which is worse than omitting it: the unit reads as protected
+# while nothing enforces it.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/streamlit-launch %i
 Restart=no
-# Belt-and-suspenders alongside Restart=no: even a manual `systemctl
-# start` loop from outside can't turn into a hot retry storm.
-StartLimitIntervalSec=0
 
 # Not started by default. An app is switched on either on demand
 # (`streamlitctl app wake <name>`, driving `systemctl start` for this
