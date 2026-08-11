@@ -1,0 +1,69 @@
+{{define "corps"}}
+<div class="s296d727">
+<div class="ph"><div><h1 class="serif">Mon compte</h1>
+<p>{{.V.Handle}} · {{if .V.Sysop}}sysop{{else}}membre{{end}}</p></div></div>
+{{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
+{{if .Msg}}<div class="note m s42a6ced"><b>{{.Msg}}</b></div>{{end}}
+
+<div class="card pad s42a6ced">
+  <h3 class="s7b1eb4e">Changer de mot de passe</h3>
+  <form method="post" action="/compte/motdepasse" class="stack">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <label class="s3fb7839">Mot de passe actuel
+      <input name="ancien" type="password" required autocomplete="current-password"
+        class="sa9ef1c9"></label>
+    <label class="s3fb7839">Nouveau mot de passe — 12 caractères au minimum
+      <input name="nouveau" type="password" required minlength="12" autocomplete="new-password"
+        class="sa9ef1c9"></label>
+    <button class="btn primary" type="submit">Changer</button>
+  </form>
+  <div class="note sf9f81af">
+    Une phrase longue résiste mieux qu'un mot court décoré de symboles — et ne
+    finit pas sur un post-it. Changer votre mot de passe <b>ferme toutes vos
+    autres sessions</b> : c'est le but du geste.
+  </div>
+</div>
+
+<div class="card pad s42a6ced">
+  <h3 class="s7b1eb4e">Inviter quelqu'un</h3>
+  {{if .Code}}
+    <div class="note m"><b>Code émis — il n'est affiché qu'une fois.</b>
+      <div class="row s381c37d">
+        <img src="/sysop/qr?code={{.Code}}" alt="Code QR de l'invitation"
+             width="150" height="150" class="s39203eb">
+        <div class="s43459be">
+          <div class="mono s63eb706">{{.Code}}</div>
+          <div class="s51eedcb">Adresse&nbsp;:
+            <span class="mono">{{.Base}}/invite/{{.Code}}</span></div>
+        </div>
+      </div>
+    </div>
+  {{end}}
+  <form method="post" action="/compte/invite" class="sdf92814">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <button class="btn primary" type="submit">Émettre une invitation</button>
+  </form>
+  <div class="note sf9f81af">
+    L'inscription se fait sur invitation, et <b>chaque membre peut en émettre</b>.
+    Le code est à usage unique et n'est affiché qu'une fois : seule son empreinte
+    est conservée. Votre pseudonyme reste attaché à l'invitation — c'est ce qui
+    permet au sysop de remonter une chaîne d'inscriptions si besoin.
+  </div>
+</div>
+
+<div class="card pad">
+  <h3 class="s7b1eb4e">Mes accès</h3>
+  <div class="kv"><span>Dernière connexion</span><b>{{if .Moi.LastLogin}}{{date .Moi.LastLogin}}{{else}}—{{end}}</b></div>
+  <div class="kv"><span>Depuis</span><b class="mono sa49cca5">{{if .Moi.LastIP}}{{.Moi.LastIP}}{{else}}—{{end}}</b></div>
+  <div class="kv"><span>Sessions ouvertes</span><b>{{.Moi.Sessions}}</b></div>
+  <form method="post" action="/compte/sessions" class="sf9f81af">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <button class="btn sm" type="submit">Fermer mes autres sessions</button>
+  </form>
+  <div class="note sf9f81af">
+    Une seule adresse est conservée, pas un historique : garder la trace de tous
+    vos accès serait une surveillance que personne n'a demandée.
+  </div>
+</div>
+</div>
+{{end}}

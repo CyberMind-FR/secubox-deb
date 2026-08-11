@@ -1,0 +1,15 @@
+#!/bin/sh
+# SecuBox-Deb :: secubox-bbs — prerm
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-bbs.service >/dev/null 2>&1 || true
+    ;;
+  upgrade)
+    # RIEN a l'upgrade : dh_installsystemd s'en charge, et un arret explicite
+    # ici ferait perdre l'information « ce service tournait », que le postinst
+    # utilise pour decider de le relancer.
+    ;;
+esac
+#DEBHELPER#
+exit 0

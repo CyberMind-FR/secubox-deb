@@ -1,0 +1,15 @@
+[Unit]
+Description=SecuBox BBS — import periodique des passerelles
+
+[Timer]
+# Toutes les six heures, pas toutes les minutes : un episode publie a midi peut
+# apparaitre a 18 h sans que cela gene personne, et un import horaire
+# reveillerait les modules endormis six fois plus souvent pour rien.
+OnCalendar=*-*-* 02,08,14,20:17:00
+# Decalage aleatoire : sans lui, toutes les boards du parc interrogeraient
+# PeerTube a la meme seconde.
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

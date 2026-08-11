@@ -1,0 +1,62 @@
+{{define "layout"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Titre}} — {{.Site}}</title>
+<!-- La banniere de sante du WAF ne s'affiche PAS ici, et c'est voulu.
+
+     Ce vhost est la surface MEMBRE, ouverte au public. La banniere interroge
+     des API d'administration et revele au passage ou se trouve la console —
+     du bruit pour un lecteur, une indication pour qui cherche.
+
+     Elle s'inserait en « mode barre laterale » et recouvrait la colonne de
+     droite. Autoriser ses deux empreintes reglait l'affichage mais laissait la
+     banniere sur une page publique, et liait notre politique a sa version : a
+     chaque mise a jour de sbxwaf, les empreintes auraient derive.
+
+     Ce refus la ecarte la banniere A LA SOURCE. La politique redevient
+     strictement fermee : aucune origine externe, aucune empreinte a suivre. -->
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
+</head><body>
+<div class="shell">
+<nav class="rail">
+  <div class="brand">
+    <div class="mark">{{.Initiale}}</div>
+    <div><b>{{.Site}}</b><small>{{.Hote}}</small></div>
+  </div>
+  <div class="railhead">Actifs</div>
+  <a class="nav s791fdb1" {{if eq .Vue "forums"}}aria-current="page"{{end}} href="/"><span class="ic">◈</span>Forums<span class="n">{{.Stats.Threads}}</span></a>
+  {{if .Mod.Media}}<a class="nav s6622767" {{if eq .Vue "media"}}aria-current="page"{{end}} href="/media"><span class="ic">▶</span>Média</a>{{end}}
+  {{if .Mod.Biblio}}<a class="nav s09c487b" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">▤</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
+  {{if and .V.Connecte .Mod.MP}}<a class="nav sf017a92" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages{{if .NonLus}}<span class="n p-new">{{.NonLus}}</span>{{end}}</a>{{end}}
+  {{if .Mod.Billets}}<a class="nav sfe562e2" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">✦</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
+  {{if .Mod.Mastodon}}<a class="nav s6622767" {{if eq .Vue "mastodon"}}aria-current="page"{{end}} href="/mastodon"><span class="ic">🐘</span>Mastodon</a>{{end}}
+
+  <div class="railhead">Salons</div>
+  {{range .Cats}}<a class="nav sb908d7d" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
+
+  {{if .V.Connecte}}{{if .V.Sysop}}
+  <div class="railhead">Console</div>
+  <a class="nav sf017a92" href="/sysop"><span class="ic">⚿</span>Sysop</a>
+  {{end}}{{end}}
+</nav>
+<div>
+<header class="top">
+  <form class="search" method="get" action="/rechercher">
+    <span>⌕</span>
+    <input name="q" value="{{.Q}}" placeholder="Rechercher dans les fils…"
+           class="sc146614">
+  </form>
+  <div class="sp"></div>
+  {{if .V.Connecte}}
+    <a class="me s15cb695" href="/compte" title="Mon compte"><span class="av">{{.V.Initiales}}</span>{{.V.Handle}}
+      {{if .V.Sysop}}<span class="pill p-warn">sysop</span>{{end}}</a>
+    <form method="post" action="/logout" class="s6b8b63d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <button class="iconbtn" type="submit">Quitter</button>
+    </form>
+  {{else}}
+    <a class="btn primary" href="/login">Se connecter</a>
+  {{end}}
+</header>
+<main>{{template "corps" .}}</main>
+</div></div></body></html>{{end}}

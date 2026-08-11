@@ -1,0 +1,14 @@
+{{define "corps"}}
+<div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
+{{if .Cards}}<div class="grid g2">{{range .Cards}}
+  <div class="card pad">
+    <div class="row sf85c702">{{range .Pills}}<span class="pill {{.Class}}">{{.Text}}</span>{{end}}</div>
+    <h3 class="sa3970b9">{{.Title}}</h3>
+    <div class="d sbf2a49c">{{.Sub}}</div>
+    {{if .Link}}<div class="row sf9f81af"><a class="btn sm" href="{{.Link}}">{{.LinkText}}</a></div>{{end}}
+  </div>
+{{end}}</div>{{else}}
+<div class="card pad sb0455c2">{{.Vide}}</div>
+{{end}}
+{{if .Note}}<div class="note m s92c18f6">{{.Note}}</div>{{end}}
+{{end}}
