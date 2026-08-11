@@ -9,9 +9,12 @@
       sans `ssl = true` doivent rediriger (`bbs`, `social`, `nc`, `sso`,
       `zigbee`, `picobrew`, `zem`, `shiptest`, `wiztest2`, `wiztest3`).
       Correctif = ajouter `ssl = true` dans leur bloc de `haproxy.toml`.
-- [ ] Reconstruire et redéployer `secubox-toolbox` : `30-toolbox-landing.cfg`
-      est empaqueté depuis #986 mais le backend vit encore hors des sources
-      sur la board.
+- [x] ~~Reconstruire `secubox-toolbox`~~ — **rien à faire, verifie le
+      2026-08-10** : `/etc/haproxy/cfg.d/30-toolbox-landing.cfg` est deja
+      livre par dpkg sur la board (2.8.9, meme empreinte que les sources).
+      L'item avait ete ecrit en deduisant l'etat de la board depuis le diff de
+      fusion, sans regarder la board — la meme erreur que celle qui a fait
+      rediagnostiquer #986/#988.
 - [ ] Fusionner les branches de worktree qui portent du code **déjà vivant**
       sur la board : c'est ce qui a fait rediagnostiquer #986/#988 à l'aveugle.
 
