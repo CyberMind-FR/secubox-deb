@@ -311,8 +311,11 @@ func (s *Server) handler() http.Handler {
 				s.wakerProxy().ServeHTTP(w, r)
 				return
 			}
-			http.Error(w, "421 Misdirected Request: no route for host "+host,
-				http.StatusMisdirectedRequest)
+			// #789: styled page instead of http.Error's bare text. The two
+			// sides are complementary — the on-demand check decides WHETHER
+			// this is a real 421, and this decides how it LOOKS. Keeping only
+			// one would either wake nothing or hand the visitor a raw string.
+			writeMisdirected(w, host)
 			return
 		}
 
