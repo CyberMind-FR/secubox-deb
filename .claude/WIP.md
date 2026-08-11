@@ -2997,6 +2997,73 @@ Add web-based mode control to the Eye Remote admin dashboard for safer manual ga
 ### Files Updated
 - `/etc/systemd/system/secubox-fallback-display.service` — NEW working service
 - `/usr/lib/secubox-eye/agent/display/fallback/` — Complete fallback display
+*Mis à jour : 2026-05-11 (Session 144)*
+
+---
+
+## 🚨 RÈGLES MÉTHODOLOGIQUES OBLIGATOIRES
+
+### Git Workflow
+1. **TOUJOURS travailler sur une branche** — jamais de commit direct sur master
+   ```bash
+   git checkout -b fix/issue-XX-description
+   ```
+2. **PR obligatoire** pour merger sur master
+3. **Référencer l'issue** dans les commits : `fix: description (ref #XX)`
+
+### Avant de créer/modifier
+1. **VÉRIFIER ce qui existe** avant de créer un nouveau fichier/script
+   ```bash
+   find . -name "*.sh" -type f | grep -i <keyword>
+   ls -la <directory>
+   ```
+2. **PROPOSER avant de reconstruire** — demander confirmation à l'utilisateur
+3. **Lire les scripts existants** pour comprendre leur fonctionnement
+
+### Build Scripts & Fixes
+1. **Les fixes doivent être intégrés dans les build scripts** — pas seulement dans `files/`
+2. **Vérifier si le build script utilise `files/` ou a des définitions embedded**
+3. **Tester le build script** après modification des sources
+
+### Image Generation
+1. **Utiliser les scripts existants** (`build-eye-remote-image.sh`, etc.)
+2. **Ne pas télécharger** si une image existe déjà localement
+3. **Vérifier les dépendances** du script avant de l'exécuter
+
+### Communication
+1. **Annoncer les actions** avant de les faire
+2. **Proposer des options** plutôt que d'agir unilatéralement
+3. **Résumer les changements** après chaque action
+
+---
+
+## 🔄 Session 144: HyperPixel Display Fixes (Eye Remote)
+
+### Problèmes identifiés et corrigés
+- [x] Cycle de dépendance systemd (pigpiod After=multi-user.target → cycle)
+- [x] pigpiod écoute IPv6 seulement (-l flag → Python ne peut pas connecter)
+- [x] Interfaces réseau dupliquées (RNDIS + ECM → conflit routing)
+- [x] Timing USB instable sur MOCHAbin (delays ajoutés)
+
+### Erreurs commises (à ne pas répéter)
+- ❌ Commit direct sur master au lieu d'une branche
+- ❌ Créé `install-eye-remote.sh` sans vérifier que `build-eye-remote-image.sh` existe
+- ❌ Modifié `files/` sans intégrer dans le build script embedded
+- ❌ Téléchargement d'image sans vérifier l'existant
+
+### Fichiers modifiés
+- `remote-ui/round/files/etc/systemd/system/pigpiod.service.d/override.conf`
+- `remote-ui/round/files/etc/systemd/system/hyperpixel2r-init.service`
+- `remote-ui/round/files/etc/systemd/system/secubox-eye-gadget.service`
+- `remote-ui/round/install-eye-remote.sh` (nouveau)
+
+### TODO
+- [ ] Intégrer les fixes dans `build-eye-remote-image.sh`
+- [ ] Tester build complet avec le script existant
+- [ ] Créer PR pour merger sur master
+
+### GitHub Issue
+- [#77] Fix HyperPixel 2.1 Round display initialization on Pi Zero W
 
 ---
 
