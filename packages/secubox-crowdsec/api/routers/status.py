@@ -100,15 +100,24 @@ def _compute_status_sync() -> Dict[str, Any]:
 
     # Check CAPI registration
     capi_error = None
+    capi_sovereign = False
     try:
         r = subprocess.run(
             "sudo cscli capi status 2>&1",
             shell=True, capture_output=True, text=True, timeout=10
         )
         output = r.stdout + r.stderr
-        if "enrolled" in output.lower() or "successfully interact" in output.lower() or r.returncode == 0:
+        low = output.lower()
+        if "no configuration for central api" in low or "no configuration for capi" in low:
+            # online_client is intentionally disabled on this box (sovereign
+            # mode, #728) — CrowdSec runs local-only, no CAPI/Console signal
+            # sharing. This is NOT an error and NOT "not enrolled": surface it
+            # as its own state so the panel shows it instead of offering an
+            # Enroll button that cannot succeed.
+            capi_sovereign = True
+        elif "enrolled" in low or "successfully interact" in low or r.returncode == 0:
             capi_registered = True
-        elif "forbidden" in output.lower() or "403" in output:
+        elif "forbidden" in low or "403" in output:
             capi_error = "API Forbidden - account issue"
     except Exception as e:
         capi_error = str(e)
@@ -131,6 +140,7 @@ def _compute_status_sync() -> Dict[str, Any]:
         "lapi_reachable": lapi_reachable,
         "capi_registered": capi_registered,
         "capi_error": capi_error,
+        "capi_sovereign": capi_sovereign,
         "lapi_url": url,
         "decisions_count": decisions_count,
         "alerts_count": alerts_count,
