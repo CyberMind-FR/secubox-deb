@@ -1,3 +1,28 @@
+secubox-users (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * TOTP : l'etat d'anti-rejeu (`last_step`) sort de users.json vers un fichier
+    dedie sous /var/lib/secubox/. Il etait ecrit dans le magasin, donc dans
+    /etc/secubox — root:root 0755 — alors que secubox-auth tourne en `secubox`.
+    Resultat mesure sur la board : PermissionError, 500, et un symptome
+    asymetrique deroutant. `_save` n'etant appele QUE dans la branche de
+    succes, un MAUVAIS code repondait proprement 401 et un BON code plantait :
+    l'utilisateur qui saisissait le bon code etait rejete.
+  * Au-dela du droit d'ecriture, c'etait une faute d'architecture :
+    verify_totp_for_user est un chemin de LECTURE qui mutait un magasin
+    appartenant a root, alors que les mutations sont reservees a
+    `sudo usersctl`. Et `last_step` est de l'etat d'execution, pas de la
+    configuration — il n'a rien a faire dans /etc.
+  * Compatibilite : un last_step deja present dans users.json continue de faire
+    plancher, sinon la migration rouvrirait une fenetre de rejeu sur les codes
+    deja consommes.
+  * Chemin surchargeable par SECUBOX_TOTP_REPLAY_PATH, et fixture d'isolation
+    dans la suite : sans elle, tout Engine construit sans argument ecrit dans
+    un fichier systeme partage — constate en ecrivant ce correctif, un test
+    existant s'est mis a echouer a cause d'un etat laisse par un run precedent.
+    (ref #990)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 05:30:00 +0200
+
 secubox-users (1.5.2-1~bookworm1) bookworm; urgency=high
 
   * SECURITY/DATA-LOSS: the v1->v2 migration destroyed credentials. On gk2 the
