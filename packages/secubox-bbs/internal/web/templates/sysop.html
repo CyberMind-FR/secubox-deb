@@ -35,6 +35,38 @@
     <div class="note sf9f81af">
       Seule l'empreinte du code est conservée : ni un listing ultérieur, ni une
       lecture de la base ne permettent de le retrouver.
+      <b>Tout membre peut inviter</b>, sans quota : la colonne « émise par »
+      ci-dessous est la seule façon de remonter une inscription en cascade.
+    </div>
+    {{if .Invites}}
+    <table class="s2bdf8e4">
+      <tr><th>émise par</th><th>utilisée par</th><th>état</th></tr>
+      {{range .Invites}}<tr>
+        <td>{{if .Emetteur}}{{.Emetteur}}{{else}}<span class="d">console</span>{{end}}</td>
+        <td>{{if .Beneficiaire}}{{.Beneficiaire}}{{else}}<span class="d">—</span>{{end}}</td>
+        <td>{{if .Used}}<span class="pill p-local">utilisée</span>{{else}}<span class="pill p-new">ouverte</span>{{end}}</td>
+      </tr>{{end}}
+    </table>
+    {{end}}
+  </div>
+
+  <div class="card pad">
+    <h3 class="s7b1eb4e">🐘 Mastodon</h3>
+    <form method="post" action="/sysop/reglages" class="stack">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <label class="s3fb7839">Adresse de l'instance
+        <input name="instance" type="url" value="{{.MastoInstance}}"
+               placeholder="https://social.exemple.fr" class="sa9ef1c9"></label>
+      <label class="s3fb7839">Lien d'invitation
+        <input name="invitation" type="url" value="{{.MastoInvite}}"
+               placeholder="https://social.exemple.fr/invite/xxxx" class="sa9ef1c9"></label>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </form>
+    <div class="note sf9f81af">
+      Le lien se crée dans Mastodon, puis se colle ici. Il n'est montré qu'aux
+      membres <b>connectés</b> : une invitation Mastodon sert plusieurs fois et
+      ne se révoque pas d'ici — affichée publiquement, elle ouvrirait l'instance
+      à qui passe. Vider un champ retire le réglage.
     </div>
   </div>
 
@@ -79,6 +111,18 @@
             <button class="btn sm" name="action" value="disable" type="submit">Désactiver</button>
           {{end}}
         </form>
+        {{if eq .Source "secubox"}}
+          <span class="pill p-sky" title="Le mot de passe est vérifié par secubox-auth, pas ici">délégué</span>
+        {{else}}
+        <form method="post" action="/sysop/motdepasse" class="s6b8b63d">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <input name="nouveau" type="password" required minlength="12"
+                 placeholder="nouveau mot de passe" autocomplete="new-password"
+                 class="sa9ef1c9">
+          <button class="btn sm" type="submit">Réinitialiser</button>
+        </form>
+        {{end}}
       </td>
     </tr>{{end}}
     </tbody>

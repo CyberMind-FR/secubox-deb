@@ -1,3 +1,47 @@
+secubox-bbs (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau d'administration : le 401 renvoyait « jeton expire » dans chaque
+    carte au lieu de renvoyer a la connexion. Message exact et inutile — il ne
+    dit pas quoi faire, et l'on croit a une panne du module. Aligne sur la
+    convention du parc (redirection vers /login.html).
+  * Onglet Sysop dans le panneau d'administration : comptes, invitations et
+    reglages Mastodon, avec desactivation et reinitialisation de mot de passe.
+    Les deux surfaces passent par les MEMES fonctions de magasin, sans quoi les
+    garde-fous ne vaudraient que pour une porte.
+  * Un compte delegue a secubox-auth n'est pas reinitialisable ici, et le dit :
+    poser un mot de passe local annoncerait un succes sans effet.
+  * La barre d'outils de l'editeur se cable a CHAQUE bloc `.editor` et non plus
+    au seul `#tools` : la saisie des messages prives a desormais le meme
+    traitement de texte que le forum.
+  * Le fichier de mots de passe est relu quand un autre processus l'a change.
+    `bbsctl` et le service ecrivent le meme fichier : sans cela, une
+    reinitialisation de secours restait sans effet jusqu'au redemarrage, et la
+    premiere ecriture du service EFFACAIT le mot de passe pose par la console.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 11 Aug 2026 16:10:00 +0200
+
+secubox-bbs (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Messagerie interne entre membres (#1008) : conversations a deux, boite de
+    reception, compteur de non-lus. Les messages vivent EN BASE et non sur
+    disque — ils ne sont donc pas repris dans la sauvegarde, ce que la page
+    annoncait deja et que l'interface redit desormais explicitement.
+  * Invitation par tout membre enregistre (#1008), sans quota. La console
+    affiche qui a invite qui : c'est la contrepartie du choix, sans quoi une
+    inscription en cascade serait indebrouillable. Un compte ferme n'invite
+    plus.
+  * Module Mastodon (#1008) : lien d'invitation partage, declare par le sysop.
+    Montre aux seuls membres connectes — une invitation Mastodon sert plusieurs
+    fois et ne se revoque pas d'ici. Les liens sont valides au STOCKAGE : seuls
+    http et https entrent en base.
+  * `bbsctl user-passwd <pseudo>` : chemin de secours hors session. La console
+    exige d'etre connecte — inutile le jour ou plus personne ne peut entrer.
+  * Reinitialisation de mot de passe par le sysop, avec la MEME politique de
+    longueur que le libre-service, et fermeture des sessions du compte. Les
+    comptes delegues a secubox-auth sont signales et non reinitialisables ici.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 11 Aug 2026 15:30:00 +0200
+
 secubox-bbs (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Premiere version : socle comptes/sessions/invitations, forums a
