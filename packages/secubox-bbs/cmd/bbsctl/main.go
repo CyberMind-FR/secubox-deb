@@ -58,7 +58,11 @@ func lisMotDePasse() string {
 }
 
 func cmdHelp() {
-	fmt.Print(`bbsctl — administration du BBS SecuBox
+	// `os.Stdout.WriteString` plutot que `fmt.Print` : l'exemple d'aide contient
+	// un `%s` destine a `printf(1)`, et `go vet` le prend pour une directive de
+	// format mal utilisee. Contourner en deformant l'exemple aurait rendu la
+	// documentation fausse pour satisfaire un outil.
+	os.Stdout.WriteString(`bbsctl — administration du BBS SecuBox
 
   status                     Compteurs
   integrity                  Compare le disque et l'index, sans rien modifier
@@ -74,7 +78,7 @@ func cmdHelp() {
   ingest-log                 Dernières exécutions d'import
   sync-users                 Aligne les comptes SecuBox (aucun mot de passe copié)
 
-  printf '%s' 'une phrase de passe' | bbsctl user-add gk2 sysop
+  printf %s 'une phrase de passe' | bbsctl user-add gk2 sysop
 `)
 }
 

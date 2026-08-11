@@ -153,3 +153,23 @@ func nilSiFaux(b bool) any {
 	}
 	return 1
 }
+
+// SetAuthSourceLocale reprend un compte delegue en LOCAL.
+//
+// Un compte issu de `sync-users` delegue sa verification a secubox-auth : le
+// BBS n'en detient aucun mot de passe. C'est defendable — une seule copie du
+// secret — mais cela rend le compte INGERABLE depuis le BBS : impossible de
+// reinitialiser son mot de passe, impossible de depanner son titulaire si
+// secubox-auth ne repond pas, et le panneau doit afficher « delegue » la ou
+// l'exploitant attend un bouton.
+//
+// Ce basculement rend le compte autonome. L'appelant DOIT poser un mot de passe
+// local avant ou juste apres : sans lui, le compte devient un compte local sans
+// empreinte, donc un compte qui ne peut plus se connecter du tout.
+//
+// La prochaine synchronisation ne le reprendra pas : `SyncExternalUsers` ne
+// touche que les comptes dont `auth_source = 'secubox'`.
+func (s *Store) SetAuthSourceLocale(id int64) error {
+	_, err := s.db.Exec(`UPDATE users SET auth_source = 'local' WHERE id = ?`, id)
+	return err
+}

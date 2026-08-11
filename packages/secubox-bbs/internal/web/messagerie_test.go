@@ -234,18 +234,19 @@ func TestLeSysopReinitialiseUnMotDePasseEtCoupeLesSessions(t *testing.T) {
 	_ = s
 }
 
-func TestUneReinitialisationTropCourteEstRefusee(t *testing.T) {
-	// La politique de longueur ne doit pas avoir de porte derobee sur le chemin
-	// qu'on emprunte dans l'urgence.
+func TestUneReinitialisationVideEstRefusee(t *testing.T) {
+	// La longueur minimale a ete retiree ; le mot de passe VIDE reste refuse.
+	// Ce n'est pas une limite de longueur mais la difference entre avoir un mot
+	// de passe et ne pas en avoir.
 	srv, _, _, jGk2, amie, _ := bancMP(t)
 	csrf := csrfDe(t, srv, "/sysop", jGk2)
 	w := demande(t, srv, "POST", "/sysop/motdepasse", jGk2, url.Values{
-		"csrf": {csrf}, "id": {itoa(amie)}, "nouveau": {"court"},
+		"csrf": {csrf}, "id": {itoa(amie)}, "nouveau": {""},
 	})
 	if !strings.Contains(w.Header().Get("Location"), "err=") {
-		t.Error("mot de passe trop court accepte")
+		t.Error("mot de passe vide accepte")
 	}
-	if srv.auth.Verify(amie, "court") {
-		t.Error("le mot de passe court a ete pose malgre le refus")
+	if srv.auth.Verify(amie, "") {
+		t.Error("un mot de passe vide a ete pose")
 	}
 }

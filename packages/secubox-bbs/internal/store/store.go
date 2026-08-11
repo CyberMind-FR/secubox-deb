@@ -199,3 +199,11 @@ func versionOf(name string) (int, error) {
 func (s *Store) QueryRowScan(dest any, query string, args ...any) error {
 	return s.db.QueryRow(query, args...).Scan(dest)
 }
+
+// QueryRowScanInt64 : un identifiant, une requete. Sucre pour les appelants qui
+// n'ont besoin que de ca et n'ont pas a manipuler *sql.DB.
+func (s *Store) QueryRowScanInt64(query string, args ...any) (int64, error) {
+	var v int64
+	err := s.db.QueryRow(query, args...).Scan(&v)
+	return v, err
+}

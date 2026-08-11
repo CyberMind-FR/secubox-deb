@@ -105,6 +105,46 @@ func (s *Server) apiUsersAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		jsonOK(w, map[string]any{"ok": true, "desactive": false})
+	case "delete":
+		// SUPPRESSION REELLE, demandee par l'exploitant. Le contenu n'est pas
+		// efface : il est reattribue a un compte tombeau (cf.
+		// store.DeleteUser). Un membre qui s'en va n'emporte pas les reponses
+		// qu'on lui a faites.
+		if err := s.st.DeleteUser(corps.ID); err != nil {
+			jsonErr(w, http.StatusConflict, err.Error())
+			return
+		}
+		// L'empreinte vit hors de la base : sans cet oubli, un secret
+		// survivrait a son compte et serait attribue au prochain compte
+		// recevant le meme identifiant.
+		if err := s.auth.Oublie(corps.ID); err != nil {
+			jsonErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		jsonOK(w, map[string]any{"ok": true, "supprime": true})
+	case "local":
+		// REPRENDRE UN COMPTE DELEGUE EN LOCAL. Un compte issu de `sync-users`
+		// delegue sa verification a secubox-auth : le BBS n'en detient aucun
+		// mot de passe, donc ne peut ni le reinitialiser ni depanner son
+		// titulaire. Ce basculement le rend autonome.
+		//
+		// Le mot de passe est pose DANS LA FOULEE : un compte bascule sans
+		// empreinte locale ne pourrait plus se connecter du tout.
+		if corps.Password == "" {
+			jsonErr(w, http.StatusBadRequest,
+				"mot de passe requis : un compte repris sans empreinte locale ne peut plus se connecter")
+			return
+		}
+		if err := s.auth.ResetPassword(corps.ID, corps.Password); err != nil {
+			jsonErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.st.SetAuthSourceLocale(corps.ID); err != nil {
+			jsonErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		s.st.RevokeOtherSessions(corps.ID, "")
+		jsonOK(w, map[string]any{"ok": true, "source": "local"})
 	case "password":
 		// UN COMPTE DELEGUE N'EST PAS REINITIALISABLE ICI. Le BBS ne copie aucun
 		// mot de passe : la verification part vers secubox-auth. En poser un

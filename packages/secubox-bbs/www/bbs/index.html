@@ -267,9 +267,15 @@ async function chargerSysop() {
     if (!r) return;
     const lignes = (r.users || []).map(u => {
       const delegue = u.source === 'secubox';
+      // UN COMPTE DÉLÉGUÉ tient son mot de passe de secubox-auth : le BBS n'en
+      // détient aucun, donc rien à réinitialiser ici. Plutôt que d'afficher une
+      // étiquette et un cul-de-sac, on propose de le REPRENDRE en local —
+      // c'est ce qui manquait, et ce qui rendait ces comptes ingérables.
       const motdepasse = delegue
-        ? '<span class="etiq">délégué</span>'
-        : `<input type="password" minlength="12" placeholder="nouveau mot de passe"
+        ? `<input type="password" placeholder="mot de passe local" id="pw-${u.id}">
+           <button class="btn" type="button" onclick="reprendreEnLocal(${u.id})"
+             title="Le compte cesse de dépendre de secubox-auth">Reprendre en local</button>`
+        : `<input type="password" placeholder="nouveau mot de passe"
              id="pw-${u.id}"><button class="btn" type="button"
              onclick="reinitialiser(${u.id})">Réinitialiser</button>`;
       return `<tr>
@@ -281,6 +287,8 @@ async function chargerSysop() {
           <button class="btn" type="button" onclick="basculerCompte(${u.id}, ${u.desactive ? 'false' : 'true'})">
             ${u.desactive ? 'Réactiver' : 'Désactiver'}</button>
           ${motdepasse}
+          <button class="btn danger" type="button" onclick="supprimerCompte(${u.id}, '${esc(u.handle)}')"
+            title="Irréversible — le contenu reste, réattribué à « compte supprimé »">Supprimer</button>
         </div></td></tr>`;
     }).join('');
     document.getElementById('comptes').innerHTML = lignes
@@ -331,6 +339,36 @@ async function reinitialiser(id) {
     toast('mot de passe réinitialisé — les sessions du compte sont fermées');
     chargerSysop();
   } catch (e) { toast('mot de passe : ' + e.message, true); }
+}
+
+async function supprimerCompte(id, handle) {
+  // DEUX CONFIRMATIONS, et la seconde demande de TAPER le pseudonyme. Un
+  // simple « êtes-vous sûr ? » se clique par réflexe ; recopier le nom oblige
+  // à regarder quelle ligne on vise. La suppression est irréversible, et les
+  // lignes du tableau se ressemblent.
+  if (!confirm(`Supprimer définitivement le compte « ${handle} » ?\n\n`
+    + `Le contenu qu'il a écrit reste en place, réattribué à « compte supprimé » — `
+    + `ses messages privés et ses sessions, eux, disparaissent.`)) return;
+  const saisi = prompt(`Pour confirmer, tapez le pseudonyme : ${handle}`);
+  if (saisi !== handle) { toast('suppression annulée', true); return; }
+  try {
+    const r = await poste('/users/delete', { id: id });
+    if (!r) return;
+    toast(`compte « ${handle} » supprimé`);
+    chargerSysop();
+  } catch (e) { toast('suppression : ' + e.message, true); }
+}
+
+async function reprendreEnLocal(id) {
+  const champ = document.getElementById('pw-' + id);
+  if (!champ || !champ.value) { toast('saisissez le mot de passe local', true); return; }
+  try {
+    const r = await poste('/users/local', { id: id, password: champ.value });
+    if (!r) return;
+    champ.value = '';
+    toast('compte repris en local — il ne dépend plus de secubox-auth');
+    chargerSysop();
+  } catch (e) { toast('reprise : ' + e.message, true); }
 }
 
 async function enregistrerReglages() {

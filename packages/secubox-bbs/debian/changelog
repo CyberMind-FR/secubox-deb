@@ -1,3 +1,27 @@
+secubox-bbs (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * POINTS D'ENTREE RECONSTRUITS. `.gitignore` portait deux motifs NUS
+    (`secubox-bbsd`, `bbsctl`) destines aux binaires : un motif nu attrape
+    n'importe quel composant de chemin, donc aussi les REPERTOIRES `cmd/*`.
+    Les deux `main.go` n'avaient jamais ete suivis, et rien ne le signalait —
+    `git status` restait propre. Reconstruits a partir de la surface des
+    binaires deployes ; motifs desormais ancres (`/bbsctl`).
+  * Longueur minimale de mot de passe RETIREE sur demande de l'exploitant.
+    Seul le mot de passe vide reste refuse : ce n'est pas une limite de
+    longueur mais la difference entre avoir un mot de passe et ne pas en avoir.
+    Les tests ne sont pas supprimes, ils sont retournes.
+  * Suppression reelle d'un compte, depuis l'onglet sysop du panneau
+    d'administration. LE CONTENU N'EST PAS EFFACE : threads/posts/files sont
+    reattribues a un compte tombeau, parce qu'un membre qui s'en va n'emporte
+    pas les reponses qu'on lui a faites. Sessions, messages prives et empreinte
+    du mot de passe disparaissent, eux. Le dernier sysop ne se supprime pas.
+  * Un compte DELEGUE peut etre repris en local (`bbsctl user-local`, bouton
+    dans l'onglet sysop). Un compte issu de `sync-users` delegue sa
+    verification a secubox-auth : le BBS n'en detient aucun mot de passe, donc
+    ne peut ni le reinitialiser ni depanner son titulaire — un cul-de-sac.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 11 Aug 2026 18:40:00 +0200
+
 secubox-bbs (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Panneau d'administration : le 401 renvoyait « jeton expire » dans chaque

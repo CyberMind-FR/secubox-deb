@@ -45,14 +45,26 @@ func TestChangerDeMotDePasseExigeLAncien(t *testing.T) {
 	}
 }
 
-func TestUnMotDePasseTropCourtEstRefuse(t *testing.T) {
+func TestUnMotDePasseCourtEstAccepteMaisPasLeVide(t *testing.T) {
 	_, a := auth(t)
 	a.SetPassword(1, "le-mot-de-passe-actuel")
-	if err := a.ChangePassword(1, "le-mot-de-passe-actuel", "court"); err == nil {
-		t.Error("mot de passe trop court accepte")
+	// LA LONGUEUR MINIMALE A ETE RETIREE sur demande de l'exploitant. Ce test
+	// ne disparait pas pour autant : il garde la seule regle qui reste, et qui
+	// n'est pas une limite de longueur — un mot de passe VIDE reviendrait a un
+	// compte sans mot de passe, ou la chaine vide authentifie.
+	if err := a.ChangePassword(1, "le-mot-de-passe-actuel", "court"); err != nil {
+		t.Errorf("mot de passe court refuse alors que la limite est levee : %v", err)
 	}
-	if !a.Verify(1, "le-mot-de-passe-actuel") {
-		t.Error("l'ancien mot de passe a ete perdu malgre le refus")
+	if !a.Verify(1, "court") {
+		t.Error("le mot de passe court ne fonctionne pas apres changement")
+	}
+	// LE VIDE RESTE REFUSE, et l'ancien mot de passe survit au refus : un echec
+	// ne doit jamais laisser le compte sans empreinte utilisable.
+	if err := a.ChangePassword(1, "court", ""); err == nil {
+		t.Error("mot de passe VIDE accepte")
+	}
+	if !a.Verify(1, "court") {
+		t.Error("le mot de passe a ete perdu malgre le refus du vide")
 	}
 }
 
@@ -174,7 +186,7 @@ func TestUneInvitationEmisePourQuelquUnResteUtilisableParQuiLaDetient(t *testing
 	}
 }
 
-func TestLaReinitialisationSysopRespecteLaPolitique(t *testing.T) {
+func TestLaReinitialisationSysopRefuseLeVide(t *testing.T) {
 	// LA POLITIQUE NE DOIT PAS AVOIR DE PORTE DEROBEE. La longueur minimale
 	// n'etait imposee que par `ChangePassword` — le chemin en libre-service.
 	// Une reinitialisation par le sysop qui appellerait `SetPassword` en direct
@@ -182,8 +194,11 @@ func TestLaReinitialisationSysopRespecteLaPolitique(t *testing.T) {
 	// c'est justement le chemin qu'on emprunte quand quelqu'un est bloque
 	// dehors, donc dans l'urgence.
 	_, a := auth(t)
-	if err := a.ResetPassword(1, "court"); err == nil {
-		t.Error("mot de passe trop court accepte a la reinitialisation")
+	if err := a.ResetPassword(1, "court"); err != nil {
+		t.Errorf("mot de passe court refuse a la reinitialisation : %v", err)
+	}
+	if err := a.ResetPassword(1, ""); err == nil {
+		t.Error("mot de passe VIDE accepte a la reinitialisation")
 	}
 	if err := a.ResetPassword(1, "une-phrase-assez-longue"); err != nil {
 		t.Fatalf("reinitialisation legitime refusee : %v", err)
@@ -237,5 +252,68 @@ func TestUnMotDePassePosePar_bbsctl_EstVuParLeDaemon(t *testing.T) {
 	}
 	if !relu.Verify(1, "pose-depuis-la-console") {
 		t.Error("l'ecriture du service a efface le mot de passe pose par la console")
+	}
+}
+
+func TestSupprimerUnCompteNEffacePasLaConversationDesAutres(t *testing.T) {
+	// UN MEMBRE QUI S'EN VA N'EMPORTE PAS LES REPONSES QU'ON LUI A FAITES.
+	// `threads.author_id` et `posts.author_id` sont NOT NULL : une suppression
+	// brute violerait la clef etrangere, et la contourner en effacant les fils
+	// detruirait la conversation de tout le monde.
+	s, a := auth(t)
+	partant, _ := s.CreateUser("partant", "Partant", RoleMember)
+	reste, _ := s.CreateUser("reste", "Reste", RoleSysop)
+	cat, _ := s.CreateCategory("atelier", "Atelier", "")
+	fil, err := s.NewThread(cat, partant, "Un fil ouvert par le partant", "le corps", VisLocal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Reply(fil, reste, "ma reponse, qui doit survivre", VisLocal); err != nil {
+		t.Fatal(err)
+	}
+	a.SetPassword(partant, "un-mot-de-passe")
+
+	if err := s.DeleteUser(partant); err != nil {
+		t.Fatalf("suppression refusee : %v", err)
+	}
+	if err := a.Oublie(partant); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.UserByHandle("partant"); err == nil {
+		t.Error("le compte est encore resolu apres suppression")
+	}
+	// L'EMPREINTE AUSSI DISPARAIT : la laisser ferait survivre un secret sans
+	// compte, et l'attribuerait au prochain compte de meme identifiant.
+	if a.Verify(partant, "un-mot-de-passe") {
+		t.Error("l'empreinte du mot de passe a survecu au compte")
+	}
+	// Le fil et la reponse sont toujours la.
+	posts, err := s.PostsOf(fil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(posts) != 2 {
+		t.Fatalf("%d messages apres suppression, attendu 2", len(posts))
+	}
+	tombeau, err := s.QueryRowScanInt64(`SELECT id FROM users WHERE handle = ?`, TombeauHandle)
+	if err != nil {
+		t.Fatalf("compte tombeau absent : %v", err)
+	}
+	if tombeau == 0 {
+		t.Error("aucun compte tombeau cree")
+	}
+}
+
+func TestLeDernierSysopNeSeSupprimePas(t *testing.T) {
+	// Sinon il faudrait rouvrir la porte depuis la ligne de commande sur la
+	// board — ce que personne ne devine au moment ou il en a besoin.
+	s, _ := auth(t)
+	seul, _ := s.CreateUser("seul", "Seul", RoleSysop)
+	if err := s.DeleteUser(seul); err == nil {
+		t.Error("le dernier sysop a pu etre supprime")
+	}
+	if _, err := s.UserByHandle("seul"); err != nil {
+		t.Error("le compte a disparu malgre le refus")
 	}
 }

@@ -335,11 +335,11 @@ func (s *Server) invitation(w http.ResponseWriter, r *http.Request) {
 	}
 	handle := strings.TrimSpace(r.PostFormValue("handle"))
 	pw := r.PostFormValue("password")
-	// Longueur minimale plutot que regles de composition : une phrase longue
-	// resiste mieux qu'un mot court decore de symboles, et ne finit pas sur un
-	// post-it.
-	if len(pw) < 12 {
-		p.Err = "Mot de passe trop court — 12 caractères au minimum."
+	// AUCUNE LONGUEUR MINIMALE — retiree sur demande de l'exploitant. Seul le
+	// mot de passe vide reste refuse : ce n'est pas une limite de longueur mais
+	// la difference entre avoir un mot de passe et ne pas en avoir.
+	if pw == "" {
+		p.Err = "Mot de passe vide."
 		s.rend(w, r, "login", p)
 		return
 	}

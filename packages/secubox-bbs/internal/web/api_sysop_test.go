@@ -93,21 +93,22 @@ func TestLApiReinitialiseEtCoupeLesSessions(t *testing.T) {
 	}
 }
 
-func TestLApiRefuseUnMotDePasseTropCourt(t *testing.T) {
-	// La politique doit valoir pour LES DEUX portes. Une API qui ne la porterait
-	// pas rendrait la regle de la console decorative.
+func TestLApiRefuseUnMotDePasseVide(t *testing.T) {
+	// La longueur minimale a ete retiree ; le refus du VIDE doit valoir pour LES
+	// DEUX portes. Une API qui l'accepterait poserait un compte ou la chaine
+	// vide authentifie.
 	srv, s := banc(t)
 	srv.opt.JWTSecret = "le-secret-partage"
 	peuple(t, s)
 	amie, _ := s.CreateUser("amie", "Amie", store.RoleMember)
 
 	w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/users/password",
-		`{"id":`+itoa(amie)+`,"password":"court"}`)
+		`{"id":`+itoa(amie)+`,"password":""}`)
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("code %d, attendu 400", w.Code)
 	}
-	if srv.auth.Verify(amie, "court") {
-		t.Error("le mot de passe court a ete pose malgre le refus")
+	if srv.auth.Verify(amie, "") {
+		t.Error("un mot de passe vide a ete pose")
 	}
 }
 
@@ -186,5 +187,70 @@ func TestLApiDesReglagesRefuseUnLienNonHttp(t *testing.T) {
 	}
 	if j["instance"] != "https://social.exemple.fr" {
 		t.Errorf("relecture = %v", j["instance"])
+	}
+}
+
+func TestLApiSupprimeUnCompteSansEffacerSonContenu(t *testing.T) {
+	srv, s := banc(t)
+	srv.opt.JWTSecret = "le-secret-partage"
+	sysop, _ := peuple(t, s)
+	partant, _ := s.CreateUser("partant", "Partant", store.RoleMember)
+	cat, _ := s.CreateCategory("coin", "Coin", "")
+	fil, _ := s.NewThread(cat, partant, "Fil du partant", "un corps", store.VisLocal)
+	s.Reply(fil, sysop, "ma reponse, qui doit survivre", store.VisLocal)
+	srv.auth.SetPassword(partant, "un-mot-de-passe")
+
+	w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/users/delete",
+		`{"id":`+itoa(partant)+`}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d : %s", w.Code, w.Body.String())
+	}
+	if _, err := s.UserByHandle("partant"); err == nil {
+		t.Error("le compte est encore resolu")
+	}
+	// L'empreinte disparait aussi : sinon un secret survit a son compte.
+	if srv.auth.Verify(partant, "un-mot-de-passe") {
+		t.Error("l'empreinte a survecu au compte")
+	}
+	if posts, _ := s.PostsOf(fil); len(posts) != 2 {
+		t.Errorf("%d messages apres suppression, attendu 2", len(posts))
+	}
+}
+
+func TestLApiRepondUnCompteDelegueEnLocal(t *testing.T) {
+	// C'est la sortie du cul-de-sac : un compte delegue n'avait aucun bouton,
+	// et l'exploitant ne pouvait ni le depanner ni lui rendre un mot de passe.
+	srv, s := banc(t)
+	srv.opt.JWTSecret = "le-secret-partage"
+	peuple(t, s)
+	s.SyncExternalUsers([]store.ExternalUser{
+		{Handle: "delegue", Display: "Delegue", Role: store.RoleMember}})
+	id, err := s.UserByHandle("delegue")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Sans mot de passe, la reprise est refusee : le compte deviendrait local
+	// SANS empreinte, donc incapable de se connecter.
+	if w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/users/local",
+		`{"id":`+itoa(id)+`}`); w.Code != http.StatusBadRequest {
+		t.Errorf("reprise sans mot de passe : code %d, attendu 400", w.Code)
+	}
+
+	w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/users/local",
+		`{"id":`+itoa(id)+`,"password":"le-mot-de-passe-local"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d : %s", w.Code, w.Body.String())
+	}
+	if src, _ := s.AuthSourceParID(id); src != "local" {
+		t.Errorf("source = %q, attendu local", src)
+	}
+	if !srv.auth.Verify(id, "le-mot-de-passe-local") {
+		t.Error("le mot de passe local ne fonctionne pas")
+	}
+	// Et il est desormais reinitialisable comme n'importe quel compte.
+	if w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/users/password",
+		`{"id":`+itoa(id)+`,"password":"un-autre-mot-de-passe"}`); w.Code != http.StatusOK {
+		t.Errorf("reinitialisation apres reprise : code %d", w.Code)
 	}
 }
