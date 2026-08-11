@@ -139,6 +139,7 @@
 | 🧰 **ToolBoX (Cabine)** | Security | AP captif + analyseur MITM de vie privée consenti |
 | 💻 **VM Manager** | System | Gestion de la virtualisation |
 | 🔎 **YaCy** | Network | Moteur de recherche pair-à-pair |
+| 🥾 **Démarrage réseau** | System | Provisioning netboot HTTP/TFTP + installeur FIT signé (Tow-Boot) |
 
 ---
 

@@ -139,6 +139,7 @@
 | 🧰 **ToolBoX (Cabine)** | Security | Captive AP + consented MITM privacy analyzer |
 | 💻 **VM Manager** | System | Virtualization management |
 | 🔎 **YaCy** | Network | Peer-to-peer search engine |
+| 🥾 **Network Boot** | System | HTTP/TFTP netboot provisioning + signed-FIT installer (Tow-Boot) |
 
 ---
 

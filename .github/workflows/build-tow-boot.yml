@@ -1,0 +1,109 @@
+name: Build Enhanced Tow-Boot (mochabin, #748)
+
+# Builds the SecuBox enhanced Tow-Boot for the GlobalScale MOCHAbin via Nix on
+# the GitHub runner (cross-arm64), since no local Nix host is available. The
+# build also validates the netboot Kconfig added on #748 (CMD_WGET/WGET/
+# PROT_TCP/CMD_DHCP/CMD_TFTPBOOT/CMD_BOOTI/FIT_SIGNATURE, MVPP2, MV88E6XXX,
+# USE_BOOTCOMMAND/EXTRA_ENV_SETTINGS) — a bad symbol fails the build here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'MOCHAbin RAM variant'
+        required: true
+        default: 'globalscale-mochabin-8gb'
+        type: choice
+        options:
+          - globalscale-mochabin-8gb
+          - globalscale-mochabin-4gb
+          - globalscale-mochabin-2gb
+  # push-triggered so it runs from the feature branch without default-branch
+  # registration (workflow_dispatch only registers from the default branch).
+  push:
+    branches:
+      - 'feature/748-enhanced-tow-boot-http-netboot-serial-fl'
+    paths:
+      - 'tools/Tow-Boot/**'
+      - '.github/workflows/build-tow-boot.yml'
+
+concurrency:
+  group: build-tow-boot-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VARIANT: ${{ github.event.inputs.variant || 'globalscale-mochabin-8gb' }}
+
+jobs:
+  build:
+    name: nix-build enhanced Tow-Boot
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v4
+
+      - name: Diagnose wget/TCP Kconfig deps in the U-Boot tree
+        run: |
+          set -x
+          git clone --depth 1 --branch 'tow-boot/2022.07/_all' \
+            https://github.com/Tow-Boot/U-Boot /tmp/ub 2>&1 | tail -3 \
+          || git clone --depth 1 --branch v2022.07 \
+            https://github.com/u-boot/u-boot /tmp/ub
+          echo "===== CMD_WGET ====="
+          grep -rn -A8 '^config CMD_WGET' /tmp/ub/cmd/ || echo 'CMD_WGET not in cmd/'
+          echo "===== PROT_TCP ====="
+          grep -rn -A6 '^config PROT_TCP' /tmp/ub/net/ || echo 'PROT_TCP not in net/'
+          echo "===== WGET (lib) ====="
+          grep -rn -A6 '^config WGET' /tmp/ub/ || echo 'no CONFIG_WGET (2022.07: only CMD_WGET)'
+          echo "===== wget sources ====="
+          find /tmp/ub -name 'wget.c' | head
+
+      - name: Build enhanced Tow-Boot (${{ env.VARIANT }})
+        working-directory: tools/Tow-Boot
+        run: |
+          set -euxo pipefail
+          nix-build -A ${{ env.VARIANT }} -o result-towboot
+          echo "=== result tree ==="
+          ls -lLR result-towboot/ | head -60
+
+      - name: Verify netboot Kconfig compiled in
+        working-directory: tools/Tow-Boot
+        run: |
+          set -uxo pipefail
+          # The built U-Boot .config may surface in the nix store output; grep it
+          # if present. Definitive runtime check is `help wget` on hardware.
+          cfg=$(find -L result-towboot* -name '.config' 2>/dev/null | head -1 || true)
+          if [ -n "${cfg:-}" ]; then
+            echo "=== U-Boot .config netboot symbols ==="
+            grep -E 'CONFIG_(CMD_WGET|WGET|PROT_TCP|CMD_DHCP|CMD_TFTPBOOT|CMD_BOOTI|FIT_SIGNATURE|MVPP2|MV88E6XXX|DM_DSA)=y' "$cfg" \
+              || echo 'WARNING: expected netboot symbols not all =y in .config'
+          else
+            echo '(.config not exported by the device output; verify on hardware via `help wget`)'
+          fi
+
+      - name: Collect artifacts
+        working-directory: tools/Tow-Boot
+        run: |
+          set -euxo pipefail
+          mkdir -p out
+          # The device output exposes binaries/Tow-Boot.<variant>.bin (spi/mmcboot/noenv)
+          if [ -d result-towboot/binaries ]; then
+            cp -Lr result-towboot/binaries/. out/
+          else
+            cp -Lr result-towboot/. out/ || true
+          fi
+          echo "=== collected ==="
+          ls -l out/
+
+      - name: Upload enhanced Tow-Boot artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: enhanced-tow-boot-${{ env.VARIANT }}
+          path: tools/Tow-Boot/out/*
+          if-no-files-found: error

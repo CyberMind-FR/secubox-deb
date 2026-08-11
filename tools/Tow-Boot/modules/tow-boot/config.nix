@@ -80,8 +80,11 @@ in
       # Looks
       # -----
 
-      # Ensures white text on black background
-      SYS_WHITE_ON_BLACK = yes;
+      # Ensures white text on black background.
+      # Depends on a video console; on headless boards (withLogo=false, e.g.
+      # mochabin) the symbol is unavailable on U-Boot >= 2023.07 and would fail
+      # Tow-Boot's config validation. Only request it where there's a display.
+      SYS_WHITE_ON_BLACK = mkIf withLogo yes;
 
       # Ensures we're not using Truetype
       CONSOLE_TRUETYPE = no;

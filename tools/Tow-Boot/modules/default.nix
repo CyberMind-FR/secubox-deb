@@ -17,6 +17,7 @@ in
     ./kconfig.nix
     ./metadata.nix
     ./overlays.nix
+    ./secubox-netboot.nix
     ./system.nix
     ./u-boot.nix
   ];
