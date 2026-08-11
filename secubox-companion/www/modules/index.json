@@ -5,6 +5,7 @@
     "waf",
     "system",
     "billets",
+    "bbs",
     "podcasteur",
     "peertube",
     "photoprism",
@@ -12,6 +13,7 @@
     "ytsas",
     "jellyfin",
     "exposure",
-    "wireguard"
+    "wireguard",
+    "kioskui"
   ]
 }

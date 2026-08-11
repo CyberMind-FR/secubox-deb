@@ -1,0 +1,8 @@
+secubox-mastodon (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiere version : panneau d'administration, API d'etat, provisionnement
+    LXC a la demande, vhost et route nginx prets.
+  * L'unite est livree NON ACTIVEE et le conteneur n'est pas cree a
+    l'installation : voir README.md.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 09 Aug 2026 12:00:00 +0200
