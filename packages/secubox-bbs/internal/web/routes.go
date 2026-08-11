@@ -18,7 +18,7 @@ import (
 // Modules actifs. Un module eteint disparait du menu ET de ses routes : laisser
 // la route repondre alors que l'entree a disparu, c'est la meme illusion que
 // « la page d'administration n'est pas dans le menu ».
-type Modules struct{ Media, Biblio, MP, Billets bool }
+type Modules struct{ Media, Biblio, MP, Billets, Mastodon bool }
 
 type page struct {
 	Titre, Site, Hote, Vue, Q string
@@ -41,6 +41,20 @@ type page struct {
 	Runs                      []store.IngestRun
 	Comptes                   []store.Compte
 	Moi                       store.Compte
+	// Messagerie (#1008). Convs : la boite de reception ; Fil : la conversation
+	// ouverte ; Avec : l'interlocuteur ; Corres : les comptes joignables.
+	Convs  []store.ConversationResume
+	Fil    []store.Message
+	Avec   store.Compte
+	Corres []store.Compte
+	// NonLus alimente la pastille de navigation. Evalue a CHAQUE page : un
+	// compteur calcule seulement sur /mp ne previendrait de rien, puisqu'il
+	// faudrait deja etre sur la page pour le voir.
+	NonLus int
+	// Module Mastodon (#1008).
+	MastoInstance, MastoInvite string
+	// Invites : qui a invite qui. Contrepartie de l'invitation sans quota.
+	Invites []store.Invitation
 	// VCSS : empreinte de la feuille de style, posee dans son adresse.
 	//
 	// LE WAF DE LA BOARD SUPPRIME `Cache-Control` ET `ETag` — verifie sur gk2 :
@@ -76,7 +90,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/invite/", s.invitation)
 	s.mux.HandleFunc("/media", s.simple("media"))
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
-	s.mux.HandleFunc("/mp", s.simple("mp"))
+	s.mux.HandleFunc("/mp", s.mp)
+	s.mux.HandleFunc("/mp/", s.mp)
+	s.mux.HandleFunc("/mp/envoyer", s.mpEnvoyer)
+	s.mux.HandleFunc("/mastodon", s.mastodon)
 	s.mux.HandleFunc("/billets", s.simple("billets"))
 	s.mux.HandleFunc("/nouveau", s.nouveau)
 	s.mux.HandleFunc("/sysop", s.sysop)
@@ -102,11 +119,16 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	if site != "" {
 		ini = strings.ToUpper(site[:1])
 	}
+	nonLus := 0
+	if v.Connecte {
+		nonLus, _ = s.st.NonLus(v.ID)
+	}
 	return page{
 		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v, VCSS: s.vCSS,
 		Base:  "https://" + r.Host,
-		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true},
+		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true},
 		Stats: st, Cats: cats, Titre: site,
+		NonLus: nonLus,
 	}, pub
 }
 
@@ -349,13 +371,6 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 		case "biblio":
 			p.Titre, p.Intro = "Bibliothèque", "Les fichiers vivent à côté des messages ; le même rsync emporte les deux."
 			p.Vide = "Aucun fichier déposé."
-		case "mp":
-			if !p.V.Connecte {
-				http.Redirect(w, r, "/login", http.StatusSeeOther)
-				return
-			}
-			p.Titre, p.Intro = "Messages", "Entre membres. Jamais repris dans un export."
-			p.Vide = "Aucun message."
 		case "billets":
 			p.Titre, p.Intro = "Billets", "Le BBS est l'atelier, billets la vitrine."
 			p.Vide = "Aucun fil n'a encore été publié en billet."
@@ -560,6 +575,10 @@ func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
 	p.Sain = p.Integ.Diverging == 0 && p.Integ.Missing == 0 && p.Integ.Unreadable == 0
 	p.Runs, _ = s.st.IngestRuns(12)
 	p.Comptes, _ = s.st.Users()
+	p.Err = r.URL.Query().Get("err")
+	p.Invites, _ = s.st.Invites()
+	p.MastoInstance, _ = s.st.Reglage(store.CleMastodonInstance)
+	p.MastoInvite, _ = s.st.Reglage(store.CleMastodonInvite)
 	s.rend(w, r, "sysop", p)
 }
 
@@ -577,6 +596,30 @@ func (s *Server) sysopAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch strings.TrimPrefix(r.URL.Path, "/sysop/") {
+	case "reglages":
+		// LE LIEN EST VALIDE AVANT D'ENTRER EN BASE, pas seulement au rendu.
+		// Il est colle par le sysop puis affiche dans un href visible de tous
+		// les membres : un `javascript:` y deviendrait actif sur chaque page du
+		// module. Une valeur invalide ne doit jamais etre stockee.
+		for cle, champ := range map[string]string{
+			store.CleMastodonInstance: "instance",
+			store.CleMastodonInvite:   "invitation",
+		} {
+			val := strings.TrimSpace(r.PostFormValue(champ))
+			if val != "" && !store.LienExterneValide(val) {
+				http.Redirect(w, r, "/sysop?err="+url.QueryEscape(
+					"lien refuse ("+champ+") : seuls http et https sont acceptes"),
+					http.StatusSeeOther)
+				return
+			}
+			if err := s.st.PoseReglage(cle, val); err != nil {
+				http.Redirect(w, r, "/sysop?err="+url.QueryEscape(err.Error()),
+					http.StatusSeeOther)
+				return
+			}
+		}
+		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape("reglages enregistres"),
+			http.StatusSeeOther)
 	case "invite":
 		code, err := s.st.NewInvite(v.ID)
 		if err != nil {
@@ -611,6 +654,26 @@ func (s *Server) sysopAction(w http.ResponseWriter, r *http.Request) {
 			msg = "echec : " + err.Error()
 		}
 		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+	case "motdepasse":
+		// REINITIALISATION PAR LE SYSOP — sans l'ancien mot de passe, c'est le
+		// propre du geste : on l'emploie quand le titulaire ne peut plus entrer.
+		var id int64
+		fmt.Sscanf(r.PostFormValue("id"), "%d", &id)
+		nouveau := r.PostFormValue("nouveau")
+		if err := s.auth.ResetPassword(id, nouveau); err != nil {
+			http.Redirect(w, r, "/sysop?err="+url.QueryEscape(err.Error()),
+				http.StatusSeeOther)
+			return
+		}
+		// TOUTES LES SESSIONS DU COMPTE SONT FERMEES. On reinitialise un mot de
+		// passe soit parce qu'il a fuite, soit pour reprendre la main : laisser
+		// vivre les sessions ouvertes ailleurs viderait le geste de son sens
+		// dans les deux cas. `RevokeOtherSessions` avec un jeton vide ne
+		// preserve rien — ce qui est bien l'intention ici.
+		s.st.RevokeOtherSessions(id, "")
+		http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(
+			"mot de passe reinitialise — les sessions du compte ont ete fermees"),
+			http.StatusSeeOther)
 	case "reindex":
 		msg := "index reconstruit"
 		if err := s.st.Reindex(); err != nil {
@@ -640,6 +703,7 @@ func (s *Server) compte(w http.ResponseWriter, r *http.Request) {
 	p.Titre = "Mon compte"
 	p.Msg = r.URL.Query().Get("msg")
 	p.Err = r.URL.Query().Get("err")
+	p.Code = r.URL.Query().Get("code")
 	// On ne lit QUE son propre compte : la liste complete est reservee a la
 	// console sysop.
 	if cs, err := s.st.Users(); err == nil {
@@ -686,6 +750,26 @@ func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {
 		s.st.RevokeOtherSessions(v.ID, jeton)
 		http.Redirect(w, r, "/compte?msg="+url.QueryEscape(
 			"mot de passe change — vos autres sessions ont ete fermees"), http.StatusSeeOther)
+	case "invite":
+		// TOUT MEMBRE PEUT INVITER, SANS QUOTA — choix explicite de
+		// l'exploitant (#1008). La contrepartie est la tracabilite : l'emetteur
+		// est enregistre, et la console sysop montre qui a invite qui. Sans
+		// cela, une inscription en cascade serait indebrouillable.
+		//
+		// Un compte ferme ne peut pas arriver ici : `DisableUser` supprime les
+		// sessions, et `UserBySession` ecarte les comptes desactives. Le
+		// verifier une seconde fois serait du code mort — mais si l'une de ces
+		// deux barrieres tombait, ce chemin ouvrirait la porte. C'est
+		// `TestUnCompteFermeNInvitePas` qui garde la propriete.
+		code, err := s.st.NewInvite(v.ID)
+		if err != nil {
+			http.Redirect(w, r, "/compte?err="+url.QueryEscape("invitation impossible : "+err.Error()),
+				http.StatusSeeOther)
+			return
+		}
+		// Le code ne transite qu'UNE fois, pour etre affiche. Il n'est stocke
+		// nulle part en clair — ni en base, ni en session.
+		http.Redirect(w, r, "/compte?code="+url.QueryEscape(code), http.StatusSeeOther)
 	case "sessions":
 		s.st.RevokeOtherSessions(v.ID, jeton)
 		http.Redirect(w, r, "/compte?msg="+url.QueryEscape("autres sessions fermees"),

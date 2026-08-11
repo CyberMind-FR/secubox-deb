@@ -1,0 +1,44 @@
+{{define "corps"}}
+<div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
+
+{{if .MastoInstance}}
+<div class="card pad">
+  <h3 class="s7b1eb4e">L'instance</h3>
+  <div class="kv"><span>Adresse</span>
+    <b class="mono"><a href="{{.MastoInstance}}" rel="noopener noreferrer">{{.MastoInstance}}</a></b></div>
+  <div class="note sf9f81af">
+    Le BBS et l'instance sont deux portes sur la même communauté : ici on
+    travaille un sujet à plusieurs, là on parle au reste du fédivers.
+  </div>
+</div>
+
+{{if .V.Connecte}}
+  {{if .MastoInvite}}
+  <div class="card pad s42a6ced">
+    <h3 class="s7b1eb4e">Votre invitation</h3>
+    <p class="d">Ce lien ouvre un compte sur l'instance. Il est partagé entre
+      membres — inutile d'en demander un autre.</p>
+    <div class="partage">
+      <a class="btn primary" href="{{.MastoInvite}}" rel="noopener noreferrer">Rejoindre l'instance</a>
+    </div>
+    <div class="lien-partage mono">{{.MastoInvite}}</div>
+    <div class="note sf9f81af">
+      Une invitation Mastodon sert plusieurs fois et ne se révoque pas depuis le
+      BBS. Elle n'est donc montrée qu'aux membres connectés : affichée
+      publiquement, elle ouvrirait l'instance à qui passe.
+    </div>
+  </div>
+  {{else}}
+  <div class="card pad sb0455c2">{{.Vide}}</div>
+  {{end}}
+{{else}}
+  <div class="card pad sb0455c2">
+    {{.Note}}
+    <div class="row sf9f81af"><a class="btn primary" href="/login">Se connecter</a></div>
+  </div>
+{{end}}
+
+{{else}}
+<div class="card pad sb0455c2">{{.Vide}}</div>
+{{end}}
+{{end}}

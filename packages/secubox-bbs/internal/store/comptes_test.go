@@ -173,3 +173,69 @@ func TestUneInvitationEmisePourQuelquUnResteUtilisableParQuiLaDetient(t *testing
 		t.Errorf("invitation refusee a un autre pseudonyme : %v", err)
 	}
 }
+
+func TestLaReinitialisationSysopRespecteLaPolitique(t *testing.T) {
+	// LA POLITIQUE NE DOIT PAS AVOIR DE PORTE DEROBEE. La longueur minimale
+	// n'etait imposee que par `ChangePassword` — le chemin en libre-service.
+	// Une reinitialisation par le sysop qui appellerait `SetPassword` en direct
+	// poserait un mot de passe de trois lettres sans que rien ne s'y oppose, et
+	// c'est justement le chemin qu'on emprunte quand quelqu'un est bloque
+	// dehors, donc dans l'urgence.
+	_, a := auth(t)
+	if err := a.ResetPassword(1, "court"); err == nil {
+		t.Error("mot de passe trop court accepte a la reinitialisation")
+	}
+	if err := a.ResetPassword(1, "une-phrase-assez-longue"); err != nil {
+		t.Fatalf("reinitialisation legitime refusee : %v", err)
+	}
+	if !a.Verify(1, "une-phrase-assez-longue") {
+		t.Error("le mot de passe reinitialise ne fonctionne pas")
+	}
+	// Aucun ancien mot de passe n'est demande : c'est le propre du geste, on
+	// l'emploie quand le titulaire ne peut plus entrer.
+}
+
+func TestUnMotDePassePosePar_bbsctl_EstVuParLeDaemon(t *testing.T) {
+	// LE DAEMON GARDE LE FICHIER EN MEMOIRE. `bbsctl` tourne dans un AUTRE
+	// processus : il reecrit le fichier, mais le service continue de verifier
+	// contre la carte chargee a son demarrage.
+	//
+	// Deux consequences, toutes deux observees sur gk2 le 2026-08-11 :
+	//   - la reinitialisation de secours reste sans effet jusqu'au redemarrage,
+	//     le jour meme ou l'on en a besoin parce que plus personne n'entre ;
+	//   - pire, la premiere ecriture du service reecrit le fichier depuis sa
+	//     carte perimee et EFFACE le mot de passe pose par bbsctl.
+	dir := t.TempDir()
+	chemin := filepath.Join(dir, "passwd")
+
+	service, err := OpenAuth(chemin) // le « daemon »
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.SetPassword(1, "le-mot-de-passe-initial")
+
+	console, err := OpenAuth(chemin) // « bbsctl », autre processus
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := console.ResetPassword(1, "pose-depuis-la-console"); err != nil {
+		t.Fatal(err)
+	}
+
+	if !service.Verify(1, "pose-depuis-la-console") {
+		t.Error("le service ignore le mot de passe pose par la console")
+	}
+	if service.Verify(1, "le-mot-de-passe-initial") {
+		t.Error("l'ancien mot de passe fonctionne encore cote service")
+	}
+
+	// Et une ecriture du service ne doit pas ressusciter sa carte perimee.
+	service.SetPassword(2, "un-autre-compte-entier")
+	relu, err := OpenAuth(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !relu.Verify(1, "pose-depuis-la-console") {
+		t.Error("l'ecriture du service a efface le mot de passe pose par la console")
+	}
+}

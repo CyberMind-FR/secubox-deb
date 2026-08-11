@@ -24,6 +24,33 @@
   </div>
 </div>
 
+<div class="card pad s42a6ced">
+  <h3 class="s7b1eb4e">Inviter quelqu'un</h3>
+  {{if .Code}}
+    <div class="note m"><b>Code émis — il n'est affiché qu'une fois.</b>
+      <div class="row s381c37d">
+        <img src="/sysop/qr?code={{.Code}}" alt="Code QR de l'invitation"
+             width="150" height="150" class="s39203eb">
+        <div class="s43459be">
+          <div class="mono s63eb706">{{.Code}}</div>
+          <div class="s51eedcb">Adresse&nbsp;:
+            <span class="mono">{{.Base}}/invite/{{.Code}}</span></div>
+        </div>
+      </div>
+    </div>
+  {{end}}
+  <form method="post" action="/compte/invite" class="sdf92814">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <button class="btn primary" type="submit">Émettre une invitation</button>
+  </form>
+  <div class="note sf9f81af">
+    L'inscription se fait sur invitation, et <b>chaque membre peut en émettre</b>.
+    Le code est à usage unique et n'est affiché qu'une fois : seule son empreinte
+    est conservée. Votre pseudonyme reste attaché à l'invitation — c'est ce qui
+    permet au sysop de remonter une chaîne d'inscriptions si besoin.
+  </div>
+</div>
+
 <div class="card pad">
   <h3 class="s7b1eb4e">Mes accès</h3>
   <div class="kv"><span>Dernière connexion</span><b>{{if .Moi.LastLogin}}{{date .Moi.LastLogin}}{{else}}—{{end}}</b></div>

@@ -27,8 +27,9 @@
   <a class="nav s791fdb1" {{if eq .Vue "forums"}}aria-current="page"{{end}} href="/"><span class="ic">◈</span>Forums<span class="n">{{.Stats.Threads}}</span></a>
   {{if .Mod.Media}}<a class="nav s6622767" {{if eq .Vue "media"}}aria-current="page"{{end}} href="/media"><span class="ic">▶</span>Média</a>{{end}}
   {{if .Mod.Biblio}}<a class="nav s09c487b" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">▤</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
-  {{if and .V.Connecte .Mod.MP}}<a class="nav sf017a92" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages</a>{{end}}
+  {{if and .V.Connecte .Mod.MP}}<a class="nav sf017a92" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages{{if .NonLus}}<span class="n p-new">{{.NonLus}}</span>{{end}}</a>{{end}}
   {{if .Mod.Billets}}<a class="nav sfe562e2" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">✦</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
+  {{if .Mod.Mastodon}}<a class="nav s6622767" {{if eq .Vue "mastodon"}}aria-current="page"{{end}} href="/mastodon"><span class="ic">🐘</span>Mastodon</a>{{end}}
 
   <div class="railhead">Salons</div>
   {{range .Cats}}<a class="nav sb908d7d" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}

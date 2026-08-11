@@ -127,6 +127,19 @@ func (s *Store) AuthSource(handle string) (string, error) {
 	return src, err
 }
 
+// AuthSourceParID : meme question, posee par identifiant.
+//
+// L'API du panneau d'administration designe les comptes par identifiant, pas
+// par pseudonyme — un pseudonyme peut changer, un identifiant non. Faire
+// resoudre l'un vers l'autre par l'appelant l'aurait oblige a une requete de
+// plus, et surtout a supposer que le pseudonyme lu quelques instants plus tot
+// designe encore le meme compte.
+func (s *Store) AuthSourceParID(id int64) (string, error) {
+	var src string
+	err := s.db.QueryRow(`SELECT auth_source FROM users WHERE id = ?`, id).Scan(&src)
+	return src, err
+}
+
 func orElse(a, b string) string {
 	if strings.TrimSpace(a) != "" {
 		return a

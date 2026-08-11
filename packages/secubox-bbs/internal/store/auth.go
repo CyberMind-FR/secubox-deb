@@ -123,6 +123,21 @@ func (s *Store) NewInvite(issuedBy int64) (string, error) {
 func (s *Store) NewInviteFor(issuedBy int64, label string) (string, error) {
 	var emetteur any
 	if issuedBy > 0 {
+		// UN COMPTE FERME N'INVITE PAS. Depuis #1008 tout membre peut emettre
+		// une invitation ; fermer un compte doit donc aussi lui retirer ce
+		// pouvoir, sans quoi la fermeture ne fermerait qu'une porte sur deux.
+		//
+		// La vue s'appuie deja sur l'impossibilite d'etre connecte avec un
+		// compte ferme ; ce refus est la seconde barriere, celle qui tient si
+		// la premiere cede.
+		var ouvert bool
+		if err := s.db.QueryRow(
+			`SELECT disabled_at IS NULL FROM users WHERE id = ?`, issuedBy).Scan(&ouvert); err != nil {
+			return "", err
+		}
+		if !ouvert {
+			return "", ErrRefuse
+		}
 		emetteur = issuedBy
 	}
 	raw := make([]byte, 16)
@@ -190,17 +205,48 @@ type Auth struct {
 	path string
 	mu   sync.Mutex
 	m    map[int64]string
+	// Empreinte du fichier tel qu'on l'a lu. LE DAEMON N'EST PAS SEUL A
+	// ECRIRE : `bbsctl` tourne dans un autre processus et reecrit le meme
+	// fichier — c'est le chemin de secours quand plus personne ne peut entrer.
+	//
+	// Sans cette empreinte, deux pannes silencieuses, toutes deux observees :
+	// la reinitialisation restait sans effet jusqu'au redemarrage, et la
+	// premiere ecriture du service reecrivait le fichier depuis sa carte
+	// perimee, EFFACANT le mot de passe que la console venait de poser.
+	mtime  time.Time
+	taille int64
 }
 
-func OpenAuth(path string) (*Auth, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, err
+// rechargeSiModifie relit le fichier quand un autre processus l'a change.
+//
+// La comparaison porte sur la date ET la taille : deux ecritures dans la meme
+// seconde peuvent partager la date, mais rarement la taille — et un rechargement
+// de trop ne coute qu'une lecture de quelques centaines d'octets.
+func (a *Auth) rechargeSiModifie() {
+	fi, err := os.Stat(a.path)
+	if err != nil {
+		return // fichier absent : rien a recharger, la carte en memoire fait foi
 	}
-	a := &Auth{path: path, m: map[int64]string{}}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if fi.ModTime().Equal(a.mtime) && fi.Size() == a.taille {
+		return
+	}
+	m, err := litPasswd(a.path)
+	if err != nil {
+		return // fichier illisible : mieux vaut la carte precedente que rien
+	}
+	a.m, a.mtime, a.taille = m, fi.ModTime(), fi.Size()
+}
+
+// litPasswd lit le fichier de hashes. Extrait de OpenAuth pour etre partage
+// avec le rechargement : deux analyseurs du meme format finiraient par diverger.
+func litPasswd(path string) (map[int64]string, error) {
+	m := map[int64]string{}
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return a, nil
+			return m, nil
 		}
 		return nil, err
 	}
@@ -213,12 +259,30 @@ func OpenAuth(path string) (*Auth, error) {
 		}
 		var n int64
 		fmt.Sscanf(id, "%d", &n)
-		a.m[n] = rec
+		m[n] = rec
 	}
-	return a, sc.Err()
+	return m, sc.Err()
+}
+
+func OpenAuth(path string) (*Auth, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
+	m, err := litPasswd(path)
+	if err != nil {
+		return nil, err
+	}
+	a := &Auth{path: path, m: m}
+	if fi, err := os.Stat(path); err == nil {
+		a.mtime, a.taille = fi.ModTime(), fi.Size()
+	}
+	return a, nil
 }
 
 func (a *Auth) SetPassword(userID int64, password string) error {
+	// AVANT D'ECRIRE : sans cela, `flush` reecrirait le fichier entier depuis
+	// une carte perimee et effacerait ce qu'un autre processus vient d'y poser.
+	a.rechargeSiModifie()
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return err
@@ -232,7 +296,25 @@ func (a *Auth) SetPassword(userID int64, password string) error {
 	return a.flush()
 }
 
+// ResetPassword pose un mot de passe SANS demander l'ancien — c'est le geste du
+// sysop pour quelqu'un qui ne peut plus entrer.
+//
+// Il passe par la MEME politique de longueur que le libre-service. Appeler
+// `SetPassword` directement depuis la console aurait ouvert une porte derobee
+// dans la politique, sur le chemin qu'on emprunte justement dans l'urgence.
+//
+// Fermer les sessions n'est PAS fait ici : la console le fait, parce qu'elle
+// seule sait s'il s'agit d'un depannage (le titulaire est present) ou d'une
+// reprise en main (il faut tout couper). Le magasin ne peut pas trancher.
+func (a *Auth) ResetPassword(userID int64, nouveau string) error {
+	if len(nouveau) < 12 {
+		return errors.New("mot de passe trop court — 12 caracteres au minimum")
+	}
+	return a.SetPassword(userID, nouveau)
+}
+
 func (a *Auth) Verify(userID int64, password string) bool {
+	a.rechargeSiModifie()
 	a.mu.Lock()
 	rec, ok := a.m[userID]
 	a.mu.Unlock()
@@ -275,6 +357,11 @@ func (a *Auth) flush() error {
 	}
 	if err := os.Rename(tmp, a.path); err != nil {
 		return err
+	}
+	// On note NOTRE propre ecriture : sans cela le prochain acces la prendrait
+	// pour un changement venu d'ailleurs et relirait inutilement.
+	if fi, err := os.Stat(a.path); err == nil {
+		a.mtime, a.taille = fi.ModTime(), fi.Size()
 	}
 	return adopteProprietaireDuDossier(a.path)
 }
@@ -382,6 +469,11 @@ type Compte struct {
 	LastLogin int64
 	LastIP    string
 	Sessions  int
+	// Source : 'local' (mot de passe verifie ici) ou 'secubox' (delegue a
+	// secubox-auth). Le BBS ne copie AUCUN mot de passe : reinitialiser celui
+	// d'un compte delegue n'aurait aucun effet a la connexion, puisque la
+	// verification part ailleurs. La console doit donc le dire, pas l'offrir.
+	Source    string
 	CreatedAt int64
 }
 
@@ -389,7 +481,7 @@ func (s *Store) Users() ([]Compte, error) {
 	rows, err := s.db.Query(`SELECT u.id, u.handle, u.display_name, u.role,
 		u.disabled_at IS NOT NULL, COALESCE(u.last_login_at,0), COALESCE(u.last_login_ip,''),
 		(SELECT count(*) FROM sessions x WHERE x.user_id = u.id AND x.expires_at > unixepoch()),
-		u.created_at
+		u.created_at, u.auth_source
 		FROM users u ORDER BY u.disabled_at IS NOT NULL, u.handle`)
 	if err != nil {
 		return nil, err
@@ -400,7 +492,7 @@ func (s *Store) Users() ([]Compte, error) {
 		var c Compte
 		var role string
 		if err := rows.Scan(&c.ID, &c.Handle, &c.Display, &role, &c.Disabled,
-			&c.LastLogin, &c.LastIP, &c.Sessions, &c.CreatedAt); err != nil {
+			&c.LastLogin, &c.LastIP, &c.Sessions, &c.CreatedAt, &c.Source); err != nil {
 			return nil, err
 		}
 		c.Role = Role(role)
@@ -427,11 +519,27 @@ type Invitation struct {
 	IssuedAt  int64
 	ExpiresAt int64
 	Used      bool
+	// Emetteur : QUI a invite. Vide pour les invitations emises par `bbsctl`,
+	// qui tourne sans session.
+	//
+	// Depuis #1008 tout membre peut inviter, sans quota. La tracabilite de
+	// l'emetteur est la contrepartie de ce choix : sans elle, une inscription
+	// en cascade — un compte en invite dix, chacun en invite dix — serait
+	// indebrouillable, et le sysop n'aurait aucun moyen de savoir par ou la
+	// porte s'est ouverte.
+	Emetteur string
+	// Beneficiaire : qui s'en est servi. Ferme la chaine : on peut suivre le
+	// fil de A invite B invite C.
+	Beneficiaire string
 }
 
 func (s *Store) Invites() ([]Invitation, error) {
-	rows, err := s.db.Query(`SELECT COALESCE(label,''), issued_at, expires_at,
-		used_at IS NOT NULL FROM invites ORDER BY issued_at DESC`)
+	rows, err := s.db.Query(`SELECT COALESCE(i.label,''), i.issued_at, i.expires_at,
+		i.used_at IS NOT NULL, COALESCE(e.handle,''), COALESCE(b.handle,'')
+		FROM invites i
+		LEFT JOIN users e ON e.id = i.issued_by
+		LEFT JOIN users b ON b.id = i.used_by
+		ORDER BY i.issued_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +547,8 @@ func (s *Store) Invites() ([]Invitation, error) {
 	var out []Invitation
 	for rows.Next() {
 		var i Invitation
-		if err := rows.Scan(&i.Label, &i.IssuedAt, &i.ExpiresAt, &i.Used); err != nil {
+		if err := rows.Scan(&i.Label, &i.IssuedAt, &i.ExpiresAt, &i.Used,
+			&i.Emetteur, &i.Beneficiaire); err != nil {
 			return nil, err
 		}
 		out = append(out, i)
