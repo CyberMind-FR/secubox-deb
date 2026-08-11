@@ -1,3 +1,37 @@
+secubox-hub (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * webui.conf : l'error_page 5xx rejoint les 4xx dans les seules locations de
+    navigation. Au niveau serveur elle remplacait le corps de TOUTE reponse 5xx
+    par la page HTML, y compris sur les routes /api/. C'est ce qui a masque le
+    vrai defaut du TOTP (#990) : un code valide provoquait un 500 et
+    l'utilisateur voyait "JSON.parse: unexpected character" — une erreur
+    serveur maquillee en erreur de parsing, qui envoie chercher du cote du
+    client pendant des heures. (ref #990)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 05:35:00 +0200
+
+secubox-hub (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Empaqueter webui.conf, le vhost principal du panneau (:9080). Il vivait
+    depuis des mois SUR LA BOARD UNIQUEMENT, empaqueté par personne : chaque
+    correctif y était posé à la main et aucun n'aurait survécu à une
+    recréation du fichier. La version vivante est reprise telle quelle — le
+    paquet ne change aucun comportement, il rend durable ce qui existait.
+  * Sous /etc, donc conffile : une modification locale est conservée lors
+    d'une mise à jour et la divergence est signalée, au lieu d'être écrasée.
+  * Inclut le correctif du JSON.parse (#987) : l'`error_page 400 401 403` de
+    niveau serveur remplaçait le corps de TOUTE réponse 4xx par une page HTML,
+    y compris sur les routes /api/ servies à des clients XHR — login.html
+    recevait du HTML là où il attendait du JSON. La directive est désormais
+    portée par les seules locations de navigation. `proxy_intercept_errors
+    off` sur les locations /api/ ne suffisait pas : la substitution avait lieu
+    malgré tout.
+  * postinst : lien sites-enabled idempotent (jamais forcé), et `nginx -t`
+    avant tout rechargement — une configuration invalide passée à un reload
+    laisse nginx sur l'ancienne sans le dire. (ref #987)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 16:30:00 +0200
+
 secubox-hub (1.5.1-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
