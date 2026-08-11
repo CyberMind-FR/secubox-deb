@@ -26,9 +26,10 @@
   `social`, `nc`, `sso`, `zigbee`, `picobrew`, `zem`, `shiptest`, `wiztest2`,
   `wiztest3`) : ils ne redirigent pas. Décider vhost par vhost, puis ajouter
   `ssl = true` dans leur bloc — **jamais** en modifiant le générateur.
-- **`secubox-toolbox` embarque désormais `30-toolbox-landing.cfg`** (#986) :
-  le paquet n'a pas été reconstruit ni redéployé, le backend vit encore hors
-  des sources sur la board.
+*(Un second item figurait ici — « reconstruire `secubox-toolbox` ». Vérifié le
+2026-08-10 : le fichier est déjà livré par dpkg sur la board, même empreinte que
+les sources. L'item avait été écrit en déduisant l'état de la board depuis le
+diff de fusion, sans regarder la board.)*
 
 ---
 
