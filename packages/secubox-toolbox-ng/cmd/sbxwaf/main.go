@@ -350,6 +350,14 @@ func (s *Server) handler() http.Handler {
 				if bare, _, e := net.SplitHostPort(reqHost); e == nil {
 					reqHost = bare
 				}
+				reqHost = strings.ToLower(strings.TrimSpace(reqHost))
+				// #746: an on-demand vhost whose upstream refuses the
+				// connection is asleep, not broken — hand it to the waker
+				// instead of a 502 nothing will ever resolve. Same hook the
+				// cached proxies in routes.go call.
+				if s.wakeUpstreamFailure(w, r, code, reqHost) {
+					return
+				}
 				writeErrorPage(w, code, reqHost)
 			}
 		}
@@ -889,6 +897,11 @@ func main() {
 		r.cookieAudit = cookieAudit
 		r.widgetHosts = srv.widgetHosts
 		r.bannerOrigin = srv.bannerOrigin
+		// #746: let the cached proxies hand a refused on-demand upstream to
+		// the waker. Wired here even though srv.onDemand is set further down —
+		// the hook reads srv.onDemand at request time, never at wiring time,
+		// so the order of these two blocks does not matter.
+		r.onUpstreamError = srv.wakeUpstreamFailure
 		srv.routes = r
 		srv.routeLookup = r.Lookup
 		log.Printf("sbxwaf: routes loaded from %s (%d entries)", *routesFile, func() int {
