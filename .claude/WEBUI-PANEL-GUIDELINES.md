@@ -174,8 +174,45 @@ Emoji are functional glyphs, not decoration — one per concept, consistent:
   responsibilities, aggregator-restart caveat): **`.claude/MODULE-COMPLIANCE.md`
   → Privileged Operations**. Reference: `cve-triage` / `secubox-cvectl`.
 
-## 7. Checklist for a new/reskinned panel
+## 7. Les deux facettes : webui (portail) et webapp (vitrine)
 
+Un module n'a pas « une interface et une version mobile ». Il a **deux facettes
+miroir d'un même système modulaire** : la **webui** est le portail complet, la
+**webapp** est la vitrine. Un sas visuel — mais fonctionnel aussi.
+
+**Parité par défaut.** Une fonction utile ajoutée d'un côté est due de l'autre.
+Un module qui gagne « pousser vers X » ou « télécharger en zip » dans sa webui
+le doit à sa webapp : la vitrine n'est pas une démo, c'est l'autre face du même
+service.
+
+**Asymétrie permise, dans un seul sens : le destructif.** La webapp peut
+légitimement **retirer** une suppression, une purge, un reset que la webui
+conserve. La vitrine s'atteint plus facilement et se manipule d'un pouce ;
+y refuser l'irréversible est un choix de sûreté, pas une amputation. L'inverse
+— retirer une fonction utile de la webapp « parce que c'est la petite » — est
+une régression de parité.
+
+**Double cache.** Chaque facette lit un cache et n'interroge pas la source dans
+le chemin d'affichage : cache serveur (fichier rafraîchi par minuteur, cf.
+`§6 Heavy/large lists` et `CLAUDE.md → Performance Patterns`) **et** cache
+client (dernière réponse conservée, réaffichée pendant qu'une nouvelle charge).
+Deux facettes qui frappent la même API sans cache doublent la charge d'un
+module pour la même information — et sur cette board, l'agrégateur sert une
+centaine de modules dans une seule boucle.
+
+**Conséquence de conception :** une nouvelle capacité se pense d'emblée pour les
+deux surfaces et pour le cache, pas « d'abord la webui, la webapp plus tard ».
+Le plus tard ne vient jamais, et l'écart devient une dérive de plus.
+
+
+## 8. Checklist for a new/reskinned panel
+
+- [ ] **Parité des deux facettes** : toute fonction utile ajoutée à la webui
+      existe aussi dans la webapp. Seul le **destructif** peut manquer côté
+      vitrine (§7) — jamais une fonction utile.
+- [ ] **Double cache** : la facette lit un cache serveur ET conserve la
+      dernière réponse côté client ; aucune interrogation de la source dans le
+      chemin d'affichage (§7).
 - [ ] `hybrid-dark` body + `/shared/hybrid-skin.css` + shared `#sidebar` + `sidebar.js`
 - [ ] Courier Prime, `:root` cyan palette verbatim, cyan-glow `h1`
 - [ ] stat grid + glass cards + the shared button/list/toast/modal classes
