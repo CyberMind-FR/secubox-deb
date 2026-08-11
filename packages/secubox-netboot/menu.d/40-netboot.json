@@ -1,0 +1,9 @@
+{
+  "id": "netboot",
+  "name": "NetBoot",
+  "icon": "🛰️",
+  "path": "/netboot/",
+  "category": "boot",
+  "order": 40,
+  "description": "Provisioning réseau + overlay U-Boot (#737)"
+}

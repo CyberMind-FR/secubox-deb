@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Exemple : notifier après pose d'overlay. Copier en
+# /etc/secubox/netboot/hooks/post-overlay.d/10-notify et rendre exécutable.
+logger -t secubox-netboot "overlay posé sur ${BOARD:-?} (uboot ${UBOOT_VER:-?})"

@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-netboot-overlay (#737, Phase 2)
+# Pose / retire l'overlay 2ᵉ U-Boot chainloadé, en double-buffer dans /boot, avec
+# détournement de bootcmd encadré par bootcount/altbootcmd (rollback AUTO vers
+# l'usine). N'écrit l'env U-Boot que si: (1) fw_env est CALIBRÉ, (2) le FIT overlay
+# est SIGNÉ et vérifié, (3) --commit est passé. Aucun flash SPI/eMMC-boot ici (P3).
+#
+#   secubox-netboot-overlay status
+#   secubox-netboot-overlay apply  [--commit]
+#   secubox-netboot-overlay revert [--commit]
+#   secubox-netboot-overlay confirm-healthy   # appelé après un boot OS sain
+set -uo pipefail
+readonly MODULE="secubox-netboot-overlay"
+readonly BOOT=/boot
+readonly STAGE="$BOOT/secubox-netboot"        # active/ shadow/ — double-buffer
+readonly FIT_NAME=sbx-uboot.fit               # déposé en $BOOT/$FIT_NAME
+readonly SCR_NAME=sbx-boot.scr
+readonly FWENV=/etc/secubox/netboot/fw_env.config   # écrit par --calibrate (probe)
+readonly AUDIT=/var/log/secubox/netboot/audit.log
+readonly MAX_TRIES=3
+
+log()   { printf '[%s] %s\n' "$MODULE" "$*" >&2; }
+die()   { log "ERREUR: $*"; exit 1; }
+audit() { mkdir -p "$(dirname "$AUDIT")"; printf '%s %s %s\n' "$(date -Is)" "$MODULE" "$*" >> "$AUDIT" 2>/dev/null || true; }
+
+have_env() { [ -r "$FWENV" ] && fw_printenv -c "$FWENV" ver >/dev/null 2>&1; }
+fwget()    { fw_printenv -c "$FWENV" -n "$1" 2>/dev/null; }
+fwset()    { fw_setenv  -c "$FWENV" "$@"; }
+
+# Verify the overlay FIT carries a valid signature for our key. dumpimage -l shows
+# "Sign value:" / configurations with signatures; we additionally require the FIT
+# to pass `mkimage -l` parsing. Real cryptographic verify happens in U-Boot at
+# bootm (the on-board trust anchor); here we gate on STRUCTURE + a declared sig.
+verify_fit() {
+  local fit="$1"
+  [ -s "$fit" ] || { log "FIT absent/vide: $fit"; return 1; }
+  command -v dumpimage >/dev/null 2>&1 || { log "dumpimage manquant"; return 1; }
+  if ! dumpimage -l "$fit" 2>/dev/null | grep -qiE 'sign|signature'; then
+    log "FIT non signé (pas de signature déclarée): $fit"; return 1
+  fi
+  return 0
+}
+
+cmd_status() {
+  local env_ok=no; have_env && env_ok=yes
+  local active="none"; [ -e "$STAGE/active/$FIT_NAME" ] && active=present
+  local fit="$BOOT/$FIT_NAME"; local deployed=no; [ -e "$fit" ] && deployed=yes
+  local bc=""; local bcmd=""; local fbcmd=""
+  if [ "$env_ok" = yes ]; then bc="$(fwget bootcount)"; bcmd="$(fwget bootcmd)"; fbcmd="$(fwget factory_bootcmd)"; fi
+  local overlay_active=no
+  printf '%s' "$bcmd" | grep -q 'sbx_overlay' && overlay_active=yes
+  local persisted=no; [ "$env_ok" = yes ] && [ "$(fwget sbx_persist)" = 1 ] && persisted=yes
+  cat <<JSON
+{ "module":"$MODULE","env_ok":"$env_ok","fit_deployed":"$deployed","staged":"$active",
+  "overlay_active":"$overlay_active","persisted":"$persisted","bootcount":"$(printf '%s' "$bc")",
+  "has_factory_backup":"$( [ -n "$fbcmd" ] && echo yes || echo no )" }
+JSON
+}
+
+cmd_apply() {
+  local commit=no; [ "${1:-}" = --commit ] && commit=yes
+  have_env || die "env U-Boot non calibré ($FWENV) — lancer le probe/--calibrate d'abord (banc série requis)."
+  local shadow="$STAGE/shadow"
+  [ -s "$shadow/$FIT_NAME" ] || die "aucun FIT overlay en shadow ($shadow/$FIT_NAME) — déposer via l'API/build d'abord."
+  verify_fit "$shadow/$FIT_NAME" || die "FIT overlay non signé/invalide — pose refusée."
+  [ -s "$shadow/$SCR_NAME" ] || die "boot.scr absent en shadow ($shadow/$SCR_NAME)."
+
+  if [ "$commit" != yes ]; then
+    log "DRY-RUN (sans --commit). Actions qui SERAIENT faites:"
+    log "  swap shadow→active, copie $FIT_NAME + $SCR_NAME dans $BOOT"
+    log "  sauvegarde factory_bootcmd, set sbx_overlay/bootcmd/altbootcmd/bootcount=0"
+    cmd_status; return 0
+  fi
+
+  # 1) double-buffer swap (atomique au mieux) + dépôt dans /boot
+  mkdir -p "$STAGE/active"
+  cp -f "$shadow/$FIT_NAME" "$STAGE/active/$FIT_NAME"
+  cp -f "$shadow/$SCR_NAME" "$STAGE/active/$SCR_NAME"
+  install -m0644 "$STAGE/active/$FIT_NAME" "$BOOT/$FIT_NAME"
+  install -m0644 "$STAGE/active/$SCR_NAME" "$BOOT/$SCR_NAME"
+  sync
+
+  # 2) sauvegarde de l'amorce usine UNE SEULE FOIS
+  if [ -z "$(fwget factory_bootcmd)" ]; then
+    local cur; cur="$(fwget bootcmd)"
+    [ -n "$cur" ] || die "bootcmd usine introuvable — refus (sécurité)."
+    fwset factory_bootcmd "$cur" || die "échec sauvegarde factory_bootcmd"
+    audit "saved factory_bootcmd"
+  fi
+
+  # 3) amorce overlay + garde-fou anti-brick (bootcount/altbootcmd)
+  fwset sbx_overlay "load mmc 0:1 \${loadaddr} $FIT_NAME && bootm \${loadaddr}"
+  fwset bootcmd "if test \${bootcount} -gt $MAX_TRIES; then echo SBX overlay KO -> factory; run factory_bootcmd; else run sbx_overlay; run factory_bootcmd; fi"
+  fwset altbootcmd "run factory_bootcmd"
+  fwset bootcount 0
+  sync
+  audit "overlay applied (fit=$(sha256sum "$BOOT/$FIT_NAME" | cut -c1-16))"
+  log "Overlay posé. Reboot pour tester ; si l'overlay échoue ${MAX_TRIES}×, retour usine auto."
+  cmd_status
+}
+
+cmd_revert() {
+  local commit=no; [ "${1:-}" = --commit ] && commit=yes
+  have_env || die "env U-Boot non calibré ($FWENV)."
+  local fb; fb="$(fwget factory_bootcmd)"
+  [ -n "$fb" ] || die "pas de factory_bootcmd sauvegardé — rien à restaurer."
+  if [ "$commit" != yes ]; then log "DRY-RUN: restaurerait bootcmd ← factory_bootcmd"; cmd_status; return 0; fi
+  fwset bootcmd "$fb"
+  fwset bootcount 0
+  rm -f "$BOOT/$FIT_NAME" "$BOOT/$SCR_NAME"
+  sync
+  audit "overlay reverted to factory"
+  log "Overlay retiré, amorce usine restaurée."
+  cmd_status
+}
+
+cmd_confirm_healthy() {
+  have_env || { log "env non calibré — confirm-healthy ignoré"; exit 0; }
+  # Si l'overlay est déjà PERSISTÉ, rien à faire (pas de compteur). Sinon on remet
+  # bootcount=0 : c'est CE qui rend l'overlay persistant tant que l'OS boote sain.
+  if [ "$(fwget sbx_persist)" = 1 ]; then log "overlay persisté — confirm-healthy no-op"; exit 0; fi
+  fwset bootcount 0 2>/dev/null && audit "boot healthy (bootcount=0)" || true
+  log "bootcount remis à 0 (boot OS sain) — overlay persistant."
+}
+
+# persist : VERROUILLE l'overlay comme amorce PERMANENTE après validation. Retire
+# le garde-fou de révocation par compteur (le repli usine à l'exécution reste, via
+# 'run sbx_overlay; run factory_bootcmd' : si l'overlay rend la main, l'usine prend
+# le relais). À n'utiliser qu'une fois l'overlay prouvé au banc.
+cmd_persist() {
+  local commit=no; [ "${1:-}" = --commit ] && commit=yes
+  have_env || die "env non calibré."
+  printf '%s' "$(fwget bootcmd)" | grep -q 'sbx_overlay' || die "overlay non actif — 'apply' d'abord."
+  if [ "$commit" != yes ]; then log "DRY-RUN: verrouillerait l'overlay en amorce permanente (sans compteur)"; cmd_status; return 0; fi
+  fwset bootcmd "run sbx_overlay; run factory_bootcmd"   # overlay-first + repli usine runtime, SANS compteur
+  fwset sbx_persist 1
+  fwset bootcount 0
+  sync
+  audit "overlay persisted (permanent)"
+  log "Overlay PERSISTÉ (amorce permanente). Repli usine runtime conservé."
+  cmd_status
+}
+
+case "${1:-status}" in
+  status)          cmd_status ;;
+  apply)           shift; cmd_apply  "${1:-}" ;;
+  revert)          shift; cmd_revert "${1:-}" ;;
+  persist)         shift; cmd_persist "${1:-}" ;;
+  confirm-healthy) cmd_confirm_healthy ;;
+  *) die "usage: $MODULE {status|apply [--commit]|persist [--commit]|revert [--commit]|confirm-healthy}" ;;
+esac

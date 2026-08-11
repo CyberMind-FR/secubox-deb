@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox NetBoot API (provisioning réseau + overlay U-Boot) [#737]
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/737
+After=network.target
+
+[Service]
+Type=simple
+# Privilégié : fw_setenv (env U-Boot), accès /boot, mtd. Tourne en root mais
+# NoNewPrivileges + chemins en lecture seule sauf ceux nécessaires.
+User=root
+WorkingDirectory=/usr/lib/secubox/netboot
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/netboot.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/run/secubox /boot /var/lib/secubox/netboot /var/log/secubox/netboot /etc/secubox/netboot
+ProtectHome=yes
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=1777
+MemoryMax=128M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

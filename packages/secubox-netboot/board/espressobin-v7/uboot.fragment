@@ -1,0 +1,24 @@
+# SecuBox-Deb :: overlay U-Boot — fragment defconfig (#737)
+# board = Globalscale ESPRESSObin v7 (Armada 3720). Par-dessus
+# `mvebu_espressobin-88f3720_defconfig`. Driver réseau (Topaz switch / mvneta)
+# distinct du MOCHAbin → fragment séparé.
+
+CONFIG_CMD_DHCP=y
+CONFIG_CMD_TFTPBOOT=y
+CONFIG_CMD_WGET=y
+CONFIG_WGET=y
+CONFIG_PROT_TCP=y
+
+CONFIG_FIT=y
+CONFIG_FIT_SIGNATURE=y
+CONFIG_RSA=y
+CONFIG_SHA256=y
+CONFIG_CMD_BOOTI=y
+
+CONFIG_CMD_BOOTMENU=y
+CONFIG_BOOTCOUNT_LIMIT=y
+CONFIG_BOOTCOUNT_ENV=y
+
+# option HTTPS (mbedTLS) — coûteux sur 3720, désactivé par défaut
+# CONFIG_WGET_HTTPS=y
+# CONFIG_MBEDTLS_LIB=y
