@@ -1,0 +1,14 @@
+{
+  "id": "bbs",
+  "name": "BBS",
+  "module": "MIND",
+  "icon": "📟",
+  "description": "Forums du noeud : lire les fils, repondre, ecouter les episodes et regarder les videos.",
+  "api_base": "/api/v1/bbs",
+  "status_endpoint": "/api/v1/bbs/m/salons",
+  "capabilities": ["read", "write"],
+  "routes": [
+    { "path": "", "label": "Fils" },
+    { "path": "salons", "label": "Salons" }
+  ]
+}

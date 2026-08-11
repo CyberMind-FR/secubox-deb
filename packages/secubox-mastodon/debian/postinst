@@ -1,0 +1,37 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    # PRESERVER L'ETAT : dpkg a envoye SIGTERM pendant la mise a jour.
+    # try-restart relance ce qui tournait et ne demarre pas ce qui etait
+    # volontairement arrete.
+    if systemctl is-enabled secubox-mastodon.service >/dev/null 2>&1; then
+        systemctl try-restart secubox-mastodon.service >/dev/null 2>&1 || true
+    fi
+    # Rechargement nginx SEULEMENT si la configuration est valide : un reload
+    # sur une configuration cassee coupe TOUS les vhosts de la board.
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+    if [ -z "$2" ]; then
+        cat <<'FIN'
+
+  secubox-mastodon installe — RIEN n'est demarre et aucun conteneur n'est cree.
+
+  1. cp /etc/secubox/mastodon.toml.example /etc/secubox/mastodon.toml
+     puis renseignez le DOMAINE. Il ne pourra plus etre change apres la
+     premiere federation : il est grave dans chaque adresse d'utilisateur.
+
+  2. systemctl enable --now secubox-mastodon     # le panneau, leger
+  3. mastodonctl install                         # le conteneur (long)
+
+  Le vhost est livre dans sites-available/mastodon.conf, NON active : il
+  demande aussi une entree HAProxy et un enregistrement DNS.
+
+FIN
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0
