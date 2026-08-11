@@ -116,12 +116,33 @@ cmd_stop()    { lxc-stop  -n "$(_nom)" -P "$LXC_PATH" -t 30 2>/dev/null; cmd_sta
 # sur quelqu'un.
 cmd_invite() {
     [ "$(_lxc_etat)" = "running" ] || { printf '{"ok":false,"error":"conteneur arrete"}\n'; return 1; }
+    # `tootctl invites` N'EXISTE PAS en Mastodon 4.7 — les invitations se creent
+    # depuis l'interface ou par le modele. La version precedente appelait cette
+    # sous-commande absente, recuperait « Could not find command "invites" » et
+    # la rendait TELLE QUELLE comme lien d'invitation, avec ok:true : le
+    # message d'erreur devenait la valeur, et l'appelant n'avait aucun moyen de
+    # s'en apercevoir avant qu'un utilisateur ne clique dessus.
     local out
     out=$(lxc-attach -n "$(_nom)" -P "$LXC_PATH" -- su - mastodon -c \
-        'cd /home/mastodon/live && RAILS_ENV=production bin/tootctl invites generate --expires-in 604800' 2>&1 | tail -1)
-    python3 -c "
-import json,sys; print(json.dumps({'ok': bool(sys.argv[1].strip()), 'invitation': sys.argv[1].strip(),
- 'note': 'valable 7 jours, affichee une seule fois'}, ensure_ascii=False))" "$out"
+        'cd /home/mastodon/live && RAILS_ENV=production bin/rails runner "\
+u = User.where(role_id: UserRole.where(name: %w[Owner Admin]).select(:id)).first || User.first; \
+abort(%(aucun compte proprietaire)) if u.nil?; \
+i = Invite.create!(user: u, expires_at: 7.days.from_now, max_uses: nil); \
+puts %(https://#{ENV[%(LOCAL_DOMAIN)]}/invite/#{i.code})"' 2>&1 | tail -1)
+    # LE RESULTAT EST VERIFIE, pas suppose : seule une adresse d'invitation bien
+    # formee vaut succes. N'importe quelle autre sortie — trace Ruby, conteneur
+    # muet, migration en cours — est une erreur, et doit le dire.
+    case "$out" in
+        https://*/invite/?*)
+            python3 -c "
+import json,sys; print(json.dumps({'ok': True, 'invitation': sys.argv[1].strip(),
+ 'note': 'valable 7 jours ; le lien sert plusieurs fois'}, ensure_ascii=False))" "$out" ;;
+        *)
+            python3 -c "
+import json,sys; print(json.dumps({'ok': False,
+ 'error': 'invitation non emise : ' + sys.argv[1].strip()}, ensure_ascii=False))" "$out"
+            return 1 ;;
+    esac
 }
 
 cmd_help() {
