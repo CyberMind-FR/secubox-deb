@@ -3,6 +3,62 @@
 
 ---
 
+## 2026-08-11 (suite) — BBS 0.3.0 et rattrapage de 21 branches non fusionnees (#1008)
+
+**secubox-bbs 0.3.0**
+
+- Messagerie interne entre membres : conversations a deux, boite de reception,
+  compteur de non-lus evalue a chaque page. Les messages vivent EN BASE et non
+  sur disque — le forum y est parce qu'il est publiable et reindexable, ce
+  qu'un message prive n'est pas. Ils ne sont donc pas repris dans la
+  sauvegarde, et l'interface le dit plutot que de laisser la propriete devenir
+  une perte silencieuse.
+- Invitation par tout membre, SANS QUOTA (choix de l'exploitant). Contrepartie
+  posee : la console montre qui a invite qui. Un compte ferme n'invite plus.
+- Module Mastodon : lien partage declare par le sysop, montre aux seuls membres
+  connectes. Les liens sont valides AU STOCKAGE — un `javascript:` n'entre pas
+  en base.
+- Reinitialisation de mot de passe par le sysop, et onglet Sysop dans la webui
+  d'administration. Les deux surfaces passent par les MEMES fonctions de
+  magasin : sinon la politique de longueur, la fermeture des sessions et le
+  refus des liens non http ne vaudraient que pour une porte.
+- `bbsctl user-passwd` : chemin de secours hors session.
+
+**Trois defauts trouves en chemin, tous du meme type — annoncer un succes sans
+effet :**
+
+1. Le panneau d'admin affichait « jeton expire » dans chaque carte au lieu de
+   renvoyer a la connexion. Exact et inutile : ne dit pas quoi faire, et l'on
+   croit a une panne du module. Les 80 autres panneaux redirigent vers
+   /login.html.
+2. Le fichier de mots de passe etait garde EN MEMOIRE par le service. `bbsctl`
+   ecrit le meme fichier depuis un autre processus : la reinitialisation de
+   secours restait sans effet jusqu'au redemarrage — le jour meme ou l'on en a
+   besoin — et la premiere ecriture du service EFFACAIT ce que la console
+   venait de poser.
+3. `mastodonctl invite` appelait `tootctl invites`, absent en Mastodon 4.7, et
+   rendait le message d'erreur COMME LIEN d'invitation, avec ok:true. Le BBS
+   l'aurait affiche a ses membres ; on ne l'aurait su qu'au premier clic.
+
+180 tests, dont deux renforces apres mutation.
+
+**Rattrapage : 21 branches fusionnees dans master**
+
+Deux d'entre elles portaient du code DEJA EN PRODUCTION sur gk2 — `secubox-bbs`
+et `secubox-mastodon` n'existaient dans aucune branche fusionnee. C'est ce meme
+mecanisme qui avait fait rediagnostiquer #986/#988 a l'aveugle le matin meme.
+
+Les 21 ont ete testees a blanc (`git merge-tree`) avant toute ecriture, puis
+fusionnees de la plus ancienne a la plus recente. Verifie apres coup : les
+suites BBS et HAProxy passent, et AUCUN paquet n'a regresse sous la version
+installee sur la board (haproxy 1.6.1, toolbox 2.8.9, bbs 0.3.0, mastodon
+0.1.0, certs 1.2.0, annuaire 0.10.1 — tous alignes).
+
+**33 branches restent en conflit** et demandent un arbitrage humain, pas une
+resolution automatique.
+
+---
+
 ## 2026-08-10 — HAProxy : la generation redevient la source de verite (#986, #988)
 
 **Trois cablages n'existaient QUE dans le `haproxy.cfg` vivant**, ajoutes a la

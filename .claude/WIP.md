@@ -1,5 +1,29 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-10*
+*Mis à jour : 2026-08-11*
+
+---
+
+## 2026-08-11 — BBS 0.3.0, et 21 branches enfin dans master
+
+### ✅ Fait — fusionné et déployé
+
+- **secubox-bbs 0.3.0** (#1008) — messagerie interne, invitation par tout
+  membre (sans quota, avec traçabilité de l'émetteur), module Mastodon, onglet
+  Sysop dans la webui d'admin, réinitialisation de mot de passe. **180 tests.**
+- **Trois faux succès corrigés** : « jeton expiré » affiché au lieu de renvoyer
+  à la connexion ; fichier de mots de passe gardé en mémoire (une
+  réinitialisation `bbsctl` restait sans effet, puis était **effacée**) ;
+  `mastodonctl invite` rendant son message d'erreur **comme lien d'invitation**
+  avec `ok:true`.
+- **21 branches fusionnées dans master**, dont `secubox-bbs` et
+  `secubox-mastodon` qui n'existaient dans aucune branche fusionnée alors
+  qu'elles tournent sur gk2.
+
+### ⬜ Next Up
+
+- **33 branches restent en conflit.** Les arbitrer une par une, en vérifiant
+  d'abord si elles portent du code vivant sur la board — c'est l'inverse qui
+  a coûté cher ce matin.
 
 ---
 

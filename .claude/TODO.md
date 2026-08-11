@@ -3,6 +3,47 @@
 
 ---
 
+## Branches non fusionnees restantes (2026-08-11)
+
+33 branches sont en conflit avec master et demandent un arbitrage, une par
+une. Certaines datent de mai et peuvent etre abandonnees ; d'autres portent
+peut-etre du code vivant sur gk2 — c'est a verifier AVANT de trancher, pas
+apres.
+
+- [ ] `archive/429-b715-occ-direct`
+- [ ] `chore/982-streamlit-bascule-du-parc-vivant-vers-le`
+- [ ] `feat/963-lien-reveil-tuiles`
+- [ ] `feat/tor-onion-pac`
+- [ ] `feature/241-secubox-zigbee-v2-4-0-rewrite-in-place-z`
+- [ ] `feature/264-secubox-zigbee-secubox-lyrion-swap-lan-o`
+- [ ] `feature/429-nextcloud-real-manageable`
+- [ ] `feature/615-security-posture-add-security-posture-to`
+- [ ] `feature/738-aggregator-resilience-sweep-async-handle`
+- [ ] `feature/740-anti-pub-renforce-sinkhole-dns-unbound-e`
+- [ ] `feature/748-enhanced-tow-boot-http-netboot-serial-fl`
+- [ ] `feature/761-fix-podcaster-audio-player-stops-every-f`
+- [ ] `feature/789-sbxwaf-styled-html-421-page-for-unrouted`
+- [ ] `feature/817-device-guardian-consolidation`
+- [ ] `feature/820-presence-guardian`
+- [ ] `feature/823-sentinel-toolbox-surfaces`
+- [ ] `feature/826-feed-report-surface`
+- [ ] `feature/826-feeds-honest-ja4capture`
+- [ ] `feature/826-ja4-plumb`
+- [ ] `feature/826-sentinel-c2-botnet-auto-learning-high-pr`
+- [ ] `feature/92-health-banner-visitor-origin-feed-anonym`
+- [ ] `feature/967-router-les-mp3-flac-conserves-vers-lyrio`
+- [ ] `feature/license-phase-b-full`
+- [ ] `feature/license-phase-b-hub`
+- [ ] `fix/361-secubox-threat-analyst-v1-1-0-wire-metri`
+- [ ] `fix/494-secubox-core-service-execstart-overrides`
+- [ ] `fix/826-c2-rare-alone-fp`
+- [ ] `fix/961-toutes-applis-endormissables`
+- [ ] `fix/962-barre-globale-recouvre-hub`
+- [ ] `fix/989-derive-nginx-systemique-les-paquets-inst`
+- [ ] `fix/issue-77-hyperpixel-init`
+- [ ] `fix/round-real-root-icons`
+- [ ] `fix/rpi4b-radar-arcs-top-centered`
+
 ## HAProxy — suites de #986/#988 (2026-08-10)
 
 - [ ] Décider, vhost par vhost, si les 10 qui déclarent `ssl_redirect = true`
