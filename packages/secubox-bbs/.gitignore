@@ -1,4 +1,19 @@
 _gocache/
 _gopath/
-secubox-bbsd
-bbsctl
+
+# BINAIRES CONSTRUITS — ANCRES A LA RACINE DU PAQUET.
+#
+# Un motif NU comme `bbsctl` correspond a n'importe quel composant de chemin, a
+# n'importe quelle profondeur : il attrapait donc aussi le REPERTOIRE
+# `cmd/bbsctl/`, et avec lui `cmd/bbsctl/main.go`. Idem pour `secubox-bbsd`.
+#
+# Consequence : les deux points d'entree du paquet n'ont JAMAIS ete suivis.
+# `git status` restait propre, `debian/rules` les construisait depuis le disque,
+# et rien ne signalait l'absence — jusqu'a ce que le seul repertoire qui les
+# contenait soit supprime. Les sources ont ete perdues et reconstruites le
+# 2026-08-11 a partir de la surface des binaires deployes.
+#
+# La barre oblique de tete ancre le motif a la racine du paquet : elle ne
+# designe plus que le fichier construit.
+/secubox-bbsd
+/bbsctl
