@@ -128,6 +128,49 @@ def read_site_config(site_dir: Path) -> dict:
 # de requête HTTP — voir la docstring du module.
 # ─────────────────────────────────────────────────────────────────────────
 
+def domaine_du_site(site_dir: Path, domain_suffix: str = DEFAULT_DOMAIN_SUFFIX) -> str:
+    """Le domaine d'un site — UN SEUL calcul, partagé par tous les chemins.
+
+    POURQUOI CETTE FONCTION EXISTE (#1012). Le domaine était calculé à quatre
+    endroits, et un seul était juste. Le chemin d'AFFICHAGE (le scan ci-dessous)
+    appliquait le suffixe réel ; les chemins de DÉTAIL, de CRÉATION et surtout
+    de PUBLICATION — celui qui écrit le vhost nginx — retombaient sur
+    ``f"{nom}.local"``.
+
+    Le décalage rendait le défaut invisible : le panneau affirmait
+    ``aletheia.gk2.secubox.in`` pendant que nginx portait
+    ``server_name aletheia.local``. Aucun ``server_name`` ne correspondant au
+    Host demandé, nginx servait le premier bloc venu — un 200 sur le contenu
+    d'un site sans rapport, PAS une erreur. Rien ne signalait quoi que ce soit,
+    ni dans les journaux ni dans l'interface.
+
+    Trois règles, dans cet ordre :
+
+    1. un domaine explicite dans ``site.json`` fait foi — c'est un choix
+       d'opérateur, y compris quand il pointe hors du board : une soixantaine
+       de sites servent sous ``maegia.tv`` ou ``ganimed.fr`` ;
+    2. un ``.local`` hérité est réécrit vers le suffixe réel — ces valeurs ont
+       été gravées par l'ancien chemin de création, et les ignorer ferait
+       perdre le sous-domaine choisi (``want`` sert sous ``wanted.``) ;
+    3. sans rien, le nom du répertoire porte le suffixe par défaut.
+    """
+    saved = ""
+    try:
+        saved = (read_site_config(site_dir).get("domain", "") or "").strip()
+    except Exception:
+        # Un site.json illisible ne doit pas empêcher la publication : on
+        # retombe sur le nom du site, jamais sur `.local`.
+        saved = ""
+
+    if not saved:
+        return f"{site_dir.name}{domain_suffix}"
+    if saved.endswith(".local"):
+        # `removesuffix` et non `replace` : un site dont le domaine contient
+        # `.local` ailleurs qu'en fin verrait sinon cette occurrence réécrite.
+        return saved.removesuffix(".local") + domain_suffix
+    return saved
+
+
 def scan_sites(
     sites_root: Path,
     nginx_conf: Path,
@@ -171,15 +214,11 @@ def scan_sites(
             continue
 
         name = site_dir.name
-        domain = f"{name}{domain_suffix}"
-        port = base_port
-
         cfg = read_site_config(site_dir)
-        saved_domain = cfg.get("domain", "") or ""
-        if saved_domain.endswith(".local"):
-            domain = saved_domain.replace(".local", domain_suffix)
-        elif saved_domain:
-            domain = saved_domain
+        # Passe par le calcul PARTAGE (#1012) : c'est ce chemin d'affichage qui
+        # etait juste pendant que la publication ecrivait `.local`, et les faire
+        # diverger de nouveau reproduirait exactement le defaut.
+        domain = domaine_du_site(site_dir, domain_suffix)
         port = cfg.get("port", base_port)
 
         published = (
