@@ -1,6 +1,6 @@
-# docs/catalog/modules.yaml — inventaire des modules SecuBox.
+# tutorial/catalog/modules.yaml — inventaire des modules SecuBox.
 #
-# GENERE PAR scripts/docs-audit.py A PARTIR DU DEPOT. Ne pas editer a la
+# GENERE PAR scripts/tutorial-audit.py A PARTIR DU DEPOT. Ne pas editer a la
 # main : la prochaine execution ecraserait la correction. Pour corriger
 # une entree, corriger sa SOURCE — le plus souvent debian/secubox.yaml.
 #

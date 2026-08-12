@@ -1,6 +1,6 @@
 # Catalogue des modules SecuBox
 
-> **Généré** par `scripts/docs-audit.py` à partir du dépôt.
+> **Généré** par `scripts/tutorial-audit.py` à partir du dépôt.
 > Ne pas éditer à la main — corriger la source, le plus souvent
 > `packages/<module>/debian/secubox.yaml`, puis relancer le script.
 
