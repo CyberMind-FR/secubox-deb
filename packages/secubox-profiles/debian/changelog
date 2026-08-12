@@ -1,3 +1,33 @@
+secubox-profiles (0.17.0-1~bookworm1) bookworm; urgency=high
+
+  * Reveil a la demande des applications Streamlit (ref #1018). 28 vhosts
+    routes vers le conteneur streamlit rendaient 502 EN 0,1 SECONDE : aucun
+    reveil n'etait tente, alors que l'unite de chaque application existait,
+    simplement arretee. Les applications sont a zero appli residente par
+    conception (#982) — sans reveil cable, « zero resident » devenait « zero
+    joignable ».
+  * Le reveilleur resolvait un vhost vers un MODULE, via les manifestes. Une
+    application Streamlit est creee dynamiquement par la forge : lui fabriquer
+    un manifeste aurait derive des la creation suivante, exactement le defaut
+    corrige ici. Le repli derive donc l'application depuis le vhost.
+  * LA GARDE EXISTANTE EST PRESERVEE. Le code refusait deja de reveiller un
+    vhost inconnu — « un 5xx ne doit pas devenir un droit de demarrer un
+    service arbitraire ». Le repli ne se fie pas au nom : l'autorite est le
+    fichier de ROUTES que lit sbxwaf. Un vhost inconnu ne reveille toujours
+    rien ; seul un vhost effectivement route vers le conteneur ouvre ce chemin.
+    Des routes illisibles referment le repli plutot que de l'ouvrir.
+  * Le privilege passe par le ctl root (nouveau verbe wake-streamlit), jamais
+    en process depuis le reveilleur — meme convention webui->ctl que le reveil
+    des modules, et meme systemd-run plutot que sudo nu, sous peine d'heriter
+    du bac a sable ProtectSystem=strict du service.
+  * Le nom d'application est valide par liste blanche AVANT d'entrer dans un
+    nom d'unite demarre en root : lettres, chiffres, tiret, souligne, et
+    commencant obligatoirement par une lettre ou un chiffre — un nom ouvrant
+    sur un tiret serait pris pour une option.
+  * 30 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 16:45:00 +0200
+
 secubox-profiles (0.16.0-1~bookworm1) bookworm; urgency=medium
 
   * La page d'indisponibilite QUALIFIE la panne au lieu d'affirmer une phrase

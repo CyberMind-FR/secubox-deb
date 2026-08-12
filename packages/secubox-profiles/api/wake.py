@@ -100,6 +100,13 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("wake")
     sp.add_argument("module")
     sp.add_argument("--json", action="store_true")
+    # Reveil d'une application Streamlit (#1018). Verbe SEPARE de `wake` : une
+    # application n'est pas un module — pas de manifeste, pas de cycle de vie,
+    # pas de snapshot 4R. Les confondre obligerait `wake` a traiter deux objets
+    # qui n'ont en commun que le mot « reveiller ».
+    spw = sub.add_parser("wake-streamlit")
+    spw.add_argument("app")
+    spw.add_argument("--json", action="store_true")
     sp2 = sub.add_parser("nginx-sync")
     sp2.add_argument("--sites", default="/etc/nginx/sites-available")
     # Sans --all, seuls les modules « a la demande » sont cables : tous les
@@ -138,6 +145,20 @@ def main(argv: list[str] | None = None) -> int:
         done = lxcstagger.apply(ms, lxc_path=_P(args.lxc_path))
         print(f"  ecrit: {len(done)} config(s) — {' '.join(done) if done else 'aucune'}")
         return 0
+
+    if args.cmd == "wake-streamlit":
+        from . import streamlit_apps
+        if not _running_as_root():
+            print("wake-streamlit doit etre lance en root (pilote le conteneur).",
+                  file=sys.stderr)
+            return 1
+        rep = streamlit_apps.reveille(args.app, run=_run)
+        if args.json:
+            print(json.dumps(rep, ensure_ascii=False))
+        else:
+            print(f"wake-streamlit: {rep['status']} — {rep['app']}"
+                  + (f" ({rep.get('detail','')})" if rep["status"] == "failed" else ""))
+        return 0 if rep["status"] == "woken" else 1
 
     if args.cmd == "nginx-sync":
         from . import nginxgen
