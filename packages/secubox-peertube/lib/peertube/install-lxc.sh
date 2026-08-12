@@ -145,33 +145,14 @@ lxc.mount.entry = $DATA_DIR/redis var/lib/redis none bind,create=dir 0 0
 lxc.cgroup2.memory.high = 1500M
 lxc.cgroup2.memory.max = 2G
 
-# Le plafond CPU (#1010) est pose par borne-cpu.sh, appele juste apres, et
-# DELIBEREMENT PAS ecrit ici : la meme borne inscrite a deux endroits finit par
-# diverger, et c'est alors la reinstallation qui ramenerait l'ancienne valeur.
+# Le plafond CPU (#1010) est pose par secubox-system-tuning depuis
+# /etc/secubox/tuning/lxc-cpu.toml (#1011), et DELIBEREMENT PAS ici : la meme
+# borne inscrite a deux endroits finit par diverger, et c'est la reinstallation
+# qui ramenerait alors silencieusement l'ancienne valeur.
 
 lxc.start.auto = 1
 lxc.start.delay = 5
 EOF
-}
-
-# borner_cpu delegue le plafond CPU (#1010) au script qui en detient la valeur.
-#
-# Resolu a cote de CE script : l'installateur tourne aussi bien depuis le depot
-# que depuis /usr/share/secubox/lib/peertube, et un chemin absolu casserait
-# dans l'un des deux cas.
-borner_cpu() {
-    local script
-    script="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/borne-cpu.sh"
-    # NON FATAL : une borne non posee laisse PeerTube trop gourmand, ce qui se
-    # corrige ; une installation interrompue laisse un conteneur a moitie fait.
-    #
-    # Un `&& ... || ...` dirait « introuvable » quand le script existe mais
-    # echoue — un diagnostic faux coute plus cher que pas de diagnostic.
-    if [ ! -x "$script" ]; then
-        log "borne-cpu.sh introuvable, plafond CPU non pose"
-    elif ! "$script"; then
-        log "borne-cpu.sh a echoue, plafond CPU non pose"
-    fi
 }
 
 ensure_resolv() {
@@ -431,9 +412,6 @@ main() {
     ensure_masquerade
     create_lxc
     write_lxc_config
-    # Le plafond CPU est pose AVANT le demarrage : la configuration n'est relue
-    # qu'au demarrage, donc le poser apres coup obligerait a un redemarrage.
-    borner_cpu
     start_lxc
     wait_for_network
     ensure_resolv
