@@ -62,15 +62,9 @@ if [ "$1" = "configure" ]; then
         nft -f /etc/nftables.d/secubox-peertube.nft 2>/dev/null || true
     fi
 
-    # Plafond CPU du transcodage (#1010). Pose ICI et pas seulement dans
-    # l'installateur : le conteneur de gk2 existe depuis des mois, et un
-    # correctif qui ne profiterait qu'aux installations futures ne corrigerait
-    # rien. Le script est idempotent et applique aussi a chaud, donc sans
-    # redemarrer PeerTube — redemarrer pour poser un plafond couperait la
-    # consultation, precisement ce qu'on protege.
-    if [ -x /usr/share/secubox/lib/peertube/borne-cpu.sh ]; then
-      /usr/share/secubox/lib/peertube/borne-cpu.sh || true
-    fi
+    # Le plafond CPU du conteneur (#1010) est desormais pose par
+    # secubox-system-tuning, a partir de /etc/secubox/tuning/lxc-cpu.toml
+    # (#1011) : deux mecanismes ecrivant la meme cle finissent par diverger.
 
     systemctl daemon-reload
     # Releve de version : savoir qu'une mise a jour existe, sans jamais
