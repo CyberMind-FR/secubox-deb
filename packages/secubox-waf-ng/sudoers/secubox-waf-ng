@@ -1,0 +1,39 @@
+# /etc/sudoers.d/secubox-waf-ng — le WAF doit pouvoir bannir (#1017).
+#
+# POURQUOI CE DROIT EXISTE
+#
+# sbxwaf detecte les scanners, sondes et crawlers de reconnaissance, puis
+# demande un bannissement. Le pont passe par `cscli decisions add` : le code du
+# WAF documente pourquoi ce chemin plutot que la LAPI — /v1/alerts rend 500 sur
+# cette version, et les jetons expirent toutes les heures. C'est ce chemin qui
+# cree reellement le blocage nft applique par le bouncer.
+#
+# Or `cscli` doit lire /etc/crowdsec/config.yaml, interdit au compte
+# `secubox-waf` sous lequel tourne le service. Sans ce droit, le WAF detectait
+# en continu sans jamais pouvoir bannir — et rien ne le signalait : le tableau
+# de bord affichait simplement peu de bans, ce qui se lit comme « peu
+# d'attaques ».
+#
+# CE QUE CE DROIT N'EST PAS
+#
+# Ce n'est pas un acces root au systeme, ni meme a CrowdSec. Un seul verbe est
+# autorise : `decisions add`. Le WAF ne peut ni lever un ban (`decisions
+# delete`), ni lire la configuration, ni toucher aux machines, aux bouncers, aux
+# collections ou aux scenarios.
+#
+# La distinction compte : un WAF compromis pourrait alors bannir a tort — une
+# nuisance, corrigeable a la main — mais pas LEVER les bans en place, ce qui
+# aurait desarme la board en silence.
+#
+# NoNewPrivileges=false est requis dans l'unite pour que ce droit soit
+# seulement utilisable. Les deux vont ensemble : l'un sans l'autre ne sert a
+# rien.
+
+Cmnd_Alias SBX_WAF_BAN = /usr/bin/cscli decisions add *
+
+secubox-waf ALL=(root) NOPASSWD: SBX_WAF_BAN
+
+# Les journaux de securite doivent nommer l'auteur reel de la decision, pas le
+# compte de service : sans cela, une decision contestee ne se remonte pas.
+Defaults!SBX_WAF_BAN !requiretty
+Defaults!SBX_WAF_BAN log_output

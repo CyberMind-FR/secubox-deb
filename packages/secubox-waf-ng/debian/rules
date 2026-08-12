@@ -54,6 +54,13 @@ override_dh_auto_clean:
 	rm -f $(CURDIR)/sbxwaf
 	rm -rf _gocache _gopath
 
+override_dh_auto_install:
+	dh_auto_install
+	# Le droit sudo borne qui permet au WAF de bannir (#1017). Sans lui,
+	# sbxwaf detecte sans jamais pouvoir appeler cscli, et rien ne le signale.
+	install -d debian/secubox-waf-ng/etc/sudoers.d
+	install -m 0440 sudoers/secubox-waf-ng debian/secubox-waf-ng/etc/sudoers.d/secubox-waf-ng
+
 override_dh_installsystemd:
 	# #896 reconcile: ship the SINGLE hardened unit (secubox-waf-ng.service,
 	# :8085) — it replaces the crash-looping worker@ fan-out template, which is
