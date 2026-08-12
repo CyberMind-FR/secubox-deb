@@ -1,3 +1,23 @@
+secubox-profiles (0.16.0-1~bookworm1) bookworm; urgency=medium
+
+  * La page d'indisponibilite QUALIFIE la panne au lieu d'affirmer une phrase
+    figee. « Ne repond pas » recouvre quatre situations qui n'appellent pas la
+    meme reaction : demarrage en cours, boucle de redemarrage, arret franc, et
+    reponse trop lente (504). Servir le meme texte aux quatre laisse deviner.
+  * Le cas zigbee l'a montre : la page disait « rien ne va le relever tout
+    seul » alors que le service se relançait une fois par minute depuis 4050
+    tentatives — l'inverse de ce qui se passait.
+  * 504 traite AVANT toute lecture de systemd : le service tourne, systemd
+    dirait « active », et l'on conclurait a tort que tout va bien. C'est une
+    panne de lenteur, pas d'absence ; le redemarrer masquerait la cause.
+  * `Retry-After` n'est pose que quand reessayer a un sens. Sur une boucle de
+    redemarrage il ferait insister le navigateur sur une panne reproductible
+    qui consomme deja du processeur en continu.
+  * En-tete `X-Sbx-Etat` pour que le panneau et les sondes lisent l'etat sans
+    analyser la page.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 08:20:00 +0200
+
 secubox-profiles (0.15.1-1~bookworm1) bookworm; urgency=medium
 
   * nginx-sync declare aussi la regle 5xx DANS les blocs qui la surchargent.
