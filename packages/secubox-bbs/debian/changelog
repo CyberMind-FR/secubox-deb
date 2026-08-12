@@ -1,3 +1,17 @@
+secubox-bbs (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * La messagerie utilise la COLONNE DE LA COQUILLE. Elle avait sa propre
+    grille a deux colonnes, imbriquee dans la vue : deux dispositions
+    superposees, chacune reprenant la moitie de la place, et la conversation
+    finissait dans un quart d'ecran. Elle datait d'avant la coquille a trois
+    colonnes et n'avait pas ete reprise.
+  * Les conversations se listent donc comme les fils, avec le meme marquage de
+    l'element ouvert et les memes paliers — une seule coquille pour tout le
+    module.
+  * Un test empeche qu'une seconde grille reapparaisse dans la vue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 11:20:00 +0200
+
 secubox-bbs (0.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Coquille a TROIS COLONNES, conforme a www/mockup-reference.html : rail,

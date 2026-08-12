@@ -3,33 +3,7 @@
 {{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
 {{if .Msg}}<div class="note m s42a6ced"><b>{{.Msg}}</b></div>{{end}}
 
-<div class="mp">
-  <aside class="mp-liste">
-    <div class="railhead">Conversations</div>
-    {{if .Convs}}{{range .Convs}}
-      <a class="mp-conv{{if eq .Handle $.Avec.Handle}} actif{{end}}" href="/mp/{{.Handle}}">
-        <span class="av">{{.Handle}}</span>
-        <span class="mp-conv-txt">
-          <b>{{.Nom}}</b>
-          <span class="d">{{.Dernier}}</span>
-        </span>
-        {{if .NonLus}}<span class="pill p-new">{{.NonLus}}</span>{{end}}
-      </a>
-    {{end}}{{else}}
-      <div class="note">{{.Vide}}</div>
-    {{end}}
-
-    <div class="railhead">Écrire à</div>
-    {{if .Corres}}
-      <div class="mp-choix">
-        {{range .Corres}}<a class="mp-membre" href="/mp/{{.Handle}}">{{.Display}}</a>{{end}}
-      </div>
-    {{else}}
-      <div class="note">Aucun autre membre pour l'instant.</div>
-    {{end}}
-  </aside>
-
-  <section class="mp-fil">
+<section class="mp-fil">
   {{if .Avec.ID}}
     <div class="mp-entete">
       <span class="av">{{.Avec.Handle}}</span>
@@ -79,7 +53,6 @@
     </div>
   {{end}}
   </section>
-</div>
 
 <div class="note m s92c18f6">
   Les messages privés vivent en base et <b>ne sont pas repris dans la

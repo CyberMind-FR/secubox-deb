@@ -293,3 +293,37 @@ func TestLaCoquilleRendSesTroisColonnesEtSaLigneDEtat(t *testing.T) {
 		t.Error("la ligne d'etat ne porte pas l'etat annonce")
 	}
 }
+
+func TestLaMessagerieUtiliseLaColonneDeLaCoquille(t *testing.T) {
+	// Elle avait sa PROPRE grille a deux colonnes, imbriquee dans la vue : deux
+	// dispositions superposees, chacune reprenant la moitie de la place, et la
+	// conversation finissait dans un quart d'ecran. Ce test empeche qu'une
+	// seconde grille reapparaisse.
+	srv, _, _, jGk2, _, jAmie := bancMP(t)
+	csrf := csrfDe(t, srv, "/mp/amie", jGk2)
+	demande(t, srv, "POST", "/mp/envoyer", jGk2, url.Values{
+		"csrf": {csrf}, "vers": {"amie"}, "corps": {"un mot"},
+	})
+
+	w := demande(t, srv, "GET", "/mp/gk2", jAmie, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d", w.Code)
+	}
+	corps := w.Body.String()
+
+	// Les conversations sont dans la colonne DE LA COQUILLE.
+	if !strings.Contains(corps, `class="liste"`) {
+		t.Error("les conversations n'occupent pas la colonne de la coquille")
+	}
+	if !strings.Contains(corps, `class="fil-item conv"`) {
+		t.Error("aucune entree de conversation dans la colonne")
+	}
+	// L'interlocuteur ouvert est signale, comme un fil ouvert l'est.
+	if !strings.Contains(corps, `aria-current="page"`) {
+		t.Error("la conversation ouverte n'est pas marquee")
+	}
+	// AUCUNE seconde grille : c'est le defaut qu'on vient de retirer.
+	if strings.Contains(corps, `class="mp"`) || strings.Contains(corps, "mp-liste") {
+		t.Error("une seconde disposition est reapparue dans la vue")
+	}
+}

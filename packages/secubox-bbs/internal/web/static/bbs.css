@@ -444,67 +444,53 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 
 /* ── messagerie interne (#1008) ───────────────────────────────────────────
  *
- * Deux colonnes : les conversations a gauche, le fil ouvert a droite. Sous
- * 900px la liste passe AU-DESSUS du fil plutot que de disparaitre — masquer
- * la liste sur telephone reviendrait a n'offrir qu'une seule conversation,
- * celle ou l'on est deja.
+ * LA MESSAGERIE N'A PLUS SA PROPRE GRILLE. Elle en avait une, a deux colonnes,
+ * imbriquee dans la vue de la coquille : deux dispositions superposees, chacune
+ * reprenant la moitie de la place, et la conversation finissait dans un quart
+ * d'ecran. Les conversations occupent desormais la colonne du milieu, comme les
+ * fils — une seule coquille pour tout le module, et les memes paliers.
  *
- * La regle responsive est placee APRES les composants, volontairement : une
- * media query n'ajoute aucune specificite, et posee avant elle serait ecrasee
- * par la regle de bureau qui la suit. C'est exactement le defaut qui avait
- * laisse le rail visible sur telephone. */
-.mp { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
-.mp-liste { display: flex; flex-direction: column; gap: 4px; }
-.mp-conv {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; border-radius: 10px; text-decoration: none;
-  color: var(--text); border: 1px solid transparent;
-}
-.mp-conv:hover { background: var(--soft); }
-.mp-conv.actif { background: var(--soft); border-color: var(--line); }
-/* min-width:0 : sans lui, le texte long refuse de se tronquer et pousse la
+ * Ne restent ici que la conversation elle-meme et ses bulles.            */
+
+/* Une entree de conversation est un `fil-item` avec un avatar et un apercu. */
+.fil-item.conv{display:flex; align-items:center; gap:9px}
+.conv-txt{display:flex; flex-direction:column; min-width:0; flex:1}
+/* min-width:0 — sans lui, un apercu long refuse de se tronquer et pousse la
  * colonne au-dela de sa largeur, ce qui fait defiler la page en travers. */
-.mp-conv-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.mp-conv-txt .d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.mp-choix { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
-.mp-membre {
-  padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px;
-  font-size: 12.5px; text-decoration: none; color: var(--dim);
+.conv-txt h3{margin:0}
+.conv-txt .apercu{
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:12px; color:var(--dim);
 }
-.mp-membre:hover { color: var(--text); background: var(--soft); }
-.mp-fil {
-  display: flex; flex-direction: column; gap: 12px;
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px;
+.mp-choix{display:flex; flex-wrap:wrap; gap:6px; padding:8px 14px 14px}
+.mp-membre{
+  padding:4px 9px; border:1px solid var(--line); border-radius:999px;
+  font-size:12.5px; text-decoration:none; color:var(--dim);
 }
-.mp-entete { display: flex; align-items: center; gap: 10px; }
-.mp-bulles { display: flex; flex-direction: column; gap: 10px; }
-.bulle { max-width: 78%; align-self: flex-start; }
-.bulle-corps {
-  background: var(--soft); border: 1px solid var(--line);
-  border-radius: 14px 14px 14px 4px; padding: 8px 12px;
+.mp-membre:hover{color:var(--text); background:var(--soft)}
+
+.mp-entete{display:flex; align-items:center; gap:10px; margin-bottom:14px}
+.mp-bulles{display:flex; flex-direction:column; gap:10px; margin-bottom:16px}
+.bulle{max-width:78%; align-self:flex-start}
+.bulle-corps{
+  background:var(--soft); border:1px solid var(--line);
+  border-radius:14px 14px 14px 4px; padding:8px 12px;
 }
-.bulle-corps p { margin: 0; }
-.bulle-pied { font-size: 11.5px; margin-top: 3px; }
+.bulle-corps p{margin:0}
+.bulle-pied{font-size:11.5px; margin-top:3px; color:var(--dim)}
 /* Les siens a droite, en couleur d'accent : la conversation se lit d'un coup
  * d'oeil sans avoir a chercher le nom sous chaque message. */
-.bulle.moi { align-self: flex-end; }
-.bulle.moi .bulle-corps {
-  background: var(--sky-soft); border-color: var(--sky);
-  border-radius: 14px 14px 4px 14px;
+.bulle.moi{align-self:flex-end}
+.bulle.moi .bulle-corps{
+  background:var(--sky-soft); border-color:var(--sky);
+  border-radius:14px 14px 4px 14px;
 }
-.bulle.moi .bulle-pied { text-align: right; }
-.mp-ecrire .editor { background: var(--panel); }
+.bulle.moi .bulle-pied{text-align:right}
+.mp-ecrire .editor{background:var(--panel)}
 /* `.area` impose 130px, taille d'un premier message de forum. Une reponse de
- * messagerie est courte : la zone doit tenir dans l'ecran sous la conversation,
- * pas la repousser hors de vue. Specificite (0,2,0) contre (0,1,0) — la regle
- * passe sans !important. */
-.mp-ecrire .area { min-height: 88px; }
-
-@media (max-width: 900px) {
-  .mp { grid-template-columns: 1fr; }
-  .bulle { max-width: 92%; }
-}
+ * messagerie est courte : specificite (0,2,0) contre (0,1,0), la regle passe
+ * sans !important. */
+.mp-ecrire .area{min-height:88px}
 
 /* ═══ PALIERS ═════════════════════════════════════════════════════════════
  *
