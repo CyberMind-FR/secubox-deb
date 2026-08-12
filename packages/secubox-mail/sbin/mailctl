@@ -225,6 +225,46 @@ cmd_user_repair() {
 # Fix Ports (container port checking)
 # ============================================================================
 
+cmd_webmail_config() {
+    # Reconcilie la configuration Roundcube d'un conteneur DEJA installe (#1014).
+    #
+    # POURQUOI UN VERBE ET PAS SEULEMENT LE GABARIT D'INSTALLATION : install.sh
+    # n'ecrit qu'au provisionnement. Le conteneur de gk2 existe depuis des mois,
+    # et un correctif qui ne profiterait qu'aux installations futures ne
+    # corrigerait rien de ce qui est signale.
+    #
+    # Le defaut : sans `username_domain`, un operateur qui saisit « gk2 » envoie
+    # « gk2 » a Dovecot, qui ne connait que « gk2@secubox.in ». La connexion
+    # echoue et le webmail parait casse alors qu'il fonctionne.
+    lxc_running "$CONTAINER" || { echo "conteneur a l'arret" >&2; return 1; }
+
+    # LE DOMAINE VIENT DE CE QUI EST SERVI, pas du declaratif : les deux
+    # divergent sur gk2 (declare gk2.secubox.in, servi secubox.in), et c'est le
+    # servi qui decide si une authentification passe.
+    # `lxc_attach` transmet ses mots tels quels a `lxc-attach ... --` : une
+    # commande composee doit donc passer par `sh -c`, sinon la chaine entiere
+    # est cherchee comme un nom de binaire.
+    local dom
+    dom=$(lxc_attach "$CONTAINER" sh -c 'postconf -h virtual_mailbox_domains' 2>/dev/null \
+          | tr ',' ' ' | awk '{print $1}')
+    [ -n "$dom" ] || { echo "domaine servi introuvable" >&2; return 1; }
+
+    # Idempotent : on remplace la ligne si elle existe, on l'ajoute sinon.
+    # Deux lignes `username_domain` laisseraient la valeur effective dependante
+    # de l'ordre de lecture.
+    lxc_attach "$CONTAINER" sh -c "
+        f=/etc/roundcube/config.inc.php.local
+        [ -f \$f ] || exit 1
+        if grep -q \"username_domain\" \$f; then
+            sed -i \"s|^.*username_domain.*\$|\\\$config['username_domain'] = '$dom';|\" \$f
+        else
+            printf \"\\\$config['username_domain'] = '%s';\\n\" '$dom' >> \$f
+        fi
+    " || { echo "ecriture refusee" >&2; return 1; }
+
+    echo "username_domain = $dom"
+}
+
 cmd_fix_ports() {
     if ! lxc_running "$CONTAINER"; then
         error "Mail container not running"
@@ -940,6 +980,7 @@ case "${1:-}" in
     # Diagnostics
     logs)        shift; cmd_logs "$@" ;;
     fix-ports)   cmd_fix_ports ;;
+    webmail-config) cmd_webmail_config ;;
     sync)        cmd_sync ;;
     # Help
     help|--help|-h|'') show_help ;;
