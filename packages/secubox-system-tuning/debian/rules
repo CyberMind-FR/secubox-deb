@@ -8,3 +8,4 @@ override_dh_auto_install:
 	install -d debian/secubox-system-tuning/etc/secubox/tuning
 	install -m 644 etc/secubox/tuning/config.toml debian/secubox-system-tuning/etc/secubox/tuning/
 	install -m 644 etc/secubox/tuning/lxc-memory-high.toml debian/secubox-system-tuning/etc/secubox/tuning/
+	install -m 644 etc/secubox/tuning/lxc-cpu.toml debian/secubox-system-tuning/etc/secubox/tuning/
