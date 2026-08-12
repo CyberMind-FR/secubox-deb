@@ -117,3 +117,62 @@ def test_un_repertoire_illisible_ne_casse_pas_la_generation(monkeypatch, tmp_pat
 
     monkeypatch.setattr(main, "NGINX_ENABLED_DIR", tmp_path / "inexistant")
     assert main.domaines_deja_servis() == {}
+
+
+# ── A egalite, l'intention l'emporte sur le defaut ────────────────────────
+
+def test_un_domaine_declare_l_emporte_sur_un_domaine_herite(monkeypatch, tmp_path):
+    """LE CAS DE `zem` / `zemialos`.
+
+    `zemialos` ECRIT `zem.gk2.secubox.in` dans son site.json et porte un
+    index.html ; `zem` ne fait qu'HERITER du nom de son repertoire et n'a pas
+    d'index. C'est pourtant `zem` qui gagnait — par ordre de scan — et le
+    domaine repondait 403.
+
+    Un domaine ecrit est une intention ; un domaine herite n'est qu'un defaut.
+    """
+    import json
+
+    from api import main
+
+    zem = tmp_path / "sites" / "zem"
+    (zem / "public").mkdir(parents=True)
+    zemialos = tmp_path / "sites" / "zemialos"
+    (zemialos / "public").mkdir(parents=True)
+    (zemialos / "public" / "index.html").write_text("<html>zemialos</html>")
+    (zemialos / "site.json").write_text(json.dumps({"domain": "zem.gk2.secubox.in"}))
+
+    s = [{"name": "zem", "domain": "zem.gk2.secubox.in",
+          "directory": str(zem), "size": "4.0K"},
+         {"name": "zemialos", "domain": "zem.gk2.secubox.in",
+          "directory": str(zemialos), "size": "1.1M"}]
+    main, enabled = prepare(monkeypatch, tmp_path, s)
+    ok, n, msg = main.regenerate_nginx_config()
+    assert ok
+    conf = (enabled / "metablogizer").read_text()
+    assert "zemialos" in conf, "le site qui DECLARE le domaine a ete ecarte"
+    assert "zem (zem.gk2.secubox.in)" in msg, f"l'ecart n'est pas dit : {msg}"
+
+
+def test_deux_declarations_egales_restent_signalees(monkeypatch, tmp_path):
+    """LE CAS DE `tdah` / `rtdah` : les deux ECRIVENT le meme domaine.
+
+    C'est une vraie egalite — le choix appartient a l'operateur. Le code ne
+    doit pas la trancher en douce, seulement la rendre visible.
+    """
+    import json
+
+    from api import main
+
+    s = []
+    for nom in ("tdah", "rtdah"):
+        d = tmp_path / "sites" / nom
+        (d / "public").mkdir(parents=True)
+        (d / "public" / "index.html").write_text("<html>x</html>")
+        (d / "site.json").write_text(json.dumps({"domain": "tdah.gk2.secubox.in"}))
+        s.append({"name": nom, "domain": "tdah.gk2.secubox.in",
+                  "directory": str(d), "size": "2.9M"})
+    main, enabled = prepare(monkeypatch, tmp_path, s)
+    ok, n, msg = main.regenerate_nginx_config()
+    assert n == 1
+    assert "ecarte" in msg and "tdah" in msg

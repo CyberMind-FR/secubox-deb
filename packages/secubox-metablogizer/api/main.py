@@ -231,6 +231,19 @@ def regenerate_nginx_config() -> tuple:
     emis: dict = {}
     ecartes: list = []
 
+    # A EGALITE, L'INTENTION L'EMPORTE SUR LE DEFAUT (#1016). Deux sites
+    # peuvent reclamer le meme domaine : l'un parce qu'il l'ECRIT dans son
+    # site.json, l'autre parce qu'il HERITE du nom de son repertoire. Sans ce
+    # tri, c'est l'ordre de scan qui tranchait — et sur gk2 il donnait
+    # `zem.gk2.secubox.in` a un repertoire sans index.html, d'ou un 403 sur un
+    # domaine dont un autre site revendiquait explicitement la charge.
+    #
+    # Le tri est STABLE : deux sites egalement explicites gardent leur ordre,
+    # et leur conflit reste signale plutot que tranche en douce.
+    sites = sorted(
+        sites,
+        key=lambda s: 0 if sites_scan.domaine_est_declare(Path(s["directory"])) else 1)
+
     for site in sites:
         name = site["name"]
         domain = site["domain"]

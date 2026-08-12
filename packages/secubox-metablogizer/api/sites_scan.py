@@ -128,6 +128,24 @@ def read_site_config(site_dir: Path) -> dict:
 # de requête HTTP — voir la docstring du module.
 # ─────────────────────────────────────────────────────────────────────────
 
+def domaine_est_declare(site_dir: Path) -> bool:
+    """Le domaine vient-il d'un CHOIX, ou du nom du repertoire ? (#1016)
+
+    La distinction tranche les egalites. `zemialos` declare
+    `zem.gk2.secubox.in` dans son `site.json` ET porte un `index.html` ;
+    `zem` ne fait qu'heriter du nom de son repertoire et n'a pas d'index.
+    Les deux reclamaient le meme domaine, nginx gardait le premier — donc
+    `zem`, qui repondait 403.
+
+    Un domaine ECRIT est une intention ; un domaine HERITE n'est qu'un defaut.
+    A egalite, l'intention l'emporte.
+    """
+    try:
+        return bool((read_site_config(site_dir).get("domain", "") or "").strip())
+    except Exception:
+        return False
+
+
 def domaine_du_site(site_dir: Path, domain_suffix: str = DEFAULT_DOMAIN_SUFFIX) -> str:
     """Le domaine d'un site — UN SEUL calcul, partagé par tous les chemins.
 

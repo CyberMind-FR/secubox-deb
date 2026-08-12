@@ -1,4 +1,4 @@
-secubox-metablogizer (1.7.3-1~bookworm1) bookworm; urgency=medium
+secubox-metablogizer (1.7.4-1~bookworm1) bookworm; urgency=medium
 
   * La configuration unifiee ne redeclare plus un domaine deja servi par un
     autre vhost nginx active (ref #1016). Cinq domaines etaient declares deux
@@ -19,6 +19,14 @@ secubox-metablogizer (1.7.3-1~bookworm1) bookworm; urgency=medium
   * Le fichier genere s'exclut de sa propre comparaison : sans cela le second
     passage verrait ses propres blocs comme « deja servis ailleurs » et
     effacerait tout, transformant une regeneration idempotente en suppression.
+  * A EGALITE, L'INTENTION L'EMPORTE SUR LE DEFAUT (ref #1016). Deux sites
+    peuvent reclamer le meme domaine : l'un parce qu'il l'ECRIT dans son
+    site.json, l'autre parce qu'il HERITE du nom de son repertoire. C'etait
+    l'ordre de scan qui tranchait — et sur gk2 il donnait `zem.gk2.secubox.in`
+    a un repertoire sans index.html, d'ou un 403, alors qu'un autre site
+    revendiquait explicitement ce domaine et portait la page. Le tri est
+    stable : deux sites egalement explicites gardent leur ordre et leur conflit
+    reste signale plutot que tranche en douce.
   * Les tests du module etaient bloques a la collecte hors board (une config
     illisible n'est pas une config absente). 153 tests passent.
 
