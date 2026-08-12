@@ -17,11 +17,15 @@
 - **`secubox-metablogizer 1.7.2`** (#1012) — la publication écrivait un
   `server_name` en `.local` **et** réclamait le port 80. `aletheia` sert enfin
   son vrai contenu.
+- **`secubox-mail 2.5.3`** (#1014, #1013) — panneau mutilé par un 500, lien
+  webmail sur `localhost`, domaine d'adresses confondu avec celui des services,
+  Roundcube sans `username_domain`. **73 tests, contre 0 exécutable avant.**
+  **Validé par l'utilisateur : mail, webmail et Nextcloud Mail fonctionnent.**
 
 ### ⬜ Next Up
 
-- **#1013 — Nextcloud : application Mail.** Signalé, **pas encore instruit** :
-  le symptôme précis reste à relever.
+- **ManageSieve (port 4190) injoignable** — pas de filtres de messages depuis
+  Nextcloud. Défaut distinct, relevé en instruisant #1013.
 - **`files-141`** rend un 403 : le site n'a pas d'`index.html`, seulement un
   `zemialos-multivers.html`. Reliquat d'envoi probable — à supprimer ou à doter
   d'une page d'accueil, décision utilisateur.

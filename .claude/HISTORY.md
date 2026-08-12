@@ -3,6 +3,61 @@
 
 ---
 
+## 2026-08-12 (fin) — Le mail : un panneau mutile, un lien qui ment, deux domaines confondus
+
+`secubox-mail 2.5.3` — deploye sur gk2, publie sur apt.secubox.in.
+**Valide par l'utilisateur : mail, webmail et Nextcloud Mail fonctionnent.**
+
+Signale comme « le lien dans la webui admin du mail est localhost, le webui est
+incomplet ou non fonctionnel ». Quatre defauts reels derriere ce constat, tous
+passes inapercus **parce que la page affichait quelque chose plutot que rien**.
+
+### Le panneau mutile par une permission
+
+`/status` rendait 500 : `lxc_exists()` faisait un `stat` sur
+`<conteneur>/rootfs`, que le compte du panneau ne peut pas atteindre
+(`/data/lxc/mail` est en `drwxrwx--- 100000:100000`). L'exception remontait et
+faisait tomber l'endpoint ENTIER — source principale de la page.
+
+**Ce n'etait pas un cas limite mais le cas nominal** : le repertoire d'un
+conteneur non privilegie n'est jamais lisible par le panneau.
+
+### Le lien qui affichait une adresse et en visitait une autre
+
+Il montrait l'adresse publique et naviguait vers `http://localhost:<port>` —
+dans le navigateur de l'operateur, la machine de l'operateur. Structurellement
+incapable de fonctionner.
+
+### Deux domaines confondus sous un seul nom
+
+`DOMAIN` (`gk2.secubox.in`) est celui des NOMS DE SERVICE — correct. Le domaine
+des ADRESSES est autre chose : Postfix ne sert que `secubox.in`, et la seule
+boite est `gk2@secubox.in`. Le panneau annoncait donc des adresses inexistantes,
+et l'autoconfiguration Thunderbird — indexee par le domaine de l'adresse saisie
+— ne pouvait JAMAIS correspondre. Le domaine est desormais lu dans `vmailbox`.
+
+### Roundcube sans `username_domain`
+
+Saisir « gk2 » envoyait « gk2 » a Dovecot, qui ne connait que « gk2@secubox.in ».
+La connexion echouait et le webmail paraissait casse alors qu'il repondait 200.
+Nouveau verbe `mailctl webmail-config`, idempotent, qui reconcilie un conteneur
+DEJA installe — le gabarit d'installation seul n'aurait servi qu'aux futures.
+
+### Au passage
+
+Les tests du module etaient **tous** bloques a la collecte hors board : une
+config illisible n'est pas une config absente. **73 tests passent, contre 0
+executable.**
+
+**#1013 (Nextcloud Mail)** : ce n'etait ni un routage — les trois chemins
+atteignent le meme Dovecot — ni l'application, mais le mot de passe stocke du
+compte. Ressaisi par l'utilisateur, valide.
+
+**Reste** : ManageSieve (4190) injoignable, donc pas de filtres depuis
+Nextcloud. Defaut distinct.
+
+---
+
 ## 2026-08-12 — Bornes CPU generalisees, et la publication qui servait un autre site
 
 Trois correctifs, deployes sur gk2 et publies sur apt.secubox.in.
