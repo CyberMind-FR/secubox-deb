@@ -1,3 +1,45 @@
+secubox-mail (2.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Distingue le domaine des ADRESSES de celui des noms de service (ref #1014).
+    Sur gk2, mail.toml declare `gk2.secubox.in` alors que Postfix ne sert que
+    `secubox.in` et que la seule boite est `gk2@secubox.in` : le panneau
+    annoncait donc des adresses qui n'existent pas, et l'autoconfiguration
+    Thunderbird — indexee par le domaine de l'adresse saisie — ne pouvait
+    JAMAIS correspondre. Le domaine des adresses est desormais lu dans
+    `vmailbox`, la table des boites reelles, lisible depuis l'hote sans
+    privilege. Repli sur le declare si elle manque.
+  * Roundcube recoit `username_domain`. Sans lui, saisir « gk2 » envoyait
+    « gk2 » a Dovecot, qui ne connait que « gk2@secubox.in » : la connexion
+    echouait et le webmail paraissait casse alors qu'il fonctionnait. Nouveau
+    verbe `mailctl webmail-config` pour reconcilier un conteneur DEJA installe
+    — le gabarit d'installation seul n'aurait profite qu'aux futures
+    installations. `lxc_attach` transmet ses mots tels quels a `lxc-attach --` :
+    une commande composee doit passer par `sh -c`, sinon la chaine entiere est
+    cherchee comme un nom de binaire — le premier jet du verbe echouait ainsi.
+  * Le panneau n'est plus mutile par une erreur de permission (ref #1014).
+    `lxc_exists()` faisait un `stat` sur `<conteneur>/rootfs` ; le repertoire
+    d'un conteneur non privilegie appartient a sa racine mappee et n'est pas
+    traversable par `secubox` (`/data/lxc/mail` est en `drwxrwx---`). La
+    `PermissionError` remontait jusqu'a faire tomber l'endpoint `/status`
+    ENTIER — source principale de la page, d'ou une interface a moitie peuplee
+    qui paraissait « incomplete ». Ce n'etait pas un cas limite mais le cas
+    nominal. La sonde interroge desormais le repertoire du conteneur, lisible,
+    et ne leve jamais.
+  * Le lien webmail mene la ou il dit. Il AFFICHAIT l'adresse publique et
+    NAVIGUAIT vers `local_url`, c'est-a-dire `http://localhost:<port>` : dans
+    le navigateur de l'operateur, la machine de l'operateur — jamais la board.
+    Le clic ne menait nulle part alors que le texte promettait le webmail. Les
+    deux liens de la page partagent maintenant le meme calcul, pour qu'ils ne
+    puissent plus diverger.
+  * `local_url` n'annonce plus `localhost` mais l'adresse du conteneur, aux
+    deux endroits ou l'API la produisait.
+  * Les tests du module etaient TOUS bloques a la collecte hors board : une
+    config illisible n'est pas une config absente, et `secubox_core.config`
+    ouvrait sans garde un fichier que `Path.exists()` disait present. Le
+    conftest pre-remplit desormais le cache. 68 tests passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 15:05:00 +0200
+
 secubox-mail (2.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

@@ -551,9 +551,18 @@
             accessData = d;
             const domain = d.domain || 'example.com';
             const host = d.mail_server || `mail.${domain}`;
-            document.getElementById('webmail-url').textContent = d.webmail?.url || `https://webmail.${domain}`;
-            document.getElementById('webmail-url').href = d.webmail?.local_url || d.webmail?.url || '#';
-            document.getElementById('external-open').href = d.webmail?.url || d.webmail?.local_url || '#';
+            // LE LIEN MENE LA OU IL DIT (#1014). Il affichait l'adresse
+            // publique et naviguait vers `local_url` — c'est-a-dire, avant
+            // correction, `http://localhost:<port>` : dans le navigateur de
+            // l'operateur, la machine de l'operateur. Le clic ne menait nulle
+            // part alors que le texte promettait le webmail.
+            const webmailUrl = d.webmail?.url || `https://webmail.${domain}`;
+            document.getElementById('webmail-url').textContent = webmailUrl;
+            document.getElementById('webmail-url').href = webmailUrl;
+            // Meme adresse que le lien ci-dessus : deux calculs separes pour
+            // la meme destination finissent par diverger, et c'est ainsi que
+            // l'un des deux s'est mis a pointer sur localhost.
+            document.getElementById('external-open').href = webmailUrl;
             document.getElementById('imap-url').textContent = `${host}:993 (SSL) · ${host}:143 (STARTTLS)`;
             document.getElementById('smtp-url').textContent = `${host}:587 (STARTTLS) · ${host}:465 (SSL)`;
             document.getElementById('autoconfig-url').textContent = d.apps?.thunderbird || '-';

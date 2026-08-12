@@ -40,6 +40,41 @@ MAIL_CONTAINER = CONTAINER
 WEBMAIL_CONTAINER = CONTAINER
 DOMAIN = config.get("domain", "secubox.local")
 HOSTNAME = config.get("hostname", "mail")
+
+
+def _domaine_des_adresses() -> str:
+    """Le domaine APRÈS l'arobase — pas celui des noms de service (#1014).
+
+    DEUX NOTIONS ÉTAIENT CONFONDUES SOUS UN SEUL NOM.
+
+    `DOMAIN` (`gk2.secubox.in`) est le domaine des *noms de service* : c'est
+    sous lui que vivent `webmail.…`, `autoconfig.…`, `mail.…`, et il est
+    correct — `webmail.gk2.secubox.in` répond.
+
+    Le domaine des *adresses* est autre chose. Sur gk2, Postfix ne sert que
+    `secubox.in` et la seule boîte est `gk2@secubox.in`. Les annoncer sous
+    `@gk2.secubox.in` désignait des adresses qui n'existent pas — et
+    l'autoconfiguration Thunderbird, indexée par le domaine de l'adresse
+    saisie, ne pouvait alors JAMAIS correspondre.
+
+    On lit donc la vérité : `vmailbox`, la table des boîtes réelles. Elle est
+    lisible depuis l'hôte (le volume de données, pas le conteneur), ce qui
+    compte — le panneau n'est pas privilégié et ne peut pas interroger Postfix.
+
+    Repli sur le domaine déclaré si la table est absente ou illisible : mieux
+    vaut une valeur discutable qu'une page vide.
+    """
+    try:
+        for ligne in (DATA_PATH / "config" / "vmailbox").read_text().splitlines():
+            adresse = ligne.split()[0] if ligne.split() else ""
+            if "@" in adresse and not adresse.startswith("#"):
+                return adresse.split("@", 1)[1]
+    except OSError:
+        pass
+    return DOMAIN
+
+
+MAIL_DOMAIN = _domaine_des_adresses()
 LXC_IP = config.get("lxc_ip", config.get("mail_ip", "10.100.0.10"))
 LXC_BRIDGE = config.get("lxc_bridge", "br-lxc")
 LXC_GATEWAY = config.get("lxc_gateway", "10.100.0.1")
@@ -75,8 +110,27 @@ def lxc_running(name: str) -> bool:
 
 
 def lxc_exists(name: str) -> bool:
-    """Check if LXC container exists"""
-    return (LXC_PATH / name / "rootfs").exists()
+    """Le conteneur est-il installé ? (#1014)
+
+    ON SONDE LE RÉPERTOIRE DU CONTENEUR, PAS SON `rootfs`. Le répertoire d'un
+    conteneur non privilégié appartient à sa racine mappée et n'est pas
+    traversable par `secubox` — `/data/lxc/mail` est en `drwxrwx---
+    100000:100000`. Un `stat` sur `rootfs` y lève `PermissionError`, et comme
+    rien ne la rattrapait, l'exception remontait jusqu'à faire tomber
+    l'endpoint `/status` **entier** : le panneau se peuplait à moitié et
+    paraissait « incomplet ».
+
+    Ce n'était pas un cas limite mais le cas NOMINAL — le répertoire d'un
+    conteneur n'est jamais lisible par le panneau.
+
+    Le `try` n'est pas décoratif non plus : une permission peut changer, un
+    point de montage disparaître. Savoir si un conteneur est installé ne vaut
+    jamais de perdre tout le reste de la page.
+    """
+    try:
+        return (LXC_PATH / name).is_dir()
+    except OSError:
+        return False
 
 
 def lxc_attach(name: str, command: str, timeout: int = 30) -> tuple:
@@ -241,13 +295,25 @@ async def get_access():
 
     return {
         "domain": DOMAIN,
+        # Le domaine des ADRESSES, distinct de celui des noms de service
+        # (#1014). Sur gk2 le declaratif dit `gk2.secubox.in` alors que Postfix
+        # ne sert que `secubox.in` : annoncer le premier decrivait des adresses
+        # qui n'existent pas.
+        "mail_domain": MAIL_DOMAIN,
         "mail_server": fqdn,
         "imap": {"host": fqdn, "port": 993, "ssl": True, "starttls_port": 143},
         "smtp": {"host": fqdn, "port": 587, "ssl": False, "starttls": True, "ssl_port": 465},
         "pop3": {"host": fqdn, "port": 995, "ssl": True},
+        # `local_url` NE PEUT PAS ETRE `localhost` (#1014). Cette valeur est
+        # consommee par le panneau, qui s'execute dans le navigateur de
+        # l'operateur : `localhost` y designe SA machine, jamais la board. Le
+        # lien menait donc systematiquement dans le vide, tout en affichant
+        # l'adresse publique — on lisait une adresse et on en visitait une
+        # autre. L'adresse du conteneur, elle, veut au moins dire quelque chose
+        # depuis le reseau de la board.
         "webmail": {
             "url": f"https://webmail.{DOMAIN}",
-            "local_url": f"http://localhost:{WEBMAIL_PORT}",
+            "local_url": f"http://{WEBMAIL_IP}:{WEBMAIL_PORT}",
         },
         "ssl_enabled": ssl_enabled,
         "apps": {
@@ -271,10 +337,14 @@ async def thunderbird_autoconfig():
 
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <clientConfig version="1.1">
-  <emailProvider id="{DOMAIN}">
-    <domain>{DOMAIN}</domain>
-    <displayName>{DOMAIN} Mail</displayName>
-    <displayShortName>{DOMAIN}</displayShortName>
+  <!-- L'identifiant et le domaine sont ceux des ADRESSES, pas des noms de
+       service (#1014). Thunderbird cherche cette fiche par le domaine de
+       l'adresse saisie : annoncer `gk2.secubox.in` alors que les boites sont
+       en `@secubox.in` la rendait introuvable, donc inutile. -->
+  <emailProvider id="{MAIL_DOMAIN}">
+    <domain>{MAIL_DOMAIN}</domain>
+    <displayName>{MAIL_DOMAIN} Mail</displayName>
+    <displayShortName>{MAIL_DOMAIN}</displayShortName>
 
     <incomingServer type="imap">
       <hostname>{fqdn}</hostname>
@@ -664,7 +734,9 @@ async def webmail_status():
         "installed": installed,
         "running": running,
         "url": f"https://webmail.{DOMAIN}" if running else None,
-        "local_url": f"http://localhost:{WEBMAIL_PORT}" if running else None,
+        # Meme raison qu'au-dessus (#1014) : `localhost`, dans le navigateur de
+        # l'operateur, designe la machine de l'operateur — jamais la board.
+        "local_url": f"http://{WEBMAIL_IP}:{WEBMAIL_PORT}" if running else None,
     }
 
 
