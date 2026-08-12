@@ -3,6 +3,30 @@
 
 ---
 
+## 2026-08-12 — PeerTube : le transcodage n'avait aucun plafond CPU (#1010)
+
+`secubox-peertube 1.3.1` — déployé sur gk2, publié sur apt.secubox.in.
+
+**Charge 113 → 63.** Deux `ffmpeg` tournaient sans borne (`cpu.max = max`), avec
+en prime `cpu.weight = 300` — trois fois la part normale en cas de contention.
+
+**Pourquoi la configuration de PeerTube ne suffisait pas** : `transcoding.threads: 1`
+et `transcoding.concurrency: 1` y étaient **déjà posés**. Le studio vidéo et le
+direct ont leurs propres réglages et y échappent. Seul le cgroup borne tout, y
+compris ce qu'une version future ajouterait.
+
+**Pourquoi pas l'unité systemd** : PeerTube sert le web et transcode dans le
+même `peertube.service`.
+
+La valeur (un cœur sur quatre) n'est définie que dans `lib/peertube/borne-cpu.sh` ;
+le gabarit d'installation l'appelle au lieu de la réécrire — deux copies de la
+même borne divergent, et c'est alors la réinstallation qui ramène l'ancienne.
+Le postinst réconcilie les conteneurs **déjà installés** et applique à chaud.
+
+**Reste à traiter** — même classe de problème : les plafonds CPU des 7 autres
+conteneurs (`gitea`, `mail`, `matrix`, `nextcloud`, `photoprism`, `streamlit`,
+`yacy`) sont posés **à la main sur la board**, sans propriétaire dans un paquet :
+absents d'une réinstallation, perdus au prochain provisionnement.
 ## 2026-08-11 (fin de journee) — Verification, 11 fusions de plus, et deux refus
 
 **VERIFICATION D'ABORD.** La bonne question n'etait pas « quelle branche est
