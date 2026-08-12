@@ -250,3 +250,46 @@ func TestUneReinitialisationVideEstRefusee(t *testing.T) {
 		t.Error("un mot de passe vide a ete pose")
 	}
 }
+
+func TestLaCoquilleRendSesTroisColonnesEtSaLigneDEtat(t *testing.T) {
+	// La disposition ne se verifie pas a l'oeil : un gabarit peut rendre du HTML
+	// valide et n'avoir aucune des zones attendues. Ce test fixe le CONTRAT de
+	// la coquille — c'est lui qui dira si une modification future la demonte.
+	srv, s := banc(t)
+	uid, _ := peuple(t, s)
+	jeton, _ := s.NewSession(uid, "", "")
+
+	// Sur un FIL, les trois colonnes sont presentes : le rail, la liste des
+	// fils voisins (c'est tout l'interet — on garde sa place en lisant), et la
+	// vue.
+	w := demande(t, srv, "GET", "/t/1", jeton, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("fil : code %d", w.Code)
+	}
+	corps := w.Body.String()
+	for _, zone := range []string{
+		`class="shell"`, `class="bar"`, `class="corps"`,
+		`class="rail"`, `class="liste"`, `class="vue"`,
+		`class="etat"`, `class="basse"`,
+	} {
+		if !strings.Contains(corps, zone) {
+			t.Errorf("zone absente de la coquille : %s", zone)
+		}
+	}
+	// Le fil ouvert est SIGNALE dans la liste : sans cela on ne sait pas ou
+	// l'on est parmi vingt titres qui se ressemblent.
+	if !strings.Contains(corps, `aria-current="page"`) {
+		t.Error("le fil ouvert n'est pas marque dans la liste")
+	}
+
+	// Une page SANS fils n'affiche pas de colonne creuse.
+	w = demande(t, srv, "GET", "/compte", jeton, nil)
+	if strings.Contains(w.Body.String(), `class="liste"`) {
+		t.Error("colonne de liste rendue sur une page qui n'a aucun fil")
+	}
+
+	// La ligne d'etat porte des FAITS, pas un slogan.
+	if !strings.Contains(corps, "non lus") || !strings.Contains(corps, "fils") {
+		t.Error("la ligne d'etat ne porte pas l'etat annonce")
+	}
+}

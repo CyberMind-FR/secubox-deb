@@ -236,6 +236,11 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 			p.Cat = c
 		}
 	}
+	// LES FILS VOISINS ALIMENTENT LA COLONNE DU MILIEU. Sans eux, ouvrir un fil
+	// viderait la liste et l'on perdrait sa place — c'est exactement ce que la
+	// disposition a trois colonnes existe pour eviter : on garde la liste sous
+	// les yeux en lisant.
+	p.Threads, _ = s.st.Threads(t.CategoryID, pub)
 	p.T, p.Titre = t, t.Title
 	s.rend(w, r, "thread", p)
 }

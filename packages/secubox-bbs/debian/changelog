@@ -1,3 +1,28 @@
+secubox-bbs (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Coquille a TROIS COLONNES, conforme a www/mockup-reference.html : rail,
+    liste des fils, vue — chacune defilant de son cote. On garde sa place dans
+    la liste en lisant un fil, ce qui etait le seul vrai avantage des premiers
+    BBS sur la plupart des interfaces d'aujourd'hui.
+  * Une colonne tombe a chaque palier : telephone la vue seule avec barre
+    basse, tablette et televiseur liste plus vue, ordinateur les trois. Le rail
+    reste atteignable par le bouton ☰ sur petit ecran, en surimpression.
+  * La colonne du milieu est PILOTEE PAR LES DONNEES : elle apparait des qu'une
+    page porte des fils et disparait sinon. Pas de liste dupliquee dans trois
+    gabarits — ecrite a trois endroits, elle divergerait a trois endroits.
+  * Lire un fil charge desormais les fils voisins : sans eux, ouvrir un fil
+    viderait la liste et l'on perdrait sa place.
+  * Ligne d'etat heritee des BBS : noeud, membre, nombre de fils, non-lus.
+    Seul ornement, et elle porte des faits.
+  * `100dvh` et non `100vh` : sur telephone la barre d'adresse se retracte et
+    `vh` reste fige sur la hauteur sans elle — la ligne d'etat passait sous le
+    pli.
+  * LES PALIERS SONT ECRITS EN FIN DE FEUILLE. Une media query n'ajoute aucune
+    specificite : placee avant les regles qu'elle corrige, elle est ecrasee.
+    Verifie par mutation — remis avant, le masquage du rail est bien annule.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 10:30:00 +0200
+
 secubox-bbs (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Panneau d'administration : la redirection vers /login.html porte desormais

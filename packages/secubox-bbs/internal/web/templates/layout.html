@@ -17,46 +17,114 @@
 <meta name="sbx-no-health-banner">
 <link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
 </head><body>
+
+<!-- COQUILLE A TROIS COLONNES (maquette de reference, www/mockup-reference.html).
+     Trois zones qui defilent CHACUNE DE LEUR COTE : on garde sa place dans la
+     liste en lisant un fil. C'est ce qui fait la sensation d'un poste de
+     travail plutot que d'une suite de pages — et la seule chose que les
+     premiers BBS faisaient mieux que la plupart des interfaces d'aujourd'hui.
+
+     Une colonne tombe a chaque palier ; les regles vivent dans bbs.css, APRES
+     les composants. -->
 <div class="shell">
-<nav class="rail">
-  <div class="brand">
-    <div class="mark">{{.Initiale}}</div>
-    <div><b>{{.Site}}</b><small>{{.Hote}}</small></div>
-  </div>
-  <div class="railhead">Actifs</div>
-  <a class="nav s791fdb1" {{if eq .Vue "forums"}}aria-current="page"{{end}} href="/"><span class="ic">◈</span>Forums<span class="n">{{.Stats.Threads}}</span></a>
-  {{if .Mod.Media}}<a class="nav s6622767" {{if eq .Vue "media"}}aria-current="page"{{end}} href="/media"><span class="ic">▶</span>Média</a>{{end}}
-  {{if .Mod.Biblio}}<a class="nav s09c487b" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">▤</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
-  {{if and .V.Connecte .Mod.MP}}<a class="nav sf017a92" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages{{if .NonLus}}<span class="n p-new">{{.NonLus}}</span>{{end}}</a>{{end}}
-  {{if .Mod.Billets}}<a class="nav sfe562e2" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">✦</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
-  {{if .Mod.Mastodon}}<a class="nav s6622767" {{if eq .Vue "mastodon"}}aria-current="page"{{end}} href="/mastodon"><span class="ic">🐘</span>Mastodon</a>{{end}}
 
-  <div class="railhead">Salons</div>
-  {{range .Cats}}<a class="nav sb908d7d" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
-
-  {{if .V.Connecte}}{{if .V.Sysop}}
-  <div class="railhead">Console</div>
-  <a class="nav sf017a92" href="/sysop"><span class="ic">⚿</span>Sysop</a>
-  {{end}}{{end}}
-</nav>
-<div>
-<header class="top">
-  <form class="search" method="get" action="/rechercher">
-    <span>⌕</span>
-    <input name="q" value="{{.Q}}" placeholder="Rechercher dans les fils…"
-           class="sc146614">
-  </form>
-  <div class="sp"></div>
-  {{if .V.Connecte}}
-    <a class="me s15cb695" href="/compte" title="Mon compte"><span class="av">{{.V.Initiales}}</span>{{.V.Handle}}
-      {{if .V.Sysop}}<span class="pill p-warn">sysop</span>{{end}}</a>
-    <form method="post" action="/logout" class="s6b8b63d">
-      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
-      <button class="iconbtn" type="submit">Quitter</button>
+  <header class="bar">
+    <button class="iconbtn menu-bascule" type="button"
+            aria-label="Afficher les salons" aria-expanded="false"
+            aria-controls="rail">☰</button>
+    <a class="marque" href="/"><span class="mark">{{.Initiale}}</span>{{.Site}}</a>
+    {{if .Cat.Slug}}<span class="chip">◆ {{.Cat.Title}}</span>{{end}}
+    <div class="sp"></div>
+    <form class="search" method="get" action="/rechercher">
+      <span aria-hidden="true">⌕</span>
+      <input name="q" value="{{.Q}}" placeholder="Rechercher…" aria-label="Rechercher dans les fils">
     </form>
-  {{else}}
-    <a class="btn primary" href="/login">Se connecter</a>
-  {{end}}
-</header>
-<main>{{template "corps" .}}</main>
-</div></div></body></html>{{end}}
+    {{if .V.Connecte}}
+      <a class="me" href="/compte" title="Mon compte"><span class="av">{{.V.Initiales}}</span><span class="me-nom">{{.V.Handle}}</span></a>
+      <form method="post" action="/logout" class="s6b8b63d">
+        <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <button class="iconbtn" type="submit" title="Quitter">⏻</button>
+      </form>
+    {{else}}
+      <a class="btn primary" href="/login">Se connecter</a>
+    {{end}}
+  </header>
+
+  <div class="corps">
+
+    <nav class="rail" id="rail" aria-label="Navigation principale">
+      <div class="railhead">Actifs</div>
+      <a class="nav" {{if eq .Vue "forums"}}aria-current="page"{{end}} href="/"><span class="ic">◈</span>Forums<span class="n">{{.Stats.Threads}}</span></a>
+      {{if .Mod.Media}}<a class="nav" {{if eq .Vue "media"}}aria-current="page"{{end}} href="/media"><span class="ic">▶</span>Média</a>{{end}}
+      {{if .Mod.Biblio}}<a class="nav" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">▤</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
+      {{if and .V.Connecte .Mod.MP}}<a class="nav" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉</span>Messages{{if .NonLus}}<span class="n p-new">{{.NonLus}}</span>{{end}}</a>{{end}}
+      {{if .Mod.Billets}}<a class="nav" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">✦</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
+      {{if .Mod.Mastodon}}<a class="nav" {{if eq .Vue "mastodon"}}aria-current="page"{{end}} href="/mastodon"><span class="ic">🐘</span>Mastodon</a>{{end}}
+
+      <div class="railhead">Salons</div>
+      {{range .Cats}}<a class="nav" href="/c/{{.Slug}}"><span class="ic">◆</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
+
+      {{if .V.Connecte}}{{if .V.Sysop}}
+      <div class="railhead">Console</div>
+      <a class="nav" href="/sysop"><span class="ic">⚿</span>Sysop</a>
+      {{end}}{{end}}
+    </nav>
+
+    <!-- COLONNE DU MILIEU, PILOTEE PAR LES DONNEES. Elle apparait des qu'une
+         page porte des fils — accueil, salon, lecture d'un fil — et disparait
+         sinon : compte, console et connexion n'ont pas de liste, et une colonne
+         creuse coute de la place sans rien apprendre.
+
+         Pas de duplication dans chaque gabarit : une liste ecrite a trois
+         endroits finit par diverger a trois endroits. -->
+    {{if .Threads}}
+    <div class="liste">
+      <div class="liste-tete">
+        <h2>{{if .Cat.Title}}{{.Cat.Title}}{{else}}Derniers fils{{end}}</h2>
+        <span class="cnt">{{len .Threads}}</span>
+      </div>
+      {{range .Threads}}
+      <a class="fil-item" href="/t/{{.ID}}"
+         {{if eq .ID $.T.ID}}aria-current="page"{{end}}>
+        <h3>{{.Title}}</h3>
+        <div class="meta">
+          {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>{{else}}<span class="pill p-local">local</span>{{end}}
+          {{if .Published}}<span class="pill p-billet">✦</span>{{end}}
+          {{if .Source}}<span class="pill p-src">{{.Source}}</span>{{end}}
+          <span>{{.Author}}</span><span>·</span><span>{{.Posts}} msg</span><span>·</span><span>{{date .LastPostAt}}</span>
+        </div>
+      </a>
+      {{end}}
+    </div>
+    {{end}}
+
+    <main class="vue">{{template "corps" .}}</main>
+  </div>
+
+  <!-- LIGNE D'ETAT — seul ornement assume, et elle porte des faits : ou l'on
+       est, qui l'on est, ce qui attend, et la version du schema. C'est
+       l'heritage direct de la barre d'etat des BBS. -->
+  <div class="etat">
+    <span>nœud <b>{{.Hote}}</b></span><span class="sep">│</span>
+    {{if .V.Connecte}}<span>membre <b>{{.V.Handle}}</b>{{if .V.Sysop}} · sysop{{end}}</span>
+    {{else}}<span>visiteur</span>{{end}}<span class="sep">│</span>
+    <span>◈ {{.Stats.Threads}} fils</span><span class="sep">│</span>
+    {{if .V.Connecte}}<span>✉ <b>{{.NonLus}}</b> non lus</span><span class="sep">│</span>{{end}}
+    <span class="vert">● en ligne</span>
+  </div>
+
+  <!-- Barre basse : TELEPHONE UNIQUEMENT (bbs.css la masque des la tablette).
+       Sur cinq pouces, le rail deroulant volerait la moitie de l'ecran ; une
+       barre de cinq cibles larges se manie au pouce. -->
+  <nav class="basse" aria-label="Navigation">
+    <a href="/" {{if eq .Vue "forums"}}aria-current="page"{{end}}><span class="ic">◈</span>Forums</a>
+    {{if .Mod.Media}}<a href="/media" {{if eq .Vue "media"}}aria-current="page"{{end}}><span class="ic">▶</span>Média</a>{{end}}
+    {{if and .V.Connecte .Mod.MP}}<a href="/mp" {{if eq .Vue "mp"}}aria-current="page"{{end}}><span class="ic">✉</span>Messages{{if .NonLus}}<span class="n p-new">{{.NonLus}}</span>{{end}}</a>{{end}}
+    {{if .Mod.Billets}}<a href="/billets" {{if eq .Vue "billets"}}aria-current="page"{{end}}><span class="ic">✦</span>Billets</a>{{end}}
+    {{if .V.Connecte}}<a href="/compte" {{if eq .Vue "compte"}}aria-current="page"{{end}}><span class="ic">👤</span>Compte</a>
+    {{else}}<a href="/login"><span class="ic">👤</span>Entrer</a>{{end}}
+  </nav>
+
+</div>
+<script src="/static/coquille.js" defer></script>
+</body></html>{{end}}
