@@ -1,3 +1,34 @@
+secubox-system-tuning (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Generalise les bornes CPU des conteneurs LXC (ref #1011). Nouveau fichier
+    declaratif /etc/secubox/tuning/lxc-cpu.toml et nouvelle phase
+    `secubox-tuning-apply cpu`, sur le modele exact des plafonds memoire :
+    application a chaud sur les conteneurs en marche (aucun redemarrage) et
+    persistance dans /data/lxc/<nom>/config.
+  * Sur 30 conteneurs, cinq seulement avaient une borne effective, trois
+    l'avaient ECRITE PUIS COMMENTEE (gitea, mail, nextcloud) et vingt-deux
+    n'en avaient aucune. Rien de tout cela n'etait ecrit par un paquet : une
+    reinstallation repartait sans aucun plafond.
+  * Ce qui etait borne n'est ni desserre ni resserre. Ce qui ne l'etait pas
+    recoit un garde-fou a deux coeurs sur quatre — assez haut pour ne jamais
+    gener l'usage courant, assez bas pour qu'un seul emballement ne puisse plus
+    affamer la board. Jellyfin recoit un coeur : il transcode, donc il presente
+    le mode de defaillance corrige en #1010.
+  * Les lignes en DOUBLE sont desormais repliees sur une seule. La
+    configuration de matrix portait deux `cpu.max`, 200000 puis 60000 : LXC
+    retient la derniere, donc l'intention de deux coeurs etait morte sans que
+    rien ne le signale. L'ancien `sed` reecrivait chaque ligne et laissait donc
+    les doublons — la phase memoire souffrait du meme defaut, elle est corrigee
+    par le meme chemin.
+  * `secubox-tuning-apply swap` (ou `cgroup`, ou `cpu`) sortait en erreur apres
+    avoir parfaitement fonctionne : sous `set -e`, le `[[ ... ]] && phase` final
+    rend 1 quand la phase est desactivee. Sortie explicite ajoutee.
+  * Les bornes commentees ne sont pas ressuscitees telles quelles : quelqu'un
+    les a retirees, la raison n'est pas connue. Elles recoivent le garde-fou
+    commun, plus large que ce qui etait ecrit, jamais plus etroit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 11:40:00 +0200
+
 secubox-system-tuning (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release — captures the gk2 RAM optimization applied by

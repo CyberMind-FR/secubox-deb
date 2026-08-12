@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# /usr/sbin/secubox-tuning-apply — apply swap + cgroup MemoryHigh tuning.
+# /usr/sbin/secubox-tuning-apply — apply swap + cgroup memory/CPU tuning.
 #
 # Idempotent. Reads config from /etc/secubox/tuning/.
 #
 # Usage:
-#   secubox-tuning-apply               # apply both swap and cgroup caps
+#   secubox-tuning-apply               # apply swap + memory caps + CPU caps
 #   secubox-tuning-apply swap          # swap only
-#   secubox-tuning-apply cgroup        # cgroup caps only
+#   secubox-tuning-apply cgroup        # memory caps only
+#   secubox-tuning-apply cpu           # CPU caps only
 #   secubox-tuning-apply --dry-run     # show what would be done
 
 set -euo pipefail
 
 CONFIG_FILE="/etc/secubox/tuning/config.toml"
 LXC_CAPS_FILE="/etc/secubox/tuning/lxc-memory-high.toml"
+LXC_CPU_FILE="/etc/secubox/tuning/lxc-cpu.toml"
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -28,12 +30,14 @@ err()  { echo -e "${RED}[fail  ]${NC} $*" >&2; }
 DRY_RUN=0
 DO_SWAP=1
 DO_CGROUP=1
+DO_CPU=1
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    swap)      DO_CGROUP=0 ;;
-    cgroup)    DO_SWAP=0 ;;
+    swap)      DO_CGROUP=0; DO_CPU=0 ;;
+    cgroup)    DO_SWAP=0;   DO_CPU=0 ;;
+    cpu)       DO_SWAP=0;   DO_CGROUP=0 ;;
     -h|--help)
       sed -n '1,/^set -/p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0
@@ -81,6 +85,51 @@ d = tomllib.loads(open('$file').read())
 for k in d.get('$table', {}):
     print(k)
 " 2>/dev/null
+}
+
+# conf_lxc <conteneur> — chemin de la config LXC, vide si le conteneur n'existe
+# pas. Les deux emplacements sont essayes : /data sur les boards, /var/lib
+# ailleurs.
+conf_lxc() {
+  local ctn="$1" path
+  for path in "/data/lxc/${ctn}/config" "/var/lib/lxc/${ctn}/config"; do
+    [[ -f "$path" ]] && { echo "$path"; return 0; }
+  done
+  echo ""
+}
+
+# persiste_cle <config> <cle> <valeur> — inscrit `cle = valeur`, EN UNE SEULE
+# LIGNE.
+#
+# LE REPLI DES DOUBLONS N'EST PAS COSMETIQUE. La configuration de `matrix`
+# portait deux `lxc.cgroup2.cpu.max` : 200000 puis 60000. LXC retient la
+# derniere, donc l'intention de deux coeurs etait morte sans que rien ne le
+# signale — on lisait 200000 en haut du fichier et le conteneur tournait a 0,6.
+# Un `sed` de remplacement ne suffit pas : il reecrit CHAQUE ligne, et laisse
+# donc deux lignes identiques, prete a diverger de nouveau au prochain
+# passage a la main.
+#
+# La cle est un motif litteral (pas une regexp) : les points de
+# `lxc.cgroup2.cpu.max` sont echappes ici, pas dans l'appelant.
+persiste_cle() {
+  local conf="$1" cle="$2" val="$3"
+  local motif; motif=$(printf '%s' "$cle" | sed 's/\./\\./g')
+
+  # Ecriture par fichier temporaire puis renommage : une config LXC tronquee
+  # par une interruption laisse le conteneur non demarrable.
+  local tmp="${conf}.tuning-tmp"
+  if grep -qE "^${motif}[[:space:]]*=" "$conf"; then
+    # On garde la PREMIERE occurrence a sa place — l'ordre du fichier reste
+    # lisible — et on efface les suivantes.
+    awk -v motif="^${motif}[[:space:]]*=" -v ligne="${cle} = ${val}" '
+      $0 ~ motif { if (!vu++) print ligne; next }
+      { print }
+    ' "$conf" > "$tmp"
+  else
+    cp "$conf" "$tmp"
+    printf '%s = %s\n' "$cle" "$val" >> "$tmp"
+  fi
+  mv "$tmp" "$conf"
 }
 
 apply_swap() {
@@ -168,23 +217,15 @@ apply_cgroup() {
     fi
 
     # (2) persistent LXC config edit. Look in both standard and /data paths.
-    lxc_conf=""
-    for path in "/data/lxc/${ctn}/config" "/var/lib/lxc/${ctn}/config"; do
-      if [[ -f "$path" ]]; then
-        lxc_conf="$path"
-        break
-      fi
-    done
+    lxc_conf=$(conf_lxc "$ctn")
     if [[ -n "$lxc_conf" ]]; then
       if [[ $DRY_RUN -eq 1 ]]; then
         printf " + DRY-RUN: would set memory.high=%s in %s\n" "$cap" "$lxc_conf"
       else
-        # Replace existing memory.high line if present, otherwise append.
-        if grep -q "^lxc\.cgroup2\.memory\.high\s*=" "$lxc_conf"; then
-          sed -i "s|^lxc\.cgroup2\.memory\.high\s*=.*|lxc.cgroup2.memory.high = ${cap}|" "$lxc_conf"
-        else
-          echo "lxc.cgroup2.memory.high = ${cap}" >> "$lxc_conf"
-        fi
+        # Passe par persiste_cle : l'ancien `sed` reecrivait CHAQUE ligne
+        # correspondante et laissait donc les doublons en place — le defaut qui
+        # a tue l'intention de deux coeurs sur `matrix` cote CPU.
+        persiste_cle "$lxc_conf" "lxc.cgroup2.memory.high" "$cap"
         printf " + persisted in %s\n" "$lxc_conf"
         persisted=$((persisted+1))
       fi
@@ -196,7 +237,71 @@ apply_cgroup() {
   ok "cgroup caps: $applied runtime + $persisted persisted + $missed missed"
 }
 
-log "secubox-tuning-apply (dry_run=$DRY_RUN, swap=$DO_SWAP, cgroup=$DO_CGROUP)"
+# apply_cpu — plafond CPU dur par conteneur (#1011).
+#
+# POURQUOI UN PLAFOND EN PLUS DE `cpu.idle` ET `cpu.weight`. Ces deux-la
+# repartissent le CPU quand il est DISPUTE. Ils ne bornent rien quand un seul
+# conteneur s'emballe : deux ffmpeg de transcodage PeerTube, prioritaires et
+# sans plafond, ont porte la charge de gk2 a 113 (#1010). La repartition
+# existante n'est pas touchee ici — seul le plafond est ajoute.
+apply_cpu() {
+  log "cgroup cpu.max phase"
+  if [[ ! -f "$LXC_CPU_FILE" ]]; then
+    warn "$LXC_CPU_FILE not found, skipping"
+    return 0
+  fi
+
+  local containers
+  containers=$(toml_table_keys "$LXC_CPU_FILE" max)
+  if [[ -z "$containers" ]]; then
+    warn "no CPU caps defined in $LXC_CPU_FILE"
+    return 0
+  fi
+
+  local applied=0 persisted=0 absent=0
+  for ctn in $containers; do
+    local cap cgrp lxc_conf
+    cap=$(toml_get "$LXC_CPU_FILE" "max.$ctn")
+
+    # (1) A CHAUD. Le cgroup v2 accepte l'ecriture sur un conteneur en marche :
+    # redemarrer pour poser un plafond couperait le service, precisement ce que
+    # le plafond protege.
+    cgrp="/sys/fs/cgroup/lxc.payload.${ctn}"
+    if [[ -d "$cgrp" ]]; then
+      run "echo '$cap' > $cgrp/cpu.max"
+      applied=$((applied+1))
+      printf "  %-20s cpu.max=%-14s (a chaud)" "$ctn" "$cap"
+    else
+      printf "  %-20s cpu.max=%-14s (a l'arret)" "$ctn" "$cap"
+    fi
+
+    # (2) PERSISTANT. Sans cela le plafond disparait au prochain lxc-start.
+    lxc_conf=$(conf_lxc "$ctn")
+    if [[ -z "$lxc_conf" ]]; then
+      # Un conteneur declare mais jamais provisionne n'est pas une erreur : le
+      # fichier decrit la flotte cible, toutes les boards n'ont pas tout.
+      absent=$((absent+1))
+      printf " — non provisionne\n"
+    elif [[ $DRY_RUN -eq 1 ]]; then
+      printf " + DRY-RUN: cpu.max=%s dans %s\n" "$cap" "$lxc_conf"
+    else
+      persiste_cle "$lxc_conf" "lxc.cgroup2.cpu.max" "$cap"
+      persisted=$((persisted+1))
+      printf " + persiste\n"
+    fi
+  done
+
+  ok "cpu caps: $applied a chaud + $persisted persistes + $absent non provisionnes"
+}
+
+log "secubox-tuning-apply (dry_run=$DRY_RUN, swap=$DO_SWAP, cgroup=$DO_CGROUP, cpu=$DO_CPU)"
 [[ $DO_SWAP   -eq 1 ]] && apply_swap
 [[ $DO_CGROUP -eq 1 ]] && apply_cgroup
+[[ $DO_CPU    -eq 1 ]] && apply_cpu
+
+# SORTIE EXPLICITE. Sous `set -e`, un `[[ ... ]] && phase` final rend 1 quand la
+# phase est desactivee : `secubox-tuning-apply swap` sortait donc en erreur
+# apres avoir parfaitement fonctionne, et un postinst qui l'appelle aurait
+# echoue pour cette seule raison.
+exit 0
 ok "done"
