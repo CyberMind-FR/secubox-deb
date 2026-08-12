@@ -493,7 +493,7 @@
         async function fetchJson(url, opts = {}) {
             try {
                 const res = await fetch(url, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return { __error: '401' }; }
+                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return { __error: '401' }; }
                 let d = {};
                 try { d = await res.json(); } catch (e) { d = {}; }
                 if (!res.ok) return { __error: (d && (d.detail || d.error)) || ('HTTP ' + res.status) };

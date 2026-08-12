@@ -673,7 +673,7 @@
             try {
                 const res = await fetch(API + endpoint, opts);
                 if (res.status === 401) {
-                    window.location.href = '/login.html';
+                    window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
                     return { success: false, error: 'Unauthorized' };
                 }
                 return res.json();
