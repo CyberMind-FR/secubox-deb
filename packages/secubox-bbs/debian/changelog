@@ -1,3 +1,27 @@
+secubox-bbs (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * 504 A LA PUBLICATION corrige. billets RE-ENCODE chaque image : 3,9 s
+    mesures pour un PNG de 2 Mo sur cette board, et il faut les additionner.
+    Fait dans la requete de l'operateur, ce travail passe derriere un delai de
+    garde de 60 s — au troisieme media le navigateur recoit un 504 alors que le
+    billet EST publie. Constate : deux essais, deux 504, deux billets crees.
+  * Le transfert des medias et la reecriture du corps se font donc EN
+    ARRIERE-PLAN. Le billet existe deja et est lisible ; les medias le
+    rejoignent quelques secondes plus tard. Rendre la main tout de suite est
+    plus honnete que faire attendre pour un resultat qu'on n'affiche pas.
+  * Delai propre au transfert (120 s) : celui de la publication est a 15 s,
+    suffisant pour poser un billet, trop court pour un re-encodage — le
+    reutiliser aurait fait echouer les gros medias sans qu'on comprenne
+    pourquoi.
+  * `TransfereEtReecrit` est exportee pour rester TESTABLE : lancee en
+    goroutine elle serait invisible aux tests, et une logique non testable finit
+    non testee. Un test verifie ce qu'elle fait, un autre que `Publier` rend la
+    main sans l'attendre — celui-la echoue si le 504 revient.
+  * La version annoncee au demarrage suit celle du paquet ; elle etait restee a
+    0.6.1.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 16:20:00 +0200
+
 secubox-bbs (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * LES MEDIAS SUIVENT LE BILLET. Publier un fil laissait dans le corps des
