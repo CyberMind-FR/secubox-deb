@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -489,6 +491,11 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 		})
 	}
 
+	// LES PIECES JOINTES CITEES SONT RESOLUES ICI, pas dans le client : lui
+	// n'a pas acces au magasin, et c'est bien ainsi — il parle a billets, il
+	// ne lit pas nos fichiers.
+	f.Jointes = s.jointesCitees(f.Messages)
+
 	res, err := s.bil.Publier(f)
 	if err != nil {
 		// PAS 502. nginx intercepte 502/503/504 (`secubox-waking.conf`) et les
@@ -807,6 +814,41 @@ func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {
 // `no-cache` ne signifie pas « ne pas mettre en cache » mais « revalider avant
 // de reutiliser ». L'ETag, calcule sur le contenu, rend cette revalidation
 // gratuite : tant que le fichier n'a pas change, la reponse est un 304 vide.
+// jointesCitees rassemble les fichiers dont l'adresse apparait dans les corps.
+//
+// ON NE TRANSFERE QUE CE QUI EST CITE. Envoyer toute la bibliotheque de
+// l'auteur serait une fuite : un fichier depose pour un fil local se
+// retrouverait sur une page publique.
+func (s *Server) jointesCitees(msgs []billets.Message) []billets.Jointe {
+	vus := map[int64]bool{}
+	var out []billets.Jointe
+	for _, m := range msgs {
+		for _, ref := range refsJointes.FindAllStringSubmatch(m.Corps, -1) {
+			var id int64
+			fmt.Sscanf(ref[1], "%d", &id)
+			if id == 0 || vus[id] {
+				continue
+			}
+			vus[id] = true
+			fi, err := s.st.Fichier(id)
+			if err != nil {
+				continue // efface depuis : la reference restera en texte
+			}
+			b, err := os.ReadFile(s.st.CheminFichier(fi))
+			if err != nil {
+				continue
+			}
+			out = append(out, billets.Jointe{
+				Ref: ref[0], Nom: fi.Name, Mime: fi.Mime, Contenu: b,
+			})
+		}
+	}
+	return out
+}
+
+// La reference telle qu'elle est ecrite dans un corps : `/f/12` ou `/f/12.png`.
+var refsJointes = regexp.MustCompile(`/f/(\d+)(?:\.[a-z0-9]{2,5})?`)
+
 func (s *Server) statique(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		nom := strings.TrimPrefix(r.URL.Path, "/")

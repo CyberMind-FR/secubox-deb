@@ -111,7 +111,7 @@ func TestLaSessionDeLOperateurEstRelayee(t *testing.T) {
 	defer srv.Close()
 	c := &Client{Base: srv.URL, HTTP: srv.Client()}
 	_, err := c.Publier(Fil{Titre: "T", Public: true, Retour: "https://bbs/t/1",
-		Session: "jeton-de-session-secubox",
+		Session:  "jeton-de-session-secubox",
 		Messages: []Message{{Auteur: "a", Corps: "b", Public: true}}})
 	if err != nil {
 		t.Fatal(err)
@@ -196,5 +196,91 @@ func TestLAttributionPeutEtreDemandeeExplicitement(t *testing.T) {
 		}})
 	if !strings.Contains(recu, "marie") {
 		t.Error("l'attribution demandee n'a pas ete appliquee")
+	}
+}
+
+func TestLesMediasSuiventLeBilletEtLeCorpsEstReecrit(t *testing.T) {
+	// Le corps citait `/f/12.png` — un chemin qui ne designe RIEN chez billets,
+	// et que le BBS refuserait de toute facon a un lecteur anonyme. Le lecteur
+	// voyait donc le chemin en texte, sans image.
+	var recus []string
+	var corpsFinal string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == "POST" && r.URL.Path == "/admin/api/billets":
+			w.Write([]byte(`{"id":"B1","url":"/b/essai"}`))
+		case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/media"):
+			r.ParseMultipartForm(1 << 20)
+			f, h, err := r.FormFile("file")
+			if err != nil {
+				w.WriteHeader(400)
+				return
+			}
+			defer f.Close()
+			recus = append(recus, h.Filename)
+			w.Write([]byte(`{"success":true,"url":"/media/AAA.png"}`))
+		case r.Method == "PUT":
+			var d map[string]any
+			json.NewDecoder(r.Body).Decode(&d)
+			corpsFinal, _ = d["body"].(string)
+			w.Write([]byte(`{"success":true}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	c := &Client{Base: srv.URL, HTTP: srv.Client()}
+	r, err := c.Publier(Fil{
+		Session: "s", Titre: "Essai", Public: true, Retour: "/t/1",
+		Messages: []Message{{Auteur: "gk2", Corps: "voir /f/12.png", Public: true}},
+		Jointes:  []Jointe{{Ref: "/f/12.png", Nom: "photo.png", Mime: "image/png", Contenu: []byte("x")}},
+	})
+	if err != nil {
+		t.Fatalf("publication : %v", err)
+	}
+	if r.Medias != 1 {
+		t.Errorf("medias transferes = %d, attendu 1", r.Medias)
+	}
+	if len(recus) != 1 || recus[0] != "photo.png" {
+		t.Errorf("fichiers recus par billets : %v", recus)
+	}
+	// LE CORPS EST REECRIT : sans cela le transfert ne servirait a rien, le
+	// billet citant toujours une adresse morte.
+	if !strings.Contains(corpsFinal, "/media/AAA.png") {
+		t.Errorf("le corps n'a pas ete reecrit :\n%s", corpsFinal)
+	}
+	if strings.Contains(corpsFinal, "/f/12.png") {
+		t.Error("l'ancienne adresse subsiste dans le corps")
+	}
+}
+
+func TestUnMediaRefuseNAnnulePasLaPublication(t *testing.T) {
+	// billets ne re-encode pas tous les formats : un son peut etre refuse en
+	// 415. Perdre l'ecrit parce qu'une video n'a pas convenu serait un mauvais
+	// echange — mais le refus doit se SAVOIR.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/admin/api/billets" {
+			w.Write([]byte(`{"id":"B1","url":"/b/essai"}`))
+			return
+		}
+		w.WriteHeader(415)
+	}))
+	defer srv.Close()
+
+	c := &Client{Base: srv.URL, HTTP: srv.Client()}
+	r, err := c.Publier(Fil{
+		Session: "s", Titre: "Essai", Public: true, Retour: "/t/1",
+		Messages: []Message{{Auteur: "gk2", Corps: "ecouter /f/7.ogg", Public: true}},
+		Jointes:  []Jointe{{Ref: "/f/7.ogg", Nom: "son.ogg", Mime: "audio/ogg", Contenu: []byte("x")}},
+	})
+	if err != nil {
+		t.Fatalf("la publication a echoue a cause d'un media : %v", err)
+	}
+	if r.BilletID != "B1" {
+		t.Error("le billet n'a pas ete publie")
+	}
+	if r.MediasRefuses != 1 {
+		t.Errorf("refus remontes = %d, attendu 1", r.MediasRefuses)
 	}
 }
