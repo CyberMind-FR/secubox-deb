@@ -1,3 +1,21 @@
+secubox-bbs (0.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * L'avatar apparait PARTOUT ou un membre est nomme : messages d'un fil,
+    colonne des conversations, carnet, annuaire, interlocuteur ouvert, barre du
+    haut. Un avatar visible sur son seul compte ne sert a rien — c'est la ou
+    l'on croise les AUTRES qu'il porte l'information.
+  * AUCUNE REQUETE DE PLUS. `Author` faisait deja une lecture par message : elle
+    rend desormais le pseudonyme ET l'avatar. Les conversations, le carnet et
+    l'annuaire recuperent l'avatar par une colonne jointe a leur requete
+    existante. Une seconde lecture par ligne aurait double le nombre de requetes
+    d'un fil ou d'un annuaire — l'ajout innocent qui met une board a genoux.
+  * Un avatar SUPPRIME de la bibliotheque rend les initiales, pas une image
+    cassee : la jointure exige que le fichier vive encore.
+  * Fragment `vignette` partage plutot que six copies du meme ternaire — la
+    septieme aurait ete oubliee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 15:00:00 +0200
+
 secubox-bbs (0.7.1-1~bookworm1) bookworm; urgency=medium
 
   * PIECES JOINTES : images, sons, videos, dans les fils ET dans les messages.

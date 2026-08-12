@@ -42,6 +42,10 @@ type ConversationResume struct {
 	Dernier string
 	SentAt  int64
 	NonLus  int
+	// Avatar : joint a la requete existante, pas lu ligne par ligne. Une
+	// lecture par conversation aurait multiplie les requetes par le nombre
+	// d'interlocuteurs, pour une vignette.
+	Avatar int64
 }
 
 // Envoyer depose un message. Les trois refus — soi-meme, compte ferme, corps
@@ -119,12 +123,13 @@ func (s *Store) Conversations(moi int64) ([]ConversationResume, error) {
 		      FROM messages
 		     WHERE sender_id = ?1 OR recipient_id = ?1
 		)
-		SELECT f.autre, u.handle, u.display_name,
+		SELECT f.autre, u.handle, u.display_name, COALESCE(av.id, 0),
 		       (SELECT body FROM fil g WHERE g.autre = f.autre
 		         ORDER BY g.sent_at DESC, g.id DESC LIMIT 1),
 		       MAX(f.sent_at), SUM(f.non_lu)
 		  FROM fil f
 		  JOIN users u ON u.id = f.autre
+		  LEFT JOIN files av ON av.id = u.avatar_file AND av.deleted_at IS NULL
 		 WHERE f.autre IS NOT NULL
 		 GROUP BY f.autre
 		 ORDER BY MAX(f.sent_at) DESC, f.autre DESC`, moi)
@@ -135,7 +140,8 @@ func (s *Store) Conversations(moi int64) ([]ConversationResume, error) {
 	var out []ConversationResume
 	for rows.Next() {
 		var c ConversationResume
-		if err := rows.Scan(&c.ID, &c.Handle, &c.Nom, &c.Dernier, &c.SentAt, &c.NonLus); err != nil {
+		if err := rows.Scan(&c.ID, &c.Handle, &c.Nom, &c.Avatar, &c.Dernier,
+			&c.SentAt, &c.NonLus); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

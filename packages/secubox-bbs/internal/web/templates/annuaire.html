@@ -12,7 +12,7 @@
 <div class="card">
   {{range .Annuaire}}
   <div class="annuaire-ligne">
-    <span class="av">{{.Handle}}</span>
+    {{template "vignette" (vignette .Avatar .Handle)}}
     <div class="annuaire-qui">
       <b>{{.Display}}</b>
       <span class="d mono">{{.Handle}}</span>

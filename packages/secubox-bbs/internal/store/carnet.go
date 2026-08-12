@@ -26,6 +26,9 @@ type Contact struct {
 	Handle  string
 	Display string
 	Note    string
+	// Avatar : joint aux requetes existantes. Un annuaire sans visage se lit
+	// mal — c'est justement ce qu'on vient chercher en cherchant quelqu'un.
+	Avatar int64
 	// AuCarnet permet a la liste de resultats de savoir quel bouton montrer.
 	// Sans lui, l'annuaire proposerait d'ajouter ce qui y est deja.
 	AuCarnet bool
@@ -48,9 +51,10 @@ func (s *Store) Annuaire(moi int64, q string, borne int) ([]Contact, error) {
 	motif := "%" + strings.ToLower(strings.TrimSpace(q)) + "%"
 	rows, err := s.db.Query(`
 		SELECT u.id, u.handle, u.display_name, COALESCE(c.note,''),
-		       c.contact IS NOT NULL
+		       c.contact IS NOT NULL, COALESCE(av.id, 0)
 		  FROM users u
 		  LEFT JOIN carnet c ON c.contact = u.id AND c.proprietaire = ?1
+		  LEFT JOIN files av ON av.id = u.avatar_file AND av.deleted_at IS NULL
 		 WHERE u.disabled_at IS NULL
 		   AND u.id <> ?1
 		   AND (?2 = '%%' OR lower(u.handle) LIKE ?2 OR lower(u.display_name) LIKE ?2)
@@ -63,7 +67,8 @@ func (s *Store) Annuaire(moi int64, q string, borne int) ([]Contact, error) {
 	var out []Contact
 	for rows.Next() {
 		var c Contact
-		if err := rows.Scan(&c.ID, &c.Handle, &c.Display, &c.Note, &c.AuCarnet); err != nil {
+		if err := rows.Scan(&c.ID, &c.Handle, &c.Display, &c.Note, &c.AuCarnet,
+			&c.Avatar); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -74,9 +79,10 @@ func (s *Store) Annuaire(moi int64, q string, borne int) ([]Contact, error) {
 // Carnet rend les contacts enregistres, les plus recemment ajoutes d'abord.
 func (s *Store) Carnet(moi int64) ([]Contact, error) {
 	rows, err := s.db.Query(`
-		SELECT u.id, u.handle, u.display_name, COALESCE(c.note,'')
+		SELECT u.id, u.handle, u.display_name, COALESCE(c.note,''), COALESCE(av.id, 0)
 		  FROM carnet c
 		  JOIN users u ON u.id = c.contact
+		  LEFT JOIN files av ON av.id = u.avatar_file AND av.deleted_at IS NULL
 		 WHERE c.proprietaire = ? AND u.disabled_at IS NULL
 		 ORDER BY c.ajoute_at DESC`, moi)
 	if err != nil {
@@ -86,7 +92,7 @@ func (s *Store) Carnet(moi int64) ([]Contact, error) {
 	var out []Contact
 	for rows.Next() {
 		c := Contact{AuCarnet: true}
-		if err := rows.Scan(&c.ID, &c.Handle, &c.Display, &c.Note); err != nil {
+		if err := rows.Scan(&c.ID, &c.Handle, &c.Display, &c.Note, &c.Avatar); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

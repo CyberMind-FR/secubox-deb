@@ -43,10 +43,11 @@ type page struct {
 	Moi                       store.Compte
 	// Messagerie (#1008). Convs : la boite de reception ; Fil : la conversation
 	// ouverte ; Avec : l'interlocuteur ; Corres : les comptes joignables.
-	Convs  []store.ConversationResume
-	Fil    []store.Message
-	Avec   store.Compte
-	Corres []store.Compte
+	Convs      []store.ConversationResume
+	Fil        []store.Message
+	Avec       store.Compte
+	AvecAvatar int64
+	Corres     []store.Compte
 	// Carnet et Annuaire (#1008) : le carnet nomme ce qu'on utilise, l'annuaire
 	// est une recherche bornee. Voir internal/store/carnet.go.
 	Carnet   []store.Contact
@@ -76,6 +77,9 @@ type page struct {
 type postView struct {
 	store.Post
 	Author, Initiales, Body string
+	// Avatar de l'auteur, 0 s'il n'en a pas. Rendu par la MEME requete que le
+	// pseudonyme : afficher un visage ne coute pas une lecture de plus.
+	Avatar int64
 }
 
 type card struct {
@@ -234,8 +238,9 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 			// que ce message ne correspond plus a ce qui a ete ecrit.
 			body = "*(ce message diverge de l'index — prévenez le sysop)*"
 		}
-		a := s.st.Author(po.AuthorID)
-		p.Posts = append(p.Posts, postView{Post: po, Author: a, Initiales: initiales(a), Body: body})
+		a, av := s.st.AuteurEtAvatar(po.AuthorID)
+		p.Posts = append(p.Posts, postView{Post: po, Author: a,
+			Initiales: initiales(a), Body: body, Avatar: av})
 	}
 	for _, c := range p.Cats {
 		if c.ID == t.CategoryID {

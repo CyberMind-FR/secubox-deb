@@ -50,7 +50,7 @@
 <div class="card">
 {{range .Posts}}
   <article class="post{{if eq .Visibility "local"}} localnote{{end}}">
-    <div class="who"><div class="av">{{.Initiales}}</div><small>{{.Author}}</small></div>
+    <div class="who">{{template "vignette" (vignette .Avatar .Initiales)}}<small>{{.Author}}</small></div>
     <div class="bd">
       <div class="hd">{{date .CreatedAt}}
         {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>

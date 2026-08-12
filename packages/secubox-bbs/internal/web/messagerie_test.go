@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -399,5 +401,55 @@ func TestUnInterlocuteurActifNEstJamaisAnnonceFerme(t *testing.T) {
 	w = demande(t, srv, "GET", "/mp/parti", jGk2, nil)
 	if w.Code == http.StatusOK && strings.Contains(w.Body.String(), `action="/mp/envoyer"`) {
 		t.Error("formulaire d'envoi propose vers un compte ferme")
+	}
+}
+
+func TestLAvatarApparaitPartoutOuUnMembreEstNomme(t *testing.T) {
+	// Un avatar pose sur son compte et visible nulle part ailleurs ne sert a
+	// rien : c'est aux endroits ou l'on croise les AUTRES qu'il porte
+	// l'information — un fil, une conversation, l'annuaire.
+	srv, s, gk2, jGk2, amie, _ := bancMP(t)
+
+	// gk2 se donne un avatar.
+	f, err := s.DeposeFichier(gk2, "moi.png", "image/png",
+		bytes.NewReader(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PoseAvatar(gk2, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	attendu := fmt.Sprintf(`src="/f/%d"`, f.ID)
+
+	// 1. Dans un fil : gk2 est l'auteur des messages semes par `peuple`.
+	w := demande(t, srv, "GET", "/t/1", jGk2, nil)
+	if w.Code == http.StatusOK && !strings.Contains(w.Body.String(), attendu) {
+		t.Error("avatar absent du fil")
+	}
+
+	// 2. Dans l'annuaire, vu par quelqu'un d'autre.
+	jAmie2, _ := s.NewSession(amie, "", "")
+	w = demande(t, srv, "GET", "/mp/annuaire?q=gk2", jAmie2, nil)
+	if !strings.Contains(w.Body.String(), attendu) {
+		t.Error("avatar absent de l'annuaire")
+	}
+
+	// 3. Dans la colonne des conversations, apres un echange.
+	csrf := csrfDe(t, srv, "/mp/amie", jGk2)
+	demande(t, srv, "POST", "/mp/envoyer", jGk2, url.Values{
+		"csrf": {csrf}, "vers": {"amie"}, "corps": {"bonjour"},
+	})
+	w = demande(t, srv, "GET", "/mp", jAmie2, nil)
+	if !strings.Contains(w.Body.String(), attendu) {
+		t.Error("avatar absent de la colonne des conversations")
+	}
+
+	// 4. UN AVATAR SUPPRIME REND LES INITIALES, pas une image cassee.
+	if err := s.SupprimeFichier(gk2, f.ID); err != nil {
+		t.Fatal(err)
+	}
+	w = demande(t, srv, "GET", "/mp/annuaire?q=gk2", jAmie2, nil)
+	if strings.Contains(w.Body.String(), attendu) {
+		t.Error("l'avatar supprime est encore servi")
 	}
 }
