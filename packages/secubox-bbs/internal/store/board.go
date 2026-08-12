@@ -136,9 +136,28 @@ func (s *Store) ThreadByID(id int64) (Thread, error) {
 
 // Author rend le pseudonyme d'un auteur.
 func (s *Store) Author(id int64) string {
-	var h string
-	s.db.QueryRow(`SELECT handle FROM users WHERE id = ?`, id).Scan(&h)
+	h, _ := s.AuteurEtAvatar(id)
 	return h
+}
+
+// AuteurEtAvatar rend le pseudonyme ET l'identifiant d'avatar d'un auteur.
+//
+// UNE SEULE REQUETE, la ou `Author` en faisait deja une : afficher l'avatar ne
+// coute donc rien de plus. Une seconde lecture par message aurait double le
+// nombre de requetes d'un fil — c'est exactement le genre d'ajout innocent qui
+// finit par mettre une board a genoux.
+//
+// L'avatar n'est rendu que si le fichier vit encore : une image supprimee de la
+// bibliotheque doit rendre les initiales, pas une image cassee.
+func (s *Store) AuteurEtAvatar(id int64) (string, int64) {
+	var h string
+	var av int64
+	s.db.QueryRow(`
+		SELECT u.handle, COALESCE(f.id, 0)
+		  FROM users u
+		  LEFT JOIN files f ON f.id = u.avatar_file AND f.deleted_at IS NULL
+		 WHERE u.id = ?`, id).Scan(&h, &av)
+	return h, av
 }
 
 type Stats struct{ Threads, Posts, Files, Members, Billets int }

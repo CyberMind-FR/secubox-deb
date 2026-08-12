@@ -67,6 +67,7 @@ func (s *Server) mp(w http.ResponseWriter, r *http.Request) {
 	// ce que la liste contient.
 	if u, err := s.st.UserInfo(id); err == nil {
 		p.Avec = store.Compte{ID: u.ID, Handle: u.Handle, Display: u.Display, Role: u.Role}
+		_, p.AvecAvatar = s.st.AuteurEtAvatar(id)
 	} else {
 		// `UserInfo` ne rend pas les comptes desactives : la conversation reste
 		// lisible, mais l'envoi est retire plutot que d'echouer apres coup.

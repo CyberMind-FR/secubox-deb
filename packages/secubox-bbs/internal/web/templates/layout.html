@@ -1,3 +1,4 @@
+{{define "vignette"}}<span class="av">{{if .A}}<img src="/f/{{.A}}" alt="">{{else}}{{.I}}{{end}}</span>{{end}}
 {{define "layout"}}<!doctype html><html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{.Titre}} — {{.Site}}</title>
@@ -47,7 +48,7 @@
       <input name="q" value="{{.Q}}" placeholder="Rechercher…" aria-label="Rechercher dans les fils">
     </form>
     {{if .V.Connecte}}
-      <a class="me" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><span class="me-nom">{{.V.Handle}}</span></a>
+      <a class="me" href="/compte" title="Mon compte">{{template "vignette" (vignette .V.Avatar .V.Initiales)}}<span class="me-nom">{{.V.Handle}}</span></a>
       <form method="post" action="/logout" class="s6b8b63d">
         <input type="hidden" name="csrf" value="{{.V.CSRF}}">
         <button class="iconbtn" type="submit" title="Quitter">⏻</button>
@@ -104,7 +105,7 @@
       {{range .Convs}}
       <a class="fil-item conv" href="/mp/{{.Handle}}"
          {{if eq .Handle $.Avec.Handle}}aria-current="page"{{end}}>
-        <span class="av">{{.Handle}}</span>
+        {{template "vignette" (vignette .Avatar .Handle)}}
         <span class="conv-txt">
           <h3>{{.Nom}}</h3>
           <span class="apercu">{{.Dernier}}</span>
@@ -120,7 +121,7 @@
       {{range .Carnet}}
       <a class="fil-item conv" href="/mp/{{.Handle}}"
          {{if eq .Handle $.Avec.Handle}}aria-current="page"{{end}}>
-        <span class="av">{{.Handle}}</span>
+        {{template "vignette" (vignette .Avatar .Handle)}}
         <span class="conv-txt">
           <h3>{{.Display}}</h3>
           {{if .Note}}<span class="apercu">{{.Note}}</span>{{end}}
