@@ -119,7 +119,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	// silence — toutes les pages afficheraient alors le meme contenu.
 	fn := template.FuncMap{"rendu": Render, "date": humain, "taille": octets}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {

@@ -1,0 +1,51 @@
+{{define "corps"}}
+<div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
+{{if .Msg}}<div class="note m s42a6ced"><b>{{.Msg}}</b></div>{{end}}
+
+<form class="annuaire-recherche" method="get" action="/mp/annuaire">
+  <input name="q" value="{{.Q}}" placeholder="Pseudonyme ou nom…"
+         aria-label="Chercher un membre" autofocus>
+  <button class="btn primary" type="submit">Chercher</button>
+</form>
+
+{{if .Annuaire}}
+<div class="card">
+  {{range .Annuaire}}
+  <div class="annuaire-ligne">
+    <span class="av">{{.Handle}}</span>
+    <div class="annuaire-qui">
+      <b>{{.Display}}</b>
+      <span class="d mono">{{.Handle}}</span>
+      {{if .Note}}<span class="d">— {{.Note}}</span>{{end}}
+    </div>
+    <div class="annuaire-actions">
+      <a class="btn sm" href="/mp/{{.Handle}}">✉ Écrire</a>
+      <form method="post" action="/mp/carnet" class="s6b8b63d">
+        <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+        <input type="hidden" name="qui" value="{{.Handle}}">
+        <input type="hidden" name="retour" value="/mp/annuaire?q={{$.Q}}">
+        {{if .AuCarnet}}
+          <input type="hidden" name="action" value="retirer">
+          <button class="btn sm" type="submit" title="Retirer du carnet">★ Au carnet</button>
+        {{else}}
+          <button class="btn sm" type="submit" title="Ajouter au carnet">☆ Ajouter</button>
+        {{end}}
+      </form>
+    </div>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="card pad sb0455c2">
+  {{if .Q}}Aucun membre ne correspond à « {{.Q}} ».
+  {{else}}Aucun autre membre pour l'instant.{{end}}
+</div>
+{{end}}
+
+<div class="note v s92c18f6">
+  <b>Le carnet est un raccourci, pas une relation.</b>
+  Y mettre quelqu'un ne l'en informe pas et ne l'oblige à rien — c'est votre
+  carnet d'adresses, il ne regarde que vous. Les contacts enregistrés
+  apparaissent en tête de la colonne des conversations.
+</div>
+{{end}}

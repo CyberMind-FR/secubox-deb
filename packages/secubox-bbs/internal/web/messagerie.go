@@ -30,7 +30,11 @@ func (s *Server) mp(w http.ResponseWriter, r *http.Request) {
 	p.Intro = "Entre membres. Jamais repris dans un export."
 	p.Msg = r.URL.Query().Get("msg")
 	p.Err = r.URL.Query().Get("err")
-	p.Corres, _ = s.st.Correspondants(p.V.ID)
+	// LE CARNET REMPLACE LE MUR DE PASTILLES. `Correspondants` rendait TOUS les
+	// comptes ouverts : tenable a cinq membres, illisible a cinquante. Le
+	// carnet nomme ce qu'on utilise vraiment ; l'annuaire complet est une
+	// recherche, sur sa propre page.
+	p.Carnet, _ = s.st.Carnet(p.V.ID)
 
 	pseudo := strings.Trim(strings.TrimPrefix(r.URL.Path, "/mp"), "/")
 	if pseudo == "" {
@@ -51,20 +55,89 @@ func (s *Server) mp(w http.ResponseWriter, r *http.Request) {
 	}
 	s.st.MarquerLu(p.V.ID, id)
 	p.Fil, _ = s.st.Conversation(p.V.ID, id)
-	for _, c := range p.Corres {
-		if c.ID == id {
-			p.Avec = c
-		}
-	}
-	if p.Avec.ID == 0 {
-		// Correspondants exclut les comptes fermes : on garde la conversation
-		// lisible, mais l'interlocuteur est signale comme injoignable plutot
-		// que d'afficher un formulaire dont l'envoi echouerait.
+	// L'ETAT DE L'INTERLOCUTEUR SE DEMANDE, IL NE SE DEDUIT PAS D'UNE LISTE.
+	//
+	// Le premier jet le cherchait dans `Corres` — tous les comptes joignables —
+	// et concluait « compte ferme » quand il ne l'y trouvait pas. Le jour ou
+	// cette liste a ete remplacee par le CARNET, tout interlocuteur hors carnet
+	// s'est retrouve annonce comme ferme, avec un formulaire d'envoi retire.
+	// Constate sur cedre83, compte parfaitement actif.
+	//
+	// Une absence dans une liste ne prouve rien sur un compte : elle ne dit que
+	// ce que la liste contient.
+	if u, err := s.st.UserInfo(id); err == nil {
+		p.Avec = store.Compte{ID: u.ID, Handle: u.Handle, Display: u.Display, Role: u.Role}
+	} else {
+		// `UserInfo` ne rend pas les comptes desactives : la conversation reste
+		// lisible, mais l'envoi est retire plutot que d'echouer apres coup.
 		p.Avec = store.Compte{ID: id, Handle: pseudo, Display: pseudo, Disabled: true}
 	}
 	p.Titre = "Messages · " + p.Avec.Display
 	p.Convs, _ = s.st.Conversations(p.V.ID)
 	s.rend(w, r, "mp", p)
+}
+
+// annuaire : la recherche de membres, bornee.
+//
+// Sur SA PROPRE PAGE et non dans la colonne : une recherche qui rend des
+// resultats a besoin de place, et la colonne doit rester la ou l'on revient.
+func (s *Server) mpAnnuaire(w http.ResponseWriter, r *http.Request) {
+	p, _ := s.base(r, "mp")
+	if !p.V.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	p.Titre = "Annuaire"
+	p.Intro = "Chercher un membre, et le garder sous la main."
+	p.Q = strings.TrimSpace(r.URL.Query().Get("q"))
+	p.Msg = r.URL.Query().Get("msg")
+	p.Carnet, _ = s.st.Carnet(p.V.ID)
+	p.Convs, _ = s.st.Conversations(p.V.ID)
+	// 40 : de quoi parcourir sans faire defiler une page entiere. Au-dela, on
+	// affine la recherche — c'est le propre d'un annuaire.
+	p.Annuaire, _ = s.st.Annuaire(p.V.ID, p.Q, 40)
+	s.rend(w, r, "annuaire", p)
+}
+
+// mpCarnet ajoute ou retire un contact.
+func (s *Server) mpCarnet(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	id, err := s.st.UserByHandle(strings.TrimSpace(r.PostFormValue("qui")))
+	if err != nil {
+		http.Redirect(w, r, "/mp/annuaire?msg="+url.QueryEscape("membre inconnu"),
+			http.StatusSeeOther)
+		return
+	}
+	msg := "ajouté au carnet"
+	if r.PostFormValue("action") == "retirer" {
+		s.st.RetireDuCarnet(v.ID, id)
+		msg = "retiré du carnet"
+	} else {
+		s.st.AjouteAuCarnet(v.ID, id, r.PostFormValue("note"))
+	}
+	// ON REVIENT D'OU L'ON VIENT. Renvoyer toujours vers l'annuaire ferait
+	// perdre sa recherche a qui ajoutait un contact depuis une conversation.
+	retour := r.PostFormValue("retour")
+	if retour == "" || !strings.HasPrefix(retour, "/") || strings.HasPrefix(retour, "//") {
+		retour = "/mp/annuaire"
+	}
+	sep := "?"
+	if strings.Contains(retour, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, retour+sep+"msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (s *Server) mpEnvoyer(w http.ResponseWriter, r *http.Request) {

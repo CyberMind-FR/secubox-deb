@@ -327,3 +327,77 @@ func TestLaMessagerieUtiliseLaColonneDeLaCoquille(t *testing.T) {
 		t.Error("une seconde disposition est reapparue dans la vue")
 	}
 }
+
+func TestLAnnuaireRemplaceLeMurDePastilles(t *testing.T) {
+	// La colonne listait TOUS les comptes ouverts en pastilles : tenable a cinq
+	// membres, illisible a cinquante. Elle montre desormais le CARNET, et
+	// l'annuaire complet est une recherche sur sa propre page.
+	srv, s, _, jGk2, _, _ := bancMP(t)
+	for _, h := range []string{"paul", "pauline", "pierre"} {
+		s.CreateUser(h, h, store.RoleMember)
+	}
+
+	// La recherche rend ce qu'on cherche, et rien d'autre.
+	w := demande(t, srv, "GET", "/mp/annuaire?q=paul", jGk2, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("annuaire : code %d", w.Code)
+	}
+	corps := w.Body.String()
+	if !strings.Contains(corps, "pauline") || !strings.Contains(corps, ">paul<") {
+		t.Error("la recherche ne rend pas les correspondances attendues")
+	}
+	if strings.Contains(corps, "pierre") {
+		t.Error("la recherche rend un membre qui ne correspond pas")
+	}
+
+	// Ajouter au carnet, puis le retrouver dans la colonne.
+	csrf := csrfDe(t, srv, "/mp/annuaire", jGk2)
+	w = demande(t, srv, "POST", "/mp/carnet", jGk2, url.Values{
+		"csrf": {csrf}, "qui": {"paul"}, "note": {"le voisin"},
+	})
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("ajout au carnet : code %d", w.Code)
+	}
+	w = demande(t, srv, "GET", "/mp", jGk2, nil)
+	if !strings.Contains(w.Body.String(), "le voisin") {
+		t.Error("le contact ajoute n'apparait pas dans la colonne")
+	}
+	// ET SURTOUT : la colonne ne liste plus tout le monde.
+	if strings.Contains(w.Body.String(), "pierre") {
+		t.Error("la colonne liste encore les comptes hors carnet")
+	}
+}
+
+func TestUnInterlocuteurActifNEstJamaisAnnonceFerme(t *testing.T) {
+	// REGRESSION VECUE. L'etat de l'interlocuteur etait DEDUIT d'une liste :
+	// absent de « tous les comptes joignables » ⇒ repute ferme. Le jour ou
+	// cette liste a ete remplacee par le carnet, tout interlocuteur hors carnet
+	// s'est retrouve annonce ferme, formulaire d'envoi retire — sur des comptes
+	// parfaitement actifs.
+	//
+	// Une absence dans une liste ne prouve rien sur un compte.
+	srv, s, _, jGk2, _, _ := bancMP(t)
+	s.CreateUser("horscarnet", "Hors Carnet", store.RoleMember)
+
+	w := demande(t, srv, "GET", "/mp/horscarnet", jGk2, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d", w.Code)
+	}
+	corps := w.Body.String()
+	if strings.Contains(corps, "compte est fermé") || strings.Contains(corps, "compte fermé") {
+		t.Error("un compte actif est annonce comme ferme")
+	}
+	// Et le formulaire d'envoi est bien la : c'est ce que la fausse mention
+	// retirait.
+	if !strings.Contains(corps, `action="/mp/envoyer"`) {
+		t.Error("le formulaire d'envoi est absent pour un compte actif")
+	}
+
+	// A l'inverse, un compte REELLEMENT ferme est signale, et sans formulaire.
+	ferme, _ := s.CreateUser("parti", "Parti", store.RoleMember)
+	s.DisableUser(ferme)
+	w = demande(t, srv, "GET", "/mp/parti", jGk2, nil)
+	if w.Code == http.StatusOK && strings.Contains(w.Body.String(), `action="/mp/envoyer"`) {
+		t.Error("formulaire d'envoi propose vers un compte ferme")
+	}
+}

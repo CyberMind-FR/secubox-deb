@@ -47,6 +47,10 @@ type page struct {
 	Fil    []store.Message
 	Avec   store.Compte
 	Corres []store.Compte
+	// Carnet et Annuaire (#1008) : le carnet nomme ce qu'on utilise, l'annuaire
+	// est une recherche bornee. Voir internal/store/carnet.go.
+	Carnet   []store.Contact
+	Annuaire []store.Contact
 	// NonLus alimente la pastille de navigation. Evalue a CHAQUE page : un
 	// compteur calcule seulement sur /mp ne previendrait de rien, puisqu'il
 	// faudrait deja etre sur la page pour le voir.
@@ -93,6 +97,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/mp", s.mp)
 	s.mux.HandleFunc("/mp/", s.mp)
 	s.mux.HandleFunc("/mp/envoyer", s.mpEnvoyer)
+	s.mux.HandleFunc("/mp/annuaire", s.mpAnnuaire)
+	s.mux.HandleFunc("/mp/carnet", s.mpCarnet)
 	s.mux.HandleFunc("/mastodon", s.mastodon)
 	s.mux.HandleFunc("/billets", s.simple("billets"))
 	s.mux.HandleFunc("/nouveau", s.nouveau)

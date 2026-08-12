@@ -33,9 +33,43 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/web"
 )
 
-const version = "0.3.0"
+const version = "0.6.1"
 
 func trim(s string) string { return strings.TrimSpace(s) }
+
+// ecoute ouvre la socket, EN REESSAYANT quelques secondes.
+//
+// POURQUOI REESSAYER PLUTOT QUE MOURIR. `/run/secubox` est partage par une
+// centaine d'unites SecuBox. Quand l'une d'elles redemarre avec un
+// `RuntimeDirectory=secubox`, systemd RECREE le repertoire — brievement en
+// `root:root 0755` au lieu du `1777` attendu. Pendant cette fenetre, un service
+// non-root ne peut plus y creer sa socket : `bind` echoue en EACCES.
+//
+// Observe sur gk2 le 2026-08-12 : cinq echecs consecutifs apres chaque
+// deploiement, puis un succes — le service finissait par remonter seul, mais
+// avec une minute de coupure et cinq lignes d'erreur qui faisaient chercher un
+// defaut de droits inexistant.
+//
+// Mourir sur un etat TRANSITOIRE est le mauvais choix : la cause disparait
+// d'elle-meme en quelques secondes. On reessaie brievement, puis on abandonne
+// vraiment — un echec durable reste un echec, et doit se voir.
+func ecoute(chemin string) (net.Listener, error) {
+	var derniere error
+	for essai := 0; essai < 12; essai++ {
+		l, err := net.Listen("unix", chemin)
+		if err == nil {
+			if essai > 0 {
+				log.Printf("socket ouverte apres %d essais — /run/secubox etait momentanement inaccessible", essai+1)
+			}
+			return l, nil
+		}
+		derniere = err
+		// Un fichier laisse par un predecesseur : on le retire et on retente.
+		_ = os.Remove(chemin)
+		time.Sleep(time.Second)
+	}
+	return nil, derniere
+}
 
 func main() {
 	var (
@@ -107,8 +141,11 @@ func main() {
 	// un arret brutal ferait echouer le bind, et le service ne remonterait
 	// jamais tout seul. L'unite fait deja ce menage, mais elle n'est pas la
 	// seule facon de lancer ce binaire.
+	//
+	// Ici c'est SANS DANGER — on est sur le point de creer la notre. C'est a
+	// l'ARRET que supprimer devient une course (voir plus bas).
 	_ = os.Remove(*socket)
-	l, err := net.Listen("unix", *socket)
+	l, err := ecoute(*socket)
 	if err != nil {
 		log.Fatalf("ecoute sur %s : %v", *socket, err)
 	}
@@ -127,15 +164,25 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// Arret propre : la socket est retiree explicitement. Sans cela, un
-	// redemarrage rapide retrouve un fichier orphelin — le cas que le
-	// `os.Remove` ci-dessus rattrape, mais mieux vaut ne pas le creer.
+	// ARRET PROPRE — SANS TOUCHER AU FICHIER DE SOCKET.
+	//
+	// Le premier jet le supprimait ici. C'est une COURSE : lors d'un
+	// redemarrage, systemd relance le service avant que l'ancien processus ait
+	// fini de s'eteindre. Le successeur cree sa socket, puis le predecesseur
+	// arrive a cette ligne et EFFACE celle du successeur. L'unite suivante
+	// echoue alors sur `bind`, redemarre, et l'on boucle.
+	//
+	// Constate sur gk2 le 2026-08-12 : cinq echecs consecutifs
+	// « bind: permission denied » avant que le hasard ne separe les deux
+	// processus.
+	//
+	// Le menage appartient a l'unite, qui le fait EN ROOT et AVANT de lancer
+	// (`ExecStartPre=+-/bin/rm -f`). Un seul endroit, sans concurrent.
 	arret := make(chan os.Signal, 1)
 	signal.Notify(arret, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-arret
 		_ = h.Close()
-		_ = os.Remove(*socket)
 	}()
 
 	if err := h.Serve(l); err != nil && err != http.ErrServerClosed {
