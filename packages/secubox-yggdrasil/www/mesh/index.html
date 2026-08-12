@@ -180,7 +180,7 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
                 if (!res.ok) throw new Error(res.statusText);
                 return await res.json();
             } catch (e) { console.error(e); return { error: e.message }; }

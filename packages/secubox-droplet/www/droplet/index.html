@@ -354,7 +354,7 @@
             if (token) headers['Authorization'] = 'Bearer ' + token;
             try {
                 const res = await fetch(API + endpoint, { ...options, headers });
-                if (res.status === 401) { window.location = '/login.html'; return {}; }
+                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
                 return res.json();
             } catch (e) { return {}; }
         }

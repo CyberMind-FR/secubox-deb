@@ -352,7 +352,7 @@
             if (data) opts.body = JSON.stringify(data);
             try {
                 const res = await fetch(API + endpoint, opts);
-                if (res.status === 401) { window.location = "/login.html"; return {}; }
+                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
                 return res.json();
             } catch (e) { console.error('API error:', e); return {}; }
         }

@@ -117,7 +117,7 @@
             const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}) };
             try {
                 const res = await fetch(API + path, { method, headers, body: data ? JSON.stringify(data) : null });
-                if (res.status === 401) { window.location = '/login.html'; return null; }
+                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
                 return res.json();
             } catch { return null; }
         }

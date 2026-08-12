@@ -407,7 +407,7 @@
                     headers: token ? { 'Authorization': 'Bearer ' + token } : {}
                 });
                 if (res.status === 401) {
-                    window.location.href = '/login.html';
+                    window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
                     return {};
                 }
                 return res.json();
