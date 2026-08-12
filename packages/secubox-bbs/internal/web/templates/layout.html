@@ -77,17 +77,23 @@
 
          Pas de duplication dans chaque gabarit : une liste ecrite a trois
          endroits finit par diverger a trois endroits. -->
-    {{if .Convs}}
-    <!-- LA MESSAGERIE UTILISE LA MEME COLONNE QUE LES FILS. Elle avait sa
+    {{if or .Convs .Carnet}}
+    <!-- LA COLONNE S'AFFICHE DES QU'IL Y A DE QUOI : conversations OU carnet.
+         Conditionnee aux seules conversations, elle disparaissait pour qui
+         n'avait encore ecrit a personne — et le carnet qu'il venait de remplir
+         restait invisible. C'est precisement le moment ou l'on en a besoin.
+
+         LA MESSAGERIE UTILISE LA MEME COLONNE QUE LES FILS. Elle avait sa
          propre grille a deux colonnes, imbriquee dans la vue : deux
          dispositions superposees, chacune reprenant la moitie de la place, et
          la conversation finissait dans un quart d'ecran. Une seule coquille
          pour tout le module. -->
     <div class="liste">
       <div class="liste-tete">
-        <h2>Conversations</h2>
+        <h2>Messages</h2>
         <span class="cnt">{{len .Convs}}</span>
       </div>
+      {{if .Convs}}<div class="railhead">Conversations</div>{{end}}
       {{range .Convs}}
       <a class="fil-item conv" href="/mp/{{.Handle}}"
          {{if eq .Handle $.Avec.Handle}}aria-current="page"{{end}}>
@@ -99,12 +105,25 @@
         {{if .NonLus}}<span class="pill p-new">{{.NonLus}}</span>{{end}}
       </a>
       {{end}}
-      {{if .Corres}}
-      <div class="railhead">Écrire à</div>
-      <div class="mp-choix">
-        {{range .Corres}}<a class="mp-membre" href="/mp/{{.Handle}}">{{.Display}}</a>{{end}}
-      </div>
+      <!-- LE CARNET, PAS TOUS LES COMPTES. La liste complete tenait a cinq
+           membres et devenait un mur a cinquante ; l'annuaire complet est une
+           recherche, sur sa propre page. -->
+      {{if .Carnet}}
+      <div class="railhead">Carnet</div>
+      {{range .Carnet}}
+      <a class="fil-item conv" href="/mp/{{.Handle}}"
+         {{if eq .Handle $.Avec.Handle}}aria-current="page"{{end}}>
+        <span class="av">{{.Handle}}</span>
+        <span class="conv-txt">
+          <h3>{{.Display}}</h3>
+          {{if .Note}}<span class="apercu">{{.Note}}</span>{{end}}
+        </span>
+      </a>
       {{end}}
+      {{end}}
+      <div class="mp-choix">
+        <a class="mp-membre" href="/mp/annuaire">🔍 Annuaire des membres</a>
+      </div>
     </div>
     {{else if .Threads}}
     <div class="liste">

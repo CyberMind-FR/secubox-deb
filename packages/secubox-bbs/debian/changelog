@@ -1,3 +1,52 @@
+secubox-bbs (0.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * REGRESSION CORRIGEE : un interlocuteur ACTIF etait annonce « compte
+    ferme », formulaire d'envoi retire. L'etat etait DEDUIT d'une liste —
+    absent de « tous les comptes joignables » donc repute ferme. Le jour ou
+    cette liste a ete remplacee par le carnet (0.6.0), tout interlocuteur hors
+    carnet est devenu « ferme ». Constate sur cedre83, compte parfaitement
+    actif. L'etat se DEMANDE desormais au magasin : une absence dans une liste
+    ne prouve rien sur un compte.
+  * OUVERTURE DE LA SOCKET AVEC REPRISE. `/run/secubox` est partage par une
+    centaine d'unites : quand l'une d'elles redemarre avec un
+    `RuntimeDirectory=secubox`, systemd RECREE le repertoire, brievement en
+    root:root 0755 au lieu du 1777 attendu — et un service non-root ne peut
+    plus y creer sa socket. Cinq echecs `bind: permission denied` apres chaque
+    deploiement, puis un succes : le service remontait seul, mais avec une
+    minute de coupure et cinq lignes qui faisaient chercher un defaut de droits
+    inexistant. Mourir sur un etat transitoire etait le mauvais choix.
+  * Suppression de la socket a l'arret retiree. Le daemon effaçait son fichier de socket a
+    l'arret. Lors d'un redemarrage, systemd relance avant que l'ancien
+    processus ait fini : le successeur creait sa socket, puis le predecesseur
+    l'effacait. Cinq echecs consecutifs « bind: permission denied » sur gk2
+    avant que le hasard ne separe les deux processus. Le menage appartient a
+    l'unite, qui le fait en root et AVANT de lancer.
+  * La version annoncee au demarrage suit celle du paquet — elle etait restee a
+    0.3.0 depuis la reconstruction.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 12:40:00 +0200
+
+secubox-bbs (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * ANNUAIRE ET CARNET D'ADRESSES pour la messagerie. Le selecteur de
+    destinataire listait TOUS les comptes ouverts en pastilles : tenable a cinq
+    membres, illisible a cinquante, et la page grossissait avec l'annuaire.
+  * L'annuaire est desormais une RECHERCHE bornee (pseudonyme ou nom affiche,
+    insensible a la casse, par fragment) sur sa propre page : une recherche qui
+    rend des resultats a besoin de place.
+  * Le carnet nomme ce qu'on utilise vraiment et occupe la colonne. Il est
+    UNIDIRECTIONNEL, comme un carnet papier : l'y mettre n'informe personne et
+    n'oblige a rien. Une note libre par contact — le pseudonyme ne dit pas
+    toujours qui c'est, six mois plus tard.
+  * Retirer du carnet ne touche NI au compte NI aux messages echanges : c'est un
+    raccourci, pas une relation.
+  * La colonne s'affiche des qu'il y a conversations OU carnet. Conditionnee aux
+    seules conversations, elle disparaissait pour qui n'avait encore ecrit a
+    personne — et le carnet qu'il venait de remplir restait invisible, au moment
+    precis ou il en avait besoin.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 12:10:00 +0200
+
 secubox-bbs (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * La messagerie utilise la COLONNE DE LA COQUILLE. Elle avait sa propre

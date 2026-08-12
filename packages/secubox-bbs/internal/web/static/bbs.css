@@ -551,3 +551,32 @@ body.rail-ouvert::after {
   .thread .cnt, .board .meta { display: none; }
   .ph h1 { font-size: 21px; }
 }
+
+/* ── annuaire (#1008) ─────────────────────────────────────────────────────
+ *
+ * Le selecteur de destinataire etait un mur de pastilles listant TOUS les
+ * comptes. L'annuaire est une recherche : un champ, des lignes, deux gestes
+ * par ligne — ecrire, ou garder sous la main. */
+.annuaire-recherche{display:flex; gap:8px; margin:0 0 14px; max-width:520px}
+.annuaire-recherche input{
+  flex:1; padding:8px 12px; font:inherit; color:var(--text);
+  background:var(--panel); border:1px solid var(--line); border-radius:9px;
+}
+.annuaire-recherche input:focus-visible{outline:2px solid var(--sky); outline-offset:-1px}
+.annuaire-ligne{
+  display:flex; align-items:center; gap:11px;
+  padding:9px 14px; border-bottom:1px solid var(--line);
+}
+.annuaire-ligne:last-child{border-bottom:0}
+/* min-width:0 — sans lui, un nom long pousse les boutons hors de la carte. */
+.annuaire-qui{display:flex; flex-direction:column; min-width:0; flex:1}
+.annuaire-qui b{font-size:14.5px}
+.annuaire-qui .d{font-size:12px; color:var(--dim)}
+.annuaire-actions{display:flex; gap:6px; align-items:center; flex:none}
+
+/* Sous 560px, les actions passent SOUS le nom : cote a cote, elles reduisaient
+ * le nom a deux lettres. Regle placee ici, apres le composant. */
+@media (max-width: 560px){
+  .annuaire-ligne{flex-wrap:wrap}
+  .annuaire-actions{width:100%; padding-left:45px}
+}
