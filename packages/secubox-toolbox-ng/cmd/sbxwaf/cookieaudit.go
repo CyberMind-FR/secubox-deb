@@ -74,11 +74,11 @@ type cookieRecord struct {
 	Status    int     `json:"status"`
 	Name      string  `json:"name"`
 	ValueHash string  `json:"value_hash"`
-	Domain    *string `json:"domain"`    // null when absent
-	Path      *string `json:"path"`      // null when absent
+	Domain    *string `json:"domain"` // null when absent
+	Path      *string `json:"path"`   // null when absent
 	Secure    bool    `json:"secure"`
 	HTTPOnly  bool    `json:"httponly"`
-	SameSite  *string `json:"samesite"`  // null when absent
+	SameSite  *string `json:"samesite"` // null when absent
 }
 
 // CookieAudit appends one JSONL record per Set-Cookie header to a ledger.
@@ -268,8 +268,8 @@ func parseSetCookieRaw(raw string) (cookieRecord, bool) {
 			if v != "" {
 				rec.SameSite = &v
 			}
-		// expires, max-age, and other attributes are intentionally ignored
-		// (not RGPD-relevant per the Python addon's design decision).
+			// expires, max-age, and other attributes are intentionally ignored
+			// (not RGPD-relevant per the Python addon's design decision).
 		}
 	}
 

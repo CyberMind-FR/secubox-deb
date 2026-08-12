@@ -89,3 +89,38 @@ func TestWidgetHostMatch(t *testing.T) {
 		}
 	}
 }
+
+func TestAPageCanRefuseTheBanner(t *testing.T) {
+	// The banner is an INLINE SCRIPT. A page shipping a strict
+	// `script-src 'self'` cannot execute it, so the browser blocks it and logs
+	// a violation on every load. The banner never appears either way — the only
+	// difference is whether the reader's console fills with errors that make a
+	// working site look broken.
+	//
+	// Observed on bbs.gk2.secubox.in: the page carried this exact meta, sbxwaf
+	// had no opt-out, and an operator reported "login KO" while login worked.
+	page := []byte(`<!doctype html><html><head>` +
+		`<meta name="sbx-no-health-banner">` +
+		`</head><body>hello</body></html>`)
+	out := injectWidgetHTML(page, "https://admin.example")
+	if !bytes.Equal(out, page) {
+		t.Error("banner injected into a page that opted out")
+	}
+
+	// And a page that says nothing still gets it — the opt-out must not become
+	// the default by accident.
+	muette := []byte(`<!doctype html><html><head></head><body>hello</body></html>`)
+	if bytes.Equal(injectWidgetHTML(muette, "https://admin.example"), muette) {
+		t.Error("banner skipped on a page that never opted out")
+	}
+}
+
+func TestTheOptOutIsCaseInsensitive(t *testing.T) {
+	// HTML attribute names are not case-sensitive; a page written with `NAME=`
+	// would otherwise be silently ignored — the worst kind of failure, since
+	// the author believes they refused.
+	page := []byte(`<html><head><META NAME="SBX-NO-HEALTH-BANNER"></head><body>x</body></html>`)
+	if !bytes.Equal(injectWidgetHTML(page, "https://admin.example"), page) {
+		t.Error("uppercase opt-out ignored")
+	}
+}

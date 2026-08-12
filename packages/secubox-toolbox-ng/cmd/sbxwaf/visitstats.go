@@ -111,8 +111,8 @@ func (v *VisitStats) Record(vhost, ua, ip string, status int) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.total++
-	bump(v.byClientType, ct)              // small fixed key-set — no cap needed
-	bump(v.byOS, os)                      // small fixed key-set
+	bump(v.byClientType, ct)               // small fixed key-set — no cap needed
+	bump(v.byOS, os)                       // small fixed key-set
 	bump(v.byStatus, statusBucket(status)) // 4 keys
 	capBump(v.byVhost, vhost)
 	if ip != "" {

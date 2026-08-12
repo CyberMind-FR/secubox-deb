@@ -37,6 +37,9 @@
             <button class="tool mono" type="button" data-w="`" title="Code">&lt;/&gt;</button>
             <span class="sep"></span>
             <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
+            <button class="tool joindre" type="button" title="Joindre une image, un son, une vidéo"
+                    data-csrf="{{.V.CSRF}}">📎</button>
+            <input type="file" class="s-invisible" accept="image/*,audio/*,video/*">
           </div>
           <textarea class="area" name="corps" rows="4" required
             placeholder="Votre message…"></textarea>

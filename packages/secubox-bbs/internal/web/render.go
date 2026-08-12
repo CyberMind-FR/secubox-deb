@@ -21,6 +21,7 @@ package web
 
 import (
 	"html/template"
+	"regexp"
 	"strings"
 )
 
@@ -114,6 +115,7 @@ func inline(s string) template.HTML {
 	e := template.HTMLEscapeString(s)
 	e = liens(e)
 	e = adressesNues(e)
+	e = mediasIntegres(e)
 	e = paires(e, "**", "<strong>", "</strong>")
 	e = paires(e, "`", "<code>", "</code>")
 	e = paires(e, "*", "<em>", "</em>")
@@ -145,6 +147,111 @@ func paires(s, marque, ouvre, ferme string) string {
 		return strings.Replace(out, ouvre, marque, 1)
 	}
 	return out
+}
+
+// mediasIntegres transforme une adresse de piece jointe en LECTEUR.
+//
+// N'agit que sur NOS adresses (`/f/<n>`) et sur les extensions que le magasin
+// accepte. Integrer une adresse quelconque ferait charger une ressource
+// distante depuis la page — c'est-a-dire signaler chaque lecteur au serveur
+// d'en face, et donner un point d'entree a qui controle ce serveur.
+//
+// S'execute APRES `liens()` et `adressesNues()`, sur du HTML deja produit : on
+// remplace le lien complet, pas l'adresse nue, pour ne pas laisser une ancre
+// vide autour du lecteur.
+func mediasIntegres(s string) string {
+	// DEUX ECRITURES A COUVRIR. Un lien Markdown produit une ancre — c'est ce
+	// que pose le bouton d'envoi. Mais on colle aussi l'adresse toute nue, et
+	// `adressesNues` ne la transforme pas : elle ne reconnait que http(s).
+	// N'en traiter qu'une laisserait la moitie des cas en texte mort.
+	//
+	// La forme nue est traitee EN PREMIER, en sautant ce qui est deja dans un
+	// attribut — sinon on remplacerait l'adresse a l'interieur d'un `href`
+	// qu'on vient soi-meme de produire.
+	s = nuesIntegrees(s)
+	for _, m := range lecteurRe.FindAllStringSubmatch(s, -1) {
+		tout, adr := m[0], m[1]
+		var balise string
+		switch {
+		case finitPar(adr, ".png", ".jpg", ".jpeg", ".gif", ".webp"):
+			// `loading=lazy` : un fil peut porter vingt images, et les charger
+			// toutes avant le premier paragraphe rend la page inutilisable sur
+			// une liaison lente.
+			balise = `<img class="jointe" src="` + adr + `" alt="" loading="lazy">`
+		case finitPar(adr, ".mp3", ".ogg", ".wav", ".flac"):
+			balise = `<audio class="jointe" controls preload="none" src="` + adr + `"></audio>`
+		case finitPar(adr, ".mp4", ".webm", ".ogv"):
+			balise = `<video class="jointe" controls preload="none" src="` + adr + `"></video>`
+		case !strings.Contains(adr[3:], "."):
+			// Adresse ecrite a la main, sans extension : on ne peut pas savoir.
+			// L'image est le cas de loin le plus frequent, et le moins couteux
+			// si l'on se trompe — une image cassee se voit, un lecteur audio
+			// muet ne se remarque pas.
+			balise = `<img class="jointe" src="` + adr + `" alt="" loading="lazy">`
+		default:
+			continue
+		}
+		s = strings.Replace(s, tout, balise, 1)
+	}
+	return s
+}
+
+// nuesIntegrees transforme `/f/12.png` ecrit tel quel en ancre, pour que la
+// suite du traitement la voie comme les autres.
+func nuesIntegrees(s string) string {
+	var b strings.Builder
+	i := 0
+	for {
+		j := strings.Index(s[i:], "/f/")
+		if j < 0 {
+			b.WriteString(s[i:])
+			break
+		}
+		deb := i + j
+		b.WriteString(s[i:deb])
+		if dansAttribut(s, deb) {
+			b.WriteString("/f/")
+			i = deb + 3
+			continue
+		}
+		fin := deb
+		for fin < len(s) && !estSeparateur(s[fin]) {
+			fin++
+		}
+		adr := s[deb:fin]
+		for len(adr) > 0 && strings.ContainsRune(".,;:!?)]}'\"", rune(adr[len(adr)-1])) {
+			adr = adr[:len(adr)-1]
+			fin--
+		}
+		if nueRe.MatchString(adr) {
+			b.WriteString(`<a href="` + adr + `">` + adr + `</a>`)
+		} else {
+			b.WriteString(adr)
+		}
+		i = fin
+	}
+	return b.String()
+}
+
+// Une adresse de piece jointe : un NUMERO, avec au plus une extension. Rien
+// d'autre ne passe — ni chemin remontant, ni caractere inattendu.
+var nueRe = regexp.MustCompile(`^/f/\d+(\.[a-z0-9]{2,5})?$`)
+
+// Une ancre produite par nos soins vers une piece jointe locale.
+var lecteurRe = regexp.MustCompile(`<a href="(/f/\d+(?:\.[a-z0-9]+)?)"[^>]*>[^<]*</a>`)
+
+func finitPar(s string, suffixes ...string) bool {
+	b := strings.ToLower(s)
+	for _, x := range suffixes {
+		if strings.HasSuffix(b, x) {
+			return true
+		}
+	}
+	// Nos adresses n'ont pas toujours d'extension : `/f/12` est legitime. On
+	// laisse alors `mediasIntegres` choisir sur le seul prefixe, en image par
+	// defaut — le cas de loin le plus frequent, et le moins couteux s'il se
+	// trompe (une image cassee, pas un lecteur muet).
+	return false
 }
 
 func liens(s string) string {

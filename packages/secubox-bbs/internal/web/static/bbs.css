@@ -580,3 +580,24 @@ body.rail-ouvert::after {
   .annuaire-ligne{flex-wrap:wrap}
   .annuaire-actions{width:100%; padding-left:45px}
 }
+
+/* ── pieces jointes (#1008) ───────────────────────────────────────────────
+ *
+ * Le champ de fichier est masque a l'oeil mais RESTE DANS LE FLUX et reste
+ * atteignable : `display:none` le retirerait de l'ordre de tabulation, et
+ * l'envoi deviendrait impossible sans souris. */
+.s-invisible{
+  position:absolute; width:1px; height:1px; overflow:hidden;
+  clip-path:inset(50%); white-space:nowrap;
+}
+/* Un media joint ne deborde jamais de la colonne qui le porte — la coquille a
+ * trois colonnes rend cette borne indispensable. */
+.jointe{max-width:100%; border-radius:10px; display:block; margin:.6rem 0}
+img.jointe{height:auto; background:var(--soft)}
+audio.jointe{width:100%}
+video.jointe{max-height:60vh; background:#000}
+
+/* Avatar : l'image remplace les initiales, meme gabarit. */
+.av img, img.av{
+  width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block;
+}

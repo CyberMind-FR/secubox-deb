@@ -394,8 +394,8 @@ func TestTrustedHostSkipsWAF(t *testing.T) {
 	banState := NewBan(300*1e9, 3)
 
 	srv := &Server{
-		rules: rules,
-		ban:   banState,
+		rules:        rules,
+		ban:          banState,
 		trustedHosts: parseTrustedHosts(trustedHost),
 		routeLookup: func(host string) (string, int, bool) {
 			return h, p, true
@@ -448,8 +448,8 @@ func TestIsTrustedHost(t *testing.T) {
 		want bool
 	}{
 		{"git.gk2.secubox.in", true},
-		{"GIT.GK2.SECUBOX.IN", true},  // case-insensitive
-		{"10.100.0.1:9080", true},      // host:port exact match
+		{"GIT.GK2.SECUBOX.IN", true}, // case-insensitive
+		{"10.100.0.1:9080", true},    // host:port exact match
 		{"untrusted.example.com", false},
 		{"", false},
 	}

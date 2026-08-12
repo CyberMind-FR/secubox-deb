@@ -44,7 +44,7 @@ import (
 const (
 	mediaCacheMaxObj   int64 = 16 * 1024 * 1024       // 16 MiB per object
 	mediaCacheMaxTotal int64 = 2 * 1024 * 1024 * 1024 // 2 GiB total
-	mediaCacheTTL      int64 = 3600                    // default 1 h
+	mediaCacheTTL      int64 = 3600                   // default 1 h
 )
 
 // Cacheable content-type prefixes/substrings — exact port from _CACHEABLE tuple.

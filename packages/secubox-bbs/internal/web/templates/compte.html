@@ -25,6 +25,30 @@
 </div>
 
 <div class="card pad s42a6ced">
+  <h3 class="s7b1eb4e">Mon avatar</h3>
+  <div class="row s381c37d">
+    <span class="av s39203eb">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span>
+    <form method="post" action="/compte/avatar" enctype="multipart/form-data" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="file" name="avatar" accept="image/*" required>
+      <button class="btn primary" type="submit">Poser</button>
+    </form>
+    {{if .V.Avatar}}
+    <form method="post" action="/compte/avatar" class="s6b8b63d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="action" value="retirer">
+      <button class="btn sm" type="submit">Retirer</button>
+    </form>
+    {{end}}
+  </div>
+  <div class="note sf9f81af">
+    Une image, rien d'autre : le dépôt accepte aussi le son et la vidéo, mais un
+    avatar sonore ne s'afficherait nulle part. Le fichier est reniflé à
+    l'arrivée — ce qu'annonce le navigateur n'est jamais cru.
+  </div>
+</div>
+
+<div class="card pad s42a6ced">
   <h3 class="s7b1eb4e">Inviter quelqu'un</h3>
   {{if .Code}}
     <div class="note m"><b>Code émis — il n'est affiché qu'une fois.</b>

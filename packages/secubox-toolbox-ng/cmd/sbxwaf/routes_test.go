@@ -35,11 +35,11 @@ func writeRoutes(t *testing.T, routes map[string]any) string {
 // TestRoutesLookup verifies the basic load + lookup contract.
 func TestRoutesLookup(t *testing.T) {
 	path := writeRoutes(t, map[string]any{
-		"gitea.example.com":   []any{"127.0.0.1", 3000},
-		"nextcloud.local":     []any{"10.0.0.1", 443},
-		"malformed.example":   "not-an-array",              // skipped
-		"short.example":       []any{"127.0.0.1"},          // skipped (only 1 element)
-		"badport.example":     []any{"127.0.0.1", "notint"}, // skipped
+		"gitea.example.com": []any{"127.0.0.1", 3000},
+		"nextcloud.local":   []any{"10.0.0.1", 443},
+		"malformed.example": "not-an-array",               // skipped
+		"short.example":     []any{"127.0.0.1"},           // skipped (only 1 element)
+		"badport.example":   []any{"127.0.0.1", "notint"}, // skipped
 	})
 
 	r := LoadRoutes(path, nil)

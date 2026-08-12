@@ -1,6 +1,9 @@
 package web
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestLeHtmlEcritParUnMembreEstAffichePasExecute(t *testing.T) {
 	// Les corps sont du Markdown ecrit par des humains. Si le rendu laissait
@@ -141,4 +144,46 @@ func compte(h, n string) int {
 		}
 	}
 	return c
+}
+
+func TestUnePieceJointeLocaleDevientUnLecteur(t *testing.T) {
+	cas := []struct{ src, attendu string }{
+		{"voir /f/12.png", `<img class="jointe"`},
+		{"ecouter /f/7.ogg", `<audio class="jointe"`},
+		{"la video /f/9.mp4", `<video class="jointe"`},
+	}
+	for _, c := range cas {
+		got := string(Render(c.src))
+		if !strings.Contains(got, c.attendu) {
+			t.Errorf("%q ne produit pas %s :\n%s", c.src, c.attendu, got)
+		}
+	}
+}
+
+func TestSeulesNosAdressesSontIntegrees(t *testing.T) {
+	// Integrer une adresse quelconque ferait charger une ressource DISTANTE
+	// depuis la page : chaque lecteur serait signale au serveur d'en face, et
+	// qui controle ce serveur obtiendrait un point d'entree dans la page.
+	got := string(Render("photo https://ailleurs.example/piege.png"))
+	if strings.Contains(got, "<img") {
+		t.Errorf("une image distante a ete integree :\n%s", got)
+	}
+	if !strings.Contains(got, "<a href=") {
+		t.Errorf("l'adresse distante devrait rester un simple lien :\n%s", got)
+	}
+}
+
+func TestUneAdresseDeposeeNEstPasUnVecteur(t *testing.T) {
+	// Le chemin est un NUMERO. Une adresse fabriquee a la main ne doit ni
+	// remonter l'arborescence ni produire de balise.
+	for _, mauvais := range []string{
+		"/f/../../etc/passwd",
+		"/f/1;rm -rf",
+		"/f/<script>alert(1)</script>",
+	} {
+		got := string(Render("essai " + mauvais))
+		if strings.Contains(got, "<img") || strings.Contains(got, "<script") {
+			t.Errorf("%q a produit une balise :\n%s", mauvais, got)
+		}
+	}
 }

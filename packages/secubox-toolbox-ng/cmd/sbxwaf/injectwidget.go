@@ -101,11 +101,34 @@ func jsString(s string) string {
 // unchanged when there is no </body>, the loader was already injected, OR the
 // page ALREADY ships the health banner itself (a dashboard page) — so we never
 // double-mount it.
+// optOutMeta lets a page REFUSE the banner: <meta name="sbx-no-health-banner">.
+//
+// WHY A PAGE MUST BE ABLE TO SAY NO. The banner is an inline script. A page
+// that ships a strict `script-src 'self'` — which a PUBLIC surface should —
+// cannot execute it, so the browser blocks it and logs a violation on every
+// single load. The banner does not appear either way; the only difference is
+// whether the reader's console fills with errors that look like a broken site.
+//
+// Observed on bbs.gk2.secubox.in: the page carried this exact meta and shipped
+// a strict policy, but sbxwaf had no opt-out at all — the tag was decorative,
+// and the BBS logged a CSP violation on every page view. Reported as "login
+// KO" by an operator, while login worked perfectly.
+//
+// Fail-safe direction: an unreadable or absent meta means "inject", the
+// behaviour every existing page already relies on.
+const optOutMeta = "sbx-no-health-banner"
+
 func injectWidgetHTML(plain []byte, origin string) []byte {
 	if bytes.Contains(plain, []byte(widgetGuard)) ||
 		bytes.Contains(plain, []byte("health-banner.js")) ||
 		bytes.Contains(plain, []byte("__SBX_HEALTH_BANNER__")) {
 		return plain // already has the banner (loader or first-party include)
+	}
+	// The page said no. Case-insensitive: HTML attribute names are not
+	// case-sensitive, and a page written with `NAME=` would otherwise be
+	// silently ignored.
+	if bytes.Contains(bytes.ToLower(plain), []byte(optOutMeta)) {
+		return plain
 	}
 	// Case-insensitive search for the LAST </body>.
 	low := bytes.ToLower(plain)

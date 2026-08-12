@@ -43,11 +43,12 @@
 // code can layer its own rate gate (same pattern as Routes.Maybe()).
 //
 // RE2 vs Python regex gap (checked against packages/secubox-waf/config/waf-rules.json):
-//   All 50+ patterns in the production rules file compile under RE2 without
-//   errors — none use lookaheads, lookbehinds, or backreferences.  The
-//   skip-on-compile-error path is a safety net; it does not suppress any
-//   production rule.  If future rules add unsupported syntax, they will be
-//   skipped and logged.
+//
+//	All 50+ patterns in the production rules file compile under RE2 without
+//	errors — none use lookaheads, lookbehinds, or backreferences.  The
+//	skip-on-compile-error path is a safety net; it does not suppress any
+//	production rule.  If future rules add unsupported syntax, they will be
+//	skipped and logged.
 package main
 
 import (
@@ -84,9 +85,9 @@ const (
 
 // compiledPattern holds a compiled regex and its metadata.
 type compiledPattern struct {
-	id      string
-	re      *regexp.Regexp
-	desc    string
+	id   string
+	re   *regexp.Regexp
+	desc string
 	// severity is inherited from the parent category at compile time.
 	severity string
 }

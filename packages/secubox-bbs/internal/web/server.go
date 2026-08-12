@@ -143,6 +143,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	}
 	s.routes()
 	s.routesAPI()
+	s.routesFichiers()
 	s.routesAPISysop()
 	s.routesMembre()
 	return s, nil
@@ -210,6 +211,10 @@ type visiteur struct {
 	store.UserInfo
 	Connecte bool
 	CSRF     string
+	// Avatar : identifiant de la piece jointe servant d'image de compte, ou 0.
+	// Porte par le visiteur et non lu dans chaque gabarit : une requete par
+	// affichage d'initiales couterait une lecture par message.
+	Avatar int64
 }
 
 // Sysop : METHODE et non comparaison dans le gabarit.
@@ -242,6 +247,7 @@ func (s *Server) qui(r *http.Request) visiteur {
 		return v
 	}
 	v.UserInfo, v.Connecte = info, true
+	v.Avatar = s.st.Avatar(id)
 	return v
 }
 

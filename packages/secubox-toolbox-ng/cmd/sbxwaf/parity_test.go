@@ -152,7 +152,7 @@ func TestWAFParity(t *testing.T) {
 					fx.Name, fx.Expect, got,
 					fx.Method, fx.Path, fx.Query, fx.ClientIP, fx.UA)
 				if fx.Expect == "warn" && got == "allow" {
-					t.Logf("  → BLOCKING: Go engine MISSED a payload Python WAF would catch — "+
+					t.Logf("  → BLOCKING: Go engine MISSED a payload Python WAF would catch — " +
 						"check rules.go / waf-rules.json pattern for this fixture")
 				}
 				return
