@@ -1,0 +1,98 @@
+# /etc/secubox/tuning/lxc-cpu.toml — plafond CPU par conteneur LXC (#1011).
+#
+# CE QUE CE FICHIER FAIT, ET CE QU'IL NE FAIT PAS.
+#
+# Il pose un PLAFOND DUR : quoi qu'il arrive, un conteneur ne depassera pas sa
+# part. Ce n'est PAS une politique de repartition — celle-ci existe deja,
+# ailleurs, sous la forme de `cpu.idle` (une vingtaine de conteneurs cedent le
+# CPU a tout le reste) et de `cpu.weight = 300` sur quatre privilegies. Les
+# deux mecanismes sont complementaires et ne se remplacent pas :
+#
+#   - `weight` et `idle` repartissent le CPU quand il est DISPUTE ;
+#   - `max` borne un conteneur qui s'emballe, meme quand rien ne le dispute.
+#
+# C'est la seconde qui manquait. Deux ffmpeg de transcodage PeerTube, sans
+# plafond, ont porte la charge de gk2 a 113 (#1010) : `weight` ne bornait rien,
+# et PeerTube etait meme prioritaire.
+#
+# FORMAT : "<quota> <periode>" en microsecondes, tel que le cgroup v2 l'attend.
+# La periode est 100000 partout ; le quota se lit donc directement :
+#   "100000 100000" = 1 coeur     "200000 100000" = 2 coeurs
+#   "60000 100000"  = 0,6 coeur   "max 100000"    = aucun plafond
+#
+# La board a QUATRE coeurs. Les plafonds se recouvrent volontiers : ils bornent
+# l'emballement, ils ne reservent rien.
+#
+# Applique par `secubox-tuning-apply cpu` — a chaud sur les conteneurs en
+# marche (aucun redemarrage), et persiste dans /data/lxc/<nom>/config pour
+# survivre au redemarrage suivant.
+
+[max]
+
+# ── Deja bornes : valeurs PRESERVEES telles quelles ────────────────────────
+#
+# Ces plafonds ont ete choisis par l'operateur. La generalisation les capture
+# pour qu'une reinstallation les reproduise — elle ne les rejuge pas.
+peertube   = "100000 100000"  # 1,0 — transcodage, #1010 (charge 113 -> 63)
+matrix     = "60000 100000"   # 0,6 — voir la note sur le doublon, plus bas
+photoprism = "60000 100000"   # 0,6 — indexation photo
+yacy       = "40000 100000"   # 0,4 — moteur d'indexation
+streamlit  = "30000 100000"   # 0,3 — applis a la demande, reveil ponctuel
+
+# ── Transcodage : meme cas que PeerTube, meme plafond ──────────────────────
+#
+# Jellyfin transcode, donc il presente EXACTEMENT le mode de defaillance qu'on
+# vient de corriger. Lui laisser le garde-fou large en le sachant reviendrait a
+# laisser la porte a moitie ouverte. La duree d'un transcodage n'est pas un
+# critere : une board injoignable, si.
+jellyfin   = "100000 100000"  # 1,0
+
+# ── Garde-fou commun : 2 coeurs sur 4 ─────────────────────────────────────
+#
+# Assez HAUT pour ne jamais gener le fonctionnement normal — aucun de ces
+# conteneurs n'approche deux coeurs en usage courant. Assez BAS pour qu'un seul
+# emballement ne puisse plus affamer la board : c'est la moitie, pas la
+# totalite.
+#
+# Ce n'est pas un reglage fin, et il ne pretend pas l'etre. C'est la difference
+# entre « borne » et « pas borne ».
+act-runner-ci-arm64 = "200000 100000"  # compilations CI, par nature gourmandes
+authelia            = "200000 100000"
+frigate             = "200000 100000"  # detection continue — a resserrer si actif
+gitea               = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
+grafana             = "200000 100000"
+horde               = "200000 100000"
+jitsi               = "200000 100000"
+lyrion              = "200000 100000"
+maigret             = "200000 100000"
+mail                = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
+mastodon            = "200000 100000"
+mitmproxy           = "200000 100000"
+mqtt                = "200000 100000"
+nextcloud           = "200000 100000"  # borne ecrite puis COMMENTEE, cf. plus bas
+openclaw            = "200000 100000"
+picobrew            = "200000 100000"
+roundcube           = "200000 100000"
+rustdesk            = "200000 100000"
+spiderfoot          = "200000 100000"
+torrent             = "200000 100000"
+toolbox-mitm        = "200000 100000"
+toolbox-mitm-wg     = "200000 100000"
+ytsas               = "200000 100000"
+zigbee              = "200000 100000"
+
+# ── Deux points qui demandent une decision, pas un defaut ──────────────────
+#
+# 1. TROIS BORNES COMMENTEES. `gitea` (1 coeur), `mail` (1) et `nextcloud` (2)
+#    portaient une ligne `#lxc.cgroup2.cpu.max = ...` — ecrite, puis
+#    desactivee. La raison n'est pas connue, et une borne desactivee l'a
+#    peut-etre ete parce qu'elle genait. Elles recoivent donc le garde-fou
+#    commun, PLUS LARGE que ce qui etait ecrit, jamais plus etroit : on ne
+#    ressuscite pas en silence un reglage que quelqu'un a retire.
+#
+# 2. LE DOUBLON DE MATRIX. Sa configuration portait DEUX lignes `cpu.max` :
+#    200000 (l.25) puis 60000 (l.35). LXC retient la derniere, donc l'intention
+#    de deux coeurs etait morte sans que rien ne le signale. La valeur
+#    effective (0,6) est conservee ici — c'est l'etat reel du service — et
+#    `secubox-tuning-apply` replie desormais les doublons sur une seule ligne
+#    pour que le cas ne se reproduise plus.
