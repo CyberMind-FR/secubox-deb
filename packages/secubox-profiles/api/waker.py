@@ -16,6 +16,7 @@ réveil contre les tempêtes. Ne pilote JAMAIS le système en direct (webui->ctl
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import logging
 import os
@@ -24,9 +25,10 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, Response
 
+from .etat_panne import qualifie
 from .lifecycle import effective_lifecycle, wake_budget
 from .manifest import Manifest, load_all
 from .observe import is_on
@@ -131,6 +133,16 @@ def _write_wake_active() -> None:
         pass
 
 
+def _unite_de(m) -> str:
+    """Unite systemd d'un module, telle que la declare son manifeste."""
+    return getattr(m, "unit", None) or getattr(m, "service", None) or f"secubox-{m.id}"
+
+
+def _conteneur_de(m) -> str | None:
+    """Nom du conteneur LXC quand le module y vit, sinon None (hote)."""
+    return getattr(m, "lxc", None) or getattr(m, "container", None)
+
+
 def _splash(module: str, budget: float, retry: int) -> HTMLResponse:
     # The splash is static + JS-driven (service name from the vhost hostname,
     # elapsed time from sessionStorage) — the SAME page nginx serves for phase-2
@@ -145,7 +157,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="SecuBox Waker", docs_url=None, redoc_url=None)
 
     @app.get("/_wake/{vhost}")
-    async def wake_vhost(vhost: str) -> Response:
+    async def wake_vhost(vhost: str, request: Request) -> Response:
         manifests = load_all(_root() / "modules.d")
         mid = _resolve(vhost, manifests)
         if mid is None:
@@ -168,10 +180,31 @@ def create_app() -> FastAPI:
             # l'utilisateur sur zigbee : un corps vide, aucune explication.
             # Le raisonnement (ne pas mentir avec une page d'attente) etait
             # juste ; il manquait la troisieme page.
-            log.warning("wake: %s est %s, pas un module endormi — panne reelle",
-                        mid, effective_lifecycle(m))
-            return HTMLResponse(_DOWN_TEXT, status_code=502,
-                                headers={"Cache-Control": "no-store"})
+            # QUALIFIER AVANT D'AFFICHER. « Ne repond pas » recouvre quatre
+            # situations qui n'appellent pas la meme reaction : demarrage en
+            # cours, boucle de redemarrage, arret franc, ou reponse trop lente
+            # (504). Servir le meme texte aux quatre laisse deviner.
+            #
+            # Le cas zigbee l'a montre : la page disait « rien ne va le relever
+            # tout seul » alors que le service se relançait une fois par minute
+            # depuis 4050 tentatives — l'inverse de ce qui se passait.
+            amont = request.headers.get("X-SecuBox-Origin-Status", "")
+            statut = int(amont) if amont.isdigit() else 502
+            p = qualifie(_unite_de(m), conteneur=_conteneur_de(m),
+                         statut_amont=statut)
+            log.warning("wake: %s est %s — etat %s (%d redemarrages)",
+                        mid, effective_lifecycle(m), p.etat, p.redemarrages)
+            corps = (_DOWN_TEXT
+                     .replace("__TITRE__", html.escape(p.titre))
+                     .replace("__EXPLICATION__", p.explication)
+                     .replace("__ACTION__", html.escape(p.action)))
+            entetes = {"Cache-Control": "no-store", "X-Sbx-Etat": p.etat}
+            # Retry-After n'est pose QUE si reessayer a un sens. Le poser sur
+            # une boucle de redemarrage inviterait le navigateur a insister sur
+            # un service qui echoue de facon reproductible.
+            if p.reessayer is not None:
+                entetes["Retry-After"] = str(p.reessayer)
+            return HTMLResponse(corps, status_code=statut, headers=entetes)
         if is_on(_observe_one(m)):
             return Response(status_code=200, headers={"X-Sbx-Wake": "up"})
         async with _lock(mid):

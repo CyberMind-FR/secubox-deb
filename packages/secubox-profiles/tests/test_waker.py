@@ -264,11 +264,74 @@ def test_always_on_failure_returns_a_page_not_an_empty_502(monkeypatch, tmp_path
     assert "text/html" in r.headers.get("content-type", "")
 
 
-def test_the_failure_page_says_no_wake_is_coming():
-    """Le point de la page : ne pas laisser rafraichir dans le vide."""
+def test_le_gabarit_de_panne_porte_les_emplacements_contextuels():
+    """Le texte n'est plus fige : il est rempli selon l'etat constate.
+
+    Le premier jet affirmait des phrases en dur, dont « rien ne va le relever
+    tout seul » — ce qui etait FAUX pour un service qui se relance en boucle,
+    et c'est precisement le cas qu'on avait sous les yeux (4050 redemarrages).
+    Le gabarit doit donc porter des emplacements, pas des conclusions.
+    """
     from pathlib import Path as _P
     import api.waker as waker
     txt = (_P(waker.__file__).resolve().parent.parent / "templates"
            / "down.html").read_text()
-    assert "panne" in txt.lower()
-    assert "relever" in txt.lower() or "reveil" in txt.lower() or "réveil" in txt.lower()
+    for marque in ("__TITRE__", "__EXPLICATION__", "__ACTION__"):
+        assert marque in txt, f"emplacement {marque} absent du gabarit"
+
+
+def test_un_service_qui_boucle_ne_dit_pas_d_attendre():
+    """Inviter a patienter devant une boucle de redemarrage est un contresens.
+
+    Le service a deja echoue des milliers de fois de facon reproductible :
+    attendre ne change rien, et `Retry-After` ferait insister le navigateur sur
+    une panne qui consomme deja du processeur en continu.
+    """
+    from api.etat_panne import qualifie, ETAT_BATTEMENT
+    import api.etat_panne as ep
+
+    ep._systemctl = lambda u, p, conteneur=None: {
+        "SubState": "auto-restart", "ActiveState": "activating",
+        "NRestarts": "4050"}.get(p, "")
+    p = qualifie("zigbee2mqtt")
+    assert p.etat == ETAT_BATTEMENT
+    assert p.reessayer is None, "un service qui boucle ne doit pas inviter a reessayer"
+    assert "4050" in p.explication, "le nombre de tentatives doit etre dit"
+
+
+def test_un_service_qui_demarre_invite_a_patienter():
+    from api.etat_panne import qualifie, ETAT_DEMARRE
+    import api.etat_panne as ep
+
+    ep._systemctl = lambda u, p, conteneur=None: {
+        "SubState": "start", "ActiveState": "activating", "NRestarts": "0"}.get(p, "")
+    p = qualifie("secubox-x")
+    assert p.etat == ETAT_DEMARRE
+    assert p.reessayer and p.reessayer > 0
+
+
+def test_un_504_est_traite_avant_toute_lecture_de_systemd():
+    """Le service TOURNE : systemd dirait « active » et ferait conclure a tort.
+
+    Un 504 est une panne de lenteur, pas d'absence. La distinguer evite de
+    proposer un redemarrage qui masquerait la cause.
+    """
+    from api.etat_panne import qualifie, ETAT_LENT
+    import api.etat_panne as ep
+
+    ep._systemctl = lambda u, p, conteneur=None: (_ for _ in ()).throw(
+        AssertionError("systemd ne doit pas etre interroge pour un 504"))
+    p = qualifie("secubox-x", statut_amont=504)
+    assert p.etat == ETAT_LENT
+    assert "lenteur" in p.explication.lower()
+
+
+def test_un_service_franchement_arrete_ne_promet_aucun_reveil():
+    from api.etat_panne import qualifie, ETAT_ARRETE
+    import api.etat_panne as ep
+
+    ep._systemctl = lambda u, p, conteneur=None: {
+        "SubState": "dead", "ActiveState": "inactive", "NRestarts": "0"}.get(p, "")
+    p = qualifie("secubox-x")
+    assert p.etat == ETAT_ARRETE
+    assert p.reessayer is None
