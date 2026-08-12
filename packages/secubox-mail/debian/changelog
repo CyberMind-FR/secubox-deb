@@ -1,5 +1,21 @@
-secubox-mail (2.5.1-1~bookworm1) bookworm; urgency=medium
+secubox-mail (2.5.3-1~bookworm1) bookworm; urgency=medium
 
+  * Distingue le domaine des ADRESSES de celui des noms de service (ref #1014).
+    Sur gk2, mail.toml declare `gk2.secubox.in` alors que Postfix ne sert que
+    `secubox.in` et que la seule boite est `gk2@secubox.in` : le panneau
+    annoncait donc des adresses qui n'existent pas, et l'autoconfiguration
+    Thunderbird — indexee par le domaine de l'adresse saisie — ne pouvait
+    JAMAIS correspondre. Le domaine des adresses est desormais lu dans
+    `vmailbox`, la table des boites reelles, lisible depuis l'hote sans
+    privilege. Repli sur le declare si elle manque.
+  * Roundcube recoit `username_domain`. Sans lui, saisir « gk2 » envoyait
+    « gk2 » a Dovecot, qui ne connait que « gk2@secubox.in » : la connexion
+    echouait et le webmail paraissait casse alors qu'il fonctionnait. Nouveau
+    verbe `mailctl webmail-config` pour reconcilier un conteneur DEJA installe
+    — le gabarit d'installation seul n'aurait profite qu'aux futures
+    installations. `lxc_attach` transmet ses mots tels quels a `lxc-attach --` :
+    une commande composee doit passer par `sh -c`, sinon la chaine entiere est
+    cherchee comme un nom de binaire — le premier jet du verbe echouait ainsi.
   * Le panneau n'est plus mutile par une erreur de permission (ref #1014).
     `lxc_exists()` faisait un `stat` sur `<conteneur>/rootfs` ; le repertoire
     d'un conteneur non privilegie appartient a sa racine mappee et n'est pas

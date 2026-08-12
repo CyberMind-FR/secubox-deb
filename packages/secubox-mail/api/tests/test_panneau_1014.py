@@ -102,3 +102,66 @@ def test_les_deux_liens_partagent_LA_MEME_adresse():
     # sans quoi le `const` la ferait passer a trois et le test mentirait.
     assert html.count(".href = webmailUrl;") == 2, \
         "les deux liens webmail ne partagent plus le même calcul"
+
+
+# ── 3. Domaine des adresses ≠ domaine des noms de service ────────────────
+
+def test_le_domaine_des_adresses_vient_de_ce_qui_est_servi(tmp_path, monkeypatch):
+    """Sur gk2, le déclaratif dit `gk2.secubox.in` et Postfix sert
+    `secubox.in`. Les adresses annoncées sous le premier n'existent pas.
+
+    On lit donc `vmailbox`, la table des boîtes réelles."""
+    from api import main
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "vmailbox").write_text("gk2@secubox.in secubox.in/gk2/Maildir/\n")
+    monkeypatch.setattr(main, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(main, "DOMAIN", "gk2.secubox.in")
+    assert main._domaine_des_adresses() == "secubox.in"
+
+
+def test_sans_table_lisible_on_retombe_sur_le_declare(tmp_path, monkeypatch):
+    # Mieux vaut une valeur discutable qu'une page vide : l'absence de table
+    # ne doit ni lever ni rendre une chaîne creuse.
+    from api import main
+
+    monkeypatch.setattr(main, "DATA_PATH", tmp_path / "absent")
+    monkeypatch.setattr(main, "DOMAIN", "gk2.secubox.in")
+    assert main._domaine_des_adresses() == "gk2.secubox.in"
+
+
+def test_les_commentaires_de_la_table_sont_ignores(tmp_path, monkeypatch):
+    # Une table commentée en tête ferait sinon dériver le domaine vers ce que
+    # dit un commentaire — donc vers n'importe quoi.
+    from api import main
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "vmailbox").write_text(
+        "# ancien@exemple.invalid ne doit pas compter\n"
+        "\n"
+        "gk2@secubox.in secubox.in/gk2/Maildir/\n")
+    monkeypatch.setattr(main, "DATA_PATH", tmp_path)
+    monkeypatch.setattr(main, "DOMAIN", "gk2.secubox.in")
+    assert main._domaine_des_adresses() == "secubox.in"
+
+
+def test_l_autoconfiguration_annonce_le_domaine_des_adresses():
+    """Thunderbird cherche la fiche par le domaine de l'adresse saisie :
+    annoncer le domaine de service la rend introuvable, donc inutile."""
+    source = (RACINE / "api" / "main.py").read_text()
+    assert '<emailProvider id="{MAIL_DOMAIN}">' in source
+    assert '<domain>{MAIL_DOMAIN}</domain>' in source
+    assert '<emailProvider id="{DOMAIN}">' not in source
+
+
+def test_roundcube_recoit_un_username_domain():
+    """Sans lui, saisir « gk2 » envoie « gk2 » à Dovecot, qui ne connaît que
+    « gk2@secubox.in » — la connexion échoue et le webmail paraît cassé."""
+    install = (RACINE / "lib" / "mail" / "install.sh").read_text()
+    assert "username_domain" in install, \
+        "le gabarit Roundcube ne pose pas username_domain"
+    mailctl = (RACINE / "sbin" / "mailctl").read_text()
+    assert "webmail-config)" in mailctl, \
+        "aucun verbe ne reconcilie un conteneur deja installe"

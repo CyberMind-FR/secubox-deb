@@ -315,6 +315,12 @@ cat > /etc/roundcube/config.inc.php.local <<LOCAL
 \$config['imap_host'] = 'tls://localhost';
 \$config['smtp_host'] = 'tls://localhost';
 \$config['des_key'] = '${DESKEY}';
+# Le domaine est AJOUTE AUX IDENTIFIANTS NUS (#1014). Sans lui, un operateur
+# qui saisit « gk2 » envoie « gk2 » a Dovecot, qui ne connait que
+# « gk2@secubox.in » : la connexion echoue et le webmail parait casse.
+# La valeur vient de ce que Postfix SERT reellement, pas du domaine declare —
+# les deux divergent sur gk2 (declare gk2.secubox.in, servi secubox.in).
+\$config['username_domain'] = '$(postconf -h virtual_mailbox_domains 2>/dev/null | tr "," " " | awk "{print \$1}")';
 \$config['imap_conn_options'] = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false));
 \$config['smtp_conn_options'] = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false));
 LOCAL
