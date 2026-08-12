@@ -42,6 +42,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+import sites_scan
+
 DEFAULT_SITES_ROOT = "/srv/metablogizer/sites"
 DEFAULT_CACHE_DIR = "/var/cache/secubox/metablogizer/shots"
 # SEUIL DE CHARGE. 40 sur une board a QUATRE coeurs laissait capturer alors que
@@ -95,22 +97,14 @@ def site_fingerprint(site_dir: Path) -> str:
 
 
 def site_domain(site_dir: Path, name: str) -> str:
-    """Domaine public d'un site — même règle que `main.py:load_sites()` :
-    `site.json:domain` s'il est renseigné (le suffixe `.local` est réécrit
-    vers `.gk2.secubox.in`), sinon `<name>.gk2.secubox.in`."""
-    domain = f"{name}{DEFAULT_DOMAIN_SUFFIX}"
-    site_json = site_dir / "site.json"
-    if site_json.exists():
-        try:
-            cfg = json.loads(site_json.read_text())
-        except (OSError, ValueError):
-            cfg = {}
-        saved = (cfg.get("domain") or "").strip()
-        if saved.endswith(".local"):
-            domain = saved.replace(".local", DEFAULT_DOMAIN_SUFFIX)
-        elif saved:
-            domain = saved
-    return domain
+    """Domaine public d'un site.
+
+    Délègue au calcul PARTAGÉ (#1012) plutôt que d'en tenir une cinquième
+    copie. Ce module prend les vignettes du mur : viser un domaine que nginx
+    n'associe à rien produirait une mosaïque de captures du même site — le
+    premier bloc serveur venu — sans qu'aucune erreur ne le signale.
+    """
+    return sites_scan.domaine_du_site(site_dir)
 
 
 # ─────────────────────────────────────────────────────────────────────────
