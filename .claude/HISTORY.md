@@ -3,6 +3,53 @@
 
 ---
 
+## 2026-08-12 (soir) — Nettoyage des branches : 421 -> 51
+
+**370 branches distantes supprimees, aucune perte de contenu.** Chacune a ete
+verifiee avant suppression, jamais estimee.
+
+| | |
+|---|---|
+| Avant | **421** branches distantes |
+| Deja fusionnees dans master | **282** supprimees |
+| Non fusionnees mais deja appliquees | **87** supprimees |
+| **Apres** | **51** |
+
+### La methode, et pourquoi elle compte
+
+Le premier lot est trivial : `--merged origin/master`, donc tout le contenu est
+deja dans master. Verifie une seconde fois par `merge-base --is-ancestor` : zero
+anomalie sur 282.
+
+Le second lot est le plus utile. 136 branches apparaissaient « non fusionnees »
+par leur SHA — mais `git cherry` compare les EMPREINTES de patch, pas les SHA :
+**87 d'entre elles n'apportaient rien**, leurs commits ayant ete repris dans
+master sous d'autres identifiants (rebase, cherry-pick, reprise a la main). Les
+supprimer ne perd rien ; les garder entretenait l'illusion d'un arriere de 136.
+
+L'arriere reel etait donc de **49**, pas 136 — et pas 32 comme annonce plus tot,
+chiffre herite d'un etat perime.
+
+### Ce qui reste : 49 branches a contenu reellement nouveau
+
+| Mois du dernier commit | Branches |
+|---|---|
+| 2026-05 | **28** |
+| 2026-06 | 4 |
+| 2026-07 | 11 |
+| 2026-08 | 6 (dont 5 en cours ce jour) |
+
+Les 28 de mai demandent un arbitrage humain, pas une suppression : elles
+contiennent du travail qui n'est jamais entre dans master. Certaines sont
+manifestement depassees — `feature/239-secubox-authelia-sso` porte un module
+**retire du produit** depuis (v2.14.0) — mais l'obsolescence se demontre, elle
+ne se presume pas.
+
+**Aucune PR ouverte** ne dependait d'une branche supprimee, et les 18 branches
+occupees par un arbre de travail ont ete protegees explicitement.
+
+---
+
 ## 2026-08-12 (fin) — Le mail : un panneau mutile, un lien qui ment, deux domaines confondus
 
 `secubox-mail 2.5.3` — deploye sur gk2, publie sur apt.secubox.in.
