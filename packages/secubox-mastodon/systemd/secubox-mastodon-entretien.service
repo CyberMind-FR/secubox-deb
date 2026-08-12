@@ -1,0 +1,49 @@
+[Unit]
+# ENTRETIEN PERIODIQUE DE L'INSTANCE FEDEREE.
+#
+# Une instance Mastodon accumule indefiniment ce qu'elle recoit du reste du
+# fediverse : miniatures et pieces jointes des comptes distants, cartes
+# d'apercu des liens, statuts d'auteurs que plus personne ne suit. Rien de tout
+# cela n'est nettoye tout seul — la documentation amont le confie a
+# l'exploitant.
+#
+# Constate le 2026-08-12 sur gk2 : AUCUN minuteur, AUCUNE entree cron. Avec un
+# seul compte et un domaine connu, l'occupation est encore de 31 Mo ; elle
+# croit avec chaque abonnement distant. Sur une board dont l'eMMC a deja
+# provoque des 502 en se remplissant, la laisser croitre sans borne n'est pas
+# une option.
+Description=SecuBox Mastodon — entretien (medias distants, cartes d'apercu, comptes morts)
+Documentation=https://docs.joinmastodon.org/admin/setup/#cleanup
+After=network-online.target
+
+[Service]
+Type=oneshot
+# NICE + PLAFOND DUR. L'entretien parcourt des milliers de fichiers : sans
+# borne, il entre en concurrence avec le service web au moment ou quelqu'un
+# lit son fil. Il n'est jamais urgent — c'est le cas typique ou un plafond
+# vaut mieux qu'une priorite basse (nice ne borne rien quand les autres
+# processus attendent le disque).
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=20%
+TimeoutStartSec=3h
+
+# Les quatre gestes, dans cet ordre : les medias d'abord (le plus volumineux),
+# les cartes d'apercu ensuite, puis les statuts distants sans lecteur local, et
+# enfin les comptes distants dont l'instance a disparu.
+#
+# `--days` genereux a dessein : on garde une semaine de medias distants pour ne
+# pas re-telecharger ce qui defile encore dans les fils.
+ExecStart=/usr/bin/lxc-attach -n mastodon -P /data/lxc -- su - mastodon -c \
+  "cd /home/mastodon/live && RAILS_ENV=production bin/tootctl media remove --days=7 --concurrency=1"
+ExecStart=/usr/bin/lxc-attach -n mastodon -P /data/lxc -- su - mastodon -c \
+  "cd /home/mastodon/live && RAILS_ENV=production bin/tootctl preview_cards remove --days=14 --concurrency=1"
+ExecStart=/usr/bin/lxc-attach -n mastodon -P /data/lxc -- su - mastodon -c \
+  "cd /home/mastodon/live && RAILS_ENV=production bin/tootctl statuses remove --days=30"
+# `accounts cull` interroge les instances distantes : il ECHOUE quand le reseau
+# est coupe, ce qui ne doit pas faire echouer l'entretien deja accompli.
+ExecStart=-/usr/bin/lxc-attach -n mastodon -P /data/lxc -- su - mastodon -c \
+  "cd /home/mastodon/live && RAILS_ENV=production bin/tootctl accounts cull"
+
+[Install]
+WantedBy=multi-user.target

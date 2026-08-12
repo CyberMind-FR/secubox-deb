@@ -1,3 +1,28 @@
+secubox-mastodon (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Entretien periodique de l'instance federee : medias distants (7 j), cartes
+    d'apercu (14 j), statuts distants sans lecteur local (30 j), et comptes des
+    instances disparues. Mastodon ne nettoie RIEN tout seul — la documentation
+    amont le confie a l'exploitant — et gk2 n'avait ni minuteur ni entree cron.
+  * Hebdomadaire, de nuit, borne a 20 % de processeur et en entrees-sorties
+    inactives : le menage parcourt des milliers de fichiers et n'est jamais
+    urgent. `Persistent=true` parce que la board n'est pas allumee en
+    permanence — sans lui, une semaine manquee n'est jamais rattrapee.
+  * Le minuteur d'entretien est active DANS LE POSTINST, pas par debhelper :
+    `--no-enable` traite toutes les unites du paquet, et ni un second appel ni
+    `--exclude` n'ont suffi — deux tentatives, deux fois `disabled` a
+    l'installation. Une ligne explicite vaut mieux qu'une combinaison d'options
+    qui ne fait pas ce qu'elle annonce.
+  * (tentative precedente) `--exclude` sur le premier `dh_installsystemd` : sans lui, l'appel qui pose
+    « ne pas activer » traitait AUSSI le minuteur d'entretien, et le second
+    appel n'avait plus rien a faire. Le minuteur restait desactive — constate a
+    l'installation.
+  * `accounts cull` tolere l'echec (prefixe `-`) : il interroge les instances
+    distantes et echoue reseau coupe, ce qui ne doit pas annuler le menage
+    deja accompli.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 09:10:00 +0200
+
 secubox-mastodon (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Premiere version : panneau d'administration, API d'etat, provisionnement
