@@ -75,8 +75,27 @@ def lxc_running(name: str) -> bool:
 
 
 def lxc_exists(name: str) -> bool:
-    """Check if LXC container exists"""
-    return (LXC_PATH / name / "rootfs").exists()
+    """Le conteneur est-il installé ? (#1014)
+
+    ON SONDE LE RÉPERTOIRE DU CONTENEUR, PAS SON `rootfs`. Le répertoire d'un
+    conteneur non privilégié appartient à sa racine mappée et n'est pas
+    traversable par `secubox` — `/data/lxc/mail` est en `drwxrwx---
+    100000:100000`. Un `stat` sur `rootfs` y lève `PermissionError`, et comme
+    rien ne la rattrapait, l'exception remontait jusqu'à faire tomber
+    l'endpoint `/status` **entier** : le panneau se peuplait à moitié et
+    paraissait « incomplet ».
+
+    Ce n'était pas un cas limite mais le cas NOMINAL — le répertoire d'un
+    conteneur n'est jamais lisible par le panneau.
+
+    Le `try` n'est pas décoratif non plus : une permission peut changer, un
+    point de montage disparaître. Savoir si un conteneur est installé ne vaut
+    jamais de perdre tout le reste de la page.
+    """
+    try:
+        return (LXC_PATH / name).is_dir()
+    except OSError:
+        return False
 
 
 def lxc_attach(name: str, command: str, timeout: int = 30) -> tuple:
@@ -245,9 +264,16 @@ async def get_access():
         "imap": {"host": fqdn, "port": 993, "ssl": True, "starttls_port": 143},
         "smtp": {"host": fqdn, "port": 587, "ssl": False, "starttls": True, "ssl_port": 465},
         "pop3": {"host": fqdn, "port": 995, "ssl": True},
+        # `local_url` NE PEUT PAS ETRE `localhost` (#1014). Cette valeur est
+        # consommee par le panneau, qui s'execute dans le navigateur de
+        # l'operateur : `localhost` y designe SA machine, jamais la board. Le
+        # lien menait donc systematiquement dans le vide, tout en affichant
+        # l'adresse publique — on lisait une adresse et on en visitait une
+        # autre. L'adresse du conteneur, elle, veut au moins dire quelque chose
+        # depuis le reseau de la board.
         "webmail": {
             "url": f"https://webmail.{DOMAIN}",
-            "local_url": f"http://localhost:{WEBMAIL_PORT}",
+            "local_url": f"http://{WEBMAIL_IP}:{WEBMAIL_PORT}",
         },
         "ssl_enabled": ssl_enabled,
         "apps": {
@@ -664,7 +690,9 @@ async def webmail_status():
         "installed": installed,
         "running": running,
         "url": f"https://webmail.{DOMAIN}" if running else None,
-        "local_url": f"http://localhost:{WEBMAIL_PORT}" if running else None,
+        # Meme raison qu'au-dessus (#1014) : `localhost`, dans le navigateur de
+        # l'operateur, designe la machine de l'operateur — jamais la board.
+        "local_url": f"http://{WEBMAIL_IP}:{WEBMAIL_PORT}" if running else None,
     }
 
 
