@@ -128,14 +128,21 @@ lxc.mount.entry = /dev/secubox-zgb dev/secubox-zgb none bind,create=file,optiona
 # Without this, the configuration.yaml port: must be the bare /dev/secubox-zgb
 # AND z2m must match by USB VID/PID alone — which v2.10+ doesn't always do.
 lxc.mount.entry = /dev/serial/by-id dev/serial/by-id none bind,create=dir,optional 0 0
-# CRITICAL: bind the actual /dev/tty{USB,ACM}* device nodes. The symlinks in
-# /dev/secubox-zgb and /dev/serial/by-id all *resolve* to /dev/ttyUSB0 or
-# /dev/ttyACM0 — if those nodes don't exist inside the container, z2m opens
-# the symlink, the kernel follows it, and the open(2) fails with ENOENT and
-# z2m crash-loops (4500+ restarts observed in the wild). The `optional`
-# flag means the LXC still starts when the dongle is unplugged.
-lxc.mount.entry = /dev/ttyUSB0 dev/ttyUSB0 none bind,create=file,optional 0 0
-lxc.mount.entry = /dev/ttyACM0 dev/ttyACM0 none bind,create=file,optional 0 0
+# LES NOEUDS ttyUSB0/ttyACM0 NE SONT PLUS MONTES, et la raison invoquee pour
+# le faire etait fausse. Elle disait que /dev/secubox-zgb, etant un lien, se
+# resoudrait vers un ttyUSB0 absent dans le conteneur. Un bind-mount SUIT le
+# lien et monte sa CIBLE : verifie le 2026-08-12 sur gk2, /dev/secubox-zgb est
+# un vrai peripherique caractere (188,0) a l'interieur, sans aucun autre
+# montage.
+#
+# Les monter avait deux couts reels :
+#   - ils reintroduisaient DANS le conteneur les noms dependant de l'ordre
+#     d'enumeration, que le nom de role existe justement pour eviter ;
+#   - avec `create=file`, LXC fabriquait un FICHIER VIDE quand l'hote n'avait
+#     pas le noeud. Constate : /dev/ttyACM0 present dans le conteneur en
+#     `---------- 0 octet`, alors qu'aucun ttyACM n'existe sur l'hote. Un
+#     fichier qui ressemble a un peripherique et n'en est pas — exactement ce
+#     qui fait chercher au mauvais endroit.
 lxc.cgroup2.devices.allow = c 188:* rwm
 lxc.cgroup2.devices.allow = c 166:* rwm
 EOF
@@ -304,13 +311,17 @@ configure_zigbee2mqtt() {
     # SONOFF Dongle Lite MG21 (10c4:ea60, Silicon Labs EFR32MG21)
     if lsusb 2>/dev/null | grep -qE "10c4:ea60.*Silicon Labs|SONOFF.*MG21"; then
         detected_adapter="ember"
-        # z2m 2.x adapter discovery matches by manufacturer regex
-        # ".*sonoff.*lite.*mg21.*" against the path — use the canonical
-        # /dev/serial/by-id symlink which contains the SONOFF descriptor.
-        local byid
-        byid=$(ls /dev/serial/by-id/usb-SONOFF_*MG21* 2>/dev/null | head -1)
-        [ -n "$byid" ] && detected_port="$byid"
     fi
+    # LE PORT RESTE /dev/secubox-zgb, TOUJOURS. La version precedente lui
+    # substituait le chemin /dev/serial/by-id/usb-SONOFF_*MG21*, pour aider la
+    # decouverte d'adaptateur de z2m 2.x qui compare une expression reguliere
+    # de fabricant au chemin. Cette decouverte ne sert a rien ici : `adapter:`
+    # est ecrit explicitement juste en dessous.
+    #
+    # Le cout, lui, etait reel : le chemin by-id contient le NUMERO DE SERIE du
+    # dongle. Le remplacer — panne, montee en gamme — changeait le chemin, et la
+    # configuration pointait vers un peripherique disparu. Le nom de role, lui,
+    # designe « le coordinateur Zigbee », quel qu'il soit.
     log "  · detected adapter: $detected_adapter ($detected_port)"
 
     local stage=/tmp/zigbee2mqtt-config.$$

@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox — noms STABLES et UNIQUES pour les liaisons série USB.
+#
+# POURQUOI. `/dev/ttyUSB0` et `/dev/ttyACM0` sont attribués dans l'ORDRE
+# D'ÉNUMÉRATION. Débrancher un dongle, en ajouter un, redémarrer avec un hub
+# lent : les numéros permutent. Un conteneur qui monte `/dev/ttyUSB0` reçoit
+# alors un AUTRE appareil sous le même nom — le cas le plus déroutant qui soit,
+# parce que rien n'échoue : le service ouvre bien un port série, et parle au
+# mauvais matériel.
+#
+# Constaté sur gk2 le 2026-08-12 : la configuration du conteneur `zigbee`
+# montait `/dev/ttyACM0` alors que l'hôte n'en avait aucun. Le montage étant
+# `create=file`, LXC a fabriqué un FICHIER VIDE de ce nom dans le conteneur —
+# `----------  0 août 7`. Un fichier qui ressemble à un périphérique et n'en
+# est pas.
+#
+# CE QUE CETTE RÈGLE POSE : un nom unique par appareil, dérivé de son NUMÉRO DE
+# SÉRIE, qui ne dépend d'aucun ordre :
+#
+#     /dev/secubox-tty/<vendeur>_<modele>_<serie>
+#
+# Le sous-répertoire est délibéré : il regroupe, et il évite qu'un nom
+# d'appareil entre en collision avec un nom de rôle (`secubox-zgb`, posé par le
+# paquet du module concerné).
+#
+# LES RÈGLES DE RÔLE VIVENT DANS LEUR PAQUET, pas ici. `secubox-zigbee` déclare
+# quel appareil est le coordinateur ; ce fichier ne fait que garantir que chaque
+# appareil a un nom à lui. Mélanger les deux obligerait à modifier le paquet
+# partagé pour chaque nouveau module.
+#
+# GROUP=dialout, MODE=0660 : un conteneur non privilégié accède au port par son
+# groupe. 0666 rendrait le port lisible par tout processus de l'hôte, ce qui est
+# inutile ici.
+#
+# LE NUMÉRO 70 N'EST PAS DÉCORATIF. Nommé `60-`, ce fichier passait AVANT
+# `60-serial.rules` d'udev — celui qui renseigne `ID_SERIAL_SHORT` et `ID_BUS`.
+# Il lisait donc des variables encore vides et ne posait aucun lien, sans
+# erreur : `udevadm trigger` réussissait, et `/dev/secubox-tty/` n'existait
+# simplement pas. Vérifié sur gk2 avant et après renommage.
+
+ACTION=="remove", GOTO="secubox_serial_fin"
+SUBSYSTEM!="tty", GOTO="secubox_serial_fin"
+
+# Seuls les ports portés par un appareil USB nous intéressent : les UART de la
+# carte (`ttyS*`, console série) n'ont pas de numéro de série et ne se
+# débranchent pas.
+ENV{ID_BUS}!="usb", GOTO="secubox_serial_fin"
+
+# Sans numéro de série, pas de nom unique possible — on retombe sur le chemin
+# physique (port du hub), stable tant qu'on ne change pas de prise. C'est moins
+# bon qu'un numéro de série, et c'est dit plutôt que tu.
+ENV{ID_SERIAL_SHORT}=="", ENV{ID_PATH}!="", \
+    SYMLINK+="secubox-tty/$env{ID_VENDOR_ID}_$env{ID_MODEL_ID}_par-port_$env{ID_PATH}", \
+    MODE="0660", GROUP="dialout", GOTO="secubox_serial_fin"
+
+ENV{ID_SERIAL_SHORT}!="", \
+    SYMLINK+="secubox-tty/$env{ID_VENDOR_ID}_$env{ID_MODEL_ID}_$env{ID_SERIAL_SHORT}", \
+    MODE="0660", GROUP="dialout"
+
+LABEL="secubox_serial_fin"
