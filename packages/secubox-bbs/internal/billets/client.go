@@ -220,15 +220,40 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 	// EXIF — ce qui est aussi ce qu'on veut avant une publication : une photo
 	// porte la position et l'appareil de qui l'a prise.
 	if len(f.Jointes) > 0 && r.BilletID != "" {
-		texte = c.transfereMedias(r.BilletID, session, texte, f.Jointes, &r)
-		// Le corps n'est reecrit QUE si un transfert a reussi : une mise a jour
-		// inutile ferait une seconde ecriture pour rien, et un echec de celle-ci
-		// perdrait le billet deja publie.
-		if r.Medias > 0 {
-			c.majCorps(r.BilletID, session, texte)
-		}
+		// LE TRANSFERT NE BLOQUE PAS LA REPONSE, et c'est deliberé.
+		//
+		// billets RE-ENCODE chaque image (2 Mo mesures a 3,9 s sur cette
+		// board, et il faut les additionner). Fait dans la requete de
+		// l'operateur, ce travail passe derriere un delai de garde de 60 s :
+		// au troisieme media, le navigateur recoit un 504 alors que le billet
+		// EST publie. C'est ce qui a ete constate — deux essais, deux 504,
+		// deux billets crees.
+		//
+		// Le billet existe deja et est lisible : les medias le rejoignent
+		// quelques secondes plus tard. Rendre la main tout de suite est plus
+		// honnete que faire attendre pour un resultat que l'on n'affiche pas.
+		id, texteFige, jointes := r.BilletID, texte, f.Jointes
+		go c.TransfereEtReecrit(id, session, texteFige, jointes)
 	}
 	return r, nil
+}
+
+// TransfereEtReecrit fait le travail de fond : transferer les medias puis
+// reecrire le corps avec leurs nouvelles adresses.
+//
+// EXPORTEE POUR ETRE TESTEE. `Publier` la lance dans une goroutine, ce qui la
+// rendrait invisible aux tests — et une logique non testable finit non testee.
+// L'appeler directement permet de verifier ce qu'elle fait, pendant qu'un autre
+// test verifie que `Publier` rend la main sans l'attendre.
+func (c *Client) TransfereEtReecrit(billetID, session, texte string, js []Jointe) Resultat {
+	var r Resultat
+	t := c.transfereMedias(billetID, session, texte, js, &r)
+	// Le corps n'est reecrit QUE si un transfert a reussi : une mise a jour
+	// inutile ferait une seconde ecriture pour rien.
+	if r.Medias > 0 {
+		c.majCorps(billetID, session, t)
+	}
+	return r
 }
 
 // transfereMedias envoie chaque piece jointe a billets et remplace sa reference
@@ -276,10 +301,11 @@ func (c *Client) envoieMedia(billetID, session string, j Jointe) (string, error)
 	req.Header.Set("Cookie", "secubox_session="+session)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
-	cl := c.HTTP
-	if cl == nil {
-		cl = &http.Client{Timeout: 30 * time.Second}
-	}
+	// UN CLIENT PROPRE AU TRANSFERT. Celui de la publication est a 15 s —
+	// suffisant pour poser un billet, trop court pour un re-encodage d'image.
+	// Reutiliser le meme aurait fait echouer les gros medias sans qu'on
+	// comprenne pourquoi.
+	cl := &http.Client{Timeout: 120 * time.Second, Transport: c.transport()}
 	resp, err := cl.Do(req)
 	if err != nil {
 		return "", err
@@ -301,6 +327,15 @@ func (c *Client) envoieMedia(billetID, session string, j Jointe) (string, error)
 }
 
 // majCorps reecrit le corps du billet, une fois les adresses connues.
+// transport rend le transport du client, pour qu'un appel long emprunte le
+// meme chemin — la socket unix quand il y en a une.
+func (c *Client) transport() http.RoundTripper {
+	if c.HTTP != nil && c.HTTP.Transport != nil {
+		return c.HTTP.Transport
+	}
+	return nil
+}
+
 func (c *Client) majCorps(billetID, session, texte string) {
 	charge, _ := json.Marshal(map[string]any{"body": texte})
 	req, err := http.NewRequest("PUT",

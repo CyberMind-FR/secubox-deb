@@ -33,7 +33,7 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/web"
 )
 
-const version = "0.6.1"
+const version = "0.8.1"
 
 func trim(s string) string { return strings.TrimSpace(s) }
 

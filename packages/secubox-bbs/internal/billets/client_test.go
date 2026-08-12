@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUnFilLocalNEstJamaisPublie(t *testing.T) {
@@ -231,14 +232,10 @@ func TestLesMediasSuiventLeBilletEtLeCorpsEstReecrit(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{Base: srv.URL, HTTP: srv.Client()}
-	r, err := c.Publier(Fil{
-		Session: "s", Titre: "Essai", Public: true, Retour: "/t/1",
-		Messages: []Message{{Auteur: "gk2", Corps: "voir /f/12.png", Public: true}},
-		Jointes:  []Jointe{{Ref: "/f/12.png", Nom: "photo.png", Mime: "image/png", Contenu: []byte("x")}},
-	})
-	if err != nil {
-		t.Fatalf("publication : %v", err)
-	}
+	// Appel DIRECT : `Publier` lance ce travail en arriere-plan pour ne pas
+	// faire attendre l'operateur derriere un re-encodage d'images.
+	r := c.TransfereEtReecrit("B1", "s", "voir /f/12.png",
+		[]Jointe{{Ref: "/f/12.png", Nom: "photo.png", Mime: "image/png", Contenu: []byte("x")}})
 	if r.Medias != 1 {
 		t.Errorf("medias transferes = %d, attendu 1", r.Medias)
 	}
@@ -269,7 +266,8 @@ func TestUnMediaRefuseNAnnulePasLaPublication(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{Base: srv.URL, HTTP: srv.Client()}
-	r, err := c.Publier(Fil{
+	// La publication elle-meme doit reussir : c'est tout l'enjeu.
+	pub, err := c.Publier(Fil{
 		Session: "s", Titre: "Essai", Public: true, Retour: "/t/1",
 		Messages: []Message{{Auteur: "gk2", Corps: "ecouter /f/7.ogg", Public: true}},
 		Jointes:  []Jointe{{Ref: "/f/7.ogg", Nom: "son.ogg", Mime: "audio/ogg", Contenu: []byte("x")}},
@@ -277,10 +275,46 @@ func TestUnMediaRefuseNAnnulePasLaPublication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("la publication a echoue a cause d'un media : %v", err)
 	}
-	if r.BilletID != "B1" {
+	if pub.BilletID != "B1" {
 		t.Error("le billet n'a pas ete publie")
 	}
+	r := c.TransfereEtReecrit("B1", "s", "ecouter /f/7.ogg",
+		[]Jointe{{Ref: "/f/7.ogg", Nom: "son.ogg", Mime: "audio/ogg", Contenu: []byte("x")}})
 	if r.MediasRefuses != 1 {
 		t.Errorf("refus remontes = %d, attendu 1", r.MediasRefuses)
+	}
+}
+
+func TestPublierRendLaMainSansAttendreLesMedias(t *testing.T) {
+	// billets RE-ENCODE chaque image : 3,9 s mesures pour 2 Mo sur la board, et
+	// il faut les additionner. Fait dans la requete de l'operateur, ce travail
+	// passe derriere un delai de garde de 60 s — au troisieme media, le
+	// navigateur recoit un 504 alors que le billet EST publie. Constate : deux
+	// essais, deux 504, deux billets crees.
+	lent := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" && r.URL.Path == "/admin/api/billets" {
+			w.Write([]byte(`{"id":"B1","url":"/b/essai"}`))
+			return
+		}
+		<-lent // un media qui ne repond jamais
+	}))
+	defer srv.Close()
+	defer close(lent)
+
+	c := &Client{Base: srv.URL, HTTP: srv.Client()}
+	fini := make(chan struct{})
+	go func() {
+		c.Publier(Fil{
+			Session: "s", Titre: "Essai", Public: true, Retour: "/t/1",
+			Messages: []Message{{Auteur: "gk2", Corps: "voir /f/1.png", Public: true}},
+			Jointes:  []Jointe{{Ref: "/f/1.png", Nom: "a.png", Contenu: []byte("x")}},
+		})
+		close(fini)
+	}()
+	select {
+	case <-fini:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Publier attend le transfert des medias — c'est ce qui produit le 504")
 	}
 }
