@@ -34,4 +34,22 @@ FIN
     ;;
 esac
 #DEBHELPER#
+
+# ENTRETIEN HEBDOMADAIRE : ACTIVE EXPLICITEMENT, ici et pas par debhelper.
+#
+# `dh_installsystemd --no-enable` traite TOUTES les unites du paquet, y compris
+# ce minuteur ; l'appel suivant cense l'activer n'avait alors plus rien a faire,
+# et `--exclude` n'y a rien change. Deux tentatives, deux fois `disabled` a
+# l'installation — verifie. Une ligne explicite vaut mieux qu'une combinaison
+# d'options qui ne fait pas ce qu'elle annonce.
+#
+# « Ne pas activer d'office » vaut pour le SERVICE de l'instance, qui demande
+# HAProxy et le DNS. Un menage hebdomadaire, lui, n'a aucune raison d'attendre :
+# son absence laisse le disque se remplir sans borne, et c'est precisement ce
+# qui a ete constate sur gk2 (ni minuteur, ni entree cron).
+if [ "$1" = "configure" ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl enable secubox-mastodon-entretien.timer >/dev/null 2>&1 || true
+    systemctl start  secubox-mastodon-entretien.timer >/dev/null 2>&1 || true
+fi
+
 exit 0

@@ -1,0 +1,19 @@
+[Unit]
+Description=SecuBox Mastodon — entretien hebdomadaire de l'instance federee
+
+[Timer]
+# HEBDOMADAIRE ET DE NUIT. L'entretien parcourt des milliers de fichiers ; le
+# faire aux heures ou personne ne lit son fil evite d'ajouter des entrees-sorties
+# a une board qui en manque deja.
+#
+# RandomizedDelaySec de deux heures : plusieurs SecuBox federees entre elles ne
+# doivent pas toutes purger — et donc toutes solliciter les memes instances
+# distantes avec `accounts cull` — a la meme minute.
+OnCalendar=Sun 03:30
+RandomizedDelaySec=2h
+# La board n'est pas allumee en permanence : sans cela, une semaine manquee
+# n'est jamais rattrapee et l'entretien n'a plus lieu du tout.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

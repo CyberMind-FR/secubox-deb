@@ -21,6 +21,16 @@ override_dh_auto_install:
 	# le DNS, qu'un paquet ne decide pas seul.
 	install -d debian/secubox-mastodon/etc/nginx/sites-available
 	install -m 0644 conf/mastodon.nginx.conf debian/secubox-mastodon/etc/nginx/sites-available/mastodon.conf
+	# Entretien periodique de l'instance federee. Mastodon accumule
+	# indefiniment les medias distants, les cartes d'apercu et les statuts
+	# d'auteurs que plus personne ne suit : rien n'est nettoye tout seul, la
+	# documentation amont le confie a l'exploitant. Constate sur gk2 le
+	# 2026-08-12 : aucun minuteur, aucune entree cron.
+	install -d debian/secubox-mastodon/lib/systemd/system
+	install -m 0644 systemd/secubox-mastodon-entretien.service \
+	  debian/secubox-mastodon/lib/systemd/system/
+	install -m 0644 systemd/secubox-mastodon-entretien.timer \
+	  debian/secubox-mastodon/lib/systemd/system/
 	install -d debian/secubox-mastodon/etc/secubox
 	install -m 0644 conf/mastodon.toml.example debian/secubox-mastodon/etc/secubox/mastodon.toml.example
 	install -d debian/secubox-mastodon/usr/share/doc/secubox-mastodon
@@ -31,4 +41,14 @@ override_dh_auto_install:
 # l'operateur l'avait active. « Ne pas activer d'office » et « couper ce qui
 # tourne » sont deux choses differentes.
 override_dh_installsystemd:
-	dh_installsystemd --no-enable --no-start --restart-after-upgrade
+	# --exclude EST INDISPENSABLE : sans lui, ce premier appel traite AUSSI le
+	# minuteur d'entretien et lui pose un « ne pas activer ». Le second appel
+	# n'a alors plus rien a faire, et le minuteur reste desactive — constate a
+	# l'installation, il fallait l'activer a la main.
+	dh_installsystemd --no-enable --no-start --restart-after-upgrade \
+	  --exclude=secubox-mastodon-entretien
+	# L'ENTRETIEN, LUI, EST ACTIVE. Ne pas activer d'office vaut pour le service
+	# de l'instance — qui demande HAProxy et le DNS — pas pour un menage
+	# hebdomadaire dont l'absence laisse le disque se remplir sans borne. Il est
+	# active sans etre demarre : il se declenchera au prochain dimanche.
+	dh_installsystemd --no-start secubox-mastodon-entretien.timer
