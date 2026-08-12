@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"strings"
@@ -47,9 +48,22 @@ type Fil struct {
 	Public   bool
 	Messages []Message
 	Retour   string // adresse du fil dans le BBS, pour le lien croise
+	// Jointes : les pieces jointes citees dans les messages, resolues par
+	// l'appelant (qui seul a acces au magasin). Sans elles, le corps publie
+	// garderait des chemins `/f/12.png` qui ne designent RIEN chez billets —
+	// et que le BBS refuserait de toute facon a un lecteur anonyme.
+	Jointes []Jointe
 	// Attribuer nomme les auteurs dans le billet. FAUX par defaut : voir
 	// l'assemblage du corps ci-dessous.
 	Attribuer bool
+}
+
+// Jointe : un fichier a transferer chez billets avec le billet.
+type Jointe struct {
+	Ref     string // tel qu'il apparait dans le corps, ex. "/f/12.png"
+	Nom     string
+	Mime    string
+	Contenu []byte
 }
 
 type Resultat struct {
@@ -57,6 +71,11 @@ type Resultat struct {
 	URL      string
 	Pris     int
 	Retenus  int
+	// Medias transferes, et refuses par billets (formats qu'il ne re-encode
+	// pas). Le compte des refus est REMONTE : un media silencieusement absent
+	// du billet ferait chercher l'erreur cote lecteur.
+	Medias        int
+	MediasRefuses int
 }
 
 type Client struct {
@@ -189,7 +208,119 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 	}
 	json.Unmarshal(corps, &out)
 	r.BilletID, r.URL = out.ID, out.URL
+
+	// LES MEDIAS SUIVENT LE BILLET, ils ne restent pas chez nous.
+	//
+	// Le corps cite des chemins `/f/12.png`. Chez billets ils ne designent
+	// RIEN — et meme resolus vers le BBS ils seraient refuses : les pieces
+	// jointes y sont reservees aux membres, alors qu'un billet est public. Un
+	// lecteur voyait donc le chemin en texte, sans image.
+	//
+	// On les TRANSFERE donc, et billets les re-encode en retirant les donnees
+	// EXIF — ce qui est aussi ce qu'on veut avant une publication : une photo
+	// porte la position et l'appareil de qui l'a prise.
+	if len(f.Jointes) > 0 && r.BilletID != "" {
+		texte = c.transfereMedias(r.BilletID, session, texte, f.Jointes, &r)
+		// Le corps n'est reecrit QUE si un transfert a reussi : une mise a jour
+		// inutile ferait une seconde ecriture pour rien, et un echec de celle-ci
+		// perdrait le billet deja publie.
+		if r.Medias > 0 {
+			c.majCorps(r.BilletID, session, texte)
+		}
+	}
 	return r, nil
+}
+
+// transfereMedias envoie chaque piece jointe a billets et remplace sa reference
+// dans le corps par l'adresse rendue.
+//
+// UN REFUS N'INTERROMPT PAS LA PUBLICATION. billets ne re-encode pas tous les
+// formats — un son ou une video peuvent etre refuses en 415. Le billet doit
+// paraitre quand meme, avec les medias qui sont passes : perdre l'ecrit parce
+// qu'une video n'a pas convenu serait un mauvais echange. Le compte des refus
+// est remonte a l'appelant, qui le dit a l'operateur.
+func (c *Client) transfereMedias(billetID, session, texte string, js []Jointe, r *Resultat) string {
+	for _, j := range js {
+		if !strings.Contains(texte, j.Ref) {
+			continue // cite nulle part : rien a transferer
+		}
+		url, err := c.envoieMedia(billetID, session, j)
+		if err != nil {
+			r.MediasRefuses++
+			continue
+		}
+		texte = strings.ReplaceAll(texte, j.Ref, url)
+		r.Medias++
+	}
+	return texte
+}
+
+func (c *Client) envoieMedia(billetID, session string, j Jointe) (string, error) {
+	var corps bytes.Buffer
+	w := multipart.NewWriter(&corps)
+	// Le nom de champ est impose par billets : `file`.
+	part, err := w.CreateFormFile("file", j.Nom)
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(j.Contenu); err != nil {
+		return "", err
+	}
+	w.Close()
+
+	req, err := http.NewRequest("POST",
+		strings.TrimRight(c.Base, "/")+"/admin/api/billets/"+billetID+"/media", &corps)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Cookie", "secubox_session="+session)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	cl := c.HTTP
+	if cl == nil {
+		cl = &http.Client{Timeout: 30 * time.Second}
+	}
+	resp, err := cl.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	brut, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 300 {
+		return "", fmt.Errorf("media refuse (%d) : %s", resp.StatusCode,
+			strings.TrimSpace(string(brut[:min(len(brut), 160)])))
+	}
+	var out struct {
+		URL string `json:"url"`
+	}
+	json.Unmarshal(brut, &out)
+	if out.URL == "" {
+		return "", errors.New("billets n'a pas rendu d'adresse")
+	}
+	return out.URL, nil
+}
+
+// majCorps reecrit le corps du billet, une fois les adresses connues.
+func (c *Client) majCorps(billetID, session, texte string) {
+	charge, _ := json.Marshal(map[string]any{"body": texte})
+	req, err := http.NewRequest("PUT",
+		strings.TrimRight(c.Base, "/")+"/admin/api/billets/"+billetID,
+		bytes.NewReader(charge))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Cookie", "secubox_session="+session)
+	req.Header.Set("Content-Type", "application/json")
+	cl := c.HTTP
+	if cl == nil {
+		cl = &http.Client{Timeout: 15 * time.Second}
+	}
+	// L'ECHEC EST SILENCIEUX ICI, et c'est assume : le billet existe deja et
+	// reste lisible avec ses chemins d'origine. Le faire echouer ferait
+	// remonter une erreur alors que la publication, elle, a reussi.
+	if resp, err := cl.Do(req); err == nil {
+		resp.Body.Close()
+	}
 }
 
 func min(a, b int) int {

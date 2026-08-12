@@ -1,3 +1,28 @@
+secubox-bbs (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * LES MEDIAS SUIVENT LE BILLET. Publier un fil laissait dans le corps des
+    chemins `/f/12.png` qui ne designent RIEN chez billets — et que le BBS
+    refuserait de toute facon a un lecteur anonyme, les pieces jointes y etant
+    reservees aux membres. Le lecteur voyait un chemin en texte, sans image.
+  * Ils sont desormais TRANSFERES par l'API de billets
+    (`POST /admin/api/billets/{id}/media`), qui les re-encode en retirant les
+    donnees EXIF — ce qu'on veut de toute facon avant une publication : une
+    photo porte la position et l'appareil de qui l'a prise.
+  * Le corps est reecrit avec les adresses rendues. Sans cela le transfert ne
+    servirait a rien, le billet citant toujours une adresse morte.
+  * ON NE TRANSFERE QUE CE QUI EST CITE. Envoyer la bibliotheque de l'auteur
+    serait une fuite : un fichier depose pour un fil local se retrouverait sur
+    une page publique.
+  * UN MEDIA REFUSE N'ANNULE PAS LA PUBLICATION. billets ne re-encode pas tous
+    les formats ; perdre l'ecrit parce qu'une video n'a pas convenu serait un
+    mauvais echange. Le nombre de refus est REMONTE — un media silencieusement
+    absent ferait chercher l'erreur cote lecteur.
+  * La reecriture du corps echoue en silence a dessein : le billet existe deja
+    et reste lisible ; faire remonter une erreur alors que la publication a
+    reussi serait trompeur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 15:40:00 +0200
+
 secubox-bbs (0.7.2-1~bookworm1) bookworm; urgency=medium
 
   * L'avatar apparait PARTOUT ou un membre est nomme : messages d'un fil,
