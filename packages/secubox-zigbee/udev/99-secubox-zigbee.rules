@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox — nom de RÔLE du coordinateur Zigbee : /dev/secubox-zgb
+#
+# Le conteneur `zigbee` monte CE nom, jamais `/dev/ttyUSB0` : il obtient donc
+# toujours le même chemin à l'intérieur, quel que soit l'ordre d'énumération de
+# l'hôte, et zigbee2mqtt n'a plus à être reconfiguré quand un autre dongle
+# apparaît.
+#
+# CE FICHIER EXISTAIT SUR LA BOARD SANS ÊTRE LIVRÉ PAR AUCUN PAQUET. Posé à la
+# main le 2026-05-22, il aurait disparu à la première réinstallation propre — et
+# avec lui le lien que la configuration du conteneur exige. Il est désormais
+# empaqueté.
+#
+# TROIS DÉFAUTS DE LA VERSION MANUELLE, corrigés ici :
+#
+#   1. Trois paires vendeur/produit différentes posaient TOUTES le symlink
+#      `secubox-zgb`. Deux de ces appareils branchés ensemble, et le lien
+#      désignait l'un ou l'autre selon l'ordre — non déterministe, donc
+#      indébrouillable le jour où ça compte. Le rôle est maintenant attribué au
+#      SEUL appareil désigné par `SECUBOX_ZIGBEE_SERIAL` quand plusieurs
+#      candidats existent (cf. /etc/secubox/zigbee.toml).
+#   2. Un second symlink `secubox-zgb-alt` pointait sur le même appareil, sans
+#      que rien ne le consomme. Retiré : deux noms pour une chose, c'est une
+#      question de plus à se poser en incident.
+#   3. `RUN+="lxc-device add"` injectait le périphérique dans le conteneur
+#      depuis la règle udev. Cela n'agit que si le conteneur tourne DÉJÀ, échoue
+#      silencieusement sinon (`|| true`), et double le montage déclaré dans la
+#      configuration LXC. Le montage déclaratif suffit et survit au redémarrage.
+
+ACTION=="remove", GOTO="secubox_zgb_fin"
+SUBSYSTEM!="tty", GOTO="secubox_zgb_fin"
+ENV{ID_BUS}!="usb", GOTO="secubox_zgb_fin"
+
+# Coordinateurs connus. La liste est BLANCHE : un dongle inconnu n'usurpe pas
+# le rôle, il garde seulement son nom unique pose par 70-secubox-serial.rules.
+#
+#   10c4:ea60  Silicon Labs CP210x — SONOFF Dongle-E / Dongle Lite MG21 (EZSP)
+#   1a86:55d4  QinHeng CH9102    — SONOFF Dongle-P / ZBDongle-P (zstack)
+#   1cf1:0030  dresden elektronik ConBee II (deconz)
+ENV{ID_VENDOR_ID}=="10c4", ENV{ID_MODEL_ID}=="ea60", ENV{SECUBOX_ZGB}="1"
+ENV{ID_VENDOR_ID}=="1a86", ENV{ID_MODEL_ID}=="55d4", ENV{SECUBOX_ZGB}="1"
+ENV{ID_VENDOR_ID}=="1cf1", ENV{ID_MODEL_ID}=="0030", ENV{SECUBOX_ZGB}="1"
+ENV{SECUBOX_ZGB}!="1", GOTO="secubox_zgb_fin"
+
+# DÉSIGNATION EXPLICITE quand plusieurs coordinateurs sont branchés. Le fichier
+# est écrit par `zigbeectl adapter pin <serie>` ; absent, le premier coordinateur
+# reconnu prend le rôle — comportement d'avant, conservé pour l'installation
+# courante à un seul dongle.
+IMPORT{file}="/etc/secubox/zigbee-adapter.env"
+ENV{SECUBOX_ZIGBEE_SERIAL}=="", GOTO="secubox_zgb_pose"
+ENV{SECUBOX_ZIGBEE_SERIAL}!="$env{ID_SERIAL_SHORT}", GOTO="secubox_zgb_fin"
+
+LABEL="secubox_zgb_pose"
+SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
+
+LABEL="secubox_zgb_fin"
