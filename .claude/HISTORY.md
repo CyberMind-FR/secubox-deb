@@ -3,6 +3,63 @@
 
 ---
 
+## 2026-08-12 — Bornes CPU generalisees, et la publication qui servait un autre site
+
+Trois correctifs, deployes sur gk2 et publies sur apt.secubox.in.
+
+### Bornes CPU declaratives pour les 30 conteneurs (#1011)
+
+`secubox-system-tuning 1.1.0`. Mecanisme **etendu, pas reinvente** :
+`secubox-tuning-apply` faisait deja ce travail pour la memoire, il gagne une
+phase `cpu` et un `/etc/secubox/tuning/lxc-cpu.toml` (conffile).
+
+Sur 30 conteneurs, **cinq** seulement avaient une borne effective, **trois**
+l'avaient ecrite puis **commentee** (`gitea`, `mail`, `nextcloud`) et
+vingt-deux n'en avaient aucune. Rien n'etait ecrit par un paquet : une
+reinstallation repartait sans plafond.
+
+Regle : ce qui etait borne n'est ni desserre ni resserre ; ce qui ne l'etait
+pas recoit deux coeurs sur quatre. Les bornes commentees ne sont **pas**
+ressuscitees — quelqu'un les a retirees, la raison est inconnue.
+
+Deux defauts trouves en chemin : l'ancien `sed` de la phase **memoire**
+laissait les doublons (celui-la meme qui avait tue en silence l'intention de
+2 coeurs sur `matrix`), et `secubox-tuning-apply <phase>` sortait en **erreur**
+apres avoir parfaitement fonctionne (`set -e` + `[[ ]] && phase` final).
+
+Verifie : 30 conteneurs persistes, 21 bornes a chaud, sans un redemarrage.
+`secubox-peertube 1.3.2` retire son `borne-cpu.sh`, desormais redondant.
+
+### La publication MetaBlogizer servait le contenu d'un autre site (#1012)
+
+`secubox-metablogizer 1.7.2`. Signale sur `aletheia.gk2.secubox.in`, qui
+rendait MAGIC-CHESS-360 en **200**, sans erreur.
+
+**Deux defauts, tous deux invisibles par construction.**
+
+1. Le domaine etait calcule a **cinq** endroits, un seul juste — celui de
+   l'affichage. Le panneau affirmait le bon domaine pendant que nginx portait
+   `server_name aletheia.local`, donc servait le premier bloc venu. C'est ce
+   decalage entre ce que l'interface montre et ce que nginx applique qui a rendu
+   le defaut indetectable.
+2. Le vhost publie reclamait **le port 80, que HAProxy detient**. Un tel vhost
+   empeche nginx de DEMARRER et fait tomber toute la board avec lui.
+
+Le second a explose pendant la verification : le `reload nginx` de la
+publication etait **inerte depuis longtemps** (un rechargement ne rebind pas),
+si bien que le conflit n'a eclate qu'au premier redemarrage franc — longtemps
+apres la publication fautive. Board indisponible ~1 min.
+
+**Piege a retenir** : `ps` montre 6 masters nginx, un seul est celui de l'hote ;
+les autres appartiennent aux conteneurs. Verifier `/proc/<pid>/cgroup` avant de
+tuer quoi que ce soit.
+
+Quatre domaines MetaBlogizer sur 171 manquaient de route WAF (421) : routes
+ajoutees, trois servent. `files-141` rend un 403 legitime — il n'a pas
+d'`index.html`.
+
+---
+
 ## 2026-08-12 — PeerTube : le transcodage n'avait aucun plafond CPU (#1010)
 
 `secubox-peertube 1.3.1` — déployé sur gk2, publié sur apt.secubox.in.

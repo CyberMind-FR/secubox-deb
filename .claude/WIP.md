@@ -1,5 +1,36 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-11*
+*Mis à jour : 2026-08-12*
+
+---
+
+## 2026-08-12 — Ressources bornées, publication réparée
+
+### ✅ Fait — fusionné et déployé
+
+- **`secubox-peertube 1.3.2`** (#1010) — transcodage plafonné à un cœur. La
+  charge de gk2 est passée de **113 à 63**. Les réglages internes de PeerTube
+  (`threads: 1`, `concurrency: 1`) étaient déjà posés : le studio vidéo et le
+  direct ont les leurs et y échappent.
+- **`secubox-system-tuning 1.1.0`** (#1011) — bornes CPU **déclaratives** pour
+  les 30 conteneurs. 5 seulement étaient bornés, 3 l'étaient **en commentaire**,
+  22 pas du tout. 30 persistés, 21 à chaud, sans un redémarrage.
+- **`secubox-metablogizer 1.7.2`** (#1012) — la publication écrivait un
+  `server_name` en `.local` **et** réclamait le port 80. `aletheia` sert enfin
+  son vrai contenu.
+
+### ⬜ Next Up
+
+- **#1013 — Nextcloud : application Mail.** Signalé, **pas encore instruit** :
+  le symptôme précis reste à relever.
+- **`files-141`** rend un 403 : le site n'a pas d'`index.html`, seulement un
+  `zemialos-multivers.html`. Reliquat d'envoi probable — à supprimer ou à doter
+  d'une page d'accueil, décision utilisateur.
+- **`haproxy.toml` déclare `aletheia` deux fois**, d'où deux ACL identiques
+  dans le `haproxy.cfg` généré. Une table TOML en double est de surcroît
+  invalide au sens strict.
+- **Vhosts par-site MetaBlogizer** en doublon avec la configuration unifiée
+  (celle qui sert réellement) — d'où les `conflicting server name ... ignored`.
+- **32 branches en conflit** toujours en attente d'arbitrage (voir `TODO.md`).
 
 ---
 
