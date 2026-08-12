@@ -1,3 +1,41 @@
+secubox-bbs (0.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * PIECES JOINTES : images, sons, videos, dans les fils ET dans les messages.
+    Deposees localement, servies par le BBS, integrees en lecteur a l'affichage.
+  * LE TYPE ANNONCE PAR LE CLIENT N'EST JAMAIS CRU : le contenu est renifle.
+    Un fichier annonce « image/png » et contenant un executable est refuse ; un
+    fichier valide mal annonce est accepte pour ce qu'il EST.
+  * LISTE BLANCHE, pas liste noire : image, son, video reconnus, le reste
+    refuse. Une liste noire vieillit mal.
+  * LE SVG EST REFUSE bien qu'il soit une image : c'est un document EXECUTABLE,
+    servi en ligne il s'execute dans l'origine du BBS, donc avec la session du
+    lecteur.
+  * Le chemin sur disque est derive de l'IDENTIFIANT, jamais du nom fourni : la
+    traversee de repertoire est impossible par construction, pas par filtrage.
+  * Borne a 64 Mio appliquee PENDANT la lecture — refuser apres avoir ecrit
+    trois gigaoctets ne protege pas l'eMMC, dont le remplissage a deja mis la
+    board en 502.
+  * Service avec `X-Content-Type-Options: nosniff` et le type reconnu au depot.
+    Lecture reservee aux membres : l'adresse est un numero, donc devinable, et
+    les pieces jointes suivent le contenu local.
+  * Seules NOS adresses sont integrees. Integrer une adresse quelconque ferait
+    charger une ressource distante depuis la page — chaque lecteur signale au
+    serveur d'en face.
+  * AVATAR : une image a la place des initiales. C'est une piece jointe dont on
+    retient l'identifiant — meme reniflage, meme liste blanche, meme borne. Un
+    chemin d'envoi separe aurait duplique ces regles, donc fini par en oublier
+    une. Reference vers `files`, jamais un chemin copie.
+  * L'ADRESSE RENDUE PORTE L'EXTENSION (`/f/12.png`). Le serveur connait le
+    type ; `/f/12` ne le dit pas, et l'affichage ne savait alors pas s'il
+    fallait une image, un lecteur audio ou une video — la piece jointe restait
+    un lien mort. L'extension est DECORATIVE au service : l'identifiant seul
+    resout le fichier, et le type servi vient de la base.
+  * Sans JavaScript, l'envoi reste possible : formulaire classique sur « Mon
+    compte », adresse a coller. Le champ de fichier est masque a l'oeil mais
+    reste dans l'ordre de tabulation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 13:30:00 +0200
+
 secubox-bbs (0.6.1-1~bookworm1) bookworm; urgency=medium
 
   * REGRESSION CORRIGEE : un interlocuteur ACTIF etait annonce « compte

@@ -653,10 +653,10 @@ func TestEncodingAcceptedTable(t *testing.T) {
 		{"gzip;q=0, identity", "gzip", false},
 		{"gzip;q=0;x=y, identity", "gzip", false}, // trailing param after q= must still reject
 		{"gzip;q=1.0", "gzip", true},
-		{"  GZIP ;q=0.5 ", "gzip", true},          // case + whitespace
+		{"  GZIP ;q=0.5 ", "gzip", true}, // case + whitespace
 		{"", "gzip", false},
-		{"anything", "", true},        // identity coding always ok
-		{"", "identity", true},        // identity coding always ok
+		{"anything", "", true}, // identity coding always ok
+		{"", "identity", true}, // identity coding always ok
 	}
 	for _, c := range cases {
 		if got := encodingAccepted(c.ae, c.coding); got != c.want {

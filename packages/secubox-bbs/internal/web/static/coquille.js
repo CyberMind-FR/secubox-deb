@@ -33,3 +33,55 @@
     }
   });
 })();
+
+// ── Envoi d'une piece jointe depuis l'editeur ────────────────────────────
+//
+// SANS JAVASCRIPT, L'ENVOI RESTE POSSIBLE : la page « Mon compte » porte un
+// formulaire classique, et l'adresse rendue se colle a la main dans le message.
+// Ce script ne fait qu'eviter cet aller-retour.
+(function () {
+  function poser(zone, url) {
+    var i = zone.selectionStart;
+    // Une ligne a soi : colle en fin de phrase, l'adresse se retrouverait dans
+    // le texte et le lecteur s'afficherait au milieu d'une ligne.
+    var av = zone.value.slice(0, i).replace(/\s*$/, '');
+    var ap = zone.value.slice(i);
+    zone.value = av + (av ? '\n\n' : '') + url + '\n' + ap;
+    zone.focus();
+    zone.setSelectionRange(av.length + url.length + 2, av.length + url.length + 2);
+  }
+
+  document.querySelectorAll('.editor').forEach(function (bloc) {
+    var bouton = bloc.querySelector('.joindre');
+    var zone = bloc.querySelector('textarea');
+    var champ = bloc.querySelector('input[type=file]');
+    if (!bouton || !zone || !champ) return;
+
+    bouton.addEventListener('click', function () { champ.click(); });
+
+    champ.addEventListener('change', function () {
+      if (!champ.files || !champ.files[0]) return;
+      var f = new FormData();
+      f.append('fichier', champ.files[0]);
+      f.append('csrf', bouton.dataset.csrf || '');
+      bouton.disabled = true;
+      var libelle = bouton.textContent;
+      bouton.textContent = '…';
+      fetch('/f/envoi', {
+        method: 'POST', body: f, headers: { 'Accept': 'application/json' },
+      }).then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.ok) poser(zone, j.url);
+          // L'ERREUR EST DITE, pas avalee : un envoi refuse en silence donne
+          // l'impression que le bouton ne marche pas.
+          else alert('Envoi refusé : ' + (j.error || 'raison inconnue'));
+        })
+        .catch(function (e) { alert('Envoi impossible : ' + e.message); })
+        .finally(function () {
+          bouton.disabled = false;
+          bouton.textContent = libelle;
+          champ.value = '';
+        });
+    });
+  });
+})();

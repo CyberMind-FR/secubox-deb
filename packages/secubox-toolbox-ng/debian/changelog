@@ -1,3 +1,24 @@
+secubox-toolbox-ng (0.1.39-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : une page peut REFUSER la banniere de sante, par
+    `<meta name="sbx-no-health-banner">`. Le refus n'existait pas : la balise
+    etait decorative.
+  * La banniere est un SCRIPT EN LIGNE. Une page qui livre un `script-src
+    'self'` strict — ce que doit faire une surface publique — ne peut pas
+    l'executer : le navigateur la bloque ET journalise une violation a CHAQUE
+    chargement. La banniere ne s'affiche pas davantage ; la seule difference est
+    une console pleine d'erreurs qui font passer un site fonctionnel pour casse.
+  * Constate sur bbs.gk2.secubox.in : la page portait cette balise exacte,
+    signalee comme un refus dans son propre commentaire, et un exploitant a
+    rapporte « login KO » alors que la connexion fonctionnait parfaitement.
+  * Insensible a la casse : les noms d'attributs HTML ne le sont pas, et une
+    page ecrite `NAME=` aurait ete ignoree en silence — le pire des echecs,
+    puisque son auteur croit avoir refuse.
+  * Direction du defaut inchangee : sans balise, on injecte, comme toutes les
+    pages existantes le supposent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 12 Aug 2026 14:10:00 +0200
+
 secubox-toolbox-ng (0.1.38-1~bookworm1) bookworm; urgency=medium
 
   * sbxmitm: per-peer R-level MITM policy (rlevel-per-peer, task 8). The

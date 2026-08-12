@@ -12,10 +12,11 @@
 //   - clientIP extraction: prefer leftmost XFF only when peer is a trusted proxy
 //
 // Ported faithfully from:
-//   packages/secubox-mitmproxy/addons/secubox_waf.py
-//     - _is_whitelisted / _WL_NETS (lines 28-47)
-//     - get_real_client_ip (lines 193-219)
-//     - check_request static/health fast-path (lines 764-769)
+//
+//	packages/secubox-mitmproxy/addons/secubox_waf.py
+//	  - _is_whitelisted / _WL_NETS (lines 28-47)
+//	  - get_real_client_ip (lines 193-219)
+//	  - check_request static/health fast-path (lines 764-769)
 //
 // Connection: close is added to upstream requests per issue #496 (Python parity).
 package main

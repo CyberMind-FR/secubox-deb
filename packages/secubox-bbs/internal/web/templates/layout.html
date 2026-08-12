@@ -12,8 +12,15 @@
      banniere sur une page publique, et liait notre politique a sa version : a
      chaque mise a jour de sbxwaf, les empreintes auraient derive.
 
-     Ce refus la ecarte la banniere A LA SOURCE. La politique redevient
-     strictement fermee : aucune origine externe, aucune empreinte a suivre. -->
+     Ce refus ecarte la banniere A LA SOURCE. La politique redevient
+     strictement fermee : aucune origine externe, aucune empreinte a suivre.
+
+     ATTENTION — CE REFUS N'A RIEN FAIT PENDANT UN TEMPS. sbxwaf n'implementait
+     AUCUN opt-out : la balise etait decorative, la banniere etait injectee
+     quand meme, et notre politique la bloquait — donc une violation CSP
+     journalisee a chaque chargement. Un exploitant a rapporte « login KO »
+     alors que la connexion fonctionnait. Le refus est implemente depuis
+     secubox-waf-ng 1.3.1 ; en deca de cette version, s'attendre au bruit. -->
 <meta name="sbx-no-health-banner">
 <link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
 </head><body>
@@ -40,7 +47,7 @@
       <input name="q" value="{{.Q}}" placeholder="Rechercher…" aria-label="Rechercher dans les fils">
     </form>
     {{if .V.Connecte}}
-      <a class="me" href="/compte" title="Mon compte"><span class="av">{{.V.Initiales}}</span><span class="me-nom">{{.V.Handle}}</span></a>
+      <a class="me" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><span class="me-nom">{{.V.Handle}}</span></a>
       <form method="post" action="/logout" class="s6b8b63d">
         <input type="hidden" name="csrf" value="{{.V.CSRF}}">
         <button class="iconbtn" type="submit" title="Quitter">⏻</button>

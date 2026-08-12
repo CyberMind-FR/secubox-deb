@@ -22,10 +22,10 @@
 //
 // Design decision — Server struct:
 //   - ca        *forge.CA          wired from --ca-cert/--ca-key (lazy: nil when
-//                                  flags are empty, so tests don't need PEM files)
+//     flags are empty, so tests don't need PEM files)
 //   - routes    *Routes            hot-reload map; nil when --routes is empty
 //   - routeLookup func(host)(ip,port,ok) — set to routes.Lookup in main(), or
-//                                  injected directly by tests
+//     injected directly by tests
 //   - upstreamTimeout time.Duration
 //   - ban       *Ban               sliding-window ban state; NewBan(300s,3) in main()
 //   - threatLog *ThreatLog         append-only JSON threat log; NewThreatLog in main()
@@ -229,8 +229,8 @@ type Server struct {
 //     - Skips inspection for static assets and health/status paths (staticAsset).
 //     - Skips inspection for NC mobile-auth paths (ncBypass).
 //     - Reads up to maxBodyInspect bytes for inspection; restores the FULL
-//       body (prefix + remaining stream via io.MultiReader) so the upstream
-//       proxy always receives every byte intact — no truncation.
+//     body (prefix + remaining stream via io.MultiReader) so the upstream
+//     proxy always receives every byte intact — no truncation.
 //     - On WAF hit: returns 403 Forbidden (Task 3.2 refines to WARNING/BAN).
 //     - Adds Connection: close to upstream requests (#496).
 func (s *Server) handler() http.Handler {
