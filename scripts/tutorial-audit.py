@@ -16,8 +16,8 @@ documentation qui comble les trous par de la vraisemblance est pire qu'une
 documentation lacunaire : elle ne se laisse plus auditer.
 
 Sorties :
-  docs/catalog/modules.yaml  — inventaire structuré (source machine)
-  docs/catalog/modules.md    — le même, en tableau lisible
+  tutorial/catalog/modules.yaml  — inventaire structuré (source machine)
+  tutorial/catalog/modules.md    — le même, en tableau lisible
 
 Le YAML est la source ; le Markdown en dérive. L'inverse condamnerait à
 resaisir la même chose deux fois, donc à diverger.
@@ -32,7 +32,7 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
 PAQUETS = RACINE / "packages"
-SORTIE = RACINE / "docs" / "catalog"
+SORTIE = RACINE / "tutorial" / "catalog"
 
 ABSENT = "À documenter"
 
@@ -237,9 +237,9 @@ def inventorier() -> list:
 def ecrire_yaml(modules: list) -> None:
     """Ecrit le YAML a la main, pour ne pas imposer PyYAML au depot."""
     lignes = [
-        "# docs/catalog/modules.yaml — inventaire des modules SecuBox.",
+        "# tutorial/catalog/modules.yaml — inventaire des modules SecuBox.",
         "#",
-        "# GENERE PAR scripts/docs-audit.py A PARTIR DU DEPOT. Ne pas editer a la",
+        "# GENERE PAR scripts/tutorial-audit.py A PARTIR DU DEPOT. Ne pas editer a la",
         "# main : la prochaine execution ecraserait la correction. Pour corriger",
         "# une entree, corriger sa SOURCE — le plus souvent debian/secubox.yaml.",
         "#",
@@ -294,7 +294,7 @@ def ecrire_markdown(modules: list) -> None:
     l = [
         "# Catalogue des modules SecuBox",
         "",
-        "> **Généré** par `scripts/docs-audit.py` à partir du dépôt.",
+        "> **Généré** par `scripts/tutorial-audit.py` à partir du dépôt.",
         "> Ne pas éditer à la main — corriger la source, le plus souvent",
         "> `packages/<module>/debian/secubox.yaml`, puis relancer le script.",
         "",
