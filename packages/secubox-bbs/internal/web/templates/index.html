@@ -21,27 +21,12 @@
     <div class="meta">{{.Threads}} fils</div>
   </a>{{else}}<div class="pad sb0455c2">Aucun salon pour l'instant.</div>{{end}}
 </div>
-<h3 class="s24a7a9f">Derniers fils</h3>
 {{end}}
 
-<div class="card">
-  {{range .Threads}}<a class="thread s15cb695" href="/t/{{.ID}}">
-    <div>
-      <div class="t">{{.Title}}</div>
-      <div class="sub">
-        {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>{{else}}<span class="pill p-local">local</span>{{end}}
-        {{if .Published}}<span class="pill p-billet">✦ billet</span>{{end}}
-        {{if .Source}}<span class="pill p-src">{{.Source}}</span>{{end}}
-        {{.Author}} · {{.Posts}} message{{if gt .Posts 1}}s{{end}}
-      </div>
-    </div>
-    <div class="cnt">{{date .LastPostAt}}</div>
-  </a>{{else}}
-  <div class="pad sb0455c2">
-    {{if .V.Connecte}}Aucun fil ici pour l'instant.
-    {{else}}Rien de public pour l'instant. Les membres connectés en voient davantage.{{end}}
-  </div>
-  {{end}}
+<div class="note v s92c18f6">
+  <b>Les fils sont dans la colonne du milieu.</b>
+  Choisissez-en un pour le lire ici — la liste reste sous les yeux, on ne perd
+  pas sa place en lisant.
 </div>
 
 {{if not .V.Connecte}}

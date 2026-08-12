@@ -61,32 +61,67 @@ button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:6px}
 
 /* ── enveloppe ────────────────────────────────────────────────────────── */
-.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
-/* La regle mobile ne vit PLUS ici : voir la fin du fichier.
+/* ═══ COQUILLE A TROIS COLONNES ═══════════════════════════════════════════
  *
- * Elle y etait AVANT la definition de `.rail`, qui declare `display:flex`. Une
- * media query n'ajoute aucune specificite : a specificite egale, la derniere
- * regle gagne. Le rail ne se masquait donc jamais sur telephone — il occupait
- * toute la largeur et repoussait le contenu hors de l'ecran.
+ * Reference : www/mockup-reference.html.
  *
- * Les regles adaptatives doivent venir APRES ce qu'elles corrigent. */
+ * Trois zones qui defilent CHACUNE DE LEUR COTE — on garde sa place dans la
+ * liste en lisant un fil. C'est ce qui fait la sensation d'un poste de travail
+ * plutot que d'une suite de pages.
+ *
+ * `100dvh` et non `100vh` : sur telephone, la barre d'adresse du navigateur se
+ * retracte et `vh` reste fige sur la hauteur SANS elle. La ligne d'etat se
+ * retrouvait alors sous le pli, invisible tant qu'on ne faisait pas defiler.
+ *
+ * DEFAUT = TELEPHONE, une seule colonne. Les paliers ajoutent les colonnes, et
+ * ils sont ecrits A LA FIN DU FICHIER : une media query n'ajoute aucune
+ * specificite, placee ici elle serait ecrasee par les regles qui suivent. */
+.shell{
+  display:grid; grid-template-rows:auto 1fr auto auto;
+  height:100dvh; overflow:hidden;
+}
+.corps{display:grid; grid-template-columns:1fr; min-height:0; overflow:hidden}
 
+/* ── barre haute ──────────────────────────────────────────────────────── */
+.bar{
+  display:flex; align-items:center; gap:10px; padding:9px 14px;
+  border-bottom:1px solid var(--line); background:var(--soft);
+}
+.bar .sp{flex:1}
+.marque{
+  display:flex; align-items:center; gap:9px; font-weight:650;
+  font-size:15px; letter-spacing:-.01em; white-space:nowrap; text-decoration:none;
+}
+.marque .mark{
+  width:28px;height:28px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--violet),var(--pink));color:#fff;font-weight:800;font-size:13px;
+}
+.chip{
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11px;
+  padding:3px 8px; border-radius:999px; border:1px solid var(--line);
+  color:var(--dim); white-space:nowrap;
+}
+.search{
+  flex:0 1 300px; display:flex; align-items:center; gap:8px;
+  background:var(--panel); border:1px solid var(--line); border-radius:9px;
+  padding:5px 10px; color:var(--dim); font-size:13px;
+}
+.search input{border:0;background:none;outline:0;color:var(--text);width:100%;font:inherit}
+.iconbtn{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:6px 10px;font-size:13px}
+.iconbtn:hover{background:var(--soft)}
+.me{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;text-decoration:none}
+.av{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;
+    background:linear-gradient(135deg,var(--mint),var(--sky))}
+
+/* ── colonne 1 : le rail ──────────────────────────────────────────────── */
 .rail{
   background:var(--panel); border-right:1px solid var(--line);
-  display:flex;flex-direction:column;gap:2px;padding:14px 10px;position:sticky;top:0;height:100vh;overflow:auto;
+  display:flex; flex-direction:column; gap:2px; padding:10px 8px;
+  overflow-y:auto; min-height:0;
 }
-.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
-.brand .mark{
-  width:34px;height:34px;border-radius:10px;flex:0 0 auto;display:grid;place-items:center;
-  background:linear-gradient(135deg,var(--violet),var(--pink));color:#fff;font-weight:800;font-size:15px;
-  box-shadow:0 6px 16px -6px var(--violet);
-}
-.brand b{font-size:15px;letter-spacing:-.02em;display:block;line-height:1.2}
-.brand small{color:var(--dim);font-size:11.5px}
-
 .railhead{
   font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--dim);
-  padding:14px 10px 6px;font-weight:700;
+  padding:12px 10px 5px;font-weight:700;
 }
 .nav{
   display:flex;align-items:center;gap:9px;width:100%;text-align:left;
@@ -100,27 +135,61 @@ button{font:inherit;color:inherit;cursor:pointer}
 }
 .nav[aria-current="page"] .ic{background:var(--c,var(--violet));color:#fff}
 .nav .n{margin-left:auto;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.nav .n.p-new{background:var(--coral);color:#fff;padding:1px 6px;border-radius:999px}
 .nav.off{opacity:.42}
 .nav.off .n{font-size:10px;text-transform:uppercase;letter-spacing:.06em}
 
-/* ── barre haute ──────────────────────────────────────────────────────── */
-.top{
-  position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--panel) 88%,transparent);
-  backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
-  display:flex;align-items:center;gap:12px;padding:11px 20px;
+/* ── colonne 2 : la liste des fils ────────────────────────────────────── */
+.liste{
+  border-right:1px solid var(--line); background:var(--panel);
+  overflow-y:auto; min-height:0;
 }
-.search{
-  flex:1;max-width:420px;display:flex;align-items:center;gap:8px;
-  background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:6px 11px;color:var(--dim);font-size:13.5px;
+.liste-tete{
+  position:sticky; top:0; z-index:2; background:var(--panel);
+  padding:11px 14px 9px; border-bottom:1px solid var(--line);
+  display:flex; align-items:baseline; gap:9px;
 }
-.top .sp{flex:1}
-.iconbtn{border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:6px 10px;font-size:13px}
-.iconbtn:hover{background:var(--soft)}
-.me{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
-.av{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;
-    background:linear-gradient(135deg,var(--mint),var(--sky))}
+.liste-tete h2{font-size:16px;margin:0}
+.liste-tete .cnt{margin-left:auto;font-size:11px;color:var(--dim);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.fil-item{
+  display:block; padding:11px 14px; border-bottom:1px solid var(--line);
+  text-decoration:none; color:inherit; border-left:3px solid transparent;
+}
+.fil-item:hover{background:var(--soft)}
+.fil-item[aria-current="page"]{background:var(--soft);border-left-color:var(--sky)}
+.fil-item h3{font-size:14.5px;font-weight:600;line-height:1.35;margin:0}
+.fil-item .meta{
+  margin-top:4px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;
+}
 
-main{padding:22px 26px 70px;max-width:1180px}
+/* ── colonne 3 : la vue ───────────────────────────────────────────────── */
+.vue{overflow-y:auto; min-height:0; padding:20px 24px 32px}
+.view{display:none} .view.on{display:block}
+
+/* ── ligne d'etat ─────────────────────────────────────────────────────── */
+.etat{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:5px 14px; border-top:1px solid var(--line);
+  background:var(--ink); color:var(--paper);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  font-size:11px; letter-spacing:.02em;
+}
+.etat .sep{opacity:.35}
+.etat .vert{color:var(--mint)}
+
+/* ── barre basse (telephone) ──────────────────────────────────────────── */
+.basse{display:flex; border-top:1px solid var(--line); background:var(--soft)}
+.basse a{
+  flex:1; text-align:center; padding:8px 4px 6px; text-decoration:none; color:var(--dim);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:10px;
+  display:flex; flex-direction:column; gap:3px; align-items:center;
+}
+.basse a .ic{font-size:16px}
+.basse a[aria-current="page"]{color:var(--sky)}
+.basse .n.p-new{background:var(--coral);color:#fff;padding:0 5px;border-radius:999px;font-size:9px}
 .view{display:none} .view.on{display:block}
 
 .ph{display:flex;align-items:flex-end;gap:14px;margin-bottom:18px;flex-wrap:wrap}
@@ -351,42 +420,6 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
  * LE RAIL N'EST PAS MASQUE, il devient une barre horizontale. Le masquer
  * laisserait un telephone sans aucune navigation : ni salons, ni console, ni
  * moyen de revenir. Une largeur reduite ne justifie pas d'amputer le site. */
-@media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
-
-  .rail {
-    position: static; height: auto; flex-direction: row; align-items: center;
-    gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 10px 12px;
-    border-right: 0; border-bottom: 1px solid var(--line);
-    scrollbar-width: none;
-  }
-  .rail::-webkit-scrollbar { display: none; }
-
-  /* Les intertitres de section n'ont pas de sens sur une seule ligne. */
-  .railhead { display: none; }
-  .brand { padding: 0 10px 0 0; flex: 0 0 auto; border-right: 1px solid var(--line); margin-right: 4px; }
-  .brand small { display: none; }
-
-  .nav { width: auto; flex: 0 0 auto; white-space: nowrap; padding: 6px 10px; }
-  .nav .n { margin-left: 6px; }
-
-  .top { padding: 9px 12px; gap: 8px; }
-  .top .search { max-width: none; }
-  main { padding: 16px 14px 60px; }
-
-  /* Une pastille de compte suffit ; le pseudonyme prend une place qu'on n'a
-   * pas, et il est deja sur la page « Mon compte ». */
-  .me { font-size: 0; gap: 0; }
-  .me .av { font-size: 11px; }
-  .me .pill { display: none; }
-}
-
-@media (max-width: 560px) {
-  .grid.g3, .grid.g2 { grid-template-columns: 1fr; }
-  .thread .cnt, .board .meta { display: none; }
-  .ph h1 { font-size: 21px; }
-}
-
 /* ── lecteur de media ─────────────────────────────────────────────────────
  *
  * Le fil PORTE le media : on ecoute ou regarde a l'endroit meme ou l'on en
@@ -471,4 +504,64 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 @media (max-width: 900px) {
   .mp { grid-template-columns: 1fr; }
   .bulle { max-width: 92%; }
+}
+
+/* ═══ PALIERS ═════════════════════════════════════════════════════════════
+ *
+ * ECRITS APRES LES COMPOSANTS, volontairement. Une media query n'ajoute AUCUNE
+ * specificite : placee avant les regles qu'elle corrige, elle est ecrasee par
+ * elles. C'est le defaut qui avait laisse le rail visible sur telephone —
+ * il occupait toute la largeur et repoussait le contenu hors de l'ecran.
+ *
+ * DEFAUT = TELEPHONE. Une seule colonne, la vue ; le rail et la liste sont
+ * masques, la barre basse porte les cinq destinations. On ne lit qu'une chose
+ * a la fois sur cinq pouces.                                                */
+.rail, .liste { display: none; }
+.basse { display: flex; }
+
+/* Le rail reste ATTEIGNABLE sur petit ecran : le bouton ☰ le fait glisser
+ * par-dessus. En surimpression et non en colonne — a cette largeur, une
+ * colonne de plus ne laisserait rien a lire. */
+body.rail-ouvert .rail {
+  display: flex; position: fixed; inset: 0 auto 0 0; z-index: 40;
+  width: min(84vw, 300px); box-shadow: var(--shadow);
+}
+body.rail-ouvert::after {
+  content: ""; position: fixed; inset: 0; z-index: 39;
+  background: rgba(13, 27, 36, .45);
+}
+
+/* ── tablette et televiseur : deux colonnes ──────────────────────────────
+ * Liste et vue. Le rail reste au bouton : a trois metres comme au pouce, on
+ * vise une cible large, et la liste vaut mieux qu'un menu toujours ouvert. */
+@media (min-width: 620px) {
+  .corps { grid-template-columns: minmax(240px, 320px) 1fr; }
+  .liste { display: block; }
+  .basse { display: none; }
+  .menu-bascule { display: inline-block; }
+}
+
+/* ── ordinateur : les trois colonnes, rail deplie ─────────────────────── */
+@media (min-width: 1000px) {
+  .corps { grid-template-columns: 232px minmax(280px, 360px) 1fr; }
+  .rail { display: flex; }
+  .menu-bascule { display: none; }
+  body.rail-ouvert::after { content: none; }
+}
+
+/* Une page sans liste (compte, sysop, connexion) ne laisse pas une colonne
+ * creuse : la vue prend la place. `:not(:has())` est lu par tous les
+ * navigateurs qui nous concernent ; la ou il ne l'est pas, on retombe sur la
+ * disposition a trois colonnes, qui reste utilisable. */
+@media (min-width: 620px) {
+  .corps:not(:has(.liste)) { grid-template-columns: 1fr; }
+}
+@media (min-width: 1000px) {
+  .corps:not(:has(.liste)) { grid-template-columns: 232px 1fr; }
+}
+
+@media (max-width: 560px) {
+  .grid.g3, .grid.g2 { grid-template-columns: 1fr; }
+  .thread .cnt, .board .meta { display: none; }
+  .ph h1 { font-size: 21px; }
 }
