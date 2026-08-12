@@ -7,6 +7,7 @@ Three-fold perspective:
 
 SecuBox is an appliance and network model - distributed peer applications.
 """
+import re
 import subprocess
 import os
 import sys
@@ -169,6 +170,48 @@ def load_sites() -> List[dict]:
     return sites_sorted
 
 
+def domaines_deja_servis() -> dict:
+    """Les domaines declares par un AUTRE vhost nginx active (#1016).
+
+    POURQUOI LE GENERATEUR DOIT S'EFFACER. Cinq domaines etaient declares deux
+    fois sur le port 8900 : une fois ici, une fois dans un fichier maintenu a la
+    main. nginx garde le PREMIER charge — c'est-a-dire, en pratique, l'ordre
+    alphabetique des noms de fichiers. `ganimed.fr.conf` passe avant
+    `metablogizer` et gagne ; `wall.ganimed.fr.conf` passe apres et perd. Rien
+    dans le code ne le decidait.
+
+    Ce hasard portait a consequence : `ganimed.fr.conf` contient le point ACME
+    (`/.well-known/acme-challenge/`) et la redirection `www` vers l'apex, que le
+    bloc genere n'a pas. Si le genere l'emportait, le renouvellement de
+    certificat casserait — et il ne l'emporte que parce que « g » vient avant
+    « m ».
+
+    Un fichier maintenu a la main porte une intention ; un bloc genere n'est
+    qu'un defaut. Le second cede donc au premier, explicitement.
+
+    Rend {domaine: fichier}. Un repertoire illisible n'est pas une erreur : on
+    rend ce qu'on a pu lire, et le pire cas est le comportement d'avant.
+    """
+    vus = {}
+    try:
+        fichiers = sorted(NGINX_ENABLED_DIR.iterdir())
+    except OSError:
+        return vus
+    for f in fichiers:
+        # Le fichier genere est justement celui qu'on est en train de refaire :
+        # s'y comparer ferait tout disparaitre au deuxieme passage.
+        if f.name == NGINX_METABLOGS_CONF.name:
+            continue
+        try:
+            texte = f.read_text(errors="replace")
+        except OSError:
+            continue
+        for m in re.finditer(r"^\s*server_name\s+([^;]+);", texte, re.M):
+            for d in m.group(1).split():
+                vus.setdefault(d, f.name)
+    return vus
+
+
 def regenerate_nginx_config() -> tuple:
     """Regenerate the unified nginx config for all metablogizer sites.
 
@@ -180,9 +223,30 @@ def regenerate_nginx_config() -> tuple:
 
     config_lines = ["# Metablogizer nginx config - auto-generated\n"]
 
+    # Un domaine n'est emis QU'UNE FOIS, et jamais s'il est deja servi ailleurs
+    # (#1016). Sans ces deux gardes, nginx ignorait le doublon EN SILENCE : le
+    # panneau montrait deux sites publies alors qu'un seul repondait, et c'est
+    # l'ordre alphabetique des fichiers qui tranchait.
+    deja_servis = domaines_deja_servis()
+    emis: dict = {}
+    ecartes: list = []
+
     for site in sites:
         name = site["name"]
         domain = site["domain"]
+
+        if domain in deja_servis:
+            # Un fichier maintenu a la main porte une intention — le point ACME
+            # et la redirection www de `ganimed.fr.conf`, par exemple. Un bloc
+            # genere n'est qu'un defaut : il cede.
+            ecartes.append(f"{name} ({domain}) — deja servi par {deja_servis[domain]}")
+            continue
+        if domain in emis:
+            # Deux sites configures sur le meme domaine. Le choix appartient a
+            # l'operateur ; le code se contente de le rendre VISIBLE.
+            ecartes.append(f"{name} ({domain}) — domaine deja pris par {emis[domain]}")
+            continue
+        emis[domain] = name
         port = site.get("port", BASE_PORT)
         site_dir = Path(site["directory"])
         size = site.get("size", "0")
@@ -240,7 +304,17 @@ server {{
             run_cmd(["systemctl", "reload", "nginx"])
 
         logger.info(f"Published {len(sites)} metablogizer sites")
-        return True, len(sites), f"Published {len(sites)} sites"
+        # LES ECARTES SONT DITS, PAS AVALES (#1016). Un doublon signale se
+        # corrige ; un doublon muet ne se voit jamais — c'est precisement ce
+        # que nginx faisait, et pourquoi le panneau affichait deux sites
+        # publies quand un seul repondait.
+        for e in ecartes:
+            logger.warning("nginx: bloc non emis — %s", e)
+        publies = len(sites) - len(ecartes)
+        if ecartes:
+            return True, publies, (f"Published {publies} sites, "
+                                   f"{len(ecartes)} ecarte(s) : " + " ; ".join(ecartes))
+        return True, publies, f"Published {publies} sites"
     except Exception as e:
         return False, 0, str(e)
 

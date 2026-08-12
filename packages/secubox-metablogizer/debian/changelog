@@ -1,3 +1,29 @@
+secubox-metablogizer (1.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * La configuration unifiee ne redeclare plus un domaine deja servi par un
+    autre vhost nginx active (ref #1016). Cinq domaines etaient declares deux
+    fois sur le port 8900, et c'est l'ORDRE ALPHABETIQUE des noms de fichiers
+    qui decidait lequel servait : `ganimed.fr.conf` passe avant `metablogizer`
+    et gagne, `wall.ganimed.fr.conf` passe apres et perd. Rien dans le code ne
+    le decidait.
+  * Ce hasard portait a consequence : `ganimed.fr.conf` contient le point ACME
+    et la redirection `www` vers l'apex, que le bloc genere n'a pas. Si le
+    genere l'emportait, le renouvellement de certificat casserait. Un fichier
+    maintenu a la main porte une intention, un bloc genere n'est qu'un defaut :
+    le second cede au premier, explicitement.
+  * Deux sites configures sur le MEME domaine (`tdah`/`rtdah`,
+    `zem`/`zemialos`) n'emettent plus qu'un bloc, et l'ecart est DIT — dans le
+    journal et dans le message de retour. nginx l'ignorait en silence : le
+    panneau affichait deux sites publies alors qu'un seul repondait, exactement
+    le mode de defaillance de #1012.
+  * Le fichier genere s'exclut de sa propre comparaison : sans cela le second
+    passage verrait ses propres blocs comme « deja servis ailleurs » et
+    effacerait tout, transformant une regeneration idempotente en suppression.
+  * Les tests du module etaient bloques a la collecte hors board (une config
+    illisible n'est pas une config absente). 153 tests passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 15:25:00 +0200
+
 secubox-metablogizer (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * Le vhost publie ne reclame plus le port 80 (ref #1012). Sur une board
