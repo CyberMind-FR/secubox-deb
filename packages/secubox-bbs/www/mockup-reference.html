@@ -1,0 +1,607 @@
+<title>SecuBox BBS — maquette de référence</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   MAQUETTE DE RÉFÉRENCE — interface BBS SecuBox
+   ═══════════════════════════════════════════════════════════════════════
+
+   Palette et polices reprises de `internal/web/static/bbs.css`, qui fait foi :
+   une maquette qui invente ses couleurs oblige à tout retraduire ensuite.
+   Les six teintes de module viennent de .claude/DESIGN-CHARTER.md et sont
+   affichées en légende — « couleurs référencées » veut dire qu'on peut les
+   nommer, pas seulement les voir.
+
+   TROIS ÉTATS DE THÈME, pas deux : le visiteur qui n'a rien choisi ne porte
+   aucune marque sur la racine, et seul `prefers-color-scheme` le départage.
+   Les composants ne lisent donc QUE des variables ; aucune couleur n'est
+   définie à l'intérieur d'un bloc de thème.                                */
+
+:root{
+  --ink:#0d1b24; --paper:#eef4f7; --panel:#ffffff; --line:#d3dee4;
+  --soft:#e7eff4; --dim:#5b727f; --text:#12242e;
+  --coral:#f2543d; --coral-soft:#ffe4de;
+  --mint:#0fa47a;  --mint-soft:#d6f5ea;
+  --amber:#d98a00; --amber-soft:#ffeecc;
+  --violet:#6d4aff;--violet-soft:#e8e2ff;
+  --sky:#1f7fd4;   --sky-soft:#dbecfb;
+  --pink:#d8318a;  --pink-soft:#ffe0f0;
+  --shadow:0 1px 2px rgba(13,27,36,.06), 0 8px 24px -12px rgba(13,27,36,.28);
+  --radius:14px;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#f2f6f8; --paper:#0a151d; --panel:#12242e; --line:#223d4b;
+    --soft:#182f3b; --dim:#8aa3b0; --text:#e6eef2;
+    --coral:#ff7a63; --coral-soft:#3a1d18;
+    --mint:#3ddba7;  --mint-soft:#0e3329;
+    --amber:#f5b445; --amber-soft:#3a2a0c;
+    --violet:#a48cff;--violet-soft:#241c44;
+    --sky:#5cb0f5;   --sky-soft:#10293f;
+    --pink:#ff6fb3;  --pink-soft:#3a1028;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#f2f6f8; --paper:#0a151d; --panel:#12242e; --line:#223d4b;
+  --soft:#182f3b; --dim:#8aa3b0; --text:#e6eef2;
+  --coral:#ff7a63; --coral-soft:#3a1d18;
+  --mint:#3ddba7;  --mint-soft:#0e3329;
+  --amber:#f5b445; --amber-soft:#3a2a0c;
+  --violet:#a48cff;--violet-soft:#241c44;
+  --sky:#5cb0f5;   --sky-soft:#10293f;
+  --pink:#ff6fb3;  --pink-soft:#3a1028;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--text);
+  font-family:var(--sans); font-size:15px; line-height:1.5;
+  -webkit-text-size-adjust:100%;
+}
+h1,h2,h3{text-wrap:balance; margin:0}
+a{color:inherit}
+
+/* ── page de présentation ─────────────────────────────────────────────── */
+.doc{max-width:1180px; margin:0 auto; padding:32px 20px 64px}
+.doc-tete{display:flex; flex-wrap:wrap; gap:18px; align-items:flex-end;
+  justify-content:space-between; padding-bottom:18px; border-bottom:2px solid var(--ink)}
+.doc-tete h1{font-family:var(--serif); font-size:clamp(1.5rem,4vw,2.2rem); letter-spacing:-.01em}
+.doc-tete p{margin:.35rem 0 0; color:var(--dim); max-width:56ch}
+.etiq{font-family:var(--mono); font-size:11.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--dim)}
+
+.section{margin-top:38px}
+.section > h2{font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--dim); margin-bottom:12px}
+
+/* ── légende des couleurs référencées ─────────────────────────────────── */
+.teintes{display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+.teinte{border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--panel)}
+.teinte .bande{height:38px}
+.teinte .txt{padding:8px 10px; font-family:var(--mono); font-size:11.5px; line-height:1.35}
+.teinte b{display:block; font-family:var(--sans); font-size:13px; letter-spacing:.02em}
+.teinte span{color:var(--dim)}
+
+/* ── sélecteur d'appareil ─────────────────────────────────────────────── */
+.appareils{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+.appareil{
+  font:inherit; font-size:13px; padding:7px 14px; cursor:pointer;
+  background:var(--panel); color:var(--text);
+  border:1px solid var(--line); border-radius:999px;
+}
+.appareil[aria-pressed="true"]{border-color:var(--sky); background:var(--sky-soft); color:var(--sky)}
+.appareil:focus-visible{outline:2px solid var(--sky); outline-offset:2px}
+
+/* Le cadre porte `container-type` : la maquette réagit à SA largeur, pas à
+   celle de la fenêtre. C'est ce qui rend la prévisualisation honnête — un
+   simple `max-width` laisserait les media queries lire l'écran réel et
+   montrerait la disposition « ordinateur » dans un cadre de téléphone. */
+.cadre{
+  container-type:inline-size;
+  width:100%; max-width:var(--w,1180px); margin:0 auto;
+  border:1px solid var(--line); border-radius:var(--radius);
+  background:var(--panel); box-shadow:var(--shadow); overflow:hidden;
+  transition:max-width .28s ease;
+}
+
+/* ═══ LA COQUILLE ═════════════════════════════════════════════════════════
+   Trois colonnes qui défilent séparément — c'est ce qui donne la sensation
+   d'OS plutôt que de page : on garde sa place dans la liste en lisant un fil.
+   Défaut = téléphone (une colonne) ; les paliers ajoutent des colonnes.      */
+.shell{display:grid; grid-template-rows:auto 1fr auto; height:640px}
+
+.bar{
+  display:flex; align-items:center; gap:12px; padding:9px 14px;
+  border-bottom:1px solid var(--line); background:var(--soft);
+}
+.marque{font-family:var(--serif); font-size:17px; letter-spacing:-.01em; white-space:nowrap}
+.marque i{font-style:normal; color:var(--sky)}
+.bar .grandir{flex:1}
+.chip{
+  font-family:var(--mono); font-size:11px; padding:3px 8px; border-radius:999px;
+  border:1px solid var(--line); color:var(--dim); white-space:nowrap;
+}
+.iconbtn{
+  font:inherit; font-size:15px; line-height:1; padding:7px 9px; cursor:pointer;
+  background:transparent; color:var(--text); border:1px solid transparent; border-radius:9px;
+}
+.iconbtn:hover{background:var(--panel); border-color:var(--line)}
+.iconbtn:focus-visible{outline:2px solid var(--sky); outline-offset:1px}
+
+.corps{display:grid; grid-template-columns:1fr; min-height:0; overflow:hidden}
+
+/* — colonne 1 : le rail dépliable — */
+.rail{
+  border-right:1px solid var(--line); background:var(--soft);
+  overflow-y:auto; min-height:0; padding:10px 8px;
+  display:flex; flex-direction:column; gap:2px;
+}
+.railtitre{
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.13em; text-transform:uppercase;
+  color:var(--dim); padding:12px 8px 5px;
+}
+.nav{
+  display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:9px;
+  text-decoration:none; color:var(--text); font-size:14px; border:1px solid transparent;
+}
+.nav:hover{background:var(--panel)}
+.nav[aria-current="page"]{background:var(--panel); border-color:var(--line); font-weight:600}
+.nav .ic{width:1.25em; text-align:center; flex:none}
+.nav .n{
+  margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--dim);
+  font-variant-numeric:tabular-nums;
+}
+.nav .n.vif{background:var(--coral); color:#fff; padding:1px 6px; border-radius:999px}
+.pastille{width:9px; height:9px; border-radius:50%; flex:none}
+
+/* — colonne 2 : la liste des fils — */
+.liste{border-right:1px solid var(--line); overflow-y:auto; min-height:0; background:var(--panel)}
+.liste-tete{
+  position:sticky; top:0; z-index:2; background:var(--panel);
+  padding:11px 14px 9px; border-bottom:1px solid var(--line);
+  display:flex; align-items:baseline; gap:9px;
+}
+.liste-tete h2{font-family:var(--serif); font-size:16px}
+.liste-tete .etiq{margin-left:auto}
+.fil{
+  display:block; padding:11px 14px; border-bottom:1px solid var(--line);
+  text-decoration:none; color:inherit; border-left:3px solid transparent;
+}
+.fil:hover{background:var(--soft)}
+.fil.actif{background:var(--soft); border-left-color:var(--sky)}
+.fil h3{font-size:14.5px; font-weight:600; line-height:1.35}
+.fil .meta{
+  margin-top:4px; display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+  font-family:var(--mono); font-size:11px; color:var(--dim);
+  font-variant-numeric:tabular-nums;
+}
+.pill{padding:1px 7px; border-radius:999px; font-family:var(--mono); font-size:10.5px}
+.p-pub{background:var(--mint-soft); color:var(--mint)}
+.p-loc{background:var(--sky-soft);  color:var(--sky)}
+.p-new{background:var(--coral);     color:#fff}
+.p-src{background:var(--violet-soft); color:var(--violet)}
+
+/* — colonne 3 : la conversation, défilement continu — */
+.fil-vue{display:flex; flex-direction:column; min-height:0; background:var(--panel)}
+.fil-tete{padding:13px 16px 11px; border-bottom:1px solid var(--line)}
+.fil-tete h2{font-family:var(--serif); font-size:19px; line-height:1.25}
+.fil-tete .meta{
+  margin-top:6px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  font-family:var(--mono); font-size:11px; color:var(--dim);
+}
+.flux{overflow-y:auto; min-height:0; padding:14px 16px; display:flex; flex-direction:column; gap:14px}
+.msg{display:grid; grid-template-columns:34px 1fr; gap:11px}
+.av{
+  width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
+  font-family:var(--mono); font-size:12px; color:#fff; font-weight:600;
+}
+.msg-corps p{margin:0 0 .5rem}
+.msg-corps p:last-child{margin-bottom:0}
+.msg-tete{display:flex; align-items:baseline; gap:8px; margin-bottom:3px}
+.msg-tete b{font-size:13.5px}
+.msg-tete time{font-family:var(--mono); font-size:11px; color:var(--dim)}
+.cite{
+  border-left:3px solid var(--line); padding:2px 0 2px 11px; margin:0 0 .5rem;
+  color:var(--dim); font-style:italic;
+}
+.reactions{display:flex; gap:6px; margin-top:7px; flex-wrap:wrap}
+.reac{
+  font-family:var(--mono); font-size:11.5px; padding:2px 8px; border-radius:999px;
+  border:1px solid var(--line); background:var(--soft); color:var(--dim); cursor:pointer;
+}
+.reac.mienne{border-color:var(--sky); color:var(--sky); background:var(--sky-soft)}
+.jour{
+  display:flex; align-items:center; gap:10px; color:var(--dim);
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+}
+.jour::before,.jour::after{content:""; height:1px; background:var(--line); flex:1}
+
+/* — l'éditeur — */
+.ecrire{border-top:1px solid var(--line); background:var(--soft); padding:9px 12px}
+.ecrire-outils{display:flex; gap:2px; margin-bottom:6px; flex-wrap:wrap}
+.outil{
+  font:inherit; font-size:13px; min-width:29px; padding:4px 7px; cursor:pointer;
+  background:transparent; border:0; border-radius:7px; color:var(--text);
+}
+.outil:hover{background:var(--panel)}
+.zone{
+  width:100%; min-height:62px; resize:vertical; padding:9px 11px;
+  font:inherit; color:var(--text); background:var(--panel);
+  border:1px solid var(--line); border-radius:10px;
+}
+.zone:focus-visible{outline:2px solid var(--sky); outline-offset:-1px}
+.ecrire-pied{display:flex; align-items:center; gap:9px; margin-top:7px}
+.btn{
+  font:inherit; font-size:13.5px; padding:7px 15px; border-radius:9px; cursor:pointer;
+  background:var(--panel); color:var(--text); border:1px solid var(--line);
+}
+.btn.primaire{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.btn:focus-visible{outline:2px solid var(--sky); outline-offset:2px}
+
+/* — la ligne d'état, héritage assumé des BBS — */
+.etat{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:6px 14px; border-top:1px solid var(--line);
+  background:var(--ink); color:var(--paper);
+  font-family:var(--mono); font-size:11px; letter-spacing:.02em;
+}
+.etat .sep{opacity:.35}
+.etat .vert{color:var(--mint)}
+
+/* — barre basse : téléphone seulement — */
+.basse{
+  display:flex; border-top:1px solid var(--line); background:var(--soft);
+}
+.basse a{
+  flex:1; text-align:center; padding:9px 4px 7px; text-decoration:none; color:var(--dim);
+  font-family:var(--mono); font-size:10px; letter-spacing:.04em;
+  display:flex; flex-direction:column; gap:3px; align-items:center;
+}
+.basse a .ic{font-size:16px}
+.basse a[aria-current="page"]{color:var(--sky)}
+
+/* ═══ PALIERS ═════════════════════════════════════════════════════════════
+   PLACÉS APRÈS LES COMPOSANTS, volontairement. Une media (ou container)
+   query n'ajoute AUCUNE spécificité : écrite avant, elle serait écrasée par
+   la règle de base qui la suit. C'est exactement le défaut qui avait laissé
+   le rail visible sur téléphone dans la version précédente.                */
+
+/* Téléphone : une seule colonne. La liste et le rail sont escamotés, la
+   conversation occupe tout — on ne lit qu'une chose à la fois sur 5 pouces. */
+.rail,.liste{display:none}
+.basse{display:flex}
+
+/* Tablette et téléviseur : deux colonnes. Le rail reste replié en icônes —
+   à trois mètres comme au pouce, on vise une cible large, pas un libellé. */
+@container (min-width: 620px){
+  .corps{grid-template-columns:minmax(230px,300px) 1fr}
+  .liste{display:block}
+  .basse{display:none}
+}
+
+/* Ordinateur : les trois colonnes. Le rail se déplie et montre ses libellés. */
+@container (min-width: 1000px){
+  .corps{grid-template-columns:212px minmax(280px,340px) 1fr}
+  .rail{display:flex}
+}
+
+/* Téléviseur : même disposition que la tablette, tout est agrandi. La règle
+   suit celle de la tablette pour la compléter, pas la contredire. */
+.cadre[data-appareil="tv"] .shell{font-size:17px}
+.cadre[data-appareil="tv"] .fil h3{font-size:16.5px}
+.cadre[data-appareil="tv"] .fil-tete h2{font-size:22px}
+.cadre[data-appareil="tv"] .nav{font-size:16px; padding:9px 11px}
+
+@media (prefers-reduced-motion: reduce){
+  .cadre{transition:none}
+}
+
+/* Notes de bas de page */
+.notes{margin-top:34px; border-top:1px solid var(--line); padding-top:18px}
+.notes h2{font-family:var(--mono); font-size:12px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--dim); margin-bottom:10px}
+.notes ul{margin:0; padding-left:1.1rem; max-width:72ch}
+.notes li{margin-bottom:.55rem}
+.notes code{font-family:var(--mono); font-size:.88em; background:var(--soft);
+  padding:1px 5px; border-radius:5px}
+</style>
+
+<div class="doc">
+
+  <header class="doc-tete">
+    <div>
+      <span class="etiq">SecuBox · maquette de référence</span>
+      <h1>Le BBS, en trois colonnes</h1>
+      <p>Un salon de conversation qui garde la disposition des premiers BBS —
+         plusieurs colonnes qui défilent chacune de leur côté — et le fil
+         continu d'aujourd'hui. Le rail se déplie à la demande.</p>
+    </div>
+    <span class="chip">bbs.gk2.secubox.in</span>
+  </header>
+
+  <section class="section">
+    <h2>Aperçu selon l'appareil</h2>
+    <div class="appareils" role="group" aria-label="Largeur de prévisualisation">
+      <button class="appareil" type="button" data-w="390"  aria-pressed="false">📱 Téléphone · 390</button>
+      <button class="appareil" type="button" data-w="860"  aria-pressed="false">📺 Tablette / TV · 860</button>
+      <button class="appareil" type="button" data-w="1180" aria-pressed="true">🖥 Ordinateur · 1180</button>
+    </div>
+
+    <div class="cadre" id="cadre" style="--w:1180px" data-appareil="pc">
+      <div class="shell">
+
+        <div class="bar">
+          <button class="iconbtn" type="button" title="Déplier le menu" aria-label="Déplier le menu">☰</button>
+          <span class="marque">Le <i>BBS</i></span>
+          <span class="chip">◈ Atelier</span>
+          <span class="grandir"></span>
+          <span class="chip">252 fils</span>
+          <button class="iconbtn" type="button" title="Rechercher" aria-label="Rechercher">🔍</button>
+          <button class="iconbtn" type="button" title="Mon compte" aria-label="Mon compte">👤</button>
+        </div>
+
+        <div class="corps">
+
+          <nav class="rail" aria-label="Navigation principale">
+            <div class="railtitre">Actifs</div>
+            <a class="nav" href="#" aria-current="page"><span class="ic">◈</span>Forums<span class="n">252</span></a>
+            <a class="nav" href="#"><span class="ic">▶</span>Média<span class="n">122</span></a>
+            <a class="nav" href="#"><span class="ic">▤</span>Bibliothèque<span class="n">18</span></a>
+            <a class="nav" href="#"><span class="ic">✉</span>Messages<span class="n vif">3</span></a>
+            <a class="nav" href="#"><span class="ic">✦</span>Billets<span class="n">30</span></a>
+            <a class="nav" href="#"><span class="ic">🐘</span>Mastodon</a>
+
+            <div class="railtitre">Salons</div>
+            <a class="nav" href="#"><span class="pastille" style="background:var(--coral)"></span>Atelier<span class="n">41</span></a>
+            <a class="nav" href="#"><span class="pastille" style="background:var(--sky)"></span>Place publique<span class="n">63</span></a>
+            <a class="nav" href="#"><span class="pastille" style="background:var(--mint)"></span>Intendance<span class="n">12</span></a>
+            <a class="nav" href="#"><span class="pastille" style="background:var(--amber)"></span>Archives<span class="n">30</span></a>
+            <a class="nav" href="#"><span class="pastille" style="background:var(--violet)"></span>Vidéos<span class="n">100</span></a>
+            <a class="nav" href="#"><span class="pastille" style="background:var(--pink)"></span>Émissions<span class="n">122</span></a>
+
+            <div class="railtitre">Console</div>
+            <a class="nav" href="#"><span class="ic">⚿</span>Sysop</a>
+          </nav>
+
+          <div class="liste">
+            <div class="liste-tete">
+              <h2>Atelier</h2>
+              <span class="etiq">41 fils</span>
+            </div>
+
+            <a class="fil actif" href="#">
+              <h3>Le dongle Zigbee ne répond plus après un rebranchement</h3>
+              <div class="meta">
+                <span class="pill p-loc">local</span>
+                <span>gk2</span><span>·</span><span>14 réponses</span><span>·</span><span>il y a 9 min</span>
+              </div>
+            </a>
+            <a class="fil" href="#">
+              <h3>Retour sur la panne HAProxy : ce que la garde anti-dérive protégeait</h3>
+              <div class="meta">
+                <span class="pill p-pub">public</span>
+                <span>gk2</span><span>·</span><span>7 réponses</span><span>·</span><span>hier</span>
+              </div>
+            </a>
+            <a class="fil" href="#">
+              <h3>Quelqu'un a déjà fait tourner Lyrion sur un disque externe ?</h3>
+              <div class="meta">
+                <span class="pill p-loc">local</span>
+                <span class="pill p-new">2 neufs</span>
+                <span>amie</span><span>·</span><span>23 réponses</span><span>·</span><span>hier</span>
+              </div>
+            </a>
+            <a class="fil" href="#">
+              <h3>Émission #48 — l'auto-hébergement sans y passer ses dimanches</h3>
+              <div class="meta">
+                <span class="pill p-src">podcaster</span>
+                <span>passerelle</span><span>·</span><span>4 réponses</span><span>·</span><span>2 jours</span>
+              </div>
+            </a>
+            <a class="fil" href="#">
+              <h3>Nommer les ports série une fois pour toutes</h3>
+              <div class="meta">
+                <span class="pill p-pub">public</span>
+                <span>gk2</span><span>·</span><span>11 réponses</span><span>·</span><span>3 jours</span>
+              </div>
+            </a>
+            <a class="fil" href="#">
+              <h3>Vos réglages de sauvegarde — on compare ?</h3>
+              <div class="meta">
+                <span class="pill p-loc">local</span>
+                <span>cedre83</span><span>·</span><span>31 réponses</span><span>·</span><span>4 jours</span>
+              </div>
+            </a>
+            <a class="fil" href="#">
+              <h3>Petit guide : remettre un compte délégué en local</h3>
+              <div class="meta">
+                <span class="pill p-pub">public</span>
+                <span>admin</span><span>·</span><span>6 réponses</span><span>·</span><span>5 jours</span>
+              </div>
+            </a>
+          </div>
+
+          <div class="fil-vue">
+            <div class="fil-tete">
+              <h2>Le dongle Zigbee ne répond plus après un rebranchement</h2>
+              <div class="meta">
+                <span class="pill p-loc">fil local</span>
+                <span>ouvert par gk2</span><span>·</span><span>14 réponses</span><span>·</span><span>◈ Atelier</span>
+              </div>
+            </div>
+
+            <div class="flux">
+              <div class="jour">Mardi</div>
+
+              <article class="msg">
+                <div class="av" style="background:var(--coral)">GK</div>
+                <div class="msg-corps">
+                  <div class="msg-tete"><b>gk2</b><time>09:14</time></div>
+                  <p>Après avoir débranché puis rebranché le SONOFF, zigbee2mqtt
+                     tourne mais n'écoute rien. Le journal dit
+                     <code>HOST_FATAL_ERROR</code> à l'initialisation.</p>
+                  <div class="reactions">
+                    <button class="reac" type="button">🤔 2</button>
+                    <button class="reac" type="button">👀 4</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="msg">
+                <div class="av" style="background:var(--sky)">AM</div>
+                <div class="msg-corps">
+                  <div class="msg-tete"><b>amie</b><time>09:31</time></div>
+                  <p>Regarde le message juste au-dessus dans le journal — chez moi
+                     c'était un <em>Permission denied</em> masqué par l'erreur EZSP,
+                     qui n'en était que la conséquence.</p>
+                </div>
+              </article>
+
+              <article class="msg">
+                <div class="av" style="background:var(--coral)">GK</div>
+                <div class="msg-corps">
+                  <div class="msg-tete"><b>gk2</b><time>09:47</time></div>
+                  <blockquote class="cite">un Permission denied masqué par l'erreur EZSP</blockquote>
+                  <p>C'est exactement ça. Le montage du périphérique dans le
+                     conteneur était resté figé sur l'ancien, en mode
+                     <code>c---------</code>. Un redémarrage du conteneur l'a
+                     rétabli.</p>
+                  <div class="reactions">
+                    <button class="reac mienne" type="button">🎯 5</button>
+                    <button class="reac" type="button">🙏 3</button>
+                  </div>
+                </div>
+              </article>
+
+              <div class="jour">Aujourd'hui</div>
+
+              <article class="msg">
+                <div class="av" style="background:var(--mint)">CE</div>
+                <div class="msg-corps">
+                  <div class="msg-tete"><b>cedre83</b><time>08:02</time></div>
+                  <p>Du coup les règles udev nommées par numéro de série évitent
+                     tout ça ? Parce que chez moi l'ordre change à chaque
+                     redémarrage.</p>
+                </div>
+              </article>
+
+              <article class="msg">
+                <div class="av" style="background:var(--coral)">GK</div>
+                <div class="msg-corps">
+                  <div class="msg-tete"><b>gk2</b><time>08:20</time></div>
+                  <p>Oui — et le conteneur ne monte plus que le nom de rôle. Je
+                     détaille dans « Nommer les ports série une fois pour toutes ».</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="ecrire">
+              <div class="ecrire-outils">
+                <button class="outil" type="button" title="Gras"><b>B</b></button>
+                <button class="outil" type="button" title="Italique"><i>I</i></button>
+                <button class="outil" type="button" title="Liste">☰</button>
+                <button class="outil" type="button" title="Citation">❝</button>
+                <button class="outil" type="button" title="Code">&lt;/&gt;</button>
+                <button class="outil" type="button" title="Lien">⛓</button>
+                <button class="outil" type="button" title="Émoji">🙂</button>
+              </div>
+              <textarea class="zone" placeholder="Répondre à gk2…"></textarea>
+              <div class="ecrire-pied">
+                <span class="etiq">Markdown — ce qui part sur le disque reste du texte</span>
+                <span class="grandir" style="flex:1"></span>
+                <button class="btn primaire" type="button">Envoyer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="etat">
+          <span>nœud <b>gk2</b></span><span class="sep">│</span>
+          <span>membre <b>gk2</b> · sysop</span><span class="sep">│</span>
+          <span>✉ <b>3</b> non lus</span><span class="sep">│</span>
+          <span class="vert">● lien local</span><span class="sep">│</span>
+          <span>schéma 11</span>
+        </div>
+
+        <nav class="basse" aria-label="Navigation (téléphone)">
+          <a href="#" aria-current="page"><span class="ic">◈</span>Forums</a>
+          <a href="#"><span class="ic">▶</span>Média</a>
+          <a href="#"><span class="ic">✉</span>Messages</a>
+          <a href="#"><span class="ic">✦</span>Billets</a>
+          <a href="#"><span class="ic">👤</span>Compte</a>
+        </nav>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Couleurs référencées</h2>
+    <div class="teintes">
+      <div class="teinte"><div class="bande" style="background:#C04E24"></div>
+        <div class="txt"><b>AUTH · 01</b><span>#C04E24 — comptes, invitations</span></div></div>
+      <div class="teinte"><div class="bande" style="background:#9A6010"></div>
+        <div class="txt"><b>WALL · 02</b><span>#9A6010 — archives, garde</span></div></div>
+      <div class="teinte"><div class="bande" style="background:#803018"></div>
+        <div class="txt"><b>BOOT · 03</b><span>#803018 — mise en service</span></div></div>
+      <div class="teinte"><div class="bande" style="background:#3D35A0"></div>
+        <div class="txt"><b>MIND · 04</b><span>#3D35A0 — vidéos, analyse</span></div></div>
+      <div class="teinte"><div class="bande" style="background:#0A5840"></div>
+        <div class="txt"><b>ROOT · 05</b><span>#0A5840 — système, intendance</span></div></div>
+      <div class="teinte"><div class="bande" style="background:#104A88"></div>
+        <div class="txt"><b>MESH · 06</b><span>#104A88 — réseau, fédération</span></div></div>
+    </div>
+  </section>
+
+  <section class="notes">
+    <h2>Règles que cette maquette fixe</h2>
+    <ul>
+      <li><b>Trois colonnes qui défilent séparément.</b> On garde sa place dans
+          la liste en lisant un fil — c'est ce qui fait la sensation d'OS
+          plutôt que de page, et c'est la seule chose que les premiers BBS
+          faisaient mieux que la plupart des interfaces d'aujourd'hui.</li>
+      <li><b>Une colonne tombe à chaque palier.</b> Téléphone : la conversation
+          seule, avec une barre basse. Tablette et téléviseur : liste et
+          conversation, rail replié en icônes — à trois mètres comme au pouce,
+          on vise une cible large. Ordinateur : les trois, rail déplié.</li>
+      <li><b>Les paliers sont écrits après les composants.</b> Une requête de
+          conteneur n'ajoute aucune spécificité : placée avant, elle serait
+          écrasée par la règle qui la suit. C'est le défaut qui avait laissé le
+          rail visible sur téléphone.</li>
+      <li><b>La prévisualisation utilise des requêtes de conteneur</b>
+          (<code>container-type</code>), pas un simple <code>max-width</code> :
+          la maquette réagit à la largeur du cadre, donc les trois appareils
+          sont exacts et non simulés.</li>
+      <li><b>La monospace porte la structure, pas le texte.</b> Salons,
+          compteurs, horodatages, ligne d'état. L'héritage BBS se lit dans
+          l'ossature ; le corps reste confortable.</li>
+      <li><b>La ligne d'état est le seul ornement</b>, et elle encode un état
+          réel : nœud, membre, non-lus, lien, version de schéma.</li>
+      <li><b>Les émojis marquent des choses distinctes</b> — un salon, un
+          module, une réaction — jamais un titre de section décoré.</li>
+      <li><b>Aucune couleur n'est définie dans un bloc de thème.</b> Les
+          composants ne lisent que des variables, redéfinies pour les trois
+          états : clair, sombre système, et choix explicite.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(function(){
+  var cadre = document.getElementById('cadre');
+  var noms = {390:'phone', 860:'tv', 1180:'pc'};
+  document.querySelectorAll('.appareil').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.appareil').forEach(function(o){
+        o.setAttribute('aria-pressed', String(o === b));
+      });
+      var w = b.dataset.w;
+      cadre.style.setProperty('--w', w + 'px');
+      cadre.dataset.appareil = noms[w] || 'pc';
+    });
+  });
+})();
+</script>
