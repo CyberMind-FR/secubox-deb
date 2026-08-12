@@ -1,3 +1,34 @@
+secubox-metablogizer (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost publie ne reclame plus le port 80 (ref #1012). Sur une board
+    SecuBox, HAProxy detient 0.0.0.0:80 : un vhost qui le reclame empeche nginx
+    de DEMARRER — bind() to 0.0.0.0:80 failed (98: Address already in use) — et
+    tous les vhosts de l'hote tombent avec lui. Le defaut restait invisible tant
+    que nginx n'etait que RECHARGE (un rechargement ne rebind pas), et n'a
+    eclate qu'au premier redemarrage franc, longtemps apres la publication
+    fautive. Le vhost ecoute desormais sur le port du module, celui vers lequel
+    la chaine HAProxy -> sbxwaf achemine deja ces sites.
+  * La publication ecrivait un `server_name` en `.local` (ref #1012). Signale
+    sur aletheia.gk2.secubox.in, qui rendait le contenu d'un tout autre site
+    (MAGIC-CHESS-360) en 200, sans qu'aucune erreur ne soit levee : nginx,
+    n'associant le Host demande a aucun `server_name`, servait le premier bloc
+    serveur venu.
+  * Le domaine etait calcule a CINQ endroits et un seul etait juste — celui de
+    l'affichage. Le panneau affirmait donc `aletheia.gk2.secubox.in` pendant que
+    nginx portait `server_name aletheia.local`, ce qui a rendu le defaut
+    invisible. Un seul calcul partage desormais (`sites_scan.domaine_du_site`),
+    utilise par l'affichage, le detail, la creation, le QR code et la
+    publication.
+  * A la creation, un domaine non fourni ne grave plus `.local` dans le
+    site.json — c'est cette valeur que la publication relisait ensuite.
+  * Le suffixe `.local` herite est retire EN FIN de chaine et non remplace
+    partout : `want` sert sous `wanted.`, et un `replace` mutilait les domaines
+    portant `.local` ailleurs qu'en suffixe.
+  * Un site.json illisible ne fait plus retomber sur `.local` : la publication
+    reste possible sous le nom du repertoire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 12:10:00 +0200
+
 secubox-metablogizer (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
