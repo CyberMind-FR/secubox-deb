@@ -44,7 +44,14 @@ from typing import Optional
 
 DEFAULT_SITES_ROOT = "/srv/metablogizer/sites"
 DEFAULT_CACHE_DIR = "/var/cache/secubox/metablogizer/shots"
-DEFAULT_LOAD_THRESHOLD = 40.0
+# SEUIL DE CHARGE. 40 sur une board a QUATRE coeurs laissait capturer alors que
+# la machine etait deja dix fois saturee — et la capture, qui lance un
+# navigateur complet, aggravait ce qu'elle etait censee eviter. Constate le
+# 2026-08-12 : charge a 77, chromium relance toutes les deux minutes.
+#
+# 4 = un coeur par coeur, soit une machine occupee mais pas engorgee. Au-dela,
+# la capture attend : elle n'est jamais urgente.
+DEFAULT_LOAD_THRESHOLD = 4.0
 LOCK_NAME = ".lock"
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 
@@ -121,7 +128,12 @@ def _site_dirs(sites_root: Path):
 def pick_next(sites_root: Path, cache_dir: Path) -> Optional[str]:
     """Nom du site à capturer ce tour-ci, ou `None` si rien n'est dû.
 
-    Parmi les sites dont la vignette est absente ou périmée, celui dont la
+    Une vignette n'est JAMAIS reprise parce que le temps a passe : seulement
+    si elle manque, si la tentative precedente a echoue, ou si le site lui-meme
+    a change (empreinte differente). Une capture est donc unique par etat du
+    site, et le passage periodique ne sert qu'a rattraper ce qui manque.
+
+    Parmi ces sites, celui dont la
     dernière tentative (`captured_at`) est la plus ancienne gagne — une
     chaîne vide (jamais tentée) trie avant toute date ISO 8601, donc un site
     jamais capturé passe toujours devant un site déjà tenté au moins une

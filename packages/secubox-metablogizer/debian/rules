@@ -3,6 +3,15 @@
 	dh $@
 
 override_dh_auto_install:
+	# Bornes de la capture d'ecran (incident de charge du 2026-08-12) : cadence
+	# horaire et plafond CPU dur. Poses a la main sur la board, ils auraient
+	# disparu a la premiere reinstallation propre.
+	install -d debian/secubox-metablogizer/lib/systemd/system/metablog-shots.service.d
+	install -m 644 systemd/metablog-shots.service.conf \
+	  debian/secubox-metablogizer/lib/systemd/system/metablog-shots.service.d/10-borne-cpu.conf
+	install -d debian/secubox-metablogizer/lib/systemd/system/metablog-shots.timer.d
+	install -m 644 systemd/metablog-shots.timer.conf \
+	  debian/secubox-metablogizer/lib/systemd/system/metablog-shots.timer.d/10-cadence.conf
 	install -d debian/secubox-metablogizer/usr/lib/secubox/metablogizer
 	cp -r api debian/secubox-metablogizer/usr/lib/secubox/metablogizer/
 	install -d debian/secubox-metablogizer/usr/share/secubox/www/metablogizer
