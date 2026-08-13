@@ -1,5 +1,62 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-31*
+*Mis à jour : 2026-08-13*
+---
+
+## Arbitrage des 39 branches restantes (2026-08-13)
+
+Le depot est passe de **421 a 47 branches**. Ce qui reste demande une decision
+humaine — je me suis arrete la volontairement.
+
+| Groupe | Nombre | Signal |
+|---|---|---|
+| Tous les fichiers existent deja dans master | **28** | fonctionnalites verifiees PRESENTES dans master |
+| Apportent des fichiers absents de master | **11** | contenu unique, a examiner |
+
+### Les 28 : doublons historiques, tres probablement
+
+Leur diff est enorme (jusqu'a 228 971 insertions) : ce ne sont pas des residus
+mais les fonctionnalites entieres. Or celles-ci sont **deja dans master**,
+arrivees par rebase ou reimplementation — `sbx-sentinel`, l'auto-apprentissage
+C2, la federation P2P DHT, Frigate et le cache media sbxwaf sont tous presents,
+et en production sur gk2.
+
+Les supprimer perd l'historique de developpement, pas la fonctionnalite.
+**Decision utilisateur.**
+
+### Les 11 qui apportent des fichiers absents de master
+
+| Branche | Fichiers absents |
+|---|---|
+| `feature/license-headers-phase-a` | 35 |
+| `feature/license-phase-b-full` | 35 |
+| `feature/127-phase2-square-variant` | 33 |
+| `feature/429-nextcloud-real-manageable` | 6 |
+| `feature/127-phase3-python-kiosk` | 5 |
+| `feature/136-mail-stack-phase-1` | 3 |
+| `feature/247-health-banner-clickable` | 3 |
+| `feature/615-security-posture` | 1 |
+| `feature/738-aggregator-resilience` | 1 |
+| `fix/133-remote-ui-square-4-bugs` | 1 |
+| `fix/139-round-image-usb0-otg` | 1 |
+
+Les deux `license-*` (35 fichiers chacune) sont les plus interessantes : elles
+posent les en-tetes SPDX, sujet transverse jamais acheve.
+
+### Une reserve gardee pour arbitrage
+
+`fix/round-real-root-icons` SUPPRIMERAIT `build-eye-remote-image.sh`, fichier
+toujours present et reference dans master. Une suppression dont l'intention ne
+se verifie pas ne se fusionne pas.
+
+### Lecon de methode
+
+`git cherry` a classe « contenu nouveau » quatre branches dont le correctif
+etait **deja dans master**, reimplemente sous un autre patch : `fix/92`,
+`fix/218`, `feature/790` et `feature/239`. L'outil oriente, il ne tranche pas —
+chaque suppression a ete verifiee sur le contenu, jamais sur le classement.
+
+---
+
 
 ---
 
