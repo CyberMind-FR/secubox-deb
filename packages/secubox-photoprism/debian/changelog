@@ -1,3 +1,16 @@
+secubox-photoprism (1.2.1-1~bookworm2) bookworm; urgency=high
+
+  * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par
+    une centaine de modules ; `RuntimeDirectory=` est concu pour un repertoire
+    PROPRE a un service. systemd le recreait a chaque demarrage avec le mode de
+    l'unite : le dernier demarre imposait le sien, et huit unites le posaient en
+    0755 — privant tous les autres du droit d'y creer leur socket. Le meme
+    mecanisme l'effacait a l'arret d'un service, emportant les sockets des
+    quatre-vingt-dix autres. Il est desormais declare une seule fois, en 1777,
+    par le tmpfiles.d de secubox-core.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 11:00:00 +0200
+
 secubox-photoprism (1.2.0-1~bookworm2) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
