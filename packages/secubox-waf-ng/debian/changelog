@@ -1,3 +1,29 @@
+secubox-waf-ng (1.3.2-1~bookworm1) bookworm; urgency=high
+
+  * Le WAF detectait sans jamais pouvoir bannir (ref #1017). Deux defauts
+    independants, tous deux silencieux.
+  * Le journal des menaces appartenait a secubox:secubox en 0640 alors que le
+    service tourne en secubox-waf : chaque ecriture echouait en permission
+    denied. TROIS SEMAINES de detections perdues, et un tableau de bord fige au
+    21 juillet — ce qui se lit comme « aucune attaque ». Le repertoire ET le
+    fichier sont desormais donnes au service au demarrage : creer le repertoire
+    ne suffit pas quand le fichier existe deja, ce qui est le cas de toute board
+    en service.
+  * Le pont CrowdSec passe par `cscli decisions add`, mais cscli doit lire
+    /etc/crowdsec/config.yaml, interdit a secubox-waf — et NoNewPrivileges=yes
+    aurait de toute facon bloque l'elevation. Un droit sudo BORNE au seul verbe
+    `decisions add` est livre avec le paquet, et NoNewPrivileges passe a false.
+    Les deux vont ensemble : l'un sans l'autre ne sert a rien.
+  * Le WAF peut donc bannir, mais pas LEVER un ban : `decisions delete` reste
+    hors de sa portee. Un WAF compromis pourrait bannir a tort — nuisance
+    corrigeable — mais pas desarmer la board en silence.
+  * L'adresse de la LAPI n'etait PAS en cause, contrairement a ce que laissait
+    croire la liste des sockets en ecoute : 10.100.0.1:8080 repond bien (403,
+    soit la LAPI rejetant une requete non authentifiee). Elle est laissee telle
+    quelle, l'auteur ayant documente pourquoi ne pas viser la boucle locale.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 16:20:00 +0200
+
 secubox-waf-ng (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Une page peut REFUSER la banniere de sante, par
