@@ -6,6 +6,13 @@ override_dh_auto_install:
 	# API
 	install -d debian/secubox-mail/usr/lib/secubox/mail
 	cp -r api debian/secubox-mail/usr/lib/secubox/mail/
+	# Greffon Roundcube zipjointes (#1029). Livre dans /usr/share/secubox pour
+	# que le postinst le pose DANS le conteneur : /usr/share/roundcube n'existe
+	# pas sur l hote, et un conteneur non privilegie n accepte pas qu on ecrive
+	# chez lui depuis l exterieur avec la bonne appartenance.
+	install -d debian/secubox-mail/usr/share/secubox/roundcube-plugins
+	cp -r roundcube/plugins/zipjointes \
+	  debian/secubox-mail/usr/share/secubox/roundcube-plugins/
 
 	# Library scripts
 	install -d debian/secubox-mail/usr/lib/secubox/mail/lib

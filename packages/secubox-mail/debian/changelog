@@ -1,3 +1,41 @@
+secubox-mail (2.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * GREFFON ROUNDCUBE `zipjointes` (ref #1029) : un bouton sous la liste des
+    pieces jointes, en composition, qui les groupe en une archive zip unique et
+    REMPLACE les originales.
+  * `php8.2-zip` MANQUAIT DEPUIS L ORIGINE, et cela ne se voyait pas. Le greffon
+    `zipdownload`, livre en standard et bien active, se desactivait tout seul a
+    son chargement faute de la classe `ZipArchive` : le bouton « telecharger
+    toutes les pieces jointes en zip » n est JAMAIS apparu sur cette board. Le
+    journal de Roundcube le repetait a chaque requete depuis des mois. Poser
+    l extension repare les deux greffons d un coup.
+  * ON NE TOUCHE JAMAIS UN CHEMIN DE FICHIER. Roundcube a trois pilotes de
+    stockage pour les pieces en cours de composition — `filesystem`, `database`,
+    `redundant` — et seul le premier pose des fichiers sur disque. Tout passe
+    donc par les crochets `attachment_get` / `attachment_upload` /
+    `attachment_delete`. Un greffon qui lirait `$att["path"]` marcherait ici et
+    casserait chez qui stocke en base, sans rien annoncer.
+  * L ARCHIVE EST ENREGISTREE AVANT QUE LES ORIGINALES NE PARTENT. L ordre
+    inverse laisserait, si l enregistrement echoue, un message sans aucune piece
+    jointe — le seul resultat vraiment inacceptable. Une piece illisible arrete
+    tout et ne modifie rien.
+  * Deux pieces homonymes ne s ecrasent pas dans l archive : on joint volontiers
+    deux `capture.png` venus de dossiers differents, et sans suffixe la seconde
+    remplacerait la premiere — perte decouverte a l ouverture, par le
+    destinataire.
+  * Compresser du deja-compresse ne gagne rien : quand l archive ne reduit pas
+    de plus de 5 %, on le DIT, plutot que d annoncer un gain qui n a pas eu lieu.
+  * Nouveau verbe `mailctl webmail-greffons` : pose le greffon DANS le conteneur
+    par `lxc-attach` — un conteneur non privilegie n accepte pas qu on ecrive
+    chez lui depuis l hote avec la bonne appartenance — installe php-zip s il
+    manque, et active le greffon dans `config.inc.php.local`, LE fichier qui
+    fait foi : `config.inc.php` ne porte que des entrees commentees, l editer ne
+    changerait rien en silence.
+  * `php -l` avant tout rechargement : une configuration cassee ferait tomber le
+    webmail entier, et l on ne s en apercevrait qu a la premiere connexion.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 17:10:00 +0200
+
 secubox-mail (2.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Les alias virtuels fonctionnent enfin (ref #1025). `alias add` ecrivait le
