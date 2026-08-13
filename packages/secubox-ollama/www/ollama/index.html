@@ -482,7 +482,7 @@
             if (token) headers['Authorization'] = `Bearer ${token}`;
             const res = await fetch(API + endpoint, { ...options, headers, credentials: 'include' });
             if (res.status === 401) {
-                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 throw new Error('Unauthorized');
             }
             return res.json();

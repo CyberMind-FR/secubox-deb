@@ -108,7 +108,7 @@
             // Handle 401 - redirect to login
             if (res.status === 401) {
                 console.log('[API] 401 Unauthorized, redirecting to login');
-                window.location = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return { ok: false, status: 401, error: 'Unauthorized', data: null };
             }
 

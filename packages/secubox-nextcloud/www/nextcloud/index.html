@@ -196,7 +196,7 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
+                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return {}; }
                 return res.json();
             } catch { return {}; }
         }

@@ -274,7 +274,7 @@
         async function api(path, opts = {}) {
             try {
                 const res = await fetch(API + path, { ...opts, headers: headers() });
-                if (res.status === 401) { location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
+                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
                 const ct = res.headers.get('content-type') || '';
                 const body = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
                 if (!res.ok) throw new Error((body && body.detail) || ('HTTP ' + res.status));

@@ -603,7 +603,7 @@
         async function checkAuth() {
             const token = localStorage.getItem('sbx_token');
             if (!token) {
-                window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
+                if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
                 return false;
             }
             return true;
@@ -622,7 +622,7 @@
             try {
                 const res = await fetch(API + endpoint, opts);
                 if (res.status === 401) {
-                    window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
+                    if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
                     return null;
                 }
                 return res.json();

@@ -75,7 +75,7 @@
 (function() {
   function getToken() { return localStorage.getItem('sbx_token'); }
   if (!getToken()) {
-    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
     return;
   }
 
