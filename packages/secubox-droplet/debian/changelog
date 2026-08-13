@@ -1,3 +1,38 @@
+secubox-droplet (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * ESPACE DE DEPOT (ref #1026). On y laisse une archive, elle atterrit sur le
+    disque de la box, et une alerte part vers le compte hote avec ce qu'on a
+    constate : empreinte, taille reelle, origine, instant. Le module PUBLIAIT
+    des fichiers pour un auteur authentifie ; il en RECOIT desormais
+    d'inconnus. Les deux ne se ressemblent qu'en surface, et le second est de
+    tres loin le plus expose — d'ou des routes separees, dans leur fichier.
+  * RIEN DE CE QUI EST DEPOSE N'EST JAMAIS RESERVI. Les fichiers vivent hors de
+    tout docroot et aucune route ne rend leur contenu. Un depot public qu'on
+    peut relire est un hebergement anonyme gratuit : il sera trouve, et il
+    servira.
+  * LE NOM FOURNI NE TOUCHE JAMAIS UN CHEMIN. Le chemin vient de l'indice du
+    fichier dans le depot ; le nom du deposant, nettoye, ne sert qu'a
+    l'affichage et au manifeste. Ce n'est pas le filtre qui protege — un filtre
+    finit toujours par laisser passer quelque chose — c'est cette separation.
+  * LE DEBIT EST BORNE PAR ORIGINE, par seau perce plutot que par fenetre : un
+    compteur remis a zero toutes les heures autoriserait deux fois le quota a
+    cheval sur la bascule. Un envoi coupe par le reseau est rembourse — punir
+    le deposant d'une panne qui n'est pas la sienne serait doublement injuste.
+  * L'ECRITURE ET L'ENVOI SE FONT HORS DE LA BOUCLE D'EVENEMENTS. Ces routes
+    sont servies EN PROCESSUS par l'agregateur, qui porte la centaine de
+    modules de la board sur une seule boucle : recopier deux gigaoctets de
+    facon synchrone y bloquerait la board ENTIERE, en 502, pour la duree du
+    televersement — et ce serait declenchable par n'importe quel inconnu.
+  * `client_max_body_size 4g` et `proxy_request_buffering off` sur la route de
+    depot. Le defaut nginx est UN megaoctet : sans cela le premier depot serait
+    refuse par nginx avec un 413 que notre code ne verrait jamais passer.
+  * L'echec de l'alerte n'est PAS l'echec du depot : les octets sont deja sur
+    le disque quand le courrier part. Un manifeste est ecrit a cote d'eux, qui
+    survit a l'alerte — le courrier peut se perdre, le dossier doit se suffire.
+  * 42 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 12:30:00 +0200
+
 secubox-droplet (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

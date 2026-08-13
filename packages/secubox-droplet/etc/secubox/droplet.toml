@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: droplet — publication de fichiers et ESPACE DE DEPOT (#1026)
+
+upload_dir     = "/srv/droplet"
+default_domain = "gk2.secubox.in"
+max_upload_mb  = 100
+
+# ── Espace de dépôt ──────────────────────────────────────────────────────
+#
+# Un point d'entrée PUBLIC EN ECRITURE. Chaque valeur ci-dessous existe parce
+# que son absence a une conséquence concrète, pas pour faire nombre.
+
+# Fermer l'espace sans désinstaller le module. Le jour d'un abus, on veut
+# pouvoir couper le dépôt en gardant la publication.
+depot_actif = true
+
+# Hors de tout docroot, et sur /data — c'est le volume qui a de la place, et
+# celui qui est sauvegardé.
+depots_dir = "/data/secubox/droplet"
+
+# L'alerte. `gk2@gk2.secubox.in` mène à la même boîte (alias, #1025).
+alerte_a  = "gk2@secubox.in"
+alerte_de = "droplet@secubox.in"
+smtp_hote = "10.100.0.10"
+smtp_port = 25
+
+# 2 Gio par fichier. PAS « sans limite » : la borne du COURRIER a été levée
+# parce qu'un refus à la porte y est pire que tout, mais un dépôt public sans
+# plafond est une invitation à remplir le disque d'un inconnu. Les deux
+# décisions n'ont pas le même sujet.
+taille_max   = 2147483648
+fichiers_max = 20
+
+# Au-delà, l'alerte porte le manifeste et le chemin plutôt que les octets.
+joindre_max = 104857600
+
+# Le seau percé par adresse. Sans lui, un seul client remplit /data en une nuit
+# et la board tombe pour une raison qui n'a rien à voir avec la sécurité.
+quota_octets_par_heure = 4294967296
+quota_depots_par_heure = 30

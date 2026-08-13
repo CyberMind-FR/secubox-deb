@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Dépôt — SecuBox</title>
+<style>
+/* Charte panneau SecuBox : cyan sur fond sombre, Courier Prime.
+   AUCUNE RESSOURCE DISTANTE. Cette page est servie à des inconnus, souvent
+   depuis des réseaux qu'on ne choisit pas : une police ou un script tiers
+   ferait dépendre le dépôt d'un serveur que nous ne tenons pas, et
+   renseignerait ce tiers sur qui vient déposer. */
+:root {
+  --fond: #0b1014; --carte: #121a20; --bord: #1e2d36;
+  --cyan: #00d4ff; --texte: #cfe3ea; --doux: #7a94a0;
+  --ambre: #f0b429; --rouge: #e05263; --vert: #57c98a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Courier Prime', 'Courier New', monospace;
+  background: var(--fond); color: var(--texte);
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 2rem 1rem; line-height: 1.6;
+}
+.boite { max-width: 42rem; width: 100%; }
+.chapeau { color: var(--cyan); letter-spacing: .18em; text-transform: uppercase;
+           font-size: .72rem; margin-bottom: .6rem; }
+h1 { font-size: 1.6rem; margin-bottom: .4rem; text-wrap: balance; }
+.resume { color: var(--doux); margin-bottom: 1.6rem; }
+
+.zone {
+  border: 2px dashed var(--bord); border-radius: 12px;
+  padding: 2.5rem 1.5rem; text-align: center; cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background: var(--carte);
+}
+.zone:hover, .zone.survol { border-color: var(--cyan); background: #16232b; }
+.zone:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.zone .goutte { font-size: 2.6rem; line-height: 1; display: block; margin-bottom: .6rem; }
+.zone .indice { color: var(--doux); font-size: .86rem; margin-top: .4rem; }
+input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+ul.liste { list-style: none; margin: 1rem 0 0; }
+ul.liste li {
+  display: flex; justify-content: space-between; gap: 1rem;
+  padding: .45rem .7rem; border: 1px solid var(--bord);
+  border-radius: 6px; margin-bottom: .4rem; background: var(--carte);
+}
+ul.liste .poids { color: var(--doux); flex: 0 0 auto; }
+ul.liste .nom { overflow-wrap: anywhere; }
+
+textarea {
+  width: 100%; margin-top: 1rem; min-height: 4.5rem; resize: vertical;
+  background: var(--carte); color: var(--texte);
+  border: 1px solid var(--bord); border-radius: 8px; padding: .7rem;
+  font: inherit;
+}
+textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+.pied { margin-top: 1.2rem; display: flex; gap: .9rem; align-items: center;
+        flex-wrap: wrap; }
+button {
+  background: transparent; color: var(--cyan); border: 1px solid var(--cyan);
+  border-radius: 6px; padding: .6rem 1.3rem; font: inherit; cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--cyan); color: var(--fond); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible { outline: 2px solid var(--texte); outline-offset: 2px; }
+
+progress { width: 100%; height: .5rem; margin-top: 1rem; }
+.note { color: var(--doux); font-size: .82rem; }
+.message { margin-top: 1.2rem; padding: .9rem 1.1rem; border-radius: 8px;
+           border: 1px solid var(--bord); background: var(--carte); }
+.message.bien { border-color: var(--vert); }
+.message.mal  { border-color: var(--rouge); }
+.message code { color: var(--cyan); overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="boite">
+
+  <p class="chapeau">SecuBox · Dépôt</p>
+  <h1>Laissez vos fichiers ici</h1>
+  <p class="resume">
+    Ils partent directement sur la box et une alerte prévient son propriétaire.
+    Rien de ce qui est déposé n'est publié ni relisible depuis cette page.
+  </p>
+
+  <form id="f">
+    <label class="zone" id="zone" tabindex="0" role="button"
+           aria-describedby="indice">
+      <span class="goutte" aria-hidden="true">💧</span>
+      <span id="titrezone">Glissez vos fichiers, ou cliquez pour les choisir</span>
+      <span class="indice" id="indice">Archives, images, documents — peu importe</span>
+      <input type="file" id="fichiers" name="fichiers" multiple>
+    </label>
+
+    <ul class="liste" id="liste" hidden></ul>
+
+    <textarea id="mot" name="mot" maxlength="2000"
+              placeholder="Un mot pour accompagner le dépôt (facultatif)"
+              aria-label="Message accompagnant le dépôt"></textarea>
+
+    <div class="pied">
+      <button type="submit" id="envoyer" disabled>Déposer</button>
+      <span class="note" id="etat"></span>
+    </div>
+    <progress id="jauge" hidden max="100" value="0"></progress>
+  </form>
+
+  <div id="message" class="message" hidden></div>
+
+</div>
+<script>
+// L'API est montée sous /api/v1/droplet par le proxy.
+const API = '/api/v1/droplet';
+const zone = document.getElementById('zone');
+const champ = document.getElementById('fichiers');
+const liste = document.getElementById('liste');
+const bouton = document.getElementById('envoyer');
+const etat = document.getElementById('etat');
+const jauge = document.getElementById('jauge');
+const msg = document.getElementById('message');
+let choisis = [];
+let reglages = { taille_max: 0, fichiers_max: 20, actif: true };
+
+function poids(n) {
+  if (n >= 1 << 30) return (n / (1 << 30)).toFixed(1) + ' Gio';
+  if (n >= 1 << 20) return (n / (1 << 20)).toFixed(1) + ' Mio';
+  if (n >= 1 << 10) return (n / (1 << 10)).toFixed(1) + ' Kio';
+  return n + ' o';
+}
+
+// LES PLAFONDS SONT DEMANDES AU SERVEUR, jamais recopiés ici. Deux valeurs
+// écrites à deux endroits divergent au premier ajustement, et c'est le
+// déposant qui découvre l'écart après dix minutes de téléversement.
+fetch(API + '/depot/reglages').then(r => r.json()).then(r => {
+  reglages = r;
+  if (!r.actif) {
+    zone.style.opacity = .5;
+    etat.textContent = "L'espace de dépôt est fermé.";
+    champ.disabled = true;
+  } else if (r.taille_max) {
+    document.getElementById('indice').textContent =
+      'Jusqu’à ' + poids(r.taille_max) + ' par fichier, ' +
+      r.fichiers_max + ' fichiers par dépôt';
+  }
+}).catch(() => { /* la page reste utilisable : le serveur tranchera */ });
+
+function montre() {
+  liste.innerHTML = '';
+  liste.hidden = choisis.length === 0;
+  let total = 0;
+  for (const f of choisis) {
+    total += f.size;
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.className = 'nom';
+    // textContent et non innerHTML : le nom vient du système de fichiers du
+    // visiteur, donc d'ailleurs. Un nom peut contenir du balisage.
+    n.textContent = f.name;
+    const p = document.createElement('span');
+    p.className = 'poids';
+    p.textContent = poids(f.size);
+    li.append(n, p);
+    liste.append(li);
+  }
+  bouton.disabled = choisis.length === 0;
+  etat.textContent = choisis.length
+    ? choisis.length + ' fichier(s), ' + poids(total) : '';
+}
+
+function ajoute(fs) {
+  choisis = choisis.concat(Array.from(fs)).slice(0, reglages.fichiers_max || 20);
+  montre();
+}
+
+champ.addEventListener('change', e => ajoute(e.target.files));
+zone.addEventListener('keydown', e => {
+  // Une zone cliquable doit s'actionner au clavier. Sans cela, déposer un
+  // fichier devient impossible pour qui n'utilise pas de souris.
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); champ.click(); }
+});
+['dragenter', 'dragover'].forEach(t => zone.addEventListener(t, e => {
+  e.preventDefault(); zone.classList.add('survol');
+}));
+['dragleave', 'drop'].forEach(t => zone.addEventListener(t, e => {
+  e.preventDefault(); zone.classList.remove('survol');
+}));
+zone.addEventListener('drop', e => {
+  if (e.dataTransfer && e.dataTransfer.files) ajoute(e.dataTransfer.files);
+});
+
+document.getElementById('f').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!choisis.length) return;
+  const corps = new FormData();
+  for (const f of choisis) corps.append('fichiers', f, f.name);
+  corps.append('mot', document.getElementById('mot').value);
+
+  bouton.disabled = true;
+  jauge.hidden = false; jauge.value = 0;
+  msg.hidden = true;
+
+  // XHR plutôt que fetch : c'est le seul moyen d'avoir une progression de
+  // téléversement. Sur une archive d'un gigaoctet, une page sans progression
+  // paraît figée — et l'on recharge, ce qui recommence tout.
+  const x = new XMLHttpRequest();
+  x.open('POST', API + '/depot');
+  x.upload.addEventListener('progress', ev => {
+    if (ev.lengthComputable) {
+      jauge.value = (ev.loaded / ev.total) * 100;
+      etat.textContent = poids(ev.loaded) + ' / ' + poids(ev.total);
+    }
+  });
+  x.addEventListener('load', () => {
+    jauge.hidden = true; msg.hidden = false;
+    let d = {};
+    try { d = JSON.parse(x.responseText); } catch (_) { }
+    if (x.status >= 200 && x.status < 300 && d.ok) {
+      msg.className = 'message bien';
+      // ON REND L'IDENTIFIANT. C'est la seule prise du déposant sur ce qu'il
+      // vient d'envoyer : sans lui, il ne peut rien demander à personne.
+      msg.innerHTML = '<b>Dépôt reçu.</b><br>Référence : <code>' +
+        String(d.depot).replace(/[<&]/g, '') + '</code><br>' +
+        (d.alerte && d.alerte.ok
+          ? 'Le propriétaire de la box a été prévenu.'
+          : "Le propriétaire n'a pas pu être prévenu par courrier, mais " +
+            'vos fichiers sont bien arrivés.');
+      choisis = []; montre();
+      document.getElementById('mot').value = '';
+    } else {
+      msg.className = 'message mal';
+      msg.textContent = d.detail || 'Le dépôt a été refusé (' + x.status + ').';
+      bouton.disabled = false;
+    }
+  });
+  x.addEventListener('error', () => {
+    jauge.hidden = true; msg.hidden = false;
+    msg.className = 'message mal';
+    msg.textContent = 'La connexion a été interrompue. Rien n’a été déposé.';
+    bouton.disabled = false;
+  });
+  x.send(corps);
+});
+</script>
+</body>
+</html>
