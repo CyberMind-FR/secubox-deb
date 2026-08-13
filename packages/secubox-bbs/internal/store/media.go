@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -185,6 +186,15 @@ func (s *Store) Fichier(id int64) (Fichier, error) {
 // par construction, et non par filtrage.
 func (s *Store) CheminFichier(f Fichier) string {
 	return filepath.Join(s.root, "files", f.Path)
+}
+
+// CheminVignette : ou la vignette d'un fichier est mise en cache (#1020).
+//
+// A COTE DES FICHIERS, PAS DEDANS : `files/` est sauvegarde et repliqué, une
+// vignette se refabrique. Les melanger ferait grossir chaque sauvegarde d'un
+// contenu qu'on sait reproduire a partir de ce qu'elle contient deja.
+func (s *Store) CheminVignette(id int64) string {
+	return filepath.Join(s.root, "vignettes", strconv.FormatInt(id, 10)+".jpg")
 }
 
 // Fichiers rend les depots d'un membre, les plus recents d'abord.
