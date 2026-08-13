@@ -1,3 +1,19 @@
+secubox-hub (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * La navbar retire les modules epingles 'off' (ref #1028). Le menu se batit
+    sur « le module est installe » — un repertoire www existe — et le mot
+    `pins` n'apparaissait nulle part dans ce code. Un module que l'operateur
+    avait eteint restait donc au menu, promettant une page qui rend 503.
+  * ON LIT LA DECISION, PAS L'OBSERVATION : un module epingle mais encore
+    allume, le temps qu'un reconciliateur passe, ne doit pas reapparaitre au
+    menu entre-temps.
+  * Un pins.toml absent ou casse ne VIDE PAS le menu : on rend un ensemble
+    vide, donc le menu complet. Le pire cas est de revenir au comportement
+    d'avant ; lever ici couperait la navigation entiere pour une virgule mal
+    placee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 16:50:00 +0200
+
 secubox-hub (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * webui.conf : l'error_page 5xx rejoint les 4xx dans les seules locations de

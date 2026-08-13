@@ -45,6 +45,30 @@ _menu_cache: dict = {}
 _menu_cache_lock = asyncio.Lock()
 
 
+_PINS_FILE = Path("/etc/secubox/profiles/pins.toml")
+
+
+def _epingles_off() -> set:
+    """Les modules epingles sur 'off' par l'operateur (#1028).
+
+    LECTURE DIRECTE, SANS DEPENDANCE. Le hub ne peut pas importer
+    secubox-profiles : les modules ne sont pas des paquets Python et ne se
+    voient pas entre eux. Le fichier, lui, est la — quinze lignes de TOML dont
+    on ne lit qu'une cle.
+
+    UN FICHIER ABSENT OU CASSE NE VIDE PAS LE MENU. Rendre un ensemble vide
+    laisse le menu complet : c'est le comportement d'avant, donc le pire cas
+    est de revenir a ce qu'on avait. Lever ici couperait la navigation entiere
+    pour une virgule mal placee.
+    """
+    try:
+        import tomllib
+        d = tomllib.loads(_PINS_FILE.read_text(encoding="utf-8"))
+        return {k for k, v in d.items() if v == "off"}
+    except Exception:  # noqa: BLE001 — voir la docstring
+        return set()
+
+
 def _compute_menu_sync() -> dict:
     """Compute full menu (synchronous, called from thread).
 
@@ -52,6 +76,10 @@ def _compute_menu_sync() -> dict:
     Skips items without ID, console-only items, and modules without frontends.
     """
     menu_items = _load_menu_definitions()
+    # UN MODULE EPINGLE 'off' N'EST PAS AU MENU (#1028). L'operateur l'a
+    # eteint ; le laisser dans la navbar promet une page qui rendra 503, et
+    # laisse croire que la decision n'a pas pris.
+    epingles_off = _epingles_off()
 
     # Filter to only installed modules and check active status
     installed_items = []
@@ -72,6 +100,12 @@ def _compute_menu_sync() -> dict:
             item_copy["installed"] = True
             item_copy["active"] = True
             installed_items.append(item_copy)
+            continue
+
+        # Epingle sur 'off' : retire du menu, quel que soit son etat reel.
+        # On lit la DECISION, pas l'observation — un module epingle mais encore
+        # allume (le temps qu'un reconciliateur passe) ne doit pas reapparaitre.
+        if module_id in epingles_off:
             continue
 
         # Check if module is installed (has www directory with content)
