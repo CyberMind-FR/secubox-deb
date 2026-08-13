@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: synchronise les sites adossés à git avec leur amont
+[Unit]
+Description=SecuBox — synchronise les sites metablog adossés à git
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/metablog-sync
+# EN FOND DE PRIORITE. Rapatrier un dépôt est du confort différé : cela ne doit
+# jamais disputer le processeur ni le disque à ce qui sert une page.
+Nice=15
+IOSchedulingClass=idle
+# `git fetch` sur une liaison lente, multiplié par le nombre de sites.
+TimeoutStartSec=900
