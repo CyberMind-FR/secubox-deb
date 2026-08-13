@@ -4,15 +4,26 @@ Documentation=file:///usr/share/doc/secubox-rustdesk/README
 After=network.target secubox-core.service
 Wants=secubox-core.service
 
+# /run/secubox N'EST PAS UN RuntimeDirectory (#1022).
+#
+# Il est PARTAGE par une centaine de modules. `RuntimeDirectory=` est concu pour
+# un repertoire PROPRE a un service : systemd le recree a chaque demarrage avec
+# le mode de l'unite, donc le dernier service demarre imposait le sien. Huit
+# unites le posaient en 0755, ce qui privait tous les autres du droit d'y creer
+# leur socket — « bind: permission denied », et un 502 dont la cause etait le
+# redemarrage d'un module sans rapport, survenu entre-temps.
+#
+# Le meme mecanisme effacait le repertoire a l'arret d'un service, emportant les
+# sockets des quatre-vingt-dix autres.
+#
+# Il est desormais declare une seule fois, en 1777, par le tmpfiles.d de
+# secubox-core — un seul proprietaire, une seule verite.
 [Service]
 UMask=0007
 Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/rustdesk
-RuntimeDirectory=secubox
-RuntimeDirectoryMode=0755
-RuntimeDirectoryPreserve=yes
 ExecStartPre=+/bin/mkdir -p /etc/secubox
 ExecStartPre=+/bin/chown secubox:secubox /etc/secubox
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/rustdesk.sock --log-level warning
