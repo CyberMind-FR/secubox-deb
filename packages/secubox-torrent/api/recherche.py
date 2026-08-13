@@ -17,12 +17,18 @@ POURQUOI CÔTÉ SERVEUR, ET PAS DEPUIS LE NAVIGATEUR. Deux raisons, la seconde
 CE MODULE NE TÉLÉCHARGE RIEN. Il interroge des index publics et rend des
 adresses `magnet:`. Ce qu'on en fait ensuite relève de l'utilisateur et du
 module de téléchargement, qui a ses propres règles de sortie réseau.
+
+LE REGISTRE `SOURCES` EST LA SEULE VÉRITÉ. L'interface le lit par `/sources` au
+lieu de tenir sa propre liste : une page qui affiche des pastilles écrites en
+dur finit toujours par proposer des index qu'on n'interroge plus — c'était
+exactement le cas ici, où sept sources étaient affichées et zéro interrogée.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import urllib.parse
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 
 import httpx
@@ -45,7 +51,12 @@ DELAI = 8.0
 
 # Ce qu'on rend au plus. Au-delà, la page devient illisible et la charge utile
 # grossit pour rien.
-BORNE = 50
+BORNE = 60
+
+# Plafond de lecture par source. UNE RÉPONSE N'EST PAS UNE PROMESSE : un index
+# hostile ou en panne peut répondre indéfiniment, et `xml.etree` se laisse
+# épuiser par une entité récursive. On borne AVANT d'analyser.
+OCTETS_MAX = 4 << 20
 
 
 @dataclass
@@ -90,13 +101,31 @@ def _entier(v, defaut: int = 0) -> int:
         return defaut
 
 
+async def _corps(client: httpx.AsyncClient, methode: str, url: str, **kw) -> bytes:
+    """Lit une réponse en la BORNANT. Voir OCTETS_MAX."""
+    async with client.stream(methode, url, timeout=DELAI, **kw) as r:
+        r.raise_for_status()
+        morceaux, total = [], 0
+        async for m in r.aiter_bytes():
+            morceaux.append(m)
+            total += len(m)
+            if total > OCTETS_MAX:
+                raise ValueError("réponse trop longue")
+        return b"".join(morceaux)
+
+
+# --------------------------------------------------------------------------
+# Les sources. Chacune traduit SA forme vers `Resultat` — et rien d'autre :
+# le tri, la déduplication et les bornes sont l'affaire de `cherche()`.
+# --------------------------------------------------------------------------
+
 async def cherche_apibay(client: httpx.AsyncClient, q: str) -> list[Resultat]:
     """The Pirate Bay, par son propre point d'entrée JSON."""
-    r = await client.get("https://apibay.org/q.php",
-                         params={"q": q, "cat": "0"}, timeout=DELAI)
-    r.raise_for_status()
+    import json
+    b = await _corps(client, "GET", "https://apibay.org/q.php",
+                     params={"q": q, "cat": "0"})
     out = []
-    for e in r.json() or []:
+    for e in json.loads(b) or []:
         # APIBAY REND UNE LIGNE SENTINELLE quand il n'a rien : un faux résultat
         # nommé « No results returned », avec un hash de zéros. Le rendre tel
         # quel afficherait un torrent inexistant en tête de liste.
@@ -105,24 +134,125 @@ async def cherche_apibay(client: httpx.AsyncClient, q: str) -> list[Resultat]:
         h = (e.get("info_hash") or "").lower()
         if not h or h == "0" * 40:
             continue
-        out.append(Resultat(
-            titre=e.get("name", "?"),
-            hash=h,
-            taille=_entier(e.get("size")),
-            seeders=_entier(e.get("seeders")),
-            leechers=_entier(e.get("leechers")),
-            source="TPB",
-        ))
+        out.append(Resultat(titre=e.get("name", "?"), hash=h,
+                            taille=_entier(e.get("size")),
+                            seeders=_entier(e.get("seeders")),
+                            leechers=_entier(e.get("leechers")),
+                            source="TPB"))
     return out
 
 
-# UNE SEULE SOURCE POUR L INSTANT, ET C EST DIT. YTS avait ete cable puis
-# retire : `yts.mx` rend NXDOMAIN, y compris depuis un resolveur public — le
-# domaine n existe plus, ce n est pas notre filtrage. Garder une source qui
-# echoue a CHAQUE recherche apprend a l utilisateur a ignorer la ligne des
-# echecs, et c est precisement la ligne qui doit rester credible le jour ou un
-# index tombe vraiment.
-SOURCES = {"tpb": cherche_apibay}
+async def cherche_torrents_csv(client: httpx.AsyncClient, q: str) -> list[Resultat]:
+    """Torrents-CSV, un index ouvert et volontairement minimal."""
+    import json
+    b = await _corps(client, "GET", "https://torrents-csv.com/service/search",
+                     params={"q": q, "size": 50})
+    out = []
+    for e in (json.loads(b) or {}).get("torrents") or []:
+        h = (e.get("infohash") or "").lower()
+        if not h:
+            continue
+        out.append(Resultat(titre=e.get("name") or "?", hash=h,
+                            taille=_entier(e.get("size_bytes")),
+                            seeders=_entier(e.get("seeders")),
+                            leechers=_entier(e.get("leechers")),
+                            source="Torrents-CSV"))
+    return out
+
+
+_NS_NYAA = "{https://nyaa.si/xmlns/nyaa}"
+
+
+async def cherche_nyaa(client: httpx.AsyncClient, q: str) -> list[Resultat]:
+    """Nyaa, par son flux RSS — il n'expose pas d'autre interface."""
+    b = await _corps(client, "GET", "https://nyaa.si/",
+                     params={"page": "rss", "q": q})
+    # ON REFUSE TOUTE DÉCLARATION DE TYPE DE DOCUMENT. `xml.etree` se laisse
+    # épuiser par une entité récursive ; le flux légitime n'en a aucune, donc
+    # refuser ne coûte rien et ferme la porte sans dépendre d'une bibliothèque
+    # supplémentaire.
+    if b"<!DOCTYPE" in b[:2048]:
+        raise ValueError("DOCTYPE refusé")
+    racine = ET.fromstring(b.decode("utf-8", "replace"))
+    out = []
+    for it in racine.iter("item"):
+        h = (it.findtext(_NS_NYAA + "infoHash") or "").lower()
+        if not h:
+            continue
+        out.append(Resultat(titre=it.findtext("title") or "?", hash=h,
+                            taille=0,  # Nyaa ne rend la taille qu'en texte.
+                            seeders=_entier(it.findtext(_NS_NYAA + "seeders")),
+                            leechers=_entier(it.findtext(_NS_NYAA + "leechers")),
+                            source="Nyaa"))
+    return out
+
+
+# LE REGISTRE. `id` est ce que l'interface renvoie, `libelle` ce qu'elle
+# affiche : une pastille ne peut plus désigner un index qui n'existe pas ici.
+SOURCES = {
+    "tpb":     {"libelle": "The Pirate Bay", "fn": cherche_apibay},
+    "tcsv":    {"libelle": "Torrents-CSV",   "fn": cherche_torrents_csv},
+    "nyaa":    {"libelle": "Nyaa",           "fn": cherche_nyaa},
+}
+
+
+def liste_sources() -> list[dict]:
+    return [{"id": i, "libelle": s["libelle"]} for i, s in SOURCES.items()]
+
+
+def pertinent(titre: str, q: str) -> bool:
+    """Le titre porte-t-il au moins un terme cherché ?
+
+    POURQUOI CETTE GARDE EXISTE. Knaben avait été câblée puis retirée : elle
+    rendait, pour TOUTE requête, le dernier contenu indexé — de la pornographie
+    en tête de liste pour une recherche « debian ». Aucun de ses modes
+    (`score`, `100%`, `50%`) ne filtrait quoi que ce soit.
+
+    LA LECON PORTE PLUS LOIN QUE CETTE SOURCE-LA. Un index qui cesse d'honorer
+    la requête ne tombe pas en panne : il répond 200, vite, avec des résultats
+    parfaitement formés. Rien dans la mécanique ne le distingue d'un succès —
+    seul le contenu le trahit. La garde est donc posée sur TOUTES les sources,
+    y compris celles qui se comportent bien aujourd'hui.
+
+    Elle reste volontairement lâche : un seul terme suffit, la casse et les
+    séparateurs sont ignorés. Exiger tous les termes écarterait
+    `ubuntu-24.04-desktop` pour la recherche « ubuntu 24 ».
+    """
+    termes = [t for t in "".join(c if c.isalnum() else " "
+                                 for c in q.lower()).split() if len(t) >= 3]
+    if not termes:
+        # Une requête sans terme exploitable ne permet aucun jugement : on ne
+        # va pas écarter des résultats sur une base qu'on n'a pas.
+        return True
+    plat = "".join(c if c.isalnum() else " " for c in titre.lower())
+    return any(t in plat for t in termes)
+
+
+def dedoublonne(res: list[Resultat]) -> list[Resultat]:
+    """Un même torrent rendu par plusieurs index n'apparaît qu'une fois.
+
+    LA DÉDUPLICATION SE FAIT SUR L'EMPREINTE, jamais sur le titre : deux index
+    nomment rarement un fichier pareil, et Knaben agrège justement des index
+    qu'on interroge aussi en direct — sans cela, la moitié de la liste serait
+    des doublons.
+
+    ON GARDE L'EXEMPLAIRE LE MIEUX POURVU EN SEEDERS, et on note les autres
+    sources : l'information « trois index le connaissent » vaut mieux que trois
+    lignes identiques.
+    """
+    par_hash: dict[str, Resultat] = {}
+    for r in res:
+        vu = par_hash.get(r.hash)
+        if vu is None:
+            par_hash[r.hash] = r
+            continue
+        if r.source not in vu.source.split(", "):
+            vu.source = f"{vu.source}, {r.source}"
+        if r.seeders > vu.seeders:
+            vu.seeders, vu.leechers = r.seeders, r.leechers
+        if r.taille and not vu.taille:
+            vu.taille = r.taille
+    return list(par_hash.values())
 
 
 async def cherche(q: str, sources: list[str] | None = None) -> dict:
@@ -136,12 +266,21 @@ async def cherche(q: str, sources: list[str] | None = None) -> dict:
     """
     q = (q or "").strip()
     if not q:
-        return {"resultats": [], "sources_ok": [], "sources_ko": {},
+        return {"resultats": [], "total": 0, "sources_ok": [], "sources_ko": {},
                 "detail": "requête vide"}
 
-    choisies = [s for s in (sources or list(SOURCES)) if s in SOURCES]
-    if not choisies:
+    # UNE SÉLECTION VIDE N'EST PAS UNE SÉLECTION DE TOUT. `sources or
+    # list(SOURCES)` faisait exactement l'inverse : une liste vide étant fausse,
+    # décocher toutes les pastilles rendait TOUS les index — le geste de
+    # l'utilisateur annulé en silence, c'est-à-dire le défaut même qu'on répare.
+    # `None` (pas de préférence) et `[]` (tout décoché) sont deux choses.
+    if sources is None:
         choisies = list(SOURCES)
+    else:
+        choisies = [s for s in sources if s in SOURCES]
+        if not choisies:
+            return {"resultats": [], "total": 0, "sources_ok": [],
+                    "sources_ko": {}, "detail": "aucune source sélectionnée"}
 
     resultats: list[Resultat] = []
     ok: list[str] = []
@@ -151,7 +290,7 @@ async def cherche(q: str, sources: list[str] | None = None) -> dict:
     # sur ce qu'on est, et plusieurs index refusent un agent vide.
     entetes = {"User-Agent": "SecuBox/torrent-search (+https://secubox.in)"}
     async with httpx.AsyncClient(headers=entetes, follow_redirects=True) as c:
-        taches = [SOURCES[s](c, q) for s in choisies]
+        taches = [SOURCES[s]["fn"](c, q) for s in choisies]
         for nom, r in zip(choisies, await asyncio.gather(*taches,
                                                         return_exceptions=True)):
             if isinstance(r, Exception):
@@ -164,7 +303,8 @@ async def cherche(q: str, sources: list[str] | None = None) -> dict:
     # LES RÉSULTATS SANS MAGNET SONT ÉCARTÉS. C'est l'objet même de cette
     # recherche : une ligne sans adresse ne sert à rien et redonnerait
     # exactement le défaut qu'on corrige — un bouton qui ne mène nulle part.
-    resultats = [r for r in resultats if r.magnet]
+    resultats = dedoublonne([r for r in resultats
+                             if r.magnet and pertinent(r.titre, q)])
     resultats.sort(key=lambda r: r.seeders, reverse=True)
 
     return {

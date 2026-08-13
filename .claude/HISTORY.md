@@ -20,6 +20,18 @@ avait pas de lien.
   n'atteignait pas le generateur. Meme piege qu'en #1023 avec les alias ; le
   test porte desormais sur la survie de la cle AU SCAN.
 - YTS retire : `yts.mx` rend NXDOMAIN, y compris depuis Quad9.
+- **Cablage complet (2.4.1)** : les pastilles pilotent enfin la recherche, et
+  la liste vient de `/sources` — une page qui tient sa propre liste finit
+  toujours par annoncer des index qu'on n'interroge plus. Onglet Usenet :
+  protocole Newznab implemente, et faute de cle l'interface LE DIT au lieu de
+  fabriquer sept resultats.
+- **Knaben cablee puis retiree, et c'est la lecon** : elle ignorait la requete
+  et rendait le dernier contenu indexe — de la pornographie en tete pour
+  « debian ». Elle repondait 200, vite, avec des resultats bien formes : seul
+  le CONTENU la trahissait. D'ou une garde de pertinence sur TOUTES les
+  sources, y compris celles qui se comportent bien aujourd'hui.
+- `sources or list(SOURCES)` transformait « tout decoche » en « tout coche » :
+  le geste de l'utilisateur annule en silence. Trouve par un test.
 
 **#1033 — l'envoi de contenu reussissait puis annoncait un echec.**
 `_version_upload()` appelait `asyncio.get_running_loop()` sans qu'`asyncio` soit

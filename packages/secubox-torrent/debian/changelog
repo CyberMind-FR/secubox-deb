@@ -1,3 +1,47 @@
+secubox-torrent (2.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * LES PASTILLES DE SOURCES PILOTENT ENFIN QUELQUE CHOSE (ref #1032). La page
+    en affichait sept — 1337x, EZTV, snowfl, YTS… — dont AUCUNE n etait
+    interrogee ; cocher ou decocher ne changeait rien. Trois index reels
+    s ajoutent a TPB : Knaben (qui agrege lui-meme des dizaines de trackers),
+    Torrents-CSV et Nyaa. Verifies un par un depuis la board avant cablage.
+  * KNABEN CABLEE PUIS RETIREE, ET C EST LA LECON DE CETTE VERSION. Elle
+    ignorait purement et simplement la requete : pour « debian », elle rendait
+    le dernier contenu indexe — de la pornographie en tete de liste. Aucun de
+    ses trois modes (`score`, `100%`, `50%`) ne filtrait quoi que ce soit. Elle
+    repondait 200, vite, avec des resultats parfaitement formes : rien dans la
+    mecanique ne la distinguait d un succes, seul le CONTENU la trahissait.
+  * D OU UNE GARDE DE PERTINENCE SUR TOUTES LES SOURCES, y compris celles qui
+    se comportent bien aujourd hui : un resultat dont le titre ne porte AUCUN
+    terme cherche est ecarte. Volontairement lache — un seul terme suffit —
+    pour ne pas perdre `ubuntu-24.04-desktop` sur une recherche « ubuntu 24 ».
+  * LE REGISTRE DES SOURCES EST SERVI PAR `/sources`, et l interface le lit au
+    lieu de tenir la sienne. Une liste ecrite en dur dans la page finit toujours
+    par annoncer des index qu on n interroge plus — c etait exactement le cas.
+  * DEDUPLICATION SUR L EMPREINTE, jamais sur le titre : Knaben agrege des index
+    qu on interroge aussi en direct, sans quoi la moitie de la liste serait des
+    doublons. On garde l exemplaire le mieux pourvu en seeders et on NOMME les
+    autres sources — « trois index le connaissent » vaut mieux que trois lignes.
+  * TOUT DECOCHER N EST PAS TOUT SELECTIONNER. `sources or list(SOURCES)`
+    faisait l inverse : une liste vide etant fausse, decocher toutes les
+    pastilles rendait TOUS les index — le geste de l utilisateur annule en
+    silence, c est-a-dire le defaut meme qu on repare. Trouve par un test.
+  * ONGLET USENET : le protocole Newznab est implemente pour de bon
+    (`/nzb/indexeurs`, `/nzb/recherche`). Il n existe AUCUN index Usenet ouvert
+    — ils exigent tous une cle nominative — et c est precisement ce que la page
+    masquait en fabriquant sept resultats. Tant qu aucune cle n est deposee dans
+    `/etc/secubox/secrets/torrent-nzb.toml`, l interface LE DIT et explique quoi
+    faire. Une page qui s annonce vide est utile ; une page qui invente ne l est
+    jamais.
+  * LES CLES NE SORTENT NI DANS UNE REPONSE NI DANS UN JOURNAL — la page qui
+    appelle ce module est publique. Un test le verifie.
+  * Les reponses distantes sont BORNEES avant analyse, et toute declaration de
+    type de document est refusee dans le flux RSS : `xml.etree` se laisse
+    epuiser par une entite recursive.
+  * 26 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 21:05:00 +0200
+
 secubox-torrent (2.3.1-1~bookworm1) bookworm; urgency=medium
 
   * RECHERCHE D INDEX, COTE SERVEUR (ref #1032). L application
