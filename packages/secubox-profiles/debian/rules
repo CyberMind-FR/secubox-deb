@@ -24,3 +24,12 @@ override_dh_installsystemd:
 	# after the deployment's lifecycle assignments are audited (a security
 	# service like crowdsec must never be on-demand). See debian/postinst.
 	dh_installsystemd --no-enable --no-start --name=secubox-sleeper
+	# secubox-pins-apply EST ACTIVE PAR DEFAUT, contrairement au sleeper — et la
+	# difference n'est pas d'humeur : le sleeper DECIDE lui-meme ce qui est
+	# inactif, ce reconciliateur ne fait qu'EXECUTER une decision deja prise et
+	# ecrite par l'operateur dans pins.toml. Il n'allume rien, et n'eteint que
+	# ce qui est explicitement epingle sur 'off'.
+	#
+	# Le laisser desactive reproduirait exactement le defaut de #1028 : un
+	# mecanisme correct, livre, et qui ne s'execute jamais.
+	dh_installsystemd --name=secubox-pins-apply

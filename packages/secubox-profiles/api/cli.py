@@ -23,7 +23,8 @@ from pathlib import Path
 from . import apply, export, healthsync, manifest_edit, nginxgen, wafsync
 from .actuate import TIMED_OUT
 from .audit import AUDIT_LOG
-from .diff import ProtectedViolation, plan_changes
+from .diff import (ProtectedViolation, changements_epingles,
+                   epingles_encore_activees, plan_changes)
 from .export import format_apt, format_json, format_pkglist, resolve_packages
 from .lifecycle import effective_lifecycle
 from .manifest import LIFECYCLES, WAKE_CLASSES, ManifestError, load_all
@@ -31,7 +32,7 @@ from .observe import Actual, is_on, load_route_values, load_routes, observe, obs
 from .scan import discover, write_drafts
 from .snapshot import SNAP_DIR
 from .snapshot import read as read_snapshot
-from .state import StateError, load_pins, load_profile
+from .state import OFF, StateError, load_pins, load_profile
 
 DEFAULT_ROOT = Path("/etc/secubox")
 
@@ -139,6 +140,24 @@ def _cmd_apply(args) -> int:
     if args.only:
         keep = set(args.only)
         plan = [c for c in plan if c.id in keep]
+    if getattr(args, "pins_only", False):
+        # N'EXECUTER QUE CE QUE L'OPERATEUR A EXPLICITEMENT EPINGLE SUR 'off'
+        # (#1028). Le plan complet, lui, emporterait aussi tout ce qui est
+        # simplement absent du profil — soixante-neuf arrets sur gk2, ce qui
+        # n'est pas une operation qu'une minuterie doit decider.
+        #
+        # ON FILTRE LE PLAN, ON NE LE REPLANIFIE PAS : un second planificateur
+        # « special epingles » finirait par diverger de celui-ci, sur la
+        # protection des modules ou sur un cas limite.
+        plan = changements_epingles(plan, pins, OFF)
+        # ET CE QUE LE PLAN NE VOIT PAS : un module epingle 'off', arrete, mais
+        # reste `enabled` reviendra au prochain demarrage. `is_on` vaut
+        # `enabled ET active`, donc il passe pour deja eteint et rien n'est
+        # planifie pour lui — la decision de l'operateur ne tient alors que
+        # jusqu'au reboot.
+        deja = {c.id for c in plan}
+        plan += [c for c in epingles_encore_activees(manifests, pins, actuals)
+                 if c.id not in deja]
     # load_route_values() (dict domaine -> [host, port]), PAS `routes` (le set
     # de load_routes() utilisé ci-dessus pour observer portal_routed) : le
     # snapshot doit capturer la vraie valeur de route pour qu'un rollback
@@ -422,6 +441,9 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--only", action="append", default=[],
                     help="restreindre aux modules nommés (répétable) — validation module par module")
     sp.add_argument("--yes", action="store_true", help="agir réellement")
+    sp.add_argument("--pins-only", dest="pins_only", action="store_true",
+                    help="n'appliquer que les épingles 'off' — sûr à répéter, "
+                         "n'allume rien et n'éteint que ce qui est explicitement épinglé")
     sp.add_argument("--json", action="store_true", help="rapport JSON sur stdout")
     sp.set_defaults(func=_cmd_apply)
 
