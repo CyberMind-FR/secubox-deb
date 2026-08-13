@@ -387,6 +387,7 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 			p.Titre, p.Intro = "Média", "Ce qu'on écoute et regarde, au même endroit que ce qu'on en dit."
 			p.Vide = "Aucune passerelle média raccordée pour l'instant."
 			p.Note = "Le média n'est pas recopié : le module lit le flux du podcaster et le catalogue PeerTube là où ils sont déjà."
+			p.Cards = s.cartesMedia()
 		case "biblio":
 			p.Titre, p.Intro = "Bibliothèque", "Les fichiers vivent à côté des messages ; le même rsync emporte les deux."
 			p.Vide = "Aucun fichier déposé."
@@ -400,6 +401,48 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 	}
 }
 
+
+// cartesMedia rend les fils deposes par les passerelles media (#1020).
+//
+// La page annoncait « aucune passerelle raccordee » alors que 222 fils y
+// etaient : 122 emissions du podcaster et 100 videos PeerTube. Elle
+// n'interrogeait pas la base — meme defaut que la Bibliotheque et les Billets,
+// et meme consequence : un message vide en dur est indiscernable d'un vide
+// reel, donc personne ne s'apercoit qu'il ment.
+func (s *Server) cartesMedia() []card {
+	fs, err := s.st.MediasParSource(60)
+	if err != nil {
+		return []card{{Title: "Lecture impossible",
+			Sub: "Les médias n'ont pas pu être lus : " + err.Error()}}
+	}
+	out := make([]card, 0, len(fs))
+	for _, f := range fs {
+		// Le NOM DE LA SOURCE est affiche, pas seulement le salon : « podcaster »
+		// dit d'ou vient le contenu et donc ou le corriger, ce qu'un titre de
+		// salon ne dit pas.
+		pills := []pill{{Class: "ok", Text: f.Source}}
+		if f.MediaKind != "" {
+			pills = append(pills, pill{Class: "", Text: f.MediaKind})
+		}
+		if f.Visibility == store.VisLocal {
+			// Une emission locale ne sort pas de la maison. Le dire evite qu'on
+			// s'etonne de ne pas la retrouver publiquement.
+			pills = append(pills, pill{Class: "warn", Text: "local"})
+		}
+		lien, texte := "/t/"+strconv.FormatInt(f.ID, 10), "Ouvrir le fil"
+		if f.MediaURL != "" {
+			lien, texte = f.MediaURL, "Écouter / regarder"
+		}
+		out = append(out, card{
+			Title:    f.Title,
+			Sub:      f.Salon,
+			Link:     lien,
+			LinkText: texte,
+			Pills:    pills,
+		})
+	}
+	return out
+}
 
 // cartesBiblio rend la bibliothèque commune (#1020).
 //

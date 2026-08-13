@@ -96,3 +96,68 @@ func TestAucunBilletSurUnMagasinNeuf(t *testing.T) {
 		t.Errorf("%d billet(s)", len(bs))
 	}
 }
+
+// ── Passerelles media (#1020) ─────────────────────────────────────────────
+
+func filPasserelle(t *testing.T, s *Store, uid, cat int64, titre, source string) {
+	t.Helper()
+	id, err := s.NewThread(cat, uid, titre, "corps", VisPublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`UPDATE threads SET source = ? WHERE id = ?`, source, id); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLaPageMediaMontreLesFilsDesPasserelles(t *testing.T) {
+	// LE CAS DE GK2 : la page annoncait « aucune passerelle raccordee » alors
+	// que 222 fils y etaient — 122 emissions et 100 videos.
+	s, uid := magasinPages(t)
+	cat, err := s.CreateCategory("emissions", "Emissions", "")
+	if err != nil {
+		t.Skip("CreateCategory indisponible : " + err.Error())
+	}
+	filPasserelle(t, s, uid, cat, "Episode 1", "podcaster")
+	filPasserelle(t, s, uid, cat, "Video 1", "peertube")
+
+	fs, err := s.MediasParSource(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) != 2 {
+		t.Fatalf("%d fil(s) media, attendu 2", len(fs))
+	}
+}
+
+func TestLesBilletsNeSontPasDesMedias(t *testing.T) {
+	// `billets` est aussi une passerelle, mais ce qu'elle depose est du TEXTE.
+	// L'afficher sous « Media » noierait ce qu'on vient y chercher.
+	s, uid := magasinPages(t)
+	cat, err := s.CreateCategory("archives", "Archives", "")
+	if err != nil {
+		t.Skip("CreateCategory indisponible")
+	}
+	filPasserelle(t, s, uid, cat, "Un billet", "billets")
+	fs, _ := s.MediasParSource(50)
+	if len(fs) != 0 {
+		t.Errorf("%d fil(s) — un billet a ete pris pour un media", len(fs))
+	}
+}
+
+func TestUnFilHumainNEstPasUnMedia(t *testing.T) {
+	// Sans source, c'est quelqu'un qui a ecrit. La page Media ne doit pas
+	// aspirer les conversations du salon.
+	s, uid := magasinPages(t)
+	cat, err := s.CreateCategory("place", "Place publique", "")
+	if err != nil {
+		t.Skip("CreateCategory indisponible")
+	}
+	if _, err := s.NewThread(cat, uid, "Bonjour", "corps", VisPublic); err != nil {
+		t.Fatal(err)
+	}
+	fs, _ := s.MediasParSource(50)
+	if len(fs) != 0 {
+		t.Errorf("%d fil(s) — un fil humain a ete pris pour un media", len(fs))
+	}
+}

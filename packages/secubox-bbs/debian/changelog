@@ -1,4 +1,4 @@
-secubox-bbs (0.9.0-1~bookworm1) bookworm; urgency=medium
+secubox-bbs (0.9.1-1~bookworm1) bookworm; urgency=medium
 
   * Bibliotheque et Billets lisent enfin la base (ref #1020). Les deux pages
     annoncaient « aucun fichier depose » et « aucun fil publie » alors que neuf
@@ -15,8 +15,17 @@ secubox-bbs (0.9.0-1~bookworm1) bookworm; urgency=medium
   * Un billet sans adresse enregistree est signale comme tel et renvoie vers son
     fil, plutot que d'offrir un lien mort. Les deux billets de gk2 sont dans ce
     cas : leur identifiant est enregistre, leur URL est vide.
-  * La page Media reste descriptive : les passerelles ne sont pas raccordees, et
-    la son message vide est encore exact.
+  * La page Media lit elle aussi la base (ref #1020). Elle annoncait « aucune
+    passerelle media raccordee » alors que 222 fils y etaient deja : 122
+    emissions du podcaster et 100 videos PeerTube. Meme defaut que les deux
+    autres pages, meme consequence — un message vide ecrit en dur est
+    indiscernable d'un vide reel, donc personne ne s'apercoit qu'il ment.
+  * Le nom de la SOURCE est affiche, pas seulement le salon : « podcaster » dit
+    d'ou vient le contenu, donc ou le corriger. Un fil local est signale comme
+    tel, sans quoi on s'etonne de ne pas le retrouver publiquement.
+  * `billets` est aussi une passerelle mais depose du TEXTE : l'afficher sous
+    Media noierait ce qu'on vient y chercher. La liste des sources media est
+    donc explicite, pas deduite.
 
  -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 09:30:00 +0200
 
