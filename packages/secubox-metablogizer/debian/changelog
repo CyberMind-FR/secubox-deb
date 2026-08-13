@@ -1,4 +1,4 @@
-secubox-metablogizer (1.8.4-1~bookworm1) bookworm; urgency=medium
+secubox-metablogizer (1.8.5-1~bookworm1) bookworm; urgency=medium
 
   * UN SITE PEUT EXPOSER DES ROUTES D API SUR SON PROPRE NOM (ref #1032),
     declarees dans `site.json` : `"api": ["/api/v1/torrent/recherche"]`.
@@ -18,7 +18,12 @@ secubox-metablogizer (1.8.4-1~bookworm1) bookworm; urgency=medium
     JOURNALISES ; une entree aberrante ne prive pas le site de ses autres
     routes.
   * RIEN N EST OUVERT TOUT SEUL : le champ est absent par defaut.
-  * 191 tests.
+  * LE MEME PIEGE S EST REFERME QU EN #1023 : la route etait declaree, validee
+    — et le vhost n en portait rien, parce que `scan_sites()` ne recopie QUE les
+    cles qu on lui a nommees. Rien n echouait ; le bloc etait seulement
+    incomplet, ce qui est le plus difficile a voir. Un test verifie desormais
+    que la cle SURVIT AU SCAN, et pas seulement qu elle est bien validee.
+  * 192 tests.
 
  -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 20:25:00 +0200
 

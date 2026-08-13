@@ -68,3 +68,27 @@ def test_le_bloc_emis_est_en_correspondance_exacte():
     assert "location = /api/v1/torrent/recherche {" in b
     assert "location /api/v1/torrent/ {" not in b
     assert "unix:/run/secubox/aggregator.sock:/api/v1/torrent/recherche" in b
+
+
+def test_la_cle_survit_au_scan(tmp_path):
+    """LA VALIDATION NE SERT A RIEN SI LE SCAN N'ACHEMINE PAS LA CLE (#1032).
+
+    Le meme piege s'etait deja referme sur les alias (#1023) : ecrits, valides,
+    et pourtant absents du vhost, parce que `scan_sites` ne recopie QUE les cles
+    qu'on lui a nommees. Rien n'echouait — le bloc etait seulement incomplet,
+    ce qui est le plus difficile a voir.
+    """
+    import json
+    import sites_scan
+
+    d = tmp_path / "sites" / "essai"
+    d.mkdir(parents=True)
+    (d / "index.html").write_text("<html></html>")
+    (d / "site.json").write_text(json.dumps({
+        "name": "essai", "domain": "essai.example.com", "published": True,
+        "api": ["/api/v1/torrent/recherche"],
+    }))
+
+    entrees = sites_scan.scan_sites(tmp_path / "sites", tmp_path / "absent.conf")
+    e = next(x for x in entrees if x["name"] == "essai")
+    assert e.get("api") == ["/api/v1/torrent/recherche"]
