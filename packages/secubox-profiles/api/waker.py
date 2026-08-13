@@ -68,6 +68,9 @@ _last_wake: dict[str, float] = {}
 log = logging.getLogger("secubox-waker")
 
 
+from . import streamlit_apps as _streamlit
+
+
 def _root() -> Path:
     """Racine de config — surchargeable en test via SECUBOX_PROFILES_ROOT
     (même motif que api/web.py::_root)."""
@@ -111,6 +114,42 @@ def _fire_wake(mid: str) -> None:
     # potentiellement des dizaines de modules, ça accumule sans borne (même
     # défaut que l'avalanche perf WireGuard déjà rencontrée sur ce dépôt). Un
     # thread daemon court-vif attend la fin sans bloquer la boucle asyncio.
+    threading.Thread(target=p.wait, daemon=True).start()
+
+
+_IP_STREAMLIT = os.environ.get("SECUBOX_STREAMLIT_IP", "10.100.0.50")
+_ROUTES_PATH = Path(os.environ.get("SECUBOX_WAF_ROUTES",
+                                   "/etc/secubox/waf/haproxy-routes.json"))
+
+
+def _lire_routes() -> dict:
+    """Le fichier de routes que lit sbxwaf. Illisible = aucune route.
+
+    Rendre {} sur erreur n'est pas une facilite : c'est la garde. Sans routes,
+    aucun vhost n'est reconnu comme Streamlit, et le repli ne s'ouvre pas — le
+    comportement d'avant, jamais un reveil au hasard.
+    """
+    try:
+        return json.loads(_ROUTES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _fire_wake_streamlit(app: str) -> None:
+    """Tire le reveil d'une application Streamlit par le ctl root.
+
+    MEME REGLE QUE LE REVEIL DES MODULES : le privilege passe par
+    `secubox-wakectl`, jamais en process. `systemd-run` et non `sudo` nu, pour
+    la meme raison qu'au-dessus — ce service tourne sous ProtectSystem=strict,
+    et un enfant sudo heriterait du meme bac a sable.
+
+    Fire-and-forget, avec le meme faucheur : sans `.wait()`, chaque reveil
+    laisserait un zombie sur un service long-vecu.
+    """
+    p = subprocess.Popen(
+        ["sudo", "-n", "/usr/bin/systemd-run", "--collect", "--quiet",
+         "/usr/sbin/secubox-wakectl", "wake-streamlit", app, "--json"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     threading.Thread(target=p.wait, daemon=True).start()
 
 
@@ -169,6 +208,22 @@ def create_app() -> FastAPI:
             # On ne reveille rien pour autant : `wake()` refuse les modules
             # inconnus, et c'est une garde voulue — un 5xx ne doit pas devenir
             # un droit de demarrer un service arbitraire.
+            # REPLI STREAMLIT (#1018). Une application Streamlit n'a pas de
+            # manifeste : elle est creee dynamiquement par la forge, et lui en
+            # fabriquer un deriverait des la creation suivante. 28 vhosts
+            # rendaient 502 en 0,1 s faute de ce repli, alors que leur unite
+            # existait — simplement arretee.
+            #
+            # LA GARDE CI-DESSUS EST PRESERVEE. On ne se fie pas au nom du
+            # vhost : l'autorite est le fichier de ROUTES. Un vhost inconnu
+            # continue de ne rien reveiller, comme voulu — seul un vhost
+            # effectivement route vers le conteneur Streamlit ouvre ce chemin.
+            app = _streamlit.app_depuis_vhost(vhost)
+            if app is not None and vhost in _streamlit.vhosts_streamlit(
+                    _lire_routes(), _IP_STREAMLIT):
+                log.info("wake: application Streamlit %s (vhost %s)", app, vhost)
+                _fire_wake_streamlit(app)
+                return _splash(app, 0.0, retry=10)
             log.warning("wake: vhost non declare, aucun reveil possible: %s", vhost)
             return _splash(vhost, 0.0, retry=10)
         m = manifests[mid]
