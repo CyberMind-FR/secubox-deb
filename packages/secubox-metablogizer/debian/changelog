@@ -1,3 +1,17 @@
+secubox-metablogizer (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cadence de `metablog-sync.timer` portee de 15 a 5 minutes : un `git push`
+    se voit desormais dans les cinq minutes.
+  * LE COUT D UN PASSAGE A VIDE EST QUASI NUL, et c est ce qui rend cette
+    cadence tenable. L outil compare le SHA local a celui de l amont et
+    s arrete la si rien n a bouge — pas de checkout, pas d ecriture, aucun
+    horodatage touche. Ce qui coute, c est le `git fetch` : une poignee
+    d octets par depot.
+  * La cadence reste reglable sans reconstruire le paquet : un fichier dans
+    /etc/systemd/system/metablog-sync.timer.d/ surcharge la ligne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:30:00 +0200
+
 secubox-metablogizer (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * SYNCHRONISATION DES SITES ADOSSES A GIT. `metablog-sync` remet au niveau de
