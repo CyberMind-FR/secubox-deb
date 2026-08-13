@@ -1,3 +1,34 @@
+secubox-bbs (0.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * Suivi lu / non-lu des fils. L'ensemble des fils non-lus est calcule en UNE
+    requete par page : un drapeau par fil aurait impose cent aller-retours sur
+    une liste de cent fils, et la fonction censee faire gagner du temps en
+    aurait coute. « Tout marquer lu » existe parce que sans lui l'indicateur
+    meurt : qui revient a deux cents non-lus ne les ouvrira pas un par un.
+  * Moderation des fils et des messages : renommer, deplacer, verrouiller,
+    epingler, retirer, retablir, depublier. ON MASQUE, ON N'EFFACE PAS, et TOUT
+    GESTE EST JOURNALISE — dans la MEME transaction que l'acte, sans quoi un
+    incident laisserait un acte sans trace ou une trace sans acte.
+  * Le journal de moderation est AFFICHE au sysop, pas seulement ecrit. C'est
+    la consultation qui rend un pouvoir verifiable ; un journal que personne ne
+    lit donne la lettre de la tracabilite sans l'usage.
+  * Le panneau sysop cree salons et sous-salons. La profondeur n'est pas bornee
+    a deux : rien n'empeche un sous-sous-salon le jour ou le besoin vient.
+  * Vignettes des medias de la bibliotheque, sans dependance ajoutee. Les
+    images de gk2 pesent 2 Mo : une grille de douze cartes aurait fait
+    descendre vingt-cinq megaoctets pour des carres de cent-soixante pixels.
+    Deux bornes AVANT le decodage — poids du fichier et surface annoncee, car
+    une image de 50 000 x 50 000 tient en quelques kilooctets compresses.
+  * Nouveau verbe `bbsctl billets-adresses` : rattrape les billets publies avant
+    la correction, dont l'adresse manque. L'INVENTAIRE EST LE DEFAUT, l'ecriture
+    se demande — voir l'ampleur avant d'ecrire coute une commande, decouvrir
+    apres coup qu'on a touche trois cents lignes coute beaucoup plus. Un billet
+    introuvable n'arrete pas les autres.
+  * L'adresse du billet publie est enfin enregistree (ref #1024) : le client
+    lisait un champ `url` que la reponse de billets n'a jamais porte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 10:45:00 +0200
+
 secubox-bbs (0.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Bibliotheque et Billets lisent enfin la base (ref #1020). Les deux pages

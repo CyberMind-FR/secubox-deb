@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/billets"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ingest"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
@@ -77,6 +78,9 @@ func cmdHelp() {
   ingest [source|all]        Passerelles : billets, peertube, podcaster
   ingest-log                 Dernières exécutions d'import
   sync-users                 Aligne les comptes SecuBox (aucun mot de passe copié)
+  billets-adresses [--ecrire]
+                             Rattrape les billets publiés sans adresse (#1024).
+                             Sans --ecrire : inventaire seul, rien n'est modifié.
 
   printf %s 'une phrase de passe' | bbsctl user-add gk2 sysop
 `)
@@ -87,6 +91,13 @@ func main() {
 	if racine == "" {
 		racine = "/var/lib/secubox/bbs"
 	}
+	billetsDB := os.Getenv("SECUBOX_BILLETS_DB")
+	if billetsDB == "" {
+		billetsDB = "/var/lib/secubox/billets/billets.db"
+	}
+	// L'adresse publique de billets. Vide, le rattrapage pose un chemin
+	// relatif plutot qu'un hote invente — voir AdresseLocale().
+	billetsURL := os.Getenv("BILLETS_SITE_URL")
 	secrets := os.Getenv("SECUBOX_BBS_SECRETS")
 	if secrets == "" {
 		secrets = "/etc/secubox/secrets/bbs"
@@ -258,6 +269,51 @@ func main() {
 		runs, err := st.IngestRuns(n)
 		verifie(err)
 		sortie(map[string]any{"ok": true, "executions": runs})
+
+	case "billets-adresses":
+		// L'INVENTAIRE EST LE DEFAUT, L'ECRITURE EST DEMANDEE.
+		//
+		// Le defaut #1024 a dure des mois : on ne sait pas combien de billets
+		// il a laisses sans adresse sur une board donnee. Voir l'ampleur avant
+		// d'ecrire coute une commande ; decouvrir apres coup qu'on a touche
+		// trois cents lignes en coute beaucoup plus.
+		manquants, err := st.BilletsSansAdresse()
+		verifie(err)
+		ecrire := arg(args, 1) == "--ecrire"
+		type ligne struct {
+			Fil     int64  `json:"fil"`
+			Billet  string `json:"billet"`
+			Titre   string `json:"titre"`
+			Adresse string `json:"adresse,omitempty"`
+			Erreur  string `json:"erreur,omitempty"`
+			Ecrit   bool   `json:"ecrit"`
+		}
+		out := make([]ligne, 0, len(manquants))
+		poses := 0
+		for _, m := range manquants {
+			l := ligne{Fil: m.ThreadID, Billet: m.BilletID, Titre: m.Titre}
+			adr, err := billets.AdresseLocale(billetsDB, billetsURL, m.BilletID)
+			if err != nil {
+				// UN BILLET INTROUVABLE N'ARRETE PAS LES AUTRES. Il a pu etre
+				// supprime chez billets ; abandonner la passe entiere pour lui
+				// laisserait sans adresse tous ceux qui suivent.
+				l.Erreur = err.Error()
+				out = append(out, l)
+				continue
+			}
+			l.Adresse = adr
+			if ecrire {
+				if err := st.PoseAdresseBillet(m.ThreadID, adr); err != nil {
+					l.Erreur = err.Error()
+				} else {
+					l.Ecrit = true
+					poses++
+				}
+			}
+			out = append(out, l)
+		}
+		sortie(map[string]any{"ok": true, "sans_adresse": len(manquants),
+			"ecrites": poses, "ecriture": ecrire, "billets": out})
 
 	case "sync-users":
 		// AUCUN MOT DE PASSE N'EST COPIE. Recopier une empreinte creerait une
