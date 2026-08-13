@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: réchauffage des caches par minuterie (#1028)
+#
+# QUI FIGURE ICI, ET QUI N'Y FIGURE PAS.
+#
+# Sur les dix-neuf modules qui réchauffaient un cache depuis une boucle
+# `asyncio`, DEUX seulement écrivent un FICHIER que l'agrégateur relit. Les
+# autres remplissaient un `global _cache` — la mémoire du daemon — alors que
+# les requêtes sont servies par l'agrégateur, qui a la sienne, froide. Ils
+# réchauffaient donc un cache que personne ne lisait : pour eux il n'y a rien
+# à convertir, seulement un daemon à éteindre.
+#
+# Un module ne rejoint cette liste que si l'on a VERIFIE que sa fonction écrit
+# sur disque. Sans cette vérification, on remplacerait une boucle inutile par
+# une minuterie inutile.
+
+["metacatalog"]
+# _refresh_catalog() → /var/cache/secubox/metacatalog/catalog.json
+fonction = "_refresh_catalog"
+
+["jitsi"]
+# _refresh_status() → /var/cache/secubox/jitsi/status.json
+fonction = "_refresh_status"

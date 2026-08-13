@@ -8,6 +8,11 @@
 override_dh_auto_install:
 	install -d debian/secubox-profiles/etc/sudoers.d
 	install -m 0440 sudoers.d/secubox-profiles debian/secubox-profiles/etc/sudoers.d/secubox-profiles
+	install -d debian/secubox-profiles/usr/sbin
+	install -m 0755 sbin/secubox-cache-warm debian/secubox-profiles/usr/sbin/secubox-cache-warm
+	install -d debian/secubox-profiles/etc/secubox
+	install -m 0644 etc/secubox/cache-warmers.toml \
+	  debian/secubox-profiles/etc/secubox/cache-warmers.toml
 
 # Three distinct units ship in this package (own socket each — see
 # debian/secubox-profiles.service, debian/secubox-waker.service,
@@ -24,3 +29,17 @@ override_dh_installsystemd:
 	# after the deployment's lifecycle assignments are audited (a security
 	# service like crowdsec must never be on-demand). See debian/postinst.
 	dh_installsystemd --no-enable --no-start --name=secubox-sleeper
+	# secubox-pins-apply EST ACTIVE PAR DEFAUT, contrairement au sleeper — et la
+	# difference n'est pas d'humeur : le sleeper DECIDE lui-meme ce qui est
+	# inactif, ce reconciliateur ne fait qu'EXECUTER une decision deja prise et
+	# ecrite par l'operateur dans pins.toml. Il n'allume rien, et n'eteint que
+	# ce qui est explicitement epingle sur 'off'.
+	#
+	# Le laisser desactive reproduirait exactement le defaut de #1028 : un
+	# mecanisme correct, livre, et qui ne s'execute jamais.
+	dh_installsystemd --name=secubox-pins-apply
+	# Rechauffage des caches par minuterie (#1028). Le template lui-meme n'est
+	# ni active ni demarre — ce sont les minuteries par module qui le tirent.
+	dh_installsystemd --no-enable --no-start --name=secubox-cache-warm@
+	dh_installsystemd --name=secubox-cache-warm@metacatalog
+	dh_installsystemd --name=secubox-cache-warm@jitsi

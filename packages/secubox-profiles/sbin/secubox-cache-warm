@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: secubox-cache-warm — réchauffe un cache de module, UNE fois
+
+CyberMind — https://cybermind.fr
+
+POURQUOI CET OUTIL EXISTE (#1028). Dix-neuf modules réchauffaient leur cache
+depuis une boucle `asyncio` tenue en vie par un daemon résident : dix-neuf
+processus qui dorment en mémoire entre deux passages, et dix-neuf réveils par
+minute forkant `systemctl`, `pgrep` ou `lxc-info` sur une board à quatre cœurs.
+Ils existaient pour éviter une première requête lente ; ils étaient devenus une
+cause de la lenteur qu'ils prétendaient éviter.
+
+LE DEPOT AVAIT DEJA LA BONNE FORME. `metablogizer` fait exactement ce travail —
+scanner 172 sites, écrire `sites.json` — par `metablog-audit.timer`. Même
+production, même consommation par l'agrégateur, aucun processus résident, et
+c'est le noyau qui ordonnance au lieu de boucles qui se réveillent ensemble.
+
+CE QUI SE PASSE ICI, ET RIEN D'AUTRE : importer le module, appeler SA fonction
+d'un seul passage, sortir. Aucune boucle, aucun état gardé. La cadence est dans
+la minuterie, où elle se règle sans toucher au code.
+
+ON N'APPELLE QUE DES FONCTIONS DECLAREES. Le nom vient d'un fichier de
+configuration écrit par nous, pas d'un argument libre : `secubox-cache-warm`
+tourne en root, et importer un module pour y appeler un nom arbitraire serait
+un moyen d'exécution détourné.
+"""
+from __future__ import annotations
+
+import asyncio
+import importlib.util
+import inspect
+import sys
+import tomllib
+from pathlib import Path
+
+CONF = Path("/etc/secubox/cache-warmers.toml")
+LIB = Path("/usr/lib/secubox")
+
+
+def charge(module: str):
+    """Importe `api/main.py` du module, comme le fait son unité systemd.
+
+    Les modules ne sont pas des paquets Python : leur unité lance
+    `uvicorn api.main:app` avec cwd=/usr/lib/secubox/<module>. On reproduit ce
+    contexte — répertoire du module en tête de `sys.path` — sans quoi les
+    imports `from api.deps import …` du module échouent.
+    """
+    racine = LIB / module
+    cible = racine / "api" / "main.py"
+    if not cible.is_file():
+        raise SystemExit(f"{module}: {cible} introuvable")
+    sys.path.insert(0, str(racine))
+    spec = importlib.util.spec_from_file_location(f"sbx_warm_{module}", cible)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"{module}: import impossible")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2:
+        print("usage: secubox-cache-warm <module>", file=sys.stderr)
+        return 2
+    module = argv[1]
+
+    try:
+        conf = tomllib.loads(CONF.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"{CONF}: {e}", file=sys.stderr)
+        return 1
+
+    entree = conf.get(module)
+    if not isinstance(entree, dict) or not entree.get("fonction"):
+        # UN MODULE NON DECLARE N'EST PAS UNE ERREUR DE CONFIGURATION SILENCIEUSE :
+        # on le dit, et on sort en échec. Une minuterie qui « réussit » sans rien
+        # faire est exactement le genre de mécanisme qu'on corrige ici.
+        print(f"{module}: non déclaré dans {CONF}", file=sys.stderr)
+        return 1
+
+    nom = entree["fonction"]
+    mod = charge(module)
+    fn = getattr(mod, nom, None)
+    if fn is None or not callable(fn):
+        print(f"{module}: fonction {nom!r} absente ou non appelable", file=sys.stderr)
+        return 1
+
+    r = fn()
+    if inspect.isawaitable(r):
+        asyncio.run(r)
+    print(f"{module}: cache réchauffé via {nom}()")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

@@ -41,7 +41,17 @@ case "$1" in
         # Own dedicated socket, own service — never served by the aggregator
         # (the profile engine must not depend on something it may later
         # restart). Restart (not just enable) so an upgrade picks up new code.
-        systemctl daemon-reload 2>/dev/null || true
+        systemctl daemon-reload
+
+    # LES MINUTERIES DE GABARIT S'ACTIVENT A LA MAIN (#1028). dh_installsystemd
+    # ne reconnait pas les instances `unite@instance.timer` : il installe les
+    # fichiers et n'en active aucun. Constate au deploiement — les deux
+    # minuteries etaient `disabled / inactive` apres un dpkg -i reussi, ce qui
+    # aurait reproduit, une fois de plus, le defaut corrige ici : un mecanisme
+    # livre qui ne s'execute jamais.
+    for _m in metacatalog jitsi; do
+      systemctl enable --now "secubox-cache-warm@${_m}.timer" >/dev/null 2>&1 || true
+    done 2>/dev/null || true
         systemctl enable secubox-profiles.service 2>/dev/null || true
         systemctl restart secubox-profiles.service 2>/dev/null || true
 

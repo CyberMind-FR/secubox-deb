@@ -72,6 +72,55 @@ def plan_changes(manifests: dict[str, Manifest], profile: Profile | None,
     return stops + starts
 
 
+def changements_epingles(changes: list[Change], pins: dict[str, str],
+                         sens: str = OFF) -> list[Change]:
+    """Ne retient que les changements DUS A UNE EPINGLE, dans un sens donné.
+
+    POURQUOI FILTRER PLUTOT QUE REPLANIFIER (#1028). Un second planificateur
+    « spécial épingles » finirait par diverger de celui-ci — sur la protection
+    des modules, sur l'ordre, sur un cas limite. On planifie donc une seule
+    fois, et l'on choisit ensuite ce qu'on exécute.
+
+    LE SENS COMPTE. Appliquer les épingles `off` n'éteint que ce que
+    l'opérateur a explicitement éteint : c'est une opération sûre, qu'une
+    minuterie peut répéter sans surprise. ALLUMER, en revanche, démarre des
+    services sur une board dont on ne sait rien de la charge — cela reste une
+    décision prise à la main, jamais par une minuterie.
+    """
+    return [c for c in changes if pins.get(c.id) == sens]
+
+
+def epingles_encore_activees(manifests: dict[str, Manifest], pins: dict[str, str],
+                             actuals: dict[str, Actual]) -> list[Change]:
+    """Modules épinglés 'off', ARRETES, mais qui redémarreront au prochain boot.
+
+    POURQUOI CE CAS ECHAPPAIT AU PLAN. `is_on` vaut `enabled ET active` : un
+    module arrêté à la main mais resté `enabled` est donc vu comme déjà éteint,
+    et rien n'est planifié pour lui. Il revient pourtant au démarrage suivant.
+
+    Constaté sur gk2 : huit des neuf modules épinglés `off`, arrêtés, étaient
+    encore `enabled`. La décision de l'opérateur ne tenait que jusqu'au
+    prochain redémarrage — et personne n'aurait fait le lien.
+
+    « ENCORE ACTIVEE » N'EST PAS « ENCORE ALLUMEE ». On ne touche pas à `is_on`,
+    dont la question est « ce module sert-il ? » : la réponse y est juste. La
+    question posée ICI est différente — « la décision d'éteindre tiendra-t-elle
+    au reboot ? » — et mérite sa propre fonction plutôt qu'un élargissement de
+    la première, qui se propagerait au statut, au coût et au diff.
+    """
+    out: list[Change] = []
+    for mid, m in manifests.items():
+        if m.protected or pins.get(mid) != OFF:
+            continue
+        a = actuals.get(mid)
+        if a is None or not a.enabled or a.active:
+            continue  # déjà désactivé, ou encore allumé (le plan s'en charge)
+        out.append(Change(id=mid, action=STOP,
+                          reason="épinglé sur 'off' mais encore activé au démarrage",
+                          priority=0))
+    return out
+
+
 def _reason(m: Manifest, profile: Profile | None, pins: dict[str, str], desired: str) -> str:
     if m.protected:
         return "module protégé (toujours allumé)"
