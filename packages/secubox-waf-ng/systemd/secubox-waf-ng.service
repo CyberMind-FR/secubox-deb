@@ -55,6 +55,16 @@ Group=secubox-waf
 ExecStartPre=+/bin/mkdir -p /var/log/secubox/cookie-audit
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/cookie-audit
 ExecStartPre=+/bin/chmod 0750 /var/log/secubox/cookie-audit
+# LE JOURNAL DES MENACES DOIT APPARTENIR AU SERVICE QUI L'ECRIT (#1017).
+# Il etait a secubox:secubox en 0640 alors que sbxwaf tourne en secubox-waf :
+# chaque ecriture echouait en « permission denied », et TROIS SEMAINES de
+# detections ont ete perdues sans que rien ne le signale — le tableau de bord
+# affichait simplement une image figee, ce qui se lit comme « aucune attaque ».
+# Le chown porte sur le repertoire ET le fichier : creer le repertoire ne suffit
+# pas quand le fichier existe deja, ce qui est le cas de toute board en service.
+ExecStartPre=+/bin/mkdir -p /var/log/secubox/waf
+ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/waf
+ExecStartPre=+/bin/chmod 0750 /var/log/secubox/waf
 ExecStart=/usr/sbin/sbxwaf \
   --listen 127.0.0.1:8085 \
   --routes /etc/secubox/waf/haproxy-routes.json \
@@ -68,6 +78,10 @@ ExecStart=/usr/sbin/sbxwaf \
 
 # --crowdsec-url is the real CrowdSec LAPI (LXC-bridge gateway 10.100.0.1:8080),
 # NOT 127.0.0.1:8080 (the nft DNAT VIP that would self-loop into this proxy).
+#
+# Verifie le 2026-08-12 (#1017) : cette adresse repond bien (403, soit la LAPI
+# qui rejette une requete non authentifiee). L'adresse n'a jamais ete en cause
+# dans l'absence de bans — c'est l'execution de cscli qui l'etait.
 
 Restart=on-failure
 RestartSec=5
@@ -76,7 +90,20 @@ RestartSec=5
 # Same posture as the worker@ template (secubox-mesh convention, §6 CSPN), minus
 # RuntimeDirectory (see header). /run/secubox is READ-WRITE so the client connect
 # to waker.sock works under ProtectSystem=strict.
-NoNewPrivileges=yes
+# NoNewPrivileges=false EST REQUIS (#1017), et c'est un choix, pas un oubli.
+#
+# Le pont CrowdSec passe par "cscli decisions add" — le code le documente :
+# la LAPI /v1/alerts rend 500 sur cette version et les jetons expirent toutes
+# les heures ; seul ce chemin cree reellement le blocage nft applique par le
+# bouncer.
+#
+# Or cscli doit lire /etc/crowdsec/config.yaml, interdit a secubox-waf. Avec
+# NoNewPrivileges=yes, meme un droit sudo reste inutilisable : le WAF detectait
+# donc en continu sans jamais pouvoir bannir, et rien ne le signalait.
+#
+# L'elevation est BORNEE au seul "cscli decisions add" par le droit sudo livre
+# avec ce paquet (/etc/sudoers.d/secubox-waf-ng) — pas un blanc-seing.
+NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
