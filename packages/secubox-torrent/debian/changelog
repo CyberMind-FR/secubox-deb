@@ -1,3 +1,31 @@
+secubox-torrent (2.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * RECHERCHE D INDEX, COTE SERVEUR (ref #1032). L application
+    torrent-search.gk2.secubox.in n avait pas de liens magnet parce qu elle
+    n avait pas de RESULTATS : titres, tailles et seeders etaient generes par
+    `Math.random()`, et le bouton « magnet » n avait aucun gestionnaire.
+    C etait une maquette.
+  * LA RECHERCHE PART DE LA BOARD, PAS DU NAVIGATEUR. Deux raisons, la seconde
+    etant la seule qui compte : CORS l interdirait de toute facon, mais surtout
+    une requete emise par le navigateur exposerait l adresse du visiteur aux
+    trackers. Emise d ici, elle ne l expose pas — sur une appliance dont c est
+    la promesse, la question ne se pose pas.
+  * Les magnets sont FABRIQUES depuis l empreinte, avec des traqueurs joints :
+    sans eux, un client sans DHT ne trouve aucun pair et le lien parait casse
+    alors qu il est seulement orphelin.
+  * UN HASH INVALIDE NE PRODUIT PAS DE MAGNET, et le resultat est ecarte : un
+    lien qui ne mene a rien est pire qu un lien absent, parce qu on l essaie.
+  * Une source en panne n emporte pas les autres — un index injoignable est le
+    cas ORDINAIRE — et les echecs sont NOMMES dans la reponse : une liste courte
+    sans explication laisserait croire que la recherche n a rien trouve.
+  * APIBAY rend une ligne sentinelle « No results returned » quand il n a rien ;
+    elle est ecartee, sans quoi un torrent inexistant s afficherait en tete.
+  * `api/main.py` MANQUAIT : le module etait l un des deux seuls, sur
+    cent-quatorze, que l agregateur ne pouvait pas monter. Corrige du meme coup.
+  * 16 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 19:40:00 +0200
+
 secubox-torrent (2.2.9-1~bookworm1) bookworm; urgency=medium
 
   * Package the admin-panel API route (ref #979): torrent is LXC-native (no
