@@ -17,10 +17,22 @@ def merge_route(existing: dict, domain: str, ip: str, port: int) -> dict:
     return out
 
 
+# `haproxyctl vhost add` regenere la configuration HAProxy ENTIERE (~400 vhosts)
+# puis la valide : 1 min 02 s mesurees sur gk2 pour ajouter un seul vhost. Le
+# budget de 120 s etait donc frole a chaque appel et franchi des que la board
+# travaillait — l'etape etait declaree en echec alors qu'elle avait abouti.
+#
+# Un depassement reste SANS DANGER : `cmd_generate` ecrit dans un fichier
+# temporaire, valide, et n'installe qu'ensuite — une interruption laisse la
+# configuration vivante intacte. On peut donc allonger sans risque.
+DELAI_PUBLISHCTL = 300
+
+
 def _sudo_publishctl(verb: str, *args: str) -> dict:
     try:
         p = subprocess.run(["sudo", "-n", PUBLISHCTL, verb, *args],
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True,
+                           timeout=DELAI_PUBLISHCTL)
         try:
             return json.loads(p.stdout.strip() or "{}")
         except json.JSONDecodeError:

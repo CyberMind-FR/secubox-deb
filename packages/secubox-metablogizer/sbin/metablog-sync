@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+"""SecuBox-Deb :: metablog-sync — remet un site adossé à git au niveau de son amont
+
+CyberMind — https://cybermind.fr
+
+TOUT SITE DONT LE `public/` EST UN DEPOT GIT est synchronisable : rien à
+déclarer, la présence d'un `.git` suffit. Un site téléversé à la main n'en a
+pas, il est donc naturellement ignoré — pas de liste à tenir, pas de liste à
+oublier de tenir.
+
+`git reset --hard` ET NON `git pull`. Un site servi n'est pas un espace de
+travail : personne n'y committe, et une divergence locale — un fichier
+retouché à chaud pour dépanner — ferait échouer tous les pulls suivants en
+silence. On aligne sur l'amont, qui est la source de vérité déclarée.
+
+RIEN N'EST TOUCHE SI L'AMONT N'A PAS BOUGE. Le cas ordinaire d'une minuterie
+est « rien de neuf » : il doit être gratuit, et surtout ne pas réécrire des
+horodatages que le reste de la chaîne surveille.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+SITES = Path("/srv/metablogizer/sites")
+DELAI_FETCH = 120
+DELAI_GIT = 30
+
+
+def git(depot: Path, *args: str, delai: int = DELAI_GIT) -> str:
+    # `safe.directory` par invocation : les sites appartiennent a `secubox` et
+    # cet outil peut tourner en root. Sans cela git 2.35+ refuse d'operer.
+    r = subprocess.run(
+        ["git", "-c", f"safe.directory={depot}", "-C", str(depot), *args],
+        capture_output=True, text=True, timeout=delai, check=True)
+    return r.stdout.strip()
+
+
+def branche(depot: Path) -> str:
+    """La branche suivie, telle que le dépôt la déclare — jamais 'main' devine.
+
+    Un dépôt sur `master` synchronisé contre `main` échouerait à chaque
+    passage, avec une erreur qui ne dit pas qu'on s'est trompé de nom.
+    """
+    try:
+        return git(depot, "rev-parse", "--abbrev-ref", "HEAD") or "HEAD"
+    except subprocess.SubprocessError:
+        return "HEAD"
+
+
+def synchronise(site: Path) -> dict:
+    depot = site / "public"
+    if not (depot / ".git").exists():
+        return {"site": site.name, "etat": "non-git"}
+    b = branche(depot)
+    try:
+        avant = git(depot, "rev-parse", "HEAD")
+        git(depot, "fetch", "--quiet", "origin", b, delai=DELAI_FETCH)
+        amont = git(depot, "rev-parse", f"origin/{b}")
+        if amont == avant:
+            return {"site": site.name, "etat": "a-jour", "sha": avant[:8]}
+        git(depot, "reset", "--hard", amont)
+        return {"site": site.name, "etat": "mis-a-jour",
+                "avant": avant[:8], "apres": amont[:8], "branche": b}
+    except subprocess.TimeoutExpired:
+        return {"site": site.name, "etat": "expire"}
+    except subprocess.CalledProcessError as e:
+        # L'ERREUR DE GIT EST RENDUE, PAS RESUMEE. « echec » ne dit pas si
+        # l'amont est injoignable, la branche absente ou le disque plein.
+        return {"site": site.name, "etat": "echec",
+                "detail": (e.stderr or e.stdout or "").strip()[:200]}
+
+
+def main(argv: list[str]) -> int:
+    cibles = argv[1:]
+    try:
+        sites = sorted(p for p in SITES.iterdir() if p.is_dir())
+    except OSError as e:
+        print(f"{SITES}: {e}", file=sys.stderr)
+        return 1
+    if cibles:
+        sites = [p for p in sites if p.name in cibles]
+        if not sites:
+            print(f"aucun site parmi {', '.join(cibles)}", file=sys.stderr)
+            return 1
+
+    out = [synchronise(s) for s in sites]
+    out = [r for r in out if r["etat"] != "non-git"]
+    changes = [r for r in out if r["etat"] == "mis-a-jour"]
+    echecs = [r for r in out if r["etat"] in ("echec", "expire")]
+
+    print(json.dumps({"sites": out, "mis_a_jour": len(changes),
+                      "echecs": len(echecs)}, ensure_ascii=False, indent=2))
+    # UN ECHEC EST UN ECHEC, meme si d'autres sites ont reussi : une minuterie
+    # qui rend toujours 0 ne se voit jamais dans `systemctl --failed`.
+    return 1 if echecs else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

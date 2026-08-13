@@ -19,6 +19,7 @@ override_dh_auto_install:
 	install -d debian/secubox-metablogizer/usr/share/secubox/menu.d
 	[ -d menu.d ] && cp -r menu.d/. debian/secubox-metablogizer/usr/share/secubox/menu.d/ || true
 	install -d debian/secubox-metablogizer/usr/sbin
+	install -m 0755 sbin/metablog-sync debian/secubox-metablogizer/usr/sbin/metablog-sync
 	[ -d sbin ] && install -m 755 sbin/* debian/secubox-metablogizer/usr/sbin/ || true
 	install -d debian/secubox-metablogizer/etc/sudoers.d
 	[ -f debian/secubox-publish-wizard.sudoers ] && install -m 0440 debian/secubox-publish-wizard.sudoers debian/secubox-metablogizer/etc/sudoers.d/secubox-publish-wizard || true
@@ -33,6 +34,12 @@ override_dh_auto_install:
 	# see api/sites_scan.py. 5-minute timer, unprivileged (secubox).
 	install -m 644 debian/metablog-audit.service debian/secubox-metablogizer/usr/lib/systemd/system/
 	install -m 644 debian/metablog-audit.timer debian/secubox-metablogizer/usr/lib/systemd/system/
+	# Synchronisation git (#1029). Les unites sont installees A LA MAIN, comme
+	# ses voisines : dh_installsystemd ne prend automatiquement que
+	# debian/<paquet>.service, et une unite livree sans etre installee ne se
+	# voit qu au moment ou l on cherche pourquoi rien ne tourne.
+	install -m 644 debian/metablog-sync.service debian/secubox-metablogizer/usr/lib/systemd/system/
+	install -m 644 debian/metablog-sync.timer debian/secubox-metablogizer/usr/lib/systemd/system/
 	install -d debian/secubox-metablogizer/usr/lib/tmpfiles.d
 	install -m 644 debian/secubox-metablogizer.tmpfiles debian/secubox-metablogizer/usr/lib/tmpfiles.d/secubox-metablogizer.conf
 	# Mosaic wall thumbnails (#977): nginx serves them directly from the
