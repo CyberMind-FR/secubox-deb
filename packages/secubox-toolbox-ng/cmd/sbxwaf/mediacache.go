@@ -69,6 +69,17 @@ type cacheEntry struct {
 	atime int64 // unix timestamp of last access (for LRU eviction)
 	ct    string
 	ce    string // Content-Encoding of the stored body ("" = identity)
+
+	// Validateurs de l'amont, pour la revalidation conditionnelle (#1031).
+	//
+	// SANS EUX, LE CACHE NE SAIT QUE VIEILLIR. `Get` servait toute entree non
+	// expiree, donc un fichier modifie sur disque restait masque jusqu'a la fin
+	// de son heure de TTL — constate sur anibal-amiot.fr, ou un `app.js`
+	// remplace par un `git pull` etait servi dans sa version d'avant. Une
+	// synchronisation aux cinq minutes ne sert a rien si le cache repond
+	// l'ancienne version pendant l'heure qui suit.
+	etag    string
+	lastMod string
 }
 
 // CacheStats is a snapshot of MediaCache counters.
@@ -160,16 +171,20 @@ func (m *MediaCache) loadIndex() {
 			}
 			metaPath := bodyPath + ".m"
 			var meta struct {
-				CT  string `json:"ct"`
-				CE  string `json:"ce"`
-				Exp int64  `json:"exp"`
+				CT      string `json:"ct"`
+				CE      string `json:"ce"`
+				Exp     int64  `json:"exp"`
+				ETag    string `json:"etag"`
+				LastMod string `json:"lm"`
 			}
 			if raw, err := os.ReadFile(metaPath); err == nil {
 				_ = json.Unmarshal(raw, &meta)
 			}
 			e := &cacheEntry{
-				size: info.Size(),
-				exp:  meta.Exp,
+				size:    info.Size(),
+				exp:     meta.Exp,
+				etag:    meta.ETag,
+				lastMod: meta.LastMod,
 				// mtime is used deliberately as the LRU recency proxy.
 				// atime is unreliable on most Linux filesystems (relatime
 				// mount option suppresses most atime updates), so we use
@@ -262,6 +277,44 @@ func encodingAccepted(acceptEncoding, coding string) bool {
 // exists that the client can decode. ok=false means cache miss (or expired, or
 // the stored representation is encoded in a way the client did not advertise via
 // acceptEncoding). Fail-open: I/O errors → miss.
+// Validateurs rend l'ETag et le Last-Modified memorises pour cette URL (#1031).
+//
+// A QUOI ILS SERVENT : construire une requete conditionnelle vers l'amont, pour
+// lui demander si le fichier a change plutot que de le supposer. Sans reponse
+// (entree absente, ou amont qui n'en pose aucun), on rend deux chaines vides et
+// l'appelant traite le cas comme un cache a rafraichir — l'ignorance conduit a
+// redemander, jamais a servir du perime.
+func (m *MediaCache) Validateurs(url string) (etag, lastMod string) {
+	if m == nil {
+		return "", ""
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e, ok := m.index[cacheKey(url)]; ok {
+		return e.etag, e.lastMod
+	}
+	return "", ""
+}
+
+// Invalide retire une entree du cache (#1031). Appelee quand l'amont a repondu
+// autre chose qu'un 304 : le contenu memorise n'est plus le bon, et le garder
+// une seconde de plus ne peut que tromper.
+func (m *MediaCache) Invalide(url string) {
+	if m == nil {
+		return
+	}
+	key := cacheKey(url)
+	m.mu.Lock()
+	if e, ok := m.index[key]; ok {
+		m.total -= e.size
+		delete(m.index, key)
+	}
+	m.mu.Unlock()
+	bodyPath, metaPath := m.paths(key)
+	_ = os.Remove(bodyPath)
+	_ = os.Remove(metaPath)
+}
+
 func (m *MediaCache) Get(url, acceptEncoding string) (body []byte, hdr http.Header, ok bool) {
 	key := cacheKey(url)
 	now := m.nowFn().Unix()
@@ -423,15 +476,25 @@ func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []b
 		_ = os.Remove(tmp)
 		return
 	}
+	// LES VALIDATEURS SONT CE QUI PERMET DE NE PAS SERVIR DU PERIME. nginx pose
+	// un ETag et un Last-Modified sur tout fichier statique ; les garder permet
+	// de demander a l'amont « a-t-il change ? » plutot que de le supposer.
+	etagClean := strings.TrimSpace(resp.Header.Get("ETag"))
+	lmClean := strings.TrimSpace(resp.Header.Get("Last-Modified"))
+
 	meta := struct {
-		CT  string `json:"ct"`
-		CE  string `json:"ce"`
-		Exp int64  `json:"exp"`
-		URL string `json:"url"`
+		CT      string `json:"ct"`
+		CE      string `json:"ce"`
+		Exp     int64  `json:"exp"`
+		ETag    string `json:"etag,omitempty"`
+		LastMod string `json:"lm,omitempty"`
+		URL     string `json:"url"`
 	}{
-		CT:  ctClean,
-		CE:  ceClean,
-		Exp: exp,
+		CT:      ctClean,
+		CE:      ceClean,
+		Exp:     exp,
+		ETag:    etagClean,
+		LastMod: lmClean,
 		URL: func() string {
 			if len(rawURL) > 300 {
 				return rawURL[:300]
@@ -453,11 +516,13 @@ func (m *MediaCache) MaybeStore(req *http.Request, resp *http.Response, body []b
 	}
 	m.total += newSize - old
 	m.index[key] = &cacheEntry{
-		size:  newSize,
-		exp:   exp,
-		atime: now,
-		ct:    ctClean,
-		ce:    ceClean,
+		size:    newSize,
+		exp:     exp,
+		atime:   now,
+		ct:      ctClean,
+		ce:      ceClean,
+		etag:    etagClean,
+		lastMod: lmClean,
 	}
 	m.evictIfNeeded()
 	m.mu.Unlock()
