@@ -36,6 +36,11 @@ systemctl enable --now metablog-shots.timer 2>/dev/null || true
 # queue above, for GET /sites — see api/sites_scan.py + metablog-audit.timer.
 systemctl enable --now metablog-audit.timer 2>/dev/null || true
 
+# Synchronisation des sites adosses a git (#1029/#1023). Tout site dont le
+# `public/` est un depot git est repris ; un site televerse a la main n en a
+# pas et reste ignore — aucune liste a tenir, donc aucune a oublier de tenir.
+systemctl enable --now metablog-sync.timer 2>/dev/null || true
+
 # Mosaic wall thumbnails served directly by nginx (#977): reload so the
 # shipped location (nginx/metablogizer.conf) picks up without a manual
 # `systemctl reload nginx` — same pattern as secubox-hub/secubox-cdn.

@@ -1,3 +1,28 @@
+secubox-metablogizer (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * SYNCHRONISATION DES SITES ADOSSES A GIT. `metablog-sync` remet au niveau de
+    son amont tout site dont le `public/` est un depot git — rien a declarer,
+    la presence d un `.git` suffit. Un site televerse a la main n en a pas et
+    reste naturellement ignore : aucune liste a tenir, donc aucune a oublier de
+    tenir.
+  * `git reset --hard` ET NON `git pull`. Un site servi n est pas un espace de
+    travail : personne n y committe, et une divergence locale — un fichier
+    retouche a chaud pour depanner — ferait echouer tous les pulls suivants EN
+    SILENCE. On aligne sur l amont, qui est la source de verite declaree.
+  * La branche suivie est DEMANDEE au depot, jamais devinee : un depot sur
+    `master` synchronise contre `main` echouerait a chaque passage, avec une
+    erreur qui ne dit pas qu on s est trompe de nom.
+  * Rien n est touche si l amont n a pas bouge — le cas ordinaire d une
+    minuterie est « rien de neuf », il doit etre gratuit et ne pas reecrire des
+    horodatages que le reste de la chaine surveille.
+  * Un echec reste un echec meme si d autres sites reussissent : une minuterie
+    qui rend toujours 0 ne se voit jamais dans `systemctl --failed`. Et
+    l erreur de git est RENDUE, pas resumee — « echec » ne dit pas si l amont
+    est injoignable, la branche absente ou le disque plein.
+  * `metablog-sync.timer` : au demarrage puis tous les quarts d heure.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:15:00 +0200
+
 secubox-metablogizer (1.7.5-1~bookworm1) bookworm; urgency=medium
 
   * L'assistant de publication rend enfin un site SERVI (ref #1023). Quatre

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: cadence de synchronisation des sites git
+[Unit]
+Description=SecuBox — cadence de synchronisation des sites metablog
+
+[Timer]
+# Au démarrage, une fois la board posée : c'est le moment où un site peut
+# avoir pris du retard pendant l'arrêt.
+OnBootSec=10min
+# Puis toutes les quinze minutes. Assez pour qu'un `git push` se voie dans le
+# quart d'heure, assez rare pour ne rien coûter — et la cadence se règle ici,
+# sans toucher au code.
+OnUnitActiveSec=15min
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
