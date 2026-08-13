@@ -1,0 +1,7 @@
+{
+  "name": "secubox/zipjointes",
+  "type": "roundcube-plugin",
+  "description": "Groupe les pieces jointes d'un message en une archive zip unique",
+  "license": "LicenseRef-CMSD-1.0",
+  "require": { "roundcube/plugin-installer": ">=0.1.6" }
+}

@@ -225,6 +225,57 @@ cmd_user_repair() {
 # Fix Ports (container port checking)
 # ============================================================================
 
+# Pose (ou repose) le greffon zipjointes DANS le conteneur (#1029).
+#
+# PAR L'INTERIEUR, ET PAS AUTREMENT. Le conteneur mail est non privilegie : un
+# fichier ecrit depuis l hote y apparait avec une appartenance decalee, et
+# `chown` depuis l hote est refuse. On pousse donc une archive dans
+# `lxc-attach`, qui la deballe avec les droits du conteneur.
+cmd_webmail_greffons() {
+    local src="/usr/share/secubox/roundcube-plugins"
+    [ -d "$src" ] || { echo "aucun greffon a poser ($src absent)"; return 0; }
+    lxc-info -n "$CONTAINER" 2>/dev/null | grep -q RUNNING || {
+        echo "conteneur arrete — greffons non poses"; return 1; }
+
+    # php-zip conditionne zipjointes ET zipdownload : sans lui, le second se
+    # desactive tout seul a son chargement et le bouton « telecharger en zip »
+    # n apparait jamais. Il manquait depuis l origine sur cette board.
+    if ! lxc-attach -n "$CONTAINER" -- php -r 'exit(class_exists("ZipArchive")?0:1);' 2>/dev/null; then
+        echo "  installation de php8.2-zip (requis par zipjointes et zipdownload)"
+        lxc-attach -n "$CONTAINER" -- sh -c \
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php8.2-zip" >/dev/null 2>&1 || true
+    fi
+
+    ( cd "$src" && tar czf - . ) | lxc-attach -n "$CONTAINER" -- sh -c \
+        "cd /usr/share/roundcube/plugins && tar xzf - && chown -R root:root zipjointes && chmod -R u=rwX,go=rX zipjointes"
+
+    # ACTIVATION DANS LE FICHIER QUI FAIT FOI. `config.inc.php` ne porte que des
+    # entrees commentees ; la liste effective vit dans `config.inc.php.local`.
+    # Editer le premier ne changerait rien — en silence, ce qui est le pire.
+    local conf="/etc/roundcube/config.inc.php.local"
+    if lxc-attach -n "$CONTAINER" -- grep -q "zipjointes" "$conf" 2>/dev/null; then
+        echo "  greffon deja actif"
+    elif lxc-attach -n "$CONTAINER" -- grep -q '\$config\["plugins"\]' "$conf" 2>/dev/null; then
+        lxc-attach -n "$CONTAINER" -- cp "$conf" "$conf.avant-zipjointes"
+        lxc-attach -n "$CONTAINER" -- sed -i 's/\("ident_switch"\)\]/\1, "zipjointes"]/' "$conf"
+        lxc-attach -n "$CONTAINER" -- grep -q "zipjointes" "$conf" \
+            && echo "  zipjointes active" \
+            || { echo "  ECHEC d activation — liste des greffons inattendue" >&2; return 1; }
+    else
+        echo "  liste des greffons introuvable dans $conf" >&2; return 1
+    fi
+
+    # `php -l` AVANT de recharger : une configuration cassee ferait tomber le
+    # webmail entier, et l on ne s en apercevrait qu a la premiere connexion.
+    lxc-attach -n "$CONTAINER" -- php -l "$conf" >/dev/null 2>&1 || {
+        echo "  configuration invalide — restauration" >&2
+        lxc-attach -n "$CONTAINER" -- cp "$conf.avant-zipjointes" "$conf" 2>/dev/null
+        return 1
+    }
+    lxc-attach -n "$CONTAINER" -- systemctl restart php8.2-fpm >/dev/null 2>&1 || true
+    echo "greffons webmail poses"
+}
+
 cmd_webmail_config() {
     # Reconcilie la configuration Roundcube d'un conteneur DEJA installe (#1014).
     #
@@ -981,6 +1032,7 @@ case "${1:-}" in
     logs)        shift; cmd_logs "$@" ;;
     fix-ports)   cmd_fix_ports ;;
     webmail-config) cmd_webmail_config ;;
+    webmail-greffons) cmd_webmail_greffons ;;
     sync)        cmd_sync ;;
     # Help
     help|--help|-h|'') show_help ;;
