@@ -9,8 +9,9 @@
 
 - **#1032 — torrent-search : vrais resultats et vrais magnets** (2026-08-13).
   Livre et mesure : 100 resultats en ~2,4 s par le nom public.
-  RESTE FAUX SUR CETTE PAGE : les pastilles de sources ne pilotent rien (seul
-  TPB est interroge) et l'onglet NZB rend toujours des resultats fabriques.
+  Pastilles et onglet NZB cables (2.4.1) : trois index reels (TPB,
+  Torrents-CSV, Nyaa), selection transmise, Usenet en attente de cles dans
+  `/etc/secubox/secrets/torrent-nzb.toml`.
 - **#1033 — metablogizer : l'envoi reussissait puis annoncait un echec**
   (2026-08-13). Prouve dans les deux sens sur gk2. — fusionné et déployé
 

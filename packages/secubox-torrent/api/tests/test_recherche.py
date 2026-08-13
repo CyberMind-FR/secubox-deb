@@ -52,7 +52,12 @@ def transport(charge, status=200):
 
 
 def lance(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # `asyncio.run` ET NON `get_event_loop()`. La seconde rend une boucle
+    # partagee et depreciee : le premier test qui la ferme fait echouer tous
+    # les suivants avec « There is no current event loop » — une panne qui
+    # semble venir du test qu'on vient d'ecrire, jamais de celui qui l'a
+    # provoquee.
+    return asyncio.run(coro)
 
 
 def test_apibay_normalise():
@@ -82,7 +87,7 @@ def test_les_resultats_sans_magnet_sont_ecartes(monkeypatch):
     async def source(c, q):
         return [R.Resultat("bon", HASH, 1, 5, 0, "TPB"),
                 R.Resultat("sans hash", "zz", 1, 99, 0, "TPB")]
-    monkeypatch.setattr(R, "SOURCES", {"x": source})
+    monkeypatch.setattr(R, "SOURCES", {"x": {"libelle": "X", "fn": source}})
     d = lance(R.cherche("q"))
     # Celui a 99 seeders serait en tete du tri : c'est bien le magnet, et non
     # le classement, qui decide.
@@ -93,7 +98,7 @@ def test_tri_par_seeders(monkeypatch):
     async def source(c, q):
         return [R.Resultat("peu", HASH, 1, 3, 0, "TPB"),
                 R.Resultat("beaucoup", "b" * 40, 1, 300, 0, "TPB")]
-    monkeypatch.setattr(R, "SOURCES", {"x": source})
+    monkeypatch.setattr(R, "SOURCES", {"x": {"libelle": "X", "fn": source}})
     d = lance(R.cherche("q"))
     assert [r["titre"] for r in d["resultats"]] == ["beaucoup", "peu"]
 
@@ -104,6 +109,72 @@ def test_requete_vide_ne_sort_pas_sur_le_reseau(monkeypatch):
         nonlocal appele
         appele = True
         return []
-    monkeypatch.setattr(R, "SOURCES", {"x": source})
+    monkeypatch.setattr(R, "SOURCES", {"x": {"libelle": "X", "fn": source}})
     d = lance(R.cherche("   "))
     assert d["resultats"] == [] and not appele
+
+
+def test_le_meme_torrent_vu_par_trois_index_ne_fait_qu_une_ligne():
+    """Knaben agrege des index qu'on interroge aussi en direct : sans
+    deduplication, la moitie de la liste serait des doublons."""
+    from recherche import Resultat, dedoublonne
+    h = "a" * 40
+    r = dedoublonne([
+        Resultat("Un film", h, 100, 5, 1, "TPB"),
+        Resultat("Un.Film.2026", h, 0, 42, 3, "Knaben"),
+        Resultat("un film", h, 100, 7, 0, "Nyaa"),
+    ])
+    assert len(r) == 1
+    # On garde le mieux pourvu en seeders...
+    assert r[0].seeders == 42
+    # ...la taille que l'un des trois seul connaissait...
+    assert r[0].taille == 100
+    # ...et on dit que trois index le connaissent.
+    assert r[0].source == "TPB, Knaben, Nyaa"
+
+
+def test_la_deduplication_se_fait_sur_l_empreinte_pas_le_titre():
+    """Deux index nomment rarement un fichier pareil ; deduire du titre
+    fusionnerait des torrents differents."""
+    from recherche import Resultat, dedoublonne
+    r = dedoublonne([Resultat("Meme titre", "a" * 40, 1, 1, 0, "TPB"),
+                     Resultat("Meme titre", "b" * 40, 1, 1, 0, "TPB")])
+    assert len(r) == 2
+
+
+def test_tout_decocher_n_est_pas_tout_selectionner():
+    """Rendre l'integralite des index quand l'utilisateur les a tous decoches
+    reviendrait a ignorer son geste."""
+    from recherche import cherche
+    d = lance(cherche("debian", []))
+    assert d["resultats"] == []
+    assert "aucune source" in d["detail"]
+
+
+def test_une_source_inconnue_ne_fait_pas_tomber_la_recherche():
+    from recherche import SOURCES
+    assert "inexistant" not in SOURCES
+
+
+def test_un_index_qui_ignore_la_requete_est_ecarte():
+    """Knaben rendait, pour TOUTE requete, le dernier contenu indexe — de la
+    pornographie en tete pour une recherche « debian ». Elle repondait 200,
+    vite, avec des resultats bien formes : seul le contenu la trahissait."""
+    from recherche import pertinent
+    assert not pertinent("(C108) Fate Grand Order doujin", "debian")
+    assert not pertinent("IPZZ-915 1080p", "debian")
+
+
+def test_la_garde_reste_lache():
+    """Exiger TOUS les termes ecarterait des resultats legitimes."""
+    from recherche import pertinent
+    assert pertinent("ubuntu-24.04.1-desktop-amd64.iso", "ubuntu 24")
+    assert pertinent("Debian.12.Bookworm.DVD", "debian bookworm arm64")
+    assert pertinent("[Debian] Sakura Trick [BD 1080p]", "debian")
+
+
+def test_une_requete_sans_terme_exploitable_n_ecarte_rien():
+    """On ne juge pas sur une base qu'on n'a pas."""
+    from recherche import pertinent
+    assert pertinent("n importe quoi", "ab")
+    assert pertinent("n importe quoi", "!!")
