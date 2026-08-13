@@ -125,6 +125,26 @@ def register_jwt_admin(app: FastAPI) -> None:
             out = [b for b in out if any(t["slug"] == tag for t in b["tags"])]
         return {"billets": out, "count": len(out)}
 
+    @app.get("/admin/api/billets/{billet_id}")
+    async def api_get(request: Request, billet_id: str, user=Depends(require_jwt)):
+        """Un billet par son identifiant (#1024).
+
+        LA LISTE NE SUFFISAIT PAS. Elle est bornee a deux cents entrees : un
+        client cherchant un billet plus ancien ne le trouvait pas, et rien ne
+        distinguait « absent » de « au-dela de la borne ». Une lecture par
+        identifiant repond sans dependre du nombre de billets publies depuis.
+
+        Sert notamment au rattrapage des billets dont le BBS n'a pas
+        l'adresse : demander vaut mieux que recalculer le slug ici, ce qui
+        ferait une seconde implementation de la meme regle, vouee a diverger.
+        """
+        conn = request.app.state.conn
+        row = await repo.get_by_id(conn, billet_id)
+        if row is None:
+            raise HTTPException(404, "billet not found")
+        tags = (await repo.tags_for_many(conn, [billet_id])).get(billet_id, [])
+        return _view(row, tags)
+
     @app.get("/admin/api/tags")
     async def api_tags(request: Request, user=Depends(require_jwt)):
         """Emoji hashtags in use (published), most-used first — the chip bar."""
