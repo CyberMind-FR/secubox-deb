@@ -10,6 +10,12 @@
 override_dh_usrlocal:
 
 override_dh_auto_install:
+	# Hook de deploiement certbot (#1019). Sans lui, HAProxy sert des copies que
+	# le renouvellement ne met jamais a jour : trois certificats sur six
+	# divergeaient sur gk2, dont un qui serait tombe alors qu'une version valide
+	# dormait deja sur le disque.
+	install -d debian/secubox-haproxy/etc/letsencrypt/renewal-hooks/deploy
+	install -m 0755 letsencrypt-hooks/secubox-haproxy debian/secubox-haproxy/etc/letsencrypt/renewal-hooks/deploy/secubox-haproxy
 	install -d debian/secubox-haproxy/usr/lib/secubox/haproxy/
 	cp -r api debian/secubox-haproxy/usr/lib/secubox/haproxy/
 	install -d debian/secubox-haproxy/usr/share/secubox/www
