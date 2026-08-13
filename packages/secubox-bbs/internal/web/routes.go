@@ -48,6 +48,8 @@ type page struct {
 	FilsNonLus                map[int64]bool
 	FilsNonLusSalon           map[int64]int
 	TotalFilsNonLus           int
+	// Journal de moderation, affiche au sysop (#1020).
+	Moderations               []store.Moderation
 	Code, Msg                 string
 	Integ                     store.Integrity
 	Sain                      bool
@@ -105,6 +107,7 @@ func (s *Server) routes() {
 	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
+	s.mux.HandleFunc("/mod/", s.moderer)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
 	s.mux.HandleFunc("/login", s.connexion)
@@ -211,6 +214,80 @@ func (s *Server) poseNonLus(p *page) {
 // SANS LUI L'INDICATEUR MEURT. Qui revient apres deux semaines a deux cents
 // fils non-lus ; s'il faut les ouvrir un par un, il ne le fera pas, et cessera
 // de regarder le compteur — qui n'aura plus servi a rien.
+
+// moderer applique un geste de moderation.
+//
+// UN SEUL POINT D'ENTREE pour tous les gestes. Un handler par verbe aurait
+// duplique cinq fois la meme sequence — sysop, POST, anti-rejeu, cible — et il
+// aurait suffi d'en oublier une dans le sixieme pour ouvrir une breche.
+//
+// L'ordre des gardes n'est pas negociable : DROIT, puis METHODE, puis
+// ANTI-REJEU. Verifier le jeton avant le droit dirait a un non-sysop si son
+// jeton est valide ; verifier la cible avant le droit lui dirait si elle existe.
+func (s *Server) moderer(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.sysopOK(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	geste := strings.TrimPrefix(r.URL.Path, "/mod/")
+	cible, _ := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	var err error
+
+	switch geste {
+	case "renommer":
+		err = s.st.RenommeFil(v.ID, cible, r.FormValue("titre"))
+	case "deplacer":
+		salon, _ := strconv.ParseInt(r.FormValue("salon"), 10, 64)
+		err = s.st.DeplaceFil(v.ID, cible, salon)
+	case "verrouiller":
+		err = s.st.VerrouilleFil(v.ID, cible, r.FormValue("etat") == "1")
+	case "epingler":
+		err = s.st.EpingleFil(v.ID, cible, r.FormValue("etat") == "1")
+	case "retirer":
+		err = s.st.RetireMessage(v.ID, cible, r.FormValue("motif"))
+	case "retablir":
+		err = s.st.RetablitMessage(v.ID, cible)
+	case "depublier":
+		err = s.st.Depublie(v.ID, cible)
+	case "salon":
+		parent, _ := strconv.ParseInt(r.FormValue("parent"), 10, 64)
+		_, err = s.st.CreeSousSalon(v.ID, r.FormValue("slug"),
+			r.FormValue("titre"), r.FormValue("desc"), parent)
+	default:
+		http.NotFound(w, r)
+		return
+	}
+
+	// L'ERREUR EST DITE A L'OPERATEUR, pas seulement journalisee. Un geste de
+	// moderation qui echoue en silence laisse croire qu'il a porte — et le
+	// moderateur decouvre le contraire quand quelqu'un s'en plaint.
+	retour := r.Referer()
+	if retour == "" || !strings.HasPrefix(retour, "/") {
+		retour = "/"
+	}
+	sep := "?"
+	if strings.Contains(retour, "?") {
+		sep = "&"
+	}
+	if err != nil {
+		log.Printf("bbs: moderation %s sur %d par %d : %v", geste, cible, v.ID, err)
+		http.Redirect(w, r, retour+sep+"err="+url.QueryEscape(err.Error()),
+			http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, retour+sep+"msg="+url.QueryEscape("modération appliquée"),
+		http.StatusSeeOther)
+}
+
 func (s *Server) toutLu(w http.ResponseWriter, r *http.Request) {
 	v := s.qui(r)
 	if !v.Connecte {
@@ -816,6 +893,11 @@ func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
 	p.Invites, _ = s.st.Invites()
 	p.MastoInstance, _ = s.st.Reglage(store.CleMastodonInstance)
 	p.MastoInvite, _ = s.st.Reglage(store.CleMastodonInvite)
+	// UN JOURNAL QUE PERSONNE NE LIT N'ENCADRE RIEN. Ecrire chaque geste de
+	// moderation sans jamais l'afficher aurait donne la lettre de la
+	// tracabilite sans l'usage : c'est la consultation qui rend le pouvoir
+	// verifiable, pas l'ecriture.
+	p.Moderations, _ = s.st.Moderations(50)
 	s.rend(w, r, "sysop", p)
 }
 
