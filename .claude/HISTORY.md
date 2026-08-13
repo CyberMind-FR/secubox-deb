@@ -3,6 +3,56 @@
 
 ---
 
+## 2026-08-13 — v2.20.0 : douze branches rendues a master, et ce qu'elles cachaient
+
+**Vingt paquets tournaient en production dans une version absente de `master`.**
+La fusion les y ramene tous : 12 branches, 39 commits, 227 fichiers.
+
+### Le defaut de fond, et comment il s'est manifeste
+
+Un paquet `secubox-haproxy` construit depuis `master` a ete deploye par-dessus
+un paquet issu d'une branche jamais fusionnee. Le verbe `haproxyctl cert sync`
+et le hook de renouvellement de certbot ont disparu **sans un mot**. Les
+certificats servis restaient valables — c'est ce qui rend la panne invisible —
+et seul le renouvellement du 11 novembre aurait echoue.
+
+Decouvert par hasard, en delivrant des certificats pour un autre site.
+
+**Pire encore : huit branches n'avaient jamais ete poussees.** Quinze commits
+n'existaient que sur un seul disque. Les `git push -q` echouaient en silence —
+l'amont pointait sur `master`, git refusait, et le `-q` avalait le message.
+
+### Corrections livrees (chacune verifiee sur gk2)
+
+| # | Ce qui etait casse |
+|---|---|
+| 1019 | HAProxy servait des certificats que le renouvellement ne mettait jamais a jour |
+| 1020 | BBS : bibliotheque et billets annoncaient « vide » sans interroger la base |
+| 1022 | 95 unites declaraient `RuntimeDirectory` sur un repertoire PARTAGE |
+| 1023 | Un site publie n'etait jamais servi (4 defauts du chemin de publication) |
+| 1024 | L'adresse du billet publie n'etait jamais enregistree |
+| 1025 | Aucun alias mail ne fonctionnait, `postmaster@` compris |
+| 1026 | Espace de depot public (nouveau) |
+| 1027 | Le WAF bloquait les envois anonymes en inspectant des octets d'archive |
+| 1028 | Un module epingle `off` tournait quand meme — rien n'appliquait la decision |
+| 1029 | Greffon Roundcube de groupage ; `php-zip` manquait depuis l'origine |
+| 1030 | Un depot volumineux echouait en 504 mais aboutissait cote serveur |
+| 1031 | Le cache media servait un fichier perime apres mise a jour sur disque |
+
+### Le fil rouge
+
+Neuf de ces douze corrections ont le meme squelette : **un mecanisme existe,
+est livre, et ne s'execute jamais** — ou s'execute sans que rien ne le
+verifie. Le veilleur n'avait jamais tourne. Les epingles n'etaient jamais
+appliquees. Le cache ne revalidait pas. Le journal de moderation etait ecrit
+mais jamais lu.
+
+Un mecanisme qui existe sans s'executer ne protege de rien.
+
+### Empreinte de la board
+
+103 daemons uvicorn -> 68. Memoire disponible 1735 -> 2194 Mio. Charge 140 -> 56.
+
 ## 2026-08-12 (soir) — Nettoyage des branches : 421 -> 51
 
 **370 branches distantes supprimees, aucune perte de contenu.** Chacune a ete

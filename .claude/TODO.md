@@ -2,6 +2,43 @@
 *Mis à jour : 2026-08-13*
 ---
 
+## Après v2.20.0 — ce que la fusion a laissé voir
+
+### Cause en amont, à traiter avant le reste
+
+- [ ] **Un module servi par l'agrégateur ne doit pas livrer un daemon résident.**
+      103 daemons uvicorn tournaient, 41 des 42 sans appelant étaient servis en
+      processus. Ramenés à 68 à la main — mais **l'empaquetage les réactivera à
+      la prochaine réinstallation**. Tant que ce point n'est pas corrigé, tout
+      le gain se perdra.
+- [ ] **`secubox-waf` ne se monte pas dans l'agrégateur** — `PermissionError`
+      sur `waf-threats.log`. #1017 se rejoue.
+
+### Défauts ouverts
+
+- [ ] `torrent-search` : les résultats n'exposent pas leurs liens magnet.
+- [ ] `publish`, `repo`, `reporter` : l'agrégateur ne répond pas pour eux.
+- [ ] ManageSieve (4190) injoignable — pas de filtres depuis Nextcloud.
+- [ ] `www.gk2.net` : DNS à repointer, puis certificat.
+- [ ] Streamlit : plafond CPU à 0,3 cœur et verrou de réveil manquant.
+
+### Arriéré
+
+- [ ] **13 branches anciennes** non fusionnées. Aucune ne tourne en production —
+      vérifié paquet par paquet. Ce n'est plus un piège, seulement un arriéré à
+      arbitrer.
+
+### Leçon à graver
+
+Neuf des douze corrections de v2.20.0 ont le même squelette : **un mécanisme
+existe, est livré, et ne s'exécute jamais**. Le veilleur n'avait jamais tourné.
+Les épingles n'étaient jamais appliquées. Le cache ne revalidait pas. Le journal
+de modération était écrit mais jamais lu. Deux minuteries livrées ce jour même
+sont arrivées désactivées, parce que `dh_installsystemd` ignore les instances de
+gabarit.
+
+**Livrer un mécanisme ne suffit pas : il faut prouver qu'il s'exécute.**
+
 ## Arbitrage des branches — TERMINE (2026-08-13)
 
 **421 -> 20 branches. 401 supprimees, aucune fonctionnalite perdue.**
