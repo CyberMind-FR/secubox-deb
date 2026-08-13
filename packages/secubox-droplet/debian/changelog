@@ -1,3 +1,27 @@
+secubox-droplet (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * La zone de depot ne dessinait aucun cadre (ref #1026). UN <label> EST
+    `display: inline` PAR DEFAUT : bordure, remplissage et hauteur minimale
+    etaient donc ignores ou replies sur les lignes de texte, et l'ensemble ne
+    ressemblait a rien d'utilisable. Un `display` explicite n'est pas une
+    precaution de style, c'est ce qui FAIT EXISTER le cadre. Le champ de
+    fichier, `position: absolute` sans ancetre positionne, se referait de son
+    cote au document entier au lieu de la zone.
+  * Un fichier se retire sans tout recommencer — sans cela, un clic de trop
+    oblige a refaire la selection entiere, et sur dix fichiers on renonce.
+  * Le document absorbe les depots manques : un fichier lache a cote de la zone
+    etait OUVERT par le navigateur, faisant perdre la page en cours.
+  * Le champ est vide apres chaque ajout, sans quoi re-choisir un fichier qu'on
+    vient de retirer ne declenche pas `change` et il devient impossible de le
+    remettre.
+  * Le formulaire fonctionne sans script : `action`, `method` et `enctype` sont
+    poses meme si le script les remplace. La reponse est alors du JSON brut —
+    ingrat, mais le fichier arrive, ce qui vaut mieux qu'un bouton inerte.
+  * Un fichier trop lourd est signale AVANT l'envoi, d'apres le plafond demande
+    au serveur et jamais recopie dans la page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 12:45:00 +0200
+
 secubox-droplet (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * ESPACE DE DEPOT (ref #1026). On y laisse une archive, elle atterrit sur le
