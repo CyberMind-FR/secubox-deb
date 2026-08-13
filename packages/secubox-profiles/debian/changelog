@@ -1,3 +1,41 @@
+secubox-profiles (0.18.0-1~bookworm1) bookworm; urgency=medium
+
+  * LES EPINGLES 'off' SONT ENFIN APPLIQUEES (ref #1028). Neuf modules
+    epingles `off` tournaient sur gk2 — la decision etait ecrite dans
+    pins.toml, et rien ne l'executait : ni au demarrage (les unites restaient
+    `enabled`), ni en continu.
+  * `apply --pins-only` n'execute QUE les epingles 'off'. Le plan complet
+    emporterait aussi tout ce qui est absent du profil — soixante-neuf arrets
+    sur gk2, ce qu'une minuterie ne doit pas decider. Le plan est FILTRE, pas
+    replanifie : un second planificateur « special epingles » finirait par
+    diverger sur la protection des modules ou sur un cas limite.
+  * ALLUMER N'EST JAMAIS FAIT PAR UNE MINUTERIE. Eteindre ce que l'operateur a
+    explicitement eteint est sur et repetable ; demarrer des services sur une
+    board dont on ne sait rien de la charge reste une decision manuelle.
+  * `secubox-pins-apply.timer` execute le verbe au demarrage puis chaque heure,
+    et il est ACTIVE PAR DEFAUT — contrairement au sleeper, qui DECIDE lui-meme
+    ce qui est inactif, ce reconciliateur ne fait qu'EXECUTER une decision deja
+    prise. Le livrer desactive reproduirait exactement le defaut corrige ici :
+    un mecanisme correct, livre, et qui ne s'execute jamais.
+  * LE WAKER REFUSE DE REVEILLER UN MODULE EPINGLE 'off'. Constate sur gk2 :
+    `glances`, epingle et arrete, revenait vingt secondes plus tard, reveille
+    par une simple visite de son vhost. Il rend desormais une page qui DIT que
+    le module est desactive volontairement — servir une page d'attente ferait
+    patienter pour un reveil qui n'aura pas lieu.
+  * UN MODULE EPINGLE, ARRETE, MAIS RESTE `enabled` EST DESORMAIS VU. `is_on`
+    vaut `enabled ET active` : un module arrete a la main mais encore active
+    passait pour deja eteint, aucun changement n'etait planifie pour lui, et il
+    revenait au prochain demarrage. Huit des neuf modules de gk2 etaient dans
+    ce cas — la decision de l'operateur ne tenait que jusqu'au reboot, et
+    personne n'aurait fait le lien. `is_on` n'est PAS elargi pour autant : sa
+    question (« ce module sert-il ? ») a une reponse juste, celle posee ici
+    (« la decision tiendra-t-elle au reboot ? ») est differente et merite sa
+    propre fonction.
+  * Un pins.toml illisible ne bloque aucun reveil : transformer une erreur de
+    syntaxe en panne generale serait un remede pire que le mal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 16:40:00 +0200
+
 secubox-profiles (0.17.0-1~bookworm1) bookworm; urgency=high
 
   * Reveil a la demande des applications Streamlit (ref #1018). 28 vhosts

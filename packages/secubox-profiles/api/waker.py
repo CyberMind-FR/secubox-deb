@@ -31,6 +31,7 @@ from fastapi.responses import HTMLResponse, Response
 from .etat_panne import qualifie
 from .lifecycle import effective_lifecycle, wake_budget
 from .manifest import Manifest, load_all
+from .state import load_pins
 from .observe import is_on
 from .observe import observe as _observe_one
 
@@ -153,6 +154,41 @@ def _fire_wake_streamlit(app: str) -> None:
     threading.Thread(target=p.wait, daemon=True).start()
 
 
+def _epingle_off(mid: str) -> bool:
+    """Le module est-il epingle sur 'off' ? (#1028)
+
+    RELU A CHAQUE APPEL, jamais mis en cache. Une epingle posee depuis le
+    panneau doit valoir immediatement : la mettre en cache signifierait qu'un
+    module reste reveillable jusqu'au prochain redemarrage du waker, et
+    l'operateur constaterait que son geste « n'a pas pris ».
+
+    Un fichier illisible ne bloque RIEN : on ne sait pas, donc on laisse le
+    comportement d'avant. Refuser tous les reveils sur un pins.toml casse
+    transformerait une erreur de syntaxe en panne generale.
+    """
+    try:
+        return load_pins(_root() / "profiles" / "pins.toml").get(mid) == "off"
+    except Exception:  # noqa: BLE001 — voir la docstring
+        log.warning("wake: pins illisibles, epingles ignorees pour ce reveil")
+        return False
+
+
+def _reponse_epingle(mid: str) -> Response:
+    """Ce module est eteint PAR DECISION. On le dit, sans page d'attente."""
+    return HTMLResponse(
+        "<!doctype html><meta charset=utf-8>"
+        "<title>Module desactive</title>"
+        "<style>body{font-family:'Courier Prime',monospace;background:#0b1014;"
+        "color:#cfe3ea;display:grid;place-items:center;min-height:100vh;"
+        "margin:0;padding:2rem;text-align:center;line-height:1.6}"
+        "b{color:#00d4ff}</style>"
+        f"<div><p><b>{mid}</b> est desactive sur cette box.</p>"
+        "<p>Ce n'est pas une panne : le module a ete eteint volontairement. "
+        "Il ne se rallumera pas tout seul.</p></div>",
+        status_code=503,
+    )
+
+
 def _write_wake_active() -> None:
     """Persiste l'ensemble des modules ayant un réveil récent (`_last_wake`)
     dans /run/secubox/waker-active.json — le seul canal par lequel le sleeper
@@ -227,6 +263,23 @@ def create_app() -> FastAPI:
             log.warning("wake: vhost non declare, aucun reveil possible: %s", vhost)
             return _splash(vhost, 0.0, retry=10)
         m = manifests[mid]
+
+        # UNE EPINGLE 'off' EST UNE DECISION, PAS UNE PANNE (#1028).
+        #
+        # Le waker rallumait un module que l'operateur avait explicitement
+        # eteint : constate sur gk2, ou `glances` — epingle `off` — revenait
+        # vingt secondes apres son arret, reveille par une simple visite de son
+        # vhost. La decision etait ecrite dans pins.toml ; ce chemin-ci ne la
+        # lisait pas.
+        #
+        # ON LE DIT PLUTOT QUE DE SERVIR UNE PAGE D'ATTENTE. Une page qui
+        # annonce un reveil imminent pour un module qu'on ne reveillera pas
+        # ferait patienter indefiniment — le meme mensonge que la page d'attente
+        # servie a un module en vraie panne, corrige plus bas.
+        if _epingle_off(mid):
+            log.info("wake: %s est epingle 'off' — aucun reveil (decision operateur)", mid)
+            return _reponse_epingle(mid)
+
         if effective_lifecycle(m) in ("always-on", "manual"):
             # Backend cense tourner en permanence : ce n'est pas un endormi,
             # c'est une VRAIE panne. La page d'attente mentirait — personne ne

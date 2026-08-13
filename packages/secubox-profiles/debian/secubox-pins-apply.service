@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: applique les épingles 'off' du profil (#1028)
+#
+# POURQUOI CETTE UNITÉ EXISTE. Neuf modules épinglés `off` tournaient sur gk2 —
+# certains depuis des semaines. La décision était écrite dans `pins.toml`, et
+# rien ne l'exécutait : ni au démarrage (les unités restaient `enabled`), ni en
+# continu (`apply` n'avait jamais été lancé).
+#
+# UN MÉCANISME QUI EXISTE SANS JAMAIS S'EXÉCUTER NE PROTÈGE DE RIEN. C'est la
+# leçon des quatre maillons de #1028, et elle vaut pour ce correctif : sans la
+# minuterie qui l'accompagne, ce verbe serait le cinquième.
+[Unit]
+Description=SecuBox — applique les épingles 'off' du profil
+After=network.target secubox-profiles.service
+Wants=secubox-profiles.service
+
+[Service]
+Type=oneshot
+# `--pins-only` n'éteint QUE ce que l'opérateur a explicitement épinglé, et
+# n'allume rien. Le plan complet emporterait aussi tout ce qui est simplement
+# absent du profil — soixante-neuf arrêts sur gk2, ce qu'une minuterie ne doit
+# pas décider.
+ExecStart=/usr/sbin/secubox-profilectl apply --pins-only --yes
+# UN ÉCHEC N'EST PAS FATAL. Une board dont un module refuse de s'arrêter ne
+# doit pas voir l'unité tomber en `failed` et rester ainsi : le passage suivant
+# réessaiera, et l'audit garde la trace.
+SuccessExitStatus=0 1
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

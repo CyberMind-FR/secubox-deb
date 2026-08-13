@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: cadence d'application des épingles (#1028)
+[Unit]
+Description=SecuBox — réapplique les épingles 'off' périodiquement
+
+[Timer]
+# AU DÉMARRAGE D'ABORD : c'est là que les unités `enabled` reviennent, et donc
+# le moment exact où l'épingle est bafouée. Deux minutes de retard laissent la
+# board finir de démarrer avant qu'on arrête quoi que ce soit.
+OnBootSec=2min
+# Puis à l'heure. Assez souvent pour qu'un module rallumé par erreur ne tourne
+# pas la journée, assez rare pour ne rien coûter sur une board à quatre cœurs.
+OnUnitActiveSec=1h
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
