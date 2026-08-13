@@ -1,0 +1,7427 @@
+# tutorial/catalog/modules.yaml — inventaire des modules SecuBox.
+#
+# GENERE PAR scripts/tutorial-audit.py A PARTIR DU DEPOT. Ne pas editer a la
+# main : la prochaine execution ecraserait la correction. Pour corriger
+# une entree, corriger sa SOURCE — le plus souvent debian/secubox.yaml.
+#
+# `À documenter` signifie que la donnee est absente du depot, jamais
+# qu'elle est inconnue de l'auteur : c'est une tache, pas une lacune de
+# redaction.
+# modules: 173
+
+modules:
+  - id: secubox-ad-guard
+    nom: "secubox-ad-guard"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Ad Guard Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ad-guard.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ad-guard.sock"
+      health: "/api/v1/ad-guard/health"
+      authentifie: true
+      nb_routes: 30
+      routes:
+        - "DELETE /blocklist/{domain}"
+        - "DELETE /webhooks"
+        - "DELETE /whitelist/{domain}"
+        - "GET /blocklist/top"
+        - "GET /check/whitelist/{domain}"
+        - "GET /check/{domain}"
+        - "GET /delayed"
+        - "GET /devices"
+        - "GET /devices/{mac_address}"
+        - "GET /health"
+        - "GET /stats"
+        - "GET /stats/by-device-type"
+        - "GET /stats/categories"
+        - "GET /stats/db"
+        - "GET /status"
+        - "GET /webhooks"
+        - "GET /whitelist"
+        - "POST /blocklist/add"
+        - "POST /blocklist/update"
+        - "POST /delayed"
+        - "POST /delayed/process"
+        - "POST /delayed/{domain}/approve"
+        - "POST /detect"
+        - "POST /maintenance/cache/clear"
+        - "POST /maintenance/cleanup"
+        - "POST /maintenance/reload"
+        - "POST /webhooks"
+        - "POST /webhooks/test"
+        - "POST /whitelist"
+        - "POST /whitelist/cleanup"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ad-guard"
+      vhosts: []
+  - id: secubox-admin
+    nom: "secubox-admin"
+    categorie: "system"
+    tier: "lite"
+    description: "SecuBox System Administration Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-admin.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/admin.sock"
+      health: "/api/v1/admin/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "GET /health"
+        - "GET /logs"
+        - "GET /processes"
+        - "GET /service/{name}"
+        - "GET /services"
+        - "GET /status"
+        - "GET /storage"
+        - "GET /summary"
+        - "GET /updates"
+        - "POST /reboot"
+        - "POST /service/{name}/restart"
+        - "POST /service/{name}/start"
+        - "POST /service/{name}/stop"
+        - "POST /shutdown"
+        - "POST /update"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/admin"
+      vhosts: []
+  - id: secubox-aggregator
+    nom: "secubox-aggregator"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "secubox-aggregator-migrate"
+      - "secubox-aggregator-watchdog.sh"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-ai-gateway
+    nom: "secubox-ai-gateway"
+    categorie: "ai"
+    tier: "pro"
+    description: "SecuBox Ai-gateway Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ai-gateway.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ai-gateway.sock"
+      health: "/api/v1/ai-gateway/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "GET /audit/stats"
+        - "GET /cache/stats"
+        - "GET /health"
+        - "GET /providers"
+        - "GET /providers/health"
+        - "GET /rate-limits"
+        - "GET /rate-limits/{client_id}"
+        - "GET /status"
+        - "GET /v1/models"
+        - "POST /cache/cleanup"
+        - "POST /cache/clear"
+        - "POST /classify"
+        - "POST /offline"
+        - "POST /providers/load"
+        - "POST /providers/save"
+        - "POST /providers/{name}"
+        - "POST /v1/chat/completions"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ai-gateway"
+      vhosts: []
+  - id: secubox-ai-insights
+    nom: "secubox-ai-insights"
+    categorie: "ai"
+    tier: "pro"
+    description: "SecuBox AI Insights - ML-based Threat Detection"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ai-insights.sock"
+      health: "/api/v1/ai-insights/health"
+      authentifie: true
+      nb_routes: 18
+      routes:
+        - "GET /access"
+        - "GET /anomalies"
+        - "GET /components"
+        - "GET /config"
+        - "GET /correlations"
+        - "GET /health"
+        - "GET /integrations"
+        - "GET /logs"
+        - "GET /models"
+        - "GET /scores"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /threats"
+        - "GET /threats/history"
+        - "POST /analyze"
+        - "POST /config"
+        - "POST /model/deploy"
+        - "POST /model/train"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ai-insights"
+      vhosts: []
+  - id: secubox-annuaire
+    nom: "secubox-annuaire"
+    categorie: "mesh"
+    tier: "all"
+    description: "Annuaire-Miroir — federated self-certifying trust substrate (AUTO-ADD/INVITE/PROPOSAL/EMANCIPATE)"
+    manifeste: true
+    lxc: false
+    tests: 42
+    depends:
+      - "secubox-core"
+    cli:
+      - "annuairectl"
+      - "sbx-centersctl"
+      - "sbx-fleetctl"
+      - "sbx-threatmesh-bridge"
+    systemd:
+      - "secubox-annuaire.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/annuaire.sock"
+      health: "/api/v1/annuaire/health"
+      authentifie: true
+      nb_routes: 39
+      routes:
+        - "GET /bans"
+        - "GET /can"
+        - "GET /centers"
+        - "GET /centers/effective/{scope}"
+        - "GET /centers/ownership"
+        - "GET /centers/proposals"
+        - "GET /config"
+        - "GET /fleet"
+        - "GET /fleet/self"
+        - "GET /health"
+        - "GET /log"
+        - "GET /log/export"
+        - "GET /merkle-root"
+        - "GET /nodes"
+        - "GET /proposal/{proposal_id}"
+        - "GET /services"
+        - "GET /status"
+        - "GET /subscriptions"
+        - "GET /verify-chain"
+        - "POST /auto-add"
+        - "POST /centers/grant"
+        - "POST /centers/proposal/accept"
+        - "POST /centers/revoke"
+        - "POST /config/publish"
+        - "POST /config/revoke"
+        - "POST /emancipate"
+        - "POST /invite"
+        - "POST /join"
+        - "POST /log/pull"
+        - "POST /node/publish"
+        - "POST /proposal"
+        - "POST /proposal/{proposal_id}/vote"
+        - "POST /revoke"
+        - "POST /service/offer"
+        - "POST /service/{service_id}/revoke"
+        - "POST /service/{service_id}/subscribe"
+        - "POST /services/pull"
+        - "POST /subscription/{subscription_id}/approve"
+        - "POST /subscription/{subscription_id}/reject"
+    interface_web:
+      presente: true
+      chemin: "/annuaire/"
+      vhosts: []
+  - id: secubox-antirootkit
+    nom: "secubox-antirootkit"
+    categorie: "wall"
+    tier: "pro"
+    description: "SecuBox Anti-Rootkit - host-IDS anti-escape + exec scanner"
+    manifeste: true
+    lxc: false
+    tests: 15
+    depends: []
+    cli:
+      - "secubox-antirootkitctl"
+    systemd:
+      - "secubox-antirootkit.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/antirootkit.sock"
+      health: "/api/v1/antirootkit/status"
+      authentifie: true
+      nb_routes: 4
+      routes:
+        - "GET /alerts"
+        - "GET /execlog"
+        - "GET /status"
+        - "POST /quarantine-prep"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/antirootkit"
+      vhosts: []
+  - id: secubox-appstore
+    nom: "secubox-appstore"
+    categorie: "system"
+    tier: "all"
+    description: "SecuBox App Store — module catalog, install/enable, profiles"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "sbx-apt-mesh"
+      - "secubox-appstorectl"
+    systemd:
+      - "secubox-appstore.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/appstore.sock"
+      health: "/api/v1/appstore/health"
+      authentifie: false
+      nb_routes: 8
+      routes:
+        - "GET /catalog"
+        - "GET /categories"
+        - "GET /health"
+        - "GET /mesh-catalog"
+        - "GET /module/{name}"
+        - "GET /module/{name}/config"
+        - "POST /module/{name}/action/{verb}"
+        - "PUT /module/{name}/config"
+    interface_web:
+      presente: true
+      chemin: "/appstore/"
+      vhosts: []
+  - id: secubox-assist
+    nom: "secubox-assist"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 17
+    depends: []
+    cli:
+      - "secubox-assistctl"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 16
+      routes:
+        - "GET /health"
+        - "GET /matches"
+        - "GET /offers"
+        - "GET /requests/open"
+        - "GET /sessions"
+        - "GET /status"
+        - "POST /close"
+        - "POST /console/grant"
+        - "POST /console/revoke"
+        - "POST /joinlink"
+        - "POST /match/accept"
+        - "POST /offer"
+        - "POST /offer/revoke"
+        - "POST /open"
+        - "POST /request"
+        - "POST /request/open"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-auth
+    nom: "secubox-auth"
+    categorie: "security"
+    tier: "lite"
+    description: "SecuBox Auth Guardian"
+    manifeste: true
+    lxc: false
+    tests: 3
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-auth.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/auth.sock"
+      health: "/api/v1/auth/health"
+      authentifie: true
+      nb_routes: 28
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /bypass_rules"
+        - "GET /health"
+        - "GET /history"
+        - "GET /list_providers"
+        - "GET /list_sessions"
+        - "GET /list_vouchers"
+        - "GET /logs"
+        - "GET /oauth_providers"
+        - "GET /sessions"
+        - "GET /sessions/stats"
+        - "GET /settings"
+        - "GET /splash_config"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /validate_voucher"
+        - "GET /vouchers"
+        - "GET /vouchers/stats"
+        - "GET /webhooks"
+        - "POST /create_voucher"
+        - "POST /delete_provider"
+        - "POST /delete_voucher"
+        - "POST /generate_vouchers"
+        - "POST /redeem_voucher"
+        - "POST /revoke_session"
+        - "POST /set_provider"
+        - "POST /settings"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/auth"
+      vhosts: []
+  - id: secubox-avatar
+    nom: "secubox-avatar"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Identity and Avatar Manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-avatar.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/avatar.sock"
+      health: "/api/v1/avatar/health"
+      authentifie: true
+      nb_routes: 18
+      routes:
+        - "DELETE /avatar/{identity_id}"
+        - "DELETE /identity/{identity_id}"
+        - "DELETE /vault/{profile}/{domain}"
+        - "GET /avatar/{identity_id}"
+        - "GET /cred/peek"
+        - "GET /health"
+        - "GET /identities"
+        - "GET /identity/{identity_id}"
+        - "GET /services"
+        - "GET /summary"
+        - "GET /vault/list"
+        - "GET /vault/restore/{profile}/{domain}"
+        - "POST /avatar/upload"
+        - "POST /cred/poke/{service}"
+        - "POST /identity"
+        - "POST /sync"
+        - "POST /vault/backup"
+        - "PUT /identity/{identity_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/avatar"
+      vhosts: []
+  - id: secubox-backup
+    nom: "secubox-backup"
+    categorie: "system"
+    tier: "lite"
+    description: "SecuBox Backup Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-backup.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/backup.sock"
+      health: "/api/v1/backup/health"
+      authentifie: true
+      nb_routes: 26
+      routes:
+        - "DELETE /history/{backup_id}"
+        - "DELETE /remotes/{remote_name}"
+        - "DELETE /schedules/{schedule_name}"
+        - "GET /containers"
+        - "GET /health"
+        - "GET /history"
+        - "GET /info"
+        - "GET /list"
+        - "GET /progress/{backup_id}"
+        - "GET /remotes"
+        - "GET /retention"
+        - "GET /running"
+        - "GET /schedules"
+        - "GET /status"
+        - "POST /cleanup"
+        - "POST /container/backup"
+        - "POST /container/restore"
+        - "POST /create"
+        - "POST /remotes/{remote_name}/test"
+        - "POST /restore"
+        - "POST /retention/apply"
+        - "POST /schedules/{schedule_name}/run"
+        - "POST /verify/{filename}"
+        - "PUT /remotes/{remote_name}"
+        - "PUT /retention/{backup_type}"
+        - "PUT /schedules/{schedule_name}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/backup"
+      vhosts: []
+  - id: secubox-bbs
+    nom: "secubox-bbs"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 26
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-bbs-ingest.service"
+      - "secubox-bbs-ingest.timer"
+      - "secubox-bbs.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "bbs.gk2.secubox.in"
+  - id: secubox-billets
+    nom: "secubox-billets"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 18
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-billets.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 8
+      routes:
+        - "GET /"
+        - "GET /b/{slug}"
+        - "GET /feed.json"
+        - "GET /feed.xml"
+        - "GET /healthz"
+        - "GET /oembed"
+        - "GET /stats.json"
+        - "GET /tags.json"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-c3box
+    nom: "secubox-c3box"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "SecuBox C3box Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-c3box.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/c3box.sock"
+      health: "/api/v1/c3box/health"
+      authentifie: true
+      nb_routes: 12
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /health"
+        - "GET /history"
+        - "GET /info"
+        - "GET /services"
+        - "GET /services/by-category"
+        - "GET /services/{name}"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /services/{name}/control"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/c3box"
+      vhosts: []
+  - id: secubox-cdn
+    nom: "secubox-cdn"
+    categorie: "misc"
+    tier: "standard"
+    description: "SecuBox CDN Cache"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-cdn.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/cdn.sock"
+      health: "/api/v1/cdn/health"
+      authentifie: true
+      nb_routes: 40
+      routes:
+        - "DELETE /banner/exclude"
+        - "GET /banner/config"
+        - "GET /cache_list"
+        - "GET /cache_size"
+        - "GET /cache_stats"
+        - "GET /clear_stats"
+        - "GET /exclusions"
+        - "GET /health"
+        - "GET /hit_ratio"
+        - "GET /list_rules"
+        - "GET /logs"
+        - "GET /mesh/manifest"
+        - "GET /mesh/peers"
+        - "GET /mesh/stats"
+        - "GET /mesh/status"
+        - "GET /policies"
+        - "GET /preload_url"
+        - "GET /restart"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /top_domains"
+        - "POST /add_policy"
+        - "POST /add_rule"
+        - "POST /bandwidth_savings"
+        - "POST /banner/config"
+        - "POST /banner/exclude"
+        - "POST /banner/toggle"
+        - "POST /delete_rule"
+        - "POST /mesh/add_peer"
+        - "POST /mesh/remove_peer"
+        - "POST /mesh/request_object"
+        - "POST /mesh/sync"
+        - "POST /purge"
+        - "POST /purge_cache"
+        - "POST /purge_domain"
+        - "POST /purge_expired"
+        - "POST /remove_exclusion"
+        - "POST /remove_policy"
+        - "POST /set_enabled"
+        - "POST /set_limits"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/cdn"
+      vhosts: []
+  - id: secubox-certs
+    nom: "secubox-certs"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 1
+    depends: []
+    cli:
+      - "certsctl"
+    systemd:
+      - "secubox-certs-deploy.service"
+      - "secubox-certs-deploy.timer"
+      - "secubox-certs.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 9
+      routes:
+        - "DELETE /revoke/{domain}"
+        - "GET /details/{domain}"
+        - "GET /list"
+        - "GET /metrics"
+        - "GET /status"
+        - "POST /check"
+        - "POST /issue"
+        - "POST /renew-all"
+        - "POST /renew/{domain}"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-cloner
+    nom: "secubox-cloner"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Cloner - System backup and restore"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-cloner.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/cloner.sock"
+      health: "/api/v1/cloner/health"
+      authentifie: false
+      nb_routes: 12
+      routes:
+        - "DELETE /backups/{backup_id}"
+        - "GET /backups"
+        - "GET /backups/{backup_id}"
+        - "GET /config"
+        - "GET /health"
+        - "GET /paths"
+        - "GET /status"
+        - "POST /backups"
+        - "POST /backups/{backup_id}/restore"
+        - "POST /cleanup"
+        - "PUT /config"
+        - "PUT /schedule"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/cloner"
+      vhosts: []
+  - id: secubox-config-advisor
+    nom: "secubox-config-advisor"
+    categorie: "system"
+    tier: "lite"
+    description: "SecuBox Config-advisor Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-config-advisor.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/config-advisor.sock"
+      health: "/api/v1/config-advisor/health"
+      authentifie: true
+      nb_routes: 10
+      routes:
+        - "GET /checks/{check_id}"
+        - "GET /fixable"
+        - "GET /health"
+        - "GET /history"
+        - "GET /report"
+        - "GET /report/summary"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /audit"
+        - "POST /fix/{check_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/config-advisor"
+      vhosts: []
+  - id: secubox-console
+    nom: "secubox-console"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Console TUI — Terminal Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-console.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-cookies
+    nom: "secubox-cookies"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Cookie Tracker"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/cookies.sock"
+      health: "/api/v1/cookies/health"
+      authentifie: true
+      nb_routes: 18
+      routes:
+        - "DELETE /policy/{policy_id}"
+        - "DELETE /tracker/{tracker_id}"
+        - "GET /config"
+        - "GET /cookie/{domain}"
+        - "GET /cookies"
+        - "GET /health"
+        - "GET /info"
+        - "GET /logs"
+        - "GET /policies"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /thirdparty"
+        - "GET /trackers"
+        - "GET /violations"
+        - "POST /config"
+        - "POST /policy"
+        - "POST /scan"
+        - "POST /tracker/add"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/cookies"
+      vhosts: []
+  - id: secubox-core
+    nom: "secubox-core"
+    categorie: "system"
+    tier: "all"
+    description: "SecuBox-DEB — bibliothèque centrale et infrastructure"
+    manifeste: true
+    lxc: false
+    tests: 1
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-core.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/core"
+      vhosts: []
+  - id: secubox-crowdsec
+    nom: "secubox-crowdsec"
+    categorie: "security"
+    tier: "lite"
+    description: "SecuBox CrowdSec Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "crowdsecctl"
+    systemd:
+      - "secubox-crowdsec.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/crowdsec.sock"
+      health: "/api/v1/crowdsec/health"
+      authentifie: true
+      nb_routes: 31
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /access"
+        - "GET /analytics/decisions"
+        - "GET /analytics/threat-level"
+        - "GET /analytics/trends"
+        - "GET /components"
+        - "GET /console/status"
+        - "GET /debug"
+        - "GET /decisions_stats"
+        - "GET /doctor"
+        - "GET /export/decisions"
+        - "GET /health"
+        - "GET /history/decisions"
+        - "GET /nftables"
+        - "GET /reputation/{ip}"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /ban"
+        - "POST /capi/enroll"
+        - "POST /console/enroll"
+        - "POST /hub/update"
+        - "POST /migrate"
+        - "POST /repair"
+        - "POST /service/reload"
+        - "POST /service/restart"
+        - "POST /service/start"
+        - "POST /service/stop"
+        - "POST /unban"
+        - "POST /webhooks"
+        - "POST /webhooks/{webhook_id}/test"
+        - "POST /whitelist/{ip}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/crowdsec"
+      vhosts: []
+  - id: secubox-cve-triage
+    nom: "secubox-cve-triage"
+    categorie: "security"
+    tier: "lite"
+    description: "SecuBox Cve-triage Module"
+    manifeste: true
+    lxc: false
+    tests: 6
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-cvectl"
+    systemd:
+      - "secubox-cve-triage.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/cve-triage.sock"
+      health: "/api/v1/cve-triage/health"
+      authentifie: true
+      nb_routes: 26
+      routes:
+        - "DELETE /cves/{cve_id}"
+        - "GET /cves"
+        - "GET /cves/search"
+        - "GET /cves/{cve_id}"
+        - "GET /cves/{cve_id}/patch"
+        - "GET /feeds/summary"
+        - "GET /feeds/trending"
+        - "GET /health"
+        - "GET /kev"
+        - "GET /packages"
+        - "GET /prioritized"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /triage"
+        - "GET /waf-rules"
+        - "POST /epss"
+        - "POST /feeds/kev"
+        - "POST /feeds/recent"
+        - "POST /feeds/sync-all"
+        - "POST /query"
+        - "POST /scan/debian/{package_name}"
+        - "POST /scan/packages"
+        - "POST /scan/vulnerabilities"
+        - "POST /triage/{cve_id}"
+        - "POST /waf-rules/generate"
+        - "PUT /triage/{cve_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/cve-triage"
+      vhosts: []
+  - id: secubox-cyberfeed
+    nom: "secubox-cyberfeed"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox CyberFeed - Threat Intelligence Feed Aggregator"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-cyberfeed.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/cyberfeed.sock"
+      health: "/api/v1/cyberfeed/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /feeds/{name}"
+        - "GET /blocklist/domains"
+        - "GET /blocklist/ips"
+        - "GET /check/domain/{domain}"
+        - "GET /check/ip/{ip}"
+        - "GET /export/domains"
+        - "GET /export/ips"
+        - "GET /feed/{name}"
+        - "GET /feeds"
+        - "GET /health"
+        - "GET /indicators"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /feed/{name}/enable"
+        - "POST /feed/{name}/update"
+        - "POST /feeds/add"
+        - "POST /feeds/update"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/cyberfeed"
+      vhosts: []
+  - id: secubox-daemon
+    nom: "secubox-daemon"
+    categorie: "system"
+    tier: "lite"
+    description: "SecuBox Mesh Daemon - WireGuard mesh with ZKP authentication"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-defaults
+    nom: "secubox-defaults"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-device-intel
+    nom: "secubox-device-intel"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Device-intel Module"
+    manifeste: true
+    lxc: false
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-device-intel.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/device-intel.sock"
+      health: "/api/v1/device-intel/health"
+      authentifie: false
+      nb_routes: 1
+      routes:
+        - "GET /health"
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/device-intel"
+      vhosts: []
+  - id: secubox-dns
+    nom: "secubox-dns"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox Dns Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-dns.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/dns.sock"
+      health: "/api/v1/dns/health"
+      authentifie: true
+      nb_routes: 23
+      routes:
+        - "DELETE /record"
+        - "DELETE /webhooks/{webhook_id}"
+        - "DELETE /zone/{zone_name}"
+        - "GET /check"
+        - "GET /export/all"
+        - "GET /export/zone/{zone_name}"
+        - "GET /health"
+        - "GET /history"
+        - "GET /logs"
+        - "GET /stats"
+        - "GET /stats/history"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "GET /zone/{zone_name}"
+        - "GET /zone/{zone_name}/records"
+        - "GET /zones"
+        - "POST /backup/{zone_name}"
+        - "POST /record"
+        - "POST /reload"
+        - "POST /validate/record"
+        - "POST /webhooks"
+        - "POST /zone"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/dns"
+      vhosts: []
+  - id: secubox-dns-guard
+    nom: "secubox-dns-guard"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox Dns-guard Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-dns-guard.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/dns-guard.sock"
+      health: "/api/v1/dns-guard/health"
+      authentifie: true
+      nb_routes: 19
+      routes:
+        - "DELETE /blocklist/{domain}"
+        - "DELETE /pending/{domain}"
+        - "DELETE /whitelist/{domain}"
+        - "GET /alerts"
+        - "GET /blocklist"
+        - "GET /check/{domain}"
+        - "GET /feeds"
+        - "GET /health"
+        - "GET /pending"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /whitelist"
+        - "POST /analyze"
+        - "POST /blocklist"
+        - "POST /feeds/download-all"
+        - "POST /feeds/{feed_name}/download"
+        - "POST /pending/{domain}/approve"
+        - "POST /sync"
+        - "POST /whitelist"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/dns-guard"
+      vhosts: []
+  - id: secubox-dns-provider
+    nom: "secubox-dns-provider"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox DNS Provider Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-dns-provider.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/dns-provider.sock"
+      health: "/api/v1/dns-provider/health"
+      authentifie: true
+      nb_routes: 20
+      routes:
+        - "DELETE /acme/challenge"
+        - "DELETE /domain/{domain_name}/record/{record_id}"
+        - "DELETE /provider/{provider_id}"
+        - "GET /config"
+        - "GET /domain/{domain_name}/records"
+        - "GET /domains"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /providers"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /zones/export/{domain}"
+        - "POST /acme/challenge"
+        - "POST /config"
+        - "POST /ddns/update"
+        - "POST /domain/{domain_name}/record"
+        - "POST /provider"
+        - "POST /zones/import"
+        - "PUT /domain/{domain_name}/record/{record_id}"
+        - "PUT /provider/{provider_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/dns-provider"
+      vhosts: []
+  - id: secubox-domoticz
+    nom: "secubox-domoticz"
+    categorie: "misc"
+    tier: "lite"
+    description: "Domoticz Home Automation for SecuBox"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/domoticz.sock"
+      health: "/api/v1/domoticz/health"
+      authentifie: true
+      nb_routes: 28
+      routes:
+        - "DELETE /hardware/{idx}"
+        - "DELETE /room/{idx}"
+        - "GET /backups"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /device/{idx}"
+        - "GET /devices"
+        - "GET /events"
+        - "GET /graphs/{idx}"
+        - "GET /hardware"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /notifications"
+        - "GET /rooms"
+        - "GET /scenes"
+        - "GET /status"
+        - "POST /backup"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /device/{idx}/command"
+        - "POST /hardware"
+        - "POST /notifications"
+        - "POST /restore"
+        - "POST /room"
+        - "POST /scene/{idx}/activate"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/domoticz"
+      vhosts: []
+  - id: secubox-dpi
+    nom: "secubox-dpi"
+    categorie: "misc"
+    tier: "pro"
+    description: "SecuBox DPI — netifyd Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 3
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-dpi-flowcap"
+    systemd:
+      - "secubox-dpi.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/dpi.sock"
+      health: "/api/v1/dpi/health"
+      authentifie: true
+      nb_routes: 58
+      routes:
+        - "DELETE /alerts/config/{alert_name}"
+        - "DELETE /quotas/{quota_name}"
+        - "DELETE /webhooks"
+        - "GET /active_flows"
+        - "GET /alerts"
+        - "GET /alerts/config"
+        - "GET /anomalies"
+        - "GET /applications"
+        - "GET /apps"
+        - "GET /bandwidth_by_app"
+        - "GET /bandwidth_by_device"
+        - "GET /block_rules"
+        - "GET /categories"
+        - "GET /device_flows"
+        - "GET /devices"
+        - "GET /dns_queries"
+        - "GET /exfil"
+        - "GET /export_flows"
+        - "GET /flow_details"
+        - "GET /flows"
+        - "GET /health"
+        - "GET /history"
+        - "GET /history/summary"
+        - "GET /interface_list"
+        - "GET /logs"
+        - "GET /media/buffer"
+        - "GET /media/replay/{rec_id}"
+        - "GET /media/thumb/{rec_id}"
+        - "GET /media_types"
+        - "GET /protocols"
+        - "GET /quotas"
+        - "GET /quotas/status"
+        - "GET /realtime"
+        - "GET /risks"
+        - "GET /settings"
+        - "GET /ssl_fingerprints"
+        - "GET /ssl_flows"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /talkers"
+        - "GET /tc_status"
+        - "GET /top_apps"
+        - "GET /top_protocols"
+        - "GET /webhooks"
+        - "POST /add_block_rule"
+        - "POST /delete_block_rule"
+        - "POST /history/clear"
+        - "POST /quotas/{quota_name}/reset"
+        - "POST /remove_mirred"
+        - "POST /restart"
+        - "POST /save_settings"
+        - "POST /setup_mirred"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /webhooks"
+        - "POST /webhooks/test"
+        - "PUT /alerts/config/{alert_name}"
+        - "PUT /quotas/{quota_name}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/dpi"
+      vhosts: []
+  - id: secubox-droplet
+    nom: "secubox-droplet"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Droplet File Publisher"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "dropletctl"
+    systemd:
+      - "secubox-droplet.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/droplet.sock"
+      health: "/api/v1/droplet/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /droplet/{name}"
+        - "GET /droplet/{name}/health"
+        - "GET /export"
+        - "GET /health"
+        - "GET /history"
+        - "GET /job/{job_id}"
+        - "GET /list"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /storage"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /remove"
+        - "POST /rename"
+        - "POST /upload"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/droplet"
+      vhosts: []
+  - id: secubox-egress
+    nom: "secubox-egress"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-exposure
+    nom: "secubox-exposure"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Exposure Manager"
+    manifeste: true
+    lxc: false
+    tests: 9
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-exposure-tor-reconcile"
+    systemd:
+      - "secubox-exposure.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/exposure.sock"
+      health: "/api/v1/exposure/health"
+      authentifie: true
+      nb_routes: 26
+      routes:
+        - "DELETE /history"
+        - "DELETE /webhooks"
+        - "GET /emancipated"
+        - "GET /exposure/{vhost}"
+        - "GET /health"
+        - "GET /health/services"
+        - "GET /health/services/{service}"
+        - "GET /history"
+        - "GET /info"
+        - "GET /scan"
+        - "GET /ssl_list"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /tor_list"
+        - "GET /webhooks"
+        - "POST /emancipate"
+        - "POST /exposure/{vhost}"
+        - "POST /health/check/{service}"
+        - "POST /health/check_all"
+        - "POST /revoke"
+        - "POST /ssl/add"
+        - "POST /ssl/remove"
+        - "POST /tor/add"
+        - "POST /tor/emancipate_webui"
+        - "POST /tor/remove"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/exposure"
+      vhosts: []
+  - id: secubox-eye-remote
+    nom: "secubox-eye-remote"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "SecuBox Eye Remote USB Gadget Integration"
+    manifeste: true
+    lxc: false
+    tests: 11
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-eye-remote.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/eye-remote.sock"
+      health: "/api/v1/eye-remote/health"
+      authentifie: false
+      nb_routes: 12
+      routes:
+        - "GET /api/v1/eye-remote/metrics"
+        - "GET /api/v1/eye-remote/paired-devices"
+        - "GET /api/v1/eye-remote/pizero/metrics"
+        - "GET /api/v1/eye-remote/serial/status"
+        - "GET /api/v1/eye-remote/status"
+        - "GET /api/v1/health"
+        - "GET /api/v1/system/metrics"
+        - "GET /health"
+        - "POST /api/v1/eye-remote/auto-pair"
+        - "POST /api/v1/eye-remote/connected"
+        - "POST /api/v1/eye-remote/disconnected"
+        - "POST /api/v1/eye-remote/mode"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/eye-remote"
+      vhosts: []
+  - id: secubox-eye-square
+    nom: "secubox-eye-square"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 22
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-fmrelay
+    nom: "secubox-fmrelay"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "fmrelayctl"
+      - "secubox-fmrelay-icy"
+      - "secubox-fmrelay-runner"
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 9
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /mounts"
+        - "GET /now-playing"
+        - "GET /status"
+        - "GET /version"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-frigate
+    nom: "secubox-frigate"
+    categorie: "misc"
+    tier: "lite"
+    description: "Frigate NVR for SecuBox"
+    manifeste: true
+    lxc: true
+    tests: 4
+    depends:
+      - "secubox-core"
+    cli:
+      - "frigatectl"
+      - "secubox-frigate-diskguard"
+    systemd:
+      - "secubox-frigate-diskguard.service"
+      - "secubox-frigate-diskguard.timer"
+      - "secubox-frigate.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/frigate.sock"
+      health: "/api/v1/frigate/status"
+      authentifie: true
+      nb_routes: 5
+      routes:
+        - "GET /cameras"
+        - "GET /events"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /storage"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/frigate"
+      vhosts: []
+  - id: secubox-full
+    nom: "secubox-full"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Full — All 49 modules"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+      - "secubox-hub"
+      - "secubox-portal"
+      - "secubox-system"
+      - "secubox-crowdsec"
+      - "secubox-waf"
+      - "secubox-vortex-firewall"
+      - "secubox-auth"
+      - "secubox-nac"
+      - "secubox-wireguard"
+      - "secubox-mesh"
+      - "secubox-p2p"
+      - "secubox-netmodes"
+      - "secubox-dpi"
+      - "secubox-qos"
+      - "secubox-traffic"
+      - "secubox-vhost"
+      - "secubox-haproxy"
+      - "secubox-cdn"
+      - "secubox-dns"
+      - "secubox-vortex-dns"
+      - "secubox-meshname"
+      - "secubox-netdata"
+      - "secubox-mediaflow"
+      - "secubox-device-intel"
+      - "secubox-watchdog"
+      - "secubox-metrics"
+      - "secubox-soc"
+      - "secubox-roadmap"
+      - "secubox-mail"
+      - "secubox-mail-lxc"
+      - "secubox-webmail"
+      - "secubox-webmail-lxc"
+      - "secubox-users"
+      - "secubox-gitea"
+      - "secubox-nextcloud"
+      - "secubox-droplet"
+      - "secubox-streamlit"
+      - "secubox-streamforge"
+      - "secubox-metablogizer"
+      - "secubox-publish"
+      - "secubox-c3box"
+      - "secubox-backup"
+      - "secubox-tor"
+      - "secubox-exposure"
+      - "secubox-zkp"
+      - "secubox-mitmproxy"
+      - "secubox-repo"
+      - "secubox-hardening"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-gitea
+    nom: "secubox-gitea"
+    categorie: "publishing"
+    tier: "pro"
+    description: "SecuBox Gitea Module"
+    manifeste: true
+    lxc: true
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "giteactl"
+    systemd:
+      - "secubox-gitea.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/gitea.sock"
+      health: "/api/v1/gitea/health"
+      authentifie: true
+      nb_routes: 31
+      routes:
+        - "DELETE /repos/{owner}/{repo}"
+        - "DELETE /user/{username}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /access"
+        - "GET /activity"
+        - "GET /backups"
+        - "GET /export/repos"
+        - "GET /export/users"
+        - "GET /health"
+        - "GET /install-progress"
+        - "GET /logs"
+        - "GET /quotas"
+        - "GET /repos"
+        - "GET /repos/{owner}/{repo}"
+        - "GET /stats/history"
+        - "GET /status"
+        - "GET /storage"
+        - "GET /summary"
+        - "GET /users"
+        - "GET /webhooks"
+        - "POST /backup"
+        - "POST /install"
+        - "POST /migrate"
+        - "POST /quotas"
+        - "POST /restart"
+        - "POST /restore/{backup_name}"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /user"
+        - "POST /webhooks"
+        - "POST /webhooks/{webhook_id}/test"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/gitea"
+      vhosts: []
+  - id: secubox-glances
+    nom: "secubox-glances"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Glances Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-glances.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/glances.sock"
+      health: "/api/v1/glances/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "GET /config"
+        - "GET /disk_io"
+        - "GET /health"
+        - "GET /history"
+        - "GET /logs"
+        - "GET /network_interfaces"
+        - "GET /processes"
+        - "GET /sensors"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /summary"
+        - "POST /config"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/glances"
+      vhosts: []
+  - id: secubox-gotosocial
+    nom: "secubox-gotosocial"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "GoToSocial Fediverse server management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/gotosocial.sock"
+      health: "/api/v1/gotosocial/health"
+      authentifie: true
+      nb_routes: 36
+      routes:
+        - "DELETE /account/{username}"
+        - "DELETE /emoji/{shortcode}"
+        - "DELETE /federation/allow/{domain}"
+        - "DELETE /federation/block/{domain}"
+        - "GET /accounts"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /emojis"
+        - "GET /federation/peers"
+        - "GET /health"
+        - "GET /instance"
+        - "GET /logs"
+        - "GET /media/stats"
+        - "GET /reports"
+        - "GET /status"
+        - "POST /account"
+        - "POST /account/{username}/confirm"
+        - "POST /account/{username}/demote"
+        - "POST /account/{username}/password"
+        - "POST /account/{username}/promote"
+        - "POST /account/{username}/suspend"
+        - "POST /account/{username}/unsuspend"
+        - "POST /backup"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /container/uninstall"
+        - "POST /container/update"
+        - "POST /emoji"
+        - "POST /federation/allow"
+        - "POST /federation/block"
+        - "POST /instance"
+        - "POST /media/cleanup"
+        - "POST /media/prune/orphaned"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/gotosocial"
+      vhosts: []
+  - id: secubox-grafana
+    nom: "secubox-grafana"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 0
+    depends: []
+    cli:
+      - "grafanactl"
+    systemd:
+      - "secubox-grafana.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 5
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /status"
+        - "GET /version"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "grafana.gk2.secubox.in"
+  - id: secubox-haproxy
+    nom: "secubox-haproxy"
+    categorie: "network"
+    tier: "standard"
+    description: "SecuBox HAProxy Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 4
+    depends:
+      - "secubox-core"
+    cli:
+      - "haproxyctl"
+      - "secubox-haproxy-regen-safe"
+      - "secubox-render-nginx-webui"
+    systemd:
+      - "secubox-haproxy.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/haproxy.sock"
+      health: "/api/v1/haproxy/health"
+      authentifie: true
+      nb_routes: 56
+      routes:
+        - "DELETE /backend/{name}"
+        - "DELETE /certificates/{name}"
+        - "DELETE /config/backups/{name}"
+        - "DELETE /vhost/{name}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /access"
+        - "GET /acls"
+        - "GET /backends"
+        - "GET /certificates"
+        - "GET /certificates/expiring"
+        - "GET /certificates/{name}"
+        - "GET /components"
+        - "GET /config"
+        - "GET /config/backups"
+        - "GET /config/backups/{name}"
+        - "GET /crowdsec/status"
+        - "GET /health"
+        - "GET /health/backends"
+        - "GET /health/history"
+        - "GET /info"
+        - "GET /stats"
+        - "GET /stats/history"
+        - "GET /stats/summary"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /vhosts"
+        - "GET /waf/routes"
+        - "GET /waf/status"
+        - "GET /waf/targets"
+        - "GET /webhooks"
+        - "GET /webui/admin-domain"
+        - "GET /webui/nginx-config"
+        - "POST /acl"
+        - "POST /backend"
+        - "POST /certificates/acme"
+        - "POST /certificates/bundle"
+        - "POST /certificates/repair"
+        - "POST /certificates/upload"
+        - "POST /certificates/{name}/renew"
+        - "POST /config/backup"
+        - "POST /config/diff"
+        - "POST /config/restore/{name}"
+        - "POST /generate"
+        - "POST /migrate"
+        - "POST /reload"
+        - "POST /repair"
+        - "POST /restart"
+        - "POST /vhost"
+        - "POST /vhost/{name}/waf-bypass"
+        - "POST /vhosts/repair"
+        - "POST /waf/sync-routes"
+        - "POST /waf/toggle"
+        - "POST /webhooks"
+        - "POST /webhooks/{webhook_id}/test"
+        - "POST /webui/refresh"
+        - "PUT /vhost/{name}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/haproxy"
+      vhosts: []
+  - id: secubox-hardening
+    nom: "secubox-hardening"
+    categorie: "security"
+    tier: "lite"
+    description: "SecuBox Kernel and System Hardening"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "hardeningctl"
+    systemd:
+      - "secubox-hardening.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/hardening.sock"
+      health: "/api/v1/hardening/health"
+      authentifie: true
+      nb_routes: 18
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /access"
+        - "GET /benchmark/history"
+        - "GET /benchmark/score"
+        - "GET /benchmark/trend"
+        - "GET /components"
+        - "GET /health"
+        - "GET /recommendations"
+        - "GET /schedule"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /apply"
+        - "POST /benchmark"
+        - "POST /benchmark/run"
+        - "POST /install"
+        - "POST /schedule"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/hardening"
+      vhosts: []
+  - id: secubox-health-doctor
+    nom: "secubox-health-doctor"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "healthctl"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 5
+      routes:
+        - "GET /checks"
+        - "GET /health"
+        - "GET /registered"
+        - "GET /status/{name}"
+        - "POST /run"
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-hexo
+    nom: "secubox-hexo"
+    categorie: "misc"
+    tier: "lite"
+    description: "Hexo static blog generator management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-hexo.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/hexo.sock"
+      health: "/api/v1/hexo/health"
+      authentifie: true
+      nb_routes: 32
+      routes:
+        - "DELETE /blog/{name}"
+        - "DELETE /blog/{name}/plugin/{plugin_name}"
+        - "DELETE /blog/{name}/post/{filename}"
+        - "GET /blog/{name}/config"
+        - "GET /blog/{name}/plugins"
+        - "GET /blog/{name}/post/{filename}"
+        - "GET /blog/{name}/posts"
+        - "GET /blog/{name}/preview/status"
+        - "GET /blog/{name}/themes"
+        - "GET /blogs"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /plugins"
+        - "GET /status"
+        - "GET /themes"
+        - "POST /blog/create"
+        - "POST /blog/{name}/clean"
+        - "POST /blog/{name}/config"
+        - "POST /blog/{name}/deploy"
+        - "POST /blog/{name}/generate"
+        - "POST /blog/{name}/plugin/install"
+        - "POST /blog/{name}/post"
+        - "POST /blog/{name}/post/{filename}/publish"
+        - "POST /blog/{name}/preview/start"
+        - "POST /blog/{name}/preview/stop"
+        - "POST /blog/{name}/theme/install"
+        - "POST /blog/{name}/theme/switch"
+        - "POST /config"
+        - "POST /container/install"
+        - "PUT /blog/{name}/post/{filename}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/hexo"
+      vhosts: []
+  - id: secubox-homeassistant
+    nom: "secubox-homeassistant"
+    categorie: "iot"
+    tier: "lite"
+    description: "Home Assistant IoT Hub for SecuBox"
+    manifeste: true
+    lxc: true
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/homeassistant.sock"
+      health: "/api/v1/homeassistant/health"
+      authentifie: true
+      nb_routes: 26
+      routes:
+        - "GET /addons"
+        - "GET /automations"
+        - "GET /backups"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /devices"
+        - "GET /entities"
+        - "GET /entity/{entity_id:path}"
+        - "GET /health"
+        - "GET /integrations"
+        - "GET /logs"
+        - "GET /scenes"
+        - "GET /status"
+        - "POST /addon/install"
+        - "POST /automation/toggle"
+        - "POST /backup/create"
+        - "POST /backup/restore"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /entity/{entity_id:path}/command"
+        - "POST /hacs/install"
+        - "POST /integration/install"
+        - "POST /scene/{scene_id:path}/activate"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/homeassistant"
+      vhosts: []
+  - id: secubox-hub
+    nom: "secubox-hub"
+    categorie: "system"
+    tier: "all"
+    description: "SecuBox Hub — Tableau de bord central"
+    manifeste: true
+    lxc: false
+    tests: 7
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-netstats-collect"
+      - "secubox-nft-cache"
+    systemd:
+      - "secubox-hub.service"
+      - "secubox-netstats.service"
+      - "secubox-netstats.timer"
+      - "secubox-nft-cache.service"
+      - "secubox-nft-cache.timer"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/hub.sock"
+      health: "/api/v1/hub/health"
+      authentifie: true
+      nb_routes: 54
+      routes:
+        - "GET /about"
+        - "GET /alerts"
+        - "GET /auth_mode"
+        - "GET /board_summary"
+        - "GET /boot_mode"
+        - "GET /check_updates"
+        - "GET /cpu"
+        - "GET /dashboard"
+        - "GET /disk"
+        - "GET /health"
+        - "GET /health-monitor/alerts"
+        - "GET /health-monitor/status"
+        - "GET /health-monitor/summary"
+        - "GET /logs"
+        - "GET /memory"
+        - "GET /menu"
+        - "GET /module-health/alerts"
+        - "GET /module-health/status"
+        - "GET /module-health/summary"
+        - "GET /module_logs"
+        - "GET /module_status"
+        - "GET /modules"
+        - "GET /monitoring"
+        - "GET /netstats/series"
+        - "GET /netstats/summary"
+        - "GET /network_mode"
+        - "GET /network_mode/preview"
+        - "GET /network_stats"
+        - "GET /network_summary"
+        - "GET /notifications"
+        - "GET /preferences"
+        - "GET /quick_actions"
+        - "GET /recent_events"
+        - "GET /repair/diagnose/{module}"
+        - "GET /repair/status"
+        - "GET /security_summary"
+        - "GET /settings"
+        - "GET /status"
+        - "GET /system_health"
+        - "GET /theme"
+        - "GET /uptime"
+        - "GET /version"
+        - "GET /widgets"
+        - "POST /apply_updates"
+        - "POST /dismiss_all_notifications"
+        - "POST /dismiss_notification"
+        - "POST /execute_action"
+        - "POST /module_control"
+        - "POST /network_mode"
+        - "POST /repair/all"
+        - "POST /repair/{module}"
+        - "POST /save_preferences"
+        - "POST /save_widgets"
+        - "POST /set_theme"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/hub"
+      vhosts:
+        - "192.168.1.200"
+        - "_"
+        - "admin.gk2.secubox.in"
+        - "localhost"
+  - id: secubox-identity
+    nom: "secubox-identity"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Identity Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-identity.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/identity.sock"
+      health: "/api/v1/identity/health"
+      authentifie: true
+      nb_routes: 20
+      routes:
+        - "DELETE /peers/{did:path}"
+        - "GET /expiry"
+        - "GET /export"
+        - "GET /health"
+        - "GET /identity"
+        - "GET /peers"
+        - "GET /peers/{did:path}"
+        - "GET /status"
+        - "GET /trust/history"
+        - "GET /trust/summary"
+        - "POST /export/encrypted"
+        - "POST /federation/create"
+        - "POST /federation/receive"
+        - "POST /identity/rotate"
+        - "POST /identity/sign"
+        - "POST /identity/verify"
+        - "POST /import"
+        - "POST /peers"
+        - "POST /peers/{did:path}/verify"
+        - "PUT /peers/{did:path}/trust"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/identity"
+      vhosts: []
+  - id: secubox-interceptor
+    nom: "secubox-interceptor"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Traffic Interceptor"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/interceptor.sock"
+      health: "/api/v1/interceptor/health"
+      authentifie: true
+      nb_routes: 23
+      routes:
+        - "DELETE /rule/{rule_id}"
+        - "GET /config"
+        - "GET /flow/{flow_id}"
+        - "GET /flows"
+        - "GET /health"
+        - "GET /info"
+        - "GET /logs"
+        - "GET /recordings"
+        - "GET /rules"
+        - "GET /session/{session_id}"
+        - "GET /sessions"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /config"
+        - "POST /flow/{flow_id}/replay"
+        - "POST /record/start"
+        - "POST /record/stop"
+        - "POST /restart"
+        - "POST /rule"
+        - "POST /session/{session_id}/close"
+        - "POST /start"
+        - "POST /stop"
+        - "PUT /rule/{rule_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/interceptor"
+      vhosts: []
+  - id: secubox-iot-guard
+    nom: "secubox-iot-guard"
+    categorie: "iot"
+    tier: "lite"
+    description: "SecuBox Iot-guard Module"
+    manifeste: true
+    lxc: false
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-iot-guard.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/iot-guard.sock"
+      health: "/api/v1/iot-guard/health"
+      authentifie: false
+      nb_routes: 1
+      routes:
+        - "GET /health"
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/iot-guard"
+      vhosts: []
+  - id: secubox-ipblock
+    nom: "secubox-ipblock"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox IP Blocklist Manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ipblock.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ipblock.sock"
+      health: "/api/v1/ipblock/health"
+      authentifie: true
+      nb_routes: 22
+      routes:
+        - "DELETE /block/{ip:path}"
+        - "DELETE /list/{list_id}"
+        - "DELETE /whitelist/{ip:path}"
+        - "GET /blocked"
+        - "GET /config"
+        - "GET /export"
+        - "GET /health"
+        - "GET /history"
+        - "GET /info"
+        - "GET /lists"
+        - "GET /lists/available"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /whitelist"
+        - "POST /apply"
+        - "POST /block"
+        - "POST /config"
+        - "POST /import"
+        - "POST /list/add"
+        - "POST /list/{list_id}/update"
+        - "POST /lists/update-all"
+        - "POST /whitelist"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ipblock"
+      vhosts: []
+  - id: secubox-jabber
+    nom: "secubox-jabber"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Jabber XMPP Server"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-jabber.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/jabber.sock"
+      health: "/api/v1/jabber/health"
+      authentifie: false
+      nb_routes: 16
+      routes:
+        - "DELETE /hosts/{domain}"
+        - "DELETE /users/{jid}"
+        - "GET /health"
+        - "GET /hosts"
+        - "GET /logs"
+        - "GET /online"
+        - "GET /status"
+        - "GET /users"
+        - "POST /hosts"
+        - "POST /install"
+        - "POST /reload"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /users"
+        - "POST /users/{jid}/password"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/jabber"
+      vhosts: []
+  - id: secubox-jellyfin
+    nom: "secubox-jellyfin"
+    categorie: "media"
+    tier: "pro"
+    description: "Jellyfin media server in a Debian LXC (partner library auto-wire)"
+    manifeste: true
+    lxc: true
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli:
+      - "jellyfinctl"
+    systemd:
+      - "secubox-jellyfin-playback-policy.service"
+      - "secubox-jellyfin-playback-policy.timer"
+      - "secubox-jellyfin-provision.service"
+      - "secubox-jellyfin.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/jellyfin.sock"
+      health: "/api/v1/jellyfin/health"
+      authentifie: true
+      nb_routes: 12
+      routes:
+        - "GET /check-upgrade"
+        - "GET /health"
+        - "GET /library/status"
+        - "GET /partners"
+        - "GET /playback"
+        - "GET /status"
+        - "POST /control"
+        - "POST /library/scan"
+        - "POST /partner/unwire"
+        - "POST /partner/wire"
+        - "POST /playback/apply"
+        - "POST /upgrade"
+    interface_web:
+      presente: true
+      chemin: "/jellyfin/"
+      vhosts:
+        - "jellyfin.gk2.secubox.in"
+  - id: secubox-jitsi
+    nom: "secubox-jitsi"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Jitsi Meet - Video Conferencing"
+    manifeste: true
+    lxc: true
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli:
+      - "jitsictl"
+    systemd:
+      - "secubox-jitsi-provision.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/jitsi.sock"
+      health: "/api/v1/jitsi/health"
+      authentifie: true
+      nb_routes: 7
+      routes:
+        - "GET /health"
+        - "GET /logs"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /control"
+        - "POST /public-ip"
+        - "POST /service/restart"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/jitsi"
+      vhosts:
+        - "meet.gk2.secubox.in"
+        - "meet.maegia.tv"
+  - id: secubox-ksm
+    nom: "secubox-ksm"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox KSM Memory Optimization Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ksm.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ksm.sock"
+      health: "/api/v1/ksm/health"
+      authentifie: true
+      nb_routes: 8
+      routes:
+        - "GET /config"
+        - "GET /health"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /summary"
+        - "POST /config"
+        - "POST /disable"
+        - "POST /enable"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ksm"
+      vhosts: []
+  - id: secubox-led-heartbeat
+    nom: "secubox-led-heartbeat"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox LED heartbeat status indicator"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-lite
+    nom: "secubox-lite"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Lite — Essential modules for low-RAM devices"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+      - "secubox-hub"
+      - "secubox-portal"
+      - "secubox-crowdsec"
+      - "secubox-wireguard"
+      - "secubox-netmodes"
+      - "secubox-nac"
+      - "secubox-system"
+      - "secubox-hardening"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-localai
+    nom: "secubox-localai"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox LocalAI - Self-hosted LLM inference"
+    manifeste: true
+    lxc: true
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-localai.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/localai.sock"
+      health: "/api/v1/localai/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /models/{model_id}"
+        - "DELETE /uninstall"
+        - "GET /config"
+        - "GET /gallery"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /metrics"
+        - "GET /models"
+        - "GET /status"
+        - "POST /chat"
+        - "POST /complete"
+        - "POST /config"
+        - "POST /install"
+        - "POST /models/install"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/localai"
+      vhosts: []
+  - id: secubox-localrecall
+    nom: "secubox-localrecall"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Localrecall Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-localrecall.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/localrecall.sock"
+      health: "/api/v1/localrecall/health"
+      authentifie: true
+      nb_routes: 16
+      routes:
+        - "DELETE /memories/{memory_id}"
+        - "GET /categories"
+        - "GET /categories/{category}"
+        - "GET /health"
+        - "GET /memories"
+        - "GET /memories/{memory_id}"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /bulk-delete"
+        - "POST /cleanup"
+        - "POST /compact"
+        - "POST /export"
+        - "POST /import"
+        - "POST /memories"
+        - "POST /search"
+        - "POST /summarize"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/localrecall"
+      vhosts: []
+  - id: secubox-lyrion
+    nom: "secubox-lyrion"
+    categorie: "media"
+    tier: "lite"
+    description: "Lyrion Music Server (LMS / Squeezebox) in a Debian LXC"
+    manifeste: true
+    lxc: true
+    tests: 3
+    depends:
+      - "secubox-core"
+    cli:
+      - "lyrionctl"
+    systemd:
+      - "secubox-lyrion-version-check.service"
+      - "secubox-lyrion-version-check.timer"
+      - "secubox-lyrion.service"
+    ports:
+      - "9000"
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/aggregator.sock"
+      health: "/api/v1/lyrion/health"
+      authentifie: true
+      nb_routes: 14
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /medialib"
+        - "GET /now-playing"
+        - "GET /players"
+        - "GET /status"
+        - "GET /version"
+        - "GET /version-status"
+        - "POST /check-upgrade"
+        - "POST /medialib/mount"
+        - "POST /medialib/unmount"
+        - "POST /rescan"
+        - "POST /upgrade"
+    interface_web:
+      presente: true
+      chemin: "/lyrion/"
+      vhosts:
+        - "192.168.1.200"
+        - "_"
+        - "localhost"
+        - "lyrion.gk2.secubox.in"
+        - "lyrion.local"
+  - id: secubox-mac-guard
+    nom: "secubox-mac-guard"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox MAC Guard - MAC Address Control"
+    manifeste: true
+    lxc: false
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mac-guard.sock"
+      health: "/api/v1/mac-guard/health"
+      authentifie: false
+      nb_routes: 1
+      routes:
+        - "GET /health"
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/mac-guard"
+      vhosts: []
+  - id: secubox-macro
+    nom: "secubox-macro"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 2
+    depends: []
+    cli:
+      - "secubox-macroctl"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-magicmirror
+    nom: "secubox-magicmirror"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox MagicMirror management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-magicmirror.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/magicmirror.sock"
+      health: "/api/v1/magicmirror/health"
+      authentifie: false
+      nb_routes: 14
+      routes:
+        - "DELETE /modules/{module_name}"
+        - "GET /config"
+        - "GET /display"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /modules"
+        - "GET /modules/available"
+        - "GET /status"
+        - "POST /display/brightness/{level}"
+        - "POST /display/power/{state}"
+        - "POST /modules/install/{module_name}"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/magicmirror"
+      vhosts: []
+  - id: secubox-maigret
+    nom: "secubox-maigret"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 2
+    depends: []
+    cli:
+      - "maigretctl"
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 8
+      routes:
+        - "DELETE /lookup/{lookup_id}"
+        - "GET /health"
+        - "GET /lookup/{lookup_id}"
+        - "GET /lookup/{lookup_id}/report.pdf"
+        - "GET /lookups"
+        - "GET /status"
+        - "POST /install"
+        - "POST /lookup"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-mail
+    nom: "secubox-mail"
+    categorie: "email"
+    tier: "lite"
+    description: "SecuBox Mail Module"
+    manifeste: true
+    lxc: true
+    tests: 3
+    depends:
+      - "secubox-core"
+    cli:
+      - "mail-migrate-to-single-lxc.sh"
+      - "mailctl"
+      - "mailserverctl"
+      - "roundcubectl"
+      - "rspamd-route-sync-patch.sh"
+    systemd:
+      - "secubox-mail.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mail.sock"
+      health: "/api/v1/mail/health"
+      authentifie: true
+      nb_routes: 48
+      routes:
+        - "DELETE /alias/{alias_email}"
+        - "DELETE /user/{email}"
+        - "GET /.well-known/autoconfig/mail/config-v1.1.xml"
+        - "GET /access"
+        - "GET /acme/status"
+        - "GET /aliases"
+        - "GET /autoconfig/mail/config-v1.1.xml"
+        - "GET /autodiscover/autodiscover.xml"
+        - "GET /av/status"
+        - "GET /backups"
+        - "GET /components"
+        - "GET /dns-setup"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /mail/config-v1.1.xml"
+        - "GET /settings"
+        - "GET /ssl"
+        - "GET /status"
+        - "GET /users"
+        - "GET /webmail/status"
+        - "GET /{domain}.mobileconfig"
+        - "POST /Autodiscover/Autodiscover.xml"
+        - "POST /acme/install"
+        - "POST /acme/issue"
+        - "POST /acme/renew"
+        - "POST /alias"
+        - "POST /autodiscover/autodiscover.xml"
+        - "POST /av/disable"
+        - "POST /av/enable"
+        - "POST /av/setup"
+        - "POST /av/update"
+        - "POST /backup"
+        - "POST /fix-ports"
+        - "POST /install"
+        - "POST /migrate"
+        - "POST /restart"
+        - "POST /restore/{backup_name}"
+        - "POST /settings"
+        - "POST /ssl/setup"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /user"
+        - "POST /user/password"
+        - "POST /user/repair/{email}"
+        - "POST /webmail/install"
+        - "POST /webmail/restart"
+        - "POST /webmail/start"
+        - "POST /webmail/stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/mail"
+      vhosts: []
+  - id: secubox-mail-lxc
+    nom: "secubox-mail-lxc"
+    categorie: "email"
+    tier: "lite"
+    description: "SecuBox Mail LXC Container (Backend)"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/mail-lxc.sock"
+      health: "/api/v1/mail-lxc/health"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/mail-lxc"
+      vhosts: []
+  - id: secubox-master-link
+    nom: "secubox-master-link"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Master-link Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/master-link.sock"
+      health: "/api/v1/master-link/health"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/master-link"
+      vhosts: []
+  - id: secubox-mastodon
+    nom: "secubox-mastodon"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 0
+    depends: []
+    cli:
+      - "mastodonctl"
+    systemd:
+      - "secubox-mastodon.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 6
+      routes:
+        - "GET /api/v1/mastodon/healthz"
+        - "GET /api/v1/mastodon/status"
+        - "POST /api/v1/mastodon/install"
+        - "POST /api/v1/mastodon/invite"
+        - "POST /api/v1/mastodon/start"
+        - "POST /api/v1/mastodon/stop"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-matrix
+    nom: "secubox-matrix"
+    categorie: "communication"
+    tier: "pro"
+    description: "SecuBox Matrix Synapse - Federated Chat Server"
+    manifeste: true
+    lxc: true
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-matrix.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/matrix.sock"
+      health: "/api/v1/matrix/health"
+      authentifie: true
+      nb_routes: 37
+      routes:
+        - "DELETE /registrations/token/{token}"
+        - "DELETE /room/{room_id:path}"
+        - "DELETE /uninstall"
+        - "DELETE /users/{username}"
+        - "GET /bridges"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /federation"
+        - "GET /federation/peers"
+        - "GET /federation/status"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /media/stats"
+        - "GET /registrations"
+        - "GET /room/{room_id:path}"
+        - "GET /rooms"
+        - "GET /server/info"
+        - "GET /status"
+        - "GET /users"
+        - "POST /backup"
+        - "POST /bridges/{bridge_id}/install"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /element/install"
+        - "POST /federation/block"
+        - "POST /install"
+        - "POST /media/purge"
+        - "POST /registrations/token"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /user/{user_id:path}/deactivate"
+        - "POST /users"
+        - "POST /users/{username}/reset-password"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/matrix"
+      vhosts: []
+  - id: secubox-mcp-server
+    nom: "secubox-mcp-server"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Mcp-server Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-mcp-server.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mcp-server.sock"
+      health: "/api/v1/mcp-server/health"
+      authentifie: true
+      nb_routes: 12
+      routes:
+        - "GET /cache/stats"
+        - "GET /health"
+        - "GET /modules"
+        - "GET /prompts"
+        - "GET /resources"
+        - "GET /resources/{uri:path}/read"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /tools"
+        - "POST /cache/clear"
+        - "POST /rpc"
+        - "POST /tools/{tool_name}/call"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/mcp-server"
+      vhosts: []
+  - id: secubox-media
+    nom: "secubox-media"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 1
+    depends: []
+    cli:
+      - "mediactl"
+    systemd:
+      - "secubox-media-drain.service"
+      - "secubox-media-drain.timer"
+      - "secubox-media.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 10
+      routes:
+        - "GET /browse"
+        - "GET /detect"
+        - "GET /health"
+        - "GET /jobs"
+        - "GET /roots"
+        - "POST /compare"
+        - "POST /copy"
+        - "POST /mount"
+        - "POST /sync"
+        - "POST /unmount"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-mediaflow
+    nom: "secubox-mediaflow"
+    categorie: "media"
+    tier: "lite"
+    description: "SecuBox Media Flow"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+      - "secubox-dpi"
+    cli:
+      - "secubox-yt-dlp-refresh"
+    systemd:
+      - "secubox-mediaflow.secubox-yt-dlp-refresh.service"
+      - "secubox-mediaflow.secubox-yt-dlp-refresh.timer"
+      - "secubox-mediaflow.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mediaflow.sock"
+      health: "/api/v1/mediaflow/health"
+      authentifie: true
+      nb_routes: 29
+      routes:
+        - "DELETE /alerts/{alert_id}"
+        - "DELETE /library/{job_id}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /alerts"
+        - "GET /clients"
+        - "GET /clone/jobs"
+        - "GET /discovered"
+        - "GET /download/{job_id}"
+        - "GET /get_active_streams"
+        - "GET /get_service_details"
+        - "GET /health"
+        - "GET /history"
+        - "GET /library"
+        - "GET /services"
+        - "GET /services/by-category"
+        - "GET /settings"
+        - "GET /status"
+        - "GET /streams"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /alerts"
+        - "POST /clear_history"
+        - "POST /clone"
+        - "POST /settings"
+        - "POST /start_ndpid"
+        - "POST /start_netifyd"
+        - "POST /stop_ndpid"
+        - "POST /stop_netifyd"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/mediaflow"
+      vhosts: []
+  - id: secubox-mesh
+    nom: "secubox-mesh"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "secubox-mt76x2u-rebind"
+    systemd:
+      - "secubox-mesh.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-mesh-bt
+    nom: "secubox-mesh-bt"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-meshname
+    nom: "secubox-meshname"
+    categorie: "vpn"
+    tier: "lite"
+    description: "SecuBox Meshname Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-meshname.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/meshname.sock"
+      health: "/api/v1/meshname/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /mappings/{hostname}"
+        - "DELETE /nodes/{name}"
+        - "GET /config"
+        - "GET /discover"
+        - "GET /health"
+        - "GET /info"
+        - "GET /mappings"
+        - "GET /nodes"
+        - "GET /resolve/{hostname}"
+        - "GET /service"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /config"
+        - "POST /discover/import"
+        - "POST /enable"
+        - "POST /mappings"
+        - "POST /nodes"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/meshname"
+      vhosts: []
+  - id: secubox-meshtastic
+    nom: "secubox-meshtastic"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 10
+    depends: []
+    cli:
+      - "secubox-meshtasticctl"
+      - "secubox-meshtasticd"
+    systemd:
+      - "secubox-meshtasticd.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 0
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-metablogizer
+    nom: "secubox-metablogizer"
+    categorie: "publishing"
+    tier: "lite"
+    description: "SecuBox MetaBlogizer - Static Site Publisher"
+    manifeste: true
+    lxc: false
+    tests: 16
+    depends:
+      - "secubox-core"
+    cli:
+      - "metablog-audit"
+      - "metablog-shotter"
+      - "metablogizerctl"
+      - "secubox-publishctl"
+    systemd:
+      - "metablog-audit.service"
+      - "metablog-audit.timer"
+      - "metablog-shots.service"
+      - "metablog-shots.timer"
+      - "secubox-metablogizer.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/metablogizer.sock"
+      health: "/api/v1/metablogizer/health"
+      authentifie: true
+      nb_routes: 24
+      routes:
+        - "DELETE /site/{name}"
+        - "GET /access"
+        - "GET /access/detailed"
+        - "GET /deploys"
+        - "GET /health"
+        - "GET /health/{domain}"
+        - "GET /logs/{name}"
+        - "GET /site/{name}"
+        - "GET /site/{name}/cert"
+        - "GET /site/{name}/certificate"
+        - "GET /site/{name}/export"
+        - "GET /site/{name}/qrcode"
+        - "GET /site/{name}/screenshot"
+        - "GET /sites"
+        - "GET /status"
+        - "POST /migrate"
+        - "POST /republish-all"
+        - "POST /site"
+        - "POST /site/{name}/deploy"
+        - "POST /site/{name}/publish"
+        - "POST /site/{name}/unpublish"
+        - "POST /site/{name}/upload"
+        - "POST /sites/refresh"
+        - "POST /webhook"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/metablogizer"
+      vhosts: []
+  - id: secubox-metacatalog
+    nom: "secubox-metacatalog"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Metacatalog - Service catalog and registry"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-metacatalog.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/metacatalog.sock"
+      health: "/api/v1/metacatalog/health"
+      authentifie: true
+      nb_routes: 10
+      routes:
+        - "GET /categories"
+        - "GET /dependencies"
+        - "GET /dependencies/{name}"
+        - "GET /endpoints"
+        - "GET /endpoints/{name}"
+        - "GET /health"
+        - "GET /service/{name}"
+        - "GET /services"
+        - "GET /status"
+        - "POST /refresh"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/metacatalog"
+      vhosts: []
+  - id: secubox-metalogizer
+    nom: "secubox-metalogizer"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Metalogizer - Log processor and analyzer"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-metalogizer.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/metalogizer.sock"
+      health: "/api/v1/metalogizer/health"
+      authentifie: true
+      nb_routes: 10
+      routes:
+        - "GET /analyze"
+        - "GET /errors"
+        - "GET /health"
+        - "GET /patterns"
+        - "GET /rotation"
+        - "GET /services"
+        - "GET /services/{service_name}/logs"
+        - "GET /services/{service_name}/stats"
+        - "GET /stats"
+        - "GET /status"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/metalogizer"
+      vhosts: []
+  - id: secubox-metrics
+    nom: "secubox-metrics"
+    categorie: "monitoring"
+    tier: "lite"
+    description: "SecuBox Metrics Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 5
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-metrics.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/metrics.sock"
+      health: "/api/v1/metrics/health"
+      authentifie: true
+      nb_routes: 19
+      routes:
+        - "GET /api/v1/cookie-audit/report"
+        - "GET /api/v1/cookie-audit/summary"
+        - "GET /api/v1/metrics/all"
+        - "GET /api/v1/metrics/cert-status"
+        - "GET /api/v1/metrics/certs"
+        - "GET /api/v1/metrics/connections"
+        - "GET /api/v1/metrics/firewall_stats"
+        - "GET /api/v1/metrics/health"
+        - "GET /api/v1/metrics/health/summary"
+        - "GET /api/v1/metrics/live-hosts"
+        - "GET /api/v1/metrics/overview"
+        - "GET /api/v1/metrics/status"
+        - "GET /api/v1/metrics/summary"
+        - "GET /api/v1/metrics/vhosts"
+        - "GET /api/v1/metrics/visitor-origin"
+        - "GET /api/v1/metrics/waf_stats"
+        - "GET /health"
+        - "POST /api/v1/cookie-audit/ingest"
+        - "POST /api/v1/metrics/refresh"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/metrics"
+      vhosts: []
+  - id: secubox-mirror
+    nom: "secubox-mirror"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Mirror/CDN Cache"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-mirror.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mirror.sock"
+      health: "/api/v1/mirror/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "GET /cache/list"
+        - "GET /cache/stats"
+        - "GET /config"
+        - "GET /health"
+        - "GET /mirror/{name}"
+        - "GET /mirrors"
+        - "GET /status"
+        - "POST /cache/purge"
+        - "POST /cache/purge_expired"
+        - "POST /config"
+        - "POST /mirror/add"
+        - "POST /mirror/remove"
+        - "POST /mirror/{name}/update"
+        - "POST /sync"
+        - "POST /sync/{name}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/mirror"
+      vhosts: []
+  - id: secubox-mitmproxy
+    nom: "secubox-mitmproxy"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Mitmproxy WAF — Web Application Firewall"
+    manifeste: true
+    lxc: false
+    tests: 2
+    depends:
+      - "secubox-core"
+      - "secubox-haproxy"
+    cli: []
+    systemd:
+      - "secubox-mitmproxy.service"
+      - "secubox-waf-ratelimit.service"
+      - "secubox-waf-watchdog.service"
+      - "secubox-waf-watchdog.timer"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mitmproxy.sock"
+      health: "/api/v1/mitmproxy/health"
+      authentifie: true
+      nb_routes: 1
+      routes:
+        - "GET /health"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/mitmproxy"
+      vhosts: []
+  - id: secubox-mmpm
+    nom: "secubox-mmpm"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox MMPM - MagicMirror Package Manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/mmpm.sock"
+      health: "/api/v1/mmpm/health"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/mmpm"
+      vhosts: []
+  - id: secubox-modem
+    nom: "secubox-modem"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox LTE/5G Modem Management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-modem.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/modem.sock"
+      health: "/api/v1/modem/health"
+      authentifie: true
+      nb_routes: 4
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /health"
+        - "GET /summary"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/modem"
+      vhosts: []
+  - id: secubox-mqtt
+    nom: "secubox-mqtt"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 0
+    depends: []
+    cli:
+      - "mqttctl"
+    systemd:
+      - "secubox-mqtt.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 4
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /status"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-nac
+    nom: "secubox-nac"
+    categorie: "security"
+    tier: "lite"
+    description: "SecuBox NAC / Client Guardian"
+    manifeste: true
+    lxc: false
+    tests: 7
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-nac.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/nac.sock"
+      health: "/api/v1/nac/health"
+      authentifie: true
+      nb_routes: 52
+      routes:
+        - "DELETE /groups/{group_id}"
+        - "DELETE /parental_rule/{mac}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /alerts"
+        - "GET /client/{mac}"
+        - "GET /clients"
+        - "GET /export/csv"
+        - "GET /export/json"
+        - "GET /get_client"
+        - "GET /get_policy"
+        - "GET /groups"
+        - "GET /health"
+        - "GET /history"
+        - "GET /list_profiles"
+        - "GET /logs"
+        - "GET /mdns"
+        - "GET /mesh/peers"
+        - "GET /parental"
+        - "GET /parental_rules"
+        - "GET /policy"
+        - "GET /portal_config"
+        - "GET /quarantine"
+        - "GET /send_test_alert"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /sync_zones"
+        - "GET /vendors"
+        - "GET /webhooks"
+        - "GET /zones"
+        - "POST /add_to_zone"
+        - "POST /allow/{mac}"
+        - "POST /apply_profile"
+        - "POST /approve_client"
+        - "POST /ban_client"
+        - "POST /deny/{mac}"
+        - "POST /groups"
+        - "POST /groups/{group_id}/members"
+        - "POST /mesh/sync"
+        - "POST /parental_rule"
+        - "POST /policy"
+        - "POST /probe/openwrt"
+        - "POST /probe/openwrt/{ip}"
+        - "POST /quarantine_client"
+        - "POST /remove_from_zone"
+        - "POST /scan"
+        - "POST /set_parental_rule"
+        - "POST /set_policy"
+        - "POST /unban_client"
+        - "POST /unquarantine"
+        - "POST /update_client"
+        - "POST /update_zone"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/nac"
+      vhosts: []
+  - id: secubox-ndpid
+    nom: "secubox-ndpid"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox nDPId Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ndpid.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ndpid.sock"
+      health: "/api/v1/ndpid/health"
+      authentifie: true
+      nb_routes: 29
+      routes:
+        - "GET /applications"
+        - "GET /export/fingerprints"
+        - "GET /export/flows"
+        - "GET /fingerprints"
+        - "GET /fingerprints/ja3"
+        - "GET /fingerprints/ja3s"
+        - "GET /fingerprints/ja4"
+        - "GET /flows"
+        - "GET /flows/{flow_id}"
+        - "GET /health"
+        - "GET /interfaces"
+        - "GET /logs"
+        - "GET /mirred/status"
+        - "GET /protocols"
+        - "GET /risks"
+        - "GET /risks/current"
+        - "GET /settings"
+        - "GET /stats"
+        - "GET /stats/realtime"
+        - "GET /status"
+        - "GET /top/applications"
+        - "GET /top/protocols"
+        - "POST /control/restart"
+        - "POST /control/start"
+        - "POST /control/stop"
+        - "POST /fingerprints/tag"
+        - "POST /mirred/remove"
+        - "POST /mirred/setup"
+        - "POST /settings"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ndpid"
+      vhosts: []
+  - id: secubox-netboot
+    nom: "secubox-netboot"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "secubox-netboot-overlay"
+      - "secubox-netboot-probe"
+      - "secubox-netboot-publish"
+      - "secubox-netboot-serve"
+      - "secubox-netboot-triggers"
+    systemd:
+      - "secubox-netboot-confirm-healthy.service"
+      - "secubox-netboot.service"
+    ports:
+      - "8099"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 18
+      routes:
+        - "DELETE /profiles/{board_id}"
+        - "GET /audit"
+        - "GET /boards"
+        - "GET /health"
+        - "GET /images"
+        - "GET /inventory"
+        - "GET /probe"
+        - "GET /profiles"
+        - "GET /server"
+        - "GET /shadow"
+        - "GET /status"
+        - "POST /overlay/apply"
+        - "POST /overlay/confirm-healthy"
+        - "POST /overlay/persist"
+        - "POST /overlay/revert"
+        - "POST /profiles"
+        - "POST /publish"
+        - "POST /server/up"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "boot.gk2.secubox.in"
+  - id: secubox-netdata
+    nom: "secubox-netdata"
+    categorie: "monitoring"
+    tier: "lite"
+    description: "SecuBox Netdata Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-netdata.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/netdata.sock"
+      health: "/api/v1/netdata/health"
+      authentifie: true
+      nb_routes: 35
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /alarms"
+        - "GET /alerts"
+        - "GET /charts"
+        - "GET /cpu"
+        - "GET /data"
+        - "GET /debug"
+        - "GET /disk"
+        - "GET /health"
+        - "GET /history"
+        - "GET /info"
+        - "GET /logs"
+        - "GET /memory"
+        - "GET /netdata_alarms"
+        - "GET /netdata_info"
+        - "GET /netdata_status"
+        - "GET /network"
+        - "GET /processes"
+        - "GET /secubox_logs"
+        - "GET /sensors"
+        - "GET /stats"
+        - "GET /stats/history"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /system"
+        - "GET /thresholds"
+        - "GET /webhooks"
+        - "POST /restart"
+        - "POST /restart_netdata"
+        - "POST /start"
+        - "POST /start_netdata"
+        - "POST /stop"
+        - "POST /stop_netdata"
+        - "POST /thresholds"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/netdata"
+      vhosts: []
+  - id: secubox-netdiag
+    nom: "secubox-netdiag"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Network Diagnostics — Troubleshooting Tools"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-netdiag.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/netdiag.sock"
+      health: "/api/v1/netdiag/health"
+      authentifie: true
+      nb_routes: 16
+      routes:
+        - "GET /arp"
+        - "GET /bandwidth"
+        - "GET /connections"
+        - "GET /health"
+        - "GET /interfaces"
+        - "GET /ports"
+        - "GET /routes"
+        - "GET /status"
+        - "POST /bandwidth"
+        - "POST /dns"
+        - "POST /mtr"
+        - "POST /nmap"
+        - "POST /ping"
+        - "POST /portscan"
+        - "POST /traceroute"
+        - "POST /whois"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/netdiag"
+      vhosts: []
+  - id: secubox-netifyd
+    nom: "secubox-netifyd"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Netifyd - Network Intelligence Daemon Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-netifyd.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/netifyd.sock"
+      health: "/api/v1/netifyd/health"
+      authentifie: true
+      nb_routes: 24
+      routes:
+        - "DELETE /alerts/clear"
+        - "GET /alerts"
+        - "GET /applications"
+        - "GET /config"
+        - "GET /export/flows"
+        - "GET /flows"
+        - "GET /flows/top"
+        - "GET /health"
+        - "GET /hosts"
+        - "GET /interfaces"
+        - "GET /logs"
+        - "GET /module/capabilities"
+        - "GET /module/health"
+        - "GET /module/info"
+        - "GET /protocols"
+        - "GET /stats"
+        - "GET /stats/realtime"
+        - "GET /status"
+        - "POST /alerts/dismiss"
+        - "POST /alerts/dismiss_all"
+        - "POST /config"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/netifyd"
+      vhosts: []
+  - id: secubox-netmodes
+    nom: "secubox-netmodes"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox Network Modes"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-netmodes.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/netmodes.sock"
+      health: "/api/v1/netmodes/health"
+      authentifie: true
+      nb_routes: 32
+      routes:
+        - "GET /ap_config"
+        - "GET /board_info"
+        - "GET /detect"
+        - "GET /detect_cached"
+        - "GET /dmz_config"
+        - "GET /doublenat_config"
+        - "GET /get_available_modes"
+        - "GET /get_current_mode"
+        - "GET /get_interfaces"
+        - "GET /health"
+        - "GET /multiwan_config"
+        - "GET /preview_changes"
+        - "GET /relay_config"
+        - "GET /router_config"
+        - "GET /sniffer_config"
+        - "GET /status"
+        - "GET /travel_config"
+        - "GET /travel_scan_networks"
+        - "GET /validate_config"
+        - "GET /vpnrelay_config"
+        - "POST /add_vhost"
+        - "POST /apply_mode"
+        - "POST /apply_mtu_clamping"
+        - "POST /apply_wireguard_config"
+        - "POST /auto_apply"
+        - "POST /confirm_mode"
+        - "POST /enable_tcp_bbr"
+        - "POST /generate_config"
+        - "POST /generate_wireguard_keys"
+        - "POST /rollback"
+        - "POST /set_mode"
+        - "POST /update_settings"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/netmodes"
+      vhosts: []
+  - id: secubox-nettweak
+    nom: "secubox-nettweak"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Network Tuning Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-nettweak.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/nettweak.sock"
+      health: "/api/v1/nettweak/health"
+      authentifie: true
+      nb_routes: 12
+      routes:
+        - "GET /health"
+        - "GET /net"
+        - "GET /profile/{profile_id}"
+        - "GET /profiles"
+        - "GET /settings"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /tcp"
+        - "POST /apply"
+        - "POST /reload"
+        - "POST /reset"
+        - "POST /set/{key}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/nettweak"
+      vhosts: []
+  - id: secubox-network-anomaly
+    nom: "secubox-network-anomaly"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox Network-anomaly Module"
+    manifeste: true
+    lxc: false
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-network-anomaly.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/network-anomaly.sock"
+      health: "/api/v1/network-anomaly/health"
+      authentifie: true
+      nb_routes: 10
+      routes:
+        - "GET /alerts"
+        - "GET /baselines"
+        - "GET /health"
+        - "GET /metrics"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /alerts/{alert_id}/acknowledge"
+        - "POST /baselines/update"
+        - "POST /detect"
+        - "POST /sample"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/network-anomaly"
+      vhosts: []
+  - id: secubox-newsbin
+    nom: "secubox-newsbin"
+    categorie: "misc"
+    tier: "lite"
+    description: "Usenet downloader management for SecuBox"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-newsbin.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/newsbin.sock"
+      health: "/api/v1/newsbin/health"
+      authentifie: true
+      nb_routes: 32
+      routes:
+        - "DELETE /category/{name}"
+        - "DELETE /container"
+        - "DELETE /history/{nzo_id}"
+        - "DELETE /queue/{nzo_id}"
+        - "DELETE /server/{name}"
+        - "GET /categories"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /health"
+        - "GET /history"
+        - "GET /logs"
+        - "GET /queue"
+        - "GET /servers"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /backup"
+        - "POST /category"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /container/update"
+        - "POST /history/clear"
+        - "POST /nzb/add"
+        - "POST /nzb/upload"
+        - "POST /queue/pause"
+        - "POST /queue/resume"
+        - "POST /queue/{nzo_id}/pause"
+        - "POST /queue/{nzo_id}/resume"
+        - "POST /restore"
+        - "POST /server"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/newsbin"
+      vhosts: []
+  - id: secubox-nextcloud
+    nom: "secubox-nextcloud"
+    categorie: "misc"
+    tier: "pro"
+    description: "SecuBox Nextcloud Module"
+    manifeste: true
+    lxc: true
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli:
+      - "nextcloudctl"
+    systemd:
+      - "secubox-nextcloud.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/nextcloud.sock"
+      health: "/api/v1/nextcloud/health"
+      authentifie: true
+      nb_routes: 22
+      routes:
+        - "DELETE /backup/{name}"
+        - "GET /backups"
+        - "GET /config"
+        - "GET /connections"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /status"
+        - "GET /storage"
+        - "GET /users"
+        - "POST /backup"
+        - "POST /config"
+        - "POST /install"
+        - "POST /occ"
+        - "POST /restart"
+        - "POST /restore/{name}"
+        - "POST /ssl/disable"
+        - "POST /ssl/enable"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /uninstall"
+        - "POST /update"
+        - "POST /user/password"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/nextcloud"
+      vhosts:
+        - "nc.gk2.secubox.in"
+  - id: secubox-ollama
+    nom: "secubox-ollama"
+    categorie: "ai"
+    tier: "pro"
+    description: "Local AI inference with Ollama"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ollama.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ollama.sock"
+      health: "/api/v1/ollama/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "DELETE /models/{name}"
+        - "GET /config"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /models"
+        - "GET /models/{name}"
+        - "GET /status"
+        - "GET /system"
+        - "POST /chat"
+        - "POST /config"
+        - "POST /generate"
+        - "POST /models/pull"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ollama"
+      vhosts: []
+  - id: secubox-openclaw
+    nom: "secubox-openclaw"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox OpenClaw OSINT Module"
+    manifeste: true
+    lxc: false
+    tests: 3
+    depends:
+      - "secubox-core"
+    cli:
+      - "openclawctl"
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/openclaw.sock"
+      health: "/api/v1/openclaw/health"
+      authentifie: true
+      nb_routes: 14
+      routes:
+        - "DELETE /scan/{scan_id}"
+        - "GET /certs/{domain}"
+        - "GET /config"
+        - "GET /dns/{domain}"
+        - "GET /health"
+        - "GET /ports/{ip}"
+        - "GET /scan/{scan_id}"
+        - "GET /scans"
+        - "GET /status"
+        - "GET /whois/{target}"
+        - "POST /install"
+        - "POST /scan/domain"
+        - "POST /scan/email"
+        - "POST /scan/ip"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/openclaw"
+      vhosts: []
+  - id: secubox-ossec
+    nom: "secubox-ossec"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox OSSEC HIDS integration"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-ossec.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/ossec.sock"
+      health: "/api/v1/ossec/health"
+      authentifie: false
+      nb_routes: 16
+      routes:
+        - "GET /active-response"
+        - "GET /agents"
+        - "GET /alerts"
+        - "GET /alerts/stats"
+        - "GET /decoders"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /rootcheck"
+        - "GET /rules"
+        - "GET /status"
+        - "GET /syscheck"
+        - "POST /restart"
+        - "POST /rootcheck/scan"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /syscheck/scan"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ossec"
+      vhosts: []
+  - id: secubox-p2p
+    nom: "secubox-p2p"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox P2P - Peer-to-Peer Network Hub"
+    manifeste: true
+    lxc: false
+    tests: 14
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-p2pctl"
+    systemd:
+      - "secubox-p2p.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/p2p.sock"
+      health: "/api/v1/p2p/health"
+      authentifie: true
+      nb_routes: 57
+      routes:
+        - "DELETE /announcers/{announcer_id}"
+        - "DELETE /peers/{peer_id}"
+        - "DELETE /profiles/{name}"
+        - "DELETE /services/{name}"
+        - "DELETE /threats/{ip}"
+        - "GET /announcers"
+        - "GET /dht/find/{did}"
+        - "GET /dht/peers"
+        - "GET /discover"
+        - "GET /discover/self"
+        - "GET /federation/services"
+        - "GET /health"
+        - "GET /master-link/config"
+        - "GET /master-link/join-script"
+        - "GET /master-link/peers"
+        - "GET /master-link/status"
+        - "GET /master-link/tree"
+        - "GET /masterlink/topology"
+        - "GET /mesh"
+        - "GET /peers"
+        - "GET /profiles"
+        - "GET /services"
+        - "GET /status"
+        - "GET /threats"
+        - "GET /wireguard"
+        - "POST /announce"
+        - "POST /announcers"
+        - "POST /announcers/sync"
+        - "POST /api/v1/p2p-macro/grant/{service_id}"
+        - "POST /dht/announce"
+        - "POST /discover"
+        - "POST /discover/bridge"
+        - "POST /federation/healthcheck"
+        - "POST /master-link/approve"
+        - "POST /master-link/cleanup-local"
+        - "POST /master-link/config"
+        - "POST /master-link/invite"
+        - "POST /master-link/invite-local"
+        - "POST /master-link/join"
+        - "POST /master-link/join-with-token"
+        - "POST /master-link/token"
+        - "POST /master-link/token/cleanup"
+        - "POST /master-link/token/revoke"
+        - "POST /master-link/token/validate"
+        - "POST /masterlink/promote"
+        - "POST /peers"
+        - "POST /peers/{peer_id}/probe"
+        - "POST /profiles"
+        - "POST /services"
+        - "POST /services/auto-register"
+        - "POST /services/{service_id}/activate"
+        - "POST /services/{service_id}/request"
+        - "POST /services/{service_id}/revoke-access"
+        - "POST /threats"
+        - "POST /wireguard/enable"
+        - "POST /wireguard/init"
+        - "POST /wireguard/peer"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/p2p"
+      vhosts: []
+  - id: secubox-peertube
+    nom: "secubox-peertube"
+    categorie: "misc"
+    tier: "lite"
+    description: "PeerTube federated video platform management"
+    manifeste: true
+    lxc: true
+    tests: 4
+    depends:
+      - "secubox-core"
+    cli:
+      - "peertubectl"
+    systemd:
+      - "peertube-backlog.service"
+      - "peertube-backlog.timer"
+      - "peertube-cookie-install.path"
+      - "peertube-cookie-install.service"
+      - "peertube-ops.path"
+      - "peertube-ops.service"
+      - "secubox-peertube-version-check.service"
+      - "secubox-peertube-version-check.timer"
+      - "secubox-peertube.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/peertube.sock"
+      health: "/api/v1/peertube/health"
+      authentifie: true
+      nb_routes: 46
+      routes:
+        - "DELETE /channel/{channel_name}"
+        - "DELETE /federation/following/{follow_id}"
+        - "DELETE /plugin/{plugin_name}"
+        - "DELETE /user/{user_id}"
+        - "DELETE /video/{video_id}"
+        - "GET /admin/op/{op_id}"
+        - "GET /channels"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /federation/followers"
+        - "GET /federation/following"
+        - "GET /health"
+        - "GET /imports"
+        - "GET /instance"
+        - "GET /logs"
+        - "GET /playlist/jobs"
+        - "GET /playlist/jobs/{job_id}"
+        - "GET /plugins"
+        - "GET /status"
+        - "GET /storage/stats"
+        - "GET /transcoding/backlog"
+        - "GET /transcoding/jobs"
+        - "GET /transcoding/settings"
+        - "GET /users"
+        - "GET /version"
+        - "GET /version-status"
+        - "GET /videos"
+        - "POST /admin/reset-password"
+        - "POST /channel"
+        - "POST /check-upgrade"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /container/uninstall"
+        - "POST /federation/follow"
+        - "POST /import"
+        - "POST /import/cookies"
+        - "POST /instance"
+        - "POST /playlist/import"
+        - "POST /playlist/jobs/{job_id}/cancel"
+        - "POST /plugin/install"
+        - "POST /transcoding/settings"
+        - "POST /upgrade"
+        - "POST /user"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/peertube"
+      vhosts: []
+  - id: secubox-photoprism
+    nom: "secubox-photoprism"
+    categorie: "misc"
+    tier: "lite"
+    description: "PhotoPrism photo management for SecuBox"
+    manifeste: true
+    lxc: true
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "photoprismctl"
+    systemd:
+      - "secubox-photoprism.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/photoprism.sock"
+      health: "/api/v1/photoprism/health"
+      authentifie: true
+      nb_routes: 27
+      routes:
+        - "DELETE /album/{album_id}"
+        - "DELETE /user/{username}"
+        - "GET /albums"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /faces"
+        - "GET /health"
+        - "GET /library/stats"
+        - "GET /logs"
+        - "GET /status"
+        - "GET /storage"
+        - "GET /users"
+        - "POST /album/create"
+        - "POST /backup"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /container/uninstall"
+        - "POST /container/update"
+        - "POST /faces/disable"
+        - "POST /faces/enable"
+        - "POST /library/import"
+        - "POST /library/index"
+        - "POST /restore"
+        - "POST /user"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/photoprism"
+      vhosts: []
+  - id: secubox-picobrew
+    nom: "secubox-picobrew"
+    categorie: "misc"
+    tier: "lite"
+    description: "Homebrew/Fermentation Controller for SecuBox"
+    manifeste: true
+    lxc: false
+    tests: 6
+    depends:
+      - "secubox-core"
+    cli:
+      - "picobrewctl"
+    systemd:
+      - "secubox-picobrew.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/picobrew.sock"
+      health: "/api/v1/picobrew/health"
+      authentifie: false
+      nb_routes: 6
+      routes:
+        - "GET /health"
+        - "GET /logs"
+        - "GET /status"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/picobrew"
+      vhosts: []
+  - id: secubox-podcaster
+    nom: "secubox-podcaster"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 3
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 20
+      routes:
+        - "DELETE /feeds/{fid}"
+        - "GET /config"
+        - "GET /downloads"
+        - "GET /episodes"
+        - "GET /feeds"
+        - "GET /feeds/{fid}/cover"
+        - "GET /health"
+        - "GET /import/status"
+        - "GET /media/{ep_id}"
+        - "GET /public/feed/{fid}/zip"
+        - "GET /public/library"
+        - "GET /share/feed.xml"
+        - "GET /status"
+        - "POST /audiobook/upload"
+        - "POST /config"
+        - "POST /episodes/{ep_id}/download"
+        - "POST /feeds"
+        - "POST /feeds/import-opml"
+        - "POST /feeds/{fid}/autodl"
+        - "POST /import/url"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-portal
+    nom: "secubox-portal"
+    categorie: "system"
+    tier: "all"
+    description: "SecuBox Portal - Web Authentication"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-portal.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/portal.sock"
+      health: "/api/v1/portal/health"
+      authentifie: false
+      nb_routes: 20
+      routes:
+        - "DELETE /sessions/{username}"
+        - "DELETE /users/{username}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /branding"
+        - "GET /health"
+        - "GET /history"
+        - "GET /sessions"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /theme"
+        - "GET /users"
+        - "GET /verify"
+        - "GET /webhooks"
+        - "POST /login"
+        - "POST /logout"
+        - "POST /recover"
+        - "POST /users/change-password"
+        - "POST /users/create"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/portal"
+      vhosts: []
+  - id: secubox-profiles
+    nom: "secubox-profiles"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 25
+    depends: []
+    cli:
+      - "secubox-profilectl"
+      - "secubox-wakectl"
+    systemd:
+      - "secubox-profiles.service"
+      - "secubox-sleeper.service"
+      - "secubox-waker.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 13
+      routes:
+        - "GET /_wake/{vhost}"
+        - "GET /api/v1/profiles/diff"
+        - "GET /api/v1/profiles/pins"
+        - "GET /api/v1/profiles/profiles"
+        - "GET /api/v1/profiles/status"
+        - "POST /api/v1/profiles/active"
+        - "POST /api/v1/profiles/apply"
+        - "POST /api/v1/profiles/lifecycle"
+        - "POST /api/v1/profiles/pins"
+        - "POST /api/v1/profiles/profiles/{name}/members"
+        - "POST /api/v1/profiles/rollback"
+        - "POST /api/v1/profiles/sleep"
+        - "POST /api/v1/profiles/wake"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-proxypac
+    nom: "secubox-proxypac"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 14
+    depends: []
+    cli:
+      - "proxypac-gen"
+      - "proxypac-wpad"
+    systemd: []
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 11
+      routes:
+        - "DELETE /override/{host}"
+        - "GET /candidates"
+        - "GET /health"
+        - "GET /rules"
+        - "GET /status"
+        - "GET /wpad/state"
+        - "POST /candidate/{host}/accept"
+        - "POST /candidate/{host}/reject"
+        - "POST /override"
+        - "POST /transparent"
+        - "POST /wpad/apply"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "wpad.gk2.secubox.in"
+  - id: secubox-publish
+    nom: "secubox-publish"
+    categorie: "publishing"
+    tier: "lite"
+    description: "SecuBox Publishing Platform"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-publish.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/publish.sock"
+      health: "/api/v1/publish/health"
+      authentifie: true
+      nb_routes: 29
+      routes:
+        - "DELETE /bundle/{name}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /activity"
+        - "GET /banner/links"
+        - "GET /bundle/{name}.zip"
+        - "GET /bundle/{name}/qrcode"
+        - "GET /bundles"
+        - "GET /droplet/files"
+        - "GET /health"
+        - "GET /history"
+        - "GET /metablogizer/sites"
+        - "GET /overview"
+        - "GET /plugins"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /streamforge/templates"
+        - "GET /streamlit/apps"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /droplet/publish"
+        - "POST /isp/upload"
+        - "POST /metablogizer/create"
+        - "POST /metablogizer/publish/{name}"
+        - "POST /plugins/reload"
+        - "POST /quick-publish"
+        - "POST /streamforge/create"
+        - "POST /streamlit/deploy"
+        - "POST /streamlit/stop"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/publish"
+      vhosts: []
+  - id: secubox-qos
+    nom: "secubox-qos"
+    categorie: "misc"
+    tier: "standard"
+    description: "SecuBox QoS / Bandwidth Manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-qos.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/qos.sock"
+      health: "/api/v1/qos/health"
+      authentifie: true
+      nb_routes: 74
+      routes:
+        - "DELETE /interface/{interface}"
+        - "DELETE /vlan/rule/{name}"
+        - "DELETE /vlan/{interface}"
+        - "DELETE /vlan/{interface}/policy"
+        - "GET /alerts"
+        - "GET /bandwidth_history"
+        - "GET /classes"
+        - "GET /clients"
+        - "GET /dpi_apps"
+        - "GET /dpi_rules"
+        - "GET /export_config"
+        - "GET /get_settings"
+        - "GET /groups"
+        - "GET /health"
+        - "GET /interface/{interface}/stats"
+        - "GET /interface_list"
+        - "GET /interfaces"
+        - "GET /list_classes"
+        - "GET /list_rules"
+        - "GET /list_schedules"
+        - "GET /logs"
+        - "GET /parental"
+        - "GET /pcp/mappings"
+        - "GET /per_client_usage"
+        - "GET /profiles"
+        - "GET /quota_status"
+        - "GET /quotas"
+        - "GET /realtime"
+        - "GET /rules"
+        - "GET /schedules"
+        - "GET /status"
+        - "GET /tc_raw"
+        - "GET /top_talkers"
+        - "GET /usage"
+        - "GET /vlan/policies"
+        - "GET /vlan/rules"
+        - "GET /vlan/{interface}"
+        - "GET /vlans"
+        - "POST /add_class"
+        - "POST /add_dpi_rule"
+        - "POST /add_group"
+        - "POST /add_profile"
+        - "POST /add_rule"
+        - "POST /add_schedule"
+        - "POST /add_to_group"
+        - "POST /apply_qos"
+        - "POST /assign_profile"
+        - "POST /delete_class"
+        - "POST /delete_dpi_rule"
+        - "POST /delete_group"
+        - "POST /delete_parental"
+        - "POST /delete_profile"
+        - "POST /delete_rule"
+        - "POST /delete_schedule"
+        - "POST /import_config"
+        - "POST /interface/add"
+        - "POST /pcp/enable"
+        - "POST /pcp/mapping"
+        - "POST /reload"
+        - "POST /remove_from_group"
+        - "POST /reset_config"
+        - "POST /reset_quota"
+        - "POST /save_settings"
+        - "POST /set_parental"
+        - "POST /set_quota"
+        - "POST /tc_command"
+        - "POST /update_class"
+        - "POST /update_group"
+        - "POST /update_rule"
+        - "POST /update_schedule"
+        - "POST /vlan/apply_all"
+        - "POST /vlan/create"
+        - "POST /vlan/rule"
+        - "POST /vlan/{interface}/policy"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/qos"
+      vhosts: []
+  - id: secubox-rbs-sensor
+    nom: "secubox-rbs-sensor"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 1
+    depends: []
+    cli:
+      - "rbssensorctl"
+    systemd:
+      - "secubox-rbs-sensor.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 9
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /neighbours"
+        - "GET /servingcell"
+        - "GET /status"
+        - "POST /mitigate/lte-only"
+        - "POST /mitigate/rf-off"
+        - "POST /restore"
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-reality
+    nom: "secubox-reality"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-reality-monitor.service"
+      - "secubox-reality-monitor.timer"
+      - "secubox-reality.service"
+      - "secubox-xray@.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-redroid
+    nom: "secubox-redroid"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Redroid - Android in container"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-redroid.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/redroid.sock"
+      health: "/api/v1/redroid/health"
+      authentifie: false
+      nb_routes: 15
+      routes:
+        - "DELETE /container"
+        - "GET /adb/devices"
+        - "GET /adb/packages"
+        - "GET /health"
+        - "GET /images"
+        - "GET /logs"
+        - "GET /status"
+        - "POST /adb/connect"
+        - "POST /adb/disconnect"
+        - "POST /adb/install"
+        - "POST /adb/shell"
+        - "POST /images/pull/{tag:path}"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/redroid"
+      vhosts: []
+  - id: secubox-release
+    nom: "secubox-release"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 6
+    depends: []
+    cli:
+      - "secubox-release-repo"
+      - "secubox-releasectl"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 8
+      routes:
+        - "GET /box-ring"
+        - "GET /evolutions"
+        - "GET /health"
+        - "GET /status"
+        - "POST /assign"
+        - "POST /demote"
+        - "POST /promote"
+        - "POST /publish"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-repo
+    nom: "secubox-repo"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox APT Repository Manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "repoctl"
+    systemd:
+      - "secubox-repo.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/repo.sock"
+      health: "/api/v1/repo/health"
+      authentifie: true
+      nb_routes: 23
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /access"
+        - "GET /components"
+        - "GET /distributions"
+        - "GET /gpg/fingerprint"
+        - "GET /health"
+        - "GET /history"
+        - "GET /packages"
+        - "GET /packages/{distribution}"
+        - "GET /recent"
+        - "GET /scan-local/preview"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /add"
+        - "POST /gpg/setup"
+        - "POST /init"
+        - "POST /remove"
+        - "POST /scan-local"
+        - "POST /sync"
+        - "POST /upload"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/repo"
+      vhosts: []
+  - id: secubox-reporter
+    nom: "secubox-reporter"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Reporter - System report generation"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-reporter.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/reporter.sock"
+      health: "/api/v1/reporter/health"
+      authentifie: true
+      nb_routes: 11
+      routes:
+        - "DELETE /reports/{report_id}"
+        - "GET /health"
+        - "GET /reports"
+        - "GET /reports/{report_id}"
+        - "GET /reports/{report_id}/download"
+        - "GET /schedule"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /templates"
+        - "POST /reports/generate"
+        - "POST /schedule"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/reporter"
+      vhosts: []
+  - id: secubox-rezapp
+    nom: "secubox-rezapp"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox RezApp - Application deployment and management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-rezapp.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/rezapp.sock"
+      health: "/api/v1/rezapp/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /templates/{name}"
+        - "GET /app/{name}"
+        - "GET /app/{name}/logs"
+        - "GET /apps"
+        - "GET /health"
+        - "GET /images"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /templates"
+        - "GET /templates/{name}"
+        - "POST /app/deploy"
+        - "POST /app/undeploy"
+        - "POST /app/{name}/restart"
+        - "POST /app/{name}/start"
+        - "POST /app/{name}/stop"
+        - "POST /images/pull"
+        - "POST /templates"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/rezapp"
+      vhosts: []
+  - id: secubox-roadmap
+    nom: "secubox-roadmap"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Roadmap - Migration tracking dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-roadmap.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/roadmap.sock"
+      health: "/api/v1/roadmap/health"
+      authentifie: false
+      nb_routes: 6
+      routes:
+        - "GET /categories"
+        - "GET /comparison"
+        - "GET /health"
+        - "GET /modules"
+        - "GET /roadmap"
+        - "GET /status"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/roadmap"
+      vhosts: []
+  - id: secubox-routes
+    nom: "secubox-routes"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Routes - Routing table viewer and manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-routes.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/routes.sock"
+      health: "/api/v1/routes/health"
+      authentifie: true
+      nb_routes: 13
+      routes:
+        - "DELETE /routes"
+        - "DELETE /rules/{priority}"
+        - "GET /health"
+        - "GET /neighbors"
+        - "GET /routes"
+        - "GET /routes/ipv4"
+        - "GET /routes/ipv6"
+        - "GET /rules"
+        - "GET /status"
+        - "GET /tables"
+        - "POST /flush"
+        - "POST /routes"
+        - "POST /rules"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/routes"
+      vhosts: []
+  - id: secubox-rtty
+    nom: "secubox-rtty"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Remote Terminal Access (rtty)"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-rtty.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/rtty.sock"
+      health: "/api/v1/rtty/health"
+      authentifie: true
+      nb_routes: 14
+      routes:
+        - "DELETE /tokens/{name}"
+        - "GET /access"
+        - "GET /components"
+        - "GET /config"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /sessions"
+        - "GET /status"
+        - "GET /tokens"
+        - "POST /config"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /token"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/rtty"
+      vhosts: []
+  - id: secubox-rustdesk
+    nom: "secubox-rustdesk"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 0
+    depends: []
+    cli:
+      - "rustdeskctl"
+    systemd:
+      - "secubox-rustdesk.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 5
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /status"
+        - "GET /version"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "rustdesk.gk2.secubox.in"
+  - id: secubox-saas-relay
+    nom: "secubox-saas-relay"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox SaaS/API Proxy Relay"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-saas-relay.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/saas-relay.sock"
+      health: "/api/v1/saas-relay/health"
+      authentifie: true
+      nb_routes: 20
+      routes:
+        - "DELETE /keys/{name}"
+        - "DELETE /logs"
+        - "DELETE /service/{name}"
+        - "GET /access"
+        - "GET /components"
+        - "GET /health"
+        - "GET /health/all"
+        - "GET /keys"
+        - "GET /logs"
+        - "GET /service/{name}"
+        - "GET /services"
+        - "GET /stats"
+        - "GET /stats/{name}"
+        - "GET /status"
+        - "POST /service/add"
+        - "POST /service/{name}/check"
+        - "POST /service/{name}/toggle"
+        - "POST /stats/reset/{name}"
+        - "PUT /keys/{name}"
+        - "PUT /service/{name}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/saas-relay"
+      vhosts: []
+  - id: secubox-security-posture
+    nom: "secubox-security-posture"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 3
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-security-posture.service"
+      - "secubox-security-posture.socket"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 8
+      routes:
+        - "GET /cspn"
+        - "GET /defcon"
+        - "GET /domains/{domain}"
+        - "GET /findings"
+        - "GET /health"
+        - "GET /overview"
+        - "GET /tpn"
+        - "POST /refresh"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-sentinelle-gsm
+    nom: "secubox-sentinelle-gsm"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 20
+    depends: []
+    cli:
+      - "secubox-grgsm-livemon-shim"
+      - "sentinellectl"
+    systemd:
+      - "secubox-sentinelle-gsm.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 34
+      routes:
+        - "DELETE /trusted/{phone_id}"
+        - "GET /access"
+        - "GET /alerts"
+        - "GET /alerts/stream"
+        - "GET /baseline"
+        - "GET /cells"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /journal/stream"
+        - "GET /observations"
+        - "GET /rds/stations"
+        - "GET /rds/status"
+        - "GET /rds/sweep/jobs"
+        - "GET /rds/sweep/jobs/{job_id}"
+        - "GET /scan/auto/jobs"
+        - "GET /scan/auto/jobs/{job_id}"
+        - "GET /scan/auto/status"
+        - "GET /scan/status"
+        - "GET /scoring/thresholds"
+        - "GET /status"
+        - "GET /trusted"
+        - "POST /alerts/test"
+        - "POST /baseline/learn"
+        - "POST /mode"
+        - "POST /rds/start"
+        - "POST /rds/stop"
+        - "POST /rds/sweep"
+        - "POST /rds/sweep/jobs/{job_id}/cancel"
+        - "POST /scan/auto"
+        - "POST /scan/auto/jobs/{job_id}/cancel"
+        - "POST /scan/start"
+        - "POST /scan/stop"
+        - "POST /scoring/thresholds"
+        - "POST /trusted"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-simplex
+    nom: "secubox-simplex"
+    categorie: "media"
+    tier: "lite"
+    description: "SecuBox SimpleX Chat Server"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-simplex.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/simplex.sock"
+      health: "/api/v1/simplex/health"
+      authentifie: false
+      nb_routes: 28
+      routes:
+        - "DELETE /backup/{backup_name}"
+        - "DELETE /container"
+        - "GET /backup"
+        - "GET /connection-string"
+        - "GET /container/status"
+        - "GET /fingerprint"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /server/config"
+        - "GET /server/info"
+        - "GET /stats"
+        - "GET /stats/connections"
+        - "GET /stats/queues"
+        - "GET /status"
+        - "GET /tls/status"
+        - "POST /backup/create"
+        - "POST /backup/restore"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /install"
+        - "POST /maintenance/cleanup"
+        - "POST /restart"
+        - "POST /server/config"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /tls/renew"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/simplex"
+      vhosts: []
+  - id: secubox-smart-strip
+    nom: "secubox-smart-strip"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-smb
+    nom: "secubox-smb"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "smbctl"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-smtp-relay
+    nom: "secubox-smtp-relay"
+    categorie: "email"
+    tier: "lite"
+    description: "SecuBox SMTP Relay — Email forwarding through smarthost"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-smtp-relay.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/smtp-relay.sock"
+      health: "/api/v1/smtp-relay/health"
+      authentifie: true
+      nb_routes: 13
+      routes:
+        - "DELETE /queue/{queue_id}"
+        - "GET /config"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /queue"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /config"
+        - "POST /queue/flush"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /test"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/smtp-relay"
+      vhosts: []
+  - id: secubox-soc
+    nom: "secubox-soc"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "SecuBox Soc Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-soc.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/soc.sock"
+      health: "/api/v1/soc/health"
+      authentifie: true
+      nb_routes: 28
+      routes:
+        - "DELETE /intel/{intel_id}"
+        - "DELETE /peers/{peer_id}"
+        - "DELETE /tickets/{ticket_id}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /alerts"
+        - "GET /clock"
+        - "GET /health"
+        - "GET /intel"
+        - "GET /map/attacks"
+        - "GET /map/threats"
+        - "GET /mesh/peers"
+        - "GET /mesh/status"
+        - "GET /mesh/tree"
+        - "GET /peers"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /tickets"
+        - "GET /webhooks"
+        - "POST /alerts"
+        - "POST /alerts/ack-all"
+        - "POST /alerts/{alert_id}/ack"
+        - "POST /intel"
+        - "POST /peers"
+        - "POST /peers/{peer_id}/sync"
+        - "POST /tickets"
+        - "POST /webhooks"
+        - "PUT /tickets/{ticket_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/soc"
+      vhosts: []
+  - id: secubox-soc-agent
+    nom: "secubox-soc-agent"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "SecuBox SOC Agent — Edge Node Agent for SOC Integration"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-soc-agent.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/soc-agent.sock"
+      health: "/api/v1/soc-agent/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "GET /alerts"
+        - "GET /audit"
+        - "GET /command/allowed"
+        - "GET /config"
+        - "GET /health"
+        - "GET /metrics"
+        - "GET /report"
+        - "GET /status"
+        - "GET /upstream/status"
+        - "POST /command"
+        - "POST /config"
+        - "POST /enroll"
+        - "POST /unenroll"
+        - "POST /upstream/push"
+        - "POST /upstream/test"
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-soc-gateway
+    nom: "secubox-soc-gateway"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "SecuBox SOC Gateway — Central Fleet Monitoring Hub"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-soc-gateway.service"
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/soc-gateway.sock"
+      health: "/api/v1/soc-gateway/health"
+      authentifie: true
+      nb_routes: 30
+      routes:
+        - "DELETE /fleet/nodes/{node_id}"
+        - "GET /alerts/correlated"
+        - "GET /alerts/correlation-summary"
+        - "GET /alerts/stream"
+        - "GET /commands"
+        - "GET /commands/{cmd_id}"
+        - "GET /fleet/nodes"
+        - "GET /fleet/nodes/{node_id}"
+        - "GET /fleet/summary"
+        - "GET /global/regions"
+        - "GET /global/summary"
+        - "GET /global/threats"
+        - "GET /health"
+        - "GET /hierarchy/status"
+        - "GET /regional/socs"
+        - "GET /status"
+        - "GET /upstream/status"
+        - "POST /broadcast"
+        - "POST /enroll"
+        - "POST /global/cleanup"
+        - "POST /hierarchy/mode"
+        - "POST /ingest"
+        - "POST /nodes/{node_id}/command"
+        - "POST /nodes/{node_id}/services/{service}/action"
+        - "POST /regional/enroll"
+        - "POST /regional/ingest"
+        - "POST /regional/token"
+        - "POST /tokens"
+        - "POST /tokens/cleanup"
+        - "POST /upstream/enroll"
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-soc-web
+    nom: "secubox-soc-web"
+    categorie: "dashboard"
+    tier: "lite"
+    description: "SecuBox SOC Web Dashboard — Browser-based Fleet Monitoring"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-spiderfoot
+    nom: "secubox-spiderfoot"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 1
+    depends: []
+    cli:
+      - "spiderfootctl"
+    systemd: []
+    ports:
+      - "9043"
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 6
+      routes:
+        - "GET /health"
+        - "GET /status"
+        - "POST /install"
+        - "POST /restart-ui"
+        - "POST /start"
+        - "POST /stop"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "192.168.1.200"
+        - "_"
+        - "localhost"
+        - "spiderfoot.gk2.secubox.in"
+        - "spiderfoot.local"
+  - id: secubox-streamforge
+    nom: "secubox-streamforge"
+    categorie: "media"
+    tier: "lite"
+    description: "SecuBox Streamlit Forge"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "streamforgectl"
+    systemd:
+      - "secubox-streamforge.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/streamforge.sock"
+      health: "/api/v1/streamforge/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /app/{name}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /app/{name}"
+        - "GET /app/{name}/file/{path:path}"
+        - "GET /apps"
+        - "GET /health"
+        - "GET /history"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /templates"
+        - "GET /webhooks"
+        - "POST /app"
+        - "POST /app/{name}/restart"
+        - "POST /app/{name}/start"
+        - "POST /app/{name}/stop"
+        - "POST /webhooks"
+        - "PUT /app/{name}/file/{path:path}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/streamforge"
+      vhosts: []
+  - id: secubox-streamlit
+    nom: "secubox-streamlit"
+    categorie: "media"
+    tier: "lite"
+    description: "SecuBox Streamlit Platform"
+    manifeste: true
+    lxc: true
+    tests: 21
+    depends:
+      - "secubox-core"
+    cli:
+      - "streamlit-shotter"
+      - "streamlitctl"
+    systemd:
+      - "secubox-streamlit-idle.service"
+      - "secubox-streamlit-idle.timer"
+      - "secubox-streamlit.service"
+      - "streamlit-audit.service"
+      - "streamlit-audit.timer"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/streamlit.sock"
+      health: "/api/v1/streamlit/health"
+      authentifie: true
+      nb_routes: 33
+      routes:
+        - "DELETE /app/{name}"
+        - "GET /access"
+        - "GET /app/{name}"
+        - "GET /app/{name}/logs"
+        - "GET /apps"
+        - "GET /apps/audit"
+        - "GET /apps/{name}/screenshot"
+        - "GET /autostart"
+        - "GET /components"
+        - "GET /container/status"
+        - "GET /details"
+        - "GET /health"
+        - "GET /instances"
+        - "GET /instant"
+        - "GET /power/status"
+        - "GET /status"
+        - "POST /app/{name}/start"
+        - "POST /app/{name}/stop"
+        - "POST /apps/{name}/recapture"
+        - "POST /apps/{name}/wake"
+        - "POST /autostart/run"
+        - "POST /container/install"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /deploy"
+        - "POST /gitea/clone/{name}"
+        - "POST /gitea/push/{name}"
+        - "POST /instance/{id}/start"
+        - "POST /instance/{id}/stop"
+        - "POST /migrate"
+        - "POST /power/pause"
+        - "POST /power/toggle"
+        - "POST /power/wake"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/streamlit"
+      vhosts: []
+  - id: secubox-system
+    nom: "secubox-system"
+    categorie: "system"
+    tier: "all"
+    description: "SecuBox System Hub"
+    manifeste: true
+    lxc: false
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-system.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/system.sock"
+      health: "/api/v1/system/health"
+      authentifie: true
+      nb_routes: 66
+      routes:
+        - "DELETE /sessions/{session_id}"
+        - "GET /action-acl"
+        - "GET /board"
+        - "GET /board/capabilities"
+        - "GET /check_updates"
+        - "GET /diagnostics"
+        - "GET /download_diagnostic"
+        - "GET /get_backup_schedule"
+        - "GET /get_components"
+        - "GET /get_components_by_category"
+        - "GET /get_denoise_stats"
+        - "GET /get_denoised_logs"
+        - "GET /get_health"
+        - "GET /get_logs"
+        - "GET /get_service_health"
+        - "GET /get_settings"
+        - "GET /get_storage"
+        - "GET /get_system_info"
+        - "GET /health"
+        - "GET /health_score"
+        - "GET /info"
+        - "GET /kiosk/status"
+        - "GET /list_diagnostics"
+        - "GET /list_services"
+        - "GET /logs"
+        - "GET /metrics"
+        - "GET /my-permissions"
+        - "GET /network"
+        - "GET /packages"
+        - "GET /preferences"
+        - "GET /resources"
+        - "GET /run_diagnostic_test"
+        - "GET /secubox_logs"
+        - "GET /security"
+        - "GET /service_action"
+        - "GET /services"
+        - "GET /services_list"
+        - "GET /sessions"
+        - "GET /sessions/summary"
+        - "GET /status"
+        - "GET /system-role/{role_id}"
+        - "GET /system-roles"
+        - "POST /apply_updates"
+        - "POST /assign-role"
+        - "POST /backup"
+        - "POST /backup_config"
+        - "POST /board/detect"
+        - "POST /check-permission"
+        - "POST /clear_cache"
+        - "POST /collect_diagnostics"
+        - "POST /delete_diagnostic"
+        - "POST /kiosk/disable"
+        - "POST /kiosk/enable"
+        - "POST /preferences/reset"
+        - "POST /reboot"
+        - "POST /reload_firewall"
+        - "POST /restart_services"
+        - "POST /restore_config"
+        - "POST /save_settings"
+        - "POST /service_control"
+        - "POST /sessions/revoke-all"
+        - "POST /set_backup_schedule"
+        - "POST /settings"
+        - "POST /shutdown"
+        - "POST /sync_time"
+        - "PUT /preferences"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/system"
+      vhosts: []
+  - id: secubox-system-hub
+    nom: "secubox-system-hub"
+    categorie: "system"
+    tier: "lite"
+    description: "SecuBox System Hub Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/system-hub.sock"
+      health: "/api/v1/system-hub/health"
+      authentifie: true
+      nb_routes: 26
+      routes:
+        - "DELETE /diagnostics/{bundle_id}"
+        - "GET /cached-status"
+        - "GET /diagnostics"
+        - "GET /diagnostics/{bundle_id}/download"
+        - "GET /disk"
+        - "GET /health"
+        - "GET /health/summary"
+        - "GET /metrics/history"
+        - "GET /network/stats"
+        - "GET /services"
+        - "GET /services/{service_name}"
+        - "GET /services/{service_name}/logs"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /support/remote"
+        - "GET /support/settings"
+        - "GET /system"
+        - "POST /diagnostics/cleanup"
+        - "POST /diagnostics/collect"
+        - "POST /diagnostics/{bundle_id}/upload"
+        - "POST /metrics/cleanup"
+        - "POST /metrics/record"
+        - "POST /services/restart-all"
+        - "POST /services/{service_name}/{action}"
+        - "POST /support/remote/{action}"
+        - "PUT /support/settings"
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-system-tuning
+    nom: "secubox-system-tuning"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 1
+    depends: []
+    cli:
+      - "secubox-tuning-apply"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-threat-analyst
+    nom: "secubox-threat-analyst"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Threat-analyst Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-threat-analyst.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/threat-analyst.sock"
+      health: "/api/v1/threat-analyst/health"
+      authentifie: true
+      nb_routes: 14
+      routes:
+        - "GET /alerts"
+        - "GET /health"
+        - "GET /overview"
+        - "GET /rules"
+        - "GET /rules/{rule_id}"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /analyze"
+        - "POST /collect"
+        - "POST /generate"
+        - "POST /rules/{rule_id}/apply"
+        - "POST /rules/{rule_id}/approve"
+        - "POST /rules/{rule_id}/reject"
+        - "POST /rules/{rule_id}/rollback"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/threat-analyst"
+      vhosts: []
+  - id: secubox-threatmesh
+    nom: "secubox-threatmesh"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "secubox-threatfeed"
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: true
+      nb_routes: 7
+      routes:
+        - "GET /decisions"
+        - "GET /health"
+        - "GET /peers"
+        - "GET /status"
+        - "POST /feeds/refresh"
+        - "POST /mesh/gossip"
+        - "POST /mesh/ingest"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-threats
+    nom: "secubox-threats"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Unified Threats Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/threats.sock"
+      health: "/api/v1/threats/health"
+      authentifie: true
+      nb_routes: 25
+      routes:
+        - "DELETE /feed/{feed_id}"
+        - "DELETE /ioc/{ioc_id}"
+        - "GET /alerts"
+        - "GET /alerts/sources"
+        - "GET /config"
+        - "GET /feeds"
+        - "GET /health"
+        - "GET /incidents"
+        - "GET /iocs"
+        - "GET /report/{report_id}"
+        - "GET /reports"
+        - "GET /scores"
+        - "GET /status"
+        - "GET /threat/{threat_id}"
+        - "GET /threats"
+        - "GET /timeline"
+        - "POST /config"
+        - "POST /feed/subscribe"
+        - "POST /incident"
+        - "POST /ioc"
+        - "POST /report/generate"
+        - "POST /threat/{threat_id}/acknowledge"
+        - "POST /threat/{threat_id}/resolve"
+        - "POST /threats"
+        - "PUT /incident/{incident_id}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/threats"
+      vhosts: []
+  - id: secubox-toolbox
+    nom: "secubox-toolbox"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 72
+    depends: []
+    cli:
+      - "sbxmitm-policyctl"
+      - "secubox-blacklist-attrib"
+      - "secubox-blacklist-sync"
+      - "secubox-escalate"
+      - "secubox-toolbox-autolearn"
+      - "secubox-toolbox-db-tune"
+      - "secubox-toolbox-fetch-apk"
+      - "secubox-toolbox-fetch-xpi"
+      - "secubox-toolbox-lxc-provision"
+      - "secubox-toolbox-mesh-exclusion-publish"
+      - "secubox-toolbox-mesh-exclusion-sync"
+      - "secubox-toolbox-mitm-wg-launch"
+      - "secubox-toolbox-tor-exempt-hosts"
+      - "secubox-toolbox-tor-reconcile"
+      - "secubox-toolbox-wg-provision"
+      - "secubox-toolbox-wg-restore"
+    systemd:
+      - "secubox-toolbox-mitm-wg-dynreload.path"
+      - "secubox-toolbox-mitm-wg-dynreload.service"
+      - "secubox-toolbox-mitm-wg.service"
+      - "secubox-toolbox.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-toolbox-ng
+    nom: "secubox-toolbox-ng"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 70
+    depends: []
+    cli:
+      - "secubox-sentinel-feeds"
+    systemd:
+      - "sbx-sentinel.service"
+      - "secubox-sentinel-feeds.service"
+      - "secubox-sentinel-feeds.timer"
+      - "secubox-toolbox-ng-worker@.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-tor
+    nom: "secubox-tor"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Tor Module"
+    manifeste: true
+    lxc: false
+    tests: 5
+    depends:
+      - "secubox-core"
+    cli:
+      - "tor-lan-ip"
+      - "torctl"
+    systemd:
+      - "secubox-tor.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/tor.sock"
+      health: "/api/v1/tor/health"
+      authentifie: true
+      nb_routes: 18
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /circuits"
+        - "GET /health"
+        - "GET /hidden_services"
+        - "GET /history"
+        - "GET /info"
+        - "GET /onion_dns"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /check_leaks"
+        - "POST /disable"
+        - "POST /enable"
+        - "POST /hidden_service/add"
+        - "POST /hidden_service/remove"
+        - "POST /new_identity"
+        - "POST /refresh_ips"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/tor"
+      vhosts: []
+  - id: secubox-torrent
+    nom: "secubox-torrent"
+    categorie: "misc"
+    tier: "lite"
+    description: "WebTorrent streaming for SecuBox (LXC-native)"
+    manifeste: true
+    lxc: true
+    tests: 2
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-torrent-conserve"
+    systemd: []
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/torrent"
+      vhosts:
+        - "torrent.gk2.secubox.in"
+  - id: secubox-traffic
+    nom: "secubox-traffic"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Traffic Shaper"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-traffic.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/traffic.sock"
+      health: "/api/v1/traffic/health"
+      authentifie: true
+      nb_routes: 20
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /classes"
+        - "GET /health"
+        - "GET /history"
+        - "GET /info"
+        - "GET /presets"
+        - "GET /rules"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /apply"
+        - "POST /class/add"
+        - "POST /class/delete"
+        - "POST /class/update"
+        - "POST /clear"
+        - "POST /preset/apply"
+        - "POST /rule/add"
+        - "POST /rule/delete"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/traffic"
+      vhosts: []
+  - id: secubox-turn
+    nom: "secubox-turn"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox TURN/STUN Server Management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-turn.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/turn.sock"
+      health: "/api/v1/turn/health"
+      authentifie: true
+      nb_routes: 20
+      routes:
+        - "DELETE /users/{username}"
+        - "GET /access"
+        - "GET /components"
+        - "GET /config"
+        - "GET /credentials"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /realm"
+        - "GET /sessions"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /users"
+        - "POST /config"
+        - "POST /credentials"
+        - "POST /generate_secret"
+        - "POST /realm"
+        - "POST /restart"
+        - "POST /start"
+        - "POST /stop"
+        - "POST /users"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/turn"
+      vhosts: []
+  - id: secubox-ui-manager
+    nom: "secubox-ui-manager"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Unified UI Manager"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd:
+      - "secubox-ui-health.service"
+      - "secubox-ui-health.timer"
+      - "secubox-ui-manager.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-users
+    nom: "secubox-users"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Users Module"
+    manifeste: true
+    lxc: true
+    tests: 16
+    depends:
+      - "secubox-core"
+    cli:
+      - "usersctl"
+    systemd:
+      - "secubox-users.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/users.sock"
+      health: "/api/v1/users/health"
+      authentifie: true
+      nb_routes: 38
+      routes:
+        - "DELETE /group/{name}"
+        - "DELETE /role/{role_id}"
+        - "DELETE /session/{session_id}"
+        - "DELETE /user/{username}"
+        - "GET /access"
+        - "GET /acl"
+        - "GET /components"
+        - "GET /export"
+        - "GET /groups"
+        - "GET /health"
+        - "GET /permissions"
+        - "GET /role/{role_id}"
+        - "GET /roles"
+        - "GET /services"
+        - "GET /sessions"
+        - "GET /status"
+        - "GET /user/{username}"
+        - "GET /user/{username}/permissions"
+        - "GET /user/{username}/roles"
+        - "GET /user/{username}/sessions"
+        - "GET /users"
+        - "POST /acl/validate"
+        - "POST /group"
+        - "POST /import"
+        - "POST /role"
+        - "POST /sessions/revoke-all"
+        - "POST /user"
+        - "POST /user/{username}/check-permission"
+        - "POST /user/{username}/disable"
+        - "POST /user/{username}/enable"
+        - "POST /user/{username}/password"
+        - "POST /user/{username}/sessions/revoke"
+        - "POST /user/{username}/sync"
+        - "POST /user/{username}/totp/backup-codes"
+        - "POST /user/{username}/totp/disable"
+        - "PUT /role/{role_id}"
+        - "PUT /user/{username}"
+        - "PUT /user/{username}/roles"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/users"
+      vhosts: []
+  - id: secubox-vault
+    nom: "secubox-vault"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Vault - Secrets management"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-vault.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/vault.sock"
+      health: "/api/v1/vault/health"
+      authentifie: false
+      nb_routes: 14
+      routes:
+        - "DELETE /secrets/{key}"
+        - "GET /audit"
+        - "GET /health"
+        - "GET /secrets"
+        - "GET /secrets/search/{query}"
+        - "GET /secrets/tag/{tag}"
+        - "GET /secrets/{key}"
+        - "GET /status"
+        - "POST /export"
+        - "POST /generate"
+        - "POST /import"
+        - "POST /secrets"
+        - "POST /secrets/{key}/rotate"
+        - "PUT /secrets/{key}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/vault"
+      vhosts: []
+  - id: secubox-vhost
+    nom: "secubox-vhost"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Virtual Host Manager"
+    manifeste: true
+    lxc: false
+    tests: 3
+    depends:
+      - "secubox-core"
+    cli:
+      - "vhostctl"
+    systemd:
+      - "secubox-vhost.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/vhost.sock"
+      health: "/api/v1/vhost/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "DELETE /vhost/{domain}"
+        - "GET /access"
+        - "GET /certificates"
+        - "GET /components"
+        - "GET /health"
+        - "GET /logs/{domain}"
+        - "GET /status"
+        - "GET /vhost/{domain}"
+        - "GET /vhosts"
+        - "POST /certificate/issue"
+        - "POST /migrate"
+        - "POST /reload"
+        - "POST /test"
+        - "POST /vhost"
+        - "PUT /vhost/{domain}"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/vhost"
+      vhosts: []
+  - id: secubox-vm
+    nom: "secubox-vm"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox VM Manager - Virtualization management"
+    manifeste: true
+    lxc: true
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-vm.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/vm.sock"
+      health: "/api/v1/vm/health"
+      authentifie: false
+      nb_routes: 15
+      routes:
+        - "DELETE /vms/{name}"
+        - "GET /health"
+        - "GET /iso"
+        - "GET /status"
+        - "GET /templates"
+        - "GET /vms"
+        - "GET /vms/kvm"
+        - "GET /vms/lxc"
+        - "GET /vms/{name}"
+        - "GET /vms/{name}/console"
+        - "POST /vms/kvm"
+        - "POST /vms/lxc"
+        - "POST /vms/{name}/restart"
+        - "POST /vms/{name}/start"
+        - "POST /vms/{name}/stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/vm"
+      vhosts: []
+  - id: secubox-voip
+    nom: "secubox-voip"
+    categorie: "misc"
+    tier: "lite"
+    description: "VoIP/PBX management module for SecuBox"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/voip.sock"
+      health: "/api/v1/voip/health"
+      authentifie: true
+      nb_routes: 28
+      routes:
+        - "DELETE /extension/{ext_number}"
+        - "DELETE /ivr/{ivr_id}"
+        - "DELETE /route/{route_id}"
+        - "DELETE /trunk/{trunk_id}"
+        - "GET /cdr"
+        - "GET /channels"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /extensions"
+        - "GET /health"
+        - "GET /ivr"
+        - "GET /logs"
+        - "GET /routes/inbound"
+        - "GET /routes/outbound"
+        - "GET /sip/peers"
+        - "GET /status"
+        - "GET /trunks"
+        - "GET /voicemail"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /container/uninstall"
+        - "POST /extension"
+        - "POST /ivr"
+        - "POST /route"
+        - "POST /trunk"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/voip"
+      vhosts: []
+  - id: secubox-vortex-dns
+    nom: "secubox-vortex-dns"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox Vortex-dns Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-vortex-dns.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/vortex-dns.sock"
+      health: "/api/v1/vortex-dns/health"
+      authentifie: true
+      nb_routes: 15
+      routes:
+        - "DELETE /blocklists/{name}"
+        - "DELETE /rules/{domain}"
+        - "GET /blocklists"
+        - "GET /feeds"
+        - "GET /health"
+        - "GET /info"
+        - "GET /rules"
+        - "GET /service"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /blocklists"
+        - "POST /blocklists/apply"
+        - "POST /blocklists/update"
+        - "POST /enable"
+        - "POST /rules"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/vortex-dns"
+      vhosts: []
+  - id: secubox-vortex-firewall
+    nom: "secubox-vortex-firewall"
+    categorie: "security"
+    tier: "lite"
+    description: "SecuBox Vortex-firewall Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-vortex-firewall.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/vortex-firewall.sock"
+      health: "/api/v1/vortex-firewall/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /blocklists/{name}"
+        - "DELETE /rules/{ip:path}"
+        - "GET /blocklists"
+        - "GET /feeds"
+        - "GET /geoip"
+        - "GET /health"
+        - "GET /info"
+        - "GET /rules"
+        - "GET /service"
+        - "GET /stats"
+        - "GET /status"
+        - "POST /blocklists"
+        - "POST /blocklists/apply"
+        - "POST /blocklists/update"
+        - "POST /enable"
+        - "POST /geoip"
+        - "POST /rules"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/vortex-firewall"
+      vhosts: []
+  - id: secubox-waf
+    nom: "secubox-waf"
+    categorie: "security"
+    tier: "standard"
+    description: "SecuBox Web Application Firewall (mitmproxy LXC)"
+    manifeste: true
+    lxc: false
+    tests: 2
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-waf.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/waf.sock"
+      health: "/api/v1/waf/health"
+      authentifie: true
+      nb_routes: 22
+      routes:
+        - "GET /alerts"
+        - "GET /bans"
+        - "GET /bans/history"
+        - "GET /categories"
+        - "GET /doctor"
+        - "GET /geoip/{ip}"
+        - "GET /health"
+        - "GET /info"
+        - "GET /rules"
+        - "GET /rules/{category}"
+        - "GET /stats"
+        - "GET /status"
+        - "GET /visits"
+        - "GET /whitelist"
+        - "POST /autoban/config"
+        - "POST /ban"
+        - "POST /category/{category}/toggle"
+        - "POST /check"
+        - "POST /reload"
+        - "POST /repair"
+        - "POST /unban/{ip}"
+        - "POST /whitelist"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/waf"
+      vhosts: []
+  - id: secubox-waf-ng
+    nom: "secubox-waf-ng"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-wan-link-guard
+    nom: "secubox-wan-link-guard"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli:
+      - "secubox-wan-link-guard"
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-watchdog
+    nom: "secubox-watchdog"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Watchdog Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-watchdog.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/watchdog.sock"
+      health: "/api/v1/watchdog/health"
+      authentifie: true
+      nb_routes: 17
+      routes:
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /config"
+        - "GET /containers"
+        - "GET /endpoints"
+        - "GET /health"
+        - "GET /history"
+        - "GET /logs"
+        - "GET /services"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /check"
+        - "POST /config"
+        - "POST /container/restart"
+        - "POST /logs/clear"
+        - "POST /service/restart"
+        - "POST /webhooks"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/watchdog"
+      vhosts: []
+  - id: secubox-wazuh
+    nom: "secubox-wazuh"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox Wazuh SIEM integration"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-wazuh.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/wazuh.sock"
+      health: "/api/v1/wazuh/health"
+      authentifie: false
+      nb_routes: 18
+      routes:
+        - "GET /agents"
+        - "GET /alerts"
+        - "GET /alerts/stats"
+        - "GET /alerts/{alert_id}"
+        - "GET /decoders"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /rootcheck"
+        - "GET /rules"
+        - "GET /status"
+        - "GET /syscheck"
+        - "POST /agent/register"
+        - "POST /agent/restart"
+        - "POST /agent/start"
+        - "POST /agent/stop"
+        - "POST /manager/restart"
+        - "POST /manager/start"
+        - "POST /manager/stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/wazuh"
+      vhosts: []
+  - id: secubox-webext
+    nom: "secubox-webext"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: false
+    tests: 0
+    depends: []
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "À documenter"
+      vhosts: []
+  - id: secubox-webmail
+    nom: "secubox-webmail"
+    categorie: "email"
+    tier: "lite"
+    description: "SecuBox Webmail Module"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/webmail.sock"
+      health: "/api/v1/webmail/health"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/webmail"
+      vhosts: []
+  - id: secubox-webmail-lxc
+    nom: "secubox-webmail-lxc"
+    categorie: "email"
+    tier: "lite"
+    description: "SecuBox Webmail LXC Container (Backend)"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd: []
+    ports: []
+    documentation: []
+    api:
+      socket: "/run/secubox/webmail-lxc.sock"
+      health: "/api/v1/webmail-lxc/health"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: false
+      chemin: "/srv/secubox/www/webmail-lxc"
+      vhosts: []
+  - id: secubox-webradio
+    nom: "secubox-webradio"
+    categorie: "misc"
+    tier: "lite"
+    description: "Internet Radio Streaming for SecuBox"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-webradio.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/webradio.sock"
+      health: "/api/v1/webradio/health"
+      authentifie: true
+      nb_routes: 25
+      routes:
+        - "DELETE /recording/{filename}"
+        - "DELETE /schedule/{entry_id}"
+        - "DELETE /station/{station_id}"
+        - "GET /config"
+        - "GET /container/status"
+        - "GET /health"
+        - "GET /logs"
+        - "GET /recordings"
+        - "GET /schedule"
+        - "GET /station/{station_id}"
+        - "GET /station/{station_id}/play"
+        - "GET /stations"
+        - "GET /status"
+        - "GET /stream/status"
+        - "POST /config"
+        - "POST /container/install"
+        - "POST /container/restart"
+        - "POST /container/start"
+        - "POST /container/stop"
+        - "POST /record/start"
+        - "POST /record/stop"
+        - "POST /schedule"
+        - "POST /station/add"
+        - "POST /stream/start"
+        - "POST /stream/stop"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/webradio"
+      vhosts: []
+  - id: secubox-wireguard
+    nom: "secubox-wireguard"
+    categorie: "network"
+    tier: "lite"
+    description: "SecuBox WireGuard VPN Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli:
+      - "wgctl"
+    systemd:
+      - "secubox-wireguard.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/wireguard.sock"
+      health: "/api/v1/wireguard/health"
+      authentifie: true
+      nb_routes: 28
+      routes:
+        - "DELETE /peer"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /access"
+        - "GET /components"
+        - "GET /config/backups"
+        - "GET /export/peers"
+        - "GET /health"
+        - "GET /interfaces"
+        - "GET /peer/{name}/config"
+        - "GET /peer/{name}/qr"
+        - "GET /peers"
+        - "GET /peers/history"
+        - "GET /peers/status"
+        - "GET /stats"
+        - "GET /stats/history"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /config/backup/{interface}"
+        - "POST /config/restore/{backup_name}"
+        - "POST /genkey"
+        - "POST /genpsk"
+        - "POST /interface/{name}/down"
+        - "POST /interface/{name}/up"
+        - "POST /migrate"
+        - "POST /peer"
+        - "POST /webhooks"
+        - "POST /webhooks/{webhook_id}/test"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/wireguard"
+      vhosts: []
+  - id: secubox-yacy
+    nom: "secubox-yacy"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 0
+    depends: []
+    cli:
+      - "yacyctl"
+    systemd:
+      - "secubox-yacy.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 5
+      routes:
+        - "GET /access"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /status"
+        - "GET /version"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "yacy.gk2.secubox.in"
+  - id: secubox-yggdrasil
+    nom: "secubox-yggdrasil"
+    categorie: "vpn"
+    tier: "lite"
+    description: "SecuBox Mesh DNS - Meshname DNS for mesh networks"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-yggdrasil.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/mesh.sock"
+      health: "/api/v1/mesh/health"
+      authentifie: true
+      nb_routes: 34
+      routes:
+        - "DELETE /secubox/peer/{ipv6:path}"
+        - "DELETE /webhooks/{webhook_id}"
+        - "GET /discovery/schedule"
+        - "GET /domains"
+        - "GET /export/peers"
+        - "GET /export/services"
+        - "GET /health"
+        - "GET /health/history"
+        - "GET /health/peers"
+        - "GET /peers"
+        - "GET /resolve"
+        - "GET /secubox/peer/{ipv6:path}"
+        - "GET /secubox/peers"
+        - "GET /secubox/self"
+        - "GET /services"
+        - "GET /services/health"
+        - "GET /sessions"
+        - "GET /stats/history"
+        - "GET /stats/traffic"
+        - "GET /status"
+        - "GET /summary"
+        - "GET /webhooks"
+        - "POST /announce"
+        - "POST /discovery/schedule"
+        - "POST /health/check/{ipv6:path}"
+        - "POST /import/peers"
+        - "POST /revoke"
+        - "POST /secubox/discover"
+        - "POST /secubox/register"
+        - "POST /services/{name}/health"
+        - "POST /stats/snapshot"
+        - "POST /sync"
+        - "POST /webhooks"
+        - "POST /webhooks/{webhook_id}/test"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/mesh"
+      vhosts: []
+  - id: secubox-ytsas
+    nom: "secubox-ytsas"
+    categorie: "mind"
+    tier: "lite"
+    description: "YouTube/web-media SAS for SecuBox (LXC-native)"
+    manifeste: true
+    lxc: true
+    tests: 1
+    depends:
+      - "secubox-core"
+    cli:
+      - "secubox-ytsas-conserve"
+    systemd: []
+    ports:
+      - "9080"
+    documentation: []
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 0
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/ytsas"
+      vhosts:
+        - "ytsas.gk2.secubox.in"
+  - id: secubox-zigbee
+    nom: "secubox-zigbee"
+    categorie: "À documenter"
+    tier: "À documenter"
+    description: "À documenter"
+    manifeste: false
+    lxc: true
+    tests: 0
+    depends: []
+    cli:
+      - "zigbee-backup"
+      - "zigbee-restore"
+      - "zigbeectl"
+    systemd:
+      - "secubox-zigbee.service"
+    ports:
+      - "9080"
+    documentation:
+      - "README.md"
+    api:
+      socket: "À documenter"
+      health: "À documenter"
+      authentifie: false
+      nb_routes: 7
+      routes:
+        - "GET /access"
+        - "GET /backups"
+        - "GET /components"
+        - "GET /healthz"
+        - "GET /status"
+        - "POST /backup"
+        - "POST /restore"
+    interface_web:
+      presente: true
+      chemin: "À documenter"
+      vhosts:
+        - "zigbee.gk2.secubox.in"
+  - id: secubox-zkp
+    nom: "secubox-zkp"
+    categorie: "misc"
+    tier: "lite"
+    description: "SecuBox ZKP - Zero-Knowledge Proof Dashboard"
+    manifeste: true
+    lxc: false
+    tests: 0
+    depends:
+      - "secubox-core"
+    cli: []
+    systemd:
+      - "secubox-zkp.service"
+    ports: []
+    documentation:
+      - "README.md"
+    api:
+      socket: "/run/secubox/zkp.sock"
+      health: "/api/v1/zkp/health"
+      authentifie: true
+      nb_routes: 7
+      routes:
+        - "DELETE /keys/{name}"
+        - "GET /health"
+        - "GET /keys"
+        - "GET /status"
+        - "POST /keygen"
+        - "POST /prove"
+        - "POST /verify"
+    interface_web:
+      presente: true
+      chemin: "/srv/secubox/www/zkp"
+      vhosts: []
