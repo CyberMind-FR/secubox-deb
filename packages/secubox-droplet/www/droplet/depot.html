@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="dark">
 <title>Dépôt — SecuBox</title>
 <style>
 /* Charte panneau SecuBox : cyan sur fond sombre, Courier Prime.
@@ -12,43 +13,71 @@
    ferait dépendre le dépôt d'un serveur que nous ne tenons pas, et
    renseignerait ce tiers sur qui vient déposer. */
 :root {
-  --fond: #0b1014; --carte: #121a20; --bord: #1e2d36;
+  --fond: #0b1014; --carte: #121a20; --carte-2: #16232b; --bord: #1e2d36;
   --cyan: #00d4ff; --texte: #cfe3ea; --doux: #7a94a0;
   --ambre: #f0b429; --rouge: #e05263; --vert: #57c98a;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html { color-scheme: dark; }
 body {
-  font-family: 'Courier Prime', 'Courier New', monospace;
+  font-family: 'Courier Prime', 'Courier New', ui-monospace, monospace;
   background: var(--fond); color: var(--texte);
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  min-height: 100dvh; display: grid; place-items: center;
   padding: 2rem 1rem; line-height: 1.6;
 }
 .boite { max-width: 42rem; width: 100%; }
 .chapeau { color: var(--cyan); letter-spacing: .18em; text-transform: uppercase;
-           font-size: .72rem; margin-bottom: .6rem; }
-h1 { font-size: 1.6rem; margin-bottom: .4rem; text-wrap: balance; }
-.resume { color: var(--doux); margin-bottom: 1.6rem; }
+           font-size: .72rem; margin-bottom: .5rem; }
+h1 { font-size: clamp(1.3rem, 4vw, 1.7rem); margin-bottom: .35rem;
+     text-wrap: balance; font-weight: 700; }
+.resume { color: var(--doux); margin-bottom: 1.5rem; }
 
+/* LA ZONE EST UN <label> — donc `display: inline` par défaut, et c'est
+   exactement ce qui cassait la première version : bordure et remplissage d'un
+   élément en ligne se replient sur les lignes de texte au lieu de dessiner un
+   cadre. Un `display` explicite n'est pas une précaution de style ici, c'est
+   ce qui fait exister le cadre. */
 .zone {
+  display: grid; place-items: center; position: relative;
   border: 2px dashed var(--bord); border-radius: 12px;
-  padding: 2.5rem 1.5rem; text-align: center; cursor: pointer;
-  transition: border-color .15s, background .15s;
-  background: var(--carte);
+  padding: 2.4rem 1.4rem; text-align: center; cursor: pointer;
+  background: var(--carte); transition: border-color .15s, background .15s;
+  min-height: 9rem;
 }
-.zone:hover, .zone.survol { border-color: var(--cyan); background: #16232b; }
-.zone:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
-.zone .goutte { font-size: 2.6rem; line-height: 1; display: block; margin-bottom: .6rem; }
-.zone .indice { color: var(--doux); font-size: .86rem; margin-top: .4rem; }
-input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.zone:hover, .zone.survol { border-color: var(--cyan); background: var(--carte-2); }
+.zone:focus-within { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.zone .goutte { font-size: 2.4rem; line-height: 1; margin-bottom: .5rem; }
+.zone .titre { font-weight: 700; }
+.zone .indice { color: var(--doux); font-size: .84rem; margin-top: .35rem; }
+/* L'input est CONTENU dans la zone (position: relative ci-dessus) et non
+   renvoyé au coin du document : `clip-path` le rend invisible sans le sortir
+   du flux d'accessibilité, contrairement à `display: none` qui le retirerait
+   du parcours clavier. */
+.zone input[type=file] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer;
+}
 
 ul.liste { list-style: none; margin: 1rem 0 0; }
 ul.liste li {
-  display: flex; justify-content: space-between; gap: 1rem;
-  padding: .45rem .7rem; border: 1px solid var(--bord);
-  border-radius: 6px; margin-bottom: .4rem; background: var(--carte);
+  display: flex; align-items: center; gap: .8rem;
+  padding: .5rem .55rem .5rem .8rem; border: 1px solid var(--bord);
+  border-radius: 8px; margin-bottom: .4rem; background: var(--carte);
 }
-ul.liste .poids { color: var(--doux); flex: 0 0 auto; }
-ul.liste .nom { overflow-wrap: anywhere; }
+ul.liste .nom { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+ul.liste .poids { color: var(--doux); flex: 0 0 auto;
+                  font-variant-numeric: tabular-nums; }
+ul.liste .retirer {
+  flex: 0 0 auto; background: none; border: 1px solid transparent;
+  color: var(--doux); border-radius: 6px; padding: .1rem .5rem;
+  font: inherit; cursor: pointer; line-height: 1.3;
+}
+ul.liste .retirer:hover { color: var(--rouge); border-color: var(--rouge); }
+ul.liste .retirer:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+.total { color: var(--doux); font-size: .84rem; margin-top: .5rem;
+         font-variant-numeric: tabular-nums; }
+.total.trop { color: var(--ambre); }
 
 textarea {
   width: 100%; margin-top: 1rem; min-height: 4.5rem; resize: vertical;
@@ -58,23 +87,31 @@ textarea {
 }
 textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 
-.pied { margin-top: 1.2rem; display: flex; gap: .9rem; align-items: center;
+.pied { margin-top: 1.1rem; display: flex; gap: .9rem; align-items: center;
         flex-wrap: wrap; }
-button {
+button.action {
   background: transparent; color: var(--cyan); border: 1px solid var(--cyan);
-  border-radius: 6px; padding: .6rem 1.3rem; font: inherit; cursor: pointer;
+  border-radius: 6px; padding: .6rem 1.4rem; font: inherit; cursor: pointer;
 }
-button:hover:not(:disabled) { background: var(--cyan); color: var(--fond); }
-button:disabled { opacity: .45; cursor: default; }
-button:focus-visible { outline: 2px solid var(--texte); outline-offset: 2px; }
+button.action:hover:not(:disabled) { background: var(--cyan); color: var(--fond); }
+button.action:disabled { opacity: .4; cursor: not-allowed; }
+button.action:focus-visible { outline: 2px solid var(--texte); outline-offset: 2px; }
 
-progress { width: 100%; height: .5rem; margin-top: 1rem; }
-.note { color: var(--doux); font-size: .82rem; }
-.message { margin-top: 1.2rem; padding: .9rem 1.1rem; border-radius: 8px;
+progress { width: 100%; height: .45rem; margin-top: .9rem;
+           accent-color: var(--cyan); }
+.note { color: var(--doux); font-size: .84rem;
+        font-variant-numeric: tabular-nums; }
+
+.message { margin-top: 1.2rem; padding: .95rem 1.1rem; border-radius: 8px;
            border: 1px solid var(--bord); background: var(--carte); }
 .message.bien { border-color: var(--vert); }
 .message.mal  { border-color: var(--rouge); }
-.message code { color: var(--cyan); overflow-wrap: anywhere; }
+.message .ref { color: var(--cyan); overflow-wrap: anywhere;
+                display: inline-block; margin-top: .3rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .zone { transition: none; }
+}
 </style>
 </head>
 <body>
@@ -83,167 +120,227 @@ progress { width: 100%; height: .5rem; margin-top: 1rem; }
   <p class="chapeau">SecuBox · Dépôt</p>
   <h1>Laissez vos fichiers ici</h1>
   <p class="resume">
-    Ils partent directement sur la box et une alerte prévient son propriétaire.
-    Rien de ce qui est déposé n'est publié ni relisible depuis cette page.
+    Ils partent directement sur la box, et une alerte prévient son
+    propriétaire. Rien de ce qui est déposé n'est publié, ni relisible depuis
+    cette page.
   </p>
 
-  <form id="f">
-    <label class="zone" id="zone" tabindex="0" role="button"
-           aria-describedby="indice">
+  <!-- `action`, `method` et `enctype` sont posés MEME si le script les
+       remplace : sans script, la page reste un formulaire qui dépose
+       réellement. La réponse est alors du JSON brut — c'est brut, mais le
+       fichier est arrivé, ce qui vaut infiniment mieux qu'un bouton inerte. -->
+  <form id="f" method="post" enctype="multipart/form-data"
+        action="/api/v1/droplet/depot">
+
+    <label class="zone" id="zone">
       <span class="goutte" aria-hidden="true">💧</span>
-      <span id="titrezone">Glissez vos fichiers, ou cliquez pour les choisir</span>
+      <span class="titre" id="titrezone">Glissez vos fichiers, ou cliquez pour les choisir</span>
       <span class="indice" id="indice">Archives, images, documents — peu importe</span>
-      <input type="file" id="fichiers" name="fichiers" multiple>
+      <input type="file" id="fichiers" name="fichiers" multiple
+             aria-labelledby="titrezone" aria-describedby="indice">
     </label>
 
-    <ul class="liste" id="liste" hidden></ul>
+    <ul class="liste" id="liste" hidden aria-label="Fichiers à déposer"></ul>
+    <p class="total" id="total" hidden></p>
 
     <textarea id="mot" name="mot" maxlength="2000"
               placeholder="Un mot pour accompagner le dépôt (facultatif)"
               aria-label="Message accompagnant le dépôt"></textarea>
 
     <div class="pied">
-      <button type="submit" id="envoyer" disabled>Déposer</button>
-      <span class="note" id="etat"></span>
+      <button type="submit" class="action" id="envoyer" disabled>Déposer</button>
+      <span class="note" id="etat" role="status" aria-live="polite"></span>
     </div>
-    <progress id="jauge" hidden max="100" value="0"></progress>
+    <progress id="jauge" hidden max="100" value="0"
+              aria-label="Progression du dépôt"></progress>
   </form>
 
-  <div id="message" class="message" hidden></div>
+  <div id="message" class="message" hidden role="status" aria-live="polite"></div>
 
 </div>
 <script>
-// L'API est montée sous /api/v1/droplet par le proxy.
-const API = '/api/v1/droplet';
-const zone = document.getElementById('zone');
-const champ = document.getElementById('fichiers');
-const liste = document.getElementById('liste');
-const bouton = document.getElementById('envoyer');
-const etat = document.getElementById('etat');
-const jauge = document.getElementById('jauge');
-const msg = document.getElementById('message');
-let choisis = [];
-let reglages = { taille_max: 0, fichiers_max: 20, actif: true };
+(function () {
+  'use strict';
+  var API = '/api/v1/droplet';
+  var zone = document.getElementById('zone');
+  var champ = document.getElementById('fichiers');
+  var liste = document.getElementById('liste');
+  var total = document.getElementById('total');
+  var bouton = document.getElementById('envoyer');
+  var etat = document.getElementById('etat');
+  var jauge = document.getElementById('jauge');
+  var msg = document.getElementById('message');
+  var choisis = [];
+  var reglages = { actif: true, taille_max: 0, fichiers_max: 20 };
 
-function poids(n) {
-  if (n >= 1 << 30) return (n / (1 << 30)).toFixed(1) + ' Gio';
-  if (n >= 1 << 20) return (n / (1 << 20)).toFixed(1) + ' Mio';
-  if (n >= 1 << 10) return (n / (1 << 10)).toFixed(1) + ' Kio';
-  return n + ' o';
-}
-
-// LES PLAFONDS SONT DEMANDES AU SERVEUR, jamais recopiés ici. Deux valeurs
-// écrites à deux endroits divergent au premier ajustement, et c'est le
-// déposant qui découvre l'écart après dix minutes de téléversement.
-fetch(API + '/depot/reglages').then(r => r.json()).then(r => {
-  reglages = r;
-  if (!r.actif) {
-    zone.style.opacity = .5;
-    etat.textContent = "L'espace de dépôt est fermé.";
-    champ.disabled = true;
-  } else if (r.taille_max) {
-    document.getElementById('indice').textContent =
-      'Jusqu’à ' + poids(r.taille_max) + ' par fichier, ' +
-      r.fichiers_max + ' fichiers par dépôt';
+  function poids(n) {
+    if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' Gio';
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' Mio';
+    if (n >= 1024) return (n / 1024).toFixed(1) + ' Kio';
+    return n + ' o';
   }
-}).catch(() => { /* la page reste utilisable : le serveur tranchera */ });
 
-function montre() {
-  liste.innerHTML = '';
-  liste.hidden = choisis.length === 0;
-  let total = 0;
-  for (const f of choisis) {
-    total += f.size;
-    const li = document.createElement('li');
-    const n = document.createElement('span');
-    n.className = 'nom';
-    // textContent et non innerHTML : le nom vient du système de fichiers du
-    // visiteur, donc d'ailleurs. Un nom peut contenir du balisage.
-    n.textContent = f.name;
-    const p = document.createElement('span');
-    p.className = 'poids';
-    p.textContent = poids(f.size);
-    li.append(n, p);
-    liste.append(li);
+  // LES PLAFONDS SONT DEMANDES AU SERVEUR, jamais recopiés ici. Deux valeurs
+  // écrites à deux endroits divergent au premier ajustement — et c'est le
+  // déposant qui découvre l'écart après dix minutes de téléversement.
+  fetch(API + '/depot/reglages').then(function (r) { return r.json(); })
+    .then(function (r) {
+      reglages = r;
+      if (!r.actif) {
+        zone.style.opacity = .5;
+        champ.disabled = true;
+        etat.textContent = "L'espace de dépôt est fermé.";
+        return;
+      }
+      if (r.taille_max) {
+        document.getElementById('indice').textContent =
+          'Jusqu’à ' + poids(r.taille_max) + ' par fichier, ' +
+          r.fichiers_max + ' fichiers par dépôt';
+      }
+    })
+    .catch(function () { /* la page reste utilisable : le serveur tranchera */ });
+
+  function montre() {
+    liste.textContent = '';
+    liste.hidden = choisis.length === 0;
+    total.hidden = choisis.length === 0;
+    var somme = 0, trop = false;
+    choisis.forEach(function (f, i) {
+      somme += f.size;
+      if (reglages.taille_max && f.size > reglages.taille_max) trop = true;
+      var li = document.createElement('li');
+      var n = document.createElement('span');
+      n.className = 'nom';
+      // textContent et non innerHTML : le nom vient du système de fichiers du
+      // visiteur, donc d'ailleurs. Un nom peut contenir du balisage.
+      n.textContent = f.name;
+      var p = document.createElement('span');
+      p.className = 'poids';
+      p.textContent = poids(f.size);
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'retirer';
+      b.textContent = '✕';
+      // POUVOIR RETIRER UN FICHIER SANS TOUT RECOMMENCER. Sans cela, un clic de
+      // trop oblige à refaire la sélection entière — et sur un dépôt de dix
+      // fichiers, on renonce.
+      b.setAttribute('aria-label', 'Retirer ' + f.name);
+      b.addEventListener('click', function () {
+        choisis.splice(i, 1); montre();
+      });
+      li.append(n, p, b);
+      liste.append(li);
+    });
+    bouton.disabled = choisis.length === 0;
+    total.className = 'total' + (trop ? ' trop' : '');
+    total.textContent = choisis.length + ' fichier(s), ' + poids(somme) +
+      (trop ? ' — un fichier dépasse le plafond, le serveur le refusera' : '');
+    etat.textContent = '';
   }
-  bouton.disabled = choisis.length === 0;
-  etat.textContent = choisis.length
-    ? choisis.length + ' fichier(s), ' + poids(total) : '';
-}
 
-function ajoute(fs) {
-  choisis = choisis.concat(Array.from(fs)).slice(0, reglages.fichiers_max || 20);
-  montre();
-}
-
-champ.addEventListener('change', e => ajoute(e.target.files));
-zone.addEventListener('keydown', e => {
-  // Une zone cliquable doit s'actionner au clavier. Sans cela, déposer un
-  // fichier devient impossible pour qui n'utilise pas de souris.
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); champ.click(); }
-});
-['dragenter', 'dragover'].forEach(t => zone.addEventListener(t, e => {
-  e.preventDefault(); zone.classList.add('survol');
-}));
-['dragleave', 'drop'].forEach(t => zone.addEventListener(t, e => {
-  e.preventDefault(); zone.classList.remove('survol');
-}));
-zone.addEventListener('drop', e => {
-  if (e.dataTransfer && e.dataTransfer.files) ajoute(e.dataTransfer.files);
-});
-
-document.getElementById('f').addEventListener('submit', e => {
-  e.preventDefault();
-  if (!choisis.length) return;
-  const corps = new FormData();
-  for (const f of choisis) corps.append('fichiers', f, f.name);
-  corps.append('mot', document.getElementById('mot').value);
-
-  bouton.disabled = true;
-  jauge.hidden = false; jauge.value = 0;
-  msg.hidden = true;
-
-  // XHR plutôt que fetch : c'est le seul moyen d'avoir une progression de
-  // téléversement. Sur une archive d'un gigaoctet, une page sans progression
-  // paraît figée — et l'on recharge, ce qui recommence tout.
-  const x = new XMLHttpRequest();
-  x.open('POST', API + '/depot');
-  x.upload.addEventListener('progress', ev => {
-    if (ev.lengthComputable) {
-      jauge.value = (ev.loaded / ev.total) * 100;
-      etat.textContent = poids(ev.loaded) + ' / ' + poids(ev.total);
+  function ajoute(fs) {
+    var max = reglages.fichiers_max || 20;
+    Array.prototype.forEach.call(fs, function (f) {
+      // On ne dépasse pas le nombre annoncé, et on le DIT plutôt que de
+      // laisser tomber les fichiers en trop en silence.
+      if (choisis.length < max) choisis.push(f);
+    });
+    if (fs.length && choisis.length >= max) {
+      etat.textContent = 'Maximum ' + max + ' fichiers par dépôt.';
     }
+    montre();
+    // Le champ est vidé pour qu'un même fichier puisse être re-choisi après
+    // avoir été retiré : sans cela, `change` ne se déclenche pas deux fois.
+    champ.value = '';
+  }
+
+  champ.addEventListener('change', function (e) { ajoute(e.target.files); });
+
+  ['dragenter', 'dragover'].forEach(function (t) {
+    zone.addEventListener(t, function (e) {
+      e.preventDefault(); zone.classList.add('survol');
+    });
   });
-  x.addEventListener('load', () => {
-    jauge.hidden = true; msg.hidden = false;
-    let d = {};
-    try { d = JSON.parse(x.responseText); } catch (_) { }
-    if (x.status >= 200 && x.status < 300 && d.ok) {
-      msg.className = 'message bien';
-      // ON REND L'IDENTIFIANT. C'est la seule prise du déposant sur ce qu'il
-      // vient d'envoyer : sans lui, il ne peut rien demander à personne.
-      msg.innerHTML = '<b>Dépôt reçu.</b><br>Référence : <code>' +
-        String(d.depot).replace(/[<&]/g, '') + '</code><br>' +
-        (d.alerte && d.alerte.ok
+  ['dragleave', 'dragend'].forEach(function (t) {
+    zone.addEventListener(t, function () { zone.classList.remove('survol'); });
+  });
+  zone.addEventListener('drop', function (e) {
+    e.preventDefault(); zone.classList.remove('survol');
+    if (e.dataTransfer && e.dataTransfer.files) ajoute(e.dataTransfer.files);
+  });
+  // Le document entier absorbe les dépôts manqués : sans cela, un fichier
+  // lâché à côté de la zone est OUVERT par le navigateur, et le visiteur perd
+  // la page qu'il était en train de remplir.
+  ['dragover', 'drop'].forEach(function (t) {
+    document.addEventListener(t, function (e) { e.preventDefault(); });
+  });
+
+  document.getElementById('f').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!choisis.length) return;
+
+    var corps = new FormData();
+    choisis.forEach(function (f) { corps.append('fichiers', f, f.name); });
+    corps.append('mot', document.getElementById('mot').value);
+
+    bouton.disabled = true;
+    jauge.hidden = false; jauge.value = 0;
+    msg.hidden = true;
+
+    // XHR plutôt que fetch : c'est le seul moyen d'avoir une progression de
+    // téléversement. Sur une archive d'un gigaoctet, une page sans progression
+    // paraît figée — et l'on recharge, ce qui recommence tout.
+    var x = new XMLHttpRequest();
+    x.open('POST', API + '/depot');
+    x.upload.addEventListener('progress', function (ev) {
+      if (ev.lengthComputable) {
+        jauge.value = (ev.loaded / ev.total) * 100;
+        etat.textContent = poids(ev.loaded) + ' / ' + poids(ev.total);
+      }
+    });
+    x.addEventListener('load', function () {
+      jauge.hidden = true;
+      msg.hidden = false;
+      var d = {};
+      try { d = JSON.parse(x.responseText); } catch (_) { }
+      if (x.status >= 200 && x.status < 300 && d.ok) {
+        msg.className = 'message bien';
+        msg.textContent = '';
+        var t = document.createElement('b');
+        t.textContent = 'Dépôt reçu.';
+        var r = document.createElement('span');
+        r.className = 'ref';
+        // ON REND L'IDENTIFIANT. C'est la seule prise du déposant sur ce qu'il
+        // vient d'envoyer : sans lui, il ne peut rien demander à personne.
+        r.textContent = 'Référence : ' + d.depot;
+        var s = document.createElement('p');
+        s.textContent = (d.alerte && d.alerte.ok)
           ? 'Le propriétaire de la box a été prévenu.'
-          : "Le propriétaire n'a pas pu être prévenu par courrier, mais " +
-            'vos fichiers sont bien arrivés.');
-      choisis = []; montre();
-      document.getElementById('mot').value = '';
-    } else {
+          : "Le propriétaire n'a pas pu être prévenu par courrier, mais vos " +
+            'fichiers sont bien arrivés.';
+        msg.append(t, document.createElement('br'), r, s);
+        choisis = []; montre();
+        document.getElementById('mot').value = '';
+        etat.textContent = '';
+      } else {
+        msg.className = 'message mal';
+        msg.textContent = d.detail || ('Le dépôt a été refusé (' + x.status + ').');
+        bouton.disabled = false;
+      }
+    });
+    x.addEventListener('error', function () {
+      jauge.hidden = true; msg.hidden = false;
       msg.className = 'message mal';
-      msg.textContent = d.detail || 'Le dépôt a été refusé (' + x.status + ').';
+      msg.textContent = 'La connexion a été interrompue. Rien n’a été déposé.';
       bouton.disabled = false;
-    }
+    });
+    x.addEventListener('abort', function () {
+      jauge.hidden = true; bouton.disabled = false;
+      etat.textContent = 'Dépôt annulé.';
+    });
+    x.send(corps);
   });
-  x.addEventListener('error', () => {
-    jauge.hidden = true; msg.hidden = false;
-    msg.className = 'message mal';
-    msg.textContent = 'La connexion a été interrompue. Rien n’a été déposé.';
-    bouton.disabled = false;
-  });
-  x.send(corps);
-});
+})();
 </script>
 </body>
 </html>
