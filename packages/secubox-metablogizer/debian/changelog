@@ -1,3 +1,35 @@
+secubox-metablogizer (1.7.5-1~bookworm1) bookworm; urgency=medium
+
+  * L'assistant de publication rend enfin un site SERVI (ref #1023). Quatre
+    defauts, un meme angle mort : chaque etape rendait compte de son succes,
+    aucune ne verifiait que le domaine repondait avec le bon contenu.
+    - L'archive est deballee de son dossier enveloppe. `zip -r site.zip site/`
+      prefixe tous ses membres ; le contenu atterrissait un cran trop bas et
+      `index_present` restait faux.
+    - La configuration nginx est regeneree. Les 163 sites partagent le port
+      8900 et se distinguent par `server_name` : un domaine sans bloc tombe sur
+      LE PREMIER BLOC DU PORT, et sert le site d'un voisin sans rien signaler.
+    - Le domaine est ecrit dans `site.json`, sans quoi il s'evapore a la
+      premiere regeneration.
+    - Le budget de `haproxyctl vhost add` passe de 120 s a 300 s : la mesure sur
+      gk2 donne 1 min 02 s pour un seul vhost, la configuration entiere etant
+      regeneree a chaque fois.
+  * Un site sans `index.html` rend enfin la page d'accueil du module au lieu du
+    `403 Forbidden` nu de nginx. Le critere d'origine exigeait une TAILLE nulle :
+    un dossier de 12 Mio dont l'index manquait — le cas exact d'une archive
+    deballee un cran trop bas — y echappait. Six sites sur gk2 etaient dans ce
+    cas. La bonne question est « ai-je un index a servir ? », pas « ce dossier
+    pese-t-il quelque chose ? ».
+  * Cette page est refaite : francais, charte du panneau, elle NOMME le domaine
+    demande et enonce les deux causes possibles. Elle est rendue avec un vrai
+    404 et un `X-Robots-Tag: noindex` — servie en 200, une page d'attente se
+    fait indexer a la place du site qu'elle remplace.
+  * Le deballage ne desarme pas la garde zip-slip : un segment `..` n'est jamais
+    traite comme une enveloppe. Assainir une archive hostile au lieu de la
+    refuser aurait efface la trace de la tentative.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 09:30:00 +0200
+
 secubox-metablogizer (1.7.4-1~bookworm1) bookworm; urgency=medium
 
   * La configuration unifiee ne redeclare plus un domaine deja servi par un

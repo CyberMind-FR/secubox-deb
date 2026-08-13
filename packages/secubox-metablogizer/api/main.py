@@ -263,25 +263,37 @@ def regenerate_nginx_config() -> tuple:
         emis[domain] = name
         port = site.get("port", BASE_PORT)
         site_dir = Path(site["directory"])
-        size = site.get("size", "0")
 
         # Use public/ subdirectory if exists, otherwise site root
         public_dir = site_dir / "public"
         root_dir = str(public_dir) if public_dir.exists() else str(site_dir)
 
-        # Check if site is empty (size is 0 or only contains site.json)
-        is_empty = size in ("0", "0B", "4.0K") and not (Path(root_dir) / "index.html").exists()
+        # LA BONNE QUESTION EST « AI-JE UN INDEX A SERVIR ? », PAS « CE DOSSIER
+        # PESE-T-IL QUELQUE CHOSE ? » (#1023). Le critere d'origine exigeait une
+        # taille nulle : un dossier de 12 Mio sans `index.html` — le cas exact
+        # d'une archive deballee un cran trop bas — echappait donc a la page
+        # d'accueil et rendait le `403 Forbidden` nu de nginx, celui qui ne dit
+        # ni quel site, ni pourquoi, ni quoi faire. Six sites sur gk2 etaient
+        # dans ce cas. Un site pesant mais sans index n'est pas plus servable
+        # qu'un site vide ; il est seulement plus trompeur, parce que l'operateur
+        # voit les octets et en conclut que ca marche.
+        is_empty = not (Path(root_dir) / "index.html").exists()
 
         if is_empty:
-            # Empty site - redirect to funky error page
+            # LA PAGE D'ACCUEIL EST RENDUE AVEC UN VRAI 404, pas un 200. Un
+            # substitut servi en 200 se fait indexer comme s'il ETAIT le site :
+            # le jour ou le contenu arrive, les moteurs ont deja retenu la page
+            # d'attente. `error_page` + `return 404` donne la belle page ET le
+            # bon code ; `X-Robots-Tag` acheve de fermer la porte.
             config_lines.append(f"""
 server {{
     listen 0.0.0.0:{port};
     server_name {domain};
     root /usr/share/secubox/www/metablogizer;
-    location / {{
-        try_files /empty-site.html =404;
-    }}
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    error_page 404 /empty-site.html;
+    location = /empty-site.html {{ internal; }}
+    location / {{ return 404; }}
 }}
 """)
         else:

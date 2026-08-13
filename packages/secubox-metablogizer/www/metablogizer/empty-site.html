@@ -1,117 +1,85 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Empty Site - Need Content!</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Courier New', monospace;
-            background: #0d1117;
-            color: #c9d1d9;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-        }
-        .container {
-            max-width: 600px;
-            text-align: center;
-        }
-        .emoji {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-            animation: bounce 2s infinite;
-        }
-        @keyframes bounce {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-20px); }
-        }
-        h1 {
-            font-size: 2rem;
-            color: #f0883e;
-            margin-bottom: 1rem;
-        }
-        .sketch {
-            background: #161b22;
-            border: 2px dashed #30363d;
-            border-radius: 12px;
-            padding: 2rem;
-            margin: 2rem 0;
-            text-align: left;
-        }
-        .sketch pre {
-            font-size: 0.7rem;
-            color: #7ee787;
-            line-height: 1.3;
-        }
-        .message {
-            font-size: 1.1rem;
-            color: #8b949e;
-            margin-bottom: 1.5rem;
-        }
-        .cta {
-            display: inline-block;
-            background: #238636;
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 6px;
-            text-decoration: none;
-            margin-top: 1rem;
-        }
-        .cta:hover {
-            background: #2ea043;
-        }
-        .tip {
-            margin-top: 2rem;
-            font-size: 0.85rem;
-            color: #6e7681;
-        }
-        .tip code {
-            background: #161b22;
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site sans page d'accueil — SecuBox MetaBlogizer</title>
+<style>
+/* Charte panneau SecuBox : cyan sur fond sombre, Courier Prime.
+   La page est SERVIE PAR NGINX, sans passer par l'API : pas de police
+   distante, pas de script tiers, rien qui puisse manquer au pire moment —
+   c'est-a-dire exactement celui ou l'on tombe dessus. */
+:root {
+  --fond: #0b1014; --carte: #121a20; --bord: #1e2d36;
+  --cyan: #00d4ff; --texte: #cfe3ea; --doux: #7a94a0; --ambre: #f0b429;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Courier Prime', 'Courier New', monospace;
+  background: var(--fond); color: var(--texte);
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 2rem; line-height: 1.6;
+}
+.boite { max-width: 46rem; width: 100%; }
+.chapeau { color: var(--cyan); letter-spacing: .18em; text-transform: uppercase;
+           font-size: .72rem; margin-bottom: .75rem; }
+h1 { font-size: 1.55rem; font-weight: 700; margin-bottom: .4rem; text-wrap: balance; }
+.hote { color: var(--cyan); word-break: break-all; }
+.resume { color: var(--doux); margin-bottom: 1.75rem; }
+.carte { background: var(--carte); border: 1px solid var(--bord);
+         border-radius: 10px; padding: 1.25rem 1.4rem; margin-bottom: 1rem; }
+.carte h2 { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase;
+            color: var(--ambre); margin-bottom: .7rem; font-weight: 700; }
+ol { margin: 0 0 0 1.15rem; }
+li { margin-bottom: .85rem; }
+li:last-child { margin-bottom: 0; }
+b { color: var(--texte); }
+code { background: #0a1418; border: 1px solid var(--bord); border-radius: 4px;
+       padding: .1rem .4rem; color: var(--cyan); font-size: .92em; }
+.pied { margin-top: 1.5rem; display: flex; gap: .9rem; flex-wrap: wrap;
+        align-items: center; }
+a.action { display: inline-block; background: transparent; color: var(--cyan);
+           border: 1px solid var(--cyan); border-radius: 6px;
+           padding: .55rem 1.1rem; text-decoration: none; }
+a.action:hover, a.action:focus { background: var(--cyan); color: var(--fond); }
+a.action:focus-visible { outline: 2px solid var(--texte); outline-offset: 2px; }
+.note { color: var(--doux); font-size: .82rem; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="emoji">🏗️ 📦 ❓</div>
-        <h1>Oops! This site is empty!</h1>
-        <p class="message">
-            This site exists but has no content yet.<br>
-            It's like a beautiful empty box waiting for treasures!
-        </p>
+<div class="boite">
 
-        <div class="sketch">
-<pre>
-    ╔═══════════════════════════════╗
-    ║                               ║
-    ║    ┌─────────────────────┐    ║
-    ║    │                     │    ║
-    ║    │   📂 <- PUT FILES   │    ║
-    ║    │        HERE         │    ║
-    ║    │                     │    ║
-    ║    └─────────────────────┘    ║
-    ║                               ║
-    ║   Your static site awaits!    ║
-    ╚═══════════════════════════════╝
-</pre>
-        </div>
+  <p class="chapeau">SecuBox · MetaBlogizer</p>
+  <h1>Ce site n'a pas de page d'accueil</h1>
+  <p class="resume">
+    Le domaine <span class="hote" id="hote">demandé</span> est bien routé et
+    bien servi : c'est <code>index.html</code> qui manque à la racine du site.
+  </p>
 
-        <p class="message">
-            Upload your HTML, CSS, and JavaScript files<br>
-            to bring this site to life! 🚀
-        </p>
+  <div class="carte">
+    <h2>Les deux causes, dans l'ordre de fréquence</h2>
+    <ol>
+      <li><b>L'archive contenait un dossier enveloppe.</b>
+        <code>zip -r site.zip site/</code> préfixe tous ses membres par
+        <code>site/</code> : le contenu se retrouve un cran trop bas, présent
+        mais hors de portée. Republier suffit — l'assistant déballe désormais
+        ce dossier.</li>
+      <li><b>Rien n'a encore été déposé.</b> Le site existe, son domaine est
+        réservé, sa place est faite. Il attend son contenu.</li>
+    </ol>
+  </div>
 
-        <a href="/metablogizer/" class="cta">Go to MetaBlogizer Dashboard</a>
+  <div class="pied">
+    <a class="action" href="/metablogizer/">Ouvrir le panneau MetaBlogizer</a>
+    <span class="note">Cette page ne remplace aucun contenu : elle s'efface dès
+      qu'un <code>index.html</code> existe.</span>
+  </div>
 
-        <p class="tip">
-            <strong>Quick tip:</strong> Upload a <code>.zip</code> or <code>.tar.gz</code> archive
-            containing your static site files.
-        </p>
-    </div>
+</div>
+<script>
+// Nommer l'hote demande, plutot que de laisser lire « ce site ». Savoir LEQUEL
+// des cent-soixante sites est en cause est la premiere chose qu'on cherche.
+document.getElementById('hote').textContent = location.hostname;
+</script>
 </body>
 </html>
