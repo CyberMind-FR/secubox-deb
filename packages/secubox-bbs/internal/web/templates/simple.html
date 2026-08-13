@@ -1,11 +1,20 @@
 {{define "corps"}}
 <div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
 {{if .Cards}}<div class="grid g2">{{range .Cards}}
-  <div class="card pad">
-    <div class="row sf85c702">{{range .Pills}}<span class="pill {{.Class}}">{{.Text}}</span>{{end}}</div>
-    <h3 class="sa3970b9">{{.Title}}</h3>
-    <div class="d sbf2a49c">{{.Sub}}</div>
-    {{if .Link}}<div class="row sf9f81af"><a class="btn sm" href="{{.Link}}">{{.LinkText}}</a></div>{{end}}
+  <div class="card pad carte-media">
+    {{if or .Vignette .Glyphe}}<div class="vignette" aria-hidden="true">
+      {{/* `loading="lazy"` : une grille de cent cartes ne doit pas demander cent
+           vignettes d'un coup. Le glyphe reste DERRIERE l'image et reapparait
+           si elle echoue — une case vide ferait croire a un fichier perdu. */}}
+      <span class="glyphe">{{.Glyphe}}</span>
+      {{if .Vignette}}<img src="{{.Vignette}}" alt="" loading="lazy" decoding="async">{{end}}
+    </div>{{end}}
+    <div class="corps-carte">
+      <div class="row sf85c702">{{range .Pills}}<span class="pill {{.Class}}">{{.Text}}</span>{{end}}</div>
+      <h3 class="sa3970b9">{{.Title}}</h3>
+      <div class="d sbf2a49c">{{.Sub}}</div>
+      {{if .Link}}<div class="row sf9f81af"><a class="btn sm" href="{{.Link}}">{{.LinkText}}</a></div>{{end}}
+    </div>
   </div>
 {{end}}</div>{{else}}
 <div class="card pad sb0455c2">{{.Vide}}</div>

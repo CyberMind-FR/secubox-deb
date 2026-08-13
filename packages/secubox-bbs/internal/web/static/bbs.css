@@ -624,3 +624,29 @@ video.jointe{max-height:60vh; background:#000}
   overflow: hidden; white-space: nowrap;
 }
 .tout-lu { display: inline; margin-left: .5rem; }
+
+/* Vignettes des cartes media (#1020).
+   Le glyphe est POSE SOUS l'image, pas remplace par elle : si la vignette
+   echoue — format refuse, cache purge, fichier disparu — la case garde un
+   reperage au lieu de devenir un trou blanc dans la grille. */
+.carte-media { display: flex; gap: .85rem; align-items: flex-start; }
+.carte-media .corps-carte { min-width: 0; flex: 1; }
+.carte-media .vignette {
+  position: relative; flex: 0 0 auto;
+  width: 4.5rem; height: 4.5rem; border-radius: 8px; overflow: hidden;
+  display: grid; place-items: center;
+  background: var(--fond-2, rgba(255,255,255,.04));
+  border: 1px solid var(--bord, rgba(255,255,255,.12));
+}
+.carte-media .vignette .glyphe { font-size: 1.6rem; line-height: 1; opacity: .75; }
+.carte-media .vignette img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+/* Le titre d'un fichier peut etre un nom sans espaces de quatre-vingts
+   caracteres : sans cela il elargit la carte et deborde la grille. */
+.carte-media h3 { overflow-wrap: anywhere; }
+
+@media (max-width: 30rem) {
+  .carte-media .vignette { width: 3.25rem; height: 3.25rem; }
+}

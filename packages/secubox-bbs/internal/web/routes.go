@@ -100,6 +100,12 @@ type postView struct {
 type card struct {
 	Title, Sub, Link, LinkText string
 	Pills                      []pill
+	// Vignette : adresse d'une miniature, vide s'il n'y en a pas. Glyphe : ce
+	// qu'on montre a sa place. LES DEUX EXISTENT parce qu'une video ou un son
+	// n'a pas d'image a reduire — et qu'une carte sans rien a gauche casse
+	// l'alignement de toute la grille.
+	Vignette string
+	Glyphe   string
 }
 type pill struct{ Class, Text string }
 
@@ -108,6 +114,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.accueil)
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
+	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
 	s.mux.HandleFunc("/login", s.connexion)
@@ -596,6 +603,11 @@ func (s *Server) cartesMedia() []card {
 			Link:     lien,
 			LinkText: texte,
 			Pills:    pills,
+			// LE GENRE VIENT DE LA SOURCE, pas d'un fichier qu'on aurait ici :
+			// une emission du podcaster et une video PeerTube vivent chez eux.
+			// On ne peut donc pas en reduire l'image — le glyphe dit au moins
+			// de quoi il s'agit avant d'avoir clique.
+			Glyphe: glypheDeSource(f.MediaKind),
 		})
 	}
 	return out
@@ -626,13 +638,21 @@ func (s *Server) cartesBiblio() []card {
 		case f.EstVideo():
 			genre = "vidéo"
 		}
-		out = append(out, card{
+		c := card{
 			Title:    f.Name,
 			Sub:      "déposé par " + f.Deposant + " · " + tailleLisible(f.Size),
 			Link:     "/f/" + strconv.FormatInt(f.ID, 10) + extensionDe(f.Mime),
 			LinkText: "Ouvrir",
 			Pills:    []pill{{Class: "ok", Text: genre}},
-		})
+			Glyphe:   glypheDe(genre),
+		}
+		// SEULES LES IMAGES ONT UNE VIGNETTE. Extraire une image d'une video
+		// demanderait ffmpeg — un decodeur complet lance sur un fichier
+		// televerse, pour orner une carte. Le rapport n'y est pas.
+		if f.EstImage() {
+			c.Vignette = "/vignette/" + strconv.FormatInt(f.ID, 10) + ".jpg"
+		}
+		out = append(out, c)
 	}
 	return out
 }
@@ -662,6 +682,7 @@ func (s *Server) cartesBillets() []card {
 			Link:     "/t/" + strconv.FormatInt(b.ThreadID, 10),
 			LinkText: "Voir le fil",
 			Pills:    []pill{{Class: "ok", Text: "publié"}},
+			Glyphe:   "📰",
 		}
 		// L'ADRESSE PEUT MANQUER : les deux billets de gk2 ont un identifiant
 		// mais pas d'URL. Plutôt que de fabriquer un lien mort, on renvoie vers
@@ -675,6 +696,37 @@ func (s *Server) cartesBillets() []card {
 		out = append(out, c)
 	}
 	return out
+}
+
+// glypheDeSource traduit le genre annonce par une passerelle media.
+//
+// Les genres viennent de sources differentes (podcaster, PeerTube) et ne
+// suivent aucune convention commune : on reconnait donc par MOTIF plutot que
+// par egalite, sans quoi un « audio/mpeg » et un « podcast » se retrouveraient
+// avec le glyphe generique alors qu'on sait tres bien ce qu'ils sont.
+func glypheDeSource(genre string) string {
+	g := strings.ToLower(genre)
+	switch {
+	case strings.Contains(g, "video") || strings.Contains(g, "vidéo"):
+		return "🎬"
+	case strings.Contains(g, "audio") || strings.Contains(g, "podcast") ||
+		strings.Contains(g, "episode") || strings.Contains(g, "épisode"):
+		return "🎧"
+	}
+	return "📡"
+}
+
+// glypheDe : ce qu'on montre quand il n'y a pas d'image a reduire.
+func glypheDe(genre string) string {
+	switch genre {
+	case "image":
+		return "🖼"
+	case "son":
+		return "🎧"
+	case "vidéo":
+		return "🎬"
+	}
+	return "📄"
 }
 
 // tailleLisible rend une taille d'octets sous forme courte.

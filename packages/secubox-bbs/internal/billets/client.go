@@ -203,11 +203,14 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 			strings.TrimSpace(string(corps[:min(len(corps), 200)])))
 	}
 	var out struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
+		ID        string `json:"id"`
+		URL       string `json:"url"`
+		Permalien string `json:"permalink"`
+		Slug      string `json:"slug"`
 	}
 	json.Unmarshal(corps, &out)
-	r.BilletID, r.URL = out.ID, out.URL
+	r.BilletID = out.ID
+	r.URL = adressePubliee(out.Permalien, out.URL, out.Slug)
 
 	// LES MEDIAS SUIVENT LE BILLET, ils ne restent pas chez nous.
 	//
@@ -372,4 +375,33 @@ func charge(jwt string) ([]byte, error) {
 		return nil, errors.New("jeton mal forme")
 	}
 	return base64.RawURLEncoding.DecodeString(p[1])
+}
+
+// adressePubliee choisit l'adresse du billet parmi ce que billets a bien voulu
+// dire (#1024).
+//
+// LE DEFAUT ETAIT UNE ABSENCE. Le client lisait `url` — un champ que la
+// reponse admin n'a JAMAIS porte. L'adresse enregistree etait donc vide pour
+// chaque billet, sans que rien n'echoue : la publication reussissait, le
+// billet etait en ligne, et la page Billets renvoyait vers le fil en
+// annoncant « adresse manquante ». Un champ qui n'existe pas ne se plaint pas.
+//
+// TROIS SOURCES, DANS CET ORDRE : `permalink` est le nom qu'emploie le rendu
+// public de billets ; `url` couvre les versions qui le servent aussi ; le slug
+// reste le dernier recours, parce qu'un identifiant vaut mieux qu'un vide.
+//
+// ON NE FABRIQUE PAS D'HOTE. Reconstruire `https://quelque-chose/b/slug` sans
+// savoir lequel donnerait un lien mort presente comme bon — et le BBS sait
+// deja dire « adresse manquante », ce qui est plus honnete qu'un lien qui
+// echoue au clic.
+func adressePubliee(permalien, url, slug string) string {
+	for _, candidat := range []string{permalien, url} {
+		if c := strings.TrimSpace(candidat); c != "" {
+			return c
+		}
+	}
+	if s := strings.TrimSpace(slug); s != "" {
+		return "/b/" + s
+	}
+	return ""
 }
