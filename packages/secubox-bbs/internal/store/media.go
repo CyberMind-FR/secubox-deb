@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -187,6 +188,15 @@ func (s *Store) CheminFichier(f Fichier) string {
 	return filepath.Join(s.root, "files", f.Path)
 }
 
+// CheminVignette : ou la vignette d'un fichier est mise en cache (#1020).
+//
+// A COTE DES FICHIERS, PAS DEDANS : `files/` est sauvegarde et repliqué, une
+// vignette se refabrique. Les melanger ferait grossir chaque sauvegarde d'un
+// contenu qu'on sait reproduire a partir de ce qu'elle contient deja.
+func (s *Store) CheminVignette(id int64) string {
+	return filepath.Join(s.root, "vignettes", strconv.FormatInt(id, 10)+".jpg")
+}
+
 // Fichiers rend les depots d'un membre, les plus recents d'abord.
 func (s *Store) Fichiers(owner int64, borne int) ([]Fichier, error) {
 	if borne <= 0 || borne > 200 {
@@ -263,4 +273,48 @@ func (s *Store) Avatar(user int64) int64 {
 		  LEFT JOIN files f ON f.id = u.avatar_file AND f.deleted_at IS NULL
 		 WHERE u.id = ? AND f.id IS NOT NULL`, user).Scan(&id)
 	return id
+}
+
+// TousFichiers rend les depots de TOUS les membres, les plus recents d'abord.
+//
+// LA BIBLIOTHEQUE EST COMMUNE, pas personnelle (#1020). « Les fichiers vivent a
+// cote des messages » : un message est lu par tout le salon, sa piece jointe
+// aussi. Une bibliotheque filtree par proprietaire aurait montre une page vide a
+// tous ceux qui n'ont rien depose — c'est-a-dire a la plupart.
+//
+// Le nom du deposant accompagne chaque entree : savoir QUI a depose est ce qui
+// permet de demander le contexte, et sans quoi une bibliotheque commune devient
+// un tas anonyme.
+func (s *Store) TousFichiers(borne int) ([]FichierPublie, error) {
+	if borne <= 0 || borne > 500 {
+		borne = 100
+	}
+	rows, err := s.db.Query(`
+		SELECT f.id, f.owner_id, f.path, f.name, f.size, f.mime, f.created_at,
+		       COALESCE(u.display_name, u.handle, '?')
+		  FROM files f
+		  LEFT JOIN users u ON u.id = f.owner_id
+		 WHERE f.deleted_at IS NULL AND f.path <> ''
+		 ORDER BY f.created_at DESC, f.id DESC
+		 LIMIT ?`, borne)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []FichierPublie
+	for rows.Next() {
+		var f FichierPublie
+		if err := rows.Scan(&f.ID, &f.Owner, &f.Path, &f.Name, &f.Size,
+			&f.Mime, &f.Created, &f.Deposant); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// FichierPublie : une piece jointe telle que la bibliotheque l'affiche.
+type FichierPublie struct {
+	Fichier
+	Deposant string
 }

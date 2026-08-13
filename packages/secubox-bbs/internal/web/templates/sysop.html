@@ -147,5 +147,49 @@
     </tbody>
   </table>
 </div>
+
+<h2 class="serif">Salons et sous-salons</h2>
+<div class="card pad">
+  <p class="note">Un salon sans parent est de premier niveau. Choisir un parent
+  en fait un sous-salon — « Réseau » sous « Technique ». La profondeur n'est pas
+  bornée à deux : rien n'empêche un sous-sous-salon le jour où le besoin vient.</p>
+
+  <form method="post" action="/mod/salon" class="row s491198d">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <input name="slug" placeholder="identifiant (reseau)" required
+           pattern="[a-z0-9_-]+" title="Lettres minuscules, chiffres, tiret, souligné"
+           aria-label="Identifiant du salon">
+    <input name="titre" placeholder="Titre affiché" required aria-label="Titre du salon">
+    <input name="desc" placeholder="Description (facultative)" aria-label="Description">
+    <select name="parent" aria-label="Salon parent">
+      <option value="0">— aucun parent (premier niveau) —</option>
+      {{range .Cats}}<option value="{{.ID}}">sous {{.Title}}</option>{{end}}
+    </select>
+    <button class="btn sm pinkish">Créer le salon</button>
+  </form>
+
+  {{/* L'identifiant est contraint cote NAVIGATEUR pour aider a la saisie, et
+       revalide cote serveur — un motif HTML se contourne d'un clic dans les
+       outils de developpement, il informe l'utilisateur, il ne protege rien. */}}
+</div>
+
+<h2 class="serif">Journal de modération</h2>
+<div class="card tw">
+  <table>
+    <thead><tr><th>Quand</th><th>Qui</th><th>Geste</th><th>Cible</th><th>Détail</th></tr></thead>
+    <tbody>
+    {{range .Moderations}}<tr>
+      <td>{{date .At}}</td>
+      <td>{{.Acteur}}</td>
+      <td><span class="pill p-src">{{.Action}}</span></td>
+      <td>{{.Cible}}</td>
+      <td>{{.Detail}}</td>
+    </tr>{{else}}<tr><td colspan="5" class="sb0455c2">Aucun geste de modération enregistré.</td></tr>{{end}}
+    </tbody>
+  </table>
+  <p class="note">Le journal n'a de valeur que s'il est LU. Un pouvoir de
+  modération sans trace consultable n'est pas un pouvoir encadré.</p>
+</div>
+
 {{if .Msg}}<div class="note m sc53ea1d"><b>{{.Msg}}</b></div>{{end}}
 {{end}}
