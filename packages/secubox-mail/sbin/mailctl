@@ -541,11 +541,20 @@ cmd_alias() {
         list)
             alias_list
             ;;
+        repair)
+            # POUR LES BOARDS DEJA INSTALLEES (#1025). Le correctif du code ne
+            # rebranche pas un main.cf ecrit avant lui : sans ce verbe, il
+            # faudrait ajouter puis retirer un alias pour declencher la
+            # recompilation — une manoeuvre qu'il faut connaitre, donc qu'on
+            # ne fait pas.
+            alias_recompile && alias_list
+            ;;
         *)
             echo "Alias commands:"
             echo "  alias add <alias> <target>  Add email alias"
             echo "  alias del <alias>           Delete email alias"
             echo "  alias list                  List aliases"
+            echo "  alias repair                Rebrancher et recompiler la carte d\x27alias"
             ;;
     esac
 }
