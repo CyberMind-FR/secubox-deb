@@ -138,11 +138,22 @@
       <div class="liste-tete">
         <h2>{{if .Cat.Title}}{{.Cat.Title}}{{else}}Derniers fils{{end}}</h2>
         <span class="cnt">{{len .Threads}}</span>
+        {{/* « Tout marquer lu » n'apparait QUE s'il y a quelque chose a marquer :
+             un bouton qui ne fait rien apprend au lecteur a ne plus le regarder. */}}
+        {{if and .V.Connecte .TotalFilsNonLus}}
+        <form method="post" action="/lu/tout" class="tout-lu">
+          <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+          <button class="btn sm">{{.TotalFilsNonLus}} non lu(s) — tout marquer lu</button>
+        </form>
+        {{end}}
       </div>
       {{range .Threads}}
-      <a class="fil-item" href="/t/{{.ID}}"
+      {{$neuf := index $.FilsNonLus .ID}}
+      <a class="fil-item{{if $neuf}} fil-neuf{{end}}" href="/t/{{.ID}}"
          {{if eq .ID $.T.ID}}aria-current="page"{{end}}>
-        <h3>{{.Title}}</h3>
+        {{/* Le point NE PORTE PAS SEUL l'information : il double le mot
+             « nouveau », lisible par une synthese vocale et a l'impression. */}}
+        <h3>{{if $neuf}}<span class="pastille" aria-hidden="true">●</span><span class="sr">nouveau — </span>{{end}}{{.Title}}</h3>
         <div class="meta">
           {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>{{else}}<span class="pill p-local">local</span>{{end}}
           {{if .Published}}<span class="pill p-billet">✦</span>{{end}}

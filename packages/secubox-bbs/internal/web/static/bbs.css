@@ -601,3 +601,26 @@ video.jointe{max-height:60vh; background:#000}
 .av img, img.av{
   width:100%; height:100%; object-fit:cover; border-radius:inherit; display:block;
 }
+
+/* ── Lu / non-lu (#1020) ──────────────────────────────────────────────────
+   La pastille DOUBLE le mot « nouveau », elle ne le remplace pas : la couleur
+   seule disparait a l'impression, sur un ecran delave, et pour un lecteur
+   daltonien. Le fil non-lu porte aussi un titre plus appuye — deux signaux
+   valent mieux qu'un, et aucun ne depend de la vue des couleurs. */
+.fil-neuf h3 { font-weight: 700; }
+.pastille {
+  color: var(--accent, #00d4ff);
+  margin-right: .4em;
+  font-size: .8em;
+  vertical-align: middle;
+}
+/* Texte reserve aux synthese vocales : present dans le flux, invisible a
+   l'oeil. `display:none` l'aurait retire aussi des lecteurs d'ecran. */
+.sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden; white-space: nowrap;
+}
+.tout-lu { display: inline; margin-left: .5rem; }

@@ -1,4 +1,4 @@
-secubox-bbs (0.9.1-1~bookworm1) bookworm; urgency=medium
+secubox-bbs (0.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Bibliotheque et Billets lisent enfin la base (ref #1020). Les deux pages
     annoncaient « aucun fichier depose » et « aucun fil publie » alors que neuf
@@ -15,6 +15,28 @@ secubox-bbs (0.9.1-1~bookworm1) bookworm; urgency=medium
   * Un billet sans adresse enregistree est signale comme tel et renvoie vers son
     fil, plutot que d'offrir un lien mort. Les deux billets de gk2 sont dans ce
     cas : leur identifiant est enregistre, leur URL est vide.
+  * Suivi LU / NON-LU des fils. La question que se pose un lecteur en arrivant
+    est « qu'est-ce qui a bouge depuis la derniere fois ? ». Sans reponse, il
+    relit les memes fils ou en rate d'autres — et sur un BBS de 250 fils, il
+    finit par ne plus rien ouvrir.
+  * Le repere est une DATE, jamais un identifiant de message : un message
+    efface, deplace ou modere ferait disparaitre un repere par identifiant, et
+    le fil redeviendrait non-lu en entier sans raison visible. La moderation
+    etant la prochaine fonction ajoutee, le choix compte.
+  * Aucune ligne n'est ecrite tant qu'un fil n'a pas ete ouvert : un BBS de cent
+    fils ne cree pas cent lignes par membre inscrit. Le cout suit l'usage.
+  * Un fil est marque lu APRES la garde de visibilite, jamais avant : une trace
+    de lecture sur un fil interdit confirmerait son existence par la bande.
+  * « Tout marquer lu » existe, et ce n'est pas un confort. Qui revient apres
+    deux semaines a deux cents fils non-lus ; s'il faut les ouvrir un par un, il
+    ne le fera pas et cessera de regarder le compteur, qui n'aura plus servi a
+    rien. Le bouton n'apparait que s'il y a quelque chose a marquer.
+  * L'indicateur ne repose PAS sur la couleur seule : la pastille double le mot
+    « nouveau », lisible par une synthese vocale, a l'impression et pour un
+    lecteur daltonien.
+  * Une seule requete par page, pas une par fil affiche — c'est ainsi qu'une
+    fonction de confort devient une cause de lenteur. Une erreur de lecture rend
+    la page sans indicateur plutot que pas de page.
   * La page Media lit elle aussi la base (ref #1020). Elle annoncait « aucune
     passerelle media raccordee » alors que 222 fils y etaient deja : 122
     emissions du podcaster et 100 videos PeerTube. Meme defaut que les deux
