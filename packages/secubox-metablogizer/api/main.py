@@ -7,6 +7,7 @@ Three-fold perspective:
 
 SecuBox is an appliance and network model - distributed peer applications.
 """
+import asyncio
 import re
 import subprocess
 import os
@@ -959,7 +960,6 @@ async def deploy_site(name: str):
     dashboard's per-site update icon. Serialized against webhook deploys via the
     shared per-site lock.
     """
-    import asyncio
     import time
 
     site_dir = SITES_ROOT / name
@@ -1030,7 +1030,6 @@ async def republish_all():
 @app.post("/webhook")
 async def webhook(request: Request):
     """Gitea push webhook. HMAC-verified; deploys metablog-* default-branch pushes."""
-    import asyncio
     import time
     from fastapi import HTTPException
 
@@ -1135,8 +1134,6 @@ async def upload_content(name: str, file: UploadFile = File(...)):
     must NOT create public/ here, or we'd silently move the served root out from
     under an already-published site and the upload wouldn't show up.
     """
-    import asyncio
-
     site_dir = SITES_ROOT / name
     if not site_dir.exists():
         site_dir.mkdir(parents=True)
@@ -1190,7 +1187,6 @@ async def _version_upload(name: str, site_dir: Path, filename: str) -> dict:
     deploy pulls, and off the event loop (git blocks). Best-effort: a Gitea
     failure is reported in the response but never fails the upload itself.
     """
-    import time
     lock = await site_lock(name)
     loop = asyncio.get_running_loop()
     # A monotonic stamp keeps commit messages unique/ordered without needing
