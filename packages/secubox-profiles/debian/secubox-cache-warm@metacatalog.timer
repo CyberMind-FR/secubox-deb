@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: cadence de réchauffage du cache metacatalog (#1028)
+[Unit]
+Description=SecuBox — cadence de réchauffage du cache metacatalog
+
+[Timer]
+Unit=secubox-cache-warm@metacatalog.service
+# Au démarrage, une fois la board posée : le cache est froid à ce moment-là,
+# et c'est le seul instant où le réchauffage vaut vraiment son coût.
+OnBootSec=5min
+# Puis toutes les cinq minutes. La boucle d'origine tournait à la minute ;
+# rien dans un catalogue de services ne change à cette vitesse, et la cadence
+# se règle désormais ici, sans toucher au code.
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
