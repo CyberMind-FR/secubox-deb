@@ -3,18 +3,76 @@
   "$id": "https://apt.secubox.in/schema/metablog/site.json",
   "title": "MetaBlogizer site.json",
   "type": "object",
-  "required": ["name", "domain", "published"],
+  "required": [
+    "name",
+    "domain",
+    "published"
+  ],
   "additionalProperties": true,
   "properties": {
-    "name":           {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
-    "domain":         {"type": "string", "format": "hostname"},
-    "published":      {"type": "boolean"},
-    "version":        {"type": ["string", "null"], "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"},
-    "title":          {"type": ["string", "null"]},
-    "description":    {"type": ["string", "null"]},
-    "category":       {"type": ["string", "null"]},
-    "streamlit_app":  {"type": ["string", "null"], "description": "Name of the gandalf/streamlit-<X> repo on Gitea, if any"},
-    "tags":           {"type": "array", "items": {"type": "string"}},
-    "last_updated":   {"type": ["string", "null"], "format": "date-time"}
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "domain": {
+      "type": "string",
+      "format": "hostname"
+    },
+    "published": {
+      "type": "boolean"
+    },
+    "version": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "title": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "category": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "streamlit_app": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Name of the gandalf/streamlit-<X> repo on Gitea, if any"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "last_updated": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
+      },
+      "description": "Noms supplementaires servant le meme site (gk2.net, www.gk2.net). Le domaine principal reste `domain`."
+    }
   }
 }

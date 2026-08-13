@@ -24,6 +24,21 @@ secubox-metablogizer (1.7.5-1~bookworm1) bookworm; urgency=medium
     demande et enonce les deux causes possibles. Elle est rendue avec un vrai
     404 et un `X-Robots-Tag: noindex` — servie en 200, une page d'attente se
     fait indexer a la place du site qu'elle remplace.
+  * Les archives DEJA deballees un cran trop bas sont rattrapees d'elles-memes :
+    quand la racine n'a pas d'index, qu'elle ne contient qu'un seul
+    sous-dossier, et que celui-ci en a un, c'est lui qui est servi. ON NE
+    DEPLACE PAS LES FICHIERS DE L'UTILISATEUR — remonter le contenu serait une
+    reecriture silencieuse de son depot ; servir le bon dossier donne le meme
+    resultat visible sans toucher un octet. Le rattrapage est journalise, jamais
+    muet. Deux sous-dossiers, ou un fichier a la racine, et l'on s'abstient :
+    descendre reviendrait a tirer au sort lequel EST le site.
+  * Un site peut declarer des ALIAS dans son `site.json` : `gk2.net` et
+    `www.gk2.net` servent ce que sert `www.gk2.secubox.in`, depuis une seule
+    verite. Ecrire un second bloc nginx a cote aurait fait diverger les deux au
+    premier changement de racine. Les alias passent par les memes gardes que le
+    domaine principal, et un alias deja pris est ecarte SANS emporter le site.
+    Le motif de validation n'est pas cosmetique : `server_name` se termine par
+    un point-virgule, un nom qui en contient un fermerait la directive.
   * Le deballage ne desarme pas la garde zip-slip : un segment `..` n'est jamais
     traite comme une enveloppe. Assainir une archive hostile au lieu de la
     refuser aurait efface la trace de la tentative.

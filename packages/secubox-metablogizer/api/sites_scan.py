@@ -258,7 +258,13 @@ def scan_sites(
             "size": size,
         }
         for key in ("version", "title", "description", "category",
-                    "streamlit_app", "tags", "last_updated"):
+                    "streamlit_app", "tags", "last_updated",
+                    # UNE CLE ABSENTE DE CETTE LISTE N'EXISTE PAS POUR LE
+                    # GENERATEUR (#1023). Les alias etaient bien ecrits dans le
+                    # site.json et bien valides — mais le scan ne les recopiait
+                    # pas dans l'entree, alors `server_name` n'en portait aucun.
+                    # Rien n'echouait : le bloc etait juste incomplet.
+                    "aliases"):
             if key in cfg and cfg[key] is not None:
                 entry[key] = cfg[key]
 
