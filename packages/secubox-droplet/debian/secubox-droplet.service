@@ -20,7 +20,10 @@ RuntimeDirectory=secubox
 RuntimeDirectoryPreserve=yes
 RuntimeDirectoryMode=0775
 
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /srv/droplet
+# /data/secubox/droplet : l espace de depot (#1026). Sans ce chemin, le
+# service demarre normalement et le PREMIER depot echoue — la panne la plus
+# desagreable, puisqu elle n arrive qu en presence d un utilisateur.
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /srv/droplet /data/secubox
 
 [Install]
 WantedBy=multi-user.target
