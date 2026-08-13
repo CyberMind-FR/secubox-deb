@@ -150,9 +150,25 @@ smtp_tls_security_level = may
 smtpd_recipient_restrictions = permit_sasl_authenticated, permit_mynetworks, reject_unauth_destination
 smtpd_sender_restrictions = permit_sasl_authenticated, permit_mynetworks
 
-# Limits
+# Limites de taille : AUCUNE, par decision (#1025).
+#
+# La board recoit des depots — archives, medias, sauvegardes — et la limite de
+# 10 Mo heritee du defaut postfix rejetait un courrier de 31 Mo avec un
+# « message size exceeds size limit » cote EXPEDITEUR. Un refus a la porte est
+# la pire des places pour une limite : l'emetteur ne sait pas quoi faire de son
+# fichier, et le destinataire n'apprend meme pas qu'on a essaye de le joindre.
+#
+# LES TROIS VONT ENSEMBLE. `virtual_mailbox_limit` borne ce qu'une boite peut
+# recevoir : le laisser a 50 Mo avec un message illimite ferait echouer la
+# remise APRES l'acceptation — un rejet plus tardif, donc plus obscur, que
+# celui qu'on vient de retirer.
+#
+# La contrepartie est assumee : rien ne borne plus la taille d'un envoi, et
+# c'est le disque de /data qui fait office de limite. Sur une machine
+# personnelle qui sert aussi de coffre a fichiers, c'est le bon arbitrage.
 mailbox_size_limit = 0
-message_size_limit = 52428800
+message_size_limit = 0
+virtual_mailbox_limit = 0
 inet_interfaces = all
 inet_protocols = ipv4
 EOF

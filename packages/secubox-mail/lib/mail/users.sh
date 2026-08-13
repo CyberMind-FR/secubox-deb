@@ -201,16 +201,98 @@ alias_add() {
 
     echo "$alias $target" >> "$CONFIG_PATH/virtual"
 
-    # Copy to container
-    if [ -d "$LXC_PATH/rootfs" ]; then
-        cp "$CONFIG_PATH/virtual" "$LXC_PATH/rootfs/etc/postfix/virtual"
-
-        if lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "RUNNING"; then
-            lxc-attach -n "$CONTAINER" -- postmap lmdb:/etc/postfix/virtual 2>/dev/null
-        fi
-    fi
+    # ON COMPILE LA CARTE QUE POSTFIX LIT, PAS UNE COPIE (#1025).
+    #
+    # $CONFIG_PATH est monte dans le conteneur sur /etc/mail-config : c'est LE
+    # MEME FICHIER, pas une copie a synchroniser. L'ancienne version recopiait
+    # vers /etc/postfix/virtual et lancait `postmap` sur cette copie — le .lmdb
+    # etait donc construit sur un chemin que main.cf ne lit pas, tandis que
+    # celui qu'il lit n'etait jamais recompile.
+    #
+    # Le defaut etait MUET : postfix ne se plaint pas d'une carte absente, il
+    # constate qu'aucun alias ne correspond et passe a la regle suivante.
+    # Ajouter un alias « reussissait », `alias list` le montrait, et il ne
+    # redirigeait rien. Deux redirections posees en fevrier 2026 —
+    # root@ et postmaster@ — n'ont jamais porte.
+    alias_recompile "$alias"
 
     echo "Alias added: $alias -> $target"
+}
+
+# alias_recompile branche la carte, la compile, et recharge postfix (#1025).
+#
+# LES TROIS VONT ENSEMBLE. Compiler sans brancher laisse un .lmdb que personne
+# ne lit ; brancher sans recharger laisse postfix sur son ancienne vue. Les
+# separer, c'est reproduire le defaut a une piece pres.
+alias_recompile() {
+    local nouvel_alias="${1:-}"
+    lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "RUNNING" || {
+        echo "Container not running — alias map will compile at next start"
+        return 0
+    }
+
+    # `virtual_alias_domains` est ENUMERE, jamais derive de la carte.
+    #
+    # Le defaut `$virtual_alias_maps` ferait de secubox.in a la fois un domaine
+    # de boites et un domaine d'alias : postfix refuse ce recouvrement, et la
+    # remise cesserait POUR TOUT LE DOMAINE. Un correctif d'alias qui casse le
+    # courrier est pire que l'absence d'alias.
+    local domaines
+    domaines=$(awk '{print $1}' "$CONFIG_PATH/virtual" 2>/dev/null \
+        | awk -F@ 'NF==2 {print $2}' | sort -u)
+    local mail_dom
+    mail_dom=$(lxc-attach -n "$CONTAINER" -- postconf -h virtual_mailbox_domains 2>/dev/null)
+    local alias_dom=""
+    for d in $domaines; do
+        case " $mail_dom " in *" $d "*) continue ;; esac
+        alias_dom="${alias_dom:+$alias_dom, }$d"
+    done
+
+    # LE TYPE DE CARTE EST DEMANDE A POSTFIX, PAS SUPPOSE.
+    #
+    # Le modele du paquet ecrivait `lmdb:` — que le postfix 3.7 de Debian
+    # bookworm NE SUPPORTE PAS ici : `postconf -m` ne l'annonce pas, et toute
+    # recherche echoue sur « unsupported dictionary type ». Une directive
+    # refusee ne se voit qu'a la remise du premier courrier, quand il est trop
+    # tard pour faire le lien. On lit donc ce que cette installation sait lire.
+    # L'ORDRE DE PREFERENCE EST LE NOTRE, PAS CELUI DE `postconf -m`.
+    #
+    # Une premiere version filtrait la sortie de postconf avec `grep -m1` : elle
+    # rendait donc le premier type dans l'ordre ALPHABETIQUE, soit `btree`,
+    # quand on voulait `lmdb`. Le resultat marchait — et n'etait pas celui
+    # qu'on avait ecrit, ce qui est la definition d'un piege a retardement. On
+    # interroge donc type par type, dans NOTRE ordre.
+    local type_carte="" supportes
+    supportes=$(lxc-attach -n "$CONTAINER" -- postconf -m 2>/dev/null)
+    for t in lmdb hash btree; do
+        if printf '%s\n' "$supportes" | grep -qx "$t"; then
+            type_carte="$t"
+            break
+        fi
+    done
+    if [ -z "$type_carte" ]; then
+        echo "postfix n'annonce ni lmdb, ni hash, ni btree — carte non compilee" >&2
+        return 1
+    fi
+
+    lxc-attach -n "$CONTAINER" -- postconf -e \
+        "virtual_alias_maps = ${type_carte}:/etc/mail-config/virtual" >/dev/null 2>&1
+    lxc-attach -n "$CONTAINER" -- postconf -e \
+        "virtual_alias_domains = $alias_dom" >/dev/null 2>&1
+    lxc-attach -n "$CONTAINER" -- postmap "${type_carte}:/etc/mail-config/virtual" 2>/dev/null
+
+    # LA CONFIGURATION EST VERIFIEE AVANT D'ETRE APPLIQUEE. Un `postconf -e`
+    # fautif ne se voit qu'au prochain demarrage — c'est-a-dire, en pratique,
+    # au prochain incident.
+    if ! lxc-attach -n "$CONTAINER" -- postfix check 2>&1 | grep -q .; then
+        lxc-attach -n "$CONTAINER" -- postfix reload >/dev/null 2>&1 || true
+    else
+        echo "postfix check a signale un probleme — rechargement NON effectue" >&2
+        lxc-attach -n "$CONTAINER" -- postfix check 2>&1 | head -5 >&2
+        return 1
+    fi
+    [ -n "$nouvel_alias" ] && return 0
+    return 0
 }
 
 alias_del() {
@@ -225,14 +307,10 @@ alias_del() {
         sed -i "/^${alias} /d" "$CONFIG_PATH/virtual"
     fi
 
-    # Copy to container
-    if [ -d "$LXC_PATH/rootfs" ]; then
-        cp "$CONFIG_PATH/virtual" "$LXC_PATH/rootfs/etc/postfix/virtual" 2>/dev/null
-
-        if lxc-info -n "$CONTAINER" 2>/dev/null | grep -q "RUNNING"; then
-            lxc-attach -n "$CONTAINER" -- postmap lmdb:/etc/postfix/virtual 2>/dev/null
-        fi
-    fi
+    # Meme recompilation qu'a l'ajout (#1025) : un alias retire d'un fichier
+    # dont la carte n'est pas refaite continue de rediriger. Une suppression
+    # qui ne supprime pas est plus dangereuse qu'un ajout qui n'ajoute pas.
+    alias_recompile
 
     echo "Alias deleted: $alias"
 }
