@@ -63,6 +63,7 @@ from webhook import (
     verify_signature,
     _record_deploy,
 )
+import routers.publish
 from routers.publish import router as publish_router
 app.include_router(publish_router)
 
@@ -330,6 +331,13 @@ server {{
         return True, publies, f"Published {publies} sites"
     except Exception as e:
         return False, 0, str(e)
+
+
+# L'ASSISTANT DE PUBLICATION A BESOIN DE CE GENERATEUR (#1023) : sans lui, un
+# site publié n'obtient jamais son bloc `server` et tombe sur le premier bloc du
+# port 8900. Il ne peut pas l'importer — main importe le routeur au chargement,
+# l'import serait circulaire — alors on le lui DEPOSE, une fois défini.
+routers.publish.regenerer_nginx = regenerate_nginx_config
 
 
 # =============================================================================
