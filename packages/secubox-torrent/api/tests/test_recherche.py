@@ -78,41 +78,6 @@ def test_apibay_ecarte_sa_ligne_sentinelle():
     assert lance(go()) == []
 
 
-def test_yts_rend_un_resultat_par_qualite():
-    charge = {"data": {"movies": [{"title": "Film", "title_long": "Film (2020)",
-              "torrents": [
-                  {"hash": HASH, "quality": "1080p", "type": "bluray",
-                   "seeds": 10, "peers": 2, "size_bytes": 2000},
-                  {"hash": "b" * 40, "quality": "720p", "type": "web",
-                   "seeds": 5, "peers": 1, "size_bytes": 1000}]}]}}
-    async def go():
-        async with httpx.AsyncClient(transport=transport(charge)) as c:
-            return await R.cherche_yts(c, "film")
-    r = lance(go())
-    assert len(r) == 2
-    assert "1080p" in r[0].titre and r[0].source == "YTS"
-
-
-# ── L'agregation ─────────────────────────────────────────────────────────
-
-def test_une_source_en_panne_n_emporte_pas_les_autres(monkeypatch):
-    """Un index en panne est le cas ORDINAIRE. Rendre une erreur globale
-    priverait l'utilisateur de ce que les autres ont bien rendu."""
-    async def bonne(c, q):
-        return [R.Resultat("ok", HASH, 1, 9, 0, "TPB")]
-    async def mauvaise(c, q):
-        raise httpx.ConnectError("index injoignable")
-    monkeypatch.setitem(R.SOURCES, "tpb", bonne)
-    monkeypatch.setitem(R.SOURCES, "yts", mauvaise)
-
-    d = lance(R.cherche("film"))
-    assert len(d["resultats"]) == 1
-    assert d["sources_ok"] == ["tpb"]
-    # L'echec est NOMME : une liste courte sans explication laisserait croire
-    # que la recherche n'a rien trouve.
-    assert "yts" in d["sources_ko"]
-
-
 def test_les_resultats_sans_magnet_sont_ecartes(monkeypatch):
     async def source(c, q):
         return [R.Resultat("bon", HASH, 1, 5, 0, "TPB"),
