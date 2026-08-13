@@ -7,6 +7,39 @@
 
 ### ✅ Fait — fusionné et déployé
 
+#### v2.20.0 — 2026-08-13 (soir) : douze branches rendues à master
+
+**Vingt paquets tournaient en production dans une version absente de `master`.**
+39 commits, 227 fichiers. Vérifié après coup : **zéro** paquet en écart.
+
+- **`secubox-haproxy 1.8.0`** (#1019 + #1030) — `cert sync` **avait disparu de
+  la board** : un paquet construit depuis master déployé par-dessus une branche
+  non fusionnée. Panne invisible — les certificats servis restaient valables,
+  seul le renouvellement du 11 novembre aurait échoué. Réunit aussi les délais
+  de téléversement, relevés **par requête** et non dans `defaults`.
+- **`secubox-waf-ng 1.5.0`** (#1027 + #1031) — le corps des requêtes n'est plus
+  inspecté pour les hôtes nommés (une règle LFI filait sur les octets d'un zip),
+  et le cache média **revalide** au lieu de seulement vieillir.
+- **`secubox-profiles 0.19.1`** + **`secubox-hub 1.8.0`** (#1028) — neuf modules
+  épinglés `off` tournaient. La décision était écrite, rien ne l'exécutait : ni
+  au démarrage, ni en continu, ni au réveil, ni dans le menu.
+- **`secubox-metablogizer 1.8.2`** (#1023, #1029) — publication, alias de
+  domaine, synchronisation git aux 5 minutes, et **`.git` n'est plus servi
+  publiquement** sur les sites adossés à git.
+- **`secubox-droplet 1.4.2`** (#1026, #1030) — espace de dépôt public.
+- **`secubox-mail 2.7.0`** (#1025, #1029) — alias virtuels réparés, limite de
+  taille levée, greffon Roundcube de groupage en archive.
+- **`secubox-bbs 0.11.0`** (#1020) — lu/non-lu, modération journalisée **et
+  consultable**, création de salons, vignettes sans dépendance ajoutée.
+- **`secubox-billets 0.2.0`** (#1024) — l'adresse du billet publié.
+
+**Le fil rouge :** neuf de ces douze corrections ont le même squelette — un
+mécanisme existe, est livré, et ne s'exécute jamais.
+
+**Empreinte de gk2 :** 103 daemons → 68, mémoire disponible 1735 → 2194 Mio,
+charge 140 → 56.
+
+
 - **`secubox-peertube 1.3.2`** (#1010) — transcodage plafonné à un cœur. La
   charge de gk2 est passée de **113 à 63**. Les réglages internes de PeerTube
   (`threads: 1`, `concurrency: 1`) étaient déjà posés : le studio vidéo et le
@@ -34,7 +67,24 @@
   invalide au sens strict.
 - **Vhosts par-site MetaBlogizer** en doublon avec la configuration unifiée
   (celle qui sert réellement) — d'où les `conflicting server name ... ignored`.
-- **32 branches en conflit** toujours en attente d'arbitrage (voir `TODO.md`).
+- **13 branches anciennes** restent non fusionnées — mais **aucune ne tourne en
+  production** : vérifié paquet par paquet contre les versions installées. Elles
+  ne sont donc plus un piège, seulement un arriéré.
+- **`torrent-search`** : les résultats n'exposent pas leurs liens magnet.
+- **`secubox-waf` n'est pas montable dans l'agrégateur** — `PermissionError` sur
+  `/var/log/secubox/waf/waf-threats.log`. Le module WAF n'est donc pas servi en
+  processus : c'est #1017 qui se rejoue sous une autre forme.
+- **`publish`, `repo`, `reporter`** : l'agrégateur ne répond pas pour eux
+  (code 000 après 40 s). Relancés, non élucidé.
+- **24 daemons à tâches de fond** encore résidents. Analysés : un seul agit
+  vraiment (`watchdog`, la reprise automatique), quatre accumulent une donnée,
+  les autres réchauffaient un cache — dont deux seulement écrivent un fichier
+  que l'agrégateur relit, et sont désormais des minuteries.
+- **Un module servi par l'agrégateur ne devrait pas livrer un daemon résident.**
+  Tant que l'empaquetage les active, ils reviendront à la prochaine
+  réinstallation. C'est la cause en amont des 103 daemons.
+- **`www.gk2.net`** attend son DNS (`213.186.33.5` → `82.67.100.75`) pour son
+  certificat. Tout le reste est prêt.
 
 ---
 
