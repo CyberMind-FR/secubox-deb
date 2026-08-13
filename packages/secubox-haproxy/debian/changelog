@@ -1,3 +1,39 @@
+secubox-haproxy (1.6.3-1~bookworm1) bookworm; urgency=medium
+
+  * `vhost add` est idempotent (ref #1015). Il appendait sans jamais regarder
+    l'existant : deux appels pour le meme domaine laissaient deux tables, donc
+    deux ACL identiques dans le cfg genere. Une table est desormais mise a jour
+    en place, en PRESERVANT les cles que le paquet ne gere pas — perdre
+    `waf_bypass` a la mise a jour d'un vhost desactiverait en silence la seule
+    exception WAF sanctionnee.
+  * `vhost add` normalise son argument `ssl` en booleen et refuse ce qui n'en
+    est pas un. Il l'inserait verbatim : `vhost add <d> <b> ssl` produisait
+    `ssl = ssl`, qui n'est pas du TOML. C'est arrive en production.
+  * `vhost remove` ne decapite plus la section suivante. La plage
+    `sed '/^\[vhosts\.X\]/,/^\[/d'` allait jusqu'a l'en-tete d'apres INCLUS :
+    retirer un vhost laissait les cles du suivant orphelines, absorbees par la
+    section precedente. Silencieusement.
+  * Nouveau `haproxyctl config-repair` : signale les tables en double et les
+    booleens invalides, et les redresse avec `--write` (sauvegarde horodatee
+    avant reecriture). En lecture seule par defaut — on ne reecrit pas la
+    configuration d'un frontal en production par simple consultation.
+  * `generate --allow-shrink` : le garde-fou anti-derive refuse toute
+    generation produisant MOINS d'entrees que la config vivante, ce qui est
+    juste — mais il ne sait pas distinguer une perte accidentelle d'un retrait
+    delibere. Replier une table en double fait legitimement baisser le compte,
+    et la generation restait alors bloquee. L'aveu est explicite, jamais un
+    defaut : sans quoi le garde-fou ne protegerait plus de rien.
+  * `CONF_PATH` et `CONFIG_DIR` sont surchargeables par l'environnement, ce qui
+    permet de verifier une configuration hors de la board sans jamais toucher au
+    frontal.
+
+  Consequence du defaut : /etc/secubox/haproxy.toml n'etait pas du TOML valide.
+  L'API du module le charge avec tomllib et echouait donc, pendant que le
+  generateur — qui lit par grep/sed — continuait sans rien signaler. C'est ce
+  qui a permis au defaut de durer.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 12 Aug 2026 15:40:00 +0200
+
 secubox-haproxy (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * mitmproxy_inspector : %[query] omet le « ? », reecrivant « /a.css?v=3 »

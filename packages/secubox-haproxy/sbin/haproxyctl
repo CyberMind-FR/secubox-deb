@@ -16,8 +16,10 @@ DOCKER_NAME="secubox-haproxy"
 # actually keep certs in /data/haproxy/certs/.
 DATA_PATH="${HAPROXY_DATA_PATH:-/data/haproxy}"
 [ -d "$DATA_PATH" ] || DATA_PATH="/srv/haproxy"
-CONF_PATH="/etc/secubox/haproxy.toml"
-CONFIG_DIR="/etc/haproxy"
+# Surchargeables : indispensable pour verifier une configuration hors de la
+# board (tests, mise au point) sans jamais toucher au frontal en production.
+CONF_PATH="${SECUBOX_HAPROXY_CONF:-/etc/secubox/haproxy.toml}"
+CONFIG_DIR="${SECUBOX_HAPROXY_CONFIG_DIR:-/etc/haproxy}"
 CERTS_DIR="$DATA_PATH/certs"
 # Operator-managed extra frontends/backends (webui-lan, gitea-ssh, custom
 # metablog_* backends, etc.) live as separate files in /etc/haproxy/cfg.d/.
@@ -444,6 +446,62 @@ cmd_vhost_list() {
     echo ']}'
 }
 
+# ─────────────────────────────────────────────────────────────────────
+# EDITION DU TOML — bornes de section (#1015)
+#
+# Une section TOML va de son en-tete jusqu'a l'en-tete SUIVANT, EXCLU. C'est
+# exactement ce que l'ancienne suppression rate : `sed '/^\[a\]/,/^\[/d'`
+# supprime jusqu'a la ligne suivante commencant par `[` INCLUSE, donc decapite
+# la section d'apres et laisse ses cles orphelines. Silencieusement.
+# ─────────────────────────────────────────────────────────────────────
+
+# vhost_table_delete <nom> — retire UNE table [vhosts.<nom>], la premiere.
+# Rend 0 si quelque chose a ete retire.
+vhost_table_delete() {
+    local name="$1" tmp
+    tmp=$(mktemp) || return 1
+    awk -v cible="[vhosts.$name]" '
+        # On copie tout, sauf les lignes de la table ciblee. `dans` retombe a 0
+        # des le prochain en-tete, qui est donc CONSERVE.
+        /^\[/ { dans = ($0 == cible) ? 1 : 0 }
+        !dans  { print }
+    ' "$CONF_PATH" > "$tmp" || { rm -f "$tmp"; return 1; }
+    # Ecriture par renommage : un fichier de configuration tronque par une
+    # interruption rendrait HAProxy non generable.
+    cat "$tmp" > "$CONF_PATH" && rm -f "$tmp"
+}
+
+# vhost_table_replace <nom> <domaine> <backend> <ssl> — remplace la table en
+# place, en PRESERVANT les cles que le paquet ne gere pas (waf_bypass, etc.).
+# Les perdre a la mise a jour d'un vhost desactiverait en silence une exception
+# WAF explicitement declaree par l'operateur.
+vhost_table_replace() {
+    local name="$1" domain="$2" backend="$3" ssl="$4" tmp
+    tmp=$(mktemp) || return 1
+    awk -v cible="[vhosts.$name]" -v dom="$domain" -v bk="$backend" -v ssl="$ssl" '
+        /^\[/ {
+            if (dans && !ecrit) { ecrit = 1 }
+            dans = ($0 == cible) ? 1 : 0
+            if (dans) {
+                print cible
+                print "domain = \"" dom "\""
+                print "backend = \"" bk "\""
+                print "ssl = " ssl
+                next
+            }
+        }
+        dans {
+            # Dans la table ciblee : on jette ce qu on vient de reecrire et on
+            # garde tout le reste tel quel.
+            if ($0 ~ /^(domain|backend|ssl)[[:space:]]*=/) next
+            print
+            next
+        }
+        { print }
+    ' "$CONF_PATH" > "$tmp" || { rm -f "$tmp"; return 1; }
+    cat "$tmp" > "$CONF_PATH" && rm -f "$tmp"
+}
+
 cmd_vhost_add() {
     local domain="$1"
     local backend="$2"
@@ -456,7 +514,28 @@ cmd_vhost_add() {
 
     local name=$(echo "$domain" | tr '.-' '_')
 
-    # Append to config
+    # `ssl` EST NORMALISE EN BOOLEEN (#1015). L'argument etait insere verbatim :
+    # `haproxyctl vhost add <d> <b> ssl` produisait `ssl = ssl`, qui n'est pas du
+    # TOML. C'est arrive en production — l'API du module charge ce fichier avec
+    # tomllib et echouait donc, pendant que le generateur (grep/sed) continuait
+    # sans rien signaler.
+    case "$(echo "$ssl" | tr '[:upper:]' '[:lower:]')" in
+        true|yes|on|1|ssl)  ssl=true ;;
+        false|no|off|0|"")  ssl=false ;;
+        *) error "vhost add: ssl doit etre true ou false (recu: '$ssl')"; return 1 ;;
+    esac
+
+    # IDEMPOTENT (#1015). L'ancienne version appendait sans regarder l'existant :
+    # deux appels pour le meme domaine laissaient deux tables, donc deux ACL
+    # identiques dans le cfg genere et un TOML invalide au sens strict.
+    if grep -q "^\[vhosts\.$name\]" "$CONF_PATH" 2>/dev/null; then
+        vhost_table_replace "$name" "$domain" "$backend" "$ssl" \
+            || { error "vhost add: mise a jour de $domain impossible"; return 1; }
+        log "Updated vhost: $domain -> $backend"
+        cmd_generate
+        return 0
+    fi
+
     cat >> "$CONF_PATH" << EOF
 
 [vhosts.$name]
@@ -471,12 +550,78 @@ EOF
     cmd_generate
 }
 
+cmd_config_repair() {
+    # Redresse un haproxy.toml deja abime par les anciens `vhost add/remove`
+    # (#1015). EN LECTURE SEULE PAR DEFAUT : on ne reecrit pas la configuration
+    # d'un frontal en production sans demande explicite.
+    local ecrire=0
+    [ "${1:-}" = "--write" ] && ecrire=1
+
+    [ -f "$CONF_PATH" ] || { error "config absente: $CONF_PATH"; return 1; }
+
+    python3 - "$CONF_PATH" "$ecrire" <<'PYEOF'
+import re, shutil, sys, time
+
+chemin, ecrire = sys.argv[1], sys.argv[2] == "1"
+lignes = open(chemin).read().splitlines(keepends=True)
+
+# 1. BOOLEENS INVALIDES. `vhost add <d> <b> ssl` ecrivait `ssl = ssl`, qui n'est
+#    pas du TOML. Le generateur lit ce champ par `grep -q 'true'` : tout ce qui
+#    n'est pas litteralement `true` vaut deja false pour lui. Normaliser vers
+#    `false` preserve donc EXACTEMENT le comportement, sans toucher au trafic.
+bools, sortie = [], []
+for i, l in enumerate(lignes, 1):
+    m = re.match(r'^(ssl|ssl_redirect|enabled|waf_bypass)\s*=\s*(.+?)\s*$', l)
+    if m and m.group(2) not in ("true", "false"):
+        bools.append((i, m.group(1), m.group(2)))
+        l = "%s = false\n" % m.group(1)
+    sortie.append(l)
+
+# 2. TABLES EN DOUBLE. On garde la PREMIERE : c'est celle que le generateur
+#    rencontre d'abord, donc celle dont le comportement est deja observe.
+vus, doublons, final, jeter = set(), [], [], False
+for i, l in enumerate(sortie, 1):
+    m = re.match(r'^\[([^\]]+)\]', l)
+    if m:
+        nom = m.group(1)
+        jeter = nom in vus
+        if jeter:
+            doublons.append((i, nom))
+        vus.add(nom)
+    if not jeter:
+        final.append(l)
+
+for i, cle, val in bools:
+    print("  ligne %d: %s = %s  -> booleen invalide" % (i, cle, val))
+for i, nom in doublons:
+    print("  ligne %d: [%s]  -> table en double" % (i, nom))
+
+if not bools and not doublons:
+    print("  configuration saine")
+    sys.exit(0)
+
+if not ecrire:
+    print("  %d anomalie(s) — relancer avec --write pour corriger"
+          % (len(bools) + len(doublons)))
+    sys.exit(0)
+
+# Sauvegarde horodatee AVANT reecriture : la configuration d'un frontal en
+# production ne se remplace pas sans filet.
+shutil.copy2(chemin, "%s.avant-reparation-%s" % (chemin, time.strftime("%Y%m%d-%H%M%S")))
+open(chemin, "w").write("".join(final))
+print("  %d anomalie(s) corrigee(s)" % (len(bools) + len(doublons)))
+PYEOF
+}
+
 cmd_vhost_remove() {
     local name="$1"
     [ -z "$name" ] && { error "Usage: haproxyctl vhost remove <name>"; return 1; }
 
-    # Remove section from TOML (sed-based)
-    sed -i "/^\[vhosts\.$name\]/,/^\[/d" "$CONF_PATH" 2>/dev/null
+    # NE TOUCHE PLUS A LA SECTION SUIVANTE (#1015). L'ancien
+    # `sed '/^\[vhosts\.X\]/,/^\[/d'` supprimait jusqu'a l'en-tete d'apres
+    # INCLUS : retirer un vhost decapitait le suivant et laissait ses cles
+    # orphelines, absorbees par la section precedente.
+    vhost_table_delete "$name" || { error "vhost remove: echec sur $name"; return 1; }
 
     log "Removed vhost: $name"
     cmd_generate
@@ -912,9 +1057,18 @@ EOF
             local _nb=$(grep -c '^backend ' "$out")
             local _ob=$(grep -c '^backend ' "$CONFIG_DIR/haproxy.cfg")
             if [ "${_nh:-0}" -lt "${_oh:-0}" ] || [ "${_nb:-0}" -lt "${_ob:-0}" ]; then
-                error "Drift guard: generated cfg has fewer vhosts/backends than live (acl ${_nh}<${_oh} or backend ${_nb}<${_ob}) — refusing to clobber. Migrate the missing entries into haproxy.toml/cfg.d first."
-                rm -f "$out"
-                return 1
+                # UNE REDUCTION PEUT ETRE VOULUE (#1015). Le garde-fou ne sait
+                # pas distinguer une perte accidentelle d'un retrait delibere :
+                # retirer un vhost, ou replier une table en double, fait
+                # legitimement baisser le compte. `--allow-shrink` est l'aveu
+                # explicite de l'operateur — jamais un defaut, sans quoi le
+                # garde-fou ne protegerait plus de rien.
+                if [ "${ALLOW_SHRINK:-0}" != "1" ]; then
+                    error "Drift guard: generated cfg has fewer vhosts/backends than live (acl ${_nh}<${_oh} or backend ${_nb}<${_ob}) — refusing to clobber. Migrate the missing entries into haproxy.toml/cfg.d first, or pass --allow-shrink if the reduction is intended."
+                    rm -f "$out"
+                    return 1
+                fi
+                log "Drift guard: reduction acceptee sur demande explicite (acl ${_oh} -> ${_nh}, backend ${_ob} -> ${_nb})"
             fi
         fi
         install -m 0644 -o root -g root "$out" "$CONFIG_DIR/haproxy.cfg"
@@ -1095,7 +1249,10 @@ case "${1:-}" in
     reload)     cmd_reload ;;
     stats)      cmd_stats ;;
     info)       cmd_info ;;
-    generate)   cmd_generate ;;
+    generate)   [ "${2:-}" = "--allow-shrink" ] && ALLOW_SHRINK=1; cmd_generate ;;
+    # Verifie (et, avec --write, redresse) un haproxy.toml abime par les
+    # anciens `vhost add/remove` — doublons de tables, booleens invalides.
+    config-repair) cmd_config_repair "${2:-}" ;;
 
     vhost)
         case "${2:-}" in
