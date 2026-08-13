@@ -1,3 +1,37 @@
+## 2026-08-13 — torrent-search rendait de faux resultats (#1032, #1033)
+
+**#1032 — « reparer les liens magnet » supposait d'abord de vrais resultats.**
+La page fabriquait ses huit resultats avec `Math.random()` et son bouton
+`⬡ magnet` n'avait aucun gestionnaire : il n'y avait pas de lien casse, il n'y
+avait pas de lien.
+
+- `secubox-torrent` 2.3.1 — recherche d'index cote serveur. Elle part de la
+  box : emise par le navigateur, elle exposerait l'adresse du visiteur aux
+  trackers. `api/main.py` manquait — le module etait l'un des deux seuls que
+  l'agregateur ne pouvait pas monter.
+- `secubox-metablogizer` 1.8.5 — un site expose des routes d'API sur son propre
+  nom via `site.json`, ROUTE PAR ROUTE et en correspondance exacte. Un prefixe
+  exposerait toute la surface du module, y compris ce qu'on y ajoutera demain.
+- Frontend pousse dans Gitea, pas sur le disque : `metablog-sync` ecrase toute
+  edition locale en cinq minutes.
+- XSS ferme : les titres viennent d'un index tiers et etaient injectes en
+  `innerHTML`. Le defaut naissait au moment ou les donnees devenaient reelles.
+- `scan_sites()` ne recopie que les cles nommees — la route declaree
+  n'atteignait pas le generateur. Meme piege qu'en #1023 avec les alias ; le
+  test porte desormais sur la survie de la cle AU SCAN.
+- YTS retire : `yts.mx` rend NXDOMAIN, y compris depuis Quad9.
+
+**#1033 — l'envoi de contenu reussissait puis annoncait un echec.**
+`_version_upload()` appelait `asyncio.get_running_loop()` sans qu'`asyncio` soit
+importe dans sa portee. L'appel arrivant APRES l'extraction, le contenu etait
+bien ecrit et l'operateur lisait « echec » — il recommencait pour rien. Garde
+posee sur la CLASSE de defaut : aucun nom indefini n'est tolere dans le module.
+
+**Egalement ce jour** : `secubox-torrent` avait ete construit avec une entree de
+changelog numerotee 2.1.0 empilee au-dessus de 2.2.9 — le contenu etait bon, la
+version declaree etait une regression que `dpkg -i` a acceptee sans rien dire.
+Renumerote en 2.3.x.
+
 # HISTORY — SecuBox-DEB Migration Log
 *Tracking completed milestones with dates*
 

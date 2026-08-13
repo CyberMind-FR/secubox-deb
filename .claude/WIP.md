@@ -5,7 +5,14 @@
 
 ## 2026-08-12 — Ressources bornées, publication réparée
 
-### ✅ Fait — fusionné et déployé
+### ✅ Fait
+
+- **#1032 — torrent-search : vrais resultats et vrais magnets** (2026-08-13).
+  Livre et mesure : 100 resultats en ~2,4 s par le nom public.
+  RESTE FAUX SUR CETTE PAGE : les pastilles de sources ne pilotent rien (seul
+  TPB est interroge) et l'onglet NZB rend toujours des resultats fabriques.
+- **#1033 — metablogizer : l'envoi reussissait puis annoncait un echec**
+  (2026-08-13). Prouve dans les deux sens sur gk2. — fusionné et déployé
 
 #### v2.20.0 — 2026-08-13 (soir) : douze branches rendues à master
 
