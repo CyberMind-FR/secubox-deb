@@ -727,6 +727,99 @@ cmd_cert_renew() {
     fi
 }
 
+cmd_cert_sync() {
+    # Reconstruit les .pem servis par HAProxy depuis /etc/letsencrypt/live (#1019).
+    #
+    # POURQUOI CE VERBE EXISTE. certbot renouvelle dans /etc/letsencrypt/live ;
+    # HAProxy sert un fichier CONCATENE (chaine + cle) dans $CERTS_DIR. Rien ne
+    # recopiait l'un vers l'autre : aucun hook de renouvellement n'existait, et
+    # `cert renew` ci-dessus est ecrit pour acme.sh, absent de cette board.
+    #
+    # Le defaut est SILENCIEUX. Le renouvellement reussit, les journaux sont
+    # propres, le site repond — jusqu'au jour ou la copie servie expire, des
+    # semaines plus tard. Le lien de cause a effet est alors indechiffrable.
+    #
+    # Constate sur gk2 : trois certificats sur six divergeaient, dont un qui
+    # serait tombe le 14 octobre alors qu'une version valide jusqu'au 2 novembre
+    # dormait deja sur le disque.
+    local ecrire=1
+    [ "${1:-}" = "--dry-run" ] && ecrire=0
+
+    local live_root="/etc/letsencrypt/live"
+    [ -d "$live_root" ] || { log "cert-sync: pas de certbot sur cette board"; return 0; }
+    mkdir -p "$CERTS_DIR"
+
+    local change=0 vus=0
+    for d in "$live_root"/*/; do
+        [ -d "$d" ] || continue
+        local nom chaine cle cible
+        nom=$(basename "$d")
+        chaine="$d/fullchain.pem"
+        cle="$d/privkey.pem"
+        [ -f "$chaine" ] && [ -f "$cle" ] || continue
+        vus=$((vus + 1))
+        cible="$CERTS_DIR/$nom.pem"
+
+        # ON COMPARE LE CONTENU, PAS LES DATES. Un mtime plus recent ne prouve
+        # pas que le contenu a change — et une copie touchee a la main aurait un
+        # mtime plus recent tout en servant un certificat perime.
+        local somme_src somme_dst
+        somme_src=$(cat "$chaine" "$cle" | sha256sum | cut -d' ' -f1)
+        somme_dst=$([ -f "$cible" ] && sha256sum "$cible" | cut -d' ' -f1 || echo "")
+        [ "$somme_src" = "$somme_dst" ] && continue
+
+        local fin_src fin_dst
+        fin_src=$(openssl x509 -in "$chaine" -noout -enddate 2>/dev/null | cut -d= -f2)
+        fin_dst=$([ -f "$cible" ] && openssl x509 -in "$cible" -noout -enddate 2>/dev/null | cut -d= -f2 || echo "")
+
+        # ON NE RACCOURCIT JAMAIS LA VIE D'UN CERTIFICAT SERVI.
+        #
+        # Le premier jet ecrasait des que le contenu differait. L'essai a blanc
+        # sur gk2 a montre le piege : deux certificats servis expiraient PLUS
+        # TARD que la copie de /etc/letsencrypt (live.maegia.tv, 4 novembre
+        # contre 14 octobre). Les synchroniser aurait raccourci leur duree de
+        # vie — l'inverse exact du but.
+        #
+        # Un .pem servi peut venir d'ailleurs qu'ACME : joker, autre outil,
+        # depot manuel. La source n'est donc pas autoritaire par nature ; seule
+        # la date d'expiration l'est.
+        if [ -n "$fin_dst" ]; then
+            local ts_src ts_dst
+            ts_src=$(date -d "$fin_src" +%s 2>/dev/null || echo 0)
+            ts_dst=$(date -d "$fin_dst" +%s 2>/dev/null || echo 0)
+            if [ "$ts_src" -le "$ts_dst" ]; then
+                log "cert-sync: $nom — IGNORE, le certificat servi expire plus tard ($fin_dst) que la source ($fin_src)"
+                continue
+            fi
+        fi
+
+        change=$((change + 1))
+        log "cert-sync: $nom — servi jusqu'au ${fin_dst:-absent}, remplace par $fin_src"
+
+        [ "$ecrire" = "1" ] || continue
+
+        # Ecriture par fichier temporaire puis renommage : HAProxy peut relire le
+        # repertoire a tout instant, et un .pem tronque le ferait echouer au
+        # rechargement — donc tomber pour TOUS les vhosts, pas seulement celui-ci.
+        local tmp="$cible.nouveau"
+        cat "$chaine" "$cle" > "$tmp" || { error "cert-sync: ecriture $nom impossible"; rm -f "$tmp"; continue; }
+        chmod 0600 "$tmp"
+        mv "$tmp" "$cible"
+    done
+
+    if [ "$ecrire" = "0" ]; then
+        log "cert-sync: $vus certificat(s), $change a mettre a jour (lecture seule)"
+        return 0
+    fi
+    log "cert-sync: $vus certificat(s), $change mis a jour"
+
+    # ON NE RECHARGE QUE SI QUELQUE CHOSE A CHANGE. Recharger a chaque passage
+    # coupe les connexions en cours sans raison, et ce verbe est appele apres
+    # CHAQUE renouvellement — donc souvent, pour rien la plupart du temps.
+    [ "$change" -gt 0 ] && cmd_reload
+    return 0
+}
+
 # ─────────────────────────────────────────────────────────────────────
 # CONFIG GENERATION
 # ─────────────────────────────────────────────────────────────────────
@@ -1293,6 +1386,7 @@ case "${1:-}" in
     cert)
         case "${2:-}" in
             list)   cmd_cert_list ;;
+            sync)   cmd_cert_sync "${3:-}" ;;
             add)    cmd_cert_add "$3" "$4" ;;
             renew)  cmd_cert_renew ;;
             *)      echo "Usage: haproxyctl cert {list|add|renew} [domain]" ;;

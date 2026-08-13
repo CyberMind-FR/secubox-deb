@@ -1,3 +1,47 @@
+secubox-haproxy (1.8.0-1~bookworm1) bookworm; urgency=high
+
+  * Cette version REUNIT deux corrections qui vivaient sur des branches
+    separees, et dont l'une avait efface l'autre sur la board : un paquet
+    construit depuis master a fait perdre le verbe `cert sync` de la 1.6.4,
+    jamais fusionne. Le renouvellement automatique des certificats etait donc
+    casse en silence — les certificats servis restaient valables, mais rien ne
+    recopiait plus les renouvellements vers HAProxy.
+
+secubox-haproxy (1.7.1-1~bookworm1) bookworm; urgency=high
+
+  * HAProxy servait des certificats que le renouvellement ne mettait jamais a
+    jour (ref #1019). certbot renouvelle dans /etc/letsencrypt/live ; HAProxy
+    sert un fichier CONCATENE dans /data/haproxy/certs. Rien ne recopiait l'un
+    vers l'autre : aucun hook n'existait, ni par certificat ni dans les
+    repertoires globaux, tous deux vides.
+  * Le defaut etait SILENCIEUX. Le renouvellement reussit, les journaux de
+    certbot sont propres, le site repond — jusqu'au jour ou la copie servie
+    expire, des semaines plus tard, et le lien de cause a effet est alors
+    indechiffrable.
+  * Constate sur gk2 : trois certificats sur six divergeaient, dont un qui
+    serait tombe le 14 octobre alors qu'une version valide jusqu'au 2 novembre
+    dormait deja sur le disque, inutilisee.
+  * Nouveau `haproxyctl cert sync` : reconstruit les .pem depuis
+    /etc/letsencrypt/live, compare le CONTENU et non les dates — un mtime plus
+    recent ne prouve pas qu'un fichier a change, et une copie touchee a la main
+    aurait un mtime recent tout en servant un certificat perime. Ecriture par
+    renommage, sans quoi un .pem tronque ferait echouer le rechargement pour
+    TOUS les vhosts. Ne recharge que si quelque chose a change.
+  * Un hook de deploiement certbot l'appelle apres chaque renouvellement reussi.
+    Livre par le paquet, pas pose a la main — sans quoi il disparaitrait a la
+    prochaine reinstallation, comme le reste.
+  * `cert sync` NE RACCOURCIT JAMAIS la vie d'un certificat servi. Le premier
+    jet ecrasait des que le contenu differait ; l'essai a blanc sur gk2 a montre
+    le piege : deux certificats servis expiraient PLUS TARD que la copie de
+    /etc/letsencrypt (live.maegia.tv, 4 novembre contre 14 octobre). Les
+    synchroniser aurait raccourci leur duree de vie — l'inverse du but. Un .pem
+    servi peut venir d'ailleurs qu'ACME (joker, autre outil, depot manuel) : la
+    source n'est pas autoritaire par nature, seule la date d'expiration l'est.
+  * `cert renew` reste ecrit pour acme.sh, absent de cette board : c'est du
+    code mort ici, laisse tel quel plutot que retire a l'aveugle.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 10:00:00 +0200
+
 secubox-haproxy (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * DELAI RELEVE PAR REQUETE POUR LES TELEVERSEMENTS DU DEPOT (ref #1030). La
