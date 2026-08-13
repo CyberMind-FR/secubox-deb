@@ -806,6 +806,7 @@ frontend http-in
     # garde anti-dérive refusait de régénérer — elle protégeait exactement ça.
     acl is_acme_challenge path_beg /.well-known/acme-challenge/
     use_backend acme_challenge if is_acme_challenge
+
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
@@ -935,6 +936,25 @@ EOF
 # WAF Inspector Backend (mitmproxy LXC at $waf_ip:$waf_port)
 backend mitmproxy_inspector
     mode http
+    # TELEVERSEMENTS LONGS : DELAI SERVEUR RELEVE PAR REQUETE (#1030).
+    #
+    # La section `defaults` porte `timeout server 30s`, et c'est bien : elle
+    # protege TOUS les vhosts d'un amont qui trainerait. Mais un depot de 22 Mio
+    # a mis 116 s a s'ecrire sur cette board — HAProxy abandonnait a 30, le
+    # deposant voyait un 504, ET LE SERVEUR TERMINAIT LE TRAVAIL. Chaque essai
+    # deposait a nouveau : trois depots pour une seule intention.
+    #
+    # DEUX LECONS PAYEES A L'ESSAI. `set-timeout` ne vit QUE dans un backend —
+    # HAProxy refuse « proxy has no backend capability » cote frontend — et il
+    # ne connait que `server` et `tunnel` : `set-timeout client` n'existe pas.
+    # `timeout client` reste donc a 30 s, ce qui convient : c'est un delai
+    # d'INACTIVITE, et un televersement regulier ne l'atteint jamais.
+    #
+    # Relever `defaults` aurait couvert le cas en retirant la protection a la
+    # centaine de vhosts qui n'en ont pas besoin — payer pour tous ce dont un
+    # seul a besoin.
+    acl est_depot_long path_beg /api/v1/droplet/depot
+    http-request set-timeout server 1h if est_depot_long
     option forwardfor
     http-request set-header X-Real-IP %[src]
     # %[query] rend la chaine de requete SANS le « ? » qui l'introduit : une
