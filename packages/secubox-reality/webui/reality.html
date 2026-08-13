@@ -299,7 +299,7 @@
       credentials: 'same-origin',
     }).then(function (resp) {
       if (resp.status === 401) {
-        window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+        if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
         return { ok: false, status: 401, data: null };
       }
       return resp.text().then(function (text) {

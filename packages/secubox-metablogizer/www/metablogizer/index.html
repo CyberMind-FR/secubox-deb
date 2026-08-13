@@ -297,7 +297,7 @@
                     // transient 401 cascades everything to the login page.
                     res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
                 }
-                if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
+                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {
                     console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
@@ -716,7 +716,7 @@
                         res = await fetch(API + '/site/' + encodeURIComponent(name) + '/upload',
                             { method: 'POST', body: fd, credentials: 'same-origin' });
                     }
-                    if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+                    if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
                     const d = await res.json().catch(() => ({}));
                     if (res.ok && d.success) { toast('✓ ' + name + ' — contenu mis à jour (' + (d.kind || 'ok') + ')'); await ensureSites(true); renderSitesTable(); }
                     else errorToast('Échec du chargement pour ' + name + (d.detail ? ': ' + d.detail : ''));
@@ -864,7 +864,7 @@
                         res = await fetch(API + '/publish/wizard',
                             { method: 'POST', body: fd, credentials: 'same-origin' });
                     }
-                    if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+                    if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return; }
                     const d = await res.json().catch(function () { return {}; });
                     out.textContent = JSON.stringify(d, null, 2);
                     if (d.steps) { ['content', 'version', 'route', 'cert'].forEach(function (s) {

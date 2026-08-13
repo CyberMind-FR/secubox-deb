@@ -997,7 +997,7 @@
 
         function checkAuth() {
             if (!getToken()) {
-                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return false;
             }
             return true;

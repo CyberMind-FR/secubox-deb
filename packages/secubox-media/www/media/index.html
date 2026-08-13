@@ -229,7 +229,7 @@ async function api(path, opts) {
         // panneau inerte. Le chemin courant est préservé pour revenir ici.
         errorToast('🔒 Connexion requise — redirection…');
         setTimeout(() => {
-            window.location.href = '/login.html?redirect=' +
+            if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' +
                 encodeURIComponent(window.location.pathname);
         }, 900);
         throw new Error('401');

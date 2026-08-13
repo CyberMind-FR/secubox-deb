@@ -1,3 +1,35 @@
+## 2026-08-13 — PAC injoignable et boucle de connexion (#1034)
+
+Trouves en diagnostiquant un « bad cert » sur des domaines tiers, tous deux
+sans rapport avec le symptome de depart.
+
+**`/proxy.pac` n'etait servi nulle part.** Sur `admin`, il rendait 200 AVEC UNE
+PAGE HTML — pire qu'un 404 : le navigateur la telecharge, echoue a l'analyser,
+et reste silencieusement sans proxy. Cause : la `location` n'etait incluse que
+par un bloc `server_name ~^admin\.gk2\.secubox\.in$` — a nom REGEX — alors
+qu'un autre bloc revendiquait le meme nom en EXACT. nginx retient toujours
+l'exact avant la regex : la directive figurait dans la configuration chargee
+sans jamais servir une requete.
+
+**Et le vhost n'etait jamais active par le paquet.** Livre dans
+`sites-available`, quelqu'un en avait fait une COPIE dans `sites-enabled`, figee
+au 25 juillet. Chaque mise a jour rafraichissait la source sans toucher le
+fichier charge : elle reussissait et ne changeait rien. Le postinst pose
+desormais un lien, apres avoir deplace la copie HORS de `sites-enabled` — nginx
+y charge tous les fichiers, et l'y laisser aurait declare deux fois le meme
+`server_name`.
+
+**La garde d'authentification bouclait sur sa propre page de sortie.**
+`checkAuth()` renvoyait vers `/login.html?redirect=<chemin>` sans verifier
+qu'elle n'y etait pas deja : `login.html?redirect=%2Flogin.html`, indefiniment,
+des que `/login.html` rendait autre chose que la page de connexion. 101
+redirections gardees dans 81 fichiers, en quatre variantes d'ecriture — dont
+une vers `/portal/login.html`, que ne garder qu'a moitie aurait laissee intacte.
+
+**Non pousse, faute de source** : `soc.html`, `hub/soc.html` et `hub/index.html`
+existent sur la board sans equivalent au depot. Onze fichiers `.bak` trainent
+aussi sous la racine servie par nginx.
+
 # HISTORY — SecuBox-DEB Migration Log
 *Tracking completed milestones with dates*
 

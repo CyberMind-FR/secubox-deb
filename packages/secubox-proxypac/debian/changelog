@@ -1,3 +1,32 @@
+secubox-proxypac (1.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * `/proxy.pac` N ETAIT SERVI NULLE PART (ref #1034), et sans que rien ne le
+    signale. Sur `admin`, il rendait 200 AVEC UNE PAGE HTML — ce qui est pire
+    qu un 404 : le navigateur la telecharge, echoue a l analyser, et reste
+    silencieusement sans configuration de proxy. Sur le vhost WPAD, 404.
+  * CAUSE : `nginx/proxypac.conf` n etait inclus que par un bloc
+    `server_name ~^admin\.gk2\.secubox\.in$` — un nom REGEX — alors qu un autre
+    bloc revendiquait le meme nom en EXACT. Or nginx retient toujours le nom
+    exact avant la regex. La `location` figurait donc dans la configuration
+    chargee sans servir une seule requete : rien n echouait, rien ne se
+    journalisait, elle etait simplement morte.
+  * LE VHOST WPAD SERT DESORMAIS LES DEUX NOMS, sur son propre nom, sans
+    dependre d une inclusion : `/wpad.dat` est celui qu un systeme cherche seul,
+    `/proxy.pac` celui qu un humain saisit et que porte la documentation. N en
+    servir qu un revient a casser l autre.
+  * ET LE VHOST N ETAIT JAMAIS ACTIVE PAR LE PAQUET. Il etait livre dans
+    `sites-available` et quelqu un en avait fait, un jour, une COPIE dans
+    `sites-enabled` — figee au 25 juillet. Chaque mise a jour rafraichissait
+    `sites-available` sans toucher le fichier reellement charge : elle
+    reussissait et ne changeait rien. Le postinst pose desormais un LIEN, apres
+    avoir deplace la copie figee HORS de `sites-enabled` — nginx y charge tous
+    les fichiers, et l y laisser declarerait le meme `server_name` deux fois.
+  * `127.0.0.1` AUTORISE : c est l adresse vue derriere HAProxy tant que
+    `real_ip` n a pas reecrit `X-Forwarded-For`. Sans elle, la chaine se
+    refusait le PAC a elle-meme, et les sondes locales aussi.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 23:10:00 +0200
+
 secubox-proxypac (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * wpad-vhost: listen on :9080 (internal) instead of :80. HAProxy fronts :80,

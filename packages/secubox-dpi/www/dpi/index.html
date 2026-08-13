@@ -372,7 +372,7 @@
             if (token) opts.headers['Authorization'] = 'Bearer ' + token;
             try {
                 const res = await fetch(path, opts);
-                if (res.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
+                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return null; }
                 if (!res.ok) return null;
                 return await res.json();
             } catch (e) { return null; }
