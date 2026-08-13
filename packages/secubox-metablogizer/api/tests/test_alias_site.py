@@ -58,3 +58,20 @@ def test_le_scan_remonte_les_alias(tmp_path):
 
     entrees = sites_scan.scan_sites(tmp_path / "sites", tmp_path / "absent.conf")
     assert entrees[0]["aliases"] == ["gk2.net", "www.gk2.net"]
+
+
+def test_le_bloc_genere_refuse_les_fichiers_caches():
+    """Un site adossé à git porte un `.git/` DANS son docroot (#1029).
+
+    Sans cette règle, `https://<site>/.git/config` répond 200 et l'historique
+    complet du dépôt se reconstitue avec un outil public. Constaté en direct sur
+    anibal-amiot.fr : le dépôt était public, donc sans conséquence cette fois —
+    la même configuration sur un dépôt privé aurait livré son contenu entier.
+    """
+    import inspect
+    import main as m
+    src = inspect.getsource(m.regenerate_nginx_config)
+    # La ligne telle que nginx la recevra : UN antislash devant le point.
+    assert r"location ~ /\." in src.replace("\\\\", "\\"), \
+        "la règle sur les fichiers cachés a disparu ou est mal échappée"
+    assert "return 404" in src
