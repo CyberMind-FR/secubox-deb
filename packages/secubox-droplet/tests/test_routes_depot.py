@@ -120,3 +120,31 @@ def test_les_reglages_sont_annonces_avant_l_envoi(client):
 
 def test_la_sante_repose_sur_une_ecriture(client):
     assert client.get("/depot/sante").json()["status"] == "ok"
+
+
+def test_la_reponse_ne_pretend_pas_que_l_alerte_est_partie(client):
+    """Le dépôt est acquis quand les octets sont sur le disque (#1030).
+
+    L'alerte suit en tâche de fond : annoncer `ok: true` avant d'avoir constaté
+    l'envoi serait exactement ce que ce module s'interdit partout ailleurs.
+    """
+    r = client.post("/depot", files={"fichiers": ("a.zip", b"x" * 100)})
+    d = r.json()
+    assert d["ok"] is True
+    assert d["alerte"]["ok"] is None
+    assert d["alerte"]["en_cours"] is True
+
+
+def test_le_depot_reussit_meme_si_l_alerte_echouera(client, monkeypatch):
+    """Les octets sont là ; le courrier est une notification, pas le dépôt."""
+    from api import routes_depot as rd
+
+    def boum(*a, **kw):
+        raise OSError("serveur SMTP muet")
+    monkeypatch.setattr(rd._alerte, "envoie", boum)
+
+    r = client.post("/depot", files={"fichiers": ("b.zip", b"y" * 50)})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    # Et le fichier est bien sur le disque, malgré l'alerte condamnée.
+    dossier = client.racine / r.json()["depot"]
+    assert (dossier / "00.bin").read_bytes() == b"y" * 50

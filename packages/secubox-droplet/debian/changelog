@@ -1,3 +1,27 @@
+secubox-droplet (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE DEPOT EST ACQUIS QUAND LES OCTETS SONT SUR LE DISQUE, PAS QUAND LE
+    COURRIER PART (ref #1030). L'alerte partait AVANT la reponse : sur un depot
+    de 22 Mio, l'envoi SMTP de la piece jointe pesait l'essentiel des 116
+    secondes mesurees. HAProxy (30 s) et sbxwaf (10 s) abandonnaient bien avant,
+    le deposant voyait un 504 — ET LE SERVEUR TERMINAIT LE TRAVAIL. Chaque essai
+    deposait donc a nouveau : trois depots et trois courriers de 30 Mio pour une
+    seule intention. Sur un point d'entree PUBLIC, un delai mal regle devenait
+    un amplificateur du volume recu.
+  * La reponse rend `alerte.ok = null`, jamais `true` : au moment ou elle part,
+    personne ne sait encore si le courrier passera. Annoncer un succes qu'on
+    n'a pas constate est exactement ce que ce module s'interdit partout
+    ailleurs. La page dit « va en etre averti », au lieu de « a ete prevenu ».
+  * La tache de fond n'a plus le droit de lever : `_alerte.envoie` attrape deja
+    les pannes de courrier attendues, l'enveloppe attrape LE RESTE. Une tache
+    de fond qui leve remonte dans les entrailles du serveur, ou elle n'apprend
+    rien a personne et salit le journal d'une trace sans rapport avec une
+    requete qui a de toute facon deja repondu.
+  * 44 tests, dont deux sur le nouveau contrat : la reponse ne pretend pas que
+    l'alerte est partie, et le depot reussit meme quand l'envoi est condamne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 17:45:00 +0200
+
 secubox-droplet (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * La zone de depot ne dessinait aucun cadre (ref #1026). UN <label> EST
