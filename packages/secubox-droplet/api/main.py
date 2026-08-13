@@ -41,6 +41,29 @@ async def health_check():
     return {"status": "ok", "module": "deb"}
 
 app.include_router(auth_router, prefix="/auth")
+
+# L'ESPACE DE DEPOT (#1026) — routes separees, responsabilite separee. Le reste
+# de ce module PUBLIE des fichiers pour un auteur authentifie ; ces routes-la en
+# RECOIVENT d'inconnus. Les melanger dans le meme fichier aurait fini par faire
+# glisser une garde de l'un vers l'autre.
+try:
+    # L'IMPORT EST RELATIF EN PREMIER, et ce n'est pas un detail de style.
+    # L'agregateur charge `api/main.py` sous un paquet synthetique dont le
+    # __path__ est le repertoire api/, mais ne met que le repertoire PARENT sur
+    # sys.path : un `from routes_depot import ...` absolu y echoue, et le
+    # module se chargerait alors sans son espace de depot, silencieusement.
+    try:
+        from .routes_depot import router as depot_router  # type: ignore
+    except ImportError:
+        from routes_depot import router as depot_router  # type: ignore
+    app.include_router(depot_router)
+except Exception as _e:  # noqa: BLE001
+    # LE MODULE DE PUBLICATION SURVIT A L'ABSENCE DU DEPOT. Faire tomber tout
+    # droplet parce que l'espace de depot ne charge pas retirerait des
+    # fonctions qui marchent, pour punir celle qui ne marche pas.
+    log_boot = __import__("logging").getLogger("droplet")
+    log_boot.error("espace de depot non charge : %s", _e)
+
 router = APIRouter()
 log = get_logger("droplet")
 

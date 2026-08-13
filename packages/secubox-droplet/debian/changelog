@@ -1,3 +1,86 @@
+secubox-droplet (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * LE DEPOT EST ACQUIS QUAND LES OCTETS SONT SUR LE DISQUE, PAS QUAND LE
+    COURRIER PART (ref #1030). L'alerte partait AVANT la reponse : sur un depot
+    de 22 Mio, l'envoi SMTP de la piece jointe pesait l'essentiel des 116
+    secondes mesurees. HAProxy (30 s) et sbxwaf (10 s) abandonnaient bien avant,
+    le deposant voyait un 504 — ET LE SERVEUR TERMINAIT LE TRAVAIL. Chaque essai
+    deposait donc a nouveau : trois depots et trois courriers de 30 Mio pour une
+    seule intention. Sur un point d'entree PUBLIC, un delai mal regle devenait
+    un amplificateur du volume recu.
+  * La reponse rend `alerte.ok = null`, jamais `true` : au moment ou elle part,
+    personne ne sait encore si le courrier passera. Annoncer un succes qu'on
+    n'a pas constate est exactement ce que ce module s'interdit partout
+    ailleurs. La page dit « va en etre averti », au lieu de « a ete prevenu ».
+  * La tache de fond n'a plus le droit de lever : `_alerte.envoie` attrape deja
+    les pannes de courrier attendues, l'enveloppe attrape LE RESTE. Une tache
+    de fond qui leve remonte dans les entrailles du serveur, ou elle n'apprend
+    rien a personne et salit le journal d'une trace sans rapport avec une
+    requete qui a de toute facon deja repondu.
+  * 44 tests, dont deux sur le nouveau contrat : la reponse ne pretend pas que
+    l'alerte est partie, et le depot reussit meme quand l'envoi est condamne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 17:45:00 +0200
+
+secubox-droplet (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * La zone de depot ne dessinait aucun cadre (ref #1026). UN <label> EST
+    `display: inline` PAR DEFAUT : bordure, remplissage et hauteur minimale
+    etaient donc ignores ou replies sur les lignes de texte, et l'ensemble ne
+    ressemblait a rien d'utilisable. Un `display` explicite n'est pas une
+    precaution de style, c'est ce qui FAIT EXISTER le cadre. Le champ de
+    fichier, `position: absolute` sans ancetre positionne, se referait de son
+    cote au document entier au lieu de la zone.
+  * Un fichier se retire sans tout recommencer — sans cela, un clic de trop
+    oblige a refaire la selection entiere, et sur dix fichiers on renonce.
+  * Le document absorbe les depots manques : un fichier lache a cote de la zone
+    etait OUVERT par le navigateur, faisant perdre la page en cours.
+  * Le champ est vide apres chaque ajout, sans quoi re-choisir un fichier qu'on
+    vient de retirer ne declenche pas `change` et il devient impossible de le
+    remettre.
+  * Le formulaire fonctionne sans script : `action`, `method` et `enctype` sont
+    poses meme si le script les remplace. La reponse est alors du JSON brut —
+    ingrat, mais le fichier arrive, ce qui vaut mieux qu'un bouton inerte.
+  * Un fichier trop lourd est signale AVANT l'envoi, d'apres le plafond demande
+    au serveur et jamais recopie dans la page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 12:45:00 +0200
+
+secubox-droplet (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * ESPACE DE DEPOT (ref #1026). On y laisse une archive, elle atterrit sur le
+    disque de la box, et une alerte part vers le compte hote avec ce qu'on a
+    constate : empreinte, taille reelle, origine, instant. Le module PUBLIAIT
+    des fichiers pour un auteur authentifie ; il en RECOIT desormais
+    d'inconnus. Les deux ne se ressemblent qu'en surface, et le second est de
+    tres loin le plus expose — d'ou des routes separees, dans leur fichier.
+  * RIEN DE CE QUI EST DEPOSE N'EST JAMAIS RESERVI. Les fichiers vivent hors de
+    tout docroot et aucune route ne rend leur contenu. Un depot public qu'on
+    peut relire est un hebergement anonyme gratuit : il sera trouve, et il
+    servira.
+  * LE NOM FOURNI NE TOUCHE JAMAIS UN CHEMIN. Le chemin vient de l'indice du
+    fichier dans le depot ; le nom du deposant, nettoye, ne sert qu'a
+    l'affichage et au manifeste. Ce n'est pas le filtre qui protege — un filtre
+    finit toujours par laisser passer quelque chose — c'est cette separation.
+  * LE DEBIT EST BORNE PAR ORIGINE, par seau perce plutot que par fenetre : un
+    compteur remis a zero toutes les heures autoriserait deux fois le quota a
+    cheval sur la bascule. Un envoi coupe par le reseau est rembourse — punir
+    le deposant d'une panne qui n'est pas la sienne serait doublement injuste.
+  * L'ECRITURE ET L'ENVOI SE FONT HORS DE LA BOUCLE D'EVENEMENTS. Ces routes
+    sont servies EN PROCESSUS par l'agregateur, qui porte la centaine de
+    modules de la board sur une seule boucle : recopier deux gigaoctets de
+    facon synchrone y bloquerait la board ENTIERE, en 502, pour la duree du
+    televersement — et ce serait declenchable par n'importe quel inconnu.
+  * `client_max_body_size 4g` et `proxy_request_buffering off` sur la route de
+    depot. Le defaut nginx est UN megaoctet : sans cela le premier depot serait
+    refuse par nginx avec un 413 que notre code ne verrait jamais passer.
+  * L'echec de l'alerte n'est PAS l'echec du depot : les octets sont deja sur
+    le disque quand le courrier part. Un manifeste est ecrit a cote d'eux, qui
+    survit a l'alerte — le courrier peut se perdre, le dossier doit se suffire.
+  * 42 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 12:30:00 +0200
+
 secubox-droplet (1.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
