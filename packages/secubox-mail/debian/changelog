@@ -25,6 +25,15 @@ secubox-mail (2.6.0-1~bookworm1) bookworm; urgency=medium
   * Nouveau verbe `mailctl alias repair`, pour les boards dont le main.cf a ete
     ecrit avant ce correctif. Sans lui il faudrait ajouter puis retirer un alias
     pour declencher la recompilation — une manoeuvre qu'il faut connaitre.
+  * PLUS AUCUNE LIMITE DE TAILLE. Le conteneur appliquait les 10 Mo du defaut
+    postfix — le modele du paquet disait pourtant 50 Mo, valeur qui n'a jamais
+    atteint la configuration vivante. Un courrier de 31 Mo etait rejete a la
+    porte avec « message size exceeds size limit », cote EXPEDITEUR : la pire
+    des places pour une limite, puisque l'emetteur ne sait pas quoi faire de son
+    fichier et que le destinataire n'apprend meme pas qu'on a tente de le
+    joindre. `virtual_mailbox_limit` est leve avec les autres : le laisser a
+    50 Mo aurait fait echouer la remise APRES l'acceptation, un rejet plus
+    tardif donc plus obscur que celui qu'on retire.
   * `alias del` recompile aussi : une suppression qui ne supprime pas est plus
     dangereuse qu'un ajout qui n'ajoute pas.
 
