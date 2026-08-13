@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: réchauffe le cache d'un module, une fois (#1028)
+#
+# TEMPLATE : une instance par module, `%i` étant son nom. La cadence vit dans
+# la minuterie correspondante, jamais ici — la régler ne doit demander ni
+# modification de code, ni redémarrage d'un daemon.
+[Unit]
+Description=SecuBox — réchauffe le cache du module %i
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/secubox-cache-warm %i
+# EN FOND DE PRIORITE. Ce travail est du confort : il ne doit jamais disputer
+# le processeur à ce qui sert une requête. C'est précisément l'inverse de ce
+# que faisaient les boucles qu'il remplace, qui se réveillaient toutes à la
+# même seconde au même rang que le reste.
+Nice=15
+IOSchedulingClass=idle
+# Un réchauffage qui échoue n'est pas une panne : le prochain passage
+# réessaiera, et l'endpoint sait recalculer à la demande entre-temps.
+SuccessExitStatus=0 1
+TimeoutStartSec=120
