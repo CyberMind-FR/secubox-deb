@@ -314,10 +314,15 @@ progress { width: 100%; height: .45rem; margin-top: .9rem;
         // vient d'envoyer : sans lui, il ne peut rien demander à personne.
         r.textContent = 'Référence : ' + d.depot;
         var s = document.createElement('p');
-        s.textContent = (d.alerte && d.alerte.ok)
-          ? 'Le propriétaire de la box a été prévenu.'
-          : "Le propriétaire n'a pas pu être prévenu par courrier, mais vos " +
-            'fichiers sont bien arrivés.';
+        // ON NE PROMET PAS CE QU'ON N'A PAS CONSTATE (#1030). L'alerte part en
+        // tache de fond, apres la reponse : au moment ou l'on ecrit cette
+        // ligne, personne ne sait encore si le courrier passera. Annoncer
+        // « a ete prevenu » serait une promesse invérifiable ; annoncer un
+        // echec le serait tout autant.
+        s.textContent = (d.alerte && d.alerte.ok === false)
+          ? "Le propriétaire n'a pas pu être prévenu par courrier, mais vos " +
+            'fichiers sont bien arrivés.'
+          : 'Le propriétaire de la box va en être averti.';
         msg.append(t, document.createElement('br'), r, s);
         choisis = []; montre();
         document.getElementById('mot').value = '';

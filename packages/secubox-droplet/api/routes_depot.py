@@ -32,7 +32,8 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (APIRouter, BackgroundTasks, Depends, File, Form, HTTPException,
+                     Request, UploadFile)
 from fastapi.responses import JSONResponse
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
@@ -131,6 +132,7 @@ async def reglages_publics():
 
 @router.post("/depot")
 async def deposer(request: Request,
+                  arriere_plan: BackgroundTasks,
                   fichiers: list[UploadFile] = File(...),
                   mot: str = Form("")):
     """Reçoit un dépôt. PUBLIC — c'est la raison d'être de cet espace."""
@@ -195,17 +197,50 @@ async def deposer(request: Request,
 
     await asyncio.to_thread(_ecris_manifeste, d)
 
-    # MEME RAISON POUR L'ALERTE. Une piece jointe de cent megaoctets vers un
-    # serveur SMTP qui met trente secondes a repondre bloquerait la boucle tout
-    # aussi surement que l'ecriture.
-    envoi = await asyncio.to_thread(
-        _alerte.envoie, d, de=r["de"], a=r["a"], hote=r["smtp_hote"],
+    # LE DEPOT EST ACQUIS QUAND LES OCTETS SONT SUR LE DISQUE, PAS QUAND LE
+    # COURRIER PART (#1030).
+    #
+    # L'alerte partait AVANT la reponse : sur un depot de 22 Mio, l'envoi SMTP
+    # de la piece jointe pesait l'essentiel des 116 secondes mesurees. HAProxy
+    # (30 s) et sbxwaf (10 s) abandonnaient bien avant, le deposant voyait un
+    # 504 — et le serveur, lui, TERMINAIT le travail. Chaque essai deposait donc
+    # a nouveau : trois depots et trois courriers de 30 Mio pour une seule
+    # intention. Sur un point d'entree public, un delai mal regle devenait un
+    # amplificateur du volume depose.
+    #
+    # On rend la main des que le fichier est ecrit et le manifeste pose. Le
+    # courrier suit en tache de fond ; s'il echoue il est journalise, et le
+    # manifeste reste a cote des octets — le depot, lui, a eu lieu.
+    arriere_plan.add_task(
+        _alerte_sans_bruit, d, de=r["de"], a=r["a"], hote=r["smtp_hote"],
         port=r["smtp_port"], plafond_joint=r["joindre_max"])
 
     return {"ok": True, "depot": ident, "taille": d.taille,
             "fichiers": [{"nom": f.nom, "taille": f.taille, "sha256": f.sha256}
                          for f in d.fichiers],
-            "alerte": envoi}
+            # `null` et non `true` : on ne SAIT pas encore si le courrier
+            # partira. Annoncer un succes qu'on n'a pas constate est exactement
+            # ce que ce module s'interdit partout ailleurs.
+            "alerte": {"ok": None, "detail": "envoi en cours", "en_cours": True}}
+
+
+def _alerte_sans_bruit(d: Depot, **kw) -> None:
+    """Envoie l'alerte en tache de fond, sans jamais laisser filer d'exception.
+
+    `_alerte.envoie` attrape deja les pannes de courrier attendues — socket
+    fermee, serveur qui refuse. Cette enveloppe attrape LE RESTE : un depot mal
+    forme, un encodage inattendu, un bogue chez nous. Une tache de fond qui leve
+    remonte dans les entrailles du serveur, ou elle n'apprend rien a personne et
+    salit le journal d'une trace sans rapport avec la requete, laquelle a de
+    toute facon deja repondu.
+
+    LE DEPOT A EU LIEU. C'est la seule chose qui compte a ce stade : les octets
+    sont ecrits, le manifeste est pose a cote d'eux, et il survit a l'alerte.
+    """
+    try:
+        _alerte.envoie(d, **kw)
+    except Exception as e:  # noqa: BLE001 — voir la docstring
+        log.error("alerte du depot %s : %s", d.identifiant, e)
 
 
 def _nettoie(dossier: Path) -> None:
