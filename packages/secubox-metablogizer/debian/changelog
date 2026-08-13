@@ -1,3 +1,18 @@
+secubox-metablogizer (1.8.2-1~bookworm1) bookworm; urgency=high
+
+  * AUCUN FICHIER CACHE N'EST PLUS SERVI. Un site adosse a git porte un `.git/`
+    DANS son docroot : `https://<site>/.git/config` repondait 200, et
+    l'historique complet du depot se reconstituait avec un outil public.
+    Constate en direct sur anibal-amiot.fr. Le depot etait public, donc sans
+    consequence cette fois — la meme configuration sur un depot prive aurait
+    livre son contenu entier, y compris tout secret jamais commite.
+  * La regle porte sur TOUT nom commencant par un point, pas seulement `.git` :
+    `.env`, `.htpasswd`, `.ssh` posent le meme probleme, et enumerer les cas
+    connus revient a attendre le premier qu'on n'a pas prevu.
+  * Elle s'applique a TOUS les sites generes, pas au seul qui l'a revelee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:50:00 +0200
+
 secubox-metablogizer (1.8.1-1~bookworm1) bookworm; urgency=medium
 
   * Cadence de `metablog-sync.timer` portee de 15 a 5 minutes : un `git push`

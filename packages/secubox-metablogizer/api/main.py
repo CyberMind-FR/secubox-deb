@@ -388,6 +388,23 @@ server {{
     server_name {server_names};
     root {root_dir};
     index index.html;
+
+    # AUCUN FICHIER CACHE N'EST SERVI (#1029).
+    #
+    # Un site adosse a git porte un `.git/` DANS son docroot : sans cette
+    # regle, `https://<site>/.git/config` repond 200 et l'historique complet du
+    # depot se reconstitue avec un outil public. Constate sur anibal-amiot.fr.
+    # Le depot etait public, donc sans consequence cette fois — la meme
+    # configuration sur un depot prive aurait livre son contenu entier.
+    #
+    # La regle porte sur TOUT nom commencant par un point, pas seulement `.git` :
+    # `.env`, `.htpasswd`, `.ssh` posent le meme probleme, et enumerer les cas
+    # connus revient a attendre le premier qu'on n'a pas prevu.
+    location ~ /\\. {{
+        deny all;
+        return 404;
+    }}
+
     location / {{
         try_files $uri $uri/ /index.html;
     }}
