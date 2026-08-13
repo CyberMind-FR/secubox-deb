@@ -1,0 +1,19 @@
+#!/bin/sh
+# /etc/letsencrypt/renewal-hooks/deploy/secubox-haproxy — #1019
+#
+# certbot renouvelle dans /etc/letsencrypt/live ; HAProxy sert un fichier
+# CONCATENE (chaine + cle) dans /data/haproxy/certs. Rien ne recopiait l'un vers
+# l'autre : trois certificats sur six divergeaient sur gk2, dont un qui serait
+# tombe le 14 octobre alors qu'une version valide jusqu'au 2 novembre dormait
+# deja sur le disque.
+#
+# Le defaut etait SILENCIEUX : le renouvellement reussit, les journaux de
+# certbot sont propres, le site repond — jusqu'au jour ou la copie servie
+# expire, des semaines plus tard. Le lien de cause a effet est alors
+# indechiffrable.
+#
+# Ce hook est un DEPLOY hook : certbot ne l'appelle qu'apres un renouvellement
+# reussi, jamais sur un simple controle. `cert sync` ne recharge HAProxy que si
+# un fichier a change, donc ce hook ne coupe aucune connexion pour rien.
+set -eu
+exec /usr/sbin/haproxyctl cert sync
