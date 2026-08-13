@@ -4,6 +4,7 @@
 """MetaBlogizer publisher wizard: upload -> version -> route -> cert -> backup."""
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -30,6 +31,65 @@ DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 BASE_PORT = 8900
 
 router = APIRouter()
+
+# api/main.py DEPOSE ICI son générateur nginx, juste après l'avoir défini.
+# L'importer serait circulaire — main importe ce routeur au chargement. Le
+# crochet reste None dans les tests, qui n'ont pas de nginx à régénérer.
+regenerer_nginx = None
+
+
+def enregistre_domaine(site: Path, domaine: str) -> dict:
+    """Écrit le domaine dans `site.json` (#1023).
+
+    LE GENERATEUR NE LIT QUE LE DISQUE. `load_sites()` déduit le domaine de
+    `site.json`, à défaut de `<nom>.gk2.secubox.in`. L'assistant acceptait un
+    domaine en formulaire sans jamais l'écrire : il servait le temps d'une
+    requête, puis disparaissait à la première régénération. Un réglage qu'on
+    saisit et qui s'évapore est pire que pas de réglage du tout.
+    """
+    fichier = site / "site.json"
+    doc = {}
+    if fichier.exists():
+        try:
+            doc = json.loads(fichier.read_text())
+            if not isinstance(doc, dict):
+                doc = {}
+        except (json.JSONDecodeError, OSError):
+            # ON N'ECRASE PAS UN FICHIER QU'ON N'A PAS SU LIRE. Repartir d'un
+            # document vide perdrait titre, version et catégorie du site.
+            return {"ok": False, "detail": "site.json illisible, domaine non enregistré"}
+    if doc.get("domain") == domaine:
+        return {"ok": True, "detail": "déjà enregistré"}
+    doc["domain"] = domaine
+    doc.setdefault("name", site.name)
+    try:
+        tmp = fichier.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n")
+        tmp.replace(fichier)
+    except OSError as e:
+        return {"ok": False, "detail": f"écriture site.json : {e}"}
+    return {"ok": True, "detail": domaine}
+
+
+def publie_vhost(domaine: str) -> dict:
+    """Régénère la configuration nginx pour que le domaine soit SERVI (#1023).
+
+    L'ETAPE MANQUANTE. L'assistant déposait le contenu, écrivait la route WAF,
+    demandait le certificat — et s'arrêtait là. Aucun bloc `server` n'était créé.
+    Or les 163 sites partagent le port 8900 et se distinguent par `server_name` :
+    un domaine sans bloc ne tombe pas en erreur, il tombe sur LE PREMIER BLOC DU
+    PORT. C'est ainsi que `www.gk2.secubox.in` a servi le site d'un voisin —
+    chaque étape se déclarait réussie, et l'adresse montrait autre chose.
+    """
+    if regenerer_nginx is None:
+        return {"ok": False, "detail": "générateur nginx indisponible"}
+    try:
+        ok, nombre, message = regenerer_nginx()
+    except Exception as e:  # le générateur touche /etc et systemctl
+        return {"ok": False, "detail": f"régénération nginx : {e}"}
+    if not ok:
+        return {"ok": False, "detail": message}
+    return {"ok": True, "detail": message, "sites": nombre}
 
 
 def _site_dir(name: str) -> Path:
@@ -59,10 +119,20 @@ async def publish_wizard(
         raise HTTPException(400, f"unsafe upload: {e}")
 
     steps["version"] = git_commit_push(site, f"publish {name} via wizard")
+    # ORDRE VOULU : le domaine est enregistré AVANT la régénération, sans quoi
+    # le générateur relit le disque et retombe sur `<nom>.gk2.secubox.in`.
+    steps["domaine"] = enregistre_domaine(site, domain)
+    steps["vhost"] = publie_vhost(domain)
     steps["route"] = apply_route(domain, BASE_PORT)
     steps["cert"] = provision_cert(domain)
 
-    ok = bool(steps["content"].get("index_present")) and bool(steps["route"].get("route_ok"))
+    # `ok` EXIGE MAINTENANT QUE LE DOMAINE SOIT SERVI. Le compte rendu
+    # d'origine se satisfaisait du contenu et de la route — un domaine sans
+    # bloc `server` passait donc pour publié alors qu'il montrait le site du
+    # voisin. Une étape qui n'entre pas dans le verdict ne protège de rien.
+    ok = (bool(steps["content"].get("index_present"))
+          and bool(steps["route"].get("route_ok"))
+          and bool(steps["vhost"].get("ok")))
     return {"ok": ok, "domain": domain, "steps": steps}
 
 

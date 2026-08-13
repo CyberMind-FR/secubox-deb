@@ -9,6 +9,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import routers.publish as rp
+
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
@@ -40,13 +42,19 @@ def _zip_bytes():
     return buf.getvalue()
 
 
-def test_wizard_runs_all_steps(client):
+def test_wizard_runs_all_steps(client, monkeypatch):
+    # LE GENERATEUR NGINX EST DESORMAIS UNE ETAPE DU VERDICT (#1023) : sans lui,
+    # le domaine n'obtient pas son bloc `server` et sert le site du voisin. Le
+    # test le fournit donc, comme main.py le depose en production.
+    monkeypatch.setattr(rp, "regenerer_nginx", lambda: (True, 3, "Published 3 sites"))
     r = client.post("/publish/wizard",
                     data={"name": "zem"},
                     files={"file": ("site.zip", _zip_bytes(), "application/zip")})
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["ok"] is True
+    assert body["steps"]["vhost"]["ok"] is True
+    assert body["steps"]["domaine"]["ok"] is True
     assert body["domain"] == "zem.gk2.secubox.in"
     assert body["steps"]["content"]["index_present"] is True
     assert body["steps"]["route"]["route_ok"] is True
@@ -59,3 +67,22 @@ def test_publish_route_endpoint(client):
     body = r.json()
     assert body["ok"] is True
     assert body["cert"]["mode"] == "wildcard"
+
+
+def test_wizard_echoue_si_le_domaine_n_est_pas_servi(client, monkeypatch):
+    """Le defaut de #1023 en une assertion.
+
+    Contenu depose, route WAF ecrite, certificat en place — et pourtant le
+    domaine n'a aucun bloc `server`. L'assistant repondait `ok: true`. Il doit
+    repondre `ok: false` : une publication qui n'est pas servie n'est pas une
+    publication.
+    """
+    monkeypatch.setattr(rp, "regenerer_nginx", lambda: (False, 0, "nginx -t a echoue"))
+    r = client.post("/publish/wizard",
+                    data={"name": "zem"},
+                    files={"file": ("site.zip", _zip_bytes(), "application/zip")})
+    body = r.json()
+    assert body["steps"]["content"]["index_present"] is True
+    assert body["steps"]["route"]["route_ok"] is True
+    assert body["ok"] is False
+    assert "nginx -t" in body["steps"]["vhost"]["detail"]
