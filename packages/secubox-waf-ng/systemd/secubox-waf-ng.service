@@ -65,8 +65,20 @@ ExecStartPre=+/bin/chmod 0750 /var/log/secubox/cookie-audit
 ExecStartPre=+/bin/mkdir -p /var/log/secubox/waf
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/waf
 ExecStartPre=+/bin/chmod 0750 /var/log/secubox/waf
+# DELAI AMONT : 10 s PAR DEFAUT, TROP COURT POUR QUI ECRIT SUR DISQUE (#1030).
+#
+# Un depot de 22 Mio a mis 116 s a s'ecrire sur cette board. Le WAF abandonnait
+# a 10 s, le deposant voyait un 504 — ET LE SERVEUR TERMINAIT LE TRAVAIL. Chaque
+# essai deposait donc a nouveau : trois depots pour une seule intention. Un
+# delai mal regle devenait un amplificateur du volume recu.
+#
+# 120 s : assez pour un televersement honnete, assez court pour qu'un amont
+# reellement mort soit encore constate comme tel. Ce n'est pas « une minute de
+# plus par securite » — c'est la duree au-dela de laquelle plus rien de sain ne
+# se passe sur un point d'entree qui accuse reception avant d'envoyer l'alerte.
 ExecStart=/usr/sbin/sbxwaf \
   --listen 127.0.0.1:8085 \
+  --upstream-timeout 120s \
   --routes /etc/secubox/waf/haproxy-routes.json \
   --rules /etc/secubox/waf/waf-rules.json \
   --on-demand-vhosts /etc/secubox/waf/on-demand-vhosts.json \
