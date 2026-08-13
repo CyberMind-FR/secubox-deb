@@ -38,6 +38,16 @@ type page struct {
 	Intro, Vide               string
 	Note                      string
 	Cards                     []card
+	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
+	// qui compte les messages prives — deux notions distinctes, et les nommer
+	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
+	//
+	// FilsNonLus est un ENSEMBLE : un drapeau par fil aurait impose une requete
+	// par ligne affichee, et c'est ainsi qu'une fonction de confort devient une
+	// cause de lenteur.
+	FilsNonLus                map[int64]bool
+	FilsNonLusSalon           map[int64]int
+	TotalFilsNonLus           int
 	Code, Msg                 string
 	Integ                     store.Integrity
 	Sain                      bool
@@ -94,6 +104,7 @@ type pill struct{ Class, Text string }
 func (s *Server) routes() {
 	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
+	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
 	s.mux.HandleFunc("/login", s.connexion)
@@ -172,6 +183,60 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	buf.WriteTo(w)
 }
 
+
+// poseNonLus renseigne l'etat lu/non-lu de la page (#1020).
+//
+// UNE SEULE REQUETE POUR TOUTE LA PAGE. Interroger fil par fil aurait produit
+// cent aller-retours sur une liste de cent fils — la fonction censee faire
+// gagner du temps en aurait coute.
+//
+// Une erreur de lecture n'est pas fatale : l'indicateur est un CONFORT, et
+// perdre la page entiere parce qu'on ne sait pas dire « nouveau » serait un
+// mauvais echange. On rend alors une page sans indicateur, ce qui se voit.
+func (s *Server) poseNonLus(p *page) {
+	if !p.V.Connecte {
+		return
+	}
+	if nl, err := s.st.FilsNonLus(p.V.ID); err == nil {
+		p.FilsNonLus = nl
+		p.TotalFilsNonLus = len(nl)
+	}
+	if c, err := s.st.NonLusParSalon(p.V.ID); err == nil {
+		p.FilsNonLusSalon = c
+	}
+}
+
+// toutLu fait retomber le compteur d'un seul geste.
+//
+// SANS LUI L'INDICATEUR MEURT. Qui revient apres deux semaines a deux cents
+// fils non-lus ; s'il faut les ouvrir un par un, il ne le fera pas, et cessera
+// de regarder le compteur — qui n'aura plus servi a rien.
+func (s *Server) toutLu(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	// Meme protection anti-rejeu que les autres actions : marquer tout lu
+	// efface un etat, et un lien piege ne doit pas pouvoir le declencher.
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	if err := s.st.MarqueToutLu(v.ID); err != nil {
+		log.Printf("bbs: tout marquer lu (%d) : %v", v.ID, err)
+	}
+	retour := r.Referer()
+	if retour == "" || !strings.HasPrefix(retour, "/") {
+		retour = "/"
+	}
+	http.Redirect(w, r, retour, http.StatusSeeOther)
+}
+
 func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -179,6 +244,7 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	}
 	p, pub := s.base(r, "forums")
 	p.Threads, _ = s.st.Recent(20, pub)
+	s.poseNonLus(&p)
 	p.Titre = "Forums"
 	s.rend(w, r, "index", p)
 }
@@ -196,6 +262,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Threads, _ = s.st.Threads(p.Cat.ID, pub)
+	s.poseNonLus(&p)
 	p.Titre = p.Cat.Title
 	s.rend(w, r, "index", p)
 }
@@ -226,6 +293,19 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	if pub && t.Visibility != store.VisPublic {
 		http.NotFound(w, r)
 		return
+	}
+
+	// OUVRIR UN FIL LE MARQUE LU (#1020). Pose APRES la garde de visibilite :
+	// marquer avant aurait laisse une trace de lecture sur un fil que le
+	// visiteur n'a pas le droit de voir — et cette trace est un aveu, elle
+	// confirmerait par la bande l'existence du fil.
+	//
+	// L'echec n'interrompt pas l'affichage : ne pas retenir une lecture est un
+	// desagrement, ne pas afficher le fil demande est une panne.
+	if p.V.Connecte {
+		if err := s.st.MarqueLu(p.V.ID, id); err != nil {
+			log.Printf("bbs: marquer lu (fil %d, membre %d) : %v", id, p.V.ID, err)
+		}
 	}
 
 	var posts []store.Post
