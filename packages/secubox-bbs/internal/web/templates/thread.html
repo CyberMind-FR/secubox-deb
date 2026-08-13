@@ -12,6 +12,14 @@
   {{if eq .T.Visibility "public"}}
     {{if .T.Published}}
       <a class="btn sm" href="{{.T.Published}}">Voir le billet</a>
+      {{/* DEPUBLIER EST A COTE DE « voir » : c'est la ou l'on est quand on
+           s'apercoit qu'il ne fallait pas publier. Le chercher ailleurs
+           retarderait un geste qu'on veut justement rapide. */}}
+      <form method="post" action="/mod/depublier" class="row s491198d">
+        <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+        <input type="hidden" name="id" value="{{.T.ID}}">
+        <button class="btn sm" title="Retire le billet de la vitrine ; le fil reste">Dépublier</button>
+      </form>
     {{else}}
       <form method="post" action="/t/{{.T.ID}}/publier" class="row s491198d">
         <input type="hidden" name="csrf" value="{{.V.CSRF}}">
@@ -23,7 +31,55 @@
   {{else}}
     <span class="pill p-local" title="Un fil local n'a pas de bouton publier">local — non publiable</span>
   {{end}}
-</div>{{end}}
+</div>
+
+{{/* MODERATION, repliee dans un <details> : ces gestes sont rares et portent a
+     consequence. Les laisser ouverts invite au clic distrait ; les cacher
+     ailleurs ferait qu'on ne les trouve pas au moment ou l'on en a besoin. */}}
+<details class="moderation">
+  <summary class="btn sm">Modérer</summary>
+  <div class="mod-outils">
+    <form method="post" action="/mod/renommer" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="id" value="{{.T.ID}}">
+      <input name="titre" value="{{.T.Title}}" required aria-label="Nouveau titre">
+      <button class="btn sm">Renommer</button>
+    </form>
+    <form method="post" action="/mod/deplacer" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="id" value="{{.T.ID}}">
+      <select name="salon" aria-label="Salon de destination">
+        {{range $.Cats}}<option value="{{.ID}}"{{if eq .ID $.T.CategoryID}} selected{{end}}>{{.Title}}</option>{{end}}
+      </select>
+      <button class="btn sm">Déplacer</button>
+    </form>
+    <form method="post" action="/mod/verrouiller" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="id" value="{{.T.ID}}">
+      <input type="hidden" name="etat" value="1">
+      <button class="btn sm" title="Le fil reste lisible ; on ne peut plus y répondre">Verrouiller</button>
+    </form>
+    <form method="post" action="/mod/verrouiller" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="id" value="{{.T.ID}}">
+      <input type="hidden" name="etat" value="0">
+      <button class="btn sm">Déverrouiller</button>
+    </form>
+    <form method="post" action="/mod/epingler" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="id" value="{{.T.ID}}">
+      <input type="hidden" name="etat" value="1">
+      <button class="btn sm">Épingler</button>
+    </form>
+    <form method="post" action="/mod/epingler" class="row s491198d">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input type="hidden" name="id" value="{{.T.ID}}">
+      <input type="hidden" name="etat" value="0">
+      <button class="btn sm">Désépingler</button>
+    </form>
+  </div>
+  <p class="note">Chaque geste est journalisé : qui, quoi, quand. Rien n'est effacé — un message retiré reste lisible des membres.</p>
+</details>{{end}}
 </div>
 
 {{if .T.MediaURL}}

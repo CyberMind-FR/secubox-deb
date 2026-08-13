@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,18 @@ type page struct {
 	Intro, Vide               string
 	Note                      string
 	Cards                     []card
+	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
+	// qui compte les messages prives — deux notions distinctes, et les nommer
+	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
+	//
+	// FilsNonLus est un ENSEMBLE : un drapeau par fil aurait impose une requete
+	// par ligne affichee, et c'est ainsi qu'une fonction de confort devient une
+	// cause de lenteur.
+	FilsNonLus                map[int64]bool
+	FilsNonLusSalon           map[int64]int
+	TotalFilsNonLus           int
+	// Journal de moderation, affiche au sysop (#1020).
+	Moderations               []store.Moderation
 	Code, Msg                 string
 	Integ                     store.Integrity
 	Sain                      bool
@@ -87,12 +100,21 @@ type postView struct {
 type card struct {
 	Title, Sub, Link, LinkText string
 	Pills                      []pill
+	// Vignette : adresse d'une miniature, vide s'il n'y en a pas. Glyphe : ce
+	// qu'on montre a sa place. LES DEUX EXISTENT parce qu'une video ou un son
+	// n'a pas d'image a reduire — et qu'une carte sans rien a gauche casse
+	// l'alignement de toute la grille.
+	Vignette string
+	Glyphe   string
 }
 type pill struct{ Class, Text string }
 
 func (s *Server) routes() {
 	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
+	s.mux.HandleFunc("/lu/tout", s.toutLu)
+	s.mux.HandleFunc("/mod/", s.moderer)
+	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
 	s.mux.HandleFunc("/login", s.connexion)
@@ -171,6 +193,134 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	buf.WriteTo(w)
 }
 
+
+// poseNonLus renseigne l'etat lu/non-lu de la page (#1020).
+//
+// UNE SEULE REQUETE POUR TOUTE LA PAGE. Interroger fil par fil aurait produit
+// cent aller-retours sur une liste de cent fils — la fonction censee faire
+// gagner du temps en aurait coute.
+//
+// Une erreur de lecture n'est pas fatale : l'indicateur est un CONFORT, et
+// perdre la page entiere parce qu'on ne sait pas dire « nouveau » serait un
+// mauvais echange. On rend alors une page sans indicateur, ce qui se voit.
+func (s *Server) poseNonLus(p *page) {
+	if !p.V.Connecte {
+		return
+	}
+	if nl, err := s.st.FilsNonLus(p.V.ID); err == nil {
+		p.FilsNonLus = nl
+		p.TotalFilsNonLus = len(nl)
+	}
+	if c, err := s.st.NonLusParSalon(p.V.ID); err == nil {
+		p.FilsNonLusSalon = c
+	}
+}
+
+// toutLu fait retomber le compteur d'un seul geste.
+//
+// SANS LUI L'INDICATEUR MEURT. Qui revient apres deux semaines a deux cents
+// fils non-lus ; s'il faut les ouvrir un par un, il ne le fera pas, et cessera
+// de regarder le compteur — qui n'aura plus servi a rien.
+
+// moderer applique un geste de moderation.
+//
+// UN SEUL POINT D'ENTREE pour tous les gestes. Un handler par verbe aurait
+// duplique cinq fois la meme sequence — sysop, POST, anti-rejeu, cible — et il
+// aurait suffi d'en oublier une dans le sixieme pour ouvrir une breche.
+//
+// L'ordre des gardes n'est pas negociable : DROIT, puis METHODE, puis
+// ANTI-REJEU. Verifier le jeton avant le droit dirait a un non-sysop si son
+// jeton est valide ; verifier la cible avant le droit lui dirait si elle existe.
+func (s *Server) moderer(w http.ResponseWriter, r *http.Request) {
+	v, ok := s.sysopOK(w, r)
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	geste := strings.TrimPrefix(r.URL.Path, "/mod/")
+	cible, _ := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	var err error
+
+	switch geste {
+	case "renommer":
+		err = s.st.RenommeFil(v.ID, cible, r.FormValue("titre"))
+	case "deplacer":
+		salon, _ := strconv.ParseInt(r.FormValue("salon"), 10, 64)
+		err = s.st.DeplaceFil(v.ID, cible, salon)
+	case "verrouiller":
+		err = s.st.VerrouilleFil(v.ID, cible, r.FormValue("etat") == "1")
+	case "epingler":
+		err = s.st.EpingleFil(v.ID, cible, r.FormValue("etat") == "1")
+	case "retirer":
+		err = s.st.RetireMessage(v.ID, cible, r.FormValue("motif"))
+	case "retablir":
+		err = s.st.RetablitMessage(v.ID, cible)
+	case "depublier":
+		err = s.st.Depublie(v.ID, cible)
+	case "salon":
+		parent, _ := strconv.ParseInt(r.FormValue("parent"), 10, 64)
+		_, err = s.st.CreeSousSalon(v.ID, r.FormValue("slug"),
+			r.FormValue("titre"), r.FormValue("desc"), parent)
+	default:
+		http.NotFound(w, r)
+		return
+	}
+
+	// L'ERREUR EST DITE A L'OPERATEUR, pas seulement journalisee. Un geste de
+	// moderation qui echoue en silence laisse croire qu'il a porte — et le
+	// moderateur decouvre le contraire quand quelqu'un s'en plaint.
+	retour := r.Referer()
+	if retour == "" || !strings.HasPrefix(retour, "/") {
+		retour = "/"
+	}
+	sep := "?"
+	if strings.Contains(retour, "?") {
+		sep = "&"
+	}
+	if err != nil {
+		log.Printf("bbs: moderation %s sur %d par %d : %v", geste, cible, v.ID, err)
+		http.Redirect(w, r, retour+sep+"err="+url.QueryEscape(err.Error()),
+			http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, retour+sep+"msg="+url.QueryEscape("modération appliquée"),
+		http.StatusSeeOther)
+}
+
+func (s *Server) toutLu(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	// Meme protection anti-rejeu que les autres actions : marquer tout lu
+	// efface un etat, et un lien piege ne doit pas pouvoir le declencher.
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	if err := s.st.MarqueToutLu(v.ID); err != nil {
+		log.Printf("bbs: tout marquer lu (%d) : %v", v.ID, err)
+	}
+	retour := r.Referer()
+	if retour == "" || !strings.HasPrefix(retour, "/") {
+		retour = "/"
+	}
+	http.Redirect(w, r, retour, http.StatusSeeOther)
+}
+
 func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -178,6 +328,7 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	}
 	p, pub := s.base(r, "forums")
 	p.Threads, _ = s.st.Recent(20, pub)
+	s.poseNonLus(&p)
 	p.Titre = "Forums"
 	s.rend(w, r, "index", p)
 }
@@ -195,6 +346,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Threads, _ = s.st.Threads(p.Cat.ID, pub)
+	s.poseNonLus(&p)
 	p.Titre = p.Cat.Title
 	s.rend(w, r, "index", p)
 }
@@ -225,6 +377,19 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	if pub && t.Visibility != store.VisPublic {
 		http.NotFound(w, r)
 		return
+	}
+
+	// OUVRIR UN FIL LE MARQUE LU (#1020). Pose APRES la garde de visibilite :
+	// marquer avant aurait laisse une trace de lecture sur un fil que le
+	// visiteur n'a pas le droit de voir — et cette trace est un aveu, elle
+	// confirmerait par la bande l'existence du fil.
+	//
+	// L'echec n'interrompt pas l'affichage : ne pas retenir une lecture est un
+	// desagrement, ne pas afficher le fil demande est une panne.
+	if p.V.Connecte {
+		if err := s.st.MarqueLu(p.V.ID, id); err != nil {
+			log.Printf("bbs: marquer lu (fil %d, membre %d) : %v", id, p.V.ID, err)
+		}
 	}
 
 	var posts []store.Post
@@ -386,15 +551,193 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 			p.Titre, p.Intro = "Média", "Ce qu'on écoute et regarde, au même endroit que ce qu'on en dit."
 			p.Vide = "Aucune passerelle média raccordée pour l'instant."
 			p.Note = "Le média n'est pas recopié : le module lit le flux du podcaster et le catalogue PeerTube là où ils sont déjà."
+			p.Cards = s.cartesMedia()
 		case "biblio":
 			p.Titre, p.Intro = "Bibliothèque", "Les fichiers vivent à côté des messages ; le même rsync emporte les deux."
 			p.Vide = "Aucun fichier déposé."
+			p.Cards = s.cartesBiblio()
 		case "billets":
 			p.Titre, p.Intro = "Billets", "Le BBS est l'atelier, billets la vitrine."
 			p.Vide = "Aucun fil n'a encore été publié en billet."
+			p.Cards = s.cartesBillets()
 		}
 		s.rend(w, r, "simple", p)
 	}
+}
+
+
+// cartesMedia rend les fils deposes par les passerelles media (#1020).
+//
+// La page annoncait « aucune passerelle raccordee » alors que 222 fils y
+// etaient : 122 emissions du podcaster et 100 videos PeerTube. Elle
+// n'interrogeait pas la base — meme defaut que la Bibliotheque et les Billets,
+// et meme consequence : un message vide en dur est indiscernable d'un vide
+// reel, donc personne ne s'apercoit qu'il ment.
+func (s *Server) cartesMedia() []card {
+	fs, err := s.st.MediasParSource(60)
+	if err != nil {
+		return []card{{Title: "Lecture impossible",
+			Sub: "Les médias n'ont pas pu être lus : " + err.Error()}}
+	}
+	out := make([]card, 0, len(fs))
+	for _, f := range fs {
+		// Le NOM DE LA SOURCE est affiche, pas seulement le salon : « podcaster »
+		// dit d'ou vient le contenu et donc ou le corriger, ce qu'un titre de
+		// salon ne dit pas.
+		pills := []pill{{Class: "ok", Text: f.Source}}
+		if f.MediaKind != "" {
+			pills = append(pills, pill{Class: "", Text: f.MediaKind})
+		}
+		if f.Visibility == store.VisLocal {
+			// Une emission locale ne sort pas de la maison. Le dire evite qu'on
+			// s'etonne de ne pas la retrouver publiquement.
+			pills = append(pills, pill{Class: "warn", Text: "local"})
+		}
+		lien, texte := "/t/"+strconv.FormatInt(f.ID, 10), "Ouvrir le fil"
+		if f.MediaURL != "" {
+			lien, texte = f.MediaURL, "Écouter / regarder"
+		}
+		out = append(out, card{
+			Title:    f.Title,
+			Sub:      f.Salon,
+			Link:     lien,
+			LinkText: texte,
+			Pills:    pills,
+			// LE GENRE VIENT DE LA SOURCE, pas d'un fichier qu'on aurait ici :
+			// une emission du podcaster et une video PeerTube vivent chez eux.
+			// On ne peut donc pas en reduire l'image — le glyphe dit au moins
+			// de quoi il s'agit avant d'avoir clique.
+			Glyphe: glypheDeSource(f.MediaKind),
+		})
+	}
+	return out
+}
+
+// cartesBiblio rend la bibliothèque commune (#1020).
+//
+// La page annonçait « aucun fichier déposé » alors que neuf l'étaient : elle
+// n'interrogeait tout simplement pas la base. Un message vide en dur est
+// indiscernable d'un vide réel — c'est ce qui a laissé le défaut passer.
+//
+// UNE ERREUR DE LECTURE NE VIDE PAS LA PAGE EN SILENCE : elle est dite. Rendre
+// une liste vide sur erreur reproduirait exactement le défaut qu'on corrige.
+func (s *Server) cartesBiblio() []card {
+	fs, err := s.st.TousFichiers(100)
+	if err != nil {
+		return []card{{Title: "Lecture impossible",
+			Sub: "La bibliothèque n'a pas pu être lue : " + err.Error()}}
+	}
+	out := make([]card, 0, len(fs))
+	for _, f := range fs {
+		genre := "fichier"
+		switch {
+		case f.EstImage():
+			genre = "image"
+		case f.EstAudio():
+			genre = "son"
+		case f.EstVideo():
+			genre = "vidéo"
+		}
+		c := card{
+			Title:    f.Name,
+			Sub:      "déposé par " + f.Deposant + " · " + tailleLisible(f.Size),
+			Link:     "/f/" + strconv.FormatInt(f.ID, 10) + extensionDe(f.Mime),
+			LinkText: "Ouvrir",
+			Pills:    []pill{{Class: "ok", Text: genre}},
+			Glyphe:   glypheDe(genre),
+		}
+		// SEULES LES IMAGES ONT UNE VIGNETTE. Extraire une image d'une video
+		// demanderait ffmpeg — un decodeur complet lance sur un fichier
+		// televerse, pour orner une carte. Le rapport n'y est pas.
+		if f.EstImage() {
+			c.Vignette = "/vignette/" + strconv.FormatInt(f.ID, 10) + ".jpg"
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// cartesBillets rend les fils sortis vers la vitrine (#1020).
+func (s *Server) cartesBillets() []card {
+	bs, err := s.st.Billets(100)
+	if err != nil {
+		return []card{{Title: "Lecture impossible",
+			Sub: "Les billets n'ont pas pu être lus : " + err.Error()}}
+	}
+	out := make([]card, 0, len(bs))
+	for _, b := range bs {
+		titre := b.Titre
+		if titre == "" {
+			titre = "(fil supprimé)"
+		}
+		sous := strconv.Itoa(b.Repris) + " message(s) repris"
+		if b.Retenus > 0 {
+			// « 6 repris, 2 retenus » dit à l'auteur que la publication n'a pas
+			// tout emporté, avant qu'il ne s'en aperçoive autrement.
+			sous += ", " + strconv.Itoa(b.Retenus) + " retenu(s) en local"
+		}
+		c := card{
+			Title:    titre,
+			Sub:      sous,
+			Link:     "/t/" + strconv.FormatInt(b.ThreadID, 10),
+			LinkText: "Voir le fil",
+			Pills:    []pill{{Class: "ok", Text: "publié"}},
+			Glyphe:   "📰",
+		}
+		// L'ADRESSE PEUT MANQUER : les deux billets de gk2 ont un identifiant
+		// mais pas d'URL. Plutôt que de fabriquer un lien mort, on renvoie vers
+		// le fil et on DIT que l'adresse manque — un lien qui échoue coûte plus
+		// cher qu'une absence signalée.
+		if b.URL != "" {
+			c.Link, c.LinkText = b.URL, "Lire le billet"
+		} else {
+			c.Pills = append(c.Pills, pill{Class: "warn", Text: "adresse manquante"})
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// glypheDeSource traduit le genre annonce par une passerelle media.
+//
+// Les genres viennent de sources differentes (podcaster, PeerTube) et ne
+// suivent aucune convention commune : on reconnait donc par MOTIF plutot que
+// par egalite, sans quoi un « audio/mpeg » et un « podcast » se retrouveraient
+// avec le glyphe generique alors qu'on sait tres bien ce qu'ils sont.
+func glypheDeSource(genre string) string {
+	g := strings.ToLower(genre)
+	switch {
+	case strings.Contains(g, "video") || strings.Contains(g, "vidéo"):
+		return "🎬"
+	case strings.Contains(g, "audio") || strings.Contains(g, "podcast") ||
+		strings.Contains(g, "episode") || strings.Contains(g, "épisode"):
+		return "🎧"
+	}
+	return "📡"
+}
+
+// glypheDe : ce qu'on montre quand il n'y a pas d'image a reduire.
+func glypheDe(genre string) string {
+	switch genre {
+	case "image":
+		return "🖼"
+	case "son":
+		return "🎧"
+	case "vidéo":
+		return "🎬"
+	}
+	return "📄"
+}
+
+// tailleLisible rend une taille d'octets sous forme courte.
+func tailleLisible(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return strconv.FormatInt(n/(1<<20), 10) + " Mio"
+	case n >= 1<<10:
+		return strconv.FormatInt(n/(1<<10), 10) + " Kio"
+	}
+	return strconv.FormatInt(n, 10) + " o"
 }
 
 func initiales(h string) string {
@@ -602,6 +945,11 @@ func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
 	p.Invites, _ = s.st.Invites()
 	p.MastoInstance, _ = s.st.Reglage(store.CleMastodonInstance)
 	p.MastoInvite, _ = s.st.Reglage(store.CleMastodonInvite)
+	// UN JOURNAL QUE PERSONNE NE LIT N'ENCADRE RIEN. Ecrire chaque geste de
+	// moderation sans jamais l'afficher aurait donne la lettre de la
+	// tracabilite sans l'usage : c'est la consultation qui rend le pouvoir
+	// verifiable, pas l'ecriture.
+	p.Moderations, _ = s.st.Moderations(50)
 	s.rend(w, r, "sysop", p)
 }
 
