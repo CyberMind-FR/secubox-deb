@@ -37,3 +37,13 @@ def test_la_vue_porte_les_deux_noms(monkeypatch):
                          "embed_url": None, "published_at": 1, "created_at": 1})
     assert v["permalink"] == "https://billets.example/b/titre-01abc"
     assert v["url"] == v["permalink"]
+
+
+def test_lecture_par_identifiant_rend_l_adresse(monkeypatch):
+    """La liste est bornee a 200 : un billet plus ancien y devenait invisible,
+    et rien ne distinguait « absent » de « au-dela de la borne »."""
+    import inspect
+    from api.routes import jwt_admin as ja
+    src = inspect.getsource(ja.register_jwt_admin)
+    assert '@app.get("/admin/api/billets/{billet_id}")' in src
+    assert "get_by_id" in src

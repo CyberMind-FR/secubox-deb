@@ -1,3 +1,19 @@
+secubox-billets (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * La reponse admin porte enfin l'adresse du billet (ref #1024). Le BBS lisait
+    un champ `url` que cette surface n'a JAMAIS rendu : l'adresse enregistree
+    etait vide pour chaque billet publie. Rien n'echouait — la publication
+    reussissait, le billet etait en ligne — et la page Billets du BBS renvoyait
+    vers le fil en annoncant « adresse manquante ». Un defaut d'ABSENCE ne se
+    signale pas tout seul.
+  * `permalink` et `url` sont tous deux servis : le premier est le nom employe
+    par le rendu public, le second celui qu'attendent les clients existants.
+  * Sans base configuree, un chemin relatif plutot qu'une adresse inventee :
+    `/b/slug` est vrai pour qui parle deja a billets, alors qu'un
+    `http://localhost/...` fabrique serait un lien mort presente comme bon.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 11:30:00 +0200
+
 secubox-billets (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: billets micro-blog gateway. Public feed (cursor pagination,
