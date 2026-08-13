@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: cadence de synchronisation des sites git
+[Unit]
+Description=SecuBox — cadence de synchronisation des sites metablog
+
+[Timer]
+# Au démarrage, une fois la board posée : c'est le moment où un site peut
+# avoir pris du retard pendant l'arrêt.
+OnBootSec=10min
+# Puis toutes les cinq minutes : un `git push` se voit dans les cinq minutes.
+#
+# LE COUT D'UN PASSAGE A VIDE EST QUASI NUL, et c'est ce qui rend cette cadence
+# tenable. `metablog-sync` compare le SHA local a celui de l'amont et s'arrete
+# la si rien n'a bouge — pas de checkout, pas d'ecriture, aucun horodatage
+# touche. Ce qui coute, c'est le `git fetch` : une poignee d'octets par depot.
+#
+# Elle reste reglable sans reconstruire le paquet — un fichier dans
+# /etc/systemd/system/metablog-sync.timer.d/ surcharge cette ligne.
+OnUnitActiveSec=5min
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

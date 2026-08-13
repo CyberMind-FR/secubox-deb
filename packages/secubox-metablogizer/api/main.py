@@ -49,6 +49,8 @@ BASE_PORT = 8900
 DEFAULT_DOMAIN_SUFFIX = ".gk2.secubox.in"
 # Internal IP where nginx listens for metablogizer sites
 NGINX_BACKEND_IP = "192.168.1.200"
+# Un nom de domaine, et rien d'autre : voir alias_du_site().
+_NOM_DOMAINE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
 
 import logging
 import sites_scan
@@ -63,6 +65,7 @@ from webhook import (
     verify_signature,
     _record_deploy,
 )
+import routers.publish
 from routers.publish import router as publish_router
 app.include_router(publish_router)
 
@@ -212,6 +215,68 @@ def domaines_deja_servis() -> dict:
     return vus
 
 
+def racine_servable(racine: Path) -> tuple:
+    """Rattrape un contenu depose un cran trop bas (#1023).
+
+    LE CAS. `zip -r site.zip site/` prefixe tous ses membres par `site/`. Les
+    archives deja deballees avant le correctif ont donc leur `index.html` dans
+    `public/site/`, jamais dans `public/` : le site est complet, sur le disque,
+    et pourtant injoignable.
+
+    ON NE DEPLACE PAS LES FICHIERS DE L'UTILISATEUR. Remonter le contenu d'un
+    cran serait une reecriture silencieuse de son depot, irreversible et faite
+    dans son dos. On se contente de SERVIR le bon dossier — meme resultat visible,
+    aucun octet touche, et un nouveau televersement remet tout d'aplomb puisque
+    l'assistant deballe desormais a la source.
+
+    LA CONDITION EST STRICTE : pas d'index a la racine, exactement un
+    sous-dossier, et un index dedans. Descendre des qu'on trouve un index
+    quelque part choisirait au hasard entre deux candidats, et servirait un
+    sous-site a la place du site.
+
+    Rend (racine_a_servir, sous_dossier_ou_None).
+    """
+    try:
+        if (racine / "index.html").exists():
+            return str(racine), None
+        entrees = [e for e in racine.iterdir() if not e.name.startswith(".")]
+    except OSError:
+        return str(racine), None
+    sous = [e for e in entrees if e.is_dir()]
+    if len(sous) != 1 or any(e.is_file() for e in entrees):
+        return str(racine), None
+    if not (sous[0] / "index.html").exists():
+        return str(racine), None
+    return str(sous[0]), sous[0].name
+
+
+def alias_du_site(cfg: dict) -> list:
+    """Les noms supplementaires servant le meme site (#1023).
+
+    POURQUOI UN CHAMP PLUTOT QU'UN FICHIER A LA MAIN. `gk2.net` et
+    `www.gk2.net` doivent rendre ce que rend `www.gk2.secubox.in`. Ecrire un
+    second bloc nginx a cote reviendrait a maintenir deux verites : la
+    regeneration suivante ne connaitrait pas la premiere, et le jour ou le site
+    change de racine, l'alias resterait pointe sur l'ancienne.
+
+    LA VALIDATION EST ICI, PAS DANS LE GABARIT. Un nom arbitraire recopie dans
+    `server_name` peut fermer un point-virgule et ouvrir un bloc : le motif
+    n'est pas de la cosmetique, c'est ce qui separe une valeur de configuration
+    d'une injection.
+    """
+    bruts = cfg.get("aliases") or []
+    if not isinstance(bruts, list):
+        return []
+    out = []
+    for a in bruts:
+        if not isinstance(a, str):
+            continue
+        a = a.strip().lower().rstrip(".")
+        if _NOM_DOMAINE.fullmatch(a) and a not in out:
+            out.append(a)
+    return out
+
+
 def regenerate_nginx_config() -> tuple:
     """Regenerate the unified nginx config for all metablogizer sites.
 
@@ -230,6 +295,7 @@ def regenerate_nginx_config() -> tuple:
     deja_servis = domaines_deja_servis()
     emis: dict = {}
     ecartes: list = []
+    rattrapes: list = []
 
     # A EGALITE, L'INTENTION L'EMPORTE SUR LE DEFAUT (#1016). Deux sites
     # peuvent reclamer le meme domaine : l'un parce qu'il l'ECRIT dans son
@@ -260,27 +326,58 @@ def regenerate_nginx_config() -> tuple:
             ecartes.append(f"{name} ({domain}) — domaine deja pris par {emis[domain]}")
             continue
         emis[domain] = name
+
+        # LES ALIAS PASSENT PAR LES MEMES GARDES QUE LE DOMAINE PRINCIPAL. Un
+        # alias deja servi ailleurs est ecarte SANS emporter le site : on perd
+        # l'alias, pas le site — l'inverse serait un remede pire que le mal.
+        noms = [domain]
+        for a in alias_du_site(site):
+            if a in deja_servis:
+                ecartes.append(f"{name} (alias {a}) — deja servi par {deja_servis[a]}")
+                continue
+            if a in emis:
+                ecartes.append(f"{name} (alias {a}) — deja pris par {emis[a]}")
+                continue
+            emis[a] = name
+            noms.append(a)
+        server_names = " ".join(noms)
+
         port = site.get("port", BASE_PORT)
         site_dir = Path(site["directory"])
-        size = site.get("size", "0")
 
         # Use public/ subdirectory if exists, otherwise site root
         public_dir = site_dir / "public"
         root_dir = str(public_dir) if public_dir.exists() else str(site_dir)
+        root_dir, descendu = racine_servable(Path(root_dir))
+        if descendu:
+            rattrapes.append(f"{name} ({domain}) → {descendu}")
 
-        # Check if site is empty (size is 0 or only contains site.json)
-        is_empty = size in ("0", "0B", "4.0K") and not (Path(root_dir) / "index.html").exists()
+        # LA BONNE QUESTION EST « AI-JE UN INDEX A SERVIR ? », PAS « CE DOSSIER
+        # PESE-T-IL QUELQUE CHOSE ? » (#1023). Le critere d'origine exigeait une
+        # taille nulle : un dossier de 12 Mio sans `index.html` — le cas exact
+        # d'une archive deballee un cran trop bas — echappait donc a la page
+        # d'accueil et rendait le `403 Forbidden` nu de nginx, celui qui ne dit
+        # ni quel site, ni pourquoi, ni quoi faire. Six sites sur gk2 etaient
+        # dans ce cas. Un site pesant mais sans index n'est pas plus servable
+        # qu'un site vide ; il est seulement plus trompeur, parce que l'operateur
+        # voit les octets et en conclut que ca marche.
+        is_empty = not (Path(root_dir) / "index.html").exists()
 
         if is_empty:
-            # Empty site - redirect to funky error page
+            # LA PAGE D'ACCUEIL EST RENDUE AVEC UN VRAI 404, pas un 200. Un
+            # substitut servi en 200 se fait indexer comme s'il ETAIT le site :
+            # le jour ou le contenu arrive, les moteurs ont deja retenu la page
+            # d'attente. `error_page` + `return 404` donne la belle page ET le
+            # bon code ; `X-Robots-Tag` acheve de fermer la porte.
             config_lines.append(f"""
 server {{
     listen 0.0.0.0:{port};
-    server_name {domain};
+    server_name {server_names};
     root /usr/share/secubox/www/metablogizer;
-    location / {{
-        try_files /empty-site.html =404;
-    }}
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    error_page 404 /empty-site.html;
+    location = /empty-site.html {{ internal; }}
+    location / {{ return 404; }}
 }}
 """)
         else:
@@ -288,9 +385,26 @@ server {{
             config_lines.append(f"""
 server {{
     listen 0.0.0.0:{port};
-    server_name {domain};
+    server_name {server_names};
     root {root_dir};
     index index.html;
+
+    # AUCUN FICHIER CACHE N'EST SERVI (#1029).
+    #
+    # Un site adosse a git porte un `.git/` DANS son docroot : sans cette
+    # regle, `https://<site>/.git/config` repond 200 et l'historique complet du
+    # depot se reconstitue avec un outil public. Constate sur anibal-amiot.fr.
+    # Le depot etait public, donc sans consequence cette fois — la meme
+    # configuration sur un depot prive aurait livre son contenu entier.
+    #
+    # La regle porte sur TOUT nom commencant par un point, pas seulement `.git` :
+    # `.env`, `.htpasswd`, `.ssh` posent le meme probleme, et enumerer les cas
+    # connus revient a attendre le premier qu'on n'a pas prevu.
+    location ~ /\\. {{
+        deny all;
+        return 404;
+    }}
+
     location / {{
         try_files $uri $uri/ /index.html;
     }}
@@ -323,6 +437,12 @@ server {{
         # publies quand un seul repondait.
         for e in ecartes:
             logger.warning("nginx: bloc non emis — %s", e)
+        # LE RATTRAPAGE EST DIT, PAS SILENCIEUX. Servir un sous-dossier a la
+        # place de la racine est une decision prise a la place de l'operateur :
+        # elle doit se lire dans le journal, sinon il cherchera longtemps
+        # pourquoi son site repond alors que son docroot est vide.
+        for r in rattrapes:
+            logger.info("nginx: contenu trouve un cran plus bas, servi tel quel — %s", r)
         publies = len(sites) - len(ecartes)
         if ecartes:
             return True, publies, (f"Published {publies} sites, "
@@ -330,6 +450,13 @@ server {{
         return True, publies, f"Published {publies} sites"
     except Exception as e:
         return False, 0, str(e)
+
+
+# L'ASSISTANT DE PUBLICATION A BESOIN DE CE GENERATEUR (#1023) : sans lui, un
+# site publié n'obtient jamais son bloc `server` et tombe sur le premier bloc du
+# port 8900. Il ne peut pas l'importer — main importe le routeur au chargement,
+# l'import serait circulaire — alors on le lui DEPOSE, une fois défini.
+routers.publish.regenerer_nginx = regenerate_nginx_config
 
 
 # =============================================================================
@@ -749,9 +876,16 @@ async def publish_site(name: str):
     # associer a aucune requete : le site servait alors le contenu du premier
     # bloc venu, en 200, sans que rien ne le signale.
     domain = sites_scan.domaine_du_site(site_dir)
+    # LE VHOST PAR-SITE PORTE LES MEMES ALIAS QUE LE BLOC UNIFIE (#1023).
+    # Deux generateurs ecrivent des blocs nginx pour un meme site ; si un seul
+    # connaissait les alias, `gk2.net` repondrait ou non selon celui des deux
+    # qui a ecrit en dernier — un comportement qu'aucune lecture du site.json
+    # ne permettrait de prevoir.
+    noms = " ".join([domain] + alias_du_site(_load_site_json(site_dir)))
 
     public_dir = site_dir / "public"
     root_dir = str(public_dir) if public_dir.exists() else str(site_dir)
+    root_dir, _ = racine_servable(Path(root_dir))
 
     # Generate nginx config
     #
@@ -773,7 +907,7 @@ async def publish_site(name: str):
 
 server {{
     listen {BASE_PORT};
-    server_name {domain};
+    server_name {noms};
     root {root_dir};
     index index.html index.htm;
 
