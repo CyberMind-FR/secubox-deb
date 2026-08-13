@@ -2,10 +2,23 @@
 *Mis à jour : 2026-08-13*
 ---
 
-## Arbitrage des 39 branches restantes (2026-08-13)
+## Arbitrage des branches — TERMINE (2026-08-13)
 
-Le depot est passe de **421 a 47 branches**. Ce qui reste demande une decision
-humaine — je me suis arrete la volontairement.
+**421 -> 20 branches. 401 supprimees, aucune fonctionnalite perdue.**
+
+Il reste **13 branches non fusionnees** :
+
+- **7 a contenu unique**, sans arbre de travail : elles apportent des fichiers
+  ABSENTS de master. Les deux plus grosses sont `license-headers-phase-a` et
+  `license-phase-b-full` (35 fichiers chacune) — les en-tetes SPDX, sujet
+  transverse jamais acheve.
+- **6 retenues par un arbre de travail**, dont **4 portent du travail NON
+  COMMITE** : `429-nextcloud` (3 fichiers), `820-presence-guardian` (5),
+  `823-sbxmitm-sentinel` (8), `826-sentinel-c2` (2). Ces quatre-la ne doivent
+  etre ni supprimees ni liberees avant que ce travail soit commite ou
+  abandonne EXPLICITEMENT.
+
+Les arbres de travail sont passes de 18 a 9.
 
 | Groupe | Nombre | Signal |
 |---|---|---|
