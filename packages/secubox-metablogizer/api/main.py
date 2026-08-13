@@ -278,6 +278,73 @@ def alias_du_site(cfg: dict) -> list:
     return out
 
 
+# Une route d'API exposable : `/api/v1/<module>/<chemin>`, en minuscules, sans
+# joker ni caractere de regex. Ce motif est la frontiere entre une valeur de
+# configuration et une injection dans le bloc nginx.
+_ROUTE_API = re.compile(r"^/api/v1/[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9/_-]*$")
+
+
+def routes_api_du_site(cfg: dict) -> list:
+    """Les routes d'API que ce site expose SUR SON PROPRE NOM (#1032).
+
+    POURQUOI IL EN FAUT UNE. Un site metablogizer est servi statiquement : son
+    JavaScript ne peut joindre aucune API, puisque le vhost n'en proxy aucune.
+    `torrent-search` fabriquait donc ses resultats avec `Math.random()` — non
+    par facetie, mais parce qu'il n'avait aucun moyen d'en obtenir de vrais.
+
+    POURQUOI ROUTE PAR ROUTE, ET JAMAIS UN PREFIXE. Ouvrir `/api/v1/torrent/`
+    exposerait publiquement TOUTE la surface du module, y compris les routes
+    qu'on y ajoutera demain sans penser a ce vhost — c'est ainsi qu'une surface
+    publique s'elargit toute seule. Chaque chemin est donc declare en entier et
+    emis en correspondance EXACTE (`location =`).
+
+    ON N'OUVRE RIEN TOUT SEUL. Le champ est absent par defaut : un site ne
+    devient joignable par une API que parce que quelqu'un l'a ecrit.
+    """
+    bruts = cfg.get("api") or []
+    if not isinstance(bruts, list):
+        return []
+    out = []
+    for r in bruts:
+        if not isinstance(r, str):
+            continue
+        r = r.strip()
+        # `..` ne peut pas passer le motif, mais on le refuse explicitement :
+        # une garde qui depend d'un detail d'un autre motif se casse le jour ou
+        # ce motif s'assouplit.
+        if ".." in r or len(r) > 120:
+            logger.warning("route d'API refusee (forme) : %r", r)
+            continue
+        if not _ROUTE_API.fullmatch(r):
+            logger.warning("route d'API refusee (motif) : %r", r)
+            continue
+        if r not in out:
+            out.append(r)
+    return out
+
+
+def bloc_routes_api(routes: list) -> str:
+    """Le fragment nginx qui expose ces routes, ou une chaine vide."""
+    if not routes:
+        return ""
+    blocs = ["""
+    # ROUTES D'API EXPOSEES SUR CE NOM (#1032), declarees dans site.json.
+    # Correspondance EXACTE : tout le reste du prefixe reste hors d'atteinte."""]
+    for r in routes:
+        blocs.append(f"""
+    location = {r} {{
+        proxy_pass http://unix:/run/secubox/aggregator.sock:{r};
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+        proxy_read_timeout 30s;
+    }}""")
+    return "".join(blocs) + "\n"
+
+
 def regenerate_nginx_config() -> tuple:
     """Regenerate the unified nginx config for all metablogizer sites.
 
@@ -342,6 +409,9 @@ def regenerate_nginx_config() -> tuple:
             emis[a] = name
             noms.append(a)
         server_names = " ".join(noms)
+        # Les alias suivent les gardes ci-dessus ; les routes d'API, elles, ne
+        # dependent d'aucun autre site — elles n'exposent que ce module-ci.
+        routes_api = bloc_routes_api(routes_api_du_site(site))
 
         port = site.get("port", BASE_PORT)
         site_dir = Path(site["directory"])
@@ -409,7 +479,7 @@ server {{
     location / {{
         try_files $uri $uri/ /index.html;
     }}
-}}
+{routes_api}}}
 """)
 
     # Write config
