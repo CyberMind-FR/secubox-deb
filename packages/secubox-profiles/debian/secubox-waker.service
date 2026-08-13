@@ -7,6 +7,20 @@ Description=SecuBox Waker — wake-on-access activator for on-demand modules (sp
 After=network.target secubox-core.service secubox-profiles.service
 Wants=secubox-core.service
 
+# /run/secubox N'EST PAS UN RuntimeDirectory (#1022).
+#
+# Il est PARTAGE par une centaine de modules. `RuntimeDirectory=` est concu pour
+# un repertoire PROPRE a un service : systemd le recree a chaque demarrage avec
+# le mode de l'unite, donc le dernier service demarre imposait le sien. Huit
+# unites le posaient en 0755, ce qui privait tous les autres du droit d'y creer
+# leur socket — « bind: permission denied », et un 502 dont la cause etait le
+# redemarrage d'un module sans rapport, survenu entre-temps.
+#
+# Le meme mecanisme effacait le repertoire a l'arret d'un service, emportant les
+# sockets des quatre-vingt-dix autres.
+#
+# Il est desormais declare une seule fois, en 1777, par le tmpfiles.d de
+# secubox-core — un seul proprietaire, une seule verite.
 [Service]
 Type=simple
 User=secubox
@@ -21,10 +35,6 @@ UMask=0007
 # systemd-run -> secubox-wakectl (webui->ctl, see sudoers.d/secubox-profiles).
 # NNP=true would neutralize sudo. The rest of the hardening below stays.
 NoNewPrivileges=false
-RuntimeDirectory=secubox
-RuntimeDirectoryPreserve=yes
-RuntimeDirectoryMode=0775
-
 # ProtectSystem=strict makes / read-only; the only path this service writes
 # is /run/secubox (the socket + waker-active.json, see
 # api/waker.py::_write_wake_active — the wake-in-flight lock the sleeper
