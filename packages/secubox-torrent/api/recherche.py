@@ -116,31 +116,13 @@ async def cherche_apibay(client: httpx.AsyncClient, q: str) -> list[Resultat]:
     return out
 
 
-async def cherche_yts(client: httpx.AsyncClient, q: str) -> list[Resultat]:
-    """YTS, dont l'API rend un torrent par qualité."""
-    r = await client.get("https://yts.mx/api/v2/list_movies.json",
-                         params={"query_term": q, "limit": 20}, timeout=DELAI)
-    r.raise_for_status()
-    films = ((r.json() or {}).get("data") or {}).get("movies") or []
-    out = []
-    for f in films:
-        for t in f.get("torrents") or []:
-            h = (t.get("hash") or "").lower()
-            if not h:
-                continue
-            out.append(Resultat(
-                titre=f"{f.get('title_long', f.get('title', '?'))} "
-                      f"[{t.get('quality', '')} {t.get('type', '')}]".strip(),
-                hash=h,
-                taille=_entier(t.get("size_bytes")),
-                seeders=_entier(t.get("seeds")),
-                leechers=_entier(t.get("peers")),
-                source="YTS",
-            ))
-    return out
-
-
-SOURCES = {"tpb": cherche_apibay, "yts": cherche_yts}
+# UNE SEULE SOURCE POUR L INSTANT, ET C EST DIT. YTS avait ete cable puis
+# retire : `yts.mx` rend NXDOMAIN, y compris depuis un resolveur public — le
+# domaine n existe plus, ce n est pas notre filtrage. Garder une source qui
+# echoue a CHAQUE recherche apprend a l utilisateur a ignorer la ligne des
+# echecs, et c est precisement la ligne qui doit rester credible le jour ou un
+# index tombe vraiment.
+SOURCES = {"tpb": cherche_apibay}
 
 
 async def cherche(q: str, sources: list[str] | None = None) -> dict:

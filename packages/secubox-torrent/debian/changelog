@@ -1,4 +1,4 @@
-secubox-torrent (2.3.0-1~bookworm1) bookworm; urgency=medium
+secubox-torrent (2.3.1-1~bookworm1) bookworm; urgency=medium
 
   * RECHERCHE D INDEX, COTE SERVEUR (ref #1032). L application
     torrent-search.gk2.secubox.in n avait pas de liens magnet parce qu elle
@@ -22,7 +22,11 @@ secubox-torrent (2.3.0-1~bookworm1) bookworm; urgency=medium
     elle est ecartee, sans quoi un torrent inexistant s afficherait en tete.
   * `api/main.py` MANQUAIT : le module etait l un des deux seuls, sur
     cent-quatorze, que l agregateur ne pouvait pas monter. Corrige du meme coup.
-  * 16 tests.
+  * YTS RETIRE : `yts.mx` rend NXDOMAIN, y compris depuis un resolveur public
+    — le domaine n existe plus, ce n est pas notre filtrage. Une source qui
+    echoue a CHAQUE recherche apprend a ignorer la ligne des echecs, et c est
+    precisement celle qui doit rester credible le jour ou un index tombe.
+  * 14 tests.
 
  -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 19:40:00 +0200
 
