@@ -30,7 +30,15 @@ Restart=on-failure
 RestartSec=5
 
 NoNewPrivileges=true
-ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /srv/droplet
+# /data/secubox/droplet : l espace de depot (#1026). Sans ce chemin, le
+# service demarre normalement et le PREMIER depot echoue — la panne la plus
+# desagreable, puisqu elle n arrive qu en presence d un utilisateur.
+#
+# `RuntimeDirectory=secubox` a ete RETIRE par #1022 : quatre-vingt-quinze
+# unites le declaraient sur un repertoire PARTAGE, et chaque redemarrage
+# reprenait la propriete du /run/secubox commun — 502 en cascade pour les
+# autres modules. Ne pas le reintroduire ici.
+ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /srv/droplet /data/secubox
 
 [Install]
 WantedBy=multi-user.target

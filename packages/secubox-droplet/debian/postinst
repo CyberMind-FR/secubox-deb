@@ -11,16 +11,54 @@ case "$1" in
     # (Shipped historically as root:root 0600 → PermissionError at runtime.)
     if [ ! -e /etc/secubox/droplet.toml ]; then
       install -d -o secubox -g secubox -m 0755 /etc/secubox
-      install -o secubox -g secubox -m 0640 /dev/null /etc/secubox/droplet.toml
+      # LE MODELE PLUTOT QU UN FICHIER VIDE (#1026). Un droplet.toml a zero
+      # octet laissait tous les reglages du depot a leurs defauts codes en dur,
+      # et surtout il ne DISAIT rien : l operateur ne pouvait pas savoir quels
+      # leviers existent sans lire le source.
+      if [ -f /usr/share/secubox/droplet/droplet.toml.exemple ]; then
+        install -o secubox -g secubox -m 0640 \
+          /usr/share/secubox/droplet/droplet.toml.exemple /etc/secubox/droplet.toml
+      else
+        install -o secubox -g secubox -m 0640 /dev/null /etc/secubox/droplet.toml
+      fi
     else
       chown secubox:secubox /etc/secubox/droplet.toml || true
       chmod 0640 /etc/secubox/droplet.toml || true
+    fi
+
+    # LES REGLAGES DU DEPOT SONT AJOUTES S ILS MANQUENT (#1026), jamais
+    # ecrases. Le droplet.toml de gk2 existait — vide : les defauts codes en
+    # dur s appliquaient, et rien ne DISAIT a l operateur quels leviers
+    # existent. Ajouter la section absente lui rend cette information sans
+    # toucher a ce qu il aurait pu regler.
+    if [ -f /etc/secubox/droplet.toml ] && \
+       ! grep -q "^depot_actif" /etc/secubox/droplet.toml 2>/dev/null && \
+       [ -f /usr/share/secubox/droplet/droplet.toml.exemple ]; then
+      # On ne reprend que la section depot du modele : les cles de publication
+      # deja presentes ne doivent pas apparaitre en double.
+      sed -n "/^# ── Espace de dépôt/,\$p" \
+        /usr/share/secubox/droplet/droplet.toml.exemple \
+        >> /etc/secubox/droplet.toml
+      chown secubox:secubox /etc/secubox/droplet.toml || true
     fi
 
     # Create runtime directories
     install -d -o root -g root -m 1777 /run/secubox
     install -d -o secubox -g secubox -m 755 /var/lib/secubox
     install -d -o secubox -g secubox -m 755 /srv/droplet
+
+    # L espace de depot (#1026). SUR /data ET NON /var : c est le volume qui a
+    # de la place et qui est sauvegarde. HORS DE TOUT DOCROOT, et en 0750 : ce
+    # qu on recoit d inconnus n a aucune raison d etre lisible par tout le
+    # monde sur la machine.
+    if [ -d /data ]; then
+      install -d -o secubox -g secubox -m 0755 /data/secubox
+      install -d -o secubox -g secubox -m 0750 /data/secubox/droplet
+    else
+      # Pas de volume /data sur cette board : on retombe sur /var/lib plutot
+      # que d echouer. Le depot marchera, avec moins de place.
+      install -d -o secubox -g secubox -m 0750 /var/lib/secubox/droplet-depots
+    fi
 
     # Enable and start service
     systemctl daemon-reload
