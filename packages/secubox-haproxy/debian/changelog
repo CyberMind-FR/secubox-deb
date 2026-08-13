@@ -1,3 +1,12 @@
+secubox-haproxy (1.8.0-1~bookworm1) bookworm; urgency=high
+
+  * Cette version REUNIT deux corrections qui vivaient sur des branches
+    separees, et dont l'une avait efface l'autre sur la board : un paquet
+    construit depuis master a fait perdre le verbe `cert sync` de la 1.6.4,
+    jamais fusionne. Le renouvellement automatique des certificats etait donc
+    casse en silence — les certificats servis restaient valables, mais rien ne
+    recopiait plus les renouvellements vers HAProxy.
+
 secubox-haproxy (1.7.1-1~bookworm1) bookworm; urgency=high
 
   * HAProxy servait des certificats que le renouvellement ne mettait jamais a
@@ -32,6 +41,32 @@ secubox-haproxy (1.7.1-1~bookworm1) bookworm; urgency=high
     code mort ici, laisse tel quel plutot que retire a l'aveugle.
 
  -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 10:00:00 +0200
+
+secubox-haproxy (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * DELAI RELEVE PAR REQUETE POUR LES TELEVERSEMENTS DU DEPOT (ref #1030). La
+    section `defaults` porte `timeout client/server 30s`, et c'est bien : elle
+    protege TOUS les vhosts d'un amont qui trainerait. Mais un depot de 22 Mio
+    a mis 116 s a s'ecrire — HAProxy abandonnait a 30, le deposant voyait un
+    504, ET LE SERVEUR TERMINAIT LE TRAVAIL. Chaque essai deposait a nouveau.
+  * `http-request set-timeout` (HAProxy >= 2.4, la board est en 2.6) releve le
+    delai POUR CES REQUETES SEULEMENT. Relever `defaults` aurait couvert le cas
+    en retirant la protection a la centaine de vhosts qui n'en ont pas besoin —
+    payer pour tous ce dont un seul a besoin.
+  * DEUX LECONS PAYEES A L'ESSAI. `http-request set-timeout` ne vit QUE dans un
+    backend — HAProxy refuse « proxy has no backend capability » cote frontend —
+    et il ne connait que `server` et `tunnel` : `set-timeout client` N'EXISTE
+    PAS. Les deux refus ont ete rattrapes par la validation qui precede
+    l'installation : la configuration vivante n'a jamais bouge. Ce garde-fou
+    vaut sa ligne.
+  * `timeout client` reste a 30 s, et c'est correct : c'est un delai
+    d'INACTIVITE, qu'un televersement regulier n'atteint jamais.
+  * L'ACL porte sur le CHEMIN, pas sur l'hote : deux `acl` de meme nom sont un
+    OU chez HAProxy, pas un ET. Nommer l'hote ET le chemin aurait releve le
+    delai pour tout hote contenant « depot », ou pour ce chemin sur n'importe
+    quel hote — l'inverse de ce qu'on cherche.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 17:45:00 +0200
 
 secubox-haproxy (1.6.3-1~bookworm1) bookworm; urgency=medium
 
