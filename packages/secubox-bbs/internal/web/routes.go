@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -389,12 +390,102 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 		case "biblio":
 			p.Titre, p.Intro = "Bibliothèque", "Les fichiers vivent à côté des messages ; le même rsync emporte les deux."
 			p.Vide = "Aucun fichier déposé."
+			p.Cards = s.cartesBiblio()
 		case "billets":
 			p.Titre, p.Intro = "Billets", "Le BBS est l'atelier, billets la vitrine."
 			p.Vide = "Aucun fil n'a encore été publié en billet."
+			p.Cards = s.cartesBillets()
 		}
 		s.rend(w, r, "simple", p)
 	}
+}
+
+
+// cartesBiblio rend la bibliothèque commune (#1020).
+//
+// La page annonçait « aucun fichier déposé » alors que neuf l'étaient : elle
+// n'interrogeait tout simplement pas la base. Un message vide en dur est
+// indiscernable d'un vide réel — c'est ce qui a laissé le défaut passer.
+//
+// UNE ERREUR DE LECTURE NE VIDE PAS LA PAGE EN SILENCE : elle est dite. Rendre
+// une liste vide sur erreur reproduirait exactement le défaut qu'on corrige.
+func (s *Server) cartesBiblio() []card {
+	fs, err := s.st.TousFichiers(100)
+	if err != nil {
+		return []card{{Title: "Lecture impossible",
+			Sub: "La bibliothèque n'a pas pu être lue : " + err.Error()}}
+	}
+	out := make([]card, 0, len(fs))
+	for _, f := range fs {
+		genre := "fichier"
+		switch {
+		case f.EstImage():
+			genre = "image"
+		case f.EstAudio():
+			genre = "son"
+		case f.EstVideo():
+			genre = "vidéo"
+		}
+		out = append(out, card{
+			Title:    f.Name,
+			Sub:      "déposé par " + f.Deposant + " · " + tailleLisible(f.Size),
+			Link:     "/f/" + strconv.FormatInt(f.ID, 10) + extensionDe(f.Mime),
+			LinkText: "Ouvrir",
+			Pills:    []pill{{Class: "ok", Text: genre}},
+		})
+	}
+	return out
+}
+
+// cartesBillets rend les fils sortis vers la vitrine (#1020).
+func (s *Server) cartesBillets() []card {
+	bs, err := s.st.Billets(100)
+	if err != nil {
+		return []card{{Title: "Lecture impossible",
+			Sub: "Les billets n'ont pas pu être lus : " + err.Error()}}
+	}
+	out := make([]card, 0, len(bs))
+	for _, b := range bs {
+		titre := b.Titre
+		if titre == "" {
+			titre = "(fil supprimé)"
+		}
+		sous := strconv.Itoa(b.Repris) + " message(s) repris"
+		if b.Retenus > 0 {
+			// « 6 repris, 2 retenus » dit à l'auteur que la publication n'a pas
+			// tout emporté, avant qu'il ne s'en aperçoive autrement.
+			sous += ", " + strconv.Itoa(b.Retenus) + " retenu(s) en local"
+		}
+		c := card{
+			Title:    titre,
+			Sub:      sous,
+			Link:     "/t/" + strconv.FormatInt(b.ThreadID, 10),
+			LinkText: "Voir le fil",
+			Pills:    []pill{{Class: "ok", Text: "publié"}},
+		}
+		// L'ADRESSE PEUT MANQUER : les deux billets de gk2 ont un identifiant
+		// mais pas d'URL. Plutôt que de fabriquer un lien mort, on renvoie vers
+		// le fil et on DIT que l'adresse manque — un lien qui échoue coûte plus
+		// cher qu'une absence signalée.
+		if b.URL != "" {
+			c.Link, c.LinkText = b.URL, "Lire le billet"
+		} else {
+			c.Pills = append(c.Pills, pill{Class: "warn", Text: "adresse manquante"})
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// tailleLisible rend une taille d'octets sous forme courte.
+func tailleLisible(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return strconv.FormatInt(n/(1<<20), 10) + " Mio"
+	case n >= 1<<10:
+		return strconv.FormatInt(n/(1<<10), 10) + " Kio"
+	}
+	return strconv.FormatInt(n, 10) + " o"
 }
 
 func initiales(h string) string {
