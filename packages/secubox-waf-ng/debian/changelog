@@ -1,3 +1,37 @@
+secubox-waf-ng (1.5.0-1~bookworm1) bookworm; urgency=high
+
+  * LE CACHE MEDIA REVALIDE, IL NE FAIT PLUS QUE VIEILLIR (ref #1031).
+    `MediaCache.Get` servait toute entree non expiree : un fichier remplace sur
+    disque restait donc masque jusqu'a la fin de son TTL d'une heure. Constate
+    sur anibal-amiot.fr — un `app.js` mis a jour par `git pull` etait servi dans
+    sa version d'avant, sur les six domaines a la fois, pendant que le disque ET
+    nginx portaient deja le bon. Le cache masquait exactement le dernier commit.
+  * L'ETag et le Last-Modified de l'amont sont memorises, et chaque succes de
+    cache declenche une requete conditionnelle : 304 → on sert le cache, chemin
+    rapide preserve ; toute autre reponse → l'entree est invalidee et l'amont
+    refait foi.
+  * SEUL UN 304 FRANC VAUT « INCHANGE ». Une erreur, un delai depasse, un amont
+    muet rendent « je ne sais pas », donc on reinterroge : servir du perime est
+    invisible et dure des heures, un aller-retour de trop coute une
+    milliseconde.
+  * UNE REDIRECTION N'EST PAS UNE FRAICHEUR : un 301 vers un autre chemin
+    masquerait le changement qu'on cherche justement a detecter. Les
+    redirections ne sont donc pas suivies.
+  * SANS VALIDATEUR, ON S'EN REMET AU TTL — faute de mieux, pas par confiance.
+    Un amont qui ne pose ni ETag ni Last-Modified ne permet aucune question ;
+    refuser alors tout cache le rendrait inutile precisement pour les services
+    qui n'en posent pas, souvent ceux qui servent les gros medias que ce cache
+    existe pour eviter de retransferer. nginx, lui, pose les deux sur tout
+    fichier statique : les sites metablog sont donc revalides.
+  * L'en-tete Host est transmis a la revalidation : l'amont sert plusieurs
+    vhosts sur le meme port, et sans lui on revaliderait contre le fichier d'un
+    autre site.
+  * Sept tests, dont le defaut de bout en bout et son inverse — une entree
+    validee dont l'amont n'a PAS change doit rester servie, sans quoi la
+    correction couterait le cache tout entier.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 18:40:00 +0200
+
 secubox-waf-ng (1.4.1-1~bookworm1) bookworm; urgency=medium
 
   * `--upstream-timeout` porte de 10 s a 120 s (ref #1030). Dix secondes sont
