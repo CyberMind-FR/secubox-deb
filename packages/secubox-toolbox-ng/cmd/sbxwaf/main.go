@@ -590,6 +590,35 @@ func (s *Server) handler() http.Handler {
 		// mirrors Python media_cache.py r.pretty_url which includes the host).
 		if s.mediaCache != nil && r.Method == http.MethodGet {
 			vhostCacheURL := "https://" + r.Host + r.URL.RequestURI()
+			// REVALIDER AVANT DE SERVIR (#1031).
+			//
+			// `Get` ne sait que verifier une expiration. Un fichier remplace sur
+			// disque restait donc masque jusqu'a la fin de son TTL — constate sur
+			// anibal-amiot.fr, ou un `app.js` mis a jour par `git pull` etait
+			// servi dans sa version d'avant, sur les six domaines a la fois. Une
+			// synchronisation aux cinq minutes ne sert a rien si le cache repond
+			// l'ancienne version pendant l'heure qui suit.
+			//
+			// LE COUT EST UN ALLER-RETOUR VERS UN NGINX LOCAL — quelques centaines
+			// d'octets pour un 304. Ce que le cache evite reste l'essentiel : le
+			// transfert et l'inspection des gros medias.
+			//
+			// SANS VALIDATEUR, ON S'EN REMET AU TTL — faute de mieux, pas par
+			// confiance. Un amont qui ne pose ni ETag ni Last-Modified ne permet
+			// aucune question ; refuser alors tout cache le rendrait inutile
+			// precisement pour les services qui n'en posent pas, c'est-a-dire
+			// souvent ceux qui servent les gros medias que ce cache existe pour
+			// eviter de retransferer. Le TTL borne alors la peremption, ce qui
+			// est le compromis HTTP habituel.
+			//
+			// nginx, lui, pose les deux sur tout fichier statique : les sites
+			// metablog — ceux qu'un `git pull` met a jour — sont donc revalides.
+			if etag, lm := s.mediaCache.Validateurs(vhostCacheURL); etag != "" || lm != "" {
+				if frais := amontInchange(ip, port, r, etag, lm); !frais {
+					s.mediaCache.Invalide(vhostCacheURL)
+				}
+			}
+
 			if cachedBody, cachedHdr, hit := s.mediaCache.Get(vhostCacheURL, r.Header.Get("Accept-Encoding")); hit {
 				for k, vs := range cachedHdr {
 					for _, v := range vs {
