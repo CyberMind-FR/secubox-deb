@@ -83,3 +83,12 @@ secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quie
 # So the wildcards only ever resolve to "a known module id + two enum values +
 # --json" — never arbitrary code or an arbitrary argv.
 secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --wait --pipe --collect --quiet /usr/sbin/secubox-profilectl set-lifecycle * --lifecycle * --wake-class * --json
+
+# Reveil d'une application Streamlit (#1018). Verbe SEPARE de `wake` : le
+# grant existant vise le prefixe litteral « wake », qui ne couvre pas
+# « wake-streamlit » — ajouter le second n'elargit donc pas le premier.
+#
+# Le reveilleur ne pilote jamais le conteneur lui-meme : il tire ce ctl, qui
+# demarre l'unite streamlit-app@<appli>. Le nom d'application est valide par
+# une liste blanche stricte cote ctl AVANT d'entrer dans un nom d'unite.
+secubox ALL=(root) NOPASSWD: /usr/bin/systemd-run --collect --quiet /usr/sbin/secubox-wakectl wake-streamlit *
