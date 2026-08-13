@@ -14,10 +14,15 @@ registered and the session admin is unaffected.
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+
+# Meme source que `main.SITE_URL`, lue ici directement : main importe ce
+# module, l'importer en retour ferait un cycle a l'initialisation.
+SITE_URL = os.environ.get("BILLETS_SITE_URL", "")
 from pydantic import BaseModel, ValidationError
 
 from .. import repo
@@ -43,11 +48,39 @@ class BilletPayload(BaseModel):
     status: str = "published"  # "published" | "draft"
 
 
+def _permalien(slug: Optional[str]) -> str:
+    """L'adresse publique du billet (#1024).
+
+    POURQUOI ELLE MANQUAIT. Cette surface rendait `id` et `slug`, jamais
+    l'adresse. Le BBS, qui publie par ici, lisait un champ `url` qui n'a jamais
+    existe : il enregistrait donc une adresse vide pour chaque billet. Rien
+    n'echouait — la publication reussissait, le billet etait en ligne — et la
+    page Billets du BBS renvoyait vers le fil en annoncant « adresse
+    manquante ». Un defaut d'ABSENCE ne se signale pas tout seul.
+
+    L'adresse est calculee depuis `BILLETS_SITE_URL`, deja renseigne : billets
+    CONNAISSAIT son adresse publique, il ne la disait pas a qui la demandait.
+
+    Sans base configuree on rend un chemin relatif plutot qu'une adresse
+    inventee : `/b/slug` est vrai pour qui parle deja a billets, alors qu'un
+    `http://localhost/...` fabrique serait un lien mort presente comme bon.
+    """
+    if not slug:
+        return ""
+    base = (SITE_URL or "").rstrip("/")
+    return f"{base}/b/{slug}" if base else f"/b/{slug}"
+
+
 def _view(row, tags: Optional[list] = None) -> dict:
     d = dict(row)
     return {
         "id": d.get("id"),
         "slug": d.get("slug"),
+        # `permalink` ET `url` : le premier est le nom employe par le rendu
+        # public, le second celui qu'attendent les clients existants. Servir
+        # les deux coute un champ et evite de casser l'un pour reparer l'autre.
+        "permalink": _permalien(d.get("slug")),
+        "url": _permalien(d.get("slug")),
         "body": d.get("body"),
         # A short excerpt so list views can show a few words instead of the whole
         # billet; `body` stays available for the editor.
