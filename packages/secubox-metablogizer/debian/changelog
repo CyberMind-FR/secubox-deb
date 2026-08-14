@@ -1,3 +1,29 @@
+secubox-metablogizer (1.8.8-1~bookworm1) bookworm; urgency=high
+
+  * SUPPRIMER UN SITE COUPAIT TOUS LES AUTRES (ref #1041). `force_remove`
+    faisait `os.chmod(parent, 0o700)` pour debloquer une suppression. Ce parent
+    est PARTAGE : `/data/metablogizer/sites` perdait ses bits groupe et autres,
+    `www-data` ne pouvait plus le traverser, et les 174 sites tombaient en 500.
+    Constate en production : anibal-amiot, www.gk2, torrent-search, tous muets.
+  * LE DEFAUT NE SE SIGNALAIT PAS. La suppression REUSSISSAIT ; la panne
+    n apparaissait qu au prochain acces a un site voisin, sans lien apparent
+    avec l action qui l avait causee.
+  * ON AJOUTE LES BITS MANQUANTS, ON NE REMPLACE PLUS LE MODE, et on ne touche
+    PLUS AU PARENT : si ses droits empechent vraiment de delier, la suppression
+    echoue franchement plutot que de casser le voisinage.
+  * SECOND DEFAUT, PREEXISTANT : le gestionnaire d erreur rejouait `func(entry)`
+    a l aveugle. Quand l appel fautif est `os.open` (repertoire en 0o000), cette
+    signature attend un argument de plus — `TypeError`, et la suppression
+    s arretait la. La fonction relache desormais l arbre vise puis retente une
+    fois.
+  * LA GARDE EXERCE VRAIMENT LE DEFAUT. Ecrite d abord avec un repertoire en
+    0o500, elle passait meme avec le bogue : en 0o500 la suppression aboutit
+    sans jamais echouer, donc le chemin fautif n etait pas emprunte. Il faut
+    0o000. Verifie dans les deux sens.
+  * 184 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 16:40:00 +0200
+
 secubox-metablogizer (1.8.2-1~bookworm1) bookworm; urgency=high
 
   * AUCUN FICHIER CACHE N'EST PLUS SERVI. Un site adosse a git porte un `.git/`
