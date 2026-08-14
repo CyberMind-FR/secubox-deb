@@ -1,3 +1,18 @@
+secubox-hub (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * LES COPIES DE SAUVEGARDE NE SONT PLUS SERVIES (ref #1034). Seize fichiers
+    `.bak` / `.pre*` trainaient sous `/usr/share/secubox/www` et nginx les
+    rendait comme n importe quelle page : `shared/health-banner.js.pre750` et
+    `cookies/index.html.pre749` s obtenaient en 200 par leur simple nom. Rien ne
+    les listait — rien ne les protegeait non plus. Une copie oubliee est du code
+    d hier, publie sans qu on l ait decide.
+  * Le vhost n avait AUCUNE garde de ce genre, pas meme sur les fichiers caches.
+  * Le motif est ancre en fin de nom et exige un chiffre ou un tiret apres
+    `.pre` : `.presentation` reste servi. Une garde qui bloque du vrai contenu
+    finit desactivee, donc elle ne protege plus rien.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 08:05:00 +0200
+
 secubox-hub (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * La navbar retire les modules epingles 'off' (ref #1028). Le menu se batit

@@ -1,3 +1,20 @@
+secubox-metablogizer (1.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * LES COPIES DE SAUVEGARDE NE SONT PLUS SERVIES (ref #1034). Meme classe de
+    defaut que les fichiers caches (#1029), et meme endroit : un site publie
+    depuis un repertoire de travail emporte les `index.html.bak` que l auteur y
+    a laisses, et nginx les rend comme n importe quelle page.
+  * LE MOTIF EXIGE UN CHIFFRE OU UN TIRET APRES `.pre`, sans quoi il attraperait
+    `.presentation` — et une garde qui bloque du vrai contenu est desactivee
+    dans la semaine.
+  * LE TEST PORTE SUR LA CONFIGURATION EMISE, PAS SUR LA SOURCE. Le gabarit est
+    une f-string : un antislash de trop et nginx recoit une regle inerte, ce qui
+    ne se voit pas a la lecture. Le piege s etait deja referme une fois sur la
+    regle des fichiers caches. Le test tombe si l echappement se casse.
+  * 195 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 08:05:00 +0200
+
 secubox-metablogizer (1.8.5-1~bookworm1) bookworm; urgency=medium
 
   * UN SITE PEUT EXPOSER DES ROUTES D API SUR SON PROPRE NOM (ref #1032),
