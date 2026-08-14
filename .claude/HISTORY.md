@@ -26,9 +26,19 @@ des que `/login.html` rendait autre chose que la page de connexion. 101
 redirections gardees dans 81 fichiers, en quatre variantes d'ecriture — dont
 une vers `/portal/login.html`, que ne garder qu'a moitie aurait laissee intacte.
 
-**Non pousse, faute de source** : `soc.html`, `hub/soc.html` et `hub/index.html`
-existent sur la board sans equivalent au depot. Onze fichiers `.bak` trainent
-aussi sous la racine servie par nginx.
+**`/portal/login.html` supprime** : ce chemin N'EXISTE PAS — il rendait la page
+« Module Not Found » en 200. La redirection y menait donc a une page qui n'est
+pas la connexion. Le changelog du hub le confirme : la copie avait ete retiree
+volontairement il y a longtemps, les appels sont restes. Une seule source
+vivante le portait (`secubox-soc`).
+
+**Racine servie nettoyee** : trois copies figees de mai (`soc.html`,
+`hub/soc.html`, `hub/index.html`) sans equivalent au depot, plus seize copies
+`.bak`/`.pre*` que nginx servait telles quelles — dont
+`cookies/index.html.pre749`, qui portait encore le chemin mort. Aucun lien,
+aucun menu, aucun trafic reel n'y renvoyait (les seules requetes journalisees
+etaient mes propres sondes). DEPLACEES, non detruites, dans
+`/var/backups/secubox-www-residus/20260814` (896 Kio).
 
 # HISTORY — SecuBox-DEB Migration Log
 *Tracking completed milestones with dates*
