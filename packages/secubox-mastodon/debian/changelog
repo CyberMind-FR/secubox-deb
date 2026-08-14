@@ -1,5 +1,20 @@
-secubox-mastodon (0.3.0-1~bookworm1) bookworm; urgency=medium
+secubox-mastodon (0.3.2-1~bookworm1) bookworm; urgency=medium
 
+  * L UNITE SE CONTREDISAIT ELLE-MEME. Elle declarait `NoNewPrivileges=false`
+    pour permettre `sudo`, et posait `RestrictAddressFamilies=` juste apres —
+    or cette directive IMPLIQUE `NoNewPrivileges=yes`, en silence. Resultat :
+    chaque appel du panneau rendait 500 et le journal etait MUET
+    (`--no-access-log` ne trace pas les requetes, et une `HTTPException(500)`
+    n est pas une exception). Directive retiree ; les trois autres options de
+    confinement sont conservees, aucune n implique NNP — verifie une par une.
+  * LE PANNEAU ANNONCAIT « CONTENEUR ARRETE » SUR UNE INSTANCE VIVANTE. Le
+    demon tourne sous `secubox` ; `lxc-info` exige root et rendait une chaine
+    VIDE, dont la sonde concluait « arrete ». Elle ne disait pas ce qu elle
+    voyait, elle disait ce qu elle ne POUVAIT PAS voir — et un etat vide n est
+    pas un etat connu. Elle distingue desormais les deux, et nomme le cas.
+  * ELEVATION CONFINEE : `/etc/sudoers.d/secubox-mastodon` autorise `secubox` a
+    appeler `mastodonctl`, COMMANDE PAR COMMANDE. Pas de joker — il donnerait
+    d avance tout ce qu on ajoutera demain a cet outil.
   * PANNEAU D EXPLOITATION REEL (ref #1040). L ancien avait des boutons —
     demarrer, arreter, inviter — et RIEN A REGARDER : il agissait sur une
     instance dont il ne disait rien. Le module n exposait que six routes.

@@ -55,7 +55,11 @@ def _ctl(*args: str, delai: int = 20) -> dict:
     arriere-plan, mais `status` interroge le reseau et pourrait attendre.
     """
     try:
-        p = subprocess.run([CTL, *args], capture_output=True, text=True, timeout=delai)
+        # `sudo -n` : le demon tourne sous `secubox`, or `lxc-info` et
+        # `lxc-attach` exigent root. Les commandes autorisees sont ENUMEREES
+        # dans /etc/sudoers.d/secubox-mastodon — jamais un joker.
+        p = subprocess.run(["sudo", "-n", CTL, *args],
+                           capture_output=True, text=True, timeout=delai)
     except FileNotFoundError:
         raise HTTPException(503, "mastodonctl absent")
     except subprocess.TimeoutExpired:

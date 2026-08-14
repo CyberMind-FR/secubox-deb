@@ -163,8 +163,17 @@ _psql() { # _psql <sql>
 # affiche « 0 compte » sur une instance eteinte MENT ; elle doit dire qu'elle
 # n'a pas pu regarder.
 _exige_running() {
-    [ "$(_lxc_etat)" = "running" ] && return 0
-    printf '{"ok":false,"error":"conteneur arrete — aucune lecture possible"}\n'
+    local e; e=$(_lxc_etat)
+    [ "$e" = "running" ] && return 0
+    # NE JAMAIS TRADUIRE UN AVEUGLEMENT EN ABSENCE. `lxc-info` echoue pour un
+    # non-root et rend une chaine VIDE : l'ancienne version en concluait
+    # « conteneur arrete » et l'affichait sur une instance parfaitement vivante.
+    # Un etat vide n'est pas un etat connu, et le dire coute une ligne.
+    if [ -z "$e" ]; then
+        printf '{"ok":false,"error":"etat du conteneur illisible — privileges insuffisants ?"}\n'
+    else
+        printf '{"ok":false,"error":"conteneur %s — aucune lecture possible"}\n' "$e"
+    fi
     return 1
 }
 
