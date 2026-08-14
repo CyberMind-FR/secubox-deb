@@ -476,6 +476,16 @@ server {{
         return 404;
     }}
 
+    # NI LES COPIES DE SAUVEGARDE (#1034). Meme raisonnement qu'au-dessus, et
+    # meme piege : un site publie depuis un repertoire de travail emporte les
+    # `index.html.bak` que l'auteur y a laisses. Le motif exige un chiffre ou un
+    # tiret apres `.pre` pour ne pas attraper `.presentation` — une garde qui
+    # bloque du vrai contenu finit desactivee.
+    location ~* (?:\\.(?:bak|old|orig|save|swp|tmp)(?:[-._][^/]*)?|\\.pre[-0-9][^/]*|~)$ {{
+        deny all;
+        return 404;
+    }}
+
     location / {{
         try_files $uri $uri/ /index.html;
     }}
