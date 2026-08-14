@@ -314,86 +314,60 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-keys
 
-      - name: Setup repository
-        if: env.SKIP_SIGN != 'true'
-        run: |
-          # `repo/conf/distributions` est SUIVI PAR GIT : le checkout le fournit
-          # deja. L'ancienne ligne se copiait sur elle-meme (« same file ») et
-          # masquait l'intention. On verifie plutot qu'il est bien la — sans
-          # lui, reprepro ne peut rien faire.
-          test -f repo/conf/distributions || {
-            echo "::error::repo/conf/distributions absent — reprepro ne peut pas publier"
-            exit 1
-          }
-          cat > repo/conf/options << EOF
-          verbose
-          basedir $(pwd)/repo
-          EOF
-
-      - name: Add packages to repository
-        if: env.SKIP_SIGN != 'true'
-        run: |
-          # UN ECHEC D'IMPORT N'EST PLUS AVALE. `|| true` masquait chaque
-          # erreur : le travail continuait avec un depot vide, et le
-          # `rsync --delete` qui suit aurait efface le depot publie.
-          #
-          # Un paquet refuse individuellement (version deja presente) reste
-          # tolere — c'est le cas ORDINAIRE d'une re-publication — mais il est
-          # COMPTE, et zero paquet importe est une erreur.
-          n_ok=0; n_ko=0
-          for deb in debs/*.deb; do
-            [ -f "$deb" ] || continue
-            if reprepro -b repo includedeb bookworm "$deb"; then
-              n_ok=$((n_ok+1))
-            else
-              n_ko=$((n_ko+1))
-              echo "::warning::import refuse : $(basename "$deb")"
-            fi
-          done
-          echo "importes: $n_ok — refuses: $n_ko"
-          if [ "$n_ok" -eq 0 ]; then
-            echo "::error::aucun paquet importe — publication interrompue"
-            exit 1
-          fi
-
-      - name: Export public key
-        if: env.SKIP_SIGN != 'true'
-        run: |
-          gpg --armor --export packages@secubox.in > repo/secubox-keyring.gpg
-
-      - name: Deploy to server
+      # LA PUBLICATION SE FAIT SUR LE SERVEUR, PAR REPREPRO (ref #1036).
+      #
+      # L'ancienne version construisait un depot LOCAL puis le poussait avec
+      # `rsync --delete` vers le docroot. Deux defauts : le depot distant est
+      # gere par `reprepro` (base de donnees comprise), qu'un rsync ecrase sans
+      # le savoir ; et `--delete` depuis un depot local incomplet EFFACE ce qui
+      # est publie. On depose donc les paquets dans la zone de transit et on
+      # laisse reprepro faire son travail, exactement comme a la main.
+      #
+      # `processincoming` n'est PAS utilise : il attend des `.changes`, que ce
+      # workflow ne produit pas (paquets construits avec `-b`, non signes).
+      # `includedeb` est la commande qui correspond a ce qu'on livre.
+      - name: Deposer les paquets et publier
         if: env.SKIP_SIGN != 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          APT_HOST: ${{ secrets.APT_HOST }}
+          APT_USER: ${{ secrets.APT_USER }}
         run: |
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "⚠ DEPLOY_SSH_KEY not set - skipping deploy"
+          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$APT_HOST" ]; then
+            echo "::notice::DEPLOY_SSH_KEY ou APT_HOST absent — publication APT ignoree"
             exit 0
           fi
+          n=$(ls debs/*.deb 2>/dev/null | wc -l)
+          if [ "$n" -lt 1 ]; then
+            echo "::error::aucun .deb a publier"
+            exit 1
+          fi
+          echo "$n paquets a deposer"
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-          # `--delete` EST UNE ARME. Il rend le distant identique a la source :
-          # si la source est vide ou partielle, il EFFACE le depot publie. On
-          # refuse donc de partir sans un `dists/` et un `pool/` peuples — la
-          # verification coute une seconde, la perte couterait le depot.
-          test -d repo/dists && test -d repo/pool || {
-            echo "::error::repo/dists ou repo/pool absent — deploiement refuse"
-            exit 1
-          }
-          n=$(find repo/pool -name '*.deb' | wc -l)
-          if [ "$n" -lt 1 ]; then
-            echo "::error::aucun .deb dans repo/pool — deploiement refuse"
-            exit 1
-          fi
-          echo "$n paquets a publier"
+          cible="${APT_USER:-deploy}@${APT_HOST}"
 
-          rsync -avz --delete \
-            repo/dists/ repo/pool/ repo/secubox-keyring.gpg \
-            deploy@apt.secubox.in:/var/www/apt.secubox.in/
+          # PAS DE `--delete` : on ajoute dans une zone de transit, on n'y
+          # reflete rien. Le depot publie n'est jamais a la merci de l'etat
+          # local de ce runner.
+          rsync -avz debs/*.deb "$cible:/data/apt/incoming/"
+
+          # L'import est fait par reprepro, seul maitre de sa base. Un paquet
+          # refuse (version deja presente) est le cas ORDINAIRE d'une
+          # republication : on le tolere, on le compte, et on n'accepte pas
+          # que TOUS echouent.
+          # Le script distant vit dans le depot (`.github/scripts/`) et non
+          # dans un heredoc : un terminateur de heredoc doit commencer en
+          # colonne 1, ce qui referme le bloc YAML. Sorti dans un fichier, il
+          # est aussi lisible et verifiable (`bash -n`).
+          ssh "$cible" \
+            "APT_BASE=/data/apt APT_DIST=bookworm bash -s" \
+            < .github/scripts/apt-publish-remote.sh
 
       - name: Delete existing release assets (if any)
         run: |
