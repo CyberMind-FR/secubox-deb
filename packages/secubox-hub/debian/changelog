@@ -1,4 +1,4 @@
-secubox-hub (1.8.1-1~bookworm1) bookworm; urgency=medium
+secubox-hub (1.8.2-1~bookworm1) bookworm; urgency=medium
 
   * LES COPIES DE SAUVEGARDE NE SONT PLUS SERVIES (ref #1034). Seize fichiers
     `.bak` / `.pre*` trainaient sous `/usr/share/secubox/www` et nginx les
@@ -7,6 +7,18 @@ secubox-hub (1.8.1-1~bookworm1) bookworm; urgency=medium
     les listait — rien ne les protegeait non plus. Une copie oubliee est du code
     d hier, publie sans qu on l ait decide.
   * Le vhost n avait AUCUNE garde de ce genre, pas meme sur les fichiers caches.
+  * RESIDU `metoblizer` RETIRE (ref #1034) : `location /api/v1/metoblizer/`
+    pointait vers `/run/secubox/metoblizer.sock`. Ce module n existe pas — ni
+    paquet, ni socket, ni repertoire : c est une coquille de `metablogizer`. Le
+    changelog de `secubox-streamlit` l avait deja identifiee et retiree de son
+    cote ; le vhost du hub, lui, la portait encore.
+  * LES LIGNES DE REVEIL NE SONT VOLONTAIREMENT PAS DANS CE PAQUET. Le vhost
+    vivant porte `include snippets/secubox-waking.conf` et
+    `error_page 502 503 504 = @sbx_wake`, absents d ici — et c est correct :
+    elles sont posees par `nginxgen.py` de `secubox-profiles`, qui en est le
+    proprietaire et les repose de facon idempotente. Les recopier ici les
+    dupliquerait, ou les ferait diverger de leur generateur au premier
+    changement.
   * Le motif est ancre en fin de nom et exige un chiffre ou un tiret apres
     `.pre` : `.presentation` reste servi. Une garde qui bloque du vrai contenu
     finit desactivee, donc elle ne protege plus rien.

@@ -26,6 +26,17 @@ des que `/login.html` rendait autre chose que la page de connexion. 101
 redirections gardees dans 81 fichiers, en quatre variantes d'ecriture — dont
 une vers `/portal/login.html`, que ne garder qu'a moitie aurait laissee intacte.
 
+**Residu `metoblizer` retire** : `location /api/v1/metoblizer/` pointait vers
+une socket qui n'existe pas — ni paquet, ni module, ni repertoire. Coquille de
+`metablogizer`, deja identifiee cote `secubox-streamlit` mais restee dans le
+vhost du hub.
+
+**Le reveil n'entre PAS dans le paquet, et c'est deliberer** : `nginxgen.py` de
+`secubox-profiles` en est le proprietaire et le repose de facon idempotente.
+L'y recopier le dupliquerait, ou le ferait diverger de son generateur au premier
+changement. Apres bascule du conffile, il a ete repose en appelant `wire()` —
+la fonction de l'outil, pas une transcription a la main.
+
 **`/portal/login.html` supprime** : ce chemin N'EXISTE PAS — il rendait la page
 « Module Not Found » en 200. La redirection y menait donc a une page qui n'est
 pas la connexion. Le changelog du hub le confirme : la copie avait ete retiree
