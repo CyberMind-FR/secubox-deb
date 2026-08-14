@@ -1,4 +1,26 @@
-secubox-nac (3.1.0-1~bookworm1) bookworm; urgency=medium
+secubox-nac (3.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * LA LISTE DES INTERFACES SCANNEES N EST PLUS ECRITE EN DUR (ref #1035).
+    `LAN_INTERFACES` couvrait `lan0`..`eth1` et les ponts usuels, mais PAS
+    `eth2` — par lequel gk2 voit justement tout son LAN, s y tenant de facon
+    transparente sur le 192.168.1.0/24 amont. La decouverte ARP filtrait donc
+    chaque voisin.
+  * CE DEFAUT NE SE SIGNALE PAS : « aucun client » est un etat parfaitement
+    legitime pour un module de controle d acces. Rien n echoue, rien ne se
+    journalise — on conclut que le reseau est calme. Le tableau de bord serait
+    simplement reste vide.
+  * LE CORRECTIF EXISTAIT SUR LA BOARD ET N AVAIT JAMAIS ETE REMONTE ICI.
+    Installer la 3.1.0 telle quelle sur gk2 aurait vide son inventaire : le code
+    etait EN AVANCE de deux versions majeures et EN RETARD sur ce point precis.
+  * `lan_interfaces` (liste ou chaine a virgules) ETEND les defauts, ne les
+    remplace pas — une config substitutive ferait disparaitre les ponts au
+    premier oubli. Une config illisible rend les defauts plutot que rien : un
+    inventaire partiel vaut mieux qu un inventaire vide, qui EST le defaut.
+  * 5 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 09:05:00 +0200
+
+secubox-nac (3.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
     (remove the hard cascade-stop when secubox-core restarts/fails).
