@@ -145,6 +145,165 @@ import json,sys; print(json.dumps({'ok': False,
     esac
 }
 
+
+# ── lecture de la base ───────────────────────────────────────────────────────
+#
+# TOUTES LES REQUETES SONT BORNEES. Ce panneau interroge une instance qui sert
+# de vrais utilisateurs : une requete sans `LIMIT` sur `accounts` ou `statuses`
+# ferait payer l'affichage d'un tableau de bord a ceux qui lisent leur fil.
+#
+# LECTURE SEULE, SANS EXCEPTION. Ces sous-commandes n'ecrivent jamais ; les
+# actions (invitation, demarrage) restent celles qui existaient deja.
+_psql() { # _psql <sql>
+    lxc-attach -n "$(_nom)" -P "$LXC_PATH" -- \
+        su - postgres -c "psql -Atq -F '|' -c \"$1\" mastodon_production" 2>/dev/null
+}
+
+# Rend un JSON d'erreur homogene quand le conteneur est arrete. Une page qui
+# affiche « 0 compte » sur une instance eteinte MENT ; elle doit dire qu'elle
+# n'a pas pu regarder.
+_exige_running() {
+    [ "$(_lxc_etat)" = "running" ] && return 0
+    printf '{"ok":false,"error":"conteneur arrete — aucune lecture possible"}\n'
+    return 1
+}
+
+# ── comptes ─────────────────────────────────────────────────────────────────
+#
+# LA DERNIERE CONNEXION EST LA COLONNE QUI COMPTE. Un compte confirme qui ne
+# s'est JAMAIS connecte est le motif classique de l'inscription automatisee :
+# l'adresse est validee, le compte ne sert jamais. L'interface amont ne met pas
+# cette information en avant ; ici, elle est en clair.
+cmd_accounts() {
+    _exige_running || return 1
+    _psql "select a.username, coalesce(u.email,''), coalesce(r.name,'Utilisateur'), \
+(u.confirmed_at is not null), coalesce(u.disabled,false), u.created_at::date, \
+coalesce(u.current_sign_in_at::date::text,''), coalesce(st.statuses_count,0) \
+from accounts a left join users u on u.account_id = a.id \
+left join user_roles r on r.id = u.role_id \
+left join account_stats st on st.account_id = a.id \
+where a.domain is null order by u.created_at nulls last limit 200" \
+    | python3 -c "
+import sys, json
+out = []
+for l in sys.stdin.read().splitlines():
+    c = l.split('|')
+    if len(c) < 8: continue
+    out.append({'compte': c[0], 'courriel': c[1], 'role': c[2],
+                'confirme': c[3] == 't', 'desactive': c[4] == 't',
+                'cree': c[5], 'derniere_connexion': c[6] or None,
+                'messages': int(c[7] or 0),
+                'systeme': c[1] == ''})
+print(json.dumps({'ok': True, 'total': len(out), 'comptes': out}, ensure_ascii=False))
+"
+}
+
+# ── invitations ─────────────────────────────────────────────────────────────
+#
+# LA FILIATION EST TOUT L'INTERET. Mastodon affiche le COMPTEUR d'usages d'une
+# invitation, jamais QUI s'en est servi — l'information existe pourtant en base
+# (`users.invite_id`). Sans elle, « 1 utilisation » ne dit pas si c'est la
+# personne qu'on attendait ou un inconnu.
+cmd_invites() {
+    _exige_running || return 1
+    _psql "select i.id, e.username, i.code, coalesce(i.expires_at::text,''), \
+coalesce(i.max_uses::text,''), i.uses, i.created_at::date, \
+coalesce((select string_agg(a2.username, ',') from users u2 \
+  join accounts a2 on a2.id = u2.account_id where u2.invite_id = i.id),''), \
+(i.expires_at is not null and i.expires_at < now()) \
+from invites i join users ue on ue.id = i.user_id \
+join accounts e on e.id = ue.account_id order by i.id desc limit 100" \
+    | python3 -c "
+import sys, json
+out = []
+for l in sys.stdin.read().splitlines():
+    c = l.split('|')
+    if len(c) < 9: continue
+    out.append({'id': int(c[0]), 'emetteur': c[1], 'code': c[2],
+                'expire_le': c[3] or None, 'max_usages': int(c[4]) if c[4] else None,
+                'usages': int(c[5] or 0), 'creee': c[6],
+                'comptes_crees': [x for x in c[7].split(',') if x],
+                'expiree': c[8] == 't'})
+actives = [i for i in out if not i['expiree']]
+print(json.dumps({'ok': True, 'total': len(out), 'actives': len(actives),
+                  'invitations': out}, ensure_ascii=False))
+"
+}
+
+
+# ── moderation ──────────────────────────────────────────────────────────────
+#
+# CE QUI ATTEND QUELQU'UN. Un signalement non traite ne fait pas de bruit : il
+# reste simplement la. C'est la seule page de ce panneau qui appelle une action
+# humaine, donc elle doit dire l'ANCIENNETE du plus vieux dossier, pas seulement
+# leur nombre — dix signalements du jour et un signalement d'il y a trois
+# semaines ne racontent pas la meme histoire.
+cmd_moderation() {
+    _exige_running || return 1
+    local sig sus dom
+    sig=$(_psql "select count(*), coalesce(max(extract(day from now()-created_at))::int,0) \
+from reports where action_taken_at is null")
+    sus=$(_psql "select count(*) filter (where suspended_at is not null), \
+count(*) filter (where silenced_at is not null) from accounts where domain is null")
+    dom=$(_psql "select count(*) from domain_blocks")
+    python3 -c "
+import sys, json
+sig = (sys.argv[1] or '0|0').split('|')
+sus = (sys.argv[2] or '0|0').split('|')
+dom = (sys.argv[3] or '0').split('|')
+def n(x, i=0):
+    try: return int(x[i])
+    except (IndexError, ValueError): return 0
+print(json.dumps({'ok': True,
+  'signalements_en_attente': n(sig),
+  'plus_ancien_jours': n(sig, 1),
+  'comptes_suspendus': n(sus),
+  'comptes_limites': n(sus, 1),
+  'domaines_bloques': n(dom)}, ensure_ascii=False))
+" "$sig" "$sus" "$dom"
+}
+
+# ── sante ───────────────────────────────────────────────────────────────────
+#
+# TROIS SERVICES, PAS UN. `web` sert les pages, `sidekiq` traite les files,
+# `streaming` alimente le temps reel. Une instance dont seul `web` tourne
+# REPOND — et ne publie plus rien : les messages partent en file et y restent.
+# C'est la panne qu'on ne voit pas depuis un navigateur.
+#
+# La place occupee par les MEDIAS est l'autre chiffre qui compte : sur une
+# appliance, c'est elle qui remplit le disque, pas la base.
+cmd_health() {
+    _exige_running || return 1
+    local n; n=$(_nom)
+    local etats=""
+    for u in mastodon-web mastodon-sidekiq mastodon-streaming; do
+        local e
+        e=$(lxc-attach -n "$n" -P "$LXC_PATH" -- systemctl is-active "$u" 2>/dev/null | head -1)
+        etats="$etats$u=${e:-inconnu};"
+    done
+    local base media fed
+    base=$(_psql "select pg_size_pretty(pg_database_size('mastodon_production'))")
+    media=$(lxc-attach -n "$n" -P "$LXC_PATH" -- du -sh /home/mastodon/live/public/system 2>/dev/null | awk '{print $1}')
+    fed=$(_psql "select count(*) filter (where domain is null), count(*) filter (where domain is not null), \
+(select count(distinct domain) from accounts where domain is not null) from accounts")
+    python3 -c "
+import sys, json
+etats = dict(x.split('=', 1) for x in sys.argv[1].split(';') if '=' in x)
+fed = (sys.argv[4] or '0|0|0').split('|')
+def n(i):
+    try: return int(fed[i])
+    except (IndexError, ValueError): return 0
+services = {k.replace('mastodon-', ''): v for k, v in etats.items()}
+# L'ETAT GLOBAL EST LE PIRE DES TROIS, jamais une moyenne : un sidekiq mort
+# rend l'instance muette meme si le web repond parfaitement.
+ok = all(v == 'active' for v in services.values())
+print(json.dumps({'ok': True, 'services': services, 'tout_actif': ok,
+  'base': sys.argv[2] or None, 'medias': sys.argv[3] or None,
+  'comptes_locaux': n(0), 'comptes_distants': n(1), 'instances_connues': n(2)},
+  ensure_ascii=False))
+" "$etats" "$base" "$media" "$fed"
+}
+
 cmd_help() {
     cat <<'EOF'
 mastodonctl — instance Mastodon federee (LXC natif)
@@ -167,6 +326,10 @@ case "${1:-help}" in
     start)   cmd_start ;;
     stop)    cmd_stop ;;
     invite)  cmd_invite ;;
+    accounts|comptes)   cmd_accounts ;;
+    invites|invitations) cmd_invites ;;
+    moderation)          cmd_moderation ;;
+    health|sante)        cmd_health ;;
     version) printf '{"ok":true,"version":"%s"}\n' "$VERSION" ;;
     *)       cmd_help ;;
 esac
