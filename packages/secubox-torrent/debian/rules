@@ -6,6 +6,11 @@ override_dh_auto_install:
 	# WebTorrent LXC app source. Ships package-lock.json (needed by
 	# `npm ci` at provision time inside the LXC) but NOT node_modules
 	# (gitignored dev artifact; install-lxc.sh runs npm ci in the LXC).
+	# API du module (#1032). Son absence etait l un des deux echecs de
+	# chargement de l agregateur : « torrent: main.py not found ». Elle porte
+	# aussi la recherche d index, qui rend de vraies adresses magnet.
+	install -d debian/secubox-torrent/usr/lib/secubox/torrent/api
+	cp -r api/*.py debian/secubox-torrent/usr/lib/secubox/torrent/api/
 	install -d debian/secubox-torrent/usr/lib/secubox/torrent/app
 	cp -r lxc/app/. debian/secubox-torrent/usr/lib/secubox/torrent/app/
 	rm -rf debian/secubox-torrent/usr/lib/secubox/torrent/app/node_modules
