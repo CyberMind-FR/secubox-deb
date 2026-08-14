@@ -5,7 +5,15 @@
 
 ## 2026-08-12 — Ressources bornées, publication réparée
 
-### ✅ Fait — fusionné et déployé
+### ✅ Fait
+
+- **#1032 — torrent-search : vrais resultats et vrais magnets** (2026-08-13).
+  Livre et mesure : 100 resultats en ~2,4 s par le nom public.
+  Pastilles et onglet NZB cables (2.4.1) : trois index reels (TPB,
+  Torrents-CSV, Nyaa), selection transmise, Usenet en attente de cles dans
+  `/etc/secubox/secrets/torrent-nzb.toml`.
+- **#1033 — metablogizer : l'envoi reussissait puis annoncait un echec**
+  (2026-08-13). Prouve dans les deux sens sur gk2. — fusionné et déployé
 
 #### v2.20.0 — 2026-08-13 (soir) : douze branches rendues à master
 

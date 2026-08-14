@@ -39,6 +39,51 @@ vivante le portait (`secubox-soc`).
 aucun menu, aucun trafic reel n'y renvoyait (les seules requetes journalisees
 etaient mes propres sondes). DEPLACEES, non detruites, dans
 `/var/backups/secubox-www-residus/20260814` (896 Kio).
+## 2026-08-13 — torrent-search rendait de faux resultats (#1032, #1033)
+
+**#1032 — « reparer les liens magnet » supposait d'abord de vrais resultats.**
+La page fabriquait ses huit resultats avec `Math.random()` et son bouton
+`⬡ magnet` n'avait aucun gestionnaire : il n'y avait pas de lien casse, il n'y
+avait pas de lien.
+
+- `secubox-torrent` 2.3.1 — recherche d'index cote serveur. Elle part de la
+  box : emise par le navigateur, elle exposerait l'adresse du visiteur aux
+  trackers. `api/main.py` manquait — le module etait l'un des deux seuls que
+  l'agregateur ne pouvait pas monter.
+- `secubox-metablogizer` 1.8.5 — un site expose des routes d'API sur son propre
+  nom via `site.json`, ROUTE PAR ROUTE et en correspondance exacte. Un prefixe
+  exposerait toute la surface du module, y compris ce qu'on y ajoutera demain.
+- Frontend pousse dans Gitea, pas sur le disque : `metablog-sync` ecrase toute
+  edition locale en cinq minutes.
+- XSS ferme : les titres viennent d'un index tiers et etaient injectes en
+  `innerHTML`. Le defaut naissait au moment ou les donnees devenaient reelles.
+- `scan_sites()` ne recopie que les cles nommees — la route declaree
+  n'atteignait pas le generateur. Meme piege qu'en #1023 avec les alias ; le
+  test porte desormais sur la survie de la cle AU SCAN.
+- YTS retire : `yts.mx` rend NXDOMAIN, y compris depuis Quad9.
+- **Cablage complet (2.4.1)** : les pastilles pilotent enfin la recherche, et
+  la liste vient de `/sources` — une page qui tient sa propre liste finit
+  toujours par annoncer des index qu'on n'interroge plus. Onglet Usenet :
+  protocole Newznab implemente, et faute de cle l'interface LE DIT au lieu de
+  fabriquer sept resultats.
+- **Knaben cablee puis retiree, et c'est la lecon** : elle ignorait la requete
+  et rendait le dernier contenu indexe — de la pornographie en tete pour
+  « debian ». Elle repondait 200, vite, avec des resultats bien formes : seul
+  le CONTENU la trahissait. D'ou une garde de pertinence sur TOUTES les
+  sources, y compris celles qui se comportent bien aujourd'hui.
+- `sources or list(SOURCES)` transformait « tout decoche » en « tout coche » :
+  le geste de l'utilisateur annule en silence. Trouve par un test.
+
+**#1033 — l'envoi de contenu reussissait puis annoncait un echec.**
+`_version_upload()` appelait `asyncio.get_running_loop()` sans qu'`asyncio` soit
+importe dans sa portee. L'appel arrivant APRES l'extraction, le contenu etait
+bien ecrit et l'operateur lisait « echec » — il recommencait pour rien. Garde
+posee sur la CLASSE de defaut : aucun nom indefini n'est tolere dans le module.
+
+**Egalement ce jour** : `secubox-torrent` avait ete construit avec une entree de
+changelog numerotee 2.1.0 empilee au-dessus de 2.2.9 — le contenu etait bon, la
+version declaree etait une regression que `dpkg -i` a acceptee sans rien dire.
+Renumerote en 2.3.x.
 
 # HISTORY — SecuBox-DEB Migration Log
 *Tracking completed milestones with dates*

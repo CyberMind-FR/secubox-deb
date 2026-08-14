@@ -1,3 +1,79 @@
+secubox-torrent (2.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * LES PASTILLES DE SOURCES PILOTENT ENFIN QUELQUE CHOSE (ref #1032). La page
+    en affichait sept — 1337x, EZTV, snowfl, YTS… — dont AUCUNE n etait
+    interrogee ; cocher ou decocher ne changeait rien. Trois index reels
+    s ajoutent a TPB : Knaben (qui agrege lui-meme des dizaines de trackers),
+    Torrents-CSV et Nyaa. Verifies un par un depuis la board avant cablage.
+  * KNABEN CABLEE PUIS RETIREE, ET C EST LA LECON DE CETTE VERSION. Elle
+    ignorait purement et simplement la requete : pour « debian », elle rendait
+    le dernier contenu indexe — de la pornographie en tete de liste. Aucun de
+    ses trois modes (`score`, `100%`, `50%`) ne filtrait quoi que ce soit. Elle
+    repondait 200, vite, avec des resultats parfaitement formes : rien dans la
+    mecanique ne la distinguait d un succes, seul le CONTENU la trahissait.
+  * D OU UNE GARDE DE PERTINENCE SUR TOUTES LES SOURCES, y compris celles qui
+    se comportent bien aujourd hui : un resultat dont le titre ne porte AUCUN
+    terme cherche est ecarte. Volontairement lache — un seul terme suffit —
+    pour ne pas perdre `ubuntu-24.04-desktop` sur une recherche « ubuntu 24 ».
+  * LE REGISTRE DES SOURCES EST SERVI PAR `/sources`, et l interface le lit au
+    lieu de tenir la sienne. Une liste ecrite en dur dans la page finit toujours
+    par annoncer des index qu on n interroge plus — c etait exactement le cas.
+  * DEDUPLICATION SUR L EMPREINTE, jamais sur le titre : Knaben agrege des index
+    qu on interroge aussi en direct, sans quoi la moitie de la liste serait des
+    doublons. On garde l exemplaire le mieux pourvu en seeders et on NOMME les
+    autres sources — « trois index le connaissent » vaut mieux que trois lignes.
+  * TOUT DECOCHER N EST PAS TOUT SELECTIONNER. `sources or list(SOURCES)`
+    faisait l inverse : une liste vide etant fausse, decocher toutes les
+    pastilles rendait TOUS les index — le geste de l utilisateur annule en
+    silence, c est-a-dire le defaut meme qu on repare. Trouve par un test.
+  * ONGLET USENET : le protocole Newznab est implemente pour de bon
+    (`/nzb/indexeurs`, `/nzb/recherche`). Il n existe AUCUN index Usenet ouvert
+    — ils exigent tous une cle nominative — et c est precisement ce que la page
+    masquait en fabriquant sept resultats. Tant qu aucune cle n est deposee dans
+    `/etc/secubox/secrets/torrent-nzb.toml`, l interface LE DIT et explique quoi
+    faire. Une page qui s annonce vide est utile ; une page qui invente ne l est
+    jamais.
+  * LES CLES NE SORTENT NI DANS UNE REPONSE NI DANS UN JOURNAL — la page qui
+    appelle ce module est publique. Un test le verifie.
+  * Les reponses distantes sont BORNEES avant analyse, et toute declaration de
+    type de document est refusee dans le flux RSS : `xml.etree` se laisse
+    epuiser par une entite recursive.
+  * 26 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 21:05:00 +0200
+
+secubox-torrent (2.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * RECHERCHE D INDEX, COTE SERVEUR (ref #1032). L application
+    torrent-search.gk2.secubox.in n avait pas de liens magnet parce qu elle
+    n avait pas de RESULTATS : titres, tailles et seeders etaient generes par
+    `Math.random()`, et le bouton « magnet » n avait aucun gestionnaire.
+    C etait une maquette.
+  * LA RECHERCHE PART DE LA BOARD, PAS DU NAVIGATEUR. Deux raisons, la seconde
+    etant la seule qui compte : CORS l interdirait de toute facon, mais surtout
+    une requete emise par le navigateur exposerait l adresse du visiteur aux
+    trackers. Emise d ici, elle ne l expose pas — sur une appliance dont c est
+    la promesse, la question ne se pose pas.
+  * Les magnets sont FABRIQUES depuis l empreinte, avec des traqueurs joints :
+    sans eux, un client sans DHT ne trouve aucun pair et le lien parait casse
+    alors qu il est seulement orphelin.
+  * UN HASH INVALIDE NE PRODUIT PAS DE MAGNET, et le resultat est ecarte : un
+    lien qui ne mene a rien est pire qu un lien absent, parce qu on l essaie.
+  * Une source en panne n emporte pas les autres — un index injoignable est le
+    cas ORDINAIRE — et les echecs sont NOMMES dans la reponse : une liste courte
+    sans explication laisserait croire que la recherche n a rien trouve.
+  * APIBAY rend une ligne sentinelle « No results returned » quand il n a rien ;
+    elle est ecartee, sans quoi un torrent inexistant s afficherait en tete.
+  * `api/main.py` MANQUAIT : le module etait l un des deux seuls, sur
+    cent-quatorze, que l agregateur ne pouvait pas monter. Corrige du meme coup.
+  * YTS RETIRE : `yts.mx` rend NXDOMAIN, y compris depuis un resolveur public
+    — le domaine n existe plus, ce n est pas notre filtrage. Une source qui
+    echoue a CHAQUE recherche apprend a ignorer la ligne des echecs, et c est
+    precisement celle qui doit rester credible le jour ou un index tombe.
+  * 14 tests.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 13 Aug 2026 19:40:00 +0200
+
 secubox-torrent (2.2.9-1~bookworm1) bookworm; urgency=medium
 
   * Package the admin-panel API route (ref #979): torrent is LXC-native (no
