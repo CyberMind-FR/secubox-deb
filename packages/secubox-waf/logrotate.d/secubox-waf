@@ -1,0 +1,39 @@
+# SecuBox-Deb :: rotation du journal des menaces du WAF (#1039)
+#
+# CE JOURNAL N'AVAIT AUCUNE ROTATION et pesait 102 Mo, sur un eMMC de 15 Go
+# occupe a 93 %. Un eMMC plein a deja provoque des 502 generalises sur cette
+# board : la croissance sans borne n'etait pas encore un incident, c'etait un
+# compte a rebours.
+#
+# RENOMMAGE, ET SURTOUT PAS `copytruncate`. `sbxwaf` ouvre le fichier en
+# `O_APPEND|O_CREATE`, ecrit, et le REFERME a chaque enregistrement
+# (threatlog.go, Record()) : il ne garde aucun descripteur, donc le renommage
+# classique suffit et le prochain enregistrement recree le fichier.
+# `copytruncate` COPIERAIT les 102 Mo avant de tronquer — doubler l'occupation
+# est exactement ce qu'on ne peut pas se permettre ici.
+#
+# `su` EST OBLIGATOIRE : le repertoire appartient a `secubox-waf`, pas a root,
+# et logrotate refuse d'operer sur un repertoire qu'il ne possede pas.
+/var/log/secubox/waf/waf-threats.log {
+    su secubox-waf secubox-waf
+    daily
+    # `maxsize` ET NON `size`. Avec `size`, logrotate ANNULE le critere
+    # temporel — il l'annonce lui-meme en mode debug : « 'size' overrides
+    # previously specified 'daily' ». La rotation ne serait alors plus que
+    # volumetrique, ce qui n'est pas ce que ce commentaire pretendait.
+    #
+    # `maxsize` conserve les DEUX : rotation chaque jour, et plus tot si le
+    # fichier depasse le seuil. Une journee d'attaque soutenue produit bien
+    # plus que la normale, et attendre minuit reviendrait a laisser le disque
+    # decider a notre place.
+    maxsize 20M
+    rotate 7
+    compress
+    # `delaycompress` : le fichier fraichement tourne reste lisible en clair un
+    # cycle, le temps qu'on l'examine apres un incident — c'est justement le
+    # moment ou on le lit.
+    delaycompress
+    missingok
+    notifempty
+    create 0640 secubox-waf secubox-waf
+}

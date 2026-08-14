@@ -23,7 +23,18 @@ if [ "$1" = "configure" ]; then
 
     # Create log directory
     mkdir -p /var/log/secubox/waf
-    chown secubox:secubox /var/log/secubox/waf 2>/dev/null || true
+    # LE PROPRIETAIRE EST CELUI QUI ECRIT (ref #1039). Cette ligne posait
+    # `secubox:secubox` alors que `sbxwaf` tourne sous `secubox-waf` : le
+    # repertoire etant en 0750, le demon se retrouvait VERROUILLE DEHORS de son
+    # propre journal (« sbxwaf/threatlog: open ...: permission denied »), et
+    # chaque reinstallation du paquet reintroduisait la panne.
+    #
+    # Groupe `secubox` : c'est sous ce compte que l'agregateur sert le panneau
+    # du WAF et lit ce journal. Le setgid (2750) fait heriter ce groupe aux
+    # fichiers crees, sans quoi le demon les creerait dans SON groupe et le
+    # lecteur perdrait l'acces au fichier suivant.
+    chown secubox-waf:secubox /var/log/secubox/waf 2>/dev/null || true
+    chmod 2750 /var/log/secubox/waf 2>/dev/null || true
 
     # Enable the WAF API service
     systemctl daemon-reload

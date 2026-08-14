@@ -3,6 +3,8 @@
 	dh $@
 
 override_dh_auto_install:
+	install -D -m 0644 logrotate.d/secubox-waf \
+		debian/secubox-waf/etc/logrotate.d/secubox-waf
 	# API backend
 	install -d debian/secubox-waf/usr/lib/secubox/waf
 	cp -r api debian/secubox-waf/usr/lib/secubox/waf/
