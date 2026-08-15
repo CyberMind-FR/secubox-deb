@@ -405,3 +405,33 @@ func TestLeScriptCorrigeLaLatenceEtNeRendPasLeCorpsEnBalisage(t *testing.T) {
 		t.Error("le chat n'utilise pas textContent")
 	}
 }
+
+// LES DEUX CHEMINS DOIVENT REPONDRE.
+//
+// Le vhost transmet `/api/v1/radio/...` ; l'agregateur RETIRE le prefixe et la
+// meme requete arrive comme `/...`. Un module qui n'ecoute que sur l'un rend
+// 404 sur l'autre, sans rien dans les journaux — du point de vue du serveur, la
+// route n'existe pas. Ce defaut a deja coute une soiree sur un autre module.
+func TestLesRoutesRepondentAvecEtSansPrefixe(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+
+	for _, chemin := range []string{
+		"/api/v1/radio/playlist", "/playlist",
+		"/api/v1/radio/current", "/current",
+		"/api/v1/radio/propositions", "/propositions",
+	} {
+		if w := appel(s, "GET", chemin, membre, nil, false); w.Code != http.StatusOK {
+			t.Errorf("%s rend %d", chemin, w.Code)
+		}
+	}
+	// ...y compris les gestes portant un identifiant.
+	for _, chemin := range []string{
+		"/api/v1/radio/pistes/" + itoa(p.ID) + "/coeur",
+		"/pistes/" + itoa(p.ID) + "/coeur",
+	} {
+		if w := appel(s, "POST", chemin, membre, nil, true); w.Code != http.StatusOK {
+			t.Errorf("%s rend %d", chemin, w.Code)
+		}
+	}
+}

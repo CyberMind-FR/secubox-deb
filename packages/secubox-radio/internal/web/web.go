@@ -105,13 +105,25 @@ var statique embed.FS
 const prefixe = "/api/v1/radio"
 
 func (s *Serveur) routes() {
-	s.mux.HandleFunc(prefixe+"/current", s.actuel)
-	s.mux.HandleFunc(prefixe+"/playlist", s.playlist)
-	s.mux.HandleFunc(prefixe+"/propositions", s.propositions)
-	s.mux.HandleFunc(prefixe+"/propositions/", s.gestePropo)
-	s.mux.HandleFunc(prefixe+"/pistes/", s.gestePiste)
-	s.mux.HandleFunc(prefixe+"/chat", s.chat)
-	s.mux.HandleFunc(prefixe+"/suivante", s.suivante)
+	// LES ROUTES SONT MONTEES DEUX FOIS, ET CE N'EST PAS UNE NEGLIGENCE.
+	//
+	// Le vhost `radio.gk2` transmet le chemin COMPLET : `/api/v1/radio/current`.
+	// L'agregateur, lui, RETIRE LE PREFIXE avant de relayer vers la socket : la
+	// meme requete y arrive comme `/current`. Un module qui n'ecoute que sur
+	// l'un des deux rend 404 sur l'autre — sans rien dans les journaux, puisque
+	// du point de vue du serveur la route n'existe pas. Ce defaut a deja coute
+	// une soiree sur un autre module.
+	//
+	// Monter les deux coute deux lignes et supprime la classe entiere.
+	for _, p := range []string{prefixe, ""} {
+		s.mux.HandleFunc(p+"/current", s.actuel)
+		s.mux.HandleFunc(p+"/playlist", s.playlist)
+		s.mux.HandleFunc(p+"/propositions", s.propositions)
+		s.mux.HandleFunc(p+"/propositions/", s.gestePropo)
+		s.mux.HandleFunc(p+"/pistes/", s.gestePiste)
+		s.mux.HandleFunc(p+"/chat", s.chat)
+		s.mux.HandleFunc(p+"/suivante", s.suivante)
+	}
 	// LA PAGE EST EMBARQUEE DANS LE BINAIRE : un fichier manquant sur le disque
 	// donnerait une page blanche sans rien dire. Ici elle ne peut pas manquer.
 	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
@@ -321,7 +333,7 @@ func (s *Serveur) propositions(w http.ResponseWriter, r *http.Request) {
 
 // gestePropo : /propositions/<id>/{valider,refuser,coeur}
 func (s *Serveur) gestePropo(w http.ResponseWriter, r *http.Request) {
-	id, geste := decoupe(r.URL.Path, prefixe+"/propositions/")
+	id, geste := decoupe(r.URL.Path, "/propositions/")
 	if id == 0 {
 		erreur(w, http.StatusNotFound, "proposition inconnue")
 		return
@@ -358,7 +370,7 @@ func (s *Serveur) gestePropo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
-	id, geste := decoupe(r.URL.Path, prefixe+"/pistes/")
+	id, geste := decoupe(r.URL.Path, "/pistes/")
 	if id == 0 || geste != "coeur" {
 		erreur(w, http.StatusNotFound, "geste inconnu")
 		return
@@ -434,9 +446,18 @@ func (s *Serveur) suivante(w http.ResponseWriter, r *http.Request) {
 		"horloge_ms": e.Horloge.UnixMilli()})
 }
 
-// decoupe extrait l'identifiant et le geste de /prefixe/<id>/<geste>.
-func decoupe(chemin, prefixe string) (int64, string) {
-	reste := strings.TrimPrefix(chemin, prefixe)
+// decoupe extrait l'identifiant et le geste de .../<segment>/<id>/<geste>.
+//
+// ON CHERCHE LE SEGMENT PLUTOT QUE DE RETIRER UN PREFIXE FIXE : le chemin
+// arrive tantot complet (`/api/v1/radio/pistes/12/coeur`), tantot ampute par
+// l'agregateur (`/pistes/12/coeur`). Un `TrimPrefix` sur l'un echouerait
+// silencieusement sur l'autre.
+func decoupe(chemin, segment string) (int64, string) {
+	i := strings.Index(chemin, segment)
+	if i < 0 {
+		return 0, ""
+	}
+	reste := chemin[i+len(segment):]
 	parts := strings.SplitN(reste, "/", 2)
 	if len(parts) != 2 {
 		return 0, ""
