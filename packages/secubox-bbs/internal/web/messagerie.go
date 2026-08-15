@@ -194,6 +194,16 @@ func (s *Server) mastodon(w http.ResponseWriter, r *http.Request) {
 			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
 			p.MastoLieLe = time.Unix(c.LieLe, 0).Format("02/01/2006")
 
+			// LA POLITIQUE S'OUVRE ICI, ET SEULEMENT ICI (#1044). Sans cela
+			// le navigateur bloque les images et les sons de l'instance —
+			// SANS RIEN DIRE AU SERVEUR : la page part complete, le lecteur
+			// reste noir, et l'on cherche la panne du mauvais cote. C'est
+			// exactement ce qui s'est produit.
+			//
+			// L'origine est celle de l'instance ou CE membre a prouve son
+			// identite ; la porte se referme avec la reponse.
+			s.OrigineMediaMastodon(w, c.Instance)
+
 			// LE FIL DISTANT. Son echec n'interrompt pas la page : une
 			// instance injoignable doit laisser le panneau s'afficher avec
 			// une ligne qui le dit.
