@@ -308,13 +308,26 @@ func TestLaListeDesAimeursEstServieAuxMembres(t *testing.T) {
 	}
 }
 
-// ...mais pas aux inconnus : la radio s'ecoute de l'exterieur, pas la liste de
-// qui aime quoi.
+// ...mais pas aux inconnus : la radio s'ecoute de l'exterieur, savoir qui aime
+// quoi non.
+//
+// LE TEST VISE `/playlist` ET NON `/current`, ET C'EST TOUT LE POINT. Ma
+// premiere version interrogeait `/current`, qui rend le SILENCE a un inconnu
+// tant qu'aucune piste n'est en cache : aucune vue de piste n'etait produite,
+// donc rien ne pouvait fuir, et le test passait sans jamais exercer la garde.
+// Verifie par mutation : il ne tombait pas quand on retirait le controle.
+//
+// `/playlist` rend des vues de pistes a qui les demande — c'est la que la fuite
+// se produirait.
 func TestLaListeDesAimeursNestPasServieAuxInconnus(t *testing.T) {
 	s, st := banc(t)
 	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
 	_ = st.PoseCoeur(p.ID, 2, "alice", t0)
-	w := appel(s, "GET", "/api/v1/radio/current", dehors, nil, false)
+
+	w := appel(s, "GET", "/api/v1/radio/playlist", dehors, nil, false)
+	if !bytes.Contains(w.Body.Bytes(), []byte("ABC")) {
+		t.Fatalf("le test n'exerce rien : aucune piste rendue (%d) %s", w.Code, w.Body)
+	}
 	if bytes.Contains(w.Body.Bytes(), []byte("alice")) {
 		t.Error("la liste des aimeurs fuit vers un inconnu")
 	}
