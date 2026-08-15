@@ -715,3 +715,13 @@ video.jointe{max-height:60vh; background:#000}
   font-size:11.5px;color:var(--dim);text-decoration:none;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pub-media:hover{background:var(--soft);color:var(--text)}
+
+/* Les medias servis par l'instance du compte s'affichent ; les autres restent
+   des pastilles. Bornes en hauteur : une publication ne doit pas chasser la
+   suivante hors de l'ecran. */
+.pub-vue{display:block;max-width:100%;border-radius:10px;overflow:hidden;
+  border:1px solid var(--line);line-height:0}
+.pub-vue img,video.pub-vue{display:block;width:100%;height:auto;
+  max-height:420px;object-fit:cover}
+.pub-son{width:100%;max-width:420px}
+.pub-medias{align-items:flex-start}

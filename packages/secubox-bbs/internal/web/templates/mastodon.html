@@ -41,13 +41,32 @@
       {{if .Medias}}
       <div class="pub-medias">
         {{range .Medias}}
-          {{/* AUCUNE IMAGE DISTANTE N'EST CHARGEE AUTOMATIQUEMENT : elle
-               signalerait chaque lecture au serveur d'en face, qui sur une
-               publication federee n'est pas le notre. */}}
-          <a class="pub-media" href="{{.URL}}" rel="noopener noreferrer"
-             title="{{if .Alt}}{{.Alt}}{{else}}pièce jointe — s'ouvre sur l'instance{{end}}">
-            {{if eq .Type "image"}}🖼{{else if eq .Type "video"}}🎥{{else if eq .Type "audio"}}🎙{{else}}📎{{end}}
-            {{if .Alt}}{{.Alt}}{{else}}{{.Type}}{{end}}</a>
+          {{if and .Interne (eq .Type "image")}}
+            {{/* SERVIE PAR L'INSTANCE DU COMPTE : c'est son propre fil, sur son
+                 propre serveur — souvent le notre, sur cette machine. Refuser
+                 l'image au nom d'une fuite vers soi-meme ne protegeait
+                 personne, et laissait la page vide : ces publications n'ont
+                 pas de texte, l'image EST le contenu. */}}
+            <a class="pub-vue" href="{{.URL}}" rel="noopener noreferrer"
+               title="{{if .Alt}}{{.Alt}}{{else}}ouvrir sur l'instance{{end}}">
+              <img src="{{if .Apercu}}{{.Apercu}}{{else}}{{.URL}}{{end}}"
+                   alt="{{.Alt}}" loading="lazy" referrerpolicy="no-referrer">
+            </a>
+          {{else if and .Interne (or (eq .Type "video") (eq .Type "gifv"))}}
+            <video class="pub-vue" controls preload="none"
+                   {{if .Apercu}}poster="{{.Apercu}}"{{end}}
+                   src="{{.URL}}" referrerpolicy="no-referrer"></video>
+          {{else if and .Interne (eq .Type "audio")}}
+            <audio class="pub-son" controls preload="none" src="{{.URL}}"></audio>
+          {{else}}
+            {{/* HOTE TIERS : on ne charge rien. Une publication federee est
+                 servie par le serveur d'un inconnu, a qui chaque affichage
+                 dirait qui regarde, quand, et depuis quelle adresse. */}}
+            <a class="pub-media" href="{{.URL}}" rel="noopener noreferrer"
+               title="{{if .Alt}}{{.Alt}}{{else}}pièce jointe distante — s'ouvre sur son serveur{{end}}">
+              {{if eq .Type "image"}}🖼{{else if eq .Type "video"}}🎥{{else if eq .Type "audio"}}🎙{{else}}📎{{end}}
+              {{if .Alt}}{{.Alt}}{{else}}{{.Type}} (hôte tiers){{end}}</a>
+          {{end}}
         {{end}}
       </div>
       {{end}}

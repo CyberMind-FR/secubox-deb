@@ -88,23 +88,20 @@ func TestLeGabaritSertLesDeuxEtatsDuCompte(t *testing.T) {
 	}
 }
 
-// AUCUNE IMAGE DISTANTE N'EST CHARGEE AUTOMATIQUEMENT : elle signalerait chaque
-// lecture au serveur d'en face, qui sur une publication federee n'est pas le
-// notre.
-func TestLesMediasDistantsNeSontPasChargesAutomatiquement(t *testing.T) {
-	g := gabaritSansCommentaires(t, "templates/mastodon.html")
-	i := strings.Index(g, "range .Medias")
-	if i < 0 {
-		t.Fatal("le bloc des medias est absent")
-	}
-	bloc := g[i:]
-	if j := strings.Index(bloc, "{{end}}"); j > 0 {
-		bloc = bloc[:j]
-	}
-	if strings.Contains(bloc, "<img") || strings.Contains(bloc, "Apercu") {
-		t.Error("une image distante serait chargee a l'affichage")
-	}
-}
+// NOTE — un test a ete RETIRE ici, et il faut dire pourquoi.
+//
+// `TestLesMediasDistantsNeSontPasChargesAutomatiquement` decoupait le gabarit
+// depuis `range .Medias` jusqu'au premier `{{end}}` et verifiait que ce
+// fragment ne contenait pas d'`<img`. Il PASSAIT POUR LA MAUVAISE RAISON : ce
+// premier `{{end}}` appartient a un `{{if}}` imbrique dans un attribut `title`,
+// si bien que le fragment inspecte faisait 221 octets et s'arretait avant la
+// balise qu'il pretendait chercher. Il aurait laisse passer n'importe quelle
+// image.
+//
+// La regle a par ailleurs change : les medias servis par l'instance DU COMPTE
+// s'affichent desormais — voir `MediaVue.Interne`. Ce qui doit etre garde est
+// verifie sur la PAGE RENDUE, dans mastodon_page_test.go :
+// `TestUnMediaDHoteTiersResteUnLien` et `TestUnHoteQuiImiteLInstanceNestPasInterne`.
 
 // gabaritSansCommentaires rend un gabarit prive de ses commentaires `{{/* */}}`,
 // pour que les tests portent sur ce qui est RENDU et non sur ce qui est ecrit
