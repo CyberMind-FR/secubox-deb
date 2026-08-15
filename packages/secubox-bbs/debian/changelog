@@ -1,3 +1,34 @@
+secubox-bbs (0.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * SALONS PRIVES : ouverts a des PERSONNES, pas a un rang (ref #1044).
+    `categories` savait deja fermer par RANG (`min_role_read`), ce qui repond a
+    « reserve aux membres ». Elle ne savait pas dire « ouvert a Alice et Bob » :
+    aucune table ne reliait un membre a un salon. C etait le seul manque.
+  * DEUX AXES ORTHOGONAUX plutot qu un rang de plus. Ajouter `prive` a la
+    contrainte de `min_role_read` aurait rendu impossible un salon a la fois
+    reserve aux membres ET limite a trois d entre eux — et aurait fait dependre
+    une regle de confidentialite d un ordre entre valeurs textuelles.
+  * UNE INVITATION DE SALON N OUVRE AUCUN COMPTE, et c est pourquoi elle a sa
+    propre table. Ajouter `category_id` a `invites` aurait paru economique et
+    aurait cree le defaut meme qu on veut eviter : un lien destine a ouvrir une
+    section serait devenu, par heritage, une porte d entree sur la board — un
+    partage maladroit aurait suffi. Ici le code rattache un compte DEJA existant
+    et authentifie ; l identifiant vient de la SESSION, jamais du lien.
+  * `SalonsCachesPour` rend ce qui est CACHE, pas ce qui est visible : si elle
+    echoue et que l appelant ignore l erreur, il cache trop, jamais trop peu.
+    L inverse aurait fait fuir l existence des salons prives.
+  * LE SYSOP VOIT TOUT : sans cela il pourrait creer un salon prive, en perdre
+    l acces, et plus personne ne pourrait le moderer.
+  * Un salon reste OUVERT par defaut : la confidentialite se demande, sinon la
+    migration refermerait des salons existants.
+  * LA VERSION DU DEMON EST INJECTEE DEPUIS CE CHANGELOG. Elle etait une
+    constante figee et avait derive : le demon annoncait 0.8.1 quand le paquet
+    en etait a 0.12.0. Un numero qui ment est pire qu absent — on diagnostique
+    alors sur une version qui ne tourne pas.
+  * 11 tests neufs ; les quatre paquets du BBS passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 16:10:00 +0200
+
 secubox-bbs (0.12.0-1~bookworm1) bookworm; urgency=medium
 
   * SOCLE DES MESSAGES VOCAUX : un media peut enfin etre lie a un message
