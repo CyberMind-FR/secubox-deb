@@ -44,6 +44,14 @@ class LiveHostsAggregator:
         self.cfg = cfg
         self._payload: dict = {"enabled": False, "entries": []}
         self._refreshed = False
+        # ── LECTURE INCREMENTALE (#1045) ────────────────────────────────────
+        # 87 journaux nginx, 12 Mo, etaient relus et re-analyses chaque minute
+        # — un `strptime` par ligne — pour ne garder que 60 minutes et n en
+        # afficher que 5 hotes. On retient ou l on s est arrete par fichier, et
+        # l on compte par MINUTE : la fenetre glissante se maintient alors en
+        # purgeant les minutes sorties, sans jamais relire le passe.
+        self._pos: dict = {}       # {chemin: (dev, inode, offset)}
+        self._minutes: dict = {}   # {hote: {minute_epoch: compte}}
 
     # -- public ---------------------------------------------
 
@@ -87,34 +95,71 @@ class LiveHostsAggregator:
     # -- helpers --------------------------------------------
 
     def _read_nginx_hosts(self) -> tuple[collections.Counter, int]:
+        """Compte les requetes par vhost sur la fenetre glissante.
+
+        LECTURE INCREMENTALE (#1045). L ancienne version relisait la queue de
+        chacun des 87 journaux a chaque cycle — 12 Mo, un `strptime` par ligne
+        — pour ne retenir que 60 minutes et n en afficher que cinq hotes.
+
+        Ici chaque fichier est lu A PARTIR DE LA OU L ON S ETAIT ARRETE, et les
+        lignes neuves alimentent des compteurs PAR MINUTE. La fenetre glissante
+        se maintient en purgeant les minutes sorties : le passe n est jamais
+        relu, alors que le resultat reste exact.
+        """
         log_dir = Path(self.cfg.get("log_dir", DEFAULT_LOG_DIR))
         window = int(self.cfg.get("window_minutes", 60))
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=window)
-        counts: collections.Counter = collections.Counter()
-        total = 0
+        maintenant = datetime.now(timezone.utc)
+        minute_limite = int((maintenant - timedelta(minutes=window)).timestamp()) // 60
         try:
             files = sorted(log_dir.glob("*_access.log"))
         except Exception as e:  # noqa: BLE001
             log.warning("cannot list %s: %s", log_dir, e)
-            return counts, 0
+            return collections.Counter(), 0
+
+        vus = set()
         for f in files:
+            cle = str(f)
+            vus.add(cle)
+            host = f.name[: -len("_access.log")]
             try:
-                size = f.stat().st_size
-                if size == 0:
+                st = f.stat()
+                if st.st_size == 0:
                     continue
-                host = f.name[: -len("_access.log")]
+                dev, ino, taille = st.st_dev, st.st_ino, st.st_size
+                etat = self._pos.get(cle)
+                if etat is None or etat[0] != dev or etat[1] != ino or taille < etat[2]:
+                    # PREMIER PASSAGE, OU ROTATION. On garde la borne de queue
+                    # d origine : au demarrage on ne remonte pas tout le
+                    # fichier, exactement comme avant.
+                    debut = max(0, taille - TAIL_BYTES) if taille > TAIL_BYTES else 0
+                    neuf_fichier = True
+                else:
+                    debut, neuf_fichier = etat[2], False
+                if taille == debut:
+                    continue
                 with open(f, "rb") as fh:
-                    if size > TAIL_BYTES:
-                        fh.seek(size - TAIL_BYTES)
-                        fh.readline()  # drop the partial first line
-                    blob = fh.read().decode("utf-8", errors="replace")
+                    fh.seek(debut)
+                    if neuf_fichier and debut > 0:
+                        fh.readline()          # jeter la ligne coupee en tete
+                        debut = fh.tell()
+                    brut = fh.read(taille - debut)
             except PermissionError:
                 log.warning("no read permission on %s (add service user to 'adm')", f)
                 continue
             except Exception as e:  # noqa: BLE001
                 log.warning("read %s failed: %s", f, e)
                 continue
-            for line in blob.splitlines():
+
+            # UNE LIGNE PARTIELLE N EST PAS CONSOMMEE : nginx ecrit pendant
+            # qu on lit, et une ligne tronquee serait rejetee ET jamais relue.
+            coupe = brut.rfind(b"\n")
+            if coupe < 0:
+                self._pos[cle] = (dev, ino, debut)
+                continue
+            self._pos[cle] = (dev, ino, debut + coupe + 1)
+
+            seau = self._minutes.setdefault(host, {})
+            for line in brut[:coupe + 1].decode("utf-8", errors="replace").splitlines():
                 m = TS_RE.search(line)
                 if not m:
                     continue
@@ -122,9 +167,26 @@ class LiveHostsAggregator:
                     ts = datetime.strptime(m.group(1), TS_FMT)
                 except ValueError:
                     continue
-                if ts >= cutoff:
-                    counts[host] += 1
-                    total += 1
+                mn = int(ts.timestamp()) // 60
+                if mn >= minute_limite:
+                    seau[mn] = seau.get(mn, 0) + 1
+
+        # Un journal disparu ne doit pas garder sa position en memoire.
+        for mort in set(self._pos) - vus:
+            del self._pos[mort]
+
+        # PURGE DE LA FENETRE : c est ce qui remplace la relecture du passe.
+        counts: collections.Counter = collections.Counter()
+        total = 0
+        for host, seau in list(self._minutes.items()):
+            for mn in [k for k in seau if k < minute_limite]:
+                del seau[mn]
+            n = sum(seau.values())
+            if n:
+                counts[host] = n
+                total += n
+            else:
+                del self._minutes[host]
         return counts, total
 
     def _persist(self, payload: dict) -> None:
