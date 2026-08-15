@@ -73,6 +73,13 @@ type page struct {
 	NonLus int
 	// Module Mastodon (#1008).
 	MastoInstance, MastoInvite string
+	// Passerelle Mastodon (#1044). MastoCompte porte l'identifiant tel que
+	// L'INSTANCE le nomme — jamais un pseudonyme devine a partir du nom local.
+	// Le jeton n'apparait pas ici : ce qui s'affiche et ce qui autorise ne
+	// voyagent pas dans la meme structure.
+	MastoCompte, MastoLieLe string
+	MastoLie                bool
+	MastoErr, MastoInfo     string
 	// Invites : qui a invite qui. Contrepartie de l'invitation sans quota.
 	Invites []store.Invitation
 	// VCSS : empreinte de la feuille de style, posee dans son adresse.
@@ -128,6 +135,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/mp/annuaire", s.mpAnnuaire)
 	s.mux.HandleFunc("/mp/carnet", s.mpCarnet)
 	s.mux.HandleFunc("/mastodon", s.mastodon)
+	// Le sous-arbre porte les gestes de la passerelle : lier, retour, delier.
+	s.mux.HandleFunc("/mastodon/", s.mastodonPasserelle)
 	s.mux.HandleFunc("/billets", s.simple("billets"))
 	s.mux.HandleFunc("/nouveau", s.nouveau)
 	s.mux.HandleFunc("/sysop", s.sysop)
@@ -416,6 +425,9 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.URL.Path, "/publier"):
 		s.publier(w, r, id)
 		return
+	case strings.HasSuffix(r.URL.Path, "/mastodon"):
+		s.republierMastodon(w, r, id)
+		return
 	case strings.HasSuffix(r.URL.Path, "/qr"):
 		s.qrFil(w, r, id)
 		return
@@ -476,6 +488,17 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	// les yeux en lisant.
 	p.Threads, _ = s.st.Threads(t.CategoryID, pub)
 	p.T, p.Titre = t, t.Title
+
+	// LE BOUTON « REPUBLIER » NE S'AFFICHE QUE S'IL PEUT ABOUTIR (#1044). Un
+	// bouton qui mene a « reliez d'abord votre compte » vaut moins que pas de
+	// bouton : il promet un geste que la page ne peut pas tenir. La lecture est
+	// une recherche par cle primaire — son cout ne se mesure pas ici.
+	if p.V.Connecte {
+		if c, err := s.st.CompteMastodonDe(p.V.ID); err == nil {
+			p.MastoLie = true
+			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
+		}
+	}
 	s.rend(w, r, "thread", p)
 }
 

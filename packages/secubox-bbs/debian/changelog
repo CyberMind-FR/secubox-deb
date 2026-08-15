@@ -1,3 +1,40 @@
+secubox-bbs (0.17.0-1~bookworm1) bookworm; urgency=medium
+
+  * PASSERELLE MASTODON : UN LIEN PERSONNEL (ref #1044). Chaque membre relie
+    SON compte par son propre aller-retour OAuth, avec SON jeton, revocable par
+    lui seul — des deux cotes, puisque Mastodon liste les applications
+    autorisees. Republier depuis un fil public pousse alors un statut sous SA
+    propre identite.
+  * CE QUI A ETE ECARTE, ET POURQUOI C ETAIT TENTANT. Un jeton d
+    administration unique, range a cote de `mastodon.invitation`, tenait en dix
+    lignes. Il aurait fait publier tout le monde sous une identite unique,
+    empeche quiconque de revoquer sa part, et donne le jour d une fuite la
+    parole publique au nom de la communaute entiere.
+  * LE LIEN NE SE DEDUIT JAMAIS DU NOM. Un membre local « alice » n est PAS
+    @alice sur l instance tant qu elle ne l a pas prouve. Sur une instance
+    ouverte, rapprocher les comptes par egalite des pseudonymes aurait suffi a
+    recevoir la parole d un membre en y prenant son nom.
+  * CONTROLE D ADRESSE SUR L INSTANCE, qui est TAPEE PAR LE MEMBRE : sans lui,
+    n importe qui obtiendrait du BBS des requetes vers le reseau interne. Mais
+    interdire toute adresse privee aurait casse le cas principal — l instance
+    de la maison est justement locale. L instance CONFIGUREE est donc jointe
+    telle quelle ; toute autre doit resoudre vers des adresses publiques. Les
+    redirections ne sont pas suivies : elles contourneraient ce controle.
+  * L ETAT OAUTH EST HACHE, A USAGE UNIQUE, ET COMPARE A LA SESSION. Sans
+    cette comparaison, un retour d autorisation aboutirait dans la session d un
+    tiers et lui attacherait le compte de l attaquant, chez qui il publierait
+    ensuite de bonne foi.
+  * LE SALON PRIVE COMMANDE, MEME SUR UN FIL PUBLIC : sans cette garde, un
+    salon ferme aurait laisse fuir ses sujets par la porte du fediverse.
+  * CE QUI SORT EST LE TITRE, LE LIEN ET LE MOT DU MEMBRE — jamais le texte des
+    autres, qui passerait pour le sien. La portee OAuth demandee est exactement
+    « lire mon compte, ecrire des statuts ».
+  * Le bouton n apparait que s il peut aboutir, et le retrait du lien dit
+    franchement qu il ne vaut qu ICI : l autorisation reste inscrite chez
+    Mastodon jusqu a ce que le membre l y revoque.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 16:08:45 +0200
+
 secubox-bbs (0.16.0-1~bookworm1) bookworm; urgency=medium
 
   * NOTE VOCALE ET NOTE VIDEO (ref #1044). Deux boutons rejoignent le trombone

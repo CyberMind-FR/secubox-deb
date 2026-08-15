@@ -1,6 +1,9 @@
 {{define "corps"}}
 <div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
 
+{{if .MastoErr}}<div class="card pad avert">{{.MastoErr}}</div>{{end}}
+{{if .MastoInfo}}<div class="card pad note">{{.MastoInfo}}</div>{{end}}
+
 {{if .MastoInstance}}
 <div class="card pad">
   <h3 class="s7b1eb4e">L'instance</h3>
@@ -31,14 +34,54 @@
   {{else}}
   <div class="card pad sb0455c2">{{.Vide}}</div>
   {{end}}
-{{else}}
-  <div class="card pad sb0455c2">
-    {{.Note}}
-    <div class="row sf9f81af"><a class="btn primary" href="/login">Se connecter</a></div>
-  </div>
+{{end}}
 {{end}}
 
-{{else}}
-<div class="card pad sb0455c2">{{.Vide}}</div>
+{{if .V.Connecte}}
+{{/* ── PASSERELLE PERSONNELLE ───────────────────────────────────────────────
+     Hors du bloc de l'instance à dessein : le fédivers n'a pas de centre, et
+     un membre peut relier un compte ailleurs même si la maison n'a déclaré
+     aucune instance. */}}
+<div class="card pad">
+  <h3 class="s7b1eb4e">Votre compte Mastodon</h3>
+
+  {{if .MastoLie}}
+    <div class="kv"><span>Relié</span><b class="mono">{{.MastoCompte}}</b></div>
+    <div class="kv"><span>Depuis le</span><b>{{.MastoLieLe}}</b></div>
+    <p class="d">Vous pouvez republier un fil public depuis sa page, sous votre
+      propre identité. Ce qui sort porte votre nom, pas celui du BBS.</p>
+    <form method="post" action="/mastodon/delier" class="row sf9f81af">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <button class="btn" type="submit">Retirer le lien</button>
+    </form>
+    <div class="note sf9f81af">
+      Retirer le lien l'efface <b>ici</b>. L'autorisation reste inscrite chez
+      Mastodon, dans les préférences de votre compte, jusqu'à ce que vous l'y
+      révoquiez — le BBS ne peut pas le faire à votre place.
+    </div>
+  {{else}}
+    <p class="d">Reliez votre compte pour republier un fil public sur votre
+      propre timeline. Le BBS ne publie jamais à votre place : il n'y a pas de
+      compte commun, chaque message part de votre compte et vous seul pouvez
+      révoquer l'accès.</p>
+    <form method="post" action="/mastodon/lier" class="rangee-form">
+      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+      <input class="champ mono" type="text" name="instance"
+             placeholder="{{if .MastoInstance}}{{.MastoInstance}}{{else}}exemple.social{{end}}"
+             autocomplete="off" spellcheck="false">
+      <button class="btn primary" type="submit">Relier mon compte</button>
+    </form>
+    <div class="note sf9f81af">
+      Laissez vide pour l'instance de la maison. Le BBS demande exactement deux
+      droits — <span class="mono">lire mon compte</span> et
+      <span class="mono">écrire des statuts</span> : il ne lit ni vos messages
+      privés, ni vos abonnements.
+    </div>
+  {{end}}
+</div>
 {{end}}
+
+{{if not .MastoInstance}}{{if not .V.Connecte}}
+<div class="card pad sb0455c2">{{.Vide}}</div>
+{{end}}{{end}}
 {{end}}
