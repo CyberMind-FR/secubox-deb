@@ -209,6 +209,7 @@ func (s *Server) mastodonRetour(w http.ResponseWriter, r *http.Request) {
 		s.messageMastodon(w, r, "Lien non retenu : "+err.Error())
 		return
 	}
+	oublieFilMastodon(v.ID)
 	http.Redirect(w, r, "/mastodon?lie=1", http.StatusSeeOther)
 }
 
@@ -227,6 +228,7 @@ func (s *Server) mastodonDelier(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return
 	}
+	oublieFilMastodon(v.ID)
 	if err := s.st.DelieCompteMastodon(v.ID); err != nil {
 		s.messageMastodon(w, r, "Le lien n'a pas pu être retiré.")
 		return

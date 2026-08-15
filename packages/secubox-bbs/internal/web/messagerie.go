@@ -193,6 +193,15 @@ func (s *Server) mastodon(w http.ResponseWriter, r *http.Request) {
 			p.MastoLie = true
 			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
 			p.MastoLieLe = time.Unix(c.LieLe, 0).Format("02/01/2006")
+
+			// LE FIL DISTANT. Son echec n'interrompt pas la page : une
+			// instance injoignable doit laisser le panneau s'afficher avec
+			// une ligne qui le dit.
+			fil, err := s.filMastodon(p.V.ID, c)
+			p.MastoFil = fil
+			if err != nil {
+				p.MastoFilErr = "Fil indisponible : " + err.Error()
+			}
 		}
 	}
 	// Les retours de la passerelle passent par l'adresse : l'aller-retour chez

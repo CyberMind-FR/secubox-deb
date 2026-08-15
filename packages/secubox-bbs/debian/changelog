@@ -1,3 +1,36 @@
+secubox-bbs (0.18.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE FIL DU COMPTE LIE S AFFICHE (ref #1044), et la page est reorganisee
+    autour de lui : le fil d abord, les reglages replies en bas. L instance,
+    l invitation et la liaison se font une fois puis ne servent plus ; ils
+    n ont pas a occuper la page qu on vient consulter.
+  * LU SANS JETON, ET C EST UN CHOIX. Mastodon sert les statuts publics d un
+    compte a qui les demande. Les lire authentifie aurait exige la portee
+    `read:statuses`, c est-a-dire le droit de lire AUSSI tout le fil d accueil
+    du membre — y compris ce qui lui est adresse en prive. Afficher son propre
+    mur ne vaut pas ce droit-la. Consequence assumee : les publications
+    reservees aux abonnes n apparaissent pas, et la page le dit.
+  * LE CONTENU DISTANT EST DEBALISE, PAS FILTRE. Il vient d une instance
+    tierce : le rendre tel quel lui donnerait le droit d executer du script
+    chez nos membres. Une liste blanche de balises « inoffensives » est un
+    exercice qu on rate — il reste toujours un attribut, un protocole
+    `javascript:`, une entite doublement encodee. Retirer TOUTES les balises
+    n a pas de cas limite. L ordre compte : on debalise AVANT de decoder les
+    entites, et le resultat n est jamais marque comme du balisage sur.
+  * AUCUNE IMAGE DISTANTE N EST CHARGEE AUTOMATIQUEMENT : elle signalerait
+    chaque lecture au serveur d en face, qui sur une publication federee n est
+    pas le notre. Les pieces jointes sont des liens.
+  * CACHE PAR MEMBRE, 90 s, ET IL RETIENT AUSSI L ECHEC : sans cela une
+    instance en panne serait re-interrogee a chaque affichage et chaque page
+    attendrait le delai complet — la panne d en face deviendrait la notre. Le
+    cache est vide au liement comme au deliement.
+  * Corrige au passage un defaut introduit en cours de route : l insertion du
+    bloc du fil avait referme la carte trop tot et enferme la branche « pas
+    encore relie » dans un conteneur masque — le formulaire de liaison
+    devenait invisible a ceux-la memes qui en avaient besoin. Un test le fige.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:16:06 +0200
+
 secubox-bbs (0.17.1-1~bookworm1) bookworm; urgency=medium
 
   * LA PASSERELLE NE POUVAIT PAS SORTIR (ref #1044). L unite portait

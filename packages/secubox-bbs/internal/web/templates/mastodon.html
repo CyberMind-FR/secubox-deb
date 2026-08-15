@@ -4,84 +4,147 @@
 {{if .MastoErr}}<div class="card pad avert">{{.MastoErr}}</div>{{end}}
 {{if .MastoInfo}}<div class="card pad note">{{.MastoInfo}}</div>{{end}}
 
-{{if .MastoInstance}}
+{{if .V.Connecte}}
+
+{{/* ── LE FIL D'ABORD ────────────────────────────────────────────────────────
+     C'est ce qu'on vient lire. Les réglages — instance, invitation, liaison —
+     se font une fois puis ne servent plus : ils sont repliés en bas de page.
+
+     `.Texte` EST DU TEXTE BRUT, pas du balisage : le contenu vient d'une
+     instance tierce et a été débalisé côté serveur. Le gabarit l'échappe comme
+     n'importe quelle chaîne, et rien ici ne doit contourner cet échappement —
+     ce serait rendre à cette instance le droit d'exécuter du script chez nos
+     membres. */}}
+{{if .MastoLie}}
 <div class="card pad">
-  <h3 class="s7b1eb4e">L'instance</h3>
-  <div class="kv"><span>Adresse</span>
+  <h3 class="s7b1eb4e">Votre fil · <span class="mono">{{.MastoCompte}}</span></h3>
+
+  {{if .MastoFilErr}}
+    <div class="note sf9f81af">{{.MastoFilErr}}</div>
+  {{else if .MastoFil}}
+    {{range .MastoFil}}
+    <article class="post sf9f81af">
+      <div class="bd">
+        <div class="hd">{{.Quand}}
+          {{if .Sensible}}<span class="pill p-local">sensible</span>{{end}}
+        </div>
+        {{if .Avert}}<p class="d"><b>{{.Avert}}</b></p>{{end}}
+        <p class="pre-ligne">{{.Texte}}</p>
+        {{if .Medias}}
+        <div class="row">
+          {{range .Medias}}
+            {{/* AUCUNE IMAGE DISTANTE N'EST CHARGÉE AUTOMATIQUEMENT : elle
+                 signalerait chaque lecture au serveur d'en face, et sur une
+                 publication fédérée ce serveur n'est pas le nôtre. On rend un
+                 lien, que l'on suit si l'on veut. */}}
+            <a class="btn sm" href="{{.URL}}" rel="noopener noreferrer"
+               title="{{if .Alt}}{{.Alt}}{{else}}pièce jointe{{end}}">
+              {{if eq .Type "image"}}🖼{{else if eq .Type "video"}}🎥{{else if eq .Type "audio"}}🎙{{else}}📎{{end}}
+              {{.Type}}</a>
+          {{end}}
+        </div>
+        {{end}}
+        <div class="row sf9f81af">
+          <span class="d">↩ {{.Reponses}} · ⇄ {{.Partages}} · ★ {{.Favoris}}</span>
+          <a class="btn sm" href="{{.URL}}" rel="noopener noreferrer">Voir sur l'instance</a>
+        </div>
+      </div>
+    </article>
+    {{end}}
+    <div class="note sf9f81af">
+      Vos publications <b>publiques</b> uniquement. Celles réservées à vos
+      abonnés n'apparaissent pas : les lire aurait exigé le droit de lire aussi
+      tout votre fil d'accueil, ce que le BBS ne demande pas.
+    </div>
+  {{else}}
+    <div class="note sf9f81af">Aucune publication publique sur ce compte.</div>
+  {{end}}
+</div>
+{{else}}
+{{/* Pas encore relié : c'est LA chose à faire sur cette page, elle reste donc
+     en évidence — la replier reviendrait à cacher la seule action utile. */}}
+<div class="card pad">
+  <h3 class="s7b1eb4e">Relier votre compte Mastodon</h3>
+  <p class="d">Vous verrez ici votre fil, et vous pourrez republier un fil
+    public sous votre propre identité. Le BBS ne publie jamais à votre place :
+    il n'y a pas de compte commun, chaque message part de votre compte, et vous
+    seul pouvez révoquer l'accès.</p>
+  <form method="post" action="/mastodon/lier" class="rangee-form">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <input class="champ mono" type="text" name="instance"
+           placeholder="{{if .MastoInstance}}{{.MastoInstance}}{{else}}exemple.social{{end}}"
+           autocomplete="off" spellcheck="false">
+    <button class="btn primary" type="submit">Relier mon compte</button>
+  </form>
+  <div class="note sf9f81af">
+    Laissez vide pour l'instance de la maison. Le BBS demande exactement deux
+    droits — <span class="mono">lire mon compte</span> et
+    <span class="mono">écrire des statuts</span> : il ne lit ni vos messages
+    privés, ni vos abonnements.
+  </div>
+</div>
+{{end}}
+
+{{/* ── RÉGLAGES, REPLIÉS ─────────────────────────────────────────────────────
+     Repliés et non supprimés : ces gestes sont rares mais on doit les
+     retrouver. Un <details> les garde à portée sans qu'ils occupent la page
+     qu'on vient consulter. */}}
+<details class="card pad reglages-masto">
+  <summary>⚙ Réglages et instance</summary>
+
+  {{if .MastoInstance}}
+  <div class="kv sf9f81af"><span>Instance de la maison</span>
     <b class="mono"><a href="{{.MastoInstance}}" rel="noopener noreferrer">{{.MastoInstance}}</a></b></div>
   <div class="note sf9f81af">
     Le BBS et l'instance sont deux portes sur la même communauté : ici on
     travaille un sujet à plusieurs, là on parle au reste du fédivers.
   </div>
-</div>
-
-{{if .V.Connecte}}
-  {{if .MastoInvite}}
-  <div class="card pad s42a6ced">
-    <h3 class="s7b1eb4e">Votre invitation</h3>
-    <p class="d">Ce lien ouvre un compte sur l'instance. Il est partagé entre
-      membres — inutile d'en demander un autre.</p>
-    <div class="partage">
-      <a class="btn primary" href="{{.MastoInvite}}" rel="noopener noreferrer">Rejoindre l'instance</a>
-    </div>
-    <div class="lien-partage mono">{{.MastoInvite}}</div>
-    <div class="note sf9f81af">
-      Une invitation Mastodon sert plusieurs fois et ne se révoque pas depuis le
-      BBS. Elle n'est donc montrée qu'aux membres connectés : affichée
-      publiquement, elle ouvrirait l'instance à qui passe.
-    </div>
-  </div>
   {{else}}
-  <div class="card pad sb0455c2">{{.Vide}}</div>
+  <div class="note sf9f81af">
+    Aucune instance déclarée pour la maison. Le sysop la renseigne depuis la
+    console — vous pouvez malgré tout relier un compte ailleurs.
+  </div>
   {{end}}
-{{end}}
-{{end}}
 
-{{if .V.Connecte}}
-{{/* ── PASSERELLE PERSONNELLE ───────────────────────────────────────────────
-     Hors du bloc de l'instance à dessein : le fédivers n'a pas de centre, et
-     un membre peut relier un compte ailleurs même si la maison n'a déclaré
-     aucune instance. */}}
-<div class="card pad">
-  <h3 class="s7b1eb4e">Votre compte Mastodon</h3>
+  {{if .MastoInvite}}
+  <h4 class="sab2784b">Invitation</h4>
+  <p class="d">Ce lien ouvre un compte sur l'instance. Il est partagé entre
+    membres — inutile d'en demander un autre.</p>
+  <div class="partage">
+    <a class="btn" href="{{.MastoInvite}}" rel="noopener noreferrer">Rejoindre l'instance</a>
+  </div>
+  <div class="lien-partage mono">{{.MastoInvite}}</div>
+  <div class="note sf9f81af">
+    Une invitation Mastodon sert plusieurs fois et ne se révoque pas depuis le
+    BBS : affichée publiquement, elle ouvrirait l'instance à qui passe. Elle
+    n'est donc montrée qu'aux membres connectés.
+  </div>
+  {{end}}
 
   {{if .MastoLie}}
-    <div class="kv"><span>Relié</span><b class="mono">{{.MastoCompte}}</b></div>
-    <div class="kv"><span>Depuis le</span><b>{{.MastoLieLe}}</b></div>
-    <p class="d">Vous pouvez republier un fil public depuis sa page, sous votre
-      propre identité. Ce qui sort porte votre nom, pas celui du BBS.</p>
-    <form method="post" action="/mastodon/delier" class="row sf9f81af">
-      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
-      <button class="btn" type="submit">Retirer le lien</button>
-    </form>
-    <div class="note sf9f81af">
-      Retirer le lien l'efface <b>ici</b>. L'autorisation reste inscrite chez
-      Mastodon, dans les préférences de votre compte, jusqu'à ce que vous l'y
-      révoquiez — le BBS ne peut pas le faire à votre place.
-    </div>
-  {{else}}
-    <p class="d">Reliez votre compte pour republier un fil public sur votre
-      propre timeline. Le BBS ne publie jamais à votre place : il n'y a pas de
-      compte commun, chaque message part de votre compte et vous seul pouvez
-      révoquer l'accès.</p>
-    <form method="post" action="/mastodon/lier" class="rangee-form">
-      <input type="hidden" name="csrf" value="{{.V.CSRF}}">
-      <input class="champ mono" type="text" name="instance"
-             placeholder="{{if .MastoInstance}}{{.MastoInstance}}{{else}}exemple.social{{end}}"
-             autocomplete="off" spellcheck="false">
-      <button class="btn primary" type="submit">Relier mon compte</button>
-    </form>
-    <div class="note sf9f81af">
-      Laissez vide pour l'instance de la maison. Le BBS demande exactement deux
-      droits — <span class="mono">lire mon compte</span> et
-      <span class="mono">écrire des statuts</span> : il ne lit ni vos messages
-      privés, ni vos abonnements.
-    </div>
+  <h4 class="sab2784b">Le lien</h4>
+  <div class="kv"><span>Compte</span><b class="mono">{{.MastoCompte}}</b></div>
+  <div class="kv"><span>Relié le</span><b>{{.MastoLieLe}}</b></div>
+  <form method="post" action="/mastodon/delier" class="row sf9f81af">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <button class="btn" type="submit">Retirer le lien</button>
+  </form>
+  <div class="note sf9f81af">
+    Retirer le lien l'efface <b>ici</b>. L'autorisation reste inscrite chez
+    Mastodon, dans les préférences de votre compte, jusqu'à ce que vous l'y
+    révoquiez — le BBS ne peut pas le faire à votre place.
+  </div>
   {{end}}
+</details>
+
+{{else}}
+<div class="card pad sb0455c2">
+  {{if .MastoInstance}}
+    Le fil et l'invitation sont réservés aux membres connectés.
+  {{else}}
+    {{.Vide}}
+  {{end}}
+  <div class="row sf9f81af"><a class="btn primary" href="/login">Se connecter</a></div>
 </div>
 {{end}}
-
-{{if not .MastoInstance}}{{if not .V.Connecte}}
-<div class="card pad sb0455c2">{{.Vide}}</div>
-{{end}}{{end}}
 {{end}}

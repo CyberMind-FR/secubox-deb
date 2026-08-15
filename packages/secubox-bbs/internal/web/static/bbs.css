@@ -677,3 +677,17 @@ video.jointe{max-height:60vh; background:#000}
 .board.sub1{padding-left:30px}
 .board.sub2{padding-left:46px}
 .board.sub3{padding-left:62px}
+
+/* Le texte debalise d'une publication garde ses retours a la ligne :
+   sans cela, un fil de trois paragraphes s'affiche en un seul bloc. */
+.pre-ligne{white-space:pre-line}
+
+/* REGLAGES REPLIES : rares mais retrouvables. Le fil est ce qu'on vient lire ;
+   l'instance, l'invitation et la liaison se font une fois puis ne servent
+   plus. */
+.reglages-masto > summary{cursor:pointer;font-weight:650;list-style:none}
+.reglages-masto > summary::-webkit-details-marker{display:none}
+.reglages-masto > summary::before{content:"▸ ";color:var(--dim)}
+.reglages-masto[open] > summary::before{content:"▾ "}
+.reglages-masto h4{margin:14px 0 4px;font-size:13px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.06em}
