@@ -1,0 +1,8 @@
+# ANCRE PAR `/`, JAMAIS NU. Un motif nu `secubox-radiod` exclurait aussi
+# `cmd/secubox-radiod/` — le repertoire des sources — et `git status` resterait
+# propre pendant que le code disparait. Le piege s'est deja referme sur ce
+# depot.
+/.gocache/
+/.gopath/
+/debian/secubox-radiod
+/secubox-radiod

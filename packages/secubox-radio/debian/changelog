@@ -1,0 +1,12 @@
+secubox-radio (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiere version : radio et television collaboratives synchronisees
+    (ref #1047).
+  * Tirage pondere par la nouveaute, les coeurs et un temps de repos.
+  * Le membre propose, la communaute soutient, le sysop valide.
+  * Chat de l'antenne, transporte par la meme requete que la synchronisation.
+  * Clips rapatries une fois par la passerelle yt-dlp, servis en plages depuis
+    la board — aucun auditeur ne contacte de service tiers.
+  * Parc borne sur le SSD, purge de la moins recemment jouee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 23:30:00 +0200
