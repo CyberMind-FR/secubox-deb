@@ -1,0 +1,67 @@
+/* Palette bbs.css : la radio est une surface de MEMBRE, elle parle le meme
+   langage que le BBS. Le panneau d'administration, lui, suit la charte cyan. */
+:root{
+  --paper:#0a151d; --panel:#12242e; --line:#223d4b; --soft:#182f3b;
+  --text:#e6eef2; --dim:#8aa3b0;
+  --violet:#a48cff; --violet-soft:#241c44; --mint:#3ddba7; --mint-soft:#0e3329;
+  --pink:#ff7ac0; --amber:#f5b445; --sky:#5fb0f2; --coral:#ff7a63;
+  --radius:14px; --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --paper:#eef4f7; --panel:#fff; --line:#d3dee4; --soft:#e7eff4;
+  --text:#12242e; --dim:#5b727f; --violet:#6d4aff; --violet-soft:#e8e2ff;
+  --mint:#0fa47a; --mint-soft:#d6f5ea; --pink:#d8318a; --amber:#d98a00;
+  --sky:#1f7fd4; --coral:#f2543d;
+  --shadow:0 1px 2px rgba(13,27,36,.06), 0 8px 24px -12px rgba(13,27,36,.28);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--text);
+  font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;
+  font-size:15px;line-height:1.55}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.wrap{max-width:64rem;margin:0 auto;padding:1.4rem 1rem 4rem}
+h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.7rem;margin:0;letter-spacing:-.02em}
+.tete{display:flex;align-items:center;gap:.9rem;flex-wrap:wrap;margin-bottom:1.1rem}
+.tete .sp{flex:1}
+.direct{display:inline-flex;align-items:center;gap:7px;background:var(--mint-soft);
+  color:var(--mint);border:1px solid var(--mint);border-radius:999px;padding:4px 11px;
+  font-size:12px;font-weight:650}
+.pt{width:8px;height:8px;border-radius:50%;background:var(--mint);animation:bat 2s ease-in-out infinite}
+@keyframes bat{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.pt{animation:none}}
+.carte{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;margin-bottom:1rem}
+.carte .pad{padding:1rem 1.1rem}
+.carte h3{margin:0 0 .7rem;font-size:.95rem}
+/* L'ECRAN EST LE CONTENU : la radio garde les clips, on les montre. */
+#ecran{width:100%;background:#000;aspect-ratio:16/9;display:block}
+#ecran.sonseul{aspect-ratio:auto;height:4rem}
+.sous{display:flex;align-items:center;gap:.8rem;padding:.7rem 1.1rem;flex-wrap:wrap}
+.sous .t{font-weight:650;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sous .d{color:var(--dim);font-size:12px}
+.btn{border:1px solid var(--line);background:var(--soft);color:var(--text);
+  border-radius:9px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.btn.p{background:var(--violet);border-color:var(--violet);color:#fff}
+.btn.aime.on{color:var(--pink);border-color:var(--pink)}
+.derive{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--dim)}
+/* mosaique — le composant partage propose en #1049 */
+.mosaique{display:grid;gap:.7rem;grid-template-columns:repeat(2,1fr);padding:0 1.1rem 1.1rem}
+@media (min-width:34rem){.mosaique{grid-template-columns:repeat(auto-fill,minmax(10rem,1fr))}}
+.tuile{background:var(--soft);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.tuile .vg{aspect-ratio:1;display:grid;place-items:center;font-size:1.6rem;color:var(--dim)}
+.tuile .bas{padding:.4rem .55rem .55rem}
+.tuile .n{font-size:12px;font-weight:600;line-height:1.3;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tuile .m{font-size:10.5px;color:var(--dim);margin-top:2px}
+.tuile.joue{border-color:var(--violet);box-shadow:0 0 0 1px var(--violet)}
+/* chat */
+#chat{max-height:16rem;overflow-y:auto;padding:0 1.1rem}
+.ph{padding:.35rem 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.ph:last-child{border-bottom:0}
+.ph b{color:var(--violet)}
+.ph .q{color:var(--dim);font-size:11px;margin-left:.4rem}
+.rangee{display:flex;gap:.5rem;padding:.7rem 1.1rem}
+.rangee input{flex:1;background:var(--paper);border:1px solid var(--line);color:var(--text);
+  border-radius:9px;padding:7px 11px;font:inherit;font-size:13.5px}
+.note{color:var(--dim);font-size:12px;padding:0 1.1rem 1rem}
+.avert{background:var(--soft);border-left:3px solid var(--amber);padding:.7rem 1.1rem;font-size:13px}

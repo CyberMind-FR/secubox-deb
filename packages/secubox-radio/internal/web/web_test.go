@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -330,5 +331,77 @@ func TestLaListeDesAimeursNestPasServieAuxInconnus(t *testing.T) {
 	}
 	if bytes.Contains(w.Body.Bytes(), []byte("alice")) {
 		t.Error("la liste des aimeurs fuit vers un inconnu")
+	}
+}
+
+// ── LA PAGE D'ECOUTE ────────────────────────────────────────────────────────
+
+// LA PAGE EST EMBARQUEE : un fichier manquant sur le disque donnerait une page
+// blanche sans rien dire.
+func TestLaPageDEcouteEstServieAuxMembres(t *testing.T) {
+	s, _ := banc(t)
+	w := appel(s, "GET", "/", membre, nil, false)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d", w.Code)
+	}
+	corps := w.Body.String()
+	for _, attendu := range []string{"<video id=\"ecran\"", "radio.js", "radio.css", "id=\"chat\""} {
+		if !strings.Contains(corps, attendu) {
+			t.Errorf("la page ne contient pas %q", attendu)
+		}
+	}
+}
+
+// RESERVEE AUX MEMBRES : la radio est celle d'une communaute, pas une station
+// ouverte.
+func TestLaPageDEcouteNestPasPublique(t *testing.T) {
+	s, _ := banc(t)
+	if w := appel(s, "GET", "/", dehors, nil, false); w.Code != http.StatusUnauthorized {
+		t.Errorf("un inconnu obtient la page : %d", w.Code)
+	}
+}
+
+// LA POLITIQUE EST STRICTE, ET ELLE PEUT L'ETRE : tout vient de nous, clips
+// compris. C'est tout l'interet de les rapatrier plutot que d'embarquer un
+// lecteur tiers — celui-ci aurait exige d'ouvrir `script-src` a Google.
+func TestLaPolitiqueDeLaPageNOuvreRienVersLExterieur(t *testing.T) {
+	s, _ := banc(t)
+	csp := appel(s, "GET", "/", membre, nil, false).Header().Get("Content-Security-Policy")
+	if csp == "" {
+		t.Fatal("aucune politique de securite de contenu")
+	}
+	for _, d := range []string{"default-src 'self'", "media-src 'self'", "script-src 'self'"} {
+		if !strings.Contains(csp, d) {
+			t.Errorf("directive manquante : %s\n%s", d, csp)
+		}
+	}
+	for _, interdit := range []string{"unsafe-inline", "unsafe-eval", "youtube", "*"} {
+		if strings.Contains(csp, interdit) {
+			t.Errorf("la politique contient %q :\n%s", interdit, csp)
+		}
+	}
+}
+
+// Le script de synchronisation doit corriger la latence : sans cela chaque
+// auditeur accumule son propre retard et la synchronisation derive.
+func TestLeScriptCorrigeLaLatenceEtNeRendPasLeCorpsEnBalisage(t *testing.T) {
+	b, err := statique.ReadFile("static/radio.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(b)
+	if !strings.Contains(js, "dernierAppel") {
+		t.Error("la latence n'est pas mesuree : la synchronisation derivera")
+	}
+	if !strings.Contains(js, "X-Sbx-Radio") {
+		t.Error("l'en-tete d'intention n'est pas envoye : toute ecriture sera refusee")
+	}
+	// LE CORPS D'UNE PHRASE NE DEVIENT JAMAIS DU BALISAGE. C'est ici la seule
+	// barriere cote client, et elle suffit — a condition de ne pas la contourner.
+	if strings.Contains(js, "innerHTML = ' ' +") || strings.Contains(js, ".innerHTML = p.") {
+		t.Error("le corps d'une phrase est injecte en balisage")
+	}
+	if !strings.Contains(js, "textContent") {
+		t.Error("le chat n'utilise pas textContent")
 	}
 }

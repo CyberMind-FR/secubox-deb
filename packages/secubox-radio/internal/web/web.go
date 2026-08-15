@@ -10,6 +10,7 @@
 package web
 
 import (
+	"embed"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -69,6 +70,38 @@ func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg 
 
 func (s *Serveur) Handler() http.Handler { return s.mux }
 
+// accueil sert la page d'ecoute.
+//
+// RESERVEE AUX MEMBRES, comme le chat et les clips : la radio est celle d'une
+// communaute, pas une station ouverte.
+func (s *Serveur) accueil(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	if !s.qui(r).Connecte {
+		erreur(w, http.StatusUnauthorized, "connectez-vous")
+		return
+	}
+	b, err := statique.ReadFile("static/index.html")
+	if err != nil {
+		erreur(w, http.StatusInternalServerError, "page indisponible")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// LA POLITIQUE EST STRICTE : tout vient de nous. Les clips aussi — c'est
+	// tout l'interet de les rapatrier plutot que d'embarquer un lecteur tiers.
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'self'; media-src 'self'; img-src 'self' data:; "+
+			"script-src 'self'; style-src 'self'; connect-src 'self'; "+
+			"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+	w.Write(b)
+}
+
+//go:embed static
+var statique embed.FS
+
 const prefixe = "/api/v1/radio"
 
 func (s *Serveur) routes() {
@@ -79,6 +112,10 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc(prefixe+"/pistes/", s.gestePiste)
 	s.mux.HandleFunc(prefixe+"/chat", s.chat)
 	s.mux.HandleFunc(prefixe+"/suivante", s.suivante)
+	// LA PAGE EST EMBARQUEE DANS LE BINAIRE : un fichier manquant sur le disque
+	// donnerait une page blanche sans rien dire. Ici elle ne peut pas manquer.
+	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
+	s.mux.HandleFunc("/", s.accueil)
 	s.mux.HandleFunc("/media/", s.servirMedia)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
