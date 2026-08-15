@@ -1,0 +1,541 @@
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     SecuBox-Deb :: secubox-torrent :: www/torrent/index.html — CyberMind https://cybermind.fr
+     Player webui — self-contained module vhost variant of the SecuBox WebUI
+     Panel Guidelines (cyan hybrid-dark terminal): no /shared/, no external
+     URLs (offline-clean), palette + component classes inlined verbatim. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- PAGE DE L'APPLICATION, PAS LE PANNEAU D'ADMINISTRATION (#1042).
+     Servie par le conteneur sur torrent.<domaine> : c'est le LECTEUR, ouvert
+     aux clients du LAN. Le panneau d'exploitation, lui, vit a
+     admin.<domaine>/torrent/ et porte le chassis partage (barre laterale,
+     bandeau de sante).
+
+     LES DEUX NE DOIVENT PAS ETRE LE MEME FICHIER. `install-lxc.sh` copiait
+     ici `/usr/share/secubox/www/torrent`, c'est-a-dire le panneau : l'adresse
+     publique servait alors une copie exacte de l'administration — meme
+     empreinte MD5 — au lieu du lecteur. Chaque reinstallation du paquet
+     refaisait la substitution. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Torrent</title>
+<style>
+  :root {
+    --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
+    --bg-row:  rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2);
+    --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
+    --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    background: var(--bg-dark); color: var(--text); margin: 0; min-height: 100vh;
+    background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
+  }
+  a { color: var(--cyan); }
+  .main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1.2rem 4rem; }
+  .header { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border); }
+  .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+  .header .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; margin-top: .25rem; }
+  .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+    text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
+    border-radius: 6px; padding: .5rem .9rem; cursor: pointer; transition: border-color .15s, box-shadow .15s;
+    display: inline-flex; align-items: center; gap: .35rem; }
+  .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.4); }
+  .btn.primary { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.12); }
+  .btn.danger { border-color: var(--red); color: var(--red); background: rgba(255,68,102,.12); }
+  .btn.good { border-color: var(--green); color: var(--green); background: rgba(0,221,68,.12); }
+  .btn.sm { padding: .3rem .55rem; font-size: .68rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: .75rem; margin-bottom: 1.2rem; }
+  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: .75rem; text-align: center; backdrop-filter: blur(10px); }
+  .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor;
+    font-variant-numeric: tabular-nums; color: var(--text); }
+  .stat-card .label { font-size: .6rem; color: var(--p31-dim); letter-spacing: .1em; margin-top: .2rem; text-transform: uppercase; }
+  .stat-card.cyan .value { color: var(--cyan); }
+  .stat-card.green .value { color: var(--green); }
+  .stat-card.orange .value { color: var(--orange); }
+  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .62rem;
+    text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--border); }
+  .badge.bt-only { border-color: var(--orange); color: var(--orange); }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.1rem 1.2rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+  .card h3 { margin: 0 0 .8rem; font-size: .95rem; color: var(--cyan); letter-spacing: .03em; }
+  .add-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .add-row input[type=text] { flex: 1 1 20rem; }
+  input[type=text] { font-family: inherit; background: var(--bg-row); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: .6rem .7rem; font-size: .85rem; }
+  input[type=text]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,.25); }
+  .item { background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 5px;
+    padding: .6rem .8rem; margin-bottom: .5rem; }
+  .item.kept { border-left-color: var(--green); }
+  .item.ephemeral { border-left-color: var(--orange); }
+  .item-top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .item .title { color: var(--text); font-size: .88rem; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 26rem; cursor: pointer; }
+  .item .title:hover { color: var(--cyan); }
+  .item .meta { color: var(--p31-dim); font-size: .68rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
+  .item .row-actions { display: flex; gap: .35rem; flex: none; }
+  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
+  .progress-bar .fill { height: 100%; background: var(--cyan); transition: width .3s; }
+  .item.kept .progress-bar .fill { background: var(--green); }
+  .files { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--border); display: none; }
+  .files.open { display: block; }
+  .file-row { display: flex; justify-content: space-between; align-items: center; gap: .5rem;
+    padding: .3rem .4rem; border-radius: 4px; font-size: .78rem; }
+  .file-row:hover { background: rgba(0,212,255,.08); }
+  .file-row .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .file-row .fname.playable:hover { color: var(--cyan); }
+  .file-row .fname:not(.playable) { color: var(--p31-dim); cursor: default; }
+  .muted { color: var(--p31-dim); font-size: .8rem; }
+  #player video { width: 100%; max-height: 60vh; background: #000; border-radius: 6px; }
+  #playerCard { display: none; }
+  .toast { position: fixed; bottom: 1rem; right: 1rem; max-width: 22rem; background: var(--cyan);
+    color: #07121a; padding: .65rem 1rem; border-radius: 6px; font-size: .78rem; opacity: 0;
+    pointer-events: none; transition: opacity .2s; z-index: 50; }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast.error { background: var(--red); color: #fff; }
+  .toast .x { float: right; margin-left: .6rem; cursor: pointer; font-weight: bold; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+  @media (max-width: 768px) {
+    .main { padding: 1rem .8rem; }
+    .item .title { max-width: 12rem; }
+  }
+</style>
+</head>
+<body>
+<main class="main">
+  <header class="header">
+    <div>
+      <h1>📥 Torrent</h1>
+      <div class="sub" id="sub">BitTorrent + WebTorrent player · chargement…</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" id="btnRefresh">↻ Refresh</button>
+    </div>
+  </header>
+
+  <div class="grid" id="statGrid">
+    <div class="stat-card cyan"><div class="value" id="statActive">–</div><div class="label">📦 Actifs</div></div>
+    <div class="stat-card green"><div class="value" id="statDisk">–</div><div class="label">💾 Disque libre</div></div>
+    <div class="stat-card orange" style="display:flex;align-items:center;justify-content:center">
+      <span class="badge bt-only" id="webrtcBadge" style="display:none">🧲 BitTorrent-only</span>
+      <span class="muted" id="webrtcOk" style="display:none">🕸️ WebRTC actif</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>➕ Ajouter un torrent</h3>
+    <div class="add-row">
+      <select id="addMode" title="Source">
+        <option value="magnet">🧲 Magnet</option>
+        <option value="url">🔗 URL .torrent</option>
+        <option value="file">📄 Fichier .torrent</option>
+      </select>
+      <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:…">
+      <input type="text" id="urlInput" placeholder="https://…/fichier.torrent" style="display:none">
+      <input type="file" id="fileInput" accept=".torrent,application/x-bittorrent" style="display:none">
+      <button class="btn primary" id="btnAdd">➕ Add</button>
+    </div>
+  </div>
+
+  <div class="card" id="playerCard">
+    <h3>▶ Lecture</h3>
+    <div id="player"></div>
+  </div>
+
+  <div class="card">
+    <h3>📚 Torrents</h3>
+    <div id="list"><p class="muted">Chargement…</p></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var API = '/api/v1/torrent';
+  var PLAYABLE = ['mp4', 'webm', 'm4v', 'mp3', 'm4a', 'ogg'];
+  var openFiles = Object.create(null); // infohash -> bool (files panel expanded)
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
+      return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c];
+    });
+  }
+
+  // Mirrors the server's sanitizeFilename (filenames.js): the real filename
+  // is torrent metadata (untrusted), so strip path separators/control chars
+  // before it ever becomes a suggested download name. The server's
+  // Content-Disposition header is authoritative; this is a belt-and-suspenders
+  // fallback for browsers that resolve the download attribute before the
+  // response headers even arrive.
+  function sanitizeFname(name) {
+    var n = String(name == null ? '' : name).replace(/[/\\]/g, '_').replace(/[\x00-\x1f\x7f]/g, '').trim();
+    return n || 'file';
+  }
+
+  // Relative time for a scheduled purge (unix ts).
+  function fmtWhen(ts) {
+    var d = ts * 1000 - Date.now();
+    if (d <= 0) return 'imminente';
+    var h = Math.round(d / 3600000);
+    if (h < 24) return 'dans ' + h + ' h';
+    return 'dans ' + Math.round(h / 24) + ' j';
+  }
+
+  function extOf(name) {
+    var m = /\.([A-Za-z0-9]+)$/.exec(name || '');
+    return m ? m[1].toLowerCase() : '';
+  }
+
+  function fmtBytes(n) {
+    if (n == null || !isFinite(n)) return '∞';
+    if (n === 0) return '0 B';
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+    return (n / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = 'toast'; }, 3000);
+  }
+  function errorToast(msg) {
+    var t = document.getElementById('toast');
+    clearTimeout(toastTimer);
+    t.innerHTML = '';
+    t.appendChild(document.createTextNode('⚠ ' + msg));
+    var x = document.createElement('span');
+    x.className = 'x';
+    x.textContent = '✕';
+    x.addEventListener('click', function () { t.className = 'toast'; });
+    t.appendChild(x);
+    t.className = 'toast show error';
+  }
+
+  function authHeaders() {
+    var h = {};
+    var tok = localStorage.getItem('sbx_token');
+    if (tok) h['Authorization'] = 'Bearer ' + tok;
+    return h;
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    // Only advertise a JSON body when we actually send one — a POST with
+    // Content-Type: application/json but no body makes Fastify 400
+    // (FST_ERR_CTP_EMPTY_JSON_BODY), which broke keep/remove/conserve.
+    var headers = Object.assign({}, opts.headers, authHeaders());
+    // Default to JSON only when the caller hasn't set a Content-Type — the
+    // .torrent file upload sends application/x-bittorrent and must NOT be
+    // clobbered to json (that made the binary hit the json parser → 400).
+    if (opts.body != null && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
+      if (res.status === 401) {
+        errorToast('🔒 Login required');
+        throw new Error('unauthorized');
+      }
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
+        return body;
+      });
+    });
+  }
+
+  function refreshStatus() {
+    return api(API + '/status').then(function (s) {
+      document.getElementById('statActive').textContent = s.active != null ? s.active : '–';
+      document.getElementById('statDisk').textContent = fmtBytes(s.disk_free);
+      var badgeEl = document.getElementById('webrtcBadge');
+      var okEl = document.getElementById('webrtcOk');
+      var btOnly = s.webrtc === false;
+      badgeEl.style.display = btOnly ? 'inline-block' : 'none';
+      okEl.style.display = btOnly ? 'none' : 'inline';
+      document.getElementById('sub').textContent = btOnly
+        ? 'BitTorrent + WebTorrent player · mode BitTorrent-only (WebRTC désactivé)'
+        : 'BitTorrent + WebTorrent player · WebRTC actif';
+    }).catch(function (e) { console.error(e); });
+  }
+
+  function statsLine(stats) {
+    if (!stats) return '<span class="muted">pas de session active</span>';
+    var pct = Math.round((stats.progress || 0) * 100);
+    var wires = (stats.wires || []).length;
+    return pct + '% · ⬇ ' + fmtBytes(stats.downloadSpeed) + '/s · ⬆ ' + fmtBytes(stats.uploadSpeed) +
+      '/s · 🤝 ' + (stats.numPeers || 0) + ' peers · 🔌 ' + wires + ' wires';
+  }
+
+  function renderList(rows) {
+    var el = document.getElementById('list');
+    if (!rows.length) {
+      el.innerHTML = '<p class="muted">Aucun torrent — colle un lien magnet ci-dessus.</p>';
+      return;
+    }
+    el.innerHTML = rows.map(function (r) {
+      // stats come from the engine, which under the sas model is EMPTY for
+      // conserved-but-not-streaming torrents (lazy). So a null stats = loaded
+      // on demand, not "0% downloaded". Completeness is enforced server-side by
+      // /conserve (it loads the torrent and checks) — the button stays enabled.
+      var pct = r.stats ? Math.round((r.stats.progress || 0) * 100) : null;
+      var eph = r.ephemeral_until;      // unix ts, or null → conserved
+      var pt = r.peertube_status;       // 'done' | 'queued' | 'error' | null
+      var filesOpen = !!openFiles[r.infohash];
+      // ZIP download only makes sense once the download actually finished —
+      // r.complete is the library's own flag (survives the torrent being
+      // lazily unloaded from the engine, unlike r.stats/pct which go null
+      // for a conserved-but-idle torrent).
+      var zipHtml = r.complete
+        ? '<a class="btn sm" data-action="zip" href="' + API + '/zip/' + encodeURIComponent(r.infohash) +
+            '" download title="Télécharger tout le dossier en ZIP">🗜️ ZIP</a>'
+        : '';
+
+      // PeerTube conserve badge / action
+      var ptHtml;
+      if (pt === 'done' && r.peertube_url) {
+        ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
+      } else if (pt === 'queued') {
+        ptHtml = '<span class="btn sm muted">📼 upload…</span>';
+      } else {
+        ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver dans PeerTube (téléchargement complet requis)">📼 Conserver</button>' +
+          (pt === 'error' ? ' <span class="muted" title="échec upload">⚠</span>' : '');
+      }
+
+      // Purge control: conserved → offer a delay; marked → offer to cancel
+      var purgeHtml = eph
+        ? '<button class="btn sm good" data-action="keep" title="Annuler la purge">📌 Conserver</button>'
+        : '<select class="btn sm" data-action="purge-in" title="Programmer une purge">' +
+            '<option value="">⏳ Purger dans…</option>' +
+            '<option value="3600">1 h</option>' +
+            '<option value="21600">6 h</option>' +
+            '<option value="86400">24 h</option>' +
+            '<option value="604800">7 j</option>' +
+          '</select>';
+
+      return (
+        '<div class="item ' + (eph ? 'ephemeral' : 'kept') + '" data-ih="' + esc(r.infohash) + '">' +
+          '<div class="item-top">' +
+            '<div class="title" data-action="toggle-files" title="' + esc(r.name) + '">' +
+              (eph ? '⏳ ' : '📌 ') + esc(r.name) +
+              (eph ? ' <span class="muted">(purge ' + fmtWhen(eph) + ')</span>' : '') +
+            '</div>' +
+            '<div class="row-actions">' +
+              (pct == null ? '<button class="btn sm" data-action="resume" title="Charger / reprendre">▶ Reprendre</button>' : '') +
+              zipHtml + ptHtml + purgeHtml +
+              '<button class="btn sm danger" data-action="remove">🗑</button>' +
+            '</div>' +
+          '</div>' +
+          (pct == null
+            ? '<div class="meta muted">📌 conservé — chargé à la lecture</div>'
+            : '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+              '<div class="meta">' + statsLine(r.stats) + '</div>') +
+          '<div class="files' + (filesOpen ? ' open' : '') + '" data-role="files">' +
+            '<p class="muted">Chargement des fichiers…</p>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    Object.keys(openFiles).forEach(function (ih) {
+      if (openFiles[ih]) loadFiles(ih);
+    });
+  }
+
+  function refreshList() {
+    return api(API + '/list').then(renderList).catch(function (e) {
+      document.getElementById('list').innerHTML = '<p class="muted">Erreur de chargement.</p>';
+      console.error(e);
+    });
+  }
+
+  function loadFiles(infohash) {
+    var itemEl = document.querySelector('.item[data-ih="' + cssEscape(infohash) + '"]');
+    if (!itemEl) return;
+    var filesEl = itemEl.querySelector('[data-role="files"]');
+    api(API + '/files/' + encodeURIComponent(infohash)).then(function (files) {
+      if (!files.length) {
+        filesEl.innerHTML = '<p class="muted">Métadonnées pas encore disponibles.</p>';
+        return;
+      }
+      filesEl.innerHTML = files.map(function (f) {
+        var ext = extOf(f.name);
+        var playable = PLAYABLE.indexOf(ext) !== -1;
+        if (playable) {
+          return '<div class="file-row">' +
+            '<span class="fname playable" data-action="play" data-idx="' + f.idx + '">▶ ' + esc(f.name) + '</span>' +
+            '<span class="muted">' + fmtBytes(f.length) + '</span></div>';
+        }
+        var href = '/stream/' + encodeURIComponent(infohash) + '/' + f.idx;
+        var dlName = esc(sanitizeFname(f.name));
+        return '<div class="file-row">' +
+          '<span class="fname">' + esc(f.name) + '</span>' +
+          '<a class="btn sm" href="' + href + '" download="' + dlName + '">⬇ Download</a></div>';
+      }).join('');
+    }).catch(function (e) {
+      filesEl.innerHTML = '<p class="muted">Erreur de chargement des fichiers.</p>';
+      console.error(e);
+    });
+  }
+
+  function cssEscape(s) {
+    return String(s).replace(/["\\]/g, '\\$&');
+  }
+
+  function playFile(infohash, idx, name) {
+    var card = document.getElementById('playerCard');
+    var player = document.getElementById('player');
+    card.style.display = 'block';
+    var src = '/stream/' + encodeURIComponent(infohash) + '/' + idx;
+    player.innerHTML = '<video controls autoplay src="' + esc(src) + '"></video>' +
+      '<p class="muted" style="margin-top:.5rem">' + esc(name) + '</p>';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function onListClick(ev) {
+    var actionEl = ev.target.closest('[data-action]');
+    if (!actionEl) return;
+    var itemEl = ev.target.closest('.item');
+    if (!itemEl) return;
+    var ih = itemEl.getAttribute('data-ih');
+    var action = actionEl.getAttribute('data-action');
+
+    if (action === 'toggle-files') {
+      openFiles[ih] = !openFiles[ih];
+      var filesEl = itemEl.querySelector('[data-role="files"]');
+      filesEl.classList.toggle('open', openFiles[ih]);
+      if (openFiles[ih]) loadFiles(ih);
+      return;
+    }
+    if (action === 'keep') {
+      api(API + '/keep/' + encodeURIComponent(ih), { method: 'POST' }).then(function () {
+        toast('📌 Torrent conservé');
+        refreshList();
+      }).catch(function (e) { errorToast('Échec: ' + e.message); });
+      return;
+    }
+    if (action === 'resume') {
+      api(API + '/resume/' + encodeURIComponent(ih), { method: 'POST' }).then(function (res) {
+        toast(res && res.status === 'resuming' ? '▶ Reprise du téléchargement…' : '▶ Chargé');
+        refreshList();
+      }).catch(function (e) { errorToast('Reprendre: ' + e.message); });
+      return;
+    }
+    if (action === 'conserve') {
+      api(API + '/conserve/' + encodeURIComponent(ih), { method: 'POST' }).then(function (res) {
+        toast('📼 Envoi vers PeerTube en file d’attente…');
+        refreshList();
+      }).catch(function (e) { errorToast('Conserver: ' + e.message); });
+      return;
+    }
+    if (action === 'remove') {
+      if (!confirm('Supprimer ce torrent et ses données ?')) return;
+      api(API + '/remove/' + encodeURIComponent(ih), { method: 'POST' }).then(function () {
+        toast('🗑 Torrent supprimé');
+        delete openFiles[ih];
+        refreshList();
+      }).catch(function (e) { errorToast('Échec: ' + e.message); });
+      return;
+    }
+    if (action === 'zip') {
+      // Don't preventDefault: this is a real <a href download> and the
+      // browser's own download machinery streams it straight to disk (never
+      // buffered in this page's JS). A multi-GB archive can take a while to
+      // start flowing once the download hits the wire (the server may need
+      // to re-verify a conserved-but-idle torrent's data first), so give
+      // immediate feedback here — otherwise a slow start reads as "nothing
+      // happened" and invites repeated clicks.
+      toast('🗜️ Préparation de l’archive ZIP… le téléchargement va démarrer.');
+      return;
+    }
+    if (action === 'play') {
+      var idx = actionEl.getAttribute('data-idx');
+      var name = actionEl.textContent.replace(/^▶\s*/, '');
+      playFile(ih, idx, name);
+      return;
+    }
+  }
+
+  function onAdded(meta) {
+    toast('➕ Torrent ajouté: ' + (meta.name || meta.infohash || 'ok'));
+    document.getElementById('fileInput').value = '';
+    refreshList();
+  }
+  function onAddErr(e) { errorToast('Échec de l\'ajout: ' + e.message); }
+
+  function addTorrent() {
+    var mode = document.getElementById('addMode').value;
+    var btn = document.getElementById('btnAdd');
+    if (mode === 'file') {
+      var f = document.getElementById('fileInput').files[0];
+      if (!f) { errorToast('Fichier .torrent requis'); return; }
+      btn.disabled = true;
+      f.arrayBuffer().then(function (buf) {
+        return api(API + '/add-file', { method: 'POST',
+          headers: { 'Content-Type': 'application/x-bittorrent' }, body: buf });
+      }).then(onAdded).catch(onAddErr).finally(function () { btn.disabled = false; });
+      return;
+    }
+    var input = document.getElementById(mode === 'url' ? 'urlInput' : 'magnetInput');
+    var val = input.value.trim();
+    if (!val) { errorToast(mode === 'url' ? 'URL .torrent requise' : 'Lien magnet requis'); return; }
+    var body = mode === 'url' ? { torrentUrl: val } : { magnet: val };
+    btn.disabled = true;
+    api(API + '/add', { method: 'POST', body: JSON.stringify(body) })
+      .then(function (meta) { input.value = ''; onAdded(meta); })
+      .catch(onAddErr).finally(function () { btn.disabled = false; });
+  }
+
+  function refresh() {
+    refreshStatus();
+    refreshList();
+  }
+
+  document.getElementById('btnRefresh').addEventListener('click', refresh);
+  document.getElementById('btnAdd').addEventListener('click', addTorrent);
+  document.getElementById('addMode').addEventListener('change', function () {
+    var m = this.value;
+    document.getElementById('magnetInput').style.display = m === 'magnet' ? '' : 'none';
+    document.getElementById('urlInput').style.display = m === 'url' ? '' : 'none';
+    document.getElementById('fileInput').style.display = m === 'file' ? '' : 'none';
+  });
+  document.getElementById('magnetInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addTorrent();
+  });
+  document.getElementById('urlInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addTorrent();
+  });
+  document.getElementById('list').addEventListener('click', onListClick);
+  // Purge-delay dropdown (change, not click).
+  document.getElementById('list').addEventListener('change', function (ev) {
+    var sel = ev.target.closest('[data-action="purge-in"]');
+    if (!sel) return;
+    var itemEl = ev.target.closest('.item');
+    if (!itemEl) return;
+    var ih = itemEl.getAttribute('data-ih');
+    var secs = Number(sel.value);
+    if (!secs) return;
+    api(API + '/ephemeral/' + encodeURIComponent(ih),
+      { method: 'POST', body: JSON.stringify({ seconds: secs }) }).then(function () {
+      toast('⏳ Purge programmée ' + fmtWhen(Math.floor(Date.now() / 1000) + secs));
+      refreshList();
+    }).catch(function (e) { errorToast('Purge: ' + e.message); });
+  });
+
+  refresh();
+  setInterval(refresh, 15000);
+})();
+</script>
+</body>
+</html>

@@ -12,6 +12,13 @@ override_dh_auto_install:
 	# LXC bootstrap script + in-LXC systemd unit (installed side by side so
 	# install-lxc.sh's $(dirname "$0") resolves the unit file on the board).
 	install -m 755 lxc/install-lxc.sh debian/secubox-torrent/usr/lib/secubox/torrent/install-lxc.sh
+	# La page de l'APPLICATION (le lecteur), a cote de l'installateur : ce
+	# dernier la copie dans le conteneur via `$$(dirname "$$0")/www`. Elle est
+	# DISTINCTE du panneau d'administration (www/torrent/), qu'on servait par
+	# erreur sur l'adresse publique (#1042).
+	install -d debian/secubox-torrent/usr/lib/secubox/torrent/www
+	install -m 0644 lxc/www/index.html \
+		debian/secubox-torrent/usr/lib/secubox/torrent/www/index.html
 	install -m 644 lxc/secubox-torrent.service debian/secubox-torrent/usr/lib/secubox/torrent/secubox-torrent.service
 	# Webui (browser player)
 	install -d debian/secubox-torrent/usr/share/secubox/www/torrent
