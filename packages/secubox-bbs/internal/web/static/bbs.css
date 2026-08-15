@@ -272,6 +272,13 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tool{border:0;background:none;padding:5px 9px;border-radius:7px;font-size:13.5px;min-width:31px}
 .tool:hover{background:var(--panel)}
 .tool.act{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+/* ENREGISTREMENT EN COURS : le bouton doit se distinguer SANS l'animation, car
+   le compteur qu'il affiche suffit deja a dire que ca tourne. La pulsation ne
+   fait que rendre l'etat visible du coin de l'oeil. */
+.tool.enregistrer.en-cours{background:var(--danger,#c0392b);color:#fff;
+  font-variant-numeric:tabular-nums;animation:sbx-pulse 1.6s ease-in-out infinite}
+@keyframes sbx-pulse{50%{opacity:.62}}
+@media (prefers-reduced-motion:reduce){.tool.enregistrer.en-cours{animation:none}}
 .sep{width:1px;height:19px;background:var(--line);margin:0 5px}
 .area{padding:14px 16px;min-height:130px;font-size:14.5px}
 .area p{margin:0 0 9px}

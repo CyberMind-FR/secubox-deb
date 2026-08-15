@@ -178,7 +178,7 @@ func mediasIntegres(s string) string {
 			// toutes avant le premier paragraphe rend la page inutilisable sur
 			// une liaison lente.
 			balise = `<img class="jointe" src="` + adr + `" alt="" loading="lazy">`
-		case finitPar(adr, ".mp3", ".ogg", ".wav", ".flac"):
+		case finitPar(adr, ".mp3", ".ogg", ".wav", ".flac", ".weba"):
 			balise = `<audio class="jointe" controls preload="none" src="` + adr + `"></audio>`
 		case finitPar(adr, ".mp4", ".webm", ".ogv"):
 			balise = `<video class="jointe" controls preload="none" src="` + adr + `"></video>`
