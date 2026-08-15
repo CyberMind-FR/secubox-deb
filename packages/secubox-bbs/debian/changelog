@@ -1,3 +1,25 @@
+secubox-bbs (0.17.1-1~bookworm1) bookworm; urgency=medium
+
+  * LA PASSERELLE NE POUVAIT PAS SORTIR (ref #1044). L unite portait
+    `RestrictAddressFamilies=AF_UNIX` — juste jusqu ici, le service ne parlant
+    qu en sockets de fichier. Relier un compte echouait donc sur « address
+    family not supported by protocol », message qui accuse le DNS alors que le
+    refus venait du confinement.
+  * AF_INET et AF_INET6 sont accordes, ET COMPENSES DANS LE NOYAU :
+    `IPAddressDeny=localhost link-local multicast` referme la boucle locale et
+    169.254.169.254. L instance etant TAPEE PAR LE MEMBRE, la surface ouverte
+    est dirigeable depuis un formulaire : la politique du paquet
+    `internal/mastodon` est donc rejouee a un etage ou aucune erreur de code
+    applicatif ne peut la contourner.
+  * Regles SYMBOLIQUES et non chiffrees : une unite de paquet ne doit porter
+    aucune adresse de site. Les plages privees restent joignables — l instance
+    de la maison y vit — et c est le controle applicatif qui tranche la, lui
+    seul sachant laquelle est configuree.
+  * Un test fige les deux moities : une passe de durcissement qui refermerait
+    AF_INET par symetrie casserait la passerelle avec ce meme message opaque.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 16:15:18 +0200
+
 secubox-bbs (0.17.0-1~bookworm1) bookworm; urgency=medium
 
   * PASSERELLE MASTODON : UN LIEN PERSONNEL (ref #1044). Chaque membre relie
