@@ -43,7 +43,16 @@ type Serveur struct {
 	qui  Identifie
 	reg  tirage.Reglages
 	mux  *http.ServeMux
-	Now  func() time.Time // remplace en test
+	// Racine CONFINE les fichiers servis, et c'est /data — le SSD.
+	//
+	// PAS L'eMMC : elle s'est deja remplie sur cette board et a produit des
+	// 502 sur des modules qui n'avaient rien demande. Le parc audio d'une
+	// radio grossit tout seul, c'est exactement le genre de chose qui n'a rien
+	// a faire sur la memoire du systeme.
+	//
+	// Vide = pas de confinement, pour les tests seulement.
+	Racine string
+	Now    func() time.Time // remplace en test
 }
 
 func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg tirage.Reglages) *Serveur {
@@ -70,6 +79,7 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc(prefixe+"/pistes/", s.gestePiste)
 	s.mux.HandleFunc(prefixe+"/chat", s.chat)
 	s.mux.HandleFunc(prefixe+"/suivante", s.suivante)
+	s.mux.HandleFunc("/audio/", s.servirAudio)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
