@@ -154,12 +154,48 @@ func (s *Store) PourTirage() ([]tirage.Piste, []Piste, error) {
 
 // PoseCoeur : idempotent. Aimer deux fois n'est pas une erreur, c'est un
 // double clic.
-func (s *Store) PoseCoeur(pisteID, userID int64, maintenant time.Time) error {
+//
+// LE PSEUDONYME EST MIS A JOUR meme sur un coeur deja pose : si quelqu'un a
+// change de nom depuis, la liste doit montrer celui sous lequel on le connait
+// aujourd'hui — sans pour autant reecrire la date du geste.
+func (s *Store) PoseCoeur(pisteID, userID int64, pseudo string, maintenant time.Time) error {
 	_, err := s.db.Exec(
-		`INSERT INTO coeurs (piste_id, user_id, mis_le) VALUES (?,?,?)
-		 ON CONFLICT (piste_id, user_id) DO NOTHING`,
-		pisteID, userID, maintenant.Unix())
+		`INSERT INTO coeurs (piste_id, user_id, pseudo, mis_le) VALUES (?,?,?,?)
+		 ON CONFLICT (piste_id, user_id) DO UPDATE SET pseudo = excluded.pseudo`,
+		pisteID, userID, pseudo, maintenant.Unix())
 	return err
+}
+
+// QuiAime rend les personnes qui ont aime une piste, dans l'ordre du geste.
+//
+// PUBLIC PAR DECISION. Un coeur anonyme se compte ; un coeur signe se discute —
+// « c'est toi qui as mis ca ? » est une conversation, et c'est le propre d'une
+// radio collective. La contrepartie est assumee : on n'aime pas de la meme
+// facon quand on sait que ca se voit.
+// Aimeur : qui a aime, et quand.
+type Aimeur struct {
+	UserID int64  `json:"user_id"`
+	Pseudo string `json:"pseudo"`
+	MisLe  int64  `json:"mis_le"`
+}
+
+func (s *Store) QuiAime(pisteID int64) ([]Aimeur, error) {
+	rows, err := s.db.Query(
+		`SELECT user_id, pseudo, mis_le FROM coeurs
+		  WHERE piste_id = ? ORDER BY mis_le, user_id`, pisteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Aimeur
+	for rows.Next() {
+		var a Aimeur
+		if err := rows.Scan(&a.UserID, &a.Pseudo, &a.MisLe); err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) RetireCoeur(pisteID, userID int64) error {

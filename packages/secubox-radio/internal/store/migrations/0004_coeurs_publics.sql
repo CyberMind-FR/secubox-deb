@@ -1,0 +1,11 @@
+-- LES COEURS DEVIENNENT PUBLICS : on voit qui a aime quoi (#1047).
+--
+-- LE PSEUDONYME EST COPIE ICI, comme dans le chat et pour la meme raison : le
+-- demon radio n'a pas de table d'utilisateurs — l'identite vient de
+-- l'authentification SecuBox. Sans cette copie, afficher la liste demanderait
+-- d'interroger un autre service a chaque ligne, et une panne de ce service
+-- viderait les coeurs de leurs noms.
+--
+-- C'est aussi la bonne semantique : on retient QUI ETAIT LA au moment du
+-- geste. Un membre qui change de pseudonyme ne reecrit pas le passe.
+ALTER TABLE coeurs ADD COLUMN pseudo TEXT NOT NULL DEFAULT '';

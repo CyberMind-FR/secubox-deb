@@ -286,3 +286,36 @@ func TestSansPisteLaSynchronisationDitLeSilence(t *testing.T) {
 		t.Error("l'etat ne signale pas le silence")
 	}
 }
+
+// LA LISTE DES AIMEURS EST SERVIE AUX MEMBRES, et la decision est assumee :
+// on n'aime pas de la meme facon quand on sait que ca se voit.
+func TestLaListeDesAimeursEstServieAuxMembres(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/coeur", membre, nil, true)
+
+	w := appel(s, "GET", "/api/v1/radio/playlist", membre, nil, false)
+	var d struct{ Pistes []vuePiste }
+	json.Unmarshal(w.Body.Bytes(), &d)
+	if len(d.Pistes) != 1 {
+		t.Fatalf("%d pistes", len(d.Pistes))
+	}
+	if len(d.Pistes[0].Aimeurs) != 1 {
+		t.Fatalf("%d aimeurs servis", len(d.Pistes[0].Aimeurs))
+	}
+	if d.Pistes[0].Aimeurs[0].Pseudo != "alice" {
+		t.Errorf("pseudo servi = %q", d.Pistes[0].Aimeurs[0].Pseudo)
+	}
+}
+
+// ...mais pas aux inconnus : la radio s'ecoute de l'exterieur, pas la liste de
+// qui aime quoi.
+func TestLaListeDesAimeursNestPasServieAuxInconnus(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	_ = st.PoseCoeur(p.ID, 2, "alice", t0)
+	w := appel(s, "GET", "/api/v1/radio/current", dehors, nil, false)
+	if bytes.Contains(w.Body.Bytes(), []byte("alice")) {
+		t.Error("la liste des aimeurs fuit vers un inconnu")
+	}
+}
