@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
+	"time"
 )
 
 // mp affiche la boite de reception, ou une conversation si l'adresse porte un
@@ -183,6 +184,27 @@ func (s *Server) mastodon(w http.ResponseWriter, r *http.Request) {
 	p.MastoInstance, _ = s.st.Reglage(store.CleMastodonInstance)
 	if p.V.Connecte {
 		p.MastoInvite, _ = s.st.Reglage(store.CleMastodonInvite)
+
+		// LE LIEN PERSONNEL (#1044). Son absence n'est pas une anomalie : c'est
+		// l'etat par defaut, et le seul acceptable tant que le membre n'a pas
+		// fait l'aller-retour OAuth. On ne rapproche JAMAIS son compte d'un
+		// compte Mastodon portant le meme pseudonyme.
+		if c, err := s.st.CompteMastodonDe(p.V.ID); err == nil {
+			p.MastoLie = true
+			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
+			p.MastoLieLe = time.Unix(c.LieLe, 0).Format("02/01/2006")
+		}
+	}
+	// Les retours de la passerelle passent par l'adresse : l'aller-retour chez
+	// l'instance fait perdre tout etat de session applicative.
+	q := r.URL.Query()
+	p.MastoErr = q.Get("err")
+	switch {
+	case q.Get("lie") != "":
+		p.MastoInfo = "Compte relié. Vous pouvez republier un fil public sous votre propre identité."
+	case q.Get("delie") != "":
+		p.MastoInfo = "Lien retiré ici. Pensez à révoquer aussi l'autorisation " +
+			"dans les réglages de votre compte Mastodon : le BBS ne peut pas le faire à votre place."
 	}
 	switch {
 	case p.MastoInstance == "":

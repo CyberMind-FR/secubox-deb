@@ -14,14 +14,14 @@ package store
 
 // BilletPublie : un fil sorti vers la vitrine.
 type BilletPublie struct {
-	ThreadID  int64
-	Titre     string
-	Slug      string
-	BilletID  string
-	URL       string
-	Publie    int64
-	Repris    int  // messages effectivement emportes
-	Retenus   int  // messages restes locaux
+	ThreadID int64
+	Titre    string
+	Slug     string
+	BilletID string
+	URL      string
+	Publie   int64
+	Repris   int // messages effectivement emportes
+	Retenus  int // messages restes locaux
 }
 
 // Billets rend les fils publies, le plus recent d'abord.
