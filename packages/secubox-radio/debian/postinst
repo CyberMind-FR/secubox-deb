@@ -12,6 +12,29 @@ case "$1" in
     fi
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-radio.conf >/dev/null 2>&1 || true
 
+    # ── LE SECRET DU SYSOP ──────────────────────────────────────────────
+    #
+    # Valider ou refuser engage l'antenne : ces gestes exigent un secret que
+    # l'operateur seul detient. Sans lui, PERSONNE n'est sysop — une
+    # installation neuve n'ouvre pas la validation a qui passe.
+    #
+    # LA TRAVERSEE DE `/etc/secubox/secrets` SE DONNE PAR ACL NOMINATIVE, et
+    # non par le groupe : le repertoire est en `drwx--x---` avec `group::---`,
+    # et chaque module qui en a besoin y figure explicitement. C'est plus serre
+    # qu'un acces de groupe — un module ne voit que ce qu'on lui a nomme. Sans
+    # cette ligne, le demon lit « aucun secret » et la validation reste fermee
+    # en silence, ce qui ressemble a une panne.
+    SECRET=/etc/secubox/secrets/radio-sysop
+    if [ ! -f "$SECRET" ]; then
+      mkdir -p /etc/secubox/secrets
+      head -c 24 /dev/urandom | base64 | tr -d "=/+" > "$SECRET"
+    fi
+    chown secubox-radio:secubox-radio "$SECRET" 2>/dev/null || true
+    chmod 0400 "$SECRET"
+    if command -v setfacl >/dev/null 2>&1; then
+      setfacl -m u:secubox-radio:--x /etc/secubox/secrets 2>/dev/null || true
+    fi
+
     # LE PARC EST SUR LE SSD, et il peut ne pas etre monte au moment de
     # l'installation. On ne fait alors QUE le signaler : creer le repertoire
     # sur la racine ferait grossir l'eMMC en silence, ce qui est precisement le
