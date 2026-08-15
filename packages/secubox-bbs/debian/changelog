@@ -1,3 +1,30 @@
+secubox-bbs (0.19.0-1~bookworm1) bookworm; urgency=medium
+
+  * LES IMAGES DU FIL S AFFICHENT (ref #1044). Elles n etaient rendues qu en
+    pastille « 🖼 image » — or les publications du compte n ont AUCUN texte :
+    l image EST le contenu, et la page paraissait donc vide.
+  * LE REFUS DE CHARGER VENAIT D UN ARGUMENT JUSTE APPLIQUE AU MAUVAIS CAS.
+    Charger une image distante signale la lecture au serveur qui la sert : sur
+    une publication federee, c est le serveur d un inconnu, a qui chaque
+    affichage dirait qui regarde, quand, depuis quelle adresse. Mais ce fil est
+    celui du membre, sur SON instance — souvent la notre, sur cette machine.
+    Lui refuser ses propres images au nom d une fuite vers lui-meme ne
+    protegeait personne.
+  * ON TRANCHE DONC PAR L HOTE : ce que sert l instance du compte s affiche
+    (image, video, son), le reste demeure un lien signale « hote tiers ». La
+    comparaison porte sur l HOTE et exige HTTPS — jamais sur un prefixe de
+    chaine, car `social.exemple.fr` et `social.exemple.fr.pirate.net` partagent
+    un prefixe et pas un hote.
+  * UN TEST PASSAIT POUR LA MAUVAISE RAISON et a ete retire. Il decoupait le
+    gabarit jusqu au premier `{{end}}` pour verifier l absence d `<img` ;
+    ce premier `{{end}}` appartenait a un `{{if}}` imbrique dans un
+    attribut, et le fragment inspecte s arretait 221 octets avant la balise
+    cherchee. Ce qui doit etre garde l est desormais sur la PAGE RENDUE.
+  * Les images sont differees (`loading=lazy`), sans referent, et bornees en
+    hauteur : une publication ne doit pas chasser la suivante hors de l ecran.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:28:21 +0200
+
 secubox-bbs (0.18.1-1~bookworm1) bookworm; urgency=medium
 
   * LE FIL S AFFICHAIT DANS 52 PIXELS (ref #1044). Chaque publication etait

@@ -18,6 +18,8 @@ import (
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/mastodon"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
+	"net/url"
+	"strings"
 )
 
 // DureeFilMastodon : au-dela, le fil est redemande.
@@ -41,10 +43,30 @@ type PublicationVue struct {
 	Sensible bool
 	URL      string
 	Quand    string
-	Medias   []mastodon.Media
+	Medias   []MediaVue
 	Reponses int
 	Partages int
 	Favoris  int
+}
+
+// MediaVue : une piece jointe, et surtout la reponse a « peut-on la charger ».
+//
+// `Interne` DECIDE SI L'IMAGE S'AFFICHE OU RESTE UN LIEN.
+//
+// Charger une image distante signale la lecture au serveur qui la sert : sur
+// une publication federee, ce serveur est celui d'un inconnu, et chaque
+// affichage de la page lui dirait qui regarde, quand, depuis quelle adresse.
+//
+// MAIS CE FIL EST CELUI DU MEMBRE, sur SON instance — souvent la notre, sur
+// cette meme machine. Lui refuser ses propres images au nom d'une fuite vers
+// lui-meme ne protegeait personne, et rendait la page vide : ses publications
+// n'ont pas de texte, l'image EST le contenu.
+//
+// On tranche donc par l'hote : ce que sert l'instance du compte s'affiche, le
+// reste demeure un lien.
+type MediaVue struct {
+	mastodon.Media
+	Interne bool
 }
 
 type filCache struct {
@@ -100,13 +122,34 @@ func (s *Server) chercheFil(c store.CompteMastodon) ([]PublicationVue, error) {
 		if texte == "" && len(p.Medias) == 0 {
 			continue // une publication vide n'apprend rien
 		}
+		medias := make([]MediaVue, 0, len(p.Medias))
+		for _, m := range p.Medias {
+			medias = append(medias, MediaVue{Media: m, Interne: servePar(m, c.Instance)})
+		}
 		out = append(out, PublicationVue{
 			Texte: texte, Avert: p.Avert, Sensible: p.Sensible,
-			URL: p.URL, Quand: quandCourt(p.CreeLe), Medias: p.Medias,
+			URL: p.URL, Quand: quandCourt(p.CreeLe), Medias: medias,
 			Reponses: p.Reponses, Partages: p.Partages, Favoris: p.Favoris,
 		})
 	}
 	return out, nil
+}
+
+// servePar dit si une piece jointe vient bien de l'instance du compte.
+//
+// COMPARAISON D'HOTE, jamais de prefixe de chaine : `social.exemple.fr` et
+// `social.exemple.fr.pirate.net` partagent un prefixe et pas un hote. C'est
+// l'erreur classique de ce genre de controle.
+func servePar(m mastodon.Media, instance string) bool {
+	adr := m.Apercu
+	if adr == "" {
+		adr = m.URL
+	}
+	u, err := url.Parse(adr)
+	if err != nil || u.Scheme != "https" {
+		return false
+	}
+	return strings.EqualFold(u.Hostname(), strings.TrimSpace(instance))
 }
 
 // oublieFilMastodon vide le cache d'un membre.
