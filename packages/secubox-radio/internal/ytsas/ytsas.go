@@ -213,3 +213,55 @@ func (l *lecteur) Read(p []byte) (int, error) {
 	l.i += n
 	return n, nil
 }
+
+// Flux ouvre le media d'une piste chez la passerelle, en relayant la plage
+// demandee.
+//
+// ── POURQUOI RELAYER PLUTOT QUE RAPATRIER ───────────────────────────────────
+//
+// La premiere version copiait le fichier dans un parc a nous. Le deploiement a
+// montre ce que cela voulait dire : un clip pese 660 Mio, et le parc de ytsas
+// comme le notre vivent sur LE MEME `/data`. On aurait donc ecrit 660 Mio a
+// cote de 660 Mio identiques, sur le meme disque, pour chaque titre.
+//
+// ytsas sert deja les plages (`206`, `Accept-Ranges`) : il ne manquait qu'a
+// relayer. La radio ne garde plus rien, et la retention redevient l'affaire de
+// ytsas — qui a deja `conserve`, `keep` et `ephemeral` pour cela.
+//
+// Ce que cela coute : la passerelle doit etre debout AU MOMENT DE L'ECOUTE, et
+// plus seulement au moment de la recuperation. C'est un vrai report de
+// dependance, assume — dupliquer un demi-gigaoctet par titre pour s'en
+// affranchir serait payer trop cher.
+func (c *Client) Flux(ctx context.Context, ytID string, plage string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url("/stream/"+ytID), nil)
+	if err != nil {
+		return nil, err
+	}
+	// LA PLAGE EST TRANSMISE TELLE QUELLE : c'est elle qui permet a un auditeur
+	// de rejoindre le direct a 3 min 41 sans telecharger ce qui precede.
+	if plage != "" {
+		req.Header.Set("Range", plage)
+	}
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("passerelle injoignable : %w", err)
+	}
+	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusPartialContent {
+		res.Body.Close()
+		return nil, fmt.Errorf("la passerelle rend %d", res.StatusCode)
+	}
+	return res, nil
+}
+
+// EstMedia dit si un type annonce est bien du son ou de l'image animee.
+//
+// LA VERIFICATION QUI MANQUAIT, ET QUI A COUTE LE DEFAUT. `/files/{id}` rend du
+// JSON decrivant les fichiers, pas les fichiers : la premiere version a pris
+// ces 65 octets pour un clip, les a ecrits dans le parc, et a marque la piste
+// « en cache ». La radio aurait joue du JSON.
+//
+// On ne fait plus confiance a ce qu'on recoit : un type qui n'est ni audio ni
+// video n'est pas un media, quelle que soit la route qui l'a rendu.
+func EstMedia(mime string) bool {
+	return contient(mime, "audio/") || contient(mime, "video/")
+}

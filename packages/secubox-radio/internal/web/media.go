@@ -1,9 +1,8 @@
 package web
 
 import (
+	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -26,14 +25,13 @@ import (
 // « a partir de 3 min 41 ». Sans plage, le navigateur telecharge tout depuis le
 // debut avant de pouvoir jouer, et la synchronisation est perdue.
 func (s *Serveur) servirMedia(w http.ResponseWriter, r *http.Request) {
-	// L'AUDIO N'EST PAS PUBLIC. Une radio peut s'ecouter, mais servir les
-	// fichiers a qui passe ferait de la board un miroir ouvert.
+	// LE MEDIA N'EST PAS PUBLIC. Une radio peut s'ecouter, mais servir les
+	// clips a qui passe ferait de la board un miroir ouvert.
 	if v := s.qui(r); !v.Connecte {
 		erreur(w, http.StatusUnauthorized, "connectez-vous")
 		return
 	}
 	brut := strings.TrimPrefix(r.URL.Path, "/media/")
-	// On coupe une eventuelle extension decorative : `/media/12.ogg`.
 	if i := strings.IndexByte(brut, '.'); i > 0 {
 		brut = brut[:i]
 	}
@@ -47,39 +45,35 @@ func (s *Serveur) servirMedia(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if s.Flux == nil {
+		erreur(w, http.StatusServiceUnavailable, "passerelle non configuree")
+		return
+	}
+	ytID := strings.TrimPrefix(p.Source, "yt:")
+	if ytID == p.Source {
+		http.NotFound(w, r)
+		return
+	}
 
-	// LE CHEMIN VIENT DE LA BASE, PAS DE L'ADRESSE — c'est la garde qui compte.
-	// On le confine malgre tout au repertoire du parc : si une ligne portait un
-	// jour un chemin de travers (import, migration, edition a la main), il ne
-	// doit pas devenir une lecture arbitraire du disque.
-	chemin := filepath.Clean(p.Fichier)
-	if s.Racine != "" {
-		rel, err := filepath.Rel(s.Racine, chemin)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			http.NotFound(w, r)
-			return
+	// ON RELAIE, ON NE RECOPIE PAS. Le deploiement l'a impose : un clip pese
+	// 660 Mio, et le parc de la passerelle vit sur LE MEME disque que le
+	// notre. Recopier revenait a ecrire 660 Mio a cote de 660 Mio identiques.
+	res, err := s.Flux(r.Context(), ytID, r.Header.Get("Range"))
+	if err != nil {
+		// PAS 502 : nginx intercepte 502/503/504 et les remplace par la page de
+		// reveil, qui n'accepte que GET.
+		erreur(w, http.StatusServiceUnavailable, "clip indisponible")
+		return
+	}
+	defer res.Body.Close()
+
+	for _, cle := range []string{"Content-Type", "Content-Length", "Content-Range", "Accept-Ranges"} {
+		if v := res.Header.Get(cle); v != "" {
+			w.Header().Set(cle, v)
 		}
 	}
-	f, err := os.Open(chemin)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer f.Close()
-	st, err := f.Stat()
-	if err != nil || st.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
-	if p.Mime != "" {
-		w.Header().Set("Content-Type", p.Mime)
-	}
-	// `nosniff` : le fichier vient d'un tiers, le navigateur ne doit pas
-	// decider lui-meme de ce qu'il est.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	// Le contenu d'une piste ne change jamais — son identifiant designe un
-	// fichier fige. Le cache navigateur evite de retelecharger a chaque
-	// passage, ce qui compte sur une radio qui repete.
-	w.Header().Set("Cache-Control", "private, max-age=86400")
-	http.ServeContent(w, r, filepath.Base(chemin), st.ModTime(), f)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.WriteHeader(res.StatusCode)
+	io.Copy(w, res.Body)
 }
