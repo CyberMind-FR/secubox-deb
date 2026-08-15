@@ -3,6 +3,31 @@
 
 ---
 
+## 2026-08-15 — BBS 0.16.0 : note vocale et note video (#1044)
+
+Deux boutons rejoignent le trombone dans les trois editeurs. Ils empruntent le
+MEME chemin d'envoi (`/f/envoi`, `poser`, `mediasIntegres`) : enregistrer
+produit un fichier comme un autre, et un second chemin aurait double les
+garde-fous a tenir.
+
+Deux defauts trouves en chemin :
+
+- **Le format ne peut pas etre suppose.** Firefox ecrit de l'Ogg/Opus,
+  Chromium du WebM ; imposer un type que le navigateur ne sait pas produire
+  fait echouer l'enregistrement en silence. Il est desormais negocie.
+- **Une note vocale sous Chromium sortait en rectangle noir.** Conteneur
+  Matroska sniffe `video/webm`, donc balise `<video>`. Corrige par le meme
+  departage que celui deja en place pour Ogg : le contenu decide, le type
+  annonce ne fait que trancher entre DEUX entrees deja acceptees. Servi sous
+  `.weba`.
+
+Les deux tests neufs echouent sur le code d'avant. Deploye et verifie sur gk2,
+publie sur apt.secubox.in.
+
+**Non traite :** le lien durable message <-> piece jointe (migration 0016)
+reste inutilise par l'interface — l'adresse est posee dans le corps, comme
+pour le trombone. Le changer ici aurait modifie le trombone en meme temps.
+
 ## 2026-08-12 — PeerTube : le transcodage n'avait aucun plafond CPU (#1010)
 
 `secubox-peertube 1.3.1` — déployé sur gk2, publié sur apt.secubox.in.
