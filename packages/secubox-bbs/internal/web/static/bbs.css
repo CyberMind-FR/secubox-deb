@@ -721,7 +721,18 @@ video.jointe{max-height:60vh; background:#000}
    suivante hors de l'ecran. */
 .pub-vue{display:block;max-width:100%;border-radius:10px;overflow:hidden;
   border:1px solid var(--line);line-height:0}
-.pub-vue img,video.pub-vue{display:block;width:100%;height:auto;
-  max-height:420px;object-fit:cover}
+/* MEMES REGLES QUE `.jointe`, ET POUR LES MEMES RAISONS.
+   Le premier jet posait `width:100%` et `object-fit:cover` : une capture de
+   200 px etait etiree sur toute la colonne, et une image verticale rognee en
+   bandeau. `max-width` sans `width` n'agrandit jamais ; `height:auto` sans
+   `object-fit` ne rogne jamais. On ne borne que la hauteur, pour qu'une
+   publication ne chasse pas la suivante hors de l'ecran. */
+.pub-vue img,video.pub-vue{display:block;max-width:100%;width:auto;height:auto;
+  max-height:60vh}
 .pub-son{width:100%;max-width:420px}
-.pub-medias{align-items:flex-start}
+/* UNE IMAGE PREND SA LIGNE, une pastille se range a cote. `flex-basis:100%`
+   sur le media affiche l'obtient sans `:has()`, donc sans dependre d'un
+   selecteur que les vieux navigateurs ignorent — et dont l'absence aurait
+   empile les pastilles en colonne. */
+.pub-medias{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px}
+.pub-medias > .pub-vue,.pub-medias > .pub-son{flex:0 1 100%}
