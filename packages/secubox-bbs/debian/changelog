@@ -1,3 +1,31 @@
+secubox-bbs (0.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * SOCLE DES MESSAGES VOCAUX : un media peut enfin etre lie a un message
+    (ref #1044). Le depot acceptait DEJA `audio/ogg`, `audio/webm`,
+    `video/webm` et `video/mp4` — exactement ce que produit `MediaRecorder` —
+    les validait par leur CONTENU et les servait avec `nosniff` et les requetes
+    par plages. Il ne manquait pas la capacite d accepter un media : il manquait
+    le LIEN. La migration 0016 ne fait que cela.
+  * DEUX CLES ETRANGERES PLUTOT QU UN COUPLE (type, id) : la base refuse
+    elle-meme l incoherence, la ou une solution polymorphique aurait laisse des
+    pieces jointes pointer dans le vide.
+  * EXACTEMENT UNE CIBLE, garantie par contrainte et non par la discipline du
+    code. Sans elle, une meme ligne pourrait viser un fil public ET un message
+    prive : le vocal d une conversation privee apparaitrait dans un salon, sans
+    qu aucune erreur ne le signale.
+  * Un fichier supprime en douceur est ecarte DANS LA REQUETE, pas dans chaque
+    gabarit : ne pas dependre de la vigilance de l affichage.
+  * Un meme fichier ne s attache pas deux fois au meme message — un double clic
+    sur « envoyer » n affiche pas le vocal en double.
+  * La duree vit sur le FICHIER, pas sur le lien : un vocal transfere garde la
+    meme duree, et deux valeurs contradictoires deviennent impossibles.
+  * ICONES DU RAIL : les glyphes geometriques cedent la place a des emoji qui
+    disent la fonction, comme la navbar des modules. La case reste a 22px —
+    seule la taille du dessin change, donc aucun alignement ne bouge.
+  * 6 tests neufs ; les quatre paquets du BBS passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 12:20:00 +0200
+
 secubox-bbs (0.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Suivi lu / non-lu des fils. L'ensemble des fils non-lus est calcule en UNE

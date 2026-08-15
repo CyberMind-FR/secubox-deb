@@ -130,8 +130,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 .nav:hover{background:var(--soft)}
 .nav[aria-current="page"]{background:var(--soft);font-weight:650}
 .nav .ic{
+  /* LA BOITE NE BOUGE PAS, LE DESSIN OUI. Le rail portait des glyphes
+     geometriques (◈ ▤ ✦) qui remplissaient la case a 12px ; un emoji, lui, y
+     paraissait riquiqui. On monte d'un point et on cale la hauteur de ligne —
+     la case reste a 22px, donc aucun alignement ne bouge.
+     `line-height:1` evite qu'un emoji a selecteur de variante (✉️, 🛠️) ne
+     descende d'un pixel par rapport a ses voisins sans variante. */
   width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;
-  font-size:12px;background:var(--soft);
+  font-size:13px;line-height:1;background:var(--soft);
 }
 .nav[aria-current="page"] .ic{background:var(--c,var(--violet));color:#fff}
 .nav .n{margin-left:auto;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
