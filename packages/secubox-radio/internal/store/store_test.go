@@ -226,3 +226,117 @@ func TestUneAdresseVideEstRefusee(t *testing.T) {
 		t.Error("une adresse vide a ete acceptee")
 	}
 }
+
+// ── BORNES DU CACHE ─────────────────────────────────────────────────────────
+//
+// L'eMMC pleine a deja provoque des 502 sur cette machine : un cache sans borne
+// n'est pas une imprudence theorique.
+
+func enCache(t *testing.T, s *Store, source string, octets int64, joueeIlYA time.Duration) Piste {
+	t.Helper()
+	p, _, err := s.Ajoute(source, "", 1, t0.Add(-30*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PoseCache(p.ID, "/data/"+source, "audio/ogg", octets, 180000, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if joueeIlYA > 0 {
+		if err := s.NoteLecture(p.ID, t0.Add(-joueeIlYA), 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	q, _ := s.ParID(p.ID)
+	return q
+}
+
+// LA MOINS RECEMMENT JOUEE PART EN PREMIER, et non la plus ancienne : une
+// piste de 2019 qui passe chaque semaine doit rester ; une nouveaute que
+// personne n'ecoute peut partir.
+func TestLaPurgeEvinceLaMoinsRecemmentJouee(t *testing.T) {
+	s := banc(t)
+	vieilleMaisEcoutee := enCache(t, s, "https://youtu.be/A", 100, time.Hour)
+	jamaisEcoutee := enCache(t, s, "https://youtu.be/B", 100, 0)
+	ecouteeHier := enCache(t, s, "https://youtu.be/C", 100, 24*time.Hour)
+
+	tot, _ := s.OctetsEnCache()
+	if tot != 300 {
+		t.Fatalf("total = %d", tot)
+	}
+	l, err := s.APurger(150, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l) != 2 {
+		t.Fatalf("%d pistes a purger pour passer de 300 a 150", len(l))
+	}
+	if l[0].ID != jamaisEcoutee.ID {
+		t.Errorf("la premiere evincee est %d, attendue la jamais ecoutee %d",
+			l[0].ID, jamaisEcoutee.ID)
+	}
+	if l[1].ID != ecouteeHier.ID {
+		t.Errorf("la seconde evincee est %d, attendue celle d'hier %d", l[1].ID, ecouteeHier.ID)
+	}
+	for _, p := range l {
+		if p.ID == vieilleMaisEcoutee.ID {
+			t.Error("la piste ecoutee il y a une heure a ete evincee")
+		}
+	}
+}
+
+// ON NE RETIRE JAMAIS CE QUI PASSE OU VA PASSER : le programme est fige sur
+// quelques titres, les evincer couperait l'antenne.
+func TestLaPurgeEpargneLesPistesProtegees(t *testing.T) {
+	s := banc(t)
+	a := enCache(t, s, "https://youtu.be/A", 100, 0) // la plus evincable
+	_ = enCache(t, s, "https://youtu.be/B", 100, 24*time.Hour)
+	_ = enCache(t, s, "https://youtu.be/C", 100, time.Hour)
+
+	l, err := s.APurger(150, map[int64]bool{a.ID: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range l {
+		if p.ID == a.ID {
+			t.Fatal("une piste protegee a ete evincee : l'antenne se couperait")
+		}
+	}
+}
+
+// SOUS LA BORNE, ON NE PURGE RIEN. Un menage qui tourne a vide use le disque
+// pour rien.
+func TestSousLaBorneAucunePurge(t *testing.T) {
+	s := banc(t)
+	_ = enCache(t, s, "https://youtu.be/A", 100, 0)
+	l, err := s.APurger(1000, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l) != 0 {
+		t.Errorf("%d pistes purgees alors qu'on est sous la borne", len(l))
+	}
+}
+
+// LA PISTE SURVIT A SON FICHIER : elle reste au repertoire et sera reprise si
+// elle ressort au tirage. L'evincer aurait fait disparaitre des titres a chaque
+// menage.
+func TestOublierLeCacheNeSupprimePasLaPiste(t *testing.T) {
+	s := banc(t)
+	p := enCache(t, s, "https://youtu.be/A", 100, 0)
+	if err := s.OublieCache(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	q, err := s.ParID(p.ID)
+	if err != nil {
+		t.Fatalf("la piste a disparu : %v", err)
+	}
+	if q.EnCache() {
+		t.Error("le fichier est toujours la")
+	}
+	if q.Etat != EtatValide {
+		t.Errorf("l'etat a change : %q", q.Etat)
+	}
+	if n, _ := s.OctetsEnCache(); n != 0 {
+		t.Errorf("le total du cache reste a %d", n)
+	}
+}

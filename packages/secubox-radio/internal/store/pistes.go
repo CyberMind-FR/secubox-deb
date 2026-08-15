@@ -347,3 +347,61 @@ func (s *Store) parEtat(etat, ordre string) ([]Piste, error) {
 	}
 	return out, rows.Err()
 }
+
+// ── CACHE ───────────────────────────────────────────────────────────────────
+
+// OctetsEnCache : ce que le parc occupe deja.
+func (s *Store) OctetsEnCache() (int64, error) {
+	var n int64
+	err := s.db.QueryRow(
+		`SELECT COALESCE(SUM(octets),0) FROM pistes WHERE fichier <> ''`).Scan(&n)
+	return n, err
+}
+
+// APurger rend les pistes a evincer pour repasser sous la borne.
+//
+// LA MOINS RECEMMENT JOUEE D'ABORD, et non la plus ancienne : une piste de
+// 2019 qui passe chaque semaine doit rester ; une nouveaute que personne
+// n'ecoute peut partir. C'est ce que « moins recemment utilisee » veut dire, et
+// trier par date d'ajout aurait fait exactement l'inverse.
+//
+// UNE PISTE N'EST PAS SUPPRIMEE, SEULEMENT SON FICHIER : elle reste dans la
+// playlist, sera reprise si elle ressort au tirage. Evincer la ligne aurait
+// fait disparaitre des titres du repertoire a chaque menage.
+func (s *Store) APurger(borne int64, proteges map[int64]bool) ([]Piste, error) {
+	total, err := s.OctetsEnCache()
+	if err != nil {
+		return nil, err
+	}
+	if total <= borne {
+		return nil, nil
+	}
+	rows, err := s.db.Query(selectPiste + `WHERE p.fichier <> ''
+		 ORDER BY jouee_le ASC, p.ajoute_le ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Piste
+	for rows.Next() && total > borne {
+		p, err := s.scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		// ON NE RETIRE JAMAIS CE QUI PASSE OU VA PASSER : le programme est
+		// fige sur quelques titres, les evincer couperait l'antenne.
+		if proteges[p.ID] {
+			continue
+		}
+		out = append(out, p)
+		total -= p.Octets
+	}
+	return out, rows.Err()
+}
+
+// OublieCache retire le fichier d'une piste, sans toucher a la piste.
+func (s *Store) OublieCache(id int64) error {
+	_, err := s.db.Exec(
+		`UPDATE pistes SET fichier = '', mime = '', octets = 0 WHERE id = ?`, id)
+	return err
+}
