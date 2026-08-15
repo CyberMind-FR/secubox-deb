@@ -352,12 +352,40 @@ func TestLaPageDEcouteEstServieAuxMembres(t *testing.T) {
 	}
 }
 
-// RESERVEE AUX MEMBRES : la radio est celle d'une communaute, pas une station
-// ouverte.
-func TestLaPageDEcouteNestPasPublique(t *testing.T) {
+// LA PAGE EST SERVIE A TOUT LE MONDE, ET C'EST DELIBERE.
+//
+// La premiere version exigeait le cookie de pseudonyme que SEULE CETTE PAGE
+// sait poser : un premier visiteur recevait un 401 en JSON, affiche par le
+// navigateur dans son visualiseur. La porte demandait la cle qu'elle etait
+// chargee de donner. Constate dans Firefox.
+func TestLaPageDEcouteEstServieAUnPremierVisiteur(t *testing.T) {
 	s, _ := banc(t)
-	if w := appel(s, "GET", "/", dehors, nil, false); w.Code != http.StatusUnauthorized {
-		t.Errorf("un inconnu obtient la page : %d", w.Code)
+	w := appel(s, "GET", "/", dehors, nil, false)
+	if w.Code != http.StatusOK {
+		t.Fatalf("un premier visiteur recoit %d : il ne peut pas entrer", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "id=\"ecran\"") {
+		t.Error("la page servie n'est pas la page d'ecoute")
+	}
+}
+
+// ...MAIS LES GESTES ET LES CLIPS RESTENT FERMES. On entre dans la salle, on ne
+// prend pas le micro.
+func TestUnInconnuNePeutNiParlerNiEcouterLesClips(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	_ = st.PoseCache(p.ID, "/x", "video/mp4", 0, 1000, "T", "")
+
+	if w := appel(s, "POST", "/api/v1/radio/chat", dehors,
+		map[string]string{"corps": "coucou"}, true); w.Code != http.StatusUnauthorized {
+		t.Errorf("un inconnu a parle : %d", w.Code)
+	}
+	if w := appel(s, "POST", "/api/v1/radio/propositions", dehors,
+		map[string]string{"source": "https://youtu.be/X"}, true); w.Code != http.StatusUnauthorized {
+		t.Errorf("un inconnu a propose : %d", w.Code)
+	}
+	if w := get(s, "/media/"+itoa(p.ID), dehors, nil); w.Code != http.StatusUnauthorized {
+		t.Errorf("un inconnu obtient un clip : %d", w.Code)
 	}
 }
 

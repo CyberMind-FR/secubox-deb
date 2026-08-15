@@ -50,7 +50,14 @@ override_dh_auto_install:
 	install -D -m 0644 www/radio/radio-admin.js \
 	  debian/secubox-radio/usr/share/secubox/www/radio/radio-admin.js
 
-# `dh_installsystemd` s'occupe de l'activation : on ne la refait pas a la main
-# dans postinst, sous peine de deux verites qui divergent.
+# PAS DE `--no-start`, ET C'EST UN CORRECTIF.
+#
+# Avec lui, `dpkg -i` ARRETAIT le service sans le relancer : le prerm genere
+# l'arrete, et le `try-restart` du postinst ne fait rien sur une unite deja
+# arretee. La radio tombait donc a CHAQUE mise a jour, silencieusement — le
+# paquet s'installait « avec succes » et le service restait mort.
+#
+# On laisse debhelper faire son travail : il redemarre ce qui tournait, et ne
+# demarre pas ce que l'operateur avait arrete.
 override_dh_installsystemd:
-	dh_installsystemd --name=secubox-radio --no-start
+	dh_installsystemd --name=secubox-radio

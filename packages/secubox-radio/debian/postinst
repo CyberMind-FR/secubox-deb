@@ -18,8 +18,8 @@ case "$1" in
     # l'operateur seul detient. Sans lui, PERSONNE n'est sysop — une
     # installation neuve n'ouvre pas la validation a qui passe.
     #
-    # LA TRAVERSEE DE `/etc/secubox/secrets` SE DONNE PAR ACL NOMINATIVE, et
-    # non par le groupe : le repertoire est en `drwx--x---` avec `group::---`,
+    # LA TRAVERSEE DE /etc/secubox/secrets SE DONNE PAR ACL NOMINATIVE, et
+    # non par le groupe : le repertoire est en drwx--x--- avec group::---,
     # et chaque module qui en a besoin y figure explicitement. C'est plus serre
     # qu'un acces de groupe — un module ne voit que ce qu'on lui a nomme. Sans
     # cette ligne, le demon lit « aucun secret » et la validation reste fermee
@@ -43,11 +43,17 @@ case "$1" in
       echo "secubox-radio: /data absent — le parc des clips attend le SSD." >&2
     fi
 
-    # `try-restart` et non `restart` : sur une mise a jour, on ne demarre pas un
-    # service que l'operateur avait arrete.
+    # LE REDEMARRAGE EST LAISSE A DEBHELPER, dont le bloc est insere plus bas.
+    # (On evite d'ecrire ici le jeton de substitution lui-meme : debhelper
+    # remplace la PREMIERE occurrence, et l'ecrire dans un commentaire fait
+    # injecter son bloc au milieu du `case` — le script devient invalide et
+    # dpkg echoue sur « ) unexpected ». C'est exactement ce qui est arrive.)
+    # lui
+    # sait ce qui tournait AVANT l'arret du prerm. Un try-restart pose ici
+    # arrive trop tard — l'unite est deja arretee, et il ne fait donc rien.
+    # C'est ce qui laissait la radio morte apres chaque mise a jour.
     if [ -d /run/systemd/system ]; then
       systemctl daemon-reload >/dev/null 2>&1 || true
-      systemctl try-restart secubox-radio.service >/dev/null 2>&1 || true
     fi
     ;;
 esac
