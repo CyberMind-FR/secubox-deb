@@ -1,0 +1,67 @@
+[Unit]
+Description=SecuBox Radio — radio collaborative synchronisee
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1047
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-radio
+Group=secubox
+ExecStart=/usr/sbin/secubox-radiod \
+    --socket /run/secubox/radio.sock \
+    --db /var/lib/secubox/radio/radio.db \
+    --parc /data/secubox/radio/media \
+    --ytsas http://10.100.0.180:8091
+Restart=on-failure
+RestartSec=5
+
+# RuntimeDirectory N'EST PAS DECLARE : /run/secubox est partage par une
+# centaine d'unites, et un `RuntimeDirectory=secubox` ici effacerait au
+# redemarrage les sockets de toutes les autres. Le repertoire est pose par
+# tmpfiles.d.
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+
+# SORTIE RESEAU ACCORDEE, ET COMPENSEE.
+#
+# La radio doit joindre la passerelle yt-dlp en HTTP — resolution de noms
+# comprise, donc UDP. Sans AF_INET, l'appel echoue sur « address family not
+# supported by protocol », un message qui accuse le DNS alors que le refus
+# vient d'ici. Ce piege a coute trois versions au module BBS le meme jour ;
+# il est ecrit ici pour qu'on ne le retrouve pas.
+#
+# La compensation est SYMBOLIQUE, jamais chiffree : une unite de paquet ne doit
+# porter aucune adresse de site, elle serait fausse partout ailleurs et
+# silencieusement. `localhost` ferme les services d'administration qui
+# n'ecoutent que sur la boucle ; `link-local` ferme 169.254.169.254.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressAllow=any
+IPAddressDeny=localhost link-local multicast
+
+# LE PARC EST SUR /data, LE SSD. L'eMMC s'est deja remplie sur cette board et a
+# produit des 502 sur des modules qui n'avaient rien demande.
+ReadWritePaths=/var/lib/secubox/radio /run/secubox /data/secubox/radio
+
+# Une radio n'est pas un service critique : bornee, elle ne prend pas la place
+# de ce qui l'est. Le processeur de cette board est deja sature.
+MemoryMax=256M
+CPUQuota=50%
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

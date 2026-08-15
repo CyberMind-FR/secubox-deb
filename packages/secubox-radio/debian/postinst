@@ -1,0 +1,33 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    # UN UTILISATEUR DEDIE, comme chaque module : la separation des privileges
+    # est une exigence CSPN, et elle ne vaut que si personne ne l'oublie.
+    if ! getent passwd secubox-radio >/dev/null; then
+      adduser --system --group --no-create-home --home /var/lib/secubox/radio \
+              --shell /usr/sbin/nologin secubox-radio >/dev/null
+      adduser secubox-radio secubox >/dev/null 2>&1 || true
+    fi
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-radio.conf >/dev/null 2>&1 || true
+
+    # LE PARC EST SUR LE SSD, et il peut ne pas etre monte au moment de
+    # l'installation. On ne fait alors QUE le signaler : creer le repertoire
+    # sur la racine ferait grossir l'eMMC en silence, ce qui est precisement le
+    # defaut qu'on veut eviter.
+    if [ ! -d /data ]; then
+      echo "secubox-radio: /data absent — le parc des clips attend le SSD." >&2
+    fi
+
+    # `try-restart` et non `restart` : sur une mise a jour, on ne demarre pas un
+    # service que l'operateur avait arrete.
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+      systemctl try-restart secubox-radio.service >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

@@ -1,0 +1,8 @@
+{
+  "id": "radio",
+  "title": "Radio",
+  "emoji": "🎵",
+  "path": "/radio/",
+  "category": "Media",
+  "order": 60
+}
