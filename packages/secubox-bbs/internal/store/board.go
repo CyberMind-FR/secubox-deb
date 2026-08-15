@@ -16,6 +16,10 @@ type Category struct {
 	Desc    string
 	Threads int
 	Public  bool
+	// Prive : le salon n'est ouvert qu'a ses membres nommes (#1044). Distinct
+	// du rang : `min_role_read` dit « a partir de quel niveau », ceci dit
+	// « qui nommement ».
+	Prive bool
 }
 
 type Thread struct {
@@ -36,7 +40,8 @@ type Thread struct {
 // Categories rend les salons. publicOnly : ceux qui sortent de la maison.
 func (s *Store) Categories(publicOnly bool) ([]Category, error) {
 	q := `SELECT c.id, c.slug, c.title, COALESCE(c.description,''),
-	        (SELECT count(*) FROM threads t WHERE t.category_id = c.id` + visClause(publicOnly, "t") + `)
+	        (SELECT count(*) FROM threads t WHERE t.category_id = c.id` + visClause(publicOnly, "t") + `),
+	        c.prive
 	      FROM categories c ORDER BY c.id`
 	rows, err := s.db.Query(q)
 	if err != nil {
@@ -46,9 +51,11 @@ func (s *Store) Categories(publicOnly bool) ([]Category, error) {
 	var out []Category
 	for rows.Next() {
 		var c Category
-		if err := rows.Scan(&c.ID, &c.Slug, &c.Title, &c.Desc, &c.Threads); err != nil {
+		var prive int
+		if err := rows.Scan(&c.ID, &c.Slug, &c.Title, &c.Desc, &c.Threads, &prive); err != nil {
 			return nil, err
 		}
+		c.Prive = prive == 1
 		out = append(out, c)
 	}
 	return out, rows.Err()

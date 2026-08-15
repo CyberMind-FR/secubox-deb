@@ -133,6 +133,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/sysop", s.sysop)
 	s.mux.HandleFunc("/sysop/", s.sysopAction)
 	s.mux.HandleFunc("/sysop/qr", s.qr)
+	s.mux.HandleFunc("/salon/rejoindre", s.rejoindreSalon)
 	s.mux.HandleFunc("/compte", s.compte)
 	s.mux.HandleFunc("/compte/", s.compteAction)
 	s.mux.HandleFunc("/media/ep/", s.mediaEpisode)
@@ -269,6 +270,28 @@ func (s *Server) moderer(w http.ResponseWriter, r *http.Request) {
 		parent, _ := strconv.ParseInt(r.FormValue("parent"), 10, 64)
 		_, err = s.st.CreeSousSalon(v.ID, r.FormValue("slug"),
 			r.FormValue("titre"), r.FormValue("desc"), parent)
+	case "salon-prive":
+		// FERMER OU ROUVRIR UN SALON. Le rang (`min_role_read`) n'est pas
+		// touche : les deux se cumulent.
+		err = s.st.RendPrive(cible, r.FormValue("etat") == "1")
+	case "salon-membre":
+		membre, _ := strconv.ParseInt(r.FormValue("membre"), 10, 64)
+		if r.FormValue("action") == "retirer" {
+			err = s.st.RetireMembre(cible, membre)
+		} else {
+			err = s.st.AjouteMembre(cible, membre, v.ID)
+		}
+	case "salon-invite":
+		// LE CODE N'EST MONTRE QU'UNE FOIS, ici, a celui qui l'a demande : la
+		// base n'en garde que l'empreinte. Le perdre oblige a en emettre un
+		// autre, ce qui est le comportement voulu.
+		var code string
+		code, err = s.st.NouvelleInvitationSalon(cible, v.ID)
+		if err == nil {
+			http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(
+				"invitation au salon : /salon/rejoindre?code="+code), http.StatusSeeOther)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 		return
