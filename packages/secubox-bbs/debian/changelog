@@ -1,3 +1,34 @@
+secubox-bbs (0.15.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE MUR, APRES LA PORTE (ref #1044). Le magasin savait dire qui a acces ;
+    l affichage ne le consommait pas — un salon ferme restait visible dans le
+    rail, serrure posee sur une porte ouverte. Le filtre est desormais applique
+    dans `base()`, l UNIQUE point qui alimente toutes les pages : le rail ET
+    l acces direct par adresse sont fermes d un seul geste.
+  * 404 ET NON 403. Un salon retire de la liste fait tomber le handler sur son
+    « categorie introuvable ». Un 403 aurait CONFIRME l existence du salon —
+    exactement ce qu un salon prive ne doit pas laisser deviner.
+  * SI LE FILTRE ECHOUE, ON CACHE TOUT CE QUI EST PRIVE plutot que rien.
+  * HIERARCHIE DES SOUS-SALONS dans le rail et sur l accueil. La liste sort a
+    plat avec une PROFONDEUR plutot qu en arbre imbrique : le gabarit n a qu a
+    decaler, la ou un arbre imposerait un gabarit recursif pour un affichage qui
+    reste une suite de lignes.
+  * UN ENFANT DONT LE PARENT EST CACHE REMONTE A LA RACINE : le rattacher
+    afficherait le titre du parent — donc son existence — a qui n y a pas acces.
+    Mieux vaut un sous-salon orphelin qu une fuite.
+  * RIEN NE DISPARAIT, JAMAIS. Un cycle (A parent de B, B parent de A) ne
+    laissait AUCUNE racine : la descente ne demarrait pas et le rail se vidait
+    ENTIEREMENT. La borne de profondeur n y pouvait rien puisqu on n y entrait
+    jamais. Trouve par le test, pas devine. Tout salon non emis est desormais
+    rattache a la racine — un affichage mal hierarchise se voit et se corrige,
+    un salon disparu se cherche.
+  * Le decalage passe par une CLASSE, pas un style en ligne : la politique de
+    securite de contenu les interdit, et un `style=` calcule serait
+    silencieusement ignore.
+  * 5 tests neufs.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 18:00:00 +0200
+
 secubox-bbs (0.14.0-1~bookworm1) bookworm; urgency=medium
 
   * CONSOLE DES SALONS PRIVES (ref #1044). Le magasin savait deja fermer un

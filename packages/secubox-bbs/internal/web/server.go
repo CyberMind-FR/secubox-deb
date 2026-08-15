@@ -123,6 +123,24 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	fn := template.FuncMap{"rendu": Render, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
+		},
+		// decalage rend la classe d'indentation d'un sous-salon.
+		//
+		// UNE CLASSE, PAS UN STYLE EN LIGNE. La politique de securite de contenu
+		// de ce serveur interdit les styles en ligne ; calculer ici un
+		// `style="padding-left:..."` produirait un decalage silencieusement
+		// ignore par le navigateur, et personne ne verrait pourquoi.
+		//
+		// La profondeur est bornee a 3 : au-dela, l'arborescence tient encore en
+		// base mais le rail, large de 220px, n'a plus de place a donner.
+		"decalage": func(n int) string {
+			if n <= 0 {
+				return ""
+			}
+			if n > 3 {
+				n = 3
+			}
+			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
 	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire"} {

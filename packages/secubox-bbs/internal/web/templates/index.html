@@ -15,8 +15,8 @@
   <div class="card stat"><div class="n sc9cd860">{{.Stats.Billets}}</div><div class="l">billets publiés</div></div>
 </div>
 <div class="card s4b54525">
-  {{range .Cats}}<a class="board s15cb695" href="/c/{{.Slug}}">
-    <div class="ic sf381ae3">◆</div>
+  {{range .Cats}}<a class="board s15cb695{{decalage .Profondeur}}" href="/c/{{.Slug}}">
+    <div class="ic sf381ae3">{{if .Profondeur}}↳{{else}}◆{{end}}</div>
     <div><b>{{.Title}}</b><div class="d">{{.Desc}}</div></div>
     <div class="meta">{{.Threads}} fils</div>
   </a>{{else}}<div class="pad sb0455c2">Aucun salon pour l'instant.</div>{{end}}

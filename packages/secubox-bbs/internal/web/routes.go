@@ -149,6 +149,40 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	pub := !v.Connecte
 	st, _ := s.st.Stats()
 	cats, _ := s.st.Categories(pub)
+
+	// LES SALONS PRIVES DISPARAISSENT ICI, ET NULLE PART AILLEURS (#1044).
+	//
+	// `base` alimente TOUTES les pages, et `salon()` cherche sa categorie dans
+	// cette meme liste : filtrer a cet unique endroit ferme donc le rail ET
+	// l'acces direct par adresse. Un salon retire de la liste fait tomber
+	// `salon()` sur son `p.Cat.ID == 0`, donc sur un 404.
+	//
+	// 404 ET NON 403, ET C'EST LE POINT. Un 403 confirmerait que le salon
+	// existe — c'est precisement ce qu'un salon prive ne doit pas laisser
+	// deviner. Pour qui n'y a pas acces, il n'existe pas.
+	//
+	// SI LA REQUETE ECHOUE, ON CACHE TOUT CE QUI EST PRIVE plutot que rien :
+	// `SalonsCachesPour` rend une liste d'exclusion, et l'erreur ignoree cache
+	// trop, jamais trop peu.
+	if caches, err := s.st.SalonsCachesPour(v.ID, v.Sysop()); err == nil {
+		if len(caches) > 0 {
+			gardes := cats[:0]
+			for _, c := range cats {
+				if !caches[c.ID] {
+					gardes = append(gardes, c)
+				}
+			}
+			cats = gardes
+		}
+	} else {
+		visibles := cats[:0]
+		for _, c := range cats {
+			if !c.Prive {
+				visibles = append(visibles, c)
+			}
+		}
+		cats = visibles
+	}
 	site := s.opt.Titre
 	ini := "B"
 	if site != "" {

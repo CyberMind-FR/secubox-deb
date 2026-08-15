@@ -20,6 +20,14 @@ type Category struct {
 	// du rang : `min_role_read` dit « a partir de quel niveau », ceci dit
 	// « qui nommement ».
 	Prive bool
+
+	// ParentID et Profondeur portent la hierarchie des sous-salons.
+	//
+	// UNE LISTE A PLAT AVEC UNE PROFONDEUR, PLUTOT QU'UN ARBRE IMBRIQUE. Le
+	// gabarit n'a alors qu'a decaler ; un arbre imposerait un gabarit recursif
+	// pour un affichage qui reste, lui, une simple suite de lignes.
+	ParentID   int64
+	Profondeur int
 }
 
 type Thread struct {
@@ -41,8 +49,8 @@ type Thread struct {
 func (s *Store) Categories(publicOnly bool) ([]Category, error) {
 	q := `SELECT c.id, c.slug, c.title, COALESCE(c.description,''),
 	        (SELECT count(*) FROM threads t WHERE t.category_id = c.id` + visClause(publicOnly, "t") + `),
-	        c.prive
-	      FROM categories c ORDER BY c.id`
+	        c.prive, COALESCE(c.parent_id, 0)
+	      FROM categories c ORDER BY c.position, c.id`
 	rows, err := s.db.Query(q)
 	if err != nil {
 		return nil, err
@@ -52,13 +60,80 @@ func (s *Store) Categories(publicOnly bool) ([]Category, error) {
 	for rows.Next() {
 		var c Category
 		var prive int
-		if err := rows.Scan(&c.ID, &c.Slug, &c.Title, &c.Desc, &c.Threads, &prive); err != nil {
+		if err := rows.Scan(&c.ID, &c.Slug, &c.Title, &c.Desc, &c.Threads,
+			&prive, &c.ParentID); err != nil {
 			return nil, err
 		}
 		c.Prive = prive == 1
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ordonneHierarchie(out), nil
+}
+
+// ordonneHierarchie range chaque sous-salon SOUS son parent et calcule sa
+// profondeur.
+//
+// UN ENFANT DONT LE PARENT N'EST PAS DANS LA LISTE REMONTE A LA RACINE. C'est
+// le cas quand le parent est prive et l'enfant non : le rattacher afficherait
+// le titre du parent — donc son existence — a quelqu'un qui n'y a pas acces.
+// Il vaut mieux un sous-salon orphelin qu'une fuite.
+//
+// La profondeur est bornee : un cycle (A parent de B, B parent de A) ferait
+// autrement tourner la fonction indefiniment. Un cycle ne devrait pas exister,
+// mais « ne devrait pas » n'est pas une garantie.
+func ordonneHierarchie(plat []Category) []Category {
+	const profondeurMax = 6
+	presents := make(map[int64]bool, len(plat))
+	enfants := make(map[int64][]Category, len(plat))
+	var racines []Category
+	for _, c := range plat {
+		presents[c.ID] = true
+	}
+	for _, c := range plat {
+		if c.ParentID != 0 && presents[c.ParentID] {
+			enfants[c.ParentID] = append(enfants[c.ParentID], c)
+		} else {
+			racines = append(racines, c)
+		}
+	}
+	out := make([]Category, 0, len(plat))
+	var descend func(c Category, niveau int)
+	descend = func(c Category, niveau int) {
+		c.Profondeur = niveau
+		out = append(out, c)
+		if niveau >= profondeurMax {
+			return
+		}
+		for _, e := range enfants[c.ID] {
+			descend(e, niveau+1)
+		}
+	}
+	for _, r := range racines {
+		descend(r, 0)
+	}
+
+	// RIEN NE DOIT DISPARAITRE, JAMAIS. Un cycle (A parent de B, B parent de A)
+	// ne laisse AUCUNE racine : la descente ne demarre pas, et le rail se vide
+	// entierement. La borne de profondeur n'y pouvait rien, puisqu'on n'y
+	// entrait jamais. Constate par le test, pas devine.
+	//
+	// Tout salon non encore emis est donc rattache a la racine. Un affichage
+	// mal hierarchise se voit et se corrige ; un salon disparu se cherche.
+	emis := make(map[int64]bool, len(out))
+	for _, c := range out {
+		emis[c.ID] = true
+	}
+	for _, c := range plat {
+		if !emis[c.ID] {
+			c.Profondeur = 0
+			out = append(out, c)
+			emis[c.ID] = true
+		}
+	}
+	return out
 }
 
 // Threads rend les fils d'un salon, les epingles d'abord.
