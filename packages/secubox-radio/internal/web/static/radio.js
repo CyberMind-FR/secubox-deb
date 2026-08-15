@@ -1,5 +1,34 @@
 (function () {
   'use strict';
+  // ── LE PSEUDONYME ─────────────────────────────────────────────────────────
+  //
+  // CE N'EST PAS UNE AUTHENTIFICATION, et la page ne pretend pas le contraire.
+  // Sur cette board le LAN est de confiance ; ce cookie sert a ATTRIBUER des
+  // gestes entre gens qui se connaissent — qui a propose, qui a aime, qui a
+  // parle. Rien de plus, et surtout rien qui ressemble a un droit.
+  //
+  // L'identifiant est tire au hasard une fois puis conserve : sans lui, chaque
+  // rechargement ferait de vous quelqu'un d'autre, et « retirer mon coeur »
+  // n'aurait plus de sens.
+  function cookie(nom) {
+    var m = document.cookie.match(new RegExp('(^|; )' + nom + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : '';
+  }
+  function poseCookie(nom, val) {
+    document.cookie = nom + '=' + encodeURIComponent(val) +
+      ';path=/;max-age=31536000;SameSite=Lax';
+  }
+  if (!cookie('sbx_radio')) {
+    poseCookie('sbx_radio', String(Math.floor(Math.random() * 9e15) + 1e3));
+  }
+  function nom() {
+    var n = cookie('sbx_radio_nom');
+    if (!n) {
+      n = (prompt('Votre nom sur l\'antenne ?') || '').trim();
+      if (n) poseCookie('sbx_radio_nom', n);
+    }
+    return n;
+  }
   // ── LA SYNCHRONISATION ────────────────────────────────────────────────────
   //
   // LE SERVEUR EST L'AUTORITE. Il dit « telle piste, a tel offset, a telle
@@ -154,6 +183,7 @@
 
   dire.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || !dire.value.trim()) return;
+    nom(); // on ne se nomme qu'au moment de parler
     var corps = dire.value;
     dire.value = '';
     json('/api/v1/radio/chat', { method: 'POST', body: JSON.stringify({ corps: corps }) })
@@ -168,6 +198,7 @@
     var champ = document.getElementById('source');
     var s = champ.value.trim();
     if (!s) return;
+    nom(); // idem : proposer, c'est signer
     json('/api/v1/radio/propositions',
          { method: 'POST', body: JSON.stringify({ source: s }) }).then(function (r) {
       var m = document.getElementById('retour');

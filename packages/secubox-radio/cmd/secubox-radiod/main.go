@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"flag"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -44,6 +46,7 @@ func main() {
 		return
 	}
 	log.SetFlags(0)
+	chargeSecret("/etc/secubox/secrets/radio-sysop")
 
 	if err := os.MkdirAll(filepath.Dir(*base), 0o750); err != nil {
 		log.Fatalf("radio: repertoire de base : %v", err)
@@ -99,28 +102,104 @@ func main() {
 	}
 }
 
-// identite : resolue par l'authentification SecuBox, transmise par nginx.
+// identite : qui frappe a la porte.
 //
-// FERME PAR DEFAUT. Sans en-tete, personne n'est connecte — une chaine mal
-// cablee refuse au lieu de s'ouvrir. Les en-tetes sont poses par nginx APRES
-// verification et ecrasent ce que le client aurait envoye.
+// ── POURQUOI PAS UNE AUTHENTIFICATION ICI ───────────────────────────────────
+//
+// Sur cette board, LE LAN EST DE CONFIANCE ET LE WAN NE L'EST PAS : c'est
+// HAProxy qui tient la frontiere, et les modules servis en 9080 — le
+// podcaster, ytsas, torrent — ne demandent aucune identite. La radio suit le
+// meme montage : y ajouter une porte n'aurait rien ferme de plus et l'aurait
+// fait diverger des autres.
+//
+// IL RESTE QU'UNE RADIO COLLECTIVE A BESOIN DE SAVOIR QUI PARLE — pour dire
+// qui a propose, qui a aime, qui a ecrit dans le chat. On prend donc l'identite
+// la ou elle est :
+//
+//  1. les en-tetes `X-Sbx-*` s'ils existent — une porte pourra les poser plus
+//     tard sans qu'on touche au demon ;
+//  2. sinon, un cookie que la page pose elle-meme : un identifiant tire au
+//     hasard et un nom choisi. Ce n'est PAS une authentification, et le code ne
+//     pretend pas le contraire — c'est un pseudonyme, qui suffit a attribuer
+//     des gestes entre gens qui se connaissent.
+//
+// LE SYSOP, LUI, SE PROUVE. Valider ou refuser engage l'antenne : ces gestes
+// exigent un secret que l'operateur seul detient, lu dans
+// `/etc/secubox/secrets/radio-sysop`. Sans ce fichier, PERSONNE n'est sysop —
+// une installation neuve n'ouvre pas la validation a qui passe.
+var secretSysop string
+
+func chargeSecret(chemin string) {
+	b, err := os.ReadFile(chemin)
+	if err != nil {
+		log.Printf("radio: aucun secret sysop (%s) — la validation reste fermee", chemin)
+		return
+	}
+	secretSysop = strings.TrimSpace(string(b))
+	if secretSysop == "" {
+		log.Printf("radio: secret sysop vide — la validation reste fermee")
+	}
+}
+
 func identite(r *http.Request) web.Visiteur {
-	id := r.Header.Get("X-Sbx-User-Id")
-	if id == "" {
-		return web.Visiteur{}
+	v := web.Visiteur{}
+	// 1. Une porte a-t-elle pose l'identite ?
+	if id := entierSur(r.Header.Get("X-Sbx-User-Id")); id > 0 {
+		v = web.Visiteur{ID: id, Pseudo: r.Header.Get("X-Sbx-User"), Connecte: true}
+		v.Sysop = r.Header.Get("X-Sbx-Role") == "sysop"
+	} else if c, err := r.Cookie("sbx_radio"); err == nil {
+		// 2. Le pseudonyme que la page s'est donne.
+		if id := entierSur(c.Value); id > 0 {
+			v = web.Visiteur{ID: id, Connecte: true}
+			if n, err := r.Cookie("sbx_radio_nom"); err == nil {
+				v.Pseudo = propre(n.Value)
+			}
+		}
+	}
+	if v.Pseudo == "" && v.Connecte {
+		v.Pseudo = "anonyme"
+	}
+	// LE SYSOP SE PROUVE, il ne se declare pas.
+	if secretSysop != "" && subtle.ConstantTimeCompare(
+		[]byte(r.Header.Get("X-Sbx-Radio-Sysop")), []byte(secretSysop)) == 1 {
+		v.Sysop, v.Connecte = true, true
+		if v.ID == 0 {
+			v.ID = 1
+		}
+		if v.Pseudo == "" || v.Pseudo == "anonyme" {
+			v.Pseudo = "sysop"
+		}
+	}
+	return v
+}
+
+func entierSur(s string) int64 {
+	if s == "" || len(s) > 18 {
+		return 0
 	}
 	var n int64
-	for _, c := range id {
+	for _, c := range s {
 		if c < '0' || c > '9' {
-			return web.Visiteur{}
+			return 0
 		}
 		n = n*10 + int64(c-'0')
 	}
-	if n <= 0 {
-		return web.Visiteur{}
+	return n
+}
+
+// propre borne un pseudonyme choisi librement : il finira dans une page.
+func propre(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 32 {
+		s = s[:32]
 	}
-	return web.Visiteur{ID: n, Pseudo: r.Header.Get("X-Sbx-User"),
-		Sysop: r.Header.Get("X-Sbx-Role") == "sysop", Connecte: true}
+	var b strings.Builder
+	for _, c := range s {
+		if c >= ' ' && c != '<' && c != '>' && c != '&' && c != '"' {
+			b.WriteRune(c)
+		}
+	}
+	return b.String()
 }
 
 // recupere : la boucle qui rapatrie les clips.
