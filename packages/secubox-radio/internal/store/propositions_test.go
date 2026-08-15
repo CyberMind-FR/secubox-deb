@@ -50,8 +50,8 @@ func TestLAjoutDuSysopEntreDirectement(t *testing.T) {
 func TestLesCoeursSurvivventALaValidation(t *testing.T) {
 	s := banc(t)
 	p, _, _ := s.Propose("https://youtu.be/ABC", "", 7, t0)
-	_ = s.PoseCoeur(p.ID, 8, t0)
-	_ = s.PoseCoeur(p.ID, 9, t0)
+	_ = s.PoseCoeur(p.ID, 8, "u", t0)
+	_ = s.PoseCoeur(p.ID, 9, "u", t0)
 
 	if err := s.Valide(p.ID, 1, t0.Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -145,9 +145,9 @@ func TestLaFileDeValidationRemonteLesPlusSoutenues(t *testing.T) {
 	b, _, _ := s.Propose("https://youtu.be/B", "", 7, t0.Add(time.Minute))
 	c, _, _ := s.Propose("https://youtu.be/C", "", 7, t0.Add(2*time.Minute))
 	for _, u := range []int64{10, 11, 12} {
-		_ = s.PoseCoeur(b.ID, u, t0)
+		_ = s.PoseCoeur(b.ID, u, "u", t0)
 	}
-	_ = s.PoseCoeur(c.ID, 10, t0)
+	_ = s.PoseCoeur(c.ID, 10, "u", t0)
 
 	pr, err := s.Propositions()
 	if err != nil || len(pr) != 3 {

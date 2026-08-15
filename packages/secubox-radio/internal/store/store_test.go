@@ -106,14 +106,14 @@ func TestUnCoeurNeCompteQuUneFoisParPersonne(t *testing.T) {
 	s := banc(t)
 	p, _, _ := s.Ajoute("https://youtu.be/ABC", "", 1, t0)
 	for i := 0; i < 3; i++ {
-		if err := s.PoseCoeur(p.ID, 7, t0); err != nil {
+		if err := s.PoseCoeur(p.ID, 7, "u", t0); err != nil {
 			t.Fatalf("pose %d : %v", i, err)
 		}
 	}
 	if q, _ := s.ParID(p.ID); q.Coeurs != 1 {
 		t.Errorf("%d coeurs pour une seule personne", q.Coeurs)
 	}
-	_ = s.PoseCoeur(p.ID, 8, t0)
+	_ = s.PoseCoeur(p.ID, 8, "u", t0)
 	if q, _ := s.ParID(p.ID); q.Coeurs != 2 {
 		t.Errorf("%d coeurs pour deux personnes", q.Coeurs)
 	}
@@ -122,8 +122,8 @@ func TestUnCoeurNeCompteQuUneFoisParPersonne(t *testing.T) {
 func TestOnPeutRetirerSonCoeurEtLuiSeul(t *testing.T) {
 	s := banc(t)
 	p, _, _ := s.Ajoute("https://youtu.be/ABC", "", 1, t0)
-	_ = s.PoseCoeur(p.ID, 7, t0)
-	_ = s.PoseCoeur(p.ID, 8, t0)
+	_ = s.PoseCoeur(p.ID, 7, "u", t0)
+	_ = s.PoseCoeur(p.ID, 8, "u", t0)
 	if err := s.RetireCoeur(p.ID, 7); err != nil {
 		t.Fatal(err)
 	}
@@ -338,5 +338,91 @@ func TestOublierLeCacheNeSupprimePasLaPiste(t *testing.T) {
 	}
 	if n, _ := s.OctetsEnCache(); n != 0 {
 		t.Errorf("le total du cache reste a %d", n)
+	}
+}
+
+// ── LES COEURS SONT PUBLICS ─────────────────────────────────────────────────
+//
+// Un coeur anonyme se compte ; un coeur signe se discute — « c'est toi qui as
+// mis ca ? » est une conversation, et c'est le propre d'une radio collective.
+func TestOnVoitQuiAAimeUnePiste(t *testing.T) {
+	s := banc(t)
+	p, _, _ := s.Ajoute("https://youtu.be/ABC", "", 1, t0)
+	if err := s.PoseCoeur(p.ID, 7, "alice", t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PoseCoeur(p.ID, 8, "bob", t0.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	l, err := s.QuiAime(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l) != 2 {
+		t.Fatalf("%d aimeurs", len(l))
+	}
+	// DANS L'ORDRE DU GESTE : qui a lance le mouvement se lit en premier.
+	if l[0].Pseudo != "alice" || l[1].Pseudo != "bob" {
+		t.Errorf("ordre = %s, %s", l[0].Pseudo, l[1].Pseudo)
+	}
+	if l[0].MisLe != t0.Unix() {
+		t.Errorf("date du premier coeur = %d", l[0].MisLe)
+	}
+}
+
+// LE PSEUDONYME SE MET A JOUR, la date du geste non : si quelqu'un a change de
+// nom, la liste montre celui sous lequel on le connait aujourd'hui — sans
+// reecrire quand il a aime.
+func TestUnChangementDePseudoNeReecritPasLaDate(t *testing.T) {
+	s := banc(t)
+	p, _, _ := s.Ajoute("https://youtu.be/ABC", "", 1, t0)
+	_ = s.PoseCoeur(p.ID, 7, "alice", t0)
+	_ = s.PoseCoeur(p.ID, 7, "alice-nouveau-nom", t0.Add(time.Hour))
+
+	l, _ := s.QuiAime(p.ID)
+	if len(l) != 1 {
+		t.Fatalf("%d aimeurs apres renommage : le coeur a ete double", len(l))
+	}
+	if l[0].Pseudo != "alice-nouveau-nom" {
+		t.Errorf("pseudo = %q, attendu le plus recent", l[0].Pseudo)
+	}
+	if l[0].MisLe != t0.Unix() {
+		t.Errorf("la date du geste a ete reecrite : %d", l[0].MisLe)
+	}
+}
+
+func TestRetirerSonCoeurLeRetireDeLaListePublique(t *testing.T) {
+	s := banc(t)
+	p, _, _ := s.Ajoute("https://youtu.be/ABC", "", 1, t0)
+	_ = s.PoseCoeur(p.ID, 7, "alice", t0)
+	_ = s.PoseCoeur(p.ID, 8, "bob", t0)
+	if err := s.RetireCoeur(p.ID, 7); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := s.QuiAime(p.ID)
+	if len(l) != 1 || l[0].Pseudo != "bob" {
+		t.Errorf("liste apres retrait : %+v", l)
+	}
+}
+
+// Les coeurs poses AVANT que la liste devienne publique n'ont pas de nom : la
+// migration ne doit pas les faire disparaitre du compte pour autant.
+func TestUnCoeurSansPseudoResteCompte(t *testing.T) {
+	s := banc(t)
+	p, _, _ := s.Ajoute("https://youtu.be/ABC", "", 1, t0)
+	if _, err := s.db.Exec(
+		`INSERT INTO coeurs (piste_id, user_id, mis_le) VALUES (?,?,?)`,
+		p.ID, 9, t0.Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := s.ParID(p.ID); q.Coeurs != 1 {
+		t.Errorf("%d coeurs : un coeur ancien a disparu du compte", q.Coeurs)
+	}
+	l, _ := s.QuiAime(p.ID)
+	if len(l) != 1 {
+		t.Fatalf("%d aimeurs", len(l))
+	}
+	if l[0].Pseudo != "" {
+		t.Errorf("pseudo invente pour un coeur ancien : %q", l[0].Pseudo)
 	}
 }

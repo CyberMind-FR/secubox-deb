@@ -157,6 +157,9 @@ type vuePiste struct {
 	Ecarte  bool   `json:"ecarte,omitempty"`
 	Raison  string `json:"raison,omitempty"`
 	Aime    bool   `json:"aime"`
+	// LES COEURS SONT PUBLICS : on voit qui a aime. Un coeur anonyme se
+	// compte, un coeur signe se discute.
+	Aimeurs []store.Aimeur `json:"aimeurs,omitempty"`
 }
 
 func (s *Serveur) vue(p store.Piste, v Visiteur) vuePiste {
@@ -164,8 +167,13 @@ func (s *Serveur) vue(p store.Piste, v Visiteur) vuePiste {
 	if v.Connecte {
 		aime, _ = s.st.ACoeur(p.ID, v.ID)
 	}
+	var aimeurs []store.Aimeur
+	if v.Connecte {
+		aimeurs, _ = s.st.QuiAime(p.ID)
+	}
 	return vuePiste{ID: p.ID, Titre: p.Titre, Auteur: p.Auteur, DureeMS: p.DureeMS,
-		Coeurs: p.Coeurs, Source: p.Source, Etat: p.Etat, Motif: p.Motif,
+		Aimeurs: aimeurs,
+		Coeurs:  p.Coeurs, Source: p.Source, Etat: p.Etat, Motif: p.Motif,
 		EnCache: p.EnCache(), Ecarte: p.Indisponible, Raison: p.Raison, Aime: aime}
 }
 
@@ -335,7 +343,7 @@ func (s *Serveur) coeur(w http.ResponseWriter, r *http.Request, id int64) {
 	if r.Method == http.MethodDelete {
 		err = s.st.RetireCoeur(id, v.ID)
 	} else {
-		err = s.st.PoseCoeur(id, v.ID, s.Now())
+		err = s.st.PoseCoeur(id, v.ID, v.Pseudo, s.Now())
 	}
 	if err != nil {
 		erreur(w, http.StatusInternalServerError, "coeur non enregistre")
