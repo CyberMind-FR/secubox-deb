@@ -1,3 +1,30 @@
+secubox-bbs (0.16.0-1~bookworm1) bookworm; urgency=medium
+
+  * NOTE VOCALE ET NOTE VIDEO (ref #1044). Deux boutons rejoignent le trombone
+    dans les trois editeurs — repondre, ouvrir un fil, message prive. Ils
+    empruntent EXACTEMENT le meme chemin : meme envoi vers `/f/envoi`, meme
+    insertion de l adresse, meme rendu en lecteur. Enregistrer produit un
+    fichier comme un autre ; ouvrir un second chemin d envoi aurait double les
+    garde-fous a tenir, et l un des deux aurait fini par diverger de l autre.
+  * LE FORMAT EST NEGOCIE, PAS SUPPOSE. Firefox ecrit de l Ogg/Opus, Chromium
+    du WebM. On demande le premier format que le navigateur declare savoir
+    produire, au lieu d en imposer un qui echouerait chez la moitie des gens.
+  * DEPARTAGE DE L AUDIO EN CONTENEUR WEBM. Une note VOCALE enregistree sous
+    Chromium sort en conteneur Matroska ; le renifleur rend `video/webm` sans
+    pouvoir savoir s il porte une piste video, et la note s affichait en
+    rectangle noir. Meme mecanisme que celui deja en place pour Ogg : le
+    contenu decide qu il s agit d un WebM, le type annonce ne fait que
+    departager DEUX entrees deja acceptees — il n en ouvre aucune nouvelle.
+    Servi sous `.weba`, il rend un lecteur audio.
+  * LE MICRO ET LA CAMERA SE RELACHENT explicitement apres l envoi. Sans cela
+    la diode reste allumee, et c est le genre de detail qui fait douter de
+    tout le reste.
+  * LE TROMBONE ET L ENREGISTREUR SONT INDEPENDANTS. La garde precedente
+    exigeait les deux : elle aurait fait taire l enregistreur sur tout editeur
+    livre sans trombone.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 15:48:14 +0200
+
 secubox-bbs (0.15.0-1~bookworm1) bookworm; urgency=medium
 
   * LE MUR, APRES LA PORTE (ref #1044). Le magasin savait dire qui a acces ;

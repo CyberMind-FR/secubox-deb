@@ -134,6 +134,12 @@
             <button class="tool joindre" type="button" title="Joindre une image, un son, une vidéo"
                     data-csrf="{{.V.CSRF}}">📎</button>
             <input type="file" class="s-invisible" accept="image/*,audio/*,video/*">
+            <button class="tool enregistrer" type="button" data-mode="audio"
+                    title="Note vocale : enregistrer, puis renvoyer pour joindre"
+                    data-csrf="{{.V.CSRF}}">🎙</button>
+            <button class="tool enregistrer" type="button" data-mode="video"
+                    title="Note vidéo : enregistrer, puis renvoyer pour joindre"
+                    data-csrf="{{.V.CSRF}}">🎥</button>
   </div>
   <textarea class="area se78b7e7" name="body" rows="6" required
            

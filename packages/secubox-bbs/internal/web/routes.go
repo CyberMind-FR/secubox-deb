@@ -45,17 +45,17 @@ type page struct {
 	// FilsNonLus est un ENSEMBLE : un drapeau par fil aurait impose une requete
 	// par ligne affichee, et c'est ainsi qu'une fonction de confort devient une
 	// cause de lenteur.
-	FilsNonLus                map[int64]bool
-	FilsNonLusSalon           map[int64]int
-	TotalFilsNonLus           int
+	FilsNonLus      map[int64]bool
+	FilsNonLusSalon map[int64]int
+	TotalFilsNonLus int
 	// Journal de moderation, affiche au sysop (#1020).
-	Moderations               []store.Moderation
-	Code, Msg                 string
-	Integ                     store.Integrity
-	Sain                      bool
-	Runs                      []store.IngestRun
-	Comptes                   []store.Compte
-	Moi                       store.Compte
+	Moderations []store.Moderation
+	Code, Msg   string
+	Integ       store.Integrity
+	Sain        bool
+	Runs        []store.IngestRun
+	Comptes     []store.Compte
+	Moi         store.Compte
 	// Messagerie (#1008). Convs : la boite de reception ; Fil : la conversation
 	// ouverte ; Avec : l'interlocuteur ; Corres : les comptes joignables.
 	Convs      []store.ConversationResume
@@ -227,7 +227,6 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	buf.WriteTo(w)
 }
-
 
 // poseNonLus renseigne l'etat lu/non-lu de la page (#1020).
 //
@@ -621,7 +620,6 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 		s.rend(w, r, "simple", p)
 	}
 }
-
 
 // cartesMedia rend les fils deposes par les passerelles media (#1020).
 //
