@@ -2,6 +2,7 @@ package mastodon
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -141,5 +142,44 @@ func TestUneInstancePubliqueEstAcceptee(t *testing.T) {
 	}
 	if err != nil {
 		t.Errorf("une instance publique est refusee : %v", err)
+	}
+}
+
+// L'UNITE DOIT ACCORDER LA SORTIE RESEAU, ET LA COMPENSER.
+//
+// Ce test existe parce que le defaut s'est produit : l'unite portait
+// `RestrictAddressFamilies=AF_UNIX`, et le premier essai de liaison a echoue sur
+// « address family not supported by protocol » — un message qui accuse le DNS
+// alors que le refus venait du confinement. Une passe de durcissement pourrait
+// refermer AF_INET par symetrie avec les autres unites ; elle casserait la
+// passerelle avec ce meme message opaque.
+//
+// Le test verifie AUSSI la compensation : ouvrir sans refermer la boucle locale
+// et le lien-local rendrait dirigeable, depuis un formulaire, une socket vers
+// les services d'administration.
+func TestLUniteAccordeLaSortieReseauEtLaCompense(t *testing.T) {
+	brut, err := os.ReadFile("../../debian/secubox-bbs.service")
+	if err != nil {
+		t.Skipf("unite indisponible : %v", err)
+	}
+	u := string(brut)
+	if !strings.Contains(u, "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6") {
+		t.Error("l'unite n'accorde pas la sortie reseau : la liaison echouera sur " +
+			"« address family not supported by protocol »")
+	}
+	for _, attendu := range []string{
+		"IPAddressDeny=localhost link-local multicast",
+		"IPAddressAllow=any",
+	} {
+		if !strings.Contains(u, attendu) {
+			t.Errorf("la compensation noyau manque : %s", attendu)
+		}
+	}
+	// Aucune adresse de site dans une unite de paquet : elle serait fausse
+	// partout ailleurs, et silencieusement.
+	for _, interdit := range []string{"192.168.", "10.100.", "82.67."} {
+		if strings.Contains(u, interdit) {
+			t.Errorf("l'unite porte une adresse de site (%s) : elle ne vaudrait que sur gk2", interdit)
+		}
 	}
 }

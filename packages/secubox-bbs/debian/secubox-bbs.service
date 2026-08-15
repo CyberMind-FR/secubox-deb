@@ -66,10 +66,36 @@ LockPersonality=true
 MemoryDenyWriteExecute=true
 SystemCallFilter=@system-service
 SystemCallArchitectures=native
-# AF_UNIX seul : le service n'a aucune raison d'ouvrir une socket reseau. Il
-# parle a billets par une socket de fichier et recoit ses requetes de nginx par
-# la sienne.
-RestrictAddressFamilies=AF_UNIX
+# SORTIE RESEAU : ouverte a contrecoeur, et compensee (#1044).
+#
+# Jusqu'a la passerelle Mastodon, `AF_UNIX` seul suffisait : le service parlait a
+# billets et a l'authentification par des sockets de fichier, et recevait ses
+# requetes de nginx par la sienne. Aucune socket reseau, donc aucune surface.
+#
+# La passerelle change cela : relier un compte demande d'appeler l'instance —
+# resolution de noms comprise, donc UDP. Sans AF_INET, l'appel echoue sur
+# « address family not supported by protocol », un message qui designe le DNS
+# alors que le refus vient d'ici. C'est precisement ce qui s'est produit au
+# premier essai.
+#
+# CE QUI COMPENSE, ET POURQUOI C'EST A DEUX ETAGES. L'instance est TAPEE PAR LE
+# MEMBRE : la surface ouverte est donc dirigeable depuis un formulaire. Le
+# paquet `internal/mastodon` refuse deja toute adresse interne sauf l'instance
+# configuree, et ne suit aucune redirection. Les regles ci-dessous rejouent la
+# meme politique DANS LE NOYAU, ou aucune erreur de code applicatif ne peut la
+# contourner.
+#
+# Volontairement SYMBOLIQUES et non chiffrees : une unite de paquet ne doit
+# porter aucune adresse de site. `localhost` ferme les services d'administration
+# qui n'ecoutent que sur la boucle ; `link-local` ferme 169.254.169.254, la
+# cible classique de ce genre d'attaque. Les plages privees restent joignables
+# — l'instance de la maison y vit — et c'est le controle applicatif qui tranche
+# la, puisque lui seul sait laquelle est configuree.
+#
+# Un site plus strict pose un drop-in avec ses propres `IPAddressAllow=`.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressAllow=any
+IPAddressDeny=localhost link-local multicast
 ReadWritePaths=/var/lib/secubox/bbs /run/secubox /var/backups/secubox
 # Les secrets sont montes EN LECTURE SEULE : le service verifie des mots de
 # passe, il n'a pas a reecrire le fichier hors d'une action explicite.
