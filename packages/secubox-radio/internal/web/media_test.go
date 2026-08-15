@@ -1,27 +1,38 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
-// prepare une piste en cache avec un vrai fichier sur disque.
+// avecFichier prepare une piste prete et une passerelle qui rend `contenu`.
+//
+// LE FLUX EST INJECTE : la radio RELAIE desormais au lieu de recopier, et les
+// tests n'ont donc pas besoin d'un fichier sur disque — ils ont besoin d'une
+// passerelle, que l'on remplace.
 func avecFichier(t *testing.T, s *Serveur, contenu string) int64 {
 	t.Helper()
-	racine := t.TempDir()
-	s.Racine = racine
-	chemin := filepath.Join(racine, "piste.ogg")
-	if err := os.WriteFile(chemin, []byte(contenu), 0o644); err != nil {
-		t.Fatal(err)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/ogg")
+		http.ServeContent(w, r, "p.ogg", time.Time{}, strings.NewReader(contenu))
+	}))
+	t.Cleanup(srv.Close)
+	s.Flux = func(ctx context.Context, ytID, plage string) (*http.Response, error) {
+		req, _ := http.NewRequestWithContext(ctx, "GET", srv.URL, nil)
+		if plage != "" {
+			req.Header.Set("Range", plage)
+		}
+		return http.DefaultClient.Do(req)
 	}
 	p, _, err := s.st.Ajoute("https://youtu.be/ABC", "T", 1, s.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.st.PoseCache(p.ID, chemin, "audio/ogg", int64(len(contenu)), 180000, "T", "A"); err != nil {
+	if err := s.st.PoseCache(p.ID, "/data/ytsas/ABC/ABC.mp4", "audio/ogg", 0, 180000, "T", "A"); err != nil {
 		t.Fatal(err)
 	}
 	return p.ID
@@ -89,32 +100,13 @@ func TestLeMediaNestPasServiAuxInconnus(t *testing.T) {
 	}
 }
 
-// ── CONFINEMENT ─────────────────────────────────────────────────────────────
+// LE CONFINEMENT DE CHEMIN A DISPARU AVEC SA RAISON D'ETRE.
 //
-// Le chemin vient de la BASE et non de l'adresse — c'est la garde qui compte.
-// Le confinement est la seconde barriere : si une ligne portait un jour un
-// chemin de travers (import, migration, edition a la main), il ne doit pas
-// devenir une lecture arbitraire du disque.
-func TestUnCheminHorsDuParcNestPasServi(t *testing.T) {
-	s, _ := banc(t)
-	racine := t.TempDir()
-	s.Racine = racine
-	dehorsFic := filepath.Join(t.TempDir(), "ailleurs.txt")
-	if err := os.WriteFile(dehorsFic, []byte("hors parc"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	p, _, _ := s.st.Ajoute("https://youtu.be/X", "", 1, s.Now())
-	if err := s.st.PoseCache(p.ID, dehorsFic, "audio/ogg", 9, 1000, "", ""); err != nil {
-		t.Fatal(err)
-	}
-	w := get(s, "/media/"+itoa(p.ID), membre, nil)
-	if w.Code != http.StatusNotFound {
-		t.Errorf("un fichier hors du parc a ete servi : %d", w.Code)
-	}
-	if w.Body.String() == "hors parc" {
-		t.Error("le contenu hors parc a fuite")
-	}
-}
+// La radio ne lit plus de fichier : elle relaie le flux de la passerelle. Le
+// chemin retenu en base ne sert plus qu'a l'affichage, et ne peut donc plus
+// devenir une lecture arbitraire du disque. Le test qui gardait cette
+// propriete est retire plutot que laisse a verifier une garde qui n'existe
+// plus — un test qui ne peut plus echouer donne une fausse assurance.
 
 func TestUnePisteSansFichierRepondIntrouvable(t *testing.T) {
 	s, _ := banc(t)

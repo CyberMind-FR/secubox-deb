@@ -209,3 +209,59 @@ func TestLaBorneArreteLaLectureEtNeSubitPasLeFichier(t *testing.T) {
 		// Le serveur n'a pas fini d'ecrire : c'est bien que le client a coupe.
 	}
 }
+
+// LA VERIFICATION QUI MANQUAIT. `/files/{id}` rend du JSON decrivant les
+// fichiers, pas les fichiers. La premiere version a pris ces 65 octets pour un
+// clip et a marque la piste « en cache » : la radio aurait joue du JSON.
+func TestUnJSONNestPasUnMedia(t *testing.T) {
+	for mime, media := range map[string]bool{
+		"application/json":       false,
+		"text/html":              false,
+		"application/xml":        false,
+		"":                       false,
+		"video/mp4":              true,
+		"audio/mpeg":             true,
+		"audio/ogg; codecs=opus": true,
+	} {
+		if EstMedia(mime) != media {
+			t.Errorf("EstMedia(%q) = %v", mime, !media)
+		}
+	}
+}
+
+// LA PLAGE EST TRANSMISE TELLE QUELLE : c'est elle qui permet de rejoindre le
+// direct sans telecharger ce qui precede.
+func TestLaPlageEstRelayeeALaPasserelle(t *testing.T) {
+	var recue string
+	c := passerelle(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/ytsas/stream/ABC" {
+			t.Errorf("chemin = %q", r.URL.Path)
+		}
+		recue = r.Header.Get("Range")
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Content-Range", "bytes 100-199/1000")
+		w.WriteHeader(http.StatusPartialContent)
+		w.Write(make([]byte, 100))
+	})
+	res, err := c.Flux(context.Background(), "ABC", "bytes=100-199")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if recue != "bytes=100-199" {
+		t.Errorf("plage transmise = %q", recue)
+	}
+	if res.StatusCode != http.StatusPartialContent {
+		t.Errorf("code relaye = %d", res.StatusCode)
+	}
+}
+
+func TestUneErreurDeLaPasserelleNestPasRelayeeCommeUnFlux(t *testing.T) {
+	c := passerelle(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	if res, err := c.Flux(context.Background(), "X", ""); err == nil {
+		res.Body.Close()
+		t.Error("un 404 a ete relaye comme un flux")
+	}
+}

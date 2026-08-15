@@ -10,6 +10,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -44,7 +45,11 @@ type Serveur struct {
 	qui  Identifie
 	reg  tirage.Reglages
 	mux  *http.ServeMux
-	// Racine CONFINE les fichiers servis, et c'est /data — le SSD.
+	// Flux ouvre le media d'une piste chez la passerelle. INJECTE : les tests
+	// n'ont alors pas besoin d'une passerelle, et le demon reste maitre du
+	// delai et des bornes.
+	Flux func(ctx context.Context, ytID, plage string) (*http.Response, error)
+	// Racine : plus utilisee depuis que l'on relaie au lieu de recopier.
 	//
 	// PAS L'eMMC : elle s'est deja remplie sur cette board et a produit des
 	// 502 sur des modules qui n'avaient rien demande. Le parc audio d'une

@@ -29,9 +29,12 @@ func main() {
 		// LE PARC VA SUR LE SSD. L'eMMC s'est deja remplie sur cette board et a
 		// produit des 502 sur des modules qui n'avaient rien demande ; un parc
 		// audio-video grossit tout seul.
-		parc       = flag.String("parc", "/data/secubox/radio/media", "repertoire des clips (SSD)")
+		// `--parc` DISPARAIT : la radio ne garde plus rien. Le drapeau est
+		// conserve muet pour ne pas casser une unite deja installee — le
+		// supprimer ferait echouer le demarrage sur « flag provided but not
+		// defined », ce qui est une facon detournee de casser une mise a jour.
+		_          = flag.String("parc", "", "obsolete : la radio relaie, elle ne recopie plus")
 		passerelle = flag.String("ytsas", "http://10.100.0.180:8091", "passerelle yt-dlp")
-		parcMax    = flag.Int64("parc-max", 4<<30, "taille maximale du parc, en octets")
 		clipMax    = flag.Int64("clip-max", 256<<20, "taille maximale d'un clip, en octets")
 		montre     = flag.Bool("version", false, "afficher la version")
 	)
@@ -44,9 +47,6 @@ func main() {
 
 	if err := os.MkdirAll(filepath.Dir(*base), 0o750); err != nil {
 		log.Fatalf("radio: repertoire de base : %v", err)
-	}
-	if err := os.MkdirAll(*parc, 0o750); err != nil {
-		log.Fatalf("radio: repertoire du parc : %v", err)
 	}
 	st, err := store.Open(*base)
 	if err != nil {
@@ -62,15 +62,18 @@ func main() {
 	log.Printf("radio: graine du tirage %d", graine)
 	prog := programme.Nouveau(st, reg, graine)
 
-	srv := web.Nouveau(st, prog, identite, reg)
-	srv.Racine = *parc
-
 	cli := ytsas.Nouveau(*passerelle, *clipMax)
+
+	srv := web.Nouveau(st, prog, identite, reg)
+	// LA RADIO RELAIE, ELLE NE RECOPIE PAS : voir internal/ytsas.Flux.
+	srv.Flux = cli.Flux
 	ctx, arrete := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer arrete()
 
-	go recupere(ctx, st, cli, *parc)
-	go menage(ctx, st, prog, *parcMax)
+	go recupere(ctx, st, cli)
+	// PLUS DE MENAGE DE PARC : la radio ne garde rien, la retention est
+	// l'affaire de la passerelle, qui a deja `conserve`, `keep` et
+	// `ephemeral` pour cela.
 
 	// SOCKET UNIX, JAMAIS DE PORT TCP : un port ecoute pour toute la machine,
 	// une socket obeit aux permissions du systeme de fichiers.
@@ -125,7 +128,7 @@ func identite(r *http.Request) web.Visiteur {
 // UNE PISTE A LA FOIS. La board est deja saturee cote processeur ; lancer trois
 // telechargements en parallele ne les rendrait pas plus rapides et prendrait la
 // place de ce qui joue.
-func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client, parc string) {
+func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -148,57 +151,24 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client, parc stri
 			}
 			e, err := cli.Etat(ctx, ytID)
 			if err != nil {
-				// Pas encore la : on demande, et l'on repassera. Ce n'est pas
-				// une erreur, c'est le cours normal des choses.
-				if err := cli.Demande(ctx, p.Source); err != nil {
+				// Pas encore chez la passerelle : on demande, et l'on
+				// repassera. Ce n'est pas une erreur, c'est le cours normal.
+				if err := cli.Demande(ctx, "https://www.youtube.com/watch?v="+ytID); err != nil {
 					log.Printf("radio: piste %d : %v", p.ID, err)
 				}
-				break // une a la fois
-			}
-			if !e.Pret() {
 				break
 			}
-			chemin, mime, n, err := cli.Rapatrie(ctx, ytID, parc)
-			if err != nil {
-				log.Printf("radio: piste %d ecartee : %v", p.ID, err)
-				st.MarqueIndisponible(p.ID, err.Error())
-				continue
+			if !e.Pret() {
+				break // recuperation en cours chez la passerelle
 			}
-			if err := st.PoseCache(p.ID, chemin, mime, n, 0, e.Titre, ""); err != nil {
-				log.Printf("radio: piste %d : cache non enregistre : %v", p.ID, err)
+			// ON NE RAPATRIE PLUS. On note seulement que la passerelle l'a, et
+			// le flux sera relaye a la lecture. Le chemin retenu est celui de
+			// la passerelle : il sert a l'affichage, pas a la lecture.
+			if err := st.PoseCache(p.ID, e.Chemin, "video/mp4", 0, 0, e.Titre, ""); err != nil {
+				log.Printf("radio: piste %d : etat non enregistre : %v", p.ID, err)
 			}
-			log.Printf("radio: piste %d en cache (%d Mio)", p.ID, n>>20)
+			log.Printf("radio: piste %d prete chez la passerelle", p.ID)
 			break
-		}
-	}
-}
-
-// menage : la purge du parc.
-func menage(ctx context.Context, st *store.Store, prog *programme.Programmateur, borne int64) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(10 * time.Minute):
-		}
-		// ON PROTEGE CE QUI PASSE : evincer la piste en cours couperait
-		// l'antenne au milieu d'un morceau.
-		proteges := map[int64]bool{}
-		if e, err := prog.Actuel(time.Now()); err == nil {
-			proteges[e.Piste.ID] = true
-		}
-		l, err := st.APurger(borne, proteges)
-		if err != nil {
-			log.Printf("radio: purge : %v", err)
-			continue
-		}
-		for _, p := range l {
-			if err := os.Remove(p.Fichier); err != nil && !os.IsNotExist(err) {
-				log.Printf("radio: purge de %s : %v", p.Fichier, err)
-				continue
-			}
-			st.OublieCache(p.ID)
-			log.Printf("radio: piste %d evincee du parc (%d Mio)", p.ID, p.Octets>>20)
 		}
 	}
 }
