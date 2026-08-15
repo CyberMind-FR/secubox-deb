@@ -173,6 +173,67 @@
        outils de developpement, il informe l'utilisateur, il ne protege rien. */}}
 </div>
 
+<h2 class="serif">Salons privés</h2>
+<div class="card pad">
+  <p class="note">Un salon privé n'apparaît qu'à ses membres — les autres n'en
+  soupçonnent pas l'existence. Le rang (« réservé aux membres ») et
+  l'appartenance (« ouvert à ces personnes ») se cumulent : fermer un salon ne
+  change pas son rang.</p>
+
+  <table>
+    <thead><tr><th>Salon</th><th>État</th><th>Membres</th><th>Convier</th><th>Inviter</th></tr></thead>
+    <tbody>
+    {{range .Cats}}<tr>
+      <td><b>{{.Title}}</b> <span class="mono s33ee298">{{.Slug}}</span></td>
+      <td>
+        <form method="post" action="/mod/salon-prive">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          {{if .Prive}}
+            <span class="pill p-warn">privé</span>
+            <input type="hidden" name="etat" value="0">
+            <button class="btn sm" type="submit">Rouvrir</button>
+          {{else}}
+            <span class="pill p-local">ouvert</span>
+            <input type="hidden" name="etat" value="1">
+            <button class="btn sm" type="submit">Fermer</button>
+          {{end}}
+        </form>
+      </td>
+      <td class="num">{{if .Prive}}—{{else}}tous{{end}}</td>
+      <td>
+        {{if .Prive}}
+        <form method="post" action="/mod/salon-membre" class="row">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <select name="membre" aria-label="Personne à convier">
+            {{range $.Comptes}}<option value="{{.ID}}">{{.Handle}}</option>{{end}}
+          </select>
+          <button class="btn sm" name="action" value="ajouter" type="submit">Convier</button>
+          <button class="btn sm" name="action" value="retirer" type="submit">Retirer</button>
+        </form>
+        {{else}}<span class="note">salon ouvert</span>{{end}}
+      </td>
+      <td>
+        {{if .Prive}}
+        <form method="post" action="/mod/salon-invite">
+          <input type="hidden" name="csrf" value="{{$.V.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button class="btn sm pinkish" type="submit">Émettre un lien</button>
+        </form>
+        {{end}}
+      </td>
+    </tr>{{end}}
+    </tbody>
+  </table>
+
+  <p class="note">Le lien d'invitation <b>n'ouvre aucun compte</b> : il rattache
+  quelqu'un qui est déjà inscrit et connecté. Partagé par mégarde, il ne donne
+  accès à rien pour qui n'a pas de compte ici. Il ne sert qu'une fois, expire au
+  bout de sept jours, et n'est affiché qu'à son émission — la base n'en garde
+  que l'empreinte.</p>
+</div>
+
 <h2 class="serif">Journal de modération</h2>
 <div class="card tw">
   <table>

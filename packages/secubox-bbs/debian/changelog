@@ -1,3 +1,24 @@
+secubox-bbs (0.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * CONSOLE DES SALONS PRIVES (ref #1044). Le magasin savait deja fermer un
+    salon et le convier ; il manquait de quoi le faire depuis l ecran. Trois
+    gestes s ajoutent a la moderation existante : fermer/rouvrir, convier ou
+    retirer une personne, emettre un lien d invitation.
+  * LE LIEN N EST MONTRE QU UNE FOIS, a son emission : la base n en garde que
+    l empreinte. Le perdre oblige a en emettre un autre — c est le comportement
+    voulu, pas une gene.
+  * `/salon/rejoindre` EXIGE D ETRE CONNECTE. Un visiteur sans compte est
+    renvoye vers la connexion en conservant le code dans l adresse de retour :
+    le geste aboutit ensuite sans recliquer sur le courriel. C est la garantie
+    centrale — une invitation de salon n ouvre AUCUN compte.
+  * L ECHEC NE DIT PAS POURQUOI. Distinguer « code inconnu » de « code deja
+    servi » apprendrait a un curieux si un code existe, et le laisserait sonder
+    la base un essai a la fois.
+  * `Category` porte desormais `Prive`, pour que le rail et la console sachent
+    ce qu ils affichent sans requete supplementaire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 17:05:00 +0200
+
 secubox-bbs (0.13.0-1~bookworm1) bookworm; urgency=medium
 
   * SALONS PRIVES : ouverts a des PERSONNES, pas a un rang (ref #1044).

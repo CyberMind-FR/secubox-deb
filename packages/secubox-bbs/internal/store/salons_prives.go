@@ -214,3 +214,13 @@ func (s *Store) RejoinsSalon(code string, userID int64) (int64, error) {
 		time.Now().Unix(), userID, sum[:])
 	return catID, err
 }
+
+// SlugDuSalon rend l'identifiant d'adresse d'un salon, pour y renvoyer.
+func (s *Store) SlugDuSalon(catID int64) (string, error) {
+	var slug string
+	err := s.db.QueryRow(`SELECT slug FROM categories WHERE id = ?`, catID).Scan(&slug)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return slug, err
+}
