@@ -23,10 +23,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -312,4 +315,100 @@ func court(s string) string {
 		return s[:200] + "…"
 	}
 	return s
+}
+
+// ── FIL DU COMPTE LIE ───────────────────────────────────────────────────────
+
+// Media : une piece jointe d'une publication.
+type Media struct {
+	Type   string `json:"type"` // image, video, gifv, audio
+	URL    string `json:"url"`
+	Apercu string `json:"preview_url"`
+	Alt    string `json:"description"`
+}
+
+// Publication : une entree du fil, telle que l'instance la rend.
+//
+// `Contenu` EST DU HTML VENANT D'UN SERVEUR TIERS. Il n'est jamais rendu tel
+// quel : voir `TexteDe`, et le test qui l'accompagne.
+type Publication struct {
+	ID       string  `json:"id"`
+	URL      string  `json:"url"`
+	CreeLe   string  `json:"created_at"`
+	Contenu  string  `json:"content"`
+	Avert    string  `json:"spoiler_text"`
+	Sensible bool    `json:"sensitive"`
+	Medias   []Media `json:"media_attachments"`
+	Reponses int     `json:"replies_count"`
+	Partages int     `json:"reblogs_count"`
+	Favoris  int     `json:"favourites_count"`
+}
+
+// StatutsDuCompte rend les publications PUBLIQUES d'un compte.
+//
+// SANS JETON, ET C'EST UN CHOIX. Mastodon sert les statuts publics d'un compte
+// a qui les demande ; les lire authentifie aurait exige la portee
+// `read:statuses`, c'est-a-dire le droit de lire AUSSI le fil d'accueil du
+// membre — tout ce que suivent ses abonnements, y compris ce qui lui est
+// adresse en prive. Afficher son propre mur ne vaut pas ce droit-la.
+//
+// Consequence assumee : les publications reservees aux abonnes n'apparaissent
+// pas. C'est le bon defaut pour un panneau consulte depuis un navigateur
+// partage.
+func (c *Client) StatutsDuCompte(ctx context.Context, compteID string, limite int) ([]Publication, error) {
+	if compteID == "" {
+		return nil, errors.New("compte inconnu")
+	}
+	if limite <= 0 || limite > 40 {
+		limite = 10
+	}
+	v := url.Values{
+		"limit": {strconv.Itoa(limite)},
+		// LES REPONSES SONT ECARTEES : un fil rempli de « @machin oui » hors de
+		// son contexte n'apprend rien a qui regarde le panneau.
+		"exclude_replies": {"true"},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.url("/api/v1/accounts/"+url.PathEscape(compteID)+"/statuses")+"?"+v.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var out []Publication
+	if err := c.faire(req, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// baliseRe : une balise HTML, ouvrante ou fermante.
+var baliseRe = regexp.MustCompile(`(?s)<[^>]*>`)
+
+// TexteDe transforme le HTML d'une publication en TEXTE BRUT.
+//
+// C'EST LA FRONTIERE DE CONFIANCE DE TOUTE CETTE FONCTIONNALITE. Le contenu
+// vient d'une instance tierce ; le rendre tel quel dans une page du BBS
+// donnerait a cette instance le droit d'executer du script chez nos membres.
+//
+// ON NE FILTRE PAS, ON DEBALISE. Une liste blanche de balises « inoffensives »
+// est un exercice qu'on rate : il reste toujours un attribut, un protocole
+// `javascript:`, une entite doublement encodee. Retirer TOUTES les balises n'a
+// pas de cas limite.
+//
+// L'ORDRE COMPTE : on retire les balises AVANT de decoder les entites. Dans
+// l'autre sens, `&lt;script&gt;` deviendrait une vraie balise que le passage
+// suivant supprimerait — mais un `&amp;lt;script&amp;gt;` en ressortirait
+// intact. Ici, ce qui sort est du texte, et le gabarit l'echappe de toute
+// facon : le resultat ne doit JAMAIS etre marque `template.HTML`.
+func TexteDe(brut string) string {
+	s := strings.ReplaceAll(brut, "<br>", "\n")
+	s = strings.ReplaceAll(s, "<br/>", "\n")
+	s = strings.ReplaceAll(s, "<br />", "\n")
+	s = strings.ReplaceAll(s, "</p>", "\n\n")
+	s = baliseRe.ReplaceAllString(s, "")
+	s = html.UnescapeString(s)
+	// Les paragraphes vides du HTML de Mastodon laissent des trous.
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return strings.TrimSpace(s)
 }

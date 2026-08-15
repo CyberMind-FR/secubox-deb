@@ -80,6 +80,10 @@ type page struct {
 	MastoCompte, MastoLieLe string
 	MastoLie                bool
 	MastoErr, MastoInfo     string
+	// Fil distant du compte lie. `Texte` y est du TEXTE BRUT : le contenu
+	// vient d'une instance tierce et n'est jamais rendu comme du HTML.
+	MastoFil    []PublicationVue
+	MastoFilErr string
 	// Invites : qui a invite qui. Contrepartie de l'invitation sans quota.
 	Invites []store.Invitation
 	// VCSS : empreinte de la feuille de style, posee dans son adresse.
