@@ -148,3 +148,79 @@ func TestUnHoteQuiImiteLInstanceNestPasInterne(t *testing.T) {
 		}
 	}
 }
+
+// LA POLITIQUE DOIT S'OUVRIR SUR CETTE PAGE, ET SUR ELLE SEULE.
+//
+// Sans cette ouverture, le navigateur bloque les images et les sons de
+// l'instance SANS RIEN DIRE AU SERVEUR : la page part complete, le lecteur
+// reste noir, et l'on cherche la panne cote rendu. C'est ce qui s'est produit.
+func TestLaPolitiqueSOuvrePourLInstanceLieeSurCettePageSeulement(t *testing.T) {
+	srv, s := banc(t)
+	uid, err := s.CreateUser("gk2", "Gandalf", store.RoleSysop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LieCompteMastodon(uid, store.CompteMastodon{
+		Instance: "social.exemple.fr", Acct: "gk2", CompteID: "42",
+	}, "jeton"); err != nil {
+		t.Fatal(err)
+	}
+	filMu.Lock()
+	fils[uid] = filCache{pris: time.Now()}
+	filMu.Unlock()
+	t.Cleanup(func() { oublieFilMastodon(uid) })
+	jeton, _ := s.NewSession(uid, "", "")
+
+	page := func(chemin string) string {
+		r := httptest.NewRequest("GET", chemin, nil)
+		r.AddCookie(&http.Cookie{Name: cookieSession, Value: jeton})
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, r)
+		return w.Header().Get("Content-Security-Policy")
+	}
+
+	csp := page("/mastodon")
+	if !strings.Contains(csp, "https://social.exemple.fr") {
+		t.Errorf("l'instance liee n'est pas autorisee :\n%s", csp)
+	}
+	for _, d := range []string{"img-src 'self' data: https://social.exemple.fr",
+		"media-src 'self' https://social.exemple.fr"} {
+		if !strings.Contains(csp, d) {
+			t.Errorf("directive attendue absente : %s\n%s", d, csp)
+		}
+	}
+	// L'IMAGE EST AUTORISEE, PAS LE SCRIPT. Confondre les deux est la facon
+	// habituelle de vider une politique de son sens.
+	i := strings.Index(csp, "script-src")
+	j := strings.Index(csp[i:], ";")
+	if strings.Contains(csp[i:i+j], "social.exemple.fr") {
+		t.Error("l'instance est autorisee a executer du script")
+	}
+	if strings.Contains(csp, "unsafe-inline") {
+		t.Error("la politique contient unsafe-inline")
+	}
+
+	// LA PORTE SE REFERME : les autres pages gardent la politique stricte.
+	if c := page("/"); strings.Contains(c, "social.exemple.fr") {
+		t.Errorf("l'accueil herite de l'ouverture :\n%s", c)
+	}
+}
+
+// UN HOTE MALFORME NE DOIT PAS COUPER LA POLITIQUE EN DEUX. Un navigateur qui
+// n'arrive pas a la lire peut l'ignorer ENTIEREMENT — on se croirait protege
+// en ne l'etant plus du tout.
+func TestUnHoteMalformeNeCassePasLaPolitique(t *testing.T) {
+	srv, _ := banc(t)
+	for _, mauvais := range []string{
+		"exemple.fr; script-src *", "exemple.fr'", `exemple.fr"`,
+		"exemple.fr /chemin", "", "   ", "exemple.fr\\x",
+	} {
+		w := httptest.NewRecorder()
+		w.Header().Set("Content-Security-Policy", "default-src 'self'")
+		srv.OrigineMediaMastodon(w, mauvais)
+		got := w.Header().Get("Content-Security-Policy")
+		if got != "default-src 'self'" {
+			t.Errorf("hote %q a modifie la politique :\n%s", mauvais, got)
+		}
+	}
+}

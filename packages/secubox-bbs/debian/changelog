@@ -1,3 +1,26 @@
+secubox-bbs (0.20.0-1~bookworm1) bookworm; urgency=medium
+
+  * LES MEDIAS DU FIL ETAIENT BLOQUES PAR LA POLITIQUE DE SECURITE (ref #1044).
+    Le BBS sert `img-src 'self' data:` et `media-src 'self'` : le navigateur
+    refusait donc les images et les sons de l instance liee — SANS RIEN DIRE AU
+    SERVEUR. La page partait complete, le lecteur restait noir, et l on
+    cherchait la panne du cote du rendu. C est exactement ce qui s est produit.
+  * LA POLITIQUE S OUVRE SUR LA PAGE /mastodon, ET SUR ELLE SEULE. L elargir
+    dans l intergiciel aurait autorise cette origine sur TOUTES les pages, y
+    compris celles qui rendent du texte ecrit par des membres. La porte
+    s ouvre pour une reponse et se referme avec elle.
+  * L ORIGINE OUVERTE EST CELLE DE L INSTANCE OU LE MEMBRE A PROUVE SON
+    IDENTITE par un aller-retour OAuth complet — jamais une saisie libre. Elle
+    est malgre tout revalidee : un espace ou un point-virgule couperait la
+    politique en deux, et un navigateur qui n arrive pas a la lire peut
+    l IGNORER ENTIEREMENT — on se croirait protege en ne l etant plus du tout.
+  * L IMAGE EST AUTORISEE, PAS LE SCRIPT. L origine n est ajoutee qu a
+    `img-src` et `media-src`, jamais a `script-src` ni `connect-src` :
+    confondre les deux est la facon habituelle de vider une politique de son
+    sens. Un test le verifie directive par directive.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:51:11 +0200
+
 secubox-bbs (0.19.1-1~bookworm1) bookworm; urgency=medium
 
   * LES IMAGES DU FIL ETAIENT ETIREES ET ROGNEES (ref #1044). Le premier jet

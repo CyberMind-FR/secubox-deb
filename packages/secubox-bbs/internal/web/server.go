@@ -189,6 +189,64 @@ func (s *Server) Store() *store.Store   { return s.st }
 // plus du tout.
 var empreinteValide = regexp.MustCompile(`^sha(256|384|512)-[A-Za-z0-9+/=]+$`)
 
+// politique assemble la politique de securite de contenu.
+//
+// `media` ajoute UNE origine a `img-src` et `media-src`, et rien d'autre —
+// jamais a `script-src` ni `connect-src`. Afficher une image d'un tiers est
+// une chose ; lui laisser executer du code en est une autre, et confondre les
+// deux est la facon habituelle de vider une politique de son sens.
+//
+// Vide par defaut : la politique reste 'self' partout tant qu'une page ne
+// demande pas explicitement le contraire.
+func politique(style, script, connect, frame, media string) string {
+	img, med := "'self' data:", "'self'"
+	if media != "" {
+		img += " " + media
+		med += " " + media
+	}
+	return "default-src 'self'; img-src " + img + "; style-src " + style + "; " +
+		"script-src " + script + "; connect-src " + connect + "; " +
+		"frame-src " + frame + "; media-src " + med + "; " +
+		"frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+}
+
+// OrigineMediaMastodon rejoue la politique en ouvrant les images et les sons
+// d'UNE instance, pour la reponse en cours uniquement.
+//
+// POURQUOI PAS DANS L'INTERGICIEL. L'elargir globalement autoriserait cette
+// origine sur TOUTES les pages, y compris celles qui rendent du texte ecrit
+// par des membres. Ici la porte ne s'ouvre que sur /mastodon, et se referme
+// avec la reponse.
+//
+// L'ORIGINE N'EST PAS UNE SAISIE LIBRE : c'est l'hote de l'instance ou le
+// membre a prouve son identite par un aller-retour OAuth complet. On la
+// revalide malgre tout — un caractere d'espacement ou un point-virgule
+// couperait la politique en deux, et un navigateur qui n'arrive pas a la lire
+// peut l'ignorer ENTIEREMENT.
+func (s *Server) OrigineMediaMastodon(w http.ResponseWriter, hote string) {
+	hote = strings.TrimSpace(hote)
+	if hote == "" || strings.ContainsAny(hote, " ;'\"/\\") {
+		return
+	}
+	script, connect, style := "'self'", "'self'", "'self'"
+	frame := "'none'"
+	if o := strings.TrimSpace(s.opt.PeerTubeOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		frame = o
+	}
+	if e := strings.TrimSpace(s.opt.BanniereStyle); empreinteValide.MatchString(e) {
+		style += " '" + e + "'"
+	}
+	if o := strings.TrimSpace(s.opt.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		script += " " + o
+		connect += " " + o
+		if e := strings.TrimSpace(s.opt.BanniereHash); empreinteValide.MatchString(e) {
+			script += " '" + e + "'"
+		}
+	}
+	w.Header().Set("Content-Security-Policy",
+		politique(style, script, connect, frame, "https://"+hote))
+}
+
 func (s *Server) entetes(h http.Handler) http.Handler {
 	script := "'self'"
 	connect := "'self'"
@@ -217,11 +275,7 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 		// est la seconde barriere, celle qui tient si la premiere cede.
 		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
 		// c'est-a-dire exactement ce contre quoi elle protege.
-		hd.Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; style-src "+style+"; "+
-				"script-src "+script+"; connect-src "+connect+"; "+
-				"frame-src "+frame+"; media-src 'self'; "+
-				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, ""))
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("X-Frame-Options", "DENY")
