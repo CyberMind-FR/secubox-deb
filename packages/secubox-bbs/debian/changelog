@@ -1,3 +1,18 @@
+secubox-bbs (0.19.1-1~bookworm1) bookworm; urgency=medium
+
+  * LES IMAGES DU FIL ETAIENT ETIREES ET ROGNEES (ref #1044). Le premier jet
+    posait `width:100%` et `object-fit:cover` : une capture de 200 px etait
+    agrandie sur toute la colonne, et une image verticale rognee en bandeau.
+  * On s aligne sur `.jointe`, la regle des pieces jointes du BBS, correcte
+    depuis toujours : `max-width` SANS `width` n agrandit jamais, `height:auto`
+    SANS `object-fit` ne rogne jamais. Seule la hauteur est bornee, pour qu une
+    publication ne chasse pas la suivante hors de l ecran.
+  * Une image prend sa ligne, une pastille se range a cote — obtenu par
+    `flex-basis` plutot que par `:has()`, dont l absence sur un vieux
+    navigateur aurait empile les pastilles en colonne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:34:51 +0200
+
 secubox-bbs (0.19.0-1~bookworm1) bookworm; urgency=medium
 
   * LES IMAGES DU FIL S AFFICHENT (ref #1044). Elles n etaient rendues qu en
