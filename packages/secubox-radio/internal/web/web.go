@@ -79,7 +79,7 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc(prefixe+"/pistes/", s.gestePiste)
 	s.mux.HandleFunc(prefixe+"/chat", s.chat)
 	s.mux.HandleFunc(prefixe+"/suivante", s.suivante)
-	s.mux.HandleFunc("/audio/", s.servirAudio)
+	s.mux.HandleFunc("/media/", s.servirMedia)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
