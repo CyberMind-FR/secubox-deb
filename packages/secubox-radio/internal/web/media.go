@@ -8,22 +8,32 @@ import (
 	"strings"
 )
 
-// servirAudio rend le fichier d'une piste.
+// servirMedia rend le CLIP d'une piste.
+//
+// UN CLIP, PAS SEULEMENT UN SON. La passerelle yt-dlp rapatrie deja du `.mp4` :
+// on le garde tel quel. C'etait d'abord percu comme du gaspillage pour une
+// radio — c'est en fait la fonctionnalite, puisqu'elle sert aussi de television
+// synchronisee. Et surtout cela evite un transcodage que le processeur de cette
+// board ne peut pas payer : il est deja sature, et ffmpeg y prend un coeur
+// entier quand il tourne.
+//
+// Le meme fichier sert les deux usages : le telephone n'affiche que le son,
+// l'ecran montre le clip. Une seule copie, une seule horloge.
 //
 // `http.ServeContent` PLUTOT QU'UNE COPIE : il gere les requetes de PLAGE, et
 // sans elles on ne peut pas se positionner dans un morceau. Or c'est
 // exactement ce que fait un auditeur qui rejoint la radio en cours — il demande
 // « a partir de 3 min 41 ». Sans plage, le navigateur telecharge tout depuis le
 // debut avant de pouvoir jouer, et la synchronisation est perdue.
-func (s *Serveur) servirAudio(w http.ResponseWriter, r *http.Request) {
+func (s *Serveur) servirMedia(w http.ResponseWriter, r *http.Request) {
 	// L'AUDIO N'EST PAS PUBLIC. Une radio peut s'ecouter, mais servir les
 	// fichiers a qui passe ferait de la board un miroir ouvert.
 	if v := s.qui(r); !v.Connecte {
 		erreur(w, http.StatusUnauthorized, "connectez-vous")
 		return
 	}
-	brut := strings.TrimPrefix(r.URL.Path, "/audio/")
-	// On coupe une eventuelle extension decorative : `/audio/12.ogg`.
+	brut := strings.TrimPrefix(r.URL.Path, "/media/")
+	// On coupe une eventuelle extension decorative : `/media/12.ogg`.
 	if i := strings.IndexByte(brut, '.'); i > 0 {
 		brut = brut[:i]
 	}

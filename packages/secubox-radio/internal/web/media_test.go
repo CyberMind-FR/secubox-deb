@@ -45,11 +45,11 @@ func get(s *Serveur, chemin, qui string, entetes map[string]string) *httptest.Re
 // Un auditeur qui rejoint la radio en cours demande « a partir de 3 min 41 ».
 // Sans requetes de plage, le navigateur telecharge tout depuis le debut avant
 // de pouvoir jouer, et la synchronisation est perdue.
-func TestLAudioRepondAuxRequetesDePlage(t *testing.T) {
+func TestLeMediaRepondAuxRequetesDePlage(t *testing.T) {
 	s, _ := banc(t)
 	id := avecFichier(t, s, "0123456789abcdef")
 
-	w := get(s, "/audio/"+itoa(id), membre, map[string]string{"Range": "bytes=4-9"})
+	w := get(s, "/media/"+itoa(id), membre, map[string]string{"Range": "bytes=4-9"})
 	if w.Code != http.StatusPartialContent {
 		t.Fatalf("code %d au lieu de 206 : les plages ne sont pas servies", w.Code)
 	}
@@ -61,10 +61,10 @@ func TestLAudioRepondAuxRequetesDePlage(t *testing.T) {
 	}
 }
 
-func TestLAudioEstServiEnEntierSansPlage(t *testing.T) {
+func TestLeMediaEstServiEnEntierSansPlage(t *testing.T) {
 	s, _ := banc(t)
 	id := avecFichier(t, s, "0123456789abcdef")
-	w := get(s, "/audio/"+itoa(id), membre, nil)
+	w := get(s, "/media/"+itoa(id), membre, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("code %d", w.Code)
 	}
@@ -81,10 +81,10 @@ func TestLAudioEstServiEnEntierSansPlage(t *testing.T) {
 
 // L'AUDIO N'EST PAS PUBLIC : servir les fichiers a qui passe ferait de la board
 // un miroir ouvert.
-func TestLAudioNestPasServiAuxInconnus(t *testing.T) {
+func TestLeMediaNestPasServiAuxInconnus(t *testing.T) {
 	s, _ := banc(t)
 	id := avecFichier(t, s, "secret")
-	if w := get(s, "/audio/"+itoa(id), dehors, nil); w.Code != http.StatusUnauthorized {
+	if w := get(s, "/media/"+itoa(id), dehors, nil); w.Code != http.StatusUnauthorized {
 		t.Errorf("un inconnu obtient l'audio : %d", w.Code)
 	}
 }
@@ -107,7 +107,7 @@ func TestUnCheminHorsDuParcNestPasServi(t *testing.T) {
 	if err := s.st.PoseCache(p.ID, dehorsFic, "audio/ogg", 9, 1000, "", ""); err != nil {
 		t.Fatal(err)
 	}
-	w := get(s, "/audio/"+itoa(p.ID), membre, nil)
+	w := get(s, "/media/"+itoa(p.ID), membre, nil)
 	if w.Code != http.StatusNotFound {
 		t.Errorf("un fichier hors du parc a ete servi : %d", w.Code)
 	}
@@ -119,7 +119,7 @@ func TestUnCheminHorsDuParcNestPasServi(t *testing.T) {
 func TestUnePisteSansFichierRepondIntrouvable(t *testing.T) {
 	s, _ := banc(t)
 	p, _, _ := s.st.Ajoute("https://youtu.be/X", "", 1, s.Now())
-	if w := get(s, "/audio/"+itoa(p.ID), membre, nil); w.Code != http.StatusNotFound {
+	if w := get(s, "/media/"+itoa(p.ID), membre, nil); w.Code != http.StatusNotFound {
 		t.Errorf("code %d pour une piste sans fichier", w.Code)
 	}
 }
@@ -127,8 +127,8 @@ func TestUnePisteSansFichierRepondIntrouvable(t *testing.T) {
 func TestUneExtensionDecorativeEstAcceptee(t *testing.T) {
 	s, _ := banc(t)
 	id := avecFichier(t, s, "0123456789abcdef")
-	if w := get(s, "/audio/"+itoa(id)+".ogg", membre, nil); w.Code != http.StatusOK {
-		t.Errorf("/audio/<id>.ogg rend %d", w.Code)
+	if w := get(s, "/media/"+itoa(id)+".ogg", membre, nil); w.Code != http.StatusOK {
+		t.Errorf("/media/<id>.ogg rend %d", w.Code)
 	}
 }
 
