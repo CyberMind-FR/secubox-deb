@@ -128,3 +128,53 @@ func gabaritSansCommentaires(t *testing.T, nom string) string {
 		s = s[:i] + s[i+j+4:]
 	}
 }
+
+// LE DEFAUT CONSTATE A L'ECRAN, ET CE QUI L'EVITE.
+//
+// La premiere version rendait chaque publication dans un `<article class="post">`
+// avec un seul `.bd`. Or `.post` est une grille `52px 1fr` : la premiere colonne
+// est reservee a la vignette de l'auteur (`.who`). Sans ce `.who`, le corps
+// atterrissait DANS les 52 pixels — dates coupees en deux lignes, compteurs
+// empiles, boutons en colonne. La page etait juste, la grille non.
+//
+// Une publication distante n'a pas d'avatar a montrer : elle ne doit donc pas
+// emprunter cette grille.
+func TestLeFilNEmpruntePasLaGrilleAVignette(t *testing.T) {
+	g := gabaritSansCommentaires(t, "templates/mastodon.html")
+	i := strings.Index(g, "range .MastoFil")
+	if i < 0 {
+		t.Fatal("le bloc du fil est absent")
+	}
+	bloc := g[i:]
+	if j := strings.Index(bloc, "reglages-masto"); j > 0 {
+		bloc = bloc[:j]
+	}
+	if strings.Contains(bloc, `class="post`) {
+		t.Error(`le fil reutilise .post, grille a deux colonnes, sans .who : ` +
+			`le contenu serait ecrase dans la colonne de la vignette`)
+	}
+	if !strings.Contains(bloc, `class="pub"`) {
+		t.Error("le fil n'utilise pas sa classe dediee")
+	}
+
+	// Et la classe doit exister dans la feuille de style, en UNE colonne.
+	css, err := assets.ReadFile("static/bbs.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := string(css)
+	if !strings.Contains(c, ".pub{") {
+		t.Error(".pub n'est pas definie : les publications seraient sans style")
+	}
+	// `.pub` ne doit pas etre une grille a colonnes : c'est precisement ce
+	// qu'on fuit.
+	if k := strings.Index(c, ".pub{"); k >= 0 {
+		regle := c[k:]
+		if e := strings.Index(regle, "}"); e > 0 {
+			regle = regle[:e]
+		}
+		if strings.Contains(regle, "grid-template-columns") {
+			t.Error(".pub redevient une grille a colonnes")
+		}
+	}
+}

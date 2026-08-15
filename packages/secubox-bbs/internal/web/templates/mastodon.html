@@ -23,32 +23,34 @@
     <div class="note sf9f81af">{{.MastoFilErr}}</div>
   {{else if .MastoFil}}
     {{range .MastoFil}}
-    <article class="post sf9f81af">
-      <div class="bd">
-        <div class="hd">{{.Quand}}
-          {{if .Sensible}}<span class="pill p-local">sensible</span>{{end}}
-        </div>
-        {{if .Avert}}<p class="d"><b>{{.Avert}}</b></p>{{end}}
-        <p class="pre-ligne">{{.Texte}}</p>
-        {{if .Medias}}
-        <div class="row">
-          {{range .Medias}}
-            {{/* AUCUNE IMAGE DISTANTE N'EST CHARGÉE AUTOMATIQUEMENT : elle
-                 signalerait chaque lecture au serveur d'en face, et sur une
-                 publication fédérée ce serveur n'est pas le nôtre. On rend un
-                 lien, que l'on suit si l'on veut. */}}
-            <a class="btn sm" href="{{.URL}}" rel="noopener noreferrer"
-               title="{{if .Alt}}{{.Alt}}{{else}}pièce jointe{{end}}">
-              {{if eq .Type "image"}}🖼{{else if eq .Type "video"}}🎥{{else if eq .Type "audio"}}🎙{{else}}📎{{end}}
-              {{.Type}}</a>
-          {{end}}
-        </div>
-        {{end}}
-        <div class="row sf9f81af">
-          <span class="d">↩ {{.Reponses}} · ⇄ {{.Partages}} · ★ {{.Favoris}}</span>
-          <a class="btn sm" href="{{.URL}}" rel="noopener noreferrer">Voir sur l'instance</a>
-        </div>
+    {{/* CLASSE DEDIEE, PAS `.post`. `.post` est une grille a deux colonnes
+         (52px pour la vignette, le reste pour le corps) : y poser un `.bd`
+         seul, sans le `.who` qui occupe la premiere colonne, ecrasait tout le
+         contenu dans les 52 pixels de l'avatar. Une publication distante n'a
+         pas d'avatar a montrer — elle n'a donc pas a emprunter cette grille. */}}
+    <article class="pub">
+      <div class="pub-tete">
+        <span class="pub-quand">{{.Quand}}</span>
+        {{if .Sensible}}<span class="pill p-local">sensible</span>{{end}}
+        <span class="pub-sp"></span>
+        <span class="pub-cpt">↩ {{.Reponses}} · ⇄ {{.Partages}} · ★ {{.Favoris}}</span>
+        <a class="pub-lien" href="{{.URL}}" rel="noopener noreferrer">voir ↗</a>
       </div>
+      {{if .Avert}}<p class="pub-avert">{{.Avert}}</p>{{end}}
+      {{if .Texte}}<p class="pre-ligne pub-txt">{{.Texte}}</p>{{end}}
+      {{if .Medias}}
+      <div class="pub-medias">
+        {{range .Medias}}
+          {{/* AUCUNE IMAGE DISTANTE N'EST CHARGEE AUTOMATIQUEMENT : elle
+               signalerait chaque lecture au serveur d'en face, qui sur une
+               publication federee n'est pas le notre. */}}
+          <a class="pub-media" href="{{.URL}}" rel="noopener noreferrer"
+             title="{{if .Alt}}{{.Alt}}{{else}}pièce jointe — s'ouvre sur l'instance{{end}}">
+            {{if eq .Type "image"}}🖼{{else if eq .Type "video"}}🎥{{else if eq .Type "audio"}}🎙{{else}}📎{{end}}
+            {{if .Alt}}{{.Alt}}{{else}}{{.Type}}{{end}}</a>
+        {{end}}
+      </div>
+      {{end}}
     </article>
     {{end}}
     <div class="note sf9f81af">

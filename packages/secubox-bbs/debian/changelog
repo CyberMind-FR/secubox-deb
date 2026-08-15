@@ -1,3 +1,21 @@
+secubox-bbs (0.18.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE FIL S AFFICHAIT DANS 52 PIXELS (ref #1044). Chaque publication etait
+    rendue dans un `article.post` avec un seul `.bd`. Or `.post` est une
+    grille `52px 1fr` : la premiere colonne est reservee a la vignette de
+    l auteur (`.who`). Sans ce `.who`, le corps atterrissait DANS la colonne de
+    l avatar — dates coupees en deux lignes, compteurs empiles, boutons en
+    colonne. La page etait juste, la grille non.
+  * Une publication distante n a pas d avatar a montrer : elle ne doit donc
+    pas emprunter cette grille. Classe dediee `.pub`, une seule colonne, avec
+    une ligne de tete compacte (date, compteurs, lien) et des pieces jointes
+    en pastilles plutot qu en boutons — la piece jointe accompagne le texte,
+    elle ne se dispute pas la place avec lui.
+  * Un test refuse desormais que le fil reutilise `.post`, et verifie que
+    `.pub` ne redevient pas une grille a colonnes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:20:26 +0200
+
 secubox-bbs (0.18.0-1~bookworm1) bookworm; urgency=medium
 
   * LE FIL DU COMPTE LIE S AFFICHE (ref #1044), et la page est reorganisee
