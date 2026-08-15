@@ -656,3 +656,17 @@ video.jointe{max-height:60vh; background:#000}
 @media (max-width: 30rem) {
   .carte-media .vignette { width: 3.25rem; height: 3.25rem; }
 }
+
+/* ── hierarchie des sous-salons dans le rail (#1044) ──────────────────────
+   Le decalage est porte par une CLASSE : la politique de securite de contenu
+   interdit les styles en ligne, et un `style=` calcule serait silencieusement
+   ignore. La fleche remplace l'icone de salon pour dire « sous » sans mot. */
+.nav.sub1{padding-left:26px}
+.nav.sub2{padding-left:40px}
+.nav.sub3{padding-left:54px}
+.nav.sub1 .ic,.nav.sub2 .ic,.nav.sub3 .ic{background:transparent;font-size:11px;color:var(--muted,#8a83a0)}
+/* La meme indentation sur la liste d'accueil : deux affichages du meme arbre
+   doivent raconter la meme chose, sinon l'un des deux ment. */
+.board.sub1{padding-left:30px}
+.board.sub2{padding-left:46px}
+.board.sub3{padding-left:62px}

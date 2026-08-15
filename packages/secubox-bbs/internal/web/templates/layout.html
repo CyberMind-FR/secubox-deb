@@ -70,7 +70,7 @@
       {{if .Mod.Mastodon}}<a class="nav" {{if eq .Vue "mastodon"}}aria-current="page"{{end}} href="/mastodon"><span class="ic">🐘</span>Mastodon</a>{{end}}
 
       <div class="railhead">Salons</div>
-      {{range .Cats}}<a class="nav" href="/c/{{.Slug}}"><span class="ic">🗨️</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
+      {{range .Cats}}<a class="nav{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="ic">{{if .Profondeur}}↳{{else}}🗨️{{end}}</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
 
       {{if .V.Connecte}}{{if .V.Sysop}}
       <div class="railhead">Console</div>
