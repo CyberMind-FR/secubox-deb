@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox Radio</title>
+<link rel="stylesheet" href="/static/radio.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="tete">
+    <h1>🎵 SecuBox Radio</h1>
+    <span class="sp"></span>
+    <span class="direct"><span class="pt"></span> En direct</span>
+  </div>
+
+  <div class="carte">
+    <!-- LES CLIPS SONT GARDES : le meme fichier sert la radio et la
+         television. `playsinline` pour que le telephone n'ouvre pas son
+         lecteur plein ecran, qui sortirait de la page et couperait le chat. -->
+    <video id="ecran" playsinline preload="none"></video>
+    <div class="sous">
+      <div class="t" id="titre">…</div>
+      <button class="btn aime" id="aime">♥</button>
+      <!-- LE RECALAGE EST L'INVERSE D'UNE COMMANDE : il abandonne sa position
+           pour rejoindre celle du serveur. Une radio ne se met pas en pause
+           pour tout le monde. -->
+      <button class="btn" id="recaler" title="Rejoindre le direct">⟳</button>
+    </div>
+    <div class="sous" style="padding-top:0">
+      <span class="d" id="meta"></span>
+      <span class="sp"></span>
+      <span class="derive" id="derive"></span>
+    </div>
+    <div class="avert" id="avert" hidden>
+      Le navigateur a bloqué la lecture automatique. Touchez <b>⟳</b> pour
+      rejoindre le direct.
+    </div>
+  </div>
+
+  <div class="carte">
+    <div class="pad"><h3>🗂 La file</h3></div>
+    <div class="mosaique" id="file"></div>
+  </div>
+
+  <div class="carte">
+    <div class="pad"><h3>💬 L'antenne</h3></div>
+    <div id="chat"></div>
+    <div class="rangee">
+      <input id="dire" placeholder="Dire quelque chose…" maxlength="500" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="carte">
+    <div class="pad"><h3>➕ Proposer un titre</h3></div>
+    <form class="rangee" id="proposer">
+      <input id="source" placeholder="https://www.youtube.com/watch?v=…"
+             autocomplete="off" spellcheck="false">
+      <button class="btn p" type="submit">Proposer</button>
+    </form>
+    <div class="note" id="retour">Votre proposition passe par le sysop. Les autres
+      membres peuvent la soutenir d'un ♥ — les plus soutenues remontent.</div>
+  </div>
+
+</div>
+<script src="/static/radio.js"></script>
+</body>
+</html>
