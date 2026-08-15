@@ -33,7 +33,15 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/web"
 )
 
-const version = "0.8.1"
+// version est INJECTEE A LA CONSTRUCTION depuis debian/changelog (voir
+// debian/rules, -ldflags -X). Elle etait une constante figee, et elle a derive :
+// le demon annoncait 0.8.1 quand le paquet en etait a 0.12.0. Un numero de
+// version qui ment est pire qu'absent — on diagnostique sur une version qui
+// n'est pas celle qui tourne.
+//
+// La valeur ci-dessous ne sert qu'a `go run` et aux tests, ou aucun editeur de
+// liens ne passe.
+var version = "0.0.0-dev"
 
 func trim(s string) string { return strings.TrimSpace(s) }
 
