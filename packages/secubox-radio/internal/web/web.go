@@ -77,15 +77,19 @@ func (s *Serveur) Handler() http.Handler { return s.mux }
 
 // accueil sert la page d'ecoute.
 //
-// RESERVEE AUX MEMBRES, comme le chat et les clips : la radio est celle d'une
-// communaute, pas une station ouverte.
+// LA PAGE EST SERVIE A TOUT LE MONDE, ET C'EST UNE CORRECTION.
+//
+// La premiere version exigeait le cookie de pseudonyme... que SEULE CETTE PAGE
+// sait poser. Un premier visiteur recevait donc un 401 en JSON, affiche par le
+// navigateur dans son visualiseur : ni page, ni explication, ni moyen d'entrer.
+// La porte demandait la cle qu'elle etait chargee de donner.
+//
+// La page est du HTML sans secret : la servir ne divulgue rien. Ce qui reste
+// ferme, ce sont les GESTES et les CLIPS — le chat, les propositions, les
+// coeurs, `/media/`. On entre dans la salle, on ne prend pas le micro.
 func (s *Serveur) accueil(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
-		return
-	}
-	if !s.qui(r).Connecte {
-		erreur(w, http.StatusUnauthorized, "connectez-vous")
 		return
 	}
 	b, err := statique.ReadFile("static/index.html")
