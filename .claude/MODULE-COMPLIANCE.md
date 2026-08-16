@@ -424,3 +424,46 @@ A phase is considered complete when:
 ---
 
 *Last updated: 2026-04-08*
+
+## Socket Unix sous `/run/secubox` — prérequis obligatoire
+
+`/run/secubox` est **partagé par ~95 unités** et porte le bit collant (1777).
+Dans un répertoire collant, **on ne peut délier que ce qu'on possède**.
+
+Toute unité qui lie une socket sous `/run/secubox` **DOIT** porter :
+
+```ini
+ExecStartPre=+/bin/rm -f /run/secubox/<module>.sock
+```
+
+Le préfixe `+` exécute en root en ignorant `User=`. **Sans lui, la ligne échoue
+exactement comme le démon qu'elle devait dépanner.**
+
+**Pourquoi c'est obligatoire et non recommandé.** Si la socket a été laissée par
+un autre utilisateur — démon renommé, module qui tournait en `secubox`,
+réinstallation — le démon ne peut plus la recréer :
+
+```
+Unable to check or remove stale UNIX socket: PermissionError(1)
+OSError: [Errno 98] Address already in use
+```
+
+Il échoue, redémarre, échoue encore, **sans que rien ne le signale**. Constaté
+le 2026-08-16 sur `secubox-antirootkit` : 16 541 redémarrages depuis le 7 août.
+Neuf jours sans détection d'intrusion, sur un module de sécurité.
+
+### Ce qui reste interdit, et qu'il ne faut pas confondre
+
+* **`RuntimeDirectory=secubox` est PROSCRIT** — il efface au redémarrage les
+  sockets de toutes les unités voisines. C'est le défaut inverse.
+* **Ne jamais `chown` le parent `/run/secubox`** — il reste `root:root` 1777.
+
+### Contrôle
+
+Ne **jamais** auditer `RuntimeDirectory` par `grep` : de nombreuses unités
+portent ce texte dans un commentaire expliquant qu'on ne le déclare pas, ce qui
+produit des faux positifs massifs. Toujours la valeur effective :
+
+```bash
+systemctl show <unite> -p RuntimeDirectory -p RuntimeDirectoryPreserve --value
+```

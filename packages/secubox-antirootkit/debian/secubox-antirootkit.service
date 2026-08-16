@@ -6,8 +6,29 @@ After=network.target
 Type=simple
 User=secubox-antirootkit
 Group=secubox-antirootkit
-RuntimeDirectory=secubox
-RuntimeDirectoryPreserve=yes
+# RuntimeDirectory=secubox RETIRE (#1022) : /run/secubox est partage par ~95
+# unites, et systemd EFFACE le contenu d'un RuntimeDirectory au redemarrage —
+# une seule unite qui le declare emporte les sockets de toutes les autres, et
+# la board rend des 502 sur des modules qui n'avaient rien demande. Le parent
+# reste root:root 1777, cree hors des unites.
+# LA SOCKET PERIMEE EST RETIREE PAR ROOT, ET C'EST OBLIGATOIRE ICI.
+#
+# /run/secubox est partage et porte le bit collant (1777). Dans un tel
+# repertoire on ne peut delier QUE ce qu'on possede. Si la socket a ete laissee
+# par un autre utilisateur — un demon qui tournait en `secubox`, un module
+# renomme, une reinstallation — l'unite ne peut plus l'effacer :
+#
+#   Unable to check or remove stale UNIX socket: PermissionError(1)
+#   OSError: [Errno 98] Address already in use
+#
+# Le service echoue alors au demarrage, redemarre, echoue encore. Constate ici
+# le 2026-08-16 : 16541 redemarrages depuis le 7 aout, neuf jours pendant
+# lesquels le detecteur d'intrusion n'a rien detecte du tout.
+#
+# Le prefixe `+` execute la commande en root, en ignorant `User=` : c'est ce
+# qui permet de delier un fichier appartenant a autrui dans un repertoire
+# collant. Sans lui, la ligne echouerait exactement comme le demon.
+ExecStartPre=+/bin/rm -f /run/secubox/antirootkit.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/antirootkit.sock --workers 1
 WorkingDirectory=/usr/lib/secubox/antirootkit
 Restart=on-failure
