@@ -3,6 +3,37 @@
 
 ---
 
+## 2026-08-16 (fin) — BBS : deux volets qui glissent
+
+Le defaut de fond n'etait pas une regle mais **une accolade** : un
+`@media (max-width: 619.98px) {` ORPHELIN, reste d'une de mes suppressions ou
+le contenu avait ete efface en laissant l'ouvrante. Tout ce qui suivait se
+trouvait imbrique dans une condition impossible — les dispositions a deux et
+trois colonnes ne s'appliquaient sur AUCUNE largeur.
+
+Puis le marqueur de volet, pose dans la base, masquait la vue a toutes les
+largeurs : les messages disparaissaient aussi au bureau.
+
+**La bonne reponse est venue du user** : un multi-volets qui glisse. Masquer
+obligeait a decider quel volet montrer, et cette decision change a chaque page
+— racine des forums = la vue, forum precis = la liste, fil ouvert = la vue
+alors que le serveur pose encore `volet-liste`. Trois reglages, trois cas
+corriges en cassant le suivant. En ne masquant rien, la question disparait.
+
+Ajoute ensuite : le glissement suit la selection (`aria-current` l'emporte sur
+le marqueur), part des le clic sans attendre le reseau, et ne revient plus tout
+seul (`overflow-anchor: none` + focus relache).
+
+Avant cela : relais de vignettes pour nos services (politique fermee, garde
+anti-proxy-ouvert verifiee par mutation), `frame-src` etendu a la radio et au
+podcaster depuis un seul point de verite, fiches de liens sans appel reseau au
+rendu, et `/media-fiche` pour la resolution differee.
+
+**Trois erreurs de methode a retenir** : un doublon de 130 lignes ecrit sans
+avoir lu l'existant ; un deploiement avec un test rouge annonce « vert » ; et
+un drapeau pose dans l'unite sans verifier que le cablage du demon avait
+reussi — le BBS a rendu 503. Cause commune : conclure sans revérifier la base.
+
 ## 2026-08-16 (suite) — Securite, socket partagee, BBS mobile
 
 **Passe de securite sur gk2 : rien de la famille notwork.** Aucun binaire
