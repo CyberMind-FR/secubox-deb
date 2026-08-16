@@ -11,3 +11,7 @@ cmd/sbxmitm/sbxmitm
 /debian/debhelper-build-stamp
 /debian/*.debhelper.log
 /sbxwaf
+
+# binaires produits par `go build` a la racine du paquet
+/sbx-sentinel
+/cmd/sbxwaf/sbxwaf

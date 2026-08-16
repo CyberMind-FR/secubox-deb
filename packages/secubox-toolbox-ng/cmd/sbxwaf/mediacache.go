@@ -44,7 +44,7 @@ import (
 const (
 	mediaCacheMaxObj   int64 = 16 * 1024 * 1024       // 16 MiB per object
 	mediaCacheMaxTotal int64 = 2 * 1024 * 1024 * 1024 // 2 GiB total
-	mediaCacheTTL      int64 = 3600                    // default 1 h
+	mediaCacheTTL      int64 = 3600                   // default 1 h
 )
 
 // Cacheable content-type prefixes/substrings — exact port from _CACHEABLE tuple.
@@ -152,6 +152,11 @@ func (m *MediaCache) loadIndex() {
 			if strings.HasSuffix(f.Name(), ".m") {
 				continue // skip meta sidecars
 			}
+			// A half-written body from a crash between WriteFile and Rename.
+			// It was being indexed under the key "<hash>.tmp" and served.
+			if strings.HasSuffix(f.Name(), ".tmp") {
+				continue
+			}
 			key := f.Name()
 			bodyPath := filepath.Join(subDir, key)
 			info, err := os.Stat(bodyPath)
@@ -164,8 +169,19 @@ func (m *MediaCache) loadIndex() {
 				CE  string `json:"ce"`
 				Exp int64  `json:"exp"`
 			}
-			if raw, err := os.ReadFile(metaPath); err == nil {
-				_ = json.Unmarshal(raw, &meta)
+			raw, err := os.ReadFile(metaPath)
+			if err != nil || json.Unmarshal(raw, &meta) != nil || meta.CT == "" {
+				// NO SIDECAR, NO ENTRY. A body whose metadata we cannot read
+				// is unservable: without a stored Content-Type, Write() falls
+				// through to net/http's DetectContentType, which labels every
+				// stylesheet and script "text/plain". Browsers then refuse the
+				// stylesheet outright, and refuse the script too as soon as
+				// nosniff is in play — a blank page whose only trace is a
+				// console line. Dropping the orphan costs one upstream fetch;
+				// serving it mislabels the response for the whole TTL.
+				_ = os.Remove(bodyPath)
+				_ = os.Remove(metaPath)
+				continue
 			}
 			e := &cacheEntry{
 				size: info.Size(),
@@ -285,6 +301,14 @@ func (m *MediaCache) Get(url, acceptEncoding string) (body []byte, hdr http.Head
 	// cannot decode. Treat as a miss so the caller proxies upstream and negotiates
 	// an acceptable encoding.
 	if e.ce != "" && !encodingAccepted(acceptEncoding, e.ce) {
+		m.misses.Add(1)
+		return nil, nil, false
+	}
+
+	// Second line of defence for the same failure. loadIndex now refuses
+	// entries with no Content-Type, but an entry can also reach the index
+	// through MaybeStore, and one bad type is worse than one extra fetch.
+	if e.ct == "" {
 		m.misses.Add(1)
 		return nil, nil, false
 	}
