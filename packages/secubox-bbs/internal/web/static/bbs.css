@@ -541,6 +541,12 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     overscroll-behavior-x: contain;
+    /* PAS D'ANCRAGE DE DEFILEMENT. Quand le contenu d'un volet change de
+     * taille — une image qui arrive, une vignette qui se remplit — le
+     * navigateur corrige la position pour garder le meme point sous les yeux.
+     * Dans un conteneur a calage horizontal, cette correction fait revenir au
+     * volet precedent SANS QUE PERSONNE NE L'AIT DEMANDE. */
+    overflow-anchor: none;
     scrollbar-width: none;
   }
   .corps::-webkit-scrollbar { display: none; }

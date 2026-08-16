@@ -1,3 +1,14 @@
+secubox-bbs (0.25.2-1~bookworm1) bookworm; urgency=medium
+
+  * Des retours de volet non demandes se produisaient. Deux causes, traitees
+    ensemble : le navigateur corrige la position quand le contenu change de
+    taille — une image qui arrive — et dans un conteneur a calage horizontal
+    cette correction ramene au volet precedent (`overflow-anchor: none`) ; et
+    il garde l'element focalise dans le champ de vision, or c'est le lien qu'on
+    vient de taper, reste dans la liste (le focus est relache au clic).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:33:42 +0200
+
 secubox-bbs (0.25.1-1~bookworm1) bookworm; urgency=medium
 
   * Choisir un fil fait glisser vers la vue, tout de suite. Le serveur pose
