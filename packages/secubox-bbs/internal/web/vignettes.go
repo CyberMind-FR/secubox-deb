@@ -203,6 +203,11 @@ func (s *Server) servirVignette(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.Header().Set("Content-Type", "image/jpeg")
+		// nosniff MANQUAIT SUR CE CHEMIN, alors qu'il est pose sur celui du
+		// cache. La toute PREMIERE vue de chaque vignette — la seule que voit
+		// celui qui vient de deposer — partait donc sans, et c'est exactement
+		// celle d'un fichier qu'on n'a pas encore vu reduit.
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "private, max-age=604800, immutable")
 		w.Write(jpg)
 		return
