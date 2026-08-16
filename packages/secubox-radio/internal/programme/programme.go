@@ -157,3 +157,21 @@ func (p *Programmateur) Suivante(maintenant time.Time) (Etat, error) {
 	p.mu.Unlock()
 	return p.Actuel(maintenant)
 }
+
+// Oublie retire une piste de l'antenne si c'est elle qui passe.
+//
+// LE PROGRAMMATEUR TIENT SA PISTE EN MEMOIRE — c'est ce qui lui permet de
+// repondre la meme chose a tous les auditeurs sans relire la base a chaque
+// appel. Mais quand la piste est SUPPRIMEE, cette memoire devient un mensonge :
+// il continue d'annoncer un identifiant qui ne designe plus rien, et les
+// auditeurs recoivent un 404 sur le clip.
+//
+// On force donc un nouveau tirage au prochain appel. S'il n'y a plus rien de
+// jouable, ce sera le silence — un etat que la page sait dire.
+func (p *Programmateur) Oublie(id int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.piste.ID == id {
+		p.piste, p.demarre = store.Piste{}, false
+	}
+}
