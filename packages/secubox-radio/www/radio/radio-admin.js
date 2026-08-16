@@ -8,33 +8,16 @@ function toast(m) {
   setTimeout(function () { t.style.display = 'none'; }, 3200);
 }
 
-// ── LE SECRET DU SYSOP ────────────────────────────────────────────────────
+// LE PANNEAU N'A RIEN A PROUVER : il est servi par `admin.gk2`, deja
+// authentifiee, et l'agregateur relaie ses appels vers la radio en retirant le
+// prefixe. Le demon en tire lui-meme la consequence — voir `parAdmin`.
 //
-// LE PANNEAU EST SERVI PAR `admin.gk2`, l'API par `radio.gk2` : le cookie
-// d'identite appartient au second domaine et le navigateur ne l'envoie donc
-// JAMAIS ici. Sans secret, le panneau n'est connecte a rien — il voyait « 1 a
-// l'antenne » (route ouverte) et « 0 a valider » (route fermee), c'est-a-dire
-// un panneau vide sans la moindre erreur affichee.
-//
-// Le secret, lui, traverse les domaines : c'est un en-tete que l'on pose. Il
-// vaut a la fois identite et preuve de sysop — voir `identite()` cote demon.
-//
-// GARDE EN `sessionStorage` ET NON EN COOKIE : il ne part alors que sur les
-// requetes que CE panneau declenche, et disparait a la fermeture de l'onglet.
-function secret() {
-  var s = sessionStorage.getItem('sbx_radio_sysop');
-  if (!s) {
-    s = (prompt('Secret sysop de la radio\n(/etc/secubox/secrets/radio-sysop)') || '').trim();
-    if (s) sessionStorage.setItem('sbx_radio_sysop', s);
-  }
-  return s;
-}
-
+// Une premiere version reclamait un secret dans une boite de dialogue a un
+// administrateur DEJA connecte. C'etait une seconde authentification pour la
+// meme personne, sur la meme session : retiree.
 function api(chemin, options) {
   options = options || {};
   options.headers = Object.assign({ 'X-Sbx-Radio': '1' }, options.headers || {});
-  var s = sessionStorage.getItem('sbx_radio_sysop');
-  if (s) options.headers['X-Sbx-Radio-Sysop'] = s;
   if (options.body) options.headers['Content-Type'] = 'application/json';
   return fetch(API + chemin, options).then(function (r) {
     return r.json().catch(function () { return {}; })
@@ -202,12 +185,12 @@ function rafraichir() {
     .catch(function () { toast('API injoignable'); });
 }
 
-// Si l'API refuse, c'est le secret qui manque ou qui est faux : on le
-// redemande plutot que d'afficher un panneau vide sans explication.
+// UN REFUS SE DIT. Un panneau vide sans explication fait chercher la panne du
+// mauvais cote — c'est exactement ce qui s'est passe quand l'identite ne
+// passait pas.
 function verifieAcces(code) {
   if (code === 401 || code === 403) {
-    sessionStorage.removeItem('sbx_radio_sysop');
-    toast('Secret refusé — rechargez pour le saisir à nouveau.');
+    toast('Accès refusé par la radio — la session d’administration est-elle active ?');
     return false;
   }
   return true;
@@ -220,6 +203,5 @@ function suivante() {
   });
 }
 
-secret();
 rafraichir();
 setInterval(rafraichir, 30000);

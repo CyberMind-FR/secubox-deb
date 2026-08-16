@@ -40,6 +40,9 @@ var (
 	// ErrPasPrete : la recuperation est en cours. CE N'EST PAS UNE ERREUR — la
 	// piste reste dans la file avec son etat, et l'on repassera.
 	ErrPasPrete = errors.New("recuperation en cours")
+	// ErrCookies : yt-dlp reclame une authentification. Ce n'est ni une panne
+	// ni un refus definitif — c'est un cookies.txt a redeposer.
+	ErrCookies = errors.New("la passerelle reclame des cookies : deposez un cookies.txt a jour depuis le panneau ytsas")
 	// ErrTropGros : au-dela de la borne. Ecarte avec une raison lisible plutot
 	// que de remplir le disque en silence.
 	ErrTropGros = errors.New("fichier trop volumineux")
@@ -82,6 +85,14 @@ func (c *Client) Demande(ctx context.Context, adresse string) error {
 	}
 	defer res.Body.Close()
 	io.Copy(io.Discard, io.LimitReader(res.Body, 1<<16))
+	// UN 401 N'EST PAS « REFUSE », C'EST « COOKIES ». La passerelle rend ce
+	// code quand yt-dlp reclame une authentification — video soumise a age,
+	// reservee aux membres, ou cookies perimes. Le dire fait la difference
+	// entre un operateur qui depose un nouveau cookies.txt et un operateur qui
+	// cherche une panne reseau pendant une heure.
+	if res.StatusCode == http.StatusUnauthorized {
+		return ErrCookies
+	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
 		return fmt.Errorf("la passerelle a refuse (%d)", res.StatusCode)
 	}

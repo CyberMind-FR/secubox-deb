@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -240,7 +241,16 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 				// Pas encore chez la passerelle : on demande, et l'on
 				// repassera. Ce n'est pas une erreur, c'est le cours normal.
 				if err := cli.Demande(ctx, "https://www.youtube.com/watch?v="+ytID); err != nil {
-					log.Printf("radio: piste %d : %v", p.ID, err)
+					// UN BESOIN DE COOKIES SE MARQUE SUR LA PISTE, il ne se
+					// repete pas toutes les vingt secondes dans le journal. Le
+					// panneau l'affiche alors avec sa raison, et l'operateur
+					// sait quoi faire — au lieu de voir une piste bloquee en
+					// « recuperation » sans explication.
+					if errors.Is(err, ytsas.ErrCookies) {
+						st.MarqueIndisponible(p.ID, err.Error())
+					} else {
+						log.Printf("radio: piste %d : %v", p.ID, err)
+					}
 				}
 				break
 			}
