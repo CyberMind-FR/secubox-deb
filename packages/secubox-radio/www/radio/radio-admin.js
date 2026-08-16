@@ -124,6 +124,21 @@ function boutonSupprimer(p, apres) {
   });
 }
 
+// TROIS GESTES, TROIS PORTEES — et le panneau les distingue, parce qu'on ne
+// les devine pas :
+//   devalider  « pas maintenant » : retour en file, coeurs gardes
+//   refuser    « jamais »         : la reproposition ne la ramene pas
+//   supprimer  « efface »         : tout part, elle pourra revenir demain
+function boutonDevalider(p) {
+  return bouton('↩ Dévalider', '', function () {
+    api('/pistes/' + p.id + '/devalider', { method: 'POST' }).then(function (r) {
+      toast(r.code === 200 ? 'Renvoyée en file — elle garde ses ♥.'
+                           : (r.corps.error || 'Refusé'));
+      rafraichir();
+    });
+  });
+}
+
 function rendPlaylist(pistes, enCours) {
   var z = document.getElementById('playlist');
   if (!z) return;
@@ -134,7 +149,7 @@ function rendPlaylist(pistes, enCours) {
              : (p.en_cache ? tag(p.id === enCours ? 'en lecture' : 'prête',
                                  p.id === enCours ? 'c' : 'g')
                            : tag('récupération…', 'o'));
-    z.appendChild(ligne(p, [etat, boutonSupprimer(p)]));
+    z.appendChild(ligne(p, [etat, boutonDevalider(p), boutonSupprimer(p)]));
   });
 }
 

@@ -14,6 +14,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -389,9 +390,39 @@ func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
 		s.coeur(w, r, id)
 	case "supprimer":
 		s.supprime(w, r, id)
+	case "devalider":
+		s.devalide(w, r, id)
 	default:
 		erreur(w, http.StatusNotFound, "geste inconnu")
 	}
+}
+
+// devalide renvoie une piste a la file de validation. RESERVEE AU SYSOP.
+//
+// TROIS GESTES, TROIS PORTEES, et l'interface doit les distinguer :
+//
+//	devalider  « pas maintenant » — retour en file, coeurs gardes, revalidable
+//	refuser    « jamais »         — la reproposition ne la ramene pas
+//	supprimer  « efface »         — tout part, et elle pourra revenir demain
+func (s *Serveur) devalide(w http.ResponseWriter, r *http.Request, id int64) {
+	v, ok := s.sysopSeul(w, r)
+	if !ok {
+		return
+	}
+	if err := s.st.Devalide(id, v.ID, s.Now()); errors.Is(err, store.ErrPisteInconnue) {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	} else if err != nil {
+		erreur(w, http.StatusInternalServerError, "devalidation impossible")
+		return
+	}
+	// ELLE QUITTE L'ANTENNE IMMEDIATEMENT. Sans cet oubli, le programmateur
+	// continuerait d'annoncer une piste qui n'est plus validee — elle ne serait
+	// plus dans la playlist mais jouerait encore, ce qui est le pire des deux
+	// mondes.
+	s.prog.Oublie(id)
+	p, _ := s.st.ParID(id)
+	rendJSON(w, http.StatusOK, map[string]any{"piste": s.vue(p, v)})
 }
 
 // supprime retire une piste du repertoire. RESERVEE AU SYSOP.
@@ -413,40 +444,34 @@ func (s *Serveur) supprime(w http.ResponseWriter, r *http.Request, id int64) {
 		erreur(w, http.StatusNotFound, "piste inconnue")
 		return
 	}
-	// SI ELLE PASSE, ON AVANCE D'ABORD. Supprimer la piste en cours sans
-	// changer de titre laisserait l'antenne sur un identifiant qui ne designe
-	// plus rien, et les auditeurs sur un lecteur mort.
+	// SI ELLE PASSE, ON AVANCE — SANS JAMAIS REFUSER.
 	//
-	// ON COMPTE LES AUTRES JOUABLES AVANT D'AVANCER. Mon premier jet se
-	// contentait de tenter `Suivante` et de refuser en cas d'echec : avec une
-	// seule piste, le tirage la RESSORT — il reussit, et l'on supprimait donc
-	// la piste qui passait. Le test l'a montre.
+	// Ma premiere version refusait de supprimer la DERNIERE piste jouable, pour
+	// ne pas laisser les auditeurs sur un lecteur mort. C'etait se proteger d'un
+	// etat DEJA TRAITE : le silence est un etat de premiere classe, la page le
+	// dit, et une radio vide est parfaitement legitime — c'est meme ce qu'on
+	// veut quand on fait le menage.
+	//
+	// Refuser rendait donc le repertoire IMPOSSIBLE A VIDER : le sysop ne
+	// pouvait jamais retirer le dernier titre. Constate en essayant.
+	//
+	// On avance s'il reste quelque chose, on laisse tomber au silence sinon.
 	if e, err := s.prog.Actuel(s.Now()); err == nil && e.Piste.ID == id {
-		tp, _, err := s.st.PourTirage()
-		if err != nil {
-			erreur(w, http.StatusInternalServerError, "lecture impossible")
-			return
-		}
-		autres := 0
-		for _, t := range tp {
-			if t.ID != id && !t.Indisponible {
-				autres++
-			}
-		}
-		if autres == 0 {
-			erreur(w, http.StatusConflict,
-				"c'est la seule piste jouable : ajoutez-en une autre avant de la retirer")
-			return
-		}
 		if _, err := s.prog.Suivante(s.Now()); err != nil {
-			erreur(w, http.StatusConflict, "impossible de changer de titre")
-			return
+			// Plus rien de jouable : le programme le dira de lui-meme au
+			// prochain appel. Ce n'est pas une erreur.
+			log.Printf("radio: suppression de la derniere piste jouable — silence")
 		}
 	}
 	if err := s.st.Retire(id); err != nil {
 		erreur(w, http.StatusInternalServerError, "suppression impossible")
 		return
 	}
+	// ON LE DIT AU PROGRAMMATEUR. Il tient sa piste en memoire pour repondre la
+	// meme chose a tous les auditeurs ; sans cet oubli, il continuerait
+	// d'annoncer un identifiant qui ne designe plus rien, et le clip rendrait
+	// 404. Le test l'a montre.
+	s.prog.Oublie(id)
 	rendJSON(w, http.StatusOK, map[string]any{"supprimee": s.vue(p, v)})
 }
 

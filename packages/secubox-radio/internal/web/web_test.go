@@ -518,21 +518,34 @@ func TestSupprimerUnePisteGardeLaConversation(t *testing.T) {
 	}
 }
 
-// SI ELLE PASSE, ON AVANCE D'ABORD — sinon l'antenne reste sur un identifiant
-// qui ne designe plus rien.
-func TestSupprimerLaSeulePisteJouableEstRefuse(t *testing.T) {
+// LE REPERTOIRE DOIT POUVOIR SE VIDER, MEME DE SA DERNIERE PISTE.
+//
+// Ma premiere version refusait, pour ne pas laisser les auditeurs sur un
+// lecteur mort. C'etait se proteger d'un etat DEJA TRAITE : le silence est un
+// etat de premiere classe et la page le dit. Le refus rendait le repertoire
+// impossible a vider — constate en essayant de faire le menage.
+func TestOnPeutSupprimerLaDernierePisteEtTomberAuSilence(t *testing.T) {
 	s, st := banc(t)
 	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
 	_ = st.PoseCache(p.ID, "/x", "video/mp4", 0, 180000, "T", "")
-	// on la fait passer a l'antenne
-	appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+	appel(s, "GET", "/api/v1/radio/current", membre, nil, false) // elle passe
 
 	w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/supprimer", sysop, nil, true)
-	if w.Code != http.StatusConflict {
-		t.Errorf("code %d : on a coupe l'antenne sans rien dire", w.Code)
+	if w.Code != http.StatusOK {
+		t.Fatalf("le menage est refuse : %d %s", w.Code, w.Body)
 	}
-	if _, err := st.ParID(p.ID); err != nil {
-		t.Error("la piste a ete supprimee alors qu'elle passait seule")
+	if _, err := st.ParID(p.ID); err == nil {
+		t.Error("la piste est toujours la")
+	}
+	// ...et la radio DIT le silence, elle n'echoue pas.
+	w = appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+	if w.Code != http.StatusOK {
+		t.Fatalf("la radio vide rend %d", w.Code)
+	}
+	var d struct{ Silence bool }
+	json.Unmarshal(w.Body.Bytes(), &d)
+	if !d.Silence {
+		t.Error("la radio vide ne dit pas le silence")
 	}
 }
 
@@ -565,5 +578,83 @@ func TestSupprimerLaPisteEnCoursAvanceDAbord(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &d)
 	if d.Piste.ID == enCours || d.Piste.ID == 0 {
 		t.Errorf("l'antenne est restee sur la piste supprimee (%d)", d.Piste.ID)
+	}
+}
+
+// ── DEVALIDER ───────────────────────────────────────────────────────────────
+//
+// TROIS GESTES, TROIS PORTEES : devalider dit « pas maintenant », refuser dit
+// « jamais », supprimer efface. Les confondre serait perdre la nuance qui rend
+// la validation utile.
+func TestDevaliderRenvoieEnFileEtGardeLesCoeurs(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	_ = st.PoseCoeur(p.ID, 5, "bob", t0)
+	_ = st.PoseCoeur(p.ID, 6, "eve", t0)
+
+	if w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/devalider",
+		membre, nil, true); w.Code != http.StatusForbidden {
+		t.Errorf("un membre a devalide : %d", w.Code)
+	}
+	if w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/devalider",
+		sysop, nil, true); w.Code != http.StatusOK {
+		t.Fatalf("devalidation refusee : %d %s", w.Code, w.Body)
+	}
+	q, err := st.ParID(p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Etat != store.EtatPropose {
+		t.Errorf("etat = %q, attendu proposee", q.Etat)
+	}
+	if q.Coeurs != 2 {
+		t.Errorf("%d coeurs apres devalidation : le soutien est perdu", q.Coeurs)
+	}
+	// Elle quitte l'antenne...
+	if l, _ := st.Toutes(); len(l) != 0 {
+		t.Error("la piste devalidee joue encore")
+	}
+	// ...et revient dans la file du sysop.
+	if pr, _ := st.Propositions(); len(pr) != 1 {
+		t.Error("la piste devalidee n'est pas dans la file de validation")
+	}
+}
+
+// DEVALIDER N'EST PAS REFUSER : la piste peut etre revalidee, et une
+// reproposition ne se heurte a rien.
+func TestUnePisteDevalideePeutEtreRevalidee(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/devalider", sysop, nil, true)
+	if w := appel(s, "POST", "/api/v1/radio/propositions/"+itoa(p.ID)+"/valider",
+		sysop, nil, true); w.Code != http.StatusOK {
+		t.Fatalf("revalidation refusee : %d", w.Code)
+	}
+	if q, _ := st.ParID(p.ID); q.Etat != store.EtatValide {
+		t.Errorf("etat = %q", q.Etat)
+	}
+}
+
+// UNE PISTE DEVALIDEE QUITTE L'ANTENNE IMMEDIATEMENT. Sans cela elle ne serait
+// plus dans la playlist mais jouerait encore : le pire des deux mondes.
+func TestDevaliderLaPisteEnCoursLaSortDeLAntenne(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	_ = st.PoseCache(p.ID, "/x", "video/mp4", 0, 180000, "T", "")
+	appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/devalider", sysop, nil, true)
+
+	w := appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+	var d struct {
+		Silence bool
+		Piste   vuePiste
+	}
+	json.Unmarshal(w.Body.Bytes(), &d)
+	if d.Piste.ID == p.ID {
+		t.Error("la piste devalidee passe encore a l'antenne")
+	}
+	if !d.Silence {
+		t.Error("l'antenne ne dit pas le silence alors qu'il n'y a plus rien de valide")
 	}
 }

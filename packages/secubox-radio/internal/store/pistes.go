@@ -331,6 +331,19 @@ func (s *Store) Valide(id, par int64, maintenant time.Time) error {
 	return s.decide(id, par, maintenant, EtatValide, "")
 }
 
+// Devalide renvoie une piste de l'antenne vers la file de validation.
+//
+// LE PENDANT DE `Valide`, ET IL MANQUAIT. Un titre entre a l'antenne peut se
+// reveler mal choisi sans qu'on veuille l'ecarter definitivement : le
+// devalider le remet en attente, ou il garde ses coeurs et peut etre revalide.
+//
+// LA DIFFERENCE AVEC `Refuse` EST NETTE : refuser ferme la porte — la piste ne
+// peut plus etre reproposee. Devalider la rouvre — c'est « pas maintenant »,
+// pas « jamais ».
+func (s *Store) Devalide(id, par int64, maintenant time.Time) error {
+	return s.decide(id, par, maintenant, EtatPropose, "")
+}
+
 // Refuse ecarte une proposition, avec un motif.
 //
 // LA PISTE N'EST PAS SUPPRIMEE : sans la ligne, la meme adresse pourrait etre
