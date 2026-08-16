@@ -1,3 +1,16 @@
+secubox-toolbox (2.8.11-1~bookworm1) bookworm; urgency=medium
+
+  * blacklist-sync : l'ajout passe par une transaction nft atomique (`nft -f`)
+    au lieu d'un argument de ligne de commande. Sur un set `interval`, un ajout
+    echoue des qu'une plage recouvre une plage DEJA presente : replier le lot
+    sur lui-meme ne suffisait pas, et le repli element par element depassait le
+    delai. `flush` et `add` dans la meme transaction suppriment le conflit sans
+    jamais laisser le set vide.
+  * blacklist-sync : TimeoutStartSec a 300 s.
+    Resultat sur gk2 : v4 = 5580 elements, v6 = 66, en 27 s.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:06:08 +0200
+
 secubox-toolbox (2.8.10-1~bookworm1) bookworm; urgency=medium
 
   * blacklist-sync : les sets nft d'application etaient vides (#1052). Trois

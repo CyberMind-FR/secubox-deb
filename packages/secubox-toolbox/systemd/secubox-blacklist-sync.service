@@ -19,7 +19,11 @@ IOSchedulingClass=idle
 # nft par lots — se compte en secondes. Un plafond genereux ne protegeait plus
 # de rien : il laissait simplement un blocage tourner dix minutes avant que
 # systemd ne s'en apercoive.
-TimeoutStartSec=120
+# 300 s et non 120 : une passe ordinaire prend une dizaine de secondes, mais
+# apres une re-ingestion des flux un lot peut etre refuse et se rejouer element
+# par element — quelques milliers d'appels nft. 120 s coupait la synchronisation
+# en plein milieu, et les sets restaient a moitie charges.
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target

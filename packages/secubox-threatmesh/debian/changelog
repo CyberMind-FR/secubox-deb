@@ -1,3 +1,13 @@
+secubox-threatmesh (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * threatfeed : ajout de Spamhaus DROPv6. Le seul flux livrant de l'IPv6 etait
+    blocklist-de en poids 60, sous les deux seuils du filtre de consensus, et
+    les sept autres sont exclusivement v4 : AUCUNE adresse IPv6 ne pouvait etre
+    armee. DROPv6 a le meme niveau de confiance que drop.txt, donc le meme
+    poids : il passe le seuil sans qu'on abaisse la garde pour les autres.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:06:08 +0200
+
 secubox-threatmesh (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
