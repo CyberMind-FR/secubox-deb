@@ -1,3 +1,25 @@
+secubox-bbs (0.20.3-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : retour a la disposition de base — le contenu seul, la liste
+    atteignable par le tiroir. L'empilement des deux volets se superposait :
+    `.shell` est en hauteur fixe avec overflow:hidden, et deux volets qui
+    defilent chacun de leur cote dans une piste 1fr ne s'empilent pas, ils se
+    chevauchent.
+  * Le defaut des sous-forums vides reste ouvert et demande un marqueur pose
+    par le serveur, aucune regle CSS ne pouvant deviner quel volet porte le
+    contenu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:50:46 +0200
+
+secubox-bbs (0.20.2-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : les deux volets sont montres, empiles, et la page defile. Selon
+    la page le contenu utile change de volet — racine des forums dans `.vue`,
+    forum precis dans `.liste` (7594 octets contre 1749). Masquer l'un ou
+    l'autre produisait un ecran vide, une fois dans chaque sens.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:46:10 +0200
+
 secubox-bbs (0.20.1-1~bookworm1) bookworm; urgency=medium
 
   * Telephone : le contenu revient au premier plan. Une regle maitre-detail
