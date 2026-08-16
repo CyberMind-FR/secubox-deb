@@ -108,6 +108,36 @@ function rendProbas(pistes, enCours) {
   });
 }
 
+// LE PANNEAU DIT LA DIFFERENCE ENTRE REFUSER ET SUPPRIMER, parce qu'elle
+// n'est pas devinable : refuser garde la ligne et empeche la reproposition ;
+// supprimer efface tout, donc la piste pourra revenir demain.
+function boutonSupprimer(p, apres) {
+  return bouton('🗑 Supprimer', 'danger', function () {
+    if (!confirm('Supprimer « ' + (p.titre || p.source) + ' » ?\n\n' +
+                 'Elle quitte le répertoire et pourra être reproposée. ' +
+                 'Pour l\'empêcher de revenir, refusez-la plutôt.')) return;
+    api('/pistes/' + p.id + '/supprimer', { method: 'POST' }).then(function (r) {
+      if (r.code === 409) toast(r.corps.error || 'Impossible pour l’instant.');
+      else toast('Supprimée.');
+      (apres || rafraichir)();
+    });
+  });
+}
+
+function rendPlaylist(pistes, enCours) {
+  var z = document.getElementById('playlist');
+  if (!z) return;
+  z.innerHTML = '';
+  if (!pistes || !pistes.length) { z.innerHTML = '<div class="vide">rien a l antenne</div>'; return; }
+  pistes.forEach(function (p) {
+    var etat = p.ecarte ? tag(p.raison || 'écarté', 'r')
+             : (p.en_cache ? tag(p.id === enCours ? 'en lecture' : 'prête',
+                                 p.id === enCours ? 'c' : 'g')
+                           : tag('récupération…', 'o'));
+    z.appendChild(ligne(p, [etat, boutonSupprimer(p)]));
+  });
+}
+
 function rendEcartes(pistes) {
   var z = document.getElementById('ecartes');
   z.innerHTML = '';
@@ -145,6 +175,7 @@ function rafraichir() {
         : 'en lecture : ' + (cur.piste ? (cur.piste.titre || cur.piste.source) : '?');
 
       rendPropositions(props);
+      rendPlaylist(pistes, enCours);
       rendProbas(pistes, enCours);
       rendEcartes(pistes);
     })

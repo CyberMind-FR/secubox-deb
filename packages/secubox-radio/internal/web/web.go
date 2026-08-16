@@ -380,11 +380,74 @@ func (s *Serveur) gestePropo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
 	id, geste := decoupe(r.URL.Path, "/pistes/")
-	if id == 0 || geste != "coeur" {
-		erreur(w, http.StatusNotFound, "geste inconnu")
+	if id == 0 {
+		erreur(w, http.StatusNotFound, "piste inconnue")
 		return
 	}
-	s.coeur(w, r, id)
+	switch geste {
+	case "coeur":
+		s.coeur(w, r, id)
+	case "supprimer":
+		s.supprime(w, r, id)
+	default:
+		erreur(w, http.StatusNotFound, "geste inconnu")
+	}
+}
+
+// supprime retire une piste du repertoire. RESERVEE AU SYSOP.
+//
+// LA DIFFERENCE AVEC « REFUSER » EST REELLE, et l'interface doit la dire :
+// refuser garde la ligne et empeche la reproposition ; SUPPRIMER efface tout,
+// et la piste pourra donc etre reproposee demain. On supprime ce qui n'a rien a
+// faire la ; on refuse ce qu'on ne veut pas voir revenir.
+//
+// Les coeurs partent avec elle (cascade). Les phrases du chat, non : elles
+// perdent seulement leur lien — ce qui s'est dit pendant un morceau reste dit.
+func (s *Serveur) supprime(w http.ResponseWriter, r *http.Request, id int64) {
+	v, ok := s.sysopSeul(w, r)
+	if !ok {
+		return
+	}
+	p, err := s.st.ParID(id)
+	if err != nil {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	}
+	// SI ELLE PASSE, ON AVANCE D'ABORD. Supprimer la piste en cours sans
+	// changer de titre laisserait l'antenne sur un identifiant qui ne designe
+	// plus rien, et les auditeurs sur un lecteur mort.
+	//
+	// ON COMPTE LES AUTRES JOUABLES AVANT D'AVANCER. Mon premier jet se
+	// contentait de tenter `Suivante` et de refuser en cas d'echec : avec une
+	// seule piste, le tirage la RESSORT — il reussit, et l'on supprimait donc
+	// la piste qui passait. Le test l'a montre.
+	if e, err := s.prog.Actuel(s.Now()); err == nil && e.Piste.ID == id {
+		tp, _, err := s.st.PourTirage()
+		if err != nil {
+			erreur(w, http.StatusInternalServerError, "lecture impossible")
+			return
+		}
+		autres := 0
+		for _, t := range tp {
+			if t.ID != id && !t.Indisponible {
+				autres++
+			}
+		}
+		if autres == 0 {
+			erreur(w, http.StatusConflict,
+				"c'est la seule piste jouable : ajoutez-en une autre avant de la retirer")
+			return
+		}
+		if _, err := s.prog.Suivante(s.Now()); err != nil {
+			erreur(w, http.StatusConflict, "impossible de changer de titre")
+			return
+		}
+	}
+	if err := s.st.Retire(id); err != nil {
+		erreur(w, http.StatusInternalServerError, "suppression impossible")
+		return
+	}
+	rendJSON(w, http.StatusOK, map[string]any{"supprimee": s.vue(p, v)})
 }
 
 // coeur : POST pose, DELETE retire. Tout membre connecte.

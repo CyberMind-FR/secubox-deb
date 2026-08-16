@@ -463,3 +463,107 @@ func TestLesRoutesRepondentAvecEtSansPrefixe(t *testing.T) {
 		}
 	}
 }
+
+// ── SUPPRESSION ─────────────────────────────────────────────────────────────
+
+func TestSeulLeSysopSupprime(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	if w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/supprimer",
+		membre, nil, true); w.Code != http.StatusForbidden {
+		t.Errorf("un membre a supprime : %d", w.Code)
+	}
+	if _, err := st.ParID(p.ID); err != nil {
+		t.Error("la piste a disparu malgre le refus")
+	}
+	if w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/supprimer",
+		sysop, nil, true); w.Code != http.StatusOK {
+		t.Fatalf("le sysop n'a pas pu supprimer : %d %s", w.Code, w.Body)
+	}
+	if _, err := st.ParID(p.ID); err == nil {
+		t.Error("la piste est toujours la")
+	}
+}
+
+// SUPPRIMER N'EST PAS REFUSER. Refuser garde la ligne et empeche la
+// reproposition ; supprimer efface tout, donc la piste peut revenir.
+func TestUnePisteSupprimeePeutEtreReproposee(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/supprimer", sysop, nil, true)
+
+	w := appel(s, "POST", "/api/v1/radio/propositions", membre,
+		map[string]string{"source": "https://youtu.be/ABC"}, true)
+	if w.Code != http.StatusCreated {
+		t.Errorf("une piste supprimee ne peut pas revenir : %d %s", w.Code, w.Body)
+	}
+}
+
+// LA SUPPRESSION N'EFFACE PAS CE QUI S'EST DIT PENDANT. Les phrases perdent
+// leur lien, pas leur contenu.
+func TestSupprimerUnePisteGardeLaConversation(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	if _, err := st.Dis(2, "alice", "celle-la est terrible", p.ID, t0); err != nil {
+		t.Fatal(err)
+	}
+	appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/supprimer", sysop, nil, true)
+
+	l, err := st.Depuis(0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l) != 1 || l[0].Corps != "celle-la est terrible" {
+		t.Errorf("la conversation a disparu avec la piste : %+v", l)
+	}
+}
+
+// SI ELLE PASSE, ON AVANCE D'ABORD — sinon l'antenne reste sur un identifiant
+// qui ne designe plus rien.
+func TestSupprimerLaSeulePisteJouableEstRefuse(t *testing.T) {
+	s, st := banc(t)
+	p, _, _ := st.Ajoute("https://youtu.be/ABC", "T", 1, t0)
+	_ = st.PoseCache(p.ID, "/x", "video/mp4", 0, 180000, "T", "")
+	// on la fait passer a l'antenne
+	appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+
+	w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(p.ID)+"/supprimer", sysop, nil, true)
+	if w.Code != http.StatusConflict {
+		t.Errorf("code %d : on a coupe l'antenne sans rien dire", w.Code)
+	}
+	if _, err := st.ParID(p.ID); err != nil {
+		t.Error("la piste a ete supprimee alors qu'elle passait seule")
+	}
+}
+
+// ...MAIS AVEC UNE AUTRE PISTE DISPONIBLE, ON AVANCE PUIS ON SUPPRIME.
+func TestSupprimerLaPisteEnCoursAvanceDAbord(t *testing.T) {
+	s, st := banc(t)
+	a, _, _ := st.Ajoute("https://youtu.be/A", "A", 1, t0)
+	b, _, _ := st.Ajoute("https://youtu.be/B", "B", 1, t0)
+	_ = st.PoseCache(a.ID, "/a", "video/mp4", 0, 180000, "A", "")
+	_ = st.PoseCache(b.ID, "/b", "video/mp4", 0, 180000, "B", "")
+
+	w := appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+	var d struct {
+		Piste vuePiste
+	}
+	json.Unmarshal(w.Body.Bytes(), &d)
+	enCours := d.Piste.ID
+	if enCours == 0 {
+		t.Fatal("aucune piste a l'antenne")
+	}
+	if w := appel(s, "POST", "/api/v1/radio/pistes/"+itoa(enCours)+"/supprimer",
+		sysop, nil, true); w.Code != http.StatusOK {
+		t.Fatalf("suppression refusee : %d %s", w.Code, w.Body)
+	}
+	if _, err := st.ParID(enCours); err == nil {
+		t.Error("la piste n'a pas ete supprimee")
+	}
+	// L'antenne joue autre chose, elle n'est pas restee sur un fantome.
+	w = appel(s, "GET", "/api/v1/radio/current", membre, nil, false)
+	json.Unmarshal(w.Body.Bytes(), &d)
+	if d.Piste.ID == enCours || d.Piste.ID == 0 {
+		t.Errorf("l'antenne est restee sur la piste supprimee (%d)", d.Piste.ID)
+	}
+}

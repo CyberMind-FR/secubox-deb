@@ -113,8 +113,18 @@ func CleSource(brut string) string {
 			return "yt:" + id
 		}
 	case "youtube.com", "m.youtube.com", "music.youtube.com":
+		// UNE PISTE D'ABORD, UNE PLAYLIST ENSUITE. Une adresse `watch?v=X&list=Y`
+		// designe UN morceau qu'on regarde DEPUIS une playlist : c'est le
+		// morceau qui est propose, pas les deux cents qui l'entourent. Ne
+		// regarder que `list` ferait entrer une playlist entiere a chaque fois
+		// qu'on colle un lien pris dedans — c'est-a-dire presque toujours.
 		if id := u.Query().Get("v"); id != "" {
 			return "yt:" + id
+		}
+		if strings.HasSuffix(u.Path, "/playlist") {
+			if id := u.Query().Get("list"); id != "" {
+				return "ytpl:" + id
+			}
 		}
 		if strings.HasPrefix(u.Path, "/shorts/") {
 			if id := strings.Trim(strings.TrimPrefix(u.Path, "/shorts/"), "/"); id != "" {
