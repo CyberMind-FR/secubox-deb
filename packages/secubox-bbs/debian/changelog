@@ -1,3 +1,18 @@
+secubox-bbs (0.24.0-1~bookworm1) bookworm; urgency=medium
+
+  * `/media-fiche` resout les metadonnees d'un lien vers nos services, appele
+    paresseusement par la page. LE DEMON APPELLE, pas le navigateur :
+    `connect-src` vaut 'self', et l'elargir sur une surface qui rend du contenu
+    ecrit par des membres est precisement ce qu'on evite.
+  * PeerTube par oEmbed et la radio par son etat — les deux contrats sont
+    mesures sur gk2, pas supposes. La vignette repart par notre relais.
+  * Le podcaster n'est PAS authentifie : le 401 observe venait du portail JWT
+    de l'agregateur sur le chemin prefixe. Son vhost sert la page publique en
+    HTML et n'expose le JSON que par sa socket — le brancher demande un autre
+    chemin d'appel, laisse pour la suite plutot qu'improvise.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:56:27 +0200
+
 secubox-bbs (0.23.0-1~bookworm1) bookworm; urgency=medium
 
   * Un lien vers un de NOS services devient une fiche : le service est nomme,
