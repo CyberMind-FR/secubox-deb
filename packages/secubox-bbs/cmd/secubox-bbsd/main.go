@@ -100,6 +100,10 @@ func main() {
 		bannStyle = flag.String("banniere-style", "", "empreinte CSP de la balise <style> injectee par la banniere (sha256-…)")
 
 		ptOrigine = flag.String("peertube-origine", "", "instance PeerTube autorisee a fournir le lecteur video ; vide = aucune video integree")
+		mediaOrig = flag.String("media-origines", "",
+			"origines de NOS services dont on relaie les vignettes, separees par des virgules")
+		frameOrig = flag.String("frame-origines", "",
+			"services autorises a fournir un lecteur incorpore, separes par des virgules")
 		podDB     = flag.String("podcast-db", "/var/lib/secubox/podcaster/podcaster.db", "base du podcaster, lue en lecture seule")
 		podRacine = flag.String("podcast-racine", "/var/lib/secubox/podcaster/media,/data/secubox/podcaster",
 			"parcs media du podcaster, separes par des virgules — CONFINEMENT : rien hors de la n'est servi")
@@ -139,7 +143,9 @@ func main() {
 		BilletsSocket: *bilSock, JWTSecret: secret, BackupDir: *sauveg,
 		BanniereOrigine: *bannOrig, BanniereHash: *bannHash, BanniereStyle: *bannStyle,
 		PeerTubeOrigine: *ptOrigine, PodcastRacine: *podRacine, PodcastDB: *podDB,
-		AuthSocket: *authSock,
+		MediaOrigines: origines(*mediaOrig),
+		FrameOrigines: origines(*frameOrig),
+		AuthSocket:    *authSock,
 	})
 	if err != nil {
 		log.Fatalf("initialisation du serveur : %v", err)
@@ -196,4 +202,20 @@ func main() {
 	if err := h.Serve(l); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("service : %v", err)
 	}
+}
+
+// origines decoupe la liste passee en ligne de commande.
+//
+// Les entrees vides sont ecartees : une virgule en trop dans un fichier d'unite
+// aurait ajoute une origine vide a la liste, et `origineAdmise` compare des
+// chaines — une origine vide ne correspond a rien, mais mieux vaut ne pas la
+// porter du tout que de compter sur cette chance.
+func origines(brut string) []string {
+	var out []string
+	for _, p := range strings.Split(brut, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
