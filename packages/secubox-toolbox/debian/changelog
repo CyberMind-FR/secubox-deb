@@ -1,3 +1,24 @@
+secubox-toolbox (2.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * blacklist-sync : les sets nft d'application etaient vides (#1052). Trois
+    causes cumulees, chacune masquee par `2>/dev/null` :
+    - un seul `nft add element` portait 7176 adresses, soit 195 Ko d'argument
+      pour une limite noyau de 128 Ko : « Argument list too long », 100 % du
+      lot perdu. Les ajouts se font desormais par lots de 500.
+    - le drapeau `interval` fait rejeter un lot entier des que deux plages se
+      recouvrent. Les plages sont repliees en un jeu minimal avant l'ajout.
+    - le fichier d'etat n'etait jamais ecrit : `fs.protected_regular=2`
+      interdit d'ecraser dans /run/secubox (1777) un fichier qu'on ne possede
+      pas, y compris pour root.
+    Resultat sur gk2 : blacklist_v4 passe de 1 a 6538 elements.
+  * blacklist-sync : garde-fou sur les plages trop larges (rien de plus large
+    qu'un /8 en v4). Une seule ligne 0.0.0.0/0 dans un flux aurait mis la
+    board hors ligne, et le plafond en nombre d'elements n'en protegeait pas.
+  * blacklist-sync : un lot refuse est rejoue element par element, et l'erreur
+    de nft est journalisee au lieu d'etre jetee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 09:46:05 +0200
+
 secubox-toolbox (2.8.9-1~bookworm1) bookworm; urgency=medium
 
   * Empaqueter le backend HAProxy `toolbox_landing` dans /etc/haproxy/cfg.d/.

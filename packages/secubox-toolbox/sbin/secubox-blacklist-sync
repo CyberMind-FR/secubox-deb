@@ -109,17 +109,95 @@ fi
 # ── Push into the nft sets (batched add-element with per-elem timeout) ──
 # We don't flush : timeouts handle expiry, and re-adding refreshes the
 # timeout on still-active entries. Batching keeps it to one nft call.
+# fusionne : replie les plages qui se recouvrent en un jeu minimal.
+#
+# Les sets portent `flags interval`, et nft REFUSE UN LOT ENTIER des que deux
+# de ses elements se chevauchent — « conflicting intervals specified ». Les
+# flux publics en produisent en quantite (un /21 et le /23 qu'il contient), si
+# bien que 13 lots sur 15 etaient rejetes.
+#
+# `collapse_addresses` fait ce calcul une fois, correctement, en un seul
+# processus. Le faire en shell aurait demande de l'arithmetique de prefixe a
+# chaque ligne — c'est exactement le genre de boucle qu'on vient de retirer.
+#
+# GARDE-FOU : rien de plus large qu'un /8 (v4) ou /32 (v6). Un flux emballe qui
+# listerait 0.0.0.0/0 mettrait la board hors ligne, et le plafond en nombre
+# d'elements ne protege pas de ca — une seule ligne suffirait.
+fusionne() {
+    local famille="$1"
+    python3 -c '
+import ipaddress, sys
+fam = sys.argv[1]
+mini = 8 if fam == "v4" else 32
+nets = []
+for ligne in sys.stdin:
+    ligne = ligne.strip()
+    if not ligne:
+        continue
+    try:
+        n = ipaddress.ip_network(ligne, strict=False)
+    except ValueError:
+        continue
+    if n.prefixlen < mini:
+        print("skip-too-broad " + str(n), file=sys.stderr)
+        continue
+    nets.append(n)
+for n in ipaddress.collapse_addresses(nets):
+    print(n.with_prefixlen if n.prefixlen != n.max_prefixlen else str(n.network_address))
+' "$famille" 2>>"$TMP_SKIP" || cat
+}
+
+# add_batch : par lots bornes, et l'erreur de nft n'est plus jetee.
+#
+# UN SEUL APPEL AVEC TOUT NE POUVAIT PAS MARCHER : 7176 adresses font 195 Ko
+# d'argument, la limite du noyau pour UN argument est de 128 Ko, et l'appel
+# echouait en « Argument list too long » — 100 % du lot perdu, sans trace,
+# `2>/dev/null` avalant le message.
+#
+# Un lot refuse est rejoue element par element : une adresse fautive ne doit
+# pas emporter les 499 autres.
+BATCH="${SECUBOX_BL_BATCH:-500}"
 add_batch() {
     local set="$1" file="$2" fam="$3"
     [ -s "$file" ] || return 0
-    local elems
-    elems=$(awk -v t="$ELEM_TIMEOUT" 'NF{printf "%s timeout %s, ", $1, t}' "$file")
-    elems="${elems%, }"
-    [ -n "$elems" ] || return 0
-    # add (not flush+add) so concurrent CrowdSec table updates don't race.
-    $NFT add element $TABLE "$set" "{ $elems }" 2>/dev/null \
-        || log "WARN: partial add to $set ($fam)"
+    local ajoutes=0 refuses=0 lot err
+    local dir; dir=$(mktemp -d); split -l "$BATCH" "$file" "$dir/l_"
+    for lot in "$dir"/l_*; do
+        local elems
+        elems=$(awk -v t="$ELEM_TIMEOUT" 'NF{printf "%s timeout %s, ", $1, t}' "$lot")
+        elems="${elems%, }"
+        [ -n "$elems" ] || continue
+        # add (not flush+add) so concurrent CrowdSec table updates don't race.
+        if err=$($NFT add element $TABLE "$set" "{ $elems }" 2>&1); then
+            ajoutes=$((ajoutes + $(wc -l < "$lot")))
+        else
+            log "WARN: lot refuse sur $set ($fam) : ${err%%$'\n'*}"
+            local une
+            while IFS= read -r une; do
+                [ -n "$une" ] || continue
+                if $NFT add element $TABLE "$set" "{ $une timeout $ELEM_TIMEOUT }" 2>/dev/null; then
+                    ajoutes=$((ajoutes + 1))
+                else
+                    refuses=$((refuses + 1))
+                fi
+            done < "$lot"
+        fi
+    done
+    rm -rf "$dir"
+    [ "$refuses" -gt 0 ] && log "WARN: $refuses element(s) refuse(s) sur $set ($fam)"
+    log "added: $ajoutes -> $set ($fam)"
+    return 0
 }
+
+TMP_SKIP=$(mktemp)
+fusionne v4 < "$TMP4" > "$TMP4.f" && mv "$TMP4.f" "$TMP4"
+fusionne v6 < "$TMP6" > "$TMP6.f" && mv "$TMP6.f" "$TMP6"
+if [ -s "$TMP_SKIP" ]; then
+    log "WARN: $(wc -l < "$TMP_SKIP") plage(s) ecartee(s) car trop larges"
+fi
+rm -f "$TMP_SKIP"
+n4=$(wc -l < "$TMP4" 2>/dev/null || echo 0)
+n6=$(wc -l < "$TMP6" 2>/dev/null || echo 0)
 
 add_batch blacklist_v4 "$TMP4" v4
 add_batch blacklist_v6 "$TMP6" v6
@@ -149,6 +227,18 @@ live4=$($NFT list set $TABLE blacklist_v4 2>/dev/null | grep -c 'timeout' || ech
 live6=$($NFT list set $TABLE blacklist_v6 2>/dev/null | grep -c 'timeout' || echo 0)
 STATE=/run/secubox/blacklist-sync.json
 mkdir -p /run/secubox 2>/dev/null || true
+# ON EFFACE AVANT D'ECRIRE, et ce n'est pas de la superstition.
+#
+# /run/secubox est partage par une centaine d'unites, donc 1777 avec le bit
+# collant. `fs.protected_regular` interdit alors d'ouvrir en ecriture un
+# fichier qu'on ne possede pas dans un repertoire de ce type — Y COMPRIS POUR
+# ROOT. Le fichier appartenait a `secubox`, laisse par un autre module : la
+# redirection echouait en « Permission denied » a chaque passe depuis des
+# jours, et /admin/blacklist n'avait jamais rien de frais a montrer.
+#
+# Le detruire d'abord contourne la regle proprement : root peut delier dans un
+# repertoire collant, et le fichier recree lui appartient.
+rm -f "$STATE" 2>/dev/null || true
 printf '{"ts":%s,"v4_added":%s,"v6_added":%s,"doh_block":%s}\n' \
     "$(date +%s)" "${n4:-0}" "${n6:-0}" "${DOH_BLOCK}" \
     > "$STATE" 2>/dev/null || true
