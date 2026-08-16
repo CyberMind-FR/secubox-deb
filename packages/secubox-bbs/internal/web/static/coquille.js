@@ -181,3 +181,50 @@
     });
   });
 })();
+
+/* QUEL VOLET EST SOUS LES YEUX AU CHARGEMENT.
+ *
+ * Les deux existent toujours ; on ne fait que placer le regard. Le serveur
+ * pose `volet-liste` quand c'est la liste qui porte le contenu — sur un forum,
+ * ce sont les fils. Partout ailleurs, la vue.
+ *
+ * `scrollLeft` et non `scrollIntoView` : ce dernier fait aussi defiler les
+ * ancetres, et sur une coquille en hauteur fixe il decalait toute la page.
+ *
+ * Sans animation au chargement : un glissement au premier affichage donne
+ * l'impression d'avoir touche l'ecran par erreur. */
+(function voletInitial() {
+  var corps = document.querySelector('.corps');
+  if (!corps || corps.scrollWidth <= corps.clientWidth) { return; }
+  var liste = corps.querySelector('.liste');
+  var vue = corps.querySelector('.vue');
+  // UN ELEMENT SELECTIONNE DANS LA LISTE L'EMPORTE SUR LE MARQUEUR.
+  //
+  // Le serveur pose `volet-liste` des qu'on est dans un forum — y compris
+  // quand un fil est OUVERT. On atterrissait donc sur la liste apres avoir
+  // choisi un fil, et il fallait glisser a la main pour lire ce qu'on venait
+  // de demander.
+  //
+  // `aria-current="page"` est deja pose par les gabarits sur l'element choisi :
+  // sa presence dit que la vue porte quelque chose de precis, et c'est un
+  // signal plus sur qu'un marqueur de page.
+  var choisi = liste && liste.querySelector('[aria-current="page"]');
+  var cible = (corps.classList.contains('volet-liste') && !choisi) ? liste : vue;
+  if (!cible) { return; }
+  var avant = corps.style.scrollBehavior;
+  corps.style.scrollBehavior = 'auto';
+  corps.scrollLeft = cible.offsetLeft - corps.offsetLeft;
+  corps.style.scrollBehavior = avant;
+
+  // GLISSER DES LE CHOIX, sans attendre le chargement de la page suivante.
+  //
+  // Le lien navigue, donc la vue ne se remplira qu'apres l'aller-retour ; mais
+  // deplacer le regard tout de suite fait sentir que le geste a ete pris en
+  // compte. Sans cela, on tape et rien ne bouge pendant le temps du reseau —
+  // et l'on tape une seconde fois.
+  liste && liste.addEventListener('click', function (e) {
+    if (!e.target.closest('a')) { return; }
+    if (corps.scrollWidth <= corps.clientWidth) { return; }
+    corps.scrollTo({ left: vue.offsetLeft - corps.offsetLeft, behavior: 'smooth' });
+  }, { passive: true });
+})();

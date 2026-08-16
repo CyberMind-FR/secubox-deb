@@ -1,3 +1,30 @@
+secubox-bbs (0.25.1-1~bookworm1) bookworm; urgency=medium
+
+  * Choisir un fil fait glisser vers la vue, tout de suite. Le serveur pose
+    `volet-liste` des qu'on est dans un forum — y compris quand un fil est
+    OUVERT : on atterrissait sur la liste apres avoir choisi un fil, et il
+    fallait glisser a la main pour lire ce qu'on venait de demander.
+  * Au chargement, un element portant `aria-current="page"` dans la liste
+    l'emporte sur le marqueur : sa presence dit que la vue porte quelque chose
+    de precis, et c'est un signal plus sur qu'un marqueur de page.
+  * Le glissement part des le clic, sans attendre l'aller-retour reseau : sans
+    cela on tape et rien ne bouge, et l'on tape une seconde fois.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:21:35 +0200
+
+secubox-bbs (0.25.0-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : les deux volets glissent au lieu d'etre masques. AUCUN VOLET
+    N'EST PLUS CACHE, et c'est tout l'interet — masquer obligeait a decider
+    lequel montrer, decision ratee trois fois : la racine des forums porte son
+    contenu dans la vue, un forum precis dans la liste, et un fil ouvert de
+    nouveau dans la vue alors que le serveur posait encore `volet-liste`. Les
+    messages restaient donc invisibles sur telephone.
+  * Le marqueur du serveur ne masque plus rien : il place seulement le regard
+    au chargement. Ce qui n'est pas sous les yeux reste a un glissement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:18:08 +0200
+
 secubox-bbs (0.24.2-1~bookworm1) bookworm; urgency=medium
 
   * Les messages d'un forum ne s'affichaient pas au bureau : le marqueur de
