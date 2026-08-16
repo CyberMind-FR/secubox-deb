@@ -771,3 +771,28 @@ video.jointe{max-height:60vh; background:#000}
    empile les pastilles en colonne. */
 .pub-medias{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px}
 .pub-medias > .pub-vue,.pub-medias > .pub-son{flex:0 1 100%}
+
+/* ── FICHE D'UN SERVICE SECUBOX ────────────────────────────────────────────
+ *
+ * Un lien vers notre radio, notre PeerTube ou notre podcaster s'habille au
+ * lieu de rester une adresse nue. Elle reste UN LIEN : si le service est
+ * absent, le membre garde quelque chose de cliquable.
+ *
+ * `inline-flex` et non `block` : une fiche apparait au fil du texte, et un
+ * bloc couperait la phrase qui l'entoure. Plusieurs fiches cote a cote
+ * s'alignent d'elles-memes — c'est la mosaique, sans grille a declarer. */
+.fiche-sbx{
+  display:inline-flex; align-items:center; gap:8px; vertical-align:baseline;
+  max-width:100%; margin:2px 0; padding:5px 11px 5px 7px;
+  border:1px solid var(--line); border-radius:9px; background:var(--soft);
+  text-decoration:none; color:var(--text); font-size:14px; line-height:1.35;
+}
+.fiche-sbx:hover{border-color:var(--dim); background:var(--panel)}
+.fiche-svc{
+  flex:0 0 auto; padding:.1em .5em; border-radius:5px;
+  background:var(--panel2, rgba(127,127,127,.14)); color:var(--dim);
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+}
+/* L'adresse peut etre longue : on la coupe plutot que d'etirer la ligne. */
+.fiche-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+@media (max-width:34rem){ .fiche-sbx{display:flex} }

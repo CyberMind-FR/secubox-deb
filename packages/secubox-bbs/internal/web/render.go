@@ -116,6 +116,9 @@ func inline(s string) template.HTML {
 	e = liens(e)
 	e = adressesNues(e)
 	e = mediasIntegres(e)
+	// APRES mediasIntegres : une piece jointe devient un lecteur, elle n'a pas
+	// a devenir une fiche. Ce qui reste ici est un lien vers un service.
+	e = fichesSecuBox(e)
 	e = paires(e, "**", "<strong>", "</strong>")
 	e = paires(e, "`", "<code>", "</code>")
 	e = paires(e, "*", "<em>", "</em>")
