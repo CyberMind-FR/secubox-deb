@@ -3,6 +3,38 @@
 
 ---
 
+## 2026-08-16 (suite) — Securite, socket partagee, BBS mobile
+
+**Passe de securite sur gk2 : rien de la famille notwork.** Aucun binaire
+d'architecture etrangere, pas de `ld.so.preload`, aucun SUID recent, cles SSH
+inchangees depuis mai, cron entierement a nous, une seule connexion sortante.
+Le port 445 est borde comme il faut : accepte depuis le LAN, `reject` ailleurs.
+
+**Mais le detecteur d'intrusion ne detectait rien.** `secubox-antirootkit` etait
+en boucle de redemarrage — 16541 fois depuis le 7 aout. `/run/secubox` porte le
+bit collant : on n'y delie que ce qu'on possede, et la socket appartenait a
+`secubox` alors que l'unite tourne en `secubox-antirootkit`. Neuf jours sans
+surveillance, en silence.
+
+Parade `ExecStartPre=+/bin/rm` portee dans **146 unites**, et
+`RuntimeDirectory=secubox` retire de **114 unites SOURCE** — celles de la board
+ne l'avaient plus, un rebuild aurait reintroduit l'effacement des sockets
+voisines. La regle entre dans `MODULE-COMPLIANCE.md`.
+
+**blacklist-sync : les sets nft etaient vides.** 7176 adresses dans un seul
+argument (195 Ko pour une limite de 128 Ko), plages en conflit sur un set
+`interval`, fichier d'etat jamais ecrit. Transaction `nft -f` atomique : v4
+passe de 1 a 5580 elements, v6 de 0 a 66 apres ajout de Spamhaus DROPv6 — le
+seul flux v6 etait en poids 60, sous les deux seuils.
+
+**mitm** : deux `mitmdump` orphelins retires (111 Mo). Un chemin sur trois est
+migre vers `sbxmitm`, contrairement a ce que j'avais d'abord conclu.
+
+**BBS mobile** : trois tentatives, trois defauts differents. Etat final —
+contenu seul, liste au tiroir dont le bouton existe enfin sur telephone. Les
+sous-forums vides restent ouverts : le contenu change de volet selon la page et
+aucune regle CSS ne peut le deviner.
+
 ## 2026-08-16 — Radio 0.1.2, sbxwaf 0.1.40 : trois symptomes, trois causes (#1047, #1031)
 
 **Le cache media du WAF servait une feuille perimee en `text/plain`.** Le

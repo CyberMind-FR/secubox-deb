@@ -18,6 +18,17 @@
 
 ### ⬜ Next Up
 
+- **Deployer les 126 paquets construits** — par lots de dix, controle de sante
+  entre chaque. Jamais d'un coup : 126 demons redemarres en parallele.
+- **#1056 mosaique et vignettes BBS** — relais par le demon, pas d'`img-src`
+  elargi. Question ouverte : le relais accepte-t-il une URL libre postee par un
+  membre ? Sinon c'est un proxy ouvert.
+- **#1055 edition et suppression** des messages, avec journal d'audit.
+- **Sous-forums vides sur telephone** — demande un marqueur pose par le serveur.
+- **#1054 sbxmitm** — splice WebSocket avant de basculer les deux chemins.
+- **#1051 403 YouTube** — piste PO token, non verifiee.
+- **#1053 c3box** — reinstallation from scratch.
+
 - **403 YouTube sur le media** (#1048 voisin) — metadonnees OK, media refuse.
   Ni les cookies, ni notre interception, ni la version de yt-dlp. Piste non
   verifiee : fournisseur de PO token.
