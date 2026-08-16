@@ -38,7 +38,13 @@ func main() {
 		_          = flag.String("parc", "", "obsolete : la radio relaie, elle ne recopie plus")
 		passerelle = flag.String("ytsas", "http://10.100.0.180:8091", "passerelle yt-dlp")
 		clipMax    = flag.Int64("clip-max", 256<<20, "taille maximale d'un clip, en octets")
-		montre     = flag.Bool("version", false, "afficher la version")
+		// LA BANNIERE DE SANTE EST INJECTEE PAR LE WAF dans chaque page HTML de
+		// la board. Une politique stricte la bloque ; ces deux reglages
+		// l'autorisent nommement. Vides = politique fermee, et la page s'affiche
+		// simplement sans banniere — on prefere cela a une politique ouverte.
+		bannOrig = flag.String("banniere-origine", "", "origine du script de banniere")
+		bannHash = flag.String("banniere-hash", "", "empreinte du script en ligne de la banniere")
+		montre   = flag.Bool("version", false, "afficher la version")
 	)
 	flag.Parse()
 	if *montre {
@@ -70,6 +76,7 @@ func main() {
 	srv := web.Nouveau(st, prog, identite, reg)
 	// LA RADIO RELAIE, ELLE NE RECOPIE PAS : voir internal/ytsas.Flux.
 	srv.Flux = cli.Flux
+	srv.BanniereOrigine, srv.BanniereHash = *bannOrig, *bannHash
 	ctx, arrete := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer arrete()
 

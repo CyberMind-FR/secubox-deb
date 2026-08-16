@@ -37,6 +37,7 @@ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.7rem;margin:
 #ecran{width:100%;background:#000;aspect-ratio:16/9;display:block}
 #ecran.sonseul{aspect-ratio:auto;height:4rem}
 .sous{display:flex;align-items:center;gap:.8rem;padding:.7rem 1.1rem;flex-wrap:wrap}
+.sous.serre{padding-top:0}
 .sous .t{font-weight:650;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sous .d{color:var(--dim);font-size:12px}
 .btn{border:1px solid var(--line);background:var(--soft);color:var(--text);

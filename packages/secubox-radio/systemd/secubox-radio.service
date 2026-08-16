@@ -12,7 +12,9 @@ ExecStart=/usr/sbin/secubox-radiod \
     --socket /run/secubox/radio.sock \
     --db /var/lib/secubox/radio/radio.db \
     --parc /data/secubox/radio/media \
-    --ytsas http://10.100.0.180:8091
+    --ytsas http://10.100.0.180:8091 \
+    --banniere-origine https://admin.gk2.secubox.in \
+    --banniere-hash sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs=
 Restart=on-failure
 RestartSec=5
 
