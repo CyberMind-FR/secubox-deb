@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/tirage"
@@ -28,8 +29,16 @@ type Piste struct {
 	JoueeLe      int64 // 0 = jamais
 }
 
+// EstPlaylist dit si cette entree designe une playlist entiere plutot qu'un
+// morceau.
+//
+// UNE PLAYLIST N'EST PAS UNE PISTE : elle ne se joue pas, elle se DEPLIE. Tant
+// qu'elle n'est pas depliee, elle n'est jamais jouable — d'ou son exclusion du
+// tirage.
+func (p Piste) EstPlaylist() bool { return strings.HasPrefix(p.Source, "ytpl:") }
+
 // EnCache dit si la piste est prete a passer.
-func (p Piste) EnCache() bool { return p.Fichier != "" && !p.Indisponible }
+func (p Piste) EnCache() bool { return p.Fichier != "" && !p.Indisponible && !p.EstPlaylist() }
 
 // Ajoute depose une piste, ou rend celle qui existe deja.
 //
@@ -440,4 +449,70 @@ func (s *Store) OublieCache(id int64) error {
 	_, err := s.db.Exec(
 		`UPDATE pistes SET fichier = '', mime = '', octets = 0 WHERE id = ?`, id)
 	return err
+}
+
+// MaxParPlaylist borne un depliage.
+//
+// Une playlist peut porter cinq cents titres. Les faire entrer d'un coup
+// noierait le repertoire, et le tirage ne parlerait plus que d'elle pendant des
+// semaines. La borne est basse a dessein : on deplie un album, pas une
+// discotheque.
+const MaxParPlaylist = 50
+
+// Deplie remplace une playlist par les morceaux qu'elle contient.
+//
+// LES MORCEAUX HERITENT DE LA DECISION DEJA PRISE : le sysop a valide LA
+// PLAYLIST, il n'a pas a revalider chacun de ses titres. C'est tout l'interet
+// de proposer une liste plutot que cinquante liens.
+//
+// LA PLAYLIST ELLE-MEME EST RETIREE : elle a joue son role. La garder
+// laisserait dans le repertoire une entree qui ne se joue jamais et que le
+// panneau afficherait comme « en attente de recuperation » indefiniment.
+func (s *Store) Deplie(playlistID int64, morceaux []MorceauPlaylist, par int64, maintenant time.Time) (int, error) {
+	pl, err := s.ParID(playlistID)
+	if err != nil {
+		return 0, err
+	}
+	if !pl.EstPlaylist() {
+		return 0, errors.New("cette entree n'est pas une playlist")
+	}
+	n := 0
+	for i, m := range morceaux {
+		if i >= MaxParPlaylist {
+			break
+		}
+		cle := CleSource(m.URL)
+		if cle == "" || strings.HasPrefix(cle, "ytpl:") {
+			continue
+		}
+		// UN MORCEAU DEJA CONNU N'ENTRE PAS DEUX FOIS — refuse, propose ou deja
+		// a l'antenne. C'est ce qui empeche qu'un depliage contourne un refus :
+		// la porte de derriere exacte que le refus est cense fermer.
+		//
+		// LE TEST EXPLICITE SUR `EtatRefuse` EST REDONDANT, et c'est verifie :
+		// en le neutralisant, aucun test ne tombe, parce que le second
+		// `continue` attrape deja les refusees. Il est garde pour dire
+		// l'intention — et il redeviendrait porteur le jour ou l'on voudrait
+		// re-proposer les morceaux connus mais non refuses.
+		if q, err := s.ParSource(cle); err == nil {
+			if q.Etat == EtatRefuse {
+				continue
+			}
+			continue
+		}
+		if _, err := s.db.Exec(
+			`INSERT INTO pistes (source, titre, ajoute_par, ajoute_le, etat, decide_par, decide_le)
+			 VALUES (?,?,?,?,?,?,?)`,
+			cle, m.Titre, pl.AjoutePar, maintenant.Unix(), EtatValide, par, maintenant.Unix()); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, s.Retire(playlistID)
+}
+
+// MorceauPlaylist : ce qu'une passerelle rend d'une liste.
+type MorceauPlaylist struct {
+	URL   string
+	Titre string
 }

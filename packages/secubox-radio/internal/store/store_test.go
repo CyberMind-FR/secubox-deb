@@ -426,3 +426,148 @@ func TestUnCoeurSansPseudoResteCompte(t *testing.T) {
 		t.Errorf("pseudo invente pour un coeur ancien : %q", l[0].Pseudo)
 	}
 }
+
+// ── PLAYLISTS ───────────────────────────────────────────────────────────────
+//
+// UNE ADRESSE `watch?v=X&list=Y` DESIGNE UN MORCEAU, pas la playlist qui
+// l'entoure : c'est ainsi que YouTube partage un titre pris dans une liste.
+// Ne regarder que `list` ferait entrer deux cents morceaux a chaque fois qu'on
+// colle un lien — c'est-a-dire presque toujours.
+func TestUnLienPrisDansUnePlaylistResteUnSeulMorceau(t *testing.T) {
+	cle := CleSource("https://www.youtube.com/watch?v=ABC&list=PL123&index=4")
+	if cle != "yt:ABC" {
+		t.Errorf("cle = %q, attendu yt:ABC", cle)
+	}
+}
+
+// ...ET UNE VRAIE ADRESSE DE PLAYLIST EN EST UNE.
+func TestUneAdresseDePlaylistEstReconnue(t *testing.T) {
+	for _, u := range []string{
+		"https://www.youtube.com/playlist?list=PL123",
+		"https://m.youtube.com/playlist?list=PL123",
+		"https://music.youtube.com/playlist?list=PL123",
+	} {
+		if cle := CleSource(u); cle != "ytpl:PL123" {
+			t.Errorf("CleSource(%q) = %q, attendu ytpl:PL123", u, cle)
+		}
+	}
+}
+
+// UNE PLAYLIST NE SE JOUE PAS, ELLE SE DEPLIE. Tant qu'elle ne l'est pas, elle
+// ne doit jamais atteindre le tirage — sinon l'antenne « joue » une liste.
+func TestUnePlaylistNestJamaisJouable(t *testing.T) {
+	s := banc(t)
+	p, _, err := s.Ajoute("https://www.youtube.com/playlist?list=PL123", "Ma liste", 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.EstPlaylist() {
+		t.Fatal("la playlist n'est pas reconnue comme telle")
+	}
+	// Meme marquee « en cache », elle reste hors du tirage.
+	_ = s.PoseCache(p.ID, "/x", "video/mp4", 1, 1000, "", "")
+	q, _ := s.ParID(p.ID)
+	if q.EnCache() {
+		t.Error("une playlist est declaree jouable")
+	}
+	tp, _, _ := s.PourTirage()
+	for _, t2 := range tp {
+		if t2.ID == p.ID && !t2.Indisponible {
+			t.Error("une playlist est proposee au tirage")
+		}
+	}
+}
+
+// DEPLIER, C'EST HERITER DE LA DECISION DEJA PRISE : le sysop a valide LA
+// PLAYLIST, il n'a pas a revalider chacun de ses titres.
+func TestDeplierUnePlaylistFaitEntrerSesMorceaux(t *testing.T) {
+	s := banc(t)
+	pl, _, _ := s.Ajoute("https://www.youtube.com/playlist?list=PL1", "Ma liste", 7, t0)
+	n, err := s.Deplie(pl.ID, []MorceauPlaylist{
+		{URL: "https://youtu.be/A", Titre: "Un"},
+		{URL: "https://youtu.be/B", Titre: "Deux"},
+	}, 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("%d morceaux deplies", n)
+	}
+	l, _ := s.Toutes()
+	if len(l) != 2 {
+		t.Fatalf("%d pistes a l'antenne", len(l))
+	}
+	for _, p := range l {
+		if p.Etat != EtatValide {
+			t.Errorf("%s est en %q : le sysop devrait revalider", p.Source, p.Etat)
+		}
+		if p.AjoutePar != 7 {
+			t.Errorf("l'auteur de la proposition est perdu : %d", p.AjoutePar)
+		}
+	}
+	// LA PLAYLIST A JOUE SON ROLE et disparait : la garder laisserait une
+	// entree qui ne se joue jamais.
+	if _, err := s.ParID(pl.ID); err == nil {
+		t.Error("la playlist subsiste apres depliage")
+	}
+}
+
+// UN MORCEAU DEJA REFUSE NE REVIENT PAS PAR LA PLAYLIST : ce serait la porte de
+// derriere exacte que le refus est cense fermer.
+//
+// CE TEST FIGE LA PROPRIETE, il ne discrimine pas la ligne qui la porte :
+// verifie par mutation, neutraliser le test sur `EtatRefuse` ne le fait pas
+// tomber, parce que le rejet des morceaux DEJA CONNUS suffit. Le dire evite
+// qu'on prete a ce test une precision qu'il n'a pas.
+func TestDeplierNeRessuscitePasUnMorceauRefuse(t *testing.T) {
+	s := banc(t)
+	refuse, _, _ := s.Propose("https://youtu.be/NON", "", 7, t0)
+	_ = s.Refuse(refuse.ID, 1, t0, "hors sujet")
+
+	pl, _, _ := s.Ajoute("https://www.youtube.com/playlist?list=PL1", "", 7, t0)
+	n, err := s.Deplie(pl.ID, []MorceauPlaylist{
+		{URL: "https://youtu.be/NON", Titre: "Le refuse"},
+		{URL: "https://youtu.be/OUI", Titre: "L'autre"},
+	}, 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("%d morceaux entres, attendu 1 (le refuse doit rester dehors)", n)
+	}
+	q, _ := s.ParSource("yt:NON")
+	if q.Etat != EtatRefuse {
+		t.Errorf("le morceau refuse est revenu en %q", q.Etat)
+	}
+}
+
+// LA BORNE EXISTE PARCE QU'UNE PLAYLIST PEUT EN PORTER CINQ CENTS : les faire
+// entrer d'un coup noierait le repertoire, et le tirage ne parlerait plus que
+// d'elle pendant des semaines.
+func TestUnDepliageEstBorne(t *testing.T) {
+	s := banc(t)
+	pl, _, _ := s.Ajoute("https://www.youtube.com/playlist?list=PL1", "", 7, t0)
+	var m []MorceauPlaylist
+	for i := 0; i < MaxParPlaylist+20; i++ {
+		m = append(m, MorceauPlaylist{URL: "https://youtu.be/x" + itoa(i), Titre: "t"})
+	}
+	n, err := s.Deplie(pl.ID, m, 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != MaxParPlaylist {
+		t.Errorf("%d morceaux entres, borne a %d", n, MaxParPlaylist)
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b []byte
+	for n > 0 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+		n /= 10
+	}
+	return string(b)
+}
