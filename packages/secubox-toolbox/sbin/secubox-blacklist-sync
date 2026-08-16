@@ -156,37 +156,43 @@ for n in ipaddress.collapse_addresses(nets):
 #
 # Un lot refuse est rejoue element par element : une adresse fautive ne doit
 # pas emporter les 499 autres.
-BATCH="${SECUBOX_BL_BATCH:-500}"
+# add_batch : une transaction nft atomique, par FICHIER.
+#
+# Trois defauts se recouvraient ici, et seul le passage par fichier les regle
+# tous les trois d'un coup :
+#
+#   * `nft add element ... "{ 7176 adresses }"` faisait 195 Ko dans UN argument,
+#     pour une limite noyau de 128 Ko : « Argument list too long », tout le lot
+#     perdu — et `2>/dev/null` avalait le message.
+#   * sur un set `interval`, un ajout echoue des qu'une plage recouvre une
+#     plage DEJA PRESENTE. Replier le lot sur lui-meme ne suffisait donc pas :
+#     il fallait aussi tenir compte du contenu precedent. Chaque lot etait
+#     refuse, et le repli element par element demandait des milliers d'appels —
+#     la synchronisation depassait le delai avant d'avoir fini.
+#   * decouper en lots multipliait les occasions de conflit sans rien resoudre.
+#
+# `flush` et `add` dans le MEME fichier forment une transaction : le set n'est
+# jamais vide entre les deux, et le contenu precedent ne peut plus entrer en
+# conflit puisqu'il disparait dans la meme operation. C'est aussi ce qui rend
+# l'ecriture concurrente sure — la raison pour laquelle le flush avait ete
+# ecarte a l'origine.
 add_batch() {
     local set="$1" file="$2" fam="$3"
-    [ -s "$file" ] || return 0
-    local ajoutes=0 refuses=0 lot err
-    local dir; dir=$(mktemp -d); split -l "$BATCH" "$file" "$dir/l_"
-    for lot in "$dir"/l_*; do
-        local elems
-        elems=$(awk -v t="$ELEM_TIMEOUT" 'NF{printf "%s timeout %s, ", $1, t}' "$lot")
-        elems="${elems%, }"
-        [ -n "$elems" ] || continue
-        # add (not flush+add) so concurrent CrowdSec table updates don't race.
-        if err=$($NFT add element $TABLE "$set" "{ $elems }" 2>&1); then
-            ajoutes=$((ajoutes + $(wc -l < "$lot")))
-        else
-            log "WARN: lot refuse sur $set ($fam) : ${err%%$'\n'*}"
-            local une
-            while IFS= read -r une; do
-                [ -n "$une" ] || continue
-                if $NFT add element $TABLE "$set" "{ $une timeout $ELEM_TIMEOUT }" 2>/dev/null; then
-                    ajoutes=$((ajoutes + 1))
-                else
-                    refuses=$((refuses + 1))
-                fi
-            done < "$lot"
-        fi
-    done
-    rm -rf "$dir"
-    [ "$refuses" -gt 0 ] && log "WARN: $refuses element(s) refuse(s) sur $set ($fam)"
-    log "added: $ajoutes -> $set ($fam)"
-    return 0
+    local plan; plan=$(mktemp)
+    {
+        printf 'flush set %s %s\n' "$TABLE" "$set"
+        awk -v t="$ELEM_TIMEOUT" -v tb="$TABLE" -v s="$set" \
+            'NF{printf "add element %s %s { %s timeout %s }\n", tb, s, $1, t}' "$file"
+    } > "$plan"
+    local err
+    if err=$($NFT -f "$plan" 2>&1); then
+        log "added: $(wc -l < "$file") -> $set ($fam)"
+    else
+        # On ne laisse PAS le set vide sur echec : le flush faisant partie de la
+        # transaction, un refus annule tout et l'ancien contenu reste en place.
+        log "WARN: transaction refusee sur $set ($fam) : ${err%%$'\n'*}"
+    fi
+    rm -f "$plan"
 }
 
 TMP_SKIP=$(mktemp)
