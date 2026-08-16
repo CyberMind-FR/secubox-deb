@@ -75,6 +75,25 @@ func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg 
 	if qui == nil {
 		qui = func(*http.Request) Visiteur { return Visiteur{} }
 	}
+	brut := qui
+	// UN SEUL ENDROIT TIRE LA CONSEQUENCE DU CHEMIN. Disperser ce test dans
+	// chaque gestionnaire garantirait qu'un jour l'un d'eux l'oublie — et ce
+	// serait celui qui valide.
+	qui = func(r *http.Request) Visiteur {
+		v := brut(r)
+		if vientDeLAdmin(r) {
+			// La porte de l'administration a deja authentifie : on ne demande
+			// pas une seconde preuve a la meme personne, sur la meme session.
+			v.Connecte, v.Sysop = true, true
+			if v.Pseudo == "" {
+				v.Pseudo = "sysop"
+			}
+			if v.ID == 0 {
+				v.ID = 1
+			}
+		}
+		return v
+	}
 	s := &Serveur{st: st, prog: prog, qui: qui, reg: reg,
 		mux: http.NewServeMux(), Now: time.Now,
 		HTTP: &http.Client{Timeout: 8 * time.Second}}
@@ -156,6 +175,46 @@ var statique embed.FS
 
 const prefixe = "/api/v1/radio"
 
+// cleAdmin marque une requete arrivee par l'agregateur.
+type cleAdmin struct{}
+
+// parAdmin marque la requete comme venant de la surface d'administration.
+//
+// Elle n'accorde rien par elle-meme : c'est `qui()` qui en tire les
+// consequences, en un seul endroit.
+func (s *Serveur) parAdmin(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h(w, r.WithContext(context.WithValue(r.Context(), cleAdmin{}, true)))
+	}
+}
+
+// vientDeLAdmin dit si la requete a franchi la porte de l'administration.
+func vientDeLAdmin(r *http.Request) bool {
+	v, _ := r.Context().Value(cleAdmin{}).(bool)
+	return v
+}
+
+// routeur choisit le gestionnaire d'un chemin.
+func (s *Serveur) routeur(chemin string) http.HandlerFunc {
+	switch chemin {
+	case "/current":
+		return s.actuel
+	case "/playlist":
+		return s.playlist
+	case "/propositions":
+		return s.propositions
+	case "/propositions/":
+		return s.gestePropo
+	case "/pistes/":
+		return s.gestePiste
+	case "/chat":
+		return s.chat
+	case "/suivante":
+		return s.suivante
+	}
+	return func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }
+}
+
 func (s *Serveur) routes() {
 	// LES ROUTES SONT MONTEES DEUX FOIS, ET CE N'EST PAS UNE NEGLIGENCE.
 	//
@@ -167,14 +226,28 @@ func (s *Serveur) routes() {
 	// une soiree sur un autre module.
 	//
 	// Monter les deux coute deux lignes et supprime la classe entiere.
-	for _, p := range []string{prefixe, ""} {
-		s.mux.HandleFunc(p+"/current", s.actuel)
-		s.mux.HandleFunc(p+"/playlist", s.playlist)
-		s.mux.HandleFunc(p+"/propositions", s.propositions)
-		s.mux.HandleFunc(p+"/propositions/", s.gestePropo)
-		s.mux.HandleFunc(p+"/pistes/", s.gestePiste)
-		s.mux.HandleFunc(p+"/chat", s.chat)
-		s.mux.HandleFunc(p+"/suivante", s.suivante)
+	// ── DEUX ENTREES, DEUX NIVEAUX DE CONFIANCE ─────────────────────────
+	//
+	// Le vhost `radio.gk2` transmet le chemin COMPLET (`/api/v1/radio/…`) :
+	// c'est la surface des auditeurs, ouverte au LAN.
+	//
+	// L'agregateur, lui, RETIRE le prefixe — la meme requete y arrive comme
+	// `/…`. Or il ne sert que `admin.gk2`, DEJA AUTHENTIFIEE : tout ce qui
+	// arrive par ce chemin a franchi la porte de l'administration.
+	//
+	// LE CHEMIN EST DONC LA PREUVE, et il n'y a rien de plus a demander. La
+	// premiere version reclamait un secret dans une boite de dialogue a un
+	// administrateur deja connecte — une seconde authentification pour la meme
+	// personne, sur la meme session.
+	//
+	// LA DISCRIMINATION EST SURE PARCE QUE NOTRE VHOST NE STRIPPE PAS : il
+	// passe le chemin entier (voir nginx/radio.conf). Un auditeur ne peut donc
+	// pas atteindre les routes courtes.
+	for _, ch := range []string{"/current", "/playlist", "/propositions",
+		"/propositions/", "/pistes/", "/chat", "/suivante"} {
+		h := s.routeur(ch)
+		s.mux.HandleFunc(prefixe+ch, h)
+		s.mux.HandleFunc(ch, s.parAdmin(h))
 	}
 	// LA PAGE EST EMBARQUEE DANS LE BINAIRE : un fichier manquant sur le disque
 	// donnerait une page blanche sans rien dire. Ici elle ne peut pas manquer.
