@@ -3,6 +3,14 @@
 
 ---
 
+## 2026-08-16 (suite)
+
+- [ ] **Deployer les 126 paquets** par lots de dix avec controle de sante
+- [ ] **#1052** verifier que les sets nft restent peuples apres 24 h
+- [ ] **#1056** mosaique BBS — trancher : relais d'URL libre ou liste d'hotes
+- [ ] **#1055** edition/suppression — trancher les trois points ouverts
+- [ ] Marqueur serveur pour le volet primaire du BBS sur telephone
+
 ## 2026-08-16 — ajoute
 
 - [ ] **403 YouTube sur le media** — metadonnees OK, media refuse. Ecarte :
