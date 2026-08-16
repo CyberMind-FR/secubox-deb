@@ -16,6 +16,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,12 @@ type Serveur struct {
 	// n'ont alors pas besoin d'une passerelle, et le demon reste maitre du
 	// delai et des bornes.
 	Flux func(ctx context.Context, ytID, plage string) (*http.Response, error)
+	// HTTP sert a relayer les pochettes. Remplace en test : une suite qui
+	// depend d'internet echoue pour des raisons etrangeres au code.
+	HTTP *http.Client
+	// Banniere de sante injectee par le WAF de la board. Vide = politique
+	// fermee, et la banniere ne s'affiche pas.
+	BanniereOrigine, BanniereHash string
 	// Racine : plus utilisee depuis que l'on relaie au lieu de recopier.
 	//
 	// PAS L'eMMC : elle s'est deja remplie sur cette board et a produit des
@@ -69,12 +76,50 @@ func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg 
 		qui = func(*http.Request) Visiteur { return Visiteur{} }
 	}
 	s := &Serveur{st: st, prog: prog, qui: qui, reg: reg,
-		mux: http.NewServeMux(), Now: time.Now}
+		mux: http.NewServeMux(), Now: time.Now,
+		HTTP: &http.Client{Timeout: 8 * time.Second}}
 	s.routes()
 	return s
 }
 
 func (s *Serveur) Handler() http.Handler { return s.mux }
+
+// politique assemble la politique de securite de contenu de la page.
+//
+// STRICTE PAR DEFAUT : tout vient de nous, clips et pochettes compris. C'est
+// tout l'interet de les relayer plutot que de les lier.
+//
+// UNE SEULE EXCEPTION, ET ELLE N'EST PAS DE NOTRE FAIT : le WAF de la board
+// INJECTE un script en ligne dans chaque page HTML — la banniere de sante. Une
+// politique stricte le bloque, et la page perd la banniere que tous les autres
+// modules affichent. Le module BBS a exactement le meme reglage, pour la meme
+// raison.
+//
+// L'EMPREINTE EST CONFIGUREE, PAS CODEE EN DUR : le WAF peut changer son
+// extrait, et une empreinte figee dans le binaire deviendrait fausse sans que
+// personne ne s'en apercoive — la banniere disparaitrait en silence. Sans
+// reglage, la politique reste fermee : on prefere une page sans banniere a une
+// politique ouverte par defaut.
+func (s *Serveur) politique() string {
+	script, connect := "'self'", "'self'"
+	if o := strings.TrimSpace(s.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		script += " " + o
+		connect += " " + o
+	}
+	if e := strings.TrimSpace(s.BanniereHash); empreinteValide.MatchString(e) {
+		script += " '" + e + "'"
+	}
+	return "default-src 'self'; media-src 'self'; img-src 'self' data:; " +
+		"script-src " + script + "; style-src 'self'; connect-src " + connect + "; " +
+		"frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+}
+
+// empreinteValide : une empreinte CSP bien formee, et rien d'autre.
+//
+// Une valeur erronee ne doit pas produire une politique invalide : un
+// navigateur qui n'arrive pas a la lire peut l'ignorer ENTIEREMENT, ce qui est
+// le pire resultat possible — on se croit protege et on ne l'est plus du tout.
+var empreinteValide = regexp.MustCompile(`^sha(256|384|512)-[A-Za-z0-9+/=]+$`)
 
 // accueil sert la page d'ecoute.
 //
@@ -102,10 +147,7 @@ func (s *Serveur) accueil(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// LA POLITIQUE EST STRICTE : tout vient de nous. Les clips aussi — c'est
 	// tout l'interet de les rapatrier plutot que d'embarquer un lecteur tiers.
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; media-src 'self'; img-src 'self' data:; "+
-			"script-src 'self'; style-src 'self'; connect-src 'self'; "+
-			"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+	w.Header().Set("Content-Security-Policy", s.politique())
 	w.Write(b)
 }
 
@@ -139,6 +181,7 @@ func (s *Serveur) routes() {
 	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
 	s.mux.HandleFunc("/", s.accueil)
 	s.mux.HandleFunc("/media/", s.servirMedia)
+	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
