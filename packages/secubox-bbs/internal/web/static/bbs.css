@@ -520,8 +520,38 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
    * precis, ce sont les fils — donc la liste — et masquer celle-ci rendait un
    * ecran vide. Sur la racine c'est l'inverse. Une seule classe suffit, et
    * personne n'a plus a deviner. */
-  .corps.volet-liste > .liste { display: block; }
-  .corps.volet-liste > .vue { display: none; }
+  /* ── TELEPHONE : DEUX VOLETS QUI GLISSENT ────────────────────────────────
+   *
+   * AUCUN VOLET N'EST MASQUE, et c'est tout l'interet. Masquer obligeait a
+   * decider lequel montrer — decision que j'ai ratee trois fois : la racine
+   * des forums porte son contenu dans la vue, un forum precis dans la liste,
+   * et un fil ouvert de nouveau dans la vue alors que le serveur posait encore
+   * `volet-liste`. Chaque reglage corrigeait un cas en cassant le suivant.
+   *
+   * Ici les deux existent cote a cote et l'on passe de l'un a l'autre d'un
+   * glissement. Il n'y a plus rien a deviner : ce qui n'est pas sous les yeux
+   * reste a un geste.
+   *
+   * `scroll-snap` cale le volet en place — sans lui on s'arrete entre les
+   * deux, et une demi-colonne de chaque cote est le pire des deux mondes. */
+  .corps {
+    grid-auto-flow: column;
+    grid-auto-columns: 100%;
+    grid-template-columns: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .corps::-webkit-scrollbar { display: none; }
+  .corps > .liste,
+  .corps > .vue {
+    display: block;
+    scroll-snap-align: start;
+    min-width: 0;
+    overflow-y: auto;
+  }
+  .liste { border-right: 1px solid var(--line); }
   /* Le tiroir est ATTEIGNABLE la ou il sert le plus : le bouton n'existait
    * qu'au-dessus de 620 px, donc jamais sur telephone. */
   .menu-bascule { display: inline-block; }
@@ -563,11 +593,10 @@ body.rail-ouvert::after {
 @media (min-width: 620px) {
   .corps { grid-template-columns: minmax(240px, 320px) 1fr; }
   .liste { display: block; }
-  /* LE MARQUEUR DE VOLET NE VAUT QUE SUR TELEPHONE, ou un seul volet tient a
-   * l'ecran. Pose dans la base, il masquait `.vue` A TOUTES LES LARGEURS : sur
-   * un forum le serveur pose `volet-liste`, et les messages disparaissaient
-   * aussi au bureau — la ou il y a pourtant la place pour les deux. */
-  .corps.volet-liste > .vue { display: block; }
+  /* Le marqueur ne sert plus qu'a placer le regard sur telephone : rien n'est
+   * masque, donc rien n'est a retablir ici. On remet seulement la grille, que
+   * le mode glissant remplace en dessous du seuil. */
+  .corps { grid-auto-flow: row; overflow-x: visible; scroll-snap-type: none; }
   .basse { display: none; }
   .menu-bascule { display: inline-block; }
 }
