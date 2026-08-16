@@ -2,32 +2,34 @@
 Description=SecuBox Anti-Rootkit API (exec forensic log, alerts, quarantine-prep)
 After=network.target
 
+# /run/secubox N'EST PAS UN RuntimeDirectory (#1022).
+#
+# Il est PARTAGE par une centaine de modules. `RuntimeDirectory=` est concu pour
+# un repertoire PROPRE a un service : systemd le recree a chaque demarrage avec
+# le mode de l'unite, donc le dernier service demarre imposait le sien. Huit
+# unites le posaient en 0755, ce qui privait tous les autres du droit d'y creer
+# leur socket — « bind: permission denied », et un 502 dont la cause etait le
+# redemarrage d'un module sans rapport, survenu entre-temps.
+#
+# Le meme mecanisme effacait le repertoire a l'arret d'un service, emportant les
+# sockets des quatre-vingt-dix autres.
+#
+# Il est desormais declare une seule fois, en 1777, par le tmpfiles.d de
+# secubox-core — un seul proprietaire, une seule verite.
 [Service]
 Type=simple
 User=secubox-antirootkit
 Group=secubox-antirootkit
-# RuntimeDirectory=secubox RETIRE (#1022) : /run/secubox est partage par ~95
-# unites, et systemd EFFACE le contenu d'un RuntimeDirectory au redemarrage —
-# une seule unite qui le declare emporte les sockets de toutes les autres, et
-# la board rend des 502 sur des modules qui n'avaient rien demande. Le parent
-# reste root:root 1777, cree hors des unites.
-# LA SOCKET PERIMEE EST RETIREE PAR ROOT, ET C'EST OBLIGATOIRE ICI.
+# LA SOCKET PERIMEE EST RETIREE PAR ROOT, ET C'EST OBLIGATOIRE.
 #
-# /run/secubox est partage et porte le bit collant (1777). Dans un tel
-# repertoire on ne peut delier QUE ce qu'on possede. Si la socket a ete laissee
-# par un autre utilisateur — un demon qui tournait en `secubox`, un module
-# renomme, une reinstallation — l'unite ne peut plus l'effacer :
-#
-#   Unable to check or remove stale UNIX socket: PermissionError(1)
+# Le repertoire etant colle (1777), on n'y delie que ce qu'on possede. Une
+# socket laissee par un AUTRE utilisateur rend le demarrage impossible :
 #   OSError: [Errno 98] Address already in use
+# Le service echoue, redemarre, echoue encore, EN SILENCE — 16541 fois entre
+# le 7 et le 16 aout 2026, sans surveiller la moindre intrusion.
 #
-# Le service echoue alors au demarrage, redemarre, echoue encore. Constate ici
-# le 2026-08-16 : 16541 redemarrages depuis le 7 aout, neuf jours pendant
-# lesquels le detecteur d'intrusion n'a rien detecte du tout.
-#
-# Le prefixe `+` execute la commande en root, en ignorant `User=` : c'est ce
-# qui permet de delier un fichier appartenant a autrui dans un repertoire
-# collant. Sans lui, la ligne echouerait exactement comme le demon.
+# Le prefixe `+` execute en root malgre User= : sans lui la ligne echouerait
+# exactement comme le demon qu'elle devait depanner.
 ExecStartPre=+/bin/rm -f /run/secubox/antirootkit.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/antirootkit.sock --workers 1
 WorkingDirectory=/usr/lib/secubox/antirootkit

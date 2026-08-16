@@ -1,3 +1,16 @@
+secubox-antirootkit (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`. /run/secubox
+    porte le bit collant : on n'y delie que ce qu'on possede, et une socket
+    laissee par un AUTRE utilisateur rendait le demarrage impossible. Le
+    service echouait, redemarrait, echouait encore, EN SILENCE — 16541 fois
+    entre le 7 et le 16 aout 2026, sans surveiller la moindre intrusion.
+  * L'unite du depot etait PLUS ANCIENNE que celle deployee (depot 0.1.0,
+    board 0.1.1) : elle est reconciliee sur la version de la board, dont
+    l'explication du tmpfiles.d de secubox-core est conservee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:32:27 +0200
+
 secubox-antirootkit (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release: anti-rootkit host-IDS (ref #915).
