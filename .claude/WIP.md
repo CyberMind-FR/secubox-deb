@@ -1,5 +1,5 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-16*
+*Mis à jour : 2026-08-16 (fin de session)*
 
 ---
 
@@ -17,6 +17,20 @@
 - **Depot** — 11 worktrees vides retires (28 → 18).
 
 ### ⬜ Next Up
+
+- **Deployer les 126 paquets construits** — par lots de dix, controle de sante
+  entre chaque. Versions deja montees, aucun echec de construction.
+- **Refonte du BBS** — maquette validee, plus urgente depuis la reparation :
+  un seul point de rupture au lieu de onze, barre de contexte, 40 classes
+  mortes a retirer. Chantier de plusieurs sessions, a faire a froid.
+- **#1056** — reste l'appel de `/media-fiche` depuis la page, et le podcaster
+  (son JSON n'est expose que par sa socket, pas par le vhost).
+- **#1054 sbxmitm** — splice WebSocket avant de basculer les deux chemins
+  restants. Un chemin sur trois est migre.
+- **#1052** — verifier que les sets nft restent peuples apres 24 h.
+- **#1051 403 YouTube** — piste PO token, non verifiee.
+- **#1050 SecuBox Retro** · **#1053 c3box** · **#1055 edition/suppression**.
+- **Fusionner l'arriere** — 18 worktrees non fusionnes, aucune PR ouverte.
 
 - **Deployer les 126 paquets construits** — par lots de dix, controle de sante
   entre chaque. Jamais d'un coup : 126 demons redemarres en parallele.
