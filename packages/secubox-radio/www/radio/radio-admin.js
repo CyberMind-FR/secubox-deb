@@ -53,90 +53,70 @@ function tag(texte, classe) {
   return s;
 }
 
+// LES MORCEAUX D'UNE LISTE SONT GROUPES. Cinquante lignes melees au reste
+// seraient illisibles : on ne saurait plus ce qui vient d'ou, ni combien il
+// reste a trancher dans une liste donnee.
+function enteteLot(titre, n) {
+  var d = document.createElement('div');
+  d.className = 'row';
+  d.style.borderBottom = '1px solid var(--cyan)';
+  var t = document.createElement('span');
+  t.className = 'sp';
+  t.style.color = 'var(--cyan)';
+  t.textContent = '📃 ' + titre;
+  d.appendChild(t);
+  d.appendChild(tag(n + ' à trancher', 'c'));
+  return d;
+}
+
+function ligneProposition(p) {
+  return ligne(p, [
+    bouton('✓ Valider', 'good', function () {
+      api('/propositions/' + p.id + '/valider', { method: 'POST' }).then(function (r) {
+        toast(r.code === 200 ? 'Validée — elle entre à l’antenne.'
+                             : (r.corps.error || 'Refusé'));
+        rafraichir();
+      });
+    }),
+    bouton('✕ Refuser', 'danger', function () {
+      // LE MOTIF EST DEMANDE, PAS FACULTATIF : sans lui, la question
+      // « pourquoi pas celle-la » se repose chaque semaine.
+      var motif = prompt('Motif du refus (il sera conservé) :');
+      if (motif === null) return;
+      api('/propositions/' + p.id + '/refuser',
+          { method: 'POST', body: JSON.stringify({ motif: motif }) }).then(function () {
+        toast('Refusée — la reproposer ne la fera pas revenir.');
+        rafraichir();
+      });
+    }),
+    boutonSupprimer(p)
+  ]);
+}
+
 function rendPropositions(l) {
   var z = document.getElementById('propositions');
   z.innerHTML = '';
   if (!l || !l.length) { z.innerHTML = '<div class="vide">rien à valider</div>'; return; }
+  var lots = {}, seules = [];
   l.forEach(function (p) {
-    z.appendChild(ligne(p, [
-      bouton('✓ Valider', 'good', function () {
-        api('/propositions/' + p.id + '/valider', { method: 'POST' }).then(function (r) {
-          toast(r.code === 200 ? 'Validée — elle entre à l’antenne.' : (r.corps.error || 'Refusé'));
-          rafraichir();
-        });
-      }),
-      bouton('✕ Refuser', 'danger', function () {
-        // LE MOTIF EST DEMANDE, PAS FACULTATIF : sans lui, la question
-        // « pourquoi pas celle-la » se repose chaque semaine.
-        var motif = prompt('Motif du refus (il sera conservé) :');
-        if (motif === null) return;
-        api('/propositions/' + p.id + '/refuser',
-            { method: 'POST', body: JSON.stringify({ motif: motif }) }).then(function () {
-          toast('Refusée — la reproposer ne la fera pas revenir.');
-          rafraichir();
-        });
-      })
-    ]));
+    if (p.lot) {
+      // LE TITRE DE LA LISTE peut manquer : on montre alors son identifiant
+      // plutot qu'une cle technique nue, qui ne dit rien a qui doit trancher.
+      if (!lots[p.lot]) {
+        var t = p.lot_titre && p.lot_titre !== p.lot ? p.lot_titre
+              : 'Playlist ' + p.lot.replace(/^ytpl:/, '');
+        lots[p.lot] = { titre: t, items: [] };
+      }
+      lots[p.lot].items.push(p);
+    } else {
+      seules.push(p);
+    }
   });
-}
-
-function rendProbas(pistes, enCours) {
-  var z = document.getElementById('probas');
-  z.innerHTML = '';
-  var jouables = (pistes || []).filter(function (p) { return p.en_cache && !p.ecarte; });
-  if (!jouables.length) { z.innerHTML = '<div class="vide">aucune piste jouable</div>'; return; }
-  // LE PANNEAU N'INVENTE PAS LES POIDS : il montre ce que le serveur retient,
-  // c'est-a-dire les coeurs et l'etat. Le calcul exact vit dans le demon —
-  // le dupliquer ici garantirait que les deux divergent un jour.
-  var total = jouables.reduce(function (s, p) { return s + (p.coeurs + 1); }, 0);
-  jouables.sort(function (a, b) { return b.coeurs - a.coeurs; }).slice(0, 8).forEach(function (p) {
-    var part = p.id === enCours ? 0 : (p.coeurs + 1) / total;
-    var d = document.createElement('div');
-    d.className = 'jauge';
-    var nm = document.createElement('span');
-    nm.className = 'nm2'; nm.textContent = p.titre || p.source;
-    var bb = document.createElement('span');
-    bb.className = 'bb';
-    var i = document.createElement('i');
-    i.style.width = Math.round(part * 100) + '%';
-    bb.appendChild(i);
-    var pc = document.createElement('span');
-    pc.className = 'pc';
-    pc.textContent = p.id === enCours ? 'au repos' : (part * 100).toFixed(1) + ' %';
-    d.appendChild(nm); d.appendChild(bb); d.appendChild(pc);
-    z.appendChild(d);
+  Object.keys(lots).forEach(function (k) {
+    z.appendChild(enteteLot(lots[k].titre, lots[k].items.length));
+    lots[k].items.forEach(function (p) { z.appendChild(ligneProposition(p)); });
   });
-}
-
-// LE PANNEAU DIT LA DIFFERENCE ENTRE REFUSER ET SUPPRIMER, parce qu'elle
-// n'est pas devinable : refuser garde la ligne et empeche la reproposition ;
-// supprimer efface tout, donc la piste pourra revenir demain.
-function boutonSupprimer(p, apres) {
-  return bouton('🗑 Supprimer', 'danger', function () {
-    if (!confirm('Supprimer « ' + (p.titre || p.source) + ' » ?\n\n' +
-                 'Elle quitte le répertoire et pourra être reproposée. ' +
-                 'Pour l\'empêcher de revenir, refusez-la plutôt.')) return;
-    api('/pistes/' + p.id + '/supprimer', { method: 'POST' }).then(function (r) {
-      if (r.code === 409) toast(r.corps.error || 'Impossible pour l’instant.');
-      else toast('Supprimée.');
-      (apres || rafraichir)();
-    });
-  });
-}
-
-// TROIS GESTES, TROIS PORTEES — et le panneau les distingue, parce qu'on ne
-// les devine pas :
-//   devalider  « pas maintenant » : retour en file, coeurs gardes
-//   refuser    « jamais »         : la reproposition ne la ramene pas
-//   supprimer  « efface »         : tout part, elle pourra revenir demain
-function boutonDevalider(p) {
-  return bouton('↩ Dévalider', '', function () {
-    api('/pistes/' + p.id + '/devalider', { method: 'POST' }).then(function (r) {
-      toast(r.code === 200 ? 'Renvoyée en file — elle garde ses ♥.'
-                           : (r.corps.error || 'Refusé'));
-      rafraichir();
-    });
-  });
+  seules.forEach(function (p) { z.appendChild(ligneProposition(p)); });
 }
 
 function rendPlaylist(pistes, enCours) {

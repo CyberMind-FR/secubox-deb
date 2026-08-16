@@ -25,6 +25,8 @@ type Piste struct {
 	Raison       string
 	Etat         string
 	Motif        string
+	Lot          string
+	LotTitre     string
 	Coeurs       int
 	JoueeLe      int64 // 0 = jamais
 }
@@ -83,7 +85,7 @@ func (s *Store) Ajoute(source, titre string, par int64, maintenant time.Time) (P
 const selectPiste = `
 SELECT p.id, p.source, p.titre, p.auteur, p.duree_ms,
        COALESCE(p.ajoute_par, 0), p.ajoute_le, p.fichier, p.mime, p.octets,
-       p.indisponible, p.raison, p.etat, p.motif,
+       p.indisponible, p.raison, p.etat, p.motif, p.lot, p.lot_titre,
        (SELECT COUNT(*) FROM coeurs c WHERE c.piste_id = p.id) AS coeurs,
        COALESCE((SELECT MAX(l.debut_le) FROM lectures l WHERE l.piste_id = p.id), 0) AS jouee_le
   FROM pistes p `
@@ -93,7 +95,7 @@ func (s *Store) scan(r interface{ Scan(...any) error }) (Piste, error) {
 	var indispo int
 	err := r.Scan(&p.ID, &p.Source, &p.Titre, &p.Auteur, &p.DureeMS,
 		&p.AjoutePar, &p.AjouteLe, &p.Fichier, &p.Mime, &p.Octets,
-		&indispo, &p.Raison, &p.Etat, &p.Motif, &p.Coeurs, &p.JoueeLe)
+		&indispo, &p.Raison, &p.Etat, &p.Motif, &p.Lot, &p.LotTitre, &p.Coeurs, &p.JoueeLe)
 	p.Indisponible = indispo == 1
 	return p, err
 }
@@ -472,22 +474,31 @@ func (s *Store) OublieCache(id int64) error {
 // discotheque.
 const MaxParPlaylist = 50
 
-// Deplie remplace une playlist par les morceaux qu'elle contient.
+// Deplie remplace une playlist par ses morceaux, EN PROPOSITIONS.
 //
-// LES MORCEAUX HERITENT DE LA DECISION DEJA PRISE : le sysop a valide LA
-// PLAYLIST, il n'a pas a revalider chacun de ses titres. C'est tout l'interet
-// de proposer une liste plutot que cinquante liens.
+// ILS N'HERITENT PAS DE LA DECISION, et c'est un changement assume. Le premier
+// jet les faisait entrer valides : valider la liste, c'etait valider ses
+// cinquante titres. C'est commode et trop grossier — ON NE CONNAIT PAS UNE
+// LISTE AVANT DE L'AVOIR VUE, et cinquante titres entraient alors sans que
+// personne ne les ait regardes.
 //
-// LA PLAYLIST ELLE-MEME EST RETIREE : elle a joue son role. La garder
-// laisserait dans le repertoire une entree qui ne se joue jamais et que le
-// panneau afficherait comme « en attente de recuperation » indefiniment.
-func (s *Store) Deplie(playlistID int64, morceaux []MorceauPlaylist, par int64, maintenant time.Time) (int, error) {
+// Ils arrivent donc en attente, groupes par `lot` pour que le panneau les
+// presente ensemble : cinquante lignes melees au reste seraient illisibles.
+//
+// LA PLAYLIST ELLE-MEME DISPARAIT : elle a joue son role. La garder laisserait
+// une entree qui ne se joue jamais et que le panneau afficherait indefiniment
+// comme « en attente de recuperation ».
+func (s *Store) Deplie(playlistID int64, morceaux []MorceauPlaylist, maintenant time.Time) (int, error) {
 	pl, err := s.ParID(playlistID)
 	if err != nil {
 		return 0, err
 	}
 	if !pl.EstPlaylist() {
 		return 0, errors.New("cette entree n'est pas une playlist")
+	}
+	titre := pl.Titre
+	if titre == "" {
+		titre = pl.Source
 	}
 	n := 0
 	for i, m := range morceaux {
@@ -499,24 +510,15 @@ func (s *Store) Deplie(playlistID int64, morceaux []MorceauPlaylist, par int64, 
 			continue
 		}
 		// UN MORCEAU DEJA CONNU N'ENTRE PAS DEUX FOIS — refuse, propose ou deja
-		// a l'antenne. C'est ce qui empeche qu'un depliage contourne un refus :
-		// la porte de derriere exacte que le refus est cense fermer.
-		//
-		// LE TEST EXPLICITE SUR `EtatRefuse` EST REDONDANT, et c'est verifie :
-		// en le neutralisant, aucun test ne tombe, parce que le second
-		// `continue` attrape deja les refusees. Il est garde pour dire
-		// l'intention — et il redeviendrait porteur le jour ou l'on voudrait
-		// re-proposer les morceaux connus mais non refuses.
-		if q, err := s.ParSource(cle); err == nil {
-			if q.Etat == EtatRefuse {
-				continue
-			}
+		// a l'antenne. C'est ce qui empeche qu'un depliage contourne un refus.
+		if _, err := s.ParSource(cle); err == nil {
 			continue
 		}
 		if _, err := s.db.Exec(
-			`INSERT INTO pistes (source, titre, ajoute_par, ajoute_le, etat, decide_par, decide_le)
+			`INSERT INTO pistes (source, titre, ajoute_par, ajoute_le, etat, lot, lot_titre)
 			 VALUES (?,?,?,?,?,?,?)`,
-			cle, m.Titre, pl.AjoutePar, maintenant.Unix(), EtatValide, par, maintenant.Unix()); err != nil {
+			cle, m.Titre, pl.AjoutePar, maintenant.Unix(), EtatPropose,
+			pl.Source, titre); err != nil {
 			return n, err
 		}
 		n++

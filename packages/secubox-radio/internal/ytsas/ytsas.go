@@ -15,8 +15,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -264,4 +266,54 @@ func (c *Client) Flux(ctx context.Context, ytID string, plage string) (*http.Res
 // video n'est pas un media, quelle que soit la route qui l'a rendu.
 func EstMedia(mime string) bool {
 	return contient(mime, "audio/") || contient(mime, "video/")
+}
+
+// Morceau : une entree de playlist, telle que la passerelle l'enumere.
+type Morceau struct {
+	ID    string `json:"id"`
+	URL   string `json:"url"`
+	Titre string `json:"title"`
+}
+
+// Enumere rend les morceaux d'une playlist SANS RIEN TELECHARGER.
+//
+// C'est la contrepartie exacte de `Demande` : l'une lance un rapatriement,
+// l'autre lit une table des matieres. Les confondre lancerait cinquante
+// telechargements la ou l'on voulait afficher une liste.
+func (c *Client) Enumere(ctx context.Context, adresse string, limite int) ([]Morceau, error) {
+	if limite <= 0 {
+		limite = 50
+	}
+	v := url.Values{"url": {adresse}, "limite": {strconv.Itoa(limite)}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.url("/playlist")+"?"+v.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("passerelle injoignable : %w", err)
+	}
+	defer res.Body.Close()
+	// LECTURE BORNEE : une passerelle en panne pourrait repondre un flux sans
+	// fin, et le demon le lirait jusqu'a manquer de memoire.
+	brut, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	var rep struct {
+		Count int       `json:"count"`
+		Items []Morceau `json:"items"`
+		Error string    `json:"error"`
+	}
+	if err := json.Unmarshal(brut, &rep); err != nil {
+		return nil, fmt.Errorf("reponse illisible (%d)", res.StatusCode)
+	}
+	if rep.Error != "" {
+		return nil, errors.New(rep.Error)
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, fmt.Errorf("la passerelle rend %d", res.StatusCode)
+	}
+	return rep.Items, nil
 }

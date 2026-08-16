@@ -21,6 +21,12 @@ VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
 	dh $@
 
 override_dh_auto_build:
+	# `go vet` AVANT LA CONSTRUCTION, ET CE N'EST PAS DU CONFORT : `go build`
+	# ne compile PAS les fichiers de test. Un paquet de tests casse laissait
+	# donc la construction reussir — et en compilation croisee, ou les tests ne
+	# tournent pas, RIEN ne le signalait. Un .deb pouvait partir avec du code de
+	# test qui ne compile plus, c'est-a-dire avec une suite qu'on croit verte.
+	go vet ./...
 	go build -ldflags "-s -w -X main.version=$(VERSION)" \
 	  -o debian/secubox-radiod ./cmd/secubox-radiod
 
