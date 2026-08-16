@@ -63,6 +63,33 @@ function tag(texte, classe) {
 // LES MORCEAUX D'UNE LISTE SONT GROUPES. Cinquante lignes melees au reste
 // seraient illisibles : on ne saurait plus ce qui vient d'ou, ni combien il
 // reste a trancher dans une liste donnee.
+// TROIS GESTES, TROIS PORTEES — et le panneau les distingue, parce qu'on ne
+// les devine pas :
+//   devalider  « pas maintenant » : retour en file, coeurs gardes
+//   refuser    « jamais »         : la reproposition ne la ramene pas
+//   supprimer  « efface »         : tout part, elle pourra revenir demain
+function boutonSupprimer(p) {
+  return bouton('🗑 Supprimer', 'danger', function () {
+    if (!confirm('Supprimer « ' + (p.titre || p.source) + ' » ?\n\n' +
+                 'Elle quitte le répertoire et pourra être reproposée. ' +
+                 'Pour l\'empêcher de revenir, refusez-la plutôt.')) return;
+    api('/pistes/' + p.id + '/supprimer', { method: 'POST' }).then(function (r) {
+      toast(r.code === 409 ? (r.corps.error || 'Impossible pour l’instant.') : 'Supprimée.');
+      rafraichir();
+    });
+  });
+}
+
+function boutonDevalider(p) {
+  return bouton('↩ Dévalider', '', function () {
+    api('/pistes/' + p.id + '/devalider', { method: 'POST' }).then(function (r) {
+      toast(r.code === 200 ? 'Renvoyée en file — elle garde ses ♥.'
+                           : (r.corps.error || 'Refusé'));
+      rafraichir();
+    });
+  });
+}
+
 function enteteLot(titre, n) {
   var d = document.createElement('div');
   d.className = 'row';

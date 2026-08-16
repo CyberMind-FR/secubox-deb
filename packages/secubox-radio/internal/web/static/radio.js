@@ -40,6 +40,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var ecran = $('ecran'), pochette = $('pochette'), glyphe = $('glyphe');
+  var lecteur = document.querySelector('.lecteur');
   var titre = $('titre'), meta = $('meta'), jauge = $('jauge');
   var ecoule = $('ecoule'), duree = $('duree'), derive = $('derive');
   var file = $('file'), chat = $('chat'), dire = $('dire');
@@ -82,6 +83,7 @@
   function pose(e) {
     if (!e || e.silence) {
       ecran.classList.add('muet');
+      lecteur.classList.remove('joue');
       titre.textContent = 'Silence';
       meta.textContent = 'Aucune piste prête — proposez-en une.';
       jauge.style.width = '0';
@@ -105,6 +107,7 @@
       poseVignette(pochette, $('glyphe'), p);
       duree.textContent = p.duree_ms ? mmss(p.duree_ms) : '--:--';
       ecran.classList.remove('muet');
+      lecteur.classList.add('joue');
       ecran.src = '/media/' + p.id;
       ecran.currentTime = offset;
       // AUTOPLAY REFUSE = SILENCE INEXPLIQUE : on le DIT plutot que de laisser

@@ -51,16 +51,23 @@ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.75rem;margin
 /* ── lecteur ──────────────────────────────────────────────────────────── */
 /* SILENCE = PAS D'ECRAN : un rectangle noir sans rien dedans fait croire a un
    lecteur casse. */
-#ecran{width:100%;display:block;background:#000;aspect-ratio:16/9}
+/* Le clip occupe EXACTEMENT le cadre de la vignette — meme taille, meme
+   format, meme coin arrondi. Il se superpose a elle plutot que de la
+   remplacer : l'image reste dessous, visible le temps que la video charge. */
+#ecran{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+       display:block;background:#000;border:0}
 #ecran.muet{display:none}
+
 .bloc{display:flex;gap:1.1rem;padding:1.1rem;align-items:flex-start}
 @media (max-width:34rem){.bloc{flex-direction:column;align-items:stretch}}
-.pochette{width:7.5rem;height:7.5rem;flex:0 0 auto;border-radius:12px;overflow:hidden;
+.cadre{position:relative;width:7.5rem;height:7.5rem;flex:0 0 auto;
+       border-radius:12px;overflow:hidden}
+.pochette{position:absolute;inset:0;border-radius:12px;overflow:hidden;
   display:grid;place-items:center;font-size:2.2rem;
   background:linear-gradient(135deg,var(--violet-sourd),var(--panel2));
   border:1px solid var(--line)}
 .pochette img{width:100%;height:100%;object-fit:cover;display:block}
-@media (max-width:34rem){.pochette{width:100%;height:auto;aspect-ratio:16/9}}
+@media (max-width:34rem){.cadre{width:100%;height:auto;aspect-ratio:1/1}}
 .infos{min-width:0;flex:1}
 .etiq{font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.14em;
   text-transform:uppercase;color:var(--violet-clair)}

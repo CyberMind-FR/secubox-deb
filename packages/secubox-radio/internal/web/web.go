@@ -10,8 +10,11 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"log"
@@ -19,6 +22,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/programme"
@@ -57,6 +61,14 @@ type Serveur struct {
 	// Banniere de sante injectee par le WAF de la board. Vide = politique
 	// fermee, et la banniere ne s'affiche pas.
 	BanniereOrigine, BanniereHash string
+	// BanniereStyle : empreinte de la balise <style> que la banniere injecte.
+	//
+	// Distincte de BanniereHash : le script et la feuille sont deux ressources
+	// separees, avec deux empreintes differentes, et `style-src` ne regarde pas
+	// `script-src`. Les confondre laissait la banniere non stylee — repliee en
+	// bas de page, illisible — avec un refus CSP dans la console pour seule
+	// trace.
+	BanniereStyle string
 	// Racine : plus utilisee depuis que l'on relaie au lieu de recopier.
 	//
 	// PAS L'eMMC : elle s'est deja remplie sur cette board et a produit des
@@ -128,8 +140,12 @@ func (s *Serveur) politique() string {
 	if e := strings.TrimSpace(s.BanniereHash); empreinteValide.MatchString(e) {
 		script += " '" + e + "'"
 	}
+	style := "'self'"
+	if e := strings.TrimSpace(s.BanniereStyle); empreinteValide.MatchString(e) {
+		style += " '" + e + "'"
+	}
 	return "default-src 'self'; media-src 'self'; img-src 'self' data:; " +
-		"script-src " + script + "; style-src 'self'; connect-src " + connect + "; " +
+		"script-src " + script + "; style-src " + style + "; connect-src " + connect + "; " +
 		"frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 }
 
@@ -157,8 +173,8 @@ func (s *Serveur) accueil(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	b, err := statique.ReadFile("static/index.html")
-	if err != nil {
+	b := pageAccueil()
+	if b == nil {
 		erreur(w, http.StatusInternalServerError, "page indisponible")
 		return
 	}
@@ -172,6 +188,37 @@ func (s *Serveur) accueil(w http.ResponseWriter, r *http.Request) {
 
 //go:embed static
 var statique embed.FS
+
+// pageAccueil rend l'accueil avec une empreinte du contenu dans l'URL des
+// fichiers statiques.
+//
+// SANS ELLE, CHAQUE DEPLOIEMENT SERT L'ANCIENNE FEUILLE. Le WAF de la board
+// met en cache par URL pendant une heure : `/static/radio.css` valant pour
+// toutes les versions, une mise a jour du paquet laissait le navigateur
+// recevoir la feuille precedente — avec, ce jour-la, une regle qui
+// redimensionnait la video et defaisait la mise en page. Le symptome se lisait
+// comme un bug de CSS, alors que la CSS deployee etait juste.
+//
+// L'empreinte change avec le contenu : une nouvelle version demande une URL
+// que le cache ne connait pas, et une version inchangee reste servie depuis le
+// cache. On garde le benefice du cache sans en subir la peremption.
+var pageAccueil = sync.OnceValue(func() []byte {
+	b, err := statique.ReadFile("static/index.html")
+	if err != nil {
+		return nil
+	}
+	for _, f := range []string{"radio.css", "radio.js"} {
+		c, err := statique.ReadFile("static/" + f)
+		if err != nil {
+			continue
+		}
+		somme := sha256.Sum256(c)
+		b = bytes.ReplaceAll(b,
+			[]byte("/static/"+f),
+			[]byte("/static/"+f+"?v="+hex.EncodeToString(somme[:6])))
+	}
+	return b
+})
 
 const prefixe = "/api/v1/radio"
 

@@ -43,9 +43,11 @@ func main() {
 		// la board. Une politique stricte la bloque ; ces deux reglages
 		// l'autorisent nommement. Vides = politique fermee, et la page s'affiche
 		// simplement sans banniere — on prefere cela a une politique ouverte.
-		bannOrig = flag.String("banniere-origine", "", "origine du script de banniere")
-		bannHash = flag.String("banniere-hash", "", "empreinte du script en ligne de la banniere")
-		montre   = flag.Bool("version", false, "afficher la version")
+		bannOrig  = flag.String("banniere-origine", "", "origine du script de banniere")
+		bannHash  = flag.String("banniere-hash", "", "empreinte du script en ligne de la banniere")
+		bannStyle = flag.String("banniere-style", "",
+			"empreinte de la <style> injectee par la banniere de sante")
+		montre = flag.Bool("version", false, "afficher la version")
 	)
 	flag.Parse()
 	if *montre {
@@ -78,6 +80,7 @@ func main() {
 	// LA RADIO RELAIE, ELLE NE RECOPIE PAS : voir internal/ytsas.Flux.
 	srv.Flux = cli.Flux
 	srv.BanniereOrigine, srv.BanniereHash = *bannOrig, *bannHash
+	srv.BanniereStyle = *bannStyle
 	ctx, arrete := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer arrete()
 
@@ -216,12 +219,62 @@ func propre(s string) string {
 // telechargements en parallele ne les rendrait pas plus rapides et prendrait la
 // place de ce qui joue.
 func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
+	var dernierCookie int64
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(20 * time.Second):
 		}
+		// ── UN DEPOT DE COOKIES REMET EN JEU CE QU'IL DEBLOQUE ──────────
+		//
+		// Sans cela, une piste ecartee faute de cookies l'est DEFINITIVEMENT :
+		// l'operateur depose un cookies.txt neuf et rien ne bouge, parce que la
+		// boucle saute desormais cette piste. Il faudrait reproposer chaque
+		// titre a la main — ce que personne ne devinerait.
+		//
+		// On ne remet en jeu qu'UNE FOIS PAR DEPOT, la date du coffre servant
+		// de repere : sinon une piste durablement inaccessible serait reessayee
+		// toutes les vingt secondes, indefiniment.
+		if e, err := cli.Cookies(ctx); err == nil && e.Present && !e.Perimes && e.Mtime > dernierCookie {
+			dernierCookie = e.Mtime
+			if n, err := st.RemetEnJeuBloqueesParCookies(); err == nil && n > 0 {
+				log.Printf("radio: cookies renouveles — %d piste(s) remise(s) en jeu", n)
+			}
+		}
+
+		// ── LES LISTES SE DEPLIENT ──────────────────────────────────────
+		//
+		// DES LA PROPOSITION, sans attendre de validation : deplier n'est pas
+		// accepter, c'est montrer ce que la liste contient. Une liste restee
+		// pliee dans la file ne dirait rien de ce qu'elle propose, et le sysop
+		// devrait l'ouvrir ailleurs pour savoir ce qu'il valide.
+		if props, err := st.Propositions(); err == nil {
+			for _, pl := range props {
+				if !pl.EstPlaylist() || pl.Indisponible {
+					continue
+				}
+				adresse := "https://www.youtube.com/playlist?list=" +
+					strings.TrimPrefix(pl.Source, "ytpl:")
+				morceaux, err := cli.Enumere(ctx, adresse, store.MaxParPlaylist)
+				if err != nil {
+					log.Printf("radio: liste %d illisible : %v", pl.ID, err)
+					st.MarqueIndisponible(pl.ID, "liste illisible : "+err.Error())
+					continue
+				}
+				conv := make([]store.MorceauPlaylist, 0, len(morceaux))
+				for _, m := range morceaux {
+					conv = append(conv, store.MorceauPlaylist{URL: m.URL, Titre: m.Titre})
+				}
+				n, err := st.Deplie(pl.ID, conv, time.Now())
+				if err != nil {
+					log.Printf("radio: depliage de %d : %v", pl.ID, err)
+					continue
+				}
+				log.Printf("radio: liste %d depliee en %d propositions", pl.ID, n)
+			}
+		}
+
 		pistes, err := st.Toutes()
 		if err != nil {
 			log.Printf("radio: lecture de la playlist : %v", err)
@@ -254,8 +307,26 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 				}
 				break
 			}
+			// UNE PISTE EN ERREUR EST ECARTEE, PAS ATTENDUE. C'est le
+			// defaut qui gelait toute la file : la passerelle marquait une
+			// video « error » (403 de YouTube, video retiree), le demon la
+			// lisait comme « pas encore prete », et repartait en attente a
+			// chaque tour SANS JAMAIS REGARDER LES SUIVANTES. Une seule video
+			// refusee suffisait a bloquer les quarante autres, sans une ligne
+			// de journal pour le dire.
+			if e.Echoue() {
+				raison := e.Erreur
+				if raison == "" {
+					raison = "la passerelle a renonce a cette piste"
+				}
+				st.MarqueIndisponible(p.ID, raison)
+				log.Printf("radio: piste %d ecartee : %s", p.ID, raison)
+				continue
+			}
 			if !e.Pret() {
-				break // recuperation en cours chez la passerelle
+				// Deja demandee, elle arrive : on passe a la suivante au lieu
+				// d'arreter l'examen de la file.
+				continue
 			}
 			// ON NE RAPATRIE PLUS. On note seulement que la passerelle l'a, et
 			// le flux sera relaye a la lecture. Le chemin retenu est celui de
