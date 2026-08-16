@@ -12,6 +12,11 @@ WorkingDirectory=/usr/share/secubox/podcaster
 # genuinely-new socket uvicorn binds — not a leftover one it would chown before
 # uvicorn re-creates it root:root (the actual cause of the nginx 502s).
 ExecStartPre=-/bin/rm -f /run/secubox/podcaster.sock
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
+# possede. Une socket laissee par un autre utilisateur rendrait le
+# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
+# root malgre User= — sans lui la ligne echouerait comme le demon.
+ExecStartPre=+/bin/rm -f /run/secubox/podcaster.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/podcaster.sock --workers 1
 # #494: only chmod/chown our OWN socket — never the shared /run/secubox parent.
 # Poll for the socket instead of a fixed `sleep 1`: uvicorn can take several

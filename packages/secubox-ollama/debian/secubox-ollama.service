@@ -12,6 +12,11 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/usr/lib/secubox/ollama
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
+# possede. Une socket laissee par un autre utilisateur rendrait le
+# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
+# root malgre User= — sans lui la ligne echouerait comme le demon.
+ExecStartPre=+/bin/rm -f /run/secubox/ollama.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/ollama.sock --log-level warning
 # Use - prefix to ignore failure if socket doesn't exist yet
 ExecStartPost=-/bin/sleep 1

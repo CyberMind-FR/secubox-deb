@@ -8,6 +8,11 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/share/secubox/picobrew
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
+# possede. Une socket laissee par un autre utilisateur rendrait le
+# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
+# root malgre User= — sans lui la ligne echouerait comme le demon.
+ExecStartPre=+/bin/rm -f /run/secubox/picobrew.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/picobrew.sock --workers 1
 Restart=on-failure
 RestartSec=5
