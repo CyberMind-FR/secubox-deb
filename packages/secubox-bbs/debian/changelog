@@ -1,3 +1,22 @@
+secubox-bbs (0.20.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le controle de la coquille cherchait `class="corps"` a l'identique, ce qui
+    interdisait toute classe supplementaire : il refusait le marqueur de volet
+    introduit en 0.20.4. Il accepte desormais une classe variable, et echoue
+    toujours si la zone disparait — verifie par mutation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 11:00:09 +0200
+
+secubox-bbs (0.20.4-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : le SERVEUR designe le volet qui porte le contenu, via la classe
+    `volet-liste`. Sur un forum precis ce sont les fils — donc la liste — et la
+    masquer rendait un ecran vide ; sur la racine c'est l'inverse. Aucune regle
+    CSS ne pouvait les distinguer, d'ou deux tentatives et deux ecrans vides,
+    un dans chaque sens.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:57:26 +0200
+
 secubox-bbs (0.20.3-1~bookworm1) bookworm; urgency=medium
 
   * Telephone : retour a la disposition de base — le contenu seul, la liste
