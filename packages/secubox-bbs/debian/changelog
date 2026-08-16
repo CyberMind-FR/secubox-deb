@@ -1,3 +1,15 @@
+secubox-bbs (0.20.1-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : le contenu revient au premier plan. Une regle maitre-detail
+    n'affichait la vue que si un element de la liste portait aria-current, or
+    la page des forums n'en a aucun : on voyait la colonne des forums et jamais
+    leur contenu.
+  * Le tiroir devient un menu vertical : rail en haut, liste dessous, en une
+    seule colonne. Son bouton n'existait qu'au-dessus de 620 px, donc jamais la
+    ou il sert.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:42:22 +0200
+
 secubox-bbs (0.20.0-1~bookworm1) bookworm; urgency=medium
 
   * LES MEDIAS DU FIL ETAIENT BLOQUES PAR LA POLITIQUE DE SECURITE (ref #1044).
