@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.40-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : une entree de cache dont l'annexe est illisible n'est plus
+    servie. Sans Content-Type stocke, net/http devine le contenu et repond
+    « text/plain » : le navigateur refuse alors la feuille de style, et le
+    script aussi des que nosniff s'applique. Le corps orphelin est efface.
+  * sbxwaf : les fichiers .tmp laisses par un arret brutal ne sont plus
+    indexes comme des corps.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 08:10:30 +0200
+
 secubox-toolbox-ng (0.1.38-1~bookworm1) bookworm; urgency=medium
 
   * sbxmitm: per-peer R-level MITM policy (rlevel-per-peer, task 8). The
