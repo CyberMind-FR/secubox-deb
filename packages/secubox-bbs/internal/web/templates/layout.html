@@ -165,7 +165,15 @@
     </div>
     {{end}}
 
-    <main class="vue">{{template "corps" .}}</main>
+    <main class="vue">
+      <!-- RETOUR A LA LISTE — telephone uniquement.
+           Sur petit ecran les deux volets ne tiennent pas cote a cote : on
+           n'en montre qu'un. Sans ce lien, ouvrir un fil menait dans une
+           impasse — la barre basse ne propose que la navigation de premier
+           niveau, pas le retour au volet precedent. -->
+      <a class="retour-liste" href="{{if eq .Vue "forums"}}/{{else}}/{{.Vue}}{{end}}">← Liste</a>
+      {{template "corps" .}}
+    </main>
   </div>
 
   <!-- LIGNE D'ETAT — seul ornement assume, et elle porte des faits : ou l'on
