@@ -42,7 +42,7 @@ trap 'rm -f "$TMP4" "$TMP6"' EXIT
 # single-source entries (e.g. blocklist.de) — arming all of them risks blocking
 # legitimate traffic. Enforce an IP only when corroborated by >= MIN_CONSENSUS
 # distinct sources OR carried by a curated high-trust feed (weight >= MIN_WEIGHT).
-# CrowdSec local decisions (Source 2) and DNS-guard domains are always enforced.
+# CrowdSec local decisions (Source 2) are always enforced.
 TI_MIN_CONSENSUS="${SECUBOX_BL_MIN_CONSENSUS:-2}"
 TI_MIN_WEIGHT="${SECUBOX_BL_MIN_WEIGHT:-80}"
 if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
@@ -61,33 +61,31 @@ if command -v cscli >/dev/null 2>&1; then
       >> "$TMP4.raw" || true
 fi
 
-# Source 3 (Phase 13.B #522) : DNS-guard — resolve blocklisted DOMAINS
-# (threat_intel ioc_type='domain') to their A/AAAA records and add those
-# IPs. Closes the DoH / hardcoded-IP bypass : even if a device resolves a
-# known-bad domain out-of-band, the resulting IP is dropped at forward.
-# Bounded : cap on domains/cycle + per-lookup timeout so the sync never
-# hangs on a dead resolver.
-DOMAIN_CAP="${SECUBOX_BL_DOMAIN_CAP:-2000}"
-RESOLVE_TIMEOUT="${SECUBOX_BL_RESOLVE_TIMEOUT:-1}"
-resolved_domains=0
-if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
-    while IFS= read -r dom; do
-        [ -n "$dom" ] || continue
-        # getent ahosts returns both A + AAAA ; timeout guards a dead lookup.
-        # NXDOMAIN makes getent exit 2 → with pipefail+set -e the assignment
-        # would abort the whole sync on the first dead blocklisted domain
-        # (and blocklisted domains are overwhelmingly dead/sinkholed). Guard
-        # the substitution so an unresolvable domain is simply skipped.
-        ips=$(timeout "$RESOLVE_TIMEOUT" getent ahosts "$dom" 2>/dev/null \
-                | awk '{print $1}' | sort -u || true)
-        if [ -n "$ips" ]; then
-            printf '%s\n' "$ips" >> "$TMP4.raw"
-            resolved_domains=$((resolved_domains + 1))
-        fi
-    done < <(sqlite3 "$TOOLBOX_DB" \
-        "SELECT DISTINCT ioc FROM threat_intel WHERE ioc_type='domain' LIMIT $DOMAIN_CAP;" \
-        2>/dev/null)
-fi
+# Source 3 (Phase 13.B #522) : DNS-guard — RETIRE le 2026-08-16.
+#
+# Cette source resolvait jusqu'a 2000 domaines de threat_intel en A/AAAA pour
+# ajouter les IP obtenues, afin de fermer le contournement DoH : meme si un
+# appareil resout un domaine connu hors-bande, l'IP tombait au forward.
+#
+# L'INTENTION EST BONNE, LA MISE EN OEUVRE NE TENAIT PAS. Mesure sur gk2 :
+#
+#   * 11 domaines sur 12 ne resolvent RIEN — ce sont des domaines morts. La
+#     boucle attendait le delai complet pour chacun, en serie.
+#   * 2000 domaines tentes sur 20394 en base, sans ORDER BY : les 90 % restants
+#     n'etaient jamais regardes, et toujours les memes etaient tentes.
+#   * quatre processus par domaine (timeout, getent, awk, sort), soit ~8000
+#     forks toutes les cinq minutes, et 48 s de CPU par passe.
+#   * les elements expirent en 2 h alors que ces domaines changent d'adresse
+#     bien plus vite.
+#
+# Couverture reelle obtenue : moins de 1 % des domaines connus. Prix : la
+# charge moyenne de la board tenue autour de 40 sur 4 coeurs (#1045).
+#
+# LE TROU N'EST PAS BOUCHE POUR AUTANT, et il ne faut pas croire l'inverse :
+# Unbound bloque 662 000 domaines, mais ce sont ceux de l'anti-publicite —
+# verifie, AUCUN des domaines de threat_intel n'y figure. La suite correcte est
+# de les servir a Unbound PAR NOM, ou 662 000 entrees ne coutent rien par
+# requete, plutot que d'en resoudre 2000 en IP toutes les cinq minutes.
 
 # Split v4 / v6, validate, dedup, cap.
 if [ -f "$TMP4.raw" ]; then
@@ -151,8 +149,8 @@ live4=$($NFT list set $TABLE blacklist_v4 2>/dev/null | grep -c 'timeout' || ech
 live6=$($NFT list set $TABLE blacklist_v6 2>/dev/null | grep -c 'timeout' || echo 0)
 STATE=/run/secubox/blacklist-sync.json
 mkdir -p /run/secubox 2>/dev/null || true
-printf '{"ts":%s,"v4_added":%s,"v6_added":%s,"resolved_domains":%s,"doh_block":%s}\n' \
-    "$(date +%s)" "${n4:-0}" "${n6:-0}" "${resolved_domains:-0}" "${DOH_BLOCK}" \
+printf '{"ts":%s,"v4_added":%s,"v6_added":%s,"doh_block":%s}\n' \
+    "$(date +%s)" "${n4:-0}" "${n6:-0}" "${DOH_BLOCK}" \
     > "$STATE" 2>/dev/null || true
-log "synced: +${n4} v4 / +${n6} v6 (live ~${live4}/${live6}, resolved ${resolved_domains:-0} domains, doh_block=${DOH_BLOCK}, timeout ${ELEM_TIMEOUT})"
+log "synced: +${n4} v4 / +${n6} v6 (live ~${live4}/${live6}, doh_block=${DOH_BLOCK}, timeout ${ELEM_TIMEOUT})"
 exit 0
