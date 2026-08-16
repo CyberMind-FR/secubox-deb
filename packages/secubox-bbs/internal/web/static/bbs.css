@@ -548,29 +548,26 @@ body.rail-ouvert::after {
 /* ── tablette et televiseur : deux colonnes ──────────────────────────────
  * Liste et vue. Le rail reste au bouton : a trois metres comme au pouce, on
  * vise une cible large, et la liste vaut mieux qu'un menu toujours ouvert. */
-/* ── TELEPHONE : UN SEUL VOLET A LA FOIS ───────────────────────────────────
+/* SUR TELEPHONE, LE SERVEUR DESIGNE LE VOLET (classe `volet-liste`).
  *
- * `.corps` passait bien a une colonne sous 620 px, mais gardait
- * `overflow:hidden` avec DEUX enfants empiles : la liste occupait la hauteur
- * disponible et la vue etait purement decoupee hors de l'ecran. On voyait la
- * colonne des forums, jamais leur contenu.
+ * Aucune regle de largeur ne peut le deviner : sur la racine des forums le
+ * contenu est dans la vue, sur un forum precis c'est la liste qui porte les
+ * fils. Deux tentatives de deviner ont produit deux ecrans vides, un dans
+ * chaque sens, puis des volets superposes.
  *
- * Les deux volets sont donc superposes dans la meme cellule, et l'on montre
- * celui qui correspond a l'etat : la liste tant que rien n'est ouvert, la vue
- * des qu'un element porte `aria-current="page"` — un marqueur que les gabarits
- * posent deja, sans rien ajouter cote serveur. */
-@media (max-width: 619.98px) {
-/* SUR TELEPHONE, LE CONTENU D'ABORD.
- *
- * La base masque deja `.liste` et laisse `.vue` seule : c'est le bon reglage.
- * Une regle « maitre-detail » posee ici l'avait ecrase — elle n'affichait la
- * vue que si un element de la liste portait `aria-current`, or la page des
- * forums n'en a AUCUN. On voyait la colonne des forums et jamais leur contenu.
- * La liste s'atteint par le tiroir, comme le rail.
+ * restait d'une suppression ou j'avais efface le contenu en laissant
+ * l'accolade. Tout ce qui suit se trouvait donc enferme dans une condition
+ * impossible (< 620 ET >= 620) : la disposition en colonnes ne s'appliquait
+ * JAMAIS, sur aucune largeur. C'est ce qui rendait le BBS inutilisable.
  */
 @media (min-width: 620px) {
   .corps { grid-template-columns: minmax(240px, 320px) 1fr; }
   .liste { display: block; }
+  /* LE MARQUEUR DE VOLET NE VAUT QUE SUR TELEPHONE, ou un seul volet tient a
+   * l'ecran. Pose dans la base, il masquait `.vue` A TOUTES LES LARGEURS : sur
+   * un forum le serveur pose `volet-liste`, et les messages disparaissaient
+   * aussi au bureau — la ou il y a pourtant la place pour les deux. */
+  .corps.volet-liste > .vue { display: block; }
   .basse { display: none; }
   .menu-bascule { display: inline-block; }
 }
