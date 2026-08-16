@@ -58,7 +58,18 @@
     {{end}}
   </header>
 
-  <div class="corps">
+  {{/* QUEL VOLET PORTE LE CONTENU — decide ICI, par le serveur.
+
+       Sur telephone un seul volet tient a l'ecran, et le contenu utile n'est
+       pas toujours dans le meme : sur la racine des forums il est dans la vue,
+       sur un forum precis c'est la LISTE qui porte les fils (mesure : 7594
+       octets contre 1749). Aucune regle CSS ne peut les distinguer — deux
+       tentatives, deux ecrans vides, un dans chaque sens.
+
+       `.Cat.Title` est renseigne des qu'on est DANS un forum, vide sur la
+       racine. Pour la messagerie, c'est l'ouverture d'une conversation qui
+       bascule. Le serveur sait, la feuille obeit. */}}
+  <div class="corps{{if and .Threads .Cat.Title}} volet-liste{{end}}{{if and .Convs (not .Avec.Handle)}} volet-liste{{end}}">
 
     <nav class="rail" id="rail" aria-label="Navigation principale">
       <div class="railhead">Actifs</div>

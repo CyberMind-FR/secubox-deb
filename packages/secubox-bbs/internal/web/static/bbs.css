@@ -516,6 +516,12 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
  * masques, la barre basse porte les cinq destinations. On ne lit qu'une chose
  * a la fois sur cinq pouces.                                                */
 .rail, .liste { display: none; }
+  /* LE SERVEUR DIT QUEL VOLET PORTE LE CONTENU (voir layout.html). Sur un forum
+   * precis, ce sont les fils — donc la liste — et masquer celle-ci rendait un
+   * ecran vide. Sur la racine c'est l'inverse. Une seule classe suffit, et
+   * personne n'a plus a deviner. */
+  .corps.volet-liste > .liste { display: block; }
+  .corps.volet-liste > .vue { display: none; }
   /* Le tiroir est ATTEIGNABLE la ou il sert le plus : le bouton n'existait
    * qu'au-dessus de 620 px, donc jamais sur telephone. */
   .menu-bascule { display: inline-block; }
