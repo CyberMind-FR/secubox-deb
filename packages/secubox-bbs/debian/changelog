@@ -1,3 +1,57 @@
+secubox-bbs (0.22.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le drapeau --frame-origines etait pose dans l'unite sans exister dans le
+    binaire : flag.Parse refusait de demarrer et le BBS rendait 503. Il est
+    desormais declare et cable.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:27:17 +0200
+
+secubox-bbs (0.22.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite etait malformee : l'insertion des nouveaux drapeaux avait produit
+    un « \\ \\ » sur la ligne ExecStart et laisse deux lignes sans
+    continuation. systemd tronquait la commande — le demon tournait SANS la
+    plupart de ses options, et `frame-src` retombait a 'none' alors que
+    PeerTube y figurait avant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:26:03 +0200
+
+secubox-bbs (0.22.0-1~bookworm1) bookworm; urgency=medium
+
+  * `frame-src` s'etend a la radio et au podcaster, par `--frame-origines`.
+    Billets en est exclu : il n'offre aucun lecteur, et accorder un cadre a un
+    service qui n'en a pas l'usage elargit la politique pour rien.
+  * La liste est DISTINCTE de --media-origines, et volontairement : relayer une
+    image ne donne aucun droit au service, l'incorporer lui donne un contexte
+    d'execution dans la page. Confondre les deux ferait qu'ajouter une vignette
+    accorderait un lecteur.
+  * `frame-src` etait calcule en DEUX endroits a l'identique : ajouter un
+    service n'aurait porte que sur l'un des deux, et la page Mastodon aurait
+    garde une politique differente du reste du site sans que rien ne le
+    signale. Un seul point de verite desormais, et chaque entree revalidee —
+    verifie par mutation qu'une origine contenant un point-virgule couperait
+    la politique en deux.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:23:47 +0200
+
+secubox-bbs (0.21.0-1~bookworm1) bookworm; urgency=medium
+
+  * Relais de vignettes pour NOS services (#1056). Chaque service est un vhost
+    distinct du BBS, donc `img-src 'self'` ne couvre pas ses images : les lier
+    ferait contacter ce vhost par le navigateur de chaque membre et obligerait
+    a elargir la politique. Le demon les relaie, la politique reste fermee, et
+    le service distant n'apprend rien sur qui regarde.
+  * Les origines viennent de `--media-origines`, JAMAIS d'une URL postee par un
+    membre : relayer une adresse quelconque ferait du demon un proxy ouvert,
+    utilisable pour sonder l'agregateur ou un conteneur depuis le WAN derriere
+    l'adresse de la board. Vide par defaut — une autre installation n'a pas nos
+    noms de vhost.
+  * Bornes : 2 Mio sur ce qui est LU (et non sur Content-Length, declaratif),
+    8 s de delai, types image uniquement — un text/html relaye serait servi
+    depuis notre origine, donc avec le droit d'y executer du script.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:13:31 +0200
+
 secubox-bbs (0.20.5-1~bookworm1) bookworm; urgency=medium
 
   * Le controle de la coquille cherchait `class="corps"` a l'identique, ce qui

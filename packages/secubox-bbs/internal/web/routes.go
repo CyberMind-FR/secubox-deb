@@ -123,6 +123,7 @@ type pill struct{ Class, Text string }
 func (s *Server) routes() {
 	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
+	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
