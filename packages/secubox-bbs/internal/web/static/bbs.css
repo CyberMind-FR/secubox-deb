@@ -516,15 +516,24 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
  * masques, la barre basse porte les cinq destinations. On ne lit qu'une chose
  * a la fois sur cinq pouces.                                                */
 .rail, .liste { display: none; }
+  /* Le tiroir est ATTEIGNABLE la ou il sert le plus : le bouton n'existait
+   * qu'au-dessus de 620 px, donc jamais sur telephone. */
+  .menu-bascule { display: inline-block; }
 .basse { display: flex; }
 
 /* Le rail reste ATTEIGNABLE sur petit ecran : le bouton ☰ le fait glisser
  * par-dessus. En surimpression et non en colonne — a cette largeur, une
  * colonne de plus ne laisserait rien a lire. */
-body.rail-ouvert .rail {
-  display: flex; position: fixed; inset: 0 auto 0 0; z-index: 40;
-  width: min(84vw, 300px); box-shadow: var(--shadow);
+body.rail-ouvert .rail,
+body.rail-ouvert .liste {
+  display: flex; flex-direction: column; position: fixed; z-index: 40;
+  width: min(84vw, 300px); box-shadow: var(--shadow); overflow-y: auto;
 }
+/* Le rail en haut, la liste dessous : UNE seule colonne verticale, qui donne
+ * d'abord les sections puis ce qu'elles contiennent. Deux tiroirs separes
+ * auraient demande deux gestes pour une seule intention. */
+body.rail-ouvert .rail  { inset: 0 auto 55% 0; border-bottom: 1px solid var(--line); }
+body.rail-ouvert .liste { inset: 45% auto 0 0; border-right: 1px solid var(--line); }
 body.rail-ouvert::after {
   content: ""; position: fixed; inset: 0; z-index: 39;
   background: rgba(13, 27, 36, .45);
@@ -545,36 +554,14 @@ body.rail-ouvert::after {
  * des qu'un element porte `aria-current="page"` — un marqueur que les gabarits
  * posent deja, sans rien ajouter cote serveur. */
 @media (max-width: 619.98px) {
-  .corps { grid-template-columns: 1fr; }
-  .corps > .liste,
-  .corps > .vue { grid-area: 1 / 1; min-height: 0; }
-  .corps > .vue { display: none; }
-  .corps:has(.liste [aria-current="page"]) > .liste { display: none; }
-  .corps:has(.liste [aria-current="page"]) > .vue { display: block; }
-  /* Page sans liste (compte, connexion, sysop) : la vue est tout ce qu'il y a. */
-  .corps:not(:has(.liste)) > .vue { display: block; }
-  .retour-liste { display: inline-flex; }
-}
-
-/* Filet pour les navigateurs sans `:has()` : plutot que de masquer la vue et
- * de reproduire le defaut, on empile et on laisse defiler. Moins elegant,
- * jamais vide. */
-@supports not selector(:has(*)) {
-  @media (max-width: 619.98px) {
-    .corps { overflow-y: auto; }
-    .corps > .liste, .corps > .vue { grid-area: auto; display: block; }
-    .corps > .liste { max-height: 45vh; overflow-y: auto; }
-  }
-}
-
-.retour-liste{
-  display:none; align-items:center; gap:7px; margin:0 0 14px;
-  padding:7px 13px; border-radius:8px; text-decoration:none;
-  font-size:13px; font-weight:600;
-  color:var(--text); background:var(--soft); border:1px solid var(--line);
-}
-.retour-liste:hover{border-color:var(--dim)}
-
+/* SUR TELEPHONE, LE CONTENU D'ABORD.
+ *
+ * La base masque deja `.liste` et laisse `.vue` seule : c'est le bon reglage.
+ * Une regle « maitre-detail » posee ici l'avait ecrase — elle n'affichait la
+ * vue que si un element de la liste portait `aria-current`, or la page des
+ * forums n'en a AUCUN. On voyait la colonne des forums et jamais leur contenu.
+ * La liste s'atteint par le tiroir, comme le rail.
+ */
 @media (min-width: 620px) {
   .corps { grid-template-columns: minmax(240px, 320px) 1fr; }
   .liste { display: block; }
