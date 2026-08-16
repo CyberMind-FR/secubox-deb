@@ -225,6 +225,14 @@
   liste && liste.addEventListener('click', function (e) {
     if (!e.target.closest('a')) { return; }
     if (corps.scrollWidth <= corps.clientWidth) { return; }
+    // ON RETIRE LE FOCUS DU LIEN QU'ON VIENT DE QUITTER.
+    //
+    // Le navigateur garde l'element focalise dans le champ de vision : le lien
+    // tape reste dans la liste, et des qu'un autre evenement provoque un
+    // recalcul, il RAMENE le volet de la liste sous les yeux — un retour que
+    // personne n'a demande, au milieu de la lecture.
+    var lien = e.target.closest('a');
+    if (lien && lien.blur) { lien.blur(); }
     corps.scrollTo({ left: vue.offsetLeft - corps.offsetLeft, behavior: 'smooth' });
   }, { passive: true });
 })();
