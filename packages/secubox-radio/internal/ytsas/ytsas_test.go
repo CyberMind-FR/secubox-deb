@@ -265,3 +265,45 @@ func TestUneErreurDeLaPasserelleNestPasRelayeeCommeUnFlux(t *testing.T) {
 		t.Error("un 404 a ete relaye comme un flux")
 	}
 }
+
+// ENUMERER N'EST PAS RAPATRIER. La contrepartie exacte de `Demande` : l'une
+// lance un telechargement, l'autre lit une table des matieres. Les confondre
+// lancerait cinquante rapatriements la ou l'on voulait afficher une liste.
+func TestEnumererLitLaListeSansRienTelecharger(t *testing.T) {
+	var chemin, requete string
+	c := passerelle(t, func(w http.ResponseWriter, r *http.Request) {
+		chemin, requete = r.URL.Path, r.URL.RawQuery
+		w.Write([]byte(`{"count":2,"items":[
+			{"id":"A","url":"https://www.youtube.com/watch?v=A","title":"Un"},
+			{"id":"B","url":"https://www.youtube.com/watch?v=B","title":"Deux"}]}`))
+	})
+	m, err := c.Enumere(context.Background(), "https://www.youtube.com/playlist?list=PL1", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if chemin != "/api/v1/ytsas/playlist" {
+		t.Errorf("chemin = %q — ce n'est pas la route d'enumeration", chemin)
+	}
+	if !strings.Contains(requete, "limite=50") {
+		t.Errorf("la borne n'est pas transmise : %q", requete)
+	}
+	if len(m) != 2 || m[0].Titre != "Un" {
+		t.Errorf("morceaux mal lus : %+v", m)
+	}
+}
+
+// UNE LISTE ILLISIBLE REMONTE SON MOTIF : « erreur » ferait chercher la panne
+// du mauvais cote.
+func TestUneListeIllisibleRemonteSonMotif(t *testing.T) {
+	c := passerelle(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"playlist vide ou illisible"}`))
+	})
+	_, err := c.Enumere(context.Background(), "https://www.youtube.com/playlist?list=X", 10)
+	if err == nil {
+		t.Fatal("une liste illisible a ete acceptee")
+	}
+	if !strings.Contains(err.Error(), "illisible") {
+		t.Errorf("motif perdu : %v", err)
+	}
+}

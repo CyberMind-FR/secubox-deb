@@ -480,29 +480,41 @@ func TestUnePlaylistNestJamaisJouable(t *testing.T) {
 
 // DEPLIER, C'EST HERITER DE LA DECISION DEJA PRISE : le sysop a valide LA
 // PLAYLIST, il n'a pas a revalider chacun de ses titres.
-func TestDeplierUnePlaylistFaitEntrerSesMorceaux(t *testing.T) {
+func TestDeplierUnePlaylistLaTransformeEnPropositions(t *testing.T) {
 	s := banc(t)
 	pl, _, _ := s.Ajoute("https://www.youtube.com/playlist?list=PL1", "Ma liste", 7, t0)
 	n, err := s.Deplie(pl.ID, []MorceauPlaylist{
 		{URL: "https://youtu.be/A", Titre: "Un"},
 		{URL: "https://youtu.be/B", Titre: "Deux"},
-	}, 1, t0)
+	}, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n != 2 {
 		t.Fatalf("%d morceaux deplies", n)
 	}
-	l, _ := s.Toutes()
-	if len(l) != 2 {
-		t.Fatalf("%d pistes a l'antenne", len(l))
+	// ILS ARRIVENT EN PROPOSITIONS, pas a l'antenne : on ne connait pas une
+	// liste avant de l'avoir vue.
+	if l, _ := s.Toutes(); len(l) != 0 {
+		t.Errorf("%d pistes sont entrees a l'antenne sans etre regardees", len(l))
 	}
-	for _, p := range l {
-		if p.Etat != EtatValide {
-			t.Errorf("%s est en %q : le sysop devrait revalider", p.Source, p.Etat)
+	pr, _ := s.Propositions()
+	if len(pr) != 2 {
+		t.Fatalf("%d propositions", len(pr))
+	}
+	for _, p := range pr {
+		if p.Etat != EtatPropose {
+			t.Errorf("%s est en %q", p.Source, p.Etat)
 		}
 		if p.AjoutePar != 7 {
 			t.Errorf("l'auteur de la proposition est perdu : %d", p.AjoutePar)
+		}
+		// GROUPES PAR LOT : cinquante lignes melees au reste seraient illisibles.
+		if p.Lot != "ytpl:PL1" {
+			t.Errorf("lot = %q", p.Lot)
+		}
+		if p.LotTitre != "Ma liste" {
+			t.Errorf("titre du lot = %q", p.LotTitre)
 		}
 	}
 	// LA PLAYLIST A JOUE SON ROLE et disparait : la garder laisserait une
@@ -528,7 +540,7 @@ func TestDeplierNeRessuscitePasUnMorceauRefuse(t *testing.T) {
 	n, err := s.Deplie(pl.ID, []MorceauPlaylist{
 		{URL: "https://youtu.be/NON", Titre: "Le refuse"},
 		{URL: "https://youtu.be/OUI", Titre: "L'autre"},
-	}, 1, t0)
+	}, t0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,7 +563,7 @@ func TestUnDepliageEstBorne(t *testing.T) {
 	for i := 0; i < MaxParPlaylist+20; i++ {
 		m = append(m, MorceauPlaylist{URL: "https://youtu.be/x" + itoa(i), Titre: "t"})
 	}
-	n, err := s.Deplie(pl.ID, m, 1, t0)
+	n, err := s.Deplie(pl.ID, m, t0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -204,18 +204,20 @@ func (s *Serveur) sysopSeul(w http.ResponseWriter, r *http.Request) (Visiteur, b
 // ── lecture ─────────────────────────────────────────────────────────────────
 
 type vuePiste struct {
-	ID      int64  `json:"id"`
-	Titre   string `json:"titre"`
-	Auteur  string `json:"auteur"`
-	DureeMS int64  `json:"duree_ms"`
-	Coeurs  int    `json:"coeurs"`
-	Source  string `json:"source"`
-	Etat    string `json:"etat,omitempty"`
-	Motif   string `json:"motif,omitempty"`
-	EnCache bool   `json:"en_cache"`
-	Ecarte  bool   `json:"ecarte,omitempty"`
-	Raison  string `json:"raison,omitempty"`
-	Aime    bool   `json:"aime"`
+	ID       int64  `json:"id"`
+	Titre    string `json:"titre"`
+	Auteur   string `json:"auteur"`
+	DureeMS  int64  `json:"duree_ms"`
+	Coeurs   int    `json:"coeurs"`
+	Source   string `json:"source"`
+	Etat     string `json:"etat,omitempty"`
+	Lot      string `json:"lot,omitempty"`
+	LotTitre string `json:"lot_titre,omitempty"`
+	Motif    string `json:"motif,omitempty"`
+	EnCache  bool   `json:"en_cache"`
+	Ecarte   bool   `json:"ecarte,omitempty"`
+	Raison   string `json:"raison,omitempty"`
+	Aime     bool   `json:"aime"`
 	// LES COEURS SONT PUBLICS : on voit qui a aime. Un coeur anonyme se
 	// compte, un coeur signe se discute.
 	Aimeurs []store.Aimeur `json:"aimeurs,omitempty"`
@@ -233,6 +235,7 @@ func (s *Serveur) vue(p store.Piste, v Visiteur) vuePiste {
 	return vuePiste{ID: p.ID, Titre: p.Titre, Auteur: p.Auteur, DureeMS: p.DureeMS,
 		Aimeurs: aimeurs,
 		Coeurs:  p.Coeurs, Source: p.Source, Etat: p.Etat, Motif: p.Motif,
+		Lot: p.Lot, LotTitre: p.LotTitre,
 		EnCache: p.EnCache(), Ecarte: p.Indisponible, Raison: p.Raison, Aime: aime}
 }
 
