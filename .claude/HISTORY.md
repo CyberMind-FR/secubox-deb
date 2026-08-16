@@ -3,6 +3,40 @@
 
 ---
 
+## 2026-08-16 — Radio 0.1.2, sbxwaf 0.1.40 : trois symptomes, trois causes (#1047, #1031)
+
+**Le cache media du WAF servait une feuille perimee en `text/plain`.** Le
+navigateur la jetait : la page paraissait non regeneree, puis « la video se
+redimensionne ». La feuille livree etait juste depuis le debut.
+
+Cause de fond, differente de celle traitee en #1031 : une entree dont l'annexe
+`.m` est absente ou illisible etait quand meme indexee et servie. Sans
+Content-Type stocke, `net/http` devine le contenu et repond `text/plain` — et
+avec `nosniff`, le script tombe aussi. Corrige : le corps orphelin est efface,
+les `.tmp` d'un arret brutal ne sont plus pris pour des corps.
+
+Une purge que j'avais faite a **cree** cette condition : je cherchais le nom du
+vhost dans les fichiers du cache, or il ne figure que dans l'annexe. J'ai
+supprime les annexes en laissant les corps.
+
+**Parade durable cote module** : les URL statiques portent une empreinte de
+leur contenu (`radio.css?v=07a51b421dad`). Un deploiement ne peut plus tomber
+sur une entree perimee, et une version inchangee reste servie depuis le cache.
+
+**La file de recuperation gelait sur la premiere piste refusee.** Une piste en
+erreur chez la passerelle etait lue comme « pas encore prete » : la boucle
+s'arretait dessus a chaque tour et ne demandait jamais les suivantes. Une seule
+video en 403 bloquait les quarante autres, sans une ligne de journal. Elle est
+desormais ecartee avec sa raison ; les 8 pistes en attente ont ete demandees
+dans la minute suivant le deploiement.
+
+**Quatre ffmpeg fantomes** dans PeerTube, bloques en `futex_wait_queue` depuis
+5 a 8 jours, zero octet ecrit, insensibles a SIGTERM. Supprimes. La charge est
+restee a 41 : ils n'en etaient pas la cause.
+
+Restent ouverts : le 403 de YouTube sur le media (metadonnees OK, ni les
+cookies ni notre interception en cause, yt-dlp deja a jour) ; la charge 41.
+
 ## 2026-08-15 — BBS 0.16.0 : note vocale et note video (#1044)
 
 Deux boutons rejoignent le trombone dans les trois editeurs. Ils empruntent le

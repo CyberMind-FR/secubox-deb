@@ -1,7 +1,32 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-05*
+*Mis à jour : 2026-08-16*
 
 ---
+
+## 2026-08-16 — Radio, cache du WAF, emulation
+
+### ✅ Fait — deploye et synchronise sur apt.secubox.in
+
+- **secubox-radio 0.1.2** (#1047) — le clip joue dans le cadre de la vignette ;
+  une piste refusee par la passerelle est ecartee avec sa raison au lieu de
+  geler toute la file ; URL statiques empreintes du contenu ; empreinte de la
+  feuille de la banniere de sante dans `style-src`.
+- **secubox-toolbox-ng 0.1.40** (#1031) — sbxwaf ne sert plus une entree de
+  cache sans metadonnees lisibles.
+- **PeerTube** — 4 ffmpeg bloques depuis 5-8 jours supprimes.
+- **Depot** — 11 worktrees vides retires (28 → 18).
+
+### ⬜ Next Up
+
+- **403 YouTube sur le media** (#1048 voisin) — metadonnees OK, media refuse.
+  Ni les cookies, ni notre interception, ni la version de yt-dlp. Piste non
+  verifiee : fournisseur de PO token.
+- **Charge moyenne a 41** (#1045) — les fantomes n'en etaient pas la cause,
+  la source reste a trouver.
+- **#1050 SecuBox Retro** — faisabilite a etudier, rien d'engage.
+- **#1049 mosaique** — composant partage entre les flux.
+- **PR manquantes** — 18 worktrees portent du travail non fusionne, dont
+  #1047, #1044, #1045. Aucune PR ouverte.
 
 ## 2026-08-03 → 08-05 — Marathon perf & fiabilité : mur mosaïque, certificats, châssis, playlists
 

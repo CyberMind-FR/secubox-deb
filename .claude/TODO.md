@@ -3,6 +3,17 @@
 
 ---
 
+## 2026-08-16 — ajoute
+
+- [ ] **403 YouTube sur le media** — metadonnees OK, media refuse. Ecarte :
+      cookies, interception locale, version de yt-dlp. Verifier l'hypothese
+      du jeton d'origine (PO token) avant d'engager quoi que ce soit.
+- [ ] **Charge moyenne a 41 sur gk2** (#1045) — trouver la source reelle.
+- [ ] **#1050 SecuBox Retro** — mesurer un coeur libretro WASM ; trancher la
+      position juridique sur les ROM AVANT la technique.
+- [ ] **Fusionner l'arriere** — 18 worktrees portent du travail non fusionne,
+      aucune PR ouverte. Commencer par #1047, #1044, #1045.
+
 ## 🎬 Média/perf — suite marathon v2.16.0 (2026-07-31)
 
 - [ ] **502 brandé global** : câbler le snippet `secubox-errorpages.conf` dans chaque `server{}` (script python balanced-brace + `nginx -t` avant reload) ; les 2 tentatives naïves (sed) ont cassé `nginx -t`.
