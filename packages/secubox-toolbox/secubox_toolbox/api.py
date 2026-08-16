@@ -3178,9 +3178,8 @@ async def admin_blacklist() -> dict:
         "doh_detect_v4": 0,
         "doh_detect_v6": 0,
         "doh_hits": 0,
-        "resolved_domains": 0,
         "doh_block": False,
-        "sources": ["crowdsec", "threat-intel", "dns-guard"],
+        "sources": ["crowdsec", "threat-intel"],
     }
     try:
         r = _sp.run(
@@ -3213,12 +3212,11 @@ async def admin_blacklist() -> dict:
             out["active"] = True
     except Exception as e:  # noqa: BLE001
         log.warning("admin_blacklist nft parse failed: %s", e)
-    # Last-sync state file (resolved-domain count + doh_block flag).
+    # Last-sync state file (doh_block flag).
     try:
         st = _P("/run/secubox/blacklist-sync.json")
         if st.exists():
             j = _json.loads(st.read_text())
-            out["resolved_domains"] = int(j.get("resolved_domains", 0) or 0)
             out["doh_block"] = str(j.get("doh_block", "0")) == "1"
     except Exception:
         pass
