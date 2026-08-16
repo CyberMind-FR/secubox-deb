@@ -1,3 +1,17 @@
+secubox-bbs (0.23.0-1~bookworm1) bookworm; urgency=medium
+
+  * Un lien vers un de NOS services devient une fiche : le service est nomme,
+    l'adresse reste cliquable. AUCUN APPEL RESEAU AU RENDU — interroger le
+    service pour son titre ferait, sur un fil de trente liens, trente requetes
+    avant que la page ne parte, et un service lent bloquerait l'affichage d'une
+    conversation qui ne le concerne pas.
+  * La reconnaissance exige le SEPARATEUR apres l'origine : sans lui,
+    `radio.gk2.secubox.in.mal.tld` usurpait notre radio. Verifie par mutation.
+  * Sans `--media-origines`, aucun lien ne change : une autre installation n'a
+    pas nos vhosts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:49:00 +0200
+
 secubox-bbs (0.22.2-1~bookworm1) bookworm; urgency=medium
 
   * Le drapeau --frame-origines etait pose dans l'unite sans exister dans le
