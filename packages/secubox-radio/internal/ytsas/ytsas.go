@@ -31,7 +31,16 @@ type Entree struct {
 	Complet int     `json:"complete"`
 	Progres float64 `json:"progress"`
 	Etat    string  `json:"job_status"`
+	Erreur  string  `json:"job_error"`
 }
+
+// Echoue dit si la passerelle a RENONCE a cette piste.
+//
+// Le distinguer de « pas encore prete » est ce qui fait avancer la file. Une
+// video refusee par YouTube — 403, retiree, reservee — ne sera jamais prete,
+// et la compter comme « en cours » revient a attendre pour toujours quelque
+// chose qui n'arrivera pas.
+func (e Entree) Echoue() bool { return e.Etat == "error" }
 
 // Pret dit si le fichier est utilisable.
 func (e Entree) Pret() bool { return e.Complet == 1 && e.Etat == "complete" }
@@ -327,4 +336,36 @@ func (c *Client) Enumere(ctx context.Context, adresse string, limite int) ([]Mor
 		return nil, fmt.Errorf("la passerelle rend %d", res.StatusCode)
 	}
 	return rep.Items, nil
+}
+
+// EtatCookies : ce que la passerelle dit de son coffre.
+type EtatCookies struct {
+	Present bool  `json:"present"`
+	Mtime   int64 `json:"mtime"`
+	Perimes bool  `json:"stale"`
+}
+
+// Cookies interroge le coffre.
+//
+// SERT A REPARER TOUT SEUL. Une piste ecartee faute de cookies l'est
+// DEFINITIVEMENT si personne ne la reessaie : deposer un cookies.txt neuf ne
+// suffirait pas, il faudrait reproposer chaque titre a la main. On surveille
+// donc la date du coffre, et un depot plus recent remet en jeu ce qu'il
+// debloque.
+func (c *Client) Cookies(ctx context.Context) (EtatCookies, error) {
+	var e EtatCookies
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url("/cookies/status"), nil)
+	if err != nil {
+		return e, err
+	}
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return e, err
+	}
+	defer res.Body.Close()
+	brut, err := io.ReadAll(io.LimitReader(res.Body, 1<<16))
+	if err != nil {
+		return e, err
+	}
+	return e, json.Unmarshal(brut, &e)
 }

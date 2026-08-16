@@ -531,3 +531,24 @@ type MorceauPlaylist struct {
 	URL   string
 	Titre string
 }
+
+// RemetEnJeuBloqueesParCookies efface les mises a l'ecart dues a un cookie
+// manquant.
+//
+// UNE MISE A L'ECART TECHNIQUE N'EST PAS UN JUGEMENT. La piste n'a pas ete
+// refusee — elle n'a pas pu etre recuperee. Quand la cause disparait, elle doit
+// revenir d'elle-meme : sans cela, deposer un cookies.txt neuf ne suffirait
+// pas, il faudrait reproposer chaque titre a la main.
+//
+// Le motif sert de marqueur : on ne touche QUE ce qui a ete ecarte pour cette
+// raison-la. Une piste geo-bloquee ou supprimee chez la source reste ecartee.
+func (s *Store) RemetEnJeuBloqueesParCookies() (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE pistes SET indisponible = 0, raison = ''
+		  WHERE indisponible = 1 AND raison LIKE '%cookies%'`)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}

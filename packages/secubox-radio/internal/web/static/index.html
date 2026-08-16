@@ -19,10 +19,19 @@
 
   <!-- ═══ LECTURE EN COURS ═══════════════════════════════════════════════ -->
   <section class="carte lecteur">
-    <video id="ecran" playsinline preload="none"></video>
-
     <div class="bloc">
-      <div class="pochette" id="pochette"><span id="glyphe">💿</span></div>
+      <!-- LE CLIP JOUE DANS LE CADRE DE LA VIGNETTE, a sa taille et a son
+           format. Une zone video separee, large, deplacait le regard hors du
+           bloc et cassait la rangee — alors que la vignette EST deja le bon
+           emplacement : elle occupe la place du visuel de la piste.
+
+           Deux enfants et non un : `poseVignette` remplace le contenu de
+           #pochette quand l'image arrive. La video, posee dans ce meme noeud,
+           serait effacee au premier changement de piste. -->
+      <div class="cadre">
+        <div class="pochette" id="pochette"><span id="glyphe">💿</span></div>
+        <video id="ecran" playsinline preload="none"></video>
+      </div>
 
       <div class="infos">
         <div class="etiq">En lecture</div>
