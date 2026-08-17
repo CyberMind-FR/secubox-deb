@@ -7,14 +7,14 @@
 //
 // DEUX REGLES COMMANDENT CE FICHIER.
 //
-// 1. ON N'EFFACE PAS, ON MASQUE. Un message retire passe en visibilite locale,
-//    il ne disparait pas de la base. Une moderation contestee doit pouvoir etre
-//    examinee, et un effacement definitif rend le desaccord indecidable — c'est
-//    la parole d'un moderateur contre celle d'un membre, sans piece.
+//  1. ON N'EFFACE PAS, ON MASQUE. Un message retire passe en visibilite locale,
+//     il ne disparait pas de la base. Une moderation contestee doit pouvoir etre
+//     examinee, et un effacement definitif rend le desaccord indecidable — c'est
+//     la parole d'un moderateur contre celle d'un membre, sans piece.
 //
-// 2. TOUT GESTE EST JOURNALISE. Qui, quoi, quand. Un pouvoir de moderation sans
-//    trace n'est pas un pouvoir encadre : c'est le journal qui distingue les
-//    deux, pas la bonne volonte de celui qui l'exerce.
+//  2. TOUT GESTE EST JOURNALISE. Qui, quoi, quand. Un pouvoir de moderation sans
+//     trace n'est pas un pouvoir encadre : c'est le journal qui distingue les
+//     deux, pas la bonne volonte de celui qui l'exerce.
 package store
 
 import (

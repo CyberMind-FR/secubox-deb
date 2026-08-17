@@ -130,8 +130,14 @@ button{font:inherit;color:inherit;cursor:pointer}
 .nav:hover{background:var(--soft)}
 .nav[aria-current="page"]{background:var(--soft);font-weight:650}
 .nav .ic{
+  /* LA BOITE NE BOUGE PAS, LE DESSIN OUI. Le rail portait des glyphes
+     geometriques (◈ ▤ ✦) qui remplissaient la case a 12px ; un emoji, lui, y
+     paraissait riquiqui. On monte d'un point et on cale la hauteur de ligne —
+     la case reste a 22px, donc aucun alignement ne bouge.
+     `line-height:1` evite qu'un emoji a selecteur de variante (✉️, 🛠️) ne
+     descende d'un pixel par rapport a ses voisins sans variante. */
   width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto;
-  font-size:12px;background:var(--soft);
+  font-size:13px;line-height:1;background:var(--soft);
 }
 .nav[aria-current="page"] .ic{background:var(--c,var(--violet));color:#fff}
 .nav .n{margin-left:auto;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
@@ -266,6 +272,13 @@ button{font:inherit;color:inherit;cursor:pointer}
 .tool{border:0;background:none;padding:5px 9px;border-radius:7px;font-size:13.5px;min-width:31px}
 .tool:hover{background:var(--panel)}
 .tool.act{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line)}
+/* ENREGISTREMENT EN COURS : le bouton doit se distinguer SANS l'animation, car
+   le compteur qu'il affiche suffit deja a dire que ca tourne. La pulsation ne
+   fait que rendre l'etat visible du coin de l'oeil. */
+.tool.enregistrer.en-cours{background:var(--danger,#c0392b);color:#fff;
+  font-variant-numeric:tabular-nums;animation:sbx-pulse 1.6s ease-in-out infinite}
+@keyframes sbx-pulse{50%{opacity:.62}}
+@media (prefers-reduced-motion:reduce){.tool.enregistrer.en-cours{animation:none}}
 .sep{width:1px;height:19px;background:var(--line);margin:0 5px}
 .area{padding:14px 16px;min-height:130px;font-size:14.5px}
 .area p{margin:0 0 9px}
@@ -503,15 +516,66 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
  * masques, la barre basse porte les cinq destinations. On ne lit qu'une chose
  * a la fois sur cinq pouces.                                                */
 .rail, .liste { display: none; }
+  /* LE SERVEUR DIT QUEL VOLET PORTE LE CONTENU (voir layout.html). Sur un forum
+   * precis, ce sont les fils — donc la liste — et masquer celle-ci rendait un
+   * ecran vide. Sur la racine c'est l'inverse. Une seule classe suffit, et
+   * personne n'a plus a deviner. */
+  /* ── TELEPHONE : DEUX VOLETS QUI GLISSENT ────────────────────────────────
+   *
+   * AUCUN VOLET N'EST MASQUE, et c'est tout l'interet. Masquer obligeait a
+   * decider lequel montrer — decision que j'ai ratee trois fois : la racine
+   * des forums porte son contenu dans la vue, un forum precis dans la liste,
+   * et un fil ouvert de nouveau dans la vue alors que le serveur posait encore
+   * `volet-liste`. Chaque reglage corrigeait un cas en cassant le suivant.
+   *
+   * Ici les deux existent cote a cote et l'on passe de l'un a l'autre d'un
+   * glissement. Il n'y a plus rien a deviner : ce qui n'est pas sous les yeux
+   * reste a un geste.
+   *
+   * `scroll-snap` cale le volet en place — sans lui on s'arrete entre les
+   * deux, et une demi-colonne de chaque cote est le pire des deux mondes. */
+  .corps {
+    grid-auto-flow: column;
+    grid-auto-columns: 100%;
+    grid-template-columns: none;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    /* PAS D'ANCRAGE DE DEFILEMENT. Quand le contenu d'un volet change de
+     * taille — une image qui arrive, une vignette qui se remplit — le
+     * navigateur corrige la position pour garder le meme point sous les yeux.
+     * Dans un conteneur a calage horizontal, cette correction fait revenir au
+     * volet precedent SANS QUE PERSONNE NE L'AIT DEMANDE. */
+    overflow-anchor: none;
+    scrollbar-width: none;
+  }
+  .corps::-webkit-scrollbar { display: none; }
+  .corps > .liste,
+  .corps > .vue {
+    display: block;
+    scroll-snap-align: start;
+    min-width: 0;
+    overflow-y: auto;
+  }
+  .liste { border-right: 1px solid var(--line); }
+  /* Le tiroir est ATTEIGNABLE la ou il sert le plus : le bouton n'existait
+   * qu'au-dessus de 620 px, donc jamais sur telephone. */
+  .menu-bascule { display: inline-block; }
 .basse { display: flex; }
 
 /* Le rail reste ATTEIGNABLE sur petit ecran : le bouton ☰ le fait glisser
  * par-dessus. En surimpression et non en colonne — a cette largeur, une
  * colonne de plus ne laisserait rien a lire. */
-body.rail-ouvert .rail {
-  display: flex; position: fixed; inset: 0 auto 0 0; z-index: 40;
-  width: min(84vw, 300px); box-shadow: var(--shadow);
+body.rail-ouvert .rail,
+body.rail-ouvert .liste {
+  display: flex; flex-direction: column; position: fixed; z-index: 40;
+  width: min(84vw, 300px); box-shadow: var(--shadow); overflow-y: auto;
 }
+/* Le rail en haut, la liste dessous : UNE seule colonne verticale, qui donne
+ * d'abord les sections puis ce qu'elles contiennent. Deux tiroirs separes
+ * auraient demande deux gestes pour une seule intention. */
+body.rail-ouvert .rail  { inset: 0 auto 55% 0; border-bottom: 1px solid var(--line); }
+body.rail-ouvert .liste { inset: 45% auto 0 0; border-right: 1px solid var(--line); }
 body.rail-ouvert::after {
   content: ""; position: fixed; inset: 0; z-index: 39;
   background: rgba(13, 27, 36, .45);
@@ -520,9 +584,25 @@ body.rail-ouvert::after {
 /* ── tablette et televiseur : deux colonnes ──────────────────────────────
  * Liste et vue. Le rail reste au bouton : a trois metres comme au pouce, on
  * vise une cible large, et la liste vaut mieux qu'un menu toujours ouvert. */
+/* SUR TELEPHONE, LE SERVEUR DESIGNE LE VOLET (classe `volet-liste`).
+ *
+ * Aucune regle de largeur ne peut le deviner : sur la racine des forums le
+ * contenu est dans la vue, sur un forum precis c'est la liste qui porte les
+ * fils. Deux tentatives de deviner ont produit deux ecrans vides, un dans
+ * chaque sens, puis des volets superposes.
+ *
+ * restait d'une suppression ou j'avais efface le contenu en laissant
+ * l'accolade. Tout ce qui suit se trouvait donc enferme dans une condition
+ * impossible (< 620 ET >= 620) : la disposition en colonnes ne s'appliquait
+ * JAMAIS, sur aucune largeur. C'est ce qui rendait le BBS inutilisable.
+ */
 @media (min-width: 620px) {
   .corps { grid-template-columns: minmax(240px, 320px) 1fr; }
   .liste { display: block; }
+  /* Le marqueur ne sert plus qu'a placer le regard sur telephone : rien n'est
+   * masque, donc rien n'est a retablir ici. On remet seulement la grille, que
+   * le mode glissant remplace en dessous du seuil. */
+  .corps { grid-auto-flow: row; overflow-x: visible; scroll-snap-type: none; }
   .basse { display: none; }
   .menu-bascule { display: inline-block; }
 }
@@ -650,3 +730,101 @@ video.jointe{max-height:60vh; background:#000}
 @media (max-width: 30rem) {
   .carte-media .vignette { width: 3.25rem; height: 3.25rem; }
 }
+
+/* ── hierarchie des sous-salons dans le rail (#1044) ──────────────────────
+   Le decalage est porte par une CLASSE : la politique de securite de contenu
+   interdit les styles en ligne, et un `style=` calcule serait silencieusement
+   ignore. La fleche remplace l'icone de salon pour dire « sous » sans mot. */
+.nav.sub1{padding-left:26px}
+.nav.sub2{padding-left:40px}
+.nav.sub3{padding-left:54px}
+.nav.sub1 .ic,.nav.sub2 .ic,.nav.sub3 .ic{background:transparent;font-size:11px;color:var(--muted,#8a83a0)}
+/* La meme indentation sur la liste d'accueil : deux affichages du meme arbre
+   doivent raconter la meme chose, sinon l'un des deux ment. */
+.board.sub1{padding-left:30px}
+.board.sub2{padding-left:46px}
+.board.sub3{padding-left:62px}
+
+/* Le texte debalise d'une publication garde ses retours a la ligne :
+   sans cela, un fil de trois paragraphes s'affiche en un seul bloc. */
+.pre-ligne{white-space:pre-line}
+
+/* REGLAGES REPLIES : rares mais retrouvables. Le fil est ce qu'on vient lire ;
+   l'instance, l'invitation et la liaison se font une fois puis ne servent
+   plus. */
+.reglages-masto > summary{cursor:pointer;font-weight:650;list-style:none}
+.reglages-masto > summary::-webkit-details-marker{display:none}
+.reglages-masto > summary::before{content:"▸ ";color:var(--dim)}
+.reglages-masto[open] > summary::before{content:"▾ "}
+.reglages-masto h4{margin:14px 0 4px;font-size:13px;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.06em}
+
+/* ── PUBLICATION DISTANTE (fil Mastodon) ──────────────────────────────────
+   PAS `.post`, qui est une grille 52px + 1fr pour la vignette de l'auteur :
+   une publication distante n'a pas d'avatar a montrer, et l'y forcer ecrasait
+   tout le contenu dans la colonne de l'avatar. Une seule colonne, donc. */
+.pub{padding:13px 0;border-bottom:1px solid var(--line)}
+.pub:last-of-type{border-bottom:0}
+.pub-tete{display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--dim);margin-bottom:5px}
+.pub-quand{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;white-space:nowrap}
+.pub-sp{flex:1}
+.pub-cpt{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pub-lien{color:var(--sky);text-decoration:none;white-space:nowrap}
+.pub-lien:hover{text-decoration:underline}
+.pub-avert{margin:0 0 6px;font-weight:650}
+.pub-txt{margin:0;font-size:14.5px}
+.pub-medias{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+/* Une pastille, pas un bouton : la piece jointe accompagne le texte, elle ne
+   se dispute pas la place avec lui. */
+.pub-media{display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  padding:3px 9px;border:1px solid var(--line);border-radius:999px;
+  font-size:11.5px;color:var(--dim);text-decoration:none;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pub-media:hover{background:var(--soft);color:var(--text)}
+
+/* Les medias servis par l'instance du compte s'affichent ; les autres restent
+   des pastilles. Bornes en hauteur : une publication ne doit pas chasser la
+   suivante hors de l'ecran. */
+.pub-vue{display:block;max-width:100%;border-radius:10px;overflow:hidden;
+  border:1px solid var(--line);line-height:0}
+/* MEMES REGLES QUE `.jointe`, ET POUR LES MEMES RAISONS.
+   Le premier jet posait `width:100%` et `object-fit:cover` : une capture de
+   200 px etait etiree sur toute la colonne, et une image verticale rognee en
+   bandeau. `max-width` sans `width` n'agrandit jamais ; `height:auto` sans
+   `object-fit` ne rogne jamais. On ne borne que la hauteur, pour qu'une
+   publication ne chasse pas la suivante hors de l'ecran. */
+.pub-vue img,video.pub-vue{display:block;max-width:100%;width:auto;height:auto;
+  max-height:60vh}
+.pub-son{width:100%;max-width:420px}
+/* UNE IMAGE PREND SA LIGNE, une pastille se range a cote. `flex-basis:100%`
+   sur le media affiche l'obtient sans `:has()`, donc sans dependre d'un
+   selecteur que les vieux navigateurs ignorent — et dont l'absence aurait
+   empile les pastilles en colonne. */
+.pub-medias{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px}
+.pub-medias > .pub-vue,.pub-medias > .pub-son{flex:0 1 100%}
+
+/* ── FICHE D'UN SERVICE SECUBOX ────────────────────────────────────────────
+ *
+ * Un lien vers notre radio, notre PeerTube ou notre podcaster s'habille au
+ * lieu de rester une adresse nue. Elle reste UN LIEN : si le service est
+ * absent, le membre garde quelque chose de cliquable.
+ *
+ * `inline-flex` et non `block` : une fiche apparait au fil du texte, et un
+ * bloc couperait la phrase qui l'entoure. Plusieurs fiches cote a cote
+ * s'alignent d'elles-memes — c'est la mosaique, sans grille a declarer. */
+.fiche-sbx{
+  display:inline-flex; align-items:center; gap:8px; vertical-align:baseline;
+  max-width:100%; margin:2px 0; padding:5px 11px 5px 7px;
+  border:1px solid var(--line); border-radius:9px; background:var(--soft);
+  text-decoration:none; color:var(--text); font-size:14px; line-height:1.35;
+}
+.fiche-sbx:hover{border-color:var(--dim); background:var(--panel)}
+.fiche-svc{
+  flex:0 0 auto; padding:.1em .5em; border-radius:5px;
+  background:var(--panel2, rgba(127,127,127,.14)); color:var(--dim);
+  font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+}
+/* L'adresse peut etre longue : on la coupe plutot que d'etirer la ligne. */
+.fiche-txt{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0}
+@media (max-width:34rem){ .fiche-sbx{display:flex} }

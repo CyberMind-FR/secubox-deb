@@ -1,44 +1,171 @@
 {{define "corps"}}
 <div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
 
-{{if .MastoInstance}}
+{{if .MastoErr}}<div class="card pad avert">{{.MastoErr}}</div>{{end}}
+{{if .MastoInfo}}<div class="card pad note">{{.MastoInfo}}</div>{{end}}
+
+{{if .V.Connecte}}
+
+{{/* ── LE FIL D'ABORD ────────────────────────────────────────────────────────
+     C'est ce qu'on vient lire. Les réglages — instance, invitation, liaison —
+     se font une fois puis ne servent plus : ils sont repliés en bas de page.
+
+     `.Texte` EST DU TEXTE BRUT, pas du balisage : le contenu vient d'une
+     instance tierce et a été débalisé côté serveur. Le gabarit l'échappe comme
+     n'importe quelle chaîne, et rien ici ne doit contourner cet échappement —
+     ce serait rendre à cette instance le droit d'exécuter du script chez nos
+     membres. */}}
+{{if .MastoLie}}
 <div class="card pad">
-  <h3 class="s7b1eb4e">L'instance</h3>
-  <div class="kv"><span>Adresse</span>
+  <h3 class="s7b1eb4e">Votre fil · <span class="mono">{{.MastoCompte}}</span></h3>
+
+  {{if .MastoFilErr}}
+    <div class="note sf9f81af">{{.MastoFilErr}}</div>
+  {{else if .MastoFil}}
+    {{range .MastoFil}}
+    {{/* CLASSE DEDIEE, PAS `.post`. `.post` est une grille a deux colonnes
+         (52px pour la vignette, le reste pour le corps) : y poser un `.bd`
+         seul, sans le `.who` qui occupe la premiere colonne, ecrasait tout le
+         contenu dans les 52 pixels de l'avatar. Une publication distante n'a
+         pas d'avatar a montrer — elle n'a donc pas a emprunter cette grille. */}}
+    <article class="pub">
+      <div class="pub-tete">
+        <span class="pub-quand">{{.Quand}}</span>
+        {{if .Sensible}}<span class="pill p-local">sensible</span>{{end}}
+        <span class="pub-sp"></span>
+        <span class="pub-cpt">↩ {{.Reponses}} · ⇄ {{.Partages}} · ★ {{.Favoris}}</span>
+        <a class="pub-lien" href="{{.URL}}" rel="noopener noreferrer">voir ↗</a>
+      </div>
+      {{if .Avert}}<p class="pub-avert">{{.Avert}}</p>{{end}}
+      {{if .Texte}}<p class="pre-ligne pub-txt">{{.Texte}}</p>{{end}}
+      {{if .Medias}}
+      <div class="pub-medias">
+        {{range .Medias}}
+          {{if and .Interne (eq .Type "image")}}
+            {{/* SERVIE PAR L'INSTANCE DU COMPTE : c'est son propre fil, sur son
+                 propre serveur — souvent le notre, sur cette machine. Refuser
+                 l'image au nom d'une fuite vers soi-meme ne protegeait
+                 personne, et laissait la page vide : ces publications n'ont
+                 pas de texte, l'image EST le contenu. */}}
+            <a class="pub-vue" href="{{.URL}}" rel="noopener noreferrer"
+               title="{{if .Alt}}{{.Alt}}{{else}}ouvrir sur l'instance{{end}}">
+              <img src="{{if .Apercu}}{{.Apercu}}{{else}}{{.URL}}{{end}}"
+                   alt="{{.Alt}}" loading="lazy" referrerpolicy="no-referrer">
+            </a>
+          {{else if and .Interne (or (eq .Type "video") (eq .Type "gifv"))}}
+            <video class="pub-vue" controls preload="none"
+                   {{if .Apercu}}poster="{{.Apercu}}"{{end}}
+                   src="{{.URL}}" referrerpolicy="no-referrer"></video>
+          {{else if and .Interne (eq .Type "audio")}}
+            <audio class="pub-son" controls preload="none" src="{{.URL}}"></audio>
+          {{else}}
+            {{/* HOTE TIERS : on ne charge rien. Une publication federee est
+                 servie par le serveur d'un inconnu, a qui chaque affichage
+                 dirait qui regarde, quand, et depuis quelle adresse. */}}
+            <a class="pub-media" href="{{.URL}}" rel="noopener noreferrer"
+               title="{{if .Alt}}{{.Alt}}{{else}}pièce jointe distante — s'ouvre sur son serveur{{end}}">
+              {{if eq .Type "image"}}🖼{{else if eq .Type "video"}}🎥{{else if eq .Type "audio"}}🎙{{else}}📎{{end}}
+              {{if .Alt}}{{.Alt}}{{else}}{{.Type}} (hôte tiers){{end}}</a>
+          {{end}}
+        {{end}}
+      </div>
+      {{end}}
+    </article>
+    {{end}}
+    <div class="note sf9f81af">
+      Vos publications <b>publiques</b> uniquement. Celles réservées à vos
+      abonnés n'apparaissent pas : les lire aurait exigé le droit de lire aussi
+      tout votre fil d'accueil, ce que le BBS ne demande pas.
+    </div>
+  {{else}}
+    <div class="note sf9f81af">Aucune publication publique sur ce compte.</div>
+  {{end}}
+</div>
+{{else}}
+{{/* Pas encore relié : c'est LA chose à faire sur cette page, elle reste donc
+     en évidence — la replier reviendrait à cacher la seule action utile. */}}
+<div class="card pad">
+  <h3 class="s7b1eb4e">Relier votre compte Mastodon</h3>
+  <p class="d">Vous verrez ici votre fil, et vous pourrez republier un fil
+    public sous votre propre identité. Le BBS ne publie jamais à votre place :
+    il n'y a pas de compte commun, chaque message part de votre compte, et vous
+    seul pouvez révoquer l'accès.</p>
+  <form method="post" action="/mastodon/lier" class="rangee-form">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <input class="champ mono" type="text" name="instance"
+           placeholder="{{if .MastoInstance}}{{.MastoInstance}}{{else}}exemple.social{{end}}"
+           autocomplete="off" spellcheck="false">
+    <button class="btn primary" type="submit">Relier mon compte</button>
+  </form>
+  <div class="note sf9f81af">
+    Laissez vide pour l'instance de la maison. Le BBS demande exactement deux
+    droits — <span class="mono">lire mon compte</span> et
+    <span class="mono">écrire des statuts</span> : il ne lit ni vos messages
+    privés, ni vos abonnements.
+  </div>
+</div>
+{{end}}
+
+{{/* ── RÉGLAGES, REPLIÉS ─────────────────────────────────────────────────────
+     Repliés et non supprimés : ces gestes sont rares mais on doit les
+     retrouver. Un <details> les garde à portée sans qu'ils occupent la page
+     qu'on vient consulter. */}}
+<details class="card pad reglages-masto">
+  <summary>⚙ Réglages et instance</summary>
+
+  {{if .MastoInstance}}
+  <div class="kv sf9f81af"><span>Instance de la maison</span>
     <b class="mono"><a href="{{.MastoInstance}}" rel="noopener noreferrer">{{.MastoInstance}}</a></b></div>
   <div class="note sf9f81af">
     Le BBS et l'instance sont deux portes sur la même communauté : ici on
     travaille un sujet à plusieurs, là on parle au reste du fédivers.
   </div>
-</div>
-
-{{if .V.Connecte}}
-  {{if .MastoInvite}}
-  <div class="card pad s42a6ced">
-    <h3 class="s7b1eb4e">Votre invitation</h3>
-    <p class="d">Ce lien ouvre un compte sur l'instance. Il est partagé entre
-      membres — inutile d'en demander un autre.</p>
-    <div class="partage">
-      <a class="btn primary" href="{{.MastoInvite}}" rel="noopener noreferrer">Rejoindre l'instance</a>
-    </div>
-    <div class="lien-partage mono">{{.MastoInvite}}</div>
-    <div class="note sf9f81af">
-      Une invitation Mastodon sert plusieurs fois et ne se révoque pas depuis le
-      BBS. Elle n'est donc montrée qu'aux membres connectés : affichée
-      publiquement, elle ouvrirait l'instance à qui passe.
-    </div>
-  </div>
   {{else}}
-  <div class="card pad sb0455c2">{{.Vide}}</div>
-  {{end}}
-{{else}}
-  <div class="card pad sb0455c2">
-    {{.Note}}
-    <div class="row sf9f81af"><a class="btn primary" href="/login">Se connecter</a></div>
+  <div class="note sf9f81af">
+    Aucune instance déclarée pour la maison. Le sysop la renseigne depuis la
+    console — vous pouvez malgré tout relier un compte ailleurs.
   </div>
-{{end}}
+  {{end}}
+
+  {{if .MastoInvite}}
+  <h4 class="sab2784b">Invitation</h4>
+  <p class="d">Ce lien ouvre un compte sur l'instance. Il est partagé entre
+    membres — inutile d'en demander un autre.</p>
+  <div class="partage">
+    <a class="btn" href="{{.MastoInvite}}" rel="noopener noreferrer">Rejoindre l'instance</a>
+  </div>
+  <div class="lien-partage mono">{{.MastoInvite}}</div>
+  <div class="note sf9f81af">
+    Une invitation Mastodon sert plusieurs fois et ne se révoque pas depuis le
+    BBS : affichée publiquement, elle ouvrirait l'instance à qui passe. Elle
+    n'est donc montrée qu'aux membres connectés.
+  </div>
+  {{end}}
+
+  {{if .MastoLie}}
+  <h4 class="sab2784b">Le lien</h4>
+  <div class="kv"><span>Compte</span><b class="mono">{{.MastoCompte}}</b></div>
+  <div class="kv"><span>Relié le</span><b>{{.MastoLieLe}}</b></div>
+  <form method="post" action="/mastodon/delier" class="row sf9f81af">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <button class="btn" type="submit">Retirer le lien</button>
+  </form>
+  <div class="note sf9f81af">
+    Retirer le lien l'efface <b>ici</b>. L'autorisation reste inscrite chez
+    Mastodon, dans les préférences de votre compte, jusqu'à ce que vous l'y
+    révoquiez — le BBS ne peut pas le faire à votre place.
+  </div>
+  {{end}}
+</details>
 
 {{else}}
-<div class="card pad sb0455c2">{{.Vide}}</div>
+<div class="card pad sb0455c2">
+  {{if .MastoInstance}}
+    Le fil et l'invitation sont réservés aux membres connectés.
+  {{else}}
+    {{.Vide}}
+  {{end}}
+  <div class="row sf9f81af"><a class="btn primary" href="/login">Se connecter</a></div>
+</div>
 {{end}}
 {{end}}

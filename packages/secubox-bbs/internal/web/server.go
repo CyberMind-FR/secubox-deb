@@ -80,6 +80,32 @@ type Options struct {
 	PodcastRacine string
 	// PodcastDB : base du podcaster, ouverte en lecture seule.
 	PodcastDB string
+	// FrameOrigines : services autorises a fournir un lecteur incorpore.
+	//
+	// DISTINCT DE MediaOrigines, ET VOLONTAIREMENT. Relayer une image ne donne
+	// aucun droit au service distant ; l'incorporer dans un cadre lui donne un
+	// contexte d'execution dans la page — son propre script, ses propres
+	// requetes, sa propre origine. Confondre les deux listes ferait qu'ajouter
+	// une vignette accorderait un lecteur, ce que personne n'aurait voulu.
+	//
+	// Vide, `frame-src` reste ferme et aucun lecteur ne s'integre.
+	FrameOrigines []string
+	// MediaOrigines : origines de NOS services dont on accepte de relayer une
+	// vignette — peertube, podcaster, radio, billets. Chacune est un vhost
+	// distinct du BBS, donc `img-src 'self'` ne les couvre pas.
+	//
+	// ON RELAIE PLUTOT QUE D'ELARGIR LA POLITIQUE. Ajouter chaque hote a
+	// `img-src` affaiblirait la politique d'une page qui affiche du contenu
+	// ecrit par des membres ; relayer la laisse fermee.
+	//
+	// LISTE, ET JAMAIS UNE URL LIBRE. Relayer une adresse quelconque postee
+	// par un membre ferait du demon un proxy ouvert : on pourrait s'en servir
+	// pour sonder l'agregateur ou un conteneur depuis le WAN, en se cachant
+	// derriere l'adresse de la board.
+	//
+	// Vide, aucun media distant n'est relaye — le bon defaut : une autre
+	// installation n'a pas nos noms de vhost.
+	MediaOrigines []string
 	// AuthSocket : socket de secubox-auth. Vide, les comptes synchronises ne
 	// peuvent pas se connecter — ils n'ont pas de mot de passe local, et c'est
 	// le comportement voulu plutot qu'un repli silencieux.
@@ -123,6 +149,24 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	fn := template.FuncMap{"rendu": Render, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
+		},
+		// decalage rend la classe d'indentation d'un sous-salon.
+		//
+		// UNE CLASSE, PAS UN STYLE EN LIGNE. La politique de securite de contenu
+		// de ce serveur interdit les styles en ligne ; calculer ici un
+		// `style="padding-left:..."` produirait un decalage silencieusement
+		// ignore par le navigateur, et personne ne verrait pourquoi.
+		//
+		// La profondeur est bornee a 3 : au-dela, l'arborescence tient encore en
+		// base mais le rail, large de 220px, n'a plus de place a donner.
+		"decalage": func(n int) string {
+			if n <= 0 {
+				return ""
+			}
+			if n > 3 {
+				n = 3
+			}
+			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
 	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire"} {
@@ -171,6 +215,91 @@ func (s *Server) Store() *store.Store   { return s.st }
 // plus du tout.
 var empreinteValide = regexp.MustCompile(`^sha(256|384|512)-[A-Za-z0-9+/=]+$`)
 
+// politique assemble la politique de securite de contenu.
+//
+// `media` ajoute UNE origine a `img-src` et `media-src`, et rien d'autre —
+// jamais a `script-src` ni `connect-src`. Afficher une image d'un tiers est
+// une chose ; lui laisser executer du code en est une autre, et confondre les
+// deux est la facon habituelle de vider une politique de son sens.
+//
+// Vide par defaut : la politique reste 'self' partout tant qu'une page ne
+// demande pas explicitement le contraire.
+// frameSrc assemble `frame-src` a partir des origines configurees.
+//
+// Elle etait calculee en DEUX endroits, a l'identique : ajouter un service
+// n'aurait porte que sur l'un des deux, et la page Mastodon aurait garde une
+// politique differente du reste du site sans que rien ne le signale.
+//
+// Chaque entree est revalidee : un espace ou un point-virgule couperait la
+// politique en deux, et un navigateur qui n'arrive pas a la lire peut
+// l'IGNORER ENTIEREMENT — on se croirait protege sans l'etre.
+func (s *Server) frameSrc() string {
+	var ok []string
+	vu := map[string]bool{}
+	ajoute := func(o string) {
+		o = strings.TrimRight(strings.TrimSpace(o), "/")
+		if o == "" || strings.ContainsAny(o, " ;'\"") || vu[o] {
+			return
+		}
+		vu[o] = true
+		ok = append(ok, o)
+	}
+	ajoute(s.opt.PeerTubeOrigine)
+	for _, o := range s.opt.FrameOrigines {
+		ajoute(o)
+	}
+	if len(ok) == 0 {
+		return "'none'"
+	}
+	return strings.Join(ok, " ")
+}
+
+func politique(style, script, connect, frame, media string) string {
+	img, med := "'self' data:", "'self'"
+	if media != "" {
+		img += " " + media
+		med += " " + media
+	}
+	return "default-src 'self'; img-src " + img + "; style-src " + style + "; " +
+		"script-src " + script + "; connect-src " + connect + "; " +
+		"frame-src " + frame + "; media-src " + med + "; " +
+		"frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+}
+
+// OrigineMediaMastodon rejoue la politique en ouvrant les images et les sons
+// d'UNE instance, pour la reponse en cours uniquement.
+//
+// POURQUOI PAS DANS L'INTERGICIEL. L'elargir globalement autoriserait cette
+// origine sur TOUTES les pages, y compris celles qui rendent du texte ecrit
+// par des membres. Ici la porte ne s'ouvre que sur /mastodon, et se referme
+// avec la reponse.
+//
+// L'ORIGINE N'EST PAS UNE SAISIE LIBRE : c'est l'hote de l'instance ou le
+// membre a prouve son identite par un aller-retour OAuth complet. On la
+// revalide malgre tout — un caractere d'espacement ou un point-virgule
+// couperait la politique en deux, et un navigateur qui n'arrive pas a la lire
+// peut l'ignorer ENTIEREMENT.
+func (s *Server) OrigineMediaMastodon(w http.ResponseWriter, hote string) {
+	hote = strings.TrimSpace(hote)
+	if hote == "" || strings.ContainsAny(hote, " ;'\"/\\") {
+		return
+	}
+	script, connect, style := "'self'", "'self'", "'self'"
+	frame := s.frameSrc()
+	if e := strings.TrimSpace(s.opt.BanniereStyle); empreinteValide.MatchString(e) {
+		style += " '" + e + "'"
+	}
+	if o := strings.TrimSpace(s.opt.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		script += " " + o
+		connect += " " + o
+		if e := strings.TrimSpace(s.opt.BanniereHash); empreinteValide.MatchString(e) {
+			script += " '" + e + "'"
+		}
+	}
+	w.Header().Set("Content-Security-Policy",
+		politique(style, script, connect, frame, "https://"+hote))
+}
+
 func (s *Server) entetes(h http.Handler) http.Handler {
 	script := "'self'"
 	connect := "'self'"
@@ -178,10 +307,7 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 	// `frame-src 'none'` par defaut : aucune page tierce ne s'integre. Seule
 	// une instance PeerTube explicitement configuree ouvre cette porte, et
 	// UNIQUEMENT pour un cadre — pas pour des scripts.
-	frame := "'none'"
-	if o := strings.TrimSpace(s.opt.PeerTubeOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
-		frame = o
-	}
+	frame := s.frameSrc()
 	if e := strings.TrimSpace(s.opt.BanniereStyle); empreinteValide.MatchString(e) {
 		style += " '" + e + "'"
 	}
@@ -199,11 +325,7 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 		// est la seconde barriere, celle qui tient si la premiere cede.
 		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
 		// c'est-a-dire exactement ce contre quoi elle protege.
-		hd.Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; style-src "+style+"; "+
-				"script-src "+script+"; connect-src "+connect+"; "+
-				"frame-src "+frame+"; media-src 'self'; "+
-				"frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, ""))
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("X-Frame-Options", "DENY")

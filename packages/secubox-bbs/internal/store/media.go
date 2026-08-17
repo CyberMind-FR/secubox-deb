@@ -55,6 +55,10 @@ var typesAcceptes = map[string]string{
 	"audio/ogg":  ".ogg",
 	"audio/wav":  ".wav",
 	"audio/flac": ".flac",
+	// WebM PORTE DE L'AUDIO SEUL AUTANT QUE DE LA VIDEO — c'est ce que produit
+	// Chrome pour une note vocale. Extension distincte : `.webm` fait rendre un
+	// lecteur video, et une note vocale s'afficherait en rectangle noir.
+	"audio/webm": ".weba",
 	"video/mp4":  ".mp4",
 	"video/ogg":  ".ogv",
 	"video/webm": ".webm",
@@ -118,6 +122,13 @@ func (s *Store) DeposeFichier(owner int64, nom, mimeAnnonce string, contenu io.R
 		} else {
 			mime = "audio/ogg"
 		}
+	}
+	// MEME DEPARTAGE POUR WEBM, ET POUR LA MEME RAISON. Le renifleur voit un
+	// conteneur Matroska et rend `video/webm` sans pouvoir savoir s'il contient
+	// une piste video. Ici encore le contenu a deja decide — le client ne fait
+	// que preciser laquelle des DEUX entrees deja acceptees s'applique.
+	if mime == "video/webm" && strings.HasPrefix(mimeAnnonce, "audio/") {
+		mime = "audio/webm"
 	}
 	ext, ok := typesAcceptes[mime]
 	if !ok {
