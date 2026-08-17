@@ -44,7 +44,7 @@ jobs:
       matrix:   ${{ steps.find.outputs.matrix }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Find packages + build flat matrix
         id: find
@@ -125,7 +125,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Skip if specific package requested
         if: ${{ github.event.inputs.package != '' && github.event.inputs.package != matrix.package }}
@@ -291,7 +291,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all packages
         uses: actions/download-artifact@v4
@@ -314,48 +314,60 @@ jobs:
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-keys
 
-      - name: Setup repository
-        if: env.SKIP_SIGN != 'true'
-        run: |
-          mkdir -p repo/conf
-          cp repo/conf/distributions repo/conf/ 2>/dev/null || true
-          cat > repo/conf/options << EOF
-          verbose
-          basedir $(pwd)/repo
-          EOF
-
-      - name: Add packages to repository
-        if: env.SKIP_SIGN != 'true'
-        run: |
-          for deb in debs/*.deb; do
-            [ -f "$deb" ] || continue
-            echo "Adding: $(basename $deb)"
-            reprepro -b repo includedeb bookworm "$deb" || true
-          done
-
-      - name: Export public key
-        if: env.SKIP_SIGN != 'true'
-        run: |
-          gpg --armor --export packages@secubox.in > repo/secubox-keyring.gpg
-
-      - name: Deploy to server
+      # LA PUBLICATION SE FAIT SUR LE SERVEUR, PAR REPREPRO (ref #1036).
+      #
+      # L'ancienne version construisait un depot LOCAL puis le poussait avec
+      # `rsync --delete` vers le docroot. Deux defauts : le depot distant est
+      # gere par `reprepro` (base de donnees comprise), qu'un rsync ecrase sans
+      # le savoir ; et `--delete` depuis un depot local incomplet EFFACE ce qui
+      # est publie. On depose donc les paquets dans la zone de transit et on
+      # laisse reprepro faire son travail, exactement comme a la main.
+      #
+      # `processincoming` n'est PAS utilise : il attend des `.changes`, que ce
+      # workflow ne produit pas (paquets construits avec `-b`, non signes).
+      # `includedeb` est la commande qui correspond a ce qu'on livre.
+      - name: Deposer les paquets et publier
         if: env.SKIP_SIGN != 'true'
         env:
           SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          APT_HOST: ${{ secrets.APT_HOST }}
+          APT_USER: ${{ secrets.APT_USER }}
         run: |
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "⚠ DEPLOY_SSH_KEY not set - skipping deploy"
+          if [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$APT_HOST" ]; then
+            echo "::notice::DEPLOY_SSH_KEY ou APT_HOST absent — publication APT ignoree"
             exit 0
           fi
+          n=$(ls debs/*.deb 2>/dev/null | wc -l)
+          if [ "$n" -lt 1 ]; then
+            echo "::error::aucun .deb a publier"
+            exit 1
+          fi
+          echo "$n paquets a deposer"
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           echo "$KNOWN_HOSTS" > ~/.ssh/known_hosts
 
-          rsync -avz --delete \
-            repo/dists/ repo/pool/ repo/secubox-keyring.gpg \
-            deploy@apt.secubox.in:/var/www/apt.secubox.in/
+          cible="${APT_USER:-deploy}@${APT_HOST}"
+
+          # PAS DE `--delete` : on ajoute dans une zone de transit, on n'y
+          # reflete rien. Le depot publie n'est jamais a la merci de l'etat
+          # local de ce runner.
+          rsync -avz debs/*.deb "$cible:/data/apt/incoming/"
+
+          # L'import est fait par reprepro, seul maitre de sa base. Un paquet
+          # refuse (version deja presente) est le cas ORDINAIRE d'une
+          # republication : on le tolere, on le compte, et on n'accepte pas
+          # que TOUS echouent.
+          # Le script distant vit dans le depot (`.github/scripts/`) et non
+          # dans un heredoc : un terminateur de heredoc doit commencer en
+          # colonne 1, ce qui referme le bloc YAML. Sorti dans un fichier, il
+          # est aussi lisible et verifiable (`bash -n`).
+          ssh "$cible" \
+            "APT_BASE=/data/apt APT_DIST=bookworm bash -s" \
+            < .github/scripts/apt-publish-remote.sh
 
       - name: Delete existing release assets (if any)
         run: |
@@ -371,8 +383,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # LE NOMBRE EST COMPTE, PAS RECOPIE. Il etait ecrit en dur a « 33 » et
+      # la release en livrait 176 : un chiffre faux dans les notes de version
+      # est repris tel quel par qui les lit.
+      - name: Compter les paquets livres
+        run: echo "SBX_NB_DEBS=$(ls debs/*.deb 2>/dev/null | wc -l)" >> $GITHUB_ENV
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             debs/*.deb
@@ -382,7 +400,7 @@ jobs:
 
             Debian bookworm packages for GlobalScale MOCHAbin / ESPRESSObin (arm64) and x86_64.
 
-            **33 packages** including:
+            **${{ env.SBX_NB_DEBS }} paquets**, dont :
             - Core infrastructure (hub, core, portal)
             - Security (crowdsec, waf, auth, nac)
             - Networking (wireguard, netmodes, dpi, qos)

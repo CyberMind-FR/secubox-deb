@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Free disk space
         run: |
@@ -103,7 +103,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Free disk space
         run: |
@@ -224,7 +224,7 @@ jobs:
 
       - name: Upload to release (on tag or manual)
         if: startsWith(github.ref, 'refs/tags/multiboot-v') || github.event.inputs.create_release == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('multiboot-v{0}', env.VERSION) }}
           name: SecuBox Multiboot v${{ env.VERSION }}
