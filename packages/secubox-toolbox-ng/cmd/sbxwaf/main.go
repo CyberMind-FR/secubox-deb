@@ -22,10 +22,10 @@
 //
 // Design decision — Server struct:
 //   - ca        *forge.CA          wired from --ca-cert/--ca-key (lazy: nil when
-//                                  flags are empty, so tests don't need PEM files)
+//     flags are empty, so tests don't need PEM files)
 //   - routes    *Routes            hot-reload map; nil when --routes is empty
 //   - routeLookup func(host)(ip,port,ok) — set to routes.Lookup in main(), or
-//                                  injected directly by tests
+//     injected directly by tests
 //   - upstreamTimeout time.Duration
 //   - ban       *Ban               sliding-window ban state; NewBan(300s,3) in main()
 //   - threatLog *ThreatLog         append-only JSON threat log; NewThreatLog in main()
@@ -184,6 +184,10 @@ type Server struct {
 	// HTML responses the WAF injects the SecuBox health banner (#747). Empty
 	// disables injection. Set from --widget-hosts.
 	widgetHosts []string
+	// widgetExclude : applications TIERCES dont on n'injecte pas le HTML. Elles
+	// restent inspectees et protegees — seul le bandeau s'arrete. Voir
+	// widgetExcluded() pour le detail.
+	widgetExclude []string
 
 	// bannerOrigin is the canonical Hub origin (absolute, e.g.
 	// https://admin.gk2.secubox.in) the injected health-banner loads its asset +
@@ -229,8 +233,8 @@ type Server struct {
 //     - Skips inspection for static assets and health/status paths (staticAsset).
 //     - Skips inspection for NC mobile-auth paths (ncBypass).
 //     - Reads up to maxBodyInspect bytes for inspection; restores the FULL
-//       body (prefix + remaining stream via io.MultiReader) so the upstream
-//       proxy always receives every byte intact — no truncation.
+//     body (prefix + remaining stream via io.MultiReader) so the upstream
+//     proxy always receives every byte intact — no truncation.
 //     - On WAF hit: returns 403 Forbidden (Task 3.2 refines to WARNING/BAN).
 //     - Adds Connection: close to upstream requests (#496).
 func (s *Server) handler() http.Handler {
@@ -339,7 +343,7 @@ func (s *Server) handler() http.Handler {
 					ca.Record(host, resp.Request, resp)
 				}
 				// #747: inject the SecuBox health/visit widget on first-party HTML.
-				applyWidget(resp, host, s.bannerOrigin, s.widgetHosts)
+				applyWidget(resp, host, s.bannerOrigin, s.widgetHosts, s.widgetExclude)
 				return nil
 			}
 			proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
@@ -755,6 +759,8 @@ func main() {
 	// #747: WAF-injected SecuBox health banner on FIRST-PARTY sites (HTML only).
 	widgetHosts := flag.String("widget-hosts", "gk2.secubox.in,secubox.in,cybermind.fr,maegia.tv",
 		"comma-separated first-party host suffixes to inject the SecuBox health banner into; empty disables")
+	widgetExclude := flag.String("widget-exclude", "",
+		"applications tierces dont on n'injecte pas le HTML (elles restent inspectees)")
 	bannerOrigin := flag.String("health-banner-origin", "https://admin.gk2.secubox.in",
 		"absolute Hub origin the injected health banner loads its asset + metrics APIs from (CDN-injected); empty disables")
 	// Body inspection cap: only the first N bytes of the request body are scanned.
@@ -843,8 +849,9 @@ func main() {
 		// #896 Task 15: per-vhost scale-to-zero signal emitter.
 		vhostSignals: vhostSignals,
 		// #747: first-party host suffixes + Hub origin for the injected health banner.
-		widgetHosts:  splitCSV(*widgetHosts),
-		bannerOrigin: strings.TrimSpace(*bannerOrigin),
+		widgetHosts:   splitCSV(*widgetHosts),
+		widgetExclude: splitCSV(*widgetExclude),
+		bannerOrigin:  strings.TrimSpace(*bannerOrigin),
 		// Body inspection cap (--max-body-inspect).
 		maxBodyInspect: *maxBodyInspectFlag,
 		// Trusted-host skip (--waf-skip-hosts): mirrors Python whitelist.
@@ -888,6 +895,7 @@ func main() {
 		// Task 5.1: inject cookie audit so Routes-built proxies also record cookies.
 		r.cookieAudit = cookieAudit
 		r.widgetHosts = srv.widgetHosts
+		r.widgetExclude = srv.widgetExclude
 		r.bannerOrigin = srv.bannerOrigin
 		srv.routes = r
 		srv.routeLookup = r.Lookup
