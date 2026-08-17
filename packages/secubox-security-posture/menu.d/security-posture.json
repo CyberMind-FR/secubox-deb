@@ -5,5 +5,5 @@
   "icon": "🎚️",
   "path": "/security-posture/",
   "order": 115,
-  "description": "DEFCON posture score, CSPN/TPN compliance and findings"
+  "description": "DEFCON level, CSPN/TPN compliance and performance posture"
 }

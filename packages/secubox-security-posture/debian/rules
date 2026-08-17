@@ -1,9 +1,6 @@
 #!/usr/bin/make -f
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 
-DESTDIR = debian/secubox-security-posture
-PKGDIR  = $(DESTDIR)/usr/lib/python3/dist-packages/secubox_security_posture
-
 %:
 	dh $@
 
@@ -11,23 +8,20 @@ override_dh_auto_build:
 	# Nothing to build - pure Python package
 
 override_dh_auto_install:
-	# Install the Python package (api/ + api/posture/ subpackage) to dist-packages.
-	install -d $(PKGDIR)/api/posture
-	touch $(PKGDIR)/__init__.py
-	cp api/__init__.py api/main.py $(PKGDIR)/api/
-	cp api/posture/*.py $(PKGDIR)/api/posture/
+	# Install Python package to Python dist-packages
+	install -d debian/secubox-security-posture/usr/lib/python3/dist-packages/secubox_security_posture/api
+	cp -r api/*.py debian/secubox-security-posture/usr/lib/python3/dist-packages/secubox_security_posture/api/
+	
+	# Create __init__.py for the module directory
+	touch debian/secubox-security-posture/usr/lib/python3/dist-packages/secubox_security_posture/__init__.py
+	
+	# Install config
+	install -d debian/secubox-security-posture/etc/secubox
+	
+	# Install www assets
+	install -d debian/secubox-security-posture/usr/share/secubox/www/security-posture
+	cp -r www/* debian/secubox-security-posture/usr/share/secubox/www/security-posture/ 2>/dev/null || true
 
-	# Config dir (empty placeholder)
-	install -d $(DESTDIR)/etc/secubox
-
-	# www assets (index.html + posture.js + posture.css)
-	install -d $(DESTDIR)/usr/share/secubox/www/security-posture
-	cp -r www/security-posture/* $(DESTDIR)/usr/share/secubox/www/security-posture/ 2>/dev/null || true
-
-	# Sidebar menu entry (self-contained — folds PR #616)
-	install -d $(DESTDIR)/usr/share/secubox/menu.d
-	[ -d menu.d ] && cp -r menu.d/. $(DESTDIR)/usr/share/secubox/menu.d/ || true
-
-	# nginx route drop-in (own socket — not aggregator-served)
-	install -d $(DESTDIR)/etc/nginx/secubox-routes.d
-	cp nginx/security-posture.conf $(DESTDIR)/etc/nginx/secubox-routes.d/
+	# Install sidebar menu entry
+	install -d debian/secubox-security-posture/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-security-posture/usr/share/secubox/menu.d/ || true
