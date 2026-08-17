@@ -714,7 +714,7 @@ async function Xj(base, path, opts) {
             tok ? { 'Authorization': 'Bearer ' + tok } : {}
         );
         const r = await fetch(base + path, Object.assign({ credentials: 'same-origin' }, opts || {}, { headers }));
-        if (r.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return { __error: '401' }; }
+        if (r.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return { __error: '401' }; }
         let d = {};
         try { d = await r.json(); } catch (e) { d = {}; }
         if (!r.ok) return { __error: (d && d.detail) || ('HTTP ' + r.status) };

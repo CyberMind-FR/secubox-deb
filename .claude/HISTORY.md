@@ -1,3 +1,55 @@
+## 2026-08-13 — PAC injoignable et boucle de connexion (#1034)
+
+Trouves en diagnostiquant un « bad cert » sur des domaines tiers, tous deux
+sans rapport avec le symptome de depart.
+
+**`/proxy.pac` n'etait servi nulle part.** Sur `admin`, il rendait 200 AVEC UNE
+PAGE HTML — pire qu'un 404 : le navigateur la telecharge, echoue a l'analyser,
+et reste silencieusement sans proxy. Cause : la `location` n'etait incluse que
+par un bloc `server_name ~^admin\.gk2\.secubox\.in$` — a nom REGEX — alors
+qu'un autre bloc revendiquait le meme nom en EXACT. nginx retient toujours
+l'exact avant la regex : la directive figurait dans la configuration chargee
+sans jamais servir une requete.
+
+**Et le vhost n'etait jamais active par le paquet.** Livre dans
+`sites-available`, quelqu'un en avait fait une COPIE dans `sites-enabled`, figee
+au 25 juillet. Chaque mise a jour rafraichissait la source sans toucher le
+fichier charge : elle reussissait et ne changeait rien. Le postinst pose
+desormais un lien, apres avoir deplace la copie HORS de `sites-enabled` — nginx
+y charge tous les fichiers, et l'y laisser aurait declare deux fois le meme
+`server_name`.
+
+**La garde d'authentification bouclait sur sa propre page de sortie.**
+`checkAuth()` renvoyait vers `/login.html?redirect=<chemin>` sans verifier
+qu'elle n'y etait pas deja : `login.html?redirect=%2Flogin.html`, indefiniment,
+des que `/login.html` rendait autre chose que la page de connexion. 101
+redirections gardees dans 81 fichiers, en quatre variantes d'ecriture — dont
+une vers `/portal/login.html`, que ne garder qu'a moitie aurait laissee intacte.
+
+**Residu `metoblizer` retire** : `location /api/v1/metoblizer/` pointait vers
+une socket qui n'existe pas — ni paquet, ni module, ni repertoire. Coquille de
+`metablogizer`, deja identifiee cote `secubox-streamlit` mais restee dans le
+vhost du hub.
+
+**Le reveil n'entre PAS dans le paquet, et c'est deliberer** : `nginxgen.py` de
+`secubox-profiles` en est le proprietaire et le repose de facon idempotente.
+L'y recopier le dupliquerait, ou le ferait diverger de son generateur au premier
+changement. Apres bascule du conffile, il a ete repose en appelant `wire()` —
+la fonction de l'outil, pas une transcription a la main.
+
+**`/portal/login.html` supprime** : ce chemin N'EXISTE PAS — il rendait la page
+« Module Not Found » en 200. La redirection y menait donc a une page qui n'est
+pas la connexion. Le changelog du hub le confirme : la copie avait ete retiree
+volontairement il y a longtemps, les appels sont restes. Une seule source
+vivante le portait (`secubox-soc`).
+
+**Racine servie nettoyee** : trois copies figees de mai (`soc.html`,
+`hub/soc.html`, `hub/index.html`) sans equivalent au depot, plus seize copies
+`.bak`/`.pre*` que nginx servait telles quelles — dont
+`cookies/index.html.pre749`, qui portait encore le chemin mort. Aucun lien,
+aucun menu, aucun trafic reel n'y renvoyait (les seules requetes journalisees
+etaient mes propres sondes). DEPLACEES, non detruites, dans
+`/var/backups/secubox-www-residus/20260814` (896 Kio).
 ## 2026-08-13 — torrent-search rendait de faux resultats (#1032, #1033)
 
 **#1032 — « reparer les liens magnet » supposait d'abord de vrais resultats.**

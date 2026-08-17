@@ -1,3 +1,26 @@
+secubox-core (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * ROTATION GENERALE DES JOURNAUX DE MODULES (ref #1039). Avant cette regle, UN
+    SEUL fichier logrotate existait pour tout secubox : sept journaux
+    croissaient sans borne (audit, watchdog, streamlit, acme-monitor,
+    acme-renew-batch, fmrelay-runner, fmrelay-icy) sur un eMMC de 15 Go deja
+    occupe a 93 %. Un eMMC plein a deja provoque des 502 generalises ici.
+  * UNE REGLE A JOKER, PAS UNE PAR MODULE : elle couvre aussi le journal qu un
+    module deposera demain. C est le seul moyen de ne pas recommencer cet
+    inventaire a chaque ajout.
+  * PAS DE `copytruncate`, ET C EST UNE EXIGENCE. `audit.log` porte la
+    journalisation immuable des decisions de securite ; la charte CSPN impose
+    une rotation SANS TRONCATURE, or `copytruncate` copie puis VIDE le fichier
+    d origine — ce qui rompt la propriete d ajout-seul dont depend sa valeur
+    probante. Le renommage suffit de toute facon : ces journaux sont ecrits par
+    des scripts en `>>` et AUCUN processus n en detient de descripteur ouvert
+    (verifie, `lsof` = 0 sur les sept).
+  * PORTEE PLATE : `*.log` ne descend pas dans `waf/` ni `cookie-audit/`, qui
+    appartiennent a d autres comptes et ont leurs propres regles — les melanger
+    imposerait un `su` unique a des fichiers de proprietaires differents.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 12:25:00 +0200
+
 secubox-core (1.3.0-1~bookworm1) bookworm; urgency=high
 
   * LE FRONTAL TLS NE DEPEND PLUS D'UNE CIBLE TARDIVE (#998). HAProxy etait

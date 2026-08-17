@@ -5,6 +5,8 @@ export DH_VERBOSE = 1
 	dh $@ --with python3
 
 override_dh_auto_install:
+	install -D -m 0644 logrotate.d/secubox \
+		debian/secubox-core/etc/logrotate.d/secubox
 	# Installer la lib Python
 	install -d debian/secubox-core/usr/lib/python3/dist-packages/
 	cp -r ../../common/secubox_core \

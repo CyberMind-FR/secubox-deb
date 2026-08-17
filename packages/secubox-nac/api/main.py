@@ -317,13 +317,45 @@ def _parse_leases() -> list[dict]:
     return clients
 
 
-# Interfaces to scan for ARP entries (LAN interfaces only)
-LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1"}
+# Interfaces scannees pour les entrees ARP.
+#
+# LA LISTE NE PEUT PAS ETRE ECRITE EN DUR (#1035). Les defauts couvrent les
+# ports du commutateur DSA, les ponts usuels et `br-lxc` — dont les conteneurs
+# sont des clients geres. Mais une board dont les clients l'atteignent par une
+# autre interface en est absente : gk2 se tient de facon transparente sur le
+# 192.168.1.0/24 amont, via `eth2`.
+#
+# SANS EXTENSION POSSIBLE, LA DECOUVERTE ARP FILTRE TOUS LES VOISINS et le
+# tableau de bord n'affiche AUCUN client — sans rien signaler, puisque « zero
+# client » est un etat parfaitement legitime. Le defaut avait ete corrige sur la
+# board et n'etait jamais remonte ici : installer cette version telle quelle sur
+# gk2 aurait vide son inventaire.
+_DEFAULT_LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan",
+                           "br-lxc", "eth0", "eth1"}
+
+
+def _lan_interfaces() -> set:
+    """Les defauts, etendus par `lan_interfaces` de la config du module.
+
+    ON ETEND, ON NE REMPLACE PAS : une config qui se substituerait aux defauts
+    ferait disparaitre les ponts au premier oubli. Et toute erreur de lecture
+    rend les defauts plutot que rien — un inventaire partiel vaut mieux qu'un
+    inventaire vide.
+    """
+    try:
+        cfg = get_config("nac") or {}
+        extra = cfg.get("lan_interfaces") or []
+        if isinstance(extra, str):
+            extra = [x.strip() for x in extra.split(",") if x.strip()]
+        return _DEFAULT_LAN_INTERFACES | set(extra)
+    except Exception:
+        return _DEFAULT_LAN_INTERFACES
 
 
 def _parse_arp() -> list[dict]:
     """Parse ARP table for network clients (fallback when DHCP leases unavailable)."""
     clients = []
+    lan_ifs = _lan_interfaces()
     try:
         # Use ip neigh for more reliable ARP parsing
         r = subprocess.run(
@@ -357,7 +389,7 @@ def _parse_arp() -> list[dict]:
                 continue
 
             # Only include clients from LAN interfaces
-            if iface and iface not in LAN_INTERFACES:
+            if iface and iface not in lan_ifs:
                 continue
 
             # Skip IPv6 link-local

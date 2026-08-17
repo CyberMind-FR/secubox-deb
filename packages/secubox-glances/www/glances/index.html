@@ -473,7 +473,7 @@
 
         function checkAuth() {
             if (!getToken()) {
-                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return false;
             }
             return true;
@@ -487,7 +487,7 @@
             try {
                 const res = await fetch(API + endpoint, { ...options, headers });
                 if (res.status === 401) {
-                    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                     return null;
                 }
                 return res.json();

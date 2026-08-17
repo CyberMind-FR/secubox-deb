@@ -28,7 +28,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-SITES = Path("/srv/metablogizer/sites")
+# LE CHEMIN EST RESOLU, ET C'EST INDISPENSABLE (#1038). `/srv/metablogizer` est
+# un LIEN vers `/data/metablogizer`. git resout le depot vers son chemin REEL et
+# compare celui-la a `safe.directory` : pose sur le chemin lie, la garde ne
+# correspond jamais et chaque synchronisation echoue en « dubious ownership ».
+#
+# Le defaut etait invisible sur un site dont le chemin reel avait ete ajoute a
+# la main dans la config git globale — il marchait, et masquait le fait que tous
+# les autres echouaient.
+SITES = Path("/srv/metablogizer/sites").resolve()
 DELAI_FETCH = 120
 DELAI_GIT = 30
 
