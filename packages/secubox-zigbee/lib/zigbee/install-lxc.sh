@@ -113,36 +113,13 @@ lxc.rootfs.path = dir:$LXC_PATH/$LXC_NAME/rootfs
 lxc.include = /usr/share/lxc/config/common.conf
 lxc.apparmor.profile = generated
 lxc.start.auto = 1
-# v2.6.0: start after the mqtt LXC. lxc-autostart honours start.order
-# (lower runs first) and start.delay (seconds to sleep BEFORE the next
-# container in the same order group). mqtt is at order=10/delay=5; we
-# go order=20 + delay=20 so z2m gets 20s after mqtt's start to let
-# mosquitto bind 1883 before z2m tries to connect. The 2026-05-23
-# incident wiped database.db because z2m crash-looped against a dead
-# MQTT broker.
-lxc.start.order = 20
-lxc.start.delay = 20
+lxc.start.delay = 5
 lxc.mount.entry = /dev/secubox-zgb dev/secubox-zgb none bind,create=file,optional 0 0
 # Also bind /dev/serial/by-id so z2m's adapter auto-discovery can match the
 # manufacturer regex (e.g. ".*sonoff.*lite.*mg21.*" for the SONOFF MG21).
 # Without this, the configuration.yaml port: must be the bare /dev/secubox-zgb
 # AND z2m must match by USB VID/PID alone — which v2.10+ doesn't always do.
 lxc.mount.entry = /dev/serial/by-id dev/serial/by-id none bind,create=dir,optional 0 0
-# LES NOEUDS ttyUSB0/ttyACM0 NE SONT PLUS MONTES, et la raison invoquee pour
-# le faire etait fausse. Elle disait que /dev/secubox-zgb, etant un lien, se
-# resoudrait vers un ttyUSB0 absent dans le conteneur. Un bind-mount SUIT le
-# lien et monte sa CIBLE : verifie le 2026-08-12 sur gk2, /dev/secubox-zgb est
-# un vrai peripherique caractere (188,0) a l'interieur, sans aucun autre
-# montage.
-#
-# Les monter avait deux couts reels :
-#   - ils reintroduisaient DANS le conteneur les noms dependant de l'ordre
-#     d'enumeration, que le nom de role existe justement pour eviter ;
-#   - avec `create=file`, LXC fabriquait un FICHIER VIDE quand l'hote n'avait
-#     pas le noeud. Constate : /dev/ttyACM0 present dans le conteneur en
-#     `---------- 0 octet`, alors qu'aucun ttyACM n'existe sur l'hote. Un
-#     fichier qui ressemble a un peripherique et n'en est pas — exactement ce
-#     qui fait chercher au mauvais endroit.
 lxc.cgroup2.devices.allow = c 188:* rwm
 lxc.cgroup2.devices.allow = c 166:* rwm
 EOF
@@ -260,20 +237,6 @@ StandardOutput=journal
 StandardError=journal
 Restart=always
 RestartSec=10
-# Bind-mounted /dev/tty* nodes land inside the LXC as root:root with
-# the host's 0660 perms. The host's `dialout` GID doesn't map to the
-# LXC's `zigbee2mqtt` user (different user namespace), so without
-# this chmod the z2m user can't open the device. Idempotent + cheap;
-# `|| true` survives the dongle-absent case. See secubox-zigbee #zigbee-prod-502.
-ExecStartPre=/bin/sh -c '[ -e /dev/ttyUSB0 ] && /bin/chmod 0666 /dev/ttyUSB0 || true'
-ExecStartPre=/bin/sh -c '[ -e /dev/ttyACM0 ] && /bin/chmod 0666 /dev/ttyACM0 || true'
-# v2.6.0: refuse to start until the MQTT broker answers on 1883.
-# Without this, z2m crash-loops when MQTT is briefly down and ends up
-# writing degraded state to database.db (the 2026-05-23 incident
-# regenerated network_key + lost 5 devices). 60s budget, 2s probe
-# interval; if the broker never comes up we exit non-zero and let
-# systemd retry per Restart=.
-ExecStartPre=/bin/sh -c 'for i in \$(seq 1 30); do if (echo > /dev/tcp/10.100.0.110/1883) >/dev/null 2>&1; then exit 0; fi; sleep 2; done; echo "MQTT 10.100.0.110:1883 unreachable after 60s — refusing to start z2m" >&2; exit 1'
 ExecStart=/usr/bin/node /opt/zigbee2mqtt/node_modules/zigbee2mqtt/index.js
 
 NoNewPrivileges=true
@@ -311,17 +274,13 @@ configure_zigbee2mqtt() {
     # SONOFF Dongle Lite MG21 (10c4:ea60, Silicon Labs EFR32MG21)
     if lsusb 2>/dev/null | grep -qE "10c4:ea60.*Silicon Labs|SONOFF.*MG21"; then
         detected_adapter="ember"
+        # z2m 2.x adapter discovery matches by manufacturer regex
+        # ".*sonoff.*lite.*mg21.*" against the path — use the canonical
+        # /dev/serial/by-id symlink which contains the SONOFF descriptor.
+        local byid
+        byid=$(ls /dev/serial/by-id/usb-SONOFF_*MG21* 2>/dev/null | head -1)
+        [ -n "$byid" ] && detected_port="$byid"
     fi
-    # LE PORT RESTE /dev/secubox-zgb, TOUJOURS. La version precedente lui
-    # substituait le chemin /dev/serial/by-id/usb-SONOFF_*MG21*, pour aider la
-    # decouverte d'adaptateur de z2m 2.x qui compare une expression reguliere
-    # de fabricant au chemin. Cette decouverte ne sert a rien ici : `adapter:`
-    # est ecrit explicitement juste en dessous.
-    #
-    # Le cout, lui, etait reel : le chemin by-id contient le NUMERO DE SERIE du
-    # dongle. Le remplacer — panne, montee en gamme — changeait le chemin, et la
-    # configuration pointait vers un peripherique disparu. Le nom de role, lui,
-    # designe « le coordinateur Zigbee », quel qu'il soit.
     log "  · detected adapter: $detected_adapter ($detected_port)"
 
     local stage=/tmp/zigbee2mqtt-config.$$
@@ -377,42 +336,23 @@ install_udev_rule() {
     log "Installing udev rule for Zigbee dongles ..."
     cat > "$rule_file" <<'UDEV'
 # /etc/udev/rules.d/99-secubox-zigbee.rules
-# Installed by secubox-zigbee (#241, updated v2.4.2 for hotplug → LXC).
+# Installed by secubox-zigbee (#241, updated v2.4.1 for SONOFF MG21).
 # Order matters: ATTRS{product} filter MUST come before the generic CP210x
 # rule below, otherwise the SONOFF MG21 would land as -alt and z2m's adapter
 # discovery wouldn't pick it up.
-#
-# What the SYMLINK lines do:
-#   * Create /dev/secubox-zgb pointing at the zigbee radio kernel device.
-#   * The LXC config bind-mounts BOTH /dev/secubox-zgb AND the underlying
-#     /dev/ttyUSB0 / /dev/ttyACM0 nodes, so the symlinks actually resolve
-#     to a real device inside the container.
-#
-# What the RUN line does (NEW in v2.4.2):
-#   * On a hotplug event (dongle re-inserted after the LXC was already
-#     running), `lxc-device add zigbee /dev/<kernel>` pushes the device
-#     node into the running container AND adds the cgroup permission.
-#     Without this, a replugged dongle stays invisible inside the LXC
-#     until the container restarts — which is the failure mode that
-#     produced 4500+ crash-loop restarts of zigbee2mqtt on gk2.
-#   * `|| true` keeps udev's overall ruleset healthy when the LXC is
-#     stopped (lxc-device exits non-zero in that case).
 
 # SONOFF Dongle Lite MG21 (Silicon Labs EFR32MG21 behind a CP210x bridge)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
     ATTRS{product}=="SONOFF Dongle Lite MG21", \
-    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
-    RUN+="/bin/sh -c '/usr/bin/lxc-device -n zigbee add /dev/%k || true'"
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
 
 # Sonoff Zigbee 3.0 USB Plus (CC2652P)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="55d4", \
-    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
-    RUN+="/bin/sh -c '/usr/bin/lxc-device -n zigbee add /dev/%k || true'"
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
 
 # ConBee II (fallback)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1cf1", ATTRS{idProduct}=="0030", \
-    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout", \
-    RUN+="/bin/sh -c '/usr/bin/lxc-device -n zigbee add /dev/%k || true'"
+    SYMLINK+="secubox-zgb", MODE="0660", GROUP="dialout"
 
 # Generic CP210x without the SONOFF descriptor — secondary symlink only
 SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
