@@ -42,7 +42,7 @@ trap 'rm -f "$TMP4" "$TMP6"' EXIT
 # single-source entries (e.g. blocklist.de) — arming all of them risks blocking
 # legitimate traffic. Enforce an IP only when corroborated by >= MIN_CONSENSUS
 # distinct sources OR carried by a curated high-trust feed (weight >= MIN_WEIGHT).
-# CrowdSec local decisions (Source 2) and DNS-guard domains are always enforced.
+# CrowdSec local decisions (Source 2) are always enforced.
 TI_MIN_CONSENSUS="${SECUBOX_BL_MIN_CONSENSUS:-2}"
 TI_MIN_WEIGHT="${SECUBOX_BL_MIN_WEIGHT:-80}"
 if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
@@ -61,33 +61,31 @@ if command -v cscli >/dev/null 2>&1; then
       >> "$TMP4.raw" || true
 fi
 
-# Source 3 (Phase 13.B #522) : DNS-guard — resolve blocklisted DOMAINS
-# (threat_intel ioc_type='domain') to their A/AAAA records and add those
-# IPs. Closes the DoH / hardcoded-IP bypass : even if a device resolves a
-# known-bad domain out-of-band, the resulting IP is dropped at forward.
-# Bounded : cap on domains/cycle + per-lookup timeout so the sync never
-# hangs on a dead resolver.
-DOMAIN_CAP="${SECUBOX_BL_DOMAIN_CAP:-2000}"
-RESOLVE_TIMEOUT="${SECUBOX_BL_RESOLVE_TIMEOUT:-1}"
-resolved_domains=0
-if [ -r "$TOOLBOX_DB" ] && command -v sqlite3 >/dev/null 2>&1; then
-    while IFS= read -r dom; do
-        [ -n "$dom" ] || continue
-        # getent ahosts returns both A + AAAA ; timeout guards a dead lookup.
-        # NXDOMAIN makes getent exit 2 → with pipefail+set -e the assignment
-        # would abort the whole sync on the first dead blocklisted domain
-        # (and blocklisted domains are overwhelmingly dead/sinkholed). Guard
-        # the substitution so an unresolvable domain is simply skipped.
-        ips=$(timeout "$RESOLVE_TIMEOUT" getent ahosts "$dom" 2>/dev/null \
-                | awk '{print $1}' | sort -u || true)
-        if [ -n "$ips" ]; then
-            printf '%s\n' "$ips" >> "$TMP4.raw"
-            resolved_domains=$((resolved_domains + 1))
-        fi
-    done < <(sqlite3 "$TOOLBOX_DB" \
-        "SELECT DISTINCT ioc FROM threat_intel WHERE ioc_type='domain' LIMIT $DOMAIN_CAP;" \
-        2>/dev/null)
-fi
+# Source 3 (Phase 13.B #522) : DNS-guard — RETIRE le 2026-08-16.
+#
+# Cette source resolvait jusqu'a 2000 domaines de threat_intel en A/AAAA pour
+# ajouter les IP obtenues, afin de fermer le contournement DoH : meme si un
+# appareil resout un domaine connu hors-bande, l'IP tombait au forward.
+#
+# L'INTENTION EST BONNE, LA MISE EN OEUVRE NE TENAIT PAS. Mesure sur gk2 :
+#
+#   * 11 domaines sur 12 ne resolvent RIEN — ce sont des domaines morts. La
+#     boucle attendait le delai complet pour chacun, en serie.
+#   * 2000 domaines tentes sur 20394 en base, sans ORDER BY : les 90 % restants
+#     n'etaient jamais regardes, et toujours les memes etaient tentes.
+#   * quatre processus par domaine (timeout, getent, awk, sort), soit ~8000
+#     forks toutes les cinq minutes, et 48 s de CPU par passe.
+#   * les elements expirent en 2 h alors que ces domaines changent d'adresse
+#     bien plus vite.
+#
+# Couverture reelle obtenue : moins de 1 % des domaines connus. Prix : la
+# charge moyenne de la board tenue autour de 40 sur 4 coeurs (#1045).
+#
+# LE TROU N'EST PAS BOUCHE POUR AUTANT, et il ne faut pas croire l'inverse :
+# Unbound bloque 662 000 domaines, mais ce sont ceux de l'anti-publicite —
+# verifie, AUCUN des domaines de threat_intel n'y figure. La suite correcte est
+# de les servir a Unbound PAR NOM, ou 662 000 entrees ne coutent rien par
+# requete, plutot que d'en resoudre 2000 en IP toutes les cinq minutes.
 
 # Split v4 / v6, validate, dedup, cap.
 if [ -f "$TMP4.raw" ]; then
@@ -111,17 +109,118 @@ fi
 # ── Push into the nft sets (batched add-element with per-elem timeout) ──
 # We don't flush : timeouts handle expiry, and re-adding refreshes the
 # timeout on still-active entries. Batching keeps it to one nft call.
+# fusionne : replie les plages qui se recouvrent en un jeu minimal.
+#
+# Les sets portent `flags interval`, et nft REFUSE UN LOT ENTIER des que deux
+# de ses elements se chevauchent — « conflicting intervals specified ». Les
+# flux publics en produisent en quantite (un /21 et le /23 qu'il contient), si
+# bien que 13 lots sur 15 etaient rejetes.
+#
+# `collapse_addresses` fait ce calcul une fois, correctement, en un seul
+# processus. Le faire en shell aurait demande de l'arithmetique de prefixe a
+# chaque ligne — c'est exactement le genre de boucle qu'on vient de retirer.
+#
+# GARDE-FOU : rien de plus large qu'un /8 (v4) ou /32 (v6). Un flux emballe qui
+# listerait 0.0.0.0/0 mettrait la board hors ligne, et le plafond en nombre
+# d'elements ne protege pas de ca — une seule ligne suffirait.
+fusionne() {
+    local famille="$1"
+    python3 -c '
+import ipaddress, sys
+fam = sys.argv[1]
+mini = 8 if fam == "v4" else 32
+nets = []
+for ligne in sys.stdin:
+    ligne = ligne.strip()
+    if not ligne:
+        continue
+    try:
+        n = ipaddress.ip_network(ligne, strict=False)
+    except ValueError:
+        continue
+    if n.prefixlen < mini:
+        print("skip-too-broad " + str(n), file=sys.stderr)
+        continue
+    # JAMAIS DE PLAGE PRIVEE NI RESERVEE DANS UN SET D APPLICATION.
+    #
+    # FireHOL level1 et les listes de bogons contiennent RFC1918, la boucle
+    # locale, le lien-local et le CGNAT. C est utile en filtrage de BORDURE,
+    # pour rejeter une adresse source usurpee qui entre par le WAN. C est
+    # catastrophique dans une chaine forward, qui porte le LAN et les
+    # conteneurs : le 2026-08-17, 192.168.0.0/16 et 10.0.0.0/8 sont entres dans
+    # le set et ont fait tomber 61392 paquets — dont la Squeezebox du salon,
+    # qui ne joignait plus Lyrion.
+    #
+    # Le plafond de prefixe ne suffisait pas : 192.168.0.0/16 est un /16, il
+    # passait la garde des /8 sans probleme.
+    if (n.is_private or n.is_loopback or n.is_link_local or n.is_multicast
+            or n.is_reserved or n.is_unspecified
+            or n.subnet_of(ipaddress.ip_network("100.64.0.0/10" if fam == "v4" else "fc00::/7"))):
+        print("skip-prive " + str(n), file=sys.stderr)
+        continue
+    nets.append(n)
+for n in ipaddress.collapse_addresses(nets):
+    print(n.with_prefixlen if n.prefixlen != n.max_prefixlen else str(n.network_address))
+' "$famille" 2>>"$TMP_SKIP" || cat
+}
+
+# add_batch : par lots bornes, et l'erreur de nft n'est plus jetee.
+#
+# UN SEUL APPEL AVEC TOUT NE POUVAIT PAS MARCHER : 7176 adresses font 195 Ko
+# d'argument, la limite du noyau pour UN argument est de 128 Ko, et l'appel
+# echouait en « Argument list too long » — 100 % du lot perdu, sans trace,
+# `2>/dev/null` avalant le message.
+#
+# Un lot refuse est rejoue element par element : une adresse fautive ne doit
+# pas emporter les 499 autres.
+# add_batch : une transaction nft atomique, par FICHIER.
+#
+# Trois defauts se recouvraient ici, et seul le passage par fichier les regle
+# tous les trois d'un coup :
+#
+#   * `nft add element ... "{ 7176 adresses }"` faisait 195 Ko dans UN argument,
+#     pour une limite noyau de 128 Ko : « Argument list too long », tout le lot
+#     perdu — et `2>/dev/null` avalait le message.
+#   * sur un set `interval`, un ajout echoue des qu'une plage recouvre une
+#     plage DEJA PRESENTE. Replier le lot sur lui-meme ne suffisait donc pas :
+#     il fallait aussi tenir compte du contenu precedent. Chaque lot etait
+#     refuse, et le repli element par element demandait des milliers d'appels —
+#     la synchronisation depassait le delai avant d'avoir fini.
+#   * decouper en lots multipliait les occasions de conflit sans rien resoudre.
+#
+# `flush` et `add` dans le MEME fichier forment une transaction : le set n'est
+# jamais vide entre les deux, et le contenu precedent ne peut plus entrer en
+# conflit puisqu'il disparait dans la meme operation. C'est aussi ce qui rend
+# l'ecriture concurrente sure — la raison pour laquelle le flush avait ete
+# ecarte a l'origine.
 add_batch() {
     local set="$1" file="$2" fam="$3"
-    [ -s "$file" ] || return 0
-    local elems
-    elems=$(awk -v t="$ELEM_TIMEOUT" 'NF{printf "%s timeout %s, ", $1, t}' "$file")
-    elems="${elems%, }"
-    [ -n "$elems" ] || return 0
-    # add (not flush+add) so concurrent CrowdSec table updates don't race.
-    $NFT add element $TABLE "$set" "{ $elems }" 2>/dev/null \
-        || log "WARN: partial add to $set ($fam)"
+    local plan; plan=$(mktemp)
+    {
+        printf 'flush set %s %s\n' "$TABLE" "$set"
+        awk -v t="$ELEM_TIMEOUT" -v tb="$TABLE" -v s="$set" \
+            'NF{printf "add element %s %s { %s timeout %s }\n", tb, s, $1, t}' "$file"
+    } > "$plan"
+    local err
+    if err=$($NFT -f "$plan" 2>&1); then
+        log "added: $(wc -l < "$file") -> $set ($fam)"
+    else
+        # On ne laisse PAS le set vide sur echec : le flush faisant partie de la
+        # transaction, un refus annule tout et l'ancien contenu reste en place.
+        log "WARN: transaction refusee sur $set ($fam) : ${err%%$'\n'*}"
+    fi
+    rm -f "$plan"
 }
+
+TMP_SKIP=$(mktemp)
+fusionne v4 < "$TMP4" > "$TMP4.f" && mv "$TMP4.f" "$TMP4"
+fusionne v6 < "$TMP6" > "$TMP6.f" && mv "$TMP6.f" "$TMP6"
+if [ -s "$TMP_SKIP" ]; then
+    log "WARN: $(wc -l < "$TMP_SKIP") plage(s) ecartee(s) car trop larges"
+fi
+rm -f "$TMP_SKIP"
+n4=$(wc -l < "$TMP4" 2>/dev/null || echo 0)
+n6=$(wc -l < "$TMP6" 2>/dev/null || echo 0)
 
 add_batch blacklist_v4 "$TMP4" v4
 add_batch blacklist_v6 "$TMP6" v6
@@ -151,8 +250,20 @@ live4=$($NFT list set $TABLE blacklist_v4 2>/dev/null | grep -c 'timeout' || ech
 live6=$($NFT list set $TABLE blacklist_v6 2>/dev/null | grep -c 'timeout' || echo 0)
 STATE=/run/secubox/blacklist-sync.json
 mkdir -p /run/secubox 2>/dev/null || true
-printf '{"ts":%s,"v4_added":%s,"v6_added":%s,"resolved_domains":%s,"doh_block":%s}\n' \
-    "$(date +%s)" "${n4:-0}" "${n6:-0}" "${resolved_domains:-0}" "${DOH_BLOCK}" \
+# ON EFFACE AVANT D'ECRIRE, et ce n'est pas de la superstition.
+#
+# /run/secubox est partage par une centaine d'unites, donc 1777 avec le bit
+# collant. `fs.protected_regular` interdit alors d'ouvrir en ecriture un
+# fichier qu'on ne possede pas dans un repertoire de ce type — Y COMPRIS POUR
+# ROOT. Le fichier appartenait a `secubox`, laisse par un autre module : la
+# redirection echouait en « Permission denied » a chaque passe depuis des
+# jours, et /admin/blacklist n'avait jamais rien de frais a montrer.
+#
+# Le detruire d'abord contourne la regle proprement : root peut delier dans un
+# repertoire collant, et le fichier recree lui appartient.
+rm -f "$STATE" 2>/dev/null || true
+printf '{"ts":%s,"v4_added":%s,"v6_added":%s,"doh_block":%s}\n' \
+    "$(date +%s)" "${n4:-0}" "${n6:-0}" "${DOH_BLOCK}" \
     > "$STATE" 2>/dev/null || true
-log "synced: +${n4} v4 / +${n6} v6 (live ~${live4}/${live6}, resolved ${resolved_domains:-0} domains, doh_block=${DOH_BLOCK}, timeout ${ELEM_TIMEOUT})"
+log "synced: +${n4} v4 / +${n6} v6 (live ~${live4}/${live6}, doh_block=${DOH_BLOCK}, timeout ${ELEM_TIMEOUT})"
 exit 0
