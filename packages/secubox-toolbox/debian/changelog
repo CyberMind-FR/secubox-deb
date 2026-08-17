@@ -1,3 +1,20 @@
+secubox-toolbox (2.8.12-1~bookworm1) bookworm; urgency=medium
+
+  * blacklist-sync : les plages PRIVEES et RESERVEES n'entrent plus dans le set
+    d'application. FireHOL level1 et les listes de bogons contiennent RFC1918,
+    la boucle locale, le lien-local et le CGNAT : c'est utile en filtrage de
+    BORDURE contre une source usurpee entrant par le WAN, et catastrophique
+    dans une chaine forward qui porte le LAN et les conteneurs.
+
+    Constate le 2026-08-17 : 192.168.0.0/16 et 10.0.0.0/8 etaient dans le set,
+    61392 paquets rejetes — dont une Squeezebox du LAN qui ne joignait plus
+    Lyrion dans son conteneur.
+
+    Le plafond de prefixe ne protegeait pas : 192.168.0.0/16 est un /16, il
+    passait la garde des /8 sans difficulte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 07:44:08 +0200
+
 secubox-toolbox (2.8.11-1~bookworm1) bookworm; urgency=medium
 
   * blacklist-sync : l'ajout passe par une transaction nft atomique (`nft -f`)

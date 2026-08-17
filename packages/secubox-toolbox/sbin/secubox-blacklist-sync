@@ -141,6 +141,23 @@ for ligne in sys.stdin:
     if n.prefixlen < mini:
         print("skip-too-broad " + str(n), file=sys.stderr)
         continue
+    # JAMAIS DE PLAGE PRIVEE NI RESERVEE DANS UN SET D APPLICATION.
+    #
+    # FireHOL level1 et les listes de bogons contiennent RFC1918, la boucle
+    # locale, le lien-local et le CGNAT. C est utile en filtrage de BORDURE,
+    # pour rejeter une adresse source usurpee qui entre par le WAN. C est
+    # catastrophique dans une chaine forward, qui porte le LAN et les
+    # conteneurs : le 2026-08-17, 192.168.0.0/16 et 10.0.0.0/8 sont entres dans
+    # le set et ont fait tomber 61392 paquets — dont la Squeezebox du salon,
+    # qui ne joignait plus Lyrion.
+    #
+    # Le plafond de prefixe ne suffisait pas : 192.168.0.0/16 est un /16, il
+    # passait la garde des /8 sans probleme.
+    if (n.is_private or n.is_loopback or n.is_link_local or n.is_multicast
+            or n.is_reserved or n.is_unspecified
+            or n.subnet_of(ipaddress.ip_network("100.64.0.0/10" if fam == "v4" else "fc00::/7"))):
+        print("skip-prive " + str(n), file=sys.stderr)
+        continue
     nets.append(n)
 for n in ipaddress.collapse_addresses(nets):
     print(n.with_prefixlen if n.prefixlen != n.max_prefixlen else str(n.network_address))
