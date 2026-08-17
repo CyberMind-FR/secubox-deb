@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox Login</title>
+    <script>
+        // Transparent redirect to /login.html preserving query params
+        (function() {
+            var params = window.location.search;
+            var hash = window.location.hash;
+            var target = '/login.html' + params + hash;
+            window.location.replace(target);
+        })();
+    </script>
+    <style>
+        body {
+            background: #0a0a0f;
+            color: #e8e6d9;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .loading {
+            text-align: center;
+        }
+        .spinner {
+            font-size: 32px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading">
+        <div class="spinner">⚙️</div>
+        <p>Redirecting to login...</p>
+    </div>
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=/login.html">
+        <p>JavaScript is disabled. <a href="/login.html">Click here to login</a>.</p>
+    </noscript>
+</body>
+</html>
