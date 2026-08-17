@@ -4,31 +4,30 @@ After=network.target secubox-runtime.service
 Requires=secubox-runtime.service
 
 [Service]
-# Run unprivileged as secubox:secubox like every other module (CSPN: never
-# root). UMask 0002 makes uvicorn create the Unix socket secubox:secubox with
-# group-rw, so nginx (www-data, a member of the 'secubox' group) can connect.
-# This removes the racy "sleep 1 + chown" ExecStartPost (#761): when uvicorn
-# took >1s to bind, the chown ran before the socket existed, silently failed,
-# and the socket stayed root:root → nginx "Permission denied" → 502 → the UI
-# looked empty ("content disappeared"). Now the socket is owned correctly the
-# instant it is created, with no timing window.
-UMask=0002
 Type=simple
-User=secubox
-Group=secubox
+User=root
+Group=root
 WorkingDirectory=/usr/share/secubox/podcaster
-# Fallback if secubox-runtime hasn't created /run/secubox yet (+ runs as root).
-ExecStartPre=+/bin/mkdir -p /run/secubox
-# Remove any stale socket before binding. /run/secubox is sticky (1777), so an
-# unprivileged secubox process cannot unlink a socket left behind by a previous
-# root-owned run (uvicorn's own os.remove() would hit EPERM) — clear it as root.
+# Remove any stale socket first, so the ExecStartPost poll below waits for the
+# genuinely-new socket uvicorn binds — not a leftover one it would chown before
+# uvicorn re-creates it root:root (the actual cause of the nginx 502s).
+ExecStartPre=-/bin/rm -f /run/secubox/podcaster.sock
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
+# possede. Une socket laissee par un autre utilisateur rendrait le
+# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
+# root malgre User= — sans lui la ligne echouerait comme le demon.
 ExecStartPre=+/bin/rm -f /run/secubox/podcaster.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/podcaster.sock --workers 1
+# #494: only chmod/chown our OWN socket — never the shared /run/secubox parent.
+# Poll for the socket instead of a fixed `sleep 1`: uvicorn can take several
+# seconds to bind the UDS, and a premature chown silently fails (leaving the
+# socket root:root → nginx 502). Wait up to ~15s, then set ownership.
+ExecStartPost=-/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/podcaster.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/podcaster.sock; chown secubox:secubox /run/secubox/podcaster.sock'
 Restart=on-failure
 RestartSec=5
 
 # Security hardening
-NoNewPrivileges=true
+NoNewPrivileges=no
 ProtectSystem=full
 ProtectHome=read-only
 PrivateTmp=true

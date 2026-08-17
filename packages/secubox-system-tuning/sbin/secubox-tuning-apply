@@ -205,6 +205,34 @@ apply_cgroup() {
     local cap cgrp lxc_conf
     cap=$(toml_get "$LXC_CAPS_FILE" "caps.$ctn")
 
+      # UN `high` AU-DESSUS DE `max` NE FREINE JAMAIS, IL TUE.
+      #
+      # `memory.high` est le seuil de FREINAGE : au-dela, le noyau ralentit le
+      # conteneur et recupere des pages. `memory.max` est la limite DURE : au-dela,
+      # il tue. Regler high >= max rend le frein inatteignable — on passe donc
+      # directement de « tout va bien » a l'execution sommaire, sans ralentissement
+      # ni avertissement.
+      #
+      # Constate le 2026-08-17 : nextcloud portait high=600M pour max=512M et avait
+      # ete tue 30 fois ; horde, mail et matrix avaient la meme inversion. Rien dans
+      # les journaux ne designait la cause — un conteneur tue redemarre, et le
+      # compteur `oom_kill` du cgroup est le seul temoin.
+      #
+      # On borne a 85 % de la limite dure plutot que de refuser : un reglage trop
+      # haut est une erreur de saisie, pas une intention.
+      local dur dur_o cap_o
+      dur=$(awk '/^lxc.cgroup2.memory.max/{print $3}' "/var/lib/lxc/${ctn}/config" 2>/dev/null | head -1)
+      if [[ -n "$dur" ]]; then
+        dur_o=$(numfmt --from=iec "$dur" 2>/dev/null || echo 0)
+        cap_o=$(numfmt --from=iec "$cap" 2>/dev/null || echo 0)
+        if [[ "$dur_o" -gt 0 && "$cap_o" -ge "$dur_o" ]]; then
+          local borne=$(( dur_o * 85 / 100 / 1048576 ))
+          printf "  %-12s high=%s >= max=%s — ramene a %sM (un frein au-dessus de la limite ne freine jamais)\n" \
+                 "$ctn" "$cap" "$dur" "$borne" >&2
+          cap="${borne}M"
+        fi
+      fi
+
     # (1) immediate cgroup write
     cgrp="/sys/fs/cgroup/lxc.payload.${ctn}"
     if [[ -d "$cgrp" ]]; then

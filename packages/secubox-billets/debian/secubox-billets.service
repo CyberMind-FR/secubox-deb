@@ -15,6 +15,11 @@ Environment=BILLETS_REVISIONS_DIR=/var/lib/secubox/billets/revisions
 Environment=BILLETS_SECRET_FILE=/etc/secubox/secrets/billets
 # Set BILLETS_SITE_URL to the public https origin so feeds/oEmbed emit absolute URLs.
 # Environment=BILLETS_SITE_URL=https://billets.example.com
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
+# possede. Une socket laissee par un autre utilisateur rendrait le
+# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
+# root malgre User= — sans lui la ligne echouerait comme le demon.
+ExecStartPre=+/bin/rm -f /run/secubox/billets.sock
 ExecStart=/usr/lib/secubox/billets/venv/bin/uvicorn api.asgi:app \
   --uds /run/secubox/billets.sock --no-access-log --workers 1
 Restart=on-failure

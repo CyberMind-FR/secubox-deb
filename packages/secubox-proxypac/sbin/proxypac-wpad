@@ -52,6 +52,24 @@ apply() {
       printf '# secubox-proxypac WPAD (auto)\ndhcp-option=252,"http://wpad.%s/wpad.dat"\n' "$DOMAIN" > "$DNSMASQ_D/secubox-wpad.conf"
       _reload systemctl reload dnsmasq ;;
     slave-dns)
+      # UN DOMAINE VIDE COUPE LE DNS DE TOUT LE LAN.
+      #
+      # Sans domaine, ce printf produit `local-data: "wpad.. A <ip>"` — un
+      # label vide. Unbound ne l'ignore pas : il REFUSE DE DEMARRER
+      # (« fatal error: Could not set up local zones »), et repart en boucle.
+      # Le 2026-08-17 il a redemarre 18 fois d'affilee, plus aucun nom ne se
+      # resolvait sur la board ni sur le LAN, et toute la surface web est
+      # devenue injoignable — pour une variable vide dans un fichier auxiliaire.
+      #
+      # On n'ecrit donc rien plutot qu'un fichier qui casse le resolveur : sans
+      # WPAD, les postes configurent leur proxy a la main ; sans DNS, plus rien
+      # ne fonctionne.
+      if [ -z "${DOMAIN:-}" ] || [ -z "${LAN_IP:-}" ]; then
+        echo "wpad: domaine ou adresse absents — aucun dropin ecrit (un label vide empecherait unbound de demarrer)" >&2
+        rm -f "$UNBOUND_D/secubox-wpad.conf"
+        _reload unbound-control reload
+        exit 0
+      fi
       printf '# secubox-proxypac WPAD via DNS (auto)\nserver:\n    local-data: "wpad.%s. A %s"\n' "$DOMAIN" "$LAN_IP" > "$UNBOUND_D/secubox-wpad.conf"
       _reload unbound-control reload ;;
     *) : ;;  # slave (tier3) et off : no-op réseau (aucun dropin, garde-fou anti double-DHCP)

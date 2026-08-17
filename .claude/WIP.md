@@ -1,177 +1,57 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-12*
+*Mis à jour : 2026-08-16 (fin de session)*
 
 ---
 
-## 2026-08-12 — Ressources bornées, publication réparée
+## 2026-08-16 — Radio, cache du WAF, emulation
 
-### ✅ Fait
+### ✅ Fait — deploye et synchronise sur apt.secubox.in
 
-- **#1032 — torrent-search : vrais resultats et vrais magnets** (2026-08-13).
-  Livre et mesure : 100 resultats en ~2,4 s par le nom public.
-  Pastilles et onglet NZB cables (2.4.1) : trois index reels (TPB,
-  Torrents-CSV, Nyaa), selection transmise, Usenet en attente de cles dans
-  `/etc/secubox/secrets/torrent-nzb.toml`.
-- **#1033 — metablogizer : l'envoi reussissait puis annoncait un echec**
-  (2026-08-13). Prouve dans les deux sens sur gk2. — fusionné et déployé
-
-#### v2.20.0 — 2026-08-13 (soir) : douze branches rendues à master
-
-**Vingt paquets tournaient en production dans une version absente de `master`.**
-39 commits, 227 fichiers. Vérifié après coup : **zéro** paquet en écart.
-
-- **`secubox-haproxy 1.8.0`** (#1019 + #1030) — `cert sync` **avait disparu de
-  la board** : un paquet construit depuis master déployé par-dessus une branche
-  non fusionnée. Panne invisible — les certificats servis restaient valables,
-  seul le renouvellement du 11 novembre aurait échoué. Réunit aussi les délais
-  de téléversement, relevés **par requête** et non dans `defaults`.
-- **`secubox-waf-ng 1.5.0`** (#1027 + #1031) — le corps des requêtes n'est plus
-  inspecté pour les hôtes nommés (une règle LFI filait sur les octets d'un zip),
-  et le cache média **revalide** au lieu de seulement vieillir.
-- **`secubox-profiles 0.19.1`** + **`secubox-hub 1.8.0`** (#1028) — neuf modules
-  épinglés `off` tournaient. La décision était écrite, rien ne l'exécutait : ni
-  au démarrage, ni en continu, ni au réveil, ni dans le menu.
-- **`secubox-metablogizer 1.8.2`** (#1023, #1029) — publication, alias de
-  domaine, synchronisation git aux 5 minutes, et **`.git` n'est plus servi
-  publiquement** sur les sites adossés à git.
-- **`secubox-droplet 1.4.2`** (#1026, #1030) — espace de dépôt public.
-- **`secubox-mail 2.7.0`** (#1025, #1029) — alias virtuels réparés, limite de
-  taille levée, greffon Roundcube de groupage en archive.
-- **`secubox-bbs 0.11.0`** (#1020) — lu/non-lu, modération journalisée **et
-  consultable**, création de salons, vignettes sans dépendance ajoutée.
-- **`secubox-billets 0.2.0`** (#1024) — l'adresse du billet publié.
-
-**Le fil rouge :** neuf de ces douze corrections ont le même squelette — un
-mécanisme existe, est livré, et ne s'exécute jamais.
-
-**Empreinte de gk2 :** 103 daemons → 68, mémoire disponible 1735 → 2194 Mio,
-charge 140 → 56.
-
-
-- **`secubox-peertube 1.3.2`** (#1010) — transcodage plafonné à un cœur. La
-  charge de gk2 est passée de **113 à 63**. Les réglages internes de PeerTube
-  (`threads: 1`, `concurrency: 1`) étaient déjà posés : le studio vidéo et le
-  direct ont les leurs et y échappent.
-- **`secubox-system-tuning 1.1.0`** (#1011) — bornes CPU **déclaratives** pour
-  les 30 conteneurs. 5 seulement étaient bornés, 3 l'étaient **en commentaire**,
-  22 pas du tout. 30 persistés, 21 à chaud, sans un redémarrage.
-- **`secubox-metablogizer 1.7.2`** (#1012) — la publication écrivait un
-  `server_name` en `.local` **et** réclamait le port 80. `aletheia` sert enfin
-  son vrai contenu.
-- **`secubox-mail 2.5.3`** (#1014, #1013) — panneau mutilé par un 500, lien
-  webmail sur `localhost`, domaine d'adresses confondu avec celui des services,
-  Roundcube sans `username_domain`. **73 tests, contre 0 exécutable avant.**
-  **Validé par l'utilisateur : mail, webmail et Nextcloud Mail fonctionnent.**
+- **secubox-radio 0.1.2** (#1047) — le clip joue dans le cadre de la vignette ;
+  une piste refusee par la passerelle est ecartee avec sa raison au lieu de
+  geler toute la file ; URL statiques empreintes du contenu ; empreinte de la
+  feuille de la banniere de sante dans `style-src`.
+- **secubox-toolbox-ng 0.1.40** (#1031) — sbxwaf ne sert plus une entree de
+  cache sans metadonnees lisibles.
+- **PeerTube** — 4 ffmpeg bloques depuis 5-8 jours supprimes.
+- **Depot** — 11 worktrees vides retires (28 → 18).
 
 ### ⬜ Next Up
 
-- **ManageSieve (port 4190) injoignable** — pas de filtres de messages depuis
-  Nextcloud. Défaut distinct, relevé en instruisant #1013.
-- **`files-141`** rend un 403 : le site n'a pas d'`index.html`, seulement un
-  `zemialos-multivers.html`. Reliquat d'envoi probable — à supprimer ou à doter
-  d'une page d'accueil, décision utilisateur.
-- **`haproxy.toml` déclare `aletheia` deux fois**, d'où deux ACL identiques
-  dans le `haproxy.cfg` généré. Une table TOML en double est de surcroît
-  invalide au sens strict.
-- **Vhosts par-site MetaBlogizer** en doublon avec la configuration unifiée
-  (celle qui sert réellement) — d'où les `conflicting server name ... ignored`.
-- **13 branches anciennes** restent non fusionnées — mais **aucune ne tourne en
-  production** : vérifié paquet par paquet contre les versions installées. Elles
-  ne sont donc plus un piège, seulement un arriéré.
-- **`torrent-search`** : les résultats n'exposent pas leurs liens magnet.
-- **`secubox-waf` n'est pas montable dans l'agrégateur** — `PermissionError` sur
-  `/var/log/secubox/waf/waf-threats.log`. Le module WAF n'est donc pas servi en
-  processus : c'est #1017 qui se rejoue sous une autre forme.
-- **`publish`, `repo`, `reporter`** : l'agrégateur ne répond pas pour eux
-  (code 000 après 40 s). Relancés, non élucidé.
-- **24 daemons à tâches de fond** encore résidents. Analysés : un seul agit
-  vraiment (`watchdog`, la reprise automatique), quatre accumulent une donnée,
-  les autres réchauffaient un cache — dont deux seulement écrivent un fichier
-  que l'agrégateur relit, et sont désormais des minuteries.
-- **Un module servi par l'agrégateur ne devrait pas livrer un daemon résident.**
-  Tant que l'empaquetage les active, ils reviendront à la prochaine
-  réinstallation. C'est la cause en amont des 103 daemons.
-- **`www.gk2.net`** attend son DNS (`213.186.33.5` → `82.67.100.75`) pour son
-  certificat. Tout le reste est prêt.
+- **Deployer les 126 paquets construits** — par lots de dix, controle de sante
+  entre chaque. Versions deja montees, aucun echec de construction.
+- **Refonte du BBS** — maquette validee, plus urgente depuis la reparation :
+  un seul point de rupture au lieu de onze, barre de contexte, 40 classes
+  mortes a retirer. Chantier de plusieurs sessions, a faire a froid.
+- **#1056** — reste l'appel de `/media-fiche` depuis la page, et le podcaster
+  (son JSON n'est expose que par sa socket, pas par le vhost).
+- **#1054 sbxmitm** — splice WebSocket avant de basculer les deux chemins
+  restants. Un chemin sur trois est migre.
+- **#1052** — verifier que les sets nft restent peuples apres 24 h.
+- **#1051 403 YouTube** — piste PO token, non verifiee.
+- **#1050 SecuBox Retro** · **#1053 c3box** · **#1055 edition/suppression**.
+- **Fusionner l'arriere** — 18 worktrees non fusionnes, aucune PR ouverte.
 
----
+- **Deployer les 126 paquets construits** — par lots de dix, controle de sante
+  entre chaque. Jamais d'un coup : 126 demons redemarres en parallele.
+- **#1056 mosaique et vignettes BBS** — relais par le demon, pas d'`img-src`
+  elargi. Question ouverte : le relais accepte-t-il une URL libre postee par un
+  membre ? Sinon c'est un proxy ouvert.
+- **#1055 edition et suppression** des messages, avec journal d'audit.
+- **Sous-forums vides sur telephone** — demande un marqueur pose par le serveur.
+- **#1054 sbxmitm** — splice WebSocket avant de basculer les deux chemins.
+- **#1051 403 YouTube** — piste PO token, non verifiee.
+- **#1053 c3box** — reinstallation from scratch.
 
-## 2026-08-11 — BBS 0.3.0, et 21 branches enfin dans master
-
-### ✅ Fait — fusionné et déployé
-
-- **secubox-bbs 0.3.0** (#1008) — messagerie interne, invitation par tout
-  membre (sans quota, avec traçabilité de l'émetteur), module Mastodon, onglet
-  Sysop dans la webui d'admin, réinitialisation de mot de passe. **180 tests.**
-- **Trois faux succès corrigés** : « jeton expiré » affiché au lieu de renvoyer
-  à la connexion ; fichier de mots de passe gardé en mémoire (une
-  réinitialisation `bbsctl` restait sans effet, puis était **effacée**) ;
-  `mastodonctl invite` rendant son message d'erreur **comme lien d'invitation**
-  avec `ok:true`.
-- **21 branches fusionnées dans master**, dont `secubox-bbs` et
-  `secubox-mastodon` qui n'existaient dans aucune branche fusionnée alors
-  qu'elles tournent sur gk2.
-
-### ⬜ Next Up
-
-- **33 branches restent en conflit.** Les arbitrer une par une, en vérifiant
-  d'abord si elles portent du code vivant sur la board — c'est l'inverse qui
-  a coûté cher ce matin.
-
----
-
-## 2026-08-10 — HAProxy : la génération redevient la source de vérité
-
-### ✅ Fait — fusionné (v2.17.0), déployé, publié sur apt
-
-- **Routage ACME généré** (#986) — l'ACL, la règle `use_backend` et le backend
-  `acme_challenge` n'existaient que dans le `haproxy.cfg` vivant. Une
-  régénération réussie les aurait effacés **en silence** : la panne ne serait
-  apparue qu'à l'expiration des certificats, des semaines plus tard.
-- **`ssl_redirect` enfin lu** (#988) — écrit par `vhost add` dans chaque bloc,
-  **lu nulle part**. 18 vhosts le déclaraient, zéro redirection était produite.
-- **`%[query]` omet le « ? »** — `/a.css?v=3` réécrit `/a.cssv=3` : 404 sur tout
-  le trafic inspecté portant une chaîne de requête. Corrigé en `%[url]`,
-  verrouillé par un test de mutation. Paquet **1.6.1**.
-- **La garde anti-dérive avait raison** — elle protégeait exactement ça, mais
-  son effet de bord a rendu `haproxy.toml` inerte plusieurs jours sans qu'aucune
-  commande n'échoue bruyamment.
-
-### ⬜ Next Up
-
-- **10 vhosts déclarent `ssl_redirect = true` sans `ssl = true`** (`bbs`,
-  `social`, `nc`, `sso`, `zigbee`, `picobrew`, `zem`, `shiptest`, `wiztest2`,
-  `wiztest3`) : ils ne redirigent pas. Décider vhost par vhost, puis ajouter
-  `ssl = true` dans leur bloc — **jamais** en modifiant le générateur.
-*(Un second item figurait ici — « reconstruire `secubox-toolbox` ». Vérifié le
-2026-08-10 : le fichier est déjà livré par dpkg sur la board, même empreinte que
-les sources. L'item avait été écrit en déduisant l'état de la board depuis le
-diff de fusion, sans regarder la board.)*
-
----
-
-## 2026-08-05 → 08-06 — Dérives de packaging et certificats
-
-### ✅ Fait
-- **Streamlit vidangé (#982)** — 23 résidents → 0, charge 31.7 → 6.4 ; les 23 applis étaient irréveillables avant `app repair`. `1.4.1` apt-synced.
-- **Jitsi LXC-native (#985, 2.1.1)** — remplace le pilotage Docker ; HTTPS 200 + WebSocket 101, sans `waf_bypass` (sbxwaf relaie les upgrades). DNAT UDP/10000 derrière `media-expose`.
-- **HAProxy régénérable à nouveau (#986)** — ACME et `toolbox_landing` générés au lieu d'être posés à la main ; 0 route modifiée, 0 perdue.
-- **`ssl_redirect` implémenté (#988)** — 18 vhosts le déclaraient, 0 redirection existait. Exclusion ACME obligatoire.
-- **TOTP réparé (#990)** — un code VALIDE échouait en 500 ; anti-rejeu sorti de `/etc/secubox`.
-- **84 certificats valides (#991)** — 36 étaient expirés ; `certsctl deploy` + minuteur, acme.sh **et** certbot.
-- **503 board-wide (#992)** — logrotate référençant un utilisateur inexistant ; 684 Mo de journal jamais tourné.
-- **`webui.conf` empaqueté (#987)** ; **45 modules migrés vers `secubox-routes.d` (#989)**, convention figée dans `MODULE-COMPLIANCE.md`.
-
-### ⬜ Next Up
-- **#989 — 25 routes sans source** dans le dépôt : empaqueter ou constater mortes (cas par cas).
-- **#989 — 3 idiomes de `rules` non reconnus** : `mitmproxy`, `ipblock`, `p2p`.
-- **#985 étape 6** — appel Jitsi à deux pairs dont un hors LAN (demande deux humains).
-- **`secubox-yggdrasil` ne s'installe pas** — conflit de fichier avec `secubox-mesh` sur `/usr/share/secubox/www/mesh/index.html`, sans `Replaces`. Jamais installé (`<none>`).
-- **Agrégateur SPOF confirmé** — une salve d'installations le redémarre, ~110 modules dans une boucle, 502 board-wide pendant le démarrage à froid.
-- **`_wildcard_` retiré** ; `exposure`, `gitea`, `mail` en 500 applicatif (routes identiques à avant migration).
-- **Volume cookie-audit** — 684 Mo en trois mois, la rotation le contient mais le débit mériterait un regard.
-
----
+- **403 YouTube sur le media** (#1048 voisin) — metadonnees OK, media refuse.
+  Ni les cookies, ni notre interception, ni la version de yt-dlp. Piste non
+  verifiee : fournisseur de PO token.
+- **Charge moyenne a 41** (#1045) — les fantomes n'en etaient pas la cause,
+  la source reste a trouver.
+- **#1050 SecuBox Retro** — faisabilite a etudier, rien d'engage.
+- **#1049 mosaique** — composant partage entre les flux.
+- **PR manquantes** — 18 worktrees portent du travail non fusionne, dont
+  #1047, #1044, #1045. Aucune PR ouverte.
 
 ## 2026-08-03 → 08-05 — Marathon perf & fiabilité : mur mosaïque, certificats, châssis, playlists
 
@@ -232,23 +112,6 @@ Session très dense. Plusieurs défauts de fond trouvés sous des symptômes ano
 - **Page 502 soignée** (module endormi / réveil / socket absent) — #979 en attente.
 - **Sessions : liste blanche + approbation à distance** (#975) — conception posée.
 - **SOGo** en alternative à Horde, arrêté (#968) ; Zimbra écarté (pas d'ARM64, 8 Go RAM).
-*Mis à jour : 2026-08-05*
-
----
-
-## 2026-08-05 — Streamlit : bascule vers les unités par appli (#982)
-
-### ✅ Fait
-- **Parc vidangé : 23 processus résidents → 0, charge 31.7 → 15.9.** Séquence en 6 étapes, chacune vérifiée avant la suivante — rapport `docs/superpowers/runs/2026-08-05-streamlit-bascule-unites-par-appli.md`.
-- **`app repair --apply` 28/28** — 15 applis en cours n'avaient aucun `.streamlit.toml`, 8 portaient `port = 8501` sans `entrypoint` : les 23 étaient irréveillables. Capture de la vérité vivante avant toute extinction. 23/23 concordantes après coup.
-- **`secubox-streamlit 1.4.0-1~bookworm1`** — les assets LXC de #963 n'avaient jamais été empaquetés (board en 1.2.4 + `streamlitctl` copié à la main). apt-synced.
-- **`streamlit-all.service` neutralisé** (drop-in `ExecStop=` vidé + `Restart=no`) puis désactivé ; vidange par `systemctl stop`, portée au cgroup — le témoin déjà adopté est resté en HTTP 200 pendant la chute des 22 autres.
-- **Réveil à la demande vérifié** : `prompt_forge` 6 s, `cc_osint` 4 s, HTTP 200 — les deux formes de point d'entrée. **`secubox-streamlit-idle.timer` active + enabled** (fin de l'arrêt manuel non persistant). 18 vignettes conservées.
-
-### ⬜ Next Up
-- **`autostart = true` désaccordé du réel** — `diapvid`, `files_51`, `enhance_app` le déclarent, **aucune ne tournait avant la bascule**. Rien démarré de ce chef. `streamlitctl autostart` les démarrerait + `enable`rait : décision à prendre, pas à supposer.
-- **#746 — réveil à l'accès URL** : toujours ouverte. Une appli endormie sollicitée par son vhost public répond en erreur ; seul le lien du mur réveille.
-- **Route nginx metablogizer orpheline** — `nginx/metablogizer.conf` jamais installé par son `debian/rules`, ne survit qu'à la main (noté dans #980).
 
 ---
 
@@ -695,47 +558,6 @@ adversariale), **toutes mergées sur master**, déployées gk2 + c3box, prouvée
 
 - boot.scr = workaround ; fix durable = enhanced Tow-Boot (#748, bloqué ciseau) OU corriger
   les adresses de boot dans l'image (extlinux.conf → `0x0a000000`). Voir TODO T5.
-*Mis à jour : 2026-06-26*
-
----
-
-## 🥾 2026-06-26 : netboot — test live gk2→c3q + enhanced Tow-Boot (#748)
-
-### Diagnostic test live gk2 → c3q
-
-Test netboot réel effectué entre gk2 (serveur, B0) et c3q (DUT, 2e MOCHAbin).
-Côté gk2 : chaîne OK — TFTP actif, nginx boot-vhost `:8099` opérationnel,
-`boot.fit` signé servi, API fonctionnelle. Artefacts publiés sous le MAC c3q
-`00504384fb2f`. Adresses de chargement U-Boot calibrées : kernel `0x02080000`,
-fdt `0x01000000`, ramdisk `0x06000000`. Cible eMMC c3q : 14,7 Gio.
-
-**Bloquer physique** : câble cuivre c3q (`mvpp2-2` — seul port netbootable sur
-MOCHAbin ; les 4 ports switch `lan0-3` ne sont pas visibles depuis U-Boot) doit
-atteindre le segment LAN de gk2 (`192.168.1.x` / .200). Sans ce câble, gk2
-capture 0 trame de c3q : le boot réseau ne peut pas démarrer. Par ailleurs, le
-U-Boot usine de c3q (2020.10) **n'a pas `wget`** — HTTP netboot impossible sans
-overlay ou re-flash.
-
-### #748 — Enhanced Tow-Boot (suit #737)
-
-Spec + plan Phase 1 commités dans la branche. Code Phase 1 terminé :
-- Kconfig réseau + FIT-signature dans la config Tow-Boot `mochabin-8gb` ;
-- Module Nix `secubox-netboot.nix` avec `bootcmd` HTTP `:8099` ;
-- Script `build-uboot-overlay.sh --tow-boot` testé OK sur gk2 (wrap + signature
-  `sbx-uboot.fit`, adresse overlay `0x06000000`).
-
-**Gated** : `nix-build` non disponible localement (pas de Nix sur gk2) +
-validation HW sur c3q (câble physique manquant).
-
-Phases suivantes :
-- **Phase 2** : flasher série CLI (`mvebu64boot` Armada 7040/8040, `kwboot`
-  Armada 3720) pour bootstrapper le Tow-Boot amélioré via BootROM UART.
-- **Phase 3** : modules kernel netboot (intégration image / auto-flash A/B).
-
-### ⬜ Next Up
-- Câble cuivre c3q vers LAN gk2 → validation HW boot réseau B1/B2.
-- Hôte Nix pour `nix-build globalscale-mochabin-8gb` → `sbx-uboot.fit` réel.
-- Phase 2 série : CLI flasher + intégration `sbin/secubox-netboot-flash`.
 
 ---
 
@@ -2824,24 +2646,6 @@ PR pending review against `master`.
 
 ---
 
-## ✅ Session 160: Health Banner Live Panel (Issue #92)
-
-### Objective
-Add three public banner sections (VisitorOrigin / LiveHosts / CertStatus)
-sharing one polling and CORS pipeline in `secubox-metrics`.
-
-### Completed
-- Spec + plan written and committed.
-- Three aggregators with unit + error-path tests (25 tests passing).
-- nftables ruleset, systemd timer, postinst plumbing.
-- Banner v1.3.0 with three fail-isolated fetch loops.
-- README updated.
-
-### Status
-PR pending review against `master`.
-
----
-
 ## ✅ Session 160: secubox apt + clone — validate implementation (Issue #89)
 
 ### Objective
@@ -3108,73 +2912,6 @@ Add web-based mode control to the Eye Remote admin dashboard for safer manual ga
 ### Files Updated
 - `/etc/systemd/system/secubox-fallback-display.service` — NEW working service
 - `/usr/lib/secubox-eye/agent/display/fallback/` — Complete fallback display
-*Mis à jour : 2026-05-11 (Session 144)*
-
----
-
-## 🚨 RÈGLES MÉTHODOLOGIQUES OBLIGATOIRES
-
-### Git Workflow
-1. **TOUJOURS travailler sur une branche** — jamais de commit direct sur master
-   ```bash
-   git checkout -b fix/issue-XX-description
-   ```
-2. **PR obligatoire** pour merger sur master
-3. **Référencer l'issue** dans les commits : `fix: description (ref #XX)`
-
-### Avant de créer/modifier
-1. **VÉRIFIER ce qui existe** avant de créer un nouveau fichier/script
-   ```bash
-   find . -name "*.sh" -type f | grep -i <keyword>
-   ls -la <directory>
-   ```
-2. **PROPOSER avant de reconstruire** — demander confirmation à l'utilisateur
-3. **Lire les scripts existants** pour comprendre leur fonctionnement
-
-### Build Scripts & Fixes
-1. **Les fixes doivent être intégrés dans les build scripts** — pas seulement dans `files/`
-2. **Vérifier si le build script utilise `files/` ou a des définitions embedded**
-3. **Tester le build script** après modification des sources
-
-### Image Generation
-1. **Utiliser les scripts existants** (`build-eye-remote-image.sh`, etc.)
-2. **Ne pas télécharger** si une image existe déjà localement
-3. **Vérifier les dépendances** du script avant de l'exécuter
-
-### Communication
-1. **Annoncer les actions** avant de les faire
-2. **Proposer des options** plutôt que d'agir unilatéralement
-3. **Résumer les changements** après chaque action
-
----
-
-## 🔄 Session 144: HyperPixel Display Fixes (Eye Remote)
-
-### Problèmes identifiés et corrigés
-- [x] Cycle de dépendance systemd (pigpiod After=multi-user.target → cycle)
-- [x] pigpiod écoute IPv6 seulement (-l flag → Python ne peut pas connecter)
-- [x] Interfaces réseau dupliquées (RNDIS + ECM → conflit routing)
-- [x] Timing USB instable sur MOCHAbin (delays ajoutés)
-
-### Erreurs commises (à ne pas répéter)
-- ❌ Commit direct sur master au lieu d'une branche
-- ❌ Créé `install-eye-remote.sh` sans vérifier que `build-eye-remote-image.sh` existe
-- ❌ Modifié `files/` sans intégrer dans le build script embedded
-- ❌ Téléchargement d'image sans vérifier l'existant
-
-### Fichiers modifiés
-- `remote-ui/round/files/etc/systemd/system/pigpiod.service.d/override.conf`
-- `remote-ui/round/files/etc/systemd/system/hyperpixel2r-init.service`
-- `remote-ui/round/files/etc/systemd/system/secubox-eye-gadget.service`
-- `remote-ui/round/install-eye-remote.sh` (nouveau)
-
-### TODO
-- [ ] Intégrer les fixes dans `build-eye-remote-image.sh`
-- [ ] Tester build complet avec le script existant
-- [ ] Créer PR pour merger sur master
-
-### GitHub Issue
-- [#77] Fix HyperPixel 2.1 Round display initialization on Pi Zero W
 
 ---
 
@@ -8967,45 +8704,3 @@ Le support a été ajouté dans le DTS upstream Linux (torvalds/linux) mais:
 - Endpoints: 2998
 - Migration: 81%
 - Commits: 3326
-
-## CI Sync 2026-08-04
-- Packages: 169
-- Endpoints: 3002
-- Migration: 81%
-- Commits: 3351
-
-## CI Sync 2026-08-05
-- Packages: 169
-- Endpoints: 3008
-- Migration: 81%
-- Commits: 3362
-
-## CI Sync 2026-08-07
-- Packages: 170
-- Endpoints: 3007
-- Migration: 80%
-- Commits: 3405
-
-## CI Sync 2026-08-10
-- Packages: 170
-- Endpoints: 3007
-- Migration: 80%
-- Commits: 3410
-
-## CI Sync 2026-08-11
-- Packages: 170
-- Endpoints: 3007
-- Migration: 80%
-- Commits: 3412
-
-## CI Sync 2026-08-12
-- Packages: 173
-- Endpoints: 3015
-- Migration: 80%
-- Commits: 3620
-
-## CI Sync 2026-08-13
-- Packages: 173
-- Endpoints: 3015
-- Migration: 80%
-- Commits: 3651

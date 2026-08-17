@@ -3,24 +3,20 @@ Description=SecuBox Annuaire-Miroir — federated trust substrate API
 After=network.target secubox-core.service
 Wants=secubox-core.service
 
-# /run/secubox N'EST PAS UN RuntimeDirectory (#1022).
-#
-# Il est PARTAGE par une centaine de modules. `RuntimeDirectory=` est concu pour
-# un repertoire PROPRE a un service : systemd le recree a chaque demarrage avec
-# le mode de l'unite, donc le dernier service demarre imposait le sien. Huit
-# unites le posaient en 0755, ce qui privait tous les autres du droit d'y creer
-# leur socket — « bind: permission denied », et un 502 dont la cause etait le
-# redemarrage d'un module sans rapport, survenu entre-temps.
-#
-# Le meme mecanisme effacait le repertoire a l'arret d'un service, emportant les
-# sockets des quatre-vingt-dix autres.
-#
-# Il est desormais declare une seule fois, en 1777, par le tmpfiles.d de
-# secubox-core — un seul proprietaire, une seule verite.
 [Service]
 Type=simple
 User=secubox
 Group=secubox
+# RuntimeDirectory=secubox RETIRE (#1022) : /run/secubox est partage par ~95
+# unites, et systemd EFFACE le contenu d'un RuntimeDirectory au redemarrage —
+# une seule unite qui le declare emporte les sockets de toutes les autres, et
+# la board rend des 502 sur des modules qui n'avaient rien demande. Le parent
+# reste root:root 1777, cree hors des unites.
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
+# possede. Une socket laissee par un autre utilisateur rendrait le
+# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
+# root malgre User= — sans lui la ligne echouerait comme le demon.
+ExecStartPre=+/bin/rm -f /run/secubox/annuaire.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/annuaire.sock --workers 1
 WorkingDirectory=/usr/lib/secubox/annuaire
 Restart=on-failure
