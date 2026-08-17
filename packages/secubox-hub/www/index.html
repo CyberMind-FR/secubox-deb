@@ -41,7 +41,12 @@
         }
 
         /* Main content */
-        .main { flex: 1; margin-left: 220px; }
+        /* La barre de menu globale injectée par /shared/sidebar.js est en
+           position fixe, en haut, sur 48px de haut — mesuré au navigateur, et
+           constant de 900 à 1920px de large. Sans réserve, elle recouvre le
+           haut du tableau de bord. Les panneaux de module réservent 56 à 60px ;
+           on s'aligne dessus, avec la même marge de sécurité. */
+        .main { flex: 1; margin-left: 220px; padding-top: 56px; }
 
         .header {
             display: flex;
