@@ -29,6 +29,16 @@ override_dh_auto_install:
 	# Nginx snippets (shared CORS config)
 	install -d debian/secubox-hub/etc/nginx/snippets
 	[ -d nginx/snippets ] && cp -r nginx/snippets/. debian/secubox-hub/etc/nginx/snippets/ || true
+	# Pages d'erreur SecuBox servies par nginx.
+	#
+	# ELLES N'APPARTENAIENT A AUCUN PAQUET : posees a la main dans
+	# /etc/secubox/errorpages, elles disparaissaient a la premiere
+	# regeneration. Le snippet nginx non plus n'etait fourni par rien, et
+	# n'etait inclus que par UN vhost sur 129 — les 128 autres rendaient la
+	# page brute de nginx sur un 502.
+	install -d debian/secubox-hub/etc/secubox/errorpages
+	install -m 0644 errorpages/*.html debian/secubox-hub/etc/secubox/errorpages/
+
 	# nftables cache populator + timer (powers SOC firewall_summary widget)
 	install -d debian/secubox-hub/usr/sbin
 	install -m 0755 sbin/secubox-nft-cache debian/secubox-hub/usr/sbin/secubox-nft-cache

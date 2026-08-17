@@ -1,3 +1,17 @@
+secubox-hub (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Les pages d'erreur nginx entrent dans le paquet. Elles n'appartenaient a
+    aucun paquet — posees a la main dans /etc/secubox/errorpages, elles
+    disparaissaient a la premiere regeneration. Le snippet nginx non plus
+    n'etait fourni par rien.
+  * Le snippet sert desormais UNE PAGE PAR CODE. Il renvoyait 500, 502, 503 et
+    504 vers un unique fichier : un visiteur voyait « service momentanement
+    arrete » alors que la passerelle avait en realite depasse son delai.
+  * Page 504 ajoutee — elle manquait, et c'est l'erreur la plus frequente quand
+    un module met trop de temps a repondre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 11:29:47 +0200
+
 secubox-hub (1.8.2-1~bookworm1) bookworm; urgency=medium
 
   * LES COPIES DE SAUVEGARDE NE SONT PLUS SERVIES (ref #1034). Seize fichiers

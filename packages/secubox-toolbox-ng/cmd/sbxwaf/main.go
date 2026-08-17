@@ -410,10 +410,17 @@ func (s *Server) handler() http.Handler {
 			if !skip {
 				var bodyBytes []byte
 				includeBlock := true
-				if isStatic {
+				// Un corps binaire n'est pas inspecte : les regles textuelles
+				// n'y trouvent que des faux positifs. Voir corpsBinaire().
+				binaire := corpsBinaire(r.Header.Get("Content-Type"))
+				if isStatic || binaire {
 					// Fingerprint-only pass: detect/escalate on path+query+ua, no
 					// body read, no block evaluation.
-					includeBlock = false
+					//
+					// Pour un corps binaire on garde en revanche l'evaluation
+					// de blocage : chemin, parametres et user-agent restent
+					// juges. Seul le CORPS est laisse de cote.
+					includeBlock = binaire
 				} else {
 					// Read up to s.maxBodyInspect bytes for WAF inspection, then
 					// restore the FULL body (prefix + remaining stream) so the

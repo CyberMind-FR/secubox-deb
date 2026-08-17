@@ -1,0 +1,25 @@
+[Unit]
+Description=SecuBox — groupe de modules « %i » dans un interpreteur partage
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+# PAS DE RuntimeDirectory : /run/secubox est partage par ~95 unites, et systemd
+# efface le contenu d'un RuntimeDirectory au redemarrage — une seule unite qui
+# le declare emporte les sockets de toutes les autres.
+#
+# Le retrait des sockets perimees est fait par le programme lui-meme, module par
+# module, juste avant chaque bind.
+ExecStart=/usr/sbin/secubox-groupd --fichier /etc/secubox/groups.d/%i.conf
+Restart=on-failure
+RestartSec=5
+# Un groupe porte plusieurs modules : lui laisser le temps de tous les importer.
+TimeoutStartSec=180
+UMask=0027
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

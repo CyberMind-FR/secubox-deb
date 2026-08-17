@@ -3,6 +3,41 @@
 
 ---
 
+## 2026-08-17 — Rassemblement des modules, et deux faux positifs de nous
+
+**82 modules dans un interpreteur : 180 Mo au lieu de 3070.** Facteur dix-huit.
+`secubox-groupd` importe chaque module et le sert sur SA socket habituelle —
+nginx et l'agregateur ne voient aucune difference. Le piege etait que les 132
+modules ont tous un paquet nomme `api` : un import naif ferait servir le code
+du premier sous le nom du second, en silence. Chaque import met donc
+`sys.modules["api"]` de cote et conserve l'arborescence sous un alias propre.
+
+**J'avais affirme le contraire de la verite** : je croyais l'agregateur hote
+des modules parce qu'en arretant `glances` il repondait encore. En realite
+`glances` n'avait pas de socket et l'agregateur repondait par un gestionnaire
+generique. Verifie en grandeur nature : arreter 56 demons a libere 1318 Mo ET
+rendu tous les modules injoignables. Il proxifie.
+
+**Envoi d'image Mastodon bloque depuis un telephone** : le WAF classait le
+corps multipart en « rce / critical ». Les regles cherchent du TEXTE ; sur les
+octets d'un JPEG elles trouvent des motifs par hasard. Aggrave par la
+troncature a 1 Mio — sbxwaf jugeait sur un fragment coupe au milieu du binaire
+tout en journalisant qu'il l'avait tronque. Il s'abstient desormais sur les
+corps binaires, sans rien retirer au reste de l'inspection.
+
+**58 paquets rétrogrades** par le deploiement de masse : la board tournait sur
+des versions plus recentes que master, construites depuis des branches non
+fusionnees. 29 branches sur 30 fusionnees, 59 paquets reconstruits et
+redeployes.
+
+**Pages d'erreur** : le snippet renvoyait 500, 502, 503 et 504 vers un unique
+fichier, et n'etait inclus que par 1 vhost sur 129. Une page par code, 504
+creee, 93 vhosts equipes, le tout empaquete dans secubox-hub.
+
+**Le hub** etait simplement `disabled` — toute la navbar minimale venait de la.
+Son cache interroge 180 services en un seul `systemctl` avec 5 s de delai : il
+expire sous charge, et sa liste contient une entree corrompue (`'●'`).
+
 ## 2026-08-16 (fin) — BBS : deux volets qui glissent
 
 Le defaut de fond n'etait pas une regle mais **une accolade** : un

@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+"""SecuBox-Deb :: secubox-groupd — plusieurs modules dans UN interpreteur.
+
+POURQUOI. Chaque module tourne aujourd'hui dans son propre uvicorn : 31 Mo en
+moyenne, dont l'immense majorite est l'interpreteur, FastAPI, Starlette et
+Pydantic — payes une fois PAR MODULE. Sur 116 demons cela fait 3,7 Go pour un
+code metier qui en represente une fraction.
+
+CE QUE CE PROGRAMME NE CHANGE PAS. Chaque module garde SA socket, a son chemin
+habituel. nginx, l'agregateur et tout ce qui parle a `/run/secubox/<m>.sock`
+continuent sans modification. On ne deplace pas la frontiere : on supprime la
+duplication derriere elle.
+
+LE PIEGE, ET SA PARADE. Les 132 modules ont tous un paquet nomme `api`. Les
+importer naivement ferait que le second ecrase le premier dans `sys.modules`,
+et l'on servirait le mauvais code sous le bon nom — silencieusement. Chaque
+module est donc importe avec `sys.modules["api"]` mis de cote et restaure, et
+son arborescence enregistree sous un alias unique pour que ses propres
+sous-imports (`from api.x import y`) resolvent bien vers LUI.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import importlib
+import importlib.util
+import logging
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+RACINE = Path("/usr/lib/secubox")
+SOCKETS = Path("/run/secubox")
+
+log = logging.getLogger("groupd")
+
+
+class ImportIsole:
+    """Importe `api.main` d'un module sans polluer les suivants.
+
+    On retire de `sys.modules` tout ce qui commence par `api` AVANT l'import,
+    puis on le restaure APRES en gardant l'arborescence du module sous un
+    prefixe qui lui est propre. Sans ce menage, le deuxieme module importe
+    recupererait le `api` du premier — et servirait son code.
+    """
+
+    def __init__(self, mid: str, chemin: Path):
+        self.mid = mid
+        self.chemin = chemin
+        self._sauve: dict[str, Any] = {}
+
+    def __enter__(self):
+        self._sauve = {n: m for n, m in sys.modules.items()
+                       if n == "api" or n.startswith("api.")}
+        for n in self._sauve:
+            del sys.modules[n]
+        sys.path.insert(0, str(self.chemin))
+        return self
+
+    def __exit__(self, *exc):
+        # L'arborescence fraichement importee est conservee sous un alias : le
+        # module garde ses references internes vivantes apres qu'on ait libere
+        # le nom `api` pour le suivant.
+        for n, m in list(sys.modules.items()):
+            if n == "api" or n.startswith("api."):
+                sys.modules[f"_sbx_{self.mid}_{n}"] = m
+                del sys.modules[n]
+        sys.modules.update(self._sauve)
+        try:
+            sys.path.remove(str(self.chemin))
+        except ValueError:
+            pass
+        return False
+
+
+def charge(mid: str, racine: Path = RACINE):
+    """Rend l'application ASGI d'un module, ou leve.
+
+    Le repertoire du module devient temporairement le repertoire courant : de
+    nombreux modules ouvrent des fichiers en chemin RELATIF, et sans cela ils
+    lisent ceux d'un voisin — une confusion silencieuse et difficile a voir.
+    """
+    d = racine / mid
+    if not (d / "api" / "main.py").exists():
+        raise FileNotFoundError(f"{mid}: api/main.py absent")
+    avant = os.getcwd()
+    try:
+        os.chdir(d)
+        with ImportIsole(mid, d):
+            mod = importlib.import_module("api.main")
+            app = getattr(mod, "app", None)
+            if app is None:
+                raise AttributeError(f"{mid}: api.main n'expose pas `app`")
+            return app
+    finally:
+        os.chdir(avant)
+
+
+async def sert(mid: str, app, dossier_sockets: Path = SOCKETS):
+    """Sert un module sur SA socket, dans la boucle partagee."""
+    import uvicorn
+
+    chemin = dossier_sockets / f"{mid}.sock"
+    # La socket perimee est retiree AVANT le bind : /run/secubox est partage et
+    # colle, et une socket laissee par un autre utilisateur rendrait le
+    # demarrage impossible — en boucle et en silence.
+    try:
+        chemin.unlink()
+    except FileNotFoundError:
+        pass
+    cfg = uvicorn.Config(app, uds=str(chemin), log_level="warning",
+                         access_log=False, lifespan="on")
+    srv = uvicorn.Server(cfg)
+    srv.install_signal_handlers = lambda: None  # la boucle est partagee
+    await srv.serve()
+
+
+async def principal(modules: list[str], racine: Path, dossier_sockets: Path) -> int:
+    charges, echecs = [], []
+    for mid in modules:
+        try:
+            charges.append((mid, charge(mid, racine)))
+        except Exception as e:
+            # UN MODULE QUI NE S'IMPORTE PAS N'EMPECHE PAS LES AUTRES. C'est
+            # tout l'interet d'un groupe : la panne d'un module reste la sienne.
+            echecs.append((mid, f"{type(e).__name__}: {e}"))
+            log.error("%s non charge : %s", mid, e)
+    log.warning("groupe : %d module(s) charges, %d en echec", len(charges), len(echecs))
+    if not charges:
+        return 1
+    await asyncio.gather(*(sert(m, a, dossier_sockets) for m, a in charges))
+    return 0
+
+
+def modules_depuis(fichier: Path) -> list[str]:
+    """Lit la liste d'un fichier : un module par ligne, `#` en commentaire."""
+    out = []
+    for ligne in fichier.read_text().splitlines():
+        ligne = ligne.split("#", 1)[0].strip()
+        if ligne:
+            out.append(ligne)
+    return out
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Sert plusieurs modules SecuBox dans un interpreteur")
+    p.add_argument("--modules", help="liste separee par des virgules")
+    p.add_argument("--fichier", type=Path, help="fichier listant les modules, un par ligne")
+    p.add_argument("--racine", type=Path, default=RACINE)
+    p.add_argument("--sockets", type=Path, default=SOCKETS)
+    a = p.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+    mods = []
+    if a.fichier:
+        mods += modules_depuis(a.fichier)
+    if a.modules:
+        mods += [m.strip() for m in a.modules.split(",") if m.strip()]
+    if not mods:
+        p.error("aucun module : donnez --modules ou --fichier")
+    return asyncio.run(principal(mods, a.racine, a.sockets))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
