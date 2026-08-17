@@ -1,3 +1,23 @@
+secubox-toolbox-ng (0.1.42-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : `--widget-exclude` retire l'injection du bandeau de sante sur les
+    applications TIERCES. CELA NE RETIRE RIEN AU WAF — ces hotes restent
+    inspectes, filtres et proteges, et c'est meme pour eux que le WAF compte le
+    plus : ils sont plus exposes et moins maitrises que notre propre code.
+    Seule la modification cosmetique du HTML s'arrete.
+
+    Mastodon, Nextcloud ou PeerTube servent leur propre politique de securite,
+    stricte et legitime, qui ignore l'empreinte de notre bandeau : le navigateur
+    refuse le script, et la console de l'utilisateur se remplit d'erreurs qui
+    designent notre injection. On ajoutait du bruit sans rien apporter.
+
+    Une exclusion plutot qu'un suffixe plus etroit : tout nouveau vhost SecuBox
+    recoit le bandeau sans qu'on y pense, seules les applications hebergees en
+    sont retirees. Vide par defaut — aucun changement pour une installation
+    existante.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 10:22:28 +0200
+
 secubox-toolbox-ng (0.1.41-1~bookworm1) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

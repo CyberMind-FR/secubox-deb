@@ -36,11 +36,14 @@ const widgetMaxBody = 4 << 20 // 4 MiB
 // request host matches a configured first-party suffix, and (c) the response is
 // text/html under the size cap. STRICTLY fail-open: any issue leaves the response
 // byte-identical. Called from the reverse-proxy ModifyResponse hook.
-func applyWidget(resp *http.Response, host string, origin string, hosts []string) {
+func applyWidget(resp *http.Response, host string, origin string, hosts, exclus []string) {
 	if origin == "" || len(hosts) == 0 || resp == nil || resp.Body == nil {
 		return
 	}
 	if !widgetHostMatch(host, hosts) || !isHTMLResponse(resp.Header.Get("Content-Type")) {
+		return
+	}
+	if widgetExcluded(host, exclus) {
 		return
 	}
 	// Don't try to inject into a body we won't fully buffer.
@@ -170,6 +173,37 @@ func splitCSV(s string) []string {
 
 // widgetHostMatch reports whether host (bare, lowercased) ends with one of the
 // configured first-party suffixes the operator opted into widget injection for.
+// widgetExcluded dit si un hote est une application TIERCE, dont on ne touche
+// pas le HTML.
+//
+// CECI NE RETIRE RIEN AU WAF. L'hote reste inspecte, filtre et protege
+// exactement comme avant — c'est meme pour ces applications-la que le WAF
+// compte le plus : elles sont plus exposees et moins maitrisees que notre
+// propre code. Seule l'INJECTION cosmetique du bandeau s'arrete.
+//
+// Pourquoi elle doit s'arreter : Mastodon, Nextcloud ou PeerTube servent leur
+// propre politique de securite, stricte et legitime. Elle ne connait pas
+// l'empreinte de notre bandeau, donc le navigateur le refuse — le script ne
+// s'execute pas, et la console de l'utilisateur se remplit d'erreurs qui
+// designent notre injection. On ajoute du bruit sans rien apporter.
+//
+// Une exclusion plutot qu'un suffixe plus etroit : ainsi tout nouveau vhost
+// SecuBox recoit le bandeau sans qu'on ait a y penser, et seules les
+// applications qu'on heberge sans les ecrire en sont retirees.
+func widgetExcluded(host string, exclus []string) bool {
+	for _, e := range exclus {
+		if e == "" {
+			continue
+		}
+		// Meme regle de frontiere que la correspondance : hote exact ou
+		// sous-domaine sur un point, jamais un suffixe nu.
+		if host == e || strings.HasSuffix(host, "."+e) {
+			return true
+		}
+	}
+	return false
+}
+
 func widgetHostMatch(host string, suffixes []string) bool {
 	for _, s := range suffixes {
 		if s == "" {
