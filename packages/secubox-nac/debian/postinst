@@ -25,19 +25,22 @@ case "$1" in
     install -d -m 755 /etc/nginx/secubox.d
     systemctl reload nginx 2>/dev/null || true
 
-    # Ensure nac's own nft table + zone sets exist so operator "move to zone"
-    # works on a fresh install — including `lxc_zone` for the LXC Containers
-    # zone — and so the mac-guard element migration below has its destination
-    # sets present. Set names mirror `ZONES[*].nft_set` in api/main.py plus the
-    # `blocked` deny set. Every `nft add` is idempotent (a no-op if the object
-    # already exists) and best-effort: a missing `nft` or a pre-existing table
-    # must never abort configure.
-    if command -v nft >/dev/null 2>&1; then
-      nft add table inet secubox_nac 2>/dev/null || true
-      for _set in blocked lan_allowed lxc_zone iot_zone guest_zone quarantine_zone; do
-        nft add set inet secubox_nac "$_set" '{ type ether_addr; }' 2>/dev/null || true
-      done
-    fi
+    # Project B (#820 Task 9): enable the presence-report TIMER only — the
+    # .service is a oneshot the timer invokes, never enabled/started
+    # directly. This is safe to enable unconditionally: the timer's
+    # oneshot calls `secubox-presence-report`, which delegates to Task 7's
+    # `run_scheduled()` — that itself no-ops (returns without emailing)
+    # unless an operator has separately configured
+    # `/etc/secubox/reporter-schedule.json` with a `frequency`+`recipient`.
+    # This is UNRELATED to Task 6's tiered EMAIL ALERTS, which stay OFF by
+    # design: only a commented `.example` is shipped
+    # (/usr/share/secubox/nac/presence-alerts.toml.example) — it is never
+    # copied to the live `/etc/secubox/presence-alerts.toml` path here, so
+    # `load_config()` keeps returning "no config" (no alerts) until an
+    # operator opts in by hand.
+    systemctl daemon-reload
+    systemctl enable secubox-presence-report.timer 2>/dev/null || true
+    systemctl start  secubox-presence-report.timer 2>/dev/null || true
 
     # #817 Task 9: one-shot, idempotent, best-effort nft element migration.
     # mac-guard's separate `inet secubox_mac_guard` table is being retired

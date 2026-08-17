@@ -17,26 +17,152 @@ best-effort: a missing file, unreadable path, or a raising `arp_cmd`
 contributes nothing for that source and never raises — `discover()`
 degrades to `[]` when all three sources are unavailable, per the
 Global Constraints fail-safe requirement.
+#820 (ref #817 follow-up): `resolve_hostname()` added — on the reference
+board nac is NOT the LAN DHCP server, so ARP-only sightings carry no
+hostname at all. Reverse-DNS (and, best-effort, mDNS) fills that gap for
+the small set of currently-seen devices — never the whole store.
 """
 from __future__ import annotations
 
 import logging
 import re
+import shutil
 import subprocess
+import time
 
 from .store import canon_mac
 
 logger = logging.getLogger("secubox.nac.discovery")
 
+# --- Hostname resolution (reverse-DNS + best-effort mDNS), #820 ref #817 ---
+
+# Module-level TTL cache: {ip: (resolved_at_monotonic, hostname_or_None)}.
+# A cached `None` still counts as a cache hit — an IP with no PTR record
+# must not be re-queried every collector cycle. Tests can clear this dict
+# directly (`discovery._HOSTNAME_CACHE.clear()`) to bypass it.
+_HOSTNAME_CACHE: dict[str, tuple[float, str | None]] = {}
+_HOSTNAME_CACHE_TTL = 300.0  # seconds
+
+# Bounded bare minimum: a hung resolver must not stall the collector
+# cycle. 1.0s for reverse-DNS, a bit more slack for the avahi subprocess
+# (process spawn overhead on top of the network round-trip).
+_DNS_TIMEOUT = 1.0
+_MDNS_TIMEOUT = 1.5
+
+
+def _reverse_dns(ip: str) -> str | None:
+    """Bounded reverse-DNS lookup via `getent hosts <ip>` (NSS: files then
+    DNS, same chain `socket.gethostbyaddr` would consult).
+
+    Deliberately NOT `socket.gethostbyaddr()` guarded by
+    `socket.setdefaulttimeout()`: that guard is a no-op for this call —
+    `setdefaulttimeout()` only affects newly-created `socket.socket()`
+    objects, not the C library resolver `gethostbyaddr()` invokes
+    directly, so a slow/unreachable DNS server would block past
+    `_DNS_TIMEOUT` anyway. Running `getent` as a subprocess makes the
+    bound real: `subprocess.run(..., timeout=...)` kills the child
+    process on expiry, so this call can never hang the caller past
+    `_DNS_TIMEOUT` regardless of what the resolver is doing. Never
+    raises — any failure (NXDOMAIN, timeout, missing binary, malformed
+    input) yields `None`.
+    """
+    try:
+        r = subprocess.run(
+            ["getent", "hosts", ip],
+            capture_output=True, text=True, timeout=_DNS_TIMEOUT,
+        )
+        if r.returncode != 0:
+            return None
+        # Expected stdout: "<ip>    <name>[ <alias>...]"
+        line = (r.stdout or "").strip().splitlines()[0] if r.stdout else ""
+        parts = line.split()
+        if len(parts) < 2:
+            return None
+        return parts[1]
+    except Exception:  # noqa: BLE001 - a resolver failure must never raise
+        return None
+
+
+def _mdns_resolve(ip: str) -> str | None:
+    """Best-effort mDNS resolve via `avahi-resolve-address`, only if the
+    binary is present. Fail-safe: missing binary / non-zero exit / parse
+    miss / timeout all yield `None`, never raise.
+    """
+    if not shutil.which("avahi-resolve-address"):
+        return None
+    try:
+        r = subprocess.run(
+            ["avahi-resolve-address", "-4", ip],
+            capture_output=True, text=True, timeout=_MDNS_TIMEOUT,
+        )
+        if r.returncode != 0:
+            return None
+        # Expected stdout: "<ip>\t<name>.local"
+        line = (r.stdout or "").strip().splitlines()[0] if r.stdout else ""
+        parts = line.split()
+        if len(parts) < 2:
+            return None
+        return parts[1]
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _short_lower(name: str | None, ip: str) -> str | None:
+    """Strip everything after the first `.`, lowercase, and reject an
+    empty result or one that just echoes the IP back (some resolvers do
+    this instead of failing).
+
+    The IP-echo check MUST run against the untouched `name` before
+    splitting on `.` — an IPv4 address contains dots too, so comparing
+    the already-split short form against `ip` would never match.
+    """
+    if not name:
+        return None
+    name = name.strip()
+    if not name or name == ip:
+        return None
+    short = name.split(".", 1)[0].lower()
+    if not short or short == ip:
+        return None
+    return short
+
+
+def resolve_hostname(ip: str) -> str | None:
+    """Resolve `ip` to a short, lowercased hostname, or `None`.
+
+    Primary: reverse-DNS (`getent hosts`, bounded to `_DNS_TIMEOUT` via a
+    subprocess timeout). Secondary, only when reverse-DNS found nothing and
+    `avahi-resolve-address` is installed: best-effort mDNS. Results
+    (including negative ones) are cached for `_HOSTNAME_CACHE_TTL`
+    seconds so a device with no PTR/mDNS record isn't re-queried every
+    collector cycle. Never raises — any internal failure degrades to
+    `None`, exactly like a genuine resolution miss.
+    """
+    try:
+        now = time.monotonic()
+        cached = _HOSTNAME_CACHE.get(ip)
+        if cached is not None and (now - cached[0]) < _HOSTNAME_CACHE_TTL:
+            return cached[1]
+
+        result = _short_lower(_reverse_dns(ip), ip)
+        if not result:
+            result = _short_lower(_mdns_resolve(ip), ip)
+
+        _HOSTNAME_CACHE[ip] = (now, result)
+        return result
+    except Exception:  # noqa: BLE001 - resolution must never raise out
+        logger.warning("resolve_hostname: failed for ip=%r", ip, exc_info=True)
+        return None
+
 # Default legacy lease/lookup locations (overridable for tests).
 DEFAULT_DNSMASQ_LEASES = "/var/lib/misc/dnsmasq.leases"
 DEFAULT_ISC_LEASES = "/var/lib/dhcp/dhcpd.leases"
 
-# Interfaces to scan for ARP entries (LAN interfaces only, + the secubox LXC
-# bridge br-lxc so containers are discovered and can auto-classify into the
-# `lxc` zone — see main.py `_interface_zones`) — lifted
-# verbatim from secubox-nac's `api/main.py` `_parse_arp`.
-LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "br-lxc", "eth0", "eth1"}
+# Interfaces to scan for ARP entries (LAN interfaces only) — lifted
+# from secubox-nac's `api/main.py` `_parse_arp`. `eth2` added because on the
+# reference board the LAN (192.168.1.0/24) rides eth2 (the previous set omitted
+# it, so ARP discovery found nothing and every device stayed a stale import).
+LAN_INTERFACES = {"lan0", "lan1", "lan2", "lan3", "br0", "br-lan", "eth0", "eth1", "eth2"}
 
 # Confidence ranking used to decide which source's data wins a merge:
 # a lease-backed sighting (dnsmasq, then isc) always beats a bare ARP
@@ -160,7 +286,6 @@ def _parse_arp(arp_text: str) -> list[dict]:
             "mac": canon,
             "ip": ip,
             "hostname": "",
-            "interface": iface,
             "source": "arp",
         })
     return out
@@ -214,13 +339,6 @@ def discover(*, dnsmasq_leases=DEFAULT_DNSMASQ_LEASES, isc_leases=DEFAULT_ISC_LE
 
         if s.get("hostname"):
             existing["hostname"] = s["hostname"]
-        # Interface comes only from the ARP pass (lowest rank), but it must
-        # survive even when a higher-rank lease sighting owns the record —
-        # otherwise a br-lxc container that also has a DHCP lease loses the
-        # interface and never auto-classifies into the `lxc` zone. Same
-        # "keep any non-empty value" rule as hostname.
-        if s.get("interface"):
-            existing["interface"] = s["interface"]
         if incoming_rank >= existing_rank:
             # Equal-rank sightings arrive in fixed dnsmasq -> isc -> arp
             # order, so multiple same-rank sightings for one MAC are
@@ -235,4 +353,24 @@ def discover(*, dnsmasq_leases=DEFAULT_DNSMASQ_LEASES, isc_leases=DEFAULT_ISC_LE
         elif not existing.get("ip"):
             existing["ip"] = s.get("ip")
 
-    return list(merged.values())
+    result = list(merged.values())
+
+    # #820 (ref #817): fill hostnames for devices no lease source named
+    # (typical on this board, where nac isn't the DHCP server so ARP-only
+    # sightings carry no hostname). Only the small MERGED live set is
+    # resolved here, never the whole store, and only an EMPTY hostname is
+    # filled — a lease-backed hostname is never overwritten. A resolver
+    # failure/timeout contributes nothing for that one device and never
+    # aborts the merge.
+    for device in result:
+        if device.get("hostname"):
+            continue
+        try:
+            name = resolve_hostname(device.get("ip", ""))
+        except Exception:  # noqa: BLE001 - resolution must never abort discover()
+            logger.warning("discover: resolve_hostname failed for mac=%s", device.get("mac"), exc_info=True)
+            name = None
+        if name:
+            device["hostname"] = name
+
+    return result

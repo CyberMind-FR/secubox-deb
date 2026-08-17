@@ -32,6 +32,12 @@ from secubox_core.logger import get_logger
 
 from .collector import Collector
 from .enrich import classify_device_type, load_oui, openwrt_fingerprint, oui_vendor, risk_score
+from .presence.geo import enrich_origin
+from .presence.kbin import collect_kbin
+from .presence.local import collect_local
+from .presence.reports import build_report
+from .presence.store import PresenceStore
+from .presence.wan import collect_wan
 from .store import DeviceStore, canon_mac, migrate_legacy
 
 app = FastAPI(title="secubox-nac", version="2.0.0", root_path="/api/v1/nac")
@@ -199,6 +205,13 @@ collector: Optional[Collector] = None
 # #817 Task 6: OUI vendor map, also exposed at module level (not just
 # captured in the Collector's closure) so `/vendors` can read it directly.
 oui_map: Optional[Dict[str, str]] = None
+
+# Project B (#820 Task 5): cross-plane presence store, built alongside
+# `store` in `_do_init()` (same idempotent lazy-init) and handed to the
+# `Collector` so its off-loop cycle also runs the presence collectors.
+# `/presence*` handlers below read it directly (guarded — `None` before
+# first init, same pattern as `store`/`collector`).
+presence_store: Optional[PresenceStore] = None
 
 # #817 whole-branch fix (C1): on the board, `/api/v1/nac` is served by the
 # AGGREGATOR in-process (nac is in aggregator.toml; its own service is
@@ -644,7 +657,7 @@ def _do_init() -> None:
     start the collector task: that needs the running loop and is done by
     whichever entrypoint holds it (`startup`/middleware).
     """
-    global store, collector, oui_map, _initialized
+    global store, collector, oui_map, presence_store, _initialized
     if _initialized:
         return
 
@@ -667,7 +680,14 @@ def _do_init() -> None:
         log.exception("NAC init: legacy migration failed (non-fatal)")
 
     oui_map = load_oui()
-    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL)
+
+    # Project B (#820 Task 5): the presence store lives in the SAME
+    # devices.db (a separate table, see `presence/store.py`) — built here
+    # so both nac's own uvicorn `startup()` and the aggregator's lazy-init
+    # middleware bring it up exactly once, and handed to the Collector so
+    # its off-loop cycle also runs the presence collectors.
+    presence_store = PresenceStore(DEVICES_DB_PATH)
+    collector = Collector(store, oui_map, interval=COLLECTOR_INTERVAL, presence_store=presence_store)
     collector._emit = _fire_collector_webhook
 
     _initialized = True
@@ -1307,6 +1327,26 @@ def summary(user=Depends(require_jwt)):
         "recent_events": _load_history()[-5:],
         "webhooks_configured": len(_load_webhooks()),
         "timestamp": datetime.now().isoformat()
+    }
+
+
+@router.get("/stats")
+def stats(user=Depends(require_jwt)):
+    """Top-level aggregation badge for the shared sidebar (`sidebar.js`).
+
+    #820: the sidebar polls `/api/v1/nac/stats` for `devices`/`blocked`/
+    `quarantine` — nac only had `/summary`, so this 404'd (missing
+    aggregation badge). Reuses `status()` (already cached/cheap) plus a
+    single indexed GROUP-BY per aggregation via `DeviceStore.count_by()`.
+    Plain `def` — no blocking work on the shared aggregator loop.
+    """
+    s = status(user)
+    return {
+        "devices": s["client_count"],
+        "blocked": s["by_zone"].get("blocked", 0),
+        "quarantine": s["quarantine_count"],
+        "by_source": store.count_by("source") if store else {},
+        "by_type": store.count_by("device_type") if store else {},
     }
 
 
@@ -2025,6 +2065,122 @@ def mesh_sync(user=Depends(require_jwt)):
 
     stats_cache.clear()
     return {"synced": synced}
+
+
+# ══════════════════════════════════════════════════════════════════
+# Project B (#820 Task 5) — /presence* : cross-plane presence read API
+#
+# Read-only reflection of the `presences`/`presence_alerts` tables the
+# background `Collector` populates every off-loop cycle (`collect_local`/
+# `collect_wan`/`collect_kbin` in `collector.py`'s `cycle_once`). Every
+# handler is plain `def` (#808 constraint) and JWT-gated like every other
+# nac endpoint. Fixed-segment routes (`geo`/`alerts`/`sync`) are declared
+# BEFORE `/presence/{pid:path}` — routes on a `APIRouter` match in
+# registration order, and the path-converter route would otherwise
+# swallow them.
+# ══════════════════════════════════════════════════════════════════
+
+
+@router.get("/presence")
+def list_presence(
+    plane: Optional[str] = None,
+    tier: Optional[str] = None,
+    limit: int = 1000,
+    user=Depends(require_jwt),
+):
+    """List cross-plane presences, optionally filtered by `?plane=`/`?tier=`."""
+    if not presence_store:
+        return {"items": [], "count": 0}
+    items = presence_store.list(plane=plane, tier=tier, limit=limit)
+    return {"items": items, "count": len(items)}
+
+
+@router.get("/presence/geo")
+def presence_geo(user=Depends(require_jwt)):
+    """Aggregate presence counts by `geo_cc` (country) and `geo_asn`."""
+    by_country: Dict[str, int] = {}
+    by_asn: Dict[str, int] = {}
+    if presence_store:
+        for p in presence_store.list(limit=100000):
+            cc = p.get("geo_cc")
+            if cc:
+                by_country[cc] = by_country.get(cc, 0) + 1
+            asn = p.get("geo_asn")
+            if asn:
+                by_asn[asn] = by_asn.get(asn, 0) + 1
+    return {"by_country": by_country, "by_asn": by_asn}
+
+
+@router.get("/presence/alerts")
+def presence_alerts_list(user=Depends(require_jwt)):
+    """Recorded tiered presence alerts (the Task 6 alert engine writes
+    these; the list is simply empty until that lands)."""
+    return {"alerts": presence_store.alerts() if presence_store else []}
+
+
+@router.post("/presence/sync")
+def presence_sync(user=Depends(require_jwt)):
+    """Force one presence collect pass, synchronously.
+
+    A plain `def` handler is already threadpooled off the shared
+    aggregator loop by FastAPI, so running the (bounded, fail-safe) file
+    reads here inline is safe — mirrors the background cycle in
+    `collector.py`, with each plane independently guarded so one failing
+    collector never blocks the others.
+    """
+    if not presence_store:
+        return {"synced": 0}
+
+    synced = 0
+    try:
+        synced += collect_local(presence_store, store) if store else 0
+    except Exception:
+        log.warning("presence_sync: collect_local failed", exc_info=True)
+    try:
+        synced += collect_wan(presence_store, geo_enrich=enrich_origin)
+    except Exception:
+        log.warning("presence_sync: collect_wan failed", exc_info=True)
+    try:
+        synced += collect_kbin(presence_store)
+    except Exception:
+        log.warning("presence_sync: collect_kbin failed", exc_info=True)
+
+    stats_cache.clear()
+    return {"synced": synced}
+
+
+@router.post("/presence/report/now")
+def presence_report_now(fmt: str = "html", user=Depends(require_jwt)):
+    """Generate the cross-plane presence report on demand (Task 7).
+
+    Plain `def` (#808): `build_report` only reads from the already-open
+    `PresenceStore` (short indexed SQLite queries), so FastAPI's threadpool
+    is enough — nothing here runs on the shared aggregator loop. Guarded
+    like every other `/presence*` handler: `presence_store` is `None`
+    before first lazy-init, in which case `build_report(None, ...)` still
+    renders a valid "no presences" report rather than 500ing.
+    """
+    fmt_norm = "text" if fmt == "text" else "html"
+    body = build_report(presence_store, fmt=fmt_norm)
+    media_type = "text/plain; charset=utf-8" if fmt_norm == "text" else "text/html; charset=utf-8"
+    return Response(content=body, media_type=media_type)
+
+
+@router.get("/presence/{pid:path}")
+def get_presence(pid: str, user=Depends(require_jwt)):
+    """Fetch a single presence by its `plane:identity` id.
+
+    The `:path` converter is required because a presence id always
+    contains a colon (e.g. `wan:1.2.3.4`) and, for a WAN/IP identity,
+    dots too — a plain `{pid}` segment converter would stop at the first
+    `/` only, but Starlette's default `str` converter is otherwise fine
+    with colons/dots; `:path` is used defensively so a future plane
+    identity containing a literal `/` (there is none today) still routes.
+    """
+    p = presence_store.get(pid) if presence_store else None
+    if not p:
+        raise HTTPException(404, "Presence not found")
+    return p
 
 
 app.include_router(router)

@@ -112,6 +112,12 @@ def canon_mac(s: str) -> str:
 class DeviceStore:
     """Canonical device inventory backed by SQLite (WAL mode)."""
 
+    # #820: whitelist for `count_by()` — the column name is interpolated
+    # into the SQL text (can't be a bound parameter), so this set IS the
+    # injection guard. Only add a column here if it's a real `devices`
+    # schema column with a dedicated index (or acceptable to scan).
+    _COUNT_BY_COLUMNS = {"source", "device_type", "zone", "risk_level", "allow_state"}
+
     def __init__(self, db_path: str):
         self.db_path = db_path
         # #817 whole-branch fix (I1): the single shared connection
@@ -241,6 +247,23 @@ class DeviceStore:
         with self._lock:
             row = self._conn.execute("SELECT COUNT(*) AS n FROM devices").fetchone()
         return int(row["n"])
+
+    def count_by(self, column: str) -> dict:
+        """Return {value: count} for a whitelisted column via one indexed
+        GROUP BY (#820: by_source/by_type aggregation for `/stats`).
+
+        The column name can't be a bound SQL parameter — `_COUNT_BY_COLUMNS`
+        is the injection guard. A non-whitelisted column returns `{}`
+        rather than raising, so a bad/stale query param never 500s the
+        aggregation endpoint. NULL values group under `"unknown"`.
+        """
+        if column not in self._COUNT_BY_COLUMNS:
+            return {}
+        with self._lock:
+            rows = self._conn.execute(
+                f"SELECT COALESCE({column},'unknown') AS k, COUNT(*) AS n FROM devices GROUP BY k"
+            ).fetchall()
+        return {r["k"]: r["n"] for r in rows}
 
     def record_event(self, mac: str, event: str, detail: str = "") -> None:
         with self._lock:

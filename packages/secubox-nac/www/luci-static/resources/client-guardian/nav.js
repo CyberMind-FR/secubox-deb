@@ -13,6 +13,7 @@ var tabs = [
 	{ id: 'clients', icon: '👥', label: _('Clients'), path: ['admin', 'secubox', 'security', 'guardian', 'clients'] },
 	{ id: 'zones', icon: '🏠', label: _('Zones'), path: ['admin', 'secubox', 'security', 'guardian', 'zones'] },
 	{ id: 'groups', icon: '🗂️', label: _('Groupes'), path: ['admin', 'secubox', 'security', 'guardian', 'groups'] },
+	{ id: 'presence', icon: '🌐', label: _('Présence'), path: ['admin', 'secubox', 'security', 'guardian', 'presence'] },
 	{ id: 'autozoning', icon: '🎯', label: _('Auto-Zoning'), path: ['admin', 'secubox', 'security', 'guardian', 'autozoning'] },
 	{ id: 'logs', icon: '📜', label: _('Logs'), path: ['admin', 'secubox', 'security', 'guardian', 'logs'] },
 	{ id: 'alerts', icon: '🔔', label: _('Alerts'), path: ['admin', 'secubox', 'security', 'guardian', 'alerts'] },

@@ -1,31 +1,43 @@
-secubox-nac (3.1.1-1~bookworm1) bookworm; urgency=medium
+secubox-nac (3.1.0-1~bookworm1) bookworm; urgency=medium
 
-  * LA LISTE DES INTERFACES SCANNEES N EST PLUS ECRITE EN DUR (ref #1035).
-    `LAN_INTERFACES` couvrait `lan0`..`eth1` et les ponts usuels, mais PAS
-    `eth2` — par lequel gk2 voit justement tout son LAN, s y tenant de facon
-    transparente sur le 192.168.1.0/24 amont. La decouverte ARP filtrait donc
-    chaque voisin.
-  * CE DEFAUT NE SE SIGNALE PAS : « aucun client » est un etat parfaitement
-    legitime pour un module de controle d acces. Rien n echoue, rien ne se
-    journalise — on conclut que le reseau est calme. Le tableau de bord serait
-    simplement reste vide.
-  * LE CORRECTIF EXISTAIT SUR LA BOARD ET N AVAIT JAMAIS ETE REMONTE ICI.
-    Installer la 3.1.0 telle quelle sur gk2 aurait vide son inventaire : le code
-    etait EN AVANCE de deux versions majeures et EN RETARD sur ce point precis.
-  * `lan_interfaces` (liste ou chaine a virgules) ETEND les defauts, ne les
-    remplace pas — une config substitutive ferait disparaitre les ponts au
-    premier oubli. Une config illisible rend les defauts plutot que rien : un
-    inventaire partiel vaut mieux qu un inventaire vide, qui EST le defaut.
-  * 5 tests.
+  * Cross-plane Presence Guardian (#820, Project B) — stacked on the
+    #817 Device Guardian consolidation.
+  * New `presences`/`presence_alerts` tables (same `devices.db`, WAL) fed
+    by four fail-safe, off-loop collectors: WAN (sbxwaf threat-log +
+    User-Agent bot/crawler classification), LAN/WG (mirrors A's device
+    store), and kbin (R3 toolbox tunnel `mac_hash` personas + report
+    token deep-link).
+  * Geo/provenance enrichment (`geo_cc`/`geo_asn`/`geo_org` for public
+    IPs via the existing mmdb readers; `provenance` always set —
+    geo/private/lan/tunnel/mesh/bot — even with no mmdb present).
+  * Tiered alert engine (`api/presence/alerts.py`): WAN bot-surge,
+    WAN new-country, and WG/LAN rogue-router (#817 risk_level=="high")
+    checks; every fired condition is always recorded, while the EMAIL
+    (sendmail, deduped/rate-limited per tier+plane+window) stays OFF
+    until an operator supplies `/etc/secubox/presence-alerts.toml` — a
+    commented `.example` ships under `/usr/share/secubox/nac/`, never
+    the live path.
+  * Scheduled presence report (`api/presence/reports.py`): a
+    self-contained HTML/text report (per-plane counts, top geo/ASN,
+    recent presences + alerts) plus `run_scheduled()`, wired to a new
+    `secubox-presence-report.timer` (daily) → oneshot
+    `secubox-presence-report.service` (`User=secubox`), and an
+    on-demand `POST /presence/report/now`. The timer is enabled by
+    default — it stays a harmless no-op until
+    `/etc/secubox/reporter-schedule.json` is configured with a
+    `frequency`+`recipient`.
+  * New read-only `/presence`, `/presence/{id}`, `/presence/geo`,
+    `/presence/alerts` (JWT-gated, plain `def`) and `POST
+    /presence/sync` (forced collect) endpoints.
+  * WebUI: new "Présence" cross-plane view (geo/provenance badges,
+    tier-colored rows, geo/ASN aggregate panel, alerts panel, LAN/WG
+    device deep-link, kbin report deep-link); all dynamic content via
+    `E()`/`textContent`, no `innerHTML` of attacker-influenceable
+    fields.
+  * Tor collection and VLAN/Tor/mesh emancipation are explicitly NOT
+    part of this release (deferred to Project C).
 
- -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 09:05:00 +0200
-
-secubox-nac (3.1.1-1~bookworm1) bookworm; urgency=medium
-
-  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
-    (remove the hard cascade-stop when secubox-core restarts/fails).
-
- -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 05 Jul 2026 20:00:00 +0000
 
 secubox-nac (3.0.0-1~bookworm1) bookworm; urgency=medium
 
@@ -58,50 +70,7 @@ secubox-nac (3.0.0-1~bookworm1) bookworm; urgency=medium
     follow-up, not part of this release.
   * Depends: add ieee-data (OUI vendor DB at /usr/share/ieee-data/oui.txt).
 
-  * Carries the LXC Containers zone + interface auto-classification
-    (br-lxc -> lxc) forward into the consolidated store: ARP discovery
-    now records the interface, the store persists it (best-value column),
-    and zone resolution falls back to it (nft set > interface > JSON >
-    quarantine). Folds in the standalone 1.0.5-1.0.7 releases below.
-  * postinst now ensures the `inet secubox_nac` table + all zone sets
-    (incl. `lxc_zone`) exist, idempotently, so operator "move to zone"
-    works on a fresh install and the mac-guard element migration has its
-    destination sets (the live board had no such table).
-
  -- Gerald KERMA <devel@cybermind.fr>  Sat, 05 Jul 2026 18:00:00 +0000
-
-secubox-nac (1.0.7-1~bookworm1) bookworm; urgency=medium
-
-  * feat: add an LXC Containers zone and auto-classify clients by the interface
-    they were seen on (br-lxc to lxc), configurable via nac interface_zones.
-    Operator moves (nft sets) still take priority. gk2: 10 containers land in
-    the lxc zone, 3 upstream devices in lan.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:45:00 +0200
-
-secubox-nac (1.0.6-1~bookworm1) bookworm; urgency=medium
-
-  * fix: Zones tab was empty because /zones reported only raw nftables set
-    members (0), not discovered clients. It now groups discovered clients by
-    their resolved zone (nft set > JSON assignment > fallback), so populated
-    zones show their members.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:20:00 +0200
-
-secubox-nac (1.0.5-1~bookworm1) bookworm; urgency=medium
-
-  * fix: NAC discovered 0 clients when devices live on br-lxc or an interface
-    outside the hardcoded LAN set (dashboard showed only the template). ARP
-    discovery now includes br-lxc by default and reads extra interfaces from
-    nac config  (gk2: eth2).
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 11:00:00 +0200
-
-secubox-nac (1.0.4-1~bookworm2) bookworm; urgency=medium
-
-  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
 
 secubox-nac (1.0.4-1~bookworm1) bookworm; urgency=medium
 

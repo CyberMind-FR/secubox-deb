@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-nac — presence report timer entrypoint (Project B,
+#820, Task 9).
+
+Tiny, fail-safe glue between `secubox-presence-report.timer` and Task 7's
+`api.presence.reports.run_scheduled()`. The nac FastAPI app is normally run
+as `uvicorn api.main:app` with `WorkingDirectory=/usr/lib/secubox/nac`
+(see `secubox-nac.service`), which is what makes `from .collector import
+Collector` etc. resolve inside `api/main.py` — this script reproduces the
+same resolution for a one-shot systemd timer tick by inserting
+`/usr/lib/secubox/nac` (the parent of the `api/` package) onto `sys.path`
+BEFORE importing anything from `api`, exactly like that unit's
+`WorkingDirectory` does for uvicorn's own import machinery.
+
+`run_scheduled()` (Task 7) already reads `/etc/secubox/reporter-schedule.json`
+(the report frequency + recipient) and is itself the off-switch: no
+schedule file, no `frequency` key, not due yet, or no recipient all resolve
+to a harmless no-op. This script does not re-implement or second-guess any
+of that — it only opens the (already-existing) `PresenceStore` and hands
+it to `run_scheduled`, so the schedule/config stay the single source of
+truth Task 7 designed them to be.
+
+Runs as `User=secubox` (see `secubox-presence-report.service`) — the same
+user the nac API itself runs as, so it can open `devices.db`
+(`0640 secubox:secubox`) without any privilege escalation, and
+`/usr/sbin/sendmail` (world-executable) works identically to how
+Task 6's mailer already sends alert mail from in-process nac handlers.
+
+Fail-safe contract: this script NEVER exits non-zero on a normal
+"nothing to do" path (missing DB, missing/absent schedule, not due yet,
+any import or runtime error) — a systemd oneshot exiting non-zero marks
+the unit failed and would eventually surface in `systemctl --failed`/
+monitoring for a condition that is completely expected on most days
+(the report simply wasn't due). The only way this exits non-zero is a
+truly unexpected crash in code paths this script does not control.
+"""
+from __future__ import annotations
+
+import sys
+
+# Make `api` importable as a package the same way uvicorn's
+# WorkingDirectory=/usr/lib/secubox/nac does for the live service.
+APP_ROOT = "/usr/lib/secubox/nac"
+if APP_ROOT not in sys.path:
+    sys.path.insert(0, APP_ROOT)
+
+DEVICES_DB_PATH = "/var/lib/secubox/nac/devices.db"
+
+
+def main() -> int:
+    try:
+        import os
+
+        if not os.path.exists(DEVICES_DB_PATH):
+            # nac hasn't run yet (fresh install, no collector cycle done) —
+            # nothing to report on. Not an error.
+            return 0
+
+        from api.presence.store import PresenceStore  # noqa: E402
+        from api.presence.reports import run_scheduled  # noqa: E402
+    except Exception:
+        # Import failure (module layout changed, dependency missing, ...) —
+        # fail-safe: never crash the timer for this.
+        return 0
+
+    store = None
+    try:
+        store = PresenceStore(DEVICES_DB_PATH)
+        run_scheduled(store)
+    except Exception:
+        # run_scheduled() is itself documented to never raise, and
+        # PresenceStore(...) opening an existing devices.db should not
+        # either — but this entrypoint is unattended (no operator watching
+        # a systemd timer tick), so belt-and-braces: swallow anything.
+        pass
+    finally:
+        if store is not None:
+            try:
+                store.close()
+            except Exception:
+                pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -3,637 +3,414 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SecuBox — Client Guardian (NAC)</title>
+    <title>SecuBox - Client Guardian</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/shared/hybrid-skin.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <link rel="stylesheet" href="/shared/sidebar-light.css">
     <style>
         :root {
-            --p31-dim: #6b7b8b;
-            --bg-dark: #0d1117;
-            --bg-card: rgba(30, 40, 55, 0.8);
-            --bg-row:  rgba(20, 30, 45, 0.6);
-            --border:  rgba(100, 150, 200, 0.2);
-            --text:    #e8e6d9;
-            --cyan:    #00d4ff;
-            --red: #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-            --green: #00dd44;  --blue: #4488ff;   --purple: #a371f7;
+            /* P31 Phosphor spectrum */
+            --p31-peak: #00dd44;
+            --p31-hot: #00ff55;
+            --p31-mid: #009933;
+            --p31-dim: #006622;
+            --p31-ghost: #003311;
+            --p31-decay: #ffb347;
+            --p31-decay-dim: #cc7722;
+            /* Tube glass */
+            --tube-light: #e8f5e9;
+            --tube-pale: #c8e6c9;
+            --tube-soft: #a5d6a7;
+            /* Legacy mappings */
+            --bg-dark: var(--tube-light);
+            --bg-card: var(--tube-pale);
+            --bg-sidebar: var(--tube-black);
+            --border: var(--tube-soft);
+            --text: var(--tube-dark);
+            --text-dim: var(--p31-dim);
+            --primary: var(--p31-peak);
+            --cyan: var(--p31-peak);
+            --green: var(--p31-peak);
+            --red: #ff4466;
+            --yellow: var(--p31-decay);
+            --orange: var(--p31-decay-dim);
+            --purple: #a371f7;
+            /* Bloom effects */
+            --bloom-text: 0 0 2px var(--p31-peak), 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-soft: 0 0 6px var(--p31-peak), 0 0 14px rgba(51,255,102,0.5);
+            --bloom-amber: 0 0 3px var(--p31-decay), 0 0 10px rgba(255,179,71,0.4);
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Courier Prime', monospace; background: var(--bg-dark); color: var(--text); display: flex; min-height: 100vh; }
-        .sidebar { width: 220px; position: fixed; height: 100vh; overflow-y: auto; }
-        .main { flex: 1; margin-left: 220px; padding: 1.5rem; padding-top: 60px; background: linear-gradient(135deg, rgba(10,15,25,0.95), rgba(15,25,40,0.9)); min-height: 100vh; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
-        .header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
-        .header .sub { font-size: 0.7rem; color: var(--p31-dim); margin-top: 0.15rem; }
+        body {
+            font-family: 'Courier Prime', 'Courier New', monospace;
+            background: var(--tube-light);
+            background-image: radial-gradient(ellipse at 50% 40%, rgba(51,255,102,0.025) 0%, transparent 70%);
+            color: var(--tube-dark);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .header h1 { font-size: 1.5rem; }
+        .btn { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+        .btn:hover { background: var(--bg-dark); }
+        .btn.danger { background: rgba(248,81,73,0.1); border-color: var(--red); color: var(--red); }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem; }
+        .card h2 { font-size: 1rem; margin-bottom: 1rem; color: var(--cyan); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+        .stat-card .value { font-size: 1.8rem; font-weight: bold; }
+        .stat-card .label { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.25rem; }
+        .stat-card.online .value { color: var(--green); }
+        .stat-card.quarantine .value { color: var(--red); }
+        .stat-card.total .value { color: var(--cyan); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 0.6rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-dim); font-weight: 500; font-size: 0.8rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge.online { background: rgba(63,185,80,0.2); color: var(--green); }
+        .badge.offline { background: rgba(139,148,158,0.2); color: var(--text-dim); }
+        .badge.quarantine { background: rgba(248,81,73,0.2); color: var(--red); }
+    
+        /* CRT Enhancements */
+        .main { margin-left: 220px; padding: 1.5rem; }
 
-        .btn { padding: 0.4rem 0.8rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 0.8rem; font-family: 'Courier Prime', monospace; text-transform: uppercase; transition: all 0.2s; }
-        .btn:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,0.3); }
-        .btn.primary { background: rgba(0,212,255,0.15); border-color: var(--cyan); color: var(--cyan); }
-        .btn.danger { background: rgba(255,68,102,0.15); border-color: var(--red); color: var(--red); }
-        .btn.good { background: rgba(0,221,68,0.15); border-color: var(--green); color: var(--green); }
-        .btn.sm { padding: 0.2rem 0.55rem; font-size: 0.68rem; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .header h1 {
+            color: var(--p31-hot);
+            text-shadow: var(--bloom-text);
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.75rem; margin-bottom: 1.2rem; }
-        .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem; text-align: center; backdrop-filter: blur(5px); }
-        .stat-card .value { font-size: 1.5rem; font-weight: bold; text-shadow: 0 0 10px currentColor; font-variant-numeric: tabular-nums; }
-        .stat-card .label { font-size: 0.6rem; color: var(--p31-dim); letter-spacing: 0.1em; margin-top: 0.25rem; text-transform: uppercase; }
-        .stat-card.cyan .value { color: var(--cyan); }
-        .stat-card.green .value { color: var(--green); }
-        .stat-card.orange .value { color: var(--orange); }
-        .stat-card.blue .value { color: var(--blue); }
-        .stat-card.purple .value { color: var(--purple); }
+        .badge {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .badge-blue, .badge-primary { background: rgba(51,255,102,0.1); border-color: var(--p31-peak); color: var(--p31-peak); }
+        .badge-green { background: rgba(51,255,102,0.15); border-color: var(--p31-peak); color: var(--p31-peak); text-shadow: var(--bloom-soft); }
+        .badge-cyan { background: rgba(51,255,102,0.1); border-color: var(--p31-mid); color: var(--p31-mid); }
+        .badge-purple { background: rgba(163,113,247,0.1); border-color: #a371f7; color: #a371f7; }
+        .badge-yellow, .badge-amber { background: rgba(255,179,71,0.1); border-color: var(--p31-decay); color: var(--p31-decay); }
+        .badge-red { background: rgba(255,68,102,0.1); border-color: #ff4466; color: #ff4466; }
 
-        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
-        .card h3 { font-size: 0.85rem; color: var(--cyan); margin-bottom: 0.75rem; }
-        .card h4 { font-size: 0.7rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 0.75rem 0 0.4rem; }
+        .btn {
+            font-family: 'Courier Prime', monospace;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            border: 1px solid var(--tube-soft);
+            background: var(--tube-pale);
+            color: var(--p31-mid);
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            border-color: var(--p31-dim);
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            box-shadow: 0 0 12px rgba(51,255,102,0.1);
+        }
+        .btn-green, .btn-primary, .btn.primary, .btn.success {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+            background: rgba(51,255,102,0.1);
+        }
+        .btn-green:hover, .btn-primary:hover, .btn.primary:hover, .btn.success:hover {
+            background: rgba(51,255,102,0.2);
+            box-shadow: 0 0 16px rgba(51,255,102,0.2);
+        }
+        .btn-red, .btn.danger {
+            border-color: #ff4466;
+            color: #ff4466;
+            background: rgba(255,68,102,0.1);
+        }
+        .btn-red:hover, .btn.danger:hover {
+            background: rgba(255,68,102,0.2);
+        }
+        .btn-blue {
+            border-color: var(--p31-mid);
+            color: var(--p31-mid);
+            background: rgba(51,255,102,0.05);
+        }
+        .btn-blue:hover {
+            border-color: var(--p31-peak);
+            color: var(--p31-peak);
+        }
 
-        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; flex-wrap: wrap; gap: 0.2rem; }
-        .tab { padding: 0.5rem 0.8rem; cursor: pointer; color: var(--p31-dim); border-bottom: 2px solid transparent; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.2s; }
-        .tab:hover { color: var(--cyan); }
-        .tab.active { color: var(--cyan); border-bottom-color: var(--cyan); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card:hover {
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.05), inset 0 0 20px rgba(0,0,0,0.3);
+        }
+        .card-title, .card-header h2 {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
 
-        /* Generic dense row — reused for clients / quarantine / zone members / parental rules / alerts / history */
-        .row { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.65rem; background: var(--bg-row); border-radius: 4px; border-left: 3px solid var(--border); font-size: 0.78rem; margin-bottom: 0.3rem; transition: all 0.15s; }
-        .row:hover { background: rgba(0,212,255,0.08); transform: translateX(2px); }
-        .row.online { border-left-color: var(--green); }
-        .row.offline { border-left-color: var(--p31-dim); }
-        .row.quarantine { border-left-color: var(--orange); }
-        .row.sev-critical { border-left-color: var(--red); }
-        .row.sev-warning { border-left-color: var(--orange); }
-        .row .dot { font-size: 0.9em; width: 1.3em; text-align: center; flex-shrink: 0; }
-        .row .who { flex: 1; min-width: 0; cursor: pointer; }
-        .row .who .mac { color: var(--cyan); font-weight: bold; }
-        .row .who .meta { display: block; color: var(--p31-dim); font-size: 0.68rem; margin-top: 0.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .row .row-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; flex-shrink: 0; }
-        .row-list { display: flex; flex-direction: column; max-height: 480px; overflow-y: auto; }
+        .stat-card {
+            background: var(--tube-pale);
+            border: 1px solid var(--tube-soft);
+        }
+        .stat-value, .stat-card .value {
+            text-shadow: 0 0 10px currentColor;
+        }
+        .stat-label, .stat-card .label {
+            color: var(--p31-dim);
+            letter-spacing: 0.15em;
+        }
+        .stat-card.cyan .value, .stat-card.green .value { color: var(--p31-peak); }
+        .stat-card.yellow .value { color: var(--p31-decay); }
+        .stat-card.red .value { color: #ff4466; }
 
-        .zonepill { font-size: 0.6rem; padding: 0.15rem 0.45rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; }
-        .zonepill.green { color: var(--green); border-color: var(--green); background: rgba(0,221,68,0.1); }
-        .zonepill.orange { color: var(--orange); border-color: var(--orange); background: rgba(255,153,68,0.1); }
-        .zonepill.blue { color: var(--blue); border-color: var(--blue); background: rgba(68,136,255,0.1); }
-        .zonepill.purple { color: var(--purple); border-color: var(--purple); background: rgba(163,113,247,0.1); }
+        table, .table {
+            font-family: 'Courier Prime', monospace;
+        }
+        th, .table th {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.15em;
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        td, .table td {
+            border-bottom: 1px solid var(--p31-ghost);
+            color: var(--p31-mid);
+        }
+        tr:hover, .table tr:hover {
+            background: rgba(51,255,102,0.03);
+        }
 
-        .zsel { background: var(--bg-row); border: 1px solid var(--border); color: var(--text); font-family: 'Courier Prime', monospace; font-size: 0.68rem; padding: 0.25rem 0.3rem; border-radius: 4px; flex-shrink: 0; }
-        .zsel:focus { outline: none; border-color: var(--cyan); }
+        .status-dot.active, .status-running {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+        }
+        .status-dot.active {
+            background: var(--p31-peak);
+            box-shadow: 0 0 8px var(--p31-peak);
+        }
 
-        .zone-card h3 { display: flex; align-items: center; gap: 0.4rem; }
-        .zone-count { color: var(--p31-dim); font-size: 0.7rem; }
+        .toast {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            font-family: 'Courier Prime', monospace;
+        }
+        .toast-success { border-color: var(--p31-peak); }
+        .toast-error { border-color: #ff4466; }
 
-        .empty-note { padding: 0.9rem; text-align: center; color: var(--p31-dim); font-size: 0.75rem; background: rgba(255,153,68,0.04); border: 1px dashed var(--border); border-radius: 6px; }
+        .modal {
+            background: rgba(0,0,0,0.85);
+        }
+        .modal-content {
+            background: var(--tube-pale);
+            border: 1px solid var(--p31-dim);
+            box-shadow: 0 0 30px rgba(51,255,102,0.1);
+        }
+        .modal-title {
+            color: var(--p31-decay);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+        }
 
-        .form-group { margin-bottom: 0.65rem; }
-        .form-group label { display: block; margin-bottom: 0.2rem; font-size: 0.68rem; color: var(--p31-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-        .form-group input[type=text], .form-group input[type=time], .form-group input[type=number], .form-group select { width: 100%; padding: 0.45rem; background: rgba(20,30,45,0.8); border: 1px solid var(--border); border-radius: 4px; font-family: 'Courier Prime', monospace; font-size: 0.8rem; color: var(--text); }
-        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 5px rgba(0,212,255,0.3); }
-        .form-row { display: flex; gap: 0.6rem; flex-wrap: wrap; }
-        .form-row .form-group { flex: 1; min-width: 160px; }
-        .checkline { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text); margin-bottom: 0.65rem; }
+        .tabs {
+            background: var(--tube-pale);
+            border-bottom: 1px solid var(--p31-ghost);
+        }
+        .tab {
+            color: var(--p31-dim);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        .tab:hover { color: var(--p31-mid); }
+        .tab.active {
+            color: var(--p31-peak);
+            text-shadow: var(--bloom-soft);
+            border-bottom-color: var(--p31-peak);
+        }
 
-        .kv { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem; font-size: 0.75rem; }
-        .kv .k { color: var(--p31-dim); }
-        .kv .v { color: var(--text); font-variant-numeric: tabular-nums; }
+        input, select, textarea {
+            font-family: 'Courier Prime', monospace;
+            background: var(--tube-light);
+            border: 1px solid var(--tube-soft);
+            color: var(--p31-mid);
+            padding: 0.5rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--p31-dim);
+            box-shadow: 0 0 8px rgba(51,255,102,0.1);
+        }
 
-        pre.log { background: var(--bg-row); border: 1px solid var(--border); border-radius: 6px; padding: 0.7rem; font-size: 0.68rem; color: var(--green); overflow-x: auto; max-height: 420px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--tube-light); }
+        ::-webkit-scrollbar-thumb { background: var(--p31-dim); }
+        ::-webkit-scrollbar-thumb:hover { background: var(--p31-mid); }
 
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
-        .modal.show { display: flex; }
-        .modal-content { background: rgba(20,30,45,0.97); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; width: 520px; max-width: 92vw; max-height: 88vh; overflow-y: auto; backdrop-filter: blur(10px); }
-        .modal-content h3 { margin-bottom: 1rem; color: var(--cyan); }
-
-        .toast { position: fixed; bottom: 24px; right: 20px; padding: 0.75rem 1rem; background: var(--cyan); color: #000; border-radius: 6px; font-size: 0.8rem; z-index: 2000; opacity: 0; transform: translateY(20px); transition: all 0.3s; box-shadow: 0 0 20px rgba(0,212,255,0.4); max-width: 340px; }
-        .toast.show { opacity: 1; transform: translateY(0); }
-        .toast.error { background: var(--red); color: #fff; }
-
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
-        ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+        /* Empty states */
+        .empty { color: var(--p31-dim); }
 
         @media (max-width: 768px) {
             .main { margin-left: 0; }
-            .row .who .meta { display: none; }
-            .row .zsel { display: none; }
-            .zonepill { display: none; }
         }
     </style>
 </head>
-<body class="hybrid-dark">
+<body class="crt-light">
     <nav class="sidebar" id="sidebar"></nav>
     <script src="/shared/sidebar.js"></script>
     <main class="main">
         <header class="header">
-            <div>
-                <h1>👥 Client Guardian (NAC)</h1>
-                <div class="sub" id="subline">Network access control · loading…</div>
-            </div>
-            <div class="btn-group">
-                <button class="btn" onclick="refresh()">↻ Refresh</button>
-            </div>
+            <h1>👥 Client Guardian (NAC)</h1>
+            <button class="btn" onclick="refresh()">Refresh</button>
         </header>
 
         <div class="grid">
-            <div class="stat-card cyan"><div class="value" id="sTotal">–</div><div class="label">👥 Clients</div></div>
-            <div class="stat-card green"><div class="value" id="sOnline">–</div><div class="label">🟢 Online</div></div>
-            <div class="stat-card orange"><div class="value" id="sQuarantine">–</div><div class="label">⛔ Quarantined</div></div>
-            <div class="stat-card blue"><div class="value" id="sZones">–</div><div class="label">🗺️ Zones</div></div>
-            <div class="stat-card purple"><div class="value" id="sAlerts">–</div><div class="label">🔔 Alerts</div></div>
-        </div>
-
-        <div class="tabs">
-            <div class="tab active" data-tab="clients">👥 Clients</div>
-            <div class="tab" data-tab="zones">🗺️ Zones</div>
-            <div class="tab" data-tab="quarantine">⛔ Quarantine</div>
-            <div class="tab" data-tab="parental">👶 Parental</div>
-            <div class="tab" data-tab="alerts">🔔 Alerts</div>
-            <div class="tab" data-tab="policy">⚙️ Policy</div>
-            <div class="tab" data-tab="history">📜 History</div>
-        </div>
-
-        <!-- Clients -->
-        <div class="tab-content active" id="tab-clients">
-            <div class="card">
-                <h3>👥 Discovered Clients</h3>
-                <div class="row-list" id="clientsList">Loading…</div>
+            <div class="stat-card total">
+                <div class="value" id="total">-</div>
+                <div class="label">Total Clients</div>
+            </div>
+            <div class="stat-card online">
+                <div class="value" id="online">-</div>
+                <div class="label">Online</div>
+            </div>
+            <div class="stat-card quarantine">
+                <div class="value" id="quarantine">-</div>
+                <div class="label">Quarantined</div>
             </div>
         </div>
 
-        <!-- Zones -->
-        <div class="tab-content" id="tab-zones">
-            <div id="zonesList">Loading…</div>
+        <div class="card">
+            <h2 style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <span>Connected Clients</span>
+                <label style="font-size:0.75rem;font-weight:400;text-transform:none;letter-spacing:0;display:flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="onlineOnly" checked onchange="refresh()"> 🟢 Online only
+                </label>
+            </h2>
+            <table>
+                <thead><tr><th>MAC</th><th>IP</th><th>Device</th><th>Zone</th><th>Risk</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="clientsTable"><tr><td colspan="8">Loading...</td></tr></tbody>
+            </table>
         </div>
 
-        <!-- Quarantine -->
-        <div class="tab-content" id="tab-quarantine">
-            <div class="card">
-                <h3>⛔ Quarantined Clients</h3>
-                <div class="row-list" id="quarantineList">Loading…</div>
-            </div>
-        </div>
-
-        <!-- Parental -->
-        <div class="tab-content" id="tab-parental">
-            <div class="card">
-                <h3>👶 New / Update Rule</h3>
-                <div class="form-row">
-                    <div class="form-group"><label>Client MAC</label><input type="text" id="ruleMac" placeholder="aa:bb:cc:dd:ee:ff"></div>
-                    <div class="form-group"><label>Block until</label><input type="time" id="ruleBlockUntil" value="22:00"></div>
-                </div>
-                <div class="form-group"><label>Blocked categories (comma-separated)</label><input type="text" id="ruleCategories" placeholder="social, gaming, streaming"></div>
-                <div class="checkline"><input type="checkbox" id="ruleEnabled" checked> <label for="ruleEnabled" style="margin:0">Enabled</label></div>
-                <button class="btn primary" onclick="saveParentalRule()">💾 Save Rule</button>
-            </div>
-            <div class="card">
-                <h3>👶 Active Rules</h3>
-                <div class="row-list" id="parentalList">Loading…</div>
-            </div>
-        </div>
-
-        <!-- Alerts -->
-        <div class="tab-content" id="tab-alerts">
-            <div class="card">
-                <h3>🔔 Current Alerts</h3>
-                <div class="row-list" id="alertsList">Loading…</div>
-            </div>
-        </div>
-
-        <!-- Policy -->
-        <div class="tab-content" id="tab-policy">
-            <div class="card">
-                <h3>⚙️ Network Access Policy</h3>
-                <div class="form-group"><label>Default zone for new clients</label><select id="policyDefaultZone"></select></div>
-                <div class="checkline"><input type="checkbox" id="policyAutoApprove"> <label for="policyAutoApprove" style="margin:0">Auto-approve new clients into default zone</label></div>
-                <div class="form-group"><label>Quarantine timeout (seconds, 0 = unlimited)</label><input type="number" id="policyQuarantineTimeout" min="0" value="0"></div>
-                <button class="btn primary" onclick="savePolicy()">💾 Save Policy</button>
-            </div>
-        </div>
-
-        <!-- History -->
-        <div class="tab-content" id="tab-history">
-            <div class="card">
-                <h3>📜 Event History</h3>
-                <div class="form-row" style="align-items:flex-end">
-                    <div class="form-group"><label>Filter by MAC (optional)</label><input type="text" id="histMacFilter" placeholder="aa:bb:cc:dd:ee:ff"></div>
-                    <button class="btn" style="height:2.3rem" onclick="loadHistory()">↻ Reload</button>
-                </div>
-                <div class="row-list" id="historyList">Loading…</div>
-            </div>
-            <div class="card">
-                <h3>🧾 Dnsmasq Logs</h3>
-                <button class="btn" onclick="loadLogs()">📥 Load logs</button>
-                <pre class="log" id="logsBlock" style="margin-top:0.6rem">(not loaded)</pre>
-            </div>
+        <div class="card">
+            <h2>Quarantine List</h2>
+            <table>
+                <thead><tr><th>MAC</th><th>Reason</th><th>Since</th><th>Actions</th></tr></thead>
+                <tbody id="quarantineTable"><tr><td colspan="4">Loading...</td></tr></tbody>
+            </table>
         </div>
     </main>
 
-    <div class="modal" id="modal">
-        <div class="modal-content" id="modalContent"></div>
-    </div>
-
-    <div class="toast" id="toast"></div>
-
     <script>
         const API = '/api/v1/nac';
-        let zonesCache = null;
-        let clientsData = [];
-        let currentTab = 'clients';
-        const ZONE_COLOR = { lan: 'green', lxc: 'cyan', iot: 'purple', guest: 'blue', quarantine: 'orange' };
 
-        function token() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
-        function authHeaders(extra) {
-            const h = Object.assign({}, extra || {});
-            const t = token();
-            if (t) h['Authorization'] = 'Bearer ' + t;
-            return h;
-        }
-        function esc(s) {
-            return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
-        function fmtTime(iso) {
-            if (!iso) return '—';
-            const d = new Date(iso);
-            return isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
-        }
-        function toast(msg, isError) {
-            const t = document.getElementById('toast');
-            t.textContent = msg;
-            t.className = 'toast show' + (isError ? ' error' : '');
-            setTimeout(() => t.classList.remove('show'), 3200);
-        }
+        // #817/#820 — icon/emoji maps for the consolidated device fields.
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        // device_type from classify_device_type: camera/smart_tv/smart_speaker/
+        // smart_home/printer/router/phone/unknown (+ forward-compat aliases).
+        const TYPE_ICON = {router:'📡',phone:'📱',mobile:'📱',computer:'💻',laptop:'💻',tablet:'📱',camera:'📷',smart_tv:'📺',tv:'📺',media:'📺',smart_speaker:'🔊',speaker:'🔊',smart_home:'🏡',game_console:'🎮',printer:'🖨️',nas:'🗄️',iot:'🔌',wearable:'⌚',unknown:'❔'};
+        const SOURCE_ICON = {dnsmasq:'📶',isc:'📶',dhcp:'📶',arp:'🔎','mac-guard':'🏷️','device-intel':'🔬','iot-guard':'🔌',mesh:'🕸️',nmap:'🛰️',mdns:'📣',manual:'✍️',imported:'📦'};
+        // zone = SHORT ZONES keys from /clients (lan/iot/guest/quarantine) + blocked.
+        const ZONE_ICON = {lan:'🏠',iot:'🤖',guest:'👥',quarantine:'🚧',blocked:'⛔',unknown:'❔'};
+        const ZONE_LABEL = {lan:'LAN',iot:'IoT',guest:'Invités',quarantine:'Quarantaine',blocked:'Bloqué',unknown:'—'};
+        const RISK_ICON = {low:'🟢',medium:'🟡',high:'🔴'};
+        const typeIcon = t => TYPE_ICON[t] || '🔌';
+        const srcBadge = s => s ? `${SOURCE_ICON[s]||'❔'} ${esc(s)}` : '<span style="color:var(--text-dim)">—</span>';
+        const zoneBadge = z => `${ZONE_ICON[z]||'❔'} ${ZONE_LABEL[z]||esc(z||'—')}`;
+        const riskBadge = r => r ? `${RISK_ICON[String(r).toLowerCase()]||'⚪'} ${esc(r)}` : '<span style="color:var(--text-dim)">—</span>';
 
-        async function api(path, opts) {
-            opts = Object.assign({}, opts || {});
-            opts.headers = authHeaders(opts.headers);
+        async function api(path, opts = {}) {
+            const token = localStorage.getItem('sbx_token');
+            const headers = token ? { 'Authorization': 'Bearer ' + token, ...(opts.headers || {}) } : (opts.headers || {});
+            opts = { ...opts, headers };
             try {
-                const res = await fetch(API + path, opts);
-                if (res.status === 401) { toast('🔒 Login required', true); return null; }
-                let data = null;
-                try { data = await res.json(); } catch (e) { data = null; }
-                if (!res.ok) { toast('❌ ' + (data && (data.detail || data.error) ? (data.detail || data.error) : ('HTTP ' + res.status)), true); return null; }
-                return data;
-            } catch (e) {
-                toast('❌ ' + e.message, true);
-                return null;
-            }
-        }
-
-        async function getZones(force) {
-            if (zonesCache && !force) return zonesCache;
-            const z = await api('/zones');
-            zonesCache = z ? (z.zones || []) : zonesCache;
-            return zonesCache;
-        }
-
-        function zoneOptions(selected, zones) {
-            return (zones || []).map(z => '<option value="' + esc(z.id) + '"' + (z.id === selected ? ' selected' : '') + '>' + esc(z.name) + '</option>').join('');
-        }
-
-        // ── Tabs ─────────────────────────────────────────────────────────
-        function switchTab(name) {
-            currentTab = name;
-            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-tab') === name));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
-            loadTab(name);
-        }
-        function loadTab(name) {
-            if (name === 'clients') loadClients();
-            else if (name === 'zones') loadZones();
-            else if (name === 'quarantine') loadQuarantine();
-            else if (name === 'parental') loadParental();
-            else if (name === 'alerts') loadAlerts();
-            else if (name === 'policy') loadPolicy();
-            else if (name === 'history') loadHistory();
-        }
-        document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.getAttribute('data-tab'))));
-
-        // ── Stats ────────────────────────────────────────────────────────
-        async function refreshStats() {
-            const s = await api('/status');
-            if (s) {
-                document.getElementById('sOnline').textContent = s.online != null ? s.online : '–';
-                document.getElementById('subline').textContent =
-                    (s.nftables_ok ? '🟢' : '🔴') + ' nftables · ' + (s.dnsmasq_ok ? '🟢' : '🔴') + ' dnsmasq · updated ' +
-                    (s.timestamp ? new Date(s.timestamp).toLocaleTimeString() : '');
-            }
-            // /summary rolls up client/quarantine/alert counts server-side
-            const sum = await api('/summary');
-            if (sum) {
-                document.getElementById('sTotal').textContent = sum.clients && sum.clients.total != null ? sum.clients.total : '–';
-                document.getElementById('sQuarantine').textContent = sum.clients && sum.clients.quarantine != null ? sum.clients.quarantine : '–';
-                document.getElementById('sAlerts').textContent = sum.alerts && sum.alerts.count != null ? sum.alerts.count : '–';
-            }
-            const z = await getZones(true);
-            document.getElementById('sZones').textContent = z ? z.length : '–';
+                const res = await fetch(API + path, { credentials: 'include', ...opts });
+                return res.json();
+            } catch { return {}; }
         }
 
         async function refresh() {
-            await refreshStats();
-            loadTab(currentTab);
+            const status = await api('/status');
+            document.getElementById('total').textContent = status.total_clients || 0;
+            document.getElementById('online').textContent = status.online || 0;
+            document.getElementById('quarantine').textContent = status.quarantined || 0;
+
+            const clients = await api('/clients');
+            const tbody = document.getElementById('clientsTable');
+            const onlineOnly = (document.getElementById('onlineOnly') || {}).checked !== false;
+            let list = clients.clients || [];
+            if (onlineOnly) list = list.filter(c => c.online);
+            if (list.length > 0) {
+                // Sort: online/alive devices first, then most-recently-detected
+                // (last_seen desc) at the top of each group.
+                const rows = list.slice().sort((a, b) => {
+                    const ao = a.online ? 1 : 0, bo = b.online ? 1 : 0;
+                    if (ao !== bo) return bo - ao;                 // alive first
+                    return (b.last_seen || 0) - (a.last_seen || 0); // newest detected first
+                });
+                tbody.innerHTML = rows.map(c => {
+                    const statusEmoji = c.status === 'online' ? '🟢' : c.status === 'offline' ? '🔴' : c.status === 'quarantine' ? '🟠' : '⚪';
+                    const statusLabel = c.status === 'online' ? 'Online' : c.status === 'offline' ? 'Offline' : c.status === 'quarantine' ? 'Quarantine' : c.status;
+                    const vendor = c.oui_vendor ? `<br><span style="color:var(--text-dim);font-size:.85em">${esc(c.oui_vendor)}</span>` : '';
+                    return `<tr>
+                        <td style="font-family:monospace">${esc(c.mac)}</td>
+                        <td style="font-family:monospace">${esc(c.ip)}</td>
+                        <td>${typeIcon(c.device_type)} ${esc(c.hostname || '-')}${vendor}</td>
+                        <td><span class="badge">${zoneBadge(c.zone)}</span></td>
+                        <td>${riskBadge(c.risk_level)}</td>
+                        <td>${srcBadge(c.source)}</td>
+                        <td><span class="badge ${c.status}">${statusEmoji} ${statusLabel}</span></td>
+                        <td>
+                            ${c.status === 'quarantine'
+                                ? '<button class="btn" onclick="unquarantine(\'' + c.mac + '\')">🔓 Release</button>'
+                                : '<button class="btn danger" onclick="quarantine(\'' + c.mac + '\')">🔒 Quarantine</button>'}
+                        </td>
+                    </tr>`;
+                }).join('');
+            } else {
+                const msg = onlineOnly
+                    ? 'No online devices — untick “Online only” to show all ' + ((clients.clients || []).length) + ' known devices'
+                    : 'No clients connected';
+                tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-dim)">' + msg + '</td></tr>';
+            }
+
+            const quarantine = await api('/quarantine');
+            const qbody = document.getElementById('quarantineTable');
+            if (quarantine.clients && quarantine.clients.length > 0) {
+                qbody.innerHTML = quarantine.clients.map(c => `
+                    <tr>
+                        <td style="font-family:monospace">${c.mac}</td>
+                        <td>${c.reason || '-'}</td>
+                        <td>${c.since || '-'}</td>
+                        <td><button class="btn" onclick="unquarantine('${c.mac}')">Release</button></td>
+                    </tr>
+                `).join('');
+            } else {
+                qbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim)">No quarantined clients</td></tr>';
+            }
         }
 
-        // ── Clients tab ──────────────────────────────────────────────────
-        async function loadClients() {
-            const el = document.getElementById('clientsList');
-            const d = await api('/clients');
-            if (!d) return;
-            clientsData = d.clients || [];
-            const zones = await getZones();
-            if (!clientsData.length) { el.innerHTML = '<div class="empty-note">No clients discovered.</div>'; return; }
-            el.innerHTML = clientsData.map(c => {
-                const mac = c.mac || '';
-                const zone = c.zone || 'quarantine';
-                const online = !!c.online;
-                const stateClass = zone === 'quarantine' ? 'quarantine' : (online ? 'online' : 'offline');
-                const dot = zone === 'quarantine' ? '⛔' : (online ? '🟢' : '⚪');
-                const pillColor = ZONE_COLOR[zone] || 'blue';
-                return '<div class="row ' + stateClass + '">' +
-                    '<span class="dot">' + dot + '</span>' +
-                    '<span class="who" data-act="detail" data-mac="' + esc(mac) + '">' +
-                        '<span class="mac">' + esc(mac) + '</span>' +
-                        '<span class="meta">' + esc(c.ip || '—') + ' · ' + esc(c.custom_hostname || c.hostname || '—') + '</span>' +
-                    '</span>' +
-                    '<span class="zonepill ' + pillColor + '">' + esc(c.zone_name || zone) + '</span>' +
-                    '<select class="zsel" data-mac="' + esc(mac) + '">' + zoneOptions(zone, zones) + '</select>' +
-                    '<span class="row-actions">' +
-                        '<button class="btn sm" data-act="movezone" data-mac="' + esc(mac) + '" title="Move to selected zone">→</button>' +
-                        '<button class="btn sm good" data-act="approve" data-mac="' + esc(mac) + '" title="Approve into LAN">✅</button>' +
-                        '<button class="btn sm" data-act="quarantine" data-mac="' + esc(mac) + '" title="Quarantine">⛔</button>' +
-                        '<button class="btn sm" data-act="removezone" data-mac="' + esc(mac) + '" title="Strip all zone memberships (force quarantine)">🧹</button>' +
-                        '<button class="btn sm danger" data-act="ban" data-mac="' + esc(mac) + '" title="Ban">🚫</button>' +
-                        '<button class="btn sm" data-act="unban" data-mac="' + esc(mac) + '" title="Unban">🔓</button>' +
-                        '<button class="btn sm" data-act="edit" data-mac="' + esc(mac) + '" title="Edit">✎</button>' +
-                    '</span>' +
-                '</div>';
-            }).join('');
+        async function quarantine(mac) {
+            if (!confirm(`Quarantine client ${mac}?`)) return;
+            await api('/quarantine', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
+            refresh();
         }
 
-        document.getElementById('clientsList').addEventListener('click', e => {
-            const t = e.target.closest('[data-act]');
-            if (!t) return;
-            const mac = t.getAttribute('data-mac');
-            const act = t.getAttribute('data-act');
-            if (act === 'detail') showClientDetail(mac);
-            else if (act === 'movezone') moveZone(mac, t);
-            else if (act === 'approve') approveClient(mac);
-            else if (act === 'quarantine') quarantineClient(mac);
-            else if (act === 'removezone') removeFromZone(mac);
-            else if (act === 'ban') banClient(mac);
-            else if (act === 'unban') unbanClient(mac);
-            else if (act === 'edit') showEditClient(mac);
-        });
-
-        async function moveZone(mac, btn) {
-            const row = btn.closest('.row');
-            const sel = row ? row.querySelector('.zsel') : null;
-            const zone = sel ? sel.value : '';
-            if (!zone) return;
-            const r = await api('/add_to_zone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mac: mac, zone: zone }) });
-            if (r) { toast('✅ ' + mac + ' → ' + zone); refresh(); }
+        async function unquarantine(mac) {
+            await api('/unquarantine', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mac}) });
+            refresh();
         }
-
-        async function approveClient(mac) {
-            if (!confirm('Approve client ' + mac + ' into LAN zone?')) return;
-            const r = await api('/approve_client?mac=' + encodeURIComponent(mac) + '&zone=lan', { method: 'POST' });
-            if (r) { toast('✅ Approved ' + mac); refresh(); }
-        }
-
-        async function quarantineClient(mac) {
-            if (!confirm('Quarantine client ' + mac + '?')) return;
-            const r = await api('/quarantine_client?mac=' + encodeURIComponent(mac), { method: 'POST' });
-            if (r) { toast('⛔ Quarantined ' + mac); refresh(); }
-        }
-
-        async function removeFromZone(mac) {
-            if (!confirm('Strip all zone memberships for ' + mac + ' and force into quarantine?')) return;
-            const r = await api('/remove_from_zone?mac=' + encodeURIComponent(mac), { method: 'POST' });
-            if (r) { toast('🧹 Reset ' + mac + ' → quarantine'); refresh(); }
-        }
-
-        async function banClient(mac) {
-            if (!confirm('🚫 Ban client ' + mac + '? This blocks all traffic from this MAC.')) return;
-            const r = await api('/ban_client?mac=' + encodeURIComponent(mac), { method: 'POST' });
-            if (r) { toast('🚫 Banned ' + mac); refresh(); }
-        }
-
-        async function unbanClient(mac) {
-            const r = await api('/unban_client?mac=' + encodeURIComponent(mac), { method: 'POST' });
-            if (r) { toast('🔓 Unbanned ' + mac); refresh(); }
-        }
-
-        function showEditClient(mac) {
-            const c = clientsData.find(x => x.mac === mac) || {};
-            const mc = document.getElementById('modalContent');
-            mc.innerHTML =
-                '<h3>✎ Edit ' + esc(mac) + '</h3>' +
-                '<div class="form-group"><label>Hostname</label><input type="text" id="editHostname" value="' + esc(c.custom_hostname || '') + '" placeholder="' + esc(c.hostname || '') + '"></div>' +
-                '<div class="form-group"><label>Notes</label><input type="text" id="editNotes" value="' + esc(c.notes || '') + '"></div>' +
-                '<div class="btn-group" style="margin-top:1rem"><button class="btn primary" id="editSaveBtn">💾 Save</button><button class="btn" id="editCancelBtn">Cancel</button></div>';
-            mc.querySelector('#editSaveBtn').addEventListener('click', () => saveClientEdit(mac));
-            mc.querySelector('#editCancelBtn').addEventListener('click', hideModal);
-            document.getElementById('modal').classList.add('show');
-        }
-
-        async function saveClientEdit(mac) {
-            const hostname = document.getElementById('editHostname').value.trim();
-            const notes = document.getElementById('editNotes').value.trim();
-            const r = await api('/update_client', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mac: mac, hostname: hostname, zone: '', notes: notes }) });
-            if (r) { toast('✅ Updated ' + mac); hideModal(); refresh(); }
-        }
-
-        async function showClientDetail(mac) {
-            const mc = document.getElementById('modalContent');
-            mc.innerHTML = '<h3>👤 ' + esc(mac) + '</h3><div class="empty-note">Loading…</div>';
-            document.getElementById('modal').classList.add('show');
-            const d = await api('/client/' + encodeURIComponent(mac));
-            if (!d) { mc.innerHTML = '<h3>👤 ' + esc(mac) + '</h3><div class="empty-note">Client not found.</div>'; return; }
-            const events = (d.recent_events || []).map(ev =>
-                '<div class="row"><span class="who"><span class="mac">' + esc(fmtTime(ev.timestamp)) + '</span><span class="meta">' + esc(ev.event || '') + '</span></span></div>'
-            ).join('') || '<div class="empty-note">No recent events.</div>';
-            mc.innerHTML =
-                '<h3>👤 ' + esc(d.custom_hostname || d.hostname || mac) + '</h3>' +
-                '<div class="kv">' +
-                    '<div class="k">MAC</div><div class="v">' + esc(d.mac) + '</div>' +
-                    '<div class="k">IP</div><div class="v">' + esc(d.ip || '—') + '</div>' +
-                    '<div class="k">Zone</div><div class="v">' + esc(d.zone_name || d.zone || '—') + '</div>' +
-                    '<div class="k">Notes</div><div class="v">' + esc(d.notes || '—') + '</div>' +
-                    '<div class="k">First seen</div><div class="v">' + esc(fmtTime(d.first_seen)) + '</div>' +
-                '</div>' +
-                '<h4>Recent events</h4>' +
-                '<div class="row-list">' + events + '</div>' +
-                '<div class="btn-group" style="margin-top:1rem"><button class="btn" id="detailCloseBtn">Close</button></div>';
-            mc.querySelector('#detailCloseBtn').addEventListener('click', hideModal);
-        }
-
-        // ── Zones tab ────────────────────────────────────────────────────
-        async function loadZones() {
-            const el = document.getElementById('zonesList');
-            const zones = await getZones(true);
-            if (!zones) return;
-            if (!zones.length) { el.innerHTML = '<div class="empty-note">No zones configured.</div>'; return; }
-            el.innerHTML = zones.map(zone => {
-                const members = (zone.members || []).map(m =>
-                    '<div class="row">' +
-                        '<span class="dot">👤</span>' +
-                        '<span class="who"><span class="mac">' + esc(m) + '</span></span>' +
-                        '<select class="zsel" data-mac="' + esc(m) + '">' + zoneOptions(zone.id, zones) + '</select>' +
-                        '<span class="row-actions"><button class="btn sm" data-act="movemember" data-mac="' + esc(m) + '">→</button></span>' +
-                    '</div>'
-                ).join('') || '<div class="empty-note">No members in this zone.</div>';
-                return '<div class="card zone-card">' +
-                    '<h3><span style="color:var(--' + esc(ZONE_COLOR[zone.id] || 'blue') + ')">' + esc(zone.name) + '</span> <span class="zone-count">(' + zone.count + ')</span></h3>' +
-                    '<div class="row-list">' + members + '</div>' +
-                '</div>';
-            }).join('');
-        }
-
-        document.getElementById('zonesList').addEventListener('click', e => {
-            const t = e.target.closest('[data-act="movemember"]');
-            if (!t) return;
-            const mac = t.getAttribute('data-mac');
-            const row = t.closest('.row');
-            const sel = row ? row.querySelector('.zsel') : null;
-            const zone = sel ? sel.value : '';
-            if (!zone) return;
-            moveMemberToZone(mac, zone);
-        });
-
-        async function moveMemberToZone(mac, zone) {
-            const r = await api('/add_to_zone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mac: mac, zone: zone }) });
-            if (r) { toast('✅ ' + mac + ' → ' + zone); refreshStats(); loadZones(); }
-        }
-
-        // ── Quarantine tab ───────────────────────────────────────────────
-        async function loadQuarantine() {
-            const el = document.getElementById('quarantineList');
-            const d = await api('/quarantine');
-            if (!d) return;
-            const list = d.clients || [];
-            if (!list.length) { el.innerHTML = '<div class="empty-note">No quarantined clients.</div>'; return; }
-            el.innerHTML = list.map(c =>
-                '<div class="row quarantine">' +
-                    '<span class="dot">⛔</span>' +
-                    '<span class="who"><span class="mac">' + esc(c.mac) + '</span>' +
-                        '<span class="meta">' + esc(c.ip || '—') + ' · ' + esc(c.hostname || '—') + ' · ' + esc(c.reason || '') + ' · since ' + esc(fmtTime(c.since)) + '</span></span>' +
-                    '<span class="row-actions"><button class="btn sm good" data-act="release" data-mac="' + esc(c.mac) + '">🔓 Release</button></span>' +
-                '</div>'
-            ).join('');
-        }
-
-        document.getElementById('quarantineList').addEventListener('click', e => {
-            const t = e.target.closest('[data-act="release"]');
-            if (!t) return;
-            releaseClient(t.getAttribute('data-mac'));
-        });
-
-        async function releaseClient(mac) {
-            const r = await api('/unquarantine', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mac: mac }) });
-            if (r) { toast('🔓 Released ' + mac); refresh(); }
-        }
-
-        // ── Parental tab ─────────────────────────────────────────────────
-        async function loadParental() {
-            const el = document.getElementById('parentalList');
-            const d = await api('/parental_rules');
-            if (!d) return;
-            const rules = d.rules || [];
-            el.innerHTML = rules.length ? rules.map(r =>
-                '<div class="row">' +
-                    '<span class="dot">' + (r.enabled ? '🟢' : '⚪') + '</span>' +
-                    '<span class="who"><span class="mac">' + esc(r.mac) + '</span>' +
-                        '<span class="meta">👶 until ' + esc(r.block_until || '—') + ' · ' + esc((r.blocked_categories || []).join(', ') || 'no categories') + '</span></span>' +
-                    '<span class="row-actions"><button class="btn sm danger" data-act="delrule" data-mac="' + esc(r.mac) + '">🗑️</button></span>' +
-                '</div>'
-            ).join('') : '<div class="empty-note">No parental rules configured.</div>';
-        }
-
-        document.getElementById('parentalList').addEventListener('click', e => {
-            const t = e.target.closest('[data-act="delrule"]');
-            if (!t) return;
-            deleteParentalRule(t.getAttribute('data-mac'));
-        });
-
-        async function saveParentalRule() {
-            const mac = document.getElementById('ruleMac').value.trim();
-            if (!/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(mac)) { toast('Enter a valid MAC address (aa:bb:cc:dd:ee:ff)', true); return; }
-            const block_until = document.getElementById('ruleBlockUntil').value || '22:00';
-            const blocked_categories = document.getElementById('ruleCategories').value.split(',').map(s => s.trim()).filter(Boolean);
-            const enabled = document.getElementById('ruleEnabled').checked;
-            const r = await api('/parental_rule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mac: mac, block_until: block_until, blocked_categories: blocked_categories, enabled: enabled }) });
-            if (r) { toast('✅ Rule saved for ' + mac); document.getElementById('ruleMac').value = ''; document.getElementById('ruleCategories').value = ''; loadParental(); }
-        }
-
-        async function deleteParentalRule(mac) {
-            if (!confirm('Delete parental rule for ' + mac + '?')) return;
-            const r = await api('/parental_rule/' + encodeURIComponent(mac), { method: 'DELETE' });
-            if (r) { toast('🗑️ Rule deleted'); loadParental(); }
-        }
-
-        // ── Alerts tab ───────────────────────────────────────────────────
-        async function loadAlerts() {
-            const el = document.getElementById('alertsList');
-            const d = await api('/alerts');
-            if (!d) return;
-            const list = d.alerts || [];
-            if (!list.length) { el.innerHTML = '<div class="empty-note">No active alerts.</div>'; return; }
-            el.innerHTML = list.map(a =>
-                '<div class="row sev-' + esc(a.severity || 'warning') + '">' +
-                    '<span class="dot">' + (a.severity === 'critical' ? '🔴' : '🟠') + '</span>' +
-                    '<span class="who"><span class="mac">' + esc(a.hostname || a.mac || '—') + '</span>' +
-                        '<span class="meta">' + esc(a.message || a.type || '') + '</span></span>' +
-                '</div>'
-            ).join('');
-        }
-
-        // ── Policy tab ───────────────────────────────────────────────────
-        async function loadPolicy() {
-            const d = await api('/policy');
-            if (!d) return;
-            const zones = await getZones();
-            document.getElementById('policyDefaultZone').innerHTML = zoneOptions(d.default_zone, zones);
-            document.getElementById('policyAutoApprove').checked = !!d.auto_approve;
-            document.getElementById('policyQuarantineTimeout').value = d.quarantine_timeout || 0;
-        }
-
-        async function savePolicy() {
-            const default_zone = document.getElementById('policyDefaultZone').value;
-            const auto_approve = document.getElementById('policyAutoApprove').checked;
-            const quarantine_timeout = parseInt(document.getElementById('policyQuarantineTimeout').value, 10) || 0;
-            const r = await api('/policy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ default_zone: default_zone, auto_approve: auto_approve, quarantine_timeout: quarantine_timeout }) });
-            if (r) toast('✅ Policy saved');
-        }
-
-        // ── History tab ──────────────────────────────────────────────────
-        async function loadHistory() {
-            const mac = (document.getElementById('histMacFilter').value || '').trim();
-            const q = mac ? '?limit=100&mac=' + encodeURIComponent(mac) : '?limit=100';
-            const d = await api('/history' + q);
-            const el = document.getElementById('historyList');
-            if (!d) return;
-            const events = d.events || [];
-            el.innerHTML = events.length ? events.slice().reverse().map(ev =>
-                '<div class="row"><span class="who"><span class="mac">' + esc(fmtTime(ev.timestamp)) + '</span>' +
-                    '<span class="meta">' + esc(ev.event || '') + ' — ' + esc(JSON.stringify(ev.details || {})) + '</span></span></div>'
-            ).join('') : '<div class="empty-note">No events recorded.</div>';
-        }
-
-        async function loadLogs() {
-            const el = document.getElementById('logsBlock');
-            el.textContent = 'Loading…';
-            const d = await api('/logs?lines=100');
-            if (!d) return;
-            el.textContent = (d.lines || []).join('\n') || '(no log lines)';
-        }
-
-        // ── Modal ────────────────────────────────────────────────────────
-        function hideModal() { document.getElementById('modal').classList.remove('show'); }
-        document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') hideModal(); });
 
         refresh();
-        setInterval(refresh, 20000);
+        setInterval(refresh, 15000);
     </script>
+    <script src="/shared/crt-engine.js"></script>
 </body>
 </html>
