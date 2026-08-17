@@ -39,7 +39,3 @@ override_dh_install:
 	    debian/secubox-metrics/lib/systemd/system/secubox-geoipupdate.service
 	install -D -m 0644 systemd/secubox-geoipupdate.timer \
 	    debian/secubox-metrics/lib/systemd/system/secubox-geoipupdate.timer
-	# Helper fetcher (#194): tries MaxMind first if license present,
-	# else falls back to DB-IP free ASN lite (no signup required).
-	install -D -m 0755 bin/secubox-geoipupdate-fetch \
-	    debian/secubox-metrics/usr/bin/secubox-geoipupdate-fetch

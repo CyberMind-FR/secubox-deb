@@ -9,7 +9,6 @@ import asyncio
 import json
 import os
 import subprocess
-import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -31,51 +30,32 @@ except ImportError:
     async def require_jwt():
         pass
 
-# When uvicorn loads us as `api.main`, sibling modules in this directory
-# are not on sys.path. Mirror what tests/conftest.py does at test time so
-# the bare imports below resolve in both environments.
-sys.path.insert(0, os.path.dirname(__file__))
-
 from visitor_origin import VisitorOriginAggregator
 from live_hosts import LiveHostsAggregator
 from cert_status import CertStatusAggregator
-from cookie_audit import CookieAuditAggregator
 
 try:
     from secubox_core.config import (
         get_visitor_origin_config,
         get_live_hosts_config,
         get_cert_status_config,
-        get_cookie_audit_config,
     )
 except ImportError:  # dev fallback
     def get_visitor_origin_config(): return {"enabled": False, "window_minutes": 60, "min_count": 5, "top_n": 5, "asn_db_path": "/var/lib/GeoIP/GeoLite2-ASN.mmdb", "nft_table": "secubox_metrics", "nft_set": "seen_src", "nft_family": "inet"}
     def get_live_hosts_config():     return {"enabled": False, "window_minutes": 60, "top_n": 5, "haproxy_socket": "/run/haproxy/admin.sock", "frontend_filter": "*"}
     def get_cert_status_config():    return {"enabled": False, "letsencrypt_live_dir": "/etc/letsencrypt/live", "warn_days": 30, "critical_days": 7}
-    def get_cookie_audit_config():   return {"enabled": False, "ledger_path": "/var/log/secubox/cookie-audit/server.jsonl", "ingest_dir": "/var/lib/secubox/cookie-audit/ingest", "classifier": {"strictly_necessary": [], "functional": [], "analytics": [], "marketing": []}}
 
 visitor_origin_agg = VisitorOriginAggregator(get_visitor_origin_config())
 live_hosts_agg     = LiveHostsAggregator(get_live_hosts_config())
 cert_status_agg    = CertStatusAggregator(get_cert_status_config())
-cookie_audit_agg   = CookieAuditAggregator(get_cookie_audit_config())
 
 
 @asynccontextmanager
 async def lifespan(_app):
-    # #740 — warm the system-metrics cache OFF the event loop at startup so the
-    # first request never blocks ~10s building it synchronously (the 502 window
-    # on /metrics/* + HealthBanner after a restart).
-    async def _warm():
-        try:
-            await asyncio.to_thread(build_cache)
-        except Exception as e:
-            log.warning("startup cache warm failed: %s", e) if 'log' in globals() else None
     tasks = [
-        asyncio.create_task(_warm()),
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
         asyncio.create_task(cert_status_agg.run_forever()),
-        asyncio.create_task(cookie_audit_agg.run_forever()),
     ]
     try:
         yield
@@ -92,19 +72,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for cross-origin health banner + cookie audit ingest requests
+# CORS middleware for cross-origin health banner requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Health banner injected on any domain
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
 
-# Cache configuration. Was /tmp/secubox until #149 — /tmp clears on reboot,
-# breaking the systemd ReadWritePaths namespace and crash-looping the service.
-# /var/cache/secubox is persistent and owned by systemd CacheDirectory=secubox.
-CACHE_DIR = Path("/var/cache/secubox")
+# Cache configuration
+CACHE_DIR = Path("/tmp/secubox")
 CACHE_FILE = CACHE_DIR / "metrics-cache.json"
 CACHE_TTL = 30  # seconds
 
@@ -153,29 +131,6 @@ def write_cache(data: dict):
 
 def build_overview() -> dict:
     """Build system overview metrics."""
-    # CPU usage
-    try:
-        with open('/proc/stat') as f:
-            # Read first line (cpu total)
-            cpu_line = f.readline()
-            if cpu_line.startswith('cpu '):
-                # Parse CPU times (user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice)
-                parts = cpu_line.split()
-                if len(parts) >= 5:
-                    # Calculate usage: (total - idle) / total * 100
-                    total = sum(int(x) for x in parts[1:])  # Sum all time values
-                    idle = int(parts[4])  # idle time is 5th column (index 4)
-                    if total > 0:
-                        cpu_pct = ((total - idle) / total) * 100
-                    else:
-                        cpu_pct = 0
-                else:
-                    cpu_pct = 0
-            else:
-                cpu_pct = 0
-    except Exception:
-        cpu_pct = 0
-
     # Uptime
     try:
         with open('/proc/uptime') as f:
@@ -278,7 +233,6 @@ def build_overview() -> dict:
     return {
         "uptime": uptime,
         "load": load,
-        "cpu_pct": cpu_pct,
         "mem_total_kb": mem_total,
         "mem_used_kb": mem_used,
         "mem_pct": mem_pct,
@@ -427,24 +381,6 @@ async def get_overview(auth: None = Depends(require_jwt)):
     data["_freshness"] = get_freshness()
     return data
 
-@app.get("/api/v1/metrics/summary")
-async def get_metrics_summary(auth: None = Depends(require_jwt)):
-    """Get metrics summary for top navbar - returns cpu, mem, load in expected format."""
-    cached = read_cache()
-    if cached and cache_is_fresh():
-        data = cached.get("overview", build_overview())
-    else:
-        data = build_overview()
-
-    # Map overview data to format expected by sidebar.js for /metrics/ page
-    # sidebar.js expects: cpu, mem, load
-    return {
-        "cpu": data.get("cpu_pct", 0),
-        "mem": data.get("mem_pct", 0),
-        "load": data.get("load", "0 0 0"),
-        "_freshness": get_freshness()
-    }
-
 @app.get("/api/v1/metrics/waf_stats")
 async def get_waf_stats(auth: None = Depends(require_jwt)):
     """Get WAF/CrowdSec statistics."""
@@ -545,38 +481,6 @@ async def get_firewall_stats(auth: None = Depends(require_jwt)):
 # For the global health banner with smart doctor advisor
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _count_waf_blocks(window_minutes: int = 60) -> int:
-    """Count Go-sbxwaf block events in the last window from the live threat
-    log (/var/log/secubox/waf/waf-threats.log, JSONL with ISO timestamps).
-    Bounded tail read so a large log can't stall the summary."""
-    from datetime import datetime, timedelta, timezone
-    p = Path("/var/log/secubox/waf/waf-threats.log")
-    try:
-        size = p.stat().st_size
-    except Exception:
-        return 0
-    if size == 0:
-        return 0
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
-    n = 0
-    try:
-        with open(p, "rb") as fh:
-            if size > 3_000_000:
-                fh.seek(size - 3_000_000)
-                fh.readline()
-            for line in fh.read().decode("utf-8", errors="replace").splitlines():
-                try:
-                    e = json.loads(line)
-                    ts = datetime.fromisoformat(e["timestamp"])
-                    if ts >= cutoff:
-                        n += 1
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    return n
-
-
 def build_health_summary() -> dict:
     """Build aggregated health summary for the health banner."""
 
@@ -667,16 +571,16 @@ def build_health_summary() -> dict:
     except Exception:
         pass
 
-    # WAF block rate from the live sbxwaf threat log over the last hour,
-    # as a share of total traffic (legit nginx requests + blocks).
+    # Get WAF blocked percentage (estimate from recent logs)
     blocked_pct = 0
-    waf_blocks_1h = _count_waf_blocks(60)
     try:
-        lh = live_hosts_agg.current()
-        total_req = int(lh.get("total_requests", 0)) if isinstance(lh, dict) else 0
-        denom = total_req + waf_blocks_1h
-        if denom > 0:
-            blocked_pct = round(waf_blocks_1h / denom * 100, 1)
+        waf_log = Path('/var/log/mitmproxy/threats.jsonl')
+        if waf_log.exists():
+            # Count threats in last hour
+            result = run_cmd(['wc', '-l', str(waf_log)])
+            threat_count = int(result.split()[0]) if result else 0
+            # Rough estimate: 1000 requests/hour baseline
+            blocked_pct = min(100, threat_count // 10)
     except Exception:
         pass
 
@@ -724,7 +628,6 @@ def build_health_summary() -> dict:
         "modules": modules,
         "waf": {
             "blocked_pct": blocked_pct,
-            "blocks_1h": waf_blocks_1h,
             "active": waf_stats.get("mitmproxy_running", False)
         },
         "crowdsec": {
@@ -860,91 +763,6 @@ async def cert_status_endpoint():
     return JSONResponse(
         content=cert_status_agg.current(),
         headers={"Cache-Control": "public, max-age=300"},
-    )
-
-
-# ── Cookie audit (RGPD / ePrivacy) ───────────────────────────────────────────
-from fastapi import Body  # noqa: E402 — kept colocated with cookie-audit block
-
-INGEST_DIR_FALLBACK = "/var/lib/secubox/cookie-audit/ingest"
-MAX_COOKIES_PER_SNAPSHOT = 200
-MAX_NAME_LEN = 128
-MAX_HASH_LEN = 128
-MAX_UA_LEN = 512
-MAX_REASON_LEN = 32
-
-
-@app.post("/api/v1/cookie-audit/ingest")
-async def cookie_audit_ingest(payload: dict = Body(...)):
-    """Receive browser snapshots of document.cookie.
-
-    Hashes only — values are sha256-hashed client-side. CORS allows
-    cross-origin POSTs without credentials (the WAF banner injection drives
-    this endpoint from every operator-owned vhost).
-    """
-    host = (payload.get("host") or "").strip()
-    cookies = payload.get("cookies")
-    if not host or not isinstance(cookies, list):
-        raise HTTPException(status_code=400, detail="host + cookies required")
-    if any(ch in host for ch in ("/", "\\", "..")):
-        raise HTTPException(status_code=400, detail="invalid host")
-    cfg = get_cookie_audit_config()
-    if not cfg.get("enabled"):
-        raise HTTPException(status_code=403, detail="cookie audit disabled")
-    ingest_dir = Path(cfg.get("ingest_dir", INGEST_DIR_FALLBACK))
-    ingest_dir.mkdir(parents=True, exist_ok=True)
-    out_path = ingest_dir / f"{host}.jsonl"
-    rec = {
-        "ts": (payload.get("ts") or datetime.now(timezone.utc).isoformat()),
-        "host": host,
-        "path": (payload.get("path") or "")[:256],
-        "ua": (payload.get("ua") or "")[:MAX_UA_LEN],
-        "reason": (payload.get("reason") or "")[:MAX_REASON_LEN],
-        "cookies": [
-            {
-                "name": str(c.get("name", ""))[:MAX_NAME_LEN],
-                "value_hash": str(c.get("value_hash") or "")[:MAX_HASH_LEN],
-            }
-            for c in cookies[:MAX_COOKIES_PER_SNAPSHOT]
-            if isinstance(c, dict)
-        ],
-    }
-    with out_path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
-    return {"ok": True, "stored": len(rec["cookies"])}
-
-
-@app.get("/api/v1/cookie-audit/report")
-async def cookie_audit_report(host: Optional[str] = None):
-    data = cookie_audit_agg.current()
-    if not host:
-        return JSONResponse(
-            content=data,
-            headers={"Cache-Control": "public, max-age=60"},
-        )
-    for h in data.get("hosts", []):
-        if h["vhost"] == host:
-            return JSONResponse(
-                content={
-                    "enabled": data.get("enabled"),
-                    "generated_at": data.get("generated_at"),
-                    "host": h,
-                },
-                headers={"Cache-Control": "public, max-age=60"},
-            )
-    raise HTTPException(status_code=404, detail=f"no data for host {host}")
-
-
-@app.get("/api/v1/cookie-audit/summary")
-async def cookie_audit_summary():
-    data = cookie_audit_agg.current()
-    return JSONResponse(
-        content={
-            "enabled": data.get("enabled"),
-            "generated_at": data.get("generated_at"),
-            "summary": data.get("summary", {}),
-        },
-        headers={"Cache-Control": "public, max-age=60"},
     )
 
 

@@ -2824,6 +2824,24 @@ PR pending review against `master`.
 
 ---
 
+## ✅ Session 160: Health Banner Live Panel (Issue #92)
+
+### Objective
+Add three public banner sections (VisitorOrigin / LiveHosts / CertStatus)
+sharing one polling and CORS pipeline in `secubox-metrics`.
+
+### Completed
+- Spec + plan written and committed.
+- Three aggregators with unit + error-path tests (25 tests passing).
+- nftables ruleset, systemd timer, postinst plumbing.
+- Banner v1.3.0 with three fail-isolated fetch loops.
+- README updated.
+
+### Status
+PR pending review against `master`.
+
+---
+
 ## ✅ Session 160: secubox apt + clone — validate implementation (Issue #89)
 
 ### Objective

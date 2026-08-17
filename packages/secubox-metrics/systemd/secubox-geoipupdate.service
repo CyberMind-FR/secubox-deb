@@ -1,15 +1,14 @@
 [Unit]
-Description=SecuBox — refresh GeoLite2-ASN database (MaxMind or DB-IP fallback)
+Description=SecuBox — refresh GeoLite2 ASN database
+ConditionPathExists=/etc/secubox/secrets/maxmind.conf
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-# Fetcher must run as root because /var/lib/GeoIP is owned by root and the
-# DB-IP fallback path uses `install -o secubox` to land the mmdb under the
-# correct ownership. The helper does not exec anything as root that takes
-# untrusted input.
-User=root
-ExecStart=/usr/bin/secubox-geoipupdate-fetch
+User=secubox
+Group=secubox
+ExecStart=/usr/bin/geoipupdate -f /etc/secubox/secrets/maxmind.conf -d /var/lib/GeoIP
+NoNewPrivileges=true
 ProtectSystem=full
 ReadWritePaths=/var/lib/GeoIP

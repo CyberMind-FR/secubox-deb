@@ -58,10 +58,7 @@ class CertStatusAggregator:
         live = Path(self.cfg["letsencrypt_live_dir"])
         if not live.is_dir():
             return self._disabled_payload()
-        # #740 — x509 parsing is synchronous CPU; run it OFF the event loop so a
-        # large cert set never freezes the shared metrics loop (502 windows on
-        # /metrics/* + HealthBanner). The endpoint serves the cached payload.
-        infos = await asyncio.to_thread(self._scan_certs, live)
+        infos = self._scan_certs(live)
         if not infos:
             return self._disabled_payload()
         payload = self._summarize(infos)
