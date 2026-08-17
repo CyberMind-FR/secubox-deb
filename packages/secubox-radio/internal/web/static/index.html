@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecuBox Radio</title>
+<link rel="stylesheet" href="/static/radio.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="tete">
+    <div>
+      <h1>🎵 SecuBox Radio</h1>
+      <p class="sst">Écoutez la radio en direct — tout le monde au même endroit du morceau.</p>
+    </div>
+    <span class="direct"><span class="pt"></span> En direct</span>
+  </header>
+
+  <!-- ═══ LECTURE EN COURS ═══════════════════════════════════════════════ -->
+  <section class="carte lecteur">
+    <div class="bloc">
+      <!-- LE CLIP JOUE DANS LE CADRE DE LA VIGNETTE, a sa taille et a son
+           format. Une zone video separee, large, deplacait le regard hors du
+           bloc et cassait la rangee — alors que la vignette EST deja le bon
+           emplacement : elle occupe la place du visuel de la piste.
+
+           Deux enfants et non un : `poseVignette` remplace le contenu de
+           #pochette quand l'image arrive. La video, posee dans ce meme noeud,
+           serait effacee au premier changement de piste. -->
+      <div class="cadre">
+        <div class="pochette" id="pochette"><span id="glyphe">💿</span></div>
+        <video id="ecran" playsinline preload="none"></video>
+      </div>
+
+      <div class="infos">
+        <div class="etiq">En lecture</div>
+        <h2 class="titre" id="titre">…</h2>
+        <div class="par" id="meta"></div>
+
+        <div class="barre"><i id="jauge"></i></div>
+        <div class="tps">
+          <span id="ecoule">0:00</span><span class="sp"></span><span id="duree">--:--</span>
+        </div>
+
+        <div class="cmd">
+          <button class="rond" id="recaler" title="Rejoindre le direct">⟳</button>
+          <button class="rond gros" id="jouer" title="Écouter">▶</button>
+          <button class="rond aime" id="aime" title="J'aime">♥</button>
+          <span class="sp"></span>
+          <span class="derive" id="derive"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="avert" id="avert" hidden>
+      Le navigateur a bloqué la lecture automatique. Touchez <b>▶</b> pour rejoindre le direct.
+    </div>
+  </section>
+
+  <!-- ═══ À VENIR ════════════════════════════════════════════════════════ -->
+  <section class="carte">
+    <h3 class="entete">🕓 À venir dans la playlist</h3>
+    <ol class="file" id="file"></ol>
+    <p class="pied">La playlist se répète — le tirage favorise les nouveautés et
+      ce que vous aimez, sans laisser un titre monopoliser l'antenne.</p>
+  </section>
+
+  <!-- ═══ L'ANTENNE ══════════════════════════════════════════════════════ -->
+  <section class="carte">
+    <h3 class="entete">💬 L'antenne</h3>
+    <div id="chat"></div>
+    <div class="rangee">
+      <input id="dire" placeholder="Dire quelque chose…" maxlength="500" autocomplete="off">
+    </div>
+  </section>
+
+  <!-- ═══ PROPOSER ═══════════════════════════════════════════════════════ -->
+  <section class="carte">
+    <h3 class="entete">➕ Proposer un titre</h3>
+    <form class="rangee" id="proposer">
+      <input id="source" placeholder="https://www.youtube.com/watch?v=… ou une playlist"
+             autocomplete="off" spellcheck="false">
+      <button class="btn primaire" type="submit">Proposer</button>
+    </form>
+    <p class="pied" id="retour">Votre proposition passe par le sysop. Les autres
+      membres peuvent la soutenir d'un ♥ — les plus soutenues remontent.</p>
+  </section>
+
+</div>
+<script src="/static/radio.js"></script>
+</body>
+</html>

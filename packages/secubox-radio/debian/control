@@ -1,0 +1,21 @@
+Source: secubox-radio
+Section: sound
+Priority: optional
+Maintainer: Gerald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-radio
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser, acl
+Recommends: secubox-ytsas
+Description: SecuBox — radio et television collaboratives synchronisees
+ Une playlist partagee ou tout le monde ecoute et regarde la meme chose au
+ meme instant. Les membres proposent, la communaute soutient, le sysop valide.
+ .
+ Le tirage est pondere par la nouveaute, les coeurs et un temps de repos, de
+ sorte qu'une nouveaute s'entende sans qu'un succes monopolise l'antenne.
+ .
+ Les clips sont rapatries une seule fois par la passerelle yt-dlp puis servis
+ depuis la board : aucun auditeur ne contacte de service tiers.

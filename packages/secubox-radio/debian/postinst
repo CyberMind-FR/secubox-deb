@@ -1,0 +1,62 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+  configure)
+    # UN UTILISATEUR DEDIE, comme chaque module : la separation des privileges
+    # est une exigence CSPN, et elle ne vaut que si personne ne l'oublie.
+    if ! getent passwd secubox-radio >/dev/null; then
+      adduser --system --group --no-create-home --home /var/lib/secubox/radio \
+              --shell /usr/sbin/nologin secubox-radio >/dev/null
+      adduser secubox-radio secubox >/dev/null 2>&1 || true
+    fi
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-radio.conf >/dev/null 2>&1 || true
+
+    # ── LE SECRET DU SYSOP ──────────────────────────────────────────────
+    #
+    # Valider ou refuser engage l'antenne : ces gestes exigent un secret que
+    # l'operateur seul detient. Sans lui, PERSONNE n'est sysop — une
+    # installation neuve n'ouvre pas la validation a qui passe.
+    #
+    # LA TRAVERSEE DE /etc/secubox/secrets SE DONNE PAR ACL NOMINATIVE, et
+    # non par le groupe : le repertoire est en drwx--x--- avec group::---,
+    # et chaque module qui en a besoin y figure explicitement. C'est plus serre
+    # qu'un acces de groupe — un module ne voit que ce qu'on lui a nomme. Sans
+    # cette ligne, le demon lit « aucun secret » et la validation reste fermee
+    # en silence, ce qui ressemble a une panne.
+    SECRET=/etc/secubox/secrets/radio-sysop
+    if [ ! -f "$SECRET" ]; then
+      mkdir -p /etc/secubox/secrets
+      head -c 24 /dev/urandom | base64 | tr -d "=/+" > "$SECRET"
+    fi
+    chown secubox-radio:secubox-radio "$SECRET" 2>/dev/null || true
+    chmod 0400 "$SECRET"
+    if command -v setfacl >/dev/null 2>&1; then
+      setfacl -m u:secubox-radio:--x /etc/secubox/secrets 2>/dev/null || true
+    fi
+
+    # LE PARC EST SUR LE SSD, et il peut ne pas etre monte au moment de
+    # l'installation. On ne fait alors QUE le signaler : creer le repertoire
+    # sur la racine ferait grossir l'eMMC en silence, ce qui est precisement le
+    # defaut qu'on veut eviter.
+    if [ ! -d /data ]; then
+      echo "secubox-radio: /data absent — le parc des clips attend le SSD." >&2
+    fi
+
+    # LE REDEMARRAGE EST LAISSE A DEBHELPER, dont le bloc est insere plus bas.
+    # (On evite d'ecrire ici le jeton de substitution lui-meme : debhelper
+    # remplace la PREMIERE occurrence, et l'ecrire dans un commentaire fait
+    # injecter son bloc au milieu du `case` — le script devient invalide et
+    # dpkg echoue sur « ) unexpected ». C'est exactement ce qui est arrive.)
+    # lui
+    # sait ce qui tournait AVANT l'arret du prerm. Un try-restart pose ici
+    # arrive trop tard — l'unite est deja arretee, et il ne fait donc rien.
+    # C'est ce qui laissait la radio morte apres chaque mise a jour.
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

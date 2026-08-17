@@ -1,0 +1,69 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+# GOARCH EST DERIVE DE LA CIBLE, pas fige. Le figer a `arm64` — comme le fait
+# le module BBS — construit un binaire arm64 meme quand on demande de l'amd64 :
+# `dh_strip` echoue alors sur une erreur qui parle de sections ELF et non
+# d'architecture, et l'on cherche longtemps.
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+GOARCH_armhf = arm
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+export CGO_ENABLED = 0
+
+export GOFLAGS = -mod=vendor -trimpath
+export GOCACHE = $(CURDIR)/.gocache
+export GOPATH  = $(CURDIR)/.gopath
+
+VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# `go vet` AVANT LA CONSTRUCTION, ET CE N'EST PAS DU CONFORT : `go build`
+	# ne compile PAS les fichiers de test. Un paquet de tests casse laissait
+	# donc la construction reussir — et en compilation croisee, ou les tests ne
+	# tournent pas, RIEN ne le signalait. Un .deb pouvait partir avec du code de
+	# test qui ne compile plus, c'est-a-dire avec une suite qu'on croit verte.
+	go vet ./...
+	go build -ldflags "-s -w -X main.version=$(VERSION)" \
+	  -o debian/secubox-radiod ./cmd/secubox-radiod
+
+# LES TESTS NE TOURNENT QU'EN NATIF. En construction croisee, les binaires de
+# test sont arm64 et ne s'executent pas sur la machine de construction — un
+# `go test` y echouerait pour une raison qui n'a rien a voir avec le code.
+override_dh_auto_test:
+	if [ "$(GOARCH)" = "$$(go env GOHOSTARCH)" ]; then go test ./...; else \
+	  echo "tests ignores : construction croisee vers $(GOARCH)"; fi
+
+override_dh_auto_clean:
+	rm -rf .gocache .gopath debian/secubox-radiod
+
+override_dh_auto_install:
+	install -D -m 0755 debian/secubox-radiod \
+	  debian/secubox-radio/usr/sbin/secubox-radiod
+	install -D -m 0644 systemd/secubox-radio.service \
+	  debian/secubox-radio/lib/systemd/system/secubox-radio.service
+	install -D -m 0644 tmpfiles/secubox-radio.conf \
+	  debian/secubox-radio/usr/lib/tmpfiles.d/secubox-radio.conf
+	install -D -m 0644 nginx/radio.conf \
+	  debian/secubox-radio/etc/secubox/nginx-available/radio.conf
+	install -D -m 0644 menu.d/60-radio.json \
+	  debian/secubox-radio/usr/share/secubox/menu.d/60-radio.json
+	install -D -m 0644 www/radio/index.html \
+	  debian/secubox-radio/usr/share/secubox/www/radio/index.html
+	install -D -m 0644 www/radio/radio-admin.js \
+	  debian/secubox-radio/usr/share/secubox/www/radio/radio-admin.js
+
+# PAS DE `--no-start`, ET C'EST UN CORRECTIF.
+#
+# Avec lui, `dpkg -i` ARRETAIT le service sans le relancer : le prerm genere
+# l'arrete, et le `try-restart` du postinst ne fait rien sur une unite deja
+# arretee. La radio tombait donc a CHAQUE mise a jour, silencieusement — le
+# paquet s'installait « avec succes » et le service restait mort.
+#
+# On laisse debhelper faire son travail : il redemarre ce qui tournait, et ne
+# demarre pas ce que l'operateur avait arrete.
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-radio
