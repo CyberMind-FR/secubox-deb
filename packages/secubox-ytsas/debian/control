@@ -8,11 +8,12 @@ Standards-Version: 4.6.2
 Package: secubox-ytsas
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), lxc, lxc-templates, debootstrap, nftables, sudo, curl, jq
-Recommends: secubox-peertube
+Recommends: secubox-peertube, secubox-lyrion, ffmpeg
 Description: YouTube/web-media SAS for SecuBox (LXC-native)
  Paste a YouTube (or any yt-dlp-supported site) link, pull it into a staging
- space and watch it in the browser (HTTP Range) — then decide: Garder (conserve
- to PeerTube) or leave ephemeral with an opt-in purge TTL. The yt-dlp fetch
- engine runs isolated in a dedicated LXC (cookie vault for age-gated/private
- videos stays inside it); the host only proxies an authenticated vhost and
- mediates the PeerTube conserve pipeline.
+ space and watch it in the browser (HTTP Range) — then decide: Garder (conserve)
+ or leave ephemeral with an opt-in purge TTL. The yt-dlp fetch engine runs
+ isolated in a dedicated LXC (cookie vault for age-gated/private videos stays
+ inside it); the host only proxies an authenticated vhost and mediates the
+ conserve pipeline — video to PeerTube, audio (mp3/flac/…) to Lyrion; ffmpeg
+ (ffprobe) lets the host resolve ambiguous containers precisely.

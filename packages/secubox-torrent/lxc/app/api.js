@@ -18,17 +18,22 @@ const TORRENT_UPLOAD_LIMIT = 5 * 1024 * 1024;
 
 const VIDEO_RE = /\.(mp4|mkv|webm|avi|mov|m4v|ts|flv)$/i;
 
-// Conserve-to-PeerTube uses a file-drop queue on the shared /data volume: the
-// LXC drops a request, a HOST timer (secubox-torrent-conserve) runs the upload
-// with the PeerTube admin creds it holds, then drops a result the LXC reads.
-// Keeping the creds host-side is the whole point of the split.
+// Conserve uses a file-drop queue on the shared /data volume: the LXC drops a
+// request, a HOST timer (secubox-torrent-conserve) routes it to the right
+// partner — PeerTube for video, Lyrion for audio (issue #967) — using the
+// creds/LXC-access it holds, then drops a result the LXC reads. Keeping the
+// creds host-side is the whole point of the split.
 function conserveDirs(downloadDir) {
   return { queue: path.join(downloadDir, '.conserve-queue'),
            results: path.join(downloadDir, '.conserve-results') };
 }
 
-// Fold any host-written upload results into the library (called on /list so the
-// panel picks up completions without a second poller in the LXC).
+// Fold any host-written conserve results into the library (called on /list so
+// the panel picks up completions without a second poller in the LXC). A
+// result's shape says which partner handled it: {url:...} came from PeerTube,
+// {library_path:...} came from Lyrion (see secubox-torrent-conserve) — each
+// goes to its own column pair so a Lyrion result never gets misread as a
+// stalled/failed PeerTube upload (or vice versa).
 function drainConserveResults(library, downloadDir) {
   const { results } = conserveDirs(downloadDir);
   let files = [];
@@ -37,7 +42,11 @@ function drainConserveResults(library, downloadDir) {
     const ih = f.replace(/\.json$/, '');
     try {
       const r = JSON.parse(fs.readFileSync(path.join(results, f), 'utf8'));
-      library.setPeertube(ih, r.status || 'done', r.url || null);
+      if (Object.prototype.hasOwnProperty.call(r, 'library_path')) {
+        library.setLyrion(ih, r.status || 'done', r.library_path || null);
+      } else {
+        library.setPeertube(ih, r.status || 'done', r.url || null);
+      }
     } catch { /* ignore malformed result */ }
     try { fs.unlinkSync(path.join(results, f)); } catch { /* ignore */ }
   }
@@ -129,10 +138,15 @@ export function buildApi({ engine, library, diskFreeBytes }) {
     return { status: complete ? 'loaded' : 'resuming', progress: t.progress || 0 };
   });
 
-  // Conserve to PeerTube: drop an upload request for the HOST processor. The
-  // download must be complete (no partial/corrupt uploads). We resolve the
-  // actual video file path here (from the loaded torrent) since only the engine
-  // knows where WebTorrent laid the files down.
+  // Conserve: drop a request for the HOST processor, which classifies the
+  // file and routes it to PeerTube (video) or Lyrion (audio). The download
+  // must be complete (no partial/corrupt uploads). We resolve the actual
+  // file path here (from the loaded torrent) since only the engine knows
+  // where WebTorrent laid the files down. `setPeertube(ih,'queued',null)`
+  // below is a destination-agnostic "in flight" marker — the real partner
+  // isn't known until the host classifies the file — the panel just shows a
+  // generic pending state either way; drainConserveResults() above records
+  // the actual destination once the host writes a result.
   app.post('/api/v1/torrent/conserve/:infohash', async (req, reply) => {
     const ih = req.params.infohash;
     const row = library.get(ih);

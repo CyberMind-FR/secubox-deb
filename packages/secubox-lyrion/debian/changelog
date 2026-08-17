@@ -1,3 +1,158 @@
+secubox-lyrion (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * lyrionctl: new `ingest <file>` verb — the Lyrion-side half of the
+    torrent/ytsas "conserve" partner pipeline (ref #967). Copies <file> into
+    [library].path/conserve (the same tree already RO-bound into the LXC) and
+    nudges an LMS rescan; always emits JSON, {"ok":false,...} when the LXC
+    isn't running so callers know to leave the item queued rather than lose
+    it or misroute it. Requires the LXC to be RUNNING (not just provisioned)
+    before touching the filesystem, so a failure never leaves a half-placed
+    file nobody will scan. The destination is namespaced by a hash of the
+    SOURCE PATH (not just the basename) so two unrelated conserved files
+    sharing a filename (eg. two different torrents both producing
+    "01 - Track.mp3") never silently overwrite each other; re-ingesting the
+    same source path stays idempotent (overwrites only its own prior copy).
+  * Added toml_get_sec() (ported from jellyfinctl) so [library].path resolves
+    correctly — config_get()'s flat grep would otherwise match [lxc] path.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 03 Aug 2026 14:00:00 +0200
+
+secubox-lyrion (1.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * lyrionctl: new `medialib` verb (detect | mount <path> | unmount | status),
+    always JSON. `detect` enumerates external mountpoints (under /media, /mnt,
+    /data/external + removable mounts from /proc/mounts) that CONTAIN audio
+    files (mp3/flac/m4a/ogg/wav/aac) and returns them as candidates — it NEVER
+    mounts. `mount <path>` (after the operator confirms in the webui) adds a
+    READ-ONLY `lxc.mount.entry` binding <path> to medialib/external inside the
+    Lyrion LXC, live-mounts it RO if the container runs, persists
+    `external_medialib = "<path>"` in lyrion.toml so it re-binds on boot, and
+    triggers an LMS rescan. `unmount` reverses all of it. Auto-detect +
+    opt-in confirm — never mount blind.
+  * api/main.py: JWT-gated (nginx auth_request) endpoints delegating to the ctl —
+    GET /medialib (status + detected candidates), POST /medialib/mount ({path}),
+    POST /medialib/unmount. Blocking ctl work (fs scan, bind, rescan) is offloaded
+    to a worker thread to keep the shared event loop free.
+  * www/lyrion/index.html: new "Médiathèque externe" panel — current mount +
+    detected candidates with a per-candidate "Monter" (confirm → RO bind) button
+    and a "Démonter" button for the active mount.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 30 Jul 2026 11:00:00 +0200
+
+secubox-lyrion (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * lyrionctl: new `check-upgrade` (LMS-Community stable tags, current vs latest;
+    the experimental 'ueml/…' tags are ignored) and `upgrade` (download the
+    _all.deb + dpkg -i) verbs. 'Upgrade when present.'
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 10:00:00 +0200
+
+secubox-lyrion (1.1.1-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+
+secubox-lyrion (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix(slimproto): DNAT was bound to a hardcoded "lan0" interface, which
+    is DOWN on a SecuBox deployed behind another router (e.g. gk2 behind a
+    Freebox, where LAN clients arrive on the uplink eth2). Result: 0
+    players could reach the LMS — the prerouting rule never matched.
+    install-lxc.sh ensure_slimproto_dnat() now generates an
+    interface-agnostic rule (iifname != br-lxc) so it matches players on
+    any LAN/Wi-Fi/uplink interface; SECUBOX_LAN_IFACE still pins a single
+    interface when set. Forward chain is policy accept and conntrack
+    rewrites the reply (LXC gateway = host), so DNAT alone suffices.
+    NOTE: hardware players may still need the Wi-Fi AP bridged or a manual
+    LMS-server IP — LMS advertises its LXC IP (10.100.0.100) for streaming,
+    which is not L2-reachable from the LAN; the DNAT only fixes slimproto
+    control reachability.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 29 Jun 2026 12:00:00 +0200
+
+secubox-lyrion (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * /lyrion/ on the canonical hub vhost is now a SecuBox admin webui,
+    NOT a reverse proxy to the LMS Material UI. The previous proxy_pass
+    to 10.100.0.100:9000 broke every LMS asset URL (/material/customcss,
+    /cometd/handshake, /css/...) because LMS hardcodes absolute paths
+    that lose the /lyrion/ prefix. The real music player still lives at
+    its own vhost lyrion.gk2.secubox.in where LMS serves at the root
+    and Material loads correctly — the admin page links to it via a
+    prominent "Open Lyrion Music UI" button.
+
+  * www/lyrion/index.html rewritten as a SecuBox admin panel: status
+    pill (green/yellow/red), components, access endpoints, now-playing
+    track, connected-players table, and a "Rescan library" action.
+    Polls every 15 s. No more iframe to /lyrion/d/... (which never had
+    a backend anyway).
+
+  * api/main.py: /players, /now-playing and /rescan are no longer stubs.
+    They hit LMS's JSON-RPC endpoint inside the LXC (slim.request) via
+    urllib — keeping the package dep set minimal. /now-playing scans
+    all powered-on players for the first one in play mode. /rescan
+    triggers an LMS scan that runs in the background.
+
+  * nginx/lyrion.conf rewritten: /lyrion/ is `alias /usr/share/secubox/
+    www/lyrion/` (static admin page) instead of `proxy_pass LMS`. Both
+    /api/v1/lyrion/ and /lyrion/ are gated by auth_request /__sbx_auth_
+    verify so the SecuBox SSO covers admin access.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 24 May 2026 09:30:00 +0200
+
+secubox-lyrion (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion-vhost.conf: @sbx_auth_login redirects to
+    https://sso.gk2.secubox.in/?rd=… (was admin.gk2.secubox.in/auth/).
+    Follow-up to the SSO portal split (#310).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 12:30:00 +0000
+
+secubox-lyrion (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion-vhost.conf: move public vhost from lyrion.maegia.tv to
+    lyrion.gk2.secubox.in. Consolidates SSO under one portal
+    (admin.gk2.secubox.in/auth/) and one cookie scope (.gk2.secubox.in)
+    instead of a separate auth.maegia.tv portal + .maegia.tv cookie.
+  * nginx/lyrion-vhost.conf: re-declare /__sbx_auth_verify with full
+    X-Original-URL + X-Forwarded-{Method,Proto,Host,Uri,For} forwarding
+    (#274 pattern) so Authelia picks the correct session.cookies[] entry.
+  * Closes #287.
+
+  Deploy-side follow-up (operator):
+   - mitmproxy haproxy-routes.json: drop lyrion.maegia.tv entry, fix
+     lyrion.gk2.secubox.in to [192.168.1.200, 9080] (was [..., 8000]).
+   - HAProxy: remove lyrion_maegia_tv vhost if any; lyrion_gk2_secubox_in
+     is already present (or routes via default_backend).
+   - Wildcard *.gk2.secubox.in.pem already covers the new vhost — no
+     new cert needed.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 21 May 2026 08:50:00 +0000
+
+secubox-lyrion (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion-vhost.conf: replace $scheme://$http_host with
+    https://$host in the rd= target of @sbx_auth_login. $scheme is
+    "http" behind HAProxy TLS termination and $http_host may carry an
+    internal port (:9080), so the previous form let the SSO portal
+    return the user to http://...:9080/... — never a valid public URL.
+    Hardcode https + $host (hostname only).
+  * Closes #273.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 20 May 2026 18:30:00 +0000
+
+secubox-lyrion (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * nginx/lyrion.conf + nginx/lyrion-vhost.conf: fix the 401 → portal
+    redirect scheme. v1.0.5 used `$scheme://$http_host` which resolves
+    to `http://...:9080` because nginx is plain HTTP behind HAProxy.
+    Now hardcoded to `https://$http_host` matching the public-facing
+    URL.
+  * Closes #266 (lyrion portion).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 03:35:00 +0200
+
 secubox-lyrion (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * SECURITY: replace the LAN-only allow/deny on /lyrion/ + lyrion.maegia.tv

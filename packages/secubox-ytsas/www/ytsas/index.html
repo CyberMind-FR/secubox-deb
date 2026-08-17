@@ -321,16 +321,23 @@
         ? '<span class="badge eph">⏳ purge ' + esc(fmtWhen(eph)) + '</span>'
         : '<span class="badge kept">📌 gardé</span>';
 
-      // PeerTube conserve badge / action (complete only)
+      // Conserve badge / action (complete only). The actual destination
+      // (PeerTube for video, Lyrion for audio) is decided host-side by file
+      // type — the panel doesn't know it in advance, so "queued" is shown
+      // generically and the two done/error states are read from whichever
+      // partner's columns the host drain actually wrote to (#967).
+      var ly = r.lyrion_status;                        // 'done' | 'error' | null
       var ptHtml = '';
       if (complete) {
         if (pt === 'done' && r.peertube_url) {
           ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
+        } else if (ly === 'done' && r.lyrion_path) {
+          ptHtml = '<span class="btn sm good" title="' + esc(r.lyrion_path) + '">🎵 Lyrion ✓</span>';
         } else if (pt === 'queued' || pt === 'uploading') {
-          ptHtml = '<span class="btn sm muted">📼 upload…</span>';
+          ptHtml = '<span class="btn sm muted">⏳ conservation…</span>';
         } else {
-          ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver dans PeerTube">📼 Garder → PeerTube</button>' +
-            (pt === 'error' ? ' <span class="muted" title="échec upload">⚠</span>' : '');
+          ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver (vidéo → PeerTube, audio → Lyrion)">💾 Garder</button>' +
+            ((pt === 'error' || ly === 'error') ? ' <span class="muted" title="échec de conservation">⚠</span>' : '');
         }
       }
 

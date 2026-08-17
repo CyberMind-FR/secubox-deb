@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Stub lxc-info — reports RUNNING unless STUB_LXC_STOPPED=1, matching the
+# `State:` line lxc_state() awk-parses out of real lxc-info output.
+if [[ "${STUB_LXC_STOPPED:-0}" = "1" ]]; then
+    echo "State:          STOPPED"
+else
+    echo "State:          RUNNING"
+fi

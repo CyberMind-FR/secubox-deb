@@ -9,8 +9,9 @@ CyberMind — https://cybermind.fr
 
 FastAPI control API for the YouTube / web-media SAS gateway. Sibling of the
 torrent SAS (same downstream: kept-by-default library, opt-in ephemeral TTL,
-disk-floor purge, host-mediated conserve → PeerTube) with yt-dlp as the fetch
-engine and a cookie vault for gated content.
+disk-floor purge, host-mediated conserve — video to PeerTube, audio to
+Lyrion, issue #967) with yt-dlp as the fetch engine and a cookie vault for
+gated content.
 
 Runs INSIDE the ytsas LXC on 0.0.0.0:8091 (auth is enforced upstream by the
 nginx gate / sbxwaf, as with the torrent SAS in-LXC app). Never blocks the
@@ -41,9 +42,10 @@ DISK_FLOOR = float(os.environ.get("YTSAS_DISK_FLOOR_GB", "5")) * 1e9
 # Cookies older than this are flagged "stale" in /cookies/status (advisory).
 COOKIE_STALE_SECS = int(os.environ.get("YTSAS_COOKIE_STALE_DAYS", "30")) * 86400
 
-# Conserve → PeerTube: the LXC drops a request on the shared /data volume, a
-# HOST timer (secubox-ytsas-conserve) runs `peertubectl upload` with the creds
-# it holds and drops a result the LXC folds back in on /list. Same split as the
+# Conserve: the LXC drops a request on the shared /data volume, a HOST timer
+# (secubox-ytsas-conserve) classifies the file and routes it — PeerTube for
+# video, Lyrion for audio (issue #967) — with the creds/LXC-access it holds,
+# then drops a result the LXC folds back in on /list. Same split as the
 # torrent SAS — creds stay host-side.
 CONSERVE_QUEUE = os.path.join(DOWNLOAD_DIR, ".conserve-queue")
 CONSERVE_RESULTS = os.path.join(DOWNLOAD_DIR, ".conserve-results")
@@ -97,7 +99,12 @@ async def _read_body(request: Request) -> dict:
 
 
 def _drain_conserve_results():
-    """Fold any host-written upload results into the library (called on /list)."""
+    """Fold any host-written conserve results into the library (called on
+    /list). A result's shape says which partner handled it: {"url": ...} came
+    from PeerTube, {"library_path": ...} came from Lyrion (see
+    secubox-ytsas-conserve) — each goes to its own column pair so a Lyrion
+    result never gets misread as a stalled/failed PeerTube upload (or vice
+    versa)."""
     try:
         files = [f for f in os.listdir(CONSERVE_RESULTS) if f.endswith(".json")]
     except OSError:
@@ -107,7 +114,10 @@ def _drain_conserve_results():
         p = os.path.join(CONSERVE_RESULTS, f)
         try:
             r = json.loads(open(p, "r", encoding="utf-8").read())
-            library.set_peertube(vid, r.get("status") or "done", r.get("url"))
+            if "library_path" in r:
+                library.set_lyrion(vid, r.get("status") or "done", r.get("library_path"))
+            else:
+                library.set_peertube(vid, r.get("status") or "done", r.get("url"))
         except (OSError, ValueError):
             pass
         try:
@@ -292,7 +302,13 @@ async def ephemeral(id: str, request: Request):
 
 @app.post(API + "/conserve/{id}")
 async def conserve(id: str):
-    """Drop a PeerTube upload request for the HOST processor to drain."""
+    """Drop a conserve request for the HOST processor, which classifies the
+    file and routes it to PeerTube (video) or Lyrion (audio). The
+    set_peertube(id, "queued", None) call below is a destination-agnostic
+    "in flight" marker — the real partner isn't known until the host
+    classifies the file; the panel just shows a generic pending state
+    either way, and _drain_conserve_results() records the actual
+    destination once the host writes a result."""
     row = library.get(id)
     if not row:
         return JSONResponse({"error": "not found"}, status_code=404)

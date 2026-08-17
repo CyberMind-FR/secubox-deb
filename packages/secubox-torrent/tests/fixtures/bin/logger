@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stub for bats tests — logs args, exit 0.
+printf 'logger %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+exit 0

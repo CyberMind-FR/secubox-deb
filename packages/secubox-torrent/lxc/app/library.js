@@ -5,7 +5,10 @@
 // SQLite-backed torrent library — the "sas" (staging area). A downloaded
 // torrent is CONSERVED BY DEFAULT (nothing auto-disappears); purge is opt-in:
 // set `ephemeral_until` and only then does the sweep delete it, at that time.
-// A torrent can also be conserved permanently in PeerTube (peertube_* columns).
+// A torrent can also be conserved permanently — to PeerTube for video
+// (peertube_* columns) or to Lyrion for audio (lyrion_* columns); the host
+// conserve drain picks the destination per file type, see
+// secubox-torrent-conserve classify_media() (issue #967).
 
 import Database from 'better-sqlite3';
 
@@ -29,6 +32,8 @@ export class Library {
     add('ephemeral_until', 'INTEGER');
     add('peertube_status', 'TEXT');
     add('peertube_url', 'TEXT');
+    add('lyrion_status', 'TEXT');
+    add('lyrion_path', 'TEXT');
     // `complete`=1 once the download finished. Incomplete torrents are re-added
     // to the engine on restart so they RESUME downloading; complete ones stay
     // lazy (loaded on stream) to avoid the boot re-hash storm.
@@ -76,6 +81,13 @@ export class Library {
   setPeertube(infohash, status, url) {
     this.db.prepare('UPDATE torrents SET peertube_status=?, peertube_url=COALESCE(?,peertube_url) WHERE infohash=?')
       .run(status, url ?? null, infohash);
+  }
+
+  // Lyrion conserve result (audio) — mirrors setPeertube(), separate columns
+  // so a video's PeerTube history and an audio's Lyrion history never collide.
+  setLyrion(infohash, status, libraryPath) {
+    this.db.prepare('UPDATE torrents SET lyrion_status=?, lyrion_path=COALESCE(?,lyrion_path) WHERE infohash=?')
+      .run(status, libraryPath ?? null, infohash);
   }
 
   setComplete(infohash, v = 1) {
