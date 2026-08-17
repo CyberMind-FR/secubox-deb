@@ -64,6 +64,21 @@ class CookieAuditAggregator:
         self.cfg = cfg
         self.cache_path = Path(cache_path) if cache_path else DEFAULT_CACHE_PATH
         self._payload: dict = {"enabled": False, "hosts": []}
+        # ── ETAT DE LECTURE INCREMENTALE (#1045) ────────────────────────────
+        # Le registre est APPEND-ONLY : ce qui a ete lu au cycle precedent ne
+        # peut plus changer. On retient donc ou l'on s'est arrete, et le
+        # resultat deja construit.
+        #
+        # Mesure qui a motive ce changement : 35 082 lignes relues chaque
+        # minute pour en retenir 25 — 99,9 % du travail jete, et refait
+        # indefiniment. Le fichier ne grandit que de ~6 ko par minute.
+        self._ledger_cle: tuple | None = None   # (dev, inode) : detecte la rotation
+        self._ledger_pos: int = 0               # octets deja consommes
+        self._ledger_out: dict = {}             # {vhost: {cookie: dernier enreg.}}
+        # Ingest : 166 fichiers dont la plupart n'ont pas bouge depuis des mois.
+        # On garde le resultat par fichier, reutilise tant que mtime ET taille
+        # sont inchanges.
+        self._ingest_cache: dict = {}           # {chemin: (mtime, taille, resultat)}
 
     def current(self) -> dict:
         if self._payload.get("hosts") or self._payload.get("enabled"):
@@ -91,8 +106,14 @@ class CookieAuditAggregator:
         ledger_path = Path(self.cfg.get("ledger_path", DEFAULT_LEDGER))
         ingest_dir = Path(self.cfg.get("ingest_dir", DEFAULT_INGEST_DIR))
         classifier = Classifier(self.cfg.get("classifier", {}))
-        server = self._read_ledger(ledger_path)
-        browser = self._read_ingest(ingest_dir)
+        # HORS DE LA BOUCLE D'EVENEMENTS (#1045). Ces deux lectures sont
+        # synchrones et peuvent durer : tant qu'elles tournaient sur la boucle,
+        # les endpoints HTTP du module etaient bloques pendant tout ce temps —
+        # le motif qui a deja produit des 502. `live_hosts` deleguait deja au
+        # pool de threads ; il n'y avait aucune raison que celui-ci ne le fasse
+        # pas.
+        server, browser = await asyncio.to_thread(
+            self._lire_sources, ledger_path, ingest_dir)
         hosts = self._reconcile(server, browser, classifier)
         payload = {
             "enabled": True,
@@ -104,13 +125,64 @@ class CookieAuditAggregator:
         self._payload = payload
         return payload
 
+    def _lire_sources(self, ledger_path: Path, ingest_dir: Path) -> tuple:
+        """Les deux lectures, ensemble, dans UN seul aller-retour de thread.
+
+        Deux `to_thread` separes auraient double le cout de bascule pour un
+        gain nul : elles sont sequentielles de toute facon.
+        """
+        return self._read_ledger(ledger_path), self._read_ingest(ingest_dir)
+
     def _read_ledger(self, path: Path) -> dict:
-        """Return {vhost: {cookie_name: latest server record}}."""
-        out: dict = {}
+        """Return {vhost: {cookie_name: latest server record}}.
+
+        LECTURE INCREMENTALE (#1045). Le journal est append-only : les lignes
+        deja lues ne changeront plus, et seul le dernier enregistrement par
+        (vhost, cookie) est conserve. Relire le fichier entier a chaque cycle
+        refaisait donc indefiniment un travail dont 99,9 % etait jete.
+
+        TROIS SITUATIONS, ET UNE SEULE EST LE CAS COURANT :
+
+        * fichier inchange ou simplement rallonge -> on ne decode que les
+          octets neufs, et on les fusionne dans le resultat deja construit ;
+        * fichier remplace (rotation logrotate : l'inode change) ou tronque
+          (taille inferieure a notre position) -> on repart de zero, comme le
+          faisait l'ancienne version a chaque cycle. Le resultat est alors
+          identique a ce qu'elle produisait ;
+        * fichier absent -> resultat vide, et l'etat est remis a zero pour ne
+          pas ressusciter d'anciennes valeurs si le fichier reapparait.
+        """
         if not path.exists():
-            return out
+            self._ledger_cle, self._ledger_pos, self._ledger_out = None, 0, {}
+            return {}
         try:
-            for line in path.read_text(encoding="utf-8").splitlines():
+            st = path.stat()
+            cle = (st.st_dev, st.st_ino)
+            # ROTATION OU TRONCATURE : on ne peut pas continuer une lecture
+            # dans un fichier qui n'est plus le meme. On repart du debut, et
+            # on OUBLIE l'accumule — c'est ce que faisait l'ancienne version,
+            # qui ne voyait jamais que le fichier courant. Conserver l'historique
+            # serait sans doute mieux, mais changerait la sortie.
+            if cle != self._ledger_cle or st.st_size < self._ledger_pos:
+                self._ledger_cle, self._ledger_pos, self._ledger_out = cle, 0, {}
+            if st.st_size == self._ledger_pos:
+                return self._ledger_out          # rien de neuf : cas le plus courant
+
+            with path.open("rb") as fh:
+                fh.seek(self._ledger_pos)
+                brut = fh.read(st.st_size - self._ledger_pos)
+
+            # UNE LIGNE PARTIELLE NE SE DECODE PAS. Le producteur ecrit pendant
+            # qu'on lit : sans cette coupure, la derniere ligne serait tronquee,
+            # rejetee comme illisible, et PERDUE — puisqu'on ne la relirait
+            # jamais. On s'arrete au dernier saut de ligne complet.
+            coupe = brut.rfind(b"\n")
+            if coupe < 0:
+                return self._ledger_out          # pas encore une ligne entiere
+            consomme, brut = coupe + 1, brut[:coupe + 1]
+            self._ledger_pos += consomme
+
+            for line in brut.decode("utf-8", "replace").splitlines():
                 if not line.strip():
                     continue
                 try:
@@ -121,38 +193,78 @@ class CookieAuditAggregator:
                 name = (rec.get("name") or "").strip()
                 if not vhost or not name:
                     continue
-                bucket = out.setdefault(vhost, {})
-                bucket[name] = rec
+                self._ledger_out.setdefault(vhost, {})[name] = rec
         except Exception as e:
             log.warning("ledger read failed: %s", e)
-        return out
+        return self._ledger_out
 
     def _read_ingest(self, ingest_dir: Path) -> dict:
-        """Return {vhost: {cookie_name: set(value_hash)}} across all snapshots."""
+        """Return {vhost: {cookie_name: set(value_hash)}} across all snapshots.
+
+        CACHE PAR FICHIER (#1045). Contrairement au registre, ces instantanes
+        sont reecrits en entier — on ne peut donc pas lire par offset. Mais ils
+        bougent rarement : sur la board, 166 fichiers pour 13 Mo, dont la
+        plupart n'ont pas ete modifies depuis des mois, etaient integralement
+        redecodes chaque minute.
+
+        Un fichier est redecode uniquement si son mtime OU sa taille a change.
+        La taille en plus du mtime : deux ecritures dans la meme seconde ne
+        changent pas toujours le mtime, et le fichier serait alors servi
+        perime.
+        """
         out: dict = {}
         if not ingest_dir.exists():
+            self._ingest_cache = {}
             return out
+        vus = set()
         for f in ingest_dir.glob("*.jsonl"):
+            cle = str(f)
+            vus.add(cle)
             try:
-                for line in f.read_text(encoding="utf-8").splitlines():
-                    if not line.strip():
-                        continue
-                    try:
-                        rec = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    host = (rec.get("host") or "").strip()
-                    if not host:
-                        continue
-                    bucket = out.setdefault(host, {})
-                    for c in rec.get("cookies", []) or []:
-                        n = (c.get("name") or "").strip()
-                        if not n:
-                            continue
-                        bucket.setdefault(n, set()).add(c.get("value_hash") or "")
+                st = f.stat()
+                signature = (st.st_mtime_ns, st.st_size)
+                cache = self._ingest_cache.get(cle)
+                if cache is not None and cache[0] == signature:
+                    partiel = cache[1]
+                else:
+                    partiel = self._decode_ingest(f)
+                    self._ingest_cache[cle] = (signature, partiel)
             except Exception as e:
                 log.warning("ingest read failed for %s: %s", f, e)
+                continue
+            # LA FUSION NE TOUCHE PAS AU CACHE : on alimente les ensembles de
+            # `out`, jamais ceux qui sont retenus. Les modifier ferait deriver
+            # le cache a chaque cycle, silencieusement.
+            for host, cookies in partiel.items():
+                bucket = out.setdefault(host, {})
+                for n, valeurs in cookies.items():
+                    bucket.setdefault(n, set()).update(valeurs)
+        # Un fichier disparu ne doit pas rester en memoire.
+        for mort in set(self._ingest_cache) - vus:
+            del self._ingest_cache[mort]
         return out
+
+    @staticmethod
+    def _decode_ingest(f: Path) -> dict:
+        """Decode UN instantane : {host: {cookie: set(value_hash)}}."""
+        partiel: dict = {}
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            host = (rec.get("host") or "").strip()
+            if not host:
+                continue
+            bucket = partiel.setdefault(host, {})
+            for c in rec.get("cookies", []) or []:
+                n = (c.get("name") or "").strip()
+                if not n:
+                    continue
+                bucket.setdefault(n, set()).add(c.get("value_hash") or "")
+        return partiel
 
     def _reconcile(self, server: dict, browser: dict, classifier: Classifier) -> list:
         all_hosts = sorted(set(server) | set(browser))

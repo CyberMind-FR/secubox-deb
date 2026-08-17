@@ -33,6 +33,16 @@ FEEDS = [
     ("sslbl",          "https://sslbl.abuse.ch/blacklist/sslipblacklist.txt",                "ip", 85),
     ("firehol1",       "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset", "ip", 80),
     ("spamhaus-drop",  "https://www.spamhaus.org/drop/drop.txt",                             "ip", 85),
+    # LE SEUL FLUX v6 ETAIT blocklist-de, EN POIDS 60 — sous les deux seuils du
+    # filtre de consensus (>= 2 sources OU poids >= 80). Les sept autres sont
+    # exclusivement v4, si bien qu'aucune adresse IPv6 ne pouvait etre armee :
+    # le set blacklist_v6 restait vide, non par defaut de filtre mais par
+    # absence de source (#1052).
+    #
+    # DROPv6 est la liste v6 de Spamhaus — memes plages detournees, meme
+    # niveau de confiance que drop.txt, donc meme poids. Elle passe le seuil
+    # par le poids, sans qu'on ait a abaisser la garde pour tout le monde.
+    ("spamhaus-dropv6", "https://www.spamhaus.org/drop/dropv6.txt",                           "ip", 85),
     ("blocklist-de",   "https://lists.blocklist.de/lists/all.txt",                           "ip", 60),
     ("cins-army",      "https://cinsscore.com/list/ci-badguys.txt",                          "ip", 70),
     ("et-compromised", "https://rules.emergingthreats.net/blockrules/compromised-ips.txt",   "ip", 75),

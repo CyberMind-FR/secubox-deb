@@ -1,3 +1,51 @@
+secubox-metrics (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * LIVE_HOSTS AVAIT LE MEME DEFAUT QUE COOKIE_AUDIT (ref #1045). Une fois
+    `cookie_audit` corrige, le profil a fait apparaitre le consommateur qu il
+    masquait : 82,7 % du CPU restant du module. 87 journaux nginx, 12 Mo,
+    etaient relus et re-analyses chaque minute — un `strptime` par ligne —
+    pour ne retenir que 60 minutes et n en afficher que cinq hotes.
+  * POSITION PAR FICHIER, COMPTEURS PAR MINUTE. Chaque journal est lu a partir
+    de la ou l on s etait arrete ; les lignes neuves alimentent des compteurs
+    par minute, et la fenetre glissante se maintient en purgeant les minutes
+    sorties. Le passe n est plus jamais relu, et le resultat reste exact.
+  * La borne de queue d origine est conservee au PREMIER passage et apres
+    rotation : on ne remonte pas tout un journal au demarrage, exactement
+    comme avant.
+  * Ici encore, une ligne partielle n est pas consommee — nginx ecrit pendant
+    qu on lit, et une ligne tronquee serait rejetee ET jamais relue.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 16:52:28 +0200
+
+secubox-metrics (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * COOKIE_AUDIT RELISAIT 12 Mo A CHAQUE CYCLE POUR 25 LIGNES UTILES (ref
+    #1045). `secubox-metrics` etait le premier consommateur CPU de la board :
+    ~14 % d un coeur en permanence, dont 89 % dans `cookie_audit` — mesure
+    py-spy sur 60 s, correlee au CPU consomme sur la meme fenetre.
+  * LE REGISTRE EST APPEND-ONLY, IL EST DESORMAIS LU AINSI. 35 082 lignes
+    etaient integralement redecodees chaque minute alors que le fichier ne
+    grandit que de ~6 ko, et que seul le dernier enregistrement par
+    (vhost, cookie) est conserve — 25 au total. On retient l inode et la
+    position, et l on ne decode que les octets neufs.
+  * UNE LIGNE PARTIELLE N EST PLUS CONSOMMEE. Le producteur ecrit pendant
+    qu on lit : consommer une ligne tronquee l aurait rejetee comme illisible
+    ET rendue impossible a relire, donc perdue — ce que la relecture integrale
+    ne pouvait pas provoquer. La lecture s arrete au dernier saut de ligne.
+  * ROTATION ET TRONCATURE REPARTENT DE ZERO, ce qui reproduit exactement la
+    sortie de l ancienne version : elle ne voyait jamais que le fichier
+    courant.
+  * L INGEST EST MIS EN CACHE PAR FICHIER : 166 instantanes, 13 Mo, dont la
+    plupart inchanges depuis des mois, etaient redecodes chaque minute. Un
+    fichier n est relu que si son mtime OU sa taille a change — la taille en
+    plus du mtime, car deux ecritures dans la meme seconde ne le changent pas
+    toujours.
+  * LES DEUX LECTURES SORTENT DE LA BOUCLE D EVENEMENTS via `asyncio.to_thread`,
+    comme le faisait deja `live_hosts`. Tant qu elles y tournaient, les
+    endpoints HTTP du module etaient bloques pendant toute la lecture.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 16:43:56 +0200
+
 secubox-metrics (1.0.5-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
