@@ -207,7 +207,7 @@ async function api(p,opt={}){
   if(!(opt.body instanceof FormData) && !opt.headers["Content-Type"]) opt.headers["Content-Type"]="application/json";
   const t=tok(); if(t) opt.headers["Authorization"]="Bearer "+t;
   const r=await fetch(API+p,opt);
-  if(r.status===401){window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);throw new Error("401")}
+  if(r.status===401){if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);throw new Error("401")}
   if(!r.ok) throw new Error(await r.text());
   const ct=r.headers.get("content-type")||""; return ct.includes("json")?r.json():r.text();
 }
@@ -283,7 +283,7 @@ function uploadZip(inp){const f=inp.files[0];if(!f)return;
   xhr.setRequestHeader("Content-Type","application/zip");
   xhr.upload.onprogress=ev=>{if(ev.lengthComputable)stickyToast("Uploading "+Math.round(ev.loaded/ev.total*100)+"%")};
   xhr.onload=()=>{
-    if(xhr.status===401){window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);return}
+    if(xhr.status===401){if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search);return}
     if(xhr.status>=200&&xhr.status<300){
       try{const r=JSON.parse(xhr.responseText);toast(`Published "${r.title}" — ${r.tracks} tracks`)}catch(_){toast("Published")}
       loadAll();

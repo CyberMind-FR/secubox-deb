@@ -1,0 +1,41 @@
+# SecuBox-Deb :: rotation des journaux de modules (#1039)
+#
+# UNE REGLE GENERALE, PAS UNE PAR MODULE. Avant celle-ci, UN SEUL fichier
+# logrotate existait pour tout secubox : sept journaux croissaient sans borne
+# (`audit`, `watchdog`, `streamlit`, `acme-monitor`, `acme-renew-batch`,
+# `fmrelay-runner`, `fmrelay-icy`) sur un eMMC de 15 Go deja occupe a 93 %.
+# Un eMMC plein a deja provoque des 502 generalises sur cette board.
+#
+# Le joker couvre aussi le journal qu'un module deposera demain : c'est le seul
+# moyen de ne pas recommencer cet inventaire a chaque nouveau module.
+#
+# PORTEE VOLONTAIREMENT PLATE. `*.log` ne descend pas dans les sous-repertoires,
+# et c'est voulu : `waf/` et `cookie-audit/` appartiennent a d'autres comptes et
+# ont leurs propres regles. Les melanger imposerait un `su` unique a des
+# fichiers qui n'ont pas le meme proprietaire.
+/var/log/secubox/*.log {
+    su secubox secubox
+    daily
+    # `maxsize` ET NON `size` : avec `size`, logrotate ANNULE le critere
+    # temporel — il l'annonce en mode debug. `maxsize` garde les deux.
+    maxsize 20M
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+
+    # PAS DE `copytruncate`, ET C'EST UNE EXIGENCE, PAS UN GOUT.
+    #
+    # `/var/log/secubox/audit.log` porte la journalisation immuable des
+    # decisions de securite (bans, regles WAF) : la charte CSPN impose une
+    # rotation SANS TRONCATURE. `copytruncate` copie puis vide le fichier
+    # d'origine — ce qui est exactement une troncature, et rompt la propriete
+    # d'ajout-seul sur laquelle repose la valeur probante du journal.
+    #
+    # Le renommage est de toute facon suffisant ici : ces sept journaux sont
+    # ecrits par des scripts en `>>`, et AUCUN processus ne detient de
+    # descripteur ouvert dessus (verifie a l'inventaire, `lsof` = 0 partout).
+    # Le prochain ajout recree le fichier.
+    create 0640 secubox secubox
+}

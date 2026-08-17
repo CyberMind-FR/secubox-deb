@@ -144,7 +144,7 @@
                     // cookie-only WITHOUT destroying the token (non-destructive).
                     res = await fetch(API + path, { credentials: 'same-origin' });
                 }
-                if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
+                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {
                     console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);

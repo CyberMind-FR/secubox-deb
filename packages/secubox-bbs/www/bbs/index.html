@@ -218,7 +218,7 @@ function jeton() { return localStorage.getItem('sbx_token') || ''; }
 // tremplin vers un site tiers.
 function versConnexion() {
   const ici = window.location.pathname + window.location.search;
-  window.location = '/login.html?redirect=' + encodeURIComponent(ici);
+  if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(ici);
 }
 
 async function api(chemin, methode) {

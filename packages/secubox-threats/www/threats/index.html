@@ -184,7 +184,7 @@ function headers() { return token() ? { 'Authorization': 'Bearer ' + token() } :
 async function api(path) {
   try {
     const r = await fetch(API + path, { headers: headers() });
-    if (r.status === 401) { window.location = '/login.html?redirect=' + encodeURIComponent(window.location.pathname); return null; }
+    if (r.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(window.location.pathname); return null; }
     if (!r.ok) return null;
     return await r.json();
   } catch (e) { console.error('[threats]', path, e); return null; }
@@ -306,7 +306,7 @@ async function loadReports() {
 }
 
 async function loadAll() {
-  if (!token()) { window.location = '/login.html?redirect=' + encodeURIComponent(window.location.pathname); return; }
+  if (!token()) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(window.location.pathname); return; }
   document.getElementById('refresh-btn').disabled = true;
   await Promise.all([loadStatus(), loadTimeline(), loadScores(), loadAlerts(), loadIocs(), loadIncidents(), loadSources(), loadFeeds(), loadReports()]);
   document.getElementById('refresh-btn').disabled = false;
