@@ -8,9 +8,11 @@ Standards-Version: 4.6.2
 Package: secubox-torrent
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), secubox-hub, lxc, debootstrap, nftables, jq
-Recommends: secubox-peertube
+Recommends: secubox-peertube, secubox-lyrion, ffmpeg
 Description: WebTorrent streaming for SecuBox (LXC-native)
  Paste a magnet and stream it in the browser (HTTP Range) while it downloads.
  Ephemeral by default with an optional Keep to a persistent library on /data.
  The WebTorrent engine (hybrid WebRTC+BitTorrent) runs isolated in a dedicated
- LXC; the host only proxies an authenticated vhost.
+ LXC; the host only proxies an authenticated vhost. Conserved video goes to
+ PeerTube, conserved audio (mp3/flac/…) goes to Lyrion; ffmpeg (ffprobe) lets
+ the host resolve ambiguous containers (eg. audio-only .mkv) precisely.

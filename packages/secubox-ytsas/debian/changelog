@@ -1,13 +1,27 @@
 secubox-ytsas (0.1.3-1~bookworm1) bookworm; urgency=medium
 
-  * Package the admin-panel API route (ref #979): ytsas is LXC-native (no
-    in-process aggregator module), so /api/v1/ytsas/ from the admin vhost
-    404'd — only the companion vhost had the matching proxy_pass. Ships
-    nginx/ytsas-routes.conf to /etc/nginx/secubox-routes.d/, wired through
-    postinst's existing nginx -t + reload and unwired cleanly in prerm on
-    remove/deconfigure (upgrade is left to dpkg's normal conffile handling).
+  * FIX conserved MP3/FLAC (and other common audio) went to PeerTube — a video
+    platform — because secubox-ytsas-conserve uploaded every conserved file
+    through peertubectl regardless of type. It now classifies each file
+    (extension-based; ambiguous .mkv is content-probed via ffprobe when
+    available) and routes audio to Lyrion (`lyrionctl ingest`) while video
+    keeps going to PeerTube unchanged. Destination per category is declarative
+    — [conserve] video/audio in ytsas.toml — not hardcoded. An unrecognised
+    file type is never routed anywhere (terminal error, dequeued); an absent
+    or unreachable Lyrion leaves the item queued for a later retry, exactly
+    like the existing "peertubectl not installed" degrade path (ref #967).
+  * Recommends: secubox-lyrion, ffmpeg (ffprobe resolves ambiguous containers).
+  * library.py/main.py: a conserved-to-Lyrion item now records into its own
+    lyrion_status/lyrion_path columns instead of falling through into
+    peertube_status='done' with no url — the previous shape made a
+    successful Lyrion conserve look neither done nor failed in the panel,
+    inviting a redundant re-click. www/ytsas/index.html shows a distinct
+    "🎵 Lyrion ✓" badge alongside "📼 PeerTube ✓".
+  * lyrionctl ingest: namespace the destination by a hash of the source path
+    (not just its basename) — two unrelated conserved files that happen to
+    share a filename no longer silently overwrite each other in the library.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 04 Aug 2026 16:55:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 03 Aug 2026 14:00:00 +0200
 
 secubox-ytsas (0.1.2-1~bookworm1) bookworm; urgency=high
 

@@ -5,11 +5,18 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 # SecuBox-Deb :: secubox-ytsas-conserve
-# Host-side drain of the ytsas "conserve to PeerTube" queue. The ytsas LXC drops
-# a request in $DATA/.conserve-queue (it has the video file but NOT the PeerTube
-# creds); this host job — which DOES have the creds via peertubectl — uploads the
-# file and drops a result in $DATA/.conserve-results the LXC reads. The whole
-# point of the split is to keep PeerTube creds off the LXC.
+# Host-side drain of the ytsas "conserve" queue. The ytsas LXC drops a
+# request in $DATA/.conserve-queue (it has the media file but NOT the
+# PeerTube/Lyrion credentials or LXC access); this host job — which DOES have
+# them via peertubectl/lyrionctl — routes the file to the right partner and
+# drops a result in $DATA/.conserve-results the LXC reads. The whole point of
+# the split is to keep those credentials off the LXC.
+#
+# Routing (issue #967): video keeps going to PeerTube; audio (mp3/flac/…)
+# goes to Lyrion instead — PeerTube is a video platform, it was never the
+# right destination for music. Destination per media category is declarative
+# — see [conserve] in ytsas.toml — not hardcoded here. See classify_media()
+# for how a file is judged audio vs video vs unclassifiable.
 set -uo pipefail
 readonly MODULE="ytsas-conserve"
 
@@ -27,11 +34,75 @@ LXC_UID="${SECUBOX_YTSAS_LXC_UID:-100000}"
 
 log() { logger -t sbx-"$MODULE" "$*"; }
 
+# _toml_sec <section> <key> <default> — section-aware scalar read of $TOML.
+# Separate from _toml() above (flat/numeric, for channel/privacy). Section-
+# aware on purpose: a flat reader would silently return the wrong value if
+# "video"/"audio" ever appear as keys under some other section — same class
+# of bug toml_get_sec() in lyrionctl/jellyfinctl exists to avoid for
+# [lxc].path vs [library].path.
+_toml_sec() {
+  local section="$1" key="$2" default="${3:-}"
+  [ -f "$TOML" ] || { printf '%s' "$default"; return; }
+  local val
+  val=$(awk -v section="$section" -v key="$key" '
+    /^[[:space:]]*\[/ { s=$0; gsub(/[][[:space:]]/,"",s); cur=s; next }
+    cur==section {
+        line=$0; k=line; sub(/=.*/,"",k); gsub(/[[:space:]]/,"",k)
+        if (k==key) {
+            v=line; sub(/^[^=]*=/,"",v); sub(/#.*/,"",v)
+            gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); gsub(/["'\''"]/,"",v)
+            print v; exit
+        }
+    }' "$TOML" 2>/dev/null || true)
+  [ -n "$val" ] && printf '%s' "$val" || printf '%s' "$default"
+}
+
+# ── Conserve routing (declarative — [conserve] in ytsas.toml) ──────────────
+# "peertube" | "lyrion" | "none" (or any other value) — "none"/unrecognised
+# leaves matching items queued rather than guessing a destination.
+CONSERVE_VIDEO_DEST="${SECUBOX_YTSAS_CONSERVE_VIDEO:-$(_toml_sec conserve video peertube)}"
+CONSERVE_AUDIO_DEST="${SECUBOX_YTSAS_CONSERVE_AUDIO:-$(_toml_sec conserve audio lyrion)}"
+
+# ── Audio/video classification ──────────────────────────────────────────────
+# Extension is the primary signal — cheap and correct for the overwhelming
+# majority of conserved files, and .m4a vs .mp4 is NOT actually ambiguous:
+# each has its own extension and its own bucket below, so no guessing needed
+# for that pair specifically. Matroska (.mkv) genuinely IS ambiguous — it can
+# hold audio-only or audio+video — so it gets a content probe via ffprobe
+# when available. Without ffprobe (or on probe failure) an .mkv defaults to
+# video: that preserves today's working behaviour for the common case
+# (yt-dlp merging separate video+audio streams into mkv) instead of
+# regressing it. Anything outside all three lists is left unclassified —
+# never routed anywhere.
+readonly AUDIO_EXTS="mp3 flac ogg oga opus m4a wav aac wma"
+readonly VIDEO_EXTS="mp4 webm avi mov wmv flv m2ts ts ogv mpg mpeg"
+readonly AMBIGUOUS_EXTS="mkv"
+FFPROBE_BIN="${SECUBOX_FFPROBE_BIN:-ffprobe}"
+
+# classify_media <path> — prints "audio", "video", or "" (unclassifiable).
+classify_media() {
+  local path="$1" base ext
+  base=$(basename -- "$path")
+  ext=$(printf '%s' "${base##*.}" | tr '[:upper:]' '[:lower:]')
+  case " $AUDIO_EXTS " in *" $ext "*) echo audio; return ;; esac
+  case " $VIDEO_EXTS " in *" $ext "*) echo video; return ;; esac
+  case " $AMBIGUOUS_EXTS " in
+    *" $ext "*)
+      if command -v "$FFPROBE_BIN" >/dev/null 2>&1; then
+        local has_video
+        has_video=$("$FFPROBE_BIN" -v error -select_streams v \
+          -show_entries stream=codec_type -of csv=p=0 "$path" 2>/dev/null)
+        if [ -n "$has_video" ]; then echo video; else echo audio; fi
+      else
+        echo video   # can't confirm — default preserves the existing video path
+      fi
+      return
+      ;;
+  esac
+  echo ""   # unrecognised extension — do not guess
+}
+
 [ -d "$QDIR" ] || exit 0
-if ! command -v peertubectl >/dev/null 2>&1; then
-  log "peertubectl not installed (secubox-peertube) — leaving queue for later"
-  exit 0
-fi
 mkdir -p "$RDIR"
 # Both dirs must be OWNED by the LXC app (idmap uid), not by host-root: the LXC
 # writes queue files and unlinks drained results, which needs write on the DIR
@@ -51,20 +122,73 @@ for req in "$QDIR"/*.json; do
   id=$(jq -r '.id // empty' "$req" 2>/dev/null)
   name=$(jq -r '.name // .title // empty' "$req" 2>/dev/null)
   file=$(jq -r '.file // empty' "$req" 2>/dev/null)
-  rm -f "$req"
-  [ -n "$id" ] || continue
+  if [ -z "$id" ]; then
+    rm -f "$req"; continue
+  fi
   if [ -z "$file" ] || [ ! -f "$file" ]; then
-    _result "$id" '{"status":"error","error":"video file not found"}'
+    rm -f "$req"
+    _result "$id" '{"status":"error","error":"media file not found"}'
     log "file missing for $id"; continue
   fi
   [ -n "$name" ] || name="$(basename "$file")"
-  res=$(peertubectl upload "$file" "$name" "$CHANNEL" "$PRIVACY" 2>/dev/null | tail -1)
-  url=$(printf '%s' "$res" | jq -r '.url // empty' 2>/dev/null)
-  if [ -n "$url" ]; then
-    _result "$id" "$(printf '{"status":"done","url":"%s"}' "$url")"
-    log "conserved $id -> $url"
-  else
-    _result "$id" '{"status":"error","error":"peertube upload failed"}'
-    log "upload FAILED for $id"
-  fi
+
+  kind=$(classify_media "$file")
+  case "$kind" in
+    audio) dest="$CONSERVE_AUDIO_DEST" ;;
+    video) dest="$CONSERVE_VIDEO_DEST" ;;
+    *)
+      rm -f "$req"
+      _result "$id" '{"status":"error","error":"unrecognised media type — not conserved"}'
+      log "unclassifiable media for $id ($file)"; continue
+      ;;
+  esac
+
+  case "$dest" in
+    peertube)
+      if ! command -v peertubectl >/dev/null 2>&1; then
+        log "peertubectl not installed (secubox-peertube) — leaving $id queued"
+        continue
+      fi
+      res=$(peertubectl upload "$file" "$name" "$CHANNEL" "$PRIVACY" 2>/dev/null | tail -1)
+      url=$(printf '%s' "$res" | jq -r '.url // empty' 2>/dev/null)
+      rm -f "$req"
+      if [ -n "$url" ]; then
+        _result "$id" "$(printf '{"status":"done","url":"%s"}' "$url")"
+        log "conserved $id -> peertube $url"
+      else
+        _result "$id" '{"status":"error","error":"peertube upload failed"}'
+        log "peertube upload FAILED for $id"
+      fi
+      ;;
+    lyrion)
+      if ! command -v lyrionctl >/dev/null 2>&1; then
+        log "lyrionctl not installed (secubox-lyrion) — leaving $id queued"
+        continue
+      fi
+      res=$(lyrionctl ingest "$file" 2>/dev/null | tail -1)
+      ok=$(printf '%s' "$res" | jq -r '.ok // false' 2>/dev/null)
+      if [ "$ok" = "true" ]; then
+        libpath=$(printf '%s' "$res" | jq -r '.path // empty' 2>/dev/null)
+        rm -f "$req"
+        _result "$id" "$(printf '{"status":"done","library_path":"%s"}' "$libpath")"
+        log "conserved $id -> lyrion $libpath"
+      else
+        # Lyrion absent/unreachable is treated as transient infra, not a
+        # terminal failure: leave the request queued so the next timer tick
+        # retries it — the file is never lost, never diverted to peertube.
+        log "lyrion unreachable/failed for $id — leaving queued"
+      fi
+      ;;
+    *)
+      # An operator-set "none" (deliberate opt-out) or a typo'd/unknown
+      # value both land here. Unlike a partner outage this can never
+      # resolve itself on a later retry, so treat it as a terminal skip
+      # (dequeue + record) rather than leave the item queued forever —
+      # the latter would grow $QDIR without bound and spam this log every
+      # tick for a persistent, intentional configuration.
+      rm -f "$req"
+      _result "$id" "$(printf '{"status":"skipped","reason":"conserve disabled for this media type (dest=%s)"}' "$dest")"
+      log "no destination configured for $id (dest='$dest') — skipped"
+      ;;
+  esac
 done

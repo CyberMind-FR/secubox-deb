@@ -75,3 +75,15 @@ test('setPeertube records status + url', () => {
   assert.equal(lib.get('a').peertube_status, 'done');
   assert.equal(lib.get('a').peertube_url, 'https://peertube/w/xyz');
 });
+
+test('setLyrion records status + library path, independently of peertube columns', () => {
+  const lib = mk();
+  lib.add({ infohash: 'a', name: 'A', magnet: 'm', path: '/tmp/a' });
+  lib.setLyrion('a', 'done', '/data/music/conserve/a.mp3');
+  const row = lib.get('a');
+  assert.equal(row.lyrion_status, 'done');
+  assert.equal(row.lyrion_path, '/data/music/conserve/a.mp3');
+  // Untouched — an audio conserve must never look like a peertube result.
+  assert.equal(row.peertube_status, null);
+  assert.equal(row.peertube_url, null);
+});

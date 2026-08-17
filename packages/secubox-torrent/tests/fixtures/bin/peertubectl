@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Stub for bats tests — logs args to $STUB_LOG, prints a fixed PeerTube-style
+# JSON result on stdout (real peertubectl prints JSON with a trailing url).
+printf 'peertubectl %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+if [[ "${STUB_PEERTUBECTL_FAIL:-0}" = "1" ]]; then
+    echo '{"error":"stub forced failure"}'
+    exit 0
+fi
+echo '{"url":"https://peertube.example/videos/watch/stubbed"}'
+exit 0

@@ -302,6 +302,7 @@
       var pct = r.stats ? Math.round((r.stats.progress || 0) * 100) : null;
       var eph = r.ephemeral_until;      // unix ts, or null → conserved
       var pt = r.peertube_status;       // 'done' | 'queued' | 'error' | null
+      var ly = r.lyrion_status;         // 'done' | 'error' | null
       var filesOpen = !!openFiles[r.infohash];
       // ZIP download only makes sense once the download actually finished —
       // r.complete is the library's own flag (survives the torrent being
@@ -312,15 +313,21 @@
             '" download title="Télécharger tout le dossier en ZIP">🗜️ ZIP</a>'
         : '';
 
-      // PeerTube conserve badge / action
+      // Conserve badge / action. The actual destination (PeerTube for video,
+      // Lyrion for audio) is decided host-side by file type — the panel
+      // doesn't know it in advance, so "queued" is shown generically and the
+      // two done/error states are read from whichever partner's columns the
+      // host drain actually wrote to (#967).
       var ptHtml;
       if (pt === 'done' && r.peertube_url) {
         ptHtml = '<a class="btn sm good" href="' + esc(r.peertube_url) + '" target="_blank" rel="noopener">📼 PeerTube ✓</a>';
+      } else if (ly === 'done' && r.lyrion_path) {
+        ptHtml = '<span class="btn sm good" title="' + esc(r.lyrion_path) + '">🎵 Lyrion ✓</span>';
       } else if (pt === 'queued') {
-        ptHtml = '<span class="btn sm muted">📼 upload…</span>';
+        ptHtml = '<span class="btn sm muted">⏳ conservation…</span>';
       } else {
-        ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver dans PeerTube (téléchargement complet requis)">📼 Conserver</button>' +
-          (pt === 'error' ? ' <span class="muted" title="échec upload">⚠</span>' : '');
+        ptHtml = '<button class="btn sm" data-action="conserve" title="Conserver (vidéo → PeerTube, audio → Lyrion ; téléchargement complet requis)">💾 Conserver</button>' +
+          ((pt === 'error' || ly === 'error') ? ' <span class="muted" title="échec de conservation">⚠</span>' : '');
       }
 
       // Purge control: conserved → offer a delay; marked → offer to cancel

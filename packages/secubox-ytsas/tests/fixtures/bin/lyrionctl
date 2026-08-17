@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Stub for bats tests — logs args to $STUB_LOG, mimics `lyrionctl ingest <file>`
+# always-JSON contract: {"ok":true,"path":"..."} or {"ok":false,"error":"..."}.
+printf 'lyrionctl %s\n' "$*" >> "${STUB_LOG:-/dev/null}"
+if [[ "$1" = "ingest" ]]; then
+    if [[ "${STUB_LYRIONCTL_FAIL:-0}" = "1" ]]; then
+        echo '{"ok":false,"error":"stub forced failure"}'
+        exit 0
+    fi
+    echo "{\"ok\":true,\"path\":\"/data/music/conserve/$(basename -- "$2")\"}"
+    exit 0
+fi
+echo '{}'
+exit 0
