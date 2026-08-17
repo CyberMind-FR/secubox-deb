@@ -69,10 +69,6 @@ type Analyzer interface {
 // *sentinel.C2Learner as "endpoints disabled" — fail-safe.
 var c2Learner *sentinel.C2Learner
 
-// ja4Capture is the optional operator JA4 recorder (SENTINEL_JA4_CAPTURE);
-// nil (the default) is a safe no-op. Set in buildAnalyzers.
-var ja4Capture *sentinel.JA4Capture
-
 // Default tuning, overridable via Config for production and tests alike.
 const (
 	defaultTTL           = 72 * time.Hour
@@ -258,8 +254,6 @@ func handleConn(ctx context.Context, conn net.Conn, store *sentinel.Store, analy
 // Verdict's Action (defense in depth against a misbehaving analyzer — see
 // sentinel.FinalizeAction), and records it to store.
 func processMsg(store *sentinel.Store, analyzers []Analyzer, msg sentinel.MirrorMsg) {
-	// Optional operator JA4 capture (SENTINEL_JA4_CAPTURE) — no-op when off.
-	ja4Capture.Observe(msg.Meta.Host, msg.Meta.JA4)
 	for _, a := range analyzers {
 		for _, v := range safeAnalyze(a, msg) {
 			if v == nil {
@@ -361,10 +355,6 @@ func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer,
 		errs = append(errs, fmt.Errorf("pack loader (spyware analyzer disabled): %w", err))
 	} else {
 		analyzers = append(analyzers, sentinel.NewSpyware(loader))
-		// #826 report-only feed surfacing: correlate the non-spyware IOC
-		// classes (botnet_c2/malware/… from the live threat feeds) that the
-		// Spyware analyzer skips, as REPORT-ONLY (the daemon never blocks).
-		analyzers = append(analyzers, sentinel.NewIOCReporter(loader))
 	}
 
 	c2 := sentinel.NewC2Learner(sentinel.NewBehavioral(), sentinel.C2Config{
@@ -372,12 +362,10 @@ func buildAnalyzers(packDir, overlayDir string, yaraRules []string) ([]Analyzer,
 		BoxFile:     getenvDefault("SENTINEL_C2_BOX_DOMAINS", "/etc/secubox/waf/haproxy-routes.json"),
 		CandFile:    getenvDefault("SENTINEL_C2_CANDIDATES", "/var/lib/secubox/sentinel/c2-candidates.json"),
 		LearnedFile: getenvDefault("SENTINEL_C2_LEARNED", "/var/lib/secubox/sentinel/c2-learned.json"),
-		BrowserJA4:  readLinesFile(getenvDefault("SENTINEL_C2_BROWSER_JA4", "/etc/secubox/sentinel/browser-ja4.txt")),
+		BrowserJA4:  readLinesFile(getenvDefault("SENTINEL_C2_BROWSER_JA4", "/usr/share/secubox/sentinel/browser-ja4.txt")),
 	})
 	analyzers = append(analyzers, c2)
 	c2Learner = c2 // package-level handle for the status mux (see http.go wiring)
-	// Optional operator JA4 capture — off unless SENTINEL_JA4_CAPTURE is set.
-	ja4Capture = sentinel.NewJA4Capture(getenvDefault("SENTINEL_JA4_CAPTURE", ""))
 
 	yara, err := sentinel.NewYaraEngine(yaraRules)
 	if err != nil {

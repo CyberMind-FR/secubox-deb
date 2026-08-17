@@ -1,16 +1,7 @@
-# Known-browser client-stack fingerprints (ja4stack format: t<ver>_c<ciphers>_a<alpn>,
-# GREASE-excluded). One per line; '#' comments allowed. EMPTY by default.
+# Known browser JA4/JA3 fingerprints (one per line). A destination polled with
+# one of these is treated as browser-driven (an admin dashboard), so the
+# non_browser_ja corroborating signal does NOT fire for it.
 #
-# These are BOARD-SPECIFIC (browsers vary by version), so populate from THIS
-# board's own live traffic rather than shipping guessed values:
-#   1) set SENTINEL_JA4_CAPTURE=/var/lib/secubox/sentinel/ja4-observed.tsv in
-#      /etc/secubox/sentinel.env and restart sbx-sentinel;
-#   2) let real browsing flow through the MITM for a while;
-#   3) keep the fingerprints seen hitting known browser destinations
-#      (google/gstatic/cloudflare/…) — prefer clear browsers (ALPN h2, TLS 1.3);
-#   4) add them here (one per line) and restart sbx-sentinel; unset the capture.
-#
-# When populated, the C2 auto-learn "non_browser_ja" signal is suppressed for
-# these fingerprints (browser-driven traffic), and fires for others. Empty =
-# signal disabled (safe: no false positives). Conservative under-listing is
-# safe; over-listing risks missing a real C2 that reuses a listed fingerprint.
+# Empty by default: operators/feeds extend this list; an empty file simply
+# disables the non_browser_ja signal shortcut (the other C2 corroborating
+# signals — rarity, DGA-looking labels, etc. — still apply).

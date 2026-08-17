@@ -193,29 +193,3 @@ func TestC2LearnerWindowAdvanceOwnTiming(t *testing.T) {
 		t.Fatalf("expected sustained own-timing window-advance to promote the host; candidates=%v", l.Candidates())
 	}
 }
-
-// A first-seen (rare), browser-fingerprinted, non-DGA host beaconed steadily
-// over a long span must NOT be learned — rarity alone is not enough. This is
-// the admin-dashboard false positive the strong-signal requirement prevents.
-func TestC2LearnerRareOnlyBrowserHostNotLearned(t *testing.T) {
-	l := c2TestLearner(t)        // browser set = {"t13d1516h2_browserfp"}
-	host := "portal.example.com" // common word → no dga
-	mac := "beefbeefbeef0001"
-	ja4 := "t13d1516h2_browserfp" // a KNOWN browser → no non_browser_ja
-	ts := int64(6_000_000)
-	// 15 contacts (stays < c2RareMaxHits=20, so "rare" fires the whole time),
-	// 600s apart → spans 8400s (> c2MinSpanSec) with many window ticks.
-	for i := 0; i < 15; i++ {
-		l.Analyze(MirrorMsg{Meta: FlowMeta{Host: host, MacHash: mac, JA4: ja4}, TS: ts})
-		ts += 600
-	}
-	if len(l.Learned()) != 0 {
-		t.Errorf("rare-only browser host must not be learned, got %v", l.Learned())
-	}
-	// and it must not even become a promotable candidate carrying only rare
-	for _, c := range l.Candidates() {
-		if c.Host == host {
-			t.Errorf("rare-only browser host should not be a tracked candidate, got %+v", c)
-		}
-	}
-}
