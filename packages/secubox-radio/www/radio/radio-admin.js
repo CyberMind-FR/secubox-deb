@@ -1,0 +1,234 @@
+'use strict';
+// Le panneau parle a l'API PAR L'AGREGATEUR : meme origine, prefixe complet.
+var API = '/api/v1/radio';
+
+function toast(m) {
+  var t = document.getElementById('toast');
+  t.textContent = m; t.style.display = 'block';
+  setTimeout(function () { t.style.display = 'none'; }, 3200);
+}
+
+// LE PANNEAU N'A RIEN A PROUVER : il est servi par `admin.gk2`, deja
+// authentifiee, et l'agregateur relaie ses appels vers la radio en retirant le
+// prefixe. Le demon en tire lui-meme la consequence — voir `parAdmin`.
+//
+// Une premiere version reclamait un secret dans une boite de dialogue a un
+// administrateur DEJA connecte. C'etait une seconde authentification pour la
+// meme personne, sur la meme session : retiree.
+function api(chemin, options) {
+  options = options || {};
+  options.headers = Object.assign({ 'X-Sbx-Radio': '1' }, options.headers || {});
+  if (options.body) options.headers['Content-Type'] = 'application/json';
+  return fetch(API + chemin, options).then(function (r) {
+    return r.json().catch(function () { return {}; })
+      .then(function (d) { return { code: r.status, corps: d }; });
+  });
+}
+
+// `textContent` PARTOUT : titres et pseudonymes viennent d'un service tiers ou
+// d'un membre. Les injecter en balisage ferait de ce panneau la porte d'entree.
+function ligne(p, actions) {
+  var d = document.createElement('div');
+  d.className = 'row';
+  var sp = document.createElement('span');
+  sp.className = 'sp';
+  var nm = document.createElement('div');
+  nm.className = 'nm';
+  nm.textContent = p.titre || p.source;
+  var su = document.createElement('div');
+  su.className = 'su';
+  var qui = (p.aimeurs || []).map(function (a) { return a.pseudo; }).filter(Boolean);
+  su.textContent = '♥ ' + p.coeurs + (qui.length ? ' — ' + qui.join(', ') : '');
+  sp.appendChild(nm); sp.appendChild(su);
+  d.appendChild(sp);
+  (actions || []).forEach(function (a) { d.appendChild(a); });
+  return d;
+}
+
+function bouton(texte, classe, clic) {
+  var b = document.createElement('button');
+  b.className = 'btn ' + classe;
+  b.textContent = texte;
+  b.addEventListener('click', clic);
+  return b;
+}
+
+function tag(texte, classe) {
+  var s = document.createElement('span');
+  s.className = 'tag ' + (classe || '');
+  s.textContent = texte;
+  return s;
+}
+
+// LES MORCEAUX D'UNE LISTE SONT GROUPES. Cinquante lignes melees au reste
+// seraient illisibles : on ne saurait plus ce qui vient d'ou, ni combien il
+// reste a trancher dans une liste donnee.
+// TROIS GESTES, TROIS PORTEES — et le panneau les distingue, parce qu'on ne
+// les devine pas :
+//   devalider  « pas maintenant » : retour en file, coeurs gardes
+//   refuser    « jamais »         : la reproposition ne la ramene pas
+//   supprimer  « efface »         : tout part, elle pourra revenir demain
+function boutonSupprimer(p) {
+  return bouton('🗑 Supprimer', 'danger', function () {
+    if (!confirm('Supprimer « ' + (p.titre || p.source) + ' » ?\n\n' +
+                 'Elle quitte le répertoire et pourra être reproposée. ' +
+                 'Pour l\'empêcher de revenir, refusez-la plutôt.')) return;
+    api('/pistes/' + p.id + '/supprimer', { method: 'POST' }).then(function (r) {
+      toast(r.code === 409 ? (r.corps.error || 'Impossible pour l’instant.') : 'Supprimée.');
+      rafraichir();
+    });
+  });
+}
+
+function boutonDevalider(p) {
+  return bouton('↩ Dévalider', '', function () {
+    api('/pistes/' + p.id + '/devalider', { method: 'POST' }).then(function (r) {
+      toast(r.code === 200 ? 'Renvoyée en file — elle garde ses ♥.'
+                           : (r.corps.error || 'Refusé'));
+      rafraichir();
+    });
+  });
+}
+
+function enteteLot(titre, n) {
+  var d = document.createElement('div');
+  d.className = 'row';
+  d.style.borderBottom = '1px solid var(--cyan)';
+  var t = document.createElement('span');
+  t.className = 'sp';
+  t.style.color = 'var(--cyan)';
+  t.textContent = '📃 ' + titre;
+  d.appendChild(t);
+  d.appendChild(tag(n + ' à trancher', 'c'));
+  return d;
+}
+
+function ligneProposition(p) {
+  return ligne(p, [
+    bouton('✓ Valider', 'good', function () {
+      api('/propositions/' + p.id + '/valider', { method: 'POST' }).then(function (r) {
+        toast(r.code === 200 ? 'Validée — elle entre à l’antenne.'
+                             : (r.corps.error || 'Refusé'));
+        rafraichir();
+      });
+    }),
+    bouton('✕ Refuser', 'danger', function () {
+      // LE MOTIF EST DEMANDE, PAS FACULTATIF : sans lui, la question
+      // « pourquoi pas celle-la » se repose chaque semaine.
+      var motif = prompt('Motif du refus (il sera conservé) :');
+      if (motif === null) return;
+      api('/propositions/' + p.id + '/refuser',
+          { method: 'POST', body: JSON.stringify({ motif: motif }) }).then(function () {
+        toast('Refusée — la reproposer ne la fera pas revenir.');
+        rafraichir();
+      });
+    }),
+    boutonSupprimer(p)
+  ]);
+}
+
+function rendPropositions(l) {
+  var z = document.getElementById('propositions');
+  z.innerHTML = '';
+  if (!l || !l.length) { z.innerHTML = '<div class="vide">rien à valider</div>'; return; }
+  var lots = {}, seules = [];
+  l.forEach(function (p) {
+    if (p.lot) {
+      // LE TITRE DE LA LISTE peut manquer : on montre alors son identifiant
+      // plutot qu'une cle technique nue, qui ne dit rien a qui doit trancher.
+      if (!lots[p.lot]) {
+        var t = p.lot_titre && p.lot_titre !== p.lot ? p.lot_titre
+              : 'Playlist ' + p.lot.replace(/^ytpl:/, '');
+        lots[p.lot] = { titre: t, items: [] };
+      }
+      lots[p.lot].items.push(p);
+    } else {
+      seules.push(p);
+    }
+  });
+  Object.keys(lots).forEach(function (k) {
+    z.appendChild(enteteLot(lots[k].titre, lots[k].items.length));
+    lots[k].items.forEach(function (p) { z.appendChild(ligneProposition(p)); });
+  });
+  seules.forEach(function (p) { z.appendChild(ligneProposition(p)); });
+}
+
+function rendPlaylist(pistes, enCours) {
+  var z = document.getElementById('playlist');
+  if (!z) return;
+  z.innerHTML = '';
+  if (!pistes || !pistes.length) { z.innerHTML = '<div class="vide">rien a l antenne</div>'; return; }
+  pistes.forEach(function (p) {
+    var etat = p.ecarte ? tag(p.raison || 'écarté', 'r')
+             : (p.en_cache ? tag(p.id === enCours ? 'en lecture' : 'prête',
+                                 p.id === enCours ? 'c' : 'g')
+                           : tag('récupération…', 'o'));
+    z.appendChild(ligne(p, [etat, boutonDevalider(p), boutonSupprimer(p)]));
+  });
+}
+
+function rendEcartes(pistes) {
+  var z = document.getElementById('ecartes');
+  z.innerHTML = '';
+  var l = (pistes || []).filter(function (p) { return p.ecarte; });
+  if (!l.length) { z.innerHTML = '<div class="vide">aucun</div>'; return; }
+  l.forEach(function (p) { z.appendChild(ligne(p, [tag(p.raison || 'écarté', 'r')])); });
+}
+
+function stat(valeur, libelle, classe) {
+  var d = document.createElement('div');
+  d.className = 'stat-card ' + (classe || '');
+  var v = document.createElement('div'); v.className = 'value'; v.textContent = valeur;
+  var l = document.createElement('div'); l.className = 'label'; l.textContent = libelle;
+  d.appendChild(v); d.appendChild(l);
+  return d;
+}
+
+function rafraichir() {
+  Promise.all([api('/playlist'), api('/propositions'), api('/current')])
+    .then(function (r) {
+      if (!verifieAcces(r[1].code)) return;
+      var pistes = (r[0].corps.pistes) || [];
+      var props = (r[1].corps.propositions) || [];
+      var cur = r[2].corps || {};
+      var enCours = cur.piste ? cur.piste.id : 0;
+
+      var g = document.getElementById('stats');
+      g.innerHTML = '';
+      g.appendChild(stat(pistes.length, 'à l’antenne', 'cyan'));
+      g.appendChild(stat(props.length, 'à valider', 'purple'));
+      g.appendChild(stat(pistes.filter(function (p) { return p.en_cache; }).length, 'en cache', 'green'));
+      g.appendChild(stat(pistes.filter(function (p) { return p.ecarte; }).length, 'écartés', 'orange'));
+
+      document.getElementById('subline').textContent = cur.silence
+        ? 'silence — aucune piste prête'
+        : 'en lecture : ' + (cur.piste ? (cur.piste.titre || cur.piste.source) : '?');
+
+      rendPropositions(props);
+      rendPlaylist(pistes, enCours);
+      rendProbas(pistes, enCours);
+      rendEcartes(pistes);
+    })
+    .catch(function () { toast('API injoignable'); });
+}
+
+// UN REFUS SE DIT. Un panneau vide sans explication fait chercher la panne du
+// mauvais cote — c'est exactement ce qui s'est passe quand l'identite ne
+// passait pas.
+function verifieAcces(code) {
+  if (code === 401 || code === 403) {
+    toast('Accès refusé par la radio — la session d’administration est-elle active ?');
+    return false;
+  }
+  return true;
+}
+
+function suivante() {
+  api('/suivante', { method: 'POST' }).then(function (r) {
+    toast(r.code === 200 ? 'Titre suivant.' : (r.corps.error || 'Refusé'));
+    rafraichir();
+  });
+}
+
+rafraichir();
+setInterval(rafraichir, 30000);
