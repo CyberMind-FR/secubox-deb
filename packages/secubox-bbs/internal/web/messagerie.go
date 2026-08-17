@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
+	"time"
 )
 
 // mp affiche la boite de reception, ou une conversation si l'adresse porte un
@@ -183,6 +184,46 @@ func (s *Server) mastodon(w http.ResponseWriter, r *http.Request) {
 	p.MastoInstance, _ = s.st.Reglage(store.CleMastodonInstance)
 	if p.V.Connecte {
 		p.MastoInvite, _ = s.st.Reglage(store.CleMastodonInvite)
+
+		// LE LIEN PERSONNEL (#1044). Son absence n'est pas une anomalie : c'est
+		// l'etat par defaut, et le seul acceptable tant que le membre n'a pas
+		// fait l'aller-retour OAuth. On ne rapproche JAMAIS son compte d'un
+		// compte Mastodon portant le meme pseudonyme.
+		if c, err := s.st.CompteMastodonDe(p.V.ID); err == nil {
+			p.MastoLie = true
+			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
+			p.MastoLieLe = time.Unix(c.LieLe, 0).Format("02/01/2006")
+
+			// LA POLITIQUE S'OUVRE ICI, ET SEULEMENT ICI (#1044). Sans cela
+			// le navigateur bloque les images et les sons de l'instance —
+			// SANS RIEN DIRE AU SERVEUR : la page part complete, le lecteur
+			// reste noir, et l'on cherche la panne du mauvais cote. C'est
+			// exactement ce qui s'est produit.
+			//
+			// L'origine est celle de l'instance ou CE membre a prouve son
+			// identite ; la porte se referme avec la reponse.
+			s.OrigineMediaMastodon(w, c.Instance)
+
+			// LE FIL DISTANT. Son echec n'interrompt pas la page : une
+			// instance injoignable doit laisser le panneau s'afficher avec
+			// une ligne qui le dit.
+			fil, err := s.filMastodon(p.V.ID, c)
+			p.MastoFil = fil
+			if err != nil {
+				p.MastoFilErr = "Fil indisponible : " + err.Error()
+			}
+		}
+	}
+	// Les retours de la passerelle passent par l'adresse : l'aller-retour chez
+	// l'instance fait perdre tout etat de session applicative.
+	q := r.URL.Query()
+	p.MastoErr = q.Get("err")
+	switch {
+	case q.Get("lie") != "":
+		p.MastoInfo = "Compte relié. Vous pouvez republier un fil public sous votre propre identité."
+	case q.Get("delie") != "":
+		p.MastoInfo = "Lien retiré ici. Pensez à révoquer aussi l'autorisation " +
+			"dans les réglages de votre compte Mastodon : le BBS ne peut pas le faire à votre place."
 	}
 	switch {
 	case p.MastoInstance == "":

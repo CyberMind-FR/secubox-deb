@@ -45,17 +45,17 @@ type page struct {
 	// FilsNonLus est un ENSEMBLE : un drapeau par fil aurait impose une requete
 	// par ligne affichee, et c'est ainsi qu'une fonction de confort devient une
 	// cause de lenteur.
-	FilsNonLus                map[int64]bool
-	FilsNonLusSalon           map[int64]int
-	TotalFilsNonLus           int
+	FilsNonLus      map[int64]bool
+	FilsNonLusSalon map[int64]int
+	TotalFilsNonLus int
 	// Journal de moderation, affiche au sysop (#1020).
-	Moderations               []store.Moderation
-	Code, Msg                 string
-	Integ                     store.Integrity
-	Sain                      bool
-	Runs                      []store.IngestRun
-	Comptes                   []store.Compte
-	Moi                       store.Compte
+	Moderations []store.Moderation
+	Code, Msg   string
+	Integ       store.Integrity
+	Sain        bool
+	Runs        []store.IngestRun
+	Comptes     []store.Compte
+	Moi         store.Compte
 	// Messagerie (#1008). Convs : la boite de reception ; Fil : la conversation
 	// ouverte ; Avec : l'interlocuteur ; Corres : les comptes joignables.
 	Convs      []store.ConversationResume
@@ -73,6 +73,17 @@ type page struct {
 	NonLus int
 	// Module Mastodon (#1008).
 	MastoInstance, MastoInvite string
+	// Passerelle Mastodon (#1044). MastoCompte porte l'identifiant tel que
+	// L'INSTANCE le nomme — jamais un pseudonyme devine a partir du nom local.
+	// Le jeton n'apparait pas ici : ce qui s'affiche et ce qui autorise ne
+	// voyagent pas dans la meme structure.
+	MastoCompte, MastoLieLe string
+	MastoLie                bool
+	MastoErr, MastoInfo     string
+	// Fil distant du compte lie. `Texte` y est du TEXTE BRUT : le contenu
+	// vient d'une instance tierce et n'est jamais rendu comme du HTML.
+	MastoFil    []PublicationVue
+	MastoFilErr string
 	// Invites : qui a invite qui. Contrepartie de l'invitation sans quota.
 	Invites []store.Invitation
 	// VCSS : empreinte de la feuille de style, posee dans son adresse.
@@ -112,6 +123,9 @@ type pill struct{ Class, Text string }
 func (s *Server) routes() {
 	s.mux.Handle("/static/", s.statique(http.FileServer(http.FS(assets))))
 	s.mux.HandleFunc("/", s.accueil)
+	ConfigurerFiches(s.opt.MediaOrigines)
+	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
+	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
@@ -128,11 +142,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/mp/annuaire", s.mpAnnuaire)
 	s.mux.HandleFunc("/mp/carnet", s.mpCarnet)
 	s.mux.HandleFunc("/mastodon", s.mastodon)
+	// Le sous-arbre porte les gestes de la passerelle : lier, retour, delier.
+	s.mux.HandleFunc("/mastodon/", s.mastodonPasserelle)
 	s.mux.HandleFunc("/billets", s.simple("billets"))
 	s.mux.HandleFunc("/nouveau", s.nouveau)
 	s.mux.HandleFunc("/sysop", s.sysop)
 	s.mux.HandleFunc("/sysop/", s.sysopAction)
 	s.mux.HandleFunc("/sysop/qr", s.qr)
+	s.mux.HandleFunc("/salon/rejoindre", s.rejoindreSalon)
 	s.mux.HandleFunc("/compte", s.compte)
 	s.mux.HandleFunc("/compte/", s.compteAction)
 	s.mux.HandleFunc("/media/ep/", s.mediaEpisode)
@@ -148,6 +165,40 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	pub := !v.Connecte
 	st, _ := s.st.Stats()
 	cats, _ := s.st.Categories(pub)
+
+	// LES SALONS PRIVES DISPARAISSENT ICI, ET NULLE PART AILLEURS (#1044).
+	//
+	// `base` alimente TOUTES les pages, et `salon()` cherche sa categorie dans
+	// cette meme liste : filtrer a cet unique endroit ferme donc le rail ET
+	// l'acces direct par adresse. Un salon retire de la liste fait tomber
+	// `salon()` sur son `p.Cat.ID == 0`, donc sur un 404.
+	//
+	// 404 ET NON 403, ET C'EST LE POINT. Un 403 confirmerait que le salon
+	// existe — c'est precisement ce qu'un salon prive ne doit pas laisser
+	// deviner. Pour qui n'y a pas acces, il n'existe pas.
+	//
+	// SI LA REQUETE ECHOUE, ON CACHE TOUT CE QUI EST PRIVE plutot que rien :
+	// `SalonsCachesPour` rend une liste d'exclusion, et l'erreur ignoree cache
+	// trop, jamais trop peu.
+	if caches, err := s.st.SalonsCachesPour(v.ID, v.Sysop()); err == nil {
+		if len(caches) > 0 {
+			gardes := cats[:0]
+			for _, c := range cats {
+				if !caches[c.ID] {
+					gardes = append(gardes, c)
+				}
+			}
+			cats = gardes
+		}
+	} else {
+		visibles := cats[:0]
+		for _, c := range cats {
+			if !c.Prive {
+				visibles = append(visibles, c)
+			}
+		}
+		cats = visibles
+	}
 	site := s.opt.Titre
 	ini := "B"
 	if site != "" {
@@ -192,7 +243,6 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	buf.WriteTo(w)
 }
-
 
 // poseNonLus renseigne l'etat lu/non-lu de la page (#1020).
 //
@@ -269,6 +319,28 @@ func (s *Server) moderer(w http.ResponseWriter, r *http.Request) {
 		parent, _ := strconv.ParseInt(r.FormValue("parent"), 10, 64)
 		_, err = s.st.CreeSousSalon(v.ID, r.FormValue("slug"),
 			r.FormValue("titre"), r.FormValue("desc"), parent)
+	case "salon-prive":
+		// FERMER OU ROUVRIR UN SALON. Le rang (`min_role_read`) n'est pas
+		// touche : les deux se cumulent.
+		err = s.st.RendPrive(cible, r.FormValue("etat") == "1")
+	case "salon-membre":
+		membre, _ := strconv.ParseInt(r.FormValue("membre"), 10, 64)
+		if r.FormValue("action") == "retirer" {
+			err = s.st.RetireMembre(cible, membre)
+		} else {
+			err = s.st.AjouteMembre(cible, membre, v.ID)
+		}
+	case "salon-invite":
+		// LE CODE N'EST MONTRE QU'UNE FOIS, ici, a celui qui l'a demande : la
+		// base n'en garde que l'empreinte. Le perdre oblige a en emettre un
+		// autre, ce qui est le comportement voulu.
+		var code string
+		code, err = s.st.NouvelleInvitationSalon(cible, v.ID)
+		if err == nil {
+			http.Redirect(w, r, "/sysop?msg="+url.QueryEscape(
+				"invitation au salon : /salon/rejoindre?code="+code), http.StatusSeeOther)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 		return
@@ -360,6 +432,9 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.URL.Path, "/publier"):
 		s.publier(w, r, id)
 		return
+	case strings.HasSuffix(r.URL.Path, "/mastodon"):
+		s.republierMastodon(w, r, id)
+		return
 	case strings.HasSuffix(r.URL.Path, "/qr"):
 		s.qrFil(w, r, id)
 		return
@@ -420,6 +495,17 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	// les yeux en lisant.
 	p.Threads, _ = s.st.Threads(t.CategoryID, pub)
 	p.T, p.Titre = t, t.Title
+
+	// LE BOUTON « REPUBLIER » NE S'AFFICHE QUE S'IL PEUT ABOUTIR (#1044). Un
+	// bouton qui mene a « reliez d'abord votre compte » vaut moins que pas de
+	// bouton : il promet un geste que la page ne peut pas tenir. La lecture est
+	// une recherche par cle primaire — son cout ne se mesure pas ici.
+	if p.V.Connecte {
+		if c, err := s.st.CompteMastodonDe(p.V.ID); err == nil {
+			p.MastoLie = true
+			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
+		}
+	}
 	s.rend(w, r, "thread", p)
 }
 
@@ -564,7 +650,6 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 		s.rend(w, r, "simple", p)
 	}
 }
-
 
 // cartesMedia rend les fils deposes par les passerelles media (#1020).
 //

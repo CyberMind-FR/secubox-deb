@@ -1,3 +1,510 @@
+secubox-bbs (0.25.2-1~bookworm1) bookworm; urgency=medium
+
+  * Des retours de volet non demandes se produisaient. Deux causes, traitees
+    ensemble : le navigateur corrige la position quand le contenu change de
+    taille — une image qui arrive — et dans un conteneur a calage horizontal
+    cette correction ramene au volet precedent (`overflow-anchor: none`) ; et
+    il garde l'element focalise dans le champ de vision, or c'est le lien qu'on
+    vient de taper, reste dans la liste (le focus est relache au clic).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:33:42 +0200
+
+secubox-bbs (0.25.1-1~bookworm1) bookworm; urgency=medium
+
+  * Choisir un fil fait glisser vers la vue, tout de suite. Le serveur pose
+    `volet-liste` des qu'on est dans un forum — y compris quand un fil est
+    OUVERT : on atterrissait sur la liste apres avoir choisi un fil, et il
+    fallait glisser a la main pour lire ce qu'on venait de demander.
+  * Au chargement, un element portant `aria-current="page"` dans la liste
+    l'emporte sur le marqueur : sa presence dit que la vue porte quelque chose
+    de precis, et c'est un signal plus sur qu'un marqueur de page.
+  * Le glissement part des le clic, sans attendre l'aller-retour reseau : sans
+    cela on tape et rien ne bouge, et l'on tape une seconde fois.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:21:35 +0200
+
+secubox-bbs (0.25.0-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : les deux volets glissent au lieu d'etre masques. AUCUN VOLET
+    N'EST PLUS CACHE, et c'est tout l'interet — masquer obligeait a decider
+    lequel montrer, decision ratee trois fois : la racine des forums porte son
+    contenu dans la vue, un forum precis dans la liste, et un fil ouvert de
+    nouveau dans la vue alors que le serveur posait encore `volet-liste`. Les
+    messages restaient donc invisibles sur telephone.
+  * Le marqueur du serveur ne masque plus rien : il place seulement le regard
+    au chargement. Ce qui n'est pas sous les yeux reste a un glissement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:18:08 +0200
+
+secubox-bbs (0.24.2-1~bookworm1) bookworm; urgency=medium
+
+  * Les messages d'un forum ne s'affichaient pas au bureau : le marqueur de
+    volet, pose dans la base de la feuille, masquait `.vue` A TOUTES LES
+    LARGEURS. Il ne vaut que sur telephone, ou un seul volet tient a l'ecran ;
+    au-dessus de 620 px les deux ont la place.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:14:46 +0200
+
+secubox-bbs (0.24.1-1~bookworm1) bookworm; urgency=medium
+
+  * La feuille contenait un `@media (max-width: 619.98px) {` ORPHELIN, reste
+    d'une suppression ou le contenu avait ete efface en laissant l'accolade
+    ouvrante. Tout ce qui suivait — les dispositions a deux et trois colonnes,
+    et la moitie des composants — se trouvait enferme dans une condition
+    impossible (< 620 ET >= 620) et ne s'appliquait sur AUCUNE largeur.
+    345 accolades ouvrantes pour 344 fermantes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 19:06:28 +0200
+
+secubox-bbs (0.24.0-1~bookworm1) bookworm; urgency=medium
+
+  * `/media-fiche` resout les metadonnees d'un lien vers nos services, appele
+    paresseusement par la page. LE DEMON APPELLE, pas le navigateur :
+    `connect-src` vaut 'self', et l'elargir sur une surface qui rend du contenu
+    ecrit par des membres est precisement ce qu'on evite.
+  * PeerTube par oEmbed et la radio par son etat — les deux contrats sont
+    mesures sur gk2, pas supposes. La vignette repart par notre relais.
+  * Le podcaster n'est PAS authentifie : le 401 observe venait du portail JWT
+    de l'agregateur sur le chemin prefixe. Son vhost sert la page publique en
+    HTML et n'expose le JSON que par sa socket — le brancher demande un autre
+    chemin d'appel, laisse pour la suite plutot qu'improvise.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:56:27 +0200
+
+secubox-bbs (0.23.0-1~bookworm1) bookworm; urgency=medium
+
+  * Un lien vers un de NOS services devient une fiche : le service est nomme,
+    l'adresse reste cliquable. AUCUN APPEL RESEAU AU RENDU — interroger le
+    service pour son titre ferait, sur un fil de trente liens, trente requetes
+    avant que la page ne parte, et un service lent bloquerait l'affichage d'une
+    conversation qui ne le concerne pas.
+  * La reconnaissance exige le SEPARATEUR apres l'origine : sans lui,
+    `radio.gk2.secubox.in.mal.tld` usurpait notre radio. Verifie par mutation.
+  * Sans `--media-origines`, aucun lien ne change : une autre installation n'a
+    pas nos vhosts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:49:00 +0200
+
+secubox-bbs (0.22.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le drapeau --frame-origines etait pose dans l'unite sans exister dans le
+    binaire : flag.Parse refusait de demarrer et le BBS rendait 503. Il est
+    desormais declare et cable.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:27:17 +0200
+
+secubox-bbs (0.22.1-1~bookworm1) bookworm; urgency=medium
+
+  * L'unite etait malformee : l'insertion des nouveaux drapeaux avait produit
+    un « \\ \\ » sur la ligne ExecStart et laisse deux lignes sans
+    continuation. systemd tronquait la commande — le demon tournait SANS la
+    plupart de ses options, et `frame-src` retombait a 'none' alors que
+    PeerTube y figurait avant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:26:03 +0200
+
+secubox-bbs (0.22.0-1~bookworm1) bookworm; urgency=medium
+
+  * `frame-src` s'etend a la radio et au podcaster, par `--frame-origines`.
+    Billets en est exclu : il n'offre aucun lecteur, et accorder un cadre a un
+    service qui n'en a pas l'usage elargit la politique pour rien.
+  * La liste est DISTINCTE de --media-origines, et volontairement : relayer une
+    image ne donne aucun droit au service, l'incorporer lui donne un contexte
+    d'execution dans la page. Confondre les deux ferait qu'ajouter une vignette
+    accorderait un lecteur.
+  * `frame-src` etait calcule en DEUX endroits a l'identique : ajouter un
+    service n'aurait porte que sur l'un des deux, et la page Mastodon aurait
+    garde une politique differente du reste du site sans que rien ne le
+    signale. Un seul point de verite desormais, et chaque entree revalidee —
+    verifie par mutation qu'une origine contenant un point-virgule couperait
+    la politique en deux.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:23:47 +0200
+
+secubox-bbs (0.21.0-1~bookworm1) bookworm; urgency=medium
+
+  * Relais de vignettes pour NOS services (#1056). Chaque service est un vhost
+    distinct du BBS, donc `img-src 'self'` ne couvre pas ses images : les lier
+    ferait contacter ce vhost par le navigateur de chaque membre et obligerait
+    a elargir la politique. Le demon les relaie, la politique reste fermee, et
+    le service distant n'apprend rien sur qui regarde.
+  * Les origines viennent de `--media-origines`, JAMAIS d'une URL postee par un
+    membre : relayer une adresse quelconque ferait du demon un proxy ouvert,
+    utilisable pour sonder l'agregateur ou un conteneur depuis le WAN derriere
+    l'adresse de la board. Vide par defaut — une autre installation n'a pas nos
+    noms de vhost.
+  * Bornes : 2 Mio sur ce qui est LU (et non sur Content-Length, declaratif),
+    8 s de delai, types image uniquement — un text/html relaye serait servi
+    depuis notre origine, donc avec le droit d'y executer du script.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 18:13:31 +0200
+
+secubox-bbs (0.20.5-1~bookworm1) bookworm; urgency=medium
+
+  * Le controle de la coquille cherchait `class="corps"` a l'identique, ce qui
+    interdisait toute classe supplementaire : il refusait le marqueur de volet
+    introduit en 0.20.4. Il accepte desormais une classe variable, et echoue
+    toujours si la zone disparait — verifie par mutation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 11:00:09 +0200
+
+secubox-bbs (0.20.4-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : le SERVEUR designe le volet qui porte le contenu, via la classe
+    `volet-liste`. Sur un forum precis ce sont les fils — donc la liste — et la
+    masquer rendait un ecran vide ; sur la racine c'est l'inverse. Aucune regle
+    CSS ne pouvait les distinguer, d'ou deux tentatives et deux ecrans vides,
+    un dans chaque sens.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:57:26 +0200
+
+secubox-bbs (0.20.3-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : retour a la disposition de base — le contenu seul, la liste
+    atteignable par le tiroir. L'empilement des deux volets se superposait :
+    `.shell` est en hauteur fixe avec overflow:hidden, et deux volets qui
+    defilent chacun de leur cote dans une piste 1fr ne s'empilent pas, ils se
+    chevauchent.
+  * Le defaut des sous-forums vides reste ouvert et demande un marqueur pose
+    par le serveur, aucune regle CSS ne pouvant deviner quel volet porte le
+    contenu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:50:46 +0200
+
+secubox-bbs (0.20.2-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : les deux volets sont montres, empiles, et la page defile. Selon
+    la page le contenu utile change de volet — racine des forums dans `.vue`,
+    forum precis dans `.liste` (7594 octets contre 1749). Masquer l'un ou
+    l'autre produisait un ecran vide, une fois dans chaque sens.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:46:10 +0200
+
+secubox-bbs (0.20.1-1~bookworm1) bookworm; urgency=medium
+
+  * Telephone : le contenu revient au premier plan. Une regle maitre-detail
+    n'affichait la vue que si un element de la liste portait aria-current, or
+    la page des forums n'en a aucun : on voyait la colonne des forums et jamais
+    leur contenu.
+  * Le tiroir devient un menu vertical : rail en haut, liste dessous, en une
+    seule colonne. Son bouton n'existait qu'au-dessus de 620 px, donc jamais la
+    ou il sert.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:42:22 +0200
+
+secubox-bbs (0.20.0-1~bookworm1) bookworm; urgency=medium
+
+  * LES MEDIAS DU FIL ETAIENT BLOQUES PAR LA POLITIQUE DE SECURITE (ref #1044).
+    Le BBS sert `img-src 'self' data:` et `media-src 'self'` : le navigateur
+    refusait donc les images et les sons de l instance liee — SANS RIEN DIRE AU
+    SERVEUR. La page partait complete, le lecteur restait noir, et l on
+    cherchait la panne du cote du rendu. C est exactement ce qui s est produit.
+  * LA POLITIQUE S OUVRE SUR LA PAGE /mastodon, ET SUR ELLE SEULE. L elargir
+    dans l intergiciel aurait autorise cette origine sur TOUTES les pages, y
+    compris celles qui rendent du texte ecrit par des membres. La porte
+    s ouvre pour une reponse et se referme avec elle.
+  * L ORIGINE OUVERTE EST CELLE DE L INSTANCE OU LE MEMBRE A PROUVE SON
+    IDENTITE par un aller-retour OAuth complet — jamais une saisie libre. Elle
+    est malgre tout revalidee : un espace ou un point-virgule couperait la
+    politique en deux, et un navigateur qui n arrive pas a la lire peut
+    l IGNORER ENTIEREMENT — on se croirait protege en ne l etant plus du tout.
+  * L IMAGE EST AUTORISEE, PAS LE SCRIPT. L origine n est ajoutee qu a
+    `img-src` et `media-src`, jamais a `script-src` ni `connect-src` :
+    confondre les deux est la facon habituelle de vider une politique de son
+    sens. Un test le verifie directive par directive.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:51:11 +0200
+
+secubox-bbs (0.19.1-1~bookworm1) bookworm; urgency=medium
+
+  * LES IMAGES DU FIL ETAIENT ETIREES ET ROGNEES (ref #1044). Le premier jet
+    posait `width:100%` et `object-fit:cover` : une capture de 200 px etait
+    agrandie sur toute la colonne, et une image verticale rognee en bandeau.
+  * On s aligne sur `.jointe`, la regle des pieces jointes du BBS, correcte
+    depuis toujours : `max-width` SANS `width` n agrandit jamais, `height:auto`
+    SANS `object-fit` ne rogne jamais. Seule la hauteur est bornee, pour qu une
+    publication ne chasse pas la suivante hors de l ecran.
+  * Une image prend sa ligne, une pastille se range a cote — obtenu par
+    `flex-basis` plutot que par `:has()`, dont l absence sur un vieux
+    navigateur aurait empile les pastilles en colonne.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:34:51 +0200
+
+secubox-bbs (0.19.0-1~bookworm1) bookworm; urgency=medium
+
+  * LES IMAGES DU FIL S AFFICHENT (ref #1044). Elles n etaient rendues qu en
+    pastille « 🖼 image » — or les publications du compte n ont AUCUN texte :
+    l image EST le contenu, et la page paraissait donc vide.
+  * LE REFUS DE CHARGER VENAIT D UN ARGUMENT JUSTE APPLIQUE AU MAUVAIS CAS.
+    Charger une image distante signale la lecture au serveur qui la sert : sur
+    une publication federee, c est le serveur d un inconnu, a qui chaque
+    affichage dirait qui regarde, quand, depuis quelle adresse. Mais ce fil est
+    celui du membre, sur SON instance — souvent la notre, sur cette machine.
+    Lui refuser ses propres images au nom d une fuite vers lui-meme ne
+    protegeait personne.
+  * ON TRANCHE DONC PAR L HOTE : ce que sert l instance du compte s affiche
+    (image, video, son), le reste demeure un lien signale « hote tiers ». La
+    comparaison porte sur l HOTE et exige HTTPS — jamais sur un prefixe de
+    chaine, car `social.exemple.fr` et `social.exemple.fr.pirate.net` partagent
+    un prefixe et pas un hote.
+  * UN TEST PASSAIT POUR LA MAUVAISE RAISON et a ete retire. Il decoupait le
+    gabarit jusqu au premier `{{end}}` pour verifier l absence d `<img` ;
+    ce premier `{{end}}` appartenait a un `{{if}}` imbrique dans un
+    attribut, et le fragment inspecte s arretait 221 octets avant la balise
+    cherchee. Ce qui doit etre garde l est desormais sur la PAGE RENDUE.
+  * Les images sont differees (`loading=lazy`), sans referent, et bornees en
+    hauteur : une publication ne doit pas chasser la suivante hors de l ecran.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:28:21 +0200
+
+secubox-bbs (0.18.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE FIL S AFFICHAIT DANS 52 PIXELS (ref #1044). Chaque publication etait
+    rendue dans un `article.post` avec un seul `.bd`. Or `.post` est une
+    grille `52px 1fr` : la premiere colonne est reservee a la vignette de
+    l auteur (`.who`). Sans ce `.who`, le corps atterrissait DANS la colonne de
+    l avatar — dates coupees en deux lignes, compteurs empiles, boutons en
+    colonne. La page etait juste, la grille non.
+  * Une publication distante n a pas d avatar a montrer : elle ne doit donc
+    pas emprunter cette grille. Classe dediee `.pub`, une seule colonne, avec
+    une ligne de tete compacte (date, compteurs, lien) et des pieces jointes
+    en pastilles plutot qu en boutons — la piece jointe accompagne le texte,
+    elle ne se dispute pas la place avec lui.
+  * Un test refuse desormais que le fil reutilise `.post`, et verifie que
+    `.pub` ne redevient pas une grille a colonnes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:20:26 +0200
+
+secubox-bbs (0.18.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE FIL DU COMPTE LIE S AFFICHE (ref #1044), et la page est reorganisee
+    autour de lui : le fil d abord, les reglages replies en bas. L instance,
+    l invitation et la liaison se font une fois puis ne servent plus ; ils
+    n ont pas a occuper la page qu on vient consulter.
+  * LU SANS JETON, ET C EST UN CHOIX. Mastodon sert les statuts publics d un
+    compte a qui les demande. Les lire authentifie aurait exige la portee
+    `read:statuses`, c est-a-dire le droit de lire AUSSI tout le fil d accueil
+    du membre — y compris ce qui lui est adresse en prive. Afficher son propre
+    mur ne vaut pas ce droit-la. Consequence assumee : les publications
+    reservees aux abonnes n apparaissent pas, et la page le dit.
+  * LE CONTENU DISTANT EST DEBALISE, PAS FILTRE. Il vient d une instance
+    tierce : le rendre tel quel lui donnerait le droit d executer du script
+    chez nos membres. Une liste blanche de balises « inoffensives » est un
+    exercice qu on rate — il reste toujours un attribut, un protocole
+    `javascript:`, une entite doublement encodee. Retirer TOUTES les balises
+    n a pas de cas limite. L ordre compte : on debalise AVANT de decoder les
+    entites, et le resultat n est jamais marque comme du balisage sur.
+  * AUCUNE IMAGE DISTANTE N EST CHARGEE AUTOMATIQUEMENT : elle signalerait
+    chaque lecture au serveur d en face, qui sur une publication federee n est
+    pas le notre. Les pieces jointes sont des liens.
+  * CACHE PAR MEMBRE, 90 s, ET IL RETIENT AUSSI L ECHEC : sans cela une
+    instance en panne serait re-interrogee a chaque affichage et chaque page
+    attendrait le delai complet — la panne d en face deviendrait la notre. Le
+    cache est vide au liement comme au deliement.
+  * Corrige au passage un defaut introduit en cours de route : l insertion du
+    bloc du fil avait referme la carte trop tot et enferme la branche « pas
+    encore relie » dans un conteneur masque — le formulaire de liaison
+    devenait invisible a ceux-la memes qui en avaient besoin. Un test le fige.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 17:16:06 +0200
+
+secubox-bbs (0.17.1-1~bookworm1) bookworm; urgency=medium
+
+  * LA PASSERELLE NE POUVAIT PAS SORTIR (ref #1044). L unite portait
+    `RestrictAddressFamilies=AF_UNIX` — juste jusqu ici, le service ne parlant
+    qu en sockets de fichier. Relier un compte echouait donc sur « address
+    family not supported by protocol », message qui accuse le DNS alors que le
+    refus venait du confinement.
+  * AF_INET et AF_INET6 sont accordes, ET COMPENSES DANS LE NOYAU :
+    `IPAddressDeny=localhost link-local multicast` referme la boucle locale et
+    169.254.169.254. L instance etant TAPEE PAR LE MEMBRE, la surface ouverte
+    est dirigeable depuis un formulaire : la politique du paquet
+    `internal/mastodon` est donc rejouee a un etage ou aucune erreur de code
+    applicatif ne peut la contourner.
+  * Regles SYMBOLIQUES et non chiffrees : une unite de paquet ne doit porter
+    aucune adresse de site. Les plages privees restent joignables — l instance
+    de la maison y vit — et c est le controle applicatif qui tranche la, lui
+    seul sachant laquelle est configuree.
+  * Un test fige les deux moities : une passe de durcissement qui refermerait
+    AF_INET par symetrie casserait la passerelle avec ce meme message opaque.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 16:15:18 +0200
+
+secubox-bbs (0.17.0-1~bookworm1) bookworm; urgency=medium
+
+  * PASSERELLE MASTODON : UN LIEN PERSONNEL (ref #1044). Chaque membre relie
+    SON compte par son propre aller-retour OAuth, avec SON jeton, revocable par
+    lui seul — des deux cotes, puisque Mastodon liste les applications
+    autorisees. Republier depuis un fil public pousse alors un statut sous SA
+    propre identite.
+  * CE QUI A ETE ECARTE, ET POURQUOI C ETAIT TENTANT. Un jeton d
+    administration unique, range a cote de `mastodon.invitation`, tenait en dix
+    lignes. Il aurait fait publier tout le monde sous une identite unique,
+    empeche quiconque de revoquer sa part, et donne le jour d une fuite la
+    parole publique au nom de la communaute entiere.
+  * LE LIEN NE SE DEDUIT JAMAIS DU NOM. Un membre local « alice » n est PAS
+    @alice sur l instance tant qu elle ne l a pas prouve. Sur une instance
+    ouverte, rapprocher les comptes par egalite des pseudonymes aurait suffi a
+    recevoir la parole d un membre en y prenant son nom.
+  * CONTROLE D ADRESSE SUR L INSTANCE, qui est TAPEE PAR LE MEMBRE : sans lui,
+    n importe qui obtiendrait du BBS des requetes vers le reseau interne. Mais
+    interdire toute adresse privee aurait casse le cas principal — l instance
+    de la maison est justement locale. L instance CONFIGUREE est donc jointe
+    telle quelle ; toute autre doit resoudre vers des adresses publiques. Les
+    redirections ne sont pas suivies : elles contourneraient ce controle.
+  * L ETAT OAUTH EST HACHE, A USAGE UNIQUE, ET COMPARE A LA SESSION. Sans
+    cette comparaison, un retour d autorisation aboutirait dans la session d un
+    tiers et lui attacherait le compte de l attaquant, chez qui il publierait
+    ensuite de bonne foi.
+  * LE SALON PRIVE COMMANDE, MEME SUR UN FIL PUBLIC : sans cette garde, un
+    salon ferme aurait laisse fuir ses sujets par la porte du fediverse.
+  * CE QUI SORT EST LE TITRE, LE LIEN ET LE MOT DU MEMBRE — jamais le texte des
+    autres, qui passerait pour le sien. La portee OAuth demandee est exactement
+    « lire mon compte, ecrire des statuts ».
+  * Le bouton n apparait que s il peut aboutir, et le retrait du lien dit
+    franchement qu il ne vaut qu ICI : l autorisation reste inscrite chez
+    Mastodon jusqu a ce que le membre l y revoque.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 16:08:45 +0200
+
+secubox-bbs (0.16.0-1~bookworm1) bookworm; urgency=medium
+
+  * NOTE VOCALE ET NOTE VIDEO (ref #1044). Deux boutons rejoignent le trombone
+    dans les trois editeurs — repondre, ouvrir un fil, message prive. Ils
+    empruntent EXACTEMENT le meme chemin : meme envoi vers `/f/envoi`, meme
+    insertion de l adresse, meme rendu en lecteur. Enregistrer produit un
+    fichier comme un autre ; ouvrir un second chemin d envoi aurait double les
+    garde-fous a tenir, et l un des deux aurait fini par diverger de l autre.
+  * LE FORMAT EST NEGOCIE, PAS SUPPOSE. Firefox ecrit de l Ogg/Opus, Chromium
+    du WebM. On demande le premier format que le navigateur declare savoir
+    produire, au lieu d en imposer un qui echouerait chez la moitie des gens.
+  * DEPARTAGE DE L AUDIO EN CONTENEUR WEBM. Une note VOCALE enregistree sous
+    Chromium sort en conteneur Matroska ; le renifleur rend `video/webm` sans
+    pouvoir savoir s il porte une piste video, et la note s affichait en
+    rectangle noir. Meme mecanisme que celui deja en place pour Ogg : le
+    contenu decide qu il s agit d un WebM, le type annonce ne fait que
+    departager DEUX entrees deja acceptees — il n en ouvre aucune nouvelle.
+    Servi sous `.weba`, il rend un lecteur audio.
+  * LE MICRO ET LA CAMERA SE RELACHENT explicitement apres l envoi. Sans cela
+    la diode reste allumee, et c est le genre de detail qui fait douter de
+    tout le reste.
+  * LE TROMBONE ET L ENREGISTREUR SONT INDEPENDANTS. La garde precedente
+    exigeait les deux : elle aurait fait taire l enregistreur sur tout editeur
+    livre sans trombone.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 15 Aug 2026 15:48:14 +0200
+
+secubox-bbs (0.15.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE MUR, APRES LA PORTE (ref #1044). Le magasin savait dire qui a acces ;
+    l affichage ne le consommait pas — un salon ferme restait visible dans le
+    rail, serrure posee sur une porte ouverte. Le filtre est desormais applique
+    dans `base()`, l UNIQUE point qui alimente toutes les pages : le rail ET
+    l acces direct par adresse sont fermes d un seul geste.
+  * 404 ET NON 403. Un salon retire de la liste fait tomber le handler sur son
+    « categorie introuvable ». Un 403 aurait CONFIRME l existence du salon —
+    exactement ce qu un salon prive ne doit pas laisser deviner.
+  * SI LE FILTRE ECHOUE, ON CACHE TOUT CE QUI EST PRIVE plutot que rien.
+  * HIERARCHIE DES SOUS-SALONS dans le rail et sur l accueil. La liste sort a
+    plat avec une PROFONDEUR plutot qu en arbre imbrique : le gabarit n a qu a
+    decaler, la ou un arbre imposerait un gabarit recursif pour un affichage qui
+    reste une suite de lignes.
+  * UN ENFANT DONT LE PARENT EST CACHE REMONTE A LA RACINE : le rattacher
+    afficherait le titre du parent — donc son existence — a qui n y a pas acces.
+    Mieux vaut un sous-salon orphelin qu une fuite.
+  * RIEN NE DISPARAIT, JAMAIS. Un cycle (A parent de B, B parent de A) ne
+    laissait AUCUNE racine : la descente ne demarrait pas et le rail se vidait
+    ENTIEREMENT. La borne de profondeur n y pouvait rien puisqu on n y entrait
+    jamais. Trouve par le test, pas devine. Tout salon non emis est desormais
+    rattache a la racine — un affichage mal hierarchise se voit et se corrige,
+    un salon disparu se cherche.
+  * Le decalage passe par une CLASSE, pas un style en ligne : la politique de
+    securite de contenu les interdit, et un `style=` calcule serait
+    silencieusement ignore.
+  * 5 tests neufs.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 18:00:00 +0200
+
+secubox-bbs (0.14.0-1~bookworm1) bookworm; urgency=medium
+
+  * CONSOLE DES SALONS PRIVES (ref #1044). Le magasin savait deja fermer un
+    salon et le convier ; il manquait de quoi le faire depuis l ecran. Trois
+    gestes s ajoutent a la moderation existante : fermer/rouvrir, convier ou
+    retirer une personne, emettre un lien d invitation.
+  * LE LIEN N EST MONTRE QU UNE FOIS, a son emission : la base n en garde que
+    l empreinte. Le perdre oblige a en emettre un autre — c est le comportement
+    voulu, pas une gene.
+  * `/salon/rejoindre` EXIGE D ETRE CONNECTE. Un visiteur sans compte est
+    renvoye vers la connexion en conservant le code dans l adresse de retour :
+    le geste aboutit ensuite sans recliquer sur le courriel. C est la garantie
+    centrale — une invitation de salon n ouvre AUCUN compte.
+  * L ECHEC NE DIT PAS POURQUOI. Distinguer « code inconnu » de « code deja
+    servi » apprendrait a un curieux si un code existe, et le laisserait sonder
+    la base un essai a la fois.
+  * `Category` porte desormais `Prive`, pour que le rail et la console sachent
+    ce qu ils affichent sans requete supplementaire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 17:05:00 +0200
+
+secubox-bbs (0.13.0-1~bookworm1) bookworm; urgency=medium
+
+  * SALONS PRIVES : ouverts a des PERSONNES, pas a un rang (ref #1044).
+    `categories` savait deja fermer par RANG (`min_role_read`), ce qui repond a
+    « reserve aux membres ». Elle ne savait pas dire « ouvert a Alice et Bob » :
+    aucune table ne reliait un membre a un salon. C etait le seul manque.
+  * DEUX AXES ORTHOGONAUX plutot qu un rang de plus. Ajouter `prive` a la
+    contrainte de `min_role_read` aurait rendu impossible un salon a la fois
+    reserve aux membres ET limite a trois d entre eux — et aurait fait dependre
+    une regle de confidentialite d un ordre entre valeurs textuelles.
+  * UNE INVITATION DE SALON N OUVRE AUCUN COMPTE, et c est pourquoi elle a sa
+    propre table. Ajouter `category_id` a `invites` aurait paru economique et
+    aurait cree le defaut meme qu on veut eviter : un lien destine a ouvrir une
+    section serait devenu, par heritage, une porte d entree sur la board — un
+    partage maladroit aurait suffi. Ici le code rattache un compte DEJA existant
+    et authentifie ; l identifiant vient de la SESSION, jamais du lien.
+  * `SalonsCachesPour` rend ce qui est CACHE, pas ce qui est visible : si elle
+    echoue et que l appelant ignore l erreur, il cache trop, jamais trop peu.
+    L inverse aurait fait fuir l existence des salons prives.
+  * LE SYSOP VOIT TOUT : sans cela il pourrait creer un salon prive, en perdre
+    l acces, et plus personne ne pourrait le moderer.
+  * Un salon reste OUVERT par defaut : la confidentialite se demande, sinon la
+    migration refermerait des salons existants.
+  * LA VERSION DU DEMON EST INJECTEE DEPUIS CE CHANGELOG. Elle etait une
+    constante figee et avait derive : le demon annoncait 0.8.1 quand le paquet
+    en etait a 0.12.0. Un numero qui ment est pire qu absent — on diagnostique
+    alors sur une version qui ne tourne pas.
+  * 11 tests neufs ; les quatre paquets du BBS passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 16:10:00 +0200
+
+secubox-bbs (0.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * SOCLE DES MESSAGES VOCAUX : un media peut enfin etre lie a un message
+    (ref #1044). Le depot acceptait DEJA `audio/ogg`, `audio/webm`,
+    `video/webm` et `video/mp4` — exactement ce que produit `MediaRecorder` —
+    les validait par leur CONTENU et les servait avec `nosniff` et les requetes
+    par plages. Il ne manquait pas la capacite d accepter un media : il manquait
+    le LIEN. La migration 0016 ne fait que cela.
+  * DEUX CLES ETRANGERES PLUTOT QU UN COUPLE (type, id) : la base refuse
+    elle-meme l incoherence, la ou une solution polymorphique aurait laisse des
+    pieces jointes pointer dans le vide.
+  * EXACTEMENT UNE CIBLE, garantie par contrainte et non par la discipline du
+    code. Sans elle, une meme ligne pourrait viser un fil public ET un message
+    prive : le vocal d une conversation privee apparaitrait dans un salon, sans
+    qu aucune erreur ne le signale.
+  * Un fichier supprime en douceur est ecarte DANS LA REQUETE, pas dans chaque
+    gabarit : ne pas dependre de la vigilance de l affichage.
+  * Un meme fichier ne s attache pas deux fois au meme message — un double clic
+    sur « envoyer » n affiche pas le vocal en double.
+  * La duree vit sur le FICHIER, pas sur le lien : un vocal transfere garde la
+    meme duree, et deux valeurs contradictoires deviennent impossibles.
+  * ICONES DU RAIL : les glyphes geometriques cedent la place a des emoji qui
+    disent la fonction, comme la navbar des modules. La case reste a 22px —
+    seule la taille du dessin change, donc aucun alignement ne bouge.
+  * 6 tests neufs ; les quatre paquets du BBS passent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 12:20:00 +0200
+
 secubox-bbs (0.11.0-1~bookworm1) bookworm; urgency=medium
 
   * Suivi lu / non-lu des fils. L'ensemble des fils non-lus est calcule en UNE

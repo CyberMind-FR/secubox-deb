@@ -270,7 +270,7 @@ func TestLaCoquilleRendSesTroisColonnesEtSaLigneDEtat(t *testing.T) {
 	}
 	corps := w.Body.String()
 	for _, zone := range []string{
-		`class="shell"`, `class="bar"`, `class="corps"`,
+		`class="shell"`, `class="bar"`, `class="corps`,
 		`class="rail"`, `class="liste"`, `class="vue"`,
 		`class="etat"`, `class="basse"`,
 	} {

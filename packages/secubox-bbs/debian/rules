@@ -21,7 +21,11 @@ export GOPATH  = $(CURDIR)/_gopath
 	dh $@
 
 override_dh_auto_build:
-	go build -trimpath -ldflags=-s -o secubox-bbsd ./cmd/secubox-bbsd
+	# LA VERSION VIENT DU CHANGELOG, jamais d'une constante recopiee a la main :
+	# c'est ainsi qu'elle avait derive de quatre versions mineures.
+	go build -trimpath \
+	  -ldflags="-s -X main.version=$(shell dpkg-parsechangelog -S Version)" \
+	  -o secubox-bbsd ./cmd/secubox-bbsd
 	go build -trimpath -ldflags=-s -o bbsctl      ./cmd/bbsctl
 
 # Les tests tournent en integration continue sur l'architecture hote : un

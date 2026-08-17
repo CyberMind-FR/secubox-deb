@@ -51,6 +51,8 @@ func extensionDe(mime string) string {
 		return ".wav"
 	case "audio/flac":
 		return ".flac"
+	case "audio/webm":
+		return ".weba"
 	case "video/mp4":
 		return ".mp4"
 	case "video/ogg":

@@ -116,6 +116,9 @@ func inline(s string) template.HTML {
 	e = liens(e)
 	e = adressesNues(e)
 	e = mediasIntegres(e)
+	// APRES mediasIntegres : une piece jointe devient un lecteur, elle n'a pas
+	// a devenir une fiche. Ce qui reste ici est un lien vers un service.
+	e = fichesSecuBox(e)
 	e = paires(e, "**", "<strong>", "</strong>")
 	e = paires(e, "`", "<code>", "</code>")
 	e = paires(e, "*", "<em>", "</em>")
@@ -178,7 +181,7 @@ func mediasIntegres(s string) string {
 			// toutes avant le premier paragraphe rend la page inutilisable sur
 			// une liaison lente.
 			balise = `<img class="jointe" src="` + adr + `" alt="" loading="lazy">`
-		case finitPar(adr, ".mp3", ".ogg", ".wav", ".flac"):
+		case finitPar(adr, ".mp3", ".ogg", ".wav", ".flac", ".weba"):
 			balise = `<audio class="jointe" controls preload="none" src="` + adr + `"></audio>`
 		case finitPar(adr, ".mp4", ".webm", ".ogv"):
 			balise = `<video class="jointe" controls preload="none" src="` + adr + `"></video>`
