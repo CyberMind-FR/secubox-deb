@@ -137,26 +137,27 @@
         .mosaic-tempo.warn { color: var(--orange); }
         .mosaic-issues { display: flex; flex-wrap: wrap; gap: 0.3rem; }
         .mosaic-issue { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 3px; background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); text-transform: uppercase; letter-spacing: 0.03em; }
-        /* Vignette périmée / échec de capture (#958) — jamais un trou :
-           l'ancienne image (ou l'emoji de repli) reste affichée, ces
-           badges se contentent de la signaler. */
-        .mosaic-shot-flags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-        .mosaic-shot-flag { font-size: 0.6rem; padding: 0.15rem 0.4rem; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.03em; }
-        .mosaic-shot-flag.stale { background: rgba(255,153,68,0.15); border: 1px solid var(--orange); color: var(--orange); }
-        .mosaic-shot-flag.failed { background: rgba(255,68,102,0.15); border: 1px solid var(--red); color: var(--red); }
         .mosaic-footer { padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
         .mosaic-footer a { color: var(--cyan); text-decoration: none; font-size: 0.7rem; }
         .mosaic-footer a:hover { text-decoration: underline; }
         .mosaic-footer button.btn { width: 100%; }
-        /* Appli en ligne : lien "ouvrir" (ou repli "non publiée") ET
-           bouton "recapturer" côte à côte — ni l'un ni l'autre ne doit
-           alors prendre toute la largeur. */
-        .mosaic-footer.two-up { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
-        .mosaic-footer.two-up a,
-        .mosaic-footer.two-up .mosaic-unpublished { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .mosaic-footer.two-up button.btn { width: auto; flex: 0 0 auto; }
-        .mosaic-unpublished { color: var(--p31-dim); font-size: 0.7rem; font-style: italic; }
+        .mosaic-footer.mosaic-unpublished { color: var(--p31-dim); font-size: 0.7rem; font-style: italic; }
         .mosaic-empty { color: var(--p31-dim); padding: 1rem; grid-column: 1 / -1; }
+
+        /* Wake-and-open — a sleeping+published tile gets ONE action, styled
+           like the "ouvrir" link of an awake tile (same affordance), not a
+           second button next to a plain "réveiller". Background/border-free
+           button so it reads as a link. */
+        .mosaic-footer button.mosaic-wakeopen { background: none; border: none; padding: 0; margin: 0; width: auto; color: var(--cyan); font-size: 0.7rem; font-family: inherit; text-transform: none; letter-spacing: normal; cursor: pointer; text-align: left; }
+        .mosaic-footer button.mosaic-wakeopen:hover { text-decoration: underline; }
+
+        /* Waking-in-progress — a semantic STATE colour (yellow, already used
+           for the "paused" power badge), never the cyan accent. The spinner
+           is the "something is happening" cue a 5-30s wait needs. */
+        .mosaic-waking { display: flex; align-items: center; gap: 0.4rem; color: var(--yellow); font-size: 0.7rem; }
+        .mosaic-waking .spinner { width: 9px; height: 9px; border: 2px solid rgba(255,204,0,0.25); border-top-color: var(--yellow); border-radius: 50%; animation: sbx-spin 0.8s linear infinite; flex: 0 0 auto; }
+        @keyframes sbx-spin { to { transform: rotate(360deg); } }
+        .mosaic-wake-error { color: var(--red); font-size: 0.65rem; margin-bottom: 0.35rem; }
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: rgba(20,30,45,0.5); }
@@ -214,6 +215,7 @@
             <div class="tab" data-tab="access" onclick="showTab('access')">Access</div>
             <div class="tab" data-tab="apps" onclick="showTab('apps')">Apps</div>
             <div class="tab" data-tab="instances" onclick="showTab('instances')">Instances</div>
+            <div class="tab" data-tab="actions" onclick="showTab('actions')">Actions</div>
         </div>
 
         <!-- MOSAIC TAB -->
@@ -288,6 +290,43 @@
             </div>
         </div>
 
+        <!-- ACTIONS TAB -->
+        <div class="tab-content" id="tab-actions">
+            <div class="card">
+                <h2>Power Management</h2>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Sleep/wake optimization - pause container to save resources</p>
+                <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+                    <div id="power-status" style="display:flex;align-items:center;gap:0.5rem">
+                        <span class="badge" id="power-state-badge">loading</span>
+                        <span id="power-idle-time" style="color:var(--p31-dim);font-size:0.85rem"></span>
+                    </div>
+                </div>
+                <div id="power-actions">
+                    <button class="btn success" id="btn-wake" onclick="powerWake()" style="display:none">Wake Up</button>
+                    <button class="btn" id="btn-pause" onclick="powerPause()">Pause (Sleep)</button>
+                    <button class="btn primary" onclick="powerToggle()">Toggle Power</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Container Management</h2>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Manage the Streamlit LXC container</p>
+                <div id="container-actions">
+                    <button class="btn success" onclick="containerStart()">Start Container</button>
+                    <button class="btn danger" onclick="containerStop()">Stop Container</button>
+                    <button class="btn primary" onclick="containerInstall()">Install Container</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Migration</h2>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Import apps from OpenWrt SecuBox</p>
+                <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
+            </div>
+            <div class="card">
+                <h2>Gitea Integration</h2>
+                <p style="margin-bottom:1rem;color:var(--p31-dim)">Clone or push apps to Gitea repositories</p>
+                <button class="btn" onclick="showGiteaClone()">Clone from Gitea</button>
+            </div>
+        </div>
     </main>
 
     <!-- Deploy Modal -->
@@ -362,7 +401,7 @@
                     // cookie — retry cookie-only WITHOUT destroying the token.
                     res = await fetch(API + path, { ...opts, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' });
                 }
-                if (res.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
+                if (res.status === 401) { window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname); return {}; }
                 const ct = res.headers.get('content-type') || '';
                 if (!res.ok || !ct.includes('application/json')) {
                     console.warn('api()', path, 'status=' + res.status, 'content-type=' + ct);
@@ -406,6 +445,7 @@
             else if (name === 'access') loadAccess();
             else if (name === 'apps') loadApps();
             else if (name === 'instances') loadInstances();
+            else if (name === 'actions') loadPowerStatus();
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
@@ -429,6 +469,52 @@
         let auditLoading = null;
         let mosaicTempoTargets = [];
         let mosaicTickTimer = null;
+
+        // Wake-in-flight tracking + per-app duration memory (ref #963).
+        //
+        // wakingApps: name -> { startedAt, domain, estimate } for every wake
+        // currently in flight. Presence in this map is what the delegated
+        // click handler checks to refuse a second click on the same tile —
+        // it is cleared only once the POST settles (success or failure), so
+        // there is no window where a repeat click could start a duplicate
+        // wake. The tile re-renders synchronously the moment a wake starts
+        // (before the fetch is awaited), which also removes the button from
+        // the DOM immediately.
+        //
+        // wakeFailures: name -> last failure message, shown on the tile
+        // itself (not just a toast) until the next wake attempt on that app
+        // clears it.
+        const wakingApps = new Map();
+        const wakeFailures = new Map();
+
+        // Observed wake duration, kept client-side only (comfort data, not a
+        // source of truth) — used to show "environ Ns" instead of a bare
+        // spinner on repeat wakes of the same app.
+        //
+        // We keep the LAST observed duration per app rather than an average
+        // over several: board load varies session to session (what else is
+        // running, disk cache state, …), so the most recent measurement is a
+        // better predictor of "now" than a smoothed figure that might still
+        // include a stale sample from a very different moment. Simpler to
+        // reason about too — one number, no rolling window to maintain.
+        const WAKE_DURATIONS_KEY = 'sbx_streamlit_wake_durations';
+
+        function loadWakeDurations() {
+            try { return JSON.parse(localStorage.getItem(WAKE_DURATIONS_KEY)) || {}; }
+            catch (e) { return {}; }
+        }
+
+        function getWakeDuration(name) {
+            const v = loadWakeDurations()[name];
+            return (typeof v === 'number' && v > 0) ? v : null;
+        }
+
+        function recordWakeDuration(name, seconds) {
+            if (!(seconds > 0)) return;
+            const d = loadWakeDurations();
+            d[name] = Math.round(seconds);
+            try { localStorage.setItem(WAKE_DURATIONS_KEY, JSON.stringify(d)); } catch (e) { /* storage unavailable — comfort data only */ }
+        }
 
         const MOSAIC_ISSUE_LABELS = {
             'not-declared': "non déclarée",
@@ -632,54 +718,35 @@
                 ? '<div class="mosaic-tempo' + tempoClass(a, tempo) + '" data-tempo="' + name + '">' + esc(tempo) + '</div>'
                 : '';
 
-            // Vignette conservée (#958) — jamais de case vide : pas
-            // d'image -> l'emoji de repli (déjà le comportement par
-            // défaut ci-dessous). `?t=captured_at` fait de l'URL elle-même
-            // la clé de cache : tant que captured_at ne change pas, c'est
-            // OCTET POUR OCTET le même contenu, et le navigateur le sert
-            // depuis son propre cache sans réseau — voir le
-            // Cache-Control de la route côté serveur. Sur 56 tuiles
-            // rafraîchies toutes les 60s, c'est ce qui évite de
-            // retélécharger une seule image tant qu'elle n'a pas changé.
-            const hasShot = !!a.screenshot_available;
-            // encodeURIComponent() alone makes this HTML-attribute-safe (no
-            // raw &/</>/" can survive it) — no separate esc() needed.
-            const shotToken = encodeURIComponent(a.screenshot_captured_at || '');
-            const thumbInner = hasShot
-                ? '<img src="' + API + '/apps/' + encodeURIComponent(rawName) +
-                  '/screenshot?t=' + shotToken + '" alt="" loading="lazy">'
-                : '🧩';
-
-            // Dégradation attendue (#957 §3.6) : une vignette périmée ou
-            // issue d'une capture en échec reste affichée — ces badges se
-            // contentent de le signaler, jamais de la remplacer par un trou.
-            const shotFlags = [];
-            if (hasShot && a.screenshot_stale) {
-                shotFlags.push('<span class="mosaic-shot-flag stale" title="la source a changé depuis cette capture">⏳ périmée</span>');
-            }
-            if (a.screenshot_ok === false) {
-                shotFlags.push('<span class="mosaic-shot-flag failed" title="dernière tentative de capture en échec — image précédente conservée">⚠ échec capture</span>');
-            }
-            const shotFlagsHtml = shotFlags.length
-                ? '<div class="mosaic-shot-flags">' + shotFlags.join('') + '</div>'
-                : '';
-
             let footer = '';
-            if (state === 'running') {
-                // Toujours un bouton "recapturer" pour une appli en ligne
-                // (#958) — à côté du lien "ouvrir" quand il existe, sinon
-                // à côté du repli "non publiée".
-                const openPart = url
-                    ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a>'
-                    : '<span class="mosaic-unpublished">non publiée</span>';
-                footer = '<div class="mosaic-footer two-up">' + openPart +
-                    '<button class="btn sm" data-recapture="' + name + '">📷 recapturer</button></div>';
+            const waking = wakingApps.get(rawName);
+            if (waking) {
+                // Same state regardless of published/unpublished — a wake in
+                // flight always shows this instead of any button, which is
+                // what makes a second click impossible (no button in the DOM
+                // to click).
+                const label = waking.estimate
+                    ? 'réveil en cours (environ ' + waking.estimate + 's)…'
+                    : 'réveil en cours…';
+                footer = '<div class="mosaic-footer"><div class="mosaic-waking"><span class="spinner" aria-hidden="true"></span>' + esc(label) + '</div></div>';
+            } else if (url) {
+                footer = '<div class="mosaic-footer"><a href="' + esc(url) + '" target="_blank" rel="noopener">↗ ouvrir</a></div>';
             } else if (state === 'sleeping') {
-                footer = '<div class="mosaic-footer"><button class="btn sm" data-wake="' + name + '">☕ réveiller</button></div>';
+                const failMsg = wakeFailures.get(rawName);
+                const errorHtml = failMsg ? '<div class="mosaic-wake-error">⚠ ' + esc(failMsg) + '</div>' : '';
+                // Published + asleep: ONE action — réveiller et ouvrir — not
+                // a separate "réveiller" button next to a link that would 502
+                // (#963). Styled like the "ouvrir" link above so the
+                // affordance matches the awake state.
+                footer = domain
+                    ? '<div class="mosaic-footer">' + errorHtml + '<button class="mosaic-wakeopen" data-wake="' + name + '" data-domain="' + esc(domain) + '">☕ réveiller et ouvrir</button></div>'
+                    : '<div class="mosaic-footer">' + errorHtml + '<button class="btn sm" data-wake="' + name + '">☕ réveiller</button></div>';
+            } else if (state === 'running') {
+                footer = '<div class="mosaic-footer mosaic-unpublished">non publiée</div>';
             }
 
             return '<div class="mosaic-tile' + (state === 'archived' ? ' archived' : '') + '">' +
-                '<div class="mosaic-thumb' + thumbClass + '">' + thumbInner + '</div>' +
+                '<div class="mosaic-thumb' + thumbClass + '">🧩</div>' +
                 '<div class="mosaic-body">' +
                     '<div class="mosaic-name" title="' + name + '">' + name + '</div>' +
                     '<div class="mosaic-meta">' +
@@ -687,7 +754,6 @@
                         '<span>' + esc(meta) + '</span>' +
                     '</div>' +
                     tempoHtml +
-                    shotFlagsHtml +
                     (issues.length
                         ? '<div class="mosaic-issues">' + issues.map(i => '<span class="mosaic-issue">' + esc(MOSAIC_ISSUE_LABELS[i] || i) + '</span>').join('') + '</div>'
                         : '') +
@@ -718,33 +784,38 @@
             if (mosaicTickTimer) { clearInterval(mosaicTickTimer); mosaicTickTimer = null; }
         }
 
-        // Wake a sleeping app on demand (POST /apps/{name}/wake). Delegated
-        // listener + data-* attribute — never hand-interpolated into onclick.
-        //
-        // #958 follow-up: the server no longer blocks this request until the
-        // app is actually up (a wake can take up to five minutes on a loaded
-        // board — holding the request open that long risks a gateway timeout
-        // well before that, see the follow-up report). It answers
-        // status="running" (already up) or "waking" (just triggered, or
-        // already in flight) almost immediately instead. For "waking", this
-        // handler re-POSTs the SAME idempotent route every few seconds — the
-        // server's per-app lock guarantees a second click (or this poll)
-        // never fires a second wake — until it reports "running". No new
-        // endpoint: this is the exact channel the wall already used to read
-        // wake outcomes, just polled instead of read once.
-        const WAKE_POLL_INTERVAL_MS = 5000;
-        const WAKE_POLL_MAX_ATTEMPTS = 80; // ~400s of polling — comfortably above the 300s server-side default budget
+        // Wake a sleeping app on demand (POST /apps/{name}/wake), optionally
+        // opening its public domain in a new tab once the wake succeeds
+        // (data-domain present = the merged "réveiller et ouvrir" tile).
+        // Delegated listener + data-* attributes — never hand-interpolated
+        // into onclick. Non-blocking: the request runs in the background,
+        // the rest of the wall (and the other tabs) stay fully usable while
+        // it's in flight.
+        document.getElementById('mosaic-grid').addEventListener('click', async (ev) => {
+            const btn = ev.target.closest('button[data-wake]');
+            if (!btn) return;
+            const name = btn.dataset.wake;
+            const domain = btn.dataset.domain || null;
+            // Belt-and-braces: the tile re-render already removes this
+            // button while a wake is in flight, but guard the map too in
+            // case a click is still queued from the same event-loop turn.
+            if (wakingApps.has(name)) return;
 
-        async function pollWakeUntilRunning(name, wakeBtn, orig, attempt) {
+            wakeFailures.delete(name);
+            wakingApps.set(name, { startedAt: Date.now(), domain, estimate: getWakeDuration(name) });
+            renderMosaic();
+
             const r = await api('/apps/' + encodeURIComponent(name) + '/wake', { method: 'POST' });
-            if (!r || !r.status) {
-                errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
-                wakeBtn.disabled = false;
-                wakeBtn.textContent = orig;
-                return;
-            }
-            if (r.status === 'running') {
-                toast('☕ ' + name + ' réveillée');
+            const startedAt = wakingApps.get(name).startedAt;
+            wakingApps.delete(name);
+
+            if (r && r.status) {
+                // Prefer the server-measured duration_ms (the actual wake
+                // time) over the client round-trip, which also carries
+                // network/UI latency.
+                const seconds = typeof r.duration_ms === 'number' ? r.duration_ms / 1000 : (Date.now() - startedAt) / 1000;
+                recordWakeDuration(name, seconds);
+                toast('☕ ' + name + ' réveillée (' + r.status + ')');
                 // Optimistic local patch: streamlit-audit.timer only refreshes
                 // the cache every 5 minutes server-side — reflect the wake
                 // immediately here instead of waiting for the next cycle.
@@ -754,54 +825,13 @@
                 }
                 renderMosaic();
                 renderFleetStats();
-                return;
-            }
-            // status === 'waking': keep polling, bounded, only while the
-            // button is still in the DOM (tab could have been re-rendered).
-            if (attempt >= WAKE_POLL_MAX_ATTEMPTS || !document.body.contains(wakeBtn)) {
-                errorToast(name + ' ne répond toujours pas après ' +
-                    Math.round(WAKE_POLL_MAX_ATTEMPTS * WAKE_POLL_INTERVAL_MS / 1000) + 's — réessayer plus tard');
-                wakeBtn.disabled = false;
-                wakeBtn.textContent = orig;
-                return;
-            }
-            wakeBtn.textContent = '⏳ réveil… (' + attempt + ')';
-            setTimeout(() => pollWakeUntilRunning(name, wakeBtn, orig, attempt + 1), WAKE_POLL_INTERVAL_MS);
-        }
-
-        document.getElementById('mosaic-grid').addEventListener('click', async (ev) => {
-            const wakeBtn = ev.target.closest('button[data-wake]');
-            const recapBtn = ev.target.closest('button[data-recapture]');
-
-            if (wakeBtn) {
-                const name = wakeBtn.dataset.wake;
-                const orig = wakeBtn.textContent;
-                wakeBtn.disabled = true;
-                wakeBtn.textContent = '⏳ réveil…';
-                await pollWakeUntilRunning(name, wakeBtn, orig, 1);
-                return;
-            }
-
-            if (recapBtn) {
-                // Déclencheur MANUEL (#958, spec §3.1). La capture tourne
-                // dans un processus détaché côté serveur (jusqu'à ~240s) —
-                // cette requête ne l'attend PAS : elle revient dès que le
-                // processus est lancé. La nouvelle vignette n'apparaîtra
-                // qu'au prochain rafraîchissement de l'audit (60s) une fois
-                // captured_at effectivement changé ; on ne bloque jamais le
-                // bouton en attendant.
-                const name = recapBtn.dataset.recapture;
-                const orig = recapBtn.textContent;
-                recapBtn.disabled = true;
-                recapBtn.textContent = '⏳…';
-                const r = await api('/apps/' + encodeURIComponent(name) + '/recapture', { method: 'POST' });
-                if (r && r.triggered) {
-                    toast('📷 capture de ' + name + ' lancée — visible au prochain rafraîchissement');
-                } else {
-                    errorToast('Échec du déclenchement de capture pour ' + name + (r && r.detail ? ' : ' + r.detail : ''));
-                }
-                recapBtn.disabled = false;
-                recapBtn.textContent = orig;
+                // Only opened on confirmed success — a failed/timed-out wake
+                // never opens a tab that would just show a 502 (#963).
+                if (domain) window.open('https://' + domain + '/', '_blank', 'noopener');
+            } else {
+                wakeFailures.set(name, (r && r.detail) ? r.detail : 'échec ou délai dépassé');
+                errorToast('Échec du réveil de ' + name + (r && r.detail ? ' : ' + r.detail : ''));
+                renderMosaic();
             }
         });
 
@@ -1011,6 +1041,65 @@
             }
         });
 
+        // Power Management
+        async function loadPowerStatus() {
+            const d = await api('/power/status');
+            const badge = document.getElementById('power-state-badge');
+            const idleTime = document.getElementById('power-idle-time');
+            const btnWake = document.getElementById('btn-wake');
+            const btnPause = document.getElementById('btn-pause');
+
+            if (d.state === 'running') {
+                badge.textContent = 'RUNNING';
+                badge.className = 'badge running';
+                idleTime.textContent = `Idle: ${d.idle_formatted || '0s'}`;
+                btnWake.style.display = 'none';
+                btnPause.style.display = 'inline-block';
+            } else if (d.state === 'paused') {
+                badge.textContent = 'PAUSED';
+                badge.className = 'badge badge-yellow';
+                idleTime.textContent = d.paused_at ? `Since: ${new Date(d.paused_at).toLocaleTimeString()}` : '';
+                btnWake.style.display = 'inline-block';
+                btnPause.style.display = 'none';
+            } else {
+                badge.textContent = d.state || 'STOPPED';
+                badge.className = 'badge stopped';
+                idleTime.textContent = '';
+                btnWake.style.display = 'inline-block';
+                btnPause.style.display = 'none';
+            }
+        }
+
+        async function powerWake() {
+            const d = await api('/power/wake', { method: 'POST' });
+            if (d.success) {
+                showToast('Container waking up...', 'success');
+                setTimeout(refresh, 2000);
+            } else {
+                showToast('Failed to wake: ' + (d.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function powerPause() {
+            const d = await api('/power/pause', { method: 'POST' });
+            if (d.success) {
+                showToast('Container paused (sleeping)', 'success');
+                refresh();
+            } else {
+                showToast('Failed to pause: ' + (d.detail || 'Unknown error'), 'error');
+            }
+        }
+
+        async function powerToggle() {
+            const d = await api('/power/toggle', { method: 'POST' });
+            if (d.success) {
+                showToast('Power state: ' + d.state, 'success');
+                setTimeout(refresh, d.state === 'running' ? 2000 : 500);
+            } else {
+                showToast('Failed to toggle: ' + (d.detail || 'Unknown error'), 'error');
+            }
+        }
+
         // ═══════════════════════════════════════════════════════════════
         // Init + periodic refresh — only the currently visible tab refetches,
         // plus the persistent fleet stat grid (cheap, cached endpoint).
@@ -1024,6 +1113,7 @@
             else if (name === 'access') loadAccess();
             else if (name === 'apps') loadApps();
             else if (name === 'instances') loadInstances();
+            else if (name === 'actions') loadPowerStatus();
         }
 
         // Status is the default-active tab, so its data loads immediately;
