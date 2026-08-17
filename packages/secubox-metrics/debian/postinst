@@ -45,6 +45,32 @@ case "$1" in
         # Enable the geoipupdate timer (no-op if user hasn't supplied a key)
         systemctl enable --now secubox-geoipupdate.timer || true
 
+        # Add secubox to haproxy group for admin-socket access (issue #92)
+        if getent group haproxy >/dev/null; then
+            usermod -aG haproxy secubox || true
+        fi
+
+        # Persistent cache dir for live-panel rollups
+        mkdir -p /var/cache/secubox/metrics
+        chown -R secubox:secubox /var/cache/secubox
+
+        # Secrets dir for MaxMind license key
+        mkdir -p /etc/secubox/secrets
+        chmod 0700 /etc/secubox/secrets
+        chown secubox:secubox /etc/secubox/secrets
+
+        # GeoIP db dir
+        mkdir -p /var/lib/GeoIP
+        chown secubox:secubox /var/lib/GeoIP
+
+        # Reload nftables to pick up /etc/nftables.d/secubox-metrics.nft
+        if systemctl is-active --quiet nftables; then
+            systemctl reload nftables || true
+        fi
+
+        # Enable the geoipupdate timer (no-op if user hasn't supplied a key)
+        systemctl enable --now secubox-geoipupdate.timer || true
+
         # Enable and start service
         systemctl daemon-reload
         systemctl enable secubox-metrics.service

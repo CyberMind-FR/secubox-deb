@@ -3,31 +3,14 @@ Description=SecuBox Metrics Dashboard API
 After=network.target secubox-core.service
 Wants=secubox-core.service
 
-# /run/secubox N'EST PAS UN RuntimeDirectory (#1022).
-#
-# Il est PARTAGE par une centaine de modules. `RuntimeDirectory=` est concu pour
-# un repertoire PROPRE a un service : systemd le recree a chaque demarrage avec
-# le mode de l'unite, donc le dernier service demarre imposait le sien. Huit
-# unites le posaient en 0755, ce qui privait tous les autres du droit d'y creer
-# leur socket — « bind: permission denied », et un 502 dont la cause etait le
-# redemarrage d'un module sans rapport, survenu entre-temps.
-#
-# Le meme mecanisme effacait le repertoire a l'arret d'un service, emportant les
-# sockets des quatre-vingt-dix autres.
-#
-# Il est desormais declare une seule fois, en 1777, par le tmpfiles.d de
-# secubox-core — un seul proprietaire, une seule verite.
 [Service]
 Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/metrics
-# CacheDirectory auto-creates /var/cache/secubox with service user/group
-# and survives reboots (unlike /tmp). Fix for #149: was ReadWritePaths=
-# /tmp/secubox, which broke namespace setup after every reboot because
-# /tmp/secubox was cleared by systemd-tmpfiles before the unit started.
-CacheDirectory=secubox
-CacheDirectoryMode=0755
+RuntimeDirectory=secubox
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app \
     --uds /run/secubox/metrics.sock \
     --log-level warning
@@ -37,14 +20,7 @@ RestartSec=5
 # PrivateTmp=true
 # ProtectSystem=full
 NoNewPrivileges=true
-ReadWritePaths=/run/secubox /var/cache/secubox
-# VisitorOrigin reads the nft `seen_src` set via `nft -j list set ...` which
-# requires CAP_NET_ADMIN. Without it, _read_nft_set silently returns [] and
-# the aggregator emits empty entries forever (#194 fix, latent since #92).
-# Coexists with NoNewPrivileges=true because systemd sets the ambient set
-# before the User= drop.
-AmbientCapabilities=CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_NET_ADMIN
+ReadWritePaths=/run/secubox /tmp/secubox /var/cache/secubox
 
 [Install]
 WantedBy=multi-user.target

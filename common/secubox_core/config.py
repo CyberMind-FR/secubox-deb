@@ -135,60 +135,6 @@ _CERT_STATUS_DEFAULTS = {
     "critical_days": 7,
 }
 
-# Cookie audit (RGPD / ePrivacy, issue #156). See packages/secubox-metrics
-# for the aggregator and packages/secubox-mitmproxy/addons/cookie_audit.py
-# for the server-side ledger producer.
-_COOKIE_AUDIT_DEFAULTS = {
-    "enabled": False,
-    "ledger_path": "/var/log/secubox/cookie-audit/server.jsonl",
-    "ingest_dir": "/var/lib/secubox/cookie-audit/ingest",
-    "max_ingest_age_hours": 24,
-}
-
-# Built-in classifier patterns. Override with [cookie_audit.classifier] in
-# /etc/secubox/secubox.conf. Categories evaluated in order
-# (strictly_necessary > functional > analytics > marketing), first match wins.
-_COOKIE_CLASSIFIER_DEFAULTS = {
-    "strictly_necessary": [
-        r"^PHPSESSID$",
-        r"^sess(ion)?id$",
-        r"^csrftoken$",
-        r"^XSRF-TOKEN$",
-        r"^_csrf$",
-        r"^cart$",
-        r"^remember_token$",
-        r"^secubox_session$",
-    ],
-    "functional": [
-        r"^lang$",
-        r"^locale$",
-        r"^theme$",
-        r"^cookie[_-]?consent$",
-        r"^euconsent",
-    ],
-    "analytics": [
-        r"^_ga",
-        r"^_gid$",
-        r"^_gat",
-        r"^_pk_",
-        r"^_hjid$",
-        r"^_hjSession",
-        r"^_clck$",
-        r"^_clsk$",
-        r"^_matomo",
-    ],
-    "marketing": [
-        r"^_fbp$",
-        r"^_fbc$",
-        r"^__utm",
-        r"^_gcl_",
-        r"^_uet",
-        r"^IDE$",
-        r"^MUID$",
-        r"^NID$",
-    ],
-}
-
 
 def _merged(defaults: dict, section: str) -> dict:
     out = dict(defaults)
@@ -209,31 +155,3 @@ def get_live_hosts_config() -> dict:
 def get_cert_status_config() -> dict:
     """Return [cert_status] merged with defaults."""
     return _merged(_CERT_STATUS_DEFAULTS, "cert_status")
-
-
-def get_cookie_audit_config() -> dict:
-    """Return [cookie_audit] merged with defaults, including classifier rules.
-
-    Each classifier category is the union of operator-provided patterns and
-    the built-in defaults — admins can extend but never silently drop the
-    RGPD baseline. Set ``classifier_override = true`` in
-    ``[cookie_audit]`` to disable the merge and use operator patterns only.
-    """
-    cfg = _merged(_COOKIE_AUDIT_DEFAULTS, "cookie_audit")
-    operator_cls = (get_config("cookie_audit") or {}).get("classifier") or {}
-    override = bool(cfg.get("classifier_override", False))
-    merged_cls: dict = {}
-    for cat, base in _COOKIE_CLASSIFIER_DEFAULTS.items():
-        op = operator_cls.get(cat, []) or []
-        if override:
-            merged_cls[cat] = list(op)
-        else:
-            seen = set()
-            out = []
-            for pat in list(op) + list(base):
-                if pat not in seen:
-                    out.append(pat)
-                    seen.add(pat)
-            merged_cls[cat] = out
-    cfg["classifier"] = merged_cls
-    return cfg
