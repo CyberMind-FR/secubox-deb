@@ -1,5 +1,5 @@
 # WIP — Work In Progress
-*Mis à jour : 2026-08-16 (fin de session)*
+*Mis à jour : 2026-08-17*
 
 ---
 
@@ -17,6 +17,20 @@
 - **Depot** — 11 worktrees vides retires (28 → 18).
 
 ### ⬜ Next Up
+
+- **Cache navbar du hub** — 180 services en un `systemctl` a 5 s, expire sous
+  charge ; entree corrompue `'●'` dans la liste. Non corrige.
+- **Groupe unique = point de panne unique** — les 6 groupes existent en
+  configuration (`/etc/secubox/groups.d/g1..g6.conf`), un `systemctl` pour y
+  revenir.
+- **15 modules muets et 2 non importables** dans le groupe.
+- **Empaqueter `secubox-groupd`** — le binaire et l'unite sont poses a la main.
+- **Plafonds memoire des conteneurs** poses en direct, a remonter en paquet.
+- **`--widget-exclude`** ne couvre que `social` ; nextcloud, peertube, gitea
+  restent a ajouter.
+- **secubox-portal** inutile (60 octets/min) mais `secubox-lite` en depend.
+- **Conflit de paquets** : `hub` et `portal` livrent tous deux `login.html`.
+- **gitea** en 504 intermittent.
 
 - **Deployer les 126 paquets construits** — par lots de dix, controle de sante
   entre chaque. Versions deja montees, aucun echec de construction.

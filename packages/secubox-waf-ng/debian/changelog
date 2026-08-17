@@ -1,3 +1,27 @@
+secubox-waf-ng (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf n'inspecte plus le CORPS d'une requete binaire — envoi multipart,
+    image, video, archive. Les regles cherchent des motifs de TEXTE ; sur les
+    octets d'un JPEG elles les trouvent par hasard, une photo de quelques
+    megaoctets contenant statistiquement n'importe quelle courte suite.
+
+    Constate le 2026-08-17 : l'envoi d'une image depuis l'application Mastodon
+    d'un telephone etait classe « rce / critical » et bloque, alors que le meme
+    envoi depuis un navigateur passait — le navigateur retravaille l'image et
+    poste sur une autre route, l'application poste le fichier brut de l'appareil
+    photo. Faux positif sur des donnees binaires, pas une attaque.
+
+    Aggrave par la troncature : l'inspection s'arretait a 1 Mio et jugeait sur
+    un fragment coupe au milieu du binaire. sbxwaf le savait — il journalisait
+    « body-inspect-truncated » — sans en tirer la consequence.
+
+    CELA NE RETIRE RIEN AU WAF : methode, chemin, parametres, user-agent,
+    origine, debit et reputation restent inspectes, et le blocage reste evalue.
+    Seule la recherche de texte dans une image cesse. Le texte — json, xml,
+    formulaires — continue d'etre inspecte integralement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 13:42:11 +0200
+
 secubox-waf-ng (1.5.0-1~bookworm1) bookworm; urgency=high
 
   * LE CACHE MEDIA REVALIDE, IL NE FAIT PLUS QUE VIEILLIR (ref #1031).

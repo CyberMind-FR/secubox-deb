@@ -3,6 +3,15 @@
 
 ---
 
+## 2026-08-17
+
+- [ ] Corriger le cache du hub : appels par lots, `--plain`, delai adapte
+- [ ] Empaqueter secubox-groupd (binaire, unite, groupes)
+- [ ] Trancher : groupe unique ou six groupes
+- [ ] Remonter en paquet les plafonds memoire des conteneurs
+- [ ] Etendre --widget-exclude aux autres applications hebergees
+- [ ] Resoudre le conflit login.html entre hub et portal
+
 ## 2026-08-16 (suite)
 
 - [ ] **Deployer les 126 paquets** par lots de dix avec controle de sante

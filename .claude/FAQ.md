@@ -36,3 +36,29 @@ pour une release.
 Verifier que le depot n'est pas **en retard** sur la board : c'etait le cas de
 `secubox-antirootkit` (depot 0.1.0, board 0.1.1). Corriger la source telle
 quelle aurait ecrase une meilleure version. Comparer avant d'ecrire.
+
+## Le WAF bloque un envoi de fichier
+
+Regarder `waf-threats.log` : une categorie `rce`/`sqli` sur un `POST` de media
+est presque toujours un FAUX POSITIF. Les regles cherchent du texte ; les
+octets d'une image en contiennent par hasard. sbxwaf s'abstient desormais sur
+les corps binaires — si le cas revient, verifier que le `Content-Type` est bien
+reconnu par `corpsBinaire()`.
+
+## `pkill -f` tue ma propre session
+
+Le motif figure dans la ligne de commande du shell distant qui l'execute.
+Utiliser les PID (`pgrep` puis `kill`), jamais `pkill -f` avec un motif qu'on
+vient d'ecrire. Erreur commise trois fois le 2026-08-17.
+
+## Un import de groupe prend des minutes
+
+`secubox-groupd` importe 84 modules : compter plusieurs minutes, pas 40
+secondes. Un controle trop precoce conclut a tort a l'echec — c'est ce qui m'a
+fait replier trois groupes qui auraient marche.
+
+## Un paquet s'installe mais le binaire ne change pas
+
+Verifier QUEL paquet livre le binaire : `dpkg -S`. Les sources de `sbxwaf`
+vivent dans `secubox-toolbox-ng` mais c'est `secubox-waf-ng` qui l'installe.
+J'ai construit le mauvais paquet deux fois.
