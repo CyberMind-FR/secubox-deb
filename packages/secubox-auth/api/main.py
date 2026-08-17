@@ -29,27 +29,6 @@ async def health_check():
     """Public health check endpoint for sidebar status."""
     return {"status": "ok", "module": "deb"}
 
-
-class _SettingsIn(BaseModel):
-    require_admin_totp: bool
-
-
-@app.get("/settings")
-async def _get_settings(user=Depends(require_jwt)):
-    """Read toggleable auth settings (any authenticated user)."""
-    return {"require_admin_totp": _get_require_admin_totp()}
-
-
-@app.post("/settings")
-async def _set_settings(req: _SettingsIn, user=Depends(require_jwt)):
-    """Toggle whether admins are forced into TOTP (admin only)."""
-    who = user_store.get_user(user.get("sub")) or {}
-    if who.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin requis")
-    _set_require_admin_totp(bool(req.require_admin_totp))
-    _append_audit("settings_changed", user.get("sub"), {"require_admin_totp": bool(req.require_admin_totp)})
-    return {"require_admin_totp": _get_require_admin_totp()}
-
 # ──────────────────────────────────────────────────────────────────────
 # Task 13: branching login, MFA, TOTP enroll/confirm, set-password
 # Inserted BEFORE the legacy auth_router mount so the overriding
@@ -131,7 +110,7 @@ try:
 except PermissionError:
     # Running as non-root in dev/test — caller is responsible for env-overriding to a writable path.
     pass
-_SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
+__SESSIONS_FILE = Path(os.environ.get("SECUBOX_AUTH_SESSIONS", str(_DATA_DIR / "sessions.json")))
 _AUDIT_FILE    = Path(os.environ.get("SECUBOX_AUTH_AUDIT",    str(_DATA_DIR / "audit.log")))
 _TOTP_PENDING_FILE = Path(os.environ.get("SECUBOX_AUTH_TOTP_PENDING", str(_DATA_DIR / "totp-pending.json")))
 _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
@@ -139,47 +118,18 @@ _USERS_FILE    = Path(os.environ.get("USERS_FILE", "/etc/secubox/users.json"))
 _pending      = PendingStore(_TOTP_PENDING_FILE, ttl_seconds=900)
 _users_engine = _users_engine_mod.Engine(users_path=_USERS_FILE)
 
-# ── Runtime auth settings (webui-toggleable) ─────────────────────────────
-# Persisted separate from the shared TOML so the webui can flip it without
-# rewriting secubox.conf. Precedence: runtime file > [auth] config > default.
-_AUTH_RUNTIME_FILE = Path(os.environ.get("SECUBOX_AUTH_RUNTIME", "/etc/secubox/auth-runtime.json"))
-
-
-def _load_runtime() -> dict:
-    try:
-        return json.loads(_AUTH_RUNTIME_FILE.read_text())
-    except Exception:
-        return {}
-
-
-def _get_require_admin_totp() -> bool:
-    """Whether admins are forced into TOTP. Default OFF so a node stays reachable."""
-    rt = _load_runtime()
-    if "require_admin_totp" in rt:
-        return bool(rt["require_admin_totp"])
-    try:
-        return bool((get_config("auth") or {}).get("require_admin_totp", False))
-    except Exception:
-        return False
-
-
-def _set_require_admin_totp(value: bool) -> None:
-    rt = _load_runtime()
-    rt["require_admin_totp"] = bool(value)
-    _AUTH_RUNTIME_FILE.write_text(json.dumps(rt))
-
 
 def _read_sessions() -> list:
-    if not _SESSIONS_FILE.exists():
+    if not __SESSIONS_FILE.exists():
         return []
     try:
-        return json.loads(_SESSIONS_FILE.read_text())
+        return json.loads(__SESSIONS_FILE.read_text())
     except Exception:
         return []
 
 
 def _write_sessions(rows: list) -> None:
-    _SESSIONS_FILE.write_text(json.dumps(rows))
+    __SESSIONS_FILE.write_text(json.dumps(rows))
 
 
 def _append_audit(event: str, username: str, details: dict) -> None:
@@ -260,21 +210,13 @@ def _check_scope(authorization: Optional[str], expected_scope: str) -> dict:
     return payload
 
 
-def _client_meta(request: _Request) -> tuple:
-    """(ip, user_agent) of the caller. nginx/HAProxy front every login, so the
-    real client is in X-Forwarded-For; request.client.host would just be the
-    proxy. Every login path MUST record these — a session row without them is
-    unauditable (who logged in from where)."""
-    ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-          or request.headers.get("X-Real-IP", "")
-          or (request.client.host if request.client else ""))
-    return ip, request.headers.get("User-Agent", "")[:100]
-
-
 @_login_router.post("/login")
 def _login_v2(req: _LoginIn, request: _Request, response: _Response):
     """Branching login: setup_token / mfa_token / enrollment_token / access_token."""
-    ip, ua = _client_meta(request)
+    ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+          or request.headers.get("X-Real-IP", "")
+          or (request.client.host if request.client else ""))
+    ua = request.headers.get("User-Agent", "")[:100]
     user = user_store.get_user(req.username)
 
     if not user or not user.get("enabled"):
@@ -304,11 +246,8 @@ def _login_v2(req: _LoginIn, request: _Request, response: _Response):
         _append_audit("mfa_challenge_issued", req.username, {"ip": ip})
         return {"mfa_required": True, "mfa_token": mfa_tok}
 
-    # Admin without TOTP → force enrollment, only when the requirement is on.
-    # Toggleable from the webui (GET/POST /settings), stored in
-    # /etc/secubox/auth-runtime.json. Defaults to OFF (password-only admin login)
-    # so a node stays reachable; opt back in for a CSPN-hardened deployment.
-    if user.get("role") == "admin" and _get_require_admin_totp():
+    # Admin without TOTP → force enrollment
+    if user.get("role") == "admin":
         enroll_tok = create_token(req.username, scope="totp-enroll", expires_in=900)
         _append_audit("totp_enrollment_required", req.username, {"ip": ip})
         return {"enrollment_required": True, "enrollment_token": enroll_tok}
@@ -337,10 +276,7 @@ async def _login_mfa(req: _MfaIn, request: _Request, response: _Response):
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok)  # SSO-lite (#400)
-    ip, ua = _client_meta(request)
-    _on_session_event("login_success", username, {
-        "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
-    })
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
     _users_engine.touch_last_login(username)
     return {"access_token": tok, "token_type": "bearer", "expires_in": 86400}
 
@@ -376,10 +312,7 @@ def _totp_confirm(req: _MfaIn, request: _Request, response: _Response):
     jti = secrets.token_hex(8)
     tok = create_token(username, jti=jti)
     _set_session_cookie(response, tok)  # SSO-lite (#400)
-    ip, ua = _client_meta(request)
-    _on_session_event("login_success", username, {
-        "jti": jti, "expires_in": 86400, "ip": ip, "user_agent": ua,
-    })
+    _on_session_event("login_success", username, {"jti": jti, "expires_in": 86400, "ip": ""})
     return {
         "access_token": tok, "token_type": "bearer", "expires_in": 86400,
         "backup_codes": backup_plain,
