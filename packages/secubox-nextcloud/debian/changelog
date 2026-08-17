@@ -1,35 +1,54 @@
-secubox-nextcloud (1.5.2-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.4.7-1~bookworm1) bookworm; urgency=medium
 
-  * nextcloudctl: new `check-upgrade` (non-destructive: reports current/latest/
-    available/major_jump via `occ update:check`) and guarded `upgrade` (official
-    updater.phar; refuses an available cross-major) verbs. 'Upgrade when present.'
+  * #429: /status,/storage cache is now stale-while-revalidate — an expired poll
+    returns the last value instantly and refreshes in a background thread, so the
+    dashboard never blocks on the ~6s lxc/occ compute after its first load.
 
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 10:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:50:00 +0200
 
-secubox-nextcloud (1.5.1-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.4.6-1~bookworm1) bookworm; urgency=medium
 
-  * Fix connection URLs showing http://localhost:8080 instead of the real
-    public domain. /connections only checked ssl_domain (unset in
-    secubox.conf [nextcloud], which carries `domain`) and fell back to
-    localhost; the panel also hardcoded localhost, ignoring status.web_url.
-    New pure _public_base_url() helper (ssl_domain > domain > localhost),
-    used by both /connections and /status; panel now renders status.web_url.
-    Regression tests added (tests/test_public_base_url.py).
+  * #429 CRITICAL: /status,/storage cache is now single-flight + serve-stale.
+    The plain TTL cache still let concurrent polls during the ~6s compute all
+    miss and spawn the helper at once (thundering herd → load 9+, status 000).
+    One compute per key at a time; concurrent callers get the last value.
 
- -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:35:00 +0200
 
-secubox-nextcloud (1.5.0-1~bookworm2) bookworm; urgency=medium
+secubox-nextcloud (1.4.5-1~bookworm1) bookworm; urgency=medium
 
-  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
-    (remove the hard cascade-stop when secubox-core restarts/fails).
+  * #429 CRITICAL: request handlers were async def calling blocking subprocess,
+    freezing the shared aggregator event loop for ~6s per /status poll →
+    board-wide 502s. Convert all handlers to plain def (threadpooled) + add a
+    TTL cache (status 15s, storage 30s) to the auto-polled read endpoints,
+    invalidated on lifecycle actions.
 
- -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:15:00 +0200
 
-secubox-nextcloud (1.4.1-1~bookworm2) bookworm; urgency=medium
+secubox-nextcloud (1.4.4-1~bookworm1) bookworm; urgency=medium
 
-  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+  * #429 fix: real detailed users — NC has no `user:list:detailed`; use
+    `occ user:list --info --output=json` (enabled/quota/last_seen/email) and
+    normalize the {uid:{…}} map to the dashboard's flat rows.
 
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 13:30:00 +0200
+
+secubox-nextcloud (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * #429 fix: brand-agnostic version parse — this NC instance rebrands the
+    product string to "SecuBox", so status/version now report 32.0.10 instead
+    of empty.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 13:00:00 +0200
+
+secubox-nextcloud (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * #429 real dashboard: route container ops via sudo nextcloudctl (+ sudoers
+    drop-in) so status/users/storage reflect reality; real vhost URLs; full user
+    CRUD (add/delete/enable/disable/quota/reset); dashboard rework with XSS
+    hardening. Fixes false-red status, empty users, localhost URLs.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 12:00:00 +0200
 
 secubox-nextcloud (1.4.1-1~bookworm1) bookworm; urgency=medium
 
