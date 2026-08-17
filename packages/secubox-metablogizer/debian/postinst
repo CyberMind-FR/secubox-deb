@@ -4,64 +4,7 @@ mkdir -p /run/secubox /srv/metablogizer/sites
 # #494: do NOT chown the shared parent /run/secubox (owned by tmpfiles.d at
 # 1777 root root). Only own this module's own data dir.
 chown secubox:secubox /srv/metablogizer/sites 2>/dev/null || true
-
-# Metablog uploads are versioned back into each site's Gitea repo (git commit +
-# push in api/webhook.py:git_commit_push). The site remotes use the PUBLIC gitea
-# host, which NAT-hairpins from the board — the SSH handshake succeeds but the
-# pack transfer stalls. Rewrite it to Gitea's internal LXC endpoint for the
-# metablogizer service user so pushes go direct. Idempotent. Override the two
-# vars in the environment if the topology differs.
-GITEA_PUBLIC_URL="${GITEA_PUBLIC_URL:-ssh://gitea@gitea.gk2.secubox.in:2222/}"
-GITEA_PUSH_TARGET="${GITEA_PUSH_TARGET:-ssh://gitea@10.100.0.40:2222/}"
-if getent passwd secubox >/dev/null 2>&1; then
-    sudo -u secubox git config --global "url.${GITEA_PUSH_TARGET}.insteadOf" "$GITEA_PUBLIC_URL" 2>/dev/null || true
-    SECU_HOME="$(getent passwd secubox | cut -d: -f6)"
-    if [ -n "$SECU_HOME" ]; then
-        install -d -o secubox -g secubox -m 700 "$SECU_HOME/.ssh" 2>/dev/null || true
-        sudo -u secubox sh -c "ssh-keyscan -p 2222 10.100.0.40 2>/dev/null >> '$SECU_HOME/.ssh/known_hosts' && sort -u '$SECU_HOME/.ssh/known_hosts' -o '$SECU_HOME/.ssh/known_hosts'" 2>/dev/null || true
-    fi
-fi
-
 systemctl daemon-reload
 systemctl enable secubox-metablogizer 2>/dev/null || true
 systemctl start secubox-metablogizer 2>/dev/null || true
-
-# Mosaic tab thumbnail queue (#956): provision the cache subtree (owner
-# secubox, NOT the shared /var/cache/secubox parent — see the .tmpfiles
-# file) then enable the 2-minute capture timer.
-systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-metablogizer.conf 2>/dev/null || true
-systemctl enable --now metablog-shots.timer 2>/dev/null || true
-
-# Mosaic tab site-list cache (#974): same provisioning as the thumbnail
-# queue above, for GET /sites — see api/sites_scan.py + metablog-audit.timer.
-systemctl enable --now metablog-audit.timer 2>/dev/null || true
-
-# Synchronisation des sites adosses a git (#1029/#1023). Tout site dont le
-# `public/` est un depot git est repris ; un site televerse a la main n en a
-# pas et reste ignore — aucune liste a tenir, donc aucune a oublier de tenir.
-systemctl enable --now metablog-sync.timer 2>/dev/null || true
-
-# Mosaic wall thumbnails served directly by nginx (#977): reload so the
-# shipped location (nginx/metablogizer.conf) picks up without a manual
-# `systemctl reload nginx` — same pattern as secubox-hub/secubox-cdn.
-# `nginx -t` first: never reload into a config nginx itself considers
-# broken, an upgrade must not be the thing that takes nginx down.
-install -d -m 755 /etc/nginx/secubox.d
-nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || true
-
-# Publisher wizard: the sbxwaf/haproxy/cert steps run through the
-# secubox-publishctl root helper, authorized by this sudoers drop-in.
-chmod 0755 /usr/sbin/secubox-publishctl 2>/dev/null || true
-if [ -f /etc/sudoers.d/secubox-publish-wizard ]; then
-  chmod 0440 /etc/sudoers.d/secubox-publish-wizard
-  visudo -cf /etc/sudoers.d/secubox-publish-wizard >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-publish-wizard
-fi
-
-# Manual site-list cache refresh (POST /sites/refresh, #974): authorizes
-# secubox to start metablog-audit.service without waiting for the timer.
-if [ -f /etc/sudoers.d/secubox-metablog-audit ]; then
-  chmod 0440 /etc/sudoers.d/secubox-metablog-audit
-  visudo -cf /etc/sudoers.d/secubox-metablog-audit >/dev/null 2>&1 || rm -f /etc/sudoers.d/secubox-metablog-audit
-fi
-
 exit 0
