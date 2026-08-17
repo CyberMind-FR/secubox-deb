@@ -1,3 +1,18 @@
+secubox-proxypac (1.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * wpad : aucun dropin n'est ecrit si le domaine ou l'adresse manquent. Sans
+    domaine, le gabarit produisait `local-data: "wpad.. A <ip>"` — un label
+    vide. Unbound ne l'ignore pas : il REFUSE DE DEMARRER et repart en boucle.
+    Le 2026-08-17 il a redemarre 18 fois, plus aucun nom ne se resolvait sur la
+    board ni sur le LAN, et toute la surface web est devenue injoignable — pour
+    une variable vide dans un fichier auxiliaire.
+
+    Sans WPAD, les postes configurent leur proxy a la main ; sans DNS, plus
+    rien ne fonctionne. On n'ecrit donc rien plutot qu'un fichier qui casse le
+    resolveur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 08:21:48 +0200
+
 secubox-proxypac (1.2.2-1~bookworm1) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
