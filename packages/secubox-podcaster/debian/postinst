@@ -7,6 +7,11 @@ case "$1" in
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/podcaster
     install -d -o secubox -g secubox -m 0750 /var/lib/secubox/podcaster/media
 
+    # #761: the service used to run as root and created the DB + media files
+    # root:root. It now runs as secubox, so reclaim ownership of any pre-existing
+    # data — otherwise the unprivileged service can't read its own library.
+    chown -R secubox:secubox /var/lib/secubox/podcaster 2>/dev/null || true
+
     # Config on first install only (preserve operator edits on upgrade).
     if [ ! -f /etc/secubox/podcaster.toml ]; then
       if [ -f /usr/share/secubox/podcaster/podcaster.toml ]; then

@@ -1,39 +1,21 @@
-secubox-podcaster (1.2.0-1~bookworm2) bookworm; urgency=high
+secubox-podcaster (1.0.4-1~bookworm1) bookworm; urgency=medium
 
-  * IDENTITE D'UN FLUX PAR SON URL SOURCE, le slug n'etant qu'un repli. Le
-    slug vient du TITRE rendu par yt-dlp, qui varie selon l'URL fournie :
-    `playlist?list=Y` et `watch?v=X&list=Y` designent la meme serie mais
-    donnent des titres — donc des slugs — differents. Un import lance depuis
-    une URL `watch` a cree un SECOND flux a cote du premier et retelecharge
-    34 episodes, soit 2,3 Go. La comparaison porte sur l'identifiant de
-    playlist, stable la ou le titre ne l'est pas.
-  * Le reimport automatique appelait run_import avec TROIS arguments au lieu
-    de quatre : il aurait echoue en TypeError au premier cycle, une heure
-    apres le deploiement. Attrape en declenchant l'import a la main.
-  * Plus aucun episode telecharge depuis le 2026-07-25. Quatre flux sur cinq ne
-    sont pas des sources HTTP mais des conteneurs crees localement
-    (`youtube:<serie>`, `audiobook:<titre>`) ; le rafraichisseur les passait a
-    un client HTTP, qui les refusait a chaque cycle :
-      Request URL is missing an 'http://' or 'https://' protocol
-    Il tournait donc bien, mais echouait sur tout sauf le seul vrai RSS.
-  * Defaut plus grave derriere : un flux `youtube:` ne pouvait PAS etre
-    rafraichi. Son url propre n'est qu'un slug de serie et la colonne `site`
-    restait vide — l'URL source etait perdue, il n'y avait rien a
-    re-interroger. Elle est desormais enregistree.
-  * La boucle d'import saute les videos deja connues AVANT de telecharger.
-    L'insertion etait idempotente (INSERT OR IGNORE sur guid), mais le fichier
-    etait telecharge avant d'y arriver : un reimport retelechargeait la serie
-    entiere, ce qui interdisait tout rafraichissement automatique.
-  * Un flux importe avant ce correctif n'a pas de source : c'est dit une fois,
-    en info, plutot qu'echoue en boucle. Il faut le reimporter une fois.
+  * Service now runs unprivileged as secubox:secubox (was root) with UMask=0002,
+    matching every other module. uvicorn creates its Unix socket owned
+    secubox:secubox so nginx (www-data, in the secubox group) can connect. This
+    removes the racy "sleep 1 + chown" ExecStartPost: when uvicorn took >1s to
+    bind (it cold-starts in ~4s here), the chown ran before the socket existed,
+    silently failed, and left it root:root → nginx "Permission denied" → 502 →
+    the dashboard looked empty ("content disappeared"). ExecStartPre now clears
+    any stale root-owned socket (sticky /run/secubox). postinst reclaims
+    ownership of pre-existing root-owned DB + media. (#761)
+  * Audio player: stop rebuilding the episode list on every poll tick (every 4s
+    admin / 15s portal) — that destroyed the playing <audio> element, so
+    playback halted every few seconds. The list now only re-renders when its
+    contents change AND no <audio> is actively playing. /media is served
+    Content-Disposition: inline so iOS Safari plays it in <audio>. (#761)
 
- -- Gandalf / CyberMind <gk@cybermind.fr>  Fri, 07 Aug 2026 09:30:00 +0200
-
-secubox-podcaster (1.0.3-1~bookworm2) bookworm; urgency=medium
-
-  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 27 Jun 2026 16:00:00 +0000
 
 secubox-podcaster (1.0.3-1~bookworm1) bookworm; urgency=medium
 

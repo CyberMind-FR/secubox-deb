@@ -497,8 +497,10 @@ async def media(ep_id: int):
     p = Path(ep["local_path"])
     if not p.exists():
         raise HTTPException(404, "file missing")
+    # inline so browsers play it in <audio> (iOS Safari refuses 'attachment');
+    # the portal/admin "download" links force a save via the HTML5 download attr.
     return FileResponse(p, media_type=ep.get("mime") or "audio/mpeg",
-                        filename=p.name)
+                        filename=p.name, content_disposition_type="inline")
 
 
 @router.get("/feeds/{fid}/cover")
