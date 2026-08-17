@@ -1,0 +1,1947 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox SOC Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+           SECUBOX SOC DASHBOARD — Hybrid Glass + Matrix Skin
+           ═══════════════════════════════════════════════════════════════ */
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-display);
+            background: var(--bg-deep);
+            color: var(--text-dark);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* Layout */
+        .layout { display: flex; min-height: 100vh; }
+
+        /* ═══════════════════════════════════════════════════════════════
+           SIDEBAR — Glass Effect
+           ═══════════════════════════════════════════════════════════════ */
+        .sidebar { display: none !important; 
+            width: 240px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: var(--space-l);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: var(--space-m);
+            text-decoration: none;
+            color: var(--text-dark);
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--root-light), var(--mesh-light));
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: var(--shadow-glow) rgba(20, 140, 102, 0.3);
+        }
+
+        .logo-text { font-weight: 700; font-size: 18px; letter-spacing: 2px; }
+        .logo-version { font-size: 10px; color: var(--muted-dark); font-family: var(--font-mono); }
+
+        .sidebar-nav { flex: 1; padding: var(--space-m); overflow-y: auto; }
+        .nav-section { margin-bottom: var(--space-l); }
+
+        .nav-section-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--muted-dark);
+            padding: var(--space-s) var(--space-m);
+            margin-bottom: var(--space-xs);
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-m);
+            padding: var(--space-s) var(--space-m);
+            border-radius: var(--radius-sm);
+            color: var(--muted-dark);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .nav-item:hover { background: var(--glass-highlight); color: var(--text-dark); }
+
+        .nav-item.active {
+            background: rgba(20, 140, 102, 0.15);
+            color: var(--root-light);
+            border-left: 2px solid var(--root-light);
+            margin-left: -2px;
+        }
+
+        .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+        .nav-item .badge { margin-left: auto; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-family: var(--font-mono); }
+        .nav-item .badge.beta { background: rgba(245, 158, 11, 0.2); color: var(--wall-light); }
+        .nav-item .badge.alpha { background: rgba(239, 68, 68, 0.2); color: var(--boot-light); }
+        .nav-item .status-led { margin-left: auto; font-size: 10px; }
+
+        .sidebar-footer { padding: var(--space-m); border-top: 1px solid var(--glass-border); }
+        .user-info { display: flex; align-items: center; gap: var(--space-m); padding: var(--space-s); }
+        .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .user-name { font-size: 13px; font-weight: 500; }
+        .user-role { font-size: 10px; color: var(--muted-dark); text-transform: uppercase; }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MAIN CONTENT
+           ═══════════════════════════════════════════════════════════════ */
+        .main {
+            flex: 1;
+            margin-left: 240px;
+            padding: var(--space-xl);
+            background: linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-dark) 100%);
+            min-height: 100vh;
+        }
+
+        .page-header { margin-bottom: var(--space-xl); }
+        .page-title { font-size: 28px; font-weight: 600; margin-bottom: var(--space-xs); }
+        .page-subtitle { color: var(--muted-dark); font-size: 14px; }
+
+        /* ═══════════════════════════════════════════════════════════════
+           GLASS CARDS — Dashboard Style
+           ═══════════════════════════════════════════════════════════════ */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: var(--space-l);
+            margin-bottom: var(--space-xl);
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-l);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--card-accent, var(--root-light));
+            opacity: 0.8;
+        }
+
+        .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-m); }
+        .card-icon { font-size: 24px; filter: drop-shadow(var(--shadow-glow) var(--card-accent, var(--root-light))); }
+
+        .card-status {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--card-accent, #148C66);
+            text-shadow: 0 0 8px currentColor;
+        }
+
+        .card-status::before {
+            content: '';
+            width: 8px; height: 8px;
+            background: currentColor;
+            border-radius: 50%;
+            box-shadow: 0 0 8px currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .card-status.warning { color: var(--wall-light); }
+        .card-status.danger { color: var(--boot-light); }
+
+        .card-metric {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--card-accent, #00ff88);
+            font-family: var(--font-mono);
+            line-height: 1;
+            margin-bottom: var(--space-s);
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .card-label { font-size: 13px; color: var(--muted-dark); margin-bottom: var(--space-m); }
+
+        .card-trend {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+        }
+
+        .card-trend.up { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
+        .card-trend.down { background: rgba(192, 96, 64, 0.15); color: var(--boot-light); }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MATRIX PANEL — Terminal Style
+           ═══════════════════════════════════════════════════════════════ */
+        .matrix-panel {
+            background: var(--surface-dark);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            margin-bottom: var(--space-xl);
+        }
+
+        .matrix-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-m) var(--space-l);
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--glass-border);
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        .matrix-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-s);
+            color: var(--root-light);
+            font-weight: 500;
+        }
+
+        .matrix-title::before { content: '>'; animation: blink 1s step-end infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .matrix-body { padding: var(--space-m); font-family: var(--font-mono); font-size: 13px; line-height: 1.8; }
+        .matrix-row { display: flex; align-items: flex-start; padding: var(--space-xs) 0; border-bottom: 1px solid rgba(255, 255, 255, 0.03); }
+        .matrix-row:last-child { border-bottom: none; }
+        .matrix-label { color: var(--muted-dark); min-width: 120px; }
+        .matrix-value { color: var(--text-dark); flex: 1; }
+        .matrix-value .highlight { color: var(--root-light); }
+        .matrix-value .warning { color: var(--wall-light); }
+        .matrix-value .danger { color: var(--boot-light); }
+        .matrix-value .info { color: var(--mesh-light); }
+        .flag { font-size: 14px; margin-right: var(--space-xs); }
+
+        /* ═══════════════════════════════════════════════════════════════
+           ACTIVITY PANEL
+           ═══════════════════════════════════════════════════════════════ */
+        .row { display: flex; gap: var(--space-l); }
+        .col-2 { flex: 1; }
+
+        .activity-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .activity-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-l);
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .activity-title { font-size: 16px; font-weight: 600; }
+        .activity-filter { display: flex; gap: var(--space-s); }
+
+        .filter-btn {
+            padding: var(--space-xs) var(--space-s);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: transparent;
+            color: var(--muted-dark);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover, .filter-btn.active {
+            background: var(--glass-highlight);
+            color: var(--text-dark);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .activity-list { max-height: 300px; overflow-y: auto; }
+
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-m);
+            padding: var(--space-m) var(--space-l);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            transition: background 0.2s ease;
+        }
+
+        .activity-item:hover { background: var(--glass-highlight); }
+
+        .activity-icon {
+            width: 32px; height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.waf { background: rgba(232, 132, 90, 0.15); color: var(--auth-light); }
+        .activity-icon.crowdsec { background: rgba(112, 104, 208, 0.15); color: var(--mind-light); }
+        .activity-icon.ssl { background: rgba(20, 140, 102, 0.15); color: var(--root-light); }
+        .activity-icon.auth { background: rgba(44, 112, 192, 0.15); color: var(--mesh-light); }
+
+        .activity-content { flex: 1; min-width: 0; }
+        .activity-text { font-size: 13px; color: var(--text-dark); margin-bottom: 2px; }
+
+        .activity-text code {
+            font-family: var(--font-mono);
+            background: var(--bg-elevated);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            color: var(--wall-light);
+        }
+
+        .activity-meta { font-size: 11px; color: var(--muted-dark); font-family: var(--font-mono); }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CHART CARD
+           ═══════════════════════════════════════════════════════════════ */
+        .chart-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-l);
+            margin-bottom: var(--space-xl);
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--space-l);
+        }
+
+        .chart-title { font-size: 16px; font-weight: 600; }
+        .chart-legend { display: flex; gap: var(--space-m); font-size: 12px; }
+        .legend-item { display: flex; align-items: center; gap: var(--space-xs); color: var(--muted-dark); }
+        .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        .chart-area {
+            height: 120px;
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            padding: var(--space-s) 0;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: linear-gradient(180deg, var(--root-light), rgba(20, 140, 102, 0.3));
+            border-radius: 2px 2px 0 0;
+            min-height: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .chart-bar:hover { filter: brightness(1.2); }
+
+        .chart-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: var(--space-s);
+            font-size: 10px;
+            color: var(--muted-dark);
+            font-family: var(--font-mono);
+        }
+
+        /* Health bars */
+        .health-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-m); }
+
+        .health-item {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-m);
+        }
+
+        .health-header { display: flex; justify-content: space-between; margin-bottom: var(--space-s); font-size: 13px; }
+        .health-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+        .health-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+        .health-fill.ok { background: linear-gradient(90deg, var(--root-light), #16a34a); }
+        .health-fill.warn { background: linear-gradient(90deg, var(--wall-light), var(--auth-light)); }
+        .health-fill.danger { background: linear-gradient(90deg, var(--boot-light), #ef4444); }
+        .health-percent { font-family: var(--font-mono); font-size: 12px; color: var(--muted-dark); margin-top: var(--space-xs); text-align: right; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+
+        /* Responsive */
+        @media (max-width: 1024px) { .row { flex-direction: column; } }
+        @media (max-width: 768px) {
+            .sidebar { display: none !important;  transform: translateX(-100%); transition: transform 0.3s ease; }
+            .sidebar.open { transform: translateX(0); }
+            .main { margin-left: 0; padding: var(--space-m); }
+        }
+
+        /* Loading spinner */
+        .loading { opacity: 0.5; animation: loading-pulse 1.5s infinite; }
+        @keyframes loading-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        /* Three-column status layout */
+        .status-columns {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-l);
+            margin-bottom: var(--space-xl);
+        }
+        .status-col { margin-bottom: 0; }
+        @media (max-width: 1200px) { .status-columns { grid-template-columns: 1fr; } }
+
+        /* Categories as small tags with emojis */
+        .categories-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .cat-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 6px;
+            font-size: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            white-space: nowrap;
+        }
+        .cat-tag.scanner { border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); }
+        .cat-tag.bruteforce { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
+        .cat-tag.honeypot { border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.1); }
+        .cat-tag.waf { border-color: rgba(232, 132, 90, 0.4); background: rgba(232, 132, 90, 0.1); }
+        .cat-tag.http { border-color: rgba(44, 112, 192, 0.4); background: rgba(44, 112, 192, 0.1); }
+        .cat-tag.ssh { border-color: rgba(20, 140, 102, 0.4); background: rgba(20, 140, 102, 0.1); }
+        .cat-tag.sqli { border-color: rgba(239, 68, 68, 0.5); background: rgba(239, 68, 68, 0.15); }
+        .cat-tag.xss { border-color: rgba(251, 146, 60, 0.5); background: rgba(251, 146, 60, 0.15); }
+
+        /* Autoban panel */
+        .autoban-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-xl);
+            overflow: hidden;
+        }
+        .autoban-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: var(--space-m);
+            padding: var(--space-m) var(--space-l);
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .autoban-title {
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--boot-light);
+        }
+        .autoban-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-s);
+            flex-wrap: wrap;
+        }
+        .ban-input, .ban-select {
+            padding: 6px 10px;
+            font-size: 12px;
+            font-family: var(--font-mono);
+            background: var(--bg-deep);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-dark);
+        }
+        .ban-input { width: 140px; }
+        .ban-select { width: 110px; }
+        .ban-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--boot-light), #ef4444);
+            border: none;
+            border-radius: var(--radius-sm);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .ban-btn:hover { filter: brightness(1.1); transform: scale(1.02); }
+        .ban-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .recent-bans {
+            padding: var(--space-m);
+            max-height: 100px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+        .ban-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+        .ban-item:last-child { border-bottom: none; }
+        .ban-ip { color: var(--boot-light); }
+        .ban-meta { color: var(--muted-dark); }
+        .unban-btn {
+            padding: 2px 6px;
+            font-size: 10px;
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 3px;
+            color: var(--boot-light);
+            cursor: pointer;
+        }
+        .unban-btn:hover { background: rgba(239, 68, 68, 0.2); }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TRIPLE EYEMOTE SENSORS
+           ═══════════════════════════════════════════════════════════════ */
+        .eyemotes-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-m);
+            margin-bottom: var(--space-xl);
+        }
+        @media (max-width: 1200px) { .eyemotes-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .eyemotes-grid { grid-template-columns: 1fr; } }
+        .eyemote-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-m);
+            display: flex;
+            flex-direction: column;
+        }
+        .eyemote-card h2 {
+            font-size: 0.85rem;
+            color: var(--muted-dark);
+            margin-bottom: var(--space-s);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .eyemote-mini {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-s) 0;
+        }
+        .eyemote-svg-mini { width: 160px; height: 160px; }
+        .eyemote-svg-mini .ring-fill { transition: stroke-dasharray 0.8s ease-out; }
+        .eyemote-svg-mini .eyemote-pupil { animation: pupilPulse 2s infinite; }
+        @keyframes pupilPulse {
+            0%, 100% { r: 8; opacity: 1; }
+            50% { r: 10; opacity: 0.8; }
+        }
+        .eyemote-total-mini {
+            position: absolute;
+            font-family: var(--font-mono);
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #00ff41;
+            text-shadow: 0 0 12px rgba(0,255,65,0.5);
+        }
+        .eyemote-total-mini.visitor { color: #00d4ff; text-shadow: 0 0 12px rgba(0,212,255,0.5); }
+        .eyemote-total-mini.vhost { color: #f97316; text-shadow: 0 0 12px rgba(249,115,22,0.5); }
+        .eyemote-legend-mini {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .legend-row-mini {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 8px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid;
+        }
+        .legend-row-mini .row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .legend-row-mini .row-val { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; min-width: 55px; }
+        .legend-row-mini .row-flags { display: flex; flex-wrap: wrap; gap: 3px; flex: 1; }
+        .flag-mini {
+            width: 20px; height: 20px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.7rem; border: 2px solid; position: relative;
+        }
+        .flag-mini .fm-count {
+            position: absolute; bottom: -2px; right: -2px;
+            font-size: 0.45rem; background: #000; color: #fff;
+            padding: 1px 2px; border-radius: 3px; font-family: var(--font-mono);
+        }
+        .vhost-badge {
+            display: inline-flex; align-items: center; gap: 3px;
+            padding: 2px 6px; background: rgba(255,255,255,0.05);
+            border-radius: var(--radius-sm); font-size: 0.65rem;
+            font-family: var(--font-mono); border: 1px solid;
+        }
+        .vhost-badge .vb-count { font-weight: 700; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="sidebar"></nav>
+    
+        <!-- SIDEBAR -->
+        <!-- MAIN CONTENT -->
+        <main class="main">
+            <header class="page-header">
+                <h1 class="page-title">Security Operations Center</h1>
+                <p class="page-subtitle">Real-time threat monitoring and system status — <span id="last-update">updating...</span></p>
+            </header>
+
+            <!-- GLASS CARDS GRID - Eyeremote Style -->
+            <div class="cards-grid">
+                <!-- WAF Card -->
+                <div class="glass-card" style="--card-accent: #ef4444; border-left: 3px solid #ef4444;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="waf-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">🛡️</span>
+                                <span class="card-status" id="waf-card-status" style="font-size:0.65rem;">LOADING</span>
+                            </div>
+                            <div class="card-metric" id="threats-blocked" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);">Threats 24h</div>
+                        </div>
+                    </div>
+                    <div id="waf-card-histogram" style="display:flex;align-items:flex-end;height:20px;gap:1px;margin-top:8px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                </div>
+
+                <!-- CrowdSec Card -->
+                <div class="glass-card" style="--card-accent: #8b5cf6; border-left: 3px solid #8b5cf6;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="cs-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">👁️</span>
+                                <span class="card-status" id="cs-card-status" style="font-size:0.65rem;">LOADING</span>
+                            </div>
+                            <div class="card-metric" id="active-decisions" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);" id="decisions-info">- bouncers</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;">
+                        <span style="background:rgba(139,92,246,0.2);color:#a78bfa;padding:2px 6px;border-radius:3px;" id="cs-bans-tag">🚫 - bans</span>
+                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;" id="cs-captcha-tag">🔒 - captcha</span>
+                    </div>
+                </div>
+
+                <!-- Network Card -->
+                <div class="glass-card" style="--card-accent: #3b82f6; border-left: 3px solid #3b82f6;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="net-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">🌐</span>
+                                <span class="card-status" style="font-size:0.65rem;">ACTIVE</span>
+                            </div>
+                            <div class="card-metric" id="throughput" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);">MB/s Throughput</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;" id="throughput-trend">
+                        <span style="background:rgba(59,130,246,0.2);color:#60a5fa;padding:2px 6px;border-radius:3px;">HTTP -</span>
+                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;">HTTPS -</span>
+                    </div>
+                </div>
+
+                <!-- Health Card -->
+                <div class="glass-card" style="--card-accent: #22c55e; border-left: 3px solid #22c55e;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <div id="health-card-donut" style="width:60px;height:60px;flex-shrink:0;"></div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                                <span style="font-size:1.1em;">⚡</span>
+                                <span class="card-status" id="health-status" style="font-size:0.65rem;">LOADING</span>
+                            </div>
+                            <div class="card-metric" id="active-services" style="font-size:1.5rem;line-height:1;">-</div>
+                            <div style="font-size:0.65rem;color:var(--muted-dark);">Active Services</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:4px;margin-top:8px;font-size:0.6rem;" id="uptime-info">
+                        <span style="background:rgba(34,197,94,0.2);color:#22c55e;padding:2px 6px;border-radius:3px;">-% healthy</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- THREE-COLUMN STATUS PANELS -->
+            <div class="status-columns">
+                <!-- CROWDSEC STATUS -->
+                <div class="matrix-panel status-col">
+                    <div class="matrix-header">
+                        <span class="matrix-title">👁️ CROWDSEC</span>
+                        <span style="color: var(--muted-dark);" id="cs-version">v-</span>
+                    </div>
+                    <div class="matrix-body">
+                        <div class="matrix-row">
+                            <span class="matrix-label">Agent</span>
+                            <span class="matrix-value" id="cs-agent-status"><span class="highlight">● LOADING</span></span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Decisions</span>
+                            <span class="matrix-value" id="cs-decisions-count">-</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Bouncers</span>
+                            <span class="matrix-value" id="cs-bouncers">-</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Categories</span>
+                            <span class="matrix-value categories-list" id="cs-categories">--</span>
+                        </div>
+                        <!-- Multi-layer donut for categories -->
+                        <div id="cs-cat-donut" style="margin-top: 0.5rem; display: flex; justify-content: center;"></div>
+                    </div>
+                </div>
+
+                <!-- WAF STATUS -->
+                <div class="matrix-panel status-col">
+                    <div class="matrix-header">
+                        <span class="matrix-title">🛡️ WAF</span>
+                        <span style="color: var(--muted-dark);" id="waf-version">v- · -</span>
+                    </div>
+                    <div class="matrix-body">
+                        <div class="matrix-row">
+                            <span class="matrix-label">Status</span>
+                            <span class="matrix-value" id="waf-status-detail"><span class="highlight">● LOADING</span></span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Countries</span>
+                            <span class="matrix-value" id="top-countries">Loading...</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Categories</span>
+                            <span class="matrix-value categories-list" id="waf-categories">Loading...</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Last Threat</span>
+                            <span class="matrix-value" id="last-threat">No recent threats</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FIREWALL STATUS -->
+                <div class="matrix-panel status-col">
+                    <div class="matrix-header">
+                        <span class="matrix-title">🔥 FIREWALL</span>
+                        <span style="color: var(--muted-dark);" id="fw-info">nftables</span>
+                    </div>
+                    <div class="matrix-body">
+                        <div class="matrix-row">
+                            <span class="matrix-label">Status</span>
+                            <span class="matrix-value" id="fw-status"><span class="highlight">● LOADING</span></span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Tables</span>
+                            <span class="matrix-value" id="fw-tables">-</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Chains</span>
+                            <span class="matrix-value" id="fw-chains">-</span>
+                        </div>
+                        <div class="matrix-row">
+                            <span class="matrix-label">Rules</span>
+                            <span class="matrix-value" id="fw-rules">-</span>
+                        </div>
+                        <!-- Packet Stats - Eyeremote Donut -->
+                        <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--divider);">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <div id="fw-donut" style="width: 90px; height: 90px; flex-shrink: 0;">
+                                    <!-- SVG donut injected by JS -->
+                                </div>
+                                <div style="flex: 1; font-size: 0.7rem; line-height: 1.8;">
+                                    <div style="display:flex;align-items:center;gap:4px;"><span>✅</span><span style="color:var(--muted-dark);">Accept</span><span id="fw-accept-val" style="margin-left:auto;color:#22c55e;font-weight:600;">-</span></div>
+                                    <div style="display:flex;align-items:center;gap:4px;"><span>🛡️</span><span style="color:var(--muted-dark);">CAPI</span><span id="fw-capi-val" style="margin-left:auto;color:#ef4444;font-weight:600;">-</span></div>
+                                    <div style="display:flex;align-items:center;gap:4px;"><span>👁️</span><span style="color:var(--muted-dark);">CrowdSec</span><span id="fw-cs-val" style="margin-left:auto;color:#f97316;font-weight:600;">-</span></div>
+                                    <div style="display:flex;align-items:center;gap:4px;"><span>✋</span><span style="color:var(--muted-dark);">Manual</span><span id="fw-manual-val" style="margin-left:auto;color:#eab308;font-weight:600;">-</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TRIPLE EYEMOTE SENSORS -->
+            <div class="eyemotes-grid">
+                <!-- Eyemote 1: Attack Origin by Continent -->
+                <div class="eyemote-card">
+                    <h2>👁️ Attack Origin</h2>
+                    <div class="eyemote-mini">
+                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgOrigin">
+                            <defs><radialGradient id="eyeGlow1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00ff41" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow1)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing1" cx="100" cy="100" r="85" fill="none" stroke="#DF0024" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing2" cx="100" cy="100" r="68" fill="none" stroke="#0085C7" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing3" cx="100" cy="100" r="51" fill="none" stroke="#F4C300" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing4" cx="100" cy="100" r="34" fill="none" stroke="#009F3D" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="originRing5" cx="100" cy="100" r="17" fill="none" stroke="#666666" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle cx="100" cy="100" r="8" fill="#00ff41" class="eyemote-pupil"/>
+                        </svg>
+                        <div class="eyemote-total-mini" id="originTotal">0</div>
+                    </div>
+                    <div class="eyemote-legend-mini" id="originLegend"></div>
+                </div>
+
+                <!-- Eyemote 2: Visitors by Country -->
+                <div class="eyemote-card">
+                    <h2>👤 Visitors</h2>
+                    <div class="eyemote-mini">
+                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVisitors">
+                            <defs><radialGradient id="eyeGlow2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#00d4ff" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow2)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing1" cx="100" cy="100" r="85" fill="none" stroke="#00d4ff" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing2" cx="100" cy="100" r="68" fill="none" stroke="#0ea5e9" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing3" cx="100" cy="100" r="51" fill="none" stroke="#6366f1" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing4" cx="100" cy="100" r="34" fill="none" stroke="#8b5cf6" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="visitorRing5" cx="100" cy="100" r="17" fill="none" stroke="#a855f7" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle cx="100" cy="100" r="8" fill="#00d4ff" class="eyemote-pupil"/>
+                        </svg>
+                        <div class="eyemote-total-mini visitor" id="visitorTotal">0</div>
+                    </div>
+                    <div class="eyemote-legend-mini" id="visitorLegend"></div>
+                </div>
+
+                <!-- Eyemote 3: Target Vhosts -->
+                <div class="eyemote-card">
+                    <h2>🎯 Target Vhosts</h2>
+                    <div class="eyemote-mini">
+                        <svg viewBox="0 0 200 200" class="eyemote-svg-mini" id="eyemoteSvgVhosts">
+                            <defs><radialGradient id="eyeGlow3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f97316" stop-opacity="0.1"/><stop offset="100%" stop-color="transparent"/></radialGradient></defs>
+                            <circle cx="100" cy="100" r="95" fill="url(#eyeGlow3)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="85" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing1" cx="100" cy="100" r="85" fill="none" stroke="#ef4444" stroke-width="14" stroke-dasharray="0 534" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="68" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing2" cx="100" cy="100" r="68" fill="none" stroke="#f97316" stroke-width="14" stroke-dasharray="0 427" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="51" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing3" cx="100" cy="100" r="51" fill="none" stroke="#eab308" stroke-width="14" stroke-dasharray="0 320" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="34" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing4" cx="100" cy="100" r="34" fill="none" stroke="#22c55e" stroke-width="14" stroke-dasharray="0 214" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle class="ring-bg" cx="100" cy="100" r="17" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>
+                            <circle class="ring-fill" id="vhostRing5" cx="100" cy="100" r="17" fill="none" stroke="#14b8a6" stroke-width="14" stroke-dasharray="0 107" stroke-linecap="round" transform="rotate(-90 100 100)"/>
+                            <circle cx="100" cy="100" r="8" fill="#f97316" class="eyemote-pupil"/>
+                        </svg>
+                        <div class="eyemote-total-mini vhost" id="vhostTotal">0</div>
+                    </div>
+                    <div class="eyemote-legend-mini" id="vhostLegend"></div>
+                </div>
+            </div>
+
+            <!-- AUTOBAN PANEL -->
+            <div class="autoban-panel">
+                <div class="autoban-header">
+                    <span class="autoban-title">⛔ Quick Autoban</span>
+                    <div class="autoban-controls">
+                        <input type="text" id="ban-ip" placeholder="IP address" class="ban-input">
+                        <select id="ban-duration" class="ban-select">
+                            <option value="1h">1 hour</option>
+                            <option value="24h" selected>24 hours</option>
+                            <option value="7d">7 days</option>
+                            <option value="30d">30 days</option>
+                            <option value="permanent">Permanent</option>
+                        </select>
+                        <select id="ban-reason" class="ban-select">
+                            <option value="manual">Manual ban</option>
+                            <option value="scanner">Scanner</option>
+                            <option value="bruteforce">Brute force</option>
+                            <option value="honeypot">Honeypot</option>
+                            <option value="waf">WAF trigger</option>
+                        </select>
+                        <button onclick="banIP()" class="ban-btn">🚫 Ban</button>
+                    </div>
+                </div>
+                <div class="recent-bans" id="recent-bans">
+                    <!-- Recent bans list -->
+                </div>
+            </div>
+
+            <!-- SYSTEM HEALTH - Mini Histograms -->
+            <div class="health-grid" style="margin-bottom: var(--space-xl); display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem;">
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">🔥 CPU</span><span id="cpu-pct" style="font-size:0.75rem;font-weight:600;color:#ef4444;">0%</span></div>
+                    <div id="cpu-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="cpu-load" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
+                </div>
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">💾 Memory</span><span id="mem-pct" style="font-size:0.75rem;font-weight:600;color:#eab308;">0%</span></div>
+                    <div id="mem-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="mem-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
+                </div>
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">💿 Disk</span><span id="disk-pct" style="font-size:0.75rem;font-weight:600;color:#22c55e;">0%</span></div>
+                    <div id="disk-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="disk-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
+                </div>
+                <div class="health-card" style="background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius-md); padding: 0.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:0.7rem;color:var(--muted-dark);">🌐 Network</span><span id="net-pct" style="font-size:0.75rem;font-weight:600;color:#3b82f6;">0%</span></div>
+                    <div id="net-histogram" style="display:flex;align-items:flex-end;height:24px;gap:1px;background:rgba(0,0,0,0.2);border-radius:3px;padding:2px;"></div>
+                    <div id="net-info" style="font-size:0.6rem;color:var(--muted-dark);margin-top:2px;text-align:center;">-</div>
+                </div>
+            </div>
+
+            <!-- CHART + ACTIVITY ROW -->
+            <div class="row">
+                <div class="col-2">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <span class="chart-title">Threat Activity (24h)</span>
+                            <div class="chart-legend">
+                                <span class="legend-item"><span class="legend-dot" style="background: var(--root-light);"></span>Blocked</span>
+                            </div>
+                        </div>
+                        <div class="chart-area" id="threat-chart">
+                            <!-- Bars will be populated by JS -->
+                        </div>
+                        <div class="chart-labels">
+                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>Now</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-2">
+                    <div class="activity-panel">
+                        <div class="activity-header">
+                            <span class="activity-title">Recent Activity</span>
+                            <div class="activity-filter">
+                                <button class="filter-btn active" onclick="filterActivity('all')">All</button>
+                                <button class="filter-btn" onclick="filterActivity('threats')">Threats</button>
+                                <button class="filter-btn" onclick="filterActivity('system')">System</button>
+                            </div>
+                        </div>
+                        <div class="activity-list" id="activity-list">
+                            <div class="activity-item loading">
+                                <div class="activity-icon waf">🛡️</div>
+                                <div class="activity-content">
+                                    <div class="activity-text">Loading activity...</div>
+                                    <div class="activity-meta">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/health-banner.js"></script>
+    <script>
+        const API_HUB = '/api/v1/hub';
+        const API_WAF = '/api/v1/waf';
+        const API_CROWDSEC = '/api/v1/crowdsec';
+        const API_METRICS = '/api/v1/metrics';
+
+        function getToken() {
+            return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+        }
+
+        function checkAuth() {
+            if (!getToken()) {
+                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+            return true;
+        }
+
+        async function api(url, method = 'GET', body = null, requireAuth = true) {
+            const token = getToken();
+            if (requireAuth && !token) { checkAuth(); return null; }
+            try {
+                const opts = { method, headers: { 'Content-Type': 'application/json' } };
+                if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+                if (body) opts.body = JSON.stringify(body);
+                const res = await fetch(url, opts);
+                if (res.status === 401 && requireAuth) { checkAuth(); return null; }
+                if (!res.ok) return null;
+                return await res.json();
+            } catch (e) { console.error('API error:', url, e); return null; }
+        }
+
+        // Activity items storage
+        let activityItems = [];
+
+        function addActivity(type, icon, text, meta) {
+            activityItems.unshift({ type, icon, text, meta, time: new Date() });
+            if (activityItems.length > 20) activityItems.pop();
+            renderActivity();
+        }
+
+        function renderActivity(filter = 'all') {
+            const list = document.getElementById('activity-list');
+            const filtered = filter === 'all' ? activityItems : activityItems.filter(i => i.type === filter);
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="activity-item"><div class="activity-content"><div class="activity-text" style="color: var(--muted-dark);">No activity yet</div></div></div>';
+                return;
+            }
+
+            list.innerHTML = filtered.slice(0, 10).map(item => `
+                <div class="activity-item">
+                    <div class="activity-icon ${item.type}">${item.icon}</div>
+                    <div class="activity-content">
+                        <div class="activity-text">${item.text}</div>
+                        <div class="activity-meta">${item.meta}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterActivity(type) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderActivity(type);
+        }
+
+        function updateStatusLed(id, status) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = status === 'ok' ? '🟢' : status === 'degraded' ? '🟡' : '🔴';
+        }
+
+        async function loadHealthBatch() {
+            const data = await api(API_HUB + '/health', 'GET', null, false);
+            if (!data) {
+                document.getElementById('active-services').textContent = '?';
+                document.getElementById('health-status').textContent = 'OFFLINE';
+                document.getElementById('health-status').className = 'card-status danger';
+                document.getElementById('health-card-donut').innerHTML = createHealthCardDonut(0, 0, 0);
+                return;
+            }
+
+            // Basic health check (hub itself is running)
+            if (data.status === 'ok') {
+                document.getElementById('health-status').textContent = 'ONLINE';
+                document.getElementById('health-status').className = 'card-status';
+            }
+
+            // Try to get module health from module-health endpoint
+            const moduleHealth = await api(API_HUB + '/module-health/summary');
+            if (moduleHealth) {
+                const healthy = moduleHealth.healthy || 0;
+                const total = moduleHealth.total || 0;
+                document.getElementById('active-services').textContent = healthy;
+                document.getElementById('health-status').textContent = healthy === total ? 'HEALTHY' : 'DEGRADED';
+                document.getElementById('health-status').className = 'card-status' + (healthy === total ? '' : ' warning');
+                document.getElementById('uptime-info').textContent = Math.round(moduleHealth.health_percent || 0) + '% healthy';
+            } else {
+                // Fallback: just show hub is up
+                document.getElementById('active-services').textContent = '1';
+                document.getElementById('health-status').textContent = 'ONLINE';
+                document.getElementById('health-status').className = 'card-status';
+            }
+        }
+
+        async function loadWAFStats() {
+            const data = await api(API_WAF + '/stats', 'GET', null, false);
+            if (!data) {
+                document.getElementById('threats-blocked').textContent = '0';
+                document.getElementById('waf-card-status').textContent = 'OFFLINE';
+                document.getElementById('waf-card-status').className = 'card-status danger';
+                document.getElementById('waf-version').textContent = 'v- · offline';
+                document.getElementById('waf-status-detail').innerHTML = '<span class="danger">● OFFLINE</span>';
+                document.getElementById('top-countries').innerHTML = '<span style="color:var(--muted);">-</span>';
+                document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
+                document.getElementById('waf-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
+                return;
+            }
+
+            const blocked = data.blocked_24h || data.blocked_today || 0;
+            document.getElementById('threats-blocked').textContent = blocked.toLocaleString();
+            document.getElementById('waf-card-status').textContent = data.running ? 'ACTIVE' : 'INACTIVE';
+            document.getElementById('waf-card-status').className = 'card-status' + (data.running ? '' : ' danger');
+
+            // Card donut: blocked vs allowed (estimate 10x traffic)
+            const total = blocked * 10 || 1;
+            document.getElementById('waf-card-donut').innerHTML = createCardDonut(blocked, total, '#ef4444', '🛡️', 'threats');
+
+            // WAF matrix details
+            document.getElementById('waf-version').textContent = `v${data.version || '1.2.0'} · ${data.rules_loaded || 0} rules`;
+            document.getElementById('waf-status-detail').innerHTML = `<span class="highlight">● ${data.running ? 'ACTIVE' : 'INACTIVE'}</span> · ${data.rules_loaded || 0} rules`;
+
+            // Top countries with concentric donut
+            if (data.top_countries && data.top_countries.length > 0) {
+                document.getElementById('top-countries').innerHTML = createCountryDonut(data.top_countries, 110);
+            }
+
+            // WAF categories with emojis
+            if (data.categories_list || data.top_categories) {
+                const cats = data.categories_list || data.top_categories;
+                document.getElementById("waf-categories").innerHTML = createCategoryDonut(cats, 80);
+            } else {
+                document.getElementById('waf-categories').innerHTML = '<span class="cat-tag">-</span>';
+            }
+
+            // Last threat with full info
+            if (data.last_threat) {
+                const t = data.last_threat;
+                const vhost = t.vhost ? `<span class="info">${t.vhost}</span> · ` : '';
+                document.getElementById('last-threat').innerHTML = `${vhost}<span class="danger">${t.type || 'Attack'}</span> from ${t.ip || 'unknown'} · ${t.time_ago || 'recently'}`;
+                addActivity('waf', '🛡️', `WAF blocked <code>${t.type || 'attack'}</code> from <code>${t.ip || 'unknown'}</code>`, t.time_ago || 'just now');
+            }
+
+            // Chart data
+            if (data.hourly_blocks) {
+                const chartEl = document.getElementById('threat-chart');
+                const max = Math.max(...data.hourly_blocks, 1);
+                chartEl.innerHTML = data.hourly_blocks.map(v =>
+                    `<div class="chart-bar" style="height: ${(v / max * 100)}%;" title="${v} blocks"></div>`
+                ).join('');
+            } else {
+                // Generate random chart data for demo
+                const chartEl = document.getElementById('threat-chart');
+                chartEl.innerHTML = Array(24).fill(0).map(() => {
+                    const h = Math.random() * 100;
+                    return `<div class="chart-bar" style="height: ${h}%;"></div>`;
+                }).join('');
+            }
+
+            // Also load top attacked sites with full DNS names
+            await loadTopVhosts();
+
+            // Store stats for double-cache eyemotes
+            window._socStats = data;
+            if (window._socEvents) {
+                updateAllEyemotes(window._socEvents, data);
+            }
+        }
+
+        async function loadTopVhosts() {
+            const data = await api(API_WAF + '/alerts?limit=100&aggregate=true');
+            if (!data || !data.alerts) return;
+
+            // Store events for double-cache eyemotes
+            window._socEvents = data.alerts;
+            if (window._socStats) {
+                updateAllEyemotes(data.alerts, window._socStats);
+            }
+
+            // Aggregate by vhost
+            const vhostCounts = {};
+            data.alerts.forEach(a => {
+                if (a.vhost) {
+                    vhostCounts[a.vhost] = (vhostCounts[a.vhost] || 0) + (a.count || 1);
+                }
+            });
+
+            // Sort by count
+            const topVhosts = Object.entries(vhostCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+            if (topVhosts.length > 0) {
+                // Add to activity panel
+                topVhosts.forEach(([vhost, count]) => {
+                    if (count > 10) {
+                        addActivity('waf', '🎯', `Site <code>${vhost}</code> under attack`, `${count} hits`);
+                    }
+                });
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TRIPLE EYEMOTE SENSORS (with double-cache)
+        // ═══════════════════════════════════════════════════════════════
+
+        // Country to Continent mapping
+        const COUNTRY_CONTINENT = {
+            'FR': 'europe', 'DE': 'europe', 'GB': 'europe', 'IT': 'europe', 'ES': 'europe',
+            'NL': 'europe', 'BE': 'europe', 'PL': 'europe', 'SE': 'europe', 'NO': 'europe',
+            'FI': 'europe', 'DK': 'europe', 'AT': 'europe', 'CH': 'europe', 'PT': 'europe',
+            'IE': 'europe', 'CZ': 'europe', 'RO': 'europe', 'HU': 'europe', 'GR': 'europe',
+            'UA': 'europe', 'RU': 'europe', 'BY': 'europe', 'SK': 'europe', 'BG': 'europe',
+            'CN': 'asia', 'JP': 'asia', 'KR': 'asia', 'IN': 'asia', 'ID': 'asia',
+            'TH': 'asia', 'VN': 'asia', 'PH': 'asia', 'MY': 'asia', 'SG': 'asia',
+            'TW': 'asia', 'HK': 'asia', 'PK': 'asia', 'BD': 'asia', 'IR': 'asia',
+            'TR': 'asia', 'SA': 'asia', 'AE': 'asia', 'IL': 'asia', 'KZ': 'asia',
+            'ZA': 'africa', 'EG': 'africa', 'NG': 'africa', 'KE': 'africa', 'MA': 'africa',
+            'DZ': 'africa', 'TN': 'africa', 'GH': 'africa', 'ET': 'africa', 'TZ': 'africa',
+            'AU': 'oceania', 'NZ': 'oceania', 'FJ': 'oceania', 'PG': 'oceania',
+            'US': 'americas', 'CA': 'americas', 'MX': 'americas', 'BR': 'americas',
+            'AR': 'americas', 'CL': 'americas', 'CO': 'americas', 'PE': 'americas',
+            'VE': 'americas', 'EC': 'americas', 'CU': 'americas', 'PR': 'americas', 'PA': 'americas'
+        };
+
+        function getContinent(cc) { return COUNTRY_CONTINENT[cc?.toUpperCase()] || 'americas'; }
+
+        // Ring config for mini eyemotes
+        const RING_CONFIG_MINI = [
+            { id: 1, continent: 'americas', color: '#DF0024', circ: 534 },
+            { id: 2, continent: 'europe', color: '#0085C7', circ: 427 },
+            { id: 3, continent: 'asia', color: '#F4C300', circ: 320 },
+            { id: 4, continent: 'oceania', color: '#009F3D', circ: 214 },
+            { id: 5, continent: 'africa', color: '#666666', circ: 107 }
+        ];
+        const VISITOR_COLORS = ['#00d4ff', '#0ea5e9', '#6366f1', '#8b5cf6', '#a855f7'];
+        const VHOST_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6'];
+
+        // Double-cache for eyemotes
+        window._socEvents = null;
+        window._socStats = null;
+
+        // Generic eyemote updater
+        function updateEyemoteMini(prefix, events, colors, totalId, legendId, isVhost = false) {
+            const counts = { americas: 0, europe: 0, asia: 0, oceania: 0, africa: 0 };
+            const countryData = { americas: {}, europe: {}, asia: {}, oceania: {}, africa: {} };
+            const vhostData = {};
+
+            events.forEach(e => {
+                const continent = getContinent(e.country);
+                const count = e.count || 1;
+                counts[continent] = (counts[continent] || 0) + count;
+                if (e.country) countryData[continent][e.country] = (countryData[continent][e.country] || 0) + count;
+                if (isVhost && e.vhost) vhostData[e.vhost] = (vhostData[e.vhost] || 0) + count;
+            });
+
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
+            const totalEl = document.getElementById(totalId);
+            if (totalEl) totalEl.textContent = total;
+
+            // Update rings
+            RING_CONFIG_MINI.forEach((cfg, i) => {
+                const count = counts[cfg.continent] || 0;
+                const pct = total > 0 ? count / total : 0;
+                const ringEl = document.getElementById(prefix + 'Ring' + cfg.id);
+                if (ringEl) {
+                    ringEl.style.stroke = colors[i];
+                    ringEl.style.strokeDasharray = (pct * cfg.circ) + ' ' + cfg.circ;
+                }
+            });
+
+            // Update legend
+            const legendEl = document.getElementById(legendId);
+            if (!legendEl) return;
+
+            if (isVhost) {
+                const vhosts = Object.entries(vhostData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                if (vhosts.length === 0) {
+                    legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.7rem;text-align:center;">No targets</div>';
+                } else {
+                    legendEl.innerHTML = vhosts.map(([vh, cnt], i) => {
+                        const pct = total > 0 ? Math.round(cnt / total * 100) : 0;
+                        const emoji = vh.includes('git') ? '💻' : vh.includes('mail') ? '📧' : vh.includes('api') ? '⚡' : '🌐';
+                        return '<div class="legend-row-mini" style="border-color:' + VHOST_COLORS[i] + '"><span class="row-dot" style="background:' + VHOST_COLORS[i] + '"></span><span class="row-val">' + cnt + ' <span style="font-size:0.55rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="vhost-badge" style="border-color:' + VHOST_COLORS[i] + '">' + emoji + ' ' + vh.replace(/\.gk2\.secubox\.in$/, '').slice(0, 12) + '</span></div>';
+                    }).join('');
+                }
+            } else {
+                const continents = ['americas', 'europe', 'asia', 'oceania', 'africa'];
+                legendEl.innerHTML = continents.map((cont, i) => {
+                    const contTotal = counts[cont] || 0;
+                    if (contTotal === 0) return '';
+                    const pct = total > 0 ? Math.round(contTotal / total * 100) : 0;
+                    const countries = Object.entries(countryData[cont]).sort((a, b) => b[1] - a[1]).slice(0, 5);
+                    const flags = countries.map(([cc, cnt]) => {
+                        const flagPct = Math.round(cnt / contTotal * 100);
+                        return '<span class="flag-mini" style="border-color:' + colors[i] + '" title="' + cc + ': ' + cnt + '">' + countryToFlag(cc) + '<span class="fm-count">' + flagPct + '%</span></span>';
+                    }).join('');
+                    return '<div class="legend-row-mini" style="border-color:' + colors[i] + '"><span class="row-dot" style="background:' + colors[i] + '"></span><span class="row-val">' + contTotal + ' <span style="font-size:0.55rem;color:var(--muted-dark);">(' + pct + '%)</span></span><span class="row-flags">' + flags + '</span></div>';
+                }).filter(Boolean).join('');
+                if (!legendEl.innerHTML) legendEl.innerHTML = '<div style="color:var(--muted-dark);font-size:0.7rem;text-align:center;">No data</div>';
+            }
+        }
+
+        // Update all 3 eyemotes (called when either events or stats are ready)
+        function updateAllEyemotes(events, statsData) {
+            // 1. Attack Origin - by continent
+            updateEyemoteMini('origin', events, RING_CONFIG_MINI.map(c => c.color), 'originTotal', 'originLegend', false);
+
+            // 2. Visitors - unique IPs by continent
+            const visitorEvents = [];
+            const seenIps = new Set();
+            events.forEach(e => {
+                if (e.ip && !seenIps.has(e.ip)) {
+                    seenIps.add(e.ip);
+                    visitorEvents.push({ country: e.country, count: 1 });
+                }
+            });
+            updateEyemoteMini('visitor', visitorEvents, VISITOR_COLORS, 'visitorTotal', 'visitorLegend', false);
+
+            // 3. Target Vhosts - attacks per vhost
+            const vhostEvents = [];
+            if (statsData?.top_vhosts) {
+                Object.entries(statsData.top_vhosts).forEach(([vh, data]) => {
+                    const count = typeof data === 'object' ? data.count || 0 : data;
+                    vhostEvents.push({ vhost: vh, count: count, country: 'XX' });
+                });
+            }
+            updateEyemoteMini('vhost', vhostEvents, VHOST_COLORS, 'vhostTotal', 'vhostLegend', true);
+        }
+
+        // Category emoji mapping
+        const CATEGORY_EMOJI = {
+            'scanner': '🔍', 'scanners': '🔍',
+            'bruteforce': '🔨', 'brute-force': '🔨',
+            'honeypot': '🍯', 'honeypots': '🍯',
+            'waf': '🛡️', 'http': '🌐',
+            'ssh': '🔐', 'ftp': '📁',
+            'sqli': '💉', 'sql-injection': '💉',
+            'xss': '⚠️', 'rce': '💣',
+            'lfi': '📂', 'rfi': '🔗',
+            'spam': '📧', 'botnet': '🤖', 'router_botnet': '🤖',
+            'exploit': '🎯', 'crawler': '🕷️', 'recon_crawler': '🕷️',
+            'default': '📌'
+        };
+        // Country flag emoji from ISO code
+        function countryToFlag(code) {
+            if (!code || code === "LAN" || code.length !== 2) return "🌐";
+            return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+        }
+
+        // Concentric donut for countries with flags
+        function createCountryDonut(countries, size) {
+            size = size || 120;
+            const center = size / 2;
+            if (!countries || countries.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
+            
+            const total = countries.reduce((s, c) => s + (c.count || 0), 0);
+            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
+            
+            const COUNTRY_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#0ea5e9", "#6366f1", "#a855f7"];
+            const topCountries = countries.slice(0, 6);
+            const ringWidth = 7;
+            const spacing = 2;
+            
+            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
+            
+            topCountries.forEach(function(c, i) {
+                const r = Math.max(5, center - 8 - (i * (ringWidth + spacing)));
+                if (r < 8) return; // Skip if ring too small
+                const pct = c.count / total;
+                const circ = 2 * Math.PI * r;
+                const dash = circ * pct;
+                const gap = circ - dash;
+                const color = COUNTRY_COLORS[i % COUNTRY_COLORS.length];
+                const code = c.country || c.code || "??";
+                const flag = countryToFlag(code);
+                
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + flag + " " + code + ": " + c.count + " (" + Math.round(pct*100) + "%)</title></circle>";
+                
+                const angle = -Math.PI/2 + (i * Math.PI / 4);
+                const iconX = center + Math.cos(angle) * (r + 2);
+                const iconY = center + Math.sin(angle) * (r + 2);
+                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"10\" style=\"pointer-events:none;\">" + flag + "</text>";
+            });
+            
+            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
+            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ATTACKS</text>";
+            svg += "</svg>";
+            
+            const legend = topCountries.slice(0, 4).map(function(c, i) {
+                const code = c.country || c.code || "??";
+                const flag = countryToFlag(code);
+                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + COUNTRY_COLORS[i % COUNTRY_COLORS.length] + ";border-radius:1px;\"></span>" + flag + " " + c.count + "</span>";
+            }).join(" ");
+            
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
+        }
+
+        const CAT_COLORS = ["#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#0ea5e9", "#14b8a6"];
+        
+        // Donut chart for categories (eyeremote style)
+        function createCategoryDonut(cats, size) {
+            size = size || 100;
+            if (!cats || cats.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
+            const total = cats.reduce((s, c) => s + (c.count || 0), 0);
+            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
+            const radius = size / 2 - 5;
+            const innerRadius = radius * 0.55;
+            let cumulative = 0;
+            const slices = cats.slice(0, 8).map((cat, i) => {
+                const name = cat.name || cat.category || "unknown";
+                const count = cat.count || 0;
+                const pct = count / total;
+                const startAngle = cumulative * 2 * Math.PI - Math.PI / 2;
+                cumulative += pct;
+                const endAngle = cumulative * 2 * Math.PI - Math.PI / 2;
+                const x1o = Math.cos(startAngle) * radius, y1o = Math.sin(startAngle) * radius;
+                const x2o = Math.cos(endAngle) * radius, y2o = Math.sin(endAngle) * radius;
+                const x1i = Math.cos(startAngle) * innerRadius, y1i = Math.sin(startAngle) * innerRadius;
+                const x2i = Math.cos(endAngle) * innerRadius, y2i = Math.sin(endAngle) * innerRadius;
+                const largeArc = pct > 0.5 ? 1 : 0;
+                const color = CAT_COLORS[i % CAT_COLORS.length];
+                const emoji = CATEGORY_EMOJI[name.toLowerCase()] || CATEGORY_EMOJI.default;
+                return "<path d=\"M" + x1o + "," + y1o + " A" + radius + "," + radius + " 0 " + largeArc + ",1 " + x2o + "," + y2o + " L" + x2i + "," + y2i + " A" + innerRadius + "," + innerRadius + " 0 " + largeArc + ",0 " + x1i + "," + y1i + " Z\" fill=\"" + color + "\" style=\"cursor:pointer;transition:opacity 0.2s;\" onmouseover=\"this.style.opacity=0.7\" onmouseout=\"this.style.opacity=1\"><title>" + emoji + " " + name + ": " + count + " (" + Math.round(pct*100) + "%)</title></path>";
+            });
+            const centerText = "<text x=\"0\" y=\"-4\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text><text x=\"0\" y=\"10\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"7\">ALERTS</text>";
+            const legend = cats.slice(0, 5).map((c, i) => {
+                const nm = c.name || c.category || "?";
+                const em = CATEGORY_EMOJI[nm.toLowerCase()] || "📌";
+                return "<span style=\"display:inline-flex;align-items:center;gap:2px;margin:1px;\"><span style=\"width:6px;height:6px;background:" + CAT_COLORS[i % CAT_COLORS.length] + ";border-radius:1px;\"></span>" + em + "</span>";
+            }).join("");
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\"><svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"-" + size/2 + " -" + size/2 + " " + size + " " + size + "\">" + slices.join("") + centerText + "</svg><div style=\"font-size:0.6rem;margin-top:4px;\">" + legend + "</div></div>";
+        }
+
+
+        // Multi-layer concentric donut for categories (eyeremote style)
+        function createMultiLayerDonut(data, colors, icons, size) {
+            size = size || 120;
+            const center = size / 2;
+            if (!data || data.length === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
+            
+            const total = data.reduce((s, c) => s + (c.count || 0), 0);
+            if (total === 0) return "<p style=\"color:var(--muted);font-size:0.7rem;\">No data</p>";
+            
+            // Take top 6 categories for concentric rings
+            const topData = data.slice(0, 6);
+            const ringWidth = 7;
+            const spacing = 2;
+            
+            let svg = "<svg width=\"" + size + "\" height=\"" + size + "\" viewBox=\"0 0 " + size + " " + size + "\">";
+            
+            // Draw rings from outer to inner with emojis around them
+            topData.forEach(function(cat, i) {
+                const r = Math.max(5, center - 8 - (i * (ringWidth + spacing)));
+                if (r < 8) return; // Skip if ring too small
+                const pct = cat.count / total;
+                const circ = 2 * Math.PI * r;
+                const dash = circ * pct;
+                const gap = circ - dash;
+                const color = colors[i % colors.length];
+                const name = cat.name || cat.category || "?";
+                const icon = icons[name.toLowerCase()] || "📌";
+                
+                // Background ring
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"rgba(255,255,255,0.05)\" stroke-width=\"" + ringWidth + "\"/>";
+                
+                // Progress arc with hover
+                svg += "<circle cx=\"" + center + "\" cy=\"" + center + "\" r=\"" + r + "\" fill=\"none\" stroke=\"" + color + "\" stroke-width=\"" + ringWidth + "\" stroke-dasharray=\"" + dash + " " + gap + "\" stroke-dashoffset=\"" + (circ/4) + "\" stroke-linecap=\"round\" style=\"transition:stroke-dasharray 0.5s;opacity:0.85;cursor:pointer;\" onmouseover=\"this.style.opacity=1;this.style.strokeWidth=9\" onmouseout=\"this.style.opacity=0.85;this.style.strokeWidth=" + ringWidth + "\"><title>" + icon + " " + name + ": " + cat.count + " (" + Math.round(pct*100) + "%)</title></circle>";
+                
+                // Emoji icon positioned around the ring
+                const angle = -Math.PI/2 + (i * Math.PI / 4);
+                const iconX = center + Math.cos(angle) * (r + 2);
+                const iconY = center + Math.sin(angle) * (r + 2);
+                svg += "<text x=\"" + iconX + "\" y=\"" + iconY + "\" text-anchor=\"middle\" dominant-baseline=\"middle\" font-size=\"9\" style=\"pointer-events:none;\">" + icon + "</text>";
+            });
+            
+            // Center total
+            svg += "<text x=\"" + center + "\" y=\"" + (center - 2) + "\" text-anchor=\"middle\" fill=\"var(--text)\" font-size=\"14\" font-weight=\"bold\">" + total + "</text>";
+            svg += "<text x=\"" + center + "\" y=\"" + (center + 10) + "\" text-anchor=\"middle\" fill=\"var(--muted)\" font-size=\"6\">ALERTS</text>";
+            
+            svg += "</svg>";
+            
+            // Compact legend with colored dots and emojis
+            const legend = topData.slice(0, 4).map(function(cat, i) {
+                const name = cat.name || cat.category || "?";
+                const icon = icons[name.toLowerCase()] || "📌";
+                return "<span style=\"display:inline-flex;align-items:center;gap:2px;font-size:0.6rem;\"><span style=\"width:6px;height:6px;background:" + colors[i % colors.length] + ";border-radius:1px;\"></span>" + icon + " " + cat.count + "</span>";
+            }).join(" ");
+            
+            return "<div style=\"display:flex;flex-direction:column;align-items:center;\">" + svg + "<div style=\"margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;justify-content:center;\">" + legend + "</div></div>";
+        }
+
+
+        function renderCategories(cats, containerId) {
+            const el = document.getElementById(containerId);
+            if (!cats || cats.length === 0) {
+                el.innerHTML = '<span class="cat-tag">None</span>';
+                return;
+            }
+            el.innerHTML = cats.slice(0, 6).map(cat => {
+                const name = typeof cat === 'object' ? cat.name || cat.category : cat;
+                const count = typeof cat === 'object' ? cat.count : null;
+                const emoji = CATEGORY_EMOJI[name.toLowerCase()] || CATEGORY_EMOJI.default;
+                const cssClass = name.toLowerCase().replace(/[^a-z]/g, '');
+                return `<span class="cat-tag ${cssClass}">${emoji} ${name}${count ? ` (${count})` : ''}</span>`;
+            }).join('');
+        }
+
+        async function loadCrowdSecStats() {
+            // Load health first for status panel
+            const health = await api(API_CROWDSEC + '/health', 'GET', null, false);
+            if (!health) {
+                document.getElementById('cs-agent-status').innerHTML = '<span class="danger">● OFFLINE</span>';
+                document.getElementById('cs-version').textContent = 'v-';
+                document.getElementById('cs-card-status').textContent = 'OFFLINE';
+                document.getElementById('cs-card-status').className = 'card-status danger';
+                document.getElementById('active-decisions').textContent = '0';
+                document.getElementById('decisions-info').textContent = '- bouncers';
+                document.getElementById('cs-decisions-count').textContent = '0';
+                document.getElementById('cs-bouncers').textContent = '0';
+                document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
+                document.getElementById('cs-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
+                return;
+            }
+
+            document.getElementById('cs-agent-status').innerHTML = health.checks && health.checks.engine_running
+                ? '<span class="highlight">● ACTIVE</span>'
+                : '<span class="danger">● INACTIVE</span>';
+            document.getElementById('cs-version').textContent = health.version ? `v${health.version}` : 'v-';
+
+            const data = await api(API_CROWDSEC + '/decisions_stats', 'GET', null, false);
+            if (!data) {
+                document.getElementById('cs-card-status').textContent = health.status === 'ok' ? 'ACTIVE' : 'DEGRADED';
+                document.getElementById('active-decisions').textContent = '0';
+                document.getElementById('decisions-info').textContent = '- bouncers';
+                return;
+            }
+
+            document.getElementById('active-decisions').textContent = data.active_decisions || 0;
+            document.getElementById('cs-card-status').textContent = 'ACTIVE';
+            document.getElementById('cs-card-status').className = 'card-status';
+            document.getElementById('decisions-info').textContent = `${data.bouncers || 0} bouncers`;
+            document.getElementById('cs-decisions-count').textContent = data.active_decisions || 0;
+            document.getElementById('cs-bouncers').textContent = data.bouncers || 0;
+
+            // Card donut: active decisions
+            const decisions = data.active_decisions || 0;
+            document.getElementById('cs-card-donut').innerHTML = createCardDonut(decisions, Math.max(decisions, 100), '#f97316', '👁', 'bans');
+
+            // Categories
+            if (data.categories && data.categories.length > 0) {
+                const csDonut = document.getElementById('cs-cat-donut');
+                if (csDonut) {
+                    csDonut.innerHTML = createMultiLayerDonut(data.categories, CAT_COLORS, CATEGORY_EMOJI, 100);
+                }
+            } else {
+                document.getElementById('cs-categories').innerHTML = '<span class="cat-tag">-</span>';
+            }
+
+            if (data.recent_alert) {
+                addActivity('crowdsec', '👁️', `CrowdSec: <code>${data.recent_alert}</code>`, 'recently');
+            }
+        }
+
+        async function loadFirewallStats() {
+            const data = await api(API_CROWDSEC + '/health', 'GET', null, false);
+            if (!data) {
+                document.getElementById('fw-status').innerHTML = '<span class="warning">● UNKNOWN</span>';
+            } else {
+                const nftOk = data.checks && data.checks.nftables_ok;
+                document.getElementById('fw-status').innerHTML = nftOk
+                    ? '<span class="highlight">● ACTIVE</span>'
+                    : '<span class="danger">● INACTIVE</span>';
+            }
+
+            // Try to get more details from firewall endpoint (public, no auth required)
+            const fwData = await api(API_HUB + '/public/firewall_summary', 'GET', null, false);
+            if (fwData && !fwData.error && fwData.tables > 0) {
+                document.getElementById('fw-tables').textContent = fwData.tables;
+                document.getElementById('fw-chains').textContent = fwData.chains || '-';
+                document.getElementById('fw-rules').textContent = fwData.rules || '-';
+
+                // Extract individual counters
+                const counters = fwData.counters || {};
+                const processed = fwData.processed || 0;
+                const capi = counters['crowdsec-blacklists-CAPI'] || 0;
+                const crowdsec = counters['crowdsec-blacklists-crowdsec'] || 0;
+                const manual = counters['crowdsec-blacklists-cscli'] || 0;
+                const totalDrop = capi + crowdsec + manual;
+                const accepted = processed - totalDrop;
+
+                // Update legend values
+                document.getElementById('fw-accept-val').textContent = formatNum(accepted);
+                document.getElementById('fw-capi-val').textContent = formatNum(capi);
+                document.getElementById('fw-cs-val').textContent = formatNum(crowdsec);
+                document.getElementById('fw-manual-val').textContent = formatNum(manual);
+
+                // Create eyeremote donut
+                const donutEl = document.getElementById('fw-donut');
+                if (donutEl && processed > 0) {
+                    donutEl.innerHTML = createNftDonut(accepted, capi, crowdsec, manual, processed, 90);
+                }
+            } else {
+                document.getElementById('fw-tables').textContent = '-';
+                document.getElementById('fw-chains').textContent = '-';
+                document.getElementById('fw-rules').textContent = '-';
+                document.getElementById('fw-accept-val').textContent = '-';
+                document.getElementById('fw-capi-val').textContent = '-';
+                document.getElementById('fw-cs-val').textContent = '-';
+                document.getElementById('fw-manual-val').textContent = '-';
+                const donutEl = document.getElementById('fw-donut');
+                if (donutEl) donutEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;width:90px;height:90px;color:var(--muted);font-size:10px;">No data</div>';
+            }
+        }
+
+        function formatNum(n) {
+            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+
+        function createNftDonut(accepted, capi, crowdsec, manual, total, size) {
+            const cx = size / 2, cy = size / 2;
+            const colors = ['#22c55e', '#ef4444', '#f97316', '#eab308'];
+            const values = [accepted, capi, crowdsec, manual];
+            const labels = ['✓', '🛡', '👁', '✋'];
+
+            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" style="width:100%;height:100%;">';
+
+            // Background ring
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="12"/>';
+
+            // Calculate percentages and draw arcs
+            let startAngle = -90;
+            const radius = 38;
+            const circumference = 2 * Math.PI * radius;
+
+            values.forEach((val, i) => {
+                if (val <= 0) return;
+                const pct = val / total;
+                const dashLen = pct * circumference;
+                const dashOffset = -startAngle / 360 * circumference;
+
+                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="' + colors[i] + '" stroke-width="12" stroke-linecap="round" stroke-dasharray="' + dashLen + ' ' + circumference + '" transform="rotate(' + startAngle + ' ' + cx + ' ' + cy + ')" style="opacity:0.9;"/>';
+                startAngle += pct * 360;
+            });
+
+            // Center text
+            svg += '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" fill="var(--text-dark)" style="font-size:11px;font-weight:700;">' + formatNum(total) + '</text>';
+            svg += '<text x="' + cx + '" y="' + (cy + 8) + '" text-anchor="middle" fill="var(--muted-dark)" style="font-size:8px;">packets</text>';
+
+            svg += '</svg>';
+            return svg;
+        }
+
+        // Mini donut for card headers (60x60)
+        function createCardDonut(value, max, color, icon, label) {
+            const size = 60, cx = 30, cy = 30, r = 22;
+            const pct = max > 0 ? Math.min(value / max, 1) : 0;
+            const circ = 2 * Math.PI * r;
+            const dash = Math.max(circ * pct, circ * 0.05); // Min 5% visible arc
+            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="60" height="60">';
+            // Background circle
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="6"/>';
+            // Progress arc
+            svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="6" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" style="filter:drop-shadow(0 0 3px ' + color + ');"/>';
+            // Center icon
+            svg += '<text x="' + cx + '" y="' + (cy + 5) + '" text-anchor="middle" dominant-baseline="middle" style="font-size:16px;">' + icon + '</text>';
+            svg += '</svg>';
+            return svg;
+        }
+
+        // Multi-segment card donut (for health: CPU/Mem/Disk)
+        function createHealthCardDonut(cpu, mem, disk) {
+            const size = 60, cx = 30, cy = 30;
+            const rings = [
+                { r: 24, val: cpu || 0, color: '#ef4444' },
+                { r: 17, val: mem || 0, color: '#f97316' },
+                { r: 10, val: disk || 0, color: '#22c55e' }
+            ];
+            let svg = '<svg viewBox="0 0 ' + size + ' ' + size + '" width="60" height="60">';
+            rings.forEach(function(ring) {
+                const circ = 2 * Math.PI * ring.r;
+                const dash = Math.max(circ * (ring.val / 100), circ * 0.03);
+                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring.r + '" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4"/>';
+                svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + ring.r + '" fill="none" stroke="' + ring.color + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + dash + ' ' + circ + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" style="filter:drop-shadow(0 0 2px ' + ring.color + ');"/>';
+            });
+            svg += '</svg>';
+            return svg;
+        }
+
+        // Recent bans list
+        let recentBans = [];
+
+        async function banIP() {
+            const ip = document.getElementById('ban-ip').value.trim();
+            const duration = document.getElementById('ban-duration').value;
+            const reason = document.getElementById('ban-reason').value;
+
+            if (!ip || !/^[\d.]+$/.test(ip)) {
+                alert('Please enter a valid IP address');
+                return;
+            }
+
+            const btn = document.querySelector('.ban-btn');
+            btn.disabled = true;
+            btn.textContent = 'Banning...';
+
+            try {
+                const res = await api(API_CROWDSEC + '/ban', 'POST', { ip, duration, reason });
+                if (res && res.success) {
+                    recentBans.unshift({ ip, duration, reason, time: new Date() });
+                    if (recentBans.length > 5) recentBans.pop();
+                    renderRecentBans();
+                    document.getElementById('ban-ip').value = '';
+                    addActivity('crowdsec', '⛔', `Banned <code>${ip}</code> for ${duration}`, 'just now');
+                } else {
+                    alert(res?.error || 'Ban failed');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+
+            btn.disabled = false;
+            btn.textContent = '🚫 Ban';
+        }
+
+        function renderRecentBans() {
+            const el = document.getElementById('recent-bans');
+            if (recentBans.length === 0) {
+                el.innerHTML = '<div style="color: var(--muted-dark);">No recent bans</div>';
+                return;
+            }
+            el.innerHTML = recentBans.map(b => `
+                <div class="ban-item">
+                    <span class="ban-ip">${b.ip}</span>
+                    <span class="ban-meta">${b.duration} · ${b.reason}</span>
+                    <button class="unban-btn" onclick="unbanIP('${b.ip}')">Unban</button>
+                </div>
+            `).join('');
+        }
+
+        async function unbanIP(ip) {
+            const res = await api(API_CROWDSEC + '/unban', 'POST', { ip });
+            if (res && res.success) {
+                recentBans = recentBans.filter(b => b.ip !== ip);
+                renderRecentBans();
+                addActivity('crowdsec', '✅', `Unbanned <code>${ip}</code>`, 'just now');
+            }
+        }
+
+
+        async function loadMetrics() {
+            const data = await api(API_METRICS + '/overview', 'GET', null, false);
+            if (!data) {
+                document.getElementById('cpu-load').textContent = '-';
+                document.getElementById('cpu-pct').textContent = '-';
+                document.getElementById('mem-info').textContent = '-';
+                document.getElementById('mem-pct').textContent = '-';
+                return;
+            }
+
+            // System metrics (use histogram updates)
+            const cpu = data.cpu_percent || (data.load_avg ? data.load_avg[0] * 10 : 0);
+            const mem = data.mem_pct || data.memory_percent || 0;
+
+            document.getElementById('cpu-load').textContent = data.load || (data.load_avg ? data.load_avg.join(' ') : '-');
+            document.getElementById('cpu-pct').textContent = Math.round(cpu) + '%';
+            document.getElementById('cpu-pct').style.color = getHealthColor(cpu);
+            updateMiniHistogram('cpu-histogram', cpu, '#ef4444');
+
+            document.getElementById('mem-info').textContent = `${data.mem_used_kb ? Math.round(data.mem_used_kb / 1024) : '-'} / ${data.mem_total_kb ? Math.round(data.mem_total_kb / 1024) : '-'} MB`;
+            document.getElementById('mem-pct').textContent = Math.round(mem) + '%';
+            document.getElementById('mem-pct').style.color = getHealthColor(mem);
+            updateMiniHistogram('mem-histogram', mem, '#eab308');
+
+            // Uptime
+            if (data.uptime) {
+                const days = Math.floor(data.uptime / 86400);
+                document.getElementById('uptime-info').textContent = `${days}d uptime`;
+            }
+        }
+
+        // Mini histogram history
+        const healthHistory = { cpu: [], mem: [], disk: [], net: [] };
+        const HIST_MAX = 12;
+
+        function updateMiniHistogram(id, value, color) {
+            const key = id.replace('-histogram', '');
+            if (!healthHistory[key]) healthHistory[key] = [];
+            healthHistory[key].push(value);
+            if (healthHistory[key].length > HIST_MAX) healthHistory[key].shift();
+
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            const maxH = 20;
+            let bars = '';
+            healthHistory[key].forEach((v, i) => {
+                const h = Math.max(2, (v / 100) * maxH);
+                const opacity = 0.4 + (i / HIST_MAX) * 0.6;
+                bars += '<div style="flex:1;height:' + h + 'px;background:' + color + ';opacity:' + opacity + ';border-radius:1px;"></div>';
+            });
+            el.innerHTML = bars;
+        }
+
+        function getHealthColor(pct) {
+            if (pct < 50) return '#22c55e';
+            if (pct < 75) return '#eab308';
+            if (pct < 90) return '#f97316';
+            return '#ef4444';
+        }
+
+        async function loadDashboard() {
+            const data = await api(API_HUB + '/dashboard', 'GET', null, true);
+            if (!data) return;
+
+            // CPU
+            if (data.cpu_percent !== undefined) {
+                const cpu = Math.round(data.cpu_percent);
+                document.getElementById('cpu-pct').textContent = cpu + '%';
+                document.getElementById('cpu-pct').style.color = getHealthColor(cpu);
+                updateMiniHistogram('cpu-histogram', cpu, '#ef4444');
+            }
+            // Memory
+            if (data.memory_percent !== undefined) {
+                const mem = Math.round(data.memory_percent);
+                document.getElementById('mem-pct').textContent = mem + '%';
+                document.getElementById('mem-pct').style.color = getHealthColor(mem);
+                updateMiniHistogram('mem-histogram', mem, '#eab308');
+            }
+            // Disk
+            if (data.disk_percent !== undefined) {
+                const disk = Math.round(data.disk_percent);
+                document.getElementById('disk-pct').textContent = disk + '%';
+                document.getElementById('disk-pct').style.color = getHealthColor(disk);
+                updateMiniHistogram('disk-histogram', disk, '#22c55e');
+            }
+
+            // Health card donut (CPU/Mem/Disk concentric)
+            const cpu = data.cpu_percent || 0;
+            const mem = data.memory_percent || 0;
+            const disk = data.disk_percent || 0;
+            document.getElementById('health-card-donut').innerHTML = createHealthCardDonut(cpu, mem, disk);
+
+            // Load
+            if (data.load_avg) {
+                document.getElementById('cpu-load').textContent = 'Load: ' + data.load_avg[0]?.toFixed(2);
+            }
+
+            // Version
+            if (data.build_info && data.build_info.version) {
+                var sv = document.getElementById('sidebar-version'); if(sv) sv.textContent = 'v' + data.build_info.version;
+            }
+        }
+
+        async function loadConnections() {
+            const data = await api(API_METRICS + '/connections', 'GET', null, false);
+            if (!data) {
+                document.getElementById('throughput').textContent = '-';
+                document.getElementById('throughput-trend').textContent = '- HTTP · - HTTPS';
+                return;
+            }
+
+            const total = data.total_tcp || (data.http + data.https + data.ssh) || 0;
+            document.getElementById('throughput').textContent = total;
+            document.getElementById('throughput-trend').textContent = `${data.http || 0} HTTP · ${data.https || 0} HTTPS`;
+        }
+
+        async function loadNetwork() {
+            const data = await api(API_HUB + '/network_summary', 'GET', null, true);
+            if (!data) {
+                document.getElementById('net-info').textContent = 'Unknown';
+                document.getElementById('net-pct').textContent = '-';
+                updateMiniHistogram('net-histogram', 0, '#3b82f6');
+                document.getElementById('net-card-donut').innerHTML = createCardDonut(0, 1, '#6b6b7a', '⚠️', '-');
+                return;
+            }
+            // Network activity (interfaces up percentage)
+            const netPct = data.interfaces_up && data.interfaces ? Math.round((data.interfaces_up / data.interfaces) * 100) : 0;
+            const netPctEl = document.getElementById('net-pct');
+            if (netPctEl) {
+                netPctEl.textContent = netPct + '%';
+                netPctEl.style.color = data.wan_status === 'connected' ? '#22c55e' : '#ef4444';
+            }
+            updateMiniHistogram('net-histogram', netPct, '#3b82f6');
+
+            const netInfoEl = document.getElementById('net-info');
+            if (netInfoEl) netInfoEl.textContent = data.wan_status || 'Unknown';
+
+            // Network card donut
+            document.getElementById('net-card-donut').innerHTML = createCardDonut(
+                data.interfaces_up || 0,
+                data.interfaces || 1,
+                data.wan_status === 'connected' ? '#22c55e' : '#ef4444',
+                '🌐',
+                'ifaces'
+            );
+        }
+
+        function updateTimestamp() {
+            document.getElementById('last-update').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+        }
+
+        async function refresh() {
+            updateTimestamp();
+            renderRecentBans();
+            await Promise.all([
+                loadHealthBatch(),
+                loadWAFStats(),
+                loadCrowdSecStats(),
+                loadFirewallStats(),
+                loadMetrics(),
+                loadDashboard(),
+                loadConnections(),
+                loadNetwork()
+            ]);
+        }
+
+        // Initial load
+        if (checkAuth()) {
+            refresh();
+            setInterval(refresh, 15000);
+        }
+    </script>
+</body>
+</html>

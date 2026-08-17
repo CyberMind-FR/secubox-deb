@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecuBox - Network Access Control</title>
+    <link rel="stylesheet" href="/shared/design-tokens.css">
+    <link rel="stylesheet" href="/shared/crt-light.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body.crt-light {
+            font-family: var(--font-mono);
+            display: flex;
+            min-height: 100vh;
+        }
+        .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; }
+        .header h1 { font-size: 1.5rem; color: var(--wall-main); text-shadow: var(--bloom-amber); }
+        .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            cursor: pointer;
+            font-size: var(--size-sm);
+            font-family: var(--font-mono);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: var(--surface2); border-color: var(--wall-main); }
+        .btn.primary { background: rgba(var(--root-rgb), 0.1); border-color: var(--root-main); color: var(--root-main); }
+        .btn.primary:hover { background: rgba(var(--root-rgb), 0.2); }
+        .btn.success { background: rgba(var(--root-rgb), 0.15); border-color: var(--root-main); color: var(--root-main); }
+        .btn.danger { background: rgba(var(--boot-rgb), 0.1); border-color: var(--boot-main); color: var(--boot-main); }
+        .btn.warning { background: rgba(var(--wall-rgb), 0.1); border-color: var(--wall-main); color: var(--wall-main); }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
+        .btn-icon { padding: 0.35rem 0.5rem; min-width: auto; }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-card .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stat-card .value { font-size: 2rem; font-weight: bold; text-shadow: 0 0 10px currentColor; }
+        .stat-card .label { font-size: 0.7rem; color: var(--muted); margin-top: 0.25rem; letter-spacing: 0.1em; text-transform: uppercase; }
+        .stat-card.cyan .value { color: var(--mind-main); }
+        .stat-card.green .value { color: var(--root-main); }
+        .stat-card.red .value { color: var(--boot-main); }
+        .stat-card.yellow .value { color: var(--wall-main); }
+        .stat-card.purple .value { color: var(--auth-main); }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; overflow-x: auto; }
+        .tab {
+            padding: 0.5rem 1rem;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            background: transparent;
+            color: var(--muted);
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .tab:hover { color: var(--wall-main); }
+        .tab.active { color: var(--wall-main); border-color: var(--border); border-bottom-color: var(--bg); background: var(--bg); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+        .card:hover { border-color: var(--border2); }
+        .card h2 {
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            color: var(--wall-main);
+            text-shadow: var(--bloom-amber);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; font-size: var(--size-sm); }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+        th { color: var(--muted); font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.75rem; }
+        tr:hover { background: rgba(var(--root-rgb), 0.03); }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .badge.online { background: rgba(var(--root-rgb), 0.15); color: var(--root-main); }
+        .badge.offline { background: rgba(139,148,158,0.15); color: var(--muted); }
+        .badge.quarantine { background: rgba(var(--boot-rgb), 0.15); color: var(--boot-main); }
+        .badge.whitelist { background: rgba(var(--root-rgb), 0.2); color: var(--root-main); }
+        .badge.blacklist { background: rgba(var(--boot-rgb), 0.2); color: var(--boot-main); }
+        .badge.unknown { background: rgba(var(--wall-rgb), 0.15); color: var(--wall-main); }
+        .badge.alert { background: rgba(var(--boot-rgb), 0.2); color: var(--boot-main); animation: pulse 2s infinite; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        /* Search & Filters */
+        .search-row { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--surface);
+            color: var(--text);
+            font-family: var(--font-mono);
+        }
+        .search-input:focus { outline: none; border-color: var(--wall-main); box-shadow: 0 0 8px rgba(var(--wall-rgb), 0.2); }
+        select {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--surface);
+            color: var(--text);
+            font-family: var(--font-mono);
+            font-size: var(--size-sm);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .modal-header h3 { color: var(--wall-main); text-shadow: var(--bloom-amber); }
+        .close-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1.5rem; }
+        .close-btn:hover { color: var(--boot-main); }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--muted); font-size: var(--size-sm); }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--surface2);
+            color: var(--text);
+            font-family: var(--font-mono);
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--wall-main); }
+
+        /* Vendor bar chart */
+        .vendor-bar { display: flex; align-items: center; margin-bottom: 0.5rem; }
+        .vendor-name { width: 120px; font-size: 0.8rem; color: var(--muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+        .vendor-count { width: 40px; text-align: right; font-size: 0.8rem; font-weight: bold; }
+        .vendor-fill { flex: 1; height: 16px; margin: 0 0.5rem; background: var(--surface2); border-radius: var(--radius-sm); overflow: hidden; }
+        .vendor-fill-inner { height: 100%; background: var(--mesh-main); border-radius: var(--radius-sm); transition: width 0.3s; }
+
+        /* Device details */
+        .device-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .info-item label { display: block; font-size: 0.7rem; color: var(--muted); text-transform: uppercase; margin-bottom: 0.25rem; }
+        .info-item span { font-size: 0.9rem; color: var(--text); word-break: break-all; }
+
+        /* Actions dropdown */
+        .actions-cell { position: relative; }
+        .action-menu {
+            position: absolute;
+            right: 0;
+            top: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100;
+            display: none;
+            min-width: 150px;
+        }
+        .action-menu.show { display: block; }
+        .action-menu button {
+            display: block;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            border: none;
+            background: none;
+            color: var(--text);
+            text-align: left;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: var(--size-sm);
+        }
+        .action-menu button:hover { background: var(--surface2); }
+        .action-menu button.danger { color: var(--boot-main); }
+
+        /* Alert row highlight */
+        tr.alert-row { background: rgba(var(--boot-rgb), 0.05); }
+        tr.alert-row:hover { background: rgba(var(--boot-rgb), 0.1); }
+
+        /* Live indicator */
+        .live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--root-main);
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--muted);
+        }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
+    </style>
+</head>
+<body class="crt-light">
+    <nav class="sidebar" id="sidebar"></nav>
+    <script src="/shared/sidebar.js"></script>
+    <script src="/shared/health-banner.js"></script>
+
+    <main class="main">
+        <header class="header">
+            <h1>🛡️ Network Access Control</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="refresh()">🔄 Refresh</button>
+                <button class="btn primary" onclick="scanNetwork()">📡 Scan Network</button>
+                <button class="btn success" onclick="showAddModal('whitelist')">➕ Whitelist</button>
+                <button class="btn danger" onclick="showAddModal('blacklist')">🚫 Blacklist</button>
+            </div>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card cyan">
+                <div class="icon">📱</div>
+                <div class="value" id="statDevices">-</div>
+                <div class="label">Total Devices</div>
+            </div>
+            <div class="stat-card green">
+                <div class="icon">✅</div>
+                <div class="value" id="statOnline">-</div>
+                <div class="label">Online Now</div>
+            </div>
+            <div class="stat-card yellow">
+                <div class="icon">🔒</div>
+                <div class="value" id="statWhitelist">-</div>
+                <div class="label">Whitelisted</div>
+            </div>
+            <div class="stat-card red">
+                <div class="icon">🚫</div>
+                <div class="value" id="statBlacklist">-</div>
+                <div class="label">Blacklisted</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="icon">⚠️</div>
+                <div class="value" id="statQuarantine">-</div>
+                <div class="label">Quarantined</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('devices')">📱 Devices</button>
+            <button class="tab" onclick="showTab('whitelist')">✅ Whitelist</button>
+            <button class="tab" onclick="showTab('blacklist')">🚫 Blacklist</button>
+            <button class="tab" onclick="showTab('quarantine')">🔒 Quarantine</button>
+            <button class="tab" onclick="showTab('alerts')">⚠️ Alerts</button>
+            <button class="tab" onclick="showTab('vendors')">🏭 Vendors</button>
+            <button class="tab" onclick="showTab('settings')">⚙️ Settings</button>
+        </div>
+
+        <!-- Devices Tab -->
+        <div id="tab-devices" class="tab-content active">
+            <div class="card">
+                <h2>Network Devices <span class="live-dot"></span></h2>
+                <div class="search-row">
+                    <input type="text" class="search-input" id="searchDevices" placeholder="Search by MAC, IP, hostname, vendor..." oninput="filterDevices()">
+                    <select id="filterStatus" onchange="filterDevices()">
+                        <option value="all">All Status</option>
+                        <option value="online">Online</option>
+                        <option value="offline">Offline</option>
+                        <option value="quarantine">Quarantined</option>
+                    </select>
+                    <select id="filterList" onchange="filterDevices()">
+                        <option value="all">All Lists</option>
+                        <option value="whitelist">Whitelisted</option>
+                        <option value="blacklist">Blacklisted</option>
+                        <option value="unknown">Unknown</option>
+                    </select>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>MAC Address</th>
+                                <th>IP Address</th>
+                                <th>Hostname</th>
+                                <th>Vendor</th>
+                                <th>List</th>
+                                <th>Last Seen</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devicesTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Whitelist Tab -->
+        <div id="tab-whitelist" class="tab-content">
+            <div class="card">
+                <h2>Whitelisted Devices <button class="btn btn-sm success" onclick="showAddModal('whitelist')">➕ Add</button></h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>MAC Address</th>
+                            <th>Hostname / Tag</th>
+                            <th>Added</th>
+                            <th>Last Seen</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="whitelistTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Blacklist Tab -->
+        <div id="tab-blacklist" class="tab-content">
+            <div class="card">
+                <h2>Blacklisted Devices <button class="btn btn-sm danger" onclick="showAddModal('blacklist')">🚫 Add</button></h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>MAC Address</th>
+                            <th>Reason</th>
+                            <th>Blocked Since</th>
+                            <th>Last Attempt</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blacklistTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Quarantine Tab -->
+        <div id="tab-quarantine" class="tab-content">
+            <div class="card">
+                <h2>Quarantined Clients</h2>
+                <p style="color:var(--muted);margin-bottom:1rem;font-size:0.85rem;">
+                    Quarantined devices have restricted network access. They can only reach the captive portal for authentication.
+                </p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>MAC Address</th>
+                            <th>IP Address</th>
+                            <th>Hostname</th>
+                            <th>Reason</th>
+                            <th>Since</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quarantineTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Alerts Tab -->
+        <div id="tab-alerts" class="tab-content">
+            <div class="card">
+                <h2>Security Alerts <button class="btn btn-sm" onclick="ackAllAlerts()">✓ Acknowledge All</button></h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Type</th>
+                            <th>MAC Address</th>
+                            <th>Details</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alertsTable"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Vendors Tab -->
+        <div id="tab-vendors" class="tab-content">
+            <div class="card">
+                <h2>Device Vendors</h2>
+                <div id="vendorStats"></div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="tab-settings" class="tab-content">
+            <div class="card">
+                <h2>NAC Settings</h2>
+                <div class="form-group">
+                    <label>Default Policy</label>
+                    <select id="settingDefaultPolicy">
+                        <option value="allow">Allow All (whitelist mode disabled)</option>
+                        <option value="deny">Deny Unknown (whitelist mode enabled)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Auto-quarantine unknown devices</label>
+                    <select id="settingAutoQuarantine">
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>MAC Spoofing Detection</label>
+                    <select id="settingMacSpoofing">
+                        <option value="alert">Alert Only</option>
+                        <option value="block">Block + Alert</option>
+                        <option value="off">Disabled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Network Interface</label>
+                    <select id="settingInterface">
+                        <option value="br-lan">br-lan (default)</option>
+                        <option value="eth0">eth0</option>
+                        <option value="lan0">lan0</option>
+                    </select>
+                </div>
+                <button class="btn primary" onclick="saveSettings()">💾 Save Settings</button>
+                <button class="btn" onclick="syncNft()">🔄 Sync nftables</button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal" id="addModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Add Device</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <form onsubmit="submitAdd(event)">
+                <input type="hidden" id="modalList" value="whitelist">
+                <div class="form-group">
+                    <label>MAC Address</label>
+                    <input type="text" id="modalMac" placeholder="00:11:22:33:44:55" required pattern="^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$">
+                </div>
+                <div class="form-group">
+                    <label>Hostname / Tag (optional)</label>
+                    <input type="text" id="modalTag" placeholder="e.g., John's iPhone">
+                </div>
+                <div class="form-group" id="modalReasonGroup" style="display:none;">
+                    <label>Reason for blocking</label>
+                    <input type="text" id="modalReason" placeholder="e.g., Unauthorized device">
+                </div>
+                <button type="submit" class="btn primary" style="width:100%;">Add Device</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Device Detail Modal -->
+    <div class="modal" id="deviceModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Device Details</h3>
+                <button class="close-btn" onclick="closeDeviceModal()">&times;</button>
+            </div>
+            <div class="device-info" id="deviceInfo"></div>
+            <div style="margin-top:1rem;" id="deviceActions"></div>
+        </div>
+    </div>
+
+    <script>
+    const API = '/api/v1/nac';
+    const token = () => localStorage.getItem('sbx_token');
+    const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
+
+    let allDevices = [];
+    let currentDevice = null;
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // DOUBLE-CACHE PRE-BUFFER SYSTEM
+    // Pattern: localStorage cache + memory cache for instant display
+    // ═══════════════════════════════════════════════════════════════════════════════
+
+    const CACHE_VERSION = 'v1';
+    const CACHE_TTL = 300000;  // 5 minutes cache validity
+    const CACHE_KEYS = {
+        status: 'nac_status_' + CACHE_VERSION,
+        devices: 'nac_devices_' + CACHE_VERSION,
+        whitelist: 'nac_whitelist_' + CACHE_VERSION,
+        blacklist: 'nac_blacklist_' + CACHE_VERSION,
+        quarantine: 'nac_quarantine_' + CACHE_VERSION,
+        alerts: 'nac_alerts_' + CACHE_VERSION,
+        vendors: 'nac_vendors_' + CACHE_VERSION
+    };
+
+    // Memory cache (faster than localStorage)
+    const memCache = {};
+
+    // Load from cache (localStorage → memory)
+    function loadCache(key) {
+        // Check memory first
+        if (memCache[key] && (Date.now() - memCache[key].ts) < CACHE_TTL) {
+            console.log('[NAC] Memory cache hit:', key);
+            return memCache[key].data;
+        }
+        // Fallback to localStorage
+        try {
+            const cached = localStorage.getItem(CACHE_KEYS[key]);
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.ts && (Date.now() - parsed.ts) < CACHE_TTL) {
+                    console.log('[NAC] LocalStorage cache hit:', key, 'age:', Math.round((Date.now() - parsed.ts)/1000) + 's');
+                    memCache[key] = parsed;  // Populate memory cache
+                    return parsed.data;
+                }
+            }
+        } catch (e) {
+            console.warn('[NAC] Cache read error:', key, e.message);
+        }
+        return null;
+    }
+
+    // Save to both caches
+    function saveCache(key, data) {
+        const entry = { ts: Date.now(), data: data };
+        memCache[key] = entry;
+        try {
+            localStorage.setItem(CACHE_KEYS[key], JSON.stringify(entry));
+        } catch (e) {
+            console.warn('[NAC] Cache write error:', key, e.message);
+        }
+    }
+
+    // Clear cache for a key
+    function clearCache(key) {
+        delete memCache[key];
+        try { localStorage.removeItem(CACHE_KEYS[key]); } catch (e) {}
+    }
+
+    // Clear all NAC caches (on mutation)
+    function invalidateCache() {
+        Object.keys(CACHE_KEYS).forEach(k => clearCache(k));
+        console.log('[NAC] Cache invalidated');
+    }
+
+    // Safe API wrapper
+    async function api(path, opts = {}) {
+        try {
+            const res = await fetch(API + path, { ...opts, headers: headers() });
+            if (res.status === 401) { window.location = '/portal/login.html'; return {}; }
+            if (!res.ok) return {};
+            const text = await res.text();
+            if (!text || text.trim().charAt(0) === '<') {
+                console.warn('[NAC] API returned HTML instead of JSON');
+                return {};
+            }
+            try { return JSON.parse(text); } catch(e) { console.warn('[NAC] JSON parse error'); return {}; }
+        } catch { return {}; }
+    }
+
+    function showTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
+        document.getElementById('tab-' + tab).classList.add('active');
+
+        if (tab === 'whitelist') loadWhitelist();
+        if (tab === 'blacklist') loadBlacklist();
+        if (tab === 'quarantine') loadQuarantine();
+        if (tab === 'alerts') loadAlerts();
+        if (tab === 'vendors') loadVendorStats();
+        if (tab === 'settings') loadSettings();
+    }
+
+    async function loadStatus() {
+        const d = await api('/status');
+        document.getElementById('statDevices').textContent = d.total_devices || 0;
+        document.getElementById('statOnline').textContent = d.online || 0;
+        document.getElementById('statWhitelist').textContent = d.whitelisted || 0;
+        document.getElementById('statBlacklist').textContent = d.blacklisted || 0;
+        document.getElementById('statQuarantine').textContent = d.quarantined || 0;
+    }
+
+    async function loadDevices() {
+        const d = await api('/devices');
+        allDevices = d.devices || [];
+        renderDevices(allDevices);
+    }
+
+    function renderDevices(devices) {
+        const tbody = document.getElementById('devicesTable');
+        if (!devices.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><div class="icon">📡</div>No devices found. Click "Scan Network" to discover devices.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = devices.map(d => {
+            const statusClass = d.quarantine ? 'quarantine' : (d.online ? 'online' : 'offline');
+            const statusText = d.quarantine ? '🔒 Quarantine' : (d.online ? '🟢 Online' : '⚫ Offline');
+            const listClass = d.whitelist ? 'whitelist' : (d.blacklist ? 'blacklist' : 'unknown');
+            const listText = d.whitelist ? '✅ Whitelist' : (d.blacklist ? '🚫 Blacklist' : '❓ Unknown');
+            const lastSeen = d.last_seen ? new Date(d.last_seen * 1000).toLocaleString() : '-';
+
+            return `<tr class="${d.alert ? 'alert-row' : ''}" onclick="showDevice('${d.mac}')">
+                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                <td><code>${d.mac}</code></td>
+                <td>${d.ip || '-'}</td>
+                <td>${d.hostname || d.tag || '-'}</td>
+                <td>${d.vendor || 'Unknown'}</td>
+                <td><span class="badge ${listClass}">${listText}</span></td>
+                <td>${lastSeen}</td>
+                <td class="actions-cell" onclick="event.stopPropagation()">
+                    <button class="btn btn-sm btn-icon" onclick="toggleActions(this)">⋮</button>
+                    <div class="action-menu">
+                        ${!d.whitelist ? `<button onclick="quickAdd('${d.mac}', 'whitelist')">✅ Whitelist</button>` : `<button onclick="removeFromList('${d.mac}', 'whitelist')">Remove from whitelist</button>`}
+                        ${!d.blacklist ? `<button onclick="quickAdd('${d.mac}', 'blacklist')">🚫 Blacklist</button>` : `<button onclick="removeFromList('${d.mac}', 'blacklist')">Remove from blacklist</button>`}
+                        ${!d.quarantine ? `<button onclick="quarantine('${d.mac}')">🔒 Quarantine</button>` : `<button onclick="unquarantine('${d.mac}')">🔓 Unquarantine</button>`}
+                        <button class="danger" onclick="forgetDevice('${d.mac}')">🗑️ Forget</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filterDevices() {
+        const search = document.getElementById('searchDevices').value.toLowerCase();
+        const status = document.getElementById('filterStatus').value;
+        const list = document.getElementById('filterList').value;
+
+        let filtered = allDevices.filter(d => {
+            const matchSearch = !search ||
+                d.mac.toLowerCase().includes(search) ||
+                (d.ip && d.ip.includes(search)) ||
+                (d.hostname && d.hostname.toLowerCase().includes(search)) ||
+                (d.tag && d.tag.toLowerCase().includes(search)) ||
+                (d.vendor && d.vendor.toLowerCase().includes(search));
+
+            const matchStatus = status === 'all' ||
+                (status === 'online' && d.online && !d.quarantine) ||
+                (status === 'offline' && !d.online && !d.quarantine) ||
+                (status === 'quarantine' && d.quarantine);
+
+            const matchList = list === 'all' ||
+                (list === 'whitelist' && d.whitelist) ||
+                (list === 'blacklist' && d.blacklist) ||
+                (list === 'unknown' && !d.whitelist && !d.blacklist);
+
+            return matchSearch && matchStatus && matchList;
+        });
+
+        renderDevices(filtered);
+    }
+
+    function toggleActions(btn) {
+        document.querySelectorAll('.action-menu.show').forEach(m => m.classList.remove('show'));
+        btn.nextElementSibling.classList.toggle('show');
+    }
+
+    document.addEventListener('click', e => {
+        if (!e.target.closest('.actions-cell')) {
+            document.querySelectorAll('.action-menu.show').forEach(m => m.classList.remove('show'));
+        }
+    });
+
+    async function loadWhitelist() {
+        const d = await api('/whitelist');
+        const tbody = document.getElementById('whitelistTable');
+        const list = d.devices || [];
+
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">✅</div>No whitelisted devices</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(d => `<tr>
+            <td><code>${d.mac}</code></td>
+            <td>${d.tag || d.hostname || '-'}</td>
+            <td>${d.added ? new Date(d.added * 1000).toLocaleDateString() : '-'}</td>
+            <td>${d.last_seen ? new Date(d.last_seen * 1000).toLocaleString() : 'Never'}</td>
+            <td><button class="btn btn-sm danger" onclick="removeFromList('${d.mac}', 'whitelist')">Remove</button></td>
+        </tr>`).join('');
+    }
+
+    async function loadBlacklist() {
+        const d = await api('/blacklist');
+        const tbody = document.getElementById('blacklistTable');
+        const list = d.devices || [];
+
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">🚫</div>No blacklisted devices</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(d => `<tr>
+            <td><code>${d.mac}</code></td>
+            <td>${d.reason || '-'}</td>
+            <td>${d.blocked ? new Date(d.blocked * 1000).toLocaleDateString() : '-'}</td>
+            <td>${d.last_attempt ? new Date(d.last_attempt * 1000).toLocaleString() : 'Never'}</td>
+            <td><button class="btn btn-sm success" onclick="removeFromList('${d.mac}', 'blacklist')">Unblock</button></td>
+        </tr>`).join('');
+    }
+
+    async function loadQuarantine() {
+        const d = await api('/quarantine');
+        const tbody = document.getElementById('quarantineTable');
+        const list = d.clients || [];
+
+        if (!list.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">🔒</div>No quarantined clients</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = list.map(c => `<tr>
+            <td><code>${c.mac}</code></td>
+            <td>${c.ip || '-'}</td>
+            <td>${c.hostname || '-'}</td>
+            <td>${c.reason || 'Manual'}</td>
+            <td>${c.since ? new Date(c.since * 1000).toLocaleString() : '-'}</td>
+            <td><button class="btn btn-sm success" onclick="unquarantine('${c.mac}')">🔓 Release</button></td>
+        </tr>`).join('');
+    }
+
+    async function loadAlerts() {
+        const d = await api('/alerts');
+        const tbody = document.getElementById('alertsTable');
+        const alerts = d.alerts || [];
+
+        if (!alerts.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">✨</div>No security alerts</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = alerts.map(a => `<tr>
+            <td>${new Date(a.timestamp * 1000).toLocaleString()}</td>
+            <td><span class="badge alert">${a.type}</span></td>
+            <td><code>${a.mac}</code></td>
+            <td>${a.details || '-'}</td>
+            <td>
+                <button class="btn btn-sm" onclick="ackAlert('${a.id}')">✓ Ack</button>
+                ${a.type === 'new_device' ? `<button class="btn btn-sm success" onclick="quickAdd('${a.mac}', 'whitelist')">Whitelist</button>` : ''}
+            </td>
+        </tr>`).join('');
+    }
+
+    async function loadVendorStats() {
+        const d = await api('/vendors');
+        const container = document.getElementById('vendorStats');
+        const vendors = d.vendors || [];
+
+        if (!vendors.length) {
+            container.innerHTML = '<div class="empty-state"><div class="icon">🏭</div>No vendor data</div>';
+            return;
+        }
+
+        const maxCount = Math.max(...vendors.map(v => v.count));
+        container.innerHTML = vendors.slice(0, 15).map(v => {
+            const pct = (v.count / maxCount * 100).toFixed(0);
+            return `<div class="vendor-bar">
+                <span class="vendor-name" title="${v.name}">${v.name}</span>
+                <div class="vendor-fill"><div class="vendor-fill-inner" style="width:${pct}%"></div></div>
+                <span class="vendor-count">${v.count}</span>
+            </div>`;
+        }).join('');
+    }
+
+    async function loadSettings() {
+        const d = await api('/settings');
+        if (d.default_policy) document.getElementById('settingDefaultPolicy').value = d.default_policy;
+        if (d.auto_quarantine) document.getElementById('settingAutoQuarantine').value = d.auto_quarantine;
+        if (d.mac_spoofing) document.getElementById('settingMacSpoofing').value = d.mac_spoofing;
+        if (d.interface) document.getElementById('settingInterface').value = d.interface;
+    }
+
+    async function saveSettings() {
+        const settings = {
+            default_policy: document.getElementById('settingDefaultPolicy').value,
+            auto_quarantine: document.getElementById('settingAutoQuarantine').value,
+            mac_spoofing: document.getElementById('settingMacSpoofing').value,
+            interface: document.getElementById('settingInterface').value
+        };
+        const r = await api('/settings', { method: 'POST', body: JSON.stringify(settings) });
+        if (r.success) alert('✅ Settings saved');
+        else alert('❌ Error saving settings');
+    }
+
+    async function syncNft() {
+        const r = await api('/sync-nft', { method: 'POST' });
+        if (r.success) alert('✅ nftables rules synchronized');
+        else alert('❌ Error: ' + (r.error || 'Unknown error'));
+    }
+
+    async function scanNetwork() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳ Scanning...';
+        const r = await api('/scan', { method: 'POST' });
+        btn.disabled = false;
+        btn.textContent = '📡 Scan Network';
+        if (r.success) {
+            alert(`✅ Scan complete: ${r.new_devices || 0} new devices found`);
+            refresh();
+        } else {
+            alert('❌ Scan error: ' + (r.error || 'Unknown error'));
+        }
+    }
+
+    function showAddModal(list) {
+        document.getElementById('modalList').value = list;
+        document.getElementById('modalTitle').textContent = list === 'whitelist' ? '➕ Add to Whitelist' : '🚫 Add to Blacklist';
+        document.getElementById('modalReasonGroup').style.display = list === 'blacklist' ? 'block' : 'none';
+        document.getElementById('modalMac').value = '';
+        document.getElementById('modalTag').value = '';
+        document.getElementById('modalReason').value = '';
+        document.getElementById('addModal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('addModal').classList.remove('active');
+    }
+
+    async function submitAdd(e) {
+        e.preventDefault();
+        const list = document.getElementById('modalList').value;
+        const mac = document.getElementById('modalMac').value.toUpperCase();
+        const tag = document.getElementById('modalTag').value;
+        const reason = document.getElementById('modalReason').value;
+
+        const payload = { mac };
+        if (tag) payload.tag = tag;
+        if (reason && list === 'blacklist') payload.reason = reason;
+
+        const r = await api('/' + list, { method: 'POST', body: JSON.stringify(payload) });
+        if (r.success) {
+            closeModal();
+            refresh();
+            showTab(list);
+        } else {
+            alert('❌ Error: ' + (r.error || 'Unknown error'));
+        }
+    }
+
+    async function quickAdd(mac, list) {
+        const r = await api('/' + list, { method: 'POST', body: JSON.stringify({ mac }) });
+        if (r.success) refresh();
+        else alert('❌ Error: ' + (r.error || 'Unknown error'));
+    }
+
+    async function removeFromList(mac, list) {
+        if (!confirm(`Remove ${mac} from ${list}?`)) return;
+        const r = await api('/' + list + '/' + encodeURIComponent(mac), { method: 'DELETE' });
+        if (r.success) refresh();
+        else alert('❌ Error: ' + (r.error || 'Unknown error'));
+    }
+
+    async function quarantine(mac) {
+        if (!confirm(`Quarantine device ${mac}? It will have restricted network access.`)) return;
+        const r = await api('/quarantine', { method: 'POST', body: JSON.stringify({ mac }) });
+        if (r.success) refresh();
+        else alert('❌ Error: ' + (r.error || 'Unknown error'));
+    }
+
+    async function unquarantine(mac) {
+        const r = await api('/quarantine/' + encodeURIComponent(mac), { method: 'DELETE' });
+        if (r.success) refresh();
+        else alert('❌ Error: ' + (r.error || 'Unknown error'));
+    }
+
+    async function forgetDevice(mac) {
+        if (!confirm(`Forget device ${mac}? This removes it from all lists and history.`)) return;
+        const r = await api('/devices/' + encodeURIComponent(mac), { method: 'DELETE' });
+        if (r.success) refresh();
+        else alert('❌ Error: ' + (r.error || 'Unknown error'));
+    }
+
+    function showDevice(mac) {
+        currentDevice = allDevices.find(d => d.mac === mac);
+        if (!currentDevice) return;
+
+        const d = currentDevice;
+        document.getElementById('deviceInfo').innerHTML = `
+            <div class="info-item"><label>MAC Address</label><span><code>${d.mac}</code></span></div>
+            <div class="info-item"><label>IP Address</label><span>${d.ip || '-'}</span></div>
+            <div class="info-item"><label>Hostname</label><span>${d.hostname || '-'}</span></div>
+            <div class="info-item"><label>Vendor</label><span>${d.vendor || 'Unknown'}</span></div>
+            <div class="info-item"><label>Status</label><span>${d.quarantine ? '🔒 Quarantined' : (d.online ? '🟢 Online' : '⚫ Offline')}</span></div>
+            <div class="info-item"><label>List</label><span>${d.whitelist ? '✅ Whitelisted' : (d.blacklist ? '🚫 Blacklisted' : '❓ Unknown')}</span></div>
+            <div class="info-item"><label>First Seen</label><span>${d.first_seen ? new Date(d.first_seen * 1000).toLocaleString() : '-'}</span></div>
+            <div class="info-item"><label>Last Seen</label><span>${d.last_seen ? new Date(d.last_seen * 1000).toLocaleString() : '-'}</span></div>
+            ${d.tag ? `<div class="info-item"><label>Tag</label><span>${d.tag}</span></div>` : ''}
+        `;
+
+        document.getElementById('deviceActions').innerHTML = `
+            ${!d.whitelist ? `<button class="btn success" onclick="quickAdd('${d.mac}', 'whitelist'); closeDeviceModal();">✅ Whitelist</button>` : `<button class="btn" onclick="removeFromList('${d.mac}', 'whitelist'); closeDeviceModal();">Remove from whitelist</button>`}
+            ${!d.blacklist ? `<button class="btn warning" onclick="quickAdd('${d.mac}', 'blacklist'); closeDeviceModal();">🚫 Blacklist</button>` : `<button class="btn" onclick="removeFromList('${d.mac}', 'blacklist'); closeDeviceModal();">Remove from blacklist</button>`}
+            ${!d.quarantine ? `<button class="btn danger" onclick="quarantine('${d.mac}'); closeDeviceModal();">🔒 Quarantine</button>` : `<button class="btn success" onclick="unquarantine('${d.mac}'); closeDeviceModal();">🔓 Release</button>`}
+        `;
+
+        document.getElementById('deviceModal').classList.add('active');
+    }
+
+    function closeDeviceModal() {
+        document.getElementById('deviceModal').classList.remove('active');
+    }
+
+    async function ackAlert(id) {
+        const r = await api('/alerts/' + id + '/ack', { method: 'POST' });
+        if (r.success) loadAlerts();
+    }
+
+    async function ackAllAlerts() {
+        const r = await api('/alerts/ack-all', { method: 'POST' });
+        if (r.success) loadAlerts();
+    }
+
+    function refresh() {
+        loadStatus();
+        loadDevices();
+    }
+
+    // Initial load
+    refresh();
+    setInterval(refresh, 30000);
+    </script>
+</body>
+</html>
