@@ -19,6 +19,7 @@ event loop: yt-dlp is an async subprocess and blocking handlers are plain
 `def` (FastAPI runs them in a threadpool).
 """
 
+import asyncio
 import json
 import os
 import shutil
@@ -355,6 +356,69 @@ async def remove(id: str):
     engine.jobs.pop(id, None)
     library.remove(id)
     return {"status": "removed"}
+
+
+@app.get(API + "/playlist")
+async def playlist(url: str, limite: int = 50):
+    """Enumere une playlist SANS RIEN TELECHARGER.
+
+    POURQUOI CETTE ROUTE EXISTE (#1047). La radio doit pouvoir deplier une
+    playlist proposee par un membre. Elle tourne sur l'hote, confinee, et n'a ni
+    yt-dlp ni le coffre a cookies — les deux vivent ici. Lui faire appeler
+    `lxc-attach` aurait demande de lui donner root sur la machine pour lire des
+    titres de chansons.
+
+    `--flat-playlist` NE TELECHARGE RIEN : une seule requete de metadonnees, la
+    ou un `add` de playlist lancerait cinq cents telechargements sur une board
+    dont le processeur est deja sature. C'est toute la difference entre
+    enumerer et rapatrier.
+
+    LA BORNE EST APPLIQUEE PAR yt-dlp LUI-MEME (`--playlist-end`), pas apres
+    coup : tronquer une liste deja reconstruite en memoire aurait laisse le
+    travail se faire pour rien.
+    """
+    if not url or not url.startswith(("https://", "http://")):
+        return JSONResponse({"error": "url requise"}, status_code=400)
+    limite = max(1, min(int(limite or 50), 200))
+    args = ["yt-dlp", "--flat-playlist", "--dump-json",
+            "--playlist-end", str(limite), "--no-warnings"]
+    # Le coffre sert aussi ici : une playlist privee ne s'enumere pas sans lui.
+    args += engine._cookie_args()
+    args.append(url)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        # UN DELAI BORNE : une playlist enorme ou une passerelle qui traine ne
+        # doit pas retenir un worker indefiniment.
+        out, err = await asyncio.wait_for(proc.communicate(), timeout=90)
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "enumeration trop longue"}, status_code=504)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    morceaux = []
+    for ligne in out.decode("utf-8", "replace").splitlines():
+        ligne = ligne.strip()
+        if not ligne:
+            continue
+        try:
+            d = json.loads(ligne)
+        except ValueError:
+            continue
+        vid = d.get("id")
+        if not vid:
+            continue
+        # ON REND UNE ADRESSE CANONIQUE, pas celle que yt-dlp a en tete : la
+        # radio normalise ensuite, et deux ecritures de la meme video ne
+        # doivent pas produire deux pistes.
+        morceaux.append({"id": vid,
+                         "url": "https://www.youtube.com/watch?v=" + vid,
+                         "title": d.get("title") or ""})
+    if not morceaux:
+        detail = err.decode("utf-8", "replace")[:200] if err else ""
+        return JSONResponse({"error": "playlist vide ou illisible", "detail": detail},
+                            status_code=404)
+    return {"count": len(morceaux), "items": morceaux}
 
 
 @app.get(API + "/status")

@@ -2,7 +2,3515 @@
 *Tracking completed milestones with dates*
 
 ---
+
+## 2026-08-16 (fin) — BBS : deux volets qui glissent
+
+Le defaut de fond n'etait pas une regle mais **une accolade** : un
+`@media (max-width: 619.98px) {` ORPHELIN, reste d'une de mes suppressions ou
+le contenu avait ete efface en laissant l'ouvrante. Tout ce qui suivait se
+trouvait imbrique dans une condition impossible — les dispositions a deux et
+trois colonnes ne s'appliquaient sur AUCUNE largeur.
+
+Puis le marqueur de volet, pose dans la base, masquait la vue a toutes les
+largeurs : les messages disparaissaient aussi au bureau.
+
+**La bonne reponse est venue du user** : un multi-volets qui glisse. Masquer
+obligeait a decider quel volet montrer, et cette decision change a chaque page
+— racine des forums = la vue, forum precis = la liste, fil ouvert = la vue
+alors que le serveur pose encore `volet-liste`. Trois reglages, trois cas
+corriges en cassant le suivant. En ne masquant rien, la question disparait.
+
+Ajoute ensuite : le glissement suit la selection (`aria-current` l'emporte sur
+le marqueur), part des le clic sans attendre le reseau, et ne revient plus tout
+seul (`overflow-anchor: none` + focus relache).
+
+Avant cela : relais de vignettes pour nos services (politique fermee, garde
+anti-proxy-ouvert verifiee par mutation), `frame-src` etendu a la radio et au
+podcaster depuis un seul point de verite, fiches de liens sans appel reseau au
+rendu, et `/media-fiche` pour la resolution differee.
+
+**Trois erreurs de methode a retenir** : un doublon de 130 lignes ecrit sans
+avoir lu l'existant ; un deploiement avec un test rouge annonce « vert » ; et
+un drapeau pose dans l'unite sans verifier que le cablage du demon avait
+reussi — le BBS a rendu 503. Cause commune : conclure sans revérifier la base.
+
+## 2026-08-16 (suite) — Securite, socket partagee, BBS mobile
+
+**Passe de securite sur gk2 : rien de la famille notwork.** Aucun binaire
+d'architecture etrangere, pas de `ld.so.preload`, aucun SUID recent, cles SSH
+inchangees depuis mai, cron entierement a nous, une seule connexion sortante.
+Le port 445 est borde comme il faut : accepte depuis le LAN, `reject` ailleurs.
+
+**Mais le detecteur d'intrusion ne detectait rien.** `secubox-antirootkit` etait
+en boucle de redemarrage — 16541 fois depuis le 7 aout. `/run/secubox` porte le
+bit collant : on n'y delie que ce qu'on possede, et la socket appartenait a
+`secubox` alors que l'unite tourne en `secubox-antirootkit`. Neuf jours sans
+surveillance, en silence.
+
+Parade `ExecStartPre=+/bin/rm` portee dans **146 unites**, et
+`RuntimeDirectory=secubox` retire de **114 unites SOURCE** — celles de la board
+ne l'avaient plus, un rebuild aurait reintroduit l'effacement des sockets
+voisines. La regle entre dans `MODULE-COMPLIANCE.md`.
+
+**blacklist-sync : les sets nft etaient vides.** 7176 adresses dans un seul
+argument (195 Ko pour une limite de 128 Ko), plages en conflit sur un set
+`interval`, fichier d'etat jamais ecrit. Transaction `nft -f` atomique : v4
+passe de 1 a 5580 elements, v6 de 0 a 66 apres ajout de Spamhaus DROPv6 — le
+seul flux v6 etait en poids 60, sous les deux seuils.
+
+**mitm** : deux `mitmdump` orphelins retires (111 Mo). Un chemin sur trois est
+migre vers `sbxmitm`, contrairement a ce que j'avais d'abord conclu.
+
+**BBS mobile** : trois tentatives, trois defauts differents. Etat final —
+contenu seul, liste au tiroir dont le bouton existe enfin sur telephone. Les
+sous-forums vides restent ouverts : le contenu change de volet selon la page et
+aucune regle CSS ne peut le deviner.
+
+## 2026-08-16 — Radio 0.1.2, sbxwaf 0.1.40 : trois symptomes, trois causes (#1047, #1031)
+
+**Le cache media du WAF servait une feuille perimee en `text/plain`.** Le
+navigateur la jetait : la page paraissait non regeneree, puis « la video se
+redimensionne ». La feuille livree etait juste depuis le debut.
+
+Cause de fond, differente de celle traitee en #1031 : une entree dont l'annexe
+`.m` est absente ou illisible etait quand meme indexee et servie. Sans
+Content-Type stocke, `net/http` devine le contenu et repond `text/plain` — et
+avec `nosniff`, le script tombe aussi. Corrige : le corps orphelin est efface,
+les `.tmp` d'un arret brutal ne sont plus pris pour des corps.
+
+Une purge que j'avais faite a **cree** cette condition : je cherchais le nom du
+vhost dans les fichiers du cache, or il ne figure que dans l'annexe. J'ai
+supprime les annexes en laissant les corps.
+
+**Parade durable cote module** : les URL statiques portent une empreinte de
+leur contenu (`radio.css?v=07a51b421dad`). Un deploiement ne peut plus tomber
+sur une entree perimee, et une version inchangee reste servie depuis le cache.
+
+**La file de recuperation gelait sur la premiere piste refusee.** Une piste en
+erreur chez la passerelle etait lue comme « pas encore prete » : la boucle
+s'arretait dessus a chaque tour et ne demandait jamais les suivantes. Une seule
+video en 403 bloquait les quarante autres, sans une ligne de journal. Elle est
+desormais ecartee avec sa raison ; les 8 pistes en attente ont ete demandees
+dans la minute suivant le deploiement.
+
+**Quatre ffmpeg fantomes** dans PeerTube, bloques en `futex_wait_queue` depuis
+5 a 8 jours, zero octet ecrit, insensibles a SIGTERM. Supprimes. La charge est
+restee a 41 : ils n'en etaient pas la cause.
+
+Restent ouverts : le 403 de YouTube sur le media (metadonnees OK, ni les
+cookies ni notre interception en cause, yt-dlp deja a jour) ; la charge 41.
+
+## 2026-08-15 — BBS 0.16.0 : note vocale et note video (#1044)
+
+Deux boutons rejoignent le trombone dans les trois editeurs. Ils empruntent le
+MEME chemin d'envoi (`/f/envoi`, `poser`, `mediasIntegres`) : enregistrer
+produit un fichier comme un autre, et un second chemin aurait double les
+garde-fous a tenir.
+
+Deux defauts trouves en chemin :
+
+- **Le format ne peut pas etre suppose.** Firefox ecrit de l'Ogg/Opus,
+  Chromium du WebM ; imposer un type que le navigateur ne sait pas produire
+  fait echouer l'enregistrement en silence. Il est desormais negocie.
+- **Une note vocale sous Chromium sortait en rectangle noir.** Conteneur
+  Matroska sniffe `video/webm`, donc balise `<video>`. Corrige par le meme
+  departage que celui deja en place pour Ogg : le contenu decide, le type
+  annonce ne fait que trancher entre DEUX entrees deja acceptees. Servi sous
+  `.weba`.
+
+Les deux tests neufs echouent sur le code d'avant. Deploye et verifie sur gk2,
+publie sur apt.secubox.in.
+
+**Non traite :** le lien durable message <-> piece jointe (migration 0016)
+reste inutilise par l'interface — l'adresse est posee dans le corps, comme
+pour le trombone. Le changer ici aurait modifie le trombone en meme temps.
+
+## 2026-08-12 — PeerTube : le transcodage n'avait aucun plafond CPU (#1010)
+
+`secubox-peertube 1.3.1` — déployé sur gk2, publié sur apt.secubox.in.
+
+**Charge 113 → 63.** Deux `ffmpeg` tournaient sans borne (`cpu.max = max`), avec
+en prime `cpu.weight = 300` — trois fois la part normale en cas de contention.
+
+**Pourquoi la configuration de PeerTube ne suffisait pas** : `transcoding.threads: 1`
+et `transcoding.concurrency: 1` y étaient **déjà posés**. Le studio vidéo et le
+direct ont leurs propres réglages et y échappent. Seul le cgroup borne tout, y
+compris ce qu'une version future ajouterait.
+
+**Pourquoi pas l'unité systemd** : PeerTube sert le web et transcode dans le
+même `peertube.service`.
+
+La valeur (un cœur sur quatre) n'est définie que dans `lib/peertube/borne-cpu.sh` ;
+le gabarit d'installation l'appelle au lieu de la réécrire — deux copies de la
+même borne divergent, et c'est alors la réinstallation qui ramène l'ancienne.
+Le postinst réconcilie les conteneurs **déjà installés** et applique à chaud.
+
+**Reste à traiter** — même classe de problème : les plafonds CPU des 7 autres
+conteneurs (`gitea`, `mail`, `matrix`, `nextcloud`, `photoprism`, `streamlit`,
+`yacy`) sont posés **à la main sur la board**, sans propriétaire dans un paquet :
+absents d'une réinstallation, perdus au prochain provisionnement.
+
+---
+
+## 2026-08-03 → 08-05 — Perf & fiabilité : mosaïques, certificats, châssis, playlists
+
+Session dense. La plupart des gains viennent de **causes racines trouvées sous des symptômes
+anodins** — chaque défaut en masquait un autre.
+
+**Chiffres marquants**
+
+| Sujet | Avant | Après |
+|---|---|---|
+| Metablogizer `GET /sites` | 502 après 43 s | 28 ms |
+| Mur metablogizer complet | 36,7 s | 0,2 s |
+| Détection applis Streamlit | 3 vues sur 15 | 23 avec leur port |
+| Vignettes Streamlit servies | 0 | 18 |
+| `idle-check` | `active=0` (24 en cours) | `active=17 would-stop=6` |
+| Boutons module (waf) | 13 | 18 |
+| `sliders.maegia.tv` | expirait dans 4 j | valide au 2 novembre |
+
+**Causes racines établies**
+
+- Le renouvellement des certificats échouait **depuis toujours** : nginx servait les challenges
+  ACME depuis `/usr/share/secubox/www`, certbot les écrivait dans `/var/www/html`. 404 systématique.
+- `GET /sites` de metablogizer forkait **2 `git` + 1 `du` par site** — plus de 500 processus
+  par affichage sur 172 sites, en synchrone dans le gestionnaire.
+- `sidebar.js` **supprimait** les en-têtes de page, faisant disparaître les boutons d'action
+  de ~112 modules sur 143. Ce n'était pas un recouvrement CSS mais un `display:none`.
+- Les captures Streamlit photographiaient le **squelette de chargement** : la condition d'attente
+  relâchait sur le conteneur de l'appli, qui apparaît avant que le contenu ne peigne.
+- `streamlit-all.service`, avec `MainPID=0` et `Restart=on-failure`, **relance le parc entier**
+  dès qu'une appli meurt — d'où l'impossibilité d'endormir quoi que ce soit (cause de fond de #946).
+- Le vrai vecteur de traversée de chemin du ZIP torrent était `file.path` **issu d'un pair distant**,
+  pas l'infohash de l'URL.
+- ytsas et torrent sont **LXC-natifs** : sans app côté hôte, leurs webui appelaient dans le vide
+  depuis le vhost d'administration.
+
+**PR fusionnées** : #963, #965, #966, #972, #973, #976, #978, #980, #983.
+**Issues ouvertes** : #967, #968, #969, #970, #971, #974, #975, #977, #979, #981.
+
+---
+
+## 2026-07-30 → 07-31 — Marathon : Jellyfin LXC-native + torrent réparé + mitm nettoyé + concentrateur agrégateur + YouTube SAS  (release v2.16.0)
+
+Session monumentale. Board **load 97 → ~20**, RAM libre **88 Mo → 1,6 Go**, deux root-causes CPU éliminées, un nouveau module média, une refonte, et une nouvelle brique d'architecture.
+
+- **Jellyfin LXC-native (secubox-jellyfin 2.0.x, #938 mergé).** Refonte complète du stub Docker 1.0.0 → LXC dédié (10.100.0.170:8096, Jellyfin officiel), `jellyfinctl` scoped-sudo, api agrégateur, webui navbar. **Auto-wire partenaires** : photoprism/nextcloud/torrent/lyrion montés RO comme bibliothèques Jellyfin ; **peertube** = vraie bibliothèque (`/data/peertube/storage/web-videos`, movies). **Self-mint clé API** (`jellyfinctl apikey-mint` — insertion directe dans la table `ApiKeys` de la DB, sans mot de passe = force du module root-LXC). Wizard 10.11 fait à la main (l'auto échoue sur le quirk `/Startup/*`). **Leçon** : ne jamais SIGKILL Jellyfin en pleine migration (DB corrompue → reset). Mode léger (trickplay/chapter/keyframe désactivés, scan hebdo). Mémoire `project_jellyfin_deploy_state`.
+- **Torrent — 2 root-causes + robustesse (2.2.4→2.2.8).** (1) **Peg event-loop** : les torrents complets seedaient sans limite → 1 cœur JS à 100% pendant 6h (503 board-wide). Fix = pas de seed à 100% + `reapIdle` décharge les torrents **complets** (jamais les incomplets → sinon downloads bloqués à 0%) + `maxConns`. (2) **0 pair/no-download** : `throttleUpload(0)` bloquait le handshake BitTorrent (le handshake EST un upload) → retiré. (3) `/add` tolérant (magnet/url/torrentUrl/bare) + upload **.torrent fichier** (le helper webui écrasait le Content-Type). `server.js` → `webtorrent-server.js`. CPU 82%→26%, downloads live (La Haine 3,4 Mo/s). Mémoire torrent existante.
+- **Résidus MITM externes virés (directive user).** sbxwaf (Go, HAProxy→:8085) + sbxmitm (Go, wg-toolbox→10.99.1.1:8091-94) portent tout le live ; les Python étaient hors-chemin. Stop+disable `secubox-toolbox-mitm` (R2, 44% CPU), `secubox-mitmproxy`, `secubox-waf-watchdog.timer` (qui ressuscitait la LXC), LXC `mitmproxy` stoppé. Chaîne sbx intacte (vérifiée), 0 résidu Python.
+- **Concentrateur sélectif agrégateur (secubox-aggregator 0.3.0, directive user).** L'agrégateur forwarde `/api/v1/<mod>/` → `/run/secubox/<mod>.sock` pour un module sur socket dédié non-monté in-process (jellyfin…). Route catch-all httpx-uds, les modules montés matchent avant. Fini les locations nginx par module. Fixe la Partenaires jellyfin sur admin.gk2.
+- **YouTube SAS (secubox-ytsas 0.1.x — NOUVEAU module).** LXC-native @ 10.100.0.180:8091 (Python FastAPI + **yt-dlp** + ffmpeg + **deno** + EJS solver), sur le modèle torrent SAS : kept-default + éphémère + purge, coffre à cookies (âge/privé), conserve→peertubectl, webui player, cardlet companion 🎞️. Construit **contract-first par 3 agents parallèles**. **Prérequis YouTube durci** (0.1.2) : deno + `--remote-components ejs:github` (résout le « n challenge » → vrais formats) + cookies frais → vidéo âge-restreinte 720p téléchargée e2e (1,04 Go). Mémoire `project_ytsas_deployed`.
+- **Companion** : métriques live mockup-parity (torrent conservés/en-cours/→peertube, peertube, photoprism, system, podcaster, exposure, wireguard), **signaux emoji** état 🟢🟡🔴 + type par catégorie, cardlets **torrent** + **jellyfin** + **ytsas**, thème sombre. **APK v1.2** (Android TV + phone) rebâti (SW v20). #934/#935/#937 mergés.
+- **Deploy durable + apt** : nextcloud 1.5.2, peertube 1.2.2, lyrion 1.1.3, torrent 2.2.8, jellyfin 2.0.3, aggregator 0.3.0, ytsas 0.1.2 — tous **apt.secubox.in** (règle : sync après chaque build). Pages d'erreur brandées 421/500/502/503 (jellyfin vhost live).
+
+---
+
+## 2026-07-30 — Companion : métriques live sur les cardlets + module Torrent + détection upgrades
+
+- **Upgrades allow-when-present (#933, mergé).** Verbes `check-upgrade` (non-destructif → `{current,latest,available,major_jump}`) + `upgrade` gardés pour les 3 apps lourdes : nextcloud (`occ update:check` + updater.phar officiel, refuse le cross-major), peertube (release GitHub + process-ops existant), lyrion (tags stables LMS-Community + `.deb dpkg -i`). Détection vérifiée live : nc 32.0.10→32.0.13, pt 8.2.2→8.2.3, ly 9.1.0→9.1.1. **Aucun upgrade réel exécuté.**
+- **Companion — métriques réelles sur les cardlets favoris (#934, mergé).** Chaque métrique pointe un champ que le `/status` du module renvoie déjà (aucune donnée fabriquée) : system (santé%/cœurs/RAM libre), podcaster (flux/épisodes/téléchargés), exposure (services.external/tor.count/ssl.count), wireguard (tunnels/pairs actifs/pairs). `fillMetrics()` résout désormais les **clés pointées** (`services.external`) dans les objets imbriqués. Vérifié live : wireguard 3/558/0, podcaster 5/118/118.
+- **Companion — module Torrent ajouté (#934).** Torrent manquait totalement (ni index, ni proxy). Ajout : cardlet favori (actifs/WebRTC), vue module (statut + bibliothèque gardé/éphémère + deep-link SAS), **proxy nginx** `/api/v1/torrent/` → LXC torrent `10.100.0.160:8090` (bridge br-lxc propre, hors agrégateur), et `/status` renvoie `status:'ok'` pour la pastille online. Patché live dans le LXC + service redémarré. SW cache v14→v16.
+- **Companion — signaux emoji état+type (#935).** Parité mockup : pastille `🟢 en ligne / 🟡 veille / 🔴 hors-ligne` (détection revue : répond sans échec = en ligne, corrige les faux « veille » de wireguard/podcaster/system/exposure) ; kicker préfixé de l'emoji de catégorie (🔑🛡️⚙️🧠🚀🔗) ; valeurs de métriques à l'accent de catégorie. SW v17.
+- **Deploy durable des changements loose (#936).** Cut de versions installables + build arch:all + install séquentiel gk2 (services vérifiés actifs) : torrent 2.2.2 (`/status`→status:ok durable), nextcloud 1.5.2 / peertube 1.2.2 / lyrion 1.1.2 (verbes check-upgrade/upgrade #933). peertube a sauté 1.1.0→1.2.2 (LXC intact, api 200). Le companion n'a pas de .deb — déployé par rsync (`www/` + `deploy/nginx-companion.conf`).
+
+---
+
+## 2026-07-28 (suite) — WAN guard 3-couches + 503 sbxwaf résolu + anti-rootkit #915 déployé & fonctionnel
+
+Suite de la session incident : WAN durci définitivement, un 503 board-wide résolu, et le nouveau module anti-rootkit construit (SDD) + déployé + validé on-hardware sur gk2.
+
+- **WAN — cause racine finale = 3 problèmes EMPILÉS** (d'où l'échec de tout fix isolé), tous derrière un **hub/switch intercalé** gk2↔Freebox : (1) flow-control PAUSE wedge le TX mvpp2 (`good_octets_sent=0`) → `ethtool -A eth2 autoneg off rx off tx off` ; (2) négo gigabit **marginale** (le hub) → `ethtool -r eth2` en boucle jusqu'à ce que `.254` réponde ; (3) route `default via lan0` parasite + `.200` dupliquée → forcer `default via .254 dev eth2`. **Fix permanent installé** : `/usr/local/sbin/secubox-wan-link-guard` + `.service` (boot) + `.timer` (30s) — idempotent, applique les 3 couches. Playbook `docs/FAQ-NETWORK-WAN-RECOVERY.md` à jour. Mémoire `project_mochabin_wan_mvpp2_hazard`. **TODO** : backport board (#913) ; retirer le hub (vraie cause physique).
+- **503 board-wide RÉSOLU.** Tous les vhosts publics en 503, `admin.gk2`=200 (tell : webui_direct bypasse sbxwaf). Cause : `secubox-waf-ng.service` (Go sbxwaf :8085, User=secubox-waf) **crash-loopait (1831 restarts)** sur `panic: cookieaudit: open /var/log/secubox/cookie-audit/server.jsonl: permission denied` — dir+fichier 639 Mo appartenaient à `secubox` (artefact du cutover WAF). Fix : `chown -R secubox-waf cookie-audit` (jamais le parent partagé). Durable aux restarts (pas de tmpfiles). Mémoire `project_sbxwaf_cookieaudit_503`. TODO source : postinst secubox-toolbox-ng + rotation du log.
+- **Anti-rootkit `secubox-antirootkit` (#915, PR #916, branche `feat/antirootkit-spec`) — CONSTRUIT (SDD, 94 tests) + DÉPLOYÉ + VALIDÉ live gk2.** Host-IDS "process scanner" détectant les exec **hors-dpkg** (menace notwork-class #914). Décision user : **alerte-seule d'abord** (scanner), jail après tuning allowlist. La validation on-hardware a corrigé le design v1 (targeted watches inopérants) → nombreux fixes : règle audit **`-S execve` large** (les `-w dir -p x` ne capturent pas les exec enfants) ; lecture via **ctl scoped-sudo `execscan`** en root (`ausearch --input-logs --checkpoint` SANS `-i`, sinon uid=root casse le parser ; non-root casse `--checkpoint`) ; **`DpkgIndex`** en mémoire O(1) (150 exec/s, `dpkg -S` par exec ne suit pas) ; alias **merged-usr** `/usr/bin`↔`/bin` (sinon tout /usr/bin = faux positif) ; route nginx dans **`secubox-routes.d`** (pas `secubox.d` inerte) ; `SupplementaryGroups=adm` ; `nft-load` crée le cgroup avant. Panel live `https://admin.gk2.secubox.in/antirootkit/`. Enforce = `[policy] enforce=true` + `jail_dirs`. Mémoire `project_antirootkit_deployed`. **NON-MERGÉ** — revue finale whole-branch + merge user requis.
+
+## 2026-07-28 — Malware C2 backdoor found + WAN-unreachable saga (U-Boot proves HW OK → Linux mvpp2 driver)
+
+Long incident session on gk2 (started as a network diag, uncovered a malware persistence, ended isolating the WAN fault to the Linux mvpp2 driver via a U-Boot test).
+
+- **SECURITY — unauthorized C2 backdoor `notwork-monitoring` (#914).** `/usr/local/bin/notwork-monitoring`, ELF **x86-64** UPX-packed Go 1.24.4, SHA-256 `f2ca2b20…b23dcc`, installed **2026-06-09 00:32** out-of-band (not dpkg, no bash_history/auth.log trace). systemd unit `Restart=always`, `StandardOutput/Error=null` (anti-forensics), beacons `https://5.182.207.11 -insecure -token 9ac1…fb` — C2 = `bunq-helpdesk.dns04.com` (impersonates bunq bank), Frankfurt, **AS213250 ITP-Solutions/Dominic Scholz** (bulletproof). **On gk2 (ARM64) it CANNOT execute** (wrong arch) → crash-loops, never beaconed — and its crash-loop was a big contributor to the boot restart-storm. **Contained:** disabled+quarantined (chmod 000 → `/root/quarantine/`), unit moved to `.evidence`, **nft `output ip daddr 5.182.207.11 drop`**, evidence bundle `/root/notwork-incident-2026-07-27.tar.gz` (transferred off-box over serial base64, SHA verified). Alert doc + Gmail draft to gandalf@gk2.net. **OPEN/URGENT:** amd64 node (192.168.1.9, x86-64 → payload WOULD run) + c3box sweep; initial-access vector ~2026-06-09; confirm `deploy@server` key. Memory `project_notwork_monitoring_c2_incident`.
+- **NETWORK — WAN unreachable, root cause isolated to Linux.** gk2 lost all external IP: ARP-resolves-but-all-unicast-fails (ICMP/DHCP 100% loss) on **both** eth2 (WAN copper 88E1510) and lan0 (DSA switch). **Systematically ruled OUT everything:** nft (full `flush ruleset` → still dead), tc/DPI/QoS, offloads, conntrack, NAT, ebtables, XDP/eBPF, policy-routing, IP conflict, cold power-cycle, new cable, Freebox reboot, wrong-port. gk2 TX/RX counters increment (0 drop) = hardware seemed fine. **DECISIVE TEST (user's idea): U-Boot.** Interrupted Tow-Boot 2022.07 (ESC/Ctrl+C → boot menu → "Firmware Console"), `setenv ethact mvpp2-2; ping 192.168.1.254` → **`host 192.168.1.254 is alive`**. So the port/PHY (1000baseT FDX)/cable/Freebox are ALL healthy → **the bug is 100% in the Linux mvpp2 driver/stack**, not hardware. **ROOT CAUSE CONFIRMED (2026-07-28): flow-control PAUSE frames block the mvpp2 MAC TX.** `ethtool -S eth2` = `good_octets_sent: 0` (hardware MAC transmits NOTHING, even while software `tx_packets` climbs) + `fc_received: 31796` (gk2 is pause-flooded by the upstream). `ethtool -a` shows `RX: off` configured but `RX negotiated: on` → the HW honors the negotiated pause → TX permanently paused → all unicast dies, RX fine, kernel-independent. U-Boot works because it doesn't negotiate that flow-control. **FIX (confirmed, immediate): `ethtool -A eth2 autoneg off rx off tx off`** → good_octets_sent climbs, arping/ping/DHCP/SSH all restored (0% loss). It's **volatile** (lost on reboot) = exactly the recurring "fixed each time / not in issues" fault the user described. **Made permanent on gk2:** networkd `.link` `10-secubox-eth2-noflowctl.link` (AutoNegotiationFlowControl/RXFlowControl/TXFlowControl=no) + backstop oneshot `secubox-eth2-flowctl-off.service`. Playbook: `docs/FAQ-NETWORK-WAN-RECOVERY.md`. **Dead-ends ruled out** (don't retry): mvpp2 unbind/rebind → `-12 ENOMEM` + removes all NICs; kernel-variant (all 3 fail); cold-boot/new-cable/Freebox-reboot. **Follow-up:** backport `.link`+service into `board/mochabin` for reflash durability (#913); investigate *why* the Freebox floods PAUSE. Memory `project_mochabin_wan_mvpp2_hazard` (also: NEVER `ip link set eth2 down/up` — separate wedge needing cold-boot).
+
+## 2026-07-27 — fleet-metrics: centralized+meshed node snapshots (trilogy 3/3, #912, deployed gk2)
+
+Last sub-project of the "auto-centre" trilogy. Each node signs a compact `MetricSnapshot` (vitals + module health + counters) with its sovereign node key into a dedicated last-wins store `/var/lib/secubox/annuaire/fleet/self.json` (NOT the immutable CSPN journal — it can't be pruned); peers pull each other's over the existing `:8799` gondwana mesh read-path (`GET /fleet/self`, public signed, mirrors `/log/export`); `GET /fleet` (JWT) aggregates self + verified peers concurrently (asyncio.gather + to_thread — never blocks the aggregator loop); a `/fleet` panel renders the mesh. Built SDD (5 tasks + opus whole-branch review). `secubox-annuaire 0.10.0`, 424 tests.
+
+- **Security:** `verify_snapshot` fail-closed 4-way DID binding (`did_from_pubkey(signer_pub)==signer_did==node_did==issued_by` + Ed25519); a peer can't serve a snapshot under another node's DID. `sign_snapshot` signs the normalized model payload. Publisher `User=secubox` (node key, non-root); opt-in `[metrics] fleet_publish`.
+- **Final-review blocking fix:** the `:8799` listener template is an exact-match allow-list — `/fleet/self` was missing → peer pulls 403, the meshed half inert (tests all mocked the fetch). Added the location (mirror `/log/export`, postinst-rendered) + 2 regression tests; re-review MERGEABLE.
+- **Deployed gk2:** `/fleet`=401 JWT, panel=200, `:8799/fleet/self`=200, publisher timer ~60s, signed self.json. Trilogy complete (Centres&Grants + assist + fleet-metrics, all deployed). Follow-ups: deploy c3box/amd64; module-health counts oneshots as "down" (filter to `failed`); disk_pct/soc_alerts sources.
+
+## 2026-07-27 — Trilogy sub-projects 1-2 finalized + p2p-ephemeral foundation (deployed gk2)
+
+Large session across three deployed deliverables (all merged to master, SDD + opus final reviews):
+
+- **release-rings (#909)** — center-driven progressive artifact delivery `draft→internal→published` (grant `capability="release"`). NEW `secubox-release 0.1.0` + `secubox-annuaire 0.9.0`. Final review closed the recurring author-vs-payload sovereignty class at the SHARED `active_grants` substrate (`_author`==issued_by, fail-closed) — also hardens Centres&Grants config-delegation; `current_ring` sovereignty-filtered. reprepro-copy repo actuator (arm64 guard) + 4R box actuator + `/releases` panel. Deploy drift: API route needs a manual `webui.conf` location (secubox.d dropin inert on the admin vhost).
+- **assist fixes** — (1) socle session resolvers bind the verified `entry.author` not `payload.issued_by` (#910, phantom-session DoS closed); (2) join-link URL now the public hub (`https://admin.<sso_cookie_domain>`) not `assist.local`; (3) `python3-websockets` Depends→Recommends (installs clean on gk2's pip-websockets policy).
+- **Incident (resolved):** deploying annuaire 0.8.1 (master) over 0.7.0 (unmerged assist-dual) dropped `assist_match.py` → assist API 502; recovered by merging assist-dual→master (annuaire 0.9.0 superset). Lesson recorded: never deploy a shared lib over a deployed-but-unmerged branch.
+- **p2p-ephemeral (#911)** — greenfield `secubox-p2pctl` + persistent-silent `wg-ephemeral` iface (10.11.0.0/24, udp/51825), session-scoped WG peers for assist escalation, auto-revoked via TTL backstop sweep; assist `join` now execs via `sudo -n`. `secubox-p2p 1.11.0` + `secubox-assist 0.2.3`. opus: MERGEABLE (8/8 invariants; sudo env_reset blocks fake-wg substitution). Follow-up: CLOSE-path teardown unwired (sweep-only). Deploy prereq: Freebox UDP/51825 forward.
+
+## 2026-07-25 — R-level: per-peer MITM inspection level (off/passive/active/reel) (PR #901, deployed gk2)
+
+Per-wg-toolbox-peer inspection control on the R3 Go engine (`secubox-toolbox-ng` sbxmitm), with bounded self-service + admin override. Built with subagent-driven-development (8 tasks, two-stage reviews, whole-branch opus review). Merged, deployed live, functionally validated.
+
+- **Four escalating modes** (`off` < `passive` < `active` < `reel`), effective = `forced ?? clamp(chosen, floor, reel)`. Fail-safe passive; board seed `default=reel` to preserve current behaviour (no surprise global downgrade). Self-service peer authenticated by tunnel identity, bounded by floor, cannot lift a `forced`.
+- **Go core** (`cmd/sbxmitm/rlevel.go`): `clampVerdict` wired into `Decide` via `decideForPeer` on BOTH accept paths — **pinned-safe** (a splice-learned host stays splice even in reel; the clamp never forces decryption). `PeerPolicy` joins `wg-peers.json` ip→pubkey, hot-reloads on mtime, fail-safe passive; `nil rlevel` = no-op (parity harness unchanged).
+- **`off` = nft**: named set `@rlevel_off` in `table inet wg-toolbox` + `ip saddr @rlevel_off return` as the FIRST rule in the SAME prerouting chain as the DNAT fanout. **A separate nat table with `return` does NOT stop the DNAT** (the kernel walks every nat base chain; only a same-chain return/dnat decides) — a critical bug caught in review and fixed.
+- **ctl `sbxmitm-policyctl`** (atomic shadow+mv write + `@rlevel_off` set update + audit), run **DIRECTLY by the portal — no sudo**: `peer-rlevel.json` is portal-owned and the nft set needs only CAP_NET_ADMIN (already granted), so the public captive portal keeps `NoNewPrivileges=true` + minimal caps. **This is strictly better than the NNP=false option first considered** (which would also have needed CAP_SETUID/SETGID/AUDIT_WRITE on a public-facing service).
+- **Escalation closed at two levels** (final-review CRITICALs): `_is_public_kbin` (the router also serves the public kbin vhost, DNAT'd L4 past nginx/SSO) AND `_require_admin_source` (rejects a tunnel-peer source). Admin pubkey travels in the body (base64 `/` breaks a path param). Panel uses event delegation (no inline-handler XSS; guard hardened to catch concatenation, not just `${}`).
+- **Deploy**: cross-built arm64 (`-mod=vendor`), **rolling** worker@1..4 restart (never all four at once). Validated: `force off` → IP enters `@rlevel_off`, `force null` → removed. Drift note: live api.py is A'-patched ahead of the installed .deb 2.8.7 — the merge rebuilds it to 2.8.8.
+
+## 2026-07-24 — Transparent `.onion` routing (wg-toolbox+LAN) + WPAD/DHCP autodetect (PR #900, deployed gk2)
+
+`.onion` now routes end-to-end for wg-toolbox/LAN clients, validated live (real onion → HTTP 200). Consolidated into the existing `secubox-proxypac` (the parallel `feat/tor-onion-pac` branch was a duplicate and was abandoned). SDD 8 tasks + final review.
+
+- **Transparent `.onion` (primary, no PAC)** for force-routed clients: Tor `TransPort`/`DNSPort` automap + Unbound onion-forward (`local-zone "onion." transparent` + `domain-insecure` — else Unbound answers authoritative NXDOMAIN per RFC 6761 and never forwards; `private-domain` keeps the automap range) + nft dnat `10.192.0.0/10`→`127.0.0.1:9040` for `iif {wg-toolbox, eth2}`. **`route_localnet` must be set PER incoming iface** (`conf.all` doesn't apply to already-created ifaces) — this was the silent blocker; a sysctl.d dropin makes it reboot-persistent for new ifaces.
+- **PAC/WPAD (fallback)** with passive role autodetect (master DHCP / DNS-resolver / manual), override `proxypac.toml`, rewritten panel (navbar + status + transparent toggle). Onion seed rule repointed from the unreachable mesh SocksPort (`10.10.0.1`) to the LAN SocksPort via a `__LAN_SOCKS__` placeholder substituted at generation.
+- **secubox-tor**: LAN `SocksPort` dropin (**never** a `SocksPolicy` — it's GLOBAL and would break the mesh port; confinement = bind IP + nft) + LAN-IP detect helper + `torctl`.
+- **Prod repairs along the way**: `tor@default` had been `failed` since 2026-07-10 (a `HiddenServiceDir` was 0750; Tor needs 0700); LAN DNS was broken after the operator pointed DHCP DNS at the box (Unbound wasn't listening on the LAN IP — added `interface:` + `access-control`).
+- **Deploy gotchas**: proxypac was absent from `/etc/secubox/aggregator.toml` → its API 404'd (aggregator mounts only listed modules); role.detect false-positived master on the eye-br0 DHCP (`role="slave"` in the toml corrects it — validating the role override). Client: Firefox needs `network.dns.blockDotOnion=false` + `network.trr.mode=0`.
+- **Follow-ups (fallback path, non-blocking)**: HAProxy route for `wpad.gk2` (vhost `listen 80` vs nginx:9080) + strict MIME for `/proxy.pac` on the admin vhost (webui.conf doesn't include secubox.d).
+
+## 2026-07-23 — rpi400 image: auth runtime deps, `--kiosk` in CI, and a postinst bug that broke every install (branch fix/rpi400-auth-deps-and-kiosk)
+
+The Pi 400 image shipped a webui nobody could log into, and no kiosk. Both root-caused; two latent packaging bugs surfaced along the way.
+
+- **Login (root cause)**: the rpi image installs SecuBox debs with `dpkg -i --force-depends`, which **bypasses declared Depends**. `secubox-auth`/`secubox-users` import `argon2`/`pyotp`/`qrcode` at module load, so the daemon died at import → nginx 502 → `JSON.parse: unexpected character` at login. Fix: `pyotp`+`qrcode` into `INCLUDE_PKGS`, `argon2-cffi` into the chroot pip step (mirroring why `cryptography` is pip-not-apt here — apt configure fails under QEMU). Works on mochabin because normal apt resolves Depends; **only the force-depends path is exposed**.
+- **Kiosk**: `--kiosk` was never reachable from CI. Added a `kiosk` workflow_dispatch boolean → `build-image.sh --kiosk` → forwarded to `build-rpi-usb.sh`.
+- **mediaflow postinst syntax error — affected EVERY install**: a comment contained the literal `#DEBHELPER#` token. `dh_installsystemd` substitutes that token **textually wherever it appears**, expanding the systemd block mid-comment and orphaning `; kick one refresh` onto its own line → `syntax error near ';'`. Silently swallowed by the image's `|| true`, but fatal once the kiosk apt-get ran a strict configure pass. Reworded; bumped to `2.3.0-1~bookworm3`. **Rule: never write the debhelper token in a comment.**
+- **Conffile prompts**: the kiosk apt-get trusted `DEBIAN_FRONTEND=noninteractive`, which governs debconf and **not** dpkg's conffile prompt — a pre-existing `/etc/secubox/mesh.toml` EOF'd on the closed chroot stdin and aborted the build. Added `--force-confdef/--force-confold`.
+- **Two ops traps that each cost a wasted flash**: `gh run download --dir DIR` **skips files that already exist**, so a stale `.img.gz` in the target dir is silently kept (kiosk img.gz ≈ 2.1 GB vs non-kiosk ≈ 664 MB — check the size). And right after `dd`-ing a card, mounting it returns **stale page-cache reads from the previous filesystem**; the raw `dd` bit-verify is trustworthy, mounted-fs reads are not — loop-mount the source `.img` or extract the `.deb` instead.
+- **Status**: image rebuilt with kiosk, flashed and bit-verified; chromium, openbox, `boot-mode=kiosk`, argon2, pyotp and mediaflow `bookworm3` all confirmed on the card. **The Pi still has no working network** (boots to console, shows an IP but no ping) — parked, see TODO.
+
+## 2026-07-22 — secubox-meshtastic: multi-grid LoRa node + passive listener (#897, PR #898, v2.15.0)
+
+New native-host module turning SecuBox into a multi-grid Meshtastic node. Built with subagent-driven development (13 tasks, each two-stage reviewed, plus a whole-branch opus review). Merged, tagged **v2.15.0**, deployed to gk2.
+
+- **Three composable grids per channel**: off-grid RF (P2P + relay), private shared-grid over MirrorNet/WireGuard, and opt-in public on-grid MQTT — all **bridged host-side**, so the daemon (not the device firmware) owns egress, WAF and policy.
+- **Passive CLIENT_MUTE listener**: packet log, heard-node census, channel stats; payload withheld when not decrypted.
+- **Webui** `admin.gk2/meshtastic/` (5 tabs, offline-clean canvas map); API `/api/v1/meshtastic/{status,nodes,messages,packets}` + POST `{send,mode,grid}`, JWT-gated.
+- **Hardware-gated (#897)**: no radio yet → daemon runs `radio: absent` gracefully; 61 tests are 100 % mock-driven (MockRadio/FakeMqtt). RAK4631 WisBlock EU868 recommended.
+- **Three deploy bugs caught live**: 0.1.1 daemon crash-looped against an unreachable broker (→ `connect_async` + skip-on-unreachable); **0.1.2 postinst chowned `/etc/secubox` to root:root and broke OTP login** (→ chmod-only, *never* chown shared parents); 0.1.3 a stale UDS blocked restart (→ `ExecStartPre=+/bin/rm`).
+- **Deferred**: on-grid egress isn't actually contained (OUTPUT is `policy accept` repo-wide) — needs a drop-based approach; reconcile broker default port (8883 vs 1883). See spec §11.
+
+## 2026-07-22 — Wiki Support: Revolut payment link + trimmed donation channels
+
+Added a Revolut card-payment callout at the top of the Support page (plus a table row), then trimmed the channels to **Revolut / Liberapay / GitHub Sponsors** — Open Collective, Stripe, SEPA, Bitcoin and Lightning removed, along with the now-orphaned "sur demande" contact note. Published to the live `.wiki` repo and mirrored in `wiki/Support.md`.
+
+## 2026-07-21 — Scale-to-zero for public services (#896) + two-phase wake UX (branch feat/scale-to-zero-public-services)
+
+Public on-demand services now **sleep when idle and wake on access**, with a per-module lifecycle policy, and a graceful two-phase "waking" UX. Culmination of a multi-day effort (also folds in #893 profiles-actuation robustness).
+
+- **Policy (secubox-profiles)**: manifest `lifecycle` (always-on/eager/on-demand/manual, DEFAULT always-on = fleet-safe) + `wake_class` (normal/urgent); `protected`⇒always-on. `api/lifecycle.py`.
+- **Sleep/Wake actuator (0.7.0→0.9.x)**: observed-state arbitration (#893); **durable portal-route memory** (`api/portal_routes.py`) so a woken vhost's WAF route is restored (route-restoration round-trip PROVEN live on yacy); `secubox-waker` (phase-1 splash + one-wake lock) + `secubox-sleeper` (idle daemon off sbxwaf per-vhost signals).
+- **sbxwaf-side wake trigger**: on-demand vhost with no route → sbxwaf reverse-proxies to the waker (instead of 421); route restored on wake.
+- **Awake-level setter (webui→ctl)**: per-module lifecycle/wake_class selector in the /profiles/ panel → `profilectl set-lifecycle` writes the manifest + resyncs; POST /api/v1/profiles/lifecycle (enum/known/protected gated before sudo).
+- **Two-phase wake UX**: pseudo-terminal "virtual screen" splash (auto-executing boot log, CRT, elapsed, repair-after-90s). Phase 1 = waker; **Phase 2 = nginx `error_page 502/503/504`** intercepts a still-booting backend → same splash. Generalized via `secubox-wakectl nginx-sync` (idempotent per-block include injector, nginx -t + rollback) to ALL on-demand vhosts (5 wired live).
+- **Board infra fix**: crash-looping `secubox-waf-ng-worker@1/@2` were re-chowning the shared `/run/secubox` to `secubox-waf` → broke any `secubox`-user service on restart; disabled (not in traffic path; interim `:8085` unit serves). WAF-drift reconcile (cookie-audit perms + drop RuntimeDirectory) tracked as follow-up.
+- **Reviews**: every task two-stage reviewed; opus whole-branch + focused reviews clean after fixes. Tests green across the package.
+
+---
+
+## 2026-07-19 — Profiles Phase 2: Requires=secubox-core → Wants= (branch feat/profiles-phase2-core-wants)
+
+Removed the hard cascade coupling to `secubox-core.service` (a Type=oneshot mkdir+chown with RemainAfterExit). A hard `Requires=` on ~108 units cascade-stops them all when core restarts or fails (e.g. a secubox-core package upgrade) — a thundering-herd outage. `After=` keeps the boot ordering; `Wants=` keeps the soft dependency without the cascade. Prerequisite for the Phase-3 native mass-apply.
+
+- **Source**: 91 units (`packages/*/{debian,systemd}/*.service`) + both scaffolds converted (every `Requires=` line was core-only → safe 1-line sed); future modules are scaffolded with `Wants=`.
+- **Live (no herd)**: 162 installed units sed'd in place + `systemctl daemon-reload` only — no service restarts (Requires/Wants is a start-time dependency). Board stayed healthy.
+- **Release**: minor bump on the 87 affected packages → CI build + publish to apt.secubox.in.
+
+---
+
+## 2026-07-17 — Session auditing + Companion auth/system/metrics + billets emoji hashtags (branch feat/sessions-companion-emoji)
+
+Sessions became auditable, the two stub Companion modules became real, and billets gained emoji-hashtag quick views. All live-verified on gk2.
+
+- **Session logging (root-caused)** 🔑 — `/login/mfa` and `/totp/confirm` hardcoded `"ip": ""` and dropped `user_agent`; only the password path captured them. **admin is forced-TOTP, so every real admin login took the MFA path** → every session row was unauditable and the users webui sessions tab (which already existed, fully built) rendered blanks. Fix: `_client_meta(request)` (X-Forwarded-For first — nginx/HAProxy front every login, so `request.client.host` is only ever the proxy) on all three paths. Proven by driving the real `/login/mfa` handler in-process with `SECUBOX_AUTH_SESSIONS` on a temp file: records `ip=192.168.1.77` (first XFF hop) + full UA.
+- **Companion auth + system** ⚙️ — both were 34-line stubs guessing routes (`/api/v1/auth/users` → **404**; identities are under `/api/v1/users`). Rebuilt against routes read from handler source. auth shows identities + **sessions (who/IP/device/age/current)**; system shows status/metrics/resources/health_score/network/security, each section degrading independently.
+- **Emoji metrics** 📊 — `core/metrics.js`: per-kind severity thresholds (disk strictest, cpu tolerant) so gk2's disk 94.5% reads 🔴 while cpu 10% reads 🟢; plain language ("Memory 75% — 5.5 GB of 7.7 GB used") + byte/uptime formatters.
+- **Billets emoji hashtags** 🏷️ — migration 0004 (`tag` + `billet_tag`, indexed); tags **extracted from the body** (`#secu`) so authoring costs nothing and applies retroactively — the backfill tagged **37 of 46** existing billets. Accent-folded slugs (#Réseau==#reseau); emoji stored (no silent restyling of published billets); URL anchors don't become tags; unknown tags get a neutral badge. Quick views via `?tag=` on `/` + `/feed.json` (EXISTS not JOIN, so keyset paging can't duplicate rows; pager carries the tag). feed.json gains standard `summary`+`tags` with emoji in the `_secubox` extension.
+- **Feed resumes** 📄 — long billets show a short excerpt + "Lire la suite"; short ones render whole (`is_long` measured on markdown-collapsed text). 16/20 resumed on the live feed.
+- **`GET /admin/api/billets`** — the authoring list. The public feed can't serve it: its item `id` is a permalink URL (**why Edit/Delete 404'd**) and it hides drafts.
+- **Companion 401 re-login** 🔓 — box tokens live 24h but the Companion seals one at pairing and reuses it forever → a day later every authed call 401'd with no escape but unpairing ("Failed: unauthorized" in billets + podcaster). `api.js` now triggers re-auth and **replays the request once**, single-flight (one prompt, not one per request), so an in-flight write survives. SW v10.
+
+**APK rebuilt + republished** 📱 — the shipped APK (16/07) bundled pre-fix code (SW v5, the `/feed` 404, no upload, no peertube); Capacitor **bundles** `www`, so no service worker could ever refresh it. Rebuilt with the tracked `android/` scaffold (JAVA_HOME=Android Studio JBR — the system JDK has no `jlink`; `cap copy` not `cap sync`; gradle **8.9-bin**, not the default 8.7-all; TLS was not MITM-intercepted this run so no truststore needed). Debug signer digest is **unchanged** (`5e6163f9…`) → installs over the old app, no uninstall. Live at `https://companion.gk2.secubox.in/secubox-companion.apk` (3.9 MB, carries SW v11 + peertube). Previous APK kept as `.apk.prev`.
+
+Follow-ups: rebuild the billets `.deb` (migration 0004 + tags.py); consider a token refresh so re-login isn't needed every 24h.
+
+---
+
+## 2026-07-17 — Billets JWT admin surface + Companion authoring & image upload (branch fix/companion-billets-feed)
+
+Made the SecuBox Companion a working authoring client for the billets micro-blog — the last gap ("New billet missing upload", comment moderation 404).
+
+- **billets JWT admin API** — new `packages/secubox-billets/api/routes/jwt_admin.py`: a JWT-authed JSON surface (`secubox_core.auth.require_jwt` — Bearer OR `secubox_session` cookie) parallel to the session HTML admin, reusing the SAME repo/media layer. `POST/PUT/DELETE /admin/api/billets`, `POST /admin/api/billets/{id}/media` (multipart, EXIF-strip via `services.media`), `GET /admin/api/comments`, approve/delete moderation. No-op if `secubox_core` is absent (isolated tests). Wired into `api/main.py` via `register_jwt_admin`.
+- **venv import fix (packaged)** — the isolated billets venv couldn't import the `.deb`-managed `secubox_core`; postinst now drops a sorted-last `zz-secubox-system.pth` appending `/usr/lib/python3/dist-packages` (venv wheels keep precedence — fastapi/pydantic NOT shadowed). Backports the live board hotfix.
+- **Companion billets module** — EP map repointed at `/feed.json` + `/admin/api/*`; editor gained an image file input that uploads after billet creation (multipart to `/admin/api/billets/{id}/media`); SW bumped v6→v7.
+- **Verified live on gk2** — minted a JWT as the `secubox` user (matching the service's `_secret()` config resolution) and ran the full round-trip: create → feed (30 items), valid PNG upload → `{url, thumb}` (a corrupt PNG was correctly 415'd, proving `media.process` runs), delete — all 200. Route probes: `/admin/api/billets` 405 (POST-only), `/admin/api/comments` 401 (JWT-gated) = both registered.
+
+Follow-ups: merge `fix/companion-billets-feed`; rebuild the billets `.deb` to ship the postinst .pth on fresh installs.
+
+---
+
+## 2026-07-17 — WAF webui + autoban-to-firewall fix + efficiency analysis + Nextcloud rework (PR #866, #867)
+
+Reworked two dashboards to the cyan hybrid-skin, fixed a major WAF control gap, and repaired the Nextcloud module — all live-verified on gk2.
+
+- **WAF webui rework** (merged earlier to master) — sbxwaf dashboard restyled to the `/certs/` cyan hybrid-skin (emoji cards, live pulse, 30s/10s reactive), netifyd/crt-light cruft dropped; every endpoint preserved. Renders the live 198K-threat data.
+- **WAF efficiency analysis** — detection strong (198K threats, 17 categories) but CONTROL weak: only 2 IPs actually banned. Bans were app-level (403 page) not firewall-level, so offenders kept hammering (one IP 36,881×; top /24 = 26% of volume). ~26% of pattern-matching (voip/xmpp/cve_voip/cve_xmpp = 39/149) is dead weight on HTTP. Ranked fixes presented.
+- **WAF autoban→firewall fix** (PR #866) — the CrowdSec bridge was silently OFF: the unit passes `--crowdsec-url` but no `--crowdsec-jwt-file`, so main.go hit the 'disabled' branch and `Report()` was never called; the LAPI `/v1/alerts` path is doubly broken (hourly JWT + 500 on our schema). Added `CscliReporter` — the proven path the manual dashboard ban uses (`cscli decisions add` → real bouncer nft drop) — engaging when `--crowdsec-url` is set without a JWT file (new `--crowdsec-cscli` flag). Per-IP 5-min dedup collapses the storm (graduated ban fires Report on every banned request → dozens of concurrent cscli procs `signal: killed`). Rebuilt arm64 + deployed (mv over /usr/sbin/sbxwaf, `systemctl restart secubox-waf-ng`). Verified: 5 honeypot hits from a test IP → exactly 1 decision, no storm; a live honeypot offender got a real `secubox-waf/honeypot` decision.
+- **Nextcloud rework** (PR #867) — the `/nextcloud/` webui showed Stopped/empty because the status probe was fully broken (same unprivileged-LXC pattern as mail/dpi): ran `lxc-info`/`occ` WITHOUT sudo + `lxc_path` `/srv/lxc` vs real `/data/lxc` (fixing the path alone then 500'd on a PermissionError); the only privileged surface is `sudo nextcloudctl`; and **`NoNewPrivileges=yes` blocked sudo** (the wireguard gotcha). Fix: privilege-free TCP port probe for liveness, PermissionError-tolerant installed, all container ops via `sudo nextcloudctl` (occ passthrough), a **daemon-thread 60s cache** for the slow occ fields (`@app.on_event("startup")` wouldn't fire under uvicorn --uds), real data_path + public web_url. Webui restyled to cyan hybrid-skin (subagent, 361 lines, endpoints preserved). Verified: running, v32.0.10, 2 users, 5.8G, nc.gk2.secubox.in. Board drift: NNP drop-in + `[nextcloud] domain` in secubox.conf.
+
+Follow-ups: WAF efficiency #2–4 (subnet/ASN bans, skip voip/xmpp on HTTP, stop logging banned IPs); backport the Nextcloud NNP drop-in + secubox.conf domain; #862–#864 still open.
+
+---
+
+## 2026-07-16 — Mail stack overhaul + systemic auth fix + DPI exfil/regen (PR #865, #862–#864)
+
+Session multi-fix, tout **live-vérifié sur gk2**, portable committé et mergé via **PR #865**.
+
+- **Auth (systémique, fleet-wide)** — `secubox_core.auth.require_jwt` utilisait un Bearer *présent-mais-périmé* exclusivement, ignorant un cookie de session valide → 401 → **boucle login sur chaque panel** (le "comme à chaque fois"). Fix : tenter Bearer **puis** cookie ; 401 seulement si aucun ne valide (strictement plus permissif, zéro régression). Prouvé : Bearer périmé + cookie valide → 200. Un seul fichier partagé, tout le fleet au prochain restart.
+- **Mail** — reset à **gk2-only** (3 users cassés + maildirs `{cur,new,tmp}` littéraux supprimés) ; **mailbox réparée** = ownership idmap (maildir host-`5000` → `nobody` dans le conteneur ; `chown 105000`, base idmap 100000) ; **submission 587/465** activée (SASL dovecot + vrai cert `/etc/ssl/mail`) → webmail peut envoyer ; **dashboard status** via probes TCP (lxc-info lisait le mauvais `lxc_path` → "Stopped" faux ; storage lisait `/mail` au lieu de `/vmail`) ; **domaine** `secubox.local` → `gk2.secubox.in` (config dans `secubox.conf [mail]`, pas le `mail.toml` vestigial) ; **webui reskin** cyan hybrid-skin (stat-cards emoji, pulse live, onglet External, plus de scanlines) ; **`/user/password`** corrigé (écrivait une copie host non lue par dovecot → reset admin no-op) ; Roundcube : plugin **`password`** self-service (helper chpasswd → passwd-file + sudoers) + **`ident_switch`** vendored (Gecka-Apps) pour comptes externes Gmail/IMAP.
+- **DPI** — `/exfil` sert le **rollup cumulatif** (7 devices) au lieu du `state.json` live vide → "no devices in R3" corrigé ; bloc engine-liveness ; **contrôle service** repointé de netifyd dormant vers le vrai collecteur Go **`secubox-dpi-flowcap`** (sudoers scellé, postinst) ; **webui régénéré** cyan, cruft netifyd/mirred/block-rules retiré, rendu media-buffer XSS-safe préservé.
+- **openclaw** — CT lookup : fallback **certSpotter** quand crt.sh est down (dumpait du HTML brut) ; whois résout le domaine registrable pour les sous-domaines.
+- **ACME HTTP-01** — câblé **live** (nginx `:8880` activé + route HAProxy `/.well-known/acme-challenge/` → backend acme) ; l'émission LE ne marchait pour **aucun** vhost WAF-routé. Certs émis pour `live.maegia.tv` + `mail.maegia.tv`.
+
+Follow-ups tracés : **#862** (provisioning mail : submission SASL, chown idmap, users.sh maildir, self-service helper), **#863** (ACME backport nginx/HAProxy/certs-webroot), **#864** (vendorer ident_switch dans le paquet). WAF webui rework + analyse triggers/control en cours.
+
+---
+
+## 2026-07-12 — metalogue: Maltego-style OSINT suite as LXC modules (#845)
+
+Wanted Maltego-style OSINT (collect → correlate → dossier). Maltego is commercial/cloud →
+built the FOSS stack as SecuBox LXC modules, wired collectors → hub. Analyzed
+`github.com/topics/osint`; picked **Maigret** (identity collector) + **SpiderFoot** (automation +
+correlation graph) for gk2, deferred **OpenCTI** (the true graph hub) to a beefier node (its
+Elasticsearch/Redis/RabbitMQ/MinIO stack would OOM the arm64 board, ~1.5 GB free). Built
+subagent-driven (implementer → adversarial review → fix per module), following the openclaw LXC
+pattern. Merged #846–#850, deployed **and installed** on gk2.
+
+- **secubox-maigret** — username → dossier across 3000+ sites. LXC 10.100.0.42, CLI wrapped by a
+  host FastAPI (async job+poll, concurrency cap 3 → 429, passive-only, JWT + append-only audit).
+  `maigretctl` privileged control plane: username passed ONLY positionally to `lxc_attach` (no shell
+  interpolation), flag-injection guards, `__guard` test verb. Installed + functional (a real
+  `torvalds` lookup returned GitHub/Instagram/Telegram/Facebook).
+- **secubox-spiderfoot** — SpiderFoot (200+ passive modules + correlation graph = interim
+  Maltego-style hub) in an LXC (10.100.0.43), in-container systemd unit binding `sf.py` to the
+  container LAN IP only. Its UI emits absolute `/static` paths so it can't live under a portal
+  subpath (`admin.gk2/spiderfoot-ui/` → the SPA's "module not found"); served **at root** on its own
+  vhost **https://spiderfoot.gk2.secubox.in/** (zigbee/lyrion pattern: nginx :9080 vhost + sbxwaf
+  route + HAProxy ACL → mitmproxy_inspector + LAN-gated exposure snippet, wildcard `*.gk2` cert) +
+  a `:9043` LAN-direct fallback. Review HIGH fixed: SpiderFoot has no native auth → every nginx
+  location auth-gated (`auth_request /__sbx_auth_verify`, peer pattern).
+- **Stylized PDF report** (maigret) — raw `--json simple` → a FORMAL SecuBox dossier (`api/report.py`,
+  fpdf2): dark masthead, document metadata block (REFERENCE/SUBJECT/CLASSIFICATION), §1 Summary,
+  §2 Findings as a coherent results table (#/platform/category/profile/details, zebra rows, category
+  colour-coding, paginated). `GET /lookup/{id}/report.pdf` (JWT, plain `def` → threadpooled so the
+  render never blocks the aggregator loop) + 📄 PDF panel button (authed fetch → blob). 12 tests.
+- **Two root causes fixed during install:** (1) `net.ipv4.ip_forward` had drifted to `0` on gk2 →
+  every LXC (incl. openclaw) had zero internet egress; restored via `sysctl --system` (the
+  `99-secubox-zz-lxc-forward.conf` drop-in intends 1). (2) maigret/SpiderFoot deps (lxml, pandas,
+  cryptography…) have no stock arm64 wheels → minbase LXC can't compile → **piwheels**
+  (`--extra-index-url`) + dev-header fallback; 17-min-fail → ~2-3 min. Backported to both `<mod>ctl`.
+- All handlers plain `def`, workers detached — no board-wide loop-blocking SPOF. Aggregator registry
+  (`aggregator.toml`) hand-edited (like openclaw); package self-registration remains a follow-up.
+
+---
+
+## 2026-07-11 — MetaBlogizer Publisher Wizard (#832): publish is fixed end-to-end
+
+The publish ecosystem was broken: `zem.gk2` answered a bare 421, droplet PermissionError'd on
+`/etc/secubox/droplet.toml`, and `secubox-publish` wrote `/etc/haproxy`+`/etc/nginx` directly as
+unprivileged `secubox` (silent failure). Root cause of the 421: metablogizer's route-sync wrote the
+**retired mitmproxy-LXC** file, not the live sbxwaf host file.
+
+Built a guided **Publisher Wizard** in secubox-metablogizer (subagent-driven, 11 tasks, TDD, 63 tests):
+upload zip/html (zip-slip guarded) → gitea version → **sbxwaf host-file route** + advisory HAProxy vhost
+via a new audited root helper `secubox-publishctl` (tight sudoers) → cert (wildcard `*.gk2` / certbot
+custom) → portable `.sbxsite` backup (git bundle + manifest, traversal-safe import). `secubox-publish`
+now delegates to a new metablogizer `POST /publish/route` (no more illegal root writes); droplet.toml
+owned `secubox:secubox 0640`.
+
+**Live-verified on gk2**: publish → `ok:True`, `https://wiztest3.gk2.secubox.in/` → **200** (was 421),
+route landed `["192.168.1.200",8900]` in `/etc/secubox/waf/haproxy-routes.json`, backup export→import
+round-trip recreated the site. Live-driven fixes: real `haproxyctl vhost add <domain> <backend>` signature;
+`route_ok` gates on the WAF route (vhost advisory — blocked by haproxyctl drift-guard + redundant with
+`default_backend mitmproxy_inspector`); portable safe tar-extract (board is Python 3.11.2, no `filter=`).
+Whole-branch review: READY TO MERGE, all 5 security invariants held. metablogizer 1.3.0.
+
+---
+
+## 2026-07-11 — Admin-TOTP toggle from webui + per-user 2FA reset (default OFF)
+
+User: "totp disableable by options from webui and default absent ok" / "or permit totp reset from webui".
+Two iPhone login failures traced to admin accounts being unconditionally forced into TOTP while
+`login.html` has no TOTP UI. Immediate unblock was a non-admin `operator` account; the durable fix
+makes the requirement **opt-in**.
+
+**secubox-auth 1.0.4** — `require_admin_totp` now defaults **OFF** so a node stays reachable. New
+admin-gated `GET/POST /api/v1/auth/settings` persist the flag to `/etc/secubox/auth-runtime.json`.
+Login enforcement reads `_get_require_admin_totp()` (runtime file > `[auth]` config > default False) and
+is **fail-open** — a config read error no longer locks admins out. Verified live on gk2: default-off admin
+login returns `access_token`; toggle on→enrollment_required, off→session; non-admin POST 403. Tests
+realigned from the old default-ON/fail-secure contract to the reachability-first one, fixture isolates the
+config + runtime paths (10 passing).
+
+**secubox-users 1.4.3** — `/users/` gained an "Admin 2FA: ON/OFF" toolbar toggle (wired to the auth
+`/settings` endpoint) and a per-user "🔑 Reset 2FA" button (POST `/user/<u>/totp/disable`), shown only for
+TOTP-enrolled users. Deployed live.
+
+---
+
+**secubox-portal 2.2.3** — `login.html` now completes the TOTP flow in-browser: the login
+response branches to a code step (`mfa_required`), a QR + manual-key enrollment step
+(`enrollment_required` → `/totp/enroll` + `/totp/confirm`) with one-time backup-code display,
+or straight through on `access_token`. So turning the toggle **ON** is now fully usable from a
+phone. Verified live end-to-end on gk2 (enroll→confirm→re-login→mfa, 10 backup codes).
+
+---
+
+## 2026-07-10 — wg-toolbox VPN surf blackhole after reboot (nft drop-in aborted every boot)
+
+User: "surf stopped when wg-toolbox VPN activated". Root cause was NOT the peer prune (restored the 540
+from backup as a precaution) but the **wg-toolbox nft DNAT missing entirely**. `nftables.service` was
+**failed**: the persistent drop-in `/etc/nftables.d/secubox-toolbox-wg.nft` (+ zz-fanout) aborts the whole
+atomic `include` load at boot for two reasons — (1) it added the UDP-51820 accept to `inet filter input`,
+a table that does not exist on gk2 at that point; (2) it used `iif "wg-toolbox"`, which resolves an
+interface index at LOAD time and fails because nftables.service runs before `wg-quick@wg-toolbox` creates
+the iface. Either abort → `table inet wg-toolbox` never applied → all tunnel traffic blackholed → no surf.
+Fix (source + board): fold the handshake accept into the wg-toolbox table's own `input` base chain
+(self-contained, no `inet filter` dependency) and switch to `iifname`/`oifname` (per-packet name match,
+load-order independent). `nft -c -f /etc/nftables.conf` now passes. Restored runtime live via
+`secubox-toolbox-wg-provision` + fanout (DNAT 443/80 → round-robin 10.99.1.1:8091-8094, the 4 live
+Go sbxmitm ng-workers). Did NOT restart nftables.service (its `flush ruleset` would wipe live
+crowdsec/waf/lxc tables); reset-failed instead, next boot loads clean.
+
+## 2026-07-10 — WireGuard webui full rewrite + status/peers perf avalanche fix (`secubox-wireguard` 1.0.2)
+
+`/wireguard/` was inoperative (`{"interfaces":["` truncated) and noisy. Root causes, fixed end-to-end on
+gk2 + source:
+
+- **Privilege**: the API (user `secubox`) reads WG state via `wgctl`, which needs root (`wg show dump`
+  exposes private keys). Added a `sudo -n /usr/sbin/wgctl` route + `/etc/sudoers.d/secubox-wireguard`
+  (wgctl + `wg show *` only) with `visudo -cf` guard in postinst. The service had `NoNewPrivileges=true`
+  which **blocks sudo** → flipped to `false` in the packaged unit (same tradeoff as the aggregator).
+- **Perf avalanche (the real incident)**: `wgctl status`/`peers` ran ~8 `wg show | grep` subprocesses
+  **per peer**. On the 542-peer `wg-toolbox` transparent-proxy tunnel that took 30s+ and — because
+  `asyncio.wait_for` in `_run_ctl` **never killed the timed-out child** — every slow `/peers` left a
+  churning `wgctl`. They piled up to **load avg 56** and starved the whole board (cached `/status` still
+  slow). Fixes: rewrote both as single `awk` / `wg show <iface> dump` passes (O(interfaces); 542 peers
+  now **0.07s**, was >30s), added `proc.kill()` on timeout, and a single-flight + short-TTL cache on the
+  read endpoints (invalidated after up/down/peer add/remove).
+- **Security (review-caught)**: the sudo route activated a dormant bug in `_parse_wg_show` — it parsed
+  `wg show all dump` with the wrong layout, emitting a truncated **private key** via `/stats,/summary,
+  /peers/status` and dropping all peers. Rewrote to parse by field count (5=iface/9=peer) and never read
+  the private key.
+- **webui**: full rewrite — interface-card dashboard (role-labelled tunnels 🧰🕸️🛡️, live status, lazy
+  per-interface peer drawers with the 542-peer tunnel gated behind "Load anyway", up/down + add-peer/QR),
+  certs `hybrid-skin` + shared sidebar navbar (already registered in `menu.d`, category `mesh`).
+  Actions use `data-*` + event delegation (no name interpolated into inline handlers).
+- Also backported the post-reboot netplan fix to source `board/mochabin/netplan/00-secubox.yaml`
+  (WAN=eth2 DHCP metric100; lan0-3/eth1 optional; drop the stray lan3 static that wedged boot).
+
+Two-stage subagent review ran on the diff; both findings (private-key disclosure, onclick breakout) fixed
+before the durable .deb install. Board recovered: load 56→4, all vhosts 200. Commits local on `master`
+(unpushed).
+
+**Follow-ups same day:** (1) 1.0.3 — large tunnels render **connected-only** peers by default (active/recent
+handshake) with a "Show all" toggle instead of suppressing. (2) **Pruned wg-toolbox peers**: it had 543
+runtime peers but **540 had never handshaked** (phantom enrollments — the R3 transparent-proxy enrolls one
+wg peer per client browser-UA into `/var/lib/secubox/toolbox/wg-peers.json`, re-applied on boot by
+`secubox-toolbox-wg-restore`; never-connected ones accumulate). Backed up the store, pruned runtime + store
+to the 3 ever-handshaked live clients (`wg set … peer … remove` in one call + JSON filter). **Open item:**
+no GC prunes these automatically → they will re-accumulate; a `secubox-toolbox` timer that drops peers with
+no handshake older than N days is the durable fix (not yet built).
+
+---
+
+## 2026-07-09 — OpenClaw OSINT scanner: LXC module live end-to-end on gk2 (branch `feature/openclaw-lxc-scanner`)
+
+8-task subagent-driven build (async-job scan endpoints dropping the old sync-shell-out machinery,
+target-policy/audit gate, packaging with sudoers+visudo, aggregator-in-process wiring, XSS-hardened
+dashboard) — Task 8 deployed + verified. `secubox-openclaw` 1.0.1-1~bookworm1 built and installed on
+gk2 over the existing 1.0.0 (LXC container `openclaw`/10.100.0.41 with nmap/dig/whois/curl already
+provisioned in earlier tasks reused as-is). `sudo -u secubox sudo -n openclawctl status --json` proves
+the sudoers grant; `secubox-aggregator` restarted once to load the new in-process `api/main.py`.
+**SPOF proof**: kicked a real `openclawctl scan ip 127.0.0.1` in the background — a concurrent
+`/api/v1/cookies/status` call through the aggregator socket returned in **6ms**, and the scan itself
+reached `status: completed`, confirming the async-job design does not block the shared aggregator
+loop the way the old sync-shell-out path would have. Dashboard (`/openclaw/`) verified 200 with wired
+markup via the generic static-root fallback (no per-module nginx alias needed — same pattern as
+`/cookies/`). Board confirmed healthy after the single restart (all sampled vhosts/APIs 200/401, no 502).
+
+---
+
+## 2026-07-06/07 — Sentinel threat engine + activation + 3 surfaces + C2 auto-learning (#821 #823–#828)
+
+Brainstorm → spec → plan → subagent-driven (per-task two-stage review + adversarial whole-branch review) throughout. All merged; all deployed + verified live on gk2.
+
+- **#821 / #822 — Frigate NVR foundation** ✅ MERGED. podman-in-LXC (amd64/OpenVINO), go2rtc, `/api/v1/frigate/*` shim, WAF-fronted no-bypass.
+- **#823 / #824 — sbxmitm Sentinel engine** ✅ MERGED (dark). Inline IOC gate + async `sbx-sentinel` daemon (bbolt store, YARA cgo build-tag + no-cgo stub), commercial-spyware base packs (Pegasus/Predator/Intellexa) + live-feed overlay, `FinalizeAction` report-only guard.
+- **#825 — Sentinel activation + 3 surfaces** ✅ MERGED (PR #825). Activated on gk2 (daemon enabled, `SENTINEL_HTTP_ADDR=127.0.0.1:8790`, worker mirror wired). Surfaced on the WebUI ToolBoX **🛡️ Sentinelle** fleet tab, the kbin per-device **Compromission** report tab, and the **PDF** report section — all report-only, `mac_hash`-only, fail-safe. Fixed a `RuntimeDirectory=secubox` clobber of the shared `/run/secubox` (drop-in). Proven e2e (Pegasus/Predator).
+- **#826 / #827 — C2/botnet auto-learning** ✅ MERGED (PR #827). Sustained + gated + strong-corroborated beaconing → report-only learned indicators. High-precision FP gate (box-vhost/first-party-LAN/seeded allowlist) + multi-signal (rare/non-browser-JA4/DGA) + candidate→confirm (≥3 windows/≥30 min). New `/c2/*` endpoints + portal proxy + WebUI **C2 appris** view with one-click **Ignorer**.
+- **#828 — C2 false-positive fix** ⏳ OPEN (PR #828, deployed to board as toolbox-ng 0.1.31). Live testing learned an admin dashboard on rarity alone → promotion now requires a STRONG signal (`dga`/`non_browser_ja`), `rare` is supporting-only; `non_browser_ja` disabled when the browser-JA4 set is unconfigured. Re-verified live: real DGA-C2 learned, admin dashboard + mail suppressed. Follow-up: populate `browser-ja4.txt` (empty seed → `dga`-only out-of-box).
+
+Deployed versions on gk2: toolbox-ng **0.1.31**, toolbox **2.8.2**.
+
+---
+
+## 2026-07-04 — ToolBox privacy report (#785 #790 #792), Zigbee WS fix (#796), PeerTube admin ops (#798)
+
+- **#785 / #790 / #792 — ToolBox kbin report** ✅ MERGED (PR #787, #794). Faithful-to-page PDF:
+  DPI-Exfil (me) + Overall donut-grids, `🎬 media types` block (real sbxmitm MIME + DPI `media`
+  category) in web + PDF, rich Netrunner character sheet (`_enrich_report_data` → parity across
+  all 3 PDF routes), real Quêtes from `_dpi_stats.alerts_raw`. Deploy incident fixed: matplotlib
+  PDF render was sync on the single uvicorn loop + WAF 504 auto-retry storm → board-wide 504;
+  hardened with threadpool + `asyncio.Lock` + per-device PDF cache + persistent `MPLCONFIGDIR`.
+
+- **#796 — sbxwaf dropped WebSocket upgrades** ✅ FIXED, live, **PR #805 open**. `wss://zigbee`
+  broke (close 1006 + reconnect loop) via 3 layers: `main.go` forced `Connection: close`
+  clobbering `Connection: Upgrade`; `statusRecorder` + `cachingResponseWriter` didn't implement
+  `http.Hijacker`. Added `isWebSocketUpgrade()` guard + `Hijack()` forwarding on both wrappers +
+  upstream-error logging (which pinned the Hijacker layer). New `websocket_test.go` (token matrix,
+  Hijack forwarding, real 101 handshake through the handler, non-WS regression). Live on gk2:
+  `wss://zigbee.gk2.secubox.in/api → 101 Switching Protocols`, dashboard stable.
+
+- **#798 — PeerTube WebUI admin ops** (reset-password + version check + upgrade) ✅ MERGED
+  (PR #800), spool→root privilege-separation (#407 pattern): unprivileged API drops an intent
+  file, root `peertube-ops.path` drains it via `peertubectl` (no sudo, NoNewPrivileges intact).
+  **Follow-up loop bug fixed, PR #804 open**: `peertube-ops.path` watches `OPS_DIR` with
+  `DirectoryNotEmpty=`, but `process-ops` wrote results back into `OPS_DIR` → the dir was never
+  empty → `.path` re-triggered `.service` in a loop until `start-limit-hit` killed the mechanism
+  after the first op. Fix: results go to a dedicated `/run/secubox/peertube/results/`; `ops/`
+  empties after draining. Live-verified on gk2 (two consecutive pings drain, `NRestarts=0`).
+
+- **Wiki** — new `ToolBox` page (numeric-cabin use cases + report features), poster image,
+  Authelia stale entries removed from MODULES, sidebar/navbar link fixes (Gollum `[[Text|Page]]`).
+
+---
+
+## 2026-07-02 — P2P DHT + Federation + Master-link, LIVE on the 3-node mesh (#774 · PR #775)
+
+Rebuilt the P2P evolutions cleanly (the non-integrating Mistral draft was removed) via
+subagent-driven TDD — **17 tasks, 132 tests**, per-task review + final opus review. Branch
+`feature/p2p-dht-federation`, **PR #775 open**.
+
+- **secubox-p2p DHT** — custom Kademlia over asyncio/UDP `:51823`, JSON wire, Ed25519-signed
+  reachability records `{did,id_pubkey,wg_pubkey,endpoint,ts,sig}`, iterative α-parallel
+  lookup, routing persistence, advisory `put_health`/`get_health` store.
+- **Federation health-checks** — `HealthStore` (debounce up/down) + `HealthChecker`
+  (semaphore-capped async sweep) + `default_probe` (aiohttp GET `/health`, TCP fallback),
+  published over the DHT.
+- **Master-link** — `Role` enum, deterministic `elect()` (min priority, node_id_hex),
+  monotonic `TermStore`, term-based failover with equal-term tie-break (no zero-master
+  window), Ed25519-signed heartbeats over UDP `:51824`, `request_promotion()`.
+- Feature-flagged OFF by default (OPAD); `[dht]/[federation]/[masterlink]` in
+  `/etc/secubox/p2p.toml` via `mesh.load_p2p_config`.
+
+**Live-activated on all 3 mesh nodes:** gk2 `10.10.0.1` (MASTER, term 1, prio 10), c3box
+`10.10.0.2` + amd64 `10.10.0.3` (satellites). Each DHT discovered the other two (peers=2),
+no split-brain. Also shipped: **Mesh visualization tab** (p2p dashboard canvas: role/term/
+DHT peers), **login-bounce auth fix** (3 boxes), gk2 nginx `/api/v1/p2p/` re-routed to
+`p2p.sock` so the endpoint mirrors the running daemon (was showing the aggregator's
+`enabled:false`), and reboot-persistent nft `wg-mesh udp {51823,51824}` on c3box+amd64.
+
+The SDD review loop caught and fixed: malformed-contact crash (Task 7), id/wg key schema
+conflation (Task 8a), equal-term split-brain (Task 15), audit-log PermissionError + unwired
+`peers_fn` (final review).
+
+**Follow-ups (roadmap):** mesh-bans → sbxwaf engine bridge (currently nft-only); macroctl on
+satellites (standalone `NoNewPrivileges=yes` blocks the sudo path — works on gk2 via
+aggregator); smooth the p2p-socket restart window (satellite 502/504). See
+`docs/P2P-EVOLUTIONS-POSTER-PROMPT.md` for the poster prompt + full roadmap.
+
+---
+
+## 2026-07-01 — Macro subsystem (M2) + tor-exit reference kind (#771)
+
+Services can now propose a vetted, AppArmor-confined **access macro** so an approved peer
+consumes them. First increment: framework + `tor-exit` (SOCKS-over-mesh). Three packages:
+- **secubox-annuaire 0.3.3** — optional signed `ServiceOffer.macro {kind, params}` that
+  federates in the signed payload (byte-stability guard keeps macro-less offers compatible
+  with pre-0.3.0 signatures); `annuairectl offer --macro-kind/--macro-param`.
+- **secubox-macro 0.1.0 (NEW)** — `secubox-macroctl` root dispatcher (kind allowlist, plugin
+  root-owned+non-writable tamper guard, src-ip mesh-CIDR check, euid-gated env-ignore,
+  append-only audit) + `macros.d/tor-exit` (nft grant/revoke, service_id path-traversal
+  sanitize, socks_port bound) + tight sudoers (env_reset) + AppArmor enforce (net_admin) +
+  postinst (Tor SocksPort on mesh IP, nft base set, audit pre-create).
+- **secubox-p2p 1.9.0** — provider grant endpoint (self-signed Subscription auth: self-cert
+  DID + ed25519 over annuaire's canonical bytes; auto-mode only), consumer activate pulls
+  the credential over the mesh + runs macroctl activate, mesh listener :8798 (mesh-IP-only,
+  X-Real-IP), revoke-access, NNP=no for the sudo path, UI SOCKS endpoint + Revoke.
+
+Built via SDD (8 tasks, per-task + final opus review = READY TO MERGE). The review loop caught
+and fixed **6 Criticals**: offer-signature wire-break (macro:null changed signed bytes),
+tor-exit root path-traversal (service_id as root filename), prerm mawk-bricks-dpkg, macroctl
+NNP-blocks-sudo, macroctl env-injection root-RCE + missing root-ownership guard. Deployed the
+3 debs to gk2 + c3box; **proven live on c3box under AppArmor enforce**: macroctl→tor-exit grant
+adds a mesh IP to the `secubox_macro_torexit` nft set + returns the endpoint + writes an
+append-only audit line; revoke empties it; bad-kind/non-mesh-IP/missing-src-ip all rejected.
+Full cross-node federation + real Tor routing is env-blocked (Tor not installed on c3box; gk2
+uses `inet filter` not `secubox_filter`) — not a code issue. Suites: annuaire 189, p2p 49,
+macro 14.
+
+---
+
+## 2026-06-30 — secubox-p2p 1.8.0 : Service Registry = live view of annuaire catalog (#769)
+
+Le registre de services p2p (`/p2p/`) affichait « No services registered » (JSON local
+isolé), déconnecté du catalogue fédéré secubox-annuaire 0.2.0. Désormais c'est une **vue
+live** : `GET /services` fusionne le catalogue annuaire + mes abonnements + un mince
+*activation overlay* + les services p2p-locaux hérités (sans duplication, sans dérive).
+`api/registry.py` (fusion pure, testable) + `api/annuaire_client.py` (lit
+`/run/secubox/annuaire.sock`, jamais l'aggregator ; s'abonne EN TANT QUE nœud via la clé
+0600 ; frappe un JWT de service car le subscribe annuaire est JWT-gated). 4 endpoints :
+`GET /services` (dégrade en `catalog_unavailable`, ne 500 jamais), `POST
+/services/auto-register` (active les offres locales + s'abonne aux distantes selon
+auto/pending), `/{id}/request`, `/{id}/activate`. UI : bouton « Auto register all » +
+Request access / Activate + badges d'état (service_id en encodeURIComponent — XSS-safe).
+annuaire inchangé ; exécution des macros déférée au Milestone 2.
+
+Construit via SDD (5 tâches TDD + revues par tâche + revue finale opus = READY TO MERGE).
+Bug trouvé au déploiement : le subscribe annuaire est JWT-gated ET vérifie que le sujet est
+un user activé → token de service frappé pour `admin` (override SBX_SERVICE_USER). 34 tests.
+Déployé gk2 + c3box : `GET /services` = WAF mirror (local) + Suricata (fédéré de c3box) sur
+gk2, image miroir sur c3box ; `auto-register` gk2 = {activated:1, requested:1} → Suricata
+fédéré **approved**. 
+
+---
+
+## 2026-06-30 — secubox-annuaire 0.2.0 : trustless cross-node service federation (#766)
+
+Le `/services/pull` de 0.1.3 n'était **pas** réellement sans-confiance ni opérable :
+`ingest_offer` vérifiait la signature contre une pubkey *fournie par l'appelant* sans
+jamais contrôler `did_from_pubkey(pubkey) == provider` (forge « apporte ta clé, réclame
+n'importe quel DID ») ; et `GET /services` renvoyait des offres **sans signature ni
+pubkey** (le payload stocké les omet), donc un pair inconnu ne pouvait rien vérifier.
+
+Corrigé :
+- **Ingest sans-confiance** : `ingest_offer` impose `did_from_pubkey(pubkey)==provider`
+  AVANT la vérif de signature. did:plc = sha256(pubkey)[:32] → liaison auto-certifiante,
+  aucun annuaire, aucune confiance préalable.
+- **Offres auto-portées** : `_get_offers`/`GET /services` ré-attachent `sig` + `signer_did`
+  + `provider_pubkey` (métadonnée de transport, retirée avant reconstruction du modèle
+  extra=forbid). `pull_services` les consomme.
+- **Bootstrap de nœud** : verbe `genesis()` (un nœud s'auto-atteste MEMBER fondateur,
+  brise le paradoxe invite/join ; DID auto-certifiant, `invited_by` vide → n'inflige
+  jamais la pluralité d'émancipation ; idempotent). `Op.GENESIS` (additif). CLI
+  `/usr/sbin/annuairectl` (init|whoami|status|offer|services|pull) opérant le journal
+  directement en tant que `secubox` (pas de JWT pour le bootstrap privilégié) ; clé 0600
+  dans `/etc/secubox/secrets/annuaire/node.key`.
+- **Écouteur mesh** : `annuaire-mesh.conf.tpl` rendu par postinst sur l'IP wg-mesh du
+  nœud uniquement (`10.10.0.1:8799` sur gk2), `allow 10.10.0.0/24 + deny all`, GET
+  `/services` seul.
+- **Tests** : +7 (forge, payload altéré, hex invalide, round-trip), 134 passants.
+- **Revue sécurité** : aucune forge exploitable. Deux durcissements board-wide :
+  postinst valide l'écouteur rendu via `nginx -t` et le retire si échec (un rendu cassé
+  ne persiste jamais) ; livraison de `ip_nonlocal_bind=1` (nginx lie l'IP mesh même si
+  wg-quick@wg-mesh démarre après nginx).
+
+Déployé sur gk2 (0.1.3 → 0.2.0) : service actif, `nginx -t` OK, écouteur live, genesis
+gk2 (DID `0463…`) + offre « WAF mirror ». **Démo live** : un second nœud (fondateur
+distinct, gk2 inconnu) `annuairectl pull http://10.10.0.1:8799` → ingested 1, chain_ok.
+Reste : pull live gk2→c3box bloqué (clé SSH non autorisée sur .94) ; NIZK/PSI GK·HAM à venir.
+
+---
+
+## 2026-06-30 — secubox-yacy 1.0.12 : repair webui embed + navbar integration
+
+Page admin `https://admin.gk2.secubox.in/yacy/` cassée sur deux points, corrigés dans
+[`www/yacy/index.html`](../packages/secubox-yacy/www/yacy/index.html) :
+
+- **webui (iframe récursif)** : l'`<iframe src="/yacy/">` pointait sur **cette même page**
+  (nginx sert `/yacy/` en `alias` statique, pas en proxy) → le panneau s'affichait
+  récursivement au lieu de l'UI YaCy. Le `src` est désormais construit au runtime depuis
+  `/api/v1/yacy/access`, en préférant l'URL **publique https** (`yacy.gk2.secubox.in`,
+  vérifiée sans X-Frame-Options/CSP → framable) pour éviter le blocage mixed-content ;
+  repli sur un lien « ouvrir dans un nouvel onglet » si seule une URL http LAN est joignable.
+- **navbar** : la page utilisait une grille CSS `.layout` custom + `sidebar-light.css`
+  legacy, en conflit avec `sidebar.js` v2.33 (injecteur hybrid-skin). Migration vers le
+  pattern canonique (annuaire/cookies) : `design-tokens.css` + `crt-light.css`,
+  `<nav class="sidebar">` + `sidebar.js`, contenu dans `<main class="main">`. Strings
+  issues de l'API échappées avant injection.
+
+Déployé live sur gk2 (`/usr/share/secubox/www/yacy/index.html`, backup `.bak-pre-fix`),
+copie debian stagée synchronisée, bump 1.0.11 → 1.0.12. Assets `/shared/*` 200, JS
+`node --check` OK.
+
+**Cause racine réelle des cartes « unavailable » + « no search results »** : drift nginx
+live. `/etc/nginx/secubox-routes.d/yacy.conf` (inclus par le vhost admin) avait dérivé vers
+`proxy_pass …/aggregator.sock` en gardant le `rewrite` qui dénude le préfixe → l'aggregator
+(modules montés sur le chemin **complet** `/api/v1/yacy/*`) recevait `/access` nu → 404 →
+`.catch()` du JS → iframe jamais construit → pas d'UI YaCy. Réaligné sur la config livrée
+(`yacy.sock`, ~0,2 s vs 11-20 s via l'aggregator qui bloquait sa boucle). YaCy jamais cassé
+(freeworld, 352 global / 466 local pour « debian »). Même pattern que Lyrion #763 ci-dessous.
+
+**Phase 2 — yacyctl detection + sudoers + postinst + .deb** :
+- `yacyctl` reportait lxc « absent » / daemon « stopped » / overall **red** alors que tout
+  tournait : `secubox-yacy.service` tourne en `User=secubox` + `NoNewPrivileges=true`, et
+  `lxc-info`/`lxc-attach` exigent root (NNP bloque sudo). Remplacé par une **sonde réseau
+  privilège-free** (`curl http://$LXC_IP:$HTTP_PORT/`) — préserve le durcissement, signal
+  plus vrai. `lxc-info` gardé en enrichissement best-effort root-only. → vert via l'API.
+- Ship `/etc/sudoers.d/secubox-yacy` (lxc-*) pour `yacyctl reload` (restart daemon in-LXC).
+- `postinst` : `systemctl restart` inconditionnel — `deb-systemd-invoke restart` de
+  dh_installsystemd **refuse** de démarrer une unité *disabled* → upgrade laissait
+  `yacy.sock` absent → 502. (Piège de test : dpkg s'arrête sur un **prompt conffile** quand
+  on a édité les `/etc` à la main → `--force-confnew` pour aligner.)
+- Construit + installé `secubox-yacy_1.0.12-1~bookworm1_all.deb` (output/debs/). Upgrade
+  propre validé : service active+enabled, dashboard vert, recherche 466, route `yacy.sock`.
+
+---
+
+## 2026-06-30 — Lyrion admin 404 → dedicated-socket extraction (#763)
+
+Page `https://admin.gk2.secubox.in/lyrion/` : tous les widgets en **HTTP 404**.
+
+### Cause racine
+La route nginx `/api/v1/lyrion/` avait dérivé sur la board vers
+`rewrite … /$1 break;` + `proxy_pass …/aggregator.sock;` (sans suffixe `/api/v1/lyrion/`).
+L'aggregator monte les modules au chemin **complet** `/api/v1/lyrion/…`, donc le `/status`
+dénudé → 404. (`curl aggregator.sock /api/v1/lyrion/status` → 200 ; `/status` → 404.)
+
+### Décision — extraction socket dédié (comme auth/metrics)
+Les handlers `now-playing` / `players` font du JSON-RPC LMS **bloquant** à chaque requête.
+Sur la boucle unique de l'aggregator (~110 modules) un appel LMS lent fige toute la
+passerelle → 502 board-wide (SPOF observé). lyrion repasse sur son propre
+`secubox-lyrion.service` + `/run/secubox/lyrion.sock` + route nginx dédiée.
+
+### Changements
+- **source** `packages/secubox-lyrion/nginx/lyrion.conf` : invariant documenté (dedicated
+  socket, ne jamais folder dans l'aggregator).
+- **source** `packages/secubox-lyrion/debian/postinst` : préserve l'état runtime sur upgrade
+  (`try-restart`), démarre au fresh install si le LXC LMS répond.
+- **source** `packages/secubox-aggregator/sbin/secubox-aggregator-migrate` : `AGG_EXCLUDE`
+  (lyrion) → discovery + switch route + disable service le sautent (durabilité).
+- **board** : `secubox-lyrion.service` enable --now ; route nginx (secubox.d +
+  secubox-routes.d) → `lyrion.sock` ; reload. 5 endpoints à 200, stream live affiché.
+- **gotcha** : le 1er `enable --now` a re-chown `/run/secubox` (1777 root:root →
+  755 secubox:secubox) car le drop-in `no-runtime-dir.conf` (`RuntimeDirectory=`) n'était pas
+  rechargé en mémoire systemd. `daemon-reload` + restaure le parent à 1777 root:root → restart
+  ne le re-casse plus (boot-safe).
+
+---
+
+## 2026-06-27 — LAN standardisé 192.168.10.0/24 + c3box/gk2 live Freebox + bump 1.10.0 (#760)
+
+Session terrain "c3box derrière Freebox" : la LAN SecuBox par défaut (`br-lan 192.168.1.1/24`)
+entrait en collision avec la LAN d'un routeur opérateur courant (Freebox/Livebox en
+`192.168.1.0/24`). En aval d'une Freebox, le WAN DHCP et la LAN se retrouvaient sur le **même
+sous-réseau** → route dupliquée, ARP ambigu, IP de management injoignable.
+
+### A. Constat live + remédiation immédiate
+- **c3box** (second MOCHAbin) derrière Freebox : WAN `eth2=192.168.1.94` (bail Freebox) +
+  `br-lan=192.168.1.1/24` → `.94` injoignable depuis le LAN. Corrigé live : `br-lan → 192.168.10.1/24`.
+  SSH root activé, webadmin `https://192.168.1.94/` OK, `/dev/sda1` (931 G) monté sur `/data`
+  (style gk2 : UUID + nofail), partition eMMC retirée (`emmc-data`).
+- **gk2** (live PoC) : uplink déplacé de `lan0` (DSA) vers le port cuivre WAN `eth2` ; netplan
+  réparé via **série** (gk2 hors-réseau le temps du switch) → `eth2 dhcp4: true`, `lan0` dépouillé.
+  Bail Freebox réservé sur le MAC eth2 `f0:ad:4e:27:88:9b` → gk2 reprend `192.168.1.200`. Persisté.
+
+### B. Standardisation source (LAN = 192.168.10.0/24, gw .10.1) — 17 fichiers
+- Netplans board : mochabin, espressobin-v7, espressobin-ultra, x64-vm, x64-live (`br-lan`),
+  + unification VM vm-x64/vm-arm64 (`192.168.100.1 → 192.168.10.1`).
+- Générateurs de netplan : `secubox-netmodes`, `secubox-hub` (preview), `secubox-net-detect`.
+- dnsmasq (`espressobin-v7.conf`) : `dhcp-range` + `option:router` + `option:dns-server`.
+- Scripts live-usb (mochabin/ebin) + SAN des certs auto-signés (`firstboot`, `build-image`,
+  `build-rpi-usb`, `build-live-usb`) → `IP:192.168.10.1`.
+- **Hors scope (intacts)** : `192.168.255.1` (whitelist mgmt/trusted-proxy WAF/mail/wg/mitm),
+  listes `GATEWAYS` de sonde WAN, exemples remote-ui/round + tests.
+
+### C. Release
+- Bump mineur (« medium ») **1.9.0 → 1.10.0** : `build-image.sh`, `build-live-usb.sh`,
+  `build-ebin-live-usb.sh`, `build-rpi-usb.sh` (mochabin-live reste sur sa piste 2.0.0).
+- Artefacts amd64 (x64) reconstruits depuis cette base.
+
+---
+
+## 2026-06-27 — Netboot live PROUVÉ + première install SecuBox Debian sur c3box (second MOCHAbin) (#748 #737)
+
+Grande session hardware : netboot gk2→c3box validé de bout en bout, premier SecuBox Debian installé
+sur un vrai MOCHAbin, et le blocage U-Boot qui empêche #748 de fermer est formellement documenté.
+
+### A. Netboot gk2 → c3box : validé en prod
+
+- **c3box** (second MOCHAbin, Armada 7040) a booté l'installeur SecuBox Debian servi par gk2 via
+  TFTP : factory U-Boot 2020.10 → `tftpboot Image/dtb/initrd` → `booti` → rescue shell installeur,
+  kernel custom 6.12.85 #5secubox. Le FIT signé (49 Mo) était servi en HTTP sur `:8099`.
+- Le long détour cabling était une impasse LAB (prouvé via gk2 bridge-FDB + test DHCP) — aucun
+  bug logiciel.
+- **Learnings opérationnels réutilisables** (documentés dans `wiki/Netboot-Install.md`) :
+  - Factory U-Boot 2020.10 s'interrompt sur **Enter** (pas Ctrl-C), `bootdelay=2`.
+  - Son env n'est PAS dans SPI mtd2 (env étranger fossile) → `fw_setenv` depuis Linux n'a aucun
+    effet ; seule la config U-Boot interne compte.
+  - Seul le port cuivre RJ45 unique = `mvpp2-2` est bootable par le factory U-Boot (les 4 ports
+    switch nécessitent le driver MV88E6XXX DSA, absent au boot).
+  - Kernel load à `0x02080000` = adresse mémoire réservée → crash immédiat ; utiliser `0x0a000000`.
+  - `setenv tftpblocksize 1468` pour TFTP rapide.
+
+### B. #748 enhanced Tow-Boot (HTTP/wget bootloader) — DIFFÉRÉ, bloquant documenté
+
+Branche `feature/748-enhanced-tow-boot-http-netboot-serial-fl` (stackée sur #737) :
+spec+plan (`docs/superpowers/`), Kconfig Tow-Boot, `build-uboot-overlay.sh --tow-boot`,
+plan serial-flasher, CI `.github/workflows/build-tow-boot.yml` (push-triggered).
+
+**Bloquant dur (ciseau)** : le board MOCHAbin n'existe que dans le fork U-Boot 2022.07 de
+Tow-Boot (pas de `wget`) ; `wget` n'existe que dans U-Boot stock ≥2023.07 (pas de board
+mochabin/DTS). Bump à stock 2023.07 = `wget` compile mais build sans DTS. Pour débloquer :
+backporter wget/TCP dans le fork Tow-Boot 2022.07, OU porter le board mochabin vers mainline
+≥2023.07. Pas un tweak de config.
+
+### C. PREMIÈRE INSTALL — c3box → SecuBox Debian (la headline)
+
+- **Image** : artefact CI `secubox-mochabin-bookworm` (run 27426515472, 1,8 Go gzip / 8,0 Gio
+  décompressé), téléchargée sur gk2 `/data`, SHA256SUMS vérifié.
+- **Signature** : clé `secubox-netboot.key` de gk2. Vérifié : cette clé FIT == `netboot-image.pub`
+  embarquée dans l'installeur (modulus match + roundtrip sign/verify). `sbx.img.gz` + `.sig`
+  publiés dans le root HTTP netboot, servis sur `:8099` (symlink depuis `/data`).
+- **Install automatisé depuis le rescue shell** :
+  `wget sbx.img.gz` (en RAM, c3box a 8 Go) →
+  `openssl dgst -verify` contre `netboot-image.pub` (résultat : Verified OK) →
+  `gunzip | dd of=/dev/mmcblk0 bs=4M conv=fsync` (8 Gio, progression 32→62→94→100%) → sync.
+- **c3box démarre SecuBox Debian v1.9.0** — hostname `secubox-mochabin`, kernel Debian
+  6.1.0-47-arm64, stack complète : secuboxd, hub, grafana, zigbee, mqtt, authelia,
+  sentinel/rogue-BTS (layers WALL+MIND). Creds root/secubox, Web UI `:9443`.
+- **Fix auto-boot persistant** : l'image utilise `extlinux.conf` à `0x02080000` (adresse réservée
+  factory U-Boot → reset immédiat) et ne livre pas de `boot.scr` compilé. Construit
+  `/boot/boot.scr` (kernel@`0x0a000000`, initrd@`0x10000000`, `console=ttyS0` + earlycon,
+  `root=LABEL=rootfs`) : le factory U-Boot charge `boot.scr` depuis mmc et démarre Debian sans
+  intervention. **VÉRIFIÉ** : reboot sans intervention → login Debian.
+- **Layout eMMC installé** : GPT p1=boot (FAT, `/boot`) p2=ROOT (`/`) p3=DATA. c3box était
+  OpenWrt ; eMMC écrasé (install RAM-only, pas de risque sur l'OS tournant avant le `dd`).
+- **Rig netboot temporaire gk2 encore actif** : `lan1=192.168.77.1/24`, dnsmasq test (DHCP) sur
+  `lan1`, `nft iif lan1 accept`, nginx boot-vhost extra listen `192.168.77.1:8099`.
+
+## 2026-06-24 (cont.) — R4 analyst mode: MITM-everything + media reverse-catcher + clone (#736)
+
+New "R4" doctrine — visibility over performance. Delivered + live on gk2:
+- **Splice flip** — `tls-splice-seed.conf` reduced from a media-CDN perf list to
+  breakers-only (`api.anthropic.com`); splice now applied ONLY where MITM provably
+  breaks (cert pinning). Banner reaches every page; catcher sees media URLs. Live:
+  learned splices cleared, autolearn gated (`tls_splice=off`).
+- **sbxmitm media reverse-catcher** (`cmd/sbxmitm/mediacatch.go`, toolbox-ng 0.1.20)
+  — 2xx MITM'd flows → cloneable media URLs (HLS/DASH manifests, direct A/V,
+  googlevideo videoplayback) appended to `/run/secubox/media-catch.jsonl` (URLs
+  only, deduped, atomic, fail-open). `--media-catch` default on; worker unit
+  `ReadWritePaths=/run/secubox`.
+- **mediaflow Discovered Media + Clone** (2.1.0) — `/discovered`, `/clone`
+  (yt-dlp→ffmpeg queue, lazy worker for the aggregator), `/library`,
+  `/download/{id}`, DELETE; dashboard cards. Verified: HLS caught → ffmpeg →
+  464 MiB mp4 in library. yt-dlp installed.
+- Also fixed the empty mediaflow dashboard (2.0.2 contract + 2.0.3 cumulative
+  services): cards/streams live, Top Media Services from DPI cumulative store.
+  KEY: dashboard routes via the **aggregator** (in-process import) — restart
+  `secubox-aggregator` to pick up mediaflow code changes.
+- Phase 4 done — R4 button added to the banner topbar (R0..R4) + set-level + by-MAC
+  validation + analytics buckets; gated to the wg path like R3 (secubox-toolbox 2.7.20).
+- yt-dlp upgraded 2023.03.04 → 2026.06.09 (standalone binary; YouTube works).
+- Recos: catcher now captures YouTube watch **pages** (kind=page, toolbox-ng 0.1.22);
+  Discovered Media persisted off tmpfs into a durable capped store (mediaflow 2.1.1);
+  yt-dlp packaged (Recommends + weekly refresh timer + postinst).
+- **Catch-log ownership bug** — `/run/secubox/media-catch.jsonl` was created
+  `secubox`-owned while the worker runs as `secubox-toolbox`, so O_APPEND failed
+  silently → nothing captured. Fixed with a tmpfiles.d entry pre-creating it owned
+  by the writer every boot (zz-secubox-toolbox-ng.conf). Live: rm + worker recreate.
+
+## 2026-06-24 (cont.) — Banner on nonce-CSP sites + Claude API splice + YouTube unblock (#728)
+
+Three distinct root causes behind "no banner on youtube / news", fixed in order:
+
+1. **Trusted Types** (0.1.17) — `require-trusted-types-for` blocked DOM injection. Stripped.
+2. **Nonce-based CSP** (0.1.18) — the banner is *inlined* (service-worker-proof), but a CSP
+   nonce/hash makes `'unsafe-inline'` IGNORED → the bare inline `<script>` was silently
+   blocked. `relaxCSPForLoader` now **borrows the page's own nonce** and stamps it on the
+   injected `<script nonce=…>` (surgical: page CSP/nonces/hashes untouched), falling back to
+   forcing `unsafe-inline` (drop nonce/hash/strict-dynamic) only when there's no nonce.
+   Nonce validated to base64 charset (attribute-breakout guard). Threaded nonce through
+   injectIntoBody → injectHTML → injectInlineBanner. Tests rewritten for inline semantics.
+3. **YouTube wholly blocked** (runtime) — autolearn false-positive put `youtube.com` in
+   `/var/lib/secubox/toolbox/learned-trackers.txt` → `Decide()` returned `block` (204) →
+   page never loaded. Removed from learned + added to `ad-allowlist.txt` (hot-reloaded).
+   Latent-bug tracker: **#735** (autolearn must not block apex/first-party nav targets).
+
+**Claude API splice** (user request) — `api.anthropic.com` added to `tls-splice-seed.conf`
+(+ live seed): cert-pinned Claude API/SDK clients reject the MITM CA, so pass them through;
+`claude.ai` web stays MITM'd (browser trusts the CA → still gets the banner).
+
+Verified end-to-end on gk2: YouTube 200 + banner nonce == page nonce; lemonde/lefigaro
+banner via unsafe-inline fallback. DPI confirmed healthy — collector writes to
+`/var/lib/secubox/dpi/` (state.json/cumulative.json fresh), `/exfil` returns categorized
+flows; the earlier "empty" was me checking the wrong paths (`/run/secubox/dpi`).
+
+## 2026-06-24 — DPI YouTube bannering: strip Trusted Types CSP (#728)
+
+- **Root cause** — YouTube serves a standalone `Content-Security-Policy:
+  require-trusted-types-for 'script'` header. sbxmitm's `relaxCSPForLoader` already
+  relaxed `script-src` (drop `strict-dynamic`, add `'self'`/`'unsafe-inline'`) so the
+  banner loader runs, but Trusted Types still blocked the banner's DOM injection →
+  banner silently never mounted on YouTube.
+- **Fix** (`cmd/sbxmitm/csp.go`, toolbox-ng 0.1.17) — drop `require-trusted-types-for`
+  and `trusted-types` directives during the relax; omit the resulting empty CSP header
+  line. Local Go unit tests cover both the relax and the empty-header drop.
+- **DPI capture half** — collector `state.json` was stale (frozen 09:44); restarted
+  `secubox-dpi-flowcap` → fresh windows, YouTube/media flows now visible in mediaflow.
+- Deployed to gk2; R3 workers `secubox-toolbox-ng-worker@1..4` restarted on 0.1.17.
+- Filed for later: #729 wireguard peers/tabs, #730 yacy, #731 lyrion, #732 magicmirror,
+  #733 firewall dashboard misreport, #734 webui.conf hardcoded-route cleanup.
+
+## 2026-06-22 — DPI exfil engine + Netrunner report (HTML+PDF) + sbxmitm fixes
+
+Big session: full per-device DPI exfiltration pipeline, the kbin report reborn as a
+cyberpunk-netrunner character sheet, and two live-ops fixes on the Go MITM engine.
+All PRs merged to master and deployed live on gk2.
+
+### DPI — per-device cloud-exfiltration (#687, secubox-dpi 1.0.5 → 1.1.2)
+- **Phase 1** nDPI flow-DPI on `wg-toolbox` (ndpiReader, ~1% CPU on the Armada).
+- **Phase 2** Go collector (`secubox-dpi-collector`, pure stdlib, arm64): attributes
+  flows to devices via `sha256(wg_pubkey)[:16]`, classifies SNI into nDPI-style
+  **categories** (cloud/filehost/messaging/ai/media/game/social/adult), fires exfil
+  scenarios (`exfil_volume`, `new_cloud`, `beaconing`, `unclassified_external`).
+  Producer = `secubox-dpi-flowcap` (60s windows) → `GET /api/v1/dpi/exfil`.
+- **Dashboard** (#693/#695): "Cloud Exfiltration Watch" panel + stat cards + all list
+  cards repointed off the inactive netifyd to the live exfil engine.
+- **#692** beaconing tuned to a C2-plausible cadence (1s–1h, CV≤0.25, external).
+- **#705 cumulative 7d** — `cumulative.json` so the report shows history, not just the
+  last 60s window (was: idle device → all zeros).
+- **Packaged** `secubox-dpi 1.1.x` (arch arm64, Go built in debian/rules offline,
+  flowcap auto-enabled, `Depends: libndpi-bin`).
+
+### kbin report — Cyberpunk-Netrunner character sheet (#707, HTML + PDF)
+- **#699** report tabs (Pistage / DPI-Exfil / Overall) with donut charts.
+- **#701/#703** DPI stats + visual donut charts in the PDF (mitm/certs/ads/dpi).
+- **#707** persona sheet: class+emoji from the request UA (live device), level=R3 for
+  wg peers, ICE/Exposition bars, XP, 4 pip-bar CARACTÉRISTIQUES, Inventaire, Bestiaire,
+  Quêtes — HTML neon + PDF `_persona_block`.
+- **#709** carto hub map + emoji tables (Traceurs/Pays/DPI) in the PDF.
+- **#711/#712** "En un coup d'œil" added to the PDF.
+- **#714** charts switched to **matplotlib PNG** embeds (fpdf2 vector donuts were blank
+  in iOS/Chrome viewers).
+- **#716** donut grid → ONE combined 2×2 image (was spilling each donut/legend onto its
+  own page → 24 pages). Report back to a clean 4 pages. User: "report parfait".
+
+### sbxmitm (Go MITM engine, #662 line)
+- **#689** forged leaf cert TTL **24h → 365d** — root cause of recurring "certificat
+  expiré" on clients (cache never evicts; 24h leaves expired daily). Interception kept.
+- **#697** stop truncating responses >8MiB — `streamResponse()` streams non-injected
+  bodies verbatim; large **Gmail** messages/attachments rendered again over R3.
+- **#688** own-domain splice approach REJECTED (decision: intercept all vhosts) — reverted.
+
+### Ops notes
+- Surf-break incident: R3 mitm CA rotated 2026-06-05 → clients must re-import the CA root
+  (the "expired cert" was client-side trust, not the board).
+- R3 engine is the Go `sbxmitm` (`secubox-toolbox-ng-worker@1..4`, 10.99.1.1:8091-8094)
+  — NOT the Python mitm; restart THOSE for R3 changes.
+
+---
+
+## 2026-06-20 — kbin Tor shipped + client releases + ad-block/mitm hardening
+
+- **#683 MERGED (PR #684)** — kbin Tor egress quick-switch (switch + nft owner-match
+  tunnel, own-services exemption, reconciler+timer), dashboard/landing/banner metrics
+  fixes, 🧅 indicators (banner/webext/APK), APK persistent WG identity, landing+report
+  **redesign** (verdict gauge + donut/bars + collapsible details). Live on gk2; Tor armed.
+- **Client releases served from kbin**: `android-v0.4.0` (Latest) + `webext-v0.1.5`
+  published by CI; pinned webext tag bumped; board fetch-helpers pull them →
+  /wg/toolbox.apk (0.4.0) + /wg/toolbox.xpi (0.1.5). toolbox 2.7.12.
+- **#685 ad-learner hardened (2.7.13)** — NEVER_LEARN guard (Google/CDN/fonts/captcha/
+  auth/payment), AD_MIN_SITES 1→2, prune existing. Root cause of euronews breakage:
+  the learner had 204'd `www.google.com` → broke reCAPTCHA/consent. Also allowlisted
+  www.google.com/.fr live.
+- **mitm-wg stream_large_bodies=1m (2.7.14)** — large binary downloads (APK, CA) were
+  corrupted ONLY through the R3 tunnel (HTTP/2 buffer/reframe); now passed verbatim.
+- **OPEN [#686]** — android-toolbox non-root flow broken (CA auto-install needs root,
+  WG handoff → Play Store, tunnel not detected). Needs on-device dev/testing; rooted-vs-
+  non-rooted decision pending. #685 signing was a red herring (corrupt = mitm buffering).
+
+## 2026-06-19 — kbin Tor egress quick-switch implemented DARK (#683, ToolBoX 2.7.1)
+
+- **Switch + tunnel** for routing kbin surfing through Tor, shipped **default-OFF /
+  fail-closed** on `feature/683`. Reuses existing secubox components per the user ask.
+- **Transport decision (USER): torify the MITM egress.** nft owner-match on the
+  `secubox-toolbox` (mitm-wg) uid → Tor TransPort 9040 / DNSPort 5353. Clients →
+  TPROXY → mitm decrypts/ad-blocks/poisons/banners/re-encrypts → exits via Tor.
+  **Inspection fully preserved**; only the exit IP + network identity change. (Rejected:
+  SOCKS5 Go-core dialer = blocked on #662; transparent client torify = breaks inspection.)
+- **Switch**: `filters.json` flags `tor_mode`/`tor_preset`; API (kbin-gated, admin.gk2
+  only for actions) `GET/POST /admin/tor/{state,on,off,newnym,check-leaks}`; 🧅 WebUI tab
+  (badge bootstrap/circuits/exit-IP, toggle, NEWNYM, SOCKS leak probe). `tor_ctl.py`
+  reuses secubox-tor's control-port code — no cross-service JWT.
+- **Tunnel arms via reconciler**: root, path-triggered (`secubox-toolbox-tor.path`
+  watches filters.json) → portal stays `NoNewPrivileges=true`, no sudo. nft loaded
+  BEFORE tor (no clearnet window); IPv6 worker egress dropped (no v6 leak); prerm
+  disarms on real removal (not upgrade). Depends jq; Recommends tor + python3-socksio;
+  postinst adds secubox-toolbox to debian-tor group.
+- **Verified**: 166 toolbox tests green (10 new), nft syntax valid (user-resolve only),
+  maintainer scripts `sh -n` clean, license headers OK, changelog parses 2.7.1.
+- **Granularity = global kbin Tor mode** (owner-match can't be per-client). Per-client
+  (WG-hash) Tor tracked under #662 (Go-core SOCKS5 dialer). NOT yet flipped/deployed —
+  needs soak + off-board leak test + tls_splice(#649)-OFF before arming.
+
+---
+
+## 2026-06-19 — kbin milestone: ToolBoX 2.7.0 (middle release) + Tor chapter staged (#683)
+
+- **End-of-session checkpoint** — docs + positioning + version, no runtime behaviour change.
+- **`secubox-toolbox` 2.6.59 → 2.7.0** (middle release) — caps the 2.6.x line
+  (ad-intelligence / Anti-Track v2 / anti-bot uTLS #662) and opens the **kbin** chapter:
+  kbin (`kbin.gk2.secubox.in`, the public ToolBoX portal) framed as the *first tool of the
+  CyberMind Swiss-army cyber kit* — transparent performance, full-encrypted MITM inspection,
+  ad poison/smog injection, adware-ban transparency banner, safe browsing.
+- **Docs** — new wiki use-case `docs/wiki/Kbin-Toolbox.md`, `docs/FAQ-KBIN-TOR.md`,
+  README positioning blurb.
+- **Plan #683 (issue + spec)** — kbin **Tor endpoint**: a quick-switch re-routing consenting
+  client surfing through Tor (outbound egress, pseudo-network) so the kbin exit is anonymized.
+  Spec `docs/superpowers/specs/2026-06-19-kbin-tor-anonymized-surfing-design.md`. Invariants:
+  inspection preserved (Tor after the forging core), fail-closed, opt-in/default-OFF, no DNS
+  leak, CSPN audit-logged. Opposite direction of `secubox-exposure` (inbound hidden services);
+  reuses its Tor control. Depends on the #662 Go core for the preferred SOCKS5-dialer transport.
+- **Caveat recorded** — Tor mode must force `tls_splice` (#649) OFF per-client or asset flows
+  leak the real IP.
+
+---
+
+## 2026-06-19 — #662 anti-bot: Chrome TLS fingerprint (uTLS) — defeat DataDome without splice (PR #674)
+
+- lemonde.fr (DataDome) blocked R3 navigation at the 2nd level: the engine re-origined
+  upstream TLS with a Go JA3/JA4 → flagged as bot. Splice rejected (don't exempt a
+  tracking site). Fix: upstream transport now presents a real **Chrome** fingerprint
+  via **uTLS HelloChrome_Auto + h2-over-uTLS**. Verified live: JA4
+  `t13d1516h2_8daaf6152771_02713d6af862` (Chrome), was Go.
+- **Cert verification preserved** (manual verifyUConn: system roots + intermediates +
+  hostname; adversarially tested). Stopped the Accept-Encoding downgrade (was a tell) +
+  added brotli/zstd decode-inject-reencode. H1 response-header timeout.
+- First vendored deps (utls/brotli/zstd/x-net, pure-Go), offline arm64 via -mod=vendor.
+  Canary 1 worker → verified Chrome FP + cert chains + ad-block + banner → widened to 4.
+- Caveat: DataDome also fingerprints HTTP/2 + behaviour — uTLS helps strongly, not a
+  100% guarantee. Browser test is the real confirmation.
+
+## 2026-06-19 — #662 post-cutover restore: ad-block metrics + popup CSS (PR #673)
+
+- **Found by verification**: the cutover ported the 204-block but NOT ad_ghost's
+  metrics recording (frozen since 2026-06-18 18:59) nor its cosmetic/popup-hiding CSS
+  (popups returned — they're 1st-party DOM, never touched by host-204).
+- **Metrics**: Go aggregates blocks in-memory (per ad_host/site + per mac_hash), flushes
+  every 10s to a new portal `POST /__toolbox/ad-event` (unauth R3-perimeter, body-bounded,
+  never 500s) → SQLite store → #ads dashboard live again (total_blocked rising).
+- **Popups**: Go injects `<style id="sbx-ghost-style">` on R3 HTML (wg-gated, idempotent,
+  on the gzip path with the banner) — ports `_COSMETIC` + ad-specific popup tokens
+  (interstitial/ad-overlay/popup-ad/popunder/exit-intent), conservative (no bare
+  modal/popup/overlay, regression-tested). Verified live on the R3 path.
+- toolbox-ng 0.1.5 deployed (rolling restart) + portal api.py hot-deployed (drift closed
+  at next .deb build). Portal uvicorn boot ~14s.
+
+## 2026-06-18 — #662 Phase 7: Python R3 engine DECOMMISSIONED + nft persistence
+
+- **nft persistence** (master `eea46326`): the boot re-apply source is the drop-in
+  `/etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft` (loaded by nftables.service). Edited
+  it `808x→809x` (live already 809x → zero disruption), `nft -c -f` validated reboot-safe;
+  patched the repo source `packages/secubox-toolbox/nftables.d/secubox-toolbox-wg-fanout.nft`.
+- **Python decommissioned**: `disable --now secubox-toolbox-mitm-wg-worker@{1..4}` +
+  `-mitm-wg-dynreload.path` → 8081-8084 free, **~240M RAM freed**. Units kept (disabled)
+  for emergency rollback. **Kept** `secubox-toolbox-mitm.service` (R2 captive-AP mitm on
+  10.99.0.1:8080 — a different path; the cutover was R3-only). Also pointed the board's
+  `/usr/share/.../secubox-toolbox-wg-fanout.nft` → 809x so a postinst re-run can't revert
+  to dead ports.
+- **Verified self-sufficient with Python gone**: banner injects on gzip HTML, ads 204,
+  redirects relayed 301.
+- Deliberately did NOT rebuild+reinstall the secubox-toolbox .deb (portal-restart blip +
+  board-wide nft reload, gratuitous) — repo source is 809x, the next natural build closes
+  the installed-payload drift. **#662 epic complete: Go engine sole R3 MITM, fast, ~64MB
+  vs ~280-470MB, persistent, ad-block + banner + redirects all correct.**
+
+## 2026-06-18 — #662 R3 CUTOVER to the Go MITM engine (PR #670) — LIVE + banner ported
+
+- **Cutover executed and live.** The Go engine now serves **100% of R3 traffic**,
+  replacing the Python mitmproxy workers. Found + fixed 4 blockers that made the dark
+  package unable to serve the live path: (1) it forged with the wrong CA (ca-wg "WG CA"
+  vs the "R3 CA" clients trust) → now uses the mitmproxy confdir bundle; (2) root-only
+  key vs non-root user → R3 CA bundle is group-readable; (3) bound 127.0.0.1 vs the
+  10.99.1.1 DNAT target → now binds 10.99.1.1; (4) ran CONNECT vs transparent → now
+  `--transparent`. `loadCA` scans PEM blocks by type (combined cert+key bundle).
+- **Validated on real arm64 hardware** then rolled out gated: localhost forge against
+  the real R3 CA → scoped-DNAT transparent capture → **canary slot 3 (~25%, dead-man
+  armed)** → **widen to 100%**. At 100%: 0 restarts, 0 errors, ~64MB total
+  (vs Python ~280-470MB), even round-robin, 142 distinct SNIs/75s.
+- **Banner ported** (the one regression the user caught — "no more banner but fast").
+  Go now injects the real loader `<script src="/__toolbox/loader.js" data-mh=.. data-wg=..>`
+  (guard-idempotent, R3 wg flag, mac_hash identity) and reverse-proxies
+  `/__toolbox/loader.js`+`/__toolbox/bundle` to the portal (127.0.0.1:8088, fail-open),
+  keeping bundle/level logic in Python. Verified live: loader injected + assets 200.
+- **Rollback** = one `nft replace` (Python workers kept warm). **Persistence gap**: the
+  nft flip is a live edit, not yet in the drift-managed generator → reboot safely falls
+  back to Python (workers enabled, banner intact). Phase 7 (decommission Python +
+  persist nft) deferred to a soak'd follow-up.
+
+## 2026-06-18 — #662 MITM engine migration: P5-prep + P6-prep (PRs #668, #669, all DARK)
+
+- **P5-prep (PR #668).** Wired the ported `Decide`+jar into the Go engine's request/
+  response handlers: `handleConnect` runs allow/splice/block/mitm; `anonymizeRequest`
+  (strip operator/re-id headers + DNT/GPC) on every MITM'd flow; cookie-poison gated
+  to mitm+tracker only (never allow/own-infra; fail-closed-to-clean; benign cookies +
+  Set-Cookie attrs preserved). New `secubox-toolbox-ng` debian pkg builds an arm64
+  `.deb` shipping `/usr/sbin/sbxmitm` + a **DISABLED** `worker@.service` on `:809%i`
+  (no enable/start, no nft). 22 Go tests, reviewed APPROVED.
+- **P6-prep (PR #669).** No-traffic build-out of the live transparent path, still DARK.
+  `machash.go` ports `mac_hash_of`/`_wg_hash_of` (WG peers → `sha256(pubkey)[:16]`,
+  mtime-cached, fail-open) wired into `clientHashFromConn`, cross-engine parity vs
+  Python (anti-rig verified). Transparent `SO_ORIGINAL_DST` accept (`--transparent`,
+  default off): peeks ClientHello SNI WITHOUT decrypting → Decide → **splice = true raw
+  passthrough** (never `tls.Server`) / else forge via replayable `prefixConn`; upstream
+  TLS verifies by SNI, pins captured ip:port. Two-stage review caught + fixed a
+  splice-decrypt defect. Builds linux/arm64+amd64+darwin, vet clean, race green, Python
+  parity 10 passed. CONNECT path + poison gate byte-unchanged.
+- **Engine now functionally complete + packaged, entirely DARK.** Remaining work =
+  the production DEPLOYMENT phases (shadow → cutover → decommission), which touch live
+  R3 traffic and are deferred to a deliberate watched session — NOT chained off "go".
+
+## 2026-06-18 — #656 Ad Intelligence (PR #657, toolbox 2.6.56) + splice reverted
+
+- **Ad Intelligence — learn/act/measure.** `ad_ghost` now records every
+  block/silent per (ad_host, site=registrable(Referer), action) into a new
+  `ad_block_stats` store (in-memory dicts, bg-thread flush — no SQLite on the
+  proxy hot path), exposed via `GET /admin/ad-stats` + a new **#ads dashboard
+  tab** (top ad hosts, ads-blocked-per-site, action split, KB saved). Aggressive
+  learning: 3rd-party ad-shape requests captured as `ad_candidates`; autolearn
+  `_ad_feed` promotes hosts on ≥AD_MIN_SITES (default 1) distinct sites into the
+  204'd blocklist. Safety (inverts the splice mistake — learning to BLOCK is
+  reversible): `ad-allowlist.txt` always wins, `ad_learn` toggle, every block
+  visible in metrics, no IP-drop, no CSP weakening. 115 tests green; deployed +
+  verified (/admin/ad-stats 200, metrics flowing, ad_ghost intact).
+- **Splice (#649/#651) REVERTED to off.** `tls_splice=on` bypassed the whole
+  addon chain → autolearn promoted telemetry/tracker hosts (datadog/MS/newsroom)
+  to splice → ad_ghost/anti-track bypassed → ads returned. Flipped `tls_splice=off`
+  (full MITM, ad-blocking restored). Splice perf vs ad-blocking is a fundamental
+  conflict; needs media-only-no-learn rework before any re-enable.
+- **Banner #653 reverted** (async loader can't read currentScript → inline-bundle
+  was dead code; setupReassert regressed the banner). Board on 2.6.55-equivalent
+  banner. The strict-CSP/SPA banner gap (YouTube) is the browser-extension's job
+  (webext content-script WIP on `feature/655`, paused).
+
+## 2026-06-18 — #649 selective SNI-splice (Lever A) shipped dark (PR #650, toolbox 2.6.54)
+
+- **Architecture decision.** Asked "do we need a full mitm for R3 HTTPS?" Answer:
+  outbound HTTPS interception intrinsically needs per-host cert forging (the
+  WAF/own-cert analogy doesn't transfer) — so we keep a forging MITM but only
+  decrypt flows we'd actually modify. Plan = A-then-B: **A** = selective
+  SNI-splice (this), **B** = Go/Rust core (strategic, later). WAF deferred.
+- **Lever A.** New `tls_splice` addon (first in the mitm-wg chain) decides at the
+  TLS ClientHello, from the SNI alone, whether to MITM or **splice** (raw
+  passthrough — no forge/decrypt/parse/16-addons). Policy: curated media-only seed
+  (googlevideo/ytimg/fbcdn/twimg/scdn…, deliberately NOT generic CDN edges) ∪
+  autolearn-promoted never-HTML hosts (`splice_host_obs` table, ≥20 obs,
+  html_hits==0). Never splices trackers/fortknox/no-SNI/media_cache-on. Learning
+  obs recorded off the event loop (bg thread), only for undecided hosts.
+- **Dark-launch.** Ships `tls_splice=observe` (classify + log would-splice, still
+  MITM — zero behavior change); `on` flip is post-soak; `off` kill-switch.
+- **Built TDD** (7 tasks, 102 tests), two-stage reviews per task + whole-branch
+  review (APPROVED; closed a hot-path sync-SQLite issue → bg-thread offload, and a
+  fortknox-WebUI never-set refresh gap). **Deployed gk2 2.6.54**, rolling restart
+  of the 4 workers, addon loads clean, 0 runtime errors, dark default confirmed.
+  Next: soak → review → flip `on`.
+
+## 2026-06-18 — #623 systemic shared-parent clobber resolved at source (PR #648)
+
+- **Root cause corrected.** The recurring `/var/{lib,log,cache,…}/secubox` parent
+  clobber was NOT the `install -d -m 0750 /parent/leaf` leaf form (empirically
+  proven harmless: GNU `install -d -m` modes only the final component). It was the
+  scaffold boilerplate `install -d -m 750 /var/lib/secubox` + `/run/secubox` (BARE
+  parents) in ~56 module postinsts — written `-m 750` (3-digit), which is why prior
+  greps/sweeps (#511/#627/#631) missed it.
+- **Source-wide fix.** Scripted rewrite of all bare-parent targets → `/run/secubox`
+  1777 root:root, `/var/lib|log|cache|etc|usr/share/secubox` 0755; 6 multi-arg
+  lines split per-parent (4 were setting `/var/lib/secubox` world-writable 1777 —
+  a security regression); 3 `chmod 750 /var/log/secubox` (soc-gateway/soc-agent/
+  ui-manager) → 0755. Module-private leaves (`/var/lib/secubox/<mod>` 0750) left
+  untouched. Scaffold `new-package.sh` + `.claude/PATTERNS.md` fixed so new
+  packages don't reintroduce it. secubox-core 1.1.8 tmpfiles.d now declares all 5
+  shared parents at 0755 (mode-only) for boot/install-time self-heal.
+- **Verified:** all 64 changed maintainer scripts `bash -n` clean; zero bare-parent
+  restrictive lines remain (install-d + chmod forms); saas-relay + core rebuilt and
+  packaged postinst/tmpfiles confirmed. Two-stage review (found + closed 2 gaps:
+  the chmod-form clobbers + tmpfiles coverage). NOT mass-deployed (60-pkg restart =
+  thundering-herd risk); live covered by `secubox-dirs-guard.timer`; lands at next
+  CI image build / reflash.
+
+## 2026-06-18 — perf sprint (hub latency, R3 tunnel encoding) + crowdsec unblock
+
+- **Hub dashboard latency (#644, PR #645, hub `1.4.6`).** The hub runs mounted in
+  `secubox-aggregator` (no sub-app lifespan → cold caches); cold `/dashboard` fanned
+  out ~16 sequential `systemctl is-active` (9-12 s) and `/public/health-batch` did an
+  uncached 3.3 s `list-units`. Fix: `_ensure_services_warm()` (one batched offloaded
+  `is-active`, double-checked lock vs thundering herd) on dashboard/status/modules/
+  alerts; `_refresh_health_batch()` TTL snapshot served by the bg loop, cold-miss =
+  one offloaded call. **Verified live: health-batch 3.3 s → 8 ms** (77 modules, shape
+  unchanged). Toolbox `/admin/clients/rich` enrichment capped to the 12 most-recent.
+- **R3 tunnel web-load (#646, PR #647, toolbox `2.6.53`).** Diagnosed live: 4-core
+  board at load ~5; the 4 mitm-wg workers are GIL-bound (~1 core total, ceiling ~30%/
+  worker) competing with R2-mitm/gitea/metrics/crowdsec. Hot path already cached. The
+  one code fix: `inject_banner` forced `Accept-Encoding: identity` on EVERY document
+  for stream-inject, but streaming is disqualified on CSP-strict sites + when upstream
+  compresses → those pages pulled uncompressed (3-5× bytes) through the worker for
+  zero benefit. Now adaptive: keep gzip/br by default, learn per-host eligibility
+  (`_STREAM_VERDICT`, capped/self-healing), strip identity only on proven-eligible
+  hosts' next visit. No feature loss; workers came back leaner (72 MB vs 117 MB).
+  Deploy via detached `dpkg -i` + rolling sequential restart of the 4 workers.
+- **crowdsec unblocked.** Its postinst's `cscli hub update` had 403'd
+  (cdn-hub.crowdsec.net) leaving it half-configured (blocking apt). Re-tested → the
+  403 was TRANSIENT CloudFront throttling (HTTP/2 200, real Amazon cert, not WAF-
+  intercepted); `dpkg --configure crowdsec` → RC=0, `dpkg --audit` clean. No patch.
+
+## 2026-06-15 — gitea mis-route fix + robust WAF route propagation
+
+- **gitea (`git.maegia.tv`) 404 → 200.** Pure routing-table error: its WAF
+  route pointed at `192.168.1.200:8000` (unrelated nginx) instead of the gitea
+  LXC `10.100.0.40:3000`. Corrected the route; gitea container was healthy
+  throughout. (`gitea.gk2`→nginx:9080 and `git.gk2`→gitea:3000 were already OK.)
+- **Robust route propagation (#609/PR #610, mitmproxy 1.0.8 + waf 1.2.6).**
+  Fixing gitea surfaced that the #603 *file* bind-mount binds an inode, so route
+  tools (`jq > tmp && mv` = new inode) didn't reach the addon until a container
+  restart. Now: **directory** bind-mount (host `/srv/mitmproxy` →
+  `/var/lib/secubox-waf-routes`, ro) + symlink, and the addon **live-reloads**
+  `haproxy-routes.json` on mtime change (10 s throttle, in `requestheaders`).
+  Verified live: `jq+mv` add → `[routes] live-reloaded 256 routes`, **0
+  restart**. Ported to source (both synced `secubox_waf.py` copies + wafctl) +
+  rebuilt into apt.secubox.in.
+
+## 2026-06-15 — WAF hardening + perf: close open-proxy, behind-WAF media cache
+
+Follow-up to the WAF restoration. Three findings investigated; two fixed.
+
+- **Open forward-proxy / loops (#605/PR #606, mitmproxy 1.0.6 + waf 1.2.4).**
+  `--mode regular` + HAProxy `default_backend mitmproxy_inspector` made the WAF
+  an open proxy: internet scanners (114.66.25.146, 211.154.17.165,
+  hashtagbrock.nl) drove a **72% backend-error rate** + 11 self-loop 508s/hr.
+  The `requestheaders` hook now serves ONLY our vhosts (routes / our domains
+  via routes-derived `local_suffixes` → nginx :9080 / `SELF_HOSTS`) and returns
+  **421 with no upstream connect** otherwise. Live: 0 external server-connects,
+  0 loop-508s, apt/admin/kbin 200, scanners 421.
+- **Behind-WAF media cache (#607/PR #608, mitmproxy 1.0.7 + waf 1.2.5).** New
+  `media_cache.py` addon caches cacheable GET media/static (image/video/audio/
+  font/css/js) from our vhosts on disk (URL key, 16 MB/obj, 2 GB LRU, TTL from
+  `max-age`) and serves repeats from cache — backend-load + latency win for
+  hosted media. **Not a bypass**: requests still pass `secubox_waf` inspection;
+  only the response body is served from a WAF-populated cache. Toggle
+  `/data/mitmproxy/media-cache.json` (default on). Live: `X-SecuBox-Cache: HIT`.
+  Gate fix vs the toolbox copy: cache on body length (our nginx is chunked).
+- **WG R3 tunnel** (`wg-toolbox`, 4 peers, 4 `mitm-wg-worker@{1..4}`) is
+  healthy — not the bottleneck; the WAF open-proxy churn was. All fixes ported
+  to source (both synced `secubox_waf.py` copies) + rebuilt into apt.secubox.in.
+
+**Still optional:** relax the forced `Connection: close` (FD-leak fix #496) to
+bounded keep-alive now that scanner churn is gone — lower per-request latency.
+
+## 2026-06-15 — APT repo: all packages published + signed (apt.secubox.in)
+
+Made the apt repo at `https://admin.gk2.secubox.in/repo/` (served from
+`/var/www/apt.secubox.in`, manager `repoctl`/reprepro) carry **all** packages.
+
+- **Was broken**: pool had 15 orphan debs with an **empty reprepro DB** and no
+  working signature — the published signing key `packages@secubox.in`
+  (fp 31848880…) has **no private key on the board**.
+- **Signing** (user chose on-board `apt@secubox.in`, fp 219BA872…): imported its
+  secret into the repo GPG home (`/var/lib/secubox-repo/gpg`), wrote
+  `conf/distributions` (`SignWith: 219BA872…`) + `conf/options`, re-published
+  `secubox-keyring.gpg` + `FINGERPRINT.txt`. `InRelease`/`Release.gpg` now
+  **Good signature**. (install.sh doesn't pin the fp — transparent.)
+- **Built all 144 packages** (`-d`, arch:all) + `reprepro includedeb bookworm`
+  → 288 entries (×2 arch), 145 debs in pool, current versions
+  (core 1.1.6, threat-analyst 1.4.4, vm 1.0.1, toolbox 2.6.37, hub 1.4.3).
+  WebUI `/api/v1/repo/packages` lists 288. Served + signed via nginx :9080.
+- **Tooling fix**: `scripts/build-packages.sh` now passes `-d` to
+  dpkg-buildpackage (it omitted it → dpkg-checkbuilddeps silently dropped
+  secubox-core and others from every build). 1 pkg failed (sentinelle-gsm,
+  buildinfo artifact race — deb still produced).
+
+**Public HTTPS now works — WAF mitmproxy restored (3 stacked bugs).** The WAF
+LXC (`mitmproxy`, served via HAProxy `mitmproxy_inspector` → 10.100.0.60:8080)
+was down board-wide (every inspected vhost 503/400), blocking public
+`apt.secubox.in`. Three compounding faults, all fixed live on gk2:
+
+1. **Crash-loop** (restart #45552): the `cookie-audit.conf` systemd drop-in
+   (added #156) overrode `ExecStart` but dropped `--set confdir=/data/mitmproxy`
+   → mitmdump fell back to `~/.mitmproxy`, which `ProtectHome=true` blocks →
+   `PermissionError: config.yaml`. Restored the flag in the drop-in (+ copied
+   the existing CA into `/data/mitmproxy` to preserve identity).
+2. **mitmproxy-11 routing**: the LXC addon (`secubox_waf.py`, pre-#499) only
+   redirected upstream in the `request` hook, but mitmproxy 11 opens the
+   upstream connection *before* `request` → traffic went to the public IP
+   (82.67.100.75). Added a `requestheaders` hook that sets
+   `flow.server_conn.address` (+ request host/port) before the connect.
+3. **Route-file drift** (the real killer, `routes_count: 0`): the addon reads
+   `/data/mitmproxy/haproxy-routes.json`, but the system maintains
+   `/srv/mitmproxy/haproxy-routes.json` (255 routes). The addon's file was
+   missing. Fixed by **bind-mounting** the host file into the container at the
+   addon's path (`/var/lib/lxc/mitmproxy/config`) so they stay in sync.
+
+Verified: `apt-get update` against `https://apt.secubox.in` fetches a
+**GPG-signed** InRelease + Packages (no signature errors), apt sees 130
+secubox packages, `.deb` downloads (200). Other inspected vhosts recovered.
+Live fixes are durable (container rootfs + LXC config survive restarts);
+porting them into the provisioning package is a follow-up.
+
+## 2026-06-15 — threat-analyst: global security overview (1.4.3, live on gk2)
+
+`secubox-threat-analyst` 1.4.1 → 1.4.3, merged via **PR #598 (closes #597)**,
+built + deployed live on gk2.
+
+- **#597** — threat-analyst page becomes a **global security overview**: all
+  metrics dynamic, fed live from WAF + CrowdSec + firewall. New cached
+  `/overview` endpoint (double-buffer, 60 s background refresh →
+  `overview.json`) aggregating WAF (`/run/secubox/waf.sock /stats`: threats
+  today, blocked 24 h, rules loaded), CrowdSec (detection: alerts), firewall
+  (enforcement: IPs blocked in nft via crowdsec-firewall-bouncer). WebUI gains
+  a "Vue globale sécurité" card row + source health line (`loadOverview()` in
+  `loadAll()`).
+- **Privilege-safe sourcing**: daemon runs as unprivileged `secubox` user →
+  `cscli`/`nft list` (both root-only) failed silently. Switched to CrowdSec's
+  privilege-free **Prometheus :6060** (`cs_alerts` + `cs_active_decisions`).
+  No privilege escalation, no coupling to broken `secubox-blacklist-sync`.
+- Also carried the **1.4.2 build-safe postinst** fix (#595/#596) which had
+  not yet reached the board (was at 1.4.1; `deb-systemd-helper` enable).
+- Live verified: CrowdSec 3712 alerts / 29312 active decisions, firewall
+  29312 blocked, WAF 140 rules; `/overview` 200 via socket **and** aggregator
+  proxy (aggregator restarted to re-discover the new route).
+
+**Found, not fixed (separate):** `secubox-blacklist-sync.service` is **failed**
+(#521, exit 2) → `secubox_blacklist` nft sets empty. Does not affect the
+overview (firewall count comes from the bouncer via Prometheus).
+
+### 1.4.4 — real CrowdSec ingestion (#599, PR #600)
+
+The overview cards populated, but the **headline stats + Top-N leaderboards
+stayed 0**: `collect_crowdsec_alerts()` shelled out to bare `cscli`, which
+fails for the unprivileged `secubox` user → `alerts.jsonl` empty.
+
+- **Read-only sudo ingestion** (backend only; frontend stays value-only):
+  collector now runs `sudo -n /usr/bin/cscli alerts list -o json -l 200`.
+  Ships `/etc/sudoers.d/secubox-threat-analyst` (only `cscli alerts/decisions
+  list *`, read-only), `visudo`-validated in postinst (self-removes if bad).
+- **`NoNewPrivileges=no`** on the unit so sudo can escalate — matches the
+  sibling `secubox-crowdsec` / `secubox-waf` units (`NoNewPrivileges=yes`
+  had blocked sudo: "no new privileges flag is set").
+- **Auto-collect loop** (~5 min) fills the DB without the page open; severity
+  mapped correctly (`remediation` is a bool).
+- **Dedup + 48 h compaction**: `get_recent_alerts` dedups by id, `compact_
+  alerts()` bounds the append-only log (was inflating counts/leaderboards).
+- Live verified (1.4.4): `alerts_24h=12`, **13 unique IPs, 10 countries**
+  (BG/BR/DE/FR/ID/IE/JP/NL/SG/US), 6+ scenarios → stats + leaderboards real.
+
+### secubox-vm 1.0.1 — /vm/ showed 0 containers (#601, PR #602)
+
+`https://admin.gk2.secubox.in/vm/` reported 0 containers though gk2 runs 20
+LXC (16 running). Two compounding bugs:
+
+- **Privilege**: the **aggregator mounts each module in-process** as the
+  unprivileged `secubox` user (serving model confirmed:
+  `/usr/lib/python3/dist-packages/aggregator/main.py` imports
+  `/usr/lib/secubox/<name>/api/main.py`). Bare `lxc-ls` can't see root's
+  `/var/lib/lxc` → empty.
+- **Wrong `-F` key**: `lxc-ls -F MEMORY` is rejected (`Invalid key`) and emits
+  no rows — valid key is `RAM`.
+
+Fix (backend-only): LXC read+lifecycle via `sudo -n` (`run_priv`); ships
+`/etc/sudoers.d/secubox-vm` (`lxc-ls/info/start/stop`, visudo-validated);
+`lxc-create`/`destroy` stay root-only (endpoints carry no JWT); `lxc-ls -F
+…,RAM`; postinst reloads `secubox-aggregator`. KVM/libvirt readings were
+already correct (`/dev/kvm` absent, libvirtd off). Live: `containers
+{total: 20, running: 16}`, `/vms` lists all 20.
+
+## 2026-06-14 — ToolBoX privacy/perf sprint : 2.6.23 → 2.6.36, all live on gk2
+
+Large feature sprint on `secubox-toolbox` (built + merged + deployed live,
+kbin healthy) + clients + two live fixes. Each shipped via PR + merge +
+build + deploy.
+
+**Toolbox (`secubox-toolbox` 2.6.23 → 2.6.36):**
+- #560 protective mode — tracker alerting + active **spoofer** (strip
+  operator/tracking headers, drop 3rd-party cookies, DNT/GPC). Live in
+  `spoof` on the 4 R3 workers + R2.
+- #566 modular **filters** (`/etc/secubox/toolbox/filters.json`, WebUI
+  `/admin/filters/ui`) + R3+/R4 **ad/banner ghoster** (ad-hiding CSS +
+  204 ad/tracker hosts ; savings → banner quick-stats).
+- #584 ad ghosting = **collapse** (no placeholder ; reverted #576 black-hole).
+- #577 shared **media proxy-cache** (image/video-segment, 16 MB/obj cap,
+  2 GB LRU, default OFF/opt-in) — `/admin/cache`.
+- #589/#591 **autolearn** bad trackers → ad_ghost block set (threat-intel
+  domains + operator-grade cross-site ; anti-bot excluded) + hourly timer.
+- #553/#549 cartographie **donut** (continent→country) + #587
+  **domain-nugget** cloud (country→eTLD+1) + #575 **IP nodes hidden**
+  (flag+name only) + #555 **favicons** of major sites (never IPs).
+- #545/#572 banner: neon → colourful **emoji-chip guirlande** ;
+  inspected→**protected** on R3+/R4 ; #578 shared **pin** broadcast
+  (`/admin/pin/ui`).
+- #570 DPI **media/content-type statistifier** + donut (`/admin/media/ui`).
+- #574 webext popup **protection panel** ; #568 top-tracker list capped 5.
+- #562 `/ca/fingerprint` surfaces the **R3 CA** (D5:E4:3A) on the tunnel.
+- #581 **postinst fix** : enabled units get a real `restart` on upgrade
+  (was leaving the portal dead → kbin 503 ; bit us twice).
+- #516 review (#564): `detect_antibot` → (vendor, **is_challenge**),
+  response-level (cf-mitigated / non-200 token) — deployment vs challenge.
+
+**Clients:** Android APK **v0.3.0** (real zero-tap : launch + boot
+auto-onboard) ; webext **v0.1.4** (crash-fix const-ext, favicons, popup
+protection panel) — both served from the cabine + GitHub releases.
+
+**Live fixes:** Nextcloud iPhone photo sync (disabled broken
+`files_antivirus` + raised PHP upload limits) ; kbin 503 root-caused →
+#581.
+
+**Open / blocked:** #592 unified webmail-hub (Gmail OAuth2 + Gandi + OVH) —
+design filed, BLOCKED on a Google OAuth client + operator decisions.
+
+## 2026-06-13 — Browser extension : emancipate cartographie live (ref #532)
+
+Nouveau client `clients/webext-toolbox/` (MV3 Firefox `.xpi` + Chromium),
+sœur de l'app Android. Surface la cartographie sociale R3 dans le
+navigateur : badge live des traceurs + popup (4 tuiles + mini Round-Eye
+graph SVG sans dépendance + top-traceurs taggés CDN/anti-bot/opérateur +
+actions cartographie/PDF/RGPD-wipe). Parle uniquement à la cabine via R3
+(pas de CORS backend grâce à host_permissions).
+
+`secubox-toolbox 2.6.14` : `GET /wg/toolbox.xpi` (local sinon 302 →
+release), bouton onboard, helper `secubox-toolbox-fetch-xpi`, postinst
+dir. CI `build-webext.yml` (`web-ext lint` + build, release asset sur tag
+`webext-v*`). Suivi : signature AMO, SSE `/social/live`, icône PNG
+Chromium, Poke/Emancipate (#525).
+
+---
+
+## 2026-06-13 — Android ToolBox app : serve + root-mode silent onboarding (ref #531/#536/#538)
+
+App compagnon Android one-tap R3 (`clients/android-toolbox/`, Kotlin + Compose).
+
+- **#531** — scaffold Gradle/Compose + CI `build-android-apk.yml` (debug APK
+  artifact, release asset sur tag `android-v*`). CI green.
+- **#536** — `GET /wg/toolbox.apk` (build local sinon 302 → release GitHub) +
+  bouton onboard kbin + helper `secubox-toolbox-fetch-apk`.
+- **#538** (PR #539) — root-mode silent onboarding : install CA système
+  (bind-mount cacerts + APEX conscrypt, SELinux ctx, `subject_hash_old`
+  pur Kotlin) + WireGuard natif noyau + vérif R3 auto, gated derrière le tap
+  `⚡ Installation automatique (root)`. Fallback handoff app WireGuard.
+  Fichiers `RootShell.kt`, `RootOnboard.kt`, step `RootAuto`. CI APK build
+  green (code compile).
+- Suivi : release signing (keystore CI) pour empreinte publiée stable.
+
+---
+
+## 2026-06-11 — Phase 12.C + Phase 13 protection enforcement plane COMPLETE (ref #518-#528)
+
+`secubox-toolbox 2.6.6 → 2.6.11`, tags v2.13.16 → v2.13.19.
+
+### Phase 12.C — operator-grade / state-adjacent (#518, v2.13.16, 2.6.7)
+`detect_operator_grade` : telco header-enrichment (MSISDN/x-acr/WAP),
+operator-consortium (Utiq/TrustPid), data-broker / state-adjacent hosts
+(LiveRamp/BlueKai/Acxiom/Neustar/Tapad/Experian/Palantir-class). Top
+severity void-purple lens + double ring + ⛔ banner + PDF evidence
+section. Detection only.
+
+### Phase 13 — protection enforcement plane (#519) COMPLETE
+Made the SecuBox ban plane (Vortex DNS + WAF + CrowdSec) actually enforce
+on device browsing across every egress path.
+- **13.A** (#521, v2.13.17, 2.6.8) — `inet secubox_blacklist` nft table,
+  v4/v6 interval+timeout sets, single forward-hook drop chain (covers
+  captive/WG/br-lxc/LAN); `secubox-blacklist-sync` unions CrowdSec bans +
+  threat-intel C2 (2h timeout); /admin/blacklist. **Also fixed the
+  override_dh_strip latent bug** (never runs for arch:all → nft/unbound/
+  nginx/perf drop-ins had stopped shipping; root cause of live-config
+  drift) by moving to execute_after_dh_auto_install. Memory saved.
+- **13.B** (#522, v2.13.17, 2.6.9) — DNS-guard: resolve blocklisted
+  domains → IPs into the set (closes DoH/hardcoded-IP bypass); count-only
+  DoH/DoT detection chain (15 v4 + 6 v6 providers); SECUBOX_DOH_BLOCK
+  opt-in. create-or-replace idiom → idempotent reloads.
+- **13.C** (#524, v2.13.18, 2.6.10) — per-device attribution: rate-limited
+  SBX-BL-DROP/SBX-DOH nft logs → journald tailer → device_blocks
+  (anonymous WG/lease hash); quarantine set + /admin/quarantine + one-click
+  operator action.
+- **13.D** (#527, v2.13.19, 2.6.11) — feedback loop: escalation evaluator
+  reads opgrade/antibot/device-blocks aggregates, escalates over threshold
+  to blacklist IPs / cscli decision / device quarantine. Audit-logged,
+  reversible, **all sources default OFF** (opt-in via SECUBOX_ESCALATE_*).
+
+**Doctrine** : DEFAULT DROP preserved (policy accept only adds drops); no
+WAF bypass; anonymous (rotating mac_hash); all escalations TTL'd +
+reversible + opt-in. Verified live on gk2 (18 C2 IPs enforced, quarantine
+add/remove, synthetic escalation + audit entry).
+
+### Future idea captured (#525)
+Phase 14 deception plane — pseudo-responses from a proxy instead of
+dropping tracker IPs (indistinguable, pollutes the profile) + neutralizing
+CDN-preloaded tracking scripts. For later.
+
+---
+
+## 2026-06-10 (soir) — Phase 11 COMPLETE + Phase 12.A/B + toolbox tabs — v2.13.15 (ref #502-#516)
+
+Consolidated stack merged via PR #517. `secubox-toolbox 2.5.2 → 2.6.6`,
+tag **v2.13.15**.
+
+### Package progression
+2.6.0 (11.A backend) → 2.6.1 (11.B frontend) → 2.6.2 (#513 toolbox tabs)
+→ 2.6.3 (11.C consent+PDF) → 2.6.4 (12.A CDN) → 2.6.5 (12.B anti-bot) →
+2.6.6 (Carto kbin-redirect fix).
+
+### Phase 11 — social mapping per device (#502) COMPLETE
+- **11.A** (#505) : `social.py` correlation engine, 3 SQLite tables,
+  `social_graph.py` addon (cookie_id_hash = sha256, never raw values),
+  `/social/graph|wipe/{token}` + `/admin/social-aggregate`.
+- **11.B** (#507) : d3 force-directed view, FR/EN i18n, server-side
+  favicon proxy, wipe modal (3s countdown), `/social/me` splash link.
+  Critical live fixes : PYTHONPATH in mitm-wg launcher (every addon's
+  `secubox_toolbox` import was silently degraded), i18n in `<script>`
+  block, StaticFiles mount + 0755 www, X-R3-Peer resolution.
+- **11.C** (#508) : consent-platform probe (OneTrust/Didomi/Quantcast/
+  Sourcepoint), pre-consent + extra-EU evidence, bilingual FR/EN PDF
+  (fpdf2). Live PDF 200 / valid v1.3.
+
+### Toolbox WebUI (#513)
+5-tab nav (Vue d'ensemble / Clients / Filtres / Cartographie sociale /
+Config). Inline kbin `/admin/` HTML route (~230 lines) deleted ;
+canonical operator surface is now `admin.gk2.secubox.in/toolbox/`.
+
+### Phase 12 — anti-human-detection platform (#514)
+- **12.A** (#515) : `detect_cdn()` from response headers (11 vendors +
+  generic edge-cache), `social_host_meta` table, by_cdn aggregate.
+  **Round-Eye central-hotspot graph** : device = pulsing eye at centre,
+  sites on inner forceRadial ring, trackers outer ring, CDN-tinted nodes.
+- **12.B** (#516) : `detect_antibot()` (reCAPTCHA/hCaptcha/Turnstile/
+  Datadome/PerimeterX-HUMAN/Arkose/Kasada/Akamai-BotManager) from URL +
+  cookies + headers — DETECTION ONLY, bypass gated behind doctrine.
+  Severe cinnabar lens + spinning warning ring + "challenged your
+  humanity" banner. Visible ring levels (dominant radial + ring guides +
+  cache-bust). Per-client operator tools : 🕸️ Carto (token-minted graph
+  link, absolute kbin redirect), ↺ Reset/RAZ (`store.reset_client` +
+  `social.wipe_mac`).
+
+### Round Eye gadget — diagnosed, physical fix required
+OTG USB CDC-Ethernet TX queue wedged (NETDEV WATCHDOG, probe -110).
+Gadget enumerates but data path dead. gk2-side recovery exhausted
+(link bounce, USB unbind/rebind). Needs Pi power-cycle / cable re-seat.
+
+### Live + verified on gk2
+Graph renders real cross-site tracking (`35.214.136.108` relay bridging
+4 publishers), PDF valid, CDN + anti-bot read paths green end-to-end,
+reset works, Carto opens the client graph on kbin.
+
+---
+
+## 2026-06-10 — Phase 11 social mapping (A+B) + system triage + v2.13.14 (ref #502-#509)
+
+### Package bumps
+
+| Package | from → to |
+|---|---|
+| secubox-toolbox | 2.5.2 → **2.6.0** (#505 Phase 11.A backend) |
+| secubox-toolbox | 2.6.0 → **2.6.1** (#507 Phase 11.B frontend) |
+| secubox-waf | 1.2.1 → **1.2.2** (#509 double-buffer cache) |
+| Release tag | **v2.13.14** |
+
+### Phase 11 — Social mapping per device (#502)
+
+**11.A backend** (`secubox-toolbox 2.6.0`, PR #506) — `social.py`
+correlation engine + 3 SQLite tables (`social_edges` / `social_nodes`
+/ `social_links`), `social_graph.py` mitm addon (cookie_id_hash =
+sha256, never persists raw values), `/social/graph/{token}` +
+`/social/wipe/{token}` (RGPD art. 17) + `/admin/social-aggregate`
+endpoints, fold + purge background tasks.
+
+**11.B frontend** (`secubox-toolbox 2.6.1`, #507) — d3 force-directed
+graph view at `/social/{token}`, FR/EN i18n, server-side favicon proxy
+(7d cache), wipe modal with 3s countdown, full-viewport layout with
+pan/pinch-zoom + pre-warm + autoFit. Splash menu link `/social/me`
+(🕸️ Ma carto) resolving R3 peers via X-R3-Peer sentinel.
+
+**Live result** : graph renders real cross-site tracking on gk2 — the
+ad-tech relay `35.214.136.108` bridging 360yield + seedtag +
+smartadserver + smilewanted publishers, surfacing exactly the
+fingerprint reuse Phase 11 targets.
+
+**Critical live-deploy fixes** : addon relative-import never resolved
+(mitmproxy loads addons top-level) → inlined; **PYTHONPATH missing in
+mitm-wg launcher** silently degraded every addon's `secubox_toolbox`
+imports → fixed globally (also un-degraded inject_banner's host
+classification + GeoIP); i18n moved to `<script>` block (FR
+apostrophes broke JSON.parse); StaticFiles mount + chmod 0755 www
+(kbin HAProxy path bypasses nginx).
+
+**11.C** (#508) — WIP checkpoint `55626e51` : schema (consent_state +
+GeoIP columns), EU/EEA whitelist, GeoIP fold enrichment, evidence()
+helper. PDF generator + consent-probe addon + frontend wire pending.
+
+### System triage on gk2
+
+- **CrowdSec firewall** — bouncer ran healthy but had no nft tables
+  (external flush). Restart recreated `ip crowdsec` + `ip6 crowdsec6`,
+  100 live decisions.
+- **WAF + SOC empty cards** — `/var/log/secubox` was 0750
+  secubox-toolbox, blocking the aggregator (user `secubox`) from
+  traversing to read `waf-threats.log`. chmod 0755 live.
+- **WAF /stats 30s+ timeout** — `_get_threat_stats()` re-parsed the full
+  110 MB / 332k-entry JSONL on every request (89% aggregator CPU).
+  Fixed via #509 double-buffered cache : disk-persisted counters +
+  byte-position incremental tail reading. `/waf/stats` now 30-37 ms.
+- **PeerTube + PhotoPrism 502** — LXCs were STOPPED; `lxc-start` → live.
+
+### CI + release
+
+- #503/PR #504 — drop espressobin-v7 + ultra from the scheduled
+  build-image matrix (cause of the v2.13.9-12 release failures).
+- #509/PR #510 — double-buffer WAF cache.
+- Merged both to master (`3ebb4477`, `a6f44807`), tagged **v2.13.14**.
+
+### Carried forward
+
+- Round Eye gadget remote-link to gk2 (shows local metrics only) —
+  needs Pi-side investigation.
+- admin.gk2/toolbox/ tab surfacing decision (proxy/iframe/sub-tab).
+- `/var/log/secubox` 0755 source-side postinst patch (live-only for now).
+
+---
+
+## 2026-06-09 — Phase 10 banner injection perf quick wins + postinst regression fix (ref #501)
+
+### Package bumps
+
+| Package | from → to |
+|---|---|
+| secubox-toolbox | 2.5.0 → **2.5.1** (banner perf, déployé live) |
+| secubox-toolbox | 2.5.1 → **2.5.2** (postinst regression fix, code-only) |
+
+### What landed
+
+**1. Banner injection quick wins** (`secubox-toolbox` 2.5.1, commit `ce059d0f`)
+
+User signal : "la banner n'apparait qu'en fin de chargement et les
+chargements de pages sont très lents". Quatre changements ciblés :
+
+* `_host_signals(host)` — nouvelle fonction LRU-cachée (maxsize=2048)
+  retournant `(app_emoji, app, flag, country, asn, status, status_icon)`.
+  Re-hits coûtent un dict lookup au lieu de 5-50 ms (`classify_host` +
+  `whitelist match` + GeoIP DNS+mmdb).
+* `_count_trackers_in_body()` retiré du chemin chaud. Le flag
+  `is_tracker_host` (regex cheap sur l'host de la requête) couvre le
+  signal privacy ; le scan plein-corps économise 30-200 ms sur les
+  publishers lourds.
+* `_MAX_INJECT_BYTES = 2 MB` — skip injection sur gros corps via
+  pré-check `Content-Length` + garde défensive `len(body)` pour les
+  streamed bodies sans CL.
+* Tile 🎯 N trackers (corps) supprimée ; cookies + ⚠ tracker-host
+  conservés.
+
+Confirmation utilisateur post-déploiement gk2 : "browsing performance
+on iPhone is better... perfect work".
+
+**2. Postinst regression fix** (`secubox-toolbox` 2.5.2, commit `15f48d9d`)
+
+Deux régressions silencieuses pendant le déploiement 2.5.0 → 2.5.1 sur gk2 :
+
+* **kbin.gk2.secubox.in 503 pendant 5 min** : dpkg upgrade a SIGTERMé
+  `secubox-toolbox.service` (FastAPI kbin landing) et ne l'a jamais
+  redémarré, car `dh_installsystemd --no-start --no-enable` dans
+  `debian/rules`. Détecté quand l'utilisateur a signalé "kbin 503".
+* **iPhone tunnel inutilisable** : postinst a écrasé
+  `/etc/nftables.d/secubox-toolbox-wg.nft` avec la version single-port
+  DNAT, supprimant le fanout Phase 9 (que l'opérateur avait déployé en
+  runtime avec `nft -f` sans persistence côté package). Résultat : tout
+  le trafic WG R3 pinné sur worker@1 à 97 % CPU, w2-w4 idle. Détecté
+  quand l'utilisateur a signalé "browsing excessivement trop lent".
+
+Fixes postinst-only :
+
+* Postinst déploie maintenant `secubox-toolbox-wg-fanout.nft` en
+  `/etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft`. Le préfixe `zz-`
+  garantit le tri alphabétique après le base file dans le glob include
+  de `/etc/nftables.conf` → le base file crée la table + chains + UDP
+  51820 input rule, puis le zz drop-in flush+repeuple `prerouting`
+  avec le numgen fanout map sur ports 8081..8084.
+* Sur upgrade (`$2` set), `systemctl try-restart` sur
+  `secubox-toolbox.service`, `secubox-toolbox-mitm.service`, et les 4
+  instances `secubox-toolbox-mitm-wg-worker@{1..4}.service`. `try-restart`
+  est no-op si l'unité n'est pas active, donc safe sur fresh install.
+
+### Mitigations live appliquées sur gk2 (2026-06-09)
+
+* `systemctl start secubox-toolbox.service` — restaure kbin landing.
+* `cp .../secubox-toolbox-wg-fanout.nft /etc/nftables.d/zz-secubox-toolbox-wg-fanout.nft`
+  + `systemctl reload nftables.service` + `systemctl restart
+  secubox-toolbox-mitm-wg-worker@1.service` (pour drop les sticky
+  flows pinnés sur w1) — restaure le fanout 4-worker.
+
+### Mémoire ajoutée
+
+* `feedback_nft_layered_dropins_persistence.md` — Phase 9 fanout doit
+  trier APRÈS son table-creator (zz- prefix) ; ne jamais symlinker en
+  place du base file.
+* `feedback_postinst_preserve_runtime_state.md` — dpkg upgrade SIGTERMe
+  l'unité ; postinst doit try-restart + redéployer les drop-ins nft
+  appliqués en runtime.
+
+### Branche
+
+`perf/501-banner-injection-quickwins` poussée sur origin (commits
+`ce059d0f` + `15f48d9d`). **Pas de PR ouverte** par défaut (rule
+`feedback_no_unprompted_prs.md`).
+
+### À faire ensuite
+
+* Build + deploy `secubox-toolbox 2.5.2` sur gk2 (postinst-only — pas
+  de code change ; attendre fenêtre de maintenance).
+* Ouvrir PR #501 sur instruction.
+* Phase 10 future : refactor banner vers JS-driven async (élimine le
+  buffer-read pour TOUS les corps, pas seulement < 2 MB).
+
+---
+
+## 2026-06-08 — Phase 7.E.x LXC hygiene + auth recovery + Phase 8 opening (ref #498, #500)
+
+### Package bumps
+
+| Package | from → to |
+|---|---|
+| secubox-waf | 1.2.0 → **1.2.1** |
+| secubox-toolbox | 2.2.0 → **2.3.2** |
+| secubox-auth | 1.0.1 → **1.0.2** |
+| secubox-users | 1.4.1 → **1.4.2** |
+
+### What landed
+
+**1. LXC mitm WAF hygiene** (`secubox-waf` 1.2.1, commit `c5f0482e`)
+
+`mitmproxy.service` inside la `mitmproxy` LXC tournait 1 d 16 h
+avec 51 % d'eresp HAProxy. Phase 6.P avait shippé le
+`RuntimeMaxSec=21600` drop-in pour les host units mais avait oublié
+la LXC. `RuntimeMaxSec=21600` + memory caps maintenant en source.
+
+**2. Auto-detect `/wg/onboard`** (`secubox-toolbox` 2.3.0, commit
+`c5f0482e`)
+
+Une URL unique sniff User-Agent et rend le panneau de la bonne
+plate-forme (iOS / Android / Linux / macOS / Windows) ouvert en
+premier. Tous les artefacts inchangés ; l'onboard compose juste.
+
+**3. NM connection name fix** (`secubox-toolbox` 2.3.1, commit
+`f1418b53`)
+
+Switch de l'UA brut (`Mozilla/5.0 (X11; Linux x86_64; rv:151.0)`) à
+`village3b-r3-<dernier-octet>` pour le champ NetworkManager `id`.
+
+**4. LXC mitm-wg scaffolding + finding architectural**
+(`secubox-toolbox` 2.3.2, commit `3c4d1cc1`)
+
+- Provision script accepte `wg` target → LXC privilégié à 10.100.0.62.
+- Launcher mitm-wg paramétré par `MITM_WG_LISTEN_HOST`.
+- **Cutover live tenté + rollback** : transparent-mode mitm dans un
+  LXC échoue parce que `SO_ORIGINAL_DST` est conntrack-backed et
+  conntrack est namespace-scoped — les entries DNAT en netns hôte
+  sont invisibles depuis le netns LXC.
+- `mitmproxy --mode wireguard` (alternative) est strictement
+  single-peer. Migration de 35 peers = re-onboarding complet.
+- **Décision** : mitm-wg reste sur l'hôte. Scaffolding LXC reste
+  shippée pour une éventuelle archi multi-instance Phase 9.
+
+**5. Auth recovery** (`secubox-auth` 1.0.2 + `secubox-users` 1.4.2,
+commits `87bd8e51` + `64e4de16`)
+
+Symptôme : utilisateur locked out de l'admin UI. Trois bugs empilés :
+
+1. `ntp_health.probe()` n'avait que chrony ; fallback timedatectl
+   ajouté (les SecuBox ship timesyncd).
+2. Clock à +3.28 s vs NTP, force-step via ntpdate.
+3. **Auth complètement cassée** : `users.json` + `auth.toml` étaient
+   `root:root` → user `secubox` ne pouvait rien lire → tous les
+   logins "Identifiants incorrects". `auth.toml` n'avait JAMAIS été
+   chown'd depuis l'install initiale. Source fix : `secubox-users`
+   1.4.2 chowne les deux. Plus drop-in
+   `40-etc-secubox-rw.conf` (`ReadWritePaths=/etc/secubox`) pour
+   l'engine puisse persister `last_step` après verify TOTP.
+
+**6. Phase 8 — anti-tracking opérateur (Utiq)** (issue #500)
+
+Ouverture du tracker Phase 8. Plan complet 4 niveaux R0 / R1 / R2 / R3,
+schéma SQLite, banner UI, doctrine CSPN, Quick Win 1 j + Phase 2 1
+sem + Phase 3 doctrine. Prompt Gemini fourni pour design exploratoire.
+
+### Ref
+
+- Commits : `c5f0482e`, `f1418b53`, `3c4d1cc1`, `87bd8e51`, `64e4de16`
+- Public trackers : `#498` + `#500`
+
+---
+
+## 2026-06-07 — Phase 7 reboot follow-up sprint SHIPPED (ref #498)
+
+Same-day follow-up after the Phase 7.D mass reboot. Two user-facing
+regressions — iPhone tunnel broken end-to-end, kbin R3 verification
+card permanently "Hors tunnel R3" — plus several collateral fixes.
+
+### Package bumps
+
+| Package | from | to |
+|---|---|---|
+| secubox-toolbox | 2.1.0 | **2.2.0** |
+| secubox-aggregator | 0.1.0 | **0.2.0** |
+| secubox-waf | 1.1.3 | **1.2.0** |
+| secubox-magicmirror | 1.1.0 | **1.1.1** |
+| secubox-openclaw | 1.0.0 | **1.0.1** |
+
+### What broke and what fixed it
+
+**1. iPhone tunnel browsing cut after reboot.** Three independent
+boot-time gaps :
+
+- `/etc/nftables.conf` had no `udp dport 51820 accept` on the inet
+  filter input chain (policy=drop), so every WG handshake initiation
+  arriving from 192.168.1.254 was silently swallowed.
+- `secubox-toolbox-wg-provision` created the `inet wg-toolbox` NAT
+  table only at package install. After reboot the table was gone —
+  even if handshake had completed, packets had no MASQUERADE rule.
+- The wg-quick config has no `[Peer]` blocks by design ; the 35
+  enrolled peers live in `wg-peers.json` and are added via `wg set`
+  at runtime. Boot wipes them.
+
+**Fix** : new `nftables.d/secubox-toolbox-wg.nft` drop-in
+(`nftables.service` replays at boot) + new
+`secubox-toolbox-wg-restore.service` (oneshot After=wg-quick@... that
+re-injects every peer from JSON).
+
+**2. iPhone DNS resolution broken even with tunnel up.** Existing
+peer configs handed out `DNS = 10.99.0.1` (captive AP IP) but the
+wlan iface is linkdown most of the time, so resolution returned ICMP
+port unreachable. Unbound only listened on 127.0.0.1.
+
+**Fix** : `unbound/99-secubox-wg.conf` binds unbound on
+`10.99.1.1 + 10.99.0.1` with `ip-transparent` ; nftables drop-in adds
+DNS DNAT 10.99.0.1:53 → 10.99.1.1:53 for legacy peers ; `wg.py` now
+emits `DNS = 10.99.1.1` on new profiles.
+
+**3. R3 verification card permanently "Hors tunnel R3".** Two bugs in
+the detection chain, then a third in the cert-trust probe :
+
+- The toolbox FastAPI's R3 check read `request.client.host` — which
+  is the upstream proxy peer (unix socket / HAProxy IP) after the wg
+  → mitm-wg → HAProxy → nginx loop. The real client IP was always
+  lost.
+- mitm-wg didn't propagate the original peer IP upstream at all.
+- The JS verification probe loaded `http://10.99.0.1:8088/qr/...`
+  from an HTTPS page : iOS Safari blocks mixed content, so the
+  request never fired regardless of whether the network was reachable.
+- The cert-trust probe targeted `https://www.gstatic.com/generate_204`
+  — but gstatic.com is in mitm-wg's `ignore_hosts` whitelist, so
+  mitm-wg passed it through with the real Google cert. The probe
+  wasn't testing CA trust at all. Plus `generate_204` returns HTTP
+  204 with no body, which `<Image>.onerror` treats identically to a
+  cert error — every CA install reported as failed.
+
+**Fix** : new `inject_xff.py` mitm-wg addon (loaded first) adds
+`X-Forwarded-For`, `X-R3-Peer`, `X-Through-R3-Tunnel: 1` headers.
+New `_client_ip(request)` helper in `api.py` reads those. New
+`GET /wg/r3-check` endpoint returns `{tunnel:bool}`. `landing.html.j2`
+JS rewritten : same-origin `fetch('/wg/r3-check')` then
+`fetch('https://duckduckgo.com/favicon.ico', {mode: 'no-cors'})` —
+duckduckgo is not whitelisted so mitm-wg actually terminates TLS with
+the R3 CA, and `fetch(no-cors)` distinguishes a successful TLS
+handshake from a cert error unambiguously.
+
+**4. Linux operators can't import the WG profile.** Cosmic/GNOME/KDE
+nmcli refused the standard `wg-quick.conf` with "le mot de passe pour
+«wireguard.private-key» n'est pas indiqué dans le paramètre
+«passwd-file»". The private key flag defaults to agent-owned (1),
+which makes nmcli require `--ask`.
+
+**Fix** : new `GET /wg/profile/new.nmconnection` emits the same
+fresh peer in NetworkManager keyfile format with
+`private-key-flags=0` (system-owned). Drop into
+`/etc/NetworkManager/system-connections/`, `nmcli c reload`, click
+Connect.
+
+**5. Aggregator load spike (83 % CPU, free RAM 137 MB).** A single
+runaway Firefox tab on the toolbox admin dashboard was hammering
+`/api/v1/toolbox/admin/{health,config,clients,metrics,filter-control/list}`
+at ~530 req/sec (stacked `setInterval(refreshAll, 10000)` timers
+accumulating across session-restore + aggregator restarts).
+
+**Fix** : nginx `limit_req zone=sbx_toolbox_admin rate=20r/s burst=40
+nodelay` on `/api/v1/toolbox/admin/*`. Live numbers : load avg 9.16
+→ 2.34, free RAM 137 → 353 MB, aggregator CPU 83 % → 18 %.
+
+**6. Other follow-up fixes :**
+
+- `secubox-magicmirror` 1.1.1 — debian/rules now ships `api/routers/`
+  (was missing → `from .routers import mmpm` always failed).
+- `secubox-openclaw` 1.0.1 — postinst chowns `/var/lib/secubox/openclaw`
+  to `secubox:secubox` so the aggregator user can traverse it.
+- Migration helper skips legacy `secubox-*` prefixed twin dirs whose
+  canonical unprefixed sibling already exists.
+- Live-masked `secubox-ui-manager.service` (was looping in
+  `activating(start)` consuming 74 % of a core). Source fix pending.
+
+### Numbers after the sprint
+
+| | Before | After |
+|---|---:|---:|
+| Load avg (1 m) | 9.16 | 2.34 |
+| Free RAM | 137 MB | 353 MB |
+| Aggregator CPU | 83 % | 18 % |
+| mitm-wg CPU | 2.1 % | 4.3 % |
+| Modules mounted | 117/121 | 117/121 |
+
+### Files changed
+
+- `packages/secubox-toolbox/` : 13 files (nftables.d/, sbin/,
+  systemd/, unbound/, mitmproxy_addons/, secubox_toolbox/,
+  conf/, nginx/, debian/)
+- `packages/secubox-aggregator/` : 4 files (aggregator/,
+  sbin/, debian/)
+- `packages/secubox-waf/` : 2 files (api/, www/)
+- `packages/secubox-magicmirror/debian/rules`
+- `packages/secubox-openclaw/debian/postinst`
+
+### Ref
+
+- Branch landings : `8b0d4840`, `22748b29`, `613de765`, `9ac35005`,
+  `7e5c510c`, `6812dfb0`
+- Public tracker : `#498`
+
+---
+
+## 2026-06-06 — Phase 7.D ASGI consolidation SHIPPED (ref #498)
+
+Memory pressure on gk2 was driven by ~100 per-module uvicorn processes
+each carrying its own Python interpreter + FastAPI + Pydantic + Starlette
+in a separate address space (~30 MB duplicated × N modules). Phase 7.D
+collapses that into one master uvicorn that mounts every module's
+FastAPI as a sub-app.
+
+### What ships
+
+**New package — `secubox-aggregator` 1.0.0-1**
+
+- `aggregator/main.py` reads `/etc/secubox/aggregator.toml`, walks
+  `/usr/lib/secubox/<name>/api/main.py` for each entry and mounts the
+  resulting FastAPI under `/api/v1/<name>` via `app.mount()`. Failures
+  are isolated (try/except per module) and surfaced at `/health`.
+- The loader synthesises a per-module parent package `sbx_pkg_<name>`
+  whose `__path__` points at `<name>/api`, then loads `api/main.py`
+  as `<pkg>.main` with `__package__` set. This makes `from .deps
+  import X` resolve to the right `deps.py` even though the module is
+  not pip-installed. `sys.modules["api"]` / `api.*` is cleared before
+  and after every load so one module's `api/` cannot shadow another's
+  (the bug that hit `haproxy` after `auth` loaded — both have
+  `api/webui_identity.py`).
+- `systemd/secubox-aggregator.service` : single uvicorn on
+  `/run/secubox/aggregator.sock`, `--workers 1 --backlog 400
+  --limit-concurrency 200`, `PYTHONOPTIMIZE=1`, `MemoryMax=1G`,
+  `MemoryHigh=768M`.
+
+**Cutover helper — `secubox-aggregator-migrate`**
+
+- Discovers every `/usr/lib/secubox/<name>/api/main.py`, generates
+  `/etc/secubox/aggregator.toml`, restarts the aggregator, reads
+  `/health` to learn which modules actually mounted.
+- Rewrites every nginx `proxy_pass` that pointed at a per-module
+  unix socket (or hub's old TCP `127.0.0.1:8001`) to target
+  `aggregator.sock` AND preserve the `/api/v1/<name>/` prefix
+  upstream. Three places get patched : `/etc/nginx/secubox.d/`,
+  `/etc/nginx/secubox-routes.d/`, and inline blocks +
+  `location /api/` catch-all in `sites-enabled/webui.conf`.
+- Stops + disables per-module systemd units for migrated modules,
+  prints rollback recipe. Idempotent.
+
+### Numbers (live on gk2 after reboot)
+
+| | Before Phase 7.D | After Phase 7.D |
+|---|---:|---:|
+| uvicorn procs | 103 | 41 |
+| RAM uvicorn (RSS sum) | 3499 MB | 1984 MB |
+| Free RAM | 153 MB | 2.7 GiB (+18×) |
+| Modules mounted | (each on own port) | 119/121 in one proc |
+| Aggregator RSS | — | ≈170 MB |
+| Sample endpoint p50 | unchanged | unchanged |
+
+### Bug fixes during the same sprint
+
+- **Loader v1** flat-loaded `api/main.py` as `sbx_mod_<name>`, leaving
+  `__package__ = None`. Nine modules (`crowdsec`, `eye-remote`,
+  `haproxy`, `health-doctor`, `mail`, `modem`, `users`,
+  `secubox-crowdsec`, `secubox-modem`) failed with "attempted
+  relative import with no known parent package" or with a stale
+  `sys.modules["api"]` from a previously-loaded module. **Loader v2**
+  builds a synthetic parent package and clears the `api*` namespace
+  per load — all 9 now mount.
+- **Migration helper v1** only walked `/etc/nginx/secubox-routes.d/`
+  and used a naive socket-name sed that kept the `:/` strip-prefix
+  rewrite. Result on first run : `/api/v1/hub/public/menu` returned
+  502, navbar empty. **Migration helper v2** walks all 3 nginx config
+  locations and rewrites every variant to preserve the
+  `/api/v1/<name>/` prefix the aggregator expects.
+
+### Remaining edge cases (carried as follow-ups)
+
+- `magicmirror` : `api/__init__.py + api/main.py` ships in the deb
+  but `from .routers import mmpm` references a missing `routers/`
+  directory. Pre-existing bug — was broken under per-module systemd
+  too.
+- `openclaw` : `/var/lib/secubox/openclaw/` is 0750 `root:root`, the
+  aggregator user `secubox` can't traverse it during the module's
+  import-time `mkdir`. Fix is a postinst chown in the openclaw deb.
+- 4 nginx 503/404 (`heartbeat`, `secubox-haproxy`, `secubox-hub`,
+  `sentinelle-gsm`) — mount fine but each module's own `/health`
+  route is missing or hangs ; investigate per module.
+
+### Files changed
+
+- Source : `packages/secubox-aggregator/` (new package, ~430 lines
+  total — main.py, migration script, systemd unit, debian/*)
+- Live : `/etc/nginx/secubox.d/*.conf`, `secubox-routes.d/*.conf`,
+  `sites-enabled/webui.conf` (110+ files, mass-rewritten + backed
+  up under `.bak.phase7` / `/root/webui.conf.bak.phase7`)
+
+### Ref
+
+- Branch `feature/498-asgi-migrate`
+- Commits `5ef13b56` (skeleton) → `7b8cc301` (migration helper) →
+  `b1ee9427` (nginx rewrite fix) → `705476cf` (loader v2)
+- Public tracker : `#498`
+
+---
+
+## 2026-06-05 — Phase 7.A.2 + 7.B WAF dashboard + rate-limit + honeypot SHIPPED (ref #498)
+
+Same-day extension after Phase 7.A. Adds operator-facing dashboard, pre-mitm
+TCP rate-limit, and honeypot routes for known bot signatures.
+
+### What ships (live on gk2)
+
+**Phase 7.A.2 — backport + automation + dashboard**
+
+- `packages/secubox-waf/mitmproxy/secubox_waf.py` (older 756→878 lines) :
+  backported `_load_crowdsec_cfg`, `_cs_jwt`, `_ban_via_crowdsec`, Phase 6.J
+  `Connection: close` upstream. Both WAF copies now in sync.
+- `debian/postinst` : auto-invokes `secubox-waf-cs-bridge-setup` on package
+  install/upgrade if cscli present. Writes config to `/etc/secubox/waf/` on
+  host AND bind-mounts into the mitmproxy LXC if `/var/lib/lxc/mitmproxy/`
+  exists. Fully idempotent.
+- `api/routers/waf.py` GET `/enforcement` returns : bridge_enabled,
+  bans_pushed, bans_failed, requests, blocked, warnings,
+  rate_limit_offenders (live nft set count), honeypot_hits_last_hour
+  (from nginx log scan), recent_bans (cscli filtered origin=secubox-waf),
+  recent_threats (last 20 lines of threats.log).
+- `www/mitmproxy/threats.html` : new dashboard tab with 6 KPI cards
+  (Bans pushed / Bans failed / Rate-limit offenders / Honeypot hits 1h /
+  WAF blocked / WAF warnings) + 2 tables (recent bans, recent threats),
+  auto-refresh /5s.
+
+**Phase 7.B — pre-mitm enforcement + honeypot**
+
+- `nftables/secubox-waf-ratelimit.nft` : standalone nft table
+  `inet secubox_waf_ratelimit` with `offenders_v4`/`v6` dynamic sets
+  (5-min timeout) + `whitelist_v4` interval set (LAN/loopback). Input
+  hook priority -10. Rule : `tcp flags syn tcp dport {80,443} limit rate
+  over 30/second burst 50 packets add @offenders_v4 { ip saddr timeout 5m }
+  log prefix "[secubox-rl] " counter drop`. Self-healing 5-min TTL on
+  entries.
+- `debian/secubox-waf-ratelimit.service` (systemd) reapplies the table on
+  boot, `RemainAfterExit=yes`.
+- `nginx/honeypot.conf` : 5 location blocks for common bot recon
+  (`/wp-admin`, `/.env`, `/.git/config`, `/phpmyadmin`, `/actuator`,
+  `/autodiscover`, etc.). Returns empty 200, logs to
+  `/var/log/nginx/honeypot.log` with custom `secubox_honeypot` log_format
+  (ISO timestamp + IP + request + UA + referer).
+- `debian/postinst` installs into `/etc/nginx/secubox-routes.d/` +
+  creates `log_format` snippet in `conf.d/`.
+
+### Verification
+
+```
+nft list table inet secubox_waf_ratelimit  → table loaded, chain attached
+curl admin.gk2.secubox.in/wp-admin           → HTTP 200 (honeypot)
+tail /var/log/nginx/honeypot.log              → log lines appearing
+systemctl is-enabled secubox-waf-ratelimit    → enabled (boot persist)
+```
+
+### Files added
+
+- `packages/secubox-mitmproxy/nftables/secubox-waf-ratelimit.nft` (NEW)
+- `packages/secubox-mitmproxy/nginx/honeypot.conf` (NEW)
+- `packages/secubox-mitmproxy/www/mitmproxy/threats.html` (NEW)
+- `packages/secubox-mitmproxy/debian/secubox-waf-ratelimit.service` (NEW)
+
+### Master merged
+
+Commit `a35ab5c5` (8 files, 938 insertions). Merge `4f89bd8b`.
+
+### Remaining (Phase 7.C, kept in #498)
+
+- eBPF/XDP filter (replace Python WAF hot-path)
+- ModSecurity in HAProxy with OWASP CRS rules
+- Federation : CrowdSec Hub + AlienVault OTX + Spamhaus DROP
+
+---
+
+## 2026-06-05 — Phase 7.A WAF active enforcement SHIPPED (ref #498)
+
+Same-day landing right after Phase 6 closure. WAF detections now become real
+nft drops within seconds.
+
+### Pipeline live-verified end-to-end on gk2
+
+```
+mitm WAF (LXC) detects threat (count >= BAN_THRESHOLD)
+  → _ban_via_crowdsec() POST /v1/alerts
+    → socat bridge 10.100.0.1:8080 → 127.0.0.1:8080
+      → CrowdSec LAPI insert decision
+        → crowdsec-firewall-bouncer poll + apply
+          → nft table ip crowdsec DROP
+
+login    : 200 JWT 160 chars
+alert    : 201 ← decision id 13244
+cscli    : Ip:192.0.2.99 ban origin=secubox-waf 1h
+nft      : 192.0.2.99 in table ip crowdsec (kernel drop)
+```
+
+Round-trip ~12s. Merged in `3eb5378e`. Issue #498 stays open for 7.B/7.C.
+
+### Files added
+
+- `packages/secubox-mitmproxy/addons/secubox_waf.py` — `_ban_via_crowdsec()`,
+  `_cs_jwt()` with 25-min cache, `_load_crowdsec_cfg()`, `ban_ip()` now
+  bridges via HTTP first (fallback to cscli subprocess)
+- `packages/secubox-mitmproxy/bin/secubox-waf-cs-bridge-setup` — idempotent
+  setup : creates socat unit, registers machine via `cscli machines add -f -`,
+  writes config TOML
+- `packages/secubox-mitmproxy/crowdsec/crowdsec.toml.example` — schema doc
+
+### Discoveries / decisions
+
+- LAPI POST /v1/alerts needs WATCHER (JWT) auth, NOT bouncer (X-Api-Key).
+  Bouncers only PULL via /v1/decisions/stream.
+- `cscli machines list -o json` uses key `machineId` not `name`.
+- `cscli machines add` writes to `/etc/crowdsec/local_api_credentials.yaml`
+  by default — conflicts with local agent. Use `-f -` to suppress.
+- Alert envelope requires `leakspeed` (one word, not snake_case).
+- urllib stdlib used instead of httpx (mitm venv lacks httpx, +1ms vs no dep).
+- Socat bridge chosen over changing LAPI `listen_uri` : changing the bind
+  address breaks the local agent + existing bouncer (hard-coded 127.0.0.1
+  in their credentials).
+
+---
+
+## 2026-06-05 — Phase 6 R3 WIREGUARD : MAJOR RELEASE shipped (ref #496) + WAF leak FIXED
+
+Phase 6 (R3 mode = portable WireGuard tunnel + mitm interception from anywhere)
+went from rough plumbing this morning to a polished public-grade release by
+evening. Branch `feature/496-phase-6-wireguard-mitm-autocert-mode-r3` carries
+30 commits, 2918 insertions across 26 files.
+
+### What ships
+
+**R3 architecture** (#496, deployed live on gk2)
+* WireGuard server `wg-quick@wg-toolbox` on UDP 51820, multi-peer
+* DNS A record `kbin.gk2.secubox.in → 82.67.100.75` provisioned via Gandi API
+* Dedicated mitm CA `Gondwana ToolBoX R3 CA` (separate from R1/R2 captive CA)
+  — final version has no SAN (Android Chrome rendered "émis par null" when SAN
+  contained spaces) and is served as PEM (/wg/ca.pem), DER (/wg/ca.crt),
+  Apple mobileconfig (/wg/ca.mobileconfig)
+* mitm-wg transparent on 10.99.1.1:8081 with launcher wrapper composing
+  `--set ignore_hosts=<regex>` from `/var/lib/secubox/toolbox/mitm-bypass.conf`
+  on every restart (15 patterns default : Signal, WhatsApp, Telegram,
+  Apple Push, French banks)
+* HAProxy vhost `kbin.gk2.secubox.in` with wildcard cert → backend
+  toolbox_landing → 10.99.0.1:8088 (FastAPI). All endpoints reachable from
+  Internet without captive constraints.
+
+**R3 first-class identity** (Phase 6.H, commit 2fab850a)
+* `mac_hash_of()` is now WG-aware: 10.99.1.x → sha256(peer_pubkey)[:16]
+  (cached, mtime-reloaded). Cascade fix : all addons (cookies, dpi, ja4,
+  soc, avatar, inject_banner, local_store) now write R3 events under the
+  correct stable mac_hash. Backfilled 21 existing peers into the clients
+  table with level=r3.
+
+**Banner enrichment** (Phase 6.G, commit 67985d93)
+* inject_banner now computes per-flow : cookies set+sent count, tracker
+  domains in body (200kB scan), is_tracker_host flag (1st-party host
+  matches ads*/pixel/analytics patterns). Display : 🍪 N · 🎯 N ·
+  ⚠ tracker-host. Privacy-safe : counts only, no names embedded.
+
+**Splash R3 detection** (Phase 6.I, commit 13e48c93)
+* When request to / comes from 10.99.1.x, splash shows large gradient
+  "🌐 Mode R3 — Tunnel WireGuard ACTIF" banner + report/PDF/reinstall
+  links, and HIDES the captive R0/R1/R2 chooser form (useless to R3
+  clients who are by construction at max-analysis).
+
+**Landing + admin polish** (commits b865636a, d81e16ac, e2b89314)
+* Public landing at https://kbin.gk2.secubox.in : 8-icon quicknav grid,
+  8 live KPI cells (auto-refresh /5s via /cumulative-stats.json with pulse
+  + flash animations), 🔬 cert R3 2-step probe (detects tunnel + mitm CA
+  trust separately), 4-level explanation cards, SVG charts.
+* /admin/ webui tabbed (👥 Clients + 🛡 Mitm filtering) with rich client
+  table, level switch modal, per-row × delete on filter patterns.
+* /admin/filter-control on public kbin = READ-ONLY (banner links to private
+  editor). Edit happens at https://admin.gk2.secubox.in/toolbox/ (SSO-gated)
+  in a new Filter card added to the existing toolbox webui.
+
+**Multi-OS install** (commit 645ce572)
+* /wg/r3-install page with 5 OS tabs (🍎 iOS, 🤖 Android, 🐧 Linux,
+  💻 macOS, 🪟 Windows), each with copy-paste-ready commands. Android
+  tab explicitly warns Chrome cannot install + walks Settings → Security
+  → Encryption & credentials path.
+* Wiki page : https://github.com/CyberMind-FR/secubox-deb/wiki/R3-WireGuard-install
+  (237 lines, same install matrix + architecture + whitelist + troubleshoot).
+
+### Bugs fixed during the session
+
+* **R3 banner not firing** : inject_banner gate accepted only "r2", not r3 (0a6073d5)
+* **/report/me/html 400 on WG** : added ?mh=<hash> bypass (67985d93)
+* **iPhone HTTPS broken in R3** : mitm 11 had no CA loaded, served default
+  CN=mitmproxy null cert (38461de4 → ba7144a3 final clean CA)
+* **Android "émis par null"** : CA had SAN with spaces → Chrome parser
+  failed → cert install dialog showed null. Regenerated CA minimal DN, no
+  SAN (ba7144a3).
+* **mitm-wg restart loop 191x** : `/etc/secubox/toolbox/ca-wg/mitmproxy-ca.pem`
+  was 0600 root:secubox-toolbox, mitm couldn't read as group member (owner
+  bit only). Fix : 0640 group-readable (3ba9e4ad).
+* **chess.maegia.tv 504 + general perf** : 1) streamlit LXC consuming 15
+  Python procs stopped + auto-start disabled (saved ~250 MB RAM) ; 2) mitm
+  WAF leak — pool of upstream keep-alive sockets accumulated 1500+ FDs over
+  4h → workers saturated → HAProxy 504. Fix : single line in addon
+  `flow.request.headers["Connection"] = "close"` forces upstream nginx to
+  close after each response (e2b89314 live + source backport this commit).
+  Cost: ~1ms loopback TCP handshake per request. FDs 1513→3, scur 812→87.
+
+### What still needs eyes
+
+* iPhone + Android : reinstall the FINAL CA (SHA1
+  `D5:E4:3A:C1:AD:4E:25:8A:A9:D4:2A:26:52:2C:D8:82:50:63:EA:0E`) and
+  delete any older "Gondwana ToolBoX..." profile first. Banner appears
+  on HTTPS pages once new CA is trusted.
+* PR #495 (Phase 5 LXC) + PR #496 (Phase 6 WG) to be opened once banner
+  E2E confirmed on both phones.
+
+---
+
+## 2026-06-02 — Pi 400 BOOTS TO KIOSK + login works (live patches + #442 closed)
+
+The v2.13.10 image flashed yesterday booted but never reached graphical.target.
+Diag revealed two stacked issues : a build-time boot storm and a missing
+admin password seed.
+
+### What was happening
+
+* `multi-user.target.wants/` had **150 enabled services**. Pi 400 (4 GB) couldn't
+  bring them all up — many LXC-driven apps (jellyfin, jitsi, peertube, photoprism,
+  matrix, gotosocial, mail, ollama, localai, gitea, …) and hardware-specific
+  daemons (`secubox-otg-gadget`, `secubox-led-trigger`, `secubox-healthbump`,
+  `secubox-picobrew`) failed and entered restart loops. Journal showed
+  `restart counter is at 13`, then kernel `task blocked for more than
+  120 seconds`. multi-user.target never reached, so graphical.target never
+  activated, so secubox-kiosk.service never tried to start. Boot stopped
+  at tty1.
+* `secubox-bootmenu.service` failed with exit 1 in the early-boot tty
+  context (`read -t` on tty1 before getty is ready). Not blocking but
+  noise in the journal.
+* The kiosk web UI showed up after the fix but **rejected admin/secubox
+  login**. Root cause : `/etc/secubox/users.json` shipped with
+  `password_hash: null` for admin and `must_change_password: true`, and
+  the kiosk login form doesn't implement the "set new password on first
+  login" flow.
+
+### What was done
+
+* **Live SD patch** : removed 130 non-essential symlinks from
+  `multi-user.target.wants/`, kept a 20-entry kiosk-essential whitelist :
+  - Debian core : avahi-daemon, console-setup, cron, e2scrub_reap,
+    networking, nginx, remote-fs.target, ssh, systemd-networkd,
+    wpa_supplicant
+  - SecuBox web stack : secubox-auth, secubox-certs, secubox-cookies,
+    secubox-core, secubox-defaults, secubox-hardening, secubox-hub,
+    secubox-portal, secubox-runtime, secubox-system, secubox-users
+* **Live SD patch** : seeded `admin` password = `secubox` (argon2id hash),
+  cleared `must_change_password`, removed the bogus `runnervm3jyl0` user
+  that the CI runner had auto-created.
+* Pi 400 rebooted on patched SD : `Reached target multi-user.target`,
+  `Started secubox-kiosk.service`, `Reached target graphical.target` —
+  the kiosk Chromium displayed the SecuBox login screen on HDMI.
+* Login `admin` / `secubox` accepted, dashboard loaded.
+
+### What was committed as proper CI fix
+
+* **#442** filed + **PR #443** merged → **v2.13.11** tagged. Adds Step 5.3
+  to `build-rpi-usb.sh` after the dpkg -i loop : trims
+  `multi-user.target.wants/` to the same 20-entry whitelist + removes
+  `secubox-bootmenu.service` from `sysinit.target.wants/`. v2.13.11
+  build-rpi-usb CI is still in progress at HISTORY-write time.
+
+### Remaining cosmetic items (low priority)
+
+* `secubox-kiosk.service` runs `startx -- :0 vt7 -nocursor` — the
+  `-nocursor` hides the mouse pointer (intentional for a touch kiosk,
+  unwelcome on the Pi 400 keyboard+mouse form factor).
+* Kiosk login UI doesn't show the LAN IP — operator can't easily SSH
+  in without finding it via the router or another method.
+* The `password_hash: null` admin in users.json shouldn't ship at all —
+  the CI build should seed a known default OR force the first-login
+  wizard. Filed as a follow-up.
+
+### Lessons (added to memory)
+
+* `feedback_no_mass_daemon_restart` was about *runtime* on gk2 ; the
+  same pattern bites at *build time* on weaker boards (Pi 400). Image
+  builds need a per-board service profile, not enable-all-by-default.
+* When debugging "boot stops at tty1", check the journal for
+  `Reached target multi-user.target` and `Started getty@tty1.service`
+  in the SAME boot. If getty starts but multi-user never reaches, you
+  have a wants/ overload. Look at `restart counter` and
+  `task blocked for more than N seconds`.
+
+---
+
+## 2026-06-01 — kiosk-on-rpi400 actually ships : the #436 chain (PRs #437–#441)
+
+Closing the kiosk regression discovered the day before. Five back-to-back PRs,
+six tags (v2.13.5 → v2.13.10) to make `--kiosk` actually produce a working
+image. The previous day's PR #435 made the assertion fail-loud, this day made
+it pass.
+
+### The full chain
+
+| Tag | PR | Issue | Failure exposed | Fix |
+|-----|-----|-------|-----------------|-----|
+| v2.13.5 | #435 (D-1) | #433 | `[OK] Kiosk installed` lied | fail-loud + pre-rsync assertion |
+| v2.13.6 | #437 | #436 | `Failed to connect to bus: Host is down` (cascade through secubox-* postinsts) | systemctl wrapper exports `SYSTEMD_OFFLINE=1`; `policy-rc.d` blocks invoke-rc.d; tmpfs at `/boot/firmware` (64M) |
+| v2.13.7 | #438 | #436 | ENOSPC on tmpfs + `findmnt: can't read /proc/mounts` | tmpfs 64M → 512M + bind-mount `/proc`,`/sys` into chroot |
+| v2.13.8 | #439 | #436 | `secubox-kiosk.service not in graphical.target.wants/` (SYSTEMD_OFFLINE doesn't always materialise WantedBy symlinks) | explicit `ln -sf` of the WantedBy symlink |
+| v2.13.9 | #440 | #436 | assertion still failed on the symlink — symlink target was absolute, host `[[ -e ]]` couldn't follow | switch to relative target (`../secubox-kiosk.service`) |
+| **v2.13.10** | **#441** | #436 | Step 7 : `config.txt: No such file` — tmpfs at `/boot/firmware` discarded raspi-firmware's writes on umount | tmpfs → `mount --bind ${ROOTFS}/boot/firmware ${ROOTFS}/boot/firmware` (self-bind preserves writes) |
+
+### Verification
+
+* `secubox-rpi-arm64-bookworm.img.gz` v2.13.10 downloaded from the
+  build-live-usb workflow artifact (1940 MB) — the GitHub release didn't
+  publish (`create-release` failed on the OTHER arch jobs that are
+  still broken : x64 live, mochabin live, espressobin-v7, espressobin-ultra)
+  but the rpi400 image itself built clean.
+* sha256sum matched.
+* Flashed `/dev/mmcblk0` (28.8 G microSD), 8.6 GB written at 37.8 MB/s.
+* Mounted p2 read-only and verified EVERY artefact :
+  - `/var/lib/secubox/boot-mode` = `kiosk` ✓
+  - `/etc/systemd/system/default.target` → `/lib/systemd/system/graphical.target` ✓
+  - `/etc/systemd/system/secubox-kiosk.service` (434 bytes) ✓
+  - `/etc/systemd/system/graphical.target.wants/secubox-kiosk.service` → `../secubox-kiosk.service` (relative) ✓
+  - `/usr/bin/chromium` ✓
+  - `/usr/share/secubox/kiosk/secubox-kiosk.sh` ✓
+
+### What this teaches about debootstrap+qemu chroots
+
+* `/run/systemd/system` being bind-mounted from the host makes systemctl
+  believe systemd is running, which breaks every offline operation. The
+  wrapper-with-SYSTEMD_OFFLINE pattern is the standard fix.
+* `policy-rc.d` returning 101 is the OTHER half — blocks invoke-rc.d
+  from trying to actually start daemons during apt operations.
+* For mountpoints needed by build-time hooks (raspi-firmware checks
+  `mountpoint -q /boot/firmware`), **bind-mount on self** is the right
+  primitive — NOT tmpfs. tmpfs throws away the postinst's writes ;
+  self-bind preserves them in the underlying directory.
+* `[[ -e symlink ]]` follows the symlink target. From the build host's
+  perspective, absolute symlinks created inside `${ROOTFS}` point to
+  paths outside `${ROOTFS}`. Use relative symlinks (matches systemctl's
+  own convention anyway).
+
+### Open follow-ups (non-blocking)
+
+* `build-live-usb` x64 amd64 — preexisting failure, separate from this chain.
+* `build-mochabin-live-usb` — same.
+* `build-image espressobin-v7` / `-ultra` — preexisting hardware-profile
+  issues, separate.
+* Release `create-release` job will keep failing as long as those four are
+  red. APT publish for v2.13.10 is therefore not present — rpi-arm64 +
+  amd64 .debs are still available from v2.13.4's APT repo, which is the
+  current install path.
+
+---
+
+## 2026-05-31 — v2.13.3 → v2.13.4 cross-build finally green + media + kiosk regressions
+
+Major release-pipeline day. The arm64 publish path that's been broken since
+v2.13.0 is finally green. Three releases shipped in one sitting.
+
+### Release pipeline saga (closes the v2.13.x cross-build chain)
+
+* **v2.13.3** tagged → still failed. PR #428 (`-a matrix.arch` on
+  `dpkg-buildpackage`) was correct but *insufficient*: with `-a arm64` on the
+  amd64 CI runner, debhelper invokes the cross-toolchain binaries
+  (`aarch64-linux-gnu-strip` for `dh_strip`, `aarch64-linux-gnu-objdump` for
+  `dh_makeshlibs`) which are *not installed* on the runner.
+  - `secubox-sentinelle-gsm arm64` → `dh_strip: aarch64-linux-gnu-strip: No such file or directory`
+  - `secubox-daemon arm64` → `dh_makeshlibs: aarch64-linux-gnu-objdump: No such file or directory`
+* **#431** filed + **PR #432** merged same hour — install
+  `binutils-aarch64-linux-gnu` (~5 MB) in `build-packages.yml` when
+  `matrix.arch == 'arm64'`. Folded into the existing apt step.
+* **v2.13.4** tagged → ✅ **APT publish green for the first time since v2.13.0**.
+  - 153 release assets, 5 arm64 (`secubox-daemon`, `secubox-sentinelle-gsm`,
+    `secubox-redroid`, `secubox-daemon-c3box`, plus the SHA256 manifest)
+  - `apt.secubox.in/dists/bookworm/main/binary-arm64/Packages` serves 15
+    arm64 packages
+  - Three-fix chain complete: **#425** (`dh_shlibdeps -Xsecubox-redsea`) →
+    **#427** (`dpkg-buildpackage -a matrix.arch`) → **#431** (cross-binutils)
+
+### Nextcloud dashboard real data (#429, branch pushed)
+
+* `secubox-nextcloud` dashboard was returning hardcoded stubs (localhost:8080
+  URLs, empty users, host-path storage). Added `_public_base_url()` reading
+  `overwrite.cli.url` → `trusted_domains[]` → fallback; rewrote `/connections`,
+  removed the `lxc_running()` early-return from `/users`, switched `/storage`
+  to `lxc_attach` `du`/`df` inside the container, added 3-pattern backup
+  detection.
+* Branch `feature/429-secubox-nextcloud-dashboard-api-renvoie` pushed (commit
+  `b715c0e4`), **PR not yet opened** (carry-over).
+* Live deployed to `/usr/lib/secubox/nextcloud/api/main.py` on gk2. **Deploy
+  mistake**: my `find | head -1` deploy detection took the alphabetically
+  first match (`/usr/lib/secubox/mail/api/main.py`) and overwrote it with
+  nextcloud's main.py. Caught from a head-mismatch, restored mail/main.py
+  from `packages/secubox-mail/api/main.py` via scp, restarted `secubox-mail`
+  (back active). Memo: deploy by *exact path*, never `find | head`.
+
+### Nextcloud upload-limits debugging (live patch on gk2)
+
+* Operator reported "erreurs de televersments" on `cloud.gk2` /
+  `nextcloud.gk2`. Traced through the chain:
+  - PHP SAPI Apache had `upload_max_filesize = 2M` / `post_max_size = 8M`
+    (Debian defaults — never bumped)
+  - host nginx had no `client_max_body_size` directive at all (default 1M)
+  - HAProxy/mitmproxy: no limit found
+* Wrote drop-in `/etc/php/8.2/apache2/conf.d/99-secubox.ini` bumping uploads
+  to 4G + `max_execution_time=3600`. **Initial drop-in didn't load**: used
+  `#` as comment prefix, which is invalid in PHP `.ini` (PHP wants `;`).
+  Switching `#` → `;` made the drop-in scanned and applied.
+* host nginx: added `client_max_body_size 4G` + `proxy_request_buffering off`
+  in `nginx.conf` http{} block.
+* Smoke test: PUT 5M then 50M to `https://nc.gk2.secubox.in/remote.php/dav/...`
+  → 401 Sabre auth (expected, full body received). Backend OK.
+* **Carry-over**: `cloud.gk2.secubox.in` is NOT in any nginx vhost
+  `server_name`. It falls through to the default_server which serves
+  `wrong-domain.html`. Fix: add `cloud.gk2.secubox.in` to
+  `nextcloud.conf`'s `server_name nc.gk2 nextcloud.gk2;` line.
+
+### Media flash for operator
+
+* **rpi400 microSD** (`/dev/mmcblk0`, 28.8 G): gunzip → dd
+  `secubox-rpi-arm64-bookworm.img.gz` (v2.13.4). 8.6 GB written at 38 MB/s.
+  SHA256 ✅. **Kiosk MISSING despite `--kiosk` in CI** — see #433 below.
+* **amd64 live USB** (`/dev/sda`, 28.8 G DataTraveler 3.0):
+  - 1st stick: dd I/O errored at 268 MB, USB device disappeared from kernel.
+    Stick is dying — classic NAND failure pattern (cf.
+    `feedback_test_with_two_usb_sticks.md`).
+  - 2nd stick (same batch): flash succeeded, 8.6 GB at 24 MB/s.
+* **VBox VM** `SecuBox-live-amd64-v2134` created from the same image:
+  2 CPU, 2 GB RAM, BIOS firmware, NAT with port forwards (2222/8080/8443/9080).
+  Boots to the SecuBox kiosk login screen; "Invalid credentials" inline error
+  on wrong password but no lockdown (see #434).
+
+### Issues filed (5 new)
+
+* **#430** — Federate two SecuBox Nextcloud instances (OCM trusted-servers
+  workflow, future dashboard tab + endpoints). Documentation + integration
+  test queued.
+* **#431** — CI cross-binutils (already fixed via PR #432 same day).
+* **#433** — `build-rpi-usb.sh --kiosk` silently fails: image v2.13.4 ships
+  without kiosk despite `Kiosk mode installed and enabled` log line. apt
+  install for chromium/xserver/openbox fails in qemu-arm64 chroot
+  (`apt --fix-broken install`), `|| warn` swallows it, and the subsequent
+  heredoc/seed steps don't end up in the rsynced rootfs (mechanism still
+  unclear — needs `set -e` review + build-time assertion).
+* **#434** — kiosk login lockdown after N failed attempts (CSPN brute-force
+  hardening, default N=1, unlock via reboot / USB key / timed).
+
+### Tracking files
+
+* `WIP.md` / `HISTORY.md` (this entry) / `TODO.md` updated to reflect
+  v2.13.4 victory, the 4 new issues, and the carry-over PR #429.
+
+### Lessons memorialised
+
+* (already in memory) Source-first ALWAYS — but **deploy by exact path**, not
+  `find | head`. Cost me one mail/main.py restoration.
+* PHP `.ini` drop-ins: comments are `;`, not `#`. `#` doesn't error, it just
+  silently aborts the parse and you lose every directive after.
+* For arm64 in CI, `dpkg-buildpackage -a arm64` requires `binutils-aarch64-linux-gnu`
+  installed alongside it — debhelper resolves cross-tools by triplet name.
+
+---
+## 2026-05-30 — v2.13.1 + v2.13.2 release polish + media flash + 4 issues filed
+
+Follow-up day on v2.13.0 to actually get the release pipeline green and put
+the resulting artefacts in the operator's hands.
+
+* **v2.13.1** tagged — packaging fix: drop duplicate `debian/compat` in
+  `secubox-fmrelay` + `secubox-zkp-hamiltonian` (debhelper refused when compat
+  was declared both in `debian/compat` AND via `Build-Depends: debhelper-compat`).
+  CI verdict: fmrelay built clean ✅, but publish still blocked by
+  `secubox-sentinelle-gsm` arm64 (different root cause).
+* **#425** filed + fixed in same day — the sentinelle-gsm arm64 build failed
+  because `dh_shlibdeps` tried to resolve a prebuilt aarch64 ELF
+  (`bin/secubox-redsea`) on the amd64 CI runner. Runtime deps were already
+  declared explicitly in `debian/control`, so `dh_shlibdeps -Xsecubox-redsea`
+  in `debian/rules` is safe. Locally reproduced + fixed (PR #426).
+* **#423** filed + fixed — `build-rpi-usb.sh --kiosk` flag was a stub: parsed
+  but never installed chromium/X/openbox and never created `secubox-kiosk.service`
+  (which the boot menu's `apply_mode` already references). Added the full
+  install block (apt, kiosk files from `image/kiosk/`, systemd unit on vt7,
+  default boot mode = kiosk, default target = graphical) AND wired
+  `extra_args: "--kiosk"` on the rpi400 matrix entry in `build-all-live-usb.yml`
+  so Pi 400 artefacts ship chromium-fullscreen-by-default (PR #424).
+* **#422** filed — `vm-x64` image v2.13.0 boots in VirtualBox but with a
+  cascade of `[FAILED]` (otg-gadget, networkd-wait-online, mitmproxy, crowdsec,
+  net-fallback, openclaw in restart loop) → sshd accepts TCP but no banner.
+  Root cause: appliance-only services (`secubox-otg-gadget` needs configfs/USB
+  gadget kernel) aren't gated on a VM profile, plus `networkd-wait-online` is
+  strict. Proposed: mask the hardware-only units on the vm-x64 build profile.
+* **#421** filed — `/run/secubox/{authelia,cookies,certs}.sock` are bound by
+  services running in a private mount namespace (`RuntimeDirectory=secubox` +
+  the host dedicated `/run/secubox` tmpfs mount = collision), invisible to nginx
+  (host) → 502 on `/api/v1/cookies` + `/api/v1/certs` and 500 on every Authelia
+  `auth_request` consumer (lyrion was the loudest). Live workaround: commented
+  out the 4 Authelia `auth_request` lines in the lyrion vhost (lyrion now 200).
+  Real fix needs reconciling tmpfs-mount vs `RuntimeDirectory`, reboot-tested.
+* **v2.13.2** tagged after #425 + #423 merged → re-runs the release pipeline
+  with: fmrelay + zkp + sentinelle-gsm packaging fixes (publish unblocked
+  expected) + rpi400 kiosk-by-default. Watcher running.
+* **Media livré à l'opérateur** :
+  - 🟢 **USB live amd64** flashée sur Kingston DataTraveler 28,8 G
+  - 🟢 **microSD rpi400** flashée sur SanDisk SC32G 29,7 G
+  - 🟡 **VirtualBox VM `SecuBox-amd64`** créée (NAT port-forward SSH:2222,
+    HTTP:8080, HTTPS:8443) MAIS bug #422 → kept off-disk pour rejouer une
+    fois l'image corrigée.
+
+---
+## 2026-05-29 (cont.) — backlog sweep + v2.13.0 release
+
+Closed a batch of fixed-live-but-unmerged issues by finalizing each branch
+(PR → merge → worktree clean), and cut the minor release.
+
+* **#392** vhost-health: fold `error` (404/502) into the 🔴 bucket in the
+  pre-computed summary path (PR #413).
+* **#394** Nextcloud: drop the Authelia `auth_request` gate on the public vhost
+  so the mobile client authenticates (PR #414; changelog conflict resolved →
+  1.4.1 above master's 1.4.0).
+* **#152** Roundcube SQLite by default — config.inc.php.local DSN + des_key +
+  schema init + sqlite3 CLI (PR #415).
+* **#150** vortex-firewall postinst unmasks + enables nftables.service so LXC
+  NAT survives reboot (PR #416).
+* **#168** nginx reload no-op — diagnosed (orphan + stuck old master from a
+  binary-upgrade re-exec; serving master reloads fine), live-cleaned to a single
+  master, closed as operational (no package patch). Brief self-inflicted nginx
+  blip during cleanup, recovered.
+* **#395** WAF: skip cred-004 on NC mobile login + WebDAV (PR #417). Caveat:
+  landed in the `secubox-waf` addon copy; live addon is the `secubox-mitmproxy`
+  copy — the two-copy drift is a separate cleanup.
+* **#389** navbar resort (PR #418); **#391** secubox-system-tuning RAM package
+  (PR #419); **#377** secubox-fmrelay package — rtl_fm→Icecast+RDS (PR #420).
+* **#153** confirmed already squash-merged (PR #160); `git cherry` had mislead.
+* Worktree tree fully tidied (verified each branch's content was in master via
+  PR merge-commit/squash before removing).
+
+* **Release v2.13.0** (minor bump from v2.12.19): tag push triggers the release
+  pipeline → all packages + system images (mochabin/real-ARM, espressobin-v7/
+  ultra, vm-x64/amd64+VirtualBox, rpi400) + APT publish.
+
+---
+## 2026-05-29 — WAF unban + NC 32 upgrade + user provisioning (#410) + Companion personas (#409)
+
+Long live-ops + feature session on gk2. Master commits pushed:
+`0bf67891` (WAF), `787c6b03` (LXC DNS+FAQ), `3ff008aa` (NC32 pin).
+
+* **WAF lockout fixed** (`fix(waf)`): mitmproxy `secubox_waf.py` whitelist was
+  an exact-match 2-IP set, so a LAN operator whose request matched a rule (e.g.
+  a logout) hit the 3-strikes ban with no bypass. Made it **CIDR-aware** and
+  trusted loopback + RFC1918 (LAN + internal LXC net). Live in the mitmproxy
+  LXC + backported to `packages/secubox-mitmproxy/addons/secubox_waf.py`.
+  Operator IP 192.168.1.13 unbanned (CrowdSec had no decision — it was the
+  in-memory 403). The historical "router-goform on gitea" false-positives in
+  the 2026-05-08 threat log are from an older, since-tightened pattern
+  (`/goform/.*(\$\(|;|\`)` is specific now). "Attacked dead sites" = bot
+  probing counted pre-backend; not real visitors.
+* **LXC DNS gotcha fixed** (`fix(nextcloud)`): NC (and mitmproxy) containers had
+  resolv.conf → systemd-resolved stub `127.0.0.53` with **no upstream**, so DNS
+  died (appstore/addons not shown, update checks fail) while NAT egress worked.
+  Root fix: `resolved.conf.d` upstream `DNS=1.1.1.1 9.9.9.9`. Applied live to
+  NC + mitmproxy LXCs, persisted in `nextcloudctl` base install, documented in
+  **`docs/FAQ-LXC-DNS.md`** (closes the WIP "LXC template wiki: DNS" carry-over).
+* **Nextcloud 31.0.14 → 32.0.10** major upgrade (PHP 8.2 OK for NC32). DB dump
+  (`mysql`, not sqlite — the outlier) + config.php backed up to
+  `data/_pre32_backup/` + 825M tree backup first; ran `updater.phar` + repair +
+  `db:add-missing-indices`. All 3 hostnames 200 (added missing `cloud.gk2`
+  mitmproxy route). Source `NC_VERSION` bumped to 32.0.10.
+* **NC config-warning hardening** (live): `trusted_proxies` 10.100.0.0/24+lo,
+  `overwriteprotocol=https`, `memcache.local=APCu` (fixes DB-locking too),
+  PHP `memory_limit=512M` + `opcache.interned_strings_buffer=16` (apache SAPI),
+  HSTS, missing indices, maintenance window, `default_phone_region=FR`,
+  `php8.2-gmp` + imagick SVG delegate.
+* **NC user cleanup**: removed the 4 non-SecuBox users (bat, bourdon, lemurien,
+  ragondin) → NC now only `admin` + `gk2` (master-users rule). Data backed up
+  to `/data/backups/nc-removed-users-20260529.tar.gz` (71M, restorable).
+* **#410 user provisioning push** (branch `feature/410-…`, pushed): SecuBox is
+  source of truth. `user_store.set_password()` (single write path = capture
+  point) + `list_users()`; host CLI **`secubox-user-sync`** (set/seed/sync/list)
+  writes the canonical argon2 hash then pushes the same plaintext (env/stdin,
+  never argv) into each app's new `<app>ctl user-provision` verb (nextcloudctl,
+  photoprismctl), creating per-user photo folders `/data/shared/photos/<user>`
+  and user-scoped libraries. Validated live with a throwaway user (caught: NC
+  sudo strips OC_PASS → stdin+`--preserve-env`; PhotoPrism CE gates non-admin
+  roles → default role + `--upload-path`). 13/13 unit tests. **Seeding gk2/admin
+  is the operator's step** (`secubox-user-sync seed` — sets their passwords).
+* **#409 Companion personas** (earlier): avatar = persona holding a group of
+  cookie auths; selectable picker (auto-discovers logins), one-click "Become"
+  (group restore on any LAN machine), avatar webui "Personas" tab. Client-
+  encrypted, on-box ciphertext only. `.xpi` rebuilt; wiki updated.
+
+---
+## 2026-05-28 — PeerTube LIVE end-to-end (upload confirmed)
+
+PeerTube install completed on the gk2 LXC (10.100.0.120) and verified
+working at https://peertube.gk2.secubox.in/ including video/avatar
+upload. Resolution of the 2026-05-27 "in flight" install:
+
+* **pnpm install** finished after retry with
+  `MSGPACKR_NATIVE_ACCELERATION_DISABLED=1` (arm64 native binding for
+  msgpackr-extract is optional perf-only; JS fallback works).
+* **Ownership**: `chown -R peertube:peertube /var/www/peertube` — the
+  `config/` and `storage/` subdirs were root-owned, blocking
+  `storage/logs` creation (EACCES) and config template copy.
+* **Node 20 → 22.22.2**: PeerTube 8.2.0 requires Node ≥22. Installed
+  via the signed NodeSource apt repo (keyring + sources.list added
+  manually; the `curl | bash` setup script is blocked by policy).
+* **production.yaml** patched: `webserver.hostname=peertube.gk2.secubox.in`
+  + `https=true` + `port=443`; `listen.hostname=0.0.0.0` (so nginx on
+  the host reaches the LXC bridge IP); 64-byte hex `secrets.peertube`;
+  DB password `secubox`; admin email `admin@cybermind.fr`.
+* **Initial admin** (auto-generated first boot, logged once): `root` /
+  `gisatejewumefatibedu` — operator must rotate via UI.
+* **"No upload button"** turned out to be a stale browser bundle (the
+  service bounced ~6× during install + Node swap). Server side was
+  perfect throughout: role Administrator, quota -1, root_channel
+  present, `/videos/publish` + `/videos/upload` both 200, client fully
+  built. Hard-refresh resolved it; upload confirmed by operator.
+
+**Source drift NOT yet backported** (Source-first follow-up): the live
+install path is native-in-LXC (Node 22 + pnpm + systemd `peertube.service`
+inside the container), whereas `packages/secubox-peertube` (#388 branch)
+describes a Docker/Podman API-managed model, and #390's vhost conf still
+lacks the full public vhost (9000 port + streaming timeouts). Both need
+reconciliation — see TODO P0.
+
+---
+## 2026-05-27 (afternoon/evening session — peertube + photoprism + mail + WAF)
+
+Continuation of the morning consolidation session. Operator-driven
+work on three fronts: peertube package + container + URL, photoprism
+LXC + Nextcloud-shared photos folder, and mail/WAF/SSO unblocking
+mobile clients. Eight new PRs (#388–#395) and substantial live-fix
+work on gk2.
+
+### Container infra (gk2)
+
+* **2 new LXC containers** at `/data/lxc/{peertube,photoprism}/`,
+  each at 10.100.0.{120,130}. Both started life with the strict
+  `common.conf + userns.conf + apparmor.profile=generated` template
+  default, which blocked unprivileged operations (postgres-15
+  postinst chown, podman CNI bridge iptables, even basic apt). Fixed
+  by aligning their config with the working `matrix` LXC template:
+  single `lxc.include = /usr/share/lxc/config/debian.common.conf`,
+  drop the apparmor lines, keep the `lxc.idmap` UID mapping.
+* **Bind-mount UID ownership pattern** captured the hard way: bind
+  mounts default to host-root ownership which the LXC root (UID
+  100000 outside) cannot chown. Both peertube postgres + photoprism
+  storage failed with "Operation not permitted" until host-side
+  `chown -R 100000:100000 /data/<service>/` opened the dirs for the
+  LXC. Recipe should ship in the LXC template wiki.
+
+### IP forwarding / NAT (gk2)
+
+* **All LXC containers were silently cut off from external internet**
+  (apt update inside any container → DNS Temporary failure → fail).
+  Root cause: `99-secubox-hardening.conf` sets `ip_forward = 0`; my
+  `90-secubox-lxc-forward.conf` from the consolidation session was
+  alphabetically earlier and lost. Renamed to
+  `99-secubox-zz-lxc-forward.conf` so it wins. Also added
+  `net.ipv4.conf.all.forwarding = 1` explicitly (the legacy
+  `ip_forward` key alone isn't enough on modern Debian).
+* **Masquerade rule targeted `eth2`** which is DOWN — real WAN is
+  `lan0` (192.168.1.200/24, default route via 192.168.1.254). Added
+  `oif lan0 masquerade` to `inet nat postrouting`, traffic now
+  egresses correctly. Should backport to `secubox-system-tuning`.
+
+### Swap (gk2)
+
+* Added `/data/swapfile2` (4 GB) bringing total swap to **8 GB**
+  (was 4 GB from session #391). 
+
+### PhotoPrism — LIVE (#388 follow-up)
+
+* `secubox-photoprism` LXC running podman → official
+  `docker.io/photoprism/photoprism:latest` (Ubuntu 26.04 / 2.59 GB
+  image) with `--network=host` (CNI bridge can't add iptables rules
+  in unprivileged LXC), `PHOTOPRISM_HTTP_PORT=2342`, sqlite DB.
+* Bind mounts: `/var/lib/photoprism/originals` ← `/data/shared/photos`
+  (shared with NC), `/var/lib/photoprism/{storage,import}` ←
+  `/data/photoprism/{storage,import}`.
+* Public URL `https://photoprism.gk2.secubox.in/` wired:
+  - nginx vhost `/etc/nginx/sites-available/photoprism.conf` → 9080 →
+    `10.100.0.130:2342`
+  - HAProxy ACL `host_photoprism_gk2_secubox_in` added to both
+    http-in + https-in frontends → `nginx_vhosts` backend
+  - URL returns 307 (PhotoPrism login redirect) ✓
+  - login: `admin` / `secubox-CHANGE-ME` (must rotate)
+
+### Nextcloud — bind mount + URL alias + SSO removal (#394)
+
+* **Photo sync ready**: `/data/shared/photos` bind-mounted into NC at
+  `/var/www/nextcloud/data/Photos` (NC LXC config edit, requires
+  restart). Smartphone NC client → "Photos" folder → PhotoPrism
+  auto-indexes via the shared dir.
+* **URL `nextcloud.gk2.secubox.in` worked end-to-end** by:
+  - mitmproxy haproxy-routes.json entry added
+    (`nextcloud.gk2.secubox.in → 192.168.1.200:9080`) — **TWICE**,
+    once on host's `/srv/mitmproxy/haproxy-routes.json` and once on
+    the LXC's separate copy (live config drift — see TODO).
+  - nginx vhost `server_name` aliased: `nc.gk2.secubox.in
+    nextcloud.gk2.secubox.in;`
+  - mitmproxy LXC service restarted to pick up the new routes
+* **SSO removed from NC vhost** so official Nextcloud mobile client
+  (which uses HTTP Basic + app-password, not browser cookies) can
+  authenticate. Comment-out preserves the four
+  `auth_request` / `error_page 401` / `auth_request_set` /
+  `proxy_set_header X-Forwarded-User` lines for revert symmetry.
+  Source backport in #394 → `secubox-nextcloud 1.3.5`.
+* **NC bruteforce protection disabled at runtime** + table truncated.
+  The SSO loop had triggered NC's own bf throttle; operator
+  re-enables via `occ config:system:set
+  auth.bruteforce.protection.enabled --value=true` after confirming
+  mobile reconnect.
+
+### WAF cred-004 false-positive (#395)
+
+* After SSO unblock, NC mobile client hit a NEW 403 wall: WAF rule
+  `cred-004` ("JWT/token in URL", severity=critical) matches NC's
+  legitimate `/index.php/login/v2/poll?token=…` polling, banning the
+  client IP after `BAN_THRESHOLD=3` polls (every ~1-2 sec).
+* Fix: path-based early-return skip in
+  `packages/secubox-waf/mitmproxy/secubox_waf.py check_request()`
+  for `/index.php/login/v2/` and `/ocs/v2.php/core/login`. Source
+  bumped to `secubox-waf 1.1.3`; live patch applied to gk2's
+  `/data/lxc/mitmproxy/rootfs/srv/mitmproxy/secubox_waf.py`.
+* Verified: 0 new 403s in 60+ sec post-fix vs 1/sec before.
+
+### CrowdSec allowlist (gk2)
+
+* Created `cscli allowlist secubox-trusted` with 4 internal nets
+  (192.168.1.0/24, 192.168.255.0/24, 10.100.0.0/24, 10.0.3.0/24).
+  Operator's public IP not added (would need user input).
+
+### LXC DNS systemd-resolved gotcha
+
+* Fresh download-template LXCs default to systemd-resolved stub
+  resolv.conf (127.0.0.53) that has no actual nameservers
+  configured. Both peertube + photoprism failed apt with
+  "Temporary failure resolving 'deb.debian.org'" until I overwrote
+  /etc/resolv.conf with `nameserver 1.1.1.1 / 8.8.8.8`. The fix
+  doesn't persist across LXC restarts (systemd-resolved rewrites
+  it). Should ship a stable resolv.conf in the LXC template
+  bootstrap.
+
+### Peertube — install in flight at session end
+
+* LXC up at 10.100.0.120, all bind mounts + network OK, podman/
+  postgres prerequisites unblocked by the template fix + bind-mount
+  chown. Install script at `/root/install-peertube.sh` running step
+  6/8 (`yarn install --production --pure-lockfile`, ~10000 packages
+  on arm64). Monitor armed; service expected active in ~15-25 min.
+* Pre-emptively rewired host nginx `peertube.conf` `proxy_pass →
+  10.100.0.120:9000` (was 127.0.0.1:9001 from the earlier Podman
+  attempt). HAProxy ACL was already in place from #390.
+
+### Live config drift discovered (mitmproxy)
+
+* `/srv/mitmproxy/haproxy-routes.json` on the host is NOT
+  bind-mounted into the mitmproxy LXC. Each has its own copy,
+  edits to one don't reach the other. Tripped me up when adding
+  the nextcloud.gk2.secubox.in route. Recipe: also bind-mount
+  the LXC's `/srv/mitmproxy/` from host. Same applies to
+  `secubox_waf.py`. Filed in TODO.
+
+---
+## 2026-05-27
+
+### Consolidation pass — full per-cluster audit + 2 real merges + 5 naming sweeps + gk2 deploy
+
+Phase 1 audit of all 141 `secubox-*` packages
+(`docs/superpowers/plans/2026-05-27-secubox-consolidation-audit.md`,
+generated by re-runnable `scripts/audit-packages.py`). Key meta-finding:
+the audit's projected reduction (~100 packages, 28%) was based on
+naming-affinity intuition that didn't survive per-package code
+inspection. Realistic floor revised to ~135-137 (4-5% reduction).
+
+Where consolidation actually paid off:
+
+* **#378** (Tier 0) — `secubox-c3box` binary-package-name collision:
+  Python dashboard + Go daemon both built a `.deb` named
+  `secubox-c3box`. Renamed the Go variant to `secubox-daemon-c3box`
+  with `Conflicts:` for clean upgrade. **Not yet on gk2** —
+  Arch:any, needs arm64 cross-compile (`secubox-daemon` not
+  currently installed on the board, so non-acute).
+* **#380** (Tier 1) — pruned 2634 LOC of dead source from the three
+  already-transitional mail packages (`secubox-mail-lxc`,
+  `secubox-webmail`, `secubox-webmail-lxc`): `api/`, `nginx/`, `www/`,
+  `menu.d/`, dead `.service` files, misleading README. Each now
+  ships only `debian/`.
+* **#381** (Tier 2, real merge) — folded `secubox-mmpm` into
+  `secubox-magicmirror`: 334-line FastAPI app → `APIRouter` mounted
+  at `/mmpm`. Frontend URL: `/mmpm/` → `/magicmirror/mmpm/`. Old
+  package becomes transitional. **-1 effective package.**
+* **#384** (Tier 3, real merge) — folded `secubox-master-link` into
+  `secubox-p2p`: surprising finding that master-link's 851-LOC API
+  was effectively dead on production (no nginx config → unreachable
+  via web; the visible `/master-link/` UI was being served by p2p
+  all along). Operator-scoping calls made and documented in the
+  commit. **-1 effective package, -1284 LOC dead code.**
+* **#382 / #383 / #385 / #386 / #387** — five thematic
+  Description-clarity sweeps. After these land, NO `secubox-*`
+  package on master ships an "X Module" placeholder headline
+  anymore. 24 Descriptions clarified, 9 maintainer placeholders
+  corrected from `SecuBox <dev@secubox.local>` → Gerald.
+
+Where consolidation did NOT pay off (decisions recorded in audit
+doc): streamlit/forge (distinct workflows, lxc-dep cost), dpi
+cluster (4 packages = clean two-layer + two-engine + consumer
+split), dns cluster (5 distinct DNS subsystems, no config overlap),
+threats cluster (7 distinct security capabilities with different
+backends).
+
+**Build tooling fix:** `scripts/build-packages.sh` had a hardcoded
+30-package allowlist that silently skipped the other 110 of 141
+packages. Replaced with dynamic glob over `packages/secubox-*/` with
+`debian/control` — core first, metapackages last. Surfaced today
+when 18 of 31 touched packages had to be built manually.
+
+**Deploy:** 30 of 31 .debs apt-installed on gk2 (root@192.168.1.200).
+`secubox-ndpid` dropped from batch (depends on `ndpid | ndpi-reader`,
+not in board's apt sources). All transitional Breaks/Replaces fired
+cleanly (mmpm + master-link old payloads removed). 24/24 expected-
+active services running post-deploy; `secubox-magicmirror.service`
+inactive is correct (`ConditionPathExists=/etc/secubox/magicmirror/
+enabled` opt-in unit). 3 orphan nginx snippets manually removed —
+pre-#380 leftovers that dpkg's `.list` tracked but new .debs didn't
+ship; recommend follow-up to add `rm -f` in transitional postinsts.
+
+---
+## 2026-05-26
+
+### SOC firewall_summary cache hardened (v2.12.17 + v2.12.18)
+
+**v2.12.17** (`40b58372`) — Moved the nftables cache populator from
+`image/firstboot.sh` into the `secubox-hub` package. Ships
+`/usr/sbin/secubox-nft-cache`, `secubox-nft-cache.{service,timer}` (30 s
+tick, auto-enabled via `timers.target.wants/` symlink), plus a sudoers
+fragment authorising user `secubox` to call `nft list *` and the
+restart of one specific unit. Co-locating crons with the module that
+consumes their data is now the canonical SecuBox pattern.
+
+**v2.12.18** (`a1c60d6b`) — `/firewall_summary` fallback ladder
+rewritten: `fresh cache → realtime via sudo → stale cache → none`.
+Discovered at deploy time that `NoNewPrivileges=true` on
+`secubox-hub.service` blocks setuid traversal, so `sudo` from inside
+the hub silently fails. The stale-cache fallback prevents the SOC
+widget from ever rendering zeros even when realtime is denied. All
+four code paths verified on gk2.
+
+Also documented a board-side cleanup step needed when upgrading from
+v2.12.16: remove the two stray cron files
+(`/etc/cron.d/secubox-nft-cache`, `/etc/cron.d/secubox-nft-stats`) and
+the helper `/usr/local/bin/secubox-nft-cache.sh` left over from an
+earlier ad-hoc fix. They were racing the new systemd timer and
+occasionally producing a 0-byte JSON cache.
+
+### secubox-waf 1.1.2 — warm asyncio cache (v2.12.19)
+
+**v2.12.19** (`30e89193`) — Rewrote the data path for the three hot
+WAF endpoints (`/stats`, `/alerts`, `/bans`). Old design ran a full
+200 k-line threat-log scan + GeoIP on every cache miss; the scan took
+longer than the 30 s TTL on this board, so the cache never warmed,
+HAProxy 504'd and the dashboard rendered empty while the WAF process
+burned 50-67 % CPU continuously. New design: a single asyncio
+background task refreshes a module-level `_warm` dict every 30 s off
+the request path; endpoints are O(1) dict reads. `_read_log_tail()`
+seeks 512 KB from end of log instead of `readlines()` so memory does
+not scale with log size. Cold-start hits compute synchronously once
+via `asyncio.to_thread`. Verified on gk2: `/stats` 200-900 ms (was
+6 s+ or timeout), `/alerts` 360 ms, `/bans` 210 ms (was 5-15 s).
+
+### secubox-soc 1.0.1 — production dashboard captured back into source
+
+**0de665c5** — Source-side `packages/secubox-soc/www/soc/index.html`
+had silently been rewritten in commit 24296084 (April 15) into a
+44 KB "threat-map" frontend that talks to `/api/v1/soc/*` (a
+`secubox-soc-gateway` backend that isn't running on production boards).
+Production boards have been running an out-of-tree 107 KB
+"comprehensive dashboard" aggregating `/api/v1/hub`, `/api/v1/waf`,
+`/api/v1/crowdsec` and `/api/v1/hub/public/firewall_summary` — never
+captured into source. First deploy of 1.0.1 from raw source clobbered
+the working dashboard and locked the operator out (login.html
+redirect, no gateway backend). Recovery: pulled the 107 KB file from
+`/srv/www/soc/index.html` (May 10 snapshot still on board) back into
+source, stripped the `.logo*` CSS overrides that re-styled the
+sidebar.js-injected SecuBox brand as a 40×40 gradient box, rebuilt,
+redeployed. Source is now the canonical comprehensive dashboard.
+
+Memory `feedback_source_first_always` saved as a hard rule: never
+bump+deploy a package without first diffing source against the
+running board's deployed copy. Board frontends are authoritative.
+
+### RuntimeDirectoryPreserve mass-redeploy on gk2
+
+Crowdsec endpoint 502s traced to the unix socket missing from
+`/run/secubox/`. Another secubox service had restarted with a unit
+file lacking `RuntimeDirectoryPreserve=yes` and wiped the directory
+for everyone. Source-side commit 24000d67 (v2.12.10 era) had already
+added the keyword to all 96 source units, but only 16/127 service
+files on gk2 had it — the other 111 packages had never been
+redeployed since the commit.
+
+Rebuilt 100 packages (3 needed `-d` to skip `python3-all` build-dep
+not installed locally; `scripts/build-packages.sh` hardcoded list
+only covers 30/100 so the remaining 70 went through a one-off shell
+loop) and shipped them all to gk2 with `dpkg -i --force-confold`. The
+cascade of 100 unordered postinst restarts overwhelmed the Marvell
+ARM board; SSH and HTTPS timed out, an emergency reboot was needed
+and triggered an fsck on `/data`.
+
+Post-reboot state: NTP auto-synced (TOTP login OK), 84/127 services
+with Preserve, 41 services without `RuntimeDirectory=` at all (so
+Preserve is sans objet), 2 real stragglers remaining
+(`secubox-torrent`, `secubox-voip`) tracked in TODO P0.
+
+### wazuh postinst tolerates masked unit (`63284497`)
+
+One of the 100 packages (`secubox-wazuh`) initially failed the
+mass-install: postinst called `systemctl enable secubox-wazuh.service`
+unconditionally, the operator had masked that unit at firstboot,
+`systemctl enable` returns exit 1 against a masked unit, `set -e`
+aborted the script, dpkg left the package `half-configured`. Recovery
+on board was `unmask → dpkg --configure → re-mask` to preserve
+operator intent. Source-side fix wraps enable+start in a
+`systemctl is-enabled ... != "masked"` check. Same pattern likely
+belongs in every other secubox-* postinst — audit tracked in TODO P0.
+
+### Memory entries saved
+
+- `feedback_source_first_always` — diff source vs board before any
+  bump/deploy; board frontend is authoritative.
+- `feedback_global_refactor_acceptable` — cross-package mass refactors
+  are correct when source-side fixes have stalled un-deployed;
+  performance-first design (warm asyncio cache, off-request-path
+  compute) preferred over correctness-only.
+
+---
+## 2026-05-24
+
+### Module dual-vhost split — MUST pattern + lyrion/zigbee/authelia alignment
+
+Codified in `docs/MODULE-GUIDELINES.md` §4 (REQUIRED) + §5 (nginx
+template) + `.claude/PATTERNS.md` Pattern 12. Any module with a real
+upstream web UI MUST split:
+
+- `admin.gk2.secubox.in/<module>/` = SecuBox static admin page (calls `/api/v1/<module>/*`)
+- `<module>.gk2.secubox.in/` = real app at vhost root (so absolute asset URLs resolve)
+
+The admin page's `Open <App> UI →` button MUST read its href from
+`/api/v1/<module>/access` at runtime — never hardcode the public
+hostname. Reverse-proxying the app under `/<module>/` is now a
+forbidden anti-pattern (breaks LMS Material, Nextcloud, Grafana, …).
+
+Three modules aligned (master commits b1718788, d4adc1a3, 54da8a7c):
+
+- **secubox-lyrion 1.1.0** — `/lyrion/` rewritten as static admin; `lyrionctl` access URLs corrected (LAN `http://IP:9000/`, public `https://lyrion.gk2.secubox.in/`); `config_get` strips TOML inline comments; admin "Open Music UI" button now reads from `/access`.
+- **secubox-zigbee** — admin "Open Zigbee Manager" button reads from `/access`.
+- **secubox-authelia** — `autheliactl` same `config_get` + `emit_access_json` fixes; public hostname default `auth.maegia.tv` → `sso.gk2.secubox.in`; "Open SSO Portal" button reads from `/access`.
+
+Live on gk2 — all three return the same shape, all three admin pages
+behave identically. **Next**: nextcloud + audit grafana/yacy/rustdesk
+for the same anti-pattern.
+
+---
+## 2026-05-22
+
+### MOCHAbin mPCIe slot J5 — EP06 GPIO investigation runbook (Issue #345)
+
+**Context:** PR #255's DTS patch wired the UTMI PHY to `cp0_usb3_1`, so the
+mPCIe slot's USB pipe is alive (4 USB buses on gk2 vs 2 before). But
+plugging an EP06-E still produces no enumeration: `lsusb` blank for the
+slot, `lspci -vvv` reports `DLActive-` on the PCIe side. Suspect: the
+slot's W_DISABLE# / PWR_EN / WAKE# control lines are not declared in
+the DTS, so they come up in whatever default state the SoC pad config
+leaves them — likely holding the modem powered-down. No MOCHAbin
+schematic in the repo to pin down which CP0 GPIO is wired to J5.
+
+**Done:**
+
+- **#345** — added `scripts/probe-mpcie-gpios.sh`: empirical sweep that
+  drives each *unrequested* CP0 GPIO line HIGH for a few seconds and
+  watches `dmesg` / `lsusb` for a new USB device. Skips any line marked
+  `[used]` by gpioinfo, uses libgpiod (`gpioset --mode=time` so the
+  line auto-restores to input on release). Three modes: `--baseline`
+  (snapshot only, no GPIO writes — safe to run anytime), `--line
+  gpiochipN K` (single line, useful once a candidate is found), or no
+  arg (full sweep across `gpiochip1` + `gpiochip2` = the two CP0
+  banks). Output to `/var/log/secubox/mpcie-probe-<ts>.log`.
+- Companion `docs/hardware/mochabin-mpcie-ep06-runbook.md` documenting
+  the hypothesis, the procedure step-by-step, and the DTS template
+  (`rfkill-gpio` block patterned after `cn9132-clearfog.dts` lines
+  69–122) to apply once a candidate GPIO is identified.
+
+**Validation:** `--baseline` smoke-tested on gk2 — produces correct
+gpioinfo dump, identifies the `[used]` lines (cp0_gpio0 line 0 "reset",
+line 12 "PHY reset", line 30 "shutdown", plus the SFP+ pca9554
+expander chip 3). No spare modem expected; if probing finds no
+candidate the next escalation is multimeter scoping of J5 pins
+2/20/24/39/41/52.
+
+**Incident — v0.1.0 blanket sweep crashed gk2:** running the
+"all unused inputs" sweep with no modem in J5 took the board hard-down
+within seconds (host became unreachable; ARP stopped responding).
+`gpioinfo`'s `[used]` tag only reflects lines the kernel *requested*,
+not lines that are physically wired — several unrequested CP0 GPIOs
+drive critical board functions (eth switch reset, PCIe2 PERST#,
+pca9554 IRQ). v0.2.0 of the script removes the blanket-sweep mode
+entirely: defaults to dry-run candidate listing, requires explicit
+`--commit --line CHIP N` to drive any single line, hardcodes a
+`DANGER_LINES` skip-list, and holds `gpiochip2` off behind
+`--allow-chip2`. Memorialised in memory
+`feedback_gpio_blanket_sweep_crashed_board.md`.
+
+---
+## 2026-05-21
+
+### secubox-nextcloud v1.3.0 — reverse-proxy + SSO gating + move to 10.100.0.21 (Issue #280)
+
+**Context:** Package predated the SSO chain. On gk2 the `/nextcloud/` URL served a static stub (alias to `/usr/share/secubox/www/nextcloud/`), the LXC was hand-patched from source's `lxc.net.0.type=none` to `veth+10.100.0.20/24` — colliding with `secubox-authelia` at the same IP. No Authelia gating.
+
+**Done:**
+- **#280 / PR [#281](https://github.com/CyberMind-FR/secubox-deb/pull/281)** (`b86dee78`): `secubox-nextcloud v1.3.0` — `nginx/nextcloud.conf` now reverse-proxies `/nextcloud/` to `10.100.0.21:80` with Apache-friendly headers and SSO-gates via `auth_request /__sbx_auth_verify` + `error_page 401 = @sbx_auth_login` (handler from secubox-authelia v1.0.8). `sbin/nextcloudctl` LXC template moved from `type=none` (host-mode) to `veth+br-lxc+10.100.0.21/24`, `LXC_PATH=/data/lxc`, env-override knobs per MODULE-GUIDELINES §3. Frees `10.100.0.20` for authelia. Operator rebind recipe in the PR.
+
+**Validation:** Hot-rebind on gk2 (`sed -i s/10.100.0.20/10.100.0.21/ /data/lxc/nextcloud/config` + restart), deployed nginx conf, both LXCs now reachable at distinct IPs. `/nextcloud/` no-cookie → 302 to `/auth/?rd=…/nextcloud/`. Apache returns 400 for plain `/` because of Nextcloud `trusted_domains` — operator must add `admin.gk2.secubox.in` to `config.php` for the post-SSO page to render.
+
+### Authelia SSO loop fix — multi-cookie + access_control + X-Original-URL forwarding (Issues #272 #273 #274)
+
+**Context:** After v1.0.5 the browser flow on `https://admin.gk2.secubox.in/zigbee/` exhibited an infinite redirect loop: login succeeded, returned to `/zigbee/`, then nginx `auth_request` returned 401/403 → 302 back to `/auth/?rd=…` → loop. Three independent bugs stacked.
+
+**Done:**
+
+- **#272 / PR [#275](https://github.com/CyberMind-FR/secubox-deb/pull/275)** (`f6439aeb`): `secubox-authelia v1.0.6` — `install-lxc.sh` now renders TWO `session.cookies[]` entries (`maegia.tv` + `${SECUBOX_HUB_DOMAIN}`, default `gk2.secubox.in`) plus matching `access_control` rules. Authelia returned 403 on `/auth/api/state` because no `cookies[].domain` matched `admin.gk2.secubox.in`. New env knob `SECUBOX_HUB_DOMAIN`.
+- **#273 / PR [#276](https://github.com/CyberMind-FR/secubox-deb/pull/276)** (`a907b5ba`): `secubox-zigbee v2.4.4` + `secubox-lyrion v1.0.7` — `@sbx_auth_login` redirect changed from `$http_host` to `$host` to strip the internal `:9080` nginx port that was leaking into public redirects. Lyrion vhost also switches `$scheme://` → hardcoded `https://`.
+- **#274 / PR [#277](https://github.com/CyberMind-FR/secubox-deb/pull/277)** (`fe37e2c7`): `secubox-authelia v1.0.7` — nginx `/__sbx_auth_verify` and FastAPI `/verify` now forward `X-Original-URL` + `X-Forwarded-{Method,Proto,Host,Uri,For}` to Authelia's `/api/verify`. Without these, Authelia defaulted to the first `cookies[]` entry (`maegia.tv`), never found the `gk2.secubox.in` session, returned 401 → infinite loop after successful login.
+
+**Validation:** Hot-deployed nginx confs + `api/main.py` onto gk2 + sed-patched the live LXC config to add `gk2.secubox.in` + `*.gk2.secubox.in` to `access_control` (source-side install-lxc.sh changes don't touch the running config — caveat memorialised in memory). Also restarted z2m which had silently hung 14h with no listener on :8080 — root cause was z2m needing ~20s post-restart to bind. Board load dropped 359 → 7 once the auth loop stopped. Final state: `/zigbee/` returns clean 302 to `/auth/?rd=https://admin.gk2.secubox.in/zigbee/` (no `:9080`), `/auth/api/state` → 200, z2m UI loads after login. User confirmed.
+
+---
+## 2026-05-19
+
+### v2.10.0 + v2.10.1 — fresh-image login chain end-to-end, VBox amd64 + bare-metal x86_64 (Issues #218, #220, #222, #224)
+
+**Context:** v2.10.0 closed the `admin / secubox` login chain from firstboot through image build (apt-get -f), web URL refactor (sed across 67 files), and Debian packaging (compat dup). v2.10.1 patched the kiosk for Debian 12 AppArmor on bare-metal. End state: fresh USB-booted x86_64 hardware reaches the SecuBox login form, accepts the default credentials, and presents the forced password-change UX — same path as VBox.
+
+**Done:**
+
+- **#218 / PR [#219](https://github.com/CyberMind-FR/secubox-deb/pull/219)** (`081d058d`): `image/build-image.sh` — `dpkg -i --force-depends` left ~15 Debian-only Python deps uninstalled (python3-argon2, python3-jose, python3-cryptography, python3-jsonschema, python3-maxminddb, python3-websockets, python3-evdev, python3-pyroute2, python3-zmq, python3-serial, python3-rich, python3-pyotp, python3-qrcode). Added `apt-get install -f -y --no-install-recommends` after the slipstream step. Three CI iterations to land the minimal diff: v1 (all 15 in `INCLUDE_PKGS`) → python3-zmq broke debootstrap second-stage; v2 (just argon2) → same C-ext postinst issue; v3 (zero new in `INCLUDE_PKGS`, only the apt-get -f step) → green. Comment line "skip apt-get -f as pip provides Python deps" was a myth — those deps don't exist on PyPI under matching names.
+- **#220 / PR [#221](https://github.com/CyberMind-FR/secubox-deb/pull/221)** (`95db06e7`): deleted `packages/secubox-health-doctor/debian/compat`. dh refused to clean because compat 13 was declared in both `debian/compat` and `Build-Depends: debhelper-compat (= 13)`. 132 other packages use the modern single-source pattern.
+- **#222 / PR [#223](https://github.com/CyberMind-FR/secubox-deb/pull/223)** (`99fc829b`): sed `/portal/login.html` → `/login.html` across 82 occurrences in 67 source files. PR #169 had moved `login.html` to the secubox-portal root (`/usr/share/secubox/www/login.html`) but missed updating the inverse links. nginx `try_files` was falling back to hub's `index.html`, whose `checkAuth()` redirected to `/portal/login.html` → infinite loop. Diagnosed via offline image dump (debugfs on dd-extracted ROOT, no sudo) when the access log showed identical `200`-served bytes for two different URLs.
+- **v2.10.0 tag** — bundles #218 + #220 + #222.
+- **#224 / PR [#225](https://github.com/CyberMind-FR/secubox-deb/pull/225)** (`e0e3a335`): `image/sbin/secubox-kiosk-launcher` — always pass `--no-sandbox` to chromium, not just in the VM branch. Debian 12 ships AppArmor with `unprivileged_userns` restriction, chromium's zygote needs unprivileged user namespaces, restart loop until `MAX_FAILURES=3` disabled the kiosk on bare-metal. The kiosk runs as a dedicated unprivileged `secubox-kiosk` user on an isolated VT in a closed-network appliance with AppArmor per-process chromium profile still applied — internal renderer sandbox provides marginal value vs. AppArmor while breaking the kiosk entirely. Diagnosed from `/tmp/kiosk-session.log` showing the literal `you can try using --no-sandbox` workaround text from chromium's own error message.
+- **v2.10.1 tag** — bundles #224.
+
+**Validation:**
+
+- VBox amd64 boot (CI run 26088128896 SHA `0da47bad`) — kiosk reaches login form, `admin / secubox` accepted, forced password-change UX appears.
+- Bare-metal USB boot (Kingston DataTraveler 28.8 GB, CI run 26091295653 SHA `e8784388`) — same path, plus working `secubox-kiosk-launcher` v3.3 with chromium fullscreen.
+
+**Non-obvious learning** (saved to memory as `reference_ci_artifact_source.md`): `build-image.yml` pulls `secubox-debs-all` from the latest SUCCESSFUL `build-packages.yml` run on ANY branch (via `dawidd6/action-download-artifact@v3`, default `workflow_conclusion: success`). Cost one CI cycle today when PR #223's sed fix was on the test branch but the .debs came from master's last successful build-packages run. Mitigation: always run build-packages.yml on the test branch first and ensure 0 failures; otherwise action-download-artifact silently falls back to master's previous artifact.
+
+**Follow-up filed:**
+
+- **#226 / PR [#227](https://github.com/CyberMind-FR/secubox-deb/pull/227)** — bare-metal x86_64 polish: `ConditionArchitecture=arm64` on three Pi-only services (healthbump, led-trigger, picobrew) that were [FAILED]-looping on x64; expand X11 driver coverage from fbdev-only to the standard xorg set (intel/amdgpu/radeon/nouveau/qxl/vmware/vesa/fbdev) for faster bare-metal cold-init.
+
+### dropletctl static-publisher CLI — port from OpenWrt, supersedes PR #185 (Issue [#196](https://github.com/CyberMind-FR/secubox-deb/issues/196), PR [#199](https://github.com/CyberMind-FR/secubox-deb/pull/199) opened pending review)
+
+**Context:** The Droplet FastAPI consumer (`packages/secubox-droplet/api/main.py`, 839 lines) has long shelled out to `subprocess.run(["dropletctl", "publish", file, name, domain])` and parsed `[OK]`-bearing output — but the binary it expected (the OpenWrt-style static-content publisher) had never been ported to Debian. PR #185 / issue #181 had shipped a different `dropletctl` — a noun-verb wrapper over the running Droplet API socket (`file upload`, `file list`, `file rename`, etc.) — which solved a different problem. The user explicitly asked for the OpenWrt-style publisher, accepting that PR #185's wrapper would be superseded.
+
+**Workflow:** Full brainstorm → spec → plan → subagent-driven execution loop in worktree `feature/196-implement-secubox-droplet-cli-dropletctl`. 11-task TDD plan; two-stage review (spec compliance then code quality) per task; final whole-branch code review caught 2 latent bugs not seen in per-task reviews, both fixed before merge with red-on-old test coverage.
+
+**Done:**
+
+- **Spec** (commit `5e6e1d83`): static-only v1.1.0, delegates HTTP-facing work to `metablogizerctl site publish`, per-package bats convention with PATH-shimmed stubs, design rationale recorded in `docs/superpowers/specs/2026-05-18-dropletctl-design.md`.
+- **Plan** (commit `133c2c0e`): 11 tasks, 1230 lines, each with verbatim heredocs the subagents could follow without interpretation.
+- **T1 scaffold** (`b9c781ab`): bats harness, helpers.bash, 2 PATH-shimmed delegate stubs, dropletctl skeleton. Surfaced the PR #185 wrapper that this branch replaces; user-approved supersession.
+- **T2–T9** (`87b9623b` → `13ddc0a8`): TDD increments — publish arg validation → name sanitization + HTML staging → ZIP extraction with single-nested-dir unwrap → tarball + plain-directory input → idempotency pin → remove → rename → list. Each task: 1–3 new bats cases, minimum-diff implementation, full review loop.
+- **T8 hardening** (`0714d941`): code-reviewer caught `mv` data-corruption (nests source inside existing target dir); added collision guard + `old == new` short-circuit + 2 new bats cases.
+- **T10 packaging** (`5d490ea6`): `debian/changelog` bumped 1.0.2 → 1.1.0-1~bookworm1 (Closes #196); `debian/control` Depends extended with `secubox-metablogizer (>= 1.1), rsync, unzip, python3` (T5 reviewer caught the runtime-dep gap beyond the plan's metablogizer-only ask); `debian/rules` comment updated (install line was already present from PR #185, so no duplicate).
+- **T11 lint** (no commit needed): bash -n clean, bats 15/0, shellcheck not installed locally (deferred to CI).
+- **Final review fix** (`550403df`): `cmd_rename` switched from prefixed-FQDN to bare-base domain in TOML (Fix A — list was double-prefixing post-rename); `cmd_publish` now rejects domain values not matching `^[a-zA-Z0-9.-]+$` (Fix B — closes TOML injection via the API boundary).
+- **Test strengthening** (`0c08ae06`): test 16 rewritten to seed the legacy-FQDN scenario explicitly so it's genuinely red on the old buggy code (red-on-old verified by swapping the parent binary in).
+
+**Accepted plan deviations** (each is a fix to a plan bug, all surfaced + reviewed):
+
+- T3: dropped `local` from `local staging` in `cmd_publish` so the EXIT trap can reference `$staging` under `set -u` (function-scoped local would unwind before the trap fires at shell exit).
+- T8: added 3 minor hardening items not in plan (collision guard + same-name short-circuit + asymmetry comments) per code reviewer's CHANGES REQUESTED.
+- T9: `cmd_list` reconstructs vhost from `f"{name}.{domain}"`; plan's literal `https://{domain}/` would have rendered the bare base domain for every site, failing the test's `first.mydomain.test` assertion.
+
+**Final state:**
+
+- 17 bats tests, 0 failures
+- HEAD `0c08ae06` on `feature/196-implement-secubox-droplet-cli-dropletctl`
+- PR #199 opened with full commit series + supersession note for PR #185 + follow-up backlog
+- Hardware deploy on `gk2` (192.168.1.200) deferred per plan §"Hardware deploy" until PR merges
+
+**Followup (queued in PR body, not blocking):**
+
+- `flock` around TOML writers for concurrency safety
+- Dedupe the 3 hand-rolled TOML regexes (`upsert_toml_site`, `remove_toml_site`, `cmd_list`) into a shared python helper
+- `cmd_rename` rollback on metablogizerctl publish failure (currently exits 5 with half-renamed state)
+- Replace `[ON]` literal in `cmd_list` with real metablogizerctl state query
+- `packages/secubox-droplet/README.md` + `debian/dropletctl.8` man page
+
+---
+## 2026-05-17
+
+### amd64 VirtualBox test bundle + apt.secubox.in keyring fix
+
+**Context:** User asked for a fresh amd64 VirtualBox image suitable for non-expert testers. The build host has no `qemu-img`, `VBoxManage`, or passwordless sudo; the CI pipeline (`build-image.yml --board vm-x64`) is the canonical path.
+
+**Done:**
+
+- Downloaded the May-11 CI artifact (`25661033196`, tag `v2.2.1-eye-remote`) → decompressed → bundled with a pure-Python raw→VDI converter (`raw_to_vdi.py`, dynamic VDI, 1 MiB blocks, 33.3% sparse, signature `0xbeda107f` validated) so the bundle is self-contained without VBox/qemu tooling on the build host.
+- Wrote `verify.sh` — 6-check self-test (file presence, CI SHA, local hash table, VDI header, GPT layout, ESP boot files). Locale-safe (`LC_ALL=C sha256sum --quiet`), runs on any bash + python3.
+- Rewrote `README.md` for first-time testers (TL;DR 4-command launch, credentials table `root`/`secubox` + `admin`/`secubox`, network defaults, troubleshooting table, "how to get fresher build" recipe).
+- Wrote `FIX-PXE.md` documenting the VBox 7 EFI quirk (`\EFI\BOOT\BOOTX64.EFI` skipped on fresh VMs with empty NVRAM) — three workarounds, with the NIC-disconnect one-liner as the cleanest.
+- Triggered a fresh CI build on master (`25983400130`) → failed in 6 min at chroot apt-get update with `NO_PUBKEY F42E679EE3730EA1`.
+
+**Root cause:** `https://apt.secubox.in/secubox-keyring.gpg` was published ASCII-armored. `apt`'s `signed-by=` directive accepts only binary OpenPGP keyrings. The subkey `F42E679EE3730EA1` (rsa4096, signs the Release file dated 2026-05-12) was present in the armored file but unreadable to `apt`.
+
+**Fix on the server (192.168.1.200, hosts apt.secubox.in):**
+
+- Backed up the armored keyring: `/var/www/apt.secubox.in/secubox-keyring.gpg.armored.bak.<epoch>`
+- `gpg --dearmor` in place: 3947 B armored → 2855 B binary
+- `file` reports `OpenPGP Public Key Version 4, Created Tue May 12 07:25:56 2026, RSA (Encrypt or Sign, 4096 bits); User ID; Signature; OpenPGP Certificate`
+- Standalone `apt-get update` against apt.secubox.in: green, fetches InRelease + Packages with no GPG error
+- Re-triggered CI (`25983593168`) → green in 14 min → `secubox-vm-x64-bookworm.img.gz` 968 MB
+
+**Bundle in `output/ci-vm-x64-25983593168/`:** verified 6/6 (CI hash + local hashes + VDI header + GPT + ESP `/EFI/BOOT/BOOTX64.EFI`), 2.76 GiB VDI (34.5% sparse), `commit 2eff4045` on `master`, built 2026-05-17.
+
+**Followup:**
+
+- `publish-packages.yml` doesn't (re-)export the keyring — it's managed manually on the board, so the server-side fix should persist. If a future operator re-uploads as armored, the same dearmor step will be needed. Worth adding a `gpg --dearmor`-on-publish step to whichever script ships the key to `/var/www/apt.secubox.in/` (not in-repo today).
+
+---
+## 2026-05-16
+
+### eye-remote: Phase 1 multi-gadget DHCP — N Pi gadgets coexist at L3 on `eye-br0` (Issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158), branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o`)
+
+**Context:** The L2 bridge (`eye-br0`) landed via #155 / PR #157 solved the hardware-level collision for N Pi RNDIS gadgets but left every Round image with the same static IP (`10.55.0.2/30`). With two gadgets attached the host ARP cache flapped between them; exactly one Pi was reachable at a time. Phase 1 adds L3 addressing: a `dnsmasq` instance scoped exclusively to `eye-br0` issues per-MAC leases from `10.55.0.10–.250`, and Round images switch from static peer to DHCP client.
+
+**Done:**
+
+- **Parser library** (Tasks 1–4): `reservations.conf` reader (per-MAC TOML-style), `dnsmasq.leases` reader (epoch + MAC + IP + hostname), IP assignment logic (pool `10.55.0.10–.250`, first-fit, MAC stable), Pydantic models `GadgetLease` / `GadgetReservation` / `LeaseState` — full pytest suite.
+- **FastAPI router** (Tasks 5–6): `GET /api/v1/eye-remote/leases` joins active lease file with reservation table, JWT-gated; wired into `api/main.py` lifespan.
+- **dnsmasq config + systemd unit** (Tasks 7–8): `eye-remote-dnsmasq.conf` bound to `eye-br0` only, 24 h lease, `dhcp-script=leasewatch.sh`; dedicated `secubox-eye-dnsmasq.service` (masks Debian's system-wide `dnsmasq.service`, `PIDFile=/run/secubox/eye-dnsmasq.pid`).
+- **Host helpers** (Tasks 9–10): `find-usb-serial` maps USB gadget interface → Pi CPU serial via udev + sysfs, writes to `/etc/secubox/eye-remote/serials/`; `leasewatch.sh` dhcp-script hook auto-appends new MACs to `reservations.conf` and writes JSONL audit entries.
+- **nftables** (Task 11): narrow DHCP allow on `eye-br0` only (`udp dport 67`); default DROP preserved.
+- **Debian packaging** (Tasks 12–13): `secubox-eye-remote` ships dnsmasq config, systemd unit, nftables snippet, `leasewatch.sh`; `postinst` enables + starts `secubox-eye-dnsmasq.service`. `secubox-system` ships `find-usb-serial` + `leasewatch.sh` to `/usr/lib/secubox/`; version bumped.
+- **Round image** (Tasks 14–15): `usb0` → `eye0` rename via `.link` udev predictable-name file; all references in build script + gadget composer updated. `eye0` switched to DHCP client via `systemd-networkd` `.network` file; firstboot derives hostname from CPU serial (`sbx-rnd-<serial_suffix>`); build script enables `systemd-networkd`, disables competing `dhcpcd` + `usb-network.service`.
+- **Integration test** (Task 16): `tests/scripts/test-eye-remote-multi-gadget-netns.sh` — netns + two veth pairs simulate two Pi gadgets; verifies distinct leases, lease renewal, and `find-usb-serial` mapping. Skipped without root (`EUID != 0`), ready for privileged CI runners.
+- **Docs + tracking** (Task 17): `remote-ui/round/MULTI-GADGET.md` created with "Resolved by #158" banner + historic limitation documentation; WIP.md + HISTORY.md updated.
+
+**State:**
+
+- Branch `feature/158-eye-remote-multi-gadget-l3-dhcp-server-o` pushed to origin; head after Task 17 commit is the tracking commit.
+- Live-board deploy deferred to user: `scripts/deploy.sh` only rsyncs Python API; full install requires `.deb` transfer + `dpkg -i` on the board (installs `dnsmasq-base`, masks `dnsmasq.service`, loads nftables rules into kernel).
+- Pi reflash deferred: Round image changes (Tasks 14–15) need a fresh flash of a Pi Zero W to validate.
+- PR not yet opened — user decides when to open the review surface.
+- Phase 2 (explicit pairing approval before lease grant, NIZK handshake option) deferred to a separate follow-up issue.
+### eye-remote: fix link-rename collision when multiple Pi gadgets plug into MOCHAbin USB (Issue [#155](https://github.com/CyberMind-FR/secubox-deb/issues/155))
+
+**Context:** Test board `192.168.1.200` had both a Pi Zero W (`rpiz`, MAC `02:fb:00:00:11:03`) and a Pi 4B (MAC `02:fb:00:00:d2:7f`) plugged into its USB hub. Both enumerated cleanly as `Linux Foundation Multifunction Composite Gadget` (1d6b:0104) but every `usb*` net iface stayed in `state DOWN` — `secubox-eye-remote.service` was running but uvicorn's `10.55.0.1:8000` had no interface to bind to.
+
+**Root cause:** Hand-installed `/etc/systemd/network/10-eye-remote.link` (not dpkg-owned) tried to rename every `02:fb:00:00:* + rndis_host` interface to the fixed name `eye-remote`. With two matching gadgets the rename collided and systemd-networkd silently left them as `usb0/usb1/usb2`. The companion `50-eye-remote.network` (and netplan's `eye-remote` ethernet stanza in `00-secubox.yaml`) then never matched anything live, so `10.55.0.1/30` was never applied. The `/etc/network/interfaces.d/usb0` ifupdown stanza was also dead (networkd is the active manager).
+
+**Fix (host-side, no Pi-side changes):**
+- New canonical `eye-br0` bridge owned by the package: [`packages/secubox-eye-remote/networkd/05-eye-br0.netdev`](../packages/secubox-eye-remote/networkd/05-eye-br0.netdev), [`packages/secubox-eye-remote/networkd/10-eye-br0.network`](../packages/secubox-eye-remote/networkd/10-eye-br0.network) (`10.55.0.1/24`, `ConfigureWithoutCarrier=yes`, `STP=off`).
+- udev rule rewritten in [`packages/secubox-system/etc/udev/rules.d/90-secubox-eye-remote.rules`](../packages/secubox-system/etc/udev/rules.d/90-secubox-eye-remote.rules): no per-iface IP, just call `eye-remote-connected.sh` which enslaves the netdev (`ip link set %k master eye-br0`). Mirror in [`packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules`](../packages/secubox-eye-remote/udev/90-secubox-eye-remote.rules) kept identical.
+- Connect handler [`eye-remote-connected.sh`](../packages/secubox-system/usr/lib/secubox/eye-remote-connected.sh) rewritten to enslave into the bridge instead of assigning `10.55.0.1/30` on the gadget iface; falls back to point-to-point if bridge is missing.
+- Idempotent host hotfix [`remote-ui/round/host-cleanup-dead-config.sh`](../remote-ui/round/host-cleanup-dead-config.sh): rewrites netplan to drop the `eye-remote:` ethernet stanza (stateful YAML editor — regex approach was too greedy and over-matched), removes the dead `.link/.network/interfaces.d/usb0` files, installs the canonical bridge files, syncs udev rules, runs `netplan generate` + `systemctl restart systemd-networkd` + `udevadm trigger`.
+- Multi-gadget L3 limitation documented in [`remote-ui/round/MULTI-GADGET.md`](../remote-ui/round/MULTI-GADGET.md): every Round image currently statically claims `10.55.0.2/30` as its peer, so two Pis simultaneously plugged in race for the same L3 address even though the bridge keeps L2 clean. Proper fix needs a Round-image change (MAC-derived peer or DHCP client) — out of scope for #155.
+
+**Verification on `192.168.1.200`:**
+- `eye-br0` is UP with `10.55.0.1/24`
+- Three L2 slaves: `enx02fb00001103` (rpiz), `enx02fb0000d27f` (Pi 4B), plus a stale `eye-remote` (the rpiz's pre-fix rename; harmless leftover, will disappear on next hot-unplug)
+- `secubox-eye-remote.service` active, uvicorn listening on `10.55.0.1:8000`, `curl http://10.55.0.1:8000/health` → HTTP 200
+- udev journal shows the bridge enslavement firing on the `udevadm trigger` retrigger; `journalctl -t secubox-eye-remote` clean
+
+**Followups:**
+- Branch pushed to `origin/fix/155-eye-remote-link-rename-collision-when-mu`; PR opening deferred per user preference.
+- Round-image change for per-Pi peer IP (DHCP or MAC-derived static) — file as a separate issue when the Round image work resumes.
+
+### Cookie audit pipeline — RGPD / ePrivacy reconciler (Issue [#156](https://github.com/CyberMind-FR/secubox-deb/issues/156), PR [#159](https://github.com/CyberMind-FR/secubox-deb/pull/159) MERGED `a19486c9`)
+
+**Context:** Operator wants a compliance audit on their own infrastructure: confirm that every cookie effectively present in visitors' browsers is either `Set-Cookie`-traceable (server-emitted) or strictly_necessary. JS-set non-essential cookies (GA, Hotjar, Matomo, FB pixel) must be flagged because LCEN art. 82 / ePrivacy requires prior consent. The WAF already injects `health-banner.js` into every HTML response in transit through mitmproxy — that injection point is the only place that can see both server cookies (via the addon hook) AND browser-effective cookies (via a sibling script that snapshots `document.cookie`).
+
+**Done:**
+- `packages/secubox-mitmproxy/addons/cookie_audit.py` — mitmproxy response hook that parses every Set-Cookie (full attrs: Domain/Path/Max-Age/Secure/HttpOnly/SameSite), sha256-hashes the value, and appends one JSONL record per cookie to `/var/log/secubox/cookie-audit/server.jsonl`. 7 unit tests.
+- `packages/secubox-hub/www/shared/cookie-inventory.js` — vanilla JS snapshotter that hashes `document.cookie` via SubtleCrypto sha256 and POSTs to `/api/v1/cookie-audit/ingest` at DOMContentLoaded, +2s, and on visibilitychange. Hard-capped at 8 snapshots/page.
+- `packages/secubox-mitmproxy/addons/secubox_waf.py` — extended the existing banner injection to load both scripts; two new CDN-config keys (`cookie_inventory_url`, `cookie_audit_ingest_url`).
+- `packages/secubox-metrics/api/cookie_audit.py` — `CookieAuditAggregator` + `Classifier` mirrors the cert_status pattern; joins server ledger ⨝ browser snapshots per (vhost, name), emits `source ∈ {http, js, both}`, flags `rgpd_violation` for `source == "js" AND category != "strictly_necessary"`. 9 unit tests.
+- `packages/secubox-metrics/api/main.py` — wires the aggregator into the lifespan loop, opens CORS to POST, adds three routes: `POST /ingest`, `GET /report?host=…`, `GET /summary`. Hard caps (200 cookies/snap, 128B names, 512B UA). Refuses ingest when `enabled = false`.
+- `common/secubox_core/config.py` — `get_cookie_audit_config()` with built-in RGPD baseline patterns (8 strictly_necessary, 5 functional, 9 analytics, 8 marketing). Operator patterns MERGED on top by default; `classifier_override = true` to replace.
+- `secubox.conf.example` — `[cookie_audit]` + `[cookie_audit.classifier]` documented.
+- READMEs of secubox-metrics + secubox-mitmproxy updated.
+- All 34 metrics tests still green + 9 new = 43 passing; 7 new mitmproxy tests passing.
+
+**State:**
+- PR #159 squash-merged to master as `a19486c9`. Issue #156 auto-closed via `Closes #156`.
+
+**Follow-ups:**
+- AppArmor profile for `usr.bin.mitmdump` needs `/var/log/secubox/cookie-audit/**` rw and `/var/lib/secubox/cookie-audit/**` rw (deferred until deployed).
+- Logrotate snippet for the JSONL ledger (deferred — first iteration aims at validating shape before hardening).
+
+### Mail stack Phase 2 (Rspamd) — live-deployed on admin.gk2.secubox.in, 13/13 gates green (Issue #153, branch `feature/153-mail-stack-phase-2-rspamd-migration-roun`)
+
+**Context:** Continuation of the Phase 2 deploy paused yesterday at DKIM keygen. Bind-mount entries were missing in `/var/lib/lxc/mail/config`, `rspamadm` only exists inside the LXC (not on host PATH), and the hardcoded `chown 100110:100110` in `configure_rspamd_controller` didn't match the actual `_rspamd` uid in the LXC's Debian image (107, not 110).
+
+**Done:**
+- Appended 4 bind-mount entries (`/etc/rspamd-keys`, `/var/lib/rspamd/{bayes,history,settings}`) to `/var/lib/lxc/mail/config`, restarted the mail LXC.
+- Generated DKIM keypair for `secubox.in/default` (2048-bit) via `lxc-attach -n mail -- rspamadm dkim_keygen`. DNS TXT recorded in `/data/volumes/mail/rspamd/dkim/secubox.in/default.txt` — awaiting publication.
+- Re-ran `configure_rspamd_milter` to deploy the 8 `local.d/*.{conf,inc}` templates into the LXC's `/etc/rspamd/local.d/`. Re-ran `configure_rspamd_controller` for `worker-controller.inc` + `secrets.inc`.
+- Fixed `secrets.inc` ownership via `lxc-attach -- chown _rspamd:_rspamd` (kernel idmap maps inside-LXC uid 107 to the right outside-LXC subuid regardless of image). Rspamd then started cleanly.
+- Added HAProxy vhost `rspamd.gk2.secubox.in → mitmproxy_inspector` via `haproxyctl vhost add`. Added matching entry to mitmproxy LXC's `/srv/mitmproxy/haproxy-routes.json` and restarted mitmproxy. End-to-end curl returned `HTTP 200`, `x-secubox-waf: inspected`, body `pong` from `rspamd/3.4`.
+- Ran `mailctl rspamd purge-legacy` on the board — D9 health gate verified rspamc-controller reachable, then purged `opendkim opendkim-tools spamassassin spamc spamd` cleanly. Postfix/Dovecot stayed active throughout.
+- All 13 acceptance gates green: ports, milter, DKIM, modules, WAF path, SA/OpenDKIM absent, Phase 1 regression (5 production mailboxes + webmail WAF path).
+
+**Live-deploy fixes pushed as `637b2221`:**
+- `packages/secubox-mail/lib/mail/rspamd.sh` — `configure_rspamd_controller` chowns via `lxc-attach` instead of hardcoded host uid.
+- `tests/scripts/test-mail-phase2-acceptance.sh` — gate 7 grep widened (`Messages scanned|Pools allocated`); gate 12 dpkg call wrapped with `|| true` so `set -e` doesn't silently abort the smoke when SA/OpenDKIM are correctly absent.
+
+**Pre-existing brokenness noted (unrelated to Phase 2):**
+- `/srv/haproxy/certs/` is missing on the board; the live haproxy still serves from in-memory config, but any reload would crash. **Resolved this session — see "HAProxy cert recovery" below.**
+
+### HAProxy cert recovery (2026-05-16 13:41 board-local)
+
+Root cause: the running HAProxy was started 2026-05-15 17:37 from a config that pointed `bind *:443 ssl crt` at `/data/haproxy/certs/` (95 .pem files). Later in the day, a `haproxyctl` config regen (triggered when adding the rspamd.gk2 vhost) emitted a new `/etc/haproxy/haproxy.cfg` that:
+
+1. Changed the cert directory to `/srv/haproxy/certs/` (which didn't exist).
+2. Stripped **every** `backend {…}` block (9 backends dropped, including `mitmproxy_inspector`, `webui_direct`, `nginx_vhosts`, `fallback`, the metablog_* group, and `gitea_ssh`).
+3. Replaced the issue-#44 `is_webui_admin` regex routing of `admin.gk2.secubox.in` to `webui_direct` with a plain `hdr -i` ACL routing to `mitmproxy_inspector`.
+
+Result: any `systemctl reload haproxy` would crash. The live process held the old (correct) config in memory and kept serving 26k+ SSL connections, hiding the breakage.
+
+**Recovery applied:**
+- Symlinked `/srv/haproxy/certs -> /data/haproxy/certs` (so the haproxyctl-style path resolves to the real cert store, future regens stay valid).
+- Rebuilt `/etc/haproxy/haproxy.cfg` from `bak.20260515-1531-pre-503-fix` (latest known-good with 9 backends), grafted in the two intentional changes the regen had introduced:
+  - `acl is_webui_admin hdr(host) -m reg ^admin\.gk2\.secubox\.in$` + `use_backend webui_direct if is_webui_admin` (in both http-in + https-in).
+  - `acl host_rspamd_gk2_secubox_in hdr(host) -i rspamd.gk2.secubox.in` + `use_backend mitmproxy_inspector if host_rspamd_gk2_secubox_in` (in both frontends).
+- `haproxy -c` validated cleanly. `systemctl reload haproxy` forked a new worker; master process stayed up (`20h06m` etime preserved). New worker took over without dropping the SSL listener.
+- Verified: `rspamd.gk2.secubox.in` (WAF inspected), `admin.gk2.secubox.in` (direct webui_direct), `webmail.gk2.secubox.in` (WAF inspected) — all return 200/expected status. Full Phase 2 smoke re-ran 13/13 green post-reload.
+
+**Defensive backup retained:** `/etc/haproxy/haproxy.cfg.bak.20260516-broken-by-vhost-add` (the broken-by-haproxyctl-regen cfg, for forensic reference).
+
+**Followups before PR merge:**
+- Investigate why `mailctl rspamd install`'s first `configure_rspamd_milter` call didn't actually populate the LXC's `/etc/rspamd/local.d/` (manual re-invocation worked) — possibly an early-bail before `LXC_BASE`/`TEMPLATES_DIR` reached the function.
+- Move the `rspamadm dkim_keygen` call into `lxc-attach` inside `rspamd_keygen` so DKIM keygen is automated on next deploy (currently errors `rspamadm not on PATH`).
+- Re-run `rspamd-route-sync-patch.sh` ordering so the mitmproxy LXC copy of `haproxy-routes.json` is updated reliably (host copy was, LXC copy wasn't on this deploy).
+
+**State:**
+- Branch pushed, head `637b2221`. PR not opened (per memory: no unprompted PRs).
+- Phase 2.5 (ClamAV) and Phase 3 (multi-domain DKIM) deferred per the spec.
+
+---
+## 2026-05-14
+
+### remote-ui Phases 1 + 3 merged to master (Issue #127, PRs #130 + #132)
+
+**Context:** Closing out the `remote-ui/square/` variant for Pi 4B/400. Phase 1 (extract `remote-ui/common/`) and Phase 3 (Pillow + `/dev/fb0` kiosk) had both been implementation-complete with green tests/reviews but the PRs were still open pending hardware bench. Decision: squash-merge both now, drive Pi 400 manual bench (Task 24) live this session.
+
+**Done:**
+- Triaged the `build-eye-remote` CI failure on PR #130: traced to pre-existing version drift — workflow env `VERSION: '2.2.0'` vs. `build-eye-remote-image.sh:16` `VERSION="2.2.1"`. One-line fix `0ba80c31` on the branch (`.github/workflows/build-eye-remote.yml` 2.2.0 → 2.2.1). CI re-ran green end-to-end including Compress + Upload artifact.
+- Squash-merged PR #130 (Phase 1) → `7c37415f` on master.
+- Squash-merged PR #132 (Phase 3) → `dee8bf8b` on master.
+- Posted merge-complete comment on issue #127 enumerating remaining hardware gates (Tasks 18/19/23/24).
+- Rebased local-only docs commit `a4de42c8` onto merged master.
+
+**State:**
+- Issue #127 stays open per CLAUDE.md "Jamais de fermeture automatique" — Tasks 18 (round/ diffoscope), 19 (Zero W bench), 23 (Pi 4B bench), 24 (Pi 400 bench) all need user-driven hardware validation before close.
+- Phase 2 PR #131 remains closed (superseded by Phase 3 — kept on record for design rationale only).
+
+**Followups:**
+- Build + flash `secubox-eye-square_0.2.0_arm64.img.xz` for Pi 400 hardware bench (Task 24, in progress this session). Build script `remote-ui/square/build-eye-square-image.sh`; CI workflow for square/ does NOT exist yet — add as Phase 4 followup so future contributors don't have to local-build.
+- Same image will satisfy Task 23 (Pi 4B sanity).
+- Worktrees `127-add-remote-ui-square-variant-for-pi-4b-7`, `127-phase2-square-variant`, `127-phase3-python-kiosk` are now ready for `scripts/agent-worktree.sh clean <#>` — branches merged.
+
+---
+## 2026-05-13
+
+### Session 167 — Auth rework: secubox-users as identity source + TOTP 2FA (Issue #120, 19 tasks)
+
+**Goal:** Replace plaintext auth.toml admin login with secubox-users-backed argon2id auth + RFC 6238 TOTP 2FA, kill-on-disable session revocation, CLI↔API parity through a single engine module, feature-flagged cutover.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-13-secubox-users-auth-design.md`
+- Plan: `docs/superpowers/plans/2026-05-13-secubox-users-auth.md` (19 tasks)
+- `secubox_core.user_store` + tests (canonical reader, auth.toml fallback path)
+- `secubox_core.feature_flags` + tests
+- `secubox_core.auth` rewired (jti, scope, session validator, disabled-reject)
+- `secubox_users.engine` (single mutation entry) — lifecycle / passwords / TOTP / sessions methods + tests (21 tests)
+- `secubox_users.password_policy` + tests (argon2id, 6-rule policy)
+- `secubox_users.totp` (pyotp + argon2id-hashed backup codes) + tests
+- `secubox_users.migrate_v1_to_v2` (idempotent) + tests
+- `secubox-auth` branching `/auth/login` + `/auth/login/mfa` + `/auth/totp/{enroll,confirm,disable}` + `/auth/set-password` + integration tests
+- secubox-users API handlers refactored to delegate to engine; new endpoints with RBAC: `/user/<u>/disable`, `/enable`, `/password`, `/totp/disable`, `/totp/backup-codes`, `/sessions`, `/sessions/revoke`
+- `/import` now routes through `engine.create_user` (rejects `password_hash` injection)
+- `usersctl` rewritten in Python (13 subcommands, all delegate to engine) + CLI tests
+- CLI↔API parity test (3 mutation sequences diff-tested)
+- `debian/control` deps + `debian/postinst`: migration + seed admin + seed `<hostname>`, secubox user/group, env-var seed (no shell injection)
+- changelog: `secubox-users 1.4.0-1~bookworm1`
+- Live smoke script `tests/scripts/test-users-auth-live.sh` (callable post-deploy)
+- 70+ cumulative tests passing per package (run per-directory due to api/ namespace collision documented in `pytest.ini`)
+
+**Followups:**
+- Build + publish the .deb (via APT pipeline) so the board can `apt upgrade`.
+- After deploy: run `bash tests/scripts/test-users-auth-live.sh` to validate.
+- Phase 2 cutover: flip `[auth] enforce_v2 = true` in `/etc/secubox/users.feature_flags.toml` on the board.
+- Encryption-at-rest for TOTP secrets — revisit under PARAMETERS double-buffer hardening.
+- "Sign in with Google" OIDC stays deferred (schema reserves `google: null`).
+- Top-10k SecLists wordlist refresh (currently ~100-entry starter in `share/common-passwords.txt`).
+- Frontend banner when `/auth/health` reports fallback or NTP unsync.
+- Cross-package pytest collection: rename `api/` packages to break the namespace collision in a separate cleanup PR.
+
+---
+
+### MetaBlogizer deploy webhook (Issue #113, sub-E of #49)
+
+**Goal:** Close the umbrella #49. Auto-deploy on `git push` to metablog-* repos. HMAC-verified webhook + per-site lock + ring buffer + Gitea API installer.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-13-metablog-deploy-webhook-design.md`
+- Plan: `docs/superpowers/plans/2026-05-13-metablog-deploy-webhook.md` (8 tasks)
+- `api/webhook.py`: `verify_signature`, `load_secret` (cached), `classify_payload`, `site_lock` pool, `git_pull`, ring buffer (50 entries)
+- `main.py`: `POST /webhook` (public, HMAC), `GET /deploys` (JWT)
+- `scripts/metablog-webhook-{install,uninstall}.sh` — Gitea API, idempotent, --dry-run
+- Bash smoke `tests/scripts/test-metablog-webhook.sh` (3 gates)
+- 21 pytest cases (36 total in the api/tests/ suite, all green)
+
+**Followups:**
+- Streamlit auto-deploy webhook (separate scope)
+
+---
+
+### Fix — Hub sidebar mobile-mode auto-detect (Issue #114, PR #115)
+
+**Symptom:** `[Sidebar] Mobile mode: ON (touch: true, narrow: false)` on a wide-window desktop with a touchscreen.
+
+**Root cause:** `packages/secubox-hub/www/shared/sidebar.js` `isTouchDevice()` ORed `'ontouchstart' in window`, `navigator.maxTouchPoints > 0`, and `matchMedia('(pointer: coarse)')`. The first two are true on hybrid touchscreen laptops where the mouse is the *primary* input, forcing mobile mode incorrectly.
+
+**Fix:** Use only `matchMedia('(hover: none) and (pointer: coarse)')` — a primary-input check. False on a laptop with a mouse, true on phones and tablets. The `≤768px` narrow-viewport fallback is unchanged.
+
+**Commit:** `ce1f270c` · merged via PR #115 (`9fbb784f`).
+
+---
 ## 2026-05-12
+
+### Session 165 — MetaBlogizer version dashboard UI (Issue #103, sub-D of #49)
+
+**Goal:** Extend the existing /metablogizer/ list view with version-aware columns, filter, sort, and 60s polling — plus a per-site drill-in page. Consume sub-C's enriched API.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-metablog-version-dashboard-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-metablog-version-dashboard.md` (5 tasks)
+- `index.html` extended in place: 3 new columns (Version → Gitea releases, Streamlit 🎨 link, Updated relative time + ISO tooltip), filter input, sortable headers with ▲/▼, 60s auto-refresh paused via Page Visibility API, row-name drill-in link
+- New `site.html` drill-in (~220 lines): every site.json field + 3 external links (live, Gitea, Streamlit hidden when null), same CRT P31 phosphor theme as index
+- Smoke `tests/scripts/test-metablogizer-ui.sh` — 4 gates all green (file shape, drill-in anchors, HTML well-formedness, live reachability 200)
+- Fixed `localStorage` key bug discovered in code review: drill-in now uses canonical `sbx_token` (matches index.html and the rest of the Hub)
+- README updated with the dashboard + drill-in URLs
+
+**Followups:**
+- Sub-E (deploy webhook) is the last remaining sub-project of #49.
+
+---
+
+### Session 164 — MetaBlogizer site.json schema + version metadata (Issue #101, sub-C of #49)
+
+**Goal:** Formal JSON Schema for site.json + Python validator/enricher (`version`/`last_updated` derived from git when absent) + backfill script + API extension. Unblocks sub-D (Dashboard).
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-metablog-site-schema-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-metablog-site-schema.md` (8 tasks)
+- JSON Schema draft-07: `packages/secubox-metablogizer/schema/site.json.schema.json`
+- Python module: `packages/secubox-metablogizer/api/site_schema.py` (load_schema/validate/enrich) + 8 pytest cases, all passing
+- API wiring: `_load_site_json()` helper in `api/main.py` validates warn-only, enriches version/last_updated from git
+- `python3-jsonschema` added to `debian/control`
+- Backfill script: `scripts/metablog-site-backfill.sh` (creates missing, `--force` merges, auto-detects `streamlit_app` via Gitea probe)
+- 3-gate smoke: `tests/scripts/test-metablog-site-schema.sh`
+- Live run: **165 total, 104 created, 61 skipped (incl. 2 force-fixed), 0 failed**
+
+**Discovered + fixed mid-execution:**
+
+1. **2 pre-existing site.json files** (`money`, `evolution`) were missing the required `published` field — invalid under the new schema. Fixed via `bash scripts/metablog-site-backfill.sh --force --site <name>` which merged in the missing field while preserving the existing `title`/`description` values.
+2. **`python3-jsonschema` not on MOCHAbin** initially — installed via `apt-get install -y python3-jsonschema` to enable smoke gate 2 (which validates all 61+ live site.json against the schema).
+3. **Total is 165 not 166** — a site was removed since the audit in PR #97; orchestrator picks up whatever `find` returns.
+
+**Commits:**
+- `77f8feef` — feat: JSON Schema draft-07
+- `345e59be` — feat: site_schema module + 8 pytest cases
+- `58a80b8f` — feat: load_sites() schema-enriched output
+- `7ca8b468` — feat: python3-jsonschema in debian/control
+- `426b0b1f` — feat: backfill orchestrator
+- `d4b4160a` — test: 3-gate smoke
+- `a4ada6c2` — docs: backfill run summary
+
+**Followup:** Sub-D (Dashboard) can now consume `current_tag`/`streamlit_app`/etc.
+
+---
+
+### Session 163 — Streamlit Gitea version pinning (Issue #95, sub-F of #49)
+
+**Goal:** Mirror the 28 directory-form Streamlit apps from `/srv/streamlit/apps/` into Gitea as `gandalf/streamlit-<app>` with `v1.0.0` tag, then extend `streamlitctl` with tag-pinned deploy + rollback, and surface the active tag in the FastAPI.
+
+**Done:**
+- Spec: `docs/superpowers/specs/2026-05-12-streamlit-gitea-version-pinning-design.md`
+- Plan: `docs/superpowers/plans/2026-05-12-streamlit-gitea-version-pinning.md` (9 tasks)
+- Per-app ingest function (`scripts/lib/streamlit-ingest-app.sh`) — sibling of B's metablog version
+- Cherry-picked `scripts/lib/gitea-ssh-preflight.sh` from PR #97 (not yet merged to master)
+- Orchestrator (`scripts/streamlit-ingest.sh`) with preflights + JSON report + dot-dir/`__pycache__` filter
+- 3-app smoke + idempotent re-run
+- Full run: 28/28 apps in Gitea (20 ingested-fresh + 8 skip-already-current, 0 failed). First pass had 20 broken-stub failures; bulk-deleted via API and second pass cleaned. Summary at `docs/superpowers/runs/2026-05-12-streamlit-ingest-summary.md`.
+- `streamlitctl deploy <app> --from-gitea --tag <vX.Y.Z>` — clone+replace in-place, backup to `<app>.bak.<ts>`, max 3 backups, `.deploy.json` record
+- `streamlitctl rollback <app>` — promote latest backup, sentinel `<app>.bak.rolledback.<ts>`
+- FastAPI `_get_apps()` enrichment (`current_tag` + `deployed_at`) via `.deploy.json` or `git describe --tags --exact-match`
+- Deploy/rollback cycle smoke (canary: yijing) all gates pass
+
+**Discovered + fixed mid-execution:**
+
+1. **`set -- "${var[@]:-}"` empty-array expansion** produced a single empty positional arg, hitting the case default `Unknown flag: `. Fixed in both source-args and saved-args occurrences (commits `34a4760e`, `7d522e9a`).
+2. **Auto-restart removed** from deploy/rollback. `cmd_start`/`cmd_stop` in streamlitctl operate on the whole LXC, so restart-after-deploy would have killed all running Streamlit apps. Streamlit auto-reloads on file changes; operator can manually `streamlitctl restart` if needed (commit `15b2a737`).
+3. **20 pre-existing broken Gitea stubs** (DB entry without on-disk objects, same as B/#97) — bulk-deleted via one-shot admin token.
+4. **`.claude/` and `__pycache__/`** directories in `/srv/streamlit/apps/` got picked up as app candidates by the initial `find -type d` — filter added (`! -name '.*' ! -name '__pycache__'`).
+
+**Commits:**
+
+- `66693d89` — feat: per-app ingest function
+- `7007d40c` — feat: cherry-pick gitea-ssh-preflight helper from #97
+- `1a12c63f`, `76379cf5`, `c8747067`, `34a4760e`, `7d522e9a` — orchestrator + filters + empty-array fixes
+- `e3ef78b9` — test: 3-app smoke
+- `fc39bf2d` — docs: full-run summary (28/28, 0 fail)
+- `f975de18`, `15b2a737` — streamlitctl deploy --from-gitea --tag + rollback
+- `6e7f698a` — feat: FastAPI _get_apps() enrichment
+- `a23b2f45` — test: deploy/rollback cycle smoke
+
+**Verification (5 random apps via `git ls-remote`):** All return valid 40-char SHAs on `main` + `v1.0.0`.
+
+**Followup:** API service on MOCHAbin needs restart after package upgrade for `current_tag` to surface (existing `_get_apps()` cached in-process). Not blocking the PR.
+
+---
 
 ### Session 160 — Health Banner Live Panel (Issue #92)
 
@@ -4038,3 +7546,82 @@ CONFIG_USB_NET_RNDIS_HOST=y
 - LAN interfaces scanned: lan0, lan1, lan2, lan3, br0, br-lan, eth0, eth1
 - ARP states mapped to online: REACHABLE, DELAY, PROBE, PERMANENT = online
 - STALE, FAILED = offline
+
+## 2026-06-24 — build+deploy T0 fixes (#494/#519/#53/#421) + dirs-guard /run self-heal
+
+- Merged #121/#53/#65; cherry-picked #494 onto master (versions re-bumped above
+  master's advanced core 1.1.8/hub 1.4.6 → core 1.1.9, hub 1.4.7).
+- Discovered #494 was systemic (7 pkgs chowning /run/secubox parent) AND that
+  91 services declare `RuntimeDirectory=secubox` → systemd re-chowns the parent
+  to secubox:secubox 0755 on each start (#421). Central fix: extended
+  secubox-dirs-guard to re-assert /run/secubox 1777 root:root every minute
+  (core 1.1.10) instead of editing 91 units.
+- Built + deployed to gk2 (8 pkgs): core 1.1.10, hub 1.4.7, eye-remote 1.0.1,
+  metablogizer 1.2.2, metrics 1.0.4, p2p 1.7.1, wazuh 1.0.1, toolbox 2.7.18.
+  First deploy ssh was timeout-killed mid-toolbox-postinst → recovered with
+  dpkg --configure -a (cleared stale lock). Verified: /run/secubox=1777 root:root
+  holds, 0 half-configured, all services + R3 workers active, webui/portal 200,
+  toolbox blacklist-sync (#519) carried.
+
+## 2026-07-02 — secubox-p2p: DHT + federation health-checks + master-link (#774, docs)
+
+- Documented the three feature-flagged, OPAD opt-in evolutions delivered by
+  Tasks 1-16 on `feature/p2p-dht-federation` (126 tests passing), built on
+  the existing WireGuard mesh + annuaire-backed registry — no new code in
+  this pass, docs only (Task 17, finalization).
+- **DHT discovery** (`api/dht.py`): custom Kademlia DHT (asyncio/UDP, JSON
+  wire), Ed25519-signed reachability records, iterative lookup, bootstrap,
+  routing-table persistence, advisory health store. Endpoints:
+  `GET /dht/peers`, `POST /dht/announce` (JWT), `GET /dht/find/{did}`.
+- **Service federation health-checks** (`api/federation.py`): debounced
+  up/down `HealthStore`, async `HealthChecker` sweep (semaphore-capped),
+  `default_probe` (HTTP GET /health, TCP fallback), publishes into the DHT
+  when both subsystems are enabled. Endpoints: `GET /federation/services`,
+  `POST /federation/healthcheck` (JWT).
+- **Hierarchical master-link** (`api/masterlink.py`): deterministic
+  `elect()`, monotonic `TermStore`, `MasterLink` heartbeat/election-timeout
+  state machine with Ed25519-signed heartbeats and equal-term tie-break.
+  Endpoints: `GET /masterlink/topology`, `POST /masterlink/promote` (JWT).
+- Config: `[dht]`, `[federation]`, `[masterlink]` sections in `p2p.toml`, all
+  disabled by default (`DHT_DEFAULTS`/`FEDERATION_DEFAULTS`/
+  `MASTERLINK_DEFAULTS` in `api/mesh.py`). Audit events (`dht_announce`,
+  `masterlink_promote`) append to `/var/log/secubox/p2p-audit.log`.
+- Updated `packages/secubox-p2p/README.md` with an "Evolutions (#774)"
+  section covering all of the above (endpoints, real config defaults,
+  audit log). No `.py` files touched, no tests run/modified.
+
+## 2026-07-03 → 07-04 — ToolBox privacy report: fidelity, media types, character sheet (#785 #790 #792 · +incident)
+
+Three features, brainstorm → spec → plan → subagent-driven SDD with two-stage
+review + adversarial whole-branch review, **all merged to master**, deployed +
+validated live on gk2.
+
+- **#785 — kbin report PDF fidelity + media types + WebUI DPI** (PR #787). The
+  report PDF now mirrors its (excellent) HTML page: DPI-Exfil (me) + Overall (all)
+  render as matplotlib **donut-grids** instead of text bullets; new **🎬 media-types**
+  block (real MIME captured by sbxmitm — video/audio/HLS·DASH — *and* the DPI service
+  category `media`), me + overall, in PDF **and** web. New shared
+  `secubox_core.media_catch` aggregator (bounded tail-read, fail-empty). Two DPI WebUI
+  cards (services-by-category bytes + MIME media types) + public `/media_types` endpoint.
+  Follow-up **#786** filed (double-caching invariant for the media aggregation).
+- **Incident (during #785 deploy):** heavier PDFs (more matplotlib grids, ~9 s render)
+  ran **synchronously on the single-worker event loop** and the WAF 504-page auto-retry
+  storm wedged the whole toolbox vhost (board-wide 504). Hardened live + in source:
+  render off-loop (threadpool) + serialized (asyncio lock; pyplot isn't thread-safe) +
+  **per-device PDF cache** (double-checked → a retry storm = 1 render, rest instant) +
+  persistent **MPLCONFIGDIR** (drop-in `30-mplcache.conf` + postinst). See memory
+  project_toolbox_pdf_render_eventloop.
+- **#790 — rich Netrunner character sheet + route parity** (PR #794). The PDF
+  *fiche de personnage* is now faithful to the HTML `.nr` card: ⚡ Caractéristiques with
+  pips `●●●○○○` + notes, 🎒 Inventaire ✓/✗, 🐉 Bestiaire, and a new ⚔️ Quêtes/menaces
+  section. `_enrich_report_data(mac_hash, data, ua="")` factored out of `report_me` and
+  applied to `/report/{token}` + `/admin/.../report` → all PDF routes now emit the same
+  rich content (were bare before). Full-fpdf, no new matplotlib.
+- **#792 (folded into #790) — real Quêtes.** `_dpi_stats` now exposes `alerts_raw`
+  (kind/service/dst/detail) beside the donut `alerts` ({label,count}); the Quêtes section
+  (HTML + PDF) shows each threat's destination + detail (`🗡️ NEW CLOUD — AWS S3`,
+  `🗡️ BEACONING — Google LLC · 15 flux périodiques`) instead of a dangling em-dash.
+
+Live on gk2: real device renders a 5-page PDF with pip bars, ✓/✗ inventory, and populated
+Quêtes; token route enriched; board stable (offload+lock+cache intact). 202 toolbox tests
+green. New wiki page [[ToolBox]] documenting the cabine use case + report features.

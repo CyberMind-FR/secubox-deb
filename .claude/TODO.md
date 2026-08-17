@@ -1,170 +1,26 @@
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-08-13*
----
-
-## Après v2.20.0 — ce que la fusion a laissé voir
-
-### Cause en amont, à traiter avant le reste
-
-- [ ] **Un module servi par l'agrégateur ne doit pas livrer un daemon résident.**
-      103 daemons uvicorn tournaient, 41 des 42 sans appelant étaient servis en
-      processus. Ramenés à 68 à la main — mais **l'empaquetage les réactivera à
-      la prochaine réinstallation**. Tant que ce point n'est pas corrigé, tout
-      le gain se perdra.
-- [ ] **`secubox-waf` ne se monte pas dans l'agrégateur** — `PermissionError`
-      sur `waf-threats.log`. #1017 se rejoue.
-
-### Défauts ouverts
-
-- [ ] `torrent-search` : les résultats n'exposent pas leurs liens magnet.
-- [ ] `publish`, `repo`, `reporter` : l'agrégateur ne répond pas pour eux.
-- [ ] ManageSieve (4190) injoignable — pas de filtres depuis Nextcloud.
-- [ ] `www.gk2.net` : DNS à repointer, puis certificat.
-- [ ] Streamlit : plafond CPU à 0,3 cœur et verrou de réveil manquant.
-
-### Arriéré
-
-- [ ] **13 branches anciennes** non fusionnées. Aucune ne tourne en production —
-      vérifié paquet par paquet. Ce n'est plus un piège, seulement un arriéré à
-      arbitrer.
-
-### Leçon à graver
-
-Neuf des douze corrections de v2.20.0 ont le même squelette : **un mécanisme
-existe, est livré, et ne s'exécute jamais**. Le veilleur n'avait jamais tourné.
-Les épingles n'étaient jamais appliquées. Le cache ne revalidait pas. Le journal
-de modération était écrit mais jamais lu. Deux minuteries livrées ce jour même
-sont arrivées désactivées, parce que `dh_installsystemd` ignore les instances de
-gabarit.
-
-**Livrer un mécanisme ne suffit pas : il faut prouver qu'il s'exécute.**
-
-## Arbitrage des branches — TERMINE (2026-08-13)
-
-**421 -> 20 branches. 401 supprimees, aucune fonctionnalite perdue.**
-
-Il reste **13 branches non fusionnees** :
-
-- **7 a contenu unique**, sans arbre de travail : elles apportent des fichiers
-  ABSENTS de master. Les deux plus grosses sont `license-headers-phase-a` et
-  `license-phase-b-full` (35 fichiers chacune) — les en-tetes SPDX, sujet
-  transverse jamais acheve.
-- **6 retenues par un arbre de travail**, dont **4 portent du travail NON
-  COMMITE** : `429-nextcloud` (3 fichiers), `820-presence-guardian` (5),
-  `823-sbxmitm-sentinel` (8), `826-sentinel-c2` (2). Ces quatre-la ne doivent
-  etre ni supprimees ni liberees avant que ce travail soit commite ou
-  abandonne EXPLICITEMENT.
-
-Les arbres de travail sont passes de 18 a 9.
-
-| Groupe | Nombre | Signal |
-|---|---|---|
-| Tous les fichiers existent deja dans master | **28** | fonctionnalites verifiees PRESENTES dans master |
-| Apportent des fichiers absents de master | **11** | contenu unique, a examiner |
-
-### Les 28 : doublons historiques, tres probablement
-
-Leur diff est enorme (jusqu'a 228 971 insertions) : ce ne sont pas des residus
-mais les fonctionnalites entieres. Or celles-ci sont **deja dans master**,
-arrivees par rebase ou reimplementation — `sbx-sentinel`, l'auto-apprentissage
-C2, la federation P2P DHT, Frigate et le cache media sbxwaf sont tous presents,
-et en production sur gk2.
-
-Les supprimer perd l'historique de developpement, pas la fonctionnalite.
-**Decision utilisateur.**
-
-### Les 11 qui apportent des fichiers absents de master
-
-| Branche | Fichiers absents |
-|---|---|
-| `feature/license-headers-phase-a` | 35 |
-| `feature/license-phase-b-full` | 35 |
-| `feature/127-phase2-square-variant` | 33 |
-| `feature/429-nextcloud-real-manageable` | 6 |
-| `feature/127-phase3-python-kiosk` | 5 |
-| `feature/136-mail-stack-phase-1` | 3 |
-| `feature/247-health-banner-clickable` | 3 |
-| `feature/615-security-posture` | 1 |
-| `feature/738-aggregator-resilience` | 1 |
-| `fix/133-remote-ui-square-4-bugs` | 1 |
-| `fix/139-round-image-usb0-otg` | 1 |
-
-Les deux `license-*` (35 fichiers chacune) sont les plus interessantes : elles
-posent les en-tetes SPDX, sujet transverse jamais acheve.
-
-### Une reserve gardee pour arbitrage
-
-`fix/round-real-root-icons` SUPPRIMERAIT `build-eye-remote-image.sh`, fichier
-toujours present et reference dans master. Une suppression dont l'intention ne
-se verifie pas ne se fusionne pas.
-
-### Lecon de methode
-
-`git cherry` a classe « contenu nouveau » quatre branches dont le correctif
-etait **deja dans master**, reimplemente sous un autre patch : `fix/92`,
-`fix/218`, `feature/790` et `feature/239`. L'outil oriente, il ne tranche pas —
-chaque suppression a ete verifiee sur le contenu, jamais sur le classement.
+*Mis à jour : 2026-07-31*
 
 ---
 
+## 2026-08-16 (suite)
 
----
+- [ ] **Deployer les 126 paquets** par lots de dix avec controle de sante
+- [ ] **#1052** verifier que les sets nft restent peuples apres 24 h
+- [ ] **#1056** mosaique BBS — trancher : relais d'URL libre ou liste d'hotes
+- [ ] **#1055** edition/suppression — trancher les trois points ouverts
+- [ ] Marqueur serveur pour le volet primaire du BBS sur telephone
 
-## Branches non fusionnees restantes (2026-08-11)
+## 2026-08-16 — ajoute
 
-33 branches sont en conflit avec master et demandent un arbitrage, une par
-une. Certaines datent de mai et peuvent etre abandonnees ; d'autres portent
-peut-etre du code vivant sur gk2 — c'est a verifier AVANT de trancher, pas
-apres.
-
-- [ ] `archive/429-b715-occ-direct`
-- [ ] `chore/982-streamlit-bascule-du-parc-vivant-vers-le`
-- [ ] `feat/963-lien-reveil-tuiles`
-- [ ] `feat/tor-onion-pac`
-- [ ] `feature/241-secubox-zigbee-v2-4-0-rewrite-in-place-z`
-- [ ] `feature/264-secubox-zigbee-secubox-lyrion-swap-lan-o`
-- [ ] `feature/429-nextcloud-real-manageable`
-- [ ] `feature/615-security-posture-add-security-posture-to`
-- [ ] `feature/738-aggregator-resilience-sweep-async-handle`
-- [ ] `feature/740-anti-pub-renforce-sinkhole-dns-unbound-e`
-- [ ] `feature/748-enhanced-tow-boot-http-netboot-serial-fl`
-- [ ] `feature/761-fix-podcaster-audio-player-stops-every-f`
-- [ ] `feature/789-sbxwaf-styled-html-421-page-for-unrouted`
-- [ ] `feature/817-device-guardian-consolidation`
-- [ ] `feature/820-presence-guardian`
-- [ ] `feature/823-sentinel-toolbox-surfaces`
-- [ ] `feature/826-feed-report-surface`
-- [ ] `feature/826-feeds-honest-ja4capture`
-- [ ] `feature/826-ja4-plumb`
-- [ ] `feature/826-sentinel-c2-botnet-auto-learning-high-pr`
-- [ ] `feature/92-health-banner-visitor-origin-feed-anonym`
-- [ ] `feature/967-router-les-mp3-flac-conserves-vers-lyrio`
-- [ ] `feature/license-phase-b-full`
-- [ ] `feature/license-phase-b-hub`
-- [ ] `fix/361-secubox-threat-analyst-v1-1-0-wire-metri`
-- [ ] `fix/494-secubox-core-service-execstart-overrides`
-- [ ] `fix/826-c2-rare-alone-fp`
-- [ ] `fix/961-toutes-applis-endormissables`
-- [ ] `fix/962-barre-globale-recouvre-hub`
-- [ ] `fix/989-derive-nginx-systemique-les-paquets-inst`
-- [ ] `fix/issue-77-hyperpixel-init`
-- [ ] `fix/round-real-root-icons`
-- [ ] `fix/rpi4b-radar-arcs-top-centered`
-
-## HAProxy — suites de #986/#988 (2026-08-10)
-
-- [ ] Décider, vhost par vhost, si les 10 qui déclarent `ssl_redirect = true`
-      sans `ssl = true` doivent rediriger (`bbs`, `social`, `nc`, `sso`,
-      `zigbee`, `picobrew`, `zem`, `shiptest`, `wiztest2`, `wiztest3`).
-      Correctif = ajouter `ssl = true` dans leur bloc de `haproxy.toml`.
-- [x] ~~Reconstruire `secubox-toolbox`~~ — **rien à faire, verifie le
-      2026-08-10** : `/etc/haproxy/cfg.d/30-toolbox-landing.cfg` est deja
-      livre par dpkg sur la board (2.8.9, meme empreinte que les sources).
-      L'item avait ete ecrit en deduisant l'etat de la board depuis le diff de
-      fusion, sans regarder la board — la meme erreur que celle qui a fait
-      rediagnostiquer #986/#988.
-- [ ] Fusionner les branches de worktree qui portent du code **déjà vivant**
-      sur la board : c'est ce qui a fait rediagnostiquer #986/#988 à l'aveugle.
+- [ ] **403 YouTube sur le media** — metadonnees OK, media refuse. Ecarte :
+      cookies, interception locale, version de yt-dlp. Verifier l'hypothese
+      du jeton d'origine (PO token) avant d'engager quoi que ce soit.
+- [ ] **Charge moyenne a 41 sur gk2** (#1045) — trouver la source reelle.
+- [ ] **#1050 SecuBox Retro** — mesurer un coeur libretro WASM ; trancher la
+      position juridique sur les ROM AVANT la technique.
+- [ ] **Fusionner l'arriere** — 18 worktrees portent du travail non fusionne,
+      aucune PR ouverte. Commencer par #1047, #1044, #1045.
 
 ## 🎬 Média/perf — suite marathon v2.16.0 (2026-07-31)
 

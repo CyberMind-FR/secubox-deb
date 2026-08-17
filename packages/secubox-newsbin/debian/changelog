@@ -1,3 +1,15 @@
+secubox-newsbin (1.0.1-1~bookworm2) bookworm; urgency=medium
+
+  * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
+    /run/secubox porte le bit collant : on n'y delie que ce qu'on possede,
+    et une socket laissee par un autre utilisateur rend le demarrage
+    impossible — le service echoue, redemarre, echoue encore, en silence.
+  * `RuntimeDirectory=secubox` retire : systemd efface le contenu d'un
+    RuntimeDirectory au redemarrage, et ce repertoire est partage par ~95
+    unites. Une seule qui le declare emporte les sockets des autres.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:35:59 +0200
+
 secubox-newsbin (1.0.0-1~bookworm2) bookworm; urgency=medium
 
   * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.

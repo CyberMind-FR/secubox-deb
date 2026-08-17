@@ -20,6 +20,17 @@ After=network.target
 Type=simple
 User=secubox-antirootkit
 Group=secubox-antirootkit
+# LA SOCKET PERIMEE EST RETIREE PAR ROOT, ET C'EST OBLIGATOIRE.
+#
+# Le repertoire etant colle (1777), on n'y delie que ce qu'on possede. Une
+# socket laissee par un AUTRE utilisateur rend le demarrage impossible :
+#   OSError: [Errno 98] Address already in use
+# Le service echoue, redemarre, echoue encore, EN SILENCE — 16541 fois entre
+# le 7 et le 16 aout 2026, sans surveiller la moindre intrusion.
+#
+# Le prefixe `+` execute en root malgre User= : sans lui la ligne echouerait
+# exactement comme le demon qu'elle devait depanner.
+ExecStartPre=+/bin/rm -f /run/secubox/antirootkit.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/antirootkit.sock --workers 1
 WorkingDirectory=/usr/lib/secubox/antirootkit
 Restart=on-failure
