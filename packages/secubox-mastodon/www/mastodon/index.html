@@ -4,214 +4,226 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SecuBox — Mastodon</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/design-tokens.css">
+<link rel="stylesheet" href="/shared/sidebar.css">
 <link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
-/* Charte des panneaux d'administration (WEBUI-PANEL-GUIDELINES.md) :
-   terminal cyan, Courier Prime, un seul accent. */
-:root {
-    --p31-dim: #6b7b8b;
-    --bg-dark: #0d1117;
-    --bg-card: rgba(30, 40, 55, 0.8);
-    --bg-row:  rgba(20, 30, 45, 0.6);
-    --border:  rgba(100, 150, 200, 0.2);
-    --text:    #e8e6d9;
-    --cyan:    #00d4ff;
-    --red:     #ff4466;  --orange: #ff9944;  --yellow: #ffcc00;
-    --green:   #00dd44;  --blue:   #4488ff;  --purple: #a371f7;
-}
-body.hybrid-dark { background: var(--bg-dark); color: var(--text);
-    font-family: 'Courier Prime', monospace; margin: 0; }
-.main { margin-left: 220px; padding: 1.5rem; padding-top: 60px; }
-@media (max-width: 800px) { .main { margin-left: 0; } }
-.header { display: flex; justify-content: space-between; align-items: flex-end;
-    flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
-.header h1 { font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); margin: 0; }
-.header .sub { color: var(--p31-dim); font-size: .75rem; margin-top: .25rem; }
-.btn-group { display: flex; gap: .5rem; flex-wrap: wrap; }
-.btn { background: var(--bg-row); border: 1px solid var(--border); color: var(--text);
-    font-family: inherit; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
-    padding: .45rem .9rem; border-radius: 6px; cursor: pointer; }
-.btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.3); }
-.btn.primary { color: var(--cyan); border-color: var(--cyan); }
-.btn.danger  { color: var(--red); border-color: rgba(255,68,102,.5); }
-.btn:disabled { opacity: .5; cursor: default; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr));
-    gap: .75rem; margin-bottom: 1.5rem; }
-.stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: .9rem; backdrop-filter: blur(10px); text-align: center; }
-.stat-card .value { font-size: 1.3rem; font-weight: 700; text-shadow: 0 0 10px currentColor; }
-.stat-card .label { font-size: .6rem; text-transform: uppercase; letter-spacing: .1em;
-    color: var(--p31-dim); margin-top: .25rem; }
-.stat-card.cyan .value { color: var(--cyan); } .stat-card.green .value { color: var(--green); }
-.stat-card.red .value { color: var(--red); } .stat-card.orange .value { color: var(--orange); }
-.stat-card.dim .value { color: var(--p31-dim); }
-.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 1rem 1.1rem; backdrop-filter: blur(10px); margin-bottom: 1rem; }
-.card h3 { color: var(--cyan); font-size: .85rem; margin: 0 0 .75rem;
-    text-transform: uppercase; letter-spacing: .08em; }
-.row { background: var(--bg-row); border-left: 3px solid var(--p31-dim);
-    padding: .5rem .75rem; margin-bottom: .35rem; border-radius: 0 5px 5px 0;
-    display: flex; gap: .75rem; align-items: center; font-size: .75rem; }
-.row.ok { border-left-color: var(--green); }
-.row.warn { border-left-color: var(--orange); }
-.row.bad { border-left-color: var(--red); }
-.row .name { color: var(--cyan); flex: 1; }
-.row .meta { color: var(--p31-dim); font-size: .68rem; text-align: right; }
-.note { color: var(--p31-dim); font-size: .7rem; line-height: 1.6; margin-top: .6rem; }
-.note b { color: var(--text); }
-.code { background: var(--bg-row); border: 1px solid var(--border); border-radius: 5px;
-    padding: .6rem .8rem; font-size: .75rem; color: var(--cyan); word-break: break-all;
-    margin-top: .5rem; }
-.toast { position: fixed; bottom: 1rem; right: 1rem; background: var(--cyan); color: #04202b;
-    padding: .6rem 1rem; border-radius: 6px; font-size: .75rem; opacity: 0;
-    transition: opacity .2s; pointer-events: none; max-width: 60ch; }
-.toast.show { opacity: 1; } .toast.error { background: var(--red); color: #fff; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+  .main { flex: 1; margin-left: 220px; padding: 1.5rem; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: .75rem; }
+  .header h1 { font-size: 1.4rem; color: var(--root-main); letter-spacing: .03em; }
+  .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .btn { padding: .45rem .9rem; border-radius: var(--radius-md); border: 1px solid var(--border);
+         background: var(--surface); color: var(--text); cursor: pointer; font-size: var(--size-sm); font-family: var(--font-body); }
+  .btn:hover { border-color: var(--root-main); color: var(--root-main); }
+  .btn.danger { border-color: var(--boot-main); color: var(--boot-main); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: .9rem 1rem; }
+  .card .v { font-size: 1.5rem; font-weight: 700; font-family: var(--font-mono); }
+  .card .k { font-size: var(--size-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-family: var(--font-mono); }
+  .ok { color: var(--root-main); } .warn { color: var(--wall-main); } .bad { color: var(--boot-main); }
+  section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1.25rem; }
+  section h2 { font-size: var(--size-sm); text-transform: uppercase; letter-spacing: .1em; color: var(--wall-main);
+               font-family: var(--font-mono); margin-bottom: .75rem; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: var(--size-sm); }
+  th { text-align: left; padding: .5rem; color: var(--wall-main); font-size: var(--size-xs);
+       text-transform: uppercase; letter-spacing: .08em; border-bottom: 1px solid var(--border); }
+  td { padding: .5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .tag { padding: .1rem .45rem; border-radius: var(--radius-sm); font-size: var(--size-xs); border: 1px solid; }
+  .tag.ok { border-color: var(--root-main); } .tag.warn { border-color: var(--wall-main); } .tag.bad { border-color: var(--boot-main); }
+  .vide { color: var(--muted); padding: .75rem; font-style: italic; }
+  .note { color: var(--muted); font-size: var(--size-xs); margin-top: .5rem; }
+  code { font-family: var(--font-mono); background: var(--bg); padding: .05rem .3rem; border-radius: var(--radius-sm); }
+  @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
 </style>
 </head>
-<body class="hybrid-dark">
+<body class="hybrid-skin">
 <nav class="sidebar" id="sidebar"></nav>
-<script src="/shared/sidebar.js"></script>
-
 <main class="main">
-<header class="header">
-  <div><h1>🐘 Mastodon</h1><div class="sub" id="subline">chargement…</div></div>
-  <div class="btn-group">
-    <button class="btn" onclick="refresh()">↻ Rafraîchir</button>
-    <button class="btn primary" id="b-install" onclick="installer()">⬇ Installer</button>
-    <button class="btn" id="b-start" onclick="act('start')">▶ Allumer</button>
-    <button class="btn danger" id="b-stop" onclick="act('stop')">■ Éteindre</button>
-    <button class="btn primary" onclick="inviter()">✉ Inviter</button>
+  <div class="header">
+    <h1>🐘 Mastodon <span id="etat-global" class="tag">…</span></h1>
+    <div class="actions">
+      <button class="btn" onclick="tout()">↻ Actualiser</button>
+      <button class="btn" onclick="agir('start')">▶ Démarrer</button>
+      <button class="btn danger" onclick="agir('stop')">■ Arrêter</button>
+      <button class="btn" onclick="inviter()">✉ Nouvelle invitation</button>
+    </div>
   </div>
-</header>
 
-<div class="grid" id="stats"></div>
+  <div class="cards" id="cartes"></div>
 
-<div class="card">
-  <h3>🧬 Chaîne de démarrage</h3>
-  <div id="chaine">…</div>
-  <div class="note">
-    <b>Quatre choses distinctes, et les confondre égare.</b> Le paquet peut être
-    installé sans conteneur ; le conteneur peut tourner sans que Puma réponde ;
-    l'instance peut répondre sans domaine configuré. Chaque manque appelle un
-    geste différent.
-  </div>
-</div>
+  <section>
+    <h2>Modération</h2>
+    <div id="moderation" class="vide">chargement…</div>
+  </section>
 
-<div class="card" id="carte-invitation" style="display:none">
-  <h3>✉ Invitation émise</h3>
-  <div class="code" id="code-invitation"></div>
-  <div class="note">
-    <b>Valable 7 jours, affichée une seule fois.</b> Les inscriptions sont
-    fermées par défaut : une instance ouverte sur internet se remplit de comptes
-    automatisés en quelques heures, et la modération retombe sur quelqu'un.
-  </div>
-</div>
+  <section>
+    <h2>Invitations</h2>
+    <div id="invitations" class="vide">chargement…</div>
+    <div class="note">Mastodon n'affiche que le <em>compteur</em> d'usages d'une invitation.
+      La colonne « comptes créés » vient de la base et dit <em>qui</em> s'en est servi.</div>
+  </section>
 
-<div class="card">
-  <h3>⚠ Ce que le paquet ne fait pas</h3>
-  <div class="note">
-    <b>L'installation n'est pas automatique jusqu'au bout.</b> Le
-    provisionnement pose le conteneur, les dépendances, la base et les secrets.
-    Restent la compilation des gemmes (plus d'une heure sur cette carte), la
-    création du schéma, et le premier compte propriétaire — qui demandent un nom
-    et un courriel qu'un script ne doit pas choisir à votre place.
-    <br><br>
-    <b>Le domaine ne se change plus après la première fédération :</b> il est
-    gravé dans chaque adresse d'utilisateur et dans les signatures échangées
-    avec les autres instances.
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
+  <section>
+    <h2>Comptes locaux</h2>
+    <div id="comptes" class="vide">chargement…</div>
+    <div class="note">Un compte confirmé qui ne s'est <em>jamais</em> connecté est le motif
+      classique de l'inscription automatisée.</div>
+  </section>
+</main>
 
 <script>
 const API = '/api/v1/mastodon';
-function jeton() { return localStorage.getItem('sbx_token') || ''; }
 
-async function api(chemin, methode) {
-  const r = await fetch(API + chemin, {
-    method: methode || 'GET',
-    headers: { 'Authorization': 'Bearer ' + jeton() },
-  });
-  const j = await r.json().catch(() => ({ ok: false, error: 'réponse illisible' }));
-  if (!r.ok) throw new Error(j.detail || j.error || ('HTTP ' + r.status));
-  return j;
-}
-function toast(msg, err) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.className = 'toast show' + (err ? ' error' : '');
-  setTimeout(() => { t.className = 'toast'; }, 5000);
-}
-function esc(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g,
-    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function stat(v, l, c) {
-  return `<div class="stat-card ${c || 'cyan'}"><div class="value">${esc(v)}</div><div class="label">${l}</div></div>`;
-}
-function ligne(ok, nom, meta, cls) {
-  return `<div class="row ${cls || (ok ? 'ok' : 'bad')}">
-    <span class="name">${ok ? '✓' : '✗'} ${esc(nom)}</span>
-    <span class="meta">${esc(meta)}</span></div>`;
+function jeton() { return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token'); }
+function garde() {
+  if (jeton()) return true;
+  // Ne jamais renvoyer vers login.html DEPUIS login.html : la garde s'appellerait
+  // elle-meme sans fin (login.html?redirect=%2Flogin.html).
+  if (!/\/login\.html$/.test(location.pathname))
+    window.location.href = '/login.html?redirect=' + encodeURIComponent(location.pathname);
+  return false;
 }
 
-async function refresh() {
+// TOUT CE QUI VIENT DU SERVEUR EST ECHAPPE. Ces noms de comptes et ces codes
+// sont ecrits par des inconnus qui s'inscrivent ; les poser tels quels dans
+// innerHTML ferait executer leur balisage dans la page d'administration.
+function esc(x) {
+  return String(x == null ? '' : x).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function lire(chemin) {
+  const t = jeton();
+  const r = await fetch(API + chemin, { headers: t ? { 'Authorization': 'Bearer ' + t } : {},
+                                        credentials: 'same-origin' });
+  if (r.status === 401) { garde(); throw new Error('non authentifié'); }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function erreur(id, e) {
+  // ON DIT CE QUI A ECHOUE. Une section vide laisserait croire « rien a voir »,
+  // alors que la lecture n'a pas eu lieu.
+  document.getElementById(id).innerHTML =
+    '<div class="vide bad">lecture impossible : ' + esc(e.message || e) + '</div>';
+}
+
+async function sante() {
   try {
-    const s = await api('/status');
-    const c = s.conteneur || {}, i = s.instance || {};
-    document.getElementById('subline').textContent =
-      `v${s.version} · conteneur ${c.nom} · ${c.ip}`;
-
-    document.getElementById('stats').innerHTML =
-      stat(c.etat || '—', 'conteneur', c.etat === 'running' ? 'green' : 'dim') +
-      stat(i.joignable ? 'oui' : 'non', 'instance répond', i.joignable ? 'green' : 'red') +
-      stat(i.version || '—', 'version', 'cyan') +
-      stat(s.pret ? 'prêt' : 'incomplet', 'état', s.pret ? 'green' : 'orange');
-
-    // On montre la chaîne ENTIÈRE, pas seulement le premier maillon rompu :
-    // savoir ce qui tient déjà évite de tout reprendre depuis le début.
-    document.getElementById('chaine').innerHTML =
-      ligne(s.configure, 'configuration présente', '/etc/secubox/mastodon.toml') +
-      ligne(!!i.domaine, 'domaine défini', i.domaine || 'aucun — requis avant installation') +
-      ligne(c.etat !== 'absent', 'conteneur créé', c.etat === 'absent' ? 'à provisionner' : c.nom) +
-      ligne(c.etat === 'running', 'conteneur allumé', c.etat || '—') +
-      ligne(i.joignable, 'instance joignable', i.joignable ? `port 3000 sur ${c.ip}` : 'aucune réponse');
-
-    document.getElementById('b-install').disabled = c.etat !== 'absent';
-    document.getElementById('b-start').disabled = c.etat === 'running' || c.etat === 'absent';
-    document.getElementById('b-stop').disabled = c.etat !== 'running';
+    const d = await lire('/health');
+    if (!d.ok) throw new Error(d.error || 'instance injoignable');
+    const s = d.services || {};
+    const badge = document.getElementById('etat-global');
+    badge.textContent = d.tout_actif ? 'en marche' : 'dégradée';
+    badge.className = 'tag ' + (d.tout_actif ? 'ok' : 'bad');
+    const svc = ['web', 'sidekiq', 'streaming'].map(n =>
+      `<div class="card"><div class="v ${s[n] === 'active' ? 'ok' : 'bad'}">${s[n] === 'active' ? '●' : '○'}</div>
+       <div class="k">${esc(n)}</div></div>`).join('');
+    document.getElementById('cartes').innerHTML = svc +
+      `<div class="card"><div class="v">${esc(d.base || '—')}</div><div class="k">base</div></div>
+       <div class="card"><div class="v">${esc(d.medias || '—')}</div><div class="k">médias</div></div>
+       <div class="card"><div class="v">${d.comptes_locaux}</div><div class="k">comptes locaux</div></div>
+       <div class="card"><div class="v">${d.instances_connues}</div><div class="k">instances connues</div></div>`;
   } catch (e) {
-    document.getElementById('subline').textContent = e.message;
-    document.getElementById('chaine').innerHTML = ligne(false, 'module injoignable', e.message);
+    document.getElementById('etat-global').textContent = 'inconnue';
+    erreur('cartes', e);
   }
 }
 
-async function installer() {
-  if (!confirm("Provisionner le conteneur Mastodon ?\n\nPlusieurs gigaoctets, et le domaine configuré ne pourra plus être changé après la première fédération.")) return;
-  try { const r = await api('/install', 'POST'); toast(r.message || 'provisionnement lancé'); }
-  catch (e) { toast(e.message, true); }
-  finally { setTimeout(refresh, 2000); }
-}
-async function act(quoi) {
-  try { await api('/' + quoi, 'POST'); toast(quoi === 'start' ? 'conteneur allumé' : 'conteneur éteint'); }
-  catch (e) { toast(e.message, true); }
-  // ON RELIT TOUJOURS : l'appel peut réussir sans que l'instance suive.
-  finally { refresh(); }
-}
-async function inviter() {
+async function moderation() {
   try {
-    const r = await api('/invite', 'POST');
-    document.getElementById('code-invitation').textContent = r.invitation || '(vide)';
-    document.getElementById('carte-invitation').style.display = '';
-    toast('invitation émise — affichée une seule fois');
-  } catch (e) { toast(e.message, true); }
+    const d = await lire('/moderation');
+    if (!d.ok) throw new Error(d.error || 'lecture refusée');
+    const enAttente = d.signalements_en_attente;
+    // L'ANCIENNETE COMPTE AUTANT QUE LE NOMBRE : dix signalements du jour et un
+    // signalement d'il y a trois semaines ne racontent pas la meme histoire.
+    const cls = enAttente === 0 ? 'ok' : (d.plus_ancien_jours > 7 ? 'bad' : 'warn');
+    document.getElementById('moderation').outerHTML =
+      `<div id="moderation" class="cards">
+        <div class="card"><div class="v ${cls}">${enAttente}</div><div class="k">signalements en attente</div></div>
+        <div class="card"><div class="v ${d.plus_ancien_jours > 7 ? 'bad' : ''}">${d.plus_ancien_jours} j</div><div class="k">plus ancien</div></div>
+        <div class="card"><div class="v">${d.comptes_suspendus}</div><div class="k">comptes suspendus</div></div>
+        <div class="card"><div class="v">${d.comptes_limites}</div><div class="k">comptes limités</div></div>
+        <div class="card"><div class="v">${d.domaines_bloques}</div><div class="k">domaines bloqués</div></div>
+       </div>`;
+  } catch (e) { erreur('moderation', e); }
 }
 
-refresh();
-setInterval(refresh, 30000);
+async function invitations() {
+  try {
+    const d = await lire('/invites');
+    if (!d.ok) throw new Error(d.error || 'lecture refusée');
+    const l = d.invitations || [];
+    if (!l.length) { document.getElementById('invitations').innerHTML =
+      '<div class="vide">aucune invitation — personne ne peut s\'inscrire sans que vous en émettiez une</div>'; return; }
+    document.getElementById('invitations').innerHTML = `<table>
+      <thead><tr><th>code</th><th>émise par</th><th>créée</th><th>expire</th><th>usages</th><th>comptes créés</th><th>état</th></tr></thead>
+      <tbody>${l.map(i => `<tr>
+        <td><code>${esc(i.code)}</code></td>
+        <td>${esc(i.emetteur)}</td>
+        <td>${esc(i.creee)}</td>
+        <td>${esc((i.expire_le || '—').slice(0, 16))}</td>
+        <td>${i.usages}${i.max_usages ? ' / ' + i.max_usages : ''}</td>
+        <td>${i.comptes_crees.length ? i.comptes_crees.map(esc).join(', ')
+                                     : '<span style="color:var(--muted)">—</span>'}</td>
+        <td><span class="tag ${i.expiree ? 'bad' : 'ok'}">${i.expiree ? 'expirée' : 'active'}</span></td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch (e) { erreur('invitations', e); }
+}
+
+async function comptes() {
+  try {
+    const d = await lire('/accounts');
+    if (!d.ok) throw new Error(d.error || 'lecture refusée');
+    const l = (d.comptes || []).filter(c => !c.systeme);
+    const sys = (d.comptes || []).filter(c => c.systeme).length;
+    if (!l.length) { document.getElementById('comptes').innerHTML = '<div class="vide">aucun compte utilisateur</div>'; return; }
+    document.getElementById('comptes').innerHTML = `<table>
+      <thead><tr><th>compte</th><th>courriel</th><th>rôle</th><th>créé</th><th>dernière connexion</th><th>messages</th><th>état</th></tr></thead>
+      <tbody>${l.map(c => {
+        const jamais = !c.derniere_connexion;
+        const etat = c.desactive ? '<span class="tag bad">désactivé</span>'
+                   : !c.confirme ? '<span class="tag warn">non confirmé</span>'
+                   : jamais ? '<span class="tag warn">jamais connecté</span>'
+                   : '<span class="tag ok">actif</span>';
+        return `<tr>
+          <td>${esc(c.compte)}</td><td>${esc(c.courriel)}</td><td>${esc(c.role)}</td>
+          <td>${esc(c.cree)}</td>
+          <td>${jamais ? '<span style="color:var(--wall-main)">jamais</span>' : esc(c.derniere_connexion)}</td>
+          <td>${c.messages}</td><td>${etat}</td></tr>`;
+      }).join('')}</tbody></table>` +
+      (sys ? `<div class="note">${sys} compte système masqué (signature des messages d'instance).</div>` : '');
+  } catch (e) { erreur('comptes', e); }
+}
+
+async function agir(quoi) {
+  if (quoi === 'stop' && !confirm('Arrêter l\'instance Mastodon ?\n\nLes utilisateurs connectés perdront le service.')) return;
+  const t = jeton();
+  try {
+    const r = await fetch(API + '/' + quoi, { method: 'POST',
+      headers: t ? { 'Authorization': 'Bearer ' + t } : {}, credentials: 'same-origin' });
+    const d = await r.json().catch(() => ({}));
+    alert(d.ok === false ? ('Échec : ' + (d.error || r.status)) : (quoi === 'start' ? 'Démarrage lancé' : 'Arrêt demandé'));
+  } catch (e) { alert('Échec : ' + e.message); }
+  setTimeout(tout, 3000);
+}
+
+async function inviter() {
+  const t = jeton();
+  try {
+    const r = await fetch(API + '/invite', { method: 'POST',
+      headers: t ? { 'Authorization': 'Bearer ' + t } : {}, credentials: 'same-origin' });
+    const d = await r.json().catch(() => ({}));
+    if (d.ok && d.invitation) { prompt('Lien d\'invitation (valable 7 jours) :', d.invitation); invitations(); }
+    else alert('Invitation non émise : ' + (d.error || d.detail || 'raison inconnue'));
+  } catch (e) { alert('Échec : ' + e.message); }
+}
+
+function tout() { sante(); moderation(); invitations(); comptes(); }
+if (garde()) { tout(); setInterval(sante, 60000); }
 </script>
-</main>
+<script src="/shared/sidebar.js"></script>
+<script src="/shared/health-banner.js"></script>
 </body>
 </html>

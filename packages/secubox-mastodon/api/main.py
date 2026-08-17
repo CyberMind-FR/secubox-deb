@@ -55,7 +55,11 @@ def _ctl(*args: str, delai: int = 20) -> dict:
     arriere-plan, mais `status` interroge le reseau et pourrait attendre.
     """
     try:
-        p = subprocess.run([CTL, *args], capture_output=True, text=True, timeout=delai)
+        # `sudo -n` : le demon tourne sous `secubox`, or `lxc-info` et
+        # `lxc-attach` exigent root. Les commandes autorisees sont ENUMEREES
+        # dans /etc/sudoers.d/secubox-mastodon — jamais un joker.
+        p = subprocess.run(["sudo", "-n", CTL, *args],
+                           capture_output=True, text=True, timeout=delai)
     except FileNotFoundError:
         raise HTTPException(503, "mastodonctl absent")
     except subprocess.TimeoutExpired:
@@ -103,3 +107,52 @@ async def stop(_=Depends(_exige_jwt)):
 @app.post("/api/v1/mastodon/invite")
 async def invite(_=Depends(_exige_jwt)):
     return _ctl("invite", delai=30)
+
+# ── lecture d'exploitation ───────────────────────────────────────────────────
+#
+# QUATRE VUES, TOUTES EN LECTURE SEULE. Le panneau precedent n'avait que des
+# boutons — demarrer, arreter, inviter — et rien a REGARDER : il pouvait agir
+# sur une instance dont il ne disait rien.
+#
+# Le delai est plus large qu'ailleurs (30 s) parce que ces appels traversent
+# `lxc-attach` puis PostgreSQL. Ce sont des lectures : les faire attendre coute
+# moins cher que de les faire echouer a mi-parcours.
+
+
+@app.get("/api/v1/mastodon/accounts")
+async def accounts(_=Depends(_exige_jwt)):
+    """Comptes locaux, avec leur DERNIERE CONNEXION.
+
+    Un compte confirme qui ne s'est jamais connecte est le motif classique de
+    l'inscription automatisee ; l'interface amont ne met pas cette colonne en
+    avant.
+    """
+    return _ctl("accounts", delai=30)
+
+
+@app.get("/api/v1/mastodon/invites")
+async def invites(_=Depends(_exige_jwt)):
+    """Invitations AVEC LEUR FILIATION.
+
+    Mastodon affiche le compteur d'usages d'une invitation, jamais QUI s'en est
+    servi — l'information existe pourtant en base. Sans elle, « 1 utilisation »
+    ne dit pas si c'est la personne qu'on attendait.
+    """
+    return _ctl("invites", delai=30)
+
+
+@app.get("/api/v1/mastodon/moderation")
+async def moderation(_=Depends(_exige_jwt)):
+    """Ce qui attend une decision humaine, et depuis combien de temps."""
+    return _ctl("moderation", delai=30)
+
+
+@app.get("/api/v1/mastodon/health")
+async def health(_=Depends(_exige_jwt)):
+    """Les TROIS services, la base, les medias, la federation.
+
+    Une instance dont seul `web` tourne REPOND et ne publie plus rien : les
+    messages partent en file et y restent. C'est la panne qu'un navigateur ne
+    montre pas.
+    """
+    return _ctl("health", delai=30)

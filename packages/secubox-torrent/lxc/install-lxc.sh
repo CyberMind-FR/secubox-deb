@@ -74,7 +74,12 @@ log "node version: $(la node --version 2>/dev/null || echo MISSING)"
 APP_SRC="${SECUBOX_APP_SRC:-/usr/lib/secubox/torrent/app}"
 la mkdir -p /opt/secubox-torrent/app /opt/secubox-torrent/www
 tar -C "$APP_SRC" -cf - . | la tar -C /opt/secubox-torrent/app -xf -
-tar -C /usr/share/secubox/www/torrent -cf - . | la tar -C /opt/secubox-torrent/www -xf -
+# LA PAGE DE L'APPLICATION, PAS LE PANNEAU (#1042). Cette ligne copiait
+# `/usr/share/secubox/www/torrent`, c'est-a-dire le panneau d'administration
+# avec son chassis : l'adresse publique servait une copie EXACTE de
+# l'administration (meme empreinte MD5) au lieu du lecteur, et chaque
+# reinstallation du paquet refaisait la substitution.
+tar -C "$(dirname "$0")/www" -cf - . | la tar -C /opt/secubox-torrent/www -xf -
 # npm ci wipes + rebuilds node_modules, which recompiles the native deps
 # (@roamhq/wrtc's node-datachannel is ~10min on arm64). Only pay that on a
 # code-only upgrade when the lockfile actually changed — otherwise the

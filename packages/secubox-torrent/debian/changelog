@@ -1,3 +1,26 @@
+secubox-torrent (2.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * L ADRESSE PUBLIQUE SERVAIT LE PANNEAU D ADMINISTRATION (ref #1042).
+    `install-lxc.sh` copiait `/usr/share/secubox/www/torrent` dans le conteneur :
+    `torrent.<domaine>` rendait donc une copie EXACTE de
+    `admin.<domaine>/torrent/` — meme empreinte MD5 — chassis compris, au lieu
+    du lecteur. Et chaque reinstallation du paquet refaisait la substitution.
+  * LES DEUX FACES SONT DESORMAIS DEUX FICHIERS. Le paquet livre
+    `lxc/www/index.html` — le LECTEUR, sans barre laterale ni bandeau, ouvert
+    aux clients du LAN — et l installateur copie CELUI-LA. Le panneau
+    d exploitation reste a `admin.<domaine>/torrent/` avec son chassis partage.
+  * La page restauree est celle d avant le raccordement au chassis (3 aout) :
+    elle porte deja tout le lecteur — ajout par magnet, par URL `.torrent` ou
+    par fichier, selecteur de mode, telechargement du dossier en ZIP,
+    conservation vers PeerTube.
+  * RIEN N AVAIT ETE SUPPRIME, contrairement a l hypothese de depart : le
+    commit du 4 aout avait applique le meme chassis a `torrent` ET a `ytsas`,
+    volontairement. La difference venait de ce que chaque vhost proxifie —
+    `ytsas` vers une application ayant sa propre interface, `torrent` vers un
+    conteneur ou l on avait copie le panneau.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 15 Aug 2026 09:35:00 +0200
+
 secubox-torrent (2.2.9-1~bookworm1) bookworm; urgency=medium
 
   * FIX conserved MP3/FLAC (and other common audio) went to PeerTube — a video
