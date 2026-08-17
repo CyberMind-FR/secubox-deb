@@ -264,7 +264,9 @@ def scan_sites(
                     # site.json et bien valides — mais le scan ne les recopiait
                     # pas dans l'entree, alors `server_name` n'en portait aucun.
                     # Rien n'echouait : le bloc etait juste incomplet.
-                    "aliases"):
+                    # Le meme piege s'est referme sur `api` (#1032) : la route
+                    # etait declaree, validee, et le vhost n'en portait rien.
+                    "aliases", "api"):
             if key in cfg and cfg[key] is not None:
                 entry[key] = cfg[key]
 
