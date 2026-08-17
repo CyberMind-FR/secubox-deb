@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+"""
+SecuBox-Deb :: secubox-adblock-sync (#740)
+CyberMind — https://cybermind.fr
+
+Board-wide DNS ad/tracker sinkhole. Compiles the modular filter-list resource
+(secubox_toolbox.filterlists) then renders the DNS-blockable domain set as an
+Unbound drop-in of `local-zone "<domain>." always_nxdomain` — so EVERY device on
+the LAN (not just R3 MITM clients) gets ads/trackers NXDOMAIN'd at resolve time.
+
+Whitelisted domains are already removed by the compiler. IPs in the operator IP
+allowlist are exempted via an Unbound *view* with no local-zones (best effort;
+requires `views:` support).
+
+Usage:
+  secubox-adblock-sync sync     # compile lists + render + reload unbound
+  secubox-adblock-sync disable  # drop the sinkhole drop-in + reload
+  secubox-adblock-sync status   # print JSON status
+
+Runs as root (writes /etc/unbound, reloads the resolver). Driven by a weekly
+systemd timer and on-demand from the dns-guard WebUI.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+# ── Locate the shared filter-list resource (secubox-toolbox package) ──────
+for _p in ("/usr/lib/secubox/toolbox", "/usr/lib/python3/dist-packages",
+           "/usr/lib/secubox/toolbox/lib"):
+    if _p not in sys.path:
+        sys.path.append(_p)
+try:
+    from secubox_toolbox import filterlists as F
+except Exception as e:  # pragma: no cover
+    print(json.dumps({"ok": False, "error": f"filterlists import failed: {e}"}))
+    sys.exit(2)
+
+DROPIN = Path("/etc/unbound/unbound.conf.d/95-secubox-adblock.conf")
+UNBOUND_CONF = Path("/etc/unbound/unbound.conf")
+STATUS = Path("/var/lib/secubox/ad-guard/sinkhole-status.json")
+IP_ALLOWLIST = Path("/var/lib/secubox/ad-guard/ip-allowlist.txt")
+STATE = Path("/var/lib/secubox/ad-guard/sinkhole.enabled")
+
+
+def _write_status(d: dict) -> None:
+    STATUS.parent.mkdir(parents=True, exist_ok=True)
+    d["ts"] = int(time.time())
+    tmp = STATUS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, indent=2))
+    tmp.replace(STATUS)
+
+
+def _ip_allowlist() -> list:
+    out = []
+    if IP_ALLOWLIST.exists():
+        for line in IP_ALLOWLIST.read_text().splitlines():
+            ip = line.strip()
+            if ip and not ip.startswith("#"):
+                out.append(ip)
+    return out
+
+
+def _render(domains: list) -> str:
+    """Render the Unbound drop-in. Domains → always_nxdomain. IP allowlist →
+    a view with no blocking so those clients bypass the sinkhole."""
+    lines = [
+        "# Managed by secubox-adblock-sync (#740). DO NOT EDIT BY HAND.",
+        "# Regenerate: secubox-adblock-sync sync",
+        "server:",
+    ]
+    ips = _ip_allowlist()
+    if ips:
+        # Tag allowlisted clients onto a permissive view.
+        for ip in ips:
+            lines.append(f'    access-control-view: {ip} sbx-allow')
+    for d in domains:
+        lines.append(f'    local-zone: "{d}." always_nxdomain')
+    if ips:
+        lines.append("")
+        lines.append('view:')
+        lines.append('    name: "sbx-allow"')
+        lines.append('    view-first: yes')
+        # empty view → falls through to normal resolution, no local-zones
+    return "\n".join(lines) + "\n"
+
+
+def _checkconf() -> tuple:
+    try:
+        r = subprocess.run(["unbound-checkconf", str(UNBOUND_CONF)],
+                           capture_output=True, text=True, timeout=60)
+        return r.returncode == 0, (r.stderr or r.stdout).strip()
+    except Exception as e:
+        return False, str(e)
+
+
+def _reload() -> bool:
+    # Prefer the lightweight control channel; fall back to systemd.
+    for cmd in (["unbound-control", "reload"], ["systemctl", "reload", "unbound"],
+                ["systemctl", "restart", "unbound"]):
+        try:
+            if subprocess.run(cmd, capture_output=True, timeout=60).returncode == 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def do_sync(force: bool = False) -> dict:
+    stats = F.compile_lists(force=force)
+    domains = []
+    if F.OUT_DNS.exists():
+        domains = [d for d in F.OUT_DNS.read_text().splitlines() if d.strip()]
+    if not domains:
+        st = {"ok": False, "error": "no domains compiled", "compile": stats}
+        _write_status(st)
+        return st
+
+    # Render + validate before swapping in (atomic, rollback on bad config).
+    prev = DROPIN.read_text() if DROPIN.exists() else None
+    DROPIN.parent.mkdir(parents=True, exist_ok=True)
+    DROPIN.write_text(_render(domains))
+    ok, msg = _checkconf()
+    if not ok:
+        if prev is not None:
+            DROPIN.write_text(prev)
+        else:
+            DROPIN.unlink(missing_ok=True)
+        st = {"ok": False, "error": f"unbound-checkconf failed: {msg}", "blocked": len(domains)}
+        _write_status(st)
+        return st
+
+    reloaded = _reload()
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text("1\n")
+    st = {"ok": True, "enabled": True, "blocked": len(domains),
+          "ip_allowlist": len(_ip_allowlist()), "reloaded": reloaded, "compile": stats}
+    _write_status(st)
+    return st
+
+
+def do_disable() -> dict:
+    DROPIN.unlink(missing_ok=True)
+    STATE.write_text("0\n") if STATE.parent.exists() else None
+    ok, msg = _checkconf()
+    reloaded = _reload() if ok else False
+    st = {"ok": ok, "enabled": False, "reloaded": reloaded, "error": None if ok else msg}
+    _write_status(st)
+    return st
+
+
+def do_status() -> dict:
+    if STATUS.exists():
+        try:
+            return json.loads(STATUS.read_text())
+        except Exception:
+            pass
+    return {"ok": True, "enabled": STATE.exists() and STATE.read_text().strip() == "1",
+            "blocked": 0}
+
+
+def main() -> int:
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    force = "--force" in sys.argv
+    if cmd == "sync":
+        st = do_sync(force=force)
+    elif cmd == "disable":
+        st = do_disable()
+    elif cmd == "status":
+        st = do_status()
+    else:
+        print(f"unknown command: {cmd}", file=sys.stderr)
+        return 2
+    print(json.dumps(st, indent=2))
+    return 0 if st.get("ok", True) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

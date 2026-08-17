@@ -7,8 +7,13 @@ Standards-Version: 4.6.2
 
 Package: secubox-ad-guard
 Architecture: all
-Depends: ${misc:Depends}, secubox-core (>= 1.0.0), python3-httpx | python3-pip
+Depends: ${misc:Depends}, secubox-core (>= 1.0.0), secubox-toolbox,
+ unbound, python3-httpx | python3-pip
 Description: SecuBox Ad Guard Module
  Ad and tracker detection with per-device statistics.
  Features blocklist management, delayed blacklisting workflow,
  and device-type classification (IoT, phones, smart TVs, etc.).
+ .
+ Provides a board-wide DNS ad/tracker sinkhole (#740): compiles the modular
+ filter-list resource (EasyList/EasyPrivacy/OISD/HaGeZi/NoScript) and renders
+ it as Unbound always_nxdomain local-zones, refreshed weekly by timer.

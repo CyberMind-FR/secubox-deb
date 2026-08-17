@@ -13,7 +13,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/shared/crt-light.css">
     <link rel="stylesheet" href="/shared/sidebar-light.css">
-    <link rel="stylesheet" href="/shared/hybrid-dark.css">
     <style>
         :root{--p31-peak:#00dd44;--p31-hot:#00ff55;--p31-mid:#009933;--p31-dim:#006622;--p31-decay:#ffb347;--tube-light:#e8f5e9;--tube-pale:#c8e6c9;--tube-soft:#a5d6a7;--bg-card:var(--tube-pale);--border:var(--tube-soft);--text-dim:var(--p31-dim);--red:#ff4466;--purple:#9e76ff;--bloom-text:0 0 2px var(--p31-peak),0 0 6px var(--p31-peak);--bloom-soft:0 0 6px var(--p31-peak)}
         *{box-sizing:border-box;margin:0;padding:0}
@@ -48,6 +47,8 @@
         .empty{color:var(--text-dim);font-style:italic;padding:1rem;text-align:center}
         .toolbar{display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap}
         button{font-family:inherit;font-size:0.9rem;padding:0.4rem 0.9rem;background:transparent;color:var(--p31-peak);border:1px solid var(--p31-mid);cursor:pointer;text-shadow:var(--bloom-text)}
+        button.mini{font-size:0.7rem;padding:0.1rem 0.45rem;white-space:nowrap;margin-left:0.3rem}
+        .filterlist li{flex-wrap:wrap;gap:0.2rem}
         button:hover{background:rgba(0,221,68,0.1)}
         .r2-banner{background:rgba(255,179,71,0.08);border-left:2px solid var(--p31-decay);padding:0.6rem 0.8rem;margin-bottom:1rem;font-size:0.85rem;color:#996b1a}
         .state-validated{color:var(--p31-peak);text-shadow:var(--bloom-text)}
@@ -62,7 +63,6 @@
         .lvlbtn{font-size:0.68rem;padding:0.12rem 0.4rem;margin-right:0.15rem;border:1px solid var(--p31-dim)}
         code{background:rgba(0,0,0,0.05);padding:0.1rem 0.3rem;border-radius:2px;font-size:0.78rem}
         a.link{color:var(--p31-mid);text-decoration:underline}
-        .filterlist{max-height:60vh;overflow-y:auto;margin:0;padding:0}
         .filterlist li{font-size:0.82rem;padding:0.2rem 0;border-bottom:1px solid var(--border);list-style:none;display:flex;justify-content:space-between;align-items:center}
     </style>
 </head>
@@ -85,9 +85,7 @@
         <button class="tab" data-tab="filtres" onclick="switchTab('filtres')">🚦 Filtres MITM</button>
         <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
         <button class="tab" data-tab="ads" onclick="switchTab('ads')">🛑 Pubs</button>
-        <button class="tab" data-tab="reseau" onclick="switchTab('reseau')">📡 Réseau</button>
         <button class="tab" data-tab="tor" onclick="switchTab('tor')">🧅 Tor</button>
-        <button class="tab" data-tab="sentinel" onclick="switchTab('sentinel')">🛡️ Sentinelle</button>
         <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
     </nav>
 
@@ -100,6 +98,10 @@
             <div class="card">
                 <h2>📊 Live metrics (24h)</h2>
                 <div class="kv" id="metrics"><span class="k">loading…</span><span class="v"></span></div>
+            </div>
+            <div class="card">
+                <h2>♥ Liveness</h2>
+                <div class="kv" id="health"><span class="k">loading…</span><span class="v"></span></div>
             </div>
         </div>
     </section>
@@ -126,12 +128,28 @@
             <button onclick="loadFilters()">🔁 Refresh</button>
         </div>
         <div class="card">
+            <h2>🔌 Splice whitelist (apps cert-pinned)</h2>
+            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
+                Hôtes <b>force-spliced</b> : TLS passthrough, jamais déchiffrés ni injectés (apps qui cassent sous MITM — ChatGPT, clients natifs). Analyse passive (SNI/DPI) + Tor si actif conservés. Effet immédiat (moteur Go) + miroir moteur Python.
+            </p>
+            <div style="display:flex;gap:0.4rem;margin-bottom:0.6rem">
+                <input id="splice-host" type="text" placeholder="ex: openai.com" style="flex:1;background:#111;color:var(--p31-fg,#e8e6d9);border:1px solid #2a2a3f;padding:0.4rem;border-radius:4px;font-family:monospace;font-size:0.82rem">
+                <button onclick="spliceAdd()">➕ Whitelist</button>
+            </div>
+            <ul class="filterlist" id="splice-list"><li class="empty">loading…</li></ul>
+        </div>
+        <div class="card">
+            <h2>🔍 Propositions auto-apprises (cert-pinning détecté)</h2>
+            <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
+                SNIs dont le client a <b>rejeté notre certificat</b> (signal de pinning). Promouvoir = ajouter à la splice whitelist ; ignorer = ne plus proposer.
+            </p>
+            <ul class="filterlist" id="splice-cands"><li class="empty">loading…</li></ul>
+        </div>
+        <div class="card">
             <h2>🚦 Hosts bypassés (mitm ignore_hosts)</h2>
             <p style="font-size:0.82rem;color:var(--p31-dim);margin-bottom:0.6rem">
-                Hosts exclus de l'inspection TLS (cert-pinning détecté ou whitelist statique).
+                Vue regex legacy (moteur Python). Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto).
             </p>
-            <p style="font-size:0.72rem;color:#888">Sources : 🌱 seed (paquet) · ✋ static (opérateur) · 🔍 learned (cert-pin auto)</p>
-            <p style="font-size:0.72rem;color:var(--p31-gold,#c9a84c)">🧅 Ces hosts (+ la liste TLS-splice) sont aussi <b>refusés à l'exposition Tor</b> par le module exposure — on ne ré-expose jamais anonymement un endpoint que les clients épinglent.</p>
             <ul class="filterlist" id="filters"><li class="empty">loading…</li></ul>
         </div>
     </section>
@@ -178,14 +196,16 @@
         <div class="toolbar">
             <button onclick="loadAds()">🔁 Refresh</button>
         </div>
-        <div id="ads-section" class="grid">
-            <div class="card" style="grid-column:1/-1;border-left:3px solid var(--matrix-green,#00ff41)">
-                <h2>🛡️ Blocage DNS (couche principale)</h2>
-                <div class="kv" id="ads-dns"><span class="k">loading…</span><span class="v"></span></div>
-                <p style="font-size:.72rem;color:var(--p31-dim,#888);margin-top:.4rem">La plupart des pubs sont tuées ICI, au DNS, avant d'atteindre le moteur MITM — le compteur « 204 » ci-dessous ne mesure QUE ce qui passe le DNS.</p>
+        <div class="card" style="grid-column:1/-1">
+            <h2>🛡️ Ad-Guard <span id="adguard-badge" class="badge">…</span></h2>
+            <div class="kv">
+                <span class="k">Master switch du blocage pub (sinkhole DNS + cosmetic R3) — indépendant des niveaux R0→R4</span>
+                <span class="v"><button id="adguard-toggle" onclick="toggleAdGuard()">…</button></span>
             </div>
+        </div>
+        <div id="ads-section" class="grid">
             <div class="card" style="grid-column:1/-1">
-                <h2>🛑 Bloqués par le moteur MITM (204, 24h)</h2>
+                <h2>🛑 Pubs bloquées (24h)</h2>
                 <div class="kv" id="ads-kpi"><span class="k">loading…</span><span class="v"></span></div>
             </div>
             <div class="card" style="grid-column:1/-1">
@@ -193,36 +213,21 @@
                 <div id="ads-hosts"><div class="empty">loading…</div></div>
             </div>
             <div class="card" style="grid-column:1/-1">
-                <h2>🔎 Trackers/pubs détectés <span style="font-size:.72rem;opacity:.6">(candidats — observés, pas encore promus au blocage)</span></h2>
-                <div id="ads-candidates"><div class="empty">loading…</div></div>
-            </div>
-            <div class="card" style="grid-column:1/-1">
                 <h2>🌐 Top sites visités</h2>
                 <div id="ads-sites"><div class="empty">loading…</div></div>
             </div>
             <div class="card" style="grid-column:1/-1">
-                <h2>👤 Top visiteurs (trackers/pubs bloqués)</h2>
+                <h2>👤 Top visiteurs (pubs bloquées)</h2>
                 <div id="ads-visitors"><div class="empty">loading…</div></div>
                 <div id="ads-client-detail"></div>
             </div>
         </div>
     </section>
 
-    <!-- #758 — network-layer stats (nft named counters + interface throughput) -->
-    <section class="panel" id="panel-reseau">
-        <h2>📡 Statistiques réseau (nftables)</h2>
-        <div id="ns-stale" style="display:none;color:var(--cinnabar,#e63946);font-size:.85em">⚠ données périmées (collecteur arrêté ?)</div>
-        <div id="ns-kpi" class="kpis"></div>
-        <h3>Débit interfaces (24h)</h3>
-        <div id="ns-throughput"></div>
-        <h3>Drops &amp; attaques par catégorie (24h)</h3>
-        <div id="ns-drops"></div>
-    </section>
-
     <!-- Tor egress quick-switch (#683) -->
     <section class="panel" id="panel-tor">
         <div class="toolbar">
-            <button type="button" onclick="refreshTorTab()">🔁 Refresh</button>
+            <button onclick="loadTor()">🔁 Refresh</button>
             <button type="button" onclick="torNewnym()">🔄 Nouvelle identité</button>
             <button type="button" onclick="torLeaks()">🔍 Vérifier l'IP de sortie</button>
         </div>
@@ -248,113 +253,6 @@
                 <span id="tor-msg" style="font-size:0.8rem;color:var(--p31-peak,#0a0)"></span>
             </div>
         </div>
-
-        <!-- Exit-country selection (#683 follow-up, Task 7) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🌍 Pays de sortie (ExitNodes)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.6rem">
-                Restreint les nœuds de sortie Tor aux pays sélectionnés (ctrl/cmd-clic pour une
-                multi-sélection ; aucune sélection = tous pays). L'IP de sortie effective reste
-                vérifiable via le bouton « Vérifier l'IP de sortie » ci-dessus.
-            </p>
-            <p class="r2-banner" style="margin:0 0 0.6rem 0">
-                ⚠️ <strong>Fail-closed :</strong> <code>StrictNodes 1</code> est forcé côté
-                reconciler — si AUCUN nœud de sortie n'existe dans les pays choisis,
-                <strong>plus aucun trafic Tor ne circule</strong> (pas de repli silencieux vers un
-                autre pays).
-            </p>
-            <div class="kv" id="tor-cc-current"><span class="k">Sélection actuelle</span><span class="v">loading…</span></div>
-            <select id="tor-cc-select" multiple size="8" style="width:100%;margin-top:0.5rem;font-family:inherit;background:var(--tube-light,#e8f5e9);color:var(--p31-mid);border:1px solid var(--border)"></select>
-            <div style="margin-top:0.6rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <button type="button" id="tor-cc-apply">✔ Appliquer la sélection</button>
-                <button type="button" id="tor-cc-clear">✖ Effacer (tous pays)</button>
-                <span id="tor-cc-msg" style="font-size:0.8rem"></span>
-            </div>
-        </div>
-
-        <!-- Tor-VPN clients (#683 follow-up, Task 7) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🔀 Clients Tor-VPN (routage sélectif)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.4rem">
-                IP / CIDR / MAC dont TOUT le trafic 80/443 est routé via Tor, indépendamment du
-                mode kbin global ci-dessus.
-            </p>
-            <p class="r2-banner" style="margin:0 0 0.6rem 0">
-                ⚠️ <strong>IPv6 non tunnelé (Phase 1) :</strong> seul l'IPv4 des clients routés
-                passe par Tor — leur IPv6 sortirait en clair si actif. Désactivez l'IPv6 sur les
-                clients routés (ou la RA du LAN) pour éviter toute fuite. Les sélecteurs IPv6 sont
-                <strong>refusés (400)</strong> par l'API.
-            </p>
-            <div class="toolbar" style="margin-bottom:0.6rem">
-                <select id="tor-vpn-kind" style="font-family:inherit">
-                    <option value="ip">IP</option>
-                    <option value="cidr">CIDR</option>
-                    <option value="mac">MAC</option>
-                </select>
-                <input type="text" id="tor-vpn-selector" placeholder="ex: 192.168.1.42" style="font-family:inherit;padding:0.4rem;border:1px solid var(--border);background:var(--tube-light,#e8f5e9);color:var(--p31-mid);flex:1;min-width:180px">
-                <button type="button" id="tor-vpn-add">➕ Ajouter</button>
-                <span id="tor-vpn-msg" style="font-size:0.8rem"></span>
-            </div>
-            <div id="tor-vpn-list"><div class="empty">loading…</div></div>
-
-            <div style="margin-top:0.8rem;padding-top:0.6rem;border-top:1px dashed var(--border)">
-                <h3 style="font-size:0.85rem;margin:0 0 0.3rem 0">🖧 Clients LAN (depuis NAC)</h3>
-                <p style="font-size:0.8rem;color:var(--p31-dim,#888);margin:0 0 0.4rem 0">
-                    Clients LAN en ligne et autorisés (NAC) — bascule pour router tout leur trafic
-                    80/443 via Tor sans saisir l'IP à la main.
-                </p>
-                <div id="tor-vpn-nac-list"><div class="empty">loading…</div></div>
-            </div>
-        </div>
-
-        <!-- obfs4 bridges (#683 follow-up / Task 8, Task 7 panel) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🌉 Ponts obfs4 (anti-censure)</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.4rem">
-                Colle une ligne <code>Bridge obfs4 …</code> (obtenue via le « moat » intégré de
-                Tor Browser ou <a class="link" href="https://bridges.torproject.org" target="_blank" rel="noopener">bridges.torproject.org</a>).
-                Dès qu'un pont valide est présent, Tor bascule en <code>UseBridges 1</code> ; liste
-                vide = Tor direct.
-            </p>
-            <div class="toolbar" style="margin-bottom:0.6rem">
-                <input type="text" id="tor-bridge-line" placeholder="Bridge obfs4 1.2.3.4:443 FINGERPRINT cert=... iat-mode=0" style="font-family:inherit;padding:0.4rem;border:1px solid var(--border);background:var(--tube-light,#e8f5e9);color:var(--p31-mid);flex:1;min-width:280px">
-                <button type="button" id="tor-bridge-add">➕ Ajouter</button>
-                <span id="tor-bridge-msg" style="font-size:0.8rem"></span>
-            </div>
-            <div id="tor-bridge-list"><div class="empty">loading…</div></div>
-        </div>
-
-        <!-- Emancipate — publish this dashboard as a .onion (Task 7) -->
-        <div class="card" style="margin-bottom:1rem">
-            <h2>🧅 Émancipation — publier ce tableau de bord en .onion</h2>
-            <p style="font-size:0.82rem;color:var(--p31-dim,#888);margin-bottom:0.6rem">
-                Crée (ou réutilise) un hidden service Tor pointant vers cette WebUI (via nginx
-                :9080). Persistant aux redémarrages de Tor.
-            </p>
-            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <button type="button" id="tor-emancipate-btn">🚀 Publier en .onion</button>
-                <span id="tor-emancipate-msg" style="font-size:0.8rem"></span>
-            </div>
-            <div id="tor-emancipate-result" style="margin-top:0.6rem"></div>
-        </div>
-
-        <!-- Hidden services + .onion-DNS status (Task 7) -->
-        <div class="card">
-            <h2>🕸️ Hidden services &amp; DNS .onion</h2>
-            <div class="kv" id="tor-onion-dns"><span class="k">DNS .onion</span><span class="v">loading…</span></div>
-            <div id="tor-hs-list" style="margin-top:0.6rem"><div class="empty">loading…</div></div>
-        </div>
-    </section>
-
-    <!-- Sentinelle -->
-    <section class="panel" id="panel-sentinel">
-        <div class="toolbar">
-            <button onclick="loadSentinel()">🔁 Refresh</button>
-            <span id="sentinel-state" class="v" style="margin-left:.5rem">…</span>
-        </div>
-        <div id="sentinel-verdict" class="card" style="margin-bottom:.8rem"></div>
-        <div id="sentinel-detections"></div>
-        <div id="sentinel-c2" style="margin-top:1rem"></div>
     </section>
 
     <!-- Config -->
@@ -380,9 +278,7 @@ function switchTab(name) {
     if (name === 'filtres') loadFilters();
     if (name === 'social') loadSocial();
     if (name === 'ads') loadAds();
-    if (name === 'reseau') loadNetstats();
-    if (name === 'tor') refreshTorTab();
-    if (name === 'sentinel') loadSentinel();
+    if (name === 'tor') loadTor();
     location.hash = name;
 }
 
@@ -565,62 +461,75 @@ async function loadClientDetail(macHash) {
 }
 
 async function loadHealth() {
-    // Liveness card removed (redundant generic status); /health still drives the
-    // top version-badge.
     const h = await J('/health');
-    if (h && h.version) document.getElementById('version-badge').textContent = `v${h.version}`;
+    const el = document.getElementById('health');
+    if (h.__error) { el.innerHTML = `<span class="k">err</span><span class="v">${h.__error}</span>`; return; }
+    el.innerHTML = `
+        <span class="k">status</span>  <span class="v">${h.status}</span>
+        <span class="k">module</span>  <span class="v">${h.module}</span>
+        <span class="k">version</span> <span class="v">${h.version}</span>
+    `;
+    document.getElementById('version-badge').textContent = `v${h.version}`;
 }
 
+const _esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 async function loadFilters() {
+    loadSpliceList();
+    loadSpliceCands();
     const el = document.getElementById('filters');
     const d = await J('/admin/filter-control/list');
     const items = (d && d.hosts) ? d.hosts : (Array.isArray(d) ? d : null);
     if (!items) { el.innerHTML = `<li class="empty">${(d && d.__error) || 'no data'}</li>`; return; }
     if (!items.length) { el.innerHTML = '<li class="empty">aucun host bypassé</li>'; return; }
-    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned',
-                   'splice-seed': '🔀 splice', 'splice-learned': '🔀 splice·auto',
-                   'mesh-splice': '🌐 mesh', 'mesh-bypass': '🌐 mesh', 'mesh-disabled': '🌐 mesh'};
-    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // Show ALL entries (bypass + splice) — every explicit splicing must be
-    // displayed + known. The <ul> scrolls (see .filterlist max-height).
-    el.innerHTML = `<li style="opacity:.6;font-size:.72rem">${items.length} hôtes exclus (MITM-bypass + splice) — ✅ = appliqué</li>` + items.map(h => {
+    const BADGE = {seed: '🌱 seed', static: '✋ static', learned: '🔍 learned'};
+    el.innerHTML = items.slice(0, 5).map(h => {
         const host = typeof h === 'string' ? h : (h.host || h.pattern || JSON.stringify(h));
         const src = (typeof h === 'object' && h.source) ? h.source : '';
-        const badge = BADGE[src] || esc(src);
-        const enabled = (typeof h === 'object') ? h.enabled !== false : true;
-        const editable = (typeof h === 'object') ? !!h.editable : false;
-        const pd = esc(host).replace(/"/g, '&quot;');
-        const chk = `<input type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleFilter(this)" data-pattern="${pd}" title="appliqué ? (décocher = présent mais non appliqué)">`;
-        const del = `<button onclick="deleteFilter(this)" data-pattern="${pd}" title="${editable ? 'supprimer' : 'seed paquet : sera désactivé (non supprimable)'}" style="background:none;border:0;cursor:pointer;color:var(--cinnabar,#e63946);font-size:.8rem">🗑</button>`;
-        const tor = ` <span title="refusé à l'exposition Tor" style="color:var(--p31-gold,#c9a84c);font-size:0.72rem">🧅 Tor-exclu</span>`;
-        const dim = enabled ? '' : 'opacity:.45;text-decoration:line-through';
-        return `<li style="${dim}"><span style="display:flex;align-items:center;gap:.35rem;min-width:0"><span>${chk}</span><code style="overflow:hidden;text-overflow:ellipsis">${esc(host)}</code>${badge ? `<span style="color:var(--p31-dim,#888);font-size:0.72rem;white-space:nowrap">${badge}</span>` : ''}${tor}</span>${del}</li>`;
+        const badge = BADGE[src] || _esc(src);
+        return `<li><code>${_esc(host)}</code>${badge ? ` <span style="color:var(--p31-dim,#888);font-size:0.72rem">${badge}</span>` : ''}</li>`;
     }).join('');
 }
 
-async function toggleFilter(el) {
-    const pattern = el.dataset.pattern;
+// ── #740 splice whitelist (cert-pinned apps) ──
+async function _splicePost(url, host) {
     try {
-        const r = await fetch('/admin/filter-control/toggle', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pattern }) });
-        if (!r.ok) { el.checked = !el.checked; return; }
-        loadFilters();
-    } catch (e) { el.checked = !el.checked; }
+        const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({host})});
+        return r.ok;
+    } catch (e) { return false; }
 }
-
-async function deleteFilter(el) {
-    const pattern = el.dataset.pattern;
-    if (!confirm('Supprimer / désactiver « ' + pattern + ' » ?')) return;
-    try {
-        await fetch('/admin/filter-control/delete', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pattern }) });
-        loadFilters();
-    } catch (e) {}
+async function loadSpliceList() {
+    const el = document.getElementById('splice-list');
+    const d = await J('/admin/splice-whitelist/list');
+    const items = (d && d.hosts) || [];
+    if (d && d.__error) { el.innerHTML = `<li class="empty">${_esc(d.__error)}</li>`; return; }
+    if (!items.length) { el.innerHTML = '<li class="empty">aucun hôte whitelisté</li>'; return; }
+    el.innerHTML = items.map(h =>
+        `<li><code>${_esc(h)}</code> <button class="mini" title="Re-soumettre à l'analyse MITM" onclick="spliceRemove('${_esc(h)}')">✕ de-whitelist</button></li>`
+    ).join('');
 }
+async function loadSpliceCands() {
+    const el = document.getElementById('splice-cands');
+    const d = await J('/admin/splice-whitelist/candidates');
+    const items = (d && d.candidates) || [];
+    if (d && d.__error) { el.innerHTML = `<li class="empty">${_esc(d.__error)}</li>`; return; }
+    if (!items.length) { el.innerHTML = '<li class="empty">aucune proposition</li>'; return; }
+    el.innerHTML = items.map(c =>
+        `<li><code>${_esc(c.host)}</code> <span style="color:var(--p31-dim,#888);font-size:0.72rem">${c.hits}× rejet cert</span> ` +
+        `<button class="mini" onclick="splicePromote('${_esc(c.host)}')">✅ whitelist</button> ` +
+        `<button class="mini" onclick="spliceIgnore('${_esc(c.host)}')">🚫 ignorer</button></li>`
+    ).join('');
+}
+async function spliceAdd() {
+    const inp = document.getElementById('splice-host');
+    const host = (inp.value || '').trim().toLowerCase();
+    if (!host) return;
+    if (await _splicePost('/admin/splice-whitelist/json-add', host)) { inp.value=''; loadSpliceList(); }
+    else alert('hôte invalide (DNS nu requis, ex: openai.com)');
+}
+async function spliceRemove(host) { if (await _splicePost('/admin/splice-whitelist/json-remove', host)) loadSpliceList(); }
+async function splicePromote(host) { if (await _splicePost('/admin/splice-whitelist/promote', host)) { loadSpliceList(); loadSpliceCands(); } }
+async function spliceIgnore(host) { if (await _splicePost('/admin/splice-whitelist/ignore', host)) loadSpliceCands(); }
 
 // ── kbin Tor egress quick-switch (#683) ──
 async function loadTor() {
@@ -683,418 +592,6 @@ async function torLeaks() {
         msg.textContent = d.ok ? `IP de sortie : ${d.tor_ip}` : ('échec : ' + (d.error || 'tor down'));
         setTimeout(() => loadTor(), 800);
     } catch (e) { msg.textContent = 'échec : ' + e.message; }
-}
-
-// ── Tor exit-country / Tor-VPN clients / obfs4 bridges / emancipate /
-//    hidden services + .onion-DNS (Task 7, #683 follow-up) ──
-
-// Toolbox's own tor-* endpoints: same vhost/cookie gate as torSet() above
-// (no bearer token needed — _require_tor_admin blocks the public kbin vhost).
-async function Tj(path, opts) {
-    try {
-        const r = await fetch(API + path, Object.assign({ credentials: 'same-origin' }, opts || {}));
-        let d = {};
-        try { d = await r.json(); } catch (e) { d = {}; }
-        if (!r.ok) return { __error: (d && d.detail) || ('HTTP ' + r.status) };
-        return d;
-    } catch (e) { return { __error: String((e && e.message) || e) }; }
-}
-
-// Cross-module fetch (secubox-exposure / secubox-tor, via nginx). These
-// modules gate with JWT (Depends(require_jwt)) — attach the same bearer
-// token the rest of the fleet's webuis read from localStorage 'sbx_token'
-// (see feedback: wrong key → login loop). 401 → login, mirrors exposure's
-// own dashboard (www/exposure/index.html).
-async function Xj(base, path, opts) {
-    try {
-        const tok = localStorage.getItem('sbx_token') || '';
-        const headers = Object.assign(
-            { 'Content-Type': 'application/json' },
-            (opts && opts.headers) || {},
-            tok ? { 'Authorization': 'Bearer ' + tok } : {}
-        );
-        const r = await fetch(base + path, Object.assign({ credentials: 'same-origin' }, opts || {}, { headers }));
-        if (r.status === 401) { if (!/\/login\.html$/.test(location.pathname)) window.location = '/login.html?redirect=' + encodeURIComponent(location.pathname + location.search); return { __error: '401' }; }
-        let d = {};
-        try { d = await r.json(); } catch (e) { d = {}; }
-        if (!r.ok) return { __error: (d && d.detail) || ('HTTP ' + r.status) };
-        return d;
-    } catch (e) { return { __error: String((e && e.message) || e) }; }
-}
-
-// IPv4-only guard for the NAC → Tor-VPN toggle list: the VPN backend
-// rejects IPv6 selectors with a 400 (Phase 1, v4-only routing) — never
-// even offer a toggle for a v6-looking address.
-function isIPv4(ip) {
-    return /^(\d{1,3}\.){3}\d{1,3}$/.test(String(ip || ''));
-}
-
-// Static ISO 3166-1 alpha-2 list — deliberately curated (not exhaustive):
-// countries with a meaningful Tor relay population + major regions. #683.
-const ISO_COUNTRIES = [
-    ['US','États-Unis'],['DE','Allemagne'],['FR','France'],['GB','Royaume-Uni'],['NL','Pays-Bas'],
-    ['CH','Suisse'],['SE','Suède'],['NO','Norvège'],['FI','Finlande'],['DK','Danemark'],
-    ['AT','Autriche'],['BE','Belgique'],['IE','Irlande'],['IS','Islande'],['LU','Luxembourg'],
-    ['CZ','Tchéquie'],['PL','Pologne'],['RO','Roumanie'],['ES','Espagne'],['IT','Italie'],
-    ['PT','Portugal'],['CA','Canada'],['AU','Australie'],['NZ','Nouvelle-Zélande'],['JP','Japon'],
-    ['SG','Singapour'],['HK','Hong Kong'],['KR','Corée du Sud'],['BR','Brésil'],['MX','Mexique'],
-    ['AR','Argentine'],['CL','Chili'],['IN','Inde'],['ZA','Afrique du Sud'],['UA','Ukraine'],
-    ['EE','Estonie'],['LV','Lettonie'],['LT','Lituanie'],['GR','Grèce'],['HU','Hongrie'],
-    ['BG','Bulgarie'],['HR','Croatie'],['SI','Slovénie'],['SK','Slovaquie'],['RS','Serbie'],
-    ['MD','Moldavie'],['MT','Malte'],['CY','Chypre'],['IL','Israël'],['TR','Turquie'],
-    ['TW','Taïwan'],['TH','Thaïlande'],['ID','Indonésie'],['MY','Malaisie'],['PH','Philippines'],
-    ['VN','Vietnam'],['AE','Émirats arabes unis'],['SA','Arabie saoudite'],['EG','Égypte'],
-    ['MA','Maroc'],['NG','Nigeria'],['KE','Kenya'],['CO','Colombie'],['PE','Pérou'],
-    ['UY','Uruguay'],['PA','Panama'],['LI','Liechtenstein'],['AD','Andorre'],['MC','Monaco'],
-    ['GE','Géorgie'],['AM','Arménie'],['AZ','Azerbaïdjan'],
-];
-
-function renderCcSelect() {
-    const sel = document.getElementById('tor-cc-select');
-    if (!sel || sel.options.length) return; // populate once
-    const sorted = ISO_COUNTRIES.slice().sort((a, b) => a[1].localeCompare(b[1], 'fr'));
-    sel.innerHTML = sorted.map(([cc, name]) => `<option value="${esc(cc)}">${esc(name)} (${esc(cc)})</option>`).join('');
-}
-
-async function loadExitCountry() {
-    renderCcSelect();
-    const sel = document.getElementById('tor-cc-select');
-    const cur = document.getElementById('tor-cc-current');
-    const d = await Tj('/exit_country');
-    if (d.__error) { cur.innerHTML = `<span class="k">err</span><span class="v">${esc(d.__error)}</span>`; return; }
-    const countries = d.countries || [];
-    const set = new Set(countries);
-    if (sel) Array.from(sel.options).forEach(o => { o.selected = set.has(o.value); });
-    cur.innerHTML = `<span class="k">Sélection actuelle</span><span class="v">${
-        countries.length ? countries.map(esc).join(', ') : 'tous pays (aucune restriction)'
-    }</span>`;
-}
-
-async function applyExitCountry() {
-    const sel = document.getElementById('tor-cc-select');
-    const msg = document.getElementById('tor-cc-msg');
-    const countries = sel ? Array.from(sel.selectedOptions).map(o => o.value) : [];
-    msg.textContent = 'application…';
-    const d = await Tj('/exit_country', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ countries }),
-    });
-    msg.textContent = d.__error ? ('échec : ' + esc(d.__error)) : 'appliqué ✓ (reconciliation asynchrone)';
-    setTimeout(() => { msg.textContent = ''; loadExitCountry(); }, 1500);
-}
-
-async function clearExitCountry() {
-    const sel = document.getElementById('tor-cc-select');
-    if (sel) Array.from(sel.options).forEach(o => { o.selected = false; });
-    await applyExitCountry();
-}
-
-async function loadVpnClients() {
-    const el = document.getElementById('tor-vpn-list');
-    const d = await Tj('/vpn/clients');
-    if (d.__error) { el.innerHTML = `<div class="empty">${esc(d.__error)}</div>`; return; }
-    const rows = d.clients || [];
-    if (!rows.length) { el.innerHTML = '<div class="empty">aucun client routé</div>'; return; }
-    el.innerHTML = '<table><thead><tr><th>Type</th><th>Sélecteur</th><th></th></tr></thead><tbody>' +
-        rows.map(c => `<tr>
-            <td>${esc(c.kind)}</td>
-            <td><code>${esc(c.selector)}</code></td>
-            <td><button type="button" class="tor-vpn-rm" data-kind="${esc(c.kind)}" data-selector="${esc(c.selector)}" style="background:none;border:0;cursor:pointer;color:var(--red,#e63946)">🗑 retirer</button></td>
-        </tr>`).join('') + '</tbody></table>';
-    el.querySelectorAll('.tor-vpn-rm').forEach(b =>
-        b.addEventListener('click', () => removeVpnClient(b.dataset.kind, b.dataset.selector)));
-}
-
-async function addVpnClient() {
-    const kind = document.getElementById('tor-vpn-kind').value;
-    const input = document.getElementById('tor-vpn-selector');
-    const selector = input.value.trim();
-    const msg = document.getElementById('tor-vpn-msg');
-    if (!selector) { msg.textContent = 'sélecteur requis'; return; }
-    // Client-side IPv6 guard — IPv4 selectors never contain ':'; surface the
-    // Phase-1 v4-only limitation cleanly instead of a bare 400.
-    if (kind !== 'mac' && selector.includes(':')) {
-        msg.textContent = '⚠ IPv6 non supporté (Phase 1, routage v4 uniquement) — utilisez une adresse IPv4';
-        return;
-    }
-    msg.textContent = 'ajout…';
-    const d = await Tj('/vpn/client', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, selector }),
-    });
-    if (d.__error) {
-        msg.textContent = selector.includes(':')
-            ? '⚠ échec : IPv6 refusé (routage v4 uniquement, Phase 1)'
-            : 'échec : ' + esc(d.__error);
-        return;
-    }
-    msg.textContent = 'ajouté ✓';
-    input.value = '';
-    setTimeout(() => { msg.textContent = ''; }, 1500);
-    loadVpnClients();
-    loadNacVpnClients();
-}
-
-async function removeVpnClient(kind, selector) {
-    const msg = document.getElementById('tor-vpn-msg');
-    const d = await Tj('/vpn/client', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, selector }),
-    });
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); return; }
-    loadVpnClients();
-    loadNacVpnClients();
-}
-
-// NAC online-clients → one-click Tor-VPN toggle. Cross-references
-// secubox-nac's "online AND allowed" clients (not banned/quarantined)
-// against the current /vpn/clients selector set to derive the toggle's
-// ON/OFF state, so the operator never has to hand-type IPs.
-async function loadNacVpnClients() {
-    const el = document.getElementById('tor-vpn-nac-list');
-    if (!el) return;
-    const [nacData, vpnData] = await Promise.all([
-        Xj('/api/v1/nac', '/clients'),
-        Tj('/vpn/clients'),
-    ]);
-    if (nacData.__error) { el.innerHTML = `<div class="empty">${esc(nacData.__error)}</div>`; return; }
-    const routedIps = new Set(
-        (vpnData.clients || []).filter(c => c.kind === 'ip').map(c => c.selector)
-    );
-    const allClients = nacData.clients || [];
-    const clients = allClients.filter(c =>
-        c.online === true && c.zone !== 'quarantine' && c.status !== 'quarantine'
-    );
-    const v4Clients = clients.filter(c => isIPv4(c.ip));
-    const v6Skipped = clients.length - v4Clients.length;
-    if (!v4Clients.length) {
-        el.innerHTML = `<div class="empty">aucun client LAN en ligne/autorisé${v6Skipped ? ` (${v6Skipped} client(s) IPv6-only masqué(s) — routage v4 uniquement)` : ''}</div>`;
-        return;
-    }
-    el.innerHTML = '<table><thead><tr><th>Nom</th><th>IP</th><th>MAC</th><th>Tor-VPN</th></tr></thead><tbody>' +
-        v4Clients.map(c => {
-            const ip = c.ip || '';
-            const on = routedIps.has(ip);
-            const hostname = c.custom_hostname || c.hostname || '(sans nom)';
-            return `<tr>
-                <td>${esc(hostname)}</td>
-                <td><code>${esc(ip)}</code></td>
-                <td><code>${esc(c.mac || '')}</code></td>
-                <td><label style="cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem">
-                    <input type="checkbox" class="nac-vpn-toggle" data-ip="${esc(ip)}" ${on ? 'checked' : ''}>
-                    ${on ? '🟢 routé' : '⚪ off'}
-                </label></td>
-            </tr>`;
-        }).join('') + '</tbody></table>' +
-        (v6Skipped ? `<p style="font-size:0.75rem;color:var(--p31-dim,#888);margin-top:0.3rem">${v6Skipped} client(s) IPv6-only masqué(s) (routage v4 uniquement).</p>` : '');
-    el.querySelectorAll('.nac-vpn-toggle').forEach(chk =>
-        chk.addEventListener('change', () => toggleNacVpnClient(chk)));
-}
-
-async function toggleNacVpnClient(chk) {
-    const ip = chk.dataset.ip;
-    const turnOn = chk.checked;
-    const msg = document.getElementById('tor-vpn-msg');
-    chk.disabled = true;
-    const d = await Tj('/vpn/client', {
-        method: turnOn ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'ip', selector: ip }),
-    });
-    if (d.__error && msg) { msg.textContent = 'échec bascule Tor-VPN : ' + esc(d.__error); }
-    await Promise.all([loadVpnClients(), loadNacVpnClients()]);
-}
-
-async function loadBridges() {
-    const el = document.getElementById('tor-bridge-list');
-    const d = await Tj('/tor/bridges');
-    if (d.__error) { el.innerHTML = `<div class="empty">${esc(d.__error)}</div>`; return; }
-    const rows = d.bridges || [];
-    if (!rows.length) { el.innerHTML = '<div class="empty">aucun pont configuré (Tor direct)</div>'; return; }
-    el.innerHTML = '<ul class="filterlist">' + rows.map(line => `<li>
-            <code style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85%">${esc(line)}</code>
-            <button type="button" class="tor-bridge-rm" data-line="${esc(line)}" style="background:none;border:0;cursor:pointer;color:var(--red,#e63946)">🗑</button>
-        </li>`).join('') + '</ul>';
-    el.querySelectorAll('.tor-bridge-rm').forEach(b =>
-        b.addEventListener('click', () => removeBridge(b.dataset.line)));
-}
-
-async function addBridge() {
-    const input = document.getElementById('tor-bridge-line');
-    const line = input.value.trim();
-    const msg = document.getElementById('tor-bridge-msg');
-    if (!line) { msg.textContent = 'ligne requise'; return; }
-    msg.textContent = 'ajout…';
-    const d = await Tj('/tor/bridge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line }),
-    });
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); return; }
-    msg.textContent = 'ajouté ✓';
-    input.value = '';
-    setTimeout(() => { msg.textContent = ''; }, 1500);
-    loadBridges();
-}
-
-async function removeBridge(line) {
-    const msg = document.getElementById('tor-bridge-msg');
-    const d = await Tj('/tor/bridge', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ line }),
-    });
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); return; }
-    loadBridges();
-}
-
-async function emancipateWebui() {
-    const btn = document.getElementById('tor-emancipate-btn');
-    const msg = document.getElementById('tor-emancipate-msg');
-    const out = document.getElementById('tor-emancipate-result');
-    btn.disabled = true;
-    msg.textContent = 'publication… (jusqu’à 10s)';
-    const d = await Xj('/api/v1/exposure', '/tor/emancipate_webui', { method: 'POST' });
-    btn.disabled = false;
-    if (d.__error) { msg.textContent = 'échec : ' + esc(d.__error); out.innerHTML = ''; return; }
-    msg.textContent = 'publié ✓';
-    const onion = (d.output && d.output.onion) || (d.tor && d.tor.onion) || '';
-    if (onion) {
-        out.innerHTML = `<div class="kv"><span class="k">.onion</span><span class="v"><code id="tor-onion-addr">${esc(onion)}</code></span></div>
-            <button type="button" id="tor-onion-copy" style="margin-top:0.4rem">📋 Copier</button>`;
-        const copyBtn = document.getElementById('tor-onion-copy');
-        if (copyBtn) copyBtn.addEventListener('click', () => {
-            (navigator.clipboard ? navigator.clipboard.writeText(onion) : Promise.reject())
-                .then(() => { copyBtn.textContent = '✓ copié'; setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 1500); })
-                .catch(() => { copyBtn.textContent = 'échec copie'; });
-        });
-    } else {
-        out.innerHTML = '<div class="empty">publié, mais aucune adresse .onion retournée pour l’instant — voir la liste ci-dessous</div>';
-    }
-    loadHiddenServices();
-}
-
-async function loadHiddenServices() {
-    const el = document.getElementById('tor-hs-list');
-    const dnsEl = document.getElementById('tor-onion-dns');
-    const [hs, dns] = await Promise.all([
-        Xj('/api/v1/tor', '/hidden_services'),
-        Xj('/api/v1/tor', '/onion_dns'),
-    ]);
-    if (dnsEl) {
-        if (dns.__error) {
-            dnsEl.innerHTML = `<span class="k">err</span><span class="v">${esc(dns.__error)}</span>`;
-        } else {
-            const ok = v => v ? '🟢 oui' : '🔴 non';
-            dnsEl.innerHTML =
-                `<span class="k">Tor DNSPort (9053)</span><span class="v">${ok(dns.dnsport_up)}</span>` +
-                `<span class="k">Zone forward Unbound</span><span class="v">${ok(dns.forward_zone_installed)}</span>` +
-                `<span class="k">Résolution .onion (canari)</span><span class="v">${ok(dns.resolves)}</span>`;
-        }
-    }
-    if (hs.__error) { el.innerHTML = `<div class="empty">${esc(hs.__error)}</div>`; return; }
-    const rows = hs.services || [];
-    if (!rows.length) { el.innerHTML = '<div class="empty">aucun hidden service détecté</div>'; return; }
-    el.innerHTML = '<table><thead><tr><th>Nom</th><th>.onion</th><th>Port local</th><th>État</th></tr></thead><tbody>' +
-        rows.map(s => `<tr>
-            <td>${esc(s.name)}</td>
-            <td>${s.has_address ? `<code>${esc(s.onion_address)}</code>` : '<span class="empty">en attente…</span>'}</td>
-            <td>${s.local_port ?? '—'}</td>
-            <td>${s.enabled === false ? '⚪ désactivé' : '🟢 actif'}</td>
-        </tr>`).join('') + '</tbody></table>';
-}
-
-function refreshTorTab() {
-    loadTor();
-    loadExitCountry();
-    loadVpnClients();
-    loadNacVpnClients();
-    loadBridges();
-    loadHiddenServices();
-}
-
-// ── Sentinel — compromise evaluation + detections (#823) ──
-const SENTINEL_TIER = {
-    clean:        { emoji: '🟢', label: 'Aucune compromission détectée', color: 'var(--p31-hot,#0a0)' },
-    suspicious:   { emoji: '🟠', label: 'Activité suspecte',              color: 'var(--p31-decay,#c77d00)' },
-    compromised:  { emoji: '🔴', label: 'Compromission confirmée',        color: 'var(--red,#e63946)' },
-};
-
-function sentinelDisposition(action) {
-    return action === 'block' ? 'Bloquée' : 'Détectée — observée';
-}
-
-function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
-        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-}
-
-async function loadSentinel() {
-    const stateEl = document.getElementById('sentinel-state');
-    const vEl = document.getElementById('sentinel-verdict');
-    const dEl = document.getElementById('sentinel-detections');
-    const stats = await J('/admin/sentinel/stats');
-    const data = await J('/admin/sentinel/verdicts');
-
-    if (stats.__error || data.__error || !data.active) {
-        stateEl.textContent = '⚪ Sentinelle inactive';
-        vEl.innerHTML = '<span class="v">Sentinelle inactive — aucune donnée de détection réseau.</span>';
-        dEl.innerHTML = '';
-        return;
-    }
-
-    stateEl.textContent = `🟢 active · ${stats.detections || 0} détections · ${stats.blocked || 0} bloquées · ${stats.spyware || 0} spyware`;
-
-    const a = data.assess || { tier: 'clean' };
-    const t = SENTINEL_TIER[a.tier] || SENTINEL_TIER.clean;
-    vEl.innerHTML =
-        `<div style="font-size:1.1rem;color:${t.color}">${t.emoji} ${esc(t.label)}</div>` +
-        `<div class="v" style="margin-top:.4rem">Sévérité max ${a.worst_severity || 0}/100 · ` +
-        `Confiance ${a.worst_confidence || 0}/100 · ${a.count || 0} détections · ` +
-        `${esc(a.dominant_class || '—')}</div>`;
-
-    const rows = (data.detections || []).map(d => {
-        const when = Number.isFinite(d.ts) ? new Date(d.ts * 1000).toISOString().replace('T', ' ').slice(0, 19) : '?';
-        return `<tr>
-            <td>${esc(d.class)}</td>
-            <td>${d.severity || 0}/${d.confidence || 0}</td>
-            <td>${esc(sentinelDisposition(d.action))}</td>
-            <td>${when}</td>
-            <td><details><summary>rapport</summary><pre style="white-space:pre-wrap;font-size:.75rem">${esc(d.report)}</pre></details></td>
-        </tr>`;
-    }).join('');
-    dEl.innerHTML = rows
-        ? `<table><thead><tr><th>Menace</th><th>Sév/Conf</th><th>Disposition</th><th>Vu</th><th>Détail</th></tr></thead><tbody>${rows}</tbody></table>`
-        : '<span class="v">Aucune détection récente.</span>';
-
-    if (!stats.__error && data.active) loadSentinelC2();
-}
-
-async function loadSentinelC2() {
-    const el = document.getElementById('sentinel-c2');
-    if (!el) return;
-    const d = await J('/admin/sentinel/c2');
-    if (d.__error || !d.active) { el.innerHTML = ''; return; }
-    const row = (h, kind) => `<tr>
-        <td>${esc(h.host)}</td>
-        <td>${esc((h.signals || []).join(', '))}</td>
-        <td>${h.interval_s ? Math.round(h.interval_s) + 's' : '—'}</td>
-        <td>${h.devices || (h.windows ? 'w' + h.windows : '')}</td>
-        <td>${kind === 'learned'
-            ? `<button class="c2-ign" data-host="${esc(h.host)}">Ignorer</button>`
-            : '<span class="v">candidat</span>'}</td></tr>`;
-    const learned = (d.learned || []).map(h => row(h, 'learned')).join('');
-    const cand = (d.candidates || []).map(h => row(h, 'candidate')).join('');
-    el.innerHTML = `<h3>🕸️ C2 appris</h3>` + ((learned || cand)
-        ? `<table><thead><tr><th>Hôte</th><th>Signaux</th><th>Intervalle</th><th>Vu</th><th></th></tr></thead><tbody>${learned}${cand}</tbody></table>`
-        : '<span class="v">Aucun C2 appris ni candidat.</span>');
-    el.querySelectorAll('.c2-ign').forEach(b => b.addEventListener('click', () => c2Ignore(b.dataset.host)));
-}
-
-async function c2Ignore(host) {
-    await fetch(`${API}/admin/sentinel/c2/allow`, {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'host=' + encodeURIComponent(host),
-    });
-    loadSentinelC2();
 }
 
 async function loadSocial() {
@@ -1184,52 +681,47 @@ async function loadSocial() {
     }
 }
 
+// ── Ad-Guard master switch (#740) ──
+async function loadAdGuard() {
+    const f = await J('/admin/filters');
+    const on = !(f && f.ad_guard === false);
+    const b = document.getElementById('adguard-badge');
+    const t = document.getElementById('adguard-toggle');
+    if (b) { b.textContent = on ? '🟢 ON' : '🔴 OFF'; b.className = 'badge ' + (on ? 'badge-green' : 'badge-red'); }
+    if (t) t.textContent = on ? '⏸ Désactiver' : '▶ Activer';
+}
+async function toggleAdGuard() {
+    const f = await J('/admin/filters');
+    const on = !(f && f.ad_guard === false);
+    await fetch(`${API}/admin/filters`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify({ ad_guard: !on }) });
+    setTimeout(loadAdGuard, 400);
+}
+
 async function loadAds() {
+    loadAdGuard();
     const d = await J('/admin/ad-stats?hours=24');
     const kpi = document.getElementById('ads-kpi');
     const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     if (!d || d.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(d&&d.__error)||'no data'}</span>`; return; }
-    // #ads — DNS-layer blocking (the real ad-blocker; engine 204s are secondary)
-    const dns = d.dns_sinkhole || {};
-    const dnsEl = document.getElementById('ads-dns');
-    if (dnsEl) {
-      dnsEl.innerHTML = dns.enabled
-        ? `<span class="k">État</span> <span class="v" style="color:var(--matrix-green,#00ff41)">🟢 actif</span>`
-          + ` <span class="k">Domaines pub/tracker sinkholés</span> <span class="v">${(dns.domains||0).toLocaleString('fr-FR')}</span>`
-          + ` <span class="k">Règles réseau</span> <span class="v">${(dns.net_rules||0).toLocaleString('fr-FR')}</span>`
-          + ` <span class="k">Sources</span> <span class="v">${(dns.sources||[]).join(', ')||'—'}</span>`
-        : (dns.enabled === false
-            ? `<span class="k">État</span> <span class="v" style="color:var(--cinnabar,#e63946)">⚪ désactivé</span>`
-            : `<span class="k">État</span> <span class="v">indisponible</span>`);
-    }
-    kpi.innerHTML = `<span class="k">Pubs bloquées (204)</span> <span class="v">${d.total_blocked||0}</span>`
-      + ` <span class="k">Trackers détectés</span> <span class="v">${d.trackers_seen||0}</span>`
-      + ` <span class="k">Pages nettoyées</span> <span class="v">${d.pages_cleaned||0}</span>`
-      + ` <span class="k">Drops réseau</span> <span class="v">${d.network_drops||0}</span>`
-      + ` <span class="k" title="estimation : un contenu bloqué n'est jamais téléchargé, on ne peut pas mesurer les octets réels — ~45 Ko/blocage">Ko évités <span style="opacity:.6">(est.)</span></span> <span class="v">~${Math.round((d.total_bytes||0)/1024)}</span>`;
-    const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>~${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
+    kpi.innerHTML = `<span class="k">Pubs bloquées</span> <span class="v">${d.total_blocked||0}</span>`
+      + ` <span class="k">Ko économisés</span> <span class="v">${Math.round((d.total_bytes||0)/1024)}</span>`
+      + ` <span class="k">Silenced</span> <span class="v">${(d.by_action&&d.by_action.silent)||0}</span>`
+      + ` <span class="k">Fenêtre</span> <span class="v">${d.window_hours||24}h</span>`;
+    const hostRows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
     const siteRows = (d.top_sites||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.site)}</code></td><td>${r.hits}</td></tr>`).join('');
     document.getElementById('ads-hosts').innerHTML = hostRows
-      ? '<table><thead><tr><th>Tracker / pub host</th><th>bloqués</th><th>Ko (est.)</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
-      : '<div class="empty">rien de bloqué dans la fenêtre</div>';
+      ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+hostRows+'</tbody></table>'
+      : '<div class="empty">aucune pub bloquée dans la fenêtre</div>';
     document.getElementById('ads-sites').innerHTML = siteRows
-      ? '<table><thead><tr><th>Site</th><th>trackers/pubs bloqués</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
+      ? '<table><thead><tr><th>Site</th><th>pubs bloquées</th></tr></thead><tbody>'+siteRows+'</tbody></table>'
       : '';
-    // #802 — detected candidates (observed, awaiting promotion to active blocking)
-    const candRows = (d.top_candidates||[]).slice(0, 15).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td></tr>`).join('');
-    const candCumul = !!d.candidates_cumulative;
-    const candHdr = candCumul
-      ? `${d.total_candidates||0} hôtes en attente de promotion <span style="opacity:.75">(cumul — rien de neuf dans la fenêtre)</span>`
-      : `${d.total_candidates||0} hôtes détectés dans la fenêtre`;
-    document.getElementById('ads-candidates').innerHTML = candRows
-      ? `<div style="font-size:.78rem;opacity:.7;margin-bottom:.4rem">${candHdr}</div><table><thead><tr><th>Hôte détecté</th><th>observations</th></tr></thead><tbody>${candRows}</tbody></table>`
-      : '<div class="empty">aucun tracker/pub détecté (backlog vide)</div>';
     const visRows = (d.top_visitors||[]).slice(0, 5).map(r=>{
         const mh = esc(r.mac_hash);
         return `<tr><td><a href="#" onclick="loadAdsClient('${mh}');return false;"><code>${mh}</code></a></td><td>${r.hits}</td></tr>`;
     }).join('');
     document.getElementById('ads-visitors').innerHTML = visRows
-      ? '<table><thead><tr><th>Visiteur</th><th>trackers/pubs</th></tr></thead><tbody>'+visRows+'</tbody></table>'
+      ? '<table><thead><tr><th>Visiteur</th><th>pubs bloquées</th></tr></thead><tbody>'+visRows+'</tbody></table>'
       : '<div class="empty">aucun visiteur dans la fenêtre</div>';
 }
 
@@ -1240,77 +732,19 @@ async function loadAdsClient(mh) {
     const d = await J('/admin/ad-stats/client/'+encodeURIComponent(mh));
     if (!d || d.__error) { detail.innerHTML = `<div class="empty">${(d&&d.__error)||'no data'}</div>`; return; }
     const rows = (d.top_hosts||[]).slice(0, 5).map(r=>`<tr><td><code>${esc(r.host)}</code></td><td>${r.hits}</td><td>${Math.round((r.bytes||0)/1024)}</td></tr>`).join('');
-    detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} trackers/pubs bloqués</h3>`
+    detail.innerHTML = `<h3>👤 <code>${esc(d.mac_hash)}</code> — ${d.total||0} pubs bloquées</h3>`
       + (rows
         ? '<table><thead><tr><th>Ad host</th><th>bloqués</th><th>Ko</th></tr></thead><tbody>'+rows+'</tbody></table>'
         : '<div class="empty">aucune pub bloquée pour ce visiteur</div>');
-}
-
-// ── Réseau tab (#758) — hub netstats endpoints ──
-async function Jhub(path) {
-    try {
-        const r = await fetch('/api/v1/hub' + path, { credentials: 'same-origin' });
-        if (!r.ok) return { __error: 'HTTP ' + r.status };
-        return await r.json();
-    } catch (e) { return { __error: String(e) }; }
-}
-
-function sparkline(points, color) {
-    // points: [[ts, value], …] → inline SVG polyline, auto-scaled.
-    if (!points || !points.length) return '<span style="opacity:.5">—</span>';
-    const W = 240, H = 40, vals = points.map(p => p[1]);
-    const max = Math.max(1, ...vals), n = points.length;
-    const path = points.map((p, i) =>
-        `${(i / Math.max(1, n - 1) * W).toFixed(1)},${(H - p[1] / max * H).toFixed(1)}`).join(' ');
-    return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`
-        + `<polyline fill="none" stroke="${color}" stroke-width="1.5" points="${path}"/></svg>`;
-}
-
-function fmtBps(b) {
-    if (b > 1e6) return (b / 1e6).toFixed(1) + ' Mb/s';
-    if (b > 1e3) return (b / 1e3).toFixed(1) + ' kb/s';
-    return (b || 0) + ' b/s';
-}
-
-// Endpoints: /api/v1/hub/netstats/summary  /api/v1/hub/netstats/series
-async function loadNetstats() {
-    const sum = await Jhub('/netstats/summary');
-    const kpi = document.getElementById('ns-kpi');
-    document.getElementById('ns-stale').style.display = (sum && sum.stale) ? 'block' : 'none';
-    if (!sum || sum.__error) { kpi.innerHTML = `<span class="k">err</span><span class="v">${(sum && sum.__error) || 'no data'}</span>`; return; }
-    const cats = sum.categories || {};
-    kpi.innerHTML = `<span class="k">Drops réseau (total)</span> <span class="v">${sum.network_drops || 0}</span>`
-        + Object.keys(cats).map(c => ` <span class="k">${c}</span> <span class="v">${(cats[c].packets) || 0}</span>`).join('');
-
-    const ser = await Jhub('/netstats/series?window=86400&step=300');
-    const tp = document.getElementById('ns-throughput');
-    const dr = document.getElementById('ns-drops');
-    if (!ser || ser.__error) { tp.textContent = 'no data'; dr.textContent = ''; return; }
-    const inb = ser.in_bps || {}, outb = ser.out_bps || {};
-    tp.innerHTML = Object.keys(inb).map(ifc =>
-        `<div class="row"><b>${ifc}</b> ↓ ${fmtBps((inb[ifc].slice(-1)[0] || [0, 0])[1])} ${sparkline(inb[ifc], '#00d4ff')}`
-        + ` ↑ ${fmtBps(((outb[ifc] || []).slice(-1)[0] || [0, 0])[1])} ${sparkline(outb[ifc] || [], '#c9a84c')}</div>`).join('') || '<span style="opacity:.5">—</span>';
-    const drops = ser.drops || {};
-    dr.innerHTML = Object.keys(drops).map(c =>
-        `<div class="row"><b>${c}</b> ${sparkline(drops[c], '#e63946')}</div>`).join('') || '<span style="opacity:.5">—</span>';
 }
 
 async function refreshAll() {
     await Promise.all([loadCfg(), loadClients(), loadHealth(), loadMetrics()]);
 }
 
-// Task 7 (#683 follow-up) — wire the exit-country / VPN-client / bridge /
-// emancipate controls. Static IDs, no per-row interpolation here (per-row
-// remove/copy buttons are wired inline after each render, above).
-document.getElementById('tor-cc-apply')?.addEventListener('click', applyExitCountry);
-document.getElementById('tor-cc-clear')?.addEventListener('click', clearExitCountry);
-document.getElementById('tor-vpn-add')?.addEventListener('click', addVpnClient);
-document.getElementById('tor-bridge-add')?.addEventListener('click', addBridge);
-document.getElementById('tor-emancipate-btn')?.addEventListener('click', emancipateWebui);
-
 // Deep-link : open the tab named in the URL hash on load.
 const initial = (location.hash || '').replace('#', '');
-if (['overview','clients','filtres','social','ads','reseau','config'].includes(initial)) switchTab(initial);
+if (['overview','clients','filtres','social','ads','config'].includes(initial)) switchTab(initial);
 
 refreshAll();
 setInterval(() => {

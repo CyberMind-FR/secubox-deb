@@ -13,3 +13,11 @@ override_dh_auto_install:
 	[ -f config/ad-guard.toml ] && install -m 644 config/ad-guard.toml debian/secubox-ad-guard/etc/secubox/ || true
 	install -d debian/secubox-ad-guard/usr/bin
 	[ -f scripts/adguardctl ] && install -m 755 scripts/adguardctl debian/secubox-ad-guard/usr/bin/ || true
+	# DNS sinkhole sync (#740) — compiles modular filter lists + renders Unbound
+	install -d debian/secubox-ad-guard/usr/sbin
+	install -m 755 sbin/secubox-adblock-sync debian/secubox-ad-guard/usr/sbin/
+	install -d debian/secubox-ad-guard/etc/secubox/toolbox
+	[ -f config/filter-sources.json ] && install -m 644 config/filter-sources.json debian/secubox-ad-guard/etc/secubox/toolbox/ || true
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-adblock-sync secubox-adblock-sync.timer

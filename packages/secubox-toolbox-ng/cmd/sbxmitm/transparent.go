@@ -399,6 +399,13 @@ func (px *Proxy) handleTransparent(client net.Conn) {
 	tconn := tls.Server(replay, px.serverTLSConfigCapture(px.captureAndEmitJA4(client),
 		func(s string) { ja4 = s }))
 	if err := tconn.Handshake(); err != nil {
+		// #740 — a CLIENT cert-rejection alert here means the app PINS its cert and
+		// refused our forged leaf: it would hard-fail under MITM. Auto-learn the SNI
+		// as a splice candidate (the portal proposes it for the whitelist). Only
+		// explicit TLS alerts count — a raw RST/EOF is ambiguous and never learns.
+		if sni != "" && isClientCertRejection(err) && !px.pol.shouldSplice(sni) {
+			px.pin.record(sni)
+		}
 		return
 	}
 	defer tconn.Close()

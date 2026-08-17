@@ -232,14 +232,72 @@ def _flush(force: bool = False) -> None:
             pass
 
 
-def _style_for(cats: dict) -> bytes:
+# EasyList cosmetic rules compiled by the modular filter resource (#740).
+# Element-hide is the MITM layer's unique value (DNS can't hide DOM nodes); the
+# DNS sinkhole already drops the network requests, so here we only inject CSS.
+_FL_COSMETIC_PATH = "/var/lib/secubox/filterlists/cosmetic.json"
+_FL_GLOBAL_CAP = 3000  # cap generic (##) selectors so injected CSS stays sane
+_fl_cosmetic_cache = {"mtime": -1.0, "data": {}, "global": []}
+
+
+def _fl_cosmetic() -> dict:
+    """Cached load of cosmetic.json (mtime-guarded, like the learned set)."""
+    try:
+        m = os.path.getmtime(_FL_COSMETIC_PATH)
+    except OSError:
+        return _fl_cosmetic_cache
+    if m != _fl_cosmetic_cache["mtime"]:
+        try:
+            with open(_FL_COSMETIC_PATH, encoding="utf-8") as fh:
+                data = json.load(fh)
+            _fl_cosmetic_cache["data"] = data if isinstance(data, dict) else {}
+            _fl_cosmetic_cache["global"] = (_fl_cosmetic_cache["data"].get("*") or [])[:_FL_GLOBAL_CAP]
+            _fl_cosmetic_cache["mtime"] = m
+        except Exception:
+            pass
+    return _fl_cosmetic_cache
+
+
+def _fl_selectors_for(host: str) -> list:
+    """Per-domain EasyList element-hide selectors for `host` (host + parents)."""
+    fl = _fl_cosmetic()
+    data = fl["data"]
+    if not data:
+        return []
+    out = list(fl["global"])
+    h = (host or "").lower().strip(".")
+    # Walk host → registrable so both `www.x.com` and `x.com` rules apply.
+    seen = set()
+    parts = h.split(".")
+    for i in range(len(parts) - 1):
+        cand = ".".join(parts[i:])
+        if cand in seen:
+            continue
+        seen.add(cand)
+        sub = data.get(cand)
+        if sub:
+            out.extend(sub)
+    return out
+
+
+def _style_for(cats: dict, host: str = "") -> bytes:
     sels = []
     for cat, on in cats.items():
         if on and cat in _COSMETIC:
             sels.extend(_COSMETIC[cat])
+    # #740 — fold in EasyList cosmetic (generic capped + per-domain targeted).
+    if cats.get("ads", True):
+        sels.extend(_fl_selectors_for(host))
     if not sels:
         return b""
-    sel = ",".join(sels)
+    # Dedup while preserving order; bound the rule size.
+    seen = set()
+    uniq = []
+    for s in sels:
+        if s and s not in seen:
+            seen.add(s)
+            uniq.append(s)
+    sel = ",".join(uniq)
     # #584 — NO placeholder : collapse the ghosted ad slot entirely so the
     # space disappears (display:none), rather than leaving a void/black-hole.
     # Host-blocking (204) still saves the bandwidth ; this just hides the box.

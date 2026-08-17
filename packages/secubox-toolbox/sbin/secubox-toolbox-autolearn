@@ -35,12 +35,34 @@ BYPASS_DYNAMIC_OUT = os.environ.get(
     "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf")
 SPLICE_MIN_HITS = int(os.environ.get("SECUBOX_SPLICE_MIN_HITS", "20"))
 SPLICE_MAX = 2000
-MIN_SITES = 2          # cross-site threshold for operator-grade trackers
+
+
+def _thr(filter_key: str, env_key: str, default: int) -> int:
+    """Threshold resolution: filters.json (toolbox UI) → env var → default.
+    Lets the operator tune autolearn aggressiveness from the config without
+    editing the unit. Read per-run (the timer fires hourly), so a change in
+    filters.json applies on the next cycle. Lower = more aggressive learning
+    (more coverage, higher false-positive risk); higher = more conservative.
+    """
+    try:
+        from secubox_toolbox.filters import get_filters
+        v = get_filters().get(filter_key)
+        if v is not None:
+            return int(v)
+    except Exception:
+        pass
+    try:
+        return int(os.environ.get(env_key, default))
+    except Exception:
+        return default
+
+
+MIN_SITES = _thr("autolearn_min_sites", "SECUBOX_MIN_SITES", 2)  # opgrade trackers
 MAX_ENTRIES = 8000
 # #656 — ad-candidate promotion. #685 hardening: require >= 2 distinct sites
 # (was 1 — a single-site host got hard-blocked, e.g. www.google.com → broke
-# reCAPTCHA/consent on euronews). Env-overridable.
-AD_MIN_SITES = int(os.environ.get("SECUBOX_AD_MIN_SITES", "2"))
+# reCAPTCHA/consent on euronews). Tunable via filters.json / env.
+AD_MIN_SITES = _thr("autolearn_ad_min_sites", "SECUBOX_AD_MIN_SITES", 2)
 AD_ALLOWLIST = os.environ.get("SECUBOX_AD_ALLOWLIST",
                               "/var/lib/secubox/toolbox/ad-allowlist.txt")
 
@@ -320,8 +342,8 @@ def _ad_feed() -> int:
 # the ad-path heuristic. Promote it into learned-trackers.txt so the engine
 # blocks (204) + smogs it. Conservative + reuses the SAME allowlist/self guard as
 # _ad_feed (NEVER promote allowlisted or self domains). De-dups against OUT.
-SOCIAL_MIN_SITES = int(os.environ.get("SECUBOX_SOCIAL_MIN_SITES", "3"))
-SOCIAL_WINDOW_HOURS = int(os.environ.get("SECUBOX_SOCIAL_WINDOW_HOURS", "168"))
+SOCIAL_MIN_SITES = _thr("autolearn_social_min_sites", "SECUBOX_SOCIAL_MIN_SITES", 3)
+SOCIAL_WINDOW_HOURS = _thr("autolearn_social_window_hours", "SECUBOX_SOCIAL_WINDOW_HOURS", 168)
 
 
 def _social_feed() -> int:
@@ -410,13 +432,24 @@ def main() -> int:
         return 0
 
     # 1) threat-intel malicious domains (high confidence).
+    # FIX (#740): the column is `ioc_type`, NOT `type` — the old query threw and
+    # was swallowed by the bare except, so threat-intel was silently NEVER
+    # promoted despite tens of thousands of domain IOCs. Gate on `weight` (the
+    # confidence score, default-50) so only higher-confidence IOCs are blocked;
+    # threshold tunable via filters.json / env.
+    # Default 40: threatfox/data-broker domain IOCs land at weight 45, below the
+    # schema default 50 — a 50 gate excluded them all. 40 captures them while
+    # still letting the operator raise it via filters.json.
+    ti_min_weight = _thr("autolearn_ti_min_weight", "SECUBOX_TI_MIN_WEIGHT", 40)
     try:
-        for r in c.execute("SELECT DISTINCT ioc FROM threat_intel WHERE type='domain'"):
+        for r in c.execute(
+            "SELECT DISTINCT ioc FROM threat_intel "
+            "WHERE ioc_type='domain' AND weight >= ?", (ti_min_weight,)):
             d = registrable(r["ioc"])
             if d:
                 learned.add(d)
-    except Exception:
-        pass
+    except Exception as e:
+        sys.stderr.write(f"autolearn: threat-intel query failed: {e}\n")
     ti = len(learned)
 
     # 2) cross-site OPERATOR-GRADE / data-broker trackers ONLY. Anti-bot
