@@ -1,3 +1,17 @@
+secubox-system-tuning (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * tuning-apply : un `memory.high` superieur ou egal a `memory.max` est ramene
+    a 85 % de la limite dure. Un frein reglé au-dessus de la limite n'est jamais
+    atteint : le conteneur passe directement de « tout va bien » a l'execution
+    sommaire, sans ralentissement ni avertissement.
+
+    Constate le 2026-08-17 : nextcloud portait high=600M pour max=512M et avait
+    ete tue 30 fois ; gitea 16 fois ; horde, mail et matrix avaient la meme
+    inversion. Rien dans les journaux ne designait la cause — un conteneur tue
+    redemarre, et le compteur oom_kill du cgroup est le seul temoin.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 09:12:12 +0200
+
 secubox-system-tuning (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Initial release — captures the gk2 RAM optimization applied by
