@@ -1,24 +1,12 @@
-secubox-tor (1.2.0-1~bookworm1) bookworm; urgency=medium
-
-  * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est
-    le seul repertoire que le vhost principal inclut. Livree dans secubox.d/
-    uniquement, la route n'etait JAMAIS lue, et il fallait la recopier a la
-    main pour que le module fonctionne.
-  * Source du depot realignee sur la version VIVANTE, a l'octet pres : les
-    deux avaient diverge. (ref #989)
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 06 Aug 2026 07:40:00 +0200
-
 secubox-tor (1.1.1-1~bookworm1) bookworm; urgency=medium
 
-  * Package tor-lan-ip/torctl helpers + share templates (socks-lan, transparent,
-    onion-forward, nft) under /usr/share/secubox/tor/; postinst wires
-    `torctl socks-lan ensure` + `torctl transparent on` (idempotent, best-effort).
-  * Depends: tor, unbound, nftables.
-  * Ship /etc/sysctl.d/60-secubox-route-localnet.conf so ifaces recreated at
-    boot (wg-toolbox) inherit route_localnet=1 for the transparent DNAT.
+  * PAC .onion -> Tor : nouveau /tor.pac (dévie les .onion vers le SOCKS Tor
+    local en SOCKS5, reste en DIRECT), servi en application/x-ns-proxy-autoconfig
+    LAN-only. Dropin torrc ajoutant un SocksPort LAN confiné (192.168.1.200:9050,
+    SocksPolicy accept LAN+wg reject *, jamais open-relay). README : runbook
+    client + network.proxy.socks_remote_dns.
 
- -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 24 Jul 2026 16:00:00 +0200
 
 secubox-tor (1.1.0-1~bookworm2) bookworm; urgency=medium
 
