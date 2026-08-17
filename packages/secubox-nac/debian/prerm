@@ -11,4 +11,9 @@ case "$1" in
 esac
 systemctl stop    secubox-nac.service 2>/dev/null || true
 systemctl disable secubox-nac.service 2>/dev/null || true
+# Project B (#820 Task 9): stop/disable the presence-report timer too (the
+# oneshot .service it invokes is never separately enabled, nothing to do
+# for it here).
+systemctl stop    secubox-presence-report.timer 2>/dev/null || true
+systemctl disable secubox-presence-report.timer 2>/dev/null || true
 #DEBHELPER#

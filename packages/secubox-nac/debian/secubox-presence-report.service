@@ -1,0 +1,23 @@
+[Unit]
+Description=SecuBox NAC cross-plane presence report (Project B, #820)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/820
+After=secubox-nac.service
+
+[Service]
+Type=oneshot
+User=secubox
+Group=secubox
+ExecStart=/usr/sbin/secubox-presence-report
+StandardOutput=journal
+StandardError=journal
+
+# Hardening (mirrors secubox-reporter.service; CSPN per-service enforce).
+# Writes: the SQLite store dir (/var/lib/secubox) + the schedule file's
+# dir (/etc/secubox). Mail leaves via /usr/sbin/sendmail — reports are OFF
+# by default (no schedule/alerts file), so if a board's MTA ever needs a
+# setgid submission this surfaces only once an operator enables reporting.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/secubox /etc/secubox
