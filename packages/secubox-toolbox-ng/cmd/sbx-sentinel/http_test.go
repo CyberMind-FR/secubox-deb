@@ -40,7 +40,7 @@ func TestStatusStats(t *testing.T) {
 		sentinel.Verdict{Class: sentinel.ClassBotnetC2, Action: sentinel.ActionSinkhole, MacHash: "b", TS: now},
 		sentinel.Verdict{Class: sentinel.ClassZeroClick, Action: sentinel.ActionReport, MacHash: "c", TS: now},
 	)
-	mux := newStatusMux(store, nil)
+	mux := newStatusMux(store)
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestStatusVerdicts(t *testing.T) {
 			TS:       time.Now().Unix(),
 		},
 	)
-	mux := newStatusMux(store, nil)
+	mux := newStatusMux(store)
 
 	req := httptest.NewRequest(http.MethodGet, "/verdicts", nil)
 	rec := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestVerdictsFilterByMac(t *testing.T) {
 		Evidence: map[string]string{"ioc_value": "b.example"},
 		MacHash:  "bbbb", TS: time.Now().Unix(),
 	})
-	mux := newStatusMux(store, nil)
+	mux := newStatusMux(store)
 
 	req := httptest.NewRequest(http.MethodGet, "/verdicts?mac=aaaa", nil)
 	rec := httptest.NewRecorder()
@@ -146,43 +146,12 @@ func TestVerdictsFilterByMac(t *testing.T) {
 
 func TestStatusRejectsNonGet(t *testing.T) {
 	store := openTestStore(t)
-	mux := newStatusMux(store, nil)
+	mux := newStatusMux(store)
 
 	req := httptest.NewRequest(http.MethodPost, "/stats", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405 for POST, got %d", rec.Code)
-	}
-}
-
-// TestC2Endpoints asserts the #826 /c2/* routes are wired when a C2Learner is
-// passed to newStatusMux: the two read views return 200, and POST /c2/allow
-// accepts a form-encoded host.
-func TestC2Endpoints(t *testing.T) {
-	store := openTestStore(t)
-	dir := t.TempDir()
-	c2 := sentinel.NewC2Learner(sentinel.NewBehavioral(), sentinel.C2Config{
-		AllowFile:   filepath.Join(dir, "allow.txt"),
-		CandFile:    filepath.Join(dir, "cand.json"),
-		LearnedFile: filepath.Join(dir, "learned.json"),
-	})
-	mux := newStatusMux(store, c2)
-
-	for _, path := range []string{"/c2/learned", "/c2/candidates"} {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("%s status %d", path, rec.Code)
-		}
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/c2/allow", strings.NewReader("host=fp.example"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("allow status %d", rec.Code)
 	}
 }
