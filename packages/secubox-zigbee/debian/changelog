@@ -1,3 +1,17 @@
+secubox-zigbee (2.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * SECURITY: replace the LAN-only allow/deny on /zigbee/ with proper
+    Authelia SSO via auth_request /__sbx_auth_verify (wired by
+    secubox-authelia v1.0.2 #263). Operators can now access the z2m
+    web UI from outside the LAN after authenticating through Authelia.
+  * Captures the Authelia-validated identity (Remote-User /
+    Remote-Groups) via auth_request_set and forwards as X-Forwarded-User
+    / X-Forwarded-Groups to z2m.
+  * 401 → 302 to /auth/?rd=… (Authelia portal on the canonical hub).
+  * Closes #264 (zigbee portion).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 May 2026 02:50:00 +0200
+
 secubox-zigbee (2.4.1-1~bookworm1) bookworm; urgency=medium
 
   * Six bugs found while wiring the SONOFF Dongle Lite MG21 on the gk2
