@@ -86,6 +86,7 @@
         <button class="tab" data-tab="social" onclick="switchTab('social')">🕸️ Cartographie sociale</button>
         <button class="tab" data-tab="ads" onclick="switchTab('ads')">🛑 Pubs</button>
         <button class="tab" data-tab="tor" onclick="switchTab('tor')">🧅 Tor</button>
+        <button class="tab" data-tab="sentinel" onclick="switchTab('sentinel')">🛡️ Sentinelle</button>
         <button class="tab" data-tab="config" onclick="switchTab('config')">⚙ Config</button>
     </nav>
 
@@ -255,6 +256,16 @@
         </div>
     </section>
 
+    <!-- Sentinelle -->
+    <section class="panel" id="panel-sentinel">
+        <div class="toolbar">
+            <button onclick="loadSentinel()">🔁 Refresh</button>
+            <span id="sentinel-state" class="v" style="margin-left:.5rem">…</span>
+        </div>
+        <div id="sentinel-verdict" class="card" style="margin-bottom:.8rem"></div>
+        <div id="sentinel-detections"></div>
+    </section>
+
     <!-- Config -->
     <section class="panel" id="panel-config">
         <div class="toolbar">
@@ -279,6 +290,7 @@ function switchTab(name) {
     if (name === 'social') loadSocial();
     if (name === 'ads') loadAds();
     if (name === 'tor') loadTor();
+    if (name === 'sentinel') loadSentinel();
     location.hash = name;
 }
 
@@ -592,6 +604,61 @@ async function torLeaks() {
         msg.textContent = d.ok ? `IP de sortie : ${d.tor_ip}` : ('échec : ' + (d.error || 'tor down'));
         setTimeout(() => loadTor(), 800);
     } catch (e) { msg.textContent = 'échec : ' + e.message; }
+}
+
+// ── Sentinel — compromise evaluation + detections (#823) ──
+const SENTINEL_TIER = {
+    clean:        { emoji: '🟢', label: 'Aucune compromission détectée', color: 'var(--p31-hot,#0a0)' },
+    suspicious:   { emoji: '🟠', label: 'Activité suspecte',              color: 'var(--p31-decay,#c77d00)' },
+    compromised:  { emoji: '🔴', label: 'Compromission confirmée',        color: 'var(--red,#e63946)' },
+};
+
+function sentinelDisposition(action) {
+    return action === 'block' ? 'Bloquée' : 'Détectée — observée';
+}
+
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+async function loadSentinel() {
+    const stateEl = document.getElementById('sentinel-state');
+    const vEl = document.getElementById('sentinel-verdict');
+    const dEl = document.getElementById('sentinel-detections');
+    const stats = await J('/admin/sentinel/stats');
+    const data = await J('/admin/sentinel/verdicts');
+
+    if (stats.__error || data.__error || !data.active) {
+        stateEl.textContent = '⚪ Sentinelle inactive';
+        vEl.innerHTML = '<span class="v">Sentinelle inactive — aucune donnée de détection réseau.</span>';
+        dEl.innerHTML = '';
+        return;
+    }
+
+    stateEl.textContent = `🟢 active · ${stats.detections || 0} détections · ${stats.blocked || 0} bloquées · ${stats.spyware || 0} spyware`;
+
+    const a = data.assess || { tier: 'clean' };
+    const t = SENTINEL_TIER[a.tier] || SENTINEL_TIER.clean;
+    vEl.innerHTML =
+        `<div style="font-size:1.1rem;color:${t.color}">${t.emoji} ${esc(t.label)}</div>` +
+        `<div class="v" style="margin-top:.4rem">Sévérité max ${a.worst_severity || 0}/100 · ` +
+        `Confiance ${a.worst_confidence || 0}/100 · ${a.count || 0} détections · ` +
+        `${esc(a.dominant_class || '—')}</div>`;
+
+    const rows = (data.detections || []).map(d => {
+        const when = Number.isFinite(d.ts) ? new Date(d.ts * 1000).toISOString().replace('T', ' ').slice(0, 19) : '?';
+        return `<tr>
+            <td>${esc(d.class)}</td>
+            <td>${d.severity || 0}/${d.confidence || 0}</td>
+            <td>${esc(sentinelDisposition(d.action))}</td>
+            <td>${when}</td>
+            <td><details><summary>rapport</summary><pre style="white-space:pre-wrap;font-size:.75rem">${esc(d.report)}</pre></details></td>
+        </tr>`;
+    }).join('');
+    dEl.innerHTML = rows
+        ? `<table><thead><tr><th>Menace</th><th>Sév/Conf</th><th>Disposition</th><th>Vu</th><th>Détail</th></tr></thead><tbody>${rows}</tbody></table>`
+        : '<span class="v">Aucune détection récente.</span>';
 }
 
 async function loadSocial() {

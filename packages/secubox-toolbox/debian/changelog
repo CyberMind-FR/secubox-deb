@@ -1,146 +1,15 @@
-secubox-toolbox (2.8.12-1~bookworm1) bookworm; urgency=medium
+secubox-toolbox (2.8.1-1~bookworm1) bookworm; urgency=medium
 
-  * blacklist-sync : les plages PRIVEES et RESERVEES n'entrent plus dans le set
-    d'application. FireHOL level1 et les listes de bogons contiennent RFC1918,
-    la boucle locale, le lien-local et le CGNAT : c'est utile en filtrage de
-    BORDURE contre une source usurpee entrant par le WAN, et catastrophique
-    dans une chaine forward qui porte le LAN et les conteneurs.
+  * #823 Sentinel surfaces — surface the sbx-sentinel compromise-detection
+    engine to the ToolBoX user & admin: a new WebUI "Sentinelle" fleet tab
+    (/admin/sentinel/{stats,verdicts} proxy), a per-device Compromission tab in
+    the kbin live HTML report, and a per-device Sentinelle section in the PDF
+    report (+ text fallback). New fail-safe stdlib bridge secubox_toolbox.
+    sentinel_link (daemon fetch + compromise/evaluation assess). All surfaces
+    are report-only, mac_hash-only, and degrade to a calm "inactive" state when
+    the daemon is dark — never a 5xx, never a broken report/PDF.
 
-    Constate le 2026-08-17 : 192.168.0.0/16 et 10.0.0.0/8 etaient dans le set,
-    61392 paquets rejetes — dont une Squeezebox du LAN qui ne joignait plus
-    Lyrion dans son conteneur.
-
-    Le plafond de prefixe ne protegeait pas : 192.168.0.0/16 est un /16, il
-    passait la garde des /8 sans difficulte.
-
- -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 07:44:08 +0200
-
-secubox-toolbox (2.8.11-1~bookworm1) bookworm; urgency=medium
-
-  * blacklist-sync : l'ajout passe par une transaction nft atomique (`nft -f`)
-    au lieu d'un argument de ligne de commande. Sur un set `interval`, un ajout
-    echoue des qu'une plage recouvre une plage DEJA presente : replier le lot
-    sur lui-meme ne suffisait pas, et le repli element par element depassait le
-    delai. `flush` et `add` dans la meme transaction suppriment le conflit sans
-    jamais laisser le set vide.
-  * blacklist-sync : TimeoutStartSec a 300 s.
-    Resultat sur gk2 : v4 = 5580 elements, v6 = 66, en 27 s.
-
- -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:06:08 +0200
-
-secubox-toolbox (2.8.10-1~bookworm1) bookworm; urgency=medium
-
-  * blacklist-sync : les sets nft d'application etaient vides (#1052). Trois
-    causes cumulees, chacune masquee par `2>/dev/null` :
-    - un seul `nft add element` portait 7176 adresses, soit 195 Ko d'argument
-      pour une limite noyau de 128 Ko : « Argument list too long », 100 % du
-      lot perdu. Les ajouts se font desormais par lots de 500.
-    - le drapeau `interval` fait rejeter un lot entier des que deux plages se
-      recouvrent. Les plages sont repliees en un jeu minimal avant l'ajout.
-    - le fichier d'etat n'etait jamais ecrit : `fs.protected_regular=2`
-      interdit d'ecraser dans /run/secubox (1777) un fichier qu'on ne possede
-      pas, y compris pour root.
-    Resultat sur gk2 : blacklist_v4 passe de 1 a 6538 elements.
-  * blacklist-sync : garde-fou sur les plages trop larges (rien de plus large
-    qu'un /8 en v4). Une seule ligne 0.0.0.0/0 dans un flux aurait mis la
-    board hors ligne, et le plafond en nombre d'elements n'en protegeait pas.
-  * blacklist-sync : un lot refuse est rejoue element par element, et l'erreur
-    de nft est journalisee au lieu d'etre jetee.
-
- -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 09:46:05 +0200
-
-secubox-toolbox (2.8.9-1~bookworm1) bookworm; urgency=medium
-
-  * Empaqueter le backend HAProxy `toolbox_landing` dans /etc/haproxy/cfg.d/.
-    Il n'existait que dans le haproxy.cfg vivant, ajouté à la main : une
-    régénération l'aurait effacé et le vhost kbin.gk2.secubox.in serait tombé.
-    C'est le paquet qui fournit le portail qui déclare désormais sa route.
-    (ref #986)
-
- -- Gerald KERMA <devel@cybermind.fr>  Wed, 05 Aug 2026 15:10:00 +0200
-
-secubox-toolbox (2.8.8-1~bookworm1) bookworm; urgency=medium
-
-  * fix(rlevel): le portail lance sbxmitm-policyctl DIRECTEMENT (sans sudo) —
-    peer-rlevel.json est portal-owned et le nft set @rlevel_off ne demande que
-    CAP_NET_ADMIN (déjà accordé). Le portail garde NoNewPrivileges=true + ses
-    caps minimales : zéro réduction de durcissement pour le contrôle webui.
-    Retire le dropin NNP=false et le sudoers devenus inutiles.
-
- -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 00:30:00 +0200
-
-secubox-toolbox (2.8.7-1~bookworm1) bookworm; urgency=medium
-
-  * rlevel-per-peer: package the R-level MITM policy surface (#rlevel-per-peer,
-    task 8). Ships sbxmitm-policyctl (root-scoped ctl owning peer-rlevel.json +
-    the @rlevel_off nft set), the /rlevel admin+self-service panel and its
-    menu.d entry, and a scoped sudoers.d/secubox-toolbox that only lets the
-    portal (User=secubox-toolbox) invoke the five fixed policyctl subcommands
-    (set-floor|force|set-chosen|set-default|list) — no blanket
-    `sbxmitm-policyctl ALL`. The panel's nftables.d off-bypass (@rlevel_off set
-    in secubox-toolbox-wg.nft + secubox-toolbox-wg-fanout.nft) already ships
-    via the existing nftables.d install block.
-    postinst seeds /var/lib/secubox/toolbox/peer-rlevel.json with
-    defaults.mode="reel" (never overwritten on upgrade) — a DELIBERATE choice
-    to PRESERVE current fleet-wide behaviour (every peer fully MITM'd + the
-    existing block policy honoured) instead of a surprise fleet-wide downgrade
-    to a lighter default at deploy time; operators opt individual peers DOWN
-    afterwards via the panel or the ctl.
-    Depends: + sudo (delegation transport for the ctl).
-
- -- Gerald KERMA <devel@cybermind.fr>  Fri, 24 Jul 2026 09:00:00 +0200
-
-secubox-toolbox (2.8.6-1~bookworm2) bookworm; urgency=medium
-
-  * autolearn: NEVER-SPLICE guard so ad/tracker networks are never promoted to
-    passthrough. Splicing is the opposite of what the #662 ad auto-learn loop
-    needs — the candidate feed only fires on the allow/mitm path, so a spliced
-    ad network can never be observed and the loop silently starves. Ad endpoints
-    serve no HTML and are high-traffic, matching the splice heuristic perfectly,
-    which is how the regies reached splice-learned.txt and froze ad learning for
-    9 days. Seeded with the major ad/analytics networks, extensible via
-    SECUBOX_NEVER_SPLICE (mirrors the #685 NEVER_LEARN pattern).
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 23 Jul 2026 13:05:00 +0200
-
-secubox-toolbox (2.8.5-1~bookworm2) bookworm; urgency=medium
-
-  * #ads: surface the ad-candidate BACKLOG when the window is empty. ad_candidates
-    is a backlog awaiting promotion at AD_MIN_SITES, not a time series: windowing
-    it to `hours` reported "aucun tracker détecté" while 67 real hosts sat in the
-    table, making a starved learning feed invisible instead of obvious. ad_stats()
-    now falls back to the cumulative backlog and flags it (candidates_cumulative)
-    so the panel labels it rather than implying recent detection.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 23 Jul 2026 11:20:00 +0200
-
-secubox-toolbox (2.8.4-1~bookworm2) bookworm; urgency=medium
-
-  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
-
-secubox-toolbox (2.8.4-1~bookworm1) bookworm; urgency=medium
-
-  * Tor-VPN panel: NAC online-clients one-click routing toggle.
-
- -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 00:00:00 +0200
-
-secubox-toolbox (2.8.3-1~bookworm1) bookworm; urgency=medium
-
-  * Tor Phase-1 enhancement: exit-country, per-client Tor-VPN (leak-proof kill-switch),
-    emancipate webui .onion (standalone+persist), .onion DNS (9053), obfs4 bridges.
-
- -- Gerald KERMA <devel@cybermind.fr>  Wed, 09 Jul 2026 18:00:00 +0200
-
-secubox-toolbox (2.8.2-1~bookworm1) bookworm; urgency=medium
-
-  * #826 Sentinel C2 auto-learning WebUI — new "C2 appris" sub-view in the
-    Sentinelle tab listing learned + candidate C2 hosts (signals, interval,
-    devices) via a fail-safe /admin/sentinel/c2 proxy, with a one-click
-    "Ignorer" allowlist safety valve. XSS-safe (data-host, escaped).
-
- -- Gerald KERMA <devel@cybermind.fr>  Mon, 07 Jul 2026 12:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 06 Jul 2026 18:00:00 +0200
 
 secubox-toolbox (2.8.0-1~bookworm1) bookworm; urgency=medium
 
