@@ -332,36 +332,15 @@ if [[ -f "$SCRIPT_DIR/hyperpixel/hyperpixel2r-init" ]]; then
 Description=HyperPixel 2.1 Round LCD Display Initialization
 After=pigpiod.service
 Requires=pigpiod.service
-Before=secubox-fb-dashboard.service
 
 [Service]
 Type=oneshot
-# Wait 3 seconds for pigpiod to be fully ready
-ExecStartPre=/bin/sleep 3
 ExecStart=/usr/local/sbin/hyperpixel2r-init
 RemainAfterExit=yes
-# CRITICAL: NO restart - one-time init only (restart causes kernel panic)
 
 [Install]
 WantedBy=multi-user.target
 HPSERVICE
-
-    # Create pigpiod override to fix IPv6-only binding and add delay
-    # Fixes: systemd cycle + pigpiod listening on IPv6 only
-    mkdir -p "$ROOT_MNT/etc/systemd/system/pigpiod.service.d"
-    cat > "$ROOT_MNT/etc/systemd/system/pigpiod.service.d/override.conf" << 'PIGPIOOVERRIDE'
-[Unit]
-# Use basic.target to avoid ordering cycle with multi-user.target
-After=basic.target sysinit.target
-
-[Service]
-ExecStart=
-# Wait 8 seconds for DPI overlay to stabilize before GPIO access
-ExecStartPre=/bin/sleep 8
-# No -l flag: must listen on IPv4 for Python pigpio library
-ExecStart=/usr/bin/pigpiod
-PIGPIOOVERRIDE
-    log "Created pigpiod override for IPv4 binding and delay"
 
     # Enable services (pigpiod + hyperpixel2r-init)
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
@@ -441,10 +420,6 @@ fi
 # Hide blinking cursor on framebuffer (keep tty for console access)
 if [[ ! "$CMDLINE" == *"vt.global_cursor_default"* ]]; then
     sed -i 's/$/ vt.global_cursor_default=0/' "$BOOT_MNT/cmdline.txt"
-fi
-# Disable USB autosuspend for stable MOCHAbin connection
-if [[ ! "$CMDLINE" == *"usbcore.autosuspend"* ]]; then
-    sed -i 's/$/ usbcore.autosuspend=-1/' "$BOOT_MNT/cmdline.txt"
 fi
 
 log "config.txt configured: overlay=$HP_OVERLAY (legacy DPI mode)"
@@ -632,12 +607,7 @@ EOF
 
 # Modprobe config
 mkdir -p "$ROOT_MNT/etc/modprobe.d"
-cat > "$ROOT_MNT/etc/modprobe.d/secubox-otg.conf" << 'MODPROBECONF'
-# SecuBox Eye Remote USB Gadget Mode
-options dwc2 dr_mode=peripheral
-# Disable USB autosuspend for stable connection
-options usbcore autosuspend=-1
-MODPROBECONF
+echo "options dwc2 dr_mode=peripheral" > "$ROOT_MNT/etc/modprobe.d/secubox-otg.conf"
 
 # NOTE: configfs is mounted by gadget-setup.sh on demand, not via fstab
 # Adding it to fstab can cause boot failures if module isn't loaded early enough
@@ -680,10 +650,13 @@ mkdir -p "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d"
 cp "$SCRIPT_DIR/files/etc/systemd/system/dnsmasq.service.d/secubox-eye.conf" \
     "$ROOT_MNT/etc/systemd/system/dnsmasq.service.d/"
 
-# secubox-eye-gadget is STORAGE-only mode for U-Boot rescue. Enabling it
-# at boot alongside secubox-otg-gadget.service (composite ECM+ACM) caused
-# UDC contention. Install the unit but DO NOT enable at boot.
-# Manual U-Boot rescue mode:
+# secubox-eye-gadget is STORAGE-only mode for U-Boot rescue boot. Enabling
+# it alongside the composite secubox-otg-gadget.service (ECM+ACM, enabled
+# below) causes two services to fight for the UDC at boot: eye-gadget
+# claims it first as mass-storage, then otg-gadget tears it down to
+# reconfigure as composite — racy and indeterministic, the MOCHAbin
+# sometimes sees no gadget at all. Install the unit but DO NOT enable it
+# at boot. To enable U-Boot rescue mode manually:
 #     systemctl disable secubox-otg-gadget.service
 #     systemctl enable --now secubox-eye-gadget.service
 # ln -sf /etc/systemd/system/secubox-eye-gadget.service \
@@ -721,9 +694,10 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
 
     # The agent depends on Pydantic v2 (pydantic_core, Rust) which has no
     # ARMv6 wheel — pip ships an ARMv7 wheel that crashes with SIGILL on
-    # the Pi Zero W BCM2835 (status=4/ILL). v2.2.1 design moved metrics
-    # rendering to secubox-fallback-display.service (pure-Python Pillow),
-    # so we install the unit but DO NOT enable at boot. ARMv7+ boards:
+    # the Pi Zero W BCM2835 (status=4/ILL, observed in journal).
+    # v2.2.1 design moved metrics rendering to secubox-fallback-display.service
+    # (pure-Python Pillow), so we install the unit file but DO NOT enable it
+    # at boot. To re-enable manually on an ARMv7+ board:
     #     systemctl enable --now secubox-eye-agent.service
     mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
     # ln -sf /etc/systemd/system/secubox-eye-agent.service \
@@ -734,9 +708,373 @@ if [[ -f "$SCRIPT_DIR/secubox-eye-agent.service" && -f "$SCRIPT_DIR/config.toml.
         log "Installing menu system icons..."
         mkdir -p "$ROOT_MNT/usr/lib/secubox-eye/assets/icons"
         cp "$SCRIPT_DIR/assets/icons"/*.png "$ROOT_MNT/usr/lib/secubox-eye/assets/icons/" 2>/dev/null || true
-        # Defense-in-depth: also drop the brand-icon PNGs (auth/wall/boot/
-        # mind/root/mesh) from remote-ui/common/assets/icons/ so any consumer
-        # that resolves icons via /usr/lib/secubox-eye/ finds them. The
-        # fallback_manager also searches /var/www/common/assets/icons/
-        # directly (where build copies common/ in another step) — this is
-        # redundant shipping for resilience.
+        # Defense-in-depth: also drop the brand-icon PNGs (auth/wall/boot/mind/
+        # root/mesh) from remote-ui/common/assets/icons/ into the same dir so
+        # any consumer that resolves icons only via /usr/lib/secubox-eye/ finds
+        # them. fallback_manager.py ALSO searches /var/www/common/assets/icons/
+        # directly — this is just a redundant shipping path.
+        _COMMON_ICONS="$(dirname "$SCRIPT_DIR")/common/assets/icons"
+        if [[ -d "$_COMMON_ICONS" ]]; then
+            cp -n "$_COMMON_ICONS"/*.png \
+                "$ROOT_MNT/usr/lib/secubox-eye/assets/icons/" 2>/dev/null || true
+        fi
+        ICON_COUNT=$(ls "$ROOT_MNT/usr/lib/secubox-eye/assets/icons"/*.png 2>/dev/null | wc -l)
+        log "Installed $ICON_COUNT menu icons (round/ + common/ brand)"
+    fi
+else
+    warn "Eye Agent files not found, skipping installation"
+fi
+
+# Copy systemd services
+cp "$SCRIPT_DIR/secubox-otg-gadget.service" "$ROOT_MNT/etc/systemd/system/"
+cp "$SCRIPT_DIR/secubox-serial-console.service" "$ROOT_MNT/etc/systemd/system/"
+cp "$SCRIPT_DIR/secubox-fb-dashboard.service" "$ROOT_MNT/etc/systemd/system/"
+
+# v2.2.1: Install fallback display service (3D cube + rainbow rings)
+cp "$SCRIPT_DIR/files/etc/systemd/system/secubox-fallback-display.service" "$ROOT_MNT/etc/systemd/system/"
+log "Installed secubox-fallback-display.service"
+
+# Enable services
+mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
+ln -sf /etc/systemd/system/secubox-otg-gadget.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+ln -sf /etc/systemd/system/secubox-serial-console.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/"
+# NOTE: fb-dashboard is DEPRECATED - use fallback-display instead
+# The old dashboard is kept for reference but NOT enabled by default
+
+# IP binding for the gadget's usb1 interface is handled by
+# /usr/local/sbin/secubox-otg-gadget.sh (the same script that composes
+# the configfs gadget). The legacy /etc/network/interfaces.d/usb0
+# stanza was removed (closes #139) — it required `ifupdown` which the
+# image never installed, so it never did anything except confuse
+# diagnostics.
+
+# USB network script (handles both usb0 and usb1 - ECM may create either)
+mkdir -p "$ROOT_MNT/usr/local/bin"
+cp "$SCRIPT_DIR/files/usr/local/bin/usb-network-up.sh" "$ROOT_MNT/usr/local/bin/"
+chmod +x "$ROOT_MNT/usr/local/bin/usb-network-up.sh"
+
+# USB network service (installed but NOT enabled — superseded by systemd-networkd)
+# The legacy static-IP usb-network.service competed for usb0/eye0 (issue #158).
+# DHCP on eye0 is now handled by systemd-networkd + 10-eye0.network.
+cp "$SCRIPT_DIR/files/etc/systemd/system/usb-network.service" "$ROOT_MNT/etc/systemd/system/"
+# NOTE: deliberately not creating the wants/ symlink for usb-network.service
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENABLE REQUIRED SERVICES
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOTE: We cannot use "find -type l ! -exec test -e" to clean broken symlinks
+# because symlinks to /lib/systemd appear "broken" from host but are valid on target.
+# Instead, explicitly enable the services we need.
+log "Enabling required services..."
+mkdir -p "$ROOT_MNT/etc/systemd/system/multi-user.target.wants"
+
+# Core services
+ln -sf /lib/systemd/system/pigpiod.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+ln -sf /lib/systemd/system/ssh.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+
+# systemd-networkd handles DHCP on eye0 (USB OTG gadget) via 10-eye0.network.
+# dhcpcd is left enabled for optional WiFi but told to ignore usb0/eye0
+# so it does not race with networkd for the gadget interface (issue #158).
+ln -sf /lib/systemd/system/systemd-networkd.service \
+    "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# denyinterfaces directive: dhcpcd must not touch usb0 or eye0
+echo "denyinterfaces eye0 usb0" >> "$ROOT_MNT/etc/dhcpcd.conf"
+log "Enabled systemd-networkd; dhcpcd denyinterfaces eye0 usb0"
+
+# First-boot hostname (must run before networkd so DHCP uses correct hostname)
+ln -sf /etc/systemd/system/eye-firstboot-hostname.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+
+# HyperPixel display
+ln -sf /etc/systemd/system/hyperpixel2r-init.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+
+# Eye Remote services
+# secubox-eye-gadget (storage-only, U-Boot rescue) intentionally NOT enabled
+# at boot — it conflicts with the composite secubox-otg-gadget.service.
+# See the comment near line 653 for the manual-enable recipe.
+# ln -sf /etc/systemd/system/secubox-eye-gadget.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# v2.2.1: Use fallback-display instead of eye-agent (3D cube + rainbow rings, stable)
+ln -sf /etc/systemd/system/secubox-fallback-display.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# NOTE: secubox-eye-agent is broken (import errors) - disabled pending fix
+# ln -sf /etc/systemd/system/secubox-eye-agent.service "$ROOT_MNT/etc/systemd/system/multi-user.target.wants/" 2>/dev/null || true
+# NOTE: usb-network.service NOT enabled — superseded by systemd-networkd (issue #158)
+
+# Create gadget data directory
+mkdir -p "$ROOT_MNT/var/lib/secubox-gadget"
+truncate -s 512M "$ROOT_MNT/var/lib/secubox-gadget/debug.img"
+
+# Create boot media directory
+log "Creating boot media directories..."
+mkdir -p "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/images"
+mkdir -p "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/tftp"
+truncate -s 16M "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/images/placeholder.img"
+ln -sf images/placeholder.img "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/active"
+
+# Initialize state.json
+cat > "$ROOT_MNT/var/lib/secubox/eye-remote/boot-media/state.json" << 'EOF'
+{
+  "active": null,
+  "shadow": null,
+  "lun_attached": false,
+  "last_swap_at": null,
+  "tftp_armed": false
+}
+EOF
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CREATE SECUBOX USER AND CONFIGURE KIOSK
+# ═══════════════════════════════════════════════════════════════════════════════
+
+log "Creating secubox user and configuring kiosk..."
+
+# Create user via chroot
+cat > "$ROOT_MNT/tmp/setup-user.sh" << 'USERSCRIPT'
+#!/bin/bash
+set -e
+
+# Create secubox user if not exists
+if ! id secubox &>/dev/null; then
+    useradd -m -s /bin/bash secubox
+    echo "secubox:secubox2026" | chpasswd
+fi
+
+# Add to groups. `sudo` lets the kiosk user manually recover networking
+# from the ACM serial console (e.g. when /dev/ttyACM0 is the only path in).
+usermod -aG sudo,video,input,gpio,i2c,spi,audio secubox 2>/dev/null || true
+
+# Enable lightdm and nginx
+systemctl enable lightdm 2>/dev/null || true
+systemctl enable nginx 2>/dev/null || true
+USERSCRIPT
+chmod +x "$ROOT_MNT/tmp/setup-user.sh"
+if ! timeout --kill-after=10s 120s chroot "$ROOT_MNT" /tmp/setup-user.sh 2>&1; then
+    warn "setup-user.sh failed or timed out (non-fatal)"
+fi
+
+# LightDM autologin
+mkdir -p "$ROOT_MNT/etc/lightdm/lightdm.conf.d"
+cat > "$ROOT_MNT/etc/lightdm/lightdm.conf.d/50-autologin.conf" << 'LIGHTDM'
+[Seat:*]
+autologin-user=secubox
+autologin-user-timeout=0
+user-session=openbox
+LIGHTDM
+
+# Openbox config
+mkdir -p "$ROOT_MNT/home/secubox/.config/openbox"
+cat > "$ROOT_MNT/home/secubox/.config/openbox/autostart" << 'AUTOSTART'
+# Disable screensaver
+xset s off &
+xset -dpms &
+xset s noblank &
+
+# Hide cursor
+unclutter -idle 0.1 -root &
+
+# Wait for nginx
+sleep 3
+
+# Launch Chromium in kiosk mode
+chromium-browser \
+    --kiosk \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-restore-session-state \
+    --disable-translate \
+    --no-first-run \
+    --start-fullscreen \
+    --window-size=480,480 \
+    --window-position=0,0 \
+    --disable-gpu \
+    --use-gl=egl \
+    http://localhost:8080
+AUTOSTART
+
+# xinitrc
+cat > "$ROOT_MNT/home/secubox/.xinitrc" << 'XINITRC'
+#!/bin/bash
+xset s off
+xset -dpms
+xset s noblank
+unclutter -idle 0.1 -root &
+exec openbox-session
+XINITRC
+chmod +x "$ROOT_MNT/home/secubox/.xinitrc"
+
+# Fix ownership
+timeout --kill-after=5s 30s chroot "$ROOT_MNT" chown -R secubox:secubox /home/secubox 2>/dev/null || true
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CONFIGURE NGINX (browser mode only)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if [[ "$BUILD_MODE" == "browser" ]]; then
+    log "Configuring nginx..."
+
+    cat > "$ROOT_MNT/etc/nginx/sites-available/secubox-round" << 'NGINX'
+server {
+    listen 8080 default_server;
+    server_name _;
+
+    root /var/www/secubox-round;
+    index index.html;
+
+    # Proxy to SecuBox API
+    location /api/ {
+        proxy_pass http://10.55.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+
+    # /common/* → /var/www/common/* (forward-looking for square/, used by round/ index.html too)
+    location /common/ {
+        alias /var/www/common/;
+        access_log off;
+        expires 1d;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+NGINX
+
+    # Enable nginx site
+    ln -sf /etc/nginx/sites-available/secubox-round "$ROOT_MNT/etc/nginx/sites-enabled/"
+    rm -f "$ROOT_MNT/etc/nginx/sites-enabled/default"
+else
+    log "Skipping nginx (framebuffer mode)"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INSTALL DASHBOARD
+# ═══════════════════════════════════════════════════════════════════════════════
+
+log "Installing Eye Remote dashboard..."
+
+mkdir -p "$ROOT_MNT/var/www/secubox-round"
+cp "$SCRIPT_DIR/index.html" "$ROOT_MNT/var/www/secubox-round/"
+
+# Copy assets if they exist
+if [[ -d "$SCRIPT_DIR/assets" ]]; then
+    cp -r "$SCRIPT_DIR/assets" "$ROOT_MNT/var/www/secubox-round/"
+fi
+
+# Embed remote-ui/common/ at /var/www/common/ (sibling of /var/www/secubox-round/)
+# round/index.html references ../common/css/* and ../common/js/* — must resolve.
+COMMON_SRC="$(dirname "$SCRIPT_DIR")/common"
+if [[ ! -d "$COMMON_SRC" ]]; then
+    err "remote-ui/common/ not found at: $COMMON_SRC"
+    exit 1
+fi
+mkdir -p "$ROOT_MNT/var/www/common"
+cp -r "$COMMON_SRC/." "$ROOT_MNT/var/www/common/"
+log "Embedded common/ (css, js, assets/icons, shell) at /var/www/common/"
+# secubox_common Python package needs to be importable from a directory
+# that's on sys.path. Ship at /var/www/common/python/ and put PYTHONPATH
+# on the relevant systemd units (see Environment="PYTHONPATH=..." lines).
+log "Embedded common/python/secubox_common/ at /var/www/common/python/secubox_common/"
+test -d "$ROOT_MNT/var/www/common/python/secubox_common" || \
+    { err "secubox_common not in /var/www/common/python — common/ source incomplete"; exit 2; }
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SSH KEY
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if [[ -n "$SSH_PUBKEY" && -f "$SSH_PUBKEY" ]]; then
+    log "Installing SSH key..."
+    mkdir -p "$ROOT_MNT/home/pi/.ssh"
+    cp "$SSH_PUBKEY" "$ROOT_MNT/home/pi/.ssh/authorized_keys"
+    chmod 700 "$ROOT_MNT/home/pi/.ssh"
+    chmod 600 "$ROOT_MNT/home/pi/.ssh/authorized_keys"
+    timeout --kill-after=5s 30s chroot "$ROOT_MNT" chown -R pi:pi /home/pi/.ssh 2>/dev/null || true
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CLEANUP AND FINALIZE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+log "Cleaning up chroot..."
+
+# Remove QEMU binary
+rm -f "$ROOT_MNT/usr/bin/qemu-arm-static"
+rm -f "$ROOT_MNT/tmp/install-packages.sh"
+rm -f "$ROOT_MNT/tmp/setup-user.sh"
+
+# Unmount special filesystems
+umount "$ROOT_MNT/boot/firmware" 2>/dev/null || true
+umount "$ROOT_MNT/dev/pts" 2>/dev/null || true
+umount "$ROOT_MNT/dev" 2>/dev/null || true
+umount "$ROOT_MNT/proc" 2>/dev/null || true
+umount "$ROOT_MNT/sys" 2>/dev/null || true
+
+log "Syncing..."
+sync
+
+# Unmount main partitions
+umount "$ROOT_MNT"
+umount "$BOOT_MNT"
+
+# Run fsck
+log "Running filesystem check..."
+e2fsck -f -y "${LOOP_DEV}p2" 2>/dev/null || true
+
+# Copy final image
+log "Creating final image..."
+cp "$WORK_IMG" "$OUTPUT_PATH"
+rm -f "$WORK_IMG"
+
+# Reset trap (cleanup already done)
+trap - EXIT
+losetup -d "$LOOP_DEV" 2>/dev/null || true
+rm -rf "$BOOT_MNT" "$ROOT_MNT" 2>/dev/null || true
+
+log ""
+log "═══════════════════════════════════════════════════════════════"
+log "SecuBox Eye Remote image built successfully! (OFFLINE MODE)"
+log "═══════════════════════════════════════════════════════════════"
+log ""
+log "Output: $OUTPUT_PATH"
+log "Size:   $(du -h "$OUTPUT_PATH" | cut -f1)"
+log ""
+log "Flash to SD card:"
+log "  sudo dd if=$OUTPUT_PATH of=/dev/sdX bs=4M status=progress"
+log ""
+log "Or compress first:"
+log "  xz -9 -v $OUTPUT_PATH"
+log "  xzcat ${OUTPUT_PATH}.xz | sudo dd of=/dev/sdX bs=4M status=progress"
+log ""
+info "OFFLINE MODE: No internet required at boot!"
+info "All packages pre-installed. Dashboard ready immediately."
+log ""
+log "First boot:"
+log "  1. Insert SD in Pi Zero W with HyperPixel"
+log "  2. Connect USB DATA port (middle) to host"
+log "  3. Wait ~60s for boot"
+log "  4. Dashboard displays automatically"
+log ""
+log "Radial Menu (v2.2.0):"
+log "  Long-press center   → Enter menu"
+log "  Tap slice           → Select item"
+log "  Tap center          → Go back"
+log "  3-finger tap        → Emergency exit"
+log ""
+log "SSH access (credentials: pi / raspberry):"
+log "  ssh pi@10.55.0.2           # Via USB OTG"
+if [[ -n "$WIFI_SSID" ]]; then
+log "  ssh pi@$HOSTNAME.local     # Via WiFi ($WIFI_SSID)"
+fi
+log ""
+log "USB Gadget modes:"
+log "  sudo secubox-otg-gadget.sh start  # Normal"
+log "  sudo secubox-otg-gadget.sh tty    # HID Keyboard"
+log "  sudo secubox-otg-gadget.sh debug  # Network + Storage"
+log "  sudo secubox-otg-gadget.sh flash  # Bootable USB"
+log "  sudo secubox-otg-gadget.sh auth   # FIDO2 Security Key"
+log ""
