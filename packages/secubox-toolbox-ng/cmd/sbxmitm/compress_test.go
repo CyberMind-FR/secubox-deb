@@ -15,8 +15,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-
-	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/httpcodec"
 )
 
 // TestAcceptEncodingPreserved pins the #662 behaviour change: the request
@@ -50,13 +48,13 @@ func TestBrotliRoundTrip(t *testing.T) {
 		bytes.Repeat([]byte("AB"), 100000),
 	}
 	for _, x := range cases {
-		enc, err := httpcodec.BrotliBytes(x)
+		enc, err := brotliBytes(x)
 		if err != nil {
-			t.Fatalf("BrotliBytes(%d): %v", len(x), err)
+			t.Fatalf("brotliBytes(%d): %v", len(x), err)
 		}
-		got, err := httpcodec.UnbrotliBytes(enc)
+		got, err := unbrotliBytes(enc)
 		if err != nil {
-			t.Fatalf("UnbrotliBytes(%d): %v", len(x), err)
+			t.Fatalf("unbrotliBytes(%d): %v", len(x), err)
 		}
 		if !bytes.Equal(got, x) {
 			t.Fatalf("brotli round-trip mismatch: got %d want %d", len(got), len(x))
@@ -72,13 +70,13 @@ func TestZstdRoundTrip(t *testing.T) {
 		bytes.Repeat([]byte("AB"), 100000),
 	}
 	for _, x := range cases {
-		enc, err := httpcodec.ZstdBytes(x)
+		enc, err := zstdBytes(x)
 		if err != nil {
-			t.Fatalf("ZstdBytes(%d): %v", len(x), err)
+			t.Fatalf("zstdBytes(%d): %v", len(x), err)
 		}
-		got, err := httpcodec.UnzstdBytes(enc)
+		got, err := unzstdBytes(enc)
 		if err != nil {
-			t.Fatalf("UnzstdBytes(%d): %v", len(x), err)
+			t.Fatalf("unzstdBytes(%d): %v", len(x), err)
 		}
 		if !bytes.Equal(got, x) {
 			t.Fatalf("zstd round-trip mismatch: got %d want %d", len(got), len(x))
@@ -88,15 +86,15 @@ func TestZstdRoundTrip(t *testing.T) {
 
 func TestInjectIntoBodyBrotli(t *testing.T) {
 	html := `<html><head><title>page</title></head><body>content</body></html>`
-	enc, err := httpcodec.BrotliBytes([]byte(html))
+	enc, err := brotliBytes([]byte(html))
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, ok := injectIntoBody(enc, "br", inlineTestScript, "", true)
+	out, ok := injectIntoBody(enc, "br", inlineTestScript, true, "")
 	if !ok {
 		t.Fatal("br inject must report ok=true")
 	}
-	plain, err := httpcodec.UnbrotliBytes(out)
+	plain, err := unbrotliBytes(out)
 	if err != nil {
 		t.Fatalf("re-brotli'd output must decode cleanly (encoding stays br): %v", err)
 	}
@@ -111,15 +109,15 @@ func TestInjectIntoBodyBrotli(t *testing.T) {
 
 func TestInjectIntoBodyZstd(t *testing.T) {
 	html := `<html><head><title>page</title></head><body>content</body></html>`
-	enc, err := httpcodec.ZstdBytes([]byte(html))
+	enc, err := zstdBytes([]byte(html))
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, ok := injectIntoBody(enc, "zstd", inlineTestScript, "", true)
+	out, ok := injectIntoBody(enc, "zstd", inlineTestScript, true, "")
 	if !ok {
 		t.Fatal("zstd inject must report ok=true")
 	}
-	plain, err := httpcodec.UnzstdBytes(out)
+	plain, err := unzstdBytes(out)
 	if err != nil {
 		t.Fatalf("re-zstd'd output must decode cleanly (encoding stays zstd): %v", err)
 	}
@@ -133,12 +131,12 @@ func TestInjectIntoBodyZstd(t *testing.T) {
 }
 
 func TestInjectIntoBodyBrotliCaseInsensitive(t *testing.T) {
-	enc, _ := httpcodec.BrotliBytes([]byte(`<head></head>`))
-	out, ok := injectIntoBody(enc, "BR", inlineTestScript, "", false)
+	enc, _ := brotliBytes([]byte(`<head></head>`))
+	out, ok := injectIntoBody(enc, "BR", inlineTestScript, false, "")
 	if !ok {
 		t.Fatal("Content-Encoding BR (upper) must be recognised → ok=true")
 	}
-	plain, err := httpcodec.UnbrotliBytes(out)
+	plain, err := unbrotliBytes(out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +147,7 @@ func TestInjectIntoBodyBrotliCaseInsensitive(t *testing.T) {
 
 func TestInjectIntoBodyBrotliFailOpen(t *testing.T) {
 	bad := []byte("not brotli at all <head></head>")
-	out, ok := injectIntoBody(bad, "br", inlineTestScript, "", false)
+	out, ok := injectIntoBody(bad, "br", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("corrupt br body must fail open (ok=false)")
 	}
@@ -160,7 +158,7 @@ func TestInjectIntoBodyBrotliFailOpen(t *testing.T) {
 
 func TestInjectIntoBodyZstdFailOpen(t *testing.T) {
 	bad := []byte("not zstd at all <head></head>")
-	out, ok := injectIntoBody(bad, "zstd", inlineTestScript, "", false)
+	out, ok := injectIntoBody(bad, "zstd", inlineTestScript, false, "")
 	if ok {
 		t.Fatal("corrupt zstd body must fail open (ok=false)")
 	}
@@ -170,28 +168,27 @@ func TestInjectIntoBodyZstdFailOpen(t *testing.T) {
 }
 
 func TestBrotliZstdBombGuard(t *testing.T) {
-	const bombCap = 32 << 20 // mirrors httpcodec.gunzipCap
-	zeros := make([]byte, bombCap+4096)
-	brBomb, err := httpcodec.BrotliBytes(zeros)
+	zeros := make([]byte, gunzipCap+4096)
+	brBomb, err := brotliBytes(zeros)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := httpcodec.UnbrotliBytes(brBomb); err == nil {
-		t.Fatal("UnbrotliBytes must reject output exceeding gunzipCap")
+	if _, err := unbrotliBytes(brBomb); err == nil {
+		t.Fatal("unbrotliBytes must reject output exceeding gunzipCap")
 	}
 	// fail-open through the inject path.
-	if out, ok := injectIntoBody(brBomb, "br", inlineTestScript, "", false); ok || !bytes.Equal(out, brBomb) {
+	if out, ok := injectIntoBody(brBomb, "br", inlineTestScript, false, ""); ok || !bytes.Equal(out, brBomb) {
 		t.Fatal("over-cap br body must fail open with original bytes")
 	}
 
-	zsBomb, err := httpcodec.ZstdBytes(zeros)
+	zsBomb, err := zstdBytes(zeros)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := httpcodec.UnzstdBytes(zsBomb); err == nil {
-		t.Fatal("UnzstdBytes must reject output exceeding gunzipCap")
+	if _, err := unzstdBytes(zsBomb); err == nil {
+		t.Fatal("unzstdBytes must reject output exceeding gunzipCap")
 	}
-	if out, ok := injectIntoBody(zsBomb, "zstd", inlineTestScript, "", false); ok || !bytes.Equal(out, zsBomb) {
+	if out, ok := injectIntoBody(zsBomb, "zstd", inlineTestScript, false, ""); ok || !bytes.Equal(out, zsBomb) {
 		t.Fatal("over-cap zstd body must fail open with original bytes")
 	}
 }

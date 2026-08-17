@@ -7,8 +7,6 @@ package main
 import (
 	"strings"
 	"testing"
-
-	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/httpcodec"
 )
 
 // representativeSelectors covers each ported group + an EXPANDED popup token,
@@ -61,14 +59,14 @@ func TestCosmeticStyleNoGenericTokens(t *testing.T) {
 
 func TestInjectCosmeticIdempotent(t *testing.T) {
 	body := []byte(`<html><head><style id="sbx-ghost-style">x</style></head><body>hi</body></html>`)
-	out := injectCosmetic(body)
+	out := injectCosmetic(body, "")
 	if string(out) != string(body) {
 		t.Fatalf("guarded body must be unchanged.\n got: %s", out)
 	}
 	// Double-inject from clean must also be a no-op the second time.
 	clean := []byte(`<html><head></head><body>hi</body></html>`)
-	once := injectCosmetic(clean)
-	twice := injectCosmetic(once)
+	once := injectCosmetic(clean, "")
+	twice := injectCosmetic(once, "")
 	if string(once) != string(twice) {
 		t.Fatalf("second injectCosmetic must be a no-op.\n once:  %s\n twice: %s", once, twice)
 	}
@@ -79,7 +77,7 @@ func TestInjectCosmeticIdempotent(t *testing.T) {
 
 func TestInjectCosmeticBeforeHeadClose(t *testing.T) {
 	body := []byte(`<html><head><title>x</title></head><body>hi</body></html>`)
-	out := string(injectCosmetic(body))
+	out := string(injectCosmetic(body, ""))
 	// The <style> must land right BEFORE </head>.
 	if !strings.Contains(out, `</style></head>`) {
 		t.Fatalf("cosmetic style not placed before </head>: %s", out)
@@ -92,7 +90,7 @@ func TestInjectCosmeticBeforeHeadClose(t *testing.T) {
 func TestInjectCosmeticAfterHeadOpenNoClose(t *testing.T) {
 	// <head ...> present, no </head> → insert right after the open tag's '>'.
 	body := []byte(`<html><head lang="en"><body>hi`)
-	out := string(injectCosmetic(body))
+	out := string(injectCosmetic(body, ""))
 	if !strings.Contains(out, `<head lang="en"><style id="sbx-ghost-style">`) {
 		t.Fatalf("cosmetic style not placed after <head>'s '>': %s", out)
 	}
@@ -100,7 +98,7 @@ func TestInjectCosmeticAfterHeadOpenNoClose(t *testing.T) {
 
 func TestInjectCosmeticBodyFallback(t *testing.T) {
 	body := []byte(`<html><body class="x">hi</body></html>`)
-	out := string(injectCosmetic(body))
+	out := string(injectCosmetic(body, ""))
 	if !strings.Contains(out, `<style id="sbx-ghost-style">`) {
 		t.Fatalf("cosmetic style not injected: %s", out)
 	}
@@ -114,7 +112,7 @@ func TestInjectCosmeticBodyFallback(t *testing.T) {
 
 func TestInjectCosmeticNoHeadNoBody(t *testing.T) {
 	body := []byte(`<p>just a fragment</p>`)
-	out := injectCosmetic(body)
+	out := injectCosmetic(body, "")
 	if string(out) != string(body) {
 		t.Fatalf("no head/body → must be unchanged.\n got: %s", out)
 	}
@@ -122,7 +120,7 @@ func TestInjectCosmeticNoHeadNoBody(t *testing.T) {
 
 func TestInjectCosmeticCaseInsensitive(t *testing.T) {
 	body := []byte(`<HTML><HEAD></HEAD><BODY>hi</BODY></HTML>`)
-	out := string(injectCosmetic(body))
+	out := string(injectCosmetic(body, ""))
 	if !strings.Contains(out, `<style id="sbx-ghost-style">`) {
 		t.Fatalf("case-insensitive </HEAD> match failed: %s", out)
 	}
@@ -138,7 +136,7 @@ func TestInjectInlineBannerAndCosmeticCompose(t *testing.T) {
 	// Both markers must be present after composing the two injects (wg client).
 	// #662 — the banner is now the INLINE script (not a <script src> tag).
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, inlineTestScript, "", true))
+	out := string(injectHTML(body, inlineTestScript, true, ""))
 	if !strings.Contains(out, bannerGuard) {
 		t.Fatalf("banner marker missing after compose: %s", out)
 	}
@@ -157,7 +155,7 @@ func TestInjectInlineBannerAndCosmeticCompose(t *testing.T) {
 func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
 	// Non-WG (non-R3) clients get the banner but NOT the cosmetic style.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, inlineTestScript, "", false))
+	out := string(injectHTML(body, inlineTestScript, false, ""))
 	if !strings.Contains(out, bannerGuard) {
 		t.Fatalf("banner marker missing for non-wg: %s", out)
 	}
@@ -169,12 +167,12 @@ func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
 func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 	// The gzip decompress→inject→recompress path must carry BOTH injects for wg.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	gz := httpcodec.GzipBytes(body)
-	out, ok := injectIntoBody(gz, "gzip", inlineTestScript, "", true)
+	gz := gzipBytes(body)
+	out, ok := injectIntoBody(gz, "gzip", inlineTestScript, true, "")
 	if !ok {
 		t.Fatalf("injectIntoBody(gzip) returned ok=false")
 	}
-	plain, err := httpcodec.GunzipBytes(out)
+	plain, err := gunzipBytes(out)
 	if err != nil {
 		t.Fatalf("re-gzip output not gunzippable: %v", err)
 	}

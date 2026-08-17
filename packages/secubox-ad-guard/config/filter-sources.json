@@ -1,0 +1,12 @@
+{
+  "_comment": "Modular ad/tracker/script filter sources (#740). Toggle 'enabled'. Consumed by the DNS sinkhole (kinds:dns) and ad_ghost MITM (net/cosmetic/scriptlet).",
+  "sources": {
+    "oisd-small":   { "enabled": true },
+    "easylist":     { "enabled": true },
+    "easyprivacy":  { "enabled": true },
+    "hagezi-pro":   { "enabled": false },
+    "stevenblack":  { "enabled": false },
+    "adguard-base": { "enabled": false },
+    "ublock-privacy": { "enabled": false }
+  }
+}

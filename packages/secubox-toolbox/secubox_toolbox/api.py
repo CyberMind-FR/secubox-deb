@@ -4,65 +4,16 @@
 """SecuBox-Deb ToolBoX :: FastAPI routes (Phase 1)."""
 from __future__ import annotations
 
-import asyncio
+import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
 import jinja2
-from fastapi import APIRouter, Form, HTTPException, Query, Request
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
-
-# #785 — PDF rendering (fpdf2 + matplotlib) is CPU-heavy (~9 s on the board) and
-# matplotlib's pyplot API is NOT thread-safe. Three defences, together, keep a
-# slow render — or a 504-page auto-retry storm hammering the PDF URL — from
-# wedging the single uvicorn worker:
-#   1. run the render OFF the event loop (threadpool) so other routes stay live;
-#   2. serialize renders through one lock so pyplot's global state can't race and
-#      concurrent renders can't starve the CPU in parallel;
-#   3. cache the rendered bytes per key for a short TTL, with a double-checked
-#      lock, so a retry storm triggers exactly ONE render, not one per retry.
-_pdf_render_lock = asyncio.Lock()
-_pdf_cache: dict = {}          # key -> (expires_at_epoch, pdf_bytes)
-_PDF_CACHE_TTL = 120           # seconds — a report is a live snapshot; 2 min stale is fine
-
-
-def _pdf_cache_get(key: str):
-    ent = _pdf_cache.get(key)
-    if ent and ent[0] > time.time():
-        return ent[1]
-    return None
-
-
-def _pdf_cache_put(key: str, blob: bytes) -> None:
-    _pdf_cache[key] = (time.time() + _PDF_CACHE_TTL, blob)
-    if len(_pdf_cache) > 64:    # bound memory: drop expired entries
-        now = time.time()
-        for k in [k for k, v in _pdf_cache.items() if v[0] <= now]:
-            _pdf_cache.pop(k, None)
-
-
-async def _render_pdf_offloaded(render_fn, data, cache_key: str | None = None):
-    """Render a PDF off the event loop, one at a time, with a short per-key cache.
-
-    The cache re-check INSIDE the lock is the storm defence: the first request
-    renders and caches; every request queued behind it on the lock then finds the
-    fresh entry and returns instantly instead of re-rendering."""
-    if cache_key:
-        cached = _pdf_cache_get(cache_key)
-        if cached is not None:
-            return cached
-    async with _pdf_render_lock:
-        if cache_key:
-            cached = _pdf_cache_get(cache_key)
-            if cached is not None:
-                return cached
-        blob = await run_in_threadpool(render_fn, data)
-        if cache_key:
-            _pdf_cache_put(cache_key, blob)
-        return blob
 
 from . import (
     avatar_analysis,
@@ -78,7 +29,6 @@ from . import (
     nft,
     reports,
     scoring,
-    sentinel_link,
     store,
     threat_intel,
 )
@@ -97,8 +47,6 @@ try:
     _HAS_TRANSPARENCY = True
 except ImportError:
     _HAS_TRANSPARENCY = False
-from pathlib import Path as _Path
-NETSTATS_SNAPSHOT = _Path("/var/lib/secubox/hub/netstats.json")
 from .config import load_config, resolve_secret
 from .models import AcceptResp, ClientRow, Config, StatusResp
 
@@ -144,7 +92,7 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
     if not (mh and all(c in "0123456789abcdef" for c in mh) and 8 <= len(mh) <= 64):
         return JSONResponse({"ok": False, "error": "bad mh"}, status_code=400,
                             headers={"Cache-Control": "no-store"})
-    if level not in ("r0", "r1", "r2", "r3", "r4"):
+    if level not in ("r0", "r1", "r2", "r3"):
         return JSONResponse({"ok": False, "error": "bad level"}, status_code=400,
                             headers={"Cache-Control": "no-store"})
     # honour the same gates as /change-level
@@ -154,8 +102,7 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
             level = "r1"
     except Exception:
         pass
-    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
-    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
     try:
         store.set_client_level(mh, level)
@@ -164,6 +111,35 @@ async def toolbox_set_level(mh: str = Query(default=""), level: str = Query(defa
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
                             headers={"Cache-Control": "no-store"})
     return JSONResponse({"ok": True, "level": level}, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/__toolbox/set-adguard")
+async def toolbox_set_adguard(on: int = Query(default=1)) -> JSONResponse:
+    """#740 — banner 🛡️ Ad-Guard quick-toggle (global master ad-block switch:
+    DNS sinkhole + R3 cosmetic). Same same-origin reverse-proxied path as the
+    level switch; flips the ``ad_guard`` filter and drops cached bundles."""
+    try:
+        from .filters import set_filters
+        set_filters({"ad_guard": bool(on)})
+        bundlemod.invalidate_all()
+    except Exception as e:  # pragma: no cover
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True, "ad_guard": bool(on)}, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/__toolbox/set-tor")
+async def toolbox_set_tor(on: int = Query(default=1)) -> JSONResponse:
+    """#740 — banner 🧅 Tor quick-toggle (toolbox-wg tunnel Tor egress). Flips the
+    ``tor_mode`` filter; the secubox-toolbox-tor path-unit re-arms the egress."""
+    try:
+        from .filters import set_filters
+        set_filters({"tor_mode": bool(on)})
+        bundlemod.invalidate_all()
+    except Exception as e:  # pragma: no cover
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500,
+                            headers={"Cache-Control": "no-store"})
+    return JSONResponse({"ok": True, "tor_mode": bool(on)}, headers={"Cache-Control": "no-store"})
 
 
 @router.get("/__toolbox/inline")
@@ -189,48 +165,6 @@ async def toolbox_inline(
         media_type="application/javascript",
         headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
     )
-
-
-# #753 — SW-neuter auto-learn ingest: sbxmitm records every host it sees
-# fetching a Service Worker that is NOT on the sw-neuter allow-list, and POSTs
-# them here every 30 s. We dedup-append to a candidates file for operator review.
-# The operator promotes wanted hosts to sw-neuter-hosts.txt to activate neuter.
-# UNAUTHENTICATED — same trust perimeter as /__toolbox/ad-event (loopback / WG).
-SW_CANDIDATES_FILE = Path("/var/lib/secubox/toolbox/sw-neuter-candidates.txt")
-
-
-def _append_sw_candidates(hosts: list[str]) -> None:
-    """Append new hosts to the sw-neuter candidates file, deduped against what is
-    already there. Best-effort; never raises into the request path."""
-    try:
-        existing: set[str] = set()
-        if SW_CANDIDATES_FILE.exists():
-            existing = {l.strip() for l in SW_CANDIDATES_FILE.read_text().splitlines() if l.strip()}
-        fresh = [h for h in hosts if h not in existing]
-        if not fresh:
-            return
-        SW_CANDIDATES_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with SW_CANDIDATES_FILE.open("a", encoding="utf-8") as fh:
-            for h in fresh:
-                fh.write(h + "\n")
-    except OSError as e:
-        log.debug("sw-candidate append failed: %s", e)
-
-
-@router.post("/__toolbox/sw-candidate")
-async def toolbox_sw_candidate(request: Request) -> Response:
-    """#753 — record SW-PWA hosts proposed for the sw-neuter allow-list. sbxmitm
-    POSTs hosts it saw fetching a Service Worker that are NOT yet allow-listed.
-    Deduped-appends to the candidates file for operator review; the operator
-    promotes wanted hosts to sw-neuter-hosts.txt."""
-    try:
-        body = await request.json()
-        hosts = [h for h in (body.get("hosts") or []) if isinstance(h, str) and h]
-    except Exception:
-        hosts = []
-    if hosts:
-        _append_sw_candidates(hosts)
-    return Response(status_code=204)
 
 
 # #662 — ad-block metrics ingest from the Go MITM engine (sbxmitm). The #662
@@ -273,15 +207,21 @@ async def toolbox_ad_event(request: Request) -> Response:
         # heuristic), recorded as candidates here for secubox-toolbox-autolearn
         # to promote into learned-trackers.txt at AD_MIN_SITES distinct sites.
         candidates = body.get("candidates") or []
+        # #740 — auto-learned cert-pinning candidates (SNIs whose client rejected
+        # our forged cert) ride the SAME ad-event POST; persisted as splice proposals.
+        pin_candidates = body.get("pinning_candidates") or []
         if not isinstance(blocks, list):
             blocks = []
         if not isinstance(clients, list):
             clients = []
         if not isinstance(candidates, list):
             candidates = []
+        if not isinstance(pin_candidates, list):
+            pin_candidates = []
         blocks = blocks[:_AD_EVENT_ROW_CAP]
         clients = clients[:_AD_EVENT_ROW_CAP]
         candidates = candidates[:_AD_EVENT_ROW_CAP]
+        pin_candidates = pin_candidates[:_AD_EVENT_ROW_CAP]
 
         block_rows = [
             (b["ad_host"], b.get("site", ""), "block", int(b.get("hits", 0)), int(b.get("bytes", 0)))
@@ -304,11 +244,13 @@ async def toolbox_ad_event(request: Request) -> Response:
             store.record_ad_client_blocks(client_rows)
         if cand_rows:
             store.record_ad_candidates(cand_rows)
-        # #755 — cosmetic-pages counter: Go engine reports how many R3 HTML pages
-        # received the cosmetic ad-hide style in this flush window.
-        cp = body.get("cosmetic_pages")
-        if cp:
-            store.record_cosmetic_pages(cp)
+        pin_rows = [
+            (c["host"], int(c.get("hits", 0)))
+            for c in pin_candidates
+            if isinstance(c, dict) and c.get("host")
+        ]
+        if pin_rows:
+            _record_pin_candidates(pin_rows)
     except Exception as e:  # never raise into the engine's fire-and-forget POST
         log.debug("ad-event ingest failed: %s", e)
     return Response(status_code=204)
@@ -574,14 +516,13 @@ async def accept(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2", "r3", "r4"):
+    if level not in ("r0", "r1", "r2", "r3"):
         level = "r1"
     # R2 only allowed if config enables it
     if level == "r2" and not cfg.r2.enabled:
         level = "r1"
     # R3 only allowed if WG container provisioned (presence of server.pubkey)
-    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
-    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # All levels get validated (net access)
@@ -633,12 +574,11 @@ async def change_level(request: Request):
         level = (form.get("level") or "r1").lower()
     except Exception:
         level = "r1"
-    if level not in ("r0", "r1", "r2", "r3", "r4"):
+    if level not in ("r0", "r1", "r2", "r3"):
         level = "r1"
     if level == "r2" and not cfg.r2.enabled:
         level = "r1"
-    # R3 + R4 (the analyst/reverse-catcher tier, #736) are wg-path tiers.
-    if level in ("r3", "r4") and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
+    if level == "r3" and not Path("/etc/secubox/toolbox/wg/server.pubkey").exists():
         level = "r1"
 
     # Re-validate (idempotent extend)
@@ -1153,56 +1093,6 @@ MITM_BYPASS_SEED_FILE = Path(os.environ.get(
     "SECUBOX_BYPASS_SEED", "/usr/lib/secubox/toolbox/conf/mitm-bypass-seed.conf"))
 MITM_BYPASS_DYNAMIC_FILE = Path(os.environ.get(
     "SECUBOX_BYPASS_DYNAMIC", "/var/lib/secubox/toolbox/mitm-bypass-dynamic.conf"))
-# TLS-splice lists (host SUFFIX, inline # comments) — the OTHER half of the
-# exclusion set: what the R3 engine actually splices. Surfaced in the Filtres
-# MITM list so ALL explicit splicing is displayed + known (#803).
-TLS_SPLICE_SEED_FILE = Path(os.environ.get(
-    "SECUBOX_SPLICE_SEED", "/usr/lib/secubox/toolbox/conf/tls-splice-seed.conf"))
-SPLICE_LEARNED_FILE = Path(os.environ.get(
-    "SECUBOX_SPLICE_LEARNED", "/var/lib/secubox/toolbox/splice-learned.txt"))
-# #806 — federated (mesh-union) lists the R3 engine also reads; surfaced in the
-# Filtres MITM list tagged mesh-* (edit on the origin node).
-FED_SPLICE_FILE = Path(os.environ.get("SECUBOX_FED_SPLICE", "/var/lib/secubox/toolbox/mitm-exclusion-fed-splice.txt"))
-FED_BYPASS_FILE = Path(os.environ.get("SECUBOX_FED_BYPASS", "/var/lib/secubox/toolbox/mitm-exclusion-fed-bypass.txt"))
-FED_DISABLED_FILE = Path(os.environ.get("SECUBOX_FED_DISABLED", "/var/lib/secubox/toolbox/mitm-exclusion-fed-disabled.txt"))
-# #809 — operator-disabled filter patterns (Filtres MITM uncheck). The R3 engine
-# reads this SAME file and suppresses matching per-pattern, so unchecking has
-# real effect on ALL sources incl. the package seed.
-MITM_FILTER_DISABLED_FILE = Path(os.environ.get(
-    "SECUBOX_FILTER_DISABLED", "/var/lib/secubox/toolbox/mitm-filter-disabled.txt"))
-
-
-def _read_disabled_file(path) -> set:
-    try:
-        return {ln.split("#", 1)[0].strip()
-                for ln in path.read_text().splitlines()
-                if ln.split("#", 1)[0].strip()}
-    except OSError:
-        return set()
-
-
-def _load_disabled() -> set:
-    """Set of operator-disabled patterns (exact strings; # comments stripped).
-
-    #806 fix — union of the LOCAL disabled file with the FEDERATED (mesh-union)
-    disabled file: a pattern disabled elsewhere in the fleet must also show
-    enabled=false here, matching the R3 engine's disabledLocal ∪ disabledFed."""
-    return _read_disabled_file(MITM_FILTER_DISABLED_FILE) | _read_disabled_file(FED_DISABLED_FILE)
-
-
-def _read_splice(path) -> list:
-    """Splice list lines — strips INLINE # comments (the seed uses them)."""
-    try:
-        out = []
-        for ln in path.read_text().splitlines():
-            s = ln.split("#", 1)[0].strip()
-            if s:
-                out.append(s)
-        return out
-    except OSError:
-        return []
-
-
 def _ensure_bypass_file() -> None:
     if not MITM_BYPASS_FILE.exists():
         MITM_BYPASS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -1240,31 +1130,7 @@ def _load_bypass_tagged() -> list:
         for pat in _read_patterns(path):
             if pat not in seen:        # first wins → seed > static > learned
                 seen[pat] = source
-    # ALSO surface the TLS-splice list (the R3 engine's actual passthrough set) so
-    # every explicitly-spliced host is displayed + known (#803). Bypass wins the
-    # tag if a pattern somehow appears in both.
-    for source, path in (("splice-seed", TLS_SPLICE_SEED_FILE),
-                         ("splice-learned", SPLICE_LEARNED_FILE)):
-        for pat in _read_splice(path):
-            if pat not in seen:
-                seen[pat] = source
-    # #806 — surface federated (mesh-union) filter entries from the 3 fed files
-    # that the R3 engine also reads; tagged mesh-* so the operator knows they're
-    # federation-sourced (edit on the origin node, not here).
-    for source, path in (("mesh-splice", FED_SPLICE_FILE),
-                         ("mesh-bypass", FED_BYPASS_FILE),
-                         ("mesh-disabled", FED_DISABLED_FILE)):
-        for pat in _read_splice(path):
-            if pat not in seen:
-                seen[pat] = source
-    # #809 — tag each row: enabled (not operator-disabled) + editable (in a
-    # writable file, so 🗑 delete can remove the line; package seeds can only be
-    # disabled, not deleted).
-    disabled = _load_disabled()
-    editable = {"static", "learned", "splice-learned"}
-    return [{"pattern": p, "source": s, "enabled": p not in disabled,
-             "editable": s in editable}
-            for p, s in sorted(seen.items())]
+    return [{"pattern": p, "source": s} for p, s in sorted(seen.items())]
 
 
 def _is_public_kbin(request: Request) -> bool:
@@ -1273,6 +1139,183 @@ def _is_public_kbin(request: Request) -> bool:
     editing happens only via the auth-gated admin.gk2.secubox.in/toolbox/."""
     host = (request.headers.get("host", "") or "").lower()
     return host.startswith("kbin.")
+
+
+# ── #740 : Go sbxmitm OPERATOR splice whitelist (host-suffix, cert-pinned apps) ──
+# The strategic R3 path is the Go sbxmitm engine, which FORCE-SPLICES (TLS
+# passthrough, no decrypt, no inject) every host in splice-whitelist.txt — the fix
+# for cert-pinned native/mobile apps (ChatGPT et al.) that hard-fail under
+# interception and force the tunnel down. The legacy Python mitm-wg uses a SEPARATE
+# regex ignore_hosts file (mitm-bypass.conf); while BOTH engines run, an operator
+# "add" must reach BOTH so the host is bypassed whichever engine handles the flow.
+# The Go file is the source of truth for the list; each host is mirrored as a
+# suffix regex into the Python file. Spliced hosts keep PASSIVE SNI/DPI analysis +
+# Tor egress; de-whitelisting returns the host to full MITM. sbxmitm mtime-reloads
+# the file live (no restart needed); the Python engine picks it up on next reload.
+SPLICE_WL_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_WHITELIST", "/var/lib/secubox/toolbox/splice-whitelist.txt"))
+_HOST_RE = re.compile(r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$")
+
+
+def _host_ok(h: str) -> bool:
+    """Accept a bare DNS host suffix only (no scheme/path/wildcard/space/regex
+    metachar) so the line stays suffix-matchable by the Go engine and safe to
+    mirror into a regex."""
+    h = h.strip().lower()
+    return bool(h) and len(h) <= 253 and "." in h and bool(_HOST_RE.fullmatch(h))
+
+
+def _load_splice_wl() -> list[str]:
+    """Active host suffixes from the Go splice whitelist (comments stripped)."""
+    try:
+        out = []
+        for ln in SPLICE_WL_FILE.read_text().splitlines():
+            s = ln.split("#", 1)[0].strip().lower()
+            if s:
+                out.append(s)
+        return out
+    except OSError:
+        return []
+
+
+def _splice_mirror_regex(host: str) -> str:
+    """Suffix regex (subdomains included) for the Python ignore_hosts mirror."""
+    return "(.+\\.)?" + host.replace(".", "\\.")
+
+
+def _splice_wl_add(host: str) -> bool:
+    """Add host to the Go splice whitelist AND mirror a suffix regex into the
+    Python ignore_hosts file. Returns True iff the host was valid and written."""
+    host = host.strip().lower()
+    if not _host_ok(host):
+        return False
+    if host not in set(_load_splice_wl()):
+        try:
+            SPLICE_WL_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with SPLICE_WL_FILE.open("a") as f:
+                f.write(host + "\n")
+        except OSError:
+            pass
+    rx = _splice_mirror_regex(host)
+    if rx not in set(_load_bypass_entries()):
+        try:
+            _ensure_bypass_file()
+            with MITM_BYPASS_FILE.open("a") as f:
+                f.write(rx + "\n")
+        except OSError:
+            pass
+    return True
+
+
+def _splice_wl_remove(host: str) -> None:
+    """De-whitelist host: drop it from the Go file AND its mirror from the Python
+    file, returning the host to full MITM analysis."""
+    host = host.strip().lower()
+    if not host:
+        return
+    try:
+        if SPLICE_WL_FILE.exists():
+            kept = [ln for ln in SPLICE_WL_FILE.read_text().splitlines()
+                    if ln.split("#", 1)[0].strip().lower() != host]
+            SPLICE_WL_FILE.write_text("\n".join(kept) + "\n")
+    except OSError:
+        pass
+    rx = _splice_mirror_regex(host)
+    try:
+        if MITM_BYPASS_FILE.exists():
+            kept = [ln for ln in MITM_BYPASS_FILE.read_text().splitlines()
+                    if ln.strip() != rx]
+            MITM_BYPASS_FILE.write_text("\n".join(kept) + "\n")
+    except OSError:
+        pass
+
+
+# ── #740 : auto-learned cert-pinning splice CANDIDATES ───────────────────────
+# The Go engine records an SNI whenever a client rejects our forged cert (a
+# pinning signal) and POSTs the tally on the ad-event channel. We persist it here
+# as a PROPOSAL (host → {hits, last_seen}); the operator promotes it to the real
+# whitelist (→ _splice_wl_add) or ignores it. Ignored hosts are remembered so the
+# same proposal does not keep reappearing. Already-whitelisted hosts are never
+# proposed. This file is advisory state, not security state — best-effort I/O.
+SPLICE_PIN_CAND_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_PIN_CANDIDATES",
+    "/var/lib/secubox/toolbox/splice-pinning-candidates.json"))
+SPLICE_PIN_IGNORE_FILE = Path(os.environ.get(
+    "SECUBOX_SPLICE_PIN_IGNORE",
+    "/var/lib/secubox/toolbox/splice-pinning-ignore.txt"))
+_PIN_CAND_CAP = 500  # bound the proposal store regardless of engine input
+
+
+def _load_pin_ignore() -> set:
+    try:
+        return {ln.strip().lower() for ln in SPLICE_PIN_IGNORE_FILE.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#")}
+    except OSError:
+        return set()
+
+
+def _load_pin_candidates() -> dict:
+    try:
+        data = json.loads(SPLICE_PIN_CAND_FILE.read_text())
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_pin_candidates(data: dict) -> None:
+    try:
+        SPLICE_PIN_CAND_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = SPLICE_PIN_CAND_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data))
+        tmp.replace(SPLICE_PIN_CAND_FILE)
+    except OSError:
+        pass
+
+
+def _record_pin_candidates(rows: list) -> None:
+    """Merge engine-reported (host, hits) pinning candidates into the proposal
+    store, skipping hosts already whitelisted or operator-ignored."""
+    if not rows:
+        return
+    whitelisted = set(_load_splice_wl())
+    ignored = _load_pin_ignore()
+    data = _load_pin_candidates()
+    now = int(time.time())
+    for host, hits in rows:
+        h = (host or "").strip().lower()
+        if not h or "." not in h or h in whitelisted or h in ignored:
+            continue
+        ent = data.get(h) or {"hits": 0, "first_seen": now}
+        ent["hits"] = int(ent.get("hits", 0)) + max(1, int(hits))
+        ent["last_seen"] = now
+        data[h] = ent
+    # Cap: keep the most-recently-seen proposals if we somehow overflow.
+    if len(data) > _PIN_CAND_CAP:
+        keep = sorted(data.items(), key=lambda kv: kv[1].get("last_seen", 0),
+                      reverse=True)[:_PIN_CAND_CAP]
+        data = dict(keep)
+    _save_pin_candidates(data)
+
+
+def _drop_pin_candidate(host: str, *, ignore: bool = False) -> None:
+    """Remove a host from the proposal store; if ignore=True also append it to the
+    ignore list so the engine's future reports for it are suppressed."""
+    host = (host or "").strip().lower()
+    if not host:
+        return
+    data = _load_pin_candidates()
+    if host in data:
+        data.pop(host, None)
+        _save_pin_candidates(data)
+    if ignore:
+        try:
+            cur = _load_pin_ignore()
+            if host not in cur:
+                SPLICE_PIN_IGNORE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                with SPLICE_PIN_IGNORE_FILE.open("a") as f:
+                    f.write(host + "\n")
+        except OSError:
+            pass
 
 
 @router.get("/admin/filter-control", response_class=HTMLResponse)
@@ -1342,7 +1385,7 @@ a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
 <br><b>Source de vérité :</b> <code>{MITM_BYPASS_FILE}</code> ({len(entries)} pattern{'s' if len(entries)>1 else ''})
 </div>
 
-<p style=margin-top:1.5rem><a href=/admin/ class=back>← Admin home</a></p>
+<p style=margin-top:1.5rem><a href=/admin/splice-whitelist class=back>🔌 Splice Whitelist (par hôte, apps cert-pinned)</a> &nbsp;·&nbsp; <a href=/admin/ class=back>← Admin home</a></p>
 </body></html>"""
     return HTMLResponse(html)
 
@@ -1373,67 +1416,6 @@ async def admin_filter_remove(request: Request) -> Response:
     return RedirectResponse("/admin/filter-control", status_code=303)
 
 
-def _write_disabled(patterns: set) -> None:
-    MITM_FILTER_DISABLED_FILE.parent.mkdir(parents=True, exist_ok=True)
-    MITM_FILTER_DISABLED_FILE.write_text(
-        "# SecuBox ToolBoX :: operator-disabled filter patterns (#809).\n"
-        "# Managed via the Filtres MITM webui checkbox. One pattern per line.\n"
-        "# The R3 engine reads this file and suppresses matching per-pattern.\n"
-        + "".join(sorted(p + "\n" for p in patterns)))
-
-
-@router.post("/admin/filter-control/toggle")
-async def admin_filter_toggle(request: Request) -> dict:
-    """#809 — enable/disable a filter pattern (webui checkbox). Toggling adds/
-    removes it from the disabled file; the engine hot-reloads and suppresses it.
-    Works for ANY source (incl. package seed)."""
-    if _is_public_kbin(request):
-        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
-    body = await request.json()
-    pat = (body.get("pattern") or "").strip()
-    if not pat or "\n" in pat:
-        raise HTTPException(400, "invalid pattern")
-    disabled = _load_disabled()
-    if pat in disabled:
-        disabled.discard(pat)
-        enabled = True
-    else:
-        disabled.add(pat)
-        enabled = False
-    _write_disabled(disabled)
-    return {"pattern": pat, "enabled": enabled}
-
-
-@router.post("/admin/filter-control/delete")
-async def admin_filter_delete(request: Request) -> dict:
-    """#809 — delete a filter entry. Removes the line from any EDITABLE file
-    (static/dynamic/splice-learned); a package-seed entry can't be deleted (file
-    is read-only) → it is disabled instead."""
-    if _is_public_kbin(request):
-        raise HTTPException(403, "filter editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
-    body = await request.json()
-    pat = (body.get("pattern") or "").strip()
-    if not pat:
-        raise HTTPException(400, "invalid pattern")
-    removed = False
-    for f in (MITM_BYPASS_FILE, MITM_BYPASS_DYNAMIC_FILE, SPLICE_LEARNED_FILE):
-        try:
-            lines = f.read_text().splitlines()
-        except OSError:
-            continue
-        new = [ln for ln in lines if ln.split("#", 1)[0].strip() != pat]
-        if len(new) != len(lines):
-            f.write_text("\n".join(new) + ("\n" if new else ""))
-            removed = True
-    disabled_fallback = False
-    if not removed:
-        d = _load_disabled()
-        d.add(pat)
-        _write_disabled(d)
-        disabled_fallback = True
-    return {"pattern": pat, "deleted": removed, "disabled": disabled_fallback}
-
-
 @router.get("/admin/filter-control/regex")
 async def admin_filter_regex() -> dict:
     """Returns the alternation regex consumable by mitmproxy --set ignore_hosts.
@@ -1451,6 +1433,164 @@ async def admin_filter_list() -> dict:
     """JSON for the #filtres panel — tagged bypass patterns (seed/static/learned)."""
     tagged = _load_bypass_tagged()
     return {"hosts": tagged, "count": len(tagged)}
+
+
+# ── #740 : splice-whitelist control panel (host-based, cert-pinned apps) ──────
+@router.get("/admin/splice-whitelist", response_class=HTMLResponse)
+async def admin_splice_whitelist(request: Request) -> HTMLResponse:
+    """Operator panel for the Go sbxmitm splice whitelist (cert-pinned apps).
+    VIEW always; EDIT only when reached via the auth-gated admin vhost (kbin
+    public hits are read-only). Adding a host force-splices it on BOTH engines."""
+    hosts = _load_splice_wl()
+    readonly = _is_public_kbin(request)
+    if readonly:
+        rows = "\n".join(f'<tr><td><code>{h}</code></td></tr>' for h in hosts)
+    else:
+        rows = "\n".join(
+            f'<tr><td><code>{h}</code></td><td><form method=POST action=/admin/splice-whitelist/remove style=display:inline><input type=hidden name=host value="{h}"/><button class=del title="Re-soumettre à l\'analyse MITM">✕ de-whitelist</button></form></td></tr>'
+            for h in hosts
+        )
+    readonly_banner = (
+        '<div style="background:rgba(255,179,71,0.08);border-left:3px solid #ffb347;padding:0.7rem;margin-bottom:1rem;border-radius:0 4px 4px 0;font-size:0.85rem;color:#ffd6a0">'
+        '🔒 <b>Lecture seule (vhost public kbin).</b> Pour éditer, utilise '
+        '<a href="https://admin.gk2.secubox.in/toolbox/" style="color:#ffb347;text-decoration:underline">'
+        'admin.gk2.secubox.in/toolbox/</a> (authentifié SSO).'
+        '</div>'
+    )
+    editor_form = (
+        '<form method=POST action=/admin/splice-whitelist/add class=add>'
+        '<input type=text name=host placeholder="ex: openai.com" '
+        'pattern="[A-Za-z0-9][A-Za-z0-9._-]*\\.[A-Za-z0-9._-]+" '
+        'title="hôte DNS nu, sous-domaines inclus (pas de http://, /, *, espace)" required>'
+        '<button class=add type=submit>➕ Whitelist (splice)</button></form>'
+    )
+    readonly_th = '<th>Hôte (sous-domaines inclus)</th>'
+    editor_th = '<th>Hôte (sous-domaines inclus)</th><th></th>'
+    html = f"""<!DOCTYPE html><html lang=fr><head><meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Admin :: Splice Whitelist</title>
+<style>:root{{--bg:#0a0a0f;--gold:#c9a84c;--phos:#00dd44;--purple:#9e76ff;--text:#e8e6d9;--err:#e63946;--cyan:#00d4ff}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Courier New',monospace;background:var(--bg);color:var(--text);padding:1.2rem;max-width:780px;margin:auto;line-height:1.5}}
+h1{{color:var(--gold);font-size:1.3rem;margin-bottom:0.4rem}}
+.lead{{color:var(--purple);font-size:0.85rem;margin-bottom:1.2rem}}
+table{{width:100%;border-collapse:collapse;margin-bottom:1rem;background:rgba(110,64,201,0.03);border:1px solid #2a2a3f;border-radius:4px}}
+td,th{{padding:0.4rem 0.7rem;border-bottom:1px solid #2a2a3f;font-size:0.8rem;text-align:left}}
+th{{background:rgba(110,64,201,0.15);color:var(--purple);font-weight:bold}}
+code{{color:var(--phos);background:#111;padding:0.1rem 0.3rem;border-radius:2px}}
+.del{{background:var(--err);color:white;border:0;padding:0.2rem 0.5rem;border-radius:3px;cursor:pointer;font-weight:bold}}
+input[type=text]{{flex:1;background:#111;color:var(--text);border:1px solid #2a2a3f;padding:0.5rem;border-radius:4px;font-family:monospace;font-size:0.85rem}}
+.add{{display:flex;gap:0.5rem;margin:0.5rem 0 1rem}}
+button.add{{background:var(--cyan);color:#0a0a0f;border:0;padding:0.5rem 1rem;border-radius:4px;cursor:pointer;font-weight:bold;white-space:nowrap}}
+.note{{font-size:0.75rem;color:#a0a0a0;background:rgba(0,212,255,0.06);border-left:2px solid var(--cyan);padding:0.6rem 0.8rem;margin-top:1rem;border-radius:0 3px 3px 0}}
+a.back{{color:var(--purple);text-decoration:underline;font-size:0.85rem}}
+</style></head><body>
+<h1>🔌 Splice Whitelist{" (lecture seule)" if readonly else ""}</h1>
+<p class=lead>Apps qui CASSENT sous MITM (certificate pinning : ChatGPT, clients natifs…). Un hôte whitelisté est <b>spliced</b> : TLS passthrough, jamais déchiffré ni injecté — il garde l'analyse passive (SNI/DPI) + sortie Tor si active.</p>
+
+{readonly_banner if readonly else editor_form}
+
+<table>
+<tr>{readonly_th if readonly else editor_th}</tr>
+{rows or '<tr><td colspan=2 style="color:#666;text-align:center;padding:1rem">Aucun hôte whitelisté.</td></tr>'}
+</table>
+
+<div class=note>
+✅ <b>Effet immédiat</b> sur le moteur Go (sbxmitm mtime-reload, aucun restart). Chaque hôte est aussi miroité dans le moteur Python legacy (<code>ignore_hosts</code>).
+<br>↩️ <b>De-whitelist</b> = ✕ → l'hôte retourne dans l'analyse MITM complète (déchiffrement + bannière).
+<br><b>Source de vérité :</b> <code>{SPLICE_WL_FILE}</code> ({len(hosts)} hôte{'s' if len(hosts)>1 else ''})
+</div>
+
+<p style=margin-top:1.5rem><a href=/admin/filter-control class=back>↔ Filter Control (regex avancé)</a> &nbsp;·&nbsp; <a href=/admin/ class=back>← Admin home</a></p>
+</body></html>"""
+    return HTMLResponse(html)
+
+
+@router.post("/admin/splice-whitelist/add")
+async def admin_splice_add(request: Request) -> Response:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice whitelist editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    form = await request.form()
+    host = (form.get("host") or "").strip().lower()
+    _splice_wl_add(host)
+    return RedirectResponse("/admin/splice-whitelist", status_code=303)
+
+
+@router.post("/admin/splice-whitelist/remove")
+async def admin_splice_remove(request: Request) -> Response:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice whitelist editing disabled on public vhost — use admin.gk2.secubox.in/toolbox/")
+    form = await request.form()
+    host = (form.get("host") or "").strip().lower()
+    _splice_wl_remove(host)
+    return RedirectResponse("/admin/splice-whitelist", status_code=303)
+
+
+@router.get("/admin/splice-whitelist/list")
+async def admin_splice_list() -> dict:
+    """JSON list of force-spliced hosts (cert-pinned apps)."""
+    hosts = _load_splice_wl()
+    return {"hosts": hosts, "count": len(hosts)}
+
+
+@router.get("/admin/splice-whitelist/candidates")
+async def admin_splice_candidates() -> dict:
+    """Auto-learned cert-pinning PROPOSALS (SNIs whose client rejected our cert),
+    most-recent first. Already-whitelisted/ignored hosts are excluded at ingest."""
+    data = _load_pin_candidates()
+    rows = [
+        {"host": h, "hits": int(v.get("hits", 0)), "last_seen": int(v.get("last_seen", 0))}
+        for h, v in data.items()
+    ]
+    rows.sort(key=lambda r: (r["hits"], r["last_seen"]), reverse=True)
+    return {"candidates": rows, "count": len(rows)}
+
+
+# JSON action endpoints (used by the #filtres dashboard panel; the HTML pages use
+# the form add/remove above). All editing is blocked on the public kbin vhost.
+@router.post("/admin/splice-whitelist/json-add")
+async def admin_splice_json_add(request: Request) -> dict:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    ok = _splice_wl_add(host)
+    if ok:
+        _drop_pin_candidate(host)  # promoting clears any matching proposal
+    return {"ok": ok, "host": host}
+
+
+@router.post("/admin/splice-whitelist/json-remove")
+async def admin_splice_json_remove(request: Request) -> dict:
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    _splice_wl_remove(host)
+    return {"ok": True, "host": host}
+
+
+@router.post("/admin/splice-whitelist/promote")
+async def admin_splice_promote(request: Request) -> dict:
+    """Promote an auto-learned candidate to the real whitelist (force-splice)."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    ok = _splice_wl_add(host)
+    _drop_pin_candidate(host)
+    return {"ok": ok, "host": host}
+
+
+@router.post("/admin/splice-whitelist/ignore")
+async def admin_splice_ignore(request: Request) -> dict:
+    """Dismiss an auto-learned candidate and suppress future proposals for it."""
+    if _is_public_kbin(request):
+        raise HTTPException(403, "splice editing disabled on public vhost")
+    body = await request.json()
+    host = (str(body.get("host", "")) if isinstance(body, dict) else "").strip().lower()
+    _drop_pin_candidate(host, ignore=True)
+    return {"ok": True, "host": host}
 
 
 def _ca_fp(ca_pem) -> dict:
@@ -2736,9 +2876,6 @@ def _dpi_stats(mac_hash: str | None) -> dict:
         "categories": cats(me.get("by_category")),
         "protocols": _dpi_donut([{"label": k, "emoji": "📡", "count": v} for k, v in me_protos.items()]),
         "alerts": alerts(me.get("alerts")),
-        # #792 — donut 'alerts' loses the per-alert fields; keep the RAW collector
-        # alerts (kind/service/dst/detail) for the persona Quêtes section.
-        "alerts_raw": me.get("alerts") or [],
         "destinations": _dpi_donut(me_dests),
     }
 
@@ -2759,30 +2896,6 @@ def _dpi_stats(mac_hash: str | None) -> dict:
                                      "count": int(a.get("bytes", 0) or 0)} for a in (st.get("top_apps") or [])]),
     }
     return {"me": me_stats, "all": all_stats}
-
-
-def _media_stats(mac_hash: str | None) -> dict:
-    """#785 — media-type donut data (MIME captured by sbxmitm R4) for THIS
-    device (me) and board-wide (all). Reuses _dpi_donut for pct/start/end so the
-    donuts render identically to the DPI-exfil ones. Fail-empty."""
-    try:
-        from secubox_core import media_catch
-        agg = media_catch.aggregate(path=media_catch.MEDIA_CATCH_PATH, mac_hash=mac_hash)
-    except Exception:  # pragma: no cover — helper is fail-empty, this is belt+braces
-        agg = {"me": {}, "all": {}}
-
-    def _shape(view: dict) -> dict:
-        view = view or {}
-        return {
-            "present": bool(view.get("present")),
-            "flows": view.get("flows", 0),
-            "bytes": view.get("bytes", 0),
-            "kinds": _dpi_donut(list(view.get("kinds") or [])),
-            "ctypes": _dpi_donut(list(view.get("ctypes") or [])),
-            "top_hosts": view.get("top_hosts") or [],
-        }
-
-    return {"me": _shape(agg.get("me")), "all": _shape(agg.get("all"))}
 
 
 def _build_pdf_donuts(mac_hash: str | None, data: dict) -> list:
@@ -2978,10 +3091,6 @@ async def report_me_html(request: Request) -> HTMLResponse:
     cumulative = _cumulative_stats()
     _level = store.get_client_level(mac_hash) if mac_hash else "r1"
     _dpi_e = _dpi_stats(mac_hash)
-    # #823 — fold in the per-device Sentinel compromission assessment (same
-    # data source the PDF routes already use via build_report_data) so the
-    # "🛡️ Compromission" tab (report.sentinel) is fed instead of Undefined.
-    report_data = reports.build_report_data(mac_hash, session)
     html = _env.get_template("report-live.html.j2").render(
         mac_hash=mac_hash, ip=ip,
         request_args=dict(request.query_params),
@@ -2991,46 +3100,15 @@ async def report_me_html(request: Request) -> HTMLResponse:
         graph=graph, graph_stats=gs, exposure_score=exposure_score,
         charts=_build_report_charts(graph),
         dpi_exfil=_dpi_e,
-        media_exfil=_media_stats(mac_hash),
         persona=_persona_sheet(mac_hash, _level, gs, exposure_score, _dpi_e,
                                session.get("device_type", ""),
                                request.headers.get("user-agent", "")),
-        report=report_data,
         **session,
     )
     return HTMLResponse(html, headers={
         "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
         "Pragma": "no-cache",
     })
-
-
-def _enrich_report_data(mac_hash: str, data: dict, ua: str = "") -> dict:
-    """#790 — attach the live enrichment (DPI, media, persona, charts, carto) to
-    a report `data` dict. Factored out of report_me so /report/{token} and the
-    admin route produce the SAME rich PDF. `ua` drives the persona device class;
-    "" is fine for non-HTTP callers (falls back to a generic Runner class)."""
-    data["dpi_exfil"] = _dpi_stats(mac_hash)          # #701 DPI parity
-    data["media_exfil"] = _media_stats(mac_hash)      # #785 media-type donuts
-    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 visual donuts
-    try:
-        from . import social as _social
-        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
-    except Exception:
-        _graph = {"stats": {}, "nodes": [], "by_country": []}
-    _gs = _graph.get("stats") or {}
-    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
-                        + (_gs.get("opgrade_sites", 0) or 0) * 12
-                        + (_gs.get("antibot_sites", 0) or 0) * 8))
-    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
-    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
-                                     data.get("device_type", ""), ua)
-    _charts = _build_report_charts(_graph)
-    data["charts"] = _charts                          # #711 "En un coup d'œil"
-    data["graph_stats"] = _gs
-    data["bestiary"] = (_charts.get("trackers") or [])[:5]
-    data["carto_nodes"] = _graph.get("nodes") or []   # #709 carto + tables
-    data["carto_country"] = _graph.get("by_country") or []
-    return data
 
 
 @router.get("/report/me")
@@ -3052,8 +3130,29 @@ async def report_me(request: Request) -> Response:
         mac_hash = macmod.hash_mac(mac, salt)
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    _enrich_report_data(mac_hash, data, ua=request.headers.get("user-agent", ""))
-    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"me:{mac_hash}")
+    data["dpi_exfil"] = _dpi_stats(mac_hash)  # #701 — DPI parity with the HTML report
+    data["pdf_donuts"] = _build_pdf_donuts(mac_hash, data)  # #703 — visual donuts
+    # #707 — Netrunner persona sheet (live graph + DPI + ads + request UA)
+    try:
+        from . import social as _social
+        _graph = _social.fetch_graph(mac_hash, since_seconds=7 * 86400)
+    except Exception:
+        _graph = {"stats": {}, "nodes": [], "by_country": []}
+    _gs = _graph.get("stats") or {}
+    _exp = min(100, int((_gs.get("total_trackers", 0) or 0) * 1.5
+                        + (_gs.get("opgrade_sites", 0) or 0) * 12
+                        + (_gs.get("antibot_sites", 0) or 0) * 8))
+    _lvl = store.get_client_level(mac_hash) if mac_hash else "r1"
+    data["persona"] = _persona_sheet(mac_hash, _lvl, _gs, _exp, data["dpi_exfil"],
+                                     data.get("device_type", ""),
+                                     request.headers.get("user-agent", ""))
+    _charts = _build_report_charts(_graph)
+    data["charts"] = _charts                              # #711 "En un coup d'œil"
+    data["graph_stats"] = _gs
+    data["bestiary"] = (_charts.get("trackers") or [])[:5]
+    data["carto_nodes"] = _graph.get("nodes") or []      # #709 carto + tables
+    data["carto_country"] = _graph.get("by_country") or []
+    pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}.pdf"
     return Response(
         content=pdf_bytes,
@@ -3072,8 +3171,7 @@ async def report(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    _enrich_report_data(mac_hash, data)  # #790 — same rich content as /report/me
-    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"tok:{mac_hash}")
+    pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
         content=pdf_bytes,
@@ -3150,16 +3248,6 @@ async def admin_social_aggregate(hours: int = 24) -> dict:
     return _s.aggregate(hours=hours)
 
 
-@router.get("/admin/cookie-crosssite")
-async def admin_cookie_crosssite(hours: int = 24, top: int = 50) -> dict:
-    """Operator view : cross-site tracker cookies (a cookie id reused across
-    >= 2 first-party sites) with per-tracker site/client/cookie counts. Read-only
-    over social_edges; same admin gating as the sibling /admin/* routes.
-    """
-    from . import social as _s
-    return _s.cookie_xsite_detail(hours=hours, top_n=top)
-
-
 @router.get("/admin/blacklist")
 async def admin_blacklist() -> dict:
     """Phase 13.A (#521) + 13.B (#522) — enforcement-spine status :
@@ -3202,14 +3290,17 @@ async def admin_blacklist() -> dict:
                         out["doh_detect_v4"] = n
                     elif name == "doh_detect_v6":
                         out["doh_detect_v6"] = n
-                if "counter" in item and isinstance(item["counter"], dict):
-                    cobj = item["counter"]
-                    cname = cobj.get("name", "")
-                    pk = int(cobj.get("packets", 0) or 0)
-                    if cname.startswith("sbx_doh_detect"):
-                        out["doh_hits"] += pk
-                    elif cname.startswith(("sbx_drop_blacklist", "sbx_drop_quarantine")):
-                        out["drops"] += pk
+                if "rule" in item:
+                    chain = item["rule"].get("chain", "")
+                    for ex in item["rule"].get("expr", []):
+                        c = ex.get("counter")
+                        if not c:
+                            continue
+                        pk = int(c.get("packets", 0) or 0)
+                        if chain == "doh_watch":
+                            out["doh_hits"] += pk
+                        else:
+                            out["drops"] += pk
             out["active"] = True
     except Exception as e:  # noqa: BLE001
         log.warning("admin_blacklist nft parse failed: %s", e)
@@ -3323,41 +3414,7 @@ async def admin_protective() -> dict:
 async def admin_ad_stats(hours: int = 24) -> dict:
     """Contextual ad-block metrics for the #ads tab (read-only, kbin-safe)."""
     h = max(1, min(int(hours if hours is not None else 24), 168))
-    out = store.ad_stats(hours=h)
-    # #758 — real network-layer drops from the hub netstats collector snapshot.
-    # Fall back to the legacy blacklist nft parse when the snapshot is absent.
-    nd = None
-    try:
-        import json as _json
-        snap = _json.loads(NETSTATS_SNAPSHOT.read_text())
-        nd = int(snap.get("network_drops", 0) or 0)
-    except Exception:
-        nd = None
-    if nd is None:
-        try:
-            bl = await admin_blacklist()
-            nd = int(bl.get("drops", 0) or 0)
-        except Exception:
-            nd = 0
-    out["network_drops"] = nd
-    # DNS-layer ad-blocking (secubox-adblock-sync #740): the Unbound sinkhole
-    # kills most ads BEFORE they reach the engine, so total_blocked (204s) reads
-    # low/0. Surface the real DNS blocking so the tab isn't misleading — "0
-    # engine blocks" ≠ "no ad-blocking".
-    try:
-        import json as _json
-        s = _json.loads(Path("/var/lib/secubox/ad-guard/sinkhole-status.json").read_text())
-        comp = s.get("compile", {}) or {}
-        out["dns_sinkhole"] = {
-            "enabled": bool(s.get("enabled")),
-            "domains": int(s.get("blocked", 0) or 0),
-            "net_rules": int(comp.get("net_rules", 0) or 0),
-            "cosmetic_domains": int(comp.get("cosmetic_domains", 0) or 0),
-            "sources": sorted((comp.get("sources") or {}).keys()),
-        }
-    except Exception:
-        out["dns_sinkhole"] = {"enabled": None}
-    return out
+    return store.ad_stats(hours=h)
 
 
 @router.get("/admin/ad-stats/client/{mac_hash}")
@@ -3693,68 +3750,6 @@ async def admin_tor_check_leaks(request: Request) -> dict:
     return result
 
 
-@router.get("/admin/sentinel/stats")
-async def admin_sentinel_stats() -> dict:
-    """Fleet Sentinel counters for the WebUI tab. Fail-safe: a dark daemon
-    yields active=false with zeroed counters (HTTP 200), never a 5xx."""
-    stats = sentinel_link.fetch_stats()
-    if not stats:
-        return {"active": False, "detections": 0, "blocked": 0, "spyware": 0}
-    return {
-        "active": True,
-        "detections": sentinel_link._safe_int(stats.get("detections", 0)),
-        "blocked": sentinel_link._safe_int(stats.get("blocked", 0)),
-        "spyware": sentinel_link._safe_int(stats.get("spyware", 0)),
-    }
-
-
-@router.get("/admin/sentinel/verdicts")
-async def admin_sentinel_verdicts(limit: int = 50) -> dict:
-    """Recent fleet detections + the compromise assessment for the WebUI tab."""
-    dets = sentinel_link.fetch_verdicts(limit)
-    return {
-        "active": bool(dets),
-        "assess": sentinel_link.assess(dets),
-        "detections": dets,
-    }
-
-
-def _c2_signals(s):
-    """Normalize Signals to a list: Go map[string]bool -> JSON object; []string -> JSON array."""
-    if isinstance(s, dict):
-        return sorted(k for k, v in s.items() if v)
-    if isinstance(s, list):
-        return s
-    return []
-
-
-def _c2_norm_learned(h):
-    return {"host": h.get("host", ""), "signals": _c2_signals(h.get("signals")),
-            "interval_s": h.get("interval_s"), "devices": h.get("devices")}
-
-
-def _c2_norm_cand(c):
-    return {"host": c.get("host", ""), "signals": _c2_signals(c.get("signals")),
-            "interval_s": c.get("interval_s"), "windows": c.get("windows")}
-
-
-@router.get("/admin/sentinel/c2")
-async def admin_sentinel_c2() -> dict:
-    """Learned + candidate C2 hosts for the WebUI 'C2 appris' view. Fail-safe."""
-    data = sentinel_link.fetch_c2()
-    if not data:
-        return {"active": False, "learned": [], "candidates": []}
-    return {"active": True,
-            "learned": [_c2_norm_learned(h) for h in data.get("learned", [])],
-            "candidates": [_c2_norm_cand(c) for c in data.get("candidates", [])]}
-
-
-@router.post("/admin/sentinel/c2/allow")
-async def admin_sentinel_c2_allow(host: str = Form(...)) -> dict:
-    """Operator 'Ignorer' — allowlist a host so it is never learned as C2."""
-    return {"ok": sentinel_link.c2_allow(host)}
-
-
 @router.get("/admin/filters/ui", response_class=HTMLResponse)
 async def admin_filters_ui() -> HTMLResponse:
     """#566 — minimal filter toggle panel for the toolbox WebUI."""
@@ -3819,7 +3814,7 @@ async def social_report_pdf(token: str) -> Response:
         raise HTTPException(404, "report not found or expired")
     data = _sr.build_social_report(mac_hash, since_seconds=7 * 86400)
     data["generated_at"] = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
-    pdf_bytes = await _render_pdf_offloaded(_sr.render_social_pdf, data, cache_key=f"soc:{mac_hash}")
+    pdf_bytes = _sr.render_social_pdf(data)
     fname = f"village3b-carto-{mac_hash[:8]}-{int(time.time())}.pdf"
     return Response(
         content=pdf_bytes,
@@ -4156,14 +4151,10 @@ async def admin_metrics() -> dict:
         "events_24h_total": 0,
         "mitm": {"connections": 0, "tls_pinned": 0, "unique_hosts": 0},
     }
-    # Per-source event counts. The legacy toolbox.db `events` table was fed by the
-    # OLD Python mitmproxy addons; the current R3 path is Go sbxmitm → relay →
-    # sidecars → cumulative stats, so that table is now empty. Read the cumulative
-    # per-source totals (cookies/ja4/…) when the events table has nothing, so the
-    # Live-metrics panel shows real activity instead of zeros.
-    since = int(time.time()) - 86400
+    # Per-source event counts (last 24h)
     try:
         with _sq3.connect("/var/lib/secubox/toolbox/toolbox.db", timeout=2) as c:
+            since = int(time.time()) - 86400
             rows = c.execute(
                 "SELECT source, COUNT(*) FROM events WHERE ts > ? GROUP BY source",
                 (since,),
@@ -4176,17 +4167,6 @@ async def admin_metrics() -> dict:
             ).fetchone()[0]
     except Exception as e:
         metrics["sqlite_error"] = str(e)
-    if not metrics["events_by_source"]:
-        try:
-            ev = (cumulative.get_cached() or {}).get("events", {}) or {}
-            src = {k: int(v) for k, v in ev.items()
-                   if k != "total_7d" and isinstance(v, (int, float))}
-            if src:
-                metrics["events_by_source"] = src
-                metrics["events_24h_total"] = int(ev.get("total_7d") or sum(src.values()))
-                metrics["events_window"] = "7d"  # cumulative fallback, not strictly 24h
-        except Exception:
-            pass
     # Live MITM activity. NOTE: the old journal-scrape for "server connect"
     # NEVER worked — the workers run at --log-level warning, so those INFO lines
     # are never emitted → the trio was permanently 0. Derive from real data: the
@@ -4195,10 +4175,8 @@ async def admin_metrics() -> dict:
     try:
         cs = cumulative.get_cached() or {}
         ev = cs.get("events", {}) or {}
-        # "connections analysées" — each JA4 observation is one inspected TLS
-        # handshake/upstream connection. The cumulative stats expose ja4 (and
-        # cookies), not a `dpi` key, so the old ev.get("dpi") was always 0.
-        metrics["mitm"]["connections"] = int(ev.get("ja4") or ev.get("dpi") or 0)
+        # "connections analysées" — DPI classifies one flow per upstream connection.
+        metrics["mitm"]["connections"] = int(ev.get("dpi", 0) or 0)
         metrics["mitm"]["unique_hosts"] = len(cs.get("top_hosts_7d", []) or [])
     except Exception:
         pass
@@ -4218,8 +4196,7 @@ async def admin_client_report(mac_hash: str) -> Response:
     """Admin endpoint : download PDF for a specific client by mac_hash."""
     session = _aggregate_session(mac_hash)
     data = reports.build_report_data(mac_hash, session)
-    _enrich_report_data(mac_hash, data)  # #790 — same rich content as /report/me
-    pdf_bytes = await _render_pdf_offloaded(reports.render_pdf, data, cache_key=f"adm:{mac_hash}")
+    pdf_bytes = reports.render_pdf(data)
     fname = f"gondwana-toolbox-{mac_hash[:8]}-admin.pdf"
     return Response(
         content=pdf_bytes,

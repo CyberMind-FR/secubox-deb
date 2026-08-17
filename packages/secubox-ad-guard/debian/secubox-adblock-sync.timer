@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly SecuBox ad-block list refresh (#740)
+
+[Timer]
+OnBootSec=10min
+OnCalendar=Sun *-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target
