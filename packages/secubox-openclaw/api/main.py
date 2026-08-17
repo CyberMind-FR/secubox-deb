@@ -1,291 +1,1043 @@
-"""SecuBox OpenClaw API — OSINT + active scanner driven through a sandboxed LXC.
+"""SecuBox OpenClaw API - OSINT Intelligence Gathering
 
-Every handler is plain `def` (FastAPI threadpools it) — the module is mounted
-in-process by the aggregator, so an async handler running subprocess would
-freeze the shared loop. Container ops go through `sudo -n openclawctl`.
+Open Source Intelligence (OSINT) tool for reconnaissance and information gathering:
+- Domain reconnaissance
+- IP intelligence
+- Email harvesting detection
+- Social media footprint
+- DNS enumeration
+- Whois lookup
+- Subdomain discovery
+- Certificate transparency
+- Shodan/Censys integration
 """
-import os
-import re as _re
-import json
-import time
-import ipaddress
-import threading
+import asyncio
 import subprocess
+import re
+import os
+import json
+import socket
+import time
+import uuid
+import hashlib
 from pathlib import Path
-from datetime import datetime, timezone
-from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+from enum import Enum
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
+import httpx
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 
-app = FastAPI(title="SecuBox OpenClaw", version="2.0.0")
+app = FastAPI(title="SecuBox OpenClaw", version="1.0.0")
 config = get_config("openclaw")
 
-CTL = "/usr/sbin/openclawctl"
-CONTAINER_IP = config.get("lxc_ip", "10.100.0.41")
+# Data directories
 DATA_DIR = Path("/var/lib/secubox/openclaw")
 SCANS_DIR = DATA_DIR / "scans"
-AUDIT_LOG = Path("/var/log/secubox/audit.log")
+CONFIG_FILE = DATA_DIR / "config.json"
+CACHE_DIR = Path("/var/cache/secubox/openclaw")
+
+# Ensure directories exist
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 SCANS_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-_UID_RE = _re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/-]*$")
-_ID_RE = _re.compile(r"^[a-f0-9]{8}$")
-OWNED = [d.lower().lstrip(".") for d in config.get("owned_domains", ["gk2.secubox.in"])]
+# Default configuration
+DEFAULT_CONFIG = {
+    "shodan_api_key": "",
+    "censys_api_id": "",
+    "censys_api_secret": "",
+    "virustotal_api_key": "",
+    "securitytrails_api_key": "",
+    "max_concurrent_scans": 3,
+    "scan_timeout": 300,
+    "cache_ttl": 3600,
+    "dns_servers": ["8.8.8.8", "1.1.1.1"],
+    "user_agent": "SecuBox-OpenClaw/1.0 OSINT Scanner"
+}
 
 
-def run_cmd(cmd, timeout=60):
+class ScanType(str, Enum):
+    DOMAIN = "domain"
+    IP = "ip"
+    EMAIL = "email"
+
+
+class ScanStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ScanRequest(BaseModel):
+    target: str
+    scan_type: ScanType = ScanType.DOMAIN
+    options: Optional[Dict[str, Any]] = None
+
+
+class ConfigUpdate(BaseModel):
+    shodan_api_key: Optional[str] = None
+    censys_api_id: Optional[str] = None
+    censys_api_secret: Optional[str] = None
+    virustotal_api_key: Optional[str] = None
+    securitytrails_api_key: Optional[str] = None
+    max_concurrent_scans: Optional[int] = None
+    scan_timeout: Optional[int] = None
+    cache_ttl: Optional[int] = None
+    dns_servers: Optional[List[str]] = None
+
+
+class ExportRequest(BaseModel):
+    scan_id: str
+    format: str = "json"  # json, csv, xml
+
+
+# Configuration management
+def _load_config() -> Dict:
+    """Load configuration."""
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = json.load(f)
+                return {**DEFAULT_CONFIG, **cfg}
+        except Exception:
+            pass
+    return DEFAULT_CONFIG.copy()
+
+
+def _save_config(cfg: Dict):
+    """Save configuration."""
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(cfg, f, indent=2)
+
+
+# Scan management
+def _load_scan(scan_id: str) -> Optional[Dict]:
+    """Load a scan by ID."""
+    scan_file = SCANS_DIR / f"{scan_id}.json"
+    if scan_file.exists():
+        try:
+            with open(scan_file) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return None
+
+
+def _save_scan(scan: Dict):
+    """Save a scan."""
+    scan_file = SCANS_DIR / f"{scan['id']}.json"
+    with open(scan_file, 'w') as f:
+        json.dump(scan, f, indent=2)
+
+
+def _list_scans(limit: int = 50) -> List[Dict]:
+    """List all scans, most recent first."""
+    scans = []
+    for f in SCANS_DIR.glob("*.json"):
+        try:
+            with open(f) as fp:
+                scan = json.load(fp)
+                scans.append({
+                    "id": scan.get("id"),
+                    "target": scan.get("target"),
+                    "type": scan.get("type"),
+                    "status": scan.get("status"),
+                    "created_at": scan.get("created_at"),
+                    "completed_at": scan.get("completed_at"),
+                    "findings_count": len(scan.get("results", {}).get("findings", []))
+                })
+        except Exception:
+            pass
+    scans.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return scans[:limit]
+
+
+# DNS enumeration
+async def _dns_lookup(domain: str, record_type: str = "A") -> List[str]:
+    """Perform DNS lookup."""
+    results = []
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
-    except subprocess.TimeoutExpired:
-        return False, "", "timed out"
-    except Exception as e:  # pragma: no cover
-        return False, "", str(e)
-
-
-def ctl(subcmd, timeout=60, stdin=None):
-    """`sudo -n openclawctl <subcmd...>` — the only privileged path. Fail-safe."""
-    cmd = ["sudo", "-n", CTL, *subcmd]
-    if stdin is None:
-        return run_cmd(cmd, timeout)
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=stdin)
-        return r.returncode == 0, r.stdout.strip(), r.stderr.strip()
-    except Exception as e:  # pragma: no cover
-        return False, "", str(e)
-
-
-def _valid_target(t): return bool(t) and bool(_UID_RE.fullmatch(t))
-def _valid_scanid(i): return bool(i) and bool(_ID_RE.fullmatch(i))
-
-
-def _is_local_or_owned(target: str) -> bool:
-    """True if target is RFC1918/loopback/link-local (IP or CIDR) or a box-owned
-    domain suffix. Used to gate active scans without an explicit authorization."""
-    t = target.strip().lower()
-    host = t.split("/")[0].split("@")[-1]
-    try:
-        ip = ipaddress.ip_address(host)
-        return ip.is_private or ip.is_loopback or ip.is_link_local
-    except ValueError:
-        pass
-    try:
-        net = ipaddress.ip_network(t, strict=False)
-        return net.is_private or net.is_loopback
-    except ValueError:
-        pass
-    return any(host == d or host.endswith("." + d) for d in OWNED)
-
-
-# ---- single-flight, stale-while-revalidate cache (ported from nextcloud) ----
-_STATS_CACHE: dict = {}
-_CACHE_LOCKS: dict = {}
-_CACHE_LOCKS_GUARD = threading.Lock()
-
-def _cache_lock(key):
-    with _CACHE_LOCKS_GUARD:
-        return _CACHE_LOCKS.setdefault(key, threading.Lock())
-
-def _cached(key, ttl, producer):
-    now = time.monotonic(); hit = _STATS_CACHE.get(key)
-    if hit and (now - hit[0]) < ttl:
-        return hit[1]
-    lock = _cache_lock(key)
-    if hit is not None:
-        if lock.acquire(blocking=False):
-            def _bg():
-                try: _STATS_CACHE[key] = (time.monotonic(), producer())
-                except Exception: pass
-                finally: lock.release()
-            threading.Thread(target=_bg, name=f"oc-cache-{key}", daemon=True).start()
-        return hit[1]
-    with lock:
-        hit = _STATS_CACHE.get(key)
-        if hit and (time.monotonic() - hit[0]) < ttl:
-            return hit[1]
-        val = producer(); _STATS_CACHE[key] = (time.monotonic(), val); return val
-
-def _invalidate_stats(): _STATS_CACHE.clear()
-
-
-def _ctl_status():
-    ok, out, _ = ctl(["status", "--json"], timeout=25)
-    if not ok:
-        return {"running": False, "installed": False, "ip": CONTAINER_IP,
-                "tools": {"nmap": False, "dig": False, "whois": False, "curl": False}}
-    try:
-        return json.loads(out)
+        proc = await asyncio.create_subprocess_exec(
+            "dig", "+short", domain, record_type,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        for line in stdout.decode().strip().split('\n'):
+            if line:
+                results.append(line.strip())
     except Exception:
-        return {"running": False, "installed": False, "ip": CONTAINER_IP, "tools": {}}
+        pass
+    return results
 
-def lxc_running() -> bool:
-    return bool(_ctl_status().get("running"))
 
-def _require_installed():
-    if not _ctl_status().get("installed"):
-        raise HTTPException(409, "OpenClaw container is not installed")
+async def _dns_enumeration(domain: str) -> Dict:
+    """Full DNS enumeration."""
+    record_types = ["A", "AAAA", "MX", "NS", "TXT", "SOA", "CNAME", "PTR", "SRV"]
+    results = {}
 
+    tasks = []
+    for rtype in record_types:
+        tasks.append(_dns_lookup(domain, rtype))
+
+    records = await asyncio.gather(*tasks)
+
+    for rtype, values in zip(record_types, records):
+        if values:
+            results[rtype] = values
+
+    return results
+
+
+# Whois lookup
+async def _whois_lookup(target: str) -> Dict:
+    """Perform WHOIS lookup."""
+    result = {
+        "raw": "",
+        "parsed": {},
+        "error": None
+    }
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "whois", target,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        result["raw"] = stdout.decode()
+
+        # Parse common fields
+        raw = result["raw"]
+        patterns = {
+            "registrar": r"Registrar:\s*(.+)",
+            "creation_date": r"Creation Date:\s*(.+)",
+            "expiry_date": r"(?:Expir(?:y|ation) Date|Registry Expiry Date):\s*(.+)",
+            "updated_date": r"Updated Date:\s*(.+)",
+            "name_servers": r"Name Server:\s*(.+)",
+            "status": r"Status:\s*(.+)",
+            "registrant_org": r"Registrant Organization:\s*(.+)",
+            "registrant_country": r"Registrant Country:\s*(.+)",
+            "admin_email": r"Admin Email:\s*(.+)",
+            "tech_email": r"Tech Email:\s*(.+)",
+        }
+
+        for key, pattern in patterns.items():
+            matches = re.findall(pattern, raw, re.IGNORECASE)
+            if matches:
+                result["parsed"][key] = matches if len(matches) > 1 else matches[0]
+
+    except asyncio.TimeoutError:
+        result["error"] = "Timeout"
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+# Subdomain discovery
+async def _discover_subdomains(domain: str) -> List[str]:
+    """Discover subdomains using various techniques."""
+    subdomains = set()
+
+    # Common subdomains to check
+    common_prefixes = [
+        "www", "mail", "ftp", "webmail", "smtp", "pop", "imap", "blog",
+        "admin", "administrator", "api", "app", "apps", "beta", "cdn",
+        "cloud", "cpanel", "dashboard", "db", "dev", "download", "files",
+        "forum", "git", "gitlab", "help", "images", "img", "info", "intranet",
+        "jenkins", "jira", "login", "m", "mobile", "mysql", "news", "ns",
+        "ns1", "ns2", "ns3", "old", "panel", "portal", "proxy", "remote",
+        "search", "secure", "server", "shop", "ssl", "staging", "static",
+        "status", "store", "support", "test", "vpn", "web", "wiki", "www2"
+    ]
+
+    async def check_subdomain(sub: str) -> Optional[str]:
+        full = f"{sub}.{domain}"
+        try:
+            socket.gethostbyname(full)
+            return full
+        except socket.gaierror:
+            return None
+
+    # Check common subdomains in parallel
+    tasks = [check_subdomain(sub) for sub in common_prefixes]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if result and not isinstance(result, Exception):
+            subdomains.add(result)
+
+    # Try zone transfer (usually fails but worth trying)
+    try:
+        ns_records = await _dns_lookup(domain, "NS")
+        for ns in ns_records[:2]:  # Try first 2 NS servers
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "dig", f"@{ns}", domain, "AXFR",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+                for line in stdout.decode().split('\n'):
+                    match = re.match(rf"(\S+\.{re.escape(domain)})\.", line)
+                    if match:
+                        subdomains.add(match.group(1))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    return sorted(list(subdomains))
+
+
+# Certificate transparency
+async def _cert_transparency(domain: str) -> List[Dict]:
+    """Query certificate transparency logs."""
+    certs = []
+    cfg = _load_config()
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Query crt.sh
+            response = await client.get(
+                f"https://crt.sh/?q=%.{domain}&output=json",
+                headers={"User-Agent": cfg.get("user_agent", DEFAULT_CONFIG["user_agent"])}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                seen = set()
+                for entry in data[:100]:  # Limit to 100 entries
+                    name = entry.get("name_value", "")
+                    if name not in seen:
+                        seen.add(name)
+                        certs.append({
+                            "name": name,
+                            "issuer": entry.get("issuer_name", ""),
+                            "not_before": entry.get("not_before", ""),
+                            "not_after": entry.get("not_after", ""),
+                            "serial": entry.get("serial_number", "")
+                        })
+    except Exception:
+        pass
+
+    return certs
+
+
+# IP intelligence
+async def _ip_intelligence(ip: str) -> Dict:
+    """Gather intelligence about an IP address."""
+    info = {
+        "ip": ip,
+        "reverse_dns": [],
+        "geolocation": {},
+        "asn": {},
+        "ports": [],
+        "reputation": {}
+    }
+
+    # Reverse DNS
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "dig", "+short", "-x", ip,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        for line in stdout.decode().strip().split('\n'):
+            if line:
+                info["reverse_dns"].append(line.strip().rstrip('.'))
+    except Exception:
+        pass
+
+    # ASN lookup using Team Cymru
+    try:
+        reversed_ip = '.'.join(reversed(ip.split('.')))
+        proc = await asyncio.create_subprocess_exec(
+            "dig", "+short", f"{reversed_ip}.origin.asn.cymru.com", "TXT",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        output = stdout.decode().strip().replace('"', '')
+        if output:
+            parts = output.split('|')
+            if len(parts) >= 3:
+                info["asn"] = {
+                    "number": parts[0].strip(),
+                    "prefix": parts[1].strip(),
+                    "country": parts[2].strip()
+                }
+    except Exception:
+        pass
+
+    return info
+
+
+# Email reconnaissance
+async def _email_recon(email: str) -> Dict:
+    """Reconnaissance on email address."""
+    info = {
+        "email": email,
+        "valid_format": False,
+        "domain": "",
+        "mx_records": [],
+        "spf": "",
+        "dmarc": "",
+        "breaches": []
+    }
+
+    # Validate format
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    info["valid_format"] = bool(re.match(email_pattern, email))
+
+    if not info["valid_format"]:
+        return info
+
+    # Extract domain
+    domain = email.split('@')[1]
+    info["domain"] = domain
+
+    # MX records
+    info["mx_records"] = await _dns_lookup(domain, "MX")
+
+    # SPF record
+    txt_records = await _dns_lookup(domain, "TXT")
+    for txt in txt_records:
+        if "v=spf1" in txt:
+            info["spf"] = txt
+            break
+
+    # DMARC record
+    dmarc_records = await _dns_lookup(f"_dmarc.{domain}", "TXT")
+    for txt in dmarc_records:
+        if "v=DMARC1" in txt:
+            info["dmarc"] = txt
+            break
+
+    return info
+
+
+# Shodan integration
+async def _shodan_lookup(target: str, api_key: str) -> Dict:
+    """Query Shodan for target."""
+    if not api_key:
+        return {"error": "Shodan API key not configured"}
+
+    results = {}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Determine if IP or domain
+            try:
+                socket.inet_aton(target)
+                endpoint = f"https://api.shodan.io/shodan/host/{target}"
+            except socket.error:
+                endpoint = f"https://api.shodan.io/dns/resolve"
+                params = {"hostnames": target, "key": api_key}
+                response = await client.get(endpoint, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    if target in data:
+                        target = data[target]
+                        endpoint = f"https://api.shodan.io/shodan/host/{target}"
+                    else:
+                        return {"error": "Could not resolve domain"}
+
+            response = await client.get(endpoint, params={"key": api_key})
+            if response.status_code == 200:
+                results = response.json()
+            elif response.status_code == 404:
+                results = {"error": "No information available"}
+            else:
+                results = {"error": f"Shodan API error: {response.status_code}"}
+    except Exception as e:
+        results = {"error": str(e)}
+
+    return results
+
+
+# Port scanning (basic, non-intrusive)
+async def _port_check(ip: str, port: int, timeout: float = 2.0) -> bool:
+    """Check if a port is open."""
+    try:
+        conn = asyncio.open_connection(ip, port)
+        reader, writer = await asyncio.wait_for(conn, timeout=timeout)
+        writer.close()
+        await writer.wait_closed()
+        return True
+    except Exception:
+        return False
+
+
+async def _scan_common_ports(ip: str) -> List[Dict]:
+    """Scan common ports."""
+    common_ports = {
+        21: "FTP",
+        22: "SSH",
+        23: "Telnet",
+        25: "SMTP",
+        53: "DNS",
+        80: "HTTP",
+        110: "POP3",
+        143: "IMAP",
+        443: "HTTPS",
+        445: "SMB",
+        993: "IMAPS",
+        995: "POP3S",
+        3306: "MySQL",
+        3389: "RDP",
+        5432: "PostgreSQL",
+        6379: "Redis",
+        8080: "HTTP-Proxy",
+        8443: "HTTPS-Alt",
+        27017: "MongoDB"
+    }
+
+    open_ports = []
+
+    async def check_port(port: int, service: str):
+        if await _port_check(ip, port):
+            return {"port": port, "service": service, "state": "open"}
+        return None
+
+    tasks = [check_port(port, service) for port, service in common_ports.items()]
+    results = await asyncio.gather(*tasks)
+
+    for result in results:
+        if result:
+            open_ports.append(result)
+
+    return sorted(open_ports, key=lambda x: x["port"])
+
+
+# Reputation check
+async def _check_reputation(target: str) -> Dict:
+    """Check target reputation against various sources."""
+    reputation = {
+        "target": target,
+        "blacklists": [],
+        "score": "unknown"
+    }
+
+    # Check common RBLs for IP
+    try:
+        socket.inet_aton(target)
+        is_ip = True
+    except socket.error:
+        is_ip = False
+
+    if is_ip:
+        rbls = [
+            "zen.spamhaus.org",
+            "bl.spamcop.net",
+            "dnsbl.sorbs.net",
+            "b.barracudacentral.org"
+        ]
+
+        reversed_ip = '.'.join(reversed(target.split('.')))
+
+        for rbl in rbls:
+            try:
+                socket.gethostbyname(f"{reversed_ip}.{rbl}")
+                reputation["blacklists"].append(rbl)
+            except socket.gaierror:
+                pass
+
+        if reputation["blacklists"]:
+            reputation["score"] = "bad"
+        else:
+            reputation["score"] = "clean"
+
+    return reputation
+
+
+# Main scan function
+async def _run_scan(scan_id: str, target: str, scan_type: ScanType, options: Dict = None):
+    """Run the actual scan."""
+    scan = _load_scan(scan_id)
+    if not scan:
+        return
+
+    scan["status"] = ScanStatus.RUNNING.value
+    scan["started_at"] = datetime.utcnow().isoformat() + "Z"
+    _save_scan(scan)
+
+    cfg = _load_config()
+    results = {
+        "target": target,
+        "type": scan_type.value,
+        "findings": [],
+        "data": {}
+    }
+
+    try:
+        if scan_type == ScanType.DOMAIN:
+            # DNS enumeration
+            dns_results = await _dns_enumeration(target)
+            if dns_results:
+                results["data"]["dns"] = dns_results
+                results["findings"].append({
+                    "type": "dns",
+                    "title": "DNS Records Found",
+                    "severity": "info",
+                    "count": sum(len(v) for v in dns_results.values())
+                })
+
+            # Whois lookup
+            whois_results = await _whois_lookup(target)
+            if whois_results.get("parsed"):
+                results["data"]["whois"] = whois_results
+                results["findings"].append({
+                    "type": "whois",
+                    "title": "WHOIS Information",
+                    "severity": "info",
+                    "registrar": whois_results["parsed"].get("registrar", "Unknown")
+                })
+
+            # Subdomain discovery
+            subdomains = await _discover_subdomains(target)
+            if subdomains:
+                results["data"]["subdomains"] = subdomains
+                results["findings"].append({
+                    "type": "subdomains",
+                    "title": "Subdomains Discovered",
+                    "severity": "low",
+                    "count": len(subdomains)
+                })
+
+            # Certificate transparency
+            certs = await _cert_transparency(target)
+            if certs:
+                results["data"]["certificates"] = certs
+                results["findings"].append({
+                    "type": "certificates",
+                    "title": "SSL Certificates Found",
+                    "severity": "info",
+                    "count": len(certs)
+                })
+
+            # Shodan (if API key configured)
+            if cfg.get("shodan_api_key"):
+                shodan_data = await _shodan_lookup(target, cfg["shodan_api_key"])
+                if "error" not in shodan_data:
+                    results["data"]["shodan"] = shodan_data
+                    ports = shodan_data.get("ports", [])
+                    if ports:
+                        results["findings"].append({
+                            "type": "shodan",
+                            "title": "Shodan Intelligence",
+                            "severity": "medium" if len(ports) > 5 else "low",
+                            "ports": ports
+                        })
+
+        elif scan_type == ScanType.IP:
+            # IP intelligence
+            ip_info = await _ip_intelligence(target)
+            results["data"]["ip_info"] = ip_info
+
+            # Port scan
+            ports = await _scan_common_ports(target)
+            if ports:
+                results["data"]["ports"] = ports
+                results["findings"].append({
+                    "type": "ports",
+                    "title": "Open Ports Detected",
+                    "severity": "medium" if len(ports) > 3 else "low",
+                    "count": len(ports)
+                })
+
+            # Reputation check
+            reputation = await _check_reputation(target)
+            results["data"]["reputation"] = reputation
+            if reputation.get("blacklists"):
+                results["findings"].append({
+                    "type": "reputation",
+                    "title": "Blacklist Hits",
+                    "severity": "high",
+                    "blacklists": reputation["blacklists"]
+                })
+
+            # Shodan (if API key configured)
+            if cfg.get("shodan_api_key"):
+                shodan_data = await _shodan_lookup(target, cfg["shodan_api_key"])
+                if "error" not in shodan_data:
+                    results["data"]["shodan"] = shodan_data
+
+        elif scan_type == ScanType.EMAIL:
+            # Email reconnaissance
+            email_info = await _email_recon(target)
+            results["data"]["email_info"] = email_info
+
+            if not email_info.get("valid_format"):
+                results["findings"].append({
+                    "type": "email",
+                    "title": "Invalid Email Format",
+                    "severity": "high"
+                })
+            else:
+                if email_info.get("mx_records"):
+                    results["findings"].append({
+                        "type": "email",
+                        "title": "Email Domain Valid",
+                        "severity": "info",
+                        "mx_count": len(email_info["mx_records"])
+                    })
+                if not email_info.get("spf"):
+                    results["findings"].append({
+                        "type": "email_security",
+                        "title": "No SPF Record",
+                        "severity": "medium"
+                    })
+                if not email_info.get("dmarc"):
+                    results["findings"].append({
+                        "type": "email_security",
+                        "title": "No DMARC Record",
+                        "severity": "medium"
+                    })
+
+        scan["status"] = ScanStatus.COMPLETED.value
+        scan["results"] = results
+
+    except Exception as e:
+        scan["status"] = ScanStatus.FAILED.value
+        scan["error"] = str(e)
+
+    scan["completed_at"] = datetime.utcnow().isoformat() + "Z"
+    _save_scan(scan)
+
+
+# ============================================================================
+# API Endpoints
+# ============================================================================
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "module": "openclaw"}
+async def health():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "secubox-openclaw", "version": "1.0.0"}
+
 
 @app.get("/status")
-def status():
-    return _cached("status", 15.0, _compute_status)
+async def status():
+    """Status endpoint with statistics."""
+    scans = _list_scans(1000)
+    cfg = _load_config()
 
-def _compute_status():
-    s = _ctl_status()
-    return {"module": "openclaw", "enabled": config.get("enabled", True),
-            "running": s.get("running", False), "installed": s.get("installed", False),
-            "ip": s.get("ip", CONTAINER_IP), "tools": s.get("tools", {}),
-            "total_scans": len(list(SCANS_DIR.glob("*.json")))}
+    return {
+        "module": "openclaw",
+        "status": "ok",
+        "version": "1.0.0",
+        "total_scans": len(scans),
+        "completed_scans": sum(1 for s in scans if s.get("status") == "completed"),
+        "integrations": {
+            "shodan": bool(cfg.get("shodan_api_key")),
+            "censys": bool(cfg.get("censys_api_id")),
+            "virustotal": bool(cfg.get("virustotal_api_key")),
+            "securitytrails": bool(cfg.get("securitytrails_api_key"))
+        }
+    }
+
 
 @app.get("/config", dependencies=[Depends(require_jwt)])
-def get_config_endpoint():
-    return {"enabled": config.get("enabled", True), "owned_domains": OWNED,
-            "integrations": {k: bool(config.get(k)) for k in
-                             ("shodan_api_key", "censys_api_id", "virustotal_api_key")}}
+async def get_config_endpoint():
+    """Get current configuration (sensitive values masked)."""
+    cfg = _load_config()
+
+    # Mask sensitive values
+    masked = cfg.copy()
+    for key in ["shodan_api_key", "censys_api_id", "censys_api_secret",
+                "virustotal_api_key", "securitytrails_api_key"]:
+        if masked.get(key):
+            masked[key] = "***configured***"
+        else:
+            masked[key] = ""
+
+    return masked
 
 
+@app.post("/config", dependencies=[Depends(require_jwt)])
+async def update_config(update: ConfigUpdate):
+    """Update configuration."""
+    cfg = _load_config()
 
-# ============================================================================
-# Scan API — async-job model. Every handler is plain `def`; the worker is a
-# fully-detached subprocess (`sudo -n openclawctl scan ...`) started via
-# start_new_session=True so it never blocks the aggregator's shared loop.
-# ============================================================================
+    updates = update.dict(exclude_none=True)
+    cfg.update(updates)
+    _save_config(cfg)
 
-class ScanReq(BaseModel):
-    target: str
-    authorized: bool = False
+    return {"status": "updated", "updated_fields": list(updates.keys())}
 
-# domain/email = passive (unrestricted); ip/ports = active (policy-gated)
-_ACTIVE_TYPES = {"ip", "ports"}
-
-def _new_id():
-    return os.urandom(4).hex()
-
-def _spawn_worker(scan_type: str, target: str, scan_id: str):
-    """Detached — runs entirely off the aggregator. openclawctl does the work
-    and writes scans/<id>.json. We only record 'pending' first."""
-    rec = {"id": scan_id, "type": scan_type, "target": target, "status": "pending",
-           "started_at": datetime.now(timezone.utc).isoformat(), "results": None, "error": None}
-    (SCANS_DIR / f"{scan_id}.json").write_text(json.dumps(rec))
-    subprocess.Popen(["sudo", "-n", CTL, "scan", scan_type, target, scan_id],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     stdin=subprocess.DEVNULL, start_new_session=True)
-
-def _audit(operator, scan_type, target, authorized, scan_id, action="scan"):
-    # Append-only — never truncate. `operator` = JWT sub (WHO), `action` = WHAT.
-    try:
-        AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with AUDIT_LOG.open("a") as f:
-            f.write(json.dumps({"ts": datetime.now(timezone.utc).isoformat(),
-                                "module": "openclaw", "action": action,
-                                "operator": operator,
-                                "type": scan_type, "target": target,
-                                "authorized": authorized, "scan_id": scan_id}) + "\n")
-    except Exception:  # pragma: no cover - audit must never break a scan
-        pass
-
-def _start_scan(scan_type, req: ScanReq, operator: str):
-    _require_installed()
-    if not _valid_target(req.target):
-        raise HTTPException(400, "invalid target")
-    if scan_type in _ACTIVE_TYPES and not _is_local_or_owned(req.target) and not req.authorized:
-        raise HTTPException(409, "external active scan requires authorized=true")
-    scan_id = _new_id()
-    if scan_type in _ACTIVE_TYPES:
-        _audit(operator, scan_type, req.target, req.authorized, scan_id, action="scan")
-    _spawn_worker(scan_type, req.target, scan_id)
-    return {"status": "started", "scan_id": scan_id, "type": scan_type, "target": req.target}
 
 @app.post("/scan/domain", dependencies=[Depends(require_jwt)])
-def scan_domain(req: ScanReq, claims: dict = Depends(require_jwt)):
-    return _start_scan("domain", req, claims.get("sub", "?"))
+async def scan_domain(target: str, background_tasks: BackgroundTasks):
+    """Start a domain scan."""
+    # Validate domain
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', target):
+        raise HTTPException(status_code=400, detail="Invalid domain format")
+
+    scan_id = str(uuid.uuid4())[:8]
+    scan = {
+        "id": scan_id,
+        "target": target,
+        "type": ScanType.DOMAIN.value,
+        "status": ScanStatus.PENDING.value,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "results": None,
+        "error": None
+    }
+    _save_scan(scan)
+
+    background_tasks.add_task(_run_scan, scan_id, target, ScanType.DOMAIN)
+
+    return {"status": "started", "scan_id": scan_id, "target": target}
+
 
 @app.post("/scan/ip", dependencies=[Depends(require_jwt)])
-def scan_ip(req: ScanReq, claims: dict = Depends(require_jwt)):
-    return _start_scan("ip", req, claims.get("sub", "?"))
+def scan_ip(target: str, background_tasks: BackgroundTasks):
+    """Start an IP scan."""
+    # Validate IP
+    try:
+        socket.inet_aton(target)
+    except socket.error:
+        raise HTTPException(status_code=400, detail="Invalid IP address")
+
+    scan_id = str(uuid.uuid4())[:8]
+    scan = {
+        "id": scan_id,
+        "target": target,
+        "type": ScanType.IP.value,
+        "status": ScanStatus.PENDING.value,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "results": None,
+        "error": None
+    }
+    _save_scan(scan)
+
+    background_tasks.add_task(_run_scan, scan_id, target, ScanType.IP)
+
+    return {"status": "started", "scan_id": scan_id, "target": target}
+
 
 @app.post("/scan/email", dependencies=[Depends(require_jwt)])
-def scan_email(req: ScanReq, claims: dict = Depends(require_jwt)):
-    return _start_scan("email", req, claims.get("sub", "?"))
+async def scan_email(target: str, background_tasks: BackgroundTasks):
+    """Start an email scan."""
+    scan_id = str(uuid.uuid4())[:8]
+    scan = {
+        "id": scan_id,
+        "target": target,
+        "type": ScanType.EMAIL.value,
+        "status": ScanStatus.PENDING.value,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "results": None,
+        "error": None
+    }
+    _save_scan(scan)
+
+    background_tasks.add_task(_run_scan, scan_id, target, ScanType.EMAIL)
+
+    return {"status": "started", "scan_id": scan_id, "target": target}
+
 
 @app.get("/scans", dependencies=[Depends(require_jwt)])
-def list_scans():
-    out = []
-    for f in sorted(SCANS_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)[:200]:
-        try: out.append(json.loads(f.read_text()))
-        except Exception: pass
-    return {"scans": out}
+async def get_scans(limit: int = Query(default=50, ge=1, le=200)):
+    """Get scan history."""
+    scans = _list_scans(limit)
+    return {"scans": scans, "total": len(scans)}
+
 
 @app.get("/scan/{scan_id}", dependencies=[Depends(require_jwt)])
-def get_scan(scan_id: str):
-    if not _valid_scanid(scan_id):
-        raise HTTPException(400, "invalid scan id")
-    f = SCANS_DIR / f"{scan_id}.json"
-    if not f.exists():
-        raise HTTPException(404, "not found")
-    return json.loads(f.read_text())
+async def get_scan(scan_id: str):
+    """Get scan results."""
+    scan = _load_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return scan
+
 
 @app.delete("/scan/{scan_id}", dependencies=[Depends(require_jwt)])
-def delete_scan(scan_id: str):
-    if not _valid_scanid(scan_id):
-        raise HTTPException(400, "invalid scan id")
-    f = SCANS_DIR / f"{scan_id}.json"
-    if f.exists(): f.unlink()
+async def delete_scan(scan_id: str):
+    """Delete a scan."""
+    scan_file = SCANS_DIR / f"{scan_id}.json"
+    if not scan_file.exists():
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    scan_file.unlink()
     return {"status": "deleted", "scan_id": scan_id}
 
-def _sync_lookup(scan_type, target):
-    _require_installed()
-    if not _valid_target(target):
-        raise HTTPException(400, "invalid target")
-    # Per-request id: two concurrent (threadpooled) lookups must not race on one
-    # file and read back each other's result. Transient — cleaned up, never
-    # persisted in /scans.
-    tmp_id = _new_id()
-    ctl(["scan", scan_type, target, tmp_id], timeout=45)
-    f = SCANS_DIR / f"{tmp_id}.json"
-    try:
-        if f.exists():
-            data = json.loads(f.read_text())
-            return data
-        return {"status": "failed", "results": {"raw": ""}}
-    finally:
-        try: f.unlink()
-        except OSError: pass
 
-# Passive OSINT quick-lookups — unrestricted (no active probing).
+@app.get("/subdomains/{domain}", dependencies=[Depends(require_jwt)])
+async def get_subdomains(domain: str):
+    """Enumerate subdomains for a domain."""
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', domain):
+        raise HTTPException(status_code=400, detail="Invalid domain format")
+
+    subdomains = await _discover_subdomains(domain)
+    return {"domain": domain, "subdomains": subdomains, "count": len(subdomains)}
+
+
 @app.get("/dns/{domain}", dependencies=[Depends(require_jwt)])
-def dns_lookup(domain: str): return _sync_lookup("dns", domain)
+async def get_dns(domain: str):
+    """Get DNS records for a domain."""
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', domain):
+        raise HTTPException(status_code=400, detail="Invalid domain format")
+
+    records = await _dns_enumeration(domain)
+    return {"domain": domain, "records": records}
+
 
 @app.get("/whois/{target}", dependencies=[Depends(require_jwt)])
-def whois_lookup(target: str): return _sync_lookup("whois", target)
+async def get_whois(target: str):
+    """Get WHOIS information."""
+    result = await _whois_lookup(target)
+    return {"target": target, "whois": result}
+
 
 @app.get("/certs/{domain}", dependencies=[Depends(require_jwt)])
-def certs_lookup(domain: str): return _sync_lookup("certs", domain)
+async def get_certs(domain: str):
+    """Get certificate transparency logs."""
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+$', domain):
+        raise HTTPException(status_code=400, detail="Invalid domain format")
 
-# Active quick-lookup — `ports` is a real nmap probe, so it is policy-gated and
-# audited. External targets must go through the gated POST /scan/ip (authorized=true).
+    certs = await _cert_transparency(domain)
+    return {"domain": domain, "certificates": certs, "count": len(certs)}
+
+
 @app.get("/ports/{ip}", dependencies=[Depends(require_jwt)])
-def ports_lookup(ip: str, claims: dict = Depends(require_jwt)):
-    _require_installed()
-    if not _valid_target(ip):
-        raise HTTPException(400, "invalid target")
-    if not _is_local_or_owned(ip):
-        raise HTTPException(409, "external active port scan requires POST /scan/ip with authorized=true")
-    _audit(claims.get("sub", "?"), "ports", ip, False, "quicklook", action="scan")
-    return _sync_lookup("ports", ip)
+async def get_ports(ip: str):
+    """Scan common ports on an IP."""
+    try:
+        socket.inet_aton(ip)
+    except socket.error:
+        raise HTTPException(status_code=400, detail="Invalid IP address")
 
-@app.post("/install", dependencies=[Depends(require_jwt)])
-def install():
-    """Build the sandbox container (debootstrap + toolchain) in the background.
-    Detached like a scan worker — never runs on the request path."""
-    if _ctl_status().get("installed"):
-        raise HTTPException(400, "already installed")
-    subprocess.Popen(["sudo", "-n", CTL, "install"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     stdin=subprocess.DEVNULL, start_new_session=True)
-    _invalidate_stats()
-    return {"status": "installing"}
+    cfg = _load_config()
+
+    # First try Shodan if configured
+    if cfg.get("shodan_api_key"):
+        shodan_data = await _shodan_lookup(ip, cfg["shodan_api_key"])
+        if "error" not in shodan_data:
+            return {
+                "ip": ip,
+                "source": "shodan",
+                "ports": shodan_data.get("ports", []),
+                "data": shodan_data.get("data", [])
+            }
+
+    # Fall back to direct scan
+    ports = await _scan_common_ports(ip)
+    return {"ip": ip, "source": "direct", "ports": ports}
+
+
+@app.get("/reputation/{target}", dependencies=[Depends(require_jwt)])
+async def get_reputation(target: str):
+    """Check reputation of IP or domain."""
+    result = await _check_reputation(target)
+    return result
+
+
+@app.get("/exports", dependencies=[Depends(require_jwt)])
+async def get_export_formats():
+    """Get available export formats."""
+    return {
+        "formats": [
+            {"id": "json", "name": "JSON", "description": "Full JSON export"},
+            {"id": "csv", "name": "CSV", "description": "CSV spreadsheet"},
+            {"id": "xml", "name": "XML", "description": "XML format"}
+        ]
+    }
+
+
+@app.post("/export", dependencies=[Depends(require_jwt)])
+async def export_scan(request: ExportRequest):
+    """Export scan results."""
+    scan = _load_scan(request.scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    if request.format == "json":
+        return Response(
+            content=json.dumps(scan, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=openclaw-{request.scan_id}.json"}
+        )
+    elif request.format == "csv":
+        # Simple CSV export of findings
+        lines = ["Type,Title,Severity,Details"]
+        for finding in scan.get("results", {}).get("findings", []):
+            details = json.dumps({k: v for k, v in finding.items() if k not in ["type", "title", "severity"]})
+            lines.append(f"{finding.get('type','')},{finding.get('title','')},{finding.get('severity','')},{details}")
+
+        return Response(
+            content='\n'.join(lines),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=openclaw-{request.scan_id}.csv"}
+        )
+    elif request.format == "xml":
+        # Basic XML export
+        xml = ['<?xml version="1.0" encoding="UTF-8"?>']
+        xml.append(f'<scan id="{scan.get("id")}" target="{scan.get("target")}" type="{scan.get("type")}">')
+        xml.append(f'  <status>{scan.get("status")}</status>')
+        xml.append('  <findings>')
+        for finding in scan.get("results", {}).get("findings", []):
+            xml.append(f'    <finding type="{finding.get("type")}" severity="{finding.get("severity")}">')
+            xml.append(f'      <title>{finding.get("title", "")}</title>')
+            xml.append('    </finding>')
+        xml.append('  </findings>')
+        xml.append('</scan>')
+
+        return Response(
+            content='\n'.join(xml),
+            media_type="application/xml",
+            headers={"Content-Disposition": f"attachment; filename=openclaw-{request.scan_id}.xml"}
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Invalid export format")
+
+
+@app.get("/integrations", dependencies=[Depends(require_jwt)])
+async def get_integrations():
+    """Get integration status."""
+    cfg = _load_config()
+
+    integrations = [
+        {
+            "id": "shodan",
+            "name": "Shodan",
+            "description": "Internet-wide port scanning and device search",
+            "configured": bool(cfg.get("shodan_api_key")),
+            "url": "https://shodan.io"
+        },
+        {
+            "id": "censys",
+            "name": "Censys",
+            "description": "Internet asset discovery and monitoring",
+            "configured": bool(cfg.get("censys_api_id") and cfg.get("censys_api_secret")),
+            "url": "https://censys.io"
+        },
+        {
+            "id": "virustotal",
+            "name": "VirusTotal",
+            "description": "File and URL scanning and analysis",
+            "configured": bool(cfg.get("virustotal_api_key")),
+            "url": "https://virustotal.com"
+        },
+        {
+            "id": "securitytrails",
+            "name": "SecurityTrails",
+            "description": "DNS and domain intelligence",
+            "configured": bool(cfg.get("securitytrails_api_key")),
+            "url": "https://securitytrails.com"
+        },
+        {
+            "id": "crtsh",
+            "name": "crt.sh",
+            "description": "Certificate transparency logs",
+            "configured": True,
+            "url": "https://crt.sh"
+        }
+    ]
+
+    return {"integrations": integrations}

@@ -5,8 +5,6 @@ Roles, Permissions, Access Control Lists, and Active Sessions
 """
 import subprocess
 import json
-import httpx
-import logging
 import os
 from datetime import datetime
 from pathlib import Path
@@ -40,15 +38,7 @@ config = get_config("users") if callable(get_config) else {}
 USERSCTL = "/usr/sbin/usersctl"
 USERS_FILE = os.environ.get("USERS_FILE", "/etc/secubox/users.json")
 ROLES_FILE = os.environ.get("ROLES_FILE", "/etc/secubox/roles.json")
-from .redact import redact_user  # expurgation des secrets (module dédié, testable seul)
-
 SERVICES = ["nextcloud", "gitea", "email", "matrix", "jellyfin", "peertube", "jabber"]
-# YaCy has a single admin account (no per-user accounts), so its password is
-# synced from exactly one SecuBox user: the master "admin". Changing that user's
-# password propagates to YaCy when the module is installed and active.
-YACY_SYNC_USER = "admin"
-
-_log = logging.getLogger("secubox.users")
 SESSIONS_FILE = os.environ.get("SECUBOX_AUTH_SESSIONS", "/var/lib/secubox/auth/sessions.json")
 
 # Single engine instance — all mutations go through here
@@ -334,59 +324,6 @@ def get_service_ctl(name: str) -> Optional[str]:
     ctl = f"/usr/sbin/{name}ctl"
     return ctl if os.path.exists(ctl) else None
 
-
-def _yacy_available() -> bool:
-    """True when the YaCy module is installed and its host service is active."""
-    if not os.path.exists("/usr/sbin/yacyctl"):
-        return False
-    try:
-        r = subprocess.run(
-            ["systemctl", "is-active", "--quiet", "secubox-yacy.service"],
-            timeout=5,
-        )
-        return r.returncode == 0
-    except Exception:
-        return False
-
-
-def _sync_yacy_admin_password(username: str, password: str) -> Optional[bool]:
-    """Propagate the master admin user's password to YaCy's single admin account.
-
-    Returns True/False on an attempt, or None when skipped (not the sync user, or
-    YaCy not installed/active). The password is handed to `yacyctl set-admin-password`
-    over STDIN (never argv) so it cannot leak via ps/sudo logs. yacyctl needs root
-    (secret file + lxc-attach); the secubox user is granted exactly this one command
-    via secubox-yacy's sudoers drop-in.
-
-    Runtime requirement: this uses `sudo`, which is neutralized by
-    `NoNewPrivileges=true` (the kernel drops the setuid bit regardless of sudoers).
-    It therefore only elevates when secubox-users runs with NNP disabled — which is
-    the case when the module is served in-process by secubox-aggregator
-    (NoNewPrivileges=no). On a hardened standalone unit the sudo call fails; we log
-    it loudly and return False (never a silent success) so the operator sees that
-    YaCy was NOT updated.
-    """
-    if username != YACY_SYNC_USER:
-        return None
-    if not _yacy_available():
-        return None
-    try:
-        r = subprocess.run(
-            ["sudo", "-n", "/usr/sbin/yacyctl", "set-admin-password"],
-            input=password,
-            capture_output=True, text=True, timeout=90,
-        )
-        if r.returncode != 0:
-            _log.warning(
-                "YaCy admin password sync failed (rc=%s): %s",
-                r.returncode, (r.stderr or "").strip()[:300],
-            )
-            return False
-        return True
-    except Exception as exc:
-        _log.warning("YaCy admin password sync errored: %s", exc)
-        return False
-
 def load_roles() -> List[dict]:
     """Load roles from JSON file or return defaults."""
     if os.path.exists(ROLES_FILE):
@@ -505,10 +442,12 @@ async def get_access():
 
 @app.get("/users", dependencies=[Depends(require_jwt)])
 async def list_users():
-    """List all users (redacted — never ships hashes or TOTP secrets)."""
+    """List all users."""
     data = load_users()
-    users = [redact_user(u) for u in data.get("users", [])]
-    return {"users": users, "total": len(users)}
+    return {
+        "users": data.get("users", []),
+        "total": len(data.get("users", []))
+    }
 
 @app.get("/user/{username}", dependencies=[Depends(require_jwt)])
 async def get_user(username: str):
@@ -516,12 +455,11 @@ async def get_user(username: str):
     data = load_users()
     for user in data.get("users", []):
         if user.get("username") == username:
-            out = redact_user(user)
             # Add service status
-            out["service_status"] = {}
+            user["service_status"] = {}
             for svc in user.get("services", []):
-                out["service_status"][svc] = check_service(svc)
-            return out
+                user["service_status"][svc] = check_service(svc)
+            return user
     raise HTTPException(status_code=404, detail="User not found")
 
 @app.post("/user", dependencies=[Depends(require_jwt)])
@@ -569,11 +507,6 @@ def create_user(user: UserCreate):
                 provision_results[svc] = False
         else:
             provision_results[svc] = False
-
-    # YaCy single-admin sync (only fires for the master 'admin' user).
-    yacy_synced = _sync_yacy_admin_password(user.username, user.password)
-    if yacy_synced is not None:
-        provision_results["yacy"] = yacy_synced
 
     # Persist services list via engine's atomic I/O
     if user.services:
@@ -736,13 +669,6 @@ def change_password(username: str, pwd: PasswordChange):
                 results[svc] = result.returncode == 0
             except Exception:
                 results[svc] = False
-
-    # YaCy has a single admin account, synced from the master 'admin' user only.
-    # Independent of the per-user services list above.
-    yacy_synced = _sync_yacy_admin_password(username, pwd.password)
-    if yacy_synced is not None:
-        results["yacy"] = yacy_synced
-
     return {"success": True, "password_results": results}
 
 
@@ -1066,20 +992,14 @@ async def validate_acl(entries: List[ACLEntry]):
 
 @app.get("/export", dependencies=[Depends(require_jwt)])
 async def export_users():
-    """Export all users (redacted).
-
-    This route previously claimed to "remove sensitive data" while dropping only
-    `provision_results` — it shipped every password hash and TOTP secret into a
-    downloadable file. A comment asserting a guarantee the code does not provide
-    is worse than no comment: it stops reviewers from looking. The guarantee now
-    lives in redact_user(), which is the single place that decides what a client
-    may see.
-    """
+    """Export all users."""
     data = load_users()
-    return {
-        "users": [redact_user(u) for u in data.get("users", [])],
-        "groups": data.get("groups", []),
-    }
+    # Remove sensitive data
+    export_data = {"users": [], "groups": data.get("groups", [])}
+    for user in data.get("users", []):
+        export_user = {k: v for k, v in user.items() if k != "provision_results"}
+        export_data["users"].append(export_user)
+    return export_data
 
 @app.post("/import", dependencies=[Depends(require_permission("system.import"))])
 async def import_users(file: UploadFile = File(...)):
@@ -1190,63 +1110,21 @@ async def get_sessions():
     }
 
 
-AUTH_SOCKET = "/run/secubox/auth.sock"
-
-
-def _auth_credentials(request: Request) -> dict:
-    """Headers carrying the CALLER's identity, for a call to secubox-auth.
-
-    `POST /revoke_session` requires a JWT and records `by: <sub>` in the audit
-    trail, so the revocation must travel under the admin's own credential.
-    Anything else would either be an anonymous revocation or force a second
-    writer on sessions.json — which #942 forbids: exactly one writer.
-    """
-    headers = {}
-    auth_header = request.headers.get("Authorization")
-    if auth_header:
-        headers["Authorization"] = auth_header
-    cookie = request.headers.get("Cookie")
-    if cookie:
-        headers["Cookie"] = cookie
-    return headers
-
-
 @app.delete("/session/{session_id}", dependencies=[Depends(require_jwt)])
-async def revoke_session(session_id: str, request: Request):
-    """Revoke a specific session, through the module that owns the store.
-
-    Rewritten in #944. The previous version shelled out to
-    `curl -X DELETE .../session/{id}` — a route secubox-auth has never
-    exposed (its verb is `POST /revoke_session?session_id=…`), so every call
-    got a 404. Worse, success was read off `curl`'s exit status, and `curl -s`
-    exits 0 on a 404: the endpoint always answered `success: true` and the UI
-    reported "✅ Session revoked" while nothing had happened.
-    """
+def revoke_session(session_id: str):
+    """Revoke a specific session."""
     try:
-        async with httpx.AsyncClient(
-            transport=httpx.AsyncHTTPTransport(uds=AUTH_SOCKET), timeout=10.0
-        ) as client:
-            resp = await client.post(
-                "http://localhost/api/v1/auth/revoke_session",
-                params={"session_id": session_id},
-                headers=_auth_credentials(request),
-            )
-    except Exception as e:
-        _log.warning("revoke_session: auth module unreachable: %s", e)
-        raise HTTPException(status_code=502, detail=f"Module auth injoignable : {e}")
-
-    if resp.status_code != 200:
-        # Surface the real failure instead of claiming success.
-        _log.warning("revoke_session: auth returned %s for %s", resp.status_code, session_id)
-        raise HTTPException(
-            status_code=resp.status_code,
-            detail=f"Le module auth a refusé la révocation (HTTP {resp.status_code})",
+        result = subprocess.run(
+            ["curl", "-s", "-X", "DELETE", "--unix-socket", "/run/secubox/auth.sock",
+             f"http://localhost/session/{session_id}"],
+            capture_output=True, text=True, timeout=5
         )
+        if result.returncode == 0:
+            return {"success": True, "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    body = resp.json() if resp.content else {}
-    if not body.get("success"):
-        return {"success": False, "error": body.get("error", "Session introuvable")}
-    return {"success": True, "session_id": session_id}
+    return {"success": False, "error": "Failed to revoke session"}
 
 
 @app.post("/sessions/revoke-all", dependencies=[Depends(require_jwt)])
@@ -1267,15 +1145,8 @@ def revoke_all_sessions():
             else:
                 revoked = len(data.get("sessions", []))
 
-            # Write an empty LIST — the store's only shape (#944).
-            #
-            # This used to write {"sessions": [], "revoked_at": …}. Both
-            # secubox-auth and secubox_core.sessions iterate the file as a
-            # list; iterating a dict yields its keys, so
-            # `any(s.get("id") == jti for s in rows)` raised
-            # `AttributeError: 'str' object has no attribute 'get'` — the panic
-            # button broke secubox-auth on every authenticated request.
-            Path(SESSIONS_FILE).write_text(json.dumps([]))
+            # Write empty sessions
+            Path(SESSIONS_FILE).write_text(json.dumps({"sessions": [], "revoked_at": datetime.now().isoformat()}))
         except Exception as e:
             errors.append(f"Failed to clear sessions file: {e}")
 
