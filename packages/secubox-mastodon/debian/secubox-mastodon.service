@@ -23,7 +23,18 @@ NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-RestrictAddressFamilies=AF_UNIX AF_INET
+# `RestrictAddressFamilies=` RETIRE, ET CE N'EST PAS UN RELACHEMENT DISTRAIT
+# (#1040). Cette directive IMPLIQUE `NoNewPrivileges=yes` — systemd le fait en
+# silence — ce qui ANNULAIT le `NoNewPrivileges=false` declare plus haut pour
+# permettre `sudo`. L'unite se contredisait : elle annoncait autoriser
+# l'elevation et l'interdisait dans la ligne suivante.
+#
+# Ce que ca donnait : chaque appel du panneau rendait 500 et le journal etait
+# MUET — `--no-access-log` ne trace pas les requetes, et une
+# `HTTPException(500)` n'est pas une exception. Rien ne pointait vers la cause.
+#
+# Le reste du confinement est CONSERVE (PrivateTmp, ProtectSystem=full,
+# ProtectHome) : aucun des trois n'implique NNP, verifie un par un.
 # PAS de RuntimeDirectory=secubox : ce repertoire est partage, et le declarer
 # ici effacerait au redemarrage les sockets de toutes les autres unites.
 

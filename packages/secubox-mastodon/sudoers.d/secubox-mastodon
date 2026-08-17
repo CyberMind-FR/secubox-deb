@@ -1,0 +1,19 @@
+# SecuBox-Deb :: mastodon — elevation confinee du ctl (#1040)
+#
+# POURQUOI ELLE EST NECESSAIRE. Le demon du module tourne sous `secubox` ;
+# `lxc-info` et `lxc-attach` exigent root. Sans cette regle, le panneau
+# annoncait « conteneur arrete » sur une instance parfaitement vivante — il ne
+# disait pas ce qu'il voyait, il disait ce qu'il ne pouvait pas voir.
+#
+# LES COMMANDES SONT ENUMEREES UNE PAR UNE, jamais `mastodonctl *`. Un joker
+# donnerait a `secubox` tout ce qu'on ajoutera demain a cet outil — y compris
+# des sous-commandes destructrices qui n'existent pas encore.
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl status
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl accounts
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl invites
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl moderation
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl health
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl invite
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl start
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl stop
+secubox ALL=(root) NOPASSWD: /usr/sbin/mastodonctl install

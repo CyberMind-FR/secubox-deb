@@ -5,6 +5,8 @@ export DH_VERBOSE = 1
 	dh $@
 
 override_dh_auto_install:
+	install -D -m 0440 sudoers.d/secubox-mastodon \
+		debian/secubox-mastodon/etc/sudoers.d/secubox-mastodon
 	install -d debian/secubox-mastodon/usr/lib/secubox/mastodon
 	cp -r api debian/secubox-mastodon/usr/lib/secubox/mastodon/
 	install -d debian/secubox-mastodon/usr/sbin

@@ -1,3 +1,43 @@
+secubox-mastodon (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * L UNITE SE CONTREDISAIT ELLE-MEME. Elle declarait `NoNewPrivileges=false`
+    pour permettre `sudo`, et posait `RestrictAddressFamilies=` juste apres —
+    or cette directive IMPLIQUE `NoNewPrivileges=yes`, en silence. Resultat :
+    chaque appel du panneau rendait 500 et le journal etait MUET
+    (`--no-access-log` ne trace pas les requetes, et une `HTTPException(500)`
+    n est pas une exception). Directive retiree ; les trois autres options de
+    confinement sont conservees, aucune n implique NNP — verifie une par une.
+  * LE PANNEAU ANNONCAIT « CONTENEUR ARRETE » SUR UNE INSTANCE VIVANTE. Le
+    demon tourne sous `secubox` ; `lxc-info` exige root et rendait une chaine
+    VIDE, dont la sonde concluait « arrete ». Elle ne disait pas ce qu elle
+    voyait, elle disait ce qu elle ne POUVAIT PAS voir — et un etat vide n est
+    pas un etat connu. Elle distingue desormais les deux, et nomme le cas.
+  * ELEVATION CONFINEE : `/etc/sudoers.d/secubox-mastodon` autorise `secubox` a
+    appeler `mastodonctl`, COMMANDE PAR COMMANDE. Pas de joker — il donnerait
+    d avance tout ce qu on ajoutera demain a cet outil.
+  * PANNEAU D EXPLOITATION REEL (ref #1040). L ancien avait des boutons —
+    demarrer, arreter, inviter — et RIEN A REGARDER : il agissait sur une
+    instance dont il ne disait rien. Le module n exposait que six routes.
+  * Quatre vues, toutes en LECTURE SEULE : comptes, invitations, moderation,
+    sante. Les actions existantes sont conservees telles quelles.
+  * LES INVITATIONS MONTRENT ENFIN LEUR FILIATION. Mastodon affiche le COMPTEUR
+    d usages d une invitation, jamais QUI s en est servi ; le lien existe
+    pourtant en base (`users.invite_id`). Sans lui, « 1 utilisation » ne dit pas
+    si c est la personne qu on attendait ou un inconnu.
+  * LA DERNIERE CONNEXION EST MISE EN AVANT sur les comptes : un compte confirme
+    qui ne s est JAMAIS connecte est le motif classique de l inscription
+    automatisee, et l interface amont ne le signale pas.
+  * LA SANTE PORTE SUR LES TROIS SERVICES. Une instance dont seul `web` tourne
+    REPOND et ne publie plus rien : les messages partent en file et y restent.
+    C est la panne qu un navigateur ne montre pas. L etat global est le PIRE des
+    trois, jamais une moyenne.
+  * Toutes les requetes sont BORNEES (`LIMIT`) : ce panneau interroge une
+    instance qui sert de vrais utilisateurs.
+  * Tout ce qui vient du serveur est ECHAPPE — noms de comptes et codes sont
+    ecrits par des inconnus qui s inscrivent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Fri, 14 Aug 2026 13:10:00 +0200
+
 secubox-mastodon (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * Entretien periodique de l'instance federee : medias distants (7 j), cartes
