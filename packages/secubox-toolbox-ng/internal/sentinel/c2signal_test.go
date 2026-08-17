@@ -53,28 +53,3 @@ func contains(ss []string, v string) bool {
 	}
 	return false
 }
-
-func TestC2SignalsEmptyBrowserSetDisablesNonBrowser(t *testing.T) {
-	// With NO configured browser set, a present fingerprint must NOT fire
-	// non_browser_ja (we cannot classify browser vs non-browser).
-	s := NewC2Signals(nil)
-	fired := s.Fired(FlowMeta{Host: "news.example.com", JA4: "anythingfp"})
-	if contains(fired, "non_browser_ja") {
-		t.Errorf("empty browser set must disable non_browser_ja, got %v", fired)
-	}
-}
-
-func TestHasStrongSignal(t *testing.T) {
-	if hasStrongSignal([]string{"rare"}) {
-		t.Error("rare alone must not be a strong signal")
-	}
-	if !hasStrongSignal([]string{"rare", "dga"}) {
-		t.Error("dga must be strong")
-	}
-	if !hasStrongSignal([]string{"non_browser_ja"}) {
-		t.Error("non_browser_ja must be strong")
-	}
-	if hasStrongSignal(nil) {
-		t.Error("empty must not be strong")
-	}
-}

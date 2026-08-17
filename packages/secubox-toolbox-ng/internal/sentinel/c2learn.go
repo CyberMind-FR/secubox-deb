@@ -148,8 +148,8 @@ func (l *C2Learner) startBeaconing(m MirrorMsg, beacon *Verdict) {
 		return
 	}
 	fired := l.signals.Fired(m.Meta)
-	if !hasStrongSignal(fired) {
-		return // periodicity + rarity alone never promotes — need dga / non-browser
+	if len(fired) == 0 {
+		return // no corroboration — periodicity alone never promotes
 	}
 	interval := parseIntervalSec(beacon.Evidence["interval_s"])
 
@@ -218,14 +218,15 @@ func (l *C2Learner) tickWindow(m MirrorMsg) {
 	l.beaconMu.Unlock()
 
 	fired := l.signals.Fired(m.Meta)
-	if !hasStrongSignal(fired) {
-		// No STRONG corroboration on THIS contact — do not advance the candidate
-		// window. C2Cand unions signals across windows permanently (once fired, a
-		// signal name stays), so recording a window on a weak-only ("rare")
-		// contact would let a transient rarity (an initial low-hit-count burst
-		// that later becomes common) silently carry a common, browser-driven host
-		// across c2MinWindows on periodicity+rarity alone — exactly the false
-		// positive the strong-signal requirement exists to prevent.
+	if len(fired) == 0 {
+		// No corroboration on THIS contact — do not advance the candidate
+		// window. C2Cand unions signals across windows permanently (once
+		// fired, a signal name stays), so recording a window here would let
+		// a signal that only ever fired transiently (e.g. "rare" during an
+		// initial low-hit-count burst that later becomes common) silently
+		// carry a common, browser-fingerprinted host across c2MinWindows on
+		// periodicity alone — exactly the false positive the signal gate
+		// exists to prevent.
 		return
 	}
 	l.recordWindow(host, m.Meta.MacHash, m.TS, interval, fired)
