@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Posture Dashboard</title>
+    <script src="defcon-badge.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a0a; --card: #1a1a1a; --border: #27272a;
+            --text: #fff; --muted: #71717a; --defcon5: #22c55e;
+            --defcon4: #86efac; --defcon3: #f97316; --defcon2: #ef4444;
+            --defcon1: #991b1b;
+        }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 2rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; }
+        .hero { text-align: center; margin-bottom: 2rem; }
+        .hero .emoji { font-size: 4rem; margin-bottom: 1rem; }
+        .hero .level { font-size: 3rem; font-weight: 900; font-family: monospace; }
+        .hero .desc { color: var(--muted); }
+        .score { font-size: 2rem; font-weight: 700; }
+        .bar { height: 8px; background: var(--border); border-radius: 4px; margin: 1rem 0; overflow: hidden; }
+        .bar .fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+        .badge.compliant { background: rgba(34,197,94,0.15); color: var(--defcon5); border: 1px solid var(--defcon5); }
+        .badge.non-compliant { background: rgba(239,68,68,0.15); color: var(--defcon2); border: 1px solid var(--defcon2); }
+        .list { display: flex; flex-direction: column; gap: 0.75rem; }
+        .item { display: flex; justify-content: space-between; padding: 0.5rem; background: #1f1f1f; border-radius: 0.5rem; }
+        h2 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--muted); font-weight: 500; }
+        .timestamp { text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 2rem; }
+        .loading { color: var(--muted); text-align: center; padding: 2rem; }
+    </style>
+</head>
+<body>
+    <div class="hero" id="hero">
+        <defcon-card api-path="/api/v1/security-posture"></defcon-card>
+    </div>
+    <div class="grid">
+        <defcon-badge api-path="/api/v1/security-posture" refresh="30"></defcon-badge>
+    </div>
+    <h2>Security Components</h2>
+    <div class="grid">
+        <div class="card">
+            <h3>DEFCON Level</h3>
+            <div id="defcon-level">--</div>
+            <div class="bar"><div class="fill" id="defcon-bar"></div></div>
+            <div class="list" id="defcon-categories"></div>
+        </div>
+        <div class="card">
+            <h3>CSPN Compliance</h3>
+            <div class="score" id="cspn-score">--%</div>
+            <span class="badge" id="cspn-badge">Loading...</span>
+            <div class="bar"><div class="fill" id="cspn-bar"></div></div>
+            <div class="list" id="cspn-stats"></div>
+        </div>
+        <div class="card">
+            <h3>TPN Media</h3>
+            <div class="score" id="tpn-score">--%</div>
+            <span class="badge" id="tpn-badge">Loading...</span>
+            <div class="bar"><div class="fill" id="tpn-bar"></div></div>
+            <div class="list" id="tpn-stats"></div>
+        </div>
+        <div class="card">
+            <h3>Performance</h3>
+            <div class="score" id="perf-score">--%</div>
+            <div class="bar"><div class="fill" id="perf-bar"></div></div>
+            <div class="list" id="perf-stats"></div>
+        </div>
+    </div>
+    <div class="card" style="margin-top: 1.5rem;">
+        <h2>Recommendations</h2>
+        <div id="recommendations"></div>
+    </div>
+    <div class="timestamp">Last updated: <span id="timestamp">--</span></div>
+    <script>
+        const API = '/api/v1/security-posture';
+        async function fetchJSON(endpoint) {
+            try {
+                const r = await fetch(`${API}${endpoint}`);
+                return r.ok ? await r.json() : null;
+            } catch { return null; }
+        }
+        async function refresh() {
+            const [overview, defcon, cspn, tpn, perf] = await Promise.all([
+                fetchJSON('/overview'),
+                fetchJSON('/defcon'),
+                fetchJSON('/cspn/summary'),
+                fetchJSON('/tpn/summary'),
+                fetchJSON('/performance/summary')
+            ]);
+            update(overview, defcon, cspn, tpn, perf);
+        }
+        function update(o, d, c, t, p) {
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            if(d) {
+                document.getElementById('defcon-level').textContent = d.level_name + ' - ' + d.score?.toFixed(1) + '/100';
+                const bar = document.getElementById('defcon-bar');
+                if(bar) { bar.style.width = d.score + '%'; bar.style.background = d.color || '#6b7280'; }
+                const cats = document.getElementById('defcon-categories');
+                if(cats && d.category_scores) {
+                    cats.innerHTML = Object.entries(d.category_scores).map(([k,v]) => 
+                        `<div class="item"><span>${k}</span><span>${v.toFixed(1)}%</span></div>`
+                    ).join('');
+                }
+            }
+            if(c?.summary) {
+                const s = c.summary;
+                document.getElementById('cspn-score').textContent = (s.compliance_score||0).toFixed(1) + '%';
+                const badge = document.getElementById('cspn-badge');
+                if(badge) { badge.className = 'badge ' + (s.is_compliant ? 'compliant' : 'non-compliant'); badge.textContent = s.is_compliant ? 'COMPLIANT' : 'NON-COMPLIANT'; }
+                const bar = document.getElementById('cspn-bar');
+                if(bar) { bar.style.width = (s.compliance_score||0) + '%'; bar.style.background = s.is_compliant ? '#22c55e' : '#ef4444'; }
+                const stats = document.getElementById('cspn-stats');
+                if(stats) stats.innerHTML = `
+                    <div class="item"><span>Total</span><span>${s.total_requirements||0}</span></div>
+                    <div class="item"><span>Passed</span><span>${s.passed||0}</span></div>
+                    <div class="item"><span>Failed</span><span>${s.failed||0}</span></div>
+                `;
+            }
+            if(t?.summary) {
+                const s = t.summary;
+                document.getElementById('tpn-score').textContent = (s.compliance_score||0).toFixed(1) + '%';
+                const badge = document.getElementById('tpn-badge');
+                if(badge) { badge.className = 'badge ' + (s.is_compliant ? 'compliant' : 'non-compliant'); badge.textContent = s.is_compliant ? 'COMPLIANT' : 'NON-COMPLIANT'; }
+                const bar = document.getElementById('tpn-bar');
+                if(bar) { bar.style.width = (s.compliance_score||0) + '%'; bar.style.background = s.is_compliant ? '#3b82f6' : '#ef4444'; }
+            }
+            if(p) {
+                document.getElementById('perf-score').textContent = (p.score||0).toFixed(1) + '%';
+                const bar = document.getElementById('perf-bar');
+                if(bar) { bar.style.width = (p.score||0) + '%'; bar.style.background = p.score >= 80 ? '#22c55e' : p.score >= 60 ? '#eab308' : '#ef4444'; }
+                const stats = document.getElementById('perf-stats');
+                if(stats && p.category_scores) {
+                    stats.innerHTML = Object.entries(p.category_scores).map(([k,v]) => 
+                        `<div class="item"><span>${k}</span><span>${v.toFixed(1)}%</span></div>`
+                    ).join('');
+                }
+            }
+            if(o?.recommendations) {
+                const recs = document.getElementById('recommendations');
+                if(recs) {
+                    if(o.recommendations.length === 0) recs.innerHTML = '<div class="loading">All systems optimal!</div>';
+                    else recs.innerHTML = o.recommendations.map(r => 
+                        `<div class="item"><span>${r.severity?.toUpperCase()||'INFO'}</span><span>${r.text||'No description'}</span></div>`
+                    ).join('');
+                }
+            }
+        }
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>
