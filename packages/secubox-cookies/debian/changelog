@@ -1,3 +1,33 @@
+secubox-cookies (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * #1058 phase 3 : le magasin de capture est cable a l'API et au marqueur.
+    - armer/desarmer (admin, opt-in) ouvrent la fenetre ET ecrivent/retirent
+      /run/secubox/cookies-capture.armed, le seul lien avec sbxmitm ;
+    - POST /capture recoit les valeurs du proxy (sans JWT : socket locale de
+      confiance, et recevoir() re-verifie la fenetre — defense en profondeur) ;
+    - GET /capture/export rend le cookies.txt reclame, par hotes ou par avatar,
+      derriere require_jwt : le SEUL endroit ou une valeur ressort ;
+    - statut et avatars n'exposent jamais les valeurs.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 12:15:39 +0200
+
+secubox-cookies (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * La webui etait vide alors que la capture tournait. Elle lisait un fichier
+    cookies.json que PLUS RIEN ne produit : sbxmitm ecrit desormais dans la
+    base SQLite mitm_events, en direct (verifie : 484 -> 491 lignes pendant une
+    navigation, hotes google/youtube/laposte visibles). La vue se rebatit
+    maintenant depuis cette vraie source, groupee par hote, classifiee par le
+    detecteur de traqueurs deja present.
+  * Lecture EN LECTURE SEULE (mode=ro) : la webui ne verrouille jamais la base
+    que l'ingest ecrit en meme temps. Repli sur l'ancien JSON s'il existe.
+  * Rappel porte dans le champ has_value : cet ingest n'enregistre que les NOMS
+    de cookies, jamais les valeurs (choix « vie privee »). La vue montre ce qui
+    est observe, pas de quoi rejouer une session — la capture de valeurs pour
+    rejeu est un chemin distinct (#1058).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 08:49:38 +0200
+
 secubox-cookies (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/. C'est le

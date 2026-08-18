@@ -216,3 +216,46 @@ def test_le_profil_actif_disparait_du_statut_apres_desarmement(magasin):
     magasin.recevoir("www.youtube.com", [_cookie()])
     magasin.desarmer()
     assert magasin.statut()["profil_actif"] is None
+
+
+# ── marqueur partage avec sbxmitm (#1058 phase 3) ───────────────────────────
+
+@pytest.fixture
+def magasin_marque(tmp_path):
+    return MagasinCapture(
+        fichier=tmp_path / "captures.enc",
+        cle_fichier=tmp_path / "capture.key",
+        marqueur=tmp_path / "armed",
+    )
+
+
+def test_armer_ecrit_le_marqueur(magasin_marque, tmp_path):
+    magasin_marque.armer(duree_s=120, profil="perso", hotes=["youtube.com"])
+    m = tmp_path / "armed"
+    assert m.exists()
+    import json, time
+    d = json.loads(m.read_text())
+    # exactement les champs que le captureArm de sbxmitm attend
+    assert d["profil"] == "perso"
+    assert d["hotes"] == ["youtube.com"]
+    assert d["deadline"] > time.time()
+
+
+def test_desarmer_retire_le_marqueur(magasin_marque, tmp_path):
+    magasin_marque.armer(duree_s=120)
+    assert (tmp_path / "armed").exists()
+    magasin_marque.desarmer()
+    assert not (tmp_path / "armed").exists()
+
+
+def test_le_marqueur_est_a_acces_restreint(magasin_marque, tmp_path):
+    magasin_marque.armer(duree_s=120)
+    import stat
+    assert stat.S_IMODE((tmp_path / "armed").stat().st_mode) == 0o600
+
+
+def test_sans_marqueur_configure_armer_ne_plante_pas(magasin):
+    # Le magasin doit rester utilisable meme sans chemin de marqueur (tests,
+    # usage hors-ligne) : armer ne fait alors qu'ouvrir la fenetre interne.
+    magasin.armer(duree_s=60)
+    assert magasin.est_arme()

@@ -33,9 +33,14 @@ PROFIL_DEFAUT = "defaut"
 
 
 class MagasinCapture:
-    def __init__(self, fichier: Path, cle_fichier: Path):
+    def __init__(self, fichier: Path, cle_fichier: Path,
+                 marqueur: Optional[Path] = None):
         self.fichier = Path(fichier)
         self.cle_fichier = Path(cle_fichier)
+        # Le marqueur est le SEUL lien avec sbxmitm : tant qu'il existe et n'est
+        # pas echu, le proxy capture ; retire, il s'arrete. C'est ici, dans
+        # armer/desarmer, qu'on le tient synchrone avec la fenetre interne.
+        self.marqueur = Path(marqueur) if marqueur else None
         self._arme_jusqua: float = 0.0
         self._profil_actif: str = PROFIL_DEFAUT
         # profil -> hote -> nom -> cookie
@@ -75,13 +80,46 @@ class MagasinCapture:
         os.replace(tmp, self.fichier)
 
     # ── armement ──────────────────────────────────────────────────────────
-    def armer(self, duree_s: int = 300, profil: str = PROFIL_DEFAUT) -> None:
-        """Ouvre une fenêtre de capture, pour un profil (avatar) donné."""
+    def armer(self, duree_s: int = 300, profil: str = PROFIL_DEFAUT,
+              hotes: Optional[list] = None) -> None:
+        """Ouvre une fenêtre de capture, pour un profil (avatar) donné.
+
+        `hotes` limite le périmètre : sbxmitm ne capturera QUE ces hôtes (et
+        leurs sous-domaines). Liste vide/None = tout hôte visité pendant la
+        fenêtre — le périmètre est alors la navigation elle-même.
+        """
         self._profil_actif = profil or PROFIL_DEFAUT
         self._arme_jusqua = time.time() + max(0, duree_s)
+        self._ecrire_marqueur(hotes or [])
+
+    def _ecrire_marqueur(self, hotes: list) -> None:
+        """Écrit le marqueur que sbxmitm lit — le seul lien avec le proxy."""
+        if self.marqueur is None:
+            return
+        payload = {
+            "deadline": int(self._arme_jusqua),
+            "profil": self._profil_actif,
+            "hotes": [h.strip().lower() for h in hotes if h.strip()],
+        }
+        try:
+            self.marqueur.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.marqueur.with_suffix(".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                f.write(json.dumps(payload))
+            os.replace(tmp, self.marqueur)
+        except OSError:
+            pass
 
     def desarmer(self) -> None:
         self._arme_jusqua = 0.0
+        # Retirer le marqueur ferme la capture cote sbxmitm immediatement,
+        # sans attendre l'echeance.
+        if self.marqueur is not None:
+            try:
+                self.marqueur.unlink()
+            except OSError:
+                pass
 
     def est_arme(self) -> bool:
         return time.time() < self._arme_jusqua
