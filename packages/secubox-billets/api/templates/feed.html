@@ -3,15 +3,6 @@
 {# Quick-view chip bar: the emoji hashtags authors typed in their billets.
    Plain links (not JS) so it works without scripts and each view is a real,
    shareable URL. #}
-{% if all_tags %}
-<nav class="tagbar" aria-label="Filtrer par tag">
-  <a class="tag-chip{% if not active_tag %} on{% endif %}" href="/">🌀 tous</a>
-  {% for t in all_tags %}
-  <a class="tag-chip{% if active_tag == t.slug %} on{% endif %}" href="/?tag={{ t.slug }}"
-     rel="{% if active_tag == t.slug %}nofollow{% endif %}">{{ t.emoji }} #{{ t.slug }} <span class="tag-n">{{ t.count }}</span></a>
-  {% endfor %}
-</nav>
-{% endif %}
 {% if active_tag %}
 <p class="tag-active">Vue rapide : <b>#{{ active_tag }}</b> — <a href="/">tout afficher</a></p>
 {% endif %}
@@ -62,5 +53,17 @@
 {% if next_cursor %}
 {# Carry the active tag across pages, else page 2 silently drops the filter. #}
 <nav class="pager"><a rel="next" href="/?cursor={{ next_cursor }}{% if active_tag %}&amp;tag={{ active_tag }}{% endif %}">Billets plus anciens →</a></nav>
+{% endif %}
+{% if all_tags %}
+<details class="motscles"{% if active_tag %} open{% endif %}>
+  <summary>Mots-clés <span class="mc-n">{{ all_tags|length }}</span></summary>
+  <nav class="tagbar" aria-label="Filtrer par tag">
+    <a class="tag-chip{% if not active_tag %} on{% endif %}" href="/">🌀 tous</a>
+    {% for t in all_tags %}
+    <a class="tag-chip{% if active_tag == t.slug %} on{% endif %}" href="/?tag={{ t.slug }}"
+       rel="{% if active_tag == t.slug %}nofollow{% endif %}">{{ t.emoji }} #{{ t.slug }} <span class="tag-n">{{ t.count }}</span></a>
+    {% endfor %}
+  </nav>
+</details>
 {% endif %}
 {% endblock %}
