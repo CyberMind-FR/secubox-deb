@@ -178,6 +178,7 @@ type Proxy struct {
 	// rest to the async sbx-sentinel analyzer. nil-safe and fail-open — a
 	// disabled/erroring hook is a transparent passthrough. See sentinel.go.
 	sentinel *sentinelHook
+	capture  *captureArm // #1058 : fenetre de capture de session (nil = jamais)
 
 	// rlevel (#rlevel-per-peer, Task 3) is the per-peer R-level clamp: it
 	// ceilings the verdict px.pol.Decide already computed to what the calling
@@ -602,6 +603,7 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// which is irrelevant here (names are unchanged by poison) but keeps the
 	// relayed names byte-for-byte the origin's. Fire-and-forget, gated.
 	px.emitCookies(relayIP, clientHash, req, resp)
+	px.emitCapture(req, resp)
 
 	// #736 R4 — media reverse-catcher: if this MITM'd response is cloneable media
 	// (HLS/DASH manifest or direct audio/video), record its URL (never the body)
@@ -788,6 +790,13 @@ func main() {
 		"seconds the R4 media buffer's captured bytes are kept before the janitor evicts them (the metatag survives eviction)")
 	mediaBufferSizeCeil := flag.Int64("media-buffer-size-ceil", defaultSizeCeilBytes,
 		"hard byte ceiling for the R4 media buffer on /data; the janitor LRU-evicts the oldest sessions first when exceeded")
+
+	captureMarker := flag.String("capture-marker", "",
+		"#1058 : chemin du fichier-marqueur d'une fenetre de capture de session. "+
+			"Vide (defaut) = capture JAMAIS active. Non-vide = sbxmitm lit ce "+
+			"marqueur ; il ne capture les VALEURS de cookies que si le marqueur "+
+			"existe, n'est pas echu, et vise l'hote — sinon rien. Le module cookies "+
+			"ecrit ce marqueur sur opt-in explicite de l'utilisateur.")
 	flag.Parse()
 	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
@@ -846,6 +855,8 @@ func main() {
 		// SENTINEL_MIRROR_SOCK); unset/false or a failed pack load yields a
 		// disabled no-op hook, so the default build is byte-identical to today.
 		sentinel: newSentinelHook(),
+		// #1058 : nil tant que --capture-marker est vide → emitCapture no-op total.
+		capture: newCaptureArm(*captureMarker),
 		// #rlevel-per-peer Task 3 — per-peer R-level clamp (see decideForPeer).
 		rlevel: rlevelPol,
 	}
