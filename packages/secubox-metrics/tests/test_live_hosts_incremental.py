@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Lecture incrementale des journaux nginx par live_hosts (#1045).
 
 Le defaut corrige : 87 journaux, 12 Mo, relus et re-analyses chaque minute — un

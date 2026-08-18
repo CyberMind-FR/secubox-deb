@@ -1,4 +1,9 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 
 # Re-exec self under flock to prevent concurrent runs (added 2026-05-12)
 LOCK=/run/sync-mitmproxy-routes.lock

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Design — kbin Tor endpoint: quick-switch anonymized web surfing
 
 *Spec · 2026-06-19 · issue [#683](https://github.com/CyberMind-FR/secubox-deb/issues/683) · status: IMPLEMENTED DARK in secubox-toolbox 2.7.1*

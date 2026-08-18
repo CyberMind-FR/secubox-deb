@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # secubox-proxypac — WPAD/PAC auto-config for mesh-service routing (design)
 
 **Issue:** #784 · **Date:** 2026-07-03 · **Status:** design (sub-project A of 2)

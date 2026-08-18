@@ -1,4 +1,9 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # haproxy-workflow.sh - HAProxy auto-rehealth, WAF sync, and certificate management
 # SecuBox-DEB :: Infrastructure Workflow Automation
 # CyberMind — Gérald Kerma

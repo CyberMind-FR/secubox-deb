@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Regression test for the TOML-rewrite helpers in `streamlitctl` (#956
 final review): `_set_toml_key_in_section`, `_remove_toml_section`,
 `_set_toml_path_in_section` and `_set_app_port` all rewrite a file via

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SecuBox P2P — Poster GPT & Roadmap (Gondwana Mesh)
 
 > Livrable de synthèse pour les évolutions **secubox-p2p DHT / Federation / Master-link**

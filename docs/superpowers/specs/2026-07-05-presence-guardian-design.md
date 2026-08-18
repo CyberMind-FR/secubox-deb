@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Design — Cross-plane Presence Guardian (Project B / B1)
 
 - **Issue** : [#820](https://github.com/CyberMind-FR/secubox-deb/issues/820)

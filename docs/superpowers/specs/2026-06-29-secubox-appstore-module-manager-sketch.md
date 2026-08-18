@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SecuBox App Store / Module Manager — Architecture Sketch
 
 **Date:** 2026-06-29 · **Status:** brainstorm sketch (pre-spec) · **Author intent:** "appstore categorized + live prefs/components care; lyrion/peertube/nextcloud/webmail/kbin are modules of this toolbox system; implement shortly."

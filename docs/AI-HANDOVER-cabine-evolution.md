@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Cabine Numérique VILLAGE3B — Brief technique pour LLM externe (GPT-5 / Gemini 2.x / Claude)
 
 > Self-contained prompt destiné à un autre assistant pour comprendre l'état + contribuer à l'évolution de la cabine SecuBox-Deb / Gondwana ToolBoX sans contexte préalable.

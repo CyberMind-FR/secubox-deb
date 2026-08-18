@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Non-regression tests for the P0 hardening batch (#942).
 
 Every test here MUST fail on the pre-#942 code. They pin the five active

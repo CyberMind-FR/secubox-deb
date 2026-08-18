@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """pytest conftest — make secubox_core importable when running locally
 out of the source tree (no system-wide install)."""
 import pathlib

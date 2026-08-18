@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Eye Remote — Multi-Gadget L3 via DHCP on `eye-br0` (+ Phase 2 Pairing Stub)
 
 *Spec for issue [#158](https://github.com/CyberMind-FR/secubox-deb/issues/158).

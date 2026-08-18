@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """L'anti-rejeu TOTP ne doit pas exiger d'ecrire dans le magasin d'utilisateurs (#990).
 
 Panne mesuree sur la board : /etc/secubox est root:root 0755, secubox-auth

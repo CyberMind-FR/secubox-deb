@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Sponsor-a-Port — Mécénat de portage
 
 Vous pouvez sponsoriser le portage de SecuBox-Deb vers une nouvelle cible matérielle. Chaque portage sponsorisé produit un livrable concret, public, et crédité.

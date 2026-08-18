@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SwitchSBX — Feuille de route des phases 1 à 6
 
 **Date :** 2026-07-31 · **Spec :** [`2026-07-31-switchsbx-design.md`](../specs/2026-07-31-switchsbx-design.md)

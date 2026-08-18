@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SecuBox Learning System — lot validé
 
 Ce dossier rassemble uniquement les fiches dont le contenu est marqué `statut: verifie` et dont la rédaction a été confrontée au dépôt `secubox-deb`.

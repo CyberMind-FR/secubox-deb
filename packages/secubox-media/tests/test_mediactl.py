@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """mediactl — confinement, lecture seule, et le refus de supprimer (#995).
 
 Ce ctl recoit des CHEMINS venus d'une requete HTTP et les applique au systeme

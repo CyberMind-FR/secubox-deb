@@ -1,4 +1,9 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # SecuBox TUI splash — single-colour SECUBOX ROOT-green (Charte §05 ROOT).
 # Previously alternated two greens per-letter ("S | EC | UB | OX") which was
 # busy and rendered ugly under reduced-palette terminals (#fix-banner).

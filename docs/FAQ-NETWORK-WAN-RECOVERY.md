@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # FAQ — WAN injoignable sur MOCHAbin (ARP marche, unicast mort)
 
 *Panne récurrente. Playbook de diagnostic + recovery. Créé 2026-07-28 après une session d'investigation exhaustive.*

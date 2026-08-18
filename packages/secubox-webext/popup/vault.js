@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
 // SecuBox Companion — client-side session vault (#409).
 // Cookies are encrypted IN THE BROWSER (AES-GCM, PBKDF2 key from the operator's
 // passphrase) before upload; the avatar module stores only opaque ciphertext.

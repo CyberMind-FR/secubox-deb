@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 import subprocess, os
 from pathlib import Path
 CTL = Path(__file__).resolve().parents[1] / "sbin" / "secubox-toolbox-tor-reconcile"

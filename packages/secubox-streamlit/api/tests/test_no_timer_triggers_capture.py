@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Invariant central du design du mur mosaïque (#957 §3.1, #958) : la
 capture d'une vignette est déclenchée par ÉVÉNEMENT (première inscription,
 mise à jour, clic manuel) — JAMAIS par une boucle. Un timer qui balaierait
