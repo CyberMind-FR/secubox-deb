@@ -38,6 +38,7 @@ const (
 	dpiRoute     = "/classify"
 	cookiesRoute = "/inject"
 	ja4Route     = "/ja4"
+	captureRoute = "/capture" // #1058 : valeurs de session, distinct de /inject (noms)
 )
 
 // Caps + truncation limits, matching the Python addons exactly.
