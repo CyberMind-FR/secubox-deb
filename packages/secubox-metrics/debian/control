@@ -16,7 +16,12 @@ Depends: ${misc:Depends},
          python3-maxminddb | python3-pip,
          python3-cryptography,
          nftables
-Recommends: geoipupdate
+Recommends: geoipupdate,
+            python3-fpdf2,
+            python3-matplotlib
+Replaces: secubox-metalogizer
+Conflicts: secubox-metalogizer
+Provides: secubox-metalogizer
 Description: SecuBox Metrics Dashboard
  Real-time system metrics dashboard with caching.
  Provides overview stats, WAF metrics, connection counts,

@@ -1,9 +1,9 @@
 {
   "id": "mastodon",
   "name": "Mastodon",
-  "category": "apps",
+  "category": "mesh",
   "icon": "🐘",
   "path": "/mastodon/",
   "order": 815,
-  "description": "Reseau social federe (LXC natif)"
+  "description": "Reseau social federe, aux cotes de GoToSocial"
 }

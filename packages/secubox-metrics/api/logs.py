@@ -1,15 +1,14 @@
 """
-SecuBox-Deb :: Metalogizer
+SecuBox-Deb :: Metrics — analyse des journaux
 CyberMind - https://cybermind.fr
-Author: Gerald KERMA <devel@cybermind.fr>
-License: Proprietary / ANSSI CSPN candidate
 
-Log processor/analyzer module - parses journalctl logs, extracts patterns,
-calculates statistics, and monitors log rotation.
+Anciennement le module `metalogizer`, fondu ici : le nom se confondait avec
+`metablogizer`, qui publie des billets et n'a rien a voir avec des journaux.
+Les routes vivent desormais sous /api/v1/metrics/logs/.
 """
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from secubox_core.auth import router as auth_router, require_jwt
+from secubox_core.auth import require_jwt
 from secubox_core.logger import get_logger
 from typing import Optional
 from datetime import datetime, timedelta
@@ -21,28 +20,16 @@ import subprocess
 import re
 from collections import defaultdict
 
-app = FastAPI(title="secubox-metalogizer", version="1.0.0", root_path="/api/v1/metalogizer")
-
-# ══════════════════════════════════════════════════════════════════
-# Health Check Endpoint (public, no auth)
-# ══════════════════════════════════════════════════════════════════
-
-@app.get("/health")
-async def health_check():
-    """Public health check endpoint for sidebar status."""
-    return {"status": "ok", "module": "deb"}
-
-app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
-log = get_logger("metalogizer")
+log = get_logger("metrics.logs")
 
 # Configuration
-CACHE_FILE = Path("/var/cache/secubox/metalogizer/stats.json")
+CACHE_FILE = Path("/var/cache/secubox/metrics/stats.json")
 LOG_DIRS = ["/var/log", "/var/log/secubox"]
 SECUBOX_SERVICES = [
     "secubox-hub", "secubox-crowdsec", "secubox-wireguard", "secubox-dpi",
     "secubox-nac", "secubox-qos", "secubox-system", "secubox-reporter",
-    "secubox-metalogizer", "secubox-netdata", "secubox-vhost", "secubox-auth",
+    "secubox-netdata", "secubox-vhost", "secubox-auth",
     "secubox-cdn", "secubox-netmodes", "secubox-mediaflow",
 ]
 
@@ -766,12 +753,21 @@ async def refresh_cache():
             log.error(f"Cache refresh failed: {e}")
         await asyncio.sleep(60)
 
-
-@app.on_event("startup")
-async def startup():
-    """Startup tasks."""
-    asyncio.create_task(refresh_cache())
-    log.info("SecuBox Metalogizer started")
+# Le rafraichissement demarre a la premiere requete plutot que sur un
+# evenement `startup` : monte dans l agregateur, le startup d une sous-app ne
+# se declenche jamais, et le cache restait froid indefiniment.
+_tache: Optional[asyncio.Task] = None
 
 
-app.include_router(router)
+def demarrer_cache() -> None:
+    """Amorce la boucle de rafraichissement, une seule fois."""
+    global _tache
+    if _tache is None or _tache.done():
+        _tache = asyncio.create_task(refresh_cache())
+
+
+@router.get("/etat-cache")
+async def etat_cache(_=Depends(require_jwt)):
+    """Dit si la boucle tourne — un cache muet est un cache qu on croit chaud."""
+    return {"actif": _tache is not None and not _tache.done(),
+            "entrees": len(_cache) if isinstance(_cache, dict) else 0}

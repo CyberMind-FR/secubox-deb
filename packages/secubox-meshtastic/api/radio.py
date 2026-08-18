@@ -61,6 +61,66 @@ def _dbg(msg: str) -> None:
     print(f"[meshtastic] {msg}", file=sys.stderr, flush=True)
 
 
+# Cartes LoRa connues, telles que les nomme /dev/serial/by-id. Le motif porte
+# le MODELE et non le numero de serie, pour survivre a un reflash.
+CARTES_LORA = ("RAK4631", "WisCore", "Heltec", "T-Beam", "TTGO", "LilyGO",
+               "RAK11200", "Station_G1", "Nano_G")
+
+
+def _chercher_carte(exclure: str | None = None) -> str | None:
+    """Cherche une carte LoRa dans /dev/serial/by-id, par modele."""
+    rep = "/dev/serial/by-id"
+    try:
+        entrees = sorted(os.listdir(rep))
+    except OSError:
+        return None
+    for nom in entrees:
+        if not any(m.lower() in nom.lower() for m in CARTES_LORA):
+            continue
+        chemin = os.path.join(rep, nom)
+        if chemin != exclure and os.path.exists(chemin):
+            return chemin
+    return None
+
+
+def appliquer_region(radio, region: str) -> str | None:
+    """Ecrit la region sur la carte si elle en differe. Rend l'action faite.
+
+    Ce reglage n'etait ecrit NULLE PART sur le materiel : la commande
+    `set-region` se contentait de modifier le fichier de configuration (en
+    journalisant « applied », ce qui etait faux), et le daemon se bornait a
+    LIRE la region pour l'afficher. Apres un reflash, la carte repartait donc
+    en region « UNSET » — et le firmware Meshtastic REFUSE d'emettre sans
+    region, pour des raisons reglementaires. La carte restait muette pendant
+    que l'interface affichait fierement « EU_868 » d'apres le fichier.
+
+    On n'ecrit que si la valeur differe : ecrire la configuration LoRa
+    redemarre la radio, et le faire a chaque demarrage la remettrait en boucle.
+    """
+    # _SerialRadio garde son interface sous `_iface` ; MockRadio n'en a pas.
+    iface = getattr(radio, "_iface", None) or getattr(radio, "iface", None)
+    if iface is None or not region:
+        return None
+    try:
+        from meshtastic.protobuf import config_pb2
+        voulue = config_pb2.Config.LoRaConfig.RegionCode.Value(region)
+    except Exception as e:
+        _dbg(f"region inconnue dans la configuration: {region!r} ({e})")
+        return None
+    try:
+        noeud = iface.localNode
+        actuelle = noeud.localConfig.lora.region
+        if actuelle == voulue:
+            return None
+        noeud.localConfig.lora.region = voulue
+        noeud.writeConfig("lora")     # ecrit ET redemarre la radio
+        _dbg(f"region ecrite sur la carte: {region} (etait {actuelle})")
+        return region
+    except Exception as e:
+        _dbg(f"ecriture de la region impossible: {e!r}")
+        return None
+
+
 def open_serial(dev: str, *, attempts: int = 3, delay: float = 2.0) -> RadioInterface | None:
     """Return a live radio, or None if the device is absent (radio: absent).
 
@@ -74,8 +134,18 @@ def open_serial(dev: str, *, attempts: int = 3, delay: float = 2.0) -> RadioInte
     can re-lock and re-handshake.
     """
     if dev != "auto" and not os.path.exists(dev):
-        _dbg(f"radio path absent: {dev}")
-        return None
+        # Un chemin `by-id` porte le NUMERO DE SERIE de la carte, et celui-ci
+        # change quand on la reflashe. Le chemin configure pointe alors dans le
+        # vide et la radio disparait sans que rien ne l'explique — la webui
+        # affiche « Radio absent » alors que le materiel est branche.
+        # On cherche donc une carte equivalente avant de renoncer.
+        remplacant = _chercher_carte(exclure=dev)
+        if remplacant:
+            _dbg(f"radio path absent ({dev}) — carte trouvee ailleurs: {remplacant}")
+            dev = remplacant
+        else:
+            _dbg(f"radio path absent: {dev} — bascule en detection automatique")
+            dev = "auto"
     try:
         from meshtastic.serial_interface import SerialInterface  # lazy
         from pubsub import pub
@@ -101,17 +171,30 @@ def open_serial(dev: str, *, attempts: int = 3, delay: float = 2.0) -> RadioInte
 class _SerialRadio:
     def __init__(self, iface, pub) -> None:
         self._iface, self._pub = iface, pub
+        # pypubsub ne garde que des references FAIBLES vers ses abonnes. Les
+        # fonctions posees ci-dessous sont creees dans `on()` : plus rien ne
+        # les reference a la sortie, le ramasse-miettes les emporte, et
+        # l'abonnement meurt EN SILENCE. Aucun paquet recu n'arrivait donc
+        # jamais au daemon — la liste des noeuds ne se remplissait qu'au
+        # demarrage, en recopiant la base de la carte, ce qui donnait
+        # l'illusion que la reception marchait. On garde donc une reference
+        # forte, pour toute la duree de vie de la radio.
+        self._abonnes: list = []
 
     def on(self, event: str, cb: Callable) -> None:
         topic = {"receive": "meshtastic.receive",
                  "node": "meshtastic.node.updated",
                  "connection": "meshtastic.connection.established"}[event]
         if event == "receive":
-            handler = lambda packet=None, interface=None, **kw: cb(packet or {})
+            def handler(packet=None, interface=None, **kw):
+                cb(packet or {})
         elif event == "node":
-            handler = lambda node=None, interface=None, **kw: cb(node or {})
+            def handler(node=None, interface=None, **kw):
+                cb(node or {})
         else:  # "connection"
-            handler = lambda interface=None, **kw: cb(interface or {})
+            def handler(interface=None, **kw):
+                cb(interface or {})
+        self._abonnes.append(handler)      # empeche la collecte de l'abonne
         self._pub.subscribe(handler, topic)
 
     def send_text(self, text: str, channel: int = 0) -> None:

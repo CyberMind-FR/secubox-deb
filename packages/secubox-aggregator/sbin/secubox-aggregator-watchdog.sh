@@ -28,8 +28,22 @@ TIMEOUT="${SECUBOX_AGG_WD_TIMEOUT:-12}"
 # No socket yet (service still starting / not migrated) → nothing to heal.
 [ -S "$SOCK" ] || exit 0
 
+# ON SONDE L AGREGATEUR, PAS UN MODULE.
+#
+# La sonde visait /api/v1/hub/public/menu — un point d entree qui traverse le
+# hub ET son cache d etat. Quand le hub etait lent, la sonde echouait et c est
+# l AGREGATEUR qui etait redemarre : on tuait le porteur pour la faute d un
+# passager. Six redemarrages en une heure le 2026-08-17.
+#
+# `/health` ne depend que de l agregateur lui-meme : il repond des qu il est
+# capable de servir, et pas avant.
+#
+# `|| echo 000` retire : curl ecrit deja 000 en cas d echec, et le repli en
+# ajoutait un second — d ou les « code=000000 » du journal, qui rendaient toute
+# comparaison numerique impossible.
 code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TIMEOUT" \
-        --unix-socket "$SOCK" http://localhost/api/v1/hub/public/menu 2>/dev/null || echo 000)
+        --unix-socket "$SOCK" http://localhost/health 2>/dev/null)
+[ -n "$code" ] || code=000
 
 if [ "$code" = "200" ]; then
     echo 0 > "$STATE" 2>/dev/null || true
@@ -45,12 +59,29 @@ logger -t "$MODULE" "aggregator probe failed (code=$code, streak=$n/$FAIL_THRESH
 # restarts, so a still-starting aggregator looks "present but unresponsive" to
 # the probe. Do NOT auto-heal while it is within the grace window, or we kill it
 # before it can finish binding (self-inflicted restart loop).
-GRACE="${SECUBOX_AGG_WD_GRACE:-480}"
+# 900 s et non 480 : le montage des ~110 modules a pris 360 s a vide le
+# 2026-08-17, et davantage sous charge. Une grace trop courte tue l agregateur
+# juste avant qu il finisse, et le redemarrage repart de zero — la boucle se
+# nourrit d elle-meme.
+GRACE="${SECUBOX_AGG_WD_GRACE:-900}"
 _mainpid=$(systemctl show secubox-aggregator -p MainPID --value 2>/dev/null || echo 0)
 if [ -n "$_mainpid" ] && [ "$_mainpid" != 0 ]; then
     _up=$(ps -o etimes= -p "$_mainpid" 2>/dev/null | tr -d " ")
     if [ -n "$_up" ] && [ "$_up" -lt "$GRACE" ]; then
         logger -t "$MODULE" "aggregator up ${_up}s (<${GRACE}s grace) — still starting, not restarting"
+        exit 0
+    fi
+    # AU-DELA DE LA GRACE, ON REGARDE S IL AVANCE.
+    #
+    # Un processus qui consomme du CPU est en train de faire quelque chose —
+    # importer un module, resoudre une dependance. Le tuer parce qu une horloge
+    # arbitraire a sonne, c est perdre le travail deja fait et recommencer.
+    # On ne redemarre que ce qui est reellement FIGE.
+    _c1=$(awk "{print \$14+\$15}" "/proc/$_mainpid/stat" 2>/dev/null || echo 0)
+    sleep 5
+    _c2=$(awk "{print \$14+\$15}" "/proc/$_mainpid/stat" 2>/dev/null || echo 0)
+    if [ "${_c2:-0}" -gt "${_c1:-0}" ] 2>/dev/null; then
+        logger -t "$MODULE" "aggregator consomme encore du CPU (${_c1}->${_c2}) — il avance, pas de redemarrage"
         exit 0
     fi
 fi

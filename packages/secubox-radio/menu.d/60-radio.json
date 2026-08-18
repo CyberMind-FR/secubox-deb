@@ -1,8 +1,9 @@
 {
   "id": "radio",
-  "title": "Radio",
-  "emoji": "🎵",
+  "name": "Radio",
+  "category": "mind",
+  "icon": "📻",
   "path": "/radio/",
-  "category": "Media",
-  "order": 60
+  "order": 60,
+  "description": "Radio et television collaboratives, programmation partagee"
 }

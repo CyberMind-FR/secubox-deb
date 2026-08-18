@@ -1,3 +1,63 @@
+secubox-meshtastic (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le recensement passif et le journal de paquets ne se remplissaient jamais.
+    Les paquets Meshtastic portent leur charge utile en OCTETS bruts, que
+    `json.dumps` refuse : chaque paquet levait une TypeError. L'ecriture ayant
+    lieu AVANT la mise a jour des compteurs, l'exception emportait tout et le
+    recensement restait a zero alors que la reception fonctionnait.
+  * Les octets sont encodes en base64, les compteurs sont mis a jour AVANT
+    l'ecriture, et une ecriture qui echoue ne fait plus perdre la reception :
+    le journal passif est un confort, pas le coeur du module.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 06:14:49 +0200
+
+secubox-meshtastic (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * AUCUN paquet recu n'arrivait jamais au daemon. pypubsub ne garde que des
+    references FAIBLES vers ses abonnes ; les fonctions d'abonnement etaient
+    creees dans `on()` et plus rien ne les referencait a la sortie. Le
+    ramasse-miettes les emportait et l'abonnement mourait EN SILENCE.
+  * L'illusion etait complete : au demarrage le daemon recopie la base de
+    noeuds de la carte, si bien que la liste des noeuds semblait vivante alors
+    que plus rien n'arrivait ensuite — ni message, ni recensement passif, ni
+    mise a jour de signal. La carte, elle, entendait parfaitement (SNR 6.0).
+  * Une reference forte est conservee pour toute la duree de vie de la radio.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 06:11:01 +0200
+
+secubox-meshtastic (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * La region radio est desormais POSEE sur la carte, et plus seulement
+    affichee. Personne ne l'ecrivait : `set-region` modifiait le fichier de
+    configuration (en journalisant « applied », ce qui etait faux) et le daemon
+    se bornait a LIRE la region pour l'interface. Apres un reflash la carte
+    repartait en region UNSET — et le firmware Meshtastic REFUSE d'emettre
+    sans region, pour des raisons reglementaires. La carte de gk2 etait donc
+    muette pendant que la webui affichait « EU_868 » d'apres le fichier.
+  * Le daemon compare au demarrage la region de la carte a celle configuree et
+    ne l'ecrit QUE si elle differe : ecrire la configuration LoRa redemarre la
+    radio, le faire a chaque lancement la remettrait en boucle. La radio est
+    rouverte apres le redemarrage de la carte.
+  * `set-region` dit maintenant ce qu'il fait vraiment et rappelle qu'il faut
+    redemarrer le daemon.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 05:57:34 +0200
+
+secubox-meshtastic (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * La radio disparaissait apres un reflash de la carte. Un chemin
+    /dev/serial/by-id porte le NUMERO DE SERIE du materiel, et celui-ci change
+    quand on reflashe : le chemin configure pointait dans le vide, et le
+    daemon renoncait sans rien expliquer. La webui affichait « Radio absent »
+    alors que la carte etait branchee et fonctionnelle.
+  * Quand le chemin configure n'existe plus, une carte equivalente est
+    cherchee dans /dev/serial/by-id par MODELE (RAK4631, Heltec, T-Beam,
+    LilyGO...) et non par numero de serie ; a defaut, la detection automatique
+    de la bibliotheque meshtastic prend le relais. Le journal dit dans les
+    deux cas ce qui a ete choisi.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 05:16:00 +0200
+
 secubox-meshtastic (0.1.6-1~bookworm1) bookworm; urgency=medium
 
   * Device config view: new GET /api/v1/meshtastic/device-config returns the

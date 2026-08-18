@@ -93,7 +93,6 @@ pas une lacune de rédaction — et c'est ce qui rend ce catalogue auditable.
 | `secubox-meshtastic` | À documenter | À documenter | oui | — | 2 | 1 | — | 10 | oui |
 | `secubox-metablogizer` | publishing | lite | oui | 24 | 4 | 5 | — | 16 | oui |
 | `secubox-metacatalog` | misc | lite | oui | 10 | — | 1 | — | — | oui |
-| `secubox-metalogizer` | misc | lite | oui | 10 | — | 1 | — | — | oui |
 | `secubox-metrics` | monitoring | lite | oui | 19 | — | 1 | — | 5 | oui |
 | `secubox-mirror` | misc | lite | oui | 15 | — | 1 | — | — | oui |
 | `secubox-mitmproxy` | misc | lite | oui | 1 | — | 4 | — | 2 | oui |
@@ -1504,22 +1503,6 @@ SecuBox Metacatalog - Service catalog and registry
 - **Tests** : À documenter
 - **Documentation existante** : README.md
 - **Source technique** : `packages/secubox-metacatalog/`
-
-### `secubox-metalogizer`
-
-SecuBox Metalogizer - Log processor and analyzer
-
-- **Catégorie** : misc · **Tier** : lite
-- **Dépend de** : `secubox-core`
-- **API** : 10 route(s), socket `/run/secubox/metalogizer.sock`, authentification requise
-- **Interface web** : oui, /srv/secubox/www/metalogizer
-- **CLI** : À documenter
-- **Units systemd** : `secubox-metalogizer.service`
-- **Ports** : À documenter
-- **Conteneur LXC** : non
-- **Tests** : À documenter
-- **Documentation existante** : README.md
-- **Source technique** : `packages/secubox-metalogizer/`
 
 ### `secubox-metrics`
 

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox-Deb :: secubox-vhost-logs
+#
+# Un `access_log` declare dans un bloc `server` REMPLACE celui herite du bloc
+# `http` — il ne s'y ajoute pas. Le journal commun pose dans conf.d ne couvre
+# donc que les blocs qui n'en declarent aucun. Ce script ajoute la ligne
+# manquante aux autres.
+#
+# Idempotent, et re-jouable : les configurations de vhosts sont generees, donc
+# une regeneration efface l'ajout. Relancer suffit.
+set -euo pipefail
+readonly MODULE="vhost-logs"
+readonly VERSION="1.0.0"
+
+LIGNE='    access_log /var/log/nginx/secubox-hosts.log sbx_host;'
+REP="${1:-/etc/nginx/sites-enabled}"
+# Les sauvegardes vont HORS de sites-enabled : nginx inclut tout ce repertoire
+# (`include /etc/nginx/sites-enabled/*`), donc une sauvegarde deposee a cote
+# est chargee comme une configuration a part entiere et duplique chaque bloc
+# server. Cinquante sauvegardes ont ainsi triple les server_name.
+SAUVEGARDES="${SAUVEGARDES:-/var/backups/secubox/nginx-vhosts}"
+APPLIQUE="${APPLIQUE:-0}"
+
+[ "${1:-}" = "--apply" ] && { APPLIQUE=1; REP=/etc/nginx/sites-enabled; }
+[ "${2:-}" = "--apply" ] && APPLIQUE=1
+
+ajoutes=0; deja=0; herites=0
+
+for f in "$REP"/*; do
+    [ -f "$f" ] || continue
+    case "$f" in
+        *.avant-secubox-hosts|*.bak|*.orig|*.dpkg-*|*~) continue ;;
+    esac
+    # On n'agit que sur les blocs qui declarent leur propre access_log ; les
+    # autres heritent deja du journal commun.
+    grep -q "access_log" "$f" || { herites=$((herites+1)); continue; }
+    if grep -q "secubox-hosts.log" "$f"; then deja=$((deja+1)); continue; fi
+
+    if [ "$APPLIQUE" = "1" ]; then
+        mkdir -p "$SAUVEGARDES"
+        cp -a "$f" "$SAUVEGARDES/$(basename "$f").$(date +%Y%m%d%H%M%S)"
+        # Apres CHAQUE access_log existant, pour couvrir tous les blocs server
+        # du fichier sans avoir a analyser les accolades.
+        sed -i "/^[[:space:]]*access_log[[:space:]]/a\\$LIGNE" "$f"
+    fi
+    ajoutes=$((ajoutes+1))
+done
+
+echo "[$MODULE] $ajoutes fichier(s) a completer, $deja deja fait(s), $herites herite(nt) du commun"
+if [ "$APPLIQUE" = "1" ]; then
+    if nginx -t 2>/dev/null; then
+        systemctl reload nginx && echo "[$MODULE] nginx recharge"
+    else
+        echo "[$MODULE] ECHEC nginx -t : restauration" >&2
+        for b in "$SAUVEGARDES"/*; do
+            [ -f "$b" ] || continue
+            nom=$(basename "$b"); nom=${nom%.*}
+            cp -a "$b" "$REP/$nom"
+        done
+        nginx -t && systemctl reload nginx
+        exit 1
+    fi
+else
+    echo "[$MODULE] essai a blanc — relancer avec --apply"
+fi

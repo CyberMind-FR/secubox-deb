@@ -132,7 +132,7 @@ OPENWRT_MODULES = {
     "luci-app-metablogizer": {"deb": "secubox-metablogizer", "status": "complete", "category": "publishing"},
     # Planned
     "luci-app-hexojs": {"deb": "secubox-hexo", "status": "planned", "category": "publishing"},
-    "luci-app-metabolizer": {"deb": "secubox-metalogizer", "status": "planned", "category": "publishing"},
+    "luci-app-metabolizer": {"deb": "secubox-metrics", "status": "planned", "category": "publishing"},
     "luci-app-metacatalog": {"deb": "secubox-metacatalog", "status": "planned", "category": "publishing"},
     "luci-app-reporter": {"deb": "secubox-reporter", "status": "planned", "category": "publishing"},
     "luci-app-newsbin": {"deb": "secubox-newsbin", "status": "planned", "category": "publishing"},

@@ -1,3 +1,11 @@
+secubox-bbs (0.25.3-1~bookworm1) bookworm; urgency=medium
+
+  * Entree de menu remise a la forme commune et rattachee a une section qui
+    existe. Trois modules trainaient dans des categories quasi vides — « apps »
+    et « Media » — au lieu des sections reelles de la navbar.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 14:03:25 +0200
+
 secubox-bbs (0.25.2-1~bookworm1) bookworm; urgency=medium
 
   * Des retours de volet non demandes se produisaient. Deux causes, traitees

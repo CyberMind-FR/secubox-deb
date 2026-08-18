@@ -1,3 +1,172 @@
+secubox-metrics (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * /health/summary avait une memoire courte, et le module cesse de s'etouffer.
+    Cet endpoint est PUBLIC, sans authentification, et le bandeau de sante est
+    injecte dans chaque page de chaque vhost — 121 domaines sur cette boite.
+    Chaque affichage relancait build_health_summary() (quatre commandes
+    systeme) et une lecture de certificat. Le module accumulait ses propres
+    sous-processus jusqu'a ne plus repondre du tout, ce qui faisait paraitre
+    toute l'interface en panne alors qu'il ne manquait qu'un cache.
+  * L'etat des services est memorise 60 s, l'etat d'un certificat 15 min :
+    l'un bouge a l'echelle de la minute, l'autre a l'echelle du mois.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 05:30:09 +0200
+
+secubox-metrics (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le cache de /overview, /waf_stats et /connections ne servait a RIEN, et le
+    module s'etouffait sous ses propres sous-processus (dix-huit en vol,
+    plus aucune reponse). La faute a `cached.get(cle, batir())` : Python
+    evalue le defaut AVANT d'appeler `.get`, donc `batir()` s'executait a
+    chaque requete, cache frais ou non. Ces fonctions lancent lxc-info, pgrep,
+    systemctl, nft et cscli.
+  * L'evaluation est desormais paresseuse : on ne rebatit que si la cle manque
+    vraiment.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 05:22:47 +0200
+
+secubox-metrics (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Le detail d'une FAMILLE additionne desormais tous ses domaines. En
+    cliquant « anibal-amiot » la page n'ouvrait que son premier membre : les
+    chiffres et le PDF ne portaient qu'une fraction du trafic. Les domaines
+    additionnes sont rappeles dans l'en-tete de la page et dans le rapport.
+  * Le PDF d'un domaine portait moins que la page web : il lui manquait les
+    codes de retour et les referents. Ils y sont, ainsi que la liste des
+    domaines quand il s'agit d'une famille, et une mention explicite quand une
+    section est vide plutot qu'un blanc.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 05:12:41 +0200
+
+secubox-metrics (1.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * `secubox-vhost-logs` deposait ses sauvegardes DANS /etc/nginx/sites-enabled.
+    Or nginx inclut tout ce repertoire : chaque sauvegarde etait chargee comme
+    une configuration a part entiere et dupliquait ses blocs server. Cinquante
+    d'entre elles avaient triple les server_name — `nginx -t` restait vert,
+    puisqu'un server_name en double n'est qu'un avertissement, mais nginx ne
+    servait plus que la premiere occurrence.
+  * Les sauvegardes vont desormais dans /var/backups/secubox/nginx-vhosts,
+    horodatees, et le script ignore explicitement sauvegardes, .bak, .orig,
+    .dpkg-* et fichiers temporaires quand il parcourt les vhosts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 17:09:15 +0200
+
+secubox-metrics (1.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le rapport PDF n'aboutissait pas (499 cote nginx, 504 vu du navigateur).
+    Le handler faisait `import rapport` en son sein : cet import tire
+    matplotlib, soit pres de dix secondes la premiere fois, et il s'executait
+    SUR la boucle asyncio. Le module restait muet tout ce temps et le
+    navigateur abandonnait avant la reponse. Le rendu lui-meme ne coutait que
+    trois secondes — il n'etait pas en cause.
+  * Import, calcul de la vue et rendu se font desormais en un seul aller vers
+    un thread, hors de la boucle.
+  * matplotlib est prechauffe en fond des la premiere requete, pour que le
+    premier clic sur « Rapport » ne paie pas l'import.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 17:06:33 +0200
+
+secubox-metrics (1.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Statistiques par DOMAINE et non plus par nom de fichier de journal. Nginx
+    tient un journal par site : un bloc server qui sert anibal-amiot.com, .fr
+    et .net ecrivait tout dans un fichier nomme d'apres le site, et rien ne
+    permettait d'attribuer une visite a l'un des trois. Ils n'apparaissaient
+    donc nulle part, pas plus que les autres domaines partageant un bloc.
+  * Un journal commun /var/log/nginx/secubox-hosts.log ajoute `$host` en
+    premier champ (fragment nginx pose dans conf.d). Il s'ajoute aux journaux
+    existants, il ne les remplace pas.
+  * `secubox-vhost-logs` complete les blocs server qui declarent deja leur
+    propre access_log — un access_log de bloc server REMPLACE celui herite du
+    bloc http, il ne s'y ajoute pas. L'outil est idempotent et rejouable : les
+    configurations etant generees, une regeneration efface l'ajout.
+  * Le collecteur lit ce journal en priorite, et alors LUI SEUL : lire aussi
+    les journaux par site compterait tout deux fois.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 16:33:25 +0200
+
+secubox-metrics (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * TOUS les endpoints authentifies pendaient, y compris /status et /overview.
+    Six handlers lancent lxc-info, pgrep, systemctl ou openssl ; declares
+    `async def`, ils s'executaient sur la boucle et la bloquaient le temps de
+    chaque sous-processus. Sur une machine chargee cela faisait des dizaines
+    de secondes pendant lesquelles toutes les autres requetes du module
+    attendaient — d'ou une interface a zero. Defaut preexistant, invisible
+    jusqu'ici parce que le module ne demarrait pas.
+  * Ces six handlers passent en `def` : FastAPI les execute alors dans son
+    pool de threads et la boucle reste libre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 16:03:15 +0200
+
+secubox-metrics (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * La collecte affamait la boucle asyncio et rendait le module muet (502).
+    Le parsing est du Python pur : meme lance dans un thread il garde le GIL,
+    et relire 22 Mo de journaux au premier passage bloquait tout — dans un
+    groupe, cela veut dire les 82 modules qui partagent la boucle.
+    - a la premiere rencontre d'un journal on se pose pres de sa fin au lieu
+      de remonter a son debut ; l'historique se recupere a la demande, par
+      vhost, avec le bouton prevu pour cela ;
+    - le volume traite par passage est plafonne, le reste attend le tour
+      suivant.
+  * Les compteurs de chemins et de referents sont bornes. Un scanner demande
+    des milliers d'URL toutes differentes : sans taille, `most_common()`
+    finissait par couter cher a chaque requete.
+  * Le calcul de la vue et du detail passe en thread.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 15:39:10 +0200
+
+secubox-metrics (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * La vue web des statistiques par vhost : /metrics/vhosts.html, accessible
+    depuis le tableau de bord. Tuiles, histogramme jour par jour avec les
+    sondes empilees, navigateurs, plateformes, et le tableau des vhosts.
+  * Page de detail par vhost : courbe propre, codes de retour, pages vues,
+    referents, et le bouton de relecture complete de ses journaux.
+  * Bascule de regroupement des familles de domaines, et selecteur de periode
+    jour / 7 jours / 30 jours.
+  * Courbe d'ensemble ajoutee a /vhost-stats : sans elle l'histogramme de la
+    vue liste serait reste vide, ou aurait demande un appel par vhost.
+  * Rapport PDF telechargeable ou expedie par la messagerie interne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 15:33:11 +0200
+
+secubox-metrics (1.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le service ne demarrait plus du tout : `from visitor_origin import ...`
+    est un import nu, mais le demon est lance sur `api.main:app` depuis le
+    repertoire parent, ou `api/` n'est pas dans le chemin. Le processus
+    sortait en erreur et aucune socket n'etait creee. Defaut preexistant, et
+    la raison pour laquelle l'agregateur ecartait ce module.
+  * Le repertoire du fichier est desormais ajoute au chemin, ce qui vaut dans
+    les trois modes d'execution : demon, agregateur et groupe.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 15:14:34 +0200
+
+secubox-metrics (1.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Statistiques par vhost : visites, visiteurs, navigateurs, plateformes et
+    sondes, lues dans les journaux nginx que le serveur ecrit deja. La lecture
+    est incrementale (suivi d'inode) — un rescan complet coutait 50 Mo toutes
+    les deux minutes, exactement le gaspillage corrige en #1045.
+  * Compteurs ranges par jour sur 30 jours : on repond sur une journee comme
+    sur un mois sans conserver chaque requete.
+  * Rafraichissement d'un seul vhost, qui relit ses journaux tournes gzip
+    compris. Couteux, donc explicite et jamais dans la boucle de fond.
+  * Regroupement optionnel des domaines d'une meme famille (anibal-amiot.com,
+    .fr, .net). Les visiteurs sont dedoublonnes par union d'adresses : une
+    personne qui passe sur deux extensions compte pour une.
+  * Rapport PDF avec histogrammes, expedie par la messagerie interne. Rendu et
+    SMTP en thread : matplotlib synchrone fige une boucle mono-worker.
+  * Le module `metalogizer` est fondu ici, sous /api/v1/metrics/logs/. Son nom
+    se confondait avec `metablogizer`, qui publie des billets et n'a rien a
+    voir avec des journaux. Son declencheur `startup` ne partait jamais quand
+    le module etait monte dans l'agregateur : le cache restait froid.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 15:06:16 +0200
+
 secubox-metrics (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * LIVE_HOSTS AVAIT LE MEME DEFAUT QUE COOKIE_AUDIT (ref #1045). Une fois

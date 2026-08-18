@@ -1,9 +1,0 @@
-#!/bin/bash
-set -e
-case "$1" in
-  remove|upgrade|deconfigure)
-    systemctl stop secubox-metalogizer.service || true
-    systemctl disable secubox-metalogizer.service || true
-    ;;
-esac
-#DEBHELPER#

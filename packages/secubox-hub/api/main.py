@@ -369,7 +369,12 @@ def _discover_modules() -> dict:
     try:
         # Get enabled or active services only
         r = subprocess.run(
-            ["systemctl", "list-units", "secubox-*.service", "--no-pager", "--no-legend", "--all"],
+            # `--plain` : sans lui, systemctl prefixe les unites en echec d'un
+            # caractere de decoration (●), qui se retrouve dans `parts[0]` et
+            # devient un faux nom de service. La liste interrogee contenait
+            # ainsi une entree « ● » que systemd ne pouvait pas resoudre.
+            ["systemctl", "list-units", "secubox-*.service", "--no-pager",
+             "--no-legend", "--plain", "--all"],
             capture_output=True, text=True, timeout=10
         )
         for line in r.stdout.strip().split("\n"):
@@ -395,27 +400,89 @@ MODULES = CORE_MODULES.copy()
 _modules_discovered = False
 
 
+def _socket_ecoute(chemin: Path, delai: float = 0.05) -> bool:
+    """Dit si QUELQU'UN ecoute sur cette socket, pas si le fichier existe.
+
+    Un fichier de socket survit a la mort de son demon : `exists()` repondrait
+    « vivant » pour un module tombe. On tente donc une connexion, qui coute
+    quelques microsecondes sur une socket locale.
+    """
+    import socket as _s
+    if not chemin.exists():
+        return False
+    c = _s.socket(_s.AF_UNIX, _s.SOCK_STREAM)
+    c.settimeout(delai)
+    try:
+        c.connect(str(chemin))
+        return True
+    except OSError:
+        return False
+    finally:
+        c.close()
+
+
 def _refresh_services_cache():
     """Refresh all service statuses in one batch (called by background task)."""
     # Get all service statuses in parallel using a single systemctl call
-    all_services = list(MODULES.values())
+    all_services = [s for s in MODULES.values() if s and s.startswith("secubox-")]
+
+    # PAR LOTS, ET NON EN UN SEUL APPEL.
+    #
+    # L'ancienne version interrogeait les ~180 unites d'un coup avec un delai de
+    # 5 secondes. Sous charge — au demarrage, pendant un deploiement — systemctl
+    # n'a pas le temps de repondre, l'appel expire, et le cache reste VIDE : le
+    # menu de l'interface d'administration se retrouve sans aucun module, alors
+    # que le hub tourne.
+    #
+    # Decoupe en lots, un lot lent ne coute que lui-meme, et les autres
+    # remplissent le cache. Un lot qui expire laisse les valeurs PRECEDENTES en
+    # place plutot que de les effacer : un etat un peu ancien vaut mieux qu'un
+    # menu vide.
+    # UN SEUL APPEL POUR TOUT LE MONDE.
+    #
+    # Interroger systemd unite par unite, meme par lots de 25, restait trop
+    # lent : 100 unites sur 186 expiraient encore. `systemctl is-active` coute
+    # un aller-retour par appel, et la board en fait des centaines.
+    #
+    # `list-units` rend l'etat de TOUTES les unites en une fois. Un appel au
+    # lieu de huit, et la reponse est complete ou absente — plus de cache a
+    # moitie rempli selon quel lot a eu de la chance.
+    #
+    # `--plain` : sans lui systemctl prefixe les unites en echec d'un caractere
+    # de decoration qui se retrouverait dans le nom.
+    etats = {}
     try:
-        # Single call to get all service states
         r = subprocess.run(
-            ["systemctl", "is-active", "--"] + all_services,
-            capture_output=True, text=True, timeout=5
+            ["systemctl", "list-units", "secubox-*", "--all", "--full",
+             "--no-legend", "--plain", "--no-pager"],
+            capture_output=True, text=True, timeout=30
         )
-        states = r.stdout.strip().split("\n")
-        for i, svc in enumerate(all_services):
-            state = states[i] if i < len(states) else "unknown"
-            sock = Path(f"/run/secubox/{svc.replace('secubox-','')}.sock")
-            _cache["services"][svc] = {
-                "name": svc,
-                "active": state == "active",
-                "socket": sock.exists()
-            }
+        for ligne in r.stdout.splitlines():
+            champs = ligne.split()
+            if len(champs) >= 3:
+                etats[champs[0].removesuffix(".service")] = champs[2]
     except Exception as e:
-        log.warning("Cache refresh failed: %s", e)
+        # On garde les valeurs precedentes : un etat un peu ancien vaut mieux
+        # qu'un menu vide.
+        log.warning("etats systemd indisponibles, valeurs precedentes conservees : %s", e)
+
+    for svc in all_services:
+        sock = Path(f"/run/secubox/{svc.replace('secubox-','')}.sock")
+        ecoute = _socket_ecoute(sock)
+        etat = etats.get(svc, "unknown")
+        # CE N'EST PAS L'UNITE QUI FAIT FOI, C'EST LA SOCKET.
+        #
+        # Depuis le rassemblement, la plupart des modules sont servis par
+        # `secubox-group@tout` et leur unite individuelle est ARRETEE alors que
+        # le module repond. Juger sur l'unite afficherait tout le parc eteint.
+        _cache["services"][svc] = {
+            "name": svc,
+            "active": etat == "active" or ecoute,
+            "socket": ecoute,
+            "porte_par_groupe": ecoute and etat != "active",
+        }
+    if not etats:
+        log.warning("cache : aucun etat systemd obtenu, seules les sockets font foi")
 
 
 # Set of module ids allowed to sleep (eager/on-demand — scale-to-zero, ref

@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-groupd/usr/sbin
+	install -m 0755 sbin/secubox-groupd debian/secubox-groupd/usr/sbin/secubox-groupd
+	install -d debian/secubox-groupd/lib/systemd/system
+	install -m 0644 systemd/secubox-group@.service debian/secubox-groupd/lib/systemd/system/
+	install -m 0644 systemd/secubox-group-root@.service debian/secubox-groupd/lib/systemd/system/
+	# Le repertoire de declaration existe des l'installation : un module qui
+	# arrive apres n'a qu'a y deposer son nom, sans avoir a le creer.
+	install -d debian/secubox-groupd/usr/share/secubox/groupable.d
+	install -d debian/secubox-groupd/usr/share/secubox/groupable-root.d
+	install -d debian/secubox-groupd/etc/secubox/groups.d
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start

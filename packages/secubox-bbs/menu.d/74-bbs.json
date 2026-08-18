@@ -1,9 +1,9 @@
 {
   "id": "bbs",
   "name": "BBS",
-  "category": "apps",
+  "category": "mind",
   "icon": "📟",
   "path": "/bbs/",
-  "order": 174,
-  "description": "Forums, bibliotheque et publication vers billets"
+  "order": 74,
+  "description": "Forums, bibliotheque et publication vers les billets"
 }

@@ -1,0 +1,217 @@
+Source: secubox-profils
+Section: metapackages
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-profil-socle
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-admin,
+         secubox-appstore,
+         secubox-auth,
+         secubox-certs,
+         secubox-console,
+         secubox-hardening,
+         secubox-hub,
+         secubox-identity,
+         secubox-maigret,
+         secubox-media,
+         secubox-nac,
+         secubox-netdiag,
+         secubox-openclaw,
+         secubox-portal,
+         secubox-profiles,
+         secubox-repo,
+         secubox-rezapp,
+         secubox-routes,
+         secubox-spiderfoot,
+         secubox-system,
+         secubox-users,
+         secubox-vault,
+         secubox-vm,
+         secubox-zkp
+Description: SecuBox — profil « socle » : Le noyau indispensable : administration, identite, routage
+ Sans lui rien ne se pilote — le panneau, l'authentification et le routage.
+ Tous les autres profils en dependent.
+ .
+ Meta-paquet : il n'installe aucun fichier, il declare seulement l'ensemble de
+ modules qui va ensemble. Retirer le profil ne retire pas les modules — c'est
+ `apt autoremove` qui s'en charge, et ce delai est voulu : on ne desinstalle
+ pas la moitie d'une boite sur un seul geste.
+
+Package: secubox-profil-defense
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-profil-socle,
+         secubox-ad-guard,
+         secubox-antirootkit,
+         secubox-crowdsec,
+         secubox-cve-triage,
+         secubox-cyberfeed,
+         secubox-dns-guard,
+         secubox-exposure,
+         secubox-interceptor,
+         secubox-ipblock,
+         secubox-ksm,
+         secubox-mac-guard,
+         secubox-mitmproxy,
+         secubox-network-anomaly,
+         secubox-ossec,
+         secubox-security-posture,
+         secubox-soc,
+         secubox-threat-analyst,
+         secubox-threatmesh,
+         secubox-threats,
+         secubox-toolbox,
+         secubox-vortex-firewall,
+         secubox-waf,
+         secubox-watchdog,
+         secubox-wazuh
+Description: SecuBox — profil « defense » : La couche de defense : WAF, CrowdSec, listes de blocage, garde DNS
+ Ce qui protege la boite et le reseau qu'elle sert. C'est le profil qu'on
+ garde quand on ne garde rien d'autre.
+ .
+ Meta-paquet : il n'installe aucun fichier, il declare seulement l'ensemble de
+ modules qui va ensemble. Retirer le profil ne retire pas les modules — c'est
+ `apt autoremove` qui s'en charge, et ce delai est voulu : on ne desinstalle
+ pas la moitie d'une boite sur un seul geste.
+
+Package: secubox-profil-reseau
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-profil-socle,
+         secubox-annuaire,
+         secubox-assist,
+         secubox-avatar,
+         secubox-cdn,
+         secubox-cookies,
+         secubox-dns,
+         secubox-dns-provider,
+         secubox-domoticz,
+         secubox-fmrelay,
+         secubox-frigate,
+         secubox-gitea,
+         secubox-gotosocial,
+         secubox-haproxy,
+         secubox-hexo,
+         secubox-homeassistant,
+         secubox-jabber,
+         secubox-jitsi,
+         secubox-lyrion,
+         secubox-magicmirror,
+         secubox-mail,
+         secubox-mastodon,
+         secubox-matrix,
+         secubox-mesh,
+         secubox-meshname,
+         secubox-meshtastic,
+         secubox-mirror,
+         secubox-modem,
+         secubox-mqtt,
+         secubox-netmodes,
+         secubox-nettweak,
+         secubox-newsbin,
+         secubox-nextcloud,
+         secubox-p2p,
+         secubox-peertube,
+         secubox-photoprism,
+         secubox-picobrew,
+         secubox-podcaster,
+         secubox-proxypac,
+         secubox-qos,
+         secubox-reality,
+         secubox-redroid,
+         secubox-rustdesk,
+         secubox-simplex,
+         secubox-streamforge,
+         secubox-streamlit,
+         secubox-tor,
+         secubox-torrent,
+         secubox-traffic,
+         secubox-turn,
+         secubox-vhost,
+         secubox-voip,
+         secubox-vortex-dns,
+         secubox-webmail,
+         secubox-wireguard,
+         secubox-yacy,
+         secubox-zigbee
+Description: SecuBox — profil « reseau » : Reseau, federation et services heberges
+ Les services que la boite rend au LAN et au fedivers : DNS, annuaire,
+ conteneurs applicatifs, maillage.
+ .
+ Meta-paquet : il n'installe aucun fichier, il declare seulement l'ensemble de
+ modules qui va ensemble. Retirer le profil ne retire pas les modules — c'est
+ `apt autoremove` qui s'en charge, et ce delai est voulu : on ne desinstalle
+ pas la moitie d'une boite sur un seul geste.
+
+Package: secubox-profil-media
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-profil-socle,
+         secubox-ai-gateway,
+         secubox-ai-insights,
+         secubox-bbs,
+         secubox-billets,
+         secubox-c3box,
+         secubox-config-advisor,
+         secubox-dpi,
+         secubox-glances,
+         secubox-grafana,
+         secubox-jellyfin,
+         secubox-localai,
+         secubox-localrecall,
+         secubox-mcp-server,
+         secubox-metablogizer,
+         secubox-metacatalog,
+         secubox-metrics,
+         secubox-netdata,
+         secubox-ollama,
+         secubox-radio,
+         secubox-reporter,
+         secubox-roadmap,
+         secubox-saas-relay,
+         secubox-sentinelle-gsm,
+         secubox-ytsas
+Description: SecuBox — profil « media » : Contenu, medias et publication
+ Ce que les membres consultent et publient : lecture, forums, billets,
+ tableaux de bord.
+ .
+ Meta-paquet : il n'installe aucun fichier, il declare seulement l'ensemble de
+ modules qui va ensemble. Retirer le profil ne retire pas les modules — c'est
+ `apt autoremove` qui s'en charge, et ce delai est voulu : on ne desinstalle
+ pas la moitie d'une boite sur un seul geste.
+
+Package: secubox-profil-provision
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-profil-socle,
+         secubox-backup,
+         secubox-cloner,
+         secubox-droplet,
+         secubox-eye-remote,
+         secubox-mediaflow,
+         secubox-netboot,
+         secubox-publish
+Description: SecuBox — profil « provision » : Provisionnement, sauvegarde et deploiement
+ Ce qui sert a fabriquer, sauvegarder et deployer une boite.
+ .
+ Meta-paquet : il n'installe aucun fichier, il declare seulement l'ensemble de
+ modules qui va ensemble. Retirer le profil ne retire pas les modules — c'est
+ `apt autoremove` qui s'en charge, et ce delai est voulu : on ne desinstalle
+ pas la moitie d'une boite sur un seul geste.
+
+Package: secubox-profil-complet
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-profil-defense,
+         secubox-profil-media,
+         secubox-profil-provision,
+         secubox-profil-reseau,
+         secubox-profil-socle
+Description: SecuBox — profil complet : tous les profils
+ Le parc entier. Sur une machine a memoire etroite, preferer les profils
+ separes : chaque module absent est de la memoire et une surface d'attaque en
+ moins.

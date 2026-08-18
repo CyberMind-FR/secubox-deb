@@ -3486,42 +3486,6 @@ modules:
       presente: true
       chemin: "/srv/secubox/www/metacatalog"
       vhosts: []
-  - id: secubox-metalogizer
-    nom: "secubox-metalogizer"
-    categorie: "misc"
-    tier: "lite"
-    description: "SecuBox Metalogizer - Log processor and analyzer"
-    manifeste: true
-    lxc: false
-    tests: 0
-    depends:
-      - "secubox-core"
-    cli: []
-    systemd:
-      - "secubox-metalogizer.service"
-    ports: []
-    documentation:
-      - "README.md"
-    api:
-      socket: "/run/secubox/metalogizer.sock"
-      health: "/api/v1/metalogizer/health"
-      authentifie: true
-      nb_routes: 10
-      routes:
-        - "GET /analyze"
-        - "GET /errors"
-        - "GET /health"
-        - "GET /patterns"
-        - "GET /rotation"
-        - "GET /services"
-        - "GET /services/{service_name}/logs"
-        - "GET /services/{service_name}/stats"
-        - "GET /stats"
-        - "GET /status"
-    interface_web:
-      presente: true
-      chemin: "/srv/secubox/www/metalogizer"
-      vhosts: []
   - id: secubox-metrics
     nom: "secubox-metrics"
     categorie: "monitoring"

@@ -1,88 +1,23 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
-case "$1" in
-    configure)
-        # Create secubox user if not exists
-        if ! getent passwd secubox > /dev/null; then
-            useradd -r -s /usr/sbin/nologin -d /var/lib/secubox secubox
-        fi
+if [ "$1" = "configure" ]; then
+    # Le journal commun n'est utile que si TOUS les blocs server y ecrivent.
+    # Ceux qui declarent leur propre access_log remplacent celui herite du
+    # bloc http ; l'outil leur ajoute la ligne manquante, et se contente d'un
+    # essai a blanc si nginx n'est pas la.
+    if [ -x /usr/sbin/secubox-vhost-logs ] && command -v nginx >/dev/null 2>&1; then
+        /usr/sbin/secubox-vhost-logs --apply || \
+            echo "secubox-metrics: completion des vhosts a rejouer a la main" >&2
+    fi
 
-        # Create runtime directory (fallback). #494: never chown the shared
-        # parent /run/secubox — it is owned by tmpfiles.d (1777 root root).
-        mkdir -p /run/secubox
-
-        # Cache directory — was /tmp/secubox until #149. Now /var/cache/secubox,
-        # auto-managed by systemd's CacheDirectory=secubox at unit start.
-        mkdir -p /var/cache/secubox
-        chown secubox:secubox /var/cache/secubox
-
-        # Add secubox to haproxy group for admin-socket access (issue #92)
-        if getent group haproxy >/dev/null; then
-            usermod -aG haproxy secubox || true
-        # adm group: read /var/log/nginx for per-vhost live-hosts metric
-        usermod -aG adm secubox || true
-        fi
-
-        # Persistent cache dir for live-panel rollups
-        mkdir -p /var/cache/secubox/metrics
-        chown -R secubox:secubox /var/cache/secubox
-
-        # Secrets dir for MaxMind license key
-        mkdir -p /etc/secubox/secrets
-        chmod 0700 /etc/secubox/secrets
-        chown secubox:secubox /etc/secubox/secrets
-
-        # GeoIP db dir
-        mkdir -p /var/lib/GeoIP
-        chown secubox:secubox /var/lib/GeoIP
-
-        # Reload nftables to pick up /etc/nftables.d/secubox-metrics.nft
-        if systemctl is-active --quiet nftables; then
-            systemctl reload nftables || true
-        fi
-
-        # Enable the geoipupdate timer (no-op if user hasn't supplied a key)
-        systemctl enable --now secubox-geoipupdate.timer || true
-
-        # Add secubox to haproxy group for admin-socket access (issue #92)
-        if getent group haproxy >/dev/null; then
-            usermod -aG haproxy secubox || true
-        fi
-
-        # Persistent cache dir for live-panel rollups
-        mkdir -p /var/cache/secubox/metrics
-        chown -R secubox:secubox /var/cache/secubox
-
-        # Secrets dir for MaxMind license key
-        mkdir -p /etc/secubox/secrets
-        chmod 0700 /etc/secubox/secrets
-        chown secubox:secubox /etc/secubox/secrets
-
-        # GeoIP db dir
-        mkdir -p /var/lib/GeoIP
-        chown secubox:secubox /var/lib/GeoIP
-
-        # Reload nftables to pick up /etc/nftables.d/secubox-metrics.nft
-        if systemctl is-active --quiet nftables; then
-            systemctl reload nftables || true
-        fi
-
-        # Enable the geoipupdate timer (no-op if user hasn't supplied a key)
-        systemctl enable --now secubox-geoipupdate.timer || true
-
-        # Enable and start service
-        systemctl daemon-reload
-        systemctl enable secubox-metrics.service
-        systemctl restart secubox-metrics.service || true
-
-        # Reload nginx if running
-        if systemctl is-active --quiet nginx; then
-            nginx -t && systemctl reload nginx || true
-        fi
-        ;;
-esac
+    # try-restart et non restart : ne pas demarrer un service que
+    # l'administrateur a volontairement arrete.
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl try-restart secubox-metrics.service || true
+    fi
+fi
 
 #DEBHELPER#
-
 exit 0
