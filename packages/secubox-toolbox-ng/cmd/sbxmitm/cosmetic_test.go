@@ -5,6 +5,7 @@
 package main
 
 import (
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/httpcodec"
 	"strings"
 	"testing"
 )
@@ -136,7 +137,7 @@ func TestInjectInlineBannerAndCosmeticCompose(t *testing.T) {
 	// Both markers must be present after composing the two injects (wg client).
 	// #662 — the banner is now the INLINE script (not a <script src> tag).
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, inlineTestScript, true, ""))
+	out := string(injectHTML(body, inlineTestScript, "", true, ""))
 	if !strings.Contains(out, bannerGuard) {
 		t.Fatalf("banner marker missing after compose: %s", out)
 	}
@@ -155,7 +156,7 @@ func TestInjectInlineBannerAndCosmeticCompose(t *testing.T) {
 func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
 	// Non-WG (non-R3) clients get the banner but NOT the cosmetic style.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	out := string(injectHTML(body, inlineTestScript, false, ""))
+	out := string(injectHTML(body, inlineTestScript, "", false, ""))
 	if !strings.Contains(out, bannerGuard) {
 		t.Fatalf("banner marker missing for non-wg: %s", out)
 	}
@@ -167,12 +168,12 @@ func TestInjectHTMLNonWGSkipsCosmetic(t *testing.T) {
 func TestInjectIntoBodyGzipCarriesCosmetic(t *testing.T) {
 	// The gzip decompress→inject→recompress path must carry BOTH injects for wg.
 	body := []byte(`<html><head></head><body>hi</body></html>`)
-	gz := gzipBytes(body)
-	out, ok := injectIntoBody(gz, "gzip", inlineTestScript, true, "")
+	gz := httpcodec.GzipBytes(body)
+	out, ok := injectIntoBody(gz, "gzip", inlineTestScript, "", true, "")
 	if !ok {
 		t.Fatalf("injectIntoBody(gzip) returned ok=false")
 	}
-	plain, err := gunzipBytes(out)
+	plain, err := httpcodec.GunzipBytes(out)
 	if err != nil {
 		t.Fatalf("re-gzip output not gunzippable: %v", err)
 	}
