@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -121,7 +122,21 @@ func jsString(s string) string {
 // behaviour every existing page already relies on.
 const optOutMeta = "sbx-no-health-banner"
 
+// pageRefuseBanner reconnait l'opt-out <meta name="sbx-no-health-banner">.
+//
+// Ce refus est la porte que layout.html du BBS et les vhosts publics utilisent
+// pour ecarter la banniere A LA SOURCE. Il etait DOCUMENTE mais pas implemente :
+// la banniere passait quand meme, et ses styles inline heurtaient le CSP strict
+// (style-src 'self') de ces pages. On tolere les variantes de graphie.
+var reOptOut = regexp.MustCompile(`(?i)<meta\s+name\s*=\s*["']?sbx-no-health-banner`)
+
+func pageRefuseBanner(plain []byte) bool { return reOptOut.Match(plain) }
+
 func injectWidgetHTML(plain []byte, origin string) []byte {
+	// Opt-out explicite de la page : on ne touche a rien.
+	if pageRefuseBanner(plain) {
+		return plain
+	}
 	if bytes.Contains(plain, []byte(widgetGuard)) ||
 		bytes.Contains(plain, []byte("health-banner.js")) ||
 		bytes.Contains(plain, []byte("__SBX_HEALTH_BANNER__")) {

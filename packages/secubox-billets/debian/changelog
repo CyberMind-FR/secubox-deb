@@ -1,3 +1,24 @@
+secubox-billets (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Les mots-cles descendent EN BAS de page, dans une bulle repliable
+    (<details>) fermee par defaut : ils servent a explorer, pas a lire, et
+    n'ont donc pas a occuper le haut du flux. Repli natif, sans JS, accessible
+    au clavier ; s'ouvre d'office quand un tag est actif (on voit alors ce
+    qu'on filtre). Style console, comme le reste. Cache v=5.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 10:38:41 +0200
+
+secubox-billets (0.3.0-1~bookworm1) bookworm; urgency=medium
+
+  * Refonte du lecteur public : feuille de style « console » — fond blanc,
+    monospace pour tout le chrome (en-tete, tags, meta, navigation), filets
+    fins et angles nets. Le corps des articles garde en revanche une vraie
+    fonte de lecture, confortable : on ne lit pas un billet en chasse fixe.
+  * Aucun template touche, aucune classe perdue : seul le CSS change. Version
+    de cache montee a v=4 pour que le nouveau style prenne sans vidage manuel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 09:35:36 +0200
+
 secubox-billets (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * La reponse admin porte enfin l'adresse du billet (ref #1024). Le BBS lisait

@@ -6,7 +6,8 @@ Author: Gerald Kerma <gandalf@gk2.net>
 License: Proprietary / ANSSI CSPN candidate
 """
 
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from pathlib import Path
@@ -72,6 +73,83 @@ mount_ingest_routes(
 # Configuration paths
 CONFIG_FILE = Path("/etc/secubox/cookies.json")
 DATA_DIR = Path("/var/lib/secubox/cookies")
+
+
+# ─── Capture de session (#1058) ───────────────────────────────────────────
+# Le magasin des VALEURS, distinct de l'ingest mitm_events (noms seulement).
+# Chiffre au repos ; la valeur ne sort qu'a l'export cookies.txt reclame.
+try:
+    from api.capture import MagasinCapture  # demon autonome
+except ImportError:
+    from capture import MagasinCapture  # monte dans l agregateur/groupe
+
+_capture = MagasinCapture(
+    fichier=DATA_DIR / "captures.enc",
+    cle_fichier=Path("/etc/secubox/keys/cookies-capture.key"),
+    # Le marqueur vit dans /run : sbxmitm le lit pour savoir s'il doit capturer.
+    marqueur=Path("/run/secubox/cookies-capture.armed"),
+)
+
+
+class ArmementCorps(BaseModel):
+    profil: str = "defaut"
+    duree_s: int = 300
+    hotes: Optional[List[str]] = None
+
+
+@app.post("/capture/armer", dependencies=[Depends(require_jwt)])
+async def capture_armer(corps: ArmementCorps):
+    """Ouvre une fenetre de capture (action admin, opt-in explicite)."""
+    _capture.armer(duree_s=corps.duree_s, profil=corps.profil, hotes=corps.hotes)
+    return {"arme": True, "reste_s": _capture.reste_s(), "profil": corps.profil}
+
+
+@app.post("/capture/desarmer", dependencies=[Depends(require_jwt)])
+async def capture_desarmer():
+    _capture.desarmer()
+    return {"arme": False}
+
+
+# Route d'ingest depuis sbxmitm. Pas de JWT : le proxy poste sur la socket
+# locale de confiance, et recevoir() re-verifie que la fenetre est armee — un
+# post hors fenetre ne garde rien. C'est la defense en profondeur.
+@app.post("/capture")
+async def capture_recevoir(request: Request):
+    ev = await request.json()
+    hote = (ev.get("hote") or "").lower()
+    cookies = ev.get("cookies") or []
+    if not hote:
+        return {"gardes": 0}
+    n = _capture.recevoir(hote, cookies)
+    return {"gardes": n}
+
+
+@app.get("/capture/statut", dependencies=[Depends(require_jwt)])
+async def capture_statut():
+    """Hotes, nombres, fraicheur — JAMAIS les valeurs."""
+    return _capture.statut()
+
+
+@app.get("/capture/avatars", dependencies=[Depends(require_jwt)])
+async def capture_avatars():
+    return {"avatars": _capture.avatars()}
+
+
+@app.get("/capture/export", dependencies=[Depends(require_jwt)],
+         response_class=PlainTextResponse)
+async def capture_export(hote: Optional[List[str]] = Query(None),
+                         avatar: Optional[str] = None):
+    """Rend le cookies.txt reclame — par hotes ou par avatar. LE SEUL endroit
+    ou une valeur ressort, et derriere require_jwt."""
+    return _capture.netscape(hotes=hote, profil=avatar)
+
+
+@app.post("/capture/oublier", dependencies=[Depends(require_jwt)])
+async def capture_oublier(hote: str, avatar: Optional[str] = None):
+    _capture.oublier(hote, profil=avatar)
+    return {"oublie": hote}
+
+
 CACHE_DIR = Path("/var/cache/secubox/cookies")
 LOG_FILE = Path("/var/log/secubox/cookies.log")
 
@@ -170,15 +248,109 @@ def save_config(config: dict):
     CONFIG_FILE.write_text(json.dumps(config, indent=2))
 
 
-def load_cookies_db() -> dict:
-    """Load tracked cookies database"""
+INGEST_DB = "/var/lib/secubox/cookies/mitm-ingest.db"
+
+
+def _hote(url: str) -> str:
+    """Extrait l'hote d'une URL, sans le port."""
+    try:
+        from urllib.parse import urlsplit
+        h = urlsplit(url).hostname or ""
+        return h.lower()
+    except Exception:
+        return ""
+
+
+def load_cookies_db_from_ingest(fenetre_jours: int = 2, plafond: int = 8000) -> dict:
+    """Construit la vue de la webui A PARTIR de la base d'ingest mitm.
+
+    La webui lisait un fichier `cookies.json` que PLUS RIEN ne produit : sbxmitm
+    ecrit desormais dans la base SQLite `mitm_events`, en direct. La vue etait
+    donc vide alors que la capture tournait. On la rebatit ici depuis la vraie
+    source.
+
+    Rappel important : cet ingest n'enregistre que les NOMS de cookies, jamais
+    les valeurs — c'est le choix « vie privee » du module. Cette vue montre donc
+    ce qui est OBSERVE (qui pose quoi, par hote), pas de quoi rejouer une
+    session. La capture de valeurs pour rejeu est un chemin distinct (#1058).
+    """
+    import sqlite3
+    import time as _t
+
+    depuis = int((_t.time() - fenetre_jours * 86400) * 1000)
+    trackers = load_config().get("known_trackers", [])
+    par_hote: dict = {}
+
+    try:
+        # Ouverture en LECTURE SEULE : la webui ne doit jamais verrouiller la
+        # base que l'ingest ecrit en meme temps.
+        con = sqlite3.connect(f"file:{INGEST_DB}?mode=ro", uri=True, timeout=5)
+    except sqlite3.Error:
+        # Repli sur l'ancien fichier tant qu'il existe, pour ne rien casser.
+        return _load_cookies_db_json()
+
+    try:
+        cur = con.execute(
+            "SELECT payload FROM mitm_events WHERE kind='cookies' AND ts_ms >= ? "
+            "ORDER BY ts_ms DESC LIMIT ?", (depuis, plafond))
+        for (brut,) in cur:
+            try:
+                ev = json.loads(brut)
+            except (ValueError, TypeError):
+                continue
+            hote = _hote(ev.get("url", ""))
+            if not hote:
+                continue
+            ts = int(ev.get("ts_ms", 0))
+            noms = list(ev.get("cookie_names") or []) + list(ev.get("set_cookie_names") or [])
+            seau = par_hote.setdefault(hote, {})
+            for nom in noms:
+                c = seau.get(nom)
+                if c is None:
+                    tr = detect_tracker({"domain": hote, "name": nom, "value": ""}, trackers)
+                    c = seau[nom] = {
+                        "name": nom,
+                        "is_tracker": bool(tr),
+                        "tracker_category": (tr or {}).get("category"),
+                        "tracker_name": (tr or {}).get("name"),
+                        # Sans le domaine du cookie dans le flux, un traqueur
+                        # connu est notre meilleur signal de tiers.
+                        "is_third_party": bool(tr),
+                        "first_seen": ts,
+                        "last_seen": ts,
+                        "count": 0,
+                        "has_value": False,  # l'ingest ne porte pas les valeurs
+                    }
+                c["count"] += 1
+                if ts > c["last_seen"]:
+                    c["last_seen"] = ts
+                if ts < c["first_seen"]:
+                    c["first_seen"] = ts
+    finally:
+        con.close()
+
+    return {
+        "cookies": {h: list(v.values()) for h, v in par_hote.items()},
+        "domains": {h: len(v) for h, v in par_hote.items()},
+        "trackers_found": sorted({c["tracker_name"] for v in par_hote.values()
+                                  for c in v.values() if c.get("tracker_name")}),
+    }
+
+
+def _load_cookies_db_json() -> dict:
+    """Ancien magasin JSON — conserve en repli."""
     db_file = DATA_DIR / "cookies.json"
     if db_file.exists():
         try:
             return json.loads(db_file.read_text())
-        except:
+        except Exception:
             pass
     return {"cookies": {}, "domains": {}, "trackers_found": []}
+
+
+def load_cookies_db() -> dict:
+    """Vue des cookies observes. Lit la base d'ingest mitm en priorite."""
+    return load_cookies_db_from_ingest()
 
 
 def save_cookies_db(db: dict):

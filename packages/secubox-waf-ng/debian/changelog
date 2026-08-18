@@ -1,3 +1,14 @@
+secubox-waf-ng (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * Honorer vraiment l'opt-out <meta name="sbx-no-health-banner">. Le refus de
+    banniere etait DOCUMENTE (layout.html du BBS s'y fie) mais implemente NULLE
+    PART : la banniere etait injectee malgre le meta, et ses styles inline
+    heurtaient le CSP strict (style-src 'self') des pages publiques qui
+    l'opposent. injectWidgetHTML reconnait desormais le meta et rend la page
+    inchangee. Tolerant a la casse, aux espaces, aux guillemets. 3 tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 12:11:56 +0200
+
 secubox-waf-ng (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf n'inspecte plus le CORPS d'une requete binaire — envoi multipart,

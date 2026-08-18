@@ -1018,10 +1018,10 @@
         }
 
         function checkAuth() {
-            if (!getToken()) {
-                window.location.href = '/portal/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                return false;
-            }
+            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
+            // session peut tenir a un cookie (SSO parent-domaine), accepte par
+            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
+            // seule une vraie 401 redirige (gere dans les appels fetch).
             return true;
         }
 

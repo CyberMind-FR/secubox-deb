@@ -434,13 +434,13 @@
             return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         }
 
-        function checkAuth() {
-            if (!getToken()) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                return false;
-            }
-            return true;
-        }
+        // Ne JAMAIS pre-empter sur l'absence de jeton localStorage : la session
+        // peut tenir a un cookie (SSO parent-domaine), que le serveur accepte
+        // aussi bien qu'un Bearer. On laisse donc les requetes partir — le
+        // cookie voyage en meme-origine — et seule une vraie 401 redirige
+        // (gere dans api()). Rediriger ici cassait l'acces des utilisateurs
+        // authentifies par cookie, et forcait une bascule de connexion inutile.
+        function checkAuth() { return true; }
 
         async function api(endpoint, options = {}) {
             const token = getToken();
@@ -451,7 +451,7 @@
             if (token) headers['Authorization'] = 'Bearer ' + token;
 
             try {
-                const fetchOptions = { ...options, headers };
+                const fetchOptions = { credentials: 'same-origin', ...options, headers };
                 if (options.formData) {
                     delete fetchOptions.headers['Content-Type'];
                 }
