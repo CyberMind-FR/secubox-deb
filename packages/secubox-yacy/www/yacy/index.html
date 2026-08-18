@@ -74,10 +74,8 @@
 <script>
 (function() {
   function getToken() { return localStorage.getItem('sbx_token'); }
-  if (!getToken()) {
-    if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-    return;
-  }
+  // Pas de pre-emption sur l'absence de jeton : le cookie de session
+  // (SSO parent-domaine) authentifie aussi. Seule une vraie 401 redirige.
 
   function get(path) {
     return fetch('/api/v1/yacy' + path, {

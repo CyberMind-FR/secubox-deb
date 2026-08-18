@@ -1,3 +1,16 @@
+secubox-avatar (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * La webui exigeait une reconnexion alors que l'utilisateur etait deja
+    authentifie. checkAuth() redirigeait vers /login.html DES QUE localStorage
+    n'avait pas de jeton — sans jamais essayer avec le cookie de session (SSO
+    parent-domaine), que le serveur accepte pourtant aussi bien qu'un Bearer.
+    On ne pre-empte plus : les requetes partent (le cookie voyage en
+    meme-origine, envoye explicitement), et seule une vraie 401 redirige.
+  * La redirection forcee etait la porte d'entree du chemin non-SSL signale :
+    ne plus rediriger a tort, c'est ne plus jamais l'emprunter.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 09:52:10 +0200
+
 secubox-avatar (1.2.1-1~bookworm1) bookworm; urgency=high
 
   * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par
