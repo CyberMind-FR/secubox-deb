@@ -1,3 +1,20 @@
+secubox-toolbox-ng (0.1.43-1~bookworm1) bookworm; urgency=medium
+
+  * Reconciliation du split-brain toolbox-ng. Le merge feature/740 du 17 aout
+    avait pris le cote feature/740 pour main.go/gzip.go/csp.go/adstats.go/
+    policy.go tout en gardant banner.go/transparent.go cote mainline : le module
+    ne compilait plus (decideForPeer, serverTLSConfigCapture 2-arg, mitmPipeline
+    ja4, injectInlineBanner 3-arg tous manquants du main.go retenu).
+  * Merge 3-voies correct : les deux familles de features coexistent enfin —
+    rlevel/decideForPeer + media/mbuf + sentinel (mainline) ET pincand +
+    cosmetique EasyList par-domaine (#740) ET bypass MITM federe #803/#806/#809.
+  * Capture de session #1058 portee depuis fix/964 (parite avec la board) :
+    safe-by-default, marqueur vide = no-op total.
+  * Depasse la 0.1.42 tournant sur la board (issue du lignage fix/964) ; master
+    est desormais le sur-ensemble canonique. build/vet/test ./... vert.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 14:59:11 +0200
+
 secubox-toolbox-ng (0.1.39-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : une page peut REFUSER la banniere de sante, par
