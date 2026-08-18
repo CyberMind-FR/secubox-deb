@@ -104,7 +104,11 @@ class MagasinCapture:
         try:
             self.marqueur.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.marqueur.with_suffix(".tmp")
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            # 0644 : sbxmitm tourne sous un AUTRE utilisateur et doit le lire.
+            # Le marqueur ne porte que des metadonnees (profil, hotes,
+            # echeance) — jamais une valeur de cookie, qui reste dans le
+            # fichier chiffre 0600.
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
             with os.fdopen(fd, "w") as f:
                 f.write(json.dumps(payload))
             os.replace(tmp, self.marqueur)
