@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # ToolBoX cert-mismatch → warn-and-allow (no 502) — Design
 
 *2026-07-02 · CyberMind / SecuBox-Deb · module `secubox-toolbox` (R3 Go mitm `sbxmitm`)*

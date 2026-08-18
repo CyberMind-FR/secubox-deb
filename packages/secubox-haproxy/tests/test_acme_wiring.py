@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Le générateur doit émettre lui-même le routage ACME HTTP-01 (#986).
 
 Avant ce correctif, l'ACL `is_acme_challenge`, sa règle `use_backend` et le

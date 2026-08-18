@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Bascule du parc Streamlit vers les unités par appli — run du 2026-08-05
 
 Issue [#982](https://github.com/CyberMind-FR/secubox-deb/issues/982) · suite de #963 · cause de fond de #946.

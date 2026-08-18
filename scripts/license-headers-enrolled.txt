@@ -1,9 +1,0 @@
-# CMSD-1.0 license header enrollment allowlist.
-# One glob per line (paths relative to repo root).
-# Phase A initial state: empty — CI does not enforce headers yet.
-# Phase B adds one line per package as they're enrolled.
-# Phase C: this file is deleted; CI then enforces repo-wide.
-scripts/license-headers.py
-tests/test_license_headers.py
-.github/workflows/license-check.yml
-packages/secubox-hub/**

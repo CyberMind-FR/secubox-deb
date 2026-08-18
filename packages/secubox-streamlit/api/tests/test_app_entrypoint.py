@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Tests for the widened entry-point detection in `streamlitctl app audit`
 (#956). The old detection only looked for app.py/main.py/streamlit_app.py
 at the app directory's root, which flagged 10 real, live apps on the board

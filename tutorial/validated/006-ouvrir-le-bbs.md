@@ -11,6 +11,13 @@ source:
   api: GET /api/v1/bbs/threads
   web_route: https://bbs.<domaine>/
 ---
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 
 # Ouvrir le BBS et lire un salon
 

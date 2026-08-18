@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # SwitchSBX — Audit d'architecture de l'accès sécurisé
 
 **Date :** 2026-07-31 · **Statut :** rapport d'analyse — aucune modification de code

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # FAQ — kbin & le mode Tor anonymisé
 
 > kbin (`kbin.gk2.secubox.in`) = le portail public de la **ToolBoX** SecuBox, premier

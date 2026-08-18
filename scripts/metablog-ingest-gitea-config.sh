@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # scripts/metablog-ingest-gitea-config.sh
 # Ensure Gitea has ENABLE_PUSH_CREATE_USER=true and DEFAULT_BRANCH=main.
 # Idempotent: skip restart if no changes were made.

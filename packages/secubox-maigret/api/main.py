@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """SecuBox Maigret API — username/identity OSINT driven through a sandboxed LXC.
 
 Every handler is plain `def` (FastAPI threadpools it) — the module is mounted

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
 // SecuBox Companion — YouTube PO-token hook (runs in the PAGE/main world).
 // Wraps fetch + XHR to spot YouTube's streaming requests, which carry the
 // `pot` (PO token) query param. Relays it (+ visitor_data from ytcfg) to the

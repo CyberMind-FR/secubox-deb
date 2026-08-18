@@ -44,8 +44,20 @@ def detect_existing(text: str) -> str:
     Only lines whose non-whitespace content begins with comment markers
     (#, //, *, <!--, -->) and then an SPDX identifier count as a license
     declaration. Prose mentions inside docstrings are ignored.
+
+    A leading YAML frontmatter block (``---`` … ``---``) is skipped first, so a
+    header placed AFTER the frontmatter (where _place_markdown puts it) is still
+    detected even when the frontmatter is longer than the scan window — without
+    this, long-frontmatter Markdown gets a duplicate header on every run.
     """
-    for line in text.splitlines()[:10]:
+    lines = text.splitlines()
+    start = 0
+    if lines and lines[0].rstrip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].rstrip() == "---":
+                start = i + 1
+                break
+    for line in lines[start:start + 10]:
         match = _SPDX_LINE_RE.match(line)
         if match:
             return "MATCH" if match.group(1) == _CMSD_ID else "FOREIGN"
@@ -70,6 +82,7 @@ SKIP_DIRS = frozenset({
     "kernel-build", "redroid", "Tow-Boot",
     "output", "cache", "backups", "apt", "repo",
     "node_modules", ".venv", ".git", "__pycache__", "dist", "build",
+    "vendor",  # code tiers vendore — jamais estampiller ni verifier
 })
 
 SKIP_GLOBS = (

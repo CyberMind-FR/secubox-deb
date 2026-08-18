@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """Phase 2 deprecation shims. Each handler forwards to a Rspamd-equivalent
 and emits the `X-Deprecated-Endpoint: rspamd` header. Removed in v3.0.
 """

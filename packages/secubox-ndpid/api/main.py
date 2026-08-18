@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """SecuBox nDPId - Deep Packet Inspection with nDPI
 Interface with nDPId daemon for traffic classification, JA3/JA4 fingerprinting,
 protocol detection, and flow analysis.

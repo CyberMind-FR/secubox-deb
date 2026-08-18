@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # scripts/render-deploy-artifacts.sh
 # Generate the nginx vhost, the DEPLOY.md recipe, install.sh, and license
 # copies inside output/repo/. No network access.

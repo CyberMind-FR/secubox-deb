@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """The migration must never destroy credentials (#945).
 
 On gk2 the 1.4.2 → 1.5.1 upgrade wiped the argon2 hashes and the admin TOTP of

@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Design — Rich Netrunner character sheet in the PDF + persona/dpi/media parity across all PDF routes
 
 - **Issue** : [#790](https://github.com/CyberMind-FR/secubox-deb/issues/790)

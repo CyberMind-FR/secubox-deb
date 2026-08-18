@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
 // SecuBox Companion — background event page (P1)
 // Periodically probes the first configured module and reflects overall health
 // on the toolbar badge. Kept minimal; richer metrics arrive with the sidebar

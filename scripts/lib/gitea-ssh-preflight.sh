@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # scripts/lib/gitea-ssh-preflight.sh
 # Verify SSH path to git@gitea.gk2.secubox.in:2222 works (as the MOCHAbin root).
 # If not, enrol the MOCHAbin root's id_ed25519.pub into gandalf's Gitea account.

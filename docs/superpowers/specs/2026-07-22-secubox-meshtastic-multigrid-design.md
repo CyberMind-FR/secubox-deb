@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # secubox-meshtastic — Multi-Grid LoRa Mesh Node + Passive Listener — Design
 
 **Goal:** A SecuBox module that turns the box into a Meshtastic node driving a USB-attached LoRa device, operating across three composable "grids" (off-grid RF, private shared-grid over MirrorNet, opt-in public on-grid MQTT), and optionally as a passive RF listener that feeds the SOC.

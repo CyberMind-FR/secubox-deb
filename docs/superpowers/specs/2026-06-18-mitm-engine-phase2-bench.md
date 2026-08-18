@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # MITM engine migration — Phase 2 bench results (#662)
 
 - **Date:** 2026-06-18 · ran the Phase-1 Go PoC on gk2 (arm64), `127.0.0.1:8090`,

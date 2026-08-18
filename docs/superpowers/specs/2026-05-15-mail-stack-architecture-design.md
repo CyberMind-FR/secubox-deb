@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Mail Stack Architecture — Phase 0 Design (rev. 3)
 
 **Date:** 2026-05-16 (rev. 3 — three-LXC topology: mail / roundcube / horde)

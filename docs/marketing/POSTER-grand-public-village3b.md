@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
 # Poster grand public — Cabine Numérique VILLAGE3B 📡
 
 > Format : A2 portrait, lisible à 1m de distance. Police monospace style P31 phosphor green (#00ff55) sur fond noir cosmos (#0a0a0f). Accents Gold Hermétique (#c9a84c) pour éléments clés.

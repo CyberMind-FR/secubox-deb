@@ -1,4 +1,9 @@
 #!/bin/bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 # Exercises spiderfootctl's dispatch + status JSON contract. SpiderFoot takes no
 # target via ctl (scans run in its own UI), so there is no user-input guard to
 # fuzz — instead we assert the dispatch rejects unknown/empty verbs and that

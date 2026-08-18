@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
 """SecuBox Netifyd - Network Intelligence Daemon Management
 Deep Packet Inspection with netifyd for network flow analysis,
 protocol detection, application classification, and device discovery.
