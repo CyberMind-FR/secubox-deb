@@ -1,54 +1,97 @@
-secubox-nextcloud (1.4.7-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.7.0-1~bookworm1) bookworm; urgency=medium
 
-  * #429: /status,/storage cache is now stale-while-revalidate — an expired poll
-    returns the last value instantly and refreshes in a background thread, so the
-    dashboard never blocks on the ~6s lxc/occ compute after its first load.
+  * Le delai d'attente est desormais pose A L'INTERIEUR du conteneur. Tuer
+    `lxc-attach` depuis l'hote ne tue PAS ce qu'il a lance dedans : il detache
+    son enfant du groupe de processus, si bien qu'un kill de groupe ne le
+    rattrape jamais. Le `php occ` restait dans le conteneur, reparente a son
+    init. Le correctif de 1.6.0 (tuer tout le groupe) etait juste, mais il ne
+    pouvait pas franchir cette frontiere — il fallait que le conteneur tue
+    lui-meme son processus.
+  * Disjoncteur sur le rafraichisseur. Un sondeur de fond qui reinterroge sans
+    fin un service engorge l'engorge davantage : chaque cycle ajoutait trois
+    `occ` a un conteneur qui ne finissait deja plus les precedents. Les
+    tentatives s'espacent apres chaque echec, de 60 s jusqu'a une demi-heure,
+    et reviennent au rythme normal des que la mesure aboutit. L'etat porte
+    alors `indisponible` plutot que de mentir avec une valeur vide.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:50:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 05:40:48 +0200
 
-secubox-nextcloud (1.4.6-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.6.0-1~bookworm1) bookworm; urgency=medium
 
-  * #429 CRITICAL: /status,/storage cache is now single-flight + serve-stale.
-    The plain TTL cache still let concurrent polls during the ~6s compute all
-    miss and spawn the helper at once (thundering herd → load 9+, status 000).
-    One compute per key at a time; concurrent callers get the last value.
+  * Un seul processus rafraichit desormais le cache, garde par un verrou de
+    fichier. Le thread de rafraichissement demarre A L'IMPORT du module, et ce
+    module est importe par le demon autonome, par l'agregateur ET par le
+    groupe : chacun lancait le sien. Sept `occ` concurrents partaient ainsi
+    toutes les minutes sur une machine qui met plus d'une minute a en executer
+    un seul — ils s'accumulaient sans jamais rattraper leur retard.
+  * Les processus qui n'ont pas le verrou relisent le fichier que son
+    detenteur ecrit : c'est la meme donnee, elle n'a pas a etre calculee sept
+    fois. Si le detenteur disparait, le premier a reprendre le verrou reprend
+    la mesure.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:35:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 16:50:14 +0200
 
-secubox-nextcloud (1.4.5-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.5.4-1~bookworm1) bookworm; urgency=medium
 
-  * #429 CRITICAL: request handlers were async def calling blocking subprocess,
-    freezing the shared aggregator event loop for ~6s per /status poll →
-    board-wide 502s. Convert all handlers to plain def (threadpooled) + add a
-    TTL cache (status 15s, storage 30s) to the auto-polled read endpoints,
-    invalidated on lifecycle actions.
+  * Fuite de processus qui a porte la charge de la machine a 300. Le
+    rafraichisseur de cache lance deux commandes `occ` toutes les 60 s ; a
+    l'expiration, `subprocess.run` ne tuait que l'enfant direct — `sudo` —
+    tandis que la chaine ouverte derriere lui (nextcloudctl, lxc-attach, php)
+    survivait, reparentee a l'init du conteneur. Chaque expiration abandonnait
+    ainsi deux PHP, qui ralentissaient le conteneur, ce qui provoquait de
+    nouvelles expirations : la fuite s'alimentait elle-meme. Il s'en etait
+    accumule 460, et 227 `sudo` avec eux.
+  * Les sous-processus tournent desormais dans leur propre session et
+    l'expiration tue tout le groupe, descendance comprise.
+  * Le cache de /status introduit en 1.5.3 est conserve tel quel : il etait
+    deja correct, il n'etait simplement pas en cause.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 14:15:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 16:45:06 +0200
 
-secubox-nextcloud (1.4.4-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.5.3-1~bookworm1) bookworm; urgency=medium
 
-  * #429 fix: real detailed users — NC has no `user:list:detailed`; use
-    `occ user:list --info --output=json` (enabled/quota/last_seen/email) and
-    normalize the {uid:{…}} map to the dashboard's flat rows.
+  * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
+    /run/secubox porte le bit collant : on n'y delie que ce qu'on possede,
+    et une socket laissee par un autre utilisateur rend le demarrage
+    impossible — le service echoue, redemarre, echoue encore, en silence.
+  * `RuntimeDirectory=secubox` retire : systemd efface le contenu d'un
+    RuntimeDirectory au redemarrage, et ce repertoire est partage par ~95
+    unites. Une seule qui le declare emporte les sockets des autres.
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 13:30:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 16 Aug 2026 10:35:59 +0200
 
-secubox-nextcloud (1.4.3-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.5.2-1~bookworm1) bookworm; urgency=medium
 
-  * #429 fix: brand-agnostic version parse — this NC instance rebrands the
-    product string to "SecuBox", so status/version now report 32.0.10 instead
-    of empty.
+  * nextcloudctl: new `check-upgrade` (non-destructive: reports current/latest/
+    available/major_jump via `occ update:check`) and guarded `upgrade` (official
+    updater.phar; refuses an available cross-major) verbs. 'Upgrade when present.'
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 13:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 30 Jul 2026 10:00:00 +0200
 
-secubox-nextcloud (1.4.2-1~bookworm1) bookworm; urgency=medium
+secubox-nextcloud (1.5.1-1~bookworm1) bookworm; urgency=medium
 
-  * #429 real dashboard: route container ops via sudo nextcloudctl (+ sudoers
-    drop-in) so status/users/storage reflect reality; real vhost URLs; full user
-    CRUD (add/delete/enable/disable/quota/reset); dashboard rework with XSS
-    hardening. Fixes false-red status, empty users, localhost URLs.
+  * Fix connection URLs showing http://localhost:8080 instead of the real
+    public domain. /connections only checked ssl_domain (unset in
+    secubox.conf [nextcloud], which carries `domain`) and fell back to
+    localhost; the panel also hardcoded localhost, ignoring status.web_url.
+    New pure _public_base_url() helper (ssl_domain > domain > localhost),
+    used by both /connections and /status; panel now renders status.web_url.
+    Regression tests added (tests/test_public_base_url.py).
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 08 Jul 2026 12:00:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 25 Jul 2026 12:00:00 +0200
+
+secubox-nextcloud (1.5.0-1~bookworm2) bookworm; urgency=medium
+
+  * Phase 2: Requires=secubox-core.service -> Wants= on this module's unit
+    (remove the hard cascade-stop when secubox-core restarts/fails).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 19 Jul 2026 12:00:00 +0200
+
+secubox-nextcloud (1.4.1-1~bookworm2) bookworm; urgency=medium
+
+  * webui: hybrid-dark cyan reskin (WebUI Panel Guidelines) baked into the package.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 10 Jul 2026 10:00:00 +0200
 
 secubox-nextcloud (1.4.1-1~bookworm1) bookworm; urgency=medium
 

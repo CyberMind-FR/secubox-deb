@@ -1,0 +1,32 @@
+secubox-groupd (0.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le groupe tombait en EMFILE (« Too many open files ») et refusait les
+    connexions sur des sockets pourtant presentes — un module joignable en
+    apparence, muet en pratique. Un groupe porte une socket par module (82
+    pour « tout ») et chaque connexion en consomme une de plus, alors que le
+    plafond SOUPLE de descripteurs valait 1024. C'est celui-la que Python
+    respecte ; le plafond dur valait deja 524288.
+  * LimitNOFILE=65536 sur les deux unites de groupe, ordinaire et privilegiee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 15:19:22 +0200
+
+secubox-groupd (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Second groupe, PRIVILEGIE, pour les modules qui tournent en root
+    (`secubox-group-root@`). Ils tournaient deja en root chacun dans son
+    processus : le privilege n'augmente pas, seul le sort devient commun.
+  * Repertoire de declaration DISTINCT (`groupable-root.d`) : un module ne peut
+    pas se retrouver dans le groupe privilegie par inadvertance, et l'ajout
+    reste un geste visible a la revue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 13:57:25 +0200
+
+secubox-groupd (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiere version : plusieurs modules dans un interpreteur partage, chacun
+    sur sa socket habituelle. nginx et l'agregateur ne voient aucune
+    difference.
+  * Les modules se declarent groupables dans /usr/share/secubox/groupable.d :
+    l'empaquetage reste modulaire, l'installation devient rassemblee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 13:54:58 +0200

@@ -1,0 +1,20 @@
+Source: secubox-groupd
+Section: net
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-groupd
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-uvicorn, python3-fastapi
+Description: SecuBox — hote de groupe pour les modules
+ Sert plusieurs modules SecuBox dans un seul interpreteur Python, chacun sur sa
+ socket habituelle. L'interpreteur, FastAPI et Starlette sont ainsi payes une
+ fois au lieu d'une fois par module : 82 modules tiennent dans 180 Mo la ou
+ leurs demons separes en occupaient 3070.
+ .
+ L'empaquetage reste separe et modulaire : chaque module garde son paquet et son
+ unite. C'est l'INSTALLATION qui est rassemblee — un module se declare groupable
+ en deposant un fichier a son nom dans /usr/share/secubox/groupable.d, et le
+ groupe constate ce que l'installation contient au lieu de tenir une liste.

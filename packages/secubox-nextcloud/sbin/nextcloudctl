@@ -50,7 +50,14 @@ lxc_exists() { [ -d "$LXC_PATH/$CONTAINER/rootfs" ]; }
 
 lxc_attach() {
     local cmd="$1"
-    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "$cmd"
+    local delai="${LXC_TIMEOUT:-45}"
+    # Le `timeout` est pose A L'INTERIEUR du conteneur, pas autour de
+    # lxc-attach. Tuer lxc-attach depuis l'hote ne tue PAS ce qu'il a lance
+    # dedans : il detache son enfant du groupe de processus, si bien qu'un
+    # kill de groupe ne le rattrape jamais. Le processus reste alors dans le
+    # conteneur, reparente a son init, et s'accumule — c'est ainsi que 460
+    # `php occ` se sont entasses jusqu'a mettre la machine a genoux.
+    lxc-attach -n "$CONTAINER" -P "$LXC_PATH" -- sh -c "exec timeout -k 5 $delai sh -c '$(printf '%s' "$cmd" | sed "s/'/'\\\\''/g")'"
 }
 
 # ============================================================================

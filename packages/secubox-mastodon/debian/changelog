@@ -1,3 +1,11 @@
+secubox-mastodon (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * Entree de menu remise a la forme commune et rattachee a une section qui
+    existe. Trois modules trainaient dans des categories quasi vides — « apps »
+    et « Media » — au lieu des sections reelles de la navbar.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 14:03:42 +0200
+
 secubox-mastodon (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * L UNITE SE CONTREDISAIT ELLE-MEME. Elle declarait `NoNewPrivileges=false`

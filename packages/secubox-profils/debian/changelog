@@ -1,0 +1,9 @@
+secubox-profils (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premiers profils de meta-installation. Ils suivent les sections que les
+    modules se donnent eux-memes dans leur manifeste — socle, defense, reseau,
+    media, provision — plutot que des familles inventees.
+  * Chaque profil hors socle en depend : on ne peut pas installer un module
+    sans de quoi le piloter.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 14:48:59 +0200

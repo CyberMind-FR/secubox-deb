@@ -207,8 +207,13 @@ def _cmd_set_region(args) -> int:
     cfg_path = config_path_for(root)
     cfg = config.load(cfg_path)
     _write_config(cfg_path, replace(cfg, region=args.region))
-    _audit(root, "set-region", {"region": args.region}, "applied")
-    print(f"set-region: {args.region}")
+    # « written » et non « applied » : cette commande ecrit le fichier, elle ne
+    # touche pas au materiel. C'est le daemon qui pose la region sur la carte a
+    # son demarrage. Le mot « applied » a longtemps masque le fait que la carte
+    # restait en region UNSET — donc muette, le firmware refusant d'emettre.
+    _audit(root, "set-region", {"region": args.region}, "written")
+    print(f"set-region: {args.region} (ecrit dans la configuration)")
+    print("redemarrer secubox-meshtasticd pour le poser sur la carte")
     return 0
 
 

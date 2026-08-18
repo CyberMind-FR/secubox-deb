@@ -468,6 +468,52 @@ cmd_unstick() {
     log "counters cleared — relaunch transcoding from the webui or the PeerTube API"
 }
 
+# ── Transcodage ───────────────────────────────────────────────────────────
+# Cette carte n'est pas une machine d'encodage : un seul thread, un Cortex-A53,
+# et le meme processeur fait tourner le pare-feu. Une video d'1 h 41 en 1080p
+# demande une quinzaine d'heures — et ffmpeg ne reprend jamais un encodage
+# interrompu, donc chaque redemarrage annule tout le calcul deja fait.
+#
+# Le piege : mettre toutes les resolutions a `false` ne suffit PAS.
+# `always_transcode_original_resolution` court-circuite cette liste et
+# re-encode quand meme, a la resolution de la source. C'est lui qu'il faut
+# eteindre.
+cmd_transcodage() {
+    local action="${1:-etat}"
+    local yaml=/var/www/peertube/config/production.yaml
+
+    case "$action" in
+        etat)
+            lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c "
+                echo 'transcoding.enabled                     :' \$(grep -A2 '^transcoding:' $yaml | grep -oE 'enabled: (true|false)' | head -1 | awk '{print \$2}')
+                echo 'always_transcode_original_resolution    :' \$(grep -oE 'always_transcode_original_resolution: (true|false)' $yaml | awk '{print \$2}')
+                echo 'hls.enabled                             :' \$(grep -A2 '^  hls:' $yaml | grep -oE 'enabled: (true|false)' | head -1 | awk '{print \$2}')
+                echo 'resolutions actives                     :' \$(sed -n '/^  resolutions:/,/^$/p' $yaml | grep -c ': true')
+            "
+            ;;
+        off)
+            log "extinction du transcodage : les videos seront servies telles quelles"
+            lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c "
+                cp -a $yaml $yaml.avant-transcodage-off
+                sed -i 's/^\(\s*\)always_transcode_original_resolution: true/\1always_transcode_original_resolution: false/' $yaml
+                sed -i '/^transcoding:/,/^live:/ s/^\(\s*\)enabled: true/\1enabled: false/' $yaml
+            "
+            log "sauvegarde : $yaml.avant-transcodage-off"
+            svc restart && log "peertube redemarre"
+            cmd_transcodage etat
+            ;;
+        on)
+            log "reactivation du transcodage"
+            lxc-attach -n "$LXC_NAME" -P "$LXC_PATH" -- sh -c "
+                [ -f $yaml.avant-transcodage-off ] && cp -a $yaml.avant-transcodage-off $yaml
+            "
+            svc restart && log "peertube redemarre"
+            cmd_transcodage etat
+            ;;
+        *) err "usage: peertubectl transcodage {etat|off|on}"; return 1 ;;
+    esac
+}
+
 cmd_help() {
     cat <<EOF
 peertubectl $VERSION — SecuBox PeerTube (native-LXC) controller
@@ -486,6 +532,9 @@ Usage: peertubectl <verb> [args]
                                 redis queue (PeerTube then 409s every relaunch);
                                 --apply clears them, only if bull is empty
   upload <file> <title> [ch] [priv]  Upload a video to PeerTube (priv 2=unlisted)
+  transcodage {etat|off|on}     Transcodage video. `off` eteint AUSSI
+                                always_transcode_original_resolution,
+                                que la liste des resolutions n'arrete pas
   reload                        Reload host nginx (after vhost changes)
   process-ops                   (root) drain the /run ops spool
   help                          This message
@@ -501,6 +550,7 @@ main() {
         install|status|start|stop|restart|logs|reload) "cmd_${noun}" "$@" ;;
         backlog) cmd_backlog "$@" ;;
         unstick) cmd_unstick "$@" ;;
+        transcodage) cmd_transcodage "$@" ;;
         set-youtube-cookies) cmd_set_youtube_cookies "$@" ;;
         upload) cmd_upload "$@" ;;
         check-upgrade) cmd_check_upgrade "$@" ;;

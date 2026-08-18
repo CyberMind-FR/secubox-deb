@@ -31,6 +31,13 @@ override_dh_auto_install:
 	echo '    proxy_set_header X-Forwarded-Proto $$scheme;' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
 	echo '}' >> $(CURDIR)/debian/secubox-metrics/etc/nginx/secubox.d/metrics.conf
 
+	# Journal nginx porte par le domaine, et l'outil qui complete les blocs
+	# server qui declarent deja leur propre access_log.
+	install -D -m 0644 nginx/secubox-hosts-log.conf \
+	    $(CURDIR)/debian/secubox-metrics/etc/nginx/conf.d/secubox-hosts-log.conf
+	install -D -m 0755 sbin/secubox-vhost-logs \
+	    $(CURDIR)/debian/secubox-metrics/usr/sbin/secubox-vhost-logs
+
 override_dh_install:
 	dh_install
 	install -D -m 0644 nftables/secubox-metrics.nft \

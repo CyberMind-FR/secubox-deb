@@ -1,3 +1,18 @@
+secubox-peertube (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouvelle sous-commande `peertubectl transcodage {etat|off|on}`.
+    Cette carte n'est pas une machine d'encodage : un seul thread sur un
+    Cortex-A53 qui fait aussi tourner le pare-feu. Une video d'1 h 41 en 1080p
+    demande une quinzaine d'heures, et ffmpeg ne reprend jamais un encodage
+    interrompu — chaque redemarrage annulait donc tout le calcul deja fait, ce
+    qui donnait un ffmpeg qui semblait tourner « depuis des jours ».
+  * Le piege que la sous-commande evite : mettre toutes les resolutions a
+    `false` ne suffit pas. `always_transcode_original_resolution` court-circuite
+    cette liste et re-encode a la resolution de la source. `off` eteint les
+    deux, et sauvegarde la configuration avant de la modifier.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 16:11:27 +0200
+
 secubox-peertube (1.3.2-1~bookworm1) bookworm; urgency=medium
 
   * Retire borne-cpu.sh, desormais redondant (ref #1011). Le plafond CPU du

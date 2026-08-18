@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — Statistiques vhosts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-dark.css">
+<style>
+:root{
+  --p31-dim:#6b7b8b; --bg-dark:#0d1117; --bg-card:rgba(30,40,55,.8);
+  --bg-row:rgba(20,30,45,.6); --border:rgba(100,150,200,.2); --text:#e8e6d9;
+  --cyan:#00d4ff; --red:#ff4466; --orange:#ff9944; --yellow:#ffcc00;
+  --green:#00e676; --violet:#a78bfa;
+  --mono:"Courier Prime",ui-monospace,"Courier New",monospace;
+}
+*{box-sizing:border-box}
+body.hybrid-dark{background:var(--bg-dark);color:var(--text);font-family:var(--mono);font-size:14px}
+.main{padding:22px 18px 60px;max-width:1180px}
+.header{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between;
+  padding-bottom:14px;margin-bottom:20px;border-bottom:1px solid var(--border)}
+h1{font-size:21px;margin:0;letter-spacing:.5px}
+.sub{color:var(--p31-dim);font-size:12px;margin-top:4px}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font-family:var(--mono);font-size:12px;padding:7px 12px;cursor:pointer;background:var(--bg-row);
+  color:var(--text);border:1px solid var(--border);border-radius:4px;transition:.15s}
+.btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn.on,.btn.pri{background:rgba(0,212,255,.14);border-color:var(--cyan);color:var(--cyan)}
+.btn[disabled]{opacity:.45;cursor:wait}
+.btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.tools{display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-bottom:20px}
+.grp{display:flex;gap:6px;align-items:center}
+.lbl{color:var(--p31-dim);font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.sw{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;user-select:none}
+.sw i{width:34px;height:18px;border-radius:9px;background:var(--bg-row);border:1px solid var(--border);
+  position:relative;transition:.2s;flex:none}
+.sw i::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;
+  background:var(--p31-dim);transition:.2s}
+.sw.on i{background:rgba(0,212,255,.25);border-color:var(--cyan)}
+.sw.on i::after{transform:translateX(16px);background:var(--cyan)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:24px}
+.tile{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:13px 15px;
+  position:relative;overflow:hidden}
+.tile::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--cyan)}
+.tile.w::before{background:var(--orange)}.tile.d::before{background:var(--red)}
+.tile.g::before{background:var(--green)}.tile.v::before{background:var(--violet)}
+.tile .k{color:var(--p31-dim);font-size:11px;text-transform:uppercase;letter-spacing:.8px}
+.tile .v{font-size:25px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums}
+.tile .n{color:var(--p31-dim);font-size:11px;margin-top:2px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:16px 18px;margin-bottom:18px}
+.card h2{font-size:13px;margin:0 0 14px;letter-spacing:1px;text-transform:uppercase;color:var(--cyan);
+  display:flex;justify-content:space-between;align-items:center;gap:10px}
+.card h2 span{color:var(--p31-dim);text-transform:none;letter-spacing:0;font-size:11px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:760px){.cols{grid-template-columns:1fr}}
+.hist{display:flex;align-items:flex-end;gap:4px;height:150px;padding-top:8px;overflow-x:auto}
+.bar{flex:1;min-width:14px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;
+  height:100%;position:relative;cursor:pointer}
+.bar .seg{width:100%;border-radius:2px 2px 0 0}
+.bar .visites{background:linear-gradient(180deg,var(--cyan),rgba(0,212,255,.45))}
+.bar .sondes{background:var(--red);border-radius:0}
+.bar:hover .seg{filter:brightness(1.35)}
+.bar .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#04070c;
+  border:1px solid var(--cyan);border-radius:4px;padding:5px 8px;font-size:11px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:.15s;z-index:5}
+.bar:hover .tip{opacity:1}
+.axis{display:flex;gap:4px;margin-top:6px;color:var(--p31-dim);font-size:10px}
+.axis span{flex:1;min-width:14px;text-align:center;overflow:hidden}
+.legend{display:flex;gap:16px;font-size:11px;color:var(--p31-dim);margin-top:10px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.rows{display:flex;flex-direction:column;gap:9px}
+.row{display:grid;grid-template-columns:96px 1fr 64px;gap:10px;align-items:center;font-size:12px}
+.row .track{height:16px;background:var(--bg-row);border-radius:3px;overflow:hidden}
+.row .fill{height:100%;border-radius:3px}
+.row .num{text-align:right;color:var(--p31-dim);font-variant-numeric:tabular-nums}
+.tblwrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;color:var(--p31-dim);font-weight:400;font-size:10px;text-transform:uppercase;
+  letter-spacing:1px;padding:0 8px 9px;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl th.r,.tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.tbl td{padding:9px 8px;border-bottom:1px solid rgba(100,150,200,.08)}
+.tbl tbody tr.cliq{cursor:pointer}
+.tbl tbody tr.cliq:hover{background:rgba(0,212,255,.06)}
+.dom{color:var(--cyan);font-weight:700}
+.fam{display:inline-block;font-size:10px;color:var(--p31-dim);border:1px solid var(--border);
+  border-radius:3px;padding:1px 5px;margin-left:7px}
+.membres{color:var(--p31-dim);font-size:11px;padding-left:14px}
+.pill{font-size:10px;padding:2px 6px;border-radius:3px;white-space:nowrap}
+.pill.ok{background:rgba(0,230,118,.14);color:var(--green)}
+.pill.warn{background:rgba(255,153,68,.16);color:var(--orange)}
+.pill.bad{background:rgba(255,68,102,.16);color:var(--red)}
+#detail{display:none}
+.back{color:var(--cyan);cursor:pointer;font-size:12px;margin-bottom:12px;display:inline-block}
+.back:hover{text-decoration:underline}
+.paths{display:flex;flex-direction:column;gap:7px;font-size:12px}
+.path{display:flex;justify-content:space-between;gap:12px;padding:6px 9px;background:var(--bg-row);border-radius:3px}
+.path code{color:var(--text);word-break:break-all;font-size:11px}
+.path b{color:var(--cyan);font-variant-numeric:tabular-nums;flex:none}
+.modal{position:fixed;inset:0;background:rgba(4,7,12,.82);display:none;align-items:center;
+  justify-content:center;padding:20px;z-index:50}
+.modal.on{display:flex}
+.sheet{background:#111823;border:1px solid var(--cyan);border-radius:8px;max-width:440px;width:100%;padding:22px}
+.sheet h3{margin:0 0 4px;font-size:15px;color:var(--cyan)}
+.sheet p{color:var(--p31-dim);font-size:12px;margin:0 0 16px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;color:var(--p31-dim);margin-bottom:5px;
+  text-transform:uppercase;letter-spacing:.8px}
+.field input,.field select{width:100%;font-family:var(--mono);font-size:12px;padding:8px 10px;
+  background:var(--bg-row);border:1px solid var(--border);border-radius:4px;color:var(--text)}
+.field input:focus,.field select:focus{outline:none;border-color:var(--cyan)}
+.note{font-size:11px;color:var(--p31-dim);border-left:2px solid var(--border);padding-left:10px;margin:14px 0}
+.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,90px);background:#04070c;
+  border:1px solid var(--green);color:var(--green);padding:10px 18px;border-radius:5px;font-size:12px;
+  transition:.3s;z-index:60;max-width:90vw}
+.toast.on{transform:translate(-50%,0)}
+.toast.err{border-color:var(--red);color:var(--red)}
+.vide{color:var(--p31-dim);font-size:12px;padding:18px 0;text-align:center}
+</style>
+</head>
+<body class="hybrid-dark">
+<nav class="sidebar" id="sidebar"></nav>
+<script src="/shared/sidebar.js"></script>
+
+<main class="main">
+
+<div class="header">
+  <div>
+    <h1>📊 Statistiques par vhost</h1>
+    <div class="sub" id="sub">chargement…</div>
+  </div>
+  <div class="btn-group">
+    <button class="btn" id="bRefresh" onclick="charger()">↻ Rafraîchir</button>
+    <button class="btn pri" onclick="ouvrir(false)">📄 Rapport PDF</button>
+  </div>
+</div>
+
+<div class="tools">
+  <div class="grp">
+    <span class="lbl">Période</span>
+    <button class="btn" data-p="jour" onclick="periode('jour')">Jour</button>
+    <button class="btn on" data-p="semaine" onclick="periode('semaine')">7 jours</button>
+    <button class="btn" data-p="mois" onclick="periode('mois')">30 jours</button>
+  </div>
+  <div class="sw" id="swg" onclick="grouper()">
+    <i></i><span>Rassembler les domaines d'une même famille</span>
+  </div>
+</div>
+
+<div id="liste">
+  <div class="tiles" id="tuiles"></div>
+
+  <div class="card">
+    <h2>Fréquentation jour par jour <span>visites · sondes en rouge</span></h2>
+    <div class="hist" id="hist"></div>
+    <div class="axis" id="axis"></div>
+    <div class="legend">
+      <span><i style="background:var(--cyan)"></i>Visites</span>
+      <span><i style="background:var(--red)"></i>Sondes</span>
+    </div>
+  </div>
+
+  <div class="cols">
+    <div class="card"><h2>Navigateurs</h2><div class="rows" id="nav"></div></div>
+    <div class="card"><h2>Plateformes</h2><div class="rows" id="plat"></div></div>
+  </div>
+
+  <div class="card">
+    <h2>Vhosts <span id="cnt"></span></h2>
+    <div class="tblwrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Domaine</th><th class="r">Visites</th><th class="r">Visiteurs</th>
+          <th class="r">Requêtes</th><th class="r">Robots</th><th class="r">Sondes</th><th>État</th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="detail">
+  <span class="back" onclick="retour()">← Retour aux vhosts</span>
+  <div class="header" style="margin-top:6px">
+    <div><h1 id="dTitre">🌐</h1><div class="sub" id="dSub"></div></div>
+    <div class="btn-group">
+      <button class="btn" id="bVhost" onclick="rafraichirVhost()">↻ Rafraîchir ce vhost</button>
+      <button class="btn pri" onclick="ouvrir(true)">📄 Rapport PDF</button>
+    </div>
+  </div>
+  <div class="note">
+    Le rafraîchissement d'un vhost relit ses journaux <em>tournés</em>, gzip compris,
+    et reconstruit son historique. C'est coûteux — d'où le bouton plutôt qu'une boucle.
+  </div>
+  <div class="tiles" id="dTuiles"></div>
+  <div class="card">
+    <h2>Visites et sondes <span>jour par jour</span></h2>
+    <div class="hist" id="dHist"></div><div class="axis" id="dAxis"></div>
+    <div class="legend">
+      <span><i style="background:var(--cyan)"></i>Visites</span>
+      <span><i style="background:var(--red)"></i>Sondes</span>
+    </div>
+  </div>
+  <div class="cols">
+    <div class="card"><h2>Navigateurs</h2><div class="rows" id="dNav"></div></div>
+    <div class="card"><h2>Codes de retour</h2><div class="rows" id="dSt"></div></div>
+  </div>
+  <div class="cols">
+    <div class="card"><h2>Pages les plus vues</h2><div class="paths" id="dPaths"></div></div>
+    <div class="card"><h2>Référents</h2><div class="paths" id="dRef"></div></div>
+  </div>
+</div>
+
+</main>
+
+<div class="modal" id="modal" onclick="if(event.target===this)fermer()">
+  <div class="sheet">
+    <h3>📄 Rapport de fréquentation</h3>
+    <p id="mPortee"></p>
+    <div class="field"><label>Période</label>
+      <select id="mPer"><option value="semaine">7 derniers jours</option>
+        <option value="mois">30 derniers jours</option><option value="jour">Journée écoulée</option></select></div>
+    <div class="field"><label>Destinataire (messagerie interne)</label>
+      <input id="mDest" placeholder="admin@localdomain"></div>
+    <div class="note">
+      Le rapport part par la messagerie interne de la boîte. Il ne sort pas sur
+      le WAN et n'emprunte aucun relais tiers.
+    </div>
+    <div class="btn-group" style="justify-content:flex-end;margin-top:6px">
+      <button class="btn" onclick="fermer()">Annuler</button>
+      <button class="btn" id="bDl" onclick="rapport(false)">⬇ Télécharger</button>
+      <button class="btn pri" id="bEnv" onclick="rapport(true)">✉ Générer et envoyer</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api/v1/metrics";
+let per = "semaine", groupe = false, vue = null, det = null, vhostCourant = null;
+
+const jeton = () => localStorage.getItem('sbx_token');
+const entetes = () => { const t = jeton(); return t ? {'Authorization': 'Bearer ' + t} : {}; };
+const fmt = n => (n ?? 0).toLocaleString("fr-FR");
+const el = i => document.getElementById(i);
+
+let tid;
+function toast(m, err){
+  const t = el("toast");
+  t.textContent = m; t.classList.toggle("err", !!err); t.classList.add("on");
+  clearTimeout(tid); tid = setTimeout(() => t.classList.remove("on"), 3400);
+}
+
+async function api(chemin, opts){
+  const r = await fetch(API + chemin, Object.assign({headers: entetes()}, opts || {}));
+  if(!r.ok){
+    // Un 401 ici veut dire jeton absent ou perime, pas « pas de donnees ».
+    if(r.status === 401) throw new Error("session expirée — reconnectez-vous");
+    throw new Error(`${r.status} ${await r.text().catch(() => "")}`.slice(0, 140));
+  }
+  return r.json();
+}
+
+// ── rendus ───────────────────────────────────────────────────────────────
+function tuiles(cible, s, sousTitres){
+  const cases = [
+    ["", "Visites", s.visites, sousTitres.visites],
+    ["g", "Visiteurs", s.visiteurs, sousTitres.visiteurs],
+    ["v", "Requêtes", s.requetes, sousTitres.requetes],
+    ["w", "Erreurs", s.erreurs, sousTitres.erreurs],
+    ["d", "Sondes", s.sondes, sousTitres.sondes],
+  ];
+  el(cible).innerHTML = cases.map(([c, k, v, n]) =>
+    `<div class="tile ${c}"><div class="k">${k}</div><div class="v">${fmt(v)}</div>
+     <div class="n">${n || ""}</div></div>`).join("");
+}
+
+function histo(cibleH, cibleA, serie){
+  if(!serie || !serie.length){ el(cibleH).innerHTML = '<div class="vide">aucune donnée</div>';
+    el(cibleA).innerHTML = ""; return; }
+  const max = Math.max(1, ...serie.map(d => (d.visites || 0) + (d.sondes || 0)));
+  el(cibleH).innerHTML = serie.map(d => `<div class="bar">
+    <div class="tip">${d.jour} · ${fmt(d.visites)} visites · ${fmt(d.sondes)} sondes</div>
+    <div class="seg sondes" style="height:${(d.sondes || 0) / max * 100}%"></div>
+    <div class="seg visites" style="height:${(d.visites || 0) / max * 100}%"></div></div>`).join("");
+  el(cibleA).innerHTML = serie.map(d => `<span>${d.jour.slice(5)}</span>`).join("");
+}
+
+const COULEURS = ["var(--cyan)","var(--green)","var(--violet)","var(--yellow)",
+                  "var(--orange)","var(--red)","var(--p31-dim)"];
+
+function barres(cible, donnees){
+  const items = Object.entries(donnees || {}).slice(0, 7);
+  if(!items.length){ el(cible).innerHTML = '<div class="vide">aucune donnée</div>'; return; }
+  const tot = items.reduce((a, [, v]) => a + v, 0) || 1;
+  el(cible).innerHTML = items.map(([k, v], i) => {
+    const p = v / tot * 100;
+    return `<div class="row"><span>${k}</span>
+      <div class="track"><div class="fill" style="width:${p}%;background:${COULEURS[i % 7]}"></div></div>
+      <span class="num">${p.toFixed(1)} %</span></div>`;
+  }).join("");
+}
+
+function etat(v){
+  // Un vhost « ciblé » n'est pas un vhost qui recoit des erreurs : c'est un
+  // vhost dont une part notable du trafic vise des chemins de scan.
+  const part = v.requetes ? v.sondes / v.requetes * 100 : 0;
+  if(part >= 10) return ["bad", "ciblé"];
+  if(part >= 2)  return ["warn", "sondé"];
+  return ["ok", "sain"];
+}
+
+function table(){
+  const lignes = [];
+  (vue.vhosts || []).forEach(v => {
+    const [cls, txt] = etat(v);
+    const multi = v.membres && v.membres.length > 1;
+    lignes.push(`<tr class="cliq" onclick="detail('${v.vhost.replace(/'/g, "")}')">
+      <td><span class="dom">${v.vhost}</span>${multi ? `<span class="fam">${v.membres.length} domaines</span>` : ""}</td>
+      <td class="r">${fmt(v.visites)}</td>
+      <td class="r">${fmt(v.visiteurs)}${v.visiteurs_minores ? " +" : ""}</td>
+      <td class="r">${fmt(v.requetes)}</td>
+      <td class="r">${v.part_robots} %</td>
+      <td class="r">${fmt(v.sondes)}</td>
+      <td><span class="pill ${cls}">${txt}</span></td></tr>`);
+    if(multi) lignes.push(`<tr><td colspan="7" class="membres">↳ ${v.membres.join(" · ")}</td></tr>`);
+  });
+  el("tb").innerHTML = lignes.join("") ||
+    '<tr><td colspan="7" class="vide">aucun trafic sur la période</td></tr>';
+  const t = vue.total || {};
+  el("cnt").textContent = groupe
+    ? `${t.vhosts || 0} familles · ${t.domaines || 0} domaines`
+    : `${t.vhosts || 0} domaines actifs`;
+}
+
+// ── chargement ───────────────────────────────────────────────────────────
+async function charger(){
+  const b = el("bRefresh"); b.disabled = true;
+  try{
+    vue = await api(`/vhost-stats?periode=${per}&grouper=${groupe}`);
+    if(vue.actif === false){ el("sub").textContent = "collecte désactivée"; return; }
+    const t = vue.total || {};
+    el("sub").textContent =
+      `${t.vhosts || 0} vhosts actifs · du ${vue.du} au ${vue.au}` +
+      (vue.maj ? ` · maj ${new Date(vue.maj).toLocaleTimeString("fr-FR")}` : " · collecte en cours");
+    tuiles("tuiles", t, {
+      visites: "pages, hors accessoires",
+      visiteurs: "IP distinctes, cumul par vhost",
+      requetes: "tout compris",
+      erreurs: "codes 4xx et 5xx",
+      sondes: "chemins de scan connus",
+    });
+    histo("hist", "axis", vue.serie || []);
+    barres("nav", t.navigateurs); barres("plat", t.plateformes);
+    table();
+  }catch(e){ toast("Chargement impossible : " + e.message, true); }
+  finally{ b.disabled = false; }
+}
+
+async function detail(nom){
+  vhostCourant = nom;
+  try{
+    det = await api(`/vhost-stats/${encodeURIComponent(nom)}?periode=${per}`);
+  }catch(e){ toast("Détail indisponible : " + e.message, true); return; }
+  el("dTitre").textContent = "🌐 " + nom;
+  const memb = det.membres || [];
+  // Quand on ouvre une famille, dire lesquels de ses domaines sont additionnes :
+  // sinon les chiffres semblent sortir de nulle part.
+  el("dSub").textContent = `${per}` +
+    (memb.length > 1 ? ` · ${memb.length} domaines : ${memb.join(", ")}` : "") +
+    (det.maj ? ` · maj ${new Date(det.maj).toLocaleTimeString("fr-FR")}` : "");
+  tuiles("dTuiles", det, {
+    visites: "pages, hors accessoires", visiteurs: "IP distinctes",
+    requetes: "tout compris", erreurs: "codes 4xx et 5xx", sondes: "chemins de scan",
+  });
+  histo("dHist", "dAxis", det.serie);
+  barres("dNav", det.navigateurs); barres("dSt", det.statuts);
+  el("dPaths").innerHTML = (det.top_chemins || []).map(e =>
+    `<div class="path"><code>${e.chemin}</code><b>${fmt(e.n)}</b></div>`).join("")
+    || '<div class="vide">aucune page</div>';
+  el("dRef").innerHTML = (det.top_referents || []).map(e =>
+    `<div class="path"><code>${e.hote}</code><b>${fmt(e.n)}</b></div>`).join("")
+    || '<div class="vide">aucun référent</div>';
+  el("liste").style.display = "none"; el("detail").style.display = "block";
+  window.scrollTo(0, 0);
+}
+
+function retour(){ el("detail").style.display = "none"; el("liste").style.display = "block"; }
+
+async function rafraichirVhost(){
+  const b = el("bVhost"); b.disabled = true; b.textContent = "↻ relecture…";
+  try{
+    const r = await api(`/vhost-stats/${encodeURIComponent(vhostCourant)}/refresh`, {method: "POST"});
+    toast(`Journaux relus : ${r.fichiers} fichiers, ${fmt(r.lignes)} lignes`);
+    await detail(vhostCourant); await charger();
+  }catch(e){ toast("Relecture impossible : " + e.message, true); }
+  finally{ b.disabled = false; b.textContent = "↻ Rafraîchir ce vhost"; }
+}
+
+function periode(p){
+  per = p;
+  document.querySelectorAll(".tools .btn").forEach(x => x.classList.toggle("on", x.dataset.p === p));
+  charger(); if(el("detail").style.display === "block") detail(vhostCourant);
+}
+function grouper(){ groupe = !groupe; el("swg").classList.toggle("on", groupe); charger(); }
+
+// ── rapport ──────────────────────────────────────────────────────────────
+function ouvrir(un){
+  el("modal").dataset.vhost = un ? vhostCourant : "";
+  el("mPortee").textContent = (un ? vhostCourant : "Tous les vhosts") + " · rapport PDF";
+  el("mPer").value = per;
+  el("modal").classList.add("on");
+}
+function fermer(){ el("modal").classList.remove("on"); }
+
+async function rapport(envoyer){
+  const b = el(envoyer ? "bEnv" : "bDl"); b.disabled = true;
+  const vhost = el("modal").dataset.vhost || "";
+  const q = new URLSearchParams({periode: el("mPer").value, vhost, grouper: groupe,
+                                 envoyer: envoyer, destinataire: el("mDest").value.trim()});
+  try{
+    const r = await fetch(`${API}/vhost-stats/rapport?${q}`, {method: "POST", headers: entetes()});
+    if(!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 140)}`);
+    if(envoyer){
+      const d = await r.json();
+      fermer(); toast(`Rapport expédié à ${d.destinataire}`);
+    }else{
+      // Telechargement : le PDF arrive en corps de reponse, pas en lien.
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `secubox-frequentation-${new Date().toISOString().slice(0,10)}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      fermer(); toast("PDF généré");
+    }
+  }catch(e){ toast("Rapport impossible : " + e.message, true); }
+  finally{ b.disabled = false; }
+}
+
+charger();
+setInterval(() => { if(el("detail").style.display !== "block") charger(); }, 120000);
+</script>
+</body>
+</html>

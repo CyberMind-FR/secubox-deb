@@ -1,3 +1,32 @@
+secubox-hub (1.9.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le cache d'etat fait UN SEUL `systemctl list-units` au lieu d'interroger
+    chaque unite. Meme par lots de 25, 100 unites sur 186 expiraient encore :
+    `is-active` coute un aller-retour par appel, et la board en fait des
+    centaines. `list-units` rend tout en une fois — la reponse est complete ou
+    absente, plus de cache a moitie rempli selon quel lot a eu de la chance.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 14:42:23 +0200
+
+secubox-hub (1.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * Le cache d'etat interrogeait ~180 unites en UN seul `systemctl is-active`
+    avec 5 s de delai. Sous charge l'appel expirait et le cache restait VIDE :
+    le menu de l'interface d'administration n'affichait aucun module alors que
+    le hub tournait. Il procede par lots de 25, et un lot qui expire laisse les
+    valeurs precedentes en place — un etat un peu ancien vaut mieux qu'un menu
+    vide.
+  * La decouverte des modules omettait `--plain` : systemctl prefixe les unites
+    en echec d'un caractere de decoration, qui devenait un faux nom de service.
+    La liste interrogee contenait ainsi une entree « ● ».
+  * Un module est desormais juge vivant sur sa SOCKET, pas sur son unite. Depuis
+    le rassemblement, la plupart sont servis par `secubox-group@tout` et leur
+    unite individuelle est arretee : juger sur l'unite aurait affiche tout le
+    parc comme eteint. La socket est testee par une connexion reelle, un fichier
+    de socket survivant a la mort de son demon.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 13:48:33 +0200
+
 secubox-hub (1.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Les pages d'erreur nginx entrent dans le paquet. Elles n'appartenaient a

@@ -14,6 +14,14 @@ Group=secubox
 # Le retrait des sockets perimees est fait par le programme lui-meme, module par
 # module, juste avant chaque bind.
 ExecStart=/usr/sbin/secubox-groupd --fichier /etc/secubox/groups.d/%i.conf
+# Un groupe porte une socket par module — 82 pour « tout » — et chaque
+# connexion acceptee consomme un descripteur de plus. Le plafond SOUPLE par
+# defaut est de 1024 : c'est lui que Python respecte, et le groupe tombait en
+# EMFILE (« Too many open files »), refusant les connexions sur des sockets
+# pourtant presentes. Le plafond dur valait deja 524288 ; seul le souple
+# manquait.
+LimitNOFILE=65536
+
 Restart=on-failure
 RestartSec=5
 # Un groupe porte plusieurs modules : lui laisser le temps de tous les importer.

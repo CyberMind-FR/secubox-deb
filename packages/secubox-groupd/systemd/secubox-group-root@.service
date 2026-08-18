@@ -1,0 +1,36 @@
+[Unit]
+Description=SecuBox — groupe PRIVILEGIE de modules « %i »
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+# CE GROUPE TOURNE EN ROOT, et c'est un choix a assumer.
+#
+# Les modules qu'il porte tournaient DEJA en root, chacun dans son processus :
+# le privilege n'augmente pas. Ce qui change, c'est le partage du sort — un
+# blocage dans l'un fige les autres.
+#
+# On ne melange donc jamais les deux groupes : un module non privilegie n'a
+# rien a faire ici, et le repertoire de declaration distinct rend l'ajout
+# volontaire et visible.
+User=root
+Group=root
+ExecStart=/usr/sbin/secubox-groupd --declarations \
+  --repertoire-declarations /usr/share/secubox/groupable-root.d \
+  --fichier /etc/secubox/groups.d/%i.conf
+# Un groupe porte une socket par module — 82 pour « tout » — et chaque
+# connexion acceptee consomme un descripteur de plus. Le plafond SOUPLE par
+# defaut est de 1024 : c'est lui que Python respecte, et le groupe tombait en
+# EMFILE (« Too many open files »), refusant les connexions sur des sockets
+# pourtant presentes. Le plafond dur valait deja 524288 ; seul le souple
+# manquait.
+LimitNOFILE=65536
+
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

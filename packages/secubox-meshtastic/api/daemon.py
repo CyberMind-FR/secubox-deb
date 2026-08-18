@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+import time
 from pathlib import Path
 
 from .model import MeshState, parse_packet, _nid
@@ -198,7 +199,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     from .config import load
-    from .radio import open_serial
+    from .radio import open_serial, appliquer_region
     from .bridge import Bridge
     from .passive import PassiveCapture
     from .cache import StateCache
@@ -209,6 +210,19 @@ def main() -> None:
     present = radio is not None
     if not present:
         log.warning("radio absent (serial=%s) — daemon runs cache/passive/bridge only", cfg.serial)
+    else:
+        # La region configuree doit etre POSEE sur la carte, pas seulement
+        # affichee : sans region, le firmware refuse d'emettre.
+        if appliquer_region(radio, cfg.region):
+            log.warning("region %s ecrite sur la carte — la radio redemarre, "
+                        "reouverture", cfg.region)
+            try:
+                radio.close()
+            except Exception:
+                pass
+            time.sleep(12)          # laisser la carte rebooter
+            radio = open_serial(cfg.serial)
+            present = radio is not None
 
     bridge = Bridge(cfg, _mqtt_factory)
     bridge.start()

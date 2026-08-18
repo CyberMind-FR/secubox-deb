@@ -33,6 +33,16 @@ from pathlib import Path
 from typing import Any
 
 RACINE = Path("/usr/lib/secubox")
+# Chaque paquet de module depose ici un fichier a son nom pour se declarer
+# groupable. C'est ce qui concilie un EMPAQUETAGE separe et modulaire avec une
+# INSTALLATION rassemblee : le groupe ne tient pas une liste a la main, il
+# constate ce que l'installation contient. Installer un module l'ajoute,
+# le desinstaller le retire, sans qu'aucun fichier central ne soit edite.
+DECLARATIONS = Path("/usr/share/secubox/groupable.d")
+# Le groupe PRIVILEGIE a son propre repertoire. Deux repertoires et non un
+# drapeau : un module ne doit pas pouvoir se retrouver dans le groupe root par
+# inadvertance. Y deposer son nom est un geste distinct, visible a la revue.
+DECLARATIONS_ROOT = Path("/usr/share/secubox/groupable-root.d")
 SOCKETS = Path("/run/secubox")
 
 log = logging.getLogger("groupd")
@@ -135,6 +145,18 @@ async def principal(modules: list[str], racine: Path, dossier_sockets: Path) -> 
     return 0
 
 
+def modules_declares(repertoire: Path = DECLARATIONS) -> list[str]:
+    """Rend les modules qui se sont declares groupables, par leur paquet.
+
+    Un fichier vide suffit : c'est son NOM qui porte l'information. Un paquet
+    peut y ecrire des options plus tard sans casser cette lecture.
+    """
+    if not repertoire.is_dir():
+        return []
+    return sorted(f.name for f in repertoire.iterdir()
+                  if f.is_file() and not f.name.startswith("."))
+
+
 def modules_depuis(fichier: Path) -> list[str]:
     """Lit la liste d'un fichier : un module par ligne, `#` en commentaire."""
     out = []
@@ -151,16 +173,30 @@ def main() -> int:
     p.add_argument("--fichier", type=Path, help="fichier listant les modules, un par ligne")
     p.add_argument("--racine", type=Path, default=RACINE)
     p.add_argument("--sockets", type=Path, default=SOCKETS)
+    p.add_argument("--declarations", action="store_true",
+                   help="prendre les modules qui se sont declares groupables")
+    p.add_argument("--repertoire-declarations", type=Path, default=DECLARATIONS,
+                   dest="repertoire_declarations")
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     mods = []
-    if a.fichier:
+    if a.declarations:
+        mods += modules_declares(a.repertoire_declarations)
+    if a.fichier and a.fichier.exists():
         mods += modules_depuis(a.fichier)
     if a.modules:
         mods += [m.strip() for m in a.modules.split(",") if m.strip()]
+    # Un module declare deux fois ne doit etre servi qu'une : deux serveurs sur
+    # la meme socket, c'est le second qui echoue et un module qui parait mort.
+    vus, uniques = set(), []
+    for m in mods:
+        if m not in vus:
+            vus.add(m)
+            uniques.append(m)
+    mods = uniques
     if not mods:
-        p.error("aucun module : donnez --modules ou --fichier")
+        p.error("aucun module : ni declaration, ni --fichier, ni --modules")
     return asyncio.run(principal(mods, a.racine, a.sockets))
 
 

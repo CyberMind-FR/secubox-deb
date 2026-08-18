@@ -17,7 +17,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
@@ -29,6 +29,18 @@ except ImportError:
     AUTH_ENABLED = False
     async def require_jwt():
         pass
+
+# Les modules voisins sont importes sans prefixe (`visitor_origin` et non
+# `api.visitor_origin`). Or le demon demarre sur `api.main:app` depuis le
+# repertoire parent : `api/` n'est alors PAS dans le chemin, et ces imports
+# echouent. C'est ce qui faisait sortir le service en erreur et ce qui faisait
+# ecarter metrics par l'agregateur. On ajoute donc le repertoire du fichier,
+# ce qui vaut dans les trois modes : demon, agregateur et groupe.
+import sys as _sys
+from pathlib import Path as _Path
+_ici = str(_Path(__file__).resolve().parent)
+if _ici not in _sys.path:
+    _sys.path.insert(0, _ici)
 
 from visitor_origin import VisitorOriginAggregator
 from live_hosts import LiveHostsAggregator
@@ -49,9 +61,49 @@ visitor_origin_agg = VisitorOriginAggregator(get_visitor_origin_config())
 live_hosts_agg     = LiveHostsAggregator(get_live_hosts_config())
 cert_status_agg    = CertStatusAggregator(get_cert_status_config())
 
+from vhost_stats import VhostStatsAggregator, famille  # noqa: E402
+
+vhost_stats_agg = VhostStatsAggregator()
+
+# Le lifespan ne se declenche pas quand metrics est monte dans l agregateur ;
+# la collecte s amorce donc aussi a la premiere requete, faute de quoi la vue
+# resterait vide sans que rien ne le signale.
+_collecte: Optional[asyncio.Task] = None
+
+
+_prechauffe = False
+
+
+def _prechauffer_rapport() -> None:
+    """Charge matplotlib en fond, une fois, pour que le premier PDF soit rapide.
+
+    Sans cela le premier clic sur « Rapport » payait dix secondes d'import.
+    On le fait dans un thread : c'est du calcul, pas de l'attente.
+    """
+    global _prechauffe
+    if _prechauffe:
+        return
+    _prechauffe = True
+
+    def _charger():
+        try:
+            import rapport  # noqa: F401
+        except Exception:
+            pass
+
+    asyncio.get_running_loop().run_in_executor(None, _charger)
+
+
+def amorcer_collecte() -> None:
+    global _collecte
+    if _collecte is None or _collecte.done():
+        _collecte = asyncio.create_task(vhost_stats_agg.run_forever())
+    _prechauffer_rapport()
+
 
 @asynccontextmanager
 async def lifespan(_app):
+    amorcer_collecte()
     tasks = [
         asyncio.create_task(visitor_origin_agg.run_forever()),
         asyncio.create_task(live_hosts_agg.run_forever()),
@@ -368,12 +420,25 @@ async def get_health():
         }
     }
 
+# ─── Handlers synchrones, volontairement ──────────────────────────────────
+# Ceux qui suivent lancent lxc-info, pgrep, systemctl ou openssl. Declares
+# `async def`, ils tournaient sur la boucle et la bloquaient le temps de
+# chaque sous-processus — sur une machine chargee, plusieurs dizaines de
+# secondes, pendant lesquelles TOUTES les autres requetes du module
+# attendaient. Declares `def`, FastAPI les execute dans son pool de threads
+# et la boucle reste libre.
 @app.get("/api/v1/metrics/overview")
-async def get_overview(auth: None = Depends(require_jwt)):
+def get_overview(auth: None = Depends(require_jwt)):
     """Get system overview metrics."""
     cached = read_cache()
     if cached and cache_is_fresh():
-        data = cached.get("overview", build_overview())
+        # `cached.get(cle, batir())` evaluait TOUJOURS `batir()`, cache frais
+        # ou non : Python calcule le defaut avant d'appeler `.get`. Ces
+        # fonctions lancent lxc-info, pgrep, systemctl, nft et cscli — elles
+        # repartaient donc a chaque requete, et le cache ne servait a rien.
+        data = cached.get("overview")
+        if data is None:
+            data = build_overview()
     else:
         # Trigger async rebuild
         data = build_overview()
@@ -382,11 +447,13 @@ async def get_overview(auth: None = Depends(require_jwt)):
     return data
 
 @app.get("/api/v1/metrics/waf_stats")
-async def get_waf_stats(auth: None = Depends(require_jwt)):
+def get_waf_stats(auth: None = Depends(require_jwt)):
     """Get WAF/CrowdSec statistics."""
     cached = read_cache()
     if cached and cache_is_fresh():
-        data = cached.get("waf", build_waf_stats())
+        data = cached.get("waf")
+        if data is None:
+            data = build_waf_stats()
     else:
         data = build_waf_stats()
 
@@ -394,11 +461,13 @@ async def get_waf_stats(auth: None = Depends(require_jwt)):
     return data
 
 @app.get("/api/v1/metrics/connections")
-async def get_connections(auth: None = Depends(require_jwt)):
+def get_connections(auth: None = Depends(require_jwt)):
     """Get connection statistics."""
     cached = read_cache()
     if cached and cache_is_fresh():
-        data = cached.get("connections", build_connections())
+        data = cached.get("connections")
+        if data is None:
+            data = build_connections()
     else:
         data = build_connections()
 
@@ -411,7 +480,7 @@ async def get_all(auth: None = Depends(require_jwt)):
     return get_cached_or_build()
 
 @app.post("/api/v1/metrics/refresh")
-async def refresh_cache(auth: None = Depends(require_jwt)):
+def refresh_cache(auth: None = Depends(require_jwt)):
     """Force cache refresh."""
     data = build_cache()
     return {"status": "ok", "message": "Cache refreshed", "timestamp": data["timestamp"]}
@@ -459,7 +528,7 @@ async def get_vhosts(auth: None = Depends(require_jwt)):
     return {"vhosts": vhosts}
 
 @app.get("/api/v1/metrics/firewall_stats")
-async def get_firewall_stats(auth: None = Depends(require_jwt)):
+def get_firewall_stats(auth: None = Depends(require_jwt)):
     """Get firewall statistics."""
     # Get nftables drop count
     nft_drops = 0
@@ -720,8 +789,33 @@ def get_ssl_status(domain: str) -> dict:
         return {"domain": domain, "days_remaining": None, "status": "unknown", "expiry": None, "error": str(e)}
 
 
+# ── Memoire courte pour les sondes publiques ──────────────────────────────
+# /health/summary est PUBLIC et sans authentification, et le bandeau de sante
+# est injecte dans chaque page de chaque vhost : sur cette boite, 121 domaines.
+# Chaque affichage relancait build_health_summary() — quatre commandes systeme
+# — et une lecture de certificat. Le module s'etouffait sous ses propres
+# sous-processus et cessait de repondre, ce qui faisait paraitre TOUTE
+# l'interface en panne.
+#
+# Ces deux mesures bougent lentement : l'etat des services a l'echelle de la
+# minute, un certificat a l'echelle du mois. Une memoire courte suffit, et
+# elle transforme une tempete en une mesure par minute.
+_memo: dict = {}
+
+
+def _memoise(cle: str, duree: int, calcul):
+    """Rend la valeur memorisee, ou la recalcule si elle a passe `duree`."""
+    entree = _memo.get(cle)
+    maintenant = time.time()
+    if entree and maintenant - entree[0] < duree:
+        return entree[1]
+    valeur = calcul()
+    _memo[cle] = (maintenant, valeur)
+    return valeur
+
+
 @app.get("/api/v1/metrics/health/summary")
-async def get_health_summary(request: Request, domain: Optional[str] = None):
+def get_health_summary(request: Request, domain: Optional[str] = None):
     """
     Health summary for the global health banner.
     Returns aggregated health score and module statuses.
@@ -731,12 +825,15 @@ async def get_health_summary(request: Request, domain: Optional[str] = None):
         domain: Optional domain to check SSL certificate for. If not provided,
                 falls back to the Host header.
     """
-    summary = build_health_summary()
+    # dict() : la valeur memorisee est partagee entre toutes les requetes, on
+    # ne doit pas y greffer le certificat d'un domaine particulier.
+    summary = dict(_memoise("sante", 60, build_health_summary))
 
     # Add SSL certificate status for the specified domain or Host header
     ssl_domain = domain or request.headers.get("host", "").split(":")[0]
     if ssl_domain:
-        summary["ssl"] = get_ssl_status(ssl_domain)
+        summary["ssl"] = _memoise(f"ssl:{ssl_domain}", 900,
+                                  lambda: get_ssl_status(ssl_domain))
     else:
         summary["ssl"] = None
 
@@ -764,6 +861,119 @@ async def cert_status_endpoint():
         content=cert_status_agg.current(),
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+# ─── Statistiques par vhost ───────────────────────────────────────────────
+# Visites, visiteurs, navigateurs — et les sondes qui viennent avec.
+
+@app.get("/api/v1/metrics/vhost-stats")
+async def vhost_stats(periode: str = "jour", grouper: bool = False,
+                      _=Depends(require_jwt)):
+    """Vue d ensemble. `grouper` fond les domaines d une meme famille."""
+    amorcer_collecte()
+    # En thread : la fusion parcourt 30 jours de compteurs. Sur la boucle
+    # partagee du groupe, ce sont les 82 modules qui attendraient.
+    vue = await asyncio.to_thread(vhost_stats_agg.current, periode, grouper)
+    return JSONResponse(content=vue)
+
+
+@app.get("/api/v1/metrics/vhost-stats/liste")
+async def vhost_stats_liste(_=Depends(require_jwt)):
+    """Les vhosts journalises, groupes par famille — pour les selecteurs."""
+    amorcer_collecte()
+    connus = vhost_stats_agg.vhosts_connus()
+    familles: dict[str, list[str]] = {}
+    for v in connus:
+        familles.setdefault(famille(v), []).append(v)
+    return {"vhosts": connus, "familles": familles}
+
+
+# Cette route doit rester APRES /liste : sinon « liste » serait avale comme
+# un nom de vhost et le selecteur ne repondrait jamais.
+@app.get("/api/v1/metrics/vhost-stats/{vhost}")
+async def vhost_stats_detail(vhost: str, periode: str = "semaine",
+                             _=Depends(require_jwt)):
+    amorcer_collecte()
+    try:
+        d = await asyncio.to_thread(vhost_stats_agg.detail, vhost, periode)
+        return JSONResponse(content=d)
+    except KeyError:
+        raise HTTPException(404, f"aucune donnee pour {vhost}")
+
+
+@app.post("/api/v1/metrics/vhost-stats/{vhost}/refresh")
+async def vhost_stats_refresh(vhost: str, _=Depends(require_jwt)):
+    """Relit integralement les journaux d un vhost, rotations comprises.
+
+    Couteux — d ou le thread : une relecture gzip sur la boucle bloquerait
+    tout le module le temps qu elle dure.
+    """
+    try:
+        return await asyncio.to_thread(vhost_stats_agg.rafraichir, vhost)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/v1/metrics/vhost-stats/rapport")
+async def vhost_stats_rapport(periode: str = "semaine", vhost: str = "",
+                              grouper: bool = False, destinataire: str = "",
+                              envoyer: bool = False, _=Depends(require_jwt)):
+    """Fabrique le PDF, et l expedie si on le demande.
+
+    Rendu et SMTP partent en thread : matplotlib synchrone sur une boucle
+    mono-worker fige le module, ce qui a deja produit des 504 ailleurs.
+    """
+    def _fabriquer():
+        """Tout le travail, dans UN seul aller-retour vers un thread.
+
+        L'import de `rapport` tire matplotlib : pres de dix secondes la
+        premiere fois. Fait a l'interieur du handler asynchrone, il bloquait la
+        boucle tout ce temps, et le navigateur abandonnait avant la reponse
+        (499 cote nginx, 504 vu du client). Il se fait donc ici, hors boucle.
+        """
+        import rapport as rapport_mod
+        vue = vhost_stats_agg.current(periode, grouper)
+        det = vhost_stats_agg.detail(vhost, periode) if vhost else None
+        return rapport_mod.construire_pdf(vue, det), rapport_mod
+
+    try:
+        pdf, rapport_mod = await asyncio.to_thread(_fabriquer)
+    except KeyError:
+        raise HTTPException(404, f"aucune donnee pour {vhost}")
+    except ImportError as e:
+        raise HTTPException(503, f"generation PDF indisponible : {e}")
+
+    if not envoyer:
+        horodatage = datetime.now().strftime("%Y%m%d")
+        return Response(
+            content=pdf, media_type="application/pdf",
+            headers={"Content-Disposition":
+                     f'attachment; filename="secubox-frequentation-{horodatage}.pdf"'})
+    try:
+        return await asyncio.to_thread(
+            rapport_mod.envoyer, pdf, destinataire or None,
+            vhost or "Tous les vhosts", periode)
+    except Exception as e:
+        raise HTTPException(502, f"expedition impossible : {e}")
+
+
+# ─── Analyse des journaux (ex-module `metalogizer`) ───────────────────────
+# Le nom precedent se confondait avec `metablogizer`. Fondu ici, sous prefixe.
+try:
+    from logs import router as logs_router, demarrer_cache
+
+    # Passe en dependance du routeur : n importe quelle requete amorce la
+    # boucle. C est ce qui rend le cache fiable quand metrics est monte dans
+    # l agregateur, ou aucun evenement de demarrage ne lui parvient.
+    app.include_router(
+        logs_router,
+        prefix="/api/v1/metrics/logs",
+        dependencies=[Depends(demarrer_cache)],
+    )
+except ImportError as e:  # le module reste utilisable sans l analyse de logs
+    print(f"[metrics] analyse des journaux indisponible : {e}")
 
 
 if __name__ == "__main__":

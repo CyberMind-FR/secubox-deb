@@ -1,3 +1,23 @@
+secubox-aggregator (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le watchdog sondait `/api/v1/hub/public/menu` — un point d'entree qui
+    traverse le hub ET son cache d'etat. Quand le hub etait lent, la sonde
+    echouait et c'est l'AGREGATEUR qui etait redemarre : on tuait le porteur
+    pour la faute d'un passager. Six redemarrages en une heure le 2026-08-17.
+    Il sonde desormais `/health`, qui ne depend que de l'agregateur.
+  * Grace portee de 480 a 900 s : le montage des ~110 modules en interne a pris
+    360 s a vide, davantage sous charge. Une grace trop courte tue l'agregateur
+    juste avant qu'il finisse, et le redemarrage repart de zero — la boucle se
+    nourrit d'elle-meme.
+  * Au-dela de la grace, la progression est verifiee avant de conclure : un
+    processus qui consomme encore du CPU fait quelque chose, et le tuer perd le
+    travail deja fait. Seul ce qui est reellement fige est redemarre.
+  * `|| echo 000` retire : curl ecrit deja 000 en cas d'echec et le repli en
+    ajoutait un second, d'ou les « code=000000 » qui rendaient toute
+    comparaison numerique impossible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 17 Aug 2026 14:40:35 +0200
+
 secubox-aggregator (0.3.1-1~bookworm1) bookworm; urgency=high
 
   * Retire `RuntimeDirectory=secubox` (ref #1022). Ce repertoire est PARTAGE par

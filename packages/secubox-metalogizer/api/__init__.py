@@ -1,1 +1,0 @@
-# SecuBox Metalogizer API
