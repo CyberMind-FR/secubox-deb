@@ -155,12 +155,12 @@
 (function () {
   function getToken() { return localStorage.getItem('sbx_token'); }
   function checkAuth() {
-    if (!getToken()) {
-      if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-      return false;
-    }
-    return true;
-  }
+            // Ne jamais pre-empter sur l'absence de jeton localStorage : la
+            // session peut tenir a un cookie (SSO parent-domaine), accepte par
+            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
+            // seule une vraie 401 redirige (gere dans les appels fetch).
+            return true;
+        }
   if (!checkAuth()) {
     document.querySelector('main.main').innerHTML = '<div style="padding:2rem;color:var(--muted);">Redirecting to login…</div>';
     return;
