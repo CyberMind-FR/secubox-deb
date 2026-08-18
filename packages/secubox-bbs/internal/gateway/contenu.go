@@ -241,3 +241,62 @@ func validerAdresse(brut string) error {
 // La règle vit ici, et non dans chaque connecteur : un connecteur qui
 // oublierait de la vérifier republierait le travail d'autrui.
 func (c Contenu) EstRepubliable() bool { return c.Propriete == ProprieteSoi }
+
+// Vocabulaire des événements de provenance. Fermé volontairement : un journal
+// dont le vocabulaire s'invente au fil de l'eau ne se relit plus.
+const (
+	EvImporte   = "importe"
+	EvCache     = "cache"
+	EvTTLEtendu = "ttl_etendu"
+	EvEpingle   = "epingle"
+	EvArchive   = "archive"
+	EvReplique  = "replique"
+	EvPublie    = "publie"
+	EvPurge     = "purge"
+	EvErreur    = "erreur_connecteur"
+)
+
+// Evenement est un maillon de la chaîne de provenance d'un contenu.
+type Evenement struct {
+	ID        int64             `json:"id"`
+	Empreinte string            `json:"empreinte"`
+	Horodate  int64             `json:"horodate"`
+	Evenement string            `json:"evenement"`
+	Acteur    string            `json:"acteur,omitempty"`
+	Details   map[string]string `json:"details,omitempty"`
+	Precedent string            `json:"precedent"`
+	Somme     string            `json:"somme"`
+}
+
+var evenements = map[string]bool{
+	EvImporte: true, EvCache: true, EvTTLEtendu: true, EvEpingle: true,
+	EvArchive: true, EvReplique: true, EvPublie: true, EvPurge: true,
+	EvErreur: true,
+}
+
+// EvenementConnu garde le vocabulaire fermé.
+func EvenementConnu(e string) bool { return evenements[e] }
+
+// SommeEvenement calcule le maillon : le précédent entre dans le calcul, si
+// bien que réécrire une ligne oblige à recalculer toute la suite.
+func SommeEvenement(precedent string, e Evenement) string {
+	var b strings.Builder
+	b.WriteString(precedent)
+	b.WriteString("\x1f" + e.Empreinte)
+	b.WriteString("\x1f" + fmt.Sprint(e.Horodate))
+	b.WriteString("\x1f" + e.Evenement)
+	b.WriteString("\x1f" + e.Acteur)
+
+	// Les détails sont sérialisés dans un ordre stable : une map parcourue au
+	// hasard donnerait une somme différente à chaque vérification.
+	cles := make([]string, 0, len(e.Details))
+	for k := range e.Details {
+		cles = append(cles, k)
+	}
+	sort.Strings(cles)
+	for _, k := range cles {
+		b.WriteString("\x1f" + k + "=" + e.Details[k])
+	}
+	somme := blake2b.Sum256([]byte(b.String()))
+	return hex.EncodeToString(somme[:])
+}
