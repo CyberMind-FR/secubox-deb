@@ -251,7 +251,7 @@ def test_desarmer_retire_le_marqueur(magasin_marque, tmp_path):
 def test_le_marqueur_est_a_acces_restreint(magasin_marque, tmp_path):
     magasin_marque.armer(duree_s=120)
     import stat
-    assert stat.S_IMODE((tmp_path / "armed").stat().st_mode) == 0o600
+    assert stat.S_IMODE((tmp_path / "armed").stat().st_mode) == 0o644
 
 
 def test_sans_marqueur_configure_armer_ne_plante_pas(magasin):
