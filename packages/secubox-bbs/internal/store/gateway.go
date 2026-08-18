@@ -101,6 +101,16 @@ func (s *Store) GatewayEnregistrer(c gateway.Contenu) (bool, error) {
 	if err := indexer(tx, c); err != nil {
 		return false, err
 	}
+	if nouveau {
+		// Le contenu et son premier evenement entrent d'un seul tenant : un
+		// objet sans origine serait pire qu'un objet absent. Un RE-import, lui,
+		// ne note rien : revoir n'est pas importer, et l'histoire se remplirait
+		// d'un evenement toutes les demi-heures pour rien.
+		if err := noter(tx, c.Empreinte, gateway.EvImporte, c.Connecteur,
+			map[string]string{"source": c.SourceURL}); err != nil {
+			return false, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return false, err
 	}
