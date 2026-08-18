@@ -40,7 +40,7 @@ func TestStatusStats(t *testing.T) {
 		sentinel.Verdict{Class: sentinel.ClassBotnetC2, Action: sentinel.ActionSinkhole, MacHash: "b", TS: now},
 		sentinel.Verdict{Class: sentinel.ClassZeroClick, Action: sentinel.ActionReport, MacHash: "c", TS: now},
 	)
-	mux := newStatusMux(store)
+	mux := newStatusMux(store, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/stats", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestStatusVerdicts(t *testing.T) {
 			TS:       time.Now().Unix(),
 		},
 	)
-	mux := newStatusMux(store)
+	mux := newStatusMux(store, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/verdicts", nil)
 	rec := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestVerdictsFilterByMac(t *testing.T) {
 		Evidence: map[string]string{"ioc_value": "b.example"},
 		MacHash:  "bbbb", TS: time.Now().Unix(),
 	})
-	mux := newStatusMux(store)
+	mux := newStatusMux(store, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/verdicts?mac=aaaa", nil)
 	rec := httptest.NewRecorder()
@@ -146,7 +146,7 @@ func TestVerdictsFilterByMac(t *testing.T) {
 
 func TestStatusRejectsNonGet(t *testing.T) {
 	store := openTestStore(t)
-	mux := newStatusMux(store)
+	mux := newStatusMux(store, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/stats", nil)
 	rec := httptest.NewRecorder()

@@ -22,137 +22,22 @@ package main
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rand"
+	"context"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
+	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/sentinel"
 )
-
-// ── CA + per-host leaf forging ──────────────────────────────────────────────
-
-// CA holds the loaded forging CA (reused from ca-wg) + a per-host leaf cache.
-type CA struct {
-	cert  *x509.Certificate
-	key   crypto.Signer
-	mu    sync.Mutex
-	cache map[string]*tls.Certificate
-}
-
-func loadCA(certPath, keyPath string) (*CA, error) {
-	cpem, err := os.ReadFile(certPath)
-	if err != nil {
-		return nil, fmt.Errorf("read ca cert: %w", err)
-	}
-	kpem, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, fmt.Errorf("read ca key: %w", err)
-	}
-	// Scan for the right block TYPE rather than assuming position: the live R3
-	// CA the toolbox forges with (mitmproxy confdir `mitmproxy-ca.pem`) is a
-	// COMBINED cert+key bundle, and --ca-key may point at it. Tolerate cert and
-	// key co-residing in either file, in any order.
-	cblk := firstPEMBlock(cpem, func(b *pem.Block) bool { return b.Type == "CERTIFICATE" })
-	if cblk == nil {
-		return nil, fmt.Errorf("ca cert: no CERTIFICATE PEM block")
-	}
-	cert, err := x509.ParseCertificate(cblk.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse ca cert: %w", err)
-	}
-	kblk := firstPEMBlock(kpem, func(b *pem.Block) bool { return strings.Contains(b.Type, "PRIVATE KEY") })
-	if kblk == nil {
-		return nil, fmt.Errorf("ca key: no PRIVATE KEY PEM block")
-	}
-	key, err := parseKey(kblk.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse ca key: %w", err)
-	}
-	return &CA{cert: cert, key: key, cache: map[string]*tls.Certificate{}}, nil
-}
-
-// firstPEMBlock returns the first PEM block in data satisfying want, or nil.
-// Used to pull a specific block (CERTIFICATE / PRIVATE KEY) out of a file that
-// may hold several (e.g. mitmproxy's combined CA bundle).
-func firstPEMBlock(data []byte, want func(*pem.Block) bool) *pem.Block {
-	for {
-		blk, rest := pem.Decode(data)
-		if blk == nil {
-			return nil
-		}
-		if want(blk) {
-			return blk
-		}
-		data = rest
-	}
-}
-
-func parseKey(der []byte) (crypto.Signer, error) {
-	if k, err := x509.ParsePKCS8PrivateKey(der); err == nil {
-		if s, ok := k.(crypto.Signer); ok {
-			return s, nil
-		}
-	}
-	if k, err := x509.ParsePKCS1PrivateKey(der); err == nil {
-		return k, nil
-	}
-	if k, err := x509.ParseECPrivateKey(der); err == nil {
-		return k, nil
-	}
-	return nil, fmt.Errorf("unsupported CA key format")
-}
-
-// forge returns a leaf cert for host signed by the CA, cached.
-func (c *CA) forge(host string) (*tls.Certificate, error) {
-	host = strings.ToLower(strings.TrimSpace(host))
-	c.mu.Lock()
-	if tc, ok := c.cache[host]; ok {
-		c.mu.Unlock()
-		return tc, nil
-	}
-	c.mu.Unlock()
-
-	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	tmpl := &x509.Certificate{
-		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: host},
-		// #689 — forged leaves must outlive the (non-evicting) cert cache, else a
-		// long-running worker keeps serving an expired leaf and every client
-		// reports "certificat expiré". 365d forward + 48h back-skew = 367d span,
-		// safely under Apple's 398-day max-validity rule for server certs.
-		NotBefore:    time.Now().Add(-48 * time.Hour),
-		NotAfter:     time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		DNSNames:     []string{host},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, tmpl, c.cert, c.key.Public(), c.key)
-	if err != nil {
-		return nil, err
-	}
-	leaf, err := x509.ParseCertificate(der) // parsed cert has Raw populated (Verify needs it)
-	if err != nil {
-		return nil, err
-	}
-	tc := &tls.Certificate{Certificate: [][]byte{der, c.cert.Raw}, PrivateKey: c.key, Leaf: leaf}
-	c.mu.Lock()
-	c.cache[host] = tc
-	c.mu.Unlock()
-	return tc, nil
-}
 
 // ── Pure handler logic ───────────────────────────────────────────────────────
 //
@@ -198,19 +83,66 @@ func ja4ish(h *tls.ClientHelloInfo) string {
 	return fmt.Sprintf("t%04x_c%02d_a%s_sni=%s", maxVer, len(h.CipherSuites), alpn, h.ServerName)
 }
 
+// ja4stack is the SNI-INDEPENDENT part of ja4ish: a client-TLS-stack
+// fingerprint (max version, cipher-suite count, first ALPN) with NO server
+// name. Unlike ja4ish (which embeds the destination SNI, so it varies per
+// host), ja4stack is stable across every flow from the same client stack, so
+// it can distinguish a browser from a non-browser client — the input the
+// Sentinel C2 auto-learn "non_browser_ja" signal (and browser-ja4.txt) needs.
+//
+// NOTE: this is an ad-hoc "stack" fingerprint (crypto/tls exposes no raw
+// ClientHello bytes, so a spec-compliant JA4 hash isn't computable in pure
+// Go here). It is self-consistent — the SENTINEL_JA4_CAPTURE recorder writes
+// this exact format into browser-ja4.txt and the signal compares against it —
+// but it is NOT interchangeable with a public JA4 blocklist's hashes.
+func ja4stack(h *tls.ClientHelloInfo) string {
+	if h == nil {
+		return ""
+	}
+	// GREASE values (RFC 8701) are randomly injected by browsers into the
+	// version and cipher lists; they MUST be excluded or the fingerprint jitters
+	// per handshake (e.g. max version flips between 0x0304 and a GREASE 0xfafa).
+	maxVer := uint16(0)
+	for _, v := range h.SupportedVersions {
+		if isGREASE(v) {
+			continue
+		}
+		if v > maxVer {
+			maxVer = v
+		}
+	}
+	nCiphers := 0
+	for _, c := range h.CipherSuites {
+		if !isGREASE(c) {
+			nCiphers++
+		}
+	}
+	alpn := "none"
+	if len(h.SupportedProtos) > 0 {
+		alpn = h.SupportedProtos[0]
+	}
+	return fmt.Sprintf("t%04x_c%02d_a%s", maxVer, nCiphers, alpn)
+}
+
+// isGREASE reports whether v is a TLS GREASE placeholder (RFC 8701): the 16
+// values 0x0a0a, 0x1a1a, … 0xfafa — both bytes equal, each low nibble 0xa.
+func isGREASE(v uint16) bool {
+	return (v>>8) == (v&0xff) && (v&0x0f) == 0x0a
+}
+
 // ── CONNECT-proxy MITM wiring ────────────────────────────────────────────────
 
 type Proxy struct {
-	ca      *CA
+	ca      *forge.CA
 	pol     *Policy
-	jaSink  func(string)  // JA4 observations (logged; a sidecar in prod)
-	jarKey  []byte        // anti-track HMAC fake-identity seed (nil → poison off)
-	poison  bool          // master gate: poison tracker Set-Cookies (default on when jarKey present)
-	portal  string        // portal base URL for /__toolbox/* reverse-proxy (banner assets)
-	ads     *adStats      // #662 — ad-block metrics aggregator (flushed to the portal)
-	cand    *adCandidates // #662 — ad-candidate learning feed (flushed with ads to the portal)
+	jaSink  func(string)   // JA4 observations (logged; a sidecar in prod)
+	jarKey  []byte         // anti-track HMAC fake-identity seed (nil → poison off)
+	poison  bool           // master gate: poison tracker Set-Cookies (default on when jarKey present)
+	portal  string         // portal base URL for /__toolbox/* reverse-proxy (banner assets)
+	ads     *adStats       // #662 — ad-block metrics aggregator (flushed to the portal)
+	cand    *adCandidates  // #662 — ad-candidate learning feed (flushed with ads to the portal)
 	pin     *pinCandidates // #740 — cert-pinning splice candidates (rides the ad-event flush)
-	cspDemo bool          // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
+	cspDemo bool           // #662 CONSENTED-DEMONSTRATION: relax a page's CSP so the injected loader runs, and flag the bypass (data-csp=1 → 🔓). Default on.
 
 	// analysisRelay gates the per-flow telemetry relay to the dpi/cookies/ja4
 	// analysis sidecar sockets (#662 — restoring the "Qui te piste?" events the
@@ -224,6 +156,50 @@ type Proxy struct {
 	socialRelayOn bool
 	social        *socialRelay
 	consent       *consentLog
+
+	// media is the R4 media reverse-catcher (#736): records cloneable media URLs
+	// (manifests / direct audio-video) seen on MITM'd flows to a JSONL log the
+	// mediaflow "Discovered Media" view reads. nil/disabled → no-op.
+	media *mediaCatcher
+
+	// mbuf is the R4 media BUFFER (#812): tees the actual bytes of whole-file
+	// media up/downloads into a time-bounded rolling buffer on /data so an
+	// admin/owner can replay a recent capture. Non-blocking (async writer +
+	// drop-if-full) — never slows the proxied flow. nil/disabled → no-op.
+	mbuf *MediaBuffer
+
+	// swNeuter (#753) is the targeted Service-Worker neuter: for allow-listed
+	// hosts it answers the SW script fetch with a self-unregistering SW so PWA
+	// shells stop being SW-cached and the banner can be injected on the next nav.
+	swNeuter *SWNeuter
+
+	// sentinel (#823) is the inline threat-detection gate: it neutralizes
+	// high-confidence known-infra IOC hits (block/strip/sinkhole) and mirrors the
+	// rest to the async sbx-sentinel analyzer. nil-safe and fail-open — a
+	// disabled/erroring hook is a transparent passthrough. See sentinel.go.
+	sentinel *sentinelHook
+
+	// rlevel (#rlevel-per-peer, Task 3) is the per-peer R-level clamp: it
+	// ceilings the verdict px.pol.Decide already computed to what the calling
+	// peer's mode allows (see decideForPeer, rlevel.go's clampVerdict). nil is
+	// a TOTAL NO-OP — every existing test/PoC that builds a Proxy{} without
+	// setting this field keeps today's exact behavior (raw px.pol.Decide).
+	rlevel *PeerPolicy
+}
+
+// decideForPeer resolves the policy verdict for (host, sni) and, if a
+// PeerPolicy is wired in (px.rlevel != nil), clamps it to the calling client's
+// R-level (clientIP). Both accept paths (CONNECT/handleConnect and
+// transparent/handleTransparent) call this SAME helper so they can never
+// drift on how the clamp is applied. px.rlevel == nil is a total no-op:
+// the result is exactly px.pol.Decide(host, sni), preserving current
+// behavior for callers/tests that never set rlevel.
+func (px *Proxy) decideForPeer(clientIP, host, sni string) string {
+	v := px.pol.Decide(host, sni)
+	if px.rlevel != nil {
+		v = clampVerdict(px.rlevel.ModeForIP(clientIP), v)
+	}
+	return v
 }
 
 // recordAdBlock forwards a 204'd ad/tracker block to the engine's metrics
@@ -263,7 +239,7 @@ func (px *Proxy) maybeRecordAdCandidate(host, site, path string) {
 }
 
 func (px *Proxy) serverTLSConfig() *tls.Config {
-	return px.serverTLSConfigCapture(nil)
+	return px.serverTLSConfigCapture(nil, nil)
 }
 
 // serverTLSConfigCapture is serverTLSConfig with an extra per-handshake hook:
@@ -272,11 +248,14 @@ func (px *Proxy) serverTLSConfig() *tls.Config {
 // handlers use it to relay the ja4 ClientHello payload (relay.go) WITH the
 // client conn's peer IP — which is known at the handler, not inside the TLS
 // config. Passing nil yields the plain forging config (CONNECT PoC, tests).
-func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo)) *tls.Config {
+func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo), onJA4 func(string)) *tls.Config {
 	return &tls.Config{
 		GetCertificate: func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			if px.jaSink != nil {
 				px.jaSink(ja4ish(h)) // capture handshake fingerprint
+			}
+			if onJA4 != nil {
+				onJA4(ja4stack(h)) // SNI-independent stack fp → Sentinel FlowMeta.JA4
 			}
 			if capture != nil {
 				capture(h) // ja4 relay material (peer IP threaded in by the handler)
@@ -285,7 +264,7 @@ func (px *Proxy) serverTLSConfigCapture(capture func(*tls.ClientHelloInfo)) *tls
 			if name == "" {
 				name = "unknown.local"
 			}
-			return px.ca.forge(name)
+			return px.ca.Forge(name)
 		},
 	}
 }
@@ -336,9 +315,10 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	defer client.Close()
 	io.WriteString(client, "HTTP/1.1 200 Connection Established\r\n\r\n")
 
-	// Decide once on (host, sni). For the CONNECT PoC the SNI is the CONNECT
-	// host; the transparent engine will splice on the real ClientHello SNI.
-	verdict := px.pol.Decide(host, host)
+	// Decide once on (host, sni), clamped to the calling peer's R-level (#rlevel
+	// -per-peer). For the CONNECT PoC the SNI is the CONNECT host; the
+	// transparent engine will splice on the real ClientHello SNI.
+	verdict := px.decideForPeer(peerIP(client), host, host)
 
 	if verdict == "splice" {
 		// passthrough: raw TCP to upstream, no TLS interception (tls_splice).
@@ -355,7 +335,9 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// MITM: TLS-terminate the client with a forged cert (+ ClientHello capture).
 	// The capture hook relays the ja4 ClientHello payload for this handshake,
 	// tagged with the client's peer IP (#662). nil when the relay gate is off.
-	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client)))
+	var ja4 string // SNI-independent client-stack fp, captured at handshake below
+	tconn := tls.Server(client, px.serverTLSConfigCapture(px.captureAndEmitJA4(client),
+		func(s string) { ja4 = s }))
 	if err := tconn.Handshake(); err != nil {
 		return
 	}
@@ -364,7 +346,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	// Shared post-TLS pipeline. CONNECT dials upstream by the request URL host
 	// (req.URL.Host set inside), so dialHost is "" → mitmPipeline derives it.
 	// CONNECT PoC is never an R3 WG client → wg=false.
-	px.mitmPipeline(tconn, client, host, verdict, "", false)
+	px.mitmPipeline(tconn, client, host, verdict, "", false, ja4)
 }
 
 // mitmPipeline runs the shared post-TLS-handshake MITM logic used by BOTH the
@@ -384,7 +366,7 @@ func (px *Proxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 //     ServerName=host and verifying the cert against host (not the bare IP).
 //   - wg         : the client is an R3 WireGuard peer (10.99.1.0/24); threaded
 //     into the injected loader's data-wg attribute. CONNECT path passes false.
-func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool) {
+func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict, dialHost string, wg bool, ja4 string) {
 	br := newReader(tconn)
 	req, err := http.ReadRequest(br)
 	if err != nil {
@@ -404,6 +386,25 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		servePortalAsset(tconn, px.portal, req.URL.RequestURI())
 		return
 	}
+
+	// #753 — targeted SW-neuter. For an allow-listed host, answer the
+	// Service-Worker script fetch with a self-unregistering SW (the next
+	// navigation bypasses the now-gone SW → reaches the MITM → banner). Off the
+	// list, record the host as an auto-learn candidate. Only ever fires on the
+	// `Service-Worker: script` request — normal traffic is untouched.
+	if px.swNeuter != nil && isSWScriptRequest(req) {
+		px.swNeuter.Maybe()
+		if px.swNeuter.Match(host) {
+			writeRaw(tconn, 200, "OK", map[string]string{
+				"Content-Type":  "application/javascript",
+				"Cache-Control": "no-store",
+				"X-SecuBox-Ng":  "sw-neutered",
+			}, []byte(NeuterSW))
+			return
+		}
+		px.swNeuter.RecordCandidate(host)
+	}
+
 	// Transparent: the upstream request must carry the SNI host (for Host header,
 	// SNI, and cert verification); the actual TCP dial is pinned to the captured
 	// original-dst by the uchromeTransport. We do NOT put the bare ip:port in
@@ -426,6 +427,21 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		// expose. Hash-only, WG-peer only, fire-and-forget — same as the allow path.
 		px.emitSocial(peerIP(rawClient), host, req, nil)
 		writeRaw(tconn, 204, "No Content", map[string]string{"X-SecuBox-Ng": "blocked"}, nil)
+		return
+	}
+
+	// WebSocket upgrade: the http.Client below cannot carry a 101 Switching
+	// Protocols, so a wss:// on a MITM'd host would hang/fail (Socket.IO,
+	// zigbee2mqtt, any real-time app behind wg-toolbox). Hand the flow to a raw
+	// bidirectional pipe after forwarding the handshake. Done BEFORE
+	// anonymize/DPI/inject: an upgrade is a control channel, not an inspectable
+	// request, and the client's Sec-WebSocket-* handshake headers must reach
+	// upstream untouched. `br` (the reader over tconn) may already hold buffered
+	// client frames, so proxyWebSocket copies the client→upstream direction from
+	// it, not from tconn.
+	if isWebSocketUpgrade(req) {
+		target, sni := wsDialTarget(req, dialHost, host)
+		px.proxyWebSocket(tconn, br, req, target, sni)
 		return
 	}
 
@@ -489,12 +505,96 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 		Transport:     newUchromeTransport(dialHost, host),
 	}
 	req.RequestURI = ""
+	// #757 — SW revalidation nudge: for an allow-listed (sw-neuter) host, strip the
+	// conditional headers off an HTML navigation / SW-revalidation request so the
+	// upstream returns a full 200 (not a 304) → the MITM injects the banner →
+	// a stale-while-revalidate SW caches a banner'd shell WITHOUT being neutered.
+	// Cache-first SWs that never revalidate still need the #753 neuter.
+	if px.swNeuter != nil && requestWantsHTML(req) && px.swNeuter.Match(host) {
+		req.Header.Del("If-None-Match")
+		req.Header.Del("If-Modified-Since")
+	}
+	// #812 R4 media buffer (upload) — if this MITM'd REQUEST is media, tee the
+	// request body into the rolling buffer as the upstream reads it. Non-blocking:
+	// the tee's ObjectWriter never errors/blocks, so a stuck buffer never affects
+	// the upload; a nil writer is a no-op. The upstream transport closes req.Body,
+	// which finalises the capture (w.Close). Only on non-splice allow|mitm flows
+	// (splice returns far earlier).
+	//
+	// I1 whole-branch-review fix — req.Body is NEVER nil for a proxied request,
+	// even a bodyless GET (net/http gives it http.NoBody), so a nil check alone
+	// doesn't tell us there is an uploaded body. And IsMedia's mediaKind falls
+	// back to classifying by PATH EXTENSION when the request Content-Type is
+	// empty — so a plain media DOWNLOAD GET (e.g. GET /v.mp4) used to match
+	// this UPLOAD branch on path alone, producing a phantom session dir, an
+	// empty object-0.mp4 and a direction:"up", bytes:0 metatag on every
+	// download. Require BOTH a real request body (ContentLength > 0 — a GET
+	// download has no request body; this is the primary guard) AND a
+	// non-empty request Content-Type that IsMedia matches ON THE CONTENT-TYPE,
+	// so the path-extension fallback never drives the upload direction.
+	if px.mbuf != nil && req.ContentLength > 0 {
+		rct := req.Header.Get("Content-Type")
+		if rct != "" && px.mbuf.IsMedia(rct, req.URL.Path) {
+			if w := px.mbuf.Capture(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path, rct, "up",
+				req.ContentLength); w != nil {
+				req.Body = teeReadCloser(req.Body, w)
+			}
+		}
+	}
 	resp, err := up.Do(req)
 	if err != nil {
 		writeRaw(tconn, 502, "Bad Gateway", nil, nil)
 		return
 	}
-	defer resp.Body.Close()
+	// defer binds a plain method-value expression AT THE DEFER STATEMENT, not at
+	// return time — `defer resp.Body.Close()` would capture the ORIGINAL upstream
+	// body here, before the #812 media-buffer tee below reassigns resp.Body to a
+	// teeReadCloser. That would leave the tee's Close() (and therefore w.Close(),
+	// which flushes the sink + appends the metatag + unblocks the drain goroutine)
+	// never called — a silent goroutine/fd leak with zero captures. Wrapping in a
+	// closure defers evaluation of `resp.Body` to when the closure RUNS (return),
+	// so it always closes whatever resp.Body currently is — the tee when a capture
+	// was armed, the original body otherwise. resp itself is never reassigned, so
+	// this remains the single, sole closer (teeReadCloser.Close is once-guarded).
+	defer func() { resp.Body.Close() }()
+
+	// #823 — inline Sentinel gate. host + the client identity are known here and
+	// the upstream response headers are in hand. Match the flow's observable
+	// metadata against the loaded IOC set: a HIGH-CONFIDENCE known-infra hit
+	// neutralizes inline (block/sinkhole → serve a Sentinel block page instead of
+	// the upstream response; strip → serve the response with an emptied body),
+	// everything else is mirrored to the async analyzer and proceeds unchanged.
+	// Fail-open + nil-safe (see sentinel.go): a disabled/erroring/absent hook is a
+	// transparent passthrough, so this can never break a normal flow. Only the
+	// domain + URL vectors drive inline matching today: JA4/JA3 (captured at
+	// handshake) and cert/file-hash are not plumbed to this shared pipeline, and
+	// ClientIP is DELIBERATELY left empty — IP IOCs are malicious *destination*
+	// IPs, so matching them against the client's own source IP is wrong and could
+	// auto-block the client. The destination-IP vector is a follow-up (plumb the
+	// resolved upstream IP here); until then IP matching stays inert inline.
+	switch action, blockPage := px.sentinel.inspect(sentinel.FlowMeta{
+		Host:    host,
+		URL:     "https://" + host + req.URL.RequestURI(),
+		MacHash: clientHash,
+		JA4:     ja4, // SNI-independent client-stack fp (feeds non_browser_ja)
+	}, nil); action {
+	case sentinel.ActionBlock, sentinel.ActionSinkhole:
+		writeRaw(tconn, 403, "Forbidden", map[string]string{
+			"Content-Type":       "text/html; charset=utf-8",
+			"Cache-Control":      "no-store",
+			"X-SecuBox-Sentinel": "blocked",
+		}, blockPage)
+		return
+	case sentinel.ActionStrip:
+		// Neutralize the payload: serve the upstream status + headers with an
+		// emptied body. Drop Content-Encoding so the zero-length body is not
+		// mis-decoded as a truncated compressed stream.
+		resp.Header.Del("Content-Encoding")
+		resp.Header.Set("X-SecuBox-Sentinel", "stripped")
+		writeResponse(tconn, resp, nil)
+		return
+	}
 
 	// #662 — relay the cookie metadata for this MITM'd response (allow|mitm only).
 	// NAMES ONLY (never values — privacy/CSPN); no-op unless ≥1 Set-Cookie OR ≥1
@@ -502,6 +602,47 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// which is irrelevant here (names are unchanged by poison) but keeps the
 	// relayed names byte-for-byte the origin's. Fire-and-forget, gated.
 	px.emitCookies(relayIP, clientHash, req, resp)
+
+	// #736 R4 — media reverse-catcher: if this MITM'd response is cloneable media
+	// (HLS/DASH manifest or direct audio/video), record its URL (never the body)
+	// to the discovery log the mediaflow "Discovered Media" view reads. Best-
+	// effort + deduped; a no-op when --media-catch is off or the flow isn't media.
+	if px.media != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		ctype := resp.Header.Get("Content-Type")
+		kind := mediaKind(req.URL.Path, ctype)
+		if kind == "" {
+			kind = videoPageKind(host, req.URL.Path, ctype) // YouTube watch/shorts → cloneable page
+		}
+		if kind != "" {
+			px.media.record(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path,
+				req.Header.Get("Referer"), kind, ctype, resp.ContentLength)
+		}
+	}
+
+	// #812 R4 media buffer (download) — tee the FULL response body into the
+	// rolling buffer so it can be replayed for a short window. Non-blocking: the
+	// ObjectWriter behind the TeeReader copies chunks to a bounded channel and
+	// drops-if-full, so it NEVER slows or fails the client stream; a nil writer
+	// is a no-op. resp.Body's deferred Close (above) finalises the capture.
+	// splice/passthrough flows never reach here.
+	//
+	// I2 whole-branch-review fix — 200 ONLY, not the whole 2xx range. Browser
+	// <video>/<audio> elements fetch media via Range requests, which the
+	// origin answers with a stream of 206 Partial Content responses; capturing
+	// each 206 as its own "whole" object produced a pile of unrelated byte
+	// fragments (never a replayable file). Phase 1 is whole-file capture only
+	// — Range/partial (206) + HLS segment reassembly is Phase 2.
+	if px.mbuf != nil && resp.StatusCode == 200 {
+		rctype := resp.Header.Get("Content-Type")
+		if px.mbuf.IsMedia(rctype, req.URL.Path) {
+			if w := px.mbuf.Capture(clientHash, host,
+				"https://"+host+req.URL.RequestURI(), req.URL.Path, rctype, "down",
+				resp.ContentLength); w != nil {
+				resp.Body = teeReadCloser(resp.Body, w)
+			}
+		}
+	}
 
 	// #662 — cross-site cookie-tracker correlation (restores the kbin /social
 	// graph). FAITHFUL to the decommissioned Python social_graph addon: extract
@@ -564,21 +705,47 @@ func (px *Proxy) mitmPipeline(tconn *tls.Conn, rawClient net.Conn, host, verdict
 	// so the inline banner runs even on strict-CSP sites. Never on non-injected
 	// responses. cspBypassed becomes csp=1 on the inline script (banner shows 🔓).
 	cspBypassed := false
+	cspNonce := ""
 	if px.cspDemo {
-		cspBypassed = relaxCSPForLoader(resp.Header)
+		cspNonce, cspBypassed = relaxCSPForLoader(resp.Header)
+	}
+	// CSP diagnostic (#751) — opt-in via SBX_DEBUG_CSP, off by default (zero cost
+	// when unset). For every injected HTML response it logs what relaxCSPForLoader
+	// actually saw — the proto, the count of CSP / CSP-Report-Only headers visible
+	// in resp.Header, the borrowed nonce and the bypass decision. Kept as a
+	// permanent operator tool: it pinpoints why a banner does/doesn't render on a
+	// given site (header present? nonce-source? hash-only? strict-dynamic?), the
+	// class of problem that took an x.com-shaped CSP to surface.
+	if os.Getenv("SBX_DEBUG_CSP") != "" {
+		csps := resp.Header.Values("Content-Security-Policy")
+		cspRO := resp.Header.Values("Content-Security-Policy-Report-Only")
+		head := ""
+		if len(csps) > 0 {
+			head = csps[0]
+			if len(head) > 220 {
+				head = head[:220]
+			}
+		}
+		log.Printf("[csp-debug] host=%s proto=%s status=%d cspHdrs=%d cspRO=%d nonce=%q bypassed=%v head=%q",
+			host, resp.Proto, resp.StatusCode, len(csps), len(cspRO), cspNonce, cspBypassed, head)
 	}
 	// #662 — INLINE the banner (supersedes the <script src="/__toolbox/loader.js">
 	// tag): sites with a SERVICE WORKER hijack the same-origin src before it
 	// reaches this engine. We fetch the COMPLETE script body from the portal
 	// server-side and bake it into a self-contained <script>. Fail-open: a
 	// dead/slow portal → scriptBody=="" → inject skipped, page served intact.
+	// cspNonce (#728): the page's borrowed nonce, stamped on the inline <script>
+	// so a nonce-based CSP (YouTube, most news sites) accepts it.
 	scriptBody, _ := fetchInlineBanner(px.portal, clientHash, wg, cspBypassed)
 	injHost := ""
 	if resp.Request != nil {
 		injHost = resp.Request.Host
 	}
-	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, wg, injHost); ok {
+	if out, ok := injectIntoBody(body, resp.Header.Get("Content-Encoding"), scriptBody, cspNonce, wg, injHost); ok {
 		body = out
+		if wg && px.ads != nil {
+			px.ads.recordCosmetic() // #755 — cosmetic style is wg-only (injectHTML gates it)
+		}
 		// Keep framing consistent with the served bytes (only the length changed).
 		resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
 		resp.ContentLength = int64(len(body))
@@ -604,8 +771,25 @@ func main() {
 		"relay per-flow telemetry (dpi/cookies/ja4) to the analysis sidecar sockets so the kbin \"Qui te piste?\" events refill (#662; replaces the decommissioned Python relay addons). Fire-and-forget; a dead/slow sidecar never affects the proxy. Set false to emit nothing.")
 	socialRelay := flag.Bool("social-relay", true,
 		"compute cross-site cookie-tracker edges and POST them to the portal /__toolbox/social-event ingest so the kbin /social graph refills (#662; replaces the decommissioned Python social_graph addon). Hash-only (never raw cookie values); WG-peer flows only; batched + fire-and-forget — a dead/slow portal never affects the proxy. Set false to emit nothing.")
+	mediaCatch := flag.Bool("media-catch", true,
+		"R4 media reverse-catcher (#736): record cloneable media URLs (HLS/DASH manifests + direct audio/video) seen on MITM'd flows to "+mediaCatchPath+" for the mediaflow \"Discovered Media\" clone view. URLs only, never bodies; deduped. Set false to disable.")
+	swNeuterHosts := flag.String("sw-neuter-hosts", "/var/lib/secubox/toolbox/sw-neuter-hosts.txt",
+		"#753 allow-list of PWA hosts whose Service Worker is neutered (served a self-unregistering SW) so the banner can be injected; empty/missing file = no-op")
+	// #812 R4 media buffer — capture whole-file media bytes (up + download) into a
+	// short rolling buffer on /data for admin/owner replay. Default OFF (Task 6
+	// formalises the flag docs + janitor wiring); the tee is a no-op when off.
+	mediaBuffer := flag.Bool("media-buffer", false,
+		"R4 media buffer (#812): tee whole-file media up/downloads into a time-bounded rolling buffer on /data for admin/owner replay. Non-blocking (async writer, drop-if-full). Default off.")
+	mediaBufferRoot := flag.String("media-buffer-root", "/data/secubox/media-buffer",
+		"root directory for the R4 media buffer (0750 secubox:secubox); per-session subdirs + media-buffer.jsonl metatag log live here")
+	mediaBufferPerObj := flag.Int64("media-buffer-per-object", 512<<20,
+		"per-object byte ceiling for the R4 media buffer; a media object exceeding this is truncated (metatag flagged) rather than persisted whole")
+	mediaBufferRetention := flag.Int64("media-buffer-retention", defaultRetentionSecs,
+		"seconds the R4 media buffer's captured bytes are kept before the janitor evicts them (the metatag survives eviction)")
+	mediaBufferSizeCeil := flag.Int64("media-buffer-size-ceil", defaultSizeCeilBytes,
+		"hard byte ceiling for the R4 media buffer on /data; the janitor LRU-evicts the oldest sessions first when exceeded")
 	flag.Parse()
-	ca, err := loadCA(*caCert, *caKey)
+	ca, err := forge.LoadCA(*caCert, *caKey)
 	if err != nil {
 		log.Fatalf("CA load: %v", err)
 	}
@@ -622,6 +806,20 @@ func main() {
 	jarKey := loadJarKey(*jarKeyPath)
 	if *poison && len(jarKey) == 0 {
 		log.Printf("poison requested but jar key %s absent/empty → poison OFF", *jarKeyPath)
+	}
+	// #rlevel-per-peer Task 3 — per-peer R-level clamp. LoadPeerPolicy is
+	// best-effort (like LoadPolicy above): a missing/unreadable/corrupt store
+	// degrades to its own Passive fail-safe rather than erroring, so in
+	// practice this branch is defensive only. On the rare non-nil error we
+	// choose rlevel = nil (total no-op via decideForPeer) over a policy we
+	// have no confidence in, rather than risk fail-closed-passive silently
+	// blanket-splicing every peer.
+	peerRlevelPath := envOr("SECUBOX_PEER_RLEVEL", "/var/lib/secubox/toolbox/peer-rlevel.json")
+	peerWgPeersPath := envOr("SECUBOX_WG_PEERS", wgPeersPath)
+	rlevelPol, err := LoadPeerPolicy(peerRlevelPath, peerWgPeersPath)
+	if err != nil {
+		log.Printf("peer rlevel policy load failed (per-peer clamp disabled): %v", err)
+		rlevelPol = nil
 	}
 	px := &Proxy{
 		ca:      ca,
@@ -640,6 +838,24 @@ func main() {
 		socialRelayOn: *socialRelay,
 		social:        newSocialRelay(),
 		consent:       newConsentLog(),
+		media:         newMediaCatcher(*mediaCatch),
+		mbuf:          NewMediaBuffer(*mediaBufferRoot, *mediaBuffer, *mediaBufferPerObj),
+		swNeuter:      newSWNeuter(*swNeuterHosts),
+		// #823 — inline Sentinel gate. Construction reads the environment
+		// (SENTINEL_ENABLED / SENTINEL_PACK_DIR / SENTINEL_OVERLAY_DIR /
+		// SENTINEL_MIRROR_SOCK); unset/false or a failed pack load yields a
+		// disabled no-op hook, so the default build is byte-identical to today.
+		sentinel: newSentinelHook(),
+		// #rlevel-per-peer Task 3 — per-peer R-level clamp (see decideForPeer).
+		rlevel: rlevelPol,
+	}
+	// #812 Task 6 — apply the retention/size-ceil overrides on top of
+	// NewMediaBuffer's defaults. Same-package unexported field access (see
+	// mediabuffer.go); the constructor signature stays (root, enabled,
+	// perObjectCeil) — do not add params there instead.
+	if px.mbuf != nil {
+		px.mbuf.retentionSecs = *mediaBufferRetention
+		px.mbuf.sizeCeilBytes = *mediaBufferSizeCeil
 	}
 	// #662 — start the social-edge flusher: the MITM path buffers cross-site
 	// tracker edges into px.social, drained every 10s to the portal's
@@ -652,8 +868,17 @@ func main() {
 	// #662 — the candidate feed (px.cand) is drained in the SAME flush so the
 	// learning candidates ride the existing ad-event channel (one POST / 10s).
 	// #740 — px.pin (cert-pinning splice candidates, recorded on a client cert
-	// rejection in handleTransparent) is drained in the SAME flush too.
+	// rejection in handleTransparent) is drained in the SAME flush.
 	go px.ads.runAdStatsFlusher(*portal, px.cand, px.pin)
+	go px.swNeuter.runCandidateFlusher(*portal)
+	if *mediaBuffer {
+		// #812 R4 media buffer janitor — evicts bytes past retention (time) or
+		// under disk pressure (LRU size ceiling), leaving only the metatag.
+		// Process-lifetime background goroutine (mirrors the flushers above);
+		// each of the 4 sbxmitm worker processes runs its own — SweepOnce is
+		// written to be safe under that concurrency (see mediabuffer_janitor.go).
+		go px.mbuf.RunJanitor(context.Background())
+	}
 	if *transparent {
 		// Transparent R3 mode: raw accept loop, each conn carries its pre-DNAT
 		// destination via SO_ORIGINAL_DST (recovered in handleTransparent). The
