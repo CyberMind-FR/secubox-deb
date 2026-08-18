@@ -1,3 +1,13 @@
+secubox-billets (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Les mots-cles descendent EN BAS de page, dans une bulle repliable
+    (<details>) fermee par defaut : ils servent a explorer, pas a lire, et
+    n'ont donc pas a occuper le haut du flux. Repli natif, sans JS, accessible
+    au clavier ; s'ouvre d'office quand un tag est actif (on voit alors ce
+    qu'on filtre). Style console, comme le reste. Cache v=5.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 18 Aug 2026 10:38:41 +0200
+
 secubox-billets (0.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Refonte du lecteur public : feuille de style « console » — fond blanc,

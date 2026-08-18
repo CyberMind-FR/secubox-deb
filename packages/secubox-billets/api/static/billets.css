@@ -163,3 +163,16 @@ button.danger,.danger{border-color:var(--brique);color:var(--brique)}
   border:1px solid var(--filet);border-radius:2px}
 .pill.published,.published{color:var(--vert);border-color:var(--vert)}
 .pill.draft,.draft{color:var(--or);border-color:var(--or)}
+
+/* ── mots-clés : bulle repliable en bas de page ────────── */
+.motscles{margin:28px 0 0;border:1px solid var(--filet);border-radius:2px;background:var(--sourd)}
+.motscles>summary{cursor:pointer;list-style:none;padding:9px 13px;font-size:10.5px;
+  letter-spacing:.13em;text-transform:uppercase;color:var(--gris);display:flex;
+  align-items:center;gap:8px;user-select:none}
+.motscles>summary::-webkit-details-marker{display:none}
+.motscles>summary::before{content:"▸";color:var(--azur);transition:transform .12s;display:inline-block}
+.motscles[open]>summary::before{transform:rotate(90deg)}
+.motscles>summary:hover{color:var(--encre)}
+.motscles .mc-n{margin-left:auto;font-size:10px;color:var(--gris);border:1px solid var(--filet);
+  border-radius:2px;padding:0 6px}
+.motscles .tagbar{padding:2px 13px 13px;margin:0}
