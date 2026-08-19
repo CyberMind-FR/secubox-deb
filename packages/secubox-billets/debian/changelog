@@ -1,3 +1,10 @@
+secubox-billets (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * style : menu deroulant des hashtags remonte EN HAUT du fil, en pilule +
+    panneau flottant AletheiaVox (au lieu du repli en bas de page).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 21:55:00 +0200
+
 secubox-billets (0.4.1-1~bookworm1) bookworm; urgency=medium
 
   * style : vitrine billets en cartes editoriales AletheiaVox (au lieu de la
