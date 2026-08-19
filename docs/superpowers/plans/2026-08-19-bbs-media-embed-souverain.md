@@ -912,6 +912,13 @@ Expected: PASS si Task 5 est correct (Manifeste valide). Sinon corriger le Manif
 - `main.go` : `ytsasOrig := flag.String("ytsas-origine", "http://10.100.0.180:8091", "origine de la SAS ytsas")` ; construire `cl := &connectors.ClientYtsas{Base: *ytsasOrig, HTTP: &http.Client{Timeout: 3*time.Second}}` ; `yt := connectors.NouveauYouTube(cl, noeud)` ; passer `yt` au `Server` et `YtsasOrigine: *ytsasOrig` dans `Options`.
 - `media_fiche.go` : dans `servirMediaFiche`, si l'URL matche le manifeste youtube, `c, _ := s.youtube.Resoudre(u); fmt.Fprint(w, embedYouTube(c))` (chemin déjà admis par `origineAdmise` OU nouveau court-circuit youtube avant le test d'origine — youtube n'est PAS dans MediaOrigines, donc ajouter le court-circuit explicite AVANT `origineAdmise`).
 
+**Portée (ruling #1056) :** ce câblage donne au connecteur un appelant réel — le
+point de résolution `/media-fiche` rend l'embed SOUVERAIN (mirror/cache/pending)
+pour une URL YouTube. Le rendu du CORPS (Task 6) reste sur la ligne de base
+youtube-nocookie ; faire consulter ytsas au renderer pur (upgrade mirror/cache
+dans le corps, avec cache) est un SUIVI distinct — l'infra ytsas (Tasks 1-5) et
+`embedYouTube(Contenu)` sont déjà prêts pour lui.
+
 - [ ] **Step 4: Build + tout le paquet**
 
 Run: `cd packages/secubox-bbs && go build ./... && go test ./...`
@@ -921,7 +928,7 @@ Expected: build OK, tous les tests PASS.
 
 ```bash
 git add packages/secubox-bbs/cmd/secubox-bbsd/main.go packages/secubox-bbs/internal/web/server.go packages/secubox-bbs/internal/web/media_fiche.go packages/secubox-bbs/internal/connectors/youtube_test.go
-git commit -m "feat(bbs): câble le connecteur youtube (flag ytsas + fiche + CSP) (ref #1056)"
+git commit -m "feat(bbs): câble le connecteur youtube (flag ytsas + résolution /media-fiche) (ref #1056)"
 ```
 
 ---
