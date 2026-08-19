@@ -1,3 +1,14 @@
+secubox-waf (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport historique des menaces (#1062) : endpoint /history (→
+    /api/v1/waf/history) qui agrège les threat logs TOURNÉS (waf-threats.log* ,
+    gzip compris) en tendances par jour + top attaquants persistants sur toute
+    la rétention — bien plus complet que le seul jour de /stats. Cache disque
+    (/var/lib/secubox/waf/waf-history.json) TTL 1 h, scan en thread, jamais sur
+    le chemin requête. Agrégateur testable (agreger_historique, 2 tests).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 19 Aug 2026 07:20:38 +0200
+
 secubox-waf (1.3.3-1~bookworm1) bookworm; urgency=medium
 
   * LE JOURNAL DES MENACES N AVAIT AUCUNE ROTATION (ref #1039). Il pesait
