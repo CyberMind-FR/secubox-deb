@@ -757,55 +757,128 @@ git commit -m "feat(bbs): embed youtube dans le corps (render.go) — le lecteur
 
 ---
 
-### Task 7: CSP — ouvrir youtube-nocookie + origine ytsas
+### Task 7: CSP — youtube-nocookie (toujours) + origine ytsas (media-src)
+
+**Contexte (ruling #1056) :** le rendu du corps (Task 6) émet TOUJOURS un `<iframe
+youtube-nocookie>` pour une URL YouTube. `frame-src` DOIT donc toujours autoriser
+`https://www.youtube-nocookie.com`, sinon l'embed est bloqué (cadre blanc). C'est
+un changement ASSUMÉ de l'invariant « frame-src fermé par défaut » : la board
+intègre YouTube par conception. `frame-ancestors 'none'` reste inchangé (NOS
+pages ne sont jamais encadrées). Le cadrage PeerTube/tiers reste, lui, sur
+configuration explicite (`FrameOrigines`). Deux tests existants qui verrouillaient
+`frame-src 'none'` sont mis à jour en conséquence.
+
+Les vraies fonctions (confirmées dans server.go) : `func (s *Server) frameSrc()
+string` (assemble frame-src : `PeerTubeOrigine` + `FrameOrigines`, sinon `'none'`)
+et `func politique(style, script, connect, frame, media string) string` (assemble
+toute la CSP ; le param `media` alimente `img-src` ET `media-src`). `entetes()`
+appelle `politique(style, script, connect, frame, "")`.
 
 **Files:**
-- Modify: `packages/secubox-bbs/internal/web/server.go` (`frameSrc`, assemblage `media-src`, ~227-265)
-- Test: `packages/secubox-bbs/internal/web/csp_test.go` (étendre)
+- Modify: `packages/secubox-bbs/internal/web/server.go` (`Options` +`YtsasOrigine` ; `frameSrc()` ajoute youtube-nocookie ; `entetes()` passe `YtsasOrigine` en `media`)
+- Modify (tests existants à réconcilier): `packages/secubox-bbs/internal/web/frame_test.go` (`TestFrameSrcFermeParDefaut`), `packages/secubox-bbs/internal/web/media_test.go` (assertion `frame-src 'none'` ~ligne 126)
+- Test: `packages/secubox-bbs/internal/web/csp_test.go` (nouveau)
 
 **Interfaces:**
-- Consumes: `Server.opt.FrameOrigines`, l'origine ytsas (nouvelle option `Options.YtsasOrigine string`).
-- Produces: `frame-src` contient `https://www.youtube-nocookie.com` ; `media-src` contient l'origine ytsas.
+- Produces: `Options.YtsasOrigine string` ; `s.frameSrc()` contient toujours `https://www.youtube-nocookie.com` ; l'en-tête CSP a `media-src` incluant `YtsasOrigine` quand configuré.
 
-- [ ] **Step 1: Write the failing test** (ajouter à `csp_test.go`)
+- [ ] **Step 1: Write the failing test** (`csp_test.go`)
 
 ```go
-func TestCSPAutoriseYoutubeNocookieEtYtsas(t *testing.T) {
-	s := &Server{opt: Options{
-		FrameOrigines: []string{"https://peertube.gk2.secubox.in"},
-		YtsasOrigine:  "http://10.100.0.180:8091",
-	}}
-	csp := s.entetesCSP() // nom réel de l'assembleur CSP à confirmer dans server.go
-	if !strings.Contains(csp, "https://www.youtube-nocookie.com") {
-		t.Fatalf("frame-src doit autoriser youtube-nocookie : %s", csp)
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
+package web
+
+import (
+	"strings"
+	"testing"
+)
+
+// La board intègre YouTube par conception : frame-src doit TOUJOURS autoriser
+// l'hôte cookieless, même sans autre configuration.
+func TestFrameSrcAutoriseToujoursYoutubeNocookie(t *testing.T) {
+	if f := (&Server{}).frameSrc(); !strings.Contains(f, "https://www.youtube-nocookie.com") {
+		t.Fatalf("frame-src doit autoriser youtube-nocookie : %s", f)
 	}
-	if !strings.Contains(csp, "http://10.100.0.180:8091") {
-		t.Fatalf("media-src doit autoriser l'origine ytsas : %s", csp)
+}
+
+// L'origine ytsas alimente media-src pour le <video> du cas « cache ».
+func TestPolitiqueMediaSrcInclutYtsas(t *testing.T) {
+	csp := politique("'self'", "'self'", "'self'", "'none'", "http://10.100.0.180:8091")
+	if !strings.Contains(csp, "media-src 'self' http://10.100.0.180:8091") {
+		t.Fatalf("media-src doit inclure l'origine ytsas : %s", csp)
 	}
 }
 ```
 
-Note d'exécution : confirmer dans `server.go` le nom réel de la fonction qui assemble la CSP (le grep a montré `frameSrc` + la concat `"frame-src " + frame + "; media-src " + med`). Adapter l'appel du test et injecter `youtube-nocookie` dans `frame` et `YtsasOrigine` dans `med`.
-
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/secubox-bbs && go test ./internal/web/ -run TestCSPAutorise -v`
-Expected: FAIL — `youtube-nocookie` absent (et champ `YtsasOrigine` inexistant).
+Run: `cd packages/secubox-bbs && go test ./internal/web/ -run 'TestFrameSrcAutoriseToujours|TestPolitiqueMediaSrc' -v`
+Expected: FAIL — youtube-nocookie absent de frameSrc ; `YtsasOrigine` inexistant.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Dans `server.go` : ajouter `YtsasOrigine string` à `Options` ; dans l'assembleur, ajouter `https://www.youtube-nocookie.com` à la liste `frame-src` et, si `YtsasOrigine != ""`, l'ajouter à `media-src`. (Garder `frame-src 'none'` quand aucune origine n'est configurée — ne pas ouvrir youtube-nocookie inconditionnellement si `FrameOrigines` est vide et qu'aucun média n'est attendu : l'ajouter dans la même branche que les autres origines.)
+Dans `server.go` :
+1. Ajouter le champ à `Options` (près de `MediaOrigines`) :
+```go
+	// YtsasOrigine : origine de la SAS ytsas (http://IP:8091). Alimente
+	// media-src pour le <video> local d'une vidéo YouTube rapatriée (#1056).
+	YtsasOrigine string
+```
+2. Dans `frameSrc()`, AVANT le test `if len(ok) == 0`, ajouter l'hôte cookieless
+   (via le même `ajoute(...)`, donc revalidé comme les autres) :
+```go
+	// #1056 — la board intègre YouTube : le rendu du corps émet un iframe
+	// youtube-nocookie. Toujours autorisé, sinon l'embed serait bloqué.
+	ajoute("https://www.youtube-nocookie.com")
+	if len(ok) == 0 {
+		return "'none'"
+	}
+```
+   (Après cet ajout, `ok` n'est jamais vide → `frame-src` vaut au minimum
+   `https://www.youtube-nocookie.com`, plus jamais `'none'`.)
+3. Dans `entetes()`, passer l'origine ytsas en `media` :
+```go
+		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, s.opt.YtsasOrigine))
+```
+   (`politique` n'ajoute rien si `YtsasOrigine == ""`.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Réconcilier les tests existants**
 
-Run: `cd packages/secubox-bbs && go test ./internal/web/ -run TestCSP -v`
-Expected: PASS (l'existant + le nouveau)
+Le nouvel invariant casse deux assertions « fermé par défaut » — les mettre à
+jour (changement INTENTIONNEL, commenter #1056) :
+- `frame_test.go` `TestFrameSrcFermeParDefaut` : remplacer l'attente `f != "'none'"`
+  par la vérification que youtube-nocookie est présent et que rien d'autre
+  (aucune origine tierce) ne l'est sans configuration :
+```go
+// #1056 : la board intègre YouTube, donc frame-src n'est plus jamais 'none' —
+// il vaut au minimum l'hôte cookieless. Aucune AUTRE origine sans configuration.
+func TestFrameSrcFermeParDefaut(t *testing.T) {
+	f := (&Server{}).frameSrc()
+	if f != "https://www.youtube-nocookie.com" {
+		t.Fatalf("frame-src par défaut inattendu : %s", f)
+	}
+}
+```
+- `media_test.go` (~ligne 126) : là où il attend `frame-src 'none'`, attendre
+  désormais `frame-src https://www.youtube-nocookie.com` (même config, invariant
+  mis à jour). Lire le test, ajuster la chaîne attendue, garder le reste.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Run all web tests**
+
+Run: `cd packages/secubox-bbs && go test ./internal/web/ -v && go build ./...`
+Expected: PASS (nouveaux + existants réconciliés), build OK. Si un AUTRE test que
+les deux cités casse, l'invariant touche plus large que prévu — s'ARRÊTER et
+remonter le test concerné (ne pas le réécrire à l'aveugle).
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add packages/secubox-bbs/internal/web/server.go packages/secubox-bbs/internal/web/csp_test.go
-git commit -m "feat(bbs): CSP autorise youtube-nocookie (1re vue) + origine ytsas (video) (ref #1056)"
+git add packages/secubox-bbs/internal/web/server.go packages/secubox-bbs/internal/web/csp_test.go packages/secubox-bbs/internal/web/frame_test.go packages/secubox-bbs/internal/web/media_test.go
+git commit -m "feat(bbs): CSP autorise youtube-nocookie (toujours) + origine ytsas en media-src (ref #1056)"
 ```
 
 ---
