@@ -33,6 +33,10 @@ type Item struct {
 	// chez un tiers.
 	Media string
 	Kind  string
+	// Vignette : URL du POSTER (image) chez la source — pochette d'épisode,
+	// miniature PeerTube. #1049 : la mosaïque la relaie localement (jamais
+	// l'hôte tiers). Vide = pas de poster, la tuile montre un glyphe.
+	Vignette string
 }
 
 type Source struct {

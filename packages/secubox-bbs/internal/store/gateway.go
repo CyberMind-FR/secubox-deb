@@ -230,6 +230,46 @@ func (s *Store) GatewayRechercher(q string, limite int) ([]gateway.Contenu, erro
 	return out, nil
 }
 
+// GatewayRecents rend les Contenu les plus récents, tous connecteurs confondus,
+// ordonnés par date de publication (plus récent d'abord) et bornés. C'est le
+// robinet de la mosaïque (#1049) : lecture des flux DÉJÀ ingérés, sans jamais
+// re-contacter une source au rendu (ni fuite, ni latence).
+func (s *Store) GatewayRecents(limite int) ([]gateway.Contenu, error) {
+	if limite <= 0 {
+		limite = 30
+	}
+	rows, err := s.db.Query(
+		`SELECT empreinte FROM gateway_contenu ORDER BY publie_le DESC, rowid DESC LIMIT ?`,
+		limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var empreintes []string
+	for rows.Next() {
+		var e string
+		if err := rows.Scan(&e); err != nil {
+			return nil, err
+		}
+		empreintes = append(empreintes, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]gateway.Contenu, 0, len(empreintes))
+	for _, e := range empreintes {
+		c, err := s.GatewayContenu(e)
+		if errors.Is(err, ErrContenuInconnu) {
+			continue // index en avance sur la table : on ignore, sans échouer
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
 func nonNil(m map[string]string) map[string]string {
 	if m == nil {
 		return map[string]string{}
