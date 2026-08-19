@@ -3,7 +3,7 @@
 # File sync in Debian LXC for Debian
 # Three-fold architecture: Components, Status, Access
 
-VERSION="1.4.0"
+VERSION="1.4.1"
 CONFIG_FILE="/etc/secubox/nextcloud.toml"
 # Shared photo library — also mounted by secubox-photoprism as its originals.
 # Phone → Nextcloud "PhotoLibrary" external storage → here → PhotoPrism (#397).
@@ -372,7 +372,23 @@ occ() {
         error "Container not running"
         return 1
     fi
-    lxc_attach "sudo -u www-data php /var/www/nextcloud/occ $*"
+    # #occ-storm — SINGLE-FLIGHT : au plus UN occ à la fois, tous appelants
+    # confondus. Le statut webui (interrogé ~toutes les 30 s), `occ user:list` et
+    # `occ --version` lançaient chacun leur `php occ` ; sur un Nextcloud lent ils
+    # s'entassaient plus vite que le `timeout` interne ne les purgeait — 60+ occ,
+    # charge 79, la boîte à genoux (déjà vu à 460). Le cache Python côté
+    # api/main.py devait l'éviter, mais son rafraîchisseur de fond ne démarre PAS
+    # quand le module est monté dans l'agrégateur (@on_event startup jamais tiré),
+    # donc chaque /status retombe sur un occ en ligne. Ce verrou est le garde-fou
+    # AGNOSTIQUE de l'appelant : `flock -n`, si un occ tourne déjà on échoue vite
+    # (code 75) sans en lancer un second — l'appelant sert son cache au lieu de
+    # nourrir la meute. Toutes les lectures occ passent par ici (cmd_status
+    # compris), donc un seul point suffit. Les opérations d'install/setup passent
+    # par lxc_attach directement et ne sont pas verrouillées (rares, séquentielles).
+    (
+        flock -n 9 || { error "occ déjà en cours (single-flight) — cache servi"; exit 75; }
+        lxc_attach "sudo -u www-data php /var/www/nextcloud/occ $*"
+    ) 9>/run/secubox/nextcloud-occ.lock
 }
 
 # ============================================================================

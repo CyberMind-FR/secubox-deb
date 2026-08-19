@@ -1,3 +1,18 @@
+secubox-nextcloud (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Orage occ FIXÉ à la racine : nextcloudctl occ() est désormais SINGLE-FLIGHT
+    (flock -n). Le statut webui (/30s), `occ user:list` et `occ --version`
+    lançaient chacun leur `php occ` ; sur un Nextcloud lent ils s'entassaient
+    (60+ occ, charge 79). Le cache Python devait l'éviter mais son rafraîchisseur
+    de fond ne démarre pas quand le module est monté dans l'agrégateur
+    (@on_event startup jamais tiré) → chaque /status retombe sur un occ en ligne.
+    Le verrou est le garde-fou agnostique de l'appelant : au plus UN occ à la
+    fois, les autres échouent vite (code 75) et servent le cache. Toutes les
+    lectures occ passent par occ() (cmd_status compris) — un seul point suffit.
+    Script VERSION 1.4.1.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 05:49:30 +0200
+
 secubox-nextcloud (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Le delai d'attente est desormais pose A L'INTERIEUR du conteneur. Tuer
