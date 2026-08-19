@@ -8,7 +8,6 @@ override_dh_auto_install:
 	# Python module
 	install -d debian/secubox-toolbox/usr/lib/secubox/toolbox
 	cp -r secubox_toolbox       debian/secubox-toolbox/usr/lib/secubox/toolbox/
-	cp -r mitmproxy_addons      debian/secubox-toolbox/usr/lib/secubox/toolbox/
 	cp -r conf                  debian/secubox-toolbox/usr/lib/secubox/toolbox/
 	cp -r data                  debian/secubox-toolbox/usr/lib/secubox/toolbox/
 	# #801 : media-catch /run file owned by the worker uid (created at boot)
@@ -43,14 +42,11 @@ override_dh_auto_install:
 	# Pre-2.6.0 only db-tune + lxc-provision shipped — the mitm-wg-launch
 	# wrapper had to be hand-installed on the board.  This block ships them
 	# all consistently so the .deb is self-contained.
-	install -m 0755 sbin/secubox-toolbox-lxc-provision   debian/secubox-toolbox/usr/sbin/
-	install -m 0755 sbin/secubox-toolbox-mitm-wg-launch  debian/secubox-toolbox/usr/sbin/
 	install -m 0755 sbin/secubox-toolbox-wg-provision    debian/secubox-toolbox/usr/sbin/
 
 override_dh_installsystemd:
 	# Install the secondary unit manually (dh_installsystemd expects 1 unit/pkg).
 	install -d debian/secubox-toolbox/lib/systemd/system
-	install -m 0644 systemd/secubox-toolbox-mitm.service debian/secubox-toolbox/lib/systemd/system/
 	# #589 : autolearn bad-tracker learner + hourly timer
 	install -m 0755 sbin/secubox-toolbox-autolearn debian/secubox-toolbox/usr/sbin/
 	install -m 0644 systemd/secubox-toolbox-autolearn.service debian/secubox-toolbox/lib/systemd/system/
@@ -63,17 +59,9 @@ override_dh_installsystemd:
 	install -m 0644 systemd/secubox-toolbox-mesh-exclusion-sync.service debian/secubox-toolbox/lib/systemd/system/
 	install -m 0644 systemd/secubox-toolbox-mesh-exclusion-sync.timer debian/secubox-toolbox/lib/systemd/system/
 	# Phase 6.P (#496) : systemd drop-ins for RuntimeMaxSec=6h on mitm + mitm-wg
-	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm.service.d
-	install -m 0644 systemd/secubox-toolbox-mitm.service.d/10-runtime-max.conf \
-	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm.service.d/
-	install -d debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm-wg.service.d
-	install -m 0644 systemd/secubox-toolbox-mitm-wg.service.d/10-runtime-max.conf \
-	  debian/secubox-toolbox/lib/systemd/system/secubox-toolbox-mitm-wg.service.d/
 	# Phase 9 (#501) : multi-worker fanout template — opt-in via
 	# systemctl enable @1..4.  See unit's [Unit] doc string for the
 	# activation + rollback recipe.
-	install -m 0644 systemd/secubox-toolbox-mitm-wg-worker@.service \
-	  debian/secubox-toolbox/lib/systemd/system/
 	# #683 : kbin Tor egress reconciler (root, oneshot) + path watcher on
 	# filters.json. conf/nft-toolbox-tor.nft + conf/torrc-toolbox-egress.conf
 	# ship via the `cp -r conf` above (→ /usr/lib/secubox/toolbox/conf/).

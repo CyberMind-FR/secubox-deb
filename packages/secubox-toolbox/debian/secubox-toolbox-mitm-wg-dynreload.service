@@ -1,9 +1,0 @@
-[Unit]
-Description=Restart mitm-wg after dynamic whitelist update [Phase 6.N #496]
-
-[Service]
-Type=oneshot
-# Throttle : if the file changes 10 times in 30s, we don't want 10 restarts.
-# Wait 10s for the dust to settle (multiple SNI in quick succession).
-ExecStartPre=/bin/sleep 10
-ExecStart=/bin/systemctl restart secubox-toolbox-mitm-wg.service
