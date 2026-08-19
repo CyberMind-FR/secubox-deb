@@ -1,3 +1,18 @@
+secubox-ytsas (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * FEAT public player page (ytsas.gk2.secubox.in): new www/ytsas/public.html
+    — torrent-SAS-styled (cyan hybrid-dark, standalone, no admin chassis)
+    add-row (POST /add) + read-only library list (GET /list) + inline
+    play (<video>/stream/{id} or an embedded peertube_url) + a safe
+    /conserve action. No cookie upload, no remove/purge — those stay
+    admin-only. install-lxc.sh now swaps the LXC's served index.html to
+    public.html after deploy (keeping the original as admin.html inside the
+    LXC), so the LXC's own StaticFiles root ("/") serves the public player
+    while the aggregator continues to serve the unmodified admin dashboard
+    (www/ytsas/index.html) at admin.gk2/ytsas/ — the two are now fully split.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 12:00:00 +0200
+
 secubox-ytsas (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * FIX conserved MP3/FLAC (and other common audio) went to PeerTube — a video
