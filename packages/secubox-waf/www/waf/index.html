@@ -243,6 +243,7 @@
             <button class="waf-tab active" data-tab="overview" onclick="switchTab('overview')">🛡️ Menaces</button>
             <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
             <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
+            <button class="waf-tab" data-tab="history" onclick="switchTab('history')">📈 Historique</button>
         </div>
 
         <div class="grid-2">
@@ -394,6 +395,15 @@
                     <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🌍 Pays</h3><div id="visitsCountries" class="vbars"><span class="muted">…</span></div></div>
                     <div><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">📊 Statut</h3><div id="visitsStatus" class="vbars"><span class="muted">…</span></div></div>
                     <div style="grid-column:1/-1"><h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🎯 Sites les plus visités</h3><div id="visitsVhosts" class="vbars"><span class="muted">…</span></div></div>
+                </div>
+            </div>
+
+            <!-- #1062 — historique des menaces depuis les logs tournés (onglet Historique) -->
+            <div class="card" id="historyCard" style="grid-column: 1 / -1; display:none;">
+                <h2>📈 Historique des menaces <span class="muted" style="font-size:0.8rem;">— <b id="histDays">—</b> jours · <b id="histTotal">—</b> menaces bloquées sur toute la rétention</span></h2>
+                <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:1.2rem;margin-top:0.6rem">
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .5rem;color:var(--text);">Menaces par jour</h3><div id="histDaysBars" class="vbars"><span class="muted">…</span></div></div>
+                    <div><h3 style="font-size:0.85rem;margin:0 0 .5rem;color:var(--text);">🎯 Attaquants persistants</h3><div id="histTopIps" class="vbars"><span class="muted">…</span></div></div>
                 </div>
             </div>
 
@@ -932,6 +942,38 @@
             _vbars('visitsVhosts', d?.by_vhost, null);
         }
 
+        // #1062 — onglet Historique : tendances des menaces par jour + attaquants
+        // persistants, depuis /history (logs tournés agrégés, cache 1 h).
+        function _histBars(el, paires, couleur, largeurCle) {
+            if (!el) return;
+            const max = Math.max(1, ...paires.map(x => x[1]));
+            el.innerHTML = paires.map(function (x) {
+                const w = Math.round(100 * x[1] / max);
+                return '<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;margin-bottom:3px;">' +
+                    '<span style="width:' + largeurCle + 'px;color:var(--p31-dim);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + x[0] + '</span>' +
+                    '<span style="flex:1;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;"><span style="display:block;height:12px;width:' + w + '%;background:' + couleur + ';"></span></span>' +
+                    '<span style="width:58px;text-align:right;font-family:monospace;color:var(--text);">' + x[1].toLocaleString() + '</span>' +
+                    (x[2] ? '<span style="width:96px;color:var(--p31-dim);font-size:0.62rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + x[2] + '</span>' : '') +
+                    '</div>';
+            }).join('') || '<span class="muted">aucune donnée</span>';
+        }
+        async function loadHistory() {
+            const d = await api('/history');
+            if (!d || !d.jours) return;
+            const noms = Object.keys(d.jours).sort();
+            const set = function (id, v) { const e = document.getElementById(id); if (e) e.textContent = v; };
+            set('histDays', noms.length);
+            set('histTotal', (d.total || 0).toLocaleString());
+            const jours = noms.slice(-21).map(function (j) {
+                const jd = d.jours[j];
+                const cats = Object.entries(jd.categories || {}).sort(function (a, b) { return b[1] - a[1]; });
+                return [j.slice(5), jd.total, cats.length ? cats[0][0] : ''];
+            });
+            _histBars(document.getElementById('histDaysBars'), jours, 'linear-gradient(90deg,#00d4ff,#ff4466)', 74);
+            const ips = Object.entries(d.top_ips || {}).slice(0, 14).map(function (x) { return [x[0], x[1]]; });
+            _histBars(document.getElementById('histTopIps'), ips, '#ff4466', 118);
+        }
+
         // #747 — dashboard tabs (Menaces / Attaquants suivis / Visites)
         function switchTab(name) {
             document.querySelectorAll('#wafTabs .waf-tab').forEach(b =>
@@ -945,8 +987,11 @@
             const visits = document.getElementById('visitsCard');
             if (tracked) tracked.style.display = (name === 'attackers') ? '' : 'none';
             if (visits) visits.style.display = (name === 'visits') ? '' : 'none';
+            const history = document.getElementById('historyCard');
+            if (history) history.style.display = (name === 'history') ? '' : 'none';
             if (name === 'visits') loadVisits();
             if (name === 'attackers') loadTrackedAttackers();
+            if (name === 'history') loadHistory();
         }
 
         // Reflect WAF on/off on the header live-dot (presentational only)
