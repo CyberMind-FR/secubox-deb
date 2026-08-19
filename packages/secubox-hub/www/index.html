@@ -725,13 +725,11 @@
             return localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
         }
 
-        function checkAuth() {
-            if (!getToken()) {
-                if (!/\/login\.html$/.test(location.pathname)) window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                return false;
-            }
-            return true;
-        }
+        // #964/auth — NE PLUS forcer une reconnexion côté JS : la session tient
+        // au cookie (utilisateurs maîtres gk2/admin). Le redirect pré-emptif
+        // cassait les sessions valides en rebouclant sur login.html?redirect=%2F.
+        // Les appels API portent le jeton et gèrent eux-mêmes un vrai 401.
+        function checkAuth() { return true; }
 
         if (!checkAuth()) {
             document.body.innerHTML = '<div style="padding:2rem;color:var(--root-main);">Redirecting to login...</div>';
