@@ -1,3 +1,12 @@
+secubox-ytsas (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat #1056 : endpoint GET /resolve — rend la meilleure source locale
+    (mirror PeerTube / cache / pending) pour une URL YouTube et enfile le
+    rapatriement (add+conserve). Brique du média intégré souverain du BBS.
+  * ytid.py : extraction canonique du video_id (watch/youtu.be/shorts).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 12:00:00 +0200
+
 secubox-ytsas (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * FIX conserved MP3/FLAC (and other common audio) went to PeerTube — a video
