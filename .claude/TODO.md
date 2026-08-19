@@ -10,6 +10,17 @@
 
 ---
 
+## 2026-08-19
+
+- [x] Réparer toolbox-ng (split-brain) + déployer 0.1.43
+- [x] Éradiquer Python mitmproxy (#1054) — source + board + apt purge
+- [x] Dompter l'orage occ Nextcloud (flock single-flight, #1046)
+- [x] Corriger la webui WAF (pastille + stats) + rapport historique (#1062)
+- [x] Rapport metrics planifié + référents + visiteur unique (#1059/#1060)
+- [ ] BBS #1049 — podcaster poster, handler /mosaique, frontend, peupler gateway_contenu
+- [ ] #1061 — dédup boucle de fond du hub (2× systemctl/5 s)
+- [ ] Dé-Python /waf/ stats (optionnel) — porter le lecteur en Go sbxwaf
+
 ## 2026-08-17
 
 - [ ] Corriger le cache du hub : appels par lots, `--plain`, delai adapte

@@ -47,7 +47,7 @@ SecuBox-Deb est un projet libre sans campagne de financement participatif, sans 
 
 | Élément | Valeur |
 |---------|--------|
-| Version courante | v2.2.4-pre1 |
+| Version courante | v2.41.0 |
 | Base Debian | bookworm (12) |
 | Kernel | 6.6 LTS mainline |
 | Paquets | 125 |
