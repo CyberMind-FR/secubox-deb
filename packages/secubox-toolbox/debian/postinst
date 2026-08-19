@@ -170,26 +170,8 @@ SBXFILTERS
       fi
     fi
 
-    # 4c. Phase 5 (#495) : provision LXC container for the ToolBox mitm.
-    # Replaces the host-native secubox-toolbox-mitm.service.
-    # Provisioning is idempotent ; safe to skip if LXC isn't installed (dev box).
-    if command -v lxc-create >/dev/null 2>&1 && [ -x /usr/sbin/secubox-toolbox-lxc-provision ]; then
-      install -d -m 0755 /var/log/secubox/toolbox-mitm
-      install -d -m 0750 -o secubox-toolbox -g secubox-toolbox /var/lib/secubox/toolbox
-      # Best-effort provision; failures logged but don't block install.
-      if /usr/sbin/secubox-toolbox-lxc-provision 2>&1; then
-        echo "[secubox-toolbox] LXC container toolbox-mitm provisioned"
-        # Disable the host-native mitm service since the container takes over.
-        if systemctl is-enabled secubox-toolbox-mitm.service >/dev/null 2>&1; then
-          systemctl disable --now secubox-toolbox-mitm.service 2>/dev/null || true
-          echo "[secubox-toolbox] host-native mitm disabled — superseded by LXC container"
-        fi
-      else
-        echo "[secubox-toolbox] LXC provision failed — falling back to host-native mitm"
-      fi
-    else
-      echo "[secubox-toolbox] LXC not installed — using host-native mitm (legacy mode)"
-    fi
+    # (Python mitmproxy retiré #1054 — la chaîne d'inspection est 100% Go
+    # sbxwaf/sbxmitm ; plus aucun conteneur mitmproxy à provisionner.)
 
     # 5. systemd : enable mais ne PAS start automatiquement (l'AP doit être configuré d'abord)
     if [ -d /run/systemd/system ]; then
@@ -200,11 +182,6 @@ fi
 
       systemctl daemon-reload || true
       systemctl enable secubox-toolbox.service || true
-      # secubox-toolbox-mitm.service stays enabled only if LXC isn't running.
-      # (postinst above disables it if LXC took over.)
-      if ! lxc-info -n toolbox-mitm 2>/dev/null | grep -q RUNNING; then
-        systemctl enable secubox-toolbox-mitm.service || true
-      fi
       # Phase 7 (#498) : boot-time peer-restore service for wg-toolbox.
       # Keeps the enrolled WG peers alive across reboots.
       systemctl enable secubox-toolbox-wg-restore.service || true
@@ -314,13 +291,7 @@ fi
     # `restart` (starts them even if currently stopped) ; everything else
     # keeps `try-restart` (preserve an operator's deliberate stop).
     if [ -n "${2:-}" ] && [ -d /run/systemd/system ]; then
-      for unit in secubox-toolbox.service \
-                  secubox-toolbox-mitm.service \
-                  secubox-toolbox-mitm-wg.service \
-                  secubox-toolbox-mitm-wg-worker@1.service \
-                  secubox-toolbox-mitm-wg-worker@2.service \
-                  secubox-toolbox-mitm-wg-worker@3.service \
-                  secubox-toolbox-mitm-wg-worker@4.service ; do
+      for unit in secubox-toolbox.service ; do
         if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
           systemctl restart "$unit" 2>/dev/null || true
         else

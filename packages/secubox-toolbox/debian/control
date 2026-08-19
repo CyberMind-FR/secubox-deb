@@ -23,7 +23,6 @@ Depends: ${misc:Depends}, ${python3:Depends},
  iproute2,
  hostapd,
  dnsmasq,
- mitmproxy,
  jq,
  openssl,
  adduser,
@@ -43,7 +42,7 @@ Recommends: bridge-utils,
 Description: SecuBox-DEB ToolBoX — Gondwana Cabine Numérique (captive AP + MITM analyzer)
  Phase 1 du parent #474 (ToolBoX Pipeline). Productionize le PoC captive
  portal en package dédié : splash + consent R2 + CA distribution iOS
- (mobileconfig) + nftables TPROXY → mitmproxy transparent +
+ (mobileconfig) + nftables TPROXY → moteur MITM Go (sbxwaf/sbxmitm) +
  addons (cookies/dpi/avatar/ja4/soc-relay) → modules SecuBox existants.
  .
  Conforme CSPN (R2 opt-in explicite, MAC hashing avec sel rotatif daily,
