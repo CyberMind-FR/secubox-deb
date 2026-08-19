@@ -114,7 +114,7 @@ See [LICENCE-CMSD-1.0.md](LICENCE-CMSD-1.0.md) (French, authoritative) or [LICEN
 
 SecuBox transforms any compatible device into a complete network security appliance with VPN, firewall, intrusion detection, and web dashboard — all preconfigured and ready to use.
 
-> **Status (2026-06-02)** — Versioning is **dev alpha**. The current line (v2.13.x) is **all-in-the-pipe working** — partly efficient, partly modules-integration-ready, partly upgradeable, **first-point POC**. Design philosophy : **KISS**. SecuBox aims to be a **full operating system for a security tool** — a **Swiss army knife** + **modular OS appliance**. See the [wiki Use-Cases page](https://github.com/CyberMind-FR/secubox-deb/wiki/Use-Cases) for scenario-by-scenario tweaks.
+> **Status (2026-06-02)** — Versioning is **dev alpha**. The current line (v2.41.x) is **all-in-the-pipe working** — partly efficient, partly modules-integration-ready, partly upgradeable, **first-point POC**. Design philosophy : **KISS**. SecuBox aims to be a **full operating system for a security tool** — a **Swiss army knife** + **modular OS appliance**. See the [wiki Use-Cases page](https://github.com/CyberMind-FR/secubox-deb/wiki/Use-Cases) for scenario-by-scenario tweaks.
 
 ---
 
@@ -123,6 +123,17 @@ SecuBox transforms any compatible device into a complete network security applia
 [![Latest stable](https://img.shields.io/github/v/release/CyberMind-FR/secubox-deb?label=stable&logo=github&color=gold&include_prereleases=false)](https://github.com/CyberMind-FR/secubox-deb/releases/latest)
 [![All releases](https://img.shields.io/github/v/tag/CyberMind-FR/secubox-deb?label=latest%20tag&logo=git&color=cyan)](https://github.com/CyberMind-FR/secubox-deb/releases)
 [![Downloads](https://img.shields.io/github/downloads/CyberMind-FR/secubox-deb/total?label=downloads&color=brightgreen)](https://github.com/CyberMind-FR/secubox-deb/releases)
+
+### `v2.41.0` — WAF Go consolidé, mitmproxy Python éradiqué (2026-08-19)
+
+Le pare-feu applicatif tourne 100 % en Go (**sbxwaf** : 37 Mo RSS, 231 vhosts,
+2028 menaces bloquées/24 h) — le reliquat Python mitmproxy est **totalement
+retiré** (paquet, LXC, dépendance, `apt purge`). Webui WAF ressuscitée avec un
+**rapport historique** exploitant les journaux tournés (34 jours, 362 k menaces,
+attaquants persistants). L'orage `occ` de Nextcloud est dompté à la racine
+(single-flight `flock`). Le comptage des visiteurs est corrigé (real_ip derrière
+HAProxy). Rapport de fréquentation PDF planifié par mail interne. 31 branches
+fusionnées purgées, entêtes SPDX Phase C sur tout le dépôt.
 
 ### `v2.13.x` — Main system line (2026-05-29 → ongoing)
 
