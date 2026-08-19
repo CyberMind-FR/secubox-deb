@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/billets"
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/connectors"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
@@ -133,9 +134,14 @@ type Server struct {
 	authAmont authAmont
 	// encodeQR : remplace en test pour verifier CE QUE le QR contient.
 	encodeQR func(string) ([]byte, error)
+	// youtube : connecteur souverain #1056, construit par l'appelant (main.go)
+	// a partir de Options.YtsasOrigine — c'est lui qui detient le http.Client
+	// et son delai, la Server n'a pas a les connaitre. Nil = servirMediaFiche
+	// retombe sur le comportement existant (aucune resolution youtube).
+	youtube *connectors.YouTube
 }
 
-func New(st *store.Store, opt Options) (*Server, error) {
+func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) {
 	if opt.Titre == "" {
 		opt.Titre = "SecuBox BBS"
 	}
@@ -180,7 +186,7 @@ func New(st *store.Store, opt Options) (*Server, error) {
 		}
 		pages[nom] = t
 	}
-	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux()}
+	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
 	if b, err := assets.ReadFile("static/bbs.css"); err == nil {
 		sum := sha256.Sum256(b)
 		s.vCSS = base64.RawURLEncoding.EncodeToString(sum[:6])

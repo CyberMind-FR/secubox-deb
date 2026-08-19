@@ -51,6 +51,18 @@ func TestYouTubeMiroirPoseUneReplique(t *testing.T) {
 	}
 }
 
+// TestYouTubeSEnregistreDansLeRegistre verrouille la conformite d'interface :
+// si Manifeste() (Task 5) se degrade — motif vide, capacite mal nommee — le
+// Registre le refuse a l'enregistrement, et ce test l'attrape avant que
+// main.go ne le decouvre au demarrage.
+func TestYouTubeSEnregistreDansLeRegistre(t *testing.T) {
+	yt := NouveauYouTube(&ClientYtsas{Base: "http://x", HTTP: http.DefaultClient}, "gk2")
+	r := gateway.NouveauRegistre()
+	if err := r.Enregistrer(yt); err != nil {
+		t.Fatalf("le connecteur youtube doit satisfaire gateway.Connecteur : %v", err)
+	}
+}
+
 func TestYouTubeYtsasHSRetombeSurWAN(t *testing.T) {
 	yt := NouveauYouTube(&ClientYtsas{Base: "http://127.0.0.1:1", HTTP: &http.Client{Timeout: 150 * time.Millisecond}}, "gk2")
 	c, err := yt.Resoudre("https://youtu.be/dQw4w9WgXcQ")
