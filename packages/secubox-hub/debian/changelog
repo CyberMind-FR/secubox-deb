@@ -1,3 +1,12 @@
+secubox-hub (1.9.5-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF : le webui admin ne force plus de reconnexion côté JS
+    (checkAuth → return true). La 1.9.4 avait réintroduit le redirect pré-emptif
+    (login.html?redirect=%2F qui rebouclait) en écrasant le fix « board-ahead ».
+    La session tient au cookie ; les appels API gèrent un vrai 401 eux-mêmes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 08:00:00 +0200
+
 secubox-hub (1.9.4-1~bookworm1) bookworm; urgency=medium
 
   * Pastille WAF verte : le health-batch reflète l'état du WAF VIVANT (Go
