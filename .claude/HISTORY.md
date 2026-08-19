@@ -10,6 +10,44 @@
 
 ---
 
+## 2026-08-19 — Grand ménage : toolbox-ng réparé, mitmproxy Python éradiqué, orage occ dompté, WAF ressuscité
+
+**toolbox-ng ne compilait plus depuis le 17 août.** Un merge feature/740 avait
+pris son côté pour main.go/gzip/csp/adstats/policy tout en gardant
+banner/transparent côté mainline : split-brain silencieux, `decideForPeer` /
+ja4 / signatures 2-arg manquants. Vrai merge 3-voies combinant les DEUX familles
+(rlevel + media + sentinel ET pincand + cosmétique-par-domaine ET bypass fédéré
+#803/#806/#809) + capture #1058. 0.1.43 déployé, sur-ensemble canonique.
+
+**Python mitmproxy totalement dégagé (#1054).** La chaîne publique était déjà
+sur Go sbxwaf (le backend `mitmproxy_inspector` pointe sur :8085) ; le reliquat
+Python était mort (0 connexion). 2 LXC détruits, paquet `secubox-mitmproxy`
+purgé, dépendance `mitmproxy` retirée de `secubox-toolbox` (2.9.0), `apt purge
+mitmproxy` réussi. Plus rien, ni sur la board ni dans les sources.
+
+**Orage occ Nextcloud (charge 79) dompté à la racine.** Le rafraîchisseur de
+cache du hub ne démarre pas monté dans l'agrégateur → chaque `/status` relançait
+un `occ` EN LIGNE, entassés plus vite que le timeout ne les purgeait (60+, charge
+79). Correctif : `flock -n` single-flight dans `nextcloudctl occ()` — un occ à la
+fois, les autres échouent vite (code 75) et servent le cache (nextcloud 1.7.1).
+Vérifié : fail-fast en 167 ms.
+
+**Webui WAF ressuscitée.** Pastille jaune = la sidebar cle le vieux
+`secubox-waf.service` (mort au cutover) au lieu du WAF Go vivant → alias
+`waf←waf-ng` (hub 1.9.4, verte). Page `/waf/` vide = l'API de stats (lecteur du
+threat log de sbxwaf) stoppée au cutover → réactivée. **Rapport historique
+(#1062)** : les logs TOURNÉS (gzip) enfin exploités — 34 jours, 362 078 menaces,
+top attaquants persistants ; onglet « Historique » + section du PDF hebdo.
+
+**Rapports metrics.** PDF planifié anibal-amiot hebdo + quotidien par mail
+interne (#1059) ; référents regroupés + % d'accès direct ; **visiteur unique
+corrigé** — nginx journalisait l'IP de l'amont, `set_real_ip_from` truste enfin
+le LAN (hub 1.9.4) → vraies IP client résolues (#1060).
+
+**Dépôt.** 31 branches fusionnées purgées, 26 issues fermées, entêtes SPDX
+Phase C (2288 fichiers). BBS #1049 mosaïque partagée : socle testé + collecteurs
+(PeerTube poster) + pont Item→Contenu (en cours). Release **v2.41.0**.
+
 ## 2026-08-17 — Rassemblement des modules, et deux faux positifs de nous
 
 **82 modules dans un interpreteur : 180 Mo au lieu de 3070.** Facteur dix-huit.

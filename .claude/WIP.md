@@ -6,9 +6,37 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-17*
+*Mis à jour : 2026-08-19*
 
 ---
+
+## 2026-08-19 — Réparation, dé-Python, WAF, rapports
+
+### ✅ Fait — déployé + synchronisé sur apt.secubox.in
+
+- **secubox-toolbox-ng 0.1.43** (#1054) — split-brain réparé (merge 3-voies) +
+  capture #1058 ; sur-ensemble canonique, R3 workers redémarrés.
+- **secubox-toolbox 2.9.0** (#1054) — Python mitmproxy excisé (dép + units +
+  addons + templates LXC + logique postinst) ; `apt purge mitmproxy` réussi,
+  2 LXC détruits.
+- **secubox-nextcloud 1.7.1** (#1046) — `flock` single-flight dans `occ()` :
+  orage occ (charge 79) dompté à la racine.
+- **secubox-hub 1.9.4** (#1060/#1054) — `set_real_ip_from` truste le LAN
+  (visiteur unique corrigé) + pastille WAF verte (alias `waf←waf-ng`).
+- **secubox-metrics 1.7.2** (#1059/#1062) — rapport PDF hebdo+quotidien anibal-amiot
+  par mail ; référents regroupés + % accès direct ; section « Menaces WAF ».
+- **secubox-waf 1.4.1** (#1062) — API de stats réactivée (webui WAF ressuscitée) ;
+  endpoint `/history` (logs tournés → 34 j / 362 k menaces) + onglet Historique.
+- **Dépôt** — 31 branches purgées, 26 issues fermées, SPDX Phase C (2288 fichiers).
+
+### ⬜ Next Up
+
+- **BBS #1049 mosaïque** — socle + collecteurs + pont Item→Contenu faits ; reste
+  enrichir podcaster (poster), le handler `/mosaique`, le frontend grille, et
+  peupler `gateway_contenu` à l'ingest.
+- **#1061** — dédup de la boucle de fond du hub (2× `systemctl list-units`/5 s).
+- **Dé-Python `/waf/` stats** (optionnel) — porter le lecteur de stats dans le Go sbxwaf.
+- **secubox-waf** — verrou source du service de stats déjà couvert par le postinst.
 
 ## 2026-08-16 — Radio, cache du WAF, emulation
 
