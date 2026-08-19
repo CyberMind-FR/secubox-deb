@@ -242,7 +242,11 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
                      new_x="LMARGIN", new_y="NEXT")
         pdf.ln(3)
 
-        _titre(pdf, "Referents")
+        # #1059 ①② — les referents regroupes (top des domaines d'ou vient le
+        # trafic) et, en clair, la PART D'ACCES DIRECT (visites sans referent)
+        # sur le total de la famille regroupee.
+        directs = detail.get("directs_pct", 0.0)
+        _titre(pdf, f"Referents  -  {directs:.1f} % d'acces direct (sans referent)")
         pdf.set_font("Helvetica", "", 8)
         referents = detail.get("top_referents") or []
         if not referents:
