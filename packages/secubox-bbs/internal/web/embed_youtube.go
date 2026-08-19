@@ -15,18 +15,20 @@ import (
 // embedYouTubeURL rend l'embed « première vue » (youtube-nocookie) d'une URL
 // YouTube. PUR : appelé depuis le rendu du corps, sans réseau.
 //
-// PAS de referrerpolicy=no-referrer : le lecteur youtube-nocookie a besoin de
-// l'ORIGINE de la page pour se configurer — sans elle il affiche « Erreur de
-// configuration du lecteur vidéo ». La politique par défaut
-// (strict-origin-when-cross-origin) n'envoie que l'origine (https://bbs…), pas
-// l'URL du fil ; combinée à -nocookie, c'est le bon compromis vie privée.
+// referrerpolicy=strict-origin-when-cross-origin est OBLIGATOIRE ici : la page
+// pose l'en-tête `Referrer-Policy: same-origin`, qui coupe le référent vers un
+// tiers — le lecteur youtube-nocookie n'a alors plus l'origine dont il a besoin
+// et affiche « Erreur 153 / Erreur de configuration du lecteur vidéo ».
+// L'attribut de l'iframe SURCHARGE l'en-tête de page pour cette requête : on
+// envoie l'ORIGINE seule (https://bbs…), jamais l'URL du fil ; avec -nocookie,
+// c'est le bon compromis vie privée.
 func embedYouTubeURL(u string) (string, bool) {
 	id := ytid.VideoID(u)
 	if id == "" {
 		return "", false
 	}
 	return `<iframe class="sbx-embed sbx-embed-yt" src="https://www.youtube-nocookie.com/embed/` +
-		html.EscapeString(id) + `" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`, true
+		html.EscapeString(id) + `" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`, true
 }
 
 // embedYouTube rend l'embed selon l'état du tuyau souverain — consommé par
@@ -50,6 +52,6 @@ func embedYouTube(c gateway.Contenu) string {
 		fallthrough
 	default: // pending / inconnu → WAN (première vue)
 		return `<iframe class="sbx-embed" src="https://www.youtube-nocookie.com/embed/` + id +
-			`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`
+			`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`
 	}
 }

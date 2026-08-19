@@ -25,16 +25,18 @@ func TestEmbedYouTubeURLNonYoutube(t *testing.T) {
 	}
 }
 
-// Le lecteur youtube-nocookie a besoin de l'origine pour se configurer :
-// referrerpolicy=no-referrer la lui cachait → « Erreur de configuration du
-// lecteur vidéo ». Garde-fou : l'embed ne doit JAMAIS couper le référent.
-func TestEmbedYouTubeNeCoupePasLeReferent(t *testing.T) {
+// Le lecteur youtube-nocookie a besoin de l'ORIGINE pour se configurer. La page
+// pose `Referrer-Policy: same-origin` (coupe le référent tiers) → sans surcharge
+// l'embed montre « Erreur 153 / Erreur de configuration du lecteur vidéo ».
+// Garde-fou : l'iframe DOIT surcharger avec strict-origin-when-cross-origin, et
+// ne JAMAIS couper le référent (no-referrer).
+func TestEmbedYouTubeEnvoieLOrigine(t *testing.T) {
 	h, _ := embedYouTubeURL("https://youtu.be/kFuf9xUInzA")
 	if strings.Contains(h, "no-referrer") {
-		t.Fatalf("referrerpolicy=no-referrer casse le lecteur youtube : %q", h)
+		t.Fatalf("no-referrer casse le lecteur youtube : %q", h)
 	}
-	if !strings.Contains(h, "allowfullscreen") {
-		t.Fatalf("attributs de lecture attendus : %q", h)
+	if !strings.Contains(h, `referrerpolicy="strict-origin-when-cross-origin"`) {
+		t.Fatalf("l'iframe doit surcharger le Referrer-Policy de page pour envoyer l'origine : %q", h)
 	}
 }
 
