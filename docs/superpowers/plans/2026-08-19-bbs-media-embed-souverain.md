@@ -549,17 +549,24 @@ git commit -m "feat(bbs): connecteur youtube souverain (résolution ytsas + fail
 
 ---
 
-### Task 6: rendu de l'embed (fiche média)
+### Task 6: embed dans le CORPS d'un message (render.go) — le lecteur apparaît
+
+**Contexte (ruling #1056) :** une URL YouTube collée dans un fil est rendue par
+`internal/web/render.go` — les deux autolinkers `liens()` (liens markdown
+`[t](url)`, ~ligne 280) et `adressesNues()` (URL nues `https://…`, ~ligne 334).
+Aujourd'hui elles produisent un `<a>` : le lecteur ne voit qu'un lien. Cette
+tâche fait émettre l'embed **youtube-nocookie** (la « première vue » approuvée
+au spec) à la place du lien. `render.go` est PUR (aucun réseau) : on n'appelle
+donc PAS ytsas ici — l'upgrade souverain (miroir/cache) est la Task 8.
 
 **Files:**
-- Modify: `packages/secubox-bbs/internal/web/media_fiche.go` (ajouter un cas youtube à côté du cas `peertube` existant, ligne ~48)
-- Test: `packages/secubox-bbs/internal/web/media_fiche_youtube_test.go`
+- Create: `packages/secubox-bbs/internal/web/embed_youtube.go` (extracteur video_id PUR + `embedYouTubeURL` + `embedYouTube(Contenu)` pour l'upgrade souverain de la Task 8)
+- Modify: `packages/secubox-bbs/internal/web/render.go` (`liens` ~280 et `adressesNues` ~334 : émettre l'embed si l'URL est YouTube)
+- Test: `packages/secubox-bbs/internal/web/embed_youtube_test.go`
 
 **Interfaces:**
-- Consumes: `connectors.YouTube.Resoudre` via un champ `Server` (ex. `s.youtube *connectors.YouTube`) ; `gateway.Contenu`.
-- Produces: un fragment d'embed HTML selon l'état — `mirror` → `<iframe src=<peertube>>`, `cache` → `<video src=<ytsas stream>>`, `pending` → `<iframe src="https://www.youtube-nocookie.com/embed/<id>">`.
-
-Note d'exécution : lire `media_fiche.go` (le type `Fiche` + `servirMediaFiche` + le cas `peertube`) pour raccorder ce rendu au même chemin ; réutiliser `vignetteRelayee` pour le poster. Le test cible la fonction pure qui, d'un `gateway.Contenu`, rend le fragment.
+- Produces: `idVideoYouTube(url string) string` (id 11 car. ou "") ; `embedYouTubeURL(url string) (html string, ok bool)` (iframe nocookie si YouTube) ; `embedYouTube(c gateway.Contenu) string` (rendu par état, consommé par la Task 8).
+- Consumes (render.go) : `embedYouTubeURL` dans les deux autolinkers.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -574,46 +581,47 @@ import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
 )
 
-func contenuYT(etat, id, ptURL, stream string) gateway.Contenu {
+func TestEmbedYouTubeURLLienNu(t *testing.T) {
+	h, ok := embedYouTubeURL("https://youtu.be/kFuf9xUInzA?si=7DvT2wtSMprn4NHI")
+	if !ok || !strings.Contains(h, "youtube-nocookie.com/embed/kFuf9xUInzA") {
+		t.Fatalf("embed nocookie attendu : %q ok=%v", h, ok)
+	}
+}
+
+func TestEmbedYouTubeURLNonYoutube(t *testing.T) {
+	if _, ok := embedYouTubeURL("https://exemple.org/x"); ok {
+		t.Fatal("une URL non-YouTube ne doit PAS produire d'embed")
+	}
+}
+
+// LE test qui reproduit la capture utilisateur : une URL nue dans un corps.
+func TestRenderCorpsEmbarqueLecteurYoutube(t *testing.T) {
+	html := string(Render("Il explique ici https://youtu.be/kFuf9xUInzA les agendas"))
+	if !strings.Contains(html, "youtube-nocookie.com/embed/kFuf9xUInzA") {
+		t.Fatalf("le corps doit embarquer le lecteur, pas un simple lien : %s", html)
+	}
+	if strings.Contains(html, `href="https://youtu.be/kFuf9xUInzA"`) {
+		t.Fatalf("l'URL YouTube nue ne doit pas rester un <a> : %s", html)
+	}
+}
+
+// L'upgrade souverain (Task 8) s'appuie sur embedYouTube(Contenu).
+func TestEmbedContenuMirrorRendPeertube(t *testing.T) {
 	c := gateway.Contenu{Genre: gateway.GenreVideo, Connecteur: "youtube",
-		Metadonnees: map[string]string{"source": "youtube", "video_id": id, "etat": etat}}
-	if stream != "" {
-		c.Metadonnees["stream_url"] = stream
-	}
-	if ptURL != "" {
-		c.Repliques = []gateway.Replique{{Cible: "peertube", CibleURL: ptURL, Mode: gateway.ModeMiroir}}
-	}
-	return c
-}
-
-func TestEmbedMirrorRendPeertube(t *testing.T) {
-	h := embedYouTube(contenuYT("mirror", "dQw4w9WgXcQ", "https://peertube.gk2/w/xy", ""))
-	if !strings.Contains(h, "<iframe") || !strings.Contains(h, "peertube.gk2/w/xy") {
+		Metadonnees: map[string]string{"video_id": "dQw4w9WgXcQ", "etat": "mirror"},
+		Repliques:   []gateway.Replique{{Cible: "peertube", CibleURL: "https://peertube.gk2/w/xy", Mode: gateway.ModeMiroir}}}
+	if h := embedYouTube(c); !strings.Contains(h, "<iframe") || !strings.Contains(h, "peertube.gk2/w/xy") {
 		t.Fatalf("miroir → iframe peertube attendu : %s", h)
-	}
-}
-
-func TestEmbedCacheRendVideoLocale(t *testing.T) {
-	h := embedYouTube(contenuYT("cache", "dQw4w9WgXcQ", "", "http://10.100.0.180:8091/api/v1/ytsas/stream/dQw4w9WgXcQ"))
-	if !strings.Contains(h, "<video") || !strings.Contains(h, "/ytsas/stream/dQw4w9WgXcQ") {
-		t.Fatalf("cache → <video> locale attendu : %s", h)
-	}
-}
-
-func TestEmbedPendingRendNocookie(t *testing.T) {
-	h := embedYouTube(contenuYT("pending", "dQw4w9WgXcQ", "", ""))
-	if !strings.Contains(h, "youtube-nocookie.com/embed/dQw4w9WgXcQ") {
-		t.Fatalf("pending → iframe youtube-nocookie attendu : %s", h)
 	}
 }
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/secubox-bbs && go test ./internal/web/ -run TestEmbed -v`
-Expected: FAIL — `undefined: embedYouTube`
+Run: `cd packages/secubox-bbs && go test ./internal/web/ -run 'TestEmbed|TestRenderCorpsEmbarque' -v`
+Expected: FAIL — `undefined: embedYouTubeURL` / `undefined: embedYouTube`
 
-- [ ] **Step 3: Write minimal implementation** (nouveau fichier `internal/web/embed_youtube.go`)
+- [ ] **Step 3: Write minimal implementation** (`internal/web/embed_youtube.go`)
 
 ```go
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
@@ -625,21 +633,74 @@ package web
 
 import (
 	"html"
+	"net/url"
+	"regexp"
+	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
 )
 
-// embedYouTube rend le fragment d'embed d'une vidéo YouTube selon l'état du
-// tuyau souverain. mirror → PeerTube (souverain) ; cache → <video> locale
-// (souverain) ; pending → youtube-nocookie (WAN, première vue seulement).
+var reIDYouTube = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+
+// idVideoYouTube extrait l'identifiant canonique (11 car.) d'une URL YouTube,
+// ou "" si ce n'en est pas une. Miroir Go de ytid.py côté ytsas : le join du
+// tuyau souverain se fait par CET identifiant, jamais par le titre.
+func idVideoYouTube(u string) string {
+	p, err := url.Parse(u)
+	if err != nil {
+		return ""
+	}
+	h := strings.TrimPrefix(strings.ToLower(p.Hostname()), "www.")
+	switch h {
+	case "youtube.com", "m.youtube.com":
+		if p.Path == "/watch" {
+			if v := p.Query().Get("v"); reIDYouTube.MatchString(v) {
+				return v
+			}
+			return ""
+		}
+		for _, pf := range []string{"/shorts/", "/embed/", "/v/"} {
+			if strings.HasPrefix(p.Path, pf) {
+				v := strings.SplitN(strings.TrimPrefix(p.Path, pf), "/", 2)[0]
+				if reIDYouTube.MatchString(v) {
+					return v
+				}
+				return ""
+			}
+		}
+		return ""
+	case "youtu.be":
+		v := strings.SplitN(strings.TrimPrefix(p.Path, "/"), "/", 2)[0]
+		if reIDYouTube.MatchString(v) {
+			return v
+		}
+	}
+	return ""
+}
+
+// embedYouTubeURL rend l'embed « première vue » (youtube-nocookie) d'une URL
+// YouTube. PUR : appelé depuis le rendu du corps, sans réseau. referrerpolicy
+// no-referrer : le fil interne n'a pas à être annoncé au tiers.
+func embedYouTubeURL(u string) (string, bool) {
+	id := idVideoYouTube(u)
+	if id == "" {
+		return "", false
+	}
+	return `<iframe class="sbx-embed sbx-embed-yt" src="https://www.youtube-nocookie.com/embed/` +
+		html.EscapeString(id) + `" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>`, true
+}
+
+// embedYouTube rend l'embed selon l'état du tuyau souverain — consommé par
+// l'upgrade côté serveur (Task 8) quand ytsas a répondu. mirror → PeerTube
+// (souverain) ; cache → <video> locale (souverain) ; sinon youtube-nocookie.
 func embedYouTube(c gateway.Contenu) string {
 	id := html.EscapeString(c.Metadonnees["video_id"])
 	switch c.Metadonnees["etat"] {
 	case "mirror":
 		for _, r := range c.Repliques {
 			if r.Cible == "peertube" && r.CibleURL != "" {
-				u := html.EscapeString(r.CibleURL)
-				return `<iframe class="sbx-embed" src="` + u + `" allowfullscreen loading="lazy"></iframe>`
+				return `<iframe class="sbx-embed" src="` + html.EscapeString(r.CibleURL) +
+					`" allowfullscreen loading="lazy"></iframe>`
 			}
 		}
 		fallthrough // miroir annoncé mais URL absente : on retombe sur WAN
@@ -650,21 +711,48 @@ func embedYouTube(c gateway.Contenu) string {
 		fallthrough
 	default: // pending / inconnu → WAN (première vue)
 		return `<iframe class="sbx-embed" src="https://www.youtube-nocookie.com/embed/` + id +
-			`" allowfullscreen loading="lazy"></iframe>`
+			`" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>`
 	}
 }
 ```
 
+Puis MODIFIER `render.go` — dans `liens()`, remplacer le bloc `if lienSur(url) {`
+qui écrit le `<a>` par :
+
+```go
+		if lienSur(url) {
+			if emb, ok := embedYouTubeURL(url); ok {
+				b.WriteString(emb)
+			} else {
+				// noopener/noreferrer : cf. commentaire d'origine.
+				b.WriteString(`<a href="` + template.HTMLEscapeString(url) +
+					`" rel="noopener noreferrer">` + texte + `</a>`)
+			}
+		} else {
+```
+
+et dans `adressesNues()`, remplacer `if lienSur(url) && len(url) > 10 {` :
+
+```go
+		if lienSur(url) && len(url) > 10 {
+			if emb, ok := embedYouTubeURL(url); ok {
+				b.WriteString(emb)
+			} else {
+				b.WriteString(`<a href="` + url + `" rel="noopener noreferrer">` + url + `</a>`)
+			}
+		} else {
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd packages/secubox-bbs && go test ./internal/web/ -run TestEmbed -v`
-Expected: PASS (3 tests)
+Run: `cd packages/secubox-bbs && go test ./internal/web/ -v && go build ./...`
+Expected: PASS (nouveaux tests + l'existant de render_test.go inchangé), build OK.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/secubox-bbs/internal/web/embed_youtube.go packages/secubox-bbs/internal/web/media_fiche_youtube_test.go
-git commit -m "feat(bbs): rendu embed youtube (mirror/cache/pending) (ref #1056)"
+git add packages/secubox-bbs/internal/web/embed_youtube.go packages/secubox-bbs/internal/web/embed_youtube_test.go packages/secubox-bbs/internal/web/render.go
+git commit -m "feat(bbs): embed youtube dans le corps (render.go) — le lecteur apparaît (ref #1056)"
 ```
 
 ---
