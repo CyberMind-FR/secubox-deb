@@ -1,3 +1,14 @@
+secubox-metrics (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Référents regroupés au total/famille (① #1059) : le top des domaines
+    référents est désormais agrégé sur toute la famille regroupée, pas seulement
+    par sous-domaine.
+  * Part d'ACCÈS DIRECT (② #1059) : `directs_pct` = visites sans référent sur le
+    total, exposée par vhost et par famille, et affichée dans le PDF
+    (« Referents — X % d'accès direct »). Nouveau compteur `sans_ref`. 3 tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 06:04:25 +0200
+
 secubox-metrics (1.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport QUOTIDIEN en plus de l'hebdomadaire (#1059) : timer à 05:00 qui
