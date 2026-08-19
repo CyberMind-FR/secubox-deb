@@ -1,4 +1,4 @@
-secubox-ytsas (0.2.0-1~bookworm1) bookworm; urgency=medium
+secubox-ytsas (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * FEAT public player page (ytsas.gk2.secubox.in): new www/ytsas/public.html
     — torrent-SAS-styled (cyan hybrid-dark, standalone, no admin chassis)
@@ -10,6 +10,13 @@ secubox-ytsas (0.2.0-1~bookworm1) bookworm; urgency=medium
     LXC), so the LXC's own StaticFiles root ("/") serves the public player
     while the aggregator continues to serve the unmodified admin dashboard
     (www/ytsas/index.html) at admin.gk2/ytsas/ — the two are now fully split.
+  * Folds in feat #1056 (endpoint GET /resolve — meilleure source locale
+    (mirror PeerTube / cache / pending) pour une URL YouTube + enfilement du
+    rapatriement ; ytid.py, extraction canonique du video_id) cherry-picked
+    from feature/1056-media-embed-souverain, which had already shipped this
+    on the board as 0.2.0-1~bookworm1 before this package existed — this
+    0.2.1 supersedes it and carries both changes forward instead of
+    regressing the board's /resolve endpoint.
 
  -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 12:00:00 +0200
 
