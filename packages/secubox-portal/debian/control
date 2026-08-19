@@ -8,6 +8,8 @@ Standards-Version: 4.6.2
 Package: secubox-portal
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0), python3-uvicorn | python3-pip, python3-jwt
+Replaces: secubox-hub (<< 1.9.6~)
+Breaks: secubox-hub (<< 1.9.6~)
 Description: SecuBox Portal - Web Authentication
  Centralized web authentication for all SecuBox modules.
  .
