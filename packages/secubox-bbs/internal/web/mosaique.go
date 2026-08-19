@@ -15,6 +15,7 @@ package web
 
 import (
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
@@ -64,4 +65,23 @@ func tuileDepuisContenu(c gateway.Contenu) TuileMosaique {
 		}
 	}
 	return t
+}
+
+// assemblerMosaique mêle des Contenu de flux hétérogènes en une grille : ordre
+// par le temps (plus récent d'abord), bornée à `max` tuiles. Un `max` ≤ 0 ne
+// borne pas.
+func assemblerMosaique(contenus []gateway.Contenu, max int) []TuileMosaique {
+	tries := make([]gateway.Contenu, len(contenus))
+	copy(tries, contenus)
+	sort.SliceStable(tries, func(i, j int) bool {
+		return tries[i].PublieLe > tries[j].PublieLe
+	})
+	if max > 0 && len(tries) > max {
+		tries = tries[:max]
+	}
+	tuiles := make([]TuileMosaique, 0, len(tries))
+	for _, c := range tries {
+		tuiles = append(tuiles, tuileDepuisContenu(c))
+	}
+	return tuiles
 }

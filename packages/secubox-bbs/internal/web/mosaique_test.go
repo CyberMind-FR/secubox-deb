@@ -67,3 +67,21 @@ func TestTuileSansImageNAPasDeVignette(t *testing.T) {
 		t.Fatalf("vignette = %q, veut vide", v)
 	}
 }
+
+// La mosaïque mêle des flux hétérogènes en une grille unique : l'ordre est le
+// temps (plus récent d'abord), et la grille est bornée — une page ne charge pas
+// mille tuiles pour en montrer dix.
+func TestMosaiqueTrieDuPlusRecentEtBorne(t *testing.T) {
+	contenus := []gateway.Contenu{
+		{Titre: "vieux", Connecteur: "billets", PublieLe: 100},
+		{Titre: "recent", Connecteur: "mastodon", PublieLe: 300},
+		{Titre: "moyen", Connecteur: "peertube", PublieLe: 200},
+	}
+	tuiles := assemblerMosaique(contenus, 2)
+	if len(tuiles) != 2 {
+		t.Fatalf("len = %d, veut 2 (borne)", len(tuiles))
+	}
+	if tuiles[0].Titre != "recent" || tuiles[1].Titre != "moyen" {
+		t.Fatalf("ordre = [%q, %q], veut [recent, moyen]", tuiles[0].Titre, tuiles[1].Titre)
+	}
+}
