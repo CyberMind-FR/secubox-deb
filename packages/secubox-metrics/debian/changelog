@@ -1,3 +1,38 @@
+secubox-metrics (1.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Référents regroupés au total/famille (① #1059) : le top des domaines
+    référents est désormais agrégé sur toute la famille regroupée, pas seulement
+    par sous-domaine.
+  * Part d'ACCÈS DIRECT (② #1059) : `directs_pct` = visites sans référent sur le
+    total, exposée par vhost et par famille, et affichée dans le PDF
+    (« Referents — X % d'accès direct »). Nouveau compteur `sans_ref`. 3 tests.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 06:04:25 +0200
+
+secubox-metrics (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport QUOTIDIEN en plus de l'hebdomadaire (#1059) : timer à 05:00 qui
+    envoie le bilan de la veille (période « jour ») à gk2@secubox.in, via le
+    même orchestrateur — l'argument passé au module fixe la période, sans
+    dupliquer la config (resoudre_config, 1 test de plus).
+  * Cache matplotlib persistant (CacheDirectory + MPLCONFIGDIR) : plus de
+    reconstruction du cache de polices (~9 s) à chaque tir.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 05:18:44 +0200
+
+secubox-metrics (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport de fréquentation PLANIFIÉ (#1059) : une tâche oneshot agrège la
+    famille de vhosts « anibal-amiot » (.com/.fr/.net, fondus par famille()),
+    en produit le PDF et l'expédie par le relais mail interne à gk2@secubox.in.
+  * Déclenchée par secubox-metrics-rapport.timer (lundi 07:00, Persistent).
+  * Orchestrateur testable (executer/config_planifie, 3 tests) ; matplotlib et
+    SMTP restent hors de la boucle du module (oneshot dédié, Nice=10).
+  * Config déclarative [rapport.planifie] (famille, destinataire, periode) —
+    défauts = la demande #1059, aucun fichier requis.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 05:13:45 +0200
+
 secubox-metrics (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * /health/summary avait une memoire courte, et le module cesse de s'etouffer.

@@ -171,7 +171,22 @@ def _vierge() -> dict:
         "navigateurs": Counter(), "plateformes": Counter(),
         "statuts": Counter(), "chemins": Counter(), "referents": Counter(),
         "sondes": 0, "erreurs": 0, "robots": 0,
+        # #1059 ② — visites de page SANS référent valide (accès direct) : le
+        # complément des `referents`, pour calculer la part de trafic direct.
+        "sans_ref": 0,
     }
+
+
+def _referents_synthese(referents: Counter, sans_ref: int, visites: int,
+                        top_n: Optional[int] = None) -> dict:
+    """① Référents regroupés (top des domaines référents) + ② part d'accès DIRECT.
+
+    `directs_pct` = visites sans référent / total des visites — sur un domaine ou
+    sur une famille regroupée (l'appelant passe des compteurs déjà fusionnés).
+    """
+    top = [{"hote": h, "n": n} for h, n in referents.most_common(top_n)]
+    directs_pct = round(100.0 * sans_ref / visites, 1) if visites else 0.0
+    return {"top": top, "directs_pct": directs_pct}
 
 
 def _compter(s: dict, m: re.Match) -> None:
@@ -209,6 +224,8 @@ def _compter(s: dict, m: re.Match) -> None:
         ref = g["ref"]
         if ref and ref != "-" and "://" in ref:
             s["referents"][ref.split("://", 1)[1].split("/", 1)[0][:80]] += 1
+        else:
+            s["sans_ref"] += 1  # #1059 ② — page sans référent = accès direct
 
 
 class VhostStatsAggregator:
@@ -389,7 +406,7 @@ class VhostStatsAggregator:
         for j in jours:
             for vhost, s in self._jours.get(j, {}).items():
                 t = total[vhost]
-                for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots"):
+                for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
                     t[c] += s[c]
                 for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents"):
                     t[c].update(s[c])
@@ -424,6 +441,10 @@ class VhostStatsAggregator:
                             for c, n in s["chemins"].most_common(self.max_chemins)],
             "top_referents": [{"hote": h, "n": n}
                               for h, n in s["referents"].most_common(self.max_chemins)],
+            # #1059 ② — part d'accès direct (visites sans référent) sur ce
+            # domaine ou cette famille regroupée.
+            "directs_pct": round(100.0 * s["sans_ref"] / s["visites"], 1)
+                           if s["visites"] else 0.0,
         }
 
     def _regrouper(self, brut: dict[str, dict]) -> dict[str, dict]:
@@ -434,7 +455,7 @@ class VhostStatsAggregator:
             f = famille(vhost)
             membres[f].append(vhost)
             t = fam[f]
-            for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots"):
+            for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
                 t[c] += s[c]
             for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents"):
                 t[c].update(s[c])
@@ -463,6 +484,16 @@ class VhostStatsAggregator:
         for v in vhosts:
             nav.update(v["navigateurs"])
             plat.update(v["plateformes"])
+        # #1059 ①② — référents et accès directs remontés au total, depuis les
+        # seaux bruts (les vues rendues n'ont que le top tronqué). `source` est
+        # déjà regroupé par famille quand grouper=True.
+        refs_tot, sans_ref_tot = Counter(), 0
+        for s in source.values():
+            refs_tot.update(s["referents"])
+            sans_ref_tot += s["sans_ref"]
+        synth_refs = _referents_synthese(
+            refs_tot, sans_ref_tot,
+            sum(v["visites"] for v in vhosts), self.max_chemins)
         # Courbe d'ensemble : tous vhosts confondus, du plus ancien au plus
         # recent. Sans elle l'histogramme de la vue liste resterait vide, et il
         # aurait fallu un appel par vhost pour la reconstituer cote navigateur.
@@ -494,6 +525,8 @@ class VhostStatsAggregator:
                 "visiteurs": sum(v["visiteurs"] for v in vhosts),
                 "sondes": sum(v["sondes"] for v in vhosts),
                 "erreurs": sum(v["erreurs"] for v in vhosts),
+                "top_referents": synth_refs["top"],
+                "directs_pct": synth_refs["directs_pct"],
                 "navigateurs": dict(nav.most_common()),
                 "plateformes": dict(plat.most_common()),
             },
@@ -604,7 +637,7 @@ class VhostStatsAggregator:
         for j, vhosts in d.get("jours", {}).items():
             for v, s in vhosts.items():
                 seau = _vierge()
-                for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots"):
+                for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
                     seau[c] = s.get(c, 0)
                 seau["ips"] = set(s.get("ips", []))
                 seau["ips_debordees"] = s.get("ips_debordees", False)

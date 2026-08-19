@@ -1,0 +1,29 @@
+[Unit]
+Description=SecuBox — rapport de fréquentation planifié (famille anibal-amiot → email interne)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1059
+After=network-online.target secubox-metrics.service
+Wants=network-online.target
+
+[Service]
+# oneshot : la tâche produit le PDF et l'expédie, puis sort. Elle est déclenchée
+# par secubox-metrics-rapport.timer, jamais lancée en continu.
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/metrics
+# matplotlib + SMTP sont lourds et bloquants : hors de la boucle du module, et
+# à priorité basse pour ne pas disputer le CPU au trafic live.
+Nice=10
+IOSchedulingClass=idle
+# Cache matplotlib persistant : sans lui, PrivateTmp efface le cache de polices
+# à chaque tir et matplotlib le reconstruit (~9 s de CPU). CacheDirectory crée
+# /var/cache/secubox-metrics-rapport, propriété du service.
+CacheDirectory=secubox-metrics-rapport
+Environment=MPLCONFIGDIR=/var/cache/secubox-metrics-rapport
+# Sans argument → période de la config (le rapport HEBDOMADAIRE).
+ExecStart=/usr/bin/python3 -m api.rapport_planifie
+# Durcissement : la tâche ne lit que des journaux et ne parle qu'au relais mail.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
