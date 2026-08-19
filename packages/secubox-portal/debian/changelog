@@ -1,3 +1,13 @@
+secubox-portal (2.3.1-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1064 : posséder de façon robuste /usr/share/secubox/www/login.html
+    (la page de login de production AVEC l'étape TOTP). Ajout de
+    Replaces/Breaks: secubox-hub (<< 1.9.6~) pour reprendre proprement le
+    chemin qu'un ancien secubox-hub livrait aussi, et empêcher qu'un hub
+    périmé ne le ré-écrase (ce qui verrouillait la board — cf. #1064).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 10:00:00 +0200
+
 secubox-portal (2.3.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

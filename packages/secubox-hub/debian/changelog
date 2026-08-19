@@ -1,3 +1,15 @@
+secubox-hub (1.9.6-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1064 : ne PLUS livrer www/login.html. Ce fichier (login
+    bootstrap sans TOTP) partageait le chemin /usr/share/secubox/www/login.html
+    avec secubox-portal (login de production AVEC TOTP). Un (ré)install de hub
+    écrasait la page TOTP par le bootstrap → admin (TOTP activé) ne pouvait plus
+    finir son login → sessions.json vide → depuis #942 (fail-closed), TOUS les
+    modules rejetaient TOUTES les sessions → verrouillage board-wide.
+    secubox-portal possède désormais seul ce chemin (Replaces/Breaks).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 10:00:00 +0200
+
 secubox-hub (1.9.5-1~bookworm1) bookworm; urgency=high
 
   * CORRECTIF : le webui admin ne force plus de reconnexion côté JS
