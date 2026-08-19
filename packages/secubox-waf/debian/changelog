@@ -1,3 +1,10 @@
+secubox-waf (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * Onglet « Historique » dans /waf/ (#1062) : tendances des menaces par jour +
+    attaquants persistants sur toute la rétention, depuis /api/v1/waf/history.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 19 Aug 2026 07:30:24 +0200
+
 secubox-waf (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport historique des menaces (#1062) : endpoint /history (→
