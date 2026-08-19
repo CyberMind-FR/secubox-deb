@@ -126,6 +126,7 @@ func DepuisPeerTube(base string, limite int) ([]Item, error) {
 			Description string `json:"description"`
 			Duree       int    `json:"duration"`
 			Publie      string `json:"publishedAt"`
+			Thumbnail   string `json:"thumbnailPath"`
 			Privacy     struct {
 				ID int `json:"id"`
 			} `json:"privacy"`
@@ -156,8 +157,12 @@ func DepuisPeerTube(base string, limite int) ([]Item, error) {
 		lien := strings.TrimRight(base, "/") + "/w/" + court
 		// L'adresse d'INTEGRATION, pas celle de la page : on encadre le
 		// lecteur, on n'ouvre pas PeerTube dans un cadre.
+		vignette := ""
+		if v.Thumbnail != "" {
+			vignette = strings.TrimRight(base, "/") + v.Thumbnail
+		}
 		out = append(out, Item{Ref: ref, Titre: v.Nom, Corps: corps,
-			Lien: lien, Date: dateRFC(v.Publie),
+			Lien: lien, Date: dateRFC(v.Publie), Vignette: vignette,
 			Media: strings.TrimRight(base, "/") + "/videos/embed/" + court,
 			Kind:  "video"})
 	}
