@@ -89,6 +89,7 @@ func main() {
 		tls     = flag.Bool("derriere-tls", true, "poser Secure sur les cookies")
 		sauveg  = flag.String("backup-dir", "/var/backups/secubox", "ou deposer les archives")
 		bilSock = flag.String("billets-socket", "/run/secubox/billets.sock", "socket du module billets")
+		bilBase = flag.String("billets-base", "", "origine publique de billets, pour resoudre les adresses relatives du flux ; vide = adresses telles que le flux les rend")
 		conf    = flag.String("conf", "/etc/secubox/secubox.conf", "configuration du core (api.jwt_secret)")
 
 		// La banniere de sante est injectee par le WAF de la board APRES notre
@@ -159,7 +160,7 @@ func main() {
 
 	srv, err := web.New(st, yt, web.Options{
 		Titre: *titre, Secrets: *secrets, DerriereTLS: *tls,
-		BilletsSocket: *bilSock, JWTSecret: secret, BackupDir: *sauveg,
+		BilletsSocket: *bilSock, BilletsBase: *bilBase, JWTSecret: secret, BackupDir: *sauveg,
 		BanniereOrigine: *bannOrig, BanniereHash: *bannHash, BanniereStyle: *bannStyle,
 		PeerTubeOrigine: *ptOrigine, PodcastRacine: *podRacine, PodcastDB: *podDB,
 		MediaOrigines: origines(*mediaOrig),

@@ -732,6 +732,21 @@ video.jointe{max-height:60vh; background:#000}
   .carte-media .vignette { width: 3.25rem; height: 3.25rem; }
 }
 
+/* Vitrine des billets (#1066 phase A) — le contenu REEL du module billets,
+   en liste : un extrait de plusieurs lignes n'a pas sa place dans la grille
+   de cartes-media, pensee pour un titre et une ligne de sous-titre. */
+.billet-pills { margin-bottom: 8px; }
+.billet-titre { font-size: 17px; margin-bottom: 6px; overflow-wrap: anywhere; }
+.billet-resume { margin: 0 0 10px; color: var(--dim); font-size: 13.5px; line-height: 1.55; }
+.billet-pied { align-items: center; gap: 10px; }
+.billet-date { color: var(--dim); font-size: 11.5px; }
+/* Une PANNE du flux (billets.gk2 injoignable) n'est pas la meme chose que
+   « zero billet publié » — les confondre ferait chercher une publication
+   manquee la ou le service est simplement injoignable. Couleur amber, comme
+   les autres avertissements de la charte, jamais coral (reserve aux erreurs
+   qui bloquent une action de l'utilisateur). */
+.panne-billets { border-color: var(--amber); background: var(--amber-soft); }
+
 /* ── hierarchie des sous-salons dans le rail (#1044) ──────────────────────
    Le decalage est porte par une CLASSE : la politique de securite de contenu
    interdit les styles en ligne, et un `style=` calcule serait silencieusement

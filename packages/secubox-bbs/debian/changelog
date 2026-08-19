@@ -1,3 +1,18 @@
+secubox-bbs (0.28.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : la page /billets affiche desormais le CONTENU REEL du module
+    billets (titre, extrait, date, lien "Lire le billet"), lu en direct sur
+    sa socket unix — plus seulement les fils publies depuis le BBS, qui
+    faisaient disparaitre tout ce qui a ete ecrit directement chez billets.
+    Un billet publie depuis un fil du BBS reste signale (croisement par
+    identifiant de billet) avec un lien de retour vers la conversation. Une
+    panne du flux (billets.gk2 injoignable) est dite explicitement, jamais
+    confondue avec « aucun billet publie ». Nouveau drapeau
+    --billets-base (#1066 phase A — affichage seul, pas d'editeur ni de
+    publication ici).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 19:20:00 +0200
+
 secubox-bbs (0.27.1-1~bookworm1) bookworm; urgency=medium
 
   * AletheiaVox : polices auto-hebergees (Cinzel/Inter/JetBrains Mono en
