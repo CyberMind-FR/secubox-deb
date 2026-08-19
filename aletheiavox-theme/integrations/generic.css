@@ -1,0 +1,67 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= generic.css
+ * PATRON D'INTÉGRATION — le point de départ pour habiller une application
+ * tierce en AletheiaVox sans toucher à sa logique.
+ *
+ * La méthode, en deux cas (voir INTEGRATION.md pour le détail) :
+ *
+ *   A. L'appli EXPOSE ses propres variables CSS (custom properties).
+ *      → On les REMAPPE vers les jetons --av-. C'est le cas idéal : une
+ *        poignée de lignes suffit, tout le reste suit. Exemple réel et
+ *        complet : integrations/bbs.css.
+ *
+ *   B. L'appli n'a PAS de variables (classes en dur).
+ *      → On SURCHARGE ses sélecteurs connus pour qu'ils empruntent les jetons
+ *        --av-. Exemples : integrations/mastodon.css, integrations/peertube.css.
+ *
+ * Dans les deux cas : on charge d'abord css/aletheiavox.css (pour les jetons et
+ * les classes av-), PUIS cette feuille d'intégration. On ne modifie JAMAIS le
+ * HTML ni le JS de l'appli — uniquement du CSS chargé par-dessus.
+ *
+ * Ci-dessous, la remise à zéro minimale « appli quelconque → av » : elle aligne
+ * le fond, le texte et les liaisons sur le thème. Adaptez le sélecteur racine
+ * (:root, .app, body…) à l'application cible. */
+
+:root{
+  /* Si l'appli lit ces noms génériques, ils pointent désormais sur AletheiaVox.
+     Sinon, ces lignes sont inertes et sans effet de bord. */
+  --background:var(--av-bg);
+  --foreground:var(--av-text);
+  --surface:var(--av-surface);
+  --border:var(--av-line);
+  --primary:var(--av-primary);
+  --accent:var(--av-accent);
+  --font-body:var(--av-font-body);
+  --font-heading:var(--av-font-display);
+  --font-mono:var(--av-font-mono);
+  --radius:var(--av-radius-md);
+}
+
+/* Fond et police de base, sans toucher au balisage. */
+body{
+  background:var(--av-bg);
+  color:var(--av-text);
+  font-family:var(--av-font-body);
+}
+
+/* Titres en Cinzel, liaisons en bleu primaire, mono en JetBrains. */
+h1,h2,h3{font-family:var(--av-font-display)}
+a{color:var(--av-primary)}
+code,pre,kbd,samp{font-family:var(--av-font-mono)}
+
+/* Boutons génériques → look av sans réécrire leurs classes. À restreindre à un
+   conteneur si l'appli a déjà des boutons stylés qu'on ne veut pas écraser. */
+button:not([class*="av-"]){
+  border:1px solid var(--av-line-strong);
+  background:var(--av-surface-2);
+  color:var(--av-text);
+  border-radius:var(--av-radius-md);
+  padding:.55rem 1.05rem;
+  font-weight:600;
+}

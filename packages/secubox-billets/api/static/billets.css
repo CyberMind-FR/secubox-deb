@@ -1,21 +1,25 @@
 /* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+/* Polices AletheiaVox auto-hebergees (CSP : self). */
+@font-face{font-family:"Cinzel";src:url("/static/fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Inter";src:url("/static/fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/static/fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
    billets — feuille de style « console » : fond blanc, monospace, filets fins,
    angles nets. Le corps des articles reste confortable à lire ; tout le reste
    (chrome, méta, navigation) assume le grain mécanique. */
 
 :root{
-  --fond:#ffffff; --encre:#101418; --gris:#6a7480; --filet:#e2e6ea; --sourd:#f6f8f9;
-  --bleu:#0d3b78; --azur:#1a6fd4; --or:#b8860b; --vert:#1f7a52; --brique:#c0392b;
-  --mono:ui-monospace,"SF Mono","JetBrains Mono","IBM Plex Mono",Menlo,Consolas,monospace;
+  --fond:#ffffff; --encre:#17232d; --gris:#697985; --filet:#d9e0e4; --sourd:#f5f3ec;
+  --bleu:#104a88; --azur:#00a8c8; --or:#c9a84c; --vert:#28765e; --brique:#a73d42;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","IBM Plex Mono",Menlo,Consolas,monospace;
   --lecture:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --corps:"Inter","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --titre:"Cinzel","Cormorant Garamond",Georgia,serif;
 }
-@media(prefers-color-scheme:dark){:root{
-  --fond:#0c0f12; --encre:#e6ebf0; --gris:#8a95a1; --filet:#1e252c; --sourd:#12171c;
-  --azur:#4d9bf0; --or:#d4a017;
-}}
+/* AletheiaVox : fond BLANC par defaut, sombre non impose par OS. */
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--fond);color:var(--encre);font-family:var(--mono);
+body{margin:0;background:var(--fond);color:var(--encre);font-family:var(--corps);
   font-size:14px;line-height:1.55;font-variant-numeric:tabular-nums;
   -webkit-font-smoothing:antialiased}
 a{color:var(--azur);text-decoration:none}
@@ -50,7 +54,7 @@ img{max-width:100%;height:auto;display:block}
 .billet-full{border:0;padding:8px 0 18px}
 /* Le corps d'article : là on lâche le mono pour de la vraie lecture. */
 .e-content{font-family:var(--lecture);font-size:17.5px;line-height:1.66;color:var(--encre)}
-.e-content h1,.e-content h2,.e-content h3{font-family:var(--mono);line-height:1.25;
+.e-content h1,.e-content h2,.e-content h3{font-family:var(--titre);line-height:1.25;
   letter-spacing:-.01em;margin:1.4em 0 .5em}
 .e-content h1{font-size:22px} .e-content h2{font-size:18px} .e-content h3{font-size:15px}
 .e-content p{margin:0 0 1em}

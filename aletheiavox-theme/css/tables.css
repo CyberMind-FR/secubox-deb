@@ -1,0 +1,23 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= tables.css
+ * Tableaux de données. Le conteneur av-table-wrap défile horizontalement de
+ * lui-même (overflow-x:auto + min-width) : sur téléphone, une table large
+ * glisse dans son cadre au lieu de déborder la page entière.
+ *
+ * Variante --technical : la première colonne passe en mono (identifiants,
+ * chemins, adresses) ; les cellules .av-mono alignent les chiffres.
+ */
+.av-table-wrap{overflow-x:auto;border:1px solid var(--av-line);border-radius:var(--av-radius-lg)}
+.av-table{width:100%;border-collapse:collapse;font-size:.9rem;min-width:560px}
+.av-table th{text-align:left;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--av-text-muted);
+  padding:.7rem .9rem;background:var(--av-surface-2);border-bottom:1px solid var(--av-line)}
+.av-table td{padding:.7rem .9rem;border-bottom:1px solid var(--av-line);color:var(--av-text-soft)}
+.av-table tbody tr:last-child td{border-bottom:none} .av-table tbody tr:hover td{background:var(--av-blue-light)}
+.av-table--technical td:first-child{font-family:var(--av-font-mono);color:var(--av-text)}
+.av-table td .av-mono{font-variant-numeric:tabular-nums}

@@ -1,3 +1,14 @@
+secubox-billets (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : vitrine billets alignee sur l'identite AletheiaVox — palette exacte
+    bleu #104a88 / cyan #00a8c8 / dore #c9a84c, titres Cinzel, corps Inter,
+    polices auto-hebergees, fond BLANC par defaut (sombre non impose par l'OS).
+    Sur la base master 0.3.1 (bulle mots-cles repliable + lecteur console deja
+    presents) — corrige un deploiement anterieur bati par erreur sur une base
+    perimee (fix/964 0.1.1).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 20:30:00 +0200
+
 secubox-billets (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Les mots-cles descendent EN BAS de page, dans une bulle repliable

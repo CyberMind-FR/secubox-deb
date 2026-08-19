@@ -1,0 +1,65 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= secubox.css
+ * INTÉGRATION — surfaces SecuBox : deux publics, un seul ADN.
+ *
+ * AletheiaVox habille DEUX familles d'écrans qui partagent la même palette, la
+ * même typographie et les mêmes composants, mais pas la même densité :
+ *
+ *   1. FACE MEMBRE (user-facing) — le BBS, l'annuaire, les fiches de service.
+ *      On LIT. Aération généreuse, largeur de lecture bornée, titres en Cinzel.
+ *      C'est le réglage par défaut du design system : rien à surcharger.
+ *
+ *   2. FACE SYSOP (admin) — tableaux de bord, panneaux de configuration.
+ *      On PILOTE. Même peau, mais plus DENSE : on voit plus d'un coup d'œil,
+ *      on scanne des tables, on bascule des interrupteurs. Mêmes jetons, échelle
+ *      resserrée.
+ *
+ * Ce fichier ne redéfinit AUCUNE couleur : l'ADN (teintes, polices) reste celui
+ * de tokens.css. Il ne fait que resserrer les espacements et les tailles sous
+ * la classe de contexte `.av-admin`, à poser sur le <body> ou le conteneur
+ * racine des écrans d'administration. Charger après css/aletheiavox.css.
+ *
+ * Rappel de la charte SecuBox : les panneaux d'administration « terminal cyan »
+ * (Courier Prime, #00d4ff) décrits dans WEBUI-PANEL-GUIDELINES.md restent leur
+ * propre langage. Ce fichier concerne les surfaces d'admin qui adoptent la peau
+ * AletheiaVox, pas ce terminal historique. */
+
+/* ── FACE MEMBRE : c'est le défaut, on ne fait que le nommer ──────────────── */
+.av-userland .av-main{gap:var(--av-space-16)}
+.av-userland .av-lede,
+.av-userland .av-post-content{max-width:var(--av-reading-width)}
+
+/* ── FACE SYSOP : même ADN, plus dense ───────────────────────────────────── */
+.av-admin{font-size:15px}
+
+/* colonnes plus étroites, gouttières resserrées */
+.av-admin .av-shell{gap:var(--av-space-6);padding:var(--av-space-6) var(--av-space-6)}
+.av-admin .av-main{gap:var(--av-space-8)}
+.av-admin .av-block{gap:var(--av-space-4)}
+
+/* cartes et vignettes compactées */
+.av-admin .av-card{padding:var(--av-space-4);gap:var(--av-space-2)}
+.av-admin .av-service-card{padding:var(--av-space-3)}
+.av-admin .av-stat{padding:var(--av-space-3)}
+.av-admin .av-stat-value{font-size:1.5rem}
+
+/* tables serrées : on en met plus à l'écran */
+.av-admin .av-table th{padding:.45rem .7rem}
+.av-admin .av-table td{padding:.45rem .7rem}
+.av-admin .av-table{font-size:.84rem}
+
+/* boutons d'admin un cran plus compacts */
+.av-admin .av-button{padding:.4rem .8rem;font-size:.86rem}
+
+/* grilles d'admin plus fines (plus de colonnes à largeur égale) */
+.av-admin .av-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:var(--av-space-3)}
+.av-admin .av-dashboard{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+
+/* le titre de section reste lisible mais moins massif en mode dense */
+.av-admin .av-section-title{font-size:1.1rem}
