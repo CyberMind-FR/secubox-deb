@@ -1,3 +1,24 @@
+secubox-hub (1.9.4-1~bookworm1) bookworm; urgency=medium
+
+  * Pastille WAF verte : le health-batch reflète l'état du WAF VIVANT (Go
+    secubox-waf-ng) sur la clé « waf » (alias waf←waf-ng), au lieu du vieux
+    secubox-waf.service (API Python débranchée au cutover, inactive/dead). La
+    sidebar/SOC/bandeau montraient un WAF « dégradé » jaune alors que la
+    protection tourne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 06:43:04 +0200
+
+secubox-hub (1.9.3-1~bookworm1) bookworm; urgency=medium
+
+  * real_ip : truste le proxy LAN (192.168.1.0/24 + .255.0/24) dans
+    secubox-lan-geo.conf (#1060). Sans ça nginx journalisait l'IP de l'amont
+    (192.168.1.200) pour TOUT le monde — « 1 visiteur unique » sur anibal-amiot
+    et le reste. real_ip réécrit désormais $remote_addr depuis X-Forwarded-For
+    (posé par HAProxy forwardfor). NB : le trafic externe cesse d'être classé
+    LAN — les vhosts gatés sur $lan_client se restreignent correctement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 06:06:35 +0200
+
 secubox-hub (1.9.2-1~bookworm1) bookworm; urgency=medium
 
   * Le cache d'etat fait UN SEUL `systemctl list-units` au lieu d'interroger

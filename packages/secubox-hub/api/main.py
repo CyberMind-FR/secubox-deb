@@ -554,6 +554,14 @@ def _refresh_health_batch():
             if mod_id not in modules:
                 modules[mod_id] = {"status": "ok", "msg": "Socket active"}
 
+    # Le WAF est désormais le Go sbxwaf (secubox-waf-ng) ; le vieux
+    # secubox-waf.service (API Python) est débranché depuis le cutover et reste
+    # inactive/dead. La sidebar, la SOC et le bandeau clé encore sur « waf » : on
+    # y reflète l'état du WAF VIVANT (waf-ng), sinon la pastille reste jaune
+    # alors que la protection tourne (secubox-waf-ng active/running).
+    if "waf-ng" in modules:
+        modules["waf"] = dict(modules["waf-ng"])
+
     _cache["health_batch"] = {"modules": modules, "count": len(modules)}
     _cache["health_batch_ts"] = time.time()
 
