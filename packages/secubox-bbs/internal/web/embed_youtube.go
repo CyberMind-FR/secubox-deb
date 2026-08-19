@@ -13,15 +13,20 @@ import (
 )
 
 // embedYouTubeURL rend l'embed « première vue » (youtube-nocookie) d'une URL
-// YouTube. PUR : appelé depuis le rendu du corps, sans réseau. referrerpolicy
-// no-referrer : le fil interne n'a pas à être annoncé au tiers.
+// YouTube. PUR : appelé depuis le rendu du corps, sans réseau.
+//
+// PAS de referrerpolicy=no-referrer : le lecteur youtube-nocookie a besoin de
+// l'ORIGINE de la page pour se configurer — sans elle il affiche « Erreur de
+// configuration du lecteur vidéo ». La politique par défaut
+// (strict-origin-when-cross-origin) n'envoie que l'origine (https://bbs…), pas
+// l'URL du fil ; combinée à -nocookie, c'est le bon compromis vie privée.
 func embedYouTubeURL(u string) (string, bool) {
 	id := ytid.VideoID(u)
 	if id == "" {
 		return "", false
 	}
 	return `<iframe class="sbx-embed sbx-embed-yt" src="https://www.youtube-nocookie.com/embed/` +
-		html.EscapeString(id) + `" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>`, true
+		html.EscapeString(id) + `" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`, true
 }
 
 // embedYouTube rend l'embed selon l'état du tuyau souverain — consommé par
@@ -45,6 +50,6 @@ func embedYouTube(c gateway.Contenu) string {
 		fallthrough
 	default: // pending / inconnu → WAN (première vue)
 		return `<iframe class="sbx-embed" src="https://www.youtube-nocookie.com/embed/` + id +
-			`" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe>`
+			`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`
 	}
 }

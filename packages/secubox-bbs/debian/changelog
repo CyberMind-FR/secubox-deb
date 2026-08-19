@@ -1,3 +1,13 @@
+secubox-bbs (0.26.1-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1056 : l'embed YouTube affichait « Erreur de configuration du
+    lecteur vidéo ». Cause : referrerpolicy=no-referrer privait le lecteur
+    youtube-nocookie de l'origine dont il a besoin pour se configurer. Retiré ;
+    ajout des attributs allow standard. La politique par défaut n'envoie que
+    l'origine (pas l'URL du fil) — vie privée préservée avec -nocookie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 15:00:00 +0200
+
 secubox-bbs (0.26.0-1~bookworm1) bookworm; urgency=medium
 
   * feat #1056 : média intégré souverain. Connecteur youtube qui demande à

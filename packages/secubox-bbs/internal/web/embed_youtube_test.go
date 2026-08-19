@@ -25,6 +25,19 @@ func TestEmbedYouTubeURLNonYoutube(t *testing.T) {
 	}
 }
 
+// Le lecteur youtube-nocookie a besoin de l'origine pour se configurer :
+// referrerpolicy=no-referrer la lui cachait → « Erreur de configuration du
+// lecteur vidéo ». Garde-fou : l'embed ne doit JAMAIS couper le référent.
+func TestEmbedYouTubeNeCoupePasLeReferent(t *testing.T) {
+	h, _ := embedYouTubeURL("https://youtu.be/kFuf9xUInzA")
+	if strings.Contains(h, "no-referrer") {
+		t.Fatalf("referrerpolicy=no-referrer casse le lecteur youtube : %q", h)
+	}
+	if !strings.Contains(h, "allowfullscreen") {
+		t.Fatalf("attributs de lecture attendus : %q", h)
+	}
+}
+
 // LE test qui reproduit la capture utilisateur : une URL nue dans un corps.
 func TestRenderCorpsEmbarqueLecteurYoutube(t *testing.T) {
 	html := string(Render("Il explique ici https://youtu.be/kFuf9xUInzA les agendas"))
