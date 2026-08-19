@@ -1,3 +1,13 @@
+secubox-bbs (0.26.2-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1056 (suite) : l'embed YouTube affichait « Erreur 153 / Erreur
+    de configuration du lecteur vidéo ». Cause réelle : l'en-tête de page
+    `Referrer-Policy: same-origin` coupait le référent vers le tiers, privant le
+    lecteur youtube-nocookie de l'origine. L'iframe surcharge désormais avec
+    referrerpolicy=strict-origin-when-cross-origin (envoie l'origine seule).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 15:45:00 +0200
+
 secubox-bbs (0.26.1-1~bookworm1) bookworm; urgency=high
 
   * CORRECTIF #1056 : l'embed YouTube affichait « Erreur de configuration du
