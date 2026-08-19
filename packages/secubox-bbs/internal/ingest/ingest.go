@@ -13,8 +13,10 @@ package ingest
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
@@ -44,6 +46,9 @@ type Source struct {
 	Categorie  int64
 	Auteur     int64
 	Visibilite store.Visibility
+	// Noeud : identité du nœud d'origine pour la passerelle (#1049). Vide =
+	// nom d'hôte de la board.
+	Noeud string
 }
 
 type Resultat struct {
@@ -67,6 +72,21 @@ func Importer(s *store.Store, src Source, items []Item) (Resultat, error) {
 		// tromper vers « public » met sur internet une liste de titres que
 		// personne n'a decide de publier, et cela ne se rattrape pas.
 		vis = store.VisLocal
+	}
+
+	// #1049 — nœud d'origine (nom d'hôte par défaut) et propriété : le contenu
+	// public de la boîte est « soi » (republiable), le local reste « tiers ».
+	noeud := src.Noeud
+	if noeud == "" {
+		if h, herr := os.Hostname(); herr == nil {
+			noeud = h
+		} else {
+			noeud = "local"
+		}
+	}
+	propriete := gateway.ProprieteTiers
+	if src.Visibilite == store.VisPublic {
+		propriete = gateway.ProprieteSoi
 	}
 
 	for _, it := range items {
@@ -99,6 +119,15 @@ func Importer(s *store.Store, src Source, items []Item) (Resultat, error) {
 			r.Ignores++
 		default:
 			r.Ignores++ // deja connu — le cas NORMAL a partir du second passage
+		}
+
+		// #1049 — peuple AUSSI la passerelle (gateway_contenu), que GatewayRecents
+		// relit pour la mosaïque. Best-effort : un Contenu invalide (adresse
+		// manquante…) est ignoré sans casser l'import du forum ci-dessus. La
+		// déduplication par empreinte rend l'appel idempotent d'un passage à l'autre.
+		c := ContenuDepuisItem(it, src.Nom, noeud, propriete)
+		if _, gerr := s.GatewayEnregistrer(c); gerr != nil {
+			r.Erreurs = append(r.Erreurs, fmt.Sprintf("passerelle %s : %v", bref(it.Titre), gerr))
 		}
 	}
 
