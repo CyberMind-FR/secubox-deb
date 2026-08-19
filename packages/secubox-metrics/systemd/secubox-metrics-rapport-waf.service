@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox — rapport WAF quotidien (menaces bloquées → email interne)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1063
+After=network-online.target secubox-metrics.service secubox-waf.service
+Wants=network-online.target
+
+[Service]
+# Rapport WAF autonome : lit waf-history.json → PDF → mail. oneshot déclenché
+# par le timer quotidien, jamais lancé en continu. matplotlib+SMTP hors boucle.
+Type=oneshot
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/metrics
+Nice=10
+IOSchedulingClass=idle
+CacheDirectory=secubox-metrics-rapport
+Environment=MPLCONFIGDIR=/var/cache/secubox-metrics-rapport
+ExecStart=/usr/bin/python3 -m api.rapport_waf
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
