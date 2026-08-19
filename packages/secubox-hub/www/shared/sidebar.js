@@ -28,7 +28,7 @@
 (function() {
     const MENU_API = '/api/v1/hub/public/menu';
     const BATCH_HEALTH_API = '/api/v1/hub/public/health-batch';
-    const VERSION = 'v2.40.0';
+    const VERSION = 'v2.41.0';
 
     // Resilience settings
     const HEARTBEAT_INTERVAL = 15000;  // 15s - check sidebar health
