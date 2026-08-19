@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/billets"
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ingest"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
@@ -38,6 +39,13 @@ type page struct {
 	Intro, Vide               string
 	Note                      string
 	Cards                     []card
+	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
+	// extrait, date, lien de chaque billet, pas seulement les fils publies
+	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
+	// « aucun billet pour l'instant » : les confondre ferait chercher une
+	// panne de publication la ou billets.gk2 est simplement injoignable.
+	Billets    []billetVue
+	BilletsErr string
 	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
 	// qui compte les messages prives — deux notions distinctes, et les nommer
 	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
@@ -644,8 +652,8 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 			p.Cards = s.cartesBiblio()
 		case "billets":
 			p.Titre, p.Intro = "Billets", "Le BBS est l'atelier, billets la vitrine."
-			p.Vide = "Aucun fil n'a encore été publié en billet."
-			p.Cards = s.cartesBillets()
+			p.Vide = "Aucun billet publié pour l'instant."
+			p.Billets, p.BilletsErr = s.vitrineBillets()
 		}
 		s.rend(w, r, "simple", p)
 	}
@@ -742,45 +750,78 @@ func (s *Server) cartesBiblio() []card {
 	return out
 }
 
-// cartesBillets rend les fils sortis vers la vitrine (#1020).
-func (s *Server) cartesBillets() []card {
-	bs, err := s.st.Billets(100)
+// billetVue est ce qu'affiche la vitrine des billets (#1066 phase A) : le
+// CONTENU REEL du billet — titre, extrait, date, lien — et non plus
+// seulement la carte « publié depuis le BBS » que rendait cartesBillets
+// (qui ne disait jamais que « 6 message(s) repris »).
+type billetVue struct {
+	Titre, Resume, Lien string
+	Date                int64
+	// DepuisFil : vrai quand ce billet correspond a un fil publie DEPUIS le
+	// BBS — croise par BilletID (voir vitrineBillets), pas par URL, qui peut
+	// manquer (#1024). Le lien vers la conversation d'origine n'a de sens que
+	// dans ce cas.
+	DepuisFil bool
+	ThreadID  int64
+	Repris    int
+}
+
+// vitrineBillets lit le flux REEL du module billets (#1066 phase A).
+//
+// cartesBillets ne rendait QUE les fils publies DEPUIS le BBS — une poignee
+// de billets sur les dizaines que porte le module, puisque billets en reçoit
+// aussi ecrits directement chez lui. La page « Billets » du BBS affichait
+// donc deux cartes indigentes a la place d'une vitrine.
+//
+// UNE PANNE DU FLUX EST DITE, PAS MASQUEE. billets.gk2 injoignable et « zero
+// billet publié » ne sont PAS le même état : les confondre ferait chercher un
+// problème de publication là où le service est simplement injoignable — le
+// même piège que documentait deja cartesMedia plus haut.
+func (s *Server) vitrineBillets() ([]billetVue, string) {
+	if s.opt.BilletsSocket == "" {
+		return nil, "module billets non configuré."
+	}
+	items, err := ingest.DepuisBillets(s.opt.BilletsSocket, s.opt.BilletsBase)
 	if err != nil {
-		return []card{{Title: "Lecture impossible",
-			Sub: "Les billets n'ont pas pu être lus : " + err.Error()}}
+		return nil, "le flux de billets n'a pas pu être lu : " + err.Error()
 	}
-	out := make([]card, 0, len(bs))
-	for _, b := range bs {
-		titre := b.Titre
-		if titre == "" {
-			titre = "(fil supprimé)"
+	// CROISEMENT PAR BilletID, l'identifiant que billets a rendu a la
+	// publication (voir internal/billets.Client.Publier -> Resultat.BilletID,
+	// enregistre par store.MarkPublished) — jamais par URL, absente pour deux
+	// billets de gk2 (#1024) : un croisement par URL les aurait donc ratés.
+	origine := map[string]store.BilletPublie{}
+	if locaux, err := s.st.Billets(500); err == nil {
+		for _, b := range locaux {
+			if b.BilletID != "" {
+				origine[b.BilletID] = b
+			}
 		}
-		sous := strconv.Itoa(b.Repris) + " message(s) repris"
-		if b.Retenus > 0 {
-			// « 6 repris, 2 retenus » dit à l'auteur que la publication n'a pas
-			// tout emporté, avant qu'il ne s'en aperçoive autrement.
-			sous += ", " + strconv.Itoa(b.Retenus) + " retenu(s) en local"
-		}
-		c := card{
-			Title:    titre,
-			Sub:      sous,
-			Link:     "/t/" + strconv.FormatInt(b.ThreadID, 10),
-			LinkText: "Voir le fil",
-			Pills:    []pill{{Class: "ok", Text: "publié"}},
-			Glyphe:   "📰",
-		}
-		// L'ADRESSE PEUT MANQUER : les deux billets de gk2 ont un identifiant
-		// mais pas d'URL. Plutôt que de fabriquer un lien mort, on renvoie vers
-		// le fil et on DIT que l'adresse manque — un lien qui échoue coûte plus
-		// cher qu'une absence signalée.
-		if b.URL != "" {
-			c.Link, c.LinkText = b.URL, "Lire le billet"
-		} else {
-			c.Pills = append(c.Pills, pill{Class: "warn", Text: "adresse manquante"})
-		}
-		out = append(out, c)
 	}
-	return out
+	out := make([]billetVue, 0, len(items))
+	for _, it := range items {
+		v := billetVue{Titre: it.Titre, Resume: extrait(it.Corps, 320),
+			Lien: it.Lien, Date: it.Date}
+		if o, ok := origine[it.Ref]; ok {
+			v.DepuisFil, v.ThreadID, v.Repris = true, o.ThreadID, o.Repris
+		}
+		out = append(out, v)
+	}
+	return out, ""
+}
+
+// extrait tronque un corps sur une frontiere de mot, pour ne pas terminer un
+// résumé en plein milieu d'une syllabe.
+func extrait(s string, n int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	coupe := string(r[:n])
+	if i := strings.LastIndexAny(coupe, " \n"); i > n/2 {
+		coupe = coupe[:i]
+	}
+	return strings.TrimRight(coupe, " \n") + "…"
 }
 
 // glypheDeSource traduit le genre annonce par une passerelle media.

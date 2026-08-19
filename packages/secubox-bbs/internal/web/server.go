@@ -55,7 +55,13 @@ type Options struct {
 	// bouton « publier » repond « module non configure » plutot que d'echouer
 	// au moment de l'appel.
 	BilletsSocket string
-	JWTSecret     string
+	// BilletsBase : origine publique de billets, pour transformer une adresse
+	// relative (« /b/slug ») du flux JSON en lien cliquable (#1066 phase A).
+	// Vide, la vitrine affiche les adresses telles que le flux les rend — un
+	// lien relatif pointerait vers le BBS lui-meme, ce qui serait pire qu'une
+	// adresse laissee telle quelle.
+	BilletsBase string
+	JWTSecret   string
 	// BackupDir : ou deposer les archives declenchees depuis le panneau.
 	BackupDir string
 	// BanniereOrigine / BanniereHash : la banniere de sante que le WAF de la

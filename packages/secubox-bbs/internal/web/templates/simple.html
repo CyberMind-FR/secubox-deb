@@ -7,6 +7,30 @@
 
 {{define "corps"}}
 <div class="ph"><div><h1 class="serif">{{.Titre}}</h1><p>{{.Intro}}</p></div></div>
+{{if eq .Vue "billets"}}
+  {{/* Vitrine REELLE du module billets (#1066 phase A) : une LISTE, pas la
+       grille de cartes-media — un billet porte un extrait de plusieurs
+       lignes, que la grille aurait coupe court. */}}
+  {{if .BilletsErr}}<div class="card pad panne-billets">
+    ⚠ {{.BilletsErr}}
+  </div>
+  {{else if .Billets}}<div class="stack">{{range .Billets}}
+    <div class="card pad billet-carte">
+      {{if .DepuisFil}}<div class="row billet-pills">
+        <span class="pill p-billet">✦ depuis un fil BBS</span>
+        {{if .Repris}}<span class="pill p-local">{{.Repris}} message(s) repris</span>{{end}}
+      </div>{{end}}
+      <h3 class="serif billet-titre">{{.Titre}}</h3>
+      {{if .Resume}}<p class="billet-resume">{{.Resume}}</p>{{end}}
+      <div class="row billet-pied">
+        {{if .Date}}<span class="billet-date mono">{{date .Date}}</span>{{end}}
+        {{if .Lien}}<a class="btn sm" href="{{.Lien}}" target="_blank" rel="noopener">Lire le billet</a>{{end}}
+        {{if .DepuisFil}}<a class="btn sm" href="/t/{{.ThreadID}}">Voir le fil</a>{{end}}
+      </div>
+    </div>
+  {{end}}</div>
+  {{else}}<div class="card pad sb0455c2">{{.Vide}}</div>{{end}}
+{{else}}
 {{if .Cards}}<div class="grid g2">{{range .Cards}}
   <div class="card pad carte-media">
     {{if or .Vignette .Glyphe}}<div class="vignette" aria-hidden="true">
@@ -25,6 +49,7 @@
   </div>
 {{end}}</div>{{else}}
 <div class="card pad sb0455c2">{{.Vide}}</div>
+{{end}}
 {{end}}
 {{if .Note}}<div class="note m s92c18f6">{{.Note}}</div>{{end}}
 {{end}}
