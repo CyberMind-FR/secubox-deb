@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import sys
+from collections import Counter
 import tomllib
 from pathlib import Path
 from typing import Optional
@@ -64,21 +65,52 @@ def executer_waf(lire_hist, construire_pdf, envoyer, cfg: Optional[dict] = None)
 
 
 # ── PDF ────────────────────────────────────────────────────────────────────
-def _serie_menaces(hist: dict, jours: int) -> list:
-    """Les N derniers jours en [{jour, total}] (du plus ancien au plus récent)."""
+# Palette catégorielle : couches distinctes et lisibles sur fond blanc.
+# (rouge attaque en tête, puis cyan/ambre/violet/vert, gris pour « autres ».)
+_PALETTE_CAT = ["#ff4466", "#00a8cc", "#f59e0b", "#8b5cf6",
+                "#10b981", "#ec4899", "#6b7b8b"]
+
+
+def _serie_categories(hist: dict, jours: int, top_n: int = 6):
+    """Prépare l'empilement : les N derniers jours × les top catégories globales.
+
+    Retourne (labels_jours, {categorie: [valeurs/jour]}, ordre_categories). Les
+    catégories hors top_n sont fondues dans « autres » (dernière couche, grise)."""
     noms = sorted(hist.get("jours", {}).keys())[-jours:]
-    return [{"jour": j, "total": hist["jours"][j].get("total", 0)} for j in noms]
+    globales: Counter = Counter()
+    for j in noms:
+        for c, n in (hist["jours"][j].get("categories") or {}).items():
+            globales[c] += n
+    top = [c for c, _ in globales.most_common(top_n)]
+    series = {c: [] for c in top}
+    autres = []
+    for j in noms:
+        cats = hist["jours"][j].get("categories") or {}
+        for c in top:
+            series[c].append(cats.get(c, 0))
+        autres.append(sum(v for k, v in cats.items() if k not in top))
+    ordre = list(top)
+    if any(autres):
+        series["autres"] = autres
+        ordre.append("autres")
+    return [j[5:] for j in noms], series, ordre
 
 
-def _histo_menaces(serie: list) -> bytes:
-    """Barres : menaces bloquées par jour."""
+def _histo_menaces(hist: dict, jours: int) -> bytes:
+    """Histogramme EMPILÉ des menaces par jour, une couche colorée par catégorie."""
     import rapport as R
-    fig, ax = R.plt.subplots(figsize=(7.2, 2.4))
-    jours = [s["jour"][5:] for s in serie]
-    vals = [s["total"] for s in serie]
-    ax.bar(jours, vals, color=R.ROUGE, width=.62)
+    labels, series, ordre = _serie_categories(hist, jours)
+    fig, ax = R.plt.subplots(figsize=(7.2, 2.8))
+    bas = [0] * len(labels)
+    for i, cat in enumerate(ordre):
+        vals = series[cat]
+        ax.bar(labels, vals, bottom=bas, width=.62, label=cat,
+               color=_PALETTE_CAT[i % len(_PALETTE_CAT)])
+        bas = [b + v for b, v in zip(bas, vals)]
     ax.set_ylabel("menaces", fontsize=8, color=R.GRIS)
     ax.tick_params(labelsize=7, colors=R.GRIS)
+    if ordre:
+        ax.legend(fontsize=6.5, frameon=False, ncol=3, loc="upper left")
     for bord in ("top", "right"):
         ax.spines[bord].set_visible(False)
     ax.grid(axis="y", alpha=.18)
@@ -108,10 +140,9 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
     pdf.ln(3)
     pdf.set_text_color(26, 36, 48)
 
-    serie = _serie_menaces(hist, jours)
-    if serie:
-        R._titre(pdf, "Menaces bloquees par jour")
-        pdf.image(io.BytesIO(_histo_menaces(serie)), w=190)
+    if hist.get("jours"):
+        R._titre(pdf, "Menaces bloquees par jour (par categorie)")
+        pdf.image(io.BytesIO(_histo_menaces(hist, jours)), w=190)
         pdf.ln(3)
 
     if resume["categories"]:
