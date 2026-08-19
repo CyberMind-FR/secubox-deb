@@ -1,3 +1,12 @@
+secubox-bbs (0.27.1-1~bookworm1) bookworm; urgency=medium
+
+  * AletheiaVox : polices auto-hebergees (Cinzel/Inter/JetBrains Mono en
+    /static/fonts, la CSP interdit l'externe) — fidelite exacte de la maquette.
+    Correctifs contraste sur blanc : bouton primaire en bleu (au lieu du cyan),
+    pastille "nouveau" recoloree, bandeau media bleu->cyan.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 17:40:00 +0200
+
 secubox-bbs (0.27.0-1~bookworm1) bookworm; urgency=medium
 
   * feat : peau AletheiaVox appliquee a l'interface membre. Fond BLANC par
