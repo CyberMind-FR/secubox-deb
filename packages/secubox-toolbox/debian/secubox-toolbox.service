@@ -3,7 +3,6 @@
 Description=SecuBox-Deb ToolBoX captive portal (FastAPI/Uvicorn)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/475
 After=network.target nftables.service
-Wants=secubox-toolbox-mitm.service
 
 [Service]
 Type=simple

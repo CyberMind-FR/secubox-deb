@@ -1,4 +1,1 @@
 # Phase 5 (#495) — install LXC artifacts
-lxc/toolbox-mitm.conf.template       usr/share/secubox/toolbox/lxc/
-lxc/toolbox-mitm.service.template    usr/share/secubox/toolbox/lxc/
-sbin/secubox-toolbox-lxc-provision   usr/sbin/
