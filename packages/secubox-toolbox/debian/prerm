@@ -4,7 +4,6 @@ set -e
 case "$1" in
   remove|upgrade|deconfigure)
     if [ -d /run/systemd/system ]; then
-      systemctl stop secubox-toolbox-mitm.service || true
       systemctl stop secubox-toolbox.service || true
     fi
     ;;

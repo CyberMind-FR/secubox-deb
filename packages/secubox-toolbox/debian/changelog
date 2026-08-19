@@ -1,3 +1,17 @@
+secubox-toolbox (2.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * Excision complète de Python mitmproxy (#1054). La chaîne d'inspection est
+    100 % Go (sbxwaf/sbxmitm) depuis le cutover ; le reliquat Python était mort.
+    Retirés : la dépendance `mitmproxy`, les units secubox-toolbox-mitm.service
+    + secubox-toolbox-mitm-wg{,-worker@,-dynreload}, les drop-ins .service.d,
+    mitmproxy_addons/, les templates LXC toolbox-mitm{,-wg}, les scripts
+    lxc-provision + mitm-wg-launch, et toute la logique mitm du postinst/prerm
+    (provision LXC, enable/restart). `Wants=` du mitm retiré du service portail.
+  * Conservé : conf/mitm-bypass-seed.conf (lu par le sbxmitm Go, BypassSeedPath)
+    et sbxmitm-policyctl (Go). Permet enfin `apt purge mitmproxy`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 06:17:50 +0200
+
 secubox-toolbox (2.8.1-1~bookworm1) bookworm; urgency=medium
 
   * #823 Sentinel surfaces — surface the sbx-sentinel compromise-detection
