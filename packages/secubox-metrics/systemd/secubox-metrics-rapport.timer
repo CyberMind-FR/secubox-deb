@@ -1,0 +1,14 @@
+[Unit]
+Description=SecuBox — déclenche le rapport de fréquentation hebdomadaire
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1059
+
+[Timer]
+# Chaque lundi matin : le bilan de la semaine écoulée part dans la boîte interne.
+OnCalendar=Mon *-*-* 07:00:00
+# Étale les réveils pour ne pas empiler tous les timers à l'heure pile.
+RandomizedDelaySec=30m
+# Si la box était éteinte à l'heure dite, on rattrape au démarrage suivant.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

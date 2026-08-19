@@ -23,6 +23,13 @@ import sys
 import tomllib
 from pathlib import Path
 
+# Comme api/main.py : rendre les modules voisins (rapport, vhost_stats)
+# importables quand la tâche tourne en « python3 -m api.rapport_planifie ».
+# Sans effet en test (conftest a déjà posé api/ sur le path).
+_ici = str(Path(__file__).resolve().parent)
+if _ici not in sys.path:
+    sys.path.insert(0, _ici)
+
 # Même fichier que rapport.py / le reste du module.
 CONF = Path("/etc/secubox/metrics.toml")
 

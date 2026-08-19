@@ -46,3 +46,8 @@ override_dh_install:
 	    debian/secubox-metrics/lib/systemd/system/secubox-geoipupdate.service
 	install -D -m 0644 systemd/secubox-geoipupdate.timer \
 	    debian/secubox-metrics/lib/systemd/system/secubox-geoipupdate.timer
+	# #1059 — rapport de fréquentation planifié (oneshot + timer hebdo).
+	install -D -m 0644 systemd/secubox-metrics-rapport.service \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-rapport.service
+	install -D -m 0644 systemd/secubox-metrics-rapport.timer \
+	    debian/secubox-metrics/lib/systemd/system/secubox-metrics-rapport.timer

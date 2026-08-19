@@ -1,3 +1,16 @@
+secubox-metrics (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport de fréquentation PLANIFIÉ (#1059) : une tâche oneshot agrège la
+    famille de vhosts « anibal-amiot » (.com/.fr/.net, fondus par famille()),
+    en produit le PDF et l'expédie par le relais mail interne à gk2@secubox.in.
+  * Déclenchée par secubox-metrics-rapport.timer (lundi 07:00, Persistent).
+  * Orchestrateur testable (executer/config_planifie, 3 tests) ; matplotlib et
+    SMTP restent hors de la boucle du module (oneshot dédié, Nice=10).
+  * Config déclarative [rapport.planifie] (famille, destinataire, periode) —
+    défauts = la demande #1059, aucun fichier requis.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 05:13:45 +0200
+
 secubox-metrics (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * /health/summary avait une memoire courte, et le module cesse de s'etouffer.

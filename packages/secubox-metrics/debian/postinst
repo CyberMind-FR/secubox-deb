@@ -16,6 +16,10 @@ if [ "$1" = "configure" ]; then
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload || true
         systemctl try-restart secubox-metrics.service || true
+        # #1059 — activer le timer du rapport hebdomadaire (le .service est
+        # oneshot, déclenché par le timer : on n'active QUE le timer). enable
+        # --now le pose ET l'arme sans attendre un reboot.
+        systemctl enable --now secubox-metrics-rapport.timer || true
     fi
 fi
 
