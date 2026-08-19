@@ -27,6 +27,7 @@ Usage:
   agent-worktree.sh sync   [<N>]
   agent-worktree.sh finish [--dry-run]
   agent-worktree.sh clean  <N> [--force]
+  agent-worktree.sh sweep  [--dry-run]
   agent-worktree.sh --help
 
 Environment:
@@ -264,6 +265,58 @@ cmd_clean() {
   echo "removed: $wt_path branch=$branch"
 }
 
+# cmd_sweep — prune EVERY agent worktree whose branch is already merged into
+# origin/master, in one pass. Removes the worktree + local branch + remote
+# branch. Skips anything with uncommitted work (tracked OR untracked) and keeps
+# unmerged branches. This is the missing step that let ~35 merged branches pile
+# up (master fell behind the board → stale-base builds → the #1064 regression).
+# Run it after PRs merge. --dry-run to preview, --force is NOT offered on
+# purpose: a dirty worktree is never swept.
+cmd_sweep() {
+  local dry_run=0
+  while (($#)); do
+    case "$1" in
+      --dry-run) dry_run=1; shift ;;
+      *) echo "sweep: unexpected arg: $1" >&2; return 1 ;;
+    esac
+  done
+
+  "$GIT_BIN" fetch --prune origin --quiet 2>/dev/null || true
+
+  local removed=0 kept=0 dirty=0
+  local wt="" br=""
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*) wt="${line#worktree }" ;;
+      "branch refs/heads/"*)
+        br="${line#branch refs/heads/}"
+        case "$br" in
+          feature/*|fix/*|docs/*|chore/*) : ;;
+          *) wt=""; br=""; continue ;;
+        esac
+        if "$GIT_BIN" merge-base --is-ancestor "$br" origin/master 2>/dev/null; then
+          if [[ -n "$("$GIT_BIN" -C "$wt" status --porcelain 2>/dev/null)" ]]; then
+            echo "sweep: SKIP (uncommitted) $br"; dirty=$((dirty+1)); wt=""; br=""; continue
+          fi
+          if (( dry_run )); then
+            echo "sweep: would remove $br"; removed=$((removed+1)); wt=""; br=""; continue
+          fi
+          "$GIT_BIN" worktree remove "$wt" 2>/dev/null \
+            || "$GIT_BIN" worktree remove --force "$wt"
+          "$GIT_BIN" branch -D "$br" >/dev/null 2>&1 || true
+          "$GIT_BIN" push origin --delete "$br" >/dev/null 2>&1 || true
+          echo "sweep: removed $br"; removed=$((removed+1))
+        else
+          kept=$((kept+1))
+        fi
+        wt=""; br=""
+        ;;
+    esac
+  done < <("$GIT_BIN" worktree list --porcelain)
+
+  echo "sweep: removed=$removed kept(unmerged)=$kept skipped(uncommitted)=$dirty"
+}
+
 main() {
   local sub="${1:-}"
   shift || true
@@ -274,6 +327,7 @@ main() {
     sync)   cmd_sync   "$@" ;;
     finish) cmd_finish "$@" ;;
     clean)  cmd_clean  "$@" ;;
+    sweep)  cmd_sweep  "$@" ;;
     *) echo "unknown sub-command: $sub" >&2 ; usage >&2 ; return 1 ;;
   esac
 }
