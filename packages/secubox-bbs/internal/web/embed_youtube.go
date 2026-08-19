@@ -7,56 +7,16 @@ package web
 
 import (
 	"html"
-	"net/url"
-	"regexp"
-	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ytid"
 )
-
-var reIDYouTube = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
-
-// idVideoYouTube extrait l'identifiant canonique (11 car.) d'une URL YouTube,
-// ou "" si ce n'en est pas une. Miroir Go de ytid.py côté ytsas : le join du
-// tuyau souverain se fait par CET identifiant, jamais par le titre.
-func idVideoYouTube(u string) string {
-	p, err := url.Parse(u)
-	if err != nil {
-		return ""
-	}
-	h := strings.TrimPrefix(strings.ToLower(p.Hostname()), "www.")
-	switch h {
-	case "youtube.com", "m.youtube.com":
-		if p.Path == "/watch" {
-			if v := p.Query().Get("v"); reIDYouTube.MatchString(v) {
-				return v
-			}
-			return ""
-		}
-		for _, pf := range []string{"/shorts/", "/embed/", "/v/"} {
-			if strings.HasPrefix(p.Path, pf) {
-				v := strings.SplitN(strings.TrimPrefix(p.Path, pf), "/", 2)[0]
-				if reIDYouTube.MatchString(v) {
-					return v
-				}
-				return ""
-			}
-		}
-		return ""
-	case "youtu.be":
-		v := strings.SplitN(strings.TrimPrefix(p.Path, "/"), "/", 2)[0]
-		if reIDYouTube.MatchString(v) {
-			return v
-		}
-	}
-	return ""
-}
 
 // embedYouTubeURL rend l'embed « première vue » (youtube-nocookie) d'une URL
 // YouTube. PUR : appelé depuis le rendu du corps, sans réseau. referrerpolicy
 // no-referrer : le fil interne n'a pas à être annoncé au tiers.
 func embedYouTubeURL(u string) (string, bool) {
-	id := idVideoYouTube(u)
+	id := ytid.VideoID(u)
 	if id == "" {
 		return "", false
 	}

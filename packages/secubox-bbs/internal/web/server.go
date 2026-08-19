@@ -260,6 +260,11 @@ func (s *Server) frameSrc() string {
 	// #1056 — la board integre YouTube : le rendu du corps emet un iframe
 	// youtube-nocookie. Toujours autorise, sinon l'embed serait bloque.
 	ajoute("https://www.youtube-nocookie.com")
+	// En pratique CE `if` NE SE DECLENCHE PLUS : youtube-nocookie est ajoutee
+	// inconditionnellement ci-dessus, donc `ok` a toujours au moins une
+	// entree. Gardee pour le jour ou cet ajout deviendrait lui aussi
+	// conditionnel — le defaut effectif aujourd'hui EST youtube-nocookie,
+	// pas 'none'.
 	if len(ok) == 0 {
 		return "'none'"
 	}
@@ -332,7 +337,10 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := w.Header()
-		// La politique interdit tout script en ligne et toute origine externe.
+		// La politique interdit tout script en ligne et toute origine externe,
+		// SAUF UNE EXCEPTION VOULUE : youtube-nocookie dans `frame-src`
+		// (#1056, voir frameSrc) — un cadre n'est pas un script, et c'est
+		// precisement la distinction que `media` documente plus haut.
 		// Le rendu Markdown ne peut deja pas produire de balise <script> ; ceci
 		// est la seconde barriere, celle qui tient si la premiere cede.
 		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
