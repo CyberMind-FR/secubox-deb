@@ -39,6 +39,51 @@ THREATS_LOG = os.environ.get("SECUBOX_WAF_THREATS_LOG") or next(
     "/var/log/secubox/waf/waf-threats.log",
 )
 STATS_CACHE = "/tmp/secubox/waf-stats.json"
+
+# ── historique des menaces (#1062) : tendances multi-jours depuis les logs
+# TOURNÉS (gzip compris), agrégat de fond servi par /history. Scan complet et
+# coûteux → jamais sur le chemin requête : cache disque, TTL 1 h, recalcul en
+# thread (comme /stats). L'import tolère les deux contextes de montage.
+import glob as _glob
+try:
+    from api.historique import agreger_historique as _agreger_historique
+except ImportError:  # standalone (WorkingDirectory=…/waf)
+    from historique import agreger_historique as _agreger_historique
+
+HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
+_history_lock = threading.Lock()
+
+
+def _history_cached(max_age: int = 3600) -> dict:
+    """Historique agrégé, servi depuis un cache disque (1 h). Recalcule sous
+    verrou si périmé, en balayant waf-threats.log* (courant + tournés)."""
+    p = Path(HISTORY_CACHE)
+
+    def _frais():
+        try:
+            return p.exists() and (time.time() - p.stat().st_mtime) < max_age
+        except OSError:
+            return False
+
+    if _frais():
+        try:
+            return json.loads(p.read_text())
+        except (OSError, ValueError):
+            pass
+    with _history_lock:
+        if _frais():
+            try:
+                return json.loads(p.read_text())
+            except (OSError, ValueError):
+                pass
+        data = _agreger_historique(sorted(_glob.glob(THREATS_LOG + "*")))
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(data))
+        except OSError:
+            pass
+        return data
+
 # Phase 7+ (#509) — disk-persisted counters + log byte position for
 # the double-buffered cache.  Survives aggregator restart, populated
 # incrementally by the warm refresh loop.
@@ -802,6 +847,13 @@ app = FastAPI(title="SecuBox WAF", lifespan=_lifespan)
 
 
 # === Public Endpoints ===
+
+@app.get("/history")
+async def waf_history():
+    """Tendances des menaces par jour + top attaquants persistants, sur toute la
+    fenêtre de rétention des logs (courant + tournés). Cache disque 1 h."""
+    return await asyncio.to_thread(_history_cached)
+
 
 @app.get("/status")
 async def status():

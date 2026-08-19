@@ -1,3 +1,11 @@
+secubox-metrics (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Section « Menaces WAF bloquées » dans le rapport PDF (#1062) : lit
+    waf-history.json → total sur la période + top catégories + attaquants
+    persistants. Absente si l'historique WAF n'existe pas (dégradation propre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 07:30:24 +0200
+
 secubox-metrics (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * Référents regroupés au total/famille (① #1059) : le top des domaines

@@ -17,6 +17,7 @@ module entier, ce qui a deja coute des 504 ailleurs sur cette boite.
 """
 
 import io
+import json
 import smtplib
 import tomllib
 from datetime import datetime
@@ -170,6 +171,40 @@ def _titre(pdf: _Page, texte: str) -> None:
     pdf.set_text_color(26, 36, 48)
 
 
+# ── bilan WAF (#1062) : menaces bloquées, depuis l'historique agrégé par sbxwaf ──
+WAF_HISTORIQUE = Path("/var/lib/secubox/waf/waf-history.json")
+
+
+def _lire_waf_historique(chemin: Path = WAF_HISTORIQUE) -> Optional[dict]:
+    """Lit l'agrégat d'historique WAF (waf-history.json). None si absent."""
+    try:
+        return json.loads(chemin.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def _resume_waf(hist: Optional[dict], jours: int = 7) -> Optional[dict]:
+    """Résume les N derniers jours : total menaces, top catégories, top attaquants."""
+    if not hist or not hist.get("jours"):
+        return None
+    noms = sorted(hist["jours"].keys())[-jours:]
+    total = 0
+    cats: dict = {}
+    for j in noms:
+        d = hist["jours"][j]
+        total += d.get("total", 0)
+        for c, n in (d.get("categories") or {}).items():
+            cats[c] = cats.get(c, 0) + n
+    if not total:
+        return None
+    return {
+        "jours": len(noms),
+        "total": total,
+        "categories": sorted(cats.items(), key=lambda x: -x[1])[:6],
+        "top_ips": list((hist.get("top_ips") or {}).items())[:5],
+    }
+
+
 def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
     """Assemble le PDF. Bloquant : a lancer dans un thread."""
     pdf = _Page()
@@ -276,6 +311,29 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
             pdf.cell(24, 5, f"{v['sondes']:,}".replace(",", " "), align="R")
             pdf.cell(30, 5, f"{v['erreurs']:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
+
+    # #1062 — bilan des menaces WAF bloquées sur la période (board-wide).
+    _waf = _resume_waf(_lire_waf_historique(),
+                       7 if vue.get("periode") == "semaine" else
+                       30 if vue.get("periode") == "mois" else 1)
+    if _waf:
+        _titre(pdf, _txt(f"Menaces WAF bloquees - {_waf['total']:,} sur "
+                         f"{_waf['jours']} jour(s)").replace(",", " "))
+        pdf.set_font("Helvetica", "", 8)
+        for c, n in _waf["categories"]:
+            pdf.cell(80, 5, _txt(c))
+            pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
+                     new_x="LMARGIN", new_y="NEXT")
+        if _waf["top_ips"]:
+            pdf.ln(1)
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.cell(0, 5, _txt("Attaquants persistants :"),
+                     new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "", 8)
+            for ip, n in _waf["top_ips"]:
+                pdf.cell(80, 5, _txt(ip))
+                pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
+                         new_x="LMARGIN", new_y="NEXT")
 
     sortie = pdf.output()
     return bytes(sortie)
