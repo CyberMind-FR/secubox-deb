@@ -51,6 +51,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Guard — no shared-path login.html regression (#1064)
+        run: |
+          set -euo pipefail
+          # secubox-portal owns /usr/share/secubox/www/login.html (the production
+          # TOTP login). If secubox-hub ships its own www/login.html again, a hub
+          # (re)install clobbers portal's page → admin can't finish MFA →
+          # sessions.json empties → fail-closed #942 rejects every session →
+          # board-wide lockout. Fail the build before that ever ships.
+          if [ -e packages/secubox-hub/www/login.html ]; then
+            echo "::error file=packages/secubox-hub/www/login.html::secubox-hub must NOT ship www/login.html — secubox-portal owns it (#1064). Delete this file; the bootstrap sysop panel lives at www/bbs/, the login belongs to portal."
+            exit 1
+          fi
+          echo "guard OK: secubox-hub does not ship login.html"
+
       - name: Find packages + build flat matrix
         id: find
         env:
