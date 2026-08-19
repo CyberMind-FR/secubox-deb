@@ -170,13 +170,11 @@ button.danger,.danger{border-color:var(--brique);color:var(--brique)}
 
 /* ── mots-clés : bulle repliable en bas de page ────────── */
 .motscles{margin:28px 0 0;border:1px solid var(--filet);border-radius:2px;background:var(--sourd)}
-.motscles>summary{cursor:pointer;list-style:none;padding:9px 13px;font-size:10.5px;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--gris);display:flex;
-  align-items:center;gap:8px;user-select:none}
+.motscles>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:8px;padding:8px 16px;font-size:13px;font-weight:600;letter-spacing:.01em;border:1px solid var(--filet);border-radius:999px;background:var(--fond);color:var(--bleu)}
 .motscles>summary::-webkit-details-marker{display:none}
-.motscles>summary::before{content:"▸";color:var(--azur);transition:transform .12s;display:inline-block}
-.motscles[open]>summary::before{transform:rotate(90deg)}
-.motscles>summary:hover{color:var(--encre)}
+.motscles>summary::after{content:"▾";color:var(--azur);margin-left:2px}
+.motscles[open]>summary::after{content:"▴"}
+.motscles>summary:hover{border-color:var(--azur);color:var(--azur)}
 .motscles .mc-n{margin-left:auto;font-size:10px;color:var(--gris);border:1px solid var(--filet);
   border-radius:2px;padding:0 6px}
-.motscles .tagbar{padding:2px 13px 13px;margin:0}
+.motscles .tagbar{margin-top:10px;padding:12px;border:1px solid var(--filet);border-radius:14px;background:var(--fond);box-shadow:0 8px 30px rgba(20,45,60,.10);max-height:50vh;overflow:auto}
