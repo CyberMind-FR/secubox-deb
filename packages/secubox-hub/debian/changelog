@@ -1,3 +1,13 @@
+secubox-hub (1.9.4-1~bookworm1) bookworm; urgency=medium
+
+  * Pastille WAF verte : le health-batch reflète l'état du WAF VIVANT (Go
+    secubox-waf-ng) sur la clé « waf » (alias waf←waf-ng), au lieu du vieux
+    secubox-waf.service (API Python débranchée au cutover, inactive/dead). La
+    sidebar/SOC/bandeau montraient un WAF « dégradé » jaune alors que la
+    protection tourne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 06:43:04 +0200
+
 secubox-hub (1.9.3-1~bookworm1) bookworm; urgency=medium
 
   * real_ip : truste le proxy LAN (192.168.1.0/24 + .255.0/24) dans
