@@ -28,8 +28,8 @@ img{max-width:100%;height:auto;display:block}
 
 /* ── ossature ──────────────────────────────────────────── */
 .site-header{max-width:760px;margin:0 auto;padding:20px 18px 14px;
-  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--encre)}
-.site-title{font-size:16px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--encre)}
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:2px solid var(--or)}
+.site-title{font-family:var(--titre);font-size:21px;font-weight:700;letter-spacing:.015em;color:var(--bleu)}
 .site-title:hover{text-decoration:none;color:var(--bleu)}
 .tagline{font-size:12px;color:var(--gris)}
 #main{max-width:760px;margin:0 auto;padding:20px 18px 40px}
@@ -38,8 +38,8 @@ img{max-width:100%;height:auto;display:block}
 
 /* ── barre de tags ─────────────────────────────────────── */
 .tagbar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px}
-.tag-chip{font-size:11px;letter-spacing:.03em;padding:3px 9px;border:1px solid var(--filet);
-  border-radius:2px;color:var(--gris);white-space:nowrap}
+.tag-chip{font-size:11.5px;letter-spacing:.02em;padding:4px 12px;border:1px solid var(--filet);
+  border-radius:999px;color:var(--gris);white-space:nowrap}
 .tag-chip:hover{border-color:var(--azur);color:var(--azur);text-decoration:none}
 .tag-chip.on{border-color:var(--bleu);color:var(--fond);background:var(--bleu)}
 .tag-chip.sm{font-size:10px;padding:1px 7px}
@@ -48,9 +48,9 @@ img{max-width:100%;height:auto;display:block}
 .tag-active{font-size:12px;color:var(--gris);margin:-8px 0 16px}
 
 /* ── flux de billets ───────────────────────────────────── */
-.h-feed{display:flex;flex-direction:column}
-.billet{padding:22px 0;border-bottom:1px solid var(--filet)}
-.billet:first-child{border-top:1px solid var(--encre)}
+.h-feed{display:flex;flex-direction:column;gap:18px;max-width:760px;margin:22px auto;padding:0 18px}
+.billet{padding:20px 24px;border:1px solid var(--filet);border-radius:16px;background:var(--fond);box-shadow:0 1px 2px rgba(20,45,60,.05),0 5px 20px rgba(20,45,60,.06)}
+.billet:first-child{border-top:1px solid var(--filet)}
 .billet-full{border:0;padding:8px 0 18px}
 /* Le corps d'article : là on lâche le mono pour de la vraie lecture. */
 .e-content{font-family:var(--lecture);font-size:17.5px;line-height:1.66;color:var(--encre)}
