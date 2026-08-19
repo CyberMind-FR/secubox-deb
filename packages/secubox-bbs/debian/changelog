@@ -1,3 +1,14 @@
+secubox-bbs (0.27.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : peau AletheiaVox appliquee a l'interface membre. Fond BLANC par
+    defaut (le sombre n'est plus imposé par l'OS, il reste un choix explicite
+    via [data-theme=dark]). Palette remappee sur le vocabulaire natif du BBS —
+    bleu #104a88 (structure), cyan #00a8c8 (connexions), dore #c9a84c (accent),
+    vert/orange/rouge semantiques. Polices Cinzel/Inter/JetBrains Mono (repli
+    systeme : la CSP interdit les polices externes ; auto-heberger Cinzel = suivi).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 17:00:00 +0200
+
 secubox-bbs (0.26.2-1~bookworm1) bookworm; urgency=high
 
   * CORRECTIF #1056 (suite) : l'embed YouTube affichait « Erreur 153 / Erreur

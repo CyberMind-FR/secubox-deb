@@ -13,48 +13,42 @@
  * les membres lisent, le sysop pilote.
  */
 :root{
-  --ink:#0d1b24; --paper:#eef4f7; --panel:#ffffff; --line:#d3dee4;
-  --soft:#e7eff4; --dim:#5b727f; --text:#12242e;
-  --coral:#f2543d; --coral-soft:#ffe4de;
-  --mint:#0fa47a;  --mint-soft:#d6f5ea;
-  --amber:#d98a00; --amber-soft:#ffeecc;
-  --violet:#6d4aff;--violet-soft:#e8e2ff;
-  --sky:#1f7fd4;   --sky-soft:#dbecfb;
-  --pink:#d8318a;  --pink-soft:#ffe0f0;
-  --shadow:0 1px 2px rgba(13,27,36,.06), 0 8px 24px -12px rgba(13,27,36,.28);
-  --radius:14px;
+  /* AletheiaVox — clair par defaut, fond BLANC. Bleu structure, cyan relie,
+     dore souligne. Mappe sur le vocabulaire natif du BBS (sky/violet/pink…). */
+  --ink:#17232d; --paper:#ffffff; --panel:#ffffff; --line:#d9e0e4;
+  --soft:#f5f3ec; --dim:#697985; --text:#17232d;
+  --coral:#a73d42; --coral-soft:#f6e7e8;
+  --mint:#28765e;  --mint-soft:#e4f2eb;
+  --amber:#c87832; --amber-soft:#fbf0e4;
+  --violet:#00a8c8;--violet-soft:#dff5f7;   /* cyan : connexions / interactions */
+  --sky:#104a88;   --sky-soft:#e8f2f8;       /* bleu : structure primaire */
+  --pink:#c9a84c;  --pink-soft:#f5ecd2;      /* dore : accent, souligne */
+  --shadow:0 1px 2px rgba(20,45,60,.05), 0 4px 18px rgba(20,45,60,.08);
+  --radius:12px;
 }
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
-  --ink:#f2f6f8; --paper:#0a151d; --panel:#12242e; --line:#223d4b;
-  --soft:#182f3b; --dim:#8aa3b0; --text:#e6eef2;
-  --coral:#ff7a63; --coral-soft:#3a1d18;
-  --mint:#3ddba7;  --mint-soft:#0e3329;
-  --amber:#f5b445; --amber-soft:#3a2a0c;
-  --violet:#a48cff;--violet-soft:#241c44;
-  --sky:#5fb0f2;   --sky-soft:#0f2c42;
-  --pink:#ff7ac0;  --pink-soft:#3d1229;
-  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
-}}
+/* AletheiaVox : fond BLANC par defaut, meme sur OS sombre. Le sombre n'est
+   JAMAIS imposé par l'OS — c'est un choix explicite via [data-theme="dark"]. */
 :root[data-theme="dark"]{
-  --ink:#f2f6f8; --paper:#0a151d; --panel:#12242e; --line:#223d4b;
-  --soft:#182f3b; --dim:#8aa3b0; --text:#e6eef2;
-  --coral:#ff7a63; --coral-soft:#3a1d18;
-  --mint:#3ddba7;  --mint-soft:#0e3329;
-  --amber:#f5b445; --amber-soft:#3a2a0c;
-  --violet:#a48cff;--violet-soft:#241c44;
-  --sky:#5fb0f2;   --sky-soft:#0f2c42;
-  --pink:#ff7ac0;  --pink-soft:#3d1229;
-  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  /* AletheiaVox sombre = bleu-nuit, jamais noir pur ; accents conserves. */
+  --ink:#eef3f6; --paper:#0f1a24; --panel:#14212d; --line:#2a3b49;
+  --soft:#1a2836; --dim:#8598a5; --text:#eef3f6;
+  --coral:#e07d82; --coral-soft:#3a1d1e;
+  --mint:#5fce9f;  --mint-soft:#14302a;
+  --amber:#e0b06a; --amber-soft:#3a2a12;
+  --violet:#33c4de;--violet-soft:#123642;
+  --sky:#5aa0e0;   --sky-soft:#173049;
+  --pink:#d9bd6a;  --pink-soft:#2b2718;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
   background:var(--paper); color:var(--text); min-height:100vh;
-  font-family:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  font-family:"Inter","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
   font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
 }
-.serif{font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif}
-.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.86em}
+.serif{font-family:"Cinzel","Cormorant Garamond","Iowan Old Style",Palatino,Georgia,serif;letter-spacing:.005em}
+.mono{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.86em}
 h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-.02em}
 a{color:inherit}
 button{font:inherit;color:inherit;cursor:pointer}
