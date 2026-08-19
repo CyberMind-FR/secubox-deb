@@ -68,3 +68,17 @@ def test_config_planifie_lit_les_surcharges(monkeypatch, tmp_path):
     assert c["famille"] == "autre"
     assert c["destinataire"] == "x@y.z"
     assert c["periode"] == "mois"
+
+
+def test_resoudre_config_argv_surcharge_la_periode():
+    base = {"famille": "anibal-amiot", "destinataire": "gk2@secubox.in",
+            "periode": "semaine"}
+    # Sans argument : la période de la config (le rapport hebdo).
+    assert rp.resoudre_config([], base)["periode"] == "semaine"
+    # Avec argument : il prime — c'est ainsi que le service quotidien demande
+    # « jour » sans dupliquer la config.
+    q = rp.resoudre_config(["jour"], base)
+    assert q["periode"] == "jour"
+    # La famille et le destinataire ne bougent pas.
+    assert q["famille"] == "anibal-amiot"
+    assert q["destinataire"] == "gk2@secubox.in"

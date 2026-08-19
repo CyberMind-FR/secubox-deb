@@ -20,6 +20,7 @@ if [ "$1" = "configure" ]; then
         # oneshot, déclenché par le timer : on n'active QUE le timer). enable
         # --now le pose ET l'arme sans attendre un reboot.
         systemctl enable --now secubox-metrics-rapport.timer || true
+        systemctl enable --now secubox-metrics-rapport-quotidien.timer || true
     fi
 fi
 
