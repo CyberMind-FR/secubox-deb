@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 
 from engine import AuthRequired, EngineError, Engine
 from library import Library
+from ytid import video_id as _video_id
 
 # --------------------------------------------------------------------- config
 DOWNLOAD_DIR = os.environ.get("YTSAS_DOWNLOAD_DIR", "/data/ytsas")
@@ -183,6 +184,29 @@ def list_items():
             r["job_error"] = None
         out.append(r)
     return out
+
+
+@app.get(API + "/resolve")
+async def resolve(url: str):
+    """Rend la meilleure source LOCALE pour une URL YouTube, et enfile le
+    rapatriement si rien n'est encore là. Ne bloque jamais sur un download."""
+    vid = _video_id(url)
+    if not vid:
+        return {"video_id": None, "state": "unsupported"}
+    for row in library.list():
+        if row.get("id") == vid:
+            if row.get("peertube_url"):
+                return {"video_id": vid, "state": "mirror",
+                        "peertube_url": row["peertube_url"], "title": row.get("title")}
+            if row.get("complete"):
+                return {"video_id": vid, "state": "cache",
+                        "stream_url": API + "/stream/" + vid, "title": row.get("title")}
+            return {"video_id": vid, "state": "pending", "title": row.get("title")}
+    try:
+        await engine.add(url)          # enfile fetch (asynchrone, non bloquant)
+    except Exception:                  # noqa: BLE001 — 403/cookies (#1051) : reste pending
+        pass
+    return {"video_id": vid, "state": "pending"}
 
 
 @app.get(API + "/files/{id}")
