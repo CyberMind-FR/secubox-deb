@@ -7,6 +7,7 @@ package connectors
 
 import (
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ytid"
 )
 
 // YouTube : connecteur souverain. Il ne télécharge rien lui-même — il DEMANDE à
@@ -25,7 +26,9 @@ func NouveauYouTube(cl *ClientYtsas, noeud string) *YouTube {
 func (y *YouTube) Manifeste() gateway.Manifeste {
 	return gateway.Manifeste{
 		Nom: "youtube", Version: "1.0",
-		Capacites: []string{gateway.CapResoudre, gateway.CapTirer},
+		// #1056 revue (M3) : Tirer() est un stub muet (retourne toujours
+		// rien) — l'annoncer capable de tirer serait mentir au registre.
+		Capacites: []string{gateway.CapResoudre},
 		AuthKind:  gateway.AuthCookies, // #1048/#1051 : ytsas détient le coffre
 		MotifsURL: []string{`(?i)youtube\.com/watch`, `(?i)youtu\.be/`, `(?i)youtube\.com/shorts/`},
 	}
@@ -40,17 +43,25 @@ func (y *YouTube) Resoudre(u string) (gateway.Contenu, error) {
 	if err != nil || etat == "" || etat == "unsupported" {
 		etat = "pending" // ytsas HS ou muet → WAN direct
 	}
+	// M2 : ytsas HS rend un video_id vide (Resolution{} zero-value) — sans ce
+	// repli, l'embed WAN de secours partirait sans id et resterait blanc.
+	// ytid.VideoID est PUR (pas de reseau) : le calculer ici ne coute rien
+	// de plus qu'un ytsas déjà injoignable.
+	vid := res.VideoID
+	if vid == "" {
+		vid = ytid.VideoID(u)
+	}
 	c := gateway.Contenu{
 		Genre:        gateway.GenreVideo,
 		Titre:        res.Titre,
 		SourceURL:    u, // failover : jamais jeté
 		Connecteur:   "youtube",
-		RefNative:    res.VideoID,
+		RefNative:    vid,
 		Propriete:    gateway.ProprieteTiers,
 		NoeudOrigine: y.noeud,
 		Metadonnees: map[string]string{
 			"source":   "youtube",
-			"video_id": res.VideoID,
+			"video_id": vid,
 			"etat":     etat,
 		},
 	}
