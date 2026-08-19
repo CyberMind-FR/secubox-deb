@@ -20,7 +20,7 @@ func banc(t *testing.T) (*Server, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	srv, err := New(s, Options{Titre: "Banc", Secrets: filepath.Join(root, "secrets")})
+	srv, err := New(s, nil, Options{Titre: "Banc", Secrets: filepath.Join(root, "secrets")})
 	if err != nil {
 		t.Fatal(err)
 	}
