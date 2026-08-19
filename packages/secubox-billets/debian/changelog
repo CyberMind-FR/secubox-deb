@@ -1,3 +1,11 @@
+secubox-billets (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * style : vitrine billets en cartes editoriales AletheiaVox (au lieu de la
+    liste console a filets) — entrees en cartes arrondies, puces pilules, titre
+    Cinzel, filet dore. Plus lisible et coherent avec la maquette.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 21:15:00 +0200
+
 secubox-billets (0.4.0-1~bookworm1) bookworm; urgency=medium
 
   * feat : vitrine billets alignee sur l'identite AletheiaVox — palette exacte
