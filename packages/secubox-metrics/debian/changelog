@@ -1,3 +1,21 @@
+secubox-metrics (1.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * Histogramme WAF EMPILÉ par catégorie (#1063) : la barre menaces/jour est
+    désormais une pile colorée (scanners/recon/honeypot/lfi/… + « autres »),
+    une couche par catégorie + légende. La composition est visible, pas juste
+    le total.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 07:56:20 +0200
+
+secubox-metrics (1.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport WAF DÉDIÉ quotidien (#1063) : tâche oneshot + timer 05:30 qui lit
+    waf-history.json (#1062) → PDF WAF-focus (tendance/jour, catégories,
+    attaquants persistants) → gk2@secubox.in, séparé du rapport de fréquentation.
+    Orchestrateur testable (executer_waf/config_waf, 3 tests).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 07:50:12 +0200
+
 secubox-metrics (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * Section « Menaces WAF bloquées » dans le rapport PDF (#1062) : lit
