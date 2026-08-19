@@ -278,11 +278,15 @@ func liens(s string) string {
 		url := s[i+j+2 : i+j+k]
 		b.WriteString(s[:i])
 		if lienSur(url) {
-			// noopener : une page ouverte depuis un lien peut sinon manipuler
-			// celle qui l'a ouverte. noreferrer : l'adresse d'un fil interne
-			// n'a pas a etre transmise au site visite.
-			b.WriteString(`<a href="` + template.HTMLEscapeString(url) +
-				`" rel="noopener noreferrer">` + texte + `</a>`)
+			if emb, ok := embedYouTubeURL(url); ok {
+				b.WriteString(emb)
+			} else {
+				// noopener : une page ouverte depuis un lien peut sinon manipuler
+				// celle qui l'a ouverte. noreferrer : l'adresse d'un fil interne
+				// n'a pas a etre transmise au site visite.
+				b.WriteString(`<a href="` + template.HTMLEscapeString(url) +
+					`" rel="noopener noreferrer">` + texte + `</a>`)
+			}
 		} else {
 			// Ni lien, ni suppression : le lecteur voit ce qui etait ecrit et
 			// peut juger lui-meme.
@@ -332,7 +336,11 @@ func adressesNues(s string) string {
 			fin--
 		}
 		if lienSur(url) && len(url) > 10 {
-			b.WriteString(`<a href="` + url + `" rel="noopener noreferrer">` + url + `</a>`)
+			if emb, ok := embedYouTubeURL(url); ok {
+				b.WriteString(emb)
+			} else {
+				b.WriteString(`<a href="` + url + `" rel="noopener noreferrer">` + url + `</a>`)
+			}
 		} else {
 			b.WriteString(url)
 		}
