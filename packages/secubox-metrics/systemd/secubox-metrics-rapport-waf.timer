@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox — déclenche le rapport WAF quotidien (05:30)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1063
+
+[Timer]
+# 05:30 : décalé du rapport de fréquentation (05:00) pour ne pas empiler les
+# deux rendus matplotlib en même temps.
+OnCalendar=*-*-* 05:30:00
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

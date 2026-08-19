@@ -21,6 +21,7 @@ if [ "$1" = "configure" ]; then
         # --now le pose ET l'arme sans attendre un reboot.
         systemctl enable --now secubox-metrics-rapport.timer || true
         systemctl enable --now secubox-metrics-rapport-quotidien.timer || true
+        systemctl enable --now secubox-metrics-rapport-waf.timer || true
     fi
 fi
 
