@@ -1,0 +1,339 @@
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+     Source-Disclosed License — All rights reserved except as expressly granted.
+     See LICENCE-CMSD-1.0.md for terms.
+     SecuBox-Deb :: secubox-ytsas :: www/ytsas/public.html — CyberMind https://cybermind.fr
+     PUBLIC player — this is what the ytsas LXC serves at "/" on its own vhost
+     (ytsas.gk2.secubox.in): recuperator (paste a link → fetch) + a read-only
+     library list + play. Styled after the torrent SAS public webui
+     (packages/secubox-torrent/www/torrent/index.html — cyan hybrid-dark
+     terminal look) but intentionally standalone (no /shared/sidebar.js admin
+     chassis: no logout/settings/nav — this page is reachable without an
+     admin session). The full admin dashboard (stat grid + cookie vault +
+     remove/purge controls) is www/ytsas/index.html, served ONLY by the
+     aggregator at admin.gk2/ytsas/ — install-lxc.sh swaps public.html in as
+     the LXC's index.html so the two never collide. No cookie upload, no
+     destructive actions here — add + list + play (+ conserve, safe) only. -->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecuBox — YT-SAS</title>
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+  :root {
+    --p31-dim: #6b7b8b; --bg-dark: #0d1117; --bg-card: rgba(30, 40, 55, 0.8);
+    --bg-row:  rgba(20, 30, 45, 0.6); --border: rgba(100, 150, 200, 0.2);
+    --text: #e8e6d9; --cyan: #00d4ff; --red: #ff4466; --orange: #ff9944;
+    --yellow: #ffcc00; --green: #00dd44; --blue: #4488ff; --purple: #a371f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier Prime', 'Courier New', monospace;
+    background: var(--bg-dark); color: var(--text); margin: 0; min-height: 100vh;
+    background-image: linear-gradient(135deg, rgba(10,15,25,.96), rgba(15,25,40,.92));
+  }
+  a { color: var(--cyan); }
+  /* Standalone page — no fixed sidebar (this is the public LXC-served root,
+     not the admin chassis), so .main is simply centered. */
+  .main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.2rem 4rem; }
+  .header { margin-bottom: 1.2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+  .header h1 { margin: 0; font-size: 1.4rem; color: var(--cyan); text-shadow: 0 0 10px var(--cyan); }
+  .toolbar { display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.2rem; flex-wrap: wrap; gap: .6rem; }
+  .sub { font-size: .72rem; color: var(--p31-dim); letter-spacing: .05em; }
+  .btn-group { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .btn { font-family: inherit; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+    text-decoration: none; color: var(--text); background: var(--bg-row); border: 1px solid var(--border);
+    border-radius: 6px; padding: .5rem .9rem; cursor: pointer; transition: border-color .15s, box-shadow .15s;
+    display: inline-flex; align-items: center; gap: .35rem; }
+  .btn:hover { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0,212,255,.4); }
+  .btn.primary { border-color: var(--cyan); color: var(--cyan); background: rgba(0,212,255,.12); }
+  .btn.good { border-color: var(--green); color: var(--green); background: rgba(0,221,68,.12); }
+  .btn.sm { padding: .3rem .55rem; font-size: .68rem; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: .75rem; margin-bottom: 1.2rem; }
+  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: .75rem; text-align: center; backdrop-filter: blur(10px); }
+  .stat-card .value { font-size: 1.4rem; font-weight: bold; text-shadow: 0 0 10px currentColor;
+    font-variant-numeric: tabular-nums; color: var(--text); }
+  .stat-card .label { font-size: .6rem; color: var(--p31-dim); letter-spacing: .1em; margin-top: .2rem; text-transform: uppercase; }
+  .stat-card.cyan .value { color: var(--cyan); }
+  .stat-card.green .value { color: var(--green); }
+  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .62rem;
+    text-transform: uppercase; letter-spacing: .06em; border: 1px solid var(--border); }
+  .badge.ready { border-color: var(--green); color: var(--green); }
+  .badge.pending { border-color: var(--orange); color: var(--orange); }
+  .badge.mirror { border-color: var(--purple); color: var(--purple); }
+  .badge.err { border-color: var(--red); color: var(--red); }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.1rem 1.2rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+  .card h3 { margin: 0 0 .8rem; font-size: .95rem; color: var(--cyan); letter-spacing: .03em; }
+  .card .hint { color: var(--p31-dim); font-size: .72rem; margin: .1rem 0 .7rem; line-height: 1.5; }
+  .add-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .add-row input[type=text] { flex: 1 1 20rem; }
+  input[type=text] { font-family: inherit; background: var(--bg-row); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); padding: .6rem .7rem; font-size: .85rem; }
+  input[type=text]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 6px rgba(0,212,255,.25); }
+  .item { background: var(--bg-row); border-left: 3px solid var(--border); border-radius: 5px;
+    padding: .6rem .8rem; margin-bottom: .5rem; }
+  .item.ready { border-left-color: var(--green); }
+  .item.pending { border-left-color: var(--orange); }
+  .item.mirror { border-left-color: var(--purple); }
+  .item.err { border-left-color: var(--red); }
+  .item-top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .item .title { color: var(--text); font-size: .88rem; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 26rem; }
+  .item .meta { color: var(--p31-dim); font-size: .68rem; margin-top: .3rem; font-variant-numeric: tabular-nums; }
+  .item .row-actions { display: flex; gap: .35rem; flex: none; flex-wrap: wrap; align-items: center; }
+  .progress-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: .35rem; }
+  .progress-bar .fill { height: 100%; background: var(--cyan); transition: width .3s; }
+  .player { margin-top: .55rem; padding-top: .5rem; border-top: 1px solid var(--border); display: none; }
+  .player.open { display: block; }
+  .player video, .player iframe { width: 100%; max-height: 60vh; aspect-ratio: 16/9; background: #000;
+    border-radius: 6px; border: 0; }
+  .muted { color: var(--p31-dim); font-size: .8rem; }
+  .toast { position: fixed; bottom: 1rem; right: 1rem; max-width: 22rem; background: var(--cyan);
+    color: #07121a; padding: .65rem 1rem; border-radius: 6px; font-size: .78rem; opacity: 0;
+    pointer-events: none; transition: opacity .2s; z-index: 50; }
+  .toast.show { opacity: 1; pointer-events: auto; }
+  .toast.error { background: var(--red); color: #fff; }
+  .toast .x { float: right; margin-left: .6rem; cursor: pointer; font-weight: bold; }
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-thumb { background: var(--p31-dim); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+  @media (max-width: 768px) {
+    .item .title { max-width: 12rem; }
+  }
+</style>
+</head>
+<body class="hybrid-dark">
+<main class="main">
+  <header class="header">
+    <h1>🎞️ YT-SAS</h1>
+  </header>
+  <div class="toolbar">
+    <div class="sub" id="sub">Colle un lien, on récupère la vidéo — puis tu la regardes ici · chargement…</div>
+    <div class="btn-group">
+      <button class="btn" id="btnRefresh">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="grid" id="statGrid">
+    <div class="stat-card cyan"><div class="value" id="statPending">–</div><div class="label">⏳ En cours</div></div>
+    <div class="stat-card green"><div class="value" id="statReady">–</div><div class="label">▶ Prêtes</div></div>
+  </div>
+
+  <div class="card">
+    <h3>➕ Récupérer une vidéo</h3>
+    <div class="add-row">
+      <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=… (tout site supporté)">
+      <button class="btn primary" id="btnAdd">➕ Récupérer</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📚 Vidéos</h3>
+    <div id="list"><p class="muted">Chargement…</p></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var API = '/api/v1/ytsas';
+  var openPlayers = Object.create(null); // id -> bool (inline player expanded)
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[<>&"]/g, function (c) {
+      return { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c];
+    });
+  }
+
+  // progress may arrive as 0..1 fraction or 0..100 percent — normalise to %.
+  function pctOf(p) {
+    if (p == null || !isFinite(p)) return null;
+    return p <= 1 ? Math.round(p * 100) : Math.round(p);
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = 'toast'; }, 3000);
+  }
+  function errorToast(msg) {
+    var t = document.getElementById('toast');
+    clearTimeout(toastTimer);
+    t.innerHTML = '';
+    t.appendChild(document.createTextNode('⚠ ' + msg));
+    var x = document.createElement('span');
+    x.className = 'x';
+    x.textContent = '✕';
+    x.addEventListener('click', function () { t.className = 'toast'; });
+    t.appendChild(x);
+    t.className = 'toast show error';
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = Object.assign({}, opts.headers);
+    if (opts.body != null && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    return fetch(path, Object.assign({}, opts, { headers: headers })).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
+        return body;
+      });
+    });
+  }
+
+  function renderList(rows) {
+    var el = document.getElementById('list');
+    rows = Array.isArray(rows) ? rows : (rows && rows.items) || [];
+    var pending = 0, ready = 0;
+
+    if (!rows.length) {
+      el.innerHTML = '<p class="muted">Rien pour l\'instant — colle un lien ci-dessus.</p>';
+      document.getElementById('statPending').textContent = '0';
+      document.getElementById('statReady').textContent = '0';
+      return;
+    }
+
+    el.innerHTML = rows.map(function (r) {
+      var id = r.id;
+      var pct = pctOf(r.progress);
+      var complete = r.complete === true || r.job_status === 'complete' || r.job_status === 'done' || pct === 100;
+      var errored = r.job_status === 'error' || !!r.error;
+      var hasMirror = complete && !!r.peertube_url;
+      var playerOpen = !!openPlayers[id];
+
+      if (errored) { /* not counted */ }
+      else if (!complete) pending++;
+      else ready++;
+
+      var cls = errored ? 'err' : (!complete ? 'pending' : (hasMirror ? 'mirror' : 'ready'));
+
+      var stateBadge = errored
+        ? '<span class="badge err">⚠ erreur</span>'
+        : !complete
+          ? '<span class="badge pending">⏳ en cours' + (pct != null ? ' ' + pct + '%' : '') + '</span>'
+          : hasMirror
+            ? '<span class="badge mirror">◎ miroir</span>'
+            : '<span class="badge ready">▶ prêt</span>';
+
+      // Safe, non-destructive "conserve" (mirror to PeerTube/Lyrion) — no
+      // remove/purge here, this page never deletes anything.
+      var conserveHtml = '';
+      if (complete && !errored && !hasMirror && r.job_status !== 'conserving') {
+        conserveHtml = '<button class="btn sm" data-action="conserve" title="Conserver (miroir PeerTube/Lyrion)">💾 Conserver</button>';
+      }
+
+      var playBtn = (complete && !errored)
+        ? '<button class="btn sm" data-action="toggle-play" title="Lire">' +
+            (playerOpen ? '⏹ Fermer' : '▶ Lire') + '</button>'
+        : '';
+
+      var body;
+      if (errored) {
+        body = '<div class="meta" style="color:var(--red)">⚠ échec de récupération</div>';
+      } else if (!complete) {
+        var pfill = pct == null ? 0 : pct;
+        body = '<div class="progress-bar"><div class="fill" style="width:' + pfill + '%"></div></div>' +
+          '<div class="meta">⏳ récupération ' + (pct == null ? '…' : pct + '%') + '</div>';
+      } else {
+        body = '';
+      }
+
+      var playerHtml = '<div class="player' + (playerOpen ? ' open' : '') + '" data-role="player">' +
+        (playerOpen
+          ? (hasMirror
+              ? '<iframe src="' + esc(r.peertube_url) + '" allowfullscreen loading="lazy"></iframe>'
+              : '<video controls autoplay preload="metadata" src="' + esc(API + '/stream/' + encodeURIComponent(id)) + '"></video>')
+          : '') +
+        '</div>';
+
+      return (
+        '<div class="item ' + cls + '" data-id="' + esc(id) + '">' +
+          '<div class="item-top">' +
+            '<div class="title" title="' + esc(r.title || r.url || id) + '">' +
+              esc(r.title || r.url || ('#' + id)) + '</div>' +
+            '<div class="row-actions">' +
+              stateBadge + playBtn + conserveHtml +
+            '</div>' +
+          '</div>' +
+          body +
+          playerHtml +
+        '</div>'
+      );
+    }).join('');
+
+    document.getElementById('statPending').textContent = String(pending);
+    document.getElementById('statReady').textContent = String(ready);
+  }
+
+  function refreshList() {
+    return api(API + '/list').then(function (rows) {
+      renderList(rows);
+      document.getElementById('sub').textContent = 'Colle un lien, on récupère la vidéo — puis tu la regardes ici';
+    }).catch(function (e) {
+      document.getElementById('list').innerHTML = '<p class="muted">Erreur de chargement.</p>';
+      console.error(e);
+    });
+  }
+
+  function onListClick(ev) {
+    var actionEl = ev.target.closest('[data-action]');
+    if (!actionEl) return;
+    var itemEl = ev.target.closest('.item');
+    if (!itemEl) return;
+    var id = itemEl.getAttribute('data-id');
+    var action = actionEl.getAttribute('data-action');
+
+    if (action === 'toggle-play') {
+      openPlayers[id] = !openPlayers[id];
+      refreshList();
+      return;
+    }
+    if (action === 'conserve') {
+      api(API + '/conserve/' + encodeURIComponent(id), { method: 'POST' }).then(function () {
+        toast('💾 Conservation en cours…');
+        refreshList();
+      }).catch(function (e) { errorToast('Conserver : ' + e.message); });
+      return;
+    }
+  }
+
+  function addVideo() {
+    var input = document.getElementById('urlInput');
+    var btn = document.getElementById('btnAdd');
+    var val = input.value.trim();
+    if (!val) { errorToast('Lien requis'); return; }
+    btn.disabled = true;
+    api(API + '/add', { method: 'POST', body: JSON.stringify({ url: val }) })
+      .then(function (meta) {
+        input.value = '';
+        toast('➕ Ajouté : ' + (meta.title || meta.id || 'ok'));
+        refreshList();
+      })
+      .catch(function (e) { errorToast('Échec de la récupération : ' + e.message); })
+      .finally(function () { btn.disabled = false; });
+  }
+
+  document.getElementById('btnRefresh').addEventListener('click', refreshList);
+  document.getElementById('btnAdd').addEventListener('click', addVideo);
+  document.getElementById('urlInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') addVideo();
+  });
+  document.getElementById('list').addEventListener('click', onListClick);
+
+  refreshList();
+  setInterval(refreshList, 15000);
+})();
+</script>
+</body>
+</html>
