@@ -110,6 +110,9 @@ type Options struct {
 	// peuvent pas se connecter — ils n'ont pas de mot de passe local, et c'est
 	// le comportement voulu plutot qu'un repli silencieux.
 	AuthSocket string
+	// YtsasOrigine : origine de la SAS ytsas (http://IP:8091). Alimente
+	// media-src pour le <video> local d'une video YouTube rapatriee (#1056).
+	YtsasOrigine string
 }
 
 type Server struct {
@@ -248,6 +251,9 @@ func (s *Server) frameSrc() string {
 	for _, o := range s.opt.FrameOrigines {
 		ajoute(o)
 	}
+	// #1056 — la board integre YouTube : le rendu du corps emet un iframe
+	// youtube-nocookie. Toujours autorise, sinon l'embed serait bloque.
+	ajoute("https://www.youtube-nocookie.com")
 	if len(ok) == 0 {
 		return "'none'"
 	}
@@ -325,7 +331,7 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 		// est la seconde barriere, celle qui tient si la premiere cede.
 		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
 		// c'est-a-dire exactement ce contre quoi elle protege.
-		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, ""))
+		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, s.opt.YtsasOrigine))
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("X-Frame-Options", "DENY")
