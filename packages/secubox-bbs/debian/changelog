@@ -1,3 +1,14 @@
+secubox-bbs (0.26.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat #1056 : média intégré souverain. Connecteur youtube qui demande à
+    ytsas (GET /resolve) la meilleure source locale et rend en conséquence :
+    miroir PeerTube (souverain), cache ytsas <video> (souverain), sinon
+    youtube-nocookie à la 1re vue (WAN). L'URL d'origine reste failover + tag
+    de provenance ; le join se fait par video_id. CSP étendue (frame-src
+    youtube-nocookie, media-src origine ytsas). Flag --ytsas-origine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 10:15:00 +0200
+
 secubox-bbs (0.25.3-1~bookworm1) bookworm; urgency=medium
 
   * Entree de menu remise a la forme commune et rattachee a une section qui
