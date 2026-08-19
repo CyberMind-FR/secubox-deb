@@ -12,6 +12,13 @@
  * et appliquee dans www/bbs/index.html. Deux publics, deux langages :
  * les membres lisent, le sysop pilote.
  */
+/* Polices AletheiaVox auto-hebergees — la CSP (default-src 'self') interdit les
+   polices externes, donc on les sert depuis /static/fonts. Variables : une seule
+   fonte couvre toute la plage de graisses. */
+@font-face{font-family:"Cinzel";src:url("/static/fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Inter";src:url("/static/fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/static/fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
+
 :root{
   /* AletheiaVox — clair par defaut, fond BLANC. Bleu structure, cyan relie,
      dore souligne. Mappe sur le vocabulaire natif du BBS (sky/violet/pink…). */
@@ -222,7 +229,7 @@ button{font:inherit;color:inherit;cursor:pointer}
   padding:7px 14px;font-size:13.5px;font-weight:600;
 }
 .btn:hover{background:var(--soft)}
-.btn.primary{background:var(--violet);border-color:var(--violet);color:#fff}
+.btn.primary{background:var(--sky);border-color:var(--sky);color:#fff}
 .btn.primary:hover{filter:brightness(1.08)}
 .btn.pinkish{background:var(--pink);border-color:var(--pink);color:#fff}
 .btn.pinkish:hover{filter:brightness(1.08)}
@@ -344,7 +351,7 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 
 .player .scrn{
   aspect-ratio:16/9;display:grid;place-items:center;font-size:34px;color:#fff;
-  background:linear-gradient(135deg,var(--sky),var(--mint));border-radius:13px 13px 0 0;
+  background:linear-gradient(135deg,var(--sky),var(--violet));border-radius:13px 13px 0 0;
 }
 .wave{display:flex;align-items:flex-end;gap:2.5px;height:26px;margin-top:9px}
 .wave i{flex:1;background:var(--violet);border-radius:2px;opacity:.5}
@@ -683,7 +690,7 @@ video.jointe{max-height:60vh; background:#000}
    valent mieux qu'un, et aucun ne depend de la vue des couleurs. */
 .fil-neuf h3 { font-weight: 700; }
 .pastille {
-  color: var(--accent, #00d4ff);
+  color: var(--sky);
   margin-right: .4em;
   font-size: .8em;
   vertical-align: middle;
