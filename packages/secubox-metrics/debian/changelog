@@ -1,3 +1,12 @@
+secubox-metrics (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : geoloc des visiteurs dans les stats vhost — mapping IP->pays via
+    GeoLite2-Country (deja sur la board), avec DRAPEAU emoji. Nouvelle carte
+    « Pays des visiteurs » dans le detail vhost. Cache IP->pays (une IP revient
+    des centaines de fois). Le geoip est un bonus : base absente = stats quand meme.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 19:40:00 +0200
+
 secubox-metrics (1.7.4-1~bookworm1) bookworm; urgency=medium
 
   * Histogramme WAF EMPILÉ par catégorie (#1063) : la barre menaces/jour est
