@@ -15,6 +15,12 @@ WorkingDirectory=/usr/lib/secubox/metrics
 # à priorité basse pour ne pas disputer le CPU au trafic live.
 Nice=10
 IOSchedulingClass=idle
+# Cache matplotlib persistant : sans lui, PrivateTmp efface le cache de polices
+# à chaque tir et matplotlib le reconstruit (~9 s de CPU). CacheDirectory crée
+# /var/cache/secubox-metrics-rapport, propriété du service.
+CacheDirectory=secubox-metrics-rapport
+Environment=MPLCONFIGDIR=/var/cache/secubox-metrics-rapport
+# Sans argument → période de la config (le rapport HEBDOMADAIRE).
 ExecStart=/usr/bin/python3 -m api.rapport_planifie
 # Durcissement : la tâche ne lit que des journaux et ne parle qu'au relais mail.
 NoNewPrivileges=true

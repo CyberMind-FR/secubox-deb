@@ -57,6 +57,18 @@ def config_planifie() -> dict:
     return c
 
 
+def resoudre_config(argv, base: dict | None = None) -> dict:
+    """Config effective : la config déclarative, dont la période peut être
+    surchargée par le premier argument. C'est ce qui laisse UN seul module
+    servir le rapport hebdomadaire (période de config) ET le quotidien (« jour »)
+    sans dupliquer la config — chaque service passe simplement sa période.
+    """
+    c = dict(base if base is not None else config_planifie())
+    if argv:
+        c["periode"] = argv[0]
+    return c
+
+
 def executer(agg, construire_pdf, envoyer, cfg: dict | None = None) -> dict:
     """Agrège la famille, produit le PDF, l'expédie. Retourne le bilan d'envoi.
 
@@ -78,9 +90,10 @@ def main(argv=None) -> int:
     from vhost_stats import VhostStatsAggregator
     import rapport
 
+    cfg = resoudre_config(sys.argv[1:] if argv is None else argv)
     agg = VhostStatsAggregator()
     try:
-        res = executer(agg, rapport.construire_pdf, rapport.envoyer)
+        res = executer(agg, rapport.construire_pdf, rapport.envoyer, cfg)
     except KeyError as e:
         # Aucune donnée pour la famille sur la période : ce n'est pas une panne
         # (parc neuf, famille absente des journaux) — on le dit sans échouer dur.
