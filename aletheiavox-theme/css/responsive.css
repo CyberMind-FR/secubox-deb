@@ -1,0 +1,25 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= responsive.css
+ * Paliers d'adaptation, écrits À LA FIN de la cascade — une media query
+ * n'ajoute AUCUNE spécificité, placée avant les règles qu'elle corrige elle
+ * serait tout simplement écrasée.
+ *
+ * L'essentiel du responsive est déjà porté « en ligne » par les composants :
+ * clamp() sur les titres, grid auto-fit sur les grilles, overflow-x sur les
+ * tables. Il ne reste ici qu'à replier la coquille sous 860 px : la barre
+ * latérale passe en bandeau horizontal et la navigation d'en-tête s'efface au
+ * profit du rail.
+ */
+@media (max-width:860px){
+  .av-shell{grid-template-columns:1fr}
+  .av-sidebar{position:static;flex-direction:row;flex-wrap:wrap;
+    border-bottom:1px solid var(--av-line);padding-bottom:var(--av-space-4)}
+  .av-railhead{display:none}
+  .av-nav{display:none}
+}

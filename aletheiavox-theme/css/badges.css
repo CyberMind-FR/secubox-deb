@@ -1,0 +1,40 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= badges.css
+ * Pastilles d'état (av-status) et de provenance (av-origin).
+ *
+ * RÈGLE ABSOLUE : jamais différenciés par la seule couleur. Chaque pastille
+ * porte une PASTILLE (point ou glyphe ◆ ⇄ ◎ ↗) ET un libellé texte. La couleur
+ * seule disparaît à l'impression, sur un écran délavé et pour un lecteur
+ * daltonien — deux signaux, jamais un.
+ */
+
+/* ── états ───────────────────────────────────────────────────────────────── */
+.av-status{display:inline-flex;align-items:center;gap:.4rem;padding:.2rem .6rem;border-radius:var(--av-radius-pill);
+  font-size:.76rem;font-weight:600;border:1px solid var(--av-line)}
+.av-status::before{content:"";width:.5rem;height:.5rem;border-radius:50%;background:currentColor}
+.av-status--online{color:var(--av-green);background:var(--av-green-soft);border-color:color-mix(in srgb,var(--av-green) 30%,transparent)}
+.av-status--offline{color:var(--av-muted);background:var(--av-surface-2)}
+.av-status--warning{color:var(--av-orange);background:#fbf0e4;border-color:color-mix(in srgb,var(--av-orange) 30%,transparent)}
+.av-status--loading{color:var(--av-blue);background:var(--av-blue-light)}
+.av-status--loading::before{animation:av-pulse-soft 1.1s ease-in-out infinite}
+.av-status--private{color:var(--av-red);background:#f6e7e8}
+.av-status--public{color:var(--av-blue);background:var(--av-blue-light)}
+.av-status--federated,.av-status--local{color:var(--av-cyan);background:var(--av-cyan-soft)}
+
+/* ── provenance / fédération ─────────────────────────────────────────────── */
+.av-origin{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--av-font-mono);font-size:.68rem;
+  font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:.12rem .45rem;border-radius:var(--av-radius-sm);
+  border:1px solid var(--av-line);color:var(--av-text-muted)}
+.av-origin::before{content:"◆";font-size:.7em}
+.av-origin--local{color:var(--av-green);border-color:color-mix(in srgb,var(--av-green) 35%,transparent)}
+.av-origin--federated{color:var(--av-cyan);border-color:color-mix(in srgb,var(--av-cyan) 40%,transparent)}
+.av-origin--federated::before{content:"⇄"}
+.av-origin--mirror{color:var(--av-gold);border-color:color-mix(in srgb,var(--av-gold) 45%,transparent)}
+.av-origin--mirror::before{content:"◎"}
+.av-origin--external{color:var(--av-muted)} .av-origin--external::before{content:"↗"}

@@ -1,0 +1,36 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= dialogs.css
+ * Messages du système : bandeaux d'alerte (av-alert), état vide (av-empty) et
+ * demi-bulle pédagogique (av-soap-bubble). Chaque alerte porte une icône ET un
+ * titre : le sens ne repose jamais sur la seule teinte de fond.
+ */
+
+/* ── alertes ─────────────────────────────────────────────────────────────── */
+.av-alert{display:flex;gap:var(--av-space-3);padding:var(--av-space-4);border-radius:var(--av-radius-md);
+  border:1px solid var(--av-line);background:var(--av-surface);align-items:flex-start}
+.av-alert-ico{font-size:1.2rem;line-height:1.4} .av-alert h4{font-weight:700;font-size:.95rem}
+.av-alert p{font-size:.88rem;color:var(--av-text-soft)}
+.av-alert--info{background:var(--av-blue-light);border-color:color-mix(in srgb,var(--av-blue) 20%,transparent)}
+.av-alert--success{background:var(--av-green-soft);border-color:color-mix(in srgb,var(--av-green) 25%,transparent)}
+.av-alert--warning{background:#fbf0e4;border-color:color-mix(in srgb,var(--av-orange) 28%,transparent)}
+.av-alert--danger{background:#f6e7e8;border-color:color-mix(in srgb,var(--av-red) 28%,transparent)}
+
+/* ── état vide ───────────────────────────────────────────────────────────── */
+.av-empty{text-align:center;padding:var(--av-space-12);border:1px dashed var(--av-line-strong);
+  border-radius:var(--av-radius-lg);color:var(--av-text-muted);display:flex;flex-direction:column;gap:var(--av-space-2);align-items:center}
+.av-empty svg{opacity:.5}
+
+/* ── demi-bulle pédagogique ──────────────────────────────────────────────── */
+.av-soap-bubble{position:relative;border-radius:var(--av-radius-xl);padding:var(--av-space-6) var(--av-space-8);
+  background:radial-gradient(120% 120% at 20% 0%,rgba(0,168,200,.10),rgba(201,168,76,.08) 55%,rgba(255,255,255,.04));
+  border:1px solid color-mix(in srgb,var(--av-cyan) 25%,var(--av-line));
+  box-shadow:inset 0 1px 12px rgba(255,255,255,.4),var(--av-shadow-sm);color:var(--av-text-soft)}
+.av-soap-bubble::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(120deg,rgba(0,168,200,.5),rgba(201,168,76,.5),rgba(16,74,136,.4));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.5}

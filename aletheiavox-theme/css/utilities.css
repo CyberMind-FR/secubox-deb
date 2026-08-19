@@ -1,0 +1,30 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= utilities.css
+ * Petites classes transverses : texte atténué, grappe d'éléments alignés,
+ * nuancier de la maquette, et helpers d'espacement adossés aux jetons
+ * --av-space-*. Rien de décoratif ici — que du réglage mécanique.
+ *
+ * av-sr-only est défini une seule fois, dans accessibility.css (chargé après
+ * cette feuille), avec les autres primitives d'accessibilité.
+ */
+.av-muted{color:var(--av-text-muted)}
+.av-cluster{display:flex;flex-wrap:wrap;gap:var(--av-space-3);align-items:center}
+
+/* nuancier (helper de catalogue, repris du démonstrateur) */
+.av-swatches{display:flex;flex-wrap:wrap;gap:var(--av-space-2)}
+.av-swatch{width:auto;padding:.4rem;border-radius:var(--av-radius-md);border:1px solid var(--av-line);
+  font-family:var(--av-font-mono);font-size:.65rem;color:var(--av-text-muted);display:flex;flex-direction:column;gap:.3rem;min-width:78px}
+.av-swatch i{height:34px;border-radius:var(--av-radius-sm);display:block}
+
+/* helpers d'espacement — marges et gouttières sur l'échelle des jetons */
+.av-mt-0{margin-top:0} .av-mt-2{margin-top:var(--av-space-2)} .av-mt-4{margin-top:var(--av-space-4)}
+.av-mt-6{margin-top:var(--av-space-6)} .av-mt-8{margin-top:var(--av-space-8)}
+.av-mb-0{margin-bottom:0} .av-mb-2{margin-bottom:var(--av-space-2)} .av-mb-4{margin-bottom:var(--av-space-4)}
+.av-mb-6{margin-bottom:var(--av-space-6)} .av-mb-8{margin-bottom:var(--av-space-8)}
+.av-gap-2{gap:var(--av-space-2)} .av-gap-4{gap:var(--av-space-4)} .av-gap-6{gap:var(--av-space-6)}
