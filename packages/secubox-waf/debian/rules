@@ -17,6 +17,13 @@ override_dh_auto_install:
 	# WAF rules and config
 	install -d debian/secubox-waf/usr/share/secubox/waf
 	[ -d config ] && cp -r config/. debian/secubox-waf/usr/share/secubox/waf/ || true
+	# #1080 phase G — profils de service par vhost, livrés en CONFFILE /etc
+	# (dpkg conserve les éditions de l'opérateur ; le fichier est possédé par le
+	# paquet, contrairement à waf-rules.json qui reste opérateur-seedé). Le
+	# daemon (sbxwaf, unité secubox-waf-ng) le lit via --vhost-profiles.
+	install -d debian/secubox-waf/etc/secubox/waf
+	[ -f config/vhost_profiles.json ] && install -m 0644 config/vhost_profiles.json \
+		debian/secubox-waf/etc/secubox/waf/vhost_profiles.json || true
 	# Mitmproxy addon for LXC container
 	install -d debian/secubox-waf/usr/share/secubox/waf/mitmproxy
 	[ -d mitmproxy ] && cp -r mitmproxy/. debian/secubox-waf/usr/share/secubox/waf/mitmproxy/ || true

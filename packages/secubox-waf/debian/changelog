@@ -1,3 +1,15 @@
+secubox-waf (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * PHASE G #1080 — profils de service par vhost. Livre `vhost_profiles.json`
+    en CONFFILE `/etc/secubox/waf/` (possédé par le paquet, éditions de
+    l'opérateur préservées à la mise à jour). Déclare, par service, les chemins
+    légitimes (gitea / peertube / nextcloud seedés) et les catégories de
+    reconnaissance supprimables sur ces chemins. Lu par sbxwaf via
+    `--vhost-profiles` ; chargé au démarrage (`systemctl restart
+    secubox-waf-ng` après édition). Ajouter un vhost = une ligne dans `vhosts`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 13:30:00 +0200
+
 secubox-waf (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * webui : onglet ⚔️ Campagnes (#1070 D) + endpoint /campaigns (lit
