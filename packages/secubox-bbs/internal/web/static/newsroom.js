@@ -41,7 +41,7 @@
   function rub(el) { $$(".rub").forEach(function (x) { x.classList.remove("on"); }); el.classList.add("on"); }
 
   /* lecteur audio RÉEL + mini-lecteur */
-  var audio = null, card = null, raf = null;
+  var audio = null, card = null, raf = null, lastBtn = null;
   function fmt(t) { t = Math.floor(t || 0); return Math.floor(t / 60) + ":" + ("0" + (t % 60)).slice(-2); }
   function paint() {
     if (!audio || !card) return;
@@ -67,18 +67,28 @@
      suivant dans le fil de la page (ordre du DOM = ordre de la rédaction). Rend
      faux quand il n'y a plus de suivant, pour que le mini-lecteur se ferme. */
   function playNext() {
-    if (!card) return false;
-    var players = $$('.dossier .play[data-media]');
-    var here = card.querySelector('.play[data-media]');
-    var i = players.indexOf(here);
+    // Tous les lecteurs de la page, dans l'ordre du DOM : dossiers de la
+    // rédaction OU épisodes d'un flux dans la médiathèque. Enchaîner sur le
+    // suivant donne la lecture continue d'un livre audio, chapitre après
+    // chapitre, puis le flux suivant.
+    var players = $$('.play[data-media]');
+    if (!lastBtn) return false;
+    var i = players.indexOf(lastBtn);
     if (i < 0 || i + 1 >= players.length) return false;
     play(players[i + 1]);
     return true;
   }
+  function playFeed(btn) {
+    var sec = btn.closest('.podfeed');
+    if (!sec) return;
+    var first = sec.querySelector('.play[data-media]');
+    if (first) play(first);
+  }
   function play(btn) {
     var url = btn.getAttribute("data-media");
     if (!url) { var h = btn.getAttribute("data-href"); if (h) location.href = h; return; }
-    var c = btn.closest(".dossier");
+    lastBtn = btn;
+    var c = btn.closest(".dossier") || btn.closest(".podfeed") || btn.closest(".ep");
     ensure();
     if (card === c && !audio.paused) { audio.pause(); return; }
     if (audio.src !== new URL(url, location.href).href) audio.src = url;
@@ -98,6 +108,7 @@
     if (!t) return;
     var a = t.getAttribute("data-act");
     if (a === "play") { e.preventDefault(); play(t); }
+    else if (a === "playfeed") { e.preventDefault(); playFeed(t); }
     else if (a === "filt") filt(t);
     else if (a === "rub") rub(t);
     else if (a === "theme") theme();

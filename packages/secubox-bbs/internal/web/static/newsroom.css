@@ -128,6 +128,29 @@ a{color:inherit;text-decoration:none}
 .grow{flex:1}
 .mini{display:flex;align-items:center;gap:5px;font-family:"JetBrains Mono";font-size:.7rem;color:var(--dim)}
 
+/* ---- médiathèque : flux = sous-dossiers ---- */
+.podfeed{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.podfeed+.podfeed{margin-top:0}
+.pfhead{display:flex;gap:14px;padding:14px 16px;align-items:center;border-bottom:1px dashed var(--line-2)}
+.pfcover{position:relative;width:72px;height:72px;flex:none;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--soft);display:grid;place-items:center}
+.pfglyph{position:absolute;font-size:1.7rem;opacity:.55}
+.pfimg{position:relative;width:100%;height:100%;object-fit:cover}
+.pfmeta{flex:1;min-width:0}
+.pfmeta h3{margin:.15rem 0 .1rem;font-family:"Cinzel";font-size:1.08rem;font-weight:600;line-height:1.2}
+.pfmeta .sub{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-family:"Cinzel";font-weight:600;font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.tag.audiobook{color:var(--amber);border-color:var(--amber)} .tag.podcast{color:var(--cyan);border-color:var(--cyan)} .tag.serie{color:var(--sky);border-color:var(--sky)}
+.pfhead .btn{flex:none}
+.eplist{list-style:none;margin:0;padding:4px 0;max-height:420px;overflow:auto}
+.ep{display:flex;align-items:center;gap:11px;padding:8px 16px;border-top:1px solid var(--line)}
+.ep:first-child{border-top:none} .ep:hover{background:var(--soft)}
+.ep.playing{background:var(--cyan-s)}
+.ep .play.sm{width:28px;height:28px;font-size:.68rem}
+.ep .epnum{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim);width:26px;text-align:right;flex:none}
+.ep .eptitle{flex:1;min-width:0;font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ep.playing .eptitle{color:var(--sky);font-weight:600}
+.ep .epdur{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim);flex:none}
+
 /* right rail */
 .billet{display:block;padding:11px 14px;border-top:1px solid var(--line);transition:.15s}
 .billet:first-of-type{border-top:none} .billet:hover{background:var(--soft)}

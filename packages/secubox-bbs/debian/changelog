@@ -1,3 +1,29 @@
+secubox-bbs (0.28.5-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF médiathèque : `duration` du podcaster est une CHAÎNE
+    (« 00:36:15 »), la lire en entier faisait échouer la requête → « aucun
+    média » alors que 145 épisodes sont téléchargés. Lecture texte + normalisation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:20:00 +0200
+
+secubox-bbs (0.28.4-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 MÉDIATHÈQUE — le podcaster en ARBORESCENCE. `/c/emissions` (et
+    `/media`) montraient 145 fils plats, un par épisode, tous mélangés et du
+    plus récent au plus ancien : ni sous-dossiers, ni bon ordre pour un livre
+    audio, ni vignette, ni lecteur. Désormais : un FLUX = un sous-dossier
+    (podcast 🎧 / livre audio 📖 / série 🎬), avec sa VIGNETTE (cover.jpg servie
+    depuis la racine media du podcaster via /media-cover/<fid>), ses épisodes
+    ORDONNÉS PAR TYPE (livre audio chapitre 1→N, podcast récent d'abord) et
+    JOUABLES EN LIGNE (lecteur audio réel, /media/ep/<id>), avec « Tout écouter »
+    et l'ÉCOUTE EN CONTINU (enchaînement automatique). Un salon majoritairement
+    alimenté par le podcaster bascule automatiquement sur cette vue.
+  * Gabarit autonome `templates/mediatheque.html` + lecture `internal/web/
+    mediatheque.go` (base podcaster en lecture seule, groupée par flux). Réutilise
+    newsroom.{css,js}. CSP stricte respectée (data-*), test d'exécution dédié.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:00:00 +0200
+
 secubox-bbs (0.28.3-1~bookworm1) bookworm; urgency=medium
 
   * #1056 — médias embarqués « très petits » dans la rédaction : le lecteur
