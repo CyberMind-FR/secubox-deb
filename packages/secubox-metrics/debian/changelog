@@ -1,3 +1,15 @@
+secubox-metrics (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF rapport planifié (anibal-amiot) : durcissement de la tâche.
+    Un matin, un run a mis ~80 min avant d'échouer (génération/envoi bloqué) —
+    échec silencieux du rapport quotidien. Désormais : GARDE-TEMPS SIGALRM
+    (180s max, plus jamais de hang), REPRISES (3 essais, pause croissante) sur
+    incident passager, et JOURNALISATION avec trace (le type et la pile de
+    l'exception, au lieu du seul message). « aucune donnée » sort toujours sans
+    échouer ni réessayer. executer() inchangé (tests préservés).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 09:00:00 +0200
+
 secubox-metrics (1.10.1-1~bookworm1) bookworm; urgency=medium
 
   * Panneau WAF & Security : lit l'état PROPRE du WAF (#1070) — bans nft natifs
