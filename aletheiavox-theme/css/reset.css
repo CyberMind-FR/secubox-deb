@@ -1,0 +1,18 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= reset.css
+ * Remise à zéro minimale. On ne réécrit pas un normalize complet : juste ce
+ * qu'il faut pour que le corps prenne le fond et la police du thème.
+ */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--av-bg);color:var(--av-text);font-family:var(--av-font-body);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+img,svg{max-width:100%;display:block} h1,h2,h3,h4,p{margin:0}
+a{color:var(--av-primary);text-decoration:none} a:hover{text-decoration:underline}
+button{font:inherit;cursor:pointer}

@@ -1,0 +1,278 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  Catalogue vivant d'AletheiaVox — reprend la maquette validée, mais consomme
+  le design system MODULAIRE (../css/aletheiavox.css) au lieu d'un <style> inline.
+  Si les .woff2 ne sont pas encore copiés dans ../assets/fonts, le rendu retombe
+  proprement sur les polices système (font-display:swap + piles de repli).
+-->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AletheiaVox — Catalogue</title>
+<link rel="stylesheet" href="../css/aletheiavox.css">
+</head>
+<body class="av-theme">
+  <header class="av-header">
+    <div class="av-header-in">
+      <a class="av-logo" href="#top" aria-label="AletheiaVox">ALETHEIA<span>VOX</span></a>
+      <nav class="av-nav" aria-label="Principale">
+        <a class="av-nav-item" aria-current="page" href="#top">Accueil</a>
+        <a class="av-nav-item" href="#services">Explorer</a>
+        <a class="av-nav-item" href="#social">Communauté</a>
+        <a class="av-nav-item" href="#data">Services</a>
+      </nav>
+      <button class="av-button av-button--ghost av-theme-toggle" id="themeBtn" aria-label="Basculer le thème">◐ Thème</button>
+    </div>
+  </header>
+
+  <div class="av-shell" id="top">
+    <aside class="av-sidebar" aria-label="Catalogue">
+      <div class="av-railhead">Design system</div>
+      <a class="av-railnav" aria-current="page" href="#top">✦ Identité</a>
+      <a class="av-railnav" href="#buttons">⬚ Boutons</a>
+      <a class="av-railnav" href="#cards">▤ Cartes</a>
+      <a class="av-railnav" href="#services">◈ Services</a>
+      <a class="av-railnav" href="#states">◉ États &amp; origines</a>
+      <a class="av-railnav" href="#form">✎ Formulaires</a>
+      <a class="av-railnav" href="#social">💬 Publications</a>
+      <a class="av-railnav" href="#data">▦ Données</a>
+      <a class="av-railnav" href="#system">⌘ Système</a>
+      <div class="av-railhead">Modules</div>
+      <a class="av-railnav" href="#social">BBS</a>
+      <a class="av-railnav" href="#services">PeerTube</a>
+      <a class="av-railnav" href="#social">Mastodon</a>
+    </aside>
+
+    <main class="av-main">
+      <!-- HERO -->
+      <section class="av-hero av-fade-in">
+        <svg class="av-network-pattern" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <g fill="none" stroke="#00a8c8" stroke-width="1" opacity="0.5">
+            <path d="M60 60 L200 120 L340 70 L470 150 L560 90"/>
+            <path d="M90 240 L200 120 L300 220 L470 150"/>
+            <path d="M60 60 L90 240 M340 70 L300 220 M560 90 L470 150"/>
+          </g>
+          <g fill="#104a88">
+            <circle cx="60" cy="60" r="4"/><circle cx="200" cy="120" r="5"/><circle cx="340" cy="70" r="4"/>
+            <circle cx="470" cy="150" r="5"/><circle cx="560" cy="90" r="3.5"/><circle cx="90" cy="240" r="4"/>
+            <circle cx="300" cy="220" r="4"/>
+          </g>
+        </svg>
+        <div class="av-hero-in">
+          <span class="av-eyebrow">Un espace numérique cohérent</span>
+          <span class="av-accentbar"></span>
+          <h1 class="av-display">Reprendre la main sur nos outils numériques.</h1>
+          <p class="av-lede">Des services ouverts, locaux et fédérés, hébergés par ceux qui les utilisent —
+            un forum, une vidéo, un réseau social ou un outil SecuBox, réunis sous une même peau.</p>
+          <div class="av-hero-actions">
+            <a class="av-button av-button--primary" href="#services">Explorer les services</a>
+            <a class="av-button av-button--secondary" href="#social">Rejoindre la communauté</a>
+          </div>
+        </div>
+      </section>
+
+      <!-- IDENTITÉ / palette -->
+      <section class="av-block" id="identity">
+        <h2 class="av-section-title av-display">Identité <small>tokens.css</small></h2>
+        <div class="av-swatches">
+          <label class="av-swatch"><i style="background:var(--av-blue)"></i>blue #104a88</label>
+          <label class="av-swatch"><i style="background:var(--av-cyan)"></i>cyan #00a8c8</label>
+          <label class="av-swatch"><i style="background:var(--av-gold)"></i>gold #c9a84c</label>
+          <label class="av-swatch"><i style="background:var(--av-green)"></i>green #28765e</label>
+          <label class="av-swatch"><i style="background:var(--av-ink)"></i>ink #17232d</label>
+          <label class="av-swatch"><i style="background:var(--av-paper);border:1px solid var(--av-line)"></i>paper #f7f5ef</label>
+        </div>
+        <div class="av-cluster">
+          <span class="av-display" style="font-size:1.6rem">Cinzel — titres</span>
+          <span style="font-family:var(--av-font-body)">Inter — interface &amp; lecture</span>
+          <span class="av-mono">JetBrains Mono — données &amp; logs</span>
+          <span class="av-reveal" tabindex="0"><b>Aletheia</b> — <i>vérité dévoilée</i><span class="av-reveal-cover"></span></span>
+        </div>
+      </section>
+
+      <!-- BUTTONS -->
+      <section class="av-block" id="buttons">
+        <h2 class="av-section-title av-display">Boutons <small>components.css</small></h2>
+        <div class="av-cluster">
+          <button class="av-button av-button--primary">Publier</button>
+          <button class="av-button av-button--secondary">Connecter</button>
+          <button class="av-button">Secondaire</button>
+          <button class="av-button av-button--ghost">Discret</button>
+          <button class="av-button av-button--success">Valider</button>
+          <button class="av-button av-button--danger">Supprimer</button>
+        </div>
+      </section>
+
+      <!-- CARDS -->
+      <section class="av-block" id="cards">
+        <h2 class="av-section-title av-display">Cartes <small>cards.css</small></h2>
+        <div class="av-grid">
+          <article class="av-card av-card--feature"><span class="av-eyebrow">À la une</span>
+            <h3>Souveraineté</h3><p class="av-muted">Vos données restent chez vous, sous votre contrôle.</p></article>
+          <article class="av-card av-card--info"><h3>Information</h3><p class="av-muted">Le réseau reste perceptible sans devenir envahissant.</p></article>
+          <article class="av-card av-card--success"><h3>Opérationnel</h3><p class="av-muted">Tous les services fédérés répondent normalement.</p></article>
+          <article class="av-card av-card--warning"><h3>Attention</h3><p class="av-muted">Le stockage approche 80 % de sa capacité.</p></article>
+        </div>
+      </section>
+
+      <!-- SERVICES -->
+      <section class="av-block" id="services">
+        <h2 class="av-section-title av-display">Services <small>service-card</small></h2>
+        <div class="av-grid">
+          <article class="av-service-card"><div class="av-service-icon">▶</div>
+            <div class="av-service-body"><div class="av-service-title">PeerTube</div>
+              <div class="av-service-description">Vidéo indépendante, hébergée localement.</div></div>
+            <span class="av-status av-status--online">En ligne</span></article>
+          <article class="av-service-card"><div class="av-service-icon">🐘</div>
+            <div class="av-service-body"><div class="av-service-title">Mastodon</div>
+              <div class="av-service-description">Réseau social fédéré, sans publicité.</div></div>
+            <span class="av-status av-status--federated">Fédéré</span></article>
+          <article class="av-service-card"><div class="av-service-icon">💬</div>
+            <div class="av-service-body"><div class="av-service-title">BBS AletheiaVox</div>
+              <div class="av-service-description">Salons, fils et médias partagés.</div></div>
+            <span class="av-status av-status--online">En ligne</span></article>
+          <article class="av-service-card"><div class="av-service-icon">🎧</div>
+            <div class="av-service-body"><div class="av-service-title">Radio</div>
+              <div class="av-service-description">Flux audio de la communauté.</div></div>
+            <span class="av-status av-status--warning">Maintenance</span></article>
+        </div>
+      </section>
+
+      <!-- STATES + ORIGINS -->
+      <section class="av-block" id="states">
+        <h2 class="av-section-title av-display">États &amp; provenance <small>badges.css</small></h2>
+        <div class="av-cluster">
+          <span class="av-status av-status--online">En ligne</span>
+          <span class="av-status av-status--offline">Hors ligne</span>
+          <span class="av-status av-status--warning">Alerte</span>
+          <span class="av-status av-status--loading">Chargement</span>
+          <span class="av-status av-status--private">Privé</span>
+          <span class="av-status av-status--public">Public</span>
+        </div>
+        <div class="av-cluster">
+          <span class="av-origin av-origin--local">Local</span>
+          <span class="av-origin av-origin--federated">Fédéré</span>
+          <span class="av-origin av-origin--mirror">Miroir</span>
+          <span class="av-origin av-origin--external">Externe</span>
+          <span class="av-muted" style="font-size:.82rem">— jamais différenciés par la seule couleur : icône + texte.</span>
+        </div>
+      </section>
+
+      <!-- FORM -->
+      <section class="av-block" id="form">
+        <h2 class="av-section-title av-display">Formulaires <small>forms.css</small></h2>
+        <div class="av-card" style="max-width:var(--av-reading-width)">
+          <div class="av-field"><label class="av-label" for="t">Titre du fil</label>
+            <input class="av-input" id="t" placeholder="Sujet clair et court"></div>
+          <div class="av-field"><label class="av-label" for="s">Salon</label>
+            <select class="av-select" id="s"><option>Place publique</option><option>Atelier</option><option>Bistrot</option></select>
+            <span class="av-help">Le salon courant est présélectionné.</span></div>
+          <div class="av-field"><label class="av-label" for="b">Premier message</label>
+            <textarea class="av-textarea" id="b" rows="3" placeholder="Écrivez ici…"></textarea></div>
+          <div class="av-cluster"><button class="av-toggle" id="tog" aria-pressed="false" aria-label="Public"></button>
+            <span class="av-help">Rendre ce fil public (fédérable)</span></div>
+          <div class="av-cluster" style="margin-top:.5rem"><button class="av-button av-button--primary">Ouvrir le fil</button>
+            <button class="av-button av-button--ghost">Annuler</button></div>
+        </div>
+      </section>
+
+      <!-- SOCIAL / BBS post -->
+      <section class="av-block" id="social">
+        <h2 class="av-section-title av-display">Publication <small>av-post — BBS &amp; Mastodon</small></h2>
+        <article class="av-post">
+          <div class="av-post-header">
+            <div class="av-post-avatar">CE</div>
+            <div><div class="av-post-author">cedre83 <span class="av-origin av-origin--local">Local</span></div>
+              <div class="av-post-meta"><span>@cedre83@aletheiavox.eu</span>·<span>il y a 6 h</span>·<span class="av-status av-status--public">Public</span></div></div>
+          </div>
+          <p class="av-post-content">Une publication ressemble à une fiche éditoriale, pas à une carte de réseau social commercial.
+            L’information reste devant ; la technologie derrière.</p>
+          <div class="av-post-media">▶ média fédéré (PeerTube)</div>
+          <div class="av-post-actions">
+            <button class="av-button">↩ Répondre</button><button class="av-button">⇄ Partager</button>
+            <button class="av-button">♡ Aimer</button><button class="av-button">⌘ Sauvegarder</button>
+          </div>
+        </article>
+        <div class="av-soap-bubble"><strong>Zanimalos —</strong> un savoir se partage mieux quand on le rend intelligible.
+          Cette demi-bulle sert aux citations, conseils et petites morales pédagogiques.</div>
+      </section>
+
+      <!-- DATA -->
+      <section class="av-block" id="data">
+        <h2 class="av-section-title av-display">Données <small>tables.css · dashboard</small></h2>
+        <div class="av-dashboard">
+          <div class="av-stat"><span class="av-stat-value">12</span><span class="av-stat-label">Services actifs</span></div>
+          <div class="av-stat"><span class="av-stat-value">8</span><span class="av-stat-label">Utilisateurs</span></div>
+          <div class="av-stat"><span class="av-stat-value">4</span><span class="av-stat-label">Services fédérés</span></div>
+          <div class="av-stat"><span class="av-stat-value">37 %</span><span class="av-stat-label">Stockage</span>
+            <div class="av-meter"><span style="width:37%"></span></div></div>
+        </div>
+        <div class="av-table-wrap">
+          <table class="av-table av-table--technical">
+            <thead><tr><th>Nom</th><th>État</th><th>Service</th><th>Adresse</th><th>Dernière activité</th></tr></thead>
+            <tbody>
+              <tr><td>peertube</td><td><span class="av-status av-status--online">En ligne</span></td><td>Vidéo</td><td class="av-mono">10.100.0.42</td><td class="av-mono">il y a 2 min</td></tr>
+              <tr><td>mastodon</td><td><span class="av-status av-status--federated">Fédéré</span></td><td>Social</td><td class="av-mono">10.100.0.44</td><td class="av-mono">il y a 1 min</td></tr>
+              <tr><td>bbs</td><td><span class="av-status av-status--online">En ligne</span></td><td>Forum</td><td class="av-mono">10.100.0.51</td><td class="av-mono">à l’instant</td></tr>
+              <tr><td>radio</td><td><span class="av-status av-status--warning">Maintenance</span></td><td>Audio</td><td class="av-mono">10.100.0.60</td><td class="av-mono">il y a 14 min</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SYSTEM: alerts, terminal, empty -->
+      <section class="av-block" id="system">
+        <h2 class="av-section-title av-display">Système <small>dialogs.css · terminal · empty</small></h2>
+        <div class="av-alert av-alert--info"><span class="av-alert-ico">ⓘ</span>
+          <div><h4>Sauvegarde planifiée</h4><p>La prochaine sauvegarde chiffrée aura lieu cette nuit à 3 h.</p></div></div>
+        <div class="av-alert av-alert--success"><span class="av-alert-ico">✓</span>
+          <div><h4>Fédération établie</h4><p>Quatre instances partenaires répondent normalement.</p></div></div>
+        <div class="av-alert av-alert--warning"><span class="av-alert-ico">⚠</span>
+          <div><h4>Stockage à surveiller</h4><p>Il reste 22 % d’espace disque sur le volume média.</p></div></div>
+
+        <div class="av-terminal"><div class="av-terminal-bar"><i></i><i></i><i></i></div>
+          <div class="av-log">
+            <span class="av-log-line av-log-info">systemd: secubox-bbs démarré (0.26.2)</span>
+            <span class="av-log-line av-log-success">ytsas: /resolve → miroir PeerTube en file</span>
+            <span class="av-log-line av-log-warning">stockage média à 78 %</span>
+            <span class="av-log-line av-log-error">flux distant injoignable — repli local</span>
+          </div>
+        </div>
+
+        <div class="av-empty">
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="9"/><path d="M8 13c1 1.5 7 1.5 8 0"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/></svg>
+          <p><strong>Aucun message pour le moment.</strong></p>
+          <p>Ce calme est plutôt bon signe.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="av-footer">
+    <div class="av-footer-in">
+      <div class="av-footer-cols">
+        <div><h4>AletheiaVox</h4><a href="#top">Manifeste</a><a href="#services">Services</a><a href="#social">Communauté</a></div>
+        <div><h4>Réseau</h4><a href="#">Instances fédérées</a><a href="#">État du réseau</a><a href="#">Miroirs</a></div>
+        <div><h4>SecuBox</h4><a href="#">Tableau de bord</a><a href="#">Documentation</a><a href="#">Administration</a></div>
+        <div><h4>Ouvert</h4><a href="#">Code source</a><a href="#">Licence</a><a href="#">Contribuer</a></div>
+      </div>
+      <div class="av-story-footer" aria-hidden="true"><span>🦊</span><span>🌿</span><span>🕊️</span><span>🌙</span><span>✶</span></div>
+    </div>
+  </footer>
+
+  <script>
+    var b=document.getElementById('themeBtn');
+    b.addEventListener('click',function(){var r=document.documentElement;
+      var cur=r.getAttribute('data-theme')|| (matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+      r.setAttribute('data-theme',cur==='dark'?'light':'dark');});
+    var t=document.getElementById('tog');
+    t.addEventListener('click',function(){t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')==='true'?'false':'true');});
+  </script>
+</body>
+</html>

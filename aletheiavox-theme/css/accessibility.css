@@ -1,0 +1,33 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= accessibility.css
+ * Primitives d'accessibilité, chargées après les composants pour avoir le
+ * dernier mot sur le focus et le mouvement :
+ *   - un anneau de focus visible et cohérent au clavier (:focus-visible) ;
+ *   - le respect de prefers-reduced-motion : on coupe animations et transitions ;
+ *   - av-sr-only : un texte réservé aux synthèses vocales, présent dans le flux
+ *     mais invisible à l'œil (display:none le retirerait AUSSI des lecteurs
+ *     d'écran, ce qu'on ne veut pas) ;
+ *   - une cible tactile d'au moins 44×44 px sur les éléments interactifs.
+ * Les composants posent déjà leur propre :focus-visible (boutons, champs) ;
+ * cette règle générale n'est qu'un filet de sécurité pour le reste.
+ */
+:focus-visible{outline:3px solid color-mix(in srgb,var(--av-cyan) 55%,transparent);outline-offset:2px;border-radius:var(--av-radius-sm)}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+
+.av-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;
+  clip-path:inset(50%);overflow:hidden;white-space:nowrap}
+
+/* Cible tactile de 44×44 px : OPT-IN via av-tap-target, jamais imposée à tous
+   les boutons — la maquette validée règle déjà ses hauteurs, et l'enrôler de
+   force les épaissirait. À poser sur les commandes isolées d'une interface
+   tactile (barre d'action mobile, icônes seules). */
+.av-tap-target{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}

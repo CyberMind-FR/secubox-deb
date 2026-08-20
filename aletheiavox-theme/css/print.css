@@ -1,0 +1,19 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= print.css
+ * À l'impression : fond blanc, texte noir, contraste maximal. On efface le
+ * chrome (en-tête, rail, pied, motif du héros, bascule de thème), on déplie la
+ * coquille sur une seule colonne et on retire les ombres au profit d'une
+ * bordure franche. Les liens redeviennent soulignés et noirs.
+ */
+@media print{
+  :root{--av-bg:#fff;--av-surface:#fff;--av-text:#000;--av-text-soft:#111;--av-line:#888}
+  .av-header,.av-sidebar,.av-footer,.av-hero .av-network-pattern,.av-theme-toggle{display:none!important}
+  .av-shell{grid-template-columns:1fr;padding:0} a{color:#000;text-decoration:underline}
+  .av-card,.av-post,.av-service-card,.av-stat{box-shadow:none;border-color:#000}
+}

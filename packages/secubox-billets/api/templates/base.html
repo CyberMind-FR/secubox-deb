@@ -13,15 +13,24 @@
 <meta name="sbx-no-health-banner" content="1"><!-- public blog: suppress the operator health banner -->
 
 <title>{% block title %}{{ site_title }}{% endblock %}</title>
-<link rel="stylesheet" href="/static/billets.css?v=5">
+<link rel="stylesheet" href="/static/billets.css?v=av4">
 <link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
 <link rel="alternate" type="application/feed+json" title="{{ site_title }}" href="/feed.json">
 {% block head %}{% endblock %}
 </head>
 <body>
 <header class="site-header">
-  <a class="site-title" href="/">{{ site_title }}</a>
-  <span class="tagline">{{ tagline }}</span>
+  <div class="mast-edition">
+    <span class="me-l">◆ gazette souveraine</span>
+    <span class="me-r">{{ tagline }}</span>
+  </div>
+  <div class="mast-main">
+    <a class="mast-mark" href="/" aria-hidden="true">A</a>
+    <div class="mast-id">
+      <a class="site-title" href="/">{{ site_title }}</a>
+      <span class="mast-sub">la face publique · AletheiaVox</span>
+    </div>
+  </div>
 </header>
 <main id="main">
 {% block content %}{% endblock %}

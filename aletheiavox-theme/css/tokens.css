@@ -1,0 +1,66 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= tokens.css
+ * Le seul bloc de variables d'AletheiaVox. Toutes les autres feuilles ne
+ * consomment que des --av- ; aucune valeur brute (hex, px) ne vit ailleurs.
+ *
+ * Trois états de thème, dans l'ordre exact validé sur la maquette :
+ *   1. clair par défaut sur :root nu ;
+ *   2. sombre AUTO sous prefers-color-scheme, mais SEULEMENT si l'utilisateur
+ *      n'a pas explicitement choisi le clair (:root:not([data-theme="light"])) ;
+ *   3. sombre EXPLICITE via [data-theme="dark"], qui gagne dans les deux sens.
+ * Une couleur ne doit jamais être définie UNIQUEMENT dans un bloc sombre.
+ */
+:root{
+  --av-white:#ffffff; --av-paper:#f7f5ef; --av-paper-warm:#ece4d0;
+  --av-ink:#17232d; --av-ink-soft:#394956; --av-muted:#697985;
+  --av-blue:#104a88; --av-blue-deep:#123b62; --av-blue-light:#e8f2f8;
+  --av-cyan:#00a8c8; --av-cyan-soft:#dff5f7;
+  --av-gold:#c9a84c; --av-gold-soft:#f5ecd2;
+  --av-green:#28765e; --av-green-soft:#e4f2eb;
+  --av-red:#a73d42; --av-orange:#c87832;
+  --av-border:#d9e0e4; --av-border-strong:#aebbc3;
+
+  /* roles */
+  --av-bg:var(--av-white); --av-surface:var(--av-white); --av-surface-2:var(--av-paper);
+  --av-text:var(--av-ink); --av-text-soft:var(--av-ink-soft); --av-text-muted:var(--av-muted);
+  --av-primary:var(--av-blue); --av-secondary:var(--av-cyan); --av-accent:var(--av-gold);
+  --av-line:var(--av-border); --av-line-strong:var(--av-border-strong);
+
+  --av-font-display:"Cinzel","Cormorant Garamond",Georgia,serif;
+  --av-font-body:"Inter","Source Sans 3",system-ui,sans-serif;
+  --av-font-mono:"JetBrains Mono","Source Code Pro",ui-monospace,monospace;
+
+  --av-space-1:.25rem; --av-space-2:.5rem; --av-space-3:.75rem; --av-space-4:1rem;
+  --av-space-6:1.5rem; --av-space-8:2rem; --av-space-12:3rem; --av-space-16:4rem;
+
+  --av-radius-sm:6px; --av-radius-md:10px; --av-radius-lg:16px; --av-radius-xl:24px; --av-radius-pill:999px;
+
+  --av-shadow-xs:0 1px 2px rgba(20,45,60,.05);
+  --av-shadow-sm:0 2px 8px rgba(20,45,60,.06);
+  --av-shadow-md:0 4px 18px rgba(20,45,60,.08);
+
+  --av-content-width:1180px; --av-reading-width:68ch; --av-sidebar-width:230px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --av-bg:#0f1a24; --av-surface:#14212d; --av-surface-2:#1a2836;
+    --av-text:#eef3f6; --av-text-soft:#c2ced7; --av-text-muted:#8598a5;
+    --av-blue-light:#173049; --av-cyan-soft:#123642; --av-gold-soft:#2b2718; --av-green-soft:#14302a;
+    --av-primary:#5aa0e0; --av-secondary:#33c4de; --av-accent:#d9bd6a;
+    --av-line:#2a3b49; --av-line-strong:#3c5163;
+  }
+}
+:root[data-theme="dark"]{
+  --av-bg:#0f1a24; --av-surface:#14212d; --av-surface-2:#1a2836;
+  --av-text:#eef3f6; --av-text-soft:#c2ced7; --av-text-muted:#8598a5;
+  --av-blue-light:#173049; --av-cyan-soft:#123642; --av-gold-soft:#2b2718; --av-green-soft:#14302a;
+  --av-primary:#5aa0e0; --av-secondary:#33c4de; --av-accent:#d9bd6a;
+  --av-line:#2a3b49; --av-line-strong:#3c5163;
+}
