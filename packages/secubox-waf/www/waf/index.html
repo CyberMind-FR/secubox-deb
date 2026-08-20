@@ -244,6 +244,7 @@
             <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
             <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
             <button class="waf-tab" data-tab="history" onclick="switchTab('history')">📈 Historique</button>
+            <button class="waf-tab" data-tab="campaigns" onclick="switchTab('campaigns')">⚔️ Campagnes</button>
         </div>
 
         <div class="grid-2">
@@ -404,6 +405,19 @@
                 <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:1.2rem;margin-top:0.6rem">
                     <div><h3 style="font-size:0.85rem;margin:0 0 .5rem;color:var(--text);">Menaces par jour</h3><div id="histDaysBars" class="vbars"><span class="muted">…</span></div></div>
                     <div><h3 style="font-size:0.85rem;margin:0 0 .5rem;color:var(--text);">🎯 Attaquants persistants</h3><div id="histTopIps" class="vbars"><span class="muted">…</span></div></div>
+                </div>
+            </div>
+
+            <div class="card" id="campaignsCard" style="grid-column: 1 / -1; display:none;">
+                <h2>⚔️ Campagnes d'attaque <span class="muted" style="font-size:0.8rem;">— <b id="campAttackers">—</b> attaquants regroupés en <b id="campCount">—</b> campagnes (même workflow)</span></h2>
+                <p class="muted" style="font-size:0.78rem;margin:.2rem 0 .6rem">
+                    Attaquants au <b>même mode opératoire</b> (mêmes sondes, même outil), corrélés à travers le temps et les IP — même s'ils changent d'adresse.
+                </p>
+                <div class="table-wrap">
+                    <table class="data-table" id="campaignsTable">
+                        <thead><tr><th>Outil</th><th>IP</th><th>Sondes</th><th>Séquence-type</th></tr></thead>
+                        <tbody><tr><td colspan="4" class="muted">…</td></tr></tbody>
+                    </table>
                 </div>
             </div>
 
@@ -989,9 +1003,37 @@
             if (visits) visits.style.display = (name === 'visits') ? '' : 'none';
             const history = document.getElementById('historyCard');
             if (history) history.style.display = (name === 'history') ? '' : 'none';
+            const campaigns = document.getElementById('campaignsCard');
+            if (campaigns) campaigns.style.display = (name === 'campaigns') ? '' : 'none';
             if (name === 'visits') loadVisits();
             if (name === 'attackers') loadTrackedAttackers();
             if (name === 'history') loadHistory();
+            if (name === 'campaigns') loadCampaigns();
+        }
+
+        // ⚔️ Campagnes d'attaque corrélées (#1070 phase D)
+        async function loadCampaigns() {
+            const d = await api('/campaigns');
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+            const tb = document.querySelector('#campaignsTable tbody');
+            if (!d || !tb) return;
+            const camps = d.campagnes || [];
+            set('campAttackers', d.attaquants || 0);
+            set('campCount', camps.length);
+            const esc = s => String(s == null ? '' : s).replace(/[&<>]/g,
+                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+            if (!camps.length) {
+                tb.innerHTML = '<tr><td colspan="4" class="muted">' +
+                    (d.available === false ? 'corrélateur pas encore passé' : 'aucune campagne détectée') + '</td></tr>';
+                return;
+            }
+            tb.innerHTML = camps.map(c =>
+                '<tr><td>' + esc(c.outil || '—') + '</td>' +
+                '<td style="color:var(--red);font-weight:600">' + (c.nb_attaquants || 0) + '</td>' +
+                '<td>' + (c.sondes || 0) + '</td>' +
+                '<td style="color:var(--p31-dim);font-size:.72rem;word-break:break-all">' +
+                (c.exemple_sequence || []).map(esc).join(' → ') + '</td></tr>'
+            ).join('');
         }
 
         // Reflect WAF on/off on the header live-dot (presentational only)
