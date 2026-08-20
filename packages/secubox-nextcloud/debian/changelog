@@ -1,3 +1,11 @@
+secubox-nextcloud (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Retrait des references a authelia (IdP SSO decommissionne, ref #1068). vhost nginx : suppression des blocs morts @sbx_auth_login +
+    /__sbx_auth_verify (proxy authelia.sock inexistant) + description control
+    corrigee. NC s'authentifie lui-meme (pas de gate, #394).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 11:00:00 +0200
+
 secubox-nextcloud (1.7.1-1~bookworm1) bookworm; urgency=medium
 
   * Orage occ FIXÉ à la racine : nextcloudctl occ() est désormais SINGLE-FLIGHT
