@@ -1,3 +1,13 @@
+secubox-waf-ng (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf recompilé avec la caractérisation d'attaquants #1070 (phases A-E) :
+    détection d'anomalie d'hôte (--host-anomaly défaut on), empreinte d'outils
+    (champ tool), corrélateur --correlate, clé JA4 --ja4-header, ban nft natif
+    opt-in --nft-ban (non activé côté service : nécessiterait AF_NETLINK +
+    CAP_NET_ADMIN sur ce service durci). Enforcement des bans inchangé (CrowdSec).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 14:15:00 +0200
+
 secubox-waf-ng (1.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Honorer vraiment l'opt-out <meta name="sbx-no-health-banner">. Le refus de
