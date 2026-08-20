@@ -140,6 +140,11 @@ type Server struct {
 	// Nil means no threat logging.
 	threatLog *ThreatLog
 
+	// hostAnomaly active la détection d'anomalie d'hôte (#1070, phase A) : un
+	// Host non routé (vide / IP brute / DGA / nom inconnu) est journalisé et
+	// sanctionné au lieu d'un simple 421 muet. Kill-switch --host-anomaly.
+	hostAnomaly bool
+
 	// crowdsec is the Task 4.1 CrowdSec LAPI bridge seam.
 	// Nil until Task 4.1 is implemented and wired in main().
 	// When non-nil: called with (ip, cat, sev) whenever an IP reaches BAN.
@@ -314,6 +319,12 @@ func (s *Server) handler() http.Handler {
 				viaWaker = true
 				s.wakerProxy().ServeHTTP(w, r)
 				return
+			}
+			// #1070 phase A : un hôte non routé est un signal scanner — on le
+			// journalise et on le sanctionne AVANT de répondre. recordHostAnomaly
+			// n'écrit rien : la réponse reste un 421 (ne rien divulguer).
+			if s.hostAnomaly {
+				s.recordHostAnomaly(r, host)
 			}
 			// #789: styled page instead of http.Error's bare text. The two
 			// sides are complementary — the on-demand check decides WHETHER
@@ -699,6 +710,48 @@ func (s *Server) handler() http.Handler {
 
 // logEscalate writes one threat record for an escalate-mode hit. `action` is
 // "detect" while observing and "banned" once the threshold is crossed.
+// recordHostAnomaly journalise et sanctionne un Host non routé (#1070, phase A).
+// N'ÉCRIT PAS de réponse : l'appelant renvoie toujours 421 (ne rien divulguer).
+//
+// Classes FORTES (vide/IP/DGA) → ban premier coup (rapport CrowdSec immédiat) :
+// aucun usage légitime. Classe FAIBLE (unrouted) → compteur gradué, car un lien
+// périmé légitime existe. Un client LAN est exempté de ban (mauvaise config, pas
+// attaque) mais reste journalisé.
+func (s *Server) recordHostAnomaly(r *http.Request, host string) {
+	cls := classifyHost(host)
+	ip := clientIP(r)
+	lan := privateCIDR(ip)
+
+	action := "detect"
+	switch {
+	case lan:
+		action = "detect" // LAN : on observe, on ne bannit pas
+	case cls.Strong:
+		action = "banned" // vide/IP/DGA : ban dès le premier coup
+	case s.ban != nil:
+		if _, banned := s.ban.Record(ip, time.Now().Unix()); banned {
+			action = "banned"
+		} else {
+			action = "warning"
+		}
+	}
+
+	cat := "host_anomaly:" + cls.Name
+	if s.threatLog != nil {
+		s.threatLog.Record(ThreatRecord{
+			ClientIP: ip, Host: r.Host, Method: r.Method, Path: r.URL.Path,
+			Category: cat, Severity: cls.Sev, Action: action,
+			UA: r.Header.Get("User-Agent"),
+		})
+	}
+	if action == "banned" {
+		log.Printf("sbxwaf: THREAT [%s] %s host-anomaly=%s host=%q", cls.Sev, ip, cls.Name, r.Host)
+		if s.crowdsec != nil {
+			go s.crowdsec.Report(ip, cat, cls.Sev)
+		}
+	}
+}
+
 func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action string) {
 	if s.threatLog == nil {
 		return
@@ -781,6 +834,9 @@ func main() {
 	vhostSignalsFile := flag.String("vhost-signals", "/var/cache/secubox/waf/vhost-signals.json",
 		"path for the per-vhost last-request/active-conns JSON snapshot (scale-to-zero signal source); empty disables")
 	upstreamTimeout := flag.Duration("upstream-timeout", 10*time.Second, "per-request upstream timeout")
+	hostAnomaly := flag.Bool("host-anomaly", true,
+		"traiter un Host non routé (vide/IP/DGA/inconnu) comme signal scanner "+
+			"— journaliser + bannir au lieu d'un 421 muet (#1070)")
 	threatLog := flag.String("threat-log", "/var/log/secubox/waf/waf-threats.log",
 		"path for append-only WAF threat log (NDJSON, one record per hit)")
 	// Task 4.1: CrowdSec LAPI bridge flags.
@@ -885,7 +941,8 @@ func main() {
 		// escalate mode: separate long-window counter (default 24h/3).
 		escalateBan: NewBan(*escalateWindow, *escalateThreshold),
 		// Task 3.2: append-only threat log.
-		threatLog: NewThreatLog(*threatLog),
+		threatLog:   NewThreatLog(*threatLog),
+		hostAnomaly: *hostAnomaly,
 		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,
