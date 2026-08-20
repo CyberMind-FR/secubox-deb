@@ -45,6 +45,7 @@ type ThreatRecord struct {
 	RuleID   string
 	Action   string // "detect" | "warning" | "banned"
 	UA       string
+	Tool     string // #1070 phase C : outil identifié (nuclei, sqlmap…) si certain
 }
 
 // ThreatLog appends JSON threat records to a file, one per line.
@@ -75,6 +76,7 @@ type logEntry struct {
 	RuleID    string `json:"rule_id"`
 	Action    string `json:"action"`
 	UserAgent string `json:"user_agent"`
+	Tool      string `json:"tool,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -92,6 +94,7 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		RuleID:    rec.RuleID,
 		Action:    rec.Action,
 		UserAgent: rec.UA,
+		Tool:      rec.Tool,
 	}
 
 	data, err := json.Marshal(entry)

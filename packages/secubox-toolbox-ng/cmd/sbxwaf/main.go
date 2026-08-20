@@ -495,6 +495,7 @@ func (s *Server) handler() http.Handler {
 							RuleID:   "",
 							Action:   "detect",
 							UA:       r.Header.Get("User-Agent"),
+							Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
 						})
 					}
 					hit = false // fall through to the normal proxy path
@@ -563,6 +564,7 @@ func (s *Server) handler() http.Handler {
 							RuleID: "",
 							Action: action,
 							UA:     r.Header.Get("User-Agent"),
+							Tool:   étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
 						})
 					}
 
@@ -754,7 +756,8 @@ func (s *Server) recordHostAnomaly(r *http.Request, host string) {
 		s.threatLog.Record(ThreatRecord{
 			ClientIP: ip, Host: r.Host, Method: r.Method, Path: r.URL.Path,
 			Category: cat, Severity: cls.Sev, Action: action,
-			UA: r.Header.Get("User-Agent"),
+			UA:   r.Header.Get("User-Agent"),
+			Tool: étiquetteOutil(r.Header.Get("User-Agent"), r.URL.Path),
 		})
 	}
 	if action == "banned" {
@@ -777,6 +780,7 @@ func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action stri
 		RuleID:   "",
 		Action:   action,
 		UA:       r.Header.Get("User-Agent"),
+		Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
 	})
 }
 
