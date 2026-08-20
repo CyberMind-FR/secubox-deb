@@ -1,3 +1,12 @@
+secubox-lyrion (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * Retrait des references a authelia (IdP SSO decommissionne, ref #1068). vhosts nginx (lyrion.conf + lyrion-vhost.conf) : proxy authelia.sock mort
+    remplace par le stub LAN-only default-deny partage (zz-sbx-authgate.conf) ;
+    auth_request_set retires. Sortie de statut lyrionctl et commentaires
+    (install-lxc.sh, index.html) : Authelia -> gate LAN-only.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 11:00:00 +0200
+
 secubox-lyrion (1.5.0-1~bookworm1) bookworm; urgency=high
 
   * PLUSIEURS mediatheques externes a la fois. La cible etait unique

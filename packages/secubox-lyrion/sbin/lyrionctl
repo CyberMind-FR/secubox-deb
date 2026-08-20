@@ -149,7 +149,7 @@ emit_access_json() {
     # webui's "Open Music UI" button reads this; consistency comes from
     # one source.
     #   lan:    http://<host>:9000/   (direct nginx vhost, LAN-only)
-    #   public: https://<PUBLIC_HOSTNAME>/   (Authelia-gated dedicated vhost)
+    #   public: https://<PUBLIC_HOSTNAME>/   (LAN-only gated dedicated vhost)
     local lan_url public_url
     lan_url="http://$(hostname -I | awk '{print $1}'):${HTTP_PORT}/"
     if [ -n "$PUBLIC_HOSTNAME" ]; then
@@ -163,7 +163,7 @@ emit_access_json() {
   "access": [
     {"url": "$lan_url",    "auth": "lan-only",       "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
     $( [ -n "$public_url" ] && cat <<PUB
-{"url": "$public_url", "auth": "Authelia SSO",   "scope": "public"}
+{"url": "$public_url", "auth": "LAN-only gate", "scope": "public"}
 PUB
 )
   ]
