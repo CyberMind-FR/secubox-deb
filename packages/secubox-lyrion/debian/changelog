@@ -1,3 +1,17 @@
+secubox-lyrion (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Pilotage des lecteurs Squeezebox/Squeezelite depuis la webui admin (#1071).
+    Le panneau « lecteurs connectes » gagne, par lecteur : transport
+    (play/pause/stop/prec/suiv), power on/off, volume, et synchronisation
+    (sync/unsync) entre lecteurs. Meme jeu de commandes que baztian/squeezectl
+    mais via l'API JSON-RPC NATIVE de LMS (deja utilisee pour la detection) —
+    aucune dependance externe. Endpoints POST /api/v1/lyrion/player/{id}/...
+    (porte LAN, sans jeton comme /rescan : piloter une lecture n'est pas un
+    redemarrage). Le pid part en valeur JSON (jamais un shell), volume borne
+    0..100. Tests unitaires sur la traduction verbe -> commande LMS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 13:00:00 +0200
+
 secubox-lyrion (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * Retrait des references a authelia (IdP SSO decommissionne, ref #1068). vhosts nginx (lyrion.conf + lyrion-vhost.conf) : proxy authelia.sock mort
