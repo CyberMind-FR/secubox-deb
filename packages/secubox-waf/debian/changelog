@@ -1,3 +1,13 @@
+secubox-waf (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * waf-rules.json (base) : graine product_absent_probes incluse, pour qu'une
+    install neuve porte le jeu de filtres COMPLET avant même que wafgen tourne.
+    wafgen (secubox-cve-triage) la regénère à chaud (remplacement idempotent).
+    Toutes les catégories de filtres du WAF sont désormais source-backed :
+    statiques dans ce fichier, product_absent_probes générée par wafgen.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 15:45:00 +0200
+
 secubox-waf (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * waf-rules.json (base) : signatures d'outils de scan (nuclei/gobuster/ffuf/
