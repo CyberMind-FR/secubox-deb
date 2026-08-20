@@ -57,7 +57,31 @@
 
   <main class="feed">
     <div class="feedhead"><h2 class="serif">À la une</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
-    {{range .Threads}}
+    {{range .News}}
+    {{if .Feed}}{{$f := .Feed}}
+    <article class="dossier" data-k="{{$f.Type}}">
+      <div class="src">
+        <div class="kind"><span class="em">{{$f.Glyphe}}</span><span class="lb">{{if eq $f.Type "audiobook"}}livre audio{{else if eq $f.Type "serie"}}série{{else}}podcast{{end}}</span></div>
+        <div class="body">
+          <div class="origin">médiathèque · {{len $f.Episodes}} épisode(s)</div>
+          <h2><a href="/media#f{{$f.ID}}">{{$f.Titre}}</a></h2>
+        </div>
+      </div>
+      <div class="prev feedrow">
+        <span class="pfcover sm"><span class="pfglyph">{{$f.Glyphe}}</span><img class="pfimg" src="{{$f.Vignette}}" alt="" loading="lazy"></span>
+        {{with index $f.Episodes 0}}
+        <button class="play sm" type="button" data-act="play" data-media="{{.Media}}" data-feed="{{$f.ID}}" data-title="{{.Titre}}" data-sub="{{$f.Titre}}" data-href="/media#f{{$f.ID}}" aria-label="Écouter">▶</button>
+        <span class="epone">{{.Titre}}{{if .Duree}} · {{.Duree}}{{end}}</span>
+        {{end}}
+        <a class="mini" href="/media#f{{$f.ID}}">{{len $f.Episodes}} ép. →</a>
+      </div>
+      <div class="dfoot">
+        <span class="meta"><span class="pill">{{if eq $f.Type "audiobook"}}chapitres 1→{{len $f.Episodes}}{{else}}récent d'abord{{end}}</span></span>
+        <span class="grow"></span>
+        <a class="btn discuss" href="/media#f{{$f.ID}}">🎧 Ouvrir</a>
+      </div>
+    </article>
+    {{else}}{{with .Fil}}
     <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if .Source}}url{{else}}fil{{end}}">
       {{if .Published}}<span class="stamp pub">publié</span>{{else if ne .Visibility "public"}}<span class="stamp loc">local</span>{{end}}
       <div class="src">
@@ -72,13 +96,7 @@
           <h2><a href="/t/{{.ID}}">{{.Title}}</a></h2>
         </div>
       </div>
-      {{if eq .MediaKind "audio"}}
-      <div class="prev"><div class="player">
-        <button class="play" type="button" data-act="play" data-media="{{.MediaURL}}" data-title="{{.Title}}" data-sub="{{.Author}}" data-href="/t/{{.ID}}" aria-label="Écouter">▶</button>
-        <div class="wave" aria-hidden="true"></div>
-        <a class="ptime" href="/t/{{.ID}}">ouvrir ↗</a>
-      </div></div>
-      {{else if eq .MediaKind "video"}}
+      {{if eq .MediaKind "video"}}
       <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
       <div class="dfoot">
@@ -90,6 +108,7 @@
         <a class="btn discuss" href="/t/{{.ID}}">💬 Discuter</a>
       </div>
     </article>
+    {{end}}{{end}}
     {{else}}
     <div class="pnl empty">Aucun dossier pour l'instant.{{if .V.Connecte}} Ouvrez le premier fil.{{end}}</div>
     {{end}}
@@ -110,11 +129,14 @@
 </div>
 
 <div class="dock"><div class="mplayer" id="mini">
+  <button class="ibtn tiny" type="button" data-act="prev" aria-label="Piste précédente">⏮</button>
   <button class="play" type="button" data-act="mini" id="miniplay" aria-label="Lecture / pause">❚❚</button>
+  <button class="ibtn tiny" type="button" data-act="next" aria-label="Piste suivante">⏭</button>
   <div class="info"><b id="mini-t">—</b><small id="mini-s">—</small></div>
   <div class="prog"><i id="mini-prog"></i></div>
   <span class="ptime mono" id="mini-time">0:00</span>
-  <button class="ibtn" type="button" data-act="mini-close" aria-label="Fermer le lecteur">✕</button>
+  <button class="ibtn tiny" type="button" data-act="popout" aria-label="Lecteur en fenêtre séparée" title="Détacher — continue en surfant">⧉</button>
+  <button class="ibtn tiny" type="button" data-act="mini-close" aria-label="Fermer le lecteur">✕</button>
 </div></div>
 {{if .V.Connecte}}<a class="fab" href="/nouveau"><span class="p">＋</span> Nouveau fil</a>{{end}}
 

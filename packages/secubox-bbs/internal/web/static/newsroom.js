@@ -78,6 +78,14 @@
     play(players[i + 1]);
     return true;
   }
+  function playPrev() {
+    var players = $$('.play[data-media]');
+    if (!lastBtn) return;
+    var i = players.indexOf(lastBtn);
+    // Avant 3 s : piste précédente ; sinon on revient au début de la piste.
+    if (audio && audio.currentTime > 3) { audio.currentTime = 0; return; }
+    if (i > 0) play(players[i - 1]);
+  }
   function playFeed(btn) {
     var sec = btn.closest('.podfeed');
     if (!sec) return;
@@ -98,6 +106,25 @@
     $("#mini-s").textContent = btn.getAttribute("data-sub") || "";
     audio.play().catch(function () { var h = btn.getAttribute("data-href"); if (h) location.href = h; });
   }
+  // POP-OUT : ouvre un lecteur dans une FENÊTRE séparée qui continue de jouer
+  // pendant qu'on navigue dans la fenêtre principale (la lecture d'un onglet ne
+  // s'interrompt pas quand un AUTRE onglet change de page). On passe le flux (ou
+  // la piste), l'épisode courant et sa position ; le lecteur reprend là.
+  function popout() {
+    if (!lastBtn) return;
+    var media = lastBtn.getAttribute("data-media") || "";
+    var feed = lastBtn.getAttribute("data-feed") || "";
+    var t = Math.floor(audio ? audio.currentTime : 0);
+    var q = feed ? "feed=" + encodeURIComponent(feed) : "src=" + encodeURIComponent(media);
+    q += "&t=" + t;
+    var m = media.match(/\/media\/ep\/(\d+)/);
+    if (m) q += "&ep=" + m[1];
+    q += "&title=" + encodeURIComponent(lastBtn.getAttribute("data-title") || "");
+    window.open("/player?" + q, "sbxplayer",
+      "width=460,height=620,menubar=no,toolbar=no,location=no,resizable=yes");
+    if (audio) audio.pause();
+    miniClose();
+  }
   function miniToggle() { if (!audio) return; audio.paused ? audio.play() : audio.pause(); }
   function miniClose() { if (audio) audio.pause(); $("#mini").classList.remove("show"); }
   function drop() { var d = $("#dropin"); if (d) { d.focus(); d.scrollIntoView({ behavior: "smooth", block: "center" }); } }
@@ -114,6 +141,9 @@
     else if (a === "theme") theme();
     else if (a === "drop") { e.preventDefault(); drop(); }
     else if (a === "mini") miniToggle();
+    else if (a === "prev") playPrev();
+    else if (a === "next") { if (!playNext() && audio) audio.currentTime = audio.duration || 0; }
+    else if (a === "popout") popout();
     else if (a === "mini-close") miniClose();
   });
   document.addEventListener("keydown", function (e) {
