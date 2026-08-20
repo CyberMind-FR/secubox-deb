@@ -65,6 +65,11 @@ ExecStartPre=+/bin/chmod 0750 /var/log/secubox/cookie-audit
 ExecStartPre=+/bin/mkdir -p /var/log/secubox/waf
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/waf
 ExecStartPre=+/bin/chmod 0750 /var/log/secubox/waf
+# #1070 phase B : le journal des bans nft (/var/lib/secubox/waf/bans.jsonl) doit
+# appartenir au service qui l'écrit et est rechargé au démarrage.
+ExecStartPre=+/bin/mkdir -p /var/lib/secubox/waf
+ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/lib/secubox/waf
+ExecStartPre=+/bin/chmod 0750 /var/lib/secubox/waf
 # DELAI AMONT : 10 s PAR DEFAUT, TROP COURT POUR QUI ECRIT SUR DISQUE (#1030).
 #
 # Un depot de 22 Mio a mis 116 s a s'ecrire sur cette board. Le WAF abandonnait
@@ -86,7 +91,8 @@ ExecStart=/usr/sbin/sbxwaf \
   --threat-log /var/log/secubox/waf/waf-threats.log \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \
-  --crowdsec-url http://10.100.0.1:8080
+  --crowdsec-url http://10.100.0.1:8080 \
+  --nft-ban
 
 # --crowdsec-url is the real CrowdSec LAPI (LXC-bridge gateway 10.100.0.1:8080),
 # NOT 127.0.0.1:8080 (the nft DNAT VIP that would self-loop into this proxy).
@@ -121,11 +127,19 @@ ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
 ReadOnlyPaths=/etc/secubox
-ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/secubox/waf /run/secubox
+ReadWritePaths=/var/log/secubox/waf /var/log/secubox/cookie-audit /var/cache/secubox/waf /run/secubox /var/lib/secubox/waf
 
-CapabilityBoundingSet=
-AmbientCapabilities=
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# #1070 phase B — BAN NFT NATIF. --nft-ban laisse le WAF poser ses propres drops
+# dans le set nft `inet secubox waf_ban{,6}` (persistants, retrait différé par le
+# timeout nft), en parallèle de CrowdSec. nft parle à netfilter par netlink :
+# d'où CAP_NET_ADMIN + AF_NETLINK. Compromis ASSUME sur ce service exposé — le WAF
+# est deja le point d'application du blocage (le bouncer CrowdSec detient le meme
+# pouvoir nft) et devient autonome (bans effectifs meme sans CrowdSec). Pour
+# revenir au strict minimum : retirer --nft-ban de l'ExecStart ET ces trois lignes
+# (rebasculer CapabilityBoundingSet/AmbientCapabilities a vide, retirer AF_NETLINK).
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
