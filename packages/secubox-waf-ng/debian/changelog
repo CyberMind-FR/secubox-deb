@@ -1,3 +1,14 @@
+secubox-waf-ng (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Activation du ban nft natif (#1070 phase B) : --nft-ban dans l'ExecStart +
+    CAP_NET_ADMIN + AF_NETLINK (nft parle netlink) + dossier /var/lib/secubox/waf
+    pour le journal des bans. Le WAF pose desormais ses propres drops nft
+    (waf_ban{,6}, persistants, retrait par timeout nft) en parallele de CrowdSec
+    — bans effectifs meme sans CrowdSec. Compromis de durcissement assume et
+    documente dans l'unite ; reversible en retirant --nft-ban + les 3 lignes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 16:30:00 +0200
+
 secubox-waf-ng (1.5.3-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf recompilé avec la caractérisation d'attaquants #1070 (phases A-E) :
