@@ -7,9 +7,9 @@ Standards-Version: 4.6.2
 
 Package: secubox-system-tuning
 Architecture: all
-Depends: ${misc:Depends}, systemd, util-linux, python3
+Depends: ${misc:Depends}, systemd, util-linux, python3, systemd-zram-generator
 Recommends: lxc
-Description: SecuBox System Tuning — swap + cgroup MemoryHigh caps for LXC containers
+Description: SecuBox System Tuning — swap + zram + memory/CPU caps for LXC
  Per-board memory tuning for SecuBox: configures a swap file in /data
  (boards typically ship with 0 swap and exhaust real memory under LXC
  load), and applies per-LXC-container cgroup MemoryHigh soft caps

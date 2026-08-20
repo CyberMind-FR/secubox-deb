@@ -19,3 +19,26 @@ size = "4G"
 # the swap file. Safety: avoid filling up /data on a board with limited
 # storage.
 minimum_data_free_gb = 8
+
+[zram]
+# Compressed RAM swap. Compresses swapped-out pages in memory (lzo-rle
+# ~2:1) instead of writing them to the eMMC: faster than disk swap, and
+# it spares eMMC write wear. Given a HIGHER priority than the /data swap
+# file so the kernel swaps to zram first and only spills to disk under
+# real pressure.
+enabled = true
+
+# zram device size, as a systemd-zram-generator expression (see
+# zram-generator.conf(5)) or a fixed value with M/G suffix. Default caps
+# at half the RAM (compressed footprint is a fraction of this).
+size = "min(ram / 2, 4096)"
+
+# Compression algorithm. This board's kernel zram offers lzo-rle / lzo
+# only (NOT zstd); lzo-rle is the fast default. secubox-tuning-apply
+# validates the choice against /sys/block/zram0/comp_algorithm and falls
+# back to lzo-rle if the kernel does not support it.
+algorithm = "lzo-rle"
+
+# Swap priority. Must be higher than the /data swap file (which defaults
+# to a negative priority) so zram is used before disk.
+priority = 100

@@ -4,8 +4,9 @@
 # Idempotent. Reads config from /etc/secubox/tuning/.
 #
 # Usage:
-#   secubox-tuning-apply               # apply swap + memory caps + CPU caps
-#   secubox-tuning-apply swap          # swap only
+#   secubox-tuning-apply               # apply swap + zram + memory caps + CPU caps
+#   secubox-tuning-apply swap          # disk swap file only
+#   secubox-tuning-apply zram          # compressed RAM swap only
 #   secubox-tuning-apply cgroup        # memory caps only
 #   secubox-tuning-apply cpu           # CPU caps only
 #   secubox-tuning-apply --dry-run     # show what would be done
@@ -29,15 +30,17 @@ err()  { echo -e "${RED}[fail  ]${NC} $*" >&2; }
 
 DRY_RUN=0
 DO_SWAP=1
+DO_ZRAM=1
 DO_CGROUP=1
 DO_CPU=1
 
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    swap)      DO_CGROUP=0; DO_CPU=0 ;;
-    cgroup)    DO_SWAP=0;   DO_CPU=0 ;;
-    cpu)       DO_SWAP=0;   DO_CGROUP=0 ;;
+    swap)      DO_ZRAM=0; DO_CGROUP=0; DO_CPU=0 ;;
+    zram)      DO_SWAP=0; DO_CGROUP=0; DO_CPU=0 ;;
+    cgroup)    DO_SWAP=0; DO_ZRAM=0;   DO_CPU=0 ;;
+    cpu)       DO_SWAP=0; DO_ZRAM=0;   DO_CGROUP=0 ;;
     -h|--help)
       sed -n '1,/^set -/p' "$0" | grep '^#' | sed 's/^# \?//'
       exit 0
@@ -174,6 +177,82 @@ apply_swap() {
   ok "swap: $(swapon --show)"
 }
 
+apply_zram() {
+  log "zram phase"
+  local enabled size algo prio
+  enabled=$(toml_get "$CONFIG_FILE" zram.enabled true)
+  case "$enabled" in
+    True|true|1) : ;;
+    *) ok "zram disabled in config, skipping"; return 0 ;;
+  esac
+  size=$(toml_get "$CONFIG_FILE" zram.size "min(ram / 2, 4096)")
+  algo=$(toml_get "$CONFIG_FILE" zram.algorithm lzo-rle)
+  prio=$(toml_get "$CONFIG_FILE" zram.priority 100)
+
+  if ! command -v zramctl >/dev/null 2>&1; then
+    warn "zramctl absent (util-linux); skipping zram"
+    return 0
+  fi
+  # systemd-zram-generator creates the device and its swap unit at boot;
+  # without it, only a live setup would work and nothing would survive a
+  # reboot — so require it rather than silently ship a non-persistent swap.
+  if [[ ! -e /lib/systemd/system-generators/zram-generator \
+     && ! -e /usr/lib/systemd/system-generators/zram-generator ]]; then
+    warn "systemd-zram-generator not installed; skipping zram (apt install systemd-zram-generator)"
+    return 0
+  fi
+
+  # Validate the algorithm against what THIS kernel's zram actually offers;
+  # fall back to the universally-supported lzo-rle otherwise. Needs the
+  # module loaded so /sys/block/zram0/comp_algorithm exists.
+  modprobe zram 2>/dev/null || true
+  if [[ -e /sys/block/zram0/comp_algorithm ]] \
+     && ! grep -qw "$algo" /sys/block/zram0/comp_algorithm; then
+    warn "algo '$algo' unsupported by kernel zram; falling back to lzo-rle"
+    algo="lzo-rle"
+  fi
+
+  local conf=/etc/systemd/zram-generator.conf tmp
+  tmp=$(mktemp)
+  cat > "$tmp" <<CONF
+# Managed by secubox-tuning-apply — edit /etc/secubox/tuning/config.toml [zram].
+# Compressed RAM swap: compresses swapped pages in memory instead of the
+# eMMC (faster + spares the flash). Priority is set above the /data swap
+# file so the kernel swaps here first.
+[zram0]
+zram-size = $size
+compression-algorithm = $algo
+swap-priority = $prio
+CONF
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    log "DRY-RUN: would write $conf:"
+    sed 's/^/    /' "$tmp"
+    rm -f "$tmp"
+    return 0
+  fi
+
+  if ! cmp -s "$tmp" "$conf" 2>/dev/null; then
+    mv "$tmp" "$conf"
+    log "wrote $conf (size=$size algo=$algo prio=$prio)"
+  else
+    rm -f "$tmp"
+    log "$conf already current"
+  fi
+
+  systemctl daemon-reload
+  if ! swapon --show=NAME --noheadings | grep -qx '/dev/zram0'; then
+    systemctl restart systemd-zram-setup@zram0.service 2>/dev/null || true
+    systemctl start dev-zram0.swap 2>/dev/null || true
+  fi
+
+  if swapon --show=NAME --noheadings | grep -qx '/dev/zram0'; then
+    ok "zram active: $(zramctl --output NAME,ALGORITHM,DISKSIZE --noheadings /dev/zram0 2>/dev/null) (prio $prio)"
+  else
+    warn "zram not active after setup — check: systemctl status dev-zram0.swap"
+  fi
+}
+
 apply_cgroup() {
   log "cgroup MemoryHigh phase"
   if [[ ! -f "$LXC_CAPS_FILE" ]]; then
@@ -200,36 +279,50 @@ apply_cgroup() {
   #      both, take the first that exists) so the cap is reapplied on
   #      every lxc-start.
 
-  local applied=0 persisted=0 missed=0
+  local applied=0 persisted=0 missed=0 skipped=0
   for ctn in $containers; do
     local cap cgrp lxc_conf
     cap=$(toml_get "$LXC_CAPS_FILE" "caps.$ctn")
 
-      # UN `high` AU-DESSUS DE `max` NE FREINE JAMAIS, IL TUE.
+      # RESPECTER LE BUDGET PROPRE DU CONTENEUR (#496) — ne pas le sur-freiner.
       #
-      # `memory.high` est le seuil de FREINAGE : au-dela, le noyau ralentit le
-      # conteneur et recupere des pages. `memory.max` est la limite DURE : au-dela,
-      # il tue. Regler high >= max rend le frein inatteignable — on passe donc
-      # directement de « tout va bien » a l'execution sommaire, sans ralentissement
-      # ni avertissement.
+      # `memory.high` est le seuil de FREINAGE ; `memory.max` la limite DURE.
+      # Certains conteneurs definissent deja leur PROPRE memory.max dans leur
+      # config LXC (budget #496 : max + swap.max=0). Si le cap tuning est
+      # SUPERIEUR OU EGAL a cette limite dure, il est au mieux redondant, au pire
+      # nuisible : l'ancien clamp le ramenait a 85 % de la max, posant un `high`
+      # SOUS le working-set du conteneur et l'etranglant en permanence.
       #
-      # Constate le 2026-08-17 : nextcloud portait high=600M pour max=512M et avait
-      # ete tue 30 fois ; horde, mail et matrix avaient la meme inversion. Rien dans
-      # les journaux ne designait la cause — un conteneur tue redemarre, et le
-      # compteur `oom_kill` du cgroup est le seul temoin.
+      # Constate le 2026-08-19 : nextcloud (max=512M, working-set ~508M, swap=0)
+      # portait high=435M et thrashait — timeouts amont nginx / 503 intermittents ;
+      # mail, matrix et horde clampes pareil. On laisse desormais le budget #496
+      # gouverner SEUL : on saute le conteneur et on retire tout `high` precedemment
+      # injecte (runtime -> max, config -> ligne supprimee), sinon un frein nuisible
+      # persisterait au prochain demarrage.
       #
-      # On borne a 85 % de la limite dure plutot que de refuser : un reglage trop
-      # haut est une erreur de saisie, pas une intention.
-      local dur dur_o cap_o
-      dur=$(awk '/^lxc.cgroup2.memory.max/{print $3}' "/var/lib/lxc/${ctn}/config" 2>/dev/null | head -1)
+      # NB : lecture de la max gardee par conf_lxc (teste l'existence) — un service
+      # hote peut laisser un /var/lib/lxc/<nom>/ sans fichier config (ex. mitmproxy) ;
+      # awk sur un fichier absent sort en code 2 et, sous `set -euo pipefail`, tuait
+      # toute la boucle (seul le 1er conteneur recevait son cap).
+      local dur maxconf; maxconf=$(conf_lxc "$ctn")
+      dur=""
+      [[ -n "$maxconf" ]] && dur=$(awk '/^lxc.cgroup2.memory.max/{print $3}' "$maxconf" 2>/dev/null | head -1)
       if [[ -n "$dur" ]]; then
+        local dur_o cap_o
         dur_o=$(numfmt --from=iec "$dur" 2>/dev/null || echo 0)
         cap_o=$(numfmt --from=iec "$cap" 2>/dev/null || echo 0)
         if [[ "$dur_o" -gt 0 && "$cap_o" -ge "$dur_o" ]]; then
-          local borne=$(( dur_o * 85 / 100 / 1048576 ))
-          printf "  %-12s high=%s >= max=%s — ramene a %sM (un frein au-dessus de la limite ne freine jamais)\n" \
-                 "$ctn" "$cap" "$dur" "$borne" >&2
-          cap="${borne}M"
+          printf "  %-12s budget propre max=%s <= cap=%s — cap tuning ignore (#496 gouverne)\n" \
+                 "$ctn" "$dur" "$cap" >&2
+          skipped=$((skipped+1))
+          if [[ $DRY_RUN -eq 0 ]]; then
+            local cgrp_r="/sys/fs/cgroup/lxc.payload.${ctn}"
+            [[ -w "$cgrp_r/memory.high" ]] && echo max > "$cgrp_r/memory.high" 2>/dev/null || true
+            for cf in "/data/lxc/${ctn}/config" "/var/lib/lxc/${ctn}/config"; do
+              [[ -f "$cf" ]] && sed -i '/^lxc\.cgroup2\.memory\.high\s*=/d' "$cf" 2>/dev/null || true
+            done
+          fi
+          continue
         fi
       fi
 
@@ -262,7 +355,7 @@ apply_cgroup() {
     fi
   done
 
-  ok "cgroup caps: $applied runtime + $persisted persisted + $missed missed"
+  ok "cgroup caps: $applied runtime + $persisted persisted + $missed missed + $skipped budget-propre"
 }
 
 # apply_cpu — plafond CPU dur par conteneur (#1011).
@@ -322,8 +415,9 @@ apply_cpu() {
   ok "cpu caps: $applied a chaud + $persisted persistes + $absent non provisionnes"
 }
 
-log "secubox-tuning-apply (dry_run=$DRY_RUN, swap=$DO_SWAP, cgroup=$DO_CGROUP, cpu=$DO_CPU)"
+log "secubox-tuning-apply (dry_run=$DRY_RUN, swap=$DO_SWAP, zram=$DO_ZRAM, cgroup=$DO_CGROUP, cpu=$DO_CPU)"
 [[ $DO_SWAP   -eq 1 ]] && apply_swap
+[[ $DO_ZRAM   -eq 1 ]] && apply_zram
 [[ $DO_CGROUP -eq 1 ]] && apply_cgroup
 [[ $DO_CPU    -eq 1 ]] && apply_cpu
 

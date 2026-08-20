@@ -217,7 +217,7 @@ configure_lms_for_proxy() {
     # whenever the request peer is the LXC bridge gateway (10.100.0.1) or on
     # a "different network" — both true when traffic arrives through nginx
     # reverse-proxy from the LAN. We disable it here because access control
-    # is enforced upstream (HAProxy + mitmproxy WAF + Authelia SSO).
+    # is enforced upstream (HAProxy + mitmproxy WAF + LAN-only gate).
     # Also widen `allowedHosts` so the LAN can reach the UI even before
     # the settings-protection lift takes effect.
     log "Configuring LMS prefs for reverse-proxy access ..."

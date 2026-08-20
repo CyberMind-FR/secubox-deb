@@ -10,23 +10,19 @@ Type=simple
 User=secubox
 Group=secubox
 WorkingDirectory=/usr/lib/secubox/lyrion
-# RuntimeDirectory=secubox RETIRE (#1022) : /run/secubox est partage par ~95
-# unites, et systemd EFFACE le contenu d'un RuntimeDirectory au redemarrage —
-# une seule unite qui le declare emporte les sockets de toutes les autres, et
-# la board rend des 502 sur des modules qui n'avaient rien demande. Le parent
-# reste root:root 1777, cree hors des unites.
+RuntimeDirectory=secubox
 RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 ExecStartPre=+/bin/mkdir -p /etc/secubox
 ExecStartPre=+/bin/chown secubox:secubox /etc/secubox
-# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on
-# possede. Une socket laissee par un autre utilisateur rendrait le
-# demarrage impossible, en boucle et en silence. Le prefixe `+` execute en
-# root malgre User= — sans lui la ligne echouerait comme le demon.
-ExecStartPre=+/bin/rm -f /run/secubox/lyrion.sock
 ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/lyrion.sock --log-level warning
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=true
+# NoNewPrivileges=true neutralise sudo — « the "no new privileges" flag is
+# set, which prevents sudo from running as root ». Or le panneau DOIT
+# deleguer a lyrionctl en root : /data/lxc/<nom> appartient a l'idmap du
+# conteneur et n'est pas meme traversable par `secubox`.
+NoNewPrivileges=false
 LogsDirectory=secubox
 LogsDirectoryMode=0755
 ReadWritePaths=/run/secubox /var/lib/secubox /etc/secubox /var/log/secubox

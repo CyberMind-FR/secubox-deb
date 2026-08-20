@@ -28,5 +28,4 @@ Description: SecuBox Users — local account manager (Argon2id + TOTP + RBAC)
   - secubox-auth — JWT auth guardian / session middleware (consumes
     secubox-users state).
   - secubox-portal — web login portal.
-  - secubox-authelia — Authelia SSO IdP (LXC).
   - secubox-avatar — profile image + display-name manager.
