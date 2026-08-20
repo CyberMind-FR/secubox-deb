@@ -54,7 +54,18 @@
     .btn { padding: 0.4rem 0.85rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.85rem; }
     .btn:hover { filter: brightness(1.1); }
     .btn.primary { background: var(--mesh-main, #104A88); color: white; border-color: var(--mesh-main); }
-  </style>
+    /* Contrôle des lecteurs (#1071) */
+    .player-row { border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; margin-bottom: 0.6rem; background: var(--surface); }
+    .player-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .player-name { font-weight: 600; color: var(--text); }
+    .player-meta { color: var(--muted); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
+    .ppwr { margin-left: auto; color: var(--muted); font-size: 0.82rem; display: inline-flex; align-items: center; gap: 0.3rem; }
+    .player-ctl { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+    .pbtn { min-width: 2.1rem; padding: 0.32rem 0.5rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 0.95rem; line-height: 1; }
+    .pbtn:hover { filter: brightness(1.12); }
+    .pvol { flex: 1 1 120px; min-width: 100px; max-width: 220px; accent-color: var(--mesh-main, #104A88); }
+    .psync { padding: 0.3rem 0.4rem; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 0.82rem; }
+</style>
 </head>
 <body class="crt-light hybrid-dark">
 
@@ -235,6 +246,36 @@
     }
   }
 
+  // Contrôle des lecteurs (#1071) : chaque verbe POST vers /player/{id}/…, qui
+  // relaie en slim.request LMS natif (jeu de commandes squeezectl, sans dép.).
+  async function playerPost(pid, path, body) {
+    return api(`/player/${encodeURIComponent(pid)}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+  }
+  async function playerAction(pid, verb) {
+    try { await playerPost(pid, `action/${verb}`); }
+    catch (e) { flashPlayers(e.message); }
+  }
+  async function playerPower(pid, on) {
+    try { await playerPost(pid, "power", { on }); loadPlayers(); }
+    catch (e) { flashPlayers(e.message); }
+  }
+  async function playerVolume(pid, level) {
+    try { await playerPost(pid, "volume", { level: Number(level) }); }
+    catch (e) { flashPlayers(e.message); }
+  }
+  async function playerSync(pid, target) {
+    try { await playerPost(pid, "sync", { target }); loadPlayers(); }
+    catch (e) { flashPlayers(e.message); }
+  }
+  function flashPlayers(msg) {
+    const n = document.getElementById("players-flash");
+    if (n) { n.textContent = "⚠ " + msg; setTimeout(() => { n.textContent = ""; }, 4000); }
+  }
+
   async function loadPlayers() {
     const wrap = document.getElementById("players-wrap");
     try {
@@ -244,16 +285,38 @@
         wrap.innerHTML = `<div class="empty">no players connected — see hint below</div>`;
         return;
       }
+      const btn = (pid, verb, label, title) =>
+        `<button class="pbtn" title="${title}" onclick="playerAction('${pid}','${verb}')">${label}</button>`;
       wrap.innerHTML =
-        '<table class="table"><thead><tr>' +
-        '<th>Name</th><th>Model</th><th>ID</th><th>IP</th><th>Power</th>' +
-        '</tr></thead><tbody>' +
-        list.map(p =>
-          `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.model)}</td>` +
-          `<td>${escapeHtml(p.id)}</td><td>${escapeHtml(p.ip)}</td>` +
-          `<td>${p.power ? "on" : "off"}</td></tr>`
-        ).join("") +
-        '</tbody></table>';
+        '<div id="players-flash" class="hint" style="color:var(--boot-main,#803018)"></div>' +
+        list.map(p => {
+          const pid = escapeHtml(p.id);
+          const opts = list.filter(o => o.id !== p.id)
+            .map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)}</option>`).join("");
+          const sync = opts
+            ? `<select class="psync" onchange="if(this.value){playerSync('${pid}',this.value);this.value='';}">` +
+              `<option value="">sync with…</option>${opts}</select>` +
+              `<button class="pbtn" title="unsync" onclick="playerAction('${pid}','unsync')">⛓✕</button>`
+            : "";
+          return `<div class="player-row">
+            <div class="player-head">
+              <span class="player-name">${escapeHtml(p.name)}</span>
+              <span class="player-meta">${escapeHtml(p.model)} · ${escapeHtml(p.ip || "—")}</span>
+              <label class="ppwr"><input type="checkbox" ${p.power ? "checked" : ""}
+                onchange="playerPower('${pid}',this.checked)"> power</label>
+            </div>
+            <div class="player-ctl">
+              ${btn(pid, "prev", "⏮", "previous")}
+              ${btn(pid, "play", "▶", "play")}
+              ${btn(pid, "pause", "⏸", "pause")}
+              ${btn(pid, "stop", "⏹", "stop")}
+              ${btn(pid, "next", "⏭", "next")}
+              <input type="range" class="pvol" min="0" max="100" value="50" title="volume"
+                onchange="playerVolume('${pid}',this.value)">
+              ${sync}
+            </div>
+          </div>`;
+        }).join("");
     } catch (e) {
       wrap.innerHTML = `<div class="empty">${escapeHtml(e.message)}</div>`;
     }
