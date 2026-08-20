@@ -19,9 +19,41 @@ testable sans matplotlib ni SMTP.
 """
 from __future__ import annotations
 
+import signal
 import sys
+import time
 import tomllib
+import traceback
 from pathlib import Path
+
+# Garde-temps et reprises de la tâche planifiée. Un matin, un run a mis
+# ~80 min avant d'échouer (requête ou rendu bloqué) : une tâche quotidienne ne
+# doit JAMAIS rester bloquée aussi longtemps, ni échouer en silence sur un
+# incident passager.
+BUDGET_SECONDES = 180   # au-delà, on coupe net (data/PDF/SMTP confondus)
+ESSAIS = 3              # reprises sur incident passager
+BACKOFF_SECONDES = 20   # pause croissante entre deux essais
+
+
+class _GardeTempsDepasse(Exception):
+    """Le run a dépassé son budget de temps."""
+
+
+def _alarme(_signum, _frame):
+    raise _GardeTempsDepasse()
+
+
+def _executer_borne(agg, construire_pdf, envoyer, cfg) -> dict:
+    """Exécute `executer` sous un garde-temps SIGALRM — impossible de dépasser
+    BUDGET_SECONDES. SIGALRM n'agit que sur le thread principal ; la tâche
+    tourne en processus dédié (oneshot), c'est donc le bon cadre."""
+    ancien = signal.signal(signal.SIGALRM, _alarme)
+    signal.alarm(BUDGET_SECONDES)
+    try:
+        return executer(agg, construire_pdf, envoyer, cfg)
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, ancien)
 
 # Comme api/main.py : rendre les modules voisins (rapport, vhost_stats)
 # importables quand la tâche tourne en « python3 -m api.rapport_planifie ».
@@ -92,19 +124,34 @@ def main(argv=None) -> int:
 
     cfg = resoudre_config(sys.argv[1:] if argv is None else argv)
     agg = VhostStatsAggregator()
-    try:
-        res = executer(agg, rapport.construire_pdf, rapport.envoyer, cfg)
-    except KeyError as e:
-        # Aucune donnée pour la famille sur la période : ce n'est pas une panne
-        # (parc neuf, famille absente des journaux) — on le dit sans échouer dur.
-        print(f"rapport planifié : aucune donnée pour {e}", file=sys.stderr)
-        return 0
-    except Exception as e:  # noqa: BLE001 — une tâche planifiée journalise et sort
-        print(f"rapport planifié : échec de l'expédition : {e}", file=sys.stderr)
-        return 1
-    print(f"rapport planifié envoyé à {res.get('destinataire')} "
-          f"({res.get('octets')} octets)")
-    return 0
+    derniere = "raison inconnue"
+    for essai in range(1, ESSAIS + 1):
+        try:
+            res = _executer_borne(agg, rapport.construire_pdf, rapport.envoyer, cfg)
+        except KeyError as e:
+            # Aucune donnée pour la famille sur la période : ce n'est pas une
+            # panne (parc neuf, famille absente des journaux). On sort SANS
+            # échouer ET sans réessayer — réessayer ne ferait pas apparaître des
+            # données qui n'existent pas.
+            print(f"rapport planifié : aucune donnée pour {e}", file=sys.stderr)
+            return 0
+        except _GardeTempsDepasse:
+            derniere = f"garde-temps dépassé (>{BUDGET_SECONDES}s) — génération ou envoi bloqué"
+            print(f"rapport planifié : {derniere} (essai {essai}/{ESSAIS})", file=sys.stderr)
+        except Exception as e:  # noqa: BLE001 — on JOURNALISE avec la trace, puis on décide
+            derniere = f"{type(e).__name__}: {e}"
+            print(f"rapport planifié : échec (essai {essai}/{ESSAIS}) : {derniere}\n"
+                  f"{traceback.format_exc()}", file=sys.stderr)
+        else:
+            marque = f" [essai {essai}]" if essai > 1 else ""
+            print(f"rapport planifié envoyé à {res.get('destinataire')} "
+                  f"({res.get('octets')} octets){marque}")
+            return 0
+        if essai < ESSAIS:
+            time.sleep(BACKOFF_SECONDES * essai)  # pause croissante avant reprise
+    print(f"rapport planifié : ÉCHEC définitif après {ESSAIS} essais — {derniere}",
+          file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
