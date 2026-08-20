@@ -11,6 +11,5 @@ Depends: ${misc:Depends}, secubox-core (>= 1.0.0)
 Description: SecuBox Nextcloud — self-hosted file sync + collaboration (LXC)
  Manages a Nextcloud server (file sync, calendar, contacts,
  collaborative editing) running in its own LXC container. SecuBox
- wires up nginx vhost, ACME TLS, SSO via secubox-authelia (SSO
- cookie scope per #272), backup integration, and a web management
- dashboard around the upstream Nextcloud install.
+ wires up nginx vhost, ACME TLS, backup integration, and a web
+ management dashboard around the upstream Nextcloud install.

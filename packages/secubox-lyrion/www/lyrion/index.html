@@ -206,7 +206,7 @@
         setRows("access-v", items);
       }
       // Single source of truth for the "Open Music UI" button: prefer
-      // the `public` access entry (https + Authelia), fall back to lan.
+      // the `public` access entry (https + LAN-only gate), fall back to lan.
       const pub = access.find(a => a.scope === "public");
       const lan = access.find(a => a.scope === "lan");
       const target = (pub && pub.url) || (lan && lan.url) || "#";
