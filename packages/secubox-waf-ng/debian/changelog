@@ -1,3 +1,77 @@
+secubox-waf-ng (1.5.9-1~bookworm1) bookworm; urgency=medium
+
+  * PHASE G #1080 — règles adaptatives par vhost. sbxwaf gagne
+    `--vhost-profiles` : une empreinte de RECONNAISSANCE (catégories scanners /
+    recon_crawler / product_absent_probes) qui touche un chemin LÉGITIME du
+    service d'un vhost — clone git chez gitea (`/owner/repo.git/info/refs`),
+    `/.well-known/` chez nextcloud, `/api/v1/` chez peertube — est supprimée
+    POUR ce vhost uniquement. Partout ailleurs la signature tire normalement.
+    Les catégories d'injection (sqli/xss/lfi/rce) ne sont JAMAIS supprimables :
+    elles bloquent partout, y compris sur un chemin « légitime ». Résout les
+    faux positifs à l'intérieur de gitea/peertube/nextcloud sans ouvrir de
+    brèche : la suppression est déclarative, versionnée, scopée au chemin (un
+    scanner trébuche toujours sur ses autres sondes non légitimes).
+  * L'unité passe `--vhost-profiles /etc/secubox/waf/vhost_profiles.json`.
+  * Opt-in et fail-safe : sans le fichier, ou s'il est illisible, la phase G
+    reste désactivée (aucune suppression = plus strict, jamais moins) et le WAF
+    ne crashe pas — la protection tient.
+  * GARDE ANTI-CONTREBANDE : avant de supprimer, sbxwaf ré-évalue la requête en
+    EXCLUANT les catégories supprimables (Rules.MatchExcept). Le premier-match
+    pouvait rendre une catégorie de reconnaissance ALORS que la même requête
+    portait une injection masquée par l'ordre des catégories ; la ré-évaluation
+    garantit qu'un sqli/xss sur un chemin « légitime » bloque quand même. Test
+    d'intégration dédié (requête recon+injection sur chemin légitime → 403).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 13:30:00 +0200
+
+secubox-waf-ng (1.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Accès données WAF pour le tableau de bord (#1070) : ajoute `secubox` au
+    groupe secubox-waf (postinst) — l'API WAF/metrics lisait 0640 secubox-waf et
+    renvoyait vide/500 sur /visits /history /bans/history. /var/lib/secubox/waf en
+    0770 pour que le cache d'historique s'écrive. Onglets Visites/Historique/
+    Attaquants désormais peuplés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:00:00 +0200
+
+secubox-waf-ng (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * campagnes : écriture ATOMIQUE de campaigns.json (temp + renommage) — file:
+    ne tronquait pas de façon fiable, laissant « Extra data » quand la nouvelle
+    synthèse était plus courte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:20:00 +0200
+
+secubox-waf-ng (1.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * Tableau de bord des campagnes (#1070 phase D) : nouveau timer
+    secubox-waf-campaigns (5 min) qui corrèle waf-threats.log en campagnes via
+    sbxwaf --correlate (seul secubox-waf lit le journal 0640) et écrit
+    /var/cache/secubox/waf/campaigns.json pour le module metrics.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:00:00 +0200
+
+secubox-waf-ng (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Activation du ban nft natif (#1070 phase B) : --nft-ban dans l'ExecStart +
+    CAP_NET_ADMIN + AF_NETLINK (nft parle netlink) + dossier /var/lib/secubox/waf
+    pour le journal des bans. Le WAF pose desormais ses propres drops nft
+    (waf_ban{,6}, persistants, retrait par timeout nft) en parallele de CrowdSec
+    — bans effectifs meme sans CrowdSec. Compromis de durcissement assume et
+    documente dans l'unite ; reversible en retirant --nft-ban + les 3 lignes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 16:30:00 +0200
+
+secubox-waf-ng (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf recompilé avec la caractérisation d'attaquants #1070 (phases A-E) :
+    détection d'anomalie d'hôte (--host-anomaly défaut on), empreinte d'outils
+    (champ tool), corrélateur --correlate, clé JA4 --ja4-header, ban nft natif
+    opt-in --nft-ban (non activé côté service : nécessiterait AF_NETLINK +
+    CAP_NET_ADMIN sur ce service durci). Enforcement des bans inchangé (CrowdSec).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 14:15:00 +0200
+
 secubox-waf-ng (1.5.2-1~bookworm1) bookworm; urgency=medium
 
   * Honorer vraiment l'opt-out <meta name="sbx-no-health-banner">. Le refus de

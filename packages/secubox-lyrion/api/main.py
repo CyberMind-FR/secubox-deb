@@ -33,7 +33,7 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Header, Response
 # l'exterieur, il est gate pour la meme raison.
 from secubox_core.auth import require_jwt
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 CTL = shutil.which("lyrionctl") or "/usr/sbin/lyrionctl"
 
 # LMS jsonrpc endpoint inside the LXC. Used for live data the lyrionctl
@@ -176,6 +176,82 @@ def rescan() -> Dict[str, Any]:
     # LMS returns {} on success for rescan — empty result is a positive
     # ack as long as the RPC round-trip succeeded.
     return {"ok": True, "result": res}
+
+
+# ── Pilotage des lecteurs (style squeezectl, JSON-RPC LMS natif) #1071 ─────────
+# Le panneau « lecteurs connectes » detecte deja les Squeezebox/Squeezelite via
+# l'API JSON-RPC native de LMS (endpoint /players). On ajoute le CONTROLE avec le
+# meme jeu de commandes que baztian/squeezectl, SANS dependance externe : chaque
+# verbe est une slim.request adressee au lecteur.
+#
+# Porte LAN nginx (comme /rescan) et PAS de jeton : piloter une lecture n'est ni
+# destructif ni un redemarrage de service (contrairement a `upgrade`). Le `pid`
+# part en VALEUR JSON vers LMS (jamais un shell) — pas d'injection ; on valide
+# seulement qu'il est non vide et que le volume reste borne.
+_ACTIONS_SIMPLES = {
+    "play":   ["play"],
+    "pause":  ["pause"],
+    "stop":   ["stop"],
+    "next":   ["playlist", "index", "+1"],
+    "prev":   ["playlist", "index", "-1"],
+    "unsync": ["sync", "-"],
+}
+
+
+def _exige_pid(pid: str) -> str:
+    pid = (pid or "").strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="identifiant lecteur requis")
+    return pid
+
+
+@app.post("/player/{pid}/action/{verbe}")
+def player_action(pid: str, verbe: str) -> Dict[str, Any]:
+    """Transport simple : play / pause / stop / next / prev / unsync."""
+    pid = _exige_pid(pid)
+    cmd = _ACTIONS_SIMPLES.get(verbe)
+    if cmd is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"action inconnue: {verbe} (attendu: {', '.join(_ACTIONS_SIMPLES)})")
+    _lms_rpc(pid, cmd)
+    return {"ok": True, "player": pid, "action": verbe}
+
+
+@app.post("/player/{pid}/power")
+def player_power(pid: str, payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
+    """Allume/eteint un lecteur. Corps: {"on": true|false} (defaut true)."""
+    pid = _exige_pid(pid)
+    on = bool((payload or {}).get("on", True))
+    _lms_rpc(pid, ["power", "1" if on else "0"])
+    return {"ok": True, "player": pid, "power": on}
+
+
+@app.post("/player/{pid}/volume")
+def player_volume(pid: str, payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
+    """Regle le volume absolu. Corps: {"level": 0..100}."""
+    pid = _exige_pid(pid)
+    try:
+        niveau = int((payload or {}).get("level"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail='corps attendu: {"level": 0..100}')
+    if not 0 <= niveau <= 100:
+        raise HTTPException(status_code=400, detail="volume hors bornes (0..100)")
+    _lms_rpc(pid, ["mixer", "volume", str(niveau)])
+    return {"ok": True, "player": pid, "volume": niveau}
+
+
+@app.post("/player/{pid}/sync")
+def player_sync(pid: str, payload: Dict[str, Any] = Body(default=None)) -> Dict[str, Any]:
+    """Synchronise un autre lecteur DANS le groupe de celui-ci.
+
+    Corps: {"target": "<playerid>"}. Semantique LMS : `<pid> sync <target>`
+    fait rejoindre `target` au lecteur `pid`. Pour desynchroniser, voir
+    l'action `unsync`."""
+    pid = _exige_pid(pid)
+    cible = _exige_pid((payload or {}).get("target", ""))
+    _lms_rpc(pid, ["sync", cible])
+    return {"ok": True, "player": pid, "sync": cible}
 
 
 # ── External media library (auto-detect + opt-in confirm) ─────────────────────

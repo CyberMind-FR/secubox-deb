@@ -1,3 +1,44 @@
+secubox-metrics (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau WAF & Security : lit l'état PROPRE du WAF (#1070) — bans nft natifs
+    (bans.jsonl) + menaces du jour/cumulées (waf-history.json), désormais lisibles
+    via le groupe secubox-waf. cscli restait inaccessible au module → panneau à 0.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:30:00 +0200
+
+secubox-metrics (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Tableau de bord des campagnes d'attaque (#1070 phase D) : endpoint
+    /api/v1/metrics/waf/campaigns (lit campagnes.json produit par le corrélateur
+    sbxwaf) + carte « Campagnes d'attaque » dans le dashboard : attaquants
+    regroupés par même workflow (mêmes sondes, même outil), outil nommé, nombre
+    d'IP, séquence-type. Vue vide si le corrélateur n'a pas encore tourné.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:05:00 +0200
+
+secubox-metrics (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * rapport : expedition AUTHENTIFIEE (soumission 587 STARTTLS + login) des que
+    `smtp_user` est configure — obligatoire pour un destinataire EXTERNE (Gmail) :
+    l'hote n'est pas dans le mynetworks du relais, le port 25 ne remet que le
+    courrier local. Le relais local historique (#1059) reste le defaut sans
+    smtp_user. Mot de passe hors-code (/etc/secubox/secrets/, CSPN).
+  * rapport : `copie_cachee` (Bcc interne) laisse une TRACE du rapport dans le
+    webmail quand il part vers l'exterieur. Permet d'expedier les rapports de
+    frequentation anibal-amiot (quotidien + hebdo) vers un destinataire externe
+    tout en gardant une copie visible dans la boite gk2. (ref #1059)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 12:00:00 +0200
+
+secubox-metrics (1.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : geoloc des visiteurs dans les stats vhost — mapping IP->pays via
+    GeoLite2-Country (deja sur la board), avec DRAPEAU emoji. Nouvelle carte
+    « Pays des visiteurs » dans le detail vhost. Cache IP->pays (une IP revient
+    des centaines de fois). Le geoip est un bonus : base absente = stats quand meme.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 19:40:00 +0200
+
 secubox-metrics (1.7.4-1~bookworm1) bookworm; urgency=medium
 
   * Histogramme WAF EMPILÉ par catégorie (#1063) : la barre menaces/jour est

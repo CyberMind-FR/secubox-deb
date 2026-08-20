@@ -1,11 +1,4 @@
 <!DOCTYPE html>
-<!--
-  SPDX-License-Identifier: LicenseRef-CMSD-1.0
-  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
--->
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -75,9 +68,8 @@
   function getToken() { return localStorage.getItem('sbx_token'); }
   function checkAuth() {
             // Ne jamais pre-empter sur l'absence de jeton localStorage : la
-            // session peut tenir a un cookie (SSO parent-domaine), accepte par
-            // le serveur aussi bien qu'un Bearer. On laisse les requetes partir ;
-            // seule une vraie 401 redirige (gere dans les appels fetch).
+            // session peut tenir a un cookie (SSO parent-domaine). Seule une
+            // vraie 401 redirige (gere dans les appels fetch).
             return true;
         }
   if (!checkAuth()) {

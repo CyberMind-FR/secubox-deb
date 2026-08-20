@@ -1,0 +1,53 @@
+{
+  "_comment": "SecuBox WAF Phase G (#1080) — regles adaptatives par vhost. Un chemin est une attaque HORS de son vhost mais legitime A L'INTERIEUR du service qui le sert. Ce fichier declare, par service, les chemins legitimes ; suppress_categories liste les categories de reconnaissance dont on annule le declenchement sur ces chemins (jamais les injections). Declaratif, versionne, auditable. Charge au demarrage : apres edition, 'systemctl restart secubox-waf-ng'. Ajouter un vhost = une ligne dans 'vhosts' pointant vers un service existant.",
+  "services": {
+    "gitea": {
+      "_note": "smart-http git (clone/push contient .git/), API, webfinger, avatars. /.git/config a la RACINE n'est PAS ici — c'est une sonde, elle doit continuer a tirer.",
+      "legit_paths": [
+        "^/[^/]+/[^/]+(\\.git)?/(info/refs|git-upload-pack|git-receive-pack|HEAD|objects/|hooks/)",
+        "^/api/v1/",
+        "^/\\.well-known/",
+        "^/avatars/",
+        "^/assets/",
+        "^/user/(login|oauth2|two_factor)"
+      ]
+    },
+    "peertube": {
+      "_note": "SPA + API REST + assets statiques + smart-http ActivityPub.",
+      "legit_paths": [
+        "^/api/v[0-9]+/",
+        "^/client/",
+        "^/lazy-static/",
+        "^/static/",
+        "^/plugins/",
+        "^/w/",
+        "^/videos/",
+        "^/video-channels/",
+        "^/accounts/",
+        "^/\\.well-known/"
+      ]
+    },
+    "nextcloud": {
+      "_note": "front-controllers PHP + WebDAV + OCS + decouverte caldav/carddav/webfinger (fortement sollicitee par les clients).",
+      "legit_paths": [
+        "^/remote\\.php/",
+        "^/index\\.php/",
+        "^/ocs/",
+        "^/apps/",
+        "^/core/",
+        "^/settings/",
+        "^/\\.well-known/",
+        "^/cron\\.php",
+        "^/status\\.php"
+      ]
+    }
+  },
+  "vhosts": {
+    "gitea.gk2.secubox.in": "gitea",
+    "git.gk2.secubox.in": "gitea",
+    "git.maegia.tv": "gitea",
+    "peertube.gk2.secubox.in": "peertube",
+    "nc.gk2.secubox.in": "nextcloud"
+  },
+  "suppress_categories": ["scanners", "recon_crawler", "product_absent_probes"]
+}

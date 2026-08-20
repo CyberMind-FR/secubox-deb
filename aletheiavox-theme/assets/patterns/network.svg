@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <!-- Constellation AletheiaVox — le réseau reste perceptible sans devenir
+       envahissant. Extraite telle quelle du héros du démonstrateur.
+       Cyan #00a8c8 pour les liens, bleu #104a88 pour les nœuds. -->
+  <g fill="none" stroke="#00a8c8" stroke-width="1" opacity="0.5">
+    <path d="M60 60 L200 120 L340 70 L470 150 L560 90"/>
+    <path d="M90 240 L200 120 L300 220 L470 150"/>
+    <path d="M60 60 L90 240 M340 70 L300 220 M560 90 L470 150"/>
+  </g>
+  <g fill="#104a88">
+    <circle cx="60" cy="60" r="4"/><circle cx="200" cy="120" r="5"/><circle cx="340" cy="70" r="4"/>
+    <circle cx="470" cy="150" r="5"/><circle cx="560" cy="90" r="3.5"/><circle cx="90" cy="240" r="4"/>
+    <circle cx="300" cy="220" r="4"/>
+  </g>
+</svg>

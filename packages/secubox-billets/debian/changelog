@@ -1,3 +1,38 @@
+secubox-billets (0.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Face publique rapprochée de la rédaction (newsroom) : masthead « gazette »
+    (ligne d'édition monospace + pastille Cinzel + filet d'encre + sous-titre
+    AletheiaVox) et grain de papier (pointillé halftone) sur le fond, comme
+    l'accueil du BBS. Palette et polices étaient déjà alignées (0.4.0-0.4.2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 21:10:00 +0200
+
+secubox-billets (0.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * style : menu deroulant des hashtags remonte EN HAUT du fil, en pilule +
+    panneau flottant AletheiaVox (au lieu du repli en bas de page).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 21:55:00 +0200
+
+secubox-billets (0.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * style : vitrine billets en cartes editoriales AletheiaVox (au lieu de la
+    liste console a filets) — entrees en cartes arrondies, puces pilules, titre
+    Cinzel, filet dore. Plus lisible et coherent avec la maquette.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 21:15:00 +0200
+
+secubox-billets (0.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : vitrine billets alignee sur l'identite AletheiaVox — palette exacte
+    bleu #104a88 / cyan #00a8c8 / dore #c9a84c, titres Cinzel, corps Inter,
+    polices auto-hebergees, fond BLANC par defaut (sombre non impose par l'OS).
+    Sur la base master 0.3.1 (bulle mots-cles repliable + lecteur console deja
+    presents) — corrige un deploiement anterieur bati par erreur sur une base
+    perimee (fix/964 0.1.1).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 20:30:00 +0200
+
 secubox-billets (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Les mots-cles descendent EN BAS de page, dans une bulle repliable

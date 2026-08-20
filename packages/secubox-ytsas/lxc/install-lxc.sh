@@ -102,6 +102,19 @@ APP_SRC="${SECUBOX_APP_SRC:-/usr/lib/secubox/ytsas/app}"
 la mkdir -p /opt/secubox-ytsas/app /opt/secubox-ytsas/www
 tar -C "$APP_SRC" -cf - . | la tar -C /opt/secubox-ytsas/app -xf -
 tar -C /usr/share/secubox/www/ytsas -cf - . | la tar -C /opt/secubox-ytsas/www -xf -
+# Routing split: the LXC's own StaticFiles mount serves index.html at "/"
+# (main.py, html=True) — that must be the PUBLIC player (public.html), NOT
+# the admin dashboard, because this LXC is what ytsas.gk2.secubox.in reaches
+# directly. The admin dashboard (the original index.html, cookie vault +
+# remove/purge) is served ONLY by the aggregator from the host copy at
+# /usr/share/secubox/www/ytsas/index.html (admin.gk2/ytsas/) — untouched by
+# this swap. Keep the original under admin.html inside the LXC too, in case
+# it's ever useful to reach directly.
+if la test -f /opt/secubox-ytsas/www/public.html; then
+  la cp -f /opt/secubox-ytsas/www/index.html /opt/secubox-ytsas/www/admin.html
+  la cp -f /opt/secubox-ytsas/www/public.html /opt/secubox-ytsas/www/index.html
+  log "LXC index.html swapped to public player (admin dashboard kept at admin.html + aggregator)"
+fi
 
 # env file from host TOML values (exported by postinst into these vars). The
 # in-LXC unit reads it (EnvironmentFile). Paths are the app contract.

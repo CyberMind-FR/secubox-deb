@@ -1,0 +1,33 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= layout.css
+ * Ossature de page : thème, en-tête collant, coquille à deux colonnes
+ * (barre latérale + contenu), blocs, grille auto-fit et pied de page.
+ * Les paliers d'adaptation vivent dans responsive.css, jamais ici.
+ */
+.av-theme{min-height:100vh;display:flex;flex-direction:column}
+.av-header{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--av-surface) 88%,transparent);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--av-line);box-shadow:0 1px 0 color-mix(in srgb,var(--av-blue) 8%,transparent)}
+.av-header-in{max-width:var(--av-content-width);margin:0 auto;padding:var(--av-space-3) var(--av-space-6);
+  display:flex;align-items:center;gap:var(--av-space-6)}
+.av-shell{flex:1;max-width:var(--av-content-width);width:100%;margin:0 auto;padding:var(--av-space-8) var(--av-space-6);
+  display:grid;grid-template-columns:var(--av-sidebar-width) 1fr;gap:var(--av-space-8);align-items:start}
+.av-sidebar{position:sticky;top:76px;display:flex;flex-direction:column;gap:var(--av-space-1)}
+.av-main{min-width:0;display:flex;flex-direction:column;gap:var(--av-space-16)}
+.av-block{display:flex;flex-direction:column;gap:var(--av-space-6);scroll-margin-top:80px}
+.av-grid{display:grid;gap:var(--av-space-4);grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.av-footer{border-top:1px solid var(--av-line);background:var(--av-surface-2);margin-top:var(--av-space-16)}
+.av-footer-in{max-width:var(--av-content-width);margin:0 auto;padding:var(--av-space-12) var(--av-space-6)}
+
+/* pied de page : colonnes de liens + liseré narratif */
+.av-footer-cols{display:grid;gap:var(--av-space-8);grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.av-footer h4{font-family:var(--av-font-display);font-size:.95rem;margin-bottom:var(--av-space-3)}
+.av-footer a{display:block;color:var(--av-text-muted);font-size:.88rem;padding:.15rem 0}
+.av-story-footer{margin-top:var(--av-space-8);height:64px;border-top:1px solid var(--av-line);
+  display:flex;align-items:flex-end;justify-content:center;gap:1.6rem;color:var(--av-ink-soft);opacity:.55;font-size:1.4rem}
+:root[data-theme="dark"] .av-story-footer,:root:not([data-theme="light"]) .av-story-footer{color:var(--av-text-muted)}

@@ -1,32 +1,51 @@
 /* SPDX-License-Identifier: LicenseRef-CMSD-1.0
+
+/* Polices AletheiaVox auto-hebergees (CSP : self). */
+@font-face{font-family:"Cinzel";src:url("/static/fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Inter";src:url("/static/fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("/static/fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
    billets — feuille de style « console » : fond blanc, monospace, filets fins,
    angles nets. Le corps des articles reste confortable à lire ; tout le reste
    (chrome, méta, navigation) assume le grain mécanique. */
 
 :root{
-  --fond:#ffffff; --encre:#101418; --gris:#6a7480; --filet:#e2e6ea; --sourd:#f6f8f9;
-  --bleu:#0d3b78; --azur:#1a6fd4; --or:#b8860b; --vert:#1f7a52; --brique:#c0392b;
-  --mono:ui-monospace,"SF Mono","JetBrains Mono","IBM Plex Mono",Menlo,Consolas,monospace;
+  --fond:#ffffff; --encre:#17232d; --gris:#697985; --filet:#d9e0e4; --sourd:#f5f3ec;
+  --bleu:#104a88; --azur:#00a8c8; --or:#c9a84c; --vert:#28765e; --brique:#a73d42;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono","IBM Plex Mono",Menlo,Consolas,monospace;
   --lecture:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --corps:"Inter","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --titre:"Cinzel","Cormorant Garamond",Georgia,serif;
 }
-@media(prefers-color-scheme:dark){:root{
-  --fond:#0c0f12; --encre:#e6ebf0; --gris:#8a95a1; --filet:#1e252c; --sourd:#12171c;
-  --azur:#4d9bf0; --or:#d4a017;
-}}
+/* AletheiaVox : fond BLANC par defaut, sombre non impose par OS. */
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--fond);color:var(--encre);font-family:var(--mono);
+body{margin:0;background-color:var(--fond);color:var(--encre);font-family:var(--corps);
   font-size:14px;line-height:1.55;font-variant-numeric:tabular-nums;
-  -webkit-font-smoothing:antialiased}
+  -webkit-font-smoothing:antialiased;
+  /* grain de papier — pointillé halftone très discret, comme la rédaction */
+  background-image:radial-gradient(var(--filet) .5px,transparent .5px),
+                   radial-gradient(var(--filet) .5px,var(--fond) .5px);
+  background-size:22px 22px,22px 22px;background-position:0 0,11px 11px}
 a{color:var(--azur);text-decoration:none}
 a:hover{text-decoration:underline}
 img{max-width:100%;height:auto;display:block}
 
-/* ── ossature ──────────────────────────────────────────── */
-.site-header{max-width:760px;margin:0 auto;padding:20px 18px 14px;
-  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--encre)}
-.site-title{font-size:16px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--encre)}
+/* ── masthead « gazette » (aligné sur la rédaction) ────────── */
+.site-header{max-width:760px;margin:0 auto;padding:0 0 0;border-bottom:2px solid var(--encre)}
+.mast-edition{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:8px 18px 5px;border-bottom:1px solid var(--filet);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--gris)}
+.mast-edition .me-l{color:var(--bleu)}
+.mast-main{display:flex;align-items:center;gap:13px;padding:11px 18px 12px}
+.mast-mark{width:42px;height:42px;flex:none;border:2px solid var(--encre);border-radius:11px;
+  display:grid;place-items:center;font-family:var(--titre);font-weight:700;font-size:1.25rem;
+  background:var(--sourd);color:var(--encre);position:relative}
+.mast-mark:hover{text-decoration:none}
+.mast-mark::after{content:"◆";position:absolute;bottom:-6px;right:-6px;font-size:.62rem;color:var(--or)}
+.mast-id{display:flex;flex-direction:column;line-height:1.15}
+.site-title{font-family:var(--titre);font-size:22px;font-weight:700;letter-spacing:.015em;color:var(--bleu)}
 .site-title:hover{text-decoration:none;color:var(--bleu)}
+.mast-sub{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--gris)}
 .tagline{font-size:12px;color:var(--gris)}
 #main{max-width:760px;margin:0 auto;padding:20px 18px 40px}
 .site-footer{max-width:760px;margin:0 auto;padding:16px 18px 40px;
@@ -34,8 +53,8 @@ img{max-width:100%;height:auto;display:block}
 
 /* ── barre de tags ─────────────────────────────────────── */
 .tagbar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:20px}
-.tag-chip{font-size:11px;letter-spacing:.03em;padding:3px 9px;border:1px solid var(--filet);
-  border-radius:2px;color:var(--gris);white-space:nowrap}
+.tag-chip{font-size:11.5px;letter-spacing:.02em;padding:4px 12px;border:1px solid var(--filet);
+  border-radius:999px;color:var(--gris);white-space:nowrap}
 .tag-chip:hover{border-color:var(--azur);color:var(--azur);text-decoration:none}
 .tag-chip.on{border-color:var(--bleu);color:var(--fond);background:var(--bleu)}
 .tag-chip.sm{font-size:10px;padding:1px 7px}
@@ -44,13 +63,13 @@ img{max-width:100%;height:auto;display:block}
 .tag-active{font-size:12px;color:var(--gris);margin:-8px 0 16px}
 
 /* ── flux de billets ───────────────────────────────────── */
-.h-feed{display:flex;flex-direction:column}
-.billet{padding:22px 0;border-bottom:1px solid var(--filet)}
-.billet:first-child{border-top:1px solid var(--encre)}
+.h-feed{display:flex;flex-direction:column;gap:18px;max-width:760px;margin:22px auto;padding:0 18px}
+.billet{padding:20px 24px;border:1px solid var(--filet);border-radius:16px;background:var(--fond);box-shadow:0 1px 2px rgba(20,45,60,.05),0 5px 20px rgba(20,45,60,.06)}
+.billet:first-child{border-top:1px solid var(--filet)}
 .billet-full{border:0;padding:8px 0 18px}
 /* Le corps d'article : là on lâche le mono pour de la vraie lecture. */
 .e-content{font-family:var(--lecture);font-size:17.5px;line-height:1.66;color:var(--encre)}
-.e-content h1,.e-content h2,.e-content h3{font-family:var(--mono);line-height:1.25;
+.e-content h1,.e-content h2,.e-content h3{font-family:var(--titre);line-height:1.25;
   letter-spacing:-.01em;margin:1.4em 0 .5em}
 .e-content h1{font-size:22px} .e-content h2{font-size:18px} .e-content h3{font-size:15px}
 .e-content p{margin:0 0 1em}
@@ -166,13 +185,11 @@ button.danger,.danger{border-color:var(--brique);color:var(--brique)}
 
 /* ── mots-clés : bulle repliable en bas de page ────────── */
 .motscles{margin:28px 0 0;border:1px solid var(--filet);border-radius:2px;background:var(--sourd)}
-.motscles>summary{cursor:pointer;list-style:none;padding:9px 13px;font-size:10.5px;
-  letter-spacing:.13em;text-transform:uppercase;color:var(--gris);display:flex;
-  align-items:center;gap:8px;user-select:none}
+.motscles>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:8px;padding:8px 16px;font-size:13px;font-weight:600;letter-spacing:.01em;border:1px solid var(--filet);border-radius:999px;background:var(--fond);color:var(--bleu)}
 .motscles>summary::-webkit-details-marker{display:none}
-.motscles>summary::before{content:"▸";color:var(--azur);transition:transform .12s;display:inline-block}
-.motscles[open]>summary::before{transform:rotate(90deg)}
-.motscles>summary:hover{color:var(--encre)}
+.motscles>summary::after{content:"▾";color:var(--azur);margin-left:2px}
+.motscles[open]>summary::after{content:"▴"}
+.motscles>summary:hover{border-color:var(--azur);color:var(--azur)}
 .motscles .mc-n{margin-left:auto;font-size:10px;color:var(--gris);border:1px solid var(--filet);
   border-radius:2px;padding:0 6px}
-.motscles .tagbar{padding:2px 13px 13px;margin:0}
+.motscles .tagbar{margin-top:10px;padding:12px;border:1px solid var(--filet);border-radius:14px;background:var(--fond);box-shadow:0 8px 30px rgba(20,45,60,.10);max-height:50vh;overflow:auto}

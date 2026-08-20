@@ -1,0 +1,89 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= bbs.css
+ * INTÉGRATION DE RÉFÉRENCE — secubox-bbs.
+ *
+ * Le BBS a son propre vocabulaire de variables, hérité de sa maquette
+ * (--ink/--paper/--sky/--violet/--pink…). Plutôt que de réécrire ses centaines
+ * de règles, l'intégration se fait en UN point : on redéfinit ces variables
+ * natives EN TERMES DE jetons --av-. Tout le reste du BBS suit sans y toucher.
+ *
+ * C'est le cas « A » du patron (voir generic.css) : l'application expose des
+ * custom properties, on les remappe. La correspondance exacte, telle qu'elle
+ * est déployée dans packages/secubox-bbs/internal/web/static/bbs.css :
+ *
+ *   VARIABLE BBS   RÔLE BBS                     → JETON AletheiaVox
+ *   ------------   --------------------------    ---------------------
+ *   --ink          encre / texte fort            --av-ink
+ *   --paper        fond de page (BLANC)          --av-white
+ *   --panel        surface de carte              --av-surface
+ *   --line         filets, bordures              --av-border
+ *   --soft         fond atténué, survol          --av-surface-2
+ *   --dim          texte secondaire              --av-muted
+ *   --text         texte courant                 --av-ink
+ *   --sky          BLEU : structure primaire     --av-blue     (+ soft → --av-blue-light)
+ *   --violet       CYAN : liens / interactions   --av-cyan     (+ soft → --av-cyan-soft)
+ *   --pink         DORÉ : accent, souligné       --av-gold     (+ soft → --av-gold-soft)
+ *   --mint         vert : succès / actif         --av-green    (+ soft → --av-green-soft)
+ *   --amber        orange : attention            --av-orange
+ *   --coral        rouge : erreur / danger       --av-red
+ *
+ * Note de nommage : le BBS a gardé les vieux noms sky/violet/pink de sa base,
+ * mais les TEINTES sont déjà celles d'AletheiaVox. Ce fichier ne fait donc que
+ * rebrancher explicitement ces noms sur les jetons canoniques — la source de
+ * vérité des couleurs devient tokens.css, et le BBS n'a plus sa propre copie
+ * des hex à maintenir.
+ *
+ * Chargement : css/aletheiavox.css (jetons) PUIS ce fichier. Aucune ligne de
+ * logique BBS n'est modifiée. */
+
+:root{
+  --ink:var(--av-ink);
+  --paper:var(--av-white);
+  --panel:var(--av-surface);
+  --line:var(--av-border);
+  --soft:var(--av-surface-2);
+  --dim:var(--av-muted);
+  --text:var(--av-ink);
+
+  --coral:var(--av-red);       --coral-soft:color-mix(in srgb,var(--av-red) 12%,var(--av-white));
+  --mint:var(--av-green);      --mint-soft:var(--av-green-soft);
+  --amber:var(--av-orange);    --amber-soft:color-mix(in srgb,var(--av-orange) 12%,var(--av-white));
+  --violet:var(--av-cyan);     --violet-soft:var(--av-cyan-soft);   /* cyan : connexions / interactions */
+  --sky:var(--av-blue);        --sky-soft:var(--av-blue-light);      /* bleu : structure primaire */
+  --pink:var(--av-gold);       --pink-soft:var(--av-gold-soft);      /* doré : accent, souligné */
+
+  --shadow:var(--av-shadow-xs),var(--av-shadow-md);
+  --radius:12px;
+}
+
+/* Le BBS impose un fond BLANC même sous OS sombre : le sombre est un CHOIX
+   explicite ([data-theme="dark"]), jamais imposé par prefers-color-scheme.
+   On respecte ce contrat en rebranchant le bloc sombre du BBS sur les jetons
+   sombres d'AletheiaVox — actifs uniquement quand [data-theme="dark"]. */
+:root[data-theme="dark"]{
+  --ink:var(--av-text);
+  --paper:var(--av-bg);
+  --panel:var(--av-surface);
+  --line:var(--av-line);
+  --soft:var(--av-surface-2);
+  --dim:var(--av-text-muted);
+  --text:var(--av-text);
+
+  --coral:var(--av-red);       --coral-soft:color-mix(in srgb,var(--av-red) 30%,var(--av-bg));
+  --mint:var(--av-green);      --mint-soft:var(--av-green-soft);
+  --amber:var(--av-orange);    --amber-soft:color-mix(in srgb,var(--av-orange) 28%,var(--av-bg));
+  --violet:var(--av-secondary);--violet-soft:var(--av-cyan-soft);
+  --sky:var(--av-primary);     --sky-soft:var(--av-blue-light);
+  --pink:var(--av-accent);     --pink-soft:var(--av-gold-soft);
+  --shadow:var(--av-shadow-md);
+}
+
+/* Les polices, elles, sont déjà auto-hébergées et identiques des deux côtés :
+   voir les @font-face de css/typography.css (repris tels quels du BBS). Rien à
+   redéclarer ici. */
