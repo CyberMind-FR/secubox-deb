@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — corrélation des campagnes d'attaque (#1070 D)
+#
+# Corrèle waf-threats.log en CAMPAGNES (attaquants au même workflow) via le
+# corrélateur Go de sbxwaf, et écrit la synthèse JSON pour le tableau de bord
+# metrics. Tourne en secubox-waf : le journal des menaces est 0640 secubox-waf,
+# lui seul (et le WAF) le lit — d'où ce service dédié plutôt qu'une lecture par
+# le module metrics (secubox, sans droit sur le journal).
+[Unit]
+Description=SecuBox WAF — synthèse des campagnes d'attaque (corrélateur #1070)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1070
+After=secubox-waf-ng.service
+
+[Service]
+Type=oneshot
+User=secubox-waf
+Group=secubox-waf
+# La synthèse (info attaquants, non secrète) est lisible par le tableau de bord.
+ExecStartPre=+/bin/mkdir -p /var/cache/secubox/waf
+ExecStartPre=+/bin/chmod 0755 /var/cache/secubox/waf
+# Écriture ATOMIQUE : sbxwaf écrit dans un fichier temporaire (le `>` le tronque
+# proprement à chaque passage), puis renommage atomique. StandardOutput=file: ne
+# tronquait pas de façon fiable — un JSON plus court laissait la queue de l'ancien
+# (« Extra data »). Le tableau de bord ne voit jamais un fichier à moitié écrit.
+ExecStart=/bin/sh -c '/usr/sbin/sbxwaf --correlate /var/log/secubox/waf/waf-threats.log > /var/cache/secubox/waf/campaigns.json.new && mv -f /var/cache/secubox/waf/campaigns.json.new /var/cache/secubox/waf/campaigns.json'
+ExecStartPost=+/bin/chmod 0644 /var/cache/secubox/waf/campaigns.json
+# Durcissement léger (lecture d'un journal, écriture d'un fichier de cache).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/cache/secubox/waf
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service

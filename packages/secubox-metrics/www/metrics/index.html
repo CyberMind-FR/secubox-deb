@@ -378,6 +378,22 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Campagnes d'attaque corrélées (#1070 phase D) -->
+            <div class="mx-panel" id="campaigns-panel" style="margin-top:1.2rem">
+                <div class="mx-panel-title">
+                    <span>🎯</span>
+                    Campagnes d'attaque
+                    <span id="camp-summary" class="mx-row-val" style="margin-left:auto;color:var(--muted)"></span>
+                </div>
+                <div id="campaigns-body">
+                    <div class="mx-row"><span class="mx-row-label">chargement…</span></div>
+                </div>
+                <p style="color:var(--muted);font-size:.8rem;margin:.5rem 0 0">
+                    Attaquants regroupés par <b>même workflow</b> (mêmes sondes, même outil), à travers
+                    le temps et les IP — corrélés depuis le journal du WAF (sbxwaf #1070).
+                </p>
+            </div>
         </div>
     </main>
 
@@ -507,6 +523,46 @@
             }
         }
 
+        function escC(s) {
+            return String(s == null ? '' : s).replace(/[&<>]/g,
+                c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+        }
+
+        // Campagnes d'attaque corrélées (#1070 phase D)
+        async function loadCampaigns() {
+            let d;
+            try { d = await api('/waf/campaigns'); } catch (e) { return; }
+            const body = document.getElementById('campaigns-body');
+            const sum = document.getElementById('camp-summary');
+            if (!body) return;
+            const camps = (d && d.campagnes) || [];
+            if (d && d._indisponible) {
+                sum.textContent = 'en attente du 1er passage du corrélateur';
+                body.innerHTML = '<div class="mx-row"><span class="mx-row-label">—</span></div>';
+                return;
+            }
+            sum.textContent = (d.attaquants || 0) + ' attaquants · ' + camps.length + ' campagnes';
+            if (!camps.length) {
+                body.innerHTML = '<div class="mx-row"><span class="mx-row-label">aucune campagne détectée</span></div>';
+                return;
+            }
+            body.innerHTML =
+                '<table style="width:100%;border-collapse:collapse;font-size:.85rem">' +
+                '<thead><tr style="text-align:left;color:var(--muted)">' +
+                '<th style="padding:.3rem .4rem">Outil</th><th style="padding:.3rem .4rem">IP</th>' +
+                '<th style="padding:.3rem .4rem">Sondes</th><th style="padding:.3rem .4rem">Séquence-type</th>' +
+                '</tr></thead><tbody>' +
+                camps.map(c =>
+                    '<tr style="border-top:1px solid var(--border,#8882)">' +
+                    '<td style="padding:.3rem .4rem">' + escC(c.outil || '—') + '</td>' +
+                    '<td style="padding:.3rem .4rem;color:var(--orange);font-weight:600">' + (c.nb_attaquants || 0) + '</td>' +
+                    '<td style="padding:.3rem .4rem">' + (c.sondes || 0) + '</td>' +
+                    '<td style="padding:.3rem .4rem;font-family:monospace;color:var(--muted);font-size:.76rem;word-break:break-all">' +
+                    (c.exemple_sequence || []).map(escC).join(' → ') + '</td>' +
+                    '</tr>'
+                ).join('') + '</tbody></table>';
+        }
+
         // Clock update
         function updateClock() {
             document.getElementById('mx-time').textContent = new Date().toLocaleTimeString();
@@ -515,7 +571,9 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadMetrics();
+            loadCampaigns();
             setInterval(loadMetrics, 5000);
+            setInterval(loadCampaigns, 30000);
             setInterval(updateClock, 1000);
             updateClock();
         });

@@ -451,6 +451,30 @@ def get_overview(auth: None = Depends(require_jwt)):
     data["_freshness"] = get_freshness()
     return data
 
+WAF_CAMPAIGNS = Path("/var/cache/secubox/waf/campaigns.json")
+
+
+@app.get("/api/v1/metrics/waf/campaigns")
+def get_waf_campaigns(auth: None = Depends(require_jwt)):
+    """Campagnes d'attaque corrélées (#1070 phase D).
+
+    Lit la synthèse produite par le timer secubox-waf-campaigns (le corrélateur
+    Go de sbxwaf, qui seul peut lire le journal des menaces). Regroupe les
+    attaquants au même workflow — même jeu de sondes, même outil — à travers le
+    temps et les IP. Fichier absent/illisible → vue vide (pas d'attaque connue,
+    ou timer pas encore passé), jamais une erreur pour le tableau de bord."""
+    try:
+        data = json.loads(WAF_CAMPAIGNS.read_text())
+    except (OSError, ValueError):
+        return {"attaquants": 0, "campagnes": [], "_indisponible": True}
+    # borne l'affichage : top 20 campagnes, séquence-exemple tronquée.
+    camps = data.get("campagnes", [])[:20]
+    for c in camps:
+        c["exemple_sequence"] = c.get("exemple_sequence", [])[:12]
+        c["nb_attaquants"] = len(c.get("attaquants", []))
+    return {"attaquants": data.get("attaquants", 0), "campagnes": camps}
+
+
 @app.get("/api/v1/metrics/waf_stats")
 def get_waf_stats(auth: None = Depends(require_jwt)):
     """Get WAF/CrowdSec statistics."""
