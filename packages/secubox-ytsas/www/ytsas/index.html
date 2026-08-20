@@ -388,6 +388,7 @@
               esc(r.title || r.url || ('#' + id)) + '</div>' +
             '<div class="row-actions">' +
               (complete && !errored ? stateBadge : '') +
+              (errored ? '<button class="btn sm" data-action="retry" title="Réessayer le téléchargement">↻ Réessayer</button>' : '') +
               playBtn + ptHtml + purgeHtml +
               '<button class="btn sm danger" data-action="remove" title="Supprimer">🗑</button>' +
             '</div>' +
@@ -440,6 +441,18 @@
         delete openPlayers[id];
         refreshList();
       }).catch(function (e) { errorToast('Suppression : ' + e.message); });
+      return;
+    }
+    if (action === 'retry') {
+      actionEl.disabled = true;
+      api(API + '/retry/' + encodeURIComponent(id), { method: 'POST' })
+        .then(function () { toast('↻ Nouvelle tentative en cours…'); refreshList(); })
+        .catch(function (e) {
+          // L'erreur ANALYSÉE est remontée telle quelle : cookies périmés, auth
+          // requise, ou la queue de stderr yt-dlp — pas un code opaque.
+          errorToast('Réessai : ' + e.message);
+          actionEl.disabled = false;
+        });
       return;
     }
   }
