@@ -34,6 +34,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -873,6 +874,10 @@ func main() {
 	banStore := flag.String("ban-store", "/var/lib/secubox/waf/bans.jsonl",
 		"journal JSONL des bans nft (persistance + audit ; rechargé au démarrage)")
 	nftBanDuration := flag.Duration("nft-ban-duration", 4*time.Hour, "durée d'un ban nft")
+	// #1070 phase D — mode hors-ligne : corréler le journal de menaces en
+	// campagnes (attaquants au même workflow) et sortir la synthèse JSON.
+	correlate := flag.String("correlate", "",
+		"corréler waf-threats.log en campagnes et afficher la synthèse JSON, puis quitter")
 	// Task 5.1: RGPD Set-Cookie ledger.
 	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
 		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
@@ -910,6 +915,18 @@ func main() {
 	escalateThreshold := flag.Int("escalate-threshold", 3,
 		"probes within the escalate window before an IP is banned")
 	flag.Parse()
+
+	// #1070 phase D — mode corrélation hors-ligne : on lit le journal, on affiche
+	// les campagnes en JSON et on quitte (ni écoute, ni proxy).
+	if *correlate != "" {
+		sum, err := CorrélerMenaces(*correlate)
+		if err != nil {
+			log.Fatalf("sbxwaf: corrélation %q: %v", *correlate, err)
+		}
+		b, _ := json.MarshalIndent(sum, "", "  ")
+		os.Stdout.Write(append(b, '\n'))
+		return
+	}
 
 	// rules is consumed below when --rules is provided.
 
