@@ -1,15 +1,10 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
+  Fil public en cartes « dossier » — identique à la rédaction du BBS.
 -->
-
 {% extends "base.html" %}
 {% block content %}
-{# Quick-view chip bar: the emoji hashtags authors typed in their billets.
-   Plain links (not JS) so it works without scripts and each view is a real,
-   shareable URL. #}
 {% if all_tags %}
 <details class="motscles"{% if active_tag %} open{% endif %}>
   <summary>🏷️ Mots-clés <span class="mc-n">{{ all_tags|length }}</span></summary>
@@ -22,55 +17,51 @@
   </nav>
 </details>
 {% endif %}
-{% if active_tag %}
-<p class="tag-active">Vue rapide : <b>#{{ active_tag }}</b> — <a href="/">tout afficher</a></p>
-{% endif %}
-<div class="h-feed">
-  {% for b in billets %}
-  <article class="h-entry billet">
-    {# The feed is a scan surface: show a short resume for long billets and send
-       the reader to the permalink for the rest. Short billets render whole —
-       clipping three words off a one-liner would be noise, not brevity. #}
-    {% if b.is_long %}
-    <p class="p-summary resume">{{ b.summary }}</p>
-    <a class="read-more" href="/b/{{ b.slug }}">Lire la suite →</a>
-    {% else %}
-    <div class="e-content">{{ b.body_html|safe }}</div>
-    {% endif %}
-    {% if b.tags %}
-    <div class="tag-row">
-      {% for t in b.tags %}<a class="tag-chip sm p-category" href="/?tag={{ t.slug }}">{{ t.emoji }} #{{ t.slug }}</a>{% endfor %}
+{% if active_tag %}<p class="tag-active">Vue rapide : <b>#{{ active_tag }}</b> — <a href="/">tout afficher</a></p>{% endif %}
+
+{% for b in billets %}
+<article class="dossier h-entry billet">
+  <div class="src">
+    <div class="kind"><span class="em">📝</span><span class="lb">billet</span></div>
+    <div class="body">
+      {% if b.published_at %}<div class="origin">{{ b.published_at[:10] }}</div>{% endif %}
+      {% if b.title %}<h2><a class="u-url p-name" href="/b/{{ b.slug }}">{{ b.title }}</a></h2>{% endif %}
+      {% if b.is_long %}
+      <p class="lede p-summary">{{ b.summary }}</p>
+      {% else %}
+      <div class="e-content">{{ b.body_html|safe }}</div>
+      {% endif %}
     </div>
-    {% endif %}
-    {% if b.media %}
-    <div class="gallery" data-lightbox>
-      {% for m in b.media %}
-      <a class="gallery-item" href="/media/{{ m.filename }}" data-full="/media/{{ m.filename }}"
-         data-alt="{{ m.alt }}" aria-label="Agrandir l'image">
-        <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy"
-             width="{{ m.width }}" height="{{ m.height }}">
-      </a>
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% if b.ref_host %}<a class="ref-chip u-url" href="{{ b.ref_url }}" target="_blank" rel="noopener nofollow ugc">{{ b.ref_host }}</a>{% endif %}
-    {% if b.style == 'communique' and b.embed_snapshot_url %}
-    <a class="embed-vignette" href="/b/{{ b.slug }}" aria-label="Voir le communiqué">
-      <img src="{{ b.embed_snapshot_url }}" alt="Aperçu de la transmission" loading="lazy">
-    </a>
-    {% elif b.embed_html %}<div class="embed">{{ b.embed_html|safe }}</div>{% endif %}
+  </div>
+  {% if b.media %}
+  <div class="prev"><div class="gallery" data-lightbox>
+    {% for m in b.media %}
+    <a class="gallery-item" href="/media/{{ m.filename }}" data-full="/media/{{ m.filename }}"
+       data-alt="{{ m.alt }}" aria-label="Agrandir l'image">
+      <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy" width="{{ m.width }}" height="{{ m.height }}"></a>
+    {% endfor %}
+  </div></div>
+  {% endif %}
+  {% if b.style == 'communique' and b.embed_snapshot_url %}
+  <div class="prev"><a class="embed-vignette" href="/b/{{ b.slug }}" aria-label="Voir le communiqué"><img src="{{ b.embed_snapshot_url }}" alt="Aperçu de la transmission" loading="lazy"></a></div>
+  {% elif b.embed_html %}<div class="prev"><div class="embed">{{ b.embed_html|safe }}</div></div>{% endif %}
+  <div class="dfoot">
+    <span class="meta">
+      {% if b.tags %}{% for t in b.tags %}<a class="tag-chip sm p-category" href="/?tag={{ t.slug }}">{{ t.emoji }} #{{ t.slug }}</a>{% endfor %}{% endif %}
+      {% if b.ref_host %}<a class="ref-chip u-url" href="{{ b.ref_url }}" target="_blank" rel="noopener nofollow ugc">↗ {{ b.ref_host }}</a>{% endif %}
+      {% if b.published_at %}<time class="dt-published mini" datetime="{{ b.published_at }}">{{ b.published_at[:10] }}</time>{% endif %}
+    </span>
+    <span class="grow"></span>
     {% with share=b.share, permalink=b.permalink, title=b.title %}{% include "_share_quick.html" %}{% endwith %}
-    <footer class="billet-meta">
-      {% if b.published_at %}<time class="dt-published" datetime="{{ b.published_at }}">{{ b.published_at[:10] }}</time>{% endif %}
-      <a class="u-url" href="/b/{{ b.slug }}">permalien</a>
-    </footer>
-  </article>
-  {% else %}
-  <p class="empty">Aucun billet pour le moment.</p>
-  {% endfor %}
-</div>
+    {% if b.is_long %}<a class="btn discuss" href="/b/{{ b.slug }}">Lire la suite →</a>{% endif %}
+    <a class="btn u-url" href="/b/{{ b.slug }}">permalien</a>
+  </div>
+</article>
+{% else %}
+<p class="empty">Aucun billet pour le moment.</p>
+{% endfor %}
+
 {% if next_cursor %}
-{# Carry the active tag across pages, else page 2 silently drops the filter. #}
 <nav class="pager"><a rel="next" href="/?cursor={{ next_cursor }}{% if active_tag %}&amp;tag={{ active_tag }}{% endif %}">Billets plus anciens →</a></nav>
 {% endif %}
 {% endblock %}

@@ -1,3 +1,13 @@
+secubox-billets (0.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Face publique REFAITE À L'IDENTIQUE de la rédaction du BBS (« showroom ») :
+    même feuille de style (newsroom.css portée telle quelle), même masthead
+    (ligne d'édition + pastille + sous-titre), et les billets rendus en cartes
+    « dossier » (colonne type 📝, fil papier). Addendum pour le contenu billet
+    (texte, galeries, tags, commentaires) cohérent avec la rédaction.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 10:00:00 +0200
+
 secubox-billets (0.4.3-1~bookworm1) bookworm; urgency=medium
 
   * Face publique rapprochée de la rédaction (newsroom) : masthead « gazette »
