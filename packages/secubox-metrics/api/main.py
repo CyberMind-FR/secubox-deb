@@ -331,6 +331,34 @@ def build_waf_stats() -> dict:
         except Exception:
             pass
 
+    # #1070 : compléter avec l'état PROPRE du WAF, désormais lisible (metrics est
+    # dans le groupe secubox-waf). cscli n'est pas accessible ici, et les BANS NFT
+    # NATIFS du WAF ne sont visibles que dans bans.jsonl ; les menaces du jour et
+    # cumulées, que dans waf-history.json. Sans ça le panneau restait à 0.
+    try:
+        etat = {}
+        for line in Path("/var/lib/secubox/waf/bans.jsonl").read_text().splitlines():
+            try:
+                r = json.loads(line)
+            except ValueError:
+                continue
+            if r.get("ip"):
+                etat[r["ip"]] = r
+        now = int(time.time())
+        actifs = sum(1 for r in etat.values()
+                     if r.get("action") == "ban" and (not r.get("exp") or int(r["exp"]) > now))
+        bans = max(bans, actifs)
+    except OSError:
+        pass
+    try:
+        hist = json.loads(Path("/var/lib/secubox/waf/waf-history.json").read_text())
+        jours = hist.get("jours") or {}
+        today = datetime.now().strftime("%Y-%m-%d")
+        alerts_today = max(alerts_today, int((jours.get(today) or {}).get("total", 0)))
+        waf_blocked = max(waf_blocked, int(hist.get("total", 0)))
+    except (OSError, ValueError):
+        pass
+
     return {
         "crowdsec_running": cs_running,
         "mitmproxy_running": mitmproxy_running,
