@@ -85,6 +85,24 @@ func (s *Store) MarquerSource(threadID int64, source string) error {
 	return err
 }
 
+// MarquerSourceMedia pose type + média (#1056 stage 3) : une source vidéo
+// déposée garde son adresse dans media_url et media_kind="video", ce qui la
+// rend embarquable dans la rédaction ET fournit l'URL au raccord ytsas.
+func (s *Store) MarquerSourceMedia(threadID int64, source, mediaURL, mediaKind string) error {
+	_, err := s.db.Exec(
+		`UPDATE threads SET source = ?, media_url = ?, media_kind = ? WHERE id = ?`,
+		source, mediaURL, mediaKind, threadID)
+	return err
+}
+
+// SourceMediaFil rend l'adresse média enregistrée d'un fil (pour le raccord
+// ytsas / l'archivage PeerTube). Vide si le fil n'en a pas.
+func (s *Store) SourceMediaFil(threadID int64) (string, error) {
+	var u string
+	err := s.db.QueryRow(`SELECT COALESCE(media_url,'') FROM threads WHERE id = ?`, threadID).Scan(&u)
+	return u, err
+}
+
 // Reply ajoute un message a un fil existant.
 func (s *Store) Reply(threadID, authorID int64, body string, vis Visibility) (int64, error) {
 	tx, err := s.db.Begin()

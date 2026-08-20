@@ -129,6 +129,7 @@ type Server struct {
 	tpl  map[string]*template.Template
 	mux  *http.ServeMux
 	bil  *billets.Client
+	ytsas *connectors.ClientYtsas
 	// vCSS : empreinte du contenu de la feuille de style, ajoutee a son
 	// adresse. Voir routes.go — le WAF de la board supprime les en-tetes de
 	// cache, l'adresse est le seul levier qui reste.
@@ -260,6 +261,11 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		// relatif rendu par billets (BILLETS_SITE_URL absent) en un lien
 		// cliquable au moment de la publication.
 		s.bil.SitePublic = opt.BilletsBase
+	}
+	// #1056 stage 3 : raccord ytsas — connecter une vidéo déposée (fetch/cache)
+	// et l'archiver vers PeerTube. Même origine que le connecteur youtube.
+	if opt.YtsasOrigine != "" {
+		s.ytsas = &connectors.ClientYtsas{Base: opt.YtsasOrigine, HTTP: &http.Client{Timeout: 20 * time.Second}}
 	}
 	s.routes()
 	s.routesAPI()
