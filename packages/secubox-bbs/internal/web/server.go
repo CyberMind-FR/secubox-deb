@@ -208,13 +208,20 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	} else {
 		return nil, fmt.Errorf("gabarit mediatheque : %w", err)
 	}
+	// Lecteur détaché (#1056), gabarit autonome pour la fenêtre pop-out.
+	if t, err := template.New("player.html").Funcs(fn).
+		ParseFS(assets, "templates/player.html"); err == nil {
+		pages["player"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit player : %w", err)
+	}
 	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
 	// L'empreinte de cache (?v=) couvre les TROIS feuilles/scripts servis : le
 	// WAF de la board efface Cache-Control/ETag (voir layout.html), donc une
 	// feuille changée sans empreinte neuve resterait invisible au navigateur.
 	{
 		h := sha256.New()
-		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js"} {
+		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js", "static/player.js"} {
 			if b, err := assets.ReadFile(f); err == nil {
 				h.Write(b)
 			}

@@ -128,6 +128,34 @@ a{color:inherit;text-decoration:none}
 .grow{flex:1}
 .mini{display:flex;align-items:center;gap:5px;font-family:"JetBrains Mono";font-size:.7rem;color:var(--dim)}
 
+/* ---- lecteur détaché (fenêtre pop-out) ---- */
+.player-body{padding:0}
+.pl-wrap{max-width:520px;margin:0 auto;padding:16px 16px 90px;display:flex;flex-direction:column;gap:14px}
+.pl-head{display:flex;gap:12px;align-items:center}
+.pl-head .pfcover.sm{width:60px;height:60px}
+.pl-meta{min-width:0} .pl-meta h1{margin:.15rem 0 .1rem;font-size:1.15rem;line-height:1.2}
+.pl-meta .sub{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
+.pl-now{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 14px;box-shadow:var(--shadow)}
+.pl-now b{display:block;font-family:"Cinzel";font-size:.98rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-now .sub{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim)}
+.pl-controls{position:fixed;left:0;right:0;bottom:0;display:flex;align-items:center;gap:10px;padding:12px 16px;
+  background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(12px);border-top:1px solid var(--line-2)}
+.pl-controls .play{width:48px;height:48px;font-size:1.05rem}
+.pl-controls .prog{flex:1;height:7px;cursor:pointer}
+.pl-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:var(--shadow)}
+.pl-ep{display:flex;align-items:center;gap:10px;padding:9px 13px;border-top:1px solid var(--line);cursor:pointer}
+.pl-ep:first-child{border-top:none} .pl-ep:hover{background:var(--soft)}
+.pl-ep.on{background:var(--cyan-s)} .pl-ep.on .eptitle{color:var(--sky);font-weight:600}
+.pl-ep .epnum{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim);width:24px;text-align:right;flex:none}
+.pl-ep .eptitle{flex:1;min-width:0;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-ep .epdur{font-size:.66rem;color:var(--dim);flex:none}
+
+/* ---- dossier « flux groupé » dans la rédaction ---- */
+.feedrow{display:flex;align-items:center;gap:10px;padding:2px 0}
+.pfcover.sm{width:46px;height:46px;flex:none}
+.pfcover.sm .pfglyph{font-size:1.15rem}
+.epone{flex:1;min-width:0;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+
 /* ---- médiathèque : flux = sous-dossiers ---- */
 .podfeed{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .podfeed+.podfeed{margin-top:0}
@@ -164,6 +192,7 @@ a{color:inherit;text-decoration:none}
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:45;display:flex;justify-content:center;pointer-events:none;padding:0 14px 16px}
 .mplayer{pointer-events:auto;display:none;align-items:center;gap:12px;max-width:960px;width:100%;padding:10px 14px;border-radius:14px;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(14px);border:1px solid var(--line-2);box-shadow:var(--lift)}
 .mplayer.show{display:flex} .mplayer .play{width:38px;height:38px;font-size:.9rem}
+.ibtn.tiny{width:32px;height:32px;font-size:.82rem;border-radius:9px;flex:none}
 .mplayer .info{min-width:0} .mplayer .info b{font-size:.84rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:"Cinzel"}
 .mplayer .info small{color:var(--dim);font-family:"JetBrains Mono";font-size:.66rem}
 .prog{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden;min-width:70px} .prog i{display:block;height:100%;width:0;background:var(--cyan)}

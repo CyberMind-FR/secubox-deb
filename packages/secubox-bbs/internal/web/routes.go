@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,13 @@ type page struct {
 	// Medias : la médiathèque du podcaster regroupée par flux (#1056) —
 	// sous-dossiers ordonnés par type, épisodes jouables en ligne.
 	Medias []PodFeed
+	// News : le fil de la rédaction (accueil). Un item est SOIT un fil, SOIT un
+	// FLUX groupé du podcaster — un podcast / un livre audio y apparaît une
+	// seule fois, pas un dossier par épisode (#1056).
+	News []NewsItem
+	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
+	PlayerFeed                          *PodFeed
+	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
 	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
 	// extrait, date, lien de chaque billet, pas seulement les fils publies
 	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
@@ -147,6 +155,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
 	s.mux.HandleFunc("/media", s.media)
+	s.mux.HandleFunc("/player", s.player)
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
 	s.mux.HandleFunc("/mp", s.mp)
 	s.mux.HandleFunc("/mp/", s.mp)
@@ -434,11 +443,14 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, pub := s.base(r, "forums")
-	p.Threads, _ = s.st.Recent(20, pub)
-	// #1056 stage 1 : la colonne de droite de la rédaction montre les derniers
-	// billets RÉELS (avec leur adresse absolue, cf. 0.28.1). Une panne du flux
-	// est dite, pas masquée — vitrineBillets distingue « injoignable » de « zéro
-	// billet ». On borne l'affichage : la vitrine complète vit sur /billets.
+	p.Threads, _ = s.st.Recent(30, pub)
+	// #1056 : la rédaction GROUPE le podcaster par FLUX. Un fil « podcaster »
+	// est un épisode ; les montrer tels quels ferait dix dossiers pour un seul
+	// livre audio et noierait le reste. On les écarte du fil des fils et on
+	// injecte à la place UN dossier par flux (un podcast / un livre audio =
+	// un article), classé par son épisode le plus récent — dynamique façon RSS :
+	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
+	p.News = s.composerRedaction(p.Threads)
 	if s.bil != nil {
 		p.Billets, p.BilletsErr = s.vitrineBillets()
 		if len(p.Billets) > 8 {
@@ -448,6 +460,36 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	s.poseNonLus(&p)
 	p.Titre = "AletheiaVox"
 	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// NewsItem : une entrée de la rédaction — SOIT un fil (discussion / source),
+// SOIT un flux groupé du podcaster (podcast / livre audio / série).
+type NewsItem struct {
+	Feed *PodFeed      // non-nil : dossier de flux groupé (podcaster)
+	Fil  *store.Thread // non-nil : dossier de fil ordinaire
+	Date int64
+}
+
+// composerRedaction mêle les fils NON-podcaster et les flux groupés du
+// podcaster en un seul fil trié par date décroissante — les épisodes d'un même
+// flux se replient en un dossier unique.
+func (s *Server) composerRedaction(fils []store.Thread) []NewsItem {
+	var out []NewsItem
+	for i := range fils {
+		if fils[i].Source == "podcaster" {
+			continue // replié dans son flux ci-dessous
+		}
+		out = append(out, NewsItem{Fil: &fils[i], Date: fils[i].LastPostAt})
+	}
+	feeds, _ := s.mediatheque(2000)
+	for i := range feeds {
+		out = append(out, NewsItem{Feed: &feeds[i], Date: feeds[i].Date})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	if len(out) > 24 {
+		out = out[:24]
+	}
+	return out
 }
 
 func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
@@ -479,6 +521,32 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 func (s *Server) media(w http.ResponseWriter, r *http.Request) {
 	p, _ := s.base(r, "media")
 	s.rendMediatheque(w, r, p)
+}
+
+// player (/player) est le LECTEUR DÉTACHÉ, destiné à une fenêtre séparée : il
+// continue de jouer pendant qu'on navigue dans la fenêtre principale. Avec
+// ?feed=<id> il joue tout un flux (playlist + précédent/suivant/continu) ; avec
+// ?src=<url> une seule piste. ?ep et ?t reprennent l'épisode et sa position.
+func (s *Server) player(w http.ResponseWriter, r *http.Request) {
+	p, _ := s.base(r, "player")
+	q := r.URL.Query()
+	p.PlayerEp = q.Get("ep")
+	p.PlayerT = q.Get("t")
+	p.PlayerTitle = q.Get("title")
+	if fid := q.Get("feed"); fid != "" {
+		feeds, _ := s.mediatheque(2000)
+		for i := range feeds {
+			if strconv.FormatInt(feeds[i].ID, 10) == fid {
+				p.PlayerFeed = &feeds[i]
+				break
+			}
+		}
+	}
+	if p.PlayerFeed == nil {
+		p.PlayerSrc = q.Get("src")
+	}
+	p.Titre = "Lecteur"
+	s.rendDef(w, r, "player", "player", p)
 }
 
 // rendMediatheque charge les flux du podcaster et rend le gabarit autonome.

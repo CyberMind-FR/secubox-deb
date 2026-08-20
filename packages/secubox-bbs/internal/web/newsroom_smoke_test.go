@@ -24,14 +24,18 @@ func TestNewsroomExecute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}
+	filDiscussion := store.Thread{ID: 1, Title: "Discussion locale", Author: "gandalf", Visibility: store.VisPublic, Posts: 4, LastPostAt: 1700000000}
+	filVideo := store.Thread{ID: 3, Title: "Vidéo miroir", Author: "nova", MediaKind: "video", MediaURL: "https://peertube.example/embed", Source: "peertube", Visibility: store.VisLocal, Posts: 0, LastPostAt: 1700000000, Published: "https://billets.gk2.secubox.in/b/x"}
+	feed := PodFeed{ID: 2, Titre: "Neuromania", Type: "audiobook", Glyphe: "📖", Vignette: "/media-cover/2", Date: 1700000500,
+		Episodes: []PodEpisode{{ID: 10, Titre: "Chapitre 1", Media: "/media/ep/10", Duree: "12:04", Numero: 1}}}
 	p := page{
 		Titre: "AletheiaVox", Site: "SecuBox", Hote: "gk2", Initiale: "S",
 		Stats: store.Stats{Threads: 3, Posts: 9, Billets: 2},
 		Cats:  []store.Category{{Slug: "g", Title: "Général", Threads: 3}},
-		Threads: []store.Thread{
-			{ID: 1, Title: "Discussion locale", Author: "gandalf", Visibility: store.VisPublic, Posts: 4, LastPostAt: 1700000000},
-			{ID: 2, Title: "Podcast épisode", Author: "anibal", MediaKind: "audio", MediaURL: "/media/ep/2", Visibility: store.VisPublic, Posts: 1, LastPostAt: 1700000000},
-			{ID: 3, Title: "Vidéo miroir", Author: "nova", MediaKind: "video", MediaURL: "https://peertube.example/embed", Source: "peertube", Visibility: store.VisLocal, Posts: 0, LastPostAt: 1700000000, Published: "https://billets.gk2.secubox.in/b/x"},
+		News: []NewsItem{
+			{Feed: &feed, Date: feed.Date},
+			{Fil: &filVideo, Date: filVideo.LastPostAt},
+			{Fil: &filDiscussion, Date: filDiscussion.LastPostAt},
 		},
 		Billets: []billetVue{{Titre: "Un billet", Resume: "un extrait", Lien: "https://billets.gk2.secubox.in/b/x"}},
 	}
@@ -41,8 +45,8 @@ func TestNewsroomExecute(t *testing.T) {
 	}
 	out := buf.String()
 	for _, want := range []string{
-		"AletheiaVox", "Général", "Podcast épisode",
-		`data-media="/media/ep/2"`, `data-k="podcast"`, `data-k="video"`,
+		"AletheiaVox", "Général", "Neuromania", "livre audio",
+		`data-media="/media/ep/10"`, `data-k="audiobook"`, `data-k="video"`,
 		"stamp pub", "billets.gk2.secubox.in", "newsroom.js", "newsroom.css",
 	} {
 		if !strings.Contains(out, want) {
@@ -88,6 +92,40 @@ func TestMediathequeExecute(t *testing.T) {
 	for _, want := range []string{
 		"Neuromania", "livre audio", "chapitres 1→2", `data-media="/media/ep/10"`,
 		`data-act="playfeed"`, `src="/media-cover/2"`, `id="f2"`, "newsroom.js",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sortie sans %q", want)
+		}
+	}
+	if strings.Contains(out, "style=") || strings.Contains(out, "onclick") {
+		t.Error("style/onclick en ligne — interdit par la CSP")
+	}
+}
+
+func TestPlayerExecute(t *testing.T) {
+	fn := template.FuncMap{
+		"rendu": Render, "date": humain, "taille": octets,
+		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
+		"decalage": func(n int) string { return "" },
+	}
+	tpl, err := template.New("player.html").Funcs(fn).ParseFS(assets, "templates/player.html")
+	if err != nil {
+		t.Fatalf("parse : %v", err)
+	}
+	feed := PodFeed{ID: 2, Titre: "Neuromania", Type: "audiobook", Glyphe: "📖", Vignette: "/media-cover/2",
+		Episodes: []PodEpisode{
+			{ID: 10, Titre: "Chapitre 1", Media: "/media/ep/10", Duree: "12:04", Numero: 1},
+			{ID: 11, Titre: "Chapitre 2", Media: "/media/ep/11", Duree: "10:41", Numero: 2},
+		}}
+	p := page{Titre: "Lecteur", Site: "SecuBox", PlayerFeed: &feed, PlayerEp: "11", PlayerT: "42"}
+	var buf bytes.Buffer
+	if err := tpl.ExecuteTemplate(&buf, "player", p); err != nil {
+		t.Fatalf("exécution : %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"Neuromania", `data-src="/media/ep/10"`, `data-ep="11"`,
+		`data-start-ep="11"`, `data-start-t="42"`, "player.js", "pl-audio",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sortie sans %q", want)

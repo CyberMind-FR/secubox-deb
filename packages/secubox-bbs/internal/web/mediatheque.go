@@ -41,6 +41,7 @@ type PodFeed struct {
 	Type     string // "audiobook" | "podcast" | "serie"
 	Glyphe   string // 📖 / 🎧 / 🎬
 	Vignette string // /media-cover/<id>
+	Date     int64  // pubdate du plus récent épisode — pour classer le flux dans la rédaction
 	Episodes []PodEpisode
 }
 
@@ -101,6 +102,9 @@ func (s *Server) mediatheque(limite int) ([]PodFeed, error) {
 			Numero: len(out[pos].Episodes) + 1,
 		}
 		out[pos].Episodes = append(out[pos].Episodes, ep)
+		if pub > out[pos].Date {
+			out[pos].Date = pub // le flux se classe par son épisode le plus récent
+		}
 	}
 	return out, rows.Err()
 }

@@ -1,0 +1,50 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Lecteur détaché #1056 : une fenêtre séparée qui CONTINUE de jouer pendant
+  qu'on navigue dans la fenêtre principale. Flux entier (playlist + précédent/
+  suivant/continu) ou piste unique. Gabarit autonome, CSP stricte (data-* +
+  player.js, aucun style/onclick en ligne).
+-->
+{{define "player"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>♪ {{if .PlayerFeed}}{{.PlayerFeed.Titre}}{{else if .PlayerTitle}}{{.PlayerTitle}}{{else}}Lecteur{{end}} — {{.Site}}</title>
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
+</head><body class="player-body">
+
+<div class="pl-wrap" data-start-ep="{{.PlayerEp}}" data-start-t="{{.PlayerT}}">
+  <header class="pl-head">
+    {{if .PlayerFeed}}
+    <div class="pfcover sm"><span class="pfglyph">{{.PlayerFeed.Glyphe}}</span><img class="pfimg" src="{{.PlayerFeed.Vignette}}" alt="" loading="lazy"></div>
+    <div class="pl-meta"><span class="tag {{.PlayerFeed.Type}}">{{.PlayerFeed.Glyphe}} {{if eq .PlayerFeed.Type "audiobook"}}livre audio{{else if eq .PlayerFeed.Type "serie"}}série{{else}}podcast{{end}}</span>
+      <h1 class="serif">{{.PlayerFeed.Titre}}</h1><span class="sub">{{len .PlayerFeed.Episodes}} épisode(s)</span></div>
+    {{else}}
+    <div class="pfcover sm"><span class="pfglyph">🎧</span></div>
+    <div class="pl-meta"><span class="tag podcast">🎧 piste</span><h1 class="serif" id="pl-title">{{.PlayerTitle}}</h1></div>
+    {{end}}
+  </header>
+
+  <div class="pl-now"><b id="pl-now-t">—</b><span class="sub" id="pl-now-s"></span></div>
+  <div class="pl-controls">
+    <button class="ibtn" type="button" data-act="prev" aria-label="Précédent">⏮</button>
+    <button class="play" type="button" data-act="toggle" id="pl-play" aria-label="Lecture / pause">▶</button>
+    <button class="ibtn" type="button" data-act="next" aria-label="Suivant">⏭</button>
+    <div class="prog" id="pl-seek"><i id="pl-prog"></i></div>
+    <span class="ptime mono" id="pl-time">0:00</span>
+  </div>
+
+  <ol class="pl-list" id="pl-list">
+    {{if .PlayerFeed}}{{range .PlayerFeed.Episodes}}
+    <li class="pl-ep" data-src="{{.Media}}" data-ep="{{.ID}}" data-title="{{.Titre}}">
+      <span class="epnum">{{.Numero}}</span><span class="eptitle">{{.Titre}}</span>{{if .Duree}}<span class="epdur mono">{{.Duree}}</span>{{end}}
+    </li>
+    {{end}}{{else if .PlayerSrc}}
+    <li class="pl-ep" data-src="{{.PlayerSrc}}" data-title="{{.PlayerTitle}}"><span class="eptitle">{{.PlayerTitle}}</span></li>
+    {{end}}
+  </ol>
+</div>
+
+<audio id="pl-audio" preload="metadata"></audio>
+<script src="/static/player.js?v={{.VCSS}}" defer></script>
+</body></html>{{end}}

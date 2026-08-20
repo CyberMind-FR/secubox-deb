@@ -1,3 +1,18 @@
+secubox-bbs (0.28.6-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 rédaction : le podcaster est GROUPÉ par flux dans l'accueil — un
+    podcast / un livre audio = UN dossier (classé par son épisode le plus
+    récent, façon RSS : un nouveau mp3 remonte son flux sans le dupliquer), au
+    lieu d'un dossier par épisode. Fils non-podcaster et flux groupés se mêlent
+    par date.
+  * Lecteur : boutons PRÉCÉDENT / SUIVANT (⏮ ⏭) dans le mini-lecteur, et
+    POP-OUT (⧉) — un LECTEUR DÉTACHÉ (/player) s'ouvre en fenêtre séparée qui
+    continue de jouer pendant qu'on navigue (flux entier avec playlist +
+    précédent/suivant/continu, ou piste unique ; reprise à l'épisode et à la
+    position ; touches média du système via Media Session).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:00:00 +0200
+
 secubox-bbs (0.28.5-1~bookworm1) bookworm; urgency=medium
 
   * CORRECTIF médiathèque : `duration` du podcaster est une CHAÎNE
