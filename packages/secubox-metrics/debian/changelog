@@ -1,3 +1,17 @@
+secubox-metrics (1.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * rapport : expedition AUTHENTIFIEE (soumission 587 STARTTLS + login) des que
+    `smtp_user` est configure — obligatoire pour un destinataire EXTERNE (Gmail) :
+    l'hote n'est pas dans le mynetworks du relais, le port 25 ne remet que le
+    courrier local. Le relais local historique (#1059) reste le defaut sans
+    smtp_user. Mot de passe hors-code (/etc/secubox/secrets/, CSPN).
+  * rapport : `copie_cachee` (Bcc interne) laisse une TRACE du rapport dans le
+    webmail quand il part vers l'exterieur. Permet d'expedier les rapports de
+    frequentation anibal-amiot (quotidien + hebdo) vers un destinataire externe
+    tout en gardant une copie visible dans la boite gk2. (ref #1059)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 12:00:00 +0200
+
 secubox-metrics (1.8.0-1~bookworm1) bookworm; urgency=medium
 
   * feat : geoloc des visiteurs dans les stats vhost — mapping IP->pays via
