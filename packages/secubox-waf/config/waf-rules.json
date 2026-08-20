@@ -945,44 +945,6 @@
           "desc": "User data export attempt"
         }
       ]
-    },
-    "product_absent": {
-      "name": "Probes for products we do not run (#875)",
-      "severity": "medium",
-      "enabled": true,
-      "mode": "escalate",
-      "patterns": [
-        {
-          "id": "absent-001",
-          "pattern": "/wp-(login\\.php|admin/|content/|includes/)",
-          "desc": "WordPress absent"
-        },
-        {
-          "id": "absent-002",
-          "pattern": "/(administrator|joomla)/",
-          "desc": "Joomla absent"
-        },
-        {
-          "id": "absent-003",
-          "pattern": "/(drupal|user/login|core/install\\.php)",
-          "desc": "Drupal absent"
-        },
-        {
-          "id": "absent-004",
-          "pattern": "/(vendor/phpunit|cgi-bin/|struts|solr/admin)",
-          "desc": "stack absente"
-        },
-        {
-          "id": "absent-005",
-          "pattern": "/(owa/|autodiscover/|ecp/)",
-          "desc": "Exchange absent"
-        },
-        {
-          "id": "absent-006",
-          "pattern": "/(boaform|goform|cgi-bin/luci)",
-          "desc": "firmware routeur absent"
-        }
-      ]
     }
   }
 }
