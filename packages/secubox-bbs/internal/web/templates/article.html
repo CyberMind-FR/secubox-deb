@@ -1,0 +1,72 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Article collaboratif #1056 stage 3 : l'éditeur à plusieurs mains. Contributions
+  attribuées ; publication vers billets (public). Gabarit autonome, newsroom.css.
+  CSP stricte : formulaires POST + CSRF, aucun style/onclick en ligne.
+-->
+{{define "article"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Titre}} — {{.Site}}</title>
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
+</head><body>
+
+<header class="mast">
+  <div class="mast-main">
+    <a class="logo" href="/"><span class="mark serif">{{.Initiale}}</span><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">rédaction collaborative</span></span></a>
+    <span class="grow"></span>
+    <div class="mast-actions"><a class="btn" href="/">↩ rédaction</a></div>
+  </div>
+</header>
+
+<div class="art-wrap">
+  {{if .Err}}<div class="errline">{{.Err}}</div>{{end}}
+
+  {{if .Art.ID}}
+  <article class="pnl art-head">
+    {{if eq .Art.Status "published"}}<span class="stamp pub">publié</span>{{else}}<span class="stamp draft">brouillon</span>{{end}}
+    <h1 class="serif">{{.Art.Title}}</h1>
+    <div class="writers">
+      <span class="stack">{{range .Art.CoAuteurs}}<span class="a">{{. | initiales2}}</span>{{end}}</span>
+      <small>{{len .Art.CoAuteurs}} rédacteur(s) · {{.Art.NbParts}} contribution(s)</small>
+    </div>
+    {{if .Art.PublishedURL}}<a class="art-link" href="{{.Art.PublishedURL}}">↗ {{.Art.PublishedURL}}</a>{{end}}
+  </article>
+
+  <div class="art-doc">
+    {{range .Parts}}
+    <div class="para"><span class="by">{{.Auteur}}</span>{{rendu .Body}}</div>
+    {{else}}<div class="teaser">Aucune contribution pour l'instant.</div>{{end}}
+  </div>
+
+  {{if ne .Art.Status "published"}}
+  <form class="pnl art-add" method="post" action="/article/{{.Art.ID}}/part">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <h3>Ajouter votre contribution</h3>
+    <textarea class="art-area" name="body" rows="5" required placeholder="Écrivez votre part — un paragraphe, un angle, une relecture… (Markdown)"></textarea>
+    <div class="art-actions"><button class="btn primary" type="submit">＋ Ajouter (signé {{.V.Handle}})</button></div>
+  </form>
+  <form class="pnl art-pub" method="post" action="/article/{{.Art.ID}}/publier">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <div class="art-actions"><button class="btn pub" type="submit">✔ Publier dans la gazette</button><span class="mini">→ billets.gk2 · public</span></div>
+    <p class="teaser">Le brouillon reste privé sur le BBS. La publication l'envoie sur la face publique (billets), avec l'attribution des rédacteurs.</p>
+  </form>
+  {{end}}
+
+  {{else}}
+  <article class="pnl art-head">
+    <span class="stamp draft">nouveau</span>
+    <h1 class="serif">Co-écrire un article</h1>
+    {{if .Art.ThreadID}}<div class="writers"><small>à partir d'un dossier de discussion</small></div>{{end}}
+  </article>
+  <form class="pnl art-add" method="post" action="/article/nouveau">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    <input type="hidden" name="thread_id" value="{{.Art.ThreadID}}">
+    <input class="art-title" name="title" required maxlength="200" value="{{.Art.Title}}" placeholder="Titre de l'article" aria-label="Titre">
+    <textarea class="art-area" name="body" rows="7" required placeholder="Votre première contribution — l'introduction, l'angle… (Markdown)"></textarea>
+    <div class="art-actions"><button class="btn primary" type="submit">Ouvrir l'article</button></div>
+  </form>
+  {{end}}
+</div>
+</body></html>{{end}}

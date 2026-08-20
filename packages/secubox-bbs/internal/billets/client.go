@@ -83,6 +83,12 @@ type Client struct {
 	Socket  string // chemin de la socket unix, si l'appel passe par elle
 	Session string // session d'operateur par defaut (essais uniquement)
 	HTTP    *http.Client
+	// SitePublic : l'origine PUBLIQUE de billets (ex. https://billets.gk2.secubox.in),
+	// connue du BBS via --billets-base. billets, quand BILLETS_SITE_URL n'est pas
+	// posee, rend un permalien RELATIF (`/b/slug`) ; le BBS l'absolutise dessus
+	// pour stocker un lien cliquable au lieu d'un chemin sans domaine (#1056).
+	// Vide : on garde le relatif — inventer un hote donnerait un lien mort.
+	SitePublic string
 }
 
 // NewUnix construit un client parlant a billets par sa socket unix.
@@ -210,7 +216,7 @@ func (c *Client) Publier(f Fil) (Resultat, error) {
 	}
 	json.Unmarshal(corps, &out)
 	r.BilletID = out.ID
-	r.URL = adressePubliee(out.Permalien, out.URL, out.Slug)
+	r.URL = adressePubliee(c.SitePublic, out.Permalien, out.URL, out.Slug)
 
 	// LES MEDIAS SUIVENT LE BILLET, ils ne restent pas chez nous.
 	//
@@ -390,18 +396,34 @@ func charge(jwt string) ([]byte, error) {
 // public de billets ; `url` couvre les versions qui le servent aussi ; le slug
 // reste le dernier recours, parce qu'un identifiant vaut mieux qu'un vide.
 //
-// ON NE FABRIQUE PAS D'HOTE. Reconstruire `https://quelque-chose/b/slug` sans
-// savoir lequel donnerait un lien mort presente comme bon — et le BBS sait
-// deja dire « adresse manquante », ce qui est plus honnete qu'un lien qui
-// echoue au clic.
-func adressePubliee(permalien, url, slug string) string {
+// ON NE FABRIQUE PAS D'HOTE AU HASARD, mais on ABSOLUTISE sur l'origine
+// CONNUE. billets, quand BILLETS_SITE_URL n'est pas posee, rend un permalien
+// RELATIF (`/b/slug`) : stocke tel quel, le lien s'affichait dans le BBS sans
+// `.gk2.secubox.in` et menait dans le vide (#1056). Le BBS, lui, connaît
+// l'origine publique de billets via --billets-base (`base` ici) : il l'ajoute
+// devant une adresse relative. Une adresse DEJA absolue est gardee intacte.
+// Sans base connue, on garde le relatif — inventer un hote donnerait un lien
+// mort presente comme bon, et le BBS sait deja dire « adresse manquante ».
+func adressePubliee(base, permalien, url, slug string) string {
 	for _, candidat := range []string{permalien, url} {
 		if c := strings.TrimSpace(candidat); c != "" {
-			return c
+			return absolutiser(base, c)
 		}
 	}
 	if s := strings.TrimSpace(slug); s != "" {
-		return "/b/" + s
+		return absolutiser(base, "/b/"+s)
 	}
 	return ""
+}
+
+// absolutiser prefixe une adresse RELATIVE par l'origine publique. Une adresse
+// deja absolue (scheme://) ou une base vide sont rendues inchangees.
+func absolutiser(base, chemin string) string {
+	if chemin == "" || base == "" || strings.Contains(chemin, "://") {
+		return chemin
+	}
+	if strings.HasPrefix(chemin, "/") {
+		return strings.TrimRight(base, "/") + chemin
+	}
+	return chemin
 }

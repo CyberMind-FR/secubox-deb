@@ -120,11 +120,13 @@ func TestSansPeerTubeConfigureAucuneOrigineNEstOuverte(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	p := w.Header().Get("Content-Security-Policy")
-	if contientTxt(p, "https://") {
+	// #1056 : la board integre YouTube, donc l'hote cookieless est toujours
+	// present — c'est la SEULE origine externe admise sans configuration.
+	if contientTxt(p, "https://") && !contientTxt(p, "https://www.youtube-nocookie.com") {
 		t.Errorf("origine externe autorisee sans configuration : %s", p)
 	}
-	if !contientTxt(p, "frame-src 'none'") {
-		t.Errorf("frame-src devrait etre ferme : %s", p)
+	if !contientTxt(p, "frame-src https://www.youtube-nocookie.com") {
+		t.Errorf("frame-src devrait se limiter a youtube-nocookie : %s", p)
 	}
 }
 

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/billets"
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/connectors"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
@@ -54,7 +55,13 @@ type Options struct {
 	// bouton « publier » repond « module non configure » plutot que d'echouer
 	// au moment de l'appel.
 	BilletsSocket string
-	JWTSecret     string
+	// BilletsBase : origine publique de billets, pour transformer une adresse
+	// relative (« /b/slug ») du flux JSON en lien cliquable (#1066 phase A).
+	// Vide, la vitrine affiche les adresses telles que le flux les rend — un
+	// lien relatif pointerait vers le BBS lui-meme, ce qui serait pire qu'une
+	// adresse laissee telle quelle.
+	BilletsBase string
+	JWTSecret   string
 	// BackupDir : ou deposer les archives declenchees depuis le panneau.
 	BackupDir string
 	// BanniereOrigine / BanniereHash : la banniere de sante que le WAF de la
@@ -110,6 +117,9 @@ type Options struct {
 	// peuvent pas se connecter — ils n'ont pas de mot de passe local, et c'est
 	// le comportement voulu plutot qu'un repli silencieux.
 	AuthSocket string
+	// YtsasOrigine : origine de la SAS ytsas (http://IP:8091). Alimente
+	// media-src pour le <video> local d'une video YouTube rapatriee (#1056).
+	YtsasOrigine string
 }
 
 type Server struct {
@@ -119,6 +129,7 @@ type Server struct {
 	tpl  map[string]*template.Template
 	mux  *http.ServeMux
 	bil  *billets.Client
+	ytsas *connectors.ClientYtsas
 	// vCSS : empreinte du contenu de la feuille de style, ajoutee a son
 	// adresse. Voir routes.go — le WAF de la board supprime les en-tetes de
 	// cache, l'adresse est le seul levier qui reste.
@@ -130,9 +141,14 @@ type Server struct {
 	authAmont authAmont
 	// encodeQR : remplace en test pour verifier CE QUE le QR contient.
 	encodeQR func(string) ([]byte, error)
+	// youtube : connecteur souverain #1056, construit par l'appelant (main.go)
+	// a partir de Options.YtsasOrigine — c'est lui qui detient le http.Client
+	// et son delai, la Server n'a pas a les connaitre. Nil = servirMediaFiche
+	// retombe sur le comportement existant (aucune resolution youtube).
+	youtube *connectors.YouTube
 }
 
-func New(st *store.Store, opt Options) (*Server, error) {
+func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) {
 	if opt.Titre == "" {
 		opt.Titre = "SecuBox BBS"
 	}
@@ -149,6 +165,18 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	fn := template.FuncMap{"rendu": Render, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
+		},
+		// initiales2 : deux lettres pour une pastille d'auteur (#1056 stage 3).
+		"initiales2": func(h string) string {
+			h = strings.TrimSpace(strings.TrimPrefix(h, "@"))
+			r := []rune(h)
+			if len(r) == 0 {
+				return "?"
+			}
+			if len(r) == 1 {
+				return strings.ToUpper(string(r))
+			}
+			return strings.ToUpper(string(r[:2]))
 		},
 		// decalage rend la classe d'indentation d'un sous-salon.
 		//
@@ -177,10 +205,49 @@ func New(st *store.Store, opt Options) (*Server, error) {
 		}
 		pages[nom] = t
 	}
-	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux()}
-	if b, err := assets.ReadFile("static/bbs.css"); err == nil {
-		sum := sha256.Sum256(b)
-		s.vCSS = base64.RawURLEncoding.EncodeToString(sum[:6])
+	// #1056 stage 1 : l'accueil « rédaction » est un gabarit AUTONOME (define
+	// "newsroom"), sans "layout" ni bbs.css. On le compile à part — les autres
+	// pages gardent la coquille à trois colonnes intacte.
+	if t, err := template.New("newsroom.html").Funcs(fn).
+		ParseFS(assets, "templates/newsroom.html"); err == nil {
+		pages["newsroom"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit newsroom : %w", err)
+	}
+	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
+	if t, err := template.New("mediatheque.html").Funcs(fn).
+		ParseFS(assets, "templates/mediatheque.html"); err == nil {
+		pages["mediatheque"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit mediatheque : %w", err)
+	}
+	// Lecteur détaché (#1056), gabarit autonome pour la fenêtre pop-out.
+	if t, err := template.New("player.html").Funcs(fn).
+		ParseFS(assets, "templates/player.html"); err == nil {
+		pages["player"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit player : %w", err)
+	}
+	// Article collaboratif (#1056 stage 3), gabarit autonome (éditeur à plusieurs mains).
+	if t, err := template.New("article.html").Funcs(fn).
+		ParseFS(assets, "templates/article.html"); err == nil {
+		pages["article"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit article : %w", err)
+	}
+	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
+	// L'empreinte de cache (?v=) couvre les TROIS feuilles/scripts servis : le
+	// WAF de la board efface Cache-Control/ETag (voir layout.html), donc une
+	// feuille changée sans empreinte neuve resterait invisible au navigateur.
+	{
+		h := sha256.New()
+		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js",
+			"static/player.js", "static/coquille.js", "static/editeur.js"} {
+			if b, err := assets.ReadFile(f); err == nil {
+				h.Write(b)
+			}
+		}
+		s.vCSS = base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:6])
 	}
 	if opt.AuthSocket != "" {
 		s.authAmont = clientAuthSocket(opt.AuthSocket)
@@ -190,6 +257,15 @@ func New(st *store.Store, opt Options) (*Server, error) {
 	}
 	if opt.BilletsSocket != "" {
 		s.bil = billets.NewUnix(opt.BilletsSocket)
+		// #1056 : l'origine publique de billets, pour absolutiser un permalien
+		// relatif rendu par billets (BILLETS_SITE_URL absent) en un lien
+		// cliquable au moment de la publication.
+		s.bil.SitePublic = opt.BilletsBase
+	}
+	// #1056 stage 3 : raccord ytsas — connecter une vidéo déposée (fetch/cache)
+	// et l'archiver vers PeerTube. Même origine que le connecteur youtube.
+	if opt.YtsasOrigine != "" {
+		s.ytsas = &connectors.ClientYtsas{Base: opt.YtsasOrigine, HTTP: &http.Client{Timeout: 20 * time.Second}}
 	}
 	s.routes()
 	s.routesAPI()
@@ -248,6 +324,14 @@ func (s *Server) frameSrc() string {
 	for _, o := range s.opt.FrameOrigines {
 		ajoute(o)
 	}
+	// #1056 — la board integre YouTube : le rendu du corps emet un iframe
+	// youtube-nocookie. Toujours autorise, sinon l'embed serait bloque.
+	ajoute("https://www.youtube-nocookie.com")
+	// En pratique CE `if` NE SE DECLENCHE PLUS : youtube-nocookie est ajoutee
+	// inconditionnellement ci-dessus, donc `ok` a toujours au moins une
+	// entree. Gardee pour le jour ou cet ajout deviendrait lui aussi
+	// conditionnel — le defaut effectif aujourd'hui EST youtube-nocookie,
+	// pas 'none'.
 	if len(ok) == 0 {
 		return "'none'"
 	}
@@ -320,12 +404,15 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hd := w.Header()
-		// La politique interdit tout script en ligne et toute origine externe.
+		// La politique interdit tout script en ligne et toute origine externe,
+		// SAUF UNE EXCEPTION VOULUE : youtube-nocookie dans `frame-src`
+		// (#1056, voir frameSrc) — un cadre n'est pas un script, et c'est
+		// precisement la distinction que `media` documente plus haut.
 		// Le rendu Markdown ne peut deja pas produire de balise <script> ; ceci
 		// est la seconde barriere, celle qui tient si la premiere cede.
 		// JAMAIS `unsafe-inline` : elle rendrait la politique decorative,
 		// c'est-a-dire exactement ce contre quoi elle protege.
-		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, ""))
+		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, s.opt.YtsasOrigine))
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")
 		hd.Set("X-Frame-Options", "DENY")

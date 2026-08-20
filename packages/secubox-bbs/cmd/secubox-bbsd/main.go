@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/connectors"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/web"
 )
@@ -88,6 +89,7 @@ func main() {
 		tls     = flag.Bool("derriere-tls", true, "poser Secure sur les cookies")
 		sauveg  = flag.String("backup-dir", "/var/backups/secubox", "ou deposer les archives")
 		bilSock = flag.String("billets-socket", "/run/secubox/billets.sock", "socket du module billets")
+		bilBase = flag.String("billets-base", "", "origine publique de billets, pour resoudre les adresses relatives du flux ; vide = adresses telles que le flux les rend")
 		conf    = flag.String("conf", "/etc/secubox/secubox.conf", "configuration du core (api.jwt_secret)")
 
 		// La banniere de sante est injectee par le WAF de la board APRES notre
@@ -109,8 +111,26 @@ func main() {
 			"parcs media du podcaster, separes par des virgules — CONFINEMENT : rien hors de la n'est servi")
 		authSock = flag.String("auth-socket", "/run/secubox/auth.sock",
 			"socket de secubox-auth ; vide = les comptes synchronises ne peuvent pas se connecter")
+
+		// ytsasOrig : origine de la SAS ytsas — le tuyau souverain qui rapatrie
+		// une video YouTube en local (mirror PeerTube ou cache) avant que le WAN
+		// ne devienne le seul recours. Alimente a la fois le connecteur (appels
+		// /resolve) et Options.YtsasOrigine (media-src de la CSP, #1056).
+		ytsasOrig = flag.String("ytsas-origine", "http://10.100.0.180:8091", "origine de la SAS ytsas")
 	)
 	flag.Parse()
+
+	// noeud identifie CETTE board dans Contenu.NoeudOrigine — provenance d'un
+	// media rapatrie. Aucun flag dedie n'existe encore pour ca ailleurs dans le
+	// demon ; le nom de machine est la seule identite stable disponible sans en
+	// inventer une nouvelle pour ce seul connecteur.
+	noeud, err := os.Hostname()
+	if err != nil || noeud == "" {
+		noeud = "secubox-bbs"
+	}
+	yt := connectors.NouveauYouTube(&connectors.ClientYtsas{
+		Base: *ytsasOrig, HTTP: &http.Client{Timeout: 3 * time.Second},
+	}, noeud)
 
 	st, err := store.Open(filepath.Join(*racine, "index.db"))
 	if err != nil {
@@ -138,14 +158,15 @@ func main() {
 		log.Print("ATTENTION : aucun secret JWT — API d'administration et publication fermees")
 	}
 
-	srv, err := web.New(st, web.Options{
+	srv, err := web.New(st, yt, web.Options{
 		Titre: *titre, Secrets: *secrets, DerriereTLS: *tls,
-		BilletsSocket: *bilSock, JWTSecret: secret, BackupDir: *sauveg,
+		BilletsSocket: *bilSock, BilletsBase: *bilBase, JWTSecret: secret, BackupDir: *sauveg,
 		BanniereOrigine: *bannOrig, BanniereHash: *bannHash, BanniereStyle: *bannStyle,
 		PeerTubeOrigine: *ptOrigine, PodcastRacine: *podRacine, PodcastDB: *podDB,
 		MediaOrigines: origines(*mediaOrig),
 		FrameOrigines: origines(*frameOrig),
 		AuthSocket:    *authSock,
+		YtsasOrigine:  *ytsasOrig,
 	})
 	if err != nil {
 		log.Fatalf("initialisation du serveur : %v", err)

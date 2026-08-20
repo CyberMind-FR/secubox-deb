@@ -7,11 +7,17 @@
 
 {{define "corps"}}
 <div class="s621f16f">
-<div class="ph"><div><h1 class="serif">Ouvrir un fil</h1>
+<div class="ph"><div><h1 class="serif">{{if .SourceURL}}Déposer une source{{else}}Ouvrir un fil{{end}}</h1>
 <p>Le premier message part sur le disque en Markdown ; la base ne fait que l'indexer.</p></div></div>
 {{if .Err}}<div class="note sa2d3b14"><b>{{.Err}}</b></div>{{end}}
 <form method="post" action="/nouveau">
 <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+{{if .SourceURL}}
+<input type="hidden" name="src" value="{{.SourceURL}}">
+<div class="note"><b>{{.SrcType.Glyphe}} Source · {{.SrcType.Label}}</b><br>
+<span class="mono">{{.SourceURL}}</span><br>
+Ajoutez un titre et votre regard — le lien ouvre la discussion. Le dossier reste <b>local</b> (privé) jusqu'à publication.</div>
+{{end}}
 <div class="card pad stack s42a6ced">
   <label class="s3fb7839">Salon
     <select name="categorie" class="sa9ef1c9">
@@ -58,5 +64,5 @@
   adresse. Seul un fil public peut ensuite devenir un billet.
 </div>
 </div>
-<script src="/static/editeur.js" defer></script>
+<script src="/static/editeur.js?v={{.VCSS}}" defer></script>
 {{end}}
