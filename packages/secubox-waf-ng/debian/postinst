@@ -121,6 +121,10 @@ case "$1" in
       # before this postinst runs, so `restart` — not `try-restart` — is needed
       # to bring it back). HAProxy srv0 → 127.0.0.1:8085 keeps pointing at it.
       systemctl restart secubox-waf-ng.service 2>/dev/null || true
+      # #1070 D : activer le timer de corrélation des campagnes + une première
+      # passe immédiate pour que le tableau de bord ait des données tout de suite.
+      systemctl enable --now secubox-waf-campaigns.timer 2>/dev/null || true
+      systemctl start secubox-waf-campaigns.service 2>/dev/null || true
     fi
 
     ;;
