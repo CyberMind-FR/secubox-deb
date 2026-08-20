@@ -26,6 +26,9 @@ override_dh_auto_install:
 	install -m 0644 nginx/webui.conf debian/secubox-hub/etc/nginx/sites-available/webui.conf
 	install -d debian/secubox-hub/etc/nginx/conf.d
 	[ -f nginx/secubox-lan-geo.conf ] && cp nginx/secubox-lan-geo.conf debian/secubox-hub/etc/nginx/conf.d/ || true
+	# absolute_redirect off (http-context) : empêche la fuite http://host:9080
+	# sur les redirections auto trailing-slash derrière HAProxy TLS (#1081).
+	[ -f nginx/secubox-redirect.conf ] && cp nginx/secubox-redirect.conf debian/secubox-hub/etc/nginx/conf.d/ || true
 	# Nginx snippets (shared CORS config)
 	install -d debian/secubox-hub/etc/nginx/snippets
 	[ -d nginx/snippets ] && cp -r nginx/snippets/. debian/secubox-hub/etc/nginx/snippets/ || true
