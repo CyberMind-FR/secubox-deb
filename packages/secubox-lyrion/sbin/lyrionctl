@@ -12,7 +12,7 @@
 
 set -u
 
-readonly VERSION="1.2.0"
+readonly VERSION="1.0.1"
 readonly CONFIG_FILE="${SECUBOX_LYRION_CONFIG:-/etc/secubox/lyrion.toml}"
 readonly STATE_DIR="${SECUBOX_LYRION_STATE:-/var/lib/secubox/lyrion}"
 readonly SECRETS_DIR="${SECUBOX_SECRETS_DIR:-/etc/secubox/secrets}"
@@ -53,38 +53,11 @@ config_get() {
     fi
 }
 
-# toml_get_sec <file> <section> <key> <default> — section-aware scalar read.
-# Needed for lyrion.toml where `path` occurs under BOTH [lxc] and [library];
-# config_get()'s flat grep would silently return the [lxc] one for either.
-# Same implementation as jellyfinctl's toml_get_sec (kept in sync by hand —
-# these host *ctl tools deliberately don't share a bash lib, see PATTERNS.md).
-toml_get_sec() {
-    local file="$1" section="$2" key="$3" default="${4:-}"
-    if [ ! -f "$file" ]; then echo "$default"; return; fi
-    local val
-    val=$(awk -v section="$section" -v key="$key" '
-        /^[[:space:]]*\[/ { s=$0; gsub(/[][[:space:]]/,"",s); cur=s; next }
-        cur==section {
-            line=$0; k=line; sub(/=.*/,"",k); gsub(/[[:space:]]/,"",k)
-            if (k==key) {
-                v=line; sub(/^[^=]*=/,"",v); sub(/#.*/,"",v)
-                gsub(/^[[:space:]]+|[[:space:]]+$/,"",v); gsub(/["'\''"]/,"",v)
-                print v; exit
-            }
-        }' "$file" 2>/dev/null || true)
-    [ -z "$val" ] && echo "$default" || echo "$val"
-}
-
 LXC_NAME=$(config_get "name" "lyrion")
 LXC_IP=$(config_get "ip" "10.100.0.100")
 LXC_PATH=$(config_get "path" "/data/lxc")
 HTTP_PORT=$(config_get "http_port" "3000")
 PUBLIC_HOSTNAME=$(config_get "public_hostname" "lyrion.gk2.secubox.in")
-
-# Conserved-audio landing subdir, inside [library].path (default /data/music).
-# Same directory tree LMS already scans — no separate partner-side mount
-# needed, unlike the single-slot `medialib` external mount below.
-readonly CONSERVE_SUBDIR="${SECUBOX_LYRION_CONSERVE_SUBDIR:-conserve}"
 
 # ── LXC helpers ───────────────────────────────────────────────────────────────
 lxc_state() {
@@ -176,7 +149,7 @@ emit_access_json() {
     # webui's "Open Music UI" button reads this; consistency comes from
     # one source.
     #   lan:    http://<host>:9000/   (direct nginx vhost, LAN-only)
-    #   public: https://<PUBLIC_HOSTNAME>/   (Authelia-gated dedicated vhost)
+    #   public: https://<PUBLIC_HOSTNAME>/   (LAN-only gated dedicated vhost)
     local lan_url public_url
     lan_url="http://$(hostname -I | awk '{print $1}'):${HTTP_PORT}/"
     if [ -n "$PUBLIC_HOSTNAME" ]; then
@@ -190,7 +163,7 @@ emit_access_json() {
   "access": [
     {"url": "$lan_url",    "auth": "lan-only",       "scope": "lan"}$( [ -n "$public_url" ] && echo ',' )
     $( [ -n "$public_url" ] && cat <<PUB
-{"url": "$public_url", "auth": "Authelia SSO",   "scope": "public"}
+{"url": "$public_url", "auth": "LAN-only gate", "scope": "public"}
 PUB
 )
   ]
@@ -249,52 +222,6 @@ cmd_reload() {
     log "Reloaded host FastAPI and lyrionmusicserver (if running)."
 }
 
-# ── Conserve ingest (partner entry point for secubox-torrent-conserve /
-# secubox-ytsas-conserve, issue #967) ─────────────────────────────────────────
-# Places an already-downloaded audio file into the Lyrion music library
-# ([library].path, the same tree lyrionctl install RO-binds into the LXC)
-# and nudges a rescan. Always emits JSON; callers key off .ok to decide
-# whether the item is DONE (dequeue) or should stay queued for a retry.
-#
-# The LXC must be RUNNING for anything to happen — not just provisioned.
-# This keeps the contract simple and unambiguous for callers: "ok":false
-# means "Lyrion is absent or unreachable right now, try again later",
-# never a half-done copy sitting in a directory nobody is scanning yet.
-cmd_ingest() {
-    local src="${1:-}" lib dest_dir dest src_hash
-    if [ -z "$src" ] || [ ! -f "$src" ]; then
-        printf '{"ok":false,"error":"source file not found"}\n'
-        return 1
-    fi
-    if ! lxc_running; then
-        printf '{"ok":false,"error":"lyrion lxc not running"}\n'
-        return 1
-    fi
-    lib=$(toml_get_sec "$CONFIG_FILE" library path "/data/music")
-    # Namespace by a hash of the SOURCE PATH (not content — cheap, and stable
-    # across retries of the same request): two unrelated conserved files that
-    # happen to share a basename (eg. two different torrents both producing
-    # "01 - Track.mp3") must never silently overwrite each other in the
-    # library. Same source path always hashes the same, so a retried/re-run
-    # ingest of the same file is idempotent (re-copies over itself, no dupes).
-    src_hash=$(printf '%s' "$src" | sha1sum | cut -c1-10)
-    dest_dir="${lib%/}/${CONSERVE_SUBDIR}/${src_hash}"
-    if ! install -d -m 0755 "$dest_dir" 2>/dev/null; then
-        printf '{"ok":false,"error":"library path not writable"}\n'
-        return 1
-    fi
-    dest="$dest_dir/$(basename -- "$src")"
-    if ! cp -f -- "$src" "$dest" 2>/dev/null; then
-        printf '{"ok":false,"error":"copy failed"}\n'
-        return 1
-    fi
-    # Best-effort — the file is already in place either way, so a failed
-    # nudge does not flip this to ok:false; LMS's own periodic scan will
-    # eventually pick it up.
-    _medialib_trigger_scan
-    printf '{"ok":true,"path":%s}\n' "$(_json_str "$dest")"
-}
-
 cmd_help() {
     cat <<'HELP'
 lyrionctl — SecuBox Lyrion music-server controller (HOSTING layer)
@@ -322,12 +249,6 @@ External media library (v1.1.3, always emits JSON):
   lyrionctl medialib mount <path>      # RO-bind <path> into the LXC + persist + rescan
   lyrionctl medialib unmount           # remove bind + config + rescan
   lyrionctl medialib status            # {"external":"<path|null>","mounted":bool}
-
-Conserve partner entry point (v1.2.0, issue #967, always emits JSON):
-  lyrionctl ingest <file>              # copy <file> into [library].path/conserve + rescan
-                                        # {"ok":true,"path":"..."} or {"ok":false,"error":"..."}
-                                        # ok:false (lxc not running, etc.) => caller should
-                                        # leave the item queued and retry later
 
   (--json on any verb returns machine-readable output)
 
@@ -898,7 +819,6 @@ main() {
         upgrade) cmd_upgrade ;;
         components|status|access|install|reload) "cmd_${noun}" "$@" ;;
         medialib) cmd_medialib "$@" ;;
-        ingest) cmd_ingest "$@" ;;
         # The remaining nouns are stubs in v1.0.0 — see #230 task G5 for
         # full implementation. They print a clear "not implemented yet" so
         # the help/grammar surface is consistent now and the API contract

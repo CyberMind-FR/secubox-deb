@@ -7,12 +7,6 @@ override_dh_auto_install:
 	install -d debian/secubox-zigbee/usr/lib/secubox/zigbee
 	cp -r api debian/secubox-zigbee/usr/lib/secubox/zigbee/
 	# CTL
-	# Regle udev du nom de ROLE (/dev/secubox-zgb). Elle existait sur la board
-	# sans etre livree par aucun paquet : une reinstallation propre l'aurait fait
-	# disparaitre, et avec elle le lien que la configuration LXC exige.
-	install -d debian/secubox-zigbee/lib/udev/rules.d
-	install -m 644 udev/99-secubox-zigbee.rules \
-	  debian/secubox-zigbee/lib/udev/rules.d/99-secubox-zigbee.rules
 	install -d debian/secubox-zigbee/usr/sbin
 	install -m 755 sbin/zigbeectl debian/secubox-zigbee/usr/sbin/zigbeectl
 	# v2.6.0 backup / restore helpers + hourly timer
