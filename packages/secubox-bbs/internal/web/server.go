@@ -205,6 +205,10 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	}
 	if opt.BilletsSocket != "" {
 		s.bil = billets.NewUnix(opt.BilletsSocket)
+		// #1056 : l'origine publique de billets, pour absolutiser un permalien
+		// relatif rendu par billets (BILLETS_SITE_URL absent) en un lien
+		// cliquable au moment de la publication.
+		s.bil.SitePublic = opt.BilletsBase
 	}
 	s.routes()
 	s.routesAPI()
