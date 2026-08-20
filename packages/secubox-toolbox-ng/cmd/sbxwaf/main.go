@@ -150,6 +150,11 @@ type Server struct {
 	// When non-nil: called with (ip, cat, sev) whenever an IP reaches BAN.
 	crowdsec CrowdSecReporter
 
+	// nftBan est le ban nft NATIF (#1070, phase B) — set nft à timeout géré par
+	// le WAF lui-même, en parallèle de CrowdSec. Nil = backend désactivé (nft
+	// indisponible / droits manquants) : on retombe sur CrowdSec seul.
+	nftBan *NftBanner
+
 	// maxBodyInspect is the per-request body inspection cap in bytes.
 	// Only the first maxBodyInspect bytes of the request body are passed to
 	// Rules.Match; the remainder is streamed to the upstream uninspected.
@@ -513,9 +518,7 @@ func (s *Server) handler() http.Handler {
 						// escalate bans too — otherwise a banned scanner is
 						// visible in the dashboard JSON but silent in the logs.
 						log.Printf("sbxwaf: THREAT [%s] %s (escalate %d): %s", sev, ip, count, cat)
-						if s.crowdsec != nil {
-							go s.crowdsec.Report(ip, cat, sev)
-						}
+						s.appliquerBan(ip, cat, sev)
 						writeBan(w)
 						return
 					} else {
@@ -568,9 +571,7 @@ func (s *Server) handler() http.Handler {
 
 					if banned {
 						// Task 4.1 seam — notify CrowdSec LAPI when non-nil.
-						if s.crowdsec != nil {
-							go s.crowdsec.Report(ip, cat, sev)
-						}
+						s.appliquerBan(ip, cat, sev)
 						writeBan(w)
 					} else {
 						writeWarning(w, cat)
@@ -710,6 +711,18 @@ func (s *Server) handler() http.Handler {
 
 // logEscalate writes one threat record for an escalate-mode hit. `action` is
 // "detect" while observing and "banned" once the threshold is crossed.
+// appliquerBan sanctionne une IP sur TOUS les backends configurés, en parallèle
+// (#1070, phase B) : le drop nft natif ET le rapport CrowdSec. Le nft rend le ban
+// effectif même si CrowdSec est absent — le WAF est autonome.
+func (s *Server) appliquerBan(ip, cat, sev string) {
+	if s.nftBan != nil {
+		go s.nftBan.Ban(ip, cat, sev)
+	}
+	if s.crowdsec != nil {
+		go s.crowdsec.Report(ip, cat, sev)
+	}
+}
+
 // recordHostAnomaly journalise et sanctionne un Host non routé (#1070, phase A).
 // N'ÉCRIT PAS de réponse : l'appelant renvoie toujours 421 (ne rien divulguer).
 //
@@ -746,9 +759,7 @@ func (s *Server) recordHostAnomaly(r *http.Request, host string) {
 	}
 	if action == "banned" {
 		log.Printf("sbxwaf: THREAT [%s] %s host-anomaly=%s host=%q", cls.Sev, ip, cls.Name, r.Host)
-		if s.crowdsec != nil {
-			go s.crowdsec.Report(ip, cat, cls.Sev)
-		}
+		s.appliquerBan(ip, cat, cls.Sev)
 	}
 }
 
@@ -849,6 +860,15 @@ func main() {
 	crowdsecCscli := flag.String("crowdsec-cscli", "cscli",
 		"cscli binary used to inject ban decisions when no --crowdsec-jwt-file is set "+
 			"(the proven path the WAF dashboard's manual ban uses); empty disables the cscli fallback")
+	// Ban nft natif (#1070 phase B) — en parallèle de CrowdSec, WAF autonome.
+	nftBanEnabled := flag.Bool("nft-ban", false,
+		"ban natif nft en parallèle de CrowdSec (#1070) : le WAF pose ses propres drops "+
+			"dans inet <table> waf_ban{,6}, persistants et à retrait différé (nécessite CAP_NET_ADMIN)")
+	nftPath := flag.String("nft-path", "nft", "chemin de l'exécutable nft")
+	nftTable := flag.String("nft-table", "secubox", "table nft inet pour les sets de ban")
+	banStore := flag.String("ban-store", "/var/lib/secubox/waf/bans.jsonl",
+		"journal JSONL des bans nft (persistance + audit ; rechargé au démarrage)")
+	nftBanDuration := flag.Duration("nft-ban-duration", 4*time.Hour, "durée d'un ban nft")
 	// Task 5.1: RGPD Set-Cookie ledger.
 	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
 		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
@@ -985,6 +1005,33 @@ func main() {
 			*crowdsecCscli, *crowdsecBanDuration)
 	} else if *crowdsecURL != "" || *crowdsecJWTFile != "" {
 		log.Printf("sbxwaf: crowdsec bridge disabled — set --crowdsec-url (+ --crowdsec-cscli or --crowdsec-jwt-file)")
+	}
+
+	// Ban nft natif (#1070 phase B) — en parallèle de CrowdSec. Autonome : le
+	// drop nft est effectif même sans CrowdSec, persiste au restart (journal) et
+	// se retire à l'échéance (timeout nft). Ensure échoue sans CAP_NET_ADMIN → on
+	// désactive proprement le backend nft et on garde CrowdSec.
+	if *nftBanEnabled {
+		store := NewBanStore(*banStore)
+		nb := NewNftBanner(*nftPath, *nftTable, *nftBanDuration, store)
+		if err := nb.Ensure(); err != nil {
+			log.Printf("sbxwaf: ban nft natif désactivé (nft indisponible : %v) — CrowdSec seul", err)
+		} else {
+			srv.nftBan = nb
+			n := nb.Reload()
+			log.Printf("sbxwaf: ban nft natif activé (table inet %s, durée %s, %d ban(s) rechargé(s))",
+				*nftTable, *nftBanDuration, n)
+			// Balayage : ré-asserte périodiquement les bans actifs du journal dans
+			// nft (au cas où le ruleset est rechargé/flush par un autre outil). Le
+			// retrait à l'échéance reste assuré par le timeout nft du noyau.
+			go func() {
+				t := time.NewTicker(2 * time.Minute)
+				defer t.Stop()
+				for range t.C {
+					nb.Reload()
+				}
+			}()
+		}
 	}
 
 	// Wire in the WAF rules engine when --rules is provided.
