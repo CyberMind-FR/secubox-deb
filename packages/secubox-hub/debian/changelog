@@ -1,3 +1,19 @@
+secubox-hub (1.9.7-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1081 : downgrade HTTPS→HTTP:9080 sur les redirections nginx.
+    Un chemin de répertoire demandé sans « / » final (ex. /metrics, /waf)
+    déclenchait la redirection auto de nginx qui, avec le défaut
+    `absolute_redirect on`, construisait un Location ABSOLU depuis son écoute
+    interne : `301 Location: http://admin.gk2.secubox.in:9080/metrics/`.
+    Le navigateur sortait alors du HTTPS vers le port backend en clair →
+    page cassée, fuite du port interne. Touchait TOUS les vhosts :9080
+    derrière HAProxy. Correctif : nouveau conf.d http-context
+    `secubox-redirect.conf` avec `absolute_redirect off` → Location relatif,
+    le navigateur conserve https://…:443. N'affecte pas les `return 301
+    https://…` explicites (SSO, ACME).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 20 Aug 2026 12:00:00 +0200
+
 secubox-hub (1.9.6-1~bookworm1) bookworm; urgency=high
 
   * CORRECTIF #1064 : ne PLUS livrer www/login.html. Ce fichier (login
