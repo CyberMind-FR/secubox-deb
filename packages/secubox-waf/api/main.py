@@ -855,6 +855,26 @@ async def waf_history():
     return await asyncio.to_thread(_history_cached)
 
 
+CAMPAIGNS_FILE = "/var/cache/secubox/waf/campaigns.json"
+
+
+@app.get("/campaigns")
+async def waf_campaigns():
+    """Campagnes d'attaque corrélées (#1070 phase D) : attaquants regroupés par
+    MÊME workflow (même jeu de sondes, même outil), à travers le temps et les IP.
+    Produit par le timer secubox-waf-campaigns (corrélateur Go de sbxwaf) ; on lit
+    ici son instantané JSON. Absent → vue vide (corrélateur pas encore passé)."""
+    try:
+        data = json.loads(Path(CAMPAIGNS_FILE).read_text())
+    except (OSError, ValueError):
+        return {"available": False, "attaquants": 0, "campagnes": []}
+    camps = data.get("campagnes", [])[:20]
+    for c in camps:
+        c["exemple_sequence"] = c.get("exemple_sequence", [])[:12]
+        c["nb_attaquants"] = len(c.get("attaquants", []))
+    return {"available": True, "attaquants": data.get("attaquants", 0), "campagnes": camps}
+
+
 @app.get("/status")
 async def status():
     """WAF status (public)."""
