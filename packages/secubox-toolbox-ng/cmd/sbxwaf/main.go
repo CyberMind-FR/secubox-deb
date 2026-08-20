@@ -156,6 +156,11 @@ type Server struct {
 	// indisponible / droits manquants) : on retombe sur CrowdSec seul.
 	nftBan *NftBanner
 
+	// ja4Header est l'en-tête de confiance où HAProxy dépose l'empreinte TLS JA4
+	// (#1070, phase E). Vide = pas de JA4. HAProxy DOIT le réécrire (set-header)
+	// pour qu'un client ne puisse pas le forger.
+	ja4Header string
+
 	// maxBodyInspect is the per-request body inspection cap in bytes.
 	// Only the first maxBodyInspect bytes of the request body are passed to
 	// Rules.Match; the remainder is streamed to the upstream uninspected.
@@ -497,6 +502,7 @@ func (s *Server) handler() http.Handler {
 							Action:   "detect",
 							UA:       r.Header.Get("User-Agent"),
 							Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
+							JA4:     s.lireJA4(r),
 						})
 					}
 					hit = false // fall through to the normal proxy path
@@ -566,6 +572,7 @@ func (s *Server) handler() http.Handler {
 							Action: action,
 							UA:     r.Header.Get("User-Agent"),
 							Tool:   étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
+							JA4:     s.lireJA4(r),
 						})
 					}
 
@@ -714,6 +721,16 @@ func (s *Server) handler() http.Handler {
 
 // logEscalate writes one threat record for an escalate-mode hit. `action` is
 // "detect" while observing and "banned" once the threshold is crossed.
+// lireJA4 renvoie l'empreinte TLS JA4 déposée par HAProxy dans l'en-tête de
+// confiance (#1070, phase E), ou "" si non configuré. On ne lit QUE l'en-tête
+// nommé : HAProxy le réécrit à chaque requête, un client ne peut pas le forger.
+func (s *Server) lireJA4(r *http.Request) string {
+	if s.ja4Header == "" {
+		return ""
+	}
+	return r.Header.Get(s.ja4Header)
+}
+
 // appliquerBan sanctionne une IP sur TOUS les backends configurés, en parallèle
 // (#1070, phase B) : le drop nft natif ET le rapport CrowdSec. Le nft rend le ban
 // effectif même si CrowdSec est absent — le WAF est autonome.
@@ -759,6 +776,7 @@ func (s *Server) recordHostAnomaly(r *http.Request, host string) {
 			Category: cat, Severity: cls.Sev, Action: action,
 			UA:   r.Header.Get("User-Agent"),
 			Tool: étiquetteOutil(r.Header.Get("User-Agent"), r.URL.Path),
+			JA4:     s.lireJA4(r),
 		})
 	}
 	if action == "banned" {
@@ -782,6 +800,7 @@ func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action stri
 		Action:   action,
 		UA:       r.Header.Get("User-Agent"),
 		Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
+		JA4:     s.lireJA4(r),
 	})
 }
 
@@ -878,6 +897,9 @@ func main() {
 	// campagnes (attaquants au même workflow) et sortir la synthèse JSON.
 	correlate := flag.String("correlate", "",
 		"corréler waf-threats.log en campagnes et afficher la synthèse JSON, puis quitter")
+	ja4Header := flag.String("ja4-header", "",
+		"en-tête de confiance portant l'empreinte TLS JA4 injectée par HAProxy "+
+			"(ex. X-Sbx-JA4) — clé de corrélation anti-spoof (#1070) ; vide = désactivé")
 	// Task 5.1: RGPD Set-Cookie ledger.
 	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
 		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
@@ -984,6 +1006,7 @@ func main() {
 		// Task 3.2: append-only threat log.
 		threatLog:   NewThreatLog(*threatLog),
 		hostAnomaly: *hostAnomaly,
+		ja4Header:   *ja4Header,
 		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,

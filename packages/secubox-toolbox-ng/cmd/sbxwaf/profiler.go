@@ -83,10 +83,17 @@ func construireProfils(r io.Reader) map[string]*AttackerProfile {
 		if json.Unmarshal(sc.Bytes(), &e) != nil || e.ClientIP == "" {
 			continue
 		}
-		p := profs[e.ClientIP]
+		// Clé = JA4 quand il est présent (#1070 phase E) : l'empreinte TLS
+		// survit à la rotation d'IP, donc regroupe mieux un même attaquant que
+		// l'IP seule. Repli sur l'IP sinon.
+		clé := e.ClientIP
+		if e.JA4 != "" {
+			clé = e.JA4
+		}
+		p := profs[clé]
 		if p == nil {
-			p = &AttackerProfile{Key: e.ClientIP, Premier: e.Timestamp}
-			profs[e.ClientIP] = p
+			p = &AttackerProfile{Key: clé, Premier: e.Timestamp}
+			profs[clé] = p
 		}
 		p.Sondes++
 		p.Dernier = e.Timestamp
