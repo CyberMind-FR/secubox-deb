@@ -1,3 +1,17 @@
+secubox-bbs (0.28.1-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF #1056 : les adresses de billets publiés perdaient le domaine.
+    billets, quand BILLETS_SITE_URL n'est pas posée, rend un permalien RELATIF
+    (`/b/slug`) ; le BBS le stockait tel quel et l'affichait sans
+    `.gk2.secubox.in` — un lien mort. Le BBS connaît pourtant l'origine
+    publique via `--billets-base` : `adressePubliee` l'ajoute désormais devant
+    une adresse relative (une adresse déjà absolue reste intacte ; sans base
+    connue on garde le relatif plutôt que d'inventer un hôte). Le client
+    billets porte l'origine publique (`Client.SitePublic`, câblée depuis
+    `opt.BilletsBase`). Test étendu (absolu / relatif+base / sans base / slug).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 14:30:00 +0200
+
 secubox-bbs (0.28.0-1~bookworm1) bookworm; urgency=medium
 
   * feat : la page /billets affiche desormais le CONTENU REEL du module
