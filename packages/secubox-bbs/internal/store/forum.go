@@ -77,6 +77,14 @@ func (s *Store) NewThread(catID, authorID int64, title, body string, vis Visibil
 	return th, tx.Commit()
 }
 
+// MarquerSource pose le TYPE de source d'un fil (#1056 stage 2 : video /
+// podcast / film / livre / conference / web). La rédaction s'en sert pour
+// classer le dossier ; l'adresse elle-même vit dans le premier message.
+func (s *Store) MarquerSource(threadID int64, source string) error {
+	_, err := s.db.Exec(`UPDATE threads SET source = ? WHERE id = ?`, source, threadID)
+	return err
+}
+
 // Reply ajoute un message a un fil existant.
 func (s *Store) Reply(threadID, authorID int64, body string, vis Visibility) (int64, error) {
 	tx, err := s.db.Begin()

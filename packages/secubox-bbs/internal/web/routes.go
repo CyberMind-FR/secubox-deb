@@ -50,6 +50,10 @@ type page struct {
 	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
 	PlayerFeed                          *PodFeed
 	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
+	// « Déposer une source » (#1056 stage 2) : l'adresse déposée et son type
+	// déduit, pour pré-remplir le composeur avec un aperçu.
+	SourceURL string
+	SrcType   SourceType
 	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
 	// extrait, date, lien de chaque billet, pas seulement les fils publies
 	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
@@ -1139,6 +1143,14 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	p, _ := s.base(r, "forums")
 	p.Titre = "Ouvrir un fil"
 	if r.Method != http.MethodPost {
+		// #1056 stage 2 : « Déposer une source ». ?src=<url> pré-remplit le
+		// composeur avec un aperçu typé ; le fil naît LOCAL (privé) et ne devient
+		// public qu'à la publication — les brouillons restent sur le BBS.
+		if src, ok := adresseSource(r.URL.Query().Get("src")); ok {
+			p.SourceURL = src
+			p.SrcType = typerSource(src)
+			p.Titre = "Déposer une source"
+		}
 		s.rend(w, r, "nouveau", p)
 		return
 	}
@@ -1173,11 +1185,23 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	if r.PostFormValue("visibility") == "public" {
 		vis = store.VisPublic
 	}
+	// #1056 stage 2 : si une source est déposée, son adresse ouvre le premier
+	// message (le rendu la transforme en lien, ou en lecteur pour une vidéo
+	// connue) et son type est posé sur le fil pour la rédaction.
+	src, aSource := adresseSource(r.PostFormValue("src"))
+	if aSource {
+		corps = src + "\n\n" + corps
+	}
 	id, err := s.st.NewThread(cat, v.ID, titre, corps, vis)
 	if err != nil {
 		p.Err = "Enregistrement impossible : " + err.Error()
 		s.rend(w, r, "nouveau", p)
 		return
+	}
+	if aSource {
+		if err := s.st.MarquerSource(id, typerSource(src).Source); err != nil {
+			log.Printf("marquage de source du fil %d : %v", id, err)
+		}
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
 }

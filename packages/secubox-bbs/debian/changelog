@@ -1,3 +1,15 @@
+secubox-bbs (0.28.7-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 2 — « Déposer une source ». Coller une URL dans la barre de la
+    rédaction (ou /nouveau?src=) ouvre le composeur pré-rempli : le type est
+    DÉDUIT de l'adresse (vidéo / podcast / film / livre / conférence / web —
+    aucune requête vers le tiers, pas de SSRF), l'adresse ouvre le premier
+    message (rendue en lien ou lecteur) et classe le dossier dans la rédaction
+    avec le bon glyphe. Le fil naît LOCAL (privé) et ne devient public qu'à la
+    publication.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:40:00 +0200
+
 secubox-bbs (0.28.6-1~bookworm1) bookworm; urgency=medium
 
   * #1056 rédaction : le podcaster est GROUPÉ par flux dans l'accueil — un
