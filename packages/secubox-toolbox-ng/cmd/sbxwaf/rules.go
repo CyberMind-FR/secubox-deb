@@ -327,6 +327,21 @@ func (r *Rules) Match(method, rawPath, rawQuery, body, ua string) (cat, sev, mod
 // legitimate static asset can never be newly blocked. Otherwise identical to
 // Match (same decoding, same scan target, first-match-wins in category order).
 func (r *Rules) MatchModes(method, rawPath, rawQuery, body, ua string, includeBlock bool) (cat, sev, mode string, hit bool) {
+	return r.MatchExcept(method, rawPath, rawQuery, body, ua, includeBlock, nil)
+}
+
+// MatchExcept is MatchModes with an extra category-id exclusion set. Any
+// category whose id is in `exclure` is skipped entirely.
+//
+// Phase G (#1080) uses it as a SAFETY RE-CHECK. When a request's first hit is
+// a SUPPRESSIBLE reconnaissance category on a legitimate vhost path, the same
+// request could ALSO carry an injection that first-match-wins masked (the recon
+// category matched the path before the injection category was reached). Before
+// suppressing, the caller re-runs MatchExcept excluding the suppressible
+// categories: if a real (injection) rule still trips, the request is NOT merely
+// legitimate recon and must be acted on rather than let through. A nil exclure
+// makes this identical to MatchModes.
+func (r *Rules) MatchExcept(method, rawPath, rawQuery, body, ua string, includeBlock bool, exclure map[string]bool) (cat, sev, mode string, hit bool) {
 	decodedPath := unquotePlus(rawPath)
 	decodedQuery := unquotePlus(rawQuery)
 	scanParts := []string{decodedPath, decodedQuery, body, ua}
@@ -342,6 +357,9 @@ func (r *Rules) MatchModes(method, rawPath, rawQuery, body, ua string, includeBl
 
 	for _, c := range cur.cats {
 		if !includeBlock && c.data.mode == modeBlock {
+			continue
+		}
+		if exclure[c.id] {
 			continue
 		}
 		for _, p := range c.data.patterns {

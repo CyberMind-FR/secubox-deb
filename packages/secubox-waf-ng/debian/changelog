@@ -1,3 +1,29 @@
+secubox-waf-ng (1.5.9-1~bookworm1) bookworm; urgency=medium
+
+  * PHASE G #1080 — règles adaptatives par vhost. sbxwaf gagne
+    `--vhost-profiles` : une empreinte de RECONNAISSANCE (catégories scanners /
+    recon_crawler / product_absent_probes) qui touche un chemin LÉGITIME du
+    service d'un vhost — clone git chez gitea (`/owner/repo.git/info/refs`),
+    `/.well-known/` chez nextcloud, `/api/v1/` chez peertube — est supprimée
+    POUR ce vhost uniquement. Partout ailleurs la signature tire normalement.
+    Les catégories d'injection (sqli/xss/lfi/rce) ne sont JAMAIS supprimables :
+    elles bloquent partout, y compris sur un chemin « légitime ». Résout les
+    faux positifs à l'intérieur de gitea/peertube/nextcloud sans ouvrir de
+    brèche : la suppression est déclarative, versionnée, scopée au chemin (un
+    scanner trébuche toujours sur ses autres sondes non légitimes).
+  * L'unité passe `--vhost-profiles /etc/secubox/waf/vhost_profiles.json`.
+  * Opt-in et fail-safe : sans le fichier, ou s'il est illisible, la phase G
+    reste désactivée (aucune suppression = plus strict, jamais moins) et le WAF
+    ne crashe pas — la protection tient.
+  * GARDE ANTI-CONTREBANDE : avant de supprimer, sbxwaf ré-évalue la requête en
+    EXCLUANT les catégories supprimables (Rules.MatchExcept). Le premier-match
+    pouvait rendre une catégorie de reconnaissance ALORS que la même requête
+    portait une injection masquée par l'ordre des catégories ; la ré-évaluation
+    garantit qu'un sqli/xss sur un chemin « légitime » bloque quand même. Test
+    d'intégration dédié (requête recon+injection sur chemin légitime → 403).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 13:30:00 +0200
+
 secubox-waf-ng (1.5.7-1~bookworm1) bookworm; urgency=medium
 
   * Accès données WAF pour le tableau de bord (#1070) : ajoute `secubox` au

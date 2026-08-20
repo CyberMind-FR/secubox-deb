@@ -161,6 +161,13 @@ type Server struct {
 	// pour qu'un client ne puisse pas le forger.
 	ja4Header string
 
+	// vhostProfiles porte les règles adaptatives par vhost (#1080, phase G) :
+	// une empreinte de reconnaissance (scanners / recon_crawler /
+	// product_absent_probes) légitime À L'INTÉRIEUR du service d'un vhost est
+	// supprimée POUR ce vhost seulement. Nil = phase G désactivée (opt-in via
+	// --vhost-profiles) ; la détection Phase F reste alors strictement inchangée.
+	vhostProfiles *VhostProfiles
+
 	// maxBodyInspect is the per-request body inspection cap in bytes.
 	// Only the first maxBodyInspect bytes of the request body are passed to
 	// Rules.Match; the remainder is streamed to the upstream uninspected.
@@ -485,6 +492,35 @@ func (s *Server) handler() http.Handler {
 					r.Header.Get("User-Agent"),
 					includeBlock,
 				)
+				// Phase G (#1080) : règle adaptative par vhost. Une empreinte de
+				// reconnaissance (scanners / recon_crawler / product_absent_probes)
+				// qui touche un chemin LÉGITIME du service de ce vhost — clone git
+				// chez gitea, /.well-known/ chez nextcloud… — est annulée POUR ce
+				// vhost. Les catégories d'injection (sqli/xss/lfi/rce) ne sont
+				// jamais dans la liste supprimable : elles bloquent partout.
+				//
+				// GARDE ANTI-CONTREBANDE : le premier-match a pu rendre une
+				// catégorie supprimable ALORS que la même requête porte AUSSI une
+				// injection (masquée par l'ordre des catégories). Avant de
+				// supprimer, on ré-évalue en EXCLUANT les catégories supprimables :
+				// si une vraie règle tire encore, ce n'est pas de la simple
+				// reconnaissance légitime — on la traite au lieu de la laisser
+				// passer. Sinon la requête n'était QUE légitime → on annule (pas de
+				// ban, pas de report, pas de ligne de menace : le journal serait
+				// inondé par chaque clone). Décision auditable par le fichier
+				// déclaratif versionné.
+				if hit && s.vhostProfiles.doitSupprimer(r.Host, rawPath, cat) {
+					c2, s2, m2, h2 := s.rules.MatchExcept(
+						r.Method, rawPath, r.URL.RawQuery, string(bodyBytes),
+						r.Header.Get("User-Agent"), includeBlock,
+						s.vhostProfiles.categoriesSupprimables(),
+					)
+					if h2 {
+						cat, sev, mode, hit = c2, s2, m2, true
+					} else {
+						hit = false
+					}
+				}
 				if hit && mode == modeDetect {
 					// Observe only: log it, let it through. A detect category
 					// must be as harmless as enabled:false, minus the log line
@@ -900,6 +936,12 @@ func main() {
 	ja4Header := flag.String("ja4-header", "",
 		"en-tête de confiance portant l'empreinte TLS JA4 injectée par HAProxy "+
 			"(ex. X-Sbx-JA4) — clé de corrélation anti-spoof (#1070) ; vide = désactivé")
+	// #1080 phase G — règles adaptatives par vhost : profils de service déclaratifs
+	// qui suppriment une empreinte de reconnaissance légitime À L'INTÉRIEUR du
+	// service (clone git chez gitea, /.well-known/ chez nextcloud…).
+	vhostProfiles := flag.String("vhost-profiles", "",
+		"fichier JSON déclaratif des profils de service par vhost (#1080) : supprime "+
+			"une signature de reconnaissance légitime dans le service d'un vhost ; vide = désactivé")
 	// Task 5.1: RGPD Set-Cookie ledger.
 	cookieAuditLog := flag.String("cookie-audit-log", DefaultCookieAuditLog,
 		"path for RGPD cookie audit JSONL ledger (one record per Set-Cookie); empty disables")
@@ -995,6 +1037,21 @@ func main() {
 		log.Printf("sbxwaf: vhost-signals enabled → %s (flush %s)", *vhostSignalsFile, vhostSignalsFlushInterval)
 	}
 
+	// #1080 phase G : règles adaptatives par vhost. Désactivé si vide. Un profil
+	// mal formé NE crashe PAS le WAF (la protection doit tenir) : la phase G
+	// reste désactivée — aucune suppression, donc plus strict, jamais moins — et
+	// l'opérateur voit l'erreur.
+	var profils *VhostProfiles
+	if *vhostProfiles != "" {
+		if p, err := chargerVhostProfiles(*vhostProfiles); err != nil {
+			log.Printf("sbxwaf: vhost-profiles ILLISIBLE (%s) — phase G désactivée : %v",
+				*vhostProfiles, err)
+		} else {
+			profils = p
+			log.Printf("sbxwaf: vhost-profiles chargé → %s (phase G active)", *vhostProfiles)
+		}
+	}
+
 	srv := &Server{
 		upstreamTimeout: *upstreamTimeout,
 		transport:       sharedTransport,
@@ -1007,6 +1064,8 @@ func main() {
 		threatLog:   NewThreatLog(*threatLog),
 		hostAnomaly: *hostAnomaly,
 		ja4Header:   *ja4Header,
+		// #1080 phase G: profils de service par vhost (nil = désactivé).
+		vhostProfiles: profils,
 		// crowdsec: wired below when --crowdsec-url and --crowdsec-jwt-file are set.
 		// Task 5.1: RGPD cookie-audit ledger.
 		cookieAudit: cookieAudit,
