@@ -201,6 +201,13 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	} else {
 		return nil, fmt.Errorf("gabarit newsroom : %w", err)
 	}
+	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
+	if t, err := template.New("mediatheque.html").Funcs(fn).
+		ParseFS(assets, "templates/mediatheque.html"); err == nil {
+		pages["mediatheque"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit mediatheque : %w", err)
+	}
 	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
 	// L'empreinte de cache (?v=) couvre les TROIS feuilles/scripts servis : le
 	// WAF de la board efface Cache-Control/ETag (voir layout.html), donc une

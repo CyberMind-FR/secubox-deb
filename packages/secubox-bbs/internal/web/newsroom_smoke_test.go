@@ -57,3 +57,43 @@ func TestNewsroomExecute(t *testing.T) {
 		t.Error("onclick en ligne — interdit par la CSP")
 	}
 }
+
+func TestMediathequeExecute(t *testing.T) {
+	fn := template.FuncMap{
+		"rendu": Render, "date": humain, "taille": octets,
+		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
+		"decalage": func(n int) string { return "" },
+	}
+	tpl, err := template.New("mediatheque.html").Funcs(fn).ParseFS(assets, "templates/mediatheque.html")
+	if err != nil {
+		t.Fatalf("parse : %v", err)
+	}
+	p := page{
+		Titre: "Médiathèque", Site: "SecuBox", Hote: "gk2", Initiale: "S",
+		Medias: []PodFeed{
+			{ID: 2, Titre: "Neuromania", Type: "audiobook", Glyphe: "📖", Vignette: "/media-cover/2",
+				Episodes: []PodEpisode{
+					{ID: 10, Titre: "Chapitre 1", Media: "/media/ep/10", Duree: "12:04", Numero: 1},
+					{ID: 11, Titre: "Chapitre 2", Media: "/media/ep/11", Duree: "10:41", Numero: 2},
+				}},
+			{ID: 1, Titre: "Si besoin", Type: "podcast", Glyphe: "🎧", Vignette: "/media-cover/1",
+				Episodes: []PodEpisode{{ID: 20, Titre: "Épisode récent", Media: "/media/ep/20", Numero: 1}}},
+		},
+	}
+	var buf bytes.Buffer
+	if err := tpl.ExecuteTemplate(&buf, "mediatheque", p); err != nil {
+		t.Fatalf("exécution : %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"Neuromania", "livre audio", "chapitres 1→2", `data-media="/media/ep/10"`,
+		`data-act="playfeed"`, `src="/media-cover/2"`, `id="f2"`, "newsroom.js",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("sortie sans %q", want)
+		}
+	}
+	if strings.Contains(out, "style=") || strings.Contains(out, "onclick") {
+		t.Error("style/onclick en ligne — interdit par la CSP")
+	}
+}

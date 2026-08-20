@@ -39,6 +39,9 @@ type page struct {
 	Intro, Vide               string
 	Note                      string
 	Cards                     []card
+	// Medias : la médiathèque du podcaster regroupée par flux (#1056) —
+	// sous-dossiers ordonnés par type, épisodes jouables en ligne.
+	Medias []PodFeed
 	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
 	// extrait, date, lien de chaque billet, pas seulement les fils publies
 	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
@@ -133,6 +136,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.accueil)
 	ConfigurerFiches(s.opt.MediaOrigines)
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
+	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
@@ -142,7 +146,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/login", s.connexion)
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
-	s.mux.HandleFunc("/media", s.simple("media"))
+	s.mux.HandleFunc("/media", s.media)
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
 	s.mux.HandleFunc("/mp", s.mp)
 	s.mux.HandleFunc("/mp/", s.mp)
@@ -459,9 +463,45 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Threads, _ = s.st.Threads(p.Cat.ID, pub)
+	// #1056 : un salon dont le contenu vient du podcaster (« émissions ») se
+	// rend en MÉDIATHÈQUE — flux en sous-dossiers, épisodes ordonnés par type et
+	// jouables — plutôt qu'en liste plate de fils par épisode.
+	if podcasterDominant(p.Threads) {
+		s.rendMediatheque(w, r, p)
+		return
+	}
 	s.poseNonLus(&p)
 	p.Titre = p.Cat.Title
 	s.rend(w, r, "index", p)
+}
+
+// media (/media) rend la médiathèque du podcaster en arborescence.
+func (s *Server) media(w http.ResponseWriter, r *http.Request) {
+	p, _ := s.base(r, "media")
+	s.rendMediatheque(w, r, p)
+}
+
+// rendMediatheque charge les flux du podcaster et rend le gabarit autonome.
+func (s *Server) rendMediatheque(w http.ResponseWriter, r *http.Request, p page) {
+	p.Medias, _ = s.mediatheque(2000)
+	p.Titre = "Médiathèque"
+	s.rendDef(w, r, "mediatheque", "mediatheque", p)
+}
+
+// podcasterDominant : le salon est-il majoritairement alimenté par le
+// podcaster ? On bascule alors sur la médiathèque. Seuil à la majorité stricte
+// pour ne pas détourner un salon qui ne ferait que citer un épisode.
+func podcasterDominant(ts []store.Thread) bool {
+	if len(ts) == 0 {
+		return false
+	}
+	n := 0
+	for _, t := range ts {
+		if t.Source == "podcaster" {
+			n++
+		}
+	}
+	return n*2 > len(ts)
 }
 
 func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
