@@ -165,6 +165,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
 	s.mux.HandleFunc("/media", s.media)
+	s.mux.HandleFunc("/media/archive/", s.mediaArchiver)
 	s.mux.HandleFunc("/player", s.player)
 	s.mux.HandleFunc("/article/", s.article)
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
@@ -535,6 +536,47 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 func (s *Server) media(w http.ResponseWriter, r *http.Request) {
 	p, _ := s.base(r, "media")
 	s.rendMediatheque(w, r, p)
+}
+
+// mediaArchiver (#1056 stage 3) : archive vers PeerTube la vidéo d'un fil, via
+// ytsas. On résout l'adresse média en id ytsas (ce qui garantit aussi qu'elle
+// est en cache), puis on demande la conservation (ytsas route vidéo→PeerTube).
+// Membre + CSRF. Best-effort côté réseau, mais l'échec est DIT.
+func (s *Server) mediaArchiver(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	if s.ytsas == nil {
+		http.Error(w, "raccord ytsas non configuré", http.StatusServiceUnavailable)
+		return
+	}
+	id := idDe(r.URL.Path, "/media/archive/")
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	u, err := s.st.SourceMediaFil(id)
+	if err != nil || u == "" {
+		http.Error(w, "ce fil n'a pas de vidéo à archiver", http.StatusBadRequest)
+		return
+	}
+	res, err := s.ytsas.Resoudre(u)
+	if err != nil || res.VideoID == "" {
+		http.Error(w, "ytsas n'a pas pu résoudre la vidéo (réessayez quand le cache est prêt)",
+			http.StatusBadGateway)
+		return
+	}
+	if err := s.ytsas.Conserver(res.VideoID); err != nil {
+		http.Error(w, "archivage PeerTube refusé : "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
 }
 
 // player (/player) est le LECTEUR DÉTACHÉ, destiné à une fenêtre séparée : il
@@ -1209,7 +1251,22 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if aSource {
-		if err := s.st.MarquerSource(id, typerSource(src).Source); err != nil {
+		st := typerSource(src)
+		if st.Source == "video" {
+			// #1056 stage 3 : une vidéo garde son adresse comme média (embarquable
+			// dans la rédaction) ET est CONNECTÉE à ytsas — le tuyau souverain la
+			// rapatrie/met en cache. Best-effort : ytsas HS ne casse pas le dépôt.
+			if err := s.st.MarquerSourceMedia(id, "video", src, "video"); err != nil {
+				log.Printf("marquage média du fil %d : %v", id, err)
+			}
+			if s.ytsas != nil {
+				go func(u string, fil int64) {
+					if _, err := s.ytsas.Resoudre(u); err != nil {
+						log.Printf("raccord ytsas (fil %d) : %v", fil, err)
+					}
+				}(src, id)
+			}
+		} else if err := s.st.MarquerSource(id, st.Source); err != nil {
 			log.Printf("marquage de source du fil %d : %v", id, err)
 		}
 	}

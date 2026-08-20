@@ -44,3 +44,23 @@ func (c *ClientYtsas) Resoudre(media string) (Resolution, error) {
 	}
 	return r, nil
 }
+
+// Conserver demande à ytsas d'ARCHIVER une vidéo déjà en cache vers PeerTube
+// (#1056 stage 3) : ytsas route vidéo→PeerTube, audio→Lyrion. videoID est l'id
+// rendu par Resoudre.
+func (c *ClientYtsas) Conserver(videoID string) error {
+	adr := c.Base + "/api/v1/ytsas/conserve/" + url.PathEscape(videoID)
+	req, err := http.NewRequest(http.MethodPost, adr, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("ytsas /conserve : code %d", resp.StatusCode)
+	}
+	return nil
+}

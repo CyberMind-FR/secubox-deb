@@ -110,6 +110,7 @@
           <span>{{.Author}}</span><span>· {{.Posts}} msg</span><span>· {{date .LastPostAt}}</span>
         </span>
         <span class="grow"></span>
+        {{if and $.V.Connecte (or (eq .MediaKind "video") (eq .Source "video"))}}<form class="inline-f" method="post" action="/media/archive/{{.ID}}"><input type="hidden" name="csrf" value="{{$.V.CSRF}}"><button class="btn" type="submit" title="Archiver vers PeerTube (miroir souverain)">📼 PeerTube</button></form>{{end}}
         {{if $.V.Connecte}}<a class="btn" href="/article/nouveau?t={{.ID}}">✍️ Co-écrire</a>{{end}}
         <a class="btn discuss" href="/t/{{.ID}}">💬 Discuter</a>
       </div>

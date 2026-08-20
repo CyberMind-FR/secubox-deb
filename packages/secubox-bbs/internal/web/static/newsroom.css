@@ -180,6 +180,8 @@ a{color:inherit;text-decoration:none}
 .pfcover.sm .pfglyph{font-size:1.15rem}
 .epone{flex:1;min-width:0;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
 
+.inline-f{display:inline}
+
 /* ---- médiathèque : flux = sous-dossiers ---- */
 .podfeed{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
 .podfeed+.podfeed{margin-top:0}

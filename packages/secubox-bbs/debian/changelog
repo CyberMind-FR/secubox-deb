@@ -1,3 +1,14 @@
+secubox-bbs (0.28.12-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 3 — raccord ytsas + archivage PeerTube. Déposer une source
+    VIDÉO dans le BBS la CONNECTE à ytsas (appel /resolve au dépôt : rapatriement
+    /cache souverain, best-effort) et garde son adresse comme média. Bouton
+    « 📼 PeerTube » sur les dossiers vidéo de la rédaction → POST /media/archive
+    → ytsas résout l'id puis /conserve (miroir vidéo→PeerTube). Réutilise le
+    ClientYtsas existant (--ytsas-origine) ; Conserver() ajouté au connecteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 22:20:00 +0200
+
 secubox-bbs (0.28.11-1~bookworm1) bookworm; urgency=medium
 
   * THÈME BBS unifié : le SHELL (fils, salons, messages, compte, console…)
