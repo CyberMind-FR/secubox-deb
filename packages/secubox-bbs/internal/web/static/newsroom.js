@@ -151,4 +151,13 @@
     if (e.target && e.target.tagName === "INPUT") return;
     if (e.key === "t") theme();
   });
+
+  // « Déposer une source » : si le champ de la barre porte une URL, on ouvre le
+  // composeur pré-rempli (dossier LOCAL jusqu'à publication) au lieu de chercher.
+  var dropForm = document.querySelector("form.drop");
+  if (dropForm) dropForm.addEventListener("submit", function (e) {
+    var el = $("#dropin"); if (!el) return;
+    var v = (el.value || "").trim();
+    if (/^https?:\/\//i.test(v)) { e.preventDefault(); location.href = "/nouveau?src=" + encodeURIComponent(v); }
+  });
 })();
