@@ -70,6 +70,10 @@ override_dh_installsystemd:
 	install -m 0644 systemd/secubox-waf-ng.service \
 	  debian/secubox-waf-ng/lib/systemd/system/
 	dh_installsystemd --name=secubox-waf-ng
+	# #1070 D : générateur de synthèse des campagnes (timer 5 min).
+	install -m 0644 systemd/secubox-waf-campaigns.service systemd/secubox-waf-campaigns.timer \
+	  debian/secubox-waf-ng/lib/systemd/system/
+	dh_installsystemd --name=secubox-waf-campaigns.timer
 
 execute_after_dh_auto_install:
 	install -d debian/secubox-waf-ng/usr/sbin

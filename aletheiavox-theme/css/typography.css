@@ -1,0 +1,36 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= typography.css
+ * Polices AletheiaVox auto-hébergées. Une politique de sécurité de contenu
+ * stricte (default-src 'self') interdit les polices externes : on les sert
+ * donc localement. Les chemins sont relatifs à cette feuille — copiez les
+ * .woff2 dans ./assets/fonts (voir assets/fonts/README.md).
+ *
+ * Chaque fonte variable couvre toute sa plage de graisses en un seul fichier.
+ * font-display:swap affiche d'abord la pile système, puis échange sans bloquer
+ * le rendu. Les piles de repli (Cinzel→Georgia, Inter→system-ui, JetBrains→
+ * ui-monospace) sont déjà portées par les variables --av-font-* de tokens.css.
+ *
+ * Les chemins sont relatifs À CETTE FEUILLE (css/), d'où le ../assets/ pour
+ * remonter d'un cran vers aletheiavox-theme/assets/fonts.
+ */
+@font-face{font-family:"Cinzel";src:url("../assets/fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Inter";src:url("../assets/fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("../assets/fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
+
+.av-display{font-family:var(--av-font-display);font-weight:600;letter-spacing:.01em;line-height:1.12;
+  text-wrap:balance;color:var(--av-text)}
+h1.av-display{font-size:clamp(2rem,4.5vw,3.2rem)} h2.av-display{font-size:clamp(1.5rem,2.6vw,2rem)}
+.av-eyebrow{font-family:var(--av-font-body);font-size:.72rem;font-weight:600;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--av-cyan)}
+.av-lede{font-size:1.12rem;color:var(--av-text-soft);max-width:var(--av-reading-width)}
+.av-mono{font-family:var(--av-font-mono)}
+.av-section-title{font-family:var(--av-font-display);font-weight:600;font-size:1.25rem;
+  padding-bottom:var(--av-space-3);border-bottom:1px solid var(--av-line);
+  display:flex;align-items:baseline;gap:var(--av-space-3)}
+.av-section-title small{font-family:var(--av-font-mono);font-size:.7rem;color:var(--av-text-muted);font-weight:400}

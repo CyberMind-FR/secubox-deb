@@ -1,0 +1,42 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= aletheiavox.css
+ * Point d'entrée unique du design system. Importez CETTE feuille et rien
+ * d'autre — l'ordre des @import EST la cascade, ne le réarrangez pas :
+ *
+ *   1. tokens         les variables, socle de tout le reste
+ *   2. reset          remise à zéro
+ *   3. typography     polices auto-hébergées + classes de texte
+ *   4. layout         ossature de page
+ *   5. navigation     logo, nav, rail
+ *   6. components      boutons, héros, reveal, terminal, animations
+ *   7. cards          cartes, services, publications, vignettes chiffrées
+ *   8. forms          champs de saisie
+ *   9. tables         tableaux de données
+ *  10. badges         états & provenance
+ *  11. dialogs        alertes, état vide, demi-bulle
+ *  12. utilities      helpers transverses
+ *  13. accessibility  focus, mouvement réduit, sr-only (dernier mot)
+ *  14. responsive     paliers d'adaptation
+ *  15. print          feuille d'impression
+ */
+@import "tokens.css";
+@import "reset.css";
+@import "typography.css";
+@import "layout.css";
+@import "navigation.css";
+@import "components.css";
+@import "cards.css";
+@import "forms.css";
+@import "tables.css";
+@import "badges.css";
+@import "dialogs.css";
+@import "utilities.css";
+@import "accessibility.css";
+@import "responsive.css";
+@import "print.css";

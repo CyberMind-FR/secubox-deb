@@ -14,6 +14,7 @@ Depends: ${misc:Depends},
          python3-fastapi | python3-pip,
          python3-uvicorn | python3-pip,
          python3-maxminddb | python3-pip,
+        python3-geoip2 | python3-pip,
          python3-cryptography,
          nftables
 Recommends: geoipupdate,

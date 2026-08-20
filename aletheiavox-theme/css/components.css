@@ -1,0 +1,54 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= components.css
+ * Éléments interactifs et d'ambiance transverses : boutons et variantes, héros
+ * de tête de page, effet de dévoilement (av-reveal), motif de constellation,
+ * bloc terminal/journaux, et les deux animations partagées.
+ */
+
+/* ── boutons ─────────────────────────────────────────────────────────────── */
+.av-button{--_bg:var(--av-surface-2);--_fg:var(--av-text);--_bd:var(--av-line-strong);
+  display:inline-flex;align-items:center;gap:.5rem;padding:.55rem 1.05rem;border-radius:var(--av-radius-md);
+  border:1px solid var(--_bd);background:var(--_bg);color:var(--_fg);font-weight:600;font-size:.92rem;
+  transition:transform .12s ease,box-shadow .16s ease,background .16s ease}
+.av-button:hover{text-decoration:none;box-shadow:var(--av-shadow-sm);transform:translateY(-1px)}
+.av-button:active{transform:translateY(0)}
+.av-button:focus-visible{outline:3px solid color-mix(in srgb,var(--av-cyan) 55%,transparent);outline-offset:2px}
+.av-button--primary{--_bg:var(--av-primary);--_fg:#fff;--_bd:var(--av-blue-deep)}
+.av-button--secondary{--_bg:var(--av-cyan-soft);--_fg:var(--av-blue-deep);--_bd:color-mix(in srgb,var(--av-cyan) 45%,transparent)}
+.av-button--ghost{--_bg:transparent;--_bd:transparent;--_fg:var(--av-primary)}
+.av-button--danger{--_bg:var(--av-red);--_fg:#fff;--_bd:#8f3237}
+.av-button--success{--_bg:var(--av-green);--_fg:#fff;--_bd:#1f5d4a}
+
+/* ── héros ───────────────────────────────────────────────────────────────── */
+.av-hero{position:relative;overflow:hidden;border-radius:var(--av-radius-xl);border:1px solid var(--av-line);
+  background:linear-gradient(160deg,var(--av-blue-light),var(--av-surface) 65%);padding:var(--av-space-16) var(--av-space-8)}
+.av-hero-in{position:relative;z-index:1;max-width:640px;display:flex;flex-direction:column;gap:var(--av-space-4)}
+.av-hero h1{font-size:clamp(2.1rem,4.6vw,3.3rem)}
+.av-hero .av-accentbar{width:56px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--av-gold),var(--av-cyan))}
+.av-hero-actions{display:flex;gap:var(--av-space-3);flex-wrap:wrap;margin-top:var(--av-space-2)}
+
+/* ── dévoilement / constellation / animations ────────────────────────────── */
+.av-reveal{position:relative;display:inline-block}
+.av-reveal>.av-reveal-cover{position:absolute;inset:0;background:var(--av-surface-2);border-radius:var(--av-radius-sm);
+  transform-origin:left;transition:transform .5s cubic-bezier(.7,0,.2,1)}
+.av-reveal:hover>.av-reveal-cover,.av-reveal:focus-within>.av-reveal-cover{transform:scaleX(0)}
+.av-network-pattern{position:absolute;inset:0;pointer-events:none;opacity:.5;z-index:0}
+@keyframes av-pulse-soft{0%,100%{opacity:1}50%{opacity:.35}}
+.av-fade-in{animation:av-fade .5s ease both} @keyframes av-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+
+/* ── code / terminal / journaux ──────────────────────────────────────────── */
+.av-terminal{background:#0e1a24;color:#d6e4ec;border-radius:var(--av-radius-lg);border:1px solid #21323f;
+  font-family:var(--av-font-mono);font-size:.82rem;overflow:hidden}
+.av-terminal-bar{display:flex;gap:.4rem;padding:.6rem .8rem;background:#132330;border-bottom:1px solid #21323f}
+.av-terminal-bar i{width:.7rem;height:.7rem;border-radius:50%;background:#33475699}
+.av-terminal-bar i:first-child{background:#a73d42} .av-terminal-bar i:nth-child(2){background:#c87832} .av-terminal-bar i:nth-child(3){background:#28765e}
+.av-log{padding:var(--av-space-4);display:flex;flex-direction:column;gap:.15rem}
+.av-log-line{white-space:pre-wrap} .av-log-line::before{margin-right:.6rem;opacity:.7}
+.av-log-info::before{content:"info";color:#5aa0e0} .av-log-success::before{content:" ok ";color:#5fce9f}
+.av-log-warning::before{content:"warn";color:#e0b06a} .av-log-error::before{content:"fail";color:#e07d82}

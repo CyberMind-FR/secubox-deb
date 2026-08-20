@@ -1,0 +1,27 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= navigation.css
+ * Logo de marque, navigation horizontale de l'en-tête (av-nav) et navigation
+ * verticale « en rail » de la barre latérale (av-railnav). L'état courant est
+ * porté par aria-current="page" — un attribut sémantique, jamais une classe
+ * décorative seule.
+ */
+.av-logo{font-family:var(--av-font-display);font-weight:700;letter-spacing:.06em;line-height:.92;font-size:1.05rem;
+  color:var(--av-text);display:grid} .av-logo span{color:var(--av-gold);font-size:.7em;letter-spacing:.22em}
+.av-nav{display:flex;gap:var(--av-space-1);margin-left:auto;align-items:center}
+.av-nav-item{padding:.4rem .7rem;border-radius:var(--av-radius-pill);color:var(--av-text-soft);font-weight:500;font-size:.92rem}
+.av-nav-item:hover{background:var(--av-blue-light);color:var(--av-primary);text-decoration:none}
+.av-nav-item[aria-current="page"]{color:var(--av-primary);background:var(--av-blue-light)}
+.av-nav-item[aria-current="page"]::after{content:"";display:block;height:2px;margin-top:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--av-cyan),var(--av-gold))}
+.av-railnav{padding:.45rem .7rem;border-radius:var(--av-radius-md);color:var(--av-text-soft);font-weight:500;
+  font-size:.9rem;display:flex;gap:.55rem;align-items:center;border-left:2px solid transparent}
+.av-railnav:hover{background:var(--av-surface-2);color:var(--av-text);text-decoration:none}
+.av-railnav[aria-current="page"]{color:var(--av-primary);border-left-color:var(--av-cyan);background:var(--av-blue-light)}
+.av-railhead{font-size:.68rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--av-text-muted);
+  padding:var(--av-space-4) var(--av-space-2) var(--av-space-1)}

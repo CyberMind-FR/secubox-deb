@@ -30,6 +30,7 @@ comme sur un mois sans garder chaque requete.
 import asyncio
 import gzip
 import json
+import ipaddress
 import os
 import re
 from collections import Counter, defaultdict
@@ -164,6 +165,57 @@ def _jour_de(horodatage: str) -> Optional[str]:
         return None
 
 
+# ── GeoIP : pays du visiteur, avec drapeau ───────────────────────────────────
+# La base GeoLite2-Country est deja sur la board (crowdsec + secubox-geoip). On
+# resout le pays par IP avec un CACHE : une meme IP revient des centaines de fois
+# dans un journal. Le geoip est un BONUS — une base absente ou une IP inconnue
+# n'interrompt jamais le calcul des stats.
+_GEOIP_MMDB = (
+    "/var/lib/secubox/geoip/GeoLite2-Country.mmdb",
+    "/usr/share/GeoIP/GeoLite2-Country.mmdb",
+    "/var/lib/GeoIP/GeoLite2-Country.mmdb",
+)
+_geo_reader = None
+_geo_essaye = False
+_geo_cache: dict = {}
+
+
+def _pays(ip: str) -> Optional[str]:
+    """Code pays ISO-2 d'une IP PUBLIQUE, ou None (privee/inconnue/base absente)."""
+    global _geo_reader, _geo_essaye
+    if ip in _geo_cache:
+        return _geo_cache[ip]
+    cc = None
+    try:
+        adr = ipaddress.ip_address(ip)
+        publique = not (adr.is_private or adr.is_loopback
+                        or adr.is_link_local or adr.is_reserved or adr.is_multicast)
+        if publique:
+            if not _geo_essaye:
+                _geo_essaye = True
+                try:
+                    import geoip2.database  # noqa: PLC0415
+                    for chemin in _GEOIP_MMDB:
+                        if os.path.exists(chemin):
+                            _geo_reader = geoip2.database.Reader(chemin)
+                            break
+                except Exception:  # noqa: BLE001
+                    _geo_reader = None
+            if _geo_reader is not None:
+                cc = _geo_reader.country(ip).country.iso_code
+    except Exception:  # noqa: BLE001
+        cc = None
+    _geo_cache[ip] = cc
+    return cc
+
+
+def _drapeau(cc: Optional[str]) -> str:
+    """Emoji drapeau depuis un code pays ISO-2 (indicateurs regionaux)."""
+    if not cc or len(cc) != 2 or not cc.isalpha():
+        return "\U0001F3F3"  # drapeau blanc = inconnu
+    return chr(0x1F1E6 + ord(cc[0].upper()) - 65) + chr(0x1F1E6 + ord(cc[1].upper()) - 65)
+
+
 def _vierge() -> dict:
     return {
         "visites": 0, "requetes": 0, "octets": 0,
@@ -174,6 +226,7 @@ def _vierge() -> dict:
         # #1059 ② — visites de page SANS référent valide (accès direct) : le
         # complément des `referents`, pour calculer la part de trafic direct.
         "sans_ref": 0,
+        "pays": Counter(),  # #geoip — visites par pays
     }
 
 
@@ -221,6 +274,9 @@ def _compter(s: dict, m: re.Match) -> None:
     if not ACCESSOIRE.search(chemin):
         s["visites"] += 1
         s["chemins"][chemin[:120]] += 1
+        cc = _pays(g["ip"])  # #geoip — pays de cette visite
+        if cc:
+            s["pays"][cc] += 1
         ref = g["ref"]
         if ref and ref != "-" and "://" in ref:
             s["referents"][ref.split("://", 1)[1].split("/", 1)[0][:80]] += 1
@@ -408,7 +464,7 @@ class VhostStatsAggregator:
                 t = total[vhost]
                 for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
                     t[c] += s[c]
-                for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents"):
+                for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
                     t[c].update(s[c])
                 # Union des IP : sur plusieurs jours c'est bien un nombre de
                 # visiteurs distincts, pas une somme de journees.
@@ -445,6 +501,9 @@ class VhostStatsAggregator:
             # domaine ou cette famille regroupée.
             "directs_pct": round(100.0 * s["sans_ref"] / s["visites"], 1)
                            if s["visites"] else 0.0,
+            # #geoip — repartition des visites par pays, avec drapeau emoji.
+            "pays": [{"code": cc, "drapeau": _drapeau(cc), "n": n}
+                     for cc, n in s["pays"].most_common(15)],
         }
 
     def _regrouper(self, brut: dict[str, dict]) -> dict[str, dict]:
@@ -457,7 +516,7 @@ class VhostStatsAggregator:
             t = fam[f]
             for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
                 t[c] += s[c]
-            for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents"):
+            for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
                 t[c].update(s[c])
             # Union et non somme : un visiteur qui passe sur le .com et le .fr
             # est une personne, pas deux.
@@ -641,7 +700,7 @@ class VhostStatsAggregator:
                     seau[c] = s.get(c, 0)
                 seau["ips"] = set(s.get("ips", []))
                 seau["ips_debordees"] = s.get("ips_debordees", False)
-                for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents"):
+                for c in ("navigateurs", "plateformes", "statuts", "chemins", "referents", "pays"):
                     seau[c] = Counter(s.get(c, {}))
                 self._jours[j][v] = seau
         self._elaguer()

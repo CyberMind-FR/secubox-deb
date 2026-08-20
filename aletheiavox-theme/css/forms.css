@@ -1,0 +1,23 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= forms.css
+ * Champs de saisie, libellés, aide et erreur, interrupteur (toggle). Le focus
+ * pose un halo cyan doux (box-shadow) en plus de la bordure : deux signaux, pas
+ * un seul, pour rester lisible même sur un écran délavé.
+ */
+.av-field{display:flex;flex-direction:column;gap:.4rem;margin-bottom:var(--av-space-4)}
+.av-label{font-weight:600;font-size:.86rem;color:var(--av-text-soft)}
+.av-input,.av-textarea,.av-select{width:100%;padding:.6rem .75rem;border:1px solid var(--av-line-strong);
+  border-radius:var(--av-radius-md);background:var(--av-surface);color:var(--av-text);font:inherit}
+.av-input:focus,.av-textarea:focus,.av-select:focus{outline:none;border-color:var(--av-cyan);
+  box-shadow:0 0 0 3px var(--av-cyan-soft)}
+.av-help{font-size:.78rem;color:var(--av-text-muted)} .av-error{font-size:.8rem;color:var(--av-red);font-weight:500}
+.av-toggle{position:relative;width:44px;height:24px;border-radius:var(--av-radius-pill);background:var(--av-line-strong);
+  border:none;transition:background .16s} .av-toggle[aria-pressed="true"]{background:var(--av-cyan)}
+.av-toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:#fff;transition:transform .16s} .av-toggle[aria-pressed="true"]::after{transform:translateX(20px)}

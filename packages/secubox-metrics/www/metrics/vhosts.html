@@ -215,6 +215,7 @@ h1{font-size:21px;margin:0;letter-spacing:.5px}
   <div class="cols">
     <div class="card"><h2>Pages les plus vues</h2><div class="paths" id="dPaths"></div></div>
     <div class="card"><h2>Référents</h2><div class="paths" id="dRef"></div></div>
+    <div class="card"><h2>Pays des visiteurs</h2><div class="paths" id="dPays"></div></div>
   </div>
 </div>
 
@@ -388,6 +389,9 @@ async function detail(nom){
   el("dRef").innerHTML = (det.top_referents || []).map(e =>
     `<div class="path"><code>${e.hote}</code><b>${fmt(e.n)}</b></div>`).join("")
     || '<div class="vide">aucun référent</div>';
+  el("dPays").innerHTML = (det.pays || []).map(e =>
+    `<div class="path"><span>${e.drapeau} ${e.code}</span><b>${fmt(e.n)}</b></div>`).join("")
+    || '<div class="vide">pas de géolocalisation</div>';
   el("liste").style.display = "none"; el("detail").style.display = "block";
   window.scrollTo(0, 0);
 }

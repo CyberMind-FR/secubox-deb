@@ -166,6 +166,24 @@ async def add(request: Request):
         return JSONResponse({"error": str(e)}, status_code=502)
 
 
+@app.post(API + "/retry/{id}")
+async def retry(id: str):
+    """Réessaie un téléchargement en échec : on relit l'URL de l'item et on
+    ré-enfile le job (engine.add relance yt-dlp depuis zéro). L'erreur ANALYSÉE
+    (cookies périmés / auth requise / queue de stderr yt-dlp) est remontée telle
+    quelle si l'échec persiste — jamais un code opaque."""
+    row = library.get(id)
+    if not row or not row.get("url"):
+        return JSONResponse({"error": "item introuvable ou sans URL enregistrée"},
+                            status_code=404)
+    try:
+        return await engine.add(row["url"])
+    except AuthRequired as e:
+        return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
+    except EngineError as e:
+        return JSONResponse({"error": str(e)}, status_code=502)
+
+
 @app.get(API + "/list")
 def list_items():
     """Library rows enriched with live job progress; drains conserve results."""
