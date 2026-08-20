@@ -252,6 +252,29 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	buf.WriteTo(w)
 }
 
+// rendDef rend un gabarit AUTONOME en exécutant un `define` nommé au lieu de
+// "layout". L'accueil « rédaction » (#1056 stage 1) ne partage pas la coquille
+// à trois colonnes ; il porte sa propre feuille et son propre script. Même
+// discipline de tampon que rend : soit la page entière part, soit une erreur
+// franche — jamais un document tronqué présenté comme valide.
+func (s *Server) rendDef(w http.ResponseWriter, r *http.Request, nom, def string, p page) {
+	t, ok := s.tpl[nom]
+	if !ok {
+		log.Printf("gabarit inconnu : %s", nom)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, def, p); err != nil {
+		log.Printf("rendu de %s : %v", nom, err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+	s.poseCSRF(w, p.V.CSRF)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
+}
+
 // poseNonLus renseigne l'etat lu/non-lu de la page (#1020).
 //
 // UNE SEULE REQUETE POUR TOUTE LA PAGE. Interroger fil par fil aurait produit
@@ -408,9 +431,19 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	}
 	p, pub := s.base(r, "forums")
 	p.Threads, _ = s.st.Recent(20, pub)
+	// #1056 stage 1 : la colonne de droite de la rédaction montre les derniers
+	// billets RÉELS (avec leur adresse absolue, cf. 0.28.1). Une panne du flux
+	// est dite, pas masquée — vitrineBillets distingue « injoignable » de « zéro
+	// billet ». On borne l'affichage : la vitrine complète vit sur /billets.
+	if s.bil != nil {
+		p.Billets, p.BilletsErr = s.vitrineBillets()
+		if len(p.Billets) > 8 {
+			p.Billets = p.Billets[:8]
+		}
+	}
 	s.poseNonLus(&p)
-	p.Titre = "Forums"
-	s.rend(w, r, "index", p)
+	p.Titre = "AletheiaVox"
+	s.rendDef(w, r, "newsroom", "newsroom", p)
 }
 
 func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
