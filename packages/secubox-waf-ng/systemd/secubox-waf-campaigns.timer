@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: secubox-waf-ng — cadence de corrélation des campagnes (#1070)
+[Unit]
+Description=SecuBox WAF — corréler les campagnes d'attaque toutes les 5 min
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

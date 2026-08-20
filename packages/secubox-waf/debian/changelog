@@ -1,3 +1,12 @@
+secubox-waf (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * webui : onglet ⚔️ Campagnes (#1070 D) + endpoint /campaigns (lit
+    campaigns.json du corrélateur) : attaquants regroupés par même workflow,
+    outil nommé, #IP, séquence-type. Complète les onglets Visites/Historique/
+    Attaquants (peuplés via le fix de groupe secubox-waf-ng 1.5.7).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:05:00 +0200
+
 secubox-waf (1.4.3-1~bookworm1) bookworm; urgency=medium
 
   * waf-rules.json (base) : graine product_absent_probes incluse, pour qu'une

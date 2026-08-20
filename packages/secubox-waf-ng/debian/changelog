@@ -1,3 +1,30 @@
+secubox-waf-ng (1.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Accès données WAF pour le tableau de bord (#1070) : ajoute `secubox` au
+    groupe secubox-waf (postinst) — l'API WAF/metrics lisait 0640 secubox-waf et
+    renvoyait vide/500 sur /visits /history /bans/history. /var/lib/secubox/waf en
+    0770 pour que le cache d'historique s'écrive. Onglets Visites/Historique/
+    Attaquants désormais peuplés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:00:00 +0200
+
+secubox-waf-ng (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * campagnes : écriture ATOMIQUE de campaigns.json (temp + renommage) — file:
+    ne tronquait pas de façon fiable, laissant « Extra data » quand la nouvelle
+    synthèse était plus courte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:20:00 +0200
+
+secubox-waf-ng (1.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * Tableau de bord des campagnes (#1070 phase D) : nouveau timer
+    secubox-waf-campaigns (5 min) qui corrèle waf-threats.log en campagnes via
+    sbxwaf --correlate (seul secubox-waf lit le journal 0640) et écrit
+    /var/cache/secubox/waf/campaigns.json pour le module metrics.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:00:00 +0200
+
 secubox-waf-ng (1.5.4-1~bookworm1) bookworm; urgency=medium
 
   * Activation du ban nft natif (#1070 phase B) : --nft-ban dans l'ExecStart +

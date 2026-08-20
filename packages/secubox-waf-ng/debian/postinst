@@ -13,6 +13,18 @@ case "$1" in
               --gecos "SecuBox WAF-NG" secubox-waf
     fi
 
+    # #1070 D : le module `secubox` (API WAF, metrics, agrégateur) LIT les données
+    # que le WAF écrit en 0640 secubox-waf (journal des menaces, visits-stats).
+    # Sans appartenance au groupe, /visits, /history et /bans/history renvoyaient
+    # vide ou 500 — les onglets Visites/Historique/Attaquants restaient muets.
+    # On ajoute `secubox` au groupe secubox-waf (lecture par le groupe).
+    if getent passwd secubox >/dev/null 2>&1 \
+       && ! id -nG secubox 2>/dev/null | tr ' ' '\n' | grep -qx secubox-waf; then
+      usermod -aG secubox-waf secubox || true
+      # le module tourne déjà : il faut le relancer pour prendre le nouveau groupe.
+      systemctl try-restart secubox-metrics.service 2>/dev/null || true
+    fi
+
     # ── 2. Config directories ─────────────────────────────────────────────────
     # IMPORTANT: NEVER chmod the SHARED PARENTS /etc/secubox to 0750 — that
     # breaks traversal for every other secubox-* daemon (#474/#620 lessons).
@@ -121,6 +133,10 @@ case "$1" in
       # before this postinst runs, so `restart` — not `try-restart` — is needed
       # to bring it back). HAProxy srv0 → 127.0.0.1:8085 keeps pointing at it.
       systemctl restart secubox-waf-ng.service 2>/dev/null || true
+      # #1070 D : activer le timer de corrélation des campagnes + une première
+      # passe immédiate pour que le tableau de bord ait des données tout de suite.
+      systemctl enable --now secubox-waf-campaigns.timer 2>/dev/null || true
+      systemctl start secubox-waf-campaigns.service 2>/dev/null || true
     fi
 
     ;;
