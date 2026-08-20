@@ -240,7 +240,8 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// feuille changée sans empreinte neuve resterait invisible au navigateur.
 	{
 		h := sha256.New()
-		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js", "static/player.js"} {
+		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js",
+			"static/player.js", "static/coquille.js", "static/editeur.js"} {
 			if b, err := assets.ReadFile(f); err == nil {
 				h.Write(b)
 			}

@@ -1,3 +1,26 @@
+secubox-bbs (0.28.10-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 rédaction : un dossier « source vidéo » (déposé) montre désormais une
+    vignette vidéo cliquable dans la mini-vue (comme un fil vidéo). Le média
+    d'un flux/lien reste visible et jouable directement. NB : rendre visible la
+    vidéo d'un lien YouTube EN LOCAL (vignette souveraine) dépend du raccord
+    ytsas (à venir).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 20:10:00 +0200
+
+secubox-bbs (0.28.9-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF ergonomie : COLLER UNE IMAGE dans un message. Une zone de texte
+    ne reçoit pas une image du presse-papier (le collage natif ne fait rien) —
+    d'où « le copier-coller ne marche pas ». On intercepte le collage d'une
+    image (capture d'écran) et on l'envoie par le même chemin que le trombone
+    (/f/envoi), puis on pose son adresse. Le collage de TEXTE reste natif.
+  * coquille.js et editeur.js sont désormais versionnés (?v=empreinte) : sans
+    ça un correctif de ces scripts ne parvenait jamais aux navigateurs (le WAF
+    efface les en-têtes de cache).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 20:00:00 +0200
+
 secubox-bbs (0.28.8-1~bookworm1) bookworm; urgency=medium
 
   * #1056 STAGE 3 — ARTICLE COLLABORATIF. Écrire à PLUSIEURS MAINS depuis un

@@ -101,7 +101,7 @@
           <h2><a href="/t/{{.ID}}">{{.Title}}</a></h2>
         </div>
       </div>
-      {{if eq .MediaKind "video"}}
+      {{if or (eq .MediaKind "video") (eq .Source "video")}}
       <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
       <div class="dfoot">
