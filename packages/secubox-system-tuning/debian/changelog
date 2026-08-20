@@ -1,3 +1,27 @@
+secubox-system-tuning (1.2.0-1~bookworm1) bookworm; urgency=high
+
+  * REUNION DE DEUX 1.1.0 DIVERGENTS (split-brain). La feature CPU (#1011,
+    ci-dessous) vivait sur master ; en parallele, sur une base perimee, un
+    travail zram + budget-memoire a ete versionne 1.1.0..1.1.3 et deploye — il
+    a ECRASE la feature CPU sur la board et dans le depot (le script perdait
+    `apply_cpu`, `lxc-cpu.toml` restait orphelin). 1.2.0 reunit les deux :
+
+    - **zram** (swap compresse RAM) : nouvelle phase + section [zram] de
+      config.toml + `secubox-tuning-apply zram`. /dev/zram0 en priorite 100
+      au-dessus du swapfile /data, lzo-rle valide contre le noyau (pas de zstd
+      ici), persistant via systemd-zram-generator. Depends ajoute.
+    - **Respect du budget #496** : `apply_cgroup` ne sur-freine plus un
+      conteneur qui a sa propre memory.max. L'ancien clamp le ramenait a 85 %
+      de sa max, posant un high SOUS son working-set. Constate le 2026-08-19 :
+      nextcloud (max=512M, ws ~508M, swap=0) high=435M -> thrashing -> 503
+      intermittents ; mail/matrix/horde pareil. Desormais si cap >= max propre,
+      on saute le conteneur et on retire tout high injecte (runtime->max,
+      config->supprime). Compteur « budget-propre » ajoute.
+    - La phase CPU (#1011), `persiste_cle`, `conf_lxc` et la sortie explicite
+      de master sont CONSERVEES intactes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 10:00:00 +0200
+
 secubox-system-tuning (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Generalise les bornes CPU des conteneurs LXC (ref #1011). Nouveau fichier
