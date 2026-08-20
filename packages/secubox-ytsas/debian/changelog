@@ -1,3 +1,13 @@
+secubox-ytsas (0.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * Bouton RÉESSAYER sur un item en échec : nouvel endpoint POST /retry/{id}
+    qui relit l'URL de l'item et ré-enfile le job (engine.add relance yt-dlp).
+    L'erreur ANALYSÉE (cookies périmés / auth requise / queue stderr yt-dlp) est
+    déjà affichée et remontée telle quelle en cas de nouvel échec. Ex. :
+    youtube.com/watch?v=6VNkeCdyOrg.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 20:40:00 +0200
+
 secubox-ytsas (0.2.1-1~bookworm1) bookworm; urgency=medium
 
   * FEAT public player page (ytsas.gk2.secubox.in): new www/ytsas/public.html
