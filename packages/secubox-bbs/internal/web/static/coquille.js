@@ -96,6 +96,44 @@
       });
     }
 
+    // ── COLLER UNE IMAGE (Ctrl/⌘+V d'une capture d'écran) ───────────────────
+    //
+    // Une zone de texte ne sait pas recevoir une image collée : le presse-papier
+    // porte un FICHIER, pas du texte, et le collage natif ne fait rien — d'où
+    // l'impression que « le copier-coller ne marche pas » dans l'éditeur. On
+    // intercepte donc le collage d'une image et on l'envoie par le MÊME chemin
+    // que le trombone (/f/envoi), puis on pose son adresse. Le collage de TEXTE
+    // n'est pas touché : le comportement natif de la zone reste en place.
+    zone.addEventListener('paste', function (e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      var fichier = null;
+      for (var k = 0; k < items.length; k++) {
+        if (items[k].kind === 'file' && items[k].type.indexOf('image/') === 0) {
+          fichier = items[k].getAsFile();
+          break;
+        }
+      }
+      if (!fichier) return; // pas une image : le collage natif du texte fait le travail
+      e.preventDefault();
+      var csrf = (bouton && bouton.dataset.csrf) || '';
+      if (!csrf) {
+        var form = zone.closest('form');
+        var champCsrf = form && form.querySelector('input[name="csrf"]');
+        if (champCsrf) csrf = champCsrf.value;
+      }
+      var f = new FormData();
+      f.append('fichier', fichier);
+      f.append('csrf', csrf);
+      fetch('/f/envoi', {
+        method: 'POST', body: f, headers: { 'Accept': 'application/json' },
+      }).then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.ok) poser(zone, j.url);
+          else alert('Image collée refusée : ' + (j.error || 'raison inconnue'));
+        })
+        .catch(function (err) { alert('Collage impossible : ' + err.message); });
+    });
+
     // ── NOTE VOCALE ET NOTE VIDEO ───────────────────────────────────────────
     //
     // MEME CHEMIN QUE LE TROMBONE : meme envoi vers `/f/envoi`, meme insertion
