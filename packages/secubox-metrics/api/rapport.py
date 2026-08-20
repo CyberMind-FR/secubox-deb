@@ -19,6 +19,7 @@ module entier, ce qui a deja coute des 504 ailleurs sur cette boite.
 import io
 import json
 import smtplib
+import ssl
 import tomllib
 from datetime import datetime
 from email.message import EmailMessage
@@ -340,9 +341,31 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
 
 
 # ── expedition ───────────────────────────────────────────────────────────
+def _lire_secret(chemin: Optional[str]) -> Optional[str]:
+    """Lit un mot de passe depuis un fichier hors-code (CSPN : secrets en
+    /etc/secubox/secrets/, jamais versionnes). Absent/illisible -> None."""
+    if not chemin:
+        return None
+    try:
+        return Path(chemin).read_text(encoding="utf-8").strip("\r\n")
+    except OSError:
+        return None
+
+
 def envoyer(pdf: bytes, destinataire: Optional[str] = None,
             portee: str = "Tous les vhosts", periode: str = "semaine") -> dict:
-    """Expedie le PDF par le relais interne. Bloquant : thread obligatoire."""
+    """Expedie le PDF. Bloquant : thread/tache oneshot obligatoire.
+
+    Deux modes selon la config `[rapport]` :
+      - relais LOCAL (defaut #1059) : port 25, sans auth, destinataire INTERNE.
+      - soumission AUTHENTIFIEE : des que `smtp_user` est configure, on passe en
+        STARTTLS + login. Obligatoire pour un destinataire EXTERNE (ex. Gmail) :
+        l'hote n'est pas dans le `mynetworks` du relais, le port 25 ne relaie
+        que le courrier local — une adresse externe y serait refusee.
+
+    `copie_cachee` : une adresse interne mise en Bcc pour laisser une TRACE du
+    rapport dans le webmail quand il part vers un destinataire externe.
+    """
     c = config()
     dest = destinataire or c["destinataire"]
     if "@" not in dest:
@@ -352,6 +375,10 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
     msg["Subject"] = f"SecuBox — frequentation {portee} ({periode})"
     msg["From"] = c["expediteur"]
     msg["To"] = dest
+    bcc = c.get("copie_cachee")
+    if bcc:
+        # send_message honore Bcc dans l'enveloppe puis retire l'en-tete.
+        msg["Bcc"] = bcc
     msg.set_content(
         f"Rapport de frequentation SecuBox.\n\n"
         f"Portee  : {portee}\n"
@@ -364,5 +391,17 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
                        filename=f"secubox-frequentation-{horodatage}.pdf")
 
     with smtplib.SMTP(c["smtp_hote"], int(c["smtp_port"]), timeout=20) as s:
+        user = c.get("smtp_user")
+        if user:
+            # Le relais interne presente souvent un certificat auto-signe : on
+            # chiffre (STARTTLS) sans exiger la chaine — le lien est LAN vers la
+            # LXC mail, l'authentification protege deja l'usage du compte.
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            s.starttls(context=ctx)
+            mdp = _lire_secret(c.get("smtp_pass_file"))
+            if mdp:
+                s.login(user, mdp)
         s.send_message(msg)
     return {"envoye": True, "destinataire": dest, "octets": len(pdf)}
