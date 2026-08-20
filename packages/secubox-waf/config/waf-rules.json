@@ -945,6 +945,24 @@
           "desc": "User data export attempt"
         }
       ]
+    },
+    "product_absent_probes": {
+      "name": "Product-absent scanner probes (generated)",
+      "severity": "high",
+      "mode": "detect",
+      "generated": true,
+      "generated_at": "2026-07-19T04:57:02Z",
+      "patterns": [
+        {
+          "id": "paloaltonetworks-cve-2024-3400",
+          "pattern": "/global\\-protect/portal/css/bootstrap\\.min\\.css",
+          "desc": "paloaltonetworks pan-os probe (product absent)",
+          "cve": "CVE-2024-3400",
+          "vendor": "paloaltonetworks",
+          "source": "nuclei"
+        }
+      ],
+      "_note": "graine ; maintenu à chaud par wafgen (secubox-cve-triage)"
     }
   }
 }
