@@ -82,3 +82,19 @@ def test_resoudre_config_argv_surcharge_la_periode():
     # La famille et le destinataire ne bougent pas.
     assert q["famille"] == "anibal-amiot"
     assert q["destinataire"] == "gk2@secubox.in"
+
+
+def test_garde_temps_coupe_un_run_bloque(monkeypatch):
+    """Un run qui dépasse son budget est coupé net (plus de hang de 80 min)."""
+    import time as _t
+    import pytest as _p
+    monkeypatch.setattr(rp, "BUDGET_SECONDES", 1)
+
+    def _bloque(*_a, **_k):
+        _t.sleep(5)
+
+    monkeypatch.setattr(rp, "executer", _bloque)
+    t0 = _t.monotonic()
+    with _p.raises(rp._GardeTempsDepasse):
+        rp._executer_borne(None, None, None, {})
+    assert _t.monotonic() - t0 < 3, "le garde-temps aurait dû couper vers 1s"
