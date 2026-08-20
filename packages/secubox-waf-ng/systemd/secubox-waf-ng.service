@@ -67,9 +67,12 @@ ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/waf
 ExecStartPre=+/bin/chmod 0750 /var/log/secubox/waf
 # #1070 phase B : le journal des bans nft (/var/lib/secubox/waf/bans.jsonl) doit
 # appartenir au service qui l'écrit et est rechargé au démarrage.
+# 0770 (et pas 0750) : l'API WAF (tourne en `secubox`, membre du groupe
+# secubox-waf) y écrit le cache d'historique waf-history.json (#1070 D) — sinon
+# l'onglet « Historique » reste vide (le calcul réussit, le cache échoue).
 ExecStartPre=+/bin/mkdir -p /var/lib/secubox/waf
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/lib/secubox/waf
-ExecStartPre=+/bin/chmod 0750 /var/lib/secubox/waf
+ExecStartPre=+/bin/chmod 0770 /var/lib/secubox/waf
 # DELAI AMONT : 10 s PAR DEFAUT, TROP COURT POUR QUI ECRIT SUR DISQUE (#1030).
 #
 # Un depot de 22 Mio a mis 116 s a s'ecrire sur cette board. Le WAF abandonnait

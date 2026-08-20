@@ -1,3 +1,13 @@
+secubox-waf-ng (1.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Accès données WAF pour le tableau de bord (#1070) : ajoute `secubox` au
+    groupe secubox-waf (postinst) — l'API WAF/metrics lisait 0640 secubox-waf et
+    renvoyait vide/500 sur /visits /history /bans/history. /var/lib/secubox/waf en
+    0770 pour que le cache d'historique s'écrive. Onglets Visites/Historique/
+    Attaquants désormais peuplés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:00:00 +0200
+
 secubox-waf-ng (1.5.6-1~bookworm1) bookworm; urgency=medium
 
   * campagnes : écriture ATOMIQUE de campaigns.json (temp + renommage) — file:
