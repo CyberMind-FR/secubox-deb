@@ -1,3 +1,18 @@
+secubox-bbs (0.28.3-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 — médias embarqués « très petits » dans la rédaction : le lecteur
+    audio et la vignette vidéo d'un dossier sont désormais compacts (petit
+    bouton, mini-onde, vignette 150px) au lieu d'occuper toute la carte.
+  * CORRECTIF podcaster : `DepuisPodcaster` lisait `pubdate` (ENTIER epoch dans
+    le podcaster) comme une chaîne RFC → Date=0 pour chaque épisode (dates
+    perdues côté BBS). Lecture epoch avec repli RFC (`dateEpochOuRFC`).
+  * ORDRE PAR TYPE au miroir du podcaster : livre audio du 1er au dernier
+    chapitre (pubdate ASC), podcast le plus récent d'abord (pubdate DESC),
+    d'après le préfixe d'URL du flux (`audiobook:…`). NB : l'affichage groupé
+    par flux (arborescence podcast/livre audio) reste à faire (rework en cours).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 16:15:00 +0200
+
 secubox-bbs (0.28.2-1~bookworm1) bookworm; urgency=medium
 
   * #1056 STAGE 1 — nouvelle interface d'accueil « AletheiaVox : rédaction sur
