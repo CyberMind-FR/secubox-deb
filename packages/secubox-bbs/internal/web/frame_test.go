@@ -38,10 +38,11 @@ func TestFrameSrcNAdmetQueDesOriginesSaines(t *testing.T) {
 	}
 }
 
-// Sans configuration, aucun lecteur ne s'integre : c'est le bon defaut pour
-// une surface qui affiche du contenu ecrit par des membres.
+// #1056 : la board integre YouTube, donc frame-src n'est plus jamais 'none' —
+// il vaut au minimum l'hote cookieless. Aucune AUTRE origine sans configuration.
 func TestFrameSrcFermeParDefaut(t *testing.T) {
-	if f := (&Server{}).frameSrc(); f != "'none'" {
-		t.Fatalf("frame-src ouvert sans configuration : %s", f)
+	f := (&Server{}).frameSrc()
+	if f != "https://www.youtube-nocookie.com" {
+		t.Fatalf("frame-src par defaut inattendu : %s", f)
 	}
 }

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+// Source-Disclosed License — All rights reserved except as expressly granted.
+// See LICENCE-CMSD-1.0.md for terms.
+
 package web
 
 import (
@@ -39,8 +44,14 @@ func TestSansBanniereLaPolitiqueResteFermee(t *testing.T) {
 	if !strings.Contains(p, "script-src 'self';") {
 		t.Errorf("script-src elargi sans raison : %s", p)
 	}
-	if strings.Contains(p, "https://") {
-		t.Errorf("une origine externe est autorisee par defaut : %s", p)
+	// #1056 : frame-src autorise youtube-nocookie par conception (la board
+	// integre YouTube). C'est la SEULE origine externe par defaut, et elle ne
+	// peut ni executer de script ni exfiltrer de donnees. L'invariant « fermee »
+	// porte donc desormais sur les directives sensibles : script/style/connect.
+	for _, dir := range []string{"script-src 'self' http", "style-src 'self' http", "connect-src 'self' http"} {
+		if strings.Contains(p, dir) {
+			t.Errorf("une origine externe de code/style/connexion est autorisee par defaut : %s", p)
+		}
 	}
 }
 
@@ -96,5 +107,21 @@ func TestUneEmpreinteDeStyleMalFormeeEstIgnoree(t *testing.T) {
 	p := csp(t, Options{BanniereStyle: "pas-une-empreinte"})
 	if strings.Contains(p, "pas-une-empreinte") {
 		t.Errorf("empreinte non validee reprise : %s", p)
+	}
+}
+
+// La board integre YouTube par conception : frame-src doit TOUJOURS autoriser
+// l'hote cookieless, meme sans autre configuration (#1056).
+func TestFrameSrcAutoriseToujoursYoutubeNocookie(t *testing.T) {
+	if f := (&Server{}).frameSrc(); !strings.Contains(f, "https://www.youtube-nocookie.com") {
+		t.Fatalf("frame-src doit autoriser youtube-nocookie : %s", f)
+	}
+}
+
+// L'origine ytsas alimente media-src pour le <video> du cas « cache » (#1056).
+func TestPolitiqueMediaSrcInclutYtsas(t *testing.T) {
+	p := politique("'self'", "'self'", "'self'", "'none'", "http://10.100.0.180:8091")
+	if !strings.Contains(p, "media-src 'self' http://10.100.0.180:8091") {
+		t.Fatalf("media-src doit inclure l'origine ytsas : %s", p)
 	}
 }

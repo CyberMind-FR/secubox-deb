@@ -2,10 +2,13 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ytid"
 )
 
 // Fiche : ce qu'on sait dire d'un media de nos services.
@@ -37,7 +40,26 @@ func (s *Server) servirMediaFiche(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := url.Parse(r.URL.Query().Get("u"))
-	if err != nil || !origineAdmise(u, s.opt.MediaOrigines) {
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	// #1056 — YouTube N'EST PAS dans MediaOrigines (ce n'est pas UN DE NOS
+	// services) : court-circuit explicite AVANT origineAdmise, sinon elle le
+	// refuserait comme n'importe quelle origine tierce non admise.
+	//
+	// s.youtube PEUT ETRE NIL — un Server construit sans connecteur (tests,
+	// ou --ytsas-origine absent) retombe silencieusement sur le comportement
+	// existant plutot que de paniquer.
+	if s.youtube != nil && ytid.VideoID(u.String()) != "" {
+		c, _ := s.youtube.Resoudre(u.String())
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Cache-Control", "private, max-age=3600")
+		fmt.Fprint(w, embedYouTube(c))
+		return
+	}
+	if !origineAdmise(u, s.opt.MediaOrigines) {
 		http.NotFound(w, r)
 		return
 	}

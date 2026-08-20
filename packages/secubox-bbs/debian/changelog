@@ -1,3 +1,229 @@
+secubox-bbs (0.28.12-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 3 — raccord ytsas + archivage PeerTube. Déposer une source
+    VIDÉO dans le BBS la CONNECTE à ytsas (appel /resolve au dépôt : rapatriement
+    /cache souverain, best-effort) et garde son adresse comme média. Bouton
+    « 📼 PeerTube » sur les dossiers vidéo de la rédaction → POST /media/archive
+    → ytsas résout l'id puis /conserve (miroir vidéo→PeerTube). Réutilise le
+    ClientYtsas existant (--ytsas-origine) ; Conserver() ajouté au connecteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 22:20:00 +0200
+
+secubox-bbs (0.28.11-1~bookworm1) bookworm; urgency=medium
+
+  * THÈME BBS unifié : le SHELL (fils, salons, messages, compte, console…)
+    rejoint l'identité de la rédaction — grain de papier (pointillé halftone)
+    sur le fond, barre haute à filet d'encre + marque Cinzel (pastille bordée,
+    accent doré). La palette et les polices AletheiaVox étaient déjà partagées ;
+    tout le BBS est désormais cohérent, de l'accueil aux pages internes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 21:40:00 +0200
+
+secubox-bbs (0.28.10-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 rédaction : un dossier « source vidéo » (déposé) montre désormais une
+    vignette vidéo cliquable dans la mini-vue (comme un fil vidéo). Le média
+    d'un flux/lien reste visible et jouable directement. NB : rendre visible la
+    vidéo d'un lien YouTube EN LOCAL (vignette souveraine) dépend du raccord
+    ytsas (à venir).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 20:10:00 +0200
+
+secubox-bbs (0.28.9-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF ergonomie : COLLER UNE IMAGE dans un message. Une zone de texte
+    ne reçoit pas une image du presse-papier (le collage natif ne fait rien) —
+    d'où « le copier-coller ne marche pas ». On intercepte le collage d'une
+    image (capture d'écran) et on l'envoie par le même chemin que le trombone
+    (/f/envoi), puis on pose son adresse. Le collage de TEXTE reste natif.
+  * coquille.js et editeur.js sont désormais versionnés (?v=empreinte) : sans
+    ça un correctif de ces scripts ne parvenait jamais aux navigateurs (le WAF
+    efface les en-têtes de cache).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 20:00:00 +0200
+
+secubox-bbs (0.28.8-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 3 — ARTICLE COLLABORATIF. Écrire à PLUSIEURS MAINS depuis un
+    dossier (« Co-écrire ») ou une page blanche : contributions attribuées et
+    ordonnées (qui a écrit quoi), co-auteurs déduits, brouillon PRIVÉ sur le
+    BBS. « Publier dans la gazette » assemble les contributions et les envoie
+    sur billets (public) avec attribution. La colonne « rédaction collaborative »
+    de l'accueil liste les brouillons en cours.
+  * Nouveau schéma (0021_articles) : tables articles + article_parts. Éditeur
+    autonome /article/{id} (newsroom.css). Réservé aux membres, CSP stricte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 19:20:00 +0200
+
+secubox-bbs (0.28.7-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 2 — « Déposer une source ». Coller une URL dans la barre de la
+    rédaction (ou /nouveau?src=) ouvre le composeur pré-rempli : le type est
+    DÉDUIT de l'adresse (vidéo / podcast / film / livre / conférence / web —
+    aucune requête vers le tiers, pas de SSRF), l'adresse ouvre le premier
+    message (rendue en lien ou lecteur) et classe le dossier dans la rédaction
+    avec le bon glyphe. Le fil naît LOCAL (privé) et ne devient public qu'à la
+    publication.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:40:00 +0200
+
+secubox-bbs (0.28.6-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 rédaction : le podcaster est GROUPÉ par flux dans l'accueil — un
+    podcast / un livre audio = UN dossier (classé par son épisode le plus
+    récent, façon RSS : un nouveau mp3 remonte son flux sans le dupliquer), au
+    lieu d'un dossier par épisode. Fils non-podcaster et flux groupés se mêlent
+    par date.
+  * Lecteur : boutons PRÉCÉDENT / SUIVANT (⏮ ⏭) dans le mini-lecteur, et
+    POP-OUT (⧉) — un LECTEUR DÉTACHÉ (/player) s'ouvre en fenêtre séparée qui
+    continue de jouer pendant qu'on navigue (flux entier avec playlist +
+    précédent/suivant/continu, ou piste unique ; reprise à l'épisode et à la
+    position ; touches média du système via Media Session).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:00:00 +0200
+
+secubox-bbs (0.28.5-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF médiathèque : `duration` du podcaster est une CHAÎNE
+    (« 00:36:15 »), la lire en entier faisait échouer la requête → « aucun
+    média » alors que 145 épisodes sont téléchargés. Lecture texte + normalisation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:20:00 +0200
+
+secubox-bbs (0.28.4-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 MÉDIATHÈQUE — le podcaster en ARBORESCENCE. `/c/emissions` (et
+    `/media`) montraient 145 fils plats, un par épisode, tous mélangés et du
+    plus récent au plus ancien : ni sous-dossiers, ni bon ordre pour un livre
+    audio, ni vignette, ni lecteur. Désormais : un FLUX = un sous-dossier
+    (podcast 🎧 / livre audio 📖 / série 🎬), avec sa VIGNETTE (cover.jpg servie
+    depuis la racine media du podcaster via /media-cover/<fid>), ses épisodes
+    ORDONNÉS PAR TYPE (livre audio chapitre 1→N, podcast récent d'abord) et
+    JOUABLES EN LIGNE (lecteur audio réel, /media/ep/<id>), avec « Tout écouter »
+    et l'ÉCOUTE EN CONTINU (enchaînement automatique). Un salon majoritairement
+    alimenté par le podcaster bascule automatiquement sur cette vue.
+  * Gabarit autonome `templates/mediatheque.html` + lecture `internal/web/
+    mediatheque.go` (base podcaster en lecture seule, groupée par flux). Réutilise
+    newsroom.{css,js}. CSP stricte respectée (data-*), test d'exécution dédié.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 17:00:00 +0200
+
+secubox-bbs (0.28.3-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 — médias embarqués « très petits » dans la rédaction : le lecteur
+    audio et la vignette vidéo d'un dossier sont désormais compacts (petit
+    bouton, mini-onde, vignette 150px) au lieu d'occuper toute la carte.
+  * CORRECTIF podcaster : `DepuisPodcaster` lisait `pubdate` (ENTIER epoch dans
+    le podcaster) comme une chaîne RFC → Date=0 pour chaque épisode (dates
+    perdues côté BBS). Lecture epoch avec repli RFC (`dateEpochOuRFC`).
+  * ORDRE PAR TYPE au miroir du podcaster : livre audio du 1er au dernier
+    chapitre (pubdate ASC), podcast le plus récent d'abord (pubdate DESC),
+    d'après le préfixe d'URL du flux (`audiobook:…`). NB : l'affichage groupé
+    par flux (arborescence podcast/livre audio) reste à faire (rework en cours).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 16:15:00 +0200
+
+secubox-bbs (0.28.2-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 1 — nouvelle interface d'accueil « AletheiaVox : rédaction sur
+    papier ». La racine adopte une mise en page de gazette (masthead, rubriques,
+    fil de DOSSIERS, colonne des derniers billets) au lieu de la coquille à
+    trois colonnes — qui reste inchangée sur toutes les autres pages. Gabarit
+    AUTONOME (`templates/newsroom.html`, define "newsroom") + feuille et script
+    dédiés (`static/newsroom.{css,js}`), compilés à part ; bbs.css et layout.html
+    ne sont pas touchés.
+  * Chaque fil récent devient un dossier « papier » : type de source déduit
+    (🎧 audio / 🎬 vidéo / 🔗 source / 💬 discussion), tampons publié/local,
+    auteur, messages, date. Le podcast se LIT EN LIGNE (lecteur audio réel, le
+    média du fil est joué ; media-src 'self' autorise /media/ep/…) avec un
+    mini-lecteur et l'ÉCOUTE EN CONTINU (enchaînement automatique sur le
+    podcast suivant). La vidéo renvoie à la page du fil, qui intègre le lecteur.
+  * CSP stricte respectée : aucun style ni onclick en ligne — actions par
+    attributs data-* et délégation de clic (comme coquille.js). Thème
+    papier/nuit persistant. Test d'exécution hors-ligne du gabarit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 15:30:00 +0200
+
+secubox-bbs (0.28.1-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTIF #1056 : les adresses de billets publiés perdaient le domaine.
+    billets, quand BILLETS_SITE_URL n'est pas posée, rend un permalien RELATIF
+    (`/b/slug`) ; le BBS le stockait tel quel et l'affichait sans
+    `.gk2.secubox.in` — un lien mort. Le BBS connaît pourtant l'origine
+    publique via `--billets-base` : `adressePubliee` l'ajoute désormais devant
+    une adresse relative (une adresse déjà absolue reste intacte ; sans base
+    connue on garde le relatif plutôt que d'inventer un hôte). Le client
+    billets porte l'origine publique (`Client.SitePublic`, câblée depuis
+    `opt.BilletsBase`). Test étendu (absolu / relatif+base / sans base / slug).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 14:30:00 +0200
+
+secubox-bbs (0.28.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : la page /billets affiche desormais le CONTENU REEL du module
+    billets (titre, extrait, date, lien "Lire le billet"), lu en direct sur
+    sa socket unix — plus seulement les fils publies depuis le BBS, qui
+    faisaient disparaitre tout ce qui a ete ecrit directement chez billets.
+    Un billet publie depuis un fil du BBS reste signale (croisement par
+    identifiant de billet) avec un lien de retour vers la conversation. Une
+    panne du flux (billets.gk2 injoignable) est dite explicitement, jamais
+    confondue avec « aucun billet publie ». Nouveau drapeau
+    --billets-base (#1066 phase A — affichage seul, pas d'editeur ni de
+    publication ici).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 19 Aug 2026 19:20:00 +0200
+
+secubox-bbs (0.27.1-1~bookworm1) bookworm; urgency=medium
+
+  * AletheiaVox : polices auto-hebergees (Cinzel/Inter/JetBrains Mono en
+    /static/fonts, la CSP interdit l'externe) — fidelite exacte de la maquette.
+    Correctifs contraste sur blanc : bouton primaire en bleu (au lieu du cyan),
+    pastille "nouveau" recoloree, bandeau media bleu->cyan.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 17:40:00 +0200
+
+secubox-bbs (0.27.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : peau AletheiaVox appliquee a l'interface membre. Fond BLANC par
+    defaut (le sombre n'est plus imposé par l'OS, il reste un choix explicite
+    via [data-theme=dark]). Palette remappee sur le vocabulaire natif du BBS —
+    bleu #104a88 (structure), cyan #00a8c8 (connexions), dore #c9a84c (accent),
+    vert/orange/rouge semantiques. Polices Cinzel/Inter/JetBrains Mono (repli
+    systeme : la CSP interdit les polices externes ; auto-heberger Cinzel = suivi).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 17:00:00 +0200
+
+secubox-bbs (0.26.2-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1056 (suite) : l'embed YouTube affichait « Erreur 153 / Erreur
+    de configuration du lecteur vidéo ». Cause réelle : l'en-tête de page
+    `Referrer-Policy: same-origin` coupait le référent vers le tiers, privant le
+    lecteur youtube-nocookie de l'origine. L'iframe surcharge désormais avec
+    referrerpolicy=strict-origin-when-cross-origin (envoie l'origine seule).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 15:45:00 +0200
+
+secubox-bbs (0.26.1-1~bookworm1) bookworm; urgency=high
+
+  * CORRECTIF #1056 : l'embed YouTube affichait « Erreur de configuration du
+    lecteur vidéo ». Cause : referrerpolicy=no-referrer privait le lecteur
+    youtube-nocookie de l'origine dont il a besoin pour se configurer. Retiré ;
+    ajout des attributs allow standard. La politique par défaut n'envoie que
+    l'origine (pas l'URL du fil) — vie privée préservée avec -nocookie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 15:00:00 +0200
+
+secubox-bbs (0.26.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat #1056 : média intégré souverain. Connecteur youtube qui demande à
+    ytsas (GET /resolve) la meilleure source locale et rend en conséquence :
+    miroir PeerTube (souverain), cache ytsas <video> (souverain), sinon
+    youtube-nocookie à la 1re vue (WAN). L'URL d'origine reste failover + tag
+    de provenance ; le join se fait par video_id. CSP étendue (frame-src
+    youtube-nocookie, media-src origine ytsas). Flag --ytsas-origine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 19 Aug 2026 10:15:00 +0200
+
 secubox-bbs (0.25.3-1~bookworm1) bookworm; urgency=medium
 
   * Entree de menu remise a la forme commune et rattachee a une section qui

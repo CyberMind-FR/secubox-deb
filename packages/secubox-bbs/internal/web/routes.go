@@ -10,11 +10,13 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/billets"
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ingest"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
@@ -38,6 +40,33 @@ type page struct {
 	Intro, Vide               string
 	Note                      string
 	Cards                     []card
+	// Medias : la médiathèque du podcaster regroupée par flux (#1056) —
+	// sous-dossiers ordonnés par type, épisodes jouables en ligne.
+	Medias []PodFeed
+	// News : le fil de la rédaction (accueil). Un item est SOIT un fil, SOIT un
+	// FLUX groupé du podcaster — un podcast / un livre audio y apparaît une
+	// seule fois, pas un dossier par épisode (#1056).
+	News []NewsItem
+	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
+	PlayerFeed                          *PodFeed
+	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
+	// « Déposer une source » (#1056 stage 2) : l'adresse déposée et son type
+	// déduit, pour pré-remplir le composeur avec un aperçu.
+	SourceURL string
+	SrcType   SourceType
+	// Article collaboratif (#1056 stage 3) : l'article ouvert (Art) et ses
+	// contributions (Parts), ou la liste des brouillons (Articles) pour la
+	// rédaction.
+	Art      store.Article
+	Parts    []store.ArticlePart
+	Articles []store.Article
+	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
+	// extrait, date, lien de chaque billet, pas seulement les fils publies
+	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
+	// « aucun billet pour l'instant » : les confondre ferait chercher une
+	// panne de publication la ou billets.gk2 est simplement injoignable.
+	Billets    []billetVue
+	BilletsErr string
 	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
 	// qui compte les messages prives — deux notions distinctes, et les nommer
 	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
@@ -125,6 +154,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.accueil)
 	ConfigurerFiches(s.opt.MediaOrigines)
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
+	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
@@ -134,7 +164,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/login", s.connexion)
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
-	s.mux.HandleFunc("/media", s.simple("media"))
+	s.mux.HandleFunc("/media", s.media)
+	s.mux.HandleFunc("/media/archive/", s.mediaArchiver)
+	s.mux.HandleFunc("/player", s.player)
+	s.mux.HandleFunc("/article/", s.article)
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
 	s.mux.HandleFunc("/mp", s.mp)
 	s.mux.HandleFunc("/mp/", s.mp)
@@ -235,6 +268,29 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	}
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", p); err != nil {
+		log.Printf("rendu de %s : %v", nom, err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+	s.poseCSRF(w, p.V.CSRF)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
+}
+
+// rendDef rend un gabarit AUTONOME en exécutant un `define` nommé au lieu de
+// "layout". L'accueil « rédaction » (#1056 stage 1) ne partage pas la coquille
+// à trois colonnes ; il porte sa propre feuille et son propre script. Même
+// discipline de tampon que rend : soit la page entière part, soit une erreur
+// franche — jamais un document tronqué présenté comme valide.
+func (s *Server) rendDef(w http.ResponseWriter, r *http.Request, nom, def string, p page) {
+	t, ok := s.tpl[nom]
+	if !ok {
+		log.Printf("gabarit inconnu : %s", nom)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, def, p); err != nil {
 		log.Printf("rendu de %s : %v", nom, err)
 		http.Error(w, "erreur interne", http.StatusInternalServerError)
 		return
@@ -399,10 +455,56 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, pub := s.base(r, "forums")
-	p.Threads, _ = s.st.Recent(20, pub)
+	p.Threads, _ = s.st.Recent(30, pub)
+	// #1056 : la rédaction GROUPE le podcaster par FLUX. Un fil « podcaster »
+	// est un épisode ; les montrer tels quels ferait dix dossiers pour un seul
+	// livre audio et noierait le reste. On les écarte du fil des fils et on
+	// injecte à la place UN dossier par flux (un podcast / un livre audio =
+	// un article), classé par son épisode le plus récent — dynamique façon RSS :
+	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
+	p.News = s.composerRedaction(p.Threads)
+	// #1056 stage 3 : les articles collaboratifs EN COURS, pour la colonne
+	// « rédaction collaborative » (remplace le teaser).
+	p.Articles, _ = s.st.Articles("draft", 8)
+	if s.bil != nil {
+		p.Billets, p.BilletsErr = s.vitrineBillets()
+		if len(p.Billets) > 8 {
+			p.Billets = p.Billets[:8]
+		}
+	}
 	s.poseNonLus(&p)
-	p.Titre = "Forums"
-	s.rend(w, r, "index", p)
+	p.Titre = "AletheiaVox"
+	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// NewsItem : une entrée de la rédaction — SOIT un fil (discussion / source),
+// SOIT un flux groupé du podcaster (podcast / livre audio / série).
+type NewsItem struct {
+	Feed *PodFeed      // non-nil : dossier de flux groupé (podcaster)
+	Fil  *store.Thread // non-nil : dossier de fil ordinaire
+	Date int64
+}
+
+// composerRedaction mêle les fils NON-podcaster et les flux groupés du
+// podcaster en un seul fil trié par date décroissante — les épisodes d'un même
+// flux se replient en un dossier unique.
+func (s *Server) composerRedaction(fils []store.Thread) []NewsItem {
+	var out []NewsItem
+	for i := range fils {
+		if fils[i].Source == "podcaster" {
+			continue // replié dans son flux ci-dessous
+		}
+		out = append(out, NewsItem{Fil: &fils[i], Date: fils[i].LastPostAt})
+	}
+	feeds, _ := s.mediatheque(2000)
+	for i := range feeds {
+		out = append(out, NewsItem{Feed: &feeds[i], Date: feeds[i].Date})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	if len(out) > 24 {
+		out = out[:24]
+	}
+	return out
 }
 
 func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
@@ -418,9 +520,112 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Threads, _ = s.st.Threads(p.Cat.ID, pub)
+	// #1056 : un salon dont le contenu vient du podcaster (« émissions ») se
+	// rend en MÉDIATHÈQUE — flux en sous-dossiers, épisodes ordonnés par type et
+	// jouables — plutôt qu'en liste plate de fils par épisode.
+	if podcasterDominant(p.Threads) {
+		s.rendMediatheque(w, r, p)
+		return
+	}
 	s.poseNonLus(&p)
 	p.Titre = p.Cat.Title
 	s.rend(w, r, "index", p)
+}
+
+// media (/media) rend la médiathèque du podcaster en arborescence.
+func (s *Server) media(w http.ResponseWriter, r *http.Request) {
+	p, _ := s.base(r, "media")
+	s.rendMediatheque(w, r, p)
+}
+
+// mediaArchiver (#1056 stage 3) : archive vers PeerTube la vidéo d'un fil, via
+// ytsas. On résout l'adresse média en id ytsas (ce qui garantit aussi qu'elle
+// est en cache), puis on demande la conservation (ytsas route vidéo→PeerTube).
+// Membre + CSRF. Best-effort côté réseau, mais l'échec est DIT.
+func (s *Server) mediaArchiver(w http.ResponseWriter, r *http.Request) {
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	if s.ytsas == nil {
+		http.Error(w, "raccord ytsas non configuré", http.StatusServiceUnavailable)
+		return
+	}
+	id := idDe(r.URL.Path, "/media/archive/")
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	u, err := s.st.SourceMediaFil(id)
+	if err != nil || u == "" {
+		http.Error(w, "ce fil n'a pas de vidéo à archiver", http.StatusBadRequest)
+		return
+	}
+	res, err := s.ytsas.Resoudre(u)
+	if err != nil || res.VideoID == "" {
+		http.Error(w, "ytsas n'a pas pu résoudre la vidéo (réessayez quand le cache est prêt)",
+			http.StatusBadGateway)
+		return
+	}
+	if err := s.ytsas.Conserver(res.VideoID); err != nil {
+		http.Error(w, "archivage PeerTube refusé : "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// player (/player) est le LECTEUR DÉTACHÉ, destiné à une fenêtre séparée : il
+// continue de jouer pendant qu'on navigue dans la fenêtre principale. Avec
+// ?feed=<id> il joue tout un flux (playlist + précédent/suivant/continu) ; avec
+// ?src=<url> une seule piste. ?ep et ?t reprennent l'épisode et sa position.
+func (s *Server) player(w http.ResponseWriter, r *http.Request) {
+	p, _ := s.base(r, "player")
+	q := r.URL.Query()
+	p.PlayerEp = q.Get("ep")
+	p.PlayerT = q.Get("t")
+	p.PlayerTitle = q.Get("title")
+	if fid := q.Get("feed"); fid != "" {
+		feeds, _ := s.mediatheque(2000)
+		for i := range feeds {
+			if strconv.FormatInt(feeds[i].ID, 10) == fid {
+				p.PlayerFeed = &feeds[i]
+				break
+			}
+		}
+	}
+	if p.PlayerFeed == nil {
+		p.PlayerSrc = q.Get("src")
+	}
+	p.Titre = "Lecteur"
+	s.rendDef(w, r, "player", "player", p)
+}
+
+// rendMediatheque charge les flux du podcaster et rend le gabarit autonome.
+func (s *Server) rendMediatheque(w http.ResponseWriter, r *http.Request, p page) {
+	p.Medias, _ = s.mediatheque(2000)
+	p.Titre = "Médiathèque"
+	s.rendDef(w, r, "mediatheque", "mediatheque", p)
+}
+
+// podcasterDominant : le salon est-il majoritairement alimenté par le
+// podcaster ? On bascule alors sur la médiathèque. Seuil à la majorité stricte
+// pour ne pas détourner un salon qui ne ferait que citer un épisode.
+func podcasterDominant(ts []store.Thread) bool {
+	if len(ts) == 0 {
+		return false
+	}
+	n := 0
+	for _, t := range ts {
+		if t.Source == "podcaster" {
+			n++
+		}
+	}
+	return n*2 > len(ts)
 }
 
 func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
@@ -644,8 +849,8 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 			p.Cards = s.cartesBiblio()
 		case "billets":
 			p.Titre, p.Intro = "Billets", "Le BBS est l'atelier, billets la vitrine."
-			p.Vide = "Aucun fil n'a encore été publié en billet."
-			p.Cards = s.cartesBillets()
+			p.Vide = "Aucun billet publié pour l'instant."
+			p.Billets, p.BilletsErr = s.vitrineBillets()
 		}
 		s.rend(w, r, "simple", p)
 	}
@@ -742,45 +947,78 @@ func (s *Server) cartesBiblio() []card {
 	return out
 }
 
-// cartesBillets rend les fils sortis vers la vitrine (#1020).
-func (s *Server) cartesBillets() []card {
-	bs, err := s.st.Billets(100)
+// billetVue est ce qu'affiche la vitrine des billets (#1066 phase A) : le
+// CONTENU REEL du billet — titre, extrait, date, lien — et non plus
+// seulement la carte « publié depuis le BBS » que rendait cartesBillets
+// (qui ne disait jamais que « 6 message(s) repris »).
+type billetVue struct {
+	Titre, Resume, Lien string
+	Date                int64
+	// DepuisFil : vrai quand ce billet correspond a un fil publie DEPUIS le
+	// BBS — croise par BilletID (voir vitrineBillets), pas par URL, qui peut
+	// manquer (#1024). Le lien vers la conversation d'origine n'a de sens que
+	// dans ce cas.
+	DepuisFil bool
+	ThreadID  int64
+	Repris    int
+}
+
+// vitrineBillets lit le flux REEL du module billets (#1066 phase A).
+//
+// cartesBillets ne rendait QUE les fils publies DEPUIS le BBS — une poignee
+// de billets sur les dizaines que porte le module, puisque billets en reçoit
+// aussi ecrits directement chez lui. La page « Billets » du BBS affichait
+// donc deux cartes indigentes a la place d'une vitrine.
+//
+// UNE PANNE DU FLUX EST DITE, PAS MASQUEE. billets.gk2 injoignable et « zero
+// billet publié » ne sont PAS le même état : les confondre ferait chercher un
+// problème de publication là où le service est simplement injoignable — le
+// même piège que documentait deja cartesMedia plus haut.
+func (s *Server) vitrineBillets() ([]billetVue, string) {
+	if s.opt.BilletsSocket == "" {
+		return nil, "module billets non configuré."
+	}
+	items, err := ingest.DepuisBillets(s.opt.BilletsSocket, s.opt.BilletsBase)
 	if err != nil {
-		return []card{{Title: "Lecture impossible",
-			Sub: "Les billets n'ont pas pu être lus : " + err.Error()}}
+		return nil, "le flux de billets n'a pas pu être lu : " + err.Error()
 	}
-	out := make([]card, 0, len(bs))
-	for _, b := range bs {
-		titre := b.Titre
-		if titre == "" {
-			titre = "(fil supprimé)"
+	// CROISEMENT PAR BilletID, l'identifiant que billets a rendu a la
+	// publication (voir internal/billets.Client.Publier -> Resultat.BilletID,
+	// enregistre par store.MarkPublished) — jamais par URL, absente pour deux
+	// billets de gk2 (#1024) : un croisement par URL les aurait donc ratés.
+	origine := map[string]store.BilletPublie{}
+	if locaux, err := s.st.Billets(500); err == nil {
+		for _, b := range locaux {
+			if b.BilletID != "" {
+				origine[b.BilletID] = b
+			}
 		}
-		sous := strconv.Itoa(b.Repris) + " message(s) repris"
-		if b.Retenus > 0 {
-			// « 6 repris, 2 retenus » dit à l'auteur que la publication n'a pas
-			// tout emporté, avant qu'il ne s'en aperçoive autrement.
-			sous += ", " + strconv.Itoa(b.Retenus) + " retenu(s) en local"
-		}
-		c := card{
-			Title:    titre,
-			Sub:      sous,
-			Link:     "/t/" + strconv.FormatInt(b.ThreadID, 10),
-			LinkText: "Voir le fil",
-			Pills:    []pill{{Class: "ok", Text: "publié"}},
-			Glyphe:   "📰",
-		}
-		// L'ADRESSE PEUT MANQUER : les deux billets de gk2 ont un identifiant
-		// mais pas d'URL. Plutôt que de fabriquer un lien mort, on renvoie vers
-		// le fil et on DIT que l'adresse manque — un lien qui échoue coûte plus
-		// cher qu'une absence signalée.
-		if b.URL != "" {
-			c.Link, c.LinkText = b.URL, "Lire le billet"
-		} else {
-			c.Pills = append(c.Pills, pill{Class: "warn", Text: "adresse manquante"})
-		}
-		out = append(out, c)
 	}
-	return out
+	out := make([]billetVue, 0, len(items))
+	for _, it := range items {
+		v := billetVue{Titre: it.Titre, Resume: extrait(it.Corps, 320),
+			Lien: it.Lien, Date: it.Date}
+		if o, ok := origine[it.Ref]; ok {
+			v.DepuisFil, v.ThreadID, v.Repris = true, o.ThreadID, o.Repris
+		}
+		out = append(out, v)
+	}
+	return out, ""
+}
+
+// extrait tronque un corps sur une frontiere de mot, pour ne pas terminer un
+// résumé en plein milieu d'une syllabe.
+func extrait(s string, n int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	coupe := string(r[:n])
+	if i := strings.LastIndexAny(coupe, " \n"); i > n/2 {
+		coupe = coupe[:i]
+	}
+	return strings.TrimRight(coupe, " \n") + "…"
 }
 
 // glypheDeSource traduit le genre annonce par une passerelle media.
@@ -957,6 +1195,14 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	p, _ := s.base(r, "forums")
 	p.Titre = "Ouvrir un fil"
 	if r.Method != http.MethodPost {
+		// #1056 stage 2 : « Déposer une source ». ?src=<url> pré-remplit le
+		// composeur avec un aperçu typé ; le fil naît LOCAL (privé) et ne devient
+		// public qu'à la publication — les brouillons restent sur le BBS.
+		if src, ok := adresseSource(r.URL.Query().Get("src")); ok {
+			p.SourceURL = src
+			p.SrcType = typerSource(src)
+			p.Titre = "Déposer une source"
+		}
 		s.rend(w, r, "nouveau", p)
 		return
 	}
@@ -991,11 +1237,38 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	if r.PostFormValue("visibility") == "public" {
 		vis = store.VisPublic
 	}
+	// #1056 stage 2 : si une source est déposée, son adresse ouvre le premier
+	// message (le rendu la transforme en lien, ou en lecteur pour une vidéo
+	// connue) et son type est posé sur le fil pour la rédaction.
+	src, aSource := adresseSource(r.PostFormValue("src"))
+	if aSource {
+		corps = src + "\n\n" + corps
+	}
 	id, err := s.st.NewThread(cat, v.ID, titre, corps, vis)
 	if err != nil {
 		p.Err = "Enregistrement impossible : " + err.Error()
 		s.rend(w, r, "nouveau", p)
 		return
+	}
+	if aSource {
+		st := typerSource(src)
+		if st.Source == "video" {
+			// #1056 stage 3 : une vidéo garde son adresse comme média (embarquable
+			// dans la rédaction) ET est CONNECTÉE à ytsas — le tuyau souverain la
+			// rapatrie/met en cache. Best-effort : ytsas HS ne casse pas le dépôt.
+			if err := s.st.MarquerSourceMedia(id, "video", src, "video"); err != nil {
+				log.Printf("marquage média du fil %d : %v", id, err)
+			}
+			if s.ytsas != nil {
+				go func(u string, fil int64) {
+					if _, err := s.ytsas.Resoudre(u); err != nil {
+						log.Printf("raccord ytsas (fil %d) : %v", fil, err)
+					}
+				}(src, id)
+			}
+		} else if err := s.st.MarquerSource(id, st.Source); err != nil {
+			log.Printf("marquage de source du fil %d : %v", id, err)
+		}
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
 }

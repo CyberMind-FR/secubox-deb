@@ -188,15 +188,22 @@ func DepuisPodcaster(chemin string, limite int) ([]Item, error) {
 	}
 	defer db.Close()
 
-	// `pubdate` est une CHAINE (format RFC des flux RSS), pas un entier : le
-	// premier jet lisait une colonne `published` qui n'existe pas, et la
-	// requete echouait entierement. Un nom de colonne se verifie contre le
-	// schema reel, jamais contre celui qu'on imagine.
+	// `pubdate` est aujourd'hui un ENTIER (epoch) dans le podcaster
+	// (`pubdate INTEGER DEFAULT 0`) — l'ancienne note « chaîne RFC » datait d'un
+	// schéma révolu, et lire l'entier comme du RFC rendait Date=0 pour CHAQUE
+	// épisode (dates perdues côté BBS). On lit donc l'epoch, avec repli RFC pour
+	// d'éventuelles lignes anciennes (dateEpochOuRFC).
+	//
+	// ORDRE PAR TYPE DE CONTENEUR (#1056), au miroir du podcaster lui-même
+	// (api/store.py) : un livre audio se lit du 1er au dernier chapitre
+	// (pubdate ASC), un podcast montre le plus récent d'abord (pubdate DESC).
+	// Le type est porté par le préfixe d'URL du flux (`audiobook:…`).
 	rows, err := db.Query(`SELECT e.id, e.guid, e.title, COALESCE(e.description,''),
 		COALESCE(e.pubdate,''), COALESCE(f.title,''), COALESCE(f.site,''),
 		COALESCE(e.local_path,'')
 		FROM episodes e LEFT JOIN feeds f ON f.id = e.feed_id
-		ORDER BY e.id DESC LIMIT ?`, limite)
+		ORDER BY CASE WHEN f.url LIKE 'audiobook:%'
+		              THEN e.pubdate ELSE -e.pubdate END ASC LIMIT ?`, limite)
 	if err != nil {
 		return nil, fmt.Errorf("lecture des episodes : %w", err)
 	}
@@ -215,7 +222,7 @@ func DepuisPodcaster(chemin string, limite int) ([]Item, error) {
 			corps = "**" + flux + "**\n\n" + corps
 		}
 		it := Item{Ref: guid, Titre: titre, Corps: corps,
-			Lien: site, Date: dateRFC(pubdate)}
+			Lien: site, Date: dateEpochOuRFC(pubdate)}
 		// SEULEMENT si le fichier a ete telecharge. Sans lui il n'y a rien a
 		// jouer, et pointer l'enclosure d'origine enverrait chaque auditeur
 		// chez un tiers depuis une page de la maison.
@@ -264,6 +271,18 @@ func texteDepuisHTML(s string) string {
 	}
 	return strings.TrimSpace(strings.Join(strings.Fields(
 		strings.ReplaceAll(b.String(), "&nbsp;", " ")), " "))
+}
+
+// dateEpochOuRFC lit une date qui peut être un epoch (entier, schéma podcaster
+// actuel) OU une chaîne RFC (flux RSS, et lignes anciennes). Un entier scanné
+// depuis une colonne INTEGER arrive ici en texte décimal ; on le reconnaît et
+// on le rend tel quel, sinon on retombe sur l'analyse RFC.
+func dateEpochOuRFC(s string) int64 {
+	s = strings.TrimSpace(s)
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil && n > 0 {
+		return n
+	}
+	return dateRFC(s)
 }
 
 func dateRFC(s string) int64 {

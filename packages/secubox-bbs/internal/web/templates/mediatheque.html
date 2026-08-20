@@ -1,0 +1,102 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Médiathèque #1056 : le podcaster EN ARBORESCENCE — un flux = un sous-dossier,
+  épisodes ordonnés par type et jouables en ligne. Gabarit AUTONOME, réutilise
+  newsroom.{css,js} (lecteur audio réel + écoute en continu). CSP stricte :
+  data-* + délégation, aucun style/onclick en ligne.
+-->
+{{define "mediatheque"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Titre}} — {{.Site}}</title>
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
+</head><body>
+
+<header class="mast">
+  <div class="mast-top">
+    <span>nœud <b>{{.Hote}}</b></span>
+    <span class="l">◆ médiathèque</span>
+    <span class="r">● {{len .Medias}} flux</span>
+  </div>
+  <div class="mast-main">
+    <a class="logo" href="/"><span class="mark serif">{{.Initiale}}</span><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">médiathèque souveraine</span></span></a>
+    <form class="drop" method="get" action="/rechercher">
+      <span class="ico" aria-hidden="true">⌕</span>
+      <input id="dropin" name="q" value="{{.Q}}" placeholder="Rechercher un épisode, un flux…" aria-label="Rechercher">
+      <span class="hintk">⌘K</span>
+    </form>
+    <div class="mast-actions">
+      <a class="btn" href="/">↩ rédaction</a>
+      <button class="ibtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="rail">
+    <div class="pnl">
+      <h3>Types</h3>
+      <div class="types">
+        <button class="type on" type="button" data-act="filt" data-f="all">✦ tout</button>
+        <button class="type" type="button" data-act="filt" data-f="podcast">🎧 podcasts</button>
+        <button class="type" type="button" data-act="filt" data-f="audiobook">📖 livres audio</button>
+        <button class="type" type="button" data-act="filt" data-f="serie">🎬 séries</button>
+      </div>
+    </div>
+    <div class="pnl">
+      <h3>Flux <span class="n">{{len .Medias}}</span></h3>
+      {{range .Medias}}<a class="rub" href="#f{{.ID}}"><span class="g">{{.Glyphe}}</span><span class="nm">{{.Titre}}</span><span class="ct">{{len .Episodes}}</span></a>{{end}}
+    </div>
+  </aside>
+
+  <main class="feed">
+    <div class="feedhead"><h2 class="serif">Médiathèque</h2><span class="sub">flux du podcaster · écoute en continu</span></div>
+    {{range $f := .Medias}}
+    <section class="podfeed" id="f{{$f.ID}}" data-k="{{$f.Type}}">
+      <div class="pfhead">
+        <div class="pfcover"><span class="pfglyph">{{$f.Glyphe}}</span><img class="pfimg" src="{{$f.Vignette}}" alt="" loading="lazy"></div>
+        <div class="pfmeta">
+          <span class="tag {{$f.Type}}">{{$f.Glyphe}} {{if eq $f.Type "audiobook"}}livre audio{{else if eq $f.Type "serie"}}série{{else}}podcast{{end}}</span>
+          <h3>{{$f.Titre}}</h3>
+          <span class="sub">{{len $f.Episodes}} épisode(s){{if eq $f.Type "audiobook"}} · chapitres 1→{{len $f.Episodes}}{{else}} · récent d'abord{{end}}</span>
+        </div>
+        <button class="btn primary" type="button" data-act="playfeed" aria-label="Tout écouter">▶ Tout écouter</button>
+      </div>
+      <ol class="eplist">
+        {{range $f.Episodes}}
+        <li class="ep">
+          <button class="play sm" type="button" data-act="play" data-media="{{.Media}}" data-feed="{{$f.ID}}" data-title="{{.Titre}}" data-sub="{{$f.Titre}}" aria-label="Écouter">▶</button>
+          <span class="epnum">{{.Numero}}</span>
+          <span class="eptitle">{{.Titre}}</span>
+          {{if .Duree}}<span class="epdur">{{.Duree}}</span>{{end}}
+        </li>
+        {{end}}
+      </ol>
+    </section>
+    {{else}}
+    <div class="pnl empty">Aucun média téléchargé pour l'instant.</div>
+    {{end}}
+  </main>
+
+  <aside class="rail rr">
+    <div class="pnl">
+      <h3>Écoute</h3>
+      <div class="teaser"><b>En continu.</b> Lance « Tout écouter » d'un flux, ou un épisode : la lecture enchaîne automatiquement le suivant. Un livre audio se lit du chapitre 1 au dernier ; un podcast, du plus récent au plus ancien.</div>
+    </div>
+  </aside>
+</div>
+
+<div class="dock"><div class="mplayer" id="mini">
+  <button class="ibtn tiny" type="button" data-act="prev" aria-label="Piste précédente">⏮</button>
+  <button class="play" type="button" data-act="mini" id="miniplay" aria-label="Lecture / pause">❚❚</button>
+  <button class="ibtn tiny" type="button" data-act="next" aria-label="Piste suivante">⏭</button>
+  <div class="info"><b id="mini-t">—</b><small id="mini-s">—</small></div>
+  <div class="prog"><i id="mini-prog"></i></div>
+  <span class="ptime mono" id="mini-time">0:00</span>
+  <button class="ibtn tiny" type="button" data-act="popout" aria-label="Lecteur en fenêtre séparée" title="Détacher — continue en surfant">⧉</button>
+  <button class="ibtn tiny" type="button" data-act="mini-close" aria-label="Fermer le lecteur">✕</button>
+</div></div>
+
+<script src="/static/newsroom.js?v={{.VCSS}}" defer></script>
+</body></html>{{end}}
