@@ -50,9 +50,13 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{
-  background:var(--paper); color:var(--text); min-height:100vh;
+  background-color:var(--paper); color:var(--text); min-height:100vh;
   font-family:"Inter","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
   font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  /* grain de papier — cohérent avec la rédaction (accueil) et billets */
+  background-image:radial-gradient(var(--line) .5px,transparent .5px),
+                   radial-gradient(var(--line) .5px,var(--paper) .5px);
+  background-size:22px 22px,22px 22px; background-position:0 0,11px 11px;
 }
 .serif{font-family:"Cinzel","Cormorant Garamond","Iowan Old Style",Palatino,Georgia,serif;letter-spacing:.005em}
 .mono{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.86em}
@@ -86,17 +90,20 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* ── barre haute ──────────────────────────────────────────────────────── */
 .bar{
   display:flex; align-items:center; gap:10px; padding:9px 14px;
-  border-bottom:1px solid var(--line); background:var(--soft);
+  border-bottom:2px solid var(--ink);
+  background:color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter:blur(10px);
 }
 .bar .sp{flex:1}
 .marque{
-  display:flex; align-items:center; gap:9px; font-weight:650;
-  font-size:15px; letter-spacing:-.01em; white-space:nowrap; text-decoration:none;
+  display:flex; align-items:center; gap:9px; font-family:"Cinzel",Georgia,serif; font-weight:700;
+  font-size:16px; letter-spacing:.01em; white-space:nowrap; text-decoration:none; color:var(--sky);
 }
 .marque .mark{
-  width:28px;height:28px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;
-  background:linear-gradient(135deg,var(--violet),var(--pink));color:#fff;font-weight:800;font-size:13px;
+  width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;position:relative;
+  background:var(--pink-soft);border:2px solid var(--ink);color:var(--ink);
+  font-family:"Cinzel",Georgia,serif;font-weight:700;font-size:14px;
 }
+.marque .mark::after{content:"◆";position:absolute;bottom:-5px;right:-5px;font-size:.55rem;color:var(--pink)}
 .chip{
   font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-size:11px;
   padding:3px 8px; border-radius:999px; border:1px solid var(--line);
