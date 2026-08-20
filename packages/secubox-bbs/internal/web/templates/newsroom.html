@@ -110,6 +110,7 @@
           <span>{{.Author}}</span><span>· {{.Posts}} msg</span><span>· {{date .LastPostAt}}</span>
         </span>
         <span class="grow"></span>
+        {{if $.V.Connecte}}<a class="btn" href="/article/nouveau?t={{.ID}}">✍️ Co-écrire</a>{{end}}
         <a class="btn discuss" href="/t/{{.ID}}">💬 Discuter</a>
       </div>
     </article>
@@ -127,8 +128,10 @@
       {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
     </div>
     <div class="pnl">
-      <h3>Rédaction collaborative</h3>
-      <div class="teaser"><b>Bientôt.</b> Écrire un article à plusieurs mains à partir d'un dossier — source (url, vidéo, podcast, film, livre, conférence), débat, brouillon partagé, co-auteurs, publication dans la gazette.</div>
+      <h3>Rédaction collaborative <span class="n">{{len .Articles}}</span></h3>
+      {{range .Articles}}<a class="billet" href="/article/{{.ID}}"><b>✍️ {{.Title}}</b><div class="ex">{{len .CoAuteurs}} rédacteur(s) · {{.NbParts}} contribution(s)</div></a>
+      {{else}}<div class="teaser">Aucun article en cours. Écrivez-en un à plusieurs mains, à partir d'un dossier ou d'une page blanche.</div>{{end}}
+      {{if .V.Connecte}}<a class="billet" href="/article/nouveau"><b>＋ Nouvel article</b><div class="ex">à plusieurs mains → publié dans la gazette</div></a>{{end}}
     </div>
   </aside>
 </div>

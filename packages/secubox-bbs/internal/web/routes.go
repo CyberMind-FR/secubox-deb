@@ -54,6 +54,12 @@ type page struct {
 	// déduit, pour pré-remplir le composeur avec un aperçu.
 	SourceURL string
 	SrcType   SourceType
+	// Article collaboratif (#1056 stage 3) : l'article ouvert (Art) et ses
+	// contributions (Parts), ou la liste des brouillons (Articles) pour la
+	// rédaction.
+	Art      store.Article
+	Parts    []store.ArticlePart
+	Articles []store.Article
 	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
 	// extrait, date, lien de chaque billet, pas seulement les fils publies
 	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
@@ -160,6 +166,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/invite/", s.invitation)
 	s.mux.HandleFunc("/media", s.media)
 	s.mux.HandleFunc("/player", s.player)
+	s.mux.HandleFunc("/article/", s.article)
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
 	s.mux.HandleFunc("/mp", s.mp)
 	s.mux.HandleFunc("/mp/", s.mp)
@@ -455,6 +462,9 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// un article), classé par son épisode le plus récent — dynamique façon RSS :
 	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
 	p.News = s.composerRedaction(p.Threads)
+	// #1056 stage 3 : les articles collaboratifs EN COURS, pour la colonne
+	// « rédaction collaborative » (remplace le teaser).
+	p.Articles, _ = s.st.Articles("draft", 8)
 	if s.bil != nil {
 		p.Billets, p.BilletsErr = s.vitrineBillets()
 		if len(p.Billets) > 8 {

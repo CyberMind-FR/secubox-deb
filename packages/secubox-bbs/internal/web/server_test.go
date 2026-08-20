@@ -376,18 +376,20 @@ func TestLaFeuilleDeStyleEstAppeleeAvecSonEmpreinte(t *testing.T) {
 	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	body := w.Body.String()
 
-	if !strings.Contains(body, "/static/bbs.css?v=") {
+	// Depuis #1056 la RACINE est la rédaction (gabarit autonome) : sa feuille est
+	// newsroom.css. L'empreinte reste le seul levier de cache face au WAF.
+	if !strings.Contains(body, "/static/newsroom.css?v=") {
 		t.Errorf("la feuille est appelee sans empreinte — un cache perime restera")
 	}
-	if strings.Contains(body, `/static/bbs.css"`) {
+	if strings.Contains(body, `/static/newsroom.css"`) {
 		t.Error("appel sans empreinte encore present")
 	}
 	// L'empreinte doit etre stable d'un rendu a l'autre, sinon le navigateur
 	// retelecharge a chaque page et le cache ne sert plus a rien.
 	w2 := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w2, httptest.NewRequest("GET", "/", nil))
-	v1 := entre(body, "/static/bbs.css?v=", `"`)
-	v2 := entre(w2.Body.String(), "/static/bbs.css?v=", `"`)
+	v1 := entre(body, "/static/newsroom.css?v=", `"`)
+	v2 := entre(w2.Body.String(), "/static/newsroom.css?v=", `"`)
 	if v1 == "" || v1 != v2 {
 		t.Errorf("empreinte instable : %q puis %q", v1, v2)
 	}

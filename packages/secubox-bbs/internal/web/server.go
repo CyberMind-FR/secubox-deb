@@ -165,6 +165,18 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
 		},
+		// initiales2 : deux lettres pour une pastille d'auteur (#1056 stage 3).
+		"initiales2": func(h string) string {
+			h = strings.TrimSpace(strings.TrimPrefix(h, "@"))
+			r := []rune(h)
+			if len(r) == 0 {
+				return "?"
+			}
+			if len(r) == 1 {
+				return strings.ToUpper(string(r))
+			}
+			return strings.ToUpper(string(r[:2]))
+		},
 		// decalage rend la classe d'indentation d'un sous-salon.
 		//
 		// UNE CLASSE, PAS UN STYLE EN LIGNE. La politique de securite de contenu
@@ -214,6 +226,13 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		pages["player"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit player : %w", err)
+	}
+	// Article collaboratif (#1056 stage 3), gabarit autonome (éditeur à plusieurs mains).
+	if t, err := template.New("article.html").Funcs(fn).
+		ParseFS(assets, "templates/article.html"); err == nil {
+		pages["article"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit article : %w", err)
 	}
 	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
 	// L'empreinte de cache (?v=) couvre les TROIS feuilles/scripts servis : le

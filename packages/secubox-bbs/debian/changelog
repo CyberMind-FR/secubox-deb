@@ -1,3 +1,16 @@
+secubox-bbs (0.28.8-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 3 — ARTICLE COLLABORATIF. Écrire à PLUSIEURS MAINS depuis un
+    dossier (« Co-écrire ») ou une page blanche : contributions attribuées et
+    ordonnées (qui a écrit quoi), co-auteurs déduits, brouillon PRIVÉ sur le
+    BBS. « Publier dans la gazette » assemble les contributions et les envoie
+    sur billets (public) avec attribution. La colonne « rédaction collaborative »
+    de l'accueil liste les brouillons en cours.
+  * Nouveau schéma (0021_articles) : tables articles + article_parts. Éditeur
+    autonome /article/{id} (newsroom.css). Réservé aux membres, CSP stricte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 19:20:00 +0200
+
 secubox-bbs (0.28.7-1~bookworm1) bookworm; urgency=medium
 
   * #1056 STAGE 2 — « Déposer une source ». Coller une URL dans la barre de la
