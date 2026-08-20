@@ -1,0 +1,61 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= cards.css
+ * Les surfaces bordées de contenu, toutes bâties sur le même socle
+ * (var(--av-surface) + var(--av-line) + rayon + ombre discrète) :
+ *   - av-card et ses variantes éditoriales ;
+ *   - av-service-card : la ligne « icône + libellé + état » d'un service ;
+ *   - av-post : la publication (BBS / Mastodon), fiche éditoriale et non carte
+ *     de réseau commercial ;
+ *   - av-dashboard / av-stat / av-meter : les vignettes chiffrées.
+ */
+
+/* ── cartes ──────────────────────────────────────────────────────────────── */
+.av-card{background:var(--av-surface);border:1px solid var(--av-line);border-radius:var(--av-radius-lg);
+  padding:var(--av-space-6);box-shadow:var(--av-shadow-xs);display:flex;flex-direction:column;gap:var(--av-space-3)}
+.av-card h3{font-family:var(--av-font-display);font-weight:600;font-size:1.1rem}
+.av-card--feature{background:linear-gradient(180deg,var(--av-blue-light),var(--av-surface));
+  border-color:color-mix(in srgb,var(--av-blue) 22%,var(--av-line))}
+.av-card--info{border-left:4px solid var(--av-cyan)}
+.av-card--success{border-left:4px solid var(--av-green)}
+.av-card--warning{border-left:4px solid var(--av-orange)}
+.av-card--critical{border-left:4px solid var(--av-red)}
+.av-card--transparent{background:transparent;border-style:dashed;box-shadow:none}
+
+/* ── cartes de service ───────────────────────────────────────────────────── */
+.av-service-card{display:flex;align-items:center;gap:var(--av-space-4);background:var(--av-surface);
+  border:1px solid var(--av-line);border-radius:var(--av-radius-lg);padding:var(--av-space-4);box-shadow:var(--av-shadow-xs)}
+.av-service-icon{flex:none;width:46px;height:46px;border-radius:var(--av-radius-md);display:grid;place-items:center;
+  font-size:1.4rem;background:var(--av-blue-light);color:var(--av-primary);border:1px solid color-mix(in srgb,var(--av-blue) 18%,var(--av-line))}
+.av-service-body{min-width:0;flex:1} .av-service-title{font-weight:600;font-family:var(--av-font-display)}
+.av-service-description{font-size:.88rem;color:var(--av-text-muted)}
+
+/* ── publication (BBS / Mastodon) ────────────────────────────────────────── */
+.av-post{background:var(--av-surface);border:1px solid var(--av-line);border-radius:var(--av-radius-lg);
+  padding:var(--av-space-6);box-shadow:var(--av-shadow-xs);display:flex;flex-direction:column;gap:var(--av-space-3)}
+.av-post-header{display:flex;gap:var(--av-space-3);align-items:center}
+.av-post-avatar{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;
+  color:#fff;background:linear-gradient(135deg,var(--av-blue),var(--av-cyan));font-family:var(--av-font-display)}
+.av-post-author{font-weight:600} .av-post-meta{font-size:.8rem;color:var(--av-text-muted);display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.av-post-content{color:var(--av-text-soft);max-width:var(--av-reading-width)}
+.av-post-media{border:1px solid var(--av-line);border-radius:var(--av-radius-md);overflow:hidden;
+  aspect-ratio:16/9;background:var(--av-surface-2) center/cover;display:grid;place-items:center;color:var(--av-text-muted)}
+.av-post-actions{display:flex;gap:var(--av-space-1);flex-wrap:wrap;border-top:1px solid var(--av-line);padding-top:var(--av-space-3)}
+.av-post-actions .av-button{--_bg:transparent;--_bd:transparent;color:var(--av-text-muted);padding:.35rem .6rem;font-size:.85rem}
+.av-post-actions .av-button:hover{--_bg:var(--av-surface-2);color:var(--av-primary)}
+
+/* ── vignettes chiffrées ─────────────────────────────────────────────────── */
+.av-dashboard{display:grid;gap:var(--av-space-4);grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.av-stat{background:var(--av-surface);border:1px solid var(--av-line);border-radius:var(--av-radius-lg);
+  padding:var(--av-space-4);display:flex;flex-direction:column;gap:.15rem}
+.av-stat-value{font-family:var(--av-font-display);font-weight:700;font-size:1.9rem;line-height:1;
+  color:var(--av-blue-deep);font-variant-numeric:tabular-nums}
+:root[data-theme="dark"] .av-stat-value,:root:not([data-theme="light"]) .av-stat-value{color:var(--av-primary)}
+.av-stat-label{font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;color:var(--av-text-muted)}
+.av-meter{height:8px;border-radius:var(--av-radius-pill);background:var(--av-surface-2);overflow:hidden;margin-top:.4rem}
+.av-meter>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--av-cyan),var(--av-blue))}

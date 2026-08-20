@@ -1,0 +1,81 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= peertube.css
+ * INTÉGRATION — PeerTube.
+ *
+ * Cas « B » du patron : surcharge des classes connues de PeerTube pour les
+ * brancher sur les jetons --av-. PeerTube expose quelques variables SCSS
+ * compilées (--mainColor, --bg-color…) : on les redéfinit AUSSI quand elles
+ * existent, ce qui repeint une bonne part de l'interface d'un coup.
+ *
+ * ⚠ À CHARGER COMME THÈME/INSTALLATION CSS, jamais en patchant le code Angular.
+ * Passer par l'admin PeerTube (Configuration → Apparence → CSS personnalisé)
+ * ou un plugin de thème, après css/aletheiavox.css. Vérifier le DOM réel : les
+ * classes évoluent d'une version à l'autre (voir INTEGRATION.md).
+ *
+ * PRINCIPE PROPRE À LA VIDÉO : la VIGNETTE RESTE REINE. On habille le chrome
+ * autour (en-tête, menus, métadonnées, commentaires) mais on ne touche ni au
+ * cadrage ni au ratio des miniatures et du lecteur — l'image domine toujours. */
+
+/* variables PeerTube rebranchées sur AletheiaVox (inertes si absentes) */
+:root{
+  --mainColor:var(--av-primary);
+  --mainHoverColor:var(--av-blue-deep);
+  --mainBackgroundColor:var(--av-bg);
+  --mainForegroundColor:var(--av-text);
+  --secondaryColor:var(--av-cyan);
+  --menuBackgroundColor:var(--av-surface);
+  --menuForegroundColor:var(--av-text-soft);
+  --submenuBackgroundColor:var(--av-surface-2);
+  --inputBackgroundColor:var(--av-surface);
+  --greyForegroundColor:var(--av-text-muted);
+}
+
+/* fond + typographie */
+body,.main-col{background:var(--av-bg);color:var(--av-text);font-family:var(--av-font-body)}
+h1,h2,h3,.video-info-name{font-family:var(--av-font-display)}
+
+/* en-tête + menu latéral */
+.header,.top-menu{background:var(--av-surface);border-bottom:1px solid var(--av-line)}
+.logo,.instance-name{color:var(--av-text);font-family:var(--av-font-display)}
+.sub-menu{background:var(--av-surface-2);border-bottom:1px solid var(--av-line)}
+.sub-menu .title-page{color:var(--av-text)}
+.menu,.menu-block{background:var(--av-surface)}
+.menu a{color:var(--av-text-soft)}
+.menu a.active,.menu a:hover{color:var(--av-primary);background:var(--av-blue-light)}
+
+/* miniature : cadre av discret, MAIS l'image garde son ratio et sa place */
+.video-miniature{background:transparent}
+.video-miniature .video-thumbnail{border-radius:var(--av-radius-md);overflow:hidden;border:1px solid var(--av-line)}
+.video-miniature .video-miniature-name{color:var(--av-text);font-weight:600}
+.video-miniature .video-miniature-created-at,
+.video-miniature .video-miniature-account{color:var(--av-text-muted)}
+
+/* fiche vidéo : métadonnées autour du lecteur */
+.video-info .video-info-name{color:var(--av-text)}
+.video-info .video-info-first-row{color:var(--av-text-soft)}
+.video-info .video-info-description{color:var(--av-text-soft);max-width:var(--av-reading-width)}
+.action-button{border-radius:var(--av-radius-md)}
+
+/* lecteur : on borne juste le rayon du conteneur, jamais la vidéo elle-même */
+.player,.video-js{border-radius:var(--av-radius-lg) var(--av-radius-lg) 0 0;overflow:hidden}
+
+/* commentaires */
+.comments,.comment-html{color:var(--av-text-soft)}
+.comment .comment-account-date .comment-account{color:var(--av-text);font-weight:600}
+.comment .comment-account-date .comment-date{color:var(--av-text-muted)}
+.root-comment{border-bottom:1px solid var(--av-line);padding:var(--av-space-4) 0}
+
+/* chaîne / compte */
+.channel,.account-info,.sub-channel{background:var(--av-surface);border:1px solid var(--av-line);border-radius:var(--av-radius-lg)}
+.channel .actor-display-name,.account-info .actor-display-name{font-family:var(--av-font-display);color:var(--av-text)}
+
+/* boutons */
+.peertube-button,.orange-button,button[type="submit"]{
+  background:var(--av-primary);color:#fff;border-radius:var(--av-radius-md);font-weight:600}
+.grey-button,.peertube-button.grey{background:var(--av-surface-2);color:var(--av-text);border:1px solid var(--av-line-strong)}

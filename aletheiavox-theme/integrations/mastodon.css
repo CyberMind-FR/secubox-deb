@@ -1,0 +1,66 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CMSD-1.0
+ * Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+ * Source-Disclosed License — All rights reserved except as expressly granted.
+ * See LICENCE-CMSD-1.0.md for terms.
+ */
+
+/* ============================================================= mastodon.css
+ * INTÉGRATION — Mastodon (interface web « advanced/glitch »).
+ *
+ * Cas « B » du patron : Mastodon n'expose pas de variables CSS réutilisables,
+ * il stylise des CLASSES en dur. On surcharge donc ses sélecteurs connus pour
+ * qu'ils empruntent les jetons --av-.
+ *
+ * ⚠ À CHARGER COMME THÈME PERSONNALISÉ, jamais en patchant le JS ou le DOM.
+ * Déposer ce fichier dans public/custom.css de l'instance (ou le servir via le
+ * réglage « CSS personnalisé » de l'admin), après css/aletheiavox.css. Aucune
+ * classe de Mastodon n'est renommée : on ne fait que repeindre par-dessus. Les
+ * noms de classes ci-dessous peuvent varier selon la version — vérifier le DOM
+ * réel avant de déployer (voir INTEGRATION.md, étape « inspecter le DOM »).
+ *
+ * Prérequis : les jetons --av- de css/tokens.css sont chargés en amont. */
+
+/* fond général + typographie */
+body,.ui,.columns-area{background:var(--av-bg);color:var(--av-text);font-family:var(--av-font-body)}
+.column-header,.drawer__header,h1,h2,h3{font-family:var(--av-font-display)}
+
+/* barre de navigation / en-tête de colonne */
+.navigation-bar,.column-header{background:var(--av-surface);color:var(--av-text);border-color:var(--av-line)}
+.column-header__button,.column-header__back-button{color:var(--av-primary)}
+
+/* colonne = surface de contenu */
+.column>.scrollable,.column{background:var(--av-surface);border-radius:var(--av-radius-lg);border:1px solid var(--av-line)}
+
+/* un statut = une publication (cf. .av-post) */
+.status{background:var(--av-surface);border-bottom:1px solid var(--av-line);padding:var(--av-space-4)}
+.status__content{color:var(--av-text-soft);font-size:1rem;line-height:1.6;max-width:var(--av-reading-width)}
+.status__content a{color:var(--av-primary)}
+.status__relative-time,.status__display-name .display-name__account{color:var(--av-text-muted)}
+.status__action-bar__button,.icon-button{color:var(--av-text-muted)}
+.status__action-bar__button:hover,.icon-button:hover{color:var(--av-primary)}
+
+/* compte / profil */
+.account,.account__header{background:var(--av-surface);border-color:var(--av-line)}
+.account__display-name strong,.account__header__tabs__name h1{font-family:var(--av-font-display);color:var(--av-text)}
+.account__header__bio{color:var(--av-text-soft)}
+
+/* boîte de composition → carte av */
+.compose-form{background:var(--av-surface);border:1px solid var(--av-line);border-radius:var(--av-radius-lg);padding:var(--av-space-4)}
+.compose-form__autosuggest-wrapper,.autosuggest-textarea__textarea,.spoiler-input__input{
+  background:var(--av-surface);color:var(--av-text);border:1px solid var(--av-line-strong);border-radius:var(--av-radius-md)}
+.compose-form__publish .button{background:var(--av-primary);color:#fff;border-radius:var(--av-radius-md)}
+
+/* boutons génériques → av-button--primary */
+.button{background:var(--av-primary);color:#fff;border:1px solid var(--av-blue-deep);border-radius:var(--av-radius-md);font-weight:600}
+.button:hover{filter:brightness(1.06)}
+.button.button-secondary{background:var(--av-cyan-soft);color:var(--av-blue-deep);border-color:color-mix(in srgb,var(--av-cyan) 45%,transparent)}
+
+/* notifications */
+.notification{background:var(--av-surface);border-bottom:1px solid var(--av-line)}
+.notification__message{color:var(--av-text-soft)}
+.notification.notification-favourite .status__content{color:var(--av-text-muted)}
+
+/* Les vignettes média gardent leur ratio et restent au premier plan : on ne
+   les recadre pas, la conversation vit autour d'elles. */
+.media-gallery,.video-player{border-radius:var(--av-radius-md);overflow:hidden}
