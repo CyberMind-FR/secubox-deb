@@ -19,18 +19,33 @@
 /* AletheiaVox : fond BLANC par defaut, sombre non impose par OS. */
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--fond);color:var(--encre);font-family:var(--corps);
+body{margin:0;background-color:var(--fond);color:var(--encre);font-family:var(--corps);
   font-size:14px;line-height:1.55;font-variant-numeric:tabular-nums;
-  -webkit-font-smoothing:antialiased}
+  -webkit-font-smoothing:antialiased;
+  /* grain de papier — pointillé halftone très discret, comme la rédaction */
+  background-image:radial-gradient(var(--filet) .5px,transparent .5px),
+                   radial-gradient(var(--filet) .5px,var(--fond) .5px);
+  background-size:22px 22px,22px 22px;background-position:0 0,11px 11px}
 a{color:var(--azur);text-decoration:none}
 a:hover{text-decoration:underline}
 img{max-width:100%;height:auto;display:block}
 
-/* ── ossature ──────────────────────────────────────────── */
-.site-header{max-width:760px;margin:0 auto;padding:20px 18px 14px;
-  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:2px solid var(--or)}
-.site-title{font-family:var(--titre);font-size:21px;font-weight:700;letter-spacing:.015em;color:var(--bleu)}
+/* ── masthead « gazette » (aligné sur la rédaction) ────────── */
+.site-header{max-width:760px;margin:0 auto;padding:0 0 0;border-bottom:2px solid var(--encre)}
+.mast-edition{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:8px 18px 5px;border-bottom:1px solid var(--filet);
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--gris)}
+.mast-edition .me-l{color:var(--bleu)}
+.mast-main{display:flex;align-items:center;gap:13px;padding:11px 18px 12px}
+.mast-mark{width:42px;height:42px;flex:none;border:2px solid var(--encre);border-radius:11px;
+  display:grid;place-items:center;font-family:var(--titre);font-weight:700;font-size:1.25rem;
+  background:var(--sourd);color:var(--encre);position:relative}
+.mast-mark:hover{text-decoration:none}
+.mast-mark::after{content:"◆";position:absolute;bottom:-6px;right:-6px;font-size:.62rem;color:var(--or)}
+.mast-id{display:flex;flex-direction:column;line-height:1.15}
+.site-title{font-family:var(--titre);font-size:22px;font-weight:700;letter-spacing:.015em;color:var(--bleu)}
 .site-title:hover{text-decoration:none;color:var(--bleu)}
+.mast-sub{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--gris)}
 .tagline{font-size:12px;color:var(--gris)}
 #main{max-width:760px;margin:0 auto;padding:20px 18px 40px}
 .site-footer{max-width:760px;margin:0 auto;padding:16px 18px 40px;
