@@ -1,3 +1,24 @@
+secubox-bbs (0.28.2-1~bookworm1) bookworm; urgency=medium
+
+  * #1056 STAGE 1 — nouvelle interface d'accueil « AletheiaVox : rédaction sur
+    papier ». La racine adopte une mise en page de gazette (masthead, rubriques,
+    fil de DOSSIERS, colonne des derniers billets) au lieu de la coquille à
+    trois colonnes — qui reste inchangée sur toutes les autres pages. Gabarit
+    AUTONOME (`templates/newsroom.html`, define "newsroom") + feuille et script
+    dédiés (`static/newsroom.{css,js}`), compilés à part ; bbs.css et layout.html
+    ne sont pas touchés.
+  * Chaque fil récent devient un dossier « papier » : type de source déduit
+    (🎧 audio / 🎬 vidéo / 🔗 source / 💬 discussion), tampons publié/local,
+    auteur, messages, date. Le podcast se LIT EN LIGNE (lecteur audio réel, le
+    média du fil est joué ; media-src 'self' autorise /media/ep/…) avec un
+    mini-lecteur et l'ÉCOUTE EN CONTINU (enchaînement automatique sur le
+    podcast suivant). La vidéo renvoie à la page du fil, qui intègre le lecteur.
+  * CSP stricte respectée : aucun style ni onclick en ligne — actions par
+    attributs data-* et délégation de clic (comme coquille.js). Thème
+    papier/nuit persistant. Test d'exécution hors-ligne du gabarit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 15:30:00 +0200
+
 secubox-bbs (0.28.1-1~bookworm1) bookworm; urgency=medium
 
   * CORRECTIF #1056 : les adresses de billets publiés perdaient le domaine.

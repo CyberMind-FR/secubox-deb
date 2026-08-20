@@ -1,0 +1,122 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  AletheiaVox — accueil « rédaction sur papier » (#1056 stage 1).
+
+  Gabarit AUTONOME : il ne réutilise PAS "layout", ne charge PAS bbs.css. Les
+  autres pages gardent la coquille à trois colonnes ; seule la racine adopte la
+  rédaction. CSP stricte respectée — aucun onclick ni style en ligne : les
+  actions sont des attributs data-*, la mise en forme vit dans newsroom.css.
+-->
+{{define "newsroom"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.Titre}} — {{.Site}}</title>
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
+</head><body>
+
+<header class="mast">
+  <div class="mast-top">
+    <span>nœud <b>{{.Hote}}</b></span>
+    <span class="l">◆ {{.Stats.Threads}} fils · {{.Stats.Posts}} messages</span>
+    <span class="r">● {{.Stats.Billets}} billets publiés</span>
+  </div>
+  <div class="mast-main">
+    <a class="logo" href="/"><span class="mark serif">{{.Initiale}}</span><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">la gazette souveraine</span></span></a>
+    <form class="drop" method="get" action="/rechercher">
+      <span class="ico" aria-hidden="true">⌕</span>
+      <input id="dropin" name="q" value="{{.Q}}" placeholder="Rechercher un fil, un billet, une source…" aria-label="Rechercher">
+      <span class="hintk">⌘K</span>
+    </form>
+    <div class="mast-actions">
+      {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
+      {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}
+      <button class="ibtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="rail">
+    <div class="pnl">
+      <h3>Rubriques <span class="n">{{len .Cats}}</span></h3>
+      <a class="rub on" href="/"><span class="g">🗞️</span><span class="nm">À la une</span><span class="ct">{{.Stats.Threads}}</span></a>
+      {{range .Cats}}<a class="rub{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="g">{{if .Profondeur}}↳{{else}}◆{{end}}</span><span class="nm">{{.Title}}</span><span class="ct">{{.Threads}}</span></a>{{end}}
+    </div>
+    <div class="pnl">
+      <h3>Types de source</h3>
+      <div class="types">
+        <button class="type on" type="button" data-act="filt" data-f="all">✦ tout</button>
+        <button class="type" type="button" data-act="filt" data-f="fil">💬 fils</button>
+        <button class="type" type="button" data-act="filt" data-f="url">🔗 sources</button>
+        <button class="type" type="button" data-act="filt" data-f="podcast">🎧 audio</button>
+        <button class="type" type="button" data-act="filt" data-f="video">🎬 vidéo</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="feed">
+    <div class="feedhead"><h2 class="serif">À la une</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
+    {{range .Threads}}
+    <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if .Source}}url{{else}}fil{{end}}">
+      {{if .Published}}<span class="stamp pub">publié</span>{{else if ne .Visibility "public"}}<span class="stamp loc">local</span>{{end}}
+      <div class="src">
+        <div class="kind">
+          {{if eq .MediaKind "audio"}}<span class="em">🎧</span><span class="lb">podcast</span>
+          {{else if eq .MediaKind "video"}}<span class="em">🎬</span><span class="lb">vidéo</span>
+          {{else if .Source}}<span class="em">🔗</span><span class="lb">source</span>
+          {{else}}<span class="em">💬</span><span class="lb">discussion</span>{{end}}
+        </div>
+        <div class="body">
+          <div class="origin">{{if .Source}}{{.Source}}{{else}}discussion locale{{end}}</div>
+          <h2><a href="/t/{{.ID}}">{{.Title}}</a></h2>
+        </div>
+      </div>
+      {{if eq .MediaKind "audio"}}
+      <div class="prev"><div class="player">
+        <button class="play" type="button" data-act="play" data-media="{{.MediaURL}}" data-title="{{.Title}}" data-sub="{{.Author}}" data-href="/t/{{.ID}}" aria-label="Écouter">▶</button>
+        <div class="wave" aria-hidden="true"></div>
+        <a class="ptime" href="/t/{{.ID}}">ouvrir ↗</a>
+      </div></div>
+      {{else if eq .MediaKind "video"}}
+      <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
+      {{end}}
+      <div class="dfoot">
+        <span class="meta">
+          {{if eq .Visibility "public"}}<span class="pill pub">public</span>{{else}}<span class="pill loc">local</span>{{end}}
+          <span>{{.Author}}</span><span>· {{.Posts}} msg</span><span>· {{date .LastPostAt}}</span>
+        </span>
+        <span class="grow"></span>
+        <a class="btn discuss" href="/t/{{.ID}}">💬 Discuter</a>
+      </div>
+    </article>
+    {{else}}
+    <div class="pnl empty">Aucun dossier pour l'instant.{{if .V.Connecte}} Ouvrez le premier fil.{{end}}</div>
+    {{end}}
+  </main>
+
+  <aside class="rail rr">
+    <div class="pnl">
+      <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
+      {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
+      {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+      {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
+    </div>
+    <div class="pnl">
+      <h3>Rédaction collaborative</h3>
+      <div class="teaser"><b>Bientôt.</b> Écrire un article à plusieurs mains à partir d'un dossier — source (url, vidéo, podcast, film, livre, conférence), débat, brouillon partagé, co-auteurs, publication dans la gazette.</div>
+    </div>
+  </aside>
+</div>
+
+<div class="dock"><div class="mplayer" id="mini">
+  <button class="play" type="button" data-act="mini" id="miniplay" aria-label="Lecture / pause">❚❚</button>
+  <div class="info"><b id="mini-t">—</b><small id="mini-s">—</small></div>
+  <div class="prog"><i id="mini-prog"></i></div>
+  <span class="ptime mono" id="mini-time">0:00</span>
+  <button class="ibtn" type="button" data-act="mini-close" aria-label="Fermer le lecteur">✕</button>
+</div></div>
+{{if .V.Connecte}}<a class="fab" href="/nouveau"><span class="p">＋</span> Nouveau fil</a>{{end}}
+
+<script src="/static/newsroom.js?v={{.VCSS}}" defer></script>
+</body></html>{{end}}

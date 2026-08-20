@@ -192,10 +192,27 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		}
 		pages[nom] = t
 	}
+	// #1056 stage 1 : l'accueil « rédaction » est un gabarit AUTONOME (define
+	// "newsroom"), sans "layout" ni bbs.css. On le compile à part — les autres
+	// pages gardent la coquille à trois colonnes intacte.
+	if t, err := template.New("newsroom.html").Funcs(fn).
+		ParseFS(assets, "templates/newsroom.html"); err == nil {
+		pages["newsroom"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit newsroom : %w", err)
+	}
 	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
-	if b, err := assets.ReadFile("static/bbs.css"); err == nil {
-		sum := sha256.Sum256(b)
-		s.vCSS = base64.RawURLEncoding.EncodeToString(sum[:6])
+	// L'empreinte de cache (?v=) couvre les TROIS feuilles/scripts servis : le
+	// WAF de la board efface Cache-Control/ETag (voir layout.html), donc une
+	// feuille changée sans empreinte neuve resterait invisible au navigateur.
+	{
+		h := sha256.New()
+		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js"} {
+			if b, err := assets.ReadFile(f); err == nil {
+				h.Write(b)
+			}
+		}
+		s.vCSS = base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:6])
 	}
 	if opt.AuthSocket != "" {
 		s.authAmont = clientAuthSocket(opt.AuthSocket)
