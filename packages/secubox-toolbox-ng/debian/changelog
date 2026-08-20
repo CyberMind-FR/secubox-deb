@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.44-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : caractérisation d'attaquants #1070 — détection d'anomalie d'hôte
+    (phase A, --host-anomaly défaut on), signatures d'outils + escalate
+    produit-absent (F), ban nft natif opt-in --nft-ban (B, nécessite
+    CAP_NET_ADMIN+AF_NETLINK — non activé côté service), empreinte d'outils
+    nommée (C, champ tool au journal), corrélateur de campagnes --correlate (D),
+    clé JA4 --ja4-header (E). Aucune modif de sbxmitm.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 14:00:00 +0200
+
 secubox-toolbox-ng (0.1.43-1~bookworm1) bookworm; urgency=medium
 
   * Reconciliation du split-brain toolbox-ng. Le merge feature/740 du 17 aout
