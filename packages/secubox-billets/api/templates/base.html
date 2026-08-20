@@ -2,42 +2,37 @@
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-  Source-Disclosed License — All rights reserved except as expressly granted.
-  See LICENCE-CMSD-1.0.md for terms.
+  Face publique billets — IDENTIQUE à la rédaction (newsroom) du BBS : même
+  feuille (newsroom.css), même masthead, mêmes cartes « dossier ».
 -->
-
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="sbx-no-health-banner" content="1"><!-- public blog: suppress the operator health banner -->
-
+<meta name="sbx-no-health-banner" content="1">
 <title>{% block title %}{{ site_title }}{% endblock %}</title>
-<link rel="stylesheet" href="/static/billets.css?v=av4">
+<link rel="stylesheet" href="/static/newsroom.css?v=nr1">
 <link rel="alternate" type="application/atom+xml" title="{{ site_title }}" href="/feed.xml">
 <link rel="alternate" type="application/feed+json" title="{{ site_title }}" href="/feed.json">
 {% block head %}{% endblock %}
 </head>
 <body>
-<header class="site-header">
-  <div class="mast-edition">
-    <span class="me-l">◆ gazette souveraine</span>
-    <span class="me-r">{{ tagline }}</span>
+<header class="mast">
+  <div class="mast-top">
+    <span class="l">◆ gazette souveraine</span>
+    <span>{{ tagline }}</span>
+    <span class="r">● public</span>
   </div>
   <div class="mast-main">
-    <a class="mast-mark" href="/" aria-hidden="true">A</a>
-    <div class="mast-id">
-      <a class="site-title" href="/">{{ site_title }}</a>
-      <span class="mast-sub">la face publique · AletheiaVox</span>
-    </div>
+    <a class="logo" href="/"><span class="mark serif">A</span><span class="logo-t"><span class="logo-h">{{ site_title }}</span><span class="sub">la face publique · AletheiaVox</span></span></a>
   </div>
 </header>
-<main id="main">
-{% block content %}{% endblock %}
-</main>
-<footer class="site-footer">
-  <a href="/feed.xml">Atom</a> · <a href="/feed.json">JSON</a> · billets
-</footer>
+<div class="pub">
+  <main class="feed">
+  {% block content %}{% endblock %}
+  </main>
+</div>
+<footer class="pub-footer"><a href="/feed.xml">Atom</a> · <a href="/feed.json">JSON</a> · billets · gk2</footer>
 <script src="/static/billets.js?v=5" defer></script>
 </body>
 </html>
