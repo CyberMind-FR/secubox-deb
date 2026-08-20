@@ -1,3 +1,11 @@
+secubox-metrics (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * Panneau WAF & Security : lit l'état PROPRE du WAF (#1070) — bans nft natifs
+    (bans.jsonl) + menaces du jour/cumulées (waf-history.json), désormais lisibles
+    via le groupe secubox-waf. cscli restait inaccessible au module → panneau à 0.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 18:30:00 +0200
+
 secubox-metrics (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Tableau de bord des campagnes d'attaque (#1070 phase D) : endpoint
