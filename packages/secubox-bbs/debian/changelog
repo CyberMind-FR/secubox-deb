@@ -1,3 +1,13 @@
+secubox-bbs (0.28.11-1~bookworm1) bookworm; urgency=medium
+
+  * THÈME BBS unifié : le SHELL (fils, salons, messages, compte, console…)
+    rejoint l'identité de la rédaction — grain de papier (pointillé halftone)
+    sur le fond, barre haute à filet d'encre + marque Cinzel (pastille bordée,
+    accent doré). La palette et les polices AletheiaVox étaient déjà partagées ;
+    tout le BBS est désormais cohérent, de l'accueil aux pages internes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 20 Aug 2026 21:40:00 +0200
+
 secubox-bbs (0.28.10-1~bookworm1) bookworm; urgency=medium
 
   * #1056 rédaction : un dossier « source vidéo » (déposé) montre désormais une
