@@ -102,6 +102,49 @@ func TestMediathequeExecute(t *testing.T) {
 	}
 }
 
+func TestArticleExecute(t *testing.T) {
+	fn := template.FuncMap{
+		"rendu": Render, "date": humain, "taille": octets,
+		"vignette":   func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
+		"decalage":   func(n int) string { return "" },
+		"initiales2": func(h string) string { return "XX" },
+	}
+	tpl, err := template.New("article.html").Funcs(fn).ParseFS(assets, "templates/article.html")
+	if err != nil {
+		t.Fatalf("parse : %v", err)
+	}
+	// Édition d'un brouillon à deux mains.
+	edit := page{Titre: "Notre lecture", Site: "SecuBox",
+		Art:   store.Article{ID: 5, Title: "Notre lecture", Status: "draft", CoAuteurs: []string{"gandalf", "anibal"}, NbParts: 2},
+		Parts: []store.ArticlePart{{Auteur: "gandalf", Body: "Intro."}, {Auteur: "anibal", Body: "Contexte."}},
+		V:     visiteur{Connecte: true, CSRF: "tok", UserInfo: store.UserInfo{Handle: "gandalf"}}}
+	var b1 bytes.Buffer
+	if err := tpl.ExecuteTemplate(&b1, "article", edit); err != nil {
+		t.Fatalf("exécution (édition) : %v", err)
+	}
+	for _, want := range []string{"Notre lecture", "Intro.", "/article/5/part", "/article/5/publier", "Publier dans la gazette"} {
+		if !strings.Contains(b1.String(), want) {
+			t.Errorf("édition sans %q", want)
+		}
+	}
+	// Création depuis un dossier.
+	create := page{Titre: "Nouveau", Site: "SecuBox",
+		Art: store.Article{ThreadID: 3, Title: "Depuis un dossier"},
+		V:   visiteur{Connecte: true, CSRF: "tok"}}
+	var b2 bytes.Buffer
+	if err := tpl.ExecuteTemplate(&b2, "article", create); err != nil {
+		t.Fatalf("exécution (création) : %v", err)
+	}
+	for _, want := range []string{"Co-écrire un article", `name="thread_id" value="3"`, `action="/article/nouveau"`} {
+		if !strings.Contains(b2.String(), want) {
+			t.Errorf("création sans %q", want)
+		}
+	}
+	if strings.Contains(b1.String(), "onclick") || strings.Contains(b2.String(), "onclick") {
+		t.Error("onclick en ligne — interdit par la CSP")
+	}
+}
+
 func TestPlayerExecute(t *testing.T) {
 	fn := template.FuncMap{
 		"rendu": Render, "date": humain, "taille": octets,
