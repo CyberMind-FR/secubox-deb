@@ -89,3 +89,22 @@ func TestConstruireProfils_IgnoreLignesCorrompues(t *testing.T) {
 		t.Fatalf("les lignes corrompues doivent être ignorées sans casser la relecture ; profs=%v", profs)
 	}
 }
+
+func ligneJA4(ip, ja4, path string) string {
+	return `{"timestamp":"2026-08-20T10:00:00Z","client_ip":"` + ip +
+		`","host":"x","method":"GET","path":"` + path +
+		`","category":"scanners","action":"banned","user_agent":"ua","ja4":"` + ja4 + `"}`
+}
+
+func TestConstruireProfils_CleParJA4SurviteRotationIP(t *testing.T) {
+	// Même JA4, deux IP différentes (rotation) → UN seul profil.
+	log := ligneJA4("1.1.1.1", "t13d1516h2_ABCD", "/a") + "\n" +
+		ligneJA4("9.9.9.9", "t13d1516h2_ABCD", "/b")
+	profs := construireProfils(strings.NewReader(log))
+	if len(profs) != 1 {
+		t.Fatalf("même JA4 doit regrouper malgré la rotation d'IP ; obtenu %d profils", len(profs))
+	}
+	if profs["t13d1516h2_ABCD"] == nil {
+		t.Fatalf("le profil doit être clé par JA4 ; clés=%v", profs)
+	}
+}
