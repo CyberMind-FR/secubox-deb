@@ -163,6 +163,20 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// gabarits Go ne passent qu'UN argument a `template` : sans cette fonction, il
 	// faudrait recopier le meme ternaire a six endroits — et l'oublier au septieme.
 	fn := template.FuncMap{"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
+		// glypheSalon : une émoji STABLE et distincte par salon (#1114), dérivée
+		// du slug — plus joli que le ◆ générique, et un sous-salon garde le ↳.
+		"glypheSalon": func(slug string, profondeur int) string {
+			if profondeur > 0 {
+				return "↳"
+			}
+			pal := []string{"🗨️", "💡", "🔧", "🎨", "📡", "🌐", "🛰️", "📚", "🎭", "🧭",
+				"⚗️", "🪐", "🔭", "🎼", "🗺️", "🧩", "🌱", "⚙️", "📻", "🛠️"}
+			var h uint32 = 2166136261
+			for _, c := range slug {
+				h = (h ^ uint32(c)) * 16777619
+			}
+			return pal[h%uint32(len(pal))]
+		},
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
 		},

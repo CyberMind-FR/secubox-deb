@@ -41,7 +41,7 @@
     <div class="pnl">
       <h3>Rubriques <span class="n">{{len .Cats}}</span></h3>
       <a class="rub on" href="/"><span class="g">🗞️</span><span class="nm">À la une</span><span class="ct">{{.Stats.Threads}}</span></a>
-      {{range .Cats}}<a class="rub{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="g">{{if .Profondeur}}↳{{else}}◆{{end}}</span><span class="nm">{{.Title}}</span><span class="ct">{{.Threads}}</span></a>{{end}}
+      {{range .Cats}}<a class="rub{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="g">{{glypheSalon .Slug .Profondeur}}</span><span class="nm">{{.Title}}</span><span class="ct">{{.Threads}}</span></a>{{end}}
     </div>
     <div class="pnl">
       <h3>Types de source</h3>

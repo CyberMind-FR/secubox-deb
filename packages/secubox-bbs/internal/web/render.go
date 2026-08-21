@@ -185,6 +185,12 @@ func mediasIntegres(s string) string {
 			balise = `<audio class="jointe" controls preload="none" src="` + adr + `"></audio>`
 		case finitPar(adr, ".mp4", ".webm", ".ogv"):
 			balise = `<video class="jointe" controls preload="none" src="` + adr + `"></video>`
+		case finitPar(adr, ".pdf"):
+			// PDF joint (#1102/#1114) : rendu inline dans le fil, servi avec
+			// nosniff — jamais interprété en HTML. Un lien de repli reste
+			// cliquable pour l'ouvrir en plein écran.
+			balise = `<embed class="jointe jointe-pdf" src="` + adr + `" type="application/pdf">` +
+				`<a class="jointe-pdf-lien" href="` + adr + `" target="_blank" rel="noopener">📄 Ouvrir le PDF</a>`
 		case !strings.Contains(adr[3:], "."):
 			// Adresse ecrite a la main, sans extension : on ne peut pas savoir.
 			// L'image est le cas de loin le plus frequent, et le moins couteux

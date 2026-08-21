@@ -1,3 +1,14 @@
+secubox-bbs (0.28.38-1~bookworm1) bookworm; urgency=medium
+
+  * PDF joints rendus INLINE dans un fil (#1102/#1114) : un /f/NN.pdf devient un
+    <embed> (servi nosniff) + lien « Ouvrir le PDF » ; la zone de dépôt accepte
+    désormais application/pdf. Médias bornés (.jointe : largeur 100 %, vidéo
+    ≤ 70vh) — plus de débordement/coupe.
+  * Émojis de salon jolis et distincts dans le rail newsroom (glypheSalon,
+    stable par slug) au lieu du ◆ générique ; un sous-salon garde ↳.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:57:33 +0000
+
 secubox-bbs (0.28.37-1~bookworm1) bookworm; urgency=medium
 
   * Intégrité : fin des fausses alertes « ce message diverge de l'index »
