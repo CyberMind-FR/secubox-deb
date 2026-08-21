@@ -101,6 +101,23 @@
         .hint { color: var(--text-dim); font-size: 0.9rem; }
         .error { color: var(--red); }
         a { color: var(--primary); }
+        .aliases { list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .aliases li a {
+            display: inline-block; padding: 0.1rem 0.5rem;
+            border: 1px solid var(--border); border-radius: 3px;
+            text-decoration: none; font-size: 0.85rem;
+        }
+        .aliases li a:hover { border-color: var(--primary); }
+        #snapshot { max-width: 100%; border: 1px solid var(--border); border-radius: 4px; display: none; }
+        label { color: var(--text-dim); }
+        input, textarea {
+            width: 100%; font-family: inherit; font-size: 0.9rem; padding: 0.4rem;
+            background: var(--bg-dark); color: var(--text);
+            border: 1px solid var(--border); border-radius: 4px;
+        }
+        input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+        dl.form { grid-template-columns: 12rem 1fr; align-items: start; }
+        .ok { color: var(--green); }
     </style>
 </head>
 <body class="crt-light">
@@ -121,12 +138,47 @@
         </div>
 
         <div class="card">
+            <h2>Snapshot</h2>
+            <a id="snapshot-link" target="_blank" rel="noopener">
+                <img id="snapshot" alt="Aperçu du site">
+            </a>
+            <p id="snapshot-empty" class="hint" hidden>Pas encore de vignette — capturée hors-ligne par le shotter (metablog-shots).</p>
+        </div>
+
+        <div class="card">
             <h2>Quick links</h2>
             <div class="actions">
-                <a id="link-live" class="btn primary" target="_blank">🌐 Live site</a>
-                <a id="link-gitea" class="btn" target="_blank">🦊 Gitea repo</a>
-                <a id="link-streamlit" class="btn success" target="_blank" hidden>🎨 Streamlit app</a>
+                <a id="link-live" class="btn primary" target="_blank" rel="noopener">🌐 Live site</a>
+                <a id="link-source" class="btn" target="_blank" rel="noopener" hidden>🐙 Source</a>
+                <a id="link-gitea" class="btn" target="_blank" rel="noopener" hidden>🦊 Miroir Gitea</a>
+                <a id="link-streamlit" class="btn success" target="_blank" rel="noopener" hidden>🎨 Streamlit app</a>
             </div>
+        </div>
+
+        <div class="card">
+            <h2>Paramétrer les détails</h2>
+            <form id="edit-form">
+                <dl class="form">
+                    <dt><label for="f-title">Title</label></dt>
+                    <dd><input id="f-title" type="text" autocomplete="off"></dd>
+                    <dt><label for="f-description">Description</label></dt>
+                    <dd><textarea id="f-description" rows="2"></textarea></dd>
+                    <dt><label for="f-category">Category</label></dt>
+                    <dd><input id="f-category" type="text" autocomplete="off"></dd>
+                    <dt><label for="f-tags">Tags</label></dt>
+                    <dd><input id="f-tags" type="text" autocomplete="off" placeholder="séparés par des virgules"></dd>
+                    <dt><label for="f-source">Source (GitHub)</label></dt>
+                    <dd><input id="f-source" type="url" autocomplete="off" placeholder="https://github.com/user/repo.git"></dd>
+                    <dt><label for="f-gitea">Miroir Gitea</label></dt>
+                    <dd><input id="f-gitea" type="url" autocomplete="off" placeholder="https://gitea.gk2.secubox.in/gandalf/…"></dd>
+                    <dt><label for="f-aliases">Aliases</label></dt>
+                    <dd><textarea id="f-aliases" rows="3" placeholder="un domaine par ligne"></textarea></dd>
+                </dl>
+                <div class="actions" style="margin-top:0.75rem">
+                    <button type="submit" class="btn primary">💾 Enregistrer</button>
+                    <span id="save-status" class="hint"></span>
+                </div>
+            </form>
         </div>
 
         <div class="card hint">
@@ -172,49 +224,140 @@
             return `${Math.floor(diff / 86400)}d ago`;
         }
 
+        function esc(s) {
+            return String(s).replace(/[&<>"']/g, c => (
+                {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
         function row(label, value) {
             const dt = document.createElement('dt'); dt.textContent = label;
             const dd = document.createElement('dd'); dd.innerHTML = value;
             return [dt, dd];
         }
 
+        let currentName = null;
+
         function render(d) {
+            currentName = d.name;
             document.getElementById('site-name').textContent = d.name;
             const badge = document.getElementById('status-badge');
             badge.textContent = d.published ? 'Published' : 'Draft';
             badge.className = 'badge ' + (d.published ? 'published' : 'draft');
 
             const dl = document.getElementById('meta-dl');
-            const versionCell = d.version
-                ? `<code>${d.version}</code>`
-                : '<span style="color:var(--text-dim)">—</span>';
+            dl.textContent = '';
+            const dash = '<span style="color:var(--text-dim)">—</span>';
+            const text = v => (v ? esc(v) : dash);
+            const versionCell = d.version ? `<code>${esc(d.version)}</code>` : dash;
             const lastUpdatedCell = d.last_updated
-                ? `${d.last_updated} <span style="color:var(--text-dim)">(${relativeTime(d.last_updated)})</span>`
-                : '<span style="color:var(--text-dim)">—</span>';
+                ? `${esc(d.last_updated)} <span style="color:var(--text-dim)">(${esc(relativeTime(d.last_updated))})</span>`
+                : dash;
             const tagsCell = (d.tags && d.tags.length)
-                ? d.tags.map(t => `<code>${t}</code>`).join(' ')
-                : '<span style="color:var(--text-dim)">—</span>';
+                ? d.tags.map(t => `<code>${esc(t)}</code>`).join(' ')
+                : dash;
+            // Aliases : noms supplémentaires servant le même site (validés côté
+            // serveur avant écriture). Rendus en liens, échappés par prudence.
+            const aliasesCell = (d.aliases && d.aliases.length)
+                ? `<ul class="aliases">${d.aliases.map(a =>
+                    `<li><a href="https://${encodeURIComponent(a)}/" target="_blank" rel="noopener">${esc(a)}</a></li>`
+                  ).join('')}</ul>`
+                : dash;
 
             const fields = [
-                ['Domain',       d.domain || '—'],
+                ['Domain',       text(d.domain)],
+                ['Aliases',      aliasesCell],
                 ['Version',      versionCell],
                 ['Last updated', lastUpdatedCell],
-                ['Title',        d.title || '—'],
-                ['Description',  d.description || '—'],
-                ['Category',     d.category || '—'],
+                ['Title',        text(d.title)],
+                ['Description',  text(d.description)],
+                ['Category',     text(d.category)],
                 ['Tags',         tagsCell],
             ];
             for (const [k, v] of fields) {
                 row(k, v).forEach(el => dl.appendChild(el));
             }
 
+            // Vignette snapshot : servie par l'endpoint existant (produite
+            // hors-ligne). 404 tant qu'aucune capture → on montre l'indice.
+            const snap = document.getElementById('snapshot');
+            const snapLink = document.getElementById('snapshot-link');
+            const snapEmpty = document.getElementById('snapshot-empty');
+            const snapUrl = `${API}/site/${encodeURIComponent(d.name)}/screenshot`;
+            snap.onload = () => { snap.style.display = 'block'; snapEmpty.hidden = true; };
+            snap.onerror = () => { snap.style.display = 'none'; snapEmpty.hidden = false; };
+            snap.src = snapUrl;
+            snapLink.href = `https://${d.domain}/`;
+
             document.getElementById('link-live').href = `https://${d.domain}/`;
-            document.getElementById('link-gitea').href =
-                `https://gitea.gk2.secubox.in/gandalf/metablog-${d.name}`;
+            // Liens source : plus de Gitea deviné. On n'affiche que ce qui est
+            // déclaré dans site.json (source_url = amont GitHub, gitea_repo = miroir).
+            const src = document.getElementById('link-source');
+            if (d.source_url) { src.href = d.source_url; src.hidden = false; }
+            const gitea = document.getElementById('link-gitea');
+            if (d.gitea_repo) { gitea.href = d.gitea_repo; gitea.hidden = false; }
             const streamlit = document.getElementById('link-streamlit');
             if (d.streamlit_app) {
-                streamlit.href = `https://gitea.gk2.secubox.in/gandalf/${d.streamlit_app}`;
+                streamlit.href = `https://gitea.gk2.secubox.in/gandalf/${encodeURIComponent(d.streamlit_app)}`;
                 streamlit.hidden = false;
+            }
+
+            // Pré-remplir le formulaire d'édition.
+            document.getElementById('f-title').value = d.title || '';
+            document.getElementById('f-description').value = d.description || '';
+            document.getElementById('f-category').value = d.category || '';
+            document.getElementById('f-tags').value = (d.tags || []).join(', ');
+            document.getElementById('f-source').value = d.source_url || '';
+            document.getElementById('f-gitea').value = d.gitea_repo || '';
+            document.getElementById('f-aliases').value = (d.aliases || []).join('\n');
+        }
+
+        function splitList(raw, sep) {
+            return raw.split(sep).map(s => s.trim()).filter(Boolean);
+        }
+
+        async function saveDetails(ev) {
+            ev.preventDefault();
+            if (!currentName) return;
+            const status = document.getElementById('save-status');
+            const val = id => document.getElementById(id).value.trim();
+            // null EFFACE le champ côté serveur ; on envoie null pour un champ vidé.
+            const orNull = v => (v === '' ? null : v);
+            const body = {
+                title: orNull(val('f-title')),
+                description: orNull(val('f-description')),
+                category: orNull(val('f-category')),
+                tags: splitList(val('f-tags'), ','),
+                source_url: orNull(val('f-source')),
+                gitea_repo: orNull(val('f-gitea')),
+                aliases: splitList(val('f-aliases'), '\n'),
+            };
+            status.textContent = 'Enregistrement…';
+            status.className = 'hint';
+            try {
+                const t = localStorage.getItem('sbx_token') || localStorage.getItem('secubox_token');
+                const res = await fetch(`${API}/site/${encodeURIComponent(currentName)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', ...(t ? { 'Authorization': `Bearer ${t}` } : {}) },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body),
+                });
+                if (res.ok) {
+                    const out = await res.json();
+                    status.textContent = '✓ Enregistré';
+                    status.className = 'hint ok';
+                    if (out.site) render(out.site);
+                } else if (res.status === 422) {
+                    const err = await res.json().catch(() => ({}));
+                    const detail = err.detail && err.detail.errors ? err.detail.errors.join(' · ') : 'validation refusée';
+                    status.textContent = '✗ ' + detail;
+                    status.className = 'hint error';
+                } else {
+                    status.textContent = '✗ Échec (' + res.status + ')';
+                    status.className = 'hint error';
+                }
+            } catch (e) {
+                status.textContent = '✗ ' + e;
+                status.className = 'hint error';
             }
         }
 
@@ -231,6 +374,7 @@
             render(d);
         }
 
+        document.getElementById('edit-form').addEventListener('submit', saveDetails);
         loadSite();
     </script>
 </body>

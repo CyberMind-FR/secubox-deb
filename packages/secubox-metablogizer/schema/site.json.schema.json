@@ -53,6 +53,20 @@
       ],
       "description": "Name of the gandalf/streamlit-<X> repo on Gitea, if any"
     },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Depot SOURCE amont du contenu (ex. https://github.com/user/repo.git). Enregistre et affiche ; aucune operation git n'en decoule."
+    },
+    "gitea_repo": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "URL du miroir Gitea du site (ex. https://gitea.gk2.secubox.in/gandalf/<name>). Enregistre et affiche ; remplace le lien Gitea autrefois devine."
+    },
     "tags": {
       "type": "array",
       "items": {

@@ -1,3 +1,20 @@
+secubox-metablogizer (1.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * Page site (#1089) : les métadonnées revenaient vides. GET /site/{name} ne
+    lisait PAS site.json — titre, description, catégorie, tags, ALIASES,
+    version, last_updated étaient perdus. Il renvoie désormais le site.json
+    enrichi (via read_site_config).
+  * PUT /site/{name} : paramétrer les détails (title/description/category/tags/
+    aliases/source_url/gitea_repo), écriture atomique + validation schéma (un
+    alias non-domaine est refusé avant écriture).
+  * Schéma site.json : champs source_url (amont GitHub) + gitea_repo (miroir),
+    enregistrés et liés — aucune opération git.
+  * site.html : rend les aliases (multiples), la vignette snapshot (endpoint
+    existant), les liens Source GitHub + miroir Gitea corrects (fin du lien
+    Gitea deviné), et un formulaire d'édition. Sorties utilisateur échappées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 07:00:00 +0200
+
 secubox-metablogizer (1.8.9-1~bookworm1) bookworm; urgency=medium
 
   * metablog-sync : purge le cache média du WAF (`wafctl purge-cache` via sudo)
