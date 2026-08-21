@@ -1,3 +1,14 @@
+secubox-bbs (0.28.37-1~bookworm1) bookworm; urgency=medium
+
+  * Intégrité : fin des fausses alertes « ce message diverge de l'index »
+    (#1114). Le hash indexé est celui de la forme NORMALISÉE (Reply/Edit/ingest
+    stockent sha256(normaliseCorps)), mais Body() validait sha256(brut) — tout
+    message à espace/retour final ou CRLF « divergeait » à tort, sans aucune
+    corruption. Body() valide désormais la même forme normalisée ; une vraie
+    altération reste détectée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:54:10 +0000
+
 secubox-bbs (0.28.36-1~bookworm1) bookworm; urgency=medium
 
   * Médias publics pour les anonymes (#1114) : un /f/NN cité dans un post

@@ -302,3 +302,22 @@ func TestLaReconstructionPreserveLOrigineDesFilsImportes(t *testing.T) {
 		t.Error("l'import a recree le fil : la reference n'a pas survecu")
 	}
 }
+
+func TestUnCorpsAvecEspacesFinauxNeDivergePas(t *testing.T) {
+	// #1114 — le hash indexé est celui de la forme NORMALISÉE. Un corps portant
+	// un CRLF ou un espace/retour final ne doit donc PAS « diverger » à la
+	// relecture (fausse alerte d'intégrité), alors qu'une vraie altération, si.
+	s := ouvre(t)
+	cat, uid := salon(t, s)
+	th, err := s.NewThread(cat, uid, "Titre", "corps\r\navec fin\n\n  \t", VisPublic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	posts, err := s.PostsOf(th)
+	if err != nil || len(posts) == 0 {
+		t.Fatalf("posts: %v", err)
+	}
+	if _, err := s.Body(posts[0]); err != nil {
+		t.Errorf("fausse divergence sur espaces/CRLF finaux : %v", err)
+	}
+}
