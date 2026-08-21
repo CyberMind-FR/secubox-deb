@@ -1,3 +1,12 @@
+secubox-bbs (0.28.46-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel CASSÉ réparé : l'aperçu d'une carte rendait l'URL en <a> (via
+    `lien`), IMBRIQUÉ dans le <a> de la carte — un <a> dans un <a> est invalide,
+    le navigateur refermait la carte d'un coup (couvertures détachées, texte qui
+    déborde, grille éclatée). Aperçus de carte et de billet rendus en TEXTE brut.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:41:35 +0200
+
 secubox-bbs (0.28.45-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel : plus de tuiles VIDES. Une carte sans image reçoit une vignette
