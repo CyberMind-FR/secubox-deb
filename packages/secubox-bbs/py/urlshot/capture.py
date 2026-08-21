@@ -24,8 +24,8 @@ Constraints #1120.
 
 Égress ONLY through the toolbox/WAF (#1120) : le repli screenshot route
 chromium à travers le même proxy sbxmitm que og:image
-(`http://10.99.1.1:8091`), en lui faisant confiance en la même CA
-(`/etc/secubox/toolbox/ca/ca.pem`) — voir `secubox_core.shotter.capture`
+(`http://127.0.0.1:8090` (instance CONNECT dédiée)), en lui faisant confiance en la même CA
+(`/usr/share/secubox/egress-ca.pem`) — voir `secubox_core.shotter.capture`
 (paramètres `proxy`/`ca`, ajoutés pour cet appelant, backward-compatible :
 défaut `None` = comportement historique des appelants existants,
 metablog-shotter et streamlit-shotter, inchangé). Si le proxy est
@@ -62,8 +62,8 @@ from secubox_core import shotter  # noqa: E402
 # Égress ONLY through the toolbox/WAF — Global Constraints #1120. Mêmes
 # valeurs que `egress.client()` : NE JAMAIS diverger de ce proxy/cette CA
 # pour un accès sortant, quel que soit le chemin (og:image ou chromium).
-_PROXY_URL = "http://10.99.1.1:8091"
-_CA_PATH = "/etc/secubox/toolbox/ca/ca.pem"
+_PROXY_URL = "http://127.0.0.1:8090"
+_CA_PATH = "/usr/share/secubox/egress-ca.pem"
 
 
 def capture_vignette(url: str) -> tuple[bytes | None, bool]:

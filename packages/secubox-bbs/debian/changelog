@@ -1,3 +1,13 @@
+secubox-bbs (0.28.50-1~bookworm1) bookworm; urgency=medium
+
+  * urlshot : égress via le proxy CONNECT interne (127.0.0.1:8090, CA publiée
+    /usr/share/secubox/egress-ca.pem) au lieu de l'hypothèse erronée
+    sbxmitm:8091 (transparent, non-proxy) ; correctif e2e (#1120).
+  * postinst : crée directement /var/cache/secubox/bbs/urlshots (systemd-tmpfiles
+    refusait la transition de propriété du parent).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 19:58:00 +0200
+
 secubox-bbs (0.28.49-1~bookworm1) bookworm; urgency=medium
 
   * Vignettes-snapshot d'URL (#1120) : unite+minuterie secubox-bbs-urlshot
