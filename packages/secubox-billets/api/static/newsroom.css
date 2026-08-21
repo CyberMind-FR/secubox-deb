@@ -48,6 +48,10 @@ a{color:inherit;text-decoration:none}
 .logo .mark{width:44px;height:44px;border-radius:12px;border:2px solid var(--ink);display:grid;place-items:center;
   font-family:"Cinzel";font-weight:700;font-size:1.3rem;background:var(--gold-s);position:relative}
 .logo .mark::after{content:"◆";position:absolute;bottom:-6px;right:-6px;font-size:.7rem;color:var(--gold)}
+/* Médaillon BBS partagé comme logo (même que bbs.gk2) : pas de cadre ni de fond,
+   il porte son propre anneau. */
+.logo img.medaille{border:none;background:none;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
+.logo img.medaille::after{content:none}
 .logo h1{margin:0;font-family:"Cinzel";font-size:1.45rem;font-weight:700;letter-spacing:.02em;line-height:1}
 .logo .sub{font-family:"JetBrains Mono";font-size:.56rem;letter-spacing:.28em;color:var(--dim);text-transform:uppercase}
 .drop{flex:1;max-width:520px;margin:0 auto;position:relative}
