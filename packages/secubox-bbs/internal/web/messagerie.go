@@ -102,7 +102,9 @@ func (s *Server) mpAnnuaire(w http.ResponseWriter, r *http.Request) {
 	// 40 : de quoi parcourir sans faire defiler une page entiere. Au-dela, on
 	// affine la recherche — c'est le propre d'un annuaire.
 	p.Annuaire, _ = s.st.Annuaire(p.V.ID, p.Q, 40)
-	s.rend(w, r, "annuaire", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "annuaire", "pagenr", p)
 }
 
 // mpCarnet ajoute ou retire un contact.
