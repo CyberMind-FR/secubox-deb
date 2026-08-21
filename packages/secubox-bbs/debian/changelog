@@ -1,3 +1,10 @@
+secubox-bbs (0.28.47-1~bookworm1) bookworm; urgency=medium
+
+  * /mp/annuaire adopte le skin newsroom (coquille pagenr) : même masthead que
+    /mp et /compte, fin de l'ancienne navbar layout.html.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 16:41:49 +0200
+
 secubox-bbs (0.28.46-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel CASSÉ réparé : l'aperçu d'une carte rendait l'URL en <a> (via
