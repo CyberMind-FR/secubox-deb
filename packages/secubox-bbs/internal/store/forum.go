@@ -226,7 +226,12 @@ func (s *Store) Body(p Post) (string, error) {
 	if err := s.db.QueryRow(`SELECT body_sha256 FROM posts WHERE id = ?`, p.ID).Scan(&want); err != nil {
 		return "", err
 	}
-	got := sha256.Sum256([]byte(body))
+	// LE HASH EST CELUI DE LA FORME NORMALISÉE. Les écritures (Reply, EditerPost,
+	// ingest) stockent toutes `sha256(normaliseCorps(body))`, mais le corps sur
+	// DISQUE est RAW. Valider `sha256(body)` faisait donc « diverger » à tort tout
+	// message portant un espace/retour final ou du CRLF (#1114) — alerte au loup,
+	// aucune corruption. On valide la MÊME forme que celle indexée.
+	got := sha256.Sum256([]byte(normaliseCorps(body)))
 	if len(want) == sha256.Size && string(got[:]) != string(want) {
 		return "", fmt.Errorf("message %d : le fichier diverge de l'index (%s)", p.ID, p.BodyPath)
 	}
