@@ -74,7 +74,7 @@
   <div class="wrap">
     <aside class="feeds">
       <div class="row">
-        <input id="feedUrl" placeholder="RSS feed URL…" onkeydown="if(event.key==='Enter')addFeed()">
+        <input id="feedUrl" placeholder="URL flux RSS ou lien YouTube…" onkeydown="if(event.key==='Enter')addFeed()">
         <button class="go" onclick="addFeed()">＋</button>
       </div>
       <label class="autodl"><input type="checkbox" id="autodl" checked> auto-download new episodes</label>
@@ -171,7 +171,9 @@ async function addFeed(){const u=document.getElementById("feedUrl").value.trim()
   const ad=document.getElementById("autodl").checked;
   try{const r=await api("/feeds",{method:"POST",body:JSON.stringify({url:u,auto_dl:ad})});
     document.getElementById("feedUrl").value="";
-    toast(`Added ${r.title||u} (${r.episodes} eps${r.queued?', '+r.queued+' queued':''})`);loadAll()}
+    if(r.imported){toast("🎬 Import YouTube démarré — suivi dans la liste");}
+    else{toast(`Added ${r.title||u} (${r.episodes} eps${r.queued?', '+r.queued+' queued':''})`);}
+    loadAll()}
   catch(e){toast("Add failed: "+e.message.slice(0,60))}}
 async function toggleAd(id,on){try{const r=await api(`/feeds/${id}/autodl?on=${on?'true':'false'}`,{method:"POST"});
     toast(on?`auto-download on${r.queued?' · '+r.queued+' queued':''}`:"auto-download off");loadAll()}catch(e){toast("toggle failed")}}
