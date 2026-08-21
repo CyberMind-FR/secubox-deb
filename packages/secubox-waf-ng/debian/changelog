@@ -1,3 +1,14 @@
+secubox-waf-ng (1.5.10-1~bookworm1) bookworm; urgency=medium
+
+  * Cache média : PURGE sur SIGUSR1 (MediaCache.Purge — vide mémoire + disque).
+    Le cache (TTL 1 h) sert CSS/JS/images/polices ; un asset redéployé dont
+    l'amont ne change pas l'ETag restait masqué jusqu'à la fin du TTL (le
+    « vieux skin » vu sur billets/anibal). Un `?v=` versionné contourne déjà le
+    cache (nouvelle clé) ; le signal couvre les assets NON versionnés. À brancher
+    au déploiement : `systemctl kill -s SIGUSR1 secubox-waf-ng` (ou wafctl purge-cache).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 11:00:00 +0200
+
 secubox-waf-ng (1.5.9-1~bookworm1) bookworm; urgency=medium
 
   * PHASE G #1080 — règles adaptatives par vhost. sbxwaf gagne

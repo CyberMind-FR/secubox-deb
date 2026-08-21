@@ -1,3 +1,10 @@
+secubox-waf (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * wafctl gagne `purge-cache` : vide le cache média du WAF (SIGUSR1 vers
+    secubox-waf-ng) pour une fraîcheur immédiate après un déploiement d'assets.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 11:00:00 +0200
+
 secubox-waf (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * PHASE G #1080 — profils de service par vhost. Livre `vhost_profiles.json`
