@@ -1,3 +1,11 @@
+secubox-bbs (0.28.28-1~bookworm1) bookworm; urgency=medium
+
+  * Vidéo en LECTEUR inline dans les cartes (#1092) : un /f/NN.mp4 devient un
+    <video controls> (au lieu d'un lien) — lecture et PiP sur place. media-src
+    self couvre /f/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:30:00 +0200
+
 secubox-bbs (0.28.27-1~bookworm1) bookworm; urgency=medium
 
   * Médias des cartes RÉPARÉS (#1092) : la base n'a AUCUNE pièce jointe tracée —

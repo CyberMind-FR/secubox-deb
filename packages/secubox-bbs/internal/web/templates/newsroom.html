@@ -102,7 +102,7 @@
         </div>
       </div>
       {{if $n.Apercu}}<p class="dek">{{lien $n.Apercu}}</p>{{end}}
-      {{if $n.Medias}}<div class="cmedias">{{range $n.Medias}}{{if eq .Kind "image"}}<a class="cmini" href="{{.Ref}}" target="_blank" rel="noopener"><img src="{{.Ref}}" alt="" loading="lazy"></a>{{else if eq .Kind "audio"}}<audio class="cplay" controls preload="none" src="{{.Ref}}"></audio>{{else if eq .Kind "video"}}<a class="cmini ic vid" href="{{.Ref}}" target="_blank" rel="noopener" title="vidéo">🎬</a>{{else}}<a class="cmini ic" href="{{.Ref}}" target="_blank" rel="noopener" title="fichier">📎</a>{{end}}{{end}}</div>{{end}}
+      {{if $n.Medias}}<div class="cmedias">{{range $n.Medias}}{{if eq .Kind "image"}}<a class="cmini" href="{{.Ref}}" target="_blank" rel="noopener"><img src="{{.Ref}}" alt="" loading="lazy"></a>{{else if eq .Kind "audio"}}<audio class="cplay" controls preload="none" src="{{.Ref}}"></audio>{{else if eq .Kind "video"}}<video class="cvid" controls preload="metadata" playsinline src="{{.Ref}}"></video>{{else}}<a class="cmini ic" href="{{.Ref}}" target="_blank" rel="noopener" title="fichier">📎</a>{{end}}{{end}}</div>{{end}}
       {{if or (eq .MediaKind "video") (eq .Source "video")}}
       <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
