@@ -310,7 +310,14 @@ func writeBody(abs string, h entete, body string) error {
 	// pouvait plus lire — la console signalait « 252 divergents » alors que
 	// rien n'avait diverge : les fichiers etaient simplement illisibles.
 	//
-	// Le repertoire, lui, appartient deja au bon compte ; on s'aligne sur lui.
+	// ON ADOPTE D'ABORD LE DOSSIER DU FIL, PUIS LE FICHIER. Un `bbsctl ingest`
+	// lance A LA MAIN en root cree un dossier de fil NEUF (MkdirAll) en root:root :
+	// il est alors INTRAVERSABLE par le service, et le corps a l'interieur devient
+	// illisible — c'est le « ce message diverge de l'index » sur des fils
+	// entiers (#1114). Adopter le seul fichier ne suffit pas : sans traversee du
+	// dossier, le service ne l'atteint meme pas. On aligne le dossier sur son
+	// parent (`content/`, deja au bon compte), puis le fichier sur le dossier.
+	adopteProprietaireDuDossier(filepath.Dir(abs))
 	return adopteProprietaireDuDossier(abs)
 }
 
