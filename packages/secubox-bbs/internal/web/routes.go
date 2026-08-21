@@ -495,8 +495,17 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// un article), classé par son épisode le plus récent — dynamique façon RSS :
 	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
 	p.News = s.composerRedaction(p.Threads, pub)
-	// #1056 stage 3 : les articles collaboratifs EN COURS, pour la colonne
-	// « rédaction collaborative » (remplace le teaser).
+	s.poseRail(&p)
+	s.poseNonLus(&p)
+	p.Titre = "AletheiaVox"
+	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// poseRail remplit la colonne DROITE de la rédaction (derniers billets + articles
+// collaboratifs en cours). Partagée par l'accueil ET les salons (#1114) : sans
+// elle, « Derniers billets » disparaissait dans les sous-forums et vues salon,
+// qui rendent pourtant la même coquille newsroom que l'accueil.
+func (s *Server) poseRail(p *page) {
 	p.Articles, _ = s.st.Articles("draft", 8)
 	if s.bil != nil {
 		p.Billets, p.BilletsErr = s.vitrineBillets()
@@ -504,9 +513,49 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 			p.Billets = p.Billets[:8]
 		}
 	}
-	s.poseNonLus(&p)
-	p.Titre = "AletheiaVox"
-	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// refsDunCorps extrait les identifiants de pièces jointes `/f/NN` cités dans un
+// corps de message.
+func refsDunCorps(body string) []int64 {
+	var ids []int64
+	for _, m := range refsJointes.FindAllStringSubmatch(body, -1) {
+		if id, err := strconv.ParseInt(m[1], 10, 64); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// propagerPiecesPubliques rend PUBLICS les fichiers cités dans un corps de post
+// PUBLIC (#1114) — à n'appeler QUE quand le post/fil est public. Le média
+// devient alors aussi accessible qu'un anonyme peut lire le message.
+func (s *Server) propagerPiecesPubliques(body string) {
+	if ids := refsDunCorps(body); len(ids) > 0 {
+		_ = s.st.MarqueFichiersPublics(ids)
+	}
+}
+
+// backfillPiecesPubliques rattrape le contenu EXISTANT (#1114) : au démarrage,
+// il marque publics les fichiers cités par les posts publics des fils publics —
+// sans lui, un média déposé avant le correctif resterait 403 pour un anonyme
+// alors que son message est public. Idempotent, lancé en tâche de fond.
+func (s *Server) backfillPiecesPubliques() {
+	fils, err := s.st.Recent(1000000, true) // fils PUBLICS uniquement
+	if err != nil {
+		return
+	}
+	var ids []int64
+	for _, f := range fils {
+		posts, _ := s.st.PublicPostsOf(f.ID)
+		for _, p := range posts {
+			body, _ := s.st.Body(p)
+			ids = append(ids, refsDunCorps(body)...)
+		}
+	}
+	if err := s.st.MarqueFichiersPublics(ids); err != nil {
+		log.Printf("bbs: backfill pièces publiques : %v", err)
+	}
 }
 
 // NewsItem : une entrée de la rédaction — SOIT un fil (discussion / source),
@@ -613,6 +662,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// rend en MÉDIATHÈQUE — flux en sous-dossiers, épisodes ordonnés par type et
 	// jouables — plutôt qu'en liste plate de fils par épisode.
 	if podcasterDominant(p.Threads) {
+		s.poseRail(&p)
 		s.rendMediatheque(w, r, p)
 		return
 	}
@@ -621,6 +671,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// colonnes. La coquille « poste de travail » reste pour un fil ouvert, le
 	// compte, la console ; les salons rejoignent la rédaction.
 	p.News = s.composerRedactionSalon(p.Threads, pub)
+	s.poseRail(&p)
 	p.Titre = p.Cat.Title
 	s.rendDef(w, r, "newsroom", "newsroom", p)
 }
@@ -930,6 +981,9 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 	if _, err := s.st.Reply(id, v.ID, body, vis); err != nil {
 		http.Error(w, "enregistrement impossible", http.StatusInternalServerError)
 		return
+	}
+	if vis == store.VisPublic {
+		s.propagerPiecesPubliques(body) // #1114 : média public comme le message
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
 }
@@ -1507,6 +1561,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 		p.Err = "Enregistrement impossible : " + err.Error()
 		s.rend(w, r, "nouveau", p)
 		return
+	}
+	if vis == store.VisPublic {
+		s.propagerPiecesPubliques(corps) // #1114 : média public comme le message
 	}
 	if aSource {
 		st := typerSource(src)
