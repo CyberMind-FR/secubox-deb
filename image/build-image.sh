@@ -108,7 +108,10 @@ if [[ -n "${PROFILE_OVERRIDE:-}" ]]; then
     *)         SECUBOX_PROFILE="secubox-${PROFILE_OVERRIDE}" ;;
   esac
 fi
+SECUBOX_PROFILE="${SECUBOX_PROFILE:-secubox-full}"
 export SECUBOX_PROFILE
+# tag court (isp/full) pour nommer les images par profil (#1112)
+PROFILE_TAG="${SECUBOX_PROFILE#secubox-}"
 
 # Redirect to build-rpi-usb.sh for Raspberry Pi boards
 if [[ "${USE_RPI_SCRIPT:-0}" == "1" ]] || [[ "$BOARD" == "rpi400" ]] || [[ "$BOARD" == "rpi4" ]]; then
@@ -180,7 +183,7 @@ fi
 mkdir -p "$OUT_DIR"
 WORK_DIR=$(mktemp -d /tmp/secubox-build-XXXXXX)
 ROOTFS="${WORK_DIR}/rootfs"
-IMG_FILE="${OUT_DIR}/secubox-${BOARD}-${SUITE}.img"
+IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${BOARD}-${SUITE}.img"
 
 log "══════════════════════════════════════════════════════════"
 log "Board       : ${BOLD}${BOARD}${NC}"
@@ -1658,7 +1661,7 @@ log "7/7 Post-traitement..."
 
 # Conversion VDI pour VirtualBox (x64 seulement)
 if [[ $IS_X64 -eq 1 ]] && [[ $CONVERT_VDI -eq 1 ]]; then
-  VDI_FILE="${OUT_DIR}/secubox-${BOARD}-${SUITE}.vdi"
+  VDI_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${BOARD}-${SUITE}.vdi"
   log "  Conversion en VDI..."
   if qemu-img convert -f raw -O vdi "${IMG_FILE}" "${VDI_FILE}"; then
     ok "VDI créé : ${VDI_FILE}"
@@ -1669,7 +1672,7 @@ fi
 
 # Conversion QCOW2 pour QEMU (arm64 VM)
 if [[ "${BOARD}" == "vm-arm64" ]]; then
-  QCOW2_FILE="${OUT_DIR}/secubox-${BOARD}-${SUITE}.qcow2"
+  QCOW2_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${BOARD}-${SUITE}.qcow2"
   log "  Conversion en QCOW2..."
   qemu-img convert -f raw -O qcow2 "${IMG_FILE}" "${QCOW2_FILE}"
   ok "QCOW2 créé : ${QCOW2_FILE}"
