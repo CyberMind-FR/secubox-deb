@@ -51,6 +51,22 @@ def test_les_aliases_multiples_sont_acceptes():
         "www.anibal-amiot.fr", "anibal-amiot.com", "www.anibal-amiot.com"]
 
 
+def test_une_source_url_non_http_est_refusee():
+    """source_url et gitea_repo deviennent des href sur la page : une URI
+    `javascript:` y serait un XSS stocké. Le schéma n'accepte que http(s)://."""
+    out, errs = fusionner(BASE, {"source_url": "javascript:alert(document.cookie)"})
+    assert errs, "une source_url non http(s) doit être refusée"
+    out2, errs2 = fusionner(BASE, {"gitea_repo": "javascript:fetch('/x')"})
+    assert errs2, "un gitea_repo non http(s) doit être refusé"
+
+
+def test_une_source_url_https_passe():
+    out, errs = fusionner(BASE, {
+        "source_url": "https://github.com/anibaledel/livreedhermes.git"})
+    assert errs == []
+    assert out["source_url"].startswith("https://")
+
+
 def test_un_alias_qui_n_est_pas_un_domaine_est_refuse():
     """La garde d'injection : `server_name` recopie un alias — un point-virgule
     ouvrirait un bloc. On refuse AVANT d'écrire."""

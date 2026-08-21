@@ -291,10 +291,16 @@
             document.getElementById('link-live').href = `https://${d.domain}/`;
             // Liens source : plus de Gitea deviné. On n'affiche que ce qui est
             // déclaré dans site.json (source_url = amont GitHub, gitea_repo = miroir).
+            // Garde de schéma : ces valeurs deviennent des href ; on n'accepte que
+            // http(s):// pour qu'une URI javascript: ne s'exécute pas au clic
+            // (le schéma la refuse déjà côté serveur — ceci est la 2e couche).
+            const httpOnly = v => (/^https?:\/\//i.test(v || '') ? v : null);
             const src = document.getElementById('link-source');
-            if (d.source_url) { src.href = d.source_url; src.hidden = false; }
+            const srcHref = httpOnly(d.source_url);
+            if (srcHref) { src.href = srcHref; src.hidden = false; }
             const gitea = document.getElementById('link-gitea');
-            if (d.gitea_repo) { gitea.href = d.gitea_repo; gitea.hidden = false; }
+            const giteaHref = httpOnly(d.gitea_repo);
+            if (giteaHref) { gitea.href = giteaHref; gitea.hidden = false; }
             const streamlit = document.getElementById('link-streamlit');
             if (d.streamlit_app) {
                 streamlit.href = `https://gitea.gk2.secubox.in/gandalf/${encodeURIComponent(d.streamlit_app)}`;

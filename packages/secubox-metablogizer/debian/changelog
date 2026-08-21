@@ -1,3 +1,12 @@
+secubox-metablogizer (1.8.11-1~bookworm1) bookworm; urgency=medium
+
+  * Durcissement (revue #1089) : source_url et gitea_repo deviennent des href
+    sur la page ; le schéma les restreint désormais à `^https?://` (une URI
+    javascript: y serait un XSS stocké, déclenché au clic sur un jeton opérateur)
+    et site.html filtre le schéma à l'affichage — double couche, comme les alias.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 07:40:00 +0200
+
 secubox-metablogizer (1.8.10-1~bookworm1) bookworm; urgency=medium
 
   * Page site (#1089) : les métadonnées revenaient vides. GET /site/{name} ne
