@@ -1,3 +1,10 @@
+secubox-dpi (1.4.0-1~bookworm1) bookworm; urgency=medium
+
+  * Architecture: any — construit aussi pour amd64 (GOARCH dérivé de la cible),
+    pour les images VirtualBox/amd64 du profil isp (#1112).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:39:14 +0000
+
 secubox-dpi (1.3.1-1~bookworm1) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
