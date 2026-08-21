@@ -68,7 +68,10 @@
           <div class="ccbody">
             <div class="cctop"><span class="ccic">{{$g}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
             <h3 class="serif">{{.Title}}</h3>
-            {{if $n.Apercu}}<p class="ccdek">{{lien $n.Apercu}}</p>{{end}}
+            {{/* TEXTE BRUT, PAS `lien` : la carte est DÉJÀ un <a>. Un <a> imbriqué
+                 (ce que produit `lien` sur une URL) est invalide — le navigateur
+                 referme la carte d'un coup, d'où le carrousel « cassé » (#1114). */}}
+            {{if $n.Apercu}}<p class="ccdek">{{$n.Apercu}}</p>{{end}}
             <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
           </div>
         </a>
@@ -150,7 +153,7 @@
     <div class="pnl">
       <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
       {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
-      {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{lien .Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+      {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
       {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
     </div>
     <div class="pnl">
@@ -220,7 +223,7 @@
 {{define "avrail"}}<div class="pnl">
   <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
   {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
-  {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{lien .Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+  {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
   {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
 </div>
 <div class="pnl">
