@@ -1,3 +1,17 @@
+secubox-billets (0.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel « À la une » en tête de la vitrine (#1104), cardlets à média :
+    couverture (vignette de la 1ʳᵉ image) + pastilles 🎬/🎵/📄 pour audio/
+    vidéo/pdf. Scroll-snap, flèches, points, clavier, tactile ; thème hérité.
+  * Vitrine : la galerie ne rendait plus que des images cassées pour l'audio/
+    vidéo/pdf (thumb vide → <img src=/media/>) — filtrée aux images ; une
+    rangée dédiée montre a/v/pdf pour les billets longs (dont le corps n'est
+    pas affiché, sinon le média disparaissait).
+  * Médias embarqués BORNÉS (#1094) : une vidéo/embed à sa taille source
+    débordait et se faisait couper — largeur 100 %, hauteur ≤ 70vh.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:08:51 +0000
+
 secubox-billets (0.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Réparation rétroactive des médias (#1094) : commande

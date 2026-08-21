@@ -172,3 +172,41 @@
     else if (e.key === "ArrowRight") step(1);
   });
 })();
+
+// Carrousel « À la une » (#1104) : flèches, points, clavier, sync au défilement.
+// Autonome (billets.js est chargé en `defer` → DOM prêt). Aucun style inline.
+(function () {
+  var track = document.getElementById("cartrack"), dots = document.getElementById("cardots");
+  if (!track) return;
+  var cards = [].slice.call(track.querySelectorAll(".ccard"));
+  var prev = document.querySelector('[data-act="carprev"]'), next = document.querySelector('[data-act="carnext"]');
+  function step(dir) {
+    var c = track.querySelector(".ccard");
+    var w = c ? c.offsetWidth + 14 : 220;
+    track.scrollBy({ left: dir * w * 1.5, behavior: "smooth" });
+  }
+  if (prev) prev.addEventListener("click", function () { step(-1); });
+  if (next) next.addEventListener("click", function () { step(1); });
+  if (dots) cards.forEach(function (card, j) {
+    var b = document.createElement("button");
+    b.type = "button"; b.setAttribute("aria-label", "Billet " + (j + 1));
+    b.addEventListener("click", function () { card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); });
+    dots.appendChild(b);
+  });
+  function sync() {
+    if (!cards.length) return;
+    var mid = track.scrollLeft + track.clientWidth / 2, best = 0, bd = 1e9;
+    cards.forEach(function (c, j) { var cc = c.offsetLeft + c.offsetWidth / 2, dd = Math.abs(cc - mid); if (dd < bd) { bd = dd; best = j; } });
+    if (dots) [].slice.call(dots.children).forEach(function (d, j) { d.classList.toggle("on", j === best); });
+    if (prev) prev.disabled = track.scrollLeft <= 2;
+    if (next) next.disabled = track.scrollLeft + track.clientWidth >= track.scrollWidth - 2;
+  }
+  var raf;
+  track.addEventListener("scroll", function () { cancelAnimationFrame(raf); raf = requestAnimationFrame(sync); });
+  track.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+  });
+  window.addEventListener("resize", sync);
+  sync();
+})();
