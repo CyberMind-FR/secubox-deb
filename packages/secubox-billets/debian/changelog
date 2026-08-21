@@ -1,3 +1,10 @@
+secubox-billets (0.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * Masthead : même médaillon BBS (SVG animé /static/bbs-logo.svg) que
+    bbs.gk2.secubox.in, à la place de la pastille « A ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:45:14 +0200
+
 secubox-billets (0.8.2-1~bookworm1) bookworm; urgency=medium
 
   * Cardlets carrés + uniformes (216×216) et TOUJOURS remplis (#1104) :
