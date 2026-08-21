@@ -5,6 +5,8 @@
   create-author <username>   create the (first) author; prompts for a password
   set-password <username>    reset an author's password
   seed                       insert sample published billets
+  backfill-tags              extract #hashtags from pre-tags billets
+  backfill-media             embed BBS /f/NN media into billets published before #1094
 """
 from __future__ import annotations
 
@@ -98,6 +100,23 @@ async def _backfill_tags() -> int:
         await conn.close()
 
 
+async def _backfill_media(bbs_db: str, files_root: str) -> int:
+    """Réembarque les médias des billets publiés avant le correctif #1094.
+
+    Les octets vivent dans le magasin du BBS ; on les refetch en lecture seule
+    via le résolveur, on les ingère par le pipeline validé, on réécrit le corps.
+    Idempotent — rejouer après coup ne trouve plus de `/f/…`."""
+    from .services import backfill_media as bm
+    resolve = bm.bbs_resolver(bbs_db, files_root)
+    conn = await db.connect(now=_now())
+    try:
+        touched, total = await bm.run(conn, resolve, now=_now())
+        print(f"réparé {touched} billet(s), {total} média(s) embarqué(s)")
+        return 0
+    finally:
+        await conn.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="billets-manage")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -106,10 +125,17 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("username")
     sub.add_parser("seed")
     sub.add_parser("backfill-tags")
+    spm = sub.add_parser("backfill-media")
+    spm.add_argument("--bbs-db", default="/var/lib/secubox/bbs/index.db",
+                     help="chemin de l'index SQLite du BBS (lecture seule)")
+    spm.add_argument("--files-root", default="/var/lib/secubox/bbs/files",
+                     help="racine de l'arbre des fichiers du BBS")
     args = p.parse_args(argv)
 
     if args.cmd == "backfill-tags":
         return asyncio.run(_backfill_tags())
+    if args.cmd == "backfill-media":
+        return asyncio.run(_backfill_media(args.bbs_db, args.files_root))
 
     if args.cmd in ("create-author", "set-password"):
         pw = getpass.getpass("Password: ")
