@@ -162,7 +162,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// `vignette` empaquette les deux valeurs dont le fragment a besoin. Les
 	// gabarits Go ne passent qu'UN argument a `template` : sans cette fonction, il
 	// faudrait recopier le meme ternaire a six endroits — et l'oublier au septieme.
-	fn := template.FuncMap{"rendu": Render, "date": humain, "taille": octets,
+	fn := template.FuncMap{"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
 		},
