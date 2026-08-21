@@ -317,7 +317,11 @@
     api(API + '/add', { method: 'POST', body: JSON.stringify({ url: val }) })
       .then(function (meta) {
         input.value = '';
-        toast('➕ Ajouté : ' + (meta.title || meta.id || 'ok'));
+        if (meta && meta.playlist) {
+          toast('🎞️ Playlist : ' + (meta.count || 0) + ' vidéo(s) ajoutée(s)');
+        } else {
+          toast('➕ Ajouté : ' + (meta.title || meta.id || 'ok'));
+        }
         refreshList();
       })
       .catch(function (e) { errorToast('Échec de la récupération : ' + e.message); })
