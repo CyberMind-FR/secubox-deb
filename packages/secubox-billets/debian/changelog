@@ -1,3 +1,13 @@
+secubox-billets (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Médias embarqués (#1094) : billets accepte désormais AUDIO/VIDÉO/PDF (stockés
+    tels quels, type épinglé par octets magiques, borne 64 Mio) en plus des
+    images ré-encodées. Le rendu embarque les refs /media/ en <img>/<video>/
+    <audio>/<embed> (allowlist nh3 élargie, refs forcées billets-relative — pas
+    d'exfiltration). Galerie = images seules (a/v/pdf en ligne dans le corps).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 16:20:00 +0200
+
 secubox-billets (0.4.4-1~bookworm1) bookworm; urgency=medium
 
   * Face publique REFAITE À L'IDENTIQUE de la rédaction du BBS (« showroom ») :
