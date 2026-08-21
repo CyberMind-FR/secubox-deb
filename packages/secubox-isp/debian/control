@@ -1,0 +1,59 @@
+Source: secubox-isp
+Section: metapackages
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+Rules-Requires-Root: no
+
+Package: secubox-isp
+Architecture: all
+Depends: ${misc:Depends},
+ secubox-core (>= 1.0),
+ secubox-defaults (>= 1.0),
+ secubox-hub (>= 1.0),
+ secubox-portal (>= 1.0),
+ secubox-system (>= 1.0),
+ secubox-auth (>= 1.0),
+ secubox-users (>= 1.0),
+ secubox-identity (>= 1.0),
+ secubox-netmodes (>= 1.0),
+ secubox-nac (>= 1.0),
+ secubox-wireguard (>= 1.0),
+ secubox-dns (>= 1.0),
+ secubox-vortex-dns (>= 1.0),
+ secubox-dns-provider (>= 1.0),
+ secubox-modem (>= 1.0),
+ secubox-routes (>= 1.0),
+ secubox-netdiag (>= 1.0),
+ secubox-traffic (>= 1.0),
+ secubox-waf (>= 1.0),
+ secubox-waf-ng (>= 1.0),
+ secubox-vortex-firewall (>= 1.0),
+ secubox-haproxy (>= 1.0),
+ secubox-ipblock (>= 1.0),
+ secubox-hardening (>= 1.0),
+ secubox-certs (>= 1.0),
+ secubox-exposure (>= 1.0),
+ secubox-qos (>= 1.0),
+ secubox-vhost (>= 1.0),
+ secubox-mediaflow (>= 1.0),
+ secubox-dpi (>= 1.0),
+ secubox-netdata (>= 1.0),
+ secubox-watchdog (>= 1.0),
+ secubox-health-doctor (>= 1.0),
+ secubox-tor (>= 1.0),
+ secubox-mesh (>= 1.0),
+ secubox-p2p (>= 1.0),
+ secubox-meshname (>= 1.0),
+ secubox-security-posture (>= 1.0)
+Recommends: secubox-crowdsec, secubox-cdn, crowdsec, wireguard-tools
+Description: SecuBox ISP — socle routeur/FAI propre
+ Métapaquet du socle SecuBox pour un routeur/passerelle FAI : réseau, pare-feu
+ (nftables, WAF, vortex-firewall, HAProxy), DNS, WireGuard, contrôle d'accès
+ réseau, DPI, QoS, exposition (Tor), supervision et durcissement.
+ .
+ Profil PROPRE : aucune application lourde (PeerTube, Matrix, Jellyfin, cloud…).
+ Ces modules s'installent à la demande depuis apt.secubox.in, ou via le profil
+ secubox-full.

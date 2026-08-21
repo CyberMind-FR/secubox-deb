@@ -8,7 +8,7 @@ Homepage: https://cybermind.fr/secubox
 Rules-Requires-Root: no
 
 Package: secubox-dpi
-Architecture: arm64
+Architecture: any
 Depends: ${misc:Depends}, secubox-core (>= 1.0), iproute2, libndpi-bin
 Recommends: netifyd, secubox-netifyd
 Description: SecuBox DPI Analytics — netifyd-backed app/protocol classification

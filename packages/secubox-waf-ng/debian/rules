@@ -17,7 +17,7 @@ export DH_VERBOSE = 1
 
 # Cross-build: produce a static arm64 binary.
 export GOOS        = linux
-export GOARCH      = arm64
+export GOARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
 export CGO_ENABLED = 0
 export GOFLAGS     = -mod=vendor
 export GOPROXY     = off
