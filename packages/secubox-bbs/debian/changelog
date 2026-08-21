@@ -1,3 +1,15 @@
+secubox-bbs (0.28.39-1~bookworm1) bookworm; urgency=medium
+
+  * La vue d'un FIL (/t/) adopte le skin newsroom AletheiaVox (#1114) : même
+    masthead + rail (rubriques/accès) que l'accueil et les salons, via des blocs
+    partagés (avmast/avrubriques/avacces) ; le corps du fil est RÉUTILISÉ tel
+    quel (messages, réponse, sysop, édition, médias). Fini la coquille layout
+    incohérente à gauche. Colonne droite « Derniers billets » ajoutée.
+  * Cartes du carrousel moins hautes (212×182, couverture 74px) — elles
+    prenaient trop de hauteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:13:39 +0000
+
 secubox-bbs (0.28.38-1~bookworm1) bookworm; urgency=medium
 
   * PDF joints rendus INLINE dans un fil (#1102/#1114) : un /f/NN.pdf devient un
