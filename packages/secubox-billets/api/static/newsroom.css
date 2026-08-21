@@ -340,3 +340,18 @@ a{color:inherit;text-decoration:none}
 /* l'embed distant (oembed/iframe) tient aussi dans la colonne */
 .embed{position:relative;max-width:100%}
 .embed iframe,.embed video{max-width:100%}
+
+/* ── Vignette d'aperçu d'URL (#1104) : link-card OG pour une source qui n'est
+   pas un média distant. Rendu LOCAL (aucune iframe/HTML distant). ── */
+.link-card{display:flex;gap:0;align-items:stretch;text-decoration:none;color:inherit;
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);
+  box-shadow:var(--shadow);max-width:540px;transition:transform .15s,border-color .15s,box-shadow .15s}
+.link-card:hover{transform:translateY(-2px);border-color:var(--sky);box-shadow:var(--lift)}
+.link-card .card-img{width:132px;min-width:132px;max-height:132px;object-fit:cover;background:var(--soft);display:block}
+.link-card .card-body{display:flex;flex-direction:column;gap:3px;padding:12px 14px;min-width:0}
+.link-card .card-title{font-weight:600;font-size:.98rem;line-height:1.22;color:var(--ink);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.link-card .card-desc{font-size:.82rem;color:var(--dim);line-height:1.35;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.link-card .card-host{font-size:.72rem;color:var(--sky);margin-top:auto;letter-spacing:.01em}
+@media(max-width:480px){.link-card{flex-direction:column;max-width:100%}.link-card .card-img{width:100%;min-width:0;height:150px;max-height:none}}

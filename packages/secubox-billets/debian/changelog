@@ -1,3 +1,13 @@
+secubox-billets (0.8.0-1~bookworm1) bookworm; urgency=medium
+
+  * Aperçu d'URL automatique (#1104) : une URL de RÉFÉRENCE (source) qui n'est
+    PAS un média distant (oEmbed) reçoit une vignette d'aperçu — link-card OG
+    (titre/description/image), rendu LOCAL (jamais d'iframe ni de HTML distant),
+    SSRF-gardée, cachée dans embed_html. Un média distant est laissé tel quel.
+    Styles .link-card ajoutés à la vitrine. (newsroom.css?v=nr3)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:19:49 +0000
+
 secubox-billets (0.7.1-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel « À la une » : auto-défilement (#1104) — avance toutes les 5 s,
