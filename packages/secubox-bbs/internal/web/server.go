@@ -211,7 +211,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mastodon", "annuaire", "edition"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mastodon"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {
@@ -256,6 +256,24 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		pages["mp"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit mp : %w", err)
+	}
+	// /mp/annuaire dans le skin newsroom : coquille GÉNÉRIQUE (pagenr) comme
+	// /compte — la recherche de membres a besoin de la pleine largeur (elle vit
+	// « sur sa propre page », pas dans la colonne des conversations). Le masthead
+	// newsroom remplace l'ancienne navbar de layout.html.
+	if t, err := template.New("annuaire.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/annuaire.html"); err == nil {
+		pages["annuaire"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit annuaire : %w", err)
+	}
+	// /p/{id}/edit (#1091) dans le skin newsroom : coquille GÉNÉRIQUE (pagenr),
+	// masthead cohérent avec le reste. edition.html charge lui-même editeur.js.
+	if t, err := template.New("edition.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/edition.html"); err == nil {
+		pages["edition"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit edition : %w", err)
 	}
 	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
 	if t, err := template.New("mediatheque.html").Funcs(fn).
