@@ -16,7 +16,7 @@ import (
 // des données réalistes (fil, podcast, vidéo, billet) avant tout déploiement.
 func TestNewsroomExecute(t *testing.T) {
 	fn := template.FuncMap{
-		"rendu": Render, "date": humain, "taille": octets,
+		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage": func(n int) string { return "" },
 	}
@@ -64,7 +64,7 @@ func TestNewsroomExecute(t *testing.T) {
 
 func TestMediathequeExecute(t *testing.T) {
 	fn := template.FuncMap{
-		"rendu": Render, "date": humain, "taille": octets,
+		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage": func(n int) string { return "" },
 	}
@@ -104,7 +104,7 @@ func TestMediathequeExecute(t *testing.T) {
 
 func TestArticleExecute(t *testing.T) {
 	fn := template.FuncMap{
-		"rendu": Render, "date": humain, "taille": octets,
+		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
 		"vignette":   func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage":   func(n int) string { return "" },
 		"initiales2": func(h string) string { return "XX" },
@@ -147,7 +147,7 @@ func TestArticleExecute(t *testing.T) {
 
 func TestPlayerExecute(t *testing.T) {
 	fn := template.FuncMap{
-		"rendu": Render, "date": humain, "taille": octets,
+		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage": func(n int) string { return "" },
 	}
