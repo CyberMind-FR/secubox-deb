@@ -1,3 +1,38 @@
+secubox-billets (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Réparation rétroactive des médias (#1094) : commande
+    `python -m api.manage backfill-media`. Les billets publiés AVANT le
+    correctif gardaient leurs refs `/f/NN` du BBS en texte mort (billets ne
+    sert pas `/f/…`). La commande refetch chaque octet-source auprès du magasin
+    du BBS (index.db + arbre files/, en LECTURE SEULE, suppression douce
+    respectée), l'ingère par le pipeline validé (process_upload) et réécrit le
+    corps vers `/media/…` que le rendu embarque. Idempotent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:00:37 +0000
+
+secubox-billets (0.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * #1094 (suite) : le TÉLÉVERSEMENT du formulaire d'édition (HTML) acceptait
+    encore les seules images — il passe par le même aiguillage que l'API
+    (process_upload) et prend désormais audio/vidéo/pdf comme elle. L'attribut
+    accept du champ fichier ouvre png/jpeg/webp/gif + mp4/webm/ogg + audio +
+    application/pdf.
+  * Bascule clair/sombre sur la face publique (#1092) : même clé localStorage
+    (av-theme) et même bouton ◐ que la rédaction du BBS — un lecteur qui passe
+    la gazette en nuit retrouve billets en nuit. Sans JS, la page reste claire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 07:34:26 +0000
+
+secubox-billets (0.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Médias embarqués (#1094) : billets accepte désormais AUDIO/VIDÉO/PDF (stockés
+    tels quels, type épinglé par octets magiques, borne 64 Mio) en plus des
+    images ré-encodées. Le rendu embarque les refs /media/ en <img>/<video>/
+    <audio>/<embed> (allowlist nh3 élargie, refs forcées billets-relative — pas
+    d'exfiltration). Galerie = images seules (a/v/pdf en ligne dans le corps).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 16:20:00 +0200
+
 secubox-billets (0.4.4-1~bookworm1) bookworm; urgency=medium
 
   * Face publique REFAITE À L'IDENTIQUE de la rédaction du BBS (« showroom ») :

@@ -29,6 +29,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"time"
 )
@@ -292,8 +293,18 @@ func (c *Client) transfereMedias(billetID, session, texte string, js []Jointe, r
 func (c *Client) envoieMedia(billetID, session string, j Jointe) (string, error) {
 	var corps bytes.Buffer
 	w := multipart.NewWriter(&corps)
-	// Le nom de champ est impose par billets : `file`.
-	part, err := w.CreateFormFile("file", j.Nom)
+	// Le nom de champ est impose par billets : `file`. On pose le Content-Type
+	// REEL de la piece (et non le `application/octet-stream` par defaut de
+	// CreateFormFile) : billets aiguille l'accueil du media dessus (#1094) —
+	// image re-encodee, audio/video/pdf stockes tels quels. Sans lui, une video
+	// arrivait en octet-stream, prise pour une image, et refusee.
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition",
+		fmt.Sprintf(`form-data; name="file"; filename=%q`, j.Nom))
+	if j.Mime != "" {
+		h.Set("Content-Type", j.Mime)
+	}
+	part, err := w.CreatePart(h)
 	if err != nil {
 		return "", err
 	}

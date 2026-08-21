@@ -256,9 +256,11 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
 
     async def _save_uploads(request: Request, billet_id: str,
                             files: list[UploadFile]) -> int:
-        """Process + store each valid uploaded image as a media attachment.
-        Invalid/oversized files are skipped (non-fatal); returns the count of
-        files that were rejected so the caller can flash a warning."""
+        """Process + store each valid uploaded media as an attachment. Images
+        are re-encoded (vignette) ; audio/vidéo/pdf sont stockés tels quels et
+        s'affichent en ligne dans le corps (#1094). Invalid/oversized files are
+        skipped (non-fatal); returns the count rejected so the caller can flash
+        a warning."""
         conn = request.app.state.conn
         skipped = 0
         for up in files or []:
@@ -268,16 +270,24 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
             if not raw:
                 continue
             try:
-                processed = await asyncio.to_thread(media.process, raw)
+                processed = await asyncio.to_thread(
+                    media.process_upload, raw, up.content_type or "")
             except media.MediaError:
                 skipped += 1
                 continue
             mid = new_ulid()
-            fn, thumb = await asyncio.to_thread(media.store, mid, processed)
-            await repo.add_media(conn, billet_id, filename=fn, thumb=thumb,
-                                 mime=processed["mime"], width=processed["width"],
-                                 height=processed["height"], alt="",
-                                 now=_now(request), ulid=mid)
+            if processed["kind"] == "image":
+                fn, thumb = await asyncio.to_thread(media.store, mid, processed)
+                await repo.add_media(conn, billet_id, filename=fn, thumb=thumb,
+                                     mime=processed["mime"], width=processed["width"],
+                                     height=processed["height"], alt="",
+                                     now=_now(request), ulid=mid)
+            else:
+                fn = await asyncio.to_thread(
+                    media.store_raw, mid, processed["ext"], processed["data"])
+                await repo.add_media(conn, billet_id, filename=fn, thumb="",
+                                     mime=processed["mime"], width=0, height=0,
+                                     alt="", now=_now(request), ulid=mid)
         return skipped
 
     @app.post("/admin/billets")
