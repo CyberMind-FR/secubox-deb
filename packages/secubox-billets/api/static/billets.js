@@ -1,4 +1,28 @@
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
+// Thème clair/sombre PARTAGÉ avec la rédaction du BBS (#1092/#1094) : MÊME clé
+// localStorage (`av-theme`) et même bascule, pour qu'un lecteur qui passe la
+// gazette du BBS en nuit retrouve billets en nuit — les deux faces publiques
+// AletheiaVox partagent la préférence. Sans JS la page reste en clair (défaut
+// de newsroom.css), le bouton ne fait qu'ajouter le confort du basculement.
+(function () {
+  var r = document.documentElement;
+  try { var sv = localStorage.getItem('av-theme'); if (sv) r.setAttribute('data-theme', sv); } catch (e) {}
+  function theme() {
+    var cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+    var nxt = cur === 'dark' ? 'light' : 'dark';
+    r.setAttribute('data-theme', nxt);
+    try { localStorage.setItem('av-theme', nxt); } catch (e) {}
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-act="theme"]');
+    if (t) { e.preventDefault(); theme(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    var tag = (e.target && e.target.tagName) || '';
+    if (e.key === 't' && tag !== 'INPUT' && tag !== 'TEXTAREA') theme();
+  });
+})();
+
 // Progressive enhancement for emoji reactions: intercept the reaction form
 // submit, POST it, and swap the #reactions fragment in place. With JS disabled
 // the same forms POST normally and the server 303-redirects back to the billet
