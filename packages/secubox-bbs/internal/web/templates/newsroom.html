@@ -213,6 +213,7 @@
   {{if .Mod.Media}}<a class="rub" href="/media"><span class="g">🎧</span><span class="nm">Médiathèque</span></a>{{end}}
   {{if .Mod.Biblio}}<a class="rub" href="/biblio"><span class="g">📚</span><span class="nm">Bibliothèque</span><span class="ct">{{.Stats.Files}}</span></a>{{end}}
   {{if .Mod.Billets}}<a class="rub" href="/billets"><span class="g">📝</span><span class="nm">Billets</span><span class="ct">{{.Stats.Billets}}</span></a>{{end}}
+  {{if .Mod.Mastodon}}<a class="rub" href="/mastodon"><span class="g">🐘</span><span class="nm">Mastodon</span></a>{{end}}
   {{if and .V.Connecte .Mod.MP}}<a class="rub" href="/mp"><span class="g">✉️</span><span class="nm">Messages</span>{{if .NonLus}}<span class="ct">{{.NonLus}}</span>{{end}}</a>{{end}}
   {{if .V.Sysop}}<a class="rub" href="/sysop"><span class="g">🛠️</span><span class="nm">Sysop</span></a>{{end}}
 </div>{{end}}
