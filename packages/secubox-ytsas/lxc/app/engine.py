@@ -62,6 +62,10 @@ class AuthRequired(EngineError):
     """yt-dlp failed because cookies are missing or stale (gated content)."""
 
 
+class PlaylistTimeout(EngineError):
+    """Playlist enumeration exceeded its time budget (mapped to 504 upstream)."""
+
+
 def _sha1(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8", "replace")).hexdigest()
 
@@ -190,6 +194,80 @@ class Engine:
         # background; /list and /status reflect progress as it advances.
         asyncio.create_task(self._download(vid, url, item_dir))
         return {"id": vid, "title": title, "status": "downloading"}
+
+    # ---------------------------------------------------------------- playlist
+    async def enumerate_playlist(self, url, limit=50):
+        """Énumère une playlist À PLAT, SANS RIEN TÉLÉCHARGER (#1099).
+
+        Une seule requête de métadonnées (`--flat-playlist`), la borne appliquée
+        par yt-dlp lui-même (`--playlist-end`). Retourne [{id,url,title}] en
+        adresses CANONIQUES `watch?v=`. Lève PlaylistTimeout au dépassement,
+        EngineError sinon (dont playlist vide/illisible)."""
+        limit = max(1, min(int(limit or 50), 200))
+        argv = [self.ytdlp_bin, "--flat-playlist", "--dump-json",
+                "--playlist-end", str(limit), "--no-warnings",
+                *self._cookie_args(), url]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *argv, stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE)
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=90)
+        except asyncio.TimeoutError:
+            raise PlaylistTimeout("énumération trop longue")
+        except FileNotFoundError:
+            raise EngineError("yt-dlp introuvable dans le conteneur")
+        items = []
+        for ligne in out.decode("utf-8", "replace").splitlines():
+            ligne = ligne.strip()
+            if not ligne:
+                continue
+            try:
+                d = json.loads(ligne)
+            except ValueError:
+                continue
+            vid = d.get("id")
+            if not vid:
+                continue
+            items.append({"id": vid,
+                          "url": "https://www.youtube.com/watch?v=" + vid,
+                          "title": d.get("title") or ""})
+        if not items:
+            detail = err.decode("utf-8", "replace")[:200] if err else ""
+            raise EngineError("playlist vide ou illisible"
+                              + (": " + detail if detail else ""))
+        return items
+
+    def add_prefetched(self, vid, url, title):
+        """Enfile le download d'une vidéo DÉJÀ identifiée (énumération à plat) :
+        saute la sonde de métadonnées (`_probe`), qu'on a déjà. Une entrée déjà
+        complète sur disque est reportée SANS re-téléchargement — un ré-ajout de
+        playlist ne doit pas rapatrier ce qui est là."""
+        existing = self.library.get(vid)
+        if existing and existing.get("complete"):
+            return {"id": vid, "title": existing.get("title") or title,
+                    "status": "complete"}
+        item_dir = os.path.join(self.download_dir, vid)
+        os.makedirs(item_dir, exist_ok=True)
+        self.library.add(id=vid, url=url, title=title, path=item_dir)
+        self.jobs[vid] = {"progress": 0.0, "status": "downloading",
+                          "title": title, "error": None,
+                          "started_at": int(time.time())}
+        asyncio.create_task(self._download(vid, url, item_dir))
+        return {"id": vid, "title": title, "status": "downloading"}
+
+    async def add_playlist(self, url, limit=100):
+        """Énumère la playlist puis enfile CHAQUE vidéo (bornée). Une entrée
+        fautive n'interrompt pas les autres. Renvoie un récapitulatif — le compte
+        inclut les entrées déjà complètes (reportées, non re-téléchargées)."""
+        entries = await self.enumerate_playlist(url, limit)
+        items = []
+        for e in entries:
+            try:
+                items.append(self.add_prefetched(
+                    e["id"], e["url"], e.get("title") or ""))
+            except Exception:  # noqa: BLE001 — une entrée fautive n'arrête pas la playlist
+                continue
+        return {"playlist": True, "count": len(items), "items": items}
 
     async def _download(self, vid, url, item_dir):
         async with self._sem:

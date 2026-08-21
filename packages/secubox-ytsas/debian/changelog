@@ -1,3 +1,15 @@
+secubox-ytsas (0.2.3-1~bookworm1) bookworm; urgency=medium
+
+  * Coller une URL de PLAYLIST ajoute désormais TOUTES ses vidéos, bornées
+    (#1099). /add détecte une playlist pure (`playlist?list=…`, via
+    ytid.is_playlist_url), l'énumère à plat (engine.enumerate_playlist,
+    partagée avec la route /playlist) et enfile chaque vidéo sans re-sonde
+    (engine.add_prefetched) ; une entrée déjà complète est reportée sans
+    re-téléchargement. Borne YTSAS_PLAYLIST_ADD_MAX (défaut 100). Avant, /add
+    forçait --no-playlist et ne prenait que la première vidéo.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:24:14 +0000
+
 secubox-ytsas (0.2.2-1~bookworm1) bookworm; urgency=medium
 
   * Bouton RÉESSAYER sur un item en échec : nouvel endpoint POST /retry/{id}
