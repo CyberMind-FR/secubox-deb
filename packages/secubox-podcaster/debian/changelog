@@ -1,3 +1,18 @@
+secubox-podcaster (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * Import YouTube : réutilise le coffre à cookies de ytsas (#1100). L'import
+    d'une playlist comme podcast échouait (« confirm you're not a bot » /
+    âge-restreint) faute de cookies — podcaster lisait /etc/secubox/secrets/
+    yt-cookies.txt, absent. `_cookies_file()` résout désormais le premier
+    candidat présent et non vide : $PODCASTER_YT_COOKIES, le secret propre,
+    puis le coffre ytsas (/data/lxc/ytsas/rootfs/...). podcaster tourne en
+    root : lecture directe, toujours à jour, aucune copie à périmer.
+  * Reprend les correctifs d'identité/déduplication d'import (identité par URL
+    source, saut des épisodes connus AVANT téléchargement) présents dans les
+    sources et absents du 1.0.4-1~bookworm2 déployé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:13:53 +0000
+
 secubox-podcaster (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Service now runs unprivileged as secubox:secubox (was root) with UMask=0002,

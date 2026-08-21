@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
-"""Rends `secubox_core` importable hors installation système (source dans
-`common/`), pour que `api.importer` s'importe comme sur la board."""
+"""Rends `secubox_core` importable hors installation système.
+
+À l'exécution, `secubox-core` est un paquet Debian installé sur le PYTHONPATH ;
+en test on ajoute simplement sa source (`common/`) au chemin, pour que
+`api.importer` (qui en dépend) s'importe comme il le fait sur la board."""
 import sys
 from pathlib import Path
 
