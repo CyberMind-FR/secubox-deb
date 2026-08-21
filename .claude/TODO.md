@@ -6,9 +6,20 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-07-31*
+*Mis à jour : 2026-08-21*
 
 ---
+
+## 2026-08-21
+
+- [x] BBS #1114 — médias publics anonymes + newsroom /t//mp//compte + carrousel + corps root:root (0.28.46, PRs #1115-1117)
+- [x] billets — médaillon BBS en logo (0.8.3, PR #1118)
+- [x] kbin/toolbox 504 — 10.99.0.1 mort → 127.0.0.1 (sbxwaf/nginx/haproxy)
+- [x] nextcloud nc.gk2 — réveil scale-to-zero réparé (manifeste + wakectl + symlink)
+- [ ] BBS — bascule public⇄privé d'un fil (store + route /t/{id}/visibilite + bouton ; propagation + revert fichiers)
+- [ ] radio — yt-dlp 403 Forbidden sur clips YouTube (cookies/IP)
+- [ ] Alias domaines — secubox.in→3d, all.gk2.net→all (HAProxy ACL + WAF route + certs/DNS)
+- [ ] BBS — vignette-snapshot d'URL (éditeur+carrousel) via secubox_core.screenshots, réconcilier #1049
 
 ## 2026-08-19
 
