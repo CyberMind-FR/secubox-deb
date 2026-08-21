@@ -60,6 +60,7 @@ _NOM_DOMAINE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-
 
 import logging
 import sites_scan
+import site_schema
 from rmtree import force_remove as _rmtree_force
 from webhook import (
     classify_payload,
@@ -790,8 +791,19 @@ class SiteCreate(BaseModel):
 
 
 class SiteUpdate(BaseModel):
+    # Paramétrage des détails d'un site (#1089). Tous optionnels : seuls les
+    # champs FOURNIS sont modifiés (model_dump(exclude_unset=True)) ; une valeur
+    # explicitement `null` efface le champ. `name` n'est PAS éditable (clé de
+    # répertoire) et `published` reste piloté par publish/unpublish.
     domain: Optional[str] = None
-    enabled: Optional[bool] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    aliases: Optional[List[str]] = None
+    source_url: Optional[str] = None
+    gitea_repo: Optional[str] = None
+    streamlit_app: Optional[str] = None
 
 
 @app.get("/sites", dependencies=[Depends(require_jwt)])
@@ -865,13 +877,66 @@ async def get_site(name: str):
 
     published = (NGINX_ENABLED_DIR / f"{name}.conf").exists()
 
+    # LES MÉTADONNÉES VIENNENT DE site.json (#1089). Auparavant ce handler
+    # construisait sa réponse à partir de rien : titre, description, catégorie,
+    # tags, ALIASES, version, last_updated, source_url/gitea_repo étaient tous
+    # perdus, et la page détail affichait « — » partout alors que les données
+    # existaient. `read_site_config` lit + enrichit (git) + valide (warn-only).
+    cfg = _load_site_json(site_dir)  # sites_scan.read_site_config
+
     return {
+        **cfg,
         "name": name,
         "domain": domain,
         "directory": str(site_dir),
         "files": files[:100],
         "published": published,
     }
+
+
+@app.put("/site/{name}", dependencies=[Depends(require_jwt)])
+async def update_site(name: str, patch: SiteUpdate):
+    """Paramétrer les détails d'un site (#1089).
+
+    Fusionne les champs FOURNIS dans le `site.json` existant (title, description,
+    category, tags, aliases, source_url, gitea_repo, domain, streamlit_app),
+    valide contre le schéma, puis écrit de façon ATOMIQUE. N'écrit RIEN si la
+    validation échoue (422) — un alias qui n'est pas un domaine est refusé avant
+    d'atteindre `server_name`.
+    """
+    site_dir = SITES_ROOT / name
+    if not site_dir.exists():
+        raise HTTPException(404, "Site not found")
+
+    config_file = site_dir / "site.json"
+    existant: dict = {}
+    if config_file.exists():
+        try:
+            existant = json.loads(config_file.read_text())
+        except json.JSONDecodeError:
+            existant = {}
+
+    # Garantir les champs REQUIS par le schéma avant validation : un site.json
+    # minimal (créé via POST /site, sans `published`) ferait sinon échouer la
+    # validation d'une édition pourtant légitime.
+    existant["name"] = name
+    existant.setdefault("domain", sites_scan.domaine_du_site(site_dir))
+    existant.setdefault("published", (NGINX_ENABLED_DIR / f"{name}.conf").exists())
+
+    patch_dict = patch.model_dump(exclude_unset=True)
+    doc, errs = site_schema.fusionner(existant, patch_dict)
+    if errs:
+        raise HTTPException(422, {"errors": errs})
+
+    # Écriture atomique (tmp + os.replace) : le scan hors-ligne
+    # (metablog-audit.timer) lit ce fichier en parallèle ; un write_text direct
+    # exposerait un site.json tronqué.
+    tmp = config_file.parent / (config_file.name + ".tmp")
+    tmp.write_text(json.dumps(doc, indent=2, ensure_ascii=False))
+    os.replace(tmp, config_file)
+
+    _invalidate_sites_cache()
+    return {"success": True, "name": name, "site": _load_site_json(site_dir)}
 
 
 @app.post("/site", dependencies=[Depends(require_jwt)])
