@@ -22,8 +22,17 @@ def billet_title(body: str, *, max_len: int = 70) -> str:
     return (line[: max_len - 1].rstrip() + "…") if len(line) > max_len else line
 
 
+_LEAD_HEADING = re.compile(r"^\s*#{1,6}[^\n]*\n+")
+_FOOTER = re.compile(r"\n-{3,}.*$", re.S)
+_MEDIA_REF = re.compile(r"(?:https?://\S+)?/(?:media|f)/[^\s)]+")
+
+
 def excerpt(body: str, *, max_len: int = 200) -> str:
-    text = _MD_STRIP.sub("", body or "")
+    text = body or ""
+    text = _FOOTER.sub("", text)                 # coupe le pied « --- [Discuter sur le BBS] »
+    text = _LEAD_HEADING.sub("", text, count=1)   # retire le titre en tête (déjà rendu en h3)
+    text = _MEDIA_REF.sub("", text)               # /media/x.mp4, /f/12.png en TEXTE brut
+    text = _MD_STRIP.sub("", text)
     text = _LINK_TARGET.sub("", text)
     text = re.sub(r"\s+", " ", text).strip()
     return (text[: max_len - 1].rstrip() + "…") if len(text) > max_len else text

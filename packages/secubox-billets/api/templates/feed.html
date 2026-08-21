@@ -19,6 +19,41 @@
 {% endif %}
 {% if active_tag %}<p class="tag-active">Vue rapide : <b>#{{ active_tag }}</b> — <a href="/">tout afficher</a></p>{% endif %}
 
+{% if billets %}
+<section class="caroussel" aria-label="À la une — carrousel des billets">
+  <div class="carhead"><h2 class="serif">À la une</h2><span class="sub">glissez, flèches ◀ ▶ ou ← →</span>
+    <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Billet précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Billet suivant">▶</button></span>
+  </div>
+  <div class="cartrack" id="cartrack" tabindex="0" role="list">
+    {% for b in billets %}
+    {% set cover = (b.media | selectattr('thumb') | list | first) if b.media else None %}
+    {% set ns = namespace(v=false, a=false, p=false) %}
+    {% if b.media %}{% for m in b.media if not m.thumb %}{% set ext = m.filename.rsplit('.', 1)[-1] | lower %}
+      {%- if ext in ['mp4','webm','ogv','mov'] %}{% set ns.v = true %}
+      {%- elif ext in ['mp3','ogg','oga','wav','m4a','weba','aac','flac'] %}{% set ns.a = true %}
+      {%- elif ext == 'pdf' %}{% set ns.p = true %}{% endif %}{% endfor %}{% endif %}
+    <a class="ccard" role="listitem" data-k="{{ 'communique' if b.style == 'communique' else 'billet' }}" href="/b/{{ b.slug }}">
+      {% if cover %}<span class="cccover"><img src="/media/{{ cover.thumb }}" alt="{{ cover.alt }}" loading="lazy"></span>
+      {%- elif b.embed_snapshot_url %}<span class="cccover"><img src="{{ b.embed_snapshot_url }}" alt="" loading="lazy"></span>
+      {%- elif ns.v %}<span class="cccover vid"></span>
+      {%- elif ns.a %}<span class="cccover aud"></span>
+      {%- elif ns.p %}<span class="cccover doc"></span>
+      {%- elif b.ref_host %}<span class="cccover link"></span>{% endif %}
+      <div class="ccbody">
+        <div class="cctop"><span class="ccic">{{ '📡' if b.style == 'communique' else '📝' }}</span><span class="cctype">{{ 'communiqué' if b.style == 'communique' else 'billet' }}</span>
+          {% if ns.v or ns.a or ns.p %}<span class="ccmed">{% if ns.v %}🎬{% endif %}{% if ns.a %}🎵{% endif %}{% if ns.p %}📄{% endif %}</span>{% endif %}
+        </div>
+        <h3 class="serif">{{ b.title or ((b.summary[:64] ~ '…') if b.summary else 'Billet') }}</h3>
+        {% if b.summary %}<p class="ccdek">{{ b.summary }}</p>{% endif %}
+        <div class="ccwho">{% if b.published_at %}{{ b.published_at[:10] }}{% endif %}{% if b.ref_host %} · <span class="cchost">🔗 {{ b.ref_host }}</span>{% elif b.tags %} · {{ b.tags[0].emoji }} #{{ b.tags[0].slug }}{% endif %}</div>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="cardots" id="cardots" aria-hidden="true"></div>
+</section>
+{% endif %}
+
 {% for b in billets %}
 <article class="dossier h-entry billet">
   <div class="src">
@@ -33,12 +68,26 @@
       {% endif %}
     </div>
   </div>
-  {% if b.media %}
+  {% set imgs = (b.media | selectattr('thumb') | list) if b.media else [] %}
+  {% if imgs %}
   <div class="prev"><div class="gallery" data-lightbox>
-    {% for m in b.media %}
+    {% for m in imgs %}
     <a class="gallery-item" href="/media/{{ m.filename }}" data-full="/media/{{ m.filename }}"
        data-alt="{{ m.alt }}" aria-label="Agrandir l'image">
       <img src="/media/{{ m.thumb }}" alt="{{ m.alt }}" loading="lazy" width="{{ m.width }}" height="{{ m.height }}"></a>
+    {% endfor %}
+  </div></div>
+  {% endif %}
+  {# a/v/pdf : embarqués dans le corps pour un billet court (#1094). Pour un
+     billet LONG, seul le résumé s'affiche — on montre alors le média ici, sinon
+     il disparaîtrait de la vitrine. #}
+  {% set av = (b.media | rejectattr('thumb') | list) if b.media else [] %}
+  {% if b.is_long and av %}
+  <div class="prev"><div class="smedias">
+    {% for m in av %}{% set ext = m.filename.rsplit('.', 1)[-1] | lower %}
+    {% if ext in ['mp4','webm','ogv','mov'] %}<video class="sv" controls preload="metadata" playsinline src="/media/{{ m.filename }}"></video>
+    {% elif ext in ['mp3','ogg','oga','wav','m4a','weba','aac','flac'] %}<audio class="sa" controls preload="none" src="/media/{{ m.filename }}"></audio>
+    {% elif ext == 'pdf' %}<a class="sf" href="/media/{{ m.filename }}" target="_blank" rel="noopener">📄 Ouvrir le PDF</a>{% endif %}
     {% endfor %}
   </div></div>
   {% endif %}

@@ -100,6 +100,30 @@ async def _resolve_and_store_embed(request: Request, billet_id: str, embed_url: 
                          provider=res["provider"], fetched_at=_now(request))
 
 
+async def _maybe_ref_card(request: Request, billet_id: str,
+                          ref_url: str | None, embed_url: str | None) -> None:
+    """URL de RÉFÉRENCE sans embed explicite (#1104) : si elle n'est PAS un
+    média distant (oEmbed), on en fabrique une vignette d'aperçu — une link-card
+    OG (titre/description/image), SSRF-gardée et sanitisée, jamais une iframe ni
+    du HTML distant — cachée dans embed_html, que le rendu affiche déjà.
+
+    La règle de l'utilisateur : aperçu SEULEMENT si ce n'est pas un média
+    embarqué/distant. `resolve_embed` distingue justement `kind`=oembed (média
+    distant → on ne touche à rien) de `kind`=linkcard (page ordinaire → vignette).
+    Ne lève jamais : une vignette ne doit pas casser une publication."""
+    if not ref_url or embed_url:
+        return
+    client = request.app.state.http_client
+    resolver = getattr(request.app.state, "resolver", ssrf_mod._default_resolver)
+    try:
+        res = await linkcard.resolve_embed(ref_url, client=client, resolver=resolver)
+    except Exception:  # noqa: BLE001 — l'aperçu est un bonus, jamais un point de rupture
+        return
+    if res.get("kind") == "linkcard" and res.get("html"):
+        await repo.set_embed(request.app.state.conn, billet_id, html=res["html"],
+                             provider=res.get("provider"), fetched_at=_now(request))
+
+
 async def _maybe_capture_snapshot(request: Request, billet_id: str, embed_url: str | None,
                                   style: str, *, prev_embed_url: str | None = None,
                                   prev_snapshot: str | None = None) -> None:
@@ -312,6 +336,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         billet_id = await repo.create_billet(request.app.state.conn, data, now=_now(request))
         skipped = await _save_uploads(request, billet_id, media_files)
         await _resolve_and_store_embed(request, billet_id, data.embed_url)
+        await _maybe_ref_card(request, billet_id, data.ref_url, data.embed_url)
         await _maybe_capture_snapshot(request, billet_id, data.embed_url, data.style)
         row = await repo.get_by_id(request.app.state.conn, billet_id)
         event = "billet.published" if data.publish else "billet.edited"
@@ -367,6 +392,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
                                   "published" if action == "publish" else "archived",
                                   now=_now(request))
         await _resolve_and_store_embed(request, billet_id, embed_url)
+        await _maybe_ref_card(request, billet_id, ref_url, embed_url)
         await _maybe_capture_snapshot(request, billet_id, embed_url, data.style,
                                       prev_embed_url=prev_embed_url, prev_snapshot=prev_snapshot)
         row = await repo.get_by_id(conn, billet_id)
