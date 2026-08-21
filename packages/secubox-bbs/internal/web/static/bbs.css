@@ -71,6 +71,9 @@ body{
 .serif{font-family:"Fraunces","Cinzel","Cormorant Garamond","Iowan Old Style",Palatino,Georgia,serif;font-optical-sizing:auto;letter-spacing:-.005em}
 .mono{font-family:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.86em}
 h1,h2,h3{margin:0;text-wrap:balance;letter-spacing:-.02em}
+/* Lecture d'un fil (#1092) : mesure d'article de gazette — colonne centrée, le
+   texte ne s'étire pas d'un bord à l'autre du volet de lecture. */
+.lecture{max-width:780px;margin:0 auto;width:100%}
 a{color:inherit}
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:6px}
