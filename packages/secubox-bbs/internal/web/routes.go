@@ -515,6 +515,12 @@ type NewsItem struct {
 	Feed *PodFeed      // non-nil : dossier de flux groupé (podcaster)
 	Fil  *store.Thread // non-nil : dossier de fil ordinaire
 	Date int64
+	// Cartes de SALON (#1092/#1093) : aperçu du premier message et dernier
+	// commentaire (auteur + extrait + date). Vides sur l'accueil.
+	Apercu      string
+	LastAuteur  string
+	LastExtrait string
+	LastAt      int64
 }
 
 // composerRedaction mêle les fils NON-podcaster et les flux groupés du
@@ -559,9 +565,63 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 		s.rendMediatheque(w, r, p)
 		return
 	}
-	s.poseNonLus(&p)
+	// #1092 : un salon se rend comme la GAZETTE — ses dossiers en cartes
+	// newsroom (aperçu + dernier commentaire), pas en liste plate à trois
+	// colonnes. La coquille « poste de travail » reste pour un fil ouvert, le
+	// compte, la console ; les salons rejoignent la rédaction.
+	p.News = s.composerRedactionSalon(p.Threads, pub)
 	p.Titre = p.Cat.Title
-	s.rend(w, r, "index", p)
+	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// composerRedactionSalon rend les fils d'UN salon en cartes de rédaction. À la
+// différence de composerRedaction (l'accueil), il n'injecte PAS les flux
+// podcaster globaux — ils n'appartiennent pas au salon, et un salon à dominante
+// podcaster est déjà parti en médiathèque plus haut. Chaque carte porte son
+// aperçu (premier message) et son dernier commentaire (#1092/#1093). `pub`
+// force la vue publique : un aperçu ne doit jamais révéler un message local.
+func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsItem {
+	out := make([]NewsItem, 0, len(fils))
+	for i := range fils {
+		if fils[i].Source == "podcaster" {
+			continue
+		}
+		ap, la, lx, lt := s.apercuEtDernier(fils[i].ID, pub)
+		out = append(out, NewsItem{
+			Fil: &fils[i], Date: fils[i].LastPostAt,
+			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
+		})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	return out
+}
+
+// apercuEtDernier lit l'aperçu (premier message) et le dernier commentaire d'un
+// fil pour sa carte. En vue publique (`pub`), on ne considère QUE les messages
+// publics — un aperçu ne doit pas divulguer un message local. Best-effort :
+// tout échec de lecture rend des chaînes vides, jamais une panne de page.
+func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64) {
+	var posts []store.Post
+	if pub {
+		posts, _ = s.st.PublicPostsOf(threadID)
+	} else {
+		posts, _ = s.st.PostsOf(threadID)
+	}
+	if len(posts) == 0 {
+		return
+	}
+	if b, err := s.st.Body(posts[0]); err == nil {
+		apercu = extrait(b, 180)
+	}
+	if len(posts) > 1 {
+		last := posts[len(posts)-1]
+		if b, err := s.st.Body(last); err == nil {
+			lastExtrait = extrait(b, 120)
+		}
+		lastAuteur, _ = s.st.AuteurEtAvatar(last.AuthorID)
+		lastAt = last.CreatedAt
+	}
+	return
 }
 
 // media (/media) rend la médiathèque du podcaster en arborescence.

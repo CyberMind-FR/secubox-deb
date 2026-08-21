@@ -81,7 +81,7 @@
         <a class="btn discuss" href="/media#f{{$f.ID}}">🎧 Ouvrir</a>
       </div>
     </article>
-    {{else}}{{with .Fil}}
+    {{else}}{{$n := .}}{{with .Fil}}
     <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}">
       {{if .Published}}<span class="stamp pub">publié</span>{{else if ne .Visibility "public"}}<span class="stamp loc">local</span>{{end}}
       <div class="src">
@@ -101,6 +101,7 @@
           <h2><a href="/t/{{.ID}}">{{.Title}}</a></h2>
         </div>
       </div>
+      {{if $n.Apercu}}<p class="dek">{{$n.Apercu}}</p>{{end}}
       {{if or (eq .MediaKind "video") (eq .Source "video")}}
       <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
@@ -114,6 +115,7 @@
         {{if $.V.Connecte}}<a class="btn" href="/article/nouveau?t={{.ID}}">✍️ Co-écrire</a>{{end}}
         <a class="btn discuss" href="/t/{{.ID}}">💬 Discuter</a>
       </div>
+      {{if $n.LastExtrait}}<div class="lastc"><span class="who">{{$n.LastAuteur}} · {{date $n.LastAt}}</span> {{$n.LastExtrait}}</div>{{end}}
     </article>
     {{end}}{{end}}
     {{else}}

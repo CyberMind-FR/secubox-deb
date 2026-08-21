@@ -1,3 +1,12 @@
+secubox-bbs (0.28.18-1~bookworm1) bookworm; urgency=medium
+
+  * Salons en GAZETTE (#1092/#1093) : /c/<salon> se rend comme la rédaction —
+    dossiers en cartes newsroom au lieu de la liste plate à trois colonnes, avec
+    APERÇU du premier message et DERNIER COMMENTAIRE (auteur + extrait + date)
+    par carte. Vue publique : l'aperçu n'expose jamais un message local.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:10:00 +0200
+
 secubox-bbs (0.28.17-1~bookworm1) bookworm; urgency=medium
 
   * Reskin coquille COMPLET (#1092) : toute la coquille (barre, rail, liste de
