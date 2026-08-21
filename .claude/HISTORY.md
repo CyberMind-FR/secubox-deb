@@ -10,6 +10,42 @@
 
 ---
 
+## 2026-08-21 — BBS médias publics + skin newsroom généralisé, carrousel réparé, kbin & nextcloud ressuscités
+
+**BBS #1114 (secubox-bbs 0.28.35 → 0.28.46, PRs #1115/#1116/#1117).**
+- **Médias publics pour anonymes** : les fichiers `/f/` cités par un message
+  PUBLIC sont visibles sans session (visibility `public`, propagée aux réponses
+  et nouveaux fils, backfill des 33 fichiers concernés).
+- **Skin newsroom étendu** à `/t/` (fil), `/mp` (rail = conversations) et
+  `/compte` : masthead partagé (avmast/avrubriques/avacces/avrail), **alerte MP**
+  en haut à droite, **médaillon SVG animé** en logo, jeux de gabarits séparés.
+- **PDF / pièces non jouables** → fiche fichier à icône générique (fin de
+  l'`<embed>` aveugle).
+- **Carrousel** : (1) doublon 🎬 supprimé, (2) plus de tuiles vides — vignette
+  « mosaïque » teintée par type, (3) **le VRAI bug** : l'aperçu rendait l'URL en
+  `<a>` IMBRIQUÉ dans le `<a>` de la carte → HTML invalide, navigateur refermant
+  la carte (couvertures détachées, grille éclatée) ; aperçus passés en texte brut.
+- **Intégrité** : fausse divergence sur espaces/CRLF, et surtout **corps
+  root:root intraversables** (un `bbsctl ingest` lancé à la main en root créait
+  des dossiers de fils root:root — 63 corps illisibles, « ce message diverge de
+  l'index » sur des fils entiers) : `writeBody` adopte désormais le DOSSIER, le
+  postinst ré-aligne l'existant.
+
+**billets 0.8.3 (PR #1118)** — même médaillon BBS en logo du masthead.
+
+**kbin / toolbox 504 (live, config board)** — `10.99.0.1` (passerelle du portail
+captif toolbox, iface WiFi tombée) hardcodée dans TROIS consommateurs (route
+sbxwaf, nginx `toolbox.conf`, fragment HAProxy `cfg.d/30-toolbox-landing.cfg`) →
+repointés `127.0.0.1:8088`. Piège : sbxwaf tournait en orphelin, `kill -HUP` le
+TUE (503 board-wide) ; recharger = `systemctl restart secubox-waf-ng.service`.
+
+**nextcloud nc.gk2 502, « ne se réveille pas »** — conteneur STOPPED démarré à la
+main ; réveil cassé par dérive de domaine (vhost servi `nc.gk2` mais
+manifeste/on-demand/nginx sur l'ancien `nextcloud.gk2`) + wiring de réveil absent
+du vhost + `sites-enabled/nextcloud.conf` = COPIE périmée, pas un lien. Corrigé :
+manifeste `portal.domain=nc.gk2`, `secubox-wakectl waf-sync/nginx-sync/health-sync`,
+symlink rétabli.
+
 ## 2026-08-19 — Grand ménage : toolbox-ng réparé, mitmproxy Python éradiqué, orage occ dompté, WAF ressuscité
 
 **toolbox-ng ne compilait plus depuis le 17 août.** Un merge feature/740 avait

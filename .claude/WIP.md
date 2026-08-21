@@ -6,9 +6,38 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-19*
+*Mis à jour : 2026-08-21*
 
 ---
+
+## 2026-08-21 — BBS médias publics + newsroom, carrousel, kbin, nextcloud
+
+### ✅ Fait — déployé + synchronisé sur apt.secubox.in
+
+- **secubox-bbs 0.28.46** (#1114, PRs #1115/#1116/#1117) — médias publics pour
+  anonymes ; skin newsroom sur `/t/` `/mp` `/compte` + alerte MP + médaillon SVG ;
+  fiche fichier PDF ; carrousel réparé (doublon 🎬, tuiles vides → mosaïque, et
+  le vrai bug : `<a>` imbriqué) ; corps root:root intraversables réparés
+  (writeBody adopte le dossier + postinst self-heal).
+- **secubox-billets 0.8.3** (PR #1118) — même médaillon BBS en logo.
+- **kbin / toolbox 504** (config live) — `10.99.0.1` mort → `127.0.0.1` dans les
+  3 consommateurs ; sbxwaf remis sous `secubox-waf-ng.service`.
+- **nextcloud nc.gk2** (config live) — réveil scale-to-zero réparé (manifeste
+  `nc.gk2` + `secubox-wakectl` sync + symlink `sites-enabled`).
+
+### ⬜ Next Up — file de la session, non traitée
+
+- **Bascule public ⇄ privé d'un fil BBS** — il n'existe AUCUN contrôle pour
+  rendre un fil local→public (le bouton « Publier en billet » exige déjà public).
+  À ajouter : store `BasculeVisibiliteThread` (+ propagation fichiers, et REVERT
+  des fichiers non cités ailleurs quand on repasse local — pas de fuite), route
+  `/t/{id}/visibilite` (sysop+CSRF), bouton dans thread.html.
+- **radio 403 Forbidden** — yt-dlp `HTTP 403` sur clips YouTube (cookies/IP).
+- **Alias de domaines** — `secubox.in`→`3d.gk2.secubox.in`,
+  `all.gk2.net`→`all.gk2.secubox.in` (ACL HAProxy + route WAF + certs/DNS).
+- **Vignette-snapshot d'URL dans BBS** (éditeur + carrousel) — feature à
+  concevoir proprement : réutiliser `secubox_core.screenshots` (capture async
+  cachée, jamais en requête), sécurité egress CSPN, réconcilier avec #1049.
 
 ## 2026-08-19 — Réparation, dé-Python, WAF, rapports
 
