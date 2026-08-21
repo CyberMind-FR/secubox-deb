@@ -1,3 +1,13 @@
+secubox-bbs (0.28.15-1~bookworm1) bookworm; urgency=medium
+
+  * Skin coquille (#1092) : porte la « bonne skin » validée en maquette — police
+    de titre **Fraunces** (serif éditoriale moderne, embarquée via go:embed) sur
+    tous les titres et la marque, masthead à l'encre (marque Fraunces + losange
+    cinabre), accent **cinabre** unique (--accent). Premier passage : typo +
+    marque ; cartes/boutons suivent selon retour visuel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:30:00 +0200
+
 secubox-bbs (0.28.14-1~bookworm1) bookworm; urgency=medium
 
   * Skin (#1092) : la coquille (fils/salons/messages/compte/console, bbs.css)
