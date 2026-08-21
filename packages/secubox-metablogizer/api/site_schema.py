@@ -27,6 +27,46 @@ def load_schema() -> dict:
         return json.load(f)
 
 
+# Champs qu'un opérateur peut PARAMÉTRER depuis la page site (#1089). Le nom
+# (clé de répertoire) n'en fait pas partie, et `published` reste piloté par les
+# actions publish/unpublish, jamais par une édition de métadonnées.
+CHAMPS_EDITABLES = (
+    "domain", "title", "description", "category", "tags",
+    "aliases", "source_url", "gitea_repo", "streamlit_app",
+)
+# Champs DÉRIVÉS, recalculés par enrich() à chaque lecture (git). Les persister
+# figerait une valeur périmée : on les retire avant d'écrire.
+CHAMPS_DERIVES = ("version", "last_updated")
+
+
+def fusionner(existant: dict, patch: dict) -> tuple[dict, list[str]]:
+    """Applique un patch d'édition sur un `site.json` et valide le résultat.
+
+    - seules les clés de `CHAMPS_EDITABLES` sont prises en compte ; les autres
+      clés du patch sont ignorées silencieusement ;
+    - une valeur `None` EFFACE le champ (retour au défaut) ;
+    - le nom n'est jamais modifié ici, et les champs dérivés ne sont jamais
+      persistés ;
+    - le document final est validé contre le schéma. Un alias qui n'est pas un
+      domaine est ainsi refusé AVANT écriture — défense en profondeur : la
+      génération nginx (`alias_du_site`) le refiltre de toute façon.
+
+    Retourne `(doc, erreurs)` ; `erreurs` non vide ⇒ ne pas écrire.
+    """
+    out = dict(existant)
+    for k in CHAMPS_EDITABLES:
+        if k in patch:
+            v = patch[k]
+            if v is None:
+                out.pop(k, None)
+            else:
+                out[k] = v
+    for k in CHAMPS_DERIVES:
+        out.pop(k, None)
+    ok, errs = validate(out)
+    return out, errs
+
+
 def validate(doc: dict) -> tuple[bool, list[str]]:
     """Validate doc against the schema.
 

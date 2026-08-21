@@ -14,6 +14,12 @@ override_dh_auto_install:
 	  debian/secubox-metablogizer/lib/systemd/system/metablog-shots.timer.d/10-cadence.conf
 	install -d debian/secubox-metablogizer/usr/lib/secubox/metablogizer
 	cp -r api debian/secubox-metablogizer/usr/lib/secubox/metablogizer/
+	# Schéma site.json (#1089) : lu par site_schema.py à parent.parent/schema/.
+	# Il n'était pas empaqueté — un exemplaire périmé traînait sur la board hors
+	# dpkg. On le livre pour que le paquet en soit propriétaire et à jour.
+	install -d debian/secubox-metablogizer/usr/lib/secubox/metablogizer/schema
+	install -m 0644 schema/site.json.schema.json \
+		debian/secubox-metablogizer/usr/lib/secubox/metablogizer/schema/site.json.schema.json
 	install -d debian/secubox-metablogizer/usr/share/secubox/www/metablogizer
 	[ -d www/metablogizer ] && cp -r www/metablogizer/. debian/secubox-metablogizer/usr/share/secubox/www/metablogizer/ || true
 	install -d debian/secubox-metablogizer/usr/share/secubox/menu.d
