@@ -1,3 +1,11 @@
+secubox-metrics (1.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * rapport.envoyer : champ `note` facultatif (`[rapport] note = "..."`) joint
+    au corps du courriel — un mot ponctuel au destinataire (ex. corriger les
+    balises canoniques d'un site) sans ouvrir un autre canal.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 17:03:48 +0200
+
 secubox-metrics (1.10.2-1~bookworm1) bookworm; urgency=medium
 
   * CORRECTIF rapport planifié (anibal-amiot) : durcissement de la tâche.

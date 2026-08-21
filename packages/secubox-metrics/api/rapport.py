@@ -379,13 +379,20 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
     if bcc:
         # send_message honore Bcc dans l'enveloppe puis retire l'en-tete.
         msg["Bcc"] = bcc
-    msg.set_content(
+    corps = (
         f"Rapport de frequentation SecuBox.\n\n"
         f"Portee  : {portee}\n"
         f"Periode : {periode}\n"
         f"Genere  : {datetime.now().strftime('%d/%m/%Y a %H:%M')}\n\n"
         "Le detail est dans la piece jointe.\n"
     )
+    # NOTE facultative (`[rapport] note = "..."`) : un mot pour le destinataire,
+    # joint au rapport. Sert à faire remonter un avis ponctuel (ex. corriger les
+    # balises canoniques d'un site) sans ouvrir un autre canal. Vide = rien.
+    note = (c.get("note") or "").strip()
+    if note:
+        corps += "\n— Note —\n" + note + "\n"
+    msg.set_content(corps)
     horodatage = datetime.now().strftime("%Y%m%d")
     msg.add_attachment(pdf, maintype="application", subtype="pdf",
                        filename=f"secubox-frequentation-{horodatage}.pdf")
