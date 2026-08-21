@@ -1,3 +1,11 @@
+secubox-bbs (0.28.20-1~bookworm1) bookworm; urgency=medium
+
+  * Cohérence typo (#1092) : la rédaction (newsroom.css : accueil, salons,
+    médiathèque) passe aussi à Fraunces, comme la coquille — plus d'écart de
+    caractère entre l'accueil et les fils.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:50:00 +0200
+
 secubox-bbs (0.28.19-1~bookworm1) bookworm; urgency=medium
 
   * Lecture d'un fil en gazette (#1092) : le contenu d'un fil ouvert (fil de
