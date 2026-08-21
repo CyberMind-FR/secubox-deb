@@ -133,6 +133,8 @@ a{color:inherit;text-decoration:none}
 .dossier .cmini{width:56px;height:56px;border-radius:4px;overflow:hidden;border:1px solid var(--line);background:var(--soft);display:grid;place-items:center;flex:0 0 auto;text-decoration:none}
 .dossier .cmini img{width:100%;height:100%;object-fit:cover;display:block}
 .dossier .cmini.ic{font-size:1.3rem}
+.dossier .cmini.ic.vid{background:var(--ink);color:var(--paper)}
+.dossier .cplay{max-width:230px;height:34px;flex:0 0 auto}
 .dossier .cmini:hover{border-color:var(--cyan)}
 .dossier .dek a,.dossier .lastc a{color:var(--cyan);text-decoration:none;border-bottom:1px solid var(--cyan-s);word-break:break-word}
 .dossier .dek a:hover,.dossier .lastc a:hover{border-bottom-color:var(--cyan)}
