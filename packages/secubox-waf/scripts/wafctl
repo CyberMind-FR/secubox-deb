@@ -225,6 +225,23 @@ cmd_test() {
     echo "HTTP $code"
 }
 
+cmd_purge_cache() {
+    # Purge le cache média du WAF Go (sbxwaf) : fraîcheur IMMÉDIATE après un
+    # déploiement d'assets. Le cache (TTL 1 h) sert CSS/JS/images/polices ; un
+    # asset mis à jour dont l'amont ne change pas l'ETag reste sinon masqué
+    # jusqu'à la fin de son TTL (« vieux skin »). SIGUSR1 → sbxwaf vide mémoire
+    # + disque. À appeler dans le flux de déploiement d'un module à assets.
+    if systemctl is-active --quiet secubox-waf-ng.service 2>/dev/null; then
+        if systemctl kill -s SIGUSR1 secubox-waf-ng.service 2>/dev/null; then
+            echo "Cache média WAF purgé (SIGUSR1 → secubox-waf-ng)."
+        else
+            echo "wafctl: échec de l'envoi du signal SIGUSR1." >&2; exit 1
+        fi
+    else
+        echo "wafctl: secubox-waf-ng.service inactif — rien à purger." >&2; exit 1
+    fi
+}
+
 case "${1:-}" in
     status)     cmd_status ;;
     components) cmd_components ;;
@@ -236,6 +253,7 @@ case "${1:-}" in
     routes)     cmd_routes ;;
     add-route)  cmd_add_route "$2" "$3" "$4" ;;
     reload)     cmd_reload ;;
+    purge-cache) cmd_purge_cache ;;
     test)       cmd_test "$2" ;;
     *)
         cat << EOF
@@ -254,6 +272,10 @@ Container:
 Routes:
   routes        Show HAProxy routes config
   add-route <domain> <ip> <port>  Add a route
+
+Cache:
+  purge-cache   Vide le cache média du WAF (SIGUSR1) — fraîcheur immédiate
+                après un déploiement d'assets (TTL 1 h sinon)
 
 Operations:
   logs [n]      Show last n log lines (default 50)

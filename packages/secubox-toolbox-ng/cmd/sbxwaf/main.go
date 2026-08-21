@@ -44,9 +44,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
@@ -1196,6 +1198,25 @@ func main() {
 		Addr:              *listen,
 		Handler:           srv.handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// SIGUSR1 : PURGE du cache média — fraîcheur immédiate après un déploiement
+	// d'assets. Un `?v=` sur l'adresse suffit pour un asset versionné (nouvelle
+	// clé de cache) ; le signal couvre les assets NON versionnés (le « vieux
+	// skin » qui persistait jusqu'à la fin du TTL d'une heure). À brancher dans
+	// le flux de déploiement : `systemctl kill -s SIGUSR1 secubox-waf-ng`.
+	if srv.mediaCache != nil {
+		purge := make(chan os.Signal, 1)
+		signal.Notify(purge, syscall.SIGUSR1)
+		go func() {
+			for range purge {
+				if n, err := srv.mediaCache.Purge(); err != nil {
+					log.Printf("sbxwaf: purge du cache média (SIGUSR1) : %d effacées, erreur disque : %v", n, err)
+				} else {
+					log.Printf("sbxwaf: cache média purgé sur SIGUSR1 — %d entrées effacées", n)
+				}
+			}
+		}()
 	}
 
 	log.Printf("sbxwaf: listening on %s", *listen)
