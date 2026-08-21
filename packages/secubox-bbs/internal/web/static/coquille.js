@@ -9,6 +9,32 @@
 // affiché en permanence par la feuille de style, et sur téléphone la barre
 // basse porte déjà les cinq destinations principales. Ce script n'ajoute qu'un
 // confort — dérouler les salons sur un petit écran — jamais un passage obligé.
+// Thème clair/sombre PARTAGÉ avec la rédaction (#1092). La coquille lisait le
+// papier par défaut et IGNORAIT le choix « nuit » posé sur l'accueil (même clé
+// localStorage, mais aucun code pour l'appliquer côté coquille) : un fil ouvert
+// restait donc clair pendant que la gazette était sombre. On applique la même
+// clé (av-theme) et le même basculement, dans son PROPRE bloc — la bascule du
+// rail ci-dessous sort tôt quand il n'y a pas de rail, ce qui aurait sauté le
+// thème s'il avait vécu là.
+(function () {
+  var r = document.documentElement;
+  try { var sv = localStorage.getItem('av-theme'); if (sv) r.setAttribute('data-theme', sv); } catch (e) {}
+  function theme() {
+    var cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+    var nxt = cur === 'dark' ? 'light' : 'dark';
+    r.setAttribute('data-theme', nxt);
+    try { localStorage.setItem('av-theme', nxt); } catch (e) {}
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-act="theme"]');
+    if (t) { e.preventDefault(); theme(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    var tag = (e.target && e.target.tagName) || '';
+    if (e.key === 't' && tag !== 'INPUT' && tag !== 'TEXTAREA') theme();
+  });
+})();
+
 (function () {
   var bascule = document.querySelector('.menu-bascule');
   var rail = document.getElementById('rail');
