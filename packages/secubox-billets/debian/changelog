@@ -1,3 +1,13 @@
+secubox-billets (0.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlets carrés + uniformes (216×216) et TOUJOURS remplis (#1104) :
+    couverture image, ou placeholder typé (▶ vidéo / 🎵 audio / 📄 pdf / 🔗
+    lien / vignette de communiqué), + ligne d'aperçu, + hôte source 🔗.
+    Aperçu NETTOYÉ : excerpt retire le titre en tête, le pied « --- Discuter
+    sur le BBS » et les refs média brutes (/media, /f). newsroom.css?v=nr5.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:50:25 +0000
+
 secubox-billets (0.8.1-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel : cardlets sans image portent désormais une ligne d'aperçu
