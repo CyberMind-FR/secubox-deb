@@ -286,3 +286,57 @@ a{color:inherit;text-decoration:none}
 .comment-form textarea,.comment-form input[type=text],.comment-form input[type=email]{width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--soft);color:var(--ink);font-family:"Inter",sans-serif;font-size:.9rem;outline:none}
 .comment-form textarea:focus,.comment-form input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-s)}
 .comment-form button{align-self:flex-start}
+
+/* ── Carrousel « À la une » + médias en cardlet (#1104) — billets. ── */
+.caroussel{margin:0 0 26px}
+.carhead{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.carhead h2{margin:0;font-size:1.15rem}
+.carhead .sub{color:var(--dim);font-size:.8rem}
+.carnav{margin-left:auto;display:flex;gap:8px}
+.carbtn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-size:.9rem;display:grid;place-items:center;box-shadow:var(--shadow);transition:.15s}
+.carbtn:hover{border-color:var(--sky);color:var(--sky)}
+.carbtn:disabled{opacity:.35;cursor:default}
+.cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
+.cartrack::-webkit-scrollbar{display:none}
+.cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
+.ccard{--tone:var(--sky);flex:0 0 auto;width:214px;min-height:150px;scroll-snap-align:start;display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;overflow:hidden;
+  box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
+.ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
+.ccard:focus-visible{outline:2px solid var(--tone);outline-offset:2px}
+.ccard[data-k="billet"]{--tone:var(--sky)}
+.ccard[data-k="communique"]{--tone:var(--coral)}
+/* média en cardlet : couverture image OU pastilles a/v/pdf */
+.cccover{display:block;height:96px;background:var(--soft);overflow:hidden}
+.cccover img{width:100%;height:100%;object-fit:cover;display:block}
+.ccbody{display:flex;flex-direction:column;flex:1;padding:11px 13px 0}
+.cctop{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.ccic{font-size:1.05rem;line-height:1}
+.cctype{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--tone)}
+.ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.85rem;filter:grayscale(.15)}
+.ccard h3{margin:0 0 auto;font-size:1rem;line-height:1.2;letter-spacing:-.01em;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ccwho{display:flex;align-items:center;gap:6px;margin-top:11px;color:var(--dim);font-size:.74rem}
+.cardots{display:flex;gap:6px;justify-content:center;margin-top:2px;flex-wrap:wrap}
+.cardots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line-2);cursor:pointer;padding:0;transition:.15s}
+.cardots button.on{background:var(--sky);transform:scale(1.3)}
+/* showroom : rangée de médias a/v/pdf sous la carte (les images restent en galerie) */
+.smedias{display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 4px}
+.smedias .sv{width:100%;max-width:340px;border-radius:10px;border:1px solid var(--line);background:#000}
+.smedias .sa{width:100%;max-width:340px}
+.smedias .sf{display:inline-flex;align-items:center;gap:7px;font-size:.8rem;color:var(--sky);border:1px solid var(--line);border-radius:9px;padding:7px 11px;text-decoration:none;background:var(--panel)}
+.smedias .sf:hover{border-color:var(--sky)}
+@media(max-width:560px){.carnav{display:none}}
+
+/* ── Médias embarqués : bornés pour ne pas déborder / se faire couper (#1094).
+   Une vidéo YouTube-native ou un mp4 vertical arrivait à sa taille source et
+   dépassait la colonne. On la contient à la largeur, hauteur bornée. ── */
+.e-content img,.e-content video,.e-content audio,.e-content embed,
+.smedias video,.smedias audio{max-width:100%}
+.e-content video,.smedias .sv{width:100%;height:auto;max-height:70vh;background:#000;border-radius:10px;display:block;margin:10px 0}
+.e-content audio,.smedias .sa{width:100%;display:block;margin:8px 0}
+.e-content embed{width:100%;height:auto;min-height:60vh;border-radius:10px;margin:10px 0}
+.e-content img{height:auto;border-radius:8px}
+/* l'embed distant (oembed/iframe) tient aussi dans la colonne */
+.embed{position:relative;max-width:100%}
+.embed iframe,.embed video{max-width:100%}
