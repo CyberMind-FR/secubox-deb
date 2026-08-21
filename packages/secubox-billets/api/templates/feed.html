@@ -41,6 +41,7 @@
           {% endif %}
         </div>
         <h3 class="serif">{{ b.title or ((b.summary[:64] ~ '…') if b.summary else 'Billet') }}</h3>
+        {% if b.summary and (not cover) %}<p class="ccdek">{{ b.summary }}</p>{% endif %}
         <div class="ccwho">{% if b.published_at %}{{ b.published_at[:10] }}{% endif %}{% if b.tags %} · {{ b.tags[0].emoji }} #{{ b.tags[0].slug }}{% endif %}</div>
       </div>
     </a>

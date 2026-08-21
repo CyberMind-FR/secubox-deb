@@ -314,9 +314,11 @@ a{color:inherit;text-decoration:none}
 .ccic{font-size:1.05rem;line-height:1}
 .cctype{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--tone)}
 .ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.85rem;filter:grayscale(.15)}
-.ccard h3{margin:0 0 auto;font-size:1rem;line-height:1.2;letter-spacing:-.01em;
+.ccard h3{margin:0;font-size:1rem;line-height:1.2;letter-spacing:-.01em;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ccdek{margin:6px 0 0;font-size:.78rem;line-height:1.35;color:var(--dim);
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.ccwho{display:flex;align-items:center;gap:6px;margin-top:11px;color:var(--dim);font-size:.74rem}
+.ccwho{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;color:var(--dim);font-size:.74rem}
 .cardots{display:flex;gap:6px;justify-content:center;margin-top:2px;flex-wrap:wrap}
 .cardots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line-2);cursor:pointer;padding:0;transition:.15s}
 .cardots button.on{background:var(--sky);transform:scale(1.3)}
