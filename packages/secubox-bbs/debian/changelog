@@ -1,3 +1,13 @@
+secubox-bbs (0.28.33-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : cardlets à média (#1104) — couverture (vignette de flux du
+    podcaster) + pastilles 🎬/🎧 selon la nature du fil ; les fils vidéo
+    portent une couverture-placeholder ▶. Aucune donnée nouvelle : on n'utilise
+    que le média DÉJÀ porté par le fil/flux (vignette, MediaKind, Source) — les
+    pièces jointes par-message restent hors accueil (perf, inchangé).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:34:18 +0000
+
 secubox-bbs (0.28.32-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel « À la une » : auto-défilement (#1104) — avance toutes les 5 s,
