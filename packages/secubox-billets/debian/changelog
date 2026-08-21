@@ -1,3 +1,15 @@
+secubox-billets (0.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Réparation rétroactive des médias (#1094) : commande
+    `python -m api.manage backfill-media`. Les billets publiés AVANT le
+    correctif gardaient leurs refs `/f/NN` du BBS en texte mort (billets ne
+    sert pas `/f/…`). La commande refetch chaque octet-source auprès du magasin
+    du BBS (index.db + arbre files/, en LECTURE SEULE, suppression douce
+    respectée), l'ingère par le pipeline validé (process_upload) et réécrit le
+    corps vers `/media/…` que le rendu embarque. Idempotent.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:00:37 +0000
+
 secubox-billets (0.5.1-1~bookworm1) bookworm; urgency=medium
 
   * #1094 (suite) : le TÉLÉVERSEMENT du formulaire d'édition (HTML) acceptait
