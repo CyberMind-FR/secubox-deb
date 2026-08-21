@@ -788,11 +788,11 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 			p.Cat = c
 		}
 	}
-	// LES FILS VOISINS ALIMENTENT LA COLONNE DU MILIEU. Sans eux, ouvrir un fil
-	// viderait la liste et l'on perdrait sa place — c'est exactement ce que la
-	// disposition a trois colonnes existe pour eviter : on garde la liste sous
-	// les yeux en lisant.
-	p.Threads, _ = s.st.Threads(t.CategoryID, pub)
+	// #1092 : un fil ouvert se lit en GAZETTE — colonne d'article centrée
+	// (.lecture), PAS coincée dans la 3ᵉ colonne étroite de la coquille. On
+	// n'alimente donc plus la liste des fils voisins (elle forçait la disposition
+	// trois colonnes) : la coquille tombe à rail + volet large, où .lecture
+	// respire. Le repère de place est désormais la rédaction (accueil/salons).
 	p.T, p.Titre = t, t.Title
 
 	// LE BOUTON « REPUBLIER » NE S'AFFICHE QUE S'IL PEUT ABOUTIR (#1044). Un
