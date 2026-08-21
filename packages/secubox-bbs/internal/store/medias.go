@@ -83,3 +83,35 @@ func (s *Store) CompteMedias() (map[string]int, error) {
 	}
 	return m, rows.Err()
 }
+
+// MediasDuFil rend les pièces jointes (par ordre d'apparition) des messages
+// d'un fil, pour la vignette média de sa carte de rédaction (#1092). Une seule
+// requête, bornée. `pub` n'expose QUE les messages publics — une carte publique
+// ne doit jamais révéler un média d'un message local. Ne renvoie que l'id et le
+// type MIME : la carte sert la miniature par /f/<id>, elle n'a pas besoin du reste.
+func (s *Store) MediasDuFil(threadID int64, pub bool, borne int) ([]Fichier, error) {
+	q := `SELECT f.id, f.mime
+	        FROM pieces_jointes pj
+	        JOIN posts p ON p.id = pj.post_id
+	        JOIN files f ON f.id = pj.file_id
+	       WHERE p.thread_id = ? AND pj.post_id IS NOT NULL
+	         AND p.deleted_at IS NULL AND f.deleted_at IS NULL`
+	if pub {
+		q += ` AND p.visibility = 'public'`
+	}
+	q += ` GROUP BY f.id ORDER BY min(p.created_at), min(pj.rang) LIMIT ?`
+	rows, err := s.db.Query(q, threadID, borne)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Fichier
+	for rows.Next() {
+		var f Fichier
+		if err := rows.Scan(&f.ID, &f.Mime); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}

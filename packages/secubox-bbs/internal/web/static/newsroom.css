@@ -127,6 +127,13 @@ a{color:inherit;text-decoration:none}
 .dossier .dek{margin:2px 16px 6px;color:var(--dim);font-size:.92rem;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical}
 .dossier .lastc{margin:0 16px 14px;padding:8px 12px;border-left:2px solid var(--line-2);background:var(--soft);border-radius:0 6px 6px 0;font-size:.88rem;line-height:1.45;color:var(--ink)}
 .dossier .lastc .who{font-family:"JetBrains Mono";font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);display:block;margin-bottom:2px}
+/* Mini-médias embarqués du fil (#1092) : les pièces jointes en miniatures, plus
+   jamais « /f/12.png » en texte brut. */
+.dossier .cmedias{display:flex;flex-wrap:wrap;gap:6px;margin:0 16px 10px}
+.dossier .cmini{width:56px;height:56px;border-radius:4px;overflow:hidden;border:1px solid var(--line);background:var(--soft);display:grid;place-items:center;flex:0 0 auto;text-decoration:none}
+.dossier .cmini img{width:100%;height:100%;object-fit:cover;display:block}
+.dossier .cmini.ic{font-size:1.3rem}
+.dossier .cmini:hover{border-color:var(--cyan)}
 .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
 .pill{font-family:"JetBrains Mono";font-size:.6rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
 .pill.pub{color:var(--mint);border-color:var(--mint)} .pill.loc{color:var(--amber);border-color:var(--amber)}

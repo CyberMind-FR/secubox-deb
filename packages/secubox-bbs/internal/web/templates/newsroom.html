@@ -102,6 +102,7 @@
         </div>
       </div>
       {{if $n.Apercu}}<p class="dek">{{$n.Apercu}}</p>{{end}}
+      {{if $n.Medias}}<div class="cmedias">{{range $n.Medias}}{{if eq .Kind "image"}}<a class="cmini" href="/f/{{.ID}}" target="_blank" rel="noopener"><img src="/f/{{.ID}}" alt="" loading="lazy"></a>{{else}}<a class="cmini ic" href="/f/{{.ID}}" target="_blank" rel="noopener" title="pièce jointe">{{if eq .Kind "audio"}}🎧{{else if eq .Kind "video"}}🎬{{else}}📎{{end}}</a>{{end}}{{end}}</div>{{end}}
       {{if or (eq .MediaKind "video") (eq .Source "video")}}
       <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
