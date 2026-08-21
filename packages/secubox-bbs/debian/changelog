@@ -1,3 +1,15 @@
+secubox-bbs (0.28.41-1~bookworm1) bookworm; urgency=medium
+
+  * /compte adopte le skin newsroom (coquille générique pagenr).
+  * Alerte messagerie privée (✉️ + compteur) en haut à droite du masthead
+    newsroom ; le lien /mp reste dans le menu Accès.
+  * PDF et pièces jointes non jouables : fiche fichier à icône générique au
+    lieu d'un <embed> peu fiable (repli toujours visible).
+  * Rail de droite newsroom factorisé (avrail), réutilisé par le fil et /compte.
+  * Tests : contrat newsroom du fil (/t/), 3 déclencheurs /f/envoi, fiches PDF.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:34:38 +0200
+
 secubox-bbs (0.28.40-1~bookworm1) bookworm; urgency=medium
 
   * (0.28.40) Correctif : inclure layout.html dans le jeu « fil » pour le

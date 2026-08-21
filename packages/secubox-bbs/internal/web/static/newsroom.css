@@ -64,6 +64,14 @@ a{color:inherit;text-decoration:none}
 .me-chip small{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
 .ibtn{width:40px;height:40px;border-radius:11px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:grid;place-items:center;font-size:1rem;transition:.2s;box-shadow:var(--shadow)}
 .ibtn:hover{border-color:var(--cyan);color:var(--cyan)}
+/* Alerte messagerie privée (#1114) : point d'entrée /mp en haut à droite du
+   masthead. Au repos = un bouton d'icône ordinaire ; en « mode alerte » (.on,
+   des non-lus) = liseré coral + pastille de compteur. */
+.mpal{position:relative;text-decoration:none}
+.mpal.on{border-color:var(--coral);color:var(--coral)}
+.mpal .mpct{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;
+  background:var(--coral);color:#fff;font-family:"JetBrains Mono";font-size:.62rem;font-weight:700;line-height:17px;
+  text-align:center;box-shadow:0 0 0 2px var(--panel)}
 .btn{padding:8px 15px;border-radius:10px;font-family:"Fraunces","Cinzel";font-weight:600;font-size:.78rem;cursor:pointer;border:1px solid var(--line);background:var(--panel);transition:.16s;display:inline-flex;align-items:center;gap:7px;color:inherit}
 .btn:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
 .btn.primary{background:var(--sky);color:#fff;border-color:var(--sky)} .btn.primary:hover{background:var(--cyan);border-color:var(--cyan)}

@@ -2,18 +2,16 @@
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 
-  Vue d'un FIL dans le skin newsroom AletheiaVox (#1114) : même masthead et même
-  rail que l'accueil/les salons (blocs partagés avmast/avrubriques/avacces), au
-  lieu de l'ancienne coquille layout.html. On RÉUTILISE le corps du fil
-  ({{template "corps"}}, défini dans thread.html) — toute la logique (messages,
-  réponse, sysop, édition, médias) reste intacte. Deux feuilles : bbs.css fournit
-  les classes du corps (.post, .lecture, .reply…), newsroom.css est chargée
-  APRÈS et l'emporte sur la coquille (.mast/.rail/.pnl/.rub/body). Le script
-  coquille.js porte le thème (av-theme, partagé) et l'enregistreur de la réponse.
+  Coquille newsroom GÉNÉRIQUE (#1114) pour les pages autonomes qui n'ont pas de
+  colonne centrale propre (compte…). Même masthead (avmast, avec l'alerte MP en
+  haut à droite), mêmes rails (avrubriques/avacces à gauche, avrail à droite)
+  que l'accueil et le fil ; le corps de la page est RÉUTILISÉ via
+  {{template "corps"}} (défini par compte.html, etc.). bbs.css fournit les
+  classes du corps, newsroom.css est chargée APRÈS et l'emporte sur la coquille.
 -->
-{{define "fil"}}<!doctype html><html lang="fr"><head>
+{{define "pagenr"}}<!doctype html><html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{.T.Title}} — {{.Site}}</title>
+<title>{{if .Titre}}{{.Titre}} — {{end}}{{.Site}}</title>
 <meta name="sbx-no-health-banner">
 <link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
 <link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">

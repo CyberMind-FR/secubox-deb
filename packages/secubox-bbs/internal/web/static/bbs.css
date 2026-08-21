@@ -891,3 +891,12 @@ audio.jointe{width:100%}
 .jointe-pdf{width:100%;height:min(70vh,720px);border:1px solid var(--line);border-radius:10px;margin:8px 0}
 .jointe-pdf-lien{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;color:var(--sky);text-decoration:none;margin-bottom:8px}
 .jointe-pdf-lien:hover{text-decoration:underline}
+/* Fiche fichier (#1114) : repli generique pour une piece jointe non jouable
+   (PDF, archive, document). Toujours visible, cliquable — jamais une zone vide. */
+.jointe-fichier{display:inline-flex;align-items:center;gap:10px;max-width:100%;margin:8px 0;padding:10px 14px;
+  border:1px solid var(--line);border-radius:10px;background:var(--soft);text-decoration:none;color:inherit}
+.jointe-fichier:hover{border-color:var(--sky)}
+.jointe-fichier .jf-ic{font-size:1.5rem;line-height:1}
+.jointe-fichier .jf-tx{display:flex;flex-direction:column;min-width:0}
+.jointe-fichier .jf-tx b{font-size:.9rem}
+.jointe-fichier .jf-tx small{font-size:.72rem;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
