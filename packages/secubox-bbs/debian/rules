@@ -55,6 +55,15 @@ override_dh_auto_install:
 	install -d debian/secubox-bbs/usr/share/doc/secubox-bbs
 	install -m 0644 www/mockup.html debian/secubox-bbs/usr/share/doc/secubox-bbs/maquette.html
 	install -m 0644 README.md debian/secubox-bbs/usr/share/doc/secubox-bbs/README.md
+	# Worker Python urlshot (#1120) : capture asynchrone des vignettes de
+	# carte URL, rappele par secubox-bbs-urlshot.timer. Fichiers nommes un a
+	# un — jamais un glob py/urlshot/* — pour que tests/ et __pycache__/ ne
+	# se glissent jamais dans le paquet.
+	install -d debian/secubox-bbs/usr/lib/secubox/bbs/urlshot
+	install -m 0644 py/urlshot/__init__.py py/urlshot/worker.py \
+	                py/urlshot/capture.py py/urlshot/egress.py \
+	                py/urlshot/ogimage.py \
+	                debian/secubox-bbs/usr/lib/secubox/bbs/urlshot/
 
 override_dh_auto_clean:
 	rm -f secubox-bbsd bbsctl
@@ -80,3 +89,9 @@ override_dh_installsystemd:
 	# dans un BBS qui n a peut-etre pas encore de salons.
 	dh_installsystemd --no-enable --no-start --name=secubox-bbs-ingest secubox-bbs-ingest.service
 	dh_installsystemd --no-enable --no-start --name=secubox-bbs-ingest secubox-bbs-ingest.timer
+	# Vignettes urlshot (#1120) : livrees DESACTIVEES elles aussi ici (le
+	# postinst les active explicitement, garde par || true) car un tour a
+	# vide sans compte ni fil ne fait rien de nuisible — contrairement a
+	# ingest, ce timer peut tourner des le premier demarrage.
+	dh_installsystemd --no-enable --no-start --name=secubox-bbs-urlshot secubox-bbs-urlshot.service
+	dh_installsystemd --no-enable --no-start --name=secubox-bbs-urlshot secubox-bbs-urlshot.timer

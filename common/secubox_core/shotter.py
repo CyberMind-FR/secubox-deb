@@ -98,6 +98,7 @@ import contextlib
 import itertools
 import json
 import shutil
+import subprocess
 import tempfile
 import urllib.request
 
@@ -286,7 +287,9 @@ async def wait_streamlit_ready(evaluate, progress: _Progress) -> None:
 
 async def capture(url: str, *, timeout: float = 240.0,
                   width: int = 1280, height: int = 800,
-                  wait=wait_streamlit_ready) -> bytes:
+                  wait=wait_streamlit_ready,
+                  proxy: str | None = None,
+                  ca: str | None = None) -> bytes:
     """Navigue vers `url`, attend le rendu selon `wait`, renvoie le PNG.
 
     `wait` est une stratégie d'attente branchable — une fonction asynchrone
@@ -296,6 +299,20 @@ async def capture(url: str, *, timeout: float = 240.0,
     une page statique, passer `wait_static_ready`. Aucune stratégie fournie
     par ce module ne porte de plafond de durée interne : `timeout` reste la
     seule autorité — voir la docstring du module.
+
+    `proxy`/`ca` (optionnels, défaut `None` = comportement historique
+    inchangé) : routent chromium à travers un proxy HTTP d'égress (ex.
+    sbxmitm, `http://host:port`, passé tel quel à `--proxy-server`) et lui
+    font confiance en la CA d'interception `ca` (chemin PEM) SANS désactiver
+    la validation de certificat en général — voir `_ca_spki_sha256_b64` :
+    seule l'empreinte SPKI de cette CA précise est acceptée
+    (`--ignore-certificate-errors-spki-list`), jamais
+    `--ignore-certificate-errors` (qui désactiverait tout contrôle, interdit
+    sur un poste CSPN). Si `ca` est fourni mais que son empreinte ne peut pas
+    être calculée (fichier absent, `openssl` indisponible...), la capture
+    continue quand même via le proxy mais échouera probablement sur l'erreur
+    de certificat du MITM — c'est voulu : mieux vaut un échec constaté
+    (`ShotError`) qu'un contournement silencieux de la vérification.
 
     Lève `ShotError` dans tous les cas d'échec — y compris un dépassement du
     délai `timeout`, pour tenir le contrat de l'interface : un appelant qui ne
@@ -312,15 +329,48 @@ async def capture(url: str, *, timeout: float = 240.0,
     async with _lock:
         try:
             return await asyncio.wait_for(
-                _capture_once(url, width, height, progress, wait), timeout=timeout)
+                _capture_once(url, width, height, progress, wait, proxy, ca),
+                timeout=timeout)
         except asyncio.TimeoutError as exc:
             raise ShotError(
                 f"délai dépassé ({timeout}s) — bloqué à la phase : "
                 f"{progress.phase}") from exc
 
 
+def _ca_spki_sha256_b64(ca_path: str) -> str | None:
+    """Empreinte SPKI (SHA-256, base64) de la clé publique portée par la CA
+    `ca_path`, au format attendu par
+    `--ignore-certificate-errors-spki-list` de chromium.
+
+    Ce drapeau ne désactive PAS la validation de certificat en général : il
+    fait exception uniquement pour les certificats signés par CETTE clé
+    publique précise (celle de la CA d'interception sbxmitm) — à la
+    différence de `--ignore-certificate-errors`, qui désactiverait tout
+    contrôle et est interdit sur un poste CSPN. Renvoie `None` si
+    l'empreinte ne peut pas être calculée (fichier absent, `openssl`
+    indisponible...) plutôt que de lever : l'appelant doit alors laisser la
+    capture échouer proprement sur l'erreur de certificat, jamais contourner
+    la vérification par un autre moyen.
+    """
+    try:
+        pubkey = subprocess.run(
+            ["openssl", "x509", "-in", ca_path, "-noout", "-pubkey"],
+            check=True, capture_output=True, timeout=10).stdout
+        der = subprocess.run(
+            ["openssl", "pkey", "-pubin", "-outform", "DER"],
+            input=pubkey, check=True, capture_output=True, timeout=10).stdout
+        digest = subprocess.run(
+            ["openssl", "dgst", "-sha256", "-binary"],
+            input=der, check=True, capture_output=True, timeout=10).stdout
+        return base64.b64encode(digest).decode("ascii")
+    except Exception:
+        return None
+
+
 async def _capture_once(url: str, width: int, height: int,
-                        progress: _Progress, wait) -> bytes:
+                        progress: _Progress, wait,
+                        proxy: str | None = None,
+                        ca: str | None = None) -> bytes:
     import websockets  # noqa: F401  (échoue tôt si absent)
     # Le répertoire de profil est créé avant le `try` qui couvre le lancement
     # du sous-processus : si celui-ci échoue (binaire absent, ENOMEM au fork
@@ -328,11 +378,20 @@ async def _capture_once(url: str, width: int, height: int,
     profile = tempfile.mkdtemp(prefix="sbx-shot-")
     proc = None
     try:
+        extra_args = []
+        if proxy:
+            extra_args.append(f"--proxy-server={proxy}")
+        if ca:
+            loop = asyncio.get_running_loop()
+            spki = await loop.run_in_executor(None, _ca_spki_sha256_b64, ca)
+            if spki:
+                extra_args.append(f"--ignore-certificate-errors-spki-list={spki}")
         proc = await asyncio.create_subprocess_exec(
             CHROMIUM, "--headless=new", "--disable-gpu", "--no-sandbox",
             "--disable-dev-shm-usage", "--hide-scrollbars",
             f"--window-size={width},{height}",
-            "--remote-debugging-port=0", f"--user-data-dir={profile}", "about:blank",
+            "--remote-debugging-port=0", f"--user-data-dir={profile}", *extra_args,
+            "about:blank",
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
         progress.phase = "attente du port de debug chromium (stderr)"
         ws_url = await _devtools_url(proc)
