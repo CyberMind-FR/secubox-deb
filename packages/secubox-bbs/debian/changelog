@@ -1,3 +1,12 @@
+secubox-bbs (0.28.29-1~bookworm1) bookworm; urgency=medium
+
+  * Publication billets : la pièce jointe part avec son VRAI Content-Type (et
+    non application/octet-stream) — billets aiguille dessus l'accueil média
+    (#1094). Sans ça une vidéo/pdf arrivait en octet-stream, prise pour une
+    image, et refusée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 16:20:00 +0200
+
 secubox-bbs (0.28.28-1~bookworm1) bookworm; urgency=medium
 
   * Vidéo en LECTEUR inline dans les cartes (#1092) : un /f/NN.mp4 devient un

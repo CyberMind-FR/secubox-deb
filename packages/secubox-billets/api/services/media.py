@@ -140,3 +140,81 @@ def read_bytes(filename: str, directory: Path | None = None) -> bytes:
     """Read a stored media file (for the portable .sbxsite export)."""
     d = directory or media_dir()
     return (d / filename).read_bytes()
+
+
+# ── Audio / vidéo (#1094) ────────────────────────────────────────────────────
+#
+# Contrairement aux images, on ne RÉ-ENCODE pas l'audio/vidéo (ffmpeg serait
+# lourd et hors périmètre) : on les stocke TELS QUELS. C'est sûr là où le SVG ne
+# l'est pas — un <video>/<audio> n'exécute pas de script, et le fichier est servi
+# avec son type MIME + `nosniff`, donc jamais interprété en HTML. On épingle
+# quand même le type par le CONTENU (octets magiques), jamais par le seul type
+# déclaré, et on borne la taille.
+MAX_AV_BYTES = 64 * 1024 * 1024  # 64 MiB par média a/v
+
+_AV_ALLOWED: dict[str, str] = {
+    "video/mp4": "mp4", "video/webm": "webm", "video/ogg": "ogv",
+    "video/quicktime": "mov",
+    "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/wav": "wav",
+    "audio/x-wav": "wav", "audio/mp4": "m4a", "audio/webm": "weba",
+    "audio/aac": "aac", "audio/flac": "flac",
+    "application/pdf": "pdf",   # #1094 — document embarqué (<embed>)
+}
+
+
+def _kind_of(ct: str) -> str:
+    if ct.startswith("video/"):
+        return "video"
+    if ct.startswith("audio/"):
+        return "audio"
+    if ct == "application/pdf":
+        return "pdf"
+    return "file"
+
+
+def _looks_like_av(raw: bytes, ct: str) -> bool:
+    """Épinglage par octets magiques — le type déclaré ne suffit pas."""
+    h = raw[:16]
+    if ct in ("video/mp4", "audio/mp4", "video/quicktime"):
+        return len(raw) >= 12 and h[4:8] == b"ftyp"
+    if ct in ("video/webm", "audio/webm"):
+        return h[:4] == b"\x1aE\xdf\xa3"  # EBML (Matroska/WebM)
+    if ct in ("video/ogg", "audio/ogg"):
+        return h[:4] == b"OggS"
+    if ct == "audio/mpeg":
+        return h[:3] == b"ID3" or (len(h) >= 2 and h[0] == 0xFF and (h[1] & 0xE0) == 0xE0)
+    if ct in ("audio/wav", "audio/x-wav"):
+        return h[:4] == b"RIFF" and raw[8:12] == b"WAVE"
+    if ct == "audio/flac":
+        return h[:4] == b"fLaC"
+    if ct == "application/pdf":
+        return h[:5] == b"%PDF-"
+    return True  # aac brut : pas de signature fiable, on accepte le type épinglé par la liste
+
+
+def process_upload(raw: bytes, content_type: str = "") -> dict:
+    """Point d'entrée unique du téléversement (#1094) : image → ré-encodage,
+    audio/vidéo → stockage tel quel épinglé au contenu. Retourne un dict avec au
+    moins `kind` (image|video|audio), `ext`, `mime`, `data` ; les images portent
+    en plus width/height/thumb."""
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct in _AV_ALLOWED:
+        if not raw:
+            raise MediaError("empty file")
+        if len(raw) > MAX_AV_BYTES:
+            raise MediaError("media too large")
+        if not _looks_like_av(raw, ct):
+            raise MediaError(f"content does not match declared type {ct}")
+        return {"kind": _kind_of(ct), "ext": _AV_ALLOWED[ct], "mime": ct, "data": raw}
+    d = process(raw)   # chemin image (ré-encodage), lève MediaError si refusé
+    d["kind"] = "image"
+    return d
+
+
+def store_raw(media_id: str, ext: str, data: bytes, directory: Path | None = None) -> str:
+    """Écrit un média audio/vidéo tel quel (pas de vignette). Retourne le nom."""
+    d = directory or media_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    filename = f"{media_id}.{ext}"
+    (d / filename).write_bytes(data)
+    return filename
