@@ -1,3 +1,15 @@
+secubox-metablogizer (1.8.12-1~bookworm1) bookworm; urgency=medium
+
+  * Publication NON bloquante (#1105) : publish_wizard/publish_route
+    déchargent git/nginx/publishctl sur des threads (asyncio.to_thread) au lieu
+    de shell-er en synchrone sur la boucle. Le certificat d'un domaine custom
+    (certbot HTTP-01, lent) part en tâche de fond → la requête rend la main tout
+    de suite (fini l'erreur 504) ; un *.gk2.secubox.in réutilise le wildcard et
+    reste attendu. La boucle n'est plus gelée → « Déploiements récents » (et la
+    liste des sites) se chargent enfin pendant une publication.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:59:05 +0000
+
 secubox-metablogizer (1.8.11-1~bookworm1) bookworm; urgency=medium
 
   * Durcissement (revue #1089) : source_url et gitea_repo deviennent des href
