@@ -273,7 +273,7 @@ a{color:inherit;text-decoration:none}
 .cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
 .cartrack::-webkit-scrollbar{display:none}
 .cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
-.ccard{--tone:var(--sky);flex:0 0 auto;width:214px;min-height:150px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
+.ccard{--tone:var(--sky);flex:0 0 auto;width:216px;height:216px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
   background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;
   box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
 .ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
@@ -283,7 +283,7 @@ a{color:inherit;text-decoration:none}
 .ccard[data-k="podcast"]{--tone:var(--amber)}
 .ccard[data-k="video"]{--tone:var(--coral)}
 /* média en cardlet (#1104) : couverture (vignette de flux / play vidéo) + pastilles */
-.cccover{position:relative;display:block;height:96px;background:var(--soft);overflow:hidden}
+.cccover{position:relative;display:block;height:92px;background:var(--soft);overflow:hidden}
 .cccover img{width:100%;height:100%;object-fit:cover;display:block}
 .cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.5rem;
   text-shadow:0 1px 6px rgba(0,0,0,.6);background:rgba(20,45,60,.18)}
