@@ -521,6 +521,36 @@ type NewsItem struct {
 	LastAuteur  string
 	LastExtrait string
 	LastAt      int64
+	// Médias du fil (#1092) : mini-vignettes des pièces jointes du fil et de ses
+	// messages, pour la 2ᵉ partie de la carte. Une image /f/12.png devient une
+	// miniature, pas le chemin brut « /f/12.png » lu tel quel.
+	Medias []cardMedia
+}
+
+// cardMedia : une pièce jointe résumée pour la vignette de carte.
+type cardMedia struct {
+	ID   int64
+	Kind string // image | audio | video | file
+}
+
+func kindDeMime(mime string) string {
+	switch {
+	case strings.HasPrefix(mime, "image/"):
+		return "image"
+	case strings.HasPrefix(mime, "audio/"):
+		return "audio"
+	case strings.HasPrefix(mime, "video/"):
+		return "video"
+	default:
+		return "file"
+	}
+}
+
+// sansRefsMedia retire les références de pièces jointes (`/f/12`, `/f/12.png`)
+// d'un corps : dans un aperçu de carte, elles s'affichaient en TEXTE BRUT
+// (« /f/15.png ») au lieu d'être la miniature rendue à côté (#1092).
+func sansRefsMedia(s string) string {
+	return strings.TrimSpace(refsJointes.ReplaceAllString(s, ""))
 }
 
 // composerRedaction mêle les fils NON-podcaster et les flux groupés du
@@ -587,9 +617,16 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 			continue
 		}
 		ap, la, lx, lt := s.apercuEtDernier(fils[i].ID, pub)
+		var medias []cardMedia
+		if fs, err := s.st.MediasDuFil(fils[i].ID, pub, 6); err == nil {
+			for _, f := range fs {
+				medias = append(medias, cardMedia{ID: f.ID, Kind: kindDeMime(f.Mime)})
+			}
+		}
 		out = append(out, NewsItem{
 			Fil: &fils[i], Date: fils[i].LastPostAt,
 			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
+			Medias: medias,
 		})
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
@@ -611,12 +648,12 @@ func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, 
 		return
 	}
 	if b, err := s.st.Body(posts[0]); err == nil {
-		apercu = extrait(b, 180)
+		apercu = extrait(sansRefsMedia(b), 180)
 	}
 	if len(posts) > 1 {
 		last := posts[len(posts)-1]
 		if b, err := s.st.Body(last); err == nil {
-			lastExtrait = extrait(b, 120)
+			lastExtrait = extrait(sansRefsMedia(b), 120)
 		}
 		lastAuteur, _ = s.st.AuteurEtAvatar(last.AuthorID)
 		lastAt = last.CreatedAt

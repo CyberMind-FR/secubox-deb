@@ -1,3 +1,12 @@
+secubox-bbs (0.28.25-1~bookworm1) bookworm; urgency=medium
+
+  * Mini-médias dans les cartes (#1092) : les pièces jointes d'un fil et de ses
+    messages s'affichent en MINIATURES (2ᵉ partie de carte) au lieu du chemin
+    brut « /f/15.png » lu en texte. MediasDuFil (une requête, publique-safe),
+    aperçu débarrassé des refs /f/NN, bande .cmedias.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:20:00 +0200
+
 secubox-bbs (0.28.24-1~bookworm1) bookworm; urgency=medium
 
   * Navbar : les icônes de sous-salons du rail utilisaient var(--muted,#8a83a0)
