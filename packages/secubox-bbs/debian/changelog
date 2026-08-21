@@ -1,3 +1,15 @@
+secubox-bbs (0.28.36-1~bookworm1) bookworm; urgency=medium
+
+  * Médias publics pour les anonymes (#1114) : un /f/NN cité dans un post
+    PUBLIC devient 'public' (à l'écriture + backfill au démarrage) et
+    servirFichier le sert à tout venant — le média est aussi accessible que le
+    message. Un fil local/privé garde ses pièces réservées aux membres.
+  * Colonne droite « Derniers billets » rétablie dans les salons/sous-forums :
+    poseRail() partagée par l'accueil ET les vues salon (elle manquait hors
+    accueil, la coquille newsroom étant pourtant la même).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:49:46 +0000
+
 secubox-bbs (0.28.35-1~bookworm1) bookworm; urgency=medium
 
   * Cardlets carrés + uniformes (216×216, #1104) : couverture bornée (92px),

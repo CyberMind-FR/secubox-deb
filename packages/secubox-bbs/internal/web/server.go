@@ -272,6 +272,9 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	s.routesFichiers()
 	s.routesAPISysop()
 	s.routesMembre()
+	// #1114 : rattrape la visibilité publique des médias déjà cités dans des
+	// posts publics (tâche de fond, ne retarde pas le démarrage).
+	go s.backfillPiecesPubliques()
 	return s, nil
 }
 
