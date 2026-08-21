@@ -81,3 +81,36 @@ def test_envoyer_local_reste_sans_auth(monkeypatch):
     assert s.starttls_called is False
     assert s.login_args is None
     assert s.sent["Bcc"] is None
+
+
+def test_envoyer_joint_la_note_de_config(monkeypatch):
+    """Une `note` en config est jointe au corps du courriel — un mot ponctuel
+    au destinataire sans ouvrir un autre canal (ex. balises canoniques)."""
+    monkeypatch.setattr(rapport, "config", lambda: {
+        "smtp_hote": "10.100.0.10", "smtp_port": 25,
+        "expediteur": "gk2@secubox.in", "destinataire": "a@localdomain",
+        "note": "Pointez les balises canoniques vers anibal-amiot.com.",
+    })
+    FauxSMTP.instances.clear()
+    monkeypatch.setattr(rapport.smtplib, "SMTP", FauxSMTP)
+
+    rapport.envoyer(b"%PDF-1.4 x", destinataire="a@localdomain")
+
+    corps = FauxSMTP.instances[-1].sent.get_body(preferencelist=("plain",)).get_content()
+    assert "— Note —" in corps
+    assert "anibal-amiot.com" in corps
+
+
+def test_envoyer_sans_note_pas_de_section(monkeypatch):
+    """Pas de `note` en config → aucune section « Note » dans le corps."""
+    monkeypatch.setattr(rapport, "config", lambda: {
+        "smtp_hote": "10.100.0.10", "smtp_port": 25,
+        "expediteur": "gk2@secubox.in", "destinataire": "a@localdomain",
+    })
+    FauxSMTP.instances.clear()
+    monkeypatch.setattr(rapport.smtplib, "SMTP", FauxSMTP)
+
+    rapport.envoyer(b"%PDF-1.4 x", destinataire="a@localdomain")
+
+    corps = FauxSMTP.instances[-1].sent.get_body(preferencelist=("plain",)).get_content()
+    assert "— Note —" not in corps
