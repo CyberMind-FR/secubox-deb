@@ -1,0 +1,13 @@
+[Unit]
+Description=SecuBox BBS — cadence de capture des vignettes-snapshot d'URL
+
+[Timer]
+# Meme cadence que metablog-shots.timer (#956) : une passe (jusqu'a
+# DEFAULT_BATCH=3 lignes, une capture chromium a la fois) toutes les deux
+# minutes, jamais en boucle interne — c'est le timer qui etale la charge.
+OnBootSec=2min
+OnUnitInactiveSec=2min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

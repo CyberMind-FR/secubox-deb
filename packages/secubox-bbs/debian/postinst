@@ -63,6 +63,14 @@ case "$1" in
         systemctl try-restart secubox-bbs.service >/dev/null 2>&1 || true
     fi
 
+    # Vignettes urlshot (#1120) : contrairement au service principal et a
+    # l'import (aucun compte requis), ce timer ne fait rien de nuisible sur
+    # un BBS vide — il lit une file qui n'a pas encore de lignes. On l'active
+    # et le demarre donc d'office, mais JAMAIS au prix de l'installation :
+    # l'unite peut manquer (mise a jour partielle) ou systemd etre absent
+    # (chroot de build) sans que `dpkg -i` echoue pour autant.
+    systemctl enable --now secubox-bbs-urlshot.timer >/dev/null 2>&1 || true
+
     # La route nginx n'est rechargee que si la configuration est valide : un
     # `reload` sur une configuration cassee coupe TOUS les vhosts de la board.
     if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
