@@ -75,6 +75,7 @@ override_dh_auto_clean:
 #   - sbx-sentinel + secubox-sentinel-feeds{.service,.timer} : the #823 engine
 override_dh_installsystemd:
 	dh_installsystemd --no-enable --no-start --name=secubox-toolbox-ng-worker@
+	dh_installsystemd --no-enable --no-start --name=secubox-toolbox-egress-proxy secubox-toolbox-egress-proxy.service
 	dh_installsystemd --no-enable --no-start --name=sbx-sentinel sbx-sentinel.service
 	dh_installsystemd --no-enable --no-start --name=secubox-sentinel-feeds secubox-sentinel-feeds.service
 	dh_installsystemd --no-enable --no-start --name=secubox-sentinel-feeds secubox-sentinel-feeds.timer

@@ -123,9 +123,9 @@ def client():
 
     import httpx
 
-    proxy_url = "http://10.99.1.1:8091"
+    proxy_url = "http://127.0.0.1:8090"
     kwargs = {
-        "verify": "/etc/secubox/toolbox/ca/ca.pem",
+        "verify": "/usr/share/secubox/egress-ca.pem",
         "timeout": 15,
         "follow_redirects": True,
         "headers": {"User-Agent": "SecuBox-URLShot/1.0"},
