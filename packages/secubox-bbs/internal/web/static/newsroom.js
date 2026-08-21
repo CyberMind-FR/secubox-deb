@@ -145,6 +145,8 @@
     else if (a === "next") { if (!playNext() && audio) audio.currentTime = audio.duration || 0; }
     else if (a === "popout") popout();
     else if (a === "mini-close") miniClose();
+    else if (a === "carprev") { carHold(); carScrollByCards(-1); }
+    else if (a === "carnext") { carHold(); carScrollByCards(1); }
   });
   document.addEventListener("keydown", function (e) {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); drop(); }
@@ -160,4 +162,58 @@
     var v = (el.value || "").trim();
     if (/^https?:\/\//i.test(v)) { e.preventDefault(); location.href = "/nouveau?src=" + encodeURIComponent(v); }
   });
+
+  /* ── Carrousel « À la une » (#1104) : flèches, points, clavier, sync au
+     défilement. Purement présentation : aucune donnée nouvelle, il rejoue les
+     mêmes dossiers que le fil vertical ci-dessous. ── */
+  var cartrack = $("#cartrack"), cardots = $("#cardots");
+  function carCards() { return cartrack ? $$(".ccard", cartrack) : []; }
+  function carScrollByCards(dir) {
+    if (!cartrack) return;
+    var c = cartrack.querySelector(".ccard");
+    var step = (c ? c.offsetWidth + 14 : 220) * 1.5;
+    cartrack.scrollBy({ left: dir * step, behavior: "smooth" });
+  }
+  function carSync() {
+    if (!cartrack || !cardots) return;
+    var cards = carCards(); if (!cards.length) return;
+    var mid = cartrack.scrollLeft + cartrack.clientWidth / 2, best = 0, bd = 1e9;
+    cards.forEach(function (c, j) { var cc = c.offsetLeft + c.offsetWidth / 2, dd = Math.abs(cc - mid); if (dd < bd) { bd = dd; best = j; } });
+    $$("button", cardots).forEach(function (d, j) { d.classList.toggle("on", j === best); });
+    var pv = $('[data-act="carprev"]'), nx = $('[data-act="carnext"]');
+    if (pv) pv.disabled = cartrack.scrollLeft <= 2;
+    if (nx) nx.disabled = cartrack.scrollLeft + cartrack.clientWidth >= cartrack.scrollWidth - 2;
+  }
+  /* Auto-défilement (#1104) : avance toutes les 5 s, revient au début en fin de
+     piste. En pause au survol / focus et 9 s après une interaction ; désactivé
+     si moins-d'animation est demandé ou s'il n'y a qu'une carte. */
+  var carTimer = null, carResume = null;
+  var carReduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function carAtEnd() { return cartrack && cartrack.scrollLeft + cartrack.clientWidth >= cartrack.scrollWidth - 2; }
+  function carTick() { if (!cartrack) return; if (carAtEnd()) cartrack.scrollTo({ left: 0, behavior: "smooth" }); else carScrollByCards(1); }
+  function carStop() { if (carTimer) { clearInterval(carTimer); carTimer = null; } }
+  function carPlay() { if (carReduce || !cartrack || carCards().length < 2) return; carStop(); carTimer = setInterval(carTick, 5000); }
+  function carHold() { carStop(); clearTimeout(carResume); carResume = setTimeout(carPlay, 9000); }
+  if (cartrack && cardots) {
+    carCards().forEach(function (card, j) {
+      var b = document.createElement("button");
+      b.type = "button"; b.setAttribute("aria-label", "Aller au dossier " + (j + 1));
+      b.addEventListener("click", function () { carHold(); card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); });
+      cardots.appendChild(b);
+    });
+    var craf;
+    cartrack.addEventListener("scroll", function () { cancelAnimationFrame(craf); craf = requestAnimationFrame(carSync); });
+    cartrack.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowRight") { e.preventDefault(); carHold(); carScrollByCards(1); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); carHold(); carScrollByCards(-1); }
+    });
+    cartrack.addEventListener("mouseenter", carStop);
+    cartrack.addEventListener("mouseleave", carPlay);
+    cartrack.addEventListener("focusin", carStop);
+    cartrack.addEventListener("focusout", carPlay);
+    window.addEventListener("resize", carSync);
+    document.addEventListener("visibilitychange", function () { document.hidden ? carStop() : carPlay(); });
+    carSync();
+    carPlay();
+  }
 })();

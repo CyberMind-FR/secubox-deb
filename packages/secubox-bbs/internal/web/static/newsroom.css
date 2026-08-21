@@ -259,3 +259,47 @@ a{color:inherit;text-decoration:none}
 @media(max-width:1120px){ .wrap{grid-template-columns:minmax(0,1fr)} .rail{position:static;max-height:none;order:2} .feed{order:1} .rail.rr{order:0} }
 @media(max-width:720px){ .drop{display:none} .logo h1{font-size:1.2rem} .logo .sub{display:none} .me-chip small{display:none} .src .kind{width:54px} }
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+/* ── Carrousel « À la une » (#1104) — bande horizontale des derniers dossiers.
+   Réutilise les jetons de thème ci-dessus, donc suit le clair/sombre. ── */
+.caroussel{margin:0 0 26px}
+.carhead{display:flex;align-items:center;gap:12px;margin:0 0 12px}
+.carhead h2{margin:0;font-size:1.15rem}
+.carhead .sub{color:var(--dim);font-size:.8rem}
+.carnav{margin-left:auto;display:flex;gap:8px}
+.carbtn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-size:.9rem;display:grid;place-items:center;box-shadow:var(--shadow);transition:.15s}
+.carbtn:hover{border-color:var(--sky);color:var(--sky)}
+.carbtn:disabled{opacity:.35;cursor:default}
+.cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
+.cartrack::-webkit-scrollbar{display:none}
+.cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
+.ccard{--tone:var(--sky);flex:0 0 auto;width:216px;height:216px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;
+  box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
+.ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
+.ccard:focus-visible{outline:2px solid var(--tone);outline-offset:2px}
+.ccard[data-k="fil"]{--tone:var(--sky)}
+.ccard[data-k="url"]{--tone:var(--cyan)}
+.ccard[data-k="podcast"]{--tone:var(--amber)}
+.ccard[data-k="video"]{--tone:var(--coral)}
+/* média en cardlet (#1104) : couverture (vignette de flux / play vidéo) + pastilles */
+.cccover{position:relative;display:block;height:92px;background:var(--soft);overflow:hidden}
+.cccover img{width:100%;height:100%;object-fit:cover;display:block}
+.cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.5rem;
+  text-shadow:0 1px 6px rgba(0,0,0,.6);background:rgba(20,45,60,.18)}
+.ccbody{display:flex;flex-direction:column;flex:1;padding:12px 14px 0}
+.cctop{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.ccic{font-size:1.1rem;line-height:1}
+.cctype{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--tone)}
+.ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.85rem;filter:grayscale(.15)}
+.ccard h3{margin:0;font-size:1rem;line-height:1.2;letter-spacing:-.01em;font-family:inherit;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ccdek{margin:6px 0 0;font-size:.78rem;line-height:1.35;color:var(--dim);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ccdek a{color:var(--sky);text-decoration:none}
+.ccwho{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;color:var(--dim);font-size:.74rem}
+.ccav{width:18px;height:18px;border-radius:50%;background:color-mix(in srgb,var(--tone) 26%,var(--panel));border:1px solid var(--line);flex:none}
+.cardots{display:flex;gap:6px;justify-content:center;margin-top:2px;flex-wrap:wrap}
+.cardots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line-2);cursor:pointer;padding:0;transition:.15s}
+.cardots button.on{background:var(--sky);transform:scale(1.3)}
+@media(max-width:560px){.carnav{display:none}}

@@ -189,15 +189,23 @@ def register_jwt_admin(app: FastAPI) -> None:
         if not raw:
             raise HTTPException(400, "empty file")
         try:
-            processed = await asyncio.to_thread(media.process, raw)
+            processed = await asyncio.to_thread(media.process_upload, raw, file.content_type or "")
         except media.MediaError as exc:
             raise HTTPException(415, f"unsupported media: {exc}")
         mid = new_ulid()
-        fn, thumb = await asyncio.to_thread(media.store, mid, processed)
-        await repo.add_media(conn, billet_id, filename=fn, thumb=thumb,
-                             mime=processed["mime"], width=processed["width"],
-                             height=processed["height"], alt="", now=_now(), ulid=mid)
-        return {"success": True, "id": mid, "url": f"/media/{fn}", "thumb": f"/media/{thumb}"}
+        if processed["kind"] == "image":
+            fn, thumb = await asyncio.to_thread(media.store, mid, processed)
+            await repo.add_media(conn, billet_id, filename=fn, thumb=thumb,
+                                 mime=processed["mime"], width=processed["width"],
+                                 height=processed["height"], alt="", now=_now(), ulid=mid)
+            return {"success": True, "id": mid, "url": f"/media/{fn}", "thumb": f"/media/{thumb}"}
+        # Audio/vidéo (#1094) : stockés tels quels, sans vignette. Ils s'affichent
+        # EN LIGNE dans le corps (render embarque les refs /media/), pas en galerie.
+        fn = await asyncio.to_thread(media.store_raw, mid, processed["ext"], processed["data"])
+        await repo.add_media(conn, billet_id, filename=fn, thumb="",
+                             mime=processed["mime"], width=0, height=0,
+                             alt="", now=_now(), ulid=mid)
+        return {"success": True, "id": mid, "url": f"/media/{fn}", "thumb": ""}
 
     @app.get("/admin/api/comments")
     async def api_comments(request: Request, status: str = "pending",
