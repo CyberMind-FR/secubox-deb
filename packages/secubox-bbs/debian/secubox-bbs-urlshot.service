@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox BBS — capture des vignettes-snapshot d'URL (#1120)
+Documentation=file:///usr/share/doc/secubox-bbs/README.md
+After=secubox-bbs.service
+
+[Service]
+Type=oneshot
+User=secubox-bbs
+Group=secubox
+Environment=PYTHONPATH=/usr/lib/secubox/bbs/urlshot
+ExecStart=/usr/bin/python3 -m worker
+# Un echec de capture (og:image absente, chromium absent, proxy sbxmitm
+# injoignable, secubox-core/python3-httpx non installes — tous des
+# `Recommends`, pas des dependances dures) est attendu et tolere : la ligne
+# reste `pending`/`failed` en base, retentee au tour suivant. Meme
+# convention que secubox-bbs-ingest.service : un tour a vide n'est jamais
+# une panne de service.
+SuccessExitStatus=0 1
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/secubox/bbs /var/cache/secubox/bbs
+# Egress : seul le proxy sbxmitm (10.99.1.1:8091) est joignable en pratique
+# (le worker le configure ; voir egress.py) — le durcissement reseau reste
+# permissif AF_INET/AF_INET6 pour l'atteindre, jamais un acces direct.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

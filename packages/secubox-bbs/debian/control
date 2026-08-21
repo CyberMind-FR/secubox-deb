@@ -10,7 +10,13 @@ Rules-Requires-Root: no
 Package: secubox-bbs
 Architecture: arm64
 Depends: ${misc:Depends}, adduser, acl
-Recommends: nginx, qrencode
+# secubox-core (secubox_core.screenshots/shotter), chromium et python3-httpx
+# servent UNIQUEMENT le worker urlshot (#1120, secubox-bbs-urlshot.timer) :
+# le coeur Go du BBS ne les touche jamais. Recommends, pas Depends — sans
+# eux le worker echoue silencieusement capture par capture (SuccessExitStatus
+# tolere l'echec) et les cartes URL gardent leur vignette de repli, exactement
+# comme metablog-shotter sans chromium.
+Recommends: nginx, qrencode, secubox-core, chromium, python3-httpx
 Suggests: secubox-billets
 Description: SecuBox-Deb — BBS auto-heberge (forums, bibliotheque, publication)
  Un BBS moderne pour une SecuBox : salons, fils, bibliotheque de fichiers,
