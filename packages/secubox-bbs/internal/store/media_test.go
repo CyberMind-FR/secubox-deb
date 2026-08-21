@@ -110,6 +110,21 @@ func TestLAudioEtLaVideoSontAcceptes(t *testing.T) {
 	}
 }
 
+func TestLePdfEstAccepte(t *testing.T) {
+	// #1102 — un PDF est rendu nativement par le navigateur et servi `inline`
+	// avec nosniff : il ne peut pas être requalifié en HTML. `%PDF-` est la
+	// signature que http.DetectContentType reconnaît comme application/pdf.
+	s, uid := magasinFichiers(t)
+	pdf := append([]byte("%PDF-1.7\n"), bytes.Repeat([]byte{0x25}, 600)...)
+	f, err := s.DeposeFichier(uid, "dossier.pdf", "application/pdf", bytes.NewReader(pdf))
+	if err != nil {
+		t.Fatalf("pdf refuse : %v", err)
+	}
+	if f.Mime != "application/pdf" {
+		t.Errorf("mime = %q, attendu application/pdf", f.Mime)
+	}
+}
+
 func TestUnFichierTropGrosEstRefuseSansEcrireSurLeDisque(t *testing.T) {
 	// La borne protege l'eMMC — dont le remplissage a deja mis la board en 502.
 	// Elle doit s'appliquer AVANT l'ecriture : refuser apres avoir ecrit trois

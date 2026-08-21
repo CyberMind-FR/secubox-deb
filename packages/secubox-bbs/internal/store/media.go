@@ -62,6 +62,11 @@ var typesAcceptes = map[string]string{
 	"video/mp4":  ".mp4",
 	"video/ogg":  ".ogv",
 	"video/webm": ".webm",
+	// PDF : rendu nativement par le navigateur, servi `inline` avec nosniff — il
+	// ne peut donc pas etre requalifie en HTML. Un PDF peut porter du script,
+	// mais celui-ci s'execute dans le lecteur PDF cloisonne, pas dans le DOM de
+	// l'origine (#1102).
+	"application/pdf": ".pdf",
 }
 
 // Fichier : une piece jointe.
