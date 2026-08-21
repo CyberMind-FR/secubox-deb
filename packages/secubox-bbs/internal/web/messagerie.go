@@ -239,5 +239,7 @@ func (s *Server) mastodon(w http.ResponseWriter, r *http.Request) {
 	case p.MastoInvite == "":
 		p.Vide = "Aucune invitation ouverte pour l'instant."
 	}
-	s.rend(w, r, "mastodon", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "mastodon", "pagenr", p)
 }

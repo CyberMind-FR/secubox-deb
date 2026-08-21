@@ -62,18 +62,26 @@ func TestNewsroomExecute(t *testing.T) {
 	}
 }
 
+// #1114 suite : la médiathèque partage désormais le masthead médaillon
+// (avmast) et la navbar gauche (avrubriques/avacces) avec le reste du skin
+// newsroom — comme server.go la compile (layout.html + newsroom.html +
+// coquillenr.html + mediatheque.html), pas mediatheque.html seul.
 func TestMediathequeExecute(t *testing.T) {
 	fn := template.FuncMap{
 		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage": func(n int) string { return "" },
 	}
-	tpl, err := template.New("mediatheque.html").Funcs(fn).ParseFS(assets, "templates/mediatheque.html")
+	tpl, err := template.New("mediatheque.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mediatheque.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}
 	p := page{
 		Titre: "Médiathèque", Site: "SecuBox", Hote: "gk2", Initiale: "S",
+		Stats: store.Stats{Threads: 3, Posts: 9, Billets: 2},
+		Cats:  []store.Category{{Slug: "g", Title: "Général", Threads: 3}},
+		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true},
 		Medias: []PodFeed{
 			{ID: 2, Titre: "Neuromania", Type: "audiobook", Glyphe: "📖", Vignette: "/media-cover/2",
 				Episodes: []PodEpisode{
@@ -92,10 +100,17 @@ func TestMediathequeExecute(t *testing.T) {
 	for _, want := range []string{
 		"Neuromania", "livre audio", "chapitres 1→2", `data-media="/media/ep/10"`,
 		`data-act="playfeed"`, `src="/media-cover/2"`, `id="f2"`, "newsroom.js",
+		// Masthead médaillon + navbar partagée (#1114 suite) : la médiathèque
+		// n'a plus SA PROPRE en-tête (l'ancien logo <span class="mark serif">).
+		`class="mark medaille"`, `src="/static/bbs-logo.svg`,
+		"Rubriques", "Accès",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sortie sans %q", want)
 		}
+	}
+	if strings.Contains(out, `class="mark serif"`) {
+		t.Error("l'ancien logo texte est encore rendu — la médiathèque doit utiliser avmast")
 	}
 	if strings.Contains(out, "style=") || strings.Contains(out, "onclick") {
 		t.Error("style/onclick en ligne — interdit par la CSP")

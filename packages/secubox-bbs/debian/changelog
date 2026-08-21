@@ -1,3 +1,11 @@
+secubox-bbs (0.28.51-1~bookworm1) bookworm; urgency=medium
+
+  * Skin newsroom généralisé : médiathèque (/c/emissions), /billets, /biblio,
+    /mastodon, /nouveau, /sysop portent désormais le masthead à médaillon et la
+    navbar gauche partagée, comme les autres sections.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 01:52:23 +0200
+
 secubox-bbs (0.28.50-1~bookworm1) bookworm; urgency=medium
 
   * urlshot : égress via le proxy CONNECT interne (127.0.0.1:8090, CA publiée
