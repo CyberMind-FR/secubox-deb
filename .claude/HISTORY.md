@@ -10,6 +10,23 @@
 
 ---
 
+## 2026-08-21 (soir) — BBS vignettes-snapshot d'URL (#1120), skin newsroom complété, alias de domaines
+
+**secubox-bbs 0.28.49 (#1120)** — un message ne contenant qu'une URL reçoit une
+VIGNETTE-SNAPSHOT en couverture de carte : og:image d'abord, repli screenshot
+chromium, tout via l'égress toolbox/WAF (proxy sbxmitm + CA épinglée par SPKI),
+gardes SSRF, capture asynchrone (worker+timer, load-guard 4.0), cache
+`secubox_core.screenshots`, gating de visibilité miroir /f/. Endpoint
+`/urlshot/<clé>` (lecture seule, placeholder tant que la capture n'est pas prête).
+Implémenté en 10 tâches TDD subagent-driven.
+
+**BBS skin newsroom** — `/mp/annuaire` et `/p/{id}/edit` passés au skin newsroom
+(cohérence masthead). Médaillon SVG en logo (BBS + billets).
+
+**Alias/redirections de domaines** — `secubox.in`→3d, `all.gk2.net`→all
+(cert LE + HTTPS), `anibal-amiot.com` canonique (fr/net/www → 301),
+`ganimed.fr`→301 anibal-amiot.com, ancienne URL `/tirage-livree-hermes.html`→/.
+
 ## 2026-08-21 — BBS médias publics + skin newsroom généralisé, carrousel réparé, kbin & nextcloud ressuscités
 
 **BBS #1114 (secubox-bbs 0.28.35 → 0.28.46, PRs #1115/#1116/#1117).**
