@@ -1,3 +1,11 @@
+secubox-billets (0.7.1-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel « À la une » : auto-défilement (#1104) — avance toutes les 5 s,
+    boucle ; pause au survol/focus, 9 s après interaction, onglet masqué ;
+    désactivé sous prefers-reduced-motion. (billets.js?v=7)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:14:02 +0000
+
 secubox-billets (0.7.0-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel « À la une » en tête de la vitrine (#1104), cardlets à média :
