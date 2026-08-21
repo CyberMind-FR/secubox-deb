@@ -66,6 +66,9 @@ jobs:
         # Operators can still build them on-demand via workflow_dispatch (the
         # choice list above retains the entries).
         board: ${{ (github.event_name == 'push' || (inputs.board == 'all' || inputs.board == '')) && fromJson('["mochabin","vm-x64","rpi400"]') || (github.event.inputs.board == 'all' && fromJson('["mochabin","vm-x64","rpi400"]') || fromJson(format('["{0}"]', inputs.board || github.event.inputs.board || 'vm-x64'))) }}
+        # Chaque board est décliné en deux profils templatés (#1112) : isp (socle
+        # routeur/FAI propre) et full (isp + apps working du catalogue all.gk2).
+        profile: ["full", "isp"]
 
     steps:
       - name: Checkout
@@ -98,6 +101,13 @@ jobs:
           path: output/debs/
           if_no_artifact_found: warn
         continue-on-error: true
+
+      - name: Verify profile is clean (#1112)
+        run: |
+          # Porte « propre » : refuse de builder si le profil référence un module
+          # inexistant ou hors working-set (un module non fini ne peut pas entrer
+          # dans l'image).
+          bash scripts/verify-profile.sh ${{ matrix.profile }}
 
       - name: List available packages
         run: |
@@ -145,6 +155,7 @@ jobs:
 
           sudo -E bash image/build-image.sh \
             --board ${{ matrix.board }} \
+            --profile ${{ matrix.profile }} \
             --suite ${{ env.DEBIAN_SUITE }} \
             --out output/ \
             $SIZE_OPT \
@@ -166,7 +177,7 @@ jobs:
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: secubox-${{ matrix.board }}-${{ env.DEBIAN_SUITE }}
+          name: secubox-${{ matrix.profile }}-${{ matrix.board }}-${{ env.DEBIAN_SUITE }}
           path: |
             output/*.img.gz
             output/SHA256SUMS
