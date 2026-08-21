@@ -527,9 +527,11 @@ type NewsItem struct {
 	Medias []cardMedia
 }
 
-// cardMedia : une pièce jointe résumée pour la vignette de carte.
+// cardMedia : un média du fil résumé pour la vignette de carte. Ref est la
+// référence telle qu'écrite dans le corps (`/f/12.png`) : elle sert de src.
 type cardMedia struct {
 	ID   int64
+	Ref  string
 	Kind string // image | audio | video | file
 }
 
@@ -616,13 +618,7 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 		if fils[i].Source == "podcaster" {
 			continue
 		}
-		ap, la, lx, lt := s.apercuEtDernier(fils[i].ID, pub)
-		var medias []cardMedia
-		if fs, err := s.st.MediasDuFil(fils[i].ID, pub, 6); err == nil {
-			for _, f := range fs {
-				medias = append(medias, cardMedia{ID: f.ID, Kind: kindDeMime(f.Mime)})
-			}
-		}
+		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, pub)
 		out = append(out, NewsItem{
 			Fil: &fils[i], Date: fils[i].LastPostAt,
 			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
@@ -637,7 +633,7 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 // fil pour sa carte. En vue publique (`pub`), on ne considère QUE les messages
 // publics — un aperçu ne doit pas divulguer un message local. Best-effort :
 // tout échec de lecture rend des chaînes vides, jamais une panne de page.
-func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64) {
+func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
 	var posts []store.Post
 	if pub {
 		posts, _ = s.st.PublicPostsOf(threadID)
@@ -647,18 +643,53 @@ func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, 
 	if len(posts) == 0 {
 		return
 	}
-	if b, err := s.st.Body(posts[0]); err == nil {
-		apercu = extrait(sansRefsMedia(b), 180)
-	}
-	if len(posts) > 1 {
-		last := posts[len(posts)-1]
-		if b, err := s.st.Body(last); err == nil {
-			lastExtrait = extrait(sansRefsMedia(b), 120)
+	seen := map[int64]bool{}
+	for i, p := range posts {
+		b, err := s.st.Body(p)
+		if err != nil {
+			continue
 		}
-		lastAuteur, _ = s.st.AuteurEtAvatar(last.AuthorID)
-		lastAt = last.CreatedAt
+		if i == 0 {
+			apercu = extrait(sansRefsMedia(b), 180)
+		}
+		if i == len(posts)-1 && len(posts) > 1 {
+			lastExtrait = extrait(sansRefsMedia(b), 120)
+			lastAuteur, _ = s.st.AuteurEtAvatar(p.AuthorID)
+			lastAt = p.CreatedAt
+		}
+		// Les médias sont référencés EN LIGNE dans le corps (`/f/12.png`), pas
+		// comme pièces jointes tracées (la base n'en a AUCUNE) : c'est donc dans
+		// le texte qu'on les trouve, pour les rendre en miniatures.
+		for _, m := range refsJointes.FindAllStringSubmatch(b, -1) {
+			id, _ := strconv.ParseInt(m[1], 10, 64)
+			if id == 0 || seen[id] {
+				continue
+			}
+			seen[id] = true
+			if len(medias) < 8 {
+				medias = append(medias, cardMedia{ID: id, Ref: m[0], Kind: kindDeRef(m[0])})
+			}
+		}
 	}
 	return
+}
+
+// kindDeRef devine le type d'un média à partir de son extension dans la
+// référence `/f/12.png`. Sans extension, on parie sur l'image — le cas courant.
+func kindDeRef(ref string) string {
+	i := strings.LastIndex(ref, ".")
+	if i < 0 {
+		return "image"
+	}
+	switch strings.ToLower(ref[i+1:]) {
+	case "png", "jpg", "jpeg", "gif", "webp", "avif", "svg":
+		return "image"
+	case "mp3", "ogg", "wav", "weba", "m4a", "opus":
+		return "audio"
+	case "mp4", "webm", "mov", "mkv":
+		return "video"
+	}
+	return "file"
 }
 
 // media (/media) rend la médiathèque du podcaster en arborescence.

@@ -1,3 +1,13 @@
+secubox-bbs (0.28.27-1~bookworm1) bookworm; urgency=medium
+
+  * Médias des cartes RÉPARÉS (#1092) : la base n'a AUCUNE pièce jointe tracée —
+    les médias sont référencés EN LIGNE dans le corps (/f/12.png). On les extrait
+    donc du TEXTE (apercuEtDernier) au lieu d'interroger pieces_jointes (qui
+    rendait vide → « espace perdu »). Images en miniatures, audio en lecteur
+    inline, vidéo/fichier en lien. kindDeRef par extension.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:10:00 +0200
+
 secubox-bbs (0.28.26-1~bookworm1) bookworm; urgency=medium
 
   * Cartes plus riches (#1092) : URLs des aperçus et derniers commentaires
