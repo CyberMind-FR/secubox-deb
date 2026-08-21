@@ -1,3 +1,14 @@
+secubox-bbs (0.28.17-1~bookworm1) bookworm; urgency=medium
+
+  * Reskin coquille COMPLET (#1092) : toute la coquille (barre, rail, liste de
+    fils, salons, cartes, boutons, pastilles, messages, éditeur, tables, stats,
+    fiches, annuaire) passe au style gazette AletheiaVox — filets à l'encre,
+    titres Fraunces, méta en mono capitales, accent cinabre unique, radii nets,
+    à plat. Tokens uniquement (clair+sombre suivent). Fini les zones « appli
+    blanche » hors accueil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:45:00 +0200
+
 secubox-bbs (0.28.16-1~bookworm1) bookworm; urgency=medium
 
   * Anti-cache HTML (#1092) : rend/rendDef posent `Cache-Control: private, no-cache`
