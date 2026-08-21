@@ -1,0 +1,6 @@
+secubox-isp (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Métapaquet initial : socle routeur/FAI propre (profil « isp »), dérivé du
+    working-set réel du board de référence (ref #1112).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 12:00:00 +0000

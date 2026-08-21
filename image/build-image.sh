@@ -48,6 +48,7 @@ usage() {
 Usage: sudo bash build-image.sh [OPTIONS]
 
   --board   BOARD    mochabin|espressobin-v7|espressobin-ultra|vm-x64 (défaut: mochabin)
+  --profile PROFILE  isp|full — surcharge SECUBOX_PROFILE du board (défaut: du board)
   --suite   SUITE    Debian suite (défaut: bookworm)
   --out     DIR      Répertoire de sortie (défaut: ./output)
   --size    SIZE     Taille totale image (défaut: 4G)
@@ -75,6 +76,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --board)       BOARD="$2";        shift 2 ;;
+    --profile)     PROFILE_OVERRIDE="$2"; shift 2 ;;
     --suite)       SUITE="$2";        shift 2 ;;
     --out)         OUT_DIR="$2";      shift 2 ;;
     --size)        IMG_SIZE="$2";     shift 2 ;;
@@ -96,6 +98,20 @@ BOARD_DIR="${REPO_DIR}/board/${BOARD}"
 
 # Charger config du board
 source "${BOARD_DIR}/config.mk" 2>/dev/null || true
+
+# --profile surcharge le SECUBOX_PROFILE du board (isp|full), APRÈS le source
+# du config.mk (sans quoi le board réécraserait le choix). Accepte le nom court
+# (isp/full) ou complet (secubox-isp).
+if [[ -n "${PROFILE_OVERRIDE:-}" ]]; then
+  case "$PROFILE_OVERRIDE" in
+    secubox-*) SECUBOX_PROFILE="$PROFILE_OVERRIDE" ;;
+    *)         SECUBOX_PROFILE="secubox-${PROFILE_OVERRIDE}" ;;
+  esac
+fi
+SECUBOX_PROFILE="${SECUBOX_PROFILE:-secubox-full}"
+export SECUBOX_PROFILE
+# tag court (isp/full) pour nommer les images par profil (#1112)
+PROFILE_TAG="${SECUBOX_PROFILE#secubox-}"
 
 # Redirect to build-rpi-usb.sh for Raspberry Pi boards
 if [[ "${USE_RPI_SCRIPT:-0}" == "1" ]] || [[ "$BOARD" == "rpi400" ]] || [[ "$BOARD" == "rpi4" ]]; then
@@ -167,7 +183,7 @@ fi
 mkdir -p "$OUT_DIR"
 WORK_DIR=$(mktemp -d /tmp/secubox-build-XXXXXX)
 ROOTFS="${WORK_DIR}/rootfs"
-IMG_FILE="${OUT_DIR}/secubox-${BOARD}-${SUITE}.img"
+IMG_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${BOARD}-${SUITE}.img"
 
 log "══════════════════════════════════════════════════════════"
 log "Board       : ${BOLD}${BOARD}${NC}"
@@ -668,9 +684,13 @@ if [[ $SECUBOX_REPO_OK -eq 1 ]]; then
   # Non-interactive conffile handling: secubox-mesh's mesh.toml triggers a dpkg
   # conffile prompt that fails the headless chroot install (#USB-build). Keep
   # the packaged conffile, never prompt.
-  chroot "${ROOTFS}" bash -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-    -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef secubox-full' \
-    || warn "secubox-full non disponible"
+  # Le PROFIL vient du board (SECUBOX_PROFILE dans board/*/config.mk) ou de
+  # --profile ; défaut secubox-full (#1112). C'est le point de bascule qui fait
+  # émettre au MÊME pipeline une image « isp » (socle propre) ou « full ».
+  SECUBOX_PROFILE="${SECUBOX_PROFILE:-secubox-full}"
+  chroot "${ROOTFS}" bash -c "DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
+    -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef ${SECUBOX_PROFILE}" \
+    || warn "${SECUBOX_PROFILE} non disponible"
   chroot "${ROOTFS}" dpkg --configure -a --force-confold 2>/dev/null || true
 else
   warn "APT repo SecuBox non disponible — skip (Phase 4)"
@@ -1641,7 +1661,7 @@ log "7/7 Post-traitement..."
 
 # Conversion VDI pour VirtualBox (x64 seulement)
 if [[ $IS_X64 -eq 1 ]] && [[ $CONVERT_VDI -eq 1 ]]; then
-  VDI_FILE="${OUT_DIR}/secubox-${BOARD}-${SUITE}.vdi"
+  VDI_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${BOARD}-${SUITE}.vdi"
   log "  Conversion en VDI..."
   if qemu-img convert -f raw -O vdi "${IMG_FILE}" "${VDI_FILE}"; then
     ok "VDI créé : ${VDI_FILE}"
@@ -1652,7 +1672,7 @@ fi
 
 # Conversion QCOW2 pour QEMU (arm64 VM)
 if [[ "${BOARD}" == "vm-arm64" ]]; then
-  QCOW2_FILE="${OUT_DIR}/secubox-${BOARD}-${SUITE}.qcow2"
+  QCOW2_FILE="${OUT_DIR}/secubox-${PROFILE_TAG}-${BOARD}-${SUITE}.qcow2"
   log "  Conversion en QCOW2..."
   qemu-img convert -f raw -O qcow2 "${IMG_FILE}" "${QCOW2_FILE}"
   ok "QCOW2 créé : ${QCOW2_FILE}"

@@ -8,7 +8,7 @@ Homepage: https://cybermind.fr/secubox
 Rules-Requires-Root: no
 
 Package: secubox-waf-ng
-Architecture: arm64
+Architecture: any
 Depends: ${misc:Depends},
  adduser,
  apparmor

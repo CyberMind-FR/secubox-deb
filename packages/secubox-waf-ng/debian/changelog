@@ -1,3 +1,10 @@
+secubox-waf-ng (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Architecture: any — construit aussi pour amd64 (GOARCH dérivé de la cible),
+    pour les images VirtualBox/amd64 du profil isp (#1112).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:39:14 +0000
+
 secubox-waf-ng (1.5.11-1~bookworm1) bookworm; urgency=medium
 
   * Conseiller de cache (#1092) : la réponse porte X-SecuBox-Cache-Age et
