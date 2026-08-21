@@ -1,3 +1,12 @@
+secubox-podcaster (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * Une URL YouTube dans « ajouter un flux » lance l'import yt-dlp (#1101).
+    (Entrée de changelog rétablie : le code était mergé sous 1.0.5, le paquet
+    déployé sur gk2 porte 1.0.6 — on aligne la source pour éviter un downgrade
+    apt.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:08:49 +0000
+
 secubox-podcaster (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * Import YouTube : réutilise le coffre à cookies de ytsas (#1100). L'import
