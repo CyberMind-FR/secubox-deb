@@ -40,6 +40,19 @@ case "$1" in
         chmod 0700 /etc/secubox/secrets/bbs
     fi
 
+    # AUTO-REPARATION DES CORPS ILLISIBLES (#1114). Un `bbsctl ingest` lance A
+    # LA MAIN en root cree des dossiers de fils et des corps en root:root :
+    # intraversables/illisibles par le service, ils s'affichent comme « ce
+    # message diverge de l'index » sur des fils entiers. On re-aligne tout ce qui
+    # n'appartient pas au service sous son arborescence de donnees. Idempotent :
+    # ne touche QUE le mal-possede, ne fait rien sur une installation neuve.
+    for sous in content files; do
+        d="/var/lib/secubox/bbs/$sous"
+        [ -d "$d" ] || continue
+        find "$d" \! -user secubox-bbs -exec chown secubox-bbs:secubox {} + \
+            2>/dev/null || true
+    done
+
     systemctl daemon-reload >/dev/null 2>&1 || true
 
     # PRESERVER L'ETAT : dpkg a envoye SIGTERM au service pendant la mise a

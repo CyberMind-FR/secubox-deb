@@ -495,8 +495,17 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// un article), classé par son épisode le plus récent — dynamique façon RSS :
 	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
 	p.News = s.composerRedaction(p.Threads, pub)
-	// #1056 stage 3 : les articles collaboratifs EN COURS, pour la colonne
-	// « rédaction collaborative » (remplace le teaser).
+	s.poseRail(&p)
+	s.poseNonLus(&p)
+	p.Titre = "AletheiaVox"
+	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// poseRail remplit la colonne DROITE de la rédaction (derniers billets + articles
+// collaboratifs en cours). Partagée par l'accueil ET les salons (#1114) : sans
+// elle, « Derniers billets » disparaissait dans les sous-forums et vues salon,
+// qui rendent pourtant la même coquille newsroom que l'accueil.
+func (s *Server) poseRail(p *page) {
 	p.Articles, _ = s.st.Articles("draft", 8)
 	if s.bil != nil {
 		p.Billets, p.BilletsErr = s.vitrineBillets()
@@ -504,9 +513,49 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 			p.Billets = p.Billets[:8]
 		}
 	}
-	s.poseNonLus(&p)
-	p.Titre = "AletheiaVox"
-	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// refsDunCorps extrait les identifiants de pièces jointes `/f/NN` cités dans un
+// corps de message.
+func refsDunCorps(body string) []int64 {
+	var ids []int64
+	for _, m := range refsJointes.FindAllStringSubmatch(body, -1) {
+		if id, err := strconv.ParseInt(m[1], 10, 64); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// propagerPiecesPubliques rend PUBLICS les fichiers cités dans un corps de post
+// PUBLIC (#1114) — à n'appeler QUE quand le post/fil est public. Le média
+// devient alors aussi accessible qu'un anonyme peut lire le message.
+func (s *Server) propagerPiecesPubliques(body string) {
+	if ids := refsDunCorps(body); len(ids) > 0 {
+		_ = s.st.MarqueFichiersPublics(ids)
+	}
+}
+
+// backfillPiecesPubliques rattrape le contenu EXISTANT (#1114) : au démarrage,
+// il marque publics les fichiers cités par les posts publics des fils publics —
+// sans lui, un média déposé avant le correctif resterait 403 pour un anonyme
+// alors que son message est public. Idempotent, lancé en tâche de fond.
+func (s *Server) backfillPiecesPubliques() {
+	fils, err := s.st.Recent(1000000, true) // fils PUBLICS uniquement
+	if err != nil {
+		return
+	}
+	var ids []int64
+	for _, f := range fils {
+		posts, _ := s.st.PublicPostsOf(f.ID)
+		for _, p := range posts {
+			body, _ := s.st.Body(p)
+			ids = append(ids, refsDunCorps(body)...)
+		}
+	}
+	if err := s.st.MarqueFichiersPublics(ids); err != nil {
+		log.Printf("bbs: backfill pièces publiques : %v", err)
+	}
 }
 
 // NewsItem : une entrée de la rédaction — SOIT un fil (discussion / source),
@@ -555,6 +604,47 @@ func sansRefsMedia(s string) string {
 	return strings.TrimSpace(refsJointes.ReplaceAllString(s, ""))
 }
 
+// lienMarkdownRe : `[texte](url)` — on garde le TEXTE, on jette l'URL.
+var lienMarkdownRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+
+// cheminMediaNu : une ligne qui n'est QU'un chemin de média (`/media/…`, `/f/…`).
+var cheminMediaNu = regexp.MustCompile(`^(?:/media/|/f/)\S+$`)
+
+// resumeDeCorps produit un aperçu PROPRE pour une carte de carrousel ou de flux.
+//
+// Les passerelles billets recopient le titre en tête du corps, y collent un
+// chemin de média nu, un pied « Discuter ce billet sur le BBS » et un lien
+// markdown « [Voir chez billets](…) ». Sans nettoyage, la carte affichait tout
+// cela tel quel : le chemin brut d'une image et un lien tronqué au lieu d'une
+// phrase (#1114). On retire la ligne-titre répétée, les chemins de média nus, le
+// pied de passerelle, et on déplie les liens markdown pour n'en garder que le
+// texte — puis on recompose une prose d'une seule ligne.
+func resumeDeCorps(corps, titre string) string {
+	titreN := strings.ToLower(strings.TrimSpace(titre))
+	var lignes []string
+	for _, ln := range strings.Split(corps, "\n") {
+		t := strings.TrimSpace(ln)
+		if t == "" {
+			continue
+		}
+		if titreN != "" && strings.ToLower(t) == titreN {
+			continue
+		}
+		if cheminMediaNu.MatchString(t) {
+			continue
+		}
+		if strings.HasPrefix(t, "Discuter ce billet") || strings.HasPrefix(t, "[Voir chez") {
+			continue
+		}
+		t = strings.TrimSpace(lienMarkdownRe.ReplaceAllString(t, "$1"))
+		if t == "" {
+			continue
+		}
+		lignes = append(lignes, t)
+	}
+	return strings.Join(lignes, " ")
+}
+
 // composerRedaction mêle les fils NON-podcaster et les flux groupés du
 // podcaster en un seul fil trié par date décroissante — les épisodes d'un même
 // flux se replient en un dossier unique.
@@ -581,7 +671,7 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 	// qui s'affiche (≤ 24 fils), jamais tout l'accueil.
 	for i := range out {
 		if out[i].Fil != nil {
-			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, pub)
+			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, out[i].Fil.Title, pub)
 			// Les pièces `/f/NN` sont RÉSERVÉES AUX MEMBRES (servirFichier renvoie
 			// 403 à un anonyme). Sur la surface publique on n'émet donc pas leurs
 			// refs — sinon des <img> cassés. L'aperçu TEXTE, lui, est déjà filtré
@@ -613,6 +703,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// rend en MÉDIATHÈQUE — flux en sous-dossiers, épisodes ordonnés par type et
 	// jouables — plutôt qu'en liste plate de fils par épisode.
 	if podcasterDominant(p.Threads) {
+		s.poseRail(&p)
 		s.rendMediatheque(w, r, p)
 		return
 	}
@@ -621,6 +712,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// colonnes. La coquille « poste de travail » reste pour un fil ouvert, le
 	// compte, la console ; les salons rejoignent la rédaction.
 	p.News = s.composerRedactionSalon(p.Threads, pub)
+	s.poseRail(&p)
 	p.Titre = p.Cat.Title
 	s.rendDef(w, r, "newsroom", "newsroom", p)
 }
@@ -637,7 +729,7 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 		if fils[i].Source == "podcaster" {
 			continue
 		}
-		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, pub)
+		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, fils[i].Title, pub)
 		out = append(out, NewsItem{
 			Fil: &fils[i], Date: fils[i].LastPostAt,
 			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
@@ -652,7 +744,7 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 // fil pour sa carte. En vue publique (`pub`), on ne considère QUE les messages
 // publics — un aperçu ne doit pas divulguer un message local. Best-effort :
 // tout échec de lecture rend des chaînes vides, jamais une panne de page.
-func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
+func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
 	var posts []store.Post
 	if pub {
 		posts, _ = s.st.PublicPostsOf(threadID)
@@ -669,10 +761,10 @@ func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, 
 			continue
 		}
 		if i == 0 {
-			apercu = extrait(sansRefsMedia(b), 180)
+			apercu = extrait(resumeDeCorps(b, titre), 180)
 		}
 		if i == len(posts)-1 && len(posts) > 1 {
-			lastExtrait = extrait(sansRefsMedia(b), 120)
+			lastExtrait = extrait(resumeDeCorps(b, titre), 120)
 			lastAuteur, _ = s.st.AuteurEtAvatar(p.AuthorID)
 			lastAt = p.CreatedAt
 		}
@@ -892,7 +984,13 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
 		}
 	}
-	s.rend(w, r, "thread", p)
+	// #1114 : le fil porte désormais le skin newsroom (masthead + rail partagés),
+	// pas l'ancienne coquille layout.html. poseRail alimente la colonne droite
+	// (derniers billets), rendDef rend le gabarit autonome "fil" (thread.html
+	// fournit le corps réutilisé).
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "fil", "fil", p)
 }
 
 func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
@@ -930,6 +1028,9 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 	if _, err := s.st.Reply(id, v.ID, body, vis); err != nil {
 		http.Error(w, "enregistrement impossible", http.StatusInternalServerError)
 		return
+	}
+	if vis == store.VisPublic {
+		s.propagerPiecesPubliques(body) // #1114 : média public comme le message
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
 }
@@ -1508,6 +1609,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 		s.rend(w, r, "nouveau", p)
 		return
 	}
+	if vis == store.VisPublic {
+		s.propagerPiecesPubliques(corps) // #1114 : média public comme le message
+	}
 	if aSource {
 		st := typerSource(src)
 		if st.Source == "video" {
@@ -1700,7 +1804,9 @@ func (s *Server) compte(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.rend(w, r, "compte", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "compte", "pagenr", p)
 }
 
 func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {

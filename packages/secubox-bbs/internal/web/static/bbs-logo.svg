@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="BBS">
+  <title>BBS</title>
+  <defs>
+    <radialGradient id="globe" cx="42%" cy="36%" r="72%">
+      <stop offset="0%" stop-color="#7fd6f2"/>
+      <stop offset="38%" stop-color="#1f7fc4"/>
+      <stop offset="78%" stop-color="#123e77"/>
+      <stop offset="100%" stop-color="#0b2550"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4f6f8"/>
+      <stop offset="30%" stop-color="#b9c4cd"/>
+      <stop offset="55%" stop-color="#8a99a6"/>
+      <stop offset="80%" stop-color="#cdd6dd"/>
+      <stop offset="100%" stop-color="#7f8d99"/>
+    </linearGradient>
+    <linearGradient id="pearl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#c3ccd4"/>
+    </linearGradient>
+    <linearGradient id="letters" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="45%" stop-color="#dcecfb"/>
+      <stop offset="55%" stop-color="#8fbfe8"/>
+      <stop offset="100%" stop-color="#2f6fae"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Anneau décoratif : deux cercles argentés + rang de perles -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#ring)" stroke-width="6"/>
+  <circle cx="100" cy="100" r="86" fill="none" stroke="url(#ring)" stroke-width="2.5" opacity=".8"/>
+  <g fill="url(#pearl)">
+    <!-- 16 perles réparties sur le pourtour -->
+    <g>
+      <circle cx="100" cy="9"   r="4.2"/><circle cx="135" cy="16"  r="3.6"/>
+      <circle cx="164" cy="36"  r="4.2"/><circle cx="184" cy="65"  r="3.6"/>
+      <circle cx="191" cy="100" r="4.2"/><circle cx="184" cy="135" r="3.6"/>
+      <circle cx="164" cy="164" r="4.2"/><circle cx="135" cy="184" r="3.6"/>
+      <circle cx="100" cy="191" r="4.2"/><circle cx="65"  cy="184" r="3.6"/>
+      <circle cx="36"  cy="164" r="4.2"/><circle cx="16"  cy="135" r="3.6"/>
+      <circle cx="9"   cy="100" r="4.2"/><circle cx="16"  cy="65"  r="3.6"/>
+      <circle cx="36"  cy="36"  r="4.2"/><circle cx="65"  cy="16"  r="3.6"/>
+    </g>
+  </g>
+
+  <!-- Globe central -->
+  <circle cx="100" cy="100" r="76" fill="url(#globe)"/>
+  <circle cx="100" cy="100" r="76" fill="none" stroke="#dfeaf5" stroke-width="1.4" opacity=".7"/>
+
+  <!-- Méridiens / orbites qui tournent lentement -->
+  <g opacity=".55" stroke="#bfe2fb" stroke-width="1.1" fill="none">
+    <g>
+      <ellipse cx="100" cy="100" rx="74" ry="30"/>
+      <ellipse cx="100" cy="100" rx="30" ry="74"/>
+      <ellipse cx="100" cy="100" rx="56" ry="56"/>
+      <animateTransform attributeName="transform" type="rotate"
+        from="0 100 100" to="360 100 100" dur="48s" repeatCount="indefinite"/>
+    </g>
+  </g>
+
+  <!-- Étincelles -->
+  <g fill="#eaf6ff">
+    <circle cx="58" cy="60" r="1.6"><animate attributeName="opacity" values="0.2;1;0.2" dur="3.2s" repeatCount="indefinite"/></circle>
+    <circle cx="146" cy="72" r="1.4"><animate attributeName="opacity" values="1;0.2;1" dur="4.1s" repeatCount="indefinite"/></circle>
+    <circle cx="132" cy="140" r="1.6"><animate attributeName="opacity" values="0.3;1;0.3" dur="3.7s" repeatCount="indefinite"/></circle>
+    <circle cx="66" cy="134" r="1.3"><animate attributeName="opacity" values="1;0.3;1" dur="2.9s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <!-- BBS -->
+  <text x="100" y="118" text-anchor="middle"
+        font-family="Fraunces, 'Playfair Display', Georgia, serif"
+        font-size="60" font-weight="700" letter-spacing="-2"
+        fill="url(#letters)" stroke="#0d3a6b" stroke-width="1.1"
+        filter="url(#soft)">BBS</text>
+</svg>

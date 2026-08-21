@@ -163,6 +163,20 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// gabarits Go ne passent qu'UN argument a `template` : sans cette fonction, il
 	// faudrait recopier le meme ternaire a six endroits — et l'oublier au septieme.
 	fn := template.FuncMap{"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
+		// glypheSalon : une émoji STABLE et distincte par salon (#1114), dérivée
+		// du slug — plus joli que le ◆ générique, et un sous-salon garde le ↳.
+		"glypheSalon": func(slug string, profondeur int) string {
+			if profondeur > 0 {
+				return "↳"
+			}
+			pal := []string{"🗨️", "💡", "🔧", "🎨", "📡", "🌐", "🛰️", "📚", "🎭", "🧭",
+				"⚗️", "🪐", "🔭", "🎼", "🗺️", "🧩", "🌱", "⚙️", "📻", "🛠️"}
+			var h uint32 = 2166136261
+			for _, c := range slug {
+				h = (h ^ uint32(c)) * 16777619
+			}
+			return pal[h%uint32(len(pal))]
+		},
 		"vignette": func(a int64, i string) map[string]any {
 			return map[string]any{"A": a, "I": i}
 		},
@@ -197,7 +211,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire", "edition"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mastodon", "annuaire", "edition"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {
@@ -213,6 +227,35 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		pages["newsroom"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit newsroom : %w", err)
+	}
+	// #1114 : le fil dans le skin newsroom. Un JEU réunissant newsroom.html (blocs
+	// partagés avmast/avrubriques/avacces), thread.html (le corps réutilisé) et
+	// fil.html (la coquille newsroom du fil). Aucune collision de « corps » : seul
+	// thread.html le définit dans ce jeu.
+	if t, err := template.New("fil.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/thread.html", "templates/fil.html"); err == nil {
+		pages["fil"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit fil : %w", err)
+	}
+	// #1114 : /compte dans le skin newsroom. Coquille GÉNÉRIQUE (pagenr) réunissant
+	// newsroom.html (blocs partagés avmast/avrubriques/avacces/avrail), compte.html
+	// (le corps réutilisé) et coquillenr.html. layout.html fournit le partial
+	// "vignette". Aucune collision de « corps » : seul compte.html le définit ici.
+	if t, err := template.New("compte.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/compte.html"); err == nil {
+		pages["compte"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit compte : %w", err)
+	}
+	// #1114 : /mp dans le skin newsroom (define "mpnr"), rail gauche = liste des
+	// conversations. layout.html fournit "vignette" (avatars) ; mp.html fournit
+	// le corps. Jeu distinct de "compte" : chacun n'a qu'un seul "corps".
+	if t, err := template.New("mp.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mp.html"); err == nil {
+		pages["mp"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit mp : %w", err)
 	}
 	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
 	if t, err := template.New("mediatheque.html").Funcs(fn).
@@ -242,7 +285,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	{
 		h := sha256.New()
 		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js",
-			"static/player.js", "static/coquille.js", "static/editeur.js"} {
+			"static/player.js", "static/coquille.js", "static/editeur.js", "static/bbs-logo.svg"} {
 			if b, err := assets.ReadFile(f); err == nil {
 				h.Write(b)
 			}
@@ -272,6 +315,9 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	s.routesFichiers()
 	s.routesAPISysop()
 	s.routesMembre()
+	// #1114 : rattrape la visibilité publique des médias déjà cités dans des
+	// posts publics (tâche de fond, ne retarde pas le démarrage).
+	go s.backfillPiecesPubliques()
 	return s, nil
 }
 
