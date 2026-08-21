@@ -1239,7 +1239,9 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 			p.Vide = "Aucun billet publié pour l'instant."
 			p.Billets, p.BilletsErr = s.vitrineBillets()
 		}
-		s.rend(w, r, "simple", p)
+		s.poseNonLus(&p)
+		s.poseRail(&p)
+		s.rendDef(w, r, "simple", "pagenr", p)
 	}
 }
 
@@ -1601,7 +1603,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 			p.SrcType = typerSource(src)
 			p.Titre = "Déposer une source"
 		}
-		s.rend(w, r, "nouveau", p)
+		s.poseNonLus(&p)
+		s.poseRail(&p)
+		s.rendDef(w, r, "nouveau", "pagenr", p)
 		return
 	}
 	if err := s.verifieCSRF(r); err != nil {
@@ -1612,7 +1616,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	corps := strings.TrimSpace(r.PostFormValue("body"))
 	if titre == "" || corps == "" {
 		p.Err = "Un titre et un premier message sont nécessaires."
-		s.rend(w, r, "nouveau", p)
+		s.poseNonLus(&p)
+		s.poseRail(&p)
+		s.rendDef(w, r, "nouveau", "pagenr", p)
 		return
 	}
 	var cat int64
@@ -1628,7 +1634,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	}
 	if !valide {
 		p.Err = "Salon inconnu."
-		s.rend(w, r, "nouveau", p)
+		s.poseNonLus(&p)
+		s.poseRail(&p)
+		s.rendDef(w, r, "nouveau", "pagenr", p)
 		return
 	}
 	vis := store.VisLocal
@@ -1645,7 +1653,9 @@ func (s *Server) nouveau(w http.ResponseWriter, r *http.Request) {
 	id, err := s.st.NewThread(cat, v.ID, titre, corps, vis)
 	if err != nil {
 		p.Err = "Enregistrement impossible : " + err.Error()
-		s.rend(w, r, "nouveau", p)
+		s.poseNonLus(&p)
+		s.poseRail(&p)
+		s.rendDef(w, r, "nouveau", "pagenr", p)
 		return
 	}
 	if vis == store.VisPublic {
@@ -1709,7 +1719,9 @@ func (s *Server) sysop(w http.ResponseWriter, r *http.Request) {
 	// tracabilite sans l'usage : c'est la consultation qui rend le pouvoir
 	// verifiable, pas l'ecriture.
 	p.Moderations, _ = s.st.Moderations(50)
-	s.rend(w, r, "sysop", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "sysop", "pagenr", p)
 }
 
 func (s *Server) sysopAction(w http.ResponseWriter, r *http.Request) {
