@@ -18,7 +18,15 @@ chromium, tout via l'égress toolbox/WAF (proxy sbxmitm + CA épinglée par SPKI
 gardes SSRF, capture asynchrone (worker+timer, load-guard 4.0), cache
 `secubox_core.screenshots`, gating de visibilité miroir /f/. Endpoint
 `/urlshot/<clé>` (lecture seule, placeholder tant que la capture n'est pas prête).
-Implémenté en 10 tâches TDD subagent-driven.
+Implémenté en 10 tâches TDD subagent-driven. **Égress finalisé (#1126, e2e prouvé,
+#1120 fermé)** : l'hypothèse « sbxmitm:8091 = proxy » était fausse (les workers R3
+tournent en `--transparent`, pas forward-proxy) ; sbxmitm sait DÉJÀ faire proxy
+CONNECT (mode défaut) → nouveau service `secubox-toolbox-egress-proxy`
+(127.0.0.1:8090, CA `ca-wg/mitmproxy-ca-cert.pem` publiée dans
+`/usr/share/secubox/egress-ca.pem`), + `secubox-core 1.3.2` (shotter proxy/ca
+épinglée SPKI). Vérifié : og:image (github 618 Ko) ET fallback chromium
+(example.com 39 Ko) → snapshot réel servi. Paquets : bbs 0.28.50, toolbox-ng
+0.1.45, core 1.3.2. Voir [[project_toolbox_egress_connect_proxy]].
 
 **BBS skin newsroom** — `/mp/annuaire` et `/p/{id}/edit` passés au skin newsroom
 (cohérence masthead). Médaillon SVG en logo (BBS + billets).

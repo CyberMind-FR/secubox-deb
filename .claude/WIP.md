@@ -6,9 +6,28 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-21*
+*Mis à jour : 2026-08-21 (soir)*
 
 ---
+
+## 2026-08-21 (soir) — #1120 vignettes-snapshot d'URL FERMÉ (e2e), alias domaines
+
+### ✅ Fait — déployé + apt-synchronisé
+- **#1120 vignette-snapshot d'URL — FERMÉ, e2e prouvé** (bbs 0.28.50, toolbox-ng
+  0.1.45, core 1.3.2, PRs #1125/#1126). Proxy CONNECT d'égress interne
+  (`secubox-toolbox-egress-proxy` :8090, CA publiée), og:image + fallback
+  chromium via égress SPKI-épinglée. Voir [[project_toolbox_egress_connect_proxy]].
+- **/mp/annuaire + /p/{id}/edit** au skin newsroom (#1121). Médaillon SVG logo
+  (bbs + billets). Alias : secubox.in→3d, all.gk2.net→all (cert+HTTPS),
+  anibal-amiot.com canonique, ganimed.fr→301.
+
+### ⬜ Next Up
+- **/c/emissions cassé** — page catégorie BBS en erreur (à diagnostiquer ;
+  régression probable skin newsroom/carrousel).
+- **ytsas téléchargements bloqués (SABR)** — yt-dlp à jour ; média googlevideo
+  throttlé 0% ; fallback DASH-https/PO-token à câbler (radio 403 idem).
+- **urlshot** — garde de charge 4.0 vs board chargée (captures aux creux) ;
+  éditeur : miniature live sur collage d'un lien (phase 2).
 
 ## 2026-08-21 — BBS médias publics + newsroom, carrousel, kbin, nextcloud
 
