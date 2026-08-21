@@ -6,9 +6,17 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-08-21*
+*Mis à jour : 2026-08-21 (soir)*
 
 ---
+
+## 2026-08-21 (soir)
+
+- [x] #1120 vignette-snapshot d'URL — e2e (proxy CONNECT égress + core 1.3.2), FERMÉ
+- [x] Alias domaines (secubox.in→3d, all.gk2.net→all+cert, anibal canonique, ganimed→301)
+- [ ] /c/emissions cassé — diagnostiquer + réparer (régression newsroom/carrousel ?)
+- [ ] ytsas téléchargements bloqués (SABR/throttle) — DASH-https + PO-token (radio 403 idem)
+- [ ] urlshot — tuning garde de charge + miniature live éditeur (phase 2)
 
 ## 2026-08-21
 
