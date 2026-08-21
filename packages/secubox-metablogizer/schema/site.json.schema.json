@@ -53,6 +53,22 @@
       ],
       "description": "Name of the gandalf/streamlit-<X> repo on Gitea, if any"
     },
+    "source_url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https?://",
+      "description": "Depot SOURCE amont du contenu (ex. https://github.com/user/repo.git). Enregistre et affiche en LIEN : restreint a http(s):// pour qu'une URI javascript: ne devienne pas un XSS stocke sur la page. Aucune operation git n'en decoule."
+    },
+    "gitea_repo": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^https?://",
+      "description": "URL du miroir Gitea du site (ex. https://gitea.gk2.secubox.in/gandalf/<name>). Enregistre et affiche en LIEN : restreint a http(s):// (meme raison que source_url). Remplace le lien Gitea autrefois devine."
+    },
     "tags": {
       "type": "array",
       "items": {
