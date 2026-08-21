@@ -1,3 +1,10 @@
+secubox-bbs (0.28.35-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlets carrés + uniformes (216×216, #1104) : couverture bornée (92px),
+    corps flex, aperçu et byline clampés — fini les cartes trop hautes/inégales.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:50:47 +0000
+
 secubox-bbs (0.28.34-1~bookworm1) bookworm; urgency=medium
 
   * Accueil : les cartes (carrousel ET liste) portent enfin un aperçu et leurs
