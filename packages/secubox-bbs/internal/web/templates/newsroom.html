@@ -65,15 +65,21 @@
         {{range .News}}
         {{if .Feed}}{{$f := .Feed}}
         <a class="ccard" role="listitem" data-k="podcast" href="/media#f{{$f.ID}}">
-          <div class="cctop"><span class="ccic">{{$f.Glyphe}}</span><span class="cctype">médiathèque</span></div>
-          <h3 class="serif">{{$f.Titre}}</h3>
-          <div class="ccwho">{{len $f.Episodes}} épisode(s)</div>
+          {{if $f.Vignette}}<span class="cccover"><img src="{{$f.Vignette}}" alt="" loading="lazy"></span>{{end}}
+          <div class="ccbody">
+            <div class="cctop"><span class="ccic">{{$f.Glyphe}}</span><span class="cctype">médiathèque</span><span class="ccmed">🎧</span></div>
+            <h3 class="serif">{{$f.Titre}}</h3>
+            <div class="ccwho">{{len $f.Episodes}} épisode(s)</div>
+          </div>
         </a>
         {{else}}{{with .Fil}}
         <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
-          <div class="cctop"><span class="ccic">{{if eq .MediaKind "audio"}}🎧{{else if eq .MediaKind "video"}}🎬{{else if eq .Source "video"}}🎬{{else if eq .Source "podcast"}}🎧{{else if eq .Source "film"}}🎞️{{else if eq .Source "livre"}}📖{{else if .Source}}🔗{{else}}💬{{end}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span></div>
-          <h3 class="serif">{{.Title}}</h3>
-          <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
+          {{if or (eq .MediaKind "video") (eq .Source "video")}}<span class="cccover vid"></span>{{end}}
+          <div class="ccbody">
+            <div class="cctop"><span class="ccic">{{if eq .MediaKind "audio"}}🎧{{else if eq .MediaKind "video"}}🎬{{else if eq .Source "video"}}🎬{{else if eq .Source "podcast"}}🎧{{else if eq .Source "film"}}🎞️{{else if eq .Source "livre"}}📖{{else if .Source}}🔗{{else}}💬{{end}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if or (eq .MediaKind "video") (eq .Source "video")}}<span class="ccmed">🎬</span>{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}<span class="ccmed">🎧</span>{{end}}</div>
+            <h3 class="serif">{{.Title}}</h3>
+            <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
+          </div>
         </a>
         {{end}}{{end}}
         {{end}}
