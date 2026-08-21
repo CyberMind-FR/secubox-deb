@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -60,6 +61,8 @@ type page struct {
 	Art      store.Article
 	Parts    []store.ArticlePart
 	Articles []store.Article
+	// Edit : formulaire d'edition d'un message (#1091), nil hors de cette page.
+	Edit *editForm
 	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
 	// extrait, date, lien de chaque billet, pas seulement les fils publies
 	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
@@ -135,6 +138,20 @@ type postView struct {
 	// Avatar de l'auteur, 0 s'il n'en a pas. Rendu par la MEME requete que le
 	// pseudonyme : afficher un visage ne coute pas une lecture de plus.
 	Avatar int64
+	// Editable : le visiteur courant peut-il editer CE message (#1091) ? Calcule
+	// par la meme regle que le magasin (PeutEditer), pour n'afficher le lien que
+	// quand il aboutira. CorrigeMod : edite par quelqu'un d'autre que l'auteur.
+	Editable   bool
+	CorrigeMod bool
+}
+
+// editForm porte le formulaire d'edition d'un message (#1091) ; nil hors de
+// cette page. Moderation = l'editeur n'est pas l'auteur (correction de sysop),
+// pour prevenir en clair « vous corrigez le texte d'un autre ».
+type editForm struct {
+	PostID, ThreadID int64
+	Body             string
+	Moderation       bool
 }
 
 type card struct {
@@ -161,6 +178,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
+	s.mux.HandleFunc("/p/", s.edition) // #1091 — /p/{id}/edit
 	s.mux.HandleFunc("/login", s.connexion)
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
@@ -687,7 +705,9 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 		}
 		a, av := s.st.AuteurEtAvatar(po.AuthorID)
 		p.Posts = append(p.Posts, postView{Post: po, Author: a,
-			Initiales: initiales(a), Body: body, Avatar: av})
+			Initiales: initiales(a), Body: body, Avatar: av,
+			Editable:   store.PeutEditer(p.V.ID, p.V.Role, po.AuthorID),
+			CorrigeMod: po.EditedAt > 0 && po.EditedBy != po.AuthorID})
 	}
 	for _, c := range p.Cats {
 		if c.ID == t.CategoryID {
@@ -751,6 +771,72 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// edition sert la page d'edition d'un message (#1091) : GET pre-remplit,
+// POST applique. La regle de droit (auteur pour le sien, sysop pour les autres)
+// est verifiee ICI ET dans le magasin — la vue n'est jamais la seule garde.
+//
+// Un visiteur sans droit reçoit 404, PAS 403 : confirmer l'existence d'un
+// message qu'il ne peut pas toucher n'apporte rien et renseigne un curieux.
+func (s *Server) edition(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasSuffix(r.URL.Path, "/edit") {
+		http.NotFound(w, r)
+		return
+	}
+	id := idDe(r.URL.Path, "/p/")
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Error(w, "connexion requise", http.StatusUnauthorized)
+		return
+	}
+	po, err := s.st.PostByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !store.PeutEditer(v.ID, v.Role, po.AuthorID) {
+		http.NotFound(w, r)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		if err := s.verifieCSRF(r); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		body := strings.TrimSpace(r.PostFormValue("body"))
+		if body == "" {
+			http.Error(w, "message vide", http.StatusBadRequest)
+			return
+		}
+		if err := s.st.EditerPost(v.ID, v.Role, id, body); err != nil {
+			if errors.Is(err, store.ErrDroitEdition) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, "enregistrement impossible", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/t/"+itoa64(po.ThreadID), http.StatusSeeOther)
+		return
+	}
+
+	corps, err := s.st.Body(po)
+	if err != nil {
+		corps = ""
+	}
+	p, _ := s.base(r, "forums")
+	p.Titre = "Éditer un message"
+	p.Edit = &editForm{
+		PostID: id, ThreadID: po.ThreadID, Body: corps,
+		Moderation: v.ID != po.AuthorID,
+	}
+	s.rend(w, r, "edition", p)
 }
 
 func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {

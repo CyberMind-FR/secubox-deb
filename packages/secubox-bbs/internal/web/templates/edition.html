@@ -1,0 +1,46 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+-->
+
+{{define "corps"}}
+<div class="s621f16f">
+<div class="ph"><div><h1 class="serif">Éditer un message</h1>
+<p>La correction réécrit le fichier sur le disque ; l'auteur d'origine reste inchangé, et l'édition est tracée.</p></div></div>
+{{if .Edit.Moderation}}
+<div class="note sa2d3b14"><b>✎ Correction de modération.</b>
+Vous éditez le texte d'un autre membre&nbsp;: le message sera marqué « corrigé par la modération » et le geste part au journal d'audit.</div>
+{{end}}
+<form method="post" action="/p/{{.Edit.PostID}}/edit">
+<input type="hidden" name="csrf" value="{{.V.CSRF}}">
+<div class="editor">
+  <div class="tools" id="tools">
+    <button class="tool" type="button" data-w="**" title="Gras"><b>B</b></button>
+    <button class="tool" type="button" data-w="*" title="Italique"><i>I</i></button>
+    <button class="tool" type="button" data-p="## " title="Titre">H2</button>
+    <button class="tool" type="button" data-p="- " title="Liste">☰</button>
+    <button class="tool" type="button" data-p="&gt; " title="Citation">❝</button>
+    <button class="tool mono" type="button" data-w="`" title="Code">&lt;/&gt;</button>
+    <span class="sep"></span>
+    <button class="tool" type="button" data-lien="1" title="Lien">⛓</button>
+  </div>
+  <textarea class="area se78b7e7" name="body" rows="12" required
+            placeholder="Le corps du message…">{{.Edit.Body}}</textarea>
+  <div class="foot">
+    <div class="row sca6fc03">
+      <a class="btn sm" href="/t/{{.Edit.ThreadID}}">Annuler</a>
+      <button class="btn primary" type="submit">Enregistrer</button>
+    </div>
+  </div>
+</div>
+</form>
+<div class="note m sc53ea1d">
+  <b>La visibilité ne change pas ici.</b>
+  Éditer corrige le texte&nbsp;; passer un message de local à public (ou l'inverse)
+  reste un geste de modération distinct.
+</div>
+</div>
+<script src="/static/editeur.js?v={{.VCSS}}" defer></script>
+{{end}}
