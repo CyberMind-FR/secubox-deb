@@ -1,3 +1,12 @@
+secubox-bbs (0.28.16-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-cache HTML (#1092) : rend/rendDef posent `Cache-Control: private, no-cache`
+    sur toute page. Sans ça le navigateur gardait la page (et son ancien `?v=`),
+    servant l'ancienne feuille après déploiement — on « perdait » un skin fraîchement
+    posé en test à l'aveugle. La page fraîche pointe désormais la feuille fraîche.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:55:00 +0200
+
 secubox-bbs (0.28.15-1~bookworm1) bookworm; urgency=medium
 
   * Skin coquille (#1092) : porte la « bonne skin » validée en maquette — police

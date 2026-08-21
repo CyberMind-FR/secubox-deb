@@ -292,6 +292,13 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	}
 	s.poseCSRF(w, p.V.CSRF)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Le HTML doit TOUJOURS être revalidé : sans cela le navigateur garde la page
+	// (avec son ancien `?v={{.VCSS}}`) par heuristique, et sert donc l'ancienne
+	// feuille même après un déploiement — c'est ce qui fait « perdre » un skin
+	// fraîchement posé en test à l'aveugle. `no-cache` = revalider avant usage ;
+	// combiné à l'empreinte VCSS sur les assets, la page fraîche pointe la feuille
+	// fraîche. `private` : jamais dans un cache partagé (contenu authentifié).
+	w.Header().Set("Cache-Control", "private, no-cache")
 	buf.WriteTo(w)
 }
 
@@ -315,6 +322,13 @@ func (s *Server) rendDef(w http.ResponseWriter, r *http.Request, nom, def string
 	}
 	s.poseCSRF(w, p.V.CSRF)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Le HTML doit TOUJOURS être revalidé : sans cela le navigateur garde la page
+	// (avec son ancien `?v={{.VCSS}}`) par heuristique, et sert donc l'ancienne
+	// feuille même après un déploiement — c'est ce qui fait « perdre » un skin
+	// fraîchement posé en test à l'aveugle. `no-cache` = revalider avant usage ;
+	// combiné à l'empreinte VCSS sur les assets, la page fraîche pointe la feuille
+	// fraîche. `private` : jamais dans un cache partagé (contenu authentifié).
+	w.Header().Set("Cache-Control", "private, no-cache")
 	buf.WriteTo(w)
 }
 
