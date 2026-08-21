@@ -1,3 +1,11 @@
+secubox-bbs (0.28.42-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : fin du « doublon fantôme » — une carte vidéo n'affiche plus
+    l'icône 🎬 deux fois (icône de type + badge média). Les badges .ccmed ne
+    signalent désormais que les médias SECONDAIRES.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:38:13 +0200
+
 secubox-bbs (0.28.41-1~bookworm1) bookworm; urgency=medium
 
   * /compte adopte le skin newsroom (coquille générique pagenr).
