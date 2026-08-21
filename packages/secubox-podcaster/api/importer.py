@@ -31,9 +31,37 @@ from . import store
 log = get_logger("podcaster.importer")
 
 PT_SECRET = Path("/etc/secubox/secrets/peertube-import.json")
-# Optional Netscape cookies.txt to defeat YouTube's "confirm you're not a bot"
-# throttle; if present it's passed to every yt-dlp call.
+# Netscape cookies.txt pour vaincre le « confirm you're not a bot » / âge-restreint
+# de YouTube ; passé à chaque appel yt-dlp quand un candidat est présent.
+#
+# MÊMES COOKIES QUE YTSAS (#1100). podcaster tourne en root sur l'hôte : il peut
+# lire le coffre à cookies de ytsas dans le rootfs de sa LXC — coffre unique où
+# l'admin dépose et rafraîchit les cookies via le panneau ytsas. On le réutilise
+# tel quel (lecture directe, toujours à jour, aucune copie à périmer) plutôt que
+# d'entretenir un second exemplaire.
 YT_COOKIES = Path("/etc/secubox/secrets/yt-cookies.txt")
+YTSAS_COOKIES_HOST = Path(os.environ.get(
+    "YTSAS_COOKIES_HOST",
+    "/data/lxc/ytsas/rootfs/var/lib/secubox/ytsas/cookies.txt"))
+
+
+def _cookies_file() -> Path | None:
+    """Premier fichier de cookies présent ET non vide, par ordre de priorité :
+    override d'environnement, secret propre à podcaster, puis coffre de ytsas.
+    Un fichier vide est IGNORÉ — un cookies.txt tronqué ne doit pas masquer une
+    source valable en aval."""
+    candidates: list[Path] = []
+    env = os.environ.get("PODCASTER_YT_COOKIES")
+    if env:
+        candidates.append(Path(env))
+    candidates += [YT_COOKIES, YTSAS_COOKIES_HOST]
+    for p in candidates:
+        try:
+            if p.is_file() and p.stat().st_size > 0:
+                return p
+        except OSError:
+            continue
+    return None
 BILLETS_DB = "/var/lib/secubox/billets/billets.db"
 BILLETS_PUBLIC = os.environ.get("BILLETS_PUBLIC_URL", "https://billets.gk2.secubox.in")
 PODCASTER_PUBLIC = os.environ.get("PODCASTER_PUBLIC_URL", "https://podcaster.gk2.secubox.in")
@@ -62,15 +90,32 @@ def _slugify(s: str, extra: str = "") -> str:
     return f"{base}-{extra}" if extra else base
 
 
+_YT_HOSTS = {"youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+
+
+def is_youtube_url(url: str) -> bool:
+    """Vrai pour une URL YouTube (vidéo, playlist ou chaîne) — à router vers
+    l'import yt-dlp plutôt que vers le parse RSS (#1101). On compare l'HÔTE
+    exact (après retrait de `www.`), jamais une sous-chaîne : `youtube.com.evil`
+    ne doit pas passer pour YouTube."""
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except (ValueError, AttributeError):
+        return False
+    return host.removeprefix("www.") in _YT_HOSTS
+
+
 def _run(cmd, timeout=None):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
 def _ytdlp(args, timeout=None):
-    """yt-dlp with the cookies file spliced in when present."""
+    """yt-dlp with the resolved cookies file spliced in when one is present."""
     cmd = ["yt-dlp"]
-    if YT_COOKIES.exists():
-        cmd += ["--cookies", str(YT_COOKIES)]
+    ck = _cookies_file()
+    if ck:
+        cmd += ["--cookies", str(ck)]
     return _run(cmd + args, timeout=timeout)
 
 

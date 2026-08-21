@@ -526,8 +526,19 @@ async def feeds():
 @router.post("/feeds", dependencies=[Depends(require_jwt)])
 async def add_feed(body: FeedIn):
     _ensure_worker()
+    url = body.url.strip()
+    # Une URL YouTube n'est PAS un flux RSS : la parser en XML échoue
+    # (« mismatched tag », #1101). On la route vers l'importeur yt-dlp, qui
+    # télécharge la playlist/vidéo comme épisodes de podcast (mêmes cookies que
+    # ytsas, #1100). Un import à la fois — 409 si un autre tourne.
+    if importer.is_youtube_url(url):
+        if importer.JOB.get("running"):
+            raise HTTPException(409, "un import est déjà en cours")
+        asyncio.create_task(asyncio.to_thread(
+            importer.run_import, url, str(MEDIA), False, False))
+        return {"ok": True, "imported": True, "started": url}
     try:
-        return await fetch_and_store(body.url.strip(), auto_dl=body.auto_dl)
+        return await fetch_and_store(url, auto_dl=body.auto_dl)
     except Exception as e:
         raise HTTPException(400, f"feed add failed: {e}")
 
