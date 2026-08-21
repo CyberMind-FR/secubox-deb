@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
@@ -113,5 +114,64 @@ func TestUrlshotCleInvalideEst404(t *testing.T) {
 		if w.Code == 200 {
 			t.Errorf("cle invalide acceptee (%q) : code %d", chemin, w.Code)
 		}
+	}
+}
+
+// TestAccueilCarteURLNueEnfileEtAffiche prouve l'integration carte (#1120,
+// tache 4) : un fil dont le SEUL contenu est une URL nue, sans media, recoit
+// une cle de vignette-snapshot — une ligne 'pending' apparait dans la file, et
+// la carte rendue pointe son <img> vers /urlshot/<cle> au lieu de la mosaique
+// glyphe (#1114).
+func TestAccueilCarteURLNueEnfileEtAffiche(t *testing.T) {
+	srv, s := banc(t)
+	uid, err := s.CreateUser("gk2", "Gandalf", store.RoleSysop)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cat, err := s.CreateCategory("sources", "Sources", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.NewThread(cat, uid, "Un lien", "https://example.com/", store.VisPublic); err != nil {
+		t.Fatal(err)
+	}
+
+	cle := store.CleUrlshot("https://example.com/")
+	if statut, vis, ok := s.StatutUrlshot(cle); ok {
+		t.Fatalf("ligne urlshots deja presente AVANT le rendu de l'accueil (statut=%q vis=%q)", statut, vis)
+	}
+
+	w := demande(t, srv, "GET", "/", "", nil)
+	if w.Code != 200 {
+		t.Fatalf("code %d", w.Code)
+	}
+
+	if statut, vis, ok := s.StatutUrlshot(cle); !ok || statut != "pending" || vis != "public" {
+		t.Fatalf("ligne urlshots absente ou incorrecte : ok=%v statut=%q vis=%q", ok, statut, vis)
+	}
+
+	src := `src="/urlshot/` + cle
+	if !strings.Contains(w.Body.String(), src) {
+		t.Errorf("la carte ne pointe pas vers /urlshot/%s dans : %s", cle, w.Body.String())
+	}
+}
+
+// TestAccueilCarteFilOrdinaireSansEnfilage prouve la garde : un fil de
+// discussion normal (plusieurs mots) ne declenche AUCUN enfilage — seule
+// une carte URL-nue-sans-media est concernee.
+func TestAccueilCarteFilOrdinaireSansEnfilage(t *testing.T) {
+	srv, s := banc(t)
+	uid, _ := s.CreateUser("gk2", "Gandalf", store.RoleSysop)
+	cat, _ := s.CreateCategory("atelier", "Atelier", "")
+	if _, err := s.NewThread(cat, uid, "Discussion", "Bonjour a tous, comment ca va ?", store.VisPublic); err != nil {
+		t.Fatal(err)
+	}
+
+	w := demande(t, srv, "GET", "/", "", nil)
+	if w.Code != 200 {
+		t.Fatalf("code %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "/urlshot/") {
+		t.Error("un fil de discussion ordinaire ne doit pas emettre de vignette /urlshot/")
 	}
 }
