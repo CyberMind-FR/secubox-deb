@@ -943,7 +943,13 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 			p.MastoCompte = "@" + c.Acct + "@" + c.Instance
 		}
 	}
-	s.rend(w, r, "thread", p)
+	// #1114 : le fil porte désormais le skin newsroom (masthead + rail partagés),
+	// pas l'ancienne coquille layout.html. poseRail alimente la colonne droite
+	// (derniers billets), rendDef rend le gabarit autonome "fil" (thread.html
+	// fournit le corps réutilisé).
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "fil", "fil", p)
 }
 
 func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {

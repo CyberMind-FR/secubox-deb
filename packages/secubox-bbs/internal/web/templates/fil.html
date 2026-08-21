@@ -1,0 +1,45 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  Vue d'un FIL dans le skin newsroom AletheiaVox (#1114) : même masthead et même
+  rail que l'accueil/les salons (blocs partagés avmast/avrubriques/avacces), au
+  lieu de l'ancienne coquille layout.html. On RÉUTILISE le corps du fil
+  ({{template "corps"}}, défini dans thread.html) — toute la logique (messages,
+  réponse, sysop, édition, médias) reste intacte. Deux feuilles : bbs.css fournit
+  les classes du corps (.post, .lecture, .reply…), newsroom.css est chargée
+  APRÈS et l'emporte sur la coquille (.mast/.rail/.pnl/.rub/body). Le script
+  coquille.js porte le thème (av-theme, partagé) et l'enregistreur de la réponse.
+-->
+{{define "fil"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{.T.Title}} — {{.Site}}</title>
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
+<link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
+</head><body>
+{{template "avmast" .}}
+<div class="wrap">
+  <aside class="rail">
+    {{template "avrubriques" .}}
+    {{template "avacces" .}}
+  </aside>
+  <main class="feed">
+    {{template "corps" .}}
+  </main>
+  <aside class="rail rr">
+    <div class="pnl">
+      <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
+      {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
+      {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{lien .Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+      {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
+    </div>
+    <div class="pnl">
+      <h3>Rédaction collaborative <span class="n">{{len .Articles}}</span></h3>
+      {{range .Articles}}<a class="billet" href="/article/{{.ID}}"><b>✍️ {{.Title}}</b><div class="ex">{{len .CoAuteurs}} rédacteur(s) · {{.NbParts}} contribution(s)</div></a>
+      {{else}}<div class="teaser">Aucun article en cours.</div>{{end}}
+    </div>
+  </aside>
+</div>
+<script src="/static/coquille.js?v={{.VCSS}}" defer></script>
+</body></html>{{end}}

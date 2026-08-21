@@ -228,6 +228,16 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	} else {
 		return nil, fmt.Errorf("gabarit newsroom : %w", err)
 	}
+	// #1114 : le fil dans le skin newsroom. Un JEU réunissant newsroom.html (blocs
+	// partagés avmast/avrubriques/avacces), thread.html (le corps réutilisé) et
+	// fil.html (la coquille newsroom du fil). Aucune collision de « corps » : seul
+	// thread.html le définit dans ce jeu.
+	if t, err := template.New("fil.html").Funcs(fn).
+		ParseFS(assets, "templates/newsroom.html", "templates/thread.html", "templates/fil.html"); err == nil {
+		pages["fil"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit fil : %w", err)
+	}
 	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
 	if t, err := template.New("mediatheque.html").Funcs(fn).
 		ParseFS(assets, "templates/mediatheque.html"); err == nil {
