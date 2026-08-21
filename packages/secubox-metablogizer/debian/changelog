@@ -1,3 +1,13 @@
+secubox-metablogizer (1.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * metablog-sync : purge le cache média du WAF (`wafctl purge-cache` via sudo)
+    UNIQUEMENT quand un site a réellement changé — supprime le « vieux skin »
+    servi jusqu'à 1 h après une synchro git de contenu (anibal-amiot et autres
+    sites adossés à git). Best-effort : une synchro réussie n'échoue jamais sur
+    un défaut de cache ; le bilan JSON gagne un champ `cache_waf`.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 05:00:00 +0200
+
 secubox-metablogizer (1.8.8-1~bookworm1) bookworm; urgency=high
 
   * SUPPRIMER UN SITE COUPAIT TOUS LES AUTRES (ref #1041). `force_remove`

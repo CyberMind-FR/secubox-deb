@@ -1,3 +1,31 @@
+secubox-waf (1.5.4-1~bookworm1) bookworm; urgency=medium
+
+  * Reconcilie l'enregistrement dpkg du conffile /etc/sudoers.d/secubox-waf
+    (contenu identique à 1.5.3 : union cscli tableau de bord + purge cache).
+    Republication propre après une pose de conffile heurtée en 1.5.3.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 05:30:00 +0200
+
+secubox-waf (1.5.3-1~bookworm1) bookworm; urgency=medium
+
+  * Sudoers : /etc/sudoers.d/secubox-waf accorde au compte `secubox` le droit
+    de lancer `wafctl purge-cache` — permet aux tâches de contenu tournant sous
+    `secubox` (metablog-sync) de rafraîchir le cache média du WAF après une
+    synchronisation git de contenu, sans droit root plus large.
+  * Le fichier redevient possédé par le paquet (il avait dérivé hors source) et
+    CONSERVE les droits cscli existants du tableau de bord WAF
+    (`decisions add/delete/list` pour le bouton bannir/lever-le-ban) : le nouveau
+    verbe purge s'AJOUTE, il ne remplace rien.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 05:00:00 +0200
+
+secubox-waf (1.5.2-1~bookworm1) bookworm; urgency=medium
+
+  * wafctl gagne `purge-cache` : vide le cache média du WAF (SIGUSR1 vers
+    secubox-waf-ng) pour une fraîcheur immédiate après un déploiement d'assets.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 21 Aug 2026 11:00:00 +0200
+
 secubox-waf (1.5.1-1~bookworm1) bookworm; urgency=medium
 
   * PHASE G #1080 — profils de service par vhost. Livre `vhost_profiles.json`
