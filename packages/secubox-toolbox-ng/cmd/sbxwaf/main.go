@@ -697,6 +697,12 @@ func (s *Server) handler() http.Handler {
 					}
 				}
 				w.Header().Set("X-SecuBox-Cache", "hit")
+				// Conseiller de fraîcheur (#1092) : âge + TTL restant, pour voir en
+				// test si l'on regarde du cache et depuis combien de temps.
+				if age, ttl, ok := s.mediaCache.Freshness(vhostCacheURL); ok {
+					w.Header().Set("X-SecuBox-Cache-Age", strconv.FormatInt(age, 10))
+					w.Header().Set("X-SecuBox-Cache-TTL", strconv.FormatInt(ttl, 10))
+				}
 				w.Header().Set("X-SecuBox-WAF", "inspected")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write(cachedBody)
@@ -717,6 +723,10 @@ func (s *Server) handler() http.Handler {
 			// body for MaybeStore.  The client always receives the full body —
 			// we only buffer up to maxObj bytes for the cache and discard the rest
 			// (the real body still flows through to the client).
+			// Conseiller de fraîcheur (#1092) : une réponse cacheable non trouvée
+			// en cache est un « miss » — l'annoncer explicitement plutôt que par
+			// l'absence d'en-tête, pour lever le doute en test à l'aveugle.
+			w.Header().Set("X-SecuBox-Cache", "miss")
 			cw := &cachingResponseWriter{
 				ResponseWriter: w,
 				maxCapture:     s.mediaCache.maxObj,

@@ -205,6 +205,13 @@ func TestMediaCacheHandlerServesHit(t *testing.T) {
 	if v := res.Header.Get("X-SecuBox-Cache"); v != "hit" {
 		t.Fatalf("expected X-SecuBox-Cache: hit, got %q", v)
 	}
+	// Conseiller de fraîcheur (#1092) : un hit annonce l'âge et le TTL restant.
+	if res.Header.Get("X-SecuBox-Cache-Age") == "" {
+		t.Fatalf("un hit doit porter X-SecuBox-Cache-Age")
+	}
+	if res.Header.Get("X-SecuBox-Cache-TTL") == "" {
+		t.Fatalf("un hit doit porter X-SecuBox-Cache-TTL")
+	}
 }
 
 // --- TestMediaCacheNoStoreSkipped -----------------------------------------------
