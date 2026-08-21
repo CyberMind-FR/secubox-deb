@@ -1,3 +1,153 @@
+secubox-bbs (0.28.28-1~bookworm1) bookworm; urgency=medium
+
+  * Vidéo en LECTEUR inline dans les cartes (#1092) : un /f/NN.mp4 devient un
+    <video controls> (au lieu d'un lien) — lecture et PiP sur place. media-src
+    self couvre /f/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:30:00 +0200
+
+secubox-bbs (0.28.27-1~bookworm1) bookworm; urgency=medium
+
+  * Médias des cartes RÉPARÉS (#1092) : la base n'a AUCUNE pièce jointe tracée —
+    les médias sont référencés EN LIGNE dans le corps (/f/12.png). On les extrait
+    donc du TEXTE (apercuEtDernier) au lieu d'interroger pieces_jointes (qui
+    rendait vide → « espace perdu »). Images en miniatures, audio en lecteur
+    inline, vidéo/fichier en lien. kindDeRef par extension.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:10:00 +0200
+
+secubox-bbs (0.28.26-1~bookworm1) bookworm; urgency=medium
+
+  * Cartes plus riches (#1092) : URLs des aperçus et derniers commentaires
+    CLIQUABLES (LienApercu, léger) ; la vitrine « Derniers billets » montre les
+    /f/NN du billet en MINI-VIGNETTES (relayées via l'origine billets admise) au
+    lieu du chemin brut, résumé nettoyé + liens cliquables.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:45:00 +0200
+
+secubox-bbs (0.28.25-1~bookworm1) bookworm; urgency=medium
+
+  * Mini-médias dans les cartes (#1092) : les pièces jointes d'un fil et de ses
+    messages s'affichent en MINIATURES (2ᵉ partie de carte) au lieu du chemin
+    brut « /f/15.png » lu en texte. MediasDuFil (une requête, publique-safe),
+    aperçu débarrassé des refs /f/NN, bande .cmedias.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:20:00 +0200
+
+secubox-bbs (0.28.24-1~bookworm1) bookworm; urgency=medium
+
+  * Navbar : les icônes de sous-salons du rail utilisaient var(--muted,#8a83a0)
+    — token INEXISTANT → repli sur un mauve fixe qui ne suivait pas le thème
+    (rail « incorrect » en sombre). Recâblé sur --dim ; le rouge de l'enregistreur
+    (var(--danger,#c0392b)) recâblé sur --coral. Plus aucun repli hors-token.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 13:55:00 +0200
+
+secubox-bbs (0.28.23-1~bookworm1) bookworm; urgency=medium
+
+  * Thème clair/sombre sur TOUTE la coquille (#1092) : coquille.js applique le
+    choix « nuit » enregistré (clé av-theme, partagée avec la rédaction) et un
+    bouton ◐ le bascule depuis n'importe quelle page. Avant, un fil ouvert
+    restait clair pendant que l'accueil était sombre — d'où « pas comme la
+    newsroom ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 13:40:00 +0200
+
+secubox-bbs (0.28.22-1~bookworm1) bookworm; urgency=medium
+
+  * Lecture d'un fil VRAIMENT en gazette (#1092) : le fil ouvert ne force plus
+    la disposition trois colonnes (liste des fils voisins retirée) — la coquille
+    tombe à rail + volet LARGE, où la colonne d'article .lecture respire, au lieu
+    d'être coincée dans la 3ᵉ colonne étroite.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 13:20:00 +0200
+
+secubox-bbs (0.28.21-1~bookworm1) bookworm; urgency=medium
+
+  * Lien billet corrigé (#1024 bis) : les billets de la newsroom pointaient
+    « http://billets/b/… » (URL INTERNE du module, injoignable hors board). Le
+    chemin est désormais rattaché à --billets-base → https://billets.gk2.secubox.in/b/….
+    lienBilletPublic() + test ; ne réécrit pas une URL déjà sur un vrai domaine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 13:05:00 +0200
+
+secubox-bbs (0.28.20-1~bookworm1) bookworm; urgency=medium
+
+  * Cohérence typo (#1092) : la rédaction (newsroom.css : accueil, salons,
+    médiathèque) passe aussi à Fraunces, comme la coquille — plus d'écart de
+    caractère entre l'accueil et les fils.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:50:00 +0200
+
+secubox-bbs (0.28.19-1~bookworm1) bookworm; urgency=medium
+
+  * Lecture d'un fil en gazette (#1092) : le contenu d'un fil ouvert (fil de
+    discussion + éditeur) passe en colonne d'article centrée (.lecture, mesure
+    ~780px) au lieu de s'étirer d'un bord à l'autre du volet — même souffle
+    éditorial que la rédaction.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:30:00 +0200
+
+secubox-bbs (0.28.18-1~bookworm1) bookworm; urgency=medium
+
+  * Salons en GAZETTE (#1092/#1093) : /c/<salon> se rend comme la rédaction —
+    dossiers en cartes newsroom au lieu de la liste plate à trois colonnes, avec
+    APERÇU du premier message et DERNIER COMMENTAIRE (auteur + extrait + date)
+    par carte. Vue publique : l'aperçu n'expose jamais un message local.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:10:00 +0200
+
+secubox-bbs (0.28.17-1~bookworm1) bookworm; urgency=medium
+
+  * Reskin coquille COMPLET (#1092) : toute la coquille (barre, rail, liste de
+    fils, salons, cartes, boutons, pastilles, messages, éditeur, tables, stats,
+    fiches, annuaire) passe au style gazette AletheiaVox — filets à l'encre,
+    titres Fraunces, méta en mono capitales, accent cinabre unique, radii nets,
+    à plat. Tokens uniquement (clair+sombre suivent). Fini les zones « appli
+    blanche » hors accueil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:45:00 +0200
+
+secubox-bbs (0.28.16-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-cache HTML (#1092) : rend/rendDef posent `Cache-Control: private, no-cache`
+    sur toute page. Sans ça le navigateur gardait la page (et son ancien `?v=`),
+    servant l'ancienne feuille après déploiement — on « perdait » un skin fraîchement
+    posé en test à l'aveugle. La page fraîche pointe désormais la feuille fraîche.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:55:00 +0200
+
+secubox-bbs (0.28.15-1~bookworm1) bookworm; urgency=medium
+
+  * Skin coquille (#1092) : porte la « bonne skin » validée en maquette — police
+    de titre **Fraunces** (serif éditoriale moderne, embarquée via go:embed) sur
+    tous les titres et la marque, masthead à l'encre (marque Fraunces + losange
+    cinabre), accent **cinabre** unique (--accent). Premier passage : typo +
+    marque ; cartes/boutons suivent selon retour visuel.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 10:30:00 +0200
+
+secubox-bbs (0.28.14-1~bookworm1) bookworm; urgency=medium
+
+  * Skin (#1092) : la coquille (fils/salons/messages/compte/console, bbs.css)
+    adopte le PAPIER crème de la rédaction (accueil) — `--paper` #ffffff→#f5f3ec
+    en clair, #0f1a24→#0c141c en sombre, `--soft` accordé, radius 14, ombres +
+    `--lift` alignés sur newsroom.css. Les panneaux blancs flottent sur le grain :
+    fin de l'effet « appli blanche » hors accueil. Identité (Cinzel/palette/
+    grain/masthead) déjà commune, inchangée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:40:00 +0200
+
+secubox-bbs (0.28.13-1~bookworm1) bookworm; urgency=medium
+
+  * Édition des messages (#1091) : l'auteur édite les siens, le sysop corrige
+    ceux des autres. Vérif de droit dans le magasin ET la vue (un tiers reçoit
+    404, pas 403). Édition tracée : edited_at/edited_by (migration 0022) +
+    journal d'audit (post.edite / post.corrige). Marque « ✎ édité » / « ✎ corrigé
+    par la modération » sur le message ; page /p/<id>/edit pré-remplie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:00:00 +0200
+
 secubox-bbs (0.28.12-1~bookworm1) bookworm; urgency=medium
 
   * #1056 STAGE 3 — raccord ytsas + archivage PeerTube. Déposer une source
