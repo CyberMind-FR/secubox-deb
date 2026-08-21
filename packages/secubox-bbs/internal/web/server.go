@@ -285,7 +285,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	{
 		h := sha256.New()
 		for _, f := range []string{"static/bbs.css", "static/newsroom.css", "static/newsroom.js",
-			"static/player.js", "static/coquille.js", "static/editeur.js"} {
+			"static/player.js", "static/coquille.js", "static/editeur.js", "static/bbs-logo.svg"} {
 			if b, err := assets.ReadFile(f); err == nil {
 				h.Write(b)
 			}
