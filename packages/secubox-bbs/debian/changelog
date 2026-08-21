@@ -1,3 +1,12 @@
+secubox-bbs (0.28.21-1~bookworm1) bookworm; urgency=medium
+
+  * Lien billet corrigé (#1024 bis) : les billets de la newsroom pointaient
+    « http://billets/b/… » (URL INTERNE du module, injoignable hors board). Le
+    chemin est désormais rattaché à --billets-base → https://billets.gk2.secubox.in/b/….
+    lienBilletPublic() + test ; ne réécrit pas une URL déjà sur un vrai domaine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 13:05:00 +0200
+
 secubox-bbs (0.28.20-1~bookworm1) bookworm; urgency=medium
 
   * Cohérence typo (#1092) : la rédaction (newsroom.css : accueil, salons,

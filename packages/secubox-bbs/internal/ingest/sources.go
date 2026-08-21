@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"net"
 	"net/http"
 	"strconv"
@@ -55,6 +56,32 @@ func lire(c *http.Client, url string) ([]byte, error) {
 // Ces billets sont DEJA PUBLIES : les importer en « public » ne divulgue rien
 // qui ne le soit deja. C'est la seule source dont la visibilite publique est un
 // constat plutot qu'une decision.
+// lienBilletPublic rattache l'adresse d'un billet à l'origine PUBLIQUE (`base`,
+// = --billets-base). Le feed du module rend son URL INTERNE (host « billets »,
+// en http, sans domaine) — jamais joignable hors de la board : on n'en garde
+// que le chemin et on le pose sur `base`. Une URL relative est traitée pareil ;
+// une URL déjà sur un vrai domaine (avec un point) est laissée intacte (#1024 bis).
+func lienBilletPublic(lien, base string) string {
+	if base == "" || lien == "" {
+		return lien
+	}
+	if strings.HasPrefix(lien, "/") {
+		return strings.TrimRight(base, "/") + lien
+	}
+	u, err := url.Parse(lien)
+	if err != nil || u.Path == "" {
+		return lien
+	}
+	if u.Host != "" && strings.Contains(u.Host, ".") {
+		return lien // vrai domaine externe : ne pas réécrire
+	}
+	out := strings.TrimRight(base, "/") + u.Path
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
+	}
+	return out
+}
+
 func DepuisBillets(socket, base string) ([]Item, error) {
 	brut, err := lire(clientSocket(socket), "http://billets/feed.json")
 	if err != nil {
@@ -90,10 +117,7 @@ func DepuisBillets(socket, base string) ([]Item, error) {
 		if corps == "" {
 			corps = texteDepuisHTML(b.Resume)
 		}
-		lien := b.URL
-		if lien != "" && strings.HasPrefix(lien, "/") && base != "" {
-			lien = strings.TrimRight(base, "/") + lien
-		}
+		lien := lienBilletPublic(b.URL, base)
 		out = append(out, Item{Ref: b.ID, Titre: titre, Corps: corps,
 			Lien: lien, Date: dateRFC(b.Publie)})
 	}
