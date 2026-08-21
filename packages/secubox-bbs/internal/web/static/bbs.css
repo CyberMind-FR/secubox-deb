@@ -312,7 +312,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 /* ENREGISTREMENT EN COURS : le bouton doit se distinguer SANS l'animation, car
    le compteur qu'il affiche suffit deja a dire que ca tourne. La pulsation ne
    fait que rendre l'etat visible du coin de l'oeil. */
-.tool.enregistrer.en-cours{background:var(--danger,#c0392b);color:#fff;
+.tool.enregistrer.en-cours{background:var(--coral);color:#fff;
   font-variant-numeric:tabular-nums;animation:sbx-pulse 1.6s ease-in-out infinite}
 @keyframes sbx-pulse{50%{opacity:.62}}
 @media (prefers-reduced-motion:reduce){.tool.enregistrer.en-cours{animation:none}}
@@ -791,7 +791,7 @@ video.jointe{max-height:60vh; background:#000}
 .nav.sub1{padding-left:26px}
 .nav.sub2{padding-left:40px}
 .nav.sub3{padding-left:54px}
-.nav.sub1 .ic,.nav.sub2 .ic,.nav.sub3 .ic{background:transparent;font-size:11px;color:var(--muted,#8a83a0)}
+.nav.sub1 .ic,.nav.sub2 .ic,.nav.sub3 .ic{background:transparent;font-size:11px;color:var(--dim)}
 /* La meme indentation sur la liste d'accueil : deux affichages du meme arbre
    doivent raconter la meme chose, sinon l'un des deux ment. */
 .board.sub1{padding-left:30px}
