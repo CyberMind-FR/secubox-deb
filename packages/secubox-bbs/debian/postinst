@@ -18,6 +18,17 @@ case "$1" in
 
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/zz-secubox-bbs.conf >/dev/null 2>&1 || true
 
+    # Cache des vignettes-snapshot d'URL (#1120). systemd-tmpfiles REFUSE de le
+    # creer : il detecte une transition de propriete « non sure »
+    # /var/cache/secubox (secubox) -> /bbs (secubox-bbs) et abandonne. On le pose
+    # donc directement — le parent existe deja, la transition est voulue (chaque
+    # module possede son sous-arbre, cf. RuntimeDirectory partage).
+    if [ -d /var/cache/secubox/bbs ] || mkdir -p /var/cache/secubox/bbs 2>/dev/null; then
+        mkdir -p /var/cache/secubox/bbs/urlshots
+        chown secubox-bbs:secubox /var/cache/secubox/bbs/urlshots 2>/dev/null || true
+        chmod 0750 /var/cache/secubox/bbs/urlshots 2>/dev/null || true
+    fi
+
     # /etc/secubox/secrets est ferme : `group::---`, seuls le proprietaire et
     # des identifiants NOMMES par ACL peuvent le traverser. C'est voulu — le
     # repertoire contient les secrets de tous les modules.

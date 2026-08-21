@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+#
+# Proxy d'égress CONNECT pour les consommateurs INTERNES de la board (#1120).
+#
+# sbxmitm sait déjà faire proxy CONNECT (mode par défaut, sans --transparent) :
+# on en lance une instance dédiée sur 127.0.0.1:8090 que des services locaux
+# (ex. le worker de vignettes-snapshot d'URL de secubox-bbs) utilisent comme
+# `http_proxy` pour sortir en étant inspectés/MITMés par la même CA que le R3,
+# jamais en direct — posture CSPN. Signe avec la CA des workers (ca-wg), et en
+# PUBLIE le certificat (public, pas la clé) dans /usr/share/secubox/egress-ca.pem
+# pour que les consommateurs (qui ne peuvent pas traverser ca-wg) lui fassent
+# confiance.
+[Unit]
+Description=SecuBox ToolBoX — proxy d'égress CONNECT interne (127.0.0.1:8090, #1120)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1120
+After=network.target
+
+[Service]
+Type=simple
+User=secubox-toolbox
+Group=secubox-toolbox
+EnvironmentFile=-/etc/secubox/toolbox-ng.env
+# Publier le CERTIFICAT de CA (public) là où tout consommateur peut le lire —
+# `+` : hors bac à sable, en root, car /usr est en lecture seule dans le sandbox.
+ExecStartPre=+/bin/sh -c 'install -D -m 0644 /etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem /usr/share/secubox/egress-ca.pem'
+ExecStart=/usr/sbin/sbxmitm \
+  --listen 127.0.0.1:8090 \
+  --ca-cert /etc/secubox/toolbox/ca-wg/mitmproxy-ca-cert.pem \
+  --ca-key /etc/secubox/toolbox/ca-wg/mitmproxy-ca.pem \
+  --jar-key /etc/secubox/secrets/privacy-jar.key
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+ReadWritePaths=/run/secubox
+
+[Install]
+WantedBy=multi-user.target
