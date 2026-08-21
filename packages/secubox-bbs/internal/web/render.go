@@ -384,3 +384,23 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// urlNueRe : une URL http(s) écrite telle quelle dans un texte.
+var urlNueRe = regexp.MustCompile(`https?://[^\s<>"'` + "`" + `]+`)
+
+// LienApercu rend un aperçu de carte en HTML SÛR : le texte est échappé, et les
+// URL http(s) deviennent cliquables (#1092). Volontairement léger — pas de
+// markdown ni d'embed lourd comme `Render`, juste le lien, pour une carte.
+func LienApercu(s string) template.HTML {
+	var b strings.Builder
+	last := 0
+	for _, loc := range urlNueRe.FindAllStringIndex(s, -1) {
+		b.WriteString(template.HTMLEscapeString(s[last:loc[0]]))
+		u := s[loc[0]:loc[1]]
+		eu := template.HTMLEscapeString(u)
+		b.WriteString(`<a href="` + eu + `" target="_blank" rel="noopener">` + eu + `</a>`)
+		last = loc[1]
+	}
+	b.WriteString(template.HTMLEscapeString(s[last:]))
+	return template.HTML(b.String())
+}

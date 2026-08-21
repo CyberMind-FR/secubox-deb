@@ -1151,6 +1151,10 @@ func (s *Server) cartesBiblio() []card {
 type billetVue struct {
 	Titre, Resume, Lien string
 	Date                int64
+	// Medias : mini-vignettes des pièces jointes du billet (/f/NN), relayées via
+	// l'origine PUBLIQUE de billets (admise) — plus le chemin brut « /f/23.png »
+	// lu en texte dans la vitrine (#1092).
+	Medias []string
 	// DepuisFil : vrai quand ce billet correspond a un fil publie DEPUIS le
 	// BBS — croise par BilletID (voir vitrineBillets), pas par URL, qui peut
 	// manquer (#1024). Le lien vers la conversation d'origine n'a de sens que
@@ -1193,8 +1197,15 @@ func (s *Server) vitrineBillets() ([]billetVue, string) {
 	}
 	out := make([]billetVue, 0, len(items))
 	for _, it := range items {
-		v := billetVue{Titre: it.Titre, Resume: extrait(it.Corps, 320),
+		v := billetVue{Titre: it.Titre, Resume: extrait(sansRefsMedia(it.Corps), 320),
 			Lien: it.Lien, Date: it.Date}
+		// Mini-vignettes : les /f/NN du billet, absolutisés sur l'origine PUBLIQUE
+		// de billets (admise au relais) — plus le chemin brut en texte.
+		if s.opt.BilletsBase != "" {
+			for _, m := range refsJointes.FindAllString(it.Corps, 6) {
+				v.Medias = append(v.Medias, vignetteRelayee(strings.TrimRight(s.opt.BilletsBase, "/")+m))
+			}
+		}
 		if o, ok := origine[it.Ref]; ok {
 			v.DepuisFil, v.ThreadID, v.Repris = true, o.ThreadID, o.Repris
 		}
