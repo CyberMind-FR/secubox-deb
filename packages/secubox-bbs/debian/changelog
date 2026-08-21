@@ -1,5 +1,7 @@
-secubox-bbs (0.28.39-1~bookworm1) bookworm; urgency=medium
+secubox-bbs (0.28.40-1~bookworm1) bookworm; urgency=medium
 
+  * (0.28.40) Correctif : inclure layout.html dans le jeu « fil » pour le
+    partial {{vignette}}.
   * La vue d'un FIL (/t/) adopte le skin newsroom AletheiaVox (#1114) : même
     masthead + rail (rubriques/accès) que l'accueil et les salons, via des blocs
     partagés (avmast/avrubriques/avacces) ; le corps du fil est RÉUTILISÉ tel
