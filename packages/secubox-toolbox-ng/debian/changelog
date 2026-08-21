@@ -1,3 +1,14 @@
+secubox-toolbox-ng (0.1.45-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau service `secubox-toolbox-egress-proxy` : instance sbxmitm en mode
+    proxy CONNECT sur 127.0.0.1:8090 pour les consommateurs INTERNES (ex. worker
+    de vignettes-snapshot d'URL de secubox-bbs), qui sortent ainsi via la même
+    inspection/CA que le R3 plutôt qu'en direct (#1120). Publie le certificat de
+    CA (public) dans /usr/share/secubox/egress-ca.pem. Livré --no-enable comme
+    les workers (activation opérateur).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 19:58:00 +0200
+
 secubox-toolbox-ng (0.1.44-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : caractérisation d'attaquants #1070 — détection d'anomalie d'hôte
