@@ -32,3 +32,22 @@ def video_id(url: str) -> str | None:
         v = u.path.lstrip("/").split("/")[0]
         return v if _ID.match(v) else None
     return None
+
+
+def is_playlist_url(url: str) -> bool:
+    """Vrai pour une URL de playlist PURE : hôte YouTube, paramètre `list=`
+    présent, et AUCUNE vidéo isolable (`video_id` None).
+
+    `watch?v=X&list=Y` porte une vidéo : `--no-playlist` doit l'isoler, donc ce
+    n'est PAS un cas playlist. Seule `playlist?list=Y` (ou `list=` sans `v=`)
+    doit être dépliée (#1099)."""
+    try:
+        u = urlparse(url)
+    except (ValueError, AttributeError):
+        return False
+    host = (u.hostname or "").lower().removeprefix("www.")
+    if host not in ("youtube.com", "m.youtube.com"):
+        return False
+    if video_id(url):
+        return False
+    return bool(parse_qs(u.query).get("list", [""])[0])
