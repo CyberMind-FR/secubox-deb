@@ -604,6 +604,47 @@ func sansRefsMedia(s string) string {
 	return strings.TrimSpace(refsJointes.ReplaceAllString(s, ""))
 }
 
+// lienMarkdownRe : `[texte](url)` — on garde le TEXTE, on jette l'URL.
+var lienMarkdownRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+
+// cheminMediaNu : une ligne qui n'est QU'un chemin de média (`/media/…`, `/f/…`).
+var cheminMediaNu = regexp.MustCompile(`^(?:/media/|/f/)\S+$`)
+
+// resumeDeCorps produit un aperçu PROPRE pour une carte de carrousel ou de flux.
+//
+// Les passerelles billets recopient le titre en tête du corps, y collent un
+// chemin de média nu, un pied « Discuter ce billet sur le BBS » et un lien
+// markdown « [Voir chez billets](…) ». Sans nettoyage, la carte affichait tout
+// cela tel quel : le chemin brut d'une image et un lien tronqué au lieu d'une
+// phrase (#1114). On retire la ligne-titre répétée, les chemins de média nus, le
+// pied de passerelle, et on déplie les liens markdown pour n'en garder que le
+// texte — puis on recompose une prose d'une seule ligne.
+func resumeDeCorps(corps, titre string) string {
+	titreN := strings.ToLower(strings.TrimSpace(titre))
+	var lignes []string
+	for _, ln := range strings.Split(corps, "\n") {
+		t := strings.TrimSpace(ln)
+		if t == "" {
+			continue
+		}
+		if titreN != "" && strings.ToLower(t) == titreN {
+			continue
+		}
+		if cheminMediaNu.MatchString(t) {
+			continue
+		}
+		if strings.HasPrefix(t, "Discuter ce billet") || strings.HasPrefix(t, "[Voir chez") {
+			continue
+		}
+		t = strings.TrimSpace(lienMarkdownRe.ReplaceAllString(t, "$1"))
+		if t == "" {
+			continue
+		}
+		lignes = append(lignes, t)
+	}
+	return strings.Join(lignes, " ")
+}
+
 // composerRedaction mêle les fils NON-podcaster et les flux groupés du
 // podcaster en un seul fil trié par date décroissante — les épisodes d'un même
 // flux se replient en un dossier unique.
@@ -630,7 +671,7 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 	// qui s'affiche (≤ 24 fils), jamais tout l'accueil.
 	for i := range out {
 		if out[i].Fil != nil {
-			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, pub)
+			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, out[i].Fil.Title, pub)
 			// Les pièces `/f/NN` sont RÉSERVÉES AUX MEMBRES (servirFichier renvoie
 			// 403 à un anonyme). Sur la surface publique on n'émet donc pas leurs
 			// refs — sinon des <img> cassés. L'aperçu TEXTE, lui, est déjà filtré
@@ -688,7 +729,7 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 		if fils[i].Source == "podcaster" {
 			continue
 		}
-		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, pub)
+		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, fils[i].Title, pub)
 		out = append(out, NewsItem{
 			Fil: &fils[i], Date: fils[i].LastPostAt,
 			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
@@ -703,7 +744,7 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 // fil pour sa carte. En vue publique (`pub`), on ne considère QUE les messages
 // publics — un aperçu ne doit pas divulguer un message local. Best-effort :
 // tout échec de lecture rend des chaînes vides, jamais une panne de page.
-func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
+func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
 	var posts []store.Post
 	if pub {
 		posts, _ = s.st.PublicPostsOf(threadID)
@@ -720,10 +761,10 @@ func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, 
 			continue
 		}
 		if i == 0 {
-			apercu = extrait(sansRefsMedia(b), 180)
+			apercu = extrait(resumeDeCorps(b, titre), 180)
 		}
 		if i == len(posts)-1 && len(posts) > 1 {
-			lastExtrait = extrait(sansRefsMedia(b), 120)
+			lastExtrait = extrait(resumeDeCorps(b, titre), 120)
 			lastAuteur, _ = s.st.AuteurEtAvatar(p.AuthorID)
 			lastAt = p.CreatedAt
 		}
