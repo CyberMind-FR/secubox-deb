@@ -62,6 +62,22 @@ def _slugify(s: str, extra: str = "") -> str:
     return f"{base}-{extra}" if extra else base
 
 
+_YT_HOSTS = {"youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+
+
+def is_youtube_url(url: str) -> bool:
+    """Vrai pour une URL YouTube (vidéo, playlist ou chaîne) — à router vers
+    l'import yt-dlp plutôt que vers le parse RSS (#1101). On compare l'HÔTE
+    exact (après retrait de `www.`), jamais une sous-chaîne : `youtube.com.evil`
+    ne doit pas passer pour YouTube."""
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except (ValueError, AttributeError):
+        return False
+    return host.removeprefix("www.") in _YT_HOSTS
+
+
 def _run(cmd, timeout=None):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
