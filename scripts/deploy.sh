@@ -26,6 +26,7 @@ PKG="${1:-}"
 HOST="${2:-}"
 RESTART=0
 [[ "${3:-}" == "--restart" ]] && RESTART=1
+WWW_PUSHED=0   # au moins un module a déposé des assets www/ → purger le cache WAF
 
 [[ -z "$PKG" || -z "$HOST" ]] && {
   echo "Usage: bash scripts/deploy.sh <package|--all> <user@host> [--restart]"
@@ -33,6 +34,16 @@ RESTART=0
 }
 
 ssh_run() { ssh -o StrictHostKeyChecking=no "$HOST" "$@"; }
+
+# Purge du cache média du WAF après avoir déposé des assets www/. Le cache de
+# sbxwaf (TTL 1 h) sert CSS/JS/images/polices ; un asset redéployé dont l'amont
+# ne change pas l'ETag reste servi périmé jusqu'à la fin du TTL (le « vieux
+# skin » après déploiement). Best-effort : absence de wafctl = simple no-op.
+purge_waf_cache() {
+  [[ $WWW_PUSHED -eq 1 ]] || return 0
+  log "Purge du cache média WAF (assets www/ mis à jour)..."
+  ssh_run "command -v wafctl >/dev/null && wafctl purge-cache || true"
+}
 
 deploy_pkg() {
   local pkg="$1"
@@ -55,6 +66,7 @@ deploy_pkg() {
     ssh_run "mkdir -p /usr/share/secubox/www"
     rsync -az -e "ssh -o StrictHostKeyChecking=no" \
       "${pkg_dir}/www/" "${HOST}:/usr/share/secubox/www/"
+    WWW_PUSHED=1
   fi
 
   # ── Copier secubox_core si c'est le core ──
@@ -85,8 +97,10 @@ if [[ "$PKG" == "--all" ]]; then
   done
   # Recharger nginx
   ssh_run "systemctl reload nginx 2>/dev/null || true"
+  purge_waf_cache
   ok "Déploiement complet terminé"
 else
   deploy_pkg "$PKG"
   [[ $RESTART -eq 1 ]] && ssh_run "systemctl reload nginx 2>/dev/null || true"
+  purge_waf_cache
 fi
