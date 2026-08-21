@@ -45,6 +45,11 @@ type Post struct {
 	BodyPath   string
 	Visibility Visibility
 	CreatedAt  int64
+	// EditedAt/EditedBy : 0 si jamais edite. EditedBy != AuthorID signale une
+	// CORRECTION DE MODERATION (un sysop a touche au texte d'un autre), a
+	// afficher distinctement d'une retouche de l'auteur (#1091).
+	EditedAt int64
+	EditedBy int64
 }
 
 // ── ecriture ────────────────────────────────────────────────────────────────
@@ -179,7 +184,8 @@ func (s *Store) PostsOf(threadID int64) ([]Post, error) { return s.posts(threadI
 func (s *Store) PublicPostsOf(threadID int64) ([]Post, error) { return s.posts(threadID, true) }
 
 func (s *Store) posts(threadID int64, publicOnly bool) ([]Post, error) {
-	q := `SELECT p.id,p.thread_id,p.author_id,p.body_path,p.visibility,p.created_at
+	q := `SELECT p.id,p.thread_id,p.author_id,p.body_path,p.visibility,p.created_at,
+	             COALESCE(p.edited_at,0),COALESCE(p.edited_by,0)
 	      FROM posts p JOIN threads t ON t.id = p.thread_id
 	      WHERE p.thread_id = ? AND p.deleted_at IS NULL`
 	if publicOnly {
@@ -195,7 +201,8 @@ func (s *Store) posts(threadID int64, publicOnly bool) ([]Post, error) {
 	for rows.Next() {
 		var p Post
 		var vis string
-		if err := rows.Scan(&p.ID, &p.ThreadID, &p.AuthorID, &p.BodyPath, &vis, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.ThreadID, &p.AuthorID, &p.BodyPath, &vis,
+			&p.CreatedAt, &p.EditedAt, &p.EditedBy); err != nil {
 			return nil, err
 		}
 		p.Visibility = Visibility(vis)

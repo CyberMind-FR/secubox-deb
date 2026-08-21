@@ -197,7 +197,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire", "edition"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {

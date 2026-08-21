@@ -1,3 +1,13 @@
+secubox-bbs (0.28.13-1~bookworm1) bookworm; urgency=medium
+
+  * Édition des messages (#1091) : l'auteur édite les siens, le sysop corrige
+    ceux des autres. Vérif de droit dans le magasin ET la vue (un tiers reçoit
+    404, pas 403). Édition tracée : edited_at/edited_by (migration 0022) +
+    journal d'audit (post.edite / post.corrige). Marque « ✎ édité » / « ✎ corrigé
+    par la modération » sur le message ; page /p/<id>/edit pré-remplie.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:00:00 +0200
+
 secubox-bbs (0.28.12-1~bookworm1) bookworm; urgency=medium
 
   * #1056 STAGE 3 — raccord ytsas + archivage PeerTube. Déposer une source

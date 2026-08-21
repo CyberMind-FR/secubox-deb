@@ -147,7 +147,9 @@
     <div class="bd">
       <div class="hd">{{date .CreatedAt}}
         {{if eq .Visibility "public"}}<span class="pill p-pub">public</span>
-        {{else}}<span class="pill p-local">local — ne sort pas</span>{{end}}</div>
+        {{else}}<span class="pill p-local">local — ne sort pas</span>{{end}}
+        {{if .EditedAt}}<span class="pill" title="Édité le {{date .EditedAt}}">{{if .CorrigeMod}}✎ corrigé par la modération{{else}}✎ édité{{end}}</span>{{end}}
+        {{if .Editable}}<a class="edit sedit1091" href="/p/{{.ID}}/edit" title="Éditer ce message">✎ éditer</a>{{end}}</div>
       {{rendu .Body}}
     </div>
   </article>
