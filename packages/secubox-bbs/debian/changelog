@@ -1,3 +1,14 @@
+secubox-bbs (0.28.14-1~bookworm1) bookworm; urgency=medium
+
+  * Skin (#1092) : la coquille (fils/salons/messages/compte/console, bbs.css)
+    adopte le PAPIER crème de la rédaction (accueil) — `--paper` #ffffff→#f5f3ec
+    en clair, #0f1a24→#0c141c en sombre, `--soft` accordé, radius 14, ombres +
+    `--lift` alignés sur newsroom.css. Les panneaux blancs flottent sur le grain :
+    fin de l'effet « appli blanche » hors accueil. Identité (Cinzel/palette/
+    grain/masthead) déjà commune, inchangée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:40:00 +0200
+
 secubox-bbs (0.28.13-1~bookworm1) bookworm; urgency=medium
 
   * Édition des messages (#1091) : l'auteur édite les siens, le sysop corrige

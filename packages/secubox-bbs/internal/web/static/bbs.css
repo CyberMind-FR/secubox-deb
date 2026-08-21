@@ -22,23 +22,27 @@
 :root{
   /* AletheiaVox — clair par defaut, fond BLANC. Bleu structure, cyan relie,
      dore souligne. Mappe sur le vocabulaire natif du BBS (sky/violet/pink…). */
-  --ink:#17232d; --paper:#ffffff; --panel:#ffffff; --line:#d9e0e4;
-  --soft:#f5f3ec; --dim:#697985; --text:#17232d;
+  --ink:#17232d; --paper:#f5f3ec; --panel:#ffffff; --line:#d9e0e4;
+  --soft:#efeadd; --dim:#697985; --text:#17232d;
   --coral:#a73d42; --coral-soft:#f6e7e8;
   --mint:#28765e;  --mint-soft:#e4f2eb;
   --amber:#c87832; --amber-soft:#fbf0e4;
   --violet:#00a8c8;--violet-soft:#dff5f7;   /* cyan : connexions / interactions */
   --sky:#104a88;   --sky-soft:#e8f2f8;       /* bleu : structure primaire */
   --pink:#c9a84c;  --pink-soft:#f5ecd2;      /* dore : accent, souligne */
-  --shadow:0 1px 2px rgba(20,45,60,.05), 0 4px 18px rgba(20,45,60,.08);
-  --radius:12px;
+  --shadow:0 1px 2px rgba(20,45,60,.05), 0 6px 22px rgba(20,45,60,.09);
+  --lift:0 2px 4px rgba(20,45,60,.08), 0 14px 34px -12px rgba(20,45,60,.22);
+  --radius:14px;
 }
-/* AletheiaVox : fond BLANC par defaut, meme sur OS sombre. Le sombre n'est
-   JAMAIS imposé par l'OS — c'est un choix explicite via [data-theme="dark"]. */
+/* AletheiaVox : fond PAPIER (crème) clair par défaut, même sur OS sombre — la
+   MÊME teinte que la rédaction (accueil, newsroom.css) et billets, pour que la
+   coquille lise comme du papier et non comme une appli blanche : les panneaux
+   blancs (`--panel`) flottent alors sur le grain. Le sombre n'est JAMAIS imposé
+   par l'OS — c'est un choix explicite via [data-theme="dark"]. */
 :root[data-theme="dark"]{
-  /* AletheiaVox sombre = bleu-nuit, jamais noir pur ; accents conserves. */
-  --ink:#eef3f6; --paper:#0f1a24; --panel:#14212d; --line:#2a3b49;
-  --soft:#1a2836; --dim:#8598a5; --text:#eef3f6;
+  /* AletheiaVox sombre = bleu-nuit profond (aligné newsroom), jamais noir pur. */
+  --ink:#eef3f6; --paper:#0c141c; --panel:#14212d; --line:#2a3b49;
+  --soft:#16242f; --dim:#8598a5; --text:#eef3f6;
   --coral:#e07d82; --coral-soft:#3a1d1e;
   --mint:#5fce9f;  --mint-soft:#14302a;
   --amber:#e0b06a; --amber-soft:#3a2a12;
@@ -46,6 +50,7 @@
   --sky:#5aa0e0;   --sky-soft:#173049;
   --pink:#d9bd6a;  --pink-soft:#2b2718;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.6);
+  --lift:0 2px 6px rgba(0,0,0,.5), 0 18px 40px -16px rgba(0,0,0,.7);
 }
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
