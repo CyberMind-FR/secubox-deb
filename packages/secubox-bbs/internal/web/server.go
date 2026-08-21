@@ -211,7 +211,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mastodon"} {
+	for _, nom := range []string{"index", "thread", "login"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {
@@ -275,9 +275,41 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	} else {
 		return nil, fmt.Errorf("gabarit edition : %w", err)
 	}
-	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
+	// Balayage newsroom (#1114 suite) : simple/mastodon/nouveau/sysop rejoignent
+	// la coquille GÉNÉRIQUE (pagenr) — même masthead médaillon, même navbar
+	// partagée que compte/annuaire/edition. Chacun ne définit que "corps" dans
+	// ce jeu, donc aucune collision.
+	if t, err := template.New("simple.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/simple.html"); err == nil {
+		pages["simple"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit simple : %w", err)
+	}
+	if t, err := template.New("mastodon.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mastodon.html"); err == nil {
+		pages["mastodon"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit mastodon : %w", err)
+	}
+	if t, err := template.New("nouveau.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/nouveau.html"); err == nil {
+		pages["nouveau"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit nouveau : %w", err)
+	}
+	if t, err := template.New("sysop.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/sysop.html"); err == nil {
+		pages["sysop"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit sysop : %w", err)
+	}
+	// Médiathèque : le podcaster en arborescence (#1056). Le corps reste son
+	// propre `{{define "mediatheque"}}` (rendu via rendMediatheque/ExecuteTemplate
+	// direct, pas "pagenr") ; layout/newsroom/coquillenr rejoignent le jeu
+	// UNIQUEMENT pour que avmast/avrubriques/avacces (et `vignette`) résolvent
+	// depuis son propre gabarit (masthead médaillon + navbar partagée, #1114).
 	if t, err := template.New("mediatheque.html").Funcs(fn).
-		ParseFS(assets, "templates/mediatheque.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mediatheque.html"); err == nil {
 		pages["mediatheque"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit mediatheque : %w", err)
