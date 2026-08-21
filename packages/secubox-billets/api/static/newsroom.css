@@ -299,16 +299,21 @@ a{color:inherit;text-decoration:none}
 .cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
 .cartrack::-webkit-scrollbar{display:none}
 .cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
-.ccard{--tone:var(--sky);flex:0 0 auto;width:214px;min-height:150px;scroll-snap-align:start;display:flex;flex-direction:column;
+.ccard{--tone:var(--sky);flex:0 0 auto;width:216px;height:216px;scroll-snap-align:start;display:flex;flex-direction:column;
   background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;overflow:hidden;
   box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
 .ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
 .ccard:focus-visible{outline:2px solid var(--tone);outline-offset:2px}
 .ccard[data-k="billet"]{--tone:var(--sky)}
 .ccard[data-k="communique"]{--tone:var(--coral)}
-/* média en cardlet : couverture image OU pastilles a/v/pdf */
-.cccover{display:block;height:96px;background:var(--soft);overflow:hidden}
+/* média en cardlet : couverture image, ou placeholder typé (vidéo/audio/pdf/lien) */
+.cccover{position:relative;display:block;height:92px;background:var(--soft);overflow:hidden;flex:none}
 .cccover img{width:100%;height:100%;object-fit:cover;display:block}
+.cccover.vid,.cccover.aud,.cccover.doc,.cccover.link{background:color-mix(in srgb,var(--tone) 12%,var(--soft))}
+.cccover.vid::after,.cccover.aud::after,.cccover.doc::after,.cccover.link::after{
+  position:absolute;inset:0;display:grid;place-items:center;font-size:1.7rem;opacity:.55}
+.cccover.vid::after{content:"▶"}.cccover.aud::after{content:"🎵"}.cccover.doc::after{content:"📄"}.cccover.link::after{content:"🔗"}
+.cchost{color:var(--sky)}
 .ccbody{display:flex;flex-direction:column;flex:1;padding:11px 13px 0}
 .cctop{display:flex;align-items:center;gap:7px;margin-bottom:8px}
 .ccic{font-size:1.05rem;line-height:1}
@@ -316,8 +321,8 @@ a{color:inherit;text-decoration:none}
 .ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.85rem;filter:grayscale(.15)}
 .ccard h3{margin:0;font-size:1rem;line-height:1.2;letter-spacing:-.01em;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.ccdek{margin:6px 0 0;font-size:.78rem;line-height:1.35;color:var(--dim);
-  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ccdek{margin:6px 0 0;font-size:.77rem;line-height:1.34;color:var(--dim);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ccwho{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;color:var(--dim);font-size:.74rem}
 .cardots{display:flex;gap:6px;justify-content:center;margin-top:2px;flex-wrap:wrap}
 .cardots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line-2);cursor:pointer;padding:0;transition:.15s}
