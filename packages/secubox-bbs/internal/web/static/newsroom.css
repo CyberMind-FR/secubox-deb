@@ -89,6 +89,14 @@ a{color:inherit;text-decoration:none}
 .rub:hover{background:var(--soft)} .rub.on{border-left-color:var(--sky);background:var(--sky-s)}
 .rub .g{width:24px;text-align:center;font-size:1rem;flex:none} .rub .nm{flex:1;font-weight:600;font-size:.86rem}
 .rub .ct{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim)} .rub.on .ct{color:var(--sky);font-weight:700}
+/* Conversation privee dans le rail (#1114) : avatar + nom + dernier extrait. */
+.rub.conv{align-items:center}
+.rub.conv .av{width:30px;height:30px;border-radius:50%;background:var(--sky);color:#fff;display:grid;place-items:center;
+  font-family:"Fraunces","Cinzel";font-weight:700;font-size:.74rem;overflow:hidden;flex:none}
+.rub.conv .av img{width:100%;height:100%;object-fit:cover}
+.rub.conv .nm{display:flex;flex-direction:column;min-width:0;font-weight:600}
+.rub.conv .nm .ap{font-weight:400;font-size:.7rem;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rub.conv .ct{background:var(--coral);color:#fff;border-radius:999px;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px}
 .types{display:flex;flex-wrap:wrap;gap:7px;padding:11px 14px}
 .type{display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:.73rem;font-weight:600;transition:.15s}
 .type:hover{border-color:var(--line-2);transform:translateY(-1px)} .type.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}

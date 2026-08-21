@@ -1,3 +1,15 @@
+secubox-bbs (0.28.43-1~bookworm1) bookworm; urgency=medium
+
+  * /mp adopte le skin newsroom : rail gauche = liste des conversations
+    (le « menu » du module), corps réutilisé, alerte MP dans le masthead.
+  * Correctif « ce message diverge de l'index » sur des fils entiers : un
+    `bbsctl ingest` lancé à la main en root créait des dossiers de fils et des
+    corps en root:root, intraversables/illisibles par le service. writeBody
+    adopte désormais le DOSSIER du fil (pas que le fichier) ; le postinst
+    ré-aligne l'existant mal-possédé sous content/ et files/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:47:19 +0200
+
 secubox-bbs (0.28.42-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel : fin du « doublon fantôme » — une carte vidéo n'affiche plus

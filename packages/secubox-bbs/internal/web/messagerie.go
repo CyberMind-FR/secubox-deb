@@ -41,7 +41,9 @@ func (s *Server) mp(w http.ResponseWriter, r *http.Request) {
 	if pseudo == "" {
 		p.Convs, _ = s.st.Conversations(p.V.ID)
 		p.Vide = "Aucun message."
-		s.rend(w, r, "mp", p)
+		s.poseNonLus(&p)
+		s.poseRail(&p)
+		s.rendDef(w, r, "mp", "mpnr", p)
 		return
 	}
 
@@ -76,7 +78,9 @@ func (s *Server) mp(w http.ResponseWriter, r *http.Request) {
 	}
 	p.Titre = "Messages · " + p.Avec.Display
 	p.Convs, _ = s.st.Conversations(p.V.ID)
-	s.rend(w, r, "mp", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "mp", "mpnr", p)
 }
 
 // annuaire : la recherche de membres, bornee.

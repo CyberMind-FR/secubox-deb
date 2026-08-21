@@ -31,3 +31,36 @@
 </div>
 <script src="/static/coquille.js?v={{.VCSS}}" defer></script>
 </body></html>{{end}}
+
+{{/* Coquille newsroom de la MESSAGERIE (#1114) : meme masthead et meme skin,
+     mais le rail GAUCHE porte la liste des conversations (le « menu » du module,
+     jadis dans la colonne de layout.html) au lieu des rubriques. Le corps
+     (mp.html) est reutilise tel quel ; il charge lui-meme editeur.js. */}}
+{{define "mpnr"}}<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{if .Titre}}{{.Titre}} — {{end}}{{.Site}}</title>
+<meta name="sbx-no-health-banner">
+<link rel="stylesheet" href="/static/bbs.css?v={{.VCSS}}">
+<link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
+</head><body>
+{{template "avmast" .}}
+<div class="wrap">
+  <aside class="rail">
+    <div class="pnl">
+      <h3>Messages <span class="n">{{len .Convs}}</span></h3>
+      {{range .Convs}}<a class="rub conv{{if eq .Handle $.Avec.Handle}} on{{end}}" href="/mp/{{.Handle}}"{{if eq .Handle $.Avec.Handle}} aria-current="page"{{end}}>{{template "vignette" (vignette .Avatar .Handle)}}<span class="nm">{{.Nom}}{{if .Dernier}}<small class="ap">{{.Dernier}}</small>{{end}}</span>{{if .NonLus}}<span class="ct">{{.NonLus}}</span>{{end}}</a>
+      {{else}}<div class="teaser">Aucune conversation. Écrivez à un membre depuis l'annuaire.</div>{{end}}
+      {{if .Carnet}}<h3>Carnet</h3>{{range .Carnet}}<a class="rub conv{{if eq .Handle $.Avec.Handle}} on{{end}}" href="/mp/{{.Handle}}"{{if eq .Handle $.Avec.Handle}} aria-current="page"{{end}}>{{template "vignette" (vignette .Avatar .Handle)}}<span class="nm">{{.Display}}{{if .Note}}<small class="ap">{{.Note}}</small>{{end}}</span></a>{{end}}{{end}}
+      <a class="rub" href="/mp/annuaire"><span class="g">🔍</span><span class="nm">Annuaire des membres</span></a>
+    </div>
+    {{template "avacces" .}}
+  </aside>
+  <main class="feed">
+    {{template "corps" .}}
+  </main>
+  <aside class="rail rr">
+    {{template "avrail" .}}
+  </aside>
+</div>
+<script src="/static/coquille.js?v={{.VCSS}}" defer></script>
+</body></html>{{end}}

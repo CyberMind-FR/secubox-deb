@@ -180,6 +180,10 @@ func (s *Store) DeposeFichier(owner int64, nom, mimeAnnonce string, contenu io.R
 		s.db.Exec(`DELETE FROM files WHERE id = ?`, id)
 		return f, err
 	}
+	// Le dossier du mois AVANT le fichier : cree en root par un depot lance a la
+	// main, il serait intraversable par le service (meme cause que les corps de
+	// fils, #1114).
+	adopteProprietaireDuDossier(filepath.Dir(abs))
 	adopteProprietaireDuDossier(abs)
 
 	return Fichier{ID: id, Owner: owner, Path: rel, Name: nom,

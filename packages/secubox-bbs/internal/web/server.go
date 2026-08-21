@@ -211,7 +211,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mp", "mastodon", "annuaire", "edition"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mastodon", "annuaire", "edition"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {
@@ -247,6 +247,15 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		pages["compte"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit compte : %w", err)
+	}
+	// #1114 : /mp dans le skin newsroom (define "mpnr"), rail gauche = liste des
+	// conversations. layout.html fournit "vignette" (avatars) ; mp.html fournit
+	// le corps. Jeu distinct de "compte" : chacun n'a qu'un seul "corps".
+	if t, err := template.New("mp.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mp.html"); err == nil {
+		pages["mp"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit mp : %w", err)
 	}
 	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
 	if t, err := template.New("mediatheque.html").Funcs(fn).

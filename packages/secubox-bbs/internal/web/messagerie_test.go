@@ -317,18 +317,20 @@ func TestLaMessagerieUtiliseLaColonneDeLaCoquille(t *testing.T) {
 	}
 	corps := w.Body.String()
 
-	// Les conversations sont dans la colonne DE LA COQUILLE.
-	if !strings.Contains(corps, `class="liste"`) {
-		t.Error("les conversations n'occupent pas la colonne de la coquille")
+	// Depuis #1114 la messagerie porte le skin newsroom (define "mpnr") : les
+	// conversations occupent le RAIL GAUCHE partage, en entrees `.rub.conv` — le
+	// « menu » du module, dans la coquille, pas une seconde grille imbriquee.
+	if !strings.Contains(corps, `class="mast"`) || !strings.Contains(corps, `class="feed"`) {
+		t.Error("/mp ne porte pas la coquille newsroom")
 	}
-	if !strings.Contains(corps, `class="fil-item conv"`) {
-		t.Error("aucune entree de conversation dans la colonne")
+	if !strings.Contains(corps, `class="rub conv`) {
+		t.Error("aucune entree de conversation dans le rail")
 	}
 	// L'interlocuteur ouvert est signale, comme un fil ouvert l'est.
 	if !strings.Contains(corps, `aria-current="page"`) {
 		t.Error("la conversation ouverte n'est pas marquee")
 	}
-	// AUCUNE seconde grille : c'est le defaut qu'on vient de retirer.
+	// AUCUNE seconde grille imbriquee : c'est le defaut qu'on interdit toujours.
 	if strings.Contains(corps, `class="mp"`) || strings.Contains(corps, "mp-liste") {
 		t.Error("une seconde disposition est reapparue dans la vue")
 	}
