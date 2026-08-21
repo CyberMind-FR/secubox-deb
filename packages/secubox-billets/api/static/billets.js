@@ -208,5 +208,26 @@
     else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
   });
   window.addEventListener("resize", sync);
+
+  // Auto-défilement (#1104) : avance toutes les 5 s, revient au début en fin de
+  // piste. En pause au survol / focus et 9 s après une interaction ; désactivé
+  // si l'utilisateur a demandé moins d'animation, ou s'il n'y a qu'une carte.
+  var timer = null, resume = null;
+  var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function atEnd() { return track.scrollLeft + track.clientWidth >= track.scrollWidth - 2; }
+  function tick() { if (atEnd()) track.scrollTo({ left: 0, behavior: "smooth" }); else step(1); }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+  function play() { if (reduce || cards.length < 2) return; stop(); timer = setInterval(tick, 5000); }
+  function hold() { stop(); clearTimeout(resume); resume = setTimeout(play, 9000); }
+  track.addEventListener("mouseenter", stop);
+  track.addEventListener("mouseleave", play);
+  track.addEventListener("focusin", stop);
+  track.addEventListener("focusout", play);
+  if (prev) prev.addEventListener("click", hold);
+  if (next) next.addEventListener("click", hold);
+  if (dots) dots.addEventListener("click", hold);
+  track.addEventListener("keydown", hold);
+  document.addEventListener("visibilitychange", function () { document.hidden ? stop() : play(); });
   sync();
+  play();
 })();
