@@ -54,6 +54,7 @@
       <span aria-hidden="true">⌕</span>
       <input name="q" value="{{.Q}}" placeholder="Rechercher…" aria-label="Rechercher dans les fils">
     </form>
+    <button class="iconbtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
     {{if .V.Connecte}}
       <a class="me" href="/compte" title="Mon compte">{{template "vignette" (vignette .V.Avatar .V.Initiales)}}<span class="me-nom">{{.V.Handle}}</span></a>
       <form method="post" action="/logout" class="s6b8b63d">
