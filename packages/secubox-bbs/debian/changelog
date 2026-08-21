@@ -1,3 +1,65 @@
+secubox-bbs (0.28.35-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlets carrés + uniformes (216×216, #1104) : couverture bornée (92px),
+    corps flex, aperçu et byline clampés — fini les cartes trop hautes/inégales.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:50:47 +0000
+
+secubox-bbs (0.28.34-1~bookworm1) bookworm; urgency=medium
+
+  * Accueil : les cartes (carrousel ET liste) portent enfin un aperçu et leurs
+    médias (#1104). composerRedaction appelle apercuEtDernier sur les ≤24 items
+    affichés — comme un salon — au lieu de cartes nues (titre+auteur). Cardlet :
+    couverture = 1ʳᵉ image du fil, pastilles 🎬/🎧/📎 selon les pièces, ligne
+    d'aperçu. Les pièces /f/ étant réservées aux membres, la surface PUBLIQUE
+    n'émet que l'aperçu texte (pas de refs → pas d'<img> cassés pour un anonyme).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:42:49 +0000
+
+secubox-bbs (0.28.33-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : cardlets à média (#1104) — couverture (vignette de flux du
+    podcaster) + pastilles 🎬/🎧 selon la nature du fil ; les fils vidéo
+    portent une couverture-placeholder ▶. Aucune donnée nouvelle : on n'utilise
+    que le média DÉJÀ porté par le fil/flux (vignette, MediaKind, Source) — les
+    pièces jointes par-message restent hors accueil (perf, inchangé).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:34:18 +0000
+
+secubox-bbs (0.28.32-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel « À la une » : auto-défilement (#1104) — avance toutes les 5 s,
+    boucle au début ; en pause au survol/focus, 9 s après une interaction, et
+    quand l'onglet est masqué ; désactivé si prefers-reduced-motion.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:13:34 +0000
+
+secubox-bbs (0.28.31-1~bookworm1) bookworm; urgency=medium
+
+  * Newsroom : carrousel « À la une » en tête d'accueil (#1104) — bande
+    horizontale des derniers dossiers (cartes compactes typées, teinte
+    d'accent, glyphe, titre, auteur, date). Scroll-snap, flèches, points,
+    clavier, tactile ; thème hérité. Réutilise .News (aucun backend), le fil
+    vertical et ses filtres restent en dessous. CSS/JS externes, data-*.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:59:49 +0000
+
+secubox-bbs (0.28.30-1~bookworm1) bookworm; urgency=medium
+
+  * Pièces jointes : accepte le PDF (application/pdf → .pdf, #1102). Rendu
+    nativement, servi inline avec nosniff. Complète #1094 côté BBS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:36:21 +0000
+
+secubox-bbs (0.28.29-1~bookworm1) bookworm; urgency=medium
+
+  * Publication billets : la pièce jointe part avec son VRAI Content-Type (et
+    non application/octet-stream) — billets aiguille dessus l'accueil média
+    (#1094). Sans ça une vidéo/pdf arrivait en octet-stream, prise pour une
+    image, et refusée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 16:20:00 +0200
+
 secubox-bbs (0.28.28-1~bookworm1) bookworm; urgency=medium
 
   * Vidéo en LECTEUR inline dans les cartes (#1092) : un /f/NN.mp4 devient un

@@ -31,7 +31,7 @@
                value="{{ (billet.embed_url or billet.ref_url) if billet else '' }}"></div>
       <div class="form-group"><label>🖼️ Images (png · jpeg · webp · gif · ≤ 5 Mo)</label>
         <input name="media_files" type="file" multiple
-               accept="image/png,image/jpeg,image/webp,image/gif">
+               accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/ogg,audio/mpeg,audio/ogg,audio/wav,audio/mp4,audio/webm,audio/flac,application/pdf">
         <small class="muted">Vignettes cliquables + zoom sur le blog. EXIF supprimé automatiquement.</small></div>
       <div class="form-group"><label>Type de lien</label>
         <div class="form-actions">

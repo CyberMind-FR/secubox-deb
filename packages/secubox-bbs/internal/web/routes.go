@@ -494,7 +494,7 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// injecte à la place UN dossier par flux (un podcast / un livre audio =
 	// un article), classé par son épisode le plus récent — dynamique façon RSS :
 	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
-	p.News = s.composerRedaction(p.Threads)
+	p.News = s.composerRedaction(p.Threads, pub)
 	// #1056 stage 3 : les articles collaboratifs EN COURS, pour la colonne
 	// « rédaction collaborative » (remplace le teaser).
 	p.Articles, _ = s.st.Articles("draft", 8)
@@ -558,7 +558,7 @@ func sansRefsMedia(s string) string {
 // composerRedaction mêle les fils NON-podcaster et les flux groupés du
 // podcaster en un seul fil trié par date décroissante — les épisodes d'un même
 // flux se replient en un dossier unique.
-func (s *Server) composerRedaction(fils []store.Thread) []NewsItem {
+func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 	var out []NewsItem
 	for i := range fils {
 		if fils[i].Source == "podcaster" {
@@ -573,6 +573,25 @@ func (s *Server) composerRedaction(fils []store.Thread) []NewsItem {
 	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
 	if len(out) > 24 {
 		out = out[:24]
+	}
+	// #1104 : enrichir les cartes RETENUES d'un aperçu (premier message), de ses
+	// médias et du dernier commentaire — comme un salon (composerRedactionSalon).
+	// Sans cela, une carte de DISCUSSION de l'accueil était vide (titre + auteur
+	// seuls), ni vignette ni aperçu. Fait APRÈS tri + plafond : on ne lit que ce
+	// qui s'affiche (≤ 24 fils), jamais tout l'accueil.
+	for i := range out {
+		if out[i].Fil != nil {
+			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, pub)
+			// Les pièces `/f/NN` sont RÉSERVÉES AUX MEMBRES (servirFichier renvoie
+			// 403 à un anonyme). Sur la surface publique on n'émet donc pas leurs
+			// refs — sinon des <img> cassés. L'aperçu TEXTE, lui, est déjà filtré
+			// public par apercuEtDernier et reste affiché.
+			if pub {
+				medias = nil
+			}
+			out[i].Apercu, out[i].LastAuteur = ap, la
+			out[i].LastExtrait, out[i].LastAt, out[i].Medias = lx, lt, medias
+		}
 	}
 	return out
 }
