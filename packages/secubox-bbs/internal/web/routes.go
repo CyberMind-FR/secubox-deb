@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -60,6 +61,8 @@ type page struct {
 	Art      store.Article
 	Parts    []store.ArticlePart
 	Articles []store.Article
+	// Edit : formulaire d'edition d'un message (#1091), nil hors de cette page.
+	Edit *editForm
 	// Billets : la vitrine REELLE du module billets (#1066 phase A) — titre,
 	// extrait, date, lien de chaque billet, pas seulement les fils publies
 	// depuis le BBS. BilletsErr distingue « le flux n'a pas pu etre lu » de
@@ -135,6 +138,20 @@ type postView struct {
 	// Avatar de l'auteur, 0 s'il n'en a pas. Rendu par la MEME requete que le
 	// pseudonyme : afficher un visage ne coute pas une lecture de plus.
 	Avatar int64
+	// Editable : le visiteur courant peut-il editer CE message (#1091) ? Calcule
+	// par la meme regle que le magasin (PeutEditer), pour n'afficher le lien que
+	// quand il aboutira. CorrigeMod : edite par quelqu'un d'autre que l'auteur.
+	Editable   bool
+	CorrigeMod bool
+}
+
+// editForm porte le formulaire d'edition d'un message (#1091) ; nil hors de
+// cette page. Moderation = l'editeur n'est pas l'auteur (correction de sysop),
+// pour prevenir en clair « vous corrigez le texte d'un autre ».
+type editForm struct {
+	PostID, ThreadID int64
+	Body             string
+	Moderation       bool
 }
 
 type card struct {
@@ -161,6 +178,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/c/", s.salon)
 	s.mux.HandleFunc("/t/", s.fil)
+	s.mux.HandleFunc("/p/", s.edition) // #1091 — /p/{id}/edit
 	s.mux.HandleFunc("/login", s.connexion)
 	s.mux.HandleFunc("/logout", s.deconnexion)
 	s.mux.HandleFunc("/invite/", s.invitation)
@@ -274,6 +292,13 @@ func (s *Server) rend(w http.ResponseWriter, r *http.Request, nom string, p page
 	}
 	s.poseCSRF(w, p.V.CSRF)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Le HTML doit TOUJOURS être revalidé : sans cela le navigateur garde la page
+	// (avec son ancien `?v={{.VCSS}}`) par heuristique, et sert donc l'ancienne
+	// feuille même après un déploiement — c'est ce qui fait « perdre » un skin
+	// fraîchement posé en test à l'aveugle. `no-cache` = revalider avant usage ;
+	// combiné à l'empreinte VCSS sur les assets, la page fraîche pointe la feuille
+	// fraîche. `private` : jamais dans un cache partagé (contenu authentifié).
+	w.Header().Set("Cache-Control", "private, no-cache")
 	buf.WriteTo(w)
 }
 
@@ -297,6 +322,13 @@ func (s *Server) rendDef(w http.ResponseWriter, r *http.Request, nom, def string
 	}
 	s.poseCSRF(w, p.V.CSRF)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Le HTML doit TOUJOURS être revalidé : sans cela le navigateur garde la page
+	// (avec son ancien `?v={{.VCSS}}`) par heuristique, et sert donc l'ancienne
+	// feuille même après un déploiement — c'est ce qui fait « perdre » un skin
+	// fraîchement posé en test à l'aveugle. `no-cache` = revalider avant usage ;
+	// combiné à l'empreinte VCSS sur les assets, la page fraîche pointe la feuille
+	// fraîche. `private` : jamais dans un cache partagé (contenu authentifié).
+	w.Header().Set("Cache-Control", "private, no-cache")
 	buf.WriteTo(w)
 }
 
@@ -483,6 +515,44 @@ type NewsItem struct {
 	Feed *PodFeed      // non-nil : dossier de flux groupé (podcaster)
 	Fil  *store.Thread // non-nil : dossier de fil ordinaire
 	Date int64
+	// Cartes de SALON (#1092/#1093) : aperçu du premier message et dernier
+	// commentaire (auteur + extrait + date). Vides sur l'accueil.
+	Apercu      string
+	LastAuteur  string
+	LastExtrait string
+	LastAt      int64
+	// Médias du fil (#1092) : mini-vignettes des pièces jointes du fil et de ses
+	// messages, pour la 2ᵉ partie de la carte. Une image /f/12.png devient une
+	// miniature, pas le chemin brut « /f/12.png » lu tel quel.
+	Medias []cardMedia
+}
+
+// cardMedia : un média du fil résumé pour la vignette de carte. Ref est la
+// référence telle qu'écrite dans le corps (`/f/12.png`) : elle sert de src.
+type cardMedia struct {
+	ID   int64
+	Ref  string
+	Kind string // image | audio | video | file
+}
+
+func kindDeMime(mime string) string {
+	switch {
+	case strings.HasPrefix(mime, "image/"):
+		return "image"
+	case strings.HasPrefix(mime, "audio/"):
+		return "audio"
+	case strings.HasPrefix(mime, "video/"):
+		return "video"
+	default:
+		return "file"
+	}
+}
+
+// sansRefsMedia retire les références de pièces jointes (`/f/12`, `/f/12.png`)
+// d'un corps : dans un aperçu de carte, elles s'affichaient en TEXTE BRUT
+// (« /f/15.png ») au lieu d'être la miniature rendue à côté (#1092).
+func sansRefsMedia(s string) string {
+	return strings.TrimSpace(refsJointes.ReplaceAllString(s, ""))
 }
 
 // composerRedaction mêle les fils NON-podcaster et les flux groupés du
@@ -527,9 +597,99 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 		s.rendMediatheque(w, r, p)
 		return
 	}
-	s.poseNonLus(&p)
+	// #1092 : un salon se rend comme la GAZETTE — ses dossiers en cartes
+	// newsroom (aperçu + dernier commentaire), pas en liste plate à trois
+	// colonnes. La coquille « poste de travail » reste pour un fil ouvert, le
+	// compte, la console ; les salons rejoignent la rédaction.
+	p.News = s.composerRedactionSalon(p.Threads, pub)
 	p.Titre = p.Cat.Title
-	s.rend(w, r, "index", p)
+	s.rendDef(w, r, "newsroom", "newsroom", p)
+}
+
+// composerRedactionSalon rend les fils d'UN salon en cartes de rédaction. À la
+// différence de composerRedaction (l'accueil), il n'injecte PAS les flux
+// podcaster globaux — ils n'appartiennent pas au salon, et un salon à dominante
+// podcaster est déjà parti en médiathèque plus haut. Chaque carte porte son
+// aperçu (premier message) et son dernier commentaire (#1092/#1093). `pub`
+// force la vue publique : un aperçu ne doit jamais révéler un message local.
+func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsItem {
+	out := make([]NewsItem, 0, len(fils))
+	for i := range fils {
+		if fils[i].Source == "podcaster" {
+			continue
+		}
+		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, pub)
+		out = append(out, NewsItem{
+			Fil: &fils[i], Date: fils[i].LastPostAt,
+			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
+			Medias: medias,
+		})
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	return out
+}
+
+// apercuEtDernier lit l'aperçu (premier message) et le dernier commentaire d'un
+// fil pour sa carte. En vue publique (`pub`), on ne considère QUE les messages
+// publics — un aperçu ne doit pas divulguer un message local. Best-effort :
+// tout échec de lecture rend des chaînes vides, jamais une panne de page.
+func (s *Server) apercuEtDernier(threadID int64, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
+	var posts []store.Post
+	if pub {
+		posts, _ = s.st.PublicPostsOf(threadID)
+	} else {
+		posts, _ = s.st.PostsOf(threadID)
+	}
+	if len(posts) == 0 {
+		return
+	}
+	seen := map[int64]bool{}
+	for i, p := range posts {
+		b, err := s.st.Body(p)
+		if err != nil {
+			continue
+		}
+		if i == 0 {
+			apercu = extrait(sansRefsMedia(b), 180)
+		}
+		if i == len(posts)-1 && len(posts) > 1 {
+			lastExtrait = extrait(sansRefsMedia(b), 120)
+			lastAuteur, _ = s.st.AuteurEtAvatar(p.AuthorID)
+			lastAt = p.CreatedAt
+		}
+		// Les médias sont référencés EN LIGNE dans le corps (`/f/12.png`), pas
+		// comme pièces jointes tracées (la base n'en a AUCUNE) : c'est donc dans
+		// le texte qu'on les trouve, pour les rendre en miniatures.
+		for _, m := range refsJointes.FindAllStringSubmatch(b, -1) {
+			id, _ := strconv.ParseInt(m[1], 10, 64)
+			if id == 0 || seen[id] {
+				continue
+			}
+			seen[id] = true
+			if len(medias) < 8 {
+				medias = append(medias, cardMedia{ID: id, Ref: m[0], Kind: kindDeRef(m[0])})
+			}
+		}
+	}
+	return
+}
+
+// kindDeRef devine le type d'un média à partir de son extension dans la
+// référence `/f/12.png`. Sans extension, on parie sur l'image — le cas courant.
+func kindDeRef(ref string) string {
+	i := strings.LastIndex(ref, ".")
+	if i < 0 {
+		return "image"
+	}
+	switch strings.ToLower(ref[i+1:]) {
+	case "png", "jpg", "jpeg", "gif", "webp", "avif", "svg":
+		return "image"
+	case "mp3", "ogg", "wav", "weba", "m4a", "opus":
+		return "audio"
+	case "mp4", "webm", "mov", "mkv":
+		return "video"
+	}
+	return "file"
 }
 
 // media (/media) rend la médiathèque du podcaster en arborescence.
@@ -687,18 +847,20 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 		}
 		a, av := s.st.AuteurEtAvatar(po.AuthorID)
 		p.Posts = append(p.Posts, postView{Post: po, Author: a,
-			Initiales: initiales(a), Body: body, Avatar: av})
+			Initiales: initiales(a), Body: body, Avatar: av,
+			Editable:   store.PeutEditer(p.V.ID, p.V.Role, po.AuthorID),
+			CorrigeMod: po.EditedAt > 0 && po.EditedBy != po.AuthorID})
 	}
 	for _, c := range p.Cats {
 		if c.ID == t.CategoryID {
 			p.Cat = c
 		}
 	}
-	// LES FILS VOISINS ALIMENTENT LA COLONNE DU MILIEU. Sans eux, ouvrir un fil
-	// viderait la liste et l'on perdrait sa place — c'est exactement ce que la
-	// disposition a trois colonnes existe pour eviter : on garde la liste sous
-	// les yeux en lisant.
-	p.Threads, _ = s.st.Threads(t.CategoryID, pub)
+	// #1092 : un fil ouvert se lit en GAZETTE — colonne d'article centrée
+	// (.lecture), PAS coincée dans la 3ᵉ colonne étroite de la coquille. On
+	// n'alimente donc plus la liste des fils voisins (elle forçait la disposition
+	// trois colonnes) : la coquille tombe à rail + volet large, où .lecture
+	// respire. Le repère de place est désormais la rédaction (accueil/salons).
 	p.T, p.Titre = t, t.Title
 
 	// LE BOUTON « REPUBLIER » NE S'AFFICHE QUE S'IL PEUT ABOUTIR (#1044). Un
@@ -751,6 +913,72 @@ func (s *Server) repondre(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// edition sert la page d'edition d'un message (#1091) : GET pre-remplit,
+// POST applique. La regle de droit (auteur pour le sien, sysop pour les autres)
+// est verifiee ICI ET dans le magasin — la vue n'est jamais la seule garde.
+//
+// Un visiteur sans droit reçoit 404, PAS 403 : confirmer l'existence d'un
+// message qu'il ne peut pas toucher n'apporte rien et renseigne un curieux.
+func (s *Server) edition(w http.ResponseWriter, r *http.Request) {
+	if !strings.HasSuffix(r.URL.Path, "/edit") {
+		http.NotFound(w, r)
+		return
+	}
+	id := idDe(r.URL.Path, "/p/")
+	if id == 0 {
+		http.NotFound(w, r)
+		return
+	}
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Error(w, "connexion requise", http.StatusUnauthorized)
+		return
+	}
+	po, err := s.st.PostByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !store.PeutEditer(v.ID, v.Role, po.AuthorID) {
+		http.NotFound(w, r)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		if err := s.verifieCSRF(r); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+		body := strings.TrimSpace(r.PostFormValue("body"))
+		if body == "" {
+			http.Error(w, "message vide", http.StatusBadRequest)
+			return
+		}
+		if err := s.st.EditerPost(v.ID, v.Role, id, body); err != nil {
+			if errors.Is(err, store.ErrDroitEdition) {
+				http.NotFound(w, r)
+				return
+			}
+			http.Error(w, "enregistrement impossible", http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/t/"+itoa64(po.ThreadID), http.StatusSeeOther)
+		return
+	}
+
+	corps, err := s.st.Body(po)
+	if err != nil {
+		corps = ""
+	}
+	p, _ := s.base(r, "forums")
+	p.Titre = "Éditer un message"
+	p.Edit = &editForm{
+		PostID: id, ThreadID: po.ThreadID, Body: corps,
+		Moderation: v.ID != po.AuthorID,
+	}
+	s.rend(w, r, "edition", p)
 }
 
 func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
@@ -954,6 +1182,10 @@ func (s *Server) cartesBiblio() []card {
 type billetVue struct {
 	Titre, Resume, Lien string
 	Date                int64
+	// Medias : mini-vignettes des pièces jointes du billet (/f/NN), relayées via
+	// l'origine PUBLIQUE de billets (admise) — plus le chemin brut « /f/23.png »
+	// lu en texte dans la vitrine (#1092).
+	Medias []string
 	// DepuisFil : vrai quand ce billet correspond a un fil publie DEPUIS le
 	// BBS — croise par BilletID (voir vitrineBillets), pas par URL, qui peut
 	// manquer (#1024). Le lien vers la conversation d'origine n'a de sens que
@@ -996,8 +1228,15 @@ func (s *Server) vitrineBillets() ([]billetVue, string) {
 	}
 	out := make([]billetVue, 0, len(items))
 	for _, it := range items {
-		v := billetVue{Titre: it.Titre, Resume: extrait(it.Corps, 320),
+		v := billetVue{Titre: it.Titre, Resume: extrait(sansRefsMedia(it.Corps), 320),
 			Lien: it.Lien, Date: it.Date}
+		// Mini-vignettes : les /f/NN du billet, absolutisés sur l'origine PUBLIQUE
+		// de billets (admise au relais) — plus le chemin brut en texte.
+		if s.opt.BilletsBase != "" {
+			for _, m := range refsJointes.FindAllString(it.Corps, 6) {
+				v.Medias = append(v.Medias, vignetteRelayee(strings.TrimRight(s.opt.BilletsBase, "/")+m))
+			}
+		}
 		if o, ok := origine[it.Ref]; ok {
 			v.DepuisFil, v.ThreadID, v.Repris = true, o.ThreadID, o.Repris
 		}
