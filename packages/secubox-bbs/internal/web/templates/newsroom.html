@@ -182,6 +182,7 @@
       <span class="hintk">⌘K</span>
     </form>
     <div class="mast-actions">
+      {{if and .V.Connecte .Mod.MP}}<a class="ibtn mpal{{if .NonLus}} on{{end}}" href="/mp" title="Messages privés{{if .NonLus}} — {{.NonLus}} non lu(s){{end}}" aria-label="Messages privés{{if .NonLus}}, {{.NonLus}} non lus{{end}}">✉️{{if .NonLus}}<span class="mpct" aria-hidden="true">{{.NonLus}}</span>{{end}}</a>{{end}}
       {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
       {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}
       <button class="ibtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
@@ -202,4 +203,20 @@
   {{if .Mod.Billets}}<a class="rub" href="/billets"><span class="g">📝</span><span class="nm">Billets</span><span class="ct">{{.Stats.Billets}}</span></a>{{end}}
   {{if and .V.Connecte .Mod.MP}}<a class="rub" href="/mp"><span class="g">✉️</span><span class="nm">Messages</span>{{if .NonLus}}<span class="ct">{{.NonLus}}</span>{{end}}</a>{{end}}
   {{if .V.Sysop}}<a class="rub" href="/sysop"><span class="g">🛠️</span><span class="nm">Sysop</span></a>{{end}}
+</div>{{end}}
+
+{{/* Rail de droite PARTAGÉ (#1114) : billets + rédaction collaborative. fil.html,
+     coquillenr.html (compte…) le réutilisent — une seule source pour la colonne
+     de droite du skin newsroom. */}}
+{{define "avrail"}}<div class="pnl">
+  <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
+  {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
+  {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{lien .Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+  {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
+</div>
+<div class="pnl">
+  <h3>Rédaction collaborative <span class="n">{{len .Articles}}</span></h3>
+  {{range .Articles}}<a class="billet" href="/article/{{.ID}}"><b>✍️ {{.Title}}</b><div class="ex">{{len .CoAuteurs}} rédacteur(s) · {{.NbParts}} contribution(s)</div></a>
+  {{else}}<div class="teaser">Aucun article en cours.</div>{{end}}
+  {{if .V.Connecte}}<a class="billet" href="/article/nouveau"><b>＋ Nouvel article</b><div class="ex">à plusieurs mains → publié dans la gazette</div></a>{{end}}
 </div>{{end}}

@@ -186,11 +186,13 @@ func mediasIntegres(s string) string {
 		case finitPar(adr, ".mp4", ".webm", ".ogv"):
 			balise = `<video class="jointe" controls preload="none" src="` + adr + `"></video>`
 		case finitPar(adr, ".pdf"):
-			// PDF joint (#1102/#1114) : rendu inline dans le fil, servi avec
-			// nosniff — jamais interprété en HTML. Un lien de repli reste
-			// cliquable pour l'ouvrir en plein écran.
-			balise = `<embed class="jointe jointe-pdf" src="` + adr + `" type="application/pdf">` +
-				`<a class="jointe-pdf-lien" href="` + adr + `" target="_blank" rel="noopener">📄 Ouvrir le PDF</a>`
+			// PDF joint (#1102/#1114) : PAS d'`<embed>`. Il depend d'un greffon du
+			// navigateur et d'une CSP permissive (`object-src`) ; en pratique il
+			// rend une zone vide plus souvent qu'un document. Le repli FIABLE est
+			// une fiche cliquable a icone generique — toujours visible, jamais
+			// muette. Un instantane vaudrait mieux, mais demanderait un rendu PDF
+			// cote serveur a l'envoi : a faire plus tard, l'icone tient d'ici la.
+			balise = ficheFichier(adr, "📄", "Document PDF")
 		case !strings.Contains(adr[3:], "."):
 			// Adresse ecrite a la main, sans extension : on ne peut pas savoir.
 			// L'image est le cas de loin le plus frequent, et le moins couteux
@@ -198,11 +200,23 @@ func mediasIntegres(s string) string {
 			// muet ne se remarque pas.
 			balise = `<img class="jointe" src="` + adr + `" alt="" loading="lazy">`
 		default:
-			continue
+			// Extension connue du magasin mais NON jouable (zip, txt, doc…) : ni
+			// lecteur, ni texte mort. Une fiche a icone generique, comme le PDF.
+			balise = ficheFichier(adr, "📎", "Fichier joint")
 		}
 		s = strings.Replace(s, tout, balise, 1)
 	}
 	return s
+}
+
+// ficheFichier rend une piece jointe NON JOUABLE en carte cliquable a icone
+// generique : le repli fiable quand ni image, ni son, ni video ne s'applique
+// (PDF, archive, document). L'adresse vient de `lecteurRe` — un `/f/<n>.<ext>`
+// deja valide — donc sure a inserer telle quelle.
+func ficheFichier(adr, icone, libelle string) string {
+	return `<a class="jointe jointe-fichier" href="` + adr + `" target="_blank" rel="noopener">` +
+		`<span class="jf-ic" aria-hidden="true">` + icone + `</span>` +
+		`<span class="jf-tx"><b>` + libelle + `</b><small>` + adr + `</small></span></a>`
 }
 
 // nuesIntegrees transforme `/f/12.png` ecrit tel quel en ancre, pour que la

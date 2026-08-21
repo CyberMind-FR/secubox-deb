@@ -1763,7 +1763,9 @@ func (s *Server) compte(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	s.rend(w, r, "compte", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "compte", "pagenr", p)
 }
 
 func (s *Server) compteAction(w http.ResponseWriter, r *http.Request) {

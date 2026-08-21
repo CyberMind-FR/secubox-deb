@@ -211,7 +211,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			return fmt.Sprintf(" sub%d", n)
 		}}
 	pages := map[string]*template.Template{}
-	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "compte", "mp", "mastodon", "annuaire", "edition"} {
+	for _, nom := range []string{"index", "thread", "login", "simple", "nouveau", "sysop", "mp", "mastodon", "annuaire", "edition"} {
 		t, err := template.New("layout.html").Funcs(fn).
 			ParseFS(assets, "templates/layout.html", "templates/"+nom+".html")
 		if err != nil {
@@ -237,6 +237,16 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		pages["fil"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit fil : %w", err)
+	}
+	// #1114 : /compte dans le skin newsroom. Coquille GÉNÉRIQUE (pagenr) réunissant
+	// newsroom.html (blocs partagés avmast/avrubriques/avacces/avrail), compte.html
+	// (le corps réutilisé) et coquillenr.html. layout.html fournit le partial
+	// "vignette". Aucune collision de « corps » : seul compte.html le définit ici.
+	if t, err := template.New("compte.html").Funcs(fn).
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/compte.html"); err == nil {
+		pages["compte"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit compte : %w", err)
 	}
 	// Médiathèque : le podcaster en arborescence (#1056), gabarit autonome lui aussi.
 	if t, err := template.New("mediatheque.html").Funcs(fn).

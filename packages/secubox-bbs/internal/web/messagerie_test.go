@@ -261,38 +261,42 @@ func TestLaCoquilleRendSesTroisColonnesEtSaLigneDEtat(t *testing.T) {
 	uid, _ := peuple(t, s)
 	jeton, _ := s.NewSession(uid, "", "")
 
-	// Sur un FIL, les trois colonnes sont presentes : le rail, la liste des
-	// fils voisins (c'est tout l'interet — on garde sa place en lisant), et la
-	// vue.
+	// Depuis #1114 le FIL porte le skin NEWSROOM (define "fil") : masthead
+	// partage, rails gauche/droite, et le corps du fil REUTILISE tel quel. Le
+	// contrat n'est plus la coquille a trois colonnes de layout.html mais la
+	// coquille newsroom — c'est ce que ce test fixe desormais.
 	w := demande(t, srv, "GET", "/t/1", jeton, nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("fil : code %d", w.Code)
 	}
 	corps := w.Body.String()
 	for _, zone := range []string{
-		`class="shell"`, `class="bar"`, `class="corps`,
-		`class="rail"`, `class="liste"`, `class="vue"`,
-		`class="etat"`, `class="basse"`,
+		`class="mast"`,   // masthead partage (avmast)
+		`class="wrap"`,   // conteneur trois colonnes newsroom
+		`class="rail"`,   // rails gauche + droite
+		`class="feed"`,   // colonne centrale
+		`class="post`,    // le corps du fil, reutilise
+		`newsroom.css`,   // la feuille newsroom l'emporte
+		`Derniers billets`, // rail de droite partage (avrail)
 	} {
 		if !strings.Contains(corps, zone) {
-			t.Errorf("zone absente de la coquille : %s", zone)
+			t.Errorf("zone absente de la coquille newsroom : %s", zone)
 		}
 	}
-	// Le fil ouvert est SIGNALE dans la liste : sans cela on ne sait pas ou
-	// l'on est parmi vingt titres qui se ressemblent.
-	if !strings.Contains(corps, `aria-current="page"`) {
-		t.Error("le fil ouvert n'est pas marque dans la liste")
+	// L'alerte messagerie est le point d'entree /mp du masthead newsroom.
+	if !strings.Contains(corps, `class="ibtn mpal`) {
+		t.Error("l'alerte messagerie (mpal) est absente du masthead")
 	}
 
-	// Une page SANS fils n'affiche pas de colonne creuse.
+	// Une page autonome (compte) porte la MEME coquille newsroom, sans colonne
+	// de liste de fils.
 	w = demande(t, srv, "GET", "/compte", jeton, nil)
-	if strings.Contains(w.Body.String(), `class="liste"`) {
-		t.Error("colonne de liste rendue sur une page qui n'a aucun fil")
+	cc := w.Body.String()
+	if !strings.Contains(cc, `class="mast"`) || !strings.Contains(cc, `class="feed"`) {
+		t.Error("/compte ne porte pas la coquille newsroom")
 	}
-
-	// La ligne d'etat porte des FAITS, pas un slogan.
-	if !strings.Contains(corps, "non lus") || !strings.Contains(corps, "fils") {
-		t.Error("la ligne d'etat ne porte pas l'etat annonce")
+	if strings.Contains(cc, `class="liste"`) {
+		t.Error("colonne de liste rendue sur une page qui n'a aucun fil")
 	}
 }
 
