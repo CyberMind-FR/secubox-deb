@@ -59,10 +59,14 @@
              garde-fou, une carte vidéo affichait 🎬 deux fois (icône + badge) —
              le « doublon fantôme » (#1114). */}}
         {{$prim := ""}}{{if or (eq .MediaKind "video") (eq .Source "video")}}{{$prim = "video"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$prim = "audio"}}{{end}}
+        {{/* Glyphe de type, calculé UNE fois : sert l'icône .ccic ET la vignette
+             de repli. Une carte sans média/cover n'est plus une tuile VIDE (#1114) :
+             elle reçoit une « mosaïque » — fond teinté par data-k + gros glyphe. */}}
+        {{$g := "💬"}}{{if eq .MediaKind "audio"}}{{$g = "🎧"}}{{else if eq .MediaKind "video"}}{{$g = "🎬"}}{{else if eq .Source "video"}}{{$g = "🎬"}}{{else if eq .Source "podcast"}}{{$g = "🎧"}}{{else if eq .Source "film"}}{{$g = "🎞️"}}{{else if eq .Source "livre"}}{{$g = "📖"}}{{else if .Source}}{{$g = "🔗"}}{{end}}
         <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
-          {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{end}}
+          {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{else}}<span class="cccover ph"><span class="phg">{{$g}}</span></span>{{end}}
           <div class="ccbody">
-            <div class="cctop"><span class="ccic">{{if eq .MediaKind "audio"}}🎧{{else if eq .MediaKind "video"}}🎬{{else if eq .Source "video"}}🎬{{else if eq .Source "podcast"}}🎧{{else if eq .Source "film"}}🎞️{{else if eq .Source "livre"}}📖{{else if .Source}}🔗{{else}}💬{{end}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
+            <div class="cctop"><span class="ccic">{{$g}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
             <h3 class="serif">{{.Title}}</h3>
             {{if $n.Apercu}}<p class="ccdek">{{lien $n.Apercu}}</p>{{end}}
             <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>

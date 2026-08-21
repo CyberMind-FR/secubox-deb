@@ -1,3 +1,11 @@
+secubox-bbs (0.28.45-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : plus de tuiles VIDES. Une carte sans image reçoit une vignette
+    de repli « mosaïque » (fond teinté par type + gros glyphe) au lieu d'un
+    cartouche vide (les 7/24 cartes fils/URL sans média).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 15:35:47 +0200
+
 secubox-bbs (0.28.44-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel/flux : aperçu de carte nettoyé (resumeDeCorps) — plus de titre
