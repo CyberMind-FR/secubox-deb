@@ -1098,7 +1098,9 @@ func (s *Server) edition(w http.ResponseWriter, r *http.Request) {
 		PostID: id, ThreadID: po.ThreadID, Body: corps,
 		Moderation: v.ID != po.AuthorID,
 	}
-	s.rend(w, r, "edition", p)
+	s.poseNonLus(&p)
+	s.poseRail(&p)
+	s.rendDef(w, r, "edition", "pagenr", p)
 }
 
 func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
