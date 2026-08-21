@@ -1,3 +1,11 @@
+secubox-bbs (0.28.32-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel « À la une » : auto-défilement (#1104) — avance toutes les 5 s,
+    boucle au début ; en pause au survol/focus, 9 s après une interaction, et
+    quand l'onglet est masqué ; désactivé si prefers-reduced-motion.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:13:34 +0000
+
 secubox-bbs (0.28.31-1~bookworm1) bookworm; urgency=medium
 
   * Newsroom : carrousel « À la une » en tête d'accueil (#1104) — bande
