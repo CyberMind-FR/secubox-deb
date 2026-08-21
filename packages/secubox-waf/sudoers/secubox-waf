@@ -1,0 +1,36 @@
+# /etc/sudoers.d/secubox-waf — droits délégués au compte de service `secubox`.
+#
+# Deux capacités, chacune limitée à un jeu de verbes précis. Ni accès root, ni
+# contrôle des services.
+#
+# ── 1. CrowdSec : bans du tableau de bord WAF ────────────────────────────────
+#
+# L'API du module WAF (api/main.py) sert le tableau de bord : lister les
+# décisions, bannir, et lever un ban à la demande de l'opérateur. Elle tourne
+# sous `secubox` et passe par `cscli decisions`. `delete` est VOULU ici — c'est
+# le bouton « lever le ban » de l'interface, une action opérateur assumée (à ne
+# pas confondre avec le service sbxwaf lui-même, qui tourne sous `secubox-waf`
+# et ne reçoit, dans /etc/sudoers.d/secubox-waf-ng, QUE `decisions add`).
+#
+# ── 2. Purge du cache média du WAF ───────────────────────────────────────────
+#
+# Le cache de sbxwaf (TTL 1 h) sert CSS/JS/images/polices. Un asset redéployé
+# dont l'amont ne change pas l'ETag reste servi PÉRIMÉ jusqu'à la fin de son TTL
+# — le « vieux skin » après un déploiement ou une synchronisation git de contenu
+# (metablog-sync). `wafctl purge-cache` envoie SIGUSR1 au daemon, qui vide le
+# cache à chaud. Les tâches de contenu tournent sous `secubox` et ne peuvent pas
+# signaler un service possédé par root ; ce droit leur ouvre EXACTEMENT ce verbe
+# — ni démarrage, ni arrêt, ni config, ni route. Au pire, une relecture de cache
+# forcée : une nuisance de performance, pas une atteinte à la sécurité.
+
+Cmnd_Alias SBX_WAF_CSCLI = /usr/bin/cscli decisions add *, \
+                           /usr/bin/cscli decisions delete *, \
+                           /usr/bin/cscli decisions list *
+Cmnd_Alias SBX_WAF_PURGE = /usr/sbin/wafctl purge-cache
+
+secubox ALL=(root) NOPASSWD: SBX_WAF_CSCLI
+secubox ALL=(root) NOPASSWD: SBX_WAF_PURGE
+
+# Déclenché depuis une minuterie (pas de terminal) et tracé.
+Defaults!SBX_WAF_PURGE !requiretty
+Defaults!SBX_WAF_PURGE log_output

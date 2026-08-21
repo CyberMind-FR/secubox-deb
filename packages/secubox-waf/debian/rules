@@ -30,6 +30,11 @@ override_dh_auto_install:
 	# wafctl control script
 	install -d debian/secubox-waf/usr/sbin
 	[ -f scripts/wafctl ] && install -m 755 scripts/wafctl debian/secubox-waf/usr/sbin/ || true
+	# Sudoers : `secubox` peut purger le cache média du WAF (wafctl purge-cache).
+	# Conffile /etc/sudoers.d (0440) — permet aux tâches de contenu tournant sous
+	# `secubox` (metablog-sync) de rafraîchir le cache après une synchro git.
+	install -d debian/secubox-waf/etc/sudoers.d
+	install -m 0440 sudoers/secubox-waf debian/secubox-waf/etc/sudoers.d/secubox-waf
 	# Log directory
 	install -d debian/secubox-waf/var/log/secubox/waf
 	# Modular nginx config
