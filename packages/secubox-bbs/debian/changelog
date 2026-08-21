@@ -1,3 +1,16 @@
+secubox-bbs (0.28.49-1~bookworm1) bookworm; urgency=medium
+
+  * Vignettes-snapshot d'URL (#1120) : unite+minuterie secubox-bbs-urlshot
+    (oneshot durci, toutes les 2 min) qui appellent le worker Python
+    py/urlshot/ (egress SSRF-safe via sbxmitm, og:image puis repli chromium)
+    livre dans /usr/lib/secubox/bbs/urlshot/. Cache dedie
+    /var/cache/secubox/bbs/urlshots (tmpfiles 0750 secubox-bbs:secubox).
+    secubox-core, chromium et python3-httpx passent en Recommends : sans eux
+    le worker echoue capture par capture et les cartes gardent leur vignette
+    de repli. Minuterie activee au postinst (garde || true, jamais bloquant).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 19:40:15 +0200
+
 secubox-bbs (0.28.48-1~bookworm1) bookworm; urgency=medium
 
   * /p/{id}/edit adopte le skin newsroom (coquille pagenr) : masthead cohérent,

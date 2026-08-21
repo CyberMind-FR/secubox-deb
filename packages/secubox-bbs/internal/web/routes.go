@@ -173,6 +173,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
 	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
+	s.mux.HandleFunc("/urlshot/", s.servirUrlshot) // #1120 — vignette-snapshot d'URL
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
@@ -574,6 +575,10 @@ type NewsItem struct {
 	// messages, pour la 2ᵉ partie de la carte. Une image /f/12.png devient une
 	// miniature, pas le chemin brut « /f/12.png » lu tel quel.
 	Medias []cardMedia
+	// CleApercu (#1120) : clé de vignette-snapshot quand la carte n'a NI média
+	// NI texte — juste une URL nue (un fil-source). Vide sinon : la carte garde
+	// alors sa mosaïque glyphe (#1114).
+	CleApercu string
 }
 
 // cardMedia : un média du fil résumé pour la vignette de carte. Ref est la
@@ -672,6 +677,10 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 	for i := range out {
 		if out[i].Fil != nil {
 			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, out[i].Fil.Title, pub)
+			// #1120 : calculé AVANT le masquage des médias ci-dessous — c'est la
+			// présence RÉELLE de média qui exclut la vignette-snapshot, pas son
+			// masquage pour la surface publique.
+			cleApercu := s.cleApercuURL(ap, medias, out[i].Fil.Visibility)
 			// Les pièces `/f/NN` sont RÉSERVÉES AUX MEMBRES (servirFichier renvoie
 			// 403 à un anonyme). Sur la surface publique on n'émet donc pas leurs
 			// refs — sinon des <img> cassés. L'aperçu TEXTE, lui, est déjà filtré
@@ -681,6 +690,7 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 			}
 			out[i].Apercu, out[i].LastAuteur = ap, la
 			out[i].LastExtrait, out[i].LastAt, out[i].Medias = lx, lt, medias
+			out[i].CleApercu = cleApercu
 		}
 	}
 	return out
@@ -730,10 +740,11 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 			continue
 		}
 		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, fils[i].Title, pub)
+		cleApercu := s.cleApercuURL(ap, medias, fils[i].Visibility)
 		out = append(out, NewsItem{
 			Fil: &fils[i], Date: fils[i].LastPostAt,
 			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
-			Medias: medias,
+			Medias: medias, CleApercu: cleApercu,
 		})
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
@@ -783,6 +794,32 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 		}
 	}
 	return
+}
+
+// cleApercuURL calcule ET enfile la clé de vignette-snapshot d'une URL
+// (#1120) pour une carte SANS média dont l'aperçu tient en une seule URL nue —
+// le cas d'un fil-source. Retourne "" dans tous les autres cas (fil illustré,
+// aperçu à plusieurs mots, URL non http(s)) : la carte garde alors sa
+// mosaïque glyphe (#1114). Best-effort : un échec d'enfilage ne casse jamais
+// le rendu de la page — juste pas de vignette pour ce tour-ci.
+func (s *Server) cleApercuURL(apercu string, medias []cardMedia, vis store.Visibility) string {
+	if len(medias) != 0 {
+		return ""
+	}
+	champs := strings.Fields(apercu)
+	if len(champs) != 1 {
+		return ""
+	}
+	u := champs[0]
+	cle := store.CleUrlshot(u)
+	if cle == "" {
+		return ""
+	}
+	if err := s.st.EnfileUrlshot(cle, u, string(vis)); err != nil {
+		log.Printf("bbs: enfilage urlshot %q : %v", u, err)
+		return ""
+	}
+	return cle
 }
 
 // kindDeRef devine le type d'un média à partir de son extension dans la
