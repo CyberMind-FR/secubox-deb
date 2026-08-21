@@ -29,9 +29,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from engine import AuthRequired, EngineError, Engine
+from engine import AuthRequired, EngineError, Engine, PlaylistTimeout
 from library import Library
-from ytid import video_id as _video_id
+from ytid import video_id as _video_id, is_playlist_url as _is_playlist
 
 # --------------------------------------------------------------------- config
 DOWNLOAD_DIR = os.environ.get("YTSAS_DOWNLOAD_DIR", "/data/ytsas")
@@ -41,6 +41,9 @@ WWW_DIR = os.environ.get("YTSAS_WWW", "/opt/secubox-ytsas/www")
 MAX_ACTIVE = int(os.environ.get("YTSAS_MAX_ACTIVE", "2"))
 PORT = int(os.environ.get("YTSAS_PORT", "8091"))
 DISK_FLOOR = float(os.environ.get("YTSAS_DISK_FLOOR_GB", "5")) * 1e9
+# Borne dure du dépliage d'une playlist collée dans /add (#1099) : on n'enfile
+# jamais plus que ça de vidéos d'un coup sur une board déjà contrainte.
+PLAYLIST_ADD_MAX = int(os.environ.get("YTSAS_PLAYLIST_ADD_MAX", "100"))
 # Cookies older than this are flagged "stale" in /cookies/status (advisory).
 COOKIE_STALE_SECS = int(os.environ.get("YTSAS_COOKIE_STALE_DAYS", "30")) * 86400
 
@@ -158,6 +161,17 @@ async def add(request: Request):
            or b.get("value") or "").strip()
     if not url:
         return JSONResponse({"error": "url required"}, status_code=400)
+    # Une URL de PLAYLIST pure (`playlist?list=…`) : on la déplie et on enfile
+    # TOUTES ses vidéos (bornées), au lieu de n'en prendre que la première —
+    # `engine.add` force `--no-playlist` (#1099). `watch?v=X&list=Y` n'est PAS
+    # une playlist ici : la vidéo X est isolée par la voie normale ci-dessous.
+    if _is_playlist(url):
+        try:
+            return await engine.add_playlist(url, limit=PLAYLIST_ADD_MAX)
+        except AuthRequired as e:
+            return JSONResponse({"error": str(e), "auth_required": True}, status_code=401)
+        except EngineError as e:
+            return JSONResponse({"error": str(e)}, status_code=502)
     try:
         return await engine.add(url)
     except AuthRequired as e:
@@ -421,44 +435,15 @@ async def playlist(url: str, limite: int = 50):
     """
     if not url or not url.startswith(("https://", "http://")):
         return JSONResponse({"error": "url requise"}, status_code=400)
-    limite = max(1, min(int(limite or 50), 200))
-    args = ["yt-dlp", "--flat-playlist", "--dump-json",
-            "--playlist-end", str(limite), "--no-warnings"]
-    # Le coffre sert aussi ici : une playlist privee ne s'enumere pas sans lui.
-    args += engine._cookie_args()
-    args.append(url)
+    # MÊME énumération que l'ajout de playlist (#1099) : une seule logique
+    # `enumerate_playlist` sert la radio (cette route) ET /add. On préserve ici
+    # les codes de cette route — 504 au dépassement, 404 sur playlist vide.
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        # UN DELAI BORNE : une playlist enorme ou une passerelle qui traine ne
-        # doit pas retenir un worker indefiniment.
-        out, err = await asyncio.wait_for(proc.communicate(), timeout=90)
-    except asyncio.TimeoutError:
+        morceaux = await engine.enumerate_playlist(url, limite)
+    except PlaylistTimeout:
         return JSONResponse({"error": "enumeration trop longue"}, status_code=504)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-    morceaux = []
-    for ligne in out.decode("utf-8", "replace").splitlines():
-        ligne = ligne.strip()
-        if not ligne:
-            continue
-        try:
-            d = json.loads(ligne)
-        except ValueError:
-            continue
-        vid = d.get("id")
-        if not vid:
-            continue
-        # ON REND UNE ADRESSE CANONIQUE, pas celle que yt-dlp a en tete : la
-        # radio normalise ensuite, et deux ecritures de la meme video ne
-        # doivent pas produire deux pistes.
-        morceaux.append({"id": vid,
-                         "url": "https://www.youtube.com/watch?v=" + vid,
-                         "title": d.get("title") or ""})
-    if not morceaux:
-        detail = err.decode("utf-8", "replace")[:200] if err else ""
-        return JSONResponse({"error": "playlist vide ou illisible", "detail": detail},
+    except EngineError as e:
+        return JSONResponse({"error": "playlist vide ou illisible", "detail": str(e)},
                             status_code=404)
     return {"count": len(morceaux), "items": morceaux}
 
