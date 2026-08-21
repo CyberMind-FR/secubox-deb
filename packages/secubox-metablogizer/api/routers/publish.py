@@ -4,6 +4,7 @@
 """MetaBlogizer publisher wizard: upload -> version -> route -> cert -> backup."""
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import tempfile
@@ -18,7 +19,7 @@ from secubox_core.config import get_config
 
 from publish.content import extract_archive, ContentError
 from publish.routing import apply_route
-from publish.certs import provision_cert
+from publish.certs import provision_cert, is_wildcard_domain
 from publish.backup import export_site, import_site
 from webhook import git_commit_push
 
@@ -118,13 +119,17 @@ async def publish_wizard(
     except ContentError as e:
         raise HTTPException(400, f"unsafe upload: {e}")
 
-    steps["version"] = git_commit_push(site, f"publish {name} via wizard")
+    # Chaque étape ci-dessous shelle un sous-processus (git, nginx, publishctl).
+    # On les DÉCHARGE sur des threads (`to_thread`) : sinon elles bloquent la
+    # boucle asyncio pendant des minutes — la requête 504 au délai amont et TOUT
+    # le reste de l'API (dont /deploys du panneau, /sites) pendouille (#1105).
+    steps["version"] = await asyncio.to_thread(git_commit_push, site, f"publish {name} via wizard")
     # ORDRE VOULU : le domaine est enregistré AVANT la régénération, sans quoi
     # le générateur relit le disque et retombe sur `<nom>.gk2.secubox.in`.
     steps["domaine"] = enregistre_domaine(site, domain)
-    steps["vhost"] = publie_vhost(domain)
-    steps["route"] = apply_route(domain, BASE_PORT)
-    steps["cert"] = provision_cert(domain)
+    steps["vhost"] = await asyncio.to_thread(publie_vhost, domain)
+    steps["route"] = await asyncio.to_thread(apply_route, domain, BASE_PORT)
+    steps["cert"] = await _cert_step(domain)
 
     # `ok` EXIGE MAINTENANT QUE LE DOMAINE SOIT SERVI. Le compte rendu
     # d'origine se satisfaisait du contenu et de la route — un domaine sans
@@ -141,13 +146,28 @@ class RouteRequest(BaseModel):
     port: int = BASE_PORT
 
 
+async def _cert_step(domain: str) -> dict:
+    """Provisionne le certificat SANS bloquer la requête (#1105).
+
+    Un `*.gk2.secubox.in` réutilise le wildcard : c'est instantané, on l'attend
+    (sur un thread) pour rendre un état exact. Un domaine CUSTOM passe par
+    certbot HTTP-01, lent : on le lance en TÂCHE DE FOND et on rend la main tout
+    de suite — le certificat s'obtient pendant que la requête a déjà répondu, au
+    lieu de la faire 504. La boucle n'est jamais bloquée dans les deux cas."""
+    if is_wildcard_domain(domain):
+        return await asyncio.to_thread(provision_cert, domain)
+    asyncio.create_task(asyncio.to_thread(provision_cert, domain))
+    return {"mode": "provisioning",
+            "detail": "certbot en cours (domaine hors *.gk2) — le certificat arrive en tâche de fond"}
+
+
 @router.post("/publish/route")
 async def publish_route(req: RouteRequest, user=Depends(require_jwt)):
     """Route an already-created site's domain through the WAF and provision its
     cert, WITHOUT a content upload. Used by the secubox-publish hub so it never
     writes /etc/nginx or /etc/haproxy itself (it runs unprivileged)."""
-    route = apply_route(req.domain, req.port)
-    cert = provision_cert(req.domain)
+    route = await asyncio.to_thread(apply_route, req.domain, req.port)
+    cert = await _cert_step(req.domain)
     return {"ok": bool(route.get("route_ok")), "route": route, "cert": cert}
 
 
