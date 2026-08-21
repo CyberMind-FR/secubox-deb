@@ -173,6 +173,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
 	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
+	s.mux.HandleFunc("/urlshot/", s.servirUrlshot) // #1120 — vignette-snapshot d'URL
 	s.mux.HandleFunc("/lu/tout", s.toutLu)
 	s.mux.HandleFunc("/mod/", s.moderer)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
