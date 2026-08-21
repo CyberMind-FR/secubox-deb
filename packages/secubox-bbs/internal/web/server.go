@@ -233,7 +233,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// fil.html (la coquille newsroom du fil). Aucune collision de « corps » : seul
 	// thread.html le définit dans ce jeu.
 	if t, err := template.New("fil.html").Funcs(fn).
-		ParseFS(assets, "templates/newsroom.html", "templates/thread.html", "templates/fil.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/thread.html", "templates/fil.html"); err == nil {
 		pages["fil"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit fil : %w", err)
