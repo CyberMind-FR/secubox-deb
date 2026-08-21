@@ -77,10 +77,6 @@ func (s *Server) routesFichiers() {
 // est un simple numero, donc devinable.
 func (s *Server) servirFichier(w http.ResponseWriter, r *http.Request) {
 	v := s.qui(r)
-	if !v.Connecte {
-		http.Error(w, "reserve aux membres", http.StatusForbidden)
-		return
-	}
 	brut := strings.TrimPrefix(r.URL.Path, "/f/")
 	if i := strings.IndexByte(brut, '/'); i >= 0 {
 		brut = brut[:i]
@@ -100,6 +96,16 @@ func (s *Server) servirFichier(w http.ResponseWriter, r *http.Request) {
 	f, err := s.st.Fichier(id)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+
+	// ACCES : un fichier PUBLIC (cité dans un post public d'un fil public) est
+	// servi à tout venant — aussi accessible que le message qui le porte (#1114).
+	// Un fichier 'local' reste réservé aux membres : un fil non public ne doit
+	// pas voir ses images fuiter, et l'adresse `/f/NN` est un simple numéro
+	// devinable.
+	if !v.Connecte && f.Visibility != "public" {
+		http.Error(w, "reserve aux membres", http.StatusForbidden)
 		return
 	}
 

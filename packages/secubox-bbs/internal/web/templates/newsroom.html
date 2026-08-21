@@ -15,34 +15,11 @@
 <link rel="stylesheet" href="/static/newsroom.css?v={{.VCSS}}">
 </head><body>
 
-<header class="mast">
-  <div class="mast-top">
-    <span>nœud <b>{{.Hote}}</b></span>
-    <span class="l">◆ {{.Stats.Threads}} fils · {{.Stats.Posts}} messages</span>
-    <span class="r">● {{.Stats.Billets}} billets publiés</span>
-  </div>
-  <div class="mast-main">
-    <a class="logo" href="/"><span class="mark serif">{{.Initiale}}</span><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">la gazette souveraine</span></span></a>
-    <form class="drop" method="get" action="/rechercher">
-      <span class="ico" aria-hidden="true">⌕</span>
-      <input id="dropin" name="q" value="{{.Q}}" placeholder="Coller une source (URL) — ou rechercher…" aria-label="Déposer une source ou rechercher">
-      <span class="hintk">⌘K</span>
-    </form>
-    <div class="mast-actions">
-      {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
-      {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}
-      <button class="ibtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
-    </div>
-  </div>
-</header>
+{{template "avmast" .}}
 
 <div class="wrap">
   <aside class="rail">
-    <div class="pnl">
-      <h3>Rubriques <span class="n">{{len .Cats}}</span></h3>
-      <a class="rub on" href="/"><span class="g">🗞️</span><span class="nm">À la une</span><span class="ct">{{.Stats.Threads}}</span></a>
-      {{range .Cats}}<a class="rub{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="g">{{if .Profondeur}}↳{{else}}◆{{end}}</span><span class="nm">{{.Title}}</span><span class="ct">{{.Threads}}</span></a>{{end}}
-    </div>
+    {{template "avrubriques" .}}
     <div class="pnl">
       <h3>Types de source</h3>
       <div class="types">
@@ -77,10 +54,15 @@
         {{$cover := ""}}{{range $n.Medias}}{{if and (eq .Kind "image") (eq $cover "")}}{{$cover = .Ref}}{{end}}{{end}}
         {{$hasVid := false}}{{$hasAud := false}}{{$hasFile := false}}
         {{range $n.Medias}}{{if eq .Kind "video"}}{{$hasVid = true}}{{else if eq .Kind "audio"}}{{$hasAud = true}}{{else if eq .Kind "file"}}{{$hasFile = true}}{{end}}{{end}}
+        {{/* Type PRINCIPAL de la carte = ce que montre déjà l'icône .ccic. Les
+             badges .ccmed ne signalent que les médias SECONDAIRES : sans ce
+             garde-fou, une carte vidéo affichait 🎬 deux fois (icône + badge) —
+             le « doublon fantôme » (#1114). */}}
+        {{$prim := ""}}{{if or (eq .MediaKind "video") (eq .Source "video")}}{{$prim = "video"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$prim = "audio"}}{{end}}
         <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
           {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{end}}
           <div class="ccbody">
-            <div class="cctop"><span class="ccic">{{if eq .MediaKind "audio"}}🎧{{else if eq .MediaKind "video"}}🎬{{else if eq .Source "video"}}🎬{{else if eq .Source "podcast"}}🎧{{else if eq .Source "film"}}🎞️{{else if eq .Source "livre"}}📖{{else if .Source}}🔗{{else}}💬{{end}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if or $hasVid (eq .MediaKind "video") (eq .Source "video")}}<span class="ccmed">🎬</span>{{end}}{{if or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
+            <div class="cctop"><span class="ccic">{{if eq .MediaKind "audio"}}🎧{{else if eq .MediaKind "video"}}🎬{{else if eq .Source "video"}}🎬{{else if eq .Source "podcast"}}🎧{{else if eq .Source "film"}}🎞️{{else if eq .Source "livre"}}📖{{else if .Source}}🔗{{else}}💬{{end}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
             <h3 class="serif">{{.Title}}</h3>
             {{if $n.Apercu}}<p class="ccdek">{{lien $n.Apercu}}</p>{{end}}
             <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
@@ -190,3 +172,56 @@
 
 <script src="/static/newsroom.js?v={{.VCSS}}" defer></script>
 </body></html>{{end}}
+
+{{define "avmast"}}<header class="mast">
+  <div class="mast-top">
+    <span>nœud <b>{{.Hote}}</b></span>
+    <span class="l">◆ {{.Stats.Threads}} fils · {{.Stats.Posts}} messages</span>
+    <span class="r">● {{.Stats.Billets}} billets publiés</span>
+  </div>
+  <div class="mast-main">
+    <a class="logo" href="/"><img class="mark medaille" src="/static/bbs-logo.svg?v={{.VCSS}}" alt="{{.Initiale}}" width="44" height="44"><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">la gazette souveraine</span></span></a>
+    <form class="drop" method="get" action="/rechercher">
+      <span class="ico" aria-hidden="true">⌕</span>
+      <input id="dropin" name="q" value="{{.Q}}" placeholder="Coller une source (URL) — ou rechercher…" aria-label="Déposer une source ou rechercher">
+      <span class="hintk">⌘K</span>
+    </form>
+    <div class="mast-actions">
+      {{if and .V.Connecte .Mod.MP}}<a class="ibtn mpal{{if .NonLus}} on{{end}}" href="/mp" title="Messages privés{{if .NonLus}} — {{.NonLus}} non lu(s){{end}}" aria-label="Messages privés{{if .NonLus}}, {{.NonLus}} non lus{{end}}">✉️{{if .NonLus}}<span class="mpct" aria-hidden="true">{{.NonLus}}</span>{{end}}</a>{{end}}
+      {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
+      {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}
+      <button class="ibtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
+    </div>
+  </div>
+</header>{{end}}
+
+{{define "avrubriques"}}<div class="pnl">
+  <h3>Rubriques <span class="n">{{len .Cats}}</span></h3>
+  <a class="rub{{if eq .Vue "accueil"}} on{{end}}" href="/"><span class="g">🗞️</span><span class="nm">À la une</span><span class="ct">{{.Stats.Threads}}</span></a>
+  {{range .Cats}}<a class="rub{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="g">{{glypheSalon .Slug .Profondeur}}</span><span class="nm">{{.Title}}</span><span class="ct">{{.Threads}}</span></a>{{end}}
+</div>{{end}}
+
+{{define "avacces"}}<div class="pnl">
+  <h3>Accès</h3>
+  {{if .Mod.Media}}<a class="rub" href="/media"><span class="g">🎧</span><span class="nm">Médiathèque</span></a>{{end}}
+  {{if .Mod.Biblio}}<a class="rub" href="/biblio"><span class="g">📚</span><span class="nm">Bibliothèque</span><span class="ct">{{.Stats.Files}}</span></a>{{end}}
+  {{if .Mod.Billets}}<a class="rub" href="/billets"><span class="g">📝</span><span class="nm">Billets</span><span class="ct">{{.Stats.Billets}}</span></a>{{end}}
+  {{if and .V.Connecte .Mod.MP}}<a class="rub" href="/mp"><span class="g">✉️</span><span class="nm">Messages</span>{{if .NonLus}}<span class="ct">{{.NonLus}}</span>{{end}}</a>{{end}}
+  {{if .V.Sysop}}<a class="rub" href="/sysop"><span class="g">🛠️</span><span class="nm">Sysop</span></a>{{end}}
+</div>{{end}}
+
+{{/* Rail de droite PARTAGÉ (#1114) : billets + rédaction collaborative. fil.html,
+     coquillenr.html (compte…) le réutilisent — une seule source pour la colonne
+     de droite du skin newsroom. */}}
+{{define "avrail"}}<div class="pnl">
+  <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
+  {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
+  {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{lien .Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+  {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
+</div>
+<div class="pnl">
+  <h3>Rédaction collaborative <span class="n">{{len .Articles}}</span></h3>
+  {{range .Articles}}<a class="billet" href="/article/{{.ID}}"><b>✍️ {{.Title}}</b><div class="ex">{{len .CoAuteurs}} rédacteur(s) · {{.NbParts}} contribution(s)</div></a>
+  {{else}}<div class="teaser">Aucun article en cours.</div>{{end}}
+  {{if .V.Connecte}}<a class="billet" href="/article/nouveau"><b>＋ Nouvel article</b><div class="ex">à plusieurs mains → publié dans la gazette</div></a>{{end}}
+</div>{{end}}

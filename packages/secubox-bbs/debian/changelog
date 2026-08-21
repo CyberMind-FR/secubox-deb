@@ -1,3 +1,93 @@
+secubox-bbs (0.28.44-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel/flux : aperçu de carte nettoyé (resumeDeCorps) — plus de titre
+    répété, de chemin de média nu (/media/…, /f/…), de pied « Discuter ce
+    billet… » ni de lien markdown brut ; on lit une phrase.
+  * Masthead : le médaillon BBS (SVG animé, /static/bbs-logo.svg) remplace la
+    pastille « S ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:58:56 +0200
+
+secubox-bbs (0.28.43-1~bookworm1) bookworm; urgency=medium
+
+  * /mp adopte le skin newsroom : rail gauche = liste des conversations
+    (le « menu » du module), corps réutilisé, alerte MP dans le masthead.
+  * Correctif « ce message diverge de l'index » sur des fils entiers : un
+    `bbsctl ingest` lancé à la main en root créait des dossiers de fils et des
+    corps en root:root, intraversables/illisibles par le service. writeBody
+    adopte désormais le DOSSIER du fil (pas que le fichier) ; le postinst
+    ré-aligne l'existant mal-possédé sous content/ et files/.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:47:19 +0200
+
+secubox-bbs (0.28.42-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : fin du « doublon fantôme » — une carte vidéo n'affiche plus
+    l'icône 🎬 deux fois (icône de type + badge média). Les badges .ccmed ne
+    signalent désormais que les médias SECONDAIRES.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:38:13 +0200
+
+secubox-bbs (0.28.41-1~bookworm1) bookworm; urgency=medium
+
+  * /compte adopte le skin newsroom (coquille générique pagenr).
+  * Alerte messagerie privée (✉️ + compteur) en haut à droite du masthead
+    newsroom ; le lien /mp reste dans le menu Accès.
+  * PDF et pièces jointes non jouables : fiche fichier à icône générique au
+    lieu d'un <embed> peu fiable (repli toujours visible).
+  * Rail de droite newsroom factorisé (avrail), réutilisé par le fil et /compte.
+  * Tests : contrat newsroom du fil (/t/), 3 déclencheurs /f/envoi, fiches PDF.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 14:34:38 +0200
+
+secubox-bbs (0.28.40-1~bookworm1) bookworm; urgency=medium
+
+  * (0.28.40) Correctif : inclure layout.html dans le jeu « fil » pour le
+    partial {{vignette}}.
+  * La vue d'un FIL (/t/) adopte le skin newsroom AletheiaVox (#1114) : même
+    masthead + rail (rubriques/accès) que l'accueil et les salons, via des blocs
+    partagés (avmast/avrubriques/avacces) ; le corps du fil est RÉUTILISÉ tel
+    quel (messages, réponse, sysop, édition, médias). Fini la coquille layout
+    incohérente à gauche. Colonne droite « Derniers billets » ajoutée.
+  * Cartes du carrousel moins hautes (212×182, couverture 74px) — elles
+    prenaient trop de hauteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 12:13:39 +0000
+
+secubox-bbs (0.28.38-1~bookworm1) bookworm; urgency=medium
+
+  * PDF joints rendus INLINE dans un fil (#1102/#1114) : un /f/NN.pdf devient un
+    <embed> (servi nosniff) + lien « Ouvrir le PDF » ; la zone de dépôt accepte
+    désormais application/pdf. Médias bornés (.jointe : largeur 100 %, vidéo
+    ≤ 70vh) — plus de débordement/coupe.
+  * Émojis de salon jolis et distincts dans le rail newsroom (glypheSalon,
+    stable par slug) au lieu du ◆ générique ; un sous-salon garde ↳.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:57:33 +0000
+
+secubox-bbs (0.28.37-1~bookworm1) bookworm; urgency=medium
+
+  * Intégrité : fin des fausses alertes « ce message diverge de l'index »
+    (#1114). Le hash indexé est celui de la forme NORMALISÉE (Reply/Edit/ingest
+    stockent sha256(normaliseCorps)), mais Body() validait sha256(brut) — tout
+    message à espace/retour final ou CRLF « divergeait » à tort, sans aucune
+    corruption. Body() valide désormais la même forme normalisée ; une vraie
+    altération reste détectée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:54:10 +0000
+
+secubox-bbs (0.28.36-1~bookworm1) bookworm; urgency=medium
+
+  * Médias publics pour les anonymes (#1114) : un /f/NN cité dans un post
+    PUBLIC devient 'public' (à l'écriture + backfill au démarrage) et
+    servirFichier le sert à tout venant — le média est aussi accessible que le
+    message. Un fil local/privé garde ses pièces réservées aux membres.
+  * Colonne droite « Derniers billets » rétablie dans les salons/sous-forums :
+    poseRail() partagée par l'accueil ET les vues salon (elle manquait hors
+    accueil, la coquille newsroom étant pourtant la même).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 11:49:46 +0000
+
 secubox-bbs (0.28.35-1~bookworm1) bookworm; urgency=medium
 
   * Cardlets carrés + uniformes (216×216, #1104) : couverture bornée (92px),

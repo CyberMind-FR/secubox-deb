@@ -49,6 +49,10 @@ a{color:inherit;text-decoration:none}
 .logo .mark{width:44px;height:44px;border-radius:12px;border:2px solid var(--ink);display:grid;place-items:center;
   font-family:"Fraunces","Cinzel";font-weight:700;font-size:1.3rem;background:var(--gold-s);position:relative}
 .logo .mark::after{content:"◆";position:absolute;bottom:-6px;right:-6px;font-size:.7rem;color:var(--gold)}
+/* Le médaillon SVG porte déjà son anneau : pas de cadre, pas de fond, pas de
+   losange (#1114). */
+.logo img.medaille{border:none;background:none;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
+.logo img.medaille::after{content:none}
 .logo h1{margin:0;font-family:"Fraunces","Cinzel";font-size:1.45rem;font-weight:700;letter-spacing:.02em;line-height:1}
 .logo .sub{font-family:"JetBrains Mono";font-size:.56rem;letter-spacing:.28em;color:var(--dim);text-transform:uppercase}
 .drop{flex:1;max-width:520px;margin:0 auto;position:relative}
@@ -64,6 +68,14 @@ a{color:inherit;text-decoration:none}
 .me-chip small{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
 .ibtn{width:40px;height:40px;border-radius:11px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;display:grid;place-items:center;font-size:1rem;transition:.2s;box-shadow:var(--shadow)}
 .ibtn:hover{border-color:var(--cyan);color:var(--cyan)}
+/* Alerte messagerie privée (#1114) : point d'entrée /mp en haut à droite du
+   masthead. Au repos = un bouton d'icône ordinaire ; en « mode alerte » (.on,
+   des non-lus) = liseré coral + pastille de compteur. */
+.mpal{position:relative;text-decoration:none}
+.mpal.on{border-color:var(--coral);color:var(--coral)}
+.mpal .mpct{position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;
+  background:var(--coral);color:#fff;font-family:"JetBrains Mono";font-size:.62rem;font-weight:700;line-height:17px;
+  text-align:center;box-shadow:0 0 0 2px var(--panel)}
 .btn{padding:8px 15px;border-radius:10px;font-family:"Fraunces","Cinzel";font-weight:600;font-size:.78rem;cursor:pointer;border:1px solid var(--line);background:var(--panel);transition:.16s;display:inline-flex;align-items:center;gap:7px;color:inherit}
 .btn:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
 .btn.primary{background:var(--sky);color:#fff;border-color:var(--sky)} .btn.primary:hover{background:var(--cyan);border-color:var(--cyan)}
@@ -81,6 +93,14 @@ a{color:inherit;text-decoration:none}
 .rub:hover{background:var(--soft)} .rub.on{border-left-color:var(--sky);background:var(--sky-s)}
 .rub .g{width:24px;text-align:center;font-size:1rem;flex:none} .rub .nm{flex:1;font-weight:600;font-size:.86rem}
 .rub .ct{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim)} .rub.on .ct{color:var(--sky);font-weight:700}
+/* Conversation privee dans le rail (#1114) : avatar + nom + dernier extrait. */
+.rub.conv{align-items:center}
+.rub.conv .av{width:30px;height:30px;border-radius:50%;background:var(--sky);color:#fff;display:grid;place-items:center;
+  font-family:"Fraunces","Cinzel";font-weight:700;font-size:.74rem;overflow:hidden;flex:none}
+.rub.conv .av img{width:100%;height:100%;object-fit:cover}
+.rub.conv .nm{display:flex;flex-direction:column;min-width:0;font-weight:600}
+.rub.conv .nm .ap{font-weight:400;font-size:.7rem;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rub.conv .ct{background:var(--coral);color:#fff;border-radius:999px;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px}
 .types{display:flex;flex-wrap:wrap;gap:7px;padding:11px 14px}
 .type{display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-size:.73rem;font-weight:600;transition:.15s}
 .type:hover{border-color:var(--line-2);transform:translateY(-1px)} .type.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
@@ -273,7 +293,7 @@ a{color:inherit;text-decoration:none}
 .cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
 .cartrack::-webkit-scrollbar{display:none}
 .cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
-.ccard{--tone:var(--sky);flex:0 0 auto;width:216px;height:216px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
+.ccard{--tone:var(--sky);flex:0 0 auto;width:212px;height:182px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
   background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;
   box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
 .ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
@@ -283,7 +303,7 @@ a{color:inherit;text-decoration:none}
 .ccard[data-k="podcast"]{--tone:var(--amber)}
 .ccard[data-k="video"]{--tone:var(--coral)}
 /* média en cardlet (#1104) : couverture (vignette de flux / play vidéo) + pastilles */
-.cccover{position:relative;display:block;height:92px;background:var(--soft);overflow:hidden}
+.cccover{position:relative;display:block;height:74px;background:var(--soft);overflow:hidden}
 .cccover img{width:100%;height:100%;object-fit:cover;display:block}
 .cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.5rem;
   text-shadow:0 1px 6px rgba(0,0,0,.6);background:rgba(20,45,60,.18)}

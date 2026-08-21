@@ -75,9 +75,10 @@ type Fichier struct {
 	Owner   int64
 	Path    string // relatif a files/ — DERIVE DE L'ID, jamais du nom fourni
 	Name    string // nom d'origine, pour l'affichage et le telechargement
-	Size    int64
-	Mime    string
-	Created int64
+	Size       int64
+	Mime       string
+	Created    int64
+	Visibility string // 'local' (membres) | 'public' (servi à tout venant, #1114)
 }
 
 // EstImage, EstAudio, EstVideo : de quoi choisir la balise a l'affichage.
@@ -179,6 +180,10 @@ func (s *Store) DeposeFichier(owner int64, nom, mimeAnnonce string, contenu io.R
 		s.db.Exec(`DELETE FROM files WHERE id = ?`, id)
 		return f, err
 	}
+	// Le dossier du mois AVANT le fichier : cree en root par un depot lance a la
+	// main, il serait intraversable par le service (meme cause que les corps de
+	// fils, #1114).
+	adopteProprietaireDuDossier(filepath.Dir(abs))
 	adopteProprietaireDuDossier(abs)
 
 	return Fichier{ID: id, Owner: owner, Path: rel, Name: nom,
@@ -189,10 +194,31 @@ func (s *Store) DeposeFichier(owner int64, nom, mimeAnnonce string, contenu io.R
 func (s *Store) Fichier(id int64) (Fichier, error) {
 	var f Fichier
 	err := s.db.QueryRow(`
-		SELECT id, owner_id, path, name, size, mime, created_at
+		SELECT id, owner_id, path, name, size, mime, created_at, visibility
 		  FROM files WHERE id = ? AND deleted_at IS NULL AND path <> ''`, id).
-		Scan(&f.ID, &f.Owner, &f.Path, &f.Name, &f.Size, &f.Mime, &f.Created)
+		Scan(&f.ID, &f.Owner, &f.Path, &f.Name, &f.Size, &f.Mime, &f.Created, &f.Visibility)
 	return f, err
+}
+
+// MarqueFichiersPublics passe des fichiers en visibilité PUBLIQUE — appelé
+// quand leurs refs `/f/NN` apparaissent dans un post PUBLIC d'un fil public
+// (#1114) : le média devient alors aussi accessible que le message qui le
+// porte. Idempotent, et ne dé-publie jamais (on n'élargit que l'accès, on ne le
+// restreint pas ici — un fichier reste public tant que le contenu l'est).
+func (s *Store) MarqueFichiersPublics(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	ph := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		ph[i] = "?"
+		args[i] = id
+	}
+	_, err := s.db.Exec(
+		"UPDATE files SET visibility='public' WHERE id IN ("+strings.Join(ph, ",")+") AND visibility <> 'public'",
+		args...)
+	return err
 }
 
 // CheminFichier rend le chemin ABSOLU d'une piece jointe.

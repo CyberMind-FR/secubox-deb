@@ -193,3 +193,28 @@ func TestLeTypeAnnonceNePeutPasElargirLaListeBlanche(t *testing.T) {
 		t.Errorf("mime = %q, attendu audio/ogg (defaut du conteneur)", f.Mime)
 	}
 }
+
+func TestMarqueFichiersPublicsRendLeFichierPublic(t *testing.T) {
+	// #1114 — un fichier déposé est 'local' ; une fois cité dans un post public,
+	// MarqueFichiersPublics le passe 'public' et Fichier() le reflète.
+	s, uid := magasinFichiers(t)
+	f, err := s.DeposeFichier(uid, "photo.png", "image/png", bytes.NewReader(pngValide))
+	if err != nil {
+		t.Fatalf("dépôt : %v", err)
+	}
+	got, _ := s.Fichier(f.ID)
+	if got.Visibility != "local" {
+		t.Fatalf("visibilité initiale = %q, attendu local", got.Visibility)
+	}
+	if err := s.MarqueFichiersPublics([]int64{f.ID}); err != nil {
+		t.Fatalf("MarqueFichiersPublics : %v", err)
+	}
+	got, _ = s.Fichier(f.ID)
+	if got.Visibility != "public" {
+		t.Errorf("après marquage = %q, attendu public", got.Visibility)
+	}
+	// idempotent : re-marquer ne casse rien
+	if err := s.MarqueFichiersPublics([]int64{f.ID}); err != nil {
+		t.Errorf("re-marquage : %v", err)
+	}
+}
