@@ -205,6 +205,13 @@ func TestMediaCacheHandlerServesHit(t *testing.T) {
 	if v := res.Header.Get("X-SecuBox-Cache"); v != "hit" {
 		t.Fatalf("expected X-SecuBox-Cache: hit, got %q", v)
 	}
+	// Conseiller de fraîcheur (#1092) : un hit annonce l'âge et le TTL restant.
+	if res.Header.Get("X-SecuBox-Cache-Age") == "" {
+		t.Fatalf("un hit doit porter X-SecuBox-Cache-Age")
+	}
+	if res.Header.Get("X-SecuBox-Cache-TTL") == "" {
+		t.Fatalf("un hit doit porter X-SecuBox-Cache-TTL")
+	}
 }
 
 // --- TestMediaCacheNoStoreSkipped -----------------------------------------------
@@ -707,5 +714,37 @@ func TestMediaCacheServesValidIdentityText(t *testing.T) {
 	}
 	if ce := hdr.Get("Content-Encoding"); ce != "" {
 		t.Fatalf("identity body must have no Content-Encoding, got %q", ce)
+	}
+}
+
+// TestMediaCachePurge : SIGUSR1 → Purge vide tout (mémoire + disque) et le
+// cache refonctionne ensuite — le levier de fraîcheur après déploiement d'assets.
+func TestMediaCachePurge(t *testing.T) {
+	dir := t.TempDir()
+	mc := NewMediaCache(dir)
+	css := "http://ex/style.css"
+	js := "http://ex/app.js"
+	mc.MaybeStore(makeGET(css), makeResp(200, "text/css", 3600, []byte("BODY_CSS")), []byte("BODY_CSS"), css)
+	mc.MaybeStore(makeGET(js), makeResp(200, "application/javascript", 3600, []byte("BODY_JS")), []byte("BODY_JS"), js)
+	if _, _, ok := mc.Get(css, ""); !ok {
+		t.Fatal("précondition : la CSS devait être en cache")
+	}
+	n, err := mc.Purge()
+	if err != nil {
+		t.Fatalf("purge : %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("purge a effacé %d entrées, attendu 2", n)
+	}
+	if _, _, ok := mc.Get(css, ""); ok {
+		t.Error("après purge : la CSS ne doit plus être servie du cache")
+	}
+	if _, _, ok := mc.Get(js, ""); ok {
+		t.Error("après purge : le JS ne doit plus être servi du cache")
+	}
+	// Le cache refonctionne (les shards se recréent au prochain stockage).
+	mc.MaybeStore(makeGET("http://ex/img.png"), makeResp(200, "image/png", 3600, []byte("PNG")), []byte("PNG"), "http://ex/img.png")
+	if _, _, ok := mc.Get("http://ex/img.png", ""); !ok {
+		t.Error("le cache doit refonctionner après purge")
 	}
 }

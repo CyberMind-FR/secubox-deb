@@ -24,6 +24,7 @@ horodatages que le reste de la chaîne surveille.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -85,6 +86,31 @@ def synchronise(site: Path) -> dict:
                 "detail": (e.stderr or e.stdout or "").strip()[:200]}
 
 
+def purger_cache_waf() -> dict:
+    """Rafraîchit le cache média du WAF après un changement de contenu.
+
+    Le cache de sbxwaf (TTL 1 h) garde CSS/JS/images/polices ; un fichier
+    ramené par `git reset --hard` dont l'amont ne change pas l'ETag resterait
+    servi périmé jusqu'à la fin du TTL — le « vieux skin » après synchro. On
+    demande donc une purge, mais SEULEMENT quand un site a réellement bougé
+    (l'appelant ne nous invoque pas sur un tour « rien de neuf »).
+
+    BEST-EFFORT : la synchro a réussi même si la purge échoue (WAF absent, sudo
+    refusé). On ne fait jamais échouer un `git reset` réussi sur un défaut de
+    cache — on le SIGNALE dans le bilan, sans plus. Le droit est un unique verbe
+    accordé à `secubox` dans /etc/sudoers.d/secubox-waf.
+    """
+    if not shutil.which("sudo") or not Path("/usr/sbin/wafctl").exists():
+        return {"etat": "indisponible"}
+    try:
+        subprocess.run(["sudo", "-n", "/usr/sbin/wafctl", "purge-cache"],
+                       capture_output=True, text=True, timeout=DELAI_GIT, check=True)
+        return {"etat": "purge"}
+    except subprocess.SubprocessError as e:
+        detail = getattr(e, "stderr", None) or str(e)
+        return {"etat": "echec", "detail": detail.strip()[:200]}
+
+
 def main(argv: list[str]) -> int:
     cibles = argv[1:]
     try:
@@ -103,8 +129,13 @@ def main(argv: list[str]) -> int:
     changes = [r for r in out if r["etat"] == "mis-a-jour"]
     echecs = [r for r in out if r["etat"] in ("echec", "expire")]
 
-    print(json.dumps({"sites": out, "mis_a_jour": len(changes),
-                      "echecs": len(echecs)}, ensure_ascii=False, indent=2))
+    # Purge du cache WAF UNIQUEMENT si un contenu a changé (jamais sur « rien de
+    # neuf » : purger à chaque tour de minuterie viderait sans cesse le cache de
+    # toute la board).
+    bilan = {"sites": out, "mis_a_jour": len(changes), "echecs": len(echecs)}
+    if changes:
+        bilan["cache_waf"] = purger_cache_waf()
+    print(json.dumps(bilan, ensure_ascii=False, indent=2))
     # UN ECHEC EST UN ECHEC, meme si d'autres sites ont reussi : une minuterie
     # qui rend toujours 0 ne se voit jamais dans `systemctl --failed`.
     return 1 if echecs else 0

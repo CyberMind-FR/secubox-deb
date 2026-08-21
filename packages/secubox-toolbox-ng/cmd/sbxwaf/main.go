@@ -44,9 +44,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-toolbox-ng/internal/forge"
@@ -695,6 +697,12 @@ func (s *Server) handler() http.Handler {
 					}
 				}
 				w.Header().Set("X-SecuBox-Cache", "hit")
+				// Conseiller de fraîcheur (#1092) : âge + TTL restant, pour voir en
+				// test si l'on regarde du cache et depuis combien de temps.
+				if age, ttl, ok := s.mediaCache.Freshness(vhostCacheURL); ok {
+					w.Header().Set("X-SecuBox-Cache-Age", strconv.FormatInt(age, 10))
+					w.Header().Set("X-SecuBox-Cache-TTL", strconv.FormatInt(ttl, 10))
+				}
 				w.Header().Set("X-SecuBox-WAF", "inspected")
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write(cachedBody)
@@ -715,6 +723,10 @@ func (s *Server) handler() http.Handler {
 			// body for MaybeStore.  The client always receives the full body —
 			// we only buffer up to maxObj bytes for the cache and discard the rest
 			// (the real body still flows through to the client).
+			// Conseiller de fraîcheur (#1092) : une réponse cacheable non trouvée
+			// en cache est un « miss » — l'annoncer explicitement plutôt que par
+			// l'absence d'en-tête, pour lever le doute en test à l'aveugle.
+			w.Header().Set("X-SecuBox-Cache", "miss")
 			cw := &cachingResponseWriter{
 				ResponseWriter: w,
 				maxCapture:     s.mediaCache.maxObj,
@@ -1196,6 +1208,25 @@ func main() {
 		Addr:              *listen,
 		Handler:           srv.handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// SIGUSR1 : PURGE du cache média — fraîcheur immédiate après un déploiement
+	// d'assets. Un `?v=` sur l'adresse suffit pour un asset versionné (nouvelle
+	// clé de cache) ; le signal couvre les assets NON versionnés (le « vieux
+	// skin » qui persistait jusqu'à la fin du TTL d'une heure). À brancher dans
+	// le flux de déploiement : `systemctl kill -s SIGUSR1 secubox-waf-ng`.
+	if srv.mediaCache != nil {
+		purge := make(chan os.Signal, 1)
+		signal.Notify(purge, syscall.SIGUSR1)
+		go func() {
+			for range purge {
+				if n, err := srv.mediaCache.Purge(); err != nil {
+					log.Printf("sbxwaf: purge du cache média (SIGUSR1) : %d effacées, erreur disque : %v", n, err)
+				} else {
+					log.Printf("sbxwaf: cache média purgé sur SIGUSR1 — %d entrées effacées", n)
+				}
+			}
+		}()
 	}
 
 	log.Printf("sbxwaf: listening on %s", *listen)

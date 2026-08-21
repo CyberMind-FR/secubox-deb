@@ -331,6 +331,63 @@ func (m *MediaCache) Invalide(url string) {
 	_ = os.Remove(metaPath)
 }
 
+// Purge VIDE tout le cache — mémoire ET disque. Sert à forcer la fraîcheur
+// juste après un déploiement d'assets : une feuille/JS mis à jour dont l'amont
+// ne change PAS l'ETag resterait sinon masqué jusqu'à la fin de son TTL (1 h) —
+// exactement le « vieux skin » observé sur billets/anibal-amiot. Un `?v=` sur
+// l'adresse contourne le cache (nouvelle clé), mais un asset non versionné, non.
+// Déclenché par SIGUSR1 (voir main) pour brancher un hook de déploiement.
+// Rend le nombre d'entrées effacées. Fail-open : les erreurs disque sont dites,
+// jamais fatales.
+func (m *MediaCache) Purge() (int, error) {
+	if m == nil {
+		return 0, nil
+	}
+	m.mu.Lock()
+	n := len(m.index)
+	m.index = make(map[string]*cacheEntry)
+	m.total = 0
+	m.mu.Unlock()
+	// Efface les shards sur disque ; Set() recrée le sien au prochain stockage.
+	entries, err := os.ReadDir(m.dir)
+	if err != nil {
+		return n, err
+	}
+	var premiereErr error
+	for _, e := range entries {
+		if e.IsDir() {
+			if rmErr := os.RemoveAll(filepath.Join(m.dir, e.Name())); rmErr != nil && premiereErr == nil {
+				premiereErr = rmErr
+			}
+		}
+	}
+	return n, premiereErr
+}
+
+// Freshness renvoie, pour une URL en cache, son ÂGE (secondes depuis la mise en
+// cache) et le TTL RESTANT (secondes avant expiration). Sert l'en-tête
+// consultatif X-SecuBox-Cache-Age / -TTL (#1092) : en test à l'aveugle, savoir
+// d'un coup d'œil dans les devtools si une réponse vient du cache et depuis
+// combien de temps — sans quoi on soupçonne le cache à tort quand on voit du
+// périmé. `ok=false` si l'entrée est absente (ce sera un « miss »).
+func (m *MediaCache) Freshness(url string) (age, remaining int64, ok bool) {
+	if m == nil {
+		return 0, 0, false
+	}
+	now := m.nowFn().Unix()
+	m.mu.Lock()
+	e, found := m.index[cacheKey(url)]
+	m.mu.Unlock()
+	if !found {
+		return 0, 0, false
+	}
+	if e.exp == 0 { // entrée sans expiration (rare) : âge inconnu, TTL infini
+		return 0, -1, true
+	}
+	// exp = instant de stockage + TTL ; l'âge s'en déduit sans horodater à part.
+	return now - (e.exp - mediaCacheTTL), e.exp - now, true
+}
+
 func (m *MediaCache) Get(url, acceptEncoding string) (body []byte, hdr http.Header, ok bool) {
 	key := cacheKey(url)
 	now := m.nowFn().Unix()
