@@ -1,3 +1,10 @@
+secubox-billets (0.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : cardlets sans image portent désormais une ligne d'aperçu
+    (résumé) — plus de cardlets à moitié vides (#1104). newsroom.css?v=nr4.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 09:44:54 +0000
+
 secubox-billets (0.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Aperçu d'URL automatique (#1104) : une URL de RÉFÉRENCE (source) qui n'est
