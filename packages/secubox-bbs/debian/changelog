@@ -1,3 +1,20 @@
+secubox-bbs (0.28.31-1~bookworm1) bookworm; urgency=medium
+
+  * Newsroom : carrousel « À la une » en tête d'accueil (#1104) — bande
+    horizontale des derniers dossiers (cartes compactes typées, teinte
+    d'accent, glyphe, titre, auteur, date). Scroll-snap, flèches, points,
+    clavier, tactile ; thème hérité. Réutilise .News (aucun backend), le fil
+    vertical et ses filtres restent en dessous. CSS/JS externes, data-*.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:59:49 +0000
+
+secubox-bbs (0.28.30-1~bookworm1) bookworm; urgency=medium
+
+  * Pièces jointes : accepte le PDF (application/pdf → .pdf, #1102). Rendu
+    nativement, servi inline avec nosniff. Complète #1094 côté BBS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 21 Aug 2026 08:36:21 +0000
+
 secubox-bbs (0.28.29-1~bookworm1) bookworm; urgency=medium
 
   * Publication billets : la pièce jointe part avec son VRAI Content-Type (et

@@ -56,7 +56,32 @@
   </aside>
 
   <main class="feed">
-    <div class="feedhead"><h2 class="serif">À la une</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
+    {{if .News}}
+    <section class="caroussel" aria-label="À la une — carrousel des derniers dossiers">
+      <div class="carhead"><h2 class="serif">À la une</h2><span class="sub">glissez, flèches ◀ ▶ ou ← →</span>
+        <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Dossier précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Dossier suivant">▶</button></span>
+      </div>
+      <div class="cartrack" id="cartrack" tabindex="0" role="list">
+        {{range .News}}
+        {{if .Feed}}{{$f := .Feed}}
+        <a class="ccard" role="listitem" data-k="podcast" href="/media#f{{$f.ID}}">
+          <div class="cctop"><span class="ccic">{{$f.Glyphe}}</span><span class="cctype">médiathèque</span></div>
+          <h3 class="serif">{{$f.Titre}}</h3>
+          <div class="ccwho">{{len $f.Episodes}} épisode(s)</div>
+        </a>
+        {{else}}{{with .Fil}}
+        <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
+          <div class="cctop"><span class="ccic">{{if eq .MediaKind "audio"}}🎧{{else if eq .MediaKind "video"}}🎬{{else if eq .Source "video"}}🎬{{else if eq .Source "podcast"}}🎧{{else if eq .Source "film"}}🎞️{{else if eq .Source "livre"}}📖{{else if .Source}}🔗{{else}}💬{{end}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span></div>
+          <h3 class="serif">{{.Title}}</h3>
+          <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
+        </a>
+        {{end}}{{end}}
+        {{end}}
+      </div>
+      <div class="cardots" id="cardots" aria-hidden="true"></div>
+    </section>
+    {{end}}
+    <div class="feedhead"><h2 class="serif">Tous les dossiers</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
     {{range .News}}
     {{if .Feed}}{{$f := .Feed}}
     <article class="dossier" data-k="{{$f.Type}}">
