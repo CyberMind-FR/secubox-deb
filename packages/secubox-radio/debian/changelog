@@ -1,9 +1,9 @@
-secubox-radio (0.1.16-1~bookworm1) bookworm; urgency=medium
+secubox-radio (0.1.17-1~bookworm1) bookworm; urgency=medium
 
-  * Micro-lecteur : l'icône 📻 coiffe la barre média (à la place d'un libellé).
-    (#1131y)
+  * Revert #1131y (icône 📻 dans la barre micro) : le retrait de l'en-tête du
+    widget rendait la cardlet radio invisible côté BBS. Retour à l'état visible.
 
- -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:36:44 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:44:16 +0200
 
 secubox-radio (0.1.15-1~bookworm1) bookworm; urgency=medium
 
