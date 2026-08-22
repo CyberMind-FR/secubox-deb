@@ -1,3 +1,11 @@
+secubox-radio (0.1.14-1~bookworm1) bookworm; urgency=medium
+
+  * L'antenne : saisie EN HAUT, messages qui défilent dessous et s'ESTOMPENT
+    (effet d'effacement ~15 s) — une antenne vive et éphémère plutôt qu'un
+    journal. (#1131v)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:24:10 +0200
+
 secubox-radio (0.1.13-1~bookworm1) bookworm; urgency=medium
 
   * Micro-lecteur affiné (#1131u) : boutons de transport en tête (barre), texte
