@@ -240,8 +240,9 @@ body.micro .microlast { color: var(--dim); }
 .detach { display: none; }
 body.micro .detach { display: grid; place-items: center; }
 
-/* Titre À DROITE de la vignette, même ligne (#1131af) : le micro-lecteur est
-   étroit, mais on FORCE la rangée — sinon la media query `max-width:34rem`
-   empile vignette puis titre. */
-body.micro .lecteur .bloc { flex-direction: row; align-items: flex-start; }
-body.micro .cadre { width: 3rem; height: 3rem; aspect-ratio: auto; }
+/* Titre À DROITE de la vignette, même ligne (#1131af) — dans TOUT mode compact
+   (/mini ET /micro) : ces vues sont étroites, mais on FORCE la rangée, sinon la
+   media query `max-width:34rem` empile vignette puis titre. */
+body.mini .lecteur .bloc { flex-direction: row; align-items: flex-start; }
+body.mini .cadre { aspect-ratio: auto; }
+body.micro .cadre { width: 3rem; height: 3rem; }
