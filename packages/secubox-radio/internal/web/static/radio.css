@@ -231,7 +231,3 @@ body.micro .microline { display: block; font-size: .72rem; line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 body.micro .micronext { color: var(--violet-clair); }
 body.micro .microlast { color: var(--dim); }
-
-/* 📻 dans la barre média du micro-lecteur (#1131y) : l'icône coiffe les boutons,
-   à la place de tout libellé « RADIO ». */
-body.micro .cmd::before { content: "📻"; font-size: 14px; margin-right: .15rem; opacity: .9; line-height: 1; }
