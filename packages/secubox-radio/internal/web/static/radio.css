@@ -246,3 +246,6 @@ body.micro .detach { display: grid; place-items: center; }
 body.mini .lecteur .bloc { flex-direction: row; align-items: flex-start; }
 body.mini .cadre { aspect-ratio: auto; }
 body.micro .cadre { width: 3rem; height: 3rem; }
+
+/* Ligne de STATUT emoji dans l'espace libre du micro (#1131ag). */
+body.micro .microstatus { color: var(--mint); font-size: .68rem; }

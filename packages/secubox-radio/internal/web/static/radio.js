@@ -69,7 +69,7 @@
   var file = $('file'), chat = $('chat'), dire = $('dire');
   var attente = $('attente');
   var estMicro = document.documentElement.classList.contains('micro');
-  var microNext = $('micro-next'), microLast = $('micro-last');
+  var microNext = $('micro-next'), microLast = $('micro-last'), microStatus = $('micro-status');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
   // ── LE VOLUME ─────────────────────────────────────────────────────────────
@@ -251,6 +251,14 @@
       for (var z = 0; z < vues.length; z++) { if (vues[z].rel === 1) { nx = vues[z].p; break; } }
       if (!nx) for (var z2 = 0; z2 < vues.length; z2++) { if (vues[z2].rel > 0) { nx = vues[z2].p; break; } }
       microNext.textContent = nx ? ('→ ' + (nx.titre || nx.source)) : '';
+    }
+    // #1131ag : STATUT en emojis dans l'espace libre — direct, nombre de titres
+    // en rotation, et l'état de la piste en cours (en cache ✅ / à venir ⏳).
+    if (estMicro && microStatus) {
+      var enc = 0, att = 0;
+      l.forEach(function (q) { if (q.en_cache) enc++; else if (!q.ecarte) att++; });
+      microStatus.textContent = '🔴 en direct · 🎶 ' + l.length +
+        ' · ✅ ' + enc + (att ? ' · ⏳ ' + att : '');
     }
   }
 
