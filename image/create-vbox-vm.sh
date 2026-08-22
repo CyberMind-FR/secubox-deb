@@ -169,6 +169,10 @@ else
     VDI="${IMAGE%.*}.vdi"
     if [[ ! -f "$VDI" || "$IMAGE" -nt "$VDI" ]]; then
         log "Conversion raw → VDI…"
+        # Réécrire le fichier lui donne un NOUVEL UUID : on retire d'abord toute
+        # inscription périmée de ce chemin du registre média, sinon VirtualBox
+        # refuse au boot (« UUID … does not match … media registry »).
+        VBoxManage closemedium disk "$VDI" &>/dev/null || true
         rm -f "$VDI"
         VBoxManage convertfromraw "$IMAGE" "$VDI" --format VDI
     else
@@ -178,12 +182,21 @@ else
 fi
 ok "Disque VDI : $VDI"
 
+# Garde-fou : purge toute inscription périmée de ce chemin avant l'attache. Le
+# storageattach ré-enregistre le médium avec son UUID réel — plus de conflit
+# d'UUID hérité d'un ancien run ou d'un autre script.
+VBoxManage closemedium disk "$VDI" &>/dev/null || true
+
 # ── VM existante ─────────────────────────────────────────────────
 if VBoxManage showvminfo "$VM_NAME" &>/dev/null; then
     if [[ "$FORCE" -eq 1 ]]; then
         log "Suppression de la VM existante « $VM_NAME »…"
         VBoxManage controlvm "$VM_NAME" poweroff &>/dev/null || true
         sleep 1
+        # Détacher le disque AVANT --delete : le VDI vit dans output/ et est
+        # partagé entre runs ; --delete supprimerait sinon le fichier image.
+        VBoxManage storageattach "$VM_NAME" --storagectl "SATA" \
+            --port 0 --device 0 --medium none &>/dev/null || true
         VBoxManage unregistervm "$VM_NAME" --delete &>/dev/null || true
     else
         err "La VM « $VM_NAME » existe déjà — relance avec --force pour la recréer."
