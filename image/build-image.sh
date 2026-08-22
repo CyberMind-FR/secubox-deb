@@ -1678,9 +1678,11 @@ if [[ "${BOARD}" == "vm-arm64" ]]; then
   ok "QCOW2 créé : ${QCOW2_FILE}"
 fi
 
-# Compression
-log "  Compression gzip..."
-gzip -9 -f "${IMG_FILE}"
+# Compression — pigz (parallèle, tous les cœurs) si présent, sinon gzip.
+# gzip -9 mono-thread sur une image de 8 Go faisait dépasser le délai du job
+# CI (#1131e). pigz produit un .gz strictement compatible.
+log "  Compression..."
+if command -v pigz >/dev/null 2>&1; then pigz -9 -f "${IMG_FILE}"; else gzip -9 -f "${IMG_FILE}"; fi
 IMG_GZ="${IMG_FILE}.gz"
 sha256sum "${IMG_GZ}" > "${IMG_GZ}.sha256"
 
