@@ -1,3 +1,11 @@
+secubox-hub (1.9.8-1~bookworm1) bookworm; urgency=medium
+
+  * Bandeau de santé v1.3.1 : ne s'injecte PLUS dans un lecteur incorporé —
+    ni la cardlet radio /micro (iframe) ni la fenêtre détachée /mini. Il reste
+    sur la page directe d'un service (/). (#1131t)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:17:42 +0200
+
 secubox-hub (1.9.7-1~bookworm1) bookworm; urgency=high
 
   * CORRECTIF #1081 : downgrade HTTPS→HTTP:9080 sur les redirections nginx.
