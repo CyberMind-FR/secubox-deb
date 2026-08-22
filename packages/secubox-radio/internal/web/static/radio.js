@@ -162,17 +162,35 @@
     if (Math.abs(ecart) > DERIVE_MAX) ecran.currentTime = offset;
   }
 
+  // poseFile : la playlist SEMI-ROTATIVE en FENÊTRE — 2 pistes déjà jouées, la
+  // piste en cours (en gras renforcé), 3 à venir (#1131i). La liste tourne :
+  // « avant » et « après » s'enroulent. Sur une petite playlist on montre tout,
+  // centré sur le courant, sans fenêtre.
   function poseFile(pistes) {
     file.innerHTML = '';
-    var l = (pistes || []).filter(function (p) { return p.id !== pisteEnCours; });
+    var l = pistes || [];
     if (!l.length) {
-      file.innerHTML = '<li class="vide">Rien d\'autre en attente — proposez un titre.</li>';
+      file.innerHTML = '<li class="vide">Rien en attente — proposez un titre.</li>';
       return;
     }
-    l.forEach(function (p, i) {
+    var idx = 0;
+    for (var k = 0; k < l.length; k++) { if (l[k].id === pisteEnCours) { idx = k; break; } }
+    var vues = [];
+    if (l.length <= 6) {
+      for (var j = 0; j < l.length; j++) vues.push({ p: l[j], rel: j - idx });
+    } else {
+      for (var d = -2; d <= 3; d++) {
+        var m = ((idx + d) % l.length + l.length) % l.length;
+        vues.push({ p: l[m], rel: d });
+      }
+    }
+    vues.forEach(function (it) {
+      var p = it.p, rel = it.rel;
       var li = document.createElement('li');
-      if (p.ecarte) li.className = 'ecarte';
-      var rg = document.createElement('span'); rg.className = 'rg'; rg.textContent = i + 2;
+      li.className = rel < 0 ? 'passe' : (rel === 0 ? 'encours' : 'avenir');
+      if (p.ecarte) li.className += ' ecarte';
+      var rg = document.createElement('span'); rg.className = 'rg';
+      rg.textContent = rel === 0 ? '▶' : (rel < 0 ? '↺' : '+' + rel);
       var vg = document.createElement('span'); vg.className = 'vg';
       var g = document.createElement('span');
       g.textContent = p.ecarte ? '⚠' : (p.en_cache ? '🎬' : '⏬');
@@ -180,10 +198,10 @@
       poseVignette(vg, g, p);
       var nm = document.createElement('span'); nm.className = 'nm';
       var b = document.createElement('b');
-      // textContent : le titre vient d'un service tiers.
-      b.textContent = p.titre || p.source;
+      b.textContent = p.titre || p.source; // titre d'un tiers : jamais du balisage
       var s = document.createElement('small');
-      s.textContent = p.ecarte ? (p.raison || 'écartée')
+      s.textContent = rel === 0 ? 'en cours'
+                    : p.ecarte ? (p.raison || 'écartée')
                     : (p.en_cache ? (p.coeurs ? '♥ ' + p.coeurs : '') : 'récupération…');
       nm.appendChild(b); nm.appendChild(s);
       var dr = document.createElement('span'); dr.className = 'dr';
@@ -197,40 +215,60 @@
   // Le backend compte déjà un cœur sur une proposition (#1131g) ; ici on
   // l'expose aux auditeurs. Construction DOM pure (createElement + listener) :
   // la CSP interdit tout style et tout onclick en ligne.
+  // La file d'attente est COMPACTE et ne montre que 3 titres à la fois, en
+  // ROTATION automatique (#1131j) : une longue file ne doit pas pousser
+  // l'antenne et le lecteur hors de l'écran. On garde la liste complète et on
+  // fait défiler une fenêtre de 3. `sonde` rafraîchit la liste (cœurs à jour),
+  // le minuteur avance la fenêtre.
+  var propos = [], propOffset = 0;
   function poseAttente(props) {
+    propos = props || [];
+    if (propOffset >= propos.length) propOffset = 0;
+    rendAttente();
+  }
+  function voteProposition(p) {
+    var li = document.createElement('li');
+    var nm = document.createElement('span'); nm.className = 'nm';
+    var b = document.createElement('b');
+    b.textContent = p.titre || p.source; // titre d'un tiers : jamais du balisage
+    var s = document.createElement('small');
+    s.textContent = p.auteur || 'en attente';
+    nm.appendChild(b); nm.appendChild(s);
+    var vote = document.createElement('button');
+    vote.type = 'button';
+    vote.className = 'vote' + (p.aime ? ' on' : '');
+    vote.textContent = '♥ ' + (p.coeurs || 0);
+    vote.setAttribute('aria-label', 'Voter pour ce titre');
+    vote.addEventListener('click', function () {
+      nom(); // voter, c'est signer
+      var poser = !vote.classList.contains('on');
+      json('/api/v1/radio/propositions/' + p.id + '/coeur',
+           { method: poser ? 'POST' : 'DELETE' }).then(function (r) {
+        if (r.corps && r.corps.piste) {
+          vote.classList.toggle('on', r.corps.piste.aime);
+          vote.textContent = '♥ ' + (r.corps.piste.coeurs || 0);
+        }
+      }).catch(function () { /* un vote raté n'est pas une panne */ });
+    });
+    li.appendChild(nm); li.appendChild(vote);
+    return li;
+  }
+  function rendAttente() {
     attente.innerHTML = '';
-    var l = props || [];
-    if (!l.length) {
+    var n = propos.length;
+    if (!n) {
       attente.innerHTML = '<li class="vide">Aucun titre en attente — proposez-en un.</li>';
       return;
     }
-    l.forEach(function (p) {
-      var li = document.createElement('li');
-      var nm = document.createElement('span'); nm.className = 'nm';
-      var b = document.createElement('b');
-      b.textContent = p.titre || p.source; // titre d'un tiers : jamais du balisage
-      var s = document.createElement('small');
-      s.textContent = p.auteur || 'en attente de validation';
-      nm.appendChild(b); nm.appendChild(s);
-      var vote = document.createElement('button');
-      vote.type = 'button';
-      vote.className = 'vote' + (p.aime ? ' on' : '');
-      vote.textContent = '♥ ' + (p.coeurs || 0);
-      vote.setAttribute('aria-label', 'Voter pour ce titre');
-      vote.addEventListener('click', function () {
-        nom(); // voter, c'est signer
-        var poser = !vote.classList.contains('on');
-        json('/api/v1/radio/propositions/' + p.id + '/coeur',
-             { method: poser ? 'POST' : 'DELETE' }).then(function (r) {
-          if (r.corps && r.corps.piste) {
-            vote.classList.toggle('on', r.corps.piste.aime);
-            vote.textContent = '♥ ' + (r.corps.piste.coeurs || 0);
-          }
-        }).catch(function () { /* un vote raté n'est pas une panne */ });
-      });
-      li.appendChild(nm); li.appendChild(vote);
-      attente.appendChild(li);
-    });
+    for (var i = 0; i < Math.min(3, n); i++) {
+      attente.appendChild(voteProposition(propos[(propOffset + i) % n]));
+    }
+    if (n > 3) {
+      var more = document.createElement('li');
+      more.className = 'plusattente';
+      more.textContent = '… ' + n + ' en attente · défilement';
+      attente.appendChild(more);
+    }
   }
 
   function poseChat(phrases) {
@@ -323,4 +361,12 @@
 
   sonde();
   setInterval(sonde, PERIODE);
+  // La fenêtre des titres en attente défile toute seule (#1131j) — un cran
+  // toutes les 4 s dès qu'il y a plus de 3 propositions.
+  setInterval(function () {
+    if (propos.length > 3) {
+      propOffset = (propOffset + 1) % propos.length;
+      rendAttente();
+    }
+  }, 4000);
 })();
