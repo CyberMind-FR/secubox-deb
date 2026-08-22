@@ -144,13 +144,22 @@ jobs:
             --out output/ \
             --slipstream
           echo "=== Checking eMMC image for embedding ==="
-          # build-image.sh already compresses to .img.gz, just verify it exists
-          if [[ -f output/secubox-mochabin-bookworm.img.gz ]]; then
-            ls -lh output/secubox-mochabin-bookworm.img.gz
-          elif [[ -f output/secubox-mochabin-bookworm.img ]]; then
-            echo "Compressing uncompressed image..."
-            gzip -k output/secubox-mochabin-bookworm.img
-            ls -lh output/secubox-mochabin-bookworm.img.gz
+          # build-image.sh names the image after its PROFILE (défaut secubox-full,
+          # #1112) : secubox-full-mochabin-bookworm.img.gz — PAS
+          # secubox-mochabin-bookworm.img.gz. On cherche donc par MOTIF, robuste
+          # au tag de profil ; la vérification en dur échouait « No eMMC image
+          # found » alors que l'image était bel et bien construite (#1131r).
+          EMMC_GZ=$(ls output/secubox-*mochabin-*.img.gz 2>/dev/null | head -1)
+          if [[ -z "$EMMC_GZ" ]]; then
+            EMMC_RAW=$(ls output/secubox-*mochabin-*.img 2>/dev/null | head -1)
+            if [[ -n "$EMMC_RAW" ]]; then
+              echo "Compressing uncompressed image..."
+              if command -v pigz >/dev/null 2>&1; then pigz -k "$EMMC_RAW"; else gzip -k "$EMMC_RAW"; fi
+              EMMC_GZ="${EMMC_RAW}.gz"
+            fi
+          fi
+          if [[ -n "$EMMC_GZ" ]]; then
+            ls -lh "$EMMC_GZ"
           else
             echo "ERROR: No eMMC image found!"
             ls -la output/
