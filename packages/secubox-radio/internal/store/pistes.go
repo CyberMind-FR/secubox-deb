@@ -262,6 +262,20 @@ func (s *Store) PoseTitre(id int64, titre string) error {
 	return err
 }
 
+// PoseDuree renseigne la duree d'une piste SI elle manque (#1131z). La source
+// de verite est le MEDIA lui-meme : le premier lecteur a en charger les
+// metadonnees la rapporte. On ne remplit que le vide — une duree connue (issue
+// des metadonnees d'un flux, par ex.) n'est jamais ecrasee par un client.
+func (s *Store) PoseDuree(id, dureeMS int64) error {
+	if dureeMS <= 0 {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`UPDATE pistes SET duree_ms = ? WHERE id = ? AND (duree_ms IS NULL OR duree_ms = 0)`,
+		dureeMS, id)
+	return err
+}
+
 func (s *Store) MarqueIndisponible(id int64, raison string) error {
 	_, err := s.db.Exec(
 		`UPDATE pistes SET indisponible = 1, raison = ? WHERE id = ?`, raison, id)
