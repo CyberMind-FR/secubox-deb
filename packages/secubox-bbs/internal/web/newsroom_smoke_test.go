@@ -91,6 +91,12 @@ func TestMediathequeExecute(t *testing.T) {
 			{ID: 1, Titre: "Si besoin", Type: "podcast", Glyphe: "🎧", Vignette: "/media-cover/1",
 				Episodes: []PodEpisode{{ID: 20, Titre: "Épisode récent", Media: "/media/ep/20", Numero: 1}}},
 		},
+		// #1131d : la médiathèque des émissions garde le carrousel « À la une »
+		// en tête (choix utilisateur : mosaïque + liste par flux dessous).
+		News: []NewsItem{
+			{Fil: &store.Thread{ID: 7, Title: "Dernier épisode publié", Author: "nova",
+				MediaKind: "audio", Source: "podcast", Visibility: store.VisPublic, LastPostAt: 1700000900}},
+		},
 	}
 	var buf bytes.Buffer
 	if err := tpl.ExecuteTemplate(&buf, "mediatheque", p); err != nil {
@@ -104,6 +110,8 @@ func TestMediathequeExecute(t *testing.T) {
 		// n'a plus SA PROPRE en-tête (l'ancien logo <span class="mark serif">).
 		`class="mark medaille"`, `src="/static/bbs-logo.svg`,
 		"Rubriques", "Accès",
+		// #1131d : mosaïque « À la une » en tête, au-dessus des flux.
+		`class="caroussel"`, "À la une", "Dernier épisode publié",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sortie sans %q", want)

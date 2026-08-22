@@ -35,6 +35,7 @@
   </aside>
 
   <main class="feed">
+    {{if .News}}{{template "avunealune" .}}{{end}}
     <div class="feedhead"><h2 class="serif">Médiathèque</h2><span class="sub">flux du podcaster · écoute en continu</span></div>
     {{range $f := .Medias}}
     <section class="podfeed" id="f{{$f.ID}}" data-k="{{$f.Type}}">
