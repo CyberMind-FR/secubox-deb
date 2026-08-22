@@ -173,6 +173,10 @@ a{color:inherit;text-decoration:none}
 .billet .bmedias{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 .billet .bmini{width:38px;height:38px;object-fit:cover;border-radius:3px;border:1px solid var(--line);background:var(--soft)}
 .billet .ex a{color:var(--cyan);text-decoration:none}
+/* Billets de même titre regroupés (#1131ab) : le dernier montré, les autres liés. */
+.billet-autres{margin:-4px 16px 10px;font-size:.72rem;color:var(--dim);display:flex;flex-wrap:wrap;align-items:center;gap:5px}
+.billet-autres .ba-lien{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid var(--line);border-radius:5px;color:var(--cyan);text-decoration:none;background:var(--soft)}
+.billet-autres .ba-lien:hover{border-color:var(--cyan)}
 .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
 .pill{font-family:"JetBrains Mono";font-size:.6rem;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
 .pill.pub{color:var(--mint);border-color:var(--mint)} .pill.loc{color:var(--amber);border-color:var(--amber)}

@@ -114,7 +114,7 @@
     <div class="pnl">
       <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
       {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
-      {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+      {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>{{if .Autres}}<div class="billet-autres"><span class="ba-lb">＋ {{len .Autres}} autre(s) du même titre :</span> {{range .Autres}}<a class="ba-lien" href="{{.Lien}}" title="{{.Titre}}">↗</a> {{end}}</div>{{end}}
       {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
     </div>
     <div class="pnl">
@@ -199,7 +199,7 @@
 <div class="pnl">
   <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
   {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
-  {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>
+  {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>{{if .Autres}}<div class="billet-autres"><span class="ba-lb">＋ {{len .Autres}} autre(s) du même titre :</span> {{range .Autres}}<a class="ba-lien" href="{{.Lien}}" title="{{.Titre}}">↗</a> {{end}}</div>{{end}}
   {{else}}{{if not .BilletsErr}}<div class="teaser">Aucun billet pour l'instant.</div>{{end}}{{end}}
 </div>
 <div class="pnl">

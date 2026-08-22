@@ -514,6 +514,9 @@ func (s *Server) poseRail(p *page) {
 	p.Articles, _ = s.st.Articles("draft", 8)
 	if s.bil != nil {
 		p.Billets, p.BilletsErr = s.vitrineBillets()
+		// Regrouper AVANT de plafonner : sinon des « autres » du même podcast
+		// tomberaient hors des 8 premiers et seraient perdus (#1131ab).
+		p.Billets = groupeBilletsParTitre(p.Billets)
 		if len(p.Billets) > 8 {
 			p.Billets = p.Billets[:8]
 		}
@@ -1425,6 +1428,34 @@ type billetVue struct {
 	DepuisFil bool
 	ThreadID  int64
 	Repris    int
+	// Autres (#1131ab) : les billets de MÊME TITRE, plus anciens, regroupés
+	// derrière celui-ci — comme un podcast regroupe ses épisodes. On montre le
+	// dernier en entier, les autres en simples liens.
+	Autres []billetLien
+}
+
+// billetLien : un billet regroupé, réduit à son titre et son adresse.
+type billetLien struct {
+	Titre, Lien string
+}
+
+// groupeBilletsParTitre regroupe les billets de MÊME TITRE (#1131ab). Les
+// billets de podcast partagent leur titre (« Retrouvez le podcast… »), seul
+// leur lien diffère : sans regroupement, la colonne se répète. Le PREMIER de
+// chaque titre — le plus récent, la liste arrivant déjà triée du plus récent au
+// plus ancien — reste en principal ; les suivants deviennent ses `Autres`.
+func groupeBilletsParTitre(billets []billetVue) []billetVue {
+	pos := map[string]int{}
+	out := make([]billetVue, 0, len(billets))
+	for _, b := range billets {
+		if i, vu := pos[b.Titre]; vu {
+			out[i].Autres = append(out[i].Autres, billetLien{Titre: b.Titre, Lien: b.Lien})
+			continue
+		}
+		pos[b.Titre] = len(out)
+		out = append(out, b)
+	}
+	return out
 }
 
 // vitrineBillets lit le flux REEL du module billets (#1066 phase A).

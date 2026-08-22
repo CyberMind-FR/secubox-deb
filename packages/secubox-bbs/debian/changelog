@@ -1,3 +1,11 @@
+secubox-bbs (0.28.69-1~bookworm1) bookworm; urgency=medium
+
+  * Billets : regroupe les billets de MÊME TITRE (comme un podcast regroupe ses
+    épisodes) — le plus récent est montré en entier, les autres apparaissent en
+    liens compacts « ＋ N autres ↗ ». (#1131ab)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:03:03 +0200
+
 secubox-bbs (0.28.68-1~bookworm1) bookworm; urgency=medium
 
   * Widget radio du rail : en-tête minimal — 📻 + ⧉ seulement, sans le mot
