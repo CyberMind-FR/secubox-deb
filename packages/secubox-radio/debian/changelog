@@ -1,3 +1,12 @@
+secubox-radio (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * Bannière de santé : met à jour l'empreinte CSP de la feuille de style
+    (--banniere-style) pour la v1.3.0 du bandeau — l'ancienne empreinte ne
+    correspondait plus au <style> injecté, la CSP refusait la feuille et le
+    bandeau tombait NON STYLÉ en bas de page. (#1131n)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:34:54 +0200
+
 secubox-radio (0.1.9-1~bookworm1) bookworm; urgency=medium
 
   * Lecteur COMPACT /mini (#1131m) : même page, mise en page resserrée (le CSS
