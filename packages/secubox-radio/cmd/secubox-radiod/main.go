@@ -220,6 +220,7 @@ func propre(s string) string {
 // place de ce qui joue.
 func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 	var dernierCookie int64
+	var dernierReprise time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -240,6 +241,22 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 			dernierCookie = e.Mtime
 			if n, err := st.RemetEnJeuBloqueesParCookies(); err == nil && n > 0 {
 				log.Printf("radio: cookies renouveles — %d piste(s) remise(s) en jeu", n)
+			}
+		}
+
+		// ── LES ECHECS DE TELECHARGEMENT SE REESSAIENT ─────────────────
+		//
+		// Un 403 sur les octets video est le plus souvent PASSAGER : la
+		// passerelle reussit au coup d'apres. Sans remise en jeu, la piste
+		// reste ecartee pour toujours — la boucle la saute (ligne « EnCache ||
+		// Indisponible »). On la remet donc periodiquement, mais ESPACE (toutes
+		// les 5 min) : une video vraiment morte serait sinon reessayee a chaque
+		// tour. Le premier passage (dernierReprise zero) tombe tout de suite,
+		// pour rattraper ce qu'un 403 transitoire avait ecarte avant ce demarrage.
+		if now := time.Now(); now.Sub(dernierReprise) >= 5*time.Minute {
+			dernierReprise = now
+			if n, err := st.RemetEnJeuEchecsTelechargement(); err == nil && n > 0 {
+				log.Printf("radio: %d piste(s) reessayee(s) apres echec de telechargement", n)
 			}
 		}
 
