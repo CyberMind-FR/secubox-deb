@@ -131,10 +131,22 @@ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.75rem;margin
 .file li.joue .dr{color:var(--violet-clair)}
 .file li.ecarte .nm b{color:var(--coral)}
 .file .vide{padding:1rem 1.1rem;color:var(--dim);font-size:13px}
+/* Playlist semi-rotative (#1131i) : passé estompé, EN COURS en gras renforcé,
+   à venir normal. */
+.file li.passe{opacity:.5}
+.file li.passe .rg{color:var(--dim)}
+.file li.encours{background:var(--violet-sourd)}
+.file li.encours .rg{color:var(--violet-clair)}
+.file li.encours .nm b{font-weight:800;color:var(--violet-clair)}
+.file li.avenir .rg{color:var(--violet-clair);font-variant-numeric:tabular-nums}
 /* En attente : propositions à voter (#1131g). */
 .attente{list-style:none;margin:0;padding:0}
-.attente li{display:flex;align-items:center;gap:.8rem;padding:.6rem 1.1rem;
+/* Compacte (#1131j) : 3 titres en rotation, rangées resserrées. */
+.attente li{display:flex;align-items:center;gap:.7rem;padding:.4rem 1.1rem;
   border-bottom:1px solid var(--line)}
+.attente li .nm small{display:none}
+.attente .plusattente{padding:.35rem 1.1rem;color:var(--dim);font-size:11px;
+  border-bottom:0;font-style:italic}
 .attente li:last-child{border-bottom:0}
 .attente li .nm{min-width:0;flex:1}
 .attente li .nm b{display:block;font-weight:600;overflow:hidden;
