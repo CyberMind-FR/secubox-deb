@@ -252,14 +252,7 @@
       if (!nx) for (var z2 = 0; z2 < vues.length; z2++) { if (vues[z2].rel > 0) { nx = vues[z2].p; break; } }
       microNext.textContent = nx ? ('→ ' + (nx.titre || nx.source)) : '';
     }
-    // #1131ag : STATUT en emojis dans l'espace libre — direct, nombre de titres
-    // en rotation, et l'état de la piste en cours (en cache ✅ / à venir ⏳).
-    if (estMicro && microStatus) {
-      var enc = 0, att = 0;
-      l.forEach(function (q) { if (q.en_cache) enc++; else if (!q.ecarte) att++; });
-      microStatus.textContent = '🔴 en direct · 🎶 ' + l.length +
-        ' · ✅ ' + enc + (att ? ' · ⏳ ' + att : '');
-    }
+
   }
 
   // poseAttente : les propositions EN ATTENTE, chacune avec un bouton de vote.
@@ -366,6 +359,14 @@
     json('/api/v1/radio/propositions').then(function (r) {
       poseAttente(r.corps.propositions);
     }).catch(function () {});
+    // #1131ah : statut d'AUDIENCE en emojis dans l'espace libre du micro.
+    if (estMicro && microStatus) {
+      json('/api/v1/radio/stats').then(function (r) {
+        var c = r.corps || {};
+        microStatus.textContent = '🎶 ' + (c.pistes || 0) + ' · 🗳️ ' + (c.propositions || 0) +
+          ' · 👥 ' + (c.auditeurs || 0) + ' · 👁️ ' + (c.visites || 0);
+      }).catch(function () {});
+    }
   }
 
   bAime.addEventListener('click', function () {
