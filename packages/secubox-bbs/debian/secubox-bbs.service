@@ -38,6 +38,7 @@ Group=secubox
 ExecStart=/usr/sbin/secubox-bbsd \
     --media-origines https://peertube.gk2.secubox.in,https://radio.gk2.secubox.in,https://podcaster.gk2.secubox.in,https://billets.gk2.secubox.in \
     --frame-origines https://radio.gk2.secubox.in,https://podcaster.gk2.secubox.in \
+    --radio-base https://radio.gk2.secubox.in \
     --billets-base https://billets.gk2.secubox.in \
     --root /var/lib/secubox/bbs \
     --secrets /etc/secubox/secrets/bbs \

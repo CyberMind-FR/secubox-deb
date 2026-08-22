@@ -125,6 +125,13 @@
     if (audio) audio.pause();
     miniClose();
   }
+  /* Détache le widget radio en fenêtre persistante (#1131m) : elle survit à la
+     navigation BBS, donc l'écoute ne se coupe pas quand on change de page. */
+  function radioPopout(t) {
+    var url = t.getAttribute("data-url");
+    if (url) window.open(url, "sbxradio",
+      "width=380,height=580,menubar=no,toolbar=no,location=no,resizable=yes");
+  }
   function miniToggle() { if (!audio) return; audio.paused ? audio.play() : audio.pause(); }
   function miniClose() { if (audio) audio.pause(); $("#mini").classList.remove("show"); }
   function drop() { var d = $("#dropin"); if (d) { d.focus(); d.scrollIntoView({ behavior: "smooth", block: "center" }); } }
@@ -144,6 +151,7 @@
     else if (a === "prev") playPrev();
     else if (a === "next") { if (!playNext() && audio) audio.currentTime = audio.duration || 0; }
     else if (a === "popout") popout();
+    else if (a === "radiopop") { e.preventDefault(); radioPopout(t); }
     else if (a === "mini-close") miniClose();
     else if (a === "carprev") { carHold(); carScrollByCards(-1); }
     else if (a === "carnext") { carHold(); carScrollByCards(1); }
