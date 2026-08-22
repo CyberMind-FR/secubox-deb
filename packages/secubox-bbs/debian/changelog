@@ -1,3 +1,11 @@
+secubox-bbs (0.28.65-1~bookworm1) bookworm; urgency=medium
+
+  * Widget radio du rail : plus d'en-tête « 📻 Radio » — l'icône et les boutons
+    média sont dans la barre du micro-lecteur ; seul ⧉ « détacher » flotte sur
+    le cadre. (#1131y)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:36:44 +0200
+
 secubox-bbs (0.28.64-1~bookworm1) bookworm; urgency=medium
 
   * Cartes vidéo : « lire ici » — l'embed (youtube-nocookie / peertube) se
