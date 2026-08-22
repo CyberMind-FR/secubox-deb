@@ -163,6 +163,10 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// gabarits Go ne passent qu'UN argument a `template` : sans cette fonction, il
 	// faudrait recopier le meme ternaire a six endroits — et l'oublier au septieme.
 	fn := template.FuncMap{"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
+		// urlembed : dérive l'URL d'INTÉGRATION d'un lien PeerTube de visionnage
+		// (/w/… → /videos/embed/…) pour un <iframe> — PeerTube refuse le cadrage
+		// de ses pages /w/ (#1131b). Toute autre URL passe inchangée.
+		"urlembed": peertubeEmbedURL,
 		// glypheSalon : une émoji STABLE et distincte par salon (#1114), dérivée
 		// du slug — plus joli que le ◆ générique, et un sous-salon garde le ↳.
 		"glypheSalon": func(slug string, profondeur int) string {
