@@ -1,3 +1,11 @@
+secubox-bbs (0.28.56-1~bookworm1) bookworm; urgency=medium
+
+  * Miroir PeerTube (suite) : le lecteur vidéo d'un fil (thread.html) dérive
+    aussi l'URL d'intégration via `urlembed` — un fil dont le média est un
+    PeerTube /w/… s'encadrait sinon comme bloqué. (#1131b)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 02:27:45 +0200
+
 secubox-bbs (0.28.55-1~bookworm1) bookworm; urgency=medium
 
   * Miroir PeerTube : encadre l'URL d'INTEGRATION (/videos/embed/…) au lieu de
