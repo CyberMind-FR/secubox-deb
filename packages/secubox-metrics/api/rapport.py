@@ -352,8 +352,48 @@ def _lire_secret(chemin: Optional[str]) -> Optional[str]:
         return None
 
 
+def resume_statuts(statuts: Optional[dict]) -> str:
+    """Résumé EMOJI des codes de retour pour le corps de l'e-mail (#1131an).
+
+    Le PDF (Helvetica/latin-1) ne peut pas afficher d'emoji ; le corps du mail,
+    lui, est en UTF-8 — c'est donc là qu'on met un résumé lisible d'un coup
+    d'œil : groupé par classe 🟢2xx / 🔵3xx / 🟠4xx / 🔴5xx, avec les principaux
+    codes d'erreur repérés par une émoticône qui dit LE TYPE d'erreur.
+    """
+    if not statuts:
+        return ""
+    classe = {"2": "🟢", "3": "🔵", "4": "🟠", "5": "🔴"}
+    par_code = {"400": "❓", "401": "🔑", "403": "🚫", "404": "🔍", "405": "🙅",
+                "408": "⏳", "429": "🐢", "500": "💥", "502": "🔌", "503": "😴",
+                "504": "⏱️"}
+    total = sum(statuts.values()) or 1
+    groupes: dict = {}
+    erreurs: list = []
+    for code, n in statuts.items():
+        tete = str(code)[:1]
+        groupes[tete] = groupes.get(tete, 0) + n
+        if tete in ("4", "5"):
+            erreurs.append((str(code), n))
+    lignes = ["— Codes de retour —"]
+    for tete in ("2", "3", "4", "5"):
+        n = groupes.get(tete)
+        if not n:
+            continue
+        ligne = f"{classe.get(tete, '•')} {tete}xx : {n:,}".replace(",", " ")
+        ligne += f" ({100 * n / total:.0f} %)"
+        det = sorted((e for e in erreurs if e[0][:1] == tete),
+                     key=lambda x: -x[1])[:4]
+        if det:
+            ligne += "  ·  " + " · ".join(
+                f"{par_code.get(cd, '⚠️')} {cd}:{m:,}".replace(",", " ")
+                for cd, m in det)
+        lignes.append(ligne)
+    return "\n".join(lignes) + "\n"
+
+
 def envoyer(pdf: bytes, destinataire: Optional[str] = None,
-            portee: str = "Tous les vhosts", periode: str = "semaine") -> dict:
+            portee: str = "Tous les vhosts", periode: str = "semaine",
+            resume: str = "") -> dict:
     """Expedie le PDF. Bloquant : thread/tache oneshot obligatoire.
 
     Deux modes selon la config `[rapport]` :
@@ -386,6 +426,10 @@ def envoyer(pdf: bytes, destinataire: Optional[str] = None,
         f"Genere  : {datetime.now().strftime('%d/%m/%Y a %H:%M')}\n\n"
         "Le detail est dans la piece jointe.\n"
     )
+    # Résumé emoji des codes de retour (#1131an) : 4xx/5xx d'un coup d'œil, avant
+    # même d'ouvrir la pièce jointe.
+    if resume:
+        corps += "\n" + resume
     # NOTE facultative (`[rapport] note = "..."`) : un mot pour le destinataire,
     # joint au rapport. Sert à faire remonter un avis ponctuel (ex. corriger les
     # balises canoniques d'un site) sans ouvrir un autre canal. Vide = rien.

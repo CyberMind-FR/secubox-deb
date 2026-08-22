@@ -1,5 +1,5 @@
 [Unit]
-Description=SecuBox — rapport de fréquentation planifié (famille anibal-amiot → email interne)
+Description=SecuBox — rapport de fréquentation MENSUEL, tiré chaque semaine (famille anibal-amiot → email interne)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1059
 After=network-online.target secubox-metrics.service
 Wants=network-online.target
@@ -20,8 +20,9 @@ IOSchedulingClass=idle
 # /var/cache/secubox-metrics-rapport, propriété du service.
 CacheDirectory=secubox-metrics-rapport
 Environment=MPLCONFIGDIR=/var/cache/secubox-metrics-rapport
-# Sans argument → période de la config (le rapport HEBDOMADAIRE).
-ExecStart=/usr/bin/python3 -m api.rapport_planifie
+# Période « mois » : bilan des 30 derniers jours, tiré chaque semaine (cadence
+# du timer). L'argument prime sur la période de config.
+ExecStart=/usr/bin/python3 -m api.rapport_planifie mois
 # Durcissement : la tâche ne lit que des journaux et ne parle qu'au relais mail.
 NoNewPrivileges=true
 ProtectSystem=strict

@@ -1,13 +1,13 @@
 [Unit]
-Description=SecuBox — rapport de fréquentation QUOTIDIEN (famille anibal-amiot → email interne)
+Description=SecuBox — rapport de fréquentation QUOTIDIEN, 7 derniers jours (famille anibal-amiot → email interne)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1059
 After=network-online.target secubox-metrics.service
 Wants=network-online.target
 
 [Service]
-# Même orchestrateur que le rapport hebdomadaire, mais période « jour » : le
-# bilan de la veille. Un seul module (api.rapport_planifie), l'argument fixe la
-# période — aucune config dupliquée.
+# Même orchestrateur que le rapport hebdomadaire, mais période « semaine » : le
+# bilan glissant des 7 derniers jours, tiré chaque matin. Un seul module
+# (api.rapport_planifie), l'argument fixe la période — aucune config dupliquée.
 Type=oneshot
 User=secubox
 Group=secubox
@@ -16,7 +16,7 @@ Nice=10
 IOSchedulingClass=idle
 CacheDirectory=secubox-metrics-rapport
 Environment=MPLCONFIGDIR=/var/cache/secubox-metrics-rapport
-ExecStart=/usr/bin/python3 -m api.rapport_planifie jour
+ExecStart=/usr/bin/python3 -m api.rapport_planifie semaine
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
