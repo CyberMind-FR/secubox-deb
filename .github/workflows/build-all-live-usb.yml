@@ -115,7 +115,7 @@ jobs:
             debootstrap qemu-user-static binfmt-support \
             parted dosfstools e2fsprogs squashfs-tools \
             grub-efi-amd64-bin grub-pc-bin grub-efi-amd64-signed shim-signed \
-            mtools rsync pv xorriso curl wget u-boot-tools
+            mtools rsync pv xorriso curl wget u-boot-tools pigz
 
       - name: Download SecuBox packages
         if: steps.filter.outputs.skip != 'true'
@@ -156,7 +156,10 @@ jobs:
             ls -la output/
             exit 1
           fi
-        timeout-minutes: 60
+        # 120 min : l'update-initramfs sous QEMU (~10 min) + la construction de
+        # l'image 8 Go dépassaient les 60 min précédents (#1131e). pigz réduit
+        # fortement la compression ; la marge évite un échec sur pic de charge.
+        timeout-minutes: 120
 
       - name: Build ${{ matrix.platform }} Live USB
         if: steps.filter.outputs.skip != 'true'

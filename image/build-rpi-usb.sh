@@ -1453,7 +1453,8 @@ ok "Image created: ${IMG_SIZE_ACTUAL}"
 # Compress
 if [[ $NO_COMPRESS -eq 0 ]]; then
   log "Compressing..."
-  gzip -9 -f "${IMG_FILE}"
+  # pigz (parallèle) si présent, sinon gzip (#1131e).
+  if command -v pigz >/dev/null 2>&1; then pigz -9 -f "${IMG_FILE}"; else gzip -9 -f "${IMG_FILE}"; fi
   FINAL_SIZE=$(du -sh "${IMG_FILE}.gz" | cut -f1)
   sha256sum "${IMG_FILE}.gz" > "${IMG_FILE}.gz.sha256"
   ok "Compressed: ${FINAL_SIZE}"
