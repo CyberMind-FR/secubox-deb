@@ -1,3 +1,13 @@
+secubox-radio (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * Auto-réparation : une piste écartée pour un échec de téléchargement
+    PASSAGER (403 YouTube sur les octets vidéo) est réessayée périodiquement
+    (toutes les 5 min, et dès le démarrage) au lieu de rester écartée à jamais
+    avec une erreur périmée. Ne touche pas les blocages cookies, géo, ni les
+    refus du sysop. (#1131f)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 06:49:30 +0200
+
 secubox-radio (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Lecteur : ajoute un contrôle de VOLUME (curseur + bouton muet) au lecteur
