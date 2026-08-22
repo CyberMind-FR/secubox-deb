@@ -38,8 +38,13 @@ func TestWidgetRadioConditionnelAuRadioBase(t *testing.T) {
 	}
 	// AVEC RadioBase : iframe /mini + bouton détacher.
 	out := rend(page{RadioBase: "https://radio.gk2.secubox.in", Stats: store.Stats{}})
-	if !strings.Contains(out, `src="https://radio.gk2.secubox.in/mini"`) {
-		t.Errorf("l'iframe ne pointe pas /mini : %s", out)
+	// L'IFRAME DU RAIL EST LE MICRO-LECTEUR (taille d'une carte, #1131o) ; le
+	// bouton de détachement ouvre le lecteur MINI, plus complet.
+	if !strings.Contains(out, `src="https://radio.gk2.secubox.in/micro"`) {
+		t.Errorf("l'iframe du rail ne pointe pas /micro : %s", out)
+	}
+	if !strings.Contains(out, `data-url="https://radio.gk2.secubox.in/mini"`) {
+		t.Errorf("le détachement ne pointe pas /mini : %s", out)
 	}
 	if !strings.Contains(out, `data-act="radiopop"`) {
 		t.Errorf("pas de bouton de détachement : %s", out)

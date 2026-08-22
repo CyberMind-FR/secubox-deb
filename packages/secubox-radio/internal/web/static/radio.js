@@ -6,16 +6,23 @@
 (function () {
   'use strict';
 
-  // MODE COMPACT (#1131m) : la même page sert de widget incorporé dans le rail
-  // BBS (et de fenêtre détachée). Le chemin /mini suffit à le déclarer ; le CSS
-  // resserre alors la mise en page et masque ce qui ne sert pas à ÉCOUTER.
-  if (location.pathname === '/mini') {
+  // MODES COMPACTS (#1131m/#1131o) : la même page sert de widget incorporé.
+  //   /mini  → lecteur + playlist + antenne, resserré (fenêtre détachée).
+  //   /micro → UNIQUEMENT le lecteur, à la taille d'une carte du carrousel
+  //            (widget du rail BBS). Le CSS fait le reste d'après ces classes.
+  (function () {
+    var mini = location.pathname === '/mini' || location.pathname === '/micro';
+    var micro = location.pathname === '/micro';
+    if (!mini) return;
+    var pose = function () {
+      if (mini) document.body.classList.add('mini');
+      if (micro) document.body.classList.add('micro');
+    };
     document.documentElement.classList.add('mini');
-    if (document.body) document.body.classList.add('mini');
-    else document.addEventListener('DOMContentLoaded', function () {
-      document.body.classList.add('mini');
-    });
-  }
+    if (micro) document.documentElement.classList.add('micro');
+    if (document.body) pose();
+    else document.addEventListener('DOMContentLoaded', pose);
+  })();
 
   // ── LE PSEUDONYME ─────────────────────────────────────────────────────────
   //
