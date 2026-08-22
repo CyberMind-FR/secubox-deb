@@ -3792,7 +3792,8 @@ ok "Bootable image created"
 # ══════════════════════════════════════════════════════════════════
 if [[ $NO_COMPRESS -eq 0 ]]; then
   log "Compressing..."
-  gzip -9 -f "${IMG_FILE}"
+  # pigz (parallèle) si présent, sinon gzip (#1131e).
+  if command -v pigz >/dev/null 2>&1; then pigz -9 -f "${IMG_FILE}"; else gzip -9 -f "${IMG_FILE}"; fi
   sha256sum "${IMG_FILE}.gz" > "${IMG_FILE}.gz.sha256"
   FINAL_SIZE=$(du -sh "${IMG_FILE}.gz" | cut -f1)
   FINAL_IMG="${IMG_FILE}.gz"

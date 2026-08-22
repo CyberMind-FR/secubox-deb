@@ -623,7 +623,8 @@ ok "Image created: $IMG_FILE"
 # ══════════════════════════════════════════════════════════════════
 if [[ $NO_COMPRESS -eq 0 ]]; then
     log "8/8 Compressing image..."
-    gzip -f -k "$IMG_FILE"
+    # pigz (parallèle) si présent, sinon gzip (#1131e).
+    if command -v pigz >/dev/null 2>&1; then pigz -f -k "$IMG_FILE"; else gzip -f -k "$IMG_FILE"; fi
     ok "Compressed: ${IMG_FILE}.gz"
 else
     log "8/8 Skipping compression (--no-compress)"
