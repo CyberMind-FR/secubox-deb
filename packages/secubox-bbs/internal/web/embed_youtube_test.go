@@ -52,11 +52,34 @@ func TestRenderCorpsEmbarqueLecteurYoutube(t *testing.T) {
 }
 
 // L'upgrade souverain (Task 8) s'appuie sur embedYouTube(Contenu).
+//
+// LE MIROIR DOIT ENCADRER L'URL D'INTEGRATION, PAS LA PAGE DE VISIONNAGE.
+// PeerTube protege ses pages `/w/…` du cadrage (`X-Frame-Options`) : les
+// encadrer donne « Firefox ne peut pas ouvrir cette page ». Seule l'URL
+// `/videos/embed/…` est concue pour l'iframe (#1131b).
 func TestEmbedContenuMirrorRendPeertube(t *testing.T) {
 	c := gateway.Contenu{Genre: gateway.GenreVideo, Connecteur: "youtube",
 		Metadonnees: map[string]string{"video_id": "dQw4w9WgXcQ", "etat": "mirror"},
 		Repliques:   []gateway.Replique{{Cible: "peertube", CibleURL: "https://peertube.gk2/w/xy", Mode: gateway.ModeMiroir}}}
-	if h := embedYouTube(c); !strings.Contains(h, "<iframe") || !strings.Contains(h, "peertube.gk2/w/xy") {
-		t.Fatalf("miroir → iframe peertube attendu : %s", h)
+	h := embedYouTube(c)
+	if !strings.Contains(h, "<iframe") || !strings.Contains(h, "peertube.gk2/videos/embed/xy") {
+		t.Fatalf("miroir → iframe d'INTEGRATION peertube attendu : %s", h)
+	}
+	if strings.Contains(h, "/w/xy") {
+		t.Fatalf("le miroir encadre la page de visionnage (bloquee par X-Frame) : %s", h)
+	}
+}
+
+func TestPeertubeEmbedURL(t *testing.T) {
+	cas := map[string]string{
+		"https://peertube.gk2.secubox.in/w/jDerWdgx1NrBTiRkFt9xuV":        "https://peertube.gk2.secubox.in/videos/embed/jDerWdgx1NrBTiRkFt9xuV",
+		"https://peertube.gk2.secubox.in/videos/watch/abc-123":            "https://peertube.gk2.secubox.in/videos/embed/abc-123",
+		"https://peertube.gk2.secubox.in/videos/embed/deja":               "https://peertube.gk2.secubox.in/videos/embed/deja",
+		"https://autre.example/chemin/quelconque":                        "https://autre.example/chemin/quelconque",
+	}
+	for in, want := range cas {
+		if got := peertubeEmbedURL(in); got != want {
+			t.Errorf("peertubeEmbedURL(%q) = %q, attendu %q", in, got, want)
+		}
 	}
 }
