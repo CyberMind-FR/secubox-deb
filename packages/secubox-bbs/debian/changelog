@@ -1,3 +1,12 @@
+secubox-bbs (0.28.59-1~bookworm1) bookworm; urgency=medium
+
+  * Fil : bouton RAPIDE local ↔ public dans l'en-tête d'un fil (auteur ou
+    sysop). La visibilité était figée à la création ; on peut désormais
+    restreindre au LAN ou exposer un fil d'un clic. POST /t/<id>/visibilite,
+    garde auteur-ou-sysop côté magasin. (#1131h)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:08:39 +0200
+
 secubox-bbs (0.28.58-1~bookworm1) bookworm; urgency=medium
 
   * Émissions : la mosaïque « À la une » liste les épisodes RÉCENTS du
