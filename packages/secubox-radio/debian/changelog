@@ -1,4 +1,4 @@
-secubox-radio (0.1.24-1~bookworm1) bookworm; urgency=medium
+secubox-radio (0.1.25-1~bookworm1) bookworm; urgency=medium
 
   * Micro : statut d'audience (🎶 titres · 🗳️ propositions · 👥 auditeurs ·
     👁️ visites) via /stats ; vignette deux fois plus grande. (#1131ah)
