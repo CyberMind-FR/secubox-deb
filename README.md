@@ -206,14 +206,12 @@ For the amd64 VirtualBox target there's a turn-key tester bundle under [`output/
 Download and run in VirtualBox — no hardware required:
 
 ```bash
-# Download the image
-wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
+# One-liner: download the latest amd64 image + create & launch the VM
+# (requires VirtualBox; uses gh if available, else curl/wget)
+./image/create-vbox-vm.sh --download
 
-# Extract
-gunzip secubox-live-amd64-bookworm.img.gz
-
-# Create VM (requires VBoxManage)
-./scripts/create-secubox-vm.sh secubox-live-amd64-bookworm.img
+# …or point it at a local image (.img, .img.gz or .vdi)
+./image/create-vbox-vm.sh output/secubox-live-amd64-bookworm.img
 ```
 
 **Access:** Open https://localhost:9443 in your browser
