@@ -118,6 +118,22 @@
     });
   }
 
+  // LE MÉDIA CONNAÎT SA VRAIE DURÉE — on la rapporte (#1131z). Sans elle, le
+  // serveur coupe à 4 min tout titre de durée inconnue et « saute » au suivant.
+  // Le premier lecteur qui charge les métadonnées la transmet ; le serveur ne
+  // remplit que le vide. Une fois par piste.
+  var dureeReportee = {};
+  ecran.addEventListener('loadedmetadata', function () {
+    var id = pisteEnCours;
+    if (!id || dureeReportee[id]) return;
+    var d = ecran.duration;
+    if (!isFinite(d) || d <= 0) return;
+    dureeReportee[id] = true;
+    json('/api/v1/radio/pistes/' + id + '/duree',
+         { method: 'POST', body: JSON.stringify({ ms: Math.round(d * 1000) }) })
+      .catch(function () { /* une durée non transmise n'est pas une panne */ });
+  });
+
   function mmss(ms) {
     var s = Math.max(0, Math.floor(ms / 1000));
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
