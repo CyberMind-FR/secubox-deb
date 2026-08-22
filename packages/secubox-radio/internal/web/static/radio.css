@@ -239,3 +239,9 @@ body.micro .microlast { color: var(--dim); }
 /* ⧉ « détacher » : uniquement dans le lecteur incorporé /micro (#1131ae). */
 .detach { display: none; }
 body.micro .detach { display: grid; place-items: center; }
+
+/* Titre À DROITE de la vignette, même ligne (#1131af) : le micro-lecteur est
+   étroit, mais on FORCE la rangée — sinon la media query `max-width:34rem`
+   empile vignette puis titre. */
+body.micro .lecteur .bloc { flex-direction: row; align-items: flex-start; }
+body.micro .cadre { width: 3rem; height: 3rem; aspect-ratio: auto; }
