@@ -7,10 +7,28 @@ package web
 
 import (
 	"html"
+	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/ytid"
 )
+
+// peertubeEmbedURL derive l'URL D'INTEGRATION d'une URL PeerTube de visionnage.
+//
+// PeerTube protege ses pages `/w/{id}` et `/videos/watch/{id}` du cadrage
+// (`X-Frame-Options`) — les encadrer donne « Firefox ne peut pas ouvrir cette
+// page ». Seule `/videos/embed/{id}` est concue pour l'iframe. On garde l'URL de
+// visionnage comme lien canonique et on n'en derive l'embed qu'au rendu (#1131b).
+// Toute autre forme passe telle quelle : le repli reste sur.
+func peertubeEmbedURL(u string) string {
+	if i := strings.Index(u, "/videos/watch/"); i >= 0 {
+		return u[:i] + "/videos/embed/" + u[i+len("/videos/watch/"):]
+	}
+	if i := strings.Index(u, "/w/"); i >= 0 {
+		return u[:i] + "/videos/embed/" + u[i+len("/w/"):]
+	}
+	return u
+}
 
 // embedYouTubeURL rend l'embed « première vue » (youtube-nocookie) d'une URL
 // YouTube. PUR : appelé depuis le rendu du corps, sans réseau.
@@ -40,7 +58,7 @@ func embedYouTube(c gateway.Contenu) string {
 	case "mirror":
 		for _, r := range c.Repliques {
 			if r.Cible == "peertube" && r.CibleURL != "" {
-				return `<iframe class="sbx-embed" src="` + html.EscapeString(r.CibleURL) +
+				return `<iframe class="sbx-embed" src="` + html.EscapeString(peertubeEmbedURL(r.CibleURL)) +
 					`" allowfullscreen loading="lazy"></iframe>`
 			}
 		}

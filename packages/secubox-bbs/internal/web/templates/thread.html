@@ -124,7 +124,7 @@
 <div class="card lecteur">
   {{if eq .T.MediaKind "video"}}
     <div class="cadre-video">
-      <iframe src="{{.T.MediaURL}}" title="{{.T.Title}}" allowfullscreen
+      <iframe src="{{urlembed .T.MediaURL}}" title="{{.T.Title}}" allowfullscreen
               referrerpolicy="no-referrer" loading="lazy"></iframe>
     </div>
   {{else}}
