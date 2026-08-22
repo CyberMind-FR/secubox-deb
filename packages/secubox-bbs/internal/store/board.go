@@ -216,6 +216,37 @@ func (s *Store) ThreadByID(id int64) (Thread, error) {
 	return t, err
 }
 
+// BasculeVisibiliteFil fait passer un fil de local à public, ou l'inverse, et
+// rend la nouvelle visibilité.
+//
+// LE GESTE APPARTIENT À L'AUTEUR ET AU SYSOP — la même règle que l'édition
+// (peutEditer). Rendre PUBLIC un fil local l'expose hors du LAN : c'est un geste
+// volontaire, jamais un défaut, et un tiers ne peut pas exposer le fil d'autrui.
+func (s *Store) BasculeVisibiliteFil(threadID, editeur int64, role Role) (Visibility, error) {
+	var auteur int64
+	var vis string
+	err := s.db.QueryRow(`SELECT author_id, visibility FROM threads WHERE id=?`, threadID).
+		Scan(&auteur, &vis)
+	if err == sql.ErrNoRows {
+		return "", ErrIntrouvable
+	}
+	if err != nil {
+		return "", err
+	}
+	if editeur != auteur && role != RoleSysop {
+		return "", ErrDroitEdition
+	}
+	nouvelle := VisPublic
+	if Visibility(vis) == VisPublic {
+		nouvelle = VisLocal
+	}
+	if _, err := s.db.Exec(`UPDATE threads SET visibility=? WHERE id=?`,
+		string(nouvelle), threadID); err != nil {
+		return "", err
+	}
+	return nouvelle, nil
+}
+
 // Author rend le pseudonyme d'un auteur.
 func (s *Store) Author(id int64) string {
 	h, _ := s.AuteurEtAvatar(id)

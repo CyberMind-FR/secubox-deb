@@ -981,6 +981,9 @@ func (s *Server) fil(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(r.URL.Path, "/qr"):
 		s.qrFil(w, r, id)
 		return
+	case strings.HasSuffix(r.URL.Path, "/visibilite"):
+		s.basculeVisibilite(w, r, id)
+		return
 	}
 
 	p, pub := s.base(r, "forums")
@@ -1608,6 +1611,37 @@ func (s *Server) publier(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// basculeVisibilite : bouton rapide local ↔ public sur un fil (#1131h).
+//
+// AUTEUR OU SYSOP, comme l'édition — la garde vraie est dans le magasin
+// (BasculeVisibiliteFil) ; ici on n'ajoute que le POST, le jeton CSRF et la
+// redirection. Rendre public expose hors du LAN : le geste est volontaire.
+func (s *Server) basculeVisibilite(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "methode refusee", http.StatusMethodNotAllowed)
+		return
+	}
+	v := s.qui(r)
+	if !v.Connecte {
+		http.Error(w, "connectez-vous", http.StatusForbidden)
+		return
+	}
+	if err := s.verifieCSRF(r); err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	switch _, err := s.st.BasculeVisibiliteFil(id, v.ID, v.Role); err {
+	case nil:
+		http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+	case store.ErrDroitEdition:
+		http.Error(w, "reserve a l'auteur ou au sysop", http.StatusForbidden)
+	case store.ErrIntrouvable:
+		http.NotFound(w, r)
+	default:
+		http.Error(w, "changement non enregistre", http.StatusInternalServerError)
+	}
 }
 
 // nouveau : ouvrir un fil.
