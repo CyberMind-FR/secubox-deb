@@ -1,3 +1,10 @@
+secubox-radio (0.1.27-1~bookworm1) bookworm; urgency=medium
+
+  * Micro : mini-antenne sous le lecteur — une ligne pour saisir + les 2
+    dernières lignes de messages ; le message unique du haut disparaît. (#1131aj)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:30:05 +0200
+
 secubox-radio (0.1.26-1~bookworm1) bookworm; urgency=medium
 
   * Micro : le titre s'affiche bien sur PLUSIEURS lignes (white-space:normal) —
