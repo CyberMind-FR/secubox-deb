@@ -49,6 +49,7 @@
   var titre = $('titre'), meta = $('meta'), jauge = $('jauge');
   var ecoule = $('ecoule'), duree = $('duree'), derive = $('derive');
   var file = $('file'), chat = $('chat'), dire = $('dire');
+  var attente = $('attente');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
   // ── LE VOLUME ─────────────────────────────────────────────────────────────
@@ -192,6 +193,46 @@
     });
   }
 
+  // poseAttente : les propositions EN ATTENTE, chacune avec un bouton de vote.
+  // Le backend compte déjà un cœur sur une proposition (#1131g) ; ici on
+  // l'expose aux auditeurs. Construction DOM pure (createElement + listener) :
+  // la CSP interdit tout style et tout onclick en ligne.
+  function poseAttente(props) {
+    attente.innerHTML = '';
+    var l = props || [];
+    if (!l.length) {
+      attente.innerHTML = '<li class="vide">Aucun titre en attente — proposez-en un.</li>';
+      return;
+    }
+    l.forEach(function (p) {
+      var li = document.createElement('li');
+      var nm = document.createElement('span'); nm.className = 'nm';
+      var b = document.createElement('b');
+      b.textContent = p.titre || p.source; // titre d'un tiers : jamais du balisage
+      var s = document.createElement('small');
+      s.textContent = p.auteur || 'en attente de validation';
+      nm.appendChild(b); nm.appendChild(s);
+      var vote = document.createElement('button');
+      vote.type = 'button';
+      vote.className = 'vote' + (p.aime ? ' on' : '');
+      vote.textContent = '♥ ' + (p.coeurs || 0);
+      vote.setAttribute('aria-label', 'Voter pour ce titre');
+      vote.addEventListener('click', function () {
+        nom(); // voter, c'est signer
+        var poser = !vote.classList.contains('on');
+        json('/api/v1/radio/propositions/' + p.id + '/coeur',
+             { method: poser ? 'POST' : 'DELETE' }).then(function (r) {
+          if (r.corps && r.corps.piste) {
+            vote.classList.toggle('on', r.corps.piste.aime);
+            vote.textContent = '♥ ' + (r.corps.piste.coeurs || 0);
+          }
+        }).catch(function () { /* un vote raté n'est pas une panne */ });
+      });
+      li.appendChild(nm); li.appendChild(vote);
+      attente.appendChild(li);
+    });
+  }
+
   function poseChat(phrases) {
     if (!phrases || !phrases.length) return;
     // ON NE RAMENE EN BAS QUE SI L'ON Y ETAIT : sinon on arrache la lecture a
@@ -219,6 +260,9 @@
     }).catch(function () { /* une sonde ratee n'est pas une panne */ });
     json('/api/v1/radio/playlist').then(function (r) {
       poseFile(r.corps.pistes);
+    }).catch(function () {});
+    json('/api/v1/radio/propositions').then(function (r) {
+      poseAttente(r.corps.propositions);
     }).catch(function () {});
   }
 
