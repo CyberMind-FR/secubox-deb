@@ -1,3 +1,12 @@
+secubox-bbs (0.28.67-1~bookworm1) bookworm; urgency=medium
+
+  * Widget radio du rail : en-tête minimal — 📻 + ⧉ seulement, sans le mot
+    « Radio ». Les boutons média restent dans la barre du micro-lecteur (le
+    parent ne peut pas piloter l'iframe radio, origine distincte). En-tête
+    conservé pour garantir la visibilité. (#1131aa)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:57:58 +0200
+
 secubox-bbs (0.28.66-1~bookworm1) bookworm; urgency=medium
 
   * Revert #1131y : restaure l'en-tête « 📻 Radio » du widget radio du rail —
