@@ -190,3 +190,20 @@ body.mini .vol { width: 72px; }
 body.mini #chat { max-height: 9rem; }             /* quelques lignes de messages */
 body.mini .file li { padding: .35rem .75rem; }
 body.mini .file li .vg { width: 2rem; height: 2rem; }
+
+/* ═══ MODE MICRO /micro (#1131o) : lecteur SEUL, taille d'une carte du
+   carrousel (~170px), pour le widget du rail BBS. body.micro s'ajoute à
+   body.mini : on ne garde que le lecteur et on le réduit à une cardlet. ═══ */
+body.micro .wrap { padding: 0; }
+body.micro .carte:not(.lecteur) { display: none; }   /* rien que le lecteur */
+body.micro .lecteur { margin: 0; border-radius: 10px; }
+body.micro .lecteur .bloc { gap: .55rem; padding: .55rem .6rem; align-items: center; }
+body.micro .cadre { width: 3.4rem; height: 3.4rem; }
+body.micro .etiq, body.micro .barre, body.micro .tps, body.micro .derive { display: none; }
+body.micro .titre { font-size: .9rem; margin: 0; }
+body.micro .meta { font-size: .72rem; }
+body.micro .cmd { margin-top: .35rem; gap: .4rem; }
+body.micro .rond { width: 27px; height: 27px; font-size: 12px; }
+body.micro .rond.gros { width: 33px; height: 33px; font-size: 13px; }
+body.micro .vol { width: 52px; }
+body.micro .avert { font-size: 11px; padding: .4rem .5rem; }

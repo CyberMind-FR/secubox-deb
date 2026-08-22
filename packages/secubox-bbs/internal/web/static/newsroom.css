@@ -335,4 +335,5 @@ a{color:inherit;text-decoration:none}
 .radiowidget h3 .popout{margin-left:auto;border:1px solid var(--line);background:var(--panel);
   color:var(--ink);border-radius:6px;width:22px;height:22px;line-height:1;cursor:pointer;font-size:.8rem}
 .radiowidget h3 .popout:hover{border-color:var(--accent,#c9a84c)}
-.radioframe{display:block;width:100%;height:360px;border:0;border-radius:0 0 var(--r) var(--r);background:var(--panel)}
+/* Micro-lecteur (#1131o) : la hauteur d'une carte du carrousel, pas un panneau. */
+.radioframe{display:block;width:100%;height:118px;border:0;border-radius:0 0 var(--r) var(--r);background:var(--panel)}

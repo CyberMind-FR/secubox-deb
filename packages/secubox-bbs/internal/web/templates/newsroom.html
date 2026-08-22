@@ -183,7 +183,7 @@
    L'iframe est en même origine radio (déclarée dans FrameOrigines). */}}
 {{define "avradio"}}{{if .RadioBase}}<div class="pnl radiowidget">
   <h3>📻 Radio <button class="popout" type="button" data-act="radiopop" data-url="{{.RadioBase}}/mini" title="Détacher — continue dans une fenêtre pendant que vous naviguez">⧉</button></h3>
-  <iframe class="radioframe" src="{{.RadioBase}}/mini" title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
+  <iframe class="radioframe" src="{{.RadioBase}}/micro" title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
 </div>{{end}}{{end}}
 
 {{define "avrail"}}{{template "avradio" .}}
