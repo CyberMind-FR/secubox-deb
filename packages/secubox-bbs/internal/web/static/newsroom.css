@@ -356,4 +356,4 @@ a{color:inherit;text-decoration:none}
 .radiowidget .radiopop-float:hover{border-color:var(--accent,#c9a84c);opacity:1}
 /* Cardlet un peu plus haute (#1131ac) : de quoi montrer barre + vignette +
    titre (2–3 lignes) + prochain titre + dernier message. */
-.radioframe{display:block;width:100%;height:200px;border:0;border-radius:var(--r);background:var(--panel)}
+.radioframe{display:block;width:100%;height:252px;border:0;border-radius:var(--r);background:var(--panel)}
