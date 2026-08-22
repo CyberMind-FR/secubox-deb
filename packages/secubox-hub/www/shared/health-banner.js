@@ -20,7 +20,7 @@
 (function() {
     'use strict';
 
-    const VERSION = '1.3.0';
+    const VERSION = '1.3.1';
     const VISITOR_ORIGIN_API = window.SECUBOX_VISITOR_ORIGIN_API
         || '/api/v1/metrics/visitor-origin';
     const LIVE_HOSTS_API     = window.SECUBOX_LIVE_HOSTS_API
@@ -922,6 +922,16 @@
     // ═══════════════════════════════════════════════════════════════════════════
 
     function init() {
+        // NE PAS S'INJECTER DANS UN LECTEUR INCORPORÉ (#1131t). Le bandeau de
+        // santé appartient à la PAGE RÉELLE d'un service, pas à un lecteur radio
+        // embarqué — la cardlet /micro (dans une iframe) ni la fenêtre détachée
+        // /mini : il y encombrerait un widget minuscule et lancerait des requêtes
+        // métriques inutiles. On garde le bandeau sur le vhost direct (/) seul.
+        if (window.self !== window.top ||
+            /^\/(mini|micro)(\/|$)/.test(location.pathname)) {
+            return;
+        }
+
         // Inject styles
         injectBannerStyles();
         pollLivePanel();
