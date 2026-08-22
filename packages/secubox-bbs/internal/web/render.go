@@ -186,13 +186,14 @@ func mediasIntegres(s string) string {
 		case finitPar(adr, ".mp4", ".webm", ".ogv"):
 			balise = `<video class="jointe" controls preload="none" src="` + adr + `"></video>`
 		case finitPar(adr, ".pdf"):
-			// PDF joint (#1102/#1114) : PAS d'`<embed>`. Il depend d'un greffon du
-			// navigateur et d'une CSP permissive (`object-src`) ; en pratique il
-			// rend une zone vide plus souvent qu'un document. Le repli FIABLE est
-			// une fiche cliquable a icone generique — toujours visible, jamais
-			// muette. Un instantane vaudrait mieux, mais demanderait un rendu PDF
-			// cote serveur a l'envoi : a faire plus tard, l'icone tient d'ici la.
-			balise = ficheFichier(adr, "📄", "Document PDF")
+			// PDF joint (#1131) : lecteur INTEGRE via `<iframe src="/f/NN">`. Le
+			// navigateur rend nativement sa visionneuse — SANS greffon, contrairement
+			// a `<embed>`/`<object>` (qui exigent `object-src` et rendent souvent une
+			// zone vide, #1102/#1114). Le cadre est en meme origine, donc conforme a
+			// `frame-src 'self'` ; la reponse /f/ s'y autorise (X-Frame SAMEORIGIN).
+			// Une fiche cliquable reste dessous : repli visible si un navigateur
+			// telecharge au lieu d'afficher.
+			balise = lecteurPDF(adr)
 		case !strings.Contains(adr[3:], "."):
 			// Adresse ecrite a la main, sans extension : on ne peut pas savoir.
 			// L'image est le cas de loin le plus frequent, et le moins couteux
@@ -217,6 +218,18 @@ func ficheFichier(adr, icone, libelle string) string {
 	return `<a class="jointe jointe-fichier" href="` + adr + `" target="_blank" rel="noopener">` +
 		`<span class="jf-ic" aria-hidden="true">` + icone + `</span>` +
 		`<span class="jf-tx"><b>` + libelle + `</b><small>` + adr + `</small></span></a>`
+}
+
+// lecteurPDF rend un PDF joint en visionneuse INTEGREE (#1131) : un `<iframe>`
+// que le navigateur remplit avec son lecteur natif, plus un lien de repli
+// TOUJOURS visible sous le cadre. L'adresse vient de `lecteurRe` — un
+// `/f/<n>.pdf` deja valide — donc sure a inserer telle quelle. Pas d'`<embed>`
+// (greffon + `object-src`), pas de saisie libre : rien a echapper de plus.
+func lecteurPDF(adr string) string {
+	return `<div class="jointe jointe-pdf">` +
+		`<iframe class="jpdf-vue" src="` + adr + `" title="Document PDF" loading="lazy"></iframe>` +
+		`<a class="jpdf-lien" href="` + adr + `" target="_blank" rel="noopener">📄 Ouvrir le PDF</a>` +
+		`</div>`
 }
 
 // nuesIntegrees transforme `/f/12.png` ecrit tel quel en ancre, pour que la

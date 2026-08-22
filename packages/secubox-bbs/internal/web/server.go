@@ -406,8 +406,12 @@ var empreinteValide = regexp.MustCompile(`^sha(256|384|512)-[A-Za-z0-9+/=]+$`)
 // politique en deux, et un navigateur qui n'arrive pas a la lire peut
 // l'IGNORER ENTIEREMENT — on se croirait protege sans l'etre.
 func (s *Server) frameSrc() string {
-	var ok []string
-	vu := map[string]bool{}
+	// `'self'` en tete : la board encadre SES PROPRES medias — la visionneuse
+	// PDF integree est un `<iframe src="/f/NN">` en meme origine (#1131). Sans
+	// cette entree, `frame-src` bloquerait le cadre. Elle n'ouvre rien vers
+	// l'exterieur : seule notre origine s'encadre.
+	ok := []string{"'self'"}
+	vu := map[string]bool{"'self'": true}
 	ajoute := func(o string) {
 		o = strings.TrimRight(strings.TrimSpace(o), "/")
 		if o == "" || strings.ContainsAny(o, " ;'\"") || vu[o] {
