@@ -1,3 +1,13 @@
+secubox-radio (0.1.18-1~bookworm1) bookworm; urgency=medium
+
+  * Lecture EN ENTIER (#1131z) : corrige « la radio perd la piste et saute à
+    une autre ». Une durée inconnue faisait couper le titre à 4 min (durée par
+    défaut). Le lecteur rapporte désormais la vraie durée du média
+    (loadedmetadata → POST /pistes/<id>/duree) ; le programme la prend en compte
+    immédiatement (MajDuree) et la retient (PoseDuree, remplit le vide seul).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:49:17 +0200
+
 secubox-radio (0.1.17-1~bookworm1) bookworm; urgency=medium
 
   * Revert #1131y (icône 📻 dans la barre micro) : le retrait de l'en-tête du

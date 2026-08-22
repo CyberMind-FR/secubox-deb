@@ -608,6 +608,8 @@ func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
 	switch geste {
 	case "coeur":
 		s.coeur(w, r, id)
+	case "duree":
+		s.poseDuree(w, r, id)
 	case "supprimer":
 		s.supprime(w, r, id)
 	case "devalider":
@@ -615,6 +617,43 @@ func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
 	default:
 		erreur(w, http.StatusNotFound, "geste inconnu")
 	}
+}
+
+// poseDuree enregistre la VRAIE durée d'une piste, rapportée par un lecteur qui
+// vient d'en charger les métadonnées (#1131z). C'est ce qui empêche le
+// programme de couper un titre plus long que la durée par défaut (4 min).
+//
+// PAS UN JUGEMENT, une MESURE : on n'exige pas d'être « connecté », juste
+// l'en-tête d'intention (un site tiers ne peut pas le poser). Bornée (5 s à
+// 4 h) contre une valeur absurde, et le magasin ne remplit que le vide. La
+// correction en mémoire (MajDuree) la rend effective immédiatement, sans quoi
+// le programme aurait déjà sauté avant le prochain tirage.
+func (s *Serveur) poseDuree(w http.ResponseWriter, r *http.Request, id int64) {
+	if r.Method != http.MethodPost {
+		erreur(w, http.StatusMethodNotAllowed, "methode refusee")
+		return
+	}
+	if r.Header.Get("X-Sbx-Radio") == "" {
+		erreur(w, http.StatusForbidden, "en-tete d'intention manquant")
+		return
+	}
+	var corps struct {
+		MS int64 `json:"ms"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256)).Decode(&corps); err != nil {
+		erreur(w, http.StatusBadRequest, "corps illisible")
+		return
+	}
+	if corps.MS < 5000 || corps.MS > 4*3600*1000 {
+		erreur(w, http.StatusBadRequest, "duree hors bornes")
+		return
+	}
+	if err := s.st.PoseDuree(id, corps.MS); err != nil {
+		erreur(w, http.StatusInternalServerError, "duree non enregistree")
+		return
+	}
+	s.prog.MajDuree(id, corps.MS) // effet immédiat sur le programme en cours
+	rendJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // devalide renvoie une piste a la file de validation. RESERVEE AU SYSOP.

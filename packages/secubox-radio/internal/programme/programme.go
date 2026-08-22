@@ -175,3 +175,17 @@ func (p *Programmateur) Oublie(id int64) {
 		p.piste, p.demarre = store.Piste{}, false
 	}
 }
+
+// MajDuree corrige EN MÉMOIRE la durée de la piste EN COURS quand un lecteur
+// vient d'en apprendre la vraie longueur (#1131z). Sans cela, une durée inconnue
+// (0) fait avancer le programme à `DureeParDefaut` (4 min) et COUPE tout titre
+// plus long — c'est le « la radio perd la piste et saute à une autre ». On ne
+// touche que la piste actuelle, et seulement si sa durée était inconnue : une
+// durée déjà établie fait autorité.
+func (p *Programmateur) MajDuree(id, dureeMS int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if dureeMS > 0 && p.piste.ID == id && p.piste.DureeMS == 0 {
+		p.piste.DureeMS = dureeMS
+	}
+}
