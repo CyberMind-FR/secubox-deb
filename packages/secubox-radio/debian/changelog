@@ -1,3 +1,10 @@
+secubox-radio (0.1.22-1~bookworm1) bookworm; urgency=medium
+
+  * Titre à droite de la vignette AUSSI dans /mini (pas seulement /micro) :
+    rangée forcée dans tout mode compact. (#1131af)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:16:37 +0200
+
 secubox-radio (0.1.21-1~bookworm1) bookworm; urgency=medium
 
   * Micro : titre à droite de la vignette, sur la même ligne (rangée forcée
