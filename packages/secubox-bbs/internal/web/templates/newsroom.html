@@ -187,11 +187,8 @@
    en fenêtre pour une écoute sans coupure pendant la navigation. Défini à part
    pour être réutilisé par avrail (fil, compte) ET par le rail de l'accueil.
    L'iframe est en même origine radio (déclarée dans FrameOrigines). */}}
-{{/* Pas d'en-tête « Radio » (#1131y) : l'icône 📻 et les boutons média vivent
-     dans la BARRE du micro-lecteur lui-même. Seul le bouton ⧉ « détacher »
-     flotte sur le cadre. */}}
 {{define "avradio"}}{{if .RadioBase}}<div class="pnl radiowidget">
-  <button class="popout radiopop-float" type="button" data-act="radiopop" data-url="{{.RadioBase}}/mini" title="Détacher — continue dans une fenêtre pendant que vous naviguez">⧉</button>
+  <h3>📻 Radio <button class="popout" type="button" data-act="radiopop" data-url="{{.RadioBase}}/mini" title="Détacher — continue dans une fenêtre pendant que vous naviguez">⧉</button></h3>
   <iframe class="radioframe" src="{{.RadioBase}}/micro" title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
 </div>{{end}}{{end}}
 
