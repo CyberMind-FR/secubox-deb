@@ -305,9 +305,9 @@
 
   function poseChat(phrases) {
     if (!phrases || !phrases.length) return;
-    // ON NE RAMENE EN BAS QUE SI L'ON Y ETAIT : sinon on arrache la lecture a
-    // qui remonte le fil.
-    var colle = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 8;
+    // SAISIE EN HAUT → on PRÉPEND : le message neuf apparaît juste sous le champ,
+    // les précédents descendent et s'estompent (l'animation CSS .ph fait le
+    // reste). Plus de défilement à gérer : le neuf est toujours en vue (#1131v).
     phrases.forEach(function (p) {
       curseurChat = Math.max(curseurChat, p.ID || p.id || 0);
       var d = document.createElement('div'); d.className = 'ph';
@@ -317,9 +317,11 @@
       // balisage. C'est ici la seule barriere, et elle suffit.
       s.textContent = ' ' + (p.Corps || p.corps || '');
       d.appendChild(b); d.appendChild(s);
-      chat.appendChild(d);
+      chat.insertBefore(d, chat.firstChild);
     });
-    if (colle) chat.scrollTop = chat.scrollHeight;
+    // On ne garde que les dernières lignes en vie : une antenne éphémère n'est
+    // pas un journal, et un DOM sans borne finirait par ramer.
+    while (chat.childNodes.length > 40) chat.removeChild(chat.lastChild);
     // MICRO : une seule ligne « dernier message » (#1131u).
     if (estMicro && microLast) {
       var last = phrases[phrases.length - 1];
