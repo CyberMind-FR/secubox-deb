@@ -136,6 +136,8 @@ a{color:inherit;text-decoration:none}
 .vthumb .pl{position:absolute;inset:0;display:grid;place-items:center}
 .vthumb .pl span{width:34px;height:34px;border-radius:50%;background:var(--panel);display:grid;place-items:center;font-size:.85rem;color:var(--sky);border:2px solid var(--sky);transition:.2s;box-shadow:var(--shadow)}
 .vthumb:hover .pl span{transform:scale(1.12);background:var(--sky);color:#fff}
+/* Embed chargé au clic dans la carte (#1131x). */
+.prev .cardframe{width:100%;max-width:360px;aspect-ratio:16/9;border:0;border-radius:9px;display:block;background:#000}
 .vthumb .pop{position:absolute;left:5px;top:5px;font-family:"Fraunces","Cinzel";font-size:.5rem;letter-spacing:.04em;background:var(--panel);color:var(--ink);padding:2px 6px;border-radius:999px;border:1px solid var(--line)}
 
 .stamp{position:absolute;top:12px;right:12px;font-family:"Fraunces","Cinzel";font-weight:700;font-size:.62rem;letter-spacing:.09em;padding:4px 10px;border-radius:6px;border:2px solid;transform:rotate(4deg);text-transform:uppercase;pointer-events:none;opacity:.92}
