@@ -207,3 +207,17 @@ body.micro .rond { width: 27px; height: 27px; font-size: 12px; }
 body.micro .rond.gros { width: 33px; height: 33px; font-size: 13px; }
 body.micro .vol { width: 52px; }
 body.micro .avert { font-size: 11px; padding: .4rem .5rem; }
+
+/* ═══ MICRO affiné (#1131u) : transport en tête, texte réduit, prochain titre
+   + dernier message. Le bandeau de santé ne s'y injecte plus (#1131t). ═══ */
+.microline { display: none; }
+body.micro .infos { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+body.micro .lecteur .bloc { align-items: flex-start; }
+body.micro .meta { display: none; }                 /* texte réduit */
+body.micro .cmd { order: -1; margin-top: 0; }        /* boutons en tête = barre */
+body.micro .titre { font-size: .86rem; line-height: 1.2; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+body.micro .microline { display: block; font-size: .72rem; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+body.micro .micronext { color: var(--violet-clair); }
+body.micro .microlast { color: var(--dim); }

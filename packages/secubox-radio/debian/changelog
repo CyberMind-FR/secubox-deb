@@ -1,3 +1,11 @@
+secubox-radio (0.1.13-1~bookworm1) bookworm; urgency=medium
+
+  * Micro-lecteur affiné (#1131u) : boutons de transport en tête (barre), texte
+    réduit (méta masquée), et deux lignes — le PROCHAIN titre et le DERNIER
+    message — au lieu de la playlist et du chat entiers.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:21:24 +0200
+
 secubox-radio (0.1.12-1~bookworm1) bookworm; urgency=medium
 
   * En attente : PRÉCHARGE le titre d'une proposition YouTube auprès de la
