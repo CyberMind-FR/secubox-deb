@@ -403,7 +403,7 @@ func (s *Serveur) routes() {
 	// passe le chemin entier (voir nginx/radio.conf). Un auditeur ne peut donc
 	// pas atteindre les routes courtes.
 	for _, ch := range []string{"/current", "/playlist", "/propositions",
-		"/propositions/", "/pistes/", "/chat", "/suivante"} {
+		"/propositions/", "/pistes/", "/chat", "/suivante", "/stats"} {
 		h := s.routeur(ch)
 		s.mux.HandleFunc(prefixe+ch, h)
 		s.mux.HandleFunc(ch, s.parAdmin(h))
