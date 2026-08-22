@@ -32,7 +32,7 @@ def test_executer_agrege_la_famille_et_expedie_au_destinataire():
     def faux_pdf(vue, det):
         return b"%PDF-fake"
 
-    def faux_envoyer(pdf, dest, portee, periode):
+    def faux_envoyer(pdf, dest, portee, periode, resume=""):
         envois.append((pdf, dest, portee, periode))
         return {"envoye": True, "destinataire": dest, "octets": len(pdf)}
 
@@ -49,6 +49,34 @@ def test_executer_agrege_la_famille_et_expedie_au_destinataire():
     assert envois == [(b"%PDF-fake", "gk2@secubox.in",
                        "anibal-amiot", "semaine")]
     assert res["envoye"] is True
+
+
+def test_executer_transmet_le_resume_emoji_des_statuts():
+    """Le détail porte des codes de retour → executer bâtit le résumé emoji et
+    le passe à envoyer (corps du mail #1131an), sans que l'agrégateur le sache."""
+
+    class AggAvecStatuts(FauxAgg):
+        def detail(self, vhost, periode="semaine"):
+            self.appels.append(("detail", vhost, periode))
+            return {"detail": vhost, "statuts": {"200": 90, "404": 8, "500": 2}}
+
+    recu = {}
+
+    def faux_pdf(vue, det):
+        return b"%PDF-fake"
+
+    def faux_envoyer(pdf, dest, portee, periode, resume=""):
+        recu["resume"] = resume
+        return {"envoye": True, "destinataire": dest, "octets": len(pdf)}
+
+    cfg = {"famille": "anibal-amiot", "destinataire": "gk2@secubox.in",
+           "periode": "semaine"}
+    rp.executer(AggAvecStatuts(), faux_pdf, faux_envoyer, cfg)
+
+    # Le résumé est non vide et porte les émoticônes de classe et de type.
+    assert "🟢 2xx" in recu["resume"]
+    assert "🔍 404" in recu["resume"]
+    assert "💥 500" in recu["resume"]
 
 
 def test_config_planifie_par_defaut_anibal_vers_gk2(monkeypatch, tmp_path):
