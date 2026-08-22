@@ -202,8 +202,12 @@
   function carStop() { if (carTimer) { clearInterval(carTimer); carTimer = null; } }
   function carPlay() { if (carReduce || !cartrack || carCards().length < 2) return; carStop(); carTimer = setInterval(carTick, 5000); }
   function carHold() { carStop(); clearTimeout(carResume); carResume = setTimeout(carPlay, 9000); }
-  if (cartrack && cardots) {
-    carCards().forEach(function (card, j) {
+  // L'AUTO-DÉFILEMENT NE DÉPEND QUE DE LA PISTE (#1131s) : le carrousel tourne
+  // PARTOUT où il apparaît, même sans pastilles. Auparavant tout — y compris
+  // carPlay — était sous `cartrack && cardots` : une vue sans #cardots restait
+  // figée. Les pastilles ne sont plus qu'un ORNEMENT optionnel.
+  if (cartrack) {
+    if (cardots) carCards().forEach(function (card, j) {
       var b = document.createElement("button");
       b.type = "button"; b.setAttribute("aria-label", "Aller au dossier " + (j + 1));
       b.addEventListener("click", function () { carHold(); card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); });
