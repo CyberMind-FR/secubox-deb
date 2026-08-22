@@ -34,54 +34,7 @@
   </aside>
 
   <main class="feed">
-    {{if .News}}
-    <section class="caroussel" aria-label="À la une — carrousel des derniers dossiers">
-      <div class="carhead"><h2 class="serif">À la une</h2><span class="sub">glissez, flèches ◀ ▶ ou ← →</span>
-        <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Dossier précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Dossier suivant">▶</button></span>
-      </div>
-      <div class="cartrack" id="cartrack" tabindex="0" role="list">
-        {{range .News}}
-        {{$n := .}}
-        {{if .Feed}}{{$f := .Feed}}
-        <a class="ccard" role="listitem" data-k="podcast" href="/media#f{{$f.ID}}">
-          {{if $f.Vignette}}<span class="cccover"><img src="{{$f.Vignette}}" alt="" loading="lazy"></span>{{end}}
-          <div class="ccbody">
-            <div class="cctop"><span class="ccic">{{$f.Glyphe}}</span><span class="cctype">médiathèque</span><span class="ccmed">🎧</span></div>
-            <h3 class="serif">{{$f.Titre}}</h3>
-            <div class="ccwho">{{len $f.Episodes}} épisode(s)</div>
-          </div>
-        </a>
-        {{else}}{{with .Fil}}
-        {{$cover := ""}}{{range $n.Medias}}{{if and (eq .Kind "image") (eq $cover "")}}{{$cover = .Ref}}{{end}}{{end}}
-        {{$hasVid := false}}{{$hasAud := false}}{{$hasFile := false}}
-        {{range $n.Medias}}{{if eq .Kind "video"}}{{$hasVid = true}}{{else if eq .Kind "audio"}}{{$hasAud = true}}{{else if eq .Kind "file"}}{{$hasFile = true}}{{end}}{{end}}
-        {{/* Type PRINCIPAL de la carte = ce que montre déjà l'icône .ccic. Les
-             badges .ccmed ne signalent que les médias SECONDAIRES : sans ce
-             garde-fou, une carte vidéo affichait 🎬 deux fois (icône + badge) —
-             le « doublon fantôme » (#1114). */}}
-        {{$prim := ""}}{{if or (eq .MediaKind "video") (eq .Source "video")}}{{$prim = "video"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$prim = "audio"}}{{end}}
-        {{/* Glyphe de type, calculé UNE fois : sert l'icône .ccic ET la vignette
-             de repli. Une carte sans média/cover n'est plus une tuile VIDE (#1114) :
-             elle reçoit une « mosaïque » — fond teinté par data-k + gros glyphe. */}}
-        {{$g := "💬"}}{{if eq .MediaKind "audio"}}{{$g = "🎧"}}{{else if eq .MediaKind "video"}}{{$g = "🎬"}}{{else if eq .Source "video"}}{{$g = "🎬"}}{{else if eq .Source "podcast"}}{{$g = "🎧"}}{{else if eq .Source "film"}}{{$g = "🎞️"}}{{else if eq .Source "livre"}}{{$g = "📖"}}{{else if .Source}}{{$g = "🔗"}}{{end}}
-        <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
-          {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{else if $n.CleApercu}}<span class="cccover"><img src="/urlshot/{{$n.CleApercu}}?v={{$.VCSS}}" alt="" loading="lazy"></span>{{else}}<span class="cccover ph"><span class="phg">{{$g}}</span></span>{{end}}
-          <div class="ccbody">
-            <div class="cctop"><span class="ccic">{{$g}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
-            <h3 class="serif">{{.Title}}</h3>
-            {{/* TEXTE BRUT, PAS `lien` : la carte est DÉJÀ un <a>. Un <a> imbriqué
-                 (ce que produit `lien` sur une URL) est invalide — le navigateur
-                 referme la carte d'un coup, d'où le carrousel « cassé » (#1114). */}}
-            {{if $n.Apercu}}<p class="ccdek">{{$n.Apercu}}</p>{{end}}
-            <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
-          </div>
-        </a>
-        {{end}}{{end}}
-        {{end}}
-      </div>
-      <div class="cardots" id="cardots" aria-hidden="true"></div>
-    </section>
-    {{end}}
+    {{if .News}}{{template "avunealune" .}}{{end}}
     <div class="feedhead"><h2 class="serif">Tous les dossiers</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
     {{range .News}}
     {{if .Feed}}{{$f := .Feed}}
@@ -234,3 +187,56 @@
   {{else}}<div class="teaser">Aucun article en cours.</div>{{end}}
   {{if .V.Connecte}}<a class="billet" href="/article/nouveau"><b>＋ Nouvel article</b><div class="ex">à plusieurs mains → publié dans la gazette</div></a>{{end}}
 </div>{{end}}
+
+
+{{/* avunealune : carrousel « À la une » PARTAGÉ (#1131d). newsroom (accueil/
+     salon) ET mediatheque.html (émissions) le réutilisent — une seule source
+     pour la mosaïque des derniers dossiers. */}}
+{{define "avunealune"}}
+    <section class="caroussel" aria-label="À la une — carrousel des derniers dossiers">
+      <div class="carhead"><h2 class="serif">À la une</h2><span class="sub">glissez, flèches ◀ ▶ ou ← →</span>
+        <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Dossier précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Dossier suivant">▶</button></span>
+      </div>
+      <div class="cartrack" id="cartrack" tabindex="0" role="list">
+        {{range .News}}
+        {{$n := .}}
+        {{if .Feed}}{{$f := .Feed}}
+        <a class="ccard" role="listitem" data-k="podcast" href="/media#f{{$f.ID}}">
+          {{if $f.Vignette}}<span class="cccover"><img src="{{$f.Vignette}}" alt="" loading="lazy"></span>{{end}}
+          <div class="ccbody">
+            <div class="cctop"><span class="ccic">{{$f.Glyphe}}</span><span class="cctype">médiathèque</span><span class="ccmed">🎧</span></div>
+            <h3 class="serif">{{$f.Titre}}</h3>
+            <div class="ccwho">{{len $f.Episodes}} épisode(s)</div>
+          </div>
+        </a>
+        {{else}}{{with .Fil}}
+        {{$cover := ""}}{{range $n.Medias}}{{if and (eq .Kind "image") (eq $cover "")}}{{$cover = .Ref}}{{end}}{{end}}
+        {{$hasVid := false}}{{$hasAud := false}}{{$hasFile := false}}
+        {{range $n.Medias}}{{if eq .Kind "video"}}{{$hasVid = true}}{{else if eq .Kind "audio"}}{{$hasAud = true}}{{else if eq .Kind "file"}}{{$hasFile = true}}{{end}}{{end}}
+        {{/* Type PRINCIPAL de la carte = ce que montre déjà l'icône .ccic. Les
+             badges .ccmed ne signalent que les médias SECONDAIRES : sans ce
+             garde-fou, une carte vidéo affichait 🎬 deux fois (icône + badge) —
+             le « doublon fantôme » (#1114). */}}
+        {{$prim := ""}}{{if or (eq .MediaKind "video") (eq .Source "video")}}{{$prim = "video"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$prim = "audio"}}{{end}}
+        {{/* Glyphe de type, calculé UNE fois : sert l'icône .ccic ET la vignette
+             de repli. Une carte sans média/cover n'est plus une tuile VIDE (#1114) :
+             elle reçoit une « mosaïque » — fond teinté par data-k + gros glyphe. */}}
+        {{$g := "💬"}}{{if eq .MediaKind "audio"}}{{$g = "🎧"}}{{else if eq .MediaKind "video"}}{{$g = "🎬"}}{{else if eq .Source "video"}}{{$g = "🎬"}}{{else if eq .Source "podcast"}}{{$g = "🎧"}}{{else if eq .Source "film"}}{{$g = "🎞️"}}{{else if eq .Source "livre"}}{{$g = "📖"}}{{else if .Source}}{{$g = "🔗"}}{{end}}
+        <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
+          {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{else if $n.CleApercu}}<span class="cccover"><img src="/urlshot/{{$n.CleApercu}}?v={{$.VCSS}}" alt="" loading="lazy"></span>{{else}}<span class="cccover ph"><span class="phg">{{$g}}</span></span>{{end}}
+          <div class="ccbody">
+            <div class="cctop"><span class="ccic">{{$g}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
+            <h3 class="serif">{{.Title}}</h3>
+            {{/* TEXTE BRUT, PAS `lien` : la carte est DÉJÀ un <a>. Un <a> imbriqué
+                 (ce que produit `lien` sur une URL) est invalide — le navigateur
+                 referme la carte d'un coup, d'où le carrousel « cassé » (#1114). */}}
+            {{if $n.Apercu}}<p class="ccdek">{{$n.Apercu}}</p>{{end}}
+            <div class="ccwho"><span class="ccav"></span>{{.Author}} · {{date .LastPostAt}}</div>
+          </div>
+        </a>
+        {{end}}{{end}}
+        {{end}}
+      </div>
+      <div class="cardots" id="cardots" aria-hidden="true"></div>
+    </section>
+{{end}}

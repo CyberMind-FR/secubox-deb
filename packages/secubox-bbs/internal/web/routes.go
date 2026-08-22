@@ -713,6 +713,11 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// rend en MÉDIATHÈQUE — flux en sous-dossiers, épisodes ordonnés par type et
 	// jouables — plutôt qu'en liste plate de fils par épisode.
 	if podcasterDominant(p.Threads) {
+		// #1131d : garder la mosaïque « À la une » en tête de la médiathèque
+		// (choix utilisateur : mosaïque + liste par flux dessous). Les cartes
+		// viennent des fils du salon, comme la vue rédaction ; les flux/épisodes
+		// restent listés en dessous.
+		p.News = s.composerRedactionSalon(p.Threads, pub)
 		s.poseRail(&p)
 		s.rendMediatheque(w, r, p)
 		return
