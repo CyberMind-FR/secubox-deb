@@ -198,7 +198,7 @@
     if (!cartrack) return;
     var c = cartrack.querySelector(".ccard");
     var step = (c ? c.offsetWidth + 14 : 220) * 1.5;
-    cartrack.scrollBy({ left: dir * step, behavior: "smooth" });
+    cartrack.scrollBy({ left: dir * step, behavior: carAnim });
   }
   function carSync() {
     if (!cartrack || !cardots) return;
@@ -215,10 +215,14 @@
      si moins-d'animation est demandé ou s'il n'y a qu'une carte. */
   var carTimer = null, carResume = null;
   var carReduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Le carrousel tourne POUR TOUT LE MONDE (#1131al) ; « réduire les
+  // animations » ne coupe pas la rotation, il la rend INSTANTANÉE (pas de
+  // défilement animé) — on respecte la préférence sans figer le carrousel.
+  var carAnim = carReduce ? "auto" : "smooth";
   function carAtEnd() { return cartrack && cartrack.scrollLeft + cartrack.clientWidth >= cartrack.scrollWidth - 2; }
-  function carTick() { if (!cartrack) return; if (carAtEnd()) cartrack.scrollTo({ left: 0, behavior: "smooth" }); else carScrollByCards(1); }
+  function carTick() { if (!cartrack) return; if (carAtEnd()) cartrack.scrollTo({ left: 0, behavior: carAnim }); else carScrollByCards(1); }
   function carStop() { if (carTimer) { clearInterval(carTimer); carTimer = null; } }
-  function carPlay() { if (carReduce || !cartrack || carCards().length < 2) return; carStop(); carTimer = setInterval(carTick, 5000); }
+  function carPlay() { if (!cartrack || carCards().length < 2) return; carStop(); carTimer = setInterval(carTick, 5000); }
   function carHold() { carStop(); clearTimeout(carResume); carResume = setTimeout(carPlay, 9000); }
   // L'AUTO-DÉFILEMENT NE DÉPEND QUE DE LA PISTE (#1131s) : le carrousel tourne
   // PARTOUT où il apparaît, même sans pastilles. Auparavant tout — y compris
