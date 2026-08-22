@@ -114,7 +114,11 @@ def executer(agg, construire_pdf, envoyer, cfg: dict | None = None) -> dict:
     vue = agg.current(c["periode"], grouper=True)
     det = agg.detail(c["famille"], c["periode"])
     pdf = construire_pdf(vue, det)
-    return envoyer(pdf, c["destinataire"], c["famille"], c["periode"])
+    # Résumé emoji des codes de retour dans le corps du mail (#1131an). Import
+    # local de `rapport` comme `main()` — la tâche tourne avec api/ sur le path.
+    import rapport
+    resume = rapport.resume_statuts((det or {}).get("statuts"))
+    return envoyer(pdf, c["destinataire"], c["famille"], c["periode"], resume=resume)
 
 
 def main(argv=None) -> int:
