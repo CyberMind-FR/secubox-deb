@@ -83,7 +83,10 @@
       {{if $n.Apercu}}<p class="dek">{{lien $n.Apercu}}</p>{{end}}
       {{if $n.Medias}}<div class="cmedias">{{range $n.Medias}}{{if eq .Kind "image"}}<a class="cmini" href="{{.Ref}}" target="_blank" rel="noopener"><img src="{{.Ref}}" alt="" loading="lazy"></a>{{else if eq .Kind "audio"}}<audio class="cplay" controls preload="none" src="{{.Ref}}"></audio>{{else if eq .Kind "video"}}<video class="cvid" controls preload="metadata" playsinline src="{{.Ref}}"></video>{{else}}<a class="cmini ic" href="{{.Ref}}" target="_blank" rel="noopener" title="fichier">📎</a>{{end}}{{end}}</div>{{end}}
       {{if or (eq .MediaKind "video") (eq .Source "video")}}
-      <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
+      {{/* CLIQUER = LIRE ICI (#1131x). L'embed ne se charge QUE sur clic — pas
+           N iframes tierces au chargement du fil (perf + vie privée). Sans URL
+           d'embed, la vignette reste un simple lien vers le fil. */}}
+      <div class="prev"><a class="vthumb"{{if .MediaURL}} data-act="cardplay" data-embed="{{urlembed .MediaURL}}"{{end}} href="/t/{{.ID}}"><span class="pop">▶ lire ici</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
       {{/* La conversation VIVE remplit l'espace de la carte, du plus récent au
            premier, AU-DESSUS des boutons (#1131q). Remplace l'ancien unique
