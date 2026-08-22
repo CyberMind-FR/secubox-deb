@@ -171,3 +171,22 @@ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.75rem;margin
   border-radius:10px;padding:8px 15px;font:inherit;font-size:13.5px;cursor:pointer}
 .btn.primaire{background:var(--violet);border-color:var(--violet);color:#fff;font-weight:600}
 .btn.primaire:hover{background:var(--violet-clair)}
+
+/* ═══ MODE COMPACT /mini (#1131m) : widget du rail BBS + fenêtre détachée. ═══
+   Même page, mise en page resserrée, focalisée sur l'écoute. */
+.mini body, body.mini { background: var(--panel); }
+body.mini .wrap { max-width: none; padding: .5rem .5rem 1rem; }
+body.mini .tete { display: none; }               /* pas de gros en-tête */
+body.mini [data-mini-hide] { display: none; }     /* ni propositions ni formulaire */
+body.mini .carte { border-radius: 10px; margin: 0 0 .5rem; }
+body.mini .entete { padding: .5rem .75rem; font-size: .82rem; }
+body.mini .lecteur .bloc { gap: .6rem; }
+body.mini .cadre { width: 4.5rem; height: 4.5rem; }
+body.mini .titre { font-size: 1rem; }
+body.mini .cmd { gap: .5rem; margin-top: .6rem; }
+body.mini .rond { width: 32px; height: 32px; font-size: 13px; }
+body.mini .rond.gros { width: 42px; height: 42px; font-size: 15px; }
+body.mini .vol { width: 72px; }
+body.mini #chat { max-height: 9rem; }             /* quelques lignes de messages */
+body.mini .file li { padding: .35rem .75rem; }
+body.mini .file li .vg { width: 2rem; height: 2rem; }

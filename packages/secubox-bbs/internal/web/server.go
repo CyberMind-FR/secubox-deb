@@ -97,6 +97,10 @@ type Options struct {
 	//
 	// Vide, `frame-src` reste ferme et aucun lecteur ne s'integre.
 	FrameOrigines []string
+	// RadioBase : URL publique de la radio (#1131m). Vide → pas de widget radio
+	// dans le rail. Son origine doit AUSSI figurer dans FrameOrigines pour que
+	// la CSP autorise l'iframe.
+	RadioBase string
 	// MediaOrigines : origines de NOS services dont on accepte de relayer une
 	// vignette — peertube, podcaster, radio, billets. Chacune est un vhost
 	// distinct du BBS, donc `img-src 'self'` ne les couvre pas.

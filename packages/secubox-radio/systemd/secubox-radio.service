@@ -15,7 +15,8 @@ ExecStart=/usr/sbin/secubox-radiod \
     --ytsas http://10.100.0.180:8091 \
     --banniere-origine https://admin.gk2.secubox.in \
     --banniere-hash sha256-eDTYsncfrGT/tlGmdDgSPq9JNg8lg8MeoFWIUtAxVHs= \
-    --banniere-style sha256-2HVN0jyg43/7tFpU8UVAi4XD067D/50XDOJYznR2CIo=
+    --banniere-style sha256-2HVN0jyg43/7tFpU8UVAi4XD067D/50XDOJYznR2CIo= \
+    --cadre-parent https://bbs.gk2.secubox.in
 Restart=on-failure
 RestartSec=5
 

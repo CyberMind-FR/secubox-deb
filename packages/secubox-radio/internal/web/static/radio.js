@@ -6,6 +6,17 @@
 (function () {
   'use strict';
 
+  // MODE COMPACT (#1131m) : la même page sert de widget incorporé dans le rail
+  // BBS (et de fenêtre détachée). Le chemin /mini suffit à le déclarer ; le CSS
+  // resserre alors la mise en page et masque ce qui ne sert pas à ÉCOUTER.
+  if (location.pathname === '/mini') {
+    document.documentElement.classList.add('mini');
+    if (document.body) document.body.classList.add('mini');
+    else document.addEventListener('DOMContentLoaded', function () {
+      document.body.classList.add('mini');
+    });
+  }
+
   // ── LE PSEUDONYME ─────────────────────────────────────────────────────────
   //
   // CE N'EST PAS UNE AUTHENTIFICATION, et la page ne pretend pas le contraire.

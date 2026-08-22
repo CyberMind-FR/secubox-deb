@@ -104,6 +104,7 @@ func main() {
 		ptOrigine = flag.String("peertube-origine", "", "instance PeerTube autorisee a fournir le lecteur video ; vide = aucune video integree")
 		mediaOrig = flag.String("media-origines", "",
 			"origines de NOS services dont on relaie les vignettes, separees par des virgules")
+		radioBase = flag.String("radio-base", "", "URL publique de la radio ; non vide = widget lecteur incorporé dans le rail (son origine doit aussi être dans --frame-origines)")
 		frameOrig = flag.String("frame-origines", "",
 			"services autorises a fournir un lecteur incorpore, separes par des virgules")
 		podDB     = flag.String("podcast-db", "/var/lib/secubox/podcaster/podcaster.db", "base du podcaster, lue en lecture seule")
@@ -165,6 +166,7 @@ func main() {
 		PeerTubeOrigine: *ptOrigine, PodcastRacine: *podRacine, PodcastDB: *podDB,
 		MediaOrigines: origines(*mediaOrig),
 		FrameOrigines: origines(*frameOrig),
+		RadioBase:     strings.TrimRight(*radioBase, "/"),
 		AuthSocket:    *authSock,
 		YtsasOrigine:  *ytsasOrig,
 	})

@@ -69,6 +69,11 @@ type Serveur struct {
 	// bas de page, illisible — avec un refus CSP dans la console pour seule
 	// trace.
 	BanniereStyle string
+	// CadreParent : origine AUTORISÉE à incorporer le lecteur compact /mini
+	// (le widget radio du rail BBS, #1131m). Vide = /mini reste non incorporable
+	// (`frame-ancestors 'self'`). Une seule origine, revalidée : un espace ou un
+	// point-virgule couperait la politique en deux.
+	CadreParent string
 	// Racine : plus utilisee depuis que l'on relaie au lieu de recopier.
 	//
 	// PAS L'eMMC : elle s'est deja remplie sur cette board et a produit des
@@ -144,9 +149,56 @@ func (s *Serveur) politique() string {
 	if e := strings.TrimSpace(s.BanniereStyle); empreinteValide.MatchString(e) {
 		style += " '" + e + "'"
 	}
+	return s.politiqueAvecAncetres(script, style, connect, "'none'")
+}
+
+// politiqueMini : la politique du lecteur compact /mini, incorporable par la
+// SEULE origine CadreParent (le rail BBS, #1131m). Tout le reste est identique à
+// la politique normale — même stricte, mêmes empreintes de bannière.
+func (s *Serveur) politiqueMini() string {
+	script, connect := "'self'", "'self'"
+	if o := strings.TrimSpace(s.BanniereOrigine); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		script += " " + o
+		connect += " " + o
+	}
+	if e := strings.TrimSpace(s.BanniereHash); empreinteValide.MatchString(e) {
+		script += " '" + e + "'"
+	}
+	style := "'self'"
+	if e := strings.TrimSpace(s.BanniereStyle); empreinteValide.MatchString(e) {
+		style += " '" + e + "'"
+	}
+	anc := "'self'"
+	if o := strings.TrimSpace(s.CadreParent); o != "" && !strings.ContainsAny(o, " ;'\"") {
+		anc += " " + o
+	}
+	return s.politiqueAvecAncetres(script, style, connect, anc)
+}
+
+func (s *Serveur) politiqueAvecAncetres(script, style, connect, ancetres string) string {
 	return "default-src 'self'; media-src 'self'; img-src 'self' data:; " +
 		"script-src " + script + "; style-src " + style + "; connect-src " + connect + "; " +
-		"frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		"frame-ancestors " + ancetres + "; base-uri 'none'; form-action 'self'"
+}
+
+// miniPlayer sert le lecteur COMPACT — mêmes octets que l'accueil (le script
+// bascule en mode « mini » d'après le chemin), mais une politique qui autorise
+// l'incorporation par le rail BBS (#1131m). Le contenu identique évite un second
+// gabarit à tenir en phase.
+func (s *Serveur) miniPlayer(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/mini" {
+		http.NotFound(w, r)
+		return
+	}
+	b := pageAccueil()
+	if b == nil {
+		erreur(w, http.StatusInternalServerError, "page indisponible")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", s.politiqueMini())
+	w.Write(b)
 }
 
 // empreinteValide : une empreinte CSP bien formee, et rien d'autre.
@@ -300,6 +352,7 @@ func (s *Serveur) routes() {
 	// donnerait une page blanche sans rien dire. Ici elle ne peut pas manquer.
 	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
 	s.mux.HandleFunc("/", s.accueil)
+	s.mux.HandleFunc("/mini", s.miniPlayer)
 	s.mux.HandleFunc("/media/", s.servirMedia)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

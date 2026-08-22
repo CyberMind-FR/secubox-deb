@@ -1,3 +1,11 @@
+secubox-radio (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * Lecteur COMPACT /mini (#1131m) : même page, mise en page resserrée (le CSS
+    bascule sur le chemin), incorporable par le rail BBS via --cadre-parent
+    (frame-ancestors 'self' + origine parente ; l'accueil reste 'none').
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:30:11 +0200
+
 secubox-radio (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * En attente : tri TOP-DOWN par les votes — les titres les plus soutenus
