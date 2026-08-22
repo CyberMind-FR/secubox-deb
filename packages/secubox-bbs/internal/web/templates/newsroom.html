@@ -85,6 +85,10 @@
       {{if or (eq .MediaKind "video") (eq .Source "video")}}
       <div class="prev"><a class="vthumb" href="/t/{{.ID}}"><span class="pop">⤢ regarder</span><span class="pl"><span>▶</span></span></a></div>
       {{end}}
+      {{/* La conversation VIVE remplit l'espace de la carte, du plus récent au
+           premier, AU-DESSUS des boutons (#1131q). Remplace l'ancien unique
+           « dernier commentaire » posé sous les boutons. */}}
+      {{if $n.Recents}}<div class="cthread">{{range $n.Recents}}<div class="cmsg"><span class="who">{{.Auteur}} · {{date .At}}</span> {{lien .Extrait}}</div>{{end}}</div>{{end}}
       <div class="dfoot">
         <span class="meta">
           {{if eq .Visibility "public"}}<span class="pill pub">public</span>{{else}}<span class="pill loc">local</span>{{end}}
@@ -95,7 +99,6 @@
         {{if $.V.Connecte}}<a class="btn" href="/article/nouveau?t={{.ID}}">✍️ Co-écrire</a>{{end}}
         <a class="btn discuss" href="/t/{{.ID}}">💬 Discuter</a>
       </div>
-      {{if $n.LastExtrait}}<div class="lastc"><span class="who">{{$n.LastAuteur}} · {{date $n.LastAt}}</span> {{lien $n.LastExtrait}}</div>{{end}}
     </article>
     {{end}}{{end}}
     {{else}}
