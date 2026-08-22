@@ -57,12 +57,14 @@
           <button class="rond" id="muet" title="Couper le son" aria-label="Couper le son">🔊</button>
           <input type="range" class="vol" id="volume" min="0" max="1" step="0.02" value="1"
                  title="Volume" aria-label="Volume">
+          <button class="rond detach" id="detach" type="button" title="Détacher dans une fenêtre" aria-label="Détacher">⧉</button>
           <span class="sp"></span>
           <span class="derive" id="derive"></span>
         </div>
         <!-- Lignes MICRO uniquement (#1131u) : cachées ailleurs, révélées par
              body.micro pour le widget du rail — le prochain titre et le dernier
              message, sans le reste. -->
+        <div class="microline microstatus" id="micro-status"></div>
         <div class="microline micronext" id="micro-next"></div>
         <div class="microline microlast" id="micro-last"></div>
       </div>

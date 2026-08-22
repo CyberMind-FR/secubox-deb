@@ -188,10 +188,9 @@
    pour être réutilisé par avrail (fil, compte) ET par le rail de l'accueil.
    L'iframe est en même origine radio (déclarée dans FrameOrigines). */}}
 {{define "avradio"}}{{if .RadioBase}}<div class="pnl radiowidget">
-  {{/* En-tête minimal (#1131aa) : l'icône 📻 et ⧉ seulement — les boutons média
-       vivent dans la barre du micro-lecteur juste dessous (l'iframe est en
-       origine radio distincte, le parent ne peut pas piloter son <video>). */}}
-  <h3 class="radiohead">📻<button class="popout" type="button" data-act="radiopop" data-url="{{.RadioBase}}/mini" title="Détacher — continue dans une fenêtre pendant que vous naviguez">⧉</button></h3>
+  {{/* Aucune en-tête ni bouton parent (#1131ae) : le lecteur /micro EST la
+       cardlet. Le bouton « détacher » ⧉ vit DANS sa barre de boutons média
+       (côté radio), pas ici. On ne touche pas au modèle de boîte. */}}
   <iframe class="radioframe" src="{{.RadioBase}}/micro" title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
 </div>{{end}}{{end}}
 

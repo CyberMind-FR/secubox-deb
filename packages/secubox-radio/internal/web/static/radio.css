@@ -225,9 +225,27 @@ body.micro .cmd { position: absolute; top: 0; left: 0; right: 0; margin: 0;
   border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0;
   align-items: center; z-index: 2; }
 body.micro .cmd .derive { display: none; }
-body.micro .titre { font-size: .86rem; line-height: 1.2; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
-body.micro .microline { display: block; font-size: .72rem; line-height: 1.25;
+/* Titre À DROITE de la vignette, sur 2–3 lignes, texte plus petit (#1131ac) —
+   au lieu d'une seule ligne tronquée. */
+body.micro .titre { font-size: .74rem; line-height: 1.2; margin: 0; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden; }
+body.micro .cadre { width: 6rem; height: 6rem; }
+body.micro .microline { display: block; font-size: .7rem; line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 body.micro .micronext { color: var(--violet-clair); }
 body.micro .microlast { color: var(--dim); }
+
+/* ⧉ « détacher » : uniquement dans le lecteur incorporé /micro (#1131ae). */
+.detach { display: none; }
+body.micro .detach { display: grid; place-items: center; }
+
+/* Titre À DROITE de la vignette, même ligne (#1131af) — dans TOUT mode compact
+   (/mini ET /micro) : ces vues sont étroites, mais on FORCE la rangée, sinon la
+   media query `max-width:34rem` empile vignette puis titre. */
+body.mini .lecteur .bloc { flex-direction: row; align-items: flex-start; }
+body.mini .cadre { aspect-ratio: auto; }
+body.micro .cadre { width: 6rem; height: 6rem; }
+
+/* Ligne de STATUT emoji dans l'espace libre du micro (#1131ag). */
+body.micro .microstatus { color: var(--mint); font-size: .68rem; }
