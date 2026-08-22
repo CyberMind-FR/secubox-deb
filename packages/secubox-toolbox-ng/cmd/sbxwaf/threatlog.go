@@ -85,9 +85,20 @@ type logEntry struct {
 // On any I/O error the error is printed to stderr — the request is never
 // interrupted by a log write failure (best-effort, mirrors Python except clause).
 func (l *ThreatLog) Record(rec ThreatRecord) {
+	// LE TRAFIC INTERNE N'EST PAS UN ATTAQUANT (#1131am). Un health check, le
+	// watchdog, l'agrégateur, le fetch des métriques de la bannière depuis
+	// 127.0.0.1 : sans X-Forwarded-For réel, clientIP retombe sur le PAIR
+	// (127.0.0.1 / la passerelle LAN), et « attaquants persistants » se
+	// retrouvait dominé par 127.0.0.1 (68k faux positifs). On AGRÈGE tout le
+	// privé/loopback sous un seul repère « local » : un bucket clairement
+	// interne, pas une IP d'attaquant qu'on classerait en tête.
+	clientIP := rec.ClientIP
+	if privateCIDR(clientIP) {
+		clientIP = "local"
+	}
 	entry := logEntry{
 		Timestamp: time.Now().Format(time.RFC3339),
-		ClientIP:  rec.ClientIP,
+		ClientIP:  clientIP,
 		Host:      rec.Host,
 		Method:    rec.Method,
 		Path:      rec.Path,
