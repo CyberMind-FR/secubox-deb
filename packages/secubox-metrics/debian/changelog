@@ -1,3 +1,15 @@
+secubox-metrics (1.10.4-1~bookworm1) bookworm; urgency=medium
+
+  * rapport planifié : résumé EMOJI des codes de retour dans le CORPS du mail
+    (le PDF est en latin-1, sans emoji) — groupé par classe 🟢2xx / 🔵3xx /
+    🟠4xx / 🔴5xx, avec une émoticône par type d'erreur (🔍404, 🚫403, 🔌502,
+    😴503, 💥500…). Détail des principaux 4xx/5xx. (#1131an)
+  * cadence revue : le service QUOTIDIEN tire désormais le bilan des 7 derniers
+    jours (période « semaine »), et le service HEBDOMADAIRE (chaque lundi) tire
+    le bilan MENSUEL (période « mois », 30 jours).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:30:00 +0200
+
 secubox-metrics (1.10.3-1~bookworm1) bookworm; urgency=medium
 
   * rapport.envoyer : champ `note` facultatif (`[rapport] note = "..."`) joint

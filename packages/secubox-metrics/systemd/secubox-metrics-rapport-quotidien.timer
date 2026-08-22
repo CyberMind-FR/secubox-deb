@@ -3,7 +3,7 @@ Description=SecuBox — déclenche le rapport de fréquentation quotidien (05:00
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1059
 
 [Timer]
-# Chaque matin à 5h : le bilan de la veille part dans la boîte interne.
+# Chaque matin à 5h : le bilan des 7 derniers jours part dans la boîte interne.
 OnCalendar=*-*-* 05:00:00
 RandomizedDelaySec=10m
 # Box éteinte à 5h → rattrapage au démarrage suivant.
