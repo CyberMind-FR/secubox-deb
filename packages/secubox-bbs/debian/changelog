@@ -1,3 +1,10 @@
+secubox-bbs (0.28.66-1~bookworm1) bookworm; urgency=medium
+
+  * Revert #1131y : restaure l'en-tête « 📻 Radio » du widget radio du rail —
+    sa suppression rendait la cardlet invisible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:44:16 +0200
+
 secubox-bbs (0.28.64-1~bookworm1) bookworm; urgency=medium
 
   * Cartes vidéo : « lire ici » — l'embed (youtube-nocookie / peertube) se
