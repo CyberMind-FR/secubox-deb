@@ -97,6 +97,14 @@ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.75rem;margin
 .rond.gros{width:52px;height:52px;font-size:18px;background:var(--violet);
   border-color:var(--violet);color:#fff;box-shadow:0 6px 18px -6px var(--violet)}
 .rond.aime.on{color:var(--pink);border-color:var(--pink)}
+.rond.muet{color:var(--dim)}
+/* Curseur de volume (#1131c) : discret, à la teinte de l'antenne. */
+.vol{-webkit-appearance:none;appearance:none;width:96px;height:4px;border-radius:2px;
+  background:var(--line);outline:none;cursor:pointer;flex:0 0 auto}
+.vol::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;
+  border-radius:50%;background:var(--violet);border:0;box-shadow:0 1px 4px -1px var(--violet)}
+.vol::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--violet);border:0}
+.vol:hover{background:var(--violet-clair)}
 .derive{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--dim);
   font-variant-numeric:tabular-nums}
 .avert{background:color-mix(in srgb,var(--amber) 12%,transparent);
