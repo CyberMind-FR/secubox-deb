@@ -394,6 +394,14 @@
   ecran.addEventListener('play', function () { bJouer.textContent = '❚❚'; bJouer.title = 'Pause'; });
   ecran.addEventListener('pause', function () { bJouer.textContent = '▶'; bJouer.title = 'Écouter'; });
 
+  // ⧉ DÉTACHER (#1131ae) : dans la barre média du micro-lecteur — ouvre le
+  // lecteur dans une fenêtre persistante, qui survit à la navigation BBS.
+  var bDetach = $('detach');
+  if (bDetach) bDetach.addEventListener('click', function () {
+    window.open('/mini', 'sbxradio',
+      'width=380,height=580,menubar=no,toolbar=no,location=no,resizable=yes');
+  });
+
   dire.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || !dire.value.trim()) return;
     nom(); // on ne se nomme qu'au moment de parler

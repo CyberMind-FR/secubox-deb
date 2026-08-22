@@ -188,12 +188,9 @@
    pour être réutilisé par avrail (fil, compte) ET par le rail de l'accueil.
    L'iframe est en même origine radio (déclarée dans FrameOrigines). */}}
 {{define "avradio"}}{{if .RadioBase}}<div class="pnl radiowidget">
-  {{/* Aucune en-tête (#1131ac) : le lecteur /micro EST la cardlet — sa barre de
-       boutons, sa vignette, son titre. Seul ⧉ « détacher » flotte dans un coin,
-       sans consommer de place. `position:relative` sur .radiowidget suffit à
-       l'ancrer ; on ne touche PAS au modèle de boîte (padding/overflow) qui
-       avait rendu le widget invisible (#1131y). */}}
-  <button class="popout radiopop-float" type="button" data-act="radiopop" data-url="{{.RadioBase}}/mini" title="Détacher — continue dans une fenêtre pendant que vous naviguez">⧉</button>
+  {{/* Aucune en-tête ni bouton parent (#1131ae) : le lecteur /micro EST la
+       cardlet. Le bouton « détacher » ⧉ vit DANS sa barre de boutons média
+       (côté radio), pas ici. On ne touche pas au modèle de boîte. */}}
   <iframe class="radioframe" src="{{.RadioBase}}/micro" title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
 </div>{{end}}{{end}}
 

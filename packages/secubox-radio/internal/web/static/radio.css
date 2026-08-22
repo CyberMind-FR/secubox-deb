@@ -235,3 +235,7 @@ body.micro .microline { display: block; font-size: .7rem; line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 body.micro .micronext { color: var(--violet-clair); }
 body.micro .microlast { color: var(--dim); }
+
+/* ⧉ « détacher » : uniquement dans le lecteur incorporé /micro (#1131ae). */
+.detach { display: none; }
+body.micro .detach { display: grid; place-items: center; }
