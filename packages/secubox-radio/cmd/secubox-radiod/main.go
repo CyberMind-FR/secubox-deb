@@ -270,7 +270,31 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 		// devrait l'ouvrir ailleurs pour savoir ce qu'il valide.
 		if props, err := st.Propositions(); err == nil {
 			for _, pl := range props {
-				if !pl.EstPlaylist() || pl.Indisponible {
+				if pl.Indisponible {
+					continue
+				}
+				// NON-LISTE : PRÉCHARGEMENT DU TITRE (#1131p). Une proposition
+				// n'affiche que son URL brute tant que personne ne l'a validée —
+				// illisible dans « en attente ». On demande son titre à la
+				// passerelle (métadonnées) et on le pose dès qu'il est connu ;
+				// PoseTitre ne touche que le vide, jamais un titre saisi.
+				if !pl.EstPlaylist() {
+					if strings.TrimSpace(pl.Titre) != "" {
+						continue
+					}
+					ytID := idYouTube(pl.Source)
+					if ytID == "" {
+						continue
+					}
+					if e, err := cli.Etat(ctx, ytID); err == nil {
+						if titre := strings.TrimSpace(e.Titre); titre != "" {
+							st.PoseTitre(pl.ID, titre)
+						}
+					} else {
+						// Pas encore connue : on enfile la demande (qui sonde les
+						// métadonnées), et l'on repassera poser le titre.
+						cli.Demande(ctx, "https://www.youtube.com/watch?v="+ytID)
+					}
 					continue
 				}
 				adresse := "https://www.youtube.com/playlist?list=" +
