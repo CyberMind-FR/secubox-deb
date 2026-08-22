@@ -186,7 +186,7 @@ func (s *Serveur) politiqueAvecAncetres(script, style, connect, ancetres string)
 // l'incorporation par le rail BBS (#1131m). Le contenu identique évite un second
 // gabarit à tenir en phase.
 func (s *Serveur) miniPlayer(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/mini" {
+	if r.URL.Path != "/mini" && r.URL.Path != "/micro" {
 		http.NotFound(w, r)
 		return
 	}
@@ -353,6 +353,7 @@ func (s *Serveur) routes() {
 	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
 	s.mux.HandleFunc("/", s.accueil)
 	s.mux.HandleFunc("/mini", s.miniPlayer)
+	s.mux.HandleFunc("/micro", s.miniPlayer)
 	s.mux.HandleFunc("/media/", s.servirMedia)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
