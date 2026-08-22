@@ -68,6 +68,8 @@
   var ecoule = $('ecoule'), duree = $('duree'), derive = $('derive');
   var file = $('file'), chat = $('chat'), dire = $('dire');
   var attente = $('attente');
+  var estMicro = document.documentElement.classList.contains('micro');
+  var microNext = $('micro-next'), microLast = $('micro-last');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
   // ── LE VOLUME ─────────────────────────────────────────────────────────────
@@ -227,6 +229,13 @@
       li.appendChild(rg); li.appendChild(vg); li.appendChild(nm); li.appendChild(dr);
       file.appendChild(li);
     });
+    // MICRO : une seule ligne « prochain titre » (#1131u).
+    if (estMicro && microNext) {
+      var nx = null;
+      for (var z = 0; z < vues.length; z++) { if (vues[z].rel === 1) { nx = vues[z].p; break; } }
+      if (!nx) for (var z2 = 0; z2 < vues.length; z2++) { if (vues[z2].rel > 0) { nx = vues[z2].p; break; } }
+      microNext.textContent = nx ? ('→ ' + (nx.titre || nx.source)) : '';
+    }
   }
 
   // poseAttente : les propositions EN ATTENTE, chacune avec un bouton de vote.
@@ -311,6 +320,12 @@
       chat.appendChild(d);
     });
     if (colle) chat.scrollTop = chat.scrollHeight;
+    // MICRO : une seule ligne « dernier message » (#1131u).
+    if (estMicro && microLast) {
+      var last = phrases[phrases.length - 1];
+      microLast.textContent = '💬 ' + (last.Pseudo || last.pseudo || '?') + ' · ' +
+                              (last.Corps || last.corps || '');
+    }
   }
 
   function sonde() {
