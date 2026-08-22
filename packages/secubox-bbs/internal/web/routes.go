@@ -48,6 +48,9 @@ type page struct {
 	// FLUX groupé du podcaster — un podcast / un livre audio y apparaît une
 	// seule fois, pas un dossier par épisode (#1056).
 	News []NewsItem
+	// RadioBase : URL publique de la radio (#1131m). Non vide → le rail affiche
+	// le widget lecteur incorporé (iframe /mini) + un bouton « détacher ».
+	RadioBase string
 	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
 	PlayerFeed                          *PodFeed
 	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
@@ -265,7 +268,8 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 		Base:  "https://" + r.Host,
 		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true},
 		Stats: st, Cats: cats, Titre: site,
-		NonLus: nonLus,
+		NonLus:    nonLus,
+		RadioBase: s.opt.RadioBase,
 	}, pub
 }
 

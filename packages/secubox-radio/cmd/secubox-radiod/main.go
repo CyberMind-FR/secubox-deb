@@ -45,6 +45,7 @@ func main() {
 		// simplement sans banniere — on prefere cela a une politique ouverte.
 		bannOrig  = flag.String("banniere-origine", "", "origine du script de banniere")
 		bannHash  = flag.String("banniere-hash", "", "empreinte du script en ligne de la banniere")
+		cadreParent = flag.String("cadre-parent", "", "origine autorisee a incorporer le lecteur /mini (rail BBS)")
 		bannStyle = flag.String("banniere-style", "",
 			"empreinte de la <style> injectee par la banniere de sante")
 		montre = flag.Bool("version", false, "afficher la version")
@@ -81,6 +82,7 @@ func main() {
 	srv.Flux = cli.Flux
 	srv.BanniereOrigine, srv.BanniereHash = *bannOrig, *bannHash
 	srv.BanniereStyle = *bannStyle
+	srv.CadreParent = *cadreParent
 	ctx, arrete := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer arrete()
 

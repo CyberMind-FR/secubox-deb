@@ -104,6 +104,7 @@
   </main>
 
   <aside class="rail rr">
+    {{template "avradio" .}}
     <div class="pnl">
       <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
       {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
@@ -175,7 +176,18 @@
 {{/* Rail de droite PARTAGÉ (#1114) : billets + rédaction collaborative. fil.html,
      coquillenr.html (compte…) le réutilisent — une seule source pour la colonne
      de droite du skin newsroom. */}}
-{{define "avrail"}}<div class="pnl">
+{{/* avradio : widget radio incorporé (#1131m) — le lecteur compact /mini
+   rejoint la diffusion synchronisée à chaque chargement ; le bouton ⧉ le DÉTACHE
+   en fenêtre pour une écoute sans coupure pendant la navigation. Défini à part
+   pour être réutilisé par avrail (fil, compte) ET par le rail de l'accueil.
+   L'iframe est en même origine radio (déclarée dans FrameOrigines). */}}
+{{define "avradio"}}{{if .RadioBase}}<div class="pnl radiowidget">
+  <h3>📻 Radio <button class="popout" type="button" data-act="radiopop" data-url="{{.RadioBase}}/mini" title="Détacher — continue dans une fenêtre pendant que vous naviguez">⧉</button></h3>
+  <iframe class="radioframe" src="{{.RadioBase}}/mini" title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
+</div>{{end}}{{end}}
+
+{{define "avrail"}}{{template "avradio" .}}
+<div class="pnl">
   <h3>Derniers billets <span class="n">{{.Stats.Billets}}</span></h3>
   {{if .BilletsErr}}<div class="errline">{{.BilletsErr}}</div>{{end}}
   {{range .Billets}}<a class="billet" href="{{.Lien}}"><b>{{.Titre}}</b>{{if .Resume}}<div class="ex">{{.Resume}}</div>{{end}}{{if .Medias}}<div class="bmedias">{{range .Medias}}<img class="bmini" src="{{.}}" alt="" loading="lazy">{{end}}</div>{{end}}<span class="lk">{{.Lien}}</span></a>

@@ -1,3 +1,12 @@
+secubox-bbs (0.28.60-1~bookworm1) bookworm; urgency=medium
+
+  * Rail : widget RADIO incorporé (#1131m) — lecteur compact /mini de la radio
+    dans le rail droit (fil, compte, accueil), avec bouton ⧉ « détacher »
+    qui ouvre une fenêtre persistante pour écouter sans coupure en naviguant.
+    Piloté par --radio-base ; l'origine doit être dans --frame-origines.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:30:10 +0200
+
 secubox-bbs (0.28.59-1~bookworm1) bookworm; urgency=medium
 
   * Fil : bouton RAPIDE local ↔ public dans l'en-tête d'un fil (auteur ou
