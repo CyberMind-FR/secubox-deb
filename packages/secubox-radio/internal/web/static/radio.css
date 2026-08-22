@@ -197,7 +197,16 @@ body.mini .file li .vg { width: 2rem; height: 2rem; }
    carrousel (~170px), pour le widget du rail BBS. body.micro s'ajoute à
    body.mini : on ne garde que le lecteur et on le réduit à une cardlet. ═══ */
 body.micro .wrap { padding: 0; }
-body.micro .carte:not(.lecteur) { display: none; }   /* rien que le lecteur */
+body.micro .carte:not(.lecteur):not(.antenne) { display: none; } /* lecteur + antenne */
+/* Mini-antenne sous le lecteur (#1131aj) : une ligne pour saisir, 2 dernières
+   lignes de messages — le message unique du haut disparaît au profit de ça. */
+body.micro .antenne { margin: .35rem 0 0; border-radius: 10px; }
+body.micro .antenne .entete { display: none; }
+body.micro .antenne .rangee { padding: .35rem .55rem; border-bottom: 0; }
+body.micro .antenne .rangee input { padding: .3rem .5rem; font-size: .72rem; }
+body.micro #chat { max-height: 2.9rem; overflow: hidden; padding: .1rem .55rem .35rem; }
+body.micro #chat .ph { font-size: .68rem; padding: .1rem 0; }
+body.micro .microlast { display: none; }             /* plus de message unique en haut */
 body.micro .lecteur { margin: 0; border-radius: 10px; }
 body.micro .lecteur .bloc { gap: .55rem; padding: .55rem .6rem; align-items: center; }
 body.micro .cadre { width: 3.4rem; height: 3.4rem; }

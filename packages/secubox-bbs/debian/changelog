@@ -1,3 +1,10 @@
+secubox-bbs (0.28.72-1~bookworm1) bookworm; urgency=medium
+
+  * Widget radio : cardlet plus haute (252px) pour loger la mini-antenne
+    (saisie + 2 derniers messages). (#1131aj)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:30:05 +0200
+
 secubox-bbs (0.28.71-1~bookworm1) bookworm; urgency=medium
 
   * Widget radio : retire le bouton ⧉ flottant — il vit désormais dans la barre
