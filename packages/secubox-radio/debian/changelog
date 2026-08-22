@@ -1,3 +1,12 @@
+secubox-radio (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Lecteur : ajoute un contrôle de VOLUME (curseur + bouton muet) au lecteur
+    en direct. La <video id="ecran"> jouait sans aucun contrôle du son ; le
+    réglage est câblé sur ecran.volume et retenu d'une session à l'autre
+    (localStorage). (#1131c)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 02:33:55 +0200
+
 secubox-radio (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * Entree de menu remise a la forme commune et rattachee a une section qui

@@ -51,6 +51,37 @@
   var file = $('file'), chat = $('chat'), dire = $('dire');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
+  // ── LE VOLUME ─────────────────────────────────────────────────────────────
+  //
+  // La <video> joue SANS controle natif (pas de `controls`) : sans ce cablage,
+  // l'auditeur ne peut ni baisser ni couper le son. `ecran.volume` est une
+  // propriete de l'ELEMENT — elle survit aux changements de piste (`ecran.src`),
+  // il suffit de la poser. Le choix est RETENU d'une session a l'autre : regler
+  // le volume a chaque visite serait une corvee.
+  var bMuet = $('muet'), curseurVol = $('volume');
+  function iconeVol() {
+    var coupe = ecran.muted || ecran.volume === 0;
+    bMuet.textContent = coupe ? '🔇' : '🔊';
+    bMuet.classList.toggle('muet', coupe);
+  }
+  (function () {
+    var v = parseFloat(localStorage.getItem('sbx_radio_vol'));
+    if (!isFinite(v) || v < 0 || v > 1) v = 1;
+    ecran.volume = v; curseurVol.value = String(v); iconeVol();
+  })();
+  curseurVol.addEventListener('input', function () {
+    var v = parseFloat(curseurVol.value);
+    if (!isFinite(v)) return;
+    ecran.volume = v;
+    if (v > 0) ecran.muted = false; // toucher le curseur, c'est vouloir entendre
+    localStorage.setItem('sbx_radio_vol', String(v));
+    iconeVol();
+  });
+  bMuet.addEventListener('click', function () {
+    ecran.muted = !ecran.muted;
+    iconeVol();
+  });
+
   var pisteEnCours = 0, curseurChat = 0, dernierAppel = Date.now();
 
   function json(url, opts) {
