@@ -84,6 +84,14 @@ type Serveur struct {
 	// Vide = pas de confinement, pour les tests seulement.
 	Racine string
 	Now    func() time.Time // remplace en test
+
+	// Statistiques légères d'audience (#1131ah), tenues en mémoire : combien de
+	// gens écoutent en ce moment (un cookie vu récemment sur `actuel`), et
+	// combien de visites depuis le démarrage. Sans base : une valeur d'ambiance,
+	// pas une comptabilité — on ne persiste rien, on ne piste personne.
+	muStat    sync.Mutex
+	auditeurs map[string]int64 // cookie → dernière seconde vue
+	visites   int64
 }
 
 func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg tirage.Reglages) *Serveur {
@@ -112,7 +120,7 @@ func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg 
 		return v
 	}
 	s := &Serveur{st: st, prog: prog, qui: qui, reg: reg,
-		mux: http.NewServeMux(), Now: time.Now,
+		mux: http.NewServeMux(), Now: time.Now, auditeurs: map[string]int64{},
 		HTTP: &http.Client{Timeout: 8 * time.Second}}
 	s.routes()
 	return s
@@ -225,6 +233,11 @@ func (s *Serveur) accueil(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// Une VISITE = ouvrir la page radio en direct (pas l'embed /micro, qui se
+	// recharge à chaque navigation BBS et fausserait le compte) (#1131ah).
+	s.muStat.Lock()
+	s.visites++
+	s.muStat.Unlock()
 	b := pageAccueil()
 	if b == nil {
 		erreur(w, http.StatusInternalServerError, "page indisponible")
@@ -310,8 +323,55 @@ func (s *Serveur) routeur(chemin string) http.HandlerFunc {
 		return s.chat
 	case "/suivante":
 		return s.suivante
+	case "/stats":
+		return s.stats
 	}
 	return func(w http.ResponseWriter, r *http.Request) { http.NotFound(w, r) }
+}
+
+// noteAuditeur retient qu'un cookie a été vu à l'instant, pour compter les
+// auditeurs ACTIFS (#1131ah). Purge au passage ce qui a plus de 45 s : la carte
+// ne grossit pas avec le temps, elle reflète l'audience du moment.
+func (s *Serveur) noteAuditeur(cle string, maintenant int64) {
+	if cle == "" {
+		return
+	}
+	s.muStat.Lock()
+	s.auditeurs[cle] = maintenant
+	for k, t := range s.auditeurs {
+		if maintenant-t > 45 {
+			delete(s.auditeurs, k)
+		}
+	}
+	s.muStat.Unlock()
+}
+
+// stats rend l'ambiance d'audience en emojis côté client : titres en rotation,
+// propositions en attente, auditeurs à l'écoute, visites depuis le démarrage.
+func (s *Serveur) stats(w http.ResponseWriter, r *http.Request) {
+	maintenant := s.Now().Unix()
+	s.muStat.Lock()
+	actifs := 0
+	for _, t := range s.auditeurs {
+		if maintenant-t <= 45 {
+			actifs++
+		}
+	}
+	visites := s.visites
+	s.muStat.Unlock()
+
+	pistes, _ := s.st.Toutes()
+	props, _ := s.st.Propositions()
+	nprop := 0
+	for _, p := range props {
+		if !p.Indisponible {
+			nprop++
+		}
+	}
+	rendJSON(w, http.StatusOK, map[string]any{
+		"pistes": len(pistes), "propositions": nprop,
+		"auditeurs": actifs, "visites": visites,
+	})
 }
 
 func (s *Serveur) routes() {
@@ -463,6 +523,11 @@ func (s *Serveur) vue(p store.Piste, v Visiteur) vuePiste {
 func (s *Serveur) actuel(w http.ResponseWriter, r *http.Request) {
 	v := s.qui(r)
 	maintenant := s.Now()
+	// Cette route est interrogée par CHAQUE auditeur toutes les ~5 s : c'est le
+	// meilleur endroit pour compter qui écoute (#1131ah).
+	if c, err := r.Cookie("sbx_radio"); err == nil {
+		s.noteAuditeur(c.Value, maintenant.Unix())
+	}
 	e, err := s.prog.Actuel(maintenant)
 
 	rep := map[string]any{
