@@ -583,6 +583,18 @@ type NewsItem struct {
 	// NI texte — juste une URL nue (un fil-source). Vide sinon : la carte garde
 	// alors sa mosaïque glyphe (#1114).
 	CleApercu string
+	// Recents (#1131q) : les messages RÉCENTS du fil, du plus récent au plus
+	// ancien, pour remplir l'espace de la carte au-dessus des boutons. Exclut le
+	// premier message (déjà rendu en aperçu). Borné pour tenir dans la carte.
+	Recents []cardMsg
+}
+
+// cardMsg : un message de fil résumé pour la mini-conversation d'une carte —
+// qui, quoi (extrait court), quand.
+type cardMsg struct {
+	Auteur  string
+	Extrait string
+	At      int64
 }
 
 // cardMedia : un média du fil résumé pour la vignette de carte. Ref est la
@@ -680,7 +692,7 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 	// qui s'affiche (≤ 24 fils), jamais tout l'accueil.
 	for i := range out {
 		if out[i].Fil != nil {
-			ap, la, lx, lt, medias := s.apercuEtDernier(out[i].Fil.ID, out[i].Fil.Title, pub)
+			ap, la, lx, lt, medias, recents := s.apercuEtDernier(out[i].Fil.ID, out[i].Fil.Title, pub)
 			// #1120 : calculé AVANT le masquage des médias ci-dessous — c'est la
 			// présence RÉELLE de média qui exclut la vignette-snapshot, pas son
 			// masquage pour la surface publique.
@@ -695,6 +707,7 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 			out[i].Apercu, out[i].LastAuteur = ap, la
 			out[i].LastExtrait, out[i].LastAt, out[i].Medias = lx, lt, medias
 			out[i].CleApercu = cleApercu
+			out[i].Recents = recents
 		}
 	}
 	return out
@@ -757,11 +770,12 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 // carteFil bâtit la carte de rédaction d'UN fil (aperçu + dernier commentaire).
 // Partagée par la vue salon et la mosaïque « À la une » de la médiathèque.
 func (s *Server) carteFil(fil *store.Thread, pub bool) NewsItem {
-	ap, la, lx, lt, medias := s.apercuEtDernier(fil.ID, fil.Title, pub)
+	ap, la, lx, lt, medias, recents := s.apercuEtDernier(fil.ID, fil.Title, pub)
 	return NewsItem{
 		Fil: fil, Date: fil.LastPostAt,
 		Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
 		Medias: medias, CleApercu: s.cleApercuURL(ap, medias, fil.Visibility),
+		Recents: recents,
 	}
 }
 
@@ -789,7 +803,7 @@ func (s *Server) composerUneEmissions(fils []store.Thread, pub bool) []NewsItem 
 // fil pour sa carte. En vue publique (`pub`), on ne considère QUE les messages
 // publics — un aperçu ne doit pas divulguer un message local. Best-effort :
 // tout échec de lecture rend des chaînes vides, jamais une panne de page.
-func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia) {
+func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu, lastAuteur, lastExtrait string, lastAt int64, medias []cardMedia, recents []cardMsg) {
 	var posts []store.Post
 	if pub {
 		posts, _ = s.st.PublicPostsOf(threadID)
@@ -799,6 +813,10 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 	if len(posts) == 0 {
 		return
 	}
+	// Les RÉPONSES (tout sauf le premier message = l'aperçu), du plus ANCIEN au
+	// plus récent pour l'instant ; on inverse à la fin pour rendre du plus récent
+	// au premier (#1131q). Borné : une carte n'est pas un fil entier.
+	const maxRecents = 5
 	seen := map[int64]bool{}
 	for i, p := range posts {
 		b, err := s.st.Body(p)
@@ -807,6 +825,13 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 		}
 		if i == 0 {
 			apercu = extrait(resumeDeCorps(b, titre), 180)
+		} else {
+			auteur, _ := s.st.AuteurEtAvatar(p.AuthorID)
+			recents = append(recents, cardMsg{
+				Auteur:  auteur,
+				Extrait: extrait(resumeDeCorps(b, titre), 140),
+				At:      p.CreatedAt,
+			})
 		}
 		if i == len(posts)-1 && len(posts) > 1 {
 			lastExtrait = extrait(resumeDeCorps(b, titre), 120)
@@ -826,6 +851,15 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 				medias = append(medias, cardMedia{ID: id, Ref: m[0], Kind: kindDeRef(m[0])})
 			}
 		}
+	}
+	// DU PLUS RÉCENT AU PREMIER, et borné : on inverse l'ordre chronologique et
+	// on ne garde que les derniers échanges — la carte montre la conversation
+	// vive, pas l'intégralité du fil (#1131q).
+	for l, r := 0, len(recents)-1; l < r; l, r = l+1, r-1 {
+		recents[l], recents[r] = recents[r], recents[l]
+	}
+	if len(recents) > maxRecents {
+		recents = recents[:maxRecents]
 	}
 	return
 }

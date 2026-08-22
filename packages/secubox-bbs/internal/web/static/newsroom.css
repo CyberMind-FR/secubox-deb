@@ -159,6 +159,14 @@ a{color:inherit;text-decoration:none}
 .dossier .cmini:hover{border-color:var(--cyan)}
 .dossier .dek a,.dossier .lastc a{color:var(--cyan);text-decoration:none;border-bottom:1px solid var(--cyan-s);word-break:break-word}
 .dossier .dek a:hover,.dossier .lastc a:hover{border-bottom-color:var(--cyan)}
+/* Conversation vive de la carte (#1131q) : messages du plus récent au premier,
+   au-dessus des boutons ; le plus récent est accentué. */
+.dossier .cthread{margin:2px 16px 12px;display:flex;flex-direction:column;gap:6px}
+.dossier .cmsg{padding:6px 12px;border-left:2px solid var(--line-2);background:var(--soft);border-radius:0 6px 6px 0;font-size:.85rem;line-height:1.4;color:var(--ink)}
+.dossier .cmsg:first-child{border-left-color:var(--cyan-s)}
+.dossier .cmsg .who{font-family:"JetBrains Mono";font-size:.62rem;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);display:block;margin-bottom:1px}
+.dossier .cmsg a{color:var(--cyan);text-decoration:none;border-bottom:1px solid var(--cyan-s);word-break:break-word}
+.dossier .cmsg a:hover{border-bottom-color:var(--cyan)}
 /* Mini-vignettes des billets dans la vitrine (#1092). */
 .billet .bmedias{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 .billet .bmini{width:38px;height:38px;object-fit:cover;border-radius:3px;border:1px solid var(--line);background:var(--soft)}

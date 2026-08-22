@@ -1,3 +1,12 @@
+secubox-bbs (0.28.62-1~bookworm1) bookworm; urgency=medium
+
+  * Cartes « dossier » : remplissent l'espace vide avec la conversation VIVE —
+    les messages récents du fil, du plus récent au premier, AU-DESSUS des
+    boutons Co-écrire / Discuter (au lieu d'un unique dernier commentaire posé
+    dessous). (#1131q)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:08:59 +0200
+
 secubox-bbs (0.28.61-1~bookworm1) bookworm; urgency=medium
 
   * Widget radio du rail : incorpore désormais le MICRO-lecteur (/micro), à la
