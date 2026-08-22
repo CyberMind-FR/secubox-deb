@@ -1,3 +1,12 @@
+secubox-bbs (0.28.58-1~bookworm1) bookworm; urgency=medium
+
+  * Émissions : la mosaïque « À la une » liste les épisodes RÉCENTS du
+    podcaster (composerUneEmissions inclut les fils `podcaster`, que la vue
+    salon exclut) — sans quoi le carrousel restait vide sur /c/emissions.
+    (#1131d)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 02:46:19 +0200
+
 secubox-bbs (0.28.57-1~bookworm1) bookworm; urgency=medium
 
   * Émissions (/c/emissions) : garde la mosaïque « À la une » en tête de la
