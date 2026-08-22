@@ -1,3 +1,11 @@
+secubox-bbs (0.28.61-1~bookworm1) bookworm; urgency=medium
+
+  * Widget radio du rail : incorpore désormais le MICRO-lecteur (/micro), à la
+    taille d'une carte du carrousel, au lieu du lecteur mini pleine hauteur. Le
+    bouton ⧉ ouvre toujours le lecteur mini complet. (#1131o)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:54:24 +0200
+
 secubox-bbs (0.28.60-1~bookworm1) bookworm; urgency=medium
 
   * Rail : widget RADIO incorporé (#1131m) — lecteur compact /mini de la radio

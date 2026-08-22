@@ -1,3 +1,11 @@
+secubox-radio (0.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * Lecteur MICRO (#1131o) : nouveau mode /micro — le lecteur seul, à la taille
+    d'une carte du carrousel, pour le widget incorporé du rail BBS. /mini reste
+    le lecteur complet (fenêtre détachée).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:54:24 +0200
+
 secubox-radio (0.1.10-1~bookworm1) bookworm; urgency=medium
 
   * Bannière de santé : met à jour l'empreinte CSP de la feuille de style
