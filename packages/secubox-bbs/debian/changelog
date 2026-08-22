@@ -1,3 +1,11 @@
+secubox-bbs (0.28.53-1~bookworm1) bookworm; urgency=medium
+
+  * Accueil : ajoute le panneau « Accès » (Média, Bibliothèque, Billets,
+    Mastodon, Messages, Sysop) dans le rail de gauche — il manquait sur la
+    page d'accueil alors qu'il figure sur les autres sections.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 02:03:48 +0200
+
 secubox-bbs (0.28.52-1~bookworm1) bookworm; urgency=medium
 
   * Navbar (Accès) : ajoute l'entrée Mastodon 🐘 (manquait depuis le passage au
