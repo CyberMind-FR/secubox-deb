@@ -1,3 +1,18 @@
+secubox-bbs (0.28.71-1~bookworm1) bookworm; urgency=medium
+
+  * Widget radio : retire le bouton ⧉ flottant — il vit désormais dans la barre
+    média du lecteur /micro. La cardlet n'est plus que l'iframe. (#1131ae)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:12:47 +0200
+
+secubox-bbs (0.28.70-1~bookworm1) bookworm; urgency=medium
+
+  * Widget radio du rail : plus d'en-tête (le lecteur /micro EST la cardlet),
+    ⧉ flotte dans un coin, cardlet un peu plus haute (200px). `position:relative`
+    seul, sans toucher au modèle de boîte. (#1131ac)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:09:25 +0200
+
 secubox-bbs (0.28.69-1~bookworm1) bookworm; urgency=medium
 
   * Billets : regroupe les billets de MÊME TITRE (comme un podcast regroupe ses

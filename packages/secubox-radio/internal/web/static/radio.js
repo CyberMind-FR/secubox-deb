@@ -69,7 +69,7 @@
   var file = $('file'), chat = $('chat'), dire = $('dire');
   var attente = $('attente');
   var estMicro = document.documentElement.classList.contains('micro');
-  var microNext = $('micro-next'), microLast = $('micro-last');
+  var microNext = $('micro-next'), microLast = $('micro-last'), microStatus = $('micro-status');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
   // ── LE VOLUME ─────────────────────────────────────────────────────────────
@@ -252,6 +252,7 @@
       if (!nx) for (var z2 = 0; z2 < vues.length; z2++) { if (vues[z2].rel > 0) { nx = vues[z2].p; break; } }
       microNext.textContent = nx ? ('→ ' + (nx.titre || nx.source)) : '';
     }
+
   }
 
   // poseAttente : les propositions EN ATTENTE, chacune avec un bouton de vote.
@@ -358,6 +359,14 @@
     json('/api/v1/radio/propositions').then(function (r) {
       poseAttente(r.corps.propositions);
     }).catch(function () {});
+    // #1131ah : statut d'AUDIENCE en emojis dans l'espace libre du micro.
+    if (estMicro && microStatus) {
+      json('/api/v1/radio/stats').then(function (r) {
+        var c = r.corps || {};
+        microStatus.textContent = '🎶 ' + (c.pistes || 0) + ' · 🗳️ ' + (c.propositions || 0) +
+          ' · 👥 ' + (c.auditeurs || 0) + ' · 👁️ ' + (c.visites || 0);
+      }).catch(function () {});
+    }
   }
 
   bAime.addEventListener('click', function () {
@@ -379,10 +388,27 @@
   $('recaler').addEventListener('click', function () {
     pisteEnCours = 0; avert.hidden = true; sonde();
   });
+  // ▶ / ❚❚ : bascule lecture/pause (#1131ad). Le direct continue côté serveur ;
+  // reprendre resynchronise (la dérive est corrigée par `pose`). Pour REJOINDRE
+  // le direct après une pause longue, le bouton ⟳ (recaler) est là.
   bJouer.addEventListener('click', function () {
     avert.hidden = true;
-    var e = ecran.play();
-    if (e && e.catch) e.catch(function () { avert.hidden = false; });
+    if (ecran.paused) {
+      var e = ecran.play();
+      if (e && e.catch) e.catch(function () { avert.hidden = false; });
+    } else {
+      ecran.pause();
+    }
+  });
+  ecran.addEventListener('play', function () { bJouer.textContent = '❚❚'; bJouer.title = 'Pause'; });
+  ecran.addEventListener('pause', function () { bJouer.textContent = '▶'; bJouer.title = 'Écouter'; });
+
+  // ⧉ DÉTACHER (#1131ae) : dans la barre média du micro-lecteur — ouvre le
+  // lecteur dans une fenêtre persistante, qui survit à la navigation BBS.
+  var bDetach = $('detach');
+  if (bDetach) bDetach.addEventListener('click', function () {
+    window.open('/mini', 'sbxradio',
+      'width=380,height=580,menubar=no,toolbar=no,location=no,resizable=yes');
   });
 
   dire.addEventListener('keydown', function (e) {
