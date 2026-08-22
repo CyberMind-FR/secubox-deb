@@ -715,9 +715,9 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	if podcasterDominant(p.Threads) {
 		// #1131d : garder la mosaïque « À la une » en tête de la médiathèque
 		// (choix utilisateur : mosaïque + liste par flux dessous). Les cartes
-		// viennent des fils du salon, comme la vue rédaction ; les flux/épisodes
-		// restent listés en dessous.
-		p.News = s.composerRedactionSalon(p.Threads, pub)
+		// viennent des épisodes RÉCENTS du podcaster (fils `podcaster`, que la vue
+		// salon exclut) ; les flux/épisodes restent listés en dessous.
+		p.News = s.composerUneEmissions(p.Threads, pub)
 		s.poseRail(&p)
 		s.rendMediatheque(w, r, p)
 		return
@@ -744,15 +744,40 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 		if fils[i].Source == "podcaster" {
 			continue
 		}
-		ap, la, lx, lt, medias := s.apercuEtDernier(fils[i].ID, fils[i].Title, pub)
-		cleApercu := s.cleApercuURL(ap, medias, fils[i].Visibility)
-		out = append(out, NewsItem{
-			Fil: &fils[i], Date: fils[i].LastPostAt,
-			Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
-			Medias: medias, CleApercu: cleApercu,
-		})
+		out = append(out, s.carteFil(&fils[i], pub))
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	return out
+}
+
+// carteFil bâtit la carte de rédaction d'UN fil (aperçu + dernier commentaire).
+// Partagée par la vue salon et la mosaïque « À la une » de la médiathèque.
+func (s *Server) carteFil(fil *store.Thread, pub bool) NewsItem {
+	ap, la, lx, lt, medias := s.apercuEtDernier(fil.ID, fil.Title, pub)
+	return NewsItem{
+		Fil: fil, Date: fil.LastPostAt,
+		Apercu: ap, LastAuteur: la, LastExtrait: lx, LastAt: lt,
+		Medias: medias, CleApercu: s.cleApercuURL(ap, medias, fil.Visibility),
+	}
+}
+
+// composerUneEmissions bâtit la mosaïque « À la une » de la médiathèque : les
+// épisodes RÉCENTS du podcaster en cartes (#1131d). Contrairement à la vue
+// salon, elle INCLUT les fils `podcaster` — ce sont justement le contenu des
+// émissions — mais se borne aux plus récents : une émission peut porter des
+// centaines d'épisodes, et lire l'aperçu de chacun figerait la page.
+func (s *Server) composerUneEmissions(fils []store.Thread, pub bool) []NewsItem {
+	tri := make([]store.Thread, len(fils))
+	copy(tri, fils)
+	sort.Slice(tri, func(a, b int) bool { return tri[a].LastPostAt > tri[b].LastPostAt })
+	const maxUne = 18
+	if len(tri) > maxUne {
+		tri = tri[:maxUne]
+	}
+	out := make([]NewsItem, 0, len(tri))
+	for i := range tri {
+		out = append(out, s.carteFil(&tri[i], pub))
+	}
 	return out
 }
 
