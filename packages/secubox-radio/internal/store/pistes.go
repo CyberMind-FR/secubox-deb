@@ -552,3 +552,28 @@ func (s *Store) RemetEnJeuBloqueesParCookies() (int64, error) {
 	n, _ := res.RowsAffected()
 	return n, nil
 }
+
+// RemetEnJeuEchecsTelechargement efface les mises a l'ecart dues a un ECHEC DE
+// TELECHARGEMENT passager.
+//
+// Un 403 de YouTube sur les octets video (throttle / edge CDN) ecarte la piste
+// sur le moment ; la passerelle reussit pourtant au reessai suivant (prouve en
+// pratique). Comme pour les cookies, une mise a l'ecart TECHNIQUE n'est pas un
+// jugement : quand la cause disparait, la piste doit revenir d'elle-meme, sinon
+// elle reste ecartee POUR TOUJOURS avec une erreur perimee. On ne touche QUE
+// les echecs de telechargement (403 / « unable to download ») — pas un blocage
+// cookies (traite a part), une geo-restriction, ni un refus du sysop. L'appelant
+// espace ses appels : une video reellement morte serait sinon reessayee sans fin.
+func (s *Store) RemetEnJeuEchecsTelechargement() (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE pistes SET indisponible = 0, raison = ''
+		  WHERE indisponible = 1
+		    AND (raison LIKE '%unable to download%'
+		      OR raison LIKE '%403%'
+		      OR raison LIKE '%Forbidden%')`)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
