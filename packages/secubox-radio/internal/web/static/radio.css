@@ -229,7 +229,8 @@ body.micro .cmd .derive { display: none; }
    au lieu d'une seule ligne tronquée. */
 body.micro .titre { font-size: .74rem; line-height: 1.2; margin: 0; max-width: 100%;
   display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical;
-  overflow: hidden; }
+  overflow: hidden; white-space: normal; }  /* normal : sinon `nowrap` de base
+  garde le titre sur UNE ligne malgré line-clamp (#1131ai) */
 body.micro .cadre { width: 6rem; height: 6rem; }
 body.micro .microline { display: block; font-size: .7rem; line-height: 1.25;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
