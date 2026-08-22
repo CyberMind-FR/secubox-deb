@@ -1,3 +1,10 @@
+secubox-radio (0.1.20-1~bookworm1) bookworm; urgency=medium
+
+  * Micro : bouton ⧉ « détacher » AJOUTÉ à la barre média (ouvre le lecteur en
+    fenêtre) — plus de bouton flottant côté BBS. (#1131ae)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:12:47 +0200
+
 secubox-radio (0.1.19-1~bookworm1) bookworm; urgency=medium
 
   * Micro : titre à droite de la vignette sur 2–3 lignes, texte plus petit ;
