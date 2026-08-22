@@ -103,7 +103,7 @@ func TestLaPolitiqueAutoriseLaVideoEtLAudioQuandIlsSontConfigures(t *testing.T) 
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 	p := w.Header().Get("Content-Security-Policy")
-	if !contientTxt(p, "frame-src https://peertube.gk2.secubox.in") {
+	if !contientTxt(p, "frame-src 'self' https://peertube.gk2.secubox.in") {
 		t.Errorf("le lecteur video restera vide : %s", p)
 	}
 	if !contientTxt(p, "media-src 'self'") {
@@ -125,7 +125,7 @@ func TestSansPeerTubeConfigureAucuneOrigineNEstOuverte(t *testing.T) {
 	if contientTxt(p, "https://") && !contientTxt(p, "https://www.youtube-nocookie.com") {
 		t.Errorf("origine externe autorisee sans configuration : %s", p)
 	}
-	if !contientTxt(p, "frame-src https://www.youtube-nocookie.com") {
+	if !contientTxt(p, "frame-src 'self' https://www.youtube-nocookie.com") {
 		t.Errorf("frame-src devrait se limiter a youtube-nocookie : %s", p)
 	}
 }

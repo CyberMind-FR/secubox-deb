@@ -22,12 +22,19 @@ func TestFrameSrcNAdmetQueDesOriginesSaines(t *testing.T) {
 		},
 	}}
 	f := s.frameSrc()
+	// `'self'` en tete par conception (#1131) : la board encadre ses propres
+	// medias. On l'ecarte avant de traquer une injection — c'est le seul jeton
+	// a guillemets legitime.
+	if !strings.HasPrefix(f, "'self'") {
+		t.Errorf("'self' devrait ouvrir la liste (lecteur PDF integre) : %s", f)
+	}
+	reste := strings.TrimSpace(strings.TrimPrefix(f, "'self'"))
 	for _, bon := range []string{"peertube.gk2", "radio.gk2", "podcaster.gk2"} {
-		if !strings.Contains(f, bon) {
+		if !strings.Contains(reste, bon) {
 			t.Errorf("origine saine absente (%s) : %s", bon, f)
 		}
 	}
-	if strings.ContainsAny(f, ";'\"") {
+	if strings.ContainsAny(reste, ";'\"") {
 		t.Fatalf("POLITIQUE COUPABLE EN DEUX : %s", f)
 	}
 	if strings.Count(f, "peertube.gk2") != 1 {
@@ -42,7 +49,8 @@ func TestFrameSrcNAdmetQueDesOriginesSaines(t *testing.T) {
 // il vaut au minimum l'hote cookieless. Aucune AUTRE origine sans configuration.
 func TestFrameSrcFermeParDefaut(t *testing.T) {
 	f := (&Server{}).frameSrc()
-	if f != "https://www.youtube-nocookie.com" {
+	// #1131 : `'self'` (nos propres medias) precede toujours l'hote cookieless.
+	if f != "'self' https://www.youtube-nocookie.com" {
 		t.Fatalf("frame-src par defaut inattendu : %s", f)
 	}
 }

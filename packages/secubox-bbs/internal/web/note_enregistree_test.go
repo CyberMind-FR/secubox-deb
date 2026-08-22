@@ -18,19 +18,29 @@ func TestUneNoteVocaleWebmDonneUnLecteurAudio(t *testing.T) {
 	}
 }
 
-// UN PDF NE SE JOUE PAS : `<embed>` depend d'un greffon du navigateur et d'une
-// CSP permissive — il rend une zone vide plus souvent qu'un document (#1114). Le
-// repli FIABLE est une FICHE cliquable a icone generique, jamais un embed.
-func TestUnPdfRendUneFicheFichierPasUnEmbed(t *testing.T) {
+// UN PDF S'AFFICHE DANS UN LECTEUR INTEGRE. Le navigateur rend NATIVEMENT un
+// `<iframe src="/f/NN.pdf">` avec sa propre visionneuse — sans greffon, en meme
+// origine, donc conforme a `frame-src 'self'`. On EVITE `<embed>`/`<object>`
+// (greffon + `object-src` permissif, souvent une zone vide). Un lien de repli
+// reste visible si le navigateur choisit malgre tout de telecharger (#1131).
+func TestUnPdfRendUnLecteurIntegre(t *testing.T) {
 	out := string(Render("Voir /f/12.pdf"))
-	if strings.Contains(out, "<embed") {
-		t.Errorf("le PDF est rendu en <embed> (peu fiable) :\n%s", out)
+	if strings.Contains(out, "<embed") || strings.Contains(out, "<object") {
+		t.Errorf("le PDF est rendu en <embed>/<object> (greffon peu fiable) :\n%s", out)
 	}
-	if !strings.Contains(out, `class="jointe jointe-fichier"`) {
-		t.Errorf("pas de fiche fichier pour le PDF :\n%s", out)
+	if !strings.Contains(out, "<iframe") {
+		t.Errorf("pas de lecteur PDF integre :\n%s", out)
+	}
+	if !strings.Contains(out, `class="jointe jointe-pdf"`) {
+		t.Errorf("le lecteur PDF n'a pas sa classe :\n%s", out)
 	}
 	if !strings.Contains(out, "/f/12.pdf") {
-		t.Errorf("la fiche ne pointe pas le fichier :\n%s", out)
+		t.Errorf("le lecteur ne pointe pas le fichier :\n%s", out)
+	}
+	// Repli visible : si le navigateur telecharge au lieu d'afficher, un lien
+	// « Ouvrir » dans un nouvel onglet reste cliquable.
+	if !strings.Contains(out, `target="_blank"`) {
+		t.Errorf("pas de lien de repli pour ouvrir le PDF :\n%s", out)
 	}
 }
 
