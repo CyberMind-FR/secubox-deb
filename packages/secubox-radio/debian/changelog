@@ -1,3 +1,11 @@
+secubox-radio (0.1.15-1~bookworm1) bookworm; urgency=medium
+
+  * Micro-lecteur : les boutons média coiffent la cardlet dans un BANDEAU
+    (en-tête) sur toute la largeur ; le contenu (vignette, titres, message)
+    descend dessous. (#1131w)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:27:47 +0200
+
 secubox-radio (0.1.14-1~bookworm1) bookworm; urgency=medium
 
   * L'antenne : saisie EN HAUT, messages qui défilent dessous et s'ESTOMPENT
