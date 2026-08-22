@@ -1,3 +1,11 @@
+secubox-bbs (0.28.63-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel « À la une » : l'auto-défilement ne dépend plus de la présence
+    des pastilles — il tourne PARTOUT où le carrousel apparaît (accueil, salons,
+    médiathèque). (#1131s)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:15:32 +0200
+
 secubox-bbs (0.28.62-1~bookworm1) bookworm; urgency=medium
 
   * Cartes « dossier » : remplissent l'espace vide avec la conversation VIVE —
