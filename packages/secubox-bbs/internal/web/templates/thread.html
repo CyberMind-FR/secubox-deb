@@ -15,6 +15,19 @@
     {{if .T.Published}}<span class="pill p-billet">✦ publié en billet</span>{{end}}
     ouvert par {{.T.Author}}
   </p>
+  {{/* Bouton RAPIDE local ↔ public (#1131h). À l'auteur et au sysop : chacun
+       peut choisir la portée de SON fil sans repasser par la base. Rendre
+       public expose hors du LAN — le libellé le dit franchement. */}}
+  {{if or .V.Sysop (and .V.Connecte (eq .V.Handle .T.Author))}}
+  <form method="post" action="/t/{{.T.ID}}/visibilite" class="row s491198d">
+    <input type="hidden" name="csrf" value="{{.V.CSRF}}">
+    {{if eq .T.Visibility "public"}}
+      <button class="btn sm" title="Restreindre ce fil au réseau local">🔒 Rendre local</button>
+    {{else}}
+      <button class="btn sm pinkish" title="Exposer ce fil hors du LAN">🌐 Rendre public</button>
+    {{end}}
+  </form>
+  {{end}}
 </div>
 {{if .V.Sysop}}<div class="row sca6fc03">
   {{if eq .T.Visibility "public"}}
