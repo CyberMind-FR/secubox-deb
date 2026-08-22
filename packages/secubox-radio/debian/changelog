@@ -1,3 +1,11 @@
+secubox-radio (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Page publique : section « En attente » — les auditeurs votent (cœur) pour
+    les titres proposés, pas seulement pour ce qui joue. Le backend comptait
+    déjà les cœurs sur une proposition ; l'interface l'expose enfin. (#1131g)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 06:57:55 +0200
+
 secubox-radio (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * Auto-réparation : une piste écartée pour un échec de téléchargement
