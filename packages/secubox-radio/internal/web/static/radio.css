@@ -216,7 +216,15 @@ body.micro .avert { font-size: 11px; padding: .4rem .5rem; }
 body.micro .infos { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 body.micro .lecteur .bloc { align-items: flex-start; }
 body.micro .meta { display: none; }                 /* texte réduit */
-body.micro .cmd { order: -1; margin-top: 0; }        /* boutons en tête = barre */
+/* Boutons média DANS LE BANDEAU (en-tête) de la cardlet (#1131w) : la barre
+   de transport coiffe le lecteur sur toute la largeur, le contenu descend
+   dessous. */
+body.micro .lecteur { position: relative; padding-top: 2.5rem; }
+body.micro .cmd { position: absolute; top: 0; left: 0; right: 0; margin: 0;
+  padding: .3rem .55rem; gap: .4rem; background: var(--panel2);
+  border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0;
+  align-items: center; z-index: 2; }
+body.micro .cmd .derive { display: none; }
 body.micro .titre { font-size: .86rem; line-height: 1.2; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
 body.micro .microline { display: block; font-size: .72rem; line-height: 1.25;
