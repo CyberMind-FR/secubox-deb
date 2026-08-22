@@ -121,6 +121,14 @@ func (s *Server) servirFichier(w http.ResponseWriter, r *http.Request) {
 	// `immutable` evite une revalidation par image sur un fil qui en porte
 	// vingt — ce qui compte sur une board a quatre coeurs.
 	w.Header().Set("Cache-Control", "private, max-age=604800, immutable")
+	// ENCADRABLE PAR NOTRE ORIGINE, ET ELLE SEULE (#1131). L'intergiciel a pose
+	// `X-Frame-Options: DENY` et `frame-ancestors 'none'` — juste pour les PAGES,
+	// contre le clickjacking. Un media, lui, doit pouvoir s'afficher dans le
+	// lecteur PDF integre d'un fil (`<iframe src="/f/NN">`), qui est en meme
+	// origine. On rouvre donc l'encadrement A SA propre origine — pas au-dela :
+	// aucune page tierce ne peut encadrer ce fichier.
+	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'self'")
 	http.ServeFile(w, r, s.st.CheminFichier(f))
 }
 

@@ -1,3 +1,13 @@
+secubox-bbs (0.28.54-1~bookworm1) bookworm; urgency=medium
+
+  * PDF joints : lecteur INTEGRE via <iframe> (visionneuse native du
+    navigateur) au lieu d'une simple fiche à télécharger ; lien « Ouvrir le
+    PDF » conservé en repli. CSP: frame-src 'self' (même origine uniquement) ;
+    la réponse /f/ s'autorise l'encadrement same-origin (X-Frame-Options
+    SAMEORIGIN + frame-ancestors 'self'), les pages HTML gardent DENY. (#1131)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 02:14:14 +0200
+
 secubox-bbs (0.28.53-1~bookworm1) bookworm; urgency=medium
 
   * Accueil : ajoute le panneau « Accès » (Média, Bibliothèque, Billets,
