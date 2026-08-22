@@ -1,3 +1,10 @@
+secubox-radio (0.1.26-1~bookworm1) bookworm; urgency=medium
+
+  * Micro : le titre s'affiche bien sur PLUSIEURS lignes (white-space:normal) —
+    le `nowrap` de base le gardait sur une seule malgré line-clamp. (#1131ai)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:27:20 +0200
+
 secubox-radio (0.1.25-1~bookworm1) bookworm; urgency=medium
 
   * Micro : statut d'audience (🎶 titres · 🗳️ propositions · 👥 auditeurs ·
