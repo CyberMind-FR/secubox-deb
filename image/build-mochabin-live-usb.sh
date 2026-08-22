@@ -205,8 +205,16 @@ INCLUDE_PKGS+=",fonts-noto-color-emoji"
 #   wireless-regdb        : signed regulatory DB, FR domain lock at postinst
 INCLUDE_PKGS+=",firmware-misc-nonfree,firmware-atheros,wireless-regdb"
 
-# Cross-architecture debootstrap with QEMU
-debootstrap --arch=arm64 --foreign --include="${INCLUDE_PKGS}" \
+# Cross-architecture debootstrap with QEMU.
+#
+# --components EST OBLIGATOIRE ICI (#1131ak) : on inclut des blobs de firmware
+# (firmware-misc-nonfree, firmware-atheros) qui, depuis bookworm, vivent dans le
+# composant `non-free-firmware` — pas `main`. Sans ces composants, debootstrap
+# ne cherche que `main` et échoue « Couldn't find these debs ». Le sources.list
+# complet n'est posé qu'APRÈS le bootstrap, trop tard pour --include.
+debootstrap --arch=arm64 --foreign \
+    --components=main,contrib,non-free,non-free-firmware \
+    --include="${INCLUDE_PKGS}" \
     "${SUITE}" "${ROOTFS}" "${APT_MIRROR}"
 
 # Copy QEMU static binary for chroot
