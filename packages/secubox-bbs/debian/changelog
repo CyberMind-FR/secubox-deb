@@ -1,3 +1,11 @@
+secubox-bbs (0.28.73-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel : tourne automatiquement AUSSI quand « réduire les animations »
+    est activé — la rotation continue, mais par sauts instantanés (sans
+    défilement animé). C'était la raison du carrousel figé. (#1131al)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:41:56 +0200
+
 secubox-bbs (0.28.72-1~bookworm1) bookworm; urgency=medium
 
   * Widget radio : cardlet plus haute (252px) pour loger la mini-antenne
