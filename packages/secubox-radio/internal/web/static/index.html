@@ -76,10 +76,13 @@
   <!-- ═══ L'ANTENNE ══════════════════════════════════════════════════════ -->
   <section class="carte">
     <h3 class="entete">💬 L'antenne</h3>
-    <div id="chat"></div>
+    <!-- SAISIE EN HAUT, messages défilant DESSOUS avec un effet d'effacement
+         (#1131v) : l'antenne est vive et éphémère — on parle en haut, les
+         messages passent puis s'estompent. -->
     <div class="rangee">
       <input id="dire" placeholder="Dire quelque chose…" maxlength="500" autocomplete="off">
     </div>
+    <div id="chat"></div>
   </section>
 
   <!-- ═══ EN ATTENTE (propositions à voter) ══════════════════════════════ -->
