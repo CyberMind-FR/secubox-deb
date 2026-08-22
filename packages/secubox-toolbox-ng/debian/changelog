@@ -1,3 +1,12 @@
+secubox-toolbox-ng (0.1.46-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : le trafic INTERNE (loopback/LAN) est agrégé sous « local » dans le
+    journal des menaces au lieu d'être compté comme attaquant. Sans X-Forwarded-
+    For réel, clientIP retombait sur le pair (127.0.0.1) et dominait « attaquants
+    persistants » (health checks, watchdog, agrégateur, fetch bannière). (#1131am)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 11:58:42 +0200
+
 secubox-toolbox-ng (0.1.45-1~bookworm1) bookworm; urgency=medium
 
   * Nouveau service `secubox-toolbox-egress-proxy` : instance sbxmitm en mode
