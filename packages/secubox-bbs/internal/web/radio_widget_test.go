@@ -36,18 +36,15 @@ func TestWidgetRadioConditionnelAuRadioBase(t *testing.T) {
 	if out := rend(page{}); strings.Contains(out, "<iframe") || strings.Contains(out, "radiowidget") {
 		t.Errorf("widget radio rendu sans RadioBase : %s", out)
 	}
-	// AVEC RadioBase : iframe /mini + bouton détacher.
+	// AVEC RadioBase : le widget EST le micro-lecteur (#1131ae) — juste l'iframe,
+	// sans en-tête ni bouton parent. Les boutons média ET le ⧉ « détacher »
+	// vivent DANS le lecteur /micro (côté radio), pas dans ce fragment BBS.
 	out := rend(page{RadioBase: "https://radio.gk2.secubox.in", Stats: store.Stats{}})
-	// L'IFRAME DU RAIL EST LE MICRO-LECTEUR (taille d'une carte, #1131o) ; le
-	// bouton de détachement ouvre le lecteur MINI, plus complet.
 	if !strings.Contains(out, `src="https://radio.gk2.secubox.in/micro"`) {
 		t.Errorf("l'iframe du rail ne pointe pas /micro : %s", out)
 	}
-	if !strings.Contains(out, `data-url="https://radio.gk2.secubox.in/mini"`) {
-		t.Errorf("le détachement ne pointe pas /mini : %s", out)
-	}
-	if !strings.Contains(out, `data-act="radiopop"`) {
-		t.Errorf("pas de bouton de détachement : %s", out)
+	if strings.Contains(out, "radiopop") || strings.Contains(out, "<h3") {
+		t.Errorf("le widget ne devrait plus porter d'en-tête ni de bouton parent : %s", out)
 	}
 	// CSP : pas de style ni d'onclick en ligne.
 	if strings.Contains(out, "style=") || strings.Contains(out, "onclick") {
