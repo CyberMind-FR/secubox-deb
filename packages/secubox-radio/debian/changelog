@@ -1,3 +1,10 @@
+secubox-radio (0.1.19-1~bookworm1) bookworm; urgency=medium
+
+  * Micro : titre à droite de la vignette sur 2–3 lignes, texte plus petit ;
+    le bouton ▶ bascule lecture/pause (⟳ rejoint le direct). (#1131ac/#1131ad)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 09:09:25 +0200
+
 secubox-radio (0.1.18-1~bookworm1) bookworm; urgency=medium
 
   * Lecture EN ENTIER (#1131z) : corrige « la radio perd la piste et saute à
