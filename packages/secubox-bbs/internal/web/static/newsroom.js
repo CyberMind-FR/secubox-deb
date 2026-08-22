@@ -127,6 +127,23 @@
   }
   /* Détache le widget radio en fenêtre persistante (#1131m) : elle survit à la
      navigation BBS, donc l'écoute ne se coupe pas quand on change de page. */
+  /* Charge l'embed vidéo DANS la carte, au clic seulement (#1131x) : la
+     vignette cède la place à un <iframe> vers l'URL d'intégration (youtube-
+     nocookie / peertube, déjà autorisés par frame-src). Rien n'est contacté
+     avant le clic. */
+  function cardPlay(t) {
+    var url = t.getAttribute("data-embed");
+    if (!url) return;
+    var prev = t.closest(".prev") || t.parentNode;
+    var f = document.createElement("iframe");
+    f.className = "cardframe";
+    f.src = url;
+    f.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share");
+    f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+    f.setAttribute("allowfullscreen", "");
+    prev.textContent = "";
+    prev.appendChild(f);
+  }
   function radioPopout(t) {
     var url = t.getAttribute("data-url");
     if (url) window.open(url, "sbxradio",
@@ -152,6 +169,7 @@
     else if (a === "next") { if (!playNext() && audio) audio.currentTime = audio.duration || 0; }
     else if (a === "popout") popout();
     else if (a === "radiopop") { e.preventDefault(); radioPopout(t); }
+    else if (a === "cardplay") { if (t.getAttribute("data-embed")) { e.preventDefault(); cardPlay(t); } }
     else if (a === "mini-close") miniClose();
     else if (a === "carprev") { carHold(); carScrollByCards(-1); }
     else if (a === "carnext") { carHold(); carScrollByCards(1); }

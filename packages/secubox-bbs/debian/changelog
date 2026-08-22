@@ -1,3 +1,11 @@
+secubox-bbs (0.28.64-1~bookworm1) bookworm; urgency=medium
+
+  * Cartes vidéo : « lire ici » — l'embed (youtube-nocookie / peertube) se
+    charge AU CLIC dans la carte, au lieu d'exiger l'ouverture du fil. Rien
+    n'est contacté avant le clic (perf + vie privée). (#1131x)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:30:34 +0200
+
 secubox-bbs (0.28.63-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel « À la une » : l'auto-défilement ne dépend plus de la présence
