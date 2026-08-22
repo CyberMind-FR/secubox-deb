@@ -248,6 +248,20 @@ func (s *Store) PoseCache(id int64, fichier, mime string, octets, dureeMS int64,
 }
 
 // MarqueIndisponible ecarte une piste SANS la supprimer, avec sa raison.
+// PoseTitre renseigne le titre d'une piste SI il manque encore (#1131p). Le
+// préchargement des métadonnées ne doit JAMAIS écraser un titre saisi à la main
+// ni reposer un titre vide — d'où le garde-fou dans le WHERE.
+func (s *Store) PoseTitre(id int64, titre string) error {
+	titre = strings.TrimSpace(titre)
+	if titre == "" {
+		return nil
+	}
+	_, err := s.db.Exec(
+		`UPDATE pistes SET titre = ? WHERE id = ? AND (titre IS NULL OR titre = '')`,
+		titre, id)
+	return err
+}
+
 func (s *Store) MarqueIndisponible(id int64, raison string) error {
 	_, err := s.db.Exec(
 		`UPDATE pistes SET indisponible = 1, raison = ? WHERE id = ?`, raison, id)

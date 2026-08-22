@@ -1,3 +1,11 @@
+secubox-radio (0.1.12-1~bookworm1) bookworm; urgency=medium
+
+  * En attente : PRÉCHARGE le titre d'une proposition YouTube auprès de la
+    passerelle (métadonnées) au lieu d'afficher l'URL brute jusqu'à validation.
+    Ne remplit que le vide, jamais un titre saisi à la main. (#1131p)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 08:00:29 +0200
+
 secubox-radio (0.1.11-1~bookworm1) bookworm; urgency=medium
 
   * Lecteur MICRO (#1131o) : nouveau mode /micro — le lecteur seul, à la taille
