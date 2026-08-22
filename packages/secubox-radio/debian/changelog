@@ -1,3 +1,12 @@
+secubox-radio (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * En attente : tri TOP-DOWN par les votes — les titres les plus soutenus
+    d'abord. (#1131k)
+  * Disposition : « L'antenne » (chat) remonte juste sous le lecteur, avant la
+    playlist. (#1131l)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 22 Aug 2026 07:16:37 +0200
+
 secubox-radio (0.1.7-1~bookworm1) bookworm; urgency=medium
 
   * Playlist : vue SEMI-ROTATIVE en fenêtre — 2 pistes déjà jouées, la piste en

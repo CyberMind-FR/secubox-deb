@@ -222,7 +222,12 @@
   // le minuteur avance la fenêtre.
   var propos = [], propOffset = 0;
   function poseAttente(props) {
-    propos = props || [];
+    // TOP-DOWN PAR LES VOTES (#1131k) : les titres les plus soutenus d'abord —
+    // le vote sert à faire remonter ce que l'antenne veut entendre. À égalité,
+    // l'ordre d'arrivée (id) départage, stable d'un rafraîchissement à l'autre.
+    propos = (props || []).slice().sort(function (a, b) {
+      return (b.coeurs || 0) - (a.coeurs || 0) || (a.id - b.id);
+    });
     if (propOffset >= propos.length) propOffset = 0;
     rendAttente();
   }
