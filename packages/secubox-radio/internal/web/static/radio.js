@@ -379,11 +379,20 @@
   $('recaler').addEventListener('click', function () {
     pisteEnCours = 0; avert.hidden = true; sonde();
   });
+  // ▶ / ❚❚ : bascule lecture/pause (#1131ad). Le direct continue côté serveur ;
+  // reprendre resynchronise (la dérive est corrigée par `pose`). Pour REJOINDRE
+  // le direct après une pause longue, le bouton ⟳ (recaler) est là.
   bJouer.addEventListener('click', function () {
     avert.hidden = true;
-    var e = ecran.play();
-    if (e && e.catch) e.catch(function () { avert.hidden = false; });
+    if (ecran.paused) {
+      var e = ecran.play();
+      if (e && e.catch) e.catch(function () { avert.hidden = false; });
+    } else {
+      ecran.pause();
+    }
   });
+  ecran.addEventListener('play', function () { bJouer.textContent = '❚❚'; bJouer.title = 'Pause'; });
+  ecran.addEventListener('pause', function () { bJouer.textContent = '▶'; bJouer.title = 'Écouter'; });
 
   dire.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || !dire.value.trim()) return;
