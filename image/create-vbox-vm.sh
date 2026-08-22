@@ -5,162 +5,244 @@
 # See LICENCE-CMSD-1.0.md for terms.
 
 # ══════════════════════════════════════════════════════════════════
-#  SecuBox-DEB — create-vbox-vm.sh
-#  Crée une VM VirtualBox prête à l'emploi avec l'image SecuBox
-#  Usage : bash create-vbox-vm.sh [IMAGE.vdi]
+#  SecuBox-DEB :: create-vbox-vm.sh — script VirtualBox CANONIQUE
+#
+#  Crée (et démarre) une VM VirtualBox à partir de l'image live-USB
+#  amd64 de SecuBox. Remplace run-vbox.sh, create-secubox-vm.sh et
+#  vbox-setup.sh — ceux-ci ne sont plus que des redirections.
+#
+#  VirtualBox est amd64 uniquement : il démarre l'image
+#  `secubox-live-amd64-*`, PAS les images ARM64 (mochabin/rpi), qui
+#  passent par QEMU (voir scripts/run-qemu.sh).
+#
+#  Usage :
+#    bash image/create-vbox-vm.sh                     # image locale output/
+#    bash image/create-vbox-vm.sh --download          # dernière release
+#    bash image/create-vbox-vm.sh --download v3.0.0-alpha.1
+#    bash image/create-vbox-vm.sh output/secubox-live-amd64-bookworm.img
+#    bash image/create-vbox-vm.sh img.vdi --name Test --headless
 # ══════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
+OUTPUT_DIR="${REPO_DIR}/output"
+GITHUB_REPO="CyberMind-FR/secubox-deb"
 
-# Defaults
-VM_NAME="SecuBox-Dev"
-VM_RAM=2048
-VM_CPUS=2
-VM_DISK_SIZE=8192  # MB
+# ── Défauts ──────────────────────────────────────────────────────
+VM_NAME="SecuBox-Live"
+VM_RAM=4096
+VM_CPUS=4
+VM_VRAM=128
+SSH_PORT=2222
+HTTPS_PORT=9443
+HTTP_PORT=8080
+IMAGE=""            # chemin explicite (.img/.img.gz/.vdi) ; sinon auto
+DOWNLOAD=""         # "" | "latest" | un tag de release
+HEADLESS=0
+NO_START=0
+FORCE=0
 
 RED='\033[0;31m'; CYAN='\033[0;36m'; GOLD='\033[0;33m'
-GREEN='\033[0;32m'; NC='\033[0m'; BOLD='\033[1m'
+GREEN='\033[0;32m'; NC='\033[0m'
 
+# Une IMAGE réelle finit par .img ou .img.gz — surtout PAS .sha256/.sig/.vdi
+# (sidecars qui matcheraient un glob « *.img* » trop gourmand). Rend la plus
+# récente correspondant au préfixe, ou une chaîne vide.
+newest_image() { ls -t "$1"* 2>/dev/null | grep -E '\.img(\.gz)?$' | head -1 || true; }
 log()  { echo -e "${CYAN}[vbox]${NC} $*"; }
 ok()   { echo -e "${GREEN}[  OK ]${NC} $*"; }
+warn() { echo -e "${GOLD}[warn ]${NC} $*"; }
 err()  { echo -e "${RED}[FAIL ]${NC} $*" >&2; exit 1; }
 
 usage() {
-  cat <<EOF
-Usage: bash create-vbox-vm.sh [OPTIONS] [IMAGE.vdi]
+    cat <<EOF
+SecuBox — create-vbox-vm.sh
+
+Crée et démarre une VM VirtualBox depuis l'image live-USB amd64.
+
+Usage: $(basename "$0") [OPTIONS] [IMAGE]
+
+  IMAGE                 Chemin d'une image .img, .img.gz ou .vdi.
+                        Omis → dernière secubox-live-amd64-*.img* dans output/.
 
 Options:
-  --name NAME      Nom de la VM (défaut: SecuBox-Dev)
-  --ram  MB        RAM en MB (défaut: 2048)
-  --cpus N         Nombre de CPUs (défaut: 2)
-  --help           Cette aide
+  --download [TAG]      Télécharge l'image depuis les releases GitHub avant
+                        (TAG optionnel, ex. v3.0.0-alpha.1 ; défaut : la
+                        dernière release). Nécessite gh, sinon curl/wget.
+  -n, --name NAME       Nom de la VM (défaut: $VM_NAME)
+  -m, --memory MB       RAM (défaut: $VM_RAM)
+  -c, --cpus N          vCPU (défaut: $VM_CPUS)
+      --vram MB         VRAM (défaut: $VM_VRAM)
+  -s, --ssh PORT        Port hôte → 22 invité (défaut: $SSH_PORT)
+  -w, --https PORT      Port hôte → 443 invité (défaut: $HTTPS_PORT)
+      --http PORT       Port hôte → 80 invité (défaut: $HTTP_PORT)
+      --headless        Démarre sans fenêtre
+      --no-start        Crée la VM sans la démarrer
+  -f, --force, --delete Supprime la VM existante puis recrée
+  -h, --help            Cette aide
 
-Si aucune image n'est fournie, une nouvelle VM est créée avec un disque vide.
-Sinon, le .vdi fourni est utilisé.
-
-Configuration réseau VirtualBox recommandée :
-  - Adapter 1 : NAT (pour accès internet - WAN)
-  - Adapter 2 : Host-Only ou Internal Network (pour accès LAN)
-
+Redirection de ports (NAT):
+  SSH:   ssh -p $SSH_PORT root@localhost
+  HTTPS: https://localhost:$HTTPS_PORT
+  HTTP:  http://localhost:$HTTP_PORT
 EOF
-  exit 0
+    exit 0
 }
 
-# Parse args
-VDI_FILE=""
+# ── Options ──────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --name)   VM_NAME="$2";  shift 2 ;;
-    --ram)    VM_RAM="$2";   shift 2 ;;
-    --cpus)   VM_CPUS="$2";  shift 2 ;;
-    --help|-h) usage ;;
-    *.vdi)    VDI_FILE="$1"; shift ;;
-    *.img)
-      # Convertir l'image raw en vdi
-      log "Conversion de $1 en VDI..."
-      VDI_FILE="${1%.img}.vdi"
-      qemu-img convert -f raw -O vdi "$1" "$VDI_FILE"
-      shift
-      ;;
-    *) err "Argument inconnu: $1" ;;
-  esac
+    case "$1" in
+        --download)
+            DOWNLOAD="latest"
+            # Argument optionnel : un tag (ne commence pas par '-').
+            if [[ $# -ge 2 && "$2" != -* ]]; then DOWNLOAD="$2"; shift; fi
+            shift ;;
+        -n|--name)    VM_NAME="$2"; shift 2 ;;
+        -m|--memory)  VM_RAM="$2"; shift 2 ;;
+        -c|--cpus)    VM_CPUS="$2"; shift 2 ;;
+        --vram)       VM_VRAM="$2"; shift 2 ;;
+        -s|--ssh)     SSH_PORT="$2"; shift 2 ;;
+        -w|--https)   HTTPS_PORT="$2"; shift 2 ;;
+        --http)       HTTP_PORT="$2"; shift 2 ;;
+        --headless)   HEADLESS=1; shift ;;
+        --no-start)   NO_START=1; shift ;;
+        -f|--force|--delete) FORCE=1; shift ;;
+        -h|--help)    usage ;;
+        -*)           err "Option inconnue : $1 (voir --help)" ;;
+        *)            IMAGE="$1"; shift ;;
+    esac
 done
 
-# Vérifier VBoxManage
-command -v VBoxManage >/dev/null || err "VBoxManage non trouvé. Installer VirtualBox."
+command -v VBoxManage &>/dev/null || err "VBoxManage introuvable — installe VirtualBox."
 
-log "Création VM: ${BOLD}${VM_NAME}${NC}"
-log "RAM: ${VM_RAM} MB | CPUs: ${VM_CPUS}"
+# ── Résolution de l'image ────────────────────────────────────────
+download_image() {
+    local tag="$1" dest
+    mkdir -p "$OUTPUT_DIR"
+    if command -v gh &>/dev/null; then
+        local args=(release download --repo "$GITHUB_REPO" --dir "$OUTPUT_DIR"
+                    --pattern '*live-amd64*.img*' --clobber)
+        [[ "$tag" != "latest" ]] && args+=("$tag")
+        log "Téléchargement via gh (${tag})…"
+        gh "${args[@]}" || err "gh release download a échoué (tag ${tag} ?)."
+        # La plus récente image amd64 fraîchement récupérée (hors .sha256/.sig).
+        IMAGE="$(newest_image "${OUTPUT_DIR}/secubox-live-amd64")"
+    else
+        warn "gh absent — repli sur l'URL 'latest' (curl/wget)."
+        [[ "$tag" != "latest" ]] && warn "Tag ${tag} ignoré sans gh (URL latest)."
+        dest="${OUTPUT_DIR}/secubox-live-amd64-bookworm.img.gz"
+        local url="https://github.com/${GITHUB_REPO}/releases/latest/download/secubox-live-amd64-bookworm.img.gz"
+        if command -v curl &>/dev/null; then curl -fL --progress-bar -o "$dest" "$url"
+        elif command -v wget &>/dev/null; then wget -q --show-progress -O "$dest" "$url"
+        else err "curl ou wget requis pour --download."; fi
+        IMAGE="$dest"
+    fi
+    [[ -n "$IMAGE" && -f "$IMAGE" ]] || err "Aucune image amd64 téléchargée."
+    ok "Image : $IMAGE"
+}
 
-# Vérifier si VM existe déjà
-if VBoxManage showvminfo "${VM_NAME}" &>/dev/null; then
-  err "Une VM nommée '${VM_NAME}' existe déjà. Supprimer ou choisir un autre nom."
+if [[ -n "$DOWNLOAD" ]]; then
+    download_image "$DOWNLOAD"
+elif [[ -z "$IMAGE" ]]; then
+    # Auto : la plus récente image amd64 dans output/ (hors sidecars .sha256).
+    IMAGE="$(newest_image "${OUTPUT_DIR}/secubox-live-amd64")"
+    [[ -n "$IMAGE" ]] || err "Aucune image amd64 (.img/.img.gz) dans ${OUTPUT_DIR}. Utilise --download ou donne un chemin."
+    log "Image auto-détectée : $IMAGE"
+fi
+[[ -f "$IMAGE" ]] || err "Image introuvable : $IMAGE"
+
+# ── .img.gz → .img ───────────────────────────────────────────────
+if [[ "$IMAGE" == *.gz ]]; then
+    local_img="${IMAGE%.gz}"
+    if [[ ! -f "$local_img" || "$IMAGE" -nt "$local_img" ]]; then
+        log "Décompression $(basename "$IMAGE")…"
+        gunzip -kf "$IMAGE"
+    fi
+    IMAGE="$local_img"
 fi
 
-# Créer la VM
-VBoxManage createvm --name "${VM_NAME}" --ostype "Debian_64" --register
-
-# Configurer système
-VBoxManage modifyvm "${VM_NAME}" \
-  --memory "${VM_RAM}" \
-  --cpus "${VM_CPUS}" \
-  --firmware efi64 \
-  --graphicscontroller vmsvga \
-  --vram 32 \
-  --audio-driver none \
-  --boot1 disk --boot2 none --boot3 none --boot4 none
-
-# Configurer réseau : 2 interfaces
-# Adapter 1 : NAT (WAN) - PXE boot disabled
-VBoxManage modifyvm "${VM_NAME}" \
-  --nic1 nat \
-  --nictype1 virtio \
-  --cableconnected1 on \
-  --nicbootprio1 0
-
-# Adapter 2 : Host-Only (LAN) - créer si nécessaire
-HOSTONLY_NET=$(VBoxManage list hostonlyifs | grep "^Name:" | head -1 | awk '{print $2}')
-if [[ -z "$HOSTONLY_NET" ]]; then
-  log "Création interface Host-Only..."
-  VBoxManage hostonlyif create
-  HOSTONLY_NET=$(VBoxManage list hostonlyifs | grep "^Name:" | head -1 | awk '{print $2}')
-fi
-
-VBoxManage modifyvm "${VM_NAME}" \
-  --nic2 hostonly \
-  --hostonlyadapter2 "${HOSTONLY_NET}" \
-  --nictype2 virtio \
-  --cableconnected2 on \
-  --nicbootprio2 0
-
-log "Réseau configuré : NAT (WAN) + Host-Only (LAN)"
-
-# Créer contrôleur SATA
-VBoxManage storagectl "${VM_NAME}" \
-  --name "SATA" \
-  --add sata \
-  --controller IntelAhci \
-  --portcount 2
-
-# Disque
-CFG_FILE=$(VBoxManage showvminfo "${VM_NAME}" --machinereadable | grep "^CfgFile=" | cut -d'"' -f2)
-VM_DIR=$(dirname "$CFG_FILE")
-
-if [[ -n "$VDI_FILE" ]] && [[ -f "$VDI_FILE" ]]; then
-  # Utiliser le VDI fourni (copier dans le dossier VM)
-  DISK_PATH="${VM_DIR}/${VM_NAME}.vdi"
-  cp "$VDI_FILE" "$DISK_PATH"
-  log "Disque copié depuis $VDI_FILE"
+# ── image brute → VDI (une .vdi est utilisée telle quelle) ───────
+if [[ "$IMAGE" == *.vdi ]]; then
+    VDI="$(realpath "$IMAGE")"
 else
-  # Créer un nouveau disque
-  DISK_PATH="${VM_DIR}/${VM_NAME}.vdi"
-  VBoxManage createmedium disk --filename "$DISK_PATH" --size "${VM_DISK_SIZE}" --format VDI
-  log "Nouveau disque créé : ${VM_DISK_SIZE} MB"
+    VDI="${IMAGE%.*}.vdi"
+    if [[ ! -f "$VDI" || "$IMAGE" -nt "$VDI" ]]; then
+        log "Conversion raw → VDI…"
+        rm -f "$VDI"
+        VBoxManage convertfromraw "$IMAGE" "$VDI" --format VDI
+    else
+        log "VDI existant réutilisé : $(basename "$VDI")"
+    fi
+    VDI="$(realpath "$VDI")"
+fi
+ok "Disque VDI : $VDI"
+
+# ── VM existante ─────────────────────────────────────────────────
+if VBoxManage showvminfo "$VM_NAME" &>/dev/null; then
+    if [[ "$FORCE" -eq 1 ]]; then
+        log "Suppression de la VM existante « $VM_NAME »…"
+        VBoxManage controlvm "$VM_NAME" poweroff &>/dev/null || true
+        sleep 1
+        VBoxManage unregistervm "$VM_NAME" --delete &>/dev/null || true
+    else
+        err "La VM « $VM_NAME » existe déjà — relance avec --force pour la recréer."
+    fi
 fi
 
-# Attacher le disque
-VBoxManage storageattach "${VM_NAME}" \
-  --storagectl "SATA" \
-  --port 0 \
-  --device 0 \
-  --type hdd \
-  --medium "$DISK_PATH"
+# ── Création + configuration ─────────────────────────────────────
+log "Création de la VM « $VM_NAME »…"
+VBoxManage createvm --name "$VM_NAME" --ostype "Debian_64" --register
 
-ok "VM '${VM_NAME}' créée avec succès !"
-echo ""
-echo -e "${GOLD}${BOLD}════════════════════════════════════════════${NC}"
-echo -e "${GREEN}${BOLD}  VM VirtualBox SecuBox prête !${NC}"
-echo ""
-echo "  Démarrer : VBoxManage startvm '${VM_NAME}'"
-echo "  GUI      : VBoxManage startvm '${VM_NAME}' --type gui"
-echo "  Headless : VBoxManage startvm '${VM_NAME}' --type headless"
-echo ""
-echo "  Réseau :"
-echo "    - enp0s3 (NAT)       : Accès internet (WAN)"
-echo "    - enp0s8 (Host-Only) : 192.168.100.1 (LAN SecuBox)"
-echo ""
-echo "  Accès SSH : ssh root@<ip-host-only>"
-echo "  Web UI    : http://<ip-host-only>/"
-echo -e "${GOLD}${BOLD}════════════════════════════════════════════${NC}"
+VBoxManage modifyvm "$VM_NAME" \
+    --memory "$VM_RAM" \
+    --cpus "$VM_CPUS" \
+    --vram "$VM_VRAM" \
+    --graphicscontroller vmsvga \
+    --firmware efi64 \
+    --chipset ich9 \
+    --boot1 disk --boot2 none \
+    --nic1 nat --nictype1 virtio \
+    --natpf1 "SSH,tcp,,${SSH_PORT},,22" \
+    --natpf1 "HTTPS,tcp,,${HTTPS_PORT},,443" \
+    --natpf1 "HTTP,tcp,,${HTTP_PORT},,80" \
+    --audio-enabled off \
+    --usb-ehci off --usb-xhci on \
+    --clipboard-mode bidirectional
+
+VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
+VBoxManage storageattach "$VM_NAME" \
+    --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI"
+
+# ── Récapitulatif ────────────────────────────────────────────────
+cat <<EOF
+
+${GREEN}══════════════════════════════════════════════════════════${NC}
+  SecuBox VirtualBox — VM prête
+${GREEN}══════════════════════════════════════════════════════════${NC}
+  Nom     : ${VM_NAME}
+  RAM/CPU : ${VM_RAM} Mo / ${VM_CPUS} vCPU
+  Disque  : ${VDI}
+
+  Accès (après démarrage) :
+    SSH   : ssh -p ${SSH_PORT} root@localhost
+    HTTPS : https://localhost:${HTTPS_PORT}
+    HTTP  : http://localhost:${HTTP_PORT}
+  Identifiants par défaut : root / secubox
+══════════════════════════════════════════════════════════
+EOF
+
+# ── Démarrage ────────────────────────────────────────────────────
+if [[ "$NO_START" -eq 1 ]]; then
+    log "VM créée, non démarrée (--no-start). Démarrer : VBoxManage startvm \"$VM_NAME\""
+    exit 0
+fi
+if [[ "$HEADLESS" -eq 1 ]]; then
+    log "Démarrage headless…"
+    VBoxManage startvm "$VM_NAME" --type headless
+    log "Arrêt : VBoxManage controlvm \"$VM_NAME\" poweroff"
+else
+    log "Démarrage (fenêtre)…"
+    VBoxManage startvm "$VM_NAME" --type gui
+fi
+ok "Patiente 30–60 s le temps du boot."
