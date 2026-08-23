@@ -1,3 +1,14 @@
+secubox-bbs (0.28.81-1~bookworm1) bookworm; urgency=medium
+
+  * Actualités (#metanews) : la page /c/actualites EST la vitrine MetaNews —
+    cartouche d'événements (sources corrélées) + listing des news PAR SOURCE
+    (dernières de chaque source). Cardlets à VIGNETTE (image de l'article),
+    relayées same-origin via /mn-vignette (garde SSRF, image seule, taille
+    bornée, réservé aux membres : le navigateur ne contacte jamais le média
+    tiers). Le cartouche est aussi sur l'accueil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 22:00:00 +0200
+
 secubox-bbs (0.28.80-1~bookworm1) bookworm; urgency=medium
 
   * Rédaction : cartouche « 📡 Actualités » (#metanews) — une dizaine

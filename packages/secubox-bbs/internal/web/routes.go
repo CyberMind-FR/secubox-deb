@@ -78,6 +78,9 @@ type page struct {
 	// sur l'accueil (pas les salons) pour ne s'afficher qu'à la rédaction.
 	MetaNews    []metaVue
 	MetaNewsErr string
+	// MetaSources : news récentes GROUPÉES PAR SOURCE, pour la page /c/actualites
+	// (« lister les news en cardlets par source »). Rempli seulement là.
+	MetaSources []srcVue
 	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
 	// qui compte les messages prives — deux notions distinctes, et les nommer
 	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
@@ -179,6 +182,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.accueil)
 	ConfigurerFiches(s.opt.MediaOrigines)
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
+	s.mux.HandleFunc("/mn-vignette", s.servirMNVignette)
 	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
 	s.mux.HandleFunc("/urlshot/", s.servirUrlshot) // #1120 — vignette-snapshot d'URL
@@ -759,6 +763,12 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// compte, la console ; les salons rejoignent la rédaction.
 	p.News = s.composerRedactionSalon(p.Threads, pub)
 	s.poseRail(&p)
+	// Le salon « actualités » EST la vitrine MetaNews : cartouche d'événements
+	// récents (sources corrélées) + listing des news par source (#metanews).
+	if slug == "actualites" && s.opt.MetaNewsSocket != "" {
+		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
+		p.MetaSources = s.vitrineMetaSources()
+	}
 	p.Titre = p.Cat.Title
 	s.rendDef(w, r, "newsroom", "newsroom", p)
 }

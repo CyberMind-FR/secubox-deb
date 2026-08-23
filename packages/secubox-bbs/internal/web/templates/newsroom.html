@@ -44,17 +44,39 @@
       </div>
       <div class="mntrack" role="list">
         {{range .MetaNews}}
-        <a class="mncard{{if .Multi}} multi{{end}}" role="listitem" href="{{.Lien}}" target="_blank" rel="noopener nofollow">
-          <div class="mntop">
-            <span class="mnsrc{{if .Multi}} on{{end}}">🔗 {{.NbSrc}} source{{if .Multi}}s corrélées{{end}}</span>
-            {{if .Tags}}<span class="mntag">{{index .Tags 0}}</span>{{end}}
+        <a class="mncard{{if .Multi}} multi{{end}}" role="listitem" href="{{.Lien}}" target="_blank" rel="noopener nofollow" title="{{.Titre}}">
+          {{if and .Vignette $.V.Connecte}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>
+          {{else}}<span class="mncover ph"><span class="phg">📡</span><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>{{end}}
+          <div class="mnbody">
+            <div class="mntop">
+              <span class="mnsrc{{if .Multi}} on{{end}}">{{.NbSrc}} source{{if .Multi}}s corrélées{{end}}</span>
+              {{if .Tags}}<span class="mntag">{{index .Tags 0}}</span>{{end}}
+            </div>
+            <h3 class="serif">{{.Titre}}</h3>
+            {{if .Sources}}<div class="mnnoms">{{range .Sources}}<span>{{.}}</span>{{end}}</div>{{end}}
           </div>
-          <h3 class="serif">{{.Titre}}</h3>
-          {{if .Resume}}<p class="mndek">{{.Resume}}</p>{{end}}
-          {{if .Sources}}<div class="mnnoms">{{range .Sources}}<span>{{.}}</span>{{end}}</div>{{end}}
         </a>
         {{end}}
       </div>
+    </section>
+    {{end}}
+    {{if .MetaSources}}
+    <section class="metasrc" aria-label="Actualités par source">
+      <div class="mnhead"><h2 class="serif">Par source</h2><span class="sub">les dernières, source par source</span></div>
+      {{range .MetaSources}}
+      <div class="msgroup">
+        <div class="mstitle"><b>{{.Nom}}</b> <span class="mscat">{{.Categorie}}</span></div>
+        <div class="mntrack" role="list">
+          {{range .News}}
+          <a class="mncard news" role="listitem" href="{{.URL}}" target="_blank" rel="noopener nofollow" title="{{.Titre}}">
+            {{if and .Vignette $.V.Connecte}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"></span>
+            {{else}}<span class="mncover ph"><span class="phg">📰</span></span>{{end}}
+            <div class="mnbody"><h3 class="serif">{{.Titre}}</h3></div>
+          </a>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
     </section>
     {{end}}
     <div class="feedhead"><h2 class="serif">Tous les dossiers</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
