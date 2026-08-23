@@ -1,3 +1,16 @@
+secubox-radio (0.1.28-1~bookworm1) bookworm; urgency=medium
+
+  * fix(radio): les « précédents » viennent du JOURNAL D'ANTENNE réel (table
+    lectures) — ce sont enfin les titres RÉELLEMENT diffusés, plus la playlist
+    triée par ajout (Store.Historique).
+  * fix(radio): le programmateur FIGE une file (tirage.Programme) et l'annonce
+    comme « à venir » — l'ordre affiché == l'ordre joué. /playlist expose
+    désormais {pistes, passe, avenir}.
+  * fix(radio): lecture/pause + silence RETENUS entre les refresh de l'iframe
+    BBS (le lecteur ne se rallume plus tout seul).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 10:40:00 +0000
+
 secubox-radio (0.1.27-1~bookworm1) bookworm; urgency=medium
 
   * Micro : mini-antenne sous le lecteur — une ligne pour saisir + les 2
