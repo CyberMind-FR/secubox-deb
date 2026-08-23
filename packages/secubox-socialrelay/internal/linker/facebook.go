@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -24,14 +25,32 @@ import (
 // ou « 61560790047791 ». Le jeton est lu d'un fichier de secret (hors base, hors
 // code), jamais reçu par l'API.
 type Facebook struct {
-	cli     *http.Client
-	jetonFn func() string // fournit le jeton actif (OAuth caché → repli manuel)
+	cli        *http.Client
+	jetonFn    func() string // fournit le jeton actif (OAuth caché → repli manuel)
+	cookiePath string        // cookies de session opérateur (mode cookie-replay)
 }
 
 // NewFacebook crée le connecteur ; jetonFn fournit le jeton Graph courant
 // (jeton OAuth mis en cache par le wizard, ou jeton manuel déposé).
 func NewFacebook(jetonFn func() string) *Facebook {
-	return &Facebook{cli: &http.Client{Timeout: 20 * time.Second}, jetonFn: jetonFn}
+	return &Facebook{
+		cli:        &http.Client{Timeout: 25 * time.Second},
+		jetonFn:    jetonFn,
+		cookiePath: "/etc/secubox/secrets/socialrelay-facebook-cookies",
+	}
+}
+
+// cookies rend l'en-tête Cookie déposé par l'opérateur (une seule ligne
+// « c_user=…; xs=…; … »), ou "" s'il n'y en a pas.
+func (f *Facebook) cookies() string {
+	if f.cookiePath == "" {
+		return ""
+	}
+	b, err := os.ReadFile(f.cookiePath)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // ID identifie le connecteur.
@@ -67,11 +86,16 @@ type fbPost struct {
 
 // Peek lit le fil de l'objet Facebook (page/groupe) via l'API Graph.
 func (f *Facebook) Peek(objectID string) ([]Contenu, error) {
+	objectID = strings.TrimSpace(objectID)
+	// PRIORITÉ au mode cookie-replay si l'opérateur a déposé ses cookies : c'est
+	// le recours quand l'API Graph lui est administrativement fermée.
+	if ck := f.cookies(); ck != "" {
+		return f.peekCookie(objectID, ck)
+	}
 	tok := f.jeton()
 	if tok == "" {
-		return nil, fmt.Errorf("jeton Facebook absent (mode consent) : connectez l'app via le wizard OAuth (panel → Connecter Facebook)")
+		return nil, fmt.Errorf("Facebook : ni cookies (déposez-les dans %s pour le mode cookie-replay) ni jeton (wizard OAuth)", f.cookiePath)
 	}
-	objectID = strings.TrimSpace(objectID)
 	champs := "id,message,story,created_time,permalink_url,full_picture,attachments{type,url,media}"
 	api := fmt.Sprintf("https://graph.facebook.com/v20.0/%s/feed?fields=%s&limit=20&access_token=%s",
 		url.PathEscape(objectID), url.QueryEscape(champs), url.QueryEscape(tok))
