@@ -1,0 +1,19 @@
+secubox-metanews (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Flux : UA de navigateur (France 24 / RFI renvoyaient 403 au robot) et suivi
+    d'au plus 3 redirections re-validées par la garde SSRF (franceinfo 301).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 18:30:00 +0200
+
+secubox-metanews (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * MVP MetaNews (#metanews) : radar d'actualite multi-sources.
+    - Linkers Peek/Poke ; connecteur RSS/Atom (lecture seule), garde SSRF.
+    - Regroupement heuristique en evenements (titre + entites + fraicheur,
+      empreinte anti-clone) ; resume extractif court (2-4 phrases).
+    - API /api/v1/metanews/* (topics, sources, categories, tags, search,
+      discuss) + UI embarquee facon redaction.
+    - Demon Go sur socket unix, SQLite, boucle de sondage bornee.
+    - Six flux publics FR/EN poses au premier demarrage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 18:00:00 +0200

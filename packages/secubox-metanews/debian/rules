@@ -1,0 +1,42 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+GOARCH_armhf = arm
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+export CGO_ENABLED = 0
+export GOFLAGS = -mod=vendor -trimpath
+export GOCACHE = $(CURDIR)/.gocache
+export GOPATH  = $(CURDIR)/.gopath
+VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go vet ./...
+	go build -ldflags "-s -w -X main.version=$(VERSION)" \
+	  -o debian/secubox-metanewsd ./cmd/secubox-metanewsd
+
+override_dh_auto_test:
+	if [ "$(GOARCH)" = "$$(go env GOHOSTARCH)" ]; then go test ./...; else \
+	  echo "tests ignores : construction croisee vers $(GOARCH)"; fi
+
+override_dh_auto_clean:
+	rm -rf .gocache .gopath debian/secubox-metanewsd
+
+override_dh_auto_install:
+	install -D -m 0755 debian/secubox-metanewsd \
+	  debian/secubox-metanews/usr/sbin/secubox-metanewsd
+	install -D -m 0644 systemd/secubox-metanews.service \
+	  debian/secubox-metanews/lib/systemd/system/secubox-metanews.service
+	install -D -m 0644 tmpfiles/secubox-metanews.conf \
+	  debian/secubox-metanews/usr/lib/tmpfiles.d/secubox-metanews.conf
+	install -D -m 0644 nginx/metanews.conf \
+	  debian/secubox-metanews/etc/secubox/nginx-available/metanews.conf
+	install -D -m 0644 menu.d/28-metanews.json \
+	  debian/secubox-metanews/usr/share/secubox/menu.d/28-metanews.json
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-metanews

@@ -1,0 +1,22 @@
+Source: secubox-metanews
+Section: news
+Priority: optional
+Maintainer: Gerald Kerma <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13), golang-go (>= 2:1.22~)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-metanews
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, adduser
+Recommends: secubox-bbs
+Description: SecuBox — radar d'actualite multi-sources (MetaNews)
+ MetaNews agrege des flux RSS/Atom, detecte quand plusieurs sources parlent du
+ meme evenement et les regroupe en UN sujet : un resume court et factuel, les
+ liens vers les sources originales, puis une discussion dans le BBS SecuBox.
+ .
+ Ce n'est pas un portail de presse ni une recopie d'articles : c'est un radar.
+ Plusieurs sources -> un evenement -> un resume -> les liens -> une discussion.
+ .
+ Regroupement heuristique local (sans LLM obligatoire), agregation locale, pas
+ de traqueur tiers : les appels externes se limitent a lire les flux declares.
