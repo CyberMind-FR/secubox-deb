@@ -1,3 +1,12 @@
+secubox-bbs (0.28.79-1~bookworm1) bookworm; urgency=medium
+
+  * API : POST /api/v1/bbs/threads (JWT) — ouvre un fil au nom du compte
+    « passerelle » (désactivé, créé au besoin), catégorie par slug (défaut
+    « actualites », créée au besoin), au doute LOCAL. Marque l'URL source.
+    C'est le POKE que MetaNews utilise pour « Discuter ». (#metanews)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 19:00:00 +0200
+
 secubox-bbs (0.28.78-1~bookworm1) bookworm; urgency=medium
 
   * Zanimalos : remonté (top:-10px) et légèrement réduit (~76px) (#1131aa).
