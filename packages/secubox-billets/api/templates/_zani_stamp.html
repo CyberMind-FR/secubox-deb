@@ -1,0 +1,28 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Zanimalos de coin AUTOMATIQUE (#1131aa) : choisit un personnage canonique
+  selon le TYPE du billet `b`, d'après les rôles du bestiaire de référence
+  (zanimalos_schema.json). Aucun réglage manuel : la vitrine se peuple seule.
+    communiqué → Wodi (sage)      · vidéo → Tikko (artiste)
+    audio      → Gazou (chanteur) · doc/pdf → Néri (archiviste)
+    lien/source→ Peek (observateur) · image → Pink (créative)
+    sinon (texte) → Lyra (exploratrice)
+-->
+{% set zns = namespace(v=false, a=false, p=false, img=false) %}
+{% if b.media %}{% for m in b.media %}
+  {%- if m.thumb %}{% set zns.img = true %}
+  {%- else %}{% set zext = m.filename.rsplit('.', 1)[-1] | lower %}
+    {%- if zext in ['mp4','webm','ogv','mov'] %}{% set zns.v = true %}
+    {%- elif zext in ['mp3','ogg','oga','wav','m4a','weba','aac','flac'] %}{% set zns.a = true %}
+    {%- elif zext == 'pdf' %}{% set zns.p = true %}{% endif %}{% endif %}
+{%- endfor %}{% endif %}
+{%- if b.style == 'communique' %}{% set zc = '16_WODI' %}
+{%- elif zns.v %}{% set zc = '14_TIKKO' %}
+{%- elif zns.a %}{% set zc = '25_GAZOU' %}
+{%- elif zns.p %}{% set zc = '15_NERI' %}
+{%- elif b.ref_host %}{% set zc = '01_PEEK' %}
+{%- elif zns.img %}{% set zc = '03_PINK' %}
+{%- else %}{% set zc = '07_LYRA' %}{% endif -%}
+<img class="zani-stamp" src="/static/stickers/zanimalos/{{ zc }}.png" alt=""
+     width="56" height="56" loading="lazy" title="zanimalos · {{ zc[3:] | lower }}">

@@ -138,6 +138,13 @@ a{color:inherit;text-decoration:none}
 .art-head h1{margin:.2rem 0 .5rem;font-size:1.5rem;line-height:1.2;text-wrap:balance}
 .art-head .stamp{position:static;display:inline-block;margin-bottom:4px}
 .stamp.draft{color:var(--amber);border-color:var(--amber);background:var(--amber-s);transform:rotate(-2deg)}
+/* Zanimalos de coin AUTOMATIQUE (#1131aa) : mascotte canonique par type de
+   billet, posée dans le coin haut-droit de la carte / de la page billet. */
+.zani-stamp{position:absolute;top:6px;right:8px;width:56px;height:56px;object-fit:contain;
+  pointer-events:none;z-index:3;filter:drop-shadow(0 3px 5px rgba(0,0,0,.28))}
+.billet-full{position:relative}
+.billet-full .zani-stamp{top:-6px;right:-2px}
+@media (max-width:520px){.zani-stamp{width:44px;height:44px}}
 .writers{display:flex;align-items:center;gap:10px}
 .writers .stack{display:flex} .writers .stack .a{width:28px;height:28px;border-radius:50%;border:2px solid var(--panel);display:grid;place-items:center;font-size:.66rem;font-weight:700;color:#fff;background:var(--sky);margin-left:-8px}
 .writers .stack .a:first-child{margin-left:0}

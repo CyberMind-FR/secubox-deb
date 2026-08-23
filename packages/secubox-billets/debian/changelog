@@ -1,3 +1,13 @@
+secubox-billets (0.8.7-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos EN PUBLIC (#1131aa) : chaque billet de la vitrine (fil + page)
+    porte enfin sa mascotte de coin, choisie AUTOMATIQUEMENT selon son type —
+    communiqué=Wodi, vidéo=Tikko, audio=Gazou, doc=Néri, lien=Peek, image=Pink,
+    texte=Lyra. Nouveau partial _zani_stamp.html ; CSS .zani-stamp ; cache-bust
+    newsroom.css nr7. (Avant : visibles seulement sur le tableau de bord admin.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 14:00:00 +0200
+
 secubox-billets (0.8.6-1~bookworm1) bookworm; urgency=medium
 
   * Bestiaire CANONIQUE 32 (#1131aa) : les 32 vrais zanimalos (planche
