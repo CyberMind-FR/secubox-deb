@@ -112,6 +112,12 @@ a{color:inherit;text-decoration:none}
 .empty{padding:26px;text-align:center;color:var(--dim);font-family:"Fraunces","Cinzel"}
 
 .dossier{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;transition:.2s;position:relative}
+/* Mascotte zanimalos AUTO par type (#1131aa) : à GAUCHE du tampon de statut
+   (public/local), au MÊME niveau (barre titre). Art v3 cadré serré → un cadre
+   modéré suffit à la rendre bien visible sans écraser le contenu. */
+.dossier .zani-stamp{position:absolute;top:-10px;right:66px;width:76px;height:76px;object-fit:contain;
+  pointer-events:none;z-index:3;filter:drop-shadow(0 3px 6px rgba(0,0,0,.30))}
+@media (max-width:520px){.dossier .zani-stamp{width:60px;height:60px;right:58px;top:-6px}}
 .dossier:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
 .src{display:flex;border-bottom:1px dashed var(--line-2)}
 .src .kind{flex:none;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:13px 6px;border-right:1px dashed var(--line-2);background:var(--soft)}
@@ -307,8 +313,12 @@ a{color:inherit;text-decoration:none}
 .cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
 .cartrack::-webkit-scrollbar{display:none}
 .cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
-.ccard{--tone:var(--sky);flex:0 0 auto;width:212px;height:182px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
-  background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;
+/* CARDLET PLEIN-CADRE (#reseaux) : le média est le FOND de la carte, le texte
+   est posé DESSUS sur un voile dégradé. Plus compact, plus dense — on lit le
+   titre et la source à même l'image. Repli mosaïque quand il n'y a pas d'image. */
+.ccard{--tone:var(--sky);position:relative;flex:0 0 auto;width:190px;height:150px;scroll-snap-align:start;
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;
+  background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0;
   box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
 .ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
 .ccard:focus-visible{outline:2px solid var(--tone);outline-offset:2px}
@@ -316,29 +326,35 @@ a{color:inherit;text-decoration:none}
 .ccard[data-k="url"]{--tone:var(--cyan)}
 .ccard[data-k="podcast"]{--tone:var(--amber)}
 .ccard[data-k="video"]{--tone:var(--coral)}
-/* média en cardlet (#1104) : couverture (vignette de flux / play vidéo) + pastilles */
-.cccover{position:relative;display:block;height:74px;background:var(--soft);overflow:hidden}
+/* couverture = FOND plein-cadre (absolu, sous le texte) */
+.cccover{position:absolute;inset:0;z-index:0;display:block;background:var(--soft);overflow:hidden}
 .cccover img{width:100%;height:100%;object-fit:cover;display:block}
-.cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.5rem;
-  text-shadow:0 1px 6px rgba(0,0,0,.6);background:rgba(20,45,60,.18)}
+.cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.7rem;
+  text-shadow:0 1px 8px rgba(0,0,0,.7)}
 /* Vignette de REPLI (#1114) : une carte sans image reçoit une mosaïque teintée
    par son type (data-k → --tone) plutôt qu'une tuile vide. */
 .cccover.ph{display:grid;place-items:center;
   background:
-    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 60%),
-    linear-gradient(135deg, color-mix(in srgb, var(--tone) 12%, var(--panel)), var(--soft))}
-.cccover.ph .phg{font-size:2rem;opacity:.5;filter:saturate(.85)}
-.ccbody{display:flex;flex-direction:column;flex:1;padding:12px 14px 0}
-.cctop{display:flex;align-items:center;gap:7px;margin-bottom:9px}
-.ccic{font-size:1.1rem;line-height:1}
-.cctype{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--tone)}
-.ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.85rem;filter:grayscale(.15)}
-.ccard h3{margin:0;font-size:1rem;line-height:1.2;letter-spacing:-.01em;font-family:inherit;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--tone) 26%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tone) 16%, var(--panel)), var(--soft))}
+.cccover.ph .phg{font-size:3rem;opacity:.42;filter:saturate(.85)}
+/* corps = posé sur l'image, sur un voile dégradé du bas vers le haut */
+.ccbody{position:relative;z-index:1;margin-top:auto;padding:26px 12px 11px;color:#f4f7fa;
+  background:linear-gradient(to top,rgba(7,11,15,.93) 0%,rgba(7,11,15,.78) 42%,rgba(7,11,15,.30) 78%,rgba(7,11,15,0) 100%)}
+.cctop{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.ccic{font-size:1rem;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.cctype{font-size:.6rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:color-mix(in srgb,var(--tone) 55%,#fff);text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.82rem;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.ccard h3{margin:0;font-size:.9rem;line-height:1.18;letter-spacing:-.01em;font-family:inherit;color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,.7);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* aperçu masqué en cardlet plein-cadre : on garde la carte compacte */
+.cartrack .ccdek{display:none}
 .ccdek{margin:6px 0 0;font-size:.78rem;line-height:1.35;color:var(--dim);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ccdek a{color:var(--sky);text-decoration:none}
-.ccwho{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;color:var(--dim);font-size:.74rem}
+.ccwho{display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:0;color:rgba(244,247,250,.82);font-size:.7rem;
+  text-shadow:0 1px 3px rgba(0,0,0,.6)}
 .ccav{width:18px;height:18px;border-radius:50%;background:color-mix(in srgb,var(--tone) 26%,var(--panel));border:1px solid var(--line);flex:none}
 .cardots{display:flex;gap:6px;justify-content:center;margin-top:2px;flex-wrap:wrap}
 .cardots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line-2);cursor:pointer;padding:0;transition:.15s}
@@ -357,3 +373,60 @@ a{color:inherit;text-decoration:none}
 /* Cardlet un peu plus haute (#1131ac) : de quoi montrer barre + vignette +
    titre (2–3 lignes) + prochain titre + dernier message. */
 .radioframe{display:block;width:100%;height:252px;border:0;border-radius:var(--r);background:var(--panel)}
+
+/* Cartouche MetaNews (#metanews) : bande d'événements à VIGNETTE. Le multi-source
+   corrélé est mis en avant (badge + bord cyan). Défilement horizontal. */
+.metanews,.metasrc{margin:18px 0 8px}
+.mnhead{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-bottom:10px}
+.mnhead h2{margin:0;font-size:1.15rem}
+.mnhead .sub{color:var(--ink);opacity:.55;font-size:.8rem;font-family:ui-monospace,monospace}
+.mnhead .mnall{margin-left:auto;color:var(--cyan);font-family:ui-monospace,monospace;font-size:.8rem;text-decoration:none}
+.mnhead .mnall:hover{text-decoration:underline}
+.mntrack{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 12px;scrollbar-width:thin}
+.mncard{scroll-snap-align:start;flex:0 0 244px;display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  text-decoration:none;color:var(--ink);transition:border-color .15s,transform .15s}
+.mncard:hover{border-color:var(--cyan);transform:translateY(-2px)}
+.mncard.multi{border-color:var(--cyan)}
+.mncover{position:relative;display:block;aspect-ratio:16/9;background:var(--paper);overflow:hidden}
+.mncover img{width:100%;height:100%;object-fit:cover;display:block}
+/* Repli SANS image : une tuile TEINTÉE et intentionnelle (pas une case grise
+   « cassée ») — certaines sources (Libération, France 24, RFI…) bloquent l'accès
+   automatisé à leurs images ; on l'assume proprement plutôt que de le contourner. */
+.mncover.ph{display:grid;place-items:center;
+  background:
+    radial-gradient(circle at 30% 26%, color-mix(in srgb, var(--sky) 22%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--sky) 13%, var(--paper)), var(--paper))}
+.mncover.ph .phg{font-size:2.6rem;opacity:.42;filter:saturate(.9)}
+.mnbadge{position:absolute;top:8px;right:8px;font-family:ui-monospace,monospace;font-size:11px;font-weight:700;
+  background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:2px 8px;backdrop-filter:blur(2px)}
+.mnbadge.on{background:var(--cyan);color:#04222a}
+.mnbody{display:flex;flex-direction:column;gap:5px;padding:10px 12px}
+.mntop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mnsrc{font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.03em;
+  border:1px solid var(--line);border-radius:20px;padding:2px 8px;color:var(--ink);opacity:.7}
+.mnsrc.on{color:var(--cyan);border-color:var(--cyan);background:var(--cyan-s);opacity:1;font-weight:700}
+.mntag{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--mint)}
+.mncard h3{margin:0;font-size:.98rem;line-height:1.25;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mnnoms{display:flex;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:10px;opacity:.6}
+.mnnoms span:not(:last-child)::after{content:" ·";opacity:.5}
+/* Listing par source : cartes plus petites, titre seul. */
+.msgroup{margin-bottom:14px}
+.mstitle{font-size:.9rem;margin:0 0 6px}
+.mstitle .mscat{font-family:ui-monospace,monospace;font-size:10px;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em;margin-left:6px}
+.mncard.news{flex:0 0 176px}
+.mncard.news .mnbody{padding:8px 10px}
+.mncard.news h3{font-size:.85rem;-webkit-line-clamp:3}
+
+/* Présence : visiteurs en ligne + membres uniques, à gauche de l'avatar (#presence). */
+.pres-chip{display:inline-flex;align-items:center;gap:5px;font-family:ui-monospace,monospace;font-size:11.5px;
+  color:var(--ink);padding:4px 10px;border:1px solid var(--line);border-radius:20px;background:var(--panel)}
+.pres-chip b{font-weight:700}
+.pres-chip small{opacity:.6;font-size:10px}
+.pres-chip .pmemb{color:var(--cyan)}
+.pres-chip .psep{opacity:.35;margin:0 1px}
+.pdot{width:7px;height:7px;border-radius:50%;background:var(--mint);flex:none;animation:prespulse 2s infinite}
+@keyframes prespulse{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.pdot{animation:none}}
+@media (max-width:680px){.pres-chip small{display:none}.pres-chip{gap:4px;padding:4px 8px}}

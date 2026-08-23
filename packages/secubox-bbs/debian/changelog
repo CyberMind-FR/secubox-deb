@@ -1,3 +1,130 @@
+secubox-bbs (0.28.88-1~bookworm1) bookworm; urgency=medium
+
+  * fix(newsroom): tuile de repli TEINTÉE (pas une case grise « cassée ») pour
+    les news sans image — certaines sources (Libération, France 24, RFI…)
+    bloquent l'accès automatisé à leurs images ; on l'assume proprement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 12:40:00 +0000
+
+secubox-bbs (0.28.87-1~bookworm1) bookworm; urgency=medium
+
+  * feat(reseaux): les cartes de fils-passerelle SANS média résolvent leur
+    vignette auprès de SocialRelay (GET /covers, un appel par page, socket) —
+    ANCIENS fils comme nouveaux, sans marqueur ni backfill. Relais same-origin,
+    surface membre uniquement. Flag --socialrelay-socket.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 12:10:00 +0000
+
+secubox-bbs (0.28.86-1~bookworm1) bookworm; urgency=medium
+
+  * feat(reseaux): les fils-passerelle SocialRelay affichent la VIGNETTE de leur
+    média — le corps porte un marqueur « 🖼 <url> » (média caché local), extrait
+    et relayé same-origin (/media-vignette). socialrelay.gk2 ajouté à
+    --media-origines. Le marqueur est retiré de l'aperçu texte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 11:35:00 +0000
+
+secubox-bbs (0.28.85-1~bookworm1) bookworm; urgency=medium
+
+  * feat(newsroom): cardlets « À la une » PLEIN-CADRE — le média (ou la mosaïque
+    de repli) devient le FOND de la carte, titre/source/auteur posés dessus sur
+    un voile dégradé. Plus compact (190×150), plus dense (#reseaux).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 11:10:00 +0000
+
+secubox-bbs (0.28.84-1~bookworm1) bookworm; urgency=medium
+
+  * RÉTABLIT le carrousel « À la une » de l'accueil (retiré à tort en 0.28.83).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 00:00:00 +0200
+
+secubox-bbs (0.28.83-1~bookworm1) bookworm; urgency=medium
+
+  * Rédaction : retrait du carrousel « À la une » de l'accueil — redondant avec
+    le cartouche Actualités + « Tous les dossiers ». (Le gabarit partagé reste
+    pour la médiathèque.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 23:30:00 +0200
+
+secubox-bbs (0.28.82-1~bookworm1) bookworm; urgency=medium
+
+  * Bandeau : compteur de présence à gauche de l'avatar (#presence) — visiteurs
+    EN LIGNE (5 min) + membres UNIQUES connectés. En mémoire, éphémère, jamais
+    persisté ; IP réelle via X-Real-IP.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 22:30:00 +0200
+
+secubox-bbs (0.28.81-1~bookworm1) bookworm; urgency=medium
+
+  * Actualités (#metanews) : la page /c/actualites EST la vitrine MetaNews —
+    cartouche d'événements (sources corrélées) + listing des news PAR SOURCE
+    (dernières de chaque source). Cardlets à VIGNETTE (image de l'article),
+    relayées same-origin via /mn-vignette (garde SSRF, image seule, taille
+    bornée, réservé aux membres : le navigateur ne contacte jamais le média
+    tiers). Le cartouche est aussi sur l'accueil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 22:00:00 +0200
+
+secubox-bbs (0.28.80-1~bookworm1) bookworm; urgency=medium
+
+  * Rédaction : cartouche « 📡 Actualités » (#metanews) — une dizaine
+    d'événements MetaNews récents en bande défilante, à l'accueil UNIQUEMENT.
+    Les événements MULTI-SOURCES corrélées sont mis en avant (badge + bord cyan,
+    « N sources corrélées »). Lu depuis la socket MetaNews ; panne = message,
+    jamais page cassée. « tout voir » renvoie à l'app MetaNews.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 20:00:00 +0200
+
+secubox-bbs (0.28.79-1~bookworm1) bookworm; urgency=medium
+
+  * API : POST /api/v1/bbs/threads (JWT) — ouvre un fil au nom du compte
+    « passerelle » (désactivé, créé au besoin), catégorie par slug (défaut
+    « actualites », créée au besoin), au doute LOCAL. Marque l'URL source.
+    C'est le POKE que MetaNews utilise pour « Discuter ». (#metanews)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 19:00:00 +0200
+
+secubox-bbs (0.28.78-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : remonté (top:-10px) et légèrement réduit (~76px) (#1131aa).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:30:00 +0200
+
+secubox-bbs (0.28.77-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : ART CORRECT (#1131aa) — pack v3 « bestiaire surnaturel »
+    (personnages cadrés serré, bien plus détaillés) à la place du « canonique ».
+    Cadre ~88px, posé à gauche du tampon de statut, au même niveau.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:00:00 +0200
+
+secubox-bbs (0.28.76-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos de la rédaction BEAUCOUP plus gros (~3,5×, 192px) et posés à
+    GAUCHE du tampon de statut public/local (#1131aa).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 16:00:00 +0200
+
+secubox-bbs (0.28.75-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos dans la rédaction (#1131aa) : chaque carte « dossier » porte une
+    mascotte canonique choisie AUTOMATIQUEMENT selon son type, empilée sous le
+    tampon de statut — fil vidéo/film=Tikko, audio/podcast=Gazou, livre=Néri,
+    conférence=Wodi, lien=Peek, discussion=Lyra ; médiathèque podcast=Gazou,
+    livre audio=Néri, série=Tikko. Les 32 zanimalos sont embarqués dans le
+    binaire (static/stickers/zanimalos/). Même geste que billets.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 15:00:00 +0200
+
+secubox-bbs (0.28.74-1~bookworm1) bookworm; urgency=medium
+
+  * Rédaction (« derniers dossiers ») : tampon de coin sur CHAQUE carte. Les
+    cartes médiathèque n'en avaient pas ; elles portent désormais « public ».
+    Les fils passent en trois états — publié (billet), public (fil public non
+    publié, qui n'avait aucun tampon), local (privé). (#1131z)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 11:00:00 +0200
+
 secubox-bbs (0.28.73-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel : tourne automatiquement AUSSI quand « réduire les animations »
