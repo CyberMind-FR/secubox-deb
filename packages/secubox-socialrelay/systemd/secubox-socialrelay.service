@@ -1,0 +1,52 @@
+[Unit]
+Description=SecuBox SocialRelay — relais de reseaux sociaux (medias caches, fils BBS)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-socialrelay
+Group=secubox
+ExecStart=/usr/sbin/secubox-socialrelayd \
+    --socket /run/secubox/socialrelay.sock \
+    --db /var/lib/secubox/socialrelay/socialrelay.db \
+    --media /var/lib/secubox/socialrelay/media \
+    --conf /etc/secubox/secubox.conf \
+    --bbs-socket /run/secubox/bbs.sock \
+    --fb-token /etc/secubox/secrets/socialrelay-facebook \
+    --poll 600
+Restart=on-failure
+RestartSec=5
+
+# RuntimeDirectory NON declare : /run/secubox est partage (voir radio).
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+
+# Sortie reseau : joindre fediverse/Graph (HTTP + DNS). Compensation symbolique.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressAllow=any
+IPAddressDeny=localhost link-local multicast
+
+ReadWritePaths=/var/lib/secubox/socialrelay /run/secubox
+# LECTURE du jeton Graph (depose par l'operateur) — ACL nominative posee en postinst.
+ReadOnlyPaths=/etc/secubox/secrets
+
+MemoryMax=192M
+CPUQuota=40%
+Nice=8
+
+[Install]
+WantedBy=multi-user.target

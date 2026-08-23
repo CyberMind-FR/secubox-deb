@@ -46,9 +46,9 @@ STATS_CACHE = "/tmp/secubox/waf-stats.json"
 # thread (comme /stats). L'import tolère les deux contextes de montage.
 import glob as _glob
 try:
-    from api.historique import agreger_historique as _agreger_historique
+    from api.historique import agreger_historique as _agreger_historique, bucket_ip
 except ImportError:  # standalone (WorkingDirectory=…/waf)
-    from historique import agreger_historique as _agreger_historique
+    from historique import agreger_historique as _agreger_historique, bucket_ip
 
 HISTORY_CACHE = "/var/lib/secubox/waf/waf-history.json"
 _history_lock = threading.Lock()
@@ -1136,6 +1136,9 @@ def _aggregate_threats(hours: int, limit: int) -> List[dict]:
         ip = e.get("client_ip") or e.get("ip")
         if not ip:
             continue
+        # Trafic interne (loopback/privé) fondu sous « local » : ce n'est pas
+        # un attaquant, il ne doit pas trôner dans le top (cf. sbxwaf #1163).
+        ip = bucket_ip(ip)
         rec = by_ip.setdefault(ip, {
             "ip": ip,
             "count": 0,

@@ -1,0 +1,236 @@
+{
+  "title": "Zanimalos — Bestiaire surnaturel",
+  "author": "Zanimalos / AletheiaVox",
+  "source": "Zanimalos_Signal_32_v3 (WebP bestiaire surnaturel) → PNG 256",
+  "roles_statut": {
+    "published": "18_LUMA",
+    "draft": "14_TIKKO",
+    "archived": "15_NERI"
+  },
+  "characters": [
+    {
+      "id": 1,
+      "name": "Peek",
+      "file": "01_PEEK.png",
+      "role": "Observateur",
+      "emoji": "🔎"
+    },
+    {
+      "id": 2,
+      "name": "Poke",
+      "file": "02_POKE.png",
+      "role": "Bricoleur",
+      "emoji": "🛠️"
+    },
+    {
+      "id": 3,
+      "name": "Pink",
+      "file": "03_PINK.png",
+      "role": "Intuitive",
+      "emoji": "🌸"
+    },
+    {
+      "id": 4,
+      "name": "Pong",
+      "file": "04_PONG.png",
+      "role": "Sceptique",
+      "emoji": "🤔"
+    },
+    {
+      "id": 5,
+      "name": "Noa",
+      "file": "05_NOA.png",
+      "role": "Passeur",
+      "emoji": "🌿"
+    },
+    {
+      "id": 6,
+      "name": "Kragzouy",
+      "file": "06_KRAGZOUY.png",
+      "role": "Archiviste",
+      "emoji": "📚"
+    },
+    {
+      "id": 7,
+      "name": "Lyra",
+      "file": "07_LYRA.png",
+      "role": "Cartographe",
+      "emoji": "🗺️"
+    },
+    {
+      "id": 8,
+      "name": "Ziri",
+      "file": "08_ZIRI.png",
+      "role": "Messager",
+      "emoji": "📨"
+    },
+    {
+      "id": 9,
+      "name": "Orin",
+      "file": "09_ORIN.png",
+      "role": "Chercheur",
+      "emoji": "🔬"
+    },
+    {
+      "id": 10,
+      "name": "Mav",
+      "file": "10_MAV.png",
+      "role": "Rêveur",
+      "emoji": "☁️"
+    },
+    {
+      "id": 11,
+      "name": "Kip",
+      "file": "11_KIP.png",
+      "role": "Guérisseur",
+      "emoji": "🌱"
+    },
+    {
+      "id": 12,
+      "name": "Grom",
+      "file": "12_GROM.png",
+      "role": "Forgeron",
+      "emoji": "⚒️"
+    },
+    {
+      "id": 13,
+      "name": "Sélia",
+      "file": "13_SELIA.png",
+      "role": "Conteuse",
+      "emoji": "📖"
+    },
+    {
+      "id": 14,
+      "name": "Tikkô",
+      "file": "14_TIKKO.png",
+      "role": "Farceur",
+      "emoji": "🎭"
+    },
+    {
+      "id": 15,
+      "name": "Néri",
+      "file": "15_NERI.png",
+      "role": "Chanteuse",
+      "emoji": "🎵"
+    },
+    {
+      "id": 16,
+      "name": "Wodi",
+      "file": "16_WODI.png",
+      "role": "Gardien",
+      "emoji": "🛡️"
+    },
+    {
+      "id": 17,
+      "name": "Bruma",
+      "file": "17_BRUMA.png",
+      "role": "Ombre",
+      "emoji": "🌑"
+    },
+    {
+      "id": 18,
+      "name": "Luma",
+      "file": "18_LUMA.png",
+      "role": "Lumière",
+      "emoji": "☀️"
+    },
+    {
+      "id": 19,
+      "name": "Vex",
+      "file": "19_VEX.png",
+      "role": "Philosophe",
+      "emoji": "🧠"
+    },
+    {
+      "id": 20,
+      "name": "Juna",
+      "file": "20_JUNA.png",
+      "role": "Jardinière",
+      "emoji": "🌼"
+    },
+    {
+      "id": 21,
+      "name": "Pilo",
+      "file": "21_PILO.png",
+      "role": "Pilote",
+      "emoji": "🧭"
+    },
+    {
+      "id": 22,
+      "name": "Mosh",
+      "file": "22_MOSH.png",
+      "role": "Musicien",
+      "emoji": "🎸"
+    },
+    {
+      "id": 23,
+      "name": "Razo",
+      "file": "23_RAZO.png",
+      "role": "Guerrier",
+      "emoji": "⚔️"
+    },
+    {
+      "id": 24,
+      "name": "Olli",
+      "file": "24_OLLI.png",
+      "role": "Rêveuse",
+      "emoji": "🌙"
+    },
+    {
+      "id": 25,
+      "name": "Gazou",
+      "file": "25_GAZOU.png",
+      "role": "Bavard",
+      "emoji": "💬"
+    },
+    {
+      "id": 26,
+      "name": "Nala",
+      "file": "26_NALA.png",
+      "role": "Aventurière",
+      "emoji": "🎒"
+    },
+    {
+      "id": 27,
+      "name": "Eko",
+      "file": "27_EKO.png",
+      "role": "Écologue",
+      "emoji": "♻️"
+    },
+    {
+      "id": 28,
+      "name": "Huko",
+      "file": "28_HUKO.png",
+      "role": "Sage",
+      "emoji": "🦉"
+    },
+    {
+      "id": 29,
+      "name": "Zeph",
+      "file": "29_ZEPH.png",
+      "role": "Voyageur",
+      "emoji": "✈️"
+    },
+    {
+      "id": 30,
+      "name": "Mina",
+      "file": "30_MINA.png",
+      "role": "Bâtisseuse",
+      "emoji": "🏠"
+    },
+    {
+      "id": 31,
+      "name": "Tala",
+      "file": "31_TALA.png",
+      "role": "Diplomate",
+      "emoji": "🤝"
+    },
+    {
+      "id": 32,
+      "name": "Solko",
+      "file": "32_SOLKO.png",
+      "role": "Rêveur",
+      "emoji": "✨"
+    }
+  ]
+}

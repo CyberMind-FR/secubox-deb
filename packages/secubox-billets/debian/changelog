@@ -1,3 +1,67 @@
+secubox-billets (0.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : remonté (top:-10px) et légèrement réduit (~84px) (#1131aa). nr10.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:30:00 +0200
+
+secubox-billets (0.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : ART CORRECT (#1131aa) — le pack v3 « bestiaire surnaturel »
+    (WebP, personnages cadrés serré et bien plus détaillés) remplace l'ancien
+    « canonique » (36% de marge → vignettes minuscules). Cadre ramené à ~96px,
+    posé au niveau du tampon de statut. Contrat de pack : docs/zanimalos-pack-contract.md.
+    newsroom.css?v=nr9.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:00:00 +0200
+
+secubox-billets (0.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos de coin BEAUCOUP plus gros (~3,5×, 192px) sur la vitrine (#1131aa).
+    newsroom.css?v=nr8.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 16:00:00 +0200
+
+secubox-billets (0.8.7-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos EN PUBLIC (#1131aa) : chaque billet de la vitrine (fil + page)
+    porte enfin sa mascotte de coin, choisie AUTOMATIQUEMENT selon son type —
+    communiqué=Wodi, vidéo=Tikko, audio=Gazou, doc=Néri, lien=Peek, image=Pink,
+    texte=Lyra. Nouveau partial _zani_stamp.html ; CSS .zani-stamp ; cache-bust
+    newsroom.css nr7. (Avant : visibles seulement sur le tableau de bord admin.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 14:00:00 +0200
+
+secubox-billets (0.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * Bestiaire CANONIQUE 32 (#1131aa) : les 32 vrais zanimalos (planche
+    canonique GK², 512² transparents) remplacent le sous-ensemble « humeurs ».
+    Rôles issus du bestiaire de référence (zanimalos_schema.json) — le manifest
+    embarqué porte nom + rôle + description des 32. Tableau de bord admin :
+    brouillon = Tikko (artiste), publié = Luma (éclaireuse), archivé = Néri
+    (archiviste). Les 32 sont auto-hébergés (static/stickers/zanimalos/NN_NAME.png)
+    et disponibles pour la suite (réactions, catégories, bbs).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 13:00:00 +0200
+
+secubox-billets (0.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * Tampons « zanimalos » (#1131aa) : le tableau de bord admin affiche une
+    mascotte de statut par billet — publié = hibou « OK », brouillon = renard
+    « DODO », archivé = hibou « ZEN ». Le pack Signal maison est auto-hébergé
+    (PNG dans static/stickers/zanimalos/, 0 appel vers signal.org, CSPN-propre),
+    récupéré et déchiffré par le nouveau scripts/fetch-signal-stickers.py.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 12:00:00 +0200
+
+secubox-billets (0.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * Corrige le rendu de la barre « Partager » : sur la seule police mono, le
+    navigateur résolvait certains emoji (📧 e-mail, 🐘 Mastodon, ✖️ X) en glyphe
+    monochrome ou en tofu « ▯ ». Ajout d'un fallback emoji COULEUR (--emoji) à la
+    pile de polices des icônes de partage ET des réactions.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 10:15:00 +0200
+
 secubox-billets (0.8.3-1~bookworm1) bookworm; urgency=medium
 
   * Masthead : même médaillon BBS (SVG animé /static/bbs-logo.svg) que

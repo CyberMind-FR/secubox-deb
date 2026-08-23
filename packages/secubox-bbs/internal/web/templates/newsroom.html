@@ -35,10 +35,61 @@
 
   <main class="feed">
     {{if .News}}{{template "avunealune" .}}{{end}}
+    {{if .MetaNews}}
+    <section class="metanews" aria-label="Actualités — MetaNews">
+      <div class="mnhead">
+        <h2 class="serif">📡 Actualités</h2>
+        <span class="sub">plusieurs sources · un événement</span>
+        <a class="mnall" href="{{(index .MetaNews 0).Lien}}" target="_blank" rel="noopener">tout voir →</a>
+      </div>
+      <div class="mntrack" role="list">
+        {{range .MetaNews}}
+        <a class="mncard{{if .Multi}} multi{{end}}" role="listitem" href="{{.Lien}}" target="_blank" rel="noopener nofollow" title="{{.Titre}}">
+          {{if and .Vignette $.V.Connecte}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>
+          {{else}}<span class="mncover ph"><span class="phg">📡</span><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>{{end}}
+          <div class="mnbody">
+            <div class="mntop">
+              <span class="mnsrc{{if .Multi}} on{{end}}">{{.NbSrc}} source{{if .Multi}}s corrélées{{end}}</span>
+              {{if .Tags}}<span class="mntag">{{index .Tags 0}}</span>{{end}}
+            </div>
+            <h3 class="serif">{{.Titre}}</h3>
+            {{if .Sources}}<div class="mnnoms">{{range .Sources}}<span>{{.}}</span>{{end}}</div>{{end}}
+          </div>
+        </a>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
+    {{if .MetaSources}}
+    <section class="metasrc" aria-label="Actualités par source">
+      <div class="mnhead"><h2 class="serif">Par source</h2><span class="sub">les dernières, source par source</span></div>
+      {{range .MetaSources}}
+      <div class="msgroup">
+        <div class="mstitle"><b>{{.Nom}}</b> <span class="mscat">{{.Categorie}}</span></div>
+        <div class="mntrack" role="list">
+          {{range .News}}
+          <a class="mncard news" role="listitem" href="{{.URL}}" target="_blank" rel="noopener nofollow" title="{{.Titre}}">
+            {{if and .Vignette $.V.Connecte}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"></span>
+            {{else}}<span class="mncover ph"><span class="phg">📰</span></span>{{end}}
+            <div class="mnbody"><h3 class="serif">{{.Titre}}</h3></div>
+          </a>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+    </section>
+    {{end}}
     <div class="feedhead"><h2 class="serif">Tous les dossiers</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
     {{range .News}}
     {{if .Feed}}{{$f := .Feed}}
     <article class="dossier" data-k="{{$f.Type}}">
+      {{/* La médiathèque est du contenu de la vitrine publique : tampon « public »
+           dans le coin, au même titre que les fils (#1131z). */}}
+      <span class="stamp pub">public</span>
+      {{/* Mascotte zanimalos AUTO selon le média (#1131aa) : podcast=Gazou
+           (chanteur), livre audio=Néri (archiviste), série=Tikko (artiste). */}}
+      {{$z := "25_GAZOU"}}{{if eq $f.Type "audiobook"}}{{$z = "15_NERI"}}{{else if eq $f.Type "serie"}}{{$z = "14_TIKKO"}}{{end}}
+      <img class="zani-stamp" src="/static/stickers/zanimalos/{{$z}}.png" alt="" width="56" height="56" loading="lazy">
       <div class="src">
         <div class="kind"><span class="em">{{$f.Glyphe}}</span><span class="lb">{{if eq $f.Type "audiobook"}}livre audio{{else if eq $f.Type "serie"}}série{{else}}podcast{{end}}</span></div>
         <div class="body">
@@ -62,7 +113,11 @@
     </article>
     {{else}}{{$n := .}}{{with .Fil}}
     <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}">
-      {{if .Published}}<span class="stamp pub">publié</span>{{else if ne .Visibility "public"}}<span class="stamp loc">local</span>{{end}}
+      {{if .Published}}<span class="stamp pub">publié</span>{{else if eq .Visibility "public"}}<span class="stamp pub">public</span>{{else}}<span class="stamp loc">local</span>{{end}}
+      {{/* Mascotte zanimalos AUTO selon le type de fil (#1131aa) : vidéo/film=Tikko,
+           audio/podcast=Gazou, livre=Néri, conférence=Wodi, lien=Peek, sinon Lyra. */}}
+      {{$z := "07_LYRA"}}{{if or (eq .MediaKind "video") (eq .Source "video") (eq .Source "film")}}{{$z = "14_TIKKO"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$z = "25_GAZOU"}}{{else if eq .Source "livre"}}{{$z = "15_NERI"}}{{else if eq .Source "conference"}}{{$z = "16_WODI"}}{{else if .Source}}{{$z = "01_PEEK"}}{{end}}
+      <img class="zani-stamp" src="/static/stickers/zanimalos/{{$z}}.png" alt="" width="56" height="56" loading="lazy">
       <div class="src">
         <div class="kind">
           {{if eq .MediaKind "audio"}}<span class="em">🎧</span><span class="lb">podcast</span>
@@ -155,6 +210,9 @@
       <span class="hintk">⌘K</span>
     </form>
     <div class="mast-actions">
+      <span class="pres-chip" title="{{.Online}} visiteur(s) en ligne · {{.MembresOnline}} membre(s) connecté(s)" aria-label="{{.Online}} en ligne, {{.MembresOnline}} membres">
+        <span class="pdot" aria-hidden="true"></span><b>{{.Online}}</b><small>en ligne</small>{{if .MembresOnline}}<span class="psep">·</span><b class="pmemb">{{.MembresOnline}}</b><small>membre{{if gt .MembresOnline 1}}s{{end}}</small>{{end}}
+      </span>
       {{if and .V.Connecte .Mod.MP}}<a class="ibtn mpal{{if .NonLus}} on{{end}}" href="/mp" title="Messages privés{{if .NonLus}} — {{.NonLus}} non lu(s){{end}}" aria-label="Messages privés{{if .NonLus}}, {{.NonLus}} non lus{{end}}">✉️{{if .NonLus}}<span class="mpct" aria-hidden="true">{{.NonLus}}</span>{{end}}</a>{{end}}
       {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
       {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}

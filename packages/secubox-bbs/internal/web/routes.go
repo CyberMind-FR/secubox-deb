@@ -30,6 +30,10 @@ type page struct {
 	Titre, Site, Hote, Vue, Q string
 	Initiale                  string
 	V                         visiteur
+	// Online : visiteurs vus dans les 5 dernières minutes ; MembresOnline : les
+	// comptes membres uniques parmi eux (#presence). Affichés dans le bandeau.
+	Online        int
+	MembresOnline int
 	Mod                       Modules
 	Stats                     store.Stats
 	Cats                      []store.Category
@@ -73,6 +77,14 @@ type page struct {
 	// panne de publication la ou billets.gk2 est simplement injoignable.
 	Billets    []billetVue
 	BilletsErr string
+	// MetaNews : cartouche « actualités » de la rédaction (#metanews) — une
+	// dizaine d'événements récents agrégés depuis plusieurs sources. Rempli SEUL
+	// sur l'accueil (pas les salons) pour ne s'afficher qu'à la rédaction.
+	MetaNews    []metaVue
+	MetaNewsErr string
+	// MetaSources : news récentes GROUPÉES PAR SOURCE, pour la page /c/actualites
+	// (« lister les news en cardlets par source »). Rempli seulement là.
+	MetaSources []srcVue
 	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
 	// qui compte les messages prives — deux notions distinctes, et les nommer
 	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
@@ -174,6 +186,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.accueil)
 	ConfigurerFiches(s.opt.MediaOrigines)
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
+	s.mux.HandleFunc("/mn-vignette", s.servirMNVignette)
 	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
 	s.mux.HandleFunc("/urlshot/", s.servirUrlshot) // #1120 — vignette-snapshot d'URL
@@ -218,6 +231,13 @@ func (s *Server) routes() {
 func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	v := s.qui(r)
 	pub := !v.Connecte
+	// Présence (#presence) : membre = clé UNIQUE par compte ; anonyme = par IP.
+	cle := "a:" + ipClient(r)
+	if v.Connecte {
+		cle = "u:" + v.Handle
+	}
+	s.pres.vu(cle, v.Connecte)
+	online, membres := s.pres.compte()
 	st, _ := s.st.Stats()
 	cats, _ := s.st.Categories(pub)
 
@@ -268,8 +288,10 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 		Base:  "https://" + r.Host,
 		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true},
 		Stats: st, Cats: cats, Titre: site,
-		NonLus:    nonLus,
-		RadioBase: s.opt.RadioBase,
+		NonLus:        nonLus,
+		Online:        online,
+		MembresOnline: membres,
+		RadioBase:     s.opt.RadioBase,
 	}, pub
 }
 
@@ -501,6 +523,12 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
 	p.News = s.composerRedaction(p.Threads, pub)
 	s.poseRail(&p)
+	// Cartouche « actualités » MetaNews — UNIQUEMENT à l'accueil (pas les salons,
+	// qui appellent poseRail mais pas ceci) : une dizaine d'événements récents,
+	// sources multiples corrélées mises en avant (#metanews).
+	if s.opt.MetaNewsSocket != "" {
+		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
+	}
 	s.poseNonLus(&p)
 	p.Titre = "AletheiaVox"
 	s.rendDef(w, r, "newsroom", "newsroom", p)
@@ -657,6 +685,9 @@ func resumeDeCorps(corps, titre string) string {
 		if cheminMediaNu.MatchString(t) {
 			continue
 		}
+		if strings.HasPrefix(t, "🖼") { // marqueur média-passerelle : hors du texte
+			continue
+		}
 		if strings.HasPrefix(t, "Discuter ce billet") || strings.HasPrefix(t, "[Voir chez") {
 			continue
 		}
@@ -713,6 +744,9 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 			out[i].Recents = recents
 		}
 	}
+	if !pub {
+		s.enrichirCoversReseaux(out) // vignette des fils-passerelle réseaux
+	}
 	return out
 }
 
@@ -748,6 +782,12 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// compte, la console ; les salons rejoignent la rédaction.
 	p.News = s.composerRedactionSalon(p.Threads, pub)
 	s.poseRail(&p)
+	// Le salon « actualités » EST la vitrine MetaNews : cartouche d'événements
+	// récents (sources corrélées) + listing des news par source (#metanews).
+	if slug == "actualites" && s.opt.MetaNewsSocket != "" {
+		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
+		p.MetaSources = s.vitrineMetaSources()
+	}
 	p.Titre = p.Cat.Title
 	s.rendDef(w, r, "newsroom", "newsroom", p)
 }
@@ -767,6 +807,9 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 		out = append(out, s.carteFil(&fils[i], pub))
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	if !pub {
+		s.enrichirCoversReseaux(out) // vignette des fils-passerelle réseaux
+	}
 	return out
 }
 
@@ -821,6 +864,7 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 	// au premier (#1131q). Borné : une carte n'est pas un fil entier.
 	const maxRecents = 5
 	seen := map[int64]bool{}
+	seenURL := map[string]bool{}
 	for i, p := range posts {
 		b, err := s.st.Body(p)
 		if err != nil {
@@ -852,6 +896,24 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 			seen[id] = true
 			if len(medias) < 8 {
 				medias = append(medias, cardMedia{ID: id, Ref: m[0], Kind: kindDeRef(m[0])})
+			}
+		}
+		// #reseaux : marqueur « 🖼 <url> » d'un fil-passerelle → vignette relayée
+		// same-origin, MAIS seulement si l'origine est UN DE NOS services
+		// (media-origines). Une URL d'origine non admise est ignorée : le relais
+		// la refuserait de toute façon, autant ne pas émettre d'<img> cassé.
+		for _, mm := range marqueImageRelais.FindAllStringSubmatch(b, -1) {
+			lien := mm[1]
+			if seenURL[lien] {
+				continue
+			}
+			u, err := url.Parse(lien)
+			if err != nil || !origineAdmise(u, s.opt.MediaOrigines) {
+				continue
+			}
+			seenURL[lien] = true
+			if len(medias) < 8 {
+				medias = append(medias, cardMedia{Ref: "/media-vignette?u=" + url.QueryEscape(lien), Kind: "image"})
 			}
 		}
 	}
@@ -2102,6 +2164,11 @@ func (s *Server) jointesCitees(msgs []billets.Message) []billets.Jointe {
 
 // La reference telle qu'elle est ecrite dans un corps : `/f/12` ou `/f/12.png`.
 var refsJointes = regexp.MustCompile(`/f/(\d+)(?:\.[a-z0-9]{2,5})?`)
+
+// marqueImageRelais : un fil-passerelle (SocialRelay) référence son média par
+// une ligne « 🖼 <url> » pointant vers UN DE NOS services. On l'extrait pour en
+// faire une vignette de carte relayée same-origin.
+var marqueImageRelais = regexp.MustCompile("(?m)^\\x{1f5bc}\\x{fe0f}?[ \\t]+(https?://\\S+)")
 
 func (s *Server) statique(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

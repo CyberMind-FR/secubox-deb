@@ -54,19 +54,6 @@ func jsonErrFr(w http.ResponseWriter, code int, msg string) {
 	json.NewEncoder(w).Encode(map[string]any{"ok": false, "erreur": msg})
 }
 
-// auteurPasserelle résout le compte 'passerelle' — celui qui signe les fils
-// ouverts depuis une source automatisée, même idiome que cmd/bbsctl/main.go
-// (importeSources). Get-or-create : contrairement à bbsctl, cette route ne
-// peut pas supposer qu'une passerelle d'ingestion a déjà tourné et créé ce
-// compte au préalable.
-func (s *Server) auteurPasserelle() (int64, error) {
-	if id, err := s.st.QueryRowScanInt64(
-		`SELECT id FROM users WHERE handle='passerelle'`); err == nil {
-		return id, nil
-	}
-	return s.st.CreateUser("passerelle", "Passerelle", store.RoleMember)
-}
-
 // entreeProvenance : une provenance telle que reçue du client. Distincte de
 // store.Provenance côté JSON pour ne pas lier le contrat d'API aux noms de
 // champs Go internes.
