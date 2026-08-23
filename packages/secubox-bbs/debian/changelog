@@ -1,3 +1,12 @@
+secubox-bbs (0.28.87-1~bookworm1) bookworm; urgency=medium
+
+  * feat(reseaux): les cartes de fils-passerelle SANS média résolvent leur
+    vignette auprès de SocialRelay (GET /covers, un appel par page, socket) —
+    ANCIENS fils comme nouveaux, sans marqueur ni backfill. Relais same-origin,
+    surface membre uniquement. Flag --socialrelay-socket.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 12:10:00 +0000
+
 secubox-bbs (0.28.86-1~bookworm1) bookworm; urgency=medium
 
   * feat(reseaux): les fils-passerelle SocialRelay affichent la VIGNETTE de leur
