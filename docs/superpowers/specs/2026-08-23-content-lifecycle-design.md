@@ -192,21 +192,175 @@ déploiement conseillé : Radio (le cas moteur), puis MetaNews, puis Social.
 module crée les `ContentObject` manquants et relie l'existant, sans doublon
 (idempotence sur `content_representation` UNIQUE + provenance UNIQUE).
 
-## Ce que la v1 NE fait PAS (phase 2, à spécifier ensuite)
+## Hors v1 (posé au-dessus du noyau, migrations additives)
 
-- **Lifecycle/rétention** : `expires_at`, `delete_cache_at`, `archive_at`,
-  `redistribution_allowed`, `keep_original`, transitions
-  permanent/temporary/dormant/archived/ephemeral/cache + le balayeur qui les
-  applique.
-- **Enforcement de la visibilité** au-delà du défaut community (tribal/family/
-  private avec permissions par cercle).
-- Events `cache` / `archive` / `deletion` et la **surcouche PeerTube**
-  (vidéo permanente / temporaire / cachée / archivée / cache reconstructible).
-- Torrents & échanges familiaux/tribaux (mêmes mécanismes, politiques plus
-  restrictives + expiration auto).
+Tout ce qui suit s'ajoute **sans remodeler** le noyau : l'objet reste stable, on
+ajoute des colonnes (via `_migrations`) et des events. Chaque phase est
+livrable/déployable seule.
 
-Ces briques se posent **au-dessus** du noyau v1 sans le remodeler : l'objet reste
-stable, on ajoute des colonnes (migrations additives) et des events.
+---
+
+## Phase 2 — Cycle de vie & rétention
+
+### Deux axes orthogonaux
+
+**Visibilité** (qui voit) et **durée de vie** (combien de temps) sont
+**indépendants**. Un même objet peut être `public` + `temporary`, ou `family` +
+`permanent`, ou `community` + `cache`. On ne les mélange jamais dans un seul
+champ.
+
+### La politique portée par l'objet
+
+Migration additive sur `content_object` :
+
+```
+  lifecycle_state  TEXT DEFAULT 'permanent'  -- permanent|temporary|dormant|archived|ephemeral|cache
+  expires_at       INTEGER DEFAULT 0         -- 0 = jamais
+  delete_cache_at  INTEGER DEFAULT 0         -- purge des représentations is_cache=1
+  archive_at       INTEGER DEFAULT 0         -- sortie du flux (gardé, non supprimé)
+  redistribution_allowed INTEGER DEFAULT 0   -- autorise les events `publication` sortants
+  keep_original    INTEGER DEFAULT 1         -- 1 = ne jamais supprimer objet+provenance, seulement les caches
+```
+
+`lifecycle_state` décrit ce que l'objet **est** ; les `*_at` sont les
+**échéances**. `keep_original=1` est le défaut protecteur : on peut perdre un
+cache, jamais la trace de la source.
+
+### Machine à états
+
+```
+                       archive_at            delete_cache_at / expires_at
+  permanent ──(rien)──▶ (reste)
+  temporary ──expires_at──▶ archived ──(purge caches)──▶ dormant
+  dormant   = caché du public, CONSERVÉ (représentations gardées, hors flux)
+  archived  = rangé, hors flux, gardé (consultable sur demande)
+  ephemeral ──expires_at──▶ DELETION (objet retiré ; provenance gardée en tombstone si keep_original)
+  cache     ──delete_cache_at──▶ purge de la représentation cache (RECONSTRUCTIBLE depuis la source)
+```
+
+Règle d'or maintenue : supprimer un `cache` ne supprime jamais la source — la
+provenance reste, la copie est reconstructible. Une suppression `ephemeral`
+retire l'objet **mais** laisse un `DeletionEvent` (audit append-only) et, si
+`keep_original`, une **tombstone** de provenance (on sait que ça a existé et d'où
+ça venait, sans le contenu).
+
+### Le balayeur (sweeper) — pattern double-caching
+
+Tâche de fond dans le BBS (comme le refresh cache FastAPI/asyncio du projet) :
+toutes les N minutes, elle scanne les échéances dépassées et **applique** la
+transition **atomiquement**, en émettant l'event correspondant :
+
+- `now ≥ delete_cache_at` → supprime les `content_representation` `is_cache=1`
+  (+ demande au module propriétaire de purger son fichier) → `CacheEvent{purged}`.
+- `now ≥ archive_at` → `lifecycle_state=archived` → `ArchiveEvent`.
+- `now ≥ expires_at` sur `ephemeral` → retrait objet + `DeletionEvent`.
+- `now ≥ expires_at` sur `temporary` → `archived` puis purge caches.
+
+Le balayeur est **idempotent** et **borné** (K objets par tour), journalisé dans
+`content_event`. Rollback 4R au sens CSPN : la transition passe par un shadow
+(marque `pending_delete`) validé avant le swap réel, jamais une suppression sèche.
+
+### Events phase 2 (mêmes tables, nouveaux `kind`)
+
+`cache` (mise en cache / purge), `archive`, `deletion` — dans `content_event`,
+`payload` décrit l'action et l'acteur (`balayeur` ou pseudo SysOp pour une action
+manuelle).
+
+### Surcouche PeerTube (application directe)
+
+Une vidéo PeerTube devient une `content_representation` `kind=peertube`,
+`is_cache=1` quand c'est une copie d'une source WAN. Son `lifecycle_state` porte
+la surcouche demandée :
+
+| État | Sens PeerTube |
+|------|---------------|
+| `permanent` | vidéo gardée indéfiniment |
+| `temporary` | expire à `expires_at` |
+| `dormant` | cachée du public, conservée |
+| `archived` | sortie du flux, gardée |
+| `cache` | copie **reconstructible** depuis la source WAN → suppressible sans perte |
+
+La règle : une vidéo peut être permanente, temporaire, cachée, archivée ou juste
+un cache reconstructible — **sans jamais** effacer/masquer la source d'origine.
+
+---
+
+## Phase 3 — Visibilité appliquée & cercles
+
+### Cercles / clans
+
+```
+circle            id, slug, name, kind (community|tribal|family), owner_id, created_at
+circle_member     circle_id, user_id, role (member|steward), added_at
+```
+
+`content_object.visibility ∈ {public, community, tribal, family, private}` +
+`content_object.circle_id` (le cercle concerné pour tribal/family ; 0 sinon).
+Une **représentation** peut porter un override de visibilité (ex. la diffusion
+radio est `community`, mais son **cache photo** est `family`).
+
+### Application (enforcement)
+
+Une seule fonction d'autorisation, appelée partout où l'on sert un objet, un
+topic, une timeline ou une représentation :
+
+```
+peutVoir(viewer, object) :
+  public     → oui
+  community  → viewer est membre BBS
+  tribal/family → viewer ∈ circle_member(object.circle_id)
+  private    → viewer == owner
+```
+
+- La **timeline** (déjà membres-only par le gate d'identité) applique **en plus**
+  la visibilité de l'objet.
+- Le **chat radio public éphémère** reste public (ambiance du direct), mais les
+  `TimelineComment` persistants héritent de la visibilité de l'objet : un objet
+  `family` n'expose sa conversation rejouable qu'au cercle.
+- Les **médias servis** (`/media-vignette`, replays, caches) passent le même
+  `peutVoir` avant diffusion.
+
+---
+
+## Phase 4 — Torrents & partages familiaux/tribaux
+
+Même moteur, **politiques par défaut restrictives** :
+
+- `visibility = family|tribal`, `circle_id` obligatoire.
+- `lifecycle_state = temporary|ephemeral`, `expires_at` court par défaut.
+- `redistribution_allowed = 0` (aucun event `publication` sortant sans opt-in
+  explicite du steward du cercle).
+- `keep_original` selon le cas : un partage familial reconstructible = `cache` ;
+  un original de famille = `permanent` + `private/family`.
+
+Un torrent/partage = `ContentObject` (type selon le média) + représentation
+`cache` sous politique stricte + **expiration automatique** par le balayeur. La
+redistribution hors cercle exige un franchissement explicite, tracé en event.
+
+---
+
+## Roadmap d'implémentation (la suite)
+
+| Phase | Contenu | Dépend de |
+|-------|---------|-----------|
+| **1** | Noyau BBS : tables `content_*`, API `/content /representation /event /topic /timeline /by-ref`, **gate d'identité** timeline. **Adaptateur Radio** (cas moteur : validation → objet+topic, broadcast event, chat membre → timeline, replay). | — |
+| **1b** | Adaptateurs **MetaNews** (topic→objet, articles→provenance) et **Social** (post→objet, cache→représentation, publications→events) + **backfill** idempotent des trois. | 1 |
+| **2** | Colonnes lifecycle + **balayeur** (shadow/4R) + events cache/archive/deletion + **surcouche PeerTube**. | 1 |
+| **3** | Cercles/clans + `peutVoir` unique + application visibilité (timeline, médias, replays). | 1, 2 |
+| **4** | Torrents & partages familiaux/tribaux (politiques restrictives, expiration auto, redistribution contrôlée). | 2, 3 |
+
+Chaque phase = un plan d'implémentation séparé (writing-plans) ; on ne code la
+suivante qu'après revue et déploiement de la précédente. Le noyau v1 ne bouge
+plus : tout le reste s'y accroche par colonnes additives et events.
+
+---
+
+## Ce qui reste hors périmètre (à décider plus tard)
+
+- **Fédération / multi-nœud** du spine (partage d'objets entre box via MirrorNet)
+  — le modèle s'y prête (id opaque + provenance), mais c'est un chantier distinct.
+- **Modération/suppression** avancée des `TimelineComment` (droit du SysOp,
+  droit à l'oubli d'un membre) — à cadrer avec la modération BBS existante.
 
 ## Auto-revue (spec)
 
