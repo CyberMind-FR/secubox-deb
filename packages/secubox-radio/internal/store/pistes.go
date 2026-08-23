@@ -116,6 +116,33 @@ func (s *Store) ParSource(cle string) (Piste, error) {
 	return p, err
 }
 
+// Historique rend LE JOURNAL D'ANTENNE : les dernières pistes RÉELLEMENT
+// diffusées, la plus récente d'abord. C'est la table `lectures` (ce qui est
+// vraiment passé à l'antenne), et NON la playlist triée par ajout — la
+// « précédents » d'avant se contentait de découper la playlist autour de la
+// piste courante, ce qui n'a rien à voir avec l'ordre réel (tirage pondéré).
+// Une piste rejouée apparaît autant de fois qu'elle est passée.
+func (s *Store) Historique(n int) ([]Piste, error) {
+	if n <= 0 || n > 100 {
+		n = 20
+	}
+	rows, err := s.db.Query(selectPiste+
+		`JOIN lectures lx ON lx.piste_id = p.id ORDER BY lx.debut_le DESC, lx.id DESC LIMIT ?`, n)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Piste
+	for rows.Next() {
+		p, err := s.scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Toutes rend LA PLAYLIST — c'est-a-dire ce qui est valide, et rien d'autre.
 //
 // Une proposition n'est pas a l'antenne. La rendre ici l'aurait fait passer

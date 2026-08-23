@@ -566,7 +566,20 @@ func (s *Serveur) playlist(w http.ResponseWriter, r *http.Request) {
 	for _, p := range l {
 		out = append(out, s.vue(p, v))
 	}
-	rendJSON(w, http.StatusOK, map[string]any{"pistes": out})
+	// À VENIR : la file FIGÉE du programmateur — ce qui va vraiment passer, dans
+	// l'ordre (et non l'ordre d'ajout deviné côté client). PASSÉ : le journal
+	// d'antenne, les titres RÉELLEMENT diffusés, le plus récent d'abord.
+	avenir := make([]vuePiste, 0, programme.ProfondeurFile)
+	for _, p := range s.prog.File() {
+		avenir = append(avenir, s.vue(p, v))
+	}
+	passe := make([]vuePiste, 0, 8)
+	if h, err := s.st.Historique(8); err == nil {
+		for _, p := range h {
+			passe = append(passe, s.vue(p, v))
+		}
+	}
+	rendJSON(w, http.StatusOK, map[string]any{"pistes": out, "avenir": avenir, "passe": passe})
 }
 
 // propositions : GET la file (tous les membres), POST une proposition.
