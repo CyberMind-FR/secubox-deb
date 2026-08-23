@@ -9,6 +9,7 @@ CREATE TABLE content_provenance (
   source_url TEXT NOT NULL, source_type TEXT NOT NULL,
   is_original INTEGER NOT NULL DEFAULT 0, noted_at INTEGER NOT NULL,
   UNIQUE(content_id, source_url));
+CREATE UNIQUE INDEX idx_prov_original ON content_provenance(source_url) WHERE is_original=1;
 CREATE TABLE content_representation (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   content_id TEXT NOT NULL REFERENCES content_object(id) ON DELETE CASCADE,
