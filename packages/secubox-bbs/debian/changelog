@@ -1,3 +1,9 @@
+secubox-bbs (0.28.84-1~bookworm1) bookworm; urgency=medium
+
+  * RÉTABLIT le carrousel « À la une » de l'accueil (retiré à tort en 0.28.83).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 00:00:00 +0200
+
 secubox-bbs (0.28.83-1~bookworm1) bookworm; urgency=medium
 
   * Rédaction : retrait du carrousel « À la une » de l'accueil — redondant avec
