@@ -3,41 +3,104 @@
      Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
 <html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SocialRelay · suivre le monde social</title>
+<title>SocialRelay · passerelle sociale souveraine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0c1116;--panel:#131b22;--ink:#e8ecf0;--mut:#8b98a6;--line:#233039;--cyan:#2fd0f5;--cyan-s:rgba(47,208,245,.12);--mint:#4ade80;--amber:#e0b355}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
-.wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px}
-header{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap}
-h1{font-size:1.4rem;margin:0}.tag{color:var(--mut);font-size:.85rem;font-family:ui-monospace,monospace}
-.gear{margin-left:auto;font:600 12px ui-monospace,monospace;background:var(--panel);border:1px solid var(--line);color:var(--cyan);border-radius:8px;padding:7px 12px;cursor:pointer}
-.post{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:14px 0}
-.ptop{display:flex;align-items:center;gap:8px;font-size:.85rem;margin-bottom:6px}
-.net{font-family:ui-monospace,monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border:1px solid var(--line);border-radius:20px;color:var(--cyan)}
-.who{font-weight:600}.when{color:var(--mut);font-size:.75rem;margin-left:auto;font-family:ui-monospace,monospace}
-.ptext{white-space:pre-wrap;margin:6px 0}
-.pmed{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:8px 0}
-.pmed img,.pmed video{width:100%;border-radius:10px;border:1px solid var(--line);display:block;aspect-ratio:4/3;object-fit:cover}
-.pfoot{display:flex;gap:10px;font-size:.82rem;margin-top:8px}
-.pfoot a{color:var(--cyan);text-decoration:none;font-family:ui-monospace,monospace}
-.empty{color:var(--mut);text-align:center;padding:40px 0}
-#admin{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
-.addform{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.addform input,.addform select{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:.88rem}
-.addform input.grow{flex:1;min-width:150px}
-.addform button{background:var(--cyan);color:#04222a;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
-.srow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:.85rem}
-.srow .snm{font-weight:600;min-width:100px}.srow .sh{color:var(--mut);font-family:ui-monospace,monospace;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mode{font-family:ui-monospace,monospace;font-size:9.5px;text-transform:uppercase;padding:2px 6px;border-radius:20px;border:1px solid var(--line)}
-.mode.open{color:var(--mint);border-color:var(--mint)}.mode.consent{color:var(--amber);border-color:var(--amber)}.mode.bridge{color:var(--cyan);border-color:var(--cyan)}
-.serr{color:#e8686e;font-size:10px}
-.srow button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer}
-.hint{color:var(--mut);font-size:.78rem;line-height:1.45;margin-top:10px}
+:root{
+  --bg:#0a0e13; --bg2:#0e141b; --panel:#111922; --panel2:#16212c; --line:#1e2c38; --line2:#27404f;
+  --ink:#e6edf3; --mut:#7d8b99; --dim:#556472;
+  --cyan:#28d3f0; --cyan-d:#0b93ac; --cyan-s:rgba(40,211,240,.10);
+  --mint:#3ee08a; --amber:#e0b24a; --rose:#ec6a72; --violet:#9a7be6;
+  --mono:'Courier Prime',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:'Space Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:
+  radial-gradient(1200px 500px at 15% -10%,rgba(40,211,240,.07),transparent 60%),
+  radial-gradient(900px 500px at 100% 0%,rgba(154,123,230,.06),transparent 55%),
+  var(--bg);
+  color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:680px;margin:0 auto;padding:0 16px 72px}
+
+/* ---- Masthead / switchboard ---- */
+.mast{position:sticky;top:0;z-index:20;margin:0 -16px 18px;padding:16px;
+  background:linear-gradient(180deg,rgba(10,14,19,.96),rgba(10,14,19,.82));
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.mast-row{display:flex;align-items:center;gap:12px;max-width:680px;margin:0 auto}
+.logo{font-size:1.5rem;filter:drop-shadow(0 0 10px rgba(40,211,240,.5))}
+.brand{display:flex;flex-direction:column;line-height:1.1}
+.brand b{font-weight:700;font-size:1.15rem;letter-spacing:.3px}
+.brand span{font-family:var(--mono);font-size:.68rem;color:var(--cyan);text-transform:uppercase;letter-spacing:.18em}
+.gear{margin-left:auto;font-family:var(--mono);font-size:.72rem;font-weight:700;background:var(--panel);
+  border:1px solid var(--line2);color:var(--cyan);border-radius:9px;padding:8px 13px;cursor:pointer;transition:.15s}
+.gear:hover{background:var(--cyan-s);border-color:var(--cyan)}
+/* network rail */
+.rail{display:flex;gap:7px;max-width:680px;margin:11px auto 0;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:.68rem;
+  padding:4px 9px;border:1px solid var(--line);border-radius:20px;color:var(--mut);background:var(--bg2)}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--dim)}
+.chip.on{color:var(--ink);border-color:var(--line2)}
+.chip.on .dot{background:var(--mint);box-shadow:0 0 7px var(--mint)}
+.chip.err .dot{background:var(--amber);box-shadow:0 0 7px var(--amber)}
+.chip .n{color:var(--cyan);font-weight:700}
+
+/* ---- feed cards ---- */
+.post{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
+  border-radius:16px;padding:15px 17px;margin:14px 0;position:relative;overflow:hidden}
+.post::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cyan-d);opacity:.5}
+.post.net-facebook::before{background:#4c6ef0}.post.net-bridge::before{background:var(--violet)}
+.ptop{display:flex;align-items:center;gap:9px;font-size:.85rem;margin-bottom:8px}
+.net{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;
+  padding:3px 9px;border:1px solid var(--line2);border-radius:20px;color:var(--cyan);white-space:nowrap}
+.net.facebook{color:#8aa0f5;border-color:#2c3a6b}.net.bridge{color:var(--violet);border-color:#3a2f5c}
+.who{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.when{color:var(--dim);font-size:.72rem;margin-left:auto;font-family:var(--mono);white-space:nowrap}
+.ptext{white-space:pre-wrap;margin:2px 0 4px;font-size:.96rem;word-break:break-word}
+.pmed{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin:10px 0 4px}
+.pmed img,.pmed video{width:100%;border-radius:11px;border:1px solid var(--line2);display:block;aspect-ratio:4/3;object-fit:cover;background:var(--bg)}
+.pmed.one{grid-template-columns:1fr}.pmed.one img,.pmed.one video{aspect-ratio:16/10}
+.local{font-family:var(--mono);font-size:9px;color:var(--mint);letter-spacing:.05em;margin-top:2px;opacity:.75}
+.pfoot{display:flex;gap:8px;margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}
+.pfoot a{font-family:var(--mono);font-size:.74rem;text-decoration:none;padding:5px 11px;border-radius:8px;
+  border:1px solid var(--line2);color:var(--mut);transition:.15s}
+.pfoot a:hover{color:var(--ink);border-color:var(--cyan);background:var(--cyan-s)}
+.pfoot a.disc{color:var(--cyan);border-color:var(--cyan-d)}
+.empty{color:var(--mut);text-align:center;padding:56px 20px;font-family:var(--mono);font-size:.85rem}
+.empty b{color:var(--ink);display:block;font-size:1rem;margin-bottom:6px;font-family:var(--sans)}
+
+/* ---- admin ---- */
+#admin{background:var(--panel2);border:1px solid var(--line2);border-radius:14px;padding:15px 17px;margin:8px 0 16px}
+.ahead{font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.14em;color:var(--cyan);margin-bottom:12px}
+.addform{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.addform input,.addform select{background:var(--bg);border:1px solid var(--line2);color:var(--ink);
+  border-radius:9px;padding:9px 11px;font-size:.86rem;font-family:var(--sans)}
+.addform input.grow{flex:1;min-width:160px}
+.addform button{background:var(--cyan);color:#04222a;border:0;border-radius:9px;padding:9px 15px;font-weight:700;cursor:pointer;font-family:var(--sans)}
+.addform button:hover{background:#4fe0f8}
+.srow{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:.85rem}
+.srow .snm{font-weight:600;min-width:96px}
+.srow .sh{color:var(--dim);font-family:var(--mono);font-size:10.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mode{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:20px;border:1px solid var(--line2)}
+.mode.open{color:var(--mint);border-color:#1c5236}.mode.consent{color:var(--amber);border-color:#5a4820}.mode.bridge{color:var(--violet);border-color:#3a2f5c}
+.serr{color:var(--rose);font-size:9.5px;font-family:var(--mono)}
+.srow button{background:transparent;border:1px solid var(--line2);color:var(--mut);border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer;font-family:var(--mono)}
+.srow button:hover{color:var(--ink);border-color:var(--cyan)}
+.hint{color:var(--mut);font-size:.76rem;line-height:1.5;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+.hint code{font-family:var(--mono);font-size:.72rem;color:var(--cyan);background:var(--bg);padding:1px 5px;border-radius:4px}
+.hint b.o{color:var(--mint)}.hint b.c{color:var(--amber)}.hint b.b{color:var(--violet)}
 </style></head><body>
+<div class="mast">
+  <div class="mast-row">
+    <span class="logo">🌐</span>
+    <span class="brand"><b>SocialRelay</b><span>passerelle sociale souveraine</span></span>
+    <button class="gear" id="gear">⚙ Sources</button>
+  </div>
+  <div class="rail" id="rail"></div>
+</div>
 <div class="wrap">
-  <header><h1>🌐 SocialRelay</h1><span class="tag">suivre le monde social</span>
-    <button class="gear" id="gear">⚙ Sources</button></header>
   <section id="admin" hidden>
+    <div class="ahead">◎ Sources connectées</div>
     <form id="addform" class="addform">
       <input id="afname" placeholder="Nom" required>
       <select id="afkind">
@@ -48,43 +111,69 @@ h1{font-size:1.4rem;margin:0}.tag{color:var(--mut);font-size:.85rem;font-family:
       <button type="submit">+ Ajouter</button>
     </form>
     <div id="adlist"></div>
-    <p class="hint">Modes : <b>open</b> (Mastodon, public, sans jeton) · <b>consent</b> (Facebook Graph,
-      jeton opérateur requis dans <code>/etc/secubox/secrets/socialrelay-facebook</code>) · <b>bridge</b>
-      (un flux RSS que <b>vous</b> hébergez). Aucun scraping.</p>
+    <p class="hint">Modes — <b class="o">open</b> (Mastodon, public, sans jeton) · <b class="c">consent</b>
+      (Facebook Graph, jeton opérateur dans <code>/etc/secubox/secrets/socialrelay-facebook</code>) ·
+      <b class="b">bridge</b> (un flux RSS que <b>vous</b> hébergez). Les médias sont recopiés en cache
+      local — le visiteur ne contacte jamais le tiers. Aucun scraping.</p>
   </section>
-  <div id="flux"><p class="empty">Chargement…</p></div>
+  <div id="flux"><p class="empty"><b>Connexion…</b>on relaie les flux</p></div>
 </div>
 <script>
 const API="/api/v1/socialrelay";
+const NETS={mastodon:{icon:"🐘",label:"Mastodon"},facebook:{icon:"📘",label:"Facebook"},bridge:{icon:"🌉",label:"Pont"}};
 function el(h){const d=document.createElement("div");d.innerHTML=h;return d.firstElementChild}
 function esc(s){return String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
-function ilya(ts){if(!ts)return"";const s=Math.max(1,Math.floor(Date.now()/1000-ts));if(s<3600)return"il y a "+Math.floor(s/60)+" min";if(s<86400)return"il y a "+Math.floor(s/3600)+" h";return"il y a "+Math.floor(s/86400)+" j"}
+function ilya(ts){if(!ts)return"";const s=Math.max(1,Math.floor(Date.now()/1000-ts));
+  if(s<3600)return"il y a "+Math.floor(s/60)+" min";if(s<86400)return"il y a "+Math.floor(s/3600)+" h";return"il y a "+Math.floor(s/86400)+" j"}
 function tok(){return localStorage.getItem("sbx_token")||""}
 function authH(){return tok()?{"Authorization":"Bearer "+tok()}:{}}
+
 function post(p){
-  const med=(p.medias||[]).map(m=>m.kind==="video"?`<video src="${m.url}" controls preload="none"></video>`:`<img src="${m.url}" alt="" loading="lazy">`).join("");
-  const c=el(`<article class="post"></article>`);
-  c.innerHTML=`<div class="ptop"><span class="net">${esc(p.network||"")}</span><span class="who">${esc(p.author||p.source||"")}</span><span class="when">${ilya(p.published_at)}</span></div>
+  const meds=(p.medias||[]);
+  const med=meds.map(m=>m.kind==="video"
+    ?`<video src="${m.url}" controls preload="none"></video>`
+    :`<img src="${m.url}" alt="" loading="lazy">`).join("");
+  const net=(p.network||"").toLowerCase();
+  const ni=NETS[net]||{icon:"🌐",label:net};
+  const c=el(`<article class="post net-${esc(net)}"></article>`);
+  c.innerHTML=`<div class="ptop">
+      <span class="net ${esc(net)}">${ni.icon} ${esc(ni.label)}</span>
+      <span class="who">${esc(p.author||p.source||"")}</span>
+      <span class="when">${ilya(p.published_at)}</span></div>
     ${p.text?`<div class="ptext">${esc(p.text)}</div>`:""}
-    ${med?`<div class="pmed">${med}</div>`:""}
-    <div class="pfoot"><a href="${esc(p.url)}" target="_blank" rel="noopener nofollow">↗ voir la source</a>${p.bbs_thread_id?`<a href="/t/${p.bbs_thread_id}" target="_blank">💬 discuter</a>`:""}</div>`;
+    ${med?`<div class="pmed${meds.length===1?" one":""}">${med}</div>
+        <div class="local">⬇ ${meds.length} média${meds.length>1?"s":""} en cache local</div>`:""}
+    <div class="pfoot">
+      <a href="${esc(p.url)}" target="_blank" rel="noopener nofollow">↗ source</a>
+      ${p.bbs_thread_id?`<a class="disc" href="/t/${p.bbs_thread_id}" target="_blank">💬 discuter sur le BBS</a>`:""}
+    </div>`;
   return c;
+}
+function rail(srcs){
+  const R=document.getElementById("rail");R.innerHTML="";
+  const by={};(srcs||[]).forEach(s=>{const k=s.kind;(by[k]=by[k]||{on:0,err:0,tot:0}).tot++;
+    if(s.last_error)by[k].err++;else if(s.enabled)by[k].on++;});
+  Object.keys(NETS).forEach(k=>{const g=by[k];if(!g)return;
+    const cls=g.err?"err":(g.on?"on":"");
+    R.appendChild(el(`<span class="chip ${cls}"><span class="dot"></span>${NETS[k].icon} ${NETS[k].label} <span class="n">${g.tot}</span></span>`));
+  });
 }
 async function charger(){
   const f=document.getElementById("flux");
-  let d;try{d=await fetch(`${API}/feed`).then(r=>r.json())}catch(e){f.innerHTML='<p class="empty">hors ligne</p>';return}
+  let d;try{d=await fetch(`${API}/feed`).then(r=>r.json())}catch(e){f.innerHTML='<p class="empty"><b>Hors ligne</b>le relais est injoignable</p>';return}
   const ps=d.posts||[];
-  if(!ps.length){f.innerHTML='<p class="empty">Aucun post relayé pour l\'instant.</p>';return}
+  if(!ps.length){f.innerHTML='<p class="empty"><b>Aucune publication relayée</b>ajoutez une source via ⚙</p>';return}
   f.innerHTML="";ps.forEach(p=>f.appendChild(post(p)));
 }
 const gid=id=>document.getElementById(id);
 gid("gear").onclick=()=>{const a=gid("admin");a.hidden=!a.hidden;if(!a.hidden)loadSources();};
 async function loadSources(){
   const d=await fetch(`${API}/sources`).then(r=>r.json()).catch(()=>({sources:[]}));
+  rail(d.sources);
   const L=gid("adlist");L.innerHTML="";
   (d.sources||[]).forEach(s=>{
-    const row=el(`<div class="srow"><span class="snm">${esc(s.name)}</span><span class="mode ${esc(s.mode)}">${esc(s.mode)}</span><span class="sh">${esc(s.handle||s.url)}</span>${s.last_error?`<span class="serr" title="${esc(s.last_error)}">err</span>`:""}</div>`);
-    const bt=el(`<button>${s.enabled?"off":"on"}</button>`);bt.onclick=()=>patch(s.id,{enabled:!s.enabled});
+    const row=el(`<div class="srow"><span class="snm">${esc(s.name)}</span><span class="mode ${esc(s.mode)}">${esc(s.mode)}</span><span class="sh">${esc(s.handle||s.url)}</span>${s.last_error?`<span class="serr" title="${esc(s.last_error)}">⚠ err</span>`:""}</div>`);
+    const bt=el(`<button>${s.enabled?"⏸":"▶"}</button>`);bt.onclick=()=>patch(s.id,{enabled:!s.enabled});
     const bd=el(`<button>🗑</button>`);bd.onclick=()=>{if(confirm("Supprimer "+s.name+" ?"))del(s.id)};
     row.appendChild(bt);row.appendChild(bd);L.appendChild(row);
   });
@@ -97,7 +186,9 @@ gid("addform").addEventListener("submit",async e=>{
   const body={name:gid("afname").value.trim(),kind:k,enabled:true};
   if(k==="bridge")body.url=h; else body.handle=h;
   const r=await fetch(`${API}/sources`,{method:"POST",headers:{...authH(),"Content-Type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json()).catch(()=>({ok:false}));
-  if(r.ok){gid("afname").value="";gid("afhandle").value="";loadSources();charger();}else alert("échec — jeton requis (connectez-vous).");
+  if(r.ok){gid("afname").value="";gid("afhandle").value="";loadSources();charger();}else alert("échec — jeton requis (connectez-vous au Hub).");
 });
+// premier chargement : feed + rail
+fetch(`${API}/sources`).then(r=>r.json()).then(d=>rail(d.sources)).catch(()=>{});
 charger();setInterval(charger,60000);
 </script></body></html>

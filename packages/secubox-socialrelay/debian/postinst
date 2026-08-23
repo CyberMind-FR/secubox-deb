@@ -1,17 +1,74 @@
 #!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 set -e
+
+DOMAIN="socialrelay.gk2.secubox.in"
+NGX_AVAIL="/etc/secubox/nginx-available/socialrelay.conf"
+WAF_ROUTES="/etc/secubox/waf/haproxy-routes.json"
+BACKPORT=9080   # port nginx partagé des webui secubox
+
 case "$1" in
   configure)
+    # --- Compte de service dédié (séparation de privilèges CSPN) ---
     if ! getent passwd secubox-socialrelay >/dev/null; then
       adduser --system --group --no-create-home --home /var/lib/secubox/socialrelay --shell /usr/sbin/nologin secubox-socialrelay >/dev/null
       adduser secubox-socialrelay secubox >/dev/null 2>&1 || true
     fi
     systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-socialrelay.conf >/dev/null 2>&1 || true
-    # Traversee nominative de /etc/secubox/secrets pour lire le jeton Graph (si depose).
+
+    # --- Traversée nominative de /etc/secubox/secrets pour le jeton Graph ---
     mkdir -p /etc/secubox/secrets
     if command -v setfacl >/dev/null 2>&1; then
       setfacl -m u:secubox-socialrelay:--x /etc/secubox/secrets 2>/dev/null || true
     fi
+
+    # ===================================================================
+    # AUTO-PROVISIONING DU VHOST (le .deb rend le service live tout seul).
+    # Chaque étape est idempotente et ne s'exécute que si l'infra existe :
+    # une réinstallation/upgrade reproduit le MÊME service live sans geste
+    # manuel. Cf. .claude/MODULE-COMPLIANCE.md §Self-Provisioning.
+    # ===================================================================
+
+    # 1. nginx : activer le vhost (available -> sites-enabled) + reload
+    if [ -f "$NGX_AVAIL" ] && [ -d /etc/nginx/sites-enabled ]; then
+      cp -f "$NGX_AVAIL" /etc/nginx/sites-available/socialrelay.conf
+      ln -sf ../sites-available/socialrelay.conf /etc/nginx/sites-enabled/socialrelay.conf
+      if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || systemctl restart nginx >/dev/null 2>&1 || true
+      fi
+    fi
+
+    # 2. HAProxy : déclarer le vhost public (déclaratif, jamais de hand-edit
+    #    du .cfg généré) puis régénérer + recharger.
+    if command -v haproxyctl >/dev/null 2>&1 && [ -f /etc/secubox/haproxy.toml ]; then
+      if ! grep -q "socialrelay_gk2_secubox_in" /etc/secubox/haproxy.toml 2>/dev/null; then
+        haproxyctl vhost add "$DOMAIN" nginx_vhosts true >/dev/null 2>&1 || true
+      fi
+      haproxyctl generate >/dev/null 2>&1 || true
+      systemctl reload haproxy >/dev/null 2>&1 || true
+    fi
+
+    # 3. Route WAF (sbxwaf inspecte puis forwarde vers nginx local) + reload.
+    if [ -f "$WAF_ROUTES" ] && command -v python3 >/dev/null 2>&1; then
+      python3 - "$WAF_ROUTES" "$DOMAIN" "$BACKPORT" <<'PY' || true
+import json, sys
+path, dom, port = sys.argv[1], sys.argv[2], int(sys.argv[3])
+try:
+    d = json.load(open(path))
+except Exception:
+    d = {}
+if d.get(dom) != ["127.0.0.1", port]:
+    d[dom] = ["127.0.0.1", port]
+    json.dump(d, open(path, "w"), indent=2)
+    print("added")
+PY
+      # reload seulement si sbxwaf tourne (évite un restart inutile)
+      if systemctl is-active --quiet secubox-waf-ng 2>/dev/null; then
+        systemctl restart secubox-waf-ng >/dev/null 2>&1 || true
+      fi
+    fi
+
     if [ -d /run/systemd/system ]; then systemctl daemon-reload >/dev/null 2>&1 || true; fi
     ;;
 esac

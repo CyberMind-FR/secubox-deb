@@ -1,3 +1,22 @@
+secubox-socialrelay (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix(pipeline): titreDe tronque sur les runes (crash slice hors-bornes sur
+    titres multi-octets < 90 runes / emoji) — le demon ne boucle plus au crash.
+  * feat(deb): AUTO-PROVISIONING complet du vhost en postinst (nginx enable +
+    HAProxy declaratif + route WAF, idempotent) — l'install/upgrade reproduit
+    le meme service live sans geste manuel. postrm purge nettoie le vhost.
+  * feat(ui): refonte passerelle sociale (masthead switchboard + rail reseaux
+    temps-reel, cartes par reseau, badge cache local, discuter BBS).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 09:35:00 +0000
+
+secubox-socialrelay (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Vhost public : socialrelay.gk2.secubox.in (social.gk2 reste l'instance
+    Mastodon auto-hebergee ; le relais a desormais son propre domaine).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 09:20:00 +0000
+
 secubox-socialrelay (0.1.0-1~bookworm1) bookworm; urgency=medium
 
   * MVP SocialRelay (#socialrelay) : relais social fediverse-first.
