@@ -1,3 +1,10 @@
+secubox-bbs (0.28.76-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos de la rédaction BEAUCOUP plus gros (~3,5×, 192px) et posés à
+    GAUCHE du tampon de statut public/local (#1131aa).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 16:00:00 +0200
+
 secubox-bbs (0.28.75-1~bookworm1) bookworm; urgency=medium
 
   * Zanimalos dans la rédaction (#1131aa) : chaque carte « dossier » porte une
