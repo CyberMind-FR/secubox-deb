@@ -1,3 +1,11 @@
+secubox-bbs (0.28.77-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : ART CORRECT (#1131aa) — pack v3 « bestiaire surnaturel »
+    (personnages cadrés serré, bien plus détaillés) à la place du « canonique ».
+    Cadre ~88px, posé à gauche du tampon de statut, au même niveau.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:00:00 +0200
+
 secubox-bbs (0.28.76-1~bookworm1) bookworm; urgency=medium
 
   * Zanimalos de la rédaction BEAUCOUP plus gros (~3,5×, 192px) et posés à
