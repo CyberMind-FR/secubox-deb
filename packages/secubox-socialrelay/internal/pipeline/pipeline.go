@@ -35,12 +35,13 @@ type Pipe struct {
 	jr        *log.Logger
 	bbsSock   string
 	jwtSecret string
-	relayer   bool // créer des fils BBS ?
+	pubURL    string // base publique HTTPS, pour référencer nos médias cachés
+	relayer   bool   // créer des fils BBS ?
 }
 
 // New crée le pipeline.
-func New(st *store.Store, reg *linker.Registre, cache *mediacache.Cache, jr *log.Logger, bbsSock, jwtSecret string, relayer bool) *Pipe {
-	return &Pipe{st: st, reg: reg, cache: cache, jr: jr, bbsSock: bbsSock, jwtSecret: jwtSecret, relayer: relayer}
+func New(st *store.Store, reg *linker.Registre, cache *mediacache.Cache, jr *log.Logger, bbsSock, jwtSecret, pubURL string, relayer bool) *Pipe {
+	return &Pipe{st: st, reg: reg, cache: cache, jr: jr, bbsSock: bbsSock, jwtSecret: jwtSecret, pubURL: pubURL, relayer: relayer}
 }
 
 type mediaLocal struct {
@@ -116,7 +117,7 @@ func (p *Pipe) Passerelle(now int64) (int, error) {
 	fils := 0
 	for _, po := range posts {
 		titre := titreDe(po.Author, po.Text)
-		corps := corpsDe(po)
+		corps := corpsDe(po, p.pubURL)
 		tid, err := p.pokeBBS(titre, corps, salon[po.SourceID], po.URL)
 		if err != nil {
 			if p.jr != nil {
@@ -144,7 +145,7 @@ func titreDe(auteur, texte string) string {
 	return t
 }
 
-func corpsDe(po store.Post) string {
+func corpsDe(po store.Post, pubURL string) string {
 	var b strings.Builder
 	b.WriteString(po.Text)
 	b.WriteString("\n\n")
@@ -152,6 +153,19 @@ func corpsDe(po store.Post) string {
 		fmt.Fprintf(&b, "— %s\n", po.Author)
 	}
 	fmt.Fprintf(&b, "Source : %s\n", po.URL)
+	// #reseaux : on référence le média CACHÉ EN LOCAL (jamais le tiers) par une
+	// URL de NOTRE service — le BBS la relaie same-origin pour la vignette de
+	// carte. Marqueur 🖼 : le BBS l'extrait, son résumé de corps l'ignore.
+	if pubURL != "" {
+		var ml []mediaLocal
+		_ = json.Unmarshal([]byte(po.Media), &ml)
+		for _, m := range ml {
+			if m.Kind == "image" && m.Hash != "" {
+				fmt.Fprintf(&b, "🖼 %s/api/v1/socialrelay/media/%s\n", strings.TrimRight(pubURL, "/"), m.Hash)
+				break
+			}
+		}
+	}
 	return b.String()
 }
 

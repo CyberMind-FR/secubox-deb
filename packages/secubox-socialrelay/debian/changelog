@@ -1,3 +1,11 @@
+secubox-socialrelay (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat(reseaux): le fil BBS d'un post porte un marqueur « 🖼 <url> » vers le
+    média CACHÉ EN LOCAL (jamais le tiers) — le BBS le relaie same-origin en
+    vignette de cardlet. Le visiteur ne contacte aucun tiers.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 11:30:00 +0000
+
 secubox-socialrelay (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * feat(fb): wizard OAuth Meta "consent" (jump-URL + QR + jeton long-lived
