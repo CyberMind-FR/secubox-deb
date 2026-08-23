@@ -23,7 +23,7 @@ CREATE TABLE content_event (
 CREATE TABLE content_timeline (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   content_id TEXT NOT NULL REFERENCES content_object(id) ON DELETE CASCADE,
-  author TEXT NOT NULL, author_id INTEGER NOT NULL,
+  author TEXT NOT NULL, author_id INTEGER NOT NULL CHECK(author_id > 0),
   offset_ms INTEGER NOT NULL DEFAULT 0, body TEXT NOT NULL,
   broadcast_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 CREATE INDEX idx_timeline_off ON content_timeline(content_id, offset_ms);
