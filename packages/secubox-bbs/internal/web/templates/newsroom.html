@@ -39,6 +39,9 @@
     {{range .News}}
     {{if .Feed}}{{$f := .Feed}}
     <article class="dossier" data-k="{{$f.Type}}">
+      {{/* La médiathèque est du contenu de la vitrine publique : tampon « public »
+           dans le coin, au même titre que les fils (#1131z). */}}
+      <span class="stamp pub">public</span>
       <div class="src">
         <div class="kind"><span class="em">{{$f.Glyphe}}</span><span class="lb">{{if eq $f.Type "audiobook"}}livre audio{{else if eq $f.Type "serie"}}série{{else}}podcast{{end}}</span></div>
         <div class="body">
@@ -62,7 +65,7 @@
     </article>
     {{else}}{{$n := .}}{{with .Fil}}
     <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}">
-      {{if .Published}}<span class="stamp pub">publié</span>{{else if ne .Visibility "public"}}<span class="stamp loc">local</span>{{end}}
+      {{if .Published}}<span class="stamp pub">publié</span>{{else if eq .Visibility "public"}}<span class="stamp pub">public</span>{{else}}<span class="stamp loc">local</span>{{end}}
       <div class="src">
         <div class="kind">
           {{if eq .MediaKind "audio"}}<span class="em">🎧</span><span class="lb">podcast</span>
