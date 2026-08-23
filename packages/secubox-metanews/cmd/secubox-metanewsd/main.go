@@ -36,7 +36,7 @@ func main() {
 		conf     = flag.String("conf", "/etc/secubox/secubox.conf", "config (pour api.jwt_secret)")
 		jwtFlag  = flag.String("jwt-secret", "", "secret JWT de flotte (sinon lu du conf)")
 		bbsSock  = flag.String("bbs-socket", "/run/secubox/bbs.sock", "socket du BBS (pour Discuter)")
-		bbsCat   = flag.Int64("bbs-cat", 1, "catégorie BBS des fils MetaNews")
+		bbsCat   = flag.String("bbs-cat", "actualites", "slug de catégorie BBS des fils MetaNews")
 		pollSec  = flag.Int("poll", 300, "période de sondage des flux, en secondes")
 		montre   = flag.Bool("version", false, "afficher la version")
 	)

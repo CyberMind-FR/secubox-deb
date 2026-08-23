@@ -1,3 +1,10 @@
+secubox-metanews (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Discuter : la catégorie BBS est un SLUG ("actualites") et non un entier —
+    accord avec POST /api/v1/bbs/threads. Le POKE vers le BBS fonctionne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 19:15:00 +0200
+
 secubox-metanews (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Flux : UA de navigateur (France 24 / RFI renvoyaient 403 au robot) et suivi
