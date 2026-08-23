@@ -1,3 +1,13 @@
+secubox-bbs (0.28.80-1~bookworm1) bookworm; urgency=medium
+
+  * Rédaction : cartouche « 📡 Actualités » (#metanews) — une dizaine
+    d'événements MetaNews récents en bande défilante, à l'accueil UNIQUEMENT.
+    Les événements MULTI-SOURCES corrélées sont mis en avant (badge + bord cyan,
+    « N sources corrélées »). Lu depuis la socket MetaNews ; panne = message,
+    jamais page cassée. « tout voir » renvoie à l'app MetaNews.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 20:00:00 +0200
+
 secubox-bbs (0.28.79-1~bookworm1) bookworm; urgency=medium
 
   * API : POST /api/v1/bbs/threads (JWT) — ouvre un fil au nom du compte

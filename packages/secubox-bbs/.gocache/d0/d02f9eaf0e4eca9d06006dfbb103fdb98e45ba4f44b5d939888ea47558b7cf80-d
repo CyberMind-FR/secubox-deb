@@ -1,0 +1,12 @@
+# test log
+getenv TMPDIR
+stat /tmp/TestAPICreerFilPasserelle3817552582/001/secrets
+stat /tmp/TestAPICreerFilPasserelle3817552582/001
+open /tmp/TestAPICreerFilPasserelle3817552582/001/secrets/passwd
+stat /tmp/TestAPICreerFilPasserelle3817552582/001/secrets/passwd
+stat /tmp/TestAPICreerFilPasserelle3817552582/001/content/1
+stat /tmp/TestAPICreerFilPasserelle3817552582/001/content
+stat /tmp/TestAPICreerFilPasserelle3817552582/001
+open /tmp/TestAPICreerFilPasserelle3817552582/001/content/1/1.md.tmp
+stat /tmp/TestAPICreerFilPasserelle3817552582/001/content/1/1.md
+open /tmp
