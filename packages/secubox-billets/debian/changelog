@@ -1,3 +1,9 @@
+secubox-billets (0.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : remonté (top:-10px) et légèrement réduit (~84px) (#1131aa). nr10.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:30:00 +0200
+
 secubox-billets (0.8.9-1~bookworm1) bookworm; urgency=medium
 
   * Zanimalos : ART CORRECT (#1131aa) — le pack v3 « bestiaire surnaturel »
