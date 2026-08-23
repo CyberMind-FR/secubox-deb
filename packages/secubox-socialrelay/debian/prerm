@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+case "$1" in
+  remove|deconfigure) if [ -d /run/systemd/system ]; then systemctl stop secubox-socialrelay.service >/dev/null 2>&1 || true; fi ;;
+esac
+#DEBHELPER#
+exit 0

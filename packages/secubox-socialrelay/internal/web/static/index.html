@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: LicenseRef-CMSD-1.0
+     Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr> -->
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SocialRelay · suivre le monde social</title>
+<style>
+:root{--bg:#0c1116;--panel:#131b22;--ink:#e8ecf0;--mut:#8b98a6;--line:#233039;--cyan:#2fd0f5;--cyan-s:rgba(47,208,245,.12);--mint:#4ade80;--amber:#e0b355}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap}
+h1{font-size:1.4rem;margin:0}.tag{color:var(--mut);font-size:.85rem;font-family:ui-monospace,monospace}
+.gear{margin-left:auto;font:600 12px ui-monospace,monospace;background:var(--panel);border:1px solid var(--line);color:var(--cyan);border-radius:8px;padding:7px 12px;cursor:pointer}
+.post{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:14px 0}
+.ptop{display:flex;align-items:center;gap:8px;font-size:.85rem;margin-bottom:6px}
+.net{font-family:ui-monospace,monospace;font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border:1px solid var(--line);border-radius:20px;color:var(--cyan)}
+.who{font-weight:600}.when{color:var(--mut);font-size:.75rem;margin-left:auto;font-family:ui-monospace,monospace}
+.ptext{white-space:pre-wrap;margin:6px 0}
+.pmed{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:8px 0}
+.pmed img,.pmed video{width:100%;border-radius:10px;border:1px solid var(--line);display:block;aspect-ratio:4/3;object-fit:cover}
+.pfoot{display:flex;gap:10px;font-size:.82rem;margin-top:8px}
+.pfoot a{color:var(--cyan);text-decoration:none;font-family:ui-monospace,monospace}
+.empty{color:var(--mut);text-align:center;padding:40px 0}
+#admin{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
+.addform{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.addform input,.addform select{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:.88rem}
+.addform input.grow{flex:1;min-width:150px}
+.addform button{background:var(--cyan);color:#04222a;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
+.srow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:.85rem}
+.srow .snm{font-weight:600;min-width:100px}.srow .sh{color:var(--mut);font-family:ui-monospace,monospace;font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mode{font-family:ui-monospace,monospace;font-size:9.5px;text-transform:uppercase;padding:2px 6px;border-radius:20px;border:1px solid var(--line)}
+.mode.open{color:var(--mint);border-color:var(--mint)}.mode.consent{color:var(--amber);border-color:var(--amber)}.mode.bridge{color:var(--cyan);border-color:var(--cyan)}
+.serr{color:#e8686e;font-size:10px}
+.srow button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer}
+.hint{color:var(--mut);font-size:.78rem;line-height:1.45;margin-top:10px}
+</style></head><body>
+<div class="wrap">
+  <header><h1>🌐 SocialRelay</h1><span class="tag">suivre le monde social</span>
+    <button class="gear" id="gear">⚙ Sources</button></header>
+  <section id="admin" hidden>
+    <form id="addform" class="addform">
+      <input id="afname" placeholder="Nom" required>
+      <select id="afkind">
+        <option value="mastodon">Mastodon</option><option value="facebook">Facebook (consent)</option>
+        <option value="bridge">Pont (RSS que vous hébergez)</option>
+      </select>
+      <input id="afhandle" class="grow" placeholder="@user@instance · #tag@instance · id FB · URL de pont">
+      <button type="submit">+ Ajouter</button>
+    </form>
+    <div id="adlist"></div>
+    <p class="hint">Modes : <b>open</b> (Mastodon, public, sans jeton) · <b>consent</b> (Facebook Graph,
+      jeton opérateur requis dans <code>/etc/secubox/secrets/socialrelay-facebook</code>) · <b>bridge</b>
+      (un flux RSS que <b>vous</b> hébergez). Aucun scraping.</p>
+  </section>
+  <div id="flux"><p class="empty">Chargement…</p></div>
+</div>
+<script>
+const API="/api/v1/socialrelay";
+function el(h){const d=document.createElement("div");d.innerHTML=h;return d.firstElementChild}
+function esc(s){return String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+function ilya(ts){if(!ts)return"";const s=Math.max(1,Math.floor(Date.now()/1000-ts));if(s<3600)return"il y a "+Math.floor(s/60)+" min";if(s<86400)return"il y a "+Math.floor(s/3600)+" h";return"il y a "+Math.floor(s/86400)+" j"}
+function tok(){return localStorage.getItem("sbx_token")||""}
+function authH(){return tok()?{"Authorization":"Bearer "+tok()}:{}}
+function post(p){
+  const med=(p.medias||[]).map(m=>m.kind==="video"?`<video src="${m.url}" controls preload="none"></video>`:`<img src="${m.url}" alt="" loading="lazy">`).join("");
+  const c=el(`<article class="post"></article>`);
+  c.innerHTML=`<div class="ptop"><span class="net">${esc(p.network||"")}</span><span class="who">${esc(p.author||p.source||"")}</span><span class="when">${ilya(p.published_at)}</span></div>
+    ${p.text?`<div class="ptext">${esc(p.text)}</div>`:""}
+    ${med?`<div class="pmed">${med}</div>`:""}
+    <div class="pfoot"><a href="${esc(p.url)}" target="_blank" rel="noopener nofollow">↗ voir la source</a>${p.bbs_thread_id?`<a href="/t/${p.bbs_thread_id}" target="_blank">💬 discuter</a>`:""}</div>`;
+  return c;
+}
+async function charger(){
+  const f=document.getElementById("flux");
+  let d;try{d=await fetch(`${API}/feed`).then(r=>r.json())}catch(e){f.innerHTML='<p class="empty">hors ligne</p>';return}
+  const ps=d.posts||[];
+  if(!ps.length){f.innerHTML='<p class="empty">Aucun post relayé pour l\'instant.</p>';return}
+  f.innerHTML="";ps.forEach(p=>f.appendChild(post(p)));
+}
+const gid=id=>document.getElementById(id);
+gid("gear").onclick=()=>{const a=gid("admin");a.hidden=!a.hidden;if(!a.hidden)loadSources();};
+async function loadSources(){
+  const d=await fetch(`${API}/sources`).then(r=>r.json()).catch(()=>({sources:[]}));
+  const L=gid("adlist");L.innerHTML="";
+  (d.sources||[]).forEach(s=>{
+    const row=el(`<div class="srow"><span class="snm">${esc(s.name)}</span><span class="mode ${esc(s.mode)}">${esc(s.mode)}</span><span class="sh">${esc(s.handle||s.url)}</span>${s.last_error?`<span class="serr" title="${esc(s.last_error)}">err</span>`:""}</div>`);
+    const bt=el(`<button>${s.enabled?"off":"on"}</button>`);bt.onclick=()=>patch(s.id,{enabled:!s.enabled});
+    const bd=el(`<button>🗑</button>`);bd.onclick=()=>{if(confirm("Supprimer "+s.name+" ?"))del(s.id)};
+    row.appendChild(bt);row.appendChild(bd);L.appendChild(row);
+  });
+}
+async function patch(id,b){await fetch(`${API}/sources/${id}`,{method:"PATCH",headers:{...authH(),"Content-Type":"application/json"},body:JSON.stringify(b)});loadSources();}
+async function del(id){await fetch(`${API}/sources/${id}`,{method:"DELETE",headers:authH()});loadSources();}
+gid("addform").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const k=gid("afkind").value, h=gid("afhandle").value.trim();
+  const body={name:gid("afname").value.trim(),kind:k,enabled:true};
+  if(k==="bridge")body.url=h; else body.handle=h;
+  const r=await fetch(`${API}/sources`,{method:"POST",headers:{...authH(),"Content-Type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json()).catch(()=>({ok:false}));
+  if(r.ok){gid("afname").value="";gid("afhandle").value="";loadSources();charger();}else alert("échec — jeton requis (connectez-vous).");
+});
+charger();setInterval(charger,60000);
+</script></body></html>

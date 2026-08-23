@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    if ! getent passwd secubox-socialrelay >/dev/null; then
+      adduser --system --group --no-create-home --home /var/lib/secubox/socialrelay --shell /usr/sbin/nologin secubox-socialrelay >/dev/null
+      adduser secubox-socialrelay secubox >/dev/null 2>&1 || true
+    fi
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-socialrelay.conf >/dev/null 2>&1 || true
+    # Traversee nominative de /etc/secubox/secrets pour lire le jeton Graph (si depose).
+    mkdir -p /etc/secubox/secrets
+    if command -v setfacl >/dev/null 2>&1; then
+      setfacl -m u:secubox-socialrelay:--x /etc/secubox/secrets 2>/dev/null || true
+    fi
+    if [ -d /run/systemd/system ]; then systemctl daemon-reload >/dev/null 2>&1 || true; fi
+    ;;
+esac
+#DEBHELPER#
+exit 0
