@@ -1,0 +1,8 @@
+.gocache/
+.gopath/
+debian/secubox-metanewsd
+debian/secubox-metanews/
+debian/.debhelper/
+debian/*.substvars
+debian/files
+*.deb
