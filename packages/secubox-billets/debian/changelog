@@ -1,3 +1,13 @@
+secubox-billets (0.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos : ART CORRECT (#1131aa) — le pack v3 « bestiaire surnaturel »
+    (WebP, personnages cadrés serré et bien plus détaillés) remplace l'ancien
+    « canonique » (36% de marge → vignettes minuscules). Cadre ramené à ~96px,
+    posé au niveau du tampon de statut. Contrat de pack : docs/zanimalos-pack-contract.md.
+    newsroom.css?v=nr9.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 17:00:00 +0200
+
 secubox-billets (0.8.8-1~bookworm1) bookworm; urgency=medium
 
   * Zanimalos de coin BEAUCOUP plus gros (~3,5×, 192px) sur la vitrine (#1131aa).
