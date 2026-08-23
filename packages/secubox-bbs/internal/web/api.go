@@ -33,6 +33,8 @@ func (s *Server) routesAPI() {
 	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/representation", s.jwt(s.apiContentRepresentation))
 	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/event", s.jwt(s.apiContentEvent))
 	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/topic", s.jwt(s.apiContentTopic))
+	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/timeline", s.jwt(s.apiContentTimelineCreer))
+	s.mux.HandleFunc("GET /api/v1/bbs/content/{id}/timeline", s.jwt(s.apiContentTimelineLister))
 	s.mux.HandleFunc("/api/v1/bbs/invite", s.jwt(s.apiInvite))
 	s.mux.HandleFunc("/api/v1/bbs/backup", s.jwt(s.apiBackup))
 	s.mux.HandleFunc("/api/v1/bbs/reindex", s.jwt(s.apiReindex))

@@ -1,3 +1,13 @@
+secubox-bbs (0.29.0-1~bookworm1) bookworm; urgency=medium
+
+  * Content spine : nouvelle API /api/v1/bbs/content* (JWT de flotte) —
+    création/résolution d'un ContentObject, représentations, événements,
+    ouverture du fil BBS associé (auteur passerelle), et timeline de
+    commentaires horodatés avec gate d'identité (author_id>0, sinon 400
+    JSON explicite). (ref #1166)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 23 Aug 2026 12:09:14 +0200
+
 secubox-bbs (0.28.73-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel : tourne automatiquement AUSSI quand « réduire les animations »
