@@ -1,3 +1,12 @@
+secubox-bbs (0.28.74-1~bookworm1) bookworm; urgency=medium
+
+  * Rédaction (« derniers dossiers ») : tampon de coin sur CHAQUE carte. Les
+    cartes médiathèque n'en avaient pas ; elles portent désormais « public ».
+    Les fils passent en trois états — publié (billet), public (fil public non
+    publié, qui n'avait aucun tampon), local (privé). (#1131z)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 11:00:00 +0200
+
 secubox-bbs (0.28.73-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel : tourne automatiquement AUSSI quand « réduire les animations »
