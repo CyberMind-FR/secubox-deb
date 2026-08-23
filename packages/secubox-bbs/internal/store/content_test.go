@@ -76,6 +76,30 @@ func TestLierTopic(t *testing.T) {
 	}
 }
 
+func TestTimelineRejetteAnonyme(t *testing.T) {
+	s := ouvre(t)
+	id, _ := s.CreerContenu(ContentObject{Type: "audio", Title: "T"},
+		[]Provenance{{SourceURL: "u4", SourceType: "youtube", Original: true}}, 1)
+	if _, err := s.AjouterTimeline(id, TimelineComment{Author: "anon", AuthorID: 0, OffsetMS: 1000, Body: "hi"}); err == nil {
+		t.Fatal("un message anonyme (author_id=0) ne doit JAMAIS être persisté")
+	}
+}
+
+func TestTimelineMembreOrdreParOffset(t *testing.T) {
+	s := ouvre(t)
+	id, _ := s.CreerContenu(ContentObject{Type: "audio", Title: "T"},
+		[]Provenance{{SourceURL: "u5", SourceType: "youtube", Original: true}}, 1)
+	s.AjouterTimeline(id, TimelineComment{Author: "Koda", AuthorID: 7, OffsetMS: 80000, Body: "b"})
+	s.AjouterTimeline(id, TimelineComment{Author: "Lyra", AuthorID: 5, OffsetMS: 64000, Body: "a"})
+	got, err := s.TimelineDe(id, 0, 0)
+	if err != nil || len(got) != 2 {
+		t.Fatalf("len=%d err=%v", len(got), err)
+	}
+	if got[0].OffsetMS != 64000 || got[1].OffsetMS != 80000 {
+		t.Fatalf("ordre par offset non respecté : %d puis %d", got[0].OffsetMS, got[1].OffsetMS)
+	}
+}
+
 func TestContentMigrationCreeLesTables(t *testing.T) {
 	s := ouvre(t) // helper existant (migrate_test.go) : ouvre un Store neuf en tempdir (migrations jouées)
 	for _, tbl := range []string{"content_object", "content_provenance",
