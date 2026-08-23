@@ -1,3 +1,12 @@
+secubox-billets (0.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * Corrige le rendu de la barre « Partager » : sur la seule police mono, le
+    navigateur résolvait certains emoji (📧 e-mail, 🐘 Mastodon, ✖️ X) en glyphe
+    monochrome ou en tofu « ▯ ». Ajout d'un fallback emoji COULEUR (--emoji) à la
+    pile de polices des icônes de partage ET des réactions.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 10:15:00 +0200
+
 secubox-billets (0.8.3-1~bookworm1) bookworm; urgency=medium
 
   * Masthead : même médaillon BBS (SVG animé /static/bbs-logo.svg) que
