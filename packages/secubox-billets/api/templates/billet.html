@@ -25,6 +25,7 @@
 {% endblock %}
 {% block content %}
 <article class="h-entry billet billet-full">
+  {% with b=billet %}{% include "_zani_stamp.html" %}{% endwith %}
   <div class="e-content">{{ billet.body_html|safe }}</div>
   {# Galerie = IMAGES seules. L'audio/vidéo/pdf s'affiche EN LIGNE dans le corps
      (les refs /media/ y sont embarquées au rendu, #1094) : les remettre ici en
