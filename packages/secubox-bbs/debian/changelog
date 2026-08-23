@@ -1,3 +1,11 @@
+secubox-bbs (0.28.85-1~bookworm1) bookworm; urgency=medium
+
+  * feat(newsroom): cardlets « À la une » PLEIN-CADRE — le média (ou la mosaïque
+    de repli) devient le FOND de la carte, titre/source/auteur posés dessus sur
+    un voile dégradé. Plus compact (190×150), plus dense (#reseaux).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 11:10:00 +0000
+
 secubox-bbs (0.28.84-1~bookworm1) bookworm; urgency=medium
 
   * RÉTABLIT le carrousel « À la une » de l'accueil (retiré à tort en 0.28.83).
