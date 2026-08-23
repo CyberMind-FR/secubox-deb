@@ -22,6 +22,17 @@ func (s *Server) routesAPI() {
 	s.mux.HandleFunc("/api/v1/bbs/status", s.jwt(s.apiStatus))
 	s.mux.HandleFunc("/api/v1/bbs/integrity", s.jwt(s.apiIntegrity))
 	s.mux.HandleFunc("/api/v1/bbs/threads", s.jwt(s.apiThreads))
+	// Content spine (#1166) : cf. api_content.go. Motifs Go 1.22 avec
+	// méthode+PathValue — "by-ref" est un segment littéral, donc plus
+	// spécifique que le joker "{id}" pour le même chemin ; l'ordre
+	// d'enregistrement n'y change rien (net/http.ServeMux départage par
+	// spécificité, pas par ordre).
+	s.mux.HandleFunc("POST /api/v1/bbs/content", s.jwt(s.apiContentCreer))
+	s.mux.HandleFunc("GET /api/v1/bbs/content/by-ref", s.jwt(s.apiContentParRef))
+	s.mux.HandleFunc("GET /api/v1/bbs/content/{id}", s.jwt(s.apiContentObtenir))
+	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/representation", s.jwt(s.apiContentRepresentation))
+	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/event", s.jwt(s.apiContentEvent))
+	s.mux.HandleFunc("POST /api/v1/bbs/content/{id}/topic", s.jwt(s.apiContentTopic))
 	s.mux.HandleFunc("/api/v1/bbs/invite", s.jwt(s.apiInvite))
 	s.mux.HandleFunc("/api/v1/bbs/backup", s.jwt(s.apiBackup))
 	s.mux.HandleFunc("/api/v1/bbs/reindex", s.jwt(s.apiReindex))

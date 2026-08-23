@@ -289,6 +289,102 @@ func (s *Store) AjouterTimeline(contentID string, c TimelineComment) (int64, err
 	return res.LastInsertId()
 }
 
+// Representation est une représentation d'un ContentObject dans un module
+// consommateur (radio, billets, mediatheque…) — la lecture symétrique de
+// AjouterRepresentation.
+type Representation struct {
+	Kind      string
+	Module    string
+	Ref       string
+	IsCache   bool
+	URL       string
+	CreatedAt int64
+}
+
+// ProvenanceDe rend les provenances d'un ContentObject, la source
+// is_original=1 en tête — c'est celle qu'un lecteur cherche en premier.
+func (s *Store) ProvenanceDe(contentID string) ([]Provenance, error) {
+	rows, err := s.db.Query(
+		`SELECT source_url,source_type,is_original FROM content_provenance
+		  WHERE content_id=? ORDER BY is_original DESC, noted_at`, contentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Provenance
+	for rows.Next() {
+		var p Provenance
+		var original int
+		if err := rows.Scan(&p.SourceURL, &p.SourceType, &original); err != nil {
+			return nil, err
+		}
+		p.Original = original != 0
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// RepresentationsDe rend les représentations d'un ContentObject dans les
+// modules consommateurs, dans l'ordre où elles ont été ajoutées.
+func (s *Store) RepresentationsDe(contentID string) ([]Representation, error) {
+	rows, err := s.db.Query(
+		`SELECT kind,module,ref,is_cache,url,created_at FROM content_representation
+		  WHERE content_id=? ORDER BY created_at`, contentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []Representation
+	for rows.Next() {
+		var r Representation
+		var cache int
+		if err := rows.Scan(&r.Kind, &r.Module, &r.Ref, &cache, &r.URL, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		r.IsCache = cache != 0
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// ContentEvent est un événement du cycle de vie d'un ContentObject — la
+// lecture symétrique de AjouterEvent.
+type ContentEvent struct {
+	Kind    string
+	Actor   string
+	Payload string
+	At      int64
+}
+
+// EventsDe rend les DERNIERS événements d'un ContentObject, les plus récents
+// en tête, bornés à limite (20 si limite<=0). Append-only côté écriture ;
+// côté lecture, une timeline complète n'a pas d'intérêt pour un panneau qui
+// n'affiche qu'un aperçu du cycle de vie.
+func (s *Store) EventsDe(contentID string, limite int) ([]ContentEvent, error) {
+	if limite <= 0 {
+		limite = 20
+	}
+	rows, err := s.db.Query(
+		`SELECT kind,actor,payload,at FROM content_event
+		  WHERE content_id=? ORDER BY id DESC LIMIT ?`, contentID, limite)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ContentEvent
+	for rows.Next() {
+		var e ContentEvent
+		if err := rows.Scan(&e.Kind, &e.Actor, &e.Payload, &e.At); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 // TimelineDe rend les commentaires d'un contenu entre fromMS et toMS (bornes
 // incluses), ordonnés par offset_ms. toMS<=0 signifie : pas de borne haute.
 func (s *Store) TimelineDe(contentID string, fromMS, toMS int64) ([]TimelineComment, error) {
