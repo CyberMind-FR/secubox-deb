@@ -13,9 +13,12 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
 func (s *Server) routesAPI() {
@@ -150,6 +153,10 @@ func (s *Server) apiIntegrity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) apiThreads(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		s.apiCreerFil(w, r)
+		return
+	}
 	// L'API d'administration voit TOUT : elle n'est atteignable qu'avec un
 	// jeton valide. C'est le seul endroit du programme ou publicOnly vaut faux
 	// sans qu'une session membre soit en jeu.
@@ -159,6 +166,75 @@ func (s *Server) apiThreads(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true, "fils": th})
+}
+
+// apiCreerFil : ouvre un fil AU NOM D'UNE PASSERELLE (compte dédié désactivé),
+// pour un module externe authentifié — MetaNews « Discuter » en premier. Le
+// corps porte le résumé + les liens sources ; le fil est marqué de son URL
+// source. Au doute, VISIBILITÉ LOCALE (une passerelle ne publie pas d'office).
+func (s *Server) apiCreerFil(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Title      string `json:"title"`
+		Body       string `json:"body"`
+		Category   string `json:"category"`   // slug ; défaut « actualites »
+		SourceURL  string `json:"source_url"`
+		Visibility string `json:"visibility"` // "public" | "local" (défaut)
+	}
+	if json.NewDecoder(io.LimitReader(r.Body, 1<<18)).Decode(&in) != nil || strings.TrimSpace(in.Title) == "" {
+		jsonErr(w, http.StatusBadRequest, "title requis")
+		return
+	}
+	aut, err := s.auteurPasserelle()
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	slug := strings.TrimSpace(in.Category)
+	if slug == "" {
+		slug = "actualites"
+	}
+	cat, err := s.catParSlug(slug)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	vis := store.VisLocal
+	if in.Visibility == "public" {
+		vis = store.VisPublic
+	}
+	id, err := s.st.NewThread(cat, aut, in.Title, in.Body, vis)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	if in.SourceURL != "" {
+		_ = s.st.MarquerSourceMedia(id, in.SourceURL, "", "")
+	}
+	var fslug string
+	_ = s.st.QueryRowScan(&fslug, `SELECT slug FROM threads WHERE id=?`, id)
+	jsonOK(w, map[string]any{"ok": true, "thread_id": id, "slug": fslug})
+}
+
+// auteurPasserelle rend l'id du compte « passerelle » (désactivé), en le créant
+// si absent — un module de passerelle ne doit pas échouer faute de ce compte.
+func (s *Server) auteurPasserelle() (int64, error) {
+	if id, err := s.st.UserByHandle("passerelle"); err == nil && id != 0 {
+		return id, nil
+	}
+	// UserByHandle ne rend pas un compte désactivé : on le retrouve directement.
+	if id, err := s.st.QueryRowScanInt64(`SELECT id FROM users WHERE handle='passerelle'`); err == nil && id != 0 {
+		return id, nil
+	}
+	return s.st.CreateUser("passerelle", "Passerelle", store.RoleMember)
+}
+
+// catParSlug rend l'id de la catégorie de slug donné, en la créant si absente.
+func (s *Server) catParSlug(slug string) (int64, error) {
+	if id, err := s.st.QueryRowScanInt64(`SELECT id FROM categories WHERE slug=?`, slug); err == nil && id != 0 {
+		return id, nil
+	}
+	titre := strings.ToUpper(slug[:1]) + slug[1:]
+	return s.st.CreateCategory(slug, titre, "")
 }
 
 func (s *Server) apiInvite(w http.ResponseWriter, r *http.Request) {

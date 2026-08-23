@@ -89,6 +89,9 @@ func main() {
 		tls     = flag.Bool("derriere-tls", true, "poser Secure sur les cookies")
 		sauveg  = flag.String("backup-dir", "/var/backups/secubox", "ou deposer les archives")
 		bilSock = flag.String("billets-socket", "/run/secubox/billets.sock", "socket du module billets")
+		mnSock  = flag.String("metanews-socket", "/run/secubox/metanews.sock", "socket du module MetaNews (cartouche actualités) ; vide = désactivé")
+		srSock  = flag.String("socialrelay-socket", "/run/secubox/socialrelay.sock", "socket du module SocialRelay (vignettes des fils-passerelle) ; vide = désactivé")
+		mnBase  = flag.String("metanews-base", "https://metanews.gk2.secubox.in", "origine publique de MetaNews (liens du cartouche)")
 		bilBase = flag.String("billets-base", "", "origine publique de billets, pour resoudre les adresses relatives du flux ; vide = adresses telles que le flux les rend")
 		conf    = flag.String("conf", "/etc/secubox/secubox.conf", "configuration du core (api.jwt_secret)")
 
@@ -162,6 +165,8 @@ func main() {
 	srv, err := web.New(st, yt, web.Options{
 		Titre: *titre, Secrets: *secrets, DerriereTLS: *tls,
 		BilletsSocket: *bilSock, BilletsBase: *bilBase, JWTSecret: secret, BackupDir: *sauveg,
+		MetaNewsSocket: *mnSock, MetaNewsBase: *mnBase,
+		SocialRelaySocket: *srSock,
 		BanniereOrigine: *bannOrig, BanniereHash: *bannHash, BanniereStyle: *bannStyle,
 		PeerTubeOrigine: *ptOrigine, PodcastRacine: *podRacine, PodcastDB: *podDB,
 		MediaOrigines: origines(*mediaOrig),
