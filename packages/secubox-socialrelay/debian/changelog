@@ -1,0 +1,10 @@
+secubox-socialrelay (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * MVP SocialRelay (#socialrelay) : relais social fediverse-first.
+    - Connecteurs Peek : Mastodon (open, compte/hashtag), Facebook (consent,
+      API Graph + jeton operateur), pont RSS (operateur).
+    - Cache local des medias (garde SSRF, type, taille) servi par hash.
+    - Passerelle : un fil BBS par post (POST /api/v1/bbs/threads, VisLocal).
+    - API /api/v1/socialrelay/* + UI (fil + medias locaux + admin sources).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 00:30:00 +0200
