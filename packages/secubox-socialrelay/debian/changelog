@@ -1,3 +1,11 @@
+secubox-socialrelay (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * feat(covers): GET /api/v1/socialrelay/covers?tids=… rend l'URL locale de la
+    vignette (média caché) par ID de fil BBS — le BBS résout ainsi la vignette
+    des fils-passerelle ANCIENS comme nouveaux, sans marqueur ni backfill.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 12:05:00 +0000
+
 secubox-socialrelay (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * feat(reseaux): le fil BBS d'un post porte un marqueur « 🖼 <url> » vers le

@@ -80,7 +80,7 @@ func main() {
 	reg := linker.NewRegistre(gardeReseau, jetonFB)
 	cache := mediacache.New(*mediaD, st, gardeReseau)
 	pipe := pipeline.New(st, reg, cache, jr, *bbsSock, secret, *pubURL, *relayer)
-	srv := web.New(st, cache, web.Options{JWTSecret: secret}, jr, version)
+	srv := web.New(st, cache, web.Options{JWTSecret: secret, PubURL: *pubURL}, jr, version)
 	srv.BrancherFB(fb)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

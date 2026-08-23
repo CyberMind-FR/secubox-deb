@@ -26,7 +26,10 @@ import (
 var assets embed.FS
 
 // Options du serveur.
-type Options struct{ JWTSecret string }
+type Options struct {
+	JWTSecret string
+	PubURL    string // base publique HTTPS, pour composer les URLs de médias
+}
 
 // Serveur SocialRelay.
 type Serveur struct {
@@ -56,6 +59,7 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc("GET "+p+"/feed", s.feed)
 	s.mux.HandleFunc("GET "+p+"/sources", s.sources)
 	s.mux.HandleFunc("GET "+p+"/media/{hash}", s.media)
+	s.mux.HandleFunc("GET "+p+"/covers", s.covers)
 	s.mux.HandleFunc("POST "+p+"/sources", s.jwt(s.sourceAdd))
 	s.mux.HandleFunc("PATCH "+p+"/sources/{id}", s.jwt(s.sourcePatch))
 	s.mux.HandleFunc("DELETE "+p+"/sources/{id}", s.jwt(s.sourceDelete))
@@ -143,6 +147,28 @@ func (s *Serveur) sources(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Serveur) media(w http.ResponseWriter, r *http.Request) {
 	s.cache.Servir(w, r, r.PathValue("hash"))
+}
+
+// covers : pour une liste d'ID de fils BBS (?tids=1,2,3), rend l'URL PUBLIQUE
+// LOCALE de la première image cachée de chaque post. Le BBS s'en sert pour
+// afficher la vignette d'un fil-passerelle, anciens comme nouveaux.
+func (s *Serveur) covers(w http.ResponseWriter, r *http.Request) {
+	var ids []int64
+	for _, part := range strings.Split(r.URL.Query().Get("tids"), ",") {
+		if n, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64); err == nil && n > 0 {
+			ids = append(ids, n)
+		}
+	}
+	if len(ids) > 240 {
+		ids = ids[:240]
+	}
+	m, _ := s.st.CoversParFil(ids)
+	base := strings.TrimRight(s.opt.PubURL, "/")
+	out := make(map[string]string, len(m))
+	for tid, hash := range m {
+		out[strconv.FormatInt(tid, 10)] = base + "/api/v1/socialrelay/media/" + hash
+	}
+	ecrire(w, 200, map[string]any{"ok": true, "covers": out})
 }
 
 func (s *Serveur) sourceAdd(w http.ResponseWriter, r *http.Request) {
