@@ -48,6 +48,9 @@ func TestNewsroomExecute(t *testing.T) {
 		"AletheiaVox", "Général", "Neuromania", "livre audio",
 		`data-media="/media/ep/10"`, `data-k="audiobook"`, `data-k="video"`,
 		"stamp pub", "billets.gk2.secubox.in", "newsroom.js", "newsroom.css",
+		// Mascotte zanimalos AUTO par type (#1131aa) : le fil vidéo → Tikko,
+		// la médiathèque audiobook → Néri.
+		"zani-stamp", "stickers/zanimalos/14_TIKKO.png", "stickers/zanimalos/15_NERI.png",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sortie sans %q", want)
