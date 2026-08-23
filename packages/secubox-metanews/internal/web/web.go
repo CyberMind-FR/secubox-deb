@@ -32,7 +32,7 @@ var assets embed.FS
 type Options struct {
 	JWTSecret string
 	BBSSocket string // /run/secubox/bbs.sock
-	BBSCat    int64  // catégorie BBS des fils MetaNews
+	BBSCat    string // slug de catégorie BBS des fils MetaNews (ex. "actualites")
 }
 
 // Serveur MetaNews.
