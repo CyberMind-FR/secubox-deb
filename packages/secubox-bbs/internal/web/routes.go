@@ -744,6 +744,9 @@ func (s *Server) composerRedaction(fils []store.Thread, pub bool) []NewsItem {
 			out[i].Recents = recents
 		}
 	}
+	if !pub {
+		s.enrichirCoversReseaux(out) // vignette des fils-passerelle réseaux
+	}
 	return out
 }
 
@@ -804,6 +807,9 @@ func (s *Server) composerRedactionSalon(fils []store.Thread, pub bool) []NewsIte
 		out = append(out, s.carteFil(&fils[i], pub))
 	}
 	sort.Slice(out, func(a, b int) bool { return out[a].Date > out[b].Date })
+	if !pub {
+		s.enrichirCoversReseaux(out) // vignette des fils-passerelle réseaux
+	}
 	return out
 }
 
