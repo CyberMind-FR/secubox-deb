@@ -132,8 +132,8 @@ func (p *Pipe) Passerelle(now int64) (int, error) {
 
 func titreDe(auteur, texte string) string {
 	t := strings.TrimSpace(strings.SplitN(texte, "\n", 2)[0])
-	if len(t) > 90 {
-		t = string([]rune(t)[:90]) + "…"
+	if r := []rune(t); len(r) > 90 {
+		t = string(r[:90]) + "…"
 	}
 	if t == "" {
 		t = "Publication"
