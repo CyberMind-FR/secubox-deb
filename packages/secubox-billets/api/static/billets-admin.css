@@ -63,9 +63,9 @@ input:focus,textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 
 .item{display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:.6rem;
   padding:.5rem .7rem;background:var(--bg-row);border-radius:5px;margin-bottom:.45rem;
   border-left:3px solid var(--border);transition:all .15s}
-/* Mascotte de statut zanimalos (#1131aa) : le tampon animal double le pill
-   texte — publié=hibou OK, brouillon=renard DODO, archivé=hibou ZEN. */
-.item .zani{width:30px;height:30px;object-fit:contain;flex:none;
+/* Mascotte de statut zanimalos canonique (#1131aa) : le personnage double le
+   pill texte — brouillon=Tikko, publié=Luma, archivé=Néri (rôles du bestiaire). */
+.item .zani{width:34px;height:34px;object-fit:contain;flex:none;
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
 .item:hover{background:rgba(0,212,255,.08);transform:translateX(2px)}
 .item.published{border-left-color:var(--green)}
