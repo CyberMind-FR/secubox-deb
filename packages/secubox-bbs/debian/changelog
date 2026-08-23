@@ -1,3 +1,12 @@
+secubox-bbs (0.28.86-1~bookworm1) bookworm; urgency=medium
+
+  * feat(reseaux): les fils-passerelle SocialRelay affichent la VIGNETTE de leur
+    média — le corps porte un marqueur « 🖼 <url> » (média caché local), extrait
+    et relayé same-origin (/media-vignette). socialrelay.gk2 ajouté à
+    --media-origines. Le marqueur est retiré de l'aperçu texte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 11:35:00 +0000
+
 secubox-bbs (0.28.85-1~bookworm1) bookworm; urgency=medium
 
   * feat(newsroom): cardlets « À la une » PLEIN-CADRE — le média (ou la mosaïque

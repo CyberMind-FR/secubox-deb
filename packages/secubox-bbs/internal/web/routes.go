@@ -685,6 +685,9 @@ func resumeDeCorps(corps, titre string) string {
 		if cheminMediaNu.MatchString(t) {
 			continue
 		}
+		if strings.HasPrefix(t, "🖼") { // marqueur média-passerelle : hors du texte
+			continue
+		}
 		if strings.HasPrefix(t, "Discuter ce billet") || strings.HasPrefix(t, "[Voir chez") {
 			continue
 		}
@@ -855,6 +858,7 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 	// au premier (#1131q). Borné : une carte n'est pas un fil entier.
 	const maxRecents = 5
 	seen := map[int64]bool{}
+	seenURL := map[string]bool{}
 	for i, p := range posts {
 		b, err := s.st.Body(p)
 		if err != nil {
@@ -886,6 +890,24 @@ func (s *Server) apercuEtDernier(threadID int64, titre string, pub bool) (apercu
 			seen[id] = true
 			if len(medias) < 8 {
 				medias = append(medias, cardMedia{ID: id, Ref: m[0], Kind: kindDeRef(m[0])})
+			}
+		}
+		// #reseaux : marqueur « 🖼 <url> » d'un fil-passerelle → vignette relayée
+		// same-origin, MAIS seulement si l'origine est UN DE NOS services
+		// (media-origines). Une URL d'origine non admise est ignorée : le relais
+		// la refuserait de toute façon, autant ne pas émettre d'<img> cassé.
+		for _, mm := range marqueImageRelais.FindAllStringSubmatch(b, -1) {
+			lien := mm[1]
+			if seenURL[lien] {
+				continue
+			}
+			u, err := url.Parse(lien)
+			if err != nil || !origineAdmise(u, s.opt.MediaOrigines) {
+				continue
+			}
+			seenURL[lien] = true
+			if len(medias) < 8 {
+				medias = append(medias, cardMedia{Ref: "/media-vignette?u=" + url.QueryEscape(lien), Kind: "image"})
 			}
 		}
 	}
@@ -2136,6 +2158,11 @@ func (s *Server) jointesCitees(msgs []billets.Message) []billets.Jointe {
 
 // La reference telle qu'elle est ecrite dans un corps : `/f/12` ou `/f/12.png`.
 var refsJointes = regexp.MustCompile(`/f/(\d+)(?:\.[a-z0-9]{2,5})?`)
+
+// marqueImageRelais : un fil-passerelle (SocialRelay) référence son média par
+// une ligne « 🖼 <url> » pointant vers UN DE NOS services. On l'extrait pour en
+// faire une vignette de carte relayée same-origin.
+var marqueImageRelais = regexp.MustCompile("(?m)^\\x{1f5bc}\\x{fe0f}?[ \\t]+(https?://\\S+)")
 
 func (s *Server) statique(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
