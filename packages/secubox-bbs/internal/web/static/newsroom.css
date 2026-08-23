@@ -115,9 +115,9 @@ a{color:inherit;text-decoration:none}
 /* Mascotte zanimalos AUTO par type (#1131aa) : à GAUCHE du tampon de statut
    (public/local), au MÊME niveau (barre titre). Art v3 cadré serré → un cadre
    modéré suffit à la rendre bien visible sans écraser le contenu. */
-.dossier .zani-stamp{position:absolute;top:6px;right:66px;width:88px;height:88px;object-fit:contain;
+.dossier .zani-stamp{position:absolute;top:-10px;right:66px;width:76px;height:76px;object-fit:contain;
   pointer-events:none;z-index:3;filter:drop-shadow(0 3px 6px rgba(0,0,0,.30))}
-@media (max-width:520px){.dossier .zani-stamp{width:66px;height:66px;right:58px}}
+@media (max-width:520px){.dossier .zani-stamp{width:60px;height:60px;right:58px;top:-6px}}
 .dossier:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
 .src{display:flex;border-bottom:1px dashed var(--line-2)}
 .src .kind{flex:none;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:13px 6px;border-right:1px dashed var(--line-2);background:var(--soft)}
