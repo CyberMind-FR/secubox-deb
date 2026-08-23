@@ -1,3 +1,13 @@
+secubox-waf (1.5.5-1~bookworm1) bookworm; urgency=medium
+
+  * « Attaquants persistants » : le trafic INTERNE (loopback/privé/link-local,
+    ex. 127.0.0.188) était classé en tête des attaquants. Il est désormais fondu
+    sous une seule étiquette « local » à l'agrégation — /history (top attaquants
+    persistants) ET /stats (top par fenêtre) — même décision que sbxwaf côté Go
+    (#1163). Corrige l'affichage même pour les journaux historiques déjà écrits.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 09:45:00 +0200
+
 secubox-waf (1.5.4-1~bookworm1) bookworm; urgency=medium
 
   * Reconcilie l'enregistrement dpkg du conffile /etc/sudoers.d/secubox-waf

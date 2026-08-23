@@ -19,9 +19,29 @@ relisent instantanément (même patron que le double-cache de /stats).
 from __future__ import annotations
 
 import gzip
+import ipaddress
 import json
 from collections import Counter, defaultdict
 from typing import Iterable
+
+
+def bucket_ip(ip: str) -> str:
+    """Regroupe le trafic INTERNE sous « local ».
+
+    Loopback (127.0.0.0/8, ::1), privé (10/8, 172.16/12, 192.168/16, fc00::/7)
+    et link-local (169.254/16, fe80::/10) ne sont PAS des attaquants : c'est du
+    trafic de la box vers elle-même (sondes host-anomaly, health-checks…). On le
+    fond sous une seule étiquette « local » — même décision que sbxwaf côté Go
+    (#1163) — pour qu'il ne trône pas en tête des « attaquants persistants ».
+    Une valeur non parsable est laissée telle quelle (on ne masque pas l'inconnu).
+    """
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if a.is_private or a.is_loopback or a.is_link_local:
+        return "local"
+    return ip
 
 
 def _ouvrir(chemin):
@@ -69,9 +89,9 @@ def agreger_historique(chemins: Iterable, top_n: int = 50) -> dict:
                 sev = e.get("severity")
                 if sev:
                     d["severites"][sev] += 1
-                ip = e.get("client_ip")
+                ip = e.get("client_ip") or e.get("ip")
                 if ip:
-                    top_ips[ip] += 1
+                    top_ips[bucket_ip(ip)] += 1
         finally:
             f.close()
 
