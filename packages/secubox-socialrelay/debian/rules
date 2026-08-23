@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+export DH_VERBOSE = 1
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+GOARCH_amd64 = amd64
+GOARCH_arm64 = arm64
+GOARCH_armhf = arm
+export GOARCH = $(or $(GOARCH_$(DEB_HOST_ARCH)),$(DEB_HOST_ARCH))
+export CGO_ENABLED = 0
+export GOFLAGS = -mod=vendor -trimpath
+export GOCACHE = $(CURDIR)/.gocache
+export GOPATH  = $(CURDIR)/.gopath
+VERSION := $(shell dpkg-parsechangelog -S Version | cut -d- -f1)
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	go vet ./...
+	go build -ldflags "-s -w -X main.version=$(VERSION)" -o debian/secubox-socialrelayd ./cmd/secubox-socialrelayd
+
+override_dh_auto_test:
+	if [ "$(GOARCH)" = "$$(go env GOHOSTARCH)" ]; then go test ./...; else echo "tests ignores (croise)"; fi
+
+override_dh_auto_clean:
+	rm -rf .gocache .gopath debian/secubox-socialrelayd
+
+override_dh_auto_install:
+	install -D -m 0755 debian/secubox-socialrelayd debian/secubox-socialrelay/usr/sbin/secubox-socialrelayd
+	install -D -m 0644 systemd/secubox-socialrelay.service debian/secubox-socialrelay/lib/systemd/system/secubox-socialrelay.service
+	install -D -m 0644 tmpfiles/secubox-socialrelay.conf debian/secubox-socialrelay/usr/lib/tmpfiles.d/secubox-socialrelay.conf
+	install -D -m 0644 nginx/socialrelay.conf debian/secubox-socialrelay/etc/secubox/nginx-available/socialrelay.conf
+	install -D -m 0644 menu.d/29-socialrelay.json debian/secubox-socialrelay/usr/share/secubox/menu.d/29-socialrelay.json
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-socialrelay
