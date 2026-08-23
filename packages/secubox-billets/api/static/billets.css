@@ -12,6 +12,10 @@
   --fond:#ffffff; --encre:#17232d; --gris:#697985; --filet:#d9e0e4; --sourd:#f5f3ec;
   --bleu:#104a88; --azur:#00a8c8; --or:#c9a84c; --vert:#28765e; --brique:#a73d42;
   --mono:"JetBrains Mono",ui-monospace,"SF Mono","IBM Plex Mono",Menlo,Consolas,monospace;
+  /* Fallback emoji COULEUR : sur une police mono seule, le navigateur résout
+     certains emoji (📧 🐘 ✖️) en glyphe monochrome/tofu. On force la police
+     emoji système en dernier recours pour un rendu couleur cohérent. */
+  --emoji:"Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji",emoji;
   --lecture:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
   --corps:"Inter","Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
   --titre:"Cinzel","Cormorant Garamond",Georgia,serif;
@@ -120,14 +124,14 @@ img{max-width:100%;height:auto;display:block}
 
 /* ── partage ───────────────────────────────────────────── */
 .share-quick{display:flex;flex-wrap:wrap;gap:5px;margin-top:14px}
-.share-quick a,.share-quick button{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;
+.share-quick a,.share-quick button{font-family:var(--mono),var(--emoji);font-size:10.5px;letter-spacing:.04em;
   text-transform:uppercase;padding:4px 9px;border:1px solid var(--filet);border-radius:2px;
   background:var(--fond);color:var(--gris);cursor:pointer}
 .share-quick a:hover,.share-quick button:hover{border-color:var(--azur);color:var(--azur);text-decoration:none}
 
 /* ── réactions ─────────────────────────────────────────── */
 .reactions,.react{display:flex;flex-wrap:wrap;gap:5px;margin:18px 0}
-.react-btn{font-family:var(--mono);font-size:13px;padding:4px 10px;border:1px solid var(--filet);
+.react-btn{font-family:var(--mono),var(--emoji);font-size:13px;padding:4px 10px;border:1px solid var(--filet);
   border-radius:2px;background:var(--fond);color:var(--encre);cursor:pointer;transition:.1s}
 .react-btn:hover{border-color:var(--azur)}
 .react-btn .count{color:var(--gris);font-size:11px;margin-left:4px}

@@ -155,6 +155,32 @@ func TestLaDerniereLectureAlimenteLeRepos(t *testing.T) {
 	}
 }
 
+// LES « PRÉCÉDENTS » VIENNENT DU JOURNAL, PAS DE LA PLAYLIST. On diffuse dans
+// un ordre (B, C, A) différent de l'ordre d'ajout (A, B, C) ; Historique doit
+// rendre l'ordre de DIFFUSION, le plus récent d'abord.
+func TestHistoriqueRendLOrdreDeDiffusionReel(t *testing.T) {
+	s := banc(t)
+	a, _, _ := s.Ajoute("https://youtu.be/AAA", "A", 1, t0)
+	b, _, _ := s.Ajoute("https://youtu.be/BBB", "B", 1, t0)
+	c, _, _ := s.Ajoute("https://youtu.be/CCC", "C", 1, t0)
+	_ = s.NoteLecture(b.ID, t0.Add(1*time.Minute), 1)
+	_ = s.NoteLecture(c.ID, t0.Add(2*time.Minute), 2)
+	_ = s.NoteLecture(a.ID, t0.Add(3*time.Minute), 3)
+	h, err := s.Historique(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{a.ID, c.ID, b.ID}
+	if len(h) != len(want) {
+		t.Fatalf("Historique a rendu %d pistes, attendu %d", len(h), len(want))
+	}
+	for i, w := range want {
+		if h[i].ID != w {
+			t.Fatalf("Historique[%d].ID = %d, attendu %d (ordre de diffusion, plus récent d'abord)", i, h[i].ID, w)
+		}
+	}
+}
+
 // LE JOURNAL EST APPEND-ONLY : c'est lui qui rend le tirage explicable.
 func TestLHistoriqueDesLecturesEstConserve(t *testing.T) {
 	s := banc(t)

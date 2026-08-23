@@ -88,7 +88,12 @@
   (function () {
     var v = parseFloat(localStorage.getItem('sbx_radio_vol'));
     if (!isFinite(v) || v < 0 || v > 1) v = 1;
-    ecran.volume = v; curseurVol.value = String(v); iconeVol();
+    ecran.volume = v; curseurVol.value = String(v);
+    // Le SILENCE aussi est RETENU d'une visite/refresh a l'autre (#radiofix) :
+    // dans le BBS, le lecteur est un iframe qui recharge a chaque navigation ;
+    // sans persistance, il se re-allumait tout seul.
+    ecran.muted = localStorage.getItem('sbx_radio_muet') === '1';
+    iconeVol();
   })();
   curseurVol.addEventListener('input', function () {
     var v = parseFloat(curseurVol.value);
@@ -100,10 +105,15 @@
   });
   bMuet.addEventListener('click', function () {
     ecran.muted = !ecran.muted;
+    localStorage.setItem('sbx_radio_muet', ecran.muted ? '1' : '0');
     iconeVol();
   });
 
   var pisteEnCours = 0, curseurChat = 0, dernierAppel = Date.now();
+  // INTENTION lecture/pause RETENUE entre les refresh (#radiofix). Défaut : on
+  // joue (une radio qu'on ouvre, on l'écoute) ; si l'auditeur a mis en pause,
+  // on RESTE en pause au rechargement au lieu de relancer le son tout seul.
+  var veutJouer = localStorage.getItem('sbx_radio_play') !== '0';
 
   function json(url, opts) {
     opts = opts || {};
@@ -183,10 +193,17 @@
       lecteur.classList.add('joue');
       ecran.src = '/media/' + p.id;
       ecran.currentTime = offset;
-      // AUTOPLAY REFUSE = SILENCE INEXPLIQUE : on le DIT plutot que de laisser
-      // un ecran noir.
-      var essai = ecran.play();
-      if (essai && essai.catch) essai.catch(function () { avert.hidden = false; });
+      // On ne relance QUE si l'auditeur veut jouer (intention retenue). S'il a
+      // mis en pause, on prépare la piste sans la lancer — l'état survit au
+      // refresh de l'iframe BBS (#radiofix).
+      if (veutJouer) {
+        // AUTOPLAY REFUSE = SILENCE INEXPLIQUE : on le DIT plutot que de laisser
+        // un ecran noir.
+        var essai = ecran.play();
+        if (essai && essai.catch) essai.catch(function () { avert.hidden = false; });
+      } else {
+        bJouer.textContent = '▶'; bJouer.title = 'Écouter';
+      }
       return;
     }
     var ecart = ecran.currentTime - offset;
@@ -198,28 +215,31 @@
     if (Math.abs(ecart) > DERIVE_MAX) ecran.currentTime = offset;
   }
 
-  // poseFile : la playlist SEMI-ROTATIVE en FENÊTRE — 2 pistes déjà jouées, la
-  // piste en cours (en gras renforcé), 3 à venir (#1131i). La liste tourne :
-  // « avant » et « après » s'enroulent. Sur une petite playlist on montre tout,
-  // centré sur le courant, sans fenêtre.
-  function poseFile(pistes) {
+  // poseFile : 2 pistes DÉJÀ DIFFUSÉES (le journal d'antenne RÉEL, `passe`), la
+  // piste en cours, 3 À VENIR (la file FIGÉE du serveur, `avenir`). Fini l'ordre
+  // d'ajout deviné : « passé » = ce qui est vraiment passé, « à venir » = ce qui
+  // va vraiment passer, dans l'ordre (#radiofix). `d` = {pistes, passe, avenir}.
+  function poseFile(d) {
     file.innerHTML = '';
-    var l = pistes || [];
-    if (!l.length) {
+    d = d || {};
+    var toutes = d.pistes || [];
+    var courante = null;
+    for (var k = 0; k < toutes.length; k++) { if (toutes[k].id === pisteEnCours) { courante = toutes[k]; break; } }
+    // `passe` est le plus récent d'abord ; sa 1re entrée est la lecture EN COURS
+    // (on vient de la journaliser) — on l'écarte, puis on garde 2 précédents et
+    // on les remet dans l'ordre chronologique (plus ancienne en haut).
+    var pas = (d.passe || []).slice();
+    if (pas.length && courante && pas[0].id === courante.id) pas.shift();
+    var precedents = pas.slice(0, 2).reverse();
+    var avenir = (d.avenir || []).slice(0, 3);
+    if (!courante && !precedents.length && !avenir.length) {
       file.innerHTML = '<li class="vide">Rien en attente — proposez un titre.</li>';
       return;
     }
-    var idx = 0;
-    for (var k = 0; k < l.length; k++) { if (l[k].id === pisteEnCours) { idx = k; break; } }
     var vues = [];
-    if (l.length <= 6) {
-      for (var j = 0; j < l.length; j++) vues.push({ p: l[j], rel: j - idx });
-    } else {
-      for (var d = -2; d <= 3; d++) {
-        var m = ((idx + d) % l.length + l.length) % l.length;
-        vues.push({ p: l[m], rel: d });
-      }
-    }
+    precedents.forEach(function (p, i) { vues.push({ p: p, rel: -(precedents.length - i) }); });
+    if (courante) vues.push({ p: courante, rel: 0 });
+    avenir.forEach(function (p, i) { vues.push({ p: p, rel: i + 1 }); });
     vues.forEach(function (it) {
       var p = it.p, rel = it.rel;
       var li = document.createElement('li');
@@ -354,7 +374,7 @@
       poseChat(r.corps.chat);
     }).catch(function () { /* une sonde ratee n'est pas une panne */ });
     json('/api/v1/radio/playlist').then(function (r) {
-      poseFile(r.corps.pistes);
+      poseFile(r.corps);
     }).catch(function () {});
     json('/api/v1/radio/propositions').then(function (r) {
       poseAttente(r.corps.propositions);
@@ -394,9 +414,11 @@
   bJouer.addEventListener('click', function () {
     avert.hidden = true;
     if (ecran.paused) {
+      veutJouer = true; localStorage.setItem('sbx_radio_play', '1');
       var e = ecran.play();
       if (e && e.catch) e.catch(function () { avert.hidden = false; });
     } else {
+      veutJouer = false; localStorage.setItem('sbx_radio_play', '0');
       ecran.pause();
     }
   });

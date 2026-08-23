@@ -48,6 +48,9 @@ func TestNewsroomExecute(t *testing.T) {
 		"AletheiaVox", "Général", "Neuromania", "livre audio",
 		`data-media="/media/ep/10"`, `data-k="audiobook"`, `data-k="video"`,
 		"stamp pub", "billets.gk2.secubox.in", "newsroom.js", "newsroom.css",
+		// Mascotte zanimalos AUTO par type (#1131aa) : le fil vidéo → Tikko,
+		// la médiathèque audiobook → Néri.
+		"zani-stamp", "stickers/zanimalos/14_TIKKO.png", "stickers/zanimalos/15_NERI.png",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("sortie sans %q", want)
@@ -199,5 +202,54 @@ func TestPlayerExecute(t *testing.T) {
 	}
 	if strings.Contains(out, "style=") || strings.Contains(out, "onclick") {
 		t.Error("style/onclick en ligne — interdit par la CSP")
+	}
+}
+
+// TestNewsroomTamponsTroisEtats : chaque carte de la rédaction porte un tampon
+// de coin — publié (billet), public (fil public non-billet), local (privé) —
+// et la médiathèque (contenu de vitrine) porte « public » (#1131z).
+func TestNewsroomTamponsTroisEtats(t *testing.T) {
+	fn := template.FuncMap{
+		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
+		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
+		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s },
+	}
+	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html")
+	if err != nil {
+		t.Fatalf("parse : %v", err)
+	}
+	filPublie := store.Thread{ID: 1, Title: "Publié", Author: "a", Visibility: store.VisPublic, Published: "https://billets.gk2/b/1", LastPostAt: 1700000000}
+	filPublic := store.Thread{ID: 2, Title: "Public non billet", Author: "b", Visibility: store.VisPublic, LastPostAt: 1700000000}
+	filLocal := store.Thread{ID: 3, Title: "Local privé", Author: "c", Visibility: store.VisLocal, LastPostAt: 1700000000}
+	feed := PodFeed{ID: 9, Titre: "Média", Type: "podcast", Glyphe: "🎧", Vignette: "/media-cover/9", Date: 1700000600,
+		Episodes: []PodEpisode{{ID: 1, Titre: "E1", Media: "/media/ep/1", Numero: 1}}}
+	p := page{
+		Titre: "AletheiaVox", Site: "SecuBox", Hote: "gk2", Initiale: "S",
+		Stats: store.Stats{Threads: 3},
+		News: []NewsItem{
+			{Feed: &feed, Date: feed.Date},
+			{Fil: &filPublie, Date: filPublie.LastPostAt},
+			{Fil: &filPublic, Date: filPublic.LastPostAt},
+			{Fil: &filLocal, Date: filLocal.LastPostAt},
+		},
+	}
+	var buf bytes.Buffer
+	if err := tpl.ExecuteTemplate(&buf, "newsroom", p); err != nil {
+		t.Fatalf("exécution : %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`class="stamp pub">publié`,
+		`class="stamp pub">public`,
+		`class="stamp loc">local`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("tampon manquant : %q", want)
+		}
+	}
+	// Le fil public non-billet ne DOIT PLUS passer sans tampon : au moins deux
+	// tampons « public » (la médiathèque + le fil public).
+	if n := strings.Count(out, `class="stamp pub">public<`); n < 2 {
+		t.Errorf("attendu ≥2 tampons « public » (médiathèque + fil public), obtenu %d", n)
 	}
 }

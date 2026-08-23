@@ -1,0 +1,2 @@
+./capi_linux_arm64.go
+./pthread_linux_arm64.go

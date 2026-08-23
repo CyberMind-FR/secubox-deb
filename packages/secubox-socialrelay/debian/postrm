@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+set -e
+case "$1" in
+  purge)
+    # Retirer le vhost nginx auto-provisionné (miroir du postinst).
+    rm -f /etc/nginx/sites-enabled/socialrelay.conf /etc/nginx/sites-available/socialrelay.conf
+    if command -v nginx >/dev/null 2>&1 && nginx -t >/dev/null 2>&1; then
+      systemctl reload nginx >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

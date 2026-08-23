@@ -1,0 +1,9 @@
+{
+  "id": "metanews",
+  "name": "MetaNews",
+  "category": "mind",
+  "icon": "📡",
+  "path": "/metanews/",
+  "order": 28,
+  "description": "Radar d'actualite : plusieurs sources, un evenement, une discussion"
+}

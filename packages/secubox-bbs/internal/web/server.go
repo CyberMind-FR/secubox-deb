@@ -61,7 +61,12 @@ type Options struct {
 	// lien relatif pointerait vers le BBS lui-meme, ce qui serait pire qu'une
 	// adresse laissee telle quelle.
 	BilletsBase string
-	JWTSecret   string
+	// MetaNewsSocket : socket du module MetaNews, pour le cartouche « actualités »
+	// de la rédaction (une dizaine d'événements récents, sources corrélées mises
+	// en avant). Vide = pas de cartouche. MetaNewsBase = origine publique (liens).
+	MetaNewsSocket string
+	MetaNewsBase   string
+	JWTSecret      string
 	// BackupDir : ou deposer les archives declenchees depuis le panneau.
 	BackupDir string
 	// BanniereOrigine / BanniereHash : la banniere de sante que le WAF de la
@@ -117,6 +122,10 @@ type Options struct {
 	// Vide, aucun media distant n'est relaye — le bon defaut : une autre
 	// installation n'a pas nos noms de vhost.
 	MediaOrigines []string
+	// SocialRelaySocket : socket de secubox-socialrelay. Sert à résoudre la
+	// vignette (média caché local) d'un fil-passerelle par son ID BBS — anciens
+	// comme nouveaux fils. Vide = pas d'enrichissement réseaux.
+	SocialRelaySocket string
 	// AuthSocket : socket de secubox-auth. Vide, les comptes synchronises ne
 	// peuvent pas se connecter — ils n'ont pas de mot de passe local, et c'est
 	// le comportement voulu plutot qu'un repli silencieux.
@@ -150,6 +159,9 @@ type Server struct {
 	// et son delai, la Server n'a pas a les connaitre. Nil = servirMediaFiche
 	// retombe sur le comportement existant (aucune resolution youtube).
 	youtube *connectors.YouTube
+	// pres : compteur de présence en mémoire (visiteurs en ligne + membres
+	// uniques), affiché dans le bandeau. Éphémère, jamais persisté.
+	pres *presence
 }
 
 func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) {
@@ -336,7 +348,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	} else {
 		return nil, fmt.Errorf("gabarit article : %w", err)
 	}
-	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt}
+	s := &Server{st: st, auth: auth, opt: opt, tpl: pages, mux: http.NewServeMux(), youtube: yt, pres: nouvellePresence()}
 	// L'empreinte de cache (?v=) couvre les TROIS feuilles/scripts servis : le
 	// WAF de la board efface Cache-Control/ETag (voir layout.html), donc une
 	// feuille changée sans empreinte neuve resterait invisible au navigateur.
