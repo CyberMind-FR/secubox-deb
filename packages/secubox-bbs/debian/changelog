@@ -1,3 +1,11 @@
+secubox-bbs (0.28.82-1~bookworm1) bookworm; urgency=medium
+
+  * Bandeau : compteur de présence à gauche de l'avatar (#presence) — visiteurs
+    EN LIGNE (5 min) + membres UNIQUES connectés. En mémoire, éphémère, jamais
+    persisté ; IP réelle via X-Real-IP.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 22:30:00 +0200
+
 secubox-bbs (0.28.81-1~bookworm1) bookworm; urgency=medium
 
   * Actualités (#metanews) : la page /c/actualites EST la vitrine MetaNews —

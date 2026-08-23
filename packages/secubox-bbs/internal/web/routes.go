@@ -30,6 +30,10 @@ type page struct {
 	Titre, Site, Hote, Vue, Q string
 	Initiale                  string
 	V                         visiteur
+	// Online : visiteurs vus dans les 5 dernières minutes ; MembresOnline : les
+	// comptes membres uniques parmi eux (#presence). Affichés dans le bandeau.
+	Online        int
+	MembresOnline int
 	Mod                       Modules
 	Stats                     store.Stats
 	Cats                      []store.Category
@@ -227,6 +231,13 @@ func (s *Server) routes() {
 func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	v := s.qui(r)
 	pub := !v.Connecte
+	// Présence (#presence) : membre = clé UNIQUE par compte ; anonyme = par IP.
+	cle := "a:" + ipClient(r)
+	if v.Connecte {
+		cle = "u:" + v.Handle
+	}
+	s.pres.vu(cle, v.Connecte)
+	online, membres := s.pres.compte()
 	st, _ := s.st.Stats()
 	cats, _ := s.st.Categories(pub)
 
@@ -277,8 +288,10 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 		Base:  "https://" + r.Host,
 		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true},
 		Stats: st, Cats: cats, Titre: site,
-		NonLus:    nonLus,
-		RadioBase: s.opt.RadioBase,
+		NonLus:        nonLus,
+		Online:        online,
+		MembresOnline: membres,
+		RadioBase:     s.opt.RadioBase,
 	}, pub
 }
 

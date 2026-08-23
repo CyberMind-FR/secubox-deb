@@ -210,6 +210,9 @@
       <span class="hintk">⌘K</span>
     </form>
     <div class="mast-actions">
+      <span class="pres-chip" title="{{.Online}} visiteur(s) en ligne · {{.MembresOnline}} membre(s) connecté(s)" aria-label="{{.Online}} en ligne, {{.MembresOnline}} membres">
+        <span class="pdot" aria-hidden="true"></span><b>{{.Online}}</b><small>en ligne</small>{{if .MembresOnline}}<span class="psep">·</span><b class="pmemb">{{.MembresOnline}}</b><small>membre{{if gt .MembresOnline 1}}s{{end}}</small>{{end}}
+      </span>
       {{if and .V.Connecte .Mod.MP}}<a class="ibtn mpal{{if .NonLus}} on{{end}}" href="/mp" title="Messages privés{{if .NonLus}} — {{.NonLus}} non lu(s){{end}}" aria-label="Messages privés{{if .NonLus}}, {{.NonLus}} non lus{{end}}">✉️{{if .NonLus}}<span class="mpct" aria-hidden="true">{{.NonLus}}</span>{{end}}</a>{{end}}
       {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
       {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}
