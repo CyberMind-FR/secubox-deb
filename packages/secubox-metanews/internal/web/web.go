@@ -16,6 +16,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,6 +68,8 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc("GET "+p+"/tags", s.tags)
 	s.mux.HandleFunc("GET "+p+"/search", s.search)
 	s.mux.HandleFunc("GET "+p+"/sources", s.sources)
+	s.mux.HandleFunc("GET "+p+"/by-source", s.bySource)
+	s.mux.HandleFunc("GET "+p+"/img", s.imgRelay)
 	// Écriture (JWT).
 	s.mux.HandleFunc("POST "+p+"/sources", s.jwt(s.sourceAdd))
 	s.mux.HandleFunc("PATCH "+p+"/sources/{id}", s.jwt(s.sourcePatch))
@@ -190,6 +193,100 @@ func (s *Serveur) search(w http.ResponseWriter, r *http.Request) {
 func (s *Serveur) sources(w http.ResponseWriter, _ *http.Request) {
 	srcs, _ := s.st.Sources()
 	ecrire(w, 200, map[string]any{"ok": true, "sources": srcs})
+}
+
+// imgRelay relaie une image d'article SAME-ORIGIN : le navigateur ne contacte
+// jamais le média tiers (vie privée). FERMÉ : on ne relaie que les images
+// CONNUES de nos flux (jamais un proxy ouvert) ; garde SSRF ; pas de redirection.
+func (s *Serveur) imgRelay(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("u")
+	if !s.st.ImageConnue(raw) {
+		http.NotFound(w, r)
+		return
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || hoteInterne(u.Hostname()) {
+		http.NotFound(w, r)
+		return
+	}
+	cli := &http.Client{Timeout: 10 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	req, _ := http.NewRequestWithContext(r.Context(), "GET", u.String(), nil)
+	req.Header.Set("User-Agent", "secubox-metanews/relais")
+	req.Header.Set("Accept", "image/*")
+	resp, err := cli.Do(req)
+	if err != nil {
+		http.Error(w, "", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		http.NotFound(w, r)
+		return
+	}
+	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(resp.Header.Get("Content-Type"), ";", 2)[0]))
+	if !strings.HasPrefix(ct, "image/") {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 3<<20+1))
+	if err != nil || len(b) > 3<<20 {
+		http.Error(w, "", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	_, _ = w.Write(b)
+}
+
+// hoteInterne : l'hôte résout-il vers une adresse interne ? (garde SSRF)
+func hoteInterne(hote string) bool {
+	if hote == "" || strings.EqualFold(hote, "localhost") || strings.HasSuffix(hote, ".local") {
+		return true
+	}
+	ips, err := net.LookupIP(hote)
+	if err != nil {
+		return true // au doute, on refuse
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() {
+			return true
+		}
+	}
+	return false
+}
+
+// bySource : les news RÉCENTES groupées PAR SOURCE (pour le listing en cartes
+// par source de la page actualités). Clones fondus par empreinte ; ~8 par source.
+func (s *Serveur) bySource(w http.ResponseWriter, _ *http.Request) {
+	srcs, _ := s.st.Sources()
+	arts, _ := s.st.ArticlesRecents(400)
+	perSrc := map[int64][]map[string]any{}
+	vu := map[string]bool{}
+	for _, a := range arts {
+		if a.Fingerprint != "" && vu[a.Fingerprint] {
+			continue
+		}
+		vu[a.Fingerprint] = true
+		if len(perSrc[a.SourceID]) >= 8 {
+			continue
+		}
+		perSrc[a.SourceID] = append(perSrc[a.SourceID], map[string]any{
+			"title": a.Title, "url": a.URL, "image": a.Image,
+			"summary": a.Summary, "published_at": a.PublishedAt,
+		})
+	}
+	out := make([]map[string]any, 0, len(srcs))
+	for _, x := range srcs {
+		if items := perSrc[x.ID]; len(items) > 0 {
+			out = append(out, map[string]any{
+				"name": x.Name, "slug": x.Slug, "category": x.Category, "items": items,
+			})
+		}
+	}
+	ecrire(w, 200, map[string]any{"ok": true, "sources": out})
 }
 
 // ── écriture ─────────────────────────────────────────────────────────────────
@@ -344,7 +441,8 @@ func (s *Serveur) sourcesDuSujet(topicID string) []map[string]any {
 		}
 		vu[a.Fingerprint] = true
 		out = append(out, map[string]any{
-			"name": noms[a.SourceID], "title": a.Title, "url": a.URL, "published_at": a.PublishedAt,
+			"name": noms[a.SourceID], "title": a.Title, "url": a.URL,
+			"image": a.Image, "published_at": a.PublishedAt,
 		})
 	}
 	return out
@@ -362,6 +460,7 @@ func (s *Serveur) vueTopic(t store.Topic, noms map[int64]string, complet bool) m
 		"id": t.ID, "title": t.Title, "summary": t.Summary,
 		"tags": dieze(t.Tags), "sources_count": t.SourcesCount,
 		"updated_at": t.UpdatedAt, "confidence": t.Confidence, "importance": t.Importance,
+		"vignette": t.Vignette,
 		"bbs_thread_id": t.BBSThreadID, "bbs_slug": t.BBSSlug,
 	}
 	src := s.sourcesDuSujet(t.ID)

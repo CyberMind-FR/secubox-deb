@@ -30,6 +30,7 @@ type Contenu struct {
 	Auteur     string `json:"auteur"`
 	Langue     string `json:"langue"`
 	PublieLe   int64  `json:"publie_le"`
+	Vignette   string `json:"vignette"`   // image de l'article (media/enclosure/img)
 	Connecteur string `json:"connecteur"` // "rss", "atom", "mastodon"…
 }
 

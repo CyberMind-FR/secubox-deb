@@ -50,6 +50,7 @@ type Article struct {
 	PublishedAt int64    `json:"published_at"`
 	FetchedAt   int64    `json:"fetched_at"`
 	Fingerprint string   `json:"fingerprint"`
+	Image       string   `json:"image"`
 	Entities    []string `json:"entities"`
 	Tags        []string `json:"tags"`
 	TopicID     string   `json:"topic_id"`
@@ -68,6 +69,7 @@ type Topic struct {
 	SourcesCount int64    `json:"sources_count"`
 	Confidence   float64  `json:"confidence"`
 	Importance   float64  `json:"importance"`
+	Vignette     string   `json:"vignette"`
 	BBSThreadID  int64    `json:"bbs_thread_id"`
 	BBSSlug      string   `json:"bbs_slug"`
 }
@@ -91,6 +93,12 @@ func Open(path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) migrate() error {
+	// Journal des migrations appliquées : une migration `ALTER TABLE` n'est pas
+	// idempotente (rejouée, elle échoue sur « duplicate column »). On ne rejoue
+	// donc jamais une migration déjà passée.
+	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS _migrations(nom TEXT PRIMARY KEY)`); err != nil {
+		return err
+	}
 	noms, err := migrations.ReadDir("migrations")
 	if err != nil {
 		return err
@@ -103,12 +111,19 @@ func (s *Store) migrate() error {
 	}
 	sort.Strings(fics)
 	for _, f := range fics {
+		var vu string
+		if s.db.QueryRow(`SELECT nom FROM _migrations WHERE nom=?`, f).Scan(&vu); vu == f {
+			continue // déjà appliquée
+		}
 		sqlb, err := migrations.ReadFile("migrations/" + f)
 		if err != nil {
 			return err
 		}
 		if _, err := s.db.Exec(string(sqlb)); err != nil {
 			return fmt.Errorf("migration %s : %w", f, err)
+		}
+		if _, err := s.db.Exec(`INSERT INTO _migrations(nom) VALUES(?)`, f); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -205,14 +220,21 @@ func (s *Store) DeleteSource(id int64) error {
 // Idempotent sur (source_id, ref) : un article déjà vu n'est pas ré-inséré.
 func (s *Store) UpsertArticle(a Article) (int64, bool, error) {
 	res, err := s.db.Exec(
-		`INSERT OR IGNORE INTO article(source_id,ref,title,url,summary,author,lang,published_at,fetched_at,fingerprint,entities,tags)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT OR IGNORE INTO article(source_id,ref,title,url,summary,author,lang,published_at,fetched_at,fingerprint,image,entities,tags)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		a.SourceID, a.Ref, a.Title, a.URL, a.Summary, a.Author, a.Lang, a.PublishedAt, a.FetchedAt,
-		a.Fingerprint, jarr(a.Entities), jarr(a.Tags))
+		a.Fingerprint, a.Image, jarr(a.Entities), jarr(a.Tags))
 	if err != nil {
 		return 0, false, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
+		// Article déjà vu : on ne le recompte pas, mais on COMPLÈTE l'image si
+		// elle manquait (le flux l'a peut-être ajoutée depuis) — sans toucher au
+		// reste, pour ne pas fausser la détection « neuf ».
+		if a.Image != "" {
+			_, _ = s.db.Exec(`UPDATE article SET image=? WHERE source_id=? AND ref=? AND image=''`,
+				a.Image, a.SourceID, a.Ref)
+		}
 		var id int64
 		err = s.db.QueryRow(`SELECT id FROM article WHERE source_id=? AND ref=?`, a.SourceID, a.Ref).Scan(&id)
 		return id, false, err
@@ -232,8 +254,30 @@ func (s *Store) ArticlesDuSujet(topicID string) ([]Article, error) {
 	return s.scanArticles(`WHERE topic_id=? ORDER BY published_at DESC`, topicID)
 }
 
+// ArticlesRecents retourne les articles les plus récents (toutes sources), pour
+// la vue « par source ».
+func (s *Store) ArticlesRecents(limit int) ([]Article, error) {
+	return s.scanArticles(`ORDER BY published_at DESC LIMIT ?`, limit)
+}
+
+// ImageConnue : l'URL est-elle l'image d'un article ou d'un sujet connu ? Garde
+// le relais d'images FERMÉ (jamais un proxy ouvert) : on ne relaie que ce que
+// nos propres flux ont rapporté.
+func (s *Store) ImageConnue(u string) bool {
+	if u == "" {
+		return false
+	}
+	var n int
+	_ = s.db.QueryRow(`SELECT 1 FROM article WHERE image=? LIMIT 1`, u).Scan(&n)
+	if n > 0 {
+		return true
+	}
+	_ = s.db.QueryRow(`SELECT 1 FROM topic WHERE vignette=? LIMIT 1`, u).Scan(&n)
+	return n > 0
+}
+
 func (s *Store) scanArticles(where string, args ...any) ([]Article, error) {
-	rows, err := s.db.Query(`SELECT id,source_id,ref,title,url,summary,author,lang,published_at,fetched_at,fingerprint,entities,tags,topic_id FROM article `+where, args...)
+	rows, err := s.db.Query(`SELECT id,source_id,ref,title,url,summary,author,lang,published_at,fetched_at,fingerprint,image,entities,tags,topic_id FROM article `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +287,7 @@ func (s *Store) scanArticles(where string, args ...any) ([]Article, error) {
 		var a Article
 		var ent, tags string
 		if err := rows.Scan(&a.ID, &a.SourceID, &a.Ref, &a.Title, &a.URL, &a.Summary, &a.Author, &a.Lang,
-			&a.PublishedAt, &a.FetchedAt, &a.Fingerprint, &ent, &tags, &a.TopicID); err != nil {
+			&a.PublishedAt, &a.FetchedAt, &a.Fingerprint, &a.Image, &ent, &tags, &a.TopicID); err != nil {
 			return nil, err
 		}
 		a.Entities, a.Tags = parr(ent), parr(tags)
@@ -287,7 +331,7 @@ func (s *Store) SujetParID(id string) (Topic, error) {
 }
 
 func (s *Store) scanTopics(where string, args ...any) ([]Topic, error) {
-	rows, err := s.db.Query(`SELECT id,title,summary,lang,created_at,updated_at,tags,entities,sources_count,confidence,importance,bbs_thread_id,bbs_slug FROM topic `+where, args...)
+	rows, err := s.db.Query(`SELECT id,title,summary,lang,created_at,updated_at,tags,entities,sources_count,confidence,importance,vignette,bbs_thread_id,bbs_slug FROM topic `+where, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +341,7 @@ func (s *Store) scanTopics(where string, args ...any) ([]Topic, error) {
 		var t Topic
 		var tags, ent string
 		if err := rows.Scan(&t.ID, &t.Title, &t.Summary, &t.Lang, &t.CreatedAt, &t.UpdatedAt, &tags, &ent,
-			&t.SourcesCount, &t.Confidence, &t.Importance, &t.BBSThreadID, &t.BBSSlug); err != nil {
+			&t.SourcesCount, &t.Confidence, &t.Importance, &t.Vignette, &t.BBSThreadID, &t.BBSSlug); err != nil {
 			return nil, err
 		}
 		t.Tags, t.Entities = parr(tags), parr(ent)
@@ -309,24 +353,35 @@ func (s *Store) scanTopics(where string, args ...any) ([]Topic, error) {
 // CreerSujet insère un sujet.
 func (s *Store) CreerSujet(t Topic) error {
 	_, err := s.db.Exec(
-		`INSERT INTO topic(id,title,summary,lang,created_at,updated_at,tags,entities,sources_count,confidence,importance,bbs_thread_id,bbs_slug)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO topic(id,title,summary,lang,created_at,updated_at,tags,entities,sources_count,confidence,importance,vignette,bbs_thread_id,bbs_slug)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.ID, t.Title, t.Summary, t.Lang, t.CreatedAt, t.UpdatedAt, jarr(t.Tags), jarr(t.Entities),
-		t.SourcesCount, t.Confidence, t.Importance, t.BBSThreadID, t.BBSSlug)
+		t.SourcesCount, t.Confidence, t.Importance, t.Vignette, t.BBSThreadID, t.BBSSlug)
 	return err
 }
 
 // MajSujet met à jour un sujet (résumé, compteurs, tags…).
 func (s *Store) MajSujet(t Topic) error {
 	_, err := s.db.Exec(
-		`UPDATE topic SET title=?,summary=?,lang=?,updated_at=?,tags=?,entities=?,sources_count=?,confidence=?,importance=? WHERE id=?`,
-		t.Title, t.Summary, t.Lang, t.UpdatedAt, jarr(t.Tags), jarr(t.Entities), t.SourcesCount, t.Confidence, t.Importance, t.ID)
+		`UPDATE topic SET title=?,summary=?,lang=?,updated_at=?,tags=?,entities=?,sources_count=?,confidence=?,importance=?,vignette=? WHERE id=?`,
+		t.Title, t.Summary, t.Lang, t.UpdatedAt, jarr(t.Tags), jarr(t.Entities), t.SourcesCount, t.Confidence, t.Importance, t.Vignette, t.ID)
 	return err
 }
 
 // FixerFilBBS enregistre le fil BBS associé au sujet.
 func (s *Store) FixerFilBBS(topicID string, threadID int64, slug string) error {
 	_, err := s.db.Exec(`UPDATE topic SET bbs_thread_id=?, bbs_slug=? WHERE id=?`, threadID, slug, topicID)
+	return err
+}
+
+// BackfillVignettes : donne une vignette aux sujets qui n'en ont pas encore
+// mais dont un article porte une image (après complétion des images au re-sondage).
+func (s *Store) BackfillVignettes() error {
+	_, err := s.db.Exec(`UPDATE topic SET vignette=(
+		SELECT a.image FROM article a WHERE a.topic_id=topic.id AND a.image<>''
+		ORDER BY a.published_at DESC LIMIT 1)
+		WHERE vignette='' AND EXISTS(
+		SELECT 1 FROM article a WHERE a.topic_id=topic.id AND a.image<>'')`)
 	return err
 }
 

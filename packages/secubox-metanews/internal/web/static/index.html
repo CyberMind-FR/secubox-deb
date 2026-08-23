@@ -26,8 +26,11 @@ h1{font-size:1.5rem;margin:0;letter-spacing:.02em}
 .tab.on{color:var(--cyan);border-color:var(--cyan)}
 .srch{width:100%;padding:9px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;
   color:var(--ink);font-size:.95rem;margin-bottom:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px;overflow:hidden}
 .card h2{font-size:1.15rem;margin:0 0 6px}
+.vign{float:left;width:108px;height:108px;object-fit:cover;border-radius:10px;margin:2px 14px 8px 0;background:#0000000f}
+.card .foot{clear:both}
+@media(max-width:520px){.vign{width:74px;height:74px}}
 .meta{font-family:ui-monospace,monospace;font-size:11px;color:var(--mut);display:flex;gap:8px 14px;flex-wrap:wrap;margin-bottom:8px}
 .meta b{color:var(--cyan)}
 .conf{display:inline-block;height:6px;width:56px;background:var(--line);border-radius:3px;overflow:hidden;vertical-align:middle}
@@ -68,7 +71,9 @@ function ilya(ts){if(!ts)return"";const s=Math.max(1,Math.floor(Date.now()/1000-
 function carte(t){
   const c=el(`<div class="card"></div>`);
   const conf=Math.round((t.confidence||0)*100);
+  const vign=t.vignette?`<img class="vign" src="${API}/img?u=${encodeURIComponent(t.vignette)}" alt="" loading="lazy">`:"";
   c.innerHTML=`
+    ${vign}
     <h2>${esc(t.title)}</h2>
     <div class="meta"><span><b>${t.sources_count}</b> source(s)</span>
       <span>maj ${ilya(t.updated_at)}</span>

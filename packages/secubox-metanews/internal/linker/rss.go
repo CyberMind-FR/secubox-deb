@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -118,19 +119,71 @@ func (r *RSS) Flux(u string) ([]Contenu, error) {
 
 // ── Analyse ─────────────────────────────────────────────────────────────────
 
+type media struct {
+	URL    string `xml:"url,attr"`
+	Medium string `xml:"medium,attr"`
+	Type   string `xml:"type,attr"`
+}
+
 type rssDoc struct {
 	XMLName xml.Name `xml:"rss"`
 	Channel struct {
 		Items []struct {
-			Title   string `xml:"title"`
-			Link    string `xml:"link"`
-			GUID    string `xml:"guid"`
-			Desc    string `xml:"description"`
-			PubDate string `xml:"pubDate"`
-			Date    string `xml:"date"`    // dc:date
-			Creator string `xml:"creator"` // dc:creator
+			Title     string  `xml:"title"`
+			Link      string  `xml:"link"`
+			GUID      string  `xml:"guid"`
+			Desc      string  `xml:"description"`
+			Encoded   string  `xml:"encoded"` // content:encoded
+			PubDate   string  `xml:"pubDate"`
+			Date      string  `xml:"date"`    // dc:date
+			Creator   string  `xml:"creator"` // dc:creator
+			Enclosure media   `xml:"enclosure"`
+			Content   []media `xml:"content"`   // media:content
+			Thumbnail media   `xml:"thumbnail"` // media:thumbnail
 		} `xml:"item"`
 	} `xml:"channel"`
+}
+
+var reImg = regexp.MustCompile(`(?i)<img[^>]+src=["']([^"']+)["']`)
+
+// imageMedia choisit la meilleure image parmi thumbnail / media:content /
+// enclosure / première <img> du corps HTML. Vide si rien d'exploitable.
+func imageMedia(thumb media, contents []media, enc media, htmls ...string) string {
+	if u := strings.TrimSpace(thumb.URL); estImage(u, "") {
+		return u
+	}
+	for _, c := range contents {
+		if estImage(c.URL, c.Type) || c.Medium == "image" {
+			if strings.TrimSpace(c.URL) != "" {
+				return c.URL
+			}
+		}
+	}
+	if estImage(enc.URL, enc.Type) {
+		return enc.URL
+	}
+	for _, h := range htmls {
+		if m := reImg.FindStringSubmatch(h); len(m) == 2 {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+func estImage(u, typ string) bool {
+	u = strings.ToLower(strings.TrimSpace(u))
+	if u == "" {
+		return false
+	}
+	if strings.HasPrefix(strings.ToLower(typ), "image/") {
+		return true
+	}
+	for _, ext := range []string{".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"} {
+		if strings.Contains(u, ext) {
+			return true
+		}
+	}
+	return false
 }
 
 type atomDoc struct {
@@ -145,10 +198,12 @@ type atomDoc struct {
 		Links     []struct {
 			Href string `xml:"href,attr"`
 			Rel  string `xml:"rel,attr"`
+			Type string `xml:"type,attr"`
 		} `xml:"link"`
 		Author struct {
 			Name string `xml:"name"`
 		} `xml:"author"`
+		Thumbnail media `xml:"thumbnail"` // media:thumbnail
 	} `xml:"entry"`
 }
 
@@ -187,6 +242,7 @@ func analyserRSS(corps []byte) ([]Contenu, error) {
 			Ref:        ref,
 			Auteur:     strings.TrimSpace(it.Creator),
 			PublieLe:   dateEpoch(date),
+			Vignette:   imageMedia(it.Thumbnail, it.Content, it.Enclosure, it.Desc, it.Encoded),
 			Connecteur: "rss",
 		})
 	}
@@ -218,6 +274,13 @@ func analyserAtom(corps []byte) ([]Contenu, error) {
 		if corpsTxt == "" {
 			corpsTxt = e.Content
 		}
+		var enc media
+		for _, l := range e.Links {
+			if l.Rel == "enclosure" {
+				enc = media{URL: l.Href, Type: l.Type}
+				break
+			}
+		}
 		out = append(out, Contenu{
 			Titre:      strings.TrimSpace(e.Title),
 			Corps:      nettoyer(corpsTxt),
@@ -225,6 +288,7 @@ func analyserAtom(corps []byte) ([]Contenu, error) {
 			Ref:        firstNon(strings.TrimSpace(e.ID), strings.TrimSpace(lien)),
 			Auteur:     strings.TrimSpace(e.Author.Name),
 			PublieLe:   dateEpoch(date),
+			Vignette:   imageMedia(e.Thumbnail, nil, enc, e.Content, e.Summary),
 			Connecteur: "atom",
 		})
 	}

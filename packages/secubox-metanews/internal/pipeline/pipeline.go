@@ -39,6 +39,9 @@ func (p *Pipe) Tour(now int64) (int, int, error) {
 		return neufs, 0, err
 	}
 	touches, err := p.Regrouper(now)
+	// Complète les vignettes des sujets dont les images d'articles viennent
+	// d'être renseignées (re-sondage).
+	_ = p.st.BackfillVignettes()
 	return neufs, touches, err
 }
 
@@ -84,6 +87,7 @@ func (p *Pipe) Sonder(now int64) (int, error) {
 				PublishedAt: pub,
 				FetchedAt:   now,
 				Fingerprint: linker.Empreinte(it.Titre, it.Corps),
+				Image:       it.Vignette,
 				Entities:    cluster.Entites(it.Titre + " " + it.Corps),
 				Tags:        nil,
 			}
@@ -161,15 +165,20 @@ func (p *Pipe) recomposer(topicID string, now int64) {
 	ent := []string{}
 	var items []resume.Item
 	var recent int64
+	vignette := ""
 	for _, a := range arts {
 		origines[a.Fingerprint] = true
 		distinctSrc[a.SourceID] = true
 		ent = cluster.Fusion(ent, a.Entities)
 		items = append(items, resume.Item{Titre: a.Title, Corps: a.Summary})
+		if vignette == "" && a.Image != "" {
+			vignette = a.Image // 1ère image disponible = illustration du sujet
+		}
 		if a.PublishedAt > recent {
 			recent = a.PublishedAt
 		}
 	}
+	t.Vignette = vignette
 	t.SourcesCount = int64(len(origines))
 	t.Entities = ent
 	t.Tags = ent // MVP : les tags = entités marquantes (dièse côté UI)
