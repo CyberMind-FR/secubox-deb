@@ -47,12 +47,72 @@ h1{font-size:1.5rem;margin:0;letter-spacing:.02em}
 .srcs a{display:block;color:var(--cyan);font-size:.9rem;padding:3px 0;text-decoration:none}
 .srcs .t{color:var(--mut);font-size:.8rem}
 .empty{color:var(--mut);text-align:center;padding:40px 0}
+header{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap}
+.gear{margin-left:auto;font:600 12px ui-monospace,monospace;background:var(--panel);border:1px solid var(--line);color:var(--cyan);border-radius:8px;padding:7px 12px;cursor:pointer}
+.gear:hover{border-color:var(--cyan)}
+#admin{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:8px 0 16px}
+.adhead{display:flex;gap:10px;align-items:baseline;margin-bottom:10px}
+.admut{color:var(--mut);font-size:.8rem;font-family:ui-monospace,monospace}
+.hint{margin:12px 0 0;font-size:.78rem;line-height:1.45}
+.addform{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.addform input,.addform select{background:var(--bg);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:.9rem}
+.addform input#afurl{flex:1;min-width:180px}
+.addform button{background:var(--cyan);color:#04222a;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
+.srow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:.9rem}
+.srow .snm{font-weight:600;min-width:110px}
+.srow .surl{color:var(--mut);font-family:ui-monospace,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.srow .scat{font-family:ui-monospace,monospace;font-size:10px;color:var(--cyan);text-transform:uppercase}
+.sbadge{font-family:ui-monospace,monospace;font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid var(--line)}
+.sbadge.ok{color:var(--mint);border-color:var(--mint)}
+.sbadge.err{color:#e8686e;border-color:#e8686e}
+.sbadge.off{color:var(--mut)}
+.srow button{background:transparent;border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer}
+.srow button:hover{border-color:var(--cyan);color:var(--cyan)}
+/* Carrousel des 10 dernières news (vignette + auto-rotation) */
+.carou{position:relative;margin:8px 0 14px;overflow:hidden;border-radius:14px}
+.cartrack{display:flex;gap:10px;transition:transform .55s ease;will-change:transform}
+.ccard-mn{flex:0 0 224px;position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
+.ccard-mn img{width:100%;height:100%;object-fit:cover;display:block}
+.ccard-mn .ph{width:100%;height:100%;display:grid;place-items:center;font-size:2rem;opacity:.4}
+.ccard-mn .cap{position:absolute;inset:auto 0 0 0;padding:24px 10px 9px;color:#fff;font-weight:600;font-size:.82rem;line-height:1.2;
+  background:linear-gradient(transparent,rgba(0,0,0,.85));display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ccard-mn .cbadge{position:absolute;top:8px;right:8px;font-family:ui-monospace,monospace;font-size:11px;font-weight:700;background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:2px 8px}
+.ccard-mn .cbadge.on{background:var(--cyan);color:#04222a}
+.carnav{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:20px;cursor:pointer;display:grid;place-items:center}
+.carnav:hover{background:var(--cyan);color:#04222a}
+.carnav.prev{left:6px}.carnav.next{right:6px}
+@media(max-width:520px){.ccard-mn{flex-basis:180px}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><h1>📡 MetaNews</h1><span class="tagline">observer le monde</span></header>
+  <header><h1>📡 MetaNews</h1><span class="tagline">observer le monde</span>
+    <button class="gear" id="gear" title="Gérer les flux / sources" aria-label="Sources">⚙ Sources</button></header>
+  <section id="admin" hidden>
+    <div class="adhead"><b>Flux &amp; sources</b> <span class="admut" id="adcount"></span>
+      <span class="admut" id="adtok"></span></div>
+    <form id="addform" class="addform">
+      <input id="afname" placeholder="Nom (ex. Le Monde)" required>
+      <input id="afurl" placeholder="URL du flux RSS/Atom" required>
+      <select id="afcat">
+        <option value="general">général</option><option value="france">France</option>
+        <option value="international">international</option><option value="tech">tech</option>
+        <option value="cyber">cyber</option><option value="economie">éco</option>
+        <option value="science">science</option><option value="local">local</option>
+      </select>
+      <button type="submit">+ Ajouter</button>
+    </form>
+    <div id="adlist"></div>
+    <p class="admut hint">Autres sources : Atom géré ; Mastodon/fédiverse à venir (Peek/Poke).
+      Les <b>groupes Facebook</b> n'exposent pas de RSS — il faudra un pont (RSS-Bridge)
+      côté connecteur, pas un flux direct.</p>
+  </section>
   <div class="tabs" id="tabs"></div>
+  <div class="carou" id="carou" hidden>
+    <div class="cartrack" id="cartrack"></div>
+    <button class="carnav prev" id="carprev" aria-label="précédent">‹</button>
+    <button class="carnav next" id="carnext" aria-label="suivant">›</button>
+  </div>
   <input class="srch" id="q" placeholder="🔎 rechercher un événement, un lieu, une personne…">
   <div id="flux"><p class="empty">Chargement…</p></div>
 </div>
@@ -114,6 +174,69 @@ async function charger(){
 }
 let deb;document.getElementById("q").addEventListener("input",()=>{clearTimeout(deb);deb=setTimeout(charger,250)});
 tabs();charger();setInterval(charger,60000);
+
+// ── Admin : gestion des flux ────────────────────────────────────────────────
+const gear=document.getElementById("gear"), admin=document.getElementById("admin");
+const gid=id=>document.getElementById(id);
+function tok(){return localStorage.getItem("sbx_token")||""}
+function authH(){return tok()?{"Authorization":"Bearer "+tok()}:{}}
+gear.onclick=()=>{admin.hidden=!admin.hidden;if(!admin.hidden)loadSources();};
+async function loadSources(){
+  const d=await fetch(`${API}/sources`).then(r=>r.json()).catch(()=>({sources:[]}));
+  const L=gid("adlist");L.innerHTML="";
+  (d.sources||[]).forEach(s=>{
+    const st=s.enabled?(s.last_error?`<span class="sbadge err" title="${esc(s.last_error)}">err</span>`:`<span class="sbadge ok">ok</span>`):`<span class="sbadge off">off</span>`;
+    const row=el(`<div class="srow"><span class="snm">${esc(s.name)}</span>${st}<span class="scat">${esc(s.category)}</span><span class="surl">${esc(s.url)}</span></div>`);
+    const bt=el(`<button>${s.enabled?"désactiver":"activer"}</button>`);
+    bt.onclick=()=>patchSource(s.id,{enabled:!s.enabled});
+    const bd=el(`<button title="Supprimer">🗑</button>`);
+    bd.onclick=()=>{if(confirm("Supprimer « "+s.name+" » ?"))delSource(s.id)};
+    row.appendChild(bt);row.appendChild(bd);L.appendChild(row);
+  });
+  gid("adcount").textContent=(d.sources||[]).length+" flux";
+  gid("adtok").textContent=tok()?"":"— connectez-vous pour gérer";
+}
+async function patchSource(id,body){
+  await fetch(`${API}/sources/${id}`,{method:"PATCH",headers:{...authH(),"Content-Type":"application/json"},body:JSON.stringify(body)});
+  loadSources();
+}
+async function delSource(id){await fetch(`${API}/sources/${id}`,{method:"DELETE",headers:authH()});loadSources();}
+gid("addform").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const body={name:gid("afname").value.trim(),url:gid("afurl").value.trim(),category:gid("afcat").value,enabled:true};
+  const r=await fetch(`${API}/sources`,{method:"POST",headers:{...authH(),"Content-Type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json()).catch(()=>({ok:false}));
+  if(r.ok){gid("afname").value="";gid("afurl").value="";loadSources();}
+  else alert("échec — jeton requis (connectez-vous).");
+});
+
+// ── Carrousel des 10 dernières news (vignette + auto-rotation) ───────────────
+const carou=gid("carou"), cartrack=gid("cartrack");
+let carIdx=0, carTimer=null, carN=0;
+const CARW=234; // 224 carte + 10 gap
+async function loadCarou(){
+  const d=await fetch(`${API}/topics?category=une`).then(r=>r.json()).catch(()=>({topics:[]}));
+  const ts=(d.topics||[]).slice(0,10);
+  if(!ts.length){carou.hidden=true;return}
+  carou.hidden=false; cartrack.innerHTML="";
+  ts.forEach(t=>{
+    const img=t.vignette?`<img src="${API}/img?u=${encodeURIComponent(t.vignette)}" alt="" loading="lazy">`:`<div class="ph">📡</div>`;
+    const bd=`<span class="cbadge${t.sources_count>1?' on':''}">🔗 ${t.sources_count}</span>`;
+    cartrack.appendChild(el(`<div class="ccard-mn" role="listitem">${img}${bd}<span class="cap">${esc(t.title)}</span></div>`));
+  });
+  carN=ts.length; carIdx=0; carGo(0); carAuto();
+}
+function carGo(i){carIdx=(i%carN+carN)%carN; cartrack.style.transform=`translateX(-${carIdx*CARW}px)`;}
+function carAuto(){
+  if(carTimer)clearInterval(carTimer);
+  if(window.matchMedia&&window.matchMedia("(prefers-reduced-motion:reduce)").matches)return;
+  carTimer=setInterval(()=>carGo(carIdx+1),4000);
+}
+carou.addEventListener("mouseenter",()=>{if(carTimer)clearInterval(carTimer)});
+carou.addEventListener("mouseleave",carAuto);
+document.addEventListener("visibilitychange",()=>{if(document.hidden){if(carTimer)clearInterval(carTimer)}else carAuto()});
+gid("carprev").onclick=()=>{carGo(carIdx-1);carAuto()};
+gid("carnext").onclick=()=>{carGo(carIdx+1);carAuto()};
+loadCarou(); setInterval(loadCarou,120000);
 </script>
 </body>
 </html>

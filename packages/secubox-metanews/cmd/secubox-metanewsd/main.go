@@ -155,12 +155,22 @@ func seed(st *store.Store, jr *log.Logger) {
 		return
 	}
 	defauts := []store.Source{
+		// FR
 		{Slug: "franceinfo", Name: "France Info", URL: "https://www.francetvinfo.fr/titres.rss", Enabled: true, Category: "general"},
-		{Slug: "france24", Name: "France 24", URL: "https://www.france24.com/fr/rss", Enabled: true, Category: "international"},
-		{Slug: "rfi", Name: "RFI", URL: "https://www.rfi.fr/fr/rss", Enabled: true, Category: "international"},
 		{Slug: "lemonde-une", Name: "Le Monde — Une", URL: "https://www.lemonde.fr/rss/une.xml", Enabled: true, Category: "general"},
+		{Slug: "liberation", Name: "Libération", URL: "https://www.liberation.fr/arc/outboundfeeds/rss/?outputType=xml", Enabled: true, Category: "general"},
+		{Slug: "bfmtv", Name: "BFMTV", URL: "https://www.bfmtv.com/rss/news-24-7/", Enabled: true, Category: "general"},
+		{Slug: "lefigaro", Name: "Le Figaro", URL: "https://www.lefigaro.fr/rss/figaro_actualites.xml", Enabled: true, Category: "general"},
+		// UK / US / EU
+		{Slug: "bbc-world", Name: "BBC News (World)", URL: "https://feeds.bbci.co.uk/news/world/rss.xml", Enabled: true, Category: "international"},
+		{Slug: "guardian-world", Name: "The Guardian (World)", URL: "https://www.theguardian.com/world/rss", Enabled: true, Category: "international"},
+		{Slug: "npr-news", Name: "NPR News", URL: "https://feeds.npr.org/1001/rss.xml", Enabled: true, Category: "international"},
+		// tech / cyber
 		{Slug: "numerama", Name: "Numerama", URL: "https://www.numerama.com/feed/", Enabled: true, Category: "tech"},
+		{Slug: "arstechnica", Name: "Ars Technica", URL: "https://feeds.arstechnica.com/arstechnica/index", Enabled: true, Category: "tech"},
 		{Slug: "zataz", Name: "ZATAZ", URL: "https://www.zataz.com/feed/", Enabled: true, Category: "cyber"},
+		// local (Savoie)
+		{Slug: "ledauphine-savoie", Name: "Le Dauphiné — Savoie", URL: "https://www.ledauphine.com/savoie/rss", Enabled: true, Category: "local"},
 	}
 	for _, s := range defauts {
 		if _, err := st.AddSource(s); err != nil {
