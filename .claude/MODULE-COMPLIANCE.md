@@ -371,6 +371,45 @@ provision oneshot + panel-over-API).
 
 ---
 
+### Install activates — own-domain webui modules (Required)
+
+**Principle.** A module that owns its **own public domain** (a content site like
+`metanews.gk2`, `radio.gk2`, `socialrelay.gk2` — not one served under the admin
+vhost) MUST provision its **entire exposure chain in the postinst**, idempotently.
+`apt install` (or an upgrade, or a reinstall) MUST reproduce the *same live
+service* with **zero manual board-side wiring**. Wiring a vhost by hand on the
+board is forbidden: it is unowned drift, it is lost on reinstall, and once the
+package is distributed we no longer have shell access to redo it. If you typed it
+into an SSH session, it MUST also be in the postinst.
+
+The postinst performs three guarded, idempotent steps (each a no-op if the infra
+is absent, so the package still installs on a non-edge host):
+
+1. **nginx** — copy the shipped `/etc/secubox/nginx-available/<mod>.conf` into
+   `sites-available/`, symlink it into `sites-enabled/`, `nginx -t` then reload.
+2. **HAProxy** — declare the public vhost **declaratively** (`haproxyctl vhost
+   add <domain> nginx_vhosts true`; guard on `grep` so re-runs don't duplicate),
+   then `haproxyctl generate` + reload. **Never hand-edit the generated
+   `haproxy.cfg`** — it is overwritten at the next `generate`.
+3. **WAF route** — add `"<domain>": ["127.0.0.1", 9080]` to
+   `/etc/secubox/waf/haproxy-routes.json` (idempotent) and `restart
+   secubox-waf-ng` **only if it is active** (never SIGHUP — that kills sbxwaf).
+
+The **postrm `purge`** mirrors step 1: remove the `sites-enabled`/`sites-available`
+symlink and reload nginx.
+
+**Domain collision check (Required).** Before claiming `<name>.gk2`, verify no
+other package or LXC already owns it (`grep -rl <name>.gk2 /etc/nginx/sites-*`).
+`social.gk2` is the self-hosted **Mastodon** instance; the relay had to take
+`socialrelay.gk2`. A colliding `server_name` silently loses to the first block
+and serves the wrong app.
+
+Reference implementation: **secubox-socialrelay** `debian/postinst` +
+`debian/postrm` (0.1.2). The daemon/socket/user/tmpfiles/secrets-ACL half is the
+standard Go-daemon template (radio); this section is the *exposure* half.
+
+---
+
 ## Nginx route — where a module declares it (Required)
 
 **Ship the route to `/etc/nginx/secubox-routes.d/`.** That is the only
