@@ -48,6 +48,12 @@ type Etat struct {
 	Silence bool
 }
 
+// ProfondeurFile : combien de titres on FIGE à l'avance. Une file figée est ce
+// qui permet d'annoncer un « à venir » VRAI — l'UI montre exactement ce qui
+// passera, dans l'ordre. Trop court, la file se redessine à chaque titre ; trop
+// long, un nouveau titre validé attend trop pour entrer à l'antenne.
+const ProfondeurFile = 5
+
 // Programmateur decide ce qui passe.
 type Programmateur struct {
 	mu      sync.Mutex
@@ -55,6 +61,7 @@ type Programmateur struct {
 	reg     tirage.Reglages
 	alea    *rand.Rand
 	piste   store.Piste
+	file    []store.Piste // les prochains titres, FIGÉS et dans l'ordre de passage
 	debut   time.Time
 	graine  int64
 	demarre bool
@@ -122,29 +129,73 @@ func (p *Programmateur) duree() time.Duration {
 	return DureeParDefaut
 }
 
-// avance tire la piste suivante et l'inscrit au journal.
-func (p *Programmateur) avance(quand time.Time) error {
+// remplir COMPLÈTE la file figée jusqu'à ProfondeurFile+1 (1 à jouer + ce qu'on
+// annonce). Le tirage pondéré `tirage.Programme` choisit SANS REMISE, en tenant
+// le repos ; on ne re-tire pas la file à chaque appel, on la prolonge.
+func (p *Programmateur) remplir(quand time.Time) error {
+	cible := ProfondeurFile + 1
+	if len(p.file) >= cible {
+		return nil
+	}
 	tp, pistes, err := p.st.PourTirage()
 	if err != nil {
 		return err
 	}
-	choisie, err := tirage.Suivante(tp, p.reg, quand, p.alea)
-	if err != nil {
+	parID := make(map[int64]store.Piste, len(pistes))
+	for _, x := range pistes {
+		parID[x.ID] = x
+	}
+	// On abaisse le poids de ce qui va déjà passer (piste courante + file), pour
+	// ne pas annoncer deux fois de suite le même titre — sans jamais VIDER le
+	// vivier (une radio à un seul titre doit continuer à le jouer).
+	dejaVu := map[int64]time.Time{}
+	if p.piste.ID != 0 {
+		dejaVu[p.piste.ID] = quand
+	}
+	for _, f := range p.file {
+		dejaVu[f.ID] = quand
+	}
+	for i := range tp {
+		if _, ok := dejaVu[tp[i].ID]; ok {
+			tp[i].JoueeLe = quand // vient de passer → repos → poids minimal
+		}
+	}
+	besoin := cible - len(p.file)
+	for _, t := range tirage.Programme(tp, p.reg, quand, besoin, p.alea) {
+		if x, ok := parID[t.ID]; ok {
+			p.file = append(p.file, x)
+		}
+	}
+	return nil
+}
+
+// avance prend la tête de la file figée et l'inscrit au journal.
+func (p *Programmateur) avance(quand time.Time) error {
+	if err := p.remplir(quand); err != nil {
+		return err
+	}
+	if len(p.file) == 0 {
 		p.demarre = false
 		return ErrSilence
 	}
-	for _, x := range pistes {
-		if x.ID == choisie.ID {
-			p.piste = x
-			break
-		}
-	}
+	p.piste = p.file[0]
+	p.file = p.file[1:]
 	p.debut, p.demarre = quand, true
 	// L'ECHEC DU JOURNAL N'INTERROMPT PAS L'ANTENNE : ne pas retenir une
 	// lecture est un desagrement, s'arreter de jouer est une panne. Mais le
 	// repos de cette piste sera alors mal calcule, d'ou la remontee de
 	// l'erreur a l'appelant qui journalise.
-	return p.st.NoteLecture(choisie.ID, quand, p.graine)
+	return p.st.NoteLecture(p.piste.ID, quand, p.graine)
+}
+
+// File rend une copie de la file figée : ce qui va passer, dans l'ordre. C'est
+// la source AUTORITAIRE du « à venir » de l'UI (fini l'ordre d'ajout inventé).
+func (p *Programmateur) File() []store.Piste {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]store.Piste, len(p.file))
+	copy(out, p.file)
+	return out
 }
 
 // Suivante force le passage au titre suivant. Reservee au sysop.
@@ -173,6 +224,17 @@ func (p *Programmateur) Oublie(id int64) {
 	defer p.mu.Unlock()
 	if p.piste.ID == id {
 		p.piste, p.demarre = store.Piste{}, false
+	}
+	// La file figée peut ANNONCER un titre supprimé : le purger, sinon l'UI
+	// promet un « à venir » qui rendra un 404, et l'antenne le tirerait.
+	if len(p.file) > 0 {
+		kept := p.file[:0]
+		for _, f := range p.file {
+			if f.ID != id {
+				kept = append(kept, f)
+			}
+		}
+		p.file = kept
 	}
 }
 
