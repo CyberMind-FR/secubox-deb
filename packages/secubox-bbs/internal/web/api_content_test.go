@@ -161,3 +161,73 @@ func TestAPIContentParRefInconnuRend404(t *testing.T) {
 		t.Fatalf("by-ref inconnu : code %d, attendu 404", w.Code)
 	}
 }
+
+// ── A6 : timeline (member-gated) ───────────────────────────────────────────
+
+func TestAPITimelineGateEtRelecture(t *testing.T) {
+	srv := bancAPI(t)
+	id := creerContenuTest(t, srv)
+
+	w, j := appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"author_id":0,"author":"anon","offset_ms":1000,"body":"x"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("anonyme doit etre refuse (400), code=%d — %s", w.Code, w.Body.String())
+	}
+	if j["erreur"] != "anonyme non persisté" {
+		t.Fatalf("erreur attendue 'anonyme non persisté', obtenu %v", j["erreur"])
+	}
+	if _, present := j["error"]; present {
+		t.Fatalf("la reponse ne doit porter que la clef 'erreur', pas 'error' : %v", j)
+	}
+
+	w2, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"author_id":7,"author":"Koda","offset_ms":64000,"body":"excellent"}`)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("membre doit passer (200), code=%d — %s", w2.Code, w2.Body.String())
+	}
+
+	w3, j3 := appelSysop(t, srv, "GET", "/api/v1/bbs/content/"+id+"/timeline", "")
+	if w3.Code != http.StatusOK {
+		t.Fatalf("lecture timeline HTTP %d — %s", w3.Code, w3.Body.String())
+	}
+	comments, _ := j3["comments"].([]any)
+	if n := len(comments); n != 1 {
+		t.Fatalf("relecture timeline : %d commentaires, attendu 1 — %v", n, j3)
+	}
+	premier, _ := comments[0].(map[string]any)
+	if premier["author"] != "Koda" || premier["offset_ms"] != float64(64000) {
+		t.Fatalf("commentaire relu inattendu : %v", premier)
+	}
+}
+
+func TestAPITimelineOrdonneeParOffset(t *testing.T) {
+	srv := bancAPI(t)
+	id := creerContenuTest(t, srv)
+
+	appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"author_id":1,"author":"A","offset_ms":5000,"body":"second"}`)
+	appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"author_id":2,"author":"B","offset_ms":1000,"body":"premier"}`)
+
+	w, j := appelSysop(t, srv, "GET", "/api/v1/bbs/content/"+id+"/timeline", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("lecture timeline HTTP %d", w.Code)
+	}
+	comments, _ := j["comments"].([]any)
+	if len(comments) != 2 {
+		t.Fatalf("attendu 2 commentaires, obtenu %d", len(comments))
+	}
+	premier, _ := comments[0].(map[string]any)
+	if premier["body"] != "premier" {
+		t.Fatalf("l'ordre doit suivre offset_ms : premier commentaire = %v", premier)
+	}
+}
+
+func TestAPITimelineContenuInconnuRend404(t *testing.T) {
+	srv := bancAPI(t)
+	w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/content/co_inconnu/timeline",
+		`{"author_id":1,"author":"A","offset_ms":0,"body":"x"}`)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("timeline sur contenu inconnu : code %d, attendu 404", w.Code)
+	}
+}

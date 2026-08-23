@@ -18,8 +18,10 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,6 +41,17 @@ func decoderContenuJSON(w http.ResponseWriter, r *http.Request, dest any) bool {
 		return false
 	}
 	return true
+}
+
+// jsonErrFr : variante de jsonErr avec la clef `erreur` plutôt que `error`.
+// Réservée aux réponses dont le libellé exact est un contrat d'API — ici, le
+// refus d'un commentaire anonyme (gate d'identité). Le reste de cette API
+// garde `jsonErr` (clef `error`), comme tout /api/v1/bbs — introduire une
+// deuxième clef partout affaiblirait la cohérence pour un gain nul.
+func jsonErrFr(w http.ResponseWriter, code int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]any{"ok": false, "erreur": msg})
 }
 
 // auteurPasserelle résout le compte 'passerelle' — celui qui signe les fils
@@ -246,6 +259,18 @@ func vueEvents(ev []store.ContentEvent) []map[string]any {
 	return out
 }
 
+func vueTimeline(c []store.TimelineComment) []map[string]any {
+	out := make([]map[string]any, 0, len(c))
+	for _, t := range c {
+		out = append(out, map[string]any{
+			"id": t.ID, "author": t.Author, "author_id": t.AuthorID,
+			"offset_ms": t.OffsetMS, "body": t.Body,
+			"broadcast_at": t.BroadcastAt, "created_at": t.CreatedAt,
+		})
+	}
+	return out
+}
+
 // apiContentObtenir : GET /api/v1/bbs/content/{id} -> objet + provenance +
 // representations + derniers events.
 func (s *Server) apiContentObtenir(w http.ResponseWriter, r *http.Request) {
@@ -297,4 +322,55 @@ func (s *Server) apiContentParRef(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonOK(w, map[string]any{"ok": true, "id": id})
+}
+
+// apiContentTimelineCreer : POST /api/v1/bbs/content/{id}/timeline
+// {author_id,author,offset_ms,body} -> 200 {ok,id} ; author_id<=0 -> 400
+// {ok:false,erreur:"anonyme non persisté"} (gate d'identité, verbatim).
+func (s *Server) apiContentTimelineCreer(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := s.st.ContenuParID(id); err != nil {
+		jsonErr(w, http.StatusNotFound, "contenu inconnu")
+		return
+	}
+	var in struct {
+		AuthorID int64  `json:"author_id"`
+		Author   string `json:"author"`
+		OffsetMS int64  `json:"offset_ms"`
+		Body     string `json:"body"`
+	}
+	if !decoderContenuJSON(w, r, &in) {
+		return
+	}
+	cid, err := s.st.AjouterTimeline(id, store.TimelineComment{
+		Author: in.Author, AuthorID: in.AuthorID, OffsetMS: in.OffsetMS, Body: in.Body,
+		CreatedAt: time.Now().Unix(),
+	})
+	if errors.Is(err, store.ErrAnonymeNonPersiste) {
+		jsonErrFr(w, http.StatusBadRequest, "anonyme non persisté")
+		return
+	}
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"ok": true, "id": cid})
+}
+
+// apiContentTimelineLister : GET /api/v1/bbs/content/{id}/timeline?from=&to=
+// -> {comments:[…]} ordonnés par offset (store.TimelineDe).
+func (s *Server) apiContentTimelineLister(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if _, err := s.st.ContenuParID(id); err != nil {
+		jsonErr(w, http.StatusNotFound, "contenu inconnu")
+		return
+	}
+	from, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+	to, _ := strconv.ParseInt(r.URL.Query().Get("to"), 10, 64)
+	comments, err := s.st.TimelineDe(id, from, to)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonOK(w, map[string]any{"ok": true, "comments": vueTimeline(comments)})
 }
