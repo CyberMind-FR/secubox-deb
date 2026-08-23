@@ -1,3 +1,15 @@
+secubox-metanews (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel des 10 dernières news (vignette + auto-rotation, pause survol/
+    onglet masqué, flèches).
+  * Admin : panneau « ⚙ Sources » dans l'app — liste des flux (état ok/err/off),
+    ajout / activation / suppression (jeton requis pour muter). Note : les
+    groupes Facebook n'exposent pas de RSS (pont requis, connecteur futur).
+  * Seed élargi : FR (Monde/Libé/BFMTV/Figaro/FranceInfo), UK/US (BBC/Guardian/
+    NPR), tech (Numerama/Ars), cyber (ZATAZ), local (Le Dauphiné Savoie).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 23:30:00 +0200
+
 secubox-metanews (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Vignettes dans l'app : chaque carte porte une lettrine (image de l'article).
