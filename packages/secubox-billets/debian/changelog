@@ -1,3 +1,13 @@
+secubox-billets (0.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * Tampons « zanimalos » (#1131aa) : le tableau de bord admin affiche une
+    mascotte de statut par billet — publié = hibou « OK », brouillon = renard
+    « DODO », archivé = hibou « ZEN ». Le pack Signal maison est auto-hébergé
+    (PNG dans static/stickers/zanimalos/, 0 appel vers signal.org, CSPN-propre),
+    récupéré et déchiffré par le nouveau scripts/fetch-signal-stickers.py.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 12:00:00 +0200
+
 secubox-billets (0.8.4-1~bookworm1) bookworm; urgency=medium
 
   * Corrige le rendu de la barre « Partager » : sur la seule police mono, le

@@ -50,6 +50,8 @@
     <h3>📋 Billets</h3>
     {% for b in billets %}
     <div class="item {{ b.status }}">
+      <img class="zani" src="/static/stickers/zanimalos/{{ b.status }}.png" alt=""
+           width="30" height="30" loading="lazy" title="{{ b.status }}">
       <span class="pill {{ b.status }}">{{ b.status }}</span>
       <a class="title" href="/admin/billets/{{ b.id }}/edit">{{ b.body[:64] }}</a>
       <div class="row-actions">
