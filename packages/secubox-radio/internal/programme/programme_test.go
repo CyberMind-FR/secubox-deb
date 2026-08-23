@@ -69,6 +69,27 @@ func TestLOffsetAvanceSansChangerDePiste(t *testing.T) {
 	}
 }
 
+// LA FILE ANNONCÉE EST CELLE QUI PASSE. Le bug « playlist order not respected »
+// venait de ce que l'UI montrait l'ordre d'AJOUT comme « à venir », alors que le
+// tirage choisissait autre chose. Le programmateur fige désormais une file, et
+// c'est elle qu'on annonce ET qu'on joue.
+func TestLaFileFigeeAnnonceCeQuiVaPasser(t *testing.T) {
+	f := &faux{pistes: []store.Piste{piste(1, 10000), piste(2, 10000), piste(3, 10000)}}
+	p := Nouveau(f, tirage.Defaut(), 5)
+	if _, err := p.Actuel(t0); err != nil {
+		t.Fatal(err)
+	}
+	file := p.File()
+	if len(file) == 0 {
+		t.Fatal("la file figée est vide")
+	}
+	annonce := file[0].ID
+	b, _ := p.Actuel(t0.Add(11 * time.Second))
+	if b.Piste.ID != annonce {
+		t.Fatalf("la file annonçait %d comme suivant, mais %d a joué", annonce, b.Piste.ID)
+	}
+}
+
 func TestLaPisteChangeALaFin(t *testing.T) {
 	f := &faux{pistes: []store.Piste{piste(1, 10000), piste(2, 10000)}}
 	p := Nouveau(f, tirage.Defaut(), 7)
