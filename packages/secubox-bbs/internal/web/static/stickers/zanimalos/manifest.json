@@ -1,7 +1,7 @@
 {
-  "title": "Zanimalos — Bestiaire canonique 32",
-  "author": "GK² / Zanimalos",
-  "reference": "zanimalos_schema.json (Zanimalos Skill Matrix v2.0.0)",
+  "title": "Zanimalos — Bestiaire surnaturel",
+  "author": "Zanimalos / AletheiaVox",
+  "source": "Zanimalos_Signal_32_v3 (WebP bestiaire surnaturel) → PNG 256",
   "roles_statut": {
     "published": "18_LUMA",
     "draft": "14_TIKKO",
@@ -10,227 +10,227 @@
   "characters": [
     {
       "id": 1,
-      "name": "PEEK",
+      "name": "Peek",
       "file": "01_PEEK.png",
-      "role": "observateur",
-      "description": "collectionneur d'indices"
+      "role": "Observateur",
+      "emoji": "🔎"
     },
     {
       "id": 2,
-      "name": "POKE",
+      "name": "Poke",
       "file": "02_POKE.png",
-      "role": "bricoleur",
-      "description": "toujours partant pour essayer"
+      "role": "Bricoleur",
+      "emoji": "🛠️"
     },
     {
       "id": 3,
-      "name": "PINK",
+      "name": "Pink",
       "file": "03_PINK.png",
-      "role": "créative",
-      "description": "voit la vie en couleur"
+      "role": "Intuitive",
+      "emoji": "🌸"
     },
     {
       "id": 4,
-      "name": "PONG",
+      "name": "Pong",
       "file": "04_PONG.png",
-      "role": "médiateur",
-      "description": "rassemble les idées"
+      "role": "Sceptique",
+      "emoji": "🤔"
     },
     {
       "id": 5,
-      "name": "NOA",
+      "name": "Noa",
       "file": "05_NOA.png",
-      "role": "messager",
-      "description": "fait circuler l'info"
+      "role": "Passeur",
+      "emoji": "🌿"
     },
     {
       "id": 6,
-      "name": "KRAGZOUY",
+      "name": "Kragzouy",
       "file": "06_KRAGZOUY.png",
-      "role": "réparateur de systèmes",
-      "description": "méthodique"
+      "role": "Archiviste",
+      "emoji": "📚"
     },
     {
       "id": 7,
-      "name": "LYRA",
+      "name": "Lyra",
       "file": "07_LYRA.png",
-      "role": "exploratrice",
-      "description": "curieuse et rêveuse"
+      "role": "Cartographe",
+      "emoji": "🗺️"
     },
     {
       "id": 8,
-      "name": "ZIRI",
+      "name": "Ziri",
       "file": "08_ZIRI.png",
-      "role": "silencieuse",
-      "description": "mais voit l'essentiel"
+      "role": "Messager",
+      "emoji": "📨"
     },
     {
       "id": 9,
-      "name": "ORIN",
+      "name": "Orin",
       "file": "09_ORIN.png",
-      "role": "logicien",
-      "description": "cherche la vérité des faits"
+      "role": "Chercheur",
+      "emoji": "🔬"
     },
     {
       "id": 10,
-      "name": "MAV",
+      "name": "Mav",
       "file": "10_MAV.png",
-      "role": "aéronaute",
-      "description": "prend de la hauteur"
+      "role": "Rêveur",
+      "emoji": "☁️"
     },
     {
       "id": 11,
-      "name": "KIP",
+      "name": "Kip",
       "file": "11_KIP.png",
-      "role": "soigneur",
-      "description": "prend soin du vivant"
+      "role": "Guérisseur",
+      "emoji": "🌱"
     },
     {
       "id": 12,
-      "name": "GROM",
+      "name": "Grom",
       "file": "12_GROM.png",
-      "role": "constructeur",
-      "description": "bâtit solide et utile"
+      "role": "Forgeron",
+      "emoji": "⚒️"
     },
     {
       "id": 13,
-      "name": "SÉLIA",
+      "name": "Sélia",
       "file": "13_SELIA.png",
-      "role": "herboriste",
-      "description": "comprend la nature"
+      "role": "Conteuse",
+      "emoji": "📖"
     },
     {
       "id": 14,
-      "name": "TIKKO",
+      "name": "Tikkô",
       "file": "14_TIKKO.png",
-      "role": "artiste",
-      "description": "anime et invente"
+      "role": "Farceur",
+      "emoji": "🎭"
     },
     {
       "id": 15,
-      "name": "NÉRI",
+      "name": "Néri",
       "file": "15_NERI.png",
-      "role": "archiviste",
-      "description": "garde la mémoire"
+      "role": "Chanteuse",
+      "emoji": "🎵"
     },
     {
       "id": 16,
-      "name": "WODI",
+      "name": "Wodi",
       "file": "16_WODI.png",
-      "role": "sage",
-      "description": "parle peu mais juste"
+      "role": "Gardien",
+      "emoji": "🛡️"
     },
     {
       "id": 17,
-      "name": "BRUMA",
+      "name": "Bruma",
       "file": "17_BRUMA.png",
-      "role": "analyste",
-      "description": "aime les plans et les cartes"
+      "role": "Ombre",
+      "emoji": "🌑"
     },
     {
       "id": 18,
-      "name": "LUMA",
+      "name": "Luma",
       "file": "18_LUMA.png",
-      "role": "éclaireuse",
-      "description": "apporte des idées lumineuses"
+      "role": "Lumière",
+      "emoji": "☀️"
     },
     {
       "id": 19,
-      "name": "VEX",
+      "name": "Vex",
       "file": "19_VEX.png",
-      "role": "hacker éthique",
-      "description": "déjoue les pièges"
+      "role": "Philosophe",
+      "emoji": "🧠"
     },
     {
       "id": 20,
-      "name": "JUNA",
+      "name": "Juna",
       "file": "20_JUNA.png",
-      "role": "protectrice",
-      "description": "veille sur les équipes"
+      "role": "Jardinière",
+      "emoji": "🌼"
     },
     {
       "id": 21,
-      "name": "PILO",
+      "name": "Pilo",
       "file": "21_PILO.png",
-      "role": "cartographe",
-      "description": "ne se perd jamais"
+      "role": "Pilote",
+      "emoji": "🧭"
     },
     {
       "id": 22,
-      "name": "MOSH",
+      "name": "Mosh",
       "file": "22_MOSH.png",
-      "role": "énergie brute",
-      "description": "moteur de l'action"
+      "role": "Musicien",
+      "emoji": "🎸"
     },
     {
       "id": 23,
-      "name": "RAZO",
+      "name": "Razo",
       "file": "23_RAZO.png",
-      "role": "discret",
-      "description": "observe dans l'ombre"
+      "role": "Guerrier",
+      "emoji": "⚔️"
     },
     {
       "id": 24,
-      "name": "OLLI",
+      "name": "Olli",
       "file": "24_OLLI.png",
-      "role": "optimiste",
-      "description": "voit le bon côté partout"
+      "role": "Rêveuse",
+      "emoji": "🌙"
     },
     {
       "id": 25,
-      "name": "GAZOU",
+      "name": "Gazou",
       "file": "25_GAZOU.png",
-      "role": "chanteur",
-      "description": "porte la joie partout"
+      "role": "Bavard",
+      "emoji": "💬"
     },
     {
       "id": 26,
-      "name": "NALA",
+      "name": "Nala",
       "file": "26_NALA.png",
-      "role": "diplomate",
-      "description": "cherche les accords"
+      "role": "Aventurière",
+      "emoji": "🎒"
     },
     {
       "id": 27,
-      "name": "EKO",
+      "name": "Eko",
       "file": "27_EKO.png",
-      "role": "gardien",
-      "description": "défend la vie et la terre"
+      "role": "Écologue",
+      "emoji": "♻️"
     },
     {
       "id": 28,
-      "name": "HUKO",
+      "name": "Huko",
       "file": "28_HUKO.png",
-      "role": "technicien",
-      "description": "maîtrise les machines"
+      "role": "Sage",
+      "emoji": "🦉"
     },
     {
       "id": 29,
-      "name": "ZEPH",
+      "name": "Zeph",
       "file": "29_ZEPH.png",
-      "role": "messager du vent",
-      "description": "rapide comme une brise"
+      "role": "Voyageur",
+      "emoji": "✈️"
     },
     {
       "id": 30,
-      "name": "MINA",
+      "name": "Mina",
       "file": "30_MINA.png",
-      "role": "minutieuse",
-      "description": "détaille pour comprendre"
+      "role": "Bâtisseuse",
+      "emoji": "🏠"
     },
     {
       "id": 31,
-      "name": "TALA",
+      "name": "Tala",
       "file": "31_TALA.png",
-      "role": "scout",
-      "description": "repère les chemins"
+      "role": "Diplomate",
+      "emoji": "🤝"
     },
     {
       "id": 32,
-      "name": "SOLKO",
+      "name": "Solko",
       "file": "32_SOLKO.png",
-      "role": "rêveur",
-      "description": "voit plus loin que demain"
+      "role": "Rêveur",
+      "emoji": "✨"
     }
   ]
 }

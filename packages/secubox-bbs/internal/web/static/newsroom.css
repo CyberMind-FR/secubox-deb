@@ -112,11 +112,12 @@ a{color:inherit;text-decoration:none}
 .empty{padding:26px;text-align:center;color:var(--dim);font-family:"Fraunces","Cinzel"}
 
 .dossier{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;transition:.2s;position:relative}
-/* Mascotte zanimalos AUTO par type (#1131aa) : GRANDE, à GAUCHE du tampon de
-   statut (public/local, coin haut-droit). ~3,5× la taille d'origine. */
-.dossier .zani-stamp{position:absolute;top:4px;right:64px;width:192px;height:192px;object-fit:contain;
-  pointer-events:none;z-index:3;filter:drop-shadow(0 5px 8px rgba(0,0,0,.32))}
-@media (max-width:520px){.dossier .zani-stamp{width:120px;height:120px;right:52px}}
+/* Mascotte zanimalos AUTO par type (#1131aa) : à GAUCHE du tampon de statut
+   (public/local), au MÊME niveau (barre titre). Art v3 cadré serré → un cadre
+   modéré suffit à la rendre bien visible sans écraser le contenu. */
+.dossier .zani-stamp{position:absolute;top:6px;right:66px;width:88px;height:88px;object-fit:contain;
+  pointer-events:none;z-index:3;filter:drop-shadow(0 3px 6px rgba(0,0,0,.30))}
+@media (max-width:520px){.dossier .zani-stamp{width:66px;height:66px;right:58px}}
 .dossier:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
 .src{display:flex;border-bottom:1px dashed var(--line-2)}
 .src .kind{flex:none;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:13px 6px;border-right:1px dashed var(--line-2);background:var(--soft)}
