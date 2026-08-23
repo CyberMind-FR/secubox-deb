@@ -390,8 +390,14 @@ a{color:inherit;text-decoration:none}
 .mncard.multi{border-color:var(--cyan)}
 .mncover{position:relative;display:block;aspect-ratio:16/9;background:var(--paper);overflow:hidden}
 .mncover img{width:100%;height:100%;object-fit:cover;display:block}
-.mncover.ph{display:grid;place-items:center}
-.mncover.ph .phg{font-size:2rem;opacity:.5}
+/* Repli SANS image : une tuile TEINTÉE et intentionnelle (pas une case grise
+   « cassée ») — certaines sources (Libération, France 24, RFI…) bloquent l'accès
+   automatisé à leurs images ; on l'assume proprement plutôt que de le contourner. */
+.mncover.ph{display:grid;place-items:center;
+  background:
+    radial-gradient(circle at 30% 26%, color-mix(in srgb, var(--sky) 22%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--sky) 13%, var(--paper)), var(--paper))}
+.mncover.ph .phg{font-size:2.6rem;opacity:.42;filter:saturate(.9)}
 .mnbadge{position:absolute;top:8px;right:8px;font-family:ui-monospace,monospace;font-size:11px;font-weight:700;
   background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:2px 8px;backdrop-filter:blur(2px)}
 .mnbadge.on{background:var(--cyan);color:#04222a}

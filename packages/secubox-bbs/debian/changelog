@@ -1,3 +1,11 @@
+secubox-bbs (0.28.88-1~bookworm1) bookworm; urgency=medium
+
+  * fix(newsroom): tuile de repli TEINTÉE (pas une case grise « cassée ») pour
+    les news sans image — certaines sources (Libération, France 24, RFI…)
+    bloquent l'accès automatisé à leurs images ; on l'assume proprement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 12:40:00 +0000
+
 secubox-bbs (0.28.87-1~bookworm1) bookworm; urgency=medium
 
   * feat(reseaux): les cartes de fils-passerelle SANS média résolvent leur
