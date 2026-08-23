@@ -89,6 +89,20 @@ body{margin:0;background:
 .hint{color:var(--mut);font-size:.76rem;line-height:1.5;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
 .hint code{font-family:var(--mono);font-size:.72rem;color:var(--cyan);background:var(--bg);padding:1px 5px;border-radius:4px}
 .hint b.o{color:var(--mint)}.hint b.c{color:var(--amber)}.hint b.b{color:var(--violet)}
+/* facebook wizard */
+.fbwiz{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.fbtop{display:flex;align-items:center;gap:8px;font-size:.9rem}
+.fbicon{font-size:1.1rem}.fbstate{margin-left:auto;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:20px;border:1px solid var(--line2);color:var(--mut)}
+.fbstate.on{color:var(--mint);border-color:#1c5236}.fbstate.off{color:var(--amber);border-color:#5a4820}.fbstate.no{color:var(--rose);border-color:#5a2427}
+#fbbody{margin-top:10px}
+.fbbtn{background:#4c6ef0;color:#fff;border:0;border-radius:9px;padding:9px 15px;font-weight:700;cursor:pointer;font-family:var(--sans);font-size:.86rem}
+.fbbtn:hover{background:#5f7ef5}
+.fbcard{margin-top:10px;padding:14px;background:var(--bg);border:1px solid var(--line2);border-radius:12px;text-align:center}
+.fbcard img{width:220px;max-width:70vw;border-radius:12px;border:6px solid #fff;background:#fff}
+.fbcard .step{font-family:var(--mono);font-size:.74rem;color:var(--mut);margin:8px 0}
+.fbcard a.jump{display:inline-block;margin-top:6px;font-family:var(--mono);font-size:.72rem;color:var(--cyan);word-break:break-all;text-decoration:none;border:1px solid var(--line2);border-radius:8px;padding:8px 10px}
+.fbnote{font-size:.76rem;color:var(--mut);line-height:1.5;margin-top:8px}
+.fbnote code{font-family:var(--mono);font-size:.7rem;color:var(--cyan);background:var(--bg);padding:1px 5px;border-radius:4px}
 </style></head><body>
 <div class="mast">
   <div class="mast-row">
@@ -111,6 +125,10 @@ body{margin:0;background:
       <button type="submit">+ Ajouter</button>
     </form>
     <div id="adlist"></div>
+    <div id="fbwiz" class="fbwiz">
+      <div class="fbtop"><span class="fbicon">📘</span><b>Connexion Facebook</b><span class="fbstate" id="fbstate">…</span></div>
+      <div id="fbbody"></div>
+    </div>
     <p class="hint">Modes — <b class="o">open</b> (Mastodon, public, sans jeton) · <b class="c">consent</b>
       (Facebook Graph, jeton opérateur dans <code>/etc/secubox/secrets/socialrelay-facebook</code>) ·
       <b class="b">bridge</b> (un flux RSS que <b>vous</b> hébergez). Les médias sont recopiés en cache
@@ -188,7 +206,45 @@ gid("addform").addEventListener("submit",async e=>{
   const r=await fetch(`${API}/sources`,{method:"POST",headers:{...authH(),"Content-Type":"application/json"},body:JSON.stringify(body)}).then(r=>r.json()).catch(()=>({ok:false}));
   if(r.ok){gid("afname").value="";gid("afhandle").value="";loadSources();charger();}else alert("échec — jeton requis (connectez-vous au Hub).");
 });
+// ---- wizard OAuth Facebook ----
+async function fbStatus(){
+  const badge=gid("fbstate"),body=gid("fbbody");
+  let d;try{d=await fetch(`${API}/fb/status`,{headers:authH()}).then(r=>r.json())}catch(e){return}
+  if(d.connected){
+    badge.className="fbstate on";badge.textContent="connecté";
+    const exp=d.expires_at?` · expire ${new Date(d.expires_at*1000).toLocaleDateString("fr")}`:"";
+    body.innerHTML=`<p class="fbnote">✅ App autorisée${exp}. Le relais lit vos pages/groupes autorisés. <button class="fbbtn" id="fbre">Reconnecter</button></p>`;
+    gid("fbre").onclick=fbStart;
+  }else if(d.configured){
+    badge.className="fbstate off";badge.textContent="à connecter";
+    body.innerHTML=`<button class="fbbtn" id="fbgo">📱 Connecter Facebook (QR / lien)</button>`;
+    gid("fbgo").onclick=fbStart;
+  }else{
+    badge.className="fbstate no";badge.textContent="app absente";
+    body.innerHTML=`<p class="fbnote">Enregistrez une <b>app Meta</b> (developers.facebook.com), puis déposez
+      <code>App ID</code> + <code>App Secret</code> (2 lignes) dans
+      <code>/etc/secubox/secrets/socialrelay-facebook-app</code> (lisible par <code>secubox-socialrelay</code>),
+      et enregistrez le redirect <code>${d.redirect_uri||"/api/v1/socialrelay/fb/callback"}</code> dans l'app.</p>`;
+  }
+}
+async function fbStart(){
+  const body=gid("fbbody");
+  body.innerHTML='<p class="fbnote">génération du lien…</p>';
+  let d;try{d=await fetch(`${API}/fb/start`,{method:"POST",headers:authH()}).then(r=>r.json())}catch(e){d={ok:false}}
+  if(!d.ok){body.innerHTML=`<p class="fbnote">❌ ${esc(d.erreur||"échec — connectez-vous au Hub")}</p>`;fbStatus();return}
+  const w=window.open(d.url,"fbauth","width=560,height=720");
+  body.innerHTML=`<div class="fbcard">
+    ${d.qr?`<img src="${d.qr}" alt="QR d'autorisation">`:""}
+    <div class="step">Scannez le QR sur votre téléphone déjà connecté à Facebook,<br>ou ouvrez le lien puis approuvez.</div>
+    <a class="jump" href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.url).slice(0,72)}…</a>
+    <div class="step">À la fin, revenez ici — le statut se met à jour.</div>
+  </div>`;
+  // rafraîchir le statut périodiquement pendant l'autorisation
+  let n=0;const tk=setInterval(async()=>{await fbStatus();if(++n>40||(w&&w.closed))clearInterval(tk);},3000);
+}
+
 // premier chargement : feed + rail
 fetch(`${API}/sources`).then(r=>r.json()).then(d=>rail(d.sources)).catch(()=>{});
+gid("gear").addEventListener("click",()=>{if(!gid("admin").hidden)fbStatus();});
 charger();setInterval(charger,60000);
 </script></body></html>

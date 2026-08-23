@@ -23,11 +23,12 @@ type Registre struct {
 	garde func(string) error
 }
 
-// NewRegistre construit le registre. fbJeton = fichier du jeton Graph (consent).
-func NewRegistre(garde func(string) error, fbJeton string) *Registre {
+// NewRegistre construit le registre. fbJetonFn fournit le jeton Graph courant
+// (OAuth caché → repli manuel).
+func NewRegistre(garde func(string) error, fbJetonFn func() string) *Registre {
 	return &Registre{
 		masto: NewMastodon(garde),
-		fb:    NewFacebook(fbJeton),
+		fb:    NewFacebook(fbJetonFn),
 		cli:   &http.Client{Timeout: 20 * time.Second},
 		garde: garde,
 	}

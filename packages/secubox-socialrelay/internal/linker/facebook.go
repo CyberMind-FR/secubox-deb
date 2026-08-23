@@ -11,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 )
@@ -25,24 +24,24 @@ import (
 // ou « 61560790047791 ». Le jeton est lu d'un fichier de secret (hors base, hors
 // code), jamais reçu par l'API.
 type Facebook struct {
-	cli       *http.Client
-	jetonPath string
+	cli     *http.Client
+	jetonFn func() string // fournit le jeton actif (OAuth caché → repli manuel)
 }
 
-// NewFacebook crée le connecteur ; jetonPath = fichier contenant le jeton Graph.
-func NewFacebook(jetonPath string) *Facebook {
-	return &Facebook{cli: &http.Client{Timeout: 20 * time.Second}, jetonPath: jetonPath}
+// NewFacebook crée le connecteur ; jetonFn fournit le jeton Graph courant
+// (jeton OAuth mis en cache par le wizard, ou jeton manuel déposé).
+func NewFacebook(jetonFn func() string) *Facebook {
+	return &Facebook{cli: &http.Client{Timeout: 20 * time.Second}, jetonFn: jetonFn}
 }
 
 // ID identifie le connecteur.
 func (f *Facebook) ID() string { return "facebook" }
 
 func (f *Facebook) jeton() string {
-	b, err := os.ReadFile(f.jetonPath)
-	if err != nil {
+	if f.jetonFn == nil {
 		return ""
 	}
-	return strings.TrimSpace(string(b))
+	return strings.TrimSpace(f.jetonFn())
 }
 
 type fbPost struct {
@@ -70,7 +69,7 @@ type fbPost struct {
 func (f *Facebook) Peek(objectID string) ([]Contenu, error) {
 	tok := f.jeton()
 	if tok == "" {
-		return nil, fmt.Errorf("jeton Facebook absent (mode consent) : déposez un jeton Graph dans %s", f.jetonPath)
+		return nil, fmt.Errorf("jeton Facebook absent (mode consent) : connectez l'app via le wizard OAuth (panel → Connecter Facebook)")
 	}
 	objectID = strings.TrimSpace(objectID)
 	champs := "id,message,story,created_time,permalink_url,full_picture,attachments{type,url,media}"
