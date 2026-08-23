@@ -1,0 +1,2 @@
+./capi_linux_arm64.go
+./termios_linux_arm64.go
