@@ -163,3 +163,36 @@ func (s *Store) ContenuParRef(module, ref string) (string, bool) {
 	}
 	return id, true
 }
+
+// AjouterRepresentation enregistre une représentation d'un ContentObject dans
+// un module consommateur (radio, billets, mediatheque…). Idempotent : la
+// contrainte UNIQUE(content_id,kind,module,ref) absorbe les ré-appels sans
+// dupliquer — un collecteur qui repasse ne doit jamais créer de doublon.
+func (s *Store) AjouterRepresentation(contentID, kind, module, ref string,
+	isCache bool, url string, now int64) error {
+	cache := 0
+	if isCache {
+		cache = 1
+	}
+	_, err := s.db.Exec(
+		`INSERT OR IGNORE INTO content_representation(content_id,kind,module,ref,is_cache,url,created_at)
+		 VALUES(?,?,?,?,?,?,?)`,
+		contentID, kind, module, ref, cache, url, now)
+	return err
+}
+
+// AjouterEvent journalise un événement du cycle de vie d'un ContentObject.
+// Append-only : jamais de mise à jour ni de suppression d'un événement.
+func (s *Store) AjouterEvent(contentID, kind, actor, payloadJSON string, at int64) error {
+	_, err := s.db.Exec(
+		`INSERT INTO content_event(content_id,kind,actor,payload,at) VALUES(?,?,?,?,?)`,
+		contentID, kind, actor, payloadJSON, at)
+	return err
+}
+
+// LierTopic rattache un ContentObject à un fil BBS.
+func (s *Store) LierTopic(contentID string, topicID int64) error {
+	_, err := s.db.Exec(
+		`UPDATE content_object SET bbs_topic_id=? WHERE id=?`, topicID, contentID)
+	return err
+}
