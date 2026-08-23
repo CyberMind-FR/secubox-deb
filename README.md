@@ -107,8 +107,8 @@ See [LICENCE-CMSD-1.0.md](LICENCE-CMSD-1.0.md) (French, authoritative) or [LICEN
 
 | Metric | Value |
 |--------|-------|
-| ![Packages](https://img.shields.io/badge/Debian_Packages-178-blue?logo=debian) | 139 `.deb` packages |
-| ![Migration](https://img.shields.io/badge/Migration-78%25-brightgreen) | 131/139 modules migrated |
+| ![Packages](https://img.shields.io/badge/Debian_Packages-180-blue?logo=debian) | 139 `.deb` packages |
+| ![Migration](https://img.shields.io/badge/Migration-77%25-brightgreen) | 131/139 modules migrated |
 | ![APIs](https://img.shields.io/badge/API_Endpoints-3127+-informational) | FastAPI + JWT auth |
 | ![Arch](https://img.shields.io/badge/Architecture-amd64_|_arm64-orange) | x86_64 + ARM64 |
 
