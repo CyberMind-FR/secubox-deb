@@ -1,0 +1,57 @@
+secubox-metanews (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Carrousel des 10 dernières news (vignette + auto-rotation, pause survol/
+    onglet masqué, flèches).
+  * Admin : panneau « ⚙ Sources » dans l'app — liste des flux (état ok/err/off),
+    ajout / activation / suppression (jeton requis pour muter). Note : les
+    groupes Facebook n'exposent pas de RSS (pont requis, connecteur futur).
+  * Seed élargi : FR (Monde/Libé/BFMTV/Figaro/FranceInfo), UK/US (BBC/Guardian/
+    NPR), tech (Numerama/Ars), cyber (ZATAZ), local (Le Dauphiné Savoie).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 23:30:00 +0200
+
+secubox-metanews (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Vignettes dans l'app : chaque carte porte une lettrine (image de l'article).
+    Relais same-origin /api/v1/metanews/img (FERMÉ aux seules images connues de
+    nos flux, garde SSRF, image seule, 3 Mio, sans redirection) — le navigateur
+    ne contacte jamais le média tiers.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 23:00:00 +0200
+
+secubox-metanews (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * Vignettes : extraction d'image des flux (media:thumbnail/content, enclosure,
+    première <img> du corps) ; portée au sujet ; exposée dans l'API. Complétion
+    non destructive au re-sondage + backfill des sujets. Nouveau endpoint
+    /api/v1/metanews/by-source (news récentes groupées par source, avec image).
+    Migrations désormais journalisées (idempotence des ALTER).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 21:00:00 +0200
+
+secubox-metanews (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Discuter : la catégorie BBS est un SLUG ("actualites") et non un entier —
+    accord avec POST /api/v1/bbs/threads. Le POKE vers le BBS fonctionne.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 19:15:00 +0200
+
+secubox-metanews (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Flux : UA de navigateur (France 24 / RFI renvoyaient 403 au robot) et suivi
+    d'au plus 3 redirections re-validées par la garde SSRF (franceinfo 301).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 18:30:00 +0200
+
+secubox-metanews (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * MVP MetaNews (#metanews) : radar d'actualite multi-sources.
+    - Linkers Peek/Poke ; connecteur RSS/Atom (lecture seule), garde SSRF.
+    - Regroupement heuristique en evenements (titre + entites + fraicheur,
+      empreinte anti-clone) ; resume extractif court (2-4 phrases).
+    - API /api/v1/metanews/* (topics, sources, categories, tags, search,
+      discuss) + UI embarquee facon redaction.
+    - Demon Go sur socket unix, SQLite, boucle de sondage bornee.
+    - Six flux publics FR/EN poses au premier demarrage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 18:00:00 +0200

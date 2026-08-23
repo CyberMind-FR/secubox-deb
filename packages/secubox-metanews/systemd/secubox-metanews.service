@@ -1,0 +1,56 @@
+[Unit]
+Description=SecuBox MetaNews — radar d'actualite multi-sources
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secubox-metanews
+Group=secubox
+ExecStart=/usr/sbin/secubox-metanewsd \
+    --socket /run/secubox/metanews.sock \
+    --db /var/lib/secubox/metanews/metanews.db \
+    --conf /etc/secubox/secubox.conf \
+    --bbs-socket /run/secubox/bbs.sock \
+    --poll 300
+Restart=on-failure
+RestartSec=5
+
+# RuntimeDirectory N'EST PAS DECLARE : /run/secubox est partage par une
+# centaine d'unites, un RuntimeDirectory=secubox ici effacerait leurs sockets.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallArchitectures=native
+
+# SORTIE RESEAU : MetaNews doit joindre les flux declares (HTTP + DNS/UDP).
+# Sans AF_INET l'appel echoue sur « address family not supported ». La
+# compensation reste symbolique : localhost ferme l'administration en boucle,
+# link-local ferme 169.254.169.254.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressAllow=any
+IPAddressDeny=localhost link-local multicast
+# MAIS le BBS s'atteint par sa socket unix (AF_UNIX), pas par le reseau : la
+# fermeture de localhost ne gene donc pas « Discuter ».
+
+ReadWritePaths=/var/lib/secubox/metanews /run/secubox
+
+# Un radar n'est pas critique : borne, il ne prend pas la place de ce qui l'est.
+MemoryMax=192M
+CPUQuota=40%
+Nice=8
+
+[Install]
+WantedBy=multi-user.target

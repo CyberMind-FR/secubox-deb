@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+case "$1" in
+  configure)
+    if ! getent passwd secubox-metanews >/dev/null; then
+      adduser --system --group --no-create-home --home /var/lib/secubox/metanews \
+              --shell /usr/sbin/nologin secubox-metanews >/dev/null
+      adduser secubox-metanews secubox >/dev/null 2>&1 || true
+    fi
+    systemd-tmpfiles --create /usr/lib/tmpfiles.d/secubox-metanews.conf >/dev/null 2>&1 || true
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0
