@@ -196,3 +196,71 @@ func (s *Store) LierTopic(contentID string, topicID int64) error {
 		`UPDATE content_object SET bbs_topic_id=? WHERE id=?`, topicID, contentID)
 	return err
 }
+
+// ErrAnonymeNonPersiste : GATE D'IDENTITÉ (constraints.md). content_timeline
+// exige un author_id > 0 — un commentaire anonyme ne doit JAMAIS atteindre la
+// base, quel que soit l'appelant.
+var ErrAnonymeNonPersiste = errors.New("content: un commentaire anonyme (author_id<=0) ne peut pas être persisté")
+
+// TimelineComment est un commentaire horodaté sur la timeline d'un contenu
+// (ex. réactions synchronisées à la diffusion radio).
+type TimelineComment struct {
+	ID          int64
+	Author      string
+	AuthorID    int64
+	OffsetMS    int64
+	Body        string
+	BroadcastAt int64
+	CreatedAt   int64
+}
+
+// AjouterTimeline insère un commentaire de timeline. Rejette AuthorID<=0 :
+// c'est la gate d'identité, appliquée ici en plus de la contrainte NOT NULL
+// du schéma, pour que l'erreur soit explicite et testable côté Go.
+func (s *Store) AjouterTimeline(contentID string, c TimelineComment) (int64, error) {
+	if c.AuthorID <= 0 {
+		return 0, ErrAnonymeNonPersiste
+	}
+	res, err := s.db.Exec(
+		`INSERT INTO content_timeline(content_id,author,author_id,offset_ms,body,broadcast_at,created_at)
+		 VALUES(?,?,?,?,?,?,?)`,
+		contentID, c.Author, c.AuthorID, c.OffsetMS, c.Body, c.BroadcastAt, c.CreatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// TimelineDe rend les commentaires d'un contenu entre fromMS et toMS (bornes
+// incluses), ordonnés par offset_ms. toMS<=0 signifie : pas de borne haute.
+func (s *Store) TimelineDe(contentID string, fromMS, toMS int64) ([]TimelineComment, error) {
+	const cols = `id,author,author_id,offset_ms,body,broadcast_at,created_at`
+	var rows *sql.Rows
+	var err error
+	if toMS <= 0 {
+		rows, err = s.db.Query(
+			`SELECT `+cols+` FROM content_timeline
+			  WHERE content_id=? AND offset_ms>=?
+			  ORDER BY offset_ms`, contentID, fromMS)
+	} else {
+		rows, err = s.db.Query(
+			`SELECT `+cols+` FROM content_timeline
+			  WHERE content_id=? AND offset_ms>=? AND offset_ms<=?
+			  ORDER BY offset_ms`, contentID, fromMS, toMS)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []TimelineComment
+	for rows.Next() {
+		var c TimelineComment
+		if err := rows.Scan(&c.ID, &c.Author, &c.AuthorID, &c.OffsetMS, &c.Body,
+			&c.BroadcastAt, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
