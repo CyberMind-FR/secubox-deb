@@ -1,9 +1,10 @@
 module github.com/CyberMind-FR/secubox-deb/secubox-socialrelay
 
-go 1.22
+go 1.25.0
 
 require (
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	golang.org/x/net v0.58.0
 	modernc.org/sqlite v1.29.10
 )
 
@@ -14,7 +15,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	golang.org/x/sys v0.19.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	modernc.org/gc/v3 v3.0.0-20240107210532-573471604cb6 // indirect
 	modernc.org/libc v1.49.3 // indirect
 	modernc.org/mathutil v1.6.0 // indirect

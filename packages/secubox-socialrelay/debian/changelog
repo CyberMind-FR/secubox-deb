@@ -1,3 +1,14 @@
+secubox-socialrelay (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * feat(facebook): mode COOKIE-REPLAY — recours quand l'API Graph est
+    administrativement fermee (Meta refuse l'app dev). L'operateur depose SES
+    cookies de session dans /etc/secubox/secrets/socialrelay-facebook-cookies ;
+    le connecteur lit SES groupes/pages via mbasic.facebook.com (parse x/net/html).
+    Prioritaire si les cookies sont presents, sinon repli sur le jeton OAuth.
+    Fragile par nature (casse si Facebook change son HTML) — pour SON compte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sun, 23 Aug 2026 14:30:00 +0000
+
 secubox-socialrelay (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * feat(covers): GET /api/v1/socialrelay/covers?tids=… rend l'URL locale de la
