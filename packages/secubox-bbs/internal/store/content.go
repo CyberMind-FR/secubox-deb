@@ -50,6 +50,30 @@ func genererIDContenu(now int64) (string, error) {
 	return fmt.Sprintf("co_%s_%s", jour, hex.EncodeToString(buf[:])), nil
 }
 
+// premiereSourceOriginale rend l'URL de la première provenance is_original.
+// Le point d'entrée public a déjà validé qu'il en existe au moins une.
+func premiereSourceOriginale(prov []Provenance) string {
+	for _, p := range prov {
+		if p.Original {
+			return p.SourceURL
+		}
+	}
+	return ""
+}
+
+// contenuOriginalPar résout le content_id de la provenance is_original=1
+// portant sourceURL, si elle existe.
+func (s *Store) contenuOriginalPar(sourceURL string) (string, bool) {
+	var id string
+	err := s.db.QueryRow(
+		`SELECT content_id FROM content_provenance WHERE source_url=? AND is_original=1`,
+		sourceURL).Scan(&id)
+	if err != nil {
+		return "", false
+	}
+	return id, true
+}
+
 // CreerContenu insère un ContentObject et ses provenances.
 //
 // Idempotent sur la provenance originale : si une ligne is_original=1 existe
@@ -59,6 +83,17 @@ func genererIDContenu(now int64) (string, error) {
 //
 // Exige au moins une provenance is_original=1 : un contenu sans origine
 // connue ne doit jamais entrer en base (RÈGLE D'OR).
+//
+// RACE-SAFE : la SELECT de pré-vérification ci-dessous est un "check-then-act"
+// — deux appels VRAIMENT concurrents pour la même source originale peuvent
+// tous les deux la trouver absente et tenter d'écrire. Le backstop vit en
+// base (index unique partiel idx_prov_original sur content_provenance,
+// migration 0024) : il garantit qu'une seule des deux écritures aboutit. Quand
+// l'autre échoue — conflit sur cet index une fois le gagnant commité, ou
+// verrou SQLITE_BUSY pendant qu'il est en vol — on ne renvoie JAMAIS l'erreur
+// brute à l'appelant : on se re-résout sur la source originale, et si elle
+// est désormais connue, on renvoie l'id du gagnant. Voir provenance.go
+// (noter) et board.go (upsertSourced) pour l'idiome maison équivalent.
 func (s *Store) CreerContenu(o ContentObject, prov []Provenance, now int64) (string, error) {
 	aUneOriginale := false
 	for _, p := range prov {
@@ -70,32 +105,36 @@ func (s *Store) CreerContenu(o ContentObject, prov []Provenance, now int64) (str
 	if !aUneOriginale {
 		return "", errors.New("content: au moins une provenance is_original=1 est requise")
 	}
+	sourceOriginale := premiereSourceOriginale(prov)
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback()
-
-	// Résolution idempotente : une provenance originale déjà connue renvoie
-	// l'objet existant, sans rien insérer de nouveau.
-	for _, p := range prov {
-		if !p.Original {
-			continue
-		}
-		var existant string
-		err := tx.QueryRow(
-			`SELECT content_id FROM content_provenance WHERE source_url=? AND is_original=1`,
-			p.SourceURL).Scan(&existant)
-		if err == nil {
-			return existant, tx.Commit()
-		}
-		if err != sql.ErrNoRows {
-			return "", err
-		}
+	// Chemin rapide : évite d'ouvrir une transaction d'écriture dans le cas
+	// courant où le contenu existe déjà.
+	if existant, ok := s.contenuOriginalPar(sourceOriginale); ok {
+		return existant, nil
 	}
 
+	id, err := s.ecrireContenu(o, prov, now)
+	if err == nil {
+		return id, nil
+	}
+
+	// Backstop : quelqu'un d'autre a peut-être gagné la course pendant notre
+	// écriture. On re-résout AVANT de rendre l'erreur — un id trouvé ici
+	// prouve que l'échec est bien un conflit sur la provenance originale, pas
+	// une panne indépendante.
+	if existant, ok := s.contenuOriginalPar(sourceOriginale); ok {
+		return existant, nil
+	}
+	return "", err
+}
+
+// ecrireContenu porte l'écriture transactionnelle proprement dite : un
+// content_object et ses provenances. Toute erreur — y compris un conflit sur
+// idx_prov_original ou un verrou — remonte telle quelle ; c'est à
+// CreerContenu de décider si elle doit se transformer en résolution.
+func (s *Store) ecrireContenu(o ContentObject, prov []Provenance, now int64) (string, error) {
 	id := o.ID
+	var err error
 	if id == "" {
 		id, err = genererIDContenu(now)
 		if err != nil {
@@ -112,6 +151,12 @@ func (s *Store) CreerContenu(o ContentObject, prov []Provenance, now int64) (str
 		o.Visibility = "community"
 	}
 
+	tx, err := s.db.Begin()
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+
 	if _, err := tx.Exec(
 		`INSERT INTO content_object(id,type,title,metadata,bbs_topic_id,status,visibility,created_at,updated_at)
 		 VALUES(?,?,?,?,?,?,?,?,?)`,
@@ -120,14 +165,27 @@ func (s *Store) CreerContenu(o ContentObject, prov []Provenance, now int64) (str
 	}
 
 	for _, p := range prov {
-		original := 0
-		if p.Original {
-			original = 1
+		if !p.Original {
+			// Provenance secondaire : pas couverte par idx_prov_original,
+			// `OR IGNORE` n'y absorbe qu'un doublon exact (content_id,
+			// source_url) — inoffensif.
+			if _, err := tx.Exec(
+				`INSERT OR IGNORE INTO content_provenance(content_id,source_url,source_type,is_original,noted_at)
+				 VALUES(?,?,?,0,?)`,
+				id, p.SourceURL, p.SourceType, now); err != nil {
+				return "", err
+			}
+			continue
 		}
+		// Provenance originale : INSERT nu, SANS `OR IGNORE`. `OR IGNORE`
+		// avalerait un conflit sur idx_prov_original en silence et commiterait
+		// un content_object SANS AUCUNE provenance originale — violation
+		// directe de la RÈGLE D'OR. L'erreur doit remonter pour que
+		// CreerContenu la traite explicitement.
 		if _, err := tx.Exec(
-			`INSERT OR IGNORE INTO content_provenance(content_id,source_url,source_type,is_original,noted_at)
-			 VALUES(?,?,?,?,?)`,
-			id, p.SourceURL, p.SourceType, original, now); err != nil {
+			`INSERT INTO content_provenance(content_id,source_url,source_type,is_original,noted_at)
+			 VALUES(?,?,?,1,?)`,
+			id, p.SourceURL, p.SourceType, now); err != nil {
 			return "", err
 		}
 	}

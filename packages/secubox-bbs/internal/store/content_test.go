@@ -1,6 +1,10 @@
 package store
 
-import "testing"
+import (
+	"fmt"
+	"sync"
+	"testing"
+)
 
 func must(t *testing.T, err error) {
 	t.Helper()
@@ -31,6 +35,83 @@ func TestCreerContenuExigeUneOriginale(t *testing.T) {
 		[]Provenance{{SourceURL: "u", SourceType: "rss", Original: false}}, 1)
 	if err == nil {
 		t.Fatal("attendu une erreur : aucune provenance originale")
+	}
+}
+
+// TestIndexPartielRejetteDoublonOriginal pin le backstop DB : deux objets
+// distincts ne peuvent JAMAIS porter chacun une provenance is_original=1
+// pour la même source_url. C'est ce qui rattrape la fenêtre de course entre
+// le SELECT de pré-vérification de CreerContenu et son INSERT — le check
+// applicatif seul ("check-then-act") ne suffit pas.
+func TestIndexPartielRejetteDoublonOriginal(t *testing.T) {
+	s := ouvre(t)
+	if _, err := s.db.Exec(
+		`INSERT INTO content_object(id,type,title,created_at,updated_at) VALUES('co_a','video','A',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(
+		`INSERT INTO content_object(id,type,title,created_at,updated_at) VALUES('co_b','video','B',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(
+		`INSERT INTO content_provenance(content_id,source_url,source_type,is_original,noted_at)
+		 VALUES('co_a','https://x','youtube',1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(
+		`INSERT INTO content_provenance(content_id,source_url,source_type,is_original,noted_at)
+		 VALUES('co_b','https://x','youtube',1,1)`); err == nil {
+		t.Fatal("idx_prov_original doit refuser une seconde provenance originale pour la même source_url")
+	}
+}
+
+// TestCreerContenuConcurrentNeDuplicePasEtNeLockPasCommeErreur reproduit le
+// défaut réel : des appels VRAIMENT concurrents pour la même provenance
+// originale. La SELECT de pré-vérification de CreerContenu peut laisser
+// passer les deux (aucune n'a encore rien inséré) ; le backstop DB
+// (idx_prov_original) doit alors garantir qu'un seul content_object survit
+// et que l'appel perdant se RÉSOUT sur l'id gagnant — jamais une erreur
+// "database is locked" brute renvoyée à l'appelant.
+func TestCreerContenuConcurrentNeDuplicePasEtNeLockPasCommeErreur(t *testing.T) {
+	s := ouvre(t)
+	const n = 5
+	prov := []Provenance{{SourceURL: "https://youtu.be/concurrent", SourceType: "youtube", Original: true}}
+
+	var wg sync.WaitGroup
+	ids := make([]string, n)
+	errs := make([]error, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			ids[i], errs[i] = s.CreerContenu(
+				ContentObject{Type: "video", Title: fmt.Sprintf("Clip %d", i)}, prov, int64(1000+i))
+		}(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("appel %d : erreur inattendue (doit se résoudre, jamais une erreur de verrou) : %v", i, err)
+		}
+	}
+	for i := 1; i < n; i++ {
+		if ids[i] != ids[0] {
+			t.Fatalf("ids divergents sous course : %q (0) vs %q (%d)", ids[0], ids[i], i)
+		}
+	}
+
+	var nObjets int
+	must(t, s.db.QueryRow(`SELECT COUNT(*) FROM content_object`).Scan(&nObjets))
+	if nObjets != 1 {
+		t.Fatalf("attendu 1 seul content_object malgré %d appels concurrents, obtenu %d", n, nObjets)
+	}
+	var nOriginales int
+	must(t, s.db.QueryRow(
+		`SELECT COUNT(*) FROM content_provenance WHERE source_url=? AND is_original=1`,
+		prov[0].SourceURL).Scan(&nOriginales))
+	if nOriginales != 1 {
+		t.Fatalf("attendu 1 seule provenance originale, obtenu %d", nOriginales)
 	}
 }
 
