@@ -1,66 +1,236 @@
 {
-  "title": "zanimalos 2d1/2",
-  "author": "G.Kerma",
-  "stickers": [
-    {
-      "id": 0,
-      "emoji": "🥰",
-      "role": "love",
-      "file": "love.png"
-    },
+  "title": "Zanimalos — Bestiaire canonique 32",
+  "author": "GK² / Zanimalos",
+  "reference": "zanimalos_schema.json (Zanimalos Skill Matrix v2.0.0)",
+  "roles_statut": {
+    "published": "18_LUMA",
+    "draft": "14_TIKKO",
+    "archived": "15_NERI"
+  },
+  "characters": [
     {
       "id": 1,
-      "emoji": "👏",
-      "role": "bravo",
-      "file": "bravo.png"
+      "name": "PEEK",
+      "file": "01_PEEK.png",
+      "role": "observateur",
+      "description": "collectionneur d'indices"
     },
     {
       "id": 2,
-      "emoji": "💤",
-      "role": "draft",
-      "file": "draft.png"
+      "name": "POKE",
+      "file": "02_POKE.png",
+      "role": "bricoleur",
+      "description": "toujours partant pour essayer"
     },
     {
       "id": 3,
-      "emoji": "🫡",
-      "role": "active",
-      "file": "active.png"
+      "name": "PINK",
+      "file": "03_PINK.png",
+      "role": "créative",
+      "description": "voit la vie en couleur"
     },
     {
       "id": 4,
-      "emoji": "🤣",
-      "role": "fun",
-      "file": "fun.png"
+      "name": "PONG",
+      "file": "04_PONG.png",
+      "role": "médiateur",
+      "description": "rassemble les idées"
     },
     {
       "id": 5,
-      "emoji": "🙏",
-      "role": "merci",
-      "file": "merci.png"
+      "name": "NOA",
+      "file": "05_NOA.png",
+      "role": "messager",
+      "description": "fait circuler l'info"
     },
     {
       "id": 6,
-      "emoji": "👍",
-      "role": "published",
-      "file": "published.png"
+      "name": "KRAGZOUY",
+      "file": "06_KRAGZOUY.png",
+      "role": "réparateur de systèmes",
+      "description": "méthodique"
     },
     {
       "id": 7,
-      "emoji": "😇",
-      "role": "error",
-      "file": "error.png"
+      "name": "LYRA",
+      "file": "07_LYRA.png",
+      "role": "exploratrice",
+      "description": "curieuse et rêveuse"
     },
     {
       "id": 8,
-      "emoji": "👋",
-      "role": "new",
-      "file": "new.png"
+      "name": "ZIRI",
+      "file": "08_ZIRI.png",
+      "role": "silencieuse",
+      "description": "mais voit l'essentiel"
     },
     {
       "id": 9,
-      "emoji": "🙂",
-      "role": "archived",
-      "file": "archived.png"
+      "name": "ORIN",
+      "file": "09_ORIN.png",
+      "role": "logicien",
+      "description": "cherche la vérité des faits"
+    },
+    {
+      "id": 10,
+      "name": "MAV",
+      "file": "10_MAV.png",
+      "role": "aéronaute",
+      "description": "prend de la hauteur"
+    },
+    {
+      "id": 11,
+      "name": "KIP",
+      "file": "11_KIP.png",
+      "role": "soigneur",
+      "description": "prend soin du vivant"
+    },
+    {
+      "id": 12,
+      "name": "GROM",
+      "file": "12_GROM.png",
+      "role": "constructeur",
+      "description": "bâtit solide et utile"
+    },
+    {
+      "id": 13,
+      "name": "SÉLIA",
+      "file": "13_SELIA.png",
+      "role": "herboriste",
+      "description": "comprend la nature"
+    },
+    {
+      "id": 14,
+      "name": "TIKKO",
+      "file": "14_TIKKO.png",
+      "role": "artiste",
+      "description": "anime et invente"
+    },
+    {
+      "id": 15,
+      "name": "NÉRI",
+      "file": "15_NERI.png",
+      "role": "archiviste",
+      "description": "garde la mémoire"
+    },
+    {
+      "id": 16,
+      "name": "WODI",
+      "file": "16_WODI.png",
+      "role": "sage",
+      "description": "parle peu mais juste"
+    },
+    {
+      "id": 17,
+      "name": "BRUMA",
+      "file": "17_BRUMA.png",
+      "role": "analyste",
+      "description": "aime les plans et les cartes"
+    },
+    {
+      "id": 18,
+      "name": "LUMA",
+      "file": "18_LUMA.png",
+      "role": "éclaireuse",
+      "description": "apporte des idées lumineuses"
+    },
+    {
+      "id": 19,
+      "name": "VEX",
+      "file": "19_VEX.png",
+      "role": "hacker éthique",
+      "description": "déjoue les pièges"
+    },
+    {
+      "id": 20,
+      "name": "JUNA",
+      "file": "20_JUNA.png",
+      "role": "protectrice",
+      "description": "veille sur les équipes"
+    },
+    {
+      "id": 21,
+      "name": "PILO",
+      "file": "21_PILO.png",
+      "role": "cartographe",
+      "description": "ne se perd jamais"
+    },
+    {
+      "id": 22,
+      "name": "MOSH",
+      "file": "22_MOSH.png",
+      "role": "énergie brute",
+      "description": "moteur de l'action"
+    },
+    {
+      "id": 23,
+      "name": "RAZO",
+      "file": "23_RAZO.png",
+      "role": "discret",
+      "description": "observe dans l'ombre"
+    },
+    {
+      "id": 24,
+      "name": "OLLI",
+      "file": "24_OLLI.png",
+      "role": "optimiste",
+      "description": "voit le bon côté partout"
+    },
+    {
+      "id": 25,
+      "name": "GAZOU",
+      "file": "25_GAZOU.png",
+      "role": "chanteur",
+      "description": "porte la joie partout"
+    },
+    {
+      "id": 26,
+      "name": "NALA",
+      "file": "26_NALA.png",
+      "role": "diplomate",
+      "description": "cherche les accords"
+    },
+    {
+      "id": 27,
+      "name": "EKO",
+      "file": "27_EKO.png",
+      "role": "gardien",
+      "description": "défend la vie et la terre"
+    },
+    {
+      "id": 28,
+      "name": "HUKO",
+      "file": "28_HUKO.png",
+      "role": "technicien",
+      "description": "maîtrise les machines"
+    },
+    {
+      "id": 29,
+      "name": "ZEPH",
+      "file": "29_ZEPH.png",
+      "role": "messager du vent",
+      "description": "rapide comme une brise"
+    },
+    {
+      "id": 30,
+      "name": "MINA",
+      "file": "30_MINA.png",
+      "role": "minutieuse",
+      "description": "détaille pour comprendre"
+    },
+    {
+      "id": 31,
+      "name": "TALA",
+      "file": "31_TALA.png",
+      "role": "scout",
+      "description": "repère les chemins"
+    },
+    {
+      "id": 32,
+      "name": "SOLKO",
+      "file": "32_SOLKO.png",
+      "role": "rêveur",
+      "description": "voit plus loin que demain"
     }
   ]
 }

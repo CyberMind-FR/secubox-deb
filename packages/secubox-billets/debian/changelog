@@ -1,3 +1,15 @@
+secubox-billets (0.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * Bestiaire CANONIQUE 32 (#1131aa) : les 32 vrais zanimalos (planche
+    canonique GK², 512² transparents) remplacent le sous-ensemble « humeurs ».
+    Rôles issus du bestiaire de référence (zanimalos_schema.json) — le manifest
+    embarqué porte nom + rôle + description des 32. Tableau de bord admin :
+    brouillon = Tikko (artiste), publié = Luma (éclaireuse), archivé = Néri
+    (archiviste). Les 32 sont auto-hébergés (static/stickers/zanimalos/NN_NAME.png)
+    et disponibles pour la suite (réactions, catégories, bbs).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 13:00:00 +0200
+
 secubox-billets (0.8.5-1~bookworm1) bookworm; urgency=medium
 
   * Tampons « zanimalos » (#1131aa) : le tableau de bord admin affiche une

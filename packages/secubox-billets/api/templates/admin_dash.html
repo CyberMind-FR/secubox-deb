@@ -48,10 +48,15 @@
 
   <div class="card">
     <h3>📋 Billets</h3>
+    {# Tampon zanimalos canonique par statut (#1131aa), rôles du bestiaire de
+       référence (zanimalos_schema.json) : brouillon = Tikko (artiste, « anime
+       et invente »), publié = Luma (éclaireuse, « apporte des idées lumineuses »),
+       archivé = Néri (archiviste, « garde la mémoire »). Repli sur Luma. #}
+    {% set zani = {'published':'18_LUMA','draft':'14_TIKKO','archived':'15_NERI'} %}
     {% for b in billets %}
     <div class="item {{ b.status }}">
-      <img class="zani" src="/static/stickers/zanimalos/{{ b.status }}.png" alt=""
-           width="30" height="30" loading="lazy" title="{{ b.status }}">
+      <img class="zani" src="/static/stickers/zanimalos/{{ zani.get(b.status, '18_LUMA') }}.png"
+           alt="" width="34" height="34" loading="lazy" title="{{ b.status }}">
       <span class="pill {{ b.status }}">{{ b.status }}</span>
       <a class="title" href="/admin/billets/{{ b.id }}/edit">{{ b.body[:64] }}</a>
       <div class="row-actions">
