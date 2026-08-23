@@ -1,3 +1,14 @@
+secubox-socialrelay (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat(fb): wizard OAuth Meta "consent" (jump-URL + QR + jeton long-lived
+    cache) dans le panel admin — remplace le collage manuel de jeton. App Meta
+    (App ID/Secret) dans /etc/secubox/secrets/socialrelay-facebook-app ; jeton
+    OAuth cache dans /var/lib/secubox/socialrelay/fb-token.json (repli sur le
+    jeton manuel). AUCUN cookie / mot de passe / scraping.
+  * Endpoints /fb/status /fb/start /fb/callback ; QR PNG server-side.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Sat, 23 Aug 2026 10:05:00 +0000
+
 secubox-socialrelay (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * fix(pipeline): titreDe tronque sur les runes (crash slice hors-bornes sur

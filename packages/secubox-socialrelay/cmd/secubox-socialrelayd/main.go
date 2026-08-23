@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/fbauth"
 	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/linker"
 	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/mediacache"
 	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/pipeline"
@@ -39,7 +40,10 @@ func main() {
 		conf    = flag.String("conf", "/etc/secubox/secubox.conf", "config (api.jwt_secret)")
 		jwtFlag = flag.String("jwt-secret", "", "secret JWT de flotte")
 		bbsSock = flag.String("bbs-socket", "/run/secubox/bbs.sock", "socket du BBS")
-		fbTok   = flag.String("fb-token", "/etc/secubox/secrets/socialrelay-facebook", "fichier du jeton Graph Facebook")
+		fbTok   = flag.String("fb-token", "/etc/secubox/secrets/socialrelay-facebook", "jeton Graph manuel (repli)")
+		fbApp   = flag.String("fb-app", "/etc/secubox/secrets/socialrelay-facebook-app", "app Meta (App ID/Secret) pour OAuth")
+		fbStore = flag.String("fb-token-store", "/var/lib/secubox/socialrelay/fb-token.json", "cache du jeton OAuth (démon)")
+		pubURL  = flag.String("public-url", "https://socialrelay.gk2.secubox.in", "base publique HTTPS (redirect_uri OAuth)")
 		poll    = flag.Int("poll", 600, "période de sondage (s)")
 		relayer = flag.Bool("relay-bbs", true, "ouvrir un fil BBS par post")
 		montre  = flag.Bool("version", false, "version")
@@ -62,10 +66,22 @@ func main() {
 	defer st.Close()
 	seed(st, jr)
 
-	reg := linker.NewRegistre(gardeReseau, *fbTok)
+	fb := fbauth.New(*fbApp, *fbStore, *pubURL)
+	// Jeton actif : OAuth caché en priorité, repli sur le jeton manuel déposé.
+	jetonFB := func() string {
+		if t := fb.Jeton(); t != "" {
+			return t
+		}
+		if b, err := os.ReadFile(*fbTok); err == nil {
+			return strings.TrimSpace(string(b))
+		}
+		return ""
+	}
+	reg := linker.NewRegistre(gardeReseau, jetonFB)
 	cache := mediacache.New(*mediaD, st, gardeReseau)
 	pipe := pipeline.New(st, reg, cache, jr, *bbsSock, secret, *relayer)
 	srv := web.New(st, cache, web.Options{JWTSecret: secret}, jr, version)
+	srv.BrancherFB(fb)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

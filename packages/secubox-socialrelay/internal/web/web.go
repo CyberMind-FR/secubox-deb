@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/fbauth"
 	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/linker"
 	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/mediacache"
 	"github.com/CyberMind-FR/secubox-deb/secubox-socialrelay/internal/store"
@@ -35,6 +36,7 @@ type Serveur struct {
 	mux     *http.ServeMux
 	jr      *log.Logger
 	version string
+	fb      *fbauth.Store
 }
 
 // New construit le serveur.
