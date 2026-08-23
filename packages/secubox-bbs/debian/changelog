@@ -1,3 +1,14 @@
+secubox-bbs (0.28.75-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos dans la rédaction (#1131aa) : chaque carte « dossier » porte une
+    mascotte canonique choisie AUTOMATIQUEMENT selon son type, empilée sous le
+    tampon de statut — fil vidéo/film=Tikko, audio/podcast=Gazou, livre=Néri,
+    conférence=Wodi, lien=Peek, discussion=Lyra ; médiathèque podcast=Gazou,
+    livre audio=Néri, série=Tikko. Les 32 zanimalos sont embarqués dans le
+    binaire (static/stickers/zanimalos/). Même geste que billets.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 15:00:00 +0200
+
 secubox-bbs (0.28.74-1~bookworm1) bookworm; urgency=medium
 
   * Rédaction (« derniers dossiers ») : tampon de coin sur CHAQUE carte. Les

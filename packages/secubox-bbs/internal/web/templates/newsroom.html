@@ -42,6 +42,10 @@
       {{/* La médiathèque est du contenu de la vitrine publique : tampon « public »
            dans le coin, au même titre que les fils (#1131z). */}}
       <span class="stamp pub">public</span>
+      {{/* Mascotte zanimalos AUTO selon le média (#1131aa) : podcast=Gazou
+           (chanteur), livre audio=Néri (archiviste), série=Tikko (artiste). */}}
+      {{$z := "25_GAZOU"}}{{if eq $f.Type "audiobook"}}{{$z = "15_NERI"}}{{else if eq $f.Type "serie"}}{{$z = "14_TIKKO"}}{{end}}
+      <img class="zani-stamp" src="/static/stickers/zanimalos/{{$z}}.png" alt="" width="56" height="56" loading="lazy">
       <div class="src">
         <div class="kind"><span class="em">{{$f.Glyphe}}</span><span class="lb">{{if eq $f.Type "audiobook"}}livre audio{{else if eq $f.Type "serie"}}série{{else}}podcast{{end}}</span></div>
         <div class="body">
@@ -66,6 +70,10 @@
     {{else}}{{$n := .}}{{with .Fil}}
     <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}">
       {{if .Published}}<span class="stamp pub">publié</span>{{else if eq .Visibility "public"}}<span class="stamp pub">public</span>{{else}}<span class="stamp loc">local</span>{{end}}
+      {{/* Mascotte zanimalos AUTO selon le type de fil (#1131aa) : vidéo/film=Tikko,
+           audio/podcast=Gazou, livre=Néri, conférence=Wodi, lien=Peek, sinon Lyra. */}}
+      {{$z := "07_LYRA"}}{{if or (eq .MediaKind "video") (eq .Source "video") (eq .Source "film")}}{{$z = "14_TIKKO"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$z = "25_GAZOU"}}{{else if eq .Source "livre"}}{{$z = "15_NERI"}}{{else if eq .Source "conference"}}{{$z = "16_WODI"}}{{else if .Source}}{{$z = "01_PEEK"}}{{end}}
+      <img class="zani-stamp" src="/static/stickers/zanimalos/{{$z}}.png" alt="" width="56" height="56" loading="lazy">
       <div class="src">
         <div class="kind">
           {{if eq .MediaKind "audio"}}<span class="em">🎧</span><span class="lb">podcast</span>
