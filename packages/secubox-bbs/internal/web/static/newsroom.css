@@ -313,8 +313,12 @@ a{color:inherit;text-decoration:none}
 .cartrack{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:4px 2px 12px;scrollbar-width:none}
 .cartrack::-webkit-scrollbar{display:none}
 .cartrack:focus-visible{outline:2px solid var(--sky);outline-offset:3px;border-radius:12px}
-.ccard{--tone:var(--sky);flex:0 0 auto;width:212px;height:182px;scroll-snap-align:start;display:flex;flex-direction:column;overflow:hidden;
-  background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0 0 12px;
+/* CARDLET PLEIN-CADRE (#reseaux) : le média est le FOND de la carte, le texte
+   est posé DESSUS sur un voile dégradé. Plus compact, plus dense — on lit le
+   titre et la source à même l'image. Repli mosaïque quand il n'y a pas d'image. */
+.ccard{--tone:var(--sky);position:relative;flex:0 0 auto;width:190px;height:150px;scroll-snap-align:start;
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;
+  background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--tone);border-radius:13px;padding:0;
   box-shadow:var(--shadow);text-decoration:none;color:inherit;transition:transform .15s,border-color .15s,box-shadow .15s}
 .ccard:hover{transform:translateY(-3px);box-shadow:var(--lift)}
 .ccard:focus-visible{outline:2px solid var(--tone);outline-offset:2px}
@@ -322,29 +326,35 @@ a{color:inherit;text-decoration:none}
 .ccard[data-k="url"]{--tone:var(--cyan)}
 .ccard[data-k="podcast"]{--tone:var(--amber)}
 .ccard[data-k="video"]{--tone:var(--coral)}
-/* média en cardlet (#1104) : couverture (vignette de flux / play vidéo) + pastilles */
-.cccover{position:relative;display:block;height:74px;background:var(--soft);overflow:hidden}
+/* couverture = FOND plein-cadre (absolu, sous le texte) */
+.cccover{position:absolute;inset:0;z-index:0;display:block;background:var(--soft);overflow:hidden}
 .cccover img{width:100%;height:100%;object-fit:cover;display:block}
-.cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.5rem;
-  text-shadow:0 1px 6px rgba(0,0,0,.6);background:rgba(20,45,60,.18)}
+.cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.7rem;
+  text-shadow:0 1px 8px rgba(0,0,0,.7)}
 /* Vignette de REPLI (#1114) : une carte sans image reçoit une mosaïque teintée
    par son type (data-k → --tone) plutôt qu'une tuile vide. */
 .cccover.ph{display:grid;place-items:center;
   background:
-    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 60%),
-    linear-gradient(135deg, color-mix(in srgb, var(--tone) 12%, var(--panel)), var(--soft))}
-.cccover.ph .phg{font-size:2rem;opacity:.5;filter:saturate(.85)}
-.ccbody{display:flex;flex-direction:column;flex:1;padding:12px 14px 0}
-.cctop{display:flex;align-items:center;gap:7px;margin-bottom:9px}
-.ccic{font-size:1.1rem;line-height:1}
-.cctype{font-size:.62rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--tone)}
-.ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.85rem;filter:grayscale(.15)}
-.ccard h3{margin:0;font-size:1rem;line-height:1.2;letter-spacing:-.01em;font-family:inherit;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--tone) 26%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tone) 16%, var(--panel)), var(--soft))}
+.cccover.ph .phg{font-size:3rem;opacity:.42;filter:saturate(.85)}
+/* corps = posé sur l'image, sur un voile dégradé du bas vers le haut */
+.ccbody{position:relative;z-index:1;margin-top:auto;padding:26px 12px 11px;color:#f4f7fa;
+  background:linear-gradient(to top,rgba(7,11,15,.93) 0%,rgba(7,11,15,.78) 42%,rgba(7,11,15,.30) 78%,rgba(7,11,15,0) 100%)}
+.cctop{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.ccic{font-size:1rem;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.cctype{font-size:.6rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  color:color-mix(in srgb,var(--tone) 55%,#fff);text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.ccmed{margin-left:auto;display:inline-flex;gap:3px;font-size:.82rem;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+.ccard h3{margin:0;font-size:.9rem;line-height:1.18;letter-spacing:-.01em;font-family:inherit;color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,.7);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* aperçu masqué en cardlet plein-cadre : on garde la carte compacte */
+.cartrack .ccdek{display:none}
 .ccdek{margin:6px 0 0;font-size:.78rem;line-height:1.35;color:var(--dim);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ccdek a{color:var(--sky);text-decoration:none}
-.ccwho{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:10px;color:var(--dim);font-size:.74rem}
+.ccwho{display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:0;color:rgba(244,247,250,.82);font-size:.7rem;
+  text-shadow:0 1px 3px rgba(0,0,0,.6)}
 .ccav{width:18px;height:18px;border-radius:50%;background:color-mix(in srgb,var(--tone) 26%,var(--panel));border:1px solid var(--line);flex:none}
 .cardots{display:flex;gap:6px;justify-content:center;margin-top:2px;flex-wrap:wrap}
 .cardots button{width:7px;height:7px;border-radius:50%;border:0;background:var(--line-2);cursor:pointer;padding:0;transition:.15s}
