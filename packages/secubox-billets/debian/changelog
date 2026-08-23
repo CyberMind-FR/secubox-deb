@@ -1,3 +1,10 @@
+secubox-billets (0.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * Zanimalos de coin BEAUCOUP plus gros (~3,5×, 192px) sur la vitrine (#1131aa).
+    newsroom.css?v=nr8.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 23 Aug 2026 16:00:00 +0200
+
 secubox-billets (0.8.7-1~bookworm1) bookworm; urgency=medium
 
   * Zanimalos EN PUBLIC (#1131aa) : chaque billet de la vitrine (fil + page)
