@@ -9,6 +9,7 @@ package store
 import (
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -230,6 +231,52 @@ func (s *Store) scanPosts(where string, args ...any) ([]Post, error) {
 func (s *Store) FixerFilBBS(postID, threadID int64) error {
 	_, err := s.db.Exec(`UPDATE post SET bbs_thread_id=? WHERE id=?`, threadID, postID)
 	return err
+}
+
+type coverML struct {
+	Hash string `json:"hash"`
+	Kind string `json:"kind"`
+}
+
+// CoversParFil rend, pour une liste d'ID de fils BBS, le HASH de la première
+// image cachée du post correspondant. C'est ce qui permet au BBS d'afficher la
+// vignette d'un fil-passerelle SANS marqueur dans le corps — anciens comme
+// nouveaux fils (le lien fil↔média vit ici, pas dans le texte).
+func (s *Store) CoversParFil(ids []int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	ph := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		ph[i] = "?"
+		args[i] = id
+	}
+	rows, err := s.db.Query(`SELECT bbs_thread_id, media FROM post
+		WHERE bbs_thread_id IN (`+strings.Join(ph, ",")+`) AND media NOT IN ('','[]')`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tid int64
+		var mj string
+		if rows.Scan(&tid, &mj) != nil {
+			continue
+		}
+		var ml []coverML
+		if json.Unmarshal([]byte(mj), &ml) != nil {
+			continue
+		}
+		for _, m := range ml {
+			if m.Kind == "image" && m.Hash != "" {
+				out[tid] = m.Hash
+				break
+			}
+		}
+	}
+	return out, rows.Err()
 }
 
 // ── Médias cachés ───────────────────────────────────────────────────────────
