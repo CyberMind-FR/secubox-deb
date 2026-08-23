@@ -34,6 +34,7 @@
   </aside>
 
   <main class="feed">
+    {{if .News}}{{template "avunealune" .}}{{end}}
     {{if .MetaNews}}
     <section class="metanews" aria-label="Actualités — MetaNews">
       <div class="mnhead">
