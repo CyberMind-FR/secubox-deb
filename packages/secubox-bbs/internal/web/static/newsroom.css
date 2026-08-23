@@ -363,3 +363,30 @@ a{color:inherit;text-decoration:none}
 /* Cardlet un peu plus haute (#1131ac) : de quoi montrer barre + vignette +
    titre (2–3 lignes) + prochain titre + dernier message. */
 .radioframe{display:block;width:100%;height:252px;border:0;border-radius:var(--r);background:var(--panel)}
+
+/* Cartouche MetaNews (#metanews) : bande d'événements récents ; les événements
+   MULTI-SOURCES corrélées sont mis en avant (bord + badge cyan). Défilement
+   horizontal, style rédaction. */
+.metanews{margin:18px 0 8px}
+.mnhead{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap;margin-bottom:10px}
+.mnhead h2{margin:0;font-size:1.15rem}
+.mnhead .sub{color:var(--ink);opacity:.55;font-size:.8rem;font-family:ui-monospace,monospace}
+.mnhead .mnall{margin-left:auto;color:var(--cyan);font-family:ui-monospace,monospace;font-size:.8rem;text-decoration:none}
+.mnhead .mnall:hover{text-decoration:underline}
+.mntrack{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 12px;scrollbar-width:thin}
+.mncard{scroll-snap-align:start;flex:0 0 266px;display:flex;flex-direction:column;gap:6px;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+  text-decoration:none;color:var(--ink);transition:border-color .15s,transform .15s}
+.mncard:hover{border-color:var(--cyan);transform:translateY(-2px)}
+.mncard.multi{border-color:var(--cyan);box-shadow:inset 3px 0 0 var(--cyan)}
+.mntop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mnsrc{font-family:ui-monospace,monospace;font-size:10.5px;letter-spacing:.03em;
+  border:1px solid var(--line);border-radius:20px;padding:2px 8px;color:var(--ink);opacity:.7}
+.mnsrc.on{color:var(--cyan);border-color:var(--cyan);background:var(--cyan-s);opacity:1;font-weight:700}
+.mntag{font-family:ui-monospace,monospace;font-size:10.5px;color:var(--mint)}
+.mncard h3{margin:0;font-size:1rem;line-height:1.25;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mndek{margin:0;font-size:.82rem;opacity:.7;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mnnoms{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap;font-family:ui-monospace,monospace;font-size:10px;opacity:.6}
+.mnnoms span:not(:last-child)::after{content:" ·";opacity:.5}

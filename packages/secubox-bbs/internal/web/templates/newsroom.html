@@ -35,6 +35,28 @@
 
   <main class="feed">
     {{if .News}}{{template "avunealune" .}}{{end}}
+    {{if .MetaNews}}
+    <section class="metanews" aria-label="Actualités — MetaNews">
+      <div class="mnhead">
+        <h2 class="serif">📡 Actualités</h2>
+        <span class="sub">plusieurs sources · un événement</span>
+        <a class="mnall" href="{{(index .MetaNews 0).Lien}}" target="_blank" rel="noopener">tout voir →</a>
+      </div>
+      <div class="mntrack" role="list">
+        {{range .MetaNews}}
+        <a class="mncard{{if .Multi}} multi{{end}}" role="listitem" href="{{.Lien}}" target="_blank" rel="noopener nofollow">
+          <div class="mntop">
+            <span class="mnsrc{{if .Multi}} on{{end}}">🔗 {{.NbSrc}} source{{if .Multi}}s corrélées{{end}}</span>
+            {{if .Tags}}<span class="mntag">{{index .Tags 0}}</span>{{end}}
+          </div>
+          <h3 class="serif">{{.Titre}}</h3>
+          {{if .Resume}}<p class="mndek">{{.Resume}}</p>{{end}}
+          {{if .Sources}}<div class="mnnoms">{{range .Sources}}<span>{{.}}</span>{{end}}</div>{{end}}
+        </a>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
     <div class="feedhead"><h2 class="serif">Tous les dossiers</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
     {{range .News}}
     {{if .Feed}}{{$f := .Feed}}

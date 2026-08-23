@@ -61,7 +61,12 @@ type Options struct {
 	// lien relatif pointerait vers le BBS lui-meme, ce qui serait pire qu'une
 	// adresse laissee telle quelle.
 	BilletsBase string
-	JWTSecret   string
+	// MetaNewsSocket : socket du module MetaNews, pour le cartouche « actualités »
+	// de la rédaction (une dizaine d'événements récents, sources corrélées mises
+	// en avant). Vide = pas de cartouche. MetaNewsBase = origine publique (liens).
+	MetaNewsSocket string
+	MetaNewsBase   string
+	JWTSecret      string
 	// BackupDir : ou deposer les archives declenchees depuis le panneau.
 	BackupDir string
 	// BanniereOrigine / BanniereHash : la banniere de sante que le WAF de la

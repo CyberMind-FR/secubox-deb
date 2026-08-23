@@ -73,6 +73,11 @@ type page struct {
 	// panne de publication la ou billets.gk2 est simplement injoignable.
 	Billets    []billetVue
 	BilletsErr string
+	// MetaNews : cartouche « actualités » de la rédaction (#metanews) — une
+	// dizaine d'événements récents agrégés depuis plusieurs sources. Rempli SEUL
+	// sur l'accueil (pas les salons) pour ne s'afficher qu'à la rédaction.
+	MetaNews    []metaVue
+	MetaNewsErr string
 	// Lu / non-lu des FILS (#1020). A ne pas confondre avec NonLus ci-dessous,
 	// qui compte les messages prives — deux notions distinctes, et les nommer
 	// pareil aurait garanti qu'on finisse par afficher l'une pour l'autre.
@@ -501,6 +506,12 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// un nouveau mp3 remonte son flux en tête, sans le dupliquer.
 	p.News = s.composerRedaction(p.Threads, pub)
 	s.poseRail(&p)
+	// Cartouche « actualités » MetaNews — UNIQUEMENT à l'accueil (pas les salons,
+	// qui appellent poseRail mais pas ceci) : une dizaine d'événements récents,
+	// sources multiples corrélées mises en avant (#metanews).
+	if s.opt.MetaNewsSocket != "" {
+		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
+	}
 	s.poseNonLus(&p)
 	p.Titre = "AletheiaVox"
 	s.rendDef(w, r, "newsroom", "newsroom", p)
