@@ -92,6 +92,9 @@ async def public_services():
     for s in _cache["services"]:
         row = {k: s[k] for k in _PUBLIC_FIELDS if k in s}
         row["health"] = {"state": (s.get("health") or {}).get("state", "unknown")}
+        # `path` (relatif, non sensible) : nécessaire pour construire l'URL de la
+        # webui admin embarquée (admin.gk2.secubox.in<path>) côté Hall (#1175).
+        row["path"] = (s.get("urls") or {}).get("path") or ("/" + s["id"] + "/")
         out.append(row)
     return {"services": out, "computed_at": _cache["computed_at"]}
 

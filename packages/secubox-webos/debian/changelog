@@ -1,3 +1,13 @@
+secubox-webos (1.0.17-1~bookworm1) bookworm; urgency=medium
+
+  * Embed WEBUI ADMIN : clic sur une carte Système embarque admin.gk2.secubox.in
+    <path> — même-site → cookie de session transmis → panneau AUTO-AUTHENTIFIÉ
+    (sans coffre avatar). `path` exposé dans public/services. frame-src += admin.
+  * Entête : retire l'ovale olive (regle .mast .av morte), le sous-titre, et
+    l'hote du topbar. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 18:00:20 +0200
+
 secubox-webos (1.0.16-1~bookworm1) bookworm; urgency=medium
 
   * Barre de STATUT bas « où suis-je » : fil d'Ariane (Hall › vue/service) + URL
