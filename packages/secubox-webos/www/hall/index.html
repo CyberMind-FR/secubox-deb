@@ -709,25 +709,15 @@ function loadCtx(id, cur){
   bt.classList.add('no-menu'); bt.removeAttribute('data-menu');
   fetch('/api/v1/webos/public/menu/'+encodeURIComponent(id),{headers:{'Accept':'application/json'}})
     .then(r=>r.ok?r.json():null).then(m=>{
-      // #1187 — la navbar du service remonte AVEC SES SECTIONS (rubriques,
-      // puis « Accès »). Repli sur une liste plate pour un service qui ne
-      // publie encore que `items`.
-      const secs=(m&&m.sections&&m.sections.length)
-        ? m.sections
-        : [{title:null, items:(m&&m.items)||[]}];
-      const total=secs.reduce((n,x)=>n+((x.items||[]).length),0);
-      if(!total || !_svc || _svc.id!==id) return;
+      const items=(m&&m.items)||[]; if(!items.length || !_svc || _svc.id!==id) return;
       document.getElementById('ctx-h').textContent=m.title||'Navigation';
-      ctx.innerHTML=secs.map(sec=>{
-        const lignes=(sec.items||[]).map(c=>{
-          const path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return '';
-          return rowHTML({attrs:'data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'+(path===cur?' class="on"':''),
-                          icon:c.icon||(_svc&&_svc.icon)||'💬', label:c.title||c.slug,
-                          count:(c.threads?c.threads:null)});
-        }).join('');
-        if(!lignes) return '';
-        // Un intertitre seulement s'il y a plusieurs sections à distinguer.
-        return (sec.title && secs.length>1 ? '<div class="grp">'+esc(sec.title)+'</div>' : '')+lignes;
+      ctx.innerHTML=items.slice(0,24).map(c=>{
+        const path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return '';
+        return rowHTML({attrs:'data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'+(path===cur?' class="on"':''),
+                        icon:c.icon||(_svc&&_svc.icon)||'💬', label:c.title||c.slug,
+                        count:(c.threads!=null?c.threads:null)});
+                        // ni ⚙️ ni ⧉ ici : une rubrique s'ouvre, elle ne
+                        // s'administre pas — la ligne entière est le clic.
       }).join('');
       bt.classList.remove('no-menu'); bt.setAttribute('data-menu','contexte');
     }).catch(()=>{});

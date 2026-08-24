@@ -1,16 +1,12 @@
-secubox-bbs (0.30.11-1~bookworm1) bookworm; urgency=medium
+secubox-bbs (0.30.12-1~bookworm1) bookworm; urgency=medium
 
-  * /api/v1/bbs/menu expose désormais la SECONDE section de la navbar, « Accès »
-    (Médiathèque, Bibliothèque + nb de fichiers, Billets + nb, Réseaux), à côté
-    des rubriques. Le Hall la remonte telle quelle dans son menu contextuel.
-  * PUBLIQUE UNIQUEMENT : « Messages » (et son compteur de non-lus) et « Sysop »
-    n'y figurent PAS. Le Hall lit cette route par la socket, donc sans session ;
-    les publier ici les exposerait à tout le monde. Ils restent dans la navbar
-    du BBS, là où la session existe.
-  * `categories` est conservé à l'identique — l'adaptateur Hall d'avant #1187
-    continue de fonctionner ; `access` s'y ajoute. (ref #1187)
+  * Retrait de la section « Accès » de /api/v1/bbs/menu (introduite en 0.30.11) :
+    à l'usage elle n'apporte rien dans le menu du Hall — Médiathèque,
+    Bibliothèque, Billets et Réseaux sont déjà atteignables depuis le BBS
+    lui-même, et les doubler dans le menu contextuel ne faisait qu'allonger la
+    liste. La route revient à `categories` seul. (ref #1187)
 
- -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 03:50:00 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 04:10:00 +0200
 
 secubox-bbs (0.30.10-1~bookworm1) bookworm; urgency=medium
 
