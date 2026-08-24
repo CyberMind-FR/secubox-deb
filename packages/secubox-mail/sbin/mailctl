@@ -42,6 +42,25 @@ config_get() {
     fi
 }
 
+# config_get est un grep plat sur TOUT le fichier : une clé homonyme dans une
+# autre section (ex. le `enabled` racine de [mail]) serait lue par erreur.
+# config_get_section borne la lecture à la section demandée — nécessaire pour
+# [mail.antivirus].enabled, qui partage son nom de clé avec [mail].enabled.
+config_get_section() {
+    local section="$1" key="$2" default="$3"
+    if [ -f "$CONFIG_FILE" ]; then
+        local value
+        value=$(awk -v sec="[$section]" -v key="$key" '
+            $0 == sec { infile=1; next }
+            /^\[/ { infile=0 }
+            infile && $0 ~ "^" key " *=" { sub(/^[^=]*=/, ""); gsub(/["[:space:]]/, ""); print; exit }
+        ' "$CONFIG_FILE" 2>/dev/null)
+        [ -n "$value" ] && echo "$value" || echo "$default"
+    else
+        echo "$default"
+    fi
+}
+
 DOMAIN=$(config_get "domain" "secubox.local")
 HOSTNAME=$(config_get "hostname" "mail")
 CONTAINER=$(config_get "container" "mail")
@@ -49,6 +68,7 @@ WEBMAIL_CONTAINER="$CONTAINER"  # legacy alias — webmail merged into single co
 LXC_IP=$(config_get "lxc_ip" "10.100.0.10")
 LXC_BRIDGE=$(config_get "lxc_bridge" "br-lxc")
 LXC_GATEWAY=$(config_get "lxc_gateway" "10.100.0.1")
+ANTIVIRUS_ENABLED=$(config_get_section "mail.antivirus" "enabled" "false")
 WEBMAIL_PORT=80  # Roundcube now on standard HTTP inside the LXC, proxied via host nginx :443
 
 # ============================================================================
@@ -387,6 +407,12 @@ cmd_install() {
     LXC_BASE="$LXC_PATH" configure_dovecot   "$CONTAINER"
     LXC_BASE="$LXC_PATH" DOMAIN="$DOMAIN" \
         configure_roundcube "$CONTAINER"
+
+    # Antivirus optionnel — honore le drapeau [mail.antivirus].enabled du
+    # provisioning (off par défaut, coûteux ~1 Go signatures sur ARM).
+    if [ "$ANTIVIRUS_ENABLED" = "true" ]; then
+        cmd_antivirus on
+    fi
 
     log "Installation complete!"
     echo ""
@@ -900,6 +926,49 @@ cmd_dkim() {
 }
 
 # ============================================================================
+# Antivirus (ClamAV, optionnel — drapeau [mail.antivirus].enabled, off par
+# défaut : ~1 Go de signatures, coûteux sur ARM). `on` installe clamav-daemon
+# + clamav-freshclam dans le LXC et dépose le module antivirus Rspamd ; `off`
+# (défaut) retire le module Rspamd et n'installe rien.
+# ============================================================================
+
+cmd_antivirus() {
+    case "${1:-status}" in
+        on)
+            lxc_attach "$CONTAINER" apt-get install -y clamav-daemon clamav-freshclam
+
+            # Même mécanique que configure_rspamd_milter (lib/mail/rspamd.sh) :
+            # le gabarit packagé est poussé dans le LXC via `lxc-attach -- tee`,
+            # jamais supposé déjà présent à l'intérieur (leçon Task 6).
+            local templates="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd/local.d"
+            if [ -f "$templates/antivirus.conf" ]; then
+                lxc_attach "$CONTAINER" install -d -m 0755 /etc/rspamd/local.d
+                lxc_attach "$CONTAINER" tee /etc/rspamd/local.d/antivirus.conf \
+                    < "$templates/antivirus.conf" >/dev/null
+                lxc_attach "$CONTAINER" chmod 0644 /etc/rspamd/local.d/antivirus.conf
+            else
+                warn "gabarit antivirus.conf introuvable ($templates) — module Rspamd non déposé"
+            fi
+
+            lxc_attach "$CONTAINER" systemctl restart clamav-daemon rspamd
+            log "antivirus activé"
+            ;;
+        off)
+            lxc_attach "$CONTAINER" rm -f /etc/rspamd/local.d/antivirus.conf 2>/dev/null || true
+            lxc_attach "$CONTAINER" systemctl restart rspamd 2>/dev/null || true
+            log "antivirus désactivé (défaut)"
+            ;;
+        status)
+            lxc_attach "$CONTAINER" systemctl is-active clamav-daemon 2>/dev/null || echo inactive
+            ;;
+        *)
+            error "usage: mailctl antivirus on|off|status"
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
 # Logs
 # ============================================================================
 
@@ -960,6 +1029,11 @@ SSL & DNS:
   ssl status           Show certificate info
   ssl setup            Obtain Let's Encrypt certificate
   dns-setup            Show DNS records to configure
+
+Antivirus (optionnel, off par défaut) :
+  antivirus on          Installer ClamAV + activer le module Rspamd
+  antivirus off         Désactiver le module Rspamd (n'installe rien)
+  antivirus status      État de clamav-daemon
 
 Diagnostics:
   logs [lines]         View mail logs
@@ -1142,6 +1216,7 @@ case "${1:-}" in
     # SSL, DNS, DKIM
     ssl)         shift; cmd_ssl "$@" ;;
     dkim)        shift; cmd_dkim "$@" ;;
+    antivirus)   shift; cmd_antivirus "$@" ;;
     dns-setup)   cmd_dns_setup ;;
     # Diagnostics
     logs)        shift; cmd_logs "$@" ;;

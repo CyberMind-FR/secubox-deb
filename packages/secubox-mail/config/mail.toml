@@ -34,3 +34,8 @@ bayes_autolearn = true
 ratelimit_outbound = "200/h/user"
 web_ui = true
 web_ui_host = "rspamd.gk2.secubox.in"
+
+[mail.antivirus]
+# Anti-virus optionnel (câblé mais dormant). true → clamav-daemon + freshclam
+# + module antivirus Rspamd. Coûteux sur ARM (~1 Go signatures) : off par défaut.
+enabled = false
