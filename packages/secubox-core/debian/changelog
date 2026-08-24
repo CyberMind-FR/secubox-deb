@@ -1,3 +1,11 @@
+secubox-core (1.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * health: helper partagé systemd_batch()/parse_units() (batch santé secubox-*
+    factorisé, consommé par le Hub et secubox-webos). Additif, comportement
+    du Hub inchangé. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 13:07:39 +0200
+
 secubox-core (1.3.2-1~bookworm1) bookworm; urgency=medium
 
   * shotter.capture : paramètres `proxy`/`ca` optionnels (défaut None =
