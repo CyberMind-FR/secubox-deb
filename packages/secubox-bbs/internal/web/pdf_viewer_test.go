@@ -45,13 +45,22 @@ func TestLeMediaSEncadreEnMemeOrigine(t *testing.T) {
 	}
 }
 
-// LES PAGES HTML NE S'ENCADRENT PAS. La relaxation ne concerne que /f/ ; une
-// page de contenu garde la protection anti-clickjacking stricte.
-func TestUnePageHtmlGardeXFrameDeny(t *testing.T) {
+// LES PAGES HTML NE S'ENCADRENT QUE PAR LE HALL SOUVERAIN (#1175). Le bureau
+// WebOS embarque le vhost réel du BBS ; tout autre parent reste bloqué. Plus de
+// X-Frame-Options DENY (il primerait et bloquerait le Hall) : le cadrage est régi
+// par frame-ancestors.
+func TestUnePageHtmlAutoriseLeHall(t *testing.T) {
 	srv, _ := banc(t)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-	if xfo := w.Header().Get("X-Frame-Options"); xfo != "DENY" {
-		t.Errorf("X-Frame-Options d'une page HTML=%q, attendu DENY", xfo)
+	if xfo := w.Header().Get("X-Frame-Options"); xfo == "DENY" {
+		t.Errorf("X-Frame-Options=DENY bloquerait le Hall ; il ne doit plus être posé")
+	}
+	csp := w.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "frame-ancestors 'self' https://hall.gk2.secubox.in") {
+		t.Errorf("frame-ancestors doit autoriser le Hall : %s", csp)
+	}
+	if strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Errorf("frame-ancestors 'none' bloquerait le Hall : %s", csp)
 	}
 }

@@ -322,7 +322,10 @@ func (s *Serveur) politique() string {
 	if e := strings.TrimSpace(s.BanniereStyle); empreinteValide.MatchString(e) {
 		style += " '" + e + "'"
 	}
-	return s.politiqueAvecAncetres(script, style, connect, "'none'")
+	// Le Hall souverain (hall.gk2.secubox.in) encadre le vhost réel de la Radio
+	// (#1175) ; tout autre parent reste bloqué. Le lecteur /mini garde en plus
+	// son CadreParent dédié (cf. politiqueMini).
+	return s.politiqueAvecAncetres(script, style, connect, "'self' https://hall.gk2.secubox.in")
 }
 
 // politiqueMini : la politique du lecteur compact /mini, incorporable par la

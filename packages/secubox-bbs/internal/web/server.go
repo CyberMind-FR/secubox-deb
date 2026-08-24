@@ -467,7 +467,10 @@ func politique(style, script, connect, frame, media string) string {
 	return "default-src 'self'; img-src " + img + "; style-src " + style + "; " +
 		"script-src " + script + "; connect-src " + connect + "; " +
 		"frame-src " + frame + "; media-src " + med + "; " +
-		"frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		// Seul le Hall souverain (hall.gk2.secubox.in) peut encadrer le BBS — pas
+		// 'none' : le bureau WebOS embarque le vhost réel du BBS (#1175). Reste
+		// clos à tout autre parent (anti-clickjacking maintenu, opt-in unique).
+		"frame-ancestors 'self' https://hall.gk2.secubox.in; base-uri 'none'; form-action 'self'"
 }
 
 // OrigineMediaMastodon rejoue la politique en ouvrant les images et les sons
@@ -535,7 +538,9 @@ func (s *Server) entetes(h http.Handler) http.Handler {
 		hd.Set("Content-Security-Policy", politique(style, script, connect, frame, s.opt.YtsasOrigine))
 		hd.Set("X-Content-Type-Options", "nosniff")
 		hd.Set("Referrer-Policy", "same-origin")
-		hd.Set("X-Frame-Options", "DENY")
+		// Pas de X-Frame-Options DENY : il primerait sur frame-ancestors et
+		// bloquerait l'embarquement par le Hall. Le cadrage est désormais régi
+		// par `frame-ancestors 'self' https://hall.gk2.secubox.in` (cf. politique).
 		h.ServeHTTP(w, r)
 	})
 }
