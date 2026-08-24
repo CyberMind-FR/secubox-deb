@@ -82,11 +82,6 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mast-actions .who b{font-size:.82rem}
 .mast-actions .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
 @media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}}
-.mast .av{display:flex;align-items:center;gap:10px;min-width:210px;justify-content:flex-end;text-align:right}
-.mast .av b{font-family:"Fraunces";font-size:.95rem;display:block}
-.mast .av span{font-family:"JetBrains Mono";font-size:.52rem;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
-.mast .av .mk{width:40px;height:40px;border-radius:50%;border:2px solid var(--gold);display:grid;place-items:center;
-  background:var(--gold-s);font-size:1.1rem}
 
 /* ── top nav ─────────────────────────────────────────────── */
 /* Nav de SECTIONS fusionnée dans la barre unique (mast-main). */
@@ -273,7 +268,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     <span class="r">● <b id="mt-mods">—</b> modules souverains</span>
   </div>
   <div class="mast-main">
-    <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span><span class="sub">hall.gk2.secubox.in · bureau souverain</span></span></a>
+    <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span></span></a>
     <nav class="mnav" aria-label="Sections">
       <a class="it" data-menu="1" title="Ouvrir le menu SBX"><span>☰</span> Accueil <span style="opacity:.6">▾</span></a>
       <a class="it" data-view="systeme"><span>🗂️</span> Services</a>
@@ -286,7 +281,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     <span id="nav-embed" class="nav-embed hidden">
       <span class="ne-ic" id="eb-ic">▦</span>
       <b class="serif" id="eb-name">Service</b>
-      <span class="state"><i class="led" id="eb-led"></i><span id="eb-host" class="mono"></span></span>
+      <span class="state"><i class="led" id="eb-led"></i></span><span id="eb-host" hidden></span>
       <button class="eb-btn" id="eb-reload" title="Recharger">⟳</button>
       <a class="eb-btn" id="eb-open" target="_blank" rel="noopener" title="Ouvrir en plein onglet">⧉ Onglet</a>
     </span>
@@ -449,7 +444,8 @@ function featCardHTML(f,s){
 }
 function compactHTML(s){
   const st=(s.health&&s.health.state)||"unknown";
-  return '<article class="card'+(s.active?'':' off')+'" data-name="'+esc((s.name+' '+(s.description||'')).toLowerCase())+'">'
+  // Clic → embarque la WEBUI ADMIN du module (admin.gk2.secubox.in<path>).
+  return '<article class="card clic'+(s.active?'':' off')+'" data-admin="'+esc(s.id)+'" data-path="'+esc(s.path||('/'+s.id+'/'))+'" data-name="'+esc((s.name+' '+(s.description||'')).toLowerCase())+'">'
     +'<div class="top"><div class="ci">'+esc(icon(s.icon))+'</div>'
     +'<div class="cn"><b>'+esc(s.name)+'</b><div class="h mono">'+esc(host(s))+'</div></div>'
     +'<span class="state"><i class="led '+st+'"></i></span></div>'
@@ -540,6 +536,24 @@ function showEmbed(id){
   var u=document.getElementById('sb-url'); if(u) u.textContent='· '+f.url+'/';
   showView('embed');
 }
+// Embarque la WEBUI ADMIN d'un module (admin.gk2.secubox.in<path>). MÊME-SITE
+// (*.gk2.secubox.in) → le cookie de session (SameSite=Lax) est transmis dans
+// l'iframe : panneau AUTO-AUTHENTIFIÉ, sans coffre avatar (#1175).
+function showEmbedAdmin(id, path){
+  const s=_reg[id]||{}; const st=(s.health&&s.health.state)||'unknown';
+  path = path || s.path || ('/'+id+'/');
+  const host='admin.gk2.secubox.in'; const url='https://'+host+path;
+  document.getElementById('eb-ic').textContent=icon(s.icon)||'⚙️';
+  document.getElementById('eb-name').textContent=(s.name||id)+' · admin';
+  document.getElementById('eb-led').className='led '+st;
+  document.getElementById('eb-open').href=url;
+  document.getElementById('eb-frame').src=url;
+  document.getElementById('eb-hint').style.display='none';
+  document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
+  var l=document.getElementById('sb-loc'); if(l) l.textContent=(s.name||id)+' · admin';
+  var u=document.getElementById('sb-url'); if(u) u.textContent='· '+host+path;
+  showView('embed');
+}
 // Mégamenu SBX en surimpression, ouvert depuis le bouton Accueil de la barre.
 function setMenu(open){
   const mm=document.getElementById('megamenu');
@@ -555,6 +569,8 @@ document.addEventListener('click',e=>{
   const mn=e.target.closest('[data-menu]'); if(mn){ e.preventDefault();
     setMenu(document.getElementById('megamenu').classList.contains('hidden')); return; }
   if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
+  const adm=e.target.closest('[data-admin]');
+  if(adm){ showEmbedAdmin(adm.dataset.admin, adm.dataset.path); setMenu(false); return; }
   const emb=e.target.closest('[data-embed]');
   if(emb && !e.target.closest('.open')){ showEmbed(emb.dataset.embed); setMenu(false); return; }
   const nav=e.target.closest('[data-nav]'); if(nav){ showView(nav.dataset.nav); setMenu(false); return; }
