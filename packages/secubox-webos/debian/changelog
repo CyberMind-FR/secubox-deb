@@ -1,3 +1,11 @@
+secubox-webos (1.0.31-1~bookworm1) bookworm; urgency=medium
+
+  * Switch de mode : le bouton du mode COURANT s'efface. En vue admin, ⚙️ ne
+    propose plus rien — on y est déjà — et il ne reste que les sorties : ⧉
+    onglet réel et ▦ retour au service. En vue service, ⧉ et ⚙️. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 03:20:00 +0200
+
 secubox-webos (1.0.30-1~bookworm1) bookworm; urgency=medium
 
   * Correctif : le menu contextuel s'ouvrait collé au BORD GAUCHE de l'écran au

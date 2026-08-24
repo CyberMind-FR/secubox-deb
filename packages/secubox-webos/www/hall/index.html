@@ -322,6 +322,8 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
   font-size:.82rem;line-height:1;display:grid;place-items:center;opacity:.55;transition:.12s}
 .modesw button:hover{opacity:1;background:var(--panel)}
 .modesw button.on{opacity:1;background:var(--panel);box-shadow:0 1px 2px rgba(20,45,60,.14)}
+/* Mode courant : bouton retiré du switch (redondant avec la vue affichée). */
+.modesw button.self{display:none}
 
 /* #1187 — la nav du service actif est un MENU POP de la mégabar (#menu-contexte),
    pas une colonne : elle réutilise tel quel le rendu .megamenu de Services. */
@@ -667,7 +669,13 @@ function setMode(mode){
   _mode=mode;
   const f=frameFor(mode), box=document.getElementById('eb-frames');
   [].forEach.call(box.children, c=>{ c.style.display = (c===f)?'block':'none'; });
-  document.querySelectorAll('#modesw button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+  // Le bouton du mode COURANT s'efface : on est déjà dedans, il ne propose
+  // rien. Ne restent que les sorties — ⧉ onglet réel, et l'autre vue. (#1187)
+  document.querySelectorAll('#modesw button').forEach(b=>{
+    const courant = b.dataset.mode===mode;
+    b.classList.toggle('on', courant);
+    b.classList.toggle('self', courant);
+  });
   document.getElementById('eb-hint').style.display=
     (mode==='embed' && _svc && !EMBEDDABLE.has(_svc.id))?'':'none';
   var u=document.getElementById('sb-url');

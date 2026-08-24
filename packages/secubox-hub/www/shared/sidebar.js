@@ -548,6 +548,33 @@
     // HYBRID SKIN INJECTION (Centralized)
     // ============================================
 
+    // Chrome redondant : un entête ou un PIED sans aucun contrôle est de la
+    // décoration — la barre (haute en direct, celle du Hall en embarqué) dit
+    // déjà la même chose. S'il porte des contrôles, on ne masque QUE ses
+    // titres : aucun bouton du module ne doit disparaître avec le doublon.
+    // `strict` = mode EMBARQUÉ : le Hall porte déjà le titre du service, le
+    // rechargement, les modes et la déconnexion. La barre haute du panneau est
+    // alors intégralement du doublon — on la retire, contrôles compris.
+    // En accès DIRECT (strict=false) on garde la règle prudente : seuls les
+    // titres tombent quand l'entête porte des contrôles.
+    function masquerChromeRedondant(strict) {
+        document.querySelectorAll(
+            '.page-header, .header, header:not(.global-menu-bar), footer, .footer, #footer'
+        ).forEach(function (h) {
+            if (h.classList.contains('global-menu-bar') || h.closest('.global-menu-bar')) return;
+            if (h.classList.contains('global-status-bar') || h.closest('.global-status-bar')) return;
+
+            var hasControls = h.querySelector('button, a, input, select, textarea');
+            if (strict || !hasControls) {
+                h.style.display = 'none';
+                return;
+            }
+            h.querySelectorAll('h1, h2, h3').forEach(function (title) {
+                title.style.display = 'none';
+            });
+        });
+    }
+
     function injectHybridSkin() {
         // Skip if already injected
         if (document.getElementById('secubox-hybrid-skin-injected')) return;
@@ -656,21 +683,7 @@
             // visible, but its title node(s) are hidden individually so the
             // module name isn't shown twice while every button/link/input
             // stays reachable.
-            setTimeout(function() {
-                document.querySelectorAll('.page-header, .header, header:not(.global-menu-bar)').forEach(function(h) {
-                    if (h.classList.contains('global-menu-bar') || h.closest('.global-menu-bar')) return;
-
-                    var hasControls = h.querySelector('button, a, input, select, textarea');
-                    if (!hasControls) {
-                        h.style.display = 'none';
-                        return;
-                    }
-
-                    h.querySelectorAll('h1, h2, h3').forEach(function(title) {
-                        title.style.display = 'none';
-                    });
-                });
-            }, 50);
+            setTimeout(function () { masquerChromeRedondant(false); }, 50);
 
             // Initialize page metrics and API status
             setTimeout(function() {
@@ -2340,7 +2353,7 @@
         // Encadré : le skin du module suffit. On ne construit pas la coquille,
         // et on n'ouvre donc AUCUNE des boucles (battement, métriques 30 s,
         // statut 60 s, LED) qui alimenteraient un chrome jamais affiché.
-        if (EMBARQUE) return;
+        if (EMBARQUE) { setTimeout(function () { masquerChromeRedondant(true); }, 50); return; }
         hideUnknownEnabled = getHideUnknownPref();
 
         // v2.39.0: paint the cached sidebar HTML instantly. The API
