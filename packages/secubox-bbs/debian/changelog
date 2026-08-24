@@ -1,3 +1,11 @@
+secubox-bbs (0.30.10-1~bookworm1) bookworm; urgency=medium
+
+  * Embed Hall : masque LES DEUX rails (droite radio/billets déjà masquée +
+    gauche rubriques, désormais remontées dans le sous-menu BBS du mégamenu) ;
+    la grille passe en une seule colonne, contenu pleine largeur. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 20:10:00 +0200
+
 secubox-bbs (0.30.9-1~bookworm1) bookworm; urgency=medium
 
   * /api/v1/bbs/menu : rubriques publiques en JSON (sous-menu Hall WebOS). (ref #1175)
