@@ -119,6 +119,18 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .megamenu.hidden{display:none}
 .menu-backdrop{position:fixed;inset:0;z-index:55;background:transparent}
 .menu-backdrop.hidden{display:none}
+/* Style MENU SYSTÈME (macOS/Windows) : panneau clair, lignes compactes — pas le
+   gros bloc navy de l'ancienne sidebar. */
+.megamenu{background:var(--panel);color:var(--ink);padding:6px}
+.megamenu .sbx{display:none}
+.megamenu a{color:var(--ink);padding:7px 10px;font-size:.85rem;gap:11px;border-radius:8px;margin:0}
+.megamenu a:hover{background:var(--soft)}
+.megamenu a.on{background:var(--sky-s);color:var(--sky);font-weight:600}
+.megamenu h4{color:var(--dim);padding:9px 10px 3px}
+.megamenu .sep{height:1px;background:var(--line);margin:6px 6px}
+.megamenu .bottom{border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
+.megamenu .bottom a{color:var(--dim)}
+.megamenu .g{opacity:.95}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
 .rail .sbx{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;border-bottom:1px solid var(--nav-line);margin-bottom:10px}
@@ -513,8 +525,14 @@ function showEmbed(id){
 }
 // Mégamenu SBX en surimpression, ouvert depuis le bouton Accueil de la barre.
 function setMenu(open){
-  document.getElementById('megamenu').classList.toggle('hidden',!open);
+  const mm=document.getElementById('megamenu');
+  if(open){ // ALIGNÉ sous son titre (le bouton Accueil), façon menu système macOS/Win
+    const t=document.querySelector('.mnav [data-menu]');
+    if(t){ const r=t.getBoundingClientRect(); mm.style.left=Math.round(r.left)+'px'; mm.style.top=Math.round(r.bottom+6)+'px'; }
+  }
+  mm.classList.toggle('hidden',!open);
   document.getElementById('menu-backdrop').classList.toggle('hidden',!open);
+  const trig=document.querySelector('.mnav [data-menu]'); if(trig) trig.classList.toggle('on',open);
 }
 document.addEventListener('click',e=>{
   const mn=e.target.closest('[data-menu]'); if(mn){ e.preventDefault();
