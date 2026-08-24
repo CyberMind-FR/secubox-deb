@@ -43,9 +43,14 @@ override_dh_auto_install:
 	install -d debian/secubox-mail/etc/nginx/secubox-routes.d
 	[ -f nginx/mail.conf ] && cp nginx/mail.conf debian/secubox-mail/etc/nginx/secubox-routes.d/ || true
 
-	# Default config
-	install -d debian/secubox-mail/etc/secubox
-	[ -f config/mail.toml ] && install -m 644 config/mail.toml debian/secubox-mail/etc/secubox/ || true
+	# Default config TEMPLATE. Shipped under /usr/lib, NOT /etc: writing it
+	# straight to /etc/secubox/mail.toml would make dpkg silently clobber the
+	# live file (domain, lxc_path...) on every upgrade, since it is not a
+	# dpkg conffile. postinst seeds /etc/secubox/mail.toml from this template
+	# on first install and merges only missing keys on upgrade (ref #1169,
+	# see lib/mail/toml.sh::merge_mail_toml).
+	install -d debian/secubox-mail/usr/lib/secubox/mail/config
+	[ -f config/mail.toml ] && install -m 644 config/mail.toml debian/secubox-mail/usr/lib/secubox/mail/config/ || true
 
 	# Sieve global par défaut (Task 6 : spam Rspamd → Junk). Déployé et compilé
 	# à l'intérieur du LXC par install_default_sieve() (lib/mail/install.sh).
