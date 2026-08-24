@@ -1,7 +1,26 @@
 #!/bin/sh
 set -e
 
+MAIL_LIB_DIR="/usr/lib/secubox/mail"
+
 if [ "$1" = "configure" ]; then
+    # #1169 — non-destructive mail.toml. The package ships only a TEMPLATE
+    # under $MAIL_LIB_DIR/config/mail.toml (never straight to /etc, which
+    # dpkg would silently overwrite on every upgrade). Fresh install: seed
+    # /etc/secubox/mail.toml from the template. Upgrade: merge only the
+    # keys/sections that are missing — live values (domain, lxc_path...)
+    # are never rewritten. See lib/mail/toml.sh::merge_mail_toml.
+    if [ -f "$MAIL_LIB_DIR/lib/toml.sh" ]; then
+        . "$MAIL_LIB_DIR/lib/toml.sh"
+        install -d -m 0755 /etc/secubox
+        if [ ! -f /etc/secubox/mail.toml ] && [ -f "$MAIL_LIB_DIR/config/mail.toml" ]; then
+            install -m 0644 "$MAIL_LIB_DIR/config/mail.toml" /etc/secubox/mail.toml
+        fi
+        if [ -f /etc/secubox/mail.toml ]; then
+            merge_mail_toml /etc/secubox/mail.toml
+        fi
+    fi
+
     # #319 /data migration. Move legacy /srv/<dir> → /data/<dir> and leave a
     # symlink behind for back-compat. Idempotent.
     for _d in mail; do
@@ -50,6 +69,50 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-mail.service || true
     systemctl start secubox-mail.service || true
+
+    # SSL auto-renew timer (ref #1169 task 10). Guarded like the other units:
+    # never fail the install if systemd isn't around (chroot/image build).
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl enable --now secubox-mail-ssl-renew.timer >/dev/null 2>&1 || true
+    fi
+
+    # Autoconfig XML + SRV Unbound (ref #1169 task 11) — end of board-only
+    # drift: the .xml under /usr/share/secubox/www/autoconfig/ is already
+    # in place from debian/rules (dh_installdirs owns it, no action needed
+    # here). nginx picks up the new secubox.d/secubox-routes.d snippet on
+    # its own reload below.
+    #
+    # SRV drop-in : posé idempotemment dans SON PROPRE fichier, jamais dans
+    # 97-secubox-split-horizon.conf (celui du board ne doit jamais être
+    # touché par ce paquet). `install` recopie le fichier source à chaque
+    # postinst — geste idempotent par construction (contenu figé, aucune
+    # variable), donc rien à "append-if-absent" : le simple recopiage
+    # suffit et ne perd jamais une modification manuelle du board, puisque
+    # ce fichier n'est OWNED que par ce paquet.
+    if [ -d /etc/unbound/unbound.conf.d ] && \
+       [ -f /usr/share/secubox/mail/unbound/97-mail-srv.conf ]; then
+        install -m 0644 /usr/share/secubox/mail/unbound/97-mail-srv.conf \
+            /etc/unbound/unbound.conf.d/97-mail-srv.conf
+        _unbound_ok=1
+        if command -v unbound-checkconf >/dev/null 2>&1; then
+            unbound-checkconf >/dev/null 2>&1 || _unbound_ok=""
+        fi
+        if [ -n "$_unbound_ok" ] && command -v systemctl >/dev/null 2>&1 \
+           && systemctl is-active --quiet unbound.service 2>/dev/null; then
+            systemctl reload-or-restart unbound.service >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # Reload nginx (hôte) so the new autoconfig.conf snippet is served
+    # immediately, without waiting for the next unrelated reload. Guarded:
+    # never fail the install if nginx isn't installed/active (chroot/image
+    # build, or this host doesn't run the shared nginx yet).
+    if command -v nginx >/dev/null 2>&1; then
+        nginx -t >/dev/null 2>&1 && \
+        command -v systemctl >/dev/null 2>&1 && \
+        systemctl is-active --quiet nginx.service 2>/dev/null && \
+        systemctl reload nginx.service >/dev/null 2>&1 || true
+    fi
 fi
 
 #DEBHELPER#

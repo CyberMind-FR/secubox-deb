@@ -58,6 +58,7 @@ apt-get update
 apt-get install -y --no-install-recommends \
     postfix postfix-lmdb \
     dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd \
+    dovecot-sieve dovecot-managesieved \
     rspamd redis-server \
     rsyslog ca-certificates openssl
 
@@ -224,8 +225,18 @@ configure_dovecot() {
 
     mkdir -p "$rootfs/etc/dovecot"
 
-    cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
-protocols = imap pop3 lmtp
+    # Sieve n'est disponible QUE si dovecot-sieve/dovecot-managesieved sont
+    # installés dans le rootfs cible. Émettre les blocs Sieve sans condition
+    # brique Dovecot sur une LXC qui ne les a pas (refus de démarrer, panne
+    # mail complète) — cf. #1169 revue finale, defaut bloquant 1.
+    local sieve_available=false
+    if [ -e "$rootfs/usr/lib/dovecot/modules/lib90_sieve_plugin.so" ] || [ -e "$rootfs/usr/bin/sievec" ]; then
+        sieve_available=true
+    fi
+
+    if [ "$sieve_available" = "true" ]; then
+        cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+protocols = imap pop3 lmtp sieve
 listen = *
 mail_location = maildir:/var/vmail/%d/%n
 mail_uid = 5000
@@ -243,15 +254,23 @@ userdb {
   args = uid=5000 gid=5000 home=/var/vmail/%d/%n
 }
 
-ssl = no
-
 service imap-login {
-  inet_listener imap  { port = 143 }
-  inet_listener imaps { port = 993; ssl = yes }
+  inet_listener imap {
+    port = 143
+  }
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
 }
 service pop3-login {
-  inet_listener pop3  { port = 110 }
-  inet_listener pop3s { port = 995; ssl = yes }
+  inet_listener pop3 {
+    port = 110
+  }
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
 }
 service lmtp {
   unix_listener /var/spool/postfix/private/dovecot-lmtp {
@@ -276,11 +295,153 @@ namespace inbox {
 log_path = /var/log/dovecot.log
 info_log_path = /var/log/dovecot.log
 EOF
+    else
+        cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+protocols = imap pop3 lmtp
+listen = *
+mail_location = maildir:/var/vmail/%d/%n
+mail_uid = 5000
+mail_gid = 5000
+first_valid_uid = 500
+last_valid_uid = 65534
+
+auth_mechanisms = plain login
+passdb {
+  driver = passwd-file
+  args = /etc/mail-config/users
+}
+userdb {
+  driver = static
+  args = uid=5000 gid=5000 home=/var/vmail/%d/%n
+}
+
+service imap-login {
+  inet_listener imap {
+    port = 143
+  }
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
+}
+service pop3-login {
+  inet_listener pop3 {
+    port = 110
+  }
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
+}
+service lmtp {
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+    mode = 0600
+    user = postfix
+    group = postfix
+  }
+}
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    mode = 0660
+    user = postfix
+    group = postfix
+  }
+}
+
+namespace inbox {
+  inbox = yes
+  separator = /
+}
+
+log_path = /var/log/dovecot.log
+info_log_path = /var/log/dovecot.log
+EOF
+    fi
+
+    # SSL-aware : ne JAMAIS régénérer une conf sans TLS si le board sert 993/995.
+    # Le cert vit dans $DATA_PATH/ssl et est monté /etc/ssl/mail dans le LXC.
+    if [ -f "${DATA_PATH:-/data/volumes/mail}/ssl/fullchain.pem" ]; then
+        cat >> "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+ssl = yes
+ssl_cert = </etc/ssl/mail/fullchain.pem
+ssl_key = </etc/ssl/mail/privkey.pem
+ssl_min_protocol = TLSv1.2
+EOF
+    else
+        echo 'ssl = no' >> "$rootfs/etc/dovecot/dovecot.conf"
+    fi
+
+    # Sieve + ManageSieve : filtrage côté serveur (règles utilisateur) et
+    # provisioning du script par défaut (Task 6 dépose default.sieve).
+    # Gaté sur $sieve_available (cf. plus haut) : un rootfs sans le plugin
+    # ne doit voir NI le service managesieve-login NI mail_plugins=...sieve.
+    if [ "$sieve_available" = "true" ]; then
+        cat >> "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+
+protocol lmtp {
+  mail_plugins = $mail_plugins sieve
+}
+service managesieve-login {
+  inet_listener sieve {
+    port = 4190
+  }
+}
+plugin {
+  sieve = file:~/sieve;active=~/.dovecot.sieve
+  sieve_default = /var/vmail/sieve/default.sieve
+}
+EOF
+    fi
 
     [ -e "$rootfs/etc/mail-config/users" ] || touch "$rootfs/etc/mail-config/users" 2>/dev/null || true
     chmod 644 "$rootfs/etc/mail-config/users" 2>/dev/null || true
 
+    install_default_sieve "$container"
+
     echo "[install] Dovecot configured"
+}
+
+# Déploie le script Sieve global par défaut (spam Rspamd → Junk, Task 6) dans
+# le rootfs de la LXC et le compile via sievec quand le conteneur tourne.
+# Idempotent : mkdir -p + cp -f, recompile sans dégât si déjà présent.
+install_default_sieve() {
+    local container="$1"
+    local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
+    local sieve_src="${SIEVE_CONFIG_DIR:-/usr/lib/secubox/mail/config/sieve}/default.sieve"
+
+    [ -f "$sieve_src" ] || { echo "install_default_sieve: source $sieve_src missing" >&2; return 0; }
+
+    # /var/vmail est un BIND-MOUNT de $DATA_PATH/vmail quand le conteneur tourne :
+    # écrire dans "$rootfs/var/vmail" est alors SHADOWÉ par le montage (le fichier
+    # n'apparaît pas dans le conteneur). On vise donc la SOURCE du bind-mount
+    # ($DATA_PATH/vmail) quand elle existe (cas gestes runtime), et on retombe sur
+    # le rootfs seulement au build (conteneur pas encore monté).
+    local vmail_dir="${DATA_PATH:-/data/volumes/mail}/vmail"
+    [ -d "$vmail_dir" ] || vmail_dir="$rootfs/var/vmail"
+    mkdir -p "$vmail_dir/sieve"
+    cp -f "$sieve_src" "$vmail_dir/sieve/default.sieve"
+    # OWNERSHIP CRITIQUE (LXC non privilégié). Créé par root-hôte, le dossier
+    # appartient à l'uid hôte 0 = « nobody » non mappé dans le conteneur : vmail
+    # ne peut alors PAS écrire le .svbin compilé (Pigeonhole abandonne, spam non
+    # filtré) et le dossier devient même irrémovable depuis le conteneur. On
+    # l'aligne sur le propriétaire (mappé) de $vmail_dir lui-même — c'est l'uid
+    # hôte de vmail — pour que le conteneur le voie comme vmail:vmail.
+    if own="$(stat -c '%u:%g' "$vmail_dir" 2>/dev/null)" && [ -n "$own" ]; then
+        chown -R "$own" "$vmail_dir/sieve" 2>/dev/null || true
+    fi
+
+    # Pré-compilation FACULTATIVE : ne l'exécuter que si le conteneur porte
+    # déjà `sievec` (dovecot-sieve installé) ET que l'aide `lxc_attach_run` est
+    # chargée. Quand cette lib est sourcée seule (par maildir-reconcile, sans
+    # lxc.sh), lxc_attach_run est indéfinie — appeler `sievec` échouerait
+    # (command not found) sur un conteneur qui, de toute façon, n'a pas encore
+    # Sieve. Pigeonhole compile `sieve_default` à la volée à la première
+    # remise ; sauter la pré-compilation est sans conséquence fonctionnelle.
+    if [ -e "$rootfs/usr/bin/sievec" ] \
+        && type lxc_attach_run >/dev/null 2>&1 \
+        && lxc_running "$container"; then
+        lxc_attach_run "$container" sievec /var/vmail/sieve/default.sieve 2>/dev/null || true
+    fi
 }
 
 # Write Apache+Roundcube config inside the LXC rootfs. Phase 1 mirrors what

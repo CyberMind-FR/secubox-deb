@@ -17,3 +17,12 @@ make_fake_lxc_env() {
     export DATA_PATH="$BATS_TEST_TMPDIR/data-volumes-mail"
     mkdir -p "$LXC_BASE" "$DATA_PATH"
 }
+
+# Sourcer mailctl SANS lancer son dispatch final : on borne la lecture au corps
+# des fonctions (avant la ligne `case "${1:-}"`), pour tester les cmd_* seules.
+source_mailctl_functions() {
+  local f="${BATS_TEST_DIRNAME}/../sbin/mailctl"
+  sed '/^case "\${1:-}"/,$d' "$f" > "$BATS_TEST_TMPDIR/mailctl.body"
+  # shellcheck disable=SC1090
+  source "$BATS_TEST_TMPDIR/mailctl.body"
+}

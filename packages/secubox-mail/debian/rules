@@ -42,7 +42,46 @@ override_dh_auto_install:
 	# elle n etait jamais lue.
 	install -d debian/secubox-mail/etc/nginx/secubox-routes.d
 	[ -f nginx/mail.conf ] && cp nginx/mail.conf debian/secubox-mail/etc/nginx/secubox-routes.d/ || true
+	# Autoconfig RFC 6186 (Task 11, #1169) : meme double-pose que mail.conf
+	# ci-dessus, pour la meme raison (#989).
+	[ -f nginx/autoconfig.conf ] && cp nginx/autoconfig.conf debian/secubox-mail/etc/nginx/secubox.d/ || true
+	[ -f nginx/autoconfig.conf ] && cp nginx/autoconfig.conf debian/secubox-mail/etc/nginx/secubox-routes.d/ || true
 
-	# Default config
-	install -d debian/secubox-mail/etc/secubox
-	[ -f config/mail.toml ] && install -m 644 config/mail.toml debian/secubox-mail/etc/secubox/ || true
+	# Autoconfig XML (Task 11, #1169) : servi par nginx hote depuis
+	# /usr/share/secubox/www/autoconfig/, chemin deja utilise en live avant
+	# empaquetage.
+	install -d debian/secubox-mail/usr/share/secubox/www/autoconfig
+	[ -f www/autoconfig/config-v1.1.xml ] && install -m 644 www/autoconfig/config-v1.1.xml \
+	  debian/secubox-mail/usr/share/secubox/www/autoconfig/ || true
+
+	# SRV Unbound split-horizon (Task 11, #1169). Livre sous /usr/share, PAS
+	# directement dans /etc/unbound/unbound.conf.d : le postinst le pose
+	# lui-meme dans SON PROPRE fichier (contenu fige, recopie idempotente)
+	# et ne touche jamais le drop-in split-horizon existant du board
+	# (meme precedent que secubox-toolbox/unbound/99-secubox-wg.conf).
+	install -d debian/secubox-mail/usr/share/secubox/mail/unbound
+	[ -f config/unbound/97-mail-srv.conf ] && install -m 644 config/unbound/97-mail-srv.conf \
+	  debian/secubox-mail/usr/share/secubox/mail/unbound/ || true
+
+	# Default config TEMPLATE. Shipped under /usr/lib, NOT /etc: writing it
+	# straight to /etc/secubox/mail.toml would make dpkg silently clobber the
+	# live file (domain, lxc_path...) on every upgrade, since it is not a
+	# dpkg conffile. postinst seeds /etc/secubox/mail.toml from this template
+	# on first install and merges only missing keys on upgrade (ref #1169,
+	# see lib/mail/toml.sh::merge_mail_toml).
+	install -d debian/secubox-mail/usr/lib/secubox/mail/config
+	[ -f config/mail.toml ] && install -m 644 config/mail.toml debian/secubox-mail/usr/lib/secubox/mail/config/ || true
+
+	# Sieve global par défaut (Task 6 : spam Rspamd → Junk). Déployé et compilé
+	# à l'intérieur du LXC par install_default_sieve() (lib/mail/install.sh).
+	install -d debian/secubox-mail/usr/lib/secubox/mail/config/sieve
+	[ -f config/sieve/default.sieve ] && install -m 644 config/sieve/default.sieve debian/secubox-mail/usr/lib/secubox/mail/config/sieve/ || true
+
+	# SSL auto-renew unit + timer (ref #1169 task 10). dh_installsystemd only
+	# auto-detects the package-named unit (secubox-mail.service); this extra
+	# unit needs to be placed in the install tree explicitly (mirror
+	# secubox-frigate's diskguard pattern) so dh_installsystemd picks it up
+	# for enable/start alongside the postinst systemctl calls below.
+	install -d debian/secubox-mail/usr/lib/systemd/system
+	install -m 644 debian/secubox-mail-ssl-renew.service debian/secubox-mail/usr/lib/systemd/system/
+	install -m 644 debian/secubox-mail-ssl-renew.timer debian/secubox-mail/usr/lib/systemd/system/

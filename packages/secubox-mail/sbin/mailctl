@@ -4,10 +4,13 @@
 # Three-fold architecture: Components, Status, Access
 
 VERSION="2.2.0"
-CONFIG_FILE="/etc/secubox/mail.toml"
+CONFIG_FILE="${CONFIG_FILE:-/etc/secubox/mail.toml}"
 LIB_DIR="/usr/lib/secubox/mail/lib"
-DATA_PATH="/data/volumes/mail"
-LXC_PATH="/var/lib/lxc"
+# Default-if-unset : préserve le comportement de production (rien n'exporte
+# ces variables en usage réel) tout en laissant les tests bats les surcharger
+# via `export DATA_PATH=...` avant de sourcer les fonctions (helpers.bash).
+DATA_PATH="${DATA_PATH:-/data/volumes/mail}"
+LXC_PATH="${LXC_PATH:-/var/lib/lxc}"
 
 # Colors
 RED='\033[0;31m'
@@ -39,6 +42,25 @@ config_get() {
     fi
 }
 
+# config_get est un grep plat sur TOUT le fichier : une clé homonyme dans une
+# autre section (ex. le `enabled` racine de [mail]) serait lue par erreur.
+# config_get_section borne la lecture à la section demandée — nécessaire pour
+# [mail.antivirus].enabled, qui partage son nom de clé avec [mail].enabled.
+config_get_section() {
+    local section="$1" key="$2" default="$3"
+    if [ -f "$CONFIG_FILE" ]; then
+        local value
+        value=$(awk -v sec="[$section]" -v key="$key" '
+            $0 == sec { infile=1; next }
+            /^\[/ { infile=0 }
+            infile && $0 ~ "^" key " *=" { sub(/^[^=]*=/, ""); gsub(/["[:space:]]/, ""); print; exit }
+        ' "$CONFIG_FILE" 2>/dev/null)
+        [ -n "$value" ] && echo "$value" || echo "$default"
+    else
+        echo "$default"
+    fi
+}
+
 DOMAIN=$(config_get "domain" "secubox.local")
 HOSTNAME=$(config_get "hostname" "mail")
 CONTAINER=$(config_get "container" "mail")
@@ -46,6 +68,14 @@ WEBMAIL_CONTAINER="$CONTAINER"  # legacy alias — webmail merged into single co
 LXC_IP=$(config_get "lxc_ip" "10.100.0.10")
 LXC_BRIDGE=$(config_get "lxc_bridge" "br-lxc")
 LXC_GATEWAY=$(config_get "lxc_gateway" "10.100.0.1")
+# LXC_PATH DOIT venir du TOML (autoritatif). Les libs sourcees plus haut
+# (users.sh) posent un LXC_PATH hérité de l'ancien nom « mailserver »
+# (/data/lxc/mailserver) — non corrigé par le `:-` de la ligne 13 car non vide.
+# Sans cette ligne, les gestes qui écrivent dans le rootfs (maildir-reconcile,
+# sieve) visent /data/lxc/mailserver/mail/rootfs au lieu de /data/lxc/mail/rootfs
+# et deviennent des no-op silencieux. Le TOML de la board porte lxc_path=/data/lxc.
+LXC_PATH=$(config_get "lxc_path" "/var/lib/lxc")
+ANTIVIRUS_ENABLED=$(config_get_section "mail.antivirus" "enabled" "false")
 WEBMAIL_PORT=80  # Roundcube now on standard HTTP inside the LXC, proxied via host nginx :443
 
 # ============================================================================
@@ -385,6 +415,12 @@ cmd_install() {
     LXC_BASE="$LXC_PATH" DOMAIN="$DOMAIN" \
         configure_roundcube "$CONTAINER"
 
+    # Antivirus optionnel — honore le drapeau [mail.antivirus].enabled du
+    # provisioning (off par défaut, coûteux ~1 Go signatures sur ARM).
+    if [ "$ANTIVIRUS_ENABLED" = "true" ]; then
+        cmd_antivirus on
+    fi
+
     log "Installation complete!"
     echo ""
     echo "Next steps:"
@@ -674,52 +710,270 @@ cmd_migrate() {
 # ============================================================================
 
 cmd_backup() {
-    local name="${1:-$(date +%Y%m%d_%H%M%S)}"
-    local backup_file="$DATA_PATH/backups/mail_$name.tar.gz"
-
-    log "Creating backup: $backup_file"
-
     mkdir -p "$DATA_PATH/backups"
+    local ts tb rootfs tar_err
+    ts="$(date +%Y%m%d-%H%M%S)"
+    tb="$DATA_PATH/backups/mail_$ts.tar.gz"
+    # dovecot.conf vit dans le rootfs du LXC ; on le range à côté du reste.
+    # LXC_PATH est déjà résolu (default-if-unset) en tête du script.
+    rootfs="$LXC_PATH/$CONTAINER/rootfs"
 
-    tar -czf "$backup_file" \
-        -C "$DATA_PATH" \
-        mail config ssl \
-        2>/dev/null
+    local tar_args=(czf "$tb" -C "$DATA_PATH" vmail config)
+    [ -f "$rootfs/etc/dovecot/dovecot.conf" ] && \
+        tar_args+=(-C "$rootfs" etc/dovecot/dovecot.conf)
 
-    log "Backup created: $backup_file"
-    echo "$backup_file"
-}
-
-cmd_restore() {
-    local backup_file="$1"
-
-    if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
-        echo "Usage: mailctl restore <backup_file>"
-        echo ""
-        echo "Available backups:"
-        ls -la "$DATA_PATH/backups/"*.tar.gz 2>/dev/null || echo "  No backups found"
+    # Le filet de sûreté d'une migration destructrice ne doit JAMAIS annoncer
+    # un succès qu'il n'a pas obtenu : on vérifie le code de retour de tar et
+    # on capture sa sortie d'erreur au lieu de la jeter (2>/dev/null cachait
+    # un tar échoué comme un tar réussi).
+    if ! tar_err="$(tar "${tar_args[@]}" 2>&1)"; then
+        error "backup échoué : $tar_err"
         return 1
     fi
 
-    warn "This will overwrite current mail data!"
-    read -p "Continue? (yes/no): " confirm
-    [ "$confirm" != "yes" ] && { echo "Aborted"; return 1; }
+    # Seul "$tb" doit sortir sur stdout : POST /backup de l'API capture la
+    # sortie standard de la commande comme chemin d'archive (run_cmd().strip()).
+    # Le log de succès va donc sur stderr.
+    log "backup → $tb" >&2
+    echo "$tb"
+}
 
-    log "Stopping services..."
-    cmd_stop
+cmd_restore() {
+    local tb="$1"
+    [ -f "$tb" ] || { error "archive introuvable : $tb"; return 1; }
 
-    log "Restoring from: $backup_file"
-    tar -xzf "$backup_file" -C "$DATA_PATH"
+    local tar_err
+    if ! tar_err="$(tar xzf "$tb" -C "$DATA_PATH" vmail config 2>&1)"; then
+        error "restauration échouée (extraction) : $tar_err"
+        return 1
+    fi
 
-    log "Starting services..."
-    cmd_start
+    # cmd_backup embarque dovecot.conf (rootfs du LXC) EN PLUS de vmail/config
+    # (DATA_PATH) : un restore qui ne le réextrairait pas ne serait pas un
+    # vrai rollback pour une régénération de conf cassée (#1169 revue finale,
+    # defaut bloquant 2). Une archive plus ancienne peut ne pas le contenir :
+    # `|| true` — ce n'est jamais un motif d'échec du restore.
+    local rootfs="$LXC_PATH/$CONTAINER/rootfs"
+    tar xzf "$tb" -C "$rootfs" etc/dovecot/dovecot.conf 2>/dev/null || true
 
-    log "Restore complete!"
+    # Un restore qui extrait les données mais ne relance pas Dovecot n'est
+    # pas un rollback réussi — le service resterait sur l'ancien état en
+    # mémoire pendant que le Maildir sur disque aurait changé sous lui.
+    local restart_err
+    if ! restart_err="$(lxc_attach "$CONTAINER" systemctl restart dovecot 2>&1)"; then
+        error "restauration échouée (redémarrage dovecot) : $restart_err"
+        return 1
+    fi
+
+    log "restore depuis $tb"
+}
+
+# ============================================================================
+# Maildir reconciliation (bascule mbox → Maildir, idempotente)
+# ============================================================================
+
+# Detecte le mail_location Dovecot effectif et, s'il n'est pas deja en
+# Maildir, sauvegarde, regenere dovecot.conf (SSL-aware, Task 2) et cree les
+# Maildir des comptes existants. Sans effet si deja conforme.
+cmd_maildir_reconcile() {
+    local loc
+    loc="$(lxc_attach "$CONTAINER" doveconf -h mail_location 2>/dev/null)"
+    case "$loc" in
+        maildir:*) log "mail_location déjà conforme ($loc)"; return 0 ;;
+    esac
+    warn "mail_location = '$loc' → bascule Maildir"
+    # La sauvegarde precede TOUJOURS la bascule destructrice : si elle
+    # echoue, on n'a plus de filet et il faut annuler avant de toucher a
+    # quoi que ce soit (regenerer dovecot.conf, redemarrer, creer des
+    # Maildir) plutot que de continuer sur un backup absent.
+    local _bk
+    if ! _bk="$(cmd_backup)"; then
+        error "backup préalable échoué — bascule Maildir annulée"
+        return 1
+    fi
+
+    # configure_dovecot vit dans la lib d'install ; on la source si besoin.
+    if ! type configure_dovecot >/dev/null 2>&1; then
+        local install_lib="$(dirname "$0")/../lib/mail/install.sh"
+        [ -f "$install_lib" ] || install_lib="/usr/lib/secubox/mail/lib/install.sh"
+        # shellcheck disable=SC1090
+        source "$install_lib"
+    fi
+    LXC_BASE="${LXC_PATH:-/data/lxc}" DATA_PATH="$DATA_PATH" configure_dovecot "$CONTAINER"
+
+    # VALIDER AVANT DE REDÉMARRER. Un dovecot.conf régénéré invalide ne doit
+    # JAMAIS provoquer un redémarrage qui casse le service : `doveconf -n`
+    # relit la conf sur disque sans toucher au Dovecot en mémoire. Si elle est
+    # invalide, on restaure le backup (qui contient l'ancien dovecot.conf) et
+    # on abandonne — pas d'outage. C'est ce filet qui transforme « redémarrage
+    # dans une conf cassée » en « abandon propre, service intact ».
+    if ! lxc_attach "$CONTAINER" doveconf -n >/dev/null 2>&1; then
+        error "conf Dovecot régénérée invalide — restauration du backup et abandon"
+        cmd_restore "$_bk" >/dev/null 2>&1
+        return 1
+    fi
+
+    # Le redemarrage fait foi de la bascule : s'il echoue, la conf a change
+    # sur disque mais Dovecot tourne encore sur l'ancienne en memoire — un
+    # etat divergent qu'on ne doit jamais annoncer comme un succes silencieux.
+    if ! lxc_attach "$CONTAINER" systemctl restart dovecot; then
+        error "bascule Maildir échouée (redémarrage dovecot) — restauration"
+        cmd_restore "$_bk" >/dev/null 2>&1
+        return 1
+    fi
+
+    # Cree les Maildir des comptes existants (boites vides = simple creation).
+    # Un compte en echec ne doit pas interrompre les suivants : on log et on
+    # continue plutot que d'abandonner la reconciliation en cours de route.
+    while IFS=: read -r user _; do
+        [ -n "$user" ] || continue
+        lxc_attach "$CONTAINER" doveadm mailbox create -u "$user" INBOX 2>/dev/null \
+            || warn "création du Maildir échouée pour $user (ignoré)"
+    done < <(lxc_attach "$CONTAINER" cat /etc/mail-config/users 2>/dev/null)
+
+    log "bascule Maildir effectuée"
+}
+
+cmd_sieve() {
+    case "${1:-status}" in
+        enable)
+            # configure_dovecot ne fait apparaitre les blocs Sieve QUE si le
+            # rootfs porte deja le plugin (#1169 revue finale, defaut bloquant
+            # 1) : on l'installe donc dans le conteneur EN PREMIER, avant toute
+            # reconciliation/regeneration — sinon la conf regeneree resterait
+            # sans Sieve meme apres cette commande.
+            if ! lxc_attach "$CONTAINER" apt-get install -y dovecot-sieve dovecot-managesieved; then
+                error "installation de dovecot-sieve/dovecot-managesieved échouée"
+                return 1
+            fi
+
+            # Sieve stocke ses scripts par boite : on garantit ensuite le
+            # Maildir (no-op si deja conforme), PUIS on regenere la conf
+            # sans condition — cmd_maildir_reconcile seul ne suffirait pas
+            # a faire apparaitre les blocs Sieve sur une box deja Maildir.
+            cmd_maildir_reconcile || { error "réconciliation Maildir échouée, activation Sieve annulée"; return 1; }
+
+            # configure_dovecot vit dans la lib d'install ; on la source si besoin
+            # (meme pattern de repli que cmd_maildir_reconcile, pour rester coherent).
+            if ! type configure_dovecot >/dev/null 2>&1; then
+                local install_lib="$(dirname "$0")/../lib/mail/install.sh"
+                [ -f "$install_lib" ] || install_lib="/usr/lib/secubox/mail/lib/install.sh"
+                # shellcheck disable=SC1090
+                source "$install_lib"
+            fi
+            local _sbk; _sbk="$(cmd_backup)"
+            LXC_BASE="${LXC_PATH:-/data/lxc}" DATA_PATH="$DATA_PATH" configure_dovecot "$CONTAINER"
+
+            # Valider AVANT de redémarrer (même filet que maildir-reconcile) :
+            # une conf Sieve invalide ne doit pas casser le service.
+            if ! lxc_attach "$CONTAINER" doveconf -n >/dev/null 2>&1; then
+                error "conf Dovecot (Sieve) invalide — restauration et abandon"
+                [ -n "$_sbk" ] && cmd_restore "$_sbk" >/dev/null 2>&1
+                return 1
+            fi
+
+            # Le redemarrage fait foi de l'activation : s'il echoue, la conf a
+            # change sur disque mais Dovecot tourne encore sur l'ancienne en
+            # memoire — jamais annoncer un succes silencieux dans ce cas.
+            if ! lxc_attach "$CONTAINER" systemctl restart dovecot; then
+                error "activation Sieve échouée (redémarrage dovecot) — restauration"
+                [ -n "$_sbk" ] && cmd_restore "$_sbk" >/dev/null 2>&1
+                return 1
+            fi
+            # Pré-compiler le sieve par défaut SOUS vmail : install_default_sieve
+            # l'a déposé côté hôte avec le bon propriétaire mappé (cf. install.sh),
+            # donc vmail peut écrire le .svbin à côté. Sans .svbin compilable, le
+            # `sieve_default` de Pigeonhole ne range jamais le spam dans Junk.
+            lxc_attach "$CONTAINER" runuser -u vmail -- \
+                sievec /var/vmail/sieve/default.sieve 2>/dev/null || true
+            log "Sieve activé"
+            cmd_sieve status ;;
+        status)
+            local l
+            l="$(lxc_attach "$CONTAINER" ss -tlnp 2>/dev/null | grep ':4190' || true)"
+            if [ -n "$l" ]; then
+                log "ManageSieve écoute : $l"
+            else
+                warn "ManageSieve (:4190) absent"
+            fi
+            return 0 ;;
+        *) error "usage: mailctl sieve enable|status"; return 1 ;;
+    esac
 }
 
 # ============================================================================
 # SSL
 # ============================================================================
+
+# mail_ssl_fqdn() derives the FQDN the ACME cert must cover. `$HOSTNAME.$DOMAIN`
+# is a provisioning artifact ("mail.gk2.secubox.in") that never matched the
+# cert actually deployed on the board ("mail.secubox.in") — #1169 revue
+# finale, defaut bloquant 3. Priorité :
+#   1. le CN du cert DEJA déployé (source de vérité vivante) ;
+#   2. la clé TOML explicite `mail_fqdn` du provisioning ;
+#   3. repli `mail.$DOMAIN`.
+mail_ssl_fqdn() {
+    local cn
+    if [ -f "$DATA_PATH/ssl/fullchain.pem" ]; then
+        cn="$(openssl x509 -in "$DATA_PATH/ssl/fullchain.pem" -noout -subject 2>/dev/null \
+              | sed -n 's/^subject=.*CN *= *//p' | sed 's/[[:space:]]*$//')"
+        [ -n "$cn" ] && { echo "$cn"; return 0; }
+    fi
+
+    local cfg_fqdn
+    cfg_fqdn="$(config_get "mail_fqdn" "")"
+    [ -n "$cfg_fqdn" ] && { echo "$cfg_fqdn"; return 0; }
+
+    echo "mail.$DOMAIN"
+}
+
+# acme_renew() actually renews the LE cert for $1 (fqdn) and writes the
+# renewed pair into $DATA_PATH/ssl/{fullchain,privkey}.pem — same mechanism
+# `ssl setup` uses. Factored out so `mailctl ssl renew` tests can override it
+# without touching the network (bats mocks this function directly).
+acme_renew() {
+    local fqdn="$1"
+
+    if command -v certbot >/dev/null 2>&1; then
+        certbot renew --cert-name "$fqdn" --quiet || return 1
+        if [ -d "/etc/letsencrypt/live/$fqdn" ]; then
+            cp "/etc/letsencrypt/live/$fqdn/fullchain.pem" "$DATA_PATH/ssl/fullchain.pem" \
+                && cp "/etc/letsencrypt/live/$fqdn/privkey.pem" "$DATA_PATH/ssl/privkey.pem"
+        fi
+    elif command -v acme.sh >/dev/null 2>&1; then
+        acme.sh --renew -d "$fqdn" --force || return 1
+        acme.sh --install-cert -d "$fqdn" \
+            --fullchain-file "$DATA_PATH/ssl/fullchain.pem" \
+            --key-file "$DATA_PATH/ssl/privkey.pem"
+    else
+        error "No ACME client found. Install certbot or acme.sh"
+        return 1
+    fi
+}
+
+# deploy_haproxy_cert() copies the renewed pair into the HAProxy cert store
+# on the HOST (concatenated cert+key, as HAProxy `bind ... crt <dir>`
+# expects). No-op if the store doesn't exist (e.g. dev/test box, or HAProxy
+# not fronting this host) — never fatal for the renewal itself.
+deploy_haproxy_cert() {
+    local fqdn="${1:-$HOSTNAME.$DOMAIN}"
+    local haproxy_dir="${HAPROXY_CERT_DIR:-/data/haproxy/certs}"
+    [ -d "$haproxy_dir" ] || return 0
+    cat "$DATA_PATH/ssl/fullchain.pem" "$DATA_PATH/ssl/privkey.pem" \
+        > "$haproxy_dir/$fqdn.pem" 2>/dev/null \
+        && chmod 600 "$haproxy_dir/$fqdn.pem"
+}
+
+# reload_mail_tls() applies a freshly deployed cert: dovecot+postfix live
+# INSIDE the mail LXC (lxc_attach), HAProxy lives on the HOST — never
+# lxc_attach for it. Factored out so tests can stub it (no LXC, no haproxy
+# in the bats sandbox).
+reload_mail_tls() {
+    lxc_attach "$CONTAINER" systemctl restart dovecot postfix 2>/dev/null || true
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl reload haproxy 2>/dev/null || systemctl restart haproxy 2>/dev/null || true
+    fi
+}
 
 cmd_ssl() {
     local action="${1:-status}"
@@ -736,7 +990,8 @@ cmd_ssl() {
             fi
             ;;
         setup)
-            local fqdn="$HOSTNAME.$DOMAIN"
+            local fqdn
+            fqdn="$(mail_ssl_fqdn)"
             log "Setting up SSL for $fqdn..."
 
             if command -v certbot >/dev/null 2>&1; then
@@ -757,10 +1012,41 @@ cmd_ssl() {
             log "SSL certificate installed"
             cmd_restart
             ;;
+        renew)
+            local fqdn
+            fqdn="$(mail_ssl_fqdn)"
+            local ssl_dir="$DATA_PATH/ssl"
+            mkdir -p "$ssl_dir"
+
+            # Rollback safety: keep a timestamped copy of the CURRENT cert
+            # before touching anything, so a failed renewal never leaves us
+            # without a working pair (spec: "if renew fails, do NOT deploy a
+            # broken cert; keep the old one").
+            local ts
+            ts=$(date +%Y%m%d%H%M%S)
+            if [ -f "$ssl_dir/fullchain.pem" ]; then
+                cp "$ssl_dir/fullchain.pem" "$ssl_dir/fullchain.pem.$ts"
+            fi
+            if [ -f "$ssl_dir/privkey.pem" ]; then
+                cp "$ssl_dir/privkey.pem" "$ssl_dir/privkey.pem.$ts"
+            fi
+
+            log "Renewing SSL for $fqdn..."
+            if ! acme_renew "$fqdn"; then
+                error "Certificate renewal failed for $fqdn — keeping previous certificate"
+                return 1
+            fi
+
+            chmod 600 "$ssl_dir/"*.pem 2>/dev/null || true
+            deploy_haproxy_cert "$fqdn"
+            reload_mail_tls
+            log "SSL certificate renewed"
+            ;;
         *)
             echo "SSL commands:"
             echo "  ssl status   Show certificate info"
             echo "  ssl setup    Obtain Let's Encrypt certificate"
+            echo "  ssl renew    Renew certificate + redeploy + reload (dovecot/postfix/haproxy)"
             ;;
     esac
 }
@@ -792,6 +1078,49 @@ cmd_dkim() {
             echo "DKIM commands:"
             echo "  dkim setup    Generate DKIM keys"
             echo "  dkim status   Show DKIM DNS record"
+            ;;
+    esac
+}
+
+# ============================================================================
+# Antivirus (ClamAV, optionnel — drapeau [mail.antivirus].enabled, off par
+# défaut : ~1 Go de signatures, coûteux sur ARM). `on` installe clamav-daemon
+# + clamav-freshclam dans le LXC et dépose le module antivirus Rspamd ; `off`
+# (défaut) retire le module Rspamd et n'installe rien.
+# ============================================================================
+
+cmd_antivirus() {
+    case "${1:-status}" in
+        on)
+            lxc_attach "$CONTAINER" apt-get install -y clamav-daemon clamav-freshclam
+
+            # Même mécanique que configure_rspamd_milter (lib/mail/rspamd.sh) :
+            # le gabarit packagé est poussé dans le LXC via `lxc-attach -- tee`,
+            # jamais supposé déjà présent à l'intérieur (leçon Task 6).
+            local templates="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd/local.d"
+            if [ -f "$templates/antivirus.conf" ]; then
+                lxc_attach "$CONTAINER" install -d -m 0755 /etc/rspamd/local.d
+                lxc_attach "$CONTAINER" tee /etc/rspamd/local.d/antivirus.conf \
+                    < "$templates/antivirus.conf" >/dev/null
+                lxc_attach "$CONTAINER" chmod 0644 /etc/rspamd/local.d/antivirus.conf
+            else
+                warn "gabarit antivirus.conf introuvable ($templates) — module Rspamd non déposé"
+            fi
+
+            lxc_attach "$CONTAINER" systemctl restart clamav-daemon rspamd
+            log "antivirus activé"
+            ;;
+        off)
+            lxc_attach "$CONTAINER" rm -f /etc/rspamd/local.d/antivirus.conf 2>/dev/null || true
+            lxc_attach "$CONTAINER" systemctl restart rspamd 2>/dev/null || true
+            log "antivirus désactivé (défaut)"
+            ;;
+        status)
+            lxc_attach "$CONTAINER" systemctl is-active clamav-daemon 2>/dev/null || echo inactive
+            ;;
+        *)
+            error "usage: mailctl antivirus on|off|status"
+            return 1
             ;;
     esac
 }
@@ -849,13 +1178,20 @@ Aliases:
   alias list           List aliases
 
 Backup:
-  backup [name]        Create backup
-  restore <file>       Restore from backup
+  backup                Create backup (vmail + config + dovecot.conf)
+  restore <file>        Restore from backup + redémarre Dovecot
+  maildir-reconcile     Bascule mbox → Maildir (idempotent)
 
 SSL & DNS:
   ssl status           Show certificate info
   ssl setup            Obtain Let's Encrypt certificate
+  ssl renew            Renew + redeploy + reload (also run weekly by timer)
   dns-setup            Show DNS records to configure
+
+Antivirus (optionnel, off par défaut) :
+  antivirus on          Installer ClamAV + activer le module Rspamd
+  antivirus off         Désactiver le module Rspamd (n'installe rien)
+  antivirus status      État de clamav-daemon
 
 Diagnostics:
   logs [lines]         View mail logs
@@ -1033,9 +1369,12 @@ case "${1:-}" in
     # Backup
     backup)      shift; cmd_backup "$@" ;;
     restore)     shift; cmd_restore "$@" ;;
+    maildir-reconcile) cmd_maildir_reconcile ;;
+    sieve)       shift; cmd_sieve "$@" ;;
     # SSL, DNS, DKIM
     ssl)         shift; cmd_ssl "$@" ;;
     dkim)        shift; cmd_dkim "$@" ;;
+    antivirus)   shift; cmd_antivirus "$@" ;;
     dns-setup)   cmd_dns_setup ;;
     # Diagnostics
     logs)        shift; cmd_logs "$@" ;;

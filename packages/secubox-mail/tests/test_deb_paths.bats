@@ -8,7 +8,7 @@
     [ -n "$deb" ] || skip "no .deb built yet (run dpkg-buildpackage first)"
     local files
     files=$(dpkg-deb -c "$deb" | awk '{print $6}')
-    for stub in lxc.sh install.sh migrate.sh rspamd.sh users.sh; do
+    for stub in lxc.sh install.sh migrate.sh rspamd.sh users.sh toml.sh; do
         echo "$files" | grep -qE "/usr/lib/secubox/mail/lib/${stub}\$" \
             || { echo "MISSING in deb: $stub"; return 1; }
     done
