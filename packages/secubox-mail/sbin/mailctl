@@ -680,7 +680,7 @@ cmd_backup() {
     mkdir -p "$DATA_PATH/backups"
     local ts tb
     ts="$(date +%Y%m%d-%H%M%S)"
-    tb="$DATA_PATH/backups/mail-$ts.tar.gz"
+    tb="$DATA_PATH/backups/mail_$ts.tar.gz"
     # dovecot.conf vit dans le rootfs du LXC ; on le range à côté du reste.
     local rootfs="${LXC_PATH:-/data/lxc}/$CONTAINER/rootfs"
     tar czf "$tb" \

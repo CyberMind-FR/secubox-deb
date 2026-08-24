@@ -14,7 +14,7 @@ setup() {
   run cmd_backup
   [ "$status" -eq 0 ]
   local tb
-  tb="$(ls "$DATA_PATH"/backups/mail-*.tar.gz)"
+  tb="$(ls "$DATA_PATH"/backups/mail_*.tar.gz)"
   [ -f "$tb" ]
   tar tzf "$tb" | grep -q "vmail/probe.txt"
 }
