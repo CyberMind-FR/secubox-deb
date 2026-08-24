@@ -20,12 +20,20 @@ _flags: dict = flags.load_flags()
 _CACHE_FILE = Path("/var/cache/secubox/webos/services.json")
 
 
+def _live_sockets(sock_dir: str = "/run/secubox") -> frozenset:
+    """Ids joignables via socket (agrégateur ou daemon propre) — signal de santé."""
+    try:
+        return frozenset(p.stem for p in Path(sock_dir).glob("*.sock"))
+    except Exception:
+        return frozenset()
+
+
 def _recompute() -> None:
     """Read menu/health/exposure sources and refresh `_cache` in place."""
     menu = registry.load_menu_cache()
     health = systemd_batch()
     expo = registry.load_exposure_cache()
-    svcs = registry.normalize_services(menu, health, expo)
+    svcs = registry.normalize_services(menu, health, expo, sockets=_live_sockets())
     _cache["services"] = [s.model_dump() for s in svcs]
     _cache["computed_at"] = time.time()
     try:

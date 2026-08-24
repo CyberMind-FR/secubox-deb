@@ -26,12 +26,22 @@ def load_exposure_cache(path: str = "/var/cache/secubox/webos/exposure-health.js
         return {}
 
 
-def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None) -> List[Service]:
+def normalize_services(menu: dict, health: dict, exposure: Optional[dict] = None,
+                       sockets: frozenset = frozenset()) -> List[Service]:
     exposure = exposure or {}
     out: List[Service] = []
     for cat in menu.get("categories", []):
         for item in cat.get("items", []):
-            state = HEALTH_MAP.get((health.get(item["id"]) or {}).get("status"), "unknown")
+            _raw = (health.get(item["id"]) or {}).get("status")
+            state = HEALTH_MAP.get(_raw, "unknown")
+            # Vérité opérationnelle SecuBox : ~110 modules sont servis IN-PROCESS
+            # par l'agrégateur, donc leur unité systemd est inactive/dead alors que
+            # le module RÉPOND via sa socket /run/secubox/<id>.sock. La socket est
+            # le vrai signal de joignabilité : présente ⇒ online, SAUF si l'unité a
+            # réellement échoué (`failed` = alarme, jamais masquée par une socket
+            # périmée).
+            if item["id"] in sockets and _raw != "error":
+                state = "online"
             domain, same_origin = resolve(item)
             rec = exposure.get(domain) if domain else None
             latency = rec.get("latency_ms") if rec else None
