@@ -2,6 +2,7 @@ secubox-webos (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * P1 : registre normalisé — module dédié secubox-webos (socket propre,
     indépendant de l'agrégateur), endpoints /public/services + /services,
-    santé via helper partagé, jointure id↔domaine via menu.d. (ref #1175)
+    santé via helper partagé, jointure id↔domaine via menu.d.
+  * Sert la surface Hall (www/hall, polices locales) + vhost hall.gk2.net. (ref #1175)
 
  -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 12:00:00 +0200
