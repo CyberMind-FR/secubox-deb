@@ -164,16 +164,27 @@ func (c *Client) Topic(id string) (int64, error) {
 }
 
 // Timeline depose un commentaire synchronise sur le ContentObject. POST
-// .../timeline. Le serveur EXIGE authorID>0 (gate d'identite,
-// constraints.md) : un author_id<=0 rend un 400 que cette methode remonte
-// telle quelle plutot que de le faire passer pour un succes.
-func (c *Client) Timeline(id string, authorID int64, author string, offsetMS int64, body string) error {
+// .../timeline.
+//
+// L'IDENTITE N'EST PLUS FOURNIE PAR CE CLIENT (correctif B4,
+// constraints.md/task-B4-report.md) : le BBS est desormais SEUL JUGE de qui
+// a poste — un author_id/author fabrique ou releve d'une source non
+// authentifiee (ex. le pseudo `sbx_radio` cote client, Math.random()) aurait
+// pu attribuer un commentaire persiste au mauvais compte, ou a aucun.
+// Ce client se contente de relayer memberToken — le sbx_token PROPRE du
+// posteur, distinct du jeton de flotte que jeton() signe pour l'appelant
+// (le module radio lui-meme) — dans l'entete X-Sbx-Member. Le serveur
+// verifie ce jeton et resout sub -> membre lui-meme
+// (packages/secubox-bbs/internal/web/api_content.go, membreDepuisJeton) et
+// rend 400 si le jeton est absent, invalide, expire, ou sans compte BBS —
+// remonte tel quel plutot que de passer pour un succes.
+func (c *Client) Timeline(id, memberToken string, offsetMS int64, body string) error {
 	var out struct {
 		OK bool `json:"ok"`
 	}
-	return c.appel(http.MethodPost, "/api/v1/bbs/content/"+id+"/timeline", map[string]any{
-		"author_id": authorID, "author": author, "offset_ms": offsetMS, "body": body,
-	}, &out)
+	return c.appelAvecEntetes(http.MethodPost, "/api/v1/bbs/content/"+id+"/timeline", map[string]any{
+		"offset_ms": offsetMS, "body": body,
+	}, &out, map[string]string{"X-Sbx-Member": memberToken})
 }
 
 // TimelineDe lit les commentaires d'un ContentObject. GET .../timeline.
@@ -193,6 +204,15 @@ func (c *Client) TimelineDe(id string) ([]Comment, error) {
 // Regroupe ici pour que chaque methode publique reste un simple mappage
 // route<->charge, sans repeter la marche a suivre HTTP.
 func (c *Client) appel(methode, chemin string, corps any, out any) error {
+	return c.appelAvecEntetes(methode, chemin, corps, out, nil)
+}
+
+// appelAvecEntetes est appel, avec des entetes SUPPLEMENTAIRES posees
+// APRES Authorization — jamais a sa place. Seule Timeline s'en sert
+// aujourd'hui (X-Sbx-Member, le jeton du posteur, distinct du jeton de
+// flotte qui identifie le module appelant) ; les autres methodes passent
+// `nil` via appel().
+func (c *Client) appelAvecEntetes(methode, chemin string, corps any, out any, entetes map[string]string) error {
 	jeton, err := c.jeton()
 	if err != nil {
 		return err
@@ -213,6 +233,9 @@ func (c *Client) appel(methode, chemin string, corps any, out any) error {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", "Bearer "+jeton)
+	for k, v := range entetes {
+		req.Header.Set(k, v)
+	}
 
 	cl := c.HTTP
 	if cl == nil {

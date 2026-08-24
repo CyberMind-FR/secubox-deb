@@ -6,11 +6,15 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
 // creerContenuTest ouvre un ContentObject via l'API elle-même (round-trip
@@ -31,6 +35,31 @@ func creerContenuTest(t *testing.T, srv *Server) string {
 		t.Fatalf("creerContenuTest : id vide dans %v", j)
 	}
 	return id
+}
+
+// appelSysopMembre : comme appelSysop (jeton de flotte en Authorization),
+// avec en plus l'entête X-Sbx-Member portant le jeton PROPRE du membre
+// posteur — c'est ce que la radio (ou tout autre module) relaie désormais,
+// sans jamais fournir author_id/author elle-même. jetonMembre vide == pas
+// d'entête == anonyme.
+func appelSysopMembre(t *testing.T, srv *Server, methode, chemin, corps, jetonMembre string) (*httptest.ResponseRecorder, map[string]any) {
+	t.Helper()
+	var r *http.Request
+	if corps == "" {
+		r = httptest.NewRequest(methode, chemin, nil)
+	} else {
+		r = httptest.NewRequest(methode, chemin, strings.NewReader(corps))
+		r.Header.Set("Content-Type", "application/json")
+	}
+	r.Header.Set("Authorization", "Bearer "+jetonHS256("le-secret-partage", "admin", time.Hour))
+	if jetonMembre != "" {
+		r.Header.Set("X-Sbx-Member", jetonMembre)
+	}
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, r)
+	var j map[string]any
+	json.Unmarshal(w.Body.Bytes(), &j)
+	return w, j
 }
 
 // ── A5 : create / representation / event / topic / by-ref ─────────────────
@@ -162,14 +191,20 @@ func TestAPIContentParRefInconnuRend404(t *testing.T) {
 	}
 }
 
-// ── A6 : timeline (member-gated) ───────────────────────────────────────────
+// ── A6/B4 : timeline (identité BBS-authoritative, jamais fournie par
+// l'appelant — voir membreDepuisJeton dans api_content.go) ────────────────
 
 func TestAPITimelineGateEtRelecture(t *testing.T) {
-	srv := bancAPI(t)
+	srv, st := banc(t)
+	srv.opt.JWTSecret = "le-secret-partage"
+	if _, err := st.CreateUser("koda", "Koda", store.RoleMember); err != nil {
+		t.Fatal(err)
+	}
 	id := creerContenuTest(t, srv)
 
-	w, j := appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
-		`{"author_id":0,"author":"anon","offset_ms":1000,"body":"x"}`)
+	// Pas d'entête X-Sbx-Member : anonyme, jamais persisté.
+	w, j := appelSysopMembre(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"offset_ms":1000,"body":"x"}`, "")
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("anonyme doit etre refuse (400), code=%d — %s", w.Code, w.Body.String())
 	}
@@ -180,13 +215,30 @@ func TestAPITimelineGateEtRelecture(t *testing.T) {
 		t.Fatalf("la reponse ne doit porter que la clef 'erreur', pas 'error' : %v", j)
 	}
 
-	w2, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
-		`{"author_id":7,"author":"Koda","offset_ms":64000,"body":"excellent"}`)
+	// Jeton mal formé (pas un JWT) : refusé aussi, pas de panique.
+	wGarbage, _ := appelSysopMembre(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"offset_ms":1000,"body":"x"}`, "ceci-nest-pas-un-jwt")
+	if wGarbage.Code != http.StatusBadRequest {
+		t.Fatalf("jeton mal forme doit etre refuse (400), code=%d", wGarbage.Code)
+	}
+
+	// Jeton valide mais dont le sujet n'a pas de compte BBS : refusé.
+	wInconnu, _ := appelSysopMembre(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"offset_ms":1000,"body":"x"}`, jetonPour("inconnu-ici"))
+	if wInconnu.Code != http.StatusBadRequest {
+		t.Fatalf("sujet sans compte BBS doit etre refuse (400), code=%d", wInconnu.Code)
+	}
+
+	// Jeton du membre lui-même : la timeline résout id + nom depuis le
+	// jeton — un author_id/author fourni dans le corps serait ignoré (le
+	// corps ne les accepte même plus).
+	w2, _ := appelSysopMembre(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"offset_ms":64000,"body":"excellent"}`, jetonPour("koda"))
 	if w2.Code != http.StatusOK {
 		t.Fatalf("membre doit passer (200), code=%d — %s", w2.Code, w2.Body.String())
 	}
 
-	w3, j3 := appelSysop(t, srv, "GET", "/api/v1/bbs/content/"+id+"/timeline", "")
+	w3, j3 := appelSysopMembre(t, srv, "GET", "/api/v1/bbs/content/"+id+"/timeline", "", "")
 	if w3.Code != http.StatusOK {
 		t.Fatalf("lecture timeline HTTP %d — %s", w3.Code, w3.Body.String())
 	}
@@ -196,20 +248,27 @@ func TestAPITimelineGateEtRelecture(t *testing.T) {
 	}
 	premier, _ := comments[0].(map[string]any)
 	if premier["author"] != "Koda" || premier["offset_ms"] != float64(64000) {
-		t.Fatalf("commentaire relu inattendu : %v", premier)
+		t.Fatalf("commentaire relu inattendu (author resolu depuis le jeton) : %v", premier)
 	}
 }
 
 func TestAPITimelineOrdonneeParOffset(t *testing.T) {
-	srv := bancAPI(t)
+	srv, st := banc(t)
+	srv.opt.JWTSecret = "le-secret-partage"
+	if _, err := st.CreateUser("membre-a", "A", store.RoleMember); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateUser("membre-b", "B", store.RoleMember); err != nil {
+		t.Fatal(err)
+	}
 	id := creerContenuTest(t, srv)
 
-	appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
-		`{"author_id":1,"author":"A","offset_ms":5000,"body":"second"}`)
-	appelSysop(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
-		`{"author_id":2,"author":"B","offset_ms":1000,"body":"premier"}`)
+	appelSysopMembre(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"offset_ms":5000,"body":"second"}`, jetonPour("membre-a"))
+	appelSysopMembre(t, srv, "POST", "/api/v1/bbs/content/"+id+"/timeline",
+		`{"offset_ms":1000,"body":"premier"}`, jetonPour("membre-b"))
 
-	w, j := appelSysop(t, srv, "GET", "/api/v1/bbs/content/"+id+"/timeline", "")
+	w, j := appelSysopMembre(t, srv, "GET", "/api/v1/bbs/content/"+id+"/timeline", "", "")
 	if w.Code != http.StatusOK {
 		t.Fatalf("lecture timeline HTTP %d", w.Code)
 	}
@@ -226,7 +285,7 @@ func TestAPITimelineOrdonneeParOffset(t *testing.T) {
 func TestAPITimelineContenuInconnuRend404(t *testing.T) {
 	srv := bancAPI(t)
 	w, _ := appelSysop(t, srv, "POST", "/api/v1/bbs/content/co_inconnu/timeline",
-		`{"author_id":1,"author":"A","offset_ms":0,"body":"x"}`)
+		`{"offset_ms":0,"body":"x"}`)
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("timeline sur contenu inconnu : code %d, attendu 404", w.Code)
 	}
