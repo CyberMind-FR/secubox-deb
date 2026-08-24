@@ -43,12 +43,16 @@ func TestAccueilIncorporableParLeHall(t *testing.T) {
 	}
 }
 
-// SANS CadreParent, /mini n'ouvre RIEN : `frame-ancestors 'self'` seul, jamais
-// une origine tierce par défaut.
-func TestMiniSansParentResteFerme(t *testing.T) {
+// SANS CadreParent, /mini n'ouvre à AUCUN tiers arbitraire — mais le Hall
+// souverain est toujours autorisé (chaîne hall>bbs>radio, #1175). Pas d'autre
+// https:// que hall.gk2.secubox.in / hall.gk2.net.
+func TestMiniSansParentAutoriseSeulementHall(t *testing.T) {
 	srv := &Serveur{}
 	csp := srv.politiqueMini()
-	if !strings.Contains(csp, "frame-ancestors 'self'") || strings.Contains(csp, "https://") {
-		t.Errorf("sans CadreParent, /mini ne doit ouvrir aucune origine : %s", csp)
+	if !strings.Contains(csp, "frame-ancestors 'self' https://hall.gk2.secubox.in https://hall.gk2.net") {
+		t.Errorf("sans CadreParent, /mini doit autoriser le Hall (et lui seul) : %s", csp)
+	}
+	if strings.Contains(csp, "https://bbs") {
+		t.Errorf("sans CadreParent, aucun tiers (ex. bbs) ne doit apparaître : %s", csp)
 	}
 }
