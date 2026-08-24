@@ -725,21 +725,26 @@ function setMenu(name){
       p.classList.add('hidden');
     }
   });
-  document.querySelectorAll('.mnav [data-menu]').forEach(b=>b.classList.toggle('on',b.dataset.menu===name));
+  document.querySelectorAll('[data-menu]').forEach(b=>b.classList.toggle('on',b.dataset.menu===name));
   const mm=name?document.getElementById('menu-'+name):null;
   if(mm){ // aligne le panneau sous son bouton
-    const t=document.querySelector('.mnav [data-menu="'+name+'"]');
+    const t=document.querySelector('[data-menu="'+name+'"]');
     const mast=document.querySelector('.mast');
     const hb=mast?Math.round(mast.getBoundingClientRect().bottom):56;
     const touch=!matchMedia('(hover:hover)').matches;   // tactile = pas de survol
     if(touch){ // téléphone : dropdown compact (largeur bornée, PAS pleine feuille)
       const w=Math.min(340, window.innerWidth-16);
-      let left=8; if(t){ const r=t.getBoundingClientRect(); left=Math.max(8, Math.min(Math.round(r.left), window.innerWidth-w-8)); }
+      let left=8;
+      if(t){ const r=t.getBoundingClientRect();
+        left=(r.left+r.width/2>window.innerWidth/2)?Math.round(r.right-w):Math.round(r.left);
+        left=Math.max(8, Math.min(left, window.innerWidth-w-8)); }
       mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+4)+'px';
     } else if(t){ // desktop : dropdown aligné sous le titre
       const r=t.getBoundingClientRect();
       const w=mm.classList.contains('mosaic')?Math.min(580,window.innerWidth-24):264;
-      let left=Math.round(r.left); if(left+w>window.innerWidth-12) left=Math.max(12,window.innerWidth-12-w);
+      let left=(r.left+r.width/2>window.innerWidth/2)?Math.round(r.right-w):Math.round(r.left);
+      if(left+w>window.innerWidth-12) left=window.innerWidth-12-w;
+      if(left<12) left=12;
       mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+2)+'px';
     }
     mm.classList.remove('hidden');

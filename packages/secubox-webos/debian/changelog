@@ -1,3 +1,18 @@
+secubox-webos (1.0.30-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif : le menu contextuel s'ouvrait collé au BORD GAUCHE de l'écran au
+    lieu de tomber sous son bouton. setMenu ne cherchait son déclencheur que
+    dans `.mnav` ; or le titre-menu du service vit maintenant dans la barre du
+    service. Sans déclencheur trouvé, le panneau gardait son `left` par défaut.
+    La recherche devient globale — chaque menu retombe sous SON bouton.
+  * Un déclencheur situé dans la moitié droite de l'écran aligne désormais son
+    panneau par la DROITE (façon menubar) : l'aligner par la gauche le faisait
+    déborder. Bornage à l'écran conservé, desktop comme tactile.
+  * Vérifié à 390, 1400 et 1680px, sur les trois menus : chacun chevauche bien
+    son bouton et reste entièrement dans l'écran. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 02:55:00 +0200
+
 secubox-webos (1.0.29-1~bookworm1) bookworm; urgency=medium
 
   * Le TITRE du service EST désormais le déclencheur de sa navigation : un seul
