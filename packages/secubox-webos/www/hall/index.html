@@ -108,7 +108,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .topnav .who b{font-size:.82rem} .topnav .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
 
 /* ── shell ───────────────────────────────────────────────── */
-.shell{display:grid;grid-template-columns:214px 1fr;max-width:1560px;margin:0 auto}
+.shell{display:block;max-width:1560px;margin:0 auto;position:relative}
+/* Le menu SBX est désormais un MÉGAMENU en surimpression, ouvert depuis le bouton
+   Accueil de la barre (plus de sidebar permanente → contenu pleine largeur). */
+.megamenu{position:fixed;top:108px;left:clamp(10px,3vw,24px);width:256px;border-radius:16px;
+  box-shadow:var(--lift);z-index:60;height:auto;min-height:0;max-height:calc(100vh - 128px);overflow-y:auto;
+  border:1px solid var(--nav-line);animation:mmpop .14s ease}
+@keyframes mmpop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.megamenu{animation:none}}
+.megamenu.hidden{display:none}
+.menu-backdrop{position:fixed;inset:0;z-index:55;background:transparent}
+.menu-backdrop.hidden{display:none}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
 .rail .sbx{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;border-bottom:1px solid var(--nav-line);margin-bottom:10px}
@@ -251,7 +261,7 @@ body:has(#view-embed:not(.hidden)) .srcnote{display:none}
   <div class="mast-main">
     <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span><span class="sub">hall.gk2.secubox.in · bureau souverain</span></span></a>
     <nav class="mnav" aria-label="Sections">
-      <a class="it on" data-view="accueil"><span>🏠</span> Accueil</a>
+      <a class="it" data-menu="1" title="Ouvrir le menu SBX"><span>☰</span> Accueil <span style="opacity:.6">▾</span></a>
       <a class="it" data-view="systeme"><span>🗂️</span> Services</a>
       <a class="it"><span>📓</span> Carnet</a>
       <a class="it"><span>🔔</span> Alertes <span class="badge">3</span></a>
@@ -273,10 +283,11 @@ body:has(#view-embed:not(.hidden)) .srcnote{display:none}
   </div>
 </header>
 
+<div id="menu-backdrop" class="menu-backdrop hidden"></div>
 <div class="shell">
-  <nav class="rail" aria-label="Menu SBX">
+  <div id="megamenu" class="rail megamenu hidden" aria-label="Menu SBX">
     <div class="sbx"><div class="mk">🦝</div><b class="serif">SBX</b></div>
-    <a class="on" data-nav="accueil"><span class="g">🏠</span> Accueil</a>
+    <a data-nav="accueil"><span class="g">🏠</span> Accueil</a>
     <h4>Services principaux</h4>
     <div id="railfeat"></div>
     <div class="sep"></div>
@@ -285,7 +296,7 @@ body:has(#view-embed:not(.hidden)) .srcnote{display:none}
       <a data-nav="aide"><span class="g">❔</span> Aide</a>
       <a href="/api/v1/webos/../../../login.html"><span class="g">⎋</span> Déconnexion</a>
     </div>
-  </nav>
+  </div>
 
   <main class="main">
     <!-- ACCUEIL : services principaux (curation all.gk2.net) -->
@@ -500,12 +511,21 @@ function showEmbed(id){
   document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
   showView('embed');
 }
+// Mégamenu SBX en surimpression, ouvert depuis le bouton Accueil de la barre.
+function setMenu(open){
+  document.getElementById('megamenu').classList.toggle('hidden',!open);
+  document.getElementById('menu-backdrop').classList.toggle('hidden',!open);
+}
 document.addEventListener('click',e=>{
+  const mn=e.target.closest('[data-menu]'); if(mn){ e.preventDefault();
+    setMenu(document.getElementById('megamenu').classList.contains('hidden')); return; }
+  if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
   const emb=e.target.closest('[data-embed]');
-  if(emb && !e.target.closest('.open')){ showEmbed(emb.dataset.embed); return; }
-  const nav=e.target.closest('[data-nav]'); if(nav){ showView(nav.dataset.nav); return; }
+  if(emb && !e.target.closest('.open')){ showEmbed(emb.dataset.embed); setMenu(false); return; }
+  const nav=e.target.closest('[data-nav]'); if(nav){ showView(nav.dataset.nav); setMenu(false); return; }
   const tv=e.target.closest('.mnav .it[data-view]'); if(tv){ showView(tv.dataset.view); return; }
 });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
 const root=document.documentElement;
 document.getElementById('theme').addEventListener('click',()=>{
   const c=root.getAttribute('data-theme');
