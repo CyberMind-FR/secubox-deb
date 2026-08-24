@@ -1,3 +1,17 @@
+secubox-bbs (0.30.0-1~bookworm1) bookworm; urgency=medium
+
+  * Newsroom : « À la une » plafonné à 12 dossiers — au-delà, le carrousel
+    s'étirait sans fin (glisser interminable, DOM lourd) ; les plus récents
+    d'abord, le reste reste accessible via les salons. (ref #1180)
+  * Cardlet dossier : le DERNIER média image du fil devient le fond ambiant de
+    la carte (voile discret 14 %, texte lisible par-dessus). (ref #1180)
+  * Messages : les images jointes dans le corps d'un message passent à toute la
+    largeur (jusqu'à 720 px, 3-4× plus grand qu'à leur taille native) et
+    deviennent cliquables → agrandissement plein écran (lightbox : clic ou Échap
+    pour fermer). (ref #1180)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 11:36:51 +0200
+
 secubox-bbs (0.29.0-1~bookworm1) bookworm; urgency=medium
 
   * Réseaux : le salon « reseaux » (fils poussés par SocialRelay) se rend

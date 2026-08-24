@@ -119,6 +119,11 @@ a{color:inherit;text-decoration:none}
   pointer-events:none;z-index:3;filter:drop-shadow(0 3px 6px rgba(0,0,0,.30))}
 @media (max-width:520px){.dossier .zani-stamp{width:60px;height:60px;right:58px;top:-6px}}
 .dossier:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
+/* #1180 : le dernier média image du fil en fond ambiant de la carte. Voile
+   discret (14 %) pour laisser le texte lisible par-dessus ; tout le contenu
+   passe au-dessus via z-index. */
+.dossier.hasbg .dbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.14;pointer-events:none}
+.dossier.hasbg > *:not(.dbg){position:relative;z-index:1}
 .src{display:flex;border-bottom:1px dashed var(--line-2)}
 .src .kind{flex:none;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:13px 6px;border-right:1px dashed var(--line-2);background:var(--soft)}
 .src .kind .em{font-size:1.45rem;line-height:1} .src .kind .lb{font-family:"JetBrains Mono";font-size:.52rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);text-align:center}

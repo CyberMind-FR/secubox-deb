@@ -888,6 +888,16 @@ video.jointe{max-height:60vh; background:#000}
 .jointe{max-width:100%;height:auto;border-radius:8px;display:block;margin:8px 0}
 video.jointe{width:100%;max-height:70vh;background:#000}
 audio.jointe{width:100%}
+/* #1180 : dans le CORPS d'un message, les images jointes s'affichaient à leur
+   taille native — une capture d'écran finissait minuscule dans la colonne. On
+   les porte à toute la largeur (jusqu'à 720 px, 3-4× plus grand) et on les rend
+   cliquables pour un agrandissement plein écran (lightbox, cf. coquille.js). */
+.post .bd img.jointe{width:100%;max-width:720px;cursor:zoom-in}
+/* Lightbox : calque plein écran créé par coquille.js au clic sur img.jointe ;
+   clic n'importe où ou touche Échap pour fermer. */
+.lightbox{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.92);cursor:zoom-out;padding:2vmin}
+.lightbox img{max-width:96vw;max-height:96vh;width:auto;height:auto;border-radius:6px;box-shadow:0 10px 50px rgba(0,0,0,.6)}
 .jointe-pdf{width:100%;height:min(70vh,720px);border:1px solid var(--line);border-radius:10px;margin:8px 0}
 .jointe-pdf-lien{display:inline-flex;align-items:center;gap:6px;font-size:.85rem;color:var(--sky);text-decoration:none;margin-bottom:8px}
 .jointe-pdf-lien:hover{text-decoration:underline}
