@@ -1,5 +1,6 @@
 {
   "id": "droplet",
+  "domain": "depot.gk2.secubox.in",
   "name": "Droplet",
   "category": "boot",
   "icon": "📤",

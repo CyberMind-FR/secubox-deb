@@ -1,5 +1,6 @@
 {
   "id": "nextcloud",
+  "domain": "nc.gk2.secubox.in",
   "name": "Nextcloud",
   "category": "mesh",
   "icon": "☁️",

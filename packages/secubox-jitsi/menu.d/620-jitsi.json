@@ -1,5 +1,6 @@
 {
   "id": "jitsi",
+  "domain": "meet.gk2.secubox.in",
   "name": "Jitsi Meet",
   "icon": "📹",
   "path": "/jitsi/",

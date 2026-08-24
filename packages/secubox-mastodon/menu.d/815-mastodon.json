@@ -1,5 +1,6 @@
 {
   "id": "mastodon",
+  "domain": "social.gk2.secubox.in",
   "name": "Mastodon",
   "category": "mesh",
   "icon": "🐘",

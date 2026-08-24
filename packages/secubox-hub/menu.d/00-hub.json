@@ -1,5 +1,6 @@
 {
   "id": "hub",
+  "domain": "admin.gk2.secubox.in",
   "name": "Dashboard",
   "category": "root",
   "icon": "🏠",
