@@ -35,6 +35,23 @@ WWW_PUSHED=0   # au moins un module a déposé des assets www/ → purger le cac
 
 ssh_run() { ssh -o StrictHostKeyChecking=no "$HOST" "$@"; }
 
+# Repertoire d'installation REEL du module, lu dans debian/rules — la seule
+# source de verite.
+#
+# Un paquet `secubox-<x>` n'installe PAS dans /usr/lib/secubox/secubox-<x> mais
+# dans /usr/lib/secubox/<x> (et parfois ailleurs : secubox-yggdrasil s'installe
+# dans `mesh`). deploy.sh visait /usr/lib/secubox/$pkg : sur 126 paquets portant
+# un dossier api/, 126 recevaient donc leur code Python dans un repertoire que
+# le service ne lit jamais. Seul www/ arrivait a bon port, ce qui rendait la
+# panne invisible — l'interface changeait, l'API non.
+module_dir() {
+  local pkg="$1" d
+  d=$(grep -ohE "usr/lib/secubox/[a-z0-9_-]+" "$REPO/packages/$pkg/debian/rules" 2>/dev/null \
+      | head -1 | sed "s|.*/||")
+  [[ -n "$d" ]] && { echo "$d"; return; }
+  echo "${pkg#secubox-}"   # repli : la convention, si rules ne dit rien
+}
+
 # Purge du cache média du WAF après avoir déposé des assets www/. Le cache de
 # sbxwaf (TTL 1 h) sert CSS/JS/images/polices ; un asset redéployé dont l'amont
 # ne change pas l'ETag reste servi périmé jusqu'à la fin du TTL (le « vieux
@@ -55,10 +72,14 @@ deploy_pkg() {
 
   log "Déploiement $pkg → $HOST"
 
-  # ── Copier l'API Python ──
-  ssh_run "mkdir -p /usr/lib/secubox/${pkg}/api"
-  rsync -az --delete -e "ssh -o StrictHostKeyChecking=no" \
-    "${pkg_dir}/api/" "${HOST}:/usr/lib/secubox/${pkg}/api/"
+  # ── Copier l'API Python (dans le repertoire REELLEMENT lu par le service) ──
+  local mod; mod="$(module_dir "$pkg")"
+  if [[ -d "${pkg_dir}/api" ]]; then
+    log "  api → /usr/lib/secubox/${mod}/api"
+    ssh_run "mkdir -p /usr/lib/secubox/${mod}/api"
+    rsync -az --delete -e "ssh -o StrictHostKeyChecking=no" \
+      "${pkg_dir}/api/" "${HOST}:/usr/lib/secubox/${mod}/api/"
+  fi
 
   # ── Copier le frontend www/ ──
   # NOTE: Do NOT use --delete here as multiple packages share /usr/share/secubox/www/

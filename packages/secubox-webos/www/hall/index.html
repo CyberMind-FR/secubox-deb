@@ -61,7 +61,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 
 /* ── masthead ─────────────────────────────────────────────── */
 /* Entête AletheiaVox — repris de bbs.gk2 (logo médaille + format). */
-.mast{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);
+.mast{position:sticky;top:0;z-index:56;background:color-mix(in srgb,var(--paper) 88%,transparent);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
 .mast-main{display:flex;align-items:center;gap:16px;padding:10px clamp(14px,3vw,26px);max-width:1560px;margin:0 auto}
 .logo{display:flex;align-items:center;gap:12px;flex:none}
@@ -69,7 +69,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .logo-t{display:flex;flex-direction:column}
 .logo-h{font-family:"Fraunces","Cinzel";font-size:1.4rem;font-weight:700;letter-spacing:.02em;line-height:1;color:var(--sky)}
 .logo .sub{font-family:"JetBrains Mono";font-size:.55rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-.mast .drop{flex:1;max-width:440px;position:relative}
+.mast .drop{flex:1;min-width:150px;max-width:440px;position:relative}
 .mast .drop input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1.5px solid var(--line-2);
   background:var(--panel);color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem;outline:none;transition:.15s}
 .mast .drop input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-s)}
@@ -81,7 +81,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mast-actions .who .av{width:30px;height:30px;border-radius:50%;background:var(--gold-s);display:grid;place-items:center;font-size:.95rem}
 .mast-actions .who b{font-size:.82rem}
 .mast-actions .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
-@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}}
+@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}
+}
 
 /* ── top nav ─────────────────────────────────────────────── */
 /* Nav de SECTIONS fusionnée dans la barre unique (mast-main). */
@@ -95,7 +96,20 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    sur l'entrée fait consommer le 1er tap par l'état survol → le clic n'ouvre jamais
    le mégamenu. On la neutralise donc sur tactile. */
 @media(hover:hover){.mnav .it:hover:not(.on){background:var(--soft);color:var(--ink)}}
+/* .mnav .it{display:flex} écrase .hidden : la règle doit être aussi spécifique. */
+.mnav .it.hidden{display:none}
 .mnav .badge{background:var(--coral);color:#fff;border-radius:20px;font-size:.6rem;padding:1px 6px;font-weight:700}
+@media(max-width:720px){
+/* #1187 — le 3e menu (contextuel) faisait DÉBORDER la barre horizontalement sur
+   téléphone : le document passait à 619px pour un écran de 390, et le pop se
+   calait hors de l'écran. Sous 720px les menus tombent en pictos seuls — le
+   libellé est un nœud de texte nu, d'où le font-size:0 rétabli sur les enfants. */
+.mnav .it{font-size:0;gap:0;padding:7px 7px}
+.mnav .it>span{font-size:.95rem} .mnav .it .ca{font-size:.62rem} .mnav .it .badge{font-size:.58rem}
+.nav-embed #eb-name{display:none}
+.nav-embed{padding-left:8px;margin-left:2px;gap:6px}
+.mast-main{gap:8px}
+}
 @media(max-width:960px){.mast-main{flex-wrap:wrap} .mnav{order:3}}
 /* Contexte du service embarqué, greffé dans le headbar racine (barre unique). */
 .nav-embed{display:inline-flex;align-items:center;gap:9px;padding-left:13px;margin-left:4px;border-left:2px solid var(--line-2)}
@@ -125,7 +139,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    gros bloc navy de l'ancienne sidebar. */
 .megamenu{background:var(--panel);color:var(--ink);padding:6px}
 .megamenu .sbx{display:none}
-.megamenu a{color:var(--ink);padding:7px 10px;font-size:.85rem;gap:11px;border-radius:8px;margin:0}
+.megamenu a{color:var(--ink);padding:7px 10px;font-size:.85rem;gap:9px;border-radius:8px;margin:0;display:flex;align-items:center}
+.megamenu a .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .megamenu a:hover{background:var(--soft)}
 .megamenu a.on{background:var(--sky-s);color:var(--sky);font-weight:600}
 .megamenu h4{color:var(--dim);padding:9px 10px 3px}
@@ -133,31 +148,29 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .megamenu .bottom{border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
 .megamenu .bottom a{color:var(--dim)}
 .megamenu .g{opacity:.95}
-/* Sous-menu « navbar embarquée » (rubriques BBS) = FLYOUT en cascade au SURVOL,
-   comme un menu système macOS. L'entrée porte un chevron ›. */
-.megamenu .has-sub{position:relative}
-.megamenu .has-sub .chev{margin-left:auto;opacity:.55;font-size:1.05rem;padding:0 4px;transition:transform .12s}
-/* Bulle de sous-menu = position FIXE (coords calculées en JS) pour ÉCHAPPER au
-   clip `overflow-y:auto` du mégamenu — en absolu le flyout était rogné, donc
-   inaccessible. z-index au-dessus du mégamenu. */
-.megamenu .submenu{position:fixed;width:230px;background:var(--panel);
-  border:1px solid var(--line);border-radius:13px;box-shadow:var(--lift);padding:6px;display:none;z-index:80;
-  max-height:74vh;overflow-y:auto}
-.megamenu .submenu a{padding:5px 9px;font-size:.78rem;color:var(--dim)}
-.megamenu .submenu .subhead{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
-  font-weight:700;padding:8px 9px 2px;margin-top:3px;border-top:1px solid var(--line)}
-@media(hover:hover){.megamenu .submenu a:hover{background:var(--soft);color:var(--ink)}}
-.megamenu .has-sub .chev.subopen{transform:rotate(90deg)}
-/* Sur TACTILE (détection par capacité de survol, indépendant de la largeur —
-   un téléphone 700px n'a pas de :hover) : la bulle se déplie INLINE au tap du
-   chevron (.has-sub.subopen), jamais en flyout. */
-@media(hover:none){
-  .megamenu .submenu{position:static !important;left:auto !important;top:auto !important;width:auto;box-shadow:none;
-    border:none;border-left:1px solid var(--line);border-radius:0;margin:0 0 4px 14px;padding:2px 0 2px 4px}
-  .megamenu .has-sub.subopen>.submenu{display:block}
-  .megamenu .has-sub .chev{padding:6px 8px;margin-left:auto;font-size:1.15rem}
-}
-.megamenu .submenu .st{margin-left:auto;width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
+/* #1187 — PLUS AUCUN SOUS-MENU dans la barre système : les menus sont des
+   listes PLATES (sélection d'apps + fonctions globales). La navigation propre
+   au service actif descend dans le panneau contextuel de droite (.ctx). */
+.megamenu .grp{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);padding:9px 10px 3px;margin-top:3px;border-top:1px solid var(--line)}
+.megamenu .grp:first-child{border-top:none;margin-top:0}
+.megamenu a .st{margin-left:auto;width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+/* #1187 — chaque ligne de menu (Services, Système, contextuel) porte les mêmes
+   deux actions à DROITE : ⚙️ console admin · ⧉ nouvel onglet. Ce sont elles qui
+   remplacent les anciennes bulles de sous-menu. */
+/* Le menu SYSTÈME porte beaucoup plus d'entrées que Services : il se déplie en
+   MOSAÏQUE (grille), les catégories restant des intertitres pleine largeur. */
+.megamenu.mosaic .gsys{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px}
+.megamenu.mosaic .gsys .grp{grid-column:1/-1}
+.megamenu.mosaic .gsys a{padding:7px 8px;font-size:.8rem;gap:7px;border:1px solid transparent}
+@media(hover:hover){.megamenu.mosaic .gsys a:hover{border-color:var(--line)}}
+.rowact{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:6px}
+.rowact .ra{width:20px;height:20px;border:0;border-radius:6px;background:transparent;padding:0;
+  font-size:.72rem;line-height:1;display:grid;place-items:center;opacity:.4;transition:.12s;color:inherit}
+@media(hover:hover){.rowact .ra:hover{opacity:1;background:var(--soft);transform:scale(1.12)}}
+@media(hover:none){.rowact .ra{opacity:.6;width:26px;height:26px;font-size:.8rem}}
+
+.megamenu a .st.mono{width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
 .rail .sbx{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;border-bottom:1px solid var(--nav-line);margin-bottom:10px}
@@ -279,6 +292,15 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .embed-bar .grow{flex:1}
 .embed-bar .eb-btn{padding:7px 13px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font-size:.8rem;text-decoration:none}
 .embed-bar .eb-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+/* #1187 — déclencheur du menu contextuel : dans la barre du service, juste à
+   gauche de ⟳. Il n'existe que si le service expose réellement une navigation. */
+.nav-embed .ctx-btn{display:inline-flex;align-items:center;gap:7px;padding:5px 11px}
+.nav-embed .ctx-btn b{font-family:"Fraunces";font-size:1rem}
+.nav-embed .ctx-btn .ca{font-size:.62rem;opacity:.65}
+.nav-embed .ctx-btn.on{border-color:var(--sky);color:var(--sky)}
+/* Sans navigation exposée : simple titre, ni chevron ni interaction. */
+.nav-embed .ctx-btn.no-menu{cursor:default;border-color:transparent;background:transparent}
+.nav-embed .ctx-btn.no-menu .ca{display:none}
 .embed-hint{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim);margin:0 4px 8px}
 /* L'embed REMPLIT la carte : hauteur = viewport - headbar (mast+topnav) - marges.
    Aucune partie perdue : le service défile DANS l'iframe. En embed on retire aussi
@@ -289,6 +311,22 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 .aide-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;max-width:760px;line-height:1.6}
 .aide-card ul{margin:8px 0} .aide-card li{margin:4px 0}
 .fcard.clic{cursor:pointer}
+
+/* ── #1187 · switch de mode (3 petits boutons emoji) ─────────── */
+/* Remplace le bouton « ⧉ Onglet ». ⧉ sort en onglet réel ; ▦ et ⚙️ sont deux
+   vues VIVANTES du même service — chacune garde sa propre iframe, la bascule
+   est instantanée et NE RECHARGE PAS l'app. */
+.modesw{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line-2);
+  border-radius:9px;background:var(--soft)}
+.modesw button{width:26px;height:24px;border:0;border-radius:7px;background:transparent;
+  font-size:.82rem;line-height:1;display:grid;place-items:center;opacity:.55;transition:.12s}
+.modesw button:hover{opacity:1;background:var(--panel)}
+.modesw button.on{opacity:1;background:var(--panel);box-shadow:0 1px 2px rgba(20,45,60,.14)}
+/* Mode courant : bouton retiré du switch (redondant avec la vue affichée). */
+.modesw button.self{display:none}
+
+/* #1187 — la nav du service actif est un MENU POP de la mégabar (#menu-contexte),
+   pas une colonne : elle réutilise tel quel le rendu .megamenu de Services. */
 </style>
 
 </head>
@@ -300,17 +338,27 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
       <button class="it" type="button" data-nav="accueil"><span>🏠</span> Accueil</button>
       <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
       <button class="it" type="button" data-menu="systeme"><span>🗄️</span> Système <span class="ca">▾</span></button>
-      <button class="it" type="button"><span>🔔</span> Alertes <span class="badge">3</span></button>
-      <button class="it" type="button"><span>👤</span> Profil</button>
     </nav>
     <div class="drop"><span class="ico" aria-hidden="true">⌕</span><input id="q" type="search" placeholder="chercher un service…" aria-label="Chercher un service"></div>
     <!-- Contexte du service embarqué, GREFFÉ dans la barre unique (#1175). -->
     <span id="nav-embed" class="nav-embed hidden">
-      <span class="ne-ic" id="eb-ic">▦</span>
-      <b class="serif" id="eb-name">Service</b>
-      <span class="state"><i class="led" id="eb-led"></i></span><span id="eb-host" hidden></span>
+      <!-- #1187 — le TITRE du service EST le déclencheur de sa navigation :
+           un seul objet dans la barre, à gauche de ⟳. Sans menu exposé, il
+           reste un simple titre (pas de chevron, pas de clic). -->
+      <button class="eb-btn ctx-btn" type="button" id="mnav-ctx" data-menu="contexte"
+              title="Navigation du service">
+        <span class="ne-ic" id="eb-ic">▦</span>
+        <b class="serif" id="eb-name">Service</b>
+        <i class="led" id="eb-led"></i>
+        <span class="ca">▾</span>
+      </button>
+      <span id="eb-host" hidden></span>
       <button class="eb-btn" id="eb-reload" title="Recharger">⟳</button>
-      <a class="eb-btn" id="eb-open" target="_blank" rel="noopener" title="Ouvrir en plein onglet">⧉ Onglet</a>
+      <span class="modesw" id="modesw" role="group" aria-label="Mode d'affichage">
+        <button type="button" data-mode="tab"   title="Ouvrir en onglet réel">⧉</button>
+        <button type="button" data-mode="admin" title="WebUI admin du module">⚙️</button>
+        <button type="button" data-mode="embed" title="Service embarqué" class="on">▦</button>
+      </span>
     </span>
     <div class="mast-actions">
       <button class="ibtn" id="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
@@ -331,14 +379,21 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     </div>
   </div>
   <!-- Menu SYSTÈME (modules du parc par catégorie, chacune sa bulle) -->
-  <div id="menu-systeme" class="megamenu hidden" data-panel="systeme" aria-label="Menu Système">
+  <div id="menu-systeme" class="megamenu mosaic hidden" data-panel="systeme" aria-label="Menu Système">
     <h4>Système — modules du parc</h4>
-    <div id="sysmenu"></div>
+    <div id="sysmenu" class="gsys"></div>
     <div class="bottom">
       <a data-nav="systeme"><span class="g">🗄️</span> Vue complète du parc</a>
       <a data-nav="aide"><span class="g">❔</span> Aide</a>
       <a href="/api/v1/webos/../../../login.html"><span class="g">⎋</span> Déconnexion</a>
     </div>
+  </div>
+
+  <!-- Menu CONTEXTUEL : la nav du service actif, en POP de la mégabar (pas en
+       colonne permanente) — même rendu que Services. -->
+  <div id="menu-contexte" class="megamenu hidden" data-panel="contexte" aria-label="Navigation du service">
+    <h4 id="ctx-h">Navigation</h4>
+    <div id="ctx"></div>
   </div>
 
   <main class="main">
@@ -378,7 +433,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     <!-- SERVICE EMBARQUÉ : page propre, vhost réel inline -->
     <section id="view-embed" class="hidden">
       <div class="embed-hint" id="eb-hint">Si la page reste vide, ce service n'autorise pas encore l'embarquement — ouvrez-le en onglet.</div>
-      <div class="embed-wrap"><iframe id="eb-frame" title="Service embarqué" referrerpolicy="no-referrer"></iframe></div>
+      <div class="embed-wrap" id="eb-frames"></div>
     </section>
 
     <!-- SYSTÈME : tous les modules du registre -->
@@ -492,20 +547,13 @@ function render(data,src){
   const svc=data.services||[]; const byId={}; svc.forEach(s=>byId[s.id]=s); _reg=byId;
   // sidebar featured
   const rail=document.getElementById('railfeat'); let rh='';
-  FEATURED.forEach(f=>{ const s=byId[f.id]; const st=s?((s.health&&s.health.state)||'unknown'):'unknown';
-    const col=st==='online'?'var(--mint)':st==='degraded'?'var(--amber)':st==='offline'?'var(--coral)':'var(--nav-dim)';
-    // Chaque service = une ENTRÉE + sa BULLE de sous-menu (multi-menus façon menubar).
-    rh+='<div class="has-sub">'
-      +'<a data-embed="'+esc(f.id)+'"><span class="g">'+f.icon+'</span> '+esc(f.label)
-        +'<span class="st" style="background:'+col+'"></span><span class="chev">›</span></a>'
-      +'<div class="submenu" id="sub-'+esc(f.id)+'">'
-        +'<a data-embed="'+esc(f.id)+'"><span class="g">🔎</span> Ouvrir dans le Hall</a>'
-        +'<a data-admin="'+esc(f.id)+'" data-path="/'+esc(f.id)+'/"><span class="g">⚙️</span> Console admin</a>'
-        +'<a href="https://'+esc(f.url)+'/" target="_blank" rel="noopener"><span class="g">↗</span> Ouvrir un onglet</a>'
-      +'</div></div>';
+  // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
+  // La nav propre au service descend dans le panneau contextuel (.ctx).
+  FEATURED.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
+    rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
+                 admin:f.id, tab:'https://'+f.url+'/'});
   });
   rail.innerHTML=rh;
-  loadBbsSubmenu();   // « navbar embarquée » BBS → salons dans la bulle BBS
   // featured grid (principal)
   const fg=document.getElementById('featgrid'); let fh='';
   FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
@@ -530,19 +578,33 @@ function render(data,src){
   });
   sb.innerHTML=sh; document.getElementById('n-sys').textContent=svc.length+' modules';
   var sbi=document.getElementById('sb-info'); if(sbi) sbi.innerHTML=src;
-  // Menu SYSTÈME : une catégorie = une entrée + sa bulle (modules → console admin).
+  // Menu SYSTÈME : liste PLATE, catégories en simples intertitres (#1187).
   const sm=document.getElementById('sysmenu'); let smh='';
-  CATS.forEach(c=>{ const items=svc.filter(s=>s.category===c.id); if(!items.length) return;
-    smh+='<div class="has-sub"><a data-nav="systeme"><span class="g">'+c.icon+'</span> '+esc(c.name)
-      +'<span class="st mono">'+items.length+'</span><span class="chev">›</span></a>'
-      +'<div class="submenu">'
-      + items.slice(0,24).map(s=>{ const st=(s.health&&s.health.state)||'unknown';
-          const col=st==='online'?'var(--mint)':st==='degraded'?'var(--amber)':st==='offline'?'var(--coral)':'var(--nav-dim)';
-          return '<a data-admin="'+esc(s.id)+'" data-path="'+esc(s.path||('/'+s.id+'/'))+'"><span class="g">·</span> '+esc(s.name||s.id)+'<span class="st" style="background:'+col+'"></span></a>'; }).join('')
-      +'</div></div>';
+  CATS.forEach(c=>{ const items=svc.filter(s2=>s2.category===c.id); if(!items.length) return;
+    smh+='<div class="grp">'+c.icon+' '+esc(c.name)+'</div>';
+    smh+=items.slice(0,24).map(s2=>{ const st=(s2.health&&s2.health.state)||'unknown';
+        // Mosaïque sans bouton rapide : la tuile entière ouvre la console
+        // admin du module (data-mode="admin").
+        return rowHTML({attrs:'data-open="'+esc(s2.id)+'" data-mode="admin"', icon:icon(s2.icon),
+                        label:s2.name||s2.id, state:st}); }).join('');
   });
   if(sm) sm.innerHTML=smh;
-  wireFlyouts();      // survol desktop → bulles fixes (services + système), après build
+}
+// #1187 — UNE seule fabrique de ligne pour les trois menus (Services, Système,
+// panneau contextuel) : emoji · libellé · marqueur · ⚙️ admin · ⧉ onglet.
+// Les deux icônes de droite remplacent les anciennes bulles de sous-menu.
+function rowHTML(o){
+  const led = o.state
+    ? '<span class="st" style="background:'+({online:'var(--mint)',degraded:'var(--amber)',offline:'var(--coral)'}[o.state]||'var(--nav-dim)')+'"></span>'
+    : (o.count!=null ? '<span class="n">'+esc(String(o.count))+'</span>' : '');
+  let act='<span class="rowact">';
+  if(o.admin) act+='<button type="button" class="ra" data-ra="admin" data-id="'+esc(o.admin)+'" title="Console admin">⚙️</button>';
+  // <a> imbriqué dans <a> = HTML invalide : le navigateur ferme la ligne et
+  // éjecte le lien. Les deux actions sont donc des <button> (ouverture en JS).
+  if(o.tab)   act+='<button type="button" class="ra" data-ra="tab" data-href="'+esc(o.tab)+'" title="Nouvel onglet">⧉</button>';
+  act+='</span>';
+  return '<a '+o.attrs+'><span class="g">'+(o.icon||'▦')+'</span>'
+    +'<span class="lb">'+esc(o.label)+'</span>'+led+act+'</a>';
 }
 function tile(cls,lbl,big,small,sub){
   return '<div class="tile '+cls+'"><div class="accent"></div><div class="lbl">'+lbl+'</div>'
@@ -564,7 +626,10 @@ function showView(v){
   // du service (barre unique — #1175). Le mix LIVE des éléments du service
   // (stats/présence/recherche) = P6 postMessage (barre injectée), différé.
   const ne=document.getElementById('nav-embed'); if(ne) ne.classList.toggle('hidden', v!=='embed');
-  // Barre de statut « où suis-je » (embed gère son propre libellé dans showEmbed).
+  // Le menu contextuel n'a de sens que devant un service embarqué.
+  const bc=document.getElementById('mnav-ctx');
+  if(bc && v!=='embed'){ bc.classList.add('hidden'); }
+  // Barre de statut « où suis-je » (embed gère son propre libellé dans openService).
   if(v!=='embed'){
     const L={accueil:'Accueil',systeme:'Système',aide:'Aide'};
     var l=document.getElementById('sb-loc'); if(l) l.textContent=L[v]||v;
@@ -572,95 +637,92 @@ function showView(v){
   }
   window.scrollTo({top:0,behavior:'smooth'});
 }
-// ouvre un service dans sa page propre : le vhost RÉEL embarqué inline.
-function showEmbed(id){
-  const f=FEATURED.find(x=>x.id===id); if(!f) return;
-  const s=_reg[id]||{}; const st=(s.health&&s.health.state)||'unknown';
-  document.getElementById('eb-ic').textContent=f.icon;
-  document.getElementById('eb-name').textContent=f.label;
-  document.getElementById('eb-host').textContent=f.url;
-  document.getElementById('eb-led').className='led '+st;
-  // ?embed=1 → le service masque son entête (barre Hall unique) ; theme= → il
-  // synchronise le skin clair/nuit du Hall (#1175).
+// ── #1187 · moteur de service : 3 modes, une seule nav contextuelle ───────
+// ⧉ onglet réel · ⚙️ WebUI admin · ▦ service embarqué. Les deux modes EMBARQUÉS
+// gardent CHACUN leur iframe vivante : basculer ne recharge pas l'app, on ne
+// fait que montrer l'autre cadre (état, lecture, formulaire en cours préservés).
+const ADMIN_HOST='admin.gk2.secubox.in';
+let _svc=null, _mode='embed', _sub=null, _frames={};
+
+function svcDesc(id){
+  const f=FEATURED.find(x=>x.id===id)||null; const s=_reg[id]||{};
+  return {id:id, label:(f&&f.label)||s.name||id, icon:(f&&f.icon)||icon(s.icon),
+          url:(f&&f.url)||host(s), path:s.path||('/'+id+'/')};
+}
+function modeURL(mode){
+  if(!_svc) return 'about:blank';
+  if(mode==='admin') return 'https://'+ADMIN_HOST+_svc.path;
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  const plain='https://'+f.url+'/';
-  const url=plain+'?embed=1&theme='+th;
-  document.getElementById('eb-open').href=plain;   // onglet = vhost réel standalone
-  document.getElementById('eb-frame').src=url;      // iframe = mode embed (entête masquée)
-  document.getElementById('eb-hint').style.display=EMBEDDABLE.has(id)?'none':'';
-  document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
-  // Barre de statut : service courant + URL relative embarquée (position DANS la
-  // navbar embarquée = P6 postMessage, à venir).
-  var l=document.getElementById('sb-loc'); if(l) l.textContent=f.label;
-  var u=document.getElementById('sb-url'); if(u) u.textContent='· '+f.url+'/';
-  showView('embed');
+  return 'https://'+_svc.url+(_sub||'/')+'?embed=1&theme='+th;
 }
-// Embarque la WEBUI ADMIN d'un module (admin.gk2.secubox.in<path>). MÊME-SITE
-// (*.gk2.secubox.in) → le cookie de session (SameSite=Lax) est transmis dans
-// l'iframe : panneau AUTO-AUTHENTIFIÉ, sans coffre avatar (#1175).
-function showEmbedAdmin(id, path){
+function plainURL(){ return _svc?('https://'+_svc.url+(_sub||'/')):'/'; }
+function frameFor(mode){
+  if(_frames[mode]) return _frames[mode];
+  const f=document.createElement('iframe');
+  f.title='Service embarqué'; f.setAttribute('referrerpolicy','no-referrer');
+  f.src=modeURL(mode); document.getElementById('eb-frames').appendChild(f);
+  _frames[mode]=f; return f;
+}
+// ⧉ ne change pas la vue du Hall : il SORT le service en onglet réel.
+function setMode(mode){
+  if(mode==='tab'){ window.open(plainURL(),'_blank','noopener'); return; }
+  _mode=mode;
+  const f=frameFor(mode), box=document.getElementById('eb-frames');
+  [].forEach.call(box.children, c=>{ c.style.display = (c===f)?'block':'none'; });
+  // Le bouton du mode COURANT s'efface : on est déjà dedans, il ne propose
+  // rien. Ne restent que les sorties — ⧉ onglet réel, et l'autre vue. (#1187)
+  document.querySelectorAll('#modesw button').forEach(b=>{
+    const courant = b.dataset.mode===mode;
+    b.classList.toggle('on', courant);
+    b.classList.toggle('self', courant);
+  });
+  document.getElementById('eb-hint').style.display=
+    (mode==='embed' && _svc && !EMBEDDABLE.has(_svc.id))?'':'none';
+  var u=document.getElementById('sb-url');
+  if(u) u.textContent='· '+modeURL(mode).replace(/^https:\/\//,'').replace(/\?.*$/,'');
+}
+// Point d'entrée UNIQUE — même logique pour tous les services (critère #1187).
+function openService(id, mode, sub, subLabel){
+  const d=svcDesc(id); if(!d) return;
   const s=_reg[id]||{}; const st=(s.health&&s.health.state)||'unknown';
-  path = path || s.path || ('/'+id+'/');
-  const host='admin.gk2.secubox.in'; const url='https://'+host+path;
-  document.getElementById('eb-ic').textContent=icon(s.icon)||'⚙️';
-  document.getElementById('eb-name').textContent=(s.name||id)+' · admin';
+  if(!_svc || _svc.id!==id || (sub||null)!==_sub){   // service ou rubrique changés
+    document.getElementById('eb-frames').innerHTML=''; _frames={};
+  }
+  _svc=d; _sub=sub||null;
+  document.getElementById('eb-ic').textContent=d.icon;
+  document.getElementById('eb-name').textContent=d.label+(subLabel?' · '+subLabel:'');
+  document.getElementById('eb-host').textContent=d.url;
   document.getElementById('eb-led').className='led '+st;
-  document.getElementById('eb-open').href=url;
-  document.getElementById('eb-frame').src=url;
-  document.getElementById('eb-hint').style.display='none';
-  document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
-  var l=document.getElementById('sb-loc'); if(l) l.textContent=(s.name||id)+' · admin';
-  var u=document.getElementById('sb-url'); if(u) u.textContent='· '+host+path;
+  document.getElementById('eb-reload').onclick=()=>{ const f=_frames[_mode]; if(f) f.src=modeURL(_mode); };
+  var l=document.getElementById('sb-loc'); if(l) l.textContent=d.label+(subLabel?' · '+subLabel:'');
+  setMode(mode||_mode||'embed');
+  loadCtx(id, sub);
   showView('embed');
 }
-// « Navbar embarquée » BBS : ses rubriques (lues côté serveur via bbs.sock) en
-// SOUS-MENU du mégamenu. Clic → embarque le salon (bbs.gk2.secubox.in/c/<slug>).
-function loadBbsSubmenu(){
-  fetch('/api/v1/webos/public/menu/bbs',{headers:{'Accept':'application/json'}})
+// LA nav du service actif — descendue de la barre système vers le panneau DROIT
+// (« put down to its reference »). Les salons BBS vivent désormais ici.
+function loadCtx(id, cur){
+  const ctx=document.getElementById('ctx'), bt=document.getElementById('mnav-ctx');
+  ctx.innerHTML='';
+  // Par défaut le titre n'est qu'un titre ; il ne devient déclencheur que si le
+  // service expose réellement une navigation.
+  bt.classList.add('no-menu'); bt.removeAttribute('data-menu');
+  fetch('/api/v1/webos/public/menu/'+encodeURIComponent(id),{headers:{'Accept':'application/json'}})
     .then(r=>r.ok?r.json():null).then(m=>{
-      if(!m||!m.items||!m.items.length) return;
-      const sub=document.getElementById('sub-bbs'); if(!sub) return;
-      // Ajoute les SALONS (rubriques lues via bbs.sock) sous les actions du service.
-      let h='<div class="subhead">Salons</div>';
-      h+=m.items.slice(0,14).map(c=>'<a data-rub="'+esc(c.slug)+'" data-rubt="'+esc(c.title)+'"><span class="g">·</span> '+esc(c.title)+(c.threads?'<span class="st mono">'+c.threads+'</span>':'')+'</a>').join('');
-      sub.insertAdjacentHTML('beforeend', h);
+      const items=(m&&m.items)||[]; if(!items.length || !_svc || _svc.id!==id) return;
+      document.getElementById('ctx-h').textContent=m.title||'Navigation';
+      ctx.innerHTML=items.slice(0,24).map(c=>{
+        const path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return '';
+        return rowHTML({attrs:'data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'+(path===cur?' class="on"':''),
+                        icon:c.icon||(_svc&&_svc.icon)||'💬', label:c.title||c.slug,
+                        count:(c.threads!=null?c.threads:null)});
+                        // ni ⚙️ ni ⧉ ici : une rubrique s'ouvre, elle ne
+                        // s'administre pas — la ligne entière est le clic.
+      }).join('');
+      bt.classList.remove('no-menu'); bt.setAttribute('data-menu','contexte');
     }).catch(()=>{});
 }
-// Bulles de sous-menu en position FIXE au survol (desktop) — échappe au clip du
-// mégamenu. Sur tactile : géré au tap du chevron (voir gestionnaire de clic).
-function wireFlyouts(){
-  if(!matchMedia('(hover:hover)').matches) return;
-  document.querySelectorAll('.megamenu .has-sub').forEach(hs=>{
-    const sub=hs.querySelector('.submenu'); if(!sub) return;
-    let t;
-    const open=()=>{ clearTimeout(t);
-      const panel=hs.closest('.megamenu');
-      panel.querySelectorAll('.submenu').forEach(o=>{ if(o!==sub) o.style.display='none'; });
-      const r=hs.getBoundingClientRect();
-      const h=Math.min(sub.scrollHeight+14, Math.round(innerHeight*0.74));
-      let top=Math.round(r.top-6); if(top+h>innerHeight-8) top=Math.max(8, innerHeight-8-h);
-      sub.style.left=Math.round(r.right+4)+'px'; sub.style.top=top+'px'; sub.style.display='block';
-    };
-    const close=()=>{ t=setTimeout(()=>{ sub.style.display='none'; }, 160); };
-    hs.addEventListener('mouseenter',open); hs.addEventListener('mouseleave',close);
-    sub.addEventListener('mouseenter',()=>clearTimeout(t)); sub.addEventListener('mouseleave',close);
-  });
-}
-function showEmbedRubrique(slug,title){
-  const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  const host='bbs.gk2.secubox.in'; const plain='https://'+host+'/c/'+encodeURIComponent(slug);
-  const url=plain+'?embed=1&theme='+th;
-  document.getElementById('eb-ic').textContent='💬';
-  document.getElementById('eb-name').textContent='BBS · '+(title||slug);
-  document.getElementById('eb-led').className='led online';
-  document.getElementById('eb-open').href=plain;
-  document.getElementById('eb-frame').src=url;
-  document.getElementById('eb-hint').style.display='none';
-  document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
-  var l=document.getElementById('sb-loc'); if(l) l.textContent='BBS · '+(title||slug);
-  var u=document.getElementById('sb-url'); if(u) u.textContent='· '+host+'/c/'+slug;
-  showView('embed');
-}
+
 // Menubar façon macOS : plusieurs menus (services / systeme), chacun déroulé
 // aligné SOUS son propre titre. setMenu(name) ouvre le panneau #menu-<name> ;
 // setMenu(false) ferme tout.
@@ -669,24 +731,29 @@ function setMenu(name){
   panels.forEach(p=>{ // purge état des panneaux qu'on ferme
     if(p.dataset.panel!==name){
       p.classList.add('hidden');
-      p.querySelectorAll('.has-sub.subopen').forEach(h=>{h.classList.remove('subopen'); const c=h.querySelector('.chev'); if(c) c.classList.remove('subopen');});
-      p.querySelectorAll('.submenu').forEach(s=>{s.style.display='';});
     }
   });
-  document.querySelectorAll('.mnav [data-menu]').forEach(b=>b.classList.toggle('on',b.dataset.menu===name));
+  document.querySelectorAll('[data-menu]').forEach(b=>b.classList.toggle('on',b.dataset.menu===name));
   const mm=name?document.getElementById('menu-'+name):null;
   if(mm){ // aligne le panneau sous son bouton
-    const t=document.querySelector('.mnav [data-menu="'+name+'"]');
+    const t=document.querySelector('[data-menu="'+name+'"]');
     const mast=document.querySelector('.mast');
     const hb=mast?Math.round(mast.getBoundingClientRect().bottom):56;
     const touch=!matchMedia('(hover:hover)').matches;   // tactile = pas de survol
     if(touch){ // téléphone : dropdown compact (largeur bornée, PAS pleine feuille)
       const w=Math.min(340, window.innerWidth-16);
-      let left=8; if(t){ const r=t.getBoundingClientRect(); left=Math.max(8, Math.min(Math.round(r.left), window.innerWidth-w-8)); }
+      let left=8;
+      if(t){ const r=t.getBoundingClientRect();
+        left=(r.left+r.width/2>window.innerWidth/2)?Math.round(r.right-w):Math.round(r.left);
+        left=Math.max(8, Math.min(left, window.innerWidth-w-8)); }
       mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+4)+'px';
     } else if(t){ // desktop : dropdown aligné sous le titre
       const r=t.getBoundingClientRect();
-      mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='264px'; mm.style.top=(hb+2)+'px';
+      const w=mm.classList.contains('mosaic')?Math.min(580,window.innerWidth-24):264;
+      let left=(r.left+r.width/2>window.innerWidth/2)?Math.round(r.right-w):Math.round(r.left);
+      if(left+w>window.innerWidth-12) left=window.innerWidth-12-w;
+      if(left<12) left=12;
+      mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+2)+'px';
     }
     mm.classList.remove('hidden');
   }
@@ -699,23 +766,27 @@ document.addEventListener('click',e=>{
     const open=!document.getElementById('menu-'+name).classList.contains('hidden');
     setMenu(open?false:name); return; }
   if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
-  // Tactile : tap sur le chevron → déplie/replie la bulle inline (accordéon),
-  // sans embarquer le service (ça, c'est le tap sur le libellé).
-  const chev=e.target.closest('.chev');
-  if(chev && !matchMedia('(hover:hover)').matches){ e.preventDefault(); e.stopPropagation();
-    const hs=chev.closest('.has-sub');
-    if(hs){ const willOpen=!hs.classList.contains('subopen');
-      document.querySelectorAll('.megamenu .has-sub.subopen').forEach(o=>{ if(o!==hs){ o.classList.remove('subopen'); const c=o.querySelector('.chev'); if(c) c.classList.remove('subopen'); }});
-      hs.classList.toggle('subopen',willOpen); chev.classList.toggle('subopen',willOpen);
-    }
-    return;
-  }
-  const rb=e.target.closest('[data-rub]');
-  if(rb){ showEmbedRubrique(rb.dataset.rub, rb.dataset.rubt); setMenu(false); return; }
+  // #1187 — actions de LIGNE : ⚙️ console admin, ⧉ nouvel onglet. Elles ne
+  // doivent jamais déclencher l'ouverture portée par la ligne elle-même.
+  const ra=e.target.closest('[data-ra]');
+  if(ra){ e.stopPropagation();
+    e.preventDefault();
+    if(ra.dataset.ra==='admin') openService(ra.dataset.id,'admin');
+    else window.open(ra.dataset.href,'_blank','noopener');
+    setMenu(false); return; }
+  // #1187 — switch de mode (⧉ onglet · ⚙️ admin · ▦ embarqué), bascule instantanée.
+  const md=e.target.closest('#modesw button');
+  if(md){ e.preventDefault(); setMode(md.dataset.mode); return; }
+  // Nav contextuelle du service actif (panneau droit) — salons BBS & co.
+  const cx=e.target.closest('[data-ctx]');
+  if(cx && _svc){ e.preventDefault(); openService(_svc.id, _mode, cx.dataset.ctx, cx.dataset.ctxt); setMenu(false); return; }
+  // Point d'entrée unique : menus plats, cartes principales et cartes du parc.
+  const op=e.target.closest('[data-open]');
+  if(op){ openService(op.dataset.open, op.dataset.mode||'embed'); setMenu(false); return; }
   const adm=e.target.closest('[data-admin]');
-  if(adm){ showEmbedAdmin(adm.dataset.admin, adm.dataset.path); setMenu(false); return; }
+  if(adm){ openService(adm.dataset.admin,'admin'); setMenu(false); return; }
   const emb=e.target.closest('[data-embed]');
-  if(emb && !e.target.closest('.open')){ showEmbed(emb.dataset.embed); setMenu(false); return; }
+  if(emb && !e.target.closest('.open')){ openService(emb.dataset.embed,'embed'); setMenu(false); return; }
   const nav=e.target.closest('[data-nav]'); if(nav){ showView(nav.dataset.nav); setMenu(false); return; }
   const tv=e.target.closest('.mnav .it[data-view]'); if(tv){ showView(tv.dataset.view); return; }
 });

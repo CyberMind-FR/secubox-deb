@@ -1,3 +1,123 @@
+secubox-webos (1.0.33-1~bookworm1) bookworm; urgency=medium
+
+  * Retour au menu contextuel précédent : la liste plate des rubriques. Le rendu
+    par sections et la traduction de la section « Accès » (1.0.32) sont retirés
+    — la section n'apportait rien au menu BBS. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 04:10:00 +0200
+
+secubox-webos (1.0.31-1~bookworm1) bookworm; urgency=medium
+
+  * Switch de mode : le bouton du mode COURANT s'efface. En vue admin, ⚙️ ne
+    propose plus rien — on y est déjà — et il ne reste que les sorties : ⧉
+    onglet réel et ▦ retour au service. En vue service, ⧉ et ⚙️. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 03:20:00 +0200
+
+secubox-webos (1.0.30-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif : le menu contextuel s'ouvrait collé au BORD GAUCHE de l'écran au
+    lieu de tomber sous son bouton. setMenu ne cherchait son déclencheur que
+    dans `.mnav` ; or le titre-menu du service vit maintenant dans la barre du
+    service. Sans déclencheur trouvé, le panneau gardait son `left` par défaut.
+    La recherche devient globale — chaque menu retombe sous SON bouton.
+  * Un déclencheur situé dans la moitié droite de l'écran aligne désormais son
+    panneau par la DROITE (façon menubar) : l'aligner par la gauche le faisait
+    déborder. Bornage à l'écran conservé, desktop comme tactile.
+  * Vérifié à 390, 1400 et 1680px, sur les trois menus : chacun chevauche bien
+    son bouton et reste entièrement dans l'écran. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 02:55:00 +0200
+
+secubox-webos (1.0.29-1~bookworm1) bookworm; urgency=medium
+
+  * Le TITRE du service EST désormais le déclencheur de sa navigation : un seul
+    objet dans la barre au lieu de deux (le titre « BBS ● » et un bouton de
+    menu faisaient doublon), posé juste à gauche de ⟳. Sans navigation exposée
+    par le service, il reste un simple titre — ni chevron, ni clic.
+  * Le menu contextuel est UNIQUEMENT cliquable : plus de boutons rapides sur
+    ses lignes. Une rubrique s'ouvre, elle ne s'administre pas.
+  * Le menu SYSTÈME garde sa mosaïque mais perd lui aussi ses boutons rapides :
+    la tuile entière ouvre la console admin du module. Seul le menu Services
+    conserve ⚙️ et ⧉ sur ses lignes.
+  * Barre système allégée : « Profil » (doublon de l'identité affichée tout à
+    droite) et « Alertes » (compteur factice sans destination) sont retirés. Il
+    ne reste que Accueil, Services et Système — la sélection d'apps et les
+    fonctions globales, comme le veut #1187.
+  * Correctif : la barre serrée écrasait le champ de recherche à 74px sur
+    desktop ; plancher de largeur à 150px. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 02:30:00 +0200
+
+secubox-webos (1.0.28-1~bookworm1) bookworm; urgency=medium
+
+  * La navigation du service actif n'est PLUS une colonne permanente : elle
+    devient un TROISIÈME MENU POP de la mégabar, à côté de Services et Système,
+    portant l'emoji et le nom du service actif. Il n'apparaît que devant un
+    service embarqué qui expose réellement un menu, et disparaît dès qu'on
+    revient à l'accueil. L'embed reprend toute la largeur.
+  * Correctif responsive : ce troisième bouton faisait DÉBORDER la barre
+    horizontalement sur téléphone (document à 605px pour un écran de 390) — le
+    menu pop se calait alors hors de l'écran, injoignable. Sous 720px les
+    entrées de menu tombent en pictogrammes seuls (le libellé est un nœud de
+    texte nu : font-size:0 sur l'entrée, rétabli sur les enfants), le nom du
+    service et celui du contexte sont masqués. Vérifié à 360, 390, 430 et
+    1400px : plus aucun débordement horizontal.
+  * Correctif : la règle de compactage était placée AVANT la définition de base
+    de `.mnav .it`, donc écrasée à spécificité égale. Déplacée après.
+  * Correctif : `.mnav .it{display:flex}` écrasait `.hidden` — le bouton
+    contextuel restait visible hors embed. Règle `.mnav .it.hidden` ajoutée.
+    (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 01:50:00 +0200
+
+secubox-webos (1.0.27-1~bookworm1) bookworm; urgency=medium
+
+  * Menus unifiés : les TROIS listes (Services, Système, panneau contextuel)
+    passent par une seule fabrique rowHTML() et rendent la même ligne — emoji ·
+    libellé · marqueur (LED de santé ou compteur) · ⚙️ console admin · ⧉ nouvel
+    onglet. Les deux icônes de droite remplacent définitivement les anciennes
+    bulles de sous-menu : mêmes actions, sans second niveau. Le menu sous BBS
+    est désormais identique au menu Services.
+  * Menu SYSTÈME en MOSAÏQUE : il porte bien plus d'entrées que Services, il se
+    déplie donc en grille (3 colonnes sur desktop, 2 sur téléphone), catégories
+    en intertitres pleine largeur. Panneau élargi à 580px, borné à l'écran.
+  * Correctif : les icônes de ligne étaient des <a> IMBRIQUÉS dans le <a> de la
+    ligne — HTML invalide, le navigateur fermait la ligne et éjectait ⧉ sur une
+    seconde ligne. Les deux actions sont maintenant des <button> (ouverture en
+    JS), et elles n'entraînent plus l'ouverture portée par la ligne.
+  * Correctif : le voile de menu (z-index 55) recouvrait la barre de menus, donc
+    cliquer « Système » pendant que « Services » était ouvert ne faisait que
+    fermer. La barre repasse au-dessus du voile (56) et sous le menu (60) : on
+    passe d'un menu à l'autre d'un seul clic, comme une menubar. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 01:05:00 +0200
+
+secubox-webos (1.0.26-1~bookworm1) bookworm; urgency=medium
+
+  * Navigation contextuelle (refonte #1187) : PLUS AUCUN SOUS-MENU dans la barre
+    système. Les deux menus deviennent des listes PLATES — Services = sélection
+    d'apps, Système = modules du parc avec les catégories en simples intertitres
+    (plus de bulles, plus de flyouts, plus de chevrons ni d'accordéon tactile :
+    tout le code has-sub/submenu/chev est retiré, CSS compris).
+  * La navigation PROPRE au service actif descend dans un PANNEAU CONTEXTUEL À
+    DROITE (.ctx) : les salons BBS, lus via /api/v1/webos/public/menu/<id>, y
+    vivent désormais au lieu d'encombrer la barre système. Une seule navigation
+    contextuelle visible, sans doublon. Le mécanisme est générique : tout service
+    exposant un menu obtient son panneau ; un service sans menu rend en pleine
+    largeur (dégradation gracieuse, panneau masqué).
+  * Le bouton « ⧉ Onglet » est remplacé par un SWITCH de trois petits boutons
+    emoji : ⧉ onglet réel · ⚙️ WebUI admin · ▦ service embarqué. Les deux modes
+    embarqués gardent CHACUN leur iframe vivante — basculer ne recharge pas
+    l'app (état, lecture et saisies en cours préservés), la bascule est
+    instantanée. Même logique d'ouverture pour tous les services, via un point
+    d'entrée unique openService(id, mode, sous-chemin).
+  * Vérifié en navigateur (chromium headless, desktop 1400px + mobile 390px) :
+    0 sous-menu dans le DOM, switch à 3 boutons opérant, 2 iframes coexistantes
+    dont une seule affichée (preuve de non-rechargement), panneau contextuel
+    présent/absent selon l'API, aucune erreur JS. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 00:20:00 +0200
 secubox-webos (1.0.25-1~bookworm1) bookworm; urgency=low
 
   * Hall : ajout d'une RÉFÉRENCE DE RENDU statique (www/hall/render-ref.html,

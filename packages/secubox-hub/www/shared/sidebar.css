@@ -492,3 +492,15 @@ body .sidebar,
 .main, .main-content {
   margin-left: 220px;
 }
+
+/* ── EMBARQUEMENT HALL (#1187) ─────────────────────────────────────────────
+   Le panneau encadré masque sa propre coquille : le Hall fournit la barre, le
+   menu contextuel et la barre d'état. En accès DIRECT (vhost admin réel) rien
+   ne change — la classe n'est posée que si window.top !== window.self. */
+:root.sbx-embed .sidebar,
+:root.sbx-embed .sidebar-toggle,
+:root.sbx-embed .global-menu-bar,
+:root.sbx-embed .global-status-bar { display: none !important; }
+:root.sbx-embed .main,
+:root.sbx-embed .main-content { margin-left: 0 !important; }
+:root.sbx-embed body { padding-top: 0 !important; padding-bottom: 0 !important; }

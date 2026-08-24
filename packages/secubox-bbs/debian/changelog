@@ -1,3 +1,13 @@
+secubox-bbs (0.30.12-1~bookworm1) bookworm; urgency=medium
+
+  * Retrait de la section « Accès » de /api/v1/bbs/menu (introduite en 0.30.11) :
+    à l'usage elle n'apporte rien dans le menu du Hall — Médiathèque,
+    Bibliothèque, Billets et Réseaux sont déjà atteignables depuis le BBS
+    lui-même, et les doubler dans le menu contextuel ne faisait qu'allonger la
+    liste. La route revient à `categories` seul. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 04:10:00 +0200
+
 secubox-bbs (0.30.10-1~bookworm1) bookworm; urgency=medium
 
   * Embed Hall : masque LES DEUX rails (droite radio/billets déjà masquée +
