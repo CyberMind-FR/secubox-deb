@@ -1,3 +1,13 @@
+secubox-webos (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * Entête AletheiaVox reprise de bbs.gk2 (logo médaille hall-logo.svg + format).
+  * URLs des services principaux corrigées (domaines réels board) : Cloud=nc,
+    Mail=webmail, Outils→Kbin=kbin ; cartes toujours affichées (curation).
+  * Icônes registre décodées (entités HTML → emoji, ex. domoticz).
+  * Domaine affiché corrigé en hall.gk2.secubox.in. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 16:12:47 +0200
+
 secubox-webos (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Hall refondu (design AletheiaVox) : menu SBX (sidebar), ACCUEIL = services

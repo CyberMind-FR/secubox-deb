@@ -52,18 +52,32 @@ body{color:var(--ink);background:var(--paper);font-family:"Inter",system-ui,sans
 a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 
 /* ── masthead ─────────────────────────────────────────────── */
-.mast{background:linear-gradient(180deg,var(--panel),var(--soft));border-bottom:1px solid var(--line);
-  padding:14px 26px;display:flex;align-items:center;gap:20px}
-.brand{display:flex;align-items:center;gap:12px;min-width:210px}
-.brand .mk{width:46px;height:46px;border-radius:12px;border:2px solid var(--sky);display:grid;place-items:center;
-  background:var(--sky-s);color:var(--sky);font-family:"Fraunces";font-weight:700;font-size:1.35rem}
-.brand b{font-family:"Fraunces";font-size:1.05rem;display:block;line-height:1.05}
-.brand span{font-family:"JetBrains Mono";font-size:.52rem;letter-spacing:.22em;color:var(--dim);text-transform:uppercase}
-.mast .ttl{flex:1;text-align:center}
-.mast .ttl h1{margin:0;font-family:"Fraunces";font-size:1.5rem;font-weight:600;color:var(--sky)}
-.mast .ttl .sub{color:var(--ink);font-size:.9rem}
-.mast .ttl .sub b{color:var(--cyan)}
-.mast .ttl .tag{color:var(--dim);font-size:.78rem;margin-top:1px}
+/* Entête AletheiaVox — repris de bbs.gk2 (logo médaille + format). */
+.mast{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
+.mast-top{display:flex;align-items:baseline;gap:14px;justify-content:center;padding:7px 20px 4px;flex-wrap:wrap;
+  font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.05em;color:var(--dim);text-transform:uppercase;
+  border-bottom:1px solid var(--line)}
+.mast-top b{color:var(--ink)} .mast-top .l{color:var(--sky)} .mast-top .r{color:var(--coral)}
+.mast-main{display:flex;align-items:center;gap:16px;padding:10px clamp(14px,3vw,26px);max-width:1560px;margin:0 auto}
+.logo{display:flex;align-items:center;gap:12px;flex:none}
+.logo img.medaille{width:46px;height:46px;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
+.logo-t{display:flex;flex-direction:column}
+.logo-h{font-family:"Fraunces","Cinzel";font-size:1.4rem;font-weight:700;letter-spacing:.02em;line-height:1;color:var(--sky)}
+.logo .sub{font-family:"JetBrains Mono";font-size:.55rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+.mast .drop{flex:1;max-width:440px;position:relative}
+.mast .drop input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1.5px solid var(--line-2);
+  background:var(--panel);color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem;outline:none;transition:.15s}
+.mast .drop input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-s)}
+.mast .drop .ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.5}
+.mast-actions{display:flex;align-items:center;gap:9px;flex:none;margin-left:auto}
+.mast-actions .ibtn{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line-2);background:var(--panel);
+  display:grid;place-items:center;color:var(--ink);font-size:1rem}
+.mast-actions .who{display:flex;align-items:center;gap:9px;padding:5px 12px 5px 6px;border:1px solid var(--line);border-radius:22px}
+.mast-actions .who .av{width:30px;height:30px;border-radius:50%;background:var(--gold-s);display:grid;place-items:center;font-size:.95rem}
+.mast-actions .who b{font-size:.82rem}
+.mast-actions .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
+@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}}
 .mast .av{display:flex;align-items:center;gap:10px;min-width:210px;justify-content:flex-end;text-align:right}
 .mast .av b{font-family:"Fraunces";font-size:.95rem;display:block}
 .mast .av span{font-family:"JetBrains Mono";font-size:.52rem;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
@@ -197,13 +211,19 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 </style>
 
 <header class="mast">
-  <div class="brand"><div class="mk">◎</div><div><b class="serif">GK2 · SecuBox</b><span>Portail Services</span></div></div>
-  <div class="ttl">
-    <h1 class="serif">SecuBox-Deb — WebOS SBX</h1>
-    <div class="sub"><b>Hall.GK2.net</b> · Services vivants, souverains et connectés</div>
-    <div class="tag">Un bureau numérique unifié pour vos services, vos données et votre liberté.</div>
+  <div class="mast-top">
+    <span>nœud <b>gk2</b></span>
+    <span class="l">◆ <b id="mt-online">—</b> services en ligne</span>
+    <span class="r">● <b id="mt-mods">—</b> modules souverains</span>
   </div>
-  <div class="av"><div><b class="serif">AletheiaVox</b><span>Réseau & Souveraineté</span></div><div class="mk">⛵</div></div>
+  <div class="mast-main">
+    <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span><span class="sub">hall.gk2.secubox.in · bureau souverain</span></span></a>
+    <div class="drop"><span class="ico" aria-hidden="true">⌕</span><input id="q" type="search" placeholder="chercher un service…" aria-label="Chercher un service"></div>
+    <div class="mast-actions">
+      <button class="ibtn" id="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
+      <div class="who"><span class="av">🧙</span><span><b>Gandalf</b><i>● Identité locale</i></span></div>
+    </div>
+  </div>
 </header>
 
 <nav class="topnav">
@@ -213,8 +233,6 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   <a class="it"><span>🔔</span> Alertes <span class="badge">3</span></a>
   <a class="it"><span>👤</span> Profil</a>
   <span class="grow"></span>
-  <button class="it" id="theme" title="Thème clair/sombre" style="background:none"><span>◐</span></button>
-  <div class="who"><span class="av">🧙</span><span><b>Gandalf</b><i>● Identité locale</i></span></div>
 </nav>
 
 <div class="shell">
@@ -275,22 +293,25 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   </main>
 </div>
 
-<div class="foot"><span>SecuBox-Deb</span><span>·</span><span>Hall.GK2.net</span><span>·</span><span>WebOS SBX · AletheiaVox</span>
+<div class="foot"><span>SecuBox-Deb</span><span>·</span><span>hall.gk2.secubox.in</span><span>·</span><span>WebOS SBX · AletheiaVox</span>
   <span>·</span><span>Un internet libre, utile et souverain.</span></div>
 
 <script>
 // Services PRINCIPAUX = curation « all.gk2.net » (apps grand public, cf. design).
 // Tout le reste va sous SYSTÈME. Les ids inexistants sont simplement ignorés.
+// url = domaine public RÉEL (vérifié board), pas la convention <id>.gk2… :
+// Cloud=nc, Mail=webmail, Outils=kbin. Chaque carte s'affiche même si le module
+// n'est pas (encore) dans le registre.
 const FEATURED = [
-  {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8"},
-  {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42"},
-  {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b"},
-  {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0"},
-  {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58"},
-  {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8"},
-  {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4"},
-  {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832"},
-  {id:"toolbox",    label:"Outils",    icon:"🧰", color:"#647685"},
+  {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in"},
+  {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in"},
+  {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
+  {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
+  {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in"},
+  {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in"},
+  {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
+  {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in"},
+  {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
 ];
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [
@@ -300,6 +321,11 @@ const CATS = [
 ];
 const STATE_FR={online:"en ligne",degraded:"dégradé",offline:"hors ligne",unknown:"inconnu"};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// Certaines icônes du registre sont encodées en entité HTML (ex. domoticz
+// "&#127968;") : on les décode en vrai emoji avant affichage (via textContent,
+// donc sans risque d'injection).
+const _dec=document.createElement('textarea');
+function icon(s){ s=s||"▦"; if(s.indexOf('&')<0) return s; _dec.innerHTML=s; return _dec.value||"▦"; }
 
 // repli maquette minimal (si registre indisponible) — mêmes ids que FEATURED + qq modules
 const MOCK={services:[
@@ -316,21 +342,22 @@ const MOCK={services:[
 
 function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || (s.id+".gk2.secubox.in"); }
 
-function featCardHTML(s,f){
-  const st=(s.health&&s.health.state)||"unknown";
+function featCardHTML(f,s){
+  s=s||{}; const st=(s.health&&s.health.state)||"unknown";
+  const h=f.url||host(s);
   return '<article class="fcard"><div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
-    +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(host(s))+'</div></div>'
+    +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
     +'<span class="state"><i class="led '+st+'"></i>'+STATE_FR[st]+'</span></div>'
     +'<div class="desc">'+esc(s.description||'Service SecuBox souverain.')+'</div>'
     +'<div class="foot"><span class="state mono" style="font-size:.58rem">'+esc(s.category||'')+'</span>'
-    +'<a class="open" href="https://'+esc(host(s))+'/" target="_blank" rel="noopener">Ouvrir</a></div>'
+    +'<a class="open" href="https://'+esc(h)+'/" target="_blank" rel="noopener">Ouvrir</a></div>'
     +'</article>';
 }
 function compactHTML(s){
   const st=(s.health&&s.health.state)||"unknown";
   return '<article class="card'+(s.active?'':' off')+'" data-name="'+esc((s.name+' '+(s.description||'')).toLowerCase())+'">'
-    +'<div class="top"><div class="ci">'+esc(s.icon||'▦')+'</div>'
+    +'<div class="top"><div class="ci">'+esc(icon(s.icon))+'</div>'
     +'<div class="cn"><b>'+esc(s.name)+'</b><div class="h mono">'+esc(host(s))+'</div></div>'
     +'<span class="state"><i class="led '+st+'"></i></span></div>'
     +'<div class="cd">'+esc(s.description||'')+'</div></article>';
@@ -347,11 +374,13 @@ function render(data,src){
   rail.innerHTML=rh;
   // featured grid (principal)
   const fg=document.getElementById('featgrid'); let fh='';
-  FEATURED.forEach(f=>{ const s=byId[f.id]; if(s) fh+=featCardHTML(s,f); });
-  fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.filter(f=>byId[f.id]).length+' services';
-  // tiles (vérité opérationnelle du registre)
+  FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
+  fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.length+' services';
+  // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
   const degr=svc.filter(s=>s.health&&s.health.state==='degraded').length;
+  var mo=document.getElementById('mt-online'); if(mo) mo.textContent=online;
+  var mm=document.getElementById('mt-mods'); if(mm) mm.textContent=svc.length;
   document.getElementById('tiles').innerHTML=
      tile('a1','Services en ligne',online,'/ '+svc.length+' modules','souverains & joignables')
     +tile('a2','À surveiller',degr,'','dégradés ou en veille')
@@ -393,6 +422,15 @@ const root=document.documentElement;
 document.getElementById('theme').addEventListener('click',()=>{
   const c=root.getAttribute('data-theme');
   root.setAttribute('data-theme', c==='dark'?'light':(c==='light'?'dark':(matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark')));
+});
+// recherche → bascule sur Système et filtre les cartes
+const q=document.getElementById('q');
+if(q) q.addEventListener('input',e=>{
+  const v=e.target.value.trim().toLowerCase();
+  if(v) showView('systeme');
+  document.querySelectorAll('#sysboard .card').forEach(c=>{
+    c.style.display=(!v||c.dataset.name.indexOf(v)>=0)?'':'none';
+  });
 });
 
 // chargement
