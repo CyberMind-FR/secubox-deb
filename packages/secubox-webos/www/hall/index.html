@@ -69,7 +69,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .logo-t{display:flex;flex-direction:column}
 .logo-h{font-family:"Fraunces","Cinzel";font-size:1.4rem;font-weight:700;letter-spacing:.02em;line-height:1;color:var(--sky)}
 .logo .sub{font-family:"JetBrains Mono";font-size:.55rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
-.mast .drop{flex:1;max-width:440px;position:relative}
+.mast .drop{flex:1;min-width:150px;max-width:440px;position:relative}
 .mast .drop input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1.5px solid var(--line-2);
   background:var(--panel);color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem;outline:none;transition:.15s}
 .mast .drop input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-s)}
@@ -106,7 +106,6 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    libellé est un nœud de texte nu, d'où le font-size:0 rétabli sur les enfants. */
 .mnav .it{font-size:0;gap:0;padding:7px 7px}
 .mnav .it>span{font-size:.95rem} .mnav .it .ca{font-size:.62rem} .mnav .it .badge{font-size:.58rem}
-#ctx-lb{display:none}
 .nav-embed #eb-name{display:none}
 .nav-embed{padding-left:8px;margin-left:2px;gap:6px}
 .mast-main{gap:8px}
@@ -293,6 +292,15 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .embed-bar .grow{flex:1}
 .embed-bar .eb-btn{padding:7px 13px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font-size:.8rem;text-decoration:none}
 .embed-bar .eb-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+/* #1187 — déclencheur du menu contextuel : dans la barre du service, juste à
+   gauche de ⟳. Il n'existe que si le service expose réellement une navigation. */
+.nav-embed .ctx-btn{display:inline-flex;align-items:center;gap:7px;padding:5px 11px}
+.nav-embed .ctx-btn b{font-family:"Fraunces";font-size:1rem}
+.nav-embed .ctx-btn .ca{font-size:.62rem;opacity:.65}
+.nav-embed .ctx-btn.on{border-color:var(--sky);color:var(--sky)}
+/* Sans navigation exposée : simple titre, ni chevron ni interaction. */
+.nav-embed .ctx-btn.no-menu{cursor:default;border-color:transparent;background:transparent}
+.nav-embed .ctx-btn.no-menu .ca{display:none}
 .embed-hint{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim);margin:0 4px 8px}
 /* L'embed REMPLIT la carte : hauteur = viewport - headbar (mast+topnav) - marges.
    Aucune partie perdue : le service défile DANS l'iframe. En embed on retire aussi
@@ -328,16 +336,21 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
       <button class="it" type="button" data-nav="accueil"><span>🏠</span> Accueil</button>
       <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
       <button class="it" type="button" data-menu="systeme"><span>🗄️</span> Système <span class="ca">▾</span></button>
-      <button class="it hidden" type="button" id="mnav-ctx" data-menu="contexte" title="Navigation du service actif"><span id="ctx-ic">💬</span> <span id="ctx-lb">Service</span> <span class="ca">▾</span></button>
-      <button class="it" type="button"><span>🔔</span> Alertes <span class="badge">3</span></button>
-      <button class="it" type="button"><span>👤</span> Profil</button>
     </nav>
     <div class="drop"><span class="ico" aria-hidden="true">⌕</span><input id="q" type="search" placeholder="chercher un service…" aria-label="Chercher un service"></div>
     <!-- Contexte du service embarqué, GREFFÉ dans la barre unique (#1175). -->
     <span id="nav-embed" class="nav-embed hidden">
-      <span class="ne-ic" id="eb-ic">▦</span>
-      <b class="serif" id="eb-name">Service</b>
-      <span class="state"><i class="led" id="eb-led"></i></span><span id="eb-host" hidden></span>
+      <!-- #1187 — le TITRE du service EST le déclencheur de sa navigation :
+           un seul objet dans la barre, à gauche de ⟳. Sans menu exposé, il
+           reste un simple titre (pas de chevron, pas de clic). -->
+      <button class="eb-btn ctx-btn" type="button" id="mnav-ctx" data-menu="contexte"
+              title="Navigation du service">
+        <span class="ne-ic" id="eb-ic">▦</span>
+        <b class="serif" id="eb-name">Service</b>
+        <i class="led" id="eb-led"></i>
+        <span class="ca">▾</span>
+      </button>
+      <span id="eb-host" hidden></span>
       <button class="eb-btn" id="eb-reload" title="Recharger">⟳</button>
       <span class="modesw" id="modesw" role="group" aria-label="Mode d'affichage">
         <button type="button" data-mode="tab"   title="Ouvrir en onglet réel">⧉</button>
@@ -568,8 +581,10 @@ function render(data,src){
   CATS.forEach(c=>{ const items=svc.filter(s2=>s2.category===c.id); if(!items.length) return;
     smh+='<div class="grp">'+c.icon+' '+esc(c.name)+'</div>';
     smh+=items.slice(0,24).map(s2=>{ const st=(s2.health&&s2.health.state)||'unknown';
+        // Mosaïque sans bouton rapide : la tuile entière ouvre la console
+        // admin du module (data-mode="admin").
         return rowHTML({attrs:'data-open="'+esc(s2.id)+'" data-mode="admin"', icon:icon(s2.icon),
-                        label:s2.name||s2.id, state:st, admin:s2.id, tab:'https://'+host(s2)+'/'}); }).join('');
+                        label:s2.name||s2.id, state:st}); }).join('');
   });
   if(sm) sm.innerHTML=smh;
 }
@@ -680,9 +695,10 @@ function openService(id, mode, sub, subLabel){
 // (« put down to its reference »). Les salons BBS vivent désormais ici.
 function loadCtx(id, cur){
   const ctx=document.getElementById('ctx'), bt=document.getElementById('mnav-ctx');
-  ctx.innerHTML=''; bt.classList.add('hidden');
-  if(_svc){ document.getElementById('ctx-ic').textContent=_svc.icon;
-            document.getElementById('ctx-lb').textContent=_svc.label; }
+  ctx.innerHTML='';
+  // Par défaut le titre n'est qu'un titre ; il ne devient déclencheur que si le
+  // service expose réellement une navigation.
+  bt.classList.add('no-menu'); bt.removeAttribute('data-menu');
   fetch('/api/v1/webos/public/menu/'+encodeURIComponent(id),{headers:{'Accept':'application/json'}})
     .then(r=>r.ok?r.json():null).then(m=>{
       const items=(m&&m.items)||[]; if(!items.length || !_svc || _svc.id!==id) return;
@@ -691,10 +707,11 @@ function loadCtx(id, cur){
         const path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return '';
         return rowHTML({attrs:'data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'+(path===cur?' class="on"':''),
                         icon:c.icon||(_svc&&_svc.icon)||'💬', label:c.title||c.slug,
-                        count:(c.threads!=null?c.threads:null),
-                        admin:id, tab:'https://'+(_svc?_svc.url:'')+path});
+                        count:(c.threads!=null?c.threads:null)});
+                        // ni ⚙️ ni ⧉ ici : une rubrique s'ouvre, elle ne
+                        // s'administre pas — la ligne entière est le clic.
       }).join('');
-      bt.classList.remove('hidden');   // le menu n'existe QUE s'il a du contenu
+      bt.classList.remove('no-menu'); bt.setAttribute('data-menu','contexte');
     }).catch(()=>{});
 }
 

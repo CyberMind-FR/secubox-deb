@@ -1,3 +1,23 @@
+secubox-webos (1.0.29-1~bookworm1) bookworm; urgency=medium
+
+  * Le TITRE du service EST désormais le déclencheur de sa navigation : un seul
+    objet dans la barre au lieu de deux (le titre « BBS ● » et un bouton de
+    menu faisaient doublon), posé juste à gauche de ⟳. Sans navigation exposée
+    par le service, il reste un simple titre — ni chevron, ni clic.
+  * Le menu contextuel est UNIQUEMENT cliquable : plus de boutons rapides sur
+    ses lignes. Une rubrique s'ouvre, elle ne s'administre pas.
+  * Le menu SYSTÈME garde sa mosaïque mais perd lui aussi ses boutons rapides :
+    la tuile entière ouvre la console admin du module. Seul le menu Services
+    conserve ⚙️ et ⧉ sur ses lignes.
+  * Barre système allégée : « Profil » (doublon de l'identité affichée tout à
+    droite) et « Alertes » (compteur factice sans destination) sont retirés. Il
+    ne reste que Accueil, Services et Système — la sélection d'apps et les
+    fonctions globales, comme le veut #1187.
+  * Correctif : la barre serrée écrasait le champ de recherche à 74px sur
+    desktop ; plancher de largeur à 150px. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 02:30:00 +0200
+
 secubox-webos (1.0.28-1~bookworm1) bookworm; urgency=medium
 
   * La navigation du service actif n'est PLUS une colonne permanente : elle
