@@ -124,7 +124,8 @@ Flashing, U-Boot and first-boot steps:
 `v3.0.0-alpha.1` is the current pre-release — 124 packages, disk images and
 Live USB builds for every supported board. It is a **pre-release**: run it on a
 test box, not on the link your household depends on.
-Guided path: [**Alpha 3 — download, install, test**](https://github.com/CyberMind-FR/secubox-deb/wiki/Alpha-3).
+Guided path: [**Démarrage rapide Alpha3**](https://github.com/CyberMind-FR/secubox-deb/wiki) —
+VM in one command, or real arm64 hardware — first section of the wiki home.
 
 ### Verifying downloads
 
