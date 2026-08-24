@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -67,5 +68,52 @@ func TestSeulesLesImagesSontRendues(t *testing.T) {
 		if mediaTypes[t2] != ok {
 			t.Errorf("%s : admis=%v, attendu %v", t2, mediaTypes[t2], ok)
 		}
+	}
+}
+
+// Un ANONYME doit pouvoir obtenir une vignette : les pages publiques en
+// affichent, et le garde-fou de ce relais est la liste blanche d'origines, pas
+// la session. Le verrou « reserve aux membres » repondait 403 en invoquant le
+// risque du proxy ouvert — risque que la liste blanche ecarte deja (cf.
+// TestSeulesLesOriginesConfigureesPassent). Il ne protegeait rien et vidait de
+// leurs images les pages vues sans compte.
+func TestAnonymeObtientLaVignette(t *testing.T) {
+	amont := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		_, _ = w.Write([]byte("\x89PNG\r\n\x1a\n"))
+	}))
+	defer amont.Close()
+
+	// L'amont de test est en http : on court-circuite la verification d'origine
+	// en autorisant exactement son URL, et on verifie ici l'ABSENCE de verrou
+	// de session, pas la liste blanche (testee separement).
+	s := &Server{opt: Options{MediaOrigines: []string{amont.URL}}}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/media-vignette?u="+url.QueryEscape(amont.URL+"/x.png"), nil)
+
+	s.servirMediaVignette(rec, req) // aucun cookie de session : visiteur anonyme
+
+	if rec.Code == http.StatusForbidden {
+		t.Fatal("403 a un anonyme : le verrou membre est revenu")
+	}
+}
+
+// La vignette relayee ne depend pas de qui regarde — aucun en-tete du visiteur
+// n'est transmis en amont. La marquer `private` interdisait au cache partage de
+// l'absorber, ce qui etait precisement le garde-fou contre l'amplification.
+func TestVignetteCachableParUnCachePartage(t *testing.T) {
+	amont := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte("\xff\xd8\xff"))
+	}))
+	defer amont.Close()
+
+	s := &Server{opt: Options{MediaOrigines: []string{amont.URL}}}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/media-vignette?u="+url.QueryEscape(amont.URL+"/x.jpg"), nil)
+	s.servirMediaVignette(rec, req)
+
+	if cc := rec.Header().Get("Cache-Control"); cc != "" && !strings.HasPrefix(cc, "public") {
+		t.Fatalf("Cache-Control = %q : un cache partage ne peut pas absorber la vignette", cc)
 	}
 }

@@ -30,9 +30,10 @@ func (s *Server) clientSocialRelay() *http.Client {
 // SocialRelay (indexé par bbs_thread_id) — donc ça marche pour les ANCIENS fils
 // comme pour les nouveaux, sans marqueur dans le corps ni backfill.
 //
-// À n'appeler que pour la surface MEMBRE : /media-vignette est réservé aux
-// membres (403 aux anonymes), et les médias sont de toute façon masqués en
-// public.
+// Vaut pour les DEUX surfaces (#1187). Le relais /media-vignette n'est plus
+// réservé aux membres — son garde-fou est la liste blanche d'origines, pas la
+// session — et la surface publique ne porte que des messages publics
+// (`PublicPostsOf`). Les vignettes publiques étaient donc absentes pour rien.
 func (s *Server) enrichirCoversReseaux(items []NewsItem) {
 	if s.opt.SocialRelaySocket == "" || len(items) == 0 {
 		return
