@@ -786,7 +786,8 @@ cmd_maildir_reconcile() {
     # echoue, on n'a plus de filet et il faut annuler avant de toucher a
     # quoi que ce soit (regenerer dovecot.conf, redemarrer, creer des
     # Maildir) plutot que de continuer sur un backup absent.
-    if ! cmd_backup >/dev/null; then
+    local _bk
+    if ! _bk="$(cmd_backup)"; then
         error "backup préalable échoué — bascule Maildir annulée"
         return 1
     fi
@@ -800,11 +801,24 @@ cmd_maildir_reconcile() {
     fi
     LXC_BASE="${LXC_PATH:-/data/lxc}" DATA_PATH="$DATA_PATH" configure_dovecot "$CONTAINER"
 
+    # VALIDER AVANT DE REDÉMARRER. Un dovecot.conf régénéré invalide ne doit
+    # JAMAIS provoquer un redémarrage qui casse le service : `doveconf -n`
+    # relit la conf sur disque sans toucher au Dovecot en mémoire. Si elle est
+    # invalide, on restaure le backup (qui contient l'ancien dovecot.conf) et
+    # on abandonne — pas d'outage. C'est ce filet qui transforme « redémarrage
+    # dans une conf cassée » en « abandon propre, service intact ».
+    if ! lxc_attach "$CONTAINER" doveconf -n >/dev/null 2>&1; then
+        error "conf Dovecot régénérée invalide — restauration du backup et abandon"
+        cmd_restore "$_bk" >/dev/null 2>&1
+        return 1
+    fi
+
     # Le redemarrage fait foi de la bascule : s'il echoue, la conf a change
     # sur disque mais Dovecot tourne encore sur l'ancienne en memoire — un
     # etat divergent qu'on ne doit jamais annoncer comme un succes silencieux.
     if ! lxc_attach "$CONTAINER" systemctl restart dovecot; then
-        error "bascule Maildir échouée (redémarrage dovecot)"
+        error "bascule Maildir échouée (redémarrage dovecot) — restauration"
+        cmd_restore "$_bk" >/dev/null 2>&1
         return 1
     fi
 
@@ -847,13 +861,23 @@ cmd_sieve() {
                 # shellcheck disable=SC1090
                 source "$install_lib"
             fi
+            local _sbk; _sbk="$(cmd_backup)"
             LXC_BASE="${LXC_PATH:-/data/lxc}" DATA_PATH="$DATA_PATH" configure_dovecot "$CONTAINER"
+
+            # Valider AVANT de redémarrer (même filet que maildir-reconcile) :
+            # une conf Sieve invalide ne doit pas casser le service.
+            if ! lxc_attach "$CONTAINER" doveconf -n >/dev/null 2>&1; then
+                error "conf Dovecot (Sieve) invalide — restauration et abandon"
+                [ -n "$_sbk" ] && cmd_restore "$_sbk" >/dev/null 2>&1
+                return 1
+            fi
 
             # Le redemarrage fait foi de l'activation : s'il echoue, la conf a
             # change sur disque mais Dovecot tourne encore sur l'ancienne en
             # memoire — jamais annoncer un succes silencieux dans ce cas.
             if ! lxc_attach "$CONTAINER" systemctl restart dovecot; then
-                error "activation Sieve échouée (redémarrage dovecot)"
+                error "activation Sieve échouée (redémarrage dovecot) — restauration"
+                [ -n "$_sbk" ] && cmd_restore "$_sbk" >/dev/null 2>&1
                 return 1
             fi
             log "Sieve activé"

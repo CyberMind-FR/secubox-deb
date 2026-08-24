@@ -255,12 +255,22 @@ userdb {
 }
 
 service imap-login {
-  inet_listener imap  { port = 143 }
-  inet_listener imaps { port = 993; ssl = yes }
+  inet_listener imap {
+    port = 143
+  }
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
 }
 service pop3-login {
-  inet_listener pop3  { port = 110 }
-  inet_listener pop3s { port = 995; ssl = yes }
+  inet_listener pop3 {
+    port = 110
+  }
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
 }
 service lmtp {
   unix_listener /var/spool/postfix/private/dovecot-lmtp {
@@ -306,12 +316,22 @@ userdb {
 }
 
 service imap-login {
-  inet_listener imap  { port = 143 }
-  inet_listener imaps { port = 993; ssl = yes }
+  inet_listener imap {
+    port = 143
+  }
+  inet_listener imaps {
+    port = 993
+    ssl = yes
+  }
 }
 service pop3-login {
-  inet_listener pop3  { port = 110 }
-  inet_listener pop3s { port = 995; ssl = yes }
+  inet_listener pop3 {
+    port = 110
+  }
+  inet_listener pop3s {
+    port = 995
+    ssl = yes
+  }
 }
 service lmtp {
   unix_listener /var/spool/postfix/private/dovecot-lmtp {
@@ -362,7 +382,9 @@ protocol lmtp {
   mail_plugins = $mail_plugins sieve
 }
 service managesieve-login {
-  inet_listener sieve { port = 4190 }
+  inet_listener sieve {
+    port = 4190
+  }
 }
 plugin {
   sieve = file:~/sieve;active=~/.dovecot.sieve

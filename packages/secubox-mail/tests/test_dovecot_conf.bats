@@ -42,3 +42,13 @@ setup() { load_libs; make_fake_lxc_env; }
   ! grep -Eq 'mail_plugins.*sieve' "$conf"
   ! grep -q 'service managesieve-login' "$conf"
 }
+
+# Régression #1169 : les listeners inline `inet_listener imap { port = 143 }`
+# font échouer Dovecot 2.3 (« Garbage after '{' ») — jamais validé avant la
+# bascule board. Ils DOIVENT être multi-lignes.
+@test "aucun listener inline (Dovecot 2.3 les rejette)" {
+  configure_dovecot mail
+  local conf="$LXC_BASE/mail/rootfs/etc/dovecot/dovecot.conf"
+  ! grep -Eq 'inet_listener [a-z0-9]+ +\{ port' "$conf"
+  grep -Eq '^[[:space:]]*inet_listener imap \{[[:space:]]*$' "$conf"
+}

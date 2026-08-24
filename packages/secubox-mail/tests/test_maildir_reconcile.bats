@@ -70,3 +70,17 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"bascule Maildir effectuée"* ]]
 }
+
+# Régression #1169 : si la conf régénérée est invalide, reconcile NE redémarre
+# PAS Dovecot — il restaure le backup et abandonne (pas d'outage).
+@test "reconcile restaure et abandonne si doveconf -n échoue" {
+  lxc_attach() { case "$*" in *doveconf\ -h\ mail_location*) echo "mbox:~/mail" ;; *doveconf\ -n*) return 1 ;; *) return 0 ;; esac; }
+  export -f lxc_attach
+  configure_dovecot() { :; }; export -f configure_dovecot
+  cmd_backup() { echo "$BATS_TEST_TMPDIR/bk.tgz"; }; export -f cmd_backup
+  local restored="$BATS_TEST_TMPDIR/restored"; rm -f "$restored"
+  cmd_restore() { echo "$1" > "$BATS_TEST_TMPDIR/restored"; }; export -f cmd_restore
+  run cmd_maildir_reconcile
+  [ "$status" -ne 0 ]
+  [ -f "$BATS_TEST_TMPDIR/restored" ]   # restore a bien été appelé
+}

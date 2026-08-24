@@ -1,3 +1,13 @@
+secubox-mail (2.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix : dovecot.conf — listeners multi-lignes (les `inet_listener x { port=.. }`
+    inline font échouer Dovecot 2.3 « Garbage after { » ; jamais validé avant la
+    bascule board réelle). maildir-reconcile ET sieve enable VALIDENT désormais
+    la conf (`doveconf -n`) AVANT de redémarrer : conf invalide → restauration
+    du backup + abandon, jamais d'outage. (ref #1169)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 12:45:00 +0200
+
 secubox-mail (2.8.1-1~bookworm1) bookworm; urgency=medium
 
   * fix : LXC_PATH résolu depuis le TOML (lxc_path) au lieu d'hériter la fuite
