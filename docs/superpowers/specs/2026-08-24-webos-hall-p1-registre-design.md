@@ -12,7 +12,11 @@
 
 ## Décisions de cadrage (validées avec l'utilisateur)
 1. **Périmètre P1 = registre normalisé SEUL.** Aucune UI, aucune cardlet, aucun shell Hall.
-2. **Jointure `id↔domaine` = tranchée à la revue de CETTE spec** (deux options chiffrées en §6).
+2. **Jointure `id↔domaine` = Option 6-B** (champ `domain`/`same_origin` dans chaque
+   `menu.d/*.json`, ~40 paquets) — validée en revue. Population par **sweep batché** avec
+   **repli gracieux** (champ absent ⇒ convention `<id>.gk2.secubox.in` puis `null`), pour que le
+   module `secubox-webos` ne bloque pas sur les 40 fichiers d'un coup.
+   **Source santé = Option 5-C** (helper partagé `secubox_core.health`). **Domaine = `hall.gk2.net`.**
 3. **Module dédié `secubox-webos`** avec sa propre socket — **indépendant de l'agrégateur**
    (aligne « composants vitaux indépendants de l'agrégateur », #1173). *Diverge du brief §8
    (« étendre le Hub »)* : justifié par la congestion agrégateur (R4) ; le registre reste
@@ -226,7 +230,11 @@ vs router avec, CSP nginx. (E2E board : parité services réels, service test of
 
 ---
 
-## Décisions demandées à la revue de cette spec
-1. **§6 jointure id↔domaine** : Option **6-A** (convention + surcharges, recommandée) ou **6-B** (champ `menu.d`) ?
-2. **§5 source santé** : Option **5-C** (helper `secubox_core.health` partagé, recommandée — touche `secubox-hub` en refacto neutre) — OK ?
-3. Nom de domaine confirmé `hall.gk2.net` (et `all.gk2.net`→Hub) — OK ?
+## Décisions tranchées à la revue (2026-08-24)
+1. **§6 jointure id↔domaine = Option 6-B** (champ `domain`/`same_origin` dans `menu.d`), sweep
+   batché + repli gracieux.
+2. **§5 source santé = Option 5-C** (helper `secubox_core.health` partagé, refacto neutre du Hub).
+3. **Domaine = `hall.gk2.net`** (WebOS) ; `all.gk2.net`→Hub existant.
+
+→ Prochaine étape : plan d'implémentation (skill writing-plans), puis exécution TDD
+(subagent-driven-development).
