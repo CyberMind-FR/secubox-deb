@@ -1,3 +1,10 @@
+secubox-webos (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * Embed : iframe en mode ?embed=1&theme= (entête service masquée + skin
+    synchronisé) ; « Onglet » ouvre le vhost réel standalone. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:00:52 +0200
+
 secubox-webos (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Radio VIVANTE : now-playing lu côté serveur (radio.sock), même

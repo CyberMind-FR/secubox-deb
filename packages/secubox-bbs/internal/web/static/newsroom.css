@@ -41,6 +41,10 @@ a{color:inherit;text-decoration:none}
 /* masthead */
 .mast{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 86%,transparent);
   backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
+/* Embarquement Hall (#1175) : la barre du Hall remplace l'entête BBS → on la
+   masque quand le BBS est encadré (classe posée par coquille.js). Vhost réel
+   inchangé. */
+:root.sbx-embed .mast{display:none}
 .mast-top{display:flex;align-items:baseline;gap:14px;justify-content:center;padding:8px 20px 4px;flex-wrap:wrap;
   border-bottom:1px solid var(--line);font-family:"JetBrains Mono";font-size:.62rem;letter-spacing:.13em;color:var(--dim);text-transform:uppercase}
 .mast-top .r{color:var(--coral)} .mast-top .l{color:var(--sky)}

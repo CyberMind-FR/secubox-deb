@@ -248,6 +248,7 @@
       {{if and .V.Connecte .Mod.MP}}<a class="ibtn mpal{{if .NonLus}} on{{end}}" href="/mp" title="Messages privés{{if .NonLus}} — {{.NonLus}} non lu(s){{end}}" aria-label="Messages privés{{if .NonLus}}, {{.NonLus}} non lus{{end}}">✉️{{if .NonLus}}<span class="mpct" aria-hidden="true">{{.NonLus}}</span>{{end}}</a>{{end}}
       {{if .V.Connecte}}<a class="me-chip" href="/compte" title="Mon compte"><span class="av">{{if .V.Avatar}}<img src="/f/{{.V.Avatar}}" alt="">{{else}}{{.V.Initiales}}{{end}}</span><small>{{.V.Handle}}</small></a>
       {{else}}<a class="btn primary" href="/login">Entrer</a>{{end}}
+      <a class="ibtn" href="https://hall.gk2.secubox.in/" title="Ouvrir dans le Hall WebOS" aria-label="Ouvrir dans le Hall">⧉</a>
       <button class="ibtn" type="button" data-act="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
     </div>
   </div>

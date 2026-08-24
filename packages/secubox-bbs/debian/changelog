@@ -1,3 +1,11 @@
+secubox-bbs (0.30.3-1~bookworm1) bookworm; urgency=medium
+
+  * Embarquement Hall : encadré par le Hall, le BBS masque son entête (barre
+    Hall unique), synchronise le thème (?theme=), et expose un lien ⧉ Hall. Vhost
+    réel standalone inchangé par défaut. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:00:52 +0200
+
 secubox-bbs (0.30.2-1~bookworm1) bookworm; urgency=medium
 
   * Cadrage : frame-ancestors autorise AUSSI https://hall.gk2.net (le Hall

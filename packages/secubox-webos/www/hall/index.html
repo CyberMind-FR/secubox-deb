@@ -480,9 +480,13 @@ function showEmbed(id){
   document.getElementById('eb-name').textContent=f.label;
   document.getElementById('eb-host').textContent=f.url;
   document.getElementById('eb-led').className='led '+st;
-  const url='https://'+f.url+'/';
-  document.getElementById('eb-open').href=url;
-  document.getElementById('eb-frame').src=url;
+  // ?embed=1 → le service masque son entête (barre Hall unique) ; theme= → il
+  // synchronise le skin clair/nuit du Hall (#1175).
+  const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  const plain='https://'+f.url+'/';
+  const url=plain+'?embed=1&theme='+th;
+  document.getElementById('eb-open').href=plain;   // onglet = vhost réel standalone
+  document.getElementById('eb-frame').src=url;      // iframe = mode embed (entête masquée)
   document.getElementById('eb-hint').style.display=EMBEDDABLE.has(id)?'none':'';
   document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
   showView('embed');
