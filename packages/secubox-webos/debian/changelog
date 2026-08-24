@@ -1,3 +1,18 @@
+secubox-webos (1.0.20-1~bookworm1) bookworm; urgency=medium
+
+  * Mégamenu = vraies BULLES multi-menus (façon menubar) : chaque service porte
+    sa bulle (Ouvrir dans le Hall / Console admin / Ouvrir un onglet) ; les
+    salons BBS alimentent la bulle BBS. Bulle en position FIXE calculée en JS →
+    échappe au clip overflow du mégamenu (avant : flyout rogné, inaccessible).
+  * iPhone : correctif d'ouverture du mégamenu — les règles :hover passent sous
+    @media(hover:hover), sinon le 1er tap est absorbé par l'état survol et le
+    clic n'ouvre jamais le menu (Safari + Chrome iOS). Bulles dépliables au tap
+    du chevron (accordéon), classe .subopen (plus de collision avec .open carte).
+  * Voile de fond du menu rendu TRANSPARENT : la vue/embed courant reste 100 %
+    visible (le fondu le faisait « disparaître »). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 21:05:00 +0200
+
 secubox-webos (1.0.19-1~bookworm1) bookworm; urgency=medium
 
   * Mégamenu façon menu système macOS : le sous-menu BBS ne s'affiche plus
