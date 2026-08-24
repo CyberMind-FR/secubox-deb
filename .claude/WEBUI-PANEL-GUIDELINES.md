@@ -233,4 +233,68 @@ Le plus tard ne vient jamais, et l'écart devient une dérive de plus.
 
 ---
 
+## 9. Embarquement dans le Hall WebOS (#1187) — RÈGLE
+
+> **Un service encadré masque sa propre coquille. En accès direct, il n'en perd rien.**
+
+Le Hall embarque les services dans une iframe et fournit déjà, autour d'eux, sa
+barre système, son menu contextuel et sa barre d'état. Un panneau qui garderait
+en plus sa sidebar et ses deux barres empile deux coquilles et mange l'écran —
+c'est précisément ce que la maquette ne montre jamais.
+
+### La méthode : détecter le CADRAGE, pas un paramètre d'URL
+
+C'est celle du BBS (`coquille.js`), reprise par la coquille admin partagée
+(`packages/secubox-hub/www/shared/sidebar.js`) :
+
+```js
+const EMBARQUE = (function () {
+    try { return window.top !== window.self; } catch (e) { return true; }
+})();
+if (EMBARQUE) document.documentElement.classList.add('sbx-embed');
+```
+
+```css
+:root.sbx-embed .sidebar,
+:root.sbx-embed .global-menu-bar,
+:root.sbx-embed .global-status-bar { display: none !important; }
+:root.sbx-embed .main { margin-left: 0 !important; }
+```
+
+**Pourquoi le cadrage plutôt qu'un `?embed=1`** — un paramètre se perd au
+premier lien interne : le module rendrait sa coquille dès la deuxième page. La
+détection vaut pour *toutes* les entrées, liens profonds compris, et ne demande
+rien à qui embarque. L'accès cross-origin à `window.top` lève : on se considère
+alors encadré, parce qu'on ne masque jamais que du chrome, jamais du contenu.
+
+### Ce que le mode embarqué masque — et ce qu'il ne masque pas
+
+| Masqué | Conservé |
+|---|---|
+| Sidebar de navigation du module | **Tout le contenu** du panneau |
+| Barre haute globale (`global-menu-bar`) | Les contrôles propres à la page (boutons, formulaires) |
+| Barre d'état basse (`global-status-bar`) | Le skin du module (hybrid-dark pour l'admin) |
+| Les boucles de sondage qui alimentent ce chrome | Les appels de données du panneau lui-même |
+
+Ne pas ouvrir de timer pour un chrome qu'on n'affiche pas : un panneau embarqué
+qui sonde toutes les 30 s une barre invisible coûte à la box sans rien rendre.
+
+### Le thème ne se synchronise pas partout
+
+Le BBS suit le thème du Hall (`?theme=`, surface publique AletheiaVox). Les
+**panneaux admin gardent hybrid-dark** — c'est la charte, pas un oubli. Ne pas
+propager `?theme=` vers `admin.gk2.secubox.in`.
+
+### Checklist d'embarquement
+
+- [ ] `window.top !== window.self` testé dans un `try/catch`, défaut = encadré
+- [ ] classe posée sur `documentElement` **avant le premier rendu** (pas de flash de coquille)
+- [ ] sidebar, barre haute, barre basse masquées en CSS `!important`
+- [ ] décalage de contenu (`margin-left`) remis à zéro
+- [ ] aucune boucle de sondage ouverte pour du chrome masqué
+- [ ] accès direct au vhost réel vérifié : la coquille est **intacte**
+- [ ] la navigation perdue est bien reprise par le menu contextuel du Hall
+
+---
+
 *© 2026 CyberMind · Notre-Dame-du-Cruet, Savoie · LicenseRef-CMSD-1.0*

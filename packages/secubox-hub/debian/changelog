@@ -1,3 +1,23 @@
+secubox-hub (1.9.9-1~bookworm1) bookworm; urgency=medium
+
+  * Coquille admin partagée : MODE EMBARQUÉ, même méthode que le BBS. Encadré
+    par le Hall (window.top !== window.self), un panneau masque désormais SA
+    PROPRE coquille — sidebar de navigation, barre haute globale et barre
+    d'état basse — car le Hall fournit déjà la sienne ; deux coquilles empilées
+    mangeaient l'écran. En accès DIRECT au vhost admin, rien ne change.
+  * La détection porte sur le CADRAGE, pas sur un `?embed=1` : un paramètre se
+    perd au premier lien interne et le module rendrait sa coquille dès la
+    deuxième page. L'accès cross-origin à window.top lève → on se considère
+    encadré (on ne masque que du chrome, jamais du contenu).
+  * Un panneau embarqué n'ouvre plus AUCUNE des boucles de sondage qui
+    alimentaient ce chrome (battement, métriques 30 s, statut 60 s, LED) :
+    autant de charge en moins sur la box pour une barre jamais affichée.
+  * Le thème n'est pas synchronisé depuis le Hall : les panneaux admin gardent
+    hybrid-dark, conformément à la charte. Règle rédigée dans
+    .claude/WEBUI-PANEL-GUIDELINES.md §9 avec sa checklist. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 01:55:00 +0200
+
 secubox-hub (1.9.8-1~bookworm1) bookworm; urgency=medium
 
   * Bandeau de santé v1.3.1 : ne s'injecte PLUS dans un lecteur incorporé —

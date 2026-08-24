@@ -81,7 +81,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mast-actions .who .av{width:30px;height:30px;border-radius:50%;background:var(--gold-s);display:grid;place-items:center;font-size:.95rem}
 .mast-actions .who b{font-size:.82rem}
 .mast-actions .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
-@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}}
+@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}
+}
 
 /* ── top nav ─────────────────────────────────────────────── */
 /* Nav de SECTIONS fusionnée dans la barre unique (mast-main). */
@@ -95,7 +96,21 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    sur l'entrée fait consommer le 1er tap par l'état survol → le clic n'ouvre jamais
    le mégamenu. On la neutralise donc sur tactile. */
 @media(hover:hover){.mnav .it:hover:not(.on){background:var(--soft);color:var(--ink)}}
+/* .mnav .it{display:flex} écrase .hidden : la règle doit être aussi spécifique. */
+.mnav .it.hidden{display:none}
 .mnav .badge{background:var(--coral);color:#fff;border-radius:20px;font-size:.6rem;padding:1px 6px;font-weight:700}
+@media(max-width:720px){
+/* #1187 — le 3e menu (contextuel) faisait DÉBORDER la barre horizontalement sur
+   téléphone : le document passait à 619px pour un écran de 390, et le pop se
+   calait hors de l'écran. Sous 720px les menus tombent en pictos seuls — le
+   libellé est un nœud de texte nu, d'où le font-size:0 rétabli sur les enfants. */
+.mnav .it{font-size:0;gap:0;padding:7px 7px}
+.mnav .it>span{font-size:.95rem} .mnav .it .ca{font-size:.62rem} .mnav .it .badge{font-size:.58rem}
+#ctx-lb{display:none}
+.nav-embed #eb-name{display:none}
+.nav-embed{padding-left:8px;margin-left:2px;gap:6px}
+.mast-main{gap:8px}
+}
 @media(max-width:960px){.mast-main{flex-wrap:wrap} .mnav{order:3}}
 /* Contexte du service embarqué, greffé dans le headbar racine (barre unique). */
 .nav-embed{display:inline-flex;align-items:center;gap:9px;padding-left:13px;margin-left:4px;border-left:2px solid var(--line-2)}
@@ -300,24 +315,8 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 .modesw button:hover{opacity:1;background:var(--panel)}
 .modesw button.on{opacity:1;background:var(--panel);box-shadow:0 1px 2px rgba(20,45,60,.14)}
 
-/* ── #1187 · panneau contextuel droit ────────────────────────── */
-/* LA navigation du service actif (salons BBS, rubriques…) vit ICI — plus dans
-   la barre système. Une seule nav contextuelle visible, sans doublon. */
-.embed-shell{display:grid;grid-template-columns:1fr 232px;gap:14px;align-items:start}
-.ctx{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
-  padding:8px;max-height:calc(100vh - 178px);overflow-y:auto}
-.ctx h4{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--dim);margin:4px 8px 6px}
-.ctx a{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:8px;font-size:.8rem;color:var(--ink)}
-.ctx a .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ctx a:hover{background:var(--soft)} .ctx a.on{background:var(--sky-s);color:var(--sky);font-weight:600}
-.ctx a .n{margin-left:auto;font-family:"JetBrains Mono";font-size:.6rem;color:var(--dim)}
-.ctx.hidden,.embed-shell.solo .ctx{display:none}
-.embed-shell.solo{grid-template-columns:1fr}
-@media(max-width:1000px){.embed-shell{grid-template-columns:1fr}
-  .ctx{max-height:none;display:flex;flex-wrap:wrap;gap:3px;order:-1}
-  .ctx h4{width:100%} .ctx a{font-size:.76rem;padding:5px 9px;border:1px solid var(--line);border-radius:20px}}
-
+/* #1187 — la nav du service actif est un MENU POP de la mégabar (#menu-contexte),
+   pas une colonne : elle réutilise tel quel le rendu .megamenu de Services. */
 </style>
 
 </head>
@@ -329,6 +328,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
       <button class="it" type="button" data-nav="accueil"><span>🏠</span> Accueil</button>
       <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
       <button class="it" type="button" data-menu="systeme"><span>🗄️</span> Système <span class="ca">▾</span></button>
+      <button class="it hidden" type="button" id="mnav-ctx" data-menu="contexte" title="Navigation du service actif"><span id="ctx-ic">💬</span> <span id="ctx-lb">Service</span> <span class="ca">▾</span></button>
       <button class="it" type="button"><span>🔔</span> Alertes <span class="badge">3</span></button>
       <button class="it" type="button"><span>👤</span> Profil</button>
     </nav>
@@ -374,6 +374,13 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     </div>
   </div>
 
+  <!-- Menu CONTEXTUEL : la nav du service actif, en POP de la mégabar (pas en
+       colonne permanente) — même rendu que Services. -->
+  <div id="menu-contexte" class="megamenu hidden" data-panel="contexte" aria-label="Navigation du service">
+    <h4 id="ctx-h">Navigation</h4>
+    <div id="ctx"></div>
+  </div>
+
   <main class="main">
     <!-- ACCUEIL : services principaux (curation all.gk2.net) -->
     <section id="view-accueil">
@@ -411,10 +418,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     <!-- SERVICE EMBARQUÉ : page propre, vhost réel inline -->
     <section id="view-embed" class="hidden">
       <div class="embed-hint" id="eb-hint">Si la page reste vide, ce service n'autorise pas encore l'embarquement — ouvrez-le en onglet.</div>
-      <div class="embed-shell solo" id="embed-shell">
-    <div class="embed-wrap" id="eb-frames"></div>
-    <aside class="ctx hidden" id="ctx" aria-label="Navigation du service"></aside>
-  </div>
+      <div class="embed-wrap" id="eb-frames"></div>
     </section>
 
     <!-- SYSTÈME : tous les modules du registre -->
@@ -605,6 +609,9 @@ function showView(v){
   // du service (barre unique — #1175). Le mix LIVE des éléments du service
   // (stats/présence/recherche) = P6 postMessage (barre injectée), différé.
   const ne=document.getElementById('nav-embed'); if(ne) ne.classList.toggle('hidden', v!=='embed');
+  // Le menu contextuel n'a de sens que devant un service embarqué.
+  const bc=document.getElementById('mnav-ctx');
+  if(bc && v!=='embed'){ bc.classList.add('hidden'); }
   // Barre de statut « où suis-je » (embed gère son propre libellé dans openService).
   if(v!=='embed'){
     const L={accueil:'Accueil',systeme:'Système',aide:'Aide'};
@@ -672,20 +679,22 @@ function openService(id, mode, sub, subLabel){
 // LA nav du service actif — descendue de la barre système vers le panneau DROIT
 // (« put down to its reference »). Les salons BBS vivent désormais ici.
 function loadCtx(id, cur){
-  const ctx=document.getElementById('ctx'), shell=document.getElementById('embed-shell');
-  ctx.innerHTML=''; ctx.classList.add('hidden'); shell.classList.add('solo');
+  const ctx=document.getElementById('ctx'), bt=document.getElementById('mnav-ctx');
+  ctx.innerHTML=''; bt.classList.add('hidden');
+  if(_svc){ document.getElementById('ctx-ic').textContent=_svc.icon;
+            document.getElementById('ctx-lb').textContent=_svc.label; }
   fetch('/api/v1/webos/public/menu/'+encodeURIComponent(id),{headers:{'Accept':'application/json'}})
     .then(r=>r.ok?r.json():null).then(m=>{
       const items=(m&&m.items)||[]; if(!items.length || !_svc || _svc.id!==id) return;
-      let h='<h4>'+esc(m.title||'Navigation')+'</h4>';
-      h+=items.slice(0,24).map(c=>{
+      document.getElementById('ctx-h').textContent=m.title||'Navigation';
+      ctx.innerHTML=items.slice(0,24).map(c=>{
         const path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return '';
         return rowHTML({attrs:'data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'+(path===cur?' class="on"':''),
                         icon:c.icon||(_svc&&_svc.icon)||'💬', label:c.title||c.slug,
                         count:(c.threads!=null?c.threads:null),
                         admin:id, tab:'https://'+(_svc?_svc.url:'')+path});
       }).join('');
-      ctx.innerHTML=h; ctx.classList.remove('hidden'); shell.classList.remove('solo');
+      bt.classList.remove('hidden');   // le menu n'existe QUE s'il a du contenu
     }).catch(()=>{});
 }
 
@@ -740,7 +749,7 @@ document.addEventListener('click',e=>{
   if(md){ e.preventDefault(); setMode(md.dataset.mode); return; }
   // Nav contextuelle du service actif (panneau droit) — salons BBS & co.
   const cx=e.target.closest('[data-ctx]');
-  if(cx && _svc){ e.preventDefault(); openService(_svc.id, _mode, cx.dataset.ctx, cx.dataset.ctxt); return; }
+  if(cx && _svc){ e.preventDefault(); openService(_svc.id, _mode, cx.dataset.ctx, cx.dataset.ctxt); setMenu(false); return; }
   // Point d'entrée unique : menus plats, cartes principales et cartes du parc.
   const op=e.target.closest('[data-open]');
   if(op){ openService(op.dataset.open, op.dataset.mode||'embed'); setMenu(false); return; }

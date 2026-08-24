@@ -1,3 +1,25 @@
+secubox-webos (1.0.28-1~bookworm1) bookworm; urgency=medium
+
+  * La navigation du service actif n'est PLUS une colonne permanente : elle
+    devient un TROISIÈME MENU POP de la mégabar, à côté de Services et Système,
+    portant l'emoji et le nom du service actif. Il n'apparaît que devant un
+    service embarqué qui expose réellement un menu, et disparaît dès qu'on
+    revient à l'accueil. L'embed reprend toute la largeur.
+  * Correctif responsive : ce troisième bouton faisait DÉBORDER la barre
+    horizontalement sur téléphone (document à 605px pour un écran de 390) — le
+    menu pop se calait alors hors de l'écran, injoignable. Sous 720px les
+    entrées de menu tombent en pictogrammes seuls (le libellé est un nœud de
+    texte nu : font-size:0 sur l'entrée, rétabli sur les enfants), le nom du
+    service et celui du contexte sont masqués. Vérifié à 360, 390, 430 et
+    1400px : plus aucun débordement horizontal.
+  * Correctif : la règle de compactage était placée AVANT la définition de base
+    de `.mnav .it`, donc écrasée à spécificité égale. Déplacée après.
+  * Correctif : `.mnav .it{display:flex}` écrasait `.hidden` — le bouton
+    contextuel restait visible hors embed. Règle `.mnav .it.hidden` ajoutée.
+    (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 01:50:00 +0200
+
 secubox-webos (1.0.27-1~bookworm1) bookworm; urgency=medium
 
   * Menus unifiés : les TROIS listes (Services, Système, panneau contextuel)
