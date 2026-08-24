@@ -181,3 +181,20 @@ Directives utilisateur (#1175, 2026-08-24) — **différé, design-first ; ne co
 
 Rappel sécurité : **jamais de recopie de cookies vers le navigateur client**. Le rejeu
 authentifié = coffre + pool navigateur souverain (dans la box).
+
+## Avatar multi-utilisateur « famille » (émancipation depuis sessions captées)
+
+TODO à créer/raffiner (capté 2026-08-24) : **émanciper l'avatar** à partir de
+l'**agrégation des cookies/sessions captés** afin que **plusieurs utilisateurs d'un
+foyer (famille)** bénéficient d'un **auth passif complet** par service, **sous contrôle
+sysop** :
+- un **avatar par membre** (ou par rôle), alimenté par le coffre de sessions ;
+- **activation/révocation par service et par avatar** décidée par le sysop (allow-list) ;
+- rejeu **DANS la box** (pool navigateur souverain), **jamais** de recopie de cookies
+  vers le navigateur client (brief §14 / CSPN) ;
+- traçabilité via l'**avatar reporter** (quel avatar a activé quel service, quand).
+- Modèle mental : l'avatar **squatte** le nœud — session hôte consentie, invité borné
+  par le périmètre sysop (« pas tout à fait chez lui, mais bien là »).
+
+Lien : [`webos-sbx-hall-cardlets.md`] §24 (backlog WebOS realtime) — l'auth passive est
+le mur derrière les embeds admin/services self-authentifiés du Hall.

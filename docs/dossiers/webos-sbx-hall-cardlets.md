@@ -120,3 +120,36 @@ Unit (normalisation registre, mapping santé, latence, schéma cardlet, cache st
 
 ## Rapport avec les TODO widgets déjà ouverts
 Ce brief chapeaute : #1170 (cardlets vidéo média-en-fond), #1171 (widget ytsas micro/mini/full), #1172 (radio slide messages↔playlist). Ils sont des instances du modèle cardlet ci-dessus — à réconcilier dans le système commun (tailles small|medium|wide, contrat cardlet, adaptateur par module) plutôt qu'isolément.
+
+---
+
+## 24. Backlog vision « WebOS realtime » (capté en session 2026-08-24, à raffiner)
+
+Design-first — noté pour suite, pas encore spécifié :
+
+1. **Fenêtres / widgets d'app** — le Hall doit gérer des surfaces façon fenêtres :
+   pop-ups **persistantes**, déplaçables/redimensionnables, prises depuis une cardlet
+   **multi-taille** (la Radio comme échantillon de référence). small|medium|wide + état
+   « flottant/épinglé ».
+2. **Widget persistant inter-service** — ex. une **pop-up Radio épinglée** qui **reste
+   active pendant qu'on navigue sur Nextcloud** (ou tout autre service), portée par
+   l'**injection de la mégabar** (P6 sub_filter). = *WebOS modulaire temps-réel* : la
+   barre + les widgets suivent l'utilisateur d'un vhost à l'autre. Shared runtime souverain.
+3. **Trois formes par service** — chaque module exposé en : **vrai vhost** (embed plein),
+   **menu embarqué** (navbar catch → sous-menu/bulle, cf. `/menu/<id>`), **cardlet**
+   full / mini / micro (`/cardlets/<id>`). Radio = premier complet ; généraliser
+   (peertube, nextcloud, …) via adaptateurs par module.
+4. **Multi-nœuds** — vue fédérée du parc dans le Hall (plusieurs nœuds gondwana), « au
+   prochain » ; le registre normalisé devra porter la dimension nœud.
+5. **Avatar « émancipé » multi-utilisateur (famille)** — raffiner l'avatar souverain
+   depuis l'**agrégation des cookies/sessions captés** pour que **plusieurs utilisateurs
+   (famille)** obtiennent un **auth passif complet** par service, **sous contrôle sysop**
+   (activation/révocation par avatar). Cf. [`secubox-avatar.md`] — jamais de recopie de
+   cookies vers le client ; rejeu = coffre + pool navigateur dans la box.
+   > Note de conception : l'avatar *squatte* le nœud — invité, « pas tout à fait chez
+   > lui, mais bien là ». Session hôte consentie, périmètre sysop.
+
+Statut mégabar (fait 2026-08-24) : mégamenu = vraies bulles multi-menus (Ouvrir Hall /
+Console admin / Onglet + salons BBS), bulle en position fixe (échappe au clip),
+ouverture fiable iPhone (@media hover:hover), voile transparent. Reste : injection
+mégabar sur services non-embarqués + widgets flottants persistants (ci-dessus).
