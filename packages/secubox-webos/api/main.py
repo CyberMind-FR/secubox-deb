@@ -105,7 +105,9 @@ async def cardlet_radio():
     now = time.time()
     if _rc["d"] and now - _rc["t"] < 5:
         return _rc["d"]
-    d = cardlets.radio_cardlet_safe()
+    # radio_cardlet_safe fait de l'I/O socket BLOQUANTE : hors du thread, elle
+    # gèle la boucle uvicorn (single-worker) → 502 sur tout le module (#1175).
+    d = await asyncio.to_thread(cardlets.radio_cardlet_safe)
     _rc["d"], _rc["t"] = d, now
     return d
 

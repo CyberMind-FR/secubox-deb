@@ -1,3 +1,10 @@
+secubox-webos (1.0.12-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Radio : I/O socket déportée en thread (asyncio.to_thread) — ne gèle
+    plus la boucle uvicorn → fin des 502 sur /cardlets/radio. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:28:57 +0200
+
 secubox-webos (1.0.11-1~bookworm1) bookworm; urgency=medium
 
   * Embed : l'iframe REMPLIT la carte (hauteur = viewport - headbar), le service
