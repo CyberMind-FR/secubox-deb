@@ -880,6 +880,14 @@ cmd_sieve() {
                 [ -n "$_sbk" ] && cmd_restore "$_sbk" >/dev/null 2>&1
                 return 1
             fi
+            # Le sieve par défaut est déposé root:root (host→idmap nobody) : le
+            # process de remise (vmail) ne peut alors PAS écrire le .svbin
+            # compilé à côté, et Pigeonhole abandonne silencieusement le
+            # filtrage. On rend le dossier writable par vmail puis on pré-compile
+            # SOUS vmail, pour que le .svbin lui appartienne. Sans droit d'écriture
+            # ici, `sieve_default` ne range jamais le spam dans Junk.
+            lxc_attach "$CONTAINER" sh -c 'chown -R vmail:vmail /var/vmail/sieve 2>/dev/null; \
+                runuser -u vmail -- sievec /var/vmail/sieve/default.sieve 2>/dev/null' || true
             log "Sieve activé"
             cmd_sieve status ;;
         status)
