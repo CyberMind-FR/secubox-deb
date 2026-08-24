@@ -1298,6 +1298,34 @@ cmd_rspamd() {
         status)
             lxc-attach -n "$CONTAINER" -- rspamc stat 2>&1 | head -40
             ;;
+        milter)
+            # Câble Rspamd en milter Postfix. Le proxy worker :11332 écoute déjà
+            # (milter=yes, self_scan=yes) ; il manque juste smtpd_milters côté
+            # Postfix + l'en-tête X-Spam-Status que le sieve par défaut consomme.
+            # SURGICAL via `postconf -e` sur le VRAI /etc/postfix/main.cf du
+            # conteneur (configure_rspamd_postfix_milter historique appendait au
+            # mauvais fichier $DATA_PATH/config/main.cf ≠ /etc/postfix/main.cf,
+            # d'où un milter jamais câblé malgré `rspamd install`).
+            local _mh="${TEMPLATES_DIR:-/usr/lib/secubox/mail/templates}/rspamd/local.d/milter_headers.conf"
+            if [ -f "$_mh" ]; then
+                lxc-attach -n "$CONTAINER" -- tee /etc/rspamd/local.d/milter_headers.conf < "$_mh" >/dev/null
+            else
+                warn "template milter_headers.conf absent ($_mh) — X-Spam-Status non garanti"
+            fi
+            lxc-attach -n "$CONTAINER" -- postconf -e \
+                "smtpd_milters=inet:127.0.0.1:11332" \
+                "non_smtpd_milters=inet:127.0.0.1:11332" \
+                "milter_default_action=accept" \
+                "milter_protocol=6" \
+                "milter_mail_macros=i {auth_authen} {auth_type} {client_addr} {client_name} {mail_addr}"
+            lxc-attach -n "$CONTAINER" -- systemctl restart rspamd postfix
+            local _m; _m="$(lxc-attach -n "$CONTAINER" -- postconf -h smtpd_milters 2>/dev/null)"
+            if [ "$_m" = "inet:127.0.0.1:11332" ]; then
+                log "Rspamd câblé en milter Postfix ($_m) — X-Spam-Status → sieve → Junk"
+            else
+                error "câblage milter échoué (smtpd_milters='$_m')"; return 1
+            fi
+            ;;
         dkim-keygen)
             local domain="${1:-$DOMAIN}"
             local sel="${2:-default}"
