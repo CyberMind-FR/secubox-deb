@@ -7,6 +7,26 @@
    clic, comme coquille.js. La lecture audio joue le VRAI média du fil
    (media-src 'self' autorise /media/ep/… local) ; la vidéo renvoie à la page du
    fil, qui intègre le lecteur avec sa propre politique. Rien n'est feint. */
+
+// EMBARQUEMENT HALL (#1175). L'accueil est un template autonome (charge
+// newsroom.js, PAS coquille.js) : la détection d'embed vit donc AUSSI ici.
+// Encadré par le Hall (seul autorisé), le BBS masque son entête (barre Hall
+// unique) et synchronise le thème (?theme=). Les widgets imbriqués qui
+// re-encadrent d'autres vhosts (radio /micro) sont masqués en embed : le
+// chaînage hall>bbs>radio casse leur frame-ancestors et déclenche des 401
+// (cookies SameSite non transmis en iframe cross-site) — l'auth imbriquée
+// relève du coffre avatar, différé.
+(function () {
+  try {
+    var r = document.documentElement;
+    if (window.top !== window.self) { r.classList.add('sbx-embed'); }
+    var qt = new URLSearchParams(location.search).get('theme');
+    if (qt === 'dark' || qt === 'light') {
+      r.setAttribute('data-theme', qt);
+      try { localStorage.setItem('av-theme', qt); } catch (e) {}
+    }
+  } catch (e) {}
+})();
 (function () {
   "use strict";
   var $ = function (s, r) { return (r || document).querySelector(s); };
