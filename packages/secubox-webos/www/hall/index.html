@@ -1,0 +1,397 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: WebOS / Hall — bureau numérique souverain (#1175, P2 shell mockup).
+  Surface publique BLANCHE AletheiaVox (≠ skin admin hybrid-dark). Consomme le
+  registre normalisé /api/v1/webos/public/services (repli mock si indisponible).
+-->
+<title>SecuBox Hall</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400..600&display=swap">
+<style>
+:root{
+  --ink:#17232d; --paper:#f5f3ec; --panel:#ffffff; --line:#d9e0e4; --line-2:#c5cdd3;
+  --soft:#efeadd; --dim:#697985;
+  --coral:#a73d42; --coral-s:#f6e7e8; --mint:#28765e; --mint-s:#e4f2eb;
+  --amber:#c87832; --amber-s:#fbf0e4; --cyan:#00a8c8; --cyan-s:#dff5f7;
+  --sky:#104a88; --sky-s:#e8f2f8; --gold:#b8912f; --gold-s:#f5ecd2;
+  --shadow:0 1px 2px rgba(20,45,60,.05),0 6px 22px rgba(20,45,60,.09);
+  --lift:0 2px 4px rgba(20,45,60,.08),0 14px 34px -12px rgba(20,45,60,.22);
+  --r:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#eef3f6; --paper:#0c141c; --panel:#14212d; --line:#2a3b49; --line-2:#33475a;
+    --soft:#16242f; --dim:#8598a5;
+    --coral:#e07d82; --coral-s:#3a1d1e; --mint:#5fce9f; --mint-s:#14302a;
+    --amber:#e0b06a; --amber-s:#3a2a12; --cyan:#33c4de; --cyan-s:#123642;
+    --sky:#6aa8e6; --sky-s:#173049; --gold:#d9bd6a; --gold-s:#2b2718;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+    --lift:0 2px 6px rgba(0,0,0,.5),0 18px 40px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#eef3f6; --paper:#0c141c; --panel:#14212d; --line:#2a3b49; --line-2:#33475a;
+  --soft:#16242f; --dim:#8598a5;
+  --coral:#e07d82; --coral-s:#3a1d1e; --mint:#5fce9f; --mint-s:#14302a;
+  --amber:#e0b06a; --amber-s:#3a2a12; --cyan:#33c4de; --cyan-s:#123642;
+  --sky:#6aa8e6; --sky-s:#173049; --gold:#d9bd6a; --gold-s:#2b2718;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+  --lift:0 2px 6px rgba(0,0,0,.5),0 18px 40px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  color:var(--ink); background-color:var(--paper);
+  font-family:"Inter",system-ui,sans-serif; font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+  background-image:radial-gradient(var(--line) .5px,transparent .5px),radial-gradient(var(--line) .5px,var(--paper) .5px);
+  background-size:22px 22px,22px 22px; background-position:0 0,11px 11px;
+}
+.serif{font-family:"Fraunces",Georgia,serif}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+
+/* ── système bar ─────────────────────────────────────────────── */
+.mast{position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(12px);
+  border-bottom:2px solid var(--ink)}
+.mast-top{display:flex;align-items:center;gap:8px;padding:4px 20px;border-bottom:1px solid var(--line);
+  font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.13em;color:var(--dim);text-transform:uppercase}
+.mast-top .l{color:var(--sky)} .mast-top .r{color:var(--coral)} .mast-top .grow{flex:1}
+.mast-main{display:flex;align-items:center;gap:16px;padding:12px 20px}
+.logo{display:flex;align-items:center;gap:12px}
+.logo .mark{width:44px;height:44px;border-radius:12px;border:2px solid var(--ink);display:grid;place-items:center;
+  font-family:"Fraunces";font-weight:700;font-size:1.3rem;background:var(--gold-s);position:relative;color:var(--ink)}
+.logo .mark::after{content:"◆";position:absolute;bottom:-6px;right:-6px;font-size:.7rem;color:var(--gold)}
+.logo h1{margin:0;font-family:"Fraunces";font-size:1.4rem;font-weight:700;letter-spacing:.01em;line-height:1}
+.logo .sub{font-family:"JetBrains Mono";font-size:.55rem;letter-spacing:.26em;color:var(--dim);text-transform:uppercase}
+.search{flex:1;max-width:420px;position:relative}
+.search input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1.5px solid var(--line-2);
+  background:var(--panel);color:var(--ink);font-family:"JetBrains Mono";font-size:.8rem;outline:none;transition:.15s}
+.search input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px var(--cyan-s)}
+.search .ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.5}
+.node{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono";font-size:.72rem;color:var(--dim)}
+.node .dot{width:9px;height:9px;border-radius:50%;background:var(--mint);box-shadow:0 0 0 3px var(--mint-s)}
+.iconbtn{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line-2);background:var(--panel);
+  display:grid;place-items:center;font-size:1rem;color:var(--ink);transition:.15s}
+.iconbtn:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* ── layout ──────────────────────────────────────────────────── */
+.shell{display:grid;grid-template-columns:236px 1fr;gap:0;max-width:1500px;margin:0 auto}
+.rail{position:sticky;top:97px;align-self:start;height:calc(100vh - 97px);overflow-y:auto;
+  padding:18px 12px;border-right:1px solid var(--line)}
+.rail h3{font-family:"JetBrains Mono";font-size:.58rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--dim);margin:18px 8px 7px}
+.rail h3:first-child{margin-top:0}
+.rail a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;font-size:.86rem;
+  color:var(--ink);transition:.12s}
+.rail a:hover{background:var(--soft)}
+.rail a.on{background:var(--sky-s);color:var(--sky);font-weight:600}
+.rail a .g{width:20px;text-align:center}
+.rail a .n{margin-left:auto;font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim)}
+.main{padding:22px 24px 60px;min-width:0}
+
+/* ── section + grille ────────────────────────────────────────── */
+.hero{margin:0 0 20px}
+.hero h2{font-family:"Fraunces";font-size:1.7rem;font-weight:600;margin:0 0 4px}
+.hero p{margin:0;color:var(--dim);max-width:60ch}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 4px;font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
+.legend span{display:flex;align-items:center;gap:6px}
+.led{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.led.online{background:var(--mint);box-shadow:0 0 0 3px var(--mint-s)}
+.led.degraded{background:var(--amber);box-shadow:0 0 0 3px var(--amber-s)}
+.led.offline{background:var(--coral);box-shadow:0 0 0 3px var(--coral-s)}
+.led.unknown{background:var(--dim);box-shadow:0 0 0 3px var(--line)}
+
+.cat{margin:28px 0 10px;display:flex;align-items:baseline;gap:10px}
+.cat h3{font-family:"Fraunces";font-size:1.15rem;font-weight:600;margin:0}
+.cat .rule{flex:1;height:1px;background:var(--line)}
+.cat .count{font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:14px}
+
+/* ── carte compacte ──────────────────────────────────────────── */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
+  padding:14px 15px;display:flex;flex-direction:column;gap:9px;transition:.18s;position:relative;overflow:hidden}
+.card:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
+.card.off{opacity:.72}
+.card .top{display:flex;align-items:center;gap:11px}
+.card .ic{width:40px;height:40px;border-radius:10px;background:var(--soft);display:grid;place-items:center;
+  font-size:1.25rem;flex:0 0 auto}
+.card .nm{min-width:0;flex:1}
+.card .nm b{font-family:"Fraunces";font-weight:600;font-size:1.02rem;display:block;line-height:1.2}
+.card .host{font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .state{display:flex;align-items:center;gap:6px;font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim);
+  white-space:nowrap}
+.card .desc{color:var(--dim);font-size:.82rem;line-height:1.45;min-height:2.3em;
+  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+.chip{font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.04em;padding:3px 8px;border-radius:20px;
+  border:1px solid var(--line-2);color:var(--dim);display:inline-flex;align-items:center;gap:4px}
+.chip.lan{border-color:var(--sky);color:var(--sky);background:var(--sky-s)}
+.chip.wan{border-color:var(--mint);color:var(--mint);background:var(--mint-s)}
+.chip.lat{border-color:var(--cyan);color:var(--cyan);background:var(--cyan-s)}
+.chip.rest{border-style:dashed}
+.card .go{margin-left:auto;font-family:"JetBrains Mono";font-size:.66rem;color:var(--cyan);opacity:0;transition:.15s}
+.card:hover .go{opacity:1}
+
+/* ── cardlet active (Radio, réf. brief §6) ───────────────────── */
+.card.wide{grid-column:span 2}
+@media (max-width:640px){.card.wide{grid-column:span 1}}
+.radio{display:flex;flex-direction:column;gap:12px}
+.radio .rtop{display:flex;gap:13px;align-items:center}
+.radio .cover{width:66px;height:66px;border-radius:12px;flex:0 0 auto;
+  background:linear-gradient(135deg,var(--sky),var(--cyan));display:grid;place-items:center;font-size:1.7rem;color:#fff}
+.radio .meta b{font-family:"Fraunces";font-size:1.1rem;display:block}
+.radio .meta .art{color:var(--dim);font-size:.82rem}
+.radio .meta .live{display:inline-flex;align-items:center;gap:6px;margin-top:5px;font-family:"JetBrains Mono";
+  font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--coral)}
+.radio .live .led{background:var(--coral);box-shadow:0 0 0 3px var(--coral-s);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){.radio .live .led{animation:none}}
+.radio .bar{display:flex;align-items:center;gap:8px}
+.radio .bar button{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line-2);background:var(--panel);
+  display:grid;place-items:center;font-size:.95rem;color:var(--ink);transition:.15s}
+.radio .bar button.play{background:var(--ink);color:var(--paper);border-color:var(--ink);width:44px;height:44px;font-size:1.05rem}
+.radio .bar button:hover{border-color:var(--cyan);color:var(--cyan)}
+.radio .bar button.play:hover{color:var(--paper);opacity:.88}
+.radio .counts{margin-left:auto;display:flex;gap:14px;font-family:"JetBrains Mono";font-size:.7rem;color:var(--dim)}
+.radio .counts b{color:var(--ink)}
+.radio .msg{display:flex;gap:8px}
+.radio .msg input{flex:1;padding:8px 12px;border-radius:9px;border:1.5px solid var(--line-2);background:var(--soft);
+  color:var(--ink);font-size:.8rem;outline:none}
+.radio .msg input:focus{border-color:var(--cyan)}
+.radio .msg button{padding:0 15px;border-radius:9px;border:none;background:var(--cyan);color:#fff;font-size:.8rem;font-weight:600}
+
+/* ── état source ─────────────────────────────────────────────── */
+.srcnote{margin:18px 0 0;padding:10px 14px;border-radius:11px;border:1px dashed var(--line-2);
+  font-family:"JetBrains Mono";font-size:.68rem;color:var(--dim);background:var(--panel);display:flex;gap:9px;align-items:center}
+.srcnote b{color:var(--ink)}
+
+/* ── responsive ──────────────────────────────────────────────── */
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr}
+  .rail{display:none}
+  .search{max-width:none}
+}
+.foot-legal{max-width:1500px;margin:0 auto;padding:22px 24px 40px;color:var(--dim);font-size:.72rem;
+  font-family:"JetBrains Mono";border-top:1px solid var(--line)}
+</style>
+
+<header class="mast">
+  <div class="mast-top">
+    <span class="l">◤ souverain</span><span>·</span><span>hall.gk2.net</span>
+    <span class="grow"></span>
+    <span>registre normalisé</span><span>·</span><span class="r">aletheiavox</span>
+  </div>
+  <div class="mast-main">
+    <div class="logo">
+      <div class="mark serif">H</div>
+      <div>
+        <h1 class="serif">Hall</h1>
+        <div class="sub">bureau numérique · secubox</div>
+      </div>
+    </div>
+    <div class="search">
+      <span class="ico">⌕</span>
+      <input id="q" type="search" placeholder="chercher un service…" aria-label="Chercher un service">
+    </div>
+    <div class="node" title="Nœud local">
+      <span class="dot"></span><span id="nodelbl">gk2 · en ligne</span>
+    </div>
+    <button class="iconbtn" id="theme" title="Thème clair/sombre" aria-label="Basculer le thème">◐</button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Catégories">
+    <h3>Bureau</h3>
+    <a class="on" href="#tous"><span class="g">▦</span> Tous les services <span class="n" id="n-all">—</span></a>
+    <a href="#favoris"><span class="g">★</span> Favoris <span class="n">4</span></a>
+    <h3>Catégories</h3>
+    <a href="#c-wall"><span class="g">🛡️</span> Muraille <span class="n" id="n-wall">—</span></a>
+    <a href="#c-mind"><span class="g">🧠</span> Esprit <span class="n" id="n-mind">—</span></a>
+    <a href="#c-mesh"><span class="g">🕸️</span> Maillage <span class="n" id="n-mesh">—</span></a>
+    <a href="#c-auth"><span class="g">🔑</span> Accès <span class="n" id="n-auth">—</span></a>
+    <a href="#c-root"><span class="g">⚙️</span> Racine <span class="n" id="n-root">—</span></a>
+    <a href="#c-boot"><span class="g">⚡</span> Amorce <span class="n" id="n-boot">—</span></a>
+    <h3>Système</h3>
+    <a href="#"><span class="g">◉</span> État du nœud</a>
+    <a href="#"><span class="g">🔔</span> Notifications <span class="n">2</span></a>
+    <a href="#"><span class="g">◆</span> Cabine R5</a>
+  </nav>
+
+  <main class="main">
+    <div class="hero">
+      <h2 class="serif">Le bureau souverain</h2>
+      <p>Chaque service respire pour lui-même — le Hall les rassemble sans les absorber.
+         Carte compacte, cardlet vivante, application complète. La vérité opérationnelle
+         (santé, latence, LAN/WAN) vient du registre réel, jamais d'une maquette figée.</p>
+      <div class="legend" aria-hidden="true">
+        <span><i class="led online"></i> en ligne</span>
+        <span><i class="led degraded"></i> dégradé</span>
+        <span><i class="led offline"></i> hors ligne</span>
+        <span><i class="led unknown"></i> inconnu</span>
+        <span class="chip lan">LAN</span>
+        <span class="chip wan">WAN</span>
+        <span class="chip lat">latence</span>
+      </div>
+    </div>
+
+    <div id="board" aria-live="polite"></div>
+
+    <div class="srcnote" id="srcnote">
+      <span>◷</span><span id="srctext">Chargement du registre…</span>
+    </div>
+  </main>
+</div>
+
+<div class="foot-legal">
+  SecuBox Hall · WebOS souverain · surface publique AletheiaVox — la vérité opérationnelle reste partagée avec le registre du Hub.
+  Aucun cookie tiers, aucun secret dans le navigateur. hall.gk2.net
+</div>
+
+<script>
+// ── Repli maquette (mêmes champs que /api/v1/webos/public/services + détail) ──
+// Le registre RÉEL est minimal en public (id,name,category,icon,health,installed,
+// active) ; ce mock ajoute urls/latence pour montrer la carte enrichie (vue authentifiée).
+const MOCK = [
+  {id:"radio",name:"Radio",category:"mind",icon:"🎧",health:{state:"online",latency_ms:8},urls:{lan:"radio.gk2.secubox.in",wan:"radio.gk2.secubox.in"},routing:{mode:"wan"},active:true,installed:true,desc:"Webradio souveraine — flux continu, chat & propositions",cardlet:"radio"},
+  {id:"waf",name:"WAF",category:"wall",icon:"🔥",health:{state:"online",latency_ms:5},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Pare-feu applicatif Go sbxwaf — inspection en frontal TLS 1.3"},
+  {id:"crowdsec",name:"CrowdSec",category:"wall",icon:"🛰️",health:{state:"online",latency_ms:12},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Détection comportementale & bans partagés (mode souverain)"},
+  {id:"dpi",name:"DPI",category:"wall",icon:"🔬",health:{state:"degraded",latency_ms:44},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Inspection profonde ndpiReader — fenêtres bornées"},
+  {id:"ad-guard",name:"Ad Guard",category:"wall",icon:"🛡️",health:{state:"online",latency_ms:9},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Détection pubs/traceurs & statistiques par appareil"},
+  {id:"bbs",name:"BBS",category:"mind",icon:"💬",health:{state:"online",latency_ms:14},urls:{lan:"bbs.gk2.secubox.in",wan:"bbs.gk2.secubox.in"},routing:{mode:"wan"},active:true,installed:true,desc:"Forums, gazette AletheiaVox & médiathèque souveraine"},
+  {id:"billets",name:"Billets",category:"mind",icon:"📝",health:{state:"online",latency_ms:11},urls:{lan:"billets.gk2.secubox.in",wan:"billets.gk2.secubox.in"},routing:{mode:"wan"},active:true,installed:true,desc:"Micro-blog — publication rapide vers la gazette"},
+  {id:"nextcloud",name:"Nextcloud",category:"mind",icon:"☁️",health:{state:"online",latency_ms:22},urls:{lan:"nc.gk2.secubox.in",wan:"nc.gk2.secubox.in"},routing:{mode:"wan"},active:true,installed:true,desc:"Fichiers & collaboration — quota avant contenu"},
+  {id:"peertube",name:"PeerTube",category:"mind",icon:"🎬",health:{state:"online",latency_ms:31},urls:{lan:"peertube.gk2.secubox.in",wan:"peertube.gk2.secubox.in"},routing:{mode:"wan"},active:true,installed:true,desc:"Vidéo fédérée — miroir souverain des embeds"},
+  {id:"jellyfin",name:"Jellyfin",category:"mind",icon:"🍿",health:{state:"unknown",latency_ms:null},urls:{lan:"jellyfin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:false,installed:true,desc:"Médiathèque personnelle — réveil à la demande"},
+  {id:"metanews",name:"MetaNews",category:"mind",icon:"🗞️",health:{state:"online",latency_ms:18},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Topics clusterisés & nombre de sources"},
+  {id:"p2p",name:"MirrorNet",category:"mesh",icon:"🕸️",health:{state:"online",latency_ms:27},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Maillage P2P — Chain of Hamiltonians & annuaire Gondwana"},
+  {id:"wireguard",name:"WireGuard",category:"mesh",icon:"🔗",health:{state:"online",latency_ms:6},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Tunnels natifs — pairs & politiques R-level"},
+  {id:"meshtastic",name:"Meshtastic",category:"mesh",icon:"📡",health:{state:"online",latency_ms:120},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"LoRa multi-grille — RAK4631 EU_868"},
+  {id:"tor",name:"Tor",category:"mesh",icon:"🧅",health:{state:"degraded",latency_ms:340},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Exposition .onion transparente & échelle anti-censure"},
+  {id:"auth",name:"Auth Guardian",category:"auth",icon:"🔑",health:{state:"online",latency_ms:7},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"JWT & sessions — vérité d'identité du parc"},
+  {id:"nac",name:"Client Guardian",category:"auth",icon:"🚦",health:{state:"online",latency_ms:10},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Contrôle d'accès réseau — sets nft & dnsmasq"},
+  {id:"system",name:"System Hub",category:"root",icon:"⚙️",health:{state:"online",latency_ms:4},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Supervision système — CPU, mémoire, services"},
+  {id:"metrics",name:"Metrics",category:"root",icon:"📊",health:{state:"online",latency_ms:15},urls:{lan:"admin.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:true,installed:true,desc:"Rapports & tableaux de bord — pays des visiteurs"},
+  {id:"netboot",name:"NetBoot",category:"boot",icon:"⚡",health:{state:"unknown",latency_ms:null},urls:{lan:"boot.gk2.secubox.in",wan:null},routing:{mode:"lan"},active:false,installed:true,desc:"Amorçage réseau — TFTP & images flashables"},
+];
+
+const CATS = [
+  {id:"wall", name:"Muraille", icon:"🛡️"},
+  {id:"mind", name:"Esprit",   icon:"🧠"},
+  {id:"mesh", name:"Maillage", icon:"🕸️"},
+  {id:"auth", name:"Accès",    icon:"🔑"},
+  {id:"root", name:"Racine",   icon:"⚙️"},
+  {id:"boot", name:"Amorce",   icon:"⚡"},
+];
+const STATE_FR = {online:"en ligne", degraded:"dégradé", offline:"hors ligne", unknown:"inconnu"};
+
+const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function cardHTML(s){
+  const st = (s.health&&s.health.state)||"unknown";
+  const lat = s.health&&s.health.latency_ms;
+  const host = (s.urls&&(s.urls.wan||s.urls.lan))||(s.id+".gk2.secubox.in");
+  const chips = [];
+  if(s.urls&&s.urls.wan) chips.push('<span class="chip wan">WAN</span>');
+  else if(s.urls&&s.urls.lan) chips.push('<span class="chip lan">LAN</span>');
+  if(lat!=null) chips.push('<span class="chip lat">'+lat+' ms</span>');
+  if(!s.active) chips.push('<span class="chip rest">veille</span>');
+  return '<article class="card'+(s.active?'':' off')+'" data-cat="'+esc(s.category)+'" data-name="'+esc((s.name+' '+(s.desc||'')).toLowerCase())+'">'
+    +'<div class="top"><div class="ic">'+esc(s.icon||'▦')+'</div>'
+    +'<div class="nm"><b>'+esc(s.name)+'</b><div class="host mono">'+esc(host)+'</div></div>'
+    +'<div class="state"><i class="led '+st+'"></i>'+STATE_FR[st]+'</div></div>'
+    +'<div class="desc">'+esc(s.desc||'')+'</div>'
+    +'<div class="foot">'+chips.join('')+'<span class="go mono">ouvrir →</span></div>'
+    +'</article>';
+}
+
+function radioHTML(s){
+  return '<article class="card wide radio" data-cat="mind" data-name="radio webradio flux">'
+    +'<div class="rtop"><div class="cover">🎧</div>'
+    +'<div class="meta"><b class="serif">Radio souveraine</b>'
+    +'<div class="art">— en attente du flux —</div>'
+    +'<span class="live"><i class="led"></i> en direct</span></div>'
+    +'<div class="counts"><span><b>—</b> écoutes</span><span><b>—</b> présents</span></div></div>'
+    +'<div class="bar"><button title="Rafraîchir">⟳</button>'
+    +'<button class="play" title="Lecture / pause">▶</button>'
+    +'<button title="Favori">★</button><button title="Son">🔊</button>'
+    +'<span class="counts" style="margin-left:auto"><span class="mono" style="font-size:.62rem">cardlet active · réf.</span></span></div>'
+    +'<div class="msg"><input placeholder="un mot à l\'antenne…" aria-label="Message radio"><button>Envoyer</button></div>'
+    +'</article>';
+}
+
+function render(list, src){
+  const board = document.getElementById('board');
+  const counts = {}; CATS.forEach(c=>counts[c.id]=0);
+  let html = '';
+  CATS.forEach(cat=>{
+    const items = list.filter(s=>s.category===cat.id);
+    if(!items.length) return;
+    counts[cat.id]=items.length;
+    html += '<section id="c-'+cat.id+'"><div class="cat"><h3 class="serif">'+cat.icon+' '+cat.name+'</h3>'
+      +'<span class="rule"></span><span class="count mono">'+items.length+'</span></div><div class="grid">';
+    items.forEach(s=>{ html += (s.cardlet==="radio") ? radioHTML(s) : cardHTML(s); });
+    html += '</div></section>';
+  });
+  board.innerHTML = html || '<p style="color:var(--dim)">Aucun service.</p>';
+  document.getElementById('n-all').textContent = list.length;
+  CATS.forEach(c=>{ const el=document.getElementById('n-'+c.id); if(el) el.textContent = counts[c.id]||0; });
+  const note = document.getElementById('srctext');
+  note.innerHTML = src;
+}
+
+function fromRegistry(services){
+  // Enrichit le mock avec l'état réel (public = santé) par id ; garde urls/desc du mock.
+  const byId = {}; MOCK.forEach(m=>byId[m.id]=Object.assign({},m));
+  services.forEach(s=>{
+    const m = byId[s.id] || {id:s.id,name:s.name,category:s.category||"root",icon:s.icon||"▦",desc:s.description||"",urls:{},routing:{},active:s.active,installed:s.installed,cardlet:s.id==="radio"?"radio":null};
+    if(s.health&&s.health.state) m.health = Object.assign({},m.health,{state:s.health.state});
+    m.active = s.active!==undefined?s.active:m.active;
+    byId[s.id]=m;
+  });
+  return Object.values(byId);
+}
+
+// Recherche
+document.getElementById('q').addEventListener('input', e=>{
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.card').forEach(c=>{
+    c.style.display = (!q || c.dataset.name.includes(q)) ? '' : 'none';
+  });
+});
+
+// Thème
+const root = document.documentElement;
+document.getElementById('theme').addEventListener('click', ()=>{
+  const cur = root.getAttribute('data-theme');
+  const next = cur==='dark' ? 'light' : (cur==='light' ? 'dark' : (matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark'));
+  root.setAttribute('data-theme', next);
+});
+
+// Chargement registre réel → repli mock
+(function load(){
+  render(MOCK, 'Registre indisponible — <b>aperçu maquette</b> (données représentatives). Le Hall se remplira du registre réel dès activation.');
+  fetch('/api/v1/webos/public/services', {headers:{'Accept':'application/json'}})
+    .then(r=>r.ok?r.json():Promise.reject(r.status))
+    .then(d=>{
+      const svc = (d&&d.services)||[];
+      if(!svc.length){
+        render(MOCK, 'Registre <b>activé mais vide</b> (flag off ou cache froid) — aperçu maquette.');
+        return;
+      }
+      render(fromRegistry(svc), 'Registre <b>réel</b> · '+svc.length+' services · santé live, LAN/WAN & latence en vue authentifiée.');
+    })
+    .catch(()=>{ /* garde le mock déjà rendu */ });
+})();
+</script>
