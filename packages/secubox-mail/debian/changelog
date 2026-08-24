@@ -1,3 +1,12 @@
+secubox-mail (2.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix : sieve enable déploie le sieve par défaut DANS le conteneur sous
+    l'identité vmail (rm+mkdir+tee+sievec via runuser -u vmail) — un dépôt
+    côté hôte est possédé par un uid non mappé (« nobody ») que le process de
+    remise ne peut ni écrire ni compiler, d'où spam jamais rangé dans Junk. (ref #1169)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 13:20:00 +0200
+
 secubox-mail (2.8.4-1~bookworm1) bookworm; urgency=medium
 
   * fix : sieve enable rend /var/vmail/sieve writable par vmail et pré-compile

@@ -880,14 +880,21 @@ cmd_sieve() {
                 [ -n "$_sbk" ] && cmd_restore "$_sbk" >/dev/null 2>&1
                 return 1
             fi
-            # Le sieve par défaut est déposé root:root (host→idmap nobody) : le
-            # process de remise (vmail) ne peut alors PAS écrire le .svbin
-            # compilé à côté, et Pigeonhole abandonne silencieusement le
-            # filtrage. On rend le dossier writable par vmail puis on pré-compile
-            # SOUS vmail, pour que le .svbin lui appartienne. Sans droit d'écriture
-            # ici, `sieve_default` ne range jamais le spam dans Junk.
-            lxc_attach "$CONTAINER" sh -c 'chown -R vmail:vmail /var/vmail/sieve 2>/dev/null; \
-                runuser -u vmail -- sievec /var/vmail/sieve/default.sieve 2>/dev/null' || true
+            # Déployer le sieve par défaut DANS le conteneur, POSSÉDÉ PAR vmail.
+            # Un dépôt côté hôte (install_default_sieve) est possédé par l'uid
+            # hôte non mappé → « nobody » dans le conteneur idmap : le process de
+            # remise (vmail) ne peut alors NI écrire le .svbin compilé NI, donc,
+            # exécuter sieve_default — Pigeonhole abandonne silencieusement et le
+            # spam n'atterrit jamais dans Junk. vmail possède /var/vmail : il peut
+            # recréer le sous-dossier, y écrire, et compiler sous sa propre identité.
+            local _sieve_src="${SIEVE_CONFIG_DIR:-/usr/lib/secubox/mail/config/sieve}/default.sieve"
+            if [ -f "$_sieve_src" ]; then
+                lxc_attach "$CONTAINER" runuser -u vmail -- sh -c \
+                    'rm -rf /var/vmail/sieve && mkdir -p /var/vmail/sieve' 2>/dev/null
+                lxc_attach "$CONTAINER" runuser -u vmail -- tee /var/vmail/sieve/default.sieve \
+                    < "$_sieve_src" >/dev/null 2>&1
+                lxc_attach "$CONTAINER" runuser -u vmail -- sievec /var/vmail/sieve/default.sieve 2>/dev/null || true
+            fi
             log "Sieve activé"
             cmd_sieve status ;;
         status)
