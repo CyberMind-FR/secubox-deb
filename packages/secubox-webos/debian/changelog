@@ -1,3 +1,13 @@
+secubox-webos (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * Hall 3 espaces : Accueil / Services principaux (chaque service ouvre sa page
+    propre = vhost RÉEL embarqué inline) / Système / Aide. +SocialRelay.
+  * DOCTYPE + charset UTF-8 + html/head/body (fin du Quirks Mode).
+  * CSP frame-src pour les domaines embarquables ; repli « ouvrir en onglet »
+    tant qu'un service n'autorise pas le cadrage par le Hall. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 16:26:13 +0200
+
 secubox-webos (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * Entête AletheiaVox reprise de bbs.gk2 (logo médaille hall-logo.svg + format).
