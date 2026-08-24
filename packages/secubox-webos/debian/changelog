@@ -1,3 +1,14 @@
+secubox-webos (1.0.23-1~bookworm1) bookworm; urgency=high
+
+  * LA cause du mégamenu mort sur smartphone : les panneaux portaient la classe
+    `rail` (vestige de l'ancienne sidebar), or `@media(max-width:820px){.rail{
+    display:none}}` les masquait sur TOUT écran ≤820px (donc tout téléphone). Le
+    tap déclenchait bien setMenu, mais le panneau était display:none. Retrait de
+    la classe `rail` des deux panneaux (tout leur style vient déjà de .megamenu).
+    Desktop intact, menus enfin visibles sur mobile. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 22:30:00 +0200
+
 secubox-webos (1.0.22-1~bookworm1) bookworm; urgency=high
 
   * CORRECTIF CRITIQUE iPhone : <!DOCTYPE html> était PRÉCÉDÉ du commentaire de
