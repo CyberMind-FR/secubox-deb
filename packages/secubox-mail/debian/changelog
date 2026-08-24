@@ -1,3 +1,15 @@
+secubox-mail (2.9.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : panel admin mail — onglet « Socle » exposant les gestes #1169
+    (bascule Maildir avec confirmation, activation Sieve/ManageSieve, ClamAV
+    on/off, renouvellement SSL) + état Maildir/Sieve/ClamAV. Le panel suivait
+    déjà la charte hybrid-dark ; on complète le fonctionnel.
+  * feat : API — endpoints socle délégués à mailctl confiné : GET /socle/status,
+    POST /maildir/reconcile, GET+POST /sieve, GET+POST /antivirus/{on|off},
+    POST /ssl/renew. (ref #1173)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 15:00:00 +0200
+
 secubox-mail (2.8.7-1~bookworm1) bookworm; urgency=medium
 
   * feat : `mailctl rspamd milter` câble Rspamd en milter Postfix (proxy :11332)
