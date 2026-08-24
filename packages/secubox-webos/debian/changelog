@@ -1,3 +1,16 @@
+secubox-webos (1.0.21-1~bookworm1) bookworm; urgency=medium
+
+  * Menubar façon macOS : DEUX menus déroulants distincts — **Services** (bulles
+    par service) et **Système** (catégories du parc, chacune sa bulle → console
+    admin du module) — chacun aligné sous son propre titre. Accueil redevient un
+    bouton d'accueil direct.
+  * iPhone (fix définitif) : les déclencheurs de menu sont désormais de vrais
+    <button type=button>. iOS déclenche toujours `click` au 1er tap sur un bouton
+    (plus de dépendance cursor:pointer ni de 1er-tap-survol absorbé) → le menu
+    s'ouvre enfin sur Safari/Chrome iOS. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 21:40:00 +0200
+
 secubox-webos (1.0.20-1~bookworm1) bookworm; urgency=medium
 
   * Mégamenu = vraies BULLES multi-menus (façon menubar) : chaque service porte
