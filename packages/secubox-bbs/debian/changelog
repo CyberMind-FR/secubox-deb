@@ -1,3 +1,9 @@
+secubox-bbs (0.30.9-1~bookworm1) bookworm; urgency=medium
+
+  * /api/v1/bbs/menu : rubriques publiques en JSON (sous-menu Hall WebOS). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 18:08:13 +0200
+
 secubox-bbs (0.30.8-1~bookworm1) bookworm; urgency=medium
 
   * Embed : simplifie le 2-volets (retire height:100vh/overflow forcés qui

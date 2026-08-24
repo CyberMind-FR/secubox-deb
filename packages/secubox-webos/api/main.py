@@ -115,6 +115,20 @@ async def cardlet_radio():
     return d
 
 
+_mbbs = {"d": None, "t": 0.0}
+
+
+@public_router.get("/menu/bbs")
+async def menu_bbs():
+    """Sous-menu BBS (rubriques) — « navbar embarquée » lue via bbs.sock, cache 30 s."""
+    now = time.time()
+    if _mbbs["d"] and now - _mbbs["t"] < 30:
+        return _mbbs["d"]
+    d = await asyncio.to_thread(cardlets.bbs_menu_safe)
+    _mbbs["d"], _mbbs["t"] = d, now
+    return d
+
+
 @router.get("/services")
 async def services(user=Depends(require_jwt)):
     """Full registry — JWT-gated."""

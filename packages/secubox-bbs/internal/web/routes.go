@@ -199,6 +199,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/mod/", s.moderer)
 	s.mux.HandleFunc("/vignette/", s.servirVignette)
 	s.mux.HandleFunc("/c/", s.salon)
+	s.mux.HandleFunc("/api/v1/bbs/menu", s.apiMenu) // rubriques JSON → sous-menu Hall (#1175)
 	s.mux.HandleFunc("/t/", s.fil)
 	s.mux.HandleFunc("/p/", s.edition) // #1091 — /p/{id}/edit
 	s.mux.HandleFunc("/login", s.connexion)
