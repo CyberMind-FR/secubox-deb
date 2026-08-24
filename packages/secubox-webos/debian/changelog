@@ -1,10 +1,14 @@
-secubox-webos (1.0.18-1~bookworm1) bookworm; urgency=medium
+secubox-webos (1.0.19-1~bookworm1) bookworm; urgency=medium
 
-  * Menu-catcher : sous-menu BBS (rubriques via bbs.sock) dans le mégamenu ;
-    clic → embarque le salon. Mégamenu iPhone : feuille pleine largeur (jamais
-    hors écran) + -webkit-backdrop-filter (fin du fond noir iOS). (ref #1175)
+  * Mégamenu façon menu système macOS : le sous-menu BBS ne s'affiche plus
+    inline mais en FLYOUT en cascade au survol de l'entrée BBS (chevron ›),
+    replié inline sur mobile (pas de survol). Stats nœud (gk2 · en ligne ·
+    modules) remontées dans la barre de statut BAS, mast-top supprimée.
+    Correctifs : popup mégamenu fiable sur iPhone (ancrage sur le bas du
+    bandeau, plus le bouton) + voile de fond discret sur PC (color-mix, la
+    vue courante reste visible). (ref #1175)
 
- -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 18:08:13 +0200
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 20:10:00 +0200
 
 secubox-webos (1.0.17-1~bookworm1) bookworm; urgency=medium
 

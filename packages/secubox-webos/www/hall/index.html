@@ -59,10 +59,6 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Entête AletheiaVox — repris de bbs.gk2 (logo médaille + format). */
 .mast{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
-.mast-top{display:flex;align-items:baseline;gap:14px;justify-content:center;padding:7px 20px 4px;flex-wrap:wrap;
-  font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.05em;color:var(--dim);text-transform:uppercase;
-  border-bottom:1px solid var(--line)}
-.mast-top b{color:var(--ink)} .mast-top .l{color:var(--sky)} .mast-top .r{color:var(--coral)}
 .mast-main{display:flex;align-items:center;gap:16px;padding:10px clamp(14px,3vw,26px);max-width:1560px;margin:0 auto}
 .logo{display:flex;align-items:center;gap:12px;flex:none}
 .logo img.medaille{width:46px;height:46px;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
@@ -112,7 +108,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 @keyframes mmpop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.megamenu{animation:none}}
 .megamenu.hidden{display:none}
-.menu-backdrop{position:fixed;inset:0;z-index:55;background:transparent}
+/* Voile DISCRET : le fond (vue courante) reste visible, juste estompé — jamais
+   « disparu ». */
+.menu-backdrop{position:fixed;inset:0;z-index:55;background:color-mix(in srgb,var(--ink) 12%,transparent)}
 .menu-backdrop.hidden{display:none}
 /* Style MENU SYSTÈME (macOS/Windows) : panneau clair, lignes compactes — pas le
    gros bloc navy de l'ancienne sidebar. */
@@ -126,10 +124,19 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .megamenu .bottom{border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
 .megamenu .bottom a{color:var(--dim)}
 .megamenu .g{opacity:.95}
-/* Sous-menu « navbar embarquée » (rubriques BBS) sous l'entrée du service. */
-.megamenu .submenu{margin:-2px 0 5px 15px;border-left:1px solid var(--line);padding-left:3px}
+/* Sous-menu « navbar embarquée » (rubriques BBS) = FLYOUT en cascade au SURVOL,
+   comme un menu système macOS. L'entrée porte un chevron ›. */
+.megamenu .has-sub{position:relative}
+.megamenu .has-sub .chev{margin-left:auto;opacity:.55;font-size:1rem}
+.megamenu .submenu{position:absolute;left:calc(100% + 5px);top:-6px;width:224px;background:var(--panel);
+  border:1px solid var(--line);border-radius:13px;box-shadow:var(--lift);padding:6px;display:none;z-index:70;
+  max-height:74vh;overflow-y:auto}
+.megamenu .has-sub:hover>.submenu, .megamenu .submenu:hover{display:block}
 .megamenu .submenu a{padding:5px 9px;font-size:.78rem;color:var(--dim)}
 .megamenu .submenu a:hover{background:var(--soft);color:var(--ink)}
+/* Sur mobile (pas de survol) : sous-menu déplié inline sous l'entrée. */
+@media(max-width:640px){.megamenu .submenu{position:static;left:auto;top:auto;width:auto;box-shadow:none;border:none;
+  border-left:1px solid var(--line);border-radius:0;margin:0 0 4px 14px;padding:2px 0 2px 4px;display:block}}
 .megamenu .submenu .st{margin-left:auto;width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
@@ -267,11 +274,6 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 </head>
 <body>
 <header class="mast">
-  <div class="mast-top">
-    <span>nœud <b>gk2</b></span>
-    <span class="l">◆ <b id="mt-online">—</b> services en ligne</span>
-    <span class="r">● <b id="mt-mods">—</b> modules souverains</span>
-  </div>
   <div class="mast-main">
     <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span></span></a>
     <nav class="mnav" aria-label="Sections">
@@ -380,8 +382,9 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
   <span class="sb-seg"><a class="crumb" data-nav="accueil">Hall</a> <span class="sep">›</span> <b id="sb-loc">Accueil</b></span>
   <span id="sb-url" class="sb-url mono"></span>
   <span class="grow"></span>
+  <span id="sb-node" class="mono"></span>
+  <span class="sep">·</span>
   <span id="sb-info" class="mono">chargement du registre…</span>
-  <span class="sep">·</span><span class="mono">souverain</span>
 </footer>
 
 <script>
@@ -474,8 +477,9 @@ function render(data,src){
   // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
   const degr=svc.filter(s=>s.health&&s.health.state==='degraded').length;
-  var mo=document.getElementById('mt-online'); if(mo) mo.textContent=online;
-  var mm=document.getElementById('mt-mods'); if(mm) mm.textContent=svc.length;
+  // Stats nœud, déplacées dans la barre de statut BAS (#1175).
+  var sn=document.getElementById('sb-node');
+  if(sn) sn.innerHTML='nœud <b>gk2</b> · ◆ <b>'+online+'</b> en ligne · ● <b>'+svc.length+'</b> modules';
   document.getElementById('tiles').innerHTML=
      tile('a1','Services en ligne',online,'/ '+svc.length+' modules','souverains & joignables')
     +tile('a2','À surveiller',degr,'','dégradés ou en veille')
@@ -568,10 +572,17 @@ function loadBbsSubmenu(){
       if(!m||!m.items||!m.items.length) return;
       const item=document.querySelector('#railfeat a[data-embed="bbs"]');
       if(!item) return;
-      var old=document.getElementById('bbs-sub'); if(old) old.remove();
+      // Enveloppe l'entrée BBS dans un .has-sub (survol → flyout) + chevron ›.
+      let host=item.parentElement.classList.contains('has-sub')?item.parentElement:null;
+      if(host){ const os=host.querySelector('.submenu'); if(os) os.remove(); }
+      else{
+        host=document.createElement('div'); host.className='has-sub';
+        item.parentElement.insertBefore(host,item); host.appendChild(item);
+        if(!item.querySelector('.chev')) item.insertAdjacentHTML('beforeend','<span class="chev">›</span>');
+      }
       const sub=document.createElement('div'); sub.id='bbs-sub'; sub.className='submenu';
       sub.innerHTML=m.items.slice(0,14).map(c=>'<a data-rub="'+esc(c.slug)+'" data-rubt="'+esc(c.title)+'"><span class="g">·</span> '+esc(c.title)+(c.threads?'<span class="st mono">'+c.threads+'</span>':'')+'</a>').join('');
-      item.insertAdjacentElement('afterend', sub);
+      host.appendChild(sub);
     }).catch(()=>{});
 }
 function showEmbedRubrique(slug,title){
@@ -594,12 +605,13 @@ function setMenu(open){
   const mm=document.getElementById('megamenu');
   if(open){ // ALIGNÉ sous son titre (le bouton Accueil), façon menu système macOS/Win
     const t=document.querySelector('.mnav [data-menu]');
-    if(t){ const r=t.getBoundingClientRect();
-      if(window.innerWidth<=640){ // iPhone/mobile : feuille pleine largeur, jamais hors écran
-        mm.style.left='8px'; mm.style.right='8px'; mm.style.width='auto'; mm.style.top=Math.round(r.bottom+6)+'px';
-      } else {
-        mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='256px'; mm.style.top=Math.round(r.bottom+6)+'px';
-      }
+    const mast=document.querySelector('.mast');
+    const hb=mast?Math.round(mast.getBoundingClientRect().bottom):56;
+    if(window.innerWidth<=640){ // iPhone/mobile : feuille pleine largeur SOUS l'entête (position fiable, pas le bouton qui peut wrapper)
+      mm.style.left='8px'; mm.style.right='8px'; mm.style.width='auto'; mm.style.top=(hb+4)+'px';
+    } else if(t){ // desktop : dropdown aligné sous le bouton (menubar macOS)
+      const r=t.getBoundingClientRect();
+      mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='256px'; mm.style.top=(hb+2)+'px';
     }
   }
   mm.classList.toggle('hidden',!open);
