@@ -1,3 +1,11 @@
+secubox-webos (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * public/services expose aussi `description` (libellé menu, non sensible) —
+    cartes du Hall lisibles pour tous les services ; urls/latence/reach restent
+    réservés à la vue authentifiée. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 13:22:25 +0200
+
 secubox-webos (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * Hall servi aussi sur hall.gk2.secubox.in (cert wildcard *.gk2.secubox.in) ;

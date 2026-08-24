@@ -67,7 +67,7 @@ def _enabled() -> bool:
     return bool(_flags.get("enabled"))
 
 
-_PUBLIC_FIELDS = ("id", "name", "category", "icon", "installed", "active")
+_PUBLIC_FIELDS = ("id", "name", "description", "category", "icon", "installed", "active")
 
 
 @app.get("/healthz")
