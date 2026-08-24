@@ -292,6 +292,22 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
             pdf.cell(160, 5, _txt(e["hote"])[:95])
             pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
+
+        # #1176 — d'ou vient l'audience : pays des visiteurs (GeoIP, PUBLIC
+        # uniquement — le loopback/prive n'a pas de pays). Les codes ISO-2
+        # suffisent : les emoji-drapeaux ne rendent pas dans les polices
+        # coeur latin-1 de fpdf2, donc on affiche le code (+ visites).
+        pays = detail.get("pays") or []
+        pdf.ln(3)
+        _titre(pdf, "Pays des visiteurs")
+        pdf.set_font("Helvetica", "", 8)
+        if not pays:
+            pdf.cell(0, 5, _txt("aucun visiteur public geolocalise sur la periode"),
+                     new_x="LMARGIN", new_y="NEXT")
+        for e in pays[:15]:
+            pdf.cell(30, 5, _txt(e.get("code") or "??"))
+            pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
+                     new_x="LMARGIN", new_y="NEXT")
     else:
         _titre(pdf, "Detail par vhost")
         pdf.set_font("Helvetica", "B", 7.5)

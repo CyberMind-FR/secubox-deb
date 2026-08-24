@@ -1,3 +1,14 @@
+secubox-metrics (1.11.0-1~bookworm1) bookworm; urgency=medium
+
+  * fix : « visiteurs unique » ne compte plus les IP privees/loopback (127.0.0.1,
+    board, bridge LXC, sondes, aggregateur) — cohérent avec le pays (public-only).
+    Fini « 1 visiteur unique » sur des sites sans audience réelle. (ref #1176)
+  * feat : les rapports PDF affichent désormais la section « Pays des visiteurs »
+    (GeoIP public, codes ISO-2 + visites) — la donnée existait déjà par vhost mais
+    n'était jamais rendue. (ref #1176)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 14:30:00 +0200
+
 secubox-metrics (1.10.4-1~bookworm1) bookworm; urgency=medium
 
   * rapport planifié : résumé EMOJI des codes de retour dans le CORPS du mail

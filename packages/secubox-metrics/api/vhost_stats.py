@@ -180,6 +180,22 @@ _geo_essaye = False
 _geo_cache: dict = {}
 
 
+def _publique(ip: str) -> bool:
+    """Vrai si l'IP est un VRAI visiteur externe (ni privee, ni loopback…).
+
+    #1176 : sans ce filtre, `visiteurs = len(ips)` comptait 127.0.0.1 (sondes
+    de sante, boucle locale) et l'IP de la board / du bridge LXC (aggregateur,
+    modules internes) comme des visiteurs — « 1 visiteur unique » sur des sites
+    qui n'en avaient aucun. Un rapport d'audience compte les visiteurs PUBLICS,
+    cohérent avec le pays (lui aussi public-only, cf. _pays)."""
+    try:
+        adr = ipaddress.ip_address(ip)
+        return not (adr.is_private or adr.is_loopback
+                    or adr.is_link_local or adr.is_reserved or adr.is_multicast)
+    except ValueError:
+        return False
+
+
 def _pays(ip: str) -> Optional[str]:
     """Code pays ISO-2 d'une IP PUBLIQUE, ou None (privee/inconnue/base absente)."""
     global _geo_reader, _geo_essaye
@@ -187,10 +203,7 @@ def _pays(ip: str) -> Optional[str]:
         return _geo_cache[ip]
     cc = None
     try:
-        adr = ipaddress.ip_address(ip)
-        publique = not (adr.is_private or adr.is_loopback
-                        or adr.is_link_local or adr.is_reserved or adr.is_multicast)
-        if publique:
+        if _publique(ip):
             if not _geo_essaye:
                 _geo_essaye = True
                 try:
@@ -253,10 +266,14 @@ def _compter(s: dict, m: re.Match) -> None:
         s["octets"] += int(g["octets"])
     s["statuts"][f"{statut // 100}xx"] += 1
 
-    if len(s["ips"]) < PLAFOND_IP:
-        s["ips"].add(g["ip"])
-    else:
-        s["ips_debordees"] = True
+    # #1176 : seuls les visiteurs PUBLICS comptent. 127.0.0.1 (sondes/boucle
+    # locale) et les IP privees internes (board, bridge LXC, aggregateur) ne
+    # sont pas des visiteurs — les compter gonflait « visiteurs unique ».
+    if _publique(g["ip"]):
+        if len(s["ips"]) < PLAFOND_IP:
+            s["ips"].add(g["ip"])
+        else:
+            s["ips_debordees"] = True
 
     nav = _classe(ua, NAVIGATEURS)
     s["navigateurs"][nav] += 1
