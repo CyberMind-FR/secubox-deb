@@ -58,7 +58,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* ── masthead ─────────────────────────────────────────────── */
 /* Entête AletheiaVox — repris de bbs.gk2 (logo médaille + format). */
 .mast{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);
-  backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
 .mast-top{display:flex;align-items:baseline;gap:14px;justify-content:center;padding:7px 20px 4px;flex-wrap:wrap;
   font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.05em;color:var(--dim);text-transform:uppercase;
   border-bottom:1px solid var(--line)}
@@ -87,7 +87,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Nav de SECTIONS fusionnée dans la barre unique (mast-main). */
 .mnav{display:flex;align-items:center;gap:2px;flex:none}
 .mnav .it{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:9px;font-size:.82rem;color:var(--dim);
-  font-weight:500;border:1px solid transparent;white-space:nowrap}
+  font-weight:500;border:1px solid transparent;white-space:nowrap;cursor:pointer}
 .mnav .it.on{background:var(--sky);color:#fff}
 .mnav .it:hover:not(.on){background:var(--soft);color:var(--ink)}
 .mnav .badge{background:var(--coral);color:#fff;border-radius:20px;font-size:.6rem;padding:1px 6px;font-weight:700}
@@ -126,6 +126,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .megamenu .bottom{border-top:1px solid var(--line);margin-top:6px;padding-top:6px}
 .megamenu .bottom a{color:var(--dim)}
 .megamenu .g{opacity:.95}
+/* Sous-menu « navbar embarquée » (rubriques BBS) sous l'entrée du service. */
+.megamenu .submenu{margin:-2px 0 5px 15px;border-left:1px solid var(--line);padding-left:3px}
+.megamenu .submenu a{padding:5px 9px;font-size:.78rem;color:var(--dim)}
+.megamenu .submenu a:hover{background:var(--soft);color:var(--ink)}
+.megamenu .submenu .st{margin-left:auto;width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
 .rail .sbx{display:flex;align-items:center;gap:10px;padding:6px 8px 14px;border-bottom:1px solid var(--nav-line);margin-bottom:10px}
@@ -230,7 +235,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .hidden{display:none}
 /* Barre de STATUT bas (« où suis-je ») — fil d'Ariane + URL de l'embed. */
 .statusbar{position:fixed;bottom:0;left:0;right:0;z-index:44;height:30px;display:flex;align-items:center;gap:10px;
-  padding:0 16px;background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(10px);
+  padding:0 16px;background:color-mix(in srgb,var(--panel) 92%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
   border-top:1px solid var(--line);font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim)}
 .statusbar b{color:var(--ink)} .statusbar .grow{flex:1} .statusbar .sep{opacity:.6}
 .statusbar .crumb{color:var(--sky);cursor:pointer} .statusbar .crumb:hover{text-decoration:underline}
@@ -461,6 +466,7 @@ function render(data,src){
     rh+='<a data-embed="'+esc(f.id)+'"><span class="g">'+f.icon+'</span> '+esc(f.label)+'<span class="st" style="background:'+col+'"></span></a>';
   });
   rail.innerHTML=rh;
+  loadBbsSubmenu();   // « navbar embarquée » BBS → sous-menu dans le mégamenu
   // featured grid (principal)
   const fg=document.getElementById('featgrid'); let fh='';
   FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
@@ -554,12 +560,47 @@ function showEmbedAdmin(id, path){
   var u=document.getElementById('sb-url'); if(u) u.textContent='· '+host+path;
   showView('embed');
 }
+// « Navbar embarquée » BBS : ses rubriques (lues côté serveur via bbs.sock) en
+// SOUS-MENU du mégamenu. Clic → embarque le salon (bbs.gk2.secubox.in/c/<slug>).
+function loadBbsSubmenu(){
+  fetch('/api/v1/webos/public/menu/bbs',{headers:{'Accept':'application/json'}})
+    .then(r=>r.ok?r.json():null).then(m=>{
+      if(!m||!m.items||!m.items.length) return;
+      const item=document.querySelector('#railfeat a[data-embed="bbs"]');
+      if(!item) return;
+      var old=document.getElementById('bbs-sub'); if(old) old.remove();
+      const sub=document.createElement('div'); sub.id='bbs-sub'; sub.className='submenu';
+      sub.innerHTML=m.items.slice(0,14).map(c=>'<a data-rub="'+esc(c.slug)+'" data-rubt="'+esc(c.title)+'"><span class="g">·</span> '+esc(c.title)+(c.threads?'<span class="st mono">'+c.threads+'</span>':'')+'</a>').join('');
+      item.insertAdjacentElement('afterend', sub);
+    }).catch(()=>{});
+}
+function showEmbedRubrique(slug,title){
+  const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  const host='bbs.gk2.secubox.in'; const plain='https://'+host+'/c/'+encodeURIComponent(slug);
+  const url=plain+'?embed=1&theme='+th;
+  document.getElementById('eb-ic').textContent='💬';
+  document.getElementById('eb-name').textContent='BBS · '+(title||slug);
+  document.getElementById('eb-led').className='led online';
+  document.getElementById('eb-open').href=plain;
+  document.getElementById('eb-frame').src=url;
+  document.getElementById('eb-hint').style.display='none';
+  document.getElementById('eb-reload').onclick=()=>{document.getElementById('eb-frame').src=url;};
+  var l=document.getElementById('sb-loc'); if(l) l.textContent='BBS · '+(title||slug);
+  var u=document.getElementById('sb-url'); if(u) u.textContent='· '+host+'/c/'+slug;
+  showView('embed');
+}
 // Mégamenu SBX en surimpression, ouvert depuis le bouton Accueil de la barre.
 function setMenu(open){
   const mm=document.getElementById('megamenu');
   if(open){ // ALIGNÉ sous son titre (le bouton Accueil), façon menu système macOS/Win
     const t=document.querySelector('.mnav [data-menu]');
-    if(t){ const r=t.getBoundingClientRect(); mm.style.left=Math.round(r.left)+'px'; mm.style.top=Math.round(r.bottom+6)+'px'; }
+    if(t){ const r=t.getBoundingClientRect();
+      if(window.innerWidth<=640){ // iPhone/mobile : feuille pleine largeur, jamais hors écran
+        mm.style.left='8px'; mm.style.right='8px'; mm.style.width='auto'; mm.style.top=Math.round(r.bottom+6)+'px';
+      } else {
+        mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='256px'; mm.style.top=Math.round(r.bottom+6)+'px';
+      }
+    }
   }
   mm.classList.toggle('hidden',!open);
   document.getElementById('menu-backdrop').classList.toggle('hidden',!open);
@@ -569,6 +610,8 @@ document.addEventListener('click',e=>{
   const mn=e.target.closest('[data-menu]'); if(mn){ e.preventDefault();
     setMenu(document.getElementById('megamenu').classList.contains('hidden')); return; }
   if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
+  const rb=e.target.closest('[data-rub]');
+  if(rb){ showEmbedRubrique(rb.dataset.rub, rb.dataset.rubt); setMenu(false); return; }
   const adm=e.target.closest('[data-admin]');
   if(adm){ showEmbedAdmin(adm.dataset.admin, adm.dataset.path); setMenu(false); return; }
   const emb=e.target.closest('[data-embed]');

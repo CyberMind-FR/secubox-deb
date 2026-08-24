@@ -1,3 +1,11 @@
+secubox-webos (1.0.18-1~bookworm1) bookworm; urgency=medium
+
+  * Menu-catcher : sous-menu BBS (rubriques via bbs.sock) dans le mégamenu ;
+    clic → embarque le salon. Mégamenu iPhone : feuille pleine largeur (jamais
+    hors écran) + -webkit-backdrop-filter (fin du fond noir iOS). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 18:08:13 +0200
+
 secubox-webos (1.0.17-1~bookworm1) bookworm; urgency=medium
 
   * Embed WEBUI ADMIN : clic sur une carte Système embarque admin.gk2.secubox.in

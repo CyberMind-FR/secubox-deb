@@ -74,3 +74,25 @@ def radio_cardlet_safe(sock: str = RADIO_SOCK, _get: Optional[Callable] = None) 
             "content": {"title": "Radio", "subtitle": "", "station": "Radio souveraine"},
             "metrics": [], "silence": False,
         }
+
+
+BBS_SOCK = "/run/secubox/bbs.sock"
+
+
+def bbs_menu(sock: str = BBS_SOCK, _get=None) -> dict:
+    """Rubriques BBS (navbar) → sous-menu Hall, lues côté serveur via bbs.sock."""
+    get = _get or uds_get
+    d = get(sock, "/api/v1/bbs/menu") or {}
+    items = [
+        {"slug": c.get("slug"), "title": c.get("title"), "threads": c.get("threads", 0)}
+        for c in (d.get("categories") or [])
+        if c.get("slug")
+    ]
+    return {"id": "bbs", "items": items}
+
+
+def bbs_menu_safe(sock: str = BBS_SOCK, _get=None) -> dict:
+    try:
+        return bbs_menu(sock, _get)
+    except Exception:
+        return {"id": "bbs", "items": []}
