@@ -1,3 +1,13 @@
+secubox-mail (2.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix : LXC_PATH résolu depuis le TOML (lxc_path) au lieu d'hériter la fuite
+    de users.sh (/data/lxc/mailserver, ancien nom de conteneur) — sinon
+    maildir-reconcile/sieve visaient le mauvais rootfs et devenaient des no-op
+    silencieux (remonté à la bascule board). compile sieve par défaut gardée
+    (sievec + lxc_attach_run requis). (ref #1169)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 12:30:00 +0200
+
 secubox-mail (2.8.0-1~bookworm1) bookworm; urgency=medium
 
   * Socle mail (#1169) :
