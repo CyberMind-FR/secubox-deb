@@ -1,3 +1,10 @@
+secubox-webos (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * Embed : headbar RACINE du Hall PRÉSERVÉ, contexte du service greffé dedans
+    (barre unique dans le topnav) ; plus de barre embed empilée. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:17:23 +0200
+
 secubox-webos (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * CSP Hall : worker-src 'self' blob: (workers légitimes des services). (ref #1175)
