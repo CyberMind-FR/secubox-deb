@@ -678,24 +678,52 @@ cmd_migrate() {
 
 cmd_backup() {
     mkdir -p "$DATA_PATH/backups"
-    local ts tb
+    local ts tb rootfs tar_err
     ts="$(date +%Y%m%d-%H%M%S)"
     tb="$DATA_PATH/backups/mail_$ts.tar.gz"
     # dovecot.conf vit dans le rootfs du LXC ; on le range à côté du reste.
-    local rootfs="${LXC_PATH:-/data/lxc}/$CONTAINER/rootfs"
-    tar czf "$tb" \
-        -C "$DATA_PATH" vmail config \
-        $( [ -f "$rootfs/etc/dovecot/dovecot.conf" ] && printf -- '-C %s etc/dovecot/dovecot.conf' "$rootfs" ) \
-        2>/dev/null
-    log "backup → $tb"
+    # LXC_PATH est déjà résolu (default-if-unset) en tête du script.
+    rootfs="$LXC_PATH/$CONTAINER/rootfs"
+
+    local tar_args=(czf "$tb" -C "$DATA_PATH" vmail config)
+    [ -f "$rootfs/etc/dovecot/dovecot.conf" ] && \
+        tar_args+=(-C "$rootfs" etc/dovecot/dovecot.conf)
+
+    # Le filet de sûreté d'une migration destructrice ne doit JAMAIS annoncer
+    # un succès qu'il n'a pas obtenu : on vérifie le code de retour de tar et
+    # on capture sa sortie d'erreur au lieu de la jeter (2>/dev/null cachait
+    # un tar échoué comme un tar réussi).
+    if ! tar_err="$(tar "${tar_args[@]}" 2>&1)"; then
+        error "backup échoué : $tar_err"
+        return 1
+    fi
+
+    # Seul "$tb" doit sortir sur stdout : POST /backup de l'API capture la
+    # sortie standard de la commande comme chemin d'archive (run_cmd().strip()).
+    # Le log de succès va donc sur stderr.
+    log "backup → $tb" >&2
     echo "$tb"
 }
 
 cmd_restore() {
     local tb="$1"
     [ -f "$tb" ] || { error "archive introuvable : $tb"; return 1; }
-    tar xzf "$tb" -C "$DATA_PATH" vmail config 2>/dev/null || true
-    lxc_attach "$CONTAINER" systemctl restart dovecot 2>/dev/null || true
+
+    local tar_err
+    if ! tar_err="$(tar xzf "$tb" -C "$DATA_PATH" vmail config 2>&1)"; then
+        error "restauration échouée (extraction) : $tar_err"
+        return 1
+    fi
+
+    # Un restore qui extrait les données mais ne relance pas Dovecot n'est
+    # pas un rollback réussi — le service resterait sur l'ancien état en
+    # mémoire pendant que le Maildir sur disque aurait changé sous lui.
+    local restart_err
+    if ! restart_err="$(lxc_attach "$CONTAINER" systemctl restart dovecot 2>&1)"; then
+        error "restauration échouée (redémarrage dovecot) : $restart_err"
+        return 1
+    fi
+
     log "restore depuis $tb"
 }
 
