@@ -1,3 +1,29 @@
+secubox-webos (1.0.26-1~bookworm1) bookworm; urgency=medium
+
+  * Navigation contextuelle (refonte #1187) : PLUS AUCUN SOUS-MENU dans la barre
+    système. Les deux menus deviennent des listes PLATES — Services = sélection
+    d'apps, Système = modules du parc avec les catégories en simples intertitres
+    (plus de bulles, plus de flyouts, plus de chevrons ni d'accordéon tactile :
+    tout le code has-sub/submenu/chev est retiré, CSS compris).
+  * La navigation PROPRE au service actif descend dans un PANNEAU CONTEXTUEL À
+    DROITE (.ctx) : les salons BBS, lus via /api/v1/webos/public/menu/<id>, y
+    vivent désormais au lieu d'encombrer la barre système. Une seule navigation
+    contextuelle visible, sans doublon. Le mécanisme est générique : tout service
+    exposant un menu obtient son panneau ; un service sans menu rend en pleine
+    largeur (dégradation gracieuse, panneau masqué).
+  * Le bouton « ⧉ Onglet » est remplacé par un SWITCH de trois petits boutons
+    emoji : ⧉ onglet réel · ⚙️ WebUI admin · ▦ service embarqué. Les deux modes
+    embarqués gardent CHACUN leur iframe vivante — basculer ne recharge pas
+    l'app (état, lecture et saisies en cours préservés), la bascule est
+    instantanée. Même logique d'ouverture pour tous les services, via un point
+    d'entrée unique openService(id, mode, sous-chemin).
+  * Vérifié en navigateur (chromium headless, desktop 1400px + mobile 390px) :
+    0 sous-menu dans le DOM, switch à 3 boutons opérant, 2 iframes coexistantes
+    dont une seule affichée (preuve de non-rechargement), panneau contextuel
+    présent/absent selon l'API, aucune erreur JS. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 00:20:00 +0200
+
 secubox-webos (1.0.24-1~bookworm1) bookworm; urgency=medium
 
   * Menu mobile : détection du tactile par CAPACITÉ DE SURVOL (@media hover:none
