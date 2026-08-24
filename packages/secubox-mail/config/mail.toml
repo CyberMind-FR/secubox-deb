@@ -10,6 +10,13 @@ enabled = true
 domain = "secubox.local"
 hostname = "mail"
 
+# FQDN réellement couvert par le certificat ACME (#1169 revue finale, defaut
+# bloquant 3). `$HOSTNAME.$DOMAIN` ("mail.gk2.secubox.in") ne correspond
+# jamais au certificat déployé sur la board ("mail.secubox.in") — `ssl renew`
+# et `ssl setup` lisent d'abord le CN du cert existant, puis cette clé, puis
+# ne retombent sur `mail.$DOMAIN` qu'en dernier recours (mail_ssl_fqdn()).
+mail_fqdn = "mail.secubox.in"
+
 # Single mail (MTA/MDA) LXC; webmail lives in roundcube + horde LXCs (rev. 3)
 container = "mail"
 lxc_ip = "10.100.0.10"

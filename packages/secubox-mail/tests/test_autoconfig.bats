@@ -11,6 +11,15 @@
   grep -q '587' "$f"
 }
 
+@test "nginx sert /mail/config-v1.1.xml (URL réellement servie par le board, tidy 4)" {
+  local f="${BATS_TEST_DIRNAME}/../nginx/autoconfig.conf"
+  [ -f "$f" ]
+  grep -q 'location = /mail/config-v1.1.xml' "$f"
+  grep -q 'alias /usr/share/secubox/www/autoconfig/config-v1.1.xml' "$f"
+  # Le chemin RFC 6186 .well-known doit rester présent, inchangé.
+  grep -q 'location = /.well-known/autoconfig/mail/config-v1.1.xml' "$f"
+}
+
 @test "SRV Unbound déclare _imaps._tcp et _submission._tcp" {
   local f="${BATS_TEST_DIRNAME}/../config/unbound/97-mail-srv.conf"
   [ -f "$f" ]

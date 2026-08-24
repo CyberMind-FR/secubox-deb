@@ -741,6 +741,14 @@ cmd_restore() {
         return 1
     fi
 
+    # cmd_backup embarque dovecot.conf (rootfs du LXC) EN PLUS de vmail/config
+    # (DATA_PATH) : un restore qui ne le réextrairait pas ne serait pas un
+    # vrai rollback pour une régénération de conf cassée (#1169 revue finale,
+    # defaut bloquant 2). Une archive plus ancienne peut ne pas le contenir :
+    # `|| true` — ce n'est jamais un motif d'échec du restore.
+    local rootfs="$LXC_PATH/$CONTAINER/rootfs"
+    tar xzf "$tb" -C "$rootfs" etc/dovecot/dovecot.conf 2>/dev/null || true
+
     # Un restore qui extrait les données mais ne relance pas Dovecot n'est
     # pas un rollback réussi — le service resterait sur l'ancien état en
     # mémoire pendant que le Maildir sur disque aurait changé sous lui.
@@ -808,11 +816,21 @@ cmd_maildir_reconcile() {
 cmd_sieve() {
     case "${1:-status}" in
         enable)
-            # Sieve stocke ses scripts par boite : on garantit d'abord le
+            # configure_dovecot ne fait apparaitre les blocs Sieve QUE si le
+            # rootfs porte deja le plugin (#1169 revue finale, defaut bloquant
+            # 1) : on l'installe donc dans le conteneur EN PREMIER, avant toute
+            # reconciliation/regeneration — sinon la conf regeneree resterait
+            # sans Sieve meme apres cette commande.
+            if ! lxc_attach "$CONTAINER" apt-get install -y dovecot-sieve dovecot-managesieved; then
+                error "installation de dovecot-sieve/dovecot-managesieved échouée"
+                return 1
+            fi
+
+            # Sieve stocke ses scripts par boite : on garantit ensuite le
             # Maildir (no-op si deja conforme), PUIS on regenere la conf
             # sans condition — cmd_maildir_reconcile seul ne suffirait pas
             # a faire apparaitre les blocs Sieve sur une box deja Maildir.
-            cmd_maildir_reconcile
+            cmd_maildir_reconcile || { error "réconciliation Maildir échouée, activation Sieve annulée"; return 1; }
 
             # configure_dovecot vit dans la lib d'install ; on la source si besoin
             # (meme pattern de repli que cmd_maildir_reconcile, pour rester coherent).
@@ -850,6 +868,27 @@ cmd_sieve() {
 # SSL
 # ============================================================================
 
+# mail_ssl_fqdn() derives the FQDN the ACME cert must cover. `$HOSTNAME.$DOMAIN`
+# is a provisioning artifact ("mail.gk2.secubox.in") that never matched the
+# cert actually deployed on the board ("mail.secubox.in") — #1169 revue
+# finale, defaut bloquant 3. Priorité :
+#   1. le CN du cert DEJA déployé (source de vérité vivante) ;
+#   2. la clé TOML explicite `mail_fqdn` du provisioning ;
+#   3. repli `mail.$DOMAIN`.
+mail_ssl_fqdn() {
+    local cn
+    if [ -f "$DATA_PATH/ssl/fullchain.pem" ]; then
+        cn="$(openssl x509 -in "$DATA_PATH/ssl/fullchain.pem" -noout -subject 2>/dev/null \
+              | sed -n 's/^subject=.*CN *= *//p' | sed 's/[[:space:]]*$//')"
+        [ -n "$cn" ] && { echo "$cn"; return 0; }
+    fi
+
+    local cfg_fqdn
+    cfg_fqdn="$(config_get "mail_fqdn" "")"
+    [ -n "$cfg_fqdn" ] && { echo "$cfg_fqdn"; return 0; }
+
+    echo "mail.$DOMAIN"
+}
 
 # acme_renew() actually renews the LE cert for $1 (fqdn) and writes the
 # renewed pair into $DATA_PATH/ssl/{fullchain,privkey}.pem — same mechanism
@@ -914,7 +953,8 @@ cmd_ssl() {
             fi
             ;;
         setup)
-            local fqdn="$HOSTNAME.$DOMAIN"
+            local fqdn
+            fqdn="$(mail_ssl_fqdn)"
             log "Setting up SSL for $fqdn..."
 
             if command -v certbot >/dev/null 2>&1; then
@@ -936,7 +976,8 @@ cmd_ssl() {
             cmd_restart
             ;;
         renew)
-            local fqdn="$HOSTNAME.$DOMAIN"
+            local fqdn
+            fqdn="$(mail_ssl_fqdn)"
             local ssl_dir="$DATA_PATH/ssl"
             mkdir -p "$ssl_dir"
 

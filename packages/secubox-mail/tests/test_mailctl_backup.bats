@@ -45,3 +45,36 @@ setup() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"archive introuvable"* ]]
 }
+
+@test "restore restaure aussi dovecot.conf dans le rootfs (rollback #1169)" {
+  export LXC_PATH="$BATS_TEST_TMPDIR/lxc"
+  local rootfs="$LXC_PATH/$CONTAINER/rootfs"
+  mkdir -p "$rootfs/etc/dovecot"
+  echo "protocols = imap pop3 lmtp sieve" > "$rootfs/etc/dovecot/dovecot.conf"
+
+  local tb
+  tb="$(cmd_backup)"
+  [ -n "$tb" ]
+  tar tzf "$tb" | grep -q "etc/dovecot/dovecot.conf"
+
+  # Simule une régénération cassée que le restore doit annuler.
+  echo "conf cassée" > "$rootfs/etc/dovecot/dovecot.conf"
+
+  lxc_attach() { return 0; }
+  run cmd_restore "$tb"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$rootfs/etc/dovecot/dovecot.conf")" = "protocols = imap pop3 lmtp sieve" ]
+}
+
+@test "restore ne échoue pas si l'archive ne contient pas dovecot.conf" {
+  export LXC_PATH="$BATS_TEST_TMPDIR/lxc"
+  local rootfs="$LXC_PATH/$CONTAINER/rootfs"
+  mkdir -p "$rootfs/etc/dovecot"
+  # Archive volontairement sans dovecot.conf, comme une ancienne sauvegarde.
+  local tb="$DATA_PATH/backups/mail_old.tar.gz"
+  tar czf "$tb" -C "$DATA_PATH" vmail config
+
+  lxc_attach() { return 0; }
+  run cmd_restore "$tb"
+  [ "$status" -eq 0 ]
+}

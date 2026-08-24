@@ -225,7 +225,17 @@ configure_dovecot() {
 
     mkdir -p "$rootfs/etc/dovecot"
 
-    cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+    # Sieve n'est disponible QUE si dovecot-sieve/dovecot-managesieved sont
+    # installés dans le rootfs cible. Émettre les blocs Sieve sans condition
+    # brique Dovecot sur une LXC qui ne les a pas (refus de démarrer, panne
+    # mail complète) — cf. #1169 revue finale, defaut bloquant 1.
+    local sieve_available=false
+    if [ -e "$rootfs/usr/lib/dovecot/modules/lib90_sieve_plugin.so" ] || [ -e "$rootfs/usr/bin/sievec" ]; then
+        sieve_available=true
+    fi
+
+    if [ "$sieve_available" = "true" ]; then
+        cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
 protocols = imap pop3 lmtp sieve
 listen = *
 mail_location = maildir:/var/vmail/%d/%n
@@ -275,6 +285,58 @@ namespace inbox {
 log_path = /var/log/dovecot.log
 info_log_path = /var/log/dovecot.log
 EOF
+    else
+        cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+protocols = imap pop3 lmtp
+listen = *
+mail_location = maildir:/var/vmail/%d/%n
+mail_uid = 5000
+mail_gid = 5000
+first_valid_uid = 500
+last_valid_uid = 65534
+
+auth_mechanisms = plain login
+passdb {
+  driver = passwd-file
+  args = /etc/mail-config/users
+}
+userdb {
+  driver = static
+  args = uid=5000 gid=5000 home=/var/vmail/%d/%n
+}
+
+service imap-login {
+  inet_listener imap  { port = 143 }
+  inet_listener imaps { port = 993; ssl = yes }
+}
+service pop3-login {
+  inet_listener pop3  { port = 110 }
+  inet_listener pop3s { port = 995; ssl = yes }
+}
+service lmtp {
+  unix_listener /var/spool/postfix/private/dovecot-lmtp {
+    mode = 0600
+    user = postfix
+    group = postfix
+  }
+}
+service auth {
+  unix_listener /var/spool/postfix/private/auth {
+    mode = 0660
+    user = postfix
+    group = postfix
+  }
+}
+
+namespace inbox {
+  inbox = yes
+  separator = /
+}
+
+log_path = /var/log/dovecot.log
+info_log_path = /var/log/dovecot.log
+EOF
+    fi
 
     # SSL-aware : ne JAMAIS régénérer une conf sans TLS si le board sert 993/995.
     # Le cert vit dans $DATA_PATH/ssl et est monté /etc/ssl/mail dans le LXC.
@@ -291,7 +353,10 @@ EOF
 
     # Sieve + ManageSieve : filtrage côté serveur (règles utilisateur) et
     # provisioning du script par défaut (Task 6 dépose default.sieve).
-    cat >> "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+    # Gaté sur $sieve_available (cf. plus haut) : un rootfs sans le plugin
+    # ne doit voir NI le service managesieve-login NI mail_plugins=...sieve.
+    if [ "$sieve_available" = "true" ]; then
+        cat >> "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
 
 protocol lmtp {
   mail_plugins = $mail_plugins sieve
@@ -304,6 +369,7 @@ plugin {
   sieve_default = /var/vmail/sieve/default.sieve
 }
 EOF
+    fi
 
     [ -e "$rootfs/etc/mail-config/users" ] || touch "$rootfs/etc/mail-config/users" 2>/dev/null || true
     chmod 644 "$rootfs/etc/mail-config/users" 2>/dev/null || true

@@ -41,6 +41,42 @@ setup() {
   [[ "$output" == *"4190"* ]]
 }
 
+@test "sieve enable installe dovecot-sieve/dovecot-managesieved AVANT la réconciliation" {
+  lxc_attach() {
+    case "$*" in
+      *"apt-get install"*"dovecot-sieve"*"dovecot-managesieved"*)
+        echo "apt-get install appelé" >> "$BATS_TEST_TMPDIR/trace" ;;
+      *doveconf*) echo "maildir:/var/vmail/%d/%n" ;;
+      *"ss -tlnp"*) echo "LISTEN 0 100 *:4190" ;;
+      *) return 0 ;;
+    esac
+  }
+  export -f lxc_attach
+  configure_dovecot() { echo "regen appelé" >> "$BATS_TEST_TMPDIR/trace"; }
+  export -f configure_dovecot
+  run cmd_sieve enable
+  [ "$status" -eq 0 ]
+  grep -q "apt-get install appelé" "$BATS_TEST_TMPDIR/trace"
+  # l'installation du paquet doit précéder la régénération de la conf.
+  [ "$(sed -n '1p' "$BATS_TEST_TMPDIR/trace")" = "apt-get install appelé" ]
+  [ "$(sed -n '2p' "$BATS_TEST_TMPDIR/trace")" = "regen appelé" ]
+}
+
+@test "sieve enable remonte une erreur si l'installation du paquet échoue" {
+  lxc_attach() {
+    case "$*" in
+      *"apt-get install"*"dovecot-sieve"*) return 1 ;;
+      *) return 0 ;;
+    esac
+  }
+  export -f lxc_attach
+  configure_dovecot() { echo "ne doit pas être appelé" >> "$BATS_TEST_TMPDIR/trace"; }
+  export -f configure_dovecot
+  run cmd_sieve enable
+  [ "$status" -ne 0 ]
+  [ ! -f "$BATS_TEST_TMPDIR/trace" ]
+}
+
 @test "sieve enable remonte une erreur si le redémarrage dovecot échoue" {
   lxc_attach() {
     case "$*" in
@@ -54,6 +90,19 @@ setup() {
   export -f configure_dovecot
   run cmd_sieve enable
   [ "$status" -ne 0 ]
+}
+
+@test "sieve enable remonte une erreur si la réconciliation Maildir échoue" {
+  lxc_attach() { return 0; }
+  export -f lxc_attach
+  cmd_maildir_reconcile() { return 1; }
+  export -f cmd_maildir_reconcile
+  configure_dovecot() { echo "ne doit pas être appelé" >> "$BATS_TEST_TMPDIR/trace"; }
+  export -f configure_dovecot
+  run cmd_sieve enable
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"réconciliation Maildir échouée"* ]]
+  [ ! -f "$BATS_TEST_TMPDIR/trace" ]
 }
 
 @test "sieve avec sous-commande inconnue échoue avec usage" {
