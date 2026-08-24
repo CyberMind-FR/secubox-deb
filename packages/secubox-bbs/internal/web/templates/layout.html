@@ -86,7 +86,7 @@
       {{if .Mod.Biblio}}<a class="nav" {{if eq .Vue "biblio"}}aria-current="page"{{end}} href="/biblio"><span class="ic">📚</span>Bibliothèque<span class="n">{{.Stats.Files}}</span></a>{{end}}
       {{if and .V.Connecte .Mod.MP}}<a class="nav" {{if eq .Vue "mp"}}aria-current="page"{{end}} href="/mp"><span class="ic">✉️</span>Messages{{if .NonLus}}<span class="n p-new">{{.NonLus}}</span>{{end}}</a>{{end}}
       {{if .Mod.Billets}}<a class="nav" {{if eq .Vue "billets"}}aria-current="page"{{end}} href="/billets"><span class="ic">📝</span>Billets<span class="n">{{.Stats.Billets}}</span></a>{{end}}
-      {{if .Mod.Mastodon}}<a class="nav" {{if eq .Vue "mastodon"}}aria-current="page"{{end}} href="/mastodon"><span class="ic">🐘</span>Mastodon</a>{{end}}
+      {{if .Mod.Reseaux}}<a class="nav" href="/c/reseaux"><span class="ic">🌐</span>Réseaux</a>{{end}}
 
       <div class="railhead">Salons</div>
       {{range .Cats}}<a class="nav{{decalage .Profondeur}}" href="/c/{{.Slug}}"><span class="ic">{{if .Profondeur}}↳{{else}}🗨️{{end}}</span>{{.Title}}<span class="n">{{.Threads}}</span></a>{{end}}
