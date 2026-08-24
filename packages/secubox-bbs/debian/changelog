@@ -1,3 +1,10 @@
+secubox-bbs (0.30.7-1~bookworm1) bookworm; urgency=medium
+
+  * Embed : colonne droite RETIRÉE du DOM (stoppe radio.js + ses 401) ; deux
+    volets (rubriques/fil) à défilement indépendant (navigation double-couche). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:28:57 +0200
+
 secubox-bbs (0.30.6-1~bookworm1) bookworm; urgency=medium
 
   * Embed : réflow de la grille (3→2 colonnes) quand la colonne droite est masquée

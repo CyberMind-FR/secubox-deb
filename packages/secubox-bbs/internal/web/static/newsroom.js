@@ -19,7 +19,14 @@
 (function () {
   try {
     var r = document.documentElement;
-    if (window.top !== window.self) { r.classList.add('sbx-embed'); }
+    if (window.top !== window.self) {
+      r.classList.add('sbx-embed');
+      // On RETIRE la colonne droite du DOM (pas juste display:none) : sinon
+      // l'iframe radio /micro CONTINUE de charger + sonder ses endpoints
+      // authentifiés → cascade de 401 (cookies SameSite non transmis). Le retirer
+      // stoppe net radio.js.
+      var rr = document.querySelector('.rail.rr'); if (rr) rr.remove();
+    }
     var qt = new URLSearchParams(location.search).get('theme');
     if (qt === 'dark' || qt === 'light') {
       r.setAttribute('data-theme', qt);
