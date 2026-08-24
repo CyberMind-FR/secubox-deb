@@ -1,3 +1,11 @@
+secubox-webos (1.0.11-1~bookworm1) bookworm; urgency=medium
+
+  * Embed : l'iframe REMPLIT la carte (hauteur = viewport - headbar), le service
+    défile dedans — aucune partie perdue ; note de registre + padding bas masqués
+    en embed (pas de scroll de page parasite). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:25:56 +0200
+
 secubox-webos (1.0.10-1~bookworm1) bookworm; urgency=medium
 
   * Embed : headbar RACINE du Hall PRÉSERVÉ, contexte du service greffé dedans
