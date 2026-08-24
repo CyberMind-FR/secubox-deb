@@ -846,6 +846,86 @@ async def restore_backup(backup_name: str, background_tasks: BackgroundTasks):
 
 
 # =============================================================================
+# SOCLE #1169 — Maildir / Sieve / ClamAV / SSL renew (delegue a mailctl confine)
+# =============================================================================
+
+@app.get("/socle/status", dependencies=[Depends(require_jwt)])
+async def socle_status():
+    """Etat des gestes socle : Maildir, Sieve (:4190), ClamAV."""
+    _, mailloc, _ = run_cmd(["lxc-attach", "-n", CONTAINER, "--",
+                             "doveconf", "-h", "mail_location"])
+    _, sieve_ss, _ = run_cmd(["/usr/sbin/mailctl", "sieve", "status"])
+    _, av, _ = run_cmd(["/usr/sbin/mailctl", "antivirus", "status"])
+    return {
+        "maildir": mailloc.strip().startswith("maildir:"),
+        "mail_location": mailloc.strip(),
+        "sieve": ":4190" in sieve_ss or "4190" in sieve_ss,
+        "antivirus": av.strip(),
+    }
+
+
+@app.post("/maildir/reconcile", dependencies=[Depends(require_jwt)])
+async def maildir_reconcile(background_tasks: BackgroundTasks):
+    """Bascule mbox->Maildir (idempotent, backup prealable obligatoire). Destructif."""
+    def do():
+        subprocess.run(["/usr/sbin/mailctl", "maildir-reconcile"],
+                       stdout=open("/var/log/mail-socle.log", "w"),
+                       stderr=subprocess.STDOUT)
+    background_tasks.add_task(do)
+    return {"success": True, "message": "Reconciliation Maildir lancee (log: /var/log/mail-socle.log)"}
+
+
+@app.get("/sieve/status", dependencies=[Depends(require_jwt)])
+async def sieve_status():
+    """ManageSieve :4190 actif ?"""
+    _, out, _ = run_cmd(["/usr/sbin/mailctl", "sieve", "status"])
+    return {"active": "4190" in out, "detail": out.strip()}
+
+
+@app.post("/sieve/enable", dependencies=[Depends(require_jwt)])
+async def sieve_enable(background_tasks: BackgroundTasks):
+    """Active Sieve/ManageSieve (installe le plugin dans le LXC + regenere)."""
+    def do():
+        subprocess.run(["/usr/sbin/mailctl", "sieve", "enable"],
+                       stdout=open("/var/log/mail-socle.log", "w"),
+                       stderr=subprocess.STDOUT)
+    background_tasks.add_task(do)
+    return {"success": True, "message": "Activation Sieve lancee"}
+
+
+@app.get("/antivirus/status", dependencies=[Depends(require_jwt)])
+async def antivirus_status():
+    """Etat ClamAV (optionnel)."""
+    _, out, _ = run_cmd(["/usr/sbin/mailctl", "antivirus", "status"])
+    return {"status": out.strip()}
+
+
+@app.post("/antivirus/{action}", dependencies=[Depends(require_jwt)])
+async def antivirus_toggle(action: str, background_tasks: BackgroundTasks):
+    """Active/desactive ClamAV. action = on | off."""
+    if action not in ("on", "off"):
+        raise HTTPException(400, "action doit etre on|off")
+
+    def do():
+        subprocess.run(["/usr/sbin/mailctl", "antivirus", action],
+                       stdout=open("/var/log/mail-socle.log", "w"),
+                       stderr=subprocess.STDOUT)
+    background_tasks.add_task(do)
+    return {"success": True, "message": f"antivirus {action} lance"}
+
+
+@app.post("/ssl/renew", dependencies=[Depends(require_jwt)])
+async def ssl_renew(background_tasks: BackgroundTasks):
+    """Renouvelle le cert LE mail + redeploie (complete ssl/setup + acme/renew)."""
+    def do():
+        subprocess.run(["/usr/sbin/mailctl", "ssl", "renew"],
+                       stdout=open("/var/log/mail-ssl.log", "w"),
+                       stderr=subprocess.STDOUT)
+    background_tasks.add_task(do)
+    return {"success": True, "message": "Renouvellement SSL lance"}
+
+
+# =============================================================================
 # LOGS & SSL
 # =============================================================================
 

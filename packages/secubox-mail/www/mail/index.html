@@ -295,6 +295,7 @@
                     <div class="tab" onclick="showTab('logs')">📜 Logs</div>
                     <div class="tab" onclick="showTab('settings')">⚙️ Settings</div>
                     <div class="tab" onclick="showTab('actions')">🛠️ Actions</div>
+                    <div class="tab" onclick="showTab('socle')">🔴 Socle</div>
                 </div>
 
                 <div class="tab-content active" id="tab-users">
@@ -359,6 +360,22 @@
                         <button class="btn" onclick="createBackup()">💾 Backup</button>
                         <button class="btn warning" onclick="restartServices()">🔄 Restart</button>
                     </div>
+                </div>
+                <div class="tab-content" id="tab-socle">
+                    <div class="alert info">Socle mail (#1169) — bascule Maildir, filtrage Sieve/ManageSieve, ClamAV optionnel, renouvellement SSL. Gestes délégués à <code>mailctl</code> confiné.</div>
+                    <div class="grid-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.7rem;margin-bottom:1rem">
+                        <div class="stat-card"><div class="value sm" id="socle-maildir">…</div><div class="label">📦 Stockage</div></div>
+                        <div class="stat-card"><div class="value sm" id="socle-sieve">…</div><div class="label">🧹 Sieve :4190</div></div>
+                        <div class="stat-card"><div class="value sm" id="socle-av">…</div><div class="label">🦠 ClamAV</div></div>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                        <button class="btn warning" onclick="reconcileMaildir()">📦 Bascule Maildir…</button>
+                        <button class="btn primary" onclick="enableSieve()">🧹 Activer Sieve</button>
+                        <button class="btn" onclick="toggleAntivirus('on')">🦠 ClamAV ON</button>
+                        <button class="btn" onclick="toggleAntivirus('off')">🦠 ClamAV OFF</button>
+                        <button class="btn primary" onclick="renewSsl()">🔒 Renouveler SSL</button>
+                    </div>
+                    <div id="socle-log" style="margin-top:0.8rem;color:var(--p31-dim);font-size:0.8rem"></div>
                 </div>
             </div>
         </div>
@@ -649,13 +666,45 @@
         function showTab(name) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            const tabs = ['users', 'aliases', 'external', 'logs', 'settings', 'actions'];
+            const tabs = ['users', 'aliases', 'external', 'logs', 'settings', 'actions', 'socle'];
             const idx = tabs.indexOf(name) + 1;
             document.querySelector(`.tab:nth-child(${idx})`).classList.add('active');
             document.getElementById(`tab-${name}`).classList.add('active');
             if (name === 'settings') loadSettings();
             if (name === 'logs') loadLogs();
             if (name === 'external') loadExternal();
+            if (name === 'socle') loadSocle();
+        }
+
+        // ── Socle #1169 : Maildir / Sieve / ClamAV / SSL renew ────────────────
+        async function loadSocle() {
+            const s = await api('/socle/status');
+            document.getElementById('socle-maildir').textContent =
+                s.maildir ? 'Maildir ✓' : (s.mail_location || 'mbox');
+            document.getElementById('socle-sieve').textContent = s.sieve ? 'actif ✓' : 'inactif';
+            document.getElementById('socle-av').textContent = s.antivirus || '-';
+        }
+        function socleLog(m) { document.getElementById('socle-log').textContent = m || ''; }
+        async function reconcileMaildir() {
+            if (!confirm('Bascule mbox→Maildir (destructif). Un backup est pris AUTOMATIQUEMENT avant, et la bascule est annulée si le backup échoue. Continuer ?')) return;
+            socleLog('Réconciliation Maildir en cours…');
+            const r = await api('/maildir/reconcile', { method: 'POST' });
+            socleLog(r.message || 'lancé'); setTimeout(loadSocle, 5000);
+        }
+        async function enableSieve() {
+            socleLog('Activation Sieve en cours…');
+            const r = await api('/sieve/enable', { method: 'POST' });
+            socleLog(r.message || 'lancé'); setTimeout(loadSocle, 6000);
+        }
+        async function toggleAntivirus(action) {
+            socleLog('ClamAV ' + action + ' en cours…');
+            const r = await api('/antivirus/' + action, { method: 'POST' });
+            socleLog(r.message || 'lancé'); setTimeout(loadSocle, 6000);
+        }
+        async function renewSsl() {
+            socleLog('Renouvellement SSL en cours…');
+            const r = await api('/ssl/renew', { method: 'POST' });
+            socleLog(r.message || 'lancé');
         }
 
         function showModal(id) { document.getElementById(id).classList.add('show'); }
