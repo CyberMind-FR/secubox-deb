@@ -13,7 +13,15 @@ REPO_BASE="${REPO_BASE:-/var/lib/secubox-repo}"
 REPO_CONF="${REPO_BASE}/conf"
 REPO_OUT="${REPO_OUT:-/var/www/apt.secubox.in}"
 GPG_HOME="${REPO_BASE}/gpg"
-GPG_EMAIL="packages@secubox.in"
+# Identite de signature du depot : l'email du NŒUD, pas une adresse generique.
+# Chaque box signe SON depot — gk2@secubox.in sur le nœud gk2. Une constante
+# partagee ferait signer tous les nœuds sous la meme identite : impossible de
+# savoir ensuite lequel a publie quoi, et impossible de revoquer un seul nœud.
+#
+# `packages@secubox.in` etait code en dur et ne correspondait a aucune clef
+# reelle : check_gpg_key echouait donc systematiquement, et `repoctl add` n'a
+# jamais rien publie (pool vide, pendant que reprepro servait le vrai depot).
+GPG_EMAIL="${GPG_EMAIL:-$(hostname -s)@secubox.in}"
 DEFAULT_DIST="bookworm"
 
 # Colors
@@ -152,7 +160,7 @@ Key-Type: RSA
 Key-Length: 4096
 Subkey-Type: RSA
 Subkey-Length: 4096
-Name-Real: SecuBox Package Signing Key
+Name-Real: SecuBox Package Signing Key ($(hostname -s))
 Name-Comment: apt.secubox.in
 Name-Email: ${GPG_EMAIL}
 Expire-Date: 0

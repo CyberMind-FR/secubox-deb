@@ -1,3 +1,19 @@
+secubox-repo (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * repoctl : l'identité de signature devient l'email du NŒUD
+    (`$(hostname -s)@secubox.in`, donc gk2@secubox.in sur gk2) au lieu de la
+    constante `packages@secubox.in`. Chaque box signe son propre dépôt : une
+    identité partagée entre nœuds empêcherait de savoir lequel a publié quoi,
+    et de n'en révoquer qu'un seul. La variable reste surchargeable par
+    l'environnement.
+  * C'était un bug franc : `packages@secubox.in` ne correspondait à aucune clef
+    réelle, donc `check_gpg_key` échouait toujours et `repoctl add` n'a jamais
+    rien publié — pool vide, pendant que reprepro servait le vrai dépôt.
+  * Le nom de la clef générée porte aussi le nœud, pour qu'un trousseau
+    multi-nœuds reste lisible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 04:55:00 +0200
+
 secubox-repo (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.
