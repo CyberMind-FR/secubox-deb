@@ -5,232 +5,131 @@
   See LICENCE-CMSD-1.0.md for terms.
 -->
 
-# Live USB to VirtualBox — Quick Start Guide
+# 🔴 Live image → VirtualBox — Quick Start
 
-Test SecuBox on VirtualBox in minutes using the pre-built live image.
+Test SecuBox (Alpha3, `v3.0.0-alpha`) on VirtualBox in minutes. The helper
+`image/create-vbox-vm.sh` downloads the live amd64 image from the GitHub
+releases, converts it, and creates + starts the VM — one command.
 
 ## Prerequisites
 
-- VirtualBox 7.0+ installed
-- 8GB free disk space
-- 4GB RAM available
+- **VirtualBox 7.0+**
+- `gh` (GitHub CLI) *or* `curl`/`wget` — for `--download`
+- ~8 GB free disk, 4 GB RAM
 
-## Quick Start (One-Liner)
+## Quick start (recommended — one command)
 
 ```bash
-# Download and create VM in one command
-curl -sL https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz | \
-  gunzip > secubox-live.img && \
-  VBoxManage convertfromraw secubox-live.img secubox-live.vdi --format VDI && \
-  bash <(curl -sL https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/image/create-vbox-vm.sh) secubox-live.vdi
+git clone https://github.com/CyberMind-FR/secubox-deb.git
+cd secubox-deb
+
+# Downloads the latest release's secubox-live-amd64 image, builds + starts the VM:
+bash image/create-vbox-vm.sh --download
+
+# …or pin a specific pre-release:
+bash image/create-vbox-vm.sh --download v3.0.0-alpha.1
 ```
 
-## Step-by-Step Guide
+That's it. The script converts the image to VDI, creates an EFI VM named
+`SecuBox-Live` (4 GB RAM, 4 vCPU), wires NAT port-forwarding, and boots it.
 
-### 1. Download the Live Image
+Useful flags (see `--help`): `--headless`, `-m/--memory MB`, `-c/--cpus N`,
+`-s/--ssh PORT`, `-w/--https PORT`, `-n/--name NAME`, `--no-start`,
+`-f/--force` (recreate an existing VM).
+
+### Already have an image?
 
 ```bash
-# From GitHub Releases
-wget https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
+# Pass an explicit .img / .img.gz / .vdi (skips the download):
+bash image/create-vbox-vm.sh output/secubox-live-amd64-bookworm.img
+# With no argument it picks the newest secubox-live-amd64-*.img* in output/.
+```
 
-# Extract
+Build one yourself instead of downloading: `sudo bash image/build-image.sh
+--board vm-x64 --local-cache` (see **[[Build-System]]**).
+
+## Access
+
+Wait ~30–60 s for first boot (firstboot generates the JWT, sets up SSH), then:
+
+| Access | Default | Notes |
+|--------|---------|-------|
+| **SSH** | `ssh -p 2222 root@localhost` | host 2222 → guest 22 |
+| **Portal (HTTPS)** | `https://localhost:9443` | host 9443 → guest 443 |
+| **HTTP** | `http://localhost:8080` | host 8080 → guest 80 |
+
+Portal master accounts: **gk2** (host) / **admin** (management). The live image
+also ships a default root password for SSH — see the release notes for the
+current value.
+
+## Manual VirtualBox commands (fallback)
+
+If you prefer to drive `VBoxManage` yourself:
+
+```bash
+# 1) Get + extract the image
+gh release download v3.0.0-alpha.1 -p 'secubox-live-amd64-bookworm.img.gz'
 gunzip secubox-live-amd64-bookworm.img.gz
-```
 
-### 2. Convert IMG to VDI
-
-VirtualBox requires VDI format:
-
-```bash
+# 2) Convert to VDI
 VBoxManage convertfromraw secubox-live-amd64-bookworm.img secubox-live.vdi --format VDI
-```
 
-### 3. Create the VM
-
-#### Option A: Using the Script
-
-```bash
-# Download and run the VM creation script
-curl -sLO https://raw.githubusercontent.com/CyberMind-FR/secubox-deb/master/image/create-vbox-vm.sh
-chmod +x create-secubox-vm.sh
-./create-secubox-vm.sh secubox-live.vdi
-```
-
-#### Option B: Manual Commands
-
-```bash
-VM_NAME="SecuBox-Live"
-VDI_PATH="$(pwd)/secubox-live.vdi"
-
-# Create VM
-VBoxManage createvm --name "$VM_NAME" --ostype "Debian_64" --register
-
-# Configure VM
-VBoxManage modifyvm "$VM_NAME" \
-    --memory 4096 \
-    --cpus 2 \
-    --vram 128 \
-    --graphicscontroller vboxsvga \
-    --firmware efi \
-    --boot1 disk \
-    --nic1 nat \
-    --natpf1 "SSH,tcp,,2222,,22" \
-    --natpf1 "HTTPS,tcp,,9443,,443"
-
-# Add storage
-VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
-VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 --type hdd --medium "$VDI_PATH"
-```
-
-### 4. Start the VM
-
-```bash
-# GUI mode
-VBoxManage startvm "SecuBox-Live" --type gui
-
-# Headless mode (background)
-VBoxManage startvm "SecuBox-Live" --type headless
-```
-
-### 5. Access SecuBox
-
-Wait 30-60 seconds for boot, then:
-
-| Access | Command/URL |
-|--------|-------------|
-| **SSH** | `ssh -p 2222 root@localhost` |
-| **Web UI** | https://localhost:9443 |
-| **Password** | `secubox` |
-
-## Complete Script
-
-Save as `secubox-vbox-quickstart.sh`:
-
-```bash
-#!/bin/bash
-# SecuBox VirtualBox Quick Start
-# Usage: ./secubox-vbox-quickstart.sh [image.img]
-
-set -euo pipefail
-
-IMG="${1:-secubox-live-amd64-bookworm.img}"
-VDI="${IMG%.img}.vdi"
-VM_NAME="SecuBox-Live-$(date +%Y%m%d)"
-
-# Check if image exists
-if [[ ! -f "$IMG" ]]; then
-    echo "Downloading SecuBox Live image..."
-    wget -q --show-progress \
-        https://github.com/CyberMind-FR/secubox-deb/releases/latest/download/secubox-live-amd64-bookworm.img.gz
-    gunzip secubox-live-amd64-bookworm.img.gz
-    IMG="secubox-live-amd64-bookworm.img"
-    VDI="${IMG%.img}.vdi"
-fi
-
-# Convert to VDI if needed
-if [[ ! -f "$VDI" ]]; then
-    echo "Converting to VDI format..."
-    VBoxManage convertfromraw "$IMG" "$VDI" --format VDI
-fi
-
-# Remove existing VM
-VBoxManage unregistervm "$VM_NAME" --delete 2>/dev/null || true
-
-# Create VM
-echo "Creating VM: $VM_NAME"
-VBoxManage createvm --name "$VM_NAME" --ostype "Debian_64" --register
-
-# Configure
-VBoxManage modifyvm "$VM_NAME" \
-    --memory 4096 \
-    --cpus 2 \
-    --vram 128 \
-    --graphicscontroller vboxsvga \
-    --firmware efi \
-    --boot1 disk \
-    --nic1 nat \
+# 3) Create + configure (EFI, NAT port-forwards)
+VM="SecuBox-Live"
+VBoxManage createvm --name "$VM" --ostype Debian_64 --register
+VBoxManage modifyvm "$VM" \
+    --memory 4096 --cpus 4 --vram 128 \
+    --graphicscontroller vmsvga --firmware efi --boot1 disk --nic1 nat \
     --natpf1 "SSH,tcp,,2222,,22" \
     --natpf1 "HTTPS,tcp,,9443,,443" \
-    --clipboard bidirectional
+    --natpf1 "HTTP,tcp,,8080,,80"
+VBoxManage storagectl "$VM" --name SATA --add sata --controller IntelAhci
+VBoxManage storageattach "$VM" --storagectl SATA --port 0 --device 0 \
+    --type hdd --medium "$(realpath secubox-live.vdi)"
 
-# Storage
-VBoxManage storagectl "$VM_NAME" --name "SATA" --add sata --controller IntelAhci
-VBoxManage storageattach "$VM_NAME" --storagectl "SATA" --port 0 --device 0 \
-    --type hdd --medium "$(realpath "$VDI")"
-
-# Start
-echo "Starting VM..."
-VBoxManage startvm "$VM_NAME" --type gui
-
-echo ""
-echo "=== SecuBox VM Ready ==="
-echo "SSH:   ssh -p 2222 root@localhost"
-echo "Web:   https://localhost:9443"
-echo "Pass:  secubox"
-echo ""
-echo "Wait 30-60 seconds for boot to complete."
+# 4) Start (drop --type gui for headless, or use --type headless)
+VBoxManage startvm "$VM" --type gui
 ```
 
 ## Troubleshooting
 
-### API errors / "Invalid credentials" (v2.1.1 Fix)
-
-If you see API 502 errors or "Invalid credentials" after login, upgrade Python packages:
+**VM won't boot / black screen** — try legacy BIOS instead of EFI:
 
 ```bash
-ssh -p 2222 root@localhost
-pip3 install --break-system-packages 'pydantic>=2.0' 'fastapi>=0.100' 'uvicorn>=0.25'
-systemctl restart secubox-hub secubox-auth secubox-system
-```
-
-This issue is fixed in v2.1.1+ images.
-
-### VM won't boot (black screen)
-
-```bash
-# Try BIOS instead of EFI
 VBoxManage modifyvm "SecuBox-Live" --firmware bios
 ```
 
-### Port already in use
+**Port already in use** — pick other host ports at creation time:
 
 ```bash
-# Use different ports
-VBoxManage modifyvm "SecuBox-Live" --natpf1 delete "SSH"
-VBoxManage modifyvm "SecuBox-Live" --natpf1 delete "HTTPS"
-VBoxManage modifyvm "SecuBox-Live" --natpf1 "SSH,tcp,,2223,,22"
-VBoxManage modifyvm "SecuBox-Live" --natpf1 "HTTPS,tcp,,9444,,443"
+bash image/create-vbox-vm.sh --download --ssh 2223 --https 9444
 ```
 
-### Graphics issues
+**Graphics glitches** — switch controller / disable 3D:
 
 ```bash
-# Disable 3D acceleration
-VBoxManage modifyvm "SecuBox-Live" --accelerate3d off --graphicscontroller vmsvga
+VBoxManage modifyvm "SecuBox-Live" --graphicscontroller vboxsvga --accelerate3d off
 ```
 
-### Check VM status
+**Check services once booted:**
 
 ```bash
-VBoxManage list runningvms
-VBoxManage showvminfo "SecuBox-Live" | head -40
+ssh -p 2222 root@localhost
+systemctl status 'secubox-*' --no-pager | head
 ```
 
 ## Cleanup
 
 ```bash
-# Stop VM
-VBoxManage controlvm "SecuBox-Live" poweroff
-
-# Delete VM and files
+VBoxManage controlvm "SecuBox-Live" poweroff 2>/dev/null || true
 VBoxManage unregistervm "SecuBox-Live" --delete
-
-# Remove VDI
-rm -f secubox-live.vdi
+rm -f secubox-live.vdi secubox-live-amd64-bookworm.img
 ```
 
-## See Also
+## See also
 
-- [Installation Guide](Installation.md)
-- [Build from Source](Building.md)
-- [Hardware Deployment](Hardware.md)
+- **[[Home]]** — landing + quick start (all targets)
+- **[[Installation]]** — full install guide (APT, Live USB, ARM)
+- **[[QEMU-ARM64]]** — emulated arm64 VM (dev)
+- **[[Build-System]]** — build images from source
+- **[[Hardware-Matrix]]** — BYOH compatibility by board/SoC
