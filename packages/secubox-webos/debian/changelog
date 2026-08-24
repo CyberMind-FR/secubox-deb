@@ -1,3 +1,10 @@
+secubox-webos (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Hall servi aussi sur hall.gk2.secubox.in (cert wildcard *.gk2.secubox.in) ;
+    hall.gk2.net reste prêt (en attente d'un A public OVH). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 13:15:37 +0200
+
 secubox-webos (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * P1 : registre normalisé — module dédié secubox-webos (socket propre,
