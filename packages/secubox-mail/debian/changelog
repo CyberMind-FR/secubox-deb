@@ -1,3 +1,12 @@
+secubox-mail (2.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * fix : sieve global anti-spam via `sieve_before` (et non `sieve_default`) —
+    il s'exécute AVANT le script perso de chaque membre, donc l'anti-spam
+    s'applique TOUJOURS, y compris aux membres ayant créé leurs filtres dans le
+    webmail (sieve_default n'aurait servi de repli qu'aux membres sans filtre). (ref #1181)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 16:10:00 +0200
+
 secubox-mail (2.10.1-1~bookworm1) bookworm; urgency=medium
 
   * fix : merge_mail_toml ajoute webmail_container/managesieve_host (#1181) —

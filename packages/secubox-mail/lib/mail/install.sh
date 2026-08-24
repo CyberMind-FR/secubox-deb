@@ -388,7 +388,12 @@ service managesieve-login {
 }
 plugin {
   sieve = file:~/sieve;active=~/.dovecot.sieve
-  sieve_default = /var/vmail/sieve/default.sieve
+  # sieve_before (et NON sieve_default) : le sieve global (anti-spam → Junk)
+  # s'exécute AVANT le script perso de chaque membre, donc il s'applique
+  # TOUJOURS — y compris aux membres qui ont créé leurs propres filtres dans le
+  # webmail. `sieve_default` n'aurait servi de repli QUE pour les membres SANS
+  # filtre perso, désactivant l'anti-spam dès le premier filtre créé (#1181).
+  sieve_before = /var/vmail/sieve/default.sieve
 }
 EOF
     fi
@@ -435,7 +440,7 @@ install_default_sieve() {
     # chargée. Quand cette lib est sourcée seule (par maildir-reconcile, sans
     # lxc.sh), lxc_attach_run est indéfinie — appeler `sievec` échouerait
     # (command not found) sur un conteneur qui, de toute façon, n'a pas encore
-    # Sieve. Pigeonhole compile `sieve_default` à la volée à la première
+    # Sieve. Pigeonhole compile `sieve_before` à la volée à la première
     # remise ; sauter la pré-compilation est sans conséquence fonctionnelle.
     if [ -e "$rootfs/usr/bin/sievec" ] \
         && type lxc_attach_run >/dev/null 2>&1 \

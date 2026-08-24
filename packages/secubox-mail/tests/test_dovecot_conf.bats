@@ -32,6 +32,10 @@ setup() { load_libs; make_fake_lxc_env; }
   grep -q 'port = 4190' "$conf"
   grep -Eq 'mail_plugins.*sieve' "$conf"
   grep -q 'sieve = file:~/sieve;active=~/.dovecot.sieve' "$conf"
+  # #1181 : anti-spam global via sieve_before (toujours actif), PAS sieve_default
+  # (repli qui s'annulerait dès qu'un membre crée un filtre perso).
+  grep -q 'sieve_before = /var/vmail/sieve/default.sieve' "$conf"
+  ! grep -qE '^[[:space:]]*sieve_default[[:space:]]*=' "$conf"
 }
 
 @test "dovecot.conf N'active PAS Sieve quand le plugin est absent du rootfs" {
