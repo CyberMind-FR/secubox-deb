@@ -1,3 +1,14 @@
+secubox-webos (1.0.24-1~bookworm1) bookworm; urgency=medium
+
+  * Menu mobile : détection du tactile par CAPACITÉ DE SURVOL (@media hover:none
+    + matchMedia hover:hover), plus par largeur — un téléphone de 700px tombait
+    entre les seuils (submenus flyout invisibles au doigt, feuille pleine
+    largeur). Résultat : (1) sous-menus dépliables au tap du chevron sur TOUT
+    téléphone ; (2) panneau en dropdown compact borné (≤340px), fini le « très
+    grand » plein écran ; chevron agrandi pour le doigt. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 22:55:00 +0200
+
 secubox-webos (1.0.23-1~bookworm1) bookworm; urgency=high
 
   * LA cause du mégamenu mort sur smartphone : les panneaux portaient la classe

@@ -148,11 +148,14 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   font-weight:700;padding:8px 9px 2px;margin-top:3px;border-top:1px solid var(--line)}
 @media(hover:hover){.megamenu .submenu a:hover{background:var(--soft);color:var(--ink)}}
 .megamenu .has-sub .chev.subopen{transform:rotate(90deg)}
-/* Sur tactile (pas de survol) : la bulle se déplie INLINE quand .has-sub.subopen. */
-@media(max-width:640px){
+/* Sur TACTILE (détection par capacité de survol, indépendant de la largeur —
+   un téléphone 700px n'a pas de :hover) : la bulle se déplie INLINE au tap du
+   chevron (.has-sub.subopen), jamais en flyout. */
+@media(hover:none){
   .megamenu .submenu{position:static !important;left:auto !important;top:auto !important;width:auto;box-shadow:none;
     border:none;border-left:1px solid var(--line);border-radius:0;margin:0 0 4px 14px;padding:2px 0 2px 4px}
   .megamenu .has-sub.subopen>.submenu{display:block}
+  .megamenu .has-sub .chev{padding:6px 8px;margin-left:auto;font-size:1.15rem}
 }
 .megamenu .submenu .st{margin-left:auto;width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
@@ -676,8 +679,11 @@ function setMenu(name){
     const t=document.querySelector('.mnav [data-menu="'+name+'"]');
     const mast=document.querySelector('.mast');
     const hb=mast?Math.round(mast.getBoundingClientRect().bottom):56;
-    if(window.innerWidth<=640){ // mobile : feuille pleine largeur sous l'entête (fiable)
-      mm.style.left='8px'; mm.style.right='8px'; mm.style.width='auto'; mm.style.top=(hb+4)+'px';
+    const touch=!matchMedia('(hover:hover)').matches;   // tactile = pas de survol
+    if(touch){ // téléphone : dropdown compact (largeur bornée, PAS pleine feuille)
+      const w=Math.min(340, window.innerWidth-16);
+      let left=8; if(t){ const r=t.getBoundingClientRect(); left=Math.max(8, Math.min(Math.round(r.left), window.innerWidth-w-8)); }
+      mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+4)+'px';
     } else if(t){ // desktop : dropdown aligné sous le titre
       const r=t.getBoundingClientRect();
       mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='264px'; mm.style.top=(hb+2)+'px';
@@ -696,7 +702,7 @@ document.addEventListener('click',e=>{
   // Tactile : tap sur le chevron → déplie/replie la bulle inline (accordéon),
   // sans embarquer le service (ça, c'est le tap sur le libellé).
   const chev=e.target.closest('.chev');
-  if(chev && window.innerWidth<=640){ e.preventDefault(); e.stopPropagation();
+  if(chev && !matchMedia('(hover:hover)').matches){ e.preventDefault(); e.stopPropagation();
     const hs=chev.closest('.has-sub');
     if(hs){ const willOpen=!hs.classList.contains('subopen');
       document.querySelectorAll('.megamenu .has-sub.subopen').forEach(o=>{ if(o!==hs){ o.classList.remove('subopen'); const c=o.querySelector('.chev'); if(c) c.classList.remove('subopen'); }});
