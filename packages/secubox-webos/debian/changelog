@@ -1,3 +1,10 @@
+secubox-webos (1.0.16-1~bookworm1) bookworm; urgency=medium
+
+  * Barre de STATUT bas « où suis-je » : fil d'Ariane (Hall › vue/service) + URL
+    relative de l'embed ; remplace srcnote/footer. Item SBX retiré du menu. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:53:13 +0200
+
 secubox-webos (1.0.15-1~bookworm1) bookworm; urgency=medium
 
   * Mégamenu : ALIGNÉ sous son bouton (Accueil) + style menu système macOS/Windows
