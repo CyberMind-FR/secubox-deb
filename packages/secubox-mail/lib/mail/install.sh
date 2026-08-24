@@ -319,11 +319,12 @@ EOF
 install_default_sieve() {
     local container="$1"
     local rootfs="${LXC_BASE:-/var/lib/lxc}/$container/rootfs"
-    local pkg_root
-    pkg_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    local sieve_src="${SIEVE_CONFIG_DIR:-/usr/lib/secubox/mail/config/sieve}/default.sieve"
+
+    [ -f "$sieve_src" ] || { echo "install_default_sieve: source $sieve_src missing" >&2; return 0; }
 
     mkdir -p "$rootfs/var/vmail/sieve"
-    cp -f "$pkg_root/config/sieve/default.sieve" "$rootfs/var/vmail/sieve/default.sieve"
+    cp -f "$sieve_src" "$rootfs/var/vmail/sieve/default.sieve"
 
     if lxc_running "$container"; then
         lxc_attach_run "$container" sievec /var/vmail/sieve/default.sieve
