@@ -138,7 +138,12 @@
       </div>
     </article>
     {{else}}{{$n := .}}{{with .Fil}}
-    <article class="dossier" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}">
+    {{/* #1180 : le DERNIER média image du fil devient le fond ambiant de la
+         carte (voile discret, cf. .dossier.hasbg). La boucle sans garde laisse
+         la dernière image l'emporter. */}}
+    {{$dbg := ""}}{{range $n.Medias}}{{if eq .Kind "image"}}{{$dbg = .Ref}}{{end}}{{end}}
+    <article class="dossier{{if $dbg}} hasbg{{end}}" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}">
+      {{if $dbg}}<img class="dbg" src="{{$dbg}}" alt="" loading="lazy">{{end}}
       {{if .Published}}<span class="stamp pub">publié</span>{{else if eq .Visibility "public"}}<span class="stamp pub">public</span>{{else}}<span class="stamp loc">local</span>{{end}}
       {{/* Mascotte zanimalos AUTO selon le type de fil (#1131aa) : vidéo/film=Tikko,
            audio/podcast=Gazou, livre=Néri, conférence=Wodi, lien=Peek, sinon Lyra. */}}
@@ -303,7 +308,10 @@
         <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Dossier précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Dossier suivant">▶</button></span>
       </div>
       <div class="cartrack" id="cartrack" tabindex="0" role="list">
-        {{range .News}}
+        {{/* #1180 : « À la une » plafonné à 12 dossiers — au-delà, le carrousel
+             s'étirait sans fin (glisser interminable, DOM lourd). Les plus
+             récents d'abord ; le reste reste accessible via les salons. */}}
+        {{range $ci, $cv := .News}}{{if lt $ci 12}}
         {{$n := .}}
         {{if .Feed}}{{$f := .Feed}}
         <a class="ccard" role="listitem" data-k="podcast" href="/media#f{{$f.ID}}">
@@ -340,7 +348,7 @@
           </div>
         </a>
         {{end}}{{end}}
-        {{end}}
+        {{end}}{{end}}
       </div>
       <div class="cardots" id="cardots" aria-hidden="true"></div>
     </section>

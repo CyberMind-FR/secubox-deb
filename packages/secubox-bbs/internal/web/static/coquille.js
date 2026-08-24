@@ -304,4 +304,32 @@
     if (lien && lien.blur) { lien.blur(); }
     corps.scrollTo({ left: vue.offsetLeft - corps.offsetLeft, behavior: 'smooth' });
   }, { passive: true });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // LIGHTBOX (#1180) : les images jointes aux messages sont volontairement
+  // affichées agrandies, mais une capture pleine résolution mérite le plein
+  // écran. Un clic sur `img.jointe` ouvre un calque ; clic ou touche Échap le
+  // ferme. Délégation sur le document : marche pour tout message, même chargé
+  // après coup. On ignore les <video>/<audio> (leurs contrôles priment).
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || t.tagName !== 'IMG' || !t.classList.contains('jointe')) { return; }
+    var src = t.getAttribute('src');
+    if (!src) { return; }
+    e.preventDefault();
+    var box = document.createElement('div');
+    box.className = 'lightbox';
+    var grand = document.createElement('img');
+    grand.src = src;
+    grand.alt = t.getAttribute('alt') || '';
+    box.appendChild(grand);
+    function surTouche(ev) { if (ev.key === 'Escape') { fermer(); } }
+    function fermer() {
+      box.remove();
+      document.removeEventListener('keydown', surTouche);
+    }
+    box.addEventListener('click', fermer);
+    document.addEventListener('keydown', surTouche);
+    document.body.appendChild(box);
+  }, false);
 })();
