@@ -30,11 +30,16 @@ func TestMiniEstIncorporableParLeParent(t *testing.T) {
 	}
 }
 
-// L'ACCUEIL NORMAL N'EST PAS INCORPORABLE : la relaxation ne concerne que /mini.
-func TestAccueilResteNonIncorporable(t *testing.T) {
+// L'ACCUEIL N'EST INCORPORABLE QUE PAR LE HALL SOUVERAIN (#1175) : le bureau
+// WebOS embarque le vhost réel de la Radio ; tout autre parent reste bloqué.
+func TestAccueilIncorporableParLeHall(t *testing.T) {
 	srv := &Serveur{CadreParent: "https://bbs.gk2.secubox.in"}
-	if !strings.Contains(srv.politique(), "frame-ancestors 'none'") {
-		t.Errorf("l'accueil devrait rester frame-ancestors 'none' : %s", srv.politique())
+	csp := srv.politique()
+	if !strings.Contains(csp, "frame-ancestors 'self' https://hall.gk2.secubox.in") {
+		t.Errorf("l'accueil devrait autoriser le Hall : %s", csp)
+	}
+	if strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Errorf("frame-ancestors 'none' bloquerait le Hall : %s", csp)
 	}
 }
 

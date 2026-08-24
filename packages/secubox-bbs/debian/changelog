@@ -1,3 +1,11 @@
+secubox-bbs (0.30.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cadrage : le Hall souverain (hall.gk2.secubox.in) peut embarquer le vhost
+    réel du BBS (frame-ancestors 'self' https://hall… ; X-Frame-Options DENY
+    retiré). Tout autre parent reste bloqué. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 16:31:58 +0200
+
 secubox-bbs (0.30.0-1~bookworm1) bookworm; urgency=medium
 
   * Newsroom : « À la une » plafonné à 12 dossiers — au-delà, le carrousel

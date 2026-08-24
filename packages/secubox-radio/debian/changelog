@@ -1,3 +1,11 @@
+secubox-radio (0.1.30-1~bookworm1) bookworm; urgency=medium
+
+  * Cadrage : l'accueil Radio est embarquable par le Hall souverain
+    (frame-ancestors 'self' https://hall.gk2.secubox.in) ; /mini garde son
+    CadreParent. Tout autre parent reste bloqué. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 16:31:58 +0200
+
 secubox-radio (0.1.29-1~bookworm1) bookworm; urgency=medium
 
   * feat(radio): spine de contenu BBS (#1166 phase 1) — la validation d'une
