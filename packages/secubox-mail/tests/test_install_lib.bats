@@ -19,3 +19,9 @@ setup() { load_libs; make_fake_lxc_env; }
     [ "$status" -ne 0 ]
     [[ "$output" == *"debootstrap"* ]]
 }
+
+@test "la liste de paquets inclut Sieve + ManageSieve" {
+    local install_sh="${BATS_TEST_DIRNAME}/../lib/mail/install.sh"
+    grep -q 'dovecot-sieve' "$install_sh"
+    grep -q 'dovecot-managesieved' "$install_sh"
+}

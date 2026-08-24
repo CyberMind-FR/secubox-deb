@@ -58,6 +58,7 @@ apt-get update
 apt-get install -y --no-install-recommends \
     postfix postfix-lmdb \
     dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd \
+    dovecot-sieve dovecot-managesieved \
     rspamd redis-server \
     rsyslog ca-certificates openssl
 
