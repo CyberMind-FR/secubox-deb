@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
@@ -5,11 +6,14 @@
   See LICENCE-CMSD-1.0.md for terms.
 
   SecuBox-Deb :: WebOS / Hall — bureau numérique souverain (#1175).
-  Surface AletheiaVox : menu SBX (sidebar), ACCUEIL = services principaux
+  Surface AletheiaVox : menu SBX (menubar), ACCUEIL = services principaux
   (curation all.gk2.net), SYSTÈME = tous les modules du registre normalisé
   (/api/v1/webos/public/services, repli mock). Polices locales, CSP sans tiers.
+
+  ⚠ Le <!DOCTYPE html> DOIT rester en TOUT PREMIER (avant ce commentaire) :
+  tout contenu qui le précède bascule iOS Safari en QUIRKS MODE → position:fixed
+  / sticky / taps cassés (mégamenu injoignable sur iPhone).
 -->
-<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
