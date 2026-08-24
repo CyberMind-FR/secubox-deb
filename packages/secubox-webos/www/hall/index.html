@@ -83,7 +83,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Nav de SECTIONS fusionnée dans la barre unique (mast-main). */
 .mnav{display:flex;align-items:center;gap:2px;flex:none}
 .mnav .it{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:9px;font-size:.82rem;color:var(--dim);
-  font-weight:500;border:1px solid transparent;white-space:nowrap;cursor:pointer}
+  font-weight:500;border:1px solid transparent;white-space:nowrap;cursor:pointer;
+  background:none;font-family:inherit;line-height:1;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent}
+.mnav .it .ca{opacity:.6;font-size:.85em}
 .mnav .it.on{background:var(--sky);color:#fff}
 /* Hover UNIQUEMENT sur pointeur fin : sur écran tactile (iPhone), une règle :hover
    sur l'entrée fait consommer le 1er tap par l'état survol → le clic n'ouvre jamais
@@ -287,12 +289,12 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 <header class="mast">
   <div class="mast-main">
     <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span></span></a>
-    <nav class="mnav" aria-label="Sections">
-      <a class="it" data-menu="1" title="Ouvrir le menu SBX"><span>☰</span> Accueil <span style="opacity:.6">▾</span></a>
-      <a class="it" data-view="systeme"><span>🗂️</span> Services</a>
-      <a class="it"><span>📓</span> Carnet</a>
-      <a class="it"><span>🔔</span> Alertes <span class="badge">3</span></a>
-      <a class="it"><span>👤</span> Profil</a>
+    <nav class="mnav" aria-label="Menus">
+      <button class="it" type="button" data-nav="accueil"><span>🏠</span> Accueil</button>
+      <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
+      <button class="it" type="button" data-menu="systeme"><span>🗄️</span> Système <span class="ca">▾</span></button>
+      <button class="it" type="button"><span>🔔</span> Alertes <span class="badge">3</span></button>
+      <button class="it" type="button"><span>👤</span> Profil</button>
     </nav>
     <div class="drop"><span class="ico" aria-hidden="true">⌕</span><input id="q" type="search" placeholder="chercher un service…" aria-label="Chercher un service"></div>
     <!-- Contexte du service embarqué, GREFFÉ dans la barre unique (#1175). -->
@@ -312,13 +314,21 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 
 <div id="menu-backdrop" class="menu-backdrop hidden"></div>
 <div class="shell">
-  <div id="megamenu" class="rail megamenu hidden" aria-label="Menu WebOS">
-    <a data-nav="accueil"><span class="g">🏠</span> Accueil</a>
+  <!-- Menu SERVICES (déroulant sous son titre, façon menubar macOS) -->
+  <div id="menu-services" class="rail megamenu hidden" data-panel="services" aria-label="Menu Services">
     <h4>Services principaux</h4>
     <div id="railfeat"></div>
-    <div class="sep"></div>
-    <a data-nav="systeme"><span class="g">🗄️</span> Système <span class="st" style="background:var(--gold)"></span></a>
     <div class="bottom">
+      <a data-nav="accueil"><span class="g">🏠</span> Tableau d'accueil</a>
+      <a data-nav="systeme"><span class="g">🗄️</span> Tout le parc…</a>
+    </div>
+  </div>
+  <!-- Menu SYSTÈME (modules du parc par catégorie, chacune sa bulle) -->
+  <div id="menu-systeme" class="rail megamenu hidden" data-panel="systeme" aria-label="Menu Système">
+    <h4>Système — modules du parc</h4>
+    <div id="sysmenu"></div>
+    <div class="bottom">
+      <a data-nav="systeme"><span class="g">🗄️</span> Vue complète du parc</a>
       <a data-nav="aide"><span class="g">❔</span> Aide</a>
       <a href="/api/v1/webos/../../../login.html"><span class="g">⎋</span> Déconnexion</a>
     </div>
@@ -488,7 +498,6 @@ function render(data,src){
       +'</div></div>';
   });
   rail.innerHTML=rh;
-  wireFlyouts();      // survol desktop → bulle en position fixe (échappe au clip)
   loadBbsSubmenu();   // « navbar embarquée » BBS → salons dans la bulle BBS
   // featured grid (principal)
   const fg=document.getElementById('featgrid'); let fh='';
@@ -514,6 +523,19 @@ function render(data,src){
   });
   sb.innerHTML=sh; document.getElementById('n-sys').textContent=svc.length+' modules';
   var sbi=document.getElementById('sb-info'); if(sbi) sbi.innerHTML=src;
+  // Menu SYSTÈME : une catégorie = une entrée + sa bulle (modules → console admin).
+  const sm=document.getElementById('sysmenu'); let smh='';
+  CATS.forEach(c=>{ const items=svc.filter(s=>s.category===c.id); if(!items.length) return;
+    smh+='<div class="has-sub"><a data-nav="systeme"><span class="g">'+c.icon+'</span> '+esc(c.name)
+      +'<span class="st mono">'+items.length+'</span><span class="chev">›</span></a>'
+      +'<div class="submenu">'
+      + items.slice(0,24).map(s=>{ const st=(s.health&&s.health.state)||'unknown';
+          const col=st==='online'?'var(--mint)':st==='degraded'?'var(--amber)':st==='offline'?'var(--coral)':'var(--nav-dim)';
+          return '<a data-admin="'+esc(s.id)+'" data-path="'+esc(s.path||('/'+s.id+'/'))+'"><span class="g">·</span> '+esc(s.name||s.id)+'<span class="st" style="background:'+col+'"></span></a>'; }).join('')
+      +'</div></div>';
+  });
+  if(sm) sm.innerHTML=smh;
+  wireFlyouts();      // survol desktop → bulles fixes (services + système), après build
 }
 function tile(cls,lbl,big,small,sub){
   return '<div class="tile '+cls+'"><div class="accent"></div><div class="lbl">'+lbl+'</div>'
@@ -601,11 +623,12 @@ function loadBbsSubmenu(){
 // mégamenu. Sur tactile : géré au tap du chevron (voir gestionnaire de clic).
 function wireFlyouts(){
   if(!matchMedia('(hover:hover)').matches) return;
-  document.querySelectorAll('#megamenu .has-sub').forEach(hs=>{
+  document.querySelectorAll('.megamenu .has-sub').forEach(hs=>{
     const sub=hs.querySelector('.submenu'); if(!sub) return;
     let t;
     const open=()=>{ clearTimeout(t);
-      document.querySelectorAll('#megamenu .submenu').forEach(o=>{ if(o!==sub) o.style.display='none'; });
+      const panel=hs.closest('.megamenu');
+      panel.querySelectorAll('.submenu').forEach(o=>{ if(o!==sub) o.style.display='none'; });
       const r=hs.getBoundingClientRect();
       const h=Math.min(sub.scrollHeight+14, Math.round(innerHeight*0.74));
       let top=Math.round(r.top-6); if(top+h>innerHeight-8) top=Math.max(8, innerHeight-8-h);
@@ -631,31 +654,40 @@ function showEmbedRubrique(slug,title){
   var u=document.getElementById('sb-url'); if(u) u.textContent='· '+host+'/c/'+slug;
   showView('embed');
 }
-// Mégamenu SBX en surimpression, ouvert depuis le bouton Accueil de la barre.
-function setMenu(open){
-  const mm=document.getElementById('megamenu');
-  if(open){ // ALIGNÉ sous son titre (le bouton Accueil), façon menu système macOS/Win
-    const t=document.querySelector('.mnav [data-menu]');
+// Menubar façon macOS : plusieurs menus (services / systeme), chacun déroulé
+// aligné SOUS son propre titre. setMenu(name) ouvre le panneau #menu-<name> ;
+// setMenu(false) ferme tout.
+function setMenu(name){
+  const panels=document.querySelectorAll('.megamenu');
+  panels.forEach(p=>{ // purge état des panneaux qu'on ferme
+    if(p.dataset.panel!==name){
+      p.classList.add('hidden');
+      p.querySelectorAll('.has-sub.subopen').forEach(h=>{h.classList.remove('subopen'); const c=h.querySelector('.chev'); if(c) c.classList.remove('subopen');});
+      p.querySelectorAll('.submenu').forEach(s=>{s.style.display='';});
+    }
+  });
+  document.querySelectorAll('.mnav [data-menu]').forEach(b=>b.classList.toggle('on',b.dataset.menu===name));
+  const mm=name?document.getElementById('menu-'+name):null;
+  if(mm){ // aligne le panneau sous son bouton
+    const t=document.querySelector('.mnav [data-menu="'+name+'"]');
     const mast=document.querySelector('.mast');
     const hb=mast?Math.round(mast.getBoundingClientRect().bottom):56;
-    if(window.innerWidth<=640){ // iPhone/mobile : feuille pleine largeur SOUS l'entête (position fiable, pas le bouton qui peut wrapper)
+    if(window.innerWidth<=640){ // mobile : feuille pleine largeur sous l'entête (fiable)
       mm.style.left='8px'; mm.style.right='8px'; mm.style.width='auto'; mm.style.top=(hb+4)+'px';
-    } else if(t){ // desktop : dropdown aligné sous le bouton (menubar macOS)
+    } else if(t){ // desktop : dropdown aligné sous le titre
       const r=t.getBoundingClientRect();
-      mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='256px'; mm.style.top=(hb+2)+'px';
+      mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='264px'; mm.style.top=(hb+2)+'px';
     }
+    mm.classList.remove('hidden');
   }
-  mm.classList.toggle('hidden',!open);
-  if(!open){ // referme bulles tactiles + purge les positions fixes desktop
-    mm.querySelectorAll('.has-sub.subopen').forEach(h=>{h.classList.remove('subopen'); const c=h.querySelector('.chev'); if(c) c.classList.remove('subopen');});
-    mm.querySelectorAll('.submenu').forEach(s=>{s.style.display='';});
-  }
-  document.getElementById('menu-backdrop').classList.toggle('hidden',!open);
-  const trig=document.querySelector('.mnav [data-menu]'); if(trig) trig.classList.toggle('on',open);
+  document.getElementById('menu-backdrop').classList.toggle('hidden',!name);
 }
+function anyMenuOpen(){ return [...document.querySelectorAll('.megamenu')].some(p=>!p.classList.contains('hidden')); }
 document.addEventListener('click',e=>{
   const mn=e.target.closest('[data-menu]'); if(mn){ e.preventDefault();
-    setMenu(document.getElementById('megamenu').classList.contains('hidden')); return; }
+    const name=mn.dataset.menu;
+    const open=!document.getElementById('menu-'+name).classList.contains('hidden');
+    setMenu(open?false:name); return; }
   if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
   // Tactile : tap sur le chevron → déplie/replie la bulle inline (accordéon),
   // sans embarquer le service (ça, c'est le tap sur le libellé).
@@ -663,7 +695,7 @@ document.addEventListener('click',e=>{
   if(chev && window.innerWidth<=640){ e.preventDefault(); e.stopPropagation();
     const hs=chev.closest('.has-sub');
     if(hs){ const willOpen=!hs.classList.contains('subopen');
-      document.querySelectorAll('#megamenu .has-sub.subopen').forEach(o=>{ if(o!==hs){ o.classList.remove('subopen'); const c=o.querySelector('.chev'); if(c) c.classList.remove('subopen'); }});
+      document.querySelectorAll('.megamenu .has-sub.subopen').forEach(o=>{ if(o!==hs){ o.classList.remove('subopen'); const c=o.querySelector('.chev'); if(c) c.classList.remove('subopen'); }});
       hs.classList.toggle('subopen',willOpen); chev.classList.toggle('subopen',willOpen);
     }
     return;
