@@ -1,3 +1,12 @@
+secubox-mail (2.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * fix : install_default_sieve aligne le propriétaire de /var/vmail/sieve sur
+    l'uid (mappé) de vmail — un dossier créé root-hôte est « nobody » non mappé
+    dans le LXC, empêchant vmail de compiler le .svbin (spam non filtré) et
+    rendant le dossier irrémovable depuis le conteneur. (ref #1169)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 13:30:00 +0200
+
 secubox-mail (2.8.5-1~bookworm1) bookworm; urgency=medium
 
   * fix : sieve enable déploie le sieve par défaut DANS le conteneur sous

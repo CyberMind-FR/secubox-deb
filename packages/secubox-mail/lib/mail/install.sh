@@ -420,6 +420,15 @@ install_default_sieve() {
     [ -d "$vmail_dir" ] || vmail_dir="$rootfs/var/vmail"
     mkdir -p "$vmail_dir/sieve"
     cp -f "$sieve_src" "$vmail_dir/sieve/default.sieve"
+    # OWNERSHIP CRITIQUE (LXC non privilégié). Créé par root-hôte, le dossier
+    # appartient à l'uid hôte 0 = « nobody » non mappé dans le conteneur : vmail
+    # ne peut alors PAS écrire le .svbin compilé (Pigeonhole abandonne, spam non
+    # filtré) et le dossier devient même irrémovable depuis le conteneur. On
+    # l'aligne sur le propriétaire (mappé) de $vmail_dir lui-même — c'est l'uid
+    # hôte de vmail — pour que le conteneur le voie comme vmail:vmail.
+    if own="$(stat -c '%u:%g' "$vmail_dir" 2>/dev/null)" && [ -n "$own" ]; then
+        chown -R "$own" "$vmail_dir/sieve" 2>/dev/null || true
+    fi
 
     # Pré-compilation FACULTATIVE : ne l'exécuter que si le conteneur porte
     # déjà `sievec` (dovecot-sieve installé) ET que l'aide `lxc_attach_run` est
