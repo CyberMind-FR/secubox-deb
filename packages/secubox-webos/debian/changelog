@@ -1,3 +1,15 @@
+secubox-webos (1.0.32-1~bookworm1) bookworm; urgency=medium
+
+  * Le menu contextuel remonte la navbar du service AVEC SES SECTIONS : pour le
+    BBS, « Rubriques » (les salons) puis « Accès » (Médiathèque, Bibliothèque,
+    Billets, Réseaux), chacune sous son intertitre, chaque entrée avec son
+    propre emoji et son compteur. Repli sur une liste plate pour un service qui
+    ne publie encore que `items` — aucune régression.
+  * L'adaptateur (api/cardlets.py) traduit les deux sections et conserve `items`
+    pour les clients antérieurs. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 03:50:00 +0200
+
 secubox-webos (1.0.31-1~bookworm1) bookworm; urgency=medium
 
   * Switch de mode : le bouton du mode COURANT s'efface. En vue admin, ⚙️ ne

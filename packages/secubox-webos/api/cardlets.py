@@ -80,7 +80,16 @@ BBS_SOCK = "/run/secubox/bbs.sock"
 
 
 def bbs_menu(sock: str = BBS_SOCK, _get=None) -> dict:
-    """Rubriques BBS (navbar) → sous-menu Hall, lues côté serveur via bbs.sock."""
+    """Navbar BBS → menu contextuel du Hall, lue côté serveur via bbs.sock.
+
+    Les DEUX sections de la navbar remontent (#1187) : les rubriques (salons)
+    et « Accès » (Médiathèque, Bibliothèque, Billets, Réseaux). Le BBS ne
+    publie sur cette route que l'Accès PUBLIC — Messages et Sysop dépendent de
+    la session, que la socket n'a pas ; ils restent dans la navbar du BBS.
+
+    `items` est conservé (rubriques à plat) pour les clients d'avant #1187 ;
+    `sections` porte la structure complète.
+    """
     get = _get or uds_get
     d = get(sock, "/api/v1/bbs/menu") or {}
     items = [
@@ -88,7 +97,22 @@ def bbs_menu(sock: str = BBS_SOCK, _get=None) -> dict:
         for c in (d.get("categories") or [])
         if c.get("slug")
     ]
-    return {"id": "bbs", "items": items}
+    acces = [
+        {
+            "path": a.get("path"),
+            "title": a.get("title"),
+            "icon": a.get("icon"),
+            "threads": a.get("threads", 0),
+        }
+        for a in (d.get("access") or [])
+        if a.get("path") and a.get("title")
+    ]
+    sections = []
+    if items:
+        sections.append({"title": "Rubriques", "items": items})
+    if acces:
+        sections.append({"title": "Accès", "items": acces})
+    return {"id": "bbs", "title": "Navigation", "items": items, "sections": sections}
 
 
 def bbs_menu_safe(sock: str = BBS_SOCK, _get=None) -> dict:

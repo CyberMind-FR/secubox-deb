@@ -17,15 +17,39 @@ import (
 func (s *Server) apiMenu(w http.ResponseWriter, r *http.Request) {
 	cats, _ := s.st.Categories(true)
 	type item struct {
-		Slug    string `json:"slug"`
+		Slug    string `json:"slug,omitempty"`
+		Path    string `json:"path,omitempty"`
+		Icon    string `json:"icon,omitempty"`
 		Title   string `json:"title"`
-		Threads int    `json:"threads"`
+		Threads int    `json:"threads,omitempty"`
 	}
 	out := make([]item, 0, len(cats))
 	for _, c := range cats {
 		out = append(out, item{Slug: c.Slug, Title: c.Title, Threads: c.Threads})
 	}
+
+	// Seconde section de la navbar BBS : « Accès » (#1187). Elle remonte telle
+	// quelle dans le menu contextuel du Hall.
+	//
+	// PUBLIQUE UNIQUEMENT. Le Hall lit cette route par la socket, donc SANS
+	// session : « Messages » (avec son compteur de non-lus) et « Sysop » n'y
+	// figurent PAS — ils dépendent de qui regarde, et les publier ici les
+	// exposerait à tout le monde. Ils restent dans la navbar du BBS, où la
+	// session existe.
+	st, _ := s.st.Stats()
+	acces := []item{
+		{Path: "/media", Icon: "🎧", Title: "Médiathèque"},
+		{Path: "/biblio", Icon: "📚", Title: "Bibliothèque", Threads: st.Files},
+		{Path: "/billets", Icon: "📝", Title: "Billets", Threads: st.Billets},
+		{Path: "/c/reseaux", Icon: "🌐", Title: "Réseaux"},
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=30")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"categories": out})
+	// `categories` est conservé tel quel : l'adaptateur Hall d'avant #1187 le
+	// lit encore. `access` s'y ajoute sans rien casser.
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"categories": out,
+		"access":     acces,
+	})
 }
