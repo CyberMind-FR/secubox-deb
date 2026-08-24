@@ -1,3 +1,12 @@
+secubox-webos (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Santé socket-aware : les ~110 modules servis in-process par l'agrégateur
+    (unité systemd inactive/dead mais socket vivante) sont désormais `online`,
+    reflétant leur vraie joignabilité ; `failed` reste `offline` (jamais masqué
+    par une socket périmée). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 15:47:20 +0200
+
 secubox-webos (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * public/services expose aussi `description` (libellé menu, non sensible) —

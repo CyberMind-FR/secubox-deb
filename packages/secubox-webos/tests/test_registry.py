@@ -84,3 +84,33 @@ def test_load_menu_cache_missing_file_defaults():
 
 def test_load_exposure_cache_missing_file_defaults():
     assert load_exposure_cache("/nonexistent/exposure.json") == {}
+
+
+# #1175 santé socket-aware : ~110 modules servis in-process par l'agrégateur ont
+# une unité systemd inactive/dead mais répondent via leur socket. La socket prime.
+_MENU_SOCK = {"categories": [{"items": [
+    {"id": "dpi", "name": "DPI", "category": "wall", "icon": "🔬",
+     "path": "/dpi/", "installed": True, "active": True},
+    {"id": "auth", "name": "Auth", "category": "auth", "icon": "🔑",
+     "path": "/auth/", "installed": True, "active": True},
+]}]}
+
+def test_socket_promotes_inactive_to_online():
+    # dpi: unité inactive → "warn" (degraded) MAIS socket présente ⇒ online
+    health = {"dpi": {"status": "warn", "msg": "inactive/dead"}}
+    svcs = {s.id: s for s in normalize_services(_MENU_SOCK, health, None,
+                                                sockets=frozenset({"dpi"}))}
+    assert svcs["dpi"].health.state == "online"
+
+def test_socket_does_not_mask_failed():
+    # auth: unité failed → "error" ; une socket périmée ne doit PAS le masquer
+    health = {"auth": {"status": "error", "msg": "Failed"}}
+    svcs = {s.id: s for s in normalize_services(_MENU_SOCK, health, None,
+                                                sockets=frozenset({"auth"}))}
+    assert svcs["auth"].health.state == "offline"
+
+def test_no_socket_keeps_degraded():
+    health = {"dpi": {"status": "warn", "msg": "inactive/dead"}}
+    svcs = {s.id: s for s in normalize_services(_MENU_SOCK, health, None,
+                                                sockets=frozenset())}
+    assert svcs["dpi"].health.state == "degraded"
