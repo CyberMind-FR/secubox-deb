@@ -470,7 +470,7 @@ func politique(style, script, connect, frame, media string) string {
 		// Seul le Hall souverain (hall.gk2.secubox.in) peut encadrer le BBS — pas
 		// 'none' : le bureau WebOS embarque le vhost réel du BBS (#1175). Reste
 		// clos à tout autre parent (anti-clickjacking maintenu, opt-in unique).
-		"frame-ancestors 'self' https://hall.gk2.secubox.in; base-uri 'none'; form-action 'self'"
+		"frame-ancestors 'self' https://hall.gk2.secubox.in https://hall.gk2.net; base-uri 'none'; form-action 'self'"
 }
 
 // OrigineMediaMastodon rejoue la politique en ouvrant les images et les sons

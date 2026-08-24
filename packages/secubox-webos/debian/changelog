@@ -1,3 +1,12 @@
+secubox-webos (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Radio VIVANTE : now-playing lu côté serveur (radio.sock), même
+    origine, cache 5 s. Adaptateur souverain (brief §6).
+  * Embarquement : une SEULE barre — l'entête Hall + la nav se replient en mode
+    embed (fin des barres empilées sur l'entête du service). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 16:52:49 +0200
+
 secubox-webos (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * Hall 3 espaces : Accueil / Services principaux (chaque service ouvre sa page

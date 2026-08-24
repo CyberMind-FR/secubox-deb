@@ -325,7 +325,7 @@ func (s *Serveur) politique() string {
 	// Le Hall souverain (hall.gk2.secubox.in) encadre le vhost réel de la Radio
 	// (#1175) ; tout autre parent reste bloqué. Le lecteur /mini garde en plus
 	// son CadreParent dédié (cf. politiqueMini).
-	return s.politiqueAvecAncetres(script, style, connect, "'self' https://hall.gk2.secubox.in")
+	return s.politiqueAvecAncetres(script, style, connect, "'self' https://hall.gk2.secubox.in https://hall.gk2.net")
 }
 
 // politiqueMini : la politique du lecteur compact /mini, incorporable par la

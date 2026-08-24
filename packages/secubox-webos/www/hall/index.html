@@ -464,6 +464,12 @@ function showView(v){
   });
   document.querySelectorAll('.rail a[data-nav]').forEach(a=>a.classList.toggle('on',a.dataset.nav===v));
   document.querySelectorAll('.topnav .it[data-view]').forEach(a=>a.classList.toggle('on',a.dataset.view===v));
+  // EMBED = une SEULE barre : on replie l'entête Hall + la barre nav (sinon 3
+  // barres empilées par-dessus l'entête du service). La barre d'embed assemble
+  // retour + contexte service + contrôles. Le rail latéral reste pour naviguer.
+  const embedMode=(v==='embed');
+  const mast=document.querySelector('.mast'); if(mast) mast.style.display=embedMode?'none':'';
+  const tn=document.querySelector('.topnav'); if(tn) tn.style.display=embedMode?'none':'';
   window.scrollTo({top:0,behavior:'smooth'});
 }
 // ouvre un service dans sa page propre : le vhost RÉEL embarqué inline.
@@ -510,6 +516,20 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(!n){ render(MOCK,'Registre <b>activé mais vide</b> — aperçu maquette.'); return; }
     render(d,'Registre <b>réel</b> · '+n+' modules · santé socket-aware. Principal = curation all.gk2.net ; tout le parc sous Système.');
   }).catch(()=>{});
+
+// Cardlet Radio VIVANTE : now-playing lu côté serveur (radio.sock), même origine.
+function majRadio(){
+  fetch('/api/v1/webos/public/cardlets/radio',{headers:{'Accept':'application/json'}})
+    .then(r=>r.ok?r.json():Promise.reject()).then(c=>{
+      const ct=(c&&c.content)||{}; const m={}; ((c&&c.metrics)||[]).forEach(x=>m[x.id]=x.value);
+      const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+      set('rtitle', ct.title||'Radio souveraine');
+      set('rart', ct.subtitle||(c&&c.silence?'— silence —':'— flux en continu —'));
+      set('rlisten', m.listeners!=null?m.listeners:'—');
+      set('rview', m.tracks!=null?m.tracks:'—');
+    }).catch(()=>{});
+}
+majRadio(); setInterval(majRadio, 15000);
 </script>
 </body>
 </html>

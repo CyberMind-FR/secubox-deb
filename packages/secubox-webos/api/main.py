@@ -13,7 +13,7 @@ from fastapi import FastAPI, APIRouter, Depends
 from secubox_core.auth import require_jwt
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags
+from api import registry, flags, cardlets
 
 _cache: dict = {"services": [], "computed_at": None}
 _flags: dict = flags.load_flags()
@@ -94,6 +94,20 @@ async def public_services():
         row["health"] = {"state": (s.get("health") or {}).get("state", "unknown")}
         out.append(row)
     return {"services": out, "computed_at": _cache["computed_at"]}
+
+
+_rc = {"d": None, "t": 0.0}
+
+
+@public_router.get("/cardlets/radio")
+async def cardlet_radio():
+    """Cardlet Radio (now-playing) — lue côté serveur via radio.sock, cache 5 s."""
+    now = time.time()
+    if _rc["d"] and now - _rc["t"] < 5:
+        return _rc["d"]
+    d = cardlets.radio_cardlet_safe()
+    _rc["d"], _rc["t"] = d, now
+    return d
 
 
 @router.get("/services")
