@@ -490,4 +490,19 @@
       rendAttente();
     }
   }, 4000);
+
+  // ── REJOUER LA TIMELINE (#1166 B5) ────────────────────────────────────────
+  //
+  // Pas encore de vue de réécoute dans cette page — ce hook est le seul point
+  // d'entrée à câbler le jour où elle existe : GET
+  // /api/v1/radio/replay/{piste}/timeline rend `{comments:[…]}`, chaque
+  // commentaire portant offset_ms, pour réafficher le chat au bon instant
+  // pendant le replay d'une piste (pisteID = l'ID numérique de la piste, pas
+  // le content_id du spine BBS — l'API le résout elle-même côté serveur).
+  //
+  // function chargeReplayTimeline(pisteID) {
+  //   return fetch('/api/v1/radio/replay/' + pisteID + '/timeline')
+  //     .then(function (r) { return r.json(); })
+  //     .then(function (d) { return d.comments || []; });
+  // }
 })();

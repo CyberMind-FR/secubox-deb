@@ -1,3 +1,20 @@
+secubox-radio (0.1.29-1~bookworm1) bookworm; urgency=medium
+
+  * feat(radio): spine de contenu BBS (#1166 phase 1) — la validation d'une
+    piste ouvre desormais un ContentObject cote BBS (client contentbbs,
+    Creer/Representation/Topic) et persiste son content_id sur la piste ;
+    chaque VRAI passage a l'antenne journalise un evenement "broadcast" sur
+    ce ContentObject ; le chat d'un membre identifie (jeton sbx_token) pousse
+    en plus, en parallele du chat volatile, un commentaire synchronise sur la
+    timeline BBS de la piste en cours ; et GET
+    /api/v1/radio/replay/{piste}/timeline sert desormais ces commentaires,
+    dans l'ordre (offset_ms), pour une future interface de reecoute. Non
+    bloquant de bout en bout : un BBS injoignable, une piste non rattachee au
+    spine ou le module Contenu absent ne font jamais echouer l'antenne — au
+    pire un 404/502 sur la seule route de lecture concernee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Mon, 24 Aug 2026 06:00:00 +0000
+
 secubox-radio (0.1.28-1~bookworm1) bookworm; urgency=medium
 
   * fix(radio): les « précédents » viennent du JOURNAL D'ANTENNE réel (table
