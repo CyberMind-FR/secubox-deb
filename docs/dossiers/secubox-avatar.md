@@ -158,3 +158,26 @@ avatar.Watch()                   → flux d'événements d'état
 - [ ] Publication Signal et Facebook Page depuis le gateway via `Invoke`.
 - [ ] `facebook-perso` publie un contenu `ownership=own`, refuse un contenu tiers.
 - [ ] Paquet cœur installable sans `secubox-avatar-browser` ; tout `cspn_scope=false` clairement identifié en UI et dans la doc.
+
+---
+
+## WebOS Hall — intégration cookies/avatar (TODO, design-first)
+
+Directives utilisateur (#1175, 2026-08-24) — **différé, design-first ; ne construire que ce dont l'injection WebOS-core a besoin** :
+
+- **self-avatar = capteur de cookies côté serveur** : l'avatar « attrape » les sessions
+  d'auth des services (admin webui, bbs, nextcloud, peertube, gitea, mail, …) et les
+  **encapsule pour réemploi** dans un **cookies-catcher helper** (coffre serveur), jamais
+  recopiées vers le navigateur client.
+- **avatar reporter** : journalise/expose l'usage des sessions capturées (traçabilité,
+  quels services activés pour quel avatar).
+- **cookies profilés & activables** : par avatar, des cookies « personnalisés / profilés »
+  qu'on **active** par service — le rejeu se fait DANS la box (pool navigateur headless),
+  pas côté client (conforme brief §14 + CSPN, hors CSPN pour le pool).
+- **sub-linings / encapsulation** : réutilisation encapsulée des sessions sous l'avatar.
+- **Lien avec P6 (barre injectée)** : l'injection WebOS-core peut avoir besoin d'un minimum
+  de contexte avatar pour relier/relayer (gateway linker). Ne construire ce minimum que
+  si l'injection l'exige ; tout le reste (catcher complet, reporter, profils) reste TODO.
+
+Rappel sécurité : **jamais de recopie de cookies vers le navigateur client**. Le rejeu
+authentifié = coffre + pool navigateur souverain (dans la box).
