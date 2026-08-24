@@ -1,3 +1,11 @@
+secubox-bbs (0.30.4-1~bookworm1) bookworm; urgency=medium
+
+  * Embed Hall : détection d'embed AUSSI dans newsroom.js (l'accueil est un
+    template autonome) → l'entête se masque enfin ; widget radio imbriqué masqué
+    en embed (évite le chaînage hall>bbs>radio + 401 SameSite). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:08:11 +0200
+
 secubox-bbs (0.30.3-1~bookworm1) bookworm; urgency=medium
 
   * Embarquement Hall : encadré par le Hall, le BBS masque son entête (barre

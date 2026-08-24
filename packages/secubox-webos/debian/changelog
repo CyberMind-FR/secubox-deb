@@ -1,3 +1,9 @@
+secubox-webos (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * CSP Hall : worker-src 'self' blob: (workers légitimes des services). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:08:11 +0200
+
 secubox-webos (1.0.8-1~bookworm1) bookworm; urgency=medium
 
   * Embed : iframe en mode ?embed=1&theme= (entête service masquée + skin

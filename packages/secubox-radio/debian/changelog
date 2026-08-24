@@ -1,3 +1,9 @@
+secubox-radio (0.1.32-1~bookworm1) bookworm; urgency=medium
+
+  * /micro : frame-ancestors liste aussi le Hall (chaîne hall>bbs>radio). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:08:11 +0200
+
 secubox-radio (0.1.31-1~bookworm1) bookworm; urgency=medium
 
   * Cadrage : frame-ancestors autorise AUSSI https://hall.gk2.net. (ref #1175)

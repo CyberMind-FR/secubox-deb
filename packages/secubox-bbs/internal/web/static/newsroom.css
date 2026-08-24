@@ -45,6 +45,10 @@ a{color:inherit;text-decoration:none}
    masque quand le BBS est encadré (classe posée par coquille.js). Vhost réel
    inchangé. */
 :root.sbx-embed .mast{display:none}
+/* En embed, on masque les widgets qui RE-encadrent un autre vhost (radio /micro) :
+   le chaînage hall>bbs>radio casse frame-ancestors + 401 SameSite. L'auth
+   imbriquée = coffre avatar (différé). */
+:root.sbx-embed .radiowidget{display:none}
 .mast-top{display:flex;align-items:baseline;gap:14px;justify-content:center;padding:8px 20px 4px;flex-wrap:wrap;
   border-bottom:1px solid var(--line);font-family:"JetBrains Mono";font-size:.62rem;letter-spacing:.13em;color:var(--dim);text-transform:uppercase}
 .mast-top .r{color:var(--coral)} .mast-top .l{color:var(--sky)}

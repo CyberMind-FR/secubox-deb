@@ -348,6 +348,9 @@ func (s *Serveur) politiqueMini() string {
 	if o := strings.TrimSpace(s.CadreParent); o != "" && !strings.ContainsAny(o, " ;'\"") {
 		anc += " " + o
 	}
+	// /micro peut être encadré en chaîne hall > bbs > radio : frame-ancestors
+	// doit lister TOUTE la chaîne d'ancêtres, donc aussi le Hall (#1175).
+	anc += " https://hall.gk2.secubox.in https://hall.gk2.net"
 	return s.politiqueAvecAncetres(script, style, connect, anc)
 }
 
