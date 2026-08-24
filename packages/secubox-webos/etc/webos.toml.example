@@ -1,0 +1,4 @@
+# /etc/secubox/webos.toml
+[webos]
+enabled = false
+registry_enabled = true

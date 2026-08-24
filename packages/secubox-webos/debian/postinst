@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+if [ "$1" = "configure" ]; then
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-webos.service || true
+    if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then systemctl reload nginx || true; fi
+fi
+#DEBHELPER#

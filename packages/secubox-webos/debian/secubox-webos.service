@@ -1,0 +1,22 @@
+[Unit]
+Description=SecuBox WebOS normalized registry API
+After=network.target secubox-core.service
+Wants=secubox-core.service
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/lib/secubox/webos
+RuntimeDirectoryMode=0755
+CacheDirectory=secubox
+CacheDirectoryMode=0755
+ExecStartPre=+/bin/rm -f /run/secubox/webos.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/webos.sock --log-level warning
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ReadWritePaths=/run/secubox /var/cache/secubox
+
+[Install]
+WantedBy=multi-user.target

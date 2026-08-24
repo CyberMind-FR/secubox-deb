@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+if [ "$1" = "remove" ]; then systemctl stop secubox-webos.service || true; fi
+#DEBHELPER#
