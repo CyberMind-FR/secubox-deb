@@ -243,8 +243,6 @@ userdb {
   args = uid=5000 gid=5000 home=/var/vmail/%d/%n
 }
 
-ssl = no
-
 service imap-login {
   inet_listener imap  { port = 143 }
   inet_listener imaps { port = 993; ssl = yes }
@@ -276,6 +274,19 @@ namespace inbox {
 log_path = /var/log/dovecot.log
 info_log_path = /var/log/dovecot.log
 EOF
+
+    # SSL-aware : ne JAMAIS régénérer une conf sans TLS si le board sert 993/995.
+    # Le cert vit dans $DATA_PATH/ssl et est monté /etc/ssl/mail dans le LXC.
+    if [ -f "${DATA_PATH:-/data/volumes/mail}/ssl/fullchain.pem" ]; then
+        cat >> "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+ssl = yes
+ssl_cert = </etc/ssl/mail/fullchain.pem
+ssl_key = </etc/ssl/mail/privkey.pem
+ssl_min_protocol = TLSv1.2
+EOF
+    else
+        echo 'ssl = no' >> "$rootfs/etc/dovecot/dovecot.conf"
+    fi
 
     [ -e "$rootfs/etc/mail-config/users" ] || touch "$rootfs/etc/mail-config/users" 2>/dev/null || true
     chmod 644 "$rootfs/etc/mail-config/users" 2>/dev/null || true
