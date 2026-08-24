@@ -13,6 +13,7 @@ from secubox_core.kiosk import (
     detect_board_type, get_board_profile, get_board_capabilities,
     get_interface_classification,
 )
+from secubox_core.health import systemd_batch
 import subprocess
 import json
 import asyncio
@@ -513,46 +514,14 @@ def _refresh_health_batch():
     Stores _cache["health_batch"] = {modules, count} + stamps health_batch_ts.
     Shared by the background loop and the /public/health-batch cold-miss path so
     the request never makes its own (3.3 s) synchronous systemctl call.
-    """
-    modules = {}
-    sleepable = _load_sleepable_modules()
-    try:
-        result = subprocess.run(
-            ["systemctl", "list-units", "--type=service",
-             "--state=running,failed,inactive", "--no-legend", "--plain",
-             "secubox-*"],
-            capture_output=True, text=True, timeout=5
-        )
-        for line in result.stdout.strip().split("\n"):
-            if not line.strip():
-                continue
-            parts = line.split()
-            if len(parts) >= 4:
-                unit, _load, active, sub = parts[0], parts[1], parts[2], parts[3]
-                if unit.startswith("secubox-") and unit.endswith(".service"):
-                    mod_id = unit[8:-8]
-                    if active == "active" and sub == "running":
-                        modules[mod_id] = {"status": "ok", "msg": "Running"}
-                    elif active == "active":
-                        modules[mod_id] = {"status": "warn", "msg": f"Active ({sub})"}
-                    elif active == "failed":
-                        # A crash is a real alarm even for a sleepable module —
-                        # intentional sleep goes through disable+stop (inactive/
-                        # dead), never "failed".
-                        modules[mod_id] = {"status": "error", "msg": "Failed"}
-                    elif mod_id in sleepable:
-                        modules[mod_id] = {"status": "ok", "msg": "Asleep (on-demand)"}
-                    else:
-                        modules[mod_id] = {"status": "warn", "msg": f"{active}/{sub}"}
-    except Exception as e:
-        log.warning("health-batch systemctl error: %s", e)
 
-    socket_dir = Path("/run/secubox")
-    if socket_dir.exists():
-        for sock in socket_dir.glob("*.sock"):
-            mod_id = sock.stem
-            if mod_id not in modules:
-                modules[mod_id] = {"status": "ok", "msg": "Socket active"}
+    The systemctl-call + classification + socket-scan is delegated to the
+    shared secubox_core.health.systemd_batch() helper (ref #1175) — the
+    sleepable-modules lookup and the waf/waf-ng overlay below stay here as
+    they're Hub-specific.
+    """
+    sleepable = _load_sleepable_modules()
+    modules = systemd_batch(sleepable=sleepable)
 
     # Le WAF est désormais le Go sbxwaf (secubox-waf-ng) ; le vieux
     # secubox-waf.service (API Python) est débranché depuis le cutover et reste
