@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox-Deb :: WebOS / Hall — RÉFÉRENCE DE RENDU (#1175).
+
+  Ceci n'est PAS le Hall. C'est la CIBLE VISUELLE : transcription fidèle et
+  statique de l'affiche « SBXOS · le bureau numérique souverain ». Aucune API,
+  aucun JS, aucune donnée réelle — chiffres et libellés sont des maquettes.
+  Sert de témoin à comparer côte à côte avec index.html (desktop ET iPhone).
+
+  Règles : polices locales, aucune origine tierce (CSP hall), palette = mêmes
+  tokens que index.html. Volontairement verrouillée en clair (canon papier) ;
+  le mode sombre se dérive des tokens de index.html, pas d'ici.
+  Doc associée : docs/dossiers/webos-hall-render-ref.md
+-->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>SBXOS — référence de rendu · Hall</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<style>
+@font-face{font-family:"Fraunces";src:url("fonts/fraunces.woff2") format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Inter";src:url("fonts/inter.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("fonts/jetbrainsmono.woff2") format("woff2");font-weight:100 800;font-display:swap}
+
+/* Canon clair — mêmes tokens que index.html, sans bascule sombre (cf. entête). */
+:root{
+  --ink:#17232d; --paper:#eef2f6; --panel:#ffffff; --line:#dbe3e9; --line-2:#c5cfd7;
+  --soft:#f1f4f7; --dim:#647685;
+  --mint:#1f7a58; --mint-s:#e3f2ec; --coral:#a73d42; --coral-s:#f6e7e8;
+  --sky:#1655a0; --sky-s:#e7f0fa; --cyan:#0a91c8; --gold:#b8912f;
+  --shadow:0 1px 2px rgba(20,45,60,.05),0 8px 26px rgba(20,45,60,.10);
+  --lift:0 2px 6px rgba(20,45,60,.09),0 18px 40px -14px rgba(20,45,60,.26);
+  /* Ambiance affiche : papier plus chaud que le --paper écran. */
+  --poster:#f2f1ec;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--poster);color:var(--ink);font-family:"Inter",system-ui,sans-serif;
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.serif{font-family:"Fraunces",Georgia,serif}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+
+.sheet{max-width:1060px;margin:0 auto;padding:clamp(26px,6vw,72px) clamp(14px,4vw,44px) clamp(30px,7vw,80px)}
+
+/* ── bandeau de garde (n'appartient pas à la maquette) ───────── */
+.warn{max-width:1060px;margin:0 auto;padding:7px clamp(14px,4vw,44px);background:#fbf0e4;
+  border-bottom:1px solid #e6d3b8;font-family:"JetBrains Mono",monospace;font-size:.6rem;
+  letter-spacing:.08em;text-transform:uppercase;color:#8a5a1c}
+
+/* ── wordmark ───────────────────────────────────────────────── */
+.word{text-align:center;line-height:.86;font-weight:700;letter-spacing:.01em;
+  font-size:clamp(64px,16vw,190px);color:#16233a;font-family:"Fraunces",Georgia,serif}
+.tag{text-align:center;font-family:"Fraunces",Georgia,serif;font-weight:400;
+  font-size:clamp(20px,4.6vw,52px);color:#16233a;margin-top:.28em;line-height:1.1}
+.rule{width:clamp(70px,12vw,150px);height:2px;background:var(--gold);margin:.55em auto 0}
+
+/* ── fenêtre ────────────────────────────────────────────────── */
+.win{margin-top:clamp(26px,5vw,58px);background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;box-shadow:var(--lift);overflow:hidden}
+.titlebar{display:flex;align-items:center;gap:16px;padding:11px 15px;border-bottom:1px solid var(--line);
+  font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--ink)}
+.titlebar .knob{width:9px;height:9px;border-radius:50%;background:var(--sky);flex:0 0 auto}
+.menus{display:flex;gap:17px;color:var(--ink);white-space:nowrap;overflow:hidden}
+.menus span{cursor:default}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:13px;color:var(--dim);white-space:nowrap}
+.tb-right .state{display:flex;align-items:center;gap:7px;color:var(--ink)}
+.tb-right .bar-sep{width:1px;height:14px;background:var(--line-2)}
+.tb-right .wctl{display:flex;gap:13px;font-size:.8rem;color:var(--dim)}
+.led{width:7px;height:7px;border-radius:50%;flex:0 0 auto;background:var(--mint)}
+.led.live{background:var(--mint)} .led.sky{background:var(--sky)}
+
+/* ── entête de vue ──────────────────────────────────────────── */
+.viewhead{display:flex;align-items:flex-end;gap:18px;padding:clamp(20px,3.6vw,34px) clamp(18px,3.4vw,32px) clamp(14px,2.4vw,22px)}
+.viewhead h1{margin:0;font-family:"Fraunces",Georgia,serif;font-weight:400;
+  font-size:clamp(34px,6vw,58px);line-height:1;color:#16233a}
+.viewhead .sub{font-family:"JetBrains Mono",monospace;font-size:.74rem;color:var(--dim);margin-top:10px}
+.viewhead .sub b{color:var(--ink);font-weight:400}
+.health{margin-left:auto;text-align:right;font-family:"JetBrains Mono",monospace;font-size:.72rem}
+.health .l1{display:flex;align-items:center;justify-content:flex-end;gap:8px;color:var(--ink)}
+.health .l2{color:var(--dim);font-size:.66rem;margin-top:5px}
+
+/* ── grille de cardlets ─────────────────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:0 clamp(18px,3.4vw,32px) clamp(18px,3.4vw,30px)}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+
+.cl{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden}
+.cl .clh{display:flex;align-items:center;gap:13px;padding:16px 17px 13px;border-bottom:1px solid var(--line)}
+.cl .clh svg{flex:0 0 auto}
+.cl .clh .t{min-width:0}
+.cl .clh .t b{display:block;font-family:"Fraunces",Georgia,serif;font-weight:400;
+  font-size:1.42rem;line-height:1.05;color:#16233a}
+.cl .clh .t .st{display:flex;align-items:center;gap:6px;margin-top:4px;
+  font-family:"JetBrains Mono",monospace;font-size:.58rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--mint)}
+.cl .clh .act{margin-left:auto;display:flex;align-items:center;gap:7px;
+  font-family:"JetBrains Mono",monospace;font-size:.58rem;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--sky);white-space:nowrap}
+.cl .clb{padding:14px 17px;flex:1}
+.cl .clf{display:flex;align-items:center;gap:11px;padding:12px 17px;border-top:1px solid var(--line);
+  font-family:"JetBrains Mono",monospace;font-size:.62rem;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--sky)}
+.cl .clf .r{margin-left:auto;display:flex;align-items:center;gap:9px;
+  letter-spacing:.04em;text-transform:none;color:var(--dim)}
+.cl .clf .r b{color:var(--ink);font-weight:500}
+
+/* Radio */
+.np{display:flex;align-items:baseline;gap:10px;font-family:"JetBrains Mono",monospace;font-size:.74rem}
+.np .n1{color:var(--ink)} .np .n2{color:var(--dim);font-size:.68rem}
+.np .tc{margin-left:auto;color:var(--ink)}
+.wave{display:block;width:100%;height:104px;margin-top:11px;fill:var(--sky);opacity:.85}
+.wave-mini{width:60px;height:24px;fill:var(--sky);opacity:.7}
+.play{width:0;height:0;border-left:13px solid var(--sky);border-top:8px solid transparent;
+  border-bottom:8px solid transparent;flex:0 0 auto}
+
+/* Forum */
+.topics{display:flex;flex-direction:column;gap:11px}
+.tp{display:flex;align-items:flex-start;gap:10px;font-family:"JetBrains Mono",monospace;font-size:.72rem}
+.tp .dot{width:6px;height:6px;border-radius:50%;background:var(--sky);margin-top:6px;flex:0 0 auto}
+.tp .tt{min-width:0;flex:1}
+.tp .tt .a{color:var(--ink)}
+.tp .tt .b{color:var(--dim);font-size:.66rem;margin-top:2px}
+.tp .when{color:var(--dim);font-size:.66rem;white-space:nowrap}
+.tp .cnt{min-width:32px;text-align:center;border:1px solid var(--sky);border-radius:5px;
+  padding:1px 6px;font-size:.64rem;color:var(--sky);flex:0 0 auto}
+
+/* Cloud */
+.qhead{display:flex;font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--ink)}
+.qhead .r{margin-left:auto}
+.meter{height:9px;border-radius:5px;background:var(--soft);border:1px solid var(--line);
+  margin-top:9px;overflow:hidden}
+.meter i{display:block;height:100%;width:25%;background:var(--sky)}
+.qsub{font-family:"JetBrains Mono",monospace;font-size:.62rem;color:var(--dim);margin-top:6px}
+.files{margin-top:14px;display:flex;flex-direction:column;gap:9px}
+.fl{display:flex;align-items:center;gap:10px;font-family:"JetBrains Mono",monospace;font-size:.72rem}
+.fl .nm{color:var(--ink)} .fl .sz{margin-left:auto;color:var(--dim);font-size:.68rem}
+
+/* Photos — vignettes de substitution (aucun asset tiers). */
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.th{aspect-ratio:4/3;border-radius:4px;background:var(--soft)}
+.th1{background:linear-gradient(#cfe0ee 0 42%,#8fa9bd 42% 58%,#5d7488 58% 100%)}
+.th2{background:linear-gradient(#dbe6d2 0 30%,#7d9c63 30% 62%,#c9c3a4 62% 100%)}
+.th3{background:linear-gradient(#cfe2ea 0 38%,#6f9080 38% 70%,#4d6a72 70% 100%)}
+.th4{background:linear-gradient(#dde7ee 0 45%,#93a9b6 45% 60%,#6d8593 60% 100%)}
+.th5{background:linear-gradient(#f0dfc0 0 40%,#d8b878 40% 68%,#a98f52 68% 100%)}
+.th6{background:linear-gradient(#d9e4cd 0 35%,#7f9c5c 35% 100%)}
+
+/* ── barre d'état ───────────────────────────────────────────── */
+.statusbar{display:flex;align-items:center;gap:20px;padding:11px 16px;border-top:1px solid var(--line);
+  background:var(--panel);font-family:"JetBrains Mono",monospace;font-size:.66rem;color:var(--dim)}
+.statusbar .i{display:flex;align-items:center;gap:8px}
+.statusbar .r{margin-left:auto;display:flex;align-items:center;gap:14px}
+@media(max-width:620px){.statusbar{flex-wrap:wrap;gap:10px} .menus span:nth-child(n+4){display:none}}
+
+/* ── pied d'affiche ─────────────────────────────────────────── */
+.ornament{display:flex;align-items:center;justify-content:center;gap:16px;margin-top:clamp(26px,5vw,54px);color:var(--gold)}
+.ornament i{display:block;width:clamp(50px,10vw,120px);height:1px;background:var(--gold);opacity:.65}
+.baseline{text-align:center;margin-top:clamp(16px,3vw,30px);font-family:"Fraunces",Georgia,serif;
+  font-size:clamp(22px,4.4vw,46px);color:#16233a}
+.baseline em{font-style:normal;color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div class="warn">Référence de rendu — maquette statique, données fictives · ne pas confondre avec le Hall</div>
+
+<div class="sheet">
+
+  <div class="word">SBXOS</div>
+  <div class="tag">le bureau numérique souverain</div>
+  <div class="rule"></div>
+
+  <div class="win">
+
+    <div class="titlebar">
+      <span class="knob"></span>
+      <nav class="menus"><span>Fichier</span><span>Édition</span><span>Affichage</span><span>Aller</span><span>Outils</span><span>Aide</span></nav>
+      <div class="tb-right">
+        <span class="state"><i class="led"></i> Système opérationnel</span>
+        <span class="bar-sep"></span>
+        <span>10:42</span>
+        <span class="wctl"><span>&minus;</span><span>&#9723;</span><span>&times;</span></span>
+      </div>
+    </div>
+
+    <header class="viewhead">
+      <div>
+        <h1>Hall</h1>
+        <div class="sub"><b>4 services actifs</b> &nbsp;·&nbsp; Tout est sous votre contrôle.</div>
+      </div>
+      <div class="health">
+        <div class="l1"><i class="led"></i> Système sain</div>
+        <div class="l2">Tous les services opérationnels</div>
+      </div>
+    </header>
+
+    <div class="grid">
+
+      <!-- Radio — cardlet active de référence (brief §6) -->
+      <section class="cl">
+        <div class="clh">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#16233a" stroke-width="1.3" stroke-linecap="round">
+            <path d="M7 8a6 6 0 0 1 10 0M4.5 5.5a9.5 9.5 0 0 1 15 0"/>
+            <circle cx="12" cy="12" r="1.6"/><path d="M12 13.6 9 21h6l-3-7.4z"/>
+          </svg>
+          <div class="t"><b>Radio</b><span class="st"><i class="led"></i> En direct</span></div>
+          <div class="act"><svg class="wave-mini" viewBox="0 0 60 24"><rect x="0" y="8,0" width="3" height="8" rx="1.5"/><rect x="5" y="2,0" width="3" height="20" rx="1.5"/><rect x="10" y="7,0" width="3" height="10" rx="1.5"/><rect x="15" y="7,0" width="3" height="10" rx="1.5"/><rect x="20" y="3,0" width="3" height="18" rx="1.5"/><rect x="25" y="6,5" width="3" height="11" rx="1.5"/><rect x="30" y="1,0" width="3" height="22" rx="1.5"/><rect x="35" y="7,0" width="3" height="10" rx="1.5"/><rect x="40" y="7,5" width="3" height="9" rx="1.5"/><rect x="45" y="4,5" width="3" height="15" rx="1.5"/><rect x="50" y="5,0" width="3" height="14" rx="1.5"/><rect x="55" y="1,0" width="3" height="22" rx="1.5"/></svg></div>
+        </div>
+        <div class="clb">
+          <div class="np"><span class="n1">Studio SBX</span><span class="tc">02:18:47</span></div>
+          <div class="np"><span class="n2">Émission en cours</span></div>
+          <svg class="wave" viewBox="0 0 640 120" preserveAspectRatio="none"><rect x="2" y="53,0" width="6" height="14" rx="3"/><rect x="12" y="23,5" width="6" height="73" rx="3"/><rect x="22" y="17,5" width="6" height="85" rx="3"/><rect x="32" y="26,0" width="6" height="68" rx="3"/><rect x="42" y="39,0" width="6" height="42" rx="3"/><rect x="52" y="47,0" width="6" height="26" rx="3"/><rect x="62" y="40,0" width="6" height="40" rx="3"/><rect x="72" y="46,5" width="6" height="27" rx="3"/><rect x="82" y="44,0" width="6" height="32" rx="3"/><rect x="92" y="43,5" width="6" height="33" rx="3"/><rect x="102" y="35,0" width="6" height="50" rx="3"/><rect x="112" y="17,5" width="6" height="85" rx="3"/><rect x="122" y="22,0" width="6" height="76" rx="3"/><rect x="132" y="43,0" width="6" height="34" rx="3"/><rect x="142" y="28,0" width="6" height="64" rx="3"/><rect x="152" y="20,0" width="6" height="80" rx="3"/><rect x="162" y="18,5" width="6" height="83" rx="3"/><rect x="172" y="35,0" width="6" height="50" rx="3"/><rect x="182" y="46,5" width="6" height="27" rx="3"/><rect x="192" y="36,0" width="6" height="48" rx="3"/><rect x="202" y="47,0" width="6" height="26" rx="3"/><rect x="212" y="44,0" width="6" height="32" rx="3"/><rect x="222" y="45,5" width="6" height="29" rx="3"/><rect x="232" y="40,0" width="6" height="40" rx="3"/><rect x="242" y="20,5" width="6" height="79" rx="3"/><rect x="252" y="23,5" width="6" height="73" rx="3"/><rect x="262" y="34,5" width="6" height="51" rx="3"/><rect x="272" y="35,5" width="6" height="49" rx="3"/><rect x="282" y="22,0" width="6" height="76" rx="3"/><rect x="292" y="13,5" width="6" height="93" rx="3"/><rect x="302" y="31,5" width="6" height="57" rx="3"/><rect x="312" y="47,0" width="6" height="26" rx="3"/><rect x="322" y="35,0" width="6" height="50" rx="3"/><rect x="332" y="43,0" width="6" height="34" rx="3"/><rect x="342" y="44,5" width="6" height="31" rx="3"/><rect x="352" y="47,5" width="6" height="25" rx="3"/><rect x="362" y="42,0" width="6" height="36" rx="3"/><rect x="372" y="26,5" width="6" height="67" rx="3"/><rect x="382" y="26,5" width="6" height="67" rx="3"/><rect x="392" y="28,0" width="6" height="64" rx="3"/><rect x="402" y="44,5" width="6" height="31" rx="3"/><rect x="412" y="22,5" width="6" height="75" rx="3"/><rect x="422" y="11,5" width="6" height="97" rx="3"/><rect x="432" y="29,0" width="6" height="62" rx="3"/><rect x="442" y="41,0" width="6" height="38" rx="3"/><rect x="452" y="37,5" width="6" height="45" rx="3"/><rect x="462" y="35,5" width="6" height="49" rx="3"/><rect x="472" y="39,5" width="6" height="41" rx="3"/><rect x="482" y="52,0" width="6" height="16" rx="3"/><rect x="492" y="44,0" width="6" height="32" rx="3"/><rect x="502" y="34,0" width="6" height="52" rx="3"/><rect x="512" y="26,0" width="6" height="68" rx="3"/><rect x="522" y="25,0" width="6" height="70" rx="3"/><rect x="532" y="49,5" width="6" height="21" rx="3"/><rect x="542" y="25,5" width="6" height="69" rx="3"/><rect x="552" y="13,5" width="6" height="93" rx="3"/><rect x="562" y="20,5" width="6" height="79" rx="3"/><rect x="572" y="34,5" width="6" height="51" rx="3"/><rect x="582" y="43,0" width="6" height="34" rx="3"/><rect x="592" y="30,0" width="6" height="60" rx="3"/><rect x="602" y="35,5" width="6" height="49" rx="3"/><rect x="612" y="48,5" width="6" height="23" rx="3"/><rect x="622" y="45,0" width="6" height="30" rx="3"/><rect x="632" y="42,5" width="6" height="35" rx="3"/></svg>
+        </div>
+        <div class="clf">
+          <span class="play"></span>
+          <span class="r" style="margin-left:0"><b>128 kbps</b> · Stéréo</span>
+          <span class="r">Auditeurs <b>342</b></span>
+        </div>
+      </section>
+
+      <!-- Forum / BBS -->
+      <section class="cl">
+        <div class="clh">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1655a0" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h13A2.5 2.5 0 0 1 21 6.5v7a2.5 2.5 0 0 1-2.5 2.5H9l-4.5 4v-4A2.5 2.5 0 0 1 3 13.5z"/>
+            <path d="M7.5 8.5h9M7.5 11.5h6"/>
+          </svg>
+          <div class="t"><b>Forum</b><span class="st"><i class="led"></i> 12 en ligne</span></div>
+          <div class="act">Nouveau sujet &plus;</div>
+        </div>
+        <div class="clb">
+          <div class="topics">
+            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Bienvenue sur le forum SBXOS</div><div class="b">par Admin</div></div><span class="when">10:15</span><span class="cnt">24</span></div>
+            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Auto-hébergement : vos retours</div><div class="b">par Léo</div></div><span class="when">09:47</span><span class="cnt">18</span></div>
+            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Mise à jour 1.2.0 disponible</div><div class="b">par Équipe</div></div><span class="when">Hier</span><span class="cnt">37</span></div>
+            <div class="tp"><i class="dot"></i><div class="tt"><div class="a">Partage de configs &amp; astuces</div><div class="b">par Marc</div></div><span class="when">Hier</span><span class="cnt">12</span></div>
+          </div>
+        </div>
+        <div class="clf">Voir tous les sujets<span class="r">&rsaquo;</span></div>
+      </section>
+
+      <!-- Cloud — quota AVANT les noms de fichiers (défaut privacy, brief §7) -->
+      <section class="cl">
+        <div class="clh">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1655a0" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 18h10a4 4 0 0 0 .5-7.97 6 6 0 0 0-11.4-1.6A3.6 3.6 0 0 0 7 18z"/>
+          </svg>
+          <div class="t"><b>Cloud</b><span class="st"><i class="led"></i> Synchronisé</span></div>
+          <div class="act">Ouvrir</div>
+        </div>
+        <div class="clb">
+          <div class="qhead"><span>Stockage utilisé</span><span class="r">256 Go / 1 To</span></div>
+          <div class="meter"><i></i></div>
+          <div class="qsub">25 % utilisé</div>
+          <div class="files">
+            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h9A1.5 1.5 0 0 1 21 9.7v8.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span class="nm">Documents</span><span class="sz">12,4 Go · 238 fichiers</span></div>
+            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h9A1.5 1.5 0 0 1 21 9.7v8.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span class="nm">Projets</span><span class="sz">45,7 Go · 128 fichiers</span></div>
+            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.2h9A1.5 1.5 0 0 1 21 9.7v8.8A1.5 1.5 0 0 1 19.5 20h-15A1.5 1.5 0 0 1 3 18.5z"/></svg><span class="nm">Partages</span><span class="sz">18,9 Go · 64 fichiers</span></div>
+            <div class="fl"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><path d="M6 3h7l5 5v13H6z"/><path d="M13 3v5h5"/></svg><span class="nm">Présentation.pdf</span><span class="sz">2,3 Mo · modifié hier</span></div>
+          </div>
+        </div>
+        <div class="clf">Dernière sauvegarde<span class="r">aujourd&rsquo;hui à <b>10:31</b></span></div>
+      </section>
+
+      <!-- Photos -->
+      <section class="cl">
+        <div class="clh">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#1f7a58" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/>
+            <path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/>
+          </svg>
+          <div class="t"><b>Photos</b><span class="st"><i class="led"></i> 1 243 éléments</span></div>
+          <div class="act">Voir tout</div>
+        </div>
+        <div class="clb">
+          <div class="thumbs">
+            <div class="th th1"></div><div class="th th2"></div><div class="th th3"></div>
+            <div class="th th4"></div><div class="th th5"></div><div class="th th6"></div>
+          </div>
+        </div>
+        <div class="clf">Sauvegarde active<span class="r">aujourd&rsquo;hui à <b>10:31</b> <i class="led"></i></span></div>
+      </section>
+
+    </div>
+
+    <div class="statusbar">
+      <span class="i"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.6"><path d="M12 3l7 3v6c0 4.4-3 7.9-7 9-4-1.1-7-4.6-7-9V6z"/></svg> Chiffrement actif</span>
+      <span class="i"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.6"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg> Données locales uniquement</span>
+      <span class="r">
+        <span>Utilisateur : vous</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647685" stroke-width="1.5"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1"/></svg>
+      </span>
+    </div>
+
+  </div>
+
+  <div class="ornament"><i></i>&#10022;<i></i></div>
+  <div class="baseline">Vos services. Votre matériel. Votre règle<em>.</em></div>
+
+</div>
+</body>
+</html>

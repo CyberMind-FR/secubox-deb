@@ -1,3 +1,20 @@
+secubox-webos (1.0.25-1~bookworm1) bookworm; urgency=low
+
+  * Hall : ajout d'une RÉFÉRENCE DE RENDU statique (www/hall/render-ref.html,
+    servie sur /render-ref.html) — transcription fidèle de l'affiche « SBXOS ·
+    le bureau numérique souverain » : chrome de fenêtre (menubar + horloge +
+    contrôles), entête Hall, 4 cardlets canoniques (Radio forme d'onde, Forum
+    sujets+badges, Cloud quota-avant-noms, Photos mosaïque), barre d'état
+    souveraine. Zéro JS, zéro API, données fictives, polices locales et
+    vignettes en dégradés CSS (compatible CSP hall). Sert de témoin à comparer
+    côte à côte avec index.html sur desktop ET iPhone.
+  * Doc : docs/dossiers/webos-hall-render-ref.md — tokens, trois voix
+    typographiques, anatomie cardlet en trois bandes, écarts assumés vs
+    index.html (rayon 8px vs 13-16px, chrome fenêtre vs masthead, ombres,
+    densité de grille) laissés à arbitrer. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 23:40:00 +0200
+
 secubox-webos (1.0.24-1~bookworm1) bookworm; urgency=medium
 
   * Menu mobile : détection du tactile par CAPACITÉ DE SURVOL (@media hover:none
