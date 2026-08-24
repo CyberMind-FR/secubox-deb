@@ -1,3 +1,12 @@
+secubox-mail (2.8.7-1~bookworm1) bookworm; urgency=medium
+
+  * feat : `mailctl rspamd milter` câble Rspamd en milter Postfix (proxy :11332)
+    via postconf -e sur le VRAI /etc/postfix/main.cf + déploie milter_headers
+    (X-Spam-Status). Le sieve par défaut matche désormais X-Spam-Status et range
+    le spam inbound dans Junk. Corrige le milter jamais câblé (#1178). (ref #1178)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 14:00:00 +0200
+
 secubox-mail (2.8.6-1~bookworm1) bookworm; urgency=medium
 
   * fix : install_default_sieve aligne le propriétaire de /var/vmail/sieve sur

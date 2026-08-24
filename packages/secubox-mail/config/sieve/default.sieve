@@ -1,7 +1,8 @@
 require ["fileinto", "mailbox"];
-# Rspamd marque le spam via l'en-tête X-Spam ; on le range dans Junk plutôt
-# que de le rejeter (le membre garde la main). Idempotent, global, par défaut.
-if header :contains "X-Spam" "Yes" {
+# Rspamd (milter) ajoute « X-Spam-Status: Yes, score=… » au-dessus du seuil
+# add_header. On range ces mails dans Junk plutôt que de les rejeter — le membre
+# garde la main. Idempotent, global, par défaut.
+if header :matches "X-Spam-Status" "Yes*" {
     fileinto :create "Junk";
     stop;
 }
