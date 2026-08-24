@@ -850,6 +850,55 @@ cmd_sieve() {
 # SSL
 # ============================================================================
 
+
+# acme_renew() actually renews the LE cert for $1 (fqdn) and writes the
+# renewed pair into $DATA_PATH/ssl/{fullchain,privkey}.pem — same mechanism
+# `ssl setup` uses. Factored out so `mailctl ssl renew` tests can override it
+# without touching the network (bats mocks this function directly).
+acme_renew() {
+    local fqdn="$1"
+
+    if command -v certbot >/dev/null 2>&1; then
+        certbot renew --cert-name "$fqdn" --quiet || return 1
+        if [ -d "/etc/letsencrypt/live/$fqdn" ]; then
+            cp "/etc/letsencrypt/live/$fqdn/fullchain.pem" "$DATA_PATH/ssl/fullchain.pem" \
+                && cp "/etc/letsencrypt/live/$fqdn/privkey.pem" "$DATA_PATH/ssl/privkey.pem"
+        fi
+    elif command -v acme.sh >/dev/null 2>&1; then
+        acme.sh --renew -d "$fqdn" --force || return 1
+        acme.sh --install-cert -d "$fqdn" \
+            --fullchain-file "$DATA_PATH/ssl/fullchain.pem" \
+            --key-file "$DATA_PATH/ssl/privkey.pem"
+    else
+        error "No ACME client found. Install certbot or acme.sh"
+        return 1
+    fi
+}
+
+# deploy_haproxy_cert() copies the renewed pair into the HAProxy cert store
+# on the HOST (concatenated cert+key, as HAProxy `bind ... crt <dir>`
+# expects). No-op if the store doesn't exist (e.g. dev/test box, or HAProxy
+# not fronting this host) — never fatal for the renewal itself.
+deploy_haproxy_cert() {
+    local fqdn="${1:-$HOSTNAME.$DOMAIN}"
+    local haproxy_dir="${HAPROXY_CERT_DIR:-/data/haproxy/certs}"
+    [ -d "$haproxy_dir" ] || return 0
+    cat "$DATA_PATH/ssl/fullchain.pem" "$DATA_PATH/ssl/privkey.pem" \
+        > "$haproxy_dir/$fqdn.pem" 2>/dev/null \
+        && chmod 600 "$haproxy_dir/$fqdn.pem"
+}
+
+# reload_mail_tls() applies a freshly deployed cert: dovecot+postfix live
+# INSIDE the mail LXC (lxc_attach), HAProxy lives on the HOST — never
+# lxc_attach for it. Factored out so tests can stub it (no LXC, no haproxy
+# in the bats sandbox).
+reload_mail_tls() {
+    lxc_attach "$CONTAINER" systemctl restart dovecot postfix 2>/dev/null || true
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl reload haproxy 2>/dev/null || systemctl restart haproxy 2>/dev/null || true
+    fi
+}
+
 cmd_ssl() {
     local action="${1:-status}"
     shift
@@ -886,10 +935,40 @@ cmd_ssl() {
             log "SSL certificate installed"
             cmd_restart
             ;;
+        renew)
+            local fqdn="$HOSTNAME.$DOMAIN"
+            local ssl_dir="$DATA_PATH/ssl"
+            mkdir -p "$ssl_dir"
+
+            # Rollback safety: keep a timestamped copy of the CURRENT cert
+            # before touching anything, so a failed renewal never leaves us
+            # without a working pair (spec: "if renew fails, do NOT deploy a
+            # broken cert; keep the old one").
+            local ts
+            ts=$(date +%Y%m%d%H%M%S)
+            if [ -f "$ssl_dir/fullchain.pem" ]; then
+                cp "$ssl_dir/fullchain.pem" "$ssl_dir/fullchain.pem.$ts"
+            fi
+            if [ -f "$ssl_dir/privkey.pem" ]; then
+                cp "$ssl_dir/privkey.pem" "$ssl_dir/privkey.pem.$ts"
+            fi
+
+            log "Renewing SSL for $fqdn..."
+            if ! acme_renew "$fqdn"; then
+                error "Certificate renewal failed for $fqdn — keeping previous certificate"
+                return 1
+            fi
+
+            chmod 600 "$ssl_dir/"*.pem 2>/dev/null || true
+            deploy_haproxy_cert "$fqdn"
+            reload_mail_tls
+            log "SSL certificate renewed"
+            ;;
         *)
             echo "SSL commands:"
             echo "  ssl status   Show certificate info"
             echo "  ssl setup    Obtain Let's Encrypt certificate"
+            echo "  ssl renew    Renew certificate + redeploy + reload (dovecot/postfix/haproxy)"
             ;;
     esac
 }
@@ -1028,6 +1107,7 @@ Backup:
 SSL & DNS:
   ssl status           Show certificate info
   ssl setup            Obtain Let's Encrypt certificate
+  ssl renew            Renew + redeploy + reload (also run weekly by timer)
   dns-setup            Show DNS records to configure
 
 Antivirus (optionnel, off par défaut) :

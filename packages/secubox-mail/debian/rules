@@ -56,3 +56,12 @@ override_dh_auto_install:
 	# à l'intérieur du LXC par install_default_sieve() (lib/mail/install.sh).
 	install -d debian/secubox-mail/usr/lib/secubox/mail/config/sieve
 	[ -f config/sieve/default.sieve ] && install -m 644 config/sieve/default.sieve debian/secubox-mail/usr/lib/secubox/mail/config/sieve/ || true
+
+	# SSL auto-renew unit + timer (ref #1169 task 10). dh_installsystemd only
+	# auto-detects the package-named unit (secubox-mail.service); this extra
+	# unit needs to be placed in the install tree explicitly (mirror
+	# secubox-frigate's diskguard pattern) so dh_installsystemd picks it up
+	# for enable/start alongside the postinst systemctl calls below.
+	install -d debian/secubox-mail/usr/lib/systemd/system
+	install -m 644 debian/secubox-mail-ssl-renew.service debian/secubox-mail/usr/lib/systemd/system/
+	install -m 644 debian/secubox-mail-ssl-renew.timer debian/secubox-mail/usr/lib/systemd/system/

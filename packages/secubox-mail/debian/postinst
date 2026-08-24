@@ -69,6 +69,12 @@ if [ "$1" = "configure" ]; then
     systemctl daemon-reload
     systemctl enable secubox-mail.service || true
     systemctl start secubox-mail.service || true
+
+    # SSL auto-renew timer (ref #1169 task 10). Guarded like the other units:
+    # never fail the install if systemd isn't around (chroot/image build).
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl enable --now secubox-mail-ssl-renew.timer >/dev/null 2>&1 || true
+    fi
 fi
 
 #DEBHELPER#

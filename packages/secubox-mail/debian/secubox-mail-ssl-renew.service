@@ -1,0 +1,8 @@
+[Unit]
+Description=SecuBox Mail Let's Encrypt certificate renewal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/mailctl ssl renew

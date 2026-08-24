@@ -3,6 +3,8 @@ set -e
 if [ "$1" = "remove" ]; then
     systemctl stop secubox-mail.service || true
     systemctl disable secubox-mail.service || true
+    systemctl stop secubox-mail-ssl-renew.timer 2>/dev/null || true
+    systemctl disable secubox-mail-ssl-renew.timer 2>/dev/null || true
     systemctl reload nginx 2>/dev/null || true
 fi
 #DEBHELPER#
