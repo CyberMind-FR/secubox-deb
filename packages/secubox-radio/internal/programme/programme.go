@@ -65,6 +65,23 @@ type Programmateur struct {
 	debut   time.Time
 	graine  int64
 	demarre bool
+
+	// OnBroadcast avertit d'un VRAI changement de piste — jamais d'un simple
+	// sondage. Invoque depuis `avance`, qui n'est appele que lorsque
+	// l'antenne bascule reellement sur un nouveau titre (premier tirage,
+	// fin de duree, rejointe apres SautMax, ou `Suivante` force par le
+	// sysop) — jamais depuis `Actuel` quand la piste en cours dure encore.
+	//
+	// CE PAQUET NE SAIT RIEN DU BBS NI DE HTTP : c'est au layer web/main de
+	// cabler ce hook vers contentbbs.Client.Event, en resolvant le
+	// content_id de la piste. Optionnel (nil = pas de hook, garde avant
+	// appel) : le demon ne le cable pas toujours (BBS non deploye).
+	//
+	// APPELE SOUS LE VERROU de ce Programmateur (voir `avance`, appele par
+	// `Actuel`/`Suivante` qui tiennent `mu`) : un hook qui bloque bloquerait
+	// tous les auditeurs qui sondent en meme temps. Le cablage doit donc
+	// rester rapide — deporter tout appel reseau dans sa propre goroutine.
+	OnBroadcast func(pisteID int64, at int64)
 }
 
 // Store : ce dont le programmateur a besoin. Une interface plutot que le type
@@ -185,7 +202,13 @@ func (p *Programmateur) avance(quand time.Time) error {
 	// lecture est un desagrement, s'arreter de jouer est une panne. Mais le
 	// repos de cette piste sera alors mal calcule, d'ou la remontee de
 	// l'erreur a l'appelant qui journalise.
-	return p.st.NoteLecture(p.piste.ID, quand, p.graine)
+	err := p.st.NoteLecture(p.piste.ID, quand, p.graine)
+	// LE PASSAGE A L'ANTENNE EST REEL MEME SI LE JOURNAL A ECHOUE (meme
+	// logique que ci-dessus) : le hook sonne dans tous les cas.
+	if p.OnBroadcast != nil {
+		p.OnBroadcast(p.piste.ID, quand.Unix())
+	}
+	return err
 }
 
 // File rend une copie de la file figée : ce qui va passer, dans l'ordre. C'est

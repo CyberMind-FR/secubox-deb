@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/contentbbs"
@@ -24,6 +25,9 @@ type contenuBouchon struct {
 	topicID                                         string
 	topicAppele                                     bool
 	topicErr                                        error
+	eventID, eventKind, eventActor, eventPayload    string
+	eventAppele                                     bool
+	eventErr                                        error
 }
 
 func (f *contenuBouchon) Creer(o contentbbs.Objet, prov []contentbbs.Prov) (string, error) {
@@ -52,6 +56,12 @@ func (f *contenuBouchon) Topic(id string) (int64, error) {
 		return 0, f.topicErr
 	}
 	return 42, nil
+}
+
+func (f *contenuBouchon) Event(id, kind, actor, payloadJSON string) error {
+	f.eventAppele = true
+	f.eventID, f.eventKind, f.eventActor, f.eventPayload = id, kind, actor, payloadJSON
+	return f.eventErr
 }
 
 // TestValiderOuvreUnContentObject : le coeur de B2. Valider une piste doit
@@ -161,4 +171,68 @@ func TestValiderEchecContenuNonBloquant(t *testing.T) {
 	if p.ContentID != "" {
 		t.Errorf("content_id aurait du rester vide apres un Creer en echec : %q", p.ContentID)
 	}
+}
+
+// ── diffuseBroadcast (#1166 B3) ─────────────────────────────────────────────
+//
+// C'est ce que `programme.Programmateur.OnBroadcast` appelle (dans sa propre
+// goroutine) a chaque VRAI passage a l'antenne. On teste la methode
+// directement plutot qu'a travers le hook asynchrone : deterministe, sans
+// synchronisation de test a inventer pour attendre une goroutine.
+func TestDiffuseBroadcastEnvoieLEvenementAvecLeContentID(t *testing.T) {
+	s, st := banc(t)
+	fake := &contenuBouchon{}
+	s.Contenu = fake
+	p, _, err := st.Ajoute("https://youtu.be/X", "Titre", 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.FixerContenu(p.ID, "cnt-42"); err != nil {
+		t.Fatal(err)
+	}
+
+	s.diffuseBroadcast(p.ID, t0.Unix())
+
+	if !fake.eventAppele {
+		t.Fatal("Event n'a pas ete appele")
+	}
+	if fake.eventID != "cnt-42" {
+		t.Errorf("evenement pose sur %q, attendu cnt-42", fake.eventID)
+	}
+	if fake.eventKind != "broadcast" {
+		t.Errorf("kind = %q, attendu broadcast", fake.eventKind)
+	}
+	if !strings.Contains(fake.eventPayload, `"piste":`) {
+		t.Errorf("charge sans l'identifiant de la piste : %s", fake.eventPayload)
+	}
+}
+
+// Une piste sans content_id (BBS injoignable a la validation, ou module non
+// cable) n'a rien a rattacher : diffuseBroadcast ne doit pas appeler Event.
+func TestDiffuseBroadcastSansContentIDNeFaitRien(t *testing.T) {
+	s, st := banc(t)
+	fake := &contenuBouchon{}
+	s.Contenu = fake
+	p, _, err := st.Ajoute("https://youtu.be/Y", "Titre", 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Volontairement pas de FixerContenu : ContentID reste vide.
+
+	s.diffuseBroadcast(p.ID, t0.Unix())
+
+	if fake.eventAppele {
+		t.Error("Event appele alors que la piste n'a pas de content_id")
+	}
+}
+
+// Un client contenu absent (BBS non deploye) doit rester un no-op silencieux.
+func TestDiffuseBroadcastSansClientNePanique(t *testing.T) {
+	s, st := banc(t)
+	s.Contenu = nil
+	p, _, err := st.Ajoute("https://youtu.be/Z", "Titre", 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.diffuseBroadcast(p.ID, t0.Unix())
 }
