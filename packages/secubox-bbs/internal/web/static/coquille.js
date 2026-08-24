@@ -19,6 +19,17 @@
 (function () {
   var r = document.documentElement;
   try { var sv = localStorage.getItem('av-theme'); if (sv) r.setAttribute('data-theme', sv); } catch (e) {}
+  // EMBARQUEMENT HALL (#1175). Le BBS reste identique en vhost réel ; encadré par
+  // le Hall (seul autorisé via frame-ancestors), il masque son entête — la barre
+  // du Hall la remplace — et SYNCHRONISE le thème passé par le Hall (?theme=).
+  try {
+    if (window.top !== window.self) { r.classList.add('sbx-embed'); }
+    var qt = new URLSearchParams(location.search).get('theme');
+    if (qt === 'dark' || qt === 'light') {
+      r.setAttribute('data-theme', qt);
+      try { localStorage.setItem('av-theme', qt); } catch (e) {}
+    }
+  } catch (e) {}
   function theme() {
     var cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
     var nxt = cur === 'dark' ? 'light' : 'dark';
