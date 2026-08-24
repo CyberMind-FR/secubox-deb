@@ -1,3 +1,9 @@
+secubox-radio (0.1.31-1~bookworm1) bookworm; urgency=medium
+
+  * Cadrage : frame-ancestors autorise AUSSI https://hall.gk2.net. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 16:52:49 +0200
+
 secubox-radio (0.1.30-1~bookworm1) bookworm; urgency=medium
 
   * Cadrage : l'accueil Radio est embarquable par le Hall souverain
