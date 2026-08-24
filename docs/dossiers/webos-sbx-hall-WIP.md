@@ -11,66 +11,101 @@
 
 # WebOS SBX / Hall — WIP, historique & TODO (#1175)
 
-**Dernière mise à jour** : 2026-08-24 (fin de session)
-**Branche** : `feature/1175-webos-sbx-hall-cardlets-bureau-numerique`
-**Worktree** : `secubox-deb-worktrees/1175-webos-sbx-hall-cardlets-bureau-numerique`
-**Dépôt principal** : `secubox-deb/secubox-deb` (master) · remotes `origin` (GitHub
+**Dernière mise à jour** : 2026-08-25 (fin de session nuit)
+**Branche de travail** : `master` — tout est fusionné et poussé sur `origin`
+**Dépôt principal** : `secubox-deb/secubox-deb` · remotes `origin` (GitHub
 CyberMind-FR) + `gitea` (gitea.gk2.secubox.in)
-**Paquet** : `secubox-webos` — version **1.0.25** (1.0.24 mergée dans master)
+**Nœud de test** : `gk2` = `root@192.168.1.200`
 
 ## 1. État courant
-- Branche **1 commit devant `origin/master`** : `9632e62de` référence de rendu SBXOS.
-  **Non poussé, non mergé** → premier geste de la reprise.
-- Tout le reste de #1175 (jusqu'à 1.0.24) est **déjà dans `master`**.
-- Le Hall vit sur `hall.gk2.net` / `hall.gk2.secubox.in`, vhost nginx port 9080,
-  API registre via `unix:/run/secubox/webos.sock`, CSP sans origine tierce.
+- `master` = `2ba5d0cd7`, poussé sur `origin`. **`gitea` n'a PAS reçu ce push**
+  (dépôt injoignable depuis le poste) → à repousser.
+- **#1187 et #1188 sont closes.** **#1175 reste ouverte** : c'est le brief
+  chapeau, dont les phases P4→P8 et le backlog §24 ne sont pas entamés.
+- Versions livrées : `secubox-webos` 1.0.33 · `secubox-hub` 1.9.10 ·
+  `secubox-bbs` 0.30.12 · `secubox-repo` 1.1.2.
+- Paquets intégrés au dépôt apt vivant (`/data/apt`, reprepro) en
+  **`bookworm-testing`**, signés. Pas en `stable` : à promouvoir si validé.
 
-## 2. Historique — session 2026-08-24
-Journée passée à rendre le **mégamenu utilisable sur smartphone**, quatre causes
-distinctes empilées (chacune masquait la suivante) :
+> ⚠ La box tourne avec des fichiers poussés **à la main** pendant la session
+> (rsync/scp) avant que la règle « déploiement uniquement par paquet » ne soit
+> posée. dpkg ne connaît pas ce code. **Premier geste de la reprise** :
+> réinstaller webos/hub/bbs/repo depuis le dépôt apt pour remettre dpkg
+> d'accord avec le disque.
 
-| Ver. | Cause trouvée | Correctif |
+## 2. Historique
+### Session 2026-08-24 (jour) — mégamenu mobile
+Quatre causes empilées, chacune masquant la suivante :
+
+| Ver. | Cause | Correctif |
 |---|---|---|
-| 1.0.20 | flyout rogné par l'`overflow` du mégamenu ; 1ᵉʳ tap iOS absorbé par `:hover` | bulles en `position:fixed` calculées en JS ; règles `:hover` sous `@media(hover:hover)` ; voile de fond transparent |
-| 1.0.21 | déclencheurs non-`<button>` → iOS n'émettait pas de `click` au 1ᵉʳ tap | vrais `<button type=button>` ; menubar macOS à 2 menus (Services / Système) |
-| 1.0.22 | **commentaire de licence AVANT `<!DOCTYPE html>`** → iOS Safari en **Quirks Mode**, `position:fixed`/`sticky` cassés, mégamenu injoignable | doctype remis en **tout premier octet** |
-| 1.0.23 | panneaux portant la classe `rail`, or `@media(max-width:820px){.rail{display:none}}` → panneau `display:none` sur **tout** téléphone | retrait de la classe `rail` |
-| 1.0.24 | seuils en **largeur** : un téléphone de 700px tombait entre deux règles | détection par **capacité de survol** (`@media(hover:none)` + `matchMedia`) ; sous-menus au tap du chevron ; dropdown borné ≤340px |
+| 1.0.20 | flyout rogné par l'`overflow` ; 1ᵉʳ tap iOS absorbé par `:hover` | bulles `position:fixed` ; `:hover` sous `@media(hover:hover)` |
+| 1.0.21 | déclencheurs non-`<button>` → pas de `click` iOS au 1ᵉʳ tap | vrais `<button type=button>` |
+| 1.0.22 | **licence avant `<!DOCTYPE html>`** → iOS Safari en **Quirks Mode** | doctype en tout premier octet |
+| 1.0.23 | classe `rail` sur les panneaux, masquée ≤820px | retrait de la classe |
+| 1.0.24 | seuils en **largeur** (un téléphone 700px tombait entre deux règles) | détection par **capacité de survol** |
 
-**Leçons à ne pas repayer** : (a) doctype en premier octet, toujours ; (b) sur mobile
-raisonner en *capacité de survol*, jamais en largeur ; (c) se méfier des classes
-héritées d'une ancienne mise en page (`rail`).
+### Session 2026-08-24/25 (nuit) — #1187, #1188, outillage
+- **1.0.25** — référence de rendu SBXOS (`/render-ref.html`) + son dossier.
+- **1.0.26** — barre système sans sous-menus, panneau contextuel, switch 3 modes.
+- **1.0.27** — menus unifiés (emoji + ⚙️ + ⧉), Système en mosaïque.
+- **1.0.28** — nav contextuelle en menu pop ; correctif de débordement mobile.
+- **1.0.29** — le **titre du service devient son menu** ; Profil/Alertes retirés.
+- **1.0.30** — chaque menu s'ouvre sous son bouton (recherche du déclencheur
+  rendue globale ; alignement par la droite dans la moitié droite).
+- **1.0.31** — le bouton du mode courant s'efface du switch.
+- **1.0.32 → 1.0.33** — section « Accès » du BBS remontée puis **retirée**
+  (n'apportait rien au menu). Les deux versions ont tourné sur la box.
+- **hub 1.9.9 → 1.9.10** — coquille du panneau admin entièrement masquée en
+  embarqué (méthode BBS : détection du **cadrage**), règle en
+  `.claude/WEBUI-PANEL-GUIDELINES.md §9`.
+- **bbs 0.30.11 → 0.30.12** — idem, ajout puis retrait de la section « Accès ».
+- **repo 1.1.2** — `repoctl` signe avec l'email du **nœud**.
 
-**Fin de session** : 1.0.25 — référence de rendu SBXOS (voir §3 du todo).
+**Leçons à ne pas repayer** : doctype en premier octet · sur mobile raisonner en
+*capacité de survol*, jamais en largeur · se méfier des classes héritées ·
+`<a>` imbriqué dans `<a>` est invalide et casse la ligne · une règle CSS placée
+avant sa définition de base est écrasée à spécificité égale · vérifier les liens
+de release contre les assets réellement publiés.
 
 ## 3. TODO — prochaine session, dans l'ordre
-1. **Pousser / merger 1.0.25** (`9632e62de`) vers `origin/master` + `gitea`, puis
-   `git merge --ff-only origin/master` dans le worktree. *Rien d'autre avant ça.*
-2. **Vérifier la réf de rendu sur vrai matériel** : `hall.gk2.net/render-ref.html`
-   côte à côte avec `hall.gk2.net/` sur desktop **et iPhone** (le terrain de #1175).
-3. **Arbitrer les 4 écarts** listés en §6 de `webos-hall-render-ref.md` — rayon 8px
-   vs 13–16px, chrome fenêtre vs masthead, ombres sans `:hover` qui soulève, grille
-   2 colonnes fixes vs `auto-fill`. Décision produit, puis alignement d'`index.html`.
-4. **Reprendre le backlog « WebOS realtime »** (dossier principal §24), non entamé :
-   - injection de la mégabar sur les services **non embarqués** (P6, `sub_filter`) ;
-   - **widgets flottants persistants** (pop-up Radio épinglée qui survit à la
-     navigation d'un vhost à l'autre) ;
-   - trois formes par service : vhost plein / menu embarqué `/menu/<id>` /
-     cardlet `/cardlets/<id>` en full·mini·micro ;
-   - multi-nœuds dans le registre normalisé (« au prochain ») ;
-   - avatar multi-utilisateur famille (cf. `secubox-avatar.md`), sous contrôle sysop.
-5. **Réconcilier les tickets widgets** #1170 / #1171 / #1172 dans le modèle cardlet
-   commun (tailles `small|medium|wide`, contrat cardlet, adaptateur par module)
-   plutôt qu'isolément.
+1. **Remettre dpkg d'accord avec le disque** (cf. §1) puis **repousser vers
+   `gitea`** quand il est joignable.
+2. **Médias publics du BBS — NON RÉSOLU, demandé par l'utilisateur.** Symptôme
+   rapporté : « sans authent les vignettes et médias sont en partie KO ». Ce qui
+   a été établi : `/media-vignette` répond **403 aux anonymes par conception**
+   (`// RESERVE AUX MEMBRES`), mais **aucune page publique testée ne l'utilise**,
+   et toutes les vignettes `/media-cover/N` répondent 200 en anonyme sauf
+   `/media-cover/1` (404). **Panne non reproduite — il manque l'URL exacte.**
+3. **Dépôt `apt.secubox.in` : le pool ne contient aucun `.deb`.** Les
+   répertoires du pool existent et les index les référencent, mais les 175
+   fichiers sont absents → un client apt aurait un 404 sur chaque téléchargement.
+   À repeupler, ou à décider d'abandonner au profit de `/data/apt`.
+4. **`repoctl` vs reprepro : deux chemins pour un dépôt.** Clarifier lequel fait
+   foi (`/data/apt` sert réellement) et retirer l'autre.
+5. **Arbitrer les écarts de la réf de rendu** (§6 de `webos-hall-render-ref.md`) :
+   rayon 8px vs 13-16px, chrome fenêtre vs masthead, ombres, densité de grille.
+6. **Backlog « WebOS realtime »** (dossier principal §24), non entamé :
+   injection de la mégabar sur les services non embarqués (P6), widgets
+   flottants persistants, trois formes par service, multi-nœuds, avatar famille.
+7. **Réconcilier #1170 / #1171 / #1172** dans le modèle cardlet commun.
+8. Pas de capture d'écran du dashboard dans le dépôt (demandée par #1188) ;
+   `Home-ZH` du wiki non traduite.
 
 ## 4. Points ouverts / non tranchés
-- Le chrome « fenêtre macOS » de l'affiche remplace-t-il le masthead AletheiaVox du
-  Hall, ou cohabitent-ils selon la vue ? **Non tranché** — bloque le point 3.
-- Aucune photo réelle disponible pour la cardlet Photos : la réf utilise des dégradés
-  CSS. Décider de la source (PhotoPrism ?) avant d'implémenter.
-- L'affiche source n'est **pas** versionnée dans le dépôt (fournie en conversation) ;
-  `render-ref.html` en est aujourd'hui la seule trace fidèle.
+- Le chrome « fenêtre macOS » de l'affiche remplace-t-il le masthead
+  AletheiaVox, ou cohabitent-ils selon la vue ? **Non tranché** — bloque le §3.5.
+- Source des photos pour la cardlet Photos (PhotoPrism ?).
+- `secubox-bbs` est **arm64 uniquement** (`Architecture: arm64` + `GOARCH`
+  figé). Faut-il le passer en `any` pour publier un amd64 ?
+- L'affiche SBXOS n'est pas versionnée : `render-ref.html` en est la seule trace.
+- Porter le webos en Go ? **Décision : pas maintenant** — 421 lignes, 4 routes,
+  et les mesures contredisent l'argument mémoire (webos Python 39,5 Mo contre
+  bbs Go 196,5 Mo). Le déclencheur sera le Session Bridge et les adaptateurs
+  cardlets en éventail, pas l'agrégateur actuel.
 
-## 5. Autres worktrees ouverts (hors #1175, pour mémoire)
-`1027-depot-le-waf-bloque-les-envois-anonymes` · `1049-mosaique-de-vignettes-partagee-pour-les`
-· `secubox-deb-license-wt` (`feature/license-phase-b-full`).
+## 5. Autres worktrees ouverts
+`1027-depot-le-waf-bloque-les-envois-anonymes` ·
+`1049-mosaique-de-vignettes-partagee-pour-les` ·
+`secubox-deb-license-wt` (`feature/license-phase-b-full`).
+Les worktrees 1175 / 1187 / 1188 sont fusionnés : ils peuvent être retirés.
