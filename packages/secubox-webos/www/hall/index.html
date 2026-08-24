@@ -85,7 +85,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mnav .it{display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:9px;font-size:.82rem;color:var(--dim);
   font-weight:500;border:1px solid transparent;white-space:nowrap;cursor:pointer}
 .mnav .it.on{background:var(--sky);color:#fff}
-.mnav .it:hover:not(.on){background:var(--soft);color:var(--ink)}
+/* Hover UNIQUEMENT sur pointeur fin : sur écran tactile (iPhone), une règle :hover
+   sur l'entrée fait consommer le 1er tap par l'état survol → le clic n'ouvre jamais
+   le mégamenu. On la neutralise donc sur tactile. */
+@media(hover:hover){.mnav .it:hover:not(.on){background:var(--soft);color:var(--ink)}}
 .mnav .badge{background:var(--coral);color:#fff;border-radius:20px;font-size:.6rem;padding:1px 6px;font-weight:700}
 @media(max-width:960px){.mast-main{flex-wrap:wrap} .mnav{order:3}}
 /* Contexte du service embarqué, greffé dans le headbar racine (barre unique). */
@@ -108,9 +111,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 @keyframes mmpop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.megamenu{animation:none}}
 .megamenu.hidden{display:none}
-/* Voile DISCRET : le fond (vue courante) reste visible, juste estompé — jamais
-   « disparu ». */
-.menu-backdrop{position:fixed;inset:0;z-index:55;background:color-mix(in srgb,var(--ink) 12%,transparent)}
+/* Attrape-clic TRANSPARENT : la vue courante / l'embed reste 100 % visible
+   derrière le menu — aucun voile (le fondu faisait « disparaître » l'embed). */
+.menu-backdrop{position:fixed;inset:0;z-index:55;background:transparent}
 .menu-backdrop.hidden{display:none}
 /* Style MENU SYSTÈME (macOS/Windows) : panneau clair, lignes compactes — pas le
    gros bloc navy de l'ancienne sidebar. */
@@ -127,16 +130,24 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Sous-menu « navbar embarquée » (rubriques BBS) = FLYOUT en cascade au SURVOL,
    comme un menu système macOS. L'entrée porte un chevron ›. */
 .megamenu .has-sub{position:relative}
-.megamenu .has-sub .chev{margin-left:auto;opacity:.55;font-size:1rem}
-.megamenu .submenu{position:absolute;left:calc(100% + 5px);top:-6px;width:224px;background:var(--panel);
-  border:1px solid var(--line);border-radius:13px;box-shadow:var(--lift);padding:6px;display:none;z-index:70;
+.megamenu .has-sub .chev{margin-left:auto;opacity:.55;font-size:1.05rem;padding:0 4px;transition:transform .12s}
+/* Bulle de sous-menu = position FIXE (coords calculées en JS) pour ÉCHAPPER au
+   clip `overflow-y:auto` du mégamenu — en absolu le flyout était rogné, donc
+   inaccessible. z-index au-dessus du mégamenu. */
+.megamenu .submenu{position:fixed;width:230px;background:var(--panel);
+  border:1px solid var(--line);border-radius:13px;box-shadow:var(--lift);padding:6px;display:none;z-index:80;
   max-height:74vh;overflow-y:auto}
-.megamenu .has-sub:hover>.submenu, .megamenu .submenu:hover{display:block}
 .megamenu .submenu a{padding:5px 9px;font-size:.78rem;color:var(--dim)}
-.megamenu .submenu a:hover{background:var(--soft);color:var(--ink)}
-/* Sur mobile (pas de survol) : sous-menu déplié inline sous l'entrée. */
-@media(max-width:640px){.megamenu .submenu{position:static;left:auto;top:auto;width:auto;box-shadow:none;border:none;
-  border-left:1px solid var(--line);border-radius:0;margin:0 0 4px 14px;padding:2px 0 2px 4px;display:block}}
+.megamenu .submenu .subhead{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);
+  font-weight:700;padding:8px 9px 2px;margin-top:3px;border-top:1px solid var(--line)}
+@media(hover:hover){.megamenu .submenu a:hover{background:var(--soft);color:var(--ink)}}
+.megamenu .has-sub .chev.subopen{transform:rotate(90deg)}
+/* Sur tactile (pas de survol) : la bulle se déplie INLINE quand .has-sub.subopen. */
+@media(max-width:640px){
+  .megamenu .submenu{position:static !important;left:auto !important;top:auto !important;width:auto;box-shadow:none;
+    border:none;border-left:1px solid var(--line);border-radius:0;margin:0 0 4px 14px;padding:2px 0 2px 4px}
+  .megamenu .has-sub.subopen>.submenu{display:block}
+}
 .megamenu .submenu .st{margin-left:auto;width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
@@ -466,10 +477,19 @@ function render(data,src){
   const rail=document.getElementById('railfeat'); let rh='';
   FEATURED.forEach(f=>{ const s=byId[f.id]; const st=s?((s.health&&s.health.state)||'unknown'):'unknown';
     const col=st==='online'?'var(--mint)':st==='degraded'?'var(--amber)':st==='offline'?'var(--coral)':'var(--nav-dim)';
-    rh+='<a data-embed="'+esc(f.id)+'"><span class="g">'+f.icon+'</span> '+esc(f.label)+'<span class="st" style="background:'+col+'"></span></a>';
+    // Chaque service = une ENTRÉE + sa BULLE de sous-menu (multi-menus façon menubar).
+    rh+='<div class="has-sub">'
+      +'<a data-embed="'+esc(f.id)+'"><span class="g">'+f.icon+'</span> '+esc(f.label)
+        +'<span class="st" style="background:'+col+'"></span><span class="chev">›</span></a>'
+      +'<div class="submenu" id="sub-'+esc(f.id)+'">'
+        +'<a data-embed="'+esc(f.id)+'"><span class="g">🔎</span> Ouvrir dans le Hall</a>'
+        +'<a data-admin="'+esc(f.id)+'" data-path="/'+esc(f.id)+'/"><span class="g">⚙️</span> Console admin</a>'
+        +'<a href="https://'+esc(f.url)+'/" target="_blank" rel="noopener"><span class="g">↗</span> Ouvrir un onglet</a>'
+      +'</div></div>';
   });
   rail.innerHTML=rh;
-  loadBbsSubmenu();   // « navbar embarquée » BBS → sous-menu dans le mégamenu
+  wireFlyouts();      // survol desktop → bulle en position fixe (échappe au clip)
+  loadBbsSubmenu();   // « navbar embarquée » BBS → salons dans la bulle BBS
   // featured grid (principal)
   const fg=document.getElementById('featgrid'); let fh='';
   FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
@@ -570,20 +590,31 @@ function loadBbsSubmenu(){
   fetch('/api/v1/webos/public/menu/bbs',{headers:{'Accept':'application/json'}})
     .then(r=>r.ok?r.json():null).then(m=>{
       if(!m||!m.items||!m.items.length) return;
-      const item=document.querySelector('#railfeat a[data-embed="bbs"]');
-      if(!item) return;
-      // Enveloppe l'entrée BBS dans un .has-sub (survol → flyout) + chevron ›.
-      let host=item.parentElement.classList.contains('has-sub')?item.parentElement:null;
-      if(host){ const os=host.querySelector('.submenu'); if(os) os.remove(); }
-      else{
-        host=document.createElement('div'); host.className='has-sub';
-        item.parentElement.insertBefore(host,item); host.appendChild(item);
-        if(!item.querySelector('.chev')) item.insertAdjacentHTML('beforeend','<span class="chev">›</span>');
-      }
-      const sub=document.createElement('div'); sub.id='bbs-sub'; sub.className='submenu';
-      sub.innerHTML=m.items.slice(0,14).map(c=>'<a data-rub="'+esc(c.slug)+'" data-rubt="'+esc(c.title)+'"><span class="g">·</span> '+esc(c.title)+(c.threads?'<span class="st mono">'+c.threads+'</span>':'')+'</a>').join('');
-      host.appendChild(sub);
+      const sub=document.getElementById('sub-bbs'); if(!sub) return;
+      // Ajoute les SALONS (rubriques lues via bbs.sock) sous les actions du service.
+      let h='<div class="subhead">Salons</div>';
+      h+=m.items.slice(0,14).map(c=>'<a data-rub="'+esc(c.slug)+'" data-rubt="'+esc(c.title)+'"><span class="g">·</span> '+esc(c.title)+(c.threads?'<span class="st mono">'+c.threads+'</span>':'')+'</a>').join('');
+      sub.insertAdjacentHTML('beforeend', h);
     }).catch(()=>{});
+}
+// Bulles de sous-menu en position FIXE au survol (desktop) — échappe au clip du
+// mégamenu. Sur tactile : géré au tap du chevron (voir gestionnaire de clic).
+function wireFlyouts(){
+  if(!matchMedia('(hover:hover)').matches) return;
+  document.querySelectorAll('#megamenu .has-sub').forEach(hs=>{
+    const sub=hs.querySelector('.submenu'); if(!sub) return;
+    let t;
+    const open=()=>{ clearTimeout(t);
+      document.querySelectorAll('#megamenu .submenu').forEach(o=>{ if(o!==sub) o.style.display='none'; });
+      const r=hs.getBoundingClientRect();
+      const h=Math.min(sub.scrollHeight+14, Math.round(innerHeight*0.74));
+      let top=Math.round(r.top-6); if(top+h>innerHeight-8) top=Math.max(8, innerHeight-8-h);
+      sub.style.left=Math.round(r.right+4)+'px'; sub.style.top=top+'px'; sub.style.display='block';
+    };
+    const close=()=>{ t=setTimeout(()=>{ sub.style.display='none'; }, 160); };
+    hs.addEventListener('mouseenter',open); hs.addEventListener('mouseleave',close);
+    sub.addEventListener('mouseenter',()=>clearTimeout(t)); sub.addEventListener('mouseleave',close);
+  });
 }
 function showEmbedRubrique(slug,title){
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
@@ -615,6 +646,10 @@ function setMenu(open){
     }
   }
   mm.classList.toggle('hidden',!open);
+  if(!open){ // referme bulles tactiles + purge les positions fixes desktop
+    mm.querySelectorAll('.has-sub.subopen').forEach(h=>{h.classList.remove('subopen'); const c=h.querySelector('.chev'); if(c) c.classList.remove('subopen');});
+    mm.querySelectorAll('.submenu').forEach(s=>{s.style.display='';});
+  }
   document.getElementById('menu-backdrop').classList.toggle('hidden',!open);
   const trig=document.querySelector('.mnav [data-menu]'); if(trig) trig.classList.toggle('on',open);
 }
@@ -622,6 +657,17 @@ document.addEventListener('click',e=>{
   const mn=e.target.closest('[data-menu]'); if(mn){ e.preventDefault();
     setMenu(document.getElementById('megamenu').classList.contains('hidden')); return; }
   if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
+  // Tactile : tap sur le chevron → déplie/replie la bulle inline (accordéon),
+  // sans embarquer le service (ça, c'est le tap sur le libellé).
+  const chev=e.target.closest('.chev');
+  if(chev && window.innerWidth<=640){ e.preventDefault(); e.stopPropagation();
+    const hs=chev.closest('.has-sub');
+    if(hs){ const willOpen=!hs.classList.contains('subopen');
+      document.querySelectorAll('#megamenu .has-sub.subopen').forEach(o=>{ if(o!==hs){ o.classList.remove('subopen'); const c=o.querySelector('.chev'); if(c) c.classList.remove('subopen'); }});
+      hs.classList.toggle('subopen',willOpen); chev.classList.toggle('subopen',willOpen);
+    }
+    return;
+  }
   const rb=e.target.closest('[data-rub]');
   if(rb){ showEmbedRubrique(rb.dataset.rub, rb.dataset.rubt); setMenu(false); return; }
   const adm=e.target.closest('[data-admin]');
