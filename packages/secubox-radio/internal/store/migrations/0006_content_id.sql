@@ -1,0 +1,12 @@
+-- LE PONT VERS LE CONTENT SPINE DU BBS (#1166 B2).
+--
+-- Valider une piste ouvre desormais un ContentObject cote BBS (Creer ->
+-- Representation -> Topic) : cette colonne retient l'identifiant rendu, pour
+-- que le replay (B5) puisse retrouver le fil de discussion et les
+-- representations d'une piste sans rappeler le BBS a chaque lecture.
+--
+-- VIDE PAR DEFAUT, JAMAIS NULL : une piste pas encore validee, ou validee
+-- avant que le BBS ne soit joignable, n'a simplement pas de contenu associe
+-- -- ce n'est pas une erreur, c'est l'etat normal avant l'appel (ou apres son
+-- echec, non-bloquant par conception).
+ALTER TABLE pistes ADD COLUMN content_id TEXT NOT NULL DEFAULT '';

@@ -210,3 +210,81 @@ func TestChaquePassageEstInscritAuJournal(t *testing.T) {
 		t.Errorf("%d lectures inscrites pour trois passages", len(f.lectures))
 	}
 }
+
+// ── OnBroadcast (#1166 B3) ───────────────────────────────────────────────────
+//
+// Le hook doit sonner UNE FOIS PAR VRAI CHANGEMENT DE PISTE — pas a chaque
+// sondage de `Actuel`. C'est ce qui permet au layer web/BBS d'ouvrir un
+// evenement "broadcast" par passage a l'antenne, sans jamais en dedoublonner
+// ni en manquer.
+func TestOnBroadcastSonneAChaqueChangementDePiste(t *testing.T) {
+	f := &faux{pistes: []store.Piste{piste(1, 10000), piste(2, 10000)}}
+	p := Nouveau(f, tirage.Defaut(), 7)
+	var appels []int64
+	p.OnBroadcast = func(pisteID int64, at int64) {
+		appels = append(appels, pisteID)
+	}
+
+	a, err := p.Actuel(t0) // premier tirage : demarre a false -> avance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Re-sondage sur la MEME piste, quelques secondes plus tard : la piste
+	// n'a pas change, le hook ne doit PAS re-sonner.
+	if _, err := p.Actuel(t0.Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if len(appels) != 1 {
+		t.Fatalf("%d appels apres deux sondages sur la meme piste, attendu 1", len(appels))
+	}
+	if appels[0] != a.Piste.ID {
+		t.Errorf("appel avec la piste %d, attendu %d", appels[0], a.Piste.ID)
+	}
+
+	// Changement de piste reel, une fois la duree ecoulee.
+	b, err := p.Actuel(t0.Add(11 * time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Piste.ID == a.Piste.ID {
+		t.Fatal("la piste n'a pas change, le test ne verifie rien")
+	}
+	if len(appels) != 2 {
+		t.Fatalf("%d appels apres un changement de piste, attendu 2", len(appels))
+	}
+	if appels[1] != b.Piste.ID {
+		t.Errorf("second appel avec la piste %d, attendu %d", appels[1], b.Piste.ID)
+	}
+}
+
+// Le passage force par le sysop (Suivante) est aussi un changement de piste :
+// le hook doit sonner.
+func TestOnBroadcastSonneAussiSurSuivante(t *testing.T) {
+	f := &faux{pistes: []store.Piste{piste(1, 180000), piste(2, 180000)}}
+	p := Nouveau(f, tirage.Defaut(), 11)
+	var appels []int64
+	p.OnBroadcast = func(pisteID int64, at int64) { appels = append(appels, pisteID) }
+
+	if _, err := p.Actuel(t0); err != nil {
+		t.Fatal(err)
+	}
+	if len(appels) != 1 {
+		t.Fatalf("%d appels apres le premier tirage, attendu 1", len(appels))
+	}
+	if _, err := p.Suivante(t0.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if len(appels) != 2 {
+		t.Fatalf("%d appels apres un passage force, attendu 2", len(appels))
+	}
+}
+
+// Sans hook (nil, le cas par defaut), rien ne doit paniquer : le demon ne
+// cable pas toujours le pont vers le BBS.
+func TestOnBroadcastNilNePanique(t *testing.T) {
+	f := &faux{pistes: []store.Piste{piste(1, 10000)}}
+	p := Nouveau(f, tirage.Defaut(), 1)
+	if _, err := p.Actuel(t0); err != nil {
+		t.Fatal(err)
+	}
+}
