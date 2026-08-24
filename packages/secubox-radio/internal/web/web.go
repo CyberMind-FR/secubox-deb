@@ -42,6 +42,12 @@ type ClientContenu interface {
 	// Event journalise une decision cote spine (#1166 B3 : "broadcast" a
 	// chaque changement de piste a l'antenne).
 	Event(id, kind, actor, payloadJSON string) error
+	// Timeline pousse un commentaire de chat MEMBRE, synchronise sur l'offset
+	// courant de la piste (#1166 B4). memberToken est le sbx_token PROPRE du
+	// posteur — la radio ne resout ni ne fabrique jamais d'identite, c'est le
+	// BBS qui verifie ce jeton et en tire l'auteur (voir
+	// packages/secubox-bbs/internal/web/api_content.go, membreDepuisJeton).
+	Timeline(id, memberToken string, offsetMS int64, body string) error
 }
 
 // Visiteur : qui frappe a la porte.
@@ -186,6 +192,54 @@ func (s *Serveur) diffuseBroadcast(pisteID int64, at int64) {
 	}
 	if err := s.Contenu.Event(p.ContentID, "broadcast", "", string(payload)); err != nil {
 		log.Printf("radio: evenement broadcast BBS pour la piste %d : %v", pisteID, err)
+	}
+}
+
+// jetonSbxDepuisRequete extrait le sbx_token du posteur depuis l'en-tete
+// Authorization ("Bearer <jeton>"), quand il est present. Rend "" sinon —
+// jamais une erreur : un chat anonyme reste un usage normal de l'ambiance,
+// seul le depot sur la timeline BBS en depend (#1166 B4).
+//
+// AUTHORIZATION EST LIBRE ICI : contrairement au jeton de flotte que
+// contentbbs.Client signe pour parler AU NOM DU MODULE radio, ce jeton est
+// celui du NAVIGATEUR — la radio ne le verifie jamais elle-meme, elle ne
+// fait que le relayer. C'est le BBS, seule autorite d'identite, qui le
+// verifie et en resout l'auteur.
+func jetonSbxDepuisRequete(r *http.Request) string {
+	const prefixe = "Bearer "
+	v := r.Header.Get("Authorization")
+	if !strings.HasPrefix(v, prefixe) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(v, prefixe))
+}
+
+// diffuseChat pousse un message de chat MEMBRE vers la timeline du content
+// spine BBS (#1166 B4), EN PLUS du chat volatile (jamais a sa place — voir
+// chat()). Meme philosophie non-bloquante que diffuseBroadcast : appelee
+// dans sa PROPRE goroutine depuis chat(), jamais sous un verrou du
+// programmateur ou du store, pour ne jamais faire attendre un auditeur
+// derriere un appel HTTP au BBS.
+//
+// NON-BLOQUANT PAR CONSTRUCTION : un BBS injoignable, une piste non
+// rattachee au spine (ContentID vide) ou un module non cable
+// (`s.Contenu == nil`) ne sont jamais des pannes du chat volatile, juste des
+// occasions journalisees ou ignorees en silence.
+func (s *Serveur) diffuseChat(pisteID int64, memberToken string, offsetMS int64, body string) {
+	if s.Contenu == nil {
+		return
+	}
+	p, err := s.st.ParID(pisteID)
+	if err != nil {
+		// Piste disparue entre le chat et l'appel : rien a rattacher.
+		return
+	}
+	if p.ContentID == "" {
+		// Pas de ContentObject ouvert pour cette piste : rien a rattacher.
+		return
+	}
+	if err := s.Contenu.Timeline(p.ContentID, memberToken, offsetMS, body); err != nil {
+		log.Printf("radio: timeline BBS pour la piste %d : %v", pisteID, err)
 	}
 }
 
@@ -960,9 +1014,9 @@ func (s *Serveur) chat(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusBadRequest, "corps illisible")
 		return
 	}
-	var pisteID int64
+	var pisteID, offsetMS int64
 	if e, err := s.prog.Actuel(s.Now()); err == nil {
-		pisteID = e.Piste.ID
+		pisteID, offsetMS = e.Piste.ID, e.OffsetMS
 	}
 	p, err := s.st.Dis(v.ID, v.Pseudo, corps.Corps, pisteID, s.Now())
 	switch {
@@ -975,6 +1029,13 @@ func (s *Serveur) chat(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		erreur(w, http.StatusInternalServerError, "phrase non enregistree")
 	default:
+		// Chat volatile (ambiance) : TOUJOURS, deja fait ci-dessus par
+		// st.Dis. La timeline BBS est un PLUS, jamais un remplacement — un
+		// posteur sans sbx_token ou sans piste rattachee au spine reste un
+		// usage parfaitement normal du chat, juste sans persistance.
+		if jeton := jetonSbxDepuisRequete(r); jeton != "" && pisteID != 0 {
+			go s.diffuseChat(pisteID, jeton, offsetMS, corps.Corps)
+		}
 		rendJSON(w, http.StatusCreated, map[string]any{"phrase": p})
 	}
 }

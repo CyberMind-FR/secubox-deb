@@ -180,37 +180,65 @@ func TestTopicRendLIdentifiantDuFil(t *testing.T) {
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────
+//
+// Correctif B4 (constraints.md, task-B4-report.md) : ce client ne fournit
+// PLUS d'identite lui-meme — il relaie le sbx_token du posteur dans
+// l'entete X-Sbx-Member, et le BBS resout seul qui a poste.
 
-func TestTimelinePosteLeCommentaire(t *testing.T) {
+func TestTimelinePosteLeCommentaireEtRelaieLeJetonMembre(t *testing.T) {
 	var corps struct {
-		AuthorID int64  `json:"author_id"`
-		Author   string `json:"author"`
 		OffsetMS int64  `json:"offset_ms"`
 		Body     string `json:"body"`
 	}
+	var entete string
 	c := serveur(t, func(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&corps)
+		entete = r.Header.Get("X-Sbx-Member")
 		json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": 5})
 	})
-	if err := c.Timeline("cnt_abc123", 12, "gandalf", 3410, "belle intro"); err != nil {
+	if err := c.Timeline("cnt_abc123", "jeton-de-gandalf", 3410, "belle intro"); err != nil {
 		t.Fatalf("Timeline : %v", err)
 	}
-	if corps.AuthorID != 12 || corps.Author != "gandalf" || corps.OffsetMS != 3410 || corps.Body != "belle intro" {
+	if corps.OffsetMS != 3410 || corps.Body != "belle intro" {
 		t.Errorf("corps mal transmis : %+v", corps)
+	}
+	if entete != "jeton-de-gandalf" {
+		t.Errorf("X-Sbx-Member = %q, attendu le jeton du membre posteur", entete)
 	}
 }
 
-// LA GATE D'IDENTITE DOIT REMONTER : un author_id<=0 est un 400 cote BBS, pas
-// une acceptation silencieuse — sinon le client croirait le commentaire
-// persiste alors qu'il a ete rejete (constraints.md, gate d'identite).
+// LE CORPS NE PORTE PLUS AUCUNE IDENTITE : un author_id/author dans le JSON
+// serait desormais ignore cote serveur — ce test garde le client honnete en
+// verifiant qu'il ne les envoie meme plus.
+func TestTimelineNEnvoiePlusAuthorIDNiAuthorDansLeCorps(t *testing.T) {
+	var brut map[string]any
+	c := serveur(t, func(w http.ResponseWriter, r *http.Request) {
+		json.NewDecoder(r.Body).Decode(&brut)
+		json.NewEncoder(w).Encode(map[string]any{"ok": true, "id": 5})
+	})
+	if err := c.Timeline("cnt_abc123", "jeton", 1000, "x"); err != nil {
+		t.Fatalf("Timeline : %v", err)
+	}
+	if _, present := brut["author_id"]; present {
+		t.Errorf("le corps porte encore author_id : %v", brut)
+	}
+	if _, present := brut["author"]; present {
+		t.Errorf("le corps porte encore author : %v", brut)
+	}
+}
+
+// LA GATE D'IDENTITE DOIT REMONTER : un jeton membre absent/invalide est un
+// 400 cote BBS, pas une acceptation silencieuse — sinon le client croirait
+// le commentaire persiste alors qu'il a ete rejete (constraints.md, gate
+// d'identite).
 func TestTimelineRemonteLeRefusAnonyme(t *testing.T) {
 	c := serveur(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]any{"ok": false, "erreur": "anonyme non persisté"})
 	})
-	err := c.Timeline("cnt_abc123", 0, "anonyme", 0, "coucou")
+	err := c.Timeline("cnt_abc123", "", 0, "coucou")
 	if err == nil {
-		t.Fatal("author_id<=0 a ete accepte sans erreur")
+		t.Fatal("jeton membre absent a ete accepte sans erreur")
 	}
 }
 

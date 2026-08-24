@@ -9,11 +9,17 @@
 // et la RÈGLE D'OR (une provenance is_original ne disparaît jamais).
 //
 // Chaque route ici exige le JWT de flotte, comme le reste de /api/v1/bbs —
-// voir api.go pour la vérification. POST .../timeline exige EN PLUS un
-// author_id>0 (gate d'identité, store.ErrAnonymeNonPersiste) : un
-// commentaire anonyme ne doit jamais atteindre la timeline, et le refus est
-// un 400 JSON EXPLICITE — jamais une page HTML. Les panneaux qui consomment
-// cette API parsent la réponse sans condition.
+// voir api.go pour la vérification. POST .../timeline exige EN PLUS le jeton
+// PROPRE du membre posteur, dans l'entête X-Sbx-Member (son sbx_token) — le
+// BBS résout lui-même `sub -> membre` (membreDepuisJeton, même précédent que
+// appelant() dans api_membre.go) plutôt que de faire confiance à un
+// author_id fourni par l'appelant. Un module tiers (la radio, par exemple)
+// ne PEUT PAS fabriquer une identité BBS : il ne fait que relayer le jeton
+// du membre, le BBS reste la seule autorité d'identité. Absence, jeton
+// invalide/expiré, ou sujet sans compte BBS -> 400 JSON EXPLICITE
+// (store.ErrAnonymeNonPersiste est le miroir de ce gate côté store) —
+// jamais une page HTML. Les panneaux qui consomment cette API parsent la
+// réponse sans condition.
 package web
 
 import (
@@ -311,9 +317,55 @@ func (s *Server) apiContentParRef(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{"ok": true, "id": id})
 }
 
+// membreDepuisJeton résout le PORTEUR d'un jeton (l'entête X-Sbx-Member,
+// verbatim un sbx_token — sans le préfixe "Bearer ") vers un compte reconnu
+// du BBS, en réutilisant claimsJeton (même vérification HS256 que le reste
+// de l'API — voir api.go). C'est l'AUTORITÉ D'IDENTITÉ de la timeline :
+// contrairement à apiContentTimelineCreer AVANT ce correctif, l'appelant
+// (un autre module, ex. la radio) ne fournit plus jamais author_id/author
+// directement — il ne peut que relayer un jeton, que le BBS vérifie et
+// résout lui-même.
+//
+// Rend (0, "", false) si le jeton est absent, mal formé, invalide, expiré,
+// ou si son sujet n'a pas de compte BBS actif — dans TOUS ces cas
+// l'appelant doit traiter le posteur comme anonyme et refuser 400, jamais
+// persister avec un id fabriqué ou nul.
+func (s *Server) membreDepuisJeton(jeton string) (id int64, nom string, ok bool) {
+	jeton = strings.TrimSpace(jeton)
+	if jeton == "" {
+		return 0, "", false
+	}
+	claims, err := s.claimsJeton("Bearer " + jeton)
+	if err != nil {
+		return 0, "", false
+	}
+	sub := strings.TrimSpace(claims.Sub)
+	if sub == "" {
+		return 0, "", false
+	}
+	// UserByHandle ignore les comptes desactives : une revocation cote
+	// SecuBox ferme donc la timeline immediatement, sans attendre
+	// l'expiration du jeton — meme garantie que appelant() (api_membre.go).
+	uid, err := s.st.UserByHandle(sub)
+	if err != nil || uid <= 0 {
+		return 0, "", false
+	}
+	info, err := s.st.UserInfo(uid)
+	if err != nil {
+		return 0, "", false
+	}
+	nom = strings.TrimSpace(info.Display)
+	if nom == "" {
+		nom = info.Handle
+	}
+	return uid, nom, true
+}
+
 // apiContentTimelineCreer : POST /api/v1/bbs/content/{id}/timeline
-// {author_id,author,offset_ms,body} -> 200 {ok,id} ; author_id<=0 -> 400
+// {offset_ms,body} + entête X-Sbx-Member:<sbx_token> -> 200 {ok,id} ;
+// jeton absent/invalide/sans compte BBS -> 400
 // {ok:false,erreur:"anonyme non persisté"} (gate d'identité, verbatim).
+// L'identité N'EST JAMAIS lue dans le corps — voir membreDepuisJeton.
 func (s *Server) apiContentTimelineCreer(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if _, err := s.st.ContenuParID(id); err != nil {
@@ -321,16 +373,21 @@ func (s *Server) apiContentTimelineCreer(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	var in struct {
-		AuthorID int64  `json:"author_id"`
-		Author   string `json:"author"`
 		OffsetMS int64  `json:"offset_ms"`
 		Body     string `json:"body"`
 	}
 	if !decoderContenuJSON(w, r, &in) {
 		return
 	}
+
+	authorID, author, ok := s.membreDepuisJeton(r.Header.Get("X-Sbx-Member"))
+	if !ok {
+		jsonErrFr(w, http.StatusBadRequest, "anonyme non persisté")
+		return
+	}
+
 	cid, err := s.st.AjouterTimeline(id, store.TimelineComment{
-		Author: in.Author, AuthorID: in.AuthorID, OffsetMS: in.OffsetMS, Body: in.Body,
+		Author: author, AuthorID: authorID, OffsetMS: in.OffsetMS, Body: in.Body,
 		CreatedAt: time.Now().Unix(),
 	})
 	if errors.Is(err, store.ErrAnonymeNonPersiste) {

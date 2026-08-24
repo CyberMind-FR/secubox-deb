@@ -128,6 +128,15 @@
     });
   }
 
+  // sbxToken() lit le sbx_token pose par la connexion BBS (#1166 B4) — le
+  // MEME localStorage que le hub et les autres webui (voir
+  // secubox-hub/www/shared/api-utils.js:getToken). '' si absent : la radio
+  // ne DEVINE ni ne FABRIQUE jamais d'identite, elle ne fait que relayer ce
+  // que le navigateur possede deja.
+  function sbxToken() {
+    try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
+  }
+
   // LE MÉDIA CONNAÎT SA VRAIE DURÉE — on la rapporte (#1131z). Sans elle, le
   // serveur coupe à 4 min tout titre de durée inconnue et « saute » au suivant.
   // Le premier lecteur qui charge les métadonnées la transmet ; le serveur ne
@@ -437,7 +446,15 @@
     if (e.key !== 'Enter' || !dire.value.trim()) return;
     nom(); // on ne se nomme qu'au moment de parler
     var corps = dire.value; dire.value = '';
-    json('/api/v1/radio/chat', { method: 'POST', body: JSON.stringify({ corps: corps }) })
+    var options = { method: 'POST', body: JSON.stringify({ corps: corps }) };
+    // MEMBRE CONNU (#1166 B4) : on joint le sbx_token pour que ce message,
+    // en plus de rejoindre le chat d'ambiance comme toujours, atteigne AUSSI
+    // la timeline du morceau en cours — c'est le BBS, jamais cette page, qui
+    // decide au nom de qui il persiste (voir jetonSbxDepuisRequete cote
+    // serveur). Sans jeton, le message reste un chat d'ambiance ordinaire.
+    var jeton = sbxToken();
+    if (jeton) options.headers = { 'Authorization': 'Bearer ' + jeton };
+    json('/api/v1/radio/chat', options)
       .then(function (r) {
         if (r.code === 429) dire.placeholder = 'Laissez souffler l’antenne…';
         else if (r.corps.phrase) poseChat([r.corps.phrase]);
