@@ -46,3 +46,8 @@ override_dh_auto_install:
 	# Default config
 	install -d debian/secubox-mail/etc/secubox
 	[ -f config/mail.toml ] && install -m 644 config/mail.toml debian/secubox-mail/etc/secubox/ || true
+
+	# Sieve global par défaut (Task 6 : spam Rspamd → Junk). Déployé et compilé
+	# à l'intérieur du LXC par install_default_sieve() (lib/mail/install.sh).
+	install -d debian/secubox-mail/usr/lib/secubox/mail/config/sieve
+	[ -f config/sieve/default.sieve ] && install -m 644 config/sieve/default.sieve debian/secubox-mail/usr/lib/secubox/mail/config/sieve/ || true
