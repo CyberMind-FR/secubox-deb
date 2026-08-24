@@ -228,7 +228,12 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .embed-bar .eb-btn{padding:7px 13px;border-radius:9px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);font-size:.8rem;text-decoration:none}
 .embed-bar .eb-btn:hover{border-color:var(--cyan);color:var(--cyan)}
 .embed-hint{font-family:"JetBrains Mono";font-size:.66rem;color:var(--dim);margin:0 4px 8px}
-.embed-wrap{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);background:var(--panel);height:calc(100vh - 210px);min-height:420px}
+/* L'embed REMPLIT la carte : hauteur = viewport - headbar (mast+topnav) - marges.
+   Aucune partie perdue : le service défile DANS l'iframe. En embed on retire aussi
+   la note de registre + le padding bas de .main (pas de scroll de page parasite). */
+.embed-wrap{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);background:var(--panel);height:calc(100vh - 148px);min-height:360px}
+body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
+body:has(#view-embed:not(.hidden)) .srcnote{display:none}
 .embed-wrap iframe{width:100%;height:100%;border:0;display:block;background:var(--panel)}
 .aide-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;max-width:760px;line-height:1.6}
 .aide-card ul{margin:8px 0} .aide-card li{margin:4px 0}
