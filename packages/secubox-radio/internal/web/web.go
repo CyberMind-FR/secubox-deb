@@ -39,6 +39,9 @@ type ClientContenu interface {
 	Creer(o contentbbs.Objet, prov []contentbbs.Prov) (string, error)
 	Representation(id, kind, module, ref string, isCache bool) error
 	Topic(id string) (int64, error)
+	// Event journalise une decision cote spine (#1166 B3 : "broadcast" a
+	// chaque changement de piste a l'antenne).
+	Event(id, kind, actor, payloadJSON string) error
 }
 
 // Visiteur : qui frappe a la porte.
@@ -139,7 +142,51 @@ func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg 
 		mux: http.NewServeMux(), Now: time.Now, auditeurs: map[string]int64{},
 		HTTP: &http.Client{Timeout: 8 * time.Second}}
 	s.routes()
+	// LE PONT VERS LE HOOK DE DIFFUSION (#1166 B3) : le programmateur ignore
+	// tout du BBS et de HTTP, c'est ici, dans le layer web, qu'on le branche.
+	// `s.Contenu` est en general pose APRES `Nouveau` (voir main.go) — la
+	// fermeture le relit a chaque appel, pas au cablage, donc l'ordre n'a
+	// pas d'importance.
+	if prog != nil {
+		prog.OnBroadcast = func(pisteID int64, at int64) { go s.diffuseBroadcast(pisteID, at) }
+	}
 	return s
+}
+
+// diffuseBroadcast ouvre l'evenement "broadcast" du content spine BBS quand
+// une piste passe reellement a l'antenne (#1166 B3). Appelee dans sa PROPRE
+// goroutine par le hook `programme.Programmateur.OnBroadcast` — jamais sous
+// le verrou du programmateur, pour ne jamais faire attendre un auditeur qui
+// sonde `Actuel` derriere un appel HTTP au BBS.
+//
+// NON-BLOQUANT PAR CONSTRUCTION, meme philosophie que `ouvreContenu` : un BBS
+// injoignable, une piste jamais validee cote spine (ContentID vide) ou un
+// module non cable (`s.Contenu == nil`) ne sont jamais des pannes, juste des
+// occasions journalisees ou ignorees en silence.
+func (s *Serveur) diffuseBroadcast(pisteID int64, at int64) {
+	if s.Contenu == nil {
+		return
+	}
+	p, err := s.st.ParID(pisteID)
+	if err != nil {
+		// Piste disparue entre le passage a l'antenne et l'appel : rien a
+		// journaliser, ce n'est pas une anomalie du hook.
+		return
+	}
+	if p.ContentID == "" {
+		// Pas de ContentObject ouvert pour cette piste (BBS injoignable a la
+		// validation, ou module non cable) : rien a rattacher.
+		return
+	}
+	payload, err := json.Marshal(map[string]any{
+		"module": "secubox-radio", "piste": pisteID, "at": at,
+	})
+	if err != nil {
+		return
+	}
+	if err := s.Contenu.Event(p.ContentID, "broadcast", "", string(payload)); err != nil {
+		log.Printf("radio: evenement broadcast BBS pour la piste %d : %v", pisteID, err)
+	}
 }
 
 func (s *Serveur) Handler() http.Handler { return s.mux }
