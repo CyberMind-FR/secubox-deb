@@ -29,6 +29,10 @@ type Piste struct {
 	LotTitre     string
 	Coeurs       int
 	JoueeLe      int64 // 0 = jamais
+	// ContentID : l'identifiant du ContentObject BBS ouvert a la validation
+	// (#1166 B2). Vide = pas encore ouvert (proposition non validee, ou appel
+	// au BBS pas encore reussi) — jamais une erreur en soi.
+	ContentID string
 }
 
 // EstPlaylist dit si cette entree designe une playlist entiere plutot qu'un
@@ -87,7 +91,8 @@ SELECT p.id, p.source, p.titre, p.auteur, p.duree_ms,
        COALESCE(p.ajoute_par, 0), p.ajoute_le, p.fichier, p.mime, p.octets,
        p.indisponible, p.raison, p.etat, p.motif, p.lot, p.lot_titre,
        (SELECT COUNT(*) FROM coeurs c WHERE c.piste_id = p.id) AS coeurs,
-       COALESCE((SELECT MAX(l.debut_le) FROM lectures l WHERE l.piste_id = p.id), 0) AS jouee_le
+       COALESCE((SELECT MAX(l.debut_le) FROM lectures l WHERE l.piste_id = p.id), 0) AS jouee_le,
+       p.content_id
   FROM pistes p `
 
 func (s *Store) scan(r interface{ Scan(...any) error }) (Piste, error) {
@@ -95,7 +100,8 @@ func (s *Store) scan(r interface{ Scan(...any) error }) (Piste, error) {
 	var indispo int
 	err := r.Scan(&p.ID, &p.Source, &p.Titre, &p.Auteur, &p.DureeMS,
 		&p.AjoutePar, &p.AjouteLe, &p.Fichier, &p.Mime, &p.Octets,
-		&indispo, &p.Raison, &p.Etat, &p.Motif, &p.Lot, &p.LotTitre, &p.Coeurs, &p.JoueeLe)
+		&indispo, &p.Raison, &p.Etat, &p.Motif, &p.Lot, &p.LotTitre, &p.Coeurs, &p.JoueeLe,
+		&p.ContentID)
 	p.Indisponible = indispo == 1
 	return p, err
 }
@@ -408,6 +414,24 @@ func (s *Store) Devalide(id, par int64, maintenant time.Time) error {
 // question.
 func (s *Store) Refuse(id, par int64, maintenant time.Time, motif string) error {
 	return s.decide(id, par, maintenant, EtatRefuse, motif)
+}
+
+// FixerContenu persiste l'identifiant du ContentObject BBS ouvert a la
+// validation d'une piste (#1166 B2).
+//
+// APPELEE APRES COUP, PAS DANS `decide` : l'appel au BBS suit la decision, il
+// ne la conditionne jamais — un BBS injoignable ne doit pas empecher la piste
+// d'entrer a l'antenne. Le motif exact de ce decouplage vit dans le
+// gestionnaire web qui appelle les deux, pas ici.
+func (s *Store) FixerContenu(pisteID int64, contentID string) error {
+	res, err := s.db.Exec(`UPDATE pistes SET content_id = ? WHERE id = ?`, contentID, pisteID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrPisteInconnue
+	}
+	return nil
 }
 
 func (s *Store) decide(id, par int64, maintenant time.Time, etat, motif string) error {

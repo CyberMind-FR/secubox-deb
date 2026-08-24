@@ -25,10 +25,35 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/contentbbs"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/programme"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/store"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/tirage"
 )
+
+// ClientContenu : ce que la validation demande au content spine du BBS
+// (#1166 B2). Une interface minuscule plutot que *contentbbs.Client
+// directement — un test injecte un bouchon qui n'ouvre aucune socket, et
+// *contentbbs.Client la satisfait deja par sa forme, sans adaptation.
+type ClientContenu interface {
+	Creer(o contentbbs.Objet, prov []contentbbs.Prov) (string, error)
+	Representation(id, kind, module, ref string, isCache bool) error
+	Topic(id string) (int64, error)
+	// Event journalise une decision cote spine (#1166 B3 : "broadcast" a
+	// chaque changement de piste a l'antenne).
+	Event(id, kind, actor, payloadJSON string) error
+	// Timeline pousse un commentaire de chat MEMBRE, synchronise sur l'offset
+	// courant de la piste (#1166 B4). memberToken est le sbx_token PROPRE du
+	// posteur — la radio ne resout ni ne fabrique jamais d'identite, c'est le
+	// BBS qui verifie ce jeton et en tire l'auteur (voir
+	// packages/secubox-bbs/internal/web/api_content.go, membreDepuisJeton).
+	Timeline(id, memberToken string, offsetMS int64, body string) error
+	// TimelineDe lit les commentaires deja persistes d'un ContentObject, dans
+	// l'ordre (offset_ms croissant) — c'est ce que sert
+	// /replay/{piste}/timeline (#1166 B5) pour que l'interface de reecoute
+	// les rejoue au bon instant.
+	TimelineDe(id string) ([]contentbbs.Comment, error)
+}
 
 // Visiteur : qui frappe a la porte.
 type Visiteur struct {
@@ -85,6 +110,11 @@ type Serveur struct {
 	Racine string
 	Now    func() time.Time // remplace en test
 
+	// Contenu ouvre le ContentObject BBS d'une piste a sa validation (#1166
+	// B2). Vide = pas de spine configure (BBS injoignable ou non deploye) —
+	// la validation continue normalement, elle ne s'arrete jamais pour ca.
+	Contenu ClientContenu
+
 	// Statistiques légères d'audience (#1131ah), tenues en mémoire : combien de
 	// gens écoutent en ce moment (un cookie vu récemment sur `actuel`), et
 	// combien de visites depuis le démarrage. Sans base : une valeur d'ambiance,
@@ -123,7 +153,142 @@ func Nouveau(st *store.Store, prog *programme.Programmateur, qui Identifie, reg 
 		mux: http.NewServeMux(), Now: time.Now, auditeurs: map[string]int64{},
 		HTTP: &http.Client{Timeout: 8 * time.Second}}
 	s.routes()
+	// LE PONT VERS LE HOOK DE DIFFUSION (#1166 B3) : le programmateur ignore
+	// tout du BBS et de HTTP, c'est ici, dans le layer web, qu'on le branche.
+	// `s.Contenu` est en general pose APRES `Nouveau` (voir main.go) — la
+	// fermeture le relit a chaque appel, pas au cablage, donc l'ordre n'a
+	// pas d'importance.
+	if prog != nil {
+		prog.OnBroadcast = func(pisteID int64, at int64) { go s.diffuseBroadcast(pisteID, at) }
+	}
 	return s
+}
+
+// diffuseBroadcast ouvre l'evenement "broadcast" du content spine BBS quand
+// une piste passe reellement a l'antenne (#1166 B3). Appelee dans sa PROPRE
+// goroutine par le hook `programme.Programmateur.OnBroadcast` — jamais sous
+// le verrou du programmateur, pour ne jamais faire attendre un auditeur qui
+// sonde `Actuel` derriere un appel HTTP au BBS.
+//
+// NON-BLOQUANT PAR CONSTRUCTION, meme philosophie que `ouvreContenu` : un BBS
+// injoignable, une piste jamais validee cote spine (ContentID vide) ou un
+// module non cable (`s.Contenu == nil`) ne sont jamais des pannes, juste des
+// occasions journalisees ou ignorees en silence.
+func (s *Serveur) diffuseBroadcast(pisteID int64, at int64) {
+	if s.Contenu == nil {
+		return
+	}
+	p, err := s.st.ParID(pisteID)
+	if err != nil {
+		// Piste disparue entre le passage a l'antenne et l'appel : rien a
+		// journaliser, ce n'est pas une anomalie du hook.
+		return
+	}
+	if p.ContentID == "" {
+		// Pas de ContentObject ouvert pour cette piste (BBS injoignable a la
+		// validation, ou module non cable) : rien a rattacher.
+		return
+	}
+	payload, err := json.Marshal(map[string]any{
+		"module": "secubox-radio", "piste": pisteID, "at": at,
+	})
+	if err != nil {
+		return
+	}
+	if err := s.Contenu.Event(p.ContentID, "broadcast", "", string(payload)); err != nil {
+		log.Printf("radio: evenement broadcast BBS pour la piste %d : %v", pisteID, err)
+	}
+}
+
+// jetonSbxDepuisRequete extrait le sbx_token du posteur depuis l'en-tete
+// Authorization ("Bearer <jeton>"), quand il est present. Rend "" sinon —
+// jamais une erreur : un chat anonyme reste un usage normal de l'ambiance,
+// seul le depot sur la timeline BBS en depend (#1166 B4).
+//
+// AUTHORIZATION EST LIBRE ICI : contrairement au jeton de flotte que
+// contentbbs.Client signe pour parler AU NOM DU MODULE radio, ce jeton est
+// celui du NAVIGATEUR — la radio ne le verifie jamais elle-meme, elle ne
+// fait que le relayer. C'est le BBS, seule autorite d'identite, qui le
+// verifie et en resout l'auteur.
+func jetonSbxDepuisRequete(r *http.Request) string {
+	const prefixe = "Bearer "
+	v := r.Header.Get("Authorization")
+	if !strings.HasPrefix(v, prefixe) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(v, prefixe))
+}
+
+// diffuseChat pousse un message de chat MEMBRE vers la timeline du content
+// spine BBS (#1166 B4), EN PLUS du chat volatile (jamais a sa place — voir
+// chat()). Meme philosophie non-bloquante que diffuseBroadcast : appelee
+// dans sa PROPRE goroutine depuis chat(), jamais sous un verrou du
+// programmateur ou du store, pour ne jamais faire attendre un auditeur
+// derriere un appel HTTP au BBS.
+//
+// NON-BLOQUANT PAR CONSTRUCTION : un BBS injoignable, une piste non
+// rattachee au spine (ContentID vide) ou un module non cable
+// (`s.Contenu == nil`) ne sont jamais des pannes du chat volatile, juste des
+// occasions journalisees ou ignorees en silence.
+func (s *Serveur) diffuseChat(pisteID int64, memberToken string, offsetMS int64, body string) {
+	if s.Contenu == nil {
+		return
+	}
+	p, err := s.st.ParID(pisteID)
+	if err != nil {
+		// Piste disparue entre le chat et l'appel : rien a rattacher.
+		return
+	}
+	if p.ContentID == "" {
+		// Pas de ContentObject ouvert pour cette piste : rien a rattacher.
+		return
+	}
+	if err := s.Contenu.Timeline(p.ContentID, memberToken, offsetMS, body); err != nil {
+		log.Printf("radio: timeline BBS pour la piste %d : %v", pisteID, err)
+	}
+}
+
+// replayTimeline sert les commentaires de la timeline BBS d'une piste, dans
+// l'ordre (offset_ms croissant) rendu par le client contenu, pour que
+// l'interface de reecoute les rejoue au bon instant (#1166 B5).
+//
+// PUR PROXY EN LECTURE, OUVERT COMME /current ET /playlist : aucun jeton
+// membre requis — les commentaires sont deja persistes cote BBS derriere sa
+// propre porte d'identite (author_id > 0, constraints.md) ; les servir en
+// lecture ici n'expose rien de plus qu'un membre n'a deja pu lire en
+// participant a la timeline.
+//
+// NON-FATAL : un BBS injoignable ou en erreur rend 502, jamais une panique —
+// meme philosophie que diffuseBroadcast/diffuseChat, mais ici il y a bien un
+// appelant HTTP a informer plutot qu'une goroutine a laisser filer.
+func (s *Serveur) replayTimeline(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("piste"), 10, 64)
+	if err != nil || id <= 0 {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	}
+	p, err := s.st.ParID(id)
+	if err != nil {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	}
+	if p.ContentID == "" {
+		// Jamais validee cote spine (BBS injoignable a la validation, ou
+		// module non cable) : rien a rejouer.
+		erreur(w, http.StatusNotFound, "piste non rattachee au spine de contenu")
+		return
+	}
+	if s.Contenu == nil {
+		erreur(w, http.StatusBadGateway, "spine de contenu non configure")
+		return
+	}
+	comments, err := s.Contenu.TimelineDe(p.ContentID)
+	if err != nil {
+		log.Printf("radio: lecture de la timeline BBS pour la piste %d : %v", id, err)
+		erreur(w, http.StatusBadGateway, "lecture de la timeline impossible")
+		return
+	}
+	rendJSON(w, http.StatusOK, map[string]any{"comments": comments})
 }
 
 func (s *Serveur) Handler() http.Handler { return s.mux }
@@ -408,6 +573,13 @@ func (s *Serveur) routes() {
 		s.mux.HandleFunc(prefixe+ch, h)
 		s.mux.HandleFunc(ch, s.parAdmin(h))
 	}
+	// /replay/{piste}/timeline (#1166 B5) : un segment variable, donc monte
+	// directement avec un patron de methode+chemin (Go 1.22 ServeMux) plutot
+	// que via `routeur`/`decoupe` — meme raisonnement double-montage que la
+	// boucle ci-dessus (vhost qui garde le prefixe complet vs agregateur qui
+	// le retire).
+	s.mux.HandleFunc("GET "+prefixe+"/replay/{piste}/timeline", s.replayTimeline)
+	s.mux.HandleFunc("GET /replay/{piste}/timeline", s.parAdmin(s.replayTimeline))
 	// LA PAGE EST EMBARQUEE DANS LE BINAIRE : un fichier manquant sur le disque
 	// donnerait une page blanche sans rien dire. Ici elle ne peut pas manquer.
 	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
@@ -671,10 +843,61 @@ func (s *Serveur) gestePropo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p, _ := s.st.ParID(id)
+		if geste == "valider" {
+			// APRES le succes, jamais avant : ouvrir le ContentObject est une
+			// consequence de la decision, pas une condition. Voir ouvreContenu.
+			p = s.ouvreContenu(p)
+		}
 		rendJSON(w, http.StatusOK, map[string]any{"piste": s.vue(p, v)})
 	default:
 		erreur(w, http.StatusNotFound, "geste inconnu")
 	}
+}
+
+// ouvreContenu ouvre le ContentObject BBS d'une piste tout juste validee et
+// persiste l'identifiant rendu (#1166 B2) : Creer (provenance = source,
+// originale) -> Representation (kind=radio, is_cache=true : la radio ne
+// detient jamais l'original, elle en relaie une copie) -> Topic (le fil de
+// discussion). Rend la piste a jour (avec son ContentID si l'appel a reussi).
+//
+// NON-BLOQUANT PAR CONSTRUCTION : chaque etape se contente de journaliser son
+// echec. L'antenne ne doit jamais dependre de la disponibilite du BBS —
+// c'est le sens meme de l'interface ClientContenu, documente sur
+// contentbbs.Client. Une piste deja pourvue d'un content_id (revalidee apres
+// avoir ete devalidee) n'est pas rouverte : le spine la connait deja.
+func (s *Serveur) ouvreContenu(p store.Piste) store.Piste {
+	if s.Contenu == nil || p.ID == 0 || p.ContentID != "" {
+		return p
+	}
+	typ := "audio"
+	if strings.HasPrefix(p.Mime, "video/") {
+		typ = "video"
+	}
+	titre := p.Titre
+	if titre == "" {
+		titre = p.Source
+	}
+	id, err := s.Contenu.Creer(
+		contentbbs.Objet{Type: typ, Title: titre},
+		[]contentbbs.Prov{{SourceURL: p.Source, SourceType: "youtube", Original: true}},
+	)
+	if err != nil {
+		log.Printf("radio: ouverture du contenu BBS pour la piste %d : %v", p.ID, err)
+		return p
+	}
+	ref := strconv.FormatInt(p.ID, 10)
+	if err := s.Contenu.Representation(id, "radio", "secubox-radio", ref, true); err != nil {
+		log.Printf("radio: representation BBS pour la piste %d : %v", p.ID, err)
+	}
+	if _, err := s.Contenu.Topic(id); err != nil {
+		log.Printf("radio: ouverture du fil BBS pour la piste %d : %v", p.ID, err)
+	}
+	if err := s.st.FixerContenu(p.ID, id); err != nil {
+		log.Printf("radio: enregistrement du content_id pour la piste %d : %v", p.ID, err)
+		return p
+	}
+	p.ContentID = id
+	return p
 }
 
 func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {
@@ -846,9 +1069,9 @@ func (s *Serveur) chat(w http.ResponseWriter, r *http.Request) {
 		erreur(w, http.StatusBadRequest, "corps illisible")
 		return
 	}
-	var pisteID int64
+	var pisteID, offsetMS int64
 	if e, err := s.prog.Actuel(s.Now()); err == nil {
-		pisteID = e.Piste.ID
+		pisteID, offsetMS = e.Piste.ID, e.OffsetMS
 	}
 	p, err := s.st.Dis(v.ID, v.Pseudo, corps.Corps, pisteID, s.Now())
 	switch {
@@ -861,6 +1084,13 @@ func (s *Serveur) chat(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		erreur(w, http.StatusInternalServerError, "phrase non enregistree")
 	default:
+		// Chat volatile (ambiance) : TOUJOURS, deja fait ci-dessus par
+		// st.Dis. La timeline BBS est un PLUS, jamais un remplacement — un
+		// posteur sans sbx_token ou sans piste rattachee au spine reste un
+		// usage parfaitement normal du chat, juste sans persistance.
+		if jeton := jetonSbxDepuisRequete(r); jeton != "" && pisteID != 0 {
+			go s.diffuseChat(pisteID, jeton, offsetMS, corps.Corps)
+		}
 		rendJSON(w, http.StatusCreated, map[string]any{"phrase": p})
 	}
 }
