@@ -38,6 +38,12 @@ type contenuBouchon struct {
 	// Timeline — le seul moyen fiable d'attendre la goroutine que chat()
 	// lance (#1166 B4), sans sommeil arbitraire dans les tests.
 	timelineSignal chan struct{}
+
+	// timelineDe* : ce que TimelineDe (lecture, #1166 B5) rend et enregistre.
+	timelineDeID     string
+	timelineDeAppele bool
+	timelineDeSortie []contentbbs.Comment
+	timelineDeErr    error
 }
 
 func (f *contenuBouchon) Creer(o contentbbs.Objet, prov []contentbbs.Prov) (string, error) {
@@ -81,6 +87,15 @@ func (f *contenuBouchon) Timeline(id, memberToken string, offsetMS int64, body s
 		f.timelineSignal <- struct{}{}
 	}
 	return f.timelineErr
+}
+
+func (f *contenuBouchon) TimelineDe(id string) ([]contentbbs.Comment, error) {
+	f.timelineDeAppele = true
+	f.timelineDeID = id
+	if f.timelineDeErr != nil {
+		return nil, f.timelineDeErr
+	}
+	return f.timelineDeSortie, nil
 }
 
 // TestValiderOuvreUnContentObject : le coeur de B2. Valider une piste doit

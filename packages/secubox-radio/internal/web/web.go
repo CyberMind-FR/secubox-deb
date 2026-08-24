@@ -48,6 +48,11 @@ type ClientContenu interface {
 	// BBS qui verifie ce jeton et en tire l'auteur (voir
 	// packages/secubox-bbs/internal/web/api_content.go, membreDepuisJeton).
 	Timeline(id, memberToken string, offsetMS int64, body string) error
+	// TimelineDe lit les commentaires deja persistes d'un ContentObject, dans
+	// l'ordre (offset_ms croissant) — c'est ce que sert
+	// /replay/{piste}/timeline (#1166 B5) pour que l'interface de reecoute
+	// les rejoue au bon instant.
+	TimelineDe(id string) ([]contentbbs.Comment, error)
 }
 
 // Visiteur : qui frappe a la porte.
@@ -241,6 +246,49 @@ func (s *Serveur) diffuseChat(pisteID int64, memberToken string, offsetMS int64,
 	if err := s.Contenu.Timeline(p.ContentID, memberToken, offsetMS, body); err != nil {
 		log.Printf("radio: timeline BBS pour la piste %d : %v", pisteID, err)
 	}
+}
+
+// replayTimeline sert les commentaires de la timeline BBS d'une piste, dans
+// l'ordre (offset_ms croissant) rendu par le client contenu, pour que
+// l'interface de reecoute les rejoue au bon instant (#1166 B5).
+//
+// PUR PROXY EN LECTURE, OUVERT COMME /current ET /playlist : aucun jeton
+// membre requis — les commentaires sont deja persistes cote BBS derriere sa
+// propre porte d'identite (author_id > 0, constraints.md) ; les servir en
+// lecture ici n'expose rien de plus qu'un membre n'a deja pu lire en
+// participant a la timeline.
+//
+// NON-FATAL : un BBS injoignable ou en erreur rend 502, jamais une panique —
+// meme philosophie que diffuseBroadcast/diffuseChat, mais ici il y a bien un
+// appelant HTTP a informer plutot qu'une goroutine a laisser filer.
+func (s *Serveur) replayTimeline(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("piste"), 10, 64)
+	if err != nil || id <= 0 {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	}
+	p, err := s.st.ParID(id)
+	if err != nil {
+		erreur(w, http.StatusNotFound, "piste inconnue")
+		return
+	}
+	if p.ContentID == "" {
+		// Jamais validee cote spine (BBS injoignable a la validation, ou
+		// module non cable) : rien a rejouer.
+		erreur(w, http.StatusNotFound, "piste non rattachee au spine de contenu")
+		return
+	}
+	if s.Contenu == nil {
+		erreur(w, http.StatusBadGateway, "spine de contenu non configure")
+		return
+	}
+	comments, err := s.Contenu.TimelineDe(p.ContentID)
+	if err != nil {
+		log.Printf("radio: lecture de la timeline BBS pour la piste %d : %v", id, err)
+		erreur(w, http.StatusBadGateway, "lecture de la timeline impossible")
+		return
+	}
+	rendJSON(w, http.StatusOK, map[string]any{"comments": comments})
 }
 
 func (s *Serveur) Handler() http.Handler { return s.mux }
@@ -525,6 +573,13 @@ func (s *Serveur) routes() {
 		s.mux.HandleFunc(prefixe+ch, h)
 		s.mux.HandleFunc(ch, s.parAdmin(h))
 	}
+	// /replay/{piste}/timeline (#1166 B5) : un segment variable, donc monte
+	// directement avec un patron de methode+chemin (Go 1.22 ServeMux) plutot
+	// que via `routeur`/`decoupe` — meme raisonnement double-montage que la
+	// boucle ci-dessus (vhost qui garde le prefixe complet vs agregateur qui
+	// le retire).
+	s.mux.HandleFunc("GET "+prefixe+"/replay/{piste}/timeline", s.replayTimeline)
+	s.mux.HandleFunc("GET /replay/{piste}/timeline", s.parAdmin(s.replayTimeline))
 	// LA PAGE EST EMBARQUEE DANS LE BINAIRE : un fichier manquant sur le disque
 	// donnerait une page blanche sans rien dire. Ici elle ne peut pas manquer.
 	s.mux.Handle("/static/", http.FileServer(http.FS(statique)))
