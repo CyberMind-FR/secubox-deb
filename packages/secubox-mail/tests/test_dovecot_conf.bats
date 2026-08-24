@@ -22,3 +22,12 @@ setup() { load_libs; make_fake_lxc_env; }
   configure_dovecot mail
   grep -q '^ssl = no' "$LXC_BASE/mail/rootfs/etc/dovecot/dovecot.conf"
 }
+
+@test "dovecot.conf active Sieve + ManageSieve :4190" {
+  configure_dovecot mail
+  local conf="$LXC_BASE/mail/rootfs/etc/dovecot/dovecot.conf"
+  grep -q 'protocols = imap pop3 lmtp sieve' "$conf"
+  grep -q 'port = 4190' "$conf"
+  grep -Eq 'mail_plugins.*sieve' "$conf"
+  grep -q 'sieve = file:~/sieve;active=~/.dovecot.sieve' "$conf"
+}

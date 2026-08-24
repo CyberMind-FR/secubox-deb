@@ -226,7 +226,7 @@ configure_dovecot() {
     mkdir -p "$rootfs/etc/dovecot"
 
     cat > "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
-protocols = imap pop3 lmtp
+protocols = imap pop3 lmtp sieve
 listen = *
 mail_location = maildir:/var/vmail/%d/%n
 mail_uid = 5000
@@ -288,6 +288,22 @@ EOF
     else
         echo 'ssl = no' >> "$rootfs/etc/dovecot/dovecot.conf"
     fi
+
+    # Sieve + ManageSieve : filtrage côté serveur (règles utilisateur) et
+    # provisioning du script par défaut (Task 6 dépose default.sieve).
+    cat >> "$rootfs/etc/dovecot/dovecot.conf" <<'EOF'
+
+protocol lmtp {
+  mail_plugins = $mail_plugins sieve
+}
+service managesieve-login {
+  inet_listener sieve { port = 4190 }
+}
+plugin {
+  sieve = file:~/sieve;active=~/.dovecot.sieve
+  sieve_default = /var/vmail/sieve/default.sieve
+}
+EOF
 
     [ -e "$rootfs/etc/mail-config/users" ] || touch "$rootfs/etc/mail-config/users" 2>/dev/null || true
     chmod 644 "$rootfs/etc/mail-config/users" 2>/dev/null || true
