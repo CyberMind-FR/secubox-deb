@@ -25,10 +25,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/contentbbs"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/programme"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/store"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/tirage"
 )
+
+// ClientContenu : ce que la validation demande au content spine du BBS
+// (#1166 B2). Une interface minuscule plutot que *contentbbs.Client
+// directement — un test injecte un bouchon qui n'ouvre aucune socket, et
+// *contentbbs.Client la satisfait deja par sa forme, sans adaptation.
+type ClientContenu interface {
+	Creer(o contentbbs.Objet, prov []contentbbs.Prov) (string, error)
+	Representation(id, kind, module, ref string, isCache bool) error
+	Topic(id string) (int64, error)
+}
 
 // Visiteur : qui frappe a la porte.
 type Visiteur struct {
@@ -84,6 +95,11 @@ type Serveur struct {
 	// Vide = pas de confinement, pour les tests seulement.
 	Racine string
 	Now    func() time.Time // remplace en test
+
+	// Contenu ouvre le ContentObject BBS d'une piste a sa validation (#1166
+	// B2). Vide = pas de spine configure (BBS injoignable ou non deploye) —
+	// la validation continue normalement, elle ne s'arrete jamais pour ca.
+	Contenu ClientContenu
 
 	// Statistiques légères d'audience (#1131ah), tenues en mémoire : combien de
 	// gens écoutent en ce moment (un cookie vu récemment sur `actuel`), et
@@ -671,10 +687,61 @@ func (s *Serveur) gestePropo(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		p, _ := s.st.ParID(id)
+		if geste == "valider" {
+			// APRES le succes, jamais avant : ouvrir le ContentObject est une
+			// consequence de la decision, pas une condition. Voir ouvreContenu.
+			p = s.ouvreContenu(p)
+		}
 		rendJSON(w, http.StatusOK, map[string]any{"piste": s.vue(p, v)})
 	default:
 		erreur(w, http.StatusNotFound, "geste inconnu")
 	}
+}
+
+// ouvreContenu ouvre le ContentObject BBS d'une piste tout juste validee et
+// persiste l'identifiant rendu (#1166 B2) : Creer (provenance = source,
+// originale) -> Representation (kind=radio, is_cache=true : la radio ne
+// detient jamais l'original, elle en relaie une copie) -> Topic (le fil de
+// discussion). Rend la piste a jour (avec son ContentID si l'appel a reussi).
+//
+// NON-BLOQUANT PAR CONSTRUCTION : chaque etape se contente de journaliser son
+// echec. L'antenne ne doit jamais dependre de la disponibilite du BBS —
+// c'est le sens meme de l'interface ClientContenu, documente sur
+// contentbbs.Client. Une piste deja pourvue d'un content_id (revalidee apres
+// avoir ete devalidee) n'est pas rouverte : le spine la connait deja.
+func (s *Serveur) ouvreContenu(p store.Piste) store.Piste {
+	if s.Contenu == nil || p.ID == 0 || p.ContentID != "" {
+		return p
+	}
+	typ := "audio"
+	if strings.HasPrefix(p.Mime, "video/") {
+		typ = "video"
+	}
+	titre := p.Titre
+	if titre == "" {
+		titre = p.Source
+	}
+	id, err := s.Contenu.Creer(
+		contentbbs.Objet{Type: typ, Title: titre},
+		[]contentbbs.Prov{{SourceURL: p.Source, SourceType: "youtube", Original: true}},
+	)
+	if err != nil {
+		log.Printf("radio: ouverture du contenu BBS pour la piste %d : %v", p.ID, err)
+		return p
+	}
+	ref := strconv.FormatInt(p.ID, 10)
+	if err := s.Contenu.Representation(id, "radio", "secubox-radio", ref, true); err != nil {
+		log.Printf("radio: representation BBS pour la piste %d : %v", p.ID, err)
+	}
+	if _, err := s.Contenu.Topic(id); err != nil {
+		log.Printf("radio: ouverture du fil BBS pour la piste %d : %v", p.ID, err)
+	}
+	if err := s.st.FixerContenu(p.ID, id); err != nil {
+		log.Printf("radio: enregistrement du content_id pour la piste %d : %v", p.ID, err)
+		return p
+	}
+	p.ContentID = id
+	return p
 }
 
 func (s *Serveur) gestePiste(w http.ResponseWriter, r *http.Request) {

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/contentbbs"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/programme"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/store"
 	"github.com/CyberMind-FR/secubox-deb/secubox-radio/internal/tirage"
@@ -43,11 +44,17 @@ func main() {
 		// la board. Une politique stricte la bloque ; ces deux reglages
 		// l'autorisent nommement. Vides = politique fermee, et la page s'affiche
 		// simplement sans banniere — on prefere cela a une politique ouverte.
-		bannOrig  = flag.String("banniere-origine", "", "origine du script de banniere")
-		bannHash  = flag.String("banniere-hash", "", "empreinte du script en ligne de la banniere")
+		bannOrig    = flag.String("banniere-origine", "", "origine du script de banniere")
+		bannHash    = flag.String("banniere-hash", "", "empreinte du script en ligne de la banniere")
 		cadreParent = flag.String("cadre-parent", "", "origine autorisee a incorporer le lecteur /mini (rail BBS)")
-		bannStyle = flag.String("banniere-style", "",
+		bannStyle   = flag.String("banniere-style", "",
 			"empreinte de la <style> injectee par la banniere de sante")
+		// contentSock/conf : le pont vers le content spine du BBS (#1166 B2).
+		// La radio signe ses appels avec le meme secret de flotte que le BBS lit
+		// (api.jwt_secret) — jamais un secret different qui romprait l'auth.
+		contentSock = flag.String("bbs-content-socket", "/run/secubox/bbs.sock",
+			"socket unix du content spine BBS")
+		conf   = flag.String("conf", "/etc/secubox/secubox.conf", "configuration du core (api.jwt_secret)")
 		montre = flag.Bool("version", false, "afficher la version")
 	)
 	flag.Parse()
@@ -80,6 +87,14 @@ func main() {
 	srv := web.Nouveau(st, prog, identite, reg)
 	// LA RADIO RELAIE, ELLE NE RECOPIE PAS : voir internal/ytsas.Flux.
 	srv.Flux = cli.Flux
+	// LE PONT VERS LE CONTENT SPINE DU BBS (#1166 B2). Toujours cable : un
+	// secret vide fait simplement echouer chaque appel (contentbbs.Client.jeton),
+	// et cet echec est journalise sans jamais bloquer une validation — voir
+	// web.Serveur.ouvreContenu.
+	if secret := jwtDepuisConf(*conf); secret == "" {
+		log.Printf("radio: aucun api.jwt_secret dans %s — le content spine BBS restera injoignable", *conf)
+	}
+	srv.Contenu = contentbbs.New(*contentSock, jwtDepuisConf(*conf))
 	srv.BanniereOrigine, srv.BanniereHash = *bannOrig, *bannHash
 	srv.BanniereStyle = *bannStyle
 	srv.CadreParent = *cadreParent
@@ -381,6 +396,40 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 			break
 		}
 	}
+}
+
+// jwtDepuisConf lit api.jwt_secret dans le fichier de config (parse minimal,
+// meme motif que secubox-bbsd/secubox-socialrelayd/secubox-metanewsd : une
+// seule cle, pas de bibliotheque TOML a vendorer pour ca). Vide si le fichier
+// est illisible ou la cle absente — l'appelant doit lire ce vide comme
+// « aucun appel au BBS ne partira », jamais comme une auth optionnelle.
+func jwtDepuisConf(chemin string) string {
+	b, err := os.ReadFile(chemin)
+	if err != nil {
+		return ""
+	}
+	section := ""
+	for _, ligne := range strings.Split(string(b), "\n") {
+		l := strings.TrimSpace(ligne)
+		if l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		if strings.HasPrefix(l, "[") && strings.HasSuffix(l, "]") {
+			section = strings.Trim(l, "[]")
+			continue
+		}
+		if section != "api" || !strings.HasPrefix(l, "jwt_secret") {
+			continue
+		}
+		if i := strings.Index(l, "="); i >= 0 {
+			v := strings.TrimSpace(l[i+1:])
+			if j := strings.Index(v, " #"); j >= 0 {
+				v = strings.TrimSpace(v[:j])
+			}
+			return strings.Trim(v, `"'`)
+		}
+	}
+	return ""
 }
 
 // idYouTube extrait l'identifiant d'une cle normalisee `yt:<id>`.
