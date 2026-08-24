@@ -4,7 +4,7 @@ load helpers
 setup() {
   export DATA_PATH="$BATS_TEST_TMPDIR/data"; export CONTAINER="mail"
   export LXC_PATH="$BATS_TEST_TMPDIR/lxc"
-  mkdir -p "$DATA_PATH/backups" "$DATA_PATH/vmail"
+  mkdir -p "$DATA_PATH/backups" "$DATA_PATH/vmail" "$DATA_PATH/config"
   source_mailctl_functions
 }
 
@@ -40,6 +40,18 @@ setup() {
   export -f configure_dovecot
   run cmd_maildir_reconcile
   [ "$status" -ne 0 ]
+}
+
+@test "reconcile annule la bascule si le backup préalable échoue" {
+  lxc_attach() { case "$*" in *doveconf*) echo "mbox:~/mail" ;; *) return 0 ;; esac; }
+  export -f lxc_attach
+  cmd_backup() { return 1; }
+  export -f cmd_backup
+  configure_dovecot() { echo "regen appelé" >> "$BATS_TEST_TMPDIR/trace"; }
+  export -f configure_dovecot
+  run cmd_maildir_reconcile
+  [ "$status" -ne 0 ]
+  [ ! -f "$BATS_TEST_TMPDIR/trace" ]
 }
 
 @test "reconcile n'abandonne pas si la création d'un Maildir échoue" {

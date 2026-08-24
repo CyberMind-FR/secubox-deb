@@ -741,7 +741,14 @@ cmd_maildir_reconcile() {
         maildir:*) log "mail_location déjà conforme ($loc)"; return 0 ;;
     esac
     warn "mail_location = '$loc' → bascule Maildir"
-    cmd_backup >/dev/null
+    # La sauvegarde precede TOUJOURS la bascule destructrice : si elle
+    # echoue, on n'a plus de filet et il faut annuler avant de toucher a
+    # quoi que ce soit (regenerer dovecot.conf, redemarrer, creer des
+    # Maildir) plutot que de continuer sur un backup absent.
+    if ! cmd_backup >/dev/null; then
+        error "backup préalable échoué — bascule Maildir annulée"
+        return 1
+    fi
 
     # configure_dovecot vit dans la lib d'install ; on la source si besoin.
     if ! type configure_dovecot >/dev/null 2>&1; then
