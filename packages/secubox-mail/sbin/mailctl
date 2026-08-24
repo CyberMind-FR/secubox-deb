@@ -4,7 +4,7 @@
 # Three-fold architecture: Components, Status, Access
 
 VERSION="2.2.0"
-CONFIG_FILE="/etc/secubox/mail.toml"
+CONFIG_FILE="${CONFIG_FILE:-/etc/secubox/mail.toml}"
 LIB_DIR="/usr/lib/secubox/mail/lib"
 # Default-if-unset : préserve le comportement de production (rien n'exporte
 # ces variables en usage réel) tout en laissant les tests bats les surcharger
@@ -68,6 +68,13 @@ WEBMAIL_CONTAINER="$CONTAINER"  # legacy alias — webmail merged into single co
 LXC_IP=$(config_get "lxc_ip" "10.100.0.10")
 LXC_BRIDGE=$(config_get "lxc_bridge" "br-lxc")
 LXC_GATEWAY=$(config_get "lxc_gateway" "10.100.0.1")
+# LXC_PATH DOIT venir du TOML (autoritatif). Les libs sourcees plus haut
+# (users.sh) posent un LXC_PATH hérité de l'ancien nom « mailserver »
+# (/data/lxc/mailserver) — non corrigé par le `:-` de la ligne 13 car non vide.
+# Sans cette ligne, les gestes qui écrivent dans le rootfs (maildir-reconcile,
+# sieve) visent /data/lxc/mailserver/mail/rootfs au lieu de /data/lxc/mail/rootfs
+# et deviennent des no-op silencieux. Le TOML de la board porte lxc_path=/data/lxc.
+LXC_PATH=$(config_get "lxc_path" "/var/lib/lxc")
 ANTIVIRUS_ENABLED=$(config_get_section "mail.antivirus" "enabled" "false")
 WEBMAIL_PORT=80  # Roundcube now on standard HTTP inside the LXC, proxied via host nginx :443
 

@@ -392,8 +392,17 @@ install_default_sieve() {
     mkdir -p "$rootfs/var/vmail/sieve"
     cp -f "$sieve_src" "$rootfs/var/vmail/sieve/default.sieve"
 
-    if lxc_running "$container"; then
-        lxc_attach_run "$container" sievec /var/vmail/sieve/default.sieve
+    # Pré-compilation FACULTATIVE : ne l'exécuter que si le conteneur porte
+    # déjà `sievec` (dovecot-sieve installé) ET que l'aide `lxc_attach_run` est
+    # chargée. Quand cette lib est sourcée seule (par maildir-reconcile, sans
+    # lxc.sh), lxc_attach_run est indéfinie — appeler `sievec` échouerait
+    # (command not found) sur un conteneur qui, de toute façon, n'a pas encore
+    # Sieve. Pigeonhole compile `sieve_default` à la volée à la première
+    # remise ; sauter la pré-compilation est sans conséquence fonctionnelle.
+    if [ -e "$rootfs/usr/bin/sievec" ] \
+        && type lxc_attach_run >/dev/null 2>&1 \
+        && lxc_running "$container"; then
+        lxc_attach_run "$container" sievec /var/vmail/sieve/default.sieve 2>/dev/null || true
     fi
 }
 
