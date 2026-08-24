@@ -14,4 +14,5 @@ override_dh_auto_install:
 	install -m 0644 etc/webos.toml.example $(CURDIR)/debian/secubox-webos/etc/secubox/webos.toml.example
 	install -m 0644 www/hall/index.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/index.html
 	install -m 0644 www/hall/hall-logo.svg $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hall-logo.svg
+	install -m 0644 www/hall/render-ref.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/render-ref.html
 	install -m 0644 www/hall/fonts/*.woff2 $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/fonts/
