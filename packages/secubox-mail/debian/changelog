@@ -1,3 +1,12 @@
+secubox-mail (2.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix : default.sieve déposé dans la SOURCE du bind-mount ($DATA_PATH/vmail/sieve)
+    au lieu de $rootfs/var/vmail (shadowé par le montage quand le conteneur tourne)
+    — sinon sieve_default pointe un fichier absent et le spam n'est pas rangé dans
+    Junk. (ref #1169)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 13:00:00 +0200
+
 secubox-mail (2.8.2-1~bookworm1) bookworm; urgency=medium
 
   * fix : dovecot.conf — listeners multi-lignes (les `inet_listener x { port=.. }`

@@ -411,8 +411,15 @@ install_default_sieve() {
 
     [ -f "$sieve_src" ] || { echo "install_default_sieve: source $sieve_src missing" >&2; return 0; }
 
-    mkdir -p "$rootfs/var/vmail/sieve"
-    cp -f "$sieve_src" "$rootfs/var/vmail/sieve/default.sieve"
+    # /var/vmail est un BIND-MOUNT de $DATA_PATH/vmail quand le conteneur tourne :
+    # écrire dans "$rootfs/var/vmail" est alors SHADOWÉ par le montage (le fichier
+    # n'apparaît pas dans le conteneur). On vise donc la SOURCE du bind-mount
+    # ($DATA_PATH/vmail) quand elle existe (cas gestes runtime), et on retombe sur
+    # le rootfs seulement au build (conteneur pas encore monté).
+    local vmail_dir="${DATA_PATH:-/data/volumes/mail}/vmail"
+    [ -d "$vmail_dir" ] || vmail_dir="$rootfs/var/vmail"
+    mkdir -p "$vmail_dir/sieve"
+    cp -f "$sieve_src" "$vmail_dir/sieve/default.sieve"
 
     # Pré-compilation FACULTATIVE : ne l'exécuter que si le conteneur porte
     # déjà `sievec` (dovecot-sieve installé) ET que l'aide `lxc_attach_run` est
