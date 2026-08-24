@@ -79,6 +79,9 @@ merge_mail_toml() {
     _toml_add_root_key "$toml" "data_path"    '"/data/volumes/mail"'
     _toml_add_root_key "$toml" "webmail_url"  '"https://webmail.gk2.secubox.in"'
     _toml_add_root_key "$toml" "horde_url"    '"https://horde.gk2.secubox.in"'
+    # #1181 : conteneur webmail (LXC roundcube séparé) + backend ManageSieve.
+    _toml_add_root_key "$toml" "webmail_container" '"roundcube"'
+    _toml_add_root_key "$toml" "managesieve_host"  '""'
     _toml_add_root_key "$toml" "ssl_provider" '"acme"'
     _toml_add_root_key "$toml" "acme_email"   '""'
 
