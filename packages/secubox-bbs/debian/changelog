@@ -1,3 +1,28 @@
+secubox-bbs (0.30.13-1~bookworm1) bookworm; urgency=medium
+
+  * /media-vignette : le 403 aux anonymes est levé. Il était inapproprié — il
+    invoquait le risque du « relais ouvert » alors que ce relais n'est pas
+    ouvert : origineAdmise le borne à une liste blanche d'origines configurées,
+    qui sont NOS propres services. Un anonyme ne pouvait donc y faire chercher
+    que ce que la box publie déjà. Le verrou ne protégeait rien et vidait de
+    leurs images les pages vues sans compte.
+  * Conséquence directe : les vignettes des fils-passerelle réseaux
+    (enrichirCoversReseaux) étaient volontairement NON émises sur la surface
+    publique pour contourner ce 403. Ce contournement est retiré — la surface
+    publique ne porte que des messages publics (PublicPostsOf), il n'y a rien à
+    cacher là.
+  * Cache-Control passe de `private` à `public` : le relais ne transmet aucun
+    en-tête du visiteur, la vignette rendue est identique pour tous. Autoriser
+    le cache partagé (nginx, cache média du WAF) est ce qui borne réellement
+    l'amplification — `private` l'interdisait.
+  * Inchangé, et c'est là qu'est la sécurité : liste blanche d'origines, liste
+    blanche de types (un text/html relayé s'exécuterait dans NOTRE politique),
+    délai de 8 s, 2 Mio lus au plus, aucun en-tête du visiteur transmis.
+  * Deux tests ajoutés : un anonyme n'est plus refusé, et la vignette reste
+    absorbable par un cache partagé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 05:40:00 +0200
+
 secubox-bbs (0.30.12-1~bookworm1) bookworm; urgency=medium
 
   * Retrait de la section « Accès » de /api/v1/bbs/menu (introduite en 0.30.11) :
