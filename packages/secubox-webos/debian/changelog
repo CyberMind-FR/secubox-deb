@@ -1,3 +1,11 @@
+secubox-webos (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * Hall refondu (design AletheiaVox) : menu SBX (sidebar), ACCUEIL = services
+    principaux (curation all.gk2.net) + tuiles + cardlet Radio ; SYSTÈME = tous
+    les modules sous-sectionnés par les 6 groupes, iconisés. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 15:55:18 +0200
+
 secubox-webos (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Santé socket-aware : les ~110 modules servis in-process par l'agrégateur
