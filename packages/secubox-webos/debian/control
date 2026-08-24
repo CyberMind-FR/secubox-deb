@@ -1,0 +1,19 @@
+Source: secubox-webos
+Section: admin
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-webos
+Architecture: all
+Depends: ${misc:Depends},
+         secubox-core,
+         python3,
+         python3-fastapi | python3-pip,
+         python3-uvicorn | python3-pip,
+         python3-pydantic | python3-pip
+Description: SecuBox WebOS — normalized service registry (Hall P1)
+ Aggregator-independent registry service exposing a normalized view of
+ SecuBox services (catalogue + health + reach), served on its own socket.

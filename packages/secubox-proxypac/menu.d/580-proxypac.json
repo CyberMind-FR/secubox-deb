@@ -1,1 +1,1 @@
-{ "id": "proxypac", "name": "ProxyPAC", "path": "/proxypac/", "icon": "🧭", "category": "mesh", "order": 58 }
+{ "id": "proxypac", "same_origin": true, "name": "ProxyPAC", "path": "/proxypac/", "icon": "🧭", "category": "mesh", "order": 58 }

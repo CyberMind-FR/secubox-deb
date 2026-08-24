@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+if [ "$1" = "configure" ]; then
+    # nginx (www-data) doit pouvoir lire /run/secubox/webos.sock (owner secubox).
+    if getent group secubox >/dev/null 2>&1 && id www-data >/dev/null 2>&1; then
+        adduser www-data secubox >/dev/null 2>&1 || usermod -aG secubox www-data || true
+    fi
+    systemctl daemon-reload || true
+    systemctl enable --now secubox-webos.service || true
+    # Recharge nginx seulement si la conf valide (le vhost hall.gk2.net est livré).
+    if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then
+        systemctl reload nginx || true
+    fi
+fi
+#DEBHELPER#

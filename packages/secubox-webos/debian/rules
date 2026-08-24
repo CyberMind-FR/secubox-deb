@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-webos/usr/lib/secubox/webos/api
+	install -d $(CURDIR)/debian/secubox-webos/etc/nginx/secubox.d
+	install -d $(CURDIR)/debian/secubox-webos/etc/nginx/sites-enabled
+	install -d $(CURDIR)/debian/secubox-webos/etc/secubox
+	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/fonts
+	cp -r api/* $(CURDIR)/debian/secubox-webos/usr/lib/secubox/webos/api/
+	install -m 0644 nginx/webos.conf $(CURDIR)/debian/secubox-webos/etc/nginx/secubox.d/webos.conf
+	install -m 0644 nginx/hall.vhost.conf $(CURDIR)/debian/secubox-webos/etc/nginx/sites-enabled/hall.gk2.net.conf
+	install -m 0644 etc/webos.toml.example $(CURDIR)/debian/secubox-webos/etc/secubox/webos.toml.example
+	install -m 0644 www/hall/index.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/index.html
+	install -m 0644 www/hall/fonts/*.woff2 $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/fonts/

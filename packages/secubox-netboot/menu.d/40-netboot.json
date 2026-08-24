@@ -1,5 +1,6 @@
 {
   "id": "netboot",
+  "domain": "boot.gk2.secubox.in",
   "name": "NetBoot",
   "icon": "🛰️",
   "path": "/netboot/",

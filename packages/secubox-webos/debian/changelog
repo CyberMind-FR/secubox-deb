@@ -1,0 +1,23 @@
+secubox-webos (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * public/services expose aussi `description` (libellé menu, non sensible) —
+    cartes du Hall lisibles pour tous les services ; urls/latence/reach restent
+    réservés à la vue authentifiée. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 13:22:25 +0200
+
+secubox-webos (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Hall servi aussi sur hall.gk2.secubox.in (cert wildcard *.gk2.secubox.in) ;
+    hall.gk2.net reste prêt (en attente d'un A public OVH). (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 13:15:37 +0200
+
+secubox-webos (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * P1 : registre normalisé — module dédié secubox-webos (socket propre,
+    indépendant de l'agrégateur), endpoints /public/services + /services,
+    santé via helper partagé, jointure id↔domaine via menu.d.
+  * Sert la surface Hall (www/hall, polices locales) + vhost hall.gk2.net. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 12:00:00 +0200
