@@ -24,7 +24,7 @@ import (
 // Modules actifs. Un module eteint disparait du menu ET de ses routes : laisser
 // la route repondre alors que l'entree a disparu, c'est la meme illusion que
 // « la page d'administration n'est pas dans le menu ».
-type Modules struct{ Media, Biblio, MP, Billets, Mastodon bool }
+type Modules struct{ Media, Biblio, MP, Billets, Mastodon, Reseaux bool }
 
 type page struct {
 	Titre, Site, Hote, Vue, Q string
@@ -131,6 +131,11 @@ type page struct {
 	// vient d'une instance tierce et n'est jamais rendu comme du HTML.
 	MastoFil    []PublicationVue
 	MastoFilErr string
+	// Mur (#1167) : le salon « reseaux » se rend en MUR de cardlets compactes
+	// (média-en-fond, texte par-dessus) au lieu de la liste de rédaction standard.
+	// Les fils y sont les posts poussés par SocialRelay ; leurs médias viennent
+	// des couvertures (enrichirCoversReseaux), déjà relayées same-origin.
+	Mur bool
 	// Invites : qui a invite qui. Contrepartie de l'invitation sans quota.
 	Invites []store.Invitation
 	// VCSS : empreinte de la feuille de style, posee dans son adresse.
@@ -286,7 +291,7 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	return page{
 		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v, VCSS: s.vCSS,
 		Base:  "https://" + r.Host,
-		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true},
+		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true, Reseaux: true},
 		Stats: st, Cats: cats, Titre: site,
 		NonLus:        nonLus,
 		Online:        online,
@@ -787,6 +792,12 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	if slug == "actualites" && s.opt.MetaNewsSocket != "" {
 		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
 		p.MetaSources = s.vitrineMetaSources()
+	}
+	// #1167 : le salon « reseaux » (fils poussés par SocialRelay) se rend en MUR
+	// de cardlets compactes — média-en-fond, texte par-dessus — au lieu de la
+	// liste de rédaction. UNE seule surface pour les réseaux : ce salon, enrichi.
+	if slug == "reseaux" {
+		p.Mur = true
 	}
 	p.Titre = p.Cat.Title
 	s.rendDef(w, r, "newsroom", "newsroom", p)

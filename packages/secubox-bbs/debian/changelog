@@ -1,3 +1,16 @@
+secubox-bbs (0.29.0-1~bookworm1) bookworm; urgency=medium
+
+  * Réseaux : le salon « reseaux » (fils poussés par SocialRelay) se rend
+    désormais en MUR de cardlets compactes — média-en-fond, texte par-dessus —
+    au lieu de la liste « Tous les dossiers ». Une seule surface souveraine pour
+    les réseaux ; le média est une couverture déjà relayée same-origin
+    (/media-vignette), le navigateur ne contacte jamais le tiers.
+  * Navbar : l'entrée « 🐘 Mastodon » devient « 🌐 Réseaux » et pointe vers le
+    salon /c/reseaux (layout + rail newsroom). La page Mastodon par-membre
+    /mastodon reste fonctionnelle, simplement retirée du menu. (ref #1167)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 10:00:00 +0200
+
 secubox-bbs (0.28.89-1~bookworm1) bookworm; urgency=medium
 
   * Content spine : nouvelle API /api/v1/bbs/content* (JWT de flotte) —

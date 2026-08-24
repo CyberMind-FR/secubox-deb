@@ -430,3 +430,29 @@ a{color:inherit;text-decoration:none}
 @keyframes prespulse{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
 @media (prefers-reduced-motion:reduce){.pdot{animation:none}}
 @media (max-width:680px){.pres-chip small{display:none}.pres-chip{gap:4px;padding:4px 8px}}
+
+/* ── #1167 · MUR RÉSEAUX ────────────────────────────────────────────────────
+   Le salon « reseaux » se rend en mur de cardlets compactes : le média en FOND,
+   le texte par-dessus sur un voile lisible. Média absent → carte pleine de texte
+   sur --soft. Grille dense et responsive, plus serrée que « Tous les dossiers ».
+   Aucune couleur définie hors des variables de thème : le mur suit clair/sombre. */
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:6px}
+.rcard{position:relative;display:block;min-height:150px;border-radius:var(--r);overflow:hidden;
+  background:var(--soft);border:1px solid var(--line);box-shadow:var(--shadow);
+  text-decoration:none;color:var(--ink);transition:transform .12s ease,box-shadow .12s ease}
+.rcard:hover{transform:translateY(-2px);box-shadow:var(--lift)}
+.rcard.hasbg{color:#fff}
+.rbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+/* Voile : illisible sinon, blanc sur photo claire. Dégradé bas→haut pour asseoir
+   le texte, transparent en haut pour laisser respirer l'image. */
+.rcard.hasbg .rin{background:linear-gradient(to top,rgba(8,14,20,.86) 0%,rgba(8,14,20,.55) 45%,rgba(8,14,20,.12) 100%)}
+.rin{position:relative;z-index:1;display:flex;flex-direction:column;gap:6px;height:100%;
+  min-height:150px;padding:12px 13px;box-sizing:border-box;justify-content:flex-end}
+.rhd{display:flex;align-items:center;gap:8px;font-size:12px;opacity:.92}
+.rau{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+.rdt{margin-left:auto;opacity:.8;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rtx{font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;
+  overflow:hidden;overflow-wrap:anywhere}
+.rcard:not(.hasbg) .rtx{color:var(--ink)}
+.rvid{width:100%;border-radius:10px;margin-top:4px;background:#000;max-height:180px}
+.rgo{font-size:12px;font-weight:600;opacity:.85;margin-top:2px}

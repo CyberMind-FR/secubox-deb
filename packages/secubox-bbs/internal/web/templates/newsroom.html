@@ -79,6 +79,32 @@
       {{end}}
     </section>
     {{end}}
+    {{if .Mur}}
+    {{/* #1167 : MUR de réseaux — les fils poussés par SocialRelay en cardlets
+         compactes, média-en-fond, texte par-dessus. `.Title` est du TEXTE BRUT
+         (le post débalisé côté socialrelay), échappé par le gabarit. Les médias
+         (couvertures) sont déjà relayés same-origin : le navigateur ne contacte
+         jamais le tiers. */}}
+    <div class="feedhead"><h2 class="serif">🌐 {{.Cat.Title}}</h2><span class="sub">{{len .News}} publications relayées · souverain</span></div>
+    {{if .News}}
+    <div class="rgrid" role="list">
+      {{range .News}}{{$n := .}}{{with .Fil}}
+      {{$img := ""}}{{range $n.Medias}}{{if and (eq .Kind "image") (eq $img "")}}{{$img = .Ref}}{{end}}{{end}}
+      <a class="rcard{{if $img}} hasbg{{end}}" role="listitem" href="/t/{{.ID}}">
+        {{if $img}}<img class="rbg" src="{{$img}}" alt="" loading="lazy">{{end}}
+        <div class="rin">
+          <div class="rhd"><span class="rau">{{.Author}}</span><time class="rdt">{{date .LastPostAt}}</time></div>
+          <div class="rtx">{{if .Title}}{{.Title}}{{else}}{{$n.Apercu}}{{end}}</div>
+          {{range $n.Medias}}{{if eq .Kind "video"}}<video class="rvid" controls preload="metadata" playsinline src="{{.Ref}}"></video>{{end}}{{end}}
+          <span class="rgo">Discuter ↴</span>
+        </div>
+      </a>
+      {{end}}{{end}}
+    </div>
+    {{else}}
+    <div class="pnl empty">Aucune publication relayée pour l'instant.</div>
+    {{end}}
+    {{else}}
     <div class="feedhead"><h2 class="serif">Tous les dossiers</h2><span class="sub">les derniers dossiers · {{len .Threads}}</span></div>
     {{range .News}}
     {{if .Feed}}{{$f := .Feed}}
@@ -162,6 +188,7 @@
     {{else}}
     <div class="pnl empty">Aucun dossier pour l'instant.{{if .V.Connecte}} Ouvrez le premier fil.{{end}}</div>
     {{end}}
+    {{end}}
   </main>
 
   <aside class="rail rr">
@@ -232,7 +259,7 @@
   {{if .Mod.Media}}<a class="rub" href="/media"><span class="g">🎧</span><span class="nm">Médiathèque</span></a>{{end}}
   {{if .Mod.Biblio}}<a class="rub" href="/biblio"><span class="g">📚</span><span class="nm">Bibliothèque</span><span class="ct">{{.Stats.Files}}</span></a>{{end}}
   {{if .Mod.Billets}}<a class="rub" href="/billets"><span class="g">📝</span><span class="nm">Billets</span><span class="ct">{{.Stats.Billets}}</span></a>{{end}}
-  {{if .Mod.Mastodon}}<a class="rub" href="/mastodon"><span class="g">🐘</span><span class="nm">Mastodon</span></a>{{end}}
+  {{if .Mod.Reseaux}}<a class="rub" href="/c/reseaux"><span class="g">🌐</span><span class="nm">Réseaux</span></a>{{end}}
   {{if and .V.Connecte .Mod.MP}}<a class="rub" href="/mp"><span class="g">✉️</span><span class="nm">Messages</span>{{if .NonLus}}<span class="ct">{{.NonLus}}</span>{{end}}</a>{{end}}
   {{if .V.Sysop}}<a class="rub" href="/sysop"><span class="g">🛠️</span><span class="nm">Sysop</span></a>{{end}}
 </div>{{end}}
