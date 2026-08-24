@@ -6,8 +6,11 @@
 VERSION="2.2.0"
 CONFIG_FILE="/etc/secubox/mail.toml"
 LIB_DIR="/usr/lib/secubox/mail/lib"
-DATA_PATH="/data/volumes/mail"
-LXC_PATH="/var/lib/lxc"
+# Default-if-unset : préserve le comportement de production (rien n'exporte
+# ces variables en usage réel) tout en laissant les tests bats les surcharger
+# via `export DATA_PATH=...` avant de sourcer les fonctions (helpers.bash).
+DATA_PATH="${DATA_PATH:-/data/volumes/mail}"
+LXC_PATH="${LXC_PATH:-/var/lib/lxc}"
 
 # Colors
 RED='\033[0;31m'
@@ -674,47 +677,26 @@ cmd_migrate() {
 # ============================================================================
 
 cmd_backup() {
-    local name="${1:-$(date +%Y%m%d_%H%M%S)}"
-    local backup_file="$DATA_PATH/backups/mail_$name.tar.gz"
-
-    log "Creating backup: $backup_file"
-
     mkdir -p "$DATA_PATH/backups"
-
-    tar -czf "$backup_file" \
-        -C "$DATA_PATH" \
-        mail config ssl \
+    local ts tb
+    ts="$(date +%Y%m%d-%H%M%S)"
+    tb="$DATA_PATH/backups/mail-$ts.tar.gz"
+    # dovecot.conf vit dans le rootfs du LXC ; on le range à côté du reste.
+    local rootfs="${LXC_PATH:-/data/lxc}/$CONTAINER/rootfs"
+    tar czf "$tb" \
+        -C "$DATA_PATH" vmail config \
+        $( [ -f "$rootfs/etc/dovecot/dovecot.conf" ] && printf -- '-C %s etc/dovecot/dovecot.conf' "$rootfs" ) \
         2>/dev/null
-
-    log "Backup created: $backup_file"
-    echo "$backup_file"
+    log "backup → $tb"
+    echo "$tb"
 }
 
 cmd_restore() {
-    local backup_file="$1"
-
-    if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
-        echo "Usage: mailctl restore <backup_file>"
-        echo ""
-        echo "Available backups:"
-        ls -la "$DATA_PATH/backups/"*.tar.gz 2>/dev/null || echo "  No backups found"
-        return 1
-    fi
-
-    warn "This will overwrite current mail data!"
-    read -p "Continue? (yes/no): " confirm
-    [ "$confirm" != "yes" ] && { echo "Aborted"; return 1; }
-
-    log "Stopping services..."
-    cmd_stop
-
-    log "Restoring from: $backup_file"
-    tar -xzf "$backup_file" -C "$DATA_PATH"
-
-    log "Starting services..."
-    cmd_start
-
-    log "Restore complete!"
+    local tb="$1"
+    [ -f "$tb" ] || { error "archive introuvable : $tb"; return 1; }
+    tar xzf "$tb" -C "$DATA_PATH" vmail config 2>/dev/null || true
+    lxc_attach "$CONTAINER" systemctl restart dovecot 2>/dev/null || true
+    log "restore depuis $tb"
 }
 
 # ============================================================================
@@ -849,8 +831,8 @@ Aliases:
   alias list           List aliases
 
 Backup:
-  backup [name]        Create backup
-  restore <file>       Restore from backup
+  backup                Create backup (vmail + config + dovecot.conf)
+  restore <file>        Restore from backup + redémarre Dovecot
 
 SSL & DNS:
   ssl status           Show certificate info
