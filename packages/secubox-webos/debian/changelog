@@ -1,3 +1,10 @@
+secubox-webos (1.0.15-1~bookworm1) bookworm; urgency=medium
+
+  * Mégamenu : ALIGNÉ sous son bouton (Accueil) + style menu système macOS/Windows
+    (panneau clair, lignes compactes) au lieu du bloc navy. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:46:47 +0200
+
 secubox-webos (1.0.14-1~bookworm1) bookworm; urgency=medium
 
   * Menu SBX en MÉGAMENU surimpression, ouvert depuis le bouton Accueil de la
