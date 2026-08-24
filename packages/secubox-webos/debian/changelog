@@ -1,3 +1,11 @@
+secubox-webos (1.0.13-1~bookworm1) bookworm; urgency=medium
+
+  * Barre UNIQUE : la nav de sections (Accueil/Services/Carnet/Alertes/Profil) +
+    le contexte du service embarqué sont fusionnés DANS l'entête (mast-main) —
+    plus de topnav séparée. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:35:49 +0200
+
 secubox-webos (1.0.12-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Radio : I/O socket déportée en thread (asyncio.to_thread) — ne gèle
