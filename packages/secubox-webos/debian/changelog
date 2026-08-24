@@ -1,3 +1,25 @@
+secubox-webos (1.0.27-1~bookworm1) bookworm; urgency=medium
+
+  * Menus unifiés : les TROIS listes (Services, Système, panneau contextuel)
+    passent par une seule fabrique rowHTML() et rendent la même ligne — emoji ·
+    libellé · marqueur (LED de santé ou compteur) · ⚙️ console admin · ⧉ nouvel
+    onglet. Les deux icônes de droite remplacent définitivement les anciennes
+    bulles de sous-menu : mêmes actions, sans second niveau. Le menu sous BBS
+    est désormais identique au menu Services.
+  * Menu SYSTÈME en MOSAÏQUE : il porte bien plus d'entrées que Services, il se
+    déplie donc en grille (3 colonnes sur desktop, 2 sur téléphone), catégories
+    en intertitres pleine largeur. Panneau élargi à 580px, borné à l'écran.
+  * Correctif : les icônes de ligne étaient des <a> IMBRIQUÉS dans le <a> de la
+    ligne — HTML invalide, le navigateur fermait la ligne et éjectait ⧉ sur une
+    seconde ligne. Les deux actions sont maintenant des <button> (ouverture en
+    JS), et elles n'entraînent plus l'ouverture portée par la ligne.
+  * Correctif : le voile de menu (z-index 55) recouvrait la barre de menus, donc
+    cliquer « Système » pendant que « Services » était ouvert ne faisait que
+    fermer. La barre repasse au-dessus du voile (56) et sous le menu (60) : on
+    passe d'un menu à l'autre d'un seul clic, comme une menubar. (ref #1187)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 01:05:00 +0200
+
 secubox-webos (1.0.26-1~bookworm1) bookworm; urgency=medium
 
   * Navigation contextuelle (refonte #1187) : PLUS AUCUN SOUS-MENU dans la barre

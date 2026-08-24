@@ -61,7 +61,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 
 /* ── masthead ─────────────────────────────────────────────── */
 /* Entête AletheiaVox — repris de bbs.gk2 (logo médaille + format). */
-.mast{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 88%,transparent);
+.mast{position:sticky;top:0;z-index:56;background:color-mix(in srgb,var(--paper) 88%,transparent);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:2px solid var(--ink)}
 .mast-main{display:flex;align-items:center;gap:16px;padding:10px clamp(14px,3vw,26px);max-width:1560px;margin:0 auto}
 .logo{display:flex;align-items:center;gap:12px;flex:none}
@@ -125,7 +125,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    gros bloc navy de l'ancienne sidebar. */
 .megamenu{background:var(--panel);color:var(--ink);padding:6px}
 .megamenu .sbx{display:none}
-.megamenu a{color:var(--ink);padding:7px 10px;font-size:.85rem;gap:11px;border-radius:8px;margin:0}
+.megamenu a{color:var(--ink);padding:7px 10px;font-size:.85rem;gap:9px;border-radius:8px;margin:0;display:flex;align-items:center}
+.megamenu a .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .megamenu a:hover{background:var(--soft)}
 .megamenu a.on{background:var(--sky-s);color:var(--sky);font-weight:600}
 .megamenu h4{color:var(--dim);padding:9px 10px 3px}
@@ -140,6 +141,21 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   color:var(--dim);padding:9px 10px 3px;margin-top:3px;border-top:1px solid var(--line)}
 .megamenu .grp:first-child{border-top:none;margin-top:0}
 .megamenu a .st{margin-left:auto;width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+/* #1187 — chaque ligne de menu (Services, Système, contextuel) porte les mêmes
+   deux actions à DROITE : ⚙️ console admin · ⧉ nouvel onglet. Ce sont elles qui
+   remplacent les anciennes bulles de sous-menu. */
+/* Le menu SYSTÈME porte beaucoup plus d'entrées que Services : il se déplie en
+   MOSAÏQUE (grille), les catégories restant des intertitres pleine largeur. */
+.megamenu.mosaic .gsys{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px}
+.megamenu.mosaic .gsys .grp{grid-column:1/-1}
+.megamenu.mosaic .gsys a{padding:7px 8px;font-size:.8rem;gap:7px;border:1px solid transparent}
+@media(hover:hover){.megamenu.mosaic .gsys a:hover{border-color:var(--line)}}
+.rowact{display:flex;align-items:center;gap:1px;flex:0 0 auto;margin-left:6px}
+.rowact .ra{width:20px;height:20px;border:0;border-radius:6px;background:transparent;padding:0;
+  font-size:.72rem;line-height:1;display:grid;place-items:center;opacity:.4;transition:.12s;color:inherit}
+@media(hover:hover){.rowact .ra:hover{opacity:1;background:var(--soft);transform:scale(1.12)}}
+@media(hover:none){.rowact .ra{opacity:.6;width:26px;height:26px;font-size:.8rem}}
+
 .megamenu a .st.mono{width:auto;height:auto;background:none;border-radius:0;color:var(--dim);font-size:.6rem}
 .rail{background:linear-gradient(180deg,var(--nav),var(--nav-2));color:var(--nav-ink);
   padding:16px 12px;min-height:calc(100vh - 118px);position:sticky;top:52px;align-self:start;height:calc(100vh - 52px);overflow-y:auto}
@@ -293,6 +309,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 .ctx h4{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.16em;text-transform:uppercase;
   color:var(--dim);margin:4px 8px 6px}
 .ctx a{display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:8px;font-size:.8rem;color:var(--ink)}
+.ctx a .lb{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ctx a:hover{background:var(--soft)} .ctx a.on{background:var(--sky-s);color:var(--sky);font-weight:600}
 .ctx a .n{margin-left:auto;font-family:"JetBrains Mono";font-size:.6rem;color:var(--dim)}
 .ctx.hidden,.embed-shell.solo .ctx{display:none}
@@ -347,9 +364,9 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
     </div>
   </div>
   <!-- Menu SYSTÈME (modules du parc par catégorie, chacune sa bulle) -->
-  <div id="menu-systeme" class="megamenu hidden" data-panel="systeme" aria-label="Menu Système">
+  <div id="menu-systeme" class="megamenu mosaic hidden" data-panel="systeme" aria-label="Menu Système">
     <h4>Système — modules du parc</h4>
-    <div id="sysmenu"></div>
+    <div id="sysmenu" class="gsys"></div>
     <div class="bottom">
       <a data-nav="systeme"><span class="g">🗄️</span> Vue complète du parc</a>
       <a data-nav="aide"><span class="g">❔</span> Aide</a>
@@ -514,9 +531,8 @@ function render(data,src){
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
   // La nav propre au service descend dans le panneau contextuel (.ctx).
   FEATURED.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
-    const col=st==='online'?'var(--mint)':st==='degraded'?'var(--amber)':st==='offline'?'var(--coral)':'var(--nav-dim)';
-    rh+='<a data-open="'+esc(f.id)+'"><span class="g">'+f.icon+'</span> '+esc(f.label)
-      +'<span class="st" style="background:'+col+'"></span></a>';
+    rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
+                 admin:f.id, tab:'https://'+f.url+'/'});
   });
   rail.innerHTML=rh;
   // featured grid (principal)
@@ -548,11 +564,26 @@ function render(data,src){
   CATS.forEach(c=>{ const items=svc.filter(s2=>s2.category===c.id); if(!items.length) return;
     smh+='<div class="grp">'+c.icon+' '+esc(c.name)+'</div>';
     smh+=items.slice(0,24).map(s2=>{ const st=(s2.health&&s2.health.state)||'unknown';
-        const col=st==='online'?'var(--mint)':st==='degraded'?'var(--amber)':st==='offline'?'var(--coral)':'var(--nav-dim)';
-        return '<a data-open="'+esc(s2.id)+'" data-mode="admin"><span class="g">·</span> '+esc(s2.name||s2.id)
-          +'<span class="st" style="background:'+col+'"></span></a>'; }).join('');
+        return rowHTML({attrs:'data-open="'+esc(s2.id)+'" data-mode="admin"', icon:icon(s2.icon),
+                        label:s2.name||s2.id, state:st, admin:s2.id, tab:'https://'+host(s2)+'/'}); }).join('');
   });
   if(sm) sm.innerHTML=smh;
+}
+// #1187 — UNE seule fabrique de ligne pour les trois menus (Services, Système,
+// panneau contextuel) : emoji · libellé · marqueur · ⚙️ admin · ⧉ onglet.
+// Les deux icônes de droite remplacent les anciennes bulles de sous-menu.
+function rowHTML(o){
+  const led = o.state
+    ? '<span class="st" style="background:'+({online:'var(--mint)',degraded:'var(--amber)',offline:'var(--coral)'}[o.state]||'var(--nav-dim)')+'"></span>'
+    : (o.count!=null ? '<span class="n">'+esc(String(o.count))+'</span>' : '');
+  let act='<span class="rowact">';
+  if(o.admin) act+='<button type="button" class="ra" data-ra="admin" data-id="'+esc(o.admin)+'" title="Console admin">⚙️</button>';
+  // <a> imbriqué dans <a> = HTML invalide : le navigateur ferme la ligne et
+  // éjecte le lien. Les deux actions sont donc des <button> (ouverture en JS).
+  if(o.tab)   act+='<button type="button" class="ra" data-ra="tab" data-href="'+esc(o.tab)+'" title="Nouvel onglet">⧉</button>';
+  act+='</span>';
+  return '<a '+o.attrs+'><span class="g">'+(o.icon||'▦')+'</span>'
+    +'<span class="lb">'+esc(o.label)+'</span>'+led+act+'</a>';
 }
 function tile(cls,lbl,big,small,sub){
   return '<div class="tile '+cls+'"><div class="accent"></div><div class="lbl">'+lbl+'</div>'
@@ -649,9 +680,10 @@ function loadCtx(id, cur){
       let h='<h4>'+esc(m.title||'Navigation')+'</h4>';
       h+=items.slice(0,24).map(c=>{
         const path=c.path||(c.slug?('/c/'+c.slug):null); if(!path) return '';
-        return '<a data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'
-          +(path===cur?' class="on"':'')+'><span class="g">·</span> '+esc(c.title||c.slug)
-          +(c.threads?'<span class="n">'+c.threads+'</span>':'')+'</a>';
+        return rowHTML({attrs:'data-ctx="'+esc(path)+'" data-ctxt="'+esc(c.title||c.slug)+'"'+(path===cur?' class="on"':''),
+                        icon:c.icon||(_svc&&_svc.icon)||'💬', label:c.title||c.slug,
+                        count:(c.threads!=null?c.threads:null),
+                        admin:id, tab:'https://'+(_svc?_svc.url:'')+path});
       }).join('');
       ctx.innerHTML=h; ctx.classList.remove('hidden'); shell.classList.remove('solo');
     }).catch(()=>{});
@@ -680,7 +712,9 @@ function setMenu(name){
       mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+4)+'px';
     } else if(t){ // desktop : dropdown aligné sous le titre
       const r=t.getBoundingClientRect();
-      mm.style.left=Math.round(r.left)+'px'; mm.style.right='auto'; mm.style.width='264px'; mm.style.top=(hb+2)+'px';
+      const w=mm.classList.contains('mosaic')?Math.min(580,window.innerWidth-24):264;
+      let left=Math.round(r.left); if(left+w>window.innerWidth-12) left=Math.max(12,window.innerWidth-12-w);
+      mm.style.left=left+'px'; mm.style.right='auto'; mm.style.width=w+'px'; mm.style.top=(hb+2)+'px';
     }
     mm.classList.remove('hidden');
   }
@@ -693,6 +727,14 @@ document.addEventListener('click',e=>{
     const open=!document.getElementById('menu-'+name).classList.contains('hidden');
     setMenu(open?false:name); return; }
   if(e.target.closest('#menu-backdrop')){ setMenu(false); return; }
+  // #1187 — actions de LIGNE : ⚙️ console admin, ⧉ nouvel onglet. Elles ne
+  // doivent jamais déclencher l'ouverture portée par la ligne elle-même.
+  const ra=e.target.closest('[data-ra]');
+  if(ra){ e.stopPropagation();
+    e.preventDefault();
+    if(ra.dataset.ra==='admin') openService(ra.dataset.id,'admin');
+    else window.open(ra.dataset.href,'_blank','noopener');
+    setMenu(false); return; }
   // #1187 — switch de mode (⧉ onglet · ⚙️ admin · ▦ embarqué), bascule instantanée.
   const md=e.target.closest('#modesw button');
   if(md){ e.preventDefault(); setMode(md.dataset.mode); return; }
