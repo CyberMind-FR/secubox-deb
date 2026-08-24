@@ -728,6 +728,51 @@ cmd_restore() {
 }
 
 # ============================================================================
+# Maildir reconciliation (bascule mbox → Maildir, idempotente)
+# ============================================================================
+
+# Detecte le mail_location Dovecot effectif et, s'il n'est pas deja en
+# Maildir, sauvegarde, regenere dovecot.conf (SSL-aware, Task 2) et cree les
+# Maildir des comptes existants. Sans effet si deja conforme.
+cmd_maildir_reconcile() {
+    local loc
+    loc="$(lxc_attach "$CONTAINER" doveconf -h mail_location 2>/dev/null)"
+    case "$loc" in
+        maildir:*) log "mail_location déjà conforme ($loc)"; return 0 ;;
+    esac
+    warn "mail_location = '$loc' → bascule Maildir"
+    cmd_backup >/dev/null
+
+    # configure_dovecot vit dans la lib d'install ; on la source si besoin.
+    if ! type configure_dovecot >/dev/null 2>&1; then
+        local install_lib="$(dirname "$0")/../lib/mail/install.sh"
+        [ -f "$install_lib" ] || install_lib="/usr/lib/secubox/mail/lib/install.sh"
+        # shellcheck disable=SC1090
+        source "$install_lib"
+    fi
+    LXC_BASE="${LXC_PATH:-/data/lxc}" DATA_PATH="$DATA_PATH" configure_dovecot "$CONTAINER"
+
+    # Le redemarrage fait foi de la bascule : s'il echoue, la conf a change
+    # sur disque mais Dovecot tourne encore sur l'ancienne en memoire — un
+    # etat divergent qu'on ne doit jamais annoncer comme un succes silencieux.
+    if ! lxc_attach "$CONTAINER" systemctl restart dovecot; then
+        error "bascule Maildir échouée (redémarrage dovecot)"
+        return 1
+    fi
+
+    # Cree les Maildir des comptes existants (boites vides = simple creation).
+    # Un compte en echec ne doit pas interrompre les suivants : on log et on
+    # continue plutot que d'abandonner la reconciliation en cours de route.
+    while IFS=: read -r user _; do
+        [ -n "$user" ] || continue
+        lxc_attach "$CONTAINER" doveadm mailbox create -u "$user" INBOX 2>/dev/null \
+            || warn "création du Maildir échouée pour $user (ignoré)"
+    done < <(lxc_attach "$CONTAINER" cat /etc/mail-config/users 2>/dev/null)
+
+    log "bascule Maildir effectuée"
+}
+
+# ============================================================================
 # SSL
 # ============================================================================
 
@@ -861,6 +906,7 @@ Aliases:
 Backup:
   backup                Create backup (vmail + config + dovecot.conf)
   restore <file>        Restore from backup + redémarre Dovecot
+  maildir-reconcile     Bascule mbox → Maildir (idempotent)
 
 SSL & DNS:
   ssl status           Show certificate info
@@ -1043,6 +1089,7 @@ case "${1:-}" in
     # Backup
     backup)      shift; cmd_backup "$@" ;;
     restore)     shift; cmd_restore "$@" ;;
+    maildir-reconcile) cmd_maildir_reconcile ;;
     # SSL, DNS, DKIM
     ssl)         shift; cmd_ssl "$@" ;;
     dkim)        shift; cmd_dkim "$@" ;;
