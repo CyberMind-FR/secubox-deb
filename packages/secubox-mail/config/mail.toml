@@ -27,6 +27,13 @@ data_path = "/data/volumes/mail"
 
 # Webmail URLs (separate LXCs from rev. 3)
 webmail_url = "https://webmail.gk2.secubox.in"   # roundcube LXC 10.100.0.12
+# Conteneur qui HÉBERGE Roundcube (#1181). La board fait tourner un LXC roundcube
+# SÉPARÉ ; les gestes webmail (config, greffons, sieve) le ciblent via cette clé.
+# Défaut historique (single-container) = le conteneur mail.
+webmail_container = "roundcube"
+# Backend ManageSieve pour l'éditeur de filtres Sieve du webmail (#1181) : l'hôte
+# du Dovecot où vivent les scripts sieve de l'utilisateur (:4190). Vide = IP LXC mail.
+managesieve_host = ""
 horde_url   = "https://horde.gk2.secubox.in"      # horde LXC 10.100.0.11
 
 # SSL settings

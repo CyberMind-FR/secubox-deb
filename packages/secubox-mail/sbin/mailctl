@@ -64,7 +64,11 @@ config_get_section() {
 DOMAIN=$(config_get "domain" "secubox.local")
 HOSTNAME=$(config_get "hostname" "mail")
 CONTAINER=$(config_get "container" "mail")
-WEBMAIL_CONTAINER="$CONTAINER"  # legacy alias — webmail merged into single container
+# WEBMAIL_CONTAINER : le conteneur qui HÉBERGE Roundcube. Historiquement fondu
+# dans le conteneur mail (single-container), mais la board réelle fait tourner un
+# LXC roundcube SÉPARÉ (#1181). On le lit donc du TOML (`webmail_container`),
+# défaut = le conteneur mail pour l'ancien modèle fondu.
+WEBMAIL_CONTAINER="$(config_get "webmail_container" "$CONTAINER")"
 LXC_IP=$(config_get "lxc_ip" "10.100.0.10")
 LXC_BRIDGE=$(config_get "lxc_bridge" "br-lxc")
 LXC_GATEWAY=$(config_get "lxc_gateway" "10.100.0.1")
@@ -344,6 +348,45 @@ cmd_webmail_config() {
     " || { echo "ecriture refusee" >&2; return 1; }
 
     echo "username_domain = $dom"
+}
+
+cmd_webmail_sieve() {
+    # Active l'EDITEUR DE FILTRES SIEVE dans Roundcube (#1181) : le plugin
+    # `managesieve` (deja installe) pointe sur le Dovecot ManageSieve :4190 du
+    # socle (#1169). Cible le conteneur WEBMAIL (LXC roundcube separe), pas mail.
+    local wc="$WEBMAIL_CONTAINER"
+    lxc_running "$wc" || { error "conteneur webmail '$wc' a l'arret"; return 1; }
+    local conf="/etc/roundcube/config.inc.php.local"
+
+    # Backend ManageSieve : la ou vivent les scripts sieve de l'utilisateur = le
+    # Dovecot mail (:4190). Reglable via managesieve_host, defaut = IP du LXC mail.
+    local ms_host
+    ms_host="$(config_get "managesieve_host" "$LXC_IP")"
+    [ -n "$ms_host" ] || ms_host="$LXC_IP"   # clé présente mais vide → IP LXC mail
+
+    # Idempotent : si le plugin est deja active, on ne re-ajoute rien.
+    if lxc_attach "$wc" grep -q "'managesieve'" "$conf" 2>/dev/null; then
+        log "managesieve deja actif dans $wc"
+        return 0
+    fi
+
+    # Bloc PHP genere cote hote, injecte via `cat >>` dans le conteneur (le
+    # .local est inclus EN DERNIER par config.inc.php, donc il l'emporte). Pas de
+    # heredoc dans un sh -c (enfer de quotes) : on pipe le bloc.
+    printf '%s\n' \
+        "// #1181 — editeur de filtres Sieve (plugin managesieve, backend socle :4190)." \
+        "\$config['plugins'][] = 'managesieve';" \
+        "\$config['managesieve_host'] = '$ms_host';" \
+        "\$config['managesieve_port'] = 4190;" \
+        "\$config['managesieve_usetls'] = false;" \
+        | lxc_attach "$wc" sh -c "cat >> '$conf'" \
+        || { error "ecriture de la config webmail refusee"; return 1; }
+
+    # Recharge le serveur web du conteneur (Apache sur la board ; php-fpm sinon).
+    lxc_attach "$wc" sh -c 'systemctl reload apache2 2>/dev/null \
+        || systemctl restart apache2 2>/dev/null \
+        || systemctl restart php*-fpm 2>/dev/null || true'
+    log "Sieve activé dans le webmail ($wc) → managesieve :4190 sur $ms_host"
 }
 
 cmd_fix_ports() {
@@ -1409,6 +1452,7 @@ case "${1:-}" in
     fix-ports)   cmd_fix_ports ;;
     webmail-config) cmd_webmail_config ;;
     webmail-greffons) cmd_webmail_greffons ;;
+    webmail-sieve) cmd_webmail_sieve ;;
     sync)        cmd_sync ;;
     # Help
     help|--help|-h|'') show_help ;;

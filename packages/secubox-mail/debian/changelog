@@ -1,3 +1,22 @@
+secubox-mail (2.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * fix : merge_mail_toml ajoute webmail_container/managesieve_host (#1181) —
+    sinon la clé restait absente du mail.toml de la board et webmail-sieve visait
+    le mauvais conteneur. (ref #1181)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 15:55:00 +0200
+
+secubox-mail (2.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * feat : éditeur de filtres Sieve dans le webmail (#1181). `mailctl
+    webmail-sieve` active le plugin managesieve de Roundcube (déjà installé) et
+    le pointe sur le Dovecot ManageSieve :4190 du socle. WEBMAIL_CONTAINER lu du
+    TOML (`webmail_container`) : réconcilie le LXC roundcube SÉPARÉ (le source
+    supposait un webmail fondu dans le LXC mail). `managesieve_host` réglable
+    (défaut = IP LXC mail). (ref #1181)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 24 Aug 2026 15:45:00 +0200
+
 secubox-mail (2.9.1-1~bookworm1) bookworm; urgency=medium
 
   * fix : /api/v1/mail routé vers le service dédié mail.sock (composant vital
