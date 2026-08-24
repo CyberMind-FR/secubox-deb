@@ -1,3 +1,11 @@
+secubox-webos (1.0.14-1~bookworm1) bookworm; urgency=medium
+
+  * Menu SBX en MÉGAMENU surimpression, ouvert depuis le bouton Accueil de la
+    barre (clic/Échap/backdrop pour fermer) — plus de sidebar permanente, contenu
+    pleine largeur. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:43:49 +0200
+
 secubox-webos (1.0.13-1~bookworm1) bookworm; urgency=medium
 
   * Barre UNIQUE : la nav de sections (Accueil/Services/Carnet/Alertes/Profil) +
