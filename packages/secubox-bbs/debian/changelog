@@ -1,3 +1,10 @@
+secubox-bbs (0.30.5-1~bookworm1) bookworm; urgency=medium
+
+  * Embed : masque la colonne de droite (aside.rail.rr = widget radio + Derniers
+    billets) en plus de l'entête. (ref #1175)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 24 Aug 2026 17:17:23 +0200
+
 secubox-bbs (0.30.4-1~bookworm1) bookworm; urgency=medium
 
   * Embed Hall : détection d'embed AUSSI dans newsroom.js (l'accueil est un
