@@ -42,6 +42,26 @@ override_dh_auto_install:
 	# elle n etait jamais lue.
 	install -d debian/secubox-mail/etc/nginx/secubox-routes.d
 	[ -f nginx/mail.conf ] && cp nginx/mail.conf debian/secubox-mail/etc/nginx/secubox-routes.d/ || true
+	# Autoconfig RFC 6186 (Task 11, #1169) : meme double-pose que mail.conf
+	# ci-dessus, pour la meme raison (#989).
+	[ -f nginx/autoconfig.conf ] && cp nginx/autoconfig.conf debian/secubox-mail/etc/nginx/secubox.d/ || true
+	[ -f nginx/autoconfig.conf ] && cp nginx/autoconfig.conf debian/secubox-mail/etc/nginx/secubox-routes.d/ || true
+
+	# Autoconfig XML (Task 11, #1169) : servi par nginx hote depuis
+	# /usr/share/secubox/www/autoconfig/, chemin deja utilise en live avant
+	# empaquetage.
+	install -d debian/secubox-mail/usr/share/secubox/www/autoconfig
+	[ -f www/autoconfig/config-v1.1.xml ] && install -m 644 www/autoconfig/config-v1.1.xml \
+	  debian/secubox-mail/usr/share/secubox/www/autoconfig/ || true
+
+	# SRV Unbound split-horizon (Task 11, #1169). Livre sous /usr/share, PAS
+	# directement dans /etc/unbound/unbound.conf.d : le postinst le pose
+	# lui-meme dans SON PROPRE fichier (contenu fige, recopie idempotente)
+	# et ne touche jamais le drop-in split-horizon existant du board
+	# (meme precedent que secubox-toolbox/unbound/99-secubox-wg.conf).
+	install -d debian/secubox-mail/usr/share/secubox/mail/unbound
+	[ -f config/unbound/97-mail-srv.conf ] && install -m 644 config/unbound/97-mail-srv.conf \
+	  debian/secubox-mail/usr/share/secubox/mail/unbound/ || true
 
 	# Default config TEMPLATE. Shipped under /usr/lib, NOT /etc: writing it
 	# straight to /etc/secubox/mail.toml would make dpkg silently clobber the

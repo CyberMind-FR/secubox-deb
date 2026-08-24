@@ -75,6 +75,44 @@ if [ "$1" = "configure" ]; then
     if command -v systemctl >/dev/null 2>&1; then
         systemctl enable --now secubox-mail-ssl-renew.timer >/dev/null 2>&1 || true
     fi
+
+    # Autoconfig XML + SRV Unbound (ref #1169 task 11) — end of board-only
+    # drift: the .xml under /usr/share/secubox/www/autoconfig/ is already
+    # in place from debian/rules (dh_installdirs owns it, no action needed
+    # here). nginx picks up the new secubox.d/secubox-routes.d snippet on
+    # its own reload below.
+    #
+    # SRV drop-in : posé idempotemment dans SON PROPRE fichier, jamais dans
+    # 97-secubox-split-horizon.conf (celui du board ne doit jamais être
+    # touché par ce paquet). `install` recopie le fichier source à chaque
+    # postinst — geste idempotent par construction (contenu figé, aucune
+    # variable), donc rien à "append-if-absent" : le simple recopiage
+    # suffit et ne perd jamais une modification manuelle du board, puisque
+    # ce fichier n'est OWNED que par ce paquet.
+    if [ -d /etc/unbound/unbound.conf.d ] && \
+       [ -f /usr/share/secubox/mail/unbound/97-mail-srv.conf ]; then
+        install -m 0644 /usr/share/secubox/mail/unbound/97-mail-srv.conf \
+            /etc/unbound/unbound.conf.d/97-mail-srv.conf
+        _unbound_ok=1
+        if command -v unbound-checkconf >/dev/null 2>&1; then
+            unbound-checkconf >/dev/null 2>&1 || _unbound_ok=""
+        fi
+        if [ -n "$_unbound_ok" ] && command -v systemctl >/dev/null 2>&1 \
+           && systemctl is-active --quiet unbound.service 2>/dev/null; then
+            systemctl reload-or-restart unbound.service >/dev/null 2>&1 || true
+        fi
+    fi
+
+    # Reload nginx (hôte) so the new autoconfig.conf snippet is served
+    # immediately, without waiting for the next unrelated reload. Guarded:
+    # never fail the install if nginx isn't installed/active (chroot/image
+    # build, or this host doesn't run the shared nginx yet).
+    if command -v nginx >/dev/null 2>&1; then
+        nginx -t >/dev/null 2>&1 && \
+        command -v systemctl >/dev/null 2>&1 && \
+        systemctl is-active --quiet nginx.service 2>/dev/null && \
+        systemctl reload nginx.service >/dev/null 2>&1 || true
+    fi
 fi
 
 #DEBHELPER#
