@@ -1,3 +1,23 @@
+secubox-mail (2.10.3-1~bookworm1) bookworm; urgency=high
+
+  * Éditeur de filtres Sieve : AUCUN filtre ne pouvait être enregistré. Le
+    webmail rendait « la connexion au serveur n'aboutit pas » et « le formulaire
+    de filtrage contient des erreurs », alors que ManageSieve tournait bien et
+    répondait sur :4190.
+  * Cause : `managesieve_usetls` était écrit à `false`. Or Dovecot n'annonce
+    AUCUN mécanisme SASL tant que la liaison est en clair — sa salutation dit
+    littéralement `"SASL" ""` puis `STARTTLS`. Roundcube n'avait donc aucun
+    moyen de s'authentifier. Après STARTTLS le serveur annonce
+    `"SASL" "PLAIN LOGIN"` : c'est TLS qui débloque l'authentification, pas un
+    réglage de confort.
+  * La fonction étant idempotente, elle sortait sans rien faire dès que le
+    greffon était présent : une box déjà installée n'aurait JAMAIS été réparée
+    par une simple mise à jour. Elle corrige désormais la ligne en place quand
+    elle porte l'ancienne valeur, et recharge le serveur web du conteneur.
+    (ref #1195)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 22:20:00 +0200
+
 secubox-mail (2.10.2-1~bookworm1) bookworm; urgency=medium
 
   * fix : sieve global anti-spam via `sieve_before` (et non `sieve_default`) —
