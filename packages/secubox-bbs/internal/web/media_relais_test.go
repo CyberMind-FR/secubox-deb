@@ -117,3 +117,52 @@ func TestVignetteCachableParUnCachePartage(t *testing.T) {
 		t.Fatalf("Cache-Control = %q : un cache partage ne peut pas absorber la vignette", cc)
 	}
 }
+
+// Le relais MetaNews s'autorise sur l'URL SCELLEE, pas sur le visiteur : un
+// anonyme voit les vignettes des cartes d'actualite publiques, et personne —
+// membre compris — ne peut faire relayer une adresse que nous n'avons pas
+// publiee. Le garde precedent inversait les deux : il refusait l'anonyme (toutes
+// les cartes tombaient sur un placeholder) sans empecher l'abus.
+func TestVignetteMetaNewsScelleeEtNonSessionnee(t *testing.T) {
+	s := &Server{opt: Options{JWTSecret: "secret-de-test"}}
+
+	const amont = "https://images.example.org/a.jpg"
+	chemin := s.relayVignette(amont)
+	if !strings.Contains(chemin, "&s=") {
+		t.Fatalf("aucun sceau dans %q", chemin)
+	}
+
+	// Le sceau ne vaut que pour SON url.
+	if s.signeVignette(amont) == s.signeVignette("https://images.example.org/b.jpg") {
+		t.Fatal("le sceau ne depend pas de l'URL")
+	}
+
+	// Une adresse non publiee par nous n'a pas de sceau valable : refusee.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet,
+		"/mn-vignette?u="+url.QueryEscape("https://ailleurs.example/x.jpg")+"&s="+s.signeVignette(amont), nil)
+	s.servirMNVignette(rec, req)
+	if rec.Code == http.StatusOK {
+		t.Fatal("PROXY OUVERT : une URL non scellee a ete relayee")
+	}
+
+	// Sans sceau du tout non plus.
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/mn-vignette?u="+url.QueryEscape(amont), nil)
+	s.servirMNVignette(rec2, req2)
+	if rec2.Code == http.StatusOK {
+		t.Fatal("PROXY OUVERT : une requete sans sceau a ete relayee")
+	}
+}
+
+// Sans secret, on ne sait pas sceller : on retombe sur le garde historique
+// plutot que d'ouvrir un proxy sur une installation mal reglee.
+func TestSansSecretLeRelaisMetaNewsResteFerme(t *testing.T) {
+	s := &Server{opt: Options{}}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/mn-vignette?u=https://images.example.org/a.jpg", nil)
+	s.servirMNVignette(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("attendu 403 sans secret, obtenu %d", rec.Code)
+	}
+}
