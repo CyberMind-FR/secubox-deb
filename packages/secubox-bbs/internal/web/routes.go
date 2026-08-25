@@ -148,6 +148,10 @@ type page struct {
 	// L'adresse, elle, passe. Le fichier change, l'empreinte change, le
 	// navigateur voit une autre ressource. Cela ne depend d'aucun en-tete.
 	VCSS string
+	// Medaillons : les faces du logo animé, si le paquet en embarque. Vide =
+	// logo fixe. C'est la PRESENCE DES FICHIERS qui allume l'animation, pas un
+	// réglage à tenir à jour d'un côté et de l'autre.
+	Medaillons []string
 	// Base : origine publique du site, pour afficher une adresse partageable.
 	Base string
 }
@@ -291,6 +295,7 @@ func (s *Server) base(r *http.Request, vue string) (page, bool) {
 	}
 	return page{
 		Site: site, Initiale: ini, Hote: r.Host, Vue: vue, V: v, VCSS: s.vCSS,
+		Medaillons: s.medaillons,
 		Base:  "https://" + r.Host,
 		Mod:   Modules{Media: true, Biblio: true, MP: true, Billets: true, Mastodon: true, Reseaux: true},
 		Stats: st, Cats: cats, Titre: site,

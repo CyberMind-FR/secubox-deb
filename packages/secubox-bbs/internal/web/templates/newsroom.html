@@ -235,7 +235,7 @@
     <span class="r">● {{.Stats.Billets}} billets publiés</span>
   </div>
   <div class="mast-main">
-    <a class="logo" href="/"><img class="mark medaille" src="/static/bbs-logo.svg?v={{.VCSS}}" alt="{{.Initiale}}" width="44" height="44"><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">la gazette souveraine</span></span></a>
+    <a class="logo" href="/"><span class="medaillon{{if .Medaillons}} anime{{end}}"{{if .Medaillons}} style="--n:{{len .Medaillons}}"{{end}}><img class="mark medaille" src="/static/bbs-logo.svg?v={{.VCSS}}" alt="{{.Initiale}}" width="44" height="44">{{range $i, $m := .Medaillons}}<img class="mface" style="--i:{{$i}}" src="{{$m}}?v={{$.VCSS}}" alt="" aria-hidden="true" loading="lazy" width="44" height="44">{{end}}</span><span class="logo-t"><span class="serif logo-h">{{.Site}}</span><span class="sub">la gazette souveraine</span></span></a>
     <form class="drop" method="get" action="/rechercher">
       <span class="ico" aria-hidden="true">⌕</span>
       <input id="dropin" name="q" value="{{.Q}}" placeholder="Coller une source (URL) — ou rechercher…" aria-label="Déposer une source ou rechercher">

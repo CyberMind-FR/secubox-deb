@@ -1,3 +1,26 @@
+secubox-bbs (0.30.17-1~bookworm1) bookworm; urgency=low
+
+  * Médaillon de l'entête animé : six faces se relaient en fondu (communauté,
+    bibliothèque, nœud, maillage, publication, sécurité) au-dessus du logo.
+  * C'est la PRÉSENCE des fichiers qui allume l'animation. Les faces sont
+    relevées une fois au démarrage dans l'FS embarqué (static/medaillons/*.webp,
+    triées par nom) : dossier sans .webp = logo fixe, sans erreur ni requête
+    supplémentaire. Aucun réglage à tenir à jour en parallèle du contenu.
+  * Le logo fixe reste DESSOUS : c'est lui qu'on voit si les faces ne sont pas
+    embarquées, si elles n'ont pas encore chargé, ou si le visiteur demande
+    moins d'animation. Rien ne saute, rien ne se décale.
+  * `prefers-reduced-motion: reduce` coupe le relais — une entête qui bouge en
+    permanence est exactement ce que ce réglage vise. Le survol suspend aussi :
+    on peut regarder une face, et le mouvement ne suit pas l'œil de qui lit le
+    titre juste à côté.
+  * Poids : 6 faces en WebP 128px (le médaillon est rendu à 44px, 128 couvre le
+    2x et le 3x), 62 Ko au total, chargées en lazy.
+  * Le nombre de faces est transmis au CSS (--n) : chacune occupe 1/n du tour,
+    quel que soit le nombre de fichiers déposés — en ajouter ou en retirer ne
+    demande aucune retouche de la feuille de style.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 13:30:00 +0200
+
 secubox-bbs (0.30.16-1~bookworm1) bookworm; urgency=high
 
   * /mn-vignette : les vignettes des cartes d'actualité s'affichent enfin sans
