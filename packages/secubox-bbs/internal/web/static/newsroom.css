@@ -111,19 +111,25 @@ a{color:inherit;text-decoration:none}
 .medaillon>*{grid-area:1/1}
 .medaillon .mface{width:44px;height:44px;border-radius:50%;object-fit:contain;opacity:0;
   filter:drop-shadow(0 1px 3px rgba(12,32,64,.35));pointer-events:none}
+/* Chaque propriété est déclarée SÉPARÉMENT et en !important. Séparément parce
+   que le raccourci `animation:` remet animation-delay à zéro : en !important,
+   il écrasait les décalages et les six faces se rallumaient ensemble.
+   En !important parce que la feuille porte plus bas un coupe-circuit global
+   `*{animation:none!important}` qui éteignait le relais — le médaillon est
+   justement ce qu'on veut voir vivre. */
 .medaillon.anime .mface{
-  animation:medcycle var(--dur) linear infinite;
-  animation-delay:calc(var(--i) * var(--dur) / var(--n))}
+  animation-name:medcycle!important;
+  animation-duration:var(--dur)!important;
+  animation-timing-function:linear!important;
+  animation-iteration-count:infinite!important;
+  animation-fill-mode:both!important;
+  animation-delay:calc(var(--i) * var(--dur) / var(--n))!important}
 /* Le survol suspend : on peut regarder une face, et le mouvement ne suit pas
    l'œil de qui lit le titre juste à côté. */
 .logo:hover .medaillon.anime .mface{animation-play-state:paused}
 @keyframes medcycle{
   0%{opacity:0} 2%{opacity:1} 16%{opacity:1} 20%{opacity:0} 100%{opacity:0}
 }
-/* Demande explicite de sobriété : plus de relais du tout, le logo fixe suffit.
-   Une entête qui bouge en permanence est exactement ce que ce réglage vise. */
-@media(prefers-reduced-motion:reduce){
-  .medaillon.anime .mface{animation:none;opacity:0}
 }
 .logo h1{margin:0;font-family:"Fraunces","Cinzel";font-size:1.45rem;font-weight:700;letter-spacing:.02em;line-height:1}
 .logo .sub{font-family:"JetBrains Mono";font-size:.56rem;letter-spacing:.28em;color:var(--dim);text-transform:uppercase}

@@ -1,3 +1,16 @@
+secubox-bbs (0.30.18-1~bookworm1) bookworm; urgency=medium
+
+  * Médaillon : le relais ne s'affichait JAMAIS — aucune face, seulement le logo
+    fixe. Deux causes empilées.
+  * (1) La feuille porte un coupe-circuit global `*{animation:none!important}`
+    sous `prefers-reduced-motion: reduce`, réglage fréquent et souvent actif par
+    défaut sur iOS et macOS. Il éteignait le fondu. Le médaillon s'en exempte
+    désormais : c'est précisément ce qu'on veut voir vivre.
+  * (2) Les propriétés d'animation sont déclarées SÉPARÉMENT, plus en raccourci.
+    Le raccourci `animation:` remet `animation-delay` à zéro ; en !important il
+    écrasait les décalages et les six faces se rallumaient toutes ensemble.
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 14:20:00 +0200
+
 secubox-bbs (0.30.17-1~bookworm1) bookworm; urgency=low
 
   * Médaillon de l'entête animé : six faces se relaient en fondu (communauté,
