@@ -98,6 +98,86 @@ def _histogramme(serie: list[dict]) -> bytes:
     return _png(fig)
 
 
+def _camembert(pays: dict, titre: str = "Visites par pays") -> bytes:
+    """Repartition geographique (#1190).
+
+    Un camembert ne supporte pas la longue traine : au-dela de sept parts on ne
+    lit plus rien. Les suivantes sont donc regroupees en « autres » — les
+    montrer separement reviendrait a ne montrer personne.
+
+    Les pays viennent du geoip, qui ne resout que les IP PUBLIQUES : la part
+    affichee est donc celle des VRAIS visiteurs, cohérente avec le compteur de
+    visiteurs uniques (cf. _publique dans vhost_stats).
+    """
+    items = sorted(pays.items(), key=lambda kv: -kv[1])
+    if not items:
+        fig, ax = plt.subplots(figsize=(3.4, 2.4))
+        ax.text(.5, .5, "aucune origine connue", ha="center", va="center",
+                fontsize=8, color=GRIS)
+        ax.axis("off")
+        return _png(fig)
+
+    tete, reste = items[:7], items[7:]
+    if reste:
+        tete.append(("autres", sum(n for _, n in reste)))
+    noms = [k for k, _ in tete]
+    vals = [v for _, v in tete]
+    total = sum(vals) or 1
+
+    fig, ax = plt.subplots(figsize=(4.4, 2.6))
+    parts, _ = ax.pie(vals, startangle=90, counterclock=False,
+                      wedgeprops={"linewidth": .6, "edgecolor": "white"})
+    # LEGENDE plutot qu'etiquettes posees sur le camembert : sur des parts
+    # fines, les libelles se chevauchent au point de se superposer (« CH IT ES
+    # autres » empiles au meme endroit). La legende porte aussi le compte, que
+    # le pourcentage seul ne donne pas.
+    ax.legend(parts, [f"{n}  {v}  ({100 * v / total:.0f} %)" for n, v in zip(noms, vals)],
+              loc="center left", bbox_to_anchor=(.98, .5),
+              fontsize=7, frameon=False, labelcolor=ENCRE)
+    ax.set_title(titre, fontsize=8.5, color=ENCRE, loc="left")
+    ax.axis("equal")
+    return _png(fig)
+
+
+def _cumul(serie: list[dict], base: int = 0, depuis: str = "") -> bytes:
+    """Visites CUMULEES depuis la premiere visite (#1190).
+
+    `base` est le total des jours deja sortis de la retention : sans lui, la
+    courbe repartirait de zero tous les trente jours et ne dirait plus « depuis
+    la premiere visite » mais « depuis un mois ».
+
+    Courbe et non barres : ce qu'on lit ici est une PENTE — l'audience
+    accelere, stagne ou retombe. Des barres cumulees ne montrent que des
+    colonnes qui montent toujours, ce qui n'apprend rien.
+    """
+    fig, ax = plt.subplots(figsize=(7.2, 2.2))
+    jours, total, cumule = [], base, []
+    for s in serie:
+        total += s.get("visites", 0)
+        jours.append(s["jour"][5:])
+        cumule.append(total)
+    if not jours:
+        jours, cumule = ["-"], [base]
+
+    ax.plot(jours, cumule, color=CYAN, linewidth=1.8)
+    ax.fill_between(range(len(jours)), cumule, color=CYAN, alpha=.14)
+    if base:
+        # Le trait dit ou commence la fenetre detaillee : au-dessous, c'est
+        # l'acquis qu'on ne detaille plus.
+        ax.axhline(base, color=GRIS, linewidth=.7, linestyle=":")
+    titre = "Visites cumulees"
+    if depuis:
+        titre += f" depuis le {depuis}"
+    ax.set_title(titre, fontsize=8.5, color=ENCRE, loc="left")
+    ax.set_ylabel("cumul", fontsize=8, color=GRIS)
+    ax.tick_params(labelsize=7, colors=GRIS)
+    for bord in ("top", "right"):
+        ax.spines[bord].set_visible(False)
+    ax.grid(axis="y", alpha=.18)
+    plt.xticks(rotation=45, ha="right")
+    return _png(fig)
+
+
 def _barres(donnees: dict, titre: str) -> bytes:
     """Repartition (navigateurs, plateformes) en barres horizontales."""
     items = list(donnees.items())[:7]
@@ -206,6 +286,16 @@ def _resume_waf(hist: Optional[dict], jours: int = 7) -> Optional[dict]:
     }
 
 
+def _pays_de(source: dict) -> dict:
+    """Normalise `pays`, que l'API rende un dict ou une liste d'entrees."""
+    p = source.get("pays")
+    if isinstance(p, dict):
+        return p
+    if isinstance(p, list):
+        return {e.get("code", "?"): e.get("n", 0) for e in p if isinstance(e, dict)}
+    return {}
+
+
 def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
     """Assemble le PDF. Bloquant : a lancer dans un thread."""
     pdf = _Page()
@@ -230,6 +320,20 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
     if detail and detail.get("serie"):
         _titre(pdf, "Frequentation jour par jour")
         pdf.image(io.BytesIO(_histogramme(detail["serie"])), w=190)
+        pdf.ln(3)
+
+        # #1190 — le cumul depuis la PREMIERE visite, pas depuis le debut de la
+        # fenetre : `base` porte les jours deja sortis de la retention.
+        cum = (detail.get("cumul") or {})
+        _titre(pdf, "Visites cumulees depuis la premiere visite")
+        pdf.image(io.BytesIO(_cumul(detail["serie"], cum.get("base", 0),
+                                    cum.get("depuis", ""))), w=190)
+        pdf.ln(3)
+
+    pays = (detail or {}).get("pays_cumul") or _pays_de(source)
+    if pays:
+        _titre(pdf, "Origine des visiteurs")
+        pdf.image(io.BytesIO(_camembert(pays)), w=92)
         pdf.ln(3)
 
     y = pdf.get_y()

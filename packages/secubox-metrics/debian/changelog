@@ -1,3 +1,30 @@
+secubox-metrics (1.11.2-1~bookworm1) bookworm; urgency=medium
+
+  * CAMEMBERT PAR PAYS et COURBE DES VISITES CUMULÉES, dans l'interface ET dans
+    le rapport PDF envoyé par courriel — même source, aucun risque de voir les
+    deux surfaces diverger. (closes #1190)
+  * BUG DE FOND corrigé au passage : `pays` était RELU au chargement du cache
+    mais jamais ÉCRIT à la sauvegarde. La répartition géographique repartait
+    donc de zéro à chaque redémarrage du service — sur ce nœud, 0 des 1577
+    entrées en cache en portait. Le camembert n'aurait jamais eu de données.
+  * « Depuis la première visite » ne peut pas se lire dans les jours retenus :
+    la rétention n'en garde que 30. Chaque jour qui sort de la fenêtre est
+    désormais versé dans un CUMUL PERMANENT — une fois et une seule, au seul
+    endroit où un jour disparaît — avec la date de première visite. Sans lui,
+    la courbe repartirait de zéro tous les trente jours et ne dirait plus
+    « depuis la première visite » mais « depuis un mois ».
+  * Le camembert regroupe la longue traîne au-delà de sept parts : au-delà on
+    ne lit plus rien. Sa légende porte le COMPTE autant que le pourcentage —
+    70 % ne dit pas s'il s'agit de 7 visites ou de 7000.
+  * Les étiquettes posées sur les parts ont été remplacées par une légende :
+    sur des parts fines elles se superposaient au point d'être illisibles.
+  * Côté interface, les deux tracés sont en SVG inline : ni bibliothèque, ni
+    requête, ni CDN — la CSP n'en voudrait pas, et un graphique ne vaut pas une
+    dépendance de plus. Le cas d'une part à 100 % est traité à part : deux
+    extrémités d'arc confondues ne tracent rien.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 20:15:00 +0200
+
 secubox-metrics (1.11.1-1~bookworm1) bookworm; urgency=medium
 
   * Statistiques par vhost : les noms qui ne désignent AUCUN site n'entrent plus

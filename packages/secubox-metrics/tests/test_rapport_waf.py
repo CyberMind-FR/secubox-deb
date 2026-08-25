@@ -51,3 +51,4 @@ def test_config_waf_par_defaut_gk2(monkeypatch, tmp_path):
     c = rw.config_waf()
     assert c["destinataire"] == "gk2@secubox.in"
     assert c["jours"] == 7
+
