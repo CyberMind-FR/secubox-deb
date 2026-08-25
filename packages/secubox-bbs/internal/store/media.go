@@ -333,6 +333,7 @@ func (s *Store) TousFichiers(borne int) ([]FichierPublie, error) {
 	}
 	rows, err := s.db.Query(`
 		SELECT f.id, f.owner_id, f.path, f.name, f.size, f.mime, f.created_at,
+		       COALESCE(f.visibility, 'local'),
 		       COALESCE(u.display_name, u.handle, '?')
 		  FROM files f
 		  LEFT JOIN users u ON u.id = f.owner_id
@@ -346,8 +347,11 @@ func (s *Store) TousFichiers(borne int) ([]FichierPublie, error) {
 	var out []FichierPublie
 	for rows.Next() {
 		var f FichierPublie
+		// La VISIBILITE fait partie de la liste : sans elle, l'appelant ne peut
+		// pas savoir ce qu'il a le droit d'annoncer, et un filtre pose plus haut
+		// masquerait tout (visibilite vide != "public").
 		if err := rows.Scan(&f.ID, &f.Owner, &f.Path, &f.Name, &f.Size,
-			&f.Mime, &f.Created, &f.Deposant); err != nil {
+			&f.Mime, &f.Created, &f.Visibility, &f.Deposant); err != nil {
 			return nil, err
 		}
 		out = append(out, f)

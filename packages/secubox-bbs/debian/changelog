@@ -1,3 +1,20 @@
+secubox-bbs (0.30.15-1~bookworm1) bookworm; urgency=high
+
+  * La Bibliothèque n'annonce plus que ce qu'elle sert : sans session, elle ne
+    liste que les fichiers publics. Elle listait tout, y compris les fichiers
+    'local' — chaque carte offrait alors un lien /f/NN et une vignette
+    /vignette/NN que le visiteur recevait en 403. C'est la seconde moitié des
+    médias cassés en anonyme (60 sur /biblio après le correctif 0.30.14).
+  * CORRECTIF DE FOND, trouvé en écrivant le test : Store.TousFichiers ne
+    SÉLECTIONNAIT PAS la colonne `visibility`. Le champ revenait donc toujours
+    vide, et un filtre posé au-dessus aurait masqué la totalité des fichiers aux
+    anonymes au lieu des seuls fichiers privés. La requête remonte désormais la
+    visibilité, avec repli 'local'.
+  * Trois tests : la vue anonyme ne contient aucun fichier 'local', la vue
+    membre garde les deux, et le compte de cartes est vérifié dans les deux cas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 11:05:00 +0200
+
 secubox-bbs (0.30.14-1~bookworm1) bookworm; urgency=high
 
   * /vignette/<id>.jpg : le garde était PLUS STRICT que sa propre documentation.
