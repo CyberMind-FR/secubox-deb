@@ -19,6 +19,14 @@
 <meta charset="utf-8">
 <title>SecuBox Hall</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Le WAF injecte un bandeau de santé dans les pages HTML, en chargeant son
+     script depuis https://admin.gk2… — une origine TIERCE. Or la CSP du Hall
+     est `script-src 'self' 'unsafe-inline'` : le navigateur bloquait donc le
+     script, et la console se remplissait de violations à chaque page. Le Hall
+     n'en a de toute façon pas besoin : sa barre d'état porte déjà l'état du
+     nœud (« nœud gk2 · N en ligne »). Ce marqueur, que sbxwaf sait honorer,
+     est le même que celui du BBS. -->
+<meta name="sbx-no-health-banner">
 <style>
 @font-face{font-family:"Cinzel";src:url("fonts/cinzel.woff2") format("woff2");font-weight:400 700;font-display:swap}
 @font-face{font-family:"Fraunces";src:url("fonts/fraunces.woff2") format("woff2");font-weight:400 700;font-display:swap}
