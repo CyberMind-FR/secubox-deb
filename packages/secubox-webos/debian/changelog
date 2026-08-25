@@ -1,3 +1,28 @@
+secubox-webos (1.0.34-1~bookworm1) bookworm; urgency=medium
+
+  * Le cadre d'embed remplit enfin TOUT le visible. Sa hauteur était un nombre
+    magique — `calc(100vh - 178px)` — hérité d'une barre plus haute : 20px
+    perdus en haut, 59px en bas sur un écran de 900px. La barre est désormais
+    MESURÉE (ResizeObserver, plutôt qu'un simple événement resize : elle change
+    aussi de hauteur quand le contexte du service apparaît, pas seulement avec
+    le viewport) et le cadre occupe l'espace restant, barre d'état déduite.
+    100dvh et non 100vh : sur mobile la barre du navigateur mange la différence.
+  * ⧉ « onglet réel » suivait le service, pas la vue. Depuis la console admin
+    d'un module il ouvrait `https://<module>.gk2…` — le vhost public — au lieu
+    de `https://admin.gk2…/<module>/`, la page qu'on avait sous les yeux.
+    L'onglet suit maintenant le mode affiché.
+  * Le logo de l'entête dit `SbX`, et porte le MÉDAILLON ANIMÉ de la gazette :
+    six faces (communauté, bibliothèque, nœud, maillage, publication, sécurité)
+    se relaient en fondu, tour de 18 s, en boucle. Le logo fixe reste dessous
+    tant qu'elles n'ont pas chargé. Aucun mouvement — ni translation, ni
+    échelle : un fondu d'opacité, rien ne se décale.
+  * Index et cardinalité par CLASSES, jamais par attribut `style` : c'est la
+    mécanique de la gazette, dont la CSP est `style-src 'self'` et ignore
+    silencieusement les styles inline. Une seule façon de faire aux deux
+    endroits vaut mieux que deux qui divergeront. 6 WebP, 62 Ko, lazy.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 15:00:00 +0200
+
 secubox-webos (1.0.33-1~bookworm1) bookworm; urgency=medium
 
   * Retour au menu contextuel précédent : la liste plate des rubriques. Le rendu

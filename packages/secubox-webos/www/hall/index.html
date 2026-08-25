@@ -33,7 +33,7 @@
   --nav:#0e1b2a; --nav-2:#16283c; --nav-ink:#dfe8f0; --nav-dim:#7f94a8; --nav-line:#22364c;
   --shadow:0 1px 2px rgba(20,45,60,.05),0 8px 26px rgba(20,45,60,.10);
   --lift:0 2px 6px rgba(20,45,60,.09),0 18px 40px -14px rgba(20,45,60,.26);
-  --r:16px;
+  --r:16px; --sb-h:30px;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --ink:#e9f0f6; --paper:#0a121b; --panel:#111f2c; --line:#22384a; --line-2:#2d4658;
@@ -69,6 +69,51 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .logo-t{display:flex;flex-direction:column}
 .logo-h{font-family:"Fraunces","Cinzel";font-size:1.4rem;font-weight:700;letter-spacing:.02em;line-height:1;color:var(--sky)}
 .logo .sub{font-family:"JetBrains Mono";font-size:.55rem;letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+/* ── Médaillon animé de l'entête ──────────────────────────────────────────
+   Les faces se relaient en fondu au-dessus du logo, qui reste dessous : c'est
+   lui qu'on voit tant qu'elles n'ont pas chargé. Aucun mouvement — ni
+   translation, ni échelle : un fondu d'opacité, et rien ne se décale.
+
+   Index et cardinalité par CLASSES, jamais par attribut `style` : la même
+   mécanique sert la gazette, dont la CSP est `style-src 'self'` et ignore
+   silencieusement les styles inline. Une seule façon de faire aux deux
+   endroits vaut mieux que deux qui divergeront. */
+.medaillon{display:inline-grid;width:46px;height:46px;flex:none;--dur:18s}
+.medaillon>*{grid-area:1/1}
+.medaillon .mface{width:46px;height:46px;border-radius:50%;object-fit:contain;opacity:0;
+  filter:drop-shadow(0 1px 3px rgba(12,32,64,.35));pointer-events:none}
+.medaillon.anime .mface{
+  animation-name:medcycle!important;
+  animation-duration:var(--dur)!important;
+  animation-timing-function:linear!important;
+  animation-iteration-count:infinite!important;
+  animation-fill-mode:both!important;
+  animation-delay:calc(var(--i) * var(--dur) / var(--n))!important}
+.logo:hover .medaillon.anime .mface{animation-play-state:paused}
+@keyframes medcycle{0%{opacity:0} 2%{opacity:1} 16%{opacity:1} 20%{opacity:0} 100%{opacity:0}}
+.medaillon .mface:nth-of-type(2){--i:0}
+.medaillon .mface:nth-of-type(3){--i:1}
+.medaillon .mface:nth-of-type(4){--i:2}
+.medaillon .mface:nth-of-type(5){--i:3}
+.medaillon .mface:nth-of-type(6){--i:4}
+.medaillon .mface:nth-of-type(7){--i:5}
+.medaillon .mface:nth-of-type(8){--i:6}
+.medaillon .mface:nth-of-type(9){--i:7}
+.medaillon .mface:nth-of-type(10){--i:8}
+.medaillon .mface:nth-of-type(11){--i:9}
+.medaillon .mface:nth-of-type(12){--i:10}
+.medaillon .mface:nth-of-type(13){--i:11}
+.medaillon.n2{--n:2}
+.medaillon.n3{--n:3}
+.medaillon.n4{--n:4}
+.medaillon.n5{--n:5}
+.medaillon.n6{--n:6}
+.medaillon.n7{--n:7}
+.medaillon.n8{--n:8}
+.medaillon.n9{--n:9}
+.medaillon.n10{--n:10}
+.medaillon.n11{--n:11}
+.medaillon.n12{--n:12}
 .mast .drop{flex:1;min-width:150px;max-width:440px;position:relative}
 .mast .drop input{width:100%;padding:10px 14px 10px 38px;border-radius:11px;border:1.5px solid var(--line-2);
   background:var(--panel);color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem;outline:none;transition:.15s}
@@ -305,8 +350,21 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* L'embed REMPLIT la carte : hauteur = viewport - headbar (mast+topnav) - marges.
    Aucune partie perdue : le service défile DANS l'iframe. En embed on retire aussi
    la note de registre + le padding bas de .main (pas de scroll de page parasite). */
-.embed-wrap{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);background:var(--panel);height:calc(100vh - 178px);min-height:340px}
-body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
+/* #1187 — le cadre remplit EXACTEMENT l'espace libre, sans hauteur devinée.
+   `calc(100vh - 178px)` était un nombre magique : il datait d'une barre plus
+   haute, et laissait 20px perdus en haut, 59px en bas. On mesure la barre
+   (--mast-h, posée en JS) et on soustrait la barre d'état (--sb-h). 100dvh et
+   non 100vh : sur mobile, la barre du navigateur mange la différence. */
+.embed-wrap{border:1px solid var(--line);border-top:0;border-bottom:0;overflow:hidden;
+  background:var(--panel);flex:1;min-height:0}
+body:has(#view-embed:not(.hidden)) .main{
+  padding:0;height:calc(100dvh - var(--mast-h,70px) - var(--sb-h));
+  display:flex;flex-direction:column;min-height:0}
+body:has(#view-embed:not(.hidden)) .embed-hint{margin:6px 10px}
+/* La chaîne d'étirement doit être CONTINUE : le fils de .main est la <section>
+   #view-embed, pas le cadre. Sans ce maillon, `flex:1` sur .embed-wrap ne
+   trouvait aucun parent flex et le cadre retombait à sa hauteur de contenu. */
+body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;flex-direction:column}
 .embed-wrap iframe{width:100%;height:100%;border:0;display:block;background:var(--panel)}
 .aide-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;max-width:760px;line-height:1.6}
 .aide-card ul{margin:8px 0} .aide-card li{margin:4px 0}
@@ -333,7 +391,7 @@ body:has(#view-embed:not(.hidden)) .main{padding-bottom:10px}
 <body>
 <header class="mast">
   <div class="mast-main">
-    <a class="logo" href="/"><img class="medaille" src="hall-logo.svg" alt="Hall" width="46" height="46"><span class="logo-t"><span class="serif logo-h">Hall</span></span></a>
+    <a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a>
     <nav class="mnav" aria-label="Menus">
       <button class="it" type="button" data-nav="accueil"><span>🏠</span> Accueil</button>
       <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
@@ -655,7 +713,14 @@ function modeURL(mode){
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   return 'https://'+_svc.url+(_sub||'/')+'?embed=1&theme='+th;
 }
-function plainURL(){ return _svc?('https://'+_svc.url+(_sub||'/')):'/'; }
+// L'onglet réel suit le MODE AFFICHÉ. Depuis la console admin d'un module,
+// ⧉ ouvrait https://<module>.gk2… — le vhost public du service — au lieu de
+// https://admin.gk2…/<module>/, la page qu'on avait sous les yeux.
+function plainURL(){
+  if(!_svc) return '/';
+  if(_mode==='admin') return 'https://'+ADMIN_HOST+_svc.path;
+  return 'https://'+_svc.url+(_sub||'/');
+}
 function frameFor(mode){
   if(_frames[mode]) return _frames[mode];
   const f=document.createElement('iframe');
@@ -792,6 +857,17 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
 const root=document.documentElement;
+// Hauteur RÉELLE de la barre : elle change avec la largeur (les libellés
+// tombent en pictos sous 720px) et quand le contexte du service apparaît.
+// Un ResizeObserver vaut mieux qu'un événement resize : il voit aussi les
+// changements de contenu, pas seulement ceux du viewport.
+(function(){
+  const mast=document.querySelector('.mast'); if(!mast) return;
+  const pose=()=>root.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
+  pose();
+  if(window.ResizeObserver) new ResizeObserver(pose).observe(mast);
+  addEventListener('resize', pose);
+})();
 document.getElementById('theme').addEventListener('click',()=>{
   const c=root.getAttribute('data-theme');
   root.setAttribute('data-theme', c==='dark'?'light':(c==='light'?'dark':(matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark')));
