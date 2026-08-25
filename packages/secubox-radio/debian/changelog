@@ -1,3 +1,29 @@
+secubox-radio (0.1.33-1~bookworm1) bookworm; urgency=high
+
+  * Une piste dont la source a disparu n'est plus redemandée sans fin. Le démon
+    réessayait toutes les vingt secondes, indéfiniment : le journal se
+    remplissait d'une ligne identique — « piste 72 : la passerelle a refusé
+    (502) » — et la piste restait affichée en « récupération… » pour toujours,
+    sans que personne puisse savoir pourquoi.
+  * La cause n'était pas une panne : sur ce nœud, deux entrées étaient
+    définitivement irrécupérables — une vidéo retirée de YouTube (« Video
+    unavailable ») et une adresse de playlist malformée (`/list=` au lieu de
+    `/playlist?list=`, donc 404). Réessayer n'y changeait rien.
+  * Le client jetait le CORPS de la réponse de la passerelle. Or c'est lui qui
+    porte la raison : sans lui, un échec définitif était indiscernable d'un
+    échec passager. Il est désormais lu, et son message remonte jusqu'au
+    panneau.
+  * Le tri est volontairement CONSERVATEUR : au moindre doute l'échec est tenu
+    pour passager et l'on repassera. Écarter à tort une piste valide est plus
+    grave que de réessayer une fois de trop — seules des marques explicites
+    (vidéo retirée, mise en privé, compte supprimé, 404) déclenchent
+    l'écartement.
+  * Une piste écartée l'est avec sa raison, comme pour les cookies : le panneau
+    l'affiche, et l'opérateur sait quoi faire au lieu de constater un blocage
+    muet.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 01:20:00 +0200
+
 secubox-radio (0.1.32-1~bookworm1) bookworm; urgency=medium
 
   * /micro : frame-ancestors liste aussi le Hall (chaîne hall>bbs>radio). (ref #1175)
