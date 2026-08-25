@@ -180,6 +180,38 @@ _geo_essaye = False
 _geo_cache: dict = {}
 
 
+# Noms qui ne designent AUCUN site : la box qui se parle a elle-meme.
+_HOTES_FANTOMES = {"localhost", "localhost.localdomain", "ip6-localhost", "_"}
+
+
+def _hote_reel(hote: str) -> bool:
+    """Vrai si `hote` designe un site qu'on peut visiter (#1191).
+
+    Un rapport d'audience compte des VISITES A UN SITE. Or le journal enregistre
+    aussi ce que la box s'adresse a elle-meme : sondes de sante et appels
+    inter-modules sur la boucle locale (`localhost`), requetes visant l'IP nue
+    de la machine, et le serveur par defaut de nginx (`_`) ou atterrit tout ce
+    qui ne correspond a aucun vhost — sur ce nœud, 1346 requetes sur l'IP LAN,
+    92 sur l'IP publique, 32 sur `_`.
+
+    Ces entrees ne sont pas masquees a l'affichage : elles n'entrent JAMAIS
+    dans les compteurs. Un faux positif qu'on cache reste dans les totaux, les
+    classements et les graphiques — et fausse silencieusement les chiffres
+    qu'on croit lire.
+
+    Une ADRESSE n'est pas un nom de site : personne n'arrive sur un site en
+    tapant son IP, sinon un scanner. Elles sont donc ecartees comme telles.
+    """
+    h = (hote or "").strip().lower().rstrip(".")
+    if not h or h in _HOTES_FANTOMES:
+        return False
+    try:                              # `[::1]` autant que `127.0.0.1`
+        ipaddress.ip_address(h.strip("[]"))
+        return False
+    except ValueError:
+        return True
+
+
 def _publique(ip: str) -> bool:
     """Vrai si l'IP est un VRAI visiteur externe (ni privee, ni loopback…).
 
@@ -385,12 +417,16 @@ class VhostStatsAggregator:
                 jour = _jour_de(m.group("date"))
                 if jour:
                     hote = m.group("hote").split(":")[0].lower()
+                    if not _hote_reel(hote):
+                        continue        # la box qui se parle : pas une visite
                     _compter(self._jours[jour][hote], m)
         else:
             for f in self._journaux():
                 if budget <= 0:
                     break       # le reste attend le prochain passage
                 vhost = f.name[:-len(SUFFIXE)]
+                if not _hote_reel(vhost):
+                    continue            # `localhost_access.log` & co.
                 lignes = self._queue(f, budget)
                 budget -= sum(len(l) for l in lignes)
                 for ligne in lignes:
@@ -712,6 +748,13 @@ class VhostStatsAggregator:
         self._suivi = {k: tuple(v) for k, v in d.get("suivi", {}).items()}
         for j, vhosts in d.get("jours", {}).items():
             for v, s in vhosts.items():
+                # #1191 — filtrer AUSSI au rechargement : le cache d'avant ce
+                # correctif contient deja des hotes fantomes (sur ce nœud :
+                # 127.0.0.1, l'IP LAN, l'IP publique, `_`…). Sans ce tri ils
+                # survivraient a la collecte assainie, et il faudrait purger le
+                # cache a la main pour que les chiffres redeviennent justes.
+                if not _hote_reel(v):
+                    continue
                 seau = _vierge()
                 for c in ("visites", "requetes", "octets", "sondes", "erreurs", "robots", "sans_ref"):
                     seau[c] = s.get(c, 0)
