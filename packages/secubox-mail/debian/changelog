@@ -1,3 +1,30 @@
+secubox-mail (2.10.4-1~bookworm1) bookworm; urgency=medium
+
+  * Nouvelle commande `mailctl antispam-apprentissage` : le geste
+    « indésirable » du webmail alimente enfin rspamd, en apprentissage GLOBAL
+    et PAR UTILISATEUR. Trois pièces devaient tenir ensemble, il en manquait
+    deux sur la board.
+  * (1) LE MAGASIN. Le classifieur bayésien de rspamd n'a pas de mémoire
+    propre : sans redis, il accepte l'apprentissage et n'en garde rien. Le
+    contrôleur répondait 204 — un succès de façade — pendant que `rspamc stat`
+    restait à « Messages learned: 0 ». Un bouton qui a l'air de marcher est
+    pire qu'un bouton absent. redis est désormais activé et démarré.
+  * (2) LES CLASSIFIEURS. Le modèle GLOBAL, que tout le monde alimente et dont
+    tout le monde profite, et un modèle PAR UTILISATEUR qui n'engage que celui
+    qui clique — symboles distincts (BAYES_*_USER), de sorte qu'on voit lequel
+    a tranché. `autolearn` reste fermé : on apprend de ce qu'un humain désigne,
+    pas de ce que le filtre croit déjà, sinon le modèle confirme ses erreurs.
+  * (3) LE GESTE. Greffon markasjunk activé dans Roundcube, pilote `cmd_learn`
+    vers le contrôleur, avec le mot de passe déjà provisionné dans
+    /etc/secubox/secrets. L'en-tête `Deliver-To` porte l'identité : c'est elle
+    qui aiguille le modèle par utilisateur ; sans lui tout retomberait dans le
+    seul global.
+  * La commande VÉRIFIE avant d'annoncer : elle apprend un message témoin et
+    relit le compteur. Elle échoue franchement si le contrôleur accepte sans
+    rien retenir. (ref #1195)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 23:30:00 +0200
+
 secubox-mail (2.10.3-1~bookworm1) bookworm; urgency=high
 
   * Éditeur de filtres Sieve : AUCUN filtre ne pouvait être enregistré. Le
