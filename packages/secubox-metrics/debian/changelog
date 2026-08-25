@@ -1,3 +1,26 @@
+secubox-metrics (1.11.1-1~bookworm1) bookworm; urgency=medium
+
+  * Statistiques par vhost : les noms qui ne désignent AUCUN site n'entrent plus
+    dans les compteurs — `localhost`, l'IP nue de la machine, et `_`, le serveur
+    par défaut de nginx où atterrit tout ce qui ne correspond à aucun vhost. Sur
+    ce nœud : 1346 requêtes sur l'IP LAN, 92 sur l'IP publique, 32 sur `_`,
+    plus 127.0.0.1 déjà en cache. C'est la box qui se parle à elle-même —
+    sondes de santé et appels inter-modules sur la boucle locale.
+  * Elles ne sont pas MASQUÉES à l'affichage : elles ne sont jamais comptées.
+    Un faux positif qu'on cache reste dans les totaux, les classements et les
+    graphiques, et fausse en silence les chiffres qu'on croit lire.
+  * Une ADRESSE n'est pas un nom de site : personne n'arrive sur un site en
+    tapant son IP, sinon un scanner. Les hôtes qui s'analysent comme une IP
+    (v4, v6, `[::1]`) sont donc écartés au même titre.
+  * Le tri s'applique AUSSI au rechargement du cache : celui d'avant ce
+    correctif contient déjà des fantômes, qui auraient survécu à la collecte
+    assainie — il aurait fallu purger le cache à la main pour retrouver des
+    chiffres justes, ce que personne n'aurait pensé à faire.
+  * Le rapport PDF planifié consomme le MÊME agrégateur : les deux surfaces
+    sont corrigées d'un seul geste, sans risque de divergence. (closes #1191)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 18:30:00 +0200
+
 secubox-metrics (1.11.0-1~bookworm1) bookworm; urgency=medium
 
   * fix : « visiteurs unique » ne compte plus les IP privees/loopback (127.0.0.1,
