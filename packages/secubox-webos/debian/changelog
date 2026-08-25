@@ -1,3 +1,18 @@
+secubox-webos (1.0.36-1~bookworm1) bookworm; urgency=medium
+
+  * Le Hall s'exclut du bandeau de santé injecté par le WAF. Celui-ci charge son
+    script depuis `https://admin.gk2…`, une origine TIERCE, alors que la CSP du
+    Hall est `script-src 'self' 'unsafe-inline'` : le navigateur bloquait le
+    script et la console se remplissait de violations à chaque chargement —
+    bruit qui masquait les vraies erreurs, notamment en embarquant gitea.
+  * Le Hall n'en a pas besoin : sa barre d'état porte déjà l'état du nœud
+    (« nœud gk2 · N en ligne »). Le marqueur `sbx-no-health-banner` est celui
+    que sbxwaf honore déjà pour le BBS — on ne crée pas un second mécanisme.
+  * Même marqueur sur la référence de rendu, qui doit rester une page sans
+    dépendance.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 00:10:00 +0200
+
 secubox-webos (1.0.35-1~bookworm1) bookworm; urgency=medium
 
   * Podcaster rejoint les services principaux : il manquait à la fois du menu
