@@ -396,6 +396,10 @@ a{color:inherit;text-decoration:none}
 .carhead h2{margin:0;font-size:1.15rem}
 .carhead .sub{color:var(--dim);font-size:.8rem}
 .carnav{margin-left:auto;display:flex;gap:8px}
+/* Le « remonter » est d'une autre nature que les flèches du carrousel : il
+   porte sur la PAGE, pas sur la piste. Un filet le sépare pour qu'on ne le
+   prenne pas pour un troisième pas de défilement. */
+.carnav .cartop{margin-right:6px;padding-right:9px;border-right:1px solid var(--line-2);border-radius:9px 0 0 9px}
 .carbtn{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer;font-size:.9rem;display:grid;place-items:center;box-shadow:var(--shadow);transition:.15s}
 .carbtn:hover{border-color:var(--sky);color:var(--sky)}
 .carbtn:disabled{opacity:.35;cursor:default}

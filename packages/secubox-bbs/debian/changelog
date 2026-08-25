@@ -1,3 +1,18 @@
+secubox-bbs (0.30.22-1~bookworm1) bookworm; urgency=low
+
+  * Bouton « remonter en haut » ajouté à GAUCHE des flèches ◀ ▶ du carrousel.
+    Il vaut pour les deux surfaces — BBS embarqué dans le Hall et BBS en accès
+    direct — parce que le défilement porte sur le document courant, qui est
+    celui de l'iframe quand on est embarqué. Le carrousel portant déjà la seule
+    barre de contrôle de la page, on l'y pose plutôt que d'inventer un second
+    jeu de boutons ailleurs.
+  * Un filet le sépare des flèches : il agit sur la PAGE, pas sur la piste, et
+    trois boutons collés se seraient lus comme trois pas de défilement.
+  * Le défilement doux est abandonné si le visiteur demande moins d'animation :
+    remonter reste instantané, jamais bloqué. (closes #1206)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 21:40:00 +0200
+
 secubox-bbs (0.30.21-1~bookworm1) bookworm; urgency=medium
 
   * Entête des cartes à FOND : le tampon (public/local/publié) et la mascotte
