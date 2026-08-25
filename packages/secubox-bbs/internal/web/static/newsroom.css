@@ -201,7 +201,13 @@ a{color:inherit;text-decoration:none}
    discret (14 %) pour laisser le texte lisible par-dessus ; tout le contenu
    passe au-dessus via z-index. */
 .dossier.hasbg .dbg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.14;pointer-events:none}
-.dossier.hasbg > *:not(.dbg){position:relative;z-index:1}
+/* Remonter les enfants AU-DESSUS du fond — sauf ceux qui sont déjà placés.
+   `position:relative` appliqué sans discernement écrasait le `position:absolute`
+   du tampon et de la mascotte : sur toute carte À FOND ils retombaient dans le
+   flux, donc en haut à gauche, par-dessus le contenu (#1203). Ils montent par
+   le z-index, pas en changeant de mode de positionnement. */
+.dossier.hasbg > *:not(.dbg):not(.stamp):not(.zani-stamp){position:relative;z-index:1}
+.dossier.hasbg > .stamp,.dossier.hasbg > .zani-stamp{z-index:2}
 .src{display:flex;border-bottom:1px dashed var(--line-2)}
 .src .kind{flex:none;width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:13px 6px;border-right:1px dashed var(--line-2);background:var(--soft)}
 .src .kind .em{font-size:1.45rem;line-height:1} .src .kind .lb{font-family:"JetBrains Mono";font-size:.52rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);text-align:center}
