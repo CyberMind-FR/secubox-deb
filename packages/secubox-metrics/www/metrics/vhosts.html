@@ -215,7 +215,11 @@ h1{font-size:21px;margin:0;letter-spacing:.5px}
   <div class="cols">
     <div class="card"><h2>Pages les plus vues</h2><div class="paths" id="dPaths"></div></div>
     <div class="card"><h2>Référents</h2><div class="paths" id="dRef"></div></div>
-    <div class="card"><h2>Pays des visiteurs</h2><div class="paths" id="dPays"></div></div>
+    <div class="card"><h2>Pays des visiteurs</h2>
+      <div id="dPaysGraph"></div>
+      <div class="paths" id="dPays"></div></div>
+    <div class="card"><h2>Visites cumulées depuis la première visite</h2>
+      <div id="dCumul"></div></div>
   </div>
 </div>
 
@@ -309,6 +313,71 @@ function barres(cible, donnees){
   }).join("");
 }
 
+// ── #1190 · camembert des pays ────────────────────────────────────────────
+// Au-dela de sept parts on ne lit plus rien : les suivantes sont regroupees en
+// « autres ». La legende porte le compte ET le pourcentage — le pourcentage
+// seul ne dit pas si 70 % vaut 7 visites ou 7000.
+function camembert(cible, pays){
+  const items = Object.entries(pays || {}).sort((a,b)=>b[1]-a[1]);
+  if(!items.length){ el(cible).innerHTML = '<div class="vide">pas de géolocalisation</div>'; return; }
+  const tete = items.slice(0,7);
+  const reste = items.slice(7).reduce((a,[,v])=>a+v,0);
+  if(reste) tete.push(["autres", reste]);
+  const tot = tete.reduce((a,[,v])=>a+v,0) || 1;
+
+  const R=54, C=60; let a0=-Math.PI/2, arcs="";
+  tete.forEach(([,v],i)=>{
+    const a1 = a0 + 2*Math.PI*v/tot;
+    // Une part de 100 % ne peut pas se tracer en arc : les deux extremites se
+    // rejoignent et le chemin est vide. On rend alors un disque plein.
+    if(v/tot > .999){
+      arcs += `<circle cx="${C}" cy="${C}" r="${R}" fill="${COULEURS[i%7]}"/>`;
+    } else {
+      const g = (a1-a0) > Math.PI ? 1 : 0;
+      arcs += `<path d="M${C},${C} L${C+R*Math.cos(a0)},${C+R*Math.sin(a0)} `
+           +  `A${R},${R} 0 ${g},1 ${C+R*Math.cos(a1)},${C+R*Math.sin(a1)} Z" `
+           +  `fill="${COULEURS[i%7]}" stroke="var(--bg-card)" stroke-width="1"/>`;
+    }
+    a0 = a1;
+  });
+  const legende = tete.map(([k,v],i)=>
+    `<div class="row"><span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;
+       background:${COULEURS[i%7]};margin-right:6px"></i>${k}</span>
+     <span class="num">${fmt(v)} · ${(v/tot*100).toFixed(0)} %</span></div>`).join("");
+  el(cible).innerHTML =
+    `<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+       <svg viewBox="0 0 120 120" width="120" height="120" role="img"
+            aria-label="répartition des visites par pays">${arcs}</svg>
+       <div style="flex:1;min-width:150px">${legende}</div></div>`;
+}
+
+// ── #1190 · cumul depuis la premiere visite ───────────────────────────────
+// `base` porte les jours deja sortis de la retention : sans lui la courbe
+// repartirait de zero tous les trente jours, et ne dirait plus « depuis la
+// premiere visite » mais « depuis un mois ». Une COURBE, pas des barres : ce
+// qu'on lit ici est une pente.
+function cumul(cible, serie, base, depuis){
+  serie = serie || [];
+  if(!serie.length){ el(cible).innerHTML = '<div class="vide">aucun historique</div>'; return; }
+  let t = base || 0;
+  const pts = serie.map(s => (t += (s.visites||0)));
+  const min = base || 0, max = pts[pts.length-1] || 1;
+  const etendue = (max - min) || 1;
+  const L=560, H=120, P=6;
+  const x = i => P + i*(L-2*P)/Math.max(1, pts.length-1);
+  const y = v => H - P - (v-min)*(H-2*P)/etendue;
+  const ligne = pts.map((v,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const aire = `${ligne} L${x(pts.length-1).toFixed(1)},${H-P} L${x(0).toFixed(1)},${H-P} Z`;
+  el(cible).innerHTML =
+    `<svg viewBox="0 0 ${L} ${H}" width="100%" height="130" role="img"
+          aria-label="visites cumulées depuis la première visite">
+       <path d="${aire}" fill="${COULEURS[0]}" opacity=".16"/>
+       <path d="${ligne}" fill="none" stroke="${COULEURS[0]}" stroke-width="2"/>
+     </svg>
+     <div class="row"><span>${depuis ? "depuis le " + depuis : "depuis la première visite"}</span>
+       <span class="num">${fmt(max)} visites</span></div>`;
+}
+
 function etat(v){
   // Un vhost « ciblé » n'est pas un vhost qui recoit des erreurs : c'est un
   // vhost dont une part notable du trafic vise des chemins de scan.
@@ -389,6 +458,8 @@ async function detail(nom){
   el("dRef").innerHTML = (det.top_referents || []).map(e =>
     `<div class="path"><code>${e.hote}</code><b>${fmt(e.n)}</b></div>`).join("")
     || '<div class="vide">aucun référent</div>';
+  camembert("dPaysGraph", det.pays_cumul || {});
+  cumul("dCumul", det.serie, (det.cumul||{}).base, (det.cumul||{}).depuis);
   el("dPays").innerHTML = (det.pays || []).map(e =>
     `<div class="path"><span>${e.drapeau} ${e.code}</span><b>${fmt(e.n)}</b></div>`).join("")
     || '<div class="vide">pas de géolocalisation</div>';

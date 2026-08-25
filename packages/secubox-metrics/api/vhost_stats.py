@@ -347,6 +347,8 @@ class VhostStatsAggregator:
         # jour -> vhost -> compteurs
         self._jours: dict[str, dict[str, dict]] = defaultdict(
             lambda: defaultdict(_vierge))
+        # vhost -> total des jours DEJA purges (+ date de premiere visite)
+        self._cumul: dict[str, dict] = {}
         self._maj: Optional[str] = None
         self._charger()
 
@@ -682,8 +684,18 @@ class VhostStatsAggregator:
                 "erreurs": sum(s["erreurs"] for s in seaux),
             })
         d = self._rendre(vhost, fondu)
+        # #1190 — le cumul DEPUIS LA PREMIERE VISITE et la geographie complete.
+        # `base` = ce qui precede la fenetre detaillee : le graphique doit
+        # partir de l'acquis, sinon il repart de zero tous les trente jours et
+        # ne dit plus « depuis la premiere visite » mais « depuis un mois ».
+        c = self.cumul_de(vhost)
+        vus = sum(x["visites"] for x in serie)
         d.update({"periode": periode, "serie": serie, "maj": self._maj,
-                  "membres": membres})
+                  "membres": membres,
+                  "cumul": {"depuis": c["depuis"], "visites": c["visites"],
+                            "requetes": c["requetes"],
+                            "base": max(0, c["visites"] - vus)},
+                  "pays_cumul": c["pays"]})
         return d
 
     def vhosts_connus(self) -> list[str]:
@@ -709,21 +721,65 @@ class VhostStatsAggregator:
                         s[cle] = Counter(dict(s[cle].most_common(garde)))
 
     def _elaguer(self) -> None:
+        """Retire les jours hors retention — APRES les avoir versés au cumul.
+
+        « Depuis la premiere visite » ne peut pas se lire dans `self._jours` :
+        la retention n'en garde que 30. Chaque jour qui sort de la fenetre est
+        donc verse dans un total permanent, une fois et une seule — c'est le
+        seul endroit ou un jour disparait, donc le seul ou le total peut se
+        perdre. La date de premiere visite est retenue au passage : sans elle,
+        « depuis » ne veut rien dire.
+        """
         limite = (date.today() - timedelta(days=self.retention - 1)).isoformat()
-        for j in [j for j in self._jours if j < limite]:
+        for j in sorted(j for j in self._jours if j < limite):
+            for v, s in self._jours[j].items():
+                c = self._cumul.setdefault(
+                    v, {"depuis": j, "visites": 0, "requetes": 0, "pays": Counter()})
+                if j < c["depuis"]:
+                    c["depuis"] = j
+                c["visites"] += s["visites"]
+                c["requetes"] += s["requetes"]
+                c["pays"].update(s["pays"])
             del self._jours[j]
+
+    def cumul_de(self, vhost: str) -> dict:
+        """Total depuis la premiere visite : le permanent plus la fenetre."""
+        c = self._cumul.get(vhost)
+        base = dict(c or {"depuis": "", "visites": 0, "requetes": 0})
+        pays = Counter((c or {}).get("pays", {}))
+        visites, requetes = base["visites"], base["requetes"]
+        depuis = base["depuis"]
+        for j in sorted(self._jours):
+            s = self._jours[j].get(vhost)
+            if not s:
+                continue
+            if not depuis or j < depuis:
+                depuis = j
+            visites += s["visites"]
+            requetes += s["requetes"]
+            pays.update(s["pays"])
+        return {"depuis": depuis, "visites": visites, "requetes": requetes,
+                "pays": dict(pays.most_common(20))}
 
     def _serialiser(self) -> dict:
         return {
             "version": 2,
             "suivi": {k: list(v) for k, v in self._suivi.items()},
+            "cumul": {v: {"depuis": c["depuis"], "visites": c["visites"],
+                          "requetes": c["requetes"], "pays": dict(c["pays"])}
+                      for v, c in self._cumul.items()},
             "jours": {
                 j: {v: {**{c: s[c] for c in ("visites", "requetes", "octets",
                                              "sondes", "erreurs", "robots")},
                         "ips": sorted(s["ips"]),
                         "ips_debordees": s["ips_debordees"],
+                        # `pays` A ETE OUBLIE ICI pendant que _charger le
+                        # relisait : la repartition geographique repartait donc
+                        # de zero a CHAQUE redemarrage, et sur ce nœud 0 des
+                        # 1577 entrees en cache en portait (#1190).
                         **{c: dict(s[c]) for c in ("navigateurs", "plateformes",
-                                                   "statuts", "chemins", "referents")}}
+                                                   "statuts", "chemins",
+                                                   "referents", "pays")}}
                     for v, s in vhosts.items()}
                 for j, vhosts in self._jours.items()},
         }
@@ -746,6 +802,13 @@ class VhostStatsAggregator:
         if d.get("version") != 2:
             return          # ancien format : on repart proprement
         self._suivi = {k: tuple(v) for k, v in d.get("suivi", {}).items()}
+        for v, c in d.get("cumul", {}).items():
+            if not _hote_reel(v):
+                continue
+            self._cumul[v] = {"depuis": c.get("depuis", ""),
+                              "visites": c.get("visites", 0),
+                              "requetes": c.get("requetes", 0),
+                              "pays": Counter(c.get("pays", {}))}
         for j, vhosts in d.get("jours", {}).items():
             for v, s in vhosts.items():
                 # #1191 — filtrer AUSSI au rechargement : le cache d'avant ce

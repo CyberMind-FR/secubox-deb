@@ -69,3 +69,56 @@ def test_le_cache_deja_pollue_est_assaini_au_rechargement(tmp_path, monkeypatch)
 
     ag = V.VhostStatsAggregator()
     assert set(ag._jours["2026-08-25"]) == {"ganimed.fr"}
+
+
+# ── #1190 — pays persistes et cumul depuis la premiere visite ───────────────
+
+def test_les_pays_survivent_a_un_redemarrage(tmp_path, monkeypatch):
+    """`pays` etait lu au chargement mais jamais ecrit : la repartition
+    geographique repartait de zero a chaque redemarrage."""
+    from api import vhost_stats as V
+    from collections import Counter
+
+    cache = tmp_path / "vhost_stats.json"
+    monkeypatch.setattr(V, "CACHE", cache)
+
+    ag = V.VhostStatsAggregator()
+    ag._jours["2026-08-25"]["ganimed.fr"]["pays"] = Counter({"FR": 12, "DE": 3})
+    ag._jours["2026-08-25"]["ganimed.fr"]["visites"] = 15
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(ag._serialiser()))
+
+    relu = V.VhostStatsAggregator()
+    assert dict(relu._jours["2026-08-25"]["ganimed.fr"]["pays"]) == {"FR": 12, "DE": 3}
+
+
+def test_le_cumul_survit_a_la_purge_de_retention(tmp_path, monkeypatch):
+    """« Depuis la premiere visite » ne peut pas se lire dans les jours retenus :
+    la retention n'en garde que 30. Ce que la purge emporte doit etre verse
+    ailleurs, une fois et une seule."""
+    from api import vhost_stats as V
+    from collections import Counter
+    import datetime
+
+    monkeypatch.setattr(V, "CACHE", tmp_path / "c.json")
+    ag = V.VhostStatsAggregator()
+    ag.retention = 30
+
+    vieux = (datetime.date.today() - datetime.timedelta(days=200)).isoformat()
+    recent = datetime.date.today().isoformat()
+    ag._jours[vieux]["ganimed.fr"].update(
+        {"visites": 500, "requetes": 900, "pays": Counter({"FR": 500})})
+    ag._jours[recent]["ganimed.fr"].update(
+        {"visites": 20, "requetes": 30, "pays": Counter({"FR": 15, "BE": 5})})
+
+    ag._elaguer()
+
+    assert vieux not in ag._jours, "le jour hors retention aurait du sortir"
+    c = ag.cumul_de("ganimed.fr")
+    assert c["visites"] == 520, f"le cumul a perdu les jours purges : {c}"
+    assert c["depuis"] == vieux, "la date de premiere visite est perdue"
+    assert c["pays"]["FR"] == 515 and c["pays"]["BE"] == 5
+
+    # Purger deux fois ne doit pas compter deux fois.
+    ag._elaguer()
+    assert ag.cumul_de("ganimed.fr")["visites"] == 520
