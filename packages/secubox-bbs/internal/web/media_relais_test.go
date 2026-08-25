@@ -166,3 +166,30 @@ func TestSansSecretLeRelaisMetaNewsResteFerme(t *testing.T) {
 		t.Fatalf("attendu 403 sans secret, obtenu %d", rec.Code)
 	}
 }
+
+// La route /api/v1/bbs/menu est lue SANS session (le Hall l'interroge par la
+// socket). Une rubrique privee n'y a donc rien a faire : publier son nom et son
+// nombre de fils renseigne un anonyme sur ce qu'il ne peut pas voir, et
+// fabrique dans le menu du Hall un lien vers une page qui repond 404.
+func TestMenuPublicNExposePasLesRubriquesPrivees(t *testing.T) {
+	srv, st := banc(t)
+	pub, _ := st.CreateCategory("ouverte", "Ouverte", "")
+	_ = pub
+	prv, err := st.CreateCategory("fermee", "Fermee", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RendPrive(prv, true); err != nil {
+		t.Fatalf("bascule privee : %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/bbs/menu", nil))
+	corps := rec.Body.String()
+	if strings.Contains(corps, "fermee") || strings.Contains(corps, "Fermee") {
+		t.Fatalf("une rubrique privee est publiee : %s", corps)
+	}
+	if !strings.Contains(corps, "ouverte") {
+		t.Fatalf("les rubriques publiques ont disparu : %s", corps)
+	}
+}

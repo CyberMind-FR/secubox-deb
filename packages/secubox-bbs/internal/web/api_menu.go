@@ -23,6 +23,16 @@ func (s *Server) apiMenu(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]item, 0, len(cats))
 	for _, c := range cats {
+		// LES RUBRIQUES PRIVEES NE SORTENT PAS D'ICI. Categories(true) ne borne
+		// que le COMPTE de fils, pas la liste : elle rend toutes les rubriques,
+		// privees comprises. Cette route est lue sans session (le Hall
+		// l'interroge par la socket) — publier ces entrees revelait leur nom et
+		// leur volume a tout venant, et fabriquait dans le menu du Hall des
+		// liens vers des pages qui repondent 404. Le nom d'une rubrique fermee
+		// est deja une information.
+		if c.Prive {
+			continue
+		}
 		out = append(out, item{Slug: c.Slug, Title: c.Title, Threads: c.Threads})
 	}
 	w.Header().Set("Content-Type", "application/json")

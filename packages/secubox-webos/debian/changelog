@@ -1,3 +1,12 @@
+secubox-webos (1.0.35-1~bookworm1) bookworm; urgency=medium
+
+  * Podcaster rejoint les services principaux : il manquait à la fois du menu
+    Services et des cartes de l'accueil, alors que le module tourne et répond.
+  * Son origine est ajoutée au `frame-src` de la CSP du Hall — sans quoi
+    l'embarquer aurait été bloqué par le navigateur, sans message utile.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 16:30:00 +0200
+
 secubox-webos (1.0.34-1~bookworm1) bookworm; urgency=medium
 
   * Le cadre d'embed remplit enfin TOUT le visible. Sa hauteur était un nombre
