@@ -1373,7 +1373,7 @@ func (s *Server) invitation(w http.ResponseWriter, r *http.Request) {
 // ment sur son etat coute plus cher qu'une page qui l'avoue.
 func (s *Server) simple(vue string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p, _ := s.base(r, vue)
+		p, pub := s.base(r, vue)
 		switch vue {
 		case "media":
 			p.Titre, p.Intro = "Média", "Ce qu'on écoute et regarde, au même endroit que ce qu'on en dit."
@@ -1383,7 +1383,10 @@ func (s *Server) simple(vue string) http.HandlerFunc {
 		case "biblio":
 			p.Titre, p.Intro = "Bibliothèque", "Les fichiers vivent à côté des messages ; le même rsync emporte les deux."
 			p.Vide = "Aucun fichier déposé."
-			p.Cards = s.cartesBiblio()
+			if pub {
+				p.Vide = "Aucun fichier public. Les membres en voient davantage."
+			}
+			p.Cards = s.cartesBiblio(pub)
 		case "billets":
 			p.Titre, p.Intro = "Billets", "Le BBS est l'atelier, billets la vitrine."
 			p.Vide = "Aucun billet publié pour l'instant."
@@ -1450,7 +1453,14 @@ func (s *Server) cartesMedia() []card {
 //
 // UNE ERREUR DE LECTURE NE VIDE PAS LA PAGE EN SILENCE : elle est dite. Rendre
 // une liste vide sur erreur reproduirait exactement le défaut qu'on corrige.
-func (s *Server) cartesBiblio() []card {
+// cartesBiblio liste les fichiers. `pub` = visiteur SANS session.
+//
+// N'ANNONCER QUE CE QU'ON SERT. Sans ce filtre, la page listait les fichiers
+// 'local' à tout venant : chaque carte affichait un lien /f/NN et une vignette
+// /vignette/NN que le visiteur recevait en 403 — 60 médias cassés sur la seule
+// /biblio. Le tri se fait ici, à la source de la liste, et non en masquant les
+// images côté gabarit : une carte dont le lien est refusé n'a rien à faire là.
+func (s *Server) cartesBiblio(pub bool) []card {
 	fs, err := s.st.TousFichiers(100)
 	if err != nil {
 		return []card{{Title: "Lecture impossible",
@@ -1458,6 +1468,9 @@ func (s *Server) cartesBiblio() []card {
 	}
 	out := make([]card, 0, len(fs))
 	for _, f := range fs {
+		if pub && f.Visibility != "public" {
+			continue // même règle que /f/ et /vignette/
+		}
 		genre := "fichier"
 		switch {
 		case f.EstImage():

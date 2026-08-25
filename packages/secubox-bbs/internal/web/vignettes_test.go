@@ -181,3 +181,42 @@ func TestVignetteDunFichierLocalResteFermee(t *testing.T) {
 		t.Fatalf("vignette d'un fichier local servie a un anonyme : code %d", rec.Code)
 	}
 }
+
+// La Bibliotheque n'annonce que ce qu'elle sert : sans session, elle ne liste
+// que les fichiers publics. Lister un fichier 'local' donnerait une carte dont
+// le lien /f/NN et la vignette /vignette/NN repondent 403 — 60 medias casses
+// sur la seule /biblio avant ce filtre.
+func TestBiblioNeListeQueLePublicAuxAnonymes(t *testing.T) {
+	srv, st := banc(t)
+	u, _ := st.CreateUser("bob", "Bob", store.RoleMember)
+
+	var img bytes.Buffer
+	if err := png.Encode(&img, image.NewRGBA(image.Rect(0, 0, 12, 12))); err != nil {
+		t.Fatal(err)
+	}
+	pubF, err := st.DeposeFichier(u, "publique.png", "image/png", bytes.NewReader(img.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarqueFichiersPublics([]int64{pubF.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DeposeFichier(u, "privee.png", "image/png", bytes.NewReader(img.Bytes())); err != nil {
+		t.Fatal(err)
+	}
+
+	anon := srv.cartesBiblio(true)
+	for _, c := range anon {
+		if strings.Contains(c.Title, "privee") {
+			t.Fatalf("un fichier 'local' est annoncé à un anonyme : %q", c.Title)
+		}
+	}
+	if len(anon) != 1 {
+		t.Fatalf("attendu 1 carte publique, obtenu %d", len(anon))
+	}
+
+	// Un membre voit les deux : le filtre ne doit pas amputer la vue connectée.
+	if membre := srv.cartesBiblio(false); len(membre) != 2 {
+		t.Fatalf("un membre doit voir les 2 fichiers, obtenu %d", len(membre))
+	}
+}
