@@ -350,6 +350,98 @@ cmd_webmail_config() {
     echo "username_domain = $dom"
 }
 
+# ── Apprentissage antispam : le geste « indésirable » du webmail ───────────
+#
+# Trois pieces doivent tenir ensemble, et il en manquait DEUX sur la board :
+#
+#  1. un MAGASIN. Le classifieur bayesien de rspamd n'a pas de memoire propre :
+#     sans redis, il accepte l'apprentissage et n'en garde rien. Le controleur
+#     repond alors 204 — un succes de facade — pendant que `rspamc stat` reste
+#     obstinement a « Messages learned: 0 ». C'est le pire des cas : un bouton
+#     qui a l'air de marcher.
+#  2. un CLASSIFIEUR declare. Deux, ici : le modele GLOBAL que tout le monde
+#     alimente et dont tout le monde profite, et un modele PAR UTILISATEUR qui
+#     n'engage que celui qui clique. Les deux notent le message, avec des
+#     symboles distincts — on peut donc voir lequel a tranche.
+#  3. le GESTE dans le webmail : le greffon markasjunk, qui poste le message au
+#     controleur avec le mot de passe deja provisionne.
+cmd_antispam_apprentissage() {
+    local wc="$WEBMAIL_CONTAINER"
+    lxc_running "$CONTAINER" || { error "conteneur mail '$CONTAINER' a l'arret"; return 1; }
+    lxc_running "$wc" || { error "conteneur webmail '$wc' a l'arret"; return 1; }
+
+    local pw_file="/etc/secubox/secrets/rspamd-controller.pw"
+    [ -r "$pw_file" ] || { error "mot de passe du controleur rspamd absent ($pw_file)"; return 1; }
+    local pw; pw="$(cat "$pw_file")"
+
+    # ── 1. le magasin ──────────────────────────────────────────────────────
+    lxc_attach "$CONTAINER" sh -c 'systemctl enable --now redis-server' >/dev/null 2>&1 \
+        || { error "redis-server n'a pas demarre — sans lui rien n'est retenu"; return 1; }
+    printf '%s\n' 'servers = "127.0.0.1";' \
+        | lxc_attach "$CONTAINER" sh -c "cat > /etc/rspamd/local.d/redis.conf"
+
+    # ── 2. les classifieurs ────────────────────────────────────────────────
+    # `autolearn` reste FERME : on apprend de ce qu'un humain designe, pas de ce
+    # que le filtre croit deja. Autrement le modele confirme ses propres erreurs.
+    printf '%s\n' \
+        'backend = "redis";' \
+        'autolearn = false;' \
+        'min_learns = 20;' \
+        | lxc_attach "$CONTAINER" sh -c "cat > /etc/rspamd/local.d/classifier-bayes.conf"
+
+    # Le modele PAR UTILISATEUR vit a cote du global, avec ses propres symboles.
+    # `local.d/` fusionne dans le classifieur existant : pour en declarer un
+    # SECOND il faut passer par rspamd.conf.local.
+    printf '%s\n' \
+        '# Modele par utilisateur (#1195) : n'"'"'engage que celui qui clique.' \
+        'classifier "bayes" {' \
+        '  name = "utilisateur";' \
+        '  backend = "redis";' \
+        '  per_user = true;' \
+        '  autolearn = false;' \
+        '  min_learns = 5;' \
+        '  symbol_spam = "BAYES_SPAM_USER";' \
+        '  symbol_ham = "BAYES_HAM_USER";' \
+        '}' \
+        | lxc_attach "$CONTAINER" sh -c "cat > /etc/rspamd/rspamd.conf.local"
+
+    lxc_attach "$CONTAINER" sh -c 'systemctl restart rspamd' >/dev/null 2>&1 || true
+
+    # ── 3. le geste dans le webmail ────────────────────────────────────────
+    # `Deliver-To` porte l'identite : c'est elle qui aiguille le modele par
+    # utilisateur. Sans cet en-tete, tout retomberait dans le seul global.
+    local conf="/etc/roundcube/config.inc.php.local"
+    if lxc_attach "$wc" grep -q "markasjunk" "$conf" 2>/dev/null; then
+        log "markasjunk deja actif dans $wc"
+    else
+        printf '%s\n' \
+            "// #1195 — geste « indesirable » : apprentissage rspamd, global ET par utilisateur." \
+            "\$config['plugins'][] = 'markasjunk';" \
+            "\$config['markasjunk_learning_driver'] = 'cmd_learn';" \
+            "\$config['markasjunk_spam_cmd'] = 'curl -s -m 10 -X POST -H \"Password: $pw\" -H \"Deliver-To: %u\" --data-binary @- http://$LXC_IP:11334/learnspam';" \
+            "\$config['markasjunk_ham_cmd'] = 'curl -s -m 10 -X POST -H \"Password: $pw\" -H \"Deliver-To: %u\" --data-binary @- http://$LXC_IP:11334/learnham';" \
+            | lxc_attach "$wc" sh -c "cat >> '$conf'" \
+            || { error "ecriture de la config webmail refusee"; return 1; }
+        lxc_attach "$wc" sh -c 'systemctl reload apache2 2>/dev/null \
+            || systemctl restart apache2 2>/dev/null \
+            || systemctl restart php*-fpm 2>/dev/null || true'
+    fi
+
+    # ── verification : on n'annonce pas un succes sans l'avoir constate ─────
+    printf 'Subject: verification apprentissage\n\ncorps\n' > /tmp/.sbx-learn.eml
+    curl -s -o /dev/null -m 10 -X POST -H "Password: $pw" \
+        --data-binary @/tmp/.sbx-learn.eml "http://$LXC_IP:11334/learnspam" || true
+    rm -f /tmp/.sbx-learn.eml
+    local appris
+    appris="$(lxc_attach "$CONTAINER" sh -c 'rspamc stat 2>/dev/null' | sed -n 's/^Messages learned: //p')"
+    if [ "${appris:-0}" -gt 0 ] 2>/dev/null; then
+        log "apprentissage operationnel — $appris message(s) retenu(s)"
+    else
+        error "le controleur accepte mais rien n'est retenu : verifier redis dans $CONTAINER"
+        return 1
+    fi
+}
+
 cmd_webmail_sieve() {
     # Active l'EDITEUR DE FILTRES SIEVE dans Roundcube (#1181) : le plugin
     # `managesieve` (deja installe) pointe sur le Dovecot ManageSieve :4190 du
@@ -1470,6 +1562,7 @@ case "${1:-}" in
     webmail-config) cmd_webmail_config ;;
     webmail-greffons) cmd_webmail_greffons ;;
     webmail-sieve) cmd_webmail_sieve ;;
+    antispam-apprentissage) cmd_antispam_apprentissage ;;
     sync)        cmd_sync ;;
     # Help
     help|--help|-h|'') show_help ;;
