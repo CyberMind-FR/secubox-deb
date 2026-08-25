@@ -364,9 +364,26 @@ cmd_webmail_sieve() {
     ms_host="$(config_get "managesieve_host" "$LXC_IP")"
     [ -n "$ms_host" ] || ms_host="$LXC_IP"   # clé présente mais vide → IP LXC mail
 
-    # Idempotent : si le plugin est deja active, on ne re-ajoute rien.
+    # Idempotent : si le plugin est deja active, on ne re-ajoute rien — mais on
+    # REPARE la ligne TLS si elle porte l'ancienne valeur.
+    #
+    # POURQUOI TLS EST OBLIGATOIRE ICI. Dovecot n'annonce AUCUN mecanisme SASL
+    # tant que la liaison est en clair (`disable_plaintext_auth`) : la
+    # salutation dit `"SASL" ""` et `STARTTLS`. Roundcube configure sans TLS
+    # n'a donc aucun moyen de s'authentifier et rend « la connexion au serveur
+    # n'aboutit pas » — l'editeur de filtres s'ouvre mais aucun filtre ne peut
+    # etre enregistre. Apres STARTTLS, le serveur annonce `"SASL" "PLAIN LOGIN"`.
     if lxc_attach "$wc" grep -q "'managesieve'" "$conf" 2>/dev/null; then
-        log "managesieve deja actif dans $wc"
+        if lxc_attach "$wc" grep -q "managesieve_usetls'\] = false" "$conf" 2>/dev/null; then
+            lxc_attach "$wc" sed -i \
+                "s/\\(managesieve_usetls'\\] = \\)false/\\1true/" "$conf" \
+                && log "managesieve : TLS remis a true dans $wc (sans lui, aucune authentification possible)"
+            lxc_attach "$wc" sh -c 'systemctl reload apache2 2>/dev/null \
+                || systemctl restart apache2 2>/dev/null \
+                || systemctl restart php*-fpm 2>/dev/null || true'
+        else
+            log "managesieve deja actif dans $wc"
+        fi
         return 0
     fi
 
@@ -378,7 +395,7 @@ cmd_webmail_sieve() {
         "\$config['plugins'][] = 'managesieve';" \
         "\$config['managesieve_host'] = '$ms_host';" \
         "\$config['managesieve_port'] = 4190;" \
-        "\$config['managesieve_usetls'] = false;" \
+        "\$config['managesieve_usetls'] = true;" \
         | lxc_attach "$wc" sh -c "cat >> '$conf'" \
         || { error "ecriture de la config webmail refusee"; return 1; }
 
