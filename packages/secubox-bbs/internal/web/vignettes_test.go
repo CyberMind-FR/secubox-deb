@@ -8,8 +8,13 @@ import (
 	"image/color"
 	"image/jpeg"
 	"image/png"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/store"
 )
 
 func imagePNG(t *testing.T, l, h int) []byte {
@@ -118,5 +123,61 @@ func TestGlyphes(t *testing.T) {
 		if got := glypheDeSource(genre); got != veut {
 			t.Errorf("glypheDeSource(%q) = %q, veut %q", genre, got, veut)
 		}
+	}
+}
+
+// La vignette suit EXACTEMENT le droit du fichier, ce que l'entete de
+// servirVignette annonce. Le garde precedent etait plus strict que sa propre
+// documentation : il exigeait une session sans regarder la visibilite, donc il
+// refusait aussi la vignette d'un fichier PUBLIC. La Bibliotheque, qui liste
+// des fichiers publics, rendait 403 sur chacune de ses vignettes a un visiteur
+// sans compte — 94 medias casses sur /biblio.
+func TestVignetteDunFichierPublicEstServieAuxAnonymes(t *testing.T) {
+	srv, st := banc(t)
+	u, _ := st.CreateUser("bob", "Bob", store.RoleMember)
+
+	var img bytes.Buffer
+	if err := png.Encode(&img, image.NewRGBA(image.Rect(0, 0, 24, 24))); err != nil {
+		t.Fatal(err)
+	}
+	f, err := st.DeposeFichier(u, "photo.png", "image/png", bytes.NewReader(img.Bytes()))
+	if err != nil {
+		t.Fatalf("depot: %v", err)
+	}
+	if err := st.MarqueFichiersPublics([]int64{f.ID}); err != nil {
+		t.Fatalf("marquage public: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vignette/"+strconv.FormatInt(f.ID, 10)+".jpg", nil)
+	srv.Handler().ServeHTTP(rec, req) // aucun cookie : visiteur anonyme
+
+	if rec.Code == http.StatusForbidden {
+		t.Fatalf("403 sur la vignette d'un fichier PUBLIC : le garde trop strict est revenu")
+	}
+}
+
+// L'inverse doit rester vrai : la vignette d'un fichier 'local' ne fuit pas. Une
+// reproduction reduite reste la meme image, et `/vignette/NN` est un numero
+// devinable.
+func TestVignetteDunFichierLocalResteFermee(t *testing.T) {
+	srv, st := banc(t)
+	u, _ := st.CreateUser("bob", "Bob", store.RoleMember)
+
+	var img bytes.Buffer
+	if err := png.Encode(&img, image.NewRGBA(image.Rect(0, 0, 24, 24))); err != nil {
+		t.Fatal(err)
+	}
+	f, err := st.DeposeFichier(u, "prive.png", "image/png", bytes.NewReader(img.Bytes()))
+	if err != nil {
+		t.Fatalf("depot: %v", err)
+	} // pas de MarqueFichiersPublics : reste 'local'
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/vignette/"+strconv.FormatInt(f.ID, 10)+".jpg", nil)
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("vignette d'un fichier local servie a un anonyme : code %d", rec.Code)
 	}
 }
