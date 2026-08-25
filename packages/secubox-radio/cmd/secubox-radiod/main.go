@@ -357,9 +357,18 @@ func recupere(ctx context.Context, st *store.Store, cli *ytsas.Client) {
 					// panneau l'affiche alors avec sa raison, et l'operateur
 					// sait quoi faire — au lieu de voir une piste bloquee en
 					// « recuperation » sans explication.
-					if errors.Is(err, ytsas.ErrCookies) {
+					// MEME TRAITEMENT POUR CE QUI NE S'ARRANGERA PAS.
+					// Une source retiree, mise en prive ou dont l'adresse est
+					// malformee ne deviendra pas disponible en attendant : la
+					// redemander toutes les vingt secondes remplissait le
+					// journal d'une ligne identique et laissait la piste
+					// affichee en « recuperation… » indefiniment. On l'ecarte
+					// avec sa raison, que le panneau montre.
+					switch {
+					case errors.Is(err, ytsas.ErrCookies),
+						errors.Is(err, ytsas.ErrIntrouvable):
 						st.MarqueIndisponible(p.ID, err.Error())
-					} else {
+					default:
 						log.Printf("radio: piste %d : %v", p.ID, err)
 					}
 				}

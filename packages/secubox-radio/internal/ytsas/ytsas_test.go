@@ -307,3 +307,54 @@ func TestUneListeIllisibleRemonteSonMotif(t *testing.T) {
 		t.Errorf("motif perdu : %v", err)
 	}
 }
+
+// Une source retiree ne reviendra pas : la redemander toutes les vingt
+// secondes remplissait le journal et laissait la piste en « recuperation… »
+// pour toujours. Elle doit etre reconnue comme DEFINITIVE, donc ecartable.
+func TestEchecDefinitifReconnu(t *testing.T) {
+	for _, cas := range []struct {
+		corps     string
+		definitif bool
+	}{
+		{`{"error":"ERROR: [youtube] J8ftIn4F-2Q: Video unavailable"}`, true},
+		{`{"error":"ERROR: [youtube:tab] list=PLX: Unable to download API page: HTTP Error 404: Not Found"}`, true},
+		{`{"error":"ERROR: [youtube] abc: Private video. Sign in if you've been granted access"}`, true},
+		{`{"error":"This video has been removed by the uploader"}`, true},
+		// Passager : on repassera. Ecarter a tort une piste valide est plus
+		// grave que de reessayer une fois de trop.
+		{`{"error":"connection reset by peer"}`, false},
+		{`{"error":"HTTP Error 503: Service Unavailable"}`, false},
+		{`{"error":"read tcp: i/o timeout"}`, false},
+		{``, false},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(cas.corps))
+		}))
+		c := &Client{Base: srv.URL, HTTP: srv.Client()}
+		err := c.Demande(context.Background(), "https://youtu.be/ABC")
+		srv.Close()
+
+		if err == nil {
+			t.Fatalf("aucune erreur pour %q", cas.corps)
+		}
+		if got := errors.Is(err, ErrIntrouvable); got != cas.definitif {
+			t.Errorf("%q : definitif=%v, attendu %v (err=%v)", cas.corps, got, cas.definitif, err)
+		}
+	}
+}
+
+// La raison doit remonter jusqu'a l'operateur : une piste ecartee sans motif
+// lisible ne vaut pas mieux qu'une piste bloquee sans explication.
+func TestLaRaisonAccompagneLErreur(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"error":"ERROR: [youtube] X: Video unavailable"}`))
+	}))
+	defer srv.Close()
+	c := &Client{Base: srv.URL, HTTP: srv.Client()}
+	err := c.Demande(context.Background(), "https://youtu.be/X")
+	if err == nil || !strings.Contains(err.Error(), "Video unavailable") {
+		t.Fatalf("la raison ne remonte pas : %v", err)
+	}
+}

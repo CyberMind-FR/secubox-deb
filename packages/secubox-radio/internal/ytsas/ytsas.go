@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -55,7 +56,40 @@ var (
 	// ErrTropGros : au-dela de la borne. Ecarte avec une raison lisible plutot
 	// que de remplir le disque en silence.
 	ErrTropGros = errors.New("fichier trop volumineux")
+	// ErrIntrouvable : la source n'existe plus, ou n'a jamais existe — video
+	// retiree, mise en prive, adresse malformee. REESSAYER N'Y CHANGERA RIEN.
+	// Sans cette distinction, le demon redemandait la meme piste toutes les
+	// vingt secondes, indefiniment : le journal se remplissait d'une ligne
+	// identique et la piste restait affichee en « recuperation… » pour
+	// toujours, sans que personne puisse savoir pourquoi.
+	ErrIntrouvable = errors.New("source introuvable")
 )
+
+// definitif reconnait, dans le message rendu par la passerelle, ce qui ne
+// s'arrangera pas tout seul.
+//
+// On lit le TEXTE et non le code : la passerelle rend 502 aussi bien pour une
+// panne reseau passagere que pour une video supprimee, et seul le message
+// distingue les deux. Le tri est volontairement CONSERVATEUR — au moindre
+// doute on considere l'echec passager et l'on repassera, parce qu'ecarter a
+// tort une piste valide est plus grave que de reessayer une fois de trop.
+func definitif(msg string) bool {
+	m := strings.ToLower(msg)
+	for _, marque := range []string{
+		"video unavailable",     // retiree par YouTube ou l'auteur
+		"private video",         // passee en prive
+		"has been removed",      // retiree pour violation
+		"account associated",    // compte supprime
+		"does not exist",        // identifiant sans objet
+		"http error 404",        // adresse malformee, playlist disparue
+		"unable to download api page: http error 404",
+	} {
+		if strings.Contains(m, marque) {
+			return true
+		}
+	}
+	return false
+}
 
 type Client struct {
 	Base string // http://10.100.0.180:8091
@@ -93,7 +127,10 @@ func (c *Client) Demande(ctx context.Context, adresse string) error {
 		return fmt.Errorf("passerelle injoignable : %w", err)
 	}
 	defer res.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(res.Body, 1<<16))
+	// LE CORPS PORTE LA RAISON. On le jetait : un echec definitif devenait
+	// alors indiscernable d'un echec passager, et la piste etait reessayee
+	// sans fin. Borne a 64 Kio comme avant.
+	corpsErr, _ := io.ReadAll(io.LimitReader(res.Body, 1<<16))
 	// UN 401 N'EST PAS « REFUSE », C'EST « COOKIES ». La passerelle rend ce
 	// code quand yt-dlp reclame une authentification — video soumise a age,
 	// reservee aux membres, ou cookies perimes. Le dire fait la difference
@@ -103,9 +140,33 @@ func (c *Client) Demande(ctx context.Context, adresse string) error {
 		return ErrCookies
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		raison := messageErreur(corpsErr)
+		if definitif(raison) {
+			return fmt.Errorf("%w : %s", ErrIntrouvable, raison)
+		}
+		if raison != "" {
+			return fmt.Errorf("la passerelle a refuse (%d) : %s", res.StatusCode, raison)
+		}
 		return fmt.Errorf("la passerelle a refuse (%d)", res.StatusCode)
 	}
 	return nil
+}
+
+// messageErreur extrait le champ `error` du corps JSON de la passerelle, ou
+// rend le corps brut borne si ce n'est pas du JSON — une panne ne doit pas
+// dependre du bon vouloir d'un decodeur.
+func messageErreur(corps []byte) string {
+	var enveloppe struct {
+		Erreur string `json:"error"`
+	}
+	if err := json.Unmarshal(corps, &enveloppe); err == nil && enveloppe.Erreur != "" {
+		return strings.TrimSpace(enveloppe.Erreur)
+	}
+	txt := strings.TrimSpace(string(corps))
+	if len(txt) > 300 {
+		txt = txt[:300]
+	}
+	return txt
 }
 
 // Etat cherche une piste dans la bibliotheque de la passerelle.
