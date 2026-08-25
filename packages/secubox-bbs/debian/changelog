@@ -1,3 +1,17 @@
+secubox-bbs (0.30.21-1~bookworm1) bookworm; urgency=medium
+
+  * Entête des cartes à FOND : le tampon (public/local/publié) et la mascotte
+    revenaient en haut à gauche, par-dessus le contenu. La règle qui remonte
+    les enfants au-dessus de l'image de fond leur imposait
+    `position:relative` — donc écrasait leur `position:absolute` et les
+    renvoyait dans le flux. Ils montent désormais par le z-index, sans changer
+    de mode de positionnement. (closes #1203)
+  * Le bouton « ✍️ Co-écrire » quitte les cartes de fil. La route
+    /article/nouveau reste en place : elle sert encore l'entrée « ＋ Nouvel
+    article » du rail — rien d'orphelin. (closes #1204)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 21:00:00 +0200
+
 secubox-bbs (0.30.20-1~bookworm1) bookworm; urgency=low
 
   * Vignette des topics VIDÉO. Une carte dont le seul média est une vidéo
