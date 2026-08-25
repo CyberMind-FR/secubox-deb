@@ -1,3 +1,28 @@
+secubox-socialrelay (0.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * Le flux devient un MUR EN MOSAÏQUE : maçonnage multi-colonnes (4 colonnes
+    au large, 2 vers 1024px, 1 sous 760px), largeur de colonne — et non nombre
+    de colonnes — comme critère, 340px étant la largeur en dessous de laquelle
+    une carte cesse d'être lisible. La page passe de 680px à 1440px.
+  * Cartes de gabarits DIFFÉRENTS, déduits du contenu et non tirés au sort
+    (deux chargements donnent le même mur) : riche (3 médias ou plus, grande
+    image en tête puis deux vignettes), illustrée (1 ou 2 médias, image plus
+    haute), texte long, texte court. Hauteurs mesurées : de 139px à 894px.
+  * PAS de `column-span:all` pour les cartes riches, malgré l'envie : un
+    « spanner » coupe le maçonnage en segments équilibrés séparément — avec
+    sept cartes riches sur vingt-quatre, le mur se fragmentait en huit tronçons
+    aux colonnes courtes. Le maçonnage garde donc une largeur constante et
+    c'est la hauteur qui distingue, comme dans tout mur de ce type.
+  * Les aperçus sont bornés à douze lignes : un texte fleuve faisait une colonne
+    à lui seul et écrasait ses voisines. Un dégradé annonce la suite plutôt que
+    de couper net sans le dire ; le texte entier reste à un clic chez la source.
+  * Correctif au passage : `.mast` portait des marges négatives de -16px pour
+    déborder le padding de `.wrap` — mais elle en est le FRÈRE, pas l'enfant.
+    Elle débordait donc la page de 32px et créait un scroll horizontal. Défaut
+    antérieur au mur, invisible tant que la page était étroite. (closes #1193)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 17:20:00 +0200
+
 secubox-socialrelay (0.1.6-1~bookworm1) bookworm; urgency=medium
 
   * feat(facebook): mode COOKIE-REPLAY — recours quand l'API Graph est

@@ -21,10 +21,18 @@ body{margin:0;background:
   radial-gradient(900px 500px at 100% 0%,rgba(154,123,230,.06),transparent 55%),
   var(--bg);
   color:var(--ink);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
-.wrap{max-width:680px;margin:0 auto;padding:0 16px 72px}
+/* Le MUR occupe la largeur ; la barre et le panneau d'administration gardent
+   la leur — une colonne d'écriture reste une colonne d'écriture, ce n'est pas
+   parce que le mur s'étale qu'un formulaire doit traverser l'écran. */
+.wrap{max-width:1440px;margin:0 auto;padding:0 16px 72px}
+#admin{max-width:680px;margin-left:auto;margin-right:auto}
 
 /* ---- Masthead / switchboard ---- */
-.mast{position:sticky;top:0;z-index:20;margin:0 -16px 18px;padding:16px;
+/* Les marges négatives -16px servaient à déborder le padding de .wrap — mais
+   .mast est son FRÈRE, pas son enfant : elles débordaient la page de 32px et
+   créaient un scroll horizontal (défaut présent avant le mur, invisible tant
+   que la page était étroite). La barre est déjà pleine largeur : sans marge. */
+.mast{position:sticky;top:0;z-index:20;margin:0 0 18px;padding:16px;
   background:linear-gradient(180deg,rgba(10,14,19,.96),rgba(10,14,19,.82));
   backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .mast-row{display:flex;align-items:center;gap:12px;max-width:680px;margin:0 auto}
@@ -46,8 +54,16 @@ body{margin:0;background:
 .chip .n{color:var(--cyan);font-weight:700}
 
 /* ---- feed cards ---- */
+/* ---- mur mosaïque ----
+   `columns` plutôt qu'une grille : les cartes ont des hauteurs libres, et une
+   grille laisserait des trous — chaque rangée s'aligne sur la carte la plus
+   haute. Le maçonnage remplit sans déchirure, et la largeur de colonne (et non
+   leur nombre) décide du passage à une colonne : 340px, c'est la largeur en
+   dessous de laquelle une carte cesse d'être lisible. */
+#flux{columns:340px 4;column-gap:14px}
 .post{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);
-  border-radius:16px;padding:15px 17px;margin:14px 0;position:relative;overflow:hidden}
+  border-radius:16px;padding:15px 17px;margin:0 0 14px;position:relative;overflow:hidden;
+  break-inside:avoid;-webkit-column-break-inside:avoid;display:flow-root;width:100%}
 .post::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--cyan-d);opacity:.5}
 .post.net-facebook::before{background:#4c6ef0}.post.net-bridge::before{background:var(--violet)}
 .ptop{display:flex;align-items:center;gap:9px;font-size:.85rem;margin-bottom:8px}
@@ -57,6 +73,14 @@ body{margin:0;background:
 .who{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .when{color:var(--dim);font-size:.72rem;margin-left:auto;font-family:var(--mono);white-space:nowrap}
 .ptext{white-space:pre-wrap;margin:2px 0 4px;font-size:.96rem;word-break:break-word}
+/* Sur un MUR, une carte est un aperçu : un texte fleuve faisait une colonne à
+   lui seul et écrasait tout ce qui l'entourait. On borne à douze lignes — le
+   texte entier reste à un clic, chez la source. Le dégradé dit qu'il y a une
+   suite, plutôt que de couper net sans le dire. */
+.post .ptext{display:-webkit-box;-webkit-line-clamp:12;line-clamp:12;-webkit-box-orient:vertical;
+  overflow:hidden;position:relative}
+.post.p-long .ptext::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2.2em;
+  background:linear-gradient(transparent,var(--panel))}
 .pmed{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin:10px 0 4px}
 .pmed img,.pmed video{width:100%;border-radius:11px;border:1px solid var(--line2);display:block;aspect-ratio:4/3;object-fit:cover;background:var(--bg)}
 .pmed.one{grid-template-columns:1fr}.pmed.one img,.pmed.one video{aspect-ratio:16/10}
@@ -66,6 +90,30 @@ body{margin:0;background:
   border:1px solid var(--line2);color:var(--mut);transition:.15s}
 .pfoot a:hover{color:var(--ink);border-color:var(--cyan);background:var(--cyan-s)}
 .pfoot a.disc{color:var(--cyan);border-color:var(--cyan-d)}
+/* Trois gabarits, décidés par le CONTENU et non au hasard : une carte n'est
+   grande que si elle a de quoi l'être. */
+/* riche (3 médias ou plus) : la carte la plus haute du mur.
+   PAS de `column-span:all` : d'une part il ne s'applique pas à un inline-block,
+   d'autre part un « spanner » coupe le maçonnage en segments équilibrés
+   séparément — avec sept cartes riches sur vingt-quatre, le mur se serait
+   fragmenté en huit tronçons aux colonnes courtes. Le maçonnage garde une
+   largeur de colonne constante ; c'est la HAUTEUR qui distingue les gabarits,
+   comme dans tout mur de ce type. */
+.post.p-hero{border-color:var(--line2)}
+.post.p-hero .pmed{grid-template-columns:1fr 1fr;gap:6px}
+.post.p-hero .pmed img,.post.p-hero .pmed video{aspect-ratio:1}
+.post.p-hero .pmed>:first-child{grid-column:1/-1;aspect-ratio:16/10}
+.post.p-hero .ptext{font-size:1.06rem}
+/* illustrée (1 ou 2 médias) : l'image respire, la carte est plus haute. */
+.post.p-media .pmed.one img,.post.p-media .pmed.one video{aspect-ratio:4/5}
+/* texte long sans média : on lui donne du corps plutôt que de la laisser
+   maigre au milieu de cartes illustrées. */
+.post.p-long .ptext{font-size:1.04rem;line-height:1.6}
+@media(max-width:760px){
+  #flux{columns:1}
+  .post.p-hero{column-span:none}
+  .post.p-media .pmed.one img,.post.p-media .pmed.one video{aspect-ratio:16/10}
+}
 .empty{color:var(--mut);text-align:center;padding:56px 20px;font-family:var(--mono);font-size:.85rem}
 .empty b{color:var(--ink);display:block;font-size:1rem;margin-bottom:6px;font-family:var(--sans)}
 
@@ -153,7 +201,14 @@ function post(p){
     :`<img src="${m.url}" alt="" loading="lazy">`).join("");
   const net=(p.network||"").toLowerCase();
   const ni=NETS[net]||{icon:"🌐",label:net};
-  const c=el(`<article class="post net-${esc(net)}"></article>`);
+  // Le gabarit se DÉDUIT du contenu : trois médias ou plus valent une une,
+  // un ou deux valent une carte illustrée, un texte long vaut du corps. Rien
+  // d'aléatoire — deux chargements de la même page donnent le même mur.
+  const nTexte=(p.text||"").length;
+  const taille = meds.length>=3 ? "p-hero"
+               : meds.length>=1 ? "p-media"
+               : nTexte>=280    ? "p-long" : "p-court";
+  const c=el(`<article class="post net-${esc(net)} ${taille}"></article>`);
   c.innerHTML=`<div class="ptop">
       <span class="net ${esc(net)}">${ni.icon} ${esc(ni.label)}</span>
       <span class="who">${esc(p.author||p.source||"")}</span>
