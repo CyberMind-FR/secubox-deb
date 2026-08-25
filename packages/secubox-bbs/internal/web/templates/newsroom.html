@@ -90,8 +90,16 @@
     <div class="rgrid" role="list">
       {{range .News}}{{$n := .}}{{with .Fil}}
       {{$img := ""}}{{range $n.Medias}}{{if and (eq .Kind "image") (eq $img "")}}{{$img = .Ref}}{{end}}{{end}}
-      <a class="rcard{{if $img}} hasbg{{end}}" role="listitem" href="/t/{{.ID}}">
-        {{if $img}}<img class="rbg" src="{{$img}}" alt="" loading="lazy">{{end}}
+      {{$vid := ""}}{{range $n.Medias}}{{if and (eq .Kind "video") (eq $vid "")}}{{$vid = .Ref}}{{end}}{{end}}
+      <a class="rcard{{if or $img $vid}} hasbg{{end}}" role="listitem" href="/t/{{.ID}}">
+        {{if $img}}<img class="rbg" src="{{$img}}" alt="" loading="lazy">
+        {{else if $vid}}{{/* Pas d'image, mais une vidéo : c'est ELLE la vignette.
+             `#t=0.5` demande au navigateur la vue à une demi-seconde — au début
+             beaucoup de vidéos ouvrent sur du noir. Aucun décodage côté serveur :
+             ffmpeg sur un fichier téléversé pour orner une carte, le rapport n'y
+             est pas (cf. vignettes.go). Muette, sans contrôles : décor, pas
+             lecteur — la lecture se fait dans le fil. */}}
+        <video class="rbg" src="{{$vid}}#t=0.5" muted playsinline preload="metadata" tabindex="-1" aria-hidden="true"></video>{{end}}
         <div class="rin">
           <div class="rhd"><span class="rau">{{.Author}}</span><time class="rdt">{{date .LastPostAt}}</time></div>
           <div class="rtx">{{if .Title}}{{.Title}}{{else}}{{$n.Apercu}}{{end}}</div>
@@ -325,6 +333,7 @@
         </a>
         {{else}}{{with .Fil}}
         {{$cover := ""}}{{range $n.Medias}}{{if and (eq .Kind "image") (eq $cover "")}}{{$cover = .Ref}}{{end}}{{end}}
+        {{$vidc := ""}}{{range $n.Medias}}{{if and (eq .Kind "video") (eq $vidc "")}}{{$vidc = .Ref}}{{end}}{{end}}
         {{$hasVid := false}}{{$hasAud := false}}{{$hasFile := false}}
         {{range $n.Medias}}{{if eq .Kind "video"}}{{$hasVid = true}}{{else if eq .Kind "audio"}}{{$hasAud = true}}{{else if eq .Kind "file"}}{{$hasFile = true}}{{end}}{{end}}
         {{/* Type PRINCIPAL de la carte = ce que montre déjà l'icône .ccic. Les
@@ -337,7 +346,7 @@
              elle reçoit une « mosaïque » — fond teinté par data-k + gros glyphe. */}}
         {{$g := "💬"}}{{if eq .MediaKind "audio"}}{{$g = "🎧"}}{{else if eq .MediaKind "video"}}{{$g = "🎬"}}{{else if eq .Source "video"}}{{$g = "🎬"}}{{else if eq .Source "podcast"}}{{$g = "🎧"}}{{else if eq .Source "film"}}{{$g = "🎞️"}}{{else if eq .Source "livre"}}{{$g = "📖"}}{{else if .Source}}{{$g = "🔗"}}{{end}}
         <a class="ccard" role="listitem" data-k="{{if eq .MediaKind "audio"}}podcast{{else if eq .MediaKind "video"}}video{{else if eq .Source "video"}}video{{else if eq .Source "podcast"}}podcast{{else if .Source}}url{{else}}fil{{end}}" href="/t/{{.ID}}">
-          {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{else if $n.CleApercu}}<span class="cccover"><img src="/urlshot/{{$n.CleApercu}}?v={{$.VCSS}}" alt="" loading="lazy"></span>{{else}}<span class="cccover ph"><span class="phg">{{$g}}</span></span>{{end}}
+          {{if $cover}}<span class="cccover"><img src="{{$cover}}" alt="" loading="lazy"></span>{{else if $vidc}}<span class="cccover vid"><video src="{{$vidc}}#t=0.5" muted playsinline preload="metadata" tabindex="-1" aria-hidden="true"></video></span>{{else if or (eq .MediaKind "video") (eq .Source "video") $hasVid}}<span class="cccover vid"></span>{{else if $n.CleApercu}}<span class="cccover"><img src="/urlshot/{{$n.CleApercu}}?v={{$.VCSS}}" alt="" loading="lazy"></span>{{else}}<span class="cccover ph"><span class="phg">{{$g}}</span></span>{{end}}
           <div class="ccbody">
             <div class="cctop"><span class="ccic">{{$g}}</span><span class="cctype">{{if .Source}}{{.Source}}{{else}}discussion{{end}}</span>{{if and (or $hasVid (eq .MediaKind "video") (eq .Source "video")) (ne $prim "video")}}<span class="ccmed">🎬</span>{{end}}{{if and (or $hasAud (eq .MediaKind "audio") (eq .Source "podcast")) (ne $prim "audio")}}<span class="ccmed">🎧</span>{{end}}{{if $hasFile}}<span class="ccmed">📎</span>{{end}}</div>
             <h3 class="serif">{{.Title}}</h3>
