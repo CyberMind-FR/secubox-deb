@@ -313,7 +313,13 @@
 {{define "avunealune"}}
     <section class="caroussel" aria-label="À la une — carrousel des derniers dossiers">
       <div class="carhead"><h2 class="serif">À la une</h2><span class="sub">glissez, flèches ◀ ▶ ou ← →</span>
-        <span class="carnav"><button class="carbtn" type="button" data-act="carprev" aria-label="Dossier précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Dossier suivant">▶</button></span>
+        {{/* Remonter en haut À GAUCHE des flèches (#1206) : le carrousel porte
+             déjà la seule barre de contrôle de la page, autant l'y mettre plutôt
+             que d'inventer un second jeu de boutons. Vaut pour les deux
+             surfaces — BBS embarqué dans le Hall et BBS en accès direct : le
+             défilement porte sur le document courant, qui est celui de l'iframe
+             quand on est embarqué. */}}
+        <span class="carnav"><button class="carbtn cartop" type="button" data-act="cartop" aria-label="Remonter en haut de la page" title="Remonter en haut">↑</button><button class="carbtn" type="button" data-act="carprev" aria-label="Dossier précédent">◀</button><button class="carbtn" type="button" data-act="carnext" aria-label="Dossier suivant">▶</button></span>
       </div>
       <div class="cartrack" id="cartrack" tabindex="0" role="list">
         {{/* #1180 : « À la une » plafonné à 12 dossiers — au-delà, le carrousel

@@ -198,6 +198,15 @@
     else if (a === "radiopop") { e.preventDefault(); radioPopout(t); }
     else if (a === "cardplay") { if (t.getAttribute("data-embed")) { e.preventDefault(); cardPlay(t); } }
     else if (a === "mini-close") miniClose();
+    else if (a === "cartop") {
+      // `scrollingElement` et non `window` : en embarqué c'est le document de
+      // l'iframe qui défile, et il n'a pas toujours le même porteur de scroll
+      // selon le navigateur. Le comportement doux est ignoré si le visiteur a
+      // demandé moins d'animation — remonter reste instantané, jamais bloqué.
+      var doux = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+      (document.scrollingElement || document.documentElement)
+        .scrollTo({ top: 0, behavior: doux ? "smooth" : "auto" });
+    }
     else if (a === "carprev") { carHold(); carScrollByCards(-1); }
     else if (a === "carnext") { carHold(); carScrollByCards(1); }
   });
