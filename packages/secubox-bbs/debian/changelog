@@ -1,3 +1,22 @@
+secubox-bbs (0.30.14-1~bookworm1) bookworm; urgency=high
+
+  * /vignette/<id>.jpg : le garde était PLUS STRICT que sa propre documentation.
+    L'entête de servirVignette annonce « LE MEME DROIT QUE LE FICHIER LUI-MEME »,
+    mais le code exigeait une session (`!v.Connecte`) sans regarder la
+    visibilité — il refusait donc aussi la vignette d'un fichier PUBLIC, que
+    /f/<id> sert pourtant à tout venant.
+  * Effet mesuré : la Bibliothèque, qui liste des fichiers publics, rendait
+    403 sur CHACUNE de ses vignettes à un visiteur sans compte — 94 médias
+    cassés sur /biblio en anonyme.
+  * Le contrôle passe après le chargement du fichier et applique exactement la
+    règle de /f/ : `!v.Connecte && f.Visibility != "public"`. La vignette d'un
+    fichier 'local' reste fermée aux anonymes — une reproduction réduite est la
+    même image, et /vignette/NN est un numéro devinable.
+  * Deux tests : la vignette d'un fichier public passe en anonyme, celle d'un
+    fichier local reste en 403.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 10:20:00 +0200
+
 secubox-bbs (0.30.13-1~bookworm1) bookworm; urgency=medium
 
   * /media-vignette : le 403 aux anonymes est levé. Il était inapproprié — il

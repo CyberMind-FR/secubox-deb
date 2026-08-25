@@ -158,10 +158,6 @@ func reduire(src image.Image, cote int) image.Image {
 // lisible l'image d'un fil prive a qui devine un numero.
 func (s *Server) servirVignette(w http.ResponseWriter, r *http.Request) {
 	v := s.qui(r)
-	if !v.Connecte {
-		http.Error(w, "reserve aux membres", http.StatusForbidden)
-		return
-	}
 	brut := strings.TrimPrefix(r.URL.Path, "/vignette/")
 	if i := strings.IndexByte(brut, '.'); i >= 0 {
 		brut = brut[:i]
@@ -174,6 +170,20 @@ func (s *Server) servirVignette(w http.ResponseWriter, r *http.Request) {
 	f, err := s.st.Fichier(id)
 	if err != nil || !f.EstImage() {
 		http.NotFound(w, r)
+		return
+	}
+
+	// EXACTEMENT le droit du fichier lui-meme (cf. /f/ dans fichiers.go), ce que
+	// l'entete de cette fonction annonce depuis toujours. Le garde precedent
+	// etait PLUS STRICT que ce qu'il documentait : `!v.Connecte` sans regarder
+	// la visibilite refusait aussi la vignette d'un fichier PUBLIC. La
+	// Bibliotheque, qui liste des fichiers publics, rendait donc 403 sur chacune
+	// de ses vignettes a un visiteur sans compte — pages publiques sans images.
+	//
+	// Le controle vient APRES le chargement : c'est la visibilite du fichier qui
+	// decide, et elle n'est connue qu'ici.
+	if !v.Connecte && f.Visibility != "public" {
+		http.Error(w, "reserve aux membres", http.StatusForbidden)
 		return
 	}
 
