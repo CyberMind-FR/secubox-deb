@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -218,5 +219,30 @@ func TestBiblioNeListeQueLePublicAuxAnonymes(t *testing.T) {
 	// Un membre voit les deux : le filtre ne doit pas amputer la vue connectée.
 	if membre := srv.cartesBiblio(false); len(membre) != 2 {
 		t.Fatalf("un membre doit voir les 2 fichiers, obtenu %d", len(membre))
+	}
+}
+
+// Les faces du medaillon sont relevees dans l'FS embarque : si le paquet en
+// embarque, l'entete les rend ; sinon le logo fixe est servi, sans erreur.
+// C'est la PRESENCE des fichiers qui allume l'animation — pas un reglage a
+// tenir a jour d'un cote puis de l'autre.
+func TestMedaillonsRelevesEtOrdonnes(t *testing.T) {
+	srv, _ := banc(t)
+	if len(srv.medaillons) == 0 {
+		t.Skip("aucune face embarquee dans ce build")
+	}
+	for i, m := range srv.medaillons {
+		if !strings.HasPrefix(m, "/static/medaillons/") || !strings.HasSuffix(m, ".webp") {
+			t.Fatalf("face %d inattendue : %q", i, m)
+		}
+	}
+	if !sort.StringsAreSorted(srv.medaillons) {
+		t.Fatalf("les faces ne sont pas triees, le defilement serait arbitraire : %v", srv.medaillons)
+	}
+	// Le texte de service ne doit pas se retrouver dans le defile.
+	for _, m := range srv.medaillons {
+		if strings.Contains(m, "LISEZ-MOI") {
+			t.Fatal("un fichier non-webp a ete pris pour une face")
+		}
 	}
 }

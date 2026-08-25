@@ -1,0 +1,30 @@
+Faces du médaillon animé de l'entête BBS.
+=========================================
+
+Déposer ici les faces au format .webp, nommées dans l'ORDRE DE DÉFILEMENT :
+
+    01-communaute.webp
+    02-bibliotheque.webp
+    03-noeud.webp
+    04-maillage.webp
+    05-publication.webp
+    06-securite.webp
+
+Règles :
+
+  * .webp uniquement — tout autre fichier est ignoré (ce texte compris).
+  * Le tri est ALPHABÉTIQUE : c'est le préfixe numérique qui fixe l'ordre.
+  * Taille : 128x128 (le médaillon est rendu à 44px, 128 couvre le 2x).
+  * Fond transparent, cadrage identique d'une face à l'autre — elles se
+    superposent, tout décalage se voit au fondu.
+
+Aucun fichier .webp ici = pas d'animation : le logo fixe est servi, sans
+erreur ni requête supplémentaire. C'est la PRÉSENCE des fichiers qui allume
+l'animation, il n'y a pas de réglage à tenir à jour en parallèle.
+
+Conversion depuis les originaux (PNG 1240x1240) :
+
+    python3 scripts/medaillons.py <dossier-des-png>
+
+Le script trie les sources par nom, les réduit, les convertit et les écrit
+ici avec le bon préfixe.

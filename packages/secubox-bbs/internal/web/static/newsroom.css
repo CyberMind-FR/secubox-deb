@@ -69,6 +69,62 @@ a{color:inherit;text-decoration:none}
    losange (#1114). */
 .logo img.medaille{border:none;background:none;border-radius:50%;object-fit:contain;filter:drop-shadow(0 1px 3px rgba(12,32,64,.35))}
 .logo img.medaille::after{content:none}
+
+/* ── Médaillon animé de l'entête ──────────────────────────────────────────
+   Les faces se superposent AU MÊME endroit que le logo et se relaient en
+   fondu. Le logo fixe reste dessous : c'est lui qu'on voit si les faces ne
+   sont pas embarquées, si elles n'ont pas encore chargé, ou si le visiteur
+   demande moins d'animation. Rien ne saute, rien ne se décale.
+
+   --n vient du gabarit (nombre de faces), --dur est le tour complet : chaque
+   face occupe donc 1/n du tour, quel que soit le nombre de fichiers déposés. */
+.medaillon{display:inline-grid;width:44px;height:44px;flex:none;--dur:18s}
+/* L'index et le nombre de faces passent par des CLASSES, jamais par un
+   attribut `style` : la CSP du BBS est `style-src 'self'`, donc tout style
+   inline est IGNORÉ par le navigateur — silencieusement. Un `animation-delay`
+   calculé sur une variable absente retombe à 0s, et les six faces défilaient
+   toutes en même temps. Le logo (1er <img>) décale les faces d'un rang, d'où
+   le nth-of-type qui commence à 2. */
+.medaillon .mface:nth-of-type(2){--i:0}
+.medaillon .mface:nth-of-type(3){--i:1}
+.medaillon .mface:nth-of-type(4){--i:2}
+.medaillon .mface:nth-of-type(5){--i:3}
+.medaillon .mface:nth-of-type(6){--i:4}
+.medaillon .mface:nth-of-type(7){--i:5}
+.medaillon .mface:nth-of-type(8){--i:6}
+.medaillon .mface:nth-of-type(9){--i:7}
+.medaillon .mface:nth-of-type(10){--i:8}
+.medaillon .mface:nth-of-type(11){--i:9}
+.medaillon .mface:nth-of-type(12){--i:10}
+.medaillon .mface:nth-of-type(13){--i:11}
+.medaillon.n2{--n:2}
+.medaillon.n3{--n:3}
+.medaillon.n4{--n:4}
+.medaillon.n5{--n:5}
+.medaillon.n6{--n:6}
+.medaillon.n7{--n:7}
+.medaillon.n8{--n:8}
+.medaillon.n9{--n:9}
+.medaillon.n10{--n:10}
+.medaillon.n11{--n:11}
+.medaillon.n12{--n:12}
+.medaillon>*{grid-area:1/1}
+.medaillon .mface{width:44px;height:44px;border-radius:50%;object-fit:contain;opacity:0;
+  filter:drop-shadow(0 1px 3px rgba(12,32,64,.35));pointer-events:none}
+.medaillon.anime .mface{
+  animation:medcycle var(--dur) linear infinite;
+  animation-delay:calc(var(--i) * var(--dur) / var(--n))}
+/* Le survol suspend : on peut regarder une face, et le mouvement ne suit pas
+   l'œil de qui lit le titre juste à côté. */
+.logo:hover .medaillon.anime .mface{animation-play-state:paused}
+@keyframes medcycle{
+  0%{opacity:0} 2%{opacity:1} 16%{opacity:1} 20%{opacity:0} 100%{opacity:0}
+}
+/* Demande explicite de sobriété : plus de relais du tout, le logo fixe suffit.
+   Une entête qui bouge en permanence est exactement ce que ce réglage vise. */
+@media(prefers-reduced-motion:reduce){
+  .medaillon.anime .mface{animation:none;opacity:0}
+}
 .logo h1{margin:0;font-family:"Fraunces","Cinzel";font-size:1.45rem;font-weight:700;letter-spacing:.02em;line-height:1}
 .logo .sub{font-family:"JetBrains Mono";font-size:.56rem;letter-spacing:.28em;color:var(--dim);text-transform:uppercase}
 .drop{flex:1;max-width:520px;margin:0 auto;position:relative}

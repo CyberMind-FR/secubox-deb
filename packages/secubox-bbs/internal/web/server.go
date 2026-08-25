@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -136,17 +138,21 @@ type Options struct {
 }
 
 type Server struct {
-	st   *store.Store
-	auth *store.Auth
-	opt  Options
-	tpl  map[string]*template.Template
-	mux  *http.ServeMux
-	bil  *billets.Client
+	st    *store.Store
+	auth  *store.Auth
+	opt   Options
+	tpl   map[string]*template.Template
+	mux   *http.ServeMux
+	bil   *billets.Client
 	ytsas *connectors.ClientYtsas
 	// vCSS : empreinte du contenu de la feuille de style, ajoutee a son
 	// adresse. Voir routes.go — le WAF de la board supprime les en-tetes de
 	// cache, l'adresse est le seul levier qui reste.
 	vCSS string
+	// medaillons : faces du logo animé, relevées UNE FOIS au démarrage dans
+	// l'FS embarqué. Vide = logo fixe. C'est la présence des fichiers qui
+	// allume l'animation ; rien à régler d'un côté puis de l'autre.
+	medaillons []string
 	// resoudreEpisode : id d'episode -> fichier local. Remplace en test.
 	resoudreEpisode resolveur
 	// authAmont : verificateur de mot de passe pour les comptes d'origine
@@ -361,6 +367,19 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 			}
 		}
 		s.vCSS = base64.RawURLEncoding.EncodeToString(h.Sum(nil)[:6])
+	}
+	// Faces du médaillon : triées par nom, l'ordre du défilement est donc celui
+	// des fichiers (01-…, 02-…). Absence du dossier = pas d'animation, pas
+	// d'erreur : le logo fixe reste servi.
+	if ents, err := fs.ReadDir(assets, "static/medaillons"); err == nil {
+		for _, e := range ents {
+			n := e.Name()
+			if e.IsDir() || !strings.HasSuffix(n, ".webp") {
+				continue
+			}
+			s.medaillons = append(s.medaillons, "/static/medaillons/"+n)
+		}
+		sort.Strings(s.medaillons)
 	}
 	if opt.AuthSocket != "" {
 		s.authAmont = clientAuthSocket(opt.AuthSocket)
