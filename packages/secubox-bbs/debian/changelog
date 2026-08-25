@@ -19,6 +19,12 @@ secubox-bbs (0.30.16-1~bookworm1) bookworm; urgency=high
   * Cache-Control passe en `public` : aucun en-tête du visiteur n'est transmis
     en amont, la vignette est identique pour tous, et c'est le cache partagé qui
     borne l'amplification.
+  * TROISIÈME COUCHE du même contournement : le gabarit newsroom conditionnait
+    lui aussi l'image à la session (`{{if and .Vignette $.V.Connecte}}`), aux
+    deux endroits — carrousel et listing par source. C'est elle qui rendait la
+    parabole de remplacement à chaque carte pour un visiteur anonyme, même une
+    fois le relais ouvert. Retirée : le relais scellé sert la vignette à qui la
+    page affiche, session ou non.
   * Trois tests : le sceau dépend de l'URL, une URL non scellée est refusée
     (avec ou sans sceau d'une autre adresse), et l'absence de secret referme.
 
