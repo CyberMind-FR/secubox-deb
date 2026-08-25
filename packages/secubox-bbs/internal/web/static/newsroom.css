@@ -79,6 +79,35 @@ a{color:inherit;text-decoration:none}
    --n vient du gabarit (nombre de faces), --dur est le tour complet : chaque
    face occupe donc 1/n du tour, quel que soit le nombre de fichiers déposés. */
 .medaillon{display:inline-grid;width:44px;height:44px;flex:none;--dur:18s}
+/* L'index et le nombre de faces passent par des CLASSES, jamais par un
+   attribut `style` : la CSP du BBS est `style-src 'self'`, donc tout style
+   inline est IGNORÉ par le navigateur — silencieusement. Un `animation-delay`
+   calculé sur une variable absente retombe à 0s, et les six faces défilaient
+   toutes en même temps. Le logo (1er <img>) décale les faces d'un rang, d'où
+   le nth-of-type qui commence à 2. */
+.medaillon .mface:nth-of-type(2){--i:0}
+.medaillon .mface:nth-of-type(3){--i:1}
+.medaillon .mface:nth-of-type(4){--i:2}
+.medaillon .mface:nth-of-type(5){--i:3}
+.medaillon .mface:nth-of-type(6){--i:4}
+.medaillon .mface:nth-of-type(7){--i:5}
+.medaillon .mface:nth-of-type(8){--i:6}
+.medaillon .mface:nth-of-type(9){--i:7}
+.medaillon .mface:nth-of-type(10){--i:8}
+.medaillon .mface:nth-of-type(11){--i:9}
+.medaillon .mface:nth-of-type(12){--i:10}
+.medaillon .mface:nth-of-type(13){--i:11}
+.medaillon.n2{--n:2}
+.medaillon.n3{--n:3}
+.medaillon.n4{--n:4}
+.medaillon.n5{--n:5}
+.medaillon.n6{--n:6}
+.medaillon.n7{--n:7}
+.medaillon.n8{--n:8}
+.medaillon.n9{--n:9}
+.medaillon.n10{--n:10}
+.medaillon.n11{--n:11}
+.medaillon.n12{--n:12}
 .medaillon>*{grid-area:1/1}
 .medaillon .mface{width:44px;height:44px;border-radius:50%;object-fit:contain;opacity:0;
   filter:drop-shadow(0 1px 3px rgba(12,32,64,.35));pointer-events:none}

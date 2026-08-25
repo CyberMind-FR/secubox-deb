@@ -13,6 +13,11 @@ secubox-bbs (0.30.17-1~bookworm1) bookworm; urgency=low
     permanence est exactement ce que ce réglage vise. Le survol suspend aussi :
     on peut regarder une face, et le mouvement ne suit pas l'œil de qui lit le
     titre juste à côté.
+  * L'index et le nombre de faces passent par des CLASSES (nth-of-type et
+    .n<N>), jamais par un attribut `style`. La CSP du BBS est `style-src
+    'self'` : tout style inline est IGNORÉ par le navigateur, silencieusement.
+    Un `animation-delay` calculé sur une variable absente retombait à 0s, et
+    les six faces défilaient toutes en même temps.
   * Poids : 6 faces en WebP 128px (le médaillon est rendu à 44px, 128 couvre le
     2x et le 3x), 62 Ko au total, chargées en lazy.
   * Le nombre de faces est transmis au CSS (--n) : chacune occupe 1/n du tour,
