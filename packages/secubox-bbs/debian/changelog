@@ -1,3 +1,19 @@
+secubox-bbs (0.30.19-1~bookworm1) bookworm; urgency=high
+
+  * /api/v1/bbs/menu ne publie plus les rubriques PRIVÉES. Store.Categories(true)
+    ne borne que le COMPTE de fils, pas la liste : elle rend toutes les
+    rubriques, privées comprises. Cette route étant lue sans session (le Hall
+    l'interroge par la socket), leur nom et leur volume étaient exposés à tout
+    venant — sur ce nœud : « Intendance », « Archives » (58 fils) et « Videos »
+    (110 fils). Le nom d'une rubrique fermée est déjà une information.
+  * Effet de bord corrigé du même coup : le menu contextuel du Hall fabriquait
+    des entrées vers ces rubriques, et chacune menait à un 404. Invisible quand
+    c'est inaccessible, plutôt qu'un lien mort.
+  * Le rail du BBS, lui, les filtrait déjà : l'API et l'interface ne
+    s'accordaient pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 16:10:00 +0200
+
 secubox-bbs (0.30.18-1~bookworm1) bookworm; urgency=medium
 
   * Médaillon : le relais ne s'affichait JAMAIS — aucune face, seulement le logo
