@@ -7,6 +7,9 @@ package web
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -57,15 +60,42 @@ func (s *Server) mnClient() *http.Client {
 		}}}
 }
 
+// signeVignette scelle une URL amont pour le relais.
+//
+// CE QUI AUTORISE LE RELAIS, C'EST L'URL, PAS LE VISITEUR. /mn-vignette va
+// chercher une adresse EXTERNE arbitraire : sans contrainte, c'est un proxy.
+// Le garde precedent — « reserve aux membres » — se trompait de cible : il
+// n'empechait pas l'abus (tout membre pouvait faire relayer n'importe quelle
+// adresse) et il cassait les vignettes des pages PUBLIQUES, ou toutes les
+// cartes d'actualite tombaient sur un placeholder.
+//
+// Le sceau HMAC dit « cette adresse vient d'un flux que NOUS avons publie ».
+// Il ferme l'abus pour TOUT LE MONDE, membre compris, et laisse passer
+// l'anonyme sur ce que la page affiche deja.
+//
+// Cle DERIVEE du secret JWT : le meme secret ne doit pas signer deux choses de
+// nature differente.
+func (s *Server) cleVignette() []byte {
+	m := hmac.New(sha256.New, []byte(s.opt.JWTSecret))
+	m.Write([]byte("mn-vignette/v1"))
+	return m.Sum(nil)
+}
+
+func (s *Server) signeVignette(u string) string {
+	m := hmac.New(sha256.New, s.cleVignette())
+	m.Write([]byte(u))
+	return base64.RawURLEncoding.EncodeToString(m.Sum(nil)[:16])
+}
+
 // relayVignette transforme une URL d'image EXTERNE en chemin same-origin relayé
-// (/mn-vignette?u=…) : le navigateur du membre ne contacte jamais le média tiers
+// (/mn-vignette?u=…&s=…) : le navigateur ne contacte jamais le média tiers
 // (vie privée + `img-src 'self'`). Vide si pas d'image.
-func relayVignette(u string) string {
+func (s *Server) relayVignette(u string) string {
 	u = strings.TrimSpace(u)
 	if u == "" || !(strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")) {
 		return ""
 	}
-	return "/mn-vignette?u=" + url.QueryEscape(u)
+	return "/mn-vignette?u=" + url.QueryEscape(u) + "&s=" + s.signeVignette(u)
 }
 
 // vitrineMetaNews récupère une dizaine d'événements récents (déjà classés par
@@ -109,7 +139,7 @@ func (s *Server) vitrineMetaNews() ([]metaVue, string) {
 		out = append(out, metaVue{
 			ID: t.ID, Titre: t.Title, Resume: t.Summary,
 			NbSrc: t.NbSrc, Sources: t.Sources, Tags: t.Tags,
-			Vignette: relayVignette(t.Vignette), Lien: lien,
+			Vignette: s.relayVignette(t.Vignette), Lien: lien,
 		})
 	}
 	return out, ""
@@ -144,7 +174,7 @@ func (s *Server) vitrineMetaSources() []srcVue {
 	for _, s0 := range d.Sources {
 		v := srcVue{Nom: s0.Name, Slug: s0.Slug, Categorie: s0.Category}
 		for _, it := range s0.Items {
-			v.News = append(v.News, newsVue{Titre: it.Title, URL: it.URL, Vignette: relayVignette(it.Image)})
+			v.News = append(v.News, newsVue{Titre: it.Title, URL: it.URL, Vignette: s.relayVignette(it.Image)})
 		}
 		out = append(out, v)
 	}
@@ -155,11 +185,20 @@ func (s *Server) vitrineMetaSources() []srcVue {
 // jamais le média tiers. Réservé aux membres, garde ANTI-SSRF (aucune adresse
 // interne), image seulement, taille bornée, en-têtes du membre non transmis.
 func (s *Server) servirMNVignette(w http.ResponseWriter, r *http.Request) {
-	if v := s.qui(r); !v.Connecte {
-		http.Error(w, "reserve aux membres", http.StatusForbidden)
+	// SANS SECRET, ON NE PEUT PAS SCELLER : on retombe alors sur le garde
+	// historique plutot que d'ouvrir un proxy sur une installation mal reglee.
+	brut := r.URL.Query().Get("u")
+	if s.opt.JWTSecret == "" {
+		if v := s.qui(r); !v.Connecte {
+			http.Error(w, "reserve aux membres", http.StatusForbidden)
+			return
+		}
+	} else if !hmac.Equal([]byte(r.URL.Query().Get("s")), []byte(s.signeVignette(brut))) {
+		// 404 et non 403 : un sceau invalide ne merite pas de confirmation.
+		http.NotFound(w, r)
 		return
 	}
-	u, err := url.Parse(r.URL.Query().Get("u"))
+	u, err := url.Parse(brut)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		http.NotFound(w, r)
 		return
@@ -198,7 +237,9 @@ func (s *Server) servirMNVignette(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	// Identique pour tous (aucun en-tete du visiteur transmis) : le cache
+	// PARTAGE doit pouvoir l'absorber, c'est lui qui borne l'amplification.
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = w.Write(corps)
 }
 

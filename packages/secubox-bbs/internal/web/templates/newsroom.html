@@ -45,7 +45,7 @@
       <div class="mntrack" role="list">
         {{range .MetaNews}}
         <a class="mncard{{if .Multi}} multi{{end}}" role="listitem" href="{{.Lien}}" target="_blank" rel="noopener nofollow" title="{{.Titre}}">
-          {{if and .Vignette $.V.Connecte}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>
+          {{if .Vignette}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>
           {{else}}<span class="mncover ph"><span class="phg">📡</span><span class="mnbadge{{if .Multi}} on{{end}}">🔗 {{.NbSrc}}</span></span>{{end}}
           <div class="mnbody">
             <div class="mntop">
@@ -69,7 +69,7 @@
         <div class="mntrack" role="list">
           {{range .News}}
           <a class="mncard news" role="listitem" href="{{.URL}}" target="_blank" rel="noopener nofollow" title="{{.Titre}}">
-            {{if and .Vignette $.V.Connecte}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"></span>
+            {{if .Vignette}}<span class="mncover"><img src="{{.Vignette}}" alt="" loading="lazy"></span>
             {{else}}<span class="mncover ph"><span class="phg">📰</span></span>{{end}}
             <div class="mnbody"><h3 class="serif">{{.Titre}}</h3></div>
           </a>

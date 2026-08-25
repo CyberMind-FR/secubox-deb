@@ -1,3 +1,35 @@
+secubox-bbs (0.30.16-1~bookworm1) bookworm; urgency=high
+
+  * /mn-vignette : les vignettes des cartes d'actualité s'affichent enfin sans
+    compte. Le relais était « réservé aux membres » ; toutes les cartes de la
+    vitrine MetaNews tombaient donc sur un placeholder pour un visiteur
+    anonyme — 60 événements, 60 vignettes manquantes.
+  * Le garde se trompait de cible. Ce relais va chercher une adresse EXTERNE
+    arbitraire : la session n'empêchait pas l'abus (tout membre pouvait faire
+    relayer n'importe quelle URL) et elle cassait les pages publiques. Ce qui
+    autorise le relais, c'est l'URL, pas le visiteur.
+  * Les URL de vignette sont désormais SCELLÉES (HMAC-SHA256, clé dérivée du
+    secret JWT — un même secret ne doit pas signer deux choses de nature
+    différente). Le sceau dit « cette adresse vient d'un flux que nous avons
+    publié ». Il ferme l'abus pour TOUT LE MONDE, membre compris, et laisse
+    passer l'anonyme sur ce que la page affiche déjà. Sceau absent ou invalide
+    → 404, jamais 403 : pas de confirmation.
+  * Sans secret configuré, on ne sait pas sceller : on retombe sur le garde
+    historique plutôt que d'ouvrir un proxy sur une installation mal réglée.
+  * Cache-Control passe en `public` : aucun en-tête du visiteur n'est transmis
+    en amont, la vignette est identique pour tous, et c'est le cache partagé qui
+    borne l'amplification.
+  * TROISIÈME COUCHE du même contournement : le gabarit newsroom conditionnait
+    lui aussi l'image à la session (`{{if and .Vignette $.V.Connecte}}`), aux
+    deux endroits — carrousel et listing par source. C'est elle qui rendait la
+    parabole de remplacement à chaque carte pour un visiteur anonyme, même une
+    fois le relais ouvert. Retirée : le relais scellé sert la vignette à qui la
+    page affiche, session ou non.
+  * Trois tests : le sceau dépend de l'URL, une URL non scellée est refusée
+    (avec ou sans sceau d'une autre adresse), et l'absence de secret referme.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 12:10:00 +0200
+
 secubox-bbs (0.30.15-1~bookworm1) bookworm; urgency=high
 
   * La Bibliothèque n'annonce plus que ce qu'elle sert : sans session, elle ne
