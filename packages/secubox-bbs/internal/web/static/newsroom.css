@@ -411,7 +411,11 @@ a{color:inherit;text-decoration:none}
 .ccard[data-k="video"]{--tone:var(--coral)}
 /* couverture = FOND plein-cadre (absolu, sous le texte) */
 .cccover{position:absolute;inset:0;z-index:0;display:block;background:var(--soft);overflow:hidden}
-.cccover img{width:100%;height:100%;object-fit:cover;display:block}
+.cccover img,.cccover video{width:100%;height:100%;object-fit:cover;display:block}
+/* Une vidéo en couverture est du DÉCOR : elle ne prend pas le clic, qui
+   appartient à la carte. Sans ça, viser la vignette ouvrait le lecteur au lieu
+   du fil. */
+.cccover video,video.rbg{pointer-events:none}
 .cccover.vid::after{content:"▶";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:1.7rem;
   text-shadow:0 1px 8px rgba(0,0,0,.7)}
 /* Vignette de REPLI (#1114) : une carte sans image reçoit une mosaïque teintée

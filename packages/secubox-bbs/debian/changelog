@@ -1,3 +1,21 @@
+secubox-bbs (0.30.20-1~bookworm1) bookworm; urgency=low
+
+  * Vignette des topics VIDÉO. Une carte dont le seul média est une vidéo
+    n'avait pas de couverture : dans le carrousel elle se réduisait à un ▶ sur
+    fond uni, dans la liste des fils elle perdait son fond. C'est désormais la
+    vidéo elle-même qui fait la vignette, via le fragment temporel `#t=0.5` —
+    la demi-seconde plutôt que la première image, beaucoup de vidéos ouvrant
+    sur du noir.
+  * AUCUN décodage côté serveur : lancer ffmpeg sur un fichier téléversé pour
+    orner une carte, le rapport n'y est pas — c'est déjà la règle posée dans
+    vignettes.go, on la respecte. Le navigateur ne charge que les métadonnées
+    et l'image demandée.
+  * La vidéo de couverture est du décor : muette, sans contrôles, hors du
+    parcours clavier, et elle ne prend pas le clic — qui appartient à la carte.
+    Sans ce dernier point, viser la vignette ouvrait le lecteur au lieu du fil.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 25 Aug 2026 19:10:00 +0200
+
 secubox-bbs (0.30.19-1~bookworm1) bookworm; urgency=high
 
   * /api/v1/bbs/menu ne publie plus les rubriques PRIVÉES. Store.Categories(true)
