@@ -84,3 +84,12 @@ backups/*.img.xz
 /output/metablog-backfill.log
 .superpowers/sdd/
 packages/*/debian/*.postinst.debhelper
+
+# Caches de construction Go — jamais dans le dépôt.
+# Ils y étaient : 556 Mo et 14 895 fichiers suivis, recopiés dans CHAQUE
+# worktree, au point de saturer le disque et d'empêcher d'en créer un nouveau.
+# Ce sont des artefacts reproductibles, pas du code.
+packages/*/.gopath/
+packages/*/.gocache/
+# Binaires construits déposés dans debian/ par dpkg-buildpackage.
+packages/*/debian/secubox-*d
