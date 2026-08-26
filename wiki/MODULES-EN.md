@@ -9,7 +9,7 @@
 
 *Complete module documentation*
 
-**Total modules:** 127
+**Total modules:** 128
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 

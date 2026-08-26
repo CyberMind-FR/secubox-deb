@@ -92,7 +92,7 @@ La documentation technique couvre l'installation sur différentes cibles matéri
 - **[[Installation]]** — Guide d'installation complet (APT, Live USB, ARM)
 - **[[Live-USB-VirtualBox]]** — Test rapide en machine virtuelle
 - **[[QEMU-ARM64]]** — Émulation ARM sur x86 pour développement
-- **[[Modules|MODULES-EN]]** — Documentation des 125 paquets
+- **[[Modules|MODULES-EN]]** — Documentation des 128 modules
 
 ---
 

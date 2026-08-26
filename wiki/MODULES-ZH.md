@@ -9,7 +9,7 @@
 
 *完整的模块文档*
 
-**模块总数:** 127
+**模块总数:** 128
 
 [🇬🇧 English](MODULES-EN.md) | [🇫🇷 Français](MODULES-FR.md) | [🇩🇪 Deutsch](MODULES-DE.md) | [🇨🇳 中文](MODULES-ZH.md)
 

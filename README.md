@@ -39,7 +39,7 @@ detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 
 - **Your hardware, your rules.** Everything runs on the box you own. No cloud
   account, no telemetry, no third-party cookie ever leaves the appliance.
-- **Whole stack, one install.** 124 packages covering security, networking,
+- **Whole stack, one install.** 176 packages covering security, networking,
   applications and operations — instead of a weekend of glue work.
 - **Runs on what you already have.** Raspberry Pi, ESPRESSObin, MOCHAbin,
   a repurposed laptop, or a VM on your desktop.
@@ -121,7 +121,7 @@ Flashing, U-Boot and first-boot steps:
 
 ### 🧪 Testing Alpha 3
 
-`v3.0.0-alpha.1` is the current pre-release — 124 packages, disk images and
+`v3.0.0-alpha.1` is the current pre-release — 177 packages, disk images and
 Live USB builds for every supported board. It is a **pre-release**: run it on a
 test box, not on the link your household depends on.
 Guided path: [**Démarrage rapide Alpha3**](https://github.com/CyberMind-FR/secubox-deb/wiki) —
@@ -143,7 +143,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 |---|---|
 | [Wiki home](https://github.com/CyberMind-FR/secubox-deb/wiki) | Portal — every guide starts here |
 | [Configuration](https://github.com/CyberMind-FR/secubox-deb/wiki/Configuration) | First-boot settings, network modes |
-| [Modules](https://github.com/CyberMind-FR/secubox-deb/wiki/MODULES-EN) | The 124 packages, one by one |
+| [Modules](https://github.com/CyberMind-FR/secubox-deb/wiki/MODULES-EN) | The 128 modules, one by one |
 | [API reference](https://github.com/CyberMind-FR/secubox-deb/wiki/API-Reference) | 2000+ endpoints |
 | [Architecture](https://github.com/CyberMind-FR/secubox-deb/wiki/Modules-Architecture) | The 6-layer model |
 | [Troubleshooting](https://github.com/CyberMind-FR/secubox-deb/wiki/Troubleshooting) | When it does not boot |

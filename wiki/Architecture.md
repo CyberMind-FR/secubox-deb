@@ -229,7 +229,7 @@ Le projet vise la certification ANSSI CSPN à horizon 2027. Contraintes respect�
 
 ## Liens
 
-- **[[Modules|MODULES-EN]]** — Documentation des 125 paquets
+- **[[Modules|MODULES-EN]]** — Documentation des 128 modules
 - **[[API-Reference]]** — Référence API (2000+ endpoints)
 - **[[Hardware-Matrix]]** — Cibles matérielles supportées
 - **[[Roadmap]]** — État du développement
