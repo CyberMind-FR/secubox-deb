@@ -1,3 +1,16 @@
+secubox-webos (1.0.95-1~bookworm1) bookworm; urgency=medium
+
+  * LA BASCULE CLAIR/SOMBRE NE REPRENAIT QU'APRES UN RAFRAICHISSEMENT FORCE
+    (#1312). Le garde pose pour taire la console cassait tout : un cadre
+    restaure depuis le cache ne redeclenche pas `load`, n'etait donc jamais
+    marque pret, et ne recevait plus rien.
+  * UNE BASCULE MORTE EST PIRE QU'UNE CONSOLE BAVARDE. On envoie toujours : a
+    l'origine PRECISE quand on sait que le document vient du service, et a `*`
+    sinon. Ce message ne porte qu'un nom de theme — `*` n'y revele rien, et il
+    ne peut pas echouer ; c'est l'echec qui remplissait la console.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:56:51 +0200
+
 secubox-webos (1.0.94-1~bookworm1) bookworm; urgency=medium
 
   * LE LECTEUR PEERTUBE NE DISAIT PAS OU IL EN ETAIT (#1311), et la carte

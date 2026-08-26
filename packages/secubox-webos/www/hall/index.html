@@ -1351,14 +1351,19 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     document.querySelectorAll(
       'iframe[data-micro], iframe[data-apercu], #eb-frames iframe'
     ).forEach(f=>{
-      // UN CADRE PAS ENCORE CHARGE EST ENCORE `about:blank`, et un about:blank
-      // HERITE de notre origine (#1293). On lui adressait alors un message
-      // destine a l'origine du service : le navigateur refusait et se
-      // plaignait a chaque envoi — une console pleine d'erreurs pour un cadre
-      // qui, de toute facon, lira ?theme= a son chargement.
-      if(f.dataset.pret!=='1') return;
+      // ON N'ABANDONNE PLUS UN CADRE NON MARQUE (#1312). Le garde posé pour
+      // taire la console cassait la bascule : un cadre restauré depuis le
+      // cache ne redéclenche pas `load`, n'était donc jamais marqué prêt, et
+      // ne recevait plus rien — il fallait un rafraîchissement forcé.
+      //
+      // UNE BASCULE MORTE EST PIRE QU'UNE CONSOLE BAVARDE. On envoie toujours ;
+      // à l'origine PRECISE quand on sait que le document vient du service, et
+      // à `*` sinon. Ce message ne porte qu'un nom de thème : `*` n'y révèle
+      // rien, et il ne peut pas échouer — c'est l'échec qui remplissait la
+      // console.
       try{
-        const o=new URL(f.src).origin;
+        const pret = f.dataset.pret === '1';
+        const o = pret ? new URL(f.src).origin : '*';
         f.contentWindow.postMessage({sbx:'theme', theme:theme()}, o);
       }catch(e){}
     });

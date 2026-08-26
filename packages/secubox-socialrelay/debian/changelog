@@ -1,3 +1,18 @@
+secubox-socialrelay (0.1.14-1~bookworm1) bookworm; urgency=medium
+
+  * TOUS LES MEDIAS, PAS SEULEMENT LES IMAGES (#1313). Une video a une premiere
+    image et valait donc d'etre montree : c'est le <img> qui ne savait pas la
+    lire, pas le post qui n'avait rien a donner. On la pose SANS la lire —
+    `muted` et `preload=\"metadata\"` donnent la vignette, rien de plus. Une
+    carte ne demarre pas une video sans qu'on le demande.
+  * Plusieurs medias d'un meme post defilent, avec des POINTS et non des
+    fleches : on ne pilote pas un diaporama depuis une vignette de 250 px, on
+    dit seulement qu'il y en a d'autres. Le defilement interne est plus rapide
+    que celui des posts — il faut voir les deux images avant que le post ne
+    cede la place.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:56:07 +0200
+
 secubox-socialrelay (0.1.13-1~bookworm1) bookworm; urgency=medium
 
   * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la

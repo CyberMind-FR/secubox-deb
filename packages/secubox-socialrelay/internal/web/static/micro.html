@@ -45,6 +45,21 @@
   .une .vign { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
                display:block; transition:opacity .35s ease; }
   .une .vign.cache { display:none; }
+  /* UNE VIDÉO A UNE PREMIÈRE IMAGE (#1313). L'ignorer parce qu'elle n'est pas
+     un fichier image laissait un dégradé nu là où le post montrait quelque
+     chose. On la pose SANS la lire — `preload="metadata"` donne la vignette,
+     rien de plus : une carte ne démarre pas une vidéo sans qu'on le demande. */
+  .une video.vign { object-fit:cover; }
+  .une .film { position:absolute; top:6px; left:6px; width:22px; height:22px;
+               border-radius:50%; display:grid; place-items:center; font-size:.62rem;
+               background:rgba(0,0,0,.62); color:#fff; }
+  /* Plusieurs médias : des points, pas des flèches. On ne pilote pas un
+     diaporama depuis une vignette de 250 px — on dit seulement qu'il y en a
+     d'autres, et lesquels sont passés. */
+  .une .points { position:absolute; top:8px; right:8px; display:flex; gap:3px; }
+  .une .points i { width:5px; height:5px; border-radius:50%;
+                   background:rgba(255,255,255,.42); }
+  .une .points i.on { background:#fff; }
   .une .voile { position:absolute; inset:auto 0 0 0; padding:.35rem .45rem .3rem;
                 background:linear-gradient(transparent, rgba(0,0,0,.86)); color:#fff; }
   .une .qui { display:flex; align-items:baseline; gap:.3rem; font-size:.6rem;
@@ -78,7 +93,7 @@
   <div class="tete"><span class="ic">🔄</span><b>SocialRelay</b><span class="n" id="n">…</span></div>
 
   <a class="une" id="une" href="/" target="_top">
-    <img class="vign cache" id="une-img" alt="">
+    <span id="une-media"></span>
     <span class="voile">
       <span class="qui"><span class="res" id="une-res"></span><span id="une-a"></span>
         <span id="une-d"></span></span>
@@ -116,11 +131,41 @@
     if (s < 86400) return Math.round(s / 3600) + ' h';
     return Math.round(s / 86400) + ' j';
   }
-  // Une image seulement : la vidéo n'a pas de vignette exploitable ici, et
-  // poser son URL dans un <img> afficherait l'icône de fichier cassé.
-  function image(p) {
-    var m = (p.medias || []).filter(function (x) { return x && x.kind === 'image' && x.url; });
-    return m.length ? m[0].url : '';
+  // TOUS LES MÉDIAS, pas seulement les images. Une vidéo a une première image
+  // et vaut donc d'être montrée ; c'est le <img> qui ne savait pas la lire, pas
+  // le post qui n'avait rien à donner.
+  function medias(p) {
+    return (p.medias || []).filter(function (x) { return x && x.url; });
+  }
+
+  var glisse = null;   // rotation des médias À L'INTÉRIEUR d'un post
+
+  function poseMedia(p) {
+    var z = el('une-media'), l = medias(p), k = 0;
+    if (glisse) { clearInterval(glisse); glisse = null; }
+    if (!l.length) { z.innerHTML = ''; return; }
+
+    function pose(n) {
+      var m = l[n % l.length];
+      var pts = l.length > 1
+        ? '<span class="points">' + l.map(function (_, j) {
+            return '<i class="' + (j === (n % l.length) ? 'on' : '') + '"></i>';
+          }).join('') + '</span>'
+        : '';
+      if (m.kind === 'video') {
+        // `muted` ET `preload="metadata"` : on veut l'image, jamais le son ni
+        // le téléchargement du fichier entier dans une vignette.
+        z.innerHTML = '<video class="vign" muted playsinline preload="metadata" '
+          + 'src="' + esc(m.url) + '#t=0.1"></video>'
+          + '<span class="film">▶</span>' + pts;
+      } else {
+        z.innerHTML = '<img class="vign" alt="" src="' + esc(m.url) + '">' + pts;
+      }
+    }
+    pose(0);
+    // Plus court que la rotation des posts : on doit voir les deux images d'un
+    // même post avant qu'il ne cède la place au suivant.
+    if (l.length > 1) glisse = setInterval(function () { pose(++k); }, 2600);
   }
   function texte(p) {
     return String(p.text || '').replace(/\s+/g, ' ').trim() || '(sans texte)';
@@ -129,9 +174,7 @@
   function montre() {
     if (!posts.length) return;
     var p = posts[i % posts.length];
-    var img = el('une-img'), src = image(p);
-    if (src) { img.src = src; img.classList.remove('cache'); }
-    else { img.removeAttribute('src'); img.classList.add('cache'); }
+    poseMedia(p);
     el('une').href = p.url || '/';
     el('une-res').textContent = (ICONE[p.network] || '🌐') + ' ' + (p.network || '');
     el('une-a').textContent = '· ' + (p.author || '');
