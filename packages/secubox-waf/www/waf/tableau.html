@@ -24,7 +24,30 @@
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
-  body { margin: 0; padding: 0 1rem 4rem; }
+  /* PALETTE LOCALE À TROIS ÉTATS (#1308).
+     Le tableau s'en remettait à /shared/hybrid-skin.css, qui ne définit AUCUN
+     des jetons qu'il utilise — ni --bg-card, ni --border, ni --cyan, ni le
+     reste — et qui ne connaît ni data-theme ni prefers-color-scheme. En clair,
+     les défauts du navigateur sauvaient l'apparence ; en sombre, du texte
+     sombre se retrouvait sur un fond sombre.
+     Les trois états sont donc écrits ici : :root nu = clair, la requête média
+     pour l'état « système » où aucun attribut n'est posé, et [data-theme] pour
+     le choix explicite, qui doit gagner dans les DEUX sens. */
+  :root { --fond:#f7f8fa; --bg-card:#ffffff; --ink:#1a1a22; --muted:#5b6b7a;
+          --border:#e2e2ea; --cyan:#0d7f9e; --purple:#5b46b8; --orange:#a1701a;
+          --red:#b7202c; --green:#1f7a55; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#0e0e14; --bg-card:#14141c; --ink:#e8e6d9;
+      --muted:#8a8a99; --border:#2a2a36; --cyan:#4fc3e8; --purple:#9d8bf0;
+      --orange:#e0b355; --red:#e8636f; --green:#4ade80; }
+  }
+  :root[data-theme="dark"] { --fond:#0e0e14; --bg-card:#14141c; --ink:#e8e6d9;
+    --muted:#8a8a99; --border:#2a2a36; --cyan:#4fc3e8; --purple:#9d8bf0;
+    --orange:#e0b355; --red:#e8636f; --green:#4ade80; }
+
+  /* Fond ET couleur EXPLICITES : un corps transparent emprunte celui de
+     l'hôte, et la page finit peinte dans un thème que son texte ne suit pas. */
+  body { margin: 0; padding: 0 1rem 4rem; background: var(--fond); color: var(--ink); }
   .grille { display: grid; gap: 1rem; max-width: 78rem; margin: 0 auto; }
   .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.1rem; }
   h1 { font-size: 1.35rem; margin: 1.6rem 0 .2rem; }
@@ -324,4 +347,21 @@
   // Rafraîchissement paresseux : ces agrégats bougent en minutes, pas en
   // secondes ; interroger plus souvent chargerait la box pour rien.
   setInterval(charger, 60000);
+</script>
+
+<script>
+  // THÈME HÉRITÉ DU HALL (#1308). Le paramètre donne le thème d'ARRIVÉE, le
+  // message donne les bascules SUIVANTES — jamais par rechargement du cadre,
+  // qui perdrait la position de lecture et les graphiques déjà tracés.
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
 </script>

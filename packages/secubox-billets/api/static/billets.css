@@ -197,3 +197,12 @@ button.danger,.danger{border-color:var(--brique);color:var(--brique)}
 .motscles .mc-n{margin-left:auto;font-size:10px;color:var(--gris);border:1px solid var(--filet);
   border-radius:2px;padding:0 6px}
 .motscles .tagbar{margin-top:10px;padding:12px;border:1px solid var(--filet);border-radius:14px;background:var(--fond);box-shadow:0 8px 30px rgba(20,45,60,.10);max-height:50vh;overflow:auto}
+
+
+/* ── ENCADRÉ DANS LE HALL (#1307) ─────────────────────────────────────────
+   La barre du service disparaît : le Hall en porte déjà une, et deux barres
+   superposées prennent la hauteur du contenu sans rien apporter. On retire
+   AUSSI le pied, qui répète des liens que la carte donne déjà. */
+html.sbx-embed .mast { display: none; }
+html.sbx-embed .pub-footer { display: none; }
+html.sbx-embed .pub { padding-top: 0; }

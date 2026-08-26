@@ -1,3 +1,17 @@
+secubox-waf (1.10.11-1~bookworm1) bookworm; urgency=medium
+
+  * TABLEAU DE BORD ILLISIBLE EN SOMBRE (#1308). Il s'en remettait a
+    /shared/hybrid-skin.css, qui ne definit AUCUN des jetons qu'il utilise — ni
+    --bg-card, ni --border, ni --cyan, ni le reste — et qui ne connait ni
+    data-theme ni prefers-color-scheme. En clair, les defauts du navigateur
+    sauvaient l'apparence ; en sombre, du texte sombre sur un fond sombre.
+  * Palette locale a TROIS etats, comme pour la carte micro (#1249), et fond du
+    corps EXPLICITE : un corps transparent emprunte celui de l'hote.
+  * Le theme d'arrivee vient de ?theme=, les bascules suivantes par message —
+    jamais par rechargement, qui perdrait les graphiques deja traces.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:42:33 +0200
+
 secubox-waf (1.10.10-1~bookworm1) bookworm; urgency=medium
 
   * SONDE TOLERANTE (#1278) : sans `return_exceptions=True`, la PREMIERE sonde

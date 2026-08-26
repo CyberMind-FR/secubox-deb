@@ -1,3 +1,19 @@
+secubox-billets (0.8.20-1~bookworm1) bookworm; urgency=medium
+
+  * ENCADRE, ON NE REDESSINE PAS LA BARRE DU HALL (#1307). Billets affichait SON
+    bandeau — « gazette souveraine », le medaillon, sa propre bascule
+    clair/sombre — juste sous celui du Hall. Deux barres l'une sur l'autre, dont
+    une qui ne commande rien de ce qu'on regarde : on perd de la hauteur et on
+    ne sait plus laquelle ecoute.
+  * On regarde `?embed=1` que le Hall pose, ET la presence d'un cadre : le
+    parametre peut manquer si l'on arrive par un lien interne, le cadre ne ment
+    pas.
+  * Le theme vient alors du Hall — garder notre bascule inviterait a regler ici
+    ce qui se regle la-bas, et les deux divergeraient. Le pied disparait aussi :
+    il repete des liens que la carte donne deja.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:42:38 +0200
+
 secubox-billets (0.8.19-1~bookworm1) bookworm; urgency=medium
 
   * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la

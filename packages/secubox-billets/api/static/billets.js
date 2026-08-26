@@ -1,3 +1,34 @@
+// ── ENCADRÉ, ON NE REDESSINE PAS LA BARRE DU HALL (#1307) ──────────────────
+//
+// Embarqué, Billets affichait SON bandeau — « gazette souveraine », le
+// médaillon, sa propre bascule clair/sombre — juste sous celui du Hall. Deux
+// barres l'une sur l'autre, dont une qui ne commande rien de ce qu'on regarde :
+// on perd de la hauteur et on ne sait plus laquelle écoute.
+//
+// On regarde `?embed=1`, que le Hall pose, ET la présence d'un cadre : le
+// paramètre peut manquer si l'on arrive par un lien interne, mais le cadre,
+// lui, ne ment pas.
+(function () {
+  try {
+    var q = new URLSearchParams(location.search).get('embed') === '1';
+    if (!q && window.top === window.self) return;
+    document.documentElement.classList.add('sbx-embed');
+    // Le thème vient alors du Hall : garder notre bascule inviterait à régler
+    // ici ce qui se règle là-bas, et les deux divergeraient.
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+    addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.sbx !== 'theme') return;
+      if (d.theme === 'dark' || d.theme === 'light') {
+        document.documentElement.setAttribute('data-theme', d.theme);
+      }
+    });
+  } catch (e) {}
+})();
+
 // SPDX-License-Identifier: LicenseRef-CMSD-1.0
 // Thème clair/sombre PARTAGÉ avec la rédaction du BBS (#1092/#1094) : MÊME clé
 // localStorage (`av-theme`) et même bascule, pour qu'un lecteur qui passe la
