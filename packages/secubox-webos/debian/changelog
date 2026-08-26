@@ -1,3 +1,28 @@
+secubox-webos (1.0.37-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet PARE-FEU dans le Hall (#1228), au meme gabarit que celui de la
+    Radio : le Hall sait deja afficher un cardlet, il n'a pas a apprendre un
+    second format. Ce qui change est le contenu — une radio dit ce qu'elle
+    joue, un pare-feu dit ce qu'il ecarte.
+  * QUATRE CHIFFRES, pas davantage : bannis actifs, menaces du jour, surfaces
+    surveillees, detections en service. Un cardlet se lit d'un coup d'oeil
+    depuis l'accueil ; au-dela, c'est le tableau de bord qu'il faut ouvrir, et
+    le cardlet y renvoie.
+  * Une phrase en tete plutot que quatre nombres muets : la categorie dominante
+    est dite en francais — « surtout : noms qu'on ne sert pas » — parce que
+    « host_anomaly:unrouted » parle au developpeur, pas a l'operateur qui passe
+    devant son accueil.
+  * Un TIRET quand un chiffre manque, jamais un zero : afficher « 0 banni »
+    sans avoir pu demander rassurerait a tort, ce qu'un indicateur de securite
+    ne doit jamais faire. Le repli « injoignable » ne pretend rien non plus.
+  * Lecture cote serveur par waf.sock, cache 20 s — le client ne contacte
+    jamais le WAF, et une posture bouge en dizaines de minutes, pas en
+    secondes : interroger plus souvent chargerait la box pour afficher le meme
+    chiffre. Teinte propre au cardlet : deux cardlets de meme couleur se
+    liraient comme un seul bloc.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:34:22 +0200
+
 secubox-webos (1.0.36-1~bookworm1) bookworm; urgency=medium
 
   * Le Hall s'exclut du bandeau de santé injecté par le WAF. Celui-ci charge son

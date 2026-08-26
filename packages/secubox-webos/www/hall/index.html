@@ -316,6 +316,18 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .cardlet .counts b{color:var(--ink)}
 .cardlet .msg{display:flex;gap:8px}
 .cardlet .msg input{flex:1;padding:8px 12px;border-radius:9px;border:1.5px solid var(--line-2);background:var(--soft);color:var(--ink);font-size:.8rem;outline:none}
+/* Cardlet PARE-FEU (#1228) — hérite de .cardlet ; seul change ce qui doit
+   changer. Teinte propre : le violet est celui de la radio, et deux cardlets de
+   même couleur se liraient comme un seul bloc. */
+.cardlet .cover-waf{background:linear-gradient(135deg,var(--violet),var(--coral))}
+.cardlet.cl-waf .clh .tag{color:var(--mint);background:color-mix(in srgb,var(--mint) 14%,transparent)}
+.cardlet.cl-waf .live{color:var(--mint)}
+.cardlet.cl-waf .live .led{background:var(--mint);box-shadow:0 0 0 3px color-mix(in srgb,var(--mint) 30%,transparent)}
+.cardlet.cl-waf[data-etat="offline"] .live{color:var(--coral)}
+.cardlet.cl-waf[data-etat="offline"] .live .led{background:var(--coral);box-shadow:0 0 0 3px var(--coral-s)}
+.cardlet .cl-lien{font-family:"JetBrains Mono";font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--dim);text-decoration:none;align-self:flex-start}
+.cardlet .cl-lien:hover{color:var(--ink)}
 .cardlet .msg button{padding:0 15px;border-radius:9px;border:none;background:var(--cyan);color:#fff;font-weight:600;font-size:.8rem}
 
 .accueil{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
@@ -480,6 +492,22 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
               <li>Sécurité R5 intégrée</li>
             </ul>
           </div>
+          <div class="cardlet cl-waf">
+            <div class="clh serif">🛡️ Pare-feu <span class="tag">veille</span></div>
+            <div class="np"><div class="cover cover-waf">🛡️</div>
+              <div class="meta"><b class="serif" id="wtitle">Sous surveillance</b>
+                <div class="art" id="wsub">— lecture en cours —</div>
+                <span class="live"><i class="led"></i> <span id="wetat">actif</span></span>
+                <div class="counts">
+                  <span title="adresses actuellement écartées par le pare-feu">🚫 <b id="wbans">—</b></span>
+                  <span title="menaces bloquées aujourd'hui">🛡️ <b id="wjour">—</b></span>
+                  <span title="surfaces surveillées : HTTP, SSH, SMTP, IMAP, leurres">🛰️ <b id="wsurf">—</b></span>
+                  <span title="détections comportementales en service">🧠 <b id="wdet">—</b></span>
+                </div>
+              </div></div>
+            <a class="cl-lien" href="https://waf.gk2.secubox.in/" target="_blank" rel="noopener">Tableau de bord ↗</a>
+          </div>
+
           <div class="cardlet">
             <div class="clh serif">✧ Cardlet actif — Radio <span class="tag">focus</span></div>
             <div class="bar"><button title="Rafraîchir">⟳</button><button class="play" title="Lecture / pause">▶</button>
@@ -913,6 +941,35 @@ function majRadio(){
     }).catch(()=>{});
 }
 majRadio(); setInterval(majRadio, 15000);
+
+// Cardlet PARE-FEU (#1228) — même chemin que la Radio : le serveur lit le WAF
+// par sa socket, le client ne le contacte jamais. Rythme plus lent : une
+// posture bouge en dizaines de minutes, pas en secondes.
+function majWaf(){
+  fetch('/api/v1/webos/public/cardlets/waf',{headers:{'Accept':'application/json'}})
+    .then(r=>r.ok?r.json():Promise.reject()).then(c=>{
+      const ct=(c&&c.content)||{}; const m={};
+      ((c&&c.metrics)||[]).forEach(x=>m[x.id]=x.value);
+      const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+      const carte=document.querySelector('.cl-waf');
+      const horsService=(c&&c.status)==='offline';
+      if(carte) carte.setAttribute('data-etat', horsService?'offline':'online');
+      set('wtitle', ct.title||'Sous surveillance');
+      set('wsub', ct.subtitle||'');
+      set('wetat', horsService?'injoignable':'en veille');
+      // Un tiret quand le chiffre manque, JAMAIS un zéro : afficher « 0 banni »
+      // sans avoir pu demander rassurerait à tort.
+      set('wbans', m.bans!=null?m.bans:'—');
+      set('wjour', m.jour!=null?m.jour:'—');
+      set('wsurf', m.surfaces!=null?m.surfaces:'—');
+      set('wdet',  m.detections!=null?m.detections:'—');
+    }).catch(()=>{
+      const carte=document.querySelector('.cl-waf');
+      if(carte) carte.setAttribute('data-etat','offline');
+      const el=document.getElementById('wetat'); if(el) el.textContent='injoignable';
+    });
+}
+majWaf(); setInterval(majWaf, 30000);
 </script>
 </body>
 </html>

@@ -115,6 +115,29 @@ async def cardlet_radio():
     return d
 
 
+_wc = {"d": None, "t": 0.0}
+
+
+@public_router.get("/cardlets/waf")
+async def cardlet_waf():
+    """Cardlet WAF (posture) — lue côté serveur via waf.sock, cache 20 s (#1228).
+
+    Cache PLUS LONG que celui de la Radio : un now-playing change de titre en
+    trois minutes, une posture de pare-feu bouge en dizaines de minutes.
+    Interroger trois points d'entrée toutes les cinq secondes chargerait la box
+    pour montrer le même chiffre — c'est exactement le travers qu'on vient de
+    corriger ailleurs (#1210).
+    """
+    now = time.time()
+    if _wc["d"] and now - _wc["t"] < 20:
+        return _wc["d"]
+    # Comme la Radio : l'I/O socket est BLOQUANTE, elle gèlerait la boucle
+    # uvicorn mono-ouvrier et rendrait 502 tout le module (#1175).
+    d = await asyncio.to_thread(cardlets.waf_cardlet_safe)
+    _wc["d"], _wc["t"] = d, now
+    return d
+
+
 _mbbs = {"d": None, "t": 0.0}
 
 

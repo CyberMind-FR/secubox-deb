@@ -1,3 +1,14 @@
+secubox-waf (1.10.1-1~bookworm1) bookworm; urgency=medium
+
+  * « Aujourd'hui » annoncait 103 814 menaces pour un total cumule bien
+    inferieur — un chiffre qui se contredisait lui-meme. La relecture complete
+    du journal, declenchee a chaque ajout de compteur (#1219, #1221, #1224),
+    remettait a zero les compteurs CUMULES mais pas ceux du JOUR : les lignes du
+    jour etaient donc rajoutees a un compteur qui les portait deja, une fois par
+    deploiement. Defaut introduit avec la relecture, corrige avec elle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:35:27 +0200
+
 secubox-waf (1.10.0-1~bookworm1) bookworm; urgency=medium
 
   * Vhost dedie du tableau de bord (#1227) : waf.gk2.secubox.in. Le certificat

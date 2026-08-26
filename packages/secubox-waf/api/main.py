@@ -565,6 +565,13 @@ def _get_threat_stats() -> dict:
             ip_countries.clear()
             total_threats = 0
             observed_threats = 0
+            # LES COMPTEURS DU JOUR AUSSI. Sans cette remise a zero, chaque
+            # relecture complete RAJOUTAIT les lignes du jour a un compteur qui
+            # les portait deja : apres cinq deploiements successifs, le tableau
+            # de bord annoncait 103 814 menaces « aujourd'hui » pour un total
+            # cumule bien inferieur — un chiffre qui se contredisait lui-meme.
+            threats_today = 0
+            observed_today = 0
             byte_position = 0
 
         # Log rotation / truncation : the file shrank since last read.

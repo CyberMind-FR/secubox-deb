@@ -96,3 +96,117 @@ def bbs_menu_safe(sock: str = BBS_SOCK, _get=None) -> dict:
         return bbs_menu(sock, _get)
     except Exception:
         return {"id": "bbs", "items": []}
+
+
+WAF_SOCK = "/run/secubox/waf.sock"
+
+
+def waf_cardlet(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
+    """Posture du WAF → payload cardlet normalisé (#1228).
+
+    MÊME FORME QUE LA RADIO, à dessein : le Hall sait déjà afficher un cardlet,
+    il n'a pas à apprendre un second gabarit. Ce qui change est le contenu —
+    une radio dit ce qu'elle joue, un pare-feu dit ce qu'il écarte.
+
+    QUATRE CHIFFRES, pas davantage. Un cardlet est lu d'un coup d'œil depuis
+    l'accueil : au-delà, il faut ouvrir le tableau de bord, qui est fait pour
+    ça. On garde donc ce qui répond à « suis-je couvert, et est-ce que ça
+    travaille » — bannis actifs, menaces du jour, surfaces surveillées,
+    détections en service.
+
+    Chaque source est facultative : une partie indisponible retire son chiffre
+    au lieu d'emporter tout le cardlet. Un pare-feu muet serait plus inquiétant
+    qu'un chiffre manquant.
+    """
+    get = _get or uds_get
+    stats = get(sock, "/stats") or {}
+
+    try:
+        bans = get(sock, "/bans") or {}
+    except Exception:
+        bans = {}
+    try:
+        detec = get(sock, "/detections") or {}
+    except Exception:
+        detec = {}
+
+    par_type = stats.get("par_type") or {}
+    detections = detec.get("detections") or []
+    actives = sum(1 for d in detections if d.get("actif"))
+
+    # La catégorie dominante donne au cardlet sa phrase : « ce qui frappe en ce
+    # moment ». Sans elle, le cardlet afficherait quatre nombres sans récit.
+    cats = stats.get("by_category") or {}
+    tete = max(cats.items(), key=lambda kv: kv[1])[0] if cats else ""
+
+    pays = stats.get("pays") or {}
+    premier_pays = next(iter(pays), "")
+
+    metrics = [
+        {"id": "bans", "value": int(bans.get("total", 0) or 0)},
+        {"id": "jour", "value": int(stats.get("threats_today", 0) or 0)},
+        {"id": "surfaces", "value": len(par_type)},
+        {"id": "detections", "value": actives},
+    ]
+
+    return {
+        "id": "waf",
+        "kind": "waf-posture",
+        "status": "online",
+        "content": {
+            "title": _phrase_waf(tete, bans.get("total", 0) or 0),
+            "subtitle": (f"première origine : {premier_pays}" if premier_pays else ""),
+            "station": "Pare-feu applicatif",
+        },
+        "metrics": metrics,
+        "categorie": tete,
+        "silence": not cats,
+    }
+
+
+# Les catégories du moteur, dites en français et d'un mot. Un cardlet qui
+# afficherait « host_anomaly:unrouted » parlerait au développeur, pas à
+# l'opérateur qui passe devant son accueil.
+_PHRASES = {
+    "host_anomaly": "noms qu'on ne sert pas",
+    "auth_": "tentatives d'authentification",
+    "leurre:": "contacts sur les leurres",
+    "robots": "robots d'indexation",
+    "scanners": "balayages",
+    "recon_crawler": "reconnaissance",
+    "honeypot": "pots de miel",
+    "sqli": "injections SQL",
+    "xss": "scripts injectés",
+    "lfi": "traversées de chemin",
+    "rce": "exécutions distantes",
+    "credential_harvest": "vols d'identifiants",
+    "api_abuse": "abus d'API",
+}
+
+
+def _phrase_waf(categorie: str, bannis: int) -> str:
+    """Ce que le cardlet raconte, en une ligne."""
+    if not categorie:
+        return "Rien à signaler"
+    for prefixe, mot in _PHRASES.items():
+        if categorie.startswith(prefixe):
+            return f"Surtout : {mot}"
+    return f"Surtout : {categorie}"
+
+
+def waf_cardlet_safe(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
+    """waf_cardlet() avec repli `offline` si le WAF est injoignable.
+
+    Le repli ne prétend rien : ni zéro menace, ni zéro ban. Afficher « 0 banni »
+    quand on n'a pas pu demander serait rassurer à tort — précisément ce qu'un
+    tableau de sécurité ne doit jamais faire.
+    """
+    try:
+        return waf_cardlet(sock, _get)
+    except Exception:
+        return {
+            "id": "waf", "kind": "waf-posture", "status": "offline",
+            "content": {"title": "WAF injoignable", "subtitle": "",
+                        "station": "Pare-feu applicatif"},
+            "metrics": [], "categorie": "", "silence": False,
+        }
