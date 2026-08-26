@@ -376,6 +376,29 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Menu PROFIL (#1245). Il n'y en avait pas : le bloc n'était qu'une étiquette.
    Ancré sous lui, à droite — il déborderait de la fenêtre s'il s'ouvrait vers
    la gauche depuis le coin. */
+/* BARRE MÉDIA (#1246). En pied, au-dessus de la barre de statut. Chaque rangée
+   est BASSE — deux flux tiennent sans manger l'écran, ce qui était la condition
+   posée. Elle disparaît quand rien ne joue : une barre vide est du bruit. */
+.mediadock{position:fixed;left:0;right:0;bottom:30px;z-index:45;
+  display:flex;flex-direction:column;gap:6px;padding:0 12px 8px;pointer-events:none}
+.mediadock:empty{display:none}
+.mrow{pointer-events:auto;display:flex;align-items:center;gap:9px;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  box-shadow:var(--lift);padding:6px 10px;max-width:1100px;margin:0 auto;width:100%}
+.mrow .mic{font-size:.95rem;flex:0 0 auto}
+.mrow button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-2);
+  background:var(--panel);color:var(--ink);font-size:.68rem;line-height:1;cursor:pointer;padding:0;flex:0 0 auto}
+.mrow button:hover{border-color:var(--violet)}
+.mrow button.mplay{width:30px;height:30px;background:var(--violet);border-color:var(--violet);color:#fff;font-size:.78rem}
+.mrow .minfo{flex:1;min-width:0}
+.mrow .minfo b{display:block;font-size:.8rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .minfo small{display:block;font-size:.68rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .mprog{flex:0 0 130px;height:4px;border-radius:3px;background:var(--line-2);overflow:hidden}
+.mrow .mprog i{display:block;height:100%;width:0;background:var(--violet)}
+.mrow .mtime{font-family:"JetBrains Mono";font-size:.62rem;color:var(--dim);
+  font-variant-numeric:tabular-nums;flex:0 0 auto}
+@media (max-width:700px){.mrow .mprog,.mrow .mtime{display:none}}
+
 .who{position:relative;cursor:pointer}
 .who-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:230px;
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
@@ -579,7 +602,16 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       </div>
     </section>
 
-    <!-- SERVICE EMBARQUÉ : page propre, vhost réel inline -->
+      <!-- ── BARRE MÉDIA MULTI-COUCHES (#1246) ────────────────────────────────
+         Une rangée par flux actif, empilées. Le Hall ne recharge jamais : la
+         barre survit donc à toute la navigation, ce qui est tout l'intérêt.
+
+         Le son vit DANS les cadres, sur d'autres origines — le Hall ne peut pas
+         toucher leur <audio>, et c'est heureux. Les services annoncent leur
+         état, la barre leur renvoie les commandes. Même canal que le thème. -->
+    <div class="mediadock" id="mediadock" aria-live="polite"></div>
+
+  <!-- SERVICE EMBARQUÉ : page propre, vhost réel inline -->
     <section id="view-embed" class="hidden">
       <div class="embed-hint" id="eb-hint">Si la page reste vide, ce service n'autorise pas encore l'embarquement — ouvrez-le en onglet.</div>
       <div class="embed-wrap" id="eb-frames"></div>
@@ -1073,6 +1105,88 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // Le PARE-FEU sert désormais sa propre carte (#1237) : plus rien à nourrir
 // ici. Son point d'entrée cardlet reste servi — il alimente encore la
 // vivification des cartes sans vue embarquée.
+
+// ── #1246 · BARRE MÉDIA MULTI-COUCHES ─────────────────────────────────────
+//
+// LE HALL NE POSSÈDE PAS LE SON. Il vit dans les cadres, chacun sur son
+// origine : toucher leur <audio> est interdit, et c'est heureux. Le contrat est
+// donc déclaratif — le service ANNONCE, la barre COMMANDE :
+//
+//   service → Hall : {sbx:'media', id, titre, sous, joue, t, d}
+//   Hall → service : {sbx:'cmd', action:'toggle'|'prev'|'next'|'stop'}
+//
+// Une rangée par flux, empilées. Un service qui se tait plus de dix secondes
+// disparaît de la barre : une rangée figée ferait croire à un flux vivant.
+(function(){
+  const dock=document.getElementById('mediadock');
+  if(!dock) return;
+  const flux=new Map();   // id -> {maj, cadre, etat}
+
+  const mmss=t=>{t=Math.floor(t||0);return Math.floor(t/60)+':'+('0'+(t%60)).slice(-2);};
+  const ICONES={radio:'📻', podcaster:'🎙️'};
+
+  function cadreDe(id){ return document.querySelector('iframe[data-micro="'+id+'"]'); }
+
+  function commande(id, action){
+    const f=flux.get(id); const c=(f&&f.cadre)||cadreDe(id);
+    if(!c) return;
+    try{ c.contentWindow.postMessage({sbx:'cmd', action}, new URL(c.src).origin); }catch(e){}
+  }
+
+  function dessine(){
+    const ids=[...flux.keys()];
+    // On ne reconstruit que si la composition change : réécrire le HTML à
+    // chaque seconde ferait clignoter le texte et perdrait le focus.
+    if(dock.dataset.ids!==ids.join(',')){
+      dock.dataset.ids=ids.join(',');
+      dock.innerHTML=ids.map(id=>
+        '<div class="mrow" data-id="'+id+'">'
+        +'<span class="mic">'+(ICONES[id]||'🔊')+'</span>'
+        +'<button data-a="prev" title="Précédent">⏮</button>'
+        +'<button class="mplay" data-a="toggle" title="Lecture / pause">❚❚</button>'
+        +'<button data-a="next" title="Suivant">⏭</button>'
+        +'<div class="minfo"><b></b><small></small></div>'
+        +'<span class="mprog"><i></i></span><span class="mtime">0:00</span>'
+        +'<button data-a="stop" title="Fermer">✕</button></div>').join('');
+    }
+    ids.forEach(id=>{
+      const r=dock.querySelector('.mrow[data-id="'+id+'"]'); if(!r) return;
+      const e=flux.get(id).etat||{};
+      r.querySelector('b').textContent=e.titre||'—';
+      r.querySelector('small').textContent=e.sous||'';
+      r.querySelector('.mplay').textContent=e.joue?'❚❚':'▶';
+      r.querySelector('.mprog i').style.width=(e.d?((e.t||0)/e.d*100):0)+'%';
+      r.querySelector('.mtime').textContent=mmss(e.t);
+    });
+  }
+
+  addEventListener('message', ev=>{
+    const d=ev.data;
+    if(!d||d.sbx!=='media'||!d.id) return;
+    // On ne retient que ce qui vient d'un cadre qu'on a nous-mêmes posé :
+    // n'importe quelle page encadrée pourrait sinon s'inviter dans la barre.
+    const c=cadreDe(d.id);
+    if(!c||c.contentWindow!==ev.source) return;
+    if(d.joue===false && d.fin){ flux.delete(d.id); dessine(); return; }
+    flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
+    dessine();
+  });
+
+  dock.addEventListener('click', e=>{
+    const b=e.target.closest('button[data-a]'); if(!b) return;
+    const id=b.closest('.mrow').dataset.id;
+    if(b.dataset.a==='stop'){ commande(id,'stop'); flux.delete(id); dessine(); return; }
+    commande(id, b.dataset.a);
+  });
+
+  // Un service qui se tait a peut-être été rechargé ou fermé : sa rangée doit
+  // partir. Une rangée figée ferait croire à un flux vivant.
+  setInterval(()=>{
+    const n=Date.now(); let bouge=false;
+    flux.forEach((v,id)=>{ if(n-v.maj>10000){ flux.delete(id); bouge=true; } });
+    if(bouge) dessine();
+  }, 5000);
+})();
 
 // ── #1245 · menu PROFIL et remise à zéro ──────────────────────────────────
 (function(){

@@ -94,6 +94,39 @@
   var microNext = $('micro-next'), microLast = $('micro-last'), microStatus = $('micro-status');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
+  // ── ANNONCE À LA BARRE DU HALL (#1246) ────────────────────────────────────
+  //
+  // Le Hall ne peut pas toucher notre média : origines différentes. On ANNONCE
+  // notre état, il COMMANDE. Une radio n'a ni précédent ni suivant — c'est un
+  // direct : ces commandes sont simplement ignorées plutôt que de faire semblant.
+  function annonceHall(fin) {
+    if (parent === window || !ecran) return;
+    try {
+      parent.postMessage({
+        sbx: 'media', id: 'radio',
+        titre: (titre && titre.textContent) || 'Radio', sous: (meta && meta.textContent) || '',
+        joue: !ecran.paused, t: ecran.currentTime || 0, d: ecran.duration || 0,
+        fin: !!fin
+      }, '*');
+    } catch (e) {}
+  }
+  ['play', 'pause', 'ended'].forEach(function (ev) {
+    if (ecran) ecran.addEventListener(ev, function () { annonceHall(); });
+  });
+  // Battement : sans lui, la barre considérerait le direct mort au bout de dix
+  // secondes sans événement et retirerait la rangée.
+  setInterval(function () { if (ecran && !ecran.paused) annonceHall(); }, 2000);
+
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'cmd' || !ecran) return;
+    if (d.action === 'toggle') {
+      if (ecran.paused) { var e = ecran.play(); if (e && e.catch) e.catch(function () {}); }
+      else ecran.pause();
+    } else if (d.action === 'stop') { ecran.pause(); annonceHall(true); }
+    // prev / next : un direct ne se parcourt pas. On ne fait pas semblant.
+  });
+
   // ── LE VOLUME ─────────────────────────────────────────────────────────────
   //
   // La <video> joue SANS controle natif (pas de `controls`) : sans ce cablage,

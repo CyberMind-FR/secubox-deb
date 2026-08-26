@@ -1,3 +1,22 @@
+secubox-webos (1.0.53-1~bookworm1) bookworm; urgency=medium
+
+  * BARRE MEDIA MULTI-COUCHES (#1246) : une rangee par flux actif, empilees en
+    pied de Hall. Le Hall ne rechargeant jamais, elle survit a toute la
+    navigation — c'est tout son interet.
+  * LE HALL NE POSSEDE PAS LE SON : il vit dans les cadres, chacun sur son
+    origine, et toucher leur media est interdit — heureusement. Le contrat est
+    donc declaratif : le service ANNONCE son etat, la barre COMMANDE. Meme canal
+    que le theme.
+  * On ne retient que ce qui vient d'un cadre qu'on a soi-meme pose : n'importe
+    quelle page encadree pourrait sinon s'inviter dans la barre.
+  * Un service qui se tait plus de dix secondes quitte la barre : une rangee
+    figee ferait croire a un flux vivant. Et la barre disparait quand rien ne
+    joue — une barre vide est du bruit.
+  * Le HTML n'est reconstruit que si la COMPOSITION change : le reecrire chaque
+    seconde ferait clignoter le texte et perdrait le focus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:45:40 +0200
+
 secubox-webos (1.0.52-1~bookworm1) bookworm; urgency=medium
 
   * Menu PROFIL et remise a zero (#1245). Le bloc du coin n'etait qu'une

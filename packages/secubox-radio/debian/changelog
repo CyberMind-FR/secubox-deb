@@ -1,3 +1,11 @@
+secubox-radio (0.1.37-1~bookworm1) bookworm; urgency=medium
+
+  * Annonce a la barre du Hall et obeissance a ses commandes (#1246). Une radio
+    n'a ni precedent ni suivant — c'est un direct : ces commandes sont ignorees
+    plutot que de faire semblant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:45:40 +0200
+
 secubox-radio (0.1.36-1~bookworm1) bookworm; urgency=medium
 
   * DEUX COLONNES quand la largeur le permet, en mini comme en micro (#1244).
