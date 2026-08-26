@@ -1,3 +1,11 @@
+secubox-webos (1.0.120-1~bookworm1) bookworm; urgency=medium
+
+  * OUVRE-HOTE : un service embarque peut en ouvrir un autre par son hote,
+    embarque dans le Hall a l'adresse profonde (#1358). C'est ainsi que les
+    liens MetaNews du BBS ouvrent le sujet dans le Hall, sans debed.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:20:21 +0200
+
 secubox-webos (1.0.119-1~bookworm1) bookworm; urgency=medium
 
   * METRICS SURF : retour visuel immediat (#1354). A l'ouverture d'une

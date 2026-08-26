@@ -1,3 +1,26 @@
+secubox-bbs (0.30.32-1~bookworm1) bookworm; urgency=medium
+
+  * LIENS METANEWS PAR SUJET, PLUS GLOBAUX (#1359). vitrineMetaNews donnait
+    a TOUS les cartouches le meme lien (accueil MetaNews), ignorant t.ID :
+    « on va ni sur la bonne source ni sur la bonne ref ». Chaque cartouche
+    pointe desormais son sujet (base + #<id>), que le front MetaNews route.
+    « Tout voir » garde le lien global.
+  * LIENS VERS UN AUTRE SERVICE BOX RESTENT EMBARQUES (#1358). Embarque,
+    un lien vers metanews (ou autre service box) demande au Hall de
+    l'embarquer a l'adresse profonde, au lieu de partir en onglet.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:19:53 +0200
+
+secubox-bbs (0.30.31-1~bookworm1) bookworm; urgency=medium
+
+  * LES LIENS EXTERNES DU BBS PASSENT PAR LE SURF, EN EMBARQUE (#1358). La
+    matrice SBXOS : dans le Hall, un lien qui SORT de la box s'ouvre a
+    travers le proxy surf (pisteurs coupes, pubs retirees), en overlay, sans
+    perdre le fil. Les liens internes (box) restent directs. Hors du Hall
+    (standalone), rien n'est intercepte : pas de gateway surf a qui parler.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:15:56 +0200
+
 secubox-bbs (0.30.30-1~bookworm1) bookworm; urgency=medium
 
   * LE LIEN DU CARDLET NE FAIT PLUS 404 (#1333). Le micro construisait

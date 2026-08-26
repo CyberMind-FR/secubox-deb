@@ -1801,10 +1801,23 @@ document.addEventListener('click', e=>{
   }
 });
 addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
+// UN SERVICE EMBARQUE DEMANDE D'EN OUVRIR UN AUTRE, PAR SON HOTE (#1358). Le
+// BBS pointe vers metanews.gk2.secubox.in/#<id> : on reste dans le Hall, on
+// embarque metanews a cette adresse profonde plutot que de partir en onglet.
+function ouvreHote(hote, url){
+  const f = FEATURED.find(x => x.url === hote);
+  if(!f){ ouvreSurf(url); return; }   // hote box inconnu du registre : par le surf
+  fermeSurf && fermeSurf();
+  openService(f.id, 'embed');
+  // openService remet le cadre a la racine ; on le pointe ensuite sur l'URL
+  // demandee (le fragment porte l'id du sujet MetaNews).
+  if(url){ setTimeout(()=>{ const fr=document.querySelector('#eb-frames iframe'); if(fr) fr.src=url; }, 0); }
+}
 addEventListener('message', ev=>{
   const d=ev.data;
   if(!d) return;
   if(d.sbx==='surf' && d.url){ ouvreSurf(d.url); return; }
+  if(d.sbx==='ouvre-hote' && d.hote){ ouvreHote(d.hote, d.url); return; }
   // Le cadre dit qu'il ne peut plus reculer : on ferme.
   if(d.sbx==='surf-vide'){ fermeSurf(); return; }
   // Le cadre a navigue : on met a jour l'hote affiche dans l'entete.

@@ -88,6 +88,7 @@ type page struct {
 	// sur l'accueil (pas les salons) pour ne s'afficher qu'à la rédaction.
 	MetaNews    []metaVue
 	MetaNewsErr string
+	MetaAll     string // lien « tout voir » : accueil MetaNews (global)
 	// MetaSources : news récentes GROUPÉES PAR SOURCE, pour la page /c/actualites
 	// (« lister les news en cardlets par source »). Rempli seulement là.
 	MetaSources []srcVue
@@ -546,6 +547,7 @@ func (s *Server) accueil(w http.ResponseWriter, r *http.Request) {
 	// sources multiples corrélées mises en avant (#metanews).
 	if s.opt.MetaNewsSocket != "" {
 		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
+		p.MetaAll = strings.TrimRight(s.opt.MetaNewsBase, "/") + "/"
 	}
 	s.poseNonLus(&p)
 	p.Titre = "AletheiaVox"
@@ -805,6 +807,7 @@ func (s *Server) salon(w http.ResponseWriter, r *http.Request) {
 	// récents (sources corrélées) + listing des news par source (#metanews).
 	if slug == "actualites" && s.opt.MetaNewsSocket != "" {
 		p.MetaNews, p.MetaNewsErr = s.vitrineMetaNews()
+		p.MetaAll = strings.TrimRight(s.opt.MetaNewsBase, "/") + "/"
 		p.MetaSources = s.vitrineMetaSources()
 	}
 	// #1167 : le salon « reseaux » (fils poussés par SocialRelay) se rend en MUR

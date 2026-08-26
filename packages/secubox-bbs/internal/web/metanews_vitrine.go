@@ -127,15 +127,20 @@ func (s *Server) vitrineMetaNews() ([]metaVue, string) {
 		return nil, "réponse MetaNews illisible : " + err.Error()
 	}
 	base := strings.TrimRight(s.opt.MetaNewsBase, "/")
-	lien := base + "/"
 	if base == "" {
-		lien = "/"
+		base = ""
 	}
 	out := make([]metaVue, 0, 12)
 	for i, t := range d.Topics {
 		if i >= 12 {
 			break
 		}
+		// LIEN PAR SUJET, PAS GLOBAL (#1359). Tous les cartouches pointaient
+		// vers l'accueil MetaNews (`base + "/"`), en ignorant `t.ID` pourtant
+		// disponible : « on va ni sur la bonne source ni sur la bonne ref ».
+		// Le front MetaNews route `#<id>` vers le sujet et ses sources. Le
+		// premier cartouche (« tout voir ») garde le lien global.
+		lien := base + "/#" + url.PathEscape(t.ID)
 		out = append(out, metaVue{
 			ID: t.ID, Titre: t.Title, Resume: t.Summary,
 			NbSrc: t.NbSrc, Sources: t.Sources, Tags: t.Tags,

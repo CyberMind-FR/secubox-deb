@@ -30,6 +30,38 @@
       try { localStorage.setItem('av-theme', qt); } catch (e) {}
     }
   } catch (e) {}
+
+  // ── LES LIENS EXTERNES PASSENT PAR LE SURF (#1358) ──────────────────────────
+  //
+  // La matrice SBXOS : embarque dans le Hall, un lien qui SORT de la box ne
+  // quitte pas le Hall — il s'ouvre A TRAVERS le proxy surf (pisteurs coupes,
+  // pubs retirees), en overlay, sans perdre le fil qu'on lisait.
+  //
+  // DE L'EXTERIEUR, RIEN N'EST INTERCEPTE. Le meme BBS ouvert en direct (hors
+  // Hall) garde ses liens standards : on ne detourne que ce qu'on peut rendre,
+  // et hors du Hall il n'y a pas de gateway surf a qui parler.
+  if (r.classList.contains('sbx-embed')) {
+    var _BOX = /(^|\.)(gk2\.secubox\.in|gk2\.net|secubox\.in)$/i;
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+      if (!a) return;
+      var href = a.getAttribute('href') || '';
+      if (!/^https?:\/\//i.test(href)) return;        // relatif = interne
+      var u; try { u = new URL(href, location.href); } catch (err) { return; }
+      // MEME HOTE = navigation interne du BBS : on laisse faire.
+      if (u.hostname === location.hostname) return;
+      e.preventDefault();
+      if (_BOX.test(u.hostname)) {
+        // AUTRE SERVICE DE LA BOX (MetaNews, etc.) : on RESTE dans le Hall — on
+        // lui demande d'embarquer ce service a cette adresse, plutot que de le
+        // « debed » dans un onglet. C'est la matrice SBXOS.
+        try { parent.postMessage({ sbx: 'ouvre-hote', hote: u.hostname, url: u.href }, '*'); } catch (err) {}
+      } else {
+        // HORS BOX : par le surf.
+        try { parent.postMessage({ sbx: 'surf', url: u.href }, '*'); } catch (err) {}
+      }
+    }, true);
+  }
   function theme() {
     var cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
     var nxt = cur === 'dark' ? 'light' : 'dark';
