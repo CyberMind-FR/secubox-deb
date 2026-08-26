@@ -505,6 +505,11 @@ cat > /etc/roundcube/config.inc.php.local <<LOCAL
 \$config['username_domain'] = '$(postconf -h virtual_mailbox_domains 2>/dev/null | tr "," " " | awk "{print \$1}")';
 \$config['imap_conn_options'] = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false));
 \$config['smtp_conn_options'] = array('ssl' => array('verify_peer' => false, 'verify_peer_name' => false));
+# DUREE DE SESSION (#1335). Le defaut Roundcube est 10 MINUTES : ouverte depuis
+# le cardlet du Hall, la session du webmail expirait presque aussitot. On la
+# porte a 8 h — une journee de travail — sans toucher a defaults.inc.php, que
+# la mise a jour du paquet roundcube reecrirait.
+\$config['session_lifetime'] = 480;
 LOCAL
 if [ -f /etc/roundcube/config.inc.php ] && ! grep -q "config.inc.php.local" /etc/roundcube/config.inc.php; then
     echo "include_once('/etc/roundcube/config.inc.php.local');" >> /etc/roundcube/config.inc.php
