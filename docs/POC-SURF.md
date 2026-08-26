@@ -158,6 +158,32 @@ Tor), réécrit HTML/CSS et en-têtes, coupe les pisteurs à la source, et sert
 sous l'origine proxy. Il tourne en `secubox-surf.service` sur `127.0.0.1:9082`,
 **hors de la chaîne d'inspection**.
 
+### C'EST EN LIGNE — `https://surf-www-lemonde-fr.gk2.secubox.in/`
+
+Câblé et vérifié de bout en bout sur gk2 (2026-08-26) :
+
+| | |
+|---|---|
+| lemonde.fr relayé, **public** | 200, 1,0 Mo, cert wildcard valide (TLS verify 0) |
+| Sous-origines par-site | `surf-img-lemde-fr`, `surf-abo-lemonde-fr`… routées par la même règle préfixe |
+| Une image via sa sous-origine | 200 `image/avif` |
+| `connect.facebook.net` relayé | **204** — pisteur coupé à la source |
+
+Le montage, pour mémoire :
+
+1. `secubox-haproxy` 1.8.9 : le générateur route `domain = "surf-*"` par
+   `hdr_beg(host)` (une entrée pour toutes les origines par-site), en **bypass**.
+2. `[vhosts.surf_poc]` dans `haproxy.toml`, `waf_bypass = true`. *Piège rencontré :
+   le générateur retire la DERNIÈRE ligne du dernier bloc (`head -n -1`) ; une
+   ligne de commentaire terminale protège `waf_bypass`, sans quoi surf repartait
+   vers l'inspection.*
+3. `sites-available/surf.conf` : `server_name ~^surf-.+\.gk2\.secubox\.in$`
+   sur `:9080` → `127.0.0.1:9082`, `Host` transmis tel quel.
+4. `secubox-surf.service` (uvicorn, `127.0.0.1:9082`), hors inspection.
+
+Reste : empaqueter `secubox-surf` proprement (service + unit + nginx +
+enregistrement du vhost), aujourd'hui posé à la main sur la box.
+
 ### Ce qui reste à câbler pour l'ouvrir dans un navigateur
 
 Le générateur HAProxy sait désormais router un **domaine préfixe** — un

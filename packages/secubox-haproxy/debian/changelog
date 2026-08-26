@@ -1,3 +1,14 @@
+secubox-haproxy (1.8.9-1~bookworm1) bookworm; urgency=medium
+
+  * ROUTAGE PAR DOMAINE PREFIXE (#1217, POC Surf). Un `domain` finissant par
+    `*` — « surf-* » — matche par DEBUT d'hote (hdr_beg) au lieu d'exact : une
+    seule entree route toutes les origines par-site du relais de surf
+    (surf-www-lemonde-fr, surf-img-lemde-fr, ...) sans les enumerer. Aucun
+    domaine existant ne finit par `*`, donc la sortie generee est inchangee
+    pour tous les vhosts actuels. Reserve a un vhost BYPASS.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:51:42 +0200
+
 secubox-haproxy (1.8.8-1~bookworm1) bookworm; urgency=medium
 
   * LE TEMOIN DU WEBMAIL SORTAIT AVEC CINQ `Secure` A LA SUITE (#1316), et le
