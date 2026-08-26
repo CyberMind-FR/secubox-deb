@@ -230,8 +230,8 @@
             <div class="card">
                 <h2>Virtual Hosts <button class="btn success sm" onclick="showAddVhost()">+ New</button></h2>
                 <table>
-                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Cochée = les robots d'indexation reçoivent 403 sur ce vhost. Décochée = ils passent.">Anti-robots</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="vhost-list"><tr><td colspan="7">Loading...</td></tr></tbody>
+                    <thead><tr><th>Domain</th><th>Module</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Cochée = les robots d'indexation reçoivent 403 sur ce vhost. Décochée = ils passent.">Anti-robots</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="vhost-list"><tr><td colspan="8">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -388,7 +388,7 @@
             const list = document.getElementById('vhost-list');
             const vhosts = d.vhosts || [];
             if (!vhosts.length) {
-                list.innerHTML = '<tr><td colspan="7" style="color:var(--dim)">No vhosts configured</td></tr>';
+                list.innerHTML = '<tr><td colspan="8" style="color:var(--dim)">No vhosts configured</td></tr>';
                 return;
             }
             list.innerHTML = vhosts.map(v => {
@@ -398,6 +398,7 @@
                 const dom = esc(v.domain);
                 return `<tr>
                 <td><a href="${v.ssl ? 'https' : 'http'}://${encodeURIComponent(v.domain)}" target="_blank" style="color:var(--cyan)">${dom}</a></td>
+                <td>${moduleBadge(v.module)}</td>
                 <td style="color:var(--dim);font-family:monospace;font-size:0.75rem">${esc(v.backend || '-')}</td>
                 <td>${v.ssl ? '<span class="badge ssl">' + esc(v.tls_mode || 'SSL') + '</span>' : '-'}</td>
                 <td><span class="badge ${reachClass}">${reachLabel}${exp.mesh ? ' 🕸️' : ''}</span></td>
@@ -437,6 +438,25 @@
                 alert('Anti-robots non appliqué sur ' + domain + '\n' +
                       ((r && r.detail) || 'le WAF n\'a pas confirmé le changement'));
             }
+        }
+
+        // La plupart des noms de gk2 sont la façade d'un MODULE SecuBox, pas un
+        // site : gitea et peertube dans leur conteneur, ytsas, podcaster… Le
+        // tableau ne le disait pas. On distingue le lien DÉCLARÉ par le module
+        // (portal.domain de son manifeste) de la simple déduction sur le nom,
+        // signalée par « ? » : une supposition ne s'affiche pas comme un fait.
+        const RUNTIME_ICONE = { lxc: '📦', native: '⚙️', docker: '🐳' };
+        function moduleBadge(m) {
+            if (!m) return '<span style="color:var(--dim)">—</span>';
+            const ico = RUNTIME_ICONE[m.runtime] || '🧩';
+            const titre = 'Module ' + m.id
+                + (m.category ? ' · ' + m.category : '')
+                + (m.runtime ? ' · ' + m.runtime : '')
+                + (m.certain ? ' · déclaré par le module'
+                             : ' · DÉDUIT du nom, non déclaré');
+            const style = m.certain ? '' : 'opacity:.65;font-style:italic';
+            return `<span class="badge ${m.certain ? 'ssl' : 'disabled'}" style="${style}" title="${esc(titre)}">`
+                 + ico + ' ' + esc(m.id) + (m.certain ? '' : ' ?') + '</span>';
         }
 
         // Par où le vhost est joignable. Un site peut répondre sans être activé

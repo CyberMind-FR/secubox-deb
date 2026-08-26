@@ -26,6 +26,7 @@ from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
 from api.antirobots import basculer_anti_robots, lire_anti_robots
 from api.exposure_read import read_exposure
+from api.modules_read import module_de
 from api.exposure_seed import ensure_snippet
 
 app = FastAPI(title="SecuBox VHost", version="1.1.0")
@@ -196,35 +197,73 @@ async def get_components():
 async def get_access():
     """Get all vhosts with their access URLs (public)"""
     vhosts = []
+    routes = _load_haproxy_routes()
+    vus = set()
 
     if NGINX_VHOST_DIR.exists():
-        for conf_file in NGINX_VHOST_DIR.glob("*.conf"):
+        for conf_file in sorted(NGINX_VHOST_DIR.glob("*.conf")):
             if conf_file.name.startswith("_") or conf_file.name == "default.conf":
                 continue
-            domain = conf_file.stem
-            enabled = (NGINX_ENABLED_DIR / conf_file.name).exists()
+            nginx_actif = (NGINX_ENABLED_DIR / conf_file.name).exists()
 
-            # Parse config for backend
             backend = ""
-            ssl = False
+            content = ""
             try:
                 content = conf_file.read_text()
                 for line in content.split("\n"):
                     if "proxy_pass" in line:
                         backend = line.split()[-1].rstrip(";")
                         break
-                ssl = "listen 443" in content or "ssl_certificate" in content
-            except:
+            except OSError:
                 pass
 
+            # Le nom du fichier n'est PAS le domaine : cet onglet servait des
+            # liens courts inexploitables (https://ab au lieu de
+            # https://ab.gk2.secubox.in). Même résolution que l'onglet Vhosts.
+            domain = _resoudre_domaine(conf_file.stem, content, routes)
+            routee = domain in routes
+            if not backend and routee:
+                cible = routes[domain]
+                backend = (f"{cible[0]}:{cible[1]}"
+                           if isinstance(cible, (list, tuple)) and len(cible) >= 2
+                           else str(cible))
+
+            # TLS terminé par HAProxy pour tout vhost public : c'est ce que le
+            # visiteur tape, pas ce que déclare le fichier nginx local.
+            is_public = _is_public_fqdn(domain)
+            ssl = is_public or "listen 443" in content or "ssl_certificate" in content
+
+            vus.add(domain)
             vhosts.append({
                 "domain": domain,
                 "url": f"https://{domain}" if ssl else f"http://{domain}",
                 "backend": backend,
                 "ssl": ssl,
-                "enabled": enabled,
+                "enabled": nginx_actif or routee,
+                "nginx_enabled": nginx_actif,
+                "haproxy_routed": routee,
             })
 
+    # Vhosts routés par le front sans fichier nginx : ils étaient absents de cet
+    # onglet alors qu'ils répondent.
+    for domain, cible in routes.items():
+        if domain in vus:
+            continue
+        vus.add(domain)
+        backend = (f"{cible[0]}:{cible[1]}"
+                   if isinstance(cible, (list, tuple)) and len(cible) >= 2
+                   else str(cible))
+        vhosts.append({
+            "domain": domain,
+            "url": f"https://{domain}",
+            "backend": backend,
+            "ssl": True,
+            "enabled": True,
+            "nginx_enabled": False,
+            "haproxy_routed": True,
+        })
+
+    vhosts.sort(key=lambda v: v["domain"])
     return {"vhosts": vhosts, "count": len(vhosts)}
 
 
@@ -307,6 +346,21 @@ def _load_haproxy_routes() -> dict:
         return {}
 
 
+def _resoudre_domaine(stem: str, content: str, routes: dict) -> str:
+    """Nom RÉEL du vhost, dans l'ordre des sources les plus sûres.
+
+    Le nom du FICHIER de configuration n'est PAS le domaine : `ab.conf` sert
+    `ab.gk2.secubox.in`. Construire une URL sur le stem donnait des liens courts
+    inexploitables (https://ab). On prend donc le server_name FQDN de la conf ;
+    à défaut la table de routage du front, indexée par FQDN, où l'on retrouve le
+    stem comme premier label ; le stem ne reste qu'en dernier recours.
+    """
+    domaine = _server_name_fqdn(content)
+    if not domaine:
+        domaine = next((k for k in routes if k.split(".")[0] == stem), None) or stem
+    return domaine
+
+
 @app.get("/vhosts", dependencies=[Depends(require_jwt)])
 async def list_vhosts():
     """List all virtual hosts with full, clickable public URLs.
@@ -343,9 +397,7 @@ async def list_vhosts():
             except Exception:
                 pass
 
-            domain = _server_name_fqdn(content)
-            if not domain:
-                domain = next((k for k in routes if k.split(".")[0] == stem), None) or stem
+            domain = _resoudre_domaine(stem, content, routes)
 
             if not backend and domain in routes:
                 cible = routes[domain]
@@ -390,6 +442,7 @@ async def list_vhosts():
                 "config_file": str(conf_file),
                 "exposure": read_exposure(domain),
                 "anti_robots": domain.lower() in anti_robots,
+                "module": module_de(domain, content=content),
             })
 
     # Append HAProxy public vhosts with no nginx config (complete the list).
@@ -416,6 +469,7 @@ async def list_vhosts():
             "config_file": None,
             "exposure": read_exposure(domain),
             "anti_robots": domain.lower() in anti_robots,
+            "module": module_de(domain),
         })
 
     vhosts.sort(key=lambda v: v["domain"])
@@ -476,6 +530,7 @@ async def get_vhost(domain: str):
         "cert_info": cert_info if cert_info else None,
         "config_content": config_content,
         "anti_robots": domain.lower() in lire_anti_robots(),
+        "module": module_de(domain),
     }
 
 

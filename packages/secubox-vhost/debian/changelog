@@ -1,3 +1,34 @@
+secubox-vhost (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Rattachement au module par le SOCKET vers lequel la configuration nginx
+    route réellement (proxy_pass http://unix:/run/secubox/<id>.sock), traité
+    comme un fait au même titre qu'un portail déclaré : ce n'est pas une
+    ressemblance de nom, c'est le chemin que prend la requête. Sans lui,
+    depot.gk2.secubox.in aurait été rattaché au module `repo` d'après son nom,
+    alors qu'il est servi par une gouttelette de l'aggregator. Couvre 18 vhosts
+    que la seule déduction sur le nom manquait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:45:34 +0200
+
+secubox-vhost (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Onglet Accès : les URL étaient construites sur le NOM DU FICHIER de
+    configuration, pas sur le domaine — `ab.conf` produisait https://ab au lieu
+    de https://ab.gk2.secubox.in. La résolution du domaine (server_name FQDN,
+    puis table de routage, le nom de fichier en dernier recours) est factorisée
+    et partagée avec l'onglet Vhosts, qui la faisait déjà correctement.
+  * Onglet Accès : les vhosts routés par le front sans fichier nginx y étaient
+    absents alors qu'ils répondent ; le TLS est celui du front pour tout vhost
+    public, pas celui que déclare le fichier nginx local.
+  * Colonne « Module » (#1217) : la plupart des noms servis sont la façade d'un
+    module SecuBox — gitea et peertube dans leur conteneur, ytsas, podcaster —
+    et le tableau ne le disait pas. Le registre /etc/secubox/modules.d fait
+    autorité. Un lien DÉCLARÉ par le module (portal.domain) et une déduction
+    sur le nom sont distingués : la seconde s'affiche en italique avec « ? »,
+    une supposition n'ayant pas à passer pour un fait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:43:35 +0200
+
 secubox-vhost (1.5.0-1~bookworm1) bookworm; urgency=medium
 
   * Table de routage : l'API lisait /srv/mitmproxy/haproxy-routes.json, chemin
