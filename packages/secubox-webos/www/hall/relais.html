@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1305 — RELAIS DE SESSION ENTRE DEUX DOMAINES.
+
+  POURQUOI CETTE PAGE EXISTE. Le témoin de session porte `.gk2.secubox.in` :
+  sur hall.gk2.net, le navigateur ne l'envoie jamais. Ce n'est pas un réglage
+  raté — c'est la règle qui empêche un site de poser des témoins valables pour
+  un autre, et aucun réglage ne la contourne.
+
+  Cette page est servie SUR le domaine SecuBox, là où la session vaut. Elle
+  demande un jeton court au nom de la personne déjà authentifiée, et le renvoie
+  au domaine d'origine DANS LE FRAGMENT de l'URL.
+
+  LE FRAGMENT ET RIEN D'AUTRE. Ce qui suit `#` ne part pas au serveur : ni dans
+  les journaux d'accès, ni dans le `Referer`, ni dans un cache de proxy. Un
+  jeton passé en requête finirait dans les trois.
+
+  LA DESTINATION EST VÉRIFIÉE, ET C'EST LE POINT CRITIQUE. Une page qui redirige
+  vers ce qu'on lui dit est une redirection ouverte ; ici elle emporterait le
+  jeton avec elle. La liste des retours acceptés est donc CLOSE et écrite ici.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SbX — relais de session</title>
+<style>
+  :root { --fond:#f7f8fa; --texte:#1a1a22; --muted:#6b6b7a; --accent:#5b46b8; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#0e0e14; --texte:#e8e6d9; --muted:#8a8a99;
+      --accent:#9d8bf0; }
+  }
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+         background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:15px; }
+  .b { max-width:420px; padding:28px 24px; text-align:center; }
+  h1 { font-size:1.1rem; margin:0 0 .4rem; }
+  p { color:var(--muted); font-size:.88rem; line-height:1.5; margin:.3rem 0; }
+  a.b2 { display:inline-block; margin-top:1rem; padding:.45rem .9rem; border-radius:8px;
+         border:1px solid var(--accent); color:var(--accent); text-decoration:none;
+         font-size:.85rem; }
+  .ko { color:#b7202c; }
+</style>
+
+<div class="b">
+  <h1>🔑 Relais de session</h1>
+  <p id="msg">Vérification de votre session SecuBox…</p>
+  <div id="suite"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  // LISTE CLOSE DES RETOURS. Tout ce qui n'y figure pas est refusé : une
+  // redirection vers une destination fournie par l'appelant emporterait le
+  // jeton chez n'importe qui.
+  var RETOURS = ['https://hall.gk2.net', 'https://hall.gk2.secubox.in'];
+
+  var msg = document.getElementById('msg');
+  var suite = document.getElementById('suite');
+  var retour = new URLSearchParams(location.search).get('retour') || '';
+
+  function origineDe(u) {
+    try { return new URL(u).origin; } catch (e) { return ''; }
+  }
+  var origine = origineDe(retour);
+  if (RETOURS.indexOf(origine) < 0) {
+    msg.className = 'ko';
+    msg.textContent = 'Destination de retour non autorisée.';
+    return;
+  }
+
+  fetch('/api/v1/webos/jeton', { method: 'POST', headers: { 'Accept': 'application/json' } })
+    .then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return { code: r.status, corps: d }; });
+    })
+    .then(function (r) {
+      if (r.code === 401 || r.code === 403) {
+        msg.textContent = 'Vous n’êtes pas connecté à la box.';
+        suite.innerHTML = '<a class="b2" href="https://admin.gk2.secubox.in/login.html'
+          + '?retour=' + encodeURIComponent(location.href) + '">Connexion SecuBox…</a>';
+        return;
+      }
+      var j = (r.corps || {}).jeton;
+      if (!j) { msg.className = 'ko'; msg.textContent = 'Jeton refusé.'; return; }
+      // Le jeton part dans le FRAGMENT, et on remplace l'entrée d'historique
+      // plutôt que d'en ajouter une : revenir en arrière ne doit pas rejouer
+      // un relais.
+      msg.textContent = 'Session transmise. Retour…';
+      location.replace(retour.split('#')[0] + '#sbx=' + encodeURIComponent(j));
+    })
+    .catch(function () {
+      msg.className = 'ko';
+      msg.textContent = 'Relais indisponible.';
+    });
+})();
+</script>

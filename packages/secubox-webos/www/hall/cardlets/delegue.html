@@ -167,11 +167,14 @@
         ? '<div class="sans"><p>Il manque votre session <b>SecuBox</b> pour voir '
             + esc(c.quoi) + '.</p>'
             + '<button id="cnx">Connexion SecuBox…</button></div>'
-        : '<div class="sans"><p>Votre session <b>SecuBox</b> ne vaut pas sur ce '
-            + 'domaine.</p><button id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
+        : '<div class="sans"><p>Ce domaine ne porte pas le témoin de session.</p>'
+            + '<button id="bascule">Récupérer ma session…</button></div>';
       var t = el('bascule');
       if (t) t.addEventListener('click', function () {
-        top.location.href = 'https://hall.gk2.secubox.in/';
+        // On va CHERCHER la session plutôt que de déménager : le relais
+        // revient ici avec un jeton, et le domaine public reste le nôtre.
+        top.location.href = 'https://hall.gk2.secubox.in/relais.html?retour='
+          + encodeURIComponent(top.location.origin + '/');
       });
       var k = el('cnx');
       if (k) k.addEventListener('click', function () {

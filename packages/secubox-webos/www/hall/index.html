@@ -1231,6 +1231,23 @@ document.addEventListener('click',e=>{
   const tv=e.target.closest('.mnav .it[data-view]'); if(tv){ showView(tv.dataset.view); return; }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
+// ── JETON REÇU D'UN AUTRE DOMAINE (#1305) ──────────────────────────────────
+//
+// Le relais nous renvoie avec `#sbx=<jeton>`. On le range dans NOTRE
+// localStorage — propre à ce domaine — puis on efface le fragment.
+//
+// On l'efface pour trois raisons : il ne doit pas rester dans la barre
+// d'adresse d'un écran partagé, ni dans l'historique, ni repartir tel quel si
+// la page est rechargée. `replaceState` remplace l'entrée au lieu d'en
+// ajouter une : revenir en arrière ne doit pas rejouer le jeton.
+(function(){
+  const h = location.hash || '';
+  const m = h.match(/[#&]sbx=([^&]+)/);
+  if(!m) return;
+  try{ localStorage.setItem('sbx_token', decodeURIComponent(m[1])); }catch(e){}
+  try{ history.replaceState({}, '', location.pathname + location.search); }catch(e){}
+})();
+
 const root=document.documentElement;
 // `var` et non `let` : render() appelle vivifieCartes() PENDANT l'évaluation du
 // script, avant cette ligne. Une déclaration `let` reste alors en zone morte et
@@ -1769,9 +1786,10 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     const b = document.getElementById('who-session');
     const e = document.getElementById('who-etat');
     if(!b || !e) return;
-    if(!SBX_DOM){
-      b.textContent = 'Ouvrir sur gk2.secubox.in';
-      e.textContent = 'Votre session ne vaut pas sur ce domaine.';
+    if(!SBX_DOM && !_moi){
+      b.textContent = 'Connexion SecuBox…';
+      e.textContent = 'Ce domaine ne porte pas le témoin de session : on ira '
+        + 'chercher un jeton sur la box.';
       return;
     }
     if(_moi){
@@ -1816,7 +1834,14 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   setInterval(sondeAttentes, 120000);
 
   document.getElementById('who-session').addEventListener('click', ()=>{
-    if(!SBX_DOM){ top.location.href='https://hall.gk2.secubox.in/'; return; }
+    if(!SBX_DOM){
+      // ON NE DEMENAGE PLUS, ON VA CHERCHER LA SESSION. Rediriger vers l'autre
+      // domaine faisait perdre le domaine public ; le relais, lui, revient ici
+      // avec un jeton et tout fonctionne a l'identique des deux cotes.
+      location.href = 'https://hall.gk2.secubox.in/relais.html?retour='
+        + encodeURIComponent(location.origin + location.pathname);
+      return;
+    }
     if(_moi){
       // La déconnexion appartient à la box, pas au Hall : on l'ouvre là où
       // elle est, plutôt que d'effacer un cookie qu'on ne possède pas.

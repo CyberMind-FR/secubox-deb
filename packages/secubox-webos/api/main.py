@@ -10,7 +10,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, Depends, Request
 
-from secubox_core.auth import require_jwt
+from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
 from api.models import Service
 from api import registry, flags, cardlets, acces
@@ -214,6 +214,37 @@ async def services(user=Depends(require_jwt)):
 
 def _qui(user) -> str:
     return acces.qui_sur((user or {}).get("sub"))
+
+
+# ── PASSAGE DE JETON ENTRE DEUX DOMAINES (#1305) ───────────────────────────
+#
+# Le temoin de session porte `.gk2.secubox.in` : sur hall.gk2.net, le
+# navigateur ne l'envoie JAMAIS. Ce n'est pas un reglage rate — c'est la regle
+# qui empeche un site de poser des temoins valables pour un autre, et aucun
+# reglage ne la contourne.
+#
+# On passe donc un JETON, pas un temoin. Cette route est appelee depuis le
+# domaine SecuBox, ou la session VAUT : elle frappe un jeton court au nom de la
+# personne deja authentifiee, que la page de relais renverra dans le FRAGMENT
+# de l'URL de retour.
+#
+# LE FRAGMENT ET RIEN D'AUTRE. Ce qui suit `#` ne part pas au serveur : ni dans
+# les journaux d'acces, ni dans le `Referer`, ni dans un cache de proxy. Un
+# jeton dans la requete finirait dans les trois.
+
+# Une heure. Assez pour ouvrir une session de travail, trop peu pour qu'un
+# jeton oublie dans un historique serve encore demain.
+DUREE_JETON = 3600
+
+
+@router.post("/jeton")
+async def frappe_jeton(user=Depends(require_jwt)):
+    """Un jeton court, pour la personne DEJA authentifiee ici."""
+    sub = (user or {}).get("sub")
+    if not sub:
+        return {"ok": False, "detail": "identite absente"}
+    return {"ok": True, "jeton": create_token(sub, expires_in=DUREE_JETON),
+            "expire_dans": DUREE_JETON}
 
 
 @router.get("/acces/{svc}")

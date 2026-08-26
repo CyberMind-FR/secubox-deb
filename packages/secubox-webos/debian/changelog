@@ -1,3 +1,28 @@
+secubox-webos (1.0.92-1~bookworm1) bookworm; urgency=medium
+
+  * PASSAGE DE JETON ENTRE DEUX DOMAINES (#1305). Le temoin de session porte
+    `.gk2.secubox.in` : sur hall.gk2.net le navigateur ne l'envoie JAMAIS. Ce
+    n'est pas un reglage rate — c'est la regle qui empeche un site de poser des
+    temoins valables pour un autre, et aucun reglage ne la contourne. On passe
+    donc un JETON, pas un temoin.
+  * Une page de relais, servie SUR le domaine SecuBox ou la session vaut,
+    demande un jeton court au nom de la personne deja authentifiee et le renvoie
+    dans le FRAGMENT de l'URL de retour.
+  * LE FRAGMENT ET RIEN D'AUTRE : ce qui suit `#` ne part pas au serveur — ni
+    journaux d'acces, ni `Referer`, ni cache de proxy. Un jeton passe en requete
+    finirait dans les trois.
+  * LA DESTINATION EST VERIFIEE, et c'est le point critique : une page qui
+    redirige vers ce qu'on lui dit est une redirection ouverte, et celle-ci
+    emporterait le jeton. La liste des retours acceptes est CLOSE.
+  * Le jeton dure UNE HEURE : assez pour une session de travail, trop peu pour
+    qu'un jeton oublie dans un historique serve encore demain. Le Hall l'efface
+    du fragment des reception, et `replaceState` remplace l'entree
+    d'historique — revenir en arriere ne doit pas rejouer un jeton.
+  * On ne DEMENAGE plus vers l'autre domaine : le domaine public reste le
+    notre, et tout fonctionne a l'identique des deux cotes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:24:57 +0200
+
 secubox-webos (1.0.91-1~bookworm1) bookworm; urgency=medium
 
   * UN MESSAGE D'API N'EST PAS UN MESSAGE POUR QUELQU'UN (#1304). « Token

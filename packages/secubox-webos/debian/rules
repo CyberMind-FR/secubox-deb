@@ -16,6 +16,7 @@ override_dh_auto_install:
 	install -m 0644 www/hall/cardlets/*.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/cardlets/
 	install -m 0644 www/hall/index.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/index.html
 	install -m 0644 www/hall/acces.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/acces.html
+	install -m 0644 www/hall/relais.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/relais.html
 	install -m 0644 www/hall/hall-logo.svg $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hall-logo.svg
 	install -m 0644 www/hall/render-ref.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/render-ref.html
 	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/medaillons
