@@ -10,6 +10,42 @@
 
 ---
 
+
+## 2026-08-26 (nuit) — Le BiB (Browser-in-Browser) + matrice SBXOS
+
+**BiB en ligne** (`secubox-surf`, hors inspection) : navigateur de relais
+par-origine `surf-<hôte>.gk2.secubox.in` dans le Hall (HAProxy route `surf-*`
+en bypass, générateur préfixe #1217). Barre d'adresse + back/home/reload/tab,
+barre unique double-ligne (adresse + metrics + statut). Confidentialité :
+pisteurs coupés (liste+motifs+labels), auto-consentement, Taboola/Outbrain
+masqués, popups+notifications interceptées, cookies `SameSite=None`,
+anti-adblock ciblé, meta-refresh neutralisé, sandbox iframe, **saut des portails
+de consentement** (first-id → 302 vers la page de retour, réécrits dans HTML+JS).
+Mesures dans `docs/POC-SURF.md`.
+
+**Matrice SBXOS** : tout lien reste dans le Hall — sources MetaNews et liens
+BBS externes → surf (overlay), liens box → service embarqué à la bonne réf
+(`sbx:'ouvre-hote'`) ; standalone → liens directs. Liens cartouche MetaNews du
+BBS : par sujet (`#<id>`) au lieu de global.
+
+**MetaNews** : clustering assaini (fraîcheur multiplicative, garde de contenu,
+acronymes, jours/mois/mots communs exclus des entités) + **re-clustering** des
+vieux mélanges (72 articles détachés, tornade nettoyée du préservatif). 16 → 28
+flux (Mediapart, Reporterre, Basta!, L'Huma, Le Point, Slate, Courrier Inter,
+France Culture, Alter-Éco, AFP Factuel, TV5Monde, France Inter).
+
+**WAF** : « Surfaces surveillées » + « Noms hors registre » (top-10 scans) dans
+le tableau du Hall ; mode clair rétabli (skin forcé retiré).
+
+**Hall divers** : miniatures PeerTube stables, fin de vidéo retire rangée+
+pastille, vol/muet média persistants, « ordre actuel = défaut » favoris, bandeau
+mobile sur une ligne, carte Dépôt qui dépose. Roundcube session 8 h.
+
+**Bugs de fond corrigés** : réassignation `const d` (ev.data) cassait tout le
+handler de messages (clics Hall) ; règle « audio cède à vidéo » bloquait la
+radio ; clic anti-adblock GLOBAL cassait toutes les pages ; le re-clustering
+synchrone bloquait le démarrage (502).
+
 ## 2026-08-21 (soir) — BBS vignettes-snapshot d'URL (#1120), skin newsroom complété, alias de domaines
 
 **secubox-bbs 0.28.49 (#1120)** — un message ne contenant qu'une URL reçoit une

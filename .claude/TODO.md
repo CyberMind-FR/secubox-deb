@@ -12,7 +12,15 @@
 
 ## 2026-08-26 (soir) — file SBXOS, par ordre décidé
 
-### 🔴 Demain, avec le POC
+### ✅ Fait (nuit du 26/08)
+
+- [x] **BiB / proxy surf EN LIGNE** (#1217) — relais par-origine, matrice SBXOS.
+- [x] **WAF top-10 noms hors registre** dans le tableau.
+- [x] **Re-clustering MetaNews** — 72 articles détachés des mauvais sujets.
+- [x] **+12 flux MetaNews** (Mediapart, AFP, TV5Monde, France Inter…).
+- [x] Persistance vol/muet des barres média ; « ordre actuel = défaut » favoris.
+
+### 🔴 Reste (avec le POC de corrélation)
 
 - [ ] **#1216 — corréler les sessions de nos services, sans les cloisonner.**
       Le lecteur PeerTube ne s'authentifie plus dans le Hall : contexte tiers,
