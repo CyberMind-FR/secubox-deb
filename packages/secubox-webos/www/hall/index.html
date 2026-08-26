@@ -667,7 +667,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                dans une fenêtre à part dont la barre d'adresse est visible.
                C'est la même règle que pour les cartes — on n'apprend à
                personne à taper son mot de passe ailleurs que chez lui. -->
-          <button type="button" role="menuitem" id="who-session">Se connecter…</button>
+          <button type="button" role="menuitem" id="who-session">Connexion SecuBox…</button>
           <p class="who-note" id="who-etat">session non vérifiée</p>
           <div class="who-sep"></div>
           <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
@@ -1775,12 +1775,14 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       return;
     }
     if(_moi){
-      b.textContent = 'Se déconnecter';
+      b.textContent = 'Déconnexion SecuBox';
       e.textContent = 'Connecté — ' + _moi;
       const n=document.getElementById('who-nom'); if(n) n.textContent=_moi;
     } else {
-      b.textContent = 'Se connecter…';
-      e.textContent = 'Non connecté : les cartes qui lisent vos services restent vides.';
+      b.textContent = 'Connexion SecuBox…';
+      // On precise « SecuBox » : c'est la session de la BOX qui ouvre les
+      // cartes, pas un compte de service.
+      e.textContent = 'Non connecté à la box : les cartes qui lisent vos services restent vides.';
     }
   }
 

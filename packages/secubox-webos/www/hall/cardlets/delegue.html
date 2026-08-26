@@ -127,11 +127,17 @@
       // « connectez-vous » sans donner le moyen de le faire envoie chercher
       // ailleurs ce qu'on pourrait régler ici.
       var meme = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+      // ON NOMME LA BOX, PAS LE SERVICE (#1301). « Se connecter » dans une
+      // carte Cloud se lit comme « se connecter à Nextcloud » — or c'est la
+      // session de la BOX qui manque, pas celle du service. La confusion
+      // enverrait quelqu'un taper son mot de passe Nextcloud pour rien, et
+      // c'est exactement le geste qu'on passe la journée à décourager.
       el('corps').innerHTML = meme
-        ? '<div class="sans"><p>Connectez-vous pour voir ' + esc(c.quoi) + '.</p>'
-            + '<button id="cnx">Se connecter…</button></div>'
-        : '<div class="sans"><p>Votre session ne vaut pas sur ce domaine.</p>'
-            + '<button id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
+        ? '<div class="sans"><p>Il manque votre session <b>SecuBox</b> pour voir '
+            + esc(c.quoi) + '.</p>'
+            + '<button id="cnx">Connexion SecuBox…</button></div>'
+        : '<div class="sans"><p>Votre session <b>SecuBox</b> ne vaut pas sur ce '
+            + 'domaine.</p><button id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
       var t = el('bascule');
       if (t) t.addEventListener('click', function () {
         top.location.href = 'https://hall.gk2.secubox.in/';

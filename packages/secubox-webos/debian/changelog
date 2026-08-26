@@ -1,3 +1,16 @@
+secubox-webos (1.0.89-1~bookworm1) bookworm; urgency=medium
+
+  * ON NOMME LA BOX, PAS LE SERVICE (#1301). « Se connecter » dans une carte
+    Cloud se lit comme « se connecter a Nextcloud » — or c'est la session de la
+    BOX qui manque, pas celle du service. La confusion enverrait quelqu'un
+    taper son mot de passe Nextcloud pour rien, et c'est exactement le geste
+    qu'on passe la journee a decourager.
+  * Partout : « Connexion SecuBox… », « Deconnexion SecuBox », « il manque
+    votre session SecuBox », « non connecte a la box ». La page precise meme
+    « jamais celui d'un service ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:12:03 +0200
+
 secubox-webos (1.0.88-1~bookworm1) bookworm; urgency=medium
 
   * CONSTATER NE SUFFIT PAS, IL FAUT PROPOSER (#1299). La page d'acces et les
