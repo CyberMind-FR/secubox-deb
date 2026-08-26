@@ -359,7 +359,33 @@ html,body{overflow:auto !important}
   document.addEventListener("DOMContentLoaded",antiMur);
   document.addEventListener("DOMContentLoaded",tiers);
   document.addEventListener("DOMContentLoaded",pub);
-  var n=0,iv=setInterval(function(){pass();antiMur();tiers();pub();if(++n>14)clearInterval(iv);},600);
+  // TRACKERS REFERENCES dans la page : on compte les hotes de pistage cites
+  // par les ressources (scripts/img/iframes). Reel, mesure sur le DOM.
+  var TRK=/(doubleclick|googlesyndication|google-analytics|googletagmanager|adservice|adnxs|criteo|taboola|outbrain|scorecardresearch|quantserve|pubmatic|rubicon|analytics|tracking|telemetry|hotjar|amplitude|segment|\.ads?\.|adservers?)/i;
+  function scanTrackers(){
+    try{
+      var S=window.__sbx; if(!S) return;
+      var r=document.querySelectorAll("script[src],img[src],iframe[src],link[href]");
+      S.total=r.length; var t=0;
+      for(var i=0;i<r.length;i++){ var u=r[i].src||r[i].href||""; if(TRK.test(u)) t++; }
+      S.trackers=t;
+    }catch(e){}
+  }
+  // On expose les comptes de pub/tiers via des marqueurs dataset deja poses.
+  function compteMasques(){
+    try{
+      var S=window.__sbx; if(!S) return;
+      S.pubs=document.querySelectorAll("[data-sbx-pub]").length;
+      S.tiers=document.querySelectorAll("[data-sbx-tiers]").length;
+    }catch(e){}
+  }
+  function rapporte(){
+    scanTrackers(); compteMasques();
+    try{ if(parent!==window) parent.postMessage({sbx:"surf-stats", stats:window.__sbx}, "*"); }catch(e){}
+  }
+  var n=0,iv=setInterval(function(){pass();antiMur();tiers();pub();rapporte();if(++n>14)clearInterval(iv);},600);
+  // Un dernier rapport plus tard, quand la page a fini de charger ses pubs.
+  setTimeout(rapporte, 4000); setTimeout(rapporte, 9000);
   // ON ANNONCE LA NAVIGATION au cadre parent (la carte Surf) : un lien suivi
   // DANS la page relayee navigue l'iframe sans que la carte le sache. Grace a
   // ceci, « precedent » recule aussi sur les liens internes, pas seulement sur
@@ -380,24 +406,55 @@ html,body{overflow:auto !important}
 _INJECTION_TETE = """
 <script id="sbx-surf-tete">
 (function(){
+  // COMPTEURS DE CAMOUFLAGE (#1351) : ce que le relais a coupe ou masque, pour
+  // l'afficher dans la barre. Reels, pas decoratifs.
+  window.__sbx={cookies:0,popups:0,notifs:0,pubs:0,tiers:0,trackers:0,total:0};
+  var S=window.__sbx;
+
+  // COOKIES : on retire domain= (etranger a notre origine) ET on impose
+  // SameSite=None (contexte tiers, sinon le navigateur rejette). Meme regle
+  // que cote serveur sur Set-Cookie.
   try{
-    var proto = Document.prototype;
-    var d = Object.getOwnPropertyDescriptor(proto, "cookie");
+    var d = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
     if(d && d.set && d.get){
       Object.defineProperty(document, "cookie", {
         configurable:true,
         get:function(){ return d.get.call(document); },
-        set:function(v){ d.set.call(document, String(v).replace(/;\\s*domain=[^;]*/ig, "")); }
+        set:function(v){
+          var x=String(v).replace(/;\\s*domain=[^;]*/ig,"").replace(/;\\s*samesite=[^;]*/ig,"");
+          if(!/;\\s*secure/i.test(x)) x+="; Secure";
+          x+="; SameSite=None";
+          S.cookies++;
+          d.set.call(document, x);
+        }
       });
     }
   }catch(e){}
-  // window.open neutralise des le depart (popups/popunders).
+
+  // POPUPS : window.open rendu inerte.
   try{
     var faux={closed:true,close:function(){},focus:function(){},blur:function(){},
       postMessage:function(){},moveTo:function(){},resizeTo:function(){},
       location:{href:"",replace:function(){},assign:function(){}},
       document:{write:function(){},close:function(){}}};
-    window.open=function(){return faux;};
+    window.open=function(){ S.popups++; return faux; };
+  }catch(e){}
+
+  // POPUPS DE NOTIFICATION : la demande d'autorisation est refusee EN SILENCE,
+  // sans le bandeau du navigateur. On ne pousse rien non plus (push/SW).
+  try{
+    if(window.Notification){
+      Notification.requestPermission=function(cb){
+        S.notifs++;
+        if(typeof cb==="function"){ try{cb("denied");}catch(e){} }
+        return Promise.resolve("denied");
+      };
+      try{ Object.defineProperty(Notification,"permission",{get:function(){return "denied";},configurable:true}); }catch(e){}
+    }
+    if(navigator.serviceWorker && navigator.serviceWorker.register){
+      var reg0=navigator.serviceWorker.register.bind(navigator.serviceWorker);
+      navigator.serviceWorker.register=function(){ S.notifs++; return Promise.reject(new Error("sbx: bloque")); };
+    }
   }catch(e){}
 })();
 </script>

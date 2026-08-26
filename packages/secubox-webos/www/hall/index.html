@@ -1238,6 +1238,10 @@ function setMode(mode){
 }
 // Point d'entrée UNIQUE — même logique pour tous les services (critère #1187).
 function openService(id, mode, sub, subLabel){
+  // SURF N'EST PAS UN SERVICE A EMBARQUER (#1350). Le traiter comme tel
+  // construisait `surf.gk2.secubox.in/?embed=1`, un hote inexistant que la CSP
+  // bloque. On ouvre le navigateur surf en overlay, sur son accueil.
+  if(id==='surf'){ ouvreSurf(''); return; }
   if(typeof fermeSurf==='function') fermeSurf();   // #1348 : ouvrir un service ferme le surf
   const d=svcDesc(id); if(!d) return;
   const s=_reg[id]||{}; const st=(s.health&&s.health.state)||'unknown';
@@ -1753,7 +1757,6 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // servie par le Hall, meme origine — avec l'adresse en parametre ; c'est elle
 // qui fabrique l'origine par-site et cadre le relais.
 function ouvreSurf(url){
-  if(!url) return;
   const th = root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   const f = document.getElementById('surf-ov-f');
@@ -1762,10 +1765,11 @@ function ouvreSurf(url){
   // mesure sa hauteur reelle — elle change selon la largeur et le pli.
   const mast=document.querySelector('.mast');
   if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
-  let hote = url;
-  try{ hote = new URL(/^https?:\/\//i.test(url)?url:'https://'+url).hostname; }catch(e){}
+  let hote = 'accueil';
+  if(url){ try{ hote = new URL(/^https?:\/\//i.test(url)?url:'https://'+url).hostname; }catch(e){} }
   document.getElementById('surf-ov-h').textContent = hote;
-  f.src = '/cardlets/surf.html?theme='+th+'&u='+encodeURIComponent(url);
+  // Sans adresse, on ouvre l'accueil du navigateur (barre vide).
+  f.src = '/cardlets/surf.html?theme='+th+(url?('&u='+encodeURIComponent(url)):'');
   ov.classList.remove('hidden');
 }
 function fermeSurf(){

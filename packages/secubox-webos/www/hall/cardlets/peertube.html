@@ -122,21 +122,48 @@
   function montre() {
     if (!vids.length || joue) return;
     var v = vids[i % vids.length], img = el('une-img'), src = vign(v);
-    if (src) { img.src = src; img.style.display = ''; } else { img.style.display = 'none'; }
+    if (src) {
+      if (img.getAttribute('src') !== src) img.src = src;
+      img.style.display = '';
+      img.onerror = function () { this.style.display = 'none'; };
+    } else { img.style.display = 'none'; }
     el('une-t').textContent = v.name || '—';
     el('une-dur').textContent = mmss(v.duration);
     el('rang').textContent = ((i % vids.length) + 1) + '/' + vids.length;
     el('pied-t').textContent = (v.channel && v.channel.displayName) || 'vidéos';
 
     var suite = [], k;
-    for (k = 1; k <= 4 && k < vids.length; k++) suite.push(vids[(i + k) % vids.length]);
-    el('top').innerHTML = suite.map(function (w, j) {
-      var s = vign(w);
-      return s
-        ? '<button type="button" data-i="' + ((i + 1 + j) % vids.length) + '" title="'
-            + esc(w.name) + '"><img src="' + esc(s) + '" alt=""></button>'
-        : '<span class="vide"></span>';
-    }).join('');
+    for (k = 1; k <= 4 && k < vids.length; k++) suite.push({ v: vids[(i + k) % vids.length], idx: (i + 1 + k - 1) % vids.length });
+
+    // ON REUTILISE LES BOUTONS AU LIEU DE LES RECREER (#1349). Reconstruire
+    // innerHTML a chaque rotation DETRUISAIT les <img> et les rechargeait : le
+    // temps du chargement, la miniature etait vide — d'ou « elles
+    // disparaissent parfois ». On garde les memes elements et on ne change que
+    // ce qui bouge (src, cible), donc l'ancienne image reste affichee jusqu'a
+    // ce que la nouvelle soit prete.
+    var top = el('top');
+    while (top.children.length < suite.length) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      var im = document.createElement('img');
+      im.alt = ''; im.loading = 'eager'; im.decoding = 'async';
+      // UN ECHEC DE CHARGEMENT NE LAISSE PLUS DE TROU : on cache l'image
+      // cassee plutot que d'afficher l'icone de fichier absent.
+      im.addEventListener('error', function () { this.style.visibility = 'hidden'; });
+      im.addEventListener('load', function () { this.style.visibility = ''; });
+      b.appendChild(im); top.appendChild(b);
+    }
+    while (top.children.length > suite.length) top.removeChild(top.lastChild);
+
+    for (k = 0; k < suite.length; k++) {
+      var bt = top.children[k], w = suite[k].v, sr = vign(w), img2 = bt.firstChild;
+      bt.dataset.i = suite[k].idx;
+      bt.title = w.name || '';
+      // On ne REASSIGNE la src que si elle change : sinon on rechargerait la
+      // meme image pour rien, et c'est justement le rechargement qui clignote.
+      if (sr && img2.getAttribute('src') !== sr) img2.src = sr;
+      bt.style.display = sr ? '' : 'none';
+    }
   }
 
   // LIRE ICI : le lecteur d'embarquement de PeerTube remplace la vignette. On
@@ -366,6 +393,26 @@
       } catch (e) {}
       return;
     }
+    // FIN DE VIDEO : LA RANGEE ET LA PASTILLE DISPARAISSENT (#1352). Le lecteur
+    // envoie `playbackState:"ended"` a la fin ; a defaut, une position au ras
+    // de la duree le dit aussi. On annonce alors `fin` — le Hall retire la
+    // rangee et efface la pastille — et on revient a la vitrine.
+    var par = (d && d.params) || {};
+    var etat = par.playbackState || par.state || '';
+    var duree = Number(par.duration) || 0;
+    var posC = positionDe(d);
+    if (joue && (etat === 'ended' || (duree > 0 && posC !== null && posC >= duree - 1.5))) {
+      joue = false;
+      if (battement) { clearInterval(battement); battement = null; }
+      oublie();
+      try { parent.postMessage({ sbx: 'media', id: 'peertube', joue: false, fin: true }, '*'); } catch (e) {}
+      el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
+        + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'
+        + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
+      montre();
+      return;
+    }
+
     // On ne retient que ce qui porte une position : le lecteur envoie aussi des
     // acquittements et des évènements qui n'en ont pas.
     var pos = positionDe(d);

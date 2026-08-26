@@ -1,3 +1,20 @@
+secubox-webos (1.0.114-1~bookworm1) bookworm; urgency=medium
+
+  * MINIATURES PEERTUBE QUI NE DISPARAISSENT PLUS (#1349). La strip etait
+    reconstruite en innerHTML a chaque rotation : les <img> etaient detruits
+    puis recharges, et le temps du chargement la miniature etait vide. On
+    reutilise desormais les memes elements (on ne change que src et cible),
+    avec onerror pour cacher une image cassee plutot qu'un trou.
+  * FIN DE VIDEO : LA RANGEE ET LA PASTILLE DISPARAISSENT (#1352). A la fin
+    (`playbackState:ended`, ou position au ras de la duree), le cardlet annonce
+    `fin` — le Hall retire la rangee media et efface la pastille — et revient a
+    la vitrine.
+  * SURF N'EST PLUS EMBARQUE COMME UN SERVICE (#1350). L'ouvrir construisait
+    `surf.gk2.secubox.in/?embed=1`, un hote inexistant bloque par la CSP. Il
+    ouvre desormais le navigateur surf en overlay sur son accueil.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:39:45 +0200
+
 secubox-webos (1.0.113-1~bookworm1) bookworm; urgency=medium
 
   * ON NE RESTE PLUS COINCE SOUS LE SURF (#1348). Toute navigation du Hall —
