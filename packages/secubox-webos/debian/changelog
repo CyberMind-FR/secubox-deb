@@ -1,3 +1,15 @@
+secubox-webos (1.0.38-1~bookworm1) bookworm; urgency=medium
+
+  * Le cardlet Pare-feu EMBARQUE le tableau de bord au lieu d'ouvrir un onglet
+    (#1229) : c'est un service du Hall comme un autre, et openService reste le
+    point d'entree unique (#1187). Un onglet separe perdrait le fil de
+    navigation et le theme.
+  * Entree « waf » dans FEATURED — sans elle openService ne savait pas quoi
+    ouvrir — et waf.gk2.secubox.in ajoute au frame-src du Hall : sans cette
+    autorisation le cadre restait vide, sans rien dire.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:39:11 +0200
+
 secubox-webos (1.0.37-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet PARE-FEU dans le Hall (#1228), au meme gabarit que celui de la

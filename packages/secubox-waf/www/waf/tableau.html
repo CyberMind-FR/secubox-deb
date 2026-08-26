@@ -117,6 +117,37 @@
     } catch (e) { return null; }
   }
 
+  // MÊME table que le panneau, et c'est le point : une catégorie doit porter
+  // le même signe partout, sinon l'œil recommence son apprentissage à chaque
+  // page. La correspondance se fait par SOUS-CHAÎNE au premier trouvé —
+  // l'ordre est donc porteur de sens, les clés spécifiques précèdent les
+  // génériques, sans quoi « cve_voip » tomberait sur « voip ».
+  const CAT_EMOJI = {
+    'auth_ssh': '🔑', 'auth_smtp': '✉️', 'auth_imap': '📥',
+    'leurre': '🕳️', 'host_anomaly': '🚪', 'product_absent': '👻', 'robots': '🤖',
+    'sqli': '💉', 'sql': '💉', 'injection': '💉',
+    'xss': '🔥',
+    'rce': '💥', 'command': '💥', 'dos': '💥',
+    'lfi': '📂', 'rfi': '🌐', 'traversal': '📂', 'path': '📂',
+    'recon_crawler': '🕷️', 'recon': '🕷️', 'crawler': '🕷️', 'scanner': '🕷️', 'scan': '🕷️', 'bot': '🤖',
+    'honeypot': '🍯',
+    'credential_harvest': '🔓', 'credential': '🔓', 'brute': '🔓',
+    'api_abuse': '🎣', 'api': '🎣',
+    'waf_fingerprint': '🖐️', 'fingerprint': '🖐️',
+    'cve_2024': '🧬', 'cve': '🧬',
+    'voip': '📞', 'xmpp': '💬',
+    'webmail': '📧', 'mail': '📧',
+    'router': '📡',
+    'autres': '➕',
+    'default': '⚠️'
+  };
+  function catEmoji(cat) {
+    if (!cat) return CAT_EMOJI.default;
+    const c = String(cat).toLowerCase();
+    for (const [k, e] of Object.entries(CAT_EMOJI)) if (c.includes(k)) return e;
+    return CAT_EMOJI.default;
+  }
+
   // Palette des catégories. Stable par NOM et non par rang : sinon une
   // catégorie changerait de couleur d'un jour à l'autre, et l'histogramme
   // deviendrait illisible d'une visite à la suivante.
@@ -195,7 +226,7 @@
     svg += '</svg>';
     cible.innerHTML = svg;
     legende.innerHTML = cles.map(k =>
-      '<span><i style="background:' + teinte(k) + '"></i>' + esc(k) + '</span>').join('');
+      '<span><i style="background:' + teinte(k) + '"></i>' + catEmoji(k) + ' ' + esc(k) + '</span>').join('');
   }
 
   // ── Efficacité : part bloquée, part avertie, part seulement observée ──────
@@ -218,7 +249,7 @@
       const pc = n => (n / total * 100).toFixed(1) + '%';
       const agi = Math.round((banni + refuse) / total * 100);
       return '<div class="barre">'
-        + '<span class="nom" title="' + esc(cat) + '">' + esc(cat) + '</span>'
+        + '<span class="nom" title="' + esc(cat) + '">' + catEmoji(cat) + ' ' + esc(cat) + '</span>'
         + '<span class="piste">'
         + (banni ? '<span style="width:' + pc(banni) + ';background:var(--red)" title="banni : ' + nb(banni) + '"></span>' : '')
         + (refuse ? '<span style="width:' + pc(refuse) + ';background:var(--purple)" title="refusé sans bannir : ' + nb(refuse) + '"></span>' : '')
@@ -262,11 +293,11 @@
     const surfaces = Object.keys((stats && stats.par_type) || {}).length;
     const actives = ((detec && detec.detections) || []).filter(d => d.actif).length;
     const items = [
-      ['Menaces vues', nb(stats && stats.total_threats), 'depuis le début du journal'],
-      ['Aujourd\'hui', nb(stats && stats.threats_today), 'bloquées ce jour'],
-      ['Bannis actifs', nb(bans && bans.total), 'dans la chaîne nft du WAF'],
-      ['Surfaces', String(surfaces), 'HTTP, SSH, SMTP, IMAP, leurres'],
-      ['Détections', actives + ' / ' + (((detec && detec.detections) || []).length),
+      ['👁️ Menaces vues', nb(stats && stats.total_threats), 'depuis le début du journal'],
+      ['📅 Aujourd\'hui', nb(stats && stats.threats_today), 'bloquées ce jour'],
+      ['🚫 Bannis actifs', nb(bans && bans.total), 'dans la chaîne nft du WAF'],
+      ['🛰️ Surfaces', String(surfaces), 'HTTP, SSH, SMTP, IMAP, leurres'],
+      ['🧠 Détections', actives + ' / ' + (((detec && detec.detections) || []).length),
        'comportementales actives']
     ];
     document.getElementById('tuiles').innerHTML = items.map(function (t) {

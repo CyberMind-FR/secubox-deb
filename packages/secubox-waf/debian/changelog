@@ -1,3 +1,18 @@
+secubox-waf (1.10.2-1~bookworm1) bookworm; urgency=medium
+
+  * Le vhost du tableau de bord declarait `frame-ancestors 'none'` : il
+    REFUSAIT d'etre embarque, et le cardlet du Hall ne pouvait qu'ouvrir un
+    onglet (#1229). Il nomme desormais les deux noms du Hall, et EUX SEULS —
+    `'self'` ne suffirait pas, l'origine du Hall n'etant pas la sienne, et un
+    joker ouvrirait la porte a n'importe quel site voulant encadrer le tableau
+    de bord.
+  * Icones dans le tableau de bord : tuiles, legende de l'histogramme,
+    efficacite et en-tetes. La table est celle du panneau — une categorie doit
+    porter le meme signe partout, sinon l'oeil recommence son apprentissage a
+    chaque page.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:39:11 +0200
+
 secubox-waf (1.10.1-1~bookworm1) bookworm; urgency=medium
 
   * « Aujourd'hui » annoncait 103 814 menaces pour un total cumule bien

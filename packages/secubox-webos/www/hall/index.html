@@ -326,7 +326,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .cardlet.cl-waf[data-etat="offline"] .live{color:var(--coral)}
 .cardlet.cl-waf[data-etat="offline"] .live .led{background:var(--coral);box-shadow:0 0 0 3px var(--coral-s)}
 .cardlet .cl-lien{font-family:"JetBrains Mono";font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--dim);text-decoration:none;align-self:flex-start}
+  color:var(--dim);text-decoration:none;align-self:flex-start;background:none;border:none;padding:0;cursor:pointer}
 .cardlet .cl-lien:hover{color:var(--ink)}
 .cardlet .msg button{padding:0 15px;border-radius:9px;border:none;background:var(--cyan);color:#fff;font-weight:600;font-size:.8rem}
 
@@ -505,7 +505,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                   <span title="détections comportementales en service">🧠 <b id="wdet">—</b></span>
                 </div>
               </div></div>
-            <a class="cl-lien" href="https://waf.gk2.secubox.in/" target="_blank" rel="noopener">Tableau de bord ↗</a>
+            <button class="cl-lien" id="wopen" type="button">📊 Tableau de bord ▦</button>
           </div>
 
           <div class="cardlet">
@@ -571,6 +571,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // Cloud=nc, Mail=webmail, Outils=kbin. Chaque carte s'affiche même si le module
 // n'est pas (encore) dans le registre.
 const FEATURED = [
+  {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in"},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in"},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in"},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
@@ -970,6 +971,14 @@ function majWaf(){
     });
 }
 majWaf(); setInterval(majWaf, 30000);
+
+// Le cardlet EMBARQUE le tableau de bord au lieu d'ouvrir un onglet : c'est un
+// service du Hall comme un autre, et openService est le point d'entrée unique
+// (#1187). Un onglet séparé perdrait le fil de navigation et le thème.
+(function(){
+  const b=document.getElementById('wopen');
+  if(b) b.addEventListener('click', ()=>openService('waf','embed'));
+})();
 </script>
 </body>
 </html>
