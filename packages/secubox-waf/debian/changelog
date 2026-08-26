@@ -1,3 +1,18 @@
+secubox-waf (1.10.14-1~bookworm1) bookworm; urgency=medium
+
+  * LE JOURNAL DE MENACES S'OUVRE AU GROUPE (#1318). sbx-authwatch ecrit dans
+    le MEME journal, mais son cloisonnement ne lui accorde pas
+    CAP_DAC_OVERRIDE — root n'y outrepasse donc pas les permissions, et un
+    fichier 0640 appartenant a un autre compte lui restait ferme. Ses
+    detections SSH, SMTP, IMAP et celles des dix leurres n'ont JAMAIS atteint
+    le tableau de bord, alors qu'elles bannissaient bel et bien.
+  * On ouvre au GROUPE plutot que d'elargir les capacites : c'est la plus
+    petite permission qui resout le probleme, et le cloisonnement garde tout
+    son interet. La rotation recree aussi le fichier en 0660 — sinon le
+    correctif n'aurait pas survecu a la premiere nuit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:25:02 +0200
+
 secubox-waf (1.10.13-1~bookworm1) bookworm; urgency=medium
 
   * LE TABLEAU DE BORD EST SOMBRE PAR NATURE, ON CESSE DE PRETENDRE LE

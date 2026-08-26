@@ -970,11 +970,17 @@ function render(data,src){
   // Stats nœud, déplacées dans la barre de statut BAS (#1175).
   var sn=document.getElementById('sb-node');
   if(sn) sn.innerHTML='nœud <b>gk2</b> · ◆ <b>'+online+'</b> en ligne · ● <b>'+svc.length+'</b> modules';
-  document.getElementById('tiles').innerHTML=
-     tile('a1','Services en ligne',online,'/ '+svc.length+' modules','souverains & joignables')
-    +tile('a2','À surveiller',degr,'','dégradés ou en veille')
-    +tile('a3','Modules du parc',svc.length,'','tout le registre normalisé')
-    +tile('a4','Catégories',CATS.length,'','muraille · esprit · maillage · accès · racine · amorce');
+  // LA BARRE DE CHIFFRES EST RETIREE (#1319). Quatre grands nombres en tete
+  // d'accueil, dont trois disaient la meme chose autrement — « 106 / 119 »,
+  // « 119 modules », « 6 categories » — et le quatrieme un etat qu'on ne
+  // pouvait pas actionner de la. Elle mangeait la premiere hauteur d'ecran,
+  // celle qui devrait revenir aux cartes.
+  //
+  // Ce qui vaut la peine d'etre su tient deja dans la barre d'etat en BAS, qui
+  // ne coute aucune place : noeud, services en ligne, modules. On la remplit
+  // juste au-dessus, et la mosaique commence en haut de page.
+  const tz=document.getElementById('tiles');
+  if(tz) tz.remove();
   // système : tous les modules par catégorie
   const sb=document.getElementById('sysboard'); let sh=''; let shown=0;
   CATS.forEach(c=>{ const items=svc.filter(s=>s.category===c.id);

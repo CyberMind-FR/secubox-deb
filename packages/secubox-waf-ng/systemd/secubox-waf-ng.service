@@ -64,7 +64,16 @@ ExecStartPre=+/bin/chmod 0750 /var/log/secubox/cookie-audit
 # pas quand le fichier existe deja, ce qui est le cas de toute board en service.
 ExecStartPre=+/bin/mkdir -p /var/log/secubox/waf
 ExecStartPre=+/bin/chown -R secubox-waf:secubox-waf /var/log/secubox/waf
-ExecStartPre=+/bin/chmod 0750 /var/log/secubox/waf
+# 0770 SUR LE DOSSIER ET 0660 SUR LE JOURNAL (#1318). sbx-authwatch ecrit dans
+# le MEME journal de menaces, mais son cloisonnement ne lui accorde pas
+# CAP_DAC_OVERRIDE : root n'y outrepasse donc pas les permissions, et un fichier
+# 0640 appartenant a un autre compte lui restait ferme. Ses detections — SSH,
+# SMTP, IMAP et les dix leurres — n'ont jamais atteint le tableau de bord,
+# alors qu'elles bannissaient bel et bien.
+# On ouvre au GROUPE plutot que d'elargir les capacites : c'est la plus petite
+# permission qui resout le probleme.
+ExecStartPre=+/bin/chmod 0770 /var/log/secubox/waf
+ExecStartPre=+/bin/sh -c 'test -e /var/log/secubox/waf/waf-threats.log && /bin/chmod 0660 /var/log/secubox/waf/waf-threats.log || true'
 # #1070 phase B : le journal des bans nft (/var/lib/secubox/waf/bans.jsonl) doit
 # appartenir au service qui l'écrit et est rechargé au démarrage.
 # 0770 (et pas 0750) : l'API WAF (tourne en `secubox`, membre du groupe

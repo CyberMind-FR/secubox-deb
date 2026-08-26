@@ -35,5 +35,9 @@
     delaycompress
     missingok
     notifempty
-    create 0640 secubox-waf secubox-waf
+    # 0660 : sbx-authwatch ecrit dans le MEME journal et n'a pas
+    # CAP_DAC_OVERRIDE — sans l'ecriture de groupe, la rotation refermerait le
+    # fichier apres chaque nuit et ses detections disparaitraient a nouveau
+    # (#1318).
+    create 0660 secubox-waf secubox-waf
 }

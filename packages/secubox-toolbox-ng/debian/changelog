@@ -1,3 +1,36 @@
+secubox-toolbox-ng (0.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * LE JOURNAL DE MENACES S'OUVRE AU GROUPE (#1318). sbx-authwatch ecrit dans
+    le MEME journal, mais son cloisonnement ne lui accorde pas
+    CAP_DAC_OVERRIDE — root n'y outrepasse donc pas les permissions, et un
+    fichier 0640 appartenant a un autre compte lui restait ferme. Ses
+    detections SSH, SMTP, IMAP et celles des dix leurres n'ont JAMAIS atteint
+    le tableau de bord, alors qu'elles bannissaient bel et bien.
+  * On ouvre au GROUPE plutot que d'elargir les capacites : c'est la plus
+    petite permission qui resout le probleme, et le cloisonnement garde tout
+    son interet. La rotation recree aussi le fichier en 0660 — sinon le
+    correctif n'aurait pas survecu a la premiere nuit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:24:35 +0200
+
+secubox-toolbox-ng (0.3.3-1~bookworm1) bookworm; urgency=medium
+
+  * UNE MISE A JOUR NE DOIT PAS DESARMER LA SURVEILLANCE (#1317). L'unite
+    secubox-authwatch est volontairement posee `--no-enable --no-start` : un
+    service qui BANNIT ne s'active pas tout seul a l'installation (#1220).
+    C'est juste, et on n'y touche pas.
+  * Mais `--no-start` vaut AUSSI a la mise a jour : dh arrete l'unite en prerm
+    et ne la relance jamais. La surveillance SSH/SMTP/IMAP et les dix leurres
+    tombaient donc en silence a chaque montee de version, sans qu'aucun message
+    ne le dise — constate en production, le service arrete depuis des heures et
+    decouvert par hasard.
+  * On distingue les deux moments : a la MISE A JOUR, si l'unite est ENABLED
+    c'est que quelqu'un a decide de la faire tourner, et cette decision doit
+    survivre au paquet. A la premiere installation, on ne demarre toujours
+    rien.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:21:44 +0200
+
 secubox-toolbox-ng (0.3.2-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : LE BANDEAU DE SANTE N'EST PLUS INJECTE DANS UNE CARTE (#1292). Les

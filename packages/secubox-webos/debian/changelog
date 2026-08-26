@@ -1,3 +1,16 @@
+secubox-webos (1.0.98-1~bookworm1) bookworm; urgency=medium
+
+  * LA BARRE DE CHIFFRES EST RETIREE (#1319). Quatre grands nombres en tete
+    d'accueil, dont TROIS disaient la meme chose autrement — « 106 / 119 »,
+    « 119 modules », « 6 categories » — et le quatrieme un etat qu'on ne
+    pouvait pas actionner de la. Elle mangeait la premiere hauteur d'ecran,
+    celle qui doit revenir aux cartes.
+  * Ce qui vaut la peine d'etre su tient deja dans la barre d'etat en BAS, qui
+    ne coute aucune place : noeud, services en ligne, modules. La mosaique
+    commence desormais en haut de page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:25:51 +0200
+
 secubox-webos (1.0.97-1~bookworm1) bookworm; urgency=medium
 
   * YTSaS AGIT : une URL, un bouton (#1315). Sa route etait introuvable parce

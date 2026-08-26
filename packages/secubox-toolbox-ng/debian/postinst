@@ -33,4 +33,25 @@ esac
 
 #DEBHELPER#
 
+# ── UNE MISE A JOUR NE DOIT PAS DESARMER LA SURVEILLANCE (#1317) ────────────
+#
+# secubox-authwatch est volontairement pose `--no-enable --no-start` : un
+# service qui BANNIT ne s'active pas tout seul a l'installation, l'operateur
+# l'observe puis decide (#1220). C'est juste, et on n'y touche pas.
+#
+# Mais `--no-start` vaut aussi a la MISE A JOUR : dh arrete l'unite en prerm et
+# ne la relance jamais. La surveillance SSH/SMTP/IMAP et les leurres tombaient
+# donc en silence a chaque montee de version du paquet, sans qu'aucun message
+# ne le dise — constate en production, le service arrete depuis des heures.
+#
+# On distingue les deux moments. `$2` non vide signifie MISE A JOUR : si
+# l'unite est ENABLED, c'est que quelqu'un a decide de la faire tourner, et
+# cette decision doit survivre au paquet. A la premiere installation, `$2` est
+# vide et l'on ne demarre rien.
+if [ "$1" = "configure" ] && [ -n "$2" ]; then
+    if systemctl is-enabled secubox-authwatch.service >/dev/null 2>&1; then
+        systemctl restart secubox-authwatch.service >/dev/null 2>&1 || true
+    fi
+fi
+
 exit 0

@@ -26,6 +26,15 @@ RestartSec=10
 # (NET_BIND_SERVICE, pour telnet 23 et smb 445). Rien de plus.
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH
+# LE GROUPE PLUTOT QUE LA CAPACITE (#1318). Ce service ecrit ses detections dans
+# le journal de menaces du pare-feu, qui appartient a secubox-waf. Sans
+# CAP_DAC_OVERRIDE — et on ne l'ajoutera pas, c'est tout l'interet de ce
+# cloisonnement — root n'outrepasse pas les permissions : le fichier lui restait
+# ferme, et ses detections SSH/SMTP/IMAP et de leurres n'atteignaient jamais le
+# tableau de bord, alors qu'elles bannissaient bel et bien.
+# Appartenir au groupe suffit, et c'est la plus petite permission qui resout le
+# probleme.
+SupplementaryGroups=secubox-waf
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
