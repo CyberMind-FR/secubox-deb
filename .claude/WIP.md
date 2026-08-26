@@ -57,6 +57,23 @@ SocialRelay dotés d'une palette claire.
 
 ### ⬜ Next
 
+0bis. **POC proxy Tor + relais MITM — le morceau qui compte.** L'objectif tel
+   que posé : anti-censure, « SaaS inversé », gestion des traqueurs, blocage
+   transparent des publicités avec apprentissage, et pseudo-témoins rejoués
+   pour que le service distant croie ses publicités affichées — donc perte du
+   traçage à distance.
+   **Ce que la journée a déjà mesuré**, et qui doit cadrer le POC : le relais
+   `/pt/` a échoué exactement là où ces projets échouent — le lecteur demandait
+   ses ressources à la **racine** (`/client/…`), pas sous le préfixe. Réécrire
+   le HTML ne suffit pas : CSS `url()`, imports dynamiques, `fetch`, service
+   workers — et ceux dans le JS sont indécidables.
+   **Le piège structurant** : une origine unique = un contexte de sécurité
+   unique. Bon pour NOS services (§4bis), **dangereux** pour du surf arbitraire
+   — une page relayée lirait le stockage de Nextcloud. Le proxy de surf exige
+   donc **une origine par site** (`<empreinte>.proxy…`, certificat générique).
+   **Trois mesures suffisent à décider** : un site statique, un site applicatif
+   (Nextcloud), un SaaS moderne hostile au proxy.
+
 0. **Cartes Mail, Nextcloud, Mastodon, PhotoPrism** : l'ossature de délégation
    est **complète** (#1288 → #1290) — demande → file → validation → jeton
    stocké, classée par personne, aucune route publique, compte nommé. Nextcloud

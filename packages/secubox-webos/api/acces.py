@@ -366,3 +366,165 @@ def pose_manuel(qui: str, svc: str, compte: str, secret: str) -> dict:
                                 "voie": "manuel"}, 0o600)
     retire(qui, svc)
     return {"ok": True, "compte": compte}
+
+
+# ── APERÇUS : lire le service AU NOM de la personne ─────────────────────────
+#
+# CES FONCTIONS TOURNENT SUR LE SERVEUR, ET C'EST TOUT L'INTÉRÊT. Le secret ne
+# quitte jamais la box : la carte reçoit des titres et des chiffres, jamais la
+# clé qui a permis de les obtenir. Un client qui recevrait le jeton pourrait
+# s'en servir ailleurs — et il finirait dans un cache, un journal, un partage
+# d'écran.
+#
+# CHACUNE REND LA MÊME FORME : {ok, entrees:[{titre, sous, quand, url, image}],
+# resume}. Une forme commune permet UNE seule carte pour tous les services ;
+# quatre formes auraient donné quatre cartes à tenir en phase.
+
+def _vide(detail: str) -> dict:
+    return {"ok": False, "detail": detail, "entrees": [], "resume": ""}
+
+
+async def apercu(qui: str, svc: str) -> dict:
+    d = secret_de(qui, svc)
+    if not d or not d.get("secret"):
+        return _vide("aucun acces")
+    hote = SERVICES.get(svc, {}).get("hote", "")
+    try:
+        if svc == "mastodon":
+            return await _ap_mastodon(hote, d)
+        if svc == "nextcloud":
+            return await _ap_nextcloud(hote, d)
+        if svc == "photoprism":
+            return await _ap_photoprism(hote, d)
+        if svc == "mail":
+            return await _ap_mail(d)
+    except Exception as e:
+        # On ne laisse JAMAIS une exception remonter telle quelle : son texte
+        # peut contenir l'URL, donc le jeton pour certains services.
+        return _vide("lecture impossible : %s" % type(e).__name__)
+    return _vide("service sans apercu")
+
+
+async def _ap_mastodon(hote: str, d: dict) -> dict:
+    async with httpx.AsyncClient(verify=False, timeout=12) as cli:
+        r = await cli.get("https://%s/api/v1/timelines/home" % hote,
+                          params={"limit": 6},
+                          headers={"Authorization": "Bearer " + d["secret"]})
+    if r.status_code != 200:
+        return _vide("timeline refusee (%d)" % r.status_code)
+    out = []
+    for x in r.json() or []:
+        c = x.get("account") or {}
+        # Le contenu est du HTML : on le degarnit ici plutot que dans la carte,
+        # ou il faudrait le reinjecter — et reinjecter du HTML distant dans une
+        # page, c'est ouvrir la porte a ce qu'il contient.
+        import re as _re
+        txt = _re.sub(r"<[^>]+>", " ", x.get("content") or "")
+        txt = _re.sub(r"\s+", " ", txt).strip()
+        m = (x.get("media_attachments") or [{}])[0]
+        out.append({"titre": txt[:180] or "(sans texte)",
+                    "sous": "@" + (c.get("acct") or ""),
+                    "quand": x.get("created_at") or "",
+                    "url": x.get("url") or "",
+                    "image": m.get("preview_url") or ""})
+    return {"ok": True, "entrees": out, "resume": "%s" % (d.get("compte") or "")}
+
+
+async def _ap_nextcloud(hote: str, d: dict) -> dict:
+    auth = (d.get("compte") or "", d["secret"])
+    ent = []
+    async with httpx.AsyncClient(verify=False, timeout=12, auth=auth) as cli:
+        r = await cli.get("https://%s/ocs/v2.php/apps/activity/api/v2/activity" % hote,
+                          params={"format": "json", "limit": 6},
+                          headers={"OCS-APIRequest": "true"})
+        if r.status_code == 200:
+            for x in ((r.json() or {}).get("ocs") or {}).get("data") or []:
+                ent.append({"titre": (x.get("subject") or "")[:180],
+                            "sous": x.get("object_name") or x.get("app") or "",
+                            "quand": x.get("datetime") or "",
+                            "url": x.get("link") or "", "image": ""})
+        # Le quota est demande a part : il vaut la peine d'etre montre meme
+        # quand l'application « activite » est absente, ce qui est frequent.
+        q = await cli.get("https://%s/ocs/v2.php/cloud/user" % hote,
+                          params={"format": "json"},
+                          headers={"OCS-APIRequest": "true"})
+    resume = ""
+    if q.status_code == 200:
+        qd = (((q.json() or {}).get("ocs") or {}).get("data") or {}).get("quota") or {}
+        libre, total = qd.get("free"), qd.get("total")
+        if isinstance(libre, int) and isinstance(total, int) and total > 0:
+            resume = "%d %% utilises" % round(100 * (1 - libre / total))
+    if not ent and not resume:
+        return _vide("aucune activite lisible")
+    return {"ok": True, "entrees": ent, "resume": resume}
+
+
+async def _ap_photoprism(hote: str, d: dict) -> dict:
+    async with httpx.AsyncClient(verify=False, timeout=12) as cli:
+        s = await cli.post("https://%s/api/v1/session" % hote,
+                           json={"username": d.get("compte"), "password": d["secret"]})
+        if s.status_code != 200:
+            return _vide("session refusee (%d)" % s.status_code)
+        jeton = (s.json() or {}).get("id") or ""
+        r = await cli.get("https://%s/api/v1/photos" % hote,
+                          params={"count": 6, "order": "newest"},
+                          headers={"X-Auth-Token": jeton})
+    if r.status_code != 200:
+        return _vide("photos refusees (%d)" % r.status_code)
+    out = []
+    for x in r.json() or []:
+        out.append({"titre": x.get("Title") or "(sans titre)",
+                    "sous": x.get("CameraModel") or "",
+                    "quand": x.get("TakenAt") or "",
+                    "url": "https://%s/library/browse?q=uid:%s" % (hote, x.get("UID") or ""),
+                    "image": ""})
+    return {"ok": True, "entrees": out, "resume": ""}
+
+
+async def _ap_mail(d: dict) -> dict:
+    """Les derniers messages, par IMAP.
+
+    ON PARLE A DOVECOT, PAS A ROUNDCUBE. Roundcube n'a pas d'API — la tentation
+    serait de racler son HTML, ce qui casserait a chaque montee de version et
+    obligerait a detenir un mot de passe d'utilisateur. L'IMAP EST l'API.
+    """
+    import asyncio as _a
+    hote = os.environ.get("SECUBOX_MAIL_IMAP", "10.100.0.10")
+
+    def _lire():
+        import imaplib, email
+        from email.header import decode_header, make_header
+        m = imaplib.IMAP4(hote, 143)
+        try:
+            m.starttls()
+        except Exception:
+            pass
+        m.login(d.get("compte") or "", d["secret"])
+        m.select("INBOX", readonly=True)
+        typ, dat = m.search(None, "ALL")
+        ids = (dat[0].split() if dat and dat[0] else [])[-6:]
+        out = []
+        for i in reversed(ids):
+            typ, dd = m.fetch(i, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+            if not dd or not dd[0]:
+                continue
+            e = email.message_from_bytes(dd[0][1])
+            def h(k):
+                try:
+                    return str(make_header(decode_header(e.get(k) or "")))
+                except Exception:
+                    return e.get(k) or ""
+            out.append({"titre": h("Subject")[:180] or "(sans objet)",
+                        "sous": h("From")[:90], "quand": h("Date"),
+                        "url": "", "image": ""})
+        try:
+            typ, u = m.search(None, "UNSEEN")
+            n = len(u[0].split()) if u and u[0] else 0
+        except Exception:
+            n = 0
+        m.logout()
+        return out, n
+
+    entrees, non_lus = await _a.to_thread(_lire)
+    return {"ok": True, "entrees": entrees,
+            "resume": ("%d non lu%s" % (non_lus, "s" if non_lus > 1 else "")) if non_lus else ""}

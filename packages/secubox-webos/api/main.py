@@ -258,6 +258,16 @@ async def acces_sonde(svc: str, user=Depends(require_jwt)):
     return await acces.flux_sonde(_qui(user), svc)
 
 
+@router.get("/acces/{svc}/apercu")
+async def acces_apercu(svc: str, user=Depends(require_jwt)):
+    """Ce que la carte affiche, lu AU NOM de la personne.
+
+    Le secret ne quitte jamais la box : la carte recoit des titres et des
+    chiffres, jamais la cle qui a permis de les obtenir.
+    """
+    return await acces.apercu(_qui(user), svc)
+
+
 @router.post("/acces/{svc}/echange")
 async def acces_echange(svc: str, corps: dict, user=Depends(require_jwt)):
     """Echanger un code d'autorisation OAuth2 contre un jeton (Mastodon)."""

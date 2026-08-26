@@ -1,3 +1,30 @@
+secubox-webos (1.0.82-1~bookworm1) bookworm; urgency=medium
+
+  * LES CARTES QUI CONSOMMENT LA DELEGATION (#1291) : Cloud, Mail, Social et
+    Photos. UNE SEULE carte pour les quatre — ils different par ce qu'ils
+    racontent, pas par ce qu'ils affichent : un titre, une source, un delai.
+    Quatre fichiers auraient ete quatre endroits ou corriger, et un seul qu'on
+    pense a corriger.
+  * LE SECRET NE DESCEND JAMAIS JUSQU'A LA CARTE. C'est la box qui lit le
+    service et n'en renvoie que des titres : un client qui recevrait le jeton
+    pourrait s'en servir ailleurs, et il finirait dans un cache, un journal ou
+    un partage d'ecran.
+  * Sans acces, la carte ne reste pas muette — une carte muette passe pour une
+    panne. Elle dit ce qu'elle pourrait montrer et propose le seul geste
+    possible : DEMANDER. Et « non connecte » n'est pas « pas d'acces » : deux
+    causes, deux phrases, sinon on envoie quelqu'un demander ce qu'il a
+    peut-etre deja.
+  * Les exceptions de lecture ne remontent JAMAIS telles quelles : leur texte
+    peut contenir l'URL, donc le jeton pour certains services.
+  * Le HTML de Mastodon est degarni cote SERVEUR : le reinjecter dans la carte
+    reviendrait a ouvrir la porte a ce qu'il contient.
+  * Le mail parle a DOVECOT, pas a Roundcube. Roundcube n'a pas d'API — la
+    tentation serait de racler son HTML, ce qui casserait a chaque montee de
+    version et obligerait a detenir un mot de passe d'utilisateur. L'IMAP EST
+    l'API.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:38:01 +0200
+
 secubox-webos (1.0.81-1~bookworm1) bookworm; urgency=medium
 
   * MASTODON CABLE EN OAuth2 (#1290). L'enregistrement de l'application est un

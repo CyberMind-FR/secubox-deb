@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1291 — CARTE D'UN SERVICE QUI DEMANDE UNE IDENTITÉ.
+
+  UNE SEULE CARTE POUR LES QUATRE. Nextcloud, Mail, Social et Photos diffèrent
+  par ce qu'ils racontent, pas par ce qu'ils affichent : un titre, une source,
+  un délai. Quatre fichiers auraient été quatre endroits où corriger, et un
+  seul qu'on pense à corriger.
+
+  ELLE NE DEMANDE JAMAIS DE MOT DE PASSE. Sans accès, elle propose de le
+  DEMANDER — et la demande va s'inscrire dans une file que l'on valide
+  ailleurs, en pleine page ou en fenêtre à part. Une carte vit dans un cadre :
+  ce qu'elle affiche n'est pas authentifiable par qui la regarde.
+
+  Le secret ne descend jamais jusqu'ici : c'est la box qui lit le service et
+  n'en renvoie que des titres.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service — vue micro</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#1655a0; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#6ea8e8; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#6ea8e8; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+  .mw { display:flex; flex-direction:column; height:100%; padding:.62rem .72rem; gap:.35rem; }
+  .tete { display:flex; align-items:baseline; gap:.42rem; }
+  .tete .ic { font-size:1rem; } .tete b { font-size:.88rem; }
+  .tete .n { margin-left:auto; font-size:.58rem; letter-spacing:.07em;
+             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .liste { display:flex; flex-direction:column; gap:.1rem; overflow:hidden; }
+  .liste a { display:flex; align-items:baseline; gap:.36rem; font-size:.71rem;
+             line-height:1.3; color:var(--texte); text-decoration:none; }
+  .liste a:hover .t { text-decoration:underline; color:var(--accent); }
+  .liste .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  .liste .s { flex:0 0 auto; font-size:.6rem; color:var(--muted);
+              max-width:38%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* SANS ACCÈS, on n'affiche pas une carte vide : on dit pourquoi, et on
+     propose le seul geste possible. Une carte muette passe pour une panne. */
+  .sans { display:flex; flex-direction:column; gap:.4rem; align-items:flex-start;
+          margin:auto 0; }
+  .sans p { margin:0; font-size:.74rem; color:var(--muted); }
+  .sans button { border:1px solid var(--accent); background:var(--accent); color:#fff;
+                 border-radius:8px; padding:.32rem .7rem; font:inherit; font-size:.74rem;
+                 cursor:pointer; }
+  .sans button:hover { opacity:.9; }
+  .sans button[disabled] { background:none; color:var(--muted); border-color:var(--border);
+                           cursor:default; }
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); text-decoration:none; }
+  .pied .grow { flex:1; } .pied:hover { color:var(--accent); }
+</style>
+
+<div class="mw">
+  <div class="tete"><span class="ic" id="ic">☁️</span><b id="nom">…</b><span class="n" id="res"></span></div>
+  <div id="corps"><p class="sans"><span>lecture…</span></p></div>
+  <a class="pied" id="pied" href="/" target="_top"><span id="pied-t"></span>
+    <span class="grow"></span><span id="cpt"></span></a>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var SVC = {
+    nextcloud:  { ic:'☁️', nom:'Cloud',  hote:'nc.gk2.secubox.in',        quoi:'vos fichiers' },
+    mail:       { ic:'📧', nom:'Mail',   hote:'webmail.gk2.secubox.in',   quoi:'votre courrier' },
+    mastodon:   { ic:'🐘', nom:'Social', hote:'social.gk2.secubox.in',    quoi:'votre fil' },
+    photoprism: { ic:'📷', nom:'Photos', hote:'photoprism.gk2.secubox.in',quoi:'vos photos' }
+  };
+  var id = new URLSearchParams(location.search).get('svc') || 'nextcloud';
+  var c = SVC[id] || SVC.nextcloud;
+
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (x) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[x]; }); };
+  var el = function (i) { return document.getElementById(i); };
+
+  el('ic').textContent = c.ic; el('nom').textContent = c.nom;
+  el('pied').href = 'https://' + c.hote + '/';
+  el('pied-t').textContent = c.hote.split('.')[0];
+
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function api(chemin, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    var j = jeton();
+    if (j) opts.headers['Authorization'] = 'Bearer ' + j;
+    if (opts.body) opts.headers['Content-Type'] = 'application/json';
+    return fetch('/api/v1/webos' + chemin, opts).then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return { code: r.status, corps: d }; });
+    });
+  }
+
+  function delai(s) {
+    var t = Date.parse(s);
+    if (!t) return '';
+    var d = Math.max(0, (Date.now() - t) / 1000);
+    if (d < 3600) return Math.round(d / 60) + ' min';
+    if (d < 86400) return Math.round(d / 3600) + ' h';
+    return Math.round(d / 86400) + ' j';
+  }
+
+  function sansAcces(etat, code) {
+    // NON CONNECTÉ ≠ PAS D'ACCÈS. Deux causes, deux phrases : dire « aucun
+    // accès » à quelqu'un qui n'est simplement pas connecté l'enverrait
+    // demander ce qu'il a peut-être déjà.
+    if (code === 401 || code === 403) {
+      el('corps').innerHTML = '<div class="sans"><p>Connectez-vous à la box pour '
+        + 'voir ' + esc(c.quoi) + '.</p></div>';
+      return;
+    }
+    var att = etat && etat.demande;
+    el('corps').innerHTML = '<div class="sans">'
+      + '<p>' + (att
+          ? 'Demande déposée. Elle attend une validation.'
+          : 'Cette carte peut afficher ' + esc(c.quoi) + ', avec votre accord.')
+      + '</p><button id="dem"' + (att ? ' disabled' : '') + '>'
+      + (att ? 'En attente…' : 'Demander l’accès') + '</button></div>';
+    var b = el('dem');
+    if (b && !att) b.addEventListener('click', function () {
+      b.disabled = true; b.textContent = '…';
+      api('/acces/' + id + '/demande', { method: 'POST' }).then(function () { charge(); });
+    });
+  }
+
+  function rend(d) {
+    el('res').textContent = d.resume || '';
+    var e = d.entrees || [];
+    if (!e.length) {
+      el('corps').innerHTML = '<div class="sans"><p>Rien à montrer pour l’instant.</p></div>';
+      return;
+    }
+    el('corps').innerHTML = '<div class="liste">' + e.slice(0, 5).map(function (x) {
+      return '<a href="' + esc(x.url || ('https://' + c.hote + '/')) + '" target="_top"'
+        + ' title="' + esc(x.titre) + '">'
+        + '<span class="t">' + esc(x.titre) + '</span>'
+        + '<span class="s">' + esc(x.sous || delai(x.quand)) + '</span></a>';
+    }).join('') + '</div>';
+  }
+
+  function charge() {
+    api('/acces/' + id).then(function (r) {
+      if (r.code !== 200 || !r.corps.acces) { sansAcces(r.corps, r.code); return; }
+      el('cpt').textContent = '';
+      api('/acces/' + id + '/apercu').then(function (a) {
+        var d = a.corps || {};
+        if (!d.ok) { el('corps').innerHTML =
+          '<div class="sans"><p>' + esc(d.detail || 'lecture impossible') + '</p></div>'; return; }
+        rend(d);
+        if (d.resume) el('cpt').textContent = '';
+      });
+    });
+  }
+
+  charge();
+  // Un fil, un courrier ou une activité bougent en minutes : plus souvent
+  // solliciterait le service pour rien.
+  setInterval(charge, 180000);
+
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: id, url: a.href }, '*'); } catch (e) {}
+  }, true);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>
