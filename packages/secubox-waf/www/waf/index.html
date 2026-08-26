@@ -400,25 +400,22 @@
             </div>
 
             <!-- #1219 — origine géographique et noms demandés que la box ne sert pas -->
-            <div class="card">
-                <h2>🌍 Origines &amp; noms non servis
-                    <span class="muted" style="font-size:0.8rem;">— vu par le WAF sur l'ensemble du journal de menaces</span></h2>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:0.6rem">
-                    <div>
-                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🌍 Pays d'origine</h3>
-                        <div id="statsPays" class="vbars"><span class="muted">…</span></div>
-                    </div>
-                    <div>
-                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🕳️ Noms demandés, non servis
-                            <span class="muted" id="nonServisResume"></span></h3>
-                        <div id="statsNonServis" class="vbars"><span class="muted">…</span></div>
-                        <p class="muted" style="font-size:0.7rem;margin:.5rem 0 0">
-                            Ces noms reçoivent un 421 : aucun vhost ne les sert. Entre le balayage,
-                            la liste montre les vhosts qui <b>manquent</b> — un nom encore référencé
-                            ailleurs, un service jamais publié.
-                        </p>
-                    </div>
-                </div>
+            <div class="card" style="grid-column: span 2;">
+                <h2>🌍 Origine des requêtes
+                    <span class="muted" style="font-size:0.8rem;">— sur l'ensemble du journal de menaces</span></h2>
+                <div id="paysCamembert" style="margin:.6rem 0"><span class="muted">…</span></div>
+                <div class="table-wrap" id="paysTable"></div>
+            </div>
+
+            <div class="card" style="grid-column: span 2;">
+                <h2>🕳️ Noms demandés, non servis
+                    <span class="muted" style="font-size:0.8rem;" id="nonServisResume"></span></h2>
+                <p class="muted" style="font-size:0.72rem;margin:.2rem 0 .6rem">
+                    Ces noms reçoivent un 421 : aucun vhost ne leur répond. Entre le balayage,
+                    la liste désigne les vhosts qui <b>manquent</b> — un nom encore référencé
+                    ailleurs, un service jamais publié.
+                </p>
+                <div class="table-wrap" id="nonServisTable"></div>
             </div>
 
             <!-- #1062 — historique des menaces depuis les logs tournés (onglet Historique) -->
@@ -801,14 +798,17 @@
             // Top Vhosts
             renderTopVhosts(d.top_vhosts);
 
-            // #1219 — pays (liste, pas aperçu) et noms demandés que la box ne sert pas.
-            _vbars('statsPays', d.pays || d.top_countries, null, 25);
-            _vbars('statsNonServis', d.noms_non_routes, null, 40);
+            // #1219 — origine géographique et noms demandés que la box ne sert pas.
+            camembertPays('paysCamembert', d.pays || d.top_countries);
+            tableau2col('paysTable', d.pays || d.top_countries, 'Pays', 'Requêtes');
+            tableau2col('nonServisTable', d.noms_non_routes, 'Nom demandé', 'Requêtes');
             const resume = document.getElementById('nonServisResume');
             if (resume) {
                 const nb = d.noms_non_routes_distincts || 0;
                 const tot = d.noms_non_routes_total || 0;
-                resume.textContent = nb ? ' — ' + nb + ' noms distincts, ' + tot.toLocaleString() + ' requêtes' : '';
+                resume.textContent = nb
+                    ? '— ' + nb + ' noms distincts, ' + tot.toLocaleString() + ' requêtes'
+                    : '';
             }
 
             // Store stats globally and update eyemotes (double-cache pattern)
@@ -816,6 +816,90 @@
             if (window._wafEvents) {
                 updateAllEyemotes(window._wafEvents, d);
             }
+        }
+
+
+        // ── #1219 · origine géographique et noms non servis ──────────────────
+        // COULEURS locales : la page a déjà CAT_COLORS, mais il sert aux
+        // catégories de menace — réutiliser sa palette ferait croire à un lien
+        // entre « pays FR » et « catégorie sqli » parce qu'ils partagent une
+        // teinte. Une échelle distincte, donc.
+        const COUL_PAYS = ['#00d4ff', '#6e40c9', '#e63946', '#c9a84c', '#00ff41', '#ff8c42', '#4ecdc4'];
+
+        function _esc(v) {
+            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        }
+
+        // Vrai camembert, pas des anneaux : on compare des PARTS d'un tout.
+        // Au-delà de sept tranches la lecture se perd — la traîne est
+        // regroupée sous « autres » plutôt que rendue en confettis.
+        function camembertPays(cible, pays) {
+            const el = document.getElementById(cible);
+            if (!el) return;
+            const items = Object.entries(pays || {}).sort((a, b) => b[1] - a[1]);
+            if (!items.length) { el.innerHTML = '<span class="muted">pas de géolocalisation</span>'; return; }
+            const tete = items.slice(0, 7);
+            const reste = items.slice(7).reduce((a, kv) => a + kv[1], 0);
+            if (reste) tete.push(['autres', reste]);
+            const tot = tete.reduce((a, kv) => a + kv[1], 0) || 1;
+
+            const R = 54, C = 60;
+            let a0 = -Math.PI / 2, arcs = '';
+            tete.forEach(function (kv, i) {
+                const v = kv[1];
+                const a1 = a0 + 2 * Math.PI * v / tot;
+                // Une part de 100 % ne se trace pas en arc : les deux extrémités
+                // se rejoignent et le chemin est vide. On rend un disque plein.
+                if (v / tot > 0.999) {
+                    arcs += '<circle cx="' + C + '" cy="' + C + '" r="' + R + '" fill="' + COUL_PAYS[i % 7] + '"/>';
+                } else {
+                    const g = (a1 - a0) > Math.PI ? 1 : 0;
+                    arcs += '<path d="M' + C + ',' + C + ' L' + (C + R * Math.cos(a0)) + ',' + (C + R * Math.sin(a0))
+                         + ' A' + R + ',' + R + ' 0 ' + g + ',1 ' + (C + R * Math.cos(a1)) + ',' + (C + R * Math.sin(a1))
+                         + ' Z" fill="' + COUL_PAYS[i % 7] + '" stroke="var(--bg-card)" stroke-width="1"/>';
+                }
+                a0 = a1;
+            });
+            // La légende porte le compte ET le pourcentage : le pourcentage seul
+            // ne dit pas si 70 % vaut 7 requêtes ou 7000.
+            const legende = tete.map(function (kv, i) {
+                return '<div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.75rem;padding:.1rem 0">'
+                     + '<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:'
+                     + COUL_PAYS[i % 7] + ';margin-right:6px"></i>' + _esc(kv[0]) + '</span>'
+                     + '<span style="font-variant-numeric:tabular-nums;color:var(--cyan)">'
+                     + kv[1].toLocaleString() + ' · ' + Math.round(kv[1] / tot * 100) + ' %</span></div>';
+            }).join('');
+            el.innerHTML = '<div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap">'
+                + '<svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="répartition des requêtes par pays">'
+                + arcs + '</svg>'
+                + '<div style="flex:1;min-width:200px">' + legende + '</div></div>';
+        }
+
+        // Liste en DEUX colonnes, au style de la table des attaquants suivis.
+        // Deux colonnes parce que ces listes sont longues et étroites : sur une
+        // seule, on scrolle pour rien et la moitié droite de la carte reste vide.
+        function tableau2col(cible, obj, entete, enteteNb) {
+            const el = document.getElementById(cible);
+            if (!el) return;
+            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+            if (!entries.length) { el.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
+            const moitie = Math.ceil(entries.length / 2);
+            const colonnes = [entries.slice(0, moitie), entries.slice(moitie)];
+            const table = function (lignes, depart) {
+                if (!lignes.length) return '';
+                return '<table class="data-table"><thead><tr>'
+                     + '<th style="width:2.2rem">#</th><th>' + _esc(entete) + '</th>'
+                     + '<th style="text-align:right">' + _esc(enteteNb) + '</th></tr></thead><tbody>'
+                     + lignes.map(function (kv, i) {
+                         return '<tr><td class="muted">' + (depart + i + 1) + '</td>'
+                              + '<td><code>' + _esc(kv[0]) + '</code></td>'
+                              + '<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--cyan)">'
+                              + kv[1].toLocaleString() + '</td></tr>';
+                     }).join('') + '</tbody></table>';
+            };
+            el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 1.2rem">'
+                + '<div>' + table(colonnes[0], 0) + '</div>'
+                + '<div>' + table(colonnes[1], moitie) + '</div></div>';
         }
 
         function createDonut(data, type, size) {

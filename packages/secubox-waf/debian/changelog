@@ -1,3 +1,19 @@
+secubox-waf (1.5.8-1~bookworm1) bookworm; urgency=medium
+
+  * Camembert des pays d'origine (#1219). Un VRAI camembert et non les anneaux
+    concentriques de createDonut : ce qu'on lit ici, ce sont des parts d'un
+    tout. Palette distincte de celle des categories de menace — partager les
+    teintes ferait croire a un lien entre « pays FR » et « categorie sqli ».
+    Au-dela de sept tranches la traine est regroupee sous « autres » plutot que
+    rendue en confettis, et la legende porte le compte ET le pourcentage : 70 %
+    ne dit pas si cela vaut 7 requetes ou 7000.
+  * Les deux listes (pays, noms non servis) passent au style de la table des
+    attaquants suivis, sur DEUX colonnes : elles sont longues et etroites, sur
+    une seule on faisait defiler pour rien avec la moitie de la carte vide.
+    Numerotation continue d'une colonne a l'autre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 06:09:15 +0200
+
 secubox-waf (1.5.7-1~bookworm1) bookworm; urgency=medium
 
   * Noms demandes que la box ne sert pas (#1219) : le moteur repond 421 et
