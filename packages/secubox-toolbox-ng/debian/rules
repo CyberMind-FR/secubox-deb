@@ -31,6 +31,12 @@ override_dh_auto_build:
 	# a YARA-enabled build is the explicit `-tags yara` variant against
 	# libyara-dev (see debian/README.sentinel.md) — NOT the default .deb.
 	go build -trimpath -ldflags=-s -o sbx-sentinel ./cmd/sbx-sentinel
+	# #1220 authwatch : analyse de journaux (SSH/SMTP/IMAP) + leurres de service.
+	# Comble ce que sbxwaf ne voit pas — il est derriere HAProxy et ne connait
+	# que le HTTP — en alimentant LE MEME ensemble nft et LE MEME journal de
+	# menaces, pour que la correlation perdue avec CrowdSec revienne sans qu'un
+	# seul consommateur ait a changer.
+	go build -trimpath -ldflags=-s -o sbx-authwatch ./cmd/sbx-authwatch
 
 # No Go unit tests at package-build time (run in CI on the host arch; the
 # arm64 cross-binary cannot execute its tests here).
@@ -42,6 +48,14 @@ override_dh_auto_install:
 	# #823 Sentinel: the async analyzer daemon + the fail-safe feed fetcher.
 	install -m 0755 sbx-sentinel debian/secubox-toolbox-ng/usr/sbin/sbx-sentinel
 	install -m 0755 sbin/secubox-sentinel-feeds debian/secubox-toolbox-ng/usr/sbin/secubox-sentinel-feeds
+	# #1220 authwatch : binaire, unite et liste blanche.
+	install -m 0755 sbx-authwatch debian/secubox-toolbox-ng/usr/sbin/sbx-authwatch
+	# L'unite est posee par dh_installsystemd, qui la trouve dans debian/.
+	# L'installer AUSSI a la main creait deux copies du meme chemin — /lib etant
+	# un lien vers /usr/lib, dpkg refusait l'archive.
+	install -d debian/secubox-toolbox-ng/etc/secubox/authwatch
+	install -m 0644 debian/authwatch/liste-blanche \
+	  debian/secubox-toolbox-ng/etc/secubox/authwatch/liste-blanche
 	# #823 Sentinel: shipped base IOC/YARA content pack (read-only content).
 	install -d debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base
 	install -m 0644 packs/base/*.json debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base/
@@ -79,3 +93,6 @@ override_dh_installsystemd:
 	dh_installsystemd --no-enable --no-start --name=sbx-sentinel sbx-sentinel.service
 	dh_installsystemd --no-enable --no-start --name=secubox-sentinel-feeds secubox-sentinel-feeds.service
 	dh_installsystemd --no-enable --no-start --name=secubox-sentinel-feeds secubox-sentinel-feeds.timer
+	# #1220 : un service qui BANNIT ne s'active pas tout seul a l'installation.
+	# L'operateur l'observe d'abord (--simulation), puis decide.
+	dh_installsystemd --no-enable --no-start --name=secubox-authwatch secubox-authwatch.service

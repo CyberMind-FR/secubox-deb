@@ -1,3 +1,50 @@
+secubox-toolbox-ng (0.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * sbx-authwatch (#1220) : couverture hors HTTP. sbxwaf est place derriere
+    HAProxy et ne voit que le HTTP ; la force brute SSH, les echecs SASL de
+    postfix, les tentatives IMAP de dovecot et les balayages de ports lui sont
+    invisibles. C'etait la surface couverte par CrowdSec, perdue en le retirant
+    (#1218). Deux sources qui se completent :
+    - ANALYSE DE JOURNAUX, patiente : compteur a fenetre GLISSANTE (une fenetre
+      fixe laisse passer qui repartit ses tentatives a cheval sur deux
+      tranches), poids proportionne a la gravite — un compte inexistant pese
+      double, un mot de passe refuse peut etre un humain. Les motifs sont
+      etablis sur des lignes PRELEVEES sur gk2, conservees verbatim dans les
+      tests : un motif valide contre une ligne inventee ne prouve rien.
+    - LEURRES DE SERVICE, certains : des ports ouverts sans rien derriere (RDP,
+      VNC, telnet, SMB, bases de donnees). Meme raisonnement que le vhost non
+      routé, transpose au reseau — personne ne se connecte a un service qu'on
+      n'offre pas. Bannissement au premier contact, sans compteur. Le leurre
+      n'imite AUCUN protocole : repondre, c'est entretenir une conversation
+      avec un balayeur et s'exposer a ses propres failles.
+  * DETECTION DE CAMPAGNE, ajoutee apres mesure. Un compteur par adresse suppose
+    que l'attaquant revient ; les relevees de gk2 disent le contraire : sur sept
+    jours, 339 des 388 sources d'une campagne SASL n'apparaissent qu'UNE fois,
+    et six seulement atteignent trois tentatives. Un seuil par IP laisserait
+    passer 87 % des participants — le botnet repartit sa charge exactement pour
+    cela. Le pivot stable est le COMPTE VISE : « gerald@gk2.net » tente 39 fois,
+    « gerard@gk2.net » 38, « gege » 38, des variantes du nom du proprietaire,
+    depuis des centaines de sources. Quand un compte est vise depuis plusieurs
+    sources distinctes dans la fenetre, chaque participant devient bannissable
+    des son premier echec. On ne punit plus l'acharnement d'un individu, on
+    reconnait une action collective — c'est precisement la correlation que
+    CrowdSec apportait.
+  * Tout converge en deux points : le MEME ensemble nft que le WAF
+    (`inet secubox waf_ban{,6}`, applique par la meme chaine) et le MEME
+    journal de menaces, au format exact du WAF. Le panneau, le camembert des
+    pays, les attaquants persistants et le rapport PDF comptent donc SSH, SMTP
+    et IMAP sans qu'aucun d'eux ait a changer d'une ligne.
+  * Refuse de demarrer si aucune regle ne consulte l'ensemble — la lecon de
+    #1218, ou 91 adresses etaient « bannies » dans un set que rien ne lisait.
+    Mieux vaut un service qui ne demarre pas et le dit.
+  * Liste blanche traitee comme une piece de securite : sans elle, le premier
+    mot de passe rate depuis un hotel bannit l'administrateur de sa propre box.
+    Le prive est toujours exempte, et un garde-fou au dernier moment refuse
+    toute adresse privee a l'entree du set.
+  * Le service n'est ni active ni demarre a l'installation : il bannit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 06:55:29 +0200
+
 secubox-toolbox-ng (0.1.46-1~bookworm1) bookworm; urgency=medium
 
   * sbxwaf : le trafic INTERNE (loopback/LAN) est agrégé sous « local » dans le

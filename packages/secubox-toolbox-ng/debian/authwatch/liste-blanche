@@ -1,0 +1,12 @@
+# /etc/secubox/authwatch/liste-blanche — adresses jamais bannies par authwatch.
+#
+# UNE PIECE DE SECURITE, pas une commodite. Sans elle, le premier mot de passe
+# rate depuis un hotel bannit l'administrateur de sa propre box, et un leurre
+# sur un port courant bannit un outil de supervision legitime.
+#
+# Une entree par ligne, ou separees par des virgules. Adresses et prefixes :
+#   203.0.113.7
+#   198.51.100.0/24
+#
+# Le prive (10/8, 172.16/12, 192.168/16, 127/8, 169.254/16) est TOUJOURS
+# exempte : inutile de l'ecrire ici.

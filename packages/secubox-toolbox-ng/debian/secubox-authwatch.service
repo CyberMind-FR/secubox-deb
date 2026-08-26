@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+[Unit]
+Description=SecuBox authwatch — analyse de journaux et leurres de service (#1220)
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1220
+# L'ensemble nft est cree par sbxwaf : sans lui, authwatch refuse de demarrer
+# plutot que de compter des bannissements sans effet (lecon de #1218).
+After=network-online.target nftables.service secubox-waf-ng.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/sbx-authwatch \
+    --journaux hote,mail:/data/lxc/mail/rootfs/var/log/journal \
+    --leurres defaut \
+    --seuil 6 \
+    --fenetre 10m \
+    --duree-ban 4h \
+    --liste-blanche-fichier /etc/secubox/authwatch/liste-blanche
+Restart=always
+RestartSec=10
+
+# Droits : ecrire dans nft (NET_ADMIN) et ouvrir les ports leurres sous 1024
+# (NET_BIND_SERVICE, pour telnet 23 et smb 445). Rien de plus.
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# Le seul chemin en ecriture : le journal de menaces partage avec le WAF.
+ReadWritePaths=/var/log/secubox/waf
+
+[Install]
+WantedBy=multi-user.target
