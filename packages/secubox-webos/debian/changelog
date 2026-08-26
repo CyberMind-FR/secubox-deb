@@ -1,3 +1,35 @@
+secubox-webos (1.0.104-1~bookworm1) bookworm; urgency=medium
+
+  * LA POIGNEE DE MAIN PEERTUBE, ENFIN CORRECTE (#1330). Le message « player is
+    not compatible with your web browser » ne parlait pas du navigateur : le
+    lecteur installe `window.onerror = displayIncompatibleBrowser`, si bien que
+    N'IMPORTE QUELLE erreur JavaScript s'affiche sous ce texte. Il accusait le
+    navigateur d'une faute qui etait dans notre reponse.
+  * On repondait `params: 'pong'`, une CHAINE. Leur jschannel lit
+    `params.publish.length` — d'ou « can't access property "length",
+    n.publish is undefined ». La reponse attendue est un OBJET
+    `{type:'publish-reply', publish:[]}` : une liste de methodes publiees, vide
+    dans notre cas puisqu'on ecoute ses notifications sans lui rien exposer.
+  * On ne repond qu'a une `publish-request`, comme le fait sa propre mise en
+    oeuvre — le verrou « une fois par cadre » de 1.0.100 tombe, il traitait un
+    symptome et non la cause.
+  * LE DEPOT DEPOSE POUR DE VRAI (#1329). La carte etait cablee sur `/upload`,
+    qui PUBLIE un site et demande un compte. La fonction du service est
+    `/depot` : public, plusieurs fichiers, sans compte, et rien n'est publie.
+    La carte le dit desormais mot pour mot — « Ils partent directement sur la
+    box, et une alerte previent son proprietaire. Rien de ce qui est depose
+    n'est publie, ni relisible depuis cette page. »
+  * Le corps est relaye EN FLUX, sans etre analyse ni tamponne : le depot
+    accepte deux gigaoctets, les mettre en memoire pour le plaisir de les
+    recompter serait une facon sure de tuer l'API du Hall d'un seul envoi.
+  * L'ADRESSE D'ORIGINE EST TRANSMISE au service : il borne son debit par
+    machine, et relayer sans elle ferait de tous les depots ceux d'une seule —
+    la notre.
+  * Les plafonds sont DEMANDES au service, pas recopies : les ecrire ici, c'est
+    garantir qu'ils divergeront le jour ou il changera les siens.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 16:17:37 +0200
+
 secubox-webos (1.0.103-1~bookworm1) bookworm; urgency=medium
 
   * LA CARTE DU DEPOT SAIT ENFIN DEPOSER (#1328). Elle listait et retirait,

@@ -8,7 +8,8 @@ import json
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, Depends, Request, File, Form, UploadFile
+from fastapi import FastAPI, APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
 
 from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
@@ -233,22 +234,31 @@ def _porteur(request: Request) -> str:
     return a[7:].strip() if a[:7].lower() == "bearer " else ""
 
 
-# DECLAREE AVANT LA ROUTE GENERIQUE : `/actions/{module}/{action}` la
-# capturerait sinon, FastAPI retenant la premiere qui correspond. Elle est a
-# part parce que son trajet est multipart, ce que la voie generique — qui ne
-# decrit que du JSON — ne sait pas transporter.
-@router.post("/actions/droplet/deposer")
-async def action_depot(request: Request,
-                       fichier: UploadFile = File(...),
-                       nom: str = Form(""),
-                       user=Depends(require_jwt)):
-    """Publier un fichier au depot, depuis la carte."""
-    # On lit avec un octet de marge : si le fichier depasse, on le sait sans
-    # avoir a lui faire confiance sur sa taille annoncee.
-    contenu = await fichier.read(actions.DEPOT_MAX + 1)
-    return await actions.depose_fichier(
-        fichier.filename or "", contenu, fichier.content_type or "",
-        nom, _porteur(request))
+# ── LE DEPOT PUBLIC ────────────────────────────────────────────────────────
+#
+# CES DEUX ROUTES NE SONT PAS PROTEGEES PAR JWT, ET C'EST LE POINT.
+# Deposer un fichier a la box ne demande aucun compte : c'est la raison d'etre
+# de cet espace, et le service l'expose deja publiquement sur son domaine. Les
+# proteger ici reviendrait a offrir dans la carte une chose plus fermee que ce
+# que le service offre a tout le monde — sans rien fermer, puisque l'autre
+# porte reste ouverte.
+#
+# Ce qu'on ne perd pas au passage : l'adresse d'origine, transmise au service
+# pour que son limiteur de debit continue de compter par machine.
+#
+# DECLAREES AVANT LA ROUTE GENERIQUE : `/actions/{module}/{action}` les
+# capturerait, FastAPI retenant la premiere qui correspond.
+@router.get("/depot/reglages")
+async def depot_reglages():
+    """Les plafonds du depot, avant l'envoi."""
+    return await actions.reglages_depot()
+
+
+@router.post("/depot")
+async def depot_public(request: Request):
+    """Relayer un depot vers le service, en flux."""
+    code, corps = await actions.relaie_depot(request)
+    return JSONResponse(status_code=code, content=corps)
 
 
 @router.get("/actions/{module}/{action}")

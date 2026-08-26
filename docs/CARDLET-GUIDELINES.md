@@ -179,13 +179,33 @@ n.publish is undefined`, puis le lecteur PeerTube affichait *« player is not
 compatible with your web browser »*. Il accusait le navigateur d'une panne que
 **nous** causions.
 
-La carte envoyait un `__ready` **non sollicité**, porteur d'un `id`, **douze
-fois de suite**. Dans jschannel, `__ready` est une salutation : elle n'a pas
-d'`id`, et elle n'arrive **qu'une fois**. La deuxième trouvait le canal déjà
-ouvert et le renversait.
+**Le message mentait, et il a coûté deux diagnostics.** Le lecteur installe
+`window.onerror = displayIncompatibleBrowser` : **n'importe quelle** erreur
+JavaScript s'y affiche sous le texte « votre navigateur est incompatible ». Le
+navigateur n'avait rien.
+
+La vraie cause était dans notre réponse. On répondait `params: 'pong'`, une
+**chaîne**, là où leur implémentation lit :
+
+```js
+n.type === 'publish-request' && notify({ … publish: h })
+for (var r = 0; r < n.publish.length; r++) …
+```
+
+`params.publish` valait `undefined`, d'où le `can't access property "length"`.
+La réponse attendue est un **objet** — `{type:'publish-reply', publish:[]}` —
+portant la liste des méthodes qu'on expose, vide quand on se contente
+d'écouter.
+
+> **Règle.** Un message d'erreur d'un composant tiers désigne rarement sa
+> cause, et un `window.onerror` global les rend tous identiques. **Lire le code
+> qui lève** avant de croire le texte affiché : ici, `grep` sur le bundle servi
+> a donné la réponse en une commande, après deux hypothèses fausses fondées sur
+> le seul message.
 
 > **Règle.** Face à un protocole de fenêtre qu'on n'a pas écrit : **répondre,
-> ne pas initier**, et garder un verrou pour ne répondre qu'une fois par cadre.
+> ne pas initier**, et répondre dans la forme exacte que son code attend — pas
+> celle que sa documentation ou son nom suggèrent.
 
 Deux détails qui coûtent chacun une demi-journée si on les ignore :
 jschannel poste des **chaînes JSON**, pas des objets (un test « est-ce un

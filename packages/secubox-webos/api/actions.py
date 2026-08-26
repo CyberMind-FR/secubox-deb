@@ -84,15 +84,10 @@ ACTIONS: dict[str, dict[str, tuple]] = {
 # trop large : un torrent est une empreinte hexadécimale, un média YTSaS porte
 # l'identifiant de la plateforme d'origine, qui admet lettres, chiffres, tiret
 # et souligné.
-# CE QUE LE DEPOT SAIT PUBLIER. La liste vient de sa propre docstring — page
-# HTML seule, archive ZIP ou TAR. Refuser ici, avec le motif, vaut mieux que
-# televerser cent megaoctets pour se faire dire non a l'arrivee.
-DEPOT_EXTENSIONS = (".html", ".htm", ".zip", ".tar.gz", ".tgz")
-
-# PLAFOND DE TAILLE, cote Hall. Le depot a le sien (`max_upload_mb`), mais il
-# ne le fait respecter qu'apres avoir tout recu : sans plafond ici, une carte
-# pourrait faire tamponner n'importe quel volume en memoire par l'API du Hall.
-DEPOT_MAX = 100 * 1024 * 1024
+# L'HOTE DU DEPOT PUBLIC. Il n'est pas celui de l'admin : `/depot` est servi
+# sur le domaine public du service, et c'est voulu — deposer ne demande aucun
+# compte, c'est la raison d'etre de cet espace.
+HOTE_DEPOT = os.environ.get("SECUBOX_DEPOT_HOTE", "depot.gk2.secubox.in")
 
 _ID_HEX = "abcdef0123456789"
 _ID_MEDIA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
@@ -170,58 +165,76 @@ async def agir(module: str, action: str, corps: dict | None = None,
     return {"ok": True, "donnees": d}
 
 
-async def depose_fichier(nom_fichier: str, contenu: bytes, mime: str,
-                         nom: str = "", jeton: str = "") -> dict:
-    """Publier un fichier au depot — la fonction MEME du service.
+# ── LE DEPOT PUBLIC ────────────────────────────────────────────────────────
+#
+# DEUX VERBES A NE PAS CONFONDRE, et la carte s'y etait trompee :
+#   /upload  publie un site ou une application — reserve, authentifie ;
+#   /depot   RECOIT un fichier — public, sans compte, rien n'est publie.
+#
+# Le second est la raison d'etre du service. C'est celui que la carte doit
+# offrir : « laissez vos fichiers ici », pas « publiez un site ».
 
-    La carte listait et retirait, mais ne deposait pas : elle parlait d'un
-    service sans savoir faire ce pour quoi il existe. Le trajet est
-    multipart, ce que `agir()` ne sait pas faire — d'ou cette fonction a part
-    plutot qu'une entree de plus dans ACTIONS, qui ne decrit que du JSON.
+async def reglages_depot() -> dict:
+    """Les plafonds, AVANT l'envoi.
+
+    Decouvrir une limite en se la prenant apres dix minutes de televersement
+    est la pire facon de l'apprendre — la page du service le dit deja, la
+    carte le dira aussi.
     """
-    base = (nom_fichier or "").strip().lower()
-    if not base:
-        return {"ok": False, "detail": "fichier sans nom"}
-    if not base.endswith(DEPOT_EXTENSIONS):
-        return {"ok": False,
-                "detail": "le depot publie des pages et des archives : "
-                          + ", ".join(DEPOT_EXTENSIONS)}
-    if not contenu:
-        return {"ok": False, "detail": "fichier vide"}
-    if len(contenu) > DEPOT_MAX:
-        return {"ok": False,
-                "detail": "%d Mo — au-dela des %d Mo acceptes"
-                          % (len(contenu) // (1024 * 1024), DEPOT_MAX // (1024 * 1024))}
+    try:
+        async with httpx.AsyncClient(timeout=10) as cli:
+            r = await cli.get(AMONT + "/api/v1/droplet/depot/reglages",
+                              headers={"Host": HOTE_DEPOT, "Accept": "application/json"})
+        if r.status_code >= 400:
+            return {"ok": False, "detail": "reglages indisponibles"}
+        return {"ok": True, "donnees": r.json()}
+    except (httpx.HTTPError, ValueError):
+        return {"ok": False, "detail": "depot injoignable"}
 
-    entetes = {"Host": HOTE_ADMIN, "Accept": "application/json"}
-    if jeton:
-        entetes["Authorization"] = "Bearer " + jeton
 
-    donnees = {}
-    # On ne transmet le nom que s'il a ete choisi : sans lui, le depot le
-    # derive du fichier, et il le fait mieux que nous ne le devinerions.
-    if nom.strip():
-        donnees["name"] = nom.strip()
+async def relaie_depot(request) -> tuple:
+    """Faire passer un depot du Hall au service, SANS RIEN GARDER AU PASSAGE.
+
+    Le corps est relaye TEL QUEL, en flux. On ne l'analyse pas, on ne le
+    tamponne pas : le depot accepte deux gigaoctets, et les mettre en memoire
+    ici pour le seul plaisir de les recompter serait une facon sure de tuer
+    l'API du Hall avec un seul envoi.
+
+    L'ADRESSE D'ORIGINE EST TRANSMISE. Le service borne son debit par adresse ;
+    relayer sans elle ferait de tous les depots ceux d'une seule machine — la
+    notre — et le limiteur ne bornerait plus rien.
+    """
+    ct = request.headers.get("content-type", "")
+    if not ct.startswith("multipart/form-data"):
+        return 400, {"ok": False, "detail": "envoi multipart attendu"}
+
+    entetes = {"Host": HOTE_DEPOT, "Content-Type": ct, "Accept": "application/json"}
+    cl = request.headers.get("content-length")
+    if cl:
+        entetes["Content-Length"] = cl
+    # On preserve la chaine existante si nginx en a pose une, sinon on nomme
+    # le client. Le service lit la PREMIERE entree.
+    amont = request.headers.get("x-forwarded-for")
+    if amont:
+        entetes["X-Forwarded-For"] = amont
+    elif request.client:
+        entetes["X-Forwarded-For"] = request.client.host
 
     try:
-        async with httpx.AsyncClient(timeout=300) as cli:
-            r = await cli.post(
-                AMONT + "/api/v1/droplet/upload",
-                headers=entetes,
-                data=donnees,
-                files={"file": (nom_fichier, contenu,
-                                mime or "application/octet-stream")},
-            )
+        async with httpx.AsyncClient(timeout=None) as cli:
+            r = await cli.post(AMONT + "/api/v1/droplet/depot",
+                               headers=entetes, content=request.stream())
     except httpx.HTTPError as e:
-        return {"ok": False, "detail": "depot injoignable : %s" % type(e).__name__}
+        return 502, {"ok": False, "detail": "depot injoignable : %s" % type(e).__name__}
 
     try:
         d = r.json()
     except ValueError:
-        return {"ok": False, "detail": "reponse illisible (%d)" % r.status_code}
+        return r.status_code, {"ok": False,
+                               "detail": "reponse illisible (%d)" % r.status_code}
 
     if r.status_code >= 400:
         detail = d.get("error") or d.get("detail") or ("refus %d" % r.status_code)
-        return {"ok": False, "detail": str(detail)[:200]}
+        return r.status_code, {"ok": False, "detail": str(detail)[:200]}
 
-    return {"ok": True, "donnees": d}
+    return 200, {"ok": True, "donnees": d}

@@ -337,18 +337,32 @@
     // notification de position n'arrivait. On regarde donc la FIN du nom.
     var nomBrut = String((d && d.method) || '');
     if (nomBrut.slice(-7) === '__ready') {
-      // UNE SEULE FOIS PAR CADRE. Repondre deux fois a la salutation produit
-      // exactement la panne qu'on vient de retirer ci-dessus : le canal est
-      // deja ouvert, la seconde reponse le renverse.
-      if (c.dataset.salue === '1') return;
-      c.dataset.salue = '1';
-      // On répond dans la MEME forme et sous le MEME nom que l'on reçoit :
-      // jschannel n'accepte ni un objet là où il attend une chaîne, ni une
-      // méthode d'une autre portée.
-      var pong = { id: d.id, method: nomBrut, params: 'pong' };
+      // ── LA POIGNEE DE MAIN, ENFIN CORRECTE (#1330) ──────────────────────
+      //
+      // On repondait `params: 'pong'`, une CHAINE. Leur jschannel fait :
+      //
+      //   n.type === 'publish-request' && notify({… publish: h})
+      //   for (var r = 0; r < n.publish.length; r++) …
+      //
+      // — il lit `params.publish.length`. Sur une chaine, `publish` vaut
+      // `undefined`, d'ou « can't access property "length", n.publish is
+      // undefined ». Et comme le lecteur installe
+      // `window.onerror = displayIncompatibleBrowser`, cette erreur-la — comme
+      // n'importe quelle autre — s'affichait en « player is not compatible
+      // with your web browser ». Le message accusait le navigateur ; la faute
+      // etait dans notre reponse.
+      //
+      // La bonne reponse est un OBJET, avec une liste de methodes publiees.
+      // La notre est vide : on ecoute ses notifications, on ne lui expose
+      // aucune methode. Leur boucle tourne alors zero fois, ce qui est
+      // exactement ce qu'on veut.
+      var p = d.params;
+      if (!p || p.type !== 'publish-request') return;
+      var reponse = { id: d.id, method: nomBrut,
+                      params: { type: 'publish-reply', publish: [] } };
       try {
         c.contentWindow.postMessage(
-          (typeof ev.data === 'string') ? JSON.stringify(pong) : pong, '*');
+          (typeof ev.data === 'string') ? JSON.stringify(reponse) : reponse, '*');
       } catch (e) {}
       return;
     }

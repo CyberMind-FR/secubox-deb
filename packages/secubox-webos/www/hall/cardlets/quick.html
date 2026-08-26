@@ -337,65 +337,105 @@
     });
   }
 
-  // ── DEPOSER, LA FONCTION MEME DU SERVICE (#1328) ─────────────────────────
+  // ── DEPOSER, LA FONCTION MEME DU SERVICE (#1328, corrige #1329) ─────────
   //
-  // Trois gestes, un seul chemin : glisser un fichier sur la carte, le coller,
-  // ou le choisir. Aucun n'est meilleur que les autres — on prend celui qui
-  // tombe sous la main, et une carte qui n'en accepte qu'un force le detour.
-  var EXT = ['.html', '.htm', '.zip', '.tar.gz', '.tgz'];
+  // DEUX VERBES A NE PAS CONFONDRE, et cette carte s'y etait trompee :
+  //   publier un site   — reserve, authentifie, et ce n'est pas ce qu'on
+  //                       vient faire ici ;
+  //   DEPOSER un fichier — public, sans compte, rien n'est publie.
+  // Le second est la raison d'etre du service. C'est celui qu'on offre.
+  //
+  // Trois gestes, un seul chemin : glisser, coller, choisir. Aucun n'est
+  // meilleur que les autres — on prend celui qui tombe sous la main, et une
+  // carte qui n'en accepte qu'un force le detour.
+  var LIMITES = null;
 
   function poseDepot() {
     if (el('depose')) return;
     var d = document.createElement('div');
     d.className = 'depose'; d.id = 'depose';
     d.setAttribute('role', 'button'); d.setAttribute('tabindex', '0');
-    d.innerHTML = '<span>Glissez un fichier, collez-le, ou <b>choisissez</b></span>'
-      + '<input type="file" id="fich" hidden accept="' + EXT.join(',') + '">';
+    d.innerHTML = INVITE + CHAMP;
     el('items').parentNode.insertBefore(d, el('msg'));
 
-    var f = el('fich');
-    d.addEventListener('click', function (e) {
-      if (e.target !== f && !d.classList.contains('envoi')) f.click();
-    });
-    d.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); f.click(); }
-    });
-    f.addEventListener('change', function () {
-      if (f.files && f.files[0]) envoieFichier(f.files[0]);
+    // CE QUE LE DEPOSANT DOIT SAVOIR AVANT D'ENVOYER, et qui n'est pas une
+    // formalite : ses fichiers ne seront pas publies, et personne ne pourra
+    // les relire depuis cette carte. Le dire apres n'aurait servi a rien.
+    var n = document.createElement('p');
+    n.className = 'note'; n.id = 'note';
+    n.textContent = "Ils partent directement sur la box, et une alerte prévient "
+      + "son propriétaire. Rien de ce qui est déposé n'est publié, ni relisible "
+      + "depuis cette page.";
+    d.parentNode.insertBefore(n, d.nextSibling);
+
+    branche();
+
+    // LES PLAFONDS SE DEMANDENT, ILS NE S'ECRIVENT PAS ICI. Les recopier dans
+    // la carte, c'est garantir qu'ils divergeront le jour ou le service
+    // changera les siens.
+    api('/depot/reglages').then(function (r) {
+      var x = (r.corps || {}).donnees;
+      if (!x) return;
+      LIMITES = x;
+      if (!x.actif) {
+        d.classList.add('ferme');
+        d.innerHTML = "<span>L'espace de dépôt est fermé.</span>";
+        return;
+      }
+      var mo = Math.round((x.taille_max || 0) / (1024 * 1024));
+      var lim = el('lim');
+      if (lim) lim.textContent = x.fichiers_max + ' fichiers · ' +
+        (mo >= 1024 ? Math.round(mo / 1024) + ' Go' : mo + ' Mo');
     });
 
     // GLISSER SUR TOUTE LA CARTE, pas seulement sur la zone. Viser un cadre de
     // 40 px de haut avec un fichier au bout du curseur est un geste ingrat ;
     // la carte entiere est une cible qu'on ne peut pas manquer.
     // `preventDefault` sur `dragover` est OBLIGATOIRE : sans lui le navigateur
-    // refuse le depot et ouvre le fichier a la place, ce qui remplacerait la
-    // page par le fichier.
-    ['dragenter', 'dragover'].forEach(function (n) {
-      document.addEventListener(n, function (e) {
-        if (!estFichier(e)) return;
+    // refuse le depot et OUVRE le fichier a la place, ce qui remplacerait la
+    // carte par le fichier.
+    ['dragenter', 'dragover'].forEach(function (nom) {
+      document.addEventListener(nom, function (e) {
+        if (!estFichier(e) || d.classList.contains('ferme')) return;
         e.preventDefault(); d.classList.add('vise');
       });
     });
-    ['dragleave', 'dragend'].forEach(function (n) {
-      document.addEventListener(n, function (e) {
+    ['dragleave', 'dragend'].forEach(function (nom) {
+      document.addEventListener(nom, function (e) {
         if (e.relatedTarget) return;      // on sort d'un enfant, pas de la page
         d.classList.remove('vise');
       });
     });
     document.addEventListener('drop', function (e) {
-      if (!estFichier(e)) return;
+      if (!estFichier(e) || d.classList.contains('ferme')) return;
       e.preventDefault(); d.classList.remove('vise');
-      var l = e.dataTransfer && e.dataTransfer.files;
-      if (l && l[0]) envoieFichier(l[0]);
+      retiens(e.dataTransfer && e.dataTransfer.files);
     });
 
     // COLLER. Le presse-papiers porte des fichiers quand on copie depuis un
     // gestionnaire de fichiers — c'est le geste le plus court quand on vient
     // d'en fabriquer un.
     document.addEventListener('paste', function (e) {
+      if (d.classList.contains('ferme')) return;
       var l = e.clipboardData && e.clipboardData.files;
-      if (l && l[0]) { e.preventDefault(); envoieFichier(l[0]); }
+      if (l && l.length) { e.preventDefault(); retiens(l); }
     });
+  }
+
+  var INVITE = '<span>Glissez vos fichiers, collez-les, ou <b>choisissez</b>'
+    + '<i id="lim"></i></span>';
+  var CHAMP = '<input type="file" id="fich" multiple hidden>';
+
+  function branche() {
+    var d = el('depose'), f = el('fich');
+    d.onclick = function (e) {
+      if (e.target !== f && !d.classList.contains('envoi')
+          && !d.classList.contains('ferme')) f.click();
+    };
+    d.onkeydown = function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); d.onclick(e); }
+    };
+    if (f) f.onchange = function () { retiens(f.files); };
   }
 
   function estFichier(e) {
@@ -405,50 +445,83 @@
     return false;
   }
 
-  function envoieFichier(fichier) {
-    var d = el('depose'); if (!d || d.classList.contains('envoi')) return;
+  // ON NE PART PAS AU PREMIER FICHIER. Le service accepte un depot de
+  // PLUSIEURS fichiers accompagne d'un mot : envoyer des qu'on en pose un
+  // ferait autant de depots separes que de fichiers, et perdrait le mot.
+  var enAttente = null;
 
-    // ON REFUSE ICI CE QUI SERA REFUSE LA-BAS. Televerser cent megaoctets pour
-    // se faire dire non a l'arrivee est une perte que la carte peut eviter :
-    // elle connait la liste, elle la lit avant d'envoyer.
-    var nom = (fichier.name || '').toLowerCase(), ok = false;
-    for (var i = 0; i < EXT.length; i++)
-      if (nom.slice(-EXT[i].length) === EXT[i]) { ok = true; break; }
-    if (!ok) { dis('le dépôt publie des pages et des archives (' + EXT.join(' ') + ')', true); return; }
+  function retiens(liste) {
+    if (!liste || !liste.length) return;
+    if (LIMITES && liste.length > LIMITES.fichiers_max) {
+      dis('au plus ' + LIMITES.fichiers_max + ' fichiers par dépôt', true);
+      return;
+    }
+    var somme = 0;
+    for (var i = 0; i < liste.length; i++) somme += liste[i].size || 0;
+    if (LIMITES && LIMITES.taille_max && somme > LIMITES.taille_max) {
+      dis('dépôt trop volumineux', true);
+      return;
+    }
+    enAttente = liste;
+    var d = el('depose');
+    d.innerHTML = '<span>' + liste.length + ' fichier'
+      + (liste.length > 1 ? 's' : '') + ' — <b>envoyer ?</b></span>' + CHAMP;
+    branche();
+    if (!el('mot')) {
+      var m = document.createElement('div');
+      m.className = 'ajout'; m.id = 'ajout';
+      m.innerHTML = '<input id="mot" placeholder="un mot, si vous voulez" '
+        + 'autocomplete="off" maxlength="2000"><button id="go">Déposer</button>';
+      el('note').parentNode.insertBefore(m, el('note'));
+      el('go').addEventListener('click', envoie);
+      el('mot').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); envoie(); }
+      });
+    }
+    dis('');
+  }
 
+  function envoie() {
+    var d = el('depose');
+    if (!enAttente || d.classList.contains('envoi')) return;
     d.classList.add('envoi');
-    d.innerHTML = '<span>' + esc(fichier.name) + '</span>';
+
     var j = document.createElement('div');
     j.className = 'jauge'; j.innerHTML = '<i></i>';
     d.parentNode.insertBefore(j, d.nextSibling);
     dis('envoi…');
 
-    // XHR ET NON `fetch` : c'est le seul qui rende la PROGRESSION. Sur une
-    // archive de plusieurs dizaines de megaoctets, « envoi… » sans jauge ne se
-    // distingue pas d'un blocage, et l'on recommence pour rien.
     var fd = new FormData();
-    fd.append('fichier', fichier, fichier.name);
+    for (var i = 0; i < enAttente.length; i++)
+      fd.append('fichiers', enAttente[i], enAttente[i].name);
+    fd.append('mot', (el('mot') && el('mot').value) || '');
+
+    // XHR ET NON `fetch` : c'est le seul qui rende la PROGRESSION. Le depot
+    // accepte des gigaoctets, et « envoi… » sans jauge ne s'y distingue pas
+    // d'un blocage — on recommence pour rien.
     var x = new XMLHttpRequest();
-    x.open('POST', '/api/v1/webos/actions/droplet/deposer');
-    var t = jeton(); if (t) x.setRequestHeader('Authorization', 'Bearer ' + t);
+    x.open('POST', '/api/v1/webos/depot');
     x.upload.onprogress = function (ev) {
       if (!ev.lengthComputable) return;
       j.firstChild.style.width = Math.round(ev.loaded / ev.total * 100) + '%';
     };
     function fini(txt, ko) {
       d.classList.remove('envoi'); j.remove();
-      d.innerHTML = '<span>Glissez un fichier, collez-le, ou <b>choisissez</b></span>'
-        + '<input type="file" id="fich" hidden accept="' + EXT.join(',') + '">';
-      el('fich').addEventListener('change', function () {
-        var f = el('fich');
-        if (f.files && f.files[0]) envoieFichier(f.files[0]);
-      });
+      enAttente = null;
+      var a = el('ajout'); if (a) a.remove();
+      d.innerHTML = INVITE + CHAMP;
+      branche();
+      if (LIMITES) {
+        var mo = Math.round((LIMITES.taille_max || 0) / (1024 * 1024));
+        el('lim').textContent = LIMITES.fichiers_max + ' fichiers · ' +
+          (mo >= 1024 ? Math.round(mo / 1024) + ' Go' : mo + ' Mo');
+      }
       dis(txt, ko);
     }
     x.onload = function () {
       var r = {};
       try { r = JSON.parse(x.responseText); } catch (e) {}
-      if (r.ok) { fini('publié'); chargeItems(); }
+      if (r.ok) fini('déposé — le propriétaire est prévenu');
       else fini(r.detail || ('refusé (' + x.status + ')'), true);
     };
     x.onerror = function () { fini('envoi interrompu', true); };
