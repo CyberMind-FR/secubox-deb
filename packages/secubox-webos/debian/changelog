@@ -1,3 +1,44 @@
+secubox-webos (1.0.60-1~bookworm1) bookworm; urgency=medium
+
+  * L'avertissement « ce service n'autorise pas encore l'embarquement » est
+    retire : depuis #1257 les cinq recalcitrants sont reecrits au proxy et la
+    phrase etait devenue fausse. Une mise en garde qui ment est pire que pas de
+    mise en garde du tout.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:21:07 +0200
+
+secubox-webos (1.0.59-1~bookworm1) bookworm; urgency=medium
+
+  * BARRE MEDIA REPLIABLE (#1258). Deux flux tiennent sans manger l'ecran, mais
+    on n'a pas toujours envie de les voir : ⌄ range la barre sur les pastilles,
+    qui disent deja ce qui joue. Rien ne s'arrete — c'est un pli, pas un arret,
+    et la distinction compte : ✕ ferme le flux, ⌄ le range.
+  * Un clic sur une pastille fait REVENIR la barre avant toute autre chose.
+    Quand elle est rangee, le geste attendu est de la retrouver, pas de changer
+    de page : embarquer le service ferait perdre ce qu'on regarde.
+  * La pastille porte un anneau quand la barre est rangee — sans indice, un
+    clic qui la fait reapparaitre semble arbitraire. L'etat est retenu, et
+    APPLIQUE au chargement : lu sans etre applique, le choix ne servait a rien.
+  * La reserve basse suit le pli : une barre rangee ne reserve plus de place.
+  * APERCU ouvert aux cinq services tiers (peertube, nextcloud, photoprism,
+    mastodon, webmail), dont l'en-tete est desormais reecrit au proxy (#1257).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:16:23 +0200
+
+secubox-webos (1.0.58-1~bookworm1) bookworm; urgency=medium
+
+  * REGRESSION CORRIGEE : `LARGEUR_PAGE` etait declaree en `const` APRES
+    l'appel qui l'utilise — render() appelle echelleApercus() PENDANT
+    l'evaluation du script. Zone morte, ReferenceError, rendu interrompu : le
+    menu systeme, le menu profil, la barre media et les pastilles
+    disparaissaient d'un coup. La constante descend dans la fonction ; la
+    declaration de fonction, elle, est hissee. Meme panne que `_cardletsVus`
+    (#1247) — deuxieme fois dans ce fichier, d'ou le commentaire sur place.
+  * billets et depot manquaient a `frame-src` de la CSP du Hall : leur apercu
+    etait bloque par notre propre politique, pas par la leur.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:10:21 +0200
+
 secubox-webos (1.0.57-1~bookworm1) bookworm; urgency=medium
 
   * APERCU VIVANT — le « smart embed » (#1256). Beaucoup de services n'ont pas

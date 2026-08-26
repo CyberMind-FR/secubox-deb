@@ -1,3 +1,77 @@
+secubox-haproxy (1.8.4-1~bookworm1) bookworm; urgency=medium
+
+  * COOKIES DES SERVICES TIERS (#1259), opt-in SEPARE de `cadrable` via
+    `cookies_tiers = true`. Nextcloud pose ses cookies en SameSite=Lax/Strict
+    et le navigateur les REJETTE dans un cadre tiers : la session ne s'etablit
+    jamais et la page boucle sur /login. Autoriser le cadrage ne suffit donc
+    pas pour un service qui s'appuie sur SameSite.
+  * Deux etapes, pas une : l'attribut existant est RETIRE avant que le notre ne
+    soit ajoute. Sans cela l'en-tete porterait deux SameSite et le navigateur
+    garderait le premier.
+  * `Partitioned` n'est pas decoratif — Firefox annonce deja le rejet des
+    cookies tiers qui en sont depourvus. Il cloisonne le cookie au couple
+    (site encadrant, service) : la session vue depuis le Hall devient distincte
+    de celle d'une visite directe, ce qui est plus sur, pas moins.
+  * CE QUE CELA COUTE : SameSite etait une des protections CSRF de Nextcloud.
+    Il lui reste son jeton `requesttoken`, verifie sur chaque ecriture — la
+    protection n'est pas levee, elle repose desormais sur ce seul jeton. D'ou
+    l'opt-in separe : on peut encadrer un service sans toucher a ses cookies,
+    et c'est le defaut.
+  * POURQUOI ICI ET NON DANS sbxmitm : photoprism est route vers nginx_vhosts
+    et ne traverse jamais le proxy d'inspection. HAProxy est le seul point
+    commun aux cinq services concernes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:18:16 +0200
+
+secubox-haproxy (1.8.3-1~bookworm1) bookworm; urgency=medium
+
+  * LA DECISION SE PREND EN PHASE REQUETE (#1257). Conditionner un
+    `http-response` directement sur une ACL d'en-tete de REQUETE ne matche pas
+    sur cette version : les regles etaient generees, la configuration valide,
+    le rechargement propre — et les en-tetes ne bougeaient pas, sans un mot.
+    Le cas le plus couteux a diagnostiquer : tout avait l'air juste.
+  * La transaction est desormais marquee pendant la requete, la ou le vhost est
+    connu (`set-var(txn.cadrable)`), et la reponse relit la marque. Verifie sur
+    la box : X-Frame-Options disparait bien de photoprism.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:14:08 +0200
+
+secubox-haproxy (1.8.2-1~bookworm1) bookworm; urgency=medium
+
+  * ACL SEPAREE POUR LES REGLES DE REPONSE (#1257). Dans un `http-response`,
+    `hdr(host)` echantillonne l'en-tete de la REPONSE, ou aucun `host`
+    n'existe : la condition etait toujours fausse et les trois regles de
+    cadrage ne s'appliquaient JAMAIS. En silence — la configuration restait
+    valide et les en-tetes ne bougeaient pas. `req.hdr()` nomme explicitement
+    la requete, seul endroit ou le vhost est connu.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:08:23 +0200
+
+secubox-haproxy (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * CADRAGE PAR LE HALL POUR LES SERVICES TIERS (#1257), opt-in par vhost via
+    `cadrable = true`. PeerTube, Nextcloud, PhotoPrism, Mastodon et le webmail
+    refusent d'etre encadres — et ils ont raison de le faire par defaut. Ils ne
+    suivent pas nos conventions et n'ont pas a les suivre : la reecriture se
+    fait au proxy, une fois, plutot que dans cinq amonts qu'on ne maitrise pas.
+  * Trois regles, dans cet ordre, parce que les trois cas different :
+    X-Frame-Options est RETIRE (il ne sait dire que DENY ou SAMEORIGIN, jamais
+    nommer une origine) ; une politique deja presente voit sa directive
+    REECRITE (ajouter un second en-tete ne servirait a rien, deux politiques
+    s'intersectent et un 'none' continuerait de tout bloquer) ; une politique
+    sans frame-ancestors recoit un second en-tete qui ne porte QUE cette
+    directive, ce qui ajoute la contrainte sans toucher au reste.
+  * CE QUE CELA COUTE, DIT FRANCHEMENT : autoriser le Hall a encadrer une
+    session authentifiee, c'est lui accorder ce que X-Frame-Options existe pour
+    refuser. La garantie tient tant que le Hall est sur — le meme pari que le
+    BBS et Billets font deja. D'ou l'opt-in : rien n'est ouvert sans une ligne
+    ecrite noir sur blanc dans haproxy.toml.
+  * La liste des ancetres est EXPLICITE et surchargeable par
+    SECUBOX_FRAME_ANCESTORS. `frame-ancestors *` accepterait n'importe quel
+    site.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:05:30 +0200
+
 secubox-haproxy (1.8.0-1~bookworm1) bookworm; urgency=high
 
   * Cette version REUNIT deux corrections qui vivaient sur des branches
