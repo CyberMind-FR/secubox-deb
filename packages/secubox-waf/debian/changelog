@@ -1,3 +1,20 @@
+secubox-waf (1.10.12-1~bookworm1) bookworm; urgency=medium
+
+  * JE M'ETAIS TROMPE DE SENS (#1309). En corrigeant le sombre, j'ai pose le
+    CLAIR sur `:root` — donc en defaut — et casse ce qui marchait. Ce tableau
+    est un design SOMBRE d'abord : ses teintes de series sont des neons
+    (#00d4ff, #b388ff) dessines pour un fond noir. `:root` nu porte desormais
+    le sombre, et c'est le clair qui se redefinit, comme pour MetaNews et
+    SocialRelay.
+  * LES TEINTES SUIVENT LE THEME. Deux jeux, choisis au trace : sur du blanc,
+    des neons eblouissent sans rien distinguer. Un graphique doit se lire dans
+    les DEUX themes, pas seulement dans celui d'origine.
+  * On ne touche pas au choix d'origine — `teinte(nom)` donne une couleur
+    STABLE par nom, seule facon de suivre une serie a l'oeil d'un rendu a
+    l'autre. On lui donne seulement le bon jeu.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:46:08 +0200
+
 secubox-waf (1.10.11-1~bookworm1) bookworm; urgency=medium
 
   * TABLEAU DE BORD ILLISIBLE EN SOMBRE (#1308). Il s'en remettait a

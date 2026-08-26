@@ -33,17 +33,23 @@
      Les trois états sont donc écrits ici : :root nu = clair, la requête média
      pour l'état « système » où aucun attribut n'est posé, et [data-theme] pour
      le choix explicite, qui doit gagner dans les DEUX sens. */
-  :root { --fond:#f7f8fa; --bg-card:#ffffff; --ink:#1a1a22; --muted:#5b6b7a;
-          --border:#e2e2ea; --cyan:#0d7f9e; --purple:#5b46b8; --orange:#a1701a;
-          --red:#b7202c; --green:#1f7a55; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#0e0e14; --bg-card:#14141c; --ink:#e8e6d9;
-      --muted:#8a8a99; --border:#2a2a36; --cyan:#4fc3e8; --purple:#9d8bf0;
-      --orange:#e0b355; --red:#e8636f; --green:#4ade80; }
+  /* SOMBRE D'ABORD, ET C'EST LE SENS DE CE TABLEAU. Ses teintes de series sont
+     des neons — #00d4ff, #6e40c9 — dessines pour un fond noir. Poser le clair
+     sur `:root` a casse ce qui marchait : le clair devenait le defaut, et les
+     neons s'y ecrasaient. On inverse donc les miroirs, comme on l'a fait pour
+     MetaNews et SocialRelay (#1268) : `:root` nu porte le SOMBRE, et c'est le
+     clair qui se redefinit. */
+  :root { --fond:#0a0a0f; --bg-card:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
+          --border:#2a2a36; --cyan:#00d4ff; --purple:#b388ff; --orange:#e0b355;
+          --red:#e8636f; --green:#4ade80; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --fond:#f7f8fa; --bg-card:#ffffff; --ink:#1a1a22;
+      --muted:#5b6b7a; --border:#e2e2ea; --cyan:#0d7f9e; --purple:#5b46b8;
+      --orange:#a1701a; --red:#b7202c; --green:#1f7a55; }
   }
-  :root[data-theme="dark"] { --fond:#0e0e14; --bg-card:#14141c; --ink:#e8e6d9;
-    --muted:#8a8a99; --border:#2a2a36; --cyan:#4fc3e8; --purple:#9d8bf0;
-    --orange:#e0b355; --red:#e8636f; --green:#4ade80; }
+  :root[data-theme="light"] { --fond:#f7f8fa; --bg-card:#ffffff; --ink:#1a1a22;
+    --muted:#5b6b7a; --border:#e2e2ea; --cyan:#0d7f9e; --purple:#5b46b8;
+    --orange:#a1701a; --red:#b7202c; --green:#1f7a55; }
 
   /* Fond ET couleur EXPLICITES : un corps transparent emprunte celui de
      l'hôte, et la page finit peinte dans un thème que son texte ne suit pas. */
@@ -174,12 +180,35 @@
   // Palette des catégories. Stable par NOM et non par rang : sinon une
   // catégorie changerait de couleur d'un jour à l'autre, et l'histogramme
   // deviendrait illisible d'une visite à la suivante.
-  const TEINTES = ['#00d4ff', '#6e40c9', '#e63946', '#c9a84c', '#00c853', '#ff8c42',
-                   '#4ecdc4', '#b388ff', '#ff5c8a', '#7cb342'];
+  // LES TEINTES SUIVENT LE THEME (#1309). Ces neons sont dessines pour un fond
+  // noir : sur du blanc ils eblouissent sans rien distinguer. On en garde deux
+  // jeux et l'on choisit au trace — un graphique doit se lire dans les deux
+  // thèmes, pas seulement dans celui d'origine.
+  const TEINTES_SOMBRE = ['#00d4ff', '#b388ff', '#e8636f', '#e0b355', '#4ade80', '#ff8c42',
+                          '#4ecdc4', '#7cb342'];
+  const TEINTES_CLAIR  = ['#0d7f9e', '#5b46b8', '#b7202c', '#a1701a', '#1f7a55', '#b35a1f',
+                          '#137a72', '#4a7a1f'];
+  const estClair = () => {
+    const t = document.documentElement.getAttribute('data-theme');
+    if (t === 'light') return true;
+    if (t === 'dark') return false;
+    return matchMedia('(prefers-color-scheme: light)').matches;
+  };
+  // Une FONCTION plutot qu'un proxy : le seul appel est `teinte(n)`, et une
+  // indirection maligne dans un tableau de bord est une dette, pas une
+  // elegance — la prochaine personne doit comprendre en une ligne.
+  // `teinte(nom)` existait deja et donnait une couleur STABLE par nom : la meme
+  // categorie garde sa couleur d'un rendu a l'autre, ce qui est la seule facon
+  // de suivre une serie a l'oeil. On ne touche pas a ce choix — on lui donne
+  // seulement le bon jeu selon le theme.
+  function teinteRang(n) {
+    const j = estClair() ? TEINTES_CLAIR : TEINTES_SOMBRE;
+    return j[((n % j.length) + j.length) % j.length];
+  }
   function teinte(nom) {
     let h = 0;
     for (let i = 0; i < nom.length; i++) h = (h * 31 + nom.charCodeAt(i)) >>> 0;
-    return TEINTES[h % TEINTES.length];
+    return teinteRang(h);
   }
 
   function drapeau(code) {
