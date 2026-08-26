@@ -1,3 +1,21 @@
+secubox-waf (1.10.6-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO — clair/sombre (#1249) : la carte s'en remettait a
+    /shared/hybrid-skin.css, qui ne connait ni data-theme ni
+    prefers-color-scheme. Le Hall posait bien l'attribut et rien ne changeait ;
+    --cyan, --muted et --border n'y sont meme pas definis. En sombre, du texte
+    reste sombre sur une carte sombre.
+  * Palette locale a TROIS etats, comme pour le podcaster : :root nu pour le
+    clair, la requete media pour l'etat « systeme » ou aucun attribut n'est
+    pose, et [data-theme] pour le choix explicite — qui doit gagner dans les
+    deux sens, pas seulement vers le sombre.
+  * Fond du corps EXPLICITE : un corps transparent emprunte celui de l'hote, et
+    la carte finit peinte dans un theme que son texte ne suit pas.
+  * Le parametre ?theme= est desormais LU a l'arrivee. Sans cela la carte se
+    peignait en clair et n'attendait le sombre que jusqu'a la premiere bascule.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:21:35 +0200
+
 secubox-waf (1.10.5-1~bookworm1) bookworm; urgency=medium
 
   * Ecoute du message de theme (#1243) : applique sans recharger.

@@ -22,7 +22,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
+  /* PALETTE LOCALE, ET C'EST UNE CORRECTION (#1249).
+     La carte s'en remettait à /shared/hybrid-skin.css, qui ne connaît NI
+     data-theme NI prefers-color-scheme : le Hall posait bien l'attribut, et
+     rien ne changeait. Pire, --cyan / --muted / --border n'y sont pas définis
+     du tout — en sombre, un texte resté sombre sur une carte sombre.
+     Les trois états sont donc écrits ici : :root nu = clair, la requête média
+     pour l'état « système » (aucun attribut posé), et [data-theme] pour le
+     choix explicite, qui doit gagner dans les DEUX sens. */
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
+          --cyan:#0f6f8c; --green:#0a7d2c; --red:#b7202c; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+            --border:#2a2a36; --cyan:#4fc3e8; --green:#3fbf6a; --red:#e8636f; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+          --border:#2a2a36; --cyan:#4fc3e8; --green:#3fbf6a; --red:#e8636f; }
+
   html, body { margin: 0; height: 100%; overflow: hidden; }
+  /* Fond EXPLICITE : un corps transparent emprunte celui de l'hôte, et la
+     carte se retrouve peinte dans un thème que son texte ne suit pas. */
+  body { background: var(--fond); color: var(--texte); }
   /* Pas d'ascenseur : la vue est taillée pour tenir. Une barre le long du
      liseré signalerait un débordement qu'on ne veut pas voir. */
   html, body { scrollbar-width: none; }
@@ -53,6 +73,22 @@
           font-variant-numeric: tabular-nums; color: var(--cyan); font-size: .95rem; }
   .m .l { color: var(--muted); font-size: .66rem; }
 
+  /* DERNIERES ATTAQUES (#1250). Quatre compteurs disent l'ampleur mais pas la
+     vie : on ne sait pas si la derniere tentative date d'une minute ou d'hier.
+     Trois lignes suffisent — au-dela, la carte devient un journal, et le
+     journal a deja son tableau de bord. */
+  .recent { display: flex; flex-direction: column; gap: .18rem; margin-top: .1rem; }
+  .rl { display: flex; align-items: baseline; gap: .3rem; font-size: .66rem;
+        line-height: 1.25; white-space: nowrap; }
+  .rl .ic { flex: 0 0 auto; font-size: .74rem; }
+  .rl .qui { font-family: 'Courier Prime', monospace; color: var(--texte);
+             overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .rl .quoi { color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .rl .quand { margin-left: auto; flex: 0 0 auto; color: var(--muted);
+               font-variant-numeric: tabular-nums; }
+  .rl.ban .qui { color: var(--red); }
+  .recent .vide { font-size: .66rem; color: var(--muted); }
+
   .lien { margin-top: auto; display: block; text-align: center; font-family: 'Courier Prime', monospace;
           font-size: .6rem; letter-spacing: .07em; text-transform: uppercase;
           color: var(--muted); text-decoration: none; padding-top: .35rem;
@@ -75,6 +111,8 @@
     <div class="m"><span class="n" id="m-det">—</span><span class="l">🧠 détections</span></div>
   </div>
 
+  <div class="recent" id="recent"><span class="vide">dernières tentatives…</span></div>
+
   <a class="lien" href="/" target="_top">📊 Tableau de bord</a>
 </div>
 
@@ -82,6 +120,12 @@
   // Le Hall dit le thème par MESSAGE plutôt que de recharger le cadre (#1243) :
   // recharger couperait le son et remettrait le lecteur au début. On applique
   // sans rien recharger. Deux valeurs acceptées, comme pour le paramètre.
+  // Le thème d'ARRIVEE vient du paramètre : sans cette lecture, la carte se
+  // peint en clair et n'attend le sombre que jusqu'à la première bascule.
+  {
+    const t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  }
   addEventListener("message", ev => {
     const d = ev.data;
     if (!d || d.sbx !== "theme") return;
@@ -108,9 +152,66 @@
     } catch (e) { return null; }
   }
 
+  // Une categorie se lit d'un coup d'oeil ou pas du tout : l'emoji porte le
+  // sens, le texte ne fait que le confirmer.
+  const EMOJI = {
+    robots: '🤖', scanners: '🔎', recon_crawler: '🕷️', honeypot: '🍯',
+    'host_anomaly:unrouted': '🚧', 'host_anomaly:ip_literal': '🔢',
+    sqli: '💉', xss: '⚡', traversal: '📁', bruteforce: '🔑',
+    ssh: '🔐', smtp: '📮', imap: '📬'
+  };
+  const LIBELLE = {
+    robots: 'robot', scanners: 'scan', recon_crawler: 'repérage',
+    honeypot: 'leurre', 'host_anomaly:unrouted': 'nom inconnu',
+    'host_anomaly:ip_literal': 'accès par IP', sqli: 'injection SQL',
+    xss: 'script injecté', traversal: 'remontée de chemin', bruteforce: 'force brute'
+  };
+  const emoji = c => EMOJI[c] || EMOJI[String(c).split(':')[0]] || '⚠️';
+  const libelle = c => LIBELLE[c] || LIBELLE[String(c).split(':')[0]] || String(c || 'anomalie');
+
+  // Delai COURT et humain. « il y a 3 min » tient dans la ligne ; une date
+  // complete la ferait deborder et n'apprendrait rien de plus a cette taille.
+  function delai(iso) {
+    const t = Date.parse(iso);
+    if (!t) return '';
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 45) return "à l'instant";
+    if (s < 3600) return 'il y a ' + Math.round(s / 60) + ' min';
+    if (s < 86400) return 'il y a ' + Math.round(s / 3600) + ' h';
+    return 'il y a ' + Math.round(s / 86400) + ' j';
+  }
+
+  // « local » est notre propre sonde interne : la montrer comme une tentative
+  // ferait passer notre surveillance pour une attaque. On garde ce qui vient
+  // vraiment de dehors, et on le dit si rien ne vient.
+  function dehors(a) {
+    const ip = String(a.client_ip || '');
+    return ip && ip !== 'local' && ip !== '127.0.0.1' && ip !== '::1';
+  }
+
+  function rendRecent(alertes) {
+    const box = document.getElementById('recent');
+    const l = (alertes || []).filter(dehors).slice(0, 3);
+    if (!l.length) { box.innerHTML = '<span class="vide">rien depuis dehors</span>'; return; }
+    box.innerHTML = l.map(a => {
+      const ban = a.action === 'banned';
+      return '<span class="rl' + (ban ? ' ban' : '') + '">'
+        + '<span class="ic">' + (ban ? '🚫' : emoji(a.category)) + '</span>'
+        + '<span class="qui">' + esc(a.client_ip) + '</span>'
+        + '<span class="quoi">' + esc(libelle(a.category)) + '</span>'
+        + '<span class="quand">' + esc(delai(a.timestamp)) + '</span>'
+        + '</span>';
+    }).join('');
+  }
+
+  const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
   async function majour() {
-    const [stats, bans, detec] = await Promise.all([
-      json('/stats'), json('/bans'), json('/detections')
+    // On demande large et on filtre ici : les sondes internes occupent souvent
+    // les toutes premieres lignes, et un limit=3 ne rendrait qu'elles.
+    const [stats, bans, detec, alertes] = await Promise.all([
+      json('/stats'), json('/bans'), json('/detections'), json('/alerts?limit=60')
     ]);
     const tete = document.getElementById('tete');
     const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
@@ -121,6 +222,7 @@
       tete.classList.add('ko');
       set('etat', 'injoignable');
       ['m-bans', 'm-jour', 'm-surf', 'm-det'].forEach(i => set(i, '—'));
+      document.getElementById('recent').innerHTML = '<span class="vide">—</span>';
       return;
     }
     tete.classList.remove('ko');
@@ -137,6 +239,8 @@
     set('m-jour', nb(stats.threats_today));
     set('m-surf', String(Object.keys(stats.par_type || {}).length));
     set('m-det', detections.length ? detections.filter(d => d.actif).length : '—');
+
+    rendRecent(alertes && alertes.alerts);
   }
 
   majour();

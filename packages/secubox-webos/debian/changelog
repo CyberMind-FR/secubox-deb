@@ -1,3 +1,11 @@
+secubox-webos (1.0.56-1~bookworm1) bookworm; urgency=medium
+
+  * Carte du pare-feu : 186 -> 238 px, la place exacte des trois dernieres
+    tentatives que la carte affiche desormais. La hauteur suit le contenu,
+    elle ne le precede pas.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:24:22 +0200
+
 secubox-webos (1.0.55-1~bookworm1) bookworm; urgency=medium
 
   * BARRE MEDIA — reserve basse (#1248) : fixee en bas de fenetre, elle
