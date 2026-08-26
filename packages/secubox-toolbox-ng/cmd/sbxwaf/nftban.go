@@ -23,8 +23,16 @@ import (
 // élément — le noyau retire l'IP à l'échéance (le retrait différé). Le journal
 // (BanStore) assure la persistance au restart et l'audit.
 //
-// Ça tourne EN PARALLÈLE de CrowdSec : les deux backends sont appelés à chaque
-// ban, mais le drop nft est effectif même si CrowdSec est absent.
+// LE WAF BLOQUE LUI-MÊME, sans relais. CrowdSec n'est plus appelé (#1218) : sa
+// voie échouait de toute façon en silence — cscli lit /etc/crowdsec/config.yaml,
+// que le compte de service ne peut pas ouvrir.
+//
+// PIÈGE CORRIGÉ (#1218) : Ensure() ne créait que la table et les deux SETS. Rien
+// ne les consultait — aucune chaîne, aucune règle, zéro référence à @waf_ban
+// dans tout le jeu de règles. Le banner remplissait donc consciencieusement un
+// ensemble que le noyau n'interrogeait jamais : 91 adresses « bannies » qui
+// passaient toutes. Un set sans règle ne bloque rien ; la chaîne ci-dessous est
+// ce qui rend le blocage réel.
 //
 // Le processus a besoin de CAP_NET_ADMIN (ou `sudo nft`) — sinon `nft` échoue et
 // on se rabat sur CrowdSec seul, en journalisant.
@@ -36,6 +44,7 @@ type nftRunner func(ctx context.Context, args ...string) ([]byte, error)
 type NftBanner struct {
 	nftPath  string
 	table    string
+	chain    string
 	set4     string
 	set6     string
 	duration time.Duration
@@ -59,6 +68,7 @@ func NewNftBanner(nftPath, table string, duration time.Duration, store *BanStore
 	b := &NftBanner{
 		nftPath:  nftPath,
 		table:    table,
+		chain:    "waf_drop",
 		set4:     "waf_ban",
 		set6:     "waf_ban6",
 		duration: duration,
@@ -86,6 +96,19 @@ func (b *NftBanner) Ensure() error {
 		{"add", "table", "inet", b.table},
 		{"add", "set", "inet", b.table, b.set4, "{", "type", "ipv4_addr;", "flags", "timeout;", "}"},
 		{"add", "set", "inet", b.table, b.set6, "{", "type", "ipv6_addr;", "flags", "timeout;", "}"},
+		// La chaîne qui CONSULTE les sets. Sans elle, tout ce qui précède est
+		// une comptabilité sans effet. Priorité -100 : avant le filtrage
+		// général, pour qu'une source bannie soit écartée au plus tôt.
+		// Politique accept : cette chaîne ne fait que retirer les bannis, elle
+		// ne décide de rien d'autre — on n'ajoute pas un point de coupure au
+		// trafic légitime.
+		{"add", "chain", "inet", b.table, b.chain,
+			"{", "type", "filter", "hook", "input", "priority", "-100;", "policy", "accept;", "}"},
+		// `add rule` n'est PAS idempotent : sans ce flush, chaque démarrage
+		// empilerait un doublon de plus.
+		{"flush", "chain", "inet", b.table, b.chain},
+		{"add", "rule", "inet", b.table, b.chain, "ip", "saddr", "@" + b.set4, "counter", "drop"},
+		{"add", "rule", "inet", b.table, b.chain, "ip6", "saddr", "@" + b.set6, "counter", "drop"},
 	}
 	for _, c := range cmds {
 		if out, err := b.runner(ctx, c...); err != nil {
@@ -111,7 +134,15 @@ func (b *NftBanner) setPour(ip string) (string, bool) {
 
 // Ban ajoute l'IP au set nft avec un timeout, et journalise ban. Anti-tempête
 // par IP (cooldown) : la réponse graduée appelle Ban à CHAQUE requête bannie.
+//
+// GARDE-FOU : une adresse privée n'est JAMAIS ajoutée. Les appelants exemptent
+// déjà le LAN, mais ce drop est réel depuis qu'il existe une règle — une seule
+// erreur en amont couperait l'accès d'administration à la box, depuis la box.
+// Le refus est ici, au dernier moment, où rien ne peut le contourner.
 func (b *NftBanner) Ban(ip, cat, sev string) {
+	if p := net.ParseIP(ip); p == nil || p.IsLoopback() || p.IsPrivate() || p.IsLinkLocalUnicast() {
+		return
+	}
 	b.mu.Lock()
 	if !b.ready {
 		b.mu.Unlock()

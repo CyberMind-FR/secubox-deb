@@ -1,3 +1,24 @@
+secubox-waf-ng (1.7.0-1~bookworm1) bookworm; urgency=medium
+
+  * LE WAF NE BLOQUAIT RIEN (#1218). Ensure() créait la table et les deux sets
+    nft `waf_ban`/`waf_ban6` — mais aucune chaîne, aucune règle. Le jeu de
+    règles ne référençait `@waf_ban` NULLE PART : 91 adresses « bannies » y
+    étaient soigneusement inscrites, et toutes passaient. Un set sans règle ne
+    bloque rien. Ensure() pose désormais la chaîne `waf_drop` (hook input,
+    priorité -100, politique accept) et les deux règles de drop qui consultent
+    les sets. Le flush précède les règles : `add rule` n'est pas idempotent et
+    chaque démarrage empilait sinon un doublon.
+  * Plus de relais CrowdSec (#1218). La seconde voie échouait de toute façon en
+    silence — cscli lit /etc/crowdsec/config.yaml, illisible par le compte de
+    service — d'où 1871 décisions de ban journalisées pour zéro décision
+    CrowdSec. Le blocage est maintenant posé par sbxwaf dans sa propre chaîne :
+    un WAF qui ne sait pas bloquer sans un tiers n'est pas un WAF.
+  * Garde-fou : une adresse privée n'entre JAMAIS dans le set. Les appelants
+    exemptent déjà le LAN, mais le drop est réel depuis qu'une règle existe —
+    une seule erreur en amont couperait l'administration de la box.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:56:12 +0200
+
 secubox-waf-ng (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Anti-robots par vhost (#1216) : sbxwaf refuse les robots d'indexation sur

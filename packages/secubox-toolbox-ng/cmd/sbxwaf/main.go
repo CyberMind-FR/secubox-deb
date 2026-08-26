@@ -812,12 +812,19 @@ func (s *Server) lireJA4(r *http.Request) string {
 // appliquerBan sanctionne une IP sur TOUS les backends configurés, en parallèle
 // (#1070, phase B) : le drop nft natif ET le rapport CrowdSec. Le nft rend le ban
 // effectif même si CrowdSec est absent — le WAF est autonome.
+// appliquerBan applique le ban. Le WAF bloque LUI-MÊME, sans relais (#1218).
+//
+// CrowdSec n'est plus appelé. Deux raisons, la seconde étant décisive :
+//   - la voie échouait de toute façon en silence — cscli lit
+//     /etc/crowdsec/config.yaml, que le compte de service ne peut pas ouvrir ;
+//   - un WAF qui ne sait pas bloquer sans un tiers n'est pas un WAF. Le drop
+//     est désormais posé par sbxwaf dans sa propre chaîne nft (voir nftban.go).
+//
+// Si nftBan est nil, RIEN ne bloque : c'est journalisé au démarrage plutôt que
+// laissé à deviner (voir main()).
 func (s *Server) appliquerBan(ip, cat, sev string) {
 	if s.nftBan != nil {
 		go s.nftBan.Ban(ip, cat, sev)
-	}
-	if s.crowdsec != nil {
-		go s.crowdsec.Report(ip, cat, sev)
 	}
 }
 
@@ -1146,6 +1153,8 @@ func main() {
 		// this build and JWTs expire hourly). This is the path that actually
 		// creates a bouncer-enforced nft drop, so auto-bans finally take effect.
 		srv.crowdsec = NewCscliReporter(*crowdsecCscli, *crowdsecBanDuration)
+		log.Printf("sbxwaf: NOTE — CrowdSec n'est plus le relais de ban (#1218) ; " +
+			"le blocage est posé par sbxwaf dans sa propre chaîne nft")
 		log.Printf("sbxwaf: CrowdSec bridge enabled via cscli %q (ban-duration=%s)",
 			*crowdsecCscli, *crowdsecBanDuration)
 	} else if *crowdsecURL != "" || *crowdsecJWTFile != "" {

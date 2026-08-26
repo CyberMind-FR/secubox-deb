@@ -30,12 +30,33 @@ func serveurAnomalie(t *testing.T, rep CrowdSecReporter) (*Server, string) {
 	}, logPath
 }
 
-func TestRecordHostAnomaly_FortDepuisWANBannitEtRapporte(t *testing.T) {
-	rep := &reporterFake{ch: make(chan [3]string, 1)}
-	srv, logPath := serveurAnomalie(t, rep)
+// serveurAnomalieNft monte un serveur dont le ban passe par le banneur nft du
+// WAF — le seul chemin de blocage depuis #1218.
+func serveurAnomalieNft(t *testing.T) (*Server, string, *fauxNft) {
+	t.Helper()
+	logPath := filepath.Join(t.TempDir(), "threats.log")
+	fx := &fauxNft{}
+	nb := NewNftBanner("nft", "secubox", time.Hour,
+		NewBanStore(filepath.Join(t.TempDir(), "bans.jsonl")))
+	nb.runner = fx.run
+	if err := nb.Ensure(); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+	return &Server{
+		ban:         NewBan(300*time.Second, 3),
+		threatLog:   NewThreatLog(logPath),
+		hostAnomaly: true,
+		nftBan:      nb,
+	}, logPath, fx
+}
+
+// Une anomalie FORTE venue du WAN doit être bannie par le WAF LUI-MÊME (#1218),
+// sans relais : l'adresse doit entrer dans le set nft que la chaîne consulte.
+func TestRecordHostAnomaly_FortDepuisWANBannitParLeWAF(t *testing.T) {
+	srv, logPath, fx := serveurAnomalieNft(t)
 
 	req := httptest.NewRequest(http.MethodGet, "http://x/", nil)
-	req.Host = "203.0.113.9"           // le client vise par IP brute → classe forte
+	req.Host = "203.0.113.9"              // le client vise par IP brute → classe forte
 	req.RemoteAddr = "203.0.113.42:12345" // WAN (TEST-NET-3)
 	srv.recordHostAnomaly(req, "203.0.113.9")
 
@@ -44,15 +65,17 @@ func TestRecordHostAnomaly_FortDepuisWANBannitEtRapporte(t *testing.T) {
 		!contains(string(data), `"category":"host_anomaly:ip_literal"`) {
 		t.Fatalf("journal attendu banned+ip_literal, obtenu: %s", data)
 	}
-	// CrowdSec (async) : rapport reçu.
-	select {
-	case c := <-rep.ch:
-		if c[0] != "203.0.113.42" || c[1] != "host_anomaly:ip_literal" {
-			t.Fatalf("rapport CrowdSec inattendu: %v", c)
+
+	// Le ban nft est posé dans une goroutine : on attend l'élément.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if contains(joint(fx.dernier()), "add element inet secubox waf_ban") &&
+			contains(joint(fx.dernier()), "203.0.113.42") {
+			return
 		}
-	case <-time.After(time.Second):
-		t.Fatal("aucun rapport CrowdSec pour une anomalie forte WAN")
+		time.Sleep(10 * time.Millisecond)
 	}
+	t.Fatalf("l'adresse n'a pas été ajoutée au set nft ; dernière commande: %q", joint(fx.dernier()))
 }
 
 func TestRecordHostAnomaly_ClientLANObserveSansBannir(t *testing.T) {

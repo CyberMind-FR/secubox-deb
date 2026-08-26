@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -199,8 +200,15 @@ func (c *CrowdSecClient) postAlert(ip, cat, sev string) error {
 // Why not the LAPI /v1/alerts POST above: that path requires a machine JWT that
 // expires hourly (fragile as a static file) AND our alert schema is rejected by
 // the LAPI with a 500 on this CrowdSec build. cscli reads the local API creds
-// directly and always works when sbxwaf runs as root. Report is invoked from a
-// goroutine (see main.go), so the ~sub-second exec never touches the hot path.
+// directly. ATTENTION : cscli lit /etc/crowdsec/config.yaml, que seul root peut
+// ouvrir ; le service tourne sous `secubox-waf`. L'appel direct échouait donc
+// systématiquement — « permission denied » — et AUCUN ban n'atteignait CrowdSec,
+// alors que /etc/sudoers.d/secubox-waf-ng délègue précisément
+// `cscli decisions add *` à ce compte. On passe donc par sudo dès qu'on n'est
+// pas root. Le blocage local par nft, lui, fonctionnait : c'est la propagation
+// (bouncer, panneau CrowdSec, corrélation) qui manquait, pas le blocage.
+// Report est invoqué depuis une goroutine (voir main.go) : l'exec sub-seconde
+// ne touche jamais le chemin chaud.
 type CscliReporter struct {
 	cscliPath string
 	duration  string
@@ -222,6 +230,19 @@ func NewCscliReporter(cscliPath, duration string) *CscliReporter {
 		cooldown:  5 * time.Minute,
 		recent:    make(map[string]time.Time),
 	}
+}
+
+// commande construit l'argv de l'appel. Sous root on invoque cscli
+// directement ; sinon on passe par `sudo -n`, la délégation prévue pour ce
+// compte. `-n` interdit toute invite : mieux vaut un échec journalisé qu'un
+// processus qui attend un mot de passe que personne ne tapera.
+func (r *CscliReporter) commande(ip, reason string) (string, []string) {
+	args := []string{"decisions", "add",
+		"--ip", ip, "--duration", r.duration, "--reason", reason, "--type", "ban"}
+	if os.Geteuid() == 0 {
+		return r.cscliPath, args
+	}
+	return "sudo", append([]string{"-n", r.cscliPath}, args...)
 }
 
 // Report adds a ban decision for ip via cscli, at most once per cooldown per IP.
@@ -248,8 +269,8 @@ func (r *CscliReporter) Report(ip, cat, sev string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	reason := fmt.Sprintf("secubox-waf/%s", cat)
-	cmd := exec.CommandContext(ctx, r.cscliPath, "decisions", "add",
-		"--ip", ip, "--duration", r.duration, "--reason", reason, "--type", "ban")
+	nom, args := r.commande(ip, reason)
+	cmd := exec.CommandContext(ctx, nom, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		log.Printf("sbxwaf: crowdsec cscli ban failed for %s (%s): %v: %s",
 			ip, cat, err, strings.TrimSpace(string(out)))
