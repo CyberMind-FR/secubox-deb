@@ -1,3 +1,16 @@
+secubox-webos (1.0.39-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Pare-feu plus compact (#1228). « Surtout : » occupait le tiers de la
+    ligne de titre pour ne rien dire de plus — le sens tient sans lui, c'est
+    bien la categorie dominante qu'on lit. Le cardlet est etroit, chaque
+    caractere y compte.
+  * Le sous-titre passe de « premiere origine : US » a « 🌍 US · NL · GB » :
+    trois codes pays tiennent sur la meme ligne et dessinent d'ou vient la
+    pression, la ou l'ancienne formule disait moins en trois fois plus de place.
+    LAN et origines inconnues restent ecartes — ce ne sont pas des provenances.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:46:34 +0200
+
 secubox-webos (1.0.38-1~bookworm1) bookworm; urgency=medium
 
   * Le cardlet Pare-feu EMBARQUE le tableau de bord au lieu d'ouvrir un onglet

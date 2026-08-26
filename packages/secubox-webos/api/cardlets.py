@@ -139,8 +139,11 @@ def waf_cardlet(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
     cats = stats.get("by_category") or {}
     tete = max(cats.items(), key=lambda kv: kv[1])[0] if cats else ""
 
+    # Les trois premieres origines, separees par un point median. « premiere
+    # origine : US » disait moins en trois fois plus de place ; trois codes
+    # pays tiennent sur la meme ligne et dessinent d'ou vient la pression.
     pays = stats.get("pays") or {}
-    premier_pays = next(iter(pays), "")
+    tete_pays = [p for p in list(pays)[:3] if p and p not in ("LAN", "??")]
 
     metrics = [
         {"id": "bans", "value": int(bans.get("total", 0) or 0)},
@@ -155,7 +158,7 @@ def waf_cardlet(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
         "status": "online",
         "content": {
             "title": _phrase_waf(tete, bans.get("total", 0) or 0),
-            "subtitle": (f"première origine : {premier_pays}" if premier_pays else ""),
+            "subtitle": ("🌍 " + " · ".join(tete_pays)) if tete_pays else "",
             "station": "Pare-feu applicatif",
         },
         "metrics": metrics,
@@ -185,13 +188,18 @@ _PHRASES = {
 
 
 def _phrase_waf(categorie: str, bannis: int) -> str:
-    """Ce que le cardlet raconte, en une ligne."""
+    """Ce que le cardlet raconte, en une ligne.
+
+    Sans preambule : « Surtout : » occupait le tiers de la ligne pour ne rien
+    dire de plus. Le cardlet est etroit, chaque caractere y compte, et le sens
+    tient sans lui — c'est bien la categorie dominante qu'on lit.
+    """
     if not categorie:
         return "Rien à signaler"
     for prefixe, mot in _PHRASES.items():
         if categorie.startswith(prefixe):
-            return f"Surtout : {mot}"
-    return f"Surtout : {categorie}"
+            return mot[:1].upper() + mot[1:]
+    return categorie
 
 
 def waf_cardlet_safe(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
