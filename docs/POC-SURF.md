@@ -202,6 +202,29 @@ schéma branche les **sources de MetaNews** : réécrire chaque lien d'article
 `https://X/…` en `https://surf-X.gk2.secubox.in/…` le fait ouvrir tracker-
 strippé dans le cadre du Hall, sans que MetaNews sache rien du proxy.
 
+## 5ter. Le mur des portails de consentement (first-id / BFM)
+
+Cas rencontré et **non franchissable**, de la même famille que Facebook et
+DataDome. BFM exige que le flux de consentement `first-id` se **termine** (pose
+un cookie) avant d'afficher l'article. Cinq techniques essayées, toutes tenues
+en échec par un cumul d'obstacles :
+
+| Technique | Pourquoi ça échoue ici |
+|---|---|
+| Réécriture serveur (HTML+JS) | l'URL du portail est construite **dynamiquement**, pas un littéral |
+| Saut de portail (`redirectHost`+`redirectUri`) | marche quand l'URL nous parvient — mais elle part vers le vrai host |
+| Catcher `securitypolicyviolation` | Firefox **tronque** souvent le `blockedURI` (perd la query) |
+| Override `location.assign`/`replace` | BFM redirige par `location.href = …`, dont le setter **n'est pas remplaçable** |
+| Relayer `gate.first-id.fr` | domaine qu'on ne possède pas → **pas de certificat** ; et le DNS de la box le bloque |
+
+Et même en sautant le portail, le cookie qu'il pose n'existe jamais → BFM
+**re-redirige en boucle**. C'est un flux JavaScript actif que rien — ni serveur,
+ni injection — ne peut compléter à sa place.
+
+**Verdict** : viser les points d'entrée sobres (`mbasic`, `m.`, `lite`, RSS,
+`.onion`) pour les SaaS à consentement/anti-bot actif. Le BiB gère l'immense
+majorité des sites ; ce cas-là est la frontière, assumée.
+
 ## 6. Décision proposée
 
 1. **Ne pas** viser les SPA modernes de front. Le coût (réécrire du JS, proxy WS,
