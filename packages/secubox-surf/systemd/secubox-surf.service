@@ -14,6 +14,8 @@ RestartSec=3
 # l'externe — d'ou pas d'acces au systeme de fichiers en ecriture.
 NoNewPrivileges=true
 ProtectSystem=strict
+ReadWritePaths=/var/lib/secubox/surf
+StateDirectory=secubox/surf
 ProtectHome=true
 PrivateTmp=true
 

@@ -34,6 +34,7 @@ from urllib.parse import parse_qs, unquote
 
 from . import relais
 from . import egress
+from . import jarre
 
 
 # Un seul client async par mode, réutilisé : ouvrir une connexion par requête
@@ -102,6 +103,31 @@ async def app(scope, receive, send):
                     "headers": [(k.encode(), v.encode()) for k, v in entetes]})
         await send({"type": "http.response.body", "body": corps})
 
+    chemin0 = scope.get("raw_path", scope["path"].encode()).decode()
+
+    # ── APPRENDRE UNE FOIS (#1366) ──────────────────────────────────────────
+    # `POST surf-<site>.../_sbx/jarre` avec {cookies:{nom:valeur}} seme le bocal
+    # pour CE site ; `GET .../_sbx/jarre` rend l'etat. C'est ainsi qu'on franchit
+    # un portail qui, sinon, ne pose jamais son cookie (il redirige avant) : on
+    # colle une fois les cookies d'une session reelle, et le relais les rejoue.
+    if cible and chemin0.startswith("/_sbx/jarre"):
+        if scope["method"] == "POST":
+            corps0 = await _lire_corps(receive)
+            try:
+                import json as _json
+                d = _json.loads(corps0 or b"{}")
+                n = jarre.pose_manuel(cible, d.get("cookies", {}))
+                await repond(200, [("content-type", "application/json")],
+                             _json.dumps({"ok": True, "cookies": n}).encode())
+            except Exception as e:  # noqa: BLE001
+                await repond(400, [("content-type", "application/json")],
+                             ('{"ok":false,"detail":"%s"}' % type(e).__name__).encode())
+        else:
+            import json as _json
+            await repond(200, [("content-type", "application/json")],
+                         _json.dumps({"ok": True, "jarre": jarre.etat()}).encode())
+        return
+
     # Origine mal formée : on ne devine pas une cible, on le dit.
     if not cible:
         await repond(400, [("content-type", "text/html; charset=utf-8")],
@@ -169,8 +195,11 @@ async def app(scope, receive, send):
     corps_req = await _lire_corps(receive) if methode in ("POST", "PUT", "PATCH") else None
     entetes_req = dict(egress.ENTETES_NAV)
     entetes_req["Host"] = cible
-    if "cookie" in entetes_in:
-        entetes_req["Cookie"] = entetes_in["cookie"]
+    # LE BOCAL A COOKIES REJOUE CE QU'ON A APPRIS (#1366) : consentement,
+    # session. On fusionne avec ce que le navigateur presente (lui prioritaire).
+    ck = jarre.entete(cible, entetes_in.get("cookie", ""))
+    if ck:
+        entetes_req["Cookie"] = ck
     if "content-type" in entetes_in and corps_req is not None:
         entetes_req["Content-Type"] = entetes_in["content-type"]
 
@@ -194,6 +223,14 @@ async def app(scope, receive, send):
         await repond(502, [("content-type", "text/html; charset=utf-8")],
                      _bannette(cible, "Injoignable (%s)." % type(e).__name__))
         return
+
+    # ON APPREND CE QUE L'AMONT POSE, avant de le reecrire pour le navigateur.
+    try:
+        jarre.apprend(cible, r.headers.get_list("set-cookie"))
+    except AttributeError:
+        sc = r.headers.get("set-cookie")
+        if sc:
+            jarre.apprend(cible, [sc])
 
     entetes_out = relais.reecris_entetes(dict(r.headers), base, rap, sur_hote)
     ct = r.headers.get("content-type", "").lower()
