@@ -43,6 +43,35 @@ app = FastAPI(title="SecuBox SOC", version="2.0.0")
 from secubox_core.mitm_ingest import mount_ingest_routes  # noqa: E402
 
 
+# ── Garde CrowdSec (#1226) ──────────────────────────────────────────────────
+#
+# Neuf modules SecuBox interrogent cscli. Chaque invocation est un binaire Go
+# qui charge sa configuration : environ 133 % de CPU le temps de s'executer.
+# Depuis que CrowdSec est arrete et masque (#1210), ces appels echouent APRES
+# avoir paye ce cout — du travail pur perdu, plusieurs fois par minute.
+#
+# La garde repond a « le moteur tourne-t-il ? » une fois par minute au lieu de
+# lancer un binaire a chaque fois. Elle n'invente rien : si CrowdSec revient,
+# les appels reprennent d'eux-memes au tour suivant.
+_CROWDSEC_ETAT = {"actif": None, "vu": 0.0}
+
+
+def crowdsec_actif(ttl: float = 60.0) -> bool:
+    """Dit si le moteur CrowdSec tourne. Resultat garde en cache ttl secondes."""
+    import time as _t
+    maintenant = _t.monotonic()
+    if _CROWDSEC_ETAT["actif"] is not None and maintenant - _CROWDSEC_ETAT["vu"] < ttl:
+        return _CROWDSEC_ETAT["actif"]
+    try:
+        r = subprocess.run(["systemctl", "is-active", "crowdsec"],
+                           capture_output=True, text=True, timeout=5)
+        actif = r.stdout.strip() == "active"
+    except Exception:
+        actif = False
+    _CROWDSEC_ETAT.update(actif=actif, vu=maintenant)
+    return actif
+
+
 def _soc_enrich(event: dict) -> dict:
     """Phase 2c enrichment : sum indicator weights -> score band.
 
@@ -455,6 +484,8 @@ async def get_map_threats(continent: Optional[str] = None, country: Optional[str
 def get_live_attacks():
     attacks = []
     try:
+        if not crowdsec_actif():
+            return []
         result = subprocess.run(["cscli", "decisions", "list", "-o", "json"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0 and result.stdout:
             decisions = json.loads(result.stdout)

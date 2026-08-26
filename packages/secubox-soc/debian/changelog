@@ -1,3 +1,17 @@
+secubox-soc (1.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * Garde CrowdSec (#1226). Le module interrogeait `cscli decisions list` sans
+    verifier que le moteur tourne. Chaque invocation est un binaire Go qui
+    charge sa configuration — environ 133 %% de CPU le temps de s'executer — et
+    depuis que CrowdSec est arrete et masque (#1210) l'appel echoue APRES avoir
+    paye ce cout. Du travail pur perdu, plusieurs fois par minute.
+  * La garde repond a « le moteur tourne-t-il ? » une fois par minute, au lieu
+    de lancer un binaire a chaque fois. Elle n'invente rien : si CrowdSec
+    revient, les appels reprennent d'eux-memes au tour suivant. C'est la meme
+    verification que secubox-metrics faisait deja, et qui lui evitait ce cout.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:14:27 +0200
+
 secubox-soc (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

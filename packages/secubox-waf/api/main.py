@@ -858,10 +858,15 @@ def _alert_severity(scenario: str) -> str:
 
 
 def _get_crowdsec_alerts() -> List[dict]:
-    """Recent CrowdSec alerts — the REAL detection layer. The inline mitmproxy WAF
-    log (THREATS_LOG) is normally empty because CrowdSec + the firewall bouncer do
-    the detection/blocking, so the threat cards must read alerts here (same source
-    the bans already use). Newest first; best-effort (empty on any cscli failure)."""
+    """REPLI d'urgence, plus la source normale (#1226).
+
+    Ce commentaire disait l'inverse : « le journal en ligne est normalement vide,
+    CrowdSec fait la detection ». C'etait vrai avant que sbxwaf ecrive un journal
+    riche (#744) et applique lui-meme ses bannissements (#1218). CrowdSec est
+    desormais arrete et masque (#1210) : cette fonction ne rend plus rien, et
+    n'est appelee que si le moteur n'a RIEN produit — moteur arrete, journal
+    illisible. Elle reste pour ce cas-la, et pour un retour eventuel de
+    CrowdSec. Best-effort : vide en cas d'echec."""
     try:
         result = subprocess.run(
             ["sudo", "cscli", "alerts", "list", "-o", "json"],
@@ -966,18 +971,23 @@ def _refresh_warm_caches() -> dict:
         new_bans = _get_bans()
     except Exception:
         new_bans = []
-    # CrowdSec is the authoritative detection layer; overlay its alerts so the
-    # threat cards/donuts aren't stuck at 0 when the inline mitmproxy log is empty.
-    try:
-        cs_alerts = _get_crowdsec_alerts()
-    except Exception:
-        cs_alerts = []
-    # The Go sbxwaf engine (#744) now writes a RICH threat log, so the WAF stats
-    # are real and fresh. Only fall back to the CrowdSec overlay when the engine
-    # produced NOTHING (engine down / log unreadable) — otherwise the overlay's
-    # older, coarser CrowdSec scenarios would clobber the engine's fresh
-    # categories AND push a stale "1h ago" entry to the live attack banner.
+    # LE MOTEUR EST LA COUCHE DE DETECTION, CrowdSec n'est qu'un repli (#1226).
+    # La prémisse d'origine était l'inverse — « le journal en ligne est
+    # normalement vide, CrowdSec fait la détection » — et elle est caduque
+    # depuis que sbxwaf écrit un journal riche (#744) puis applique lui-même
+    # (#1218). CrowdSec est d'ailleurs arrêté et masqué (#1210).
+    #
+    # L'appel se faisait a CHAQUE cycle avant d'etre jete : un `sudo cscli` de
+    # plus toutes les trente secondes, pour un resultat inutilise. On ne
+    # l'invoque plus que si le moteur n'a RIEN produit — moteur arrete, journal
+    # illisible — c'est-a-dire presque jamais.
     engine_has_data = (new_stats.get("total_threats", 0) or 0) > 0 or bool(new_alerts)
+    cs_alerts: List[dict] = []
+    if not engine_has_data:
+        try:
+            cs_alerts = _get_crowdsec_alerts()
+        except Exception:
+            cs_alerts = []
     if cs_alerts and not engine_has_data:
         # Defensive: a CrowdSec-overlay failure must NEVER abort the refresh and
         # leave the warm cache frozen — the WAF top_ips/top_vhosts/tracked-attacker

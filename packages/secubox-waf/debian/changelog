@@ -1,3 +1,20 @@
+secubox-waf (1.9.2-1~bookworm1) bookworm; urgency=medium
+
+  * Un `sudo cscli` gaspille a chaque cycle de rafraichissement (#1226). Le
+    tableau de bord appelait _get_crowdsec_alerts() SYSTEMATIQUEMENT, puis
+    jetait le resultat : la couche CrowdSec n'est qu'un repli, applique
+    seulement si le moteur n'a rien produit. Un binaire Go lance toutes les
+    trente secondes pour rien — et c'est exactement ce qui chargeait la box
+    (#1210). L'appel n'a plus lieu que dans le cas de repli : moteur arrete ou
+    journal illisible, c'est-a-dire presque jamais.
+  * Le commentaire disait la prémisse inverse — « le journal en ligne est
+    normalement vide, CrowdSec fait la detection ». Elle est caduque depuis que
+    sbxwaf ecrit un journal riche (#744), applique lui-meme (#1218), et que
+    CrowdSec est arrete et masque (#1210). Corrige plutot que laisse tromper le
+    prochain lecteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:08:20 +0200
+
 secubox-waf (1.9.1-1~bookworm1) bookworm; urgency=medium
 
   * LE BOUTON « BAN » NE BANNISSAIT PLUS RIEN (#1225). Il passait par
