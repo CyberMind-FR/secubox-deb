@@ -505,6 +505,13 @@ def _get_threat_stats() -> dict:
     # Ce qui etait VISE sur les surfaces hors HTTP (#1221). Un compte inexistant
     # tente depuis des centaines de sources en dit plus long qu'un total : c'est
     # la que se lit le ciblage.
+    # EFFICACITE par categorie (#1224) : ce qui a ete BLOQUE contre ce qui n'a
+    # ete qu'observe. Une categorie qui detecte beaucoup et ne bloque jamais
+    # n'est pas une protection, c'est un compteur — et rien ne le disait.
+    efficacite = defaultdict(lambda: defaultdict(int))
+    for _cat, _actions in (counters.get("efficacite") or {}).items():
+        for _a, _n in (_actions or {}).items():
+            efficacite[_cat][_a] = int(_n or 0)
     comptes_vises = defaultdict(int, counters.get("comptes_vises", {}))
     leurres_touches = defaultdict(int, counters.get("leurres_touches", {}))
     total_threats = counters.get("total_threats", 0)
@@ -524,7 +531,7 @@ def _get_threat_stats() -> dict:
             total_threats, threats_today, by_category, by_severity,
             top_ips, top_countries, top_vhosts, ip_countries,
             observed_threats, observed_today, noms_non_routes,
-            par_origine, par_type, comptes_vises, leurres_touches,
+            par_origine, par_type, comptes_vises, leurres_touches, efficacite,
         )
 
     geoip_reader = _get_geoip_reader()
@@ -539,11 +546,12 @@ def _get_threat_stats() -> dict:
         # entier, une fois — et on repart de zéro pour TOUS les compteurs, faute
         # de quoi les anciens seraient comptés deux fois.
         if ("noms_non_routes" not in counters or "par_origine" not in counters
-                or "comptes_vises" not in counters):
+                or "comptes_vises" not in counters
+                or "efficacite" not in counters):
             by_category.clear(); by_severity.clear(); top_ips.clear()
             top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
             par_origine.clear(); par_type.clear()
-            comptes_vises.clear(); leurres_touches.clear()
+            comptes_vises.clear(); leurres_touches.clear(); efficacite.clear()
             ip_countries.clear()
             total_threats = 0
             observed_threats = 0
@@ -599,6 +607,9 @@ def _get_threat_stats() -> dict:
 
                         # Un Host non routé : on garde le NOM demandé, pas la
                         # classe — c'est le nom qui dit s'il manque un vhost.
+                        _act = str(entry.get("action") or "inconnu")
+                        efficacite[str(entry.get("category") or "inconnu")][_act] += 1
+
                         _orig, _typ = _origine_et_type(entry)
                         par_origine[_orig] += 1
                         par_type[_typ] += 1
@@ -647,6 +658,7 @@ def _get_threat_stats() -> dict:
             "par_type": dict(par_type),
             "comptes_vises": dict(comptes_vises),
             "leurres_touches": dict(leurres_touches),
+            "efficacite": {c: dict(a) for c, a in efficacite.items()},
         },
         "ip_countries": ip_countries,
         "last_updated": int(time.time()),
@@ -656,7 +668,7 @@ def _get_threat_stats() -> dict:
         total_threats, threats_today, by_category, by_severity,
         top_ips, top_countries, top_vhosts, ip_countries,
         observed_threats, observed_today, noms_non_routes,
-        par_origine, par_type, comptes_vises, leurres_touches,
+        par_origine, par_type, comptes_vises, leurres_touches, efficacite,
     )
 
 
@@ -666,7 +678,7 @@ def _finalize_stats(
     ip_countries: dict,
     observed_threats: int = 0, observed_today: int = 0,
     noms_non_routes=None, par_origine=None, par_type=None,
-    comptes_vises=None, leurres_touches=None,
+    comptes_vises=None, leurres_touches=None, efficacite=None,
 ) -> dict:
     """Shape the dashboard-friendly result : top-10 lists + plain dicts."""
     top_ips_sorted = sorted(top_ips.items(), key=lambda x: -x[1])[:10]
@@ -705,6 +717,14 @@ def _finalize_stats(
         ),
         "leurres_touches": dict(
             sorted((leurres_touches or {}).items(), key=lambda x: -x[1])[:15]
+        ),
+        # Trie par volume : les categories les plus sollicitees d'abord, ce
+        # sont celles dont l'efficacite compte le plus.
+        "efficacite": dict(
+            sorted(
+                ((c, dict(a)) for c, a in (efficacite or {}).items()),
+                key=lambda x: -sum(x[1].values()),
+            )[:20]
         ),
     }
 

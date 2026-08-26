@@ -1,3 +1,31 @@
+secubox-waf (1.8.1-1~bookworm1) bookworm; urgency=medium
+
+  * Tableau de bord WAF (#1224), /waf/tableau.html. Le panneau repond a « que
+    se passe-t-il maintenant » ; cette page repond a « comment cela evolue, et
+    est-ce que ca sert ». Deux choses qu'on ne trouvait nulle part :
+    - EVOLUTION JOURNALIERE par categorie, histogramme empile sur l'historique
+      deja tenu par le moteur. Une journee qui gonfle d'un seul bloc est une
+      campagne, pas une hausse de fond — la pile le montre, un total ne le dit
+      pas. Au-dela de huit categories la traine est regroupee sous « autres » :
+      empilee, elle devient un degrade illisible.
+    - EFFICACITE par categorie : bloque contre simplement observe. Une
+      categorie qui detecte beaucoup et ne bloque jamais n'est pas une
+      protection, c'est un compteur, et rien ne le disait.
+      REFUSER N'EST PAS OBSERVER : l'anti-robots repond 403 sans bannir, et
+      c'est delibere — on ne bannit pas Googlebot. Compter ce refus parmi les
+      observations affichait « 0 % » sur 1824 requetes pourtant toutes
+      ecartees ; la mesure accusait une protection qui fonctionne. Le refus a
+      donc sa propre part.
+  * /stats expose `efficacite` : le compte par action pour chaque categorie,
+    persiste avec les autres compteurs et relu une fois a son arrivee.
+  * La couleur d'une categorie est derivee de son NOM et non de son rang : sinon
+    elle changerait d'un jour a l'autre et l'histogramme deviendrait illisible
+    d'une visite a la suivante.
+  * SVG ecrit dans la page, aucune bibliotheque : la CSP du panneau interdit les
+    scripts externes, et une dependance de plus serait une dependance de plus.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 07:58:14 +0200
+
 secubox-waf (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * Detections COMPORTEMENTALES dans le panneau (#1222). « Protection

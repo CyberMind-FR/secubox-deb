@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+
+  SecuBox #1224 — tableau de bord WAF : attaquants, détections, évolution.
+
+  CE QUE CETTE PAGE AJOUTE au panneau WAF. Le panneau répond à « que se
+  passe-t-il maintenant ». Celle-ci répond à « comment cela évolue, et est-ce
+  que ça sert ». D'où deux choses qu'on ne trouve nulle part ailleurs :
+  l'histogramme journalier par catégorie, et l'EFFICACITÉ — pour chaque type,
+  ce qui a été bloqué contre ce qui n'a été qu'observé. Une catégorie qui
+  détecte beaucoup et ne bloque jamais n'est pas une protection, c'est un
+  compteur ; rien ne le disait.
+
+  Tous les graphiques sont en SVG écrit ici : la CSP du panneau interdit les
+  scripts externes, et une bibliothèque de plus serait une dépendance de plus.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WAF — évolution et efficacité</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+  body { margin: 0; padding: 0 1rem 4rem; }
+  .grille { display: grid; gap: 1rem; max-width: 78rem; margin: 0 auto; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 1rem 1.1rem; }
+  h1 { font-size: 1.35rem; margin: 1.6rem 0 .2rem; }
+  .sous { color: var(--muted); font-size: .82rem; margin: 0 0 1.2rem; }
+  h2 { font-size: 1rem; margin: 0 0 .2rem; }
+  .h2sous { color: var(--muted); font-size: .74rem; margin: 0 0 .9rem; font-style: italic; }
+
+  .tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 1px;
+            background: var(--border); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .tuile { background: var(--bg-card); padding: .9rem 1rem; }
+  .tuile .lib { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .tuile .val { font-family: 'Courier Prime', monospace; font-size: 1.5rem; font-weight: 700;
+                color: var(--cyan); font-variant-numeric: tabular-nums; margin-top: .3rem; }
+  .tuile .note { font-size: .68rem; color: var(--muted); margin-top: .25rem; }
+
+  .legende { display: flex; flex-wrap: wrap; gap: .5rem .9rem; margin-top: .7rem; font-size: .7rem; color: var(--muted); }
+  .legende i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .78rem; font-variant-numeric: tabular-nums; }
+  th, td { padding: .45rem .6rem; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
+  tbody tr:last-child td { border-bottom: none; }
+  code { font-family: 'Courier Prime', monospace; color: var(--cyan); }
+  .enveloppe { overflow-x: auto; }
+  .muted { color: var(--muted); }
+
+  .barre { display: grid; grid-template-columns: 11rem 1fr auto; gap: .6rem; align-items: center;
+           font-size: .76rem; margin-bottom: .4rem; }
+  .barre .nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .piste { height: .8rem; border-radius: 2px; overflow: hidden; display: flex; background: rgba(255,255,255,.06); }
+  .piste span { height: 100%; }
+  .chiffre { font-family: 'Courier Prime', monospace; color: var(--muted); font-size: .72rem; }
+</style>
+
+<div class="grille">
+  <div>
+    <h1>🛡️ WAF — évolution et efficacité</h1>
+    <p class="sous">Ce que le panneau ne dit pas : comment les menaces évoluent, et si les protections bloquent vraiment.</p>
+  </div>
+
+  <div class="tuiles" id="tuiles"><div class="tuile"><span class="muted">chargement…</span></div></div>
+
+  <div class="card">
+    <h2>📈 Évolution journalière par catégorie</h2>
+    <p class="h2sous">Chaque barre est une journée ; les couleurs sont les catégories. Une journée qui gonfle d'un seul bloc est une campagne, pas une hausse de fond.</p>
+    <div class="enveloppe" id="evolution"><span class="muted">chargement…</span></div>
+    <div class="legende" id="evolutionLegende"></div>
+  </div>
+
+  <div class="card">
+    <h2>🎚️ Efficacité par catégorie</h2>
+    <p class="h2sous">Écarté contre simplement observé. Refuser sans bannir compte comme écarter : on ne bannit pas Googlebot, on lui ferme la porte. Une catégorie qui détecte beaucoup et n'agit jamais n'est pas une protection, c'est un compteur.</p>
+    <div id="efficacite"><span class="muted">chargement…</span></div>
+    <div class="legende">
+      <span><i style="background:var(--red)"></i>banni</span>
+      <span><i style="background:var(--purple)"></i>refusé sans bannir</span>
+      <span><i style="background:var(--orange)"></i>averti</span>
+      <span><i style="background:var(--muted)"></i>observé seulement</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎯 Attaquants persistants</h2>
+    <p class="h2sous">Les adresses les plus vues, avec leur origine. « local » agrège tout le trafic interne : ce n'est pas un attaquant.</p>
+    <div class="enveloppe" id="attaquants"><span class="muted">chargement…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>🧠 Ce qui protège</h2>
+    <p class="h2sous">État mesuré, jamais supposé.</p>
+    <div id="detections" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.6rem">
+      <span class="muted">chargement…</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = '/api/v1/waf';
+
+  function esc(v) {
+    return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  }
+  function nb(n) { return (Number(n) || 0).toLocaleString('fr-FR'); }
+
+  async function api(chemin) {
+    try {
+      const r = await fetch(API + chemin, { headers: { 'Accept': 'application/json' } });
+      if (r.status === 401) { location = '/login.html?redirect=' + encodeURIComponent(location.pathname); return null; }
+      return await r.json();
+    } catch (e) { return null; }
+  }
+
+  // Palette des catégories. Stable par NOM et non par rang : sinon une
+  // catégorie changerait de couleur d'un jour à l'autre, et l'histogramme
+  // deviendrait illisible d'une visite à la suivante.
+  const TEINTES = ['#00d4ff', '#6e40c9', '#e63946', '#c9a84c', '#00c853', '#ff8c42',
+                   '#4ecdc4', '#b388ff', '#ff5c8a', '#7cb342'];
+  function teinte(nom) {
+    let h = 0;
+    for (let i = 0; i < nom.length; i++) h = (h * 31 + nom.charCodeAt(i)) >>> 0;
+    return TEINTES[h % TEINTES.length];
+  }
+
+  function drapeau(code) {
+    if (!code || code === 'LAN' || code.length !== 2) return '🌐';
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+  }
+
+  // ── Histogramme empilé, en SVG ────────────────────────────────────────────
+  function evolution(jours) {
+    const cible = document.getElementById('evolution');
+    const legende = document.getElementById('evolutionLegende');
+    const dates = Object.keys(jours || {}).sort();
+    if (!dates.length) { cible.innerHTML = '<span class="muted">pas encore d\'historique</span>'; return; }
+
+    // On ne garde que les catégories qui pèsent : au-delà de huit, la pile
+    // devient un dégradé illisible. Le reste est regroupé sous « autres ».
+    const poids = {};
+    dates.forEach(d => {
+      const c = (jours[d] && jours[d].categories) || {};
+      Object.entries(c).forEach(([k, v]) => { poids[k] = (poids[k] || 0) + v; });
+    });
+    const tete = Object.entries(poids).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]);
+    const cles = tete.concat(Object.keys(poids).length > tete.length ? ['autres'] : []);
+
+    const L = 860, H = 240, gauche = 52, bas = 34, haut = 12;
+    const largeurBarre = Math.max(6, Math.min(46, (L - gauche - 10) / dates.length - 6));
+    const pas = (L - gauche - 10) / dates.length;
+    const maxi = Math.max(...dates.map(d => (jours[d] && jours[d].total) || 0), 1);
+    const echelle = (H - bas - haut) / maxi;
+
+    let svg = '<svg viewBox="0 0 ' + L + ' ' + H + '" width="100%" height="' + H
+            + '" role="img" aria-label="évolution journalière des menaces par catégorie">';
+    // Repères horizontaux : sans eux on compare des hauteurs à l'œil nu.
+    for (let i = 0; i <= 4; i++) {
+      const y = haut + (H - bas - haut) * i / 4;
+      const val = Math.round(maxi * (1 - i / 4));
+      svg += '<line x1="' + gauche + '" y1="' + y + '" x2="' + L + '" y2="' + y
+           + '" stroke="var(--border)" stroke-width="1"/>'
+           + '<text x="' + (gauche - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="9" fill="var(--muted)">'
+           + nb(val) + '</text>';
+    }
+    dates.forEach((d, i) => {
+      const jour = jours[d] || {};
+      const cats = jour.categories || {};
+      const x = gauche + i * pas + (pas - largeurBarre) / 2;
+      let y = H - bas;
+      const groupe = {};
+      Object.entries(cats).forEach(([k, v]) => {
+        const clef = tete.indexOf(k) >= 0 ? k : 'autres';
+        groupe[clef] = (groupe[clef] || 0) + v;
+      });
+      cles.forEach(k => {
+        const v = groupe[k] || 0;
+        if (!v) return;
+        const h = Math.max(1, v * echelle);
+        y -= h;
+        svg += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + largeurBarre.toFixed(1)
+             + '" height="' + h.toFixed(1) + '" fill="' + teinte(k) + '">'
+             + '<title>' + esc(d) + ' · ' + esc(k) + ' : ' + nb(v) + '</title></rect>';
+      });
+      // Une date sur deux quand elles se serrent, sinon elles se chevauchent.
+      if (dates.length <= 12 || i % 2 === 0) {
+        svg += '<text x="' + (x + largeurBarre / 2).toFixed(1) + '" y="' + (H - bas + 14)
+             + '" text-anchor="middle" font-size="9" fill="var(--muted)">' + esc(d.slice(5)) + '</text>';
+      }
+    });
+    svg += '</svg>';
+    cible.innerHTML = svg;
+    legende.innerHTML = cles.map(k =>
+      '<span><i style="background:' + teinte(k) + '"></i>' + esc(k) + '</span>').join('');
+  }
+
+  // ── Efficacité : part bloquée, part avertie, part seulement observée ──────
+  function efficacite(parCat) {
+    const cible = document.getElementById('efficacite');
+    const lignes = Object.entries(parCat || {});
+    if (!lignes.length) { cible.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
+    cible.innerHTML = lignes.map(function (kv) {
+      const cat = kv[0], a = kv[1] || {};
+      // REFUSER N'EST PAS OBSERVER. L'anti-robots répond 403 sans bannir —
+      // c'est délibéré, on ne bannit pas Googlebot. Compter ce refus parmi les
+      // simples observations affichait « 0 % » sur 1824 requêtes pourtant
+      // toutes écartées : la mesure accusait une protection qui fonctionne.
+      const banni = a.banned || 0;
+      const refuse = a.robot || 0;
+      const averti = a.warning || 0;
+      const observe = a.detect || 0;
+      const total = banni + refuse + averti + observe;
+      if (!total) return '';
+      const pc = n => (n / total * 100).toFixed(1) + '%';
+      const agi = Math.round((banni + refuse) / total * 100);
+      return '<div class="barre">'
+        + '<span class="nom" title="' + esc(cat) + '">' + esc(cat) + '</span>'
+        + '<span class="piste">'
+        + (banni ? '<span style="width:' + pc(banni) + ';background:var(--red)" title="banni : ' + nb(banni) + '"></span>' : '')
+        + (refuse ? '<span style="width:' + pc(refuse) + ';background:var(--purple)" title="refusé sans bannir : ' + nb(refuse) + '"></span>' : '')
+        + (averti ? '<span style="width:' + pc(averti) + ';background:var(--orange)" title="averti : ' + nb(averti) + '"></span>' : '')
+        + (observe ? '<span style="width:' + pc(observe) + ';background:var(--muted)" title="observé seulement : ' + nb(observe) + '"></span>' : '')
+        + '</span>'
+        + '<span class="chiffre">' + agi + ' % écarté · ' + nb(total) + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function attaquants(ips, pays) {
+    const cible = document.getElementById('attaquants');
+    const lignes = Object.entries(ips || {});
+    if (!lignes.length) { cible.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
+    cible.innerHTML = '<table><thead><tr><th>Origine</th><th>Adresse</th>'
+      + '<th style="text-align:right">Événements</th></tr></thead><tbody>'
+      + lignes.map(function (kv) {
+        const p = (pays || {})[kv[0]] || '';
+        const interne = kv[0] === 'local';
+        return '<tr><td>' + (interne ? '🏠' : drapeau(p)) + ' <span class="muted">'
+          + esc(interne ? 'interne' : (p || '??')) + '</span></td>'
+          + '<td><code>' + esc(kv[0]) + '</code></td>'
+          + '<td style="text-align:right;color:var(--cyan)">' + nb(kv[1]) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function detections(liste) {
+    const cible = document.getElementById('detections');
+    if (!liste || !liste.length) { cible.innerHTML = '<span class="muted">indisponible</span>'; return; }
+    cible.innerHTML = liste.map(function (x) {
+      const bord = x.actif ? 'var(--cyan)' : 'var(--muted)';
+      return '<div style="border:1px solid var(--border);border-left:3px solid ' + bord + ';padding:.6rem .75rem">'
+        + '<div style="font-weight:700;font-size:.84rem">' + x.emoji + ' ' + esc(x.nom)
+        + ' <span class="muted" style="font-size:.64rem;font-weight:400">' + (x.actif ? '✓ ON' : '○ inactif') + '</span></div>'
+        + '<div class="muted" style="font-size:.68rem;margin-top:.3rem">' + esc(x.detail) + '</div></div>';
+    }).join('');
+  }
+
+  function tuiles(stats, bans, detec) {
+    const surfaces = Object.keys((stats && stats.par_type) || {}).length;
+    const actives = ((detec && detec.detections) || []).filter(d => d.actif).length;
+    const items = [
+      ['Menaces vues', nb(stats && stats.total_threats), 'depuis le début du journal'],
+      ['Aujourd\'hui', nb(stats && stats.threats_today), 'bloquées ce jour'],
+      ['Bannis actifs', nb(bans && bans.total), 'dans la chaîne nft du WAF'],
+      ['Surfaces', String(surfaces), 'HTTP, SSH, SMTP, IMAP, leurres'],
+      ['Détections', actives + ' / ' + (((detec && detec.detections) || []).length),
+       'comportementales actives']
+    ];
+    document.getElementById('tuiles').innerHTML = items.map(function (t) {
+      return '<div class="tuile"><div class="lib">' + esc(t[0]) + '</div>'
+        + '<div class="val">' + esc(t[1]) + '</div>'
+        + '<div class="note">' + esc(t[2]) + '</div></div>';
+    }).join('');
+  }
+
+  async function charger() {
+    const [stats, hist, bans, detec] = await Promise.all([
+      api('/stats'), api('/history'), api('/bans'), api('/detections')
+    ]);
+    if (stats) {
+      efficacite(stats.efficacite);
+      attaquants(stats.top_ips, stats.top_ips_countries);
+    }
+    if (hist) evolution(hist.jours);
+    detections(detec && detec.detections);
+    tuiles(stats, bans, detec);
+  }
+
+  charger();
+  // Rafraîchissement paresseux : ces agrégats bougent en minutes, pas en
+  // secondes ; interroger plus souvent chargerait la box pour rien.
+  setInterval(charger, 60000);
+</script>
