@@ -306,12 +306,41 @@ html,body{overflow:auto !important}
         b.style.cssText="position:absolute;left:-9999px;top:-9999px;width:300px;height:250px";
         b.innerHTML="&nbsp;"; (document.body||document.documentElement).appendChild(b);
       }
-      // Murs courants : on les retire et on rend la lecture.
+      // Murs par classe/id.
       var murs=document.querySelectorAll(
         "[class*=adblock i],[id*=adblock i],[class*=adBlock],[id*=adBlock],"
         +"[class*=antiadblock i],[id*=antiadblock i],[class*=abd i][class*=overlay i],"
         +"[class*=blocker i][class*=modal i]");
       murs.forEach(function(m){ try{ m.remove(); }catch(e){} });
+
+      // MUR ANTI-ADBLOCK, ET RIEN D'AUTRE (#1355). ATTENTION : on n'agit QUE
+      // sur un overlay qui parle EXPLICITEMENT de bloqueur/whitelist. Avant, on
+      // cliquait GLOBALEMENT tout bouton « OK / Continuer / Lire / Fermer » de
+      // la page — sur une page normale, ca la faisait naviguer au hasard :
+      // « plus rien ne surf ». On ne touche donc qu'un mur avere.
+      var MURTXT=/bloqueur\s*de\s*pub|adblock|ad.?block\b|publicit.{0,25}(detect|desactiv)|desactiv.{0,25}bloqueur|liste\s*blanche|whitelist/i;
+      var cand=document.querySelectorAll("div,section,aside,dialog");
+      for(var mi=0; mi<cand.length; mi++){
+        var el=cand[mi];
+        if(el.dataset && el.dataset.sbxMur) continue;
+        var txt=(el.textContent||"");
+        if(txt.length>1400 || !MURTXT.test(txt)) continue;
+        var cs; try{ cs=getComputedStyle(el); }catch(e){ continue; }
+        if(cs.position!=="fixed" && cs.position!=="sticky") continue;
+        var r=el.getBoundingClientRect();
+        if(r.width < innerWidth*0.6 || r.height < innerHeight*0.4) continue;
+        if(el.dataset) el.dataset.sbxMur="1";
+        var boutons=el.querySelectorAll("button,a,[role=button]"), clique=false;
+        for(var bi=0; bi<boutons.length; bi++){
+          var bt=(boutons[bi].textContent||"").trim();
+          if(bt && bt.length<40 && /whitelist|liste\s*blanche|continuer|lire|okay|fermer|j.ai\s*compris|poursuivre/i.test(bt)){
+            try{ boutons[bi].click(); clique=true; break; }catch(e){}
+          }
+        }
+        if(!clique){ try{ el.remove(); }catch(e){} }
+      }
+      document.documentElement.style.overflow="auto";
+      if(document.body) document.body.style.overflow="auto";
     }catch(e){}
   }
   // PLACEHOLDERS « CONTENUS TIERS » (#1346). Beaucoup de sites FR remplacent un

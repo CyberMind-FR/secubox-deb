@@ -214,6 +214,9 @@
       + pic('🚫', S.popups,   'popups/popunders coupés')
       + '<span class="cam" title="part de pistage sur les ressources de la page">🛡️ '+pct+'% pisté</span>';
     z.classList.remove('hidden');
+    // On fait aussi REMONTER les stats au Hall : il les montre dans l'entete
+    // de l'overlay, la barre la plus haute (#1354).
+    try{ if(parent!==window) parent.postMessage({sbx:'surf-stats-up', stats:S}, '*'); }catch(e){}
   }
   addEventListener('message', function (ev) {
     var d = ev.data;
