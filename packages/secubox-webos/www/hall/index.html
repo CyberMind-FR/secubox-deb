@@ -622,7 +622,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .surf-ov{position:fixed;left:0;right:0;bottom:0;z-index:52;display:flex;flex-direction:column;
   background:var(--bg);top:var(--mast-h,56px)}
 .surf-ov.hidden{display:none}
-.surf-ov-tete{display:flex;align-items:center;gap:10px;padding:8px 12px;
+/* BARRE UNIQUE (#1362) : la barre du cardlet porte tout (adresse, boutons,
+   metrics, fermeture). L'entete du Hall ferait doublon — on la retire. */
+.surf-ov-tete{display:none}
+.surf-ov-tete-legacy{display:flex;align-items:center;gap:10px;padding:8px 12px;
   background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto}
 .surf-ov-t{font-size:.82rem;color:var(--dim)} .surf-ov-t b{color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem}
 .surf-ov-stats{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
@@ -1841,6 +1844,7 @@ addEventListener('message', ev=>{
   if(d.sbx==='ouvre-hote' && d.hote){ ouvreHote(d.hote, d.url); return; }
   // Le cadre dit qu'il ne peut plus reculer : on ferme.
   if(d.sbx==='surf-vide'){ fermeSurf(); return; }
+  if(d.sbx==='surf-close'){ fermeSurf(); return; }
   // Le cadre a navigue : on met a jour l'hote affiche dans l'entete.
   if(d.sbx==='surf-hote' && d.hote){ const h=document.getElementById('surf-ov-h'); if(h) h.textContent=d.hote; return; }
   if(d.sbx==='surf-stats-up' && d.stats){

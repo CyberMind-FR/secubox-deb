@@ -28,22 +28,33 @@
   body{background:var(--fond);color:var(--ink);
        font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
        display:flex;flex-direction:column}
-  .barre{display:flex;align-items:center;gap:.4rem;padding:.45rem .5rem;
+  .barre{display:flex;align-items:center;gap:.35rem;padding:.22rem .5rem;
          background:var(--carte);border-bottom:1px solid var(--ligne);flex:0 0 auto}
   .barre .ic{font-size:.95rem;flex:0 0 auto;opacity:.8}
-  .barre input{flex:1;min-width:0;padding:.42rem .6rem;border-radius:8px;
+  .barre input{flex:1;min-width:0;padding:.26rem .55rem;border-radius:7px;
          border:1px solid var(--ligne);background:var(--fond);color:var(--ink);
          font-size:.8rem;font-family:"JetBrains Mono",ui-monospace,monospace}
   .barre input:focus{outline:none;border-color:var(--cyan);
          box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 22%,transparent)}
-  .barre button{flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;
-         background:var(--cyan);color:#04222a;font-weight:700;font-size:.78rem;
-         padding:.42rem .7rem}
+  .barre button{flex:0 0 auto;border:none;border-radius:7px;cursor:pointer;
+         background:var(--cyan);color:#04222a;font-weight:700;font-size:.74rem;
+         padding:.26rem .6rem}
   .barre button.ghost{background:transparent;color:var(--muted);
-         border:1px solid var(--ligne);font-weight:600;padding:.42rem .55rem}
+         border:1px solid var(--ligne);font-weight:600;padding:.24rem .45rem}
   .barre button.ghost:hover{color:var(--ink);border-color:var(--cyan)}
-  .stats{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:.2rem .6rem;
-        background:var(--carte);border-bottom:1px solid var(--ligne);font-size:.62rem;
+  .barre .barstats{display:inline-flex;align-items:center;gap:.5rem;flex:0 0 auto;
+        font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.62rem;color:var(--muted);
+        white-space:nowrap;margin-left:.3rem}
+  .barre .barstats.hidden{display:none}
+  .barre .barstats .s{display:inline-flex;align-items:center;gap:.15rem}
+  .barre .barstats .s b{color:var(--ink)} .barre .barstats .s.z{opacity:.35}
+  .barre .barstats .cam{color:var(--cyan);font-weight:700}
+  .barre .xbtn{font-weight:700}
+  .barre .xbtn:hover{border-color:var(--coral);color:var(--coral)}
+  @media(max-width:760px){.barre .barstats{display:none}}
+  .stats{display:flex;align-items:center;gap:.7rem;flex-wrap:nowrap;overflow:hidden;
+        padding:.05rem .6rem .12rem;background:var(--carte);
+        border-bottom:1px solid var(--ligne);font-size:.6rem;
         font-family:"JetBrains Mono",ui-monospace,monospace;color:var(--muted)}
   .stats.hidden{display:none}
   .stats .s{display:inline-flex;align-items:center;gap:.2rem}
@@ -80,6 +91,7 @@
     <button id="go" type="button">Surfer</button>
     <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
     <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
+    <button id="fermer" class="ghost xbtn" type="button" title="Fermer le surf" hidden>✕</button>
   </div>
   <div class="stats hidden" id="stats" title="Ce que le relais a coupé ou masqué sur cette page"></div>
   <div class="etat" id="etat" hidden></div>
@@ -203,11 +215,28 @@
   // on ne les DOUBLE pas dans la barre du cardlet. On les remonte quand meme.
   var CHROME_HALL = false;
   try { CHROME_HALL = new URLSearchParams(location.search).get('chrome') === 'hall'; } catch (e) {}
+  // BARRE UNIQUE EN OVERLAY (#1362) : l'entete du Hall est masquee ; l'adresse,
+  // les boutons, les metrics et le ✕ tiennent sur CETTE barre. Le ✕ ferme
+  // l'overlay cote Hall.
+  if (CHROME_HALL) {
+    var xf = $('fermer'); if (xf) { xf.hidden = false;
+      xf.addEventListener('click', function () {
+        try { parent.postMessage({ sbx: 'surf-close' }, '*'); } catch (e) {}
+      }); }
+  }
+  function metricsHTML(S) {
+    var total = S.total || 0, pct = total ? Math.round((S.trackers||0) / total * 100) : 0;
+    function pic(ic, n, l){ return '<span class="s'+((n||0)?'':' z')+'" title="'+l+'">'+ic+' <b>'+(n||0)+'</b></span>'; }
+    return pic('🎯', S.trackers, 'traqueurs') + pic('📢', S.pubs, 'pubs')
+      + pic('🍪', S.cookies, 'cookies réécrits') + pic('🔔', S.notifs, 'notifications bloquées')
+      + pic('🚫', S.popups, 'popups coupées')
+      + '<span class="cam" title="part de pistage">🛡️ '+pct+'%</span>';
+  }
   function poseStats(S) {
     if (!S) return;
-    // On remonte toujours au Hall (l'entete de l'overlay).
-    try{ if(parent!==window) parent.postMessage({sbx:'surf-stats-up', stats:S}, '*'); }catch(e){}
-    if (CHROME_HALL) return;   // pas de doublon dans la barre du cardlet
+    // DOUBLE LIGNE (#1362) : la barre #stats (ligne 2) porte les metrics, en
+    // overlay comme en standalone. L'entete du Hall etant masquee, il n'y a
+    // plus de doublon. La barre d'adresse (ligne 1) garde le ✕.
     var z = document.getElementById('stats'); if (!z) return;
     var total = S.total || 0;
     var pct = total ? Math.round((S.trackers||0) / total * 100) : 0;
