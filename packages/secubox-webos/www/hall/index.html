@@ -1530,7 +1530,11 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       r.querySelector('small').textContent=e.sous||'';
       r.querySelector('.mplay').textContent=e.joue?'❚❚':'▶';
       r.querySelector('.mprog i').style.width=(e.d?((e.t||0)/e.d*100):0)+'%';
-      r.querySelector('.mtime').textContent=mmss(e.t);
+      // Une position de ZERO sur un flux qui dure n'est pas une position :
+      // c'est un lecteur qui ne nous dit rien. On montre un tiret plutot
+      // qu'un « 0:00 » qui ferait croire au debut de la piste.
+      r.querySelector('.mtime').textContent =
+        (e.d && !e.t) ? '—:—' : mmss(e.t);
     });
   }
 

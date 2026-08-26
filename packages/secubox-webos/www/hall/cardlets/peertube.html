@@ -176,6 +176,20 @@
       + '<button class="zoom" id="zoom" type="button" title="Agrandir" aria-label="Agrandir">⤢</button>';
     annonce(v, true);
     bat(v);
+    // ON S'ANNONCE AUSSI. jschannel attend que les DEUX côtés se soient
+    // présentés : répondre à son « ping » ne suffit pas si l'on n'a jamais
+    // envoyé le nôtre. On le répète quelques fois — le cadre peut ne pas avoir
+    // fini de charger au premier essai, et un message posté trop tôt tombe
+    // dans le vide sans que personne ne le dise.
+    var essais = 0;
+    var salut = setInterval(function () {
+      var f = document.getElementById('cadre-pt');
+      if (!f || ++essais > 12) { clearInterval(salut); return; }
+      try {
+        f.contentWindow.postMessage(
+          JSON.stringify({ id: essais, method: 'peertube::__ready', params: 'ping' }), '*');
+      } catch (e) {}
+    }, 700);
   }
 
   // La barre du Hall doit savoir ce qui joue. On n'a pas la position — le
@@ -198,7 +212,7 @@
         clearInterval(battement); battement = null; return;
       }
       annonce(v, true);
-    }, 4000);
+    }, 2000);
   }
 
   function annonce(v, actif) {
@@ -317,20 +331,24 @@
     }
     // Poignée de main : sans réponse, jschannel n'émet jamais ses
     // notifications. On répond sans rien demander en retour.
-    if (d && d.method === '__ready') {
-      // On répond dans la MEME forme que l'on reçoit : jschannel n'accepte pas
-      // un objet là où il attend une chaîne.
-      var pong = { id: d.id, method: '__ready', params: 'pong' };
+    // JSCHANNEL PREFIXE SES METHODES PAR LA PORTEE (#1311). Le lecteur n'envoie
+    // pas `__ready` mais `peertube::__ready` : chercher le nom nu ne pouvait
+    // rien trouver, la poignée de main n'aboutissait jamais, et aucune
+    // notification de position n'arrivait. On regarde donc la FIN du nom.
+    var nomBrut = String((d && d.method) || '');
+    if (nomBrut.slice(-7) === '__ready') {
+      // On répond dans la MEME forme et sous le MEME nom que l'on reçoit :
+      // jschannel n'accepte ni un objet là où il attend une chaîne, ni une
+      // méthode d'une autre portée.
+      var pong = { id: d.id, method: nomBrut, params: 'pong' };
       try {
         c.contentWindow.postMessage(
           (typeof ev.data === 'string') ? JSON.stringify(pong) : pong, '*');
       } catch (e) {}
       return;
     }
-    // La notification est préfixée par son scope (`peertube::…`) : on regarde la
-    // fin du nom plutôt que son égalité, pour ne pas dépendre du scope choisi.
-    var nom = String((d && d.method) || '');
-    if (nom && nom.indexOf('playbackStatusUpdate') < 0 && nom.indexOf('__') === 0) return;
+    // On ne retient que ce qui porte une position : le lecteur envoie aussi des
+    // acquittements et des évènements qui n'en ont pas.
     var pos = positionDe(d);
     if (pos !== null) {
       position = pos;

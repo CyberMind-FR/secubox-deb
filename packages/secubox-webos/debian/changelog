@@ -1,3 +1,27 @@
+secubox-webos (1.0.94-1~bookworm1) bookworm; urgency=medium
+
+  * LE LECTEUR PEERTUBE NE DISAIT PAS OU IL EN ETAIT (#1311), et la carte
+    perdait le fil des qu'on avancait dans la video. jschannel PREFIXE ses
+    methodes par la portee : le lecteur n'envoie pas `__ready` mais
+    `peertube::__ready`. Chercher le nom nu ne pouvait rien trouver — la
+    poignee de main n'aboutissait jamais, et aucune notification de position
+    n'arrivait.
+  * On regarde desormais la FIN du nom, et l'on repond sous le MEME nom : une
+    reponse d'une autre portee est ignoree aussi surement qu'une absence de
+    reponse.
+  * ON S'ANNONCE AUSSI. jschannel attend que les DEUX cotes se soient
+    presentes : repondre a son « ping » ne suffit pas si l'on n'a jamais envoye
+    le notre. On le repete quelques fois — le cadre peut ne pas avoir fini de
+    charger au premier essai, et un message poste trop tot tombe dans le vide
+    sans que personne ne le dise.
+  * Battement porte a deux secondes pendant la lecture : la position doit
+    suivre le doigt sur la barre, pas la rattraper.
+  * Une position de ZERO sur un flux qui dure n'est pas une position, c'est un
+    lecteur muet : la barre affiche un tiret plutot qu'un « 0:00 » qui ferait
+    croire au debut de la piste.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:53:36 +0200
+
 secubox-webos (1.0.93-1~bookworm1) bookworm; urgency=medium
 
   * LE JETON RELAYE ETAIT TOUJOURS REFUSE (#1306), et mon relais etait donc
