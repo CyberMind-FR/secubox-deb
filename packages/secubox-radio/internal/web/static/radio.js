@@ -178,6 +178,16 @@
   // soit — c'est ce geste qui accorde l'autorisation. Le bandeau ne s'affiche
   // que si la relance echoue A SON TOUR : afficher un avertissement qu'un
   // simple clic va effacer, c'est inquieter pour rien.
+  // AGRANDIR LE CLIP (#1281). Le plein ecran porte sur le CADRE et non sur la
+  // <video> nue : on garde ainsi la pochette et le fond, au lieu d'un
+  // rectangle noir qui semble bloque quand la piste n'a pas d'image.
+  function agrandis() {
+    var z = document.querySelector('.cadre') || ecran;
+    if (!z) return;
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    if (z.requestFullscreen) z.requestFullscreen().catch(function () {});
+  }
+
   var relanceArmee = false;
   function armeRelance() {
     if (relanceArmee) return;
@@ -204,6 +214,12 @@
     try {
       parent.postMessage({
         sbx: 'media', id: 'radio',
+        // AGRANDISSABLE, mais PAS de type « video » (#1281). La radio diffuse
+        // des clips : on veut pouvoir les voir en grand. Mais la declarer
+        // video la ferait taire toutes les autres sources — or une radio se
+        // superpose volontiers a un podcast, c'est meme l'usage. Deux notions
+        // distinctes, deux drapeaux distincts.
+        zoomable: true,
         titre: (titre && titre.textContent) || 'Radio', sous: (meta && meta.textContent) || '',
         joue: !ecran.paused, t: ecran.currentTime || 0, d: ecran.duration || 0,
         fin: !!fin
@@ -230,6 +246,13 @@
         if (e && e.catch) e.catch(function () { armeRelance(); });
       } else ecran.pause();
     } else if (d.action === 'stop') { ecran.pause(); annonceHall(true); }
+    // `pause` N'EST PAS `toggle` (#1276) : le Hall s'en sert pour faire taire
+    // une seconde instance du meme service, ou pour laisser la place a une
+    // video. Une bascule relancerait ce qui etait deja a l'arret. On ne touche
+    // PAS a `veutJouer` : l'intention de l'auditeur reste la sienne, et la
+    // lecture reprendra si on revient a cette instance.
+    else if (d.action === 'pause') { if (!ecran.paused) ecran.pause(); }
+    else if (d.action === 'zoom') { agrandis(); }
     // VOLUME ET COUPURE PILOTES PAR LA BARRE (#1267). On passe par les memes
     // fonctions que les commandes locales : deux chemins vers le meme reglage
     // finiraient par diverger, et le curseur de la carte ne dirait plus la

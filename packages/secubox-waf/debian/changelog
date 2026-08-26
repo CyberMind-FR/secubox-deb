@@ -1,3 +1,31 @@
+secubox-waf (1.10.10-1~bookworm1) bookworm; urgency=medium
+
+  * SONDE TOLERANTE (#1278) : sans `return_exceptions=True`, la PREMIERE sonde
+    en echec faisait echouer tout le rassemblement et l'inventaire revenait
+    VIDE — exactement ce qui s'est produit. En cas de doute on GARDE desormais
+    le service : cacher une identite reelle est pire que d'en montrer une
+    perimee.
+  * On ne verifie plus le certificat : la question est « ce nom repond-il ? »,
+    pas « son certificat est-il valide pour moi ? ». Une chaine interne faisait
+    echouer la verification sur des services parfaitement vivants.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:54:03 +0200
+
+secubox-waf (1.10.9-1~bookworm1) bookworm; urgency=medium
+
+  * INVENTAIRE DES TEMOINS : les noms qui ne repondent plus sont ECARTES
+    (#1277). Un domaine abandonne garde longtemps son certificat, son entree de
+    routage et son `enabled = true` — sur cette box, deux d'entre eux ont les
+    trois et pointent meme vers des conteneurs bien vivants : c'est le NOM
+    PUBLIC qui est mort. Aucun fichier ne le dit, seule une connexion le montre.
+  * Le resultat de la sonde est garde 10 minutes : la question ne change pas
+    d'une seconde a l'autre, et le menu ne doit pas ouvrir neuf connexions a
+    chaque ouverture.
+  * Une identite sur un domaine mort n'est pas une identite, c'est un
+    souvenir — et la lister invite a cliquer sur une porte muree.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:50:45 +0200
+
 secubox-waf (1.10.8-1~bookworm1) bookworm; urgency=medium
 
   * INVENTAIRE DES TEMOINS, PAR SERVICE (#1272). Un utilisateur du Hall est

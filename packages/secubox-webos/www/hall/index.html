@@ -422,11 +422,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    n'a pas toujours envie de les voir : la barre se replie sur les pastilles,
    qui disent deja ce qui joue. Rien ne s'arrete — c'est un pli, pas un arret,
    et la distinction compte : ✕ ferme le flux, ⌄ le range. */
-.mediadock.replie{display:none}
+.mrow.replie{display:none}
 .mrow .mplier{width:26px;height:26px}
 /* La pastille signale que la barre est rangee : sans indice, un clic qui la
    fait reapparaitre semble arbitraire. */
-#pastilles.barre-repliee .fpast{box-shadow:0 0 0 2px var(--violet)}
+/* La pastille d'un flux RANGE porte l'anneau : chacune dit l'état du sien, et
+   pas celui de la barre — deux flux peuvent être rangés séparément. */
+#pastilles .fpast.rangee{box-shadow:0 0 0 2px var(--violet)}
+/* PASTILLE VIDÉO (#1277). Elle ne fait pas la même chose que les autres — un
+   clic AGRANDIT au lieu de changer de page — alors elle ne leur ressemble pas
+   tout à fait : un liseré, et le curseur qui annonce l'agrandissement. */
+#pastilles .fpast.video{box-shadow:0 0 0 2px var(--rose,#c0392b);cursor:zoom-in}
 .mrow{pointer-events:auto;display:flex;align-items:center;gap:9px;
   background:var(--panel);border:1px solid var(--line);border-radius:12px;
   box-shadow:var(--lift);padding:6px 10px;max-width:1100px;margin:0 auto;width:100%}
@@ -1041,6 +1047,11 @@ function frameFor(mode){
   if(_frames[mode]) return _frames[mode];
   const f=document.createElement('iframe');
   f.title='Service embarqué'; f.setAttribute('referrerpolicy','no-referrer');
+  f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
+  // Le cadre embarqué porte l'IDENTITÉ du service : sans elle, la barre média
+  // ne pouvait ni le reconnaître ni le commander, et la carte restée en fond
+  // continuait de jouer le même flux — deux fois la même chose (#1276).
+  if(_svc) f.setAttribute('data-embarque', _svc.id);
   f.src=modeURL(mode); document.getElementById('eb-frames').appendChild(f);
   _frames[mode]=f; return f;
 }
@@ -1304,14 +1315,59 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // Une rangée par flux, empilées. Un service qui se tait plus de dix secondes
 // disparaît de la barre : une rangée figée ferait croire à un flux vivant.
 (function(){
+  // L'ETAT DU PLI SE DECLARE AVANT CE QUI S'EN SERT (#1282). Place plus bas,
+  // `replies` valait encore `undefined` quand dessine() s'executait PENDANT
+  // l'evaluation du script : `replies.has()` levait, le rendu s'arretait, et
+  // les pastilles disparaissaient avec lui. `var` hisse la declaration, pas la
+  // valeur — c'est la quatrieme fois que ce fichier le rappelle (#1247,
+  // #1256, #1268, #1280).
+  const CLEF_PLI = 'sbx.hall.dock.replies';
+  var replies = new Set();
+  try {
+    const v = JSON.parse(localStorage.getItem(CLEF_PLI) || '[]');
+    if (Array.isArray(v)) replies = new Set(v);
+  } catch(e) {}
+  function noteLePli(){
+    try { localStorage.setItem(CLEF_PLI, JSON.stringify([...replies])); } catch(e) {}
+  }
+  function plie(id, v){
+    if(v) replies.add(id); else replies.delete(id);
+    noteLePli();
+    dessine();
+  }
+  function estRange(id){ return replies.has(id); }
+
   const dock=document.getElementById('mediadock');
   if(!dock) return;
   const flux=new Map();   // id -> {maj, cadre, etat}
 
   const mmss=t=>{t=Math.floor(t||0);return Math.floor(t/60)+':'+('0'+(t%60)).slice(-2);};
-  const ICONES={radio:'📻', podcaster:'🎙️'};
+  // Une pastille sans icône propre retombe sur 🔊 — un haut-parleur pour une
+  // VIDÉO serait un contresens : ce n'est pas le son qu'on est venu voir.
+  const ICONES={radio:'📻', podcaster:'🎙️', peertube:'📹'};
 
-  function cadreDe(id){ return document.querySelector('iframe[data-micro="'+id+'"]'); }
+  // UNE SEULE INSTANCE PAR SERVICE (#1276). Le service peut exister DEUX fois
+  // dans la page : sa carte à l'accueil, et son cadre embarqué. Les deux
+  // jouent, et l'auditeur entend le même flux en double, légèrement décalé.
+  // L'instance qui COMPTE est celle qu'on regarde — l'embarquée quand elle
+  // existe. C'est elle que la barre commande, et c'est l'autre qu'on fait
+  // taire.
+  function cadreDe(id){
+    return document.querySelector('iframe[data-embarque="'+id+'"]')
+        || document.querySelector('iframe[data-micro="'+id+'"]');
+  }
+  function cadresDe(id){
+    return [...document.querySelectorAll(
+      'iframe[data-embarque="'+id+'"], iframe[data-micro="'+id+'"]')];
+  }
+  // Faire taire toutes les instances SAUF celle-là. `pause` et non `toggle` :
+  // une bascule relancerait ce qui était déjà à l'arrêt.
+  function tairAutres(id, garde){
+    cadresDe(id).forEach(c=>{
+      if(c===garde) return;
+      try{ c.contentWindow.postMessage({sbx:'cmd', action:'pause'}, new URL(c.src).origin); }catch(e){}
+    });
+  }
 
   function commande(id, action, v){
     const f=flux.get(id); const c=(f&&f.cadre)||cadreDe(id);
@@ -1328,8 +1384,10 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(zone.dataset.ids!==ids.join(',')){
       zone.dataset.ids=ids.join(',');
       zone.innerHTML=ids.map(id=>
-        '<button class="fpast" type="button" data-id="'+id+'" title="Ouvrir le lecteur">'
-        +(ICONES[id]||'🔊')
+        '<button class="fpast'+(zoomable(id)?' video':'')
+        +'" type="button" data-id="'+id+'" title="'
+        +(zoomable(id)?'Agrandir':'Ouvrir le lecteur')+'">'
+        +(ICONES[id]||((((flux.get(id)||{}).etat||{}).type==='video')?'🎬':'🔊'))
         +'<span class="fbulle"><b></b><small></small></span></button>').join('');
     }
     ids.forEach(id=>{
@@ -1359,17 +1417,22 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         +'<button data-a="muet" title="Couper le son">🔊</button>'
         +'<input class="mvol" type="range" min="0" max="1" step="0.05" value="1"'
         +' title="Volume" aria-label="Volume">'
-        +(((flux.get(id)||{}).etat||{}).type==='video'
-            ? '<button data-a="zoom" title="Agrandir la vidéo">⤢</button>' : '')
-        +'<button class="mplier" data-a="plier" title="Ranger la barre — les pastilles restent">⌄</button>'
+        +(zoomable(id) ? '<button data-a="zoom" title="Agrandir">⤢</button>' : '')
+        +'<button class="mplier" data-a="plier" title="Ranger CE flux — sa pastille reste">⌄</button>'
         +'<button data-a="stop" title="Fermer le flux">✕</button></div>').join('');
     }
-    // La réserve suit la barre : 30px de barre d'état, plus les rangées.
-    dock.classList.toggle('replie', replie);
-    const zp = document.getElementById('pastilles');
-    if(zp) zp.classList.toggle('barre-repliee', replie);
+    // Chaque rangée porte SON pli, et chaque pastille dit l'état du sien.
+    ids.forEach(id=>{
+      const r=dock.querySelector('.mrow[data-id="'+id+'"]');
+      if(r) r.classList.toggle('replie', estRange(id));
+      const p=document.querySelector('#pastilles .fpast[data-id="'+id+'"]');
+      if(p) p.classList.toggle('rangee', estRange(id));
+    });
+    // La réserve suit ce qui RESTE visible : une rangée rangée ne réserve plus
+    // rien, mais les autres si. On mesure après avoir posé les classes.
+    const visibles = ids.filter(id=>!estRange(id)).length;
     document.documentElement.style.setProperty(
-      '--dock-h', (ids.length && !replie ? dock.offsetHeight : 0) + 'px');
+      '--dock-h', visibles ? dock.offsetHeight + 'px' : '0px');
     ids.forEach(id=>{
       const r=dock.querySelector('.mrow[data-id="'+id+'"]'); if(!r) return;
       const e=flux.get(id).etat||{};
@@ -1410,8 +1473,11 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(!d||d.sbx!=='media'||!d.id) return;
     // On ne retient que ce qui vient d'un cadre qu'on a nous-mêmes posé :
     // n'importe quelle page encadrée pourrait sinon s'inviter dans la barre.
-    const c=cadreDe(d.id);
-    if(!c||c.contentWindow!==ev.source) return;
+    const c=cadresDe(d.id).find(f=>f.contentWindow===ev.source);
+    if(!c) return;
+    // Celle qui joue prend la main ; l'autre se tait. On ne l'arrête pas —
+    // elle reprendra si on revient à elle.
+    if(d.joue) tairAutres(d.id, c);
     if(d.joue===false && d.fin){ flux.delete(d.id); dessine(); return; }
     // UNE VIDEO FAIT TAIRE LE RESTE (#1275). Deux flux AUDIO peuvent cohabiter
     // — c'est même pour cela que chaque rangée a son volume. Une vidéo, non :
@@ -1420,7 +1486,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     const etaitEnLecture = ((flux.get(d.id)||{}).etat||{}).joue;
     if(d.type==='video' && d.joue && !etaitEnLecture){
       flux.forEach((f,autre)=>{
-        if(autre!==d.id && f.etat && f.etat.joue) commande(autre,'toggle');
+        if(autre!==d.id && f.etat && f.etat.joue) commande(autre,'pause');
       });
     }
     flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
@@ -1429,37 +1495,35 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 
   // Un clic sur la pastille embarque le service : on revient au lecteur sans
   // perdre le flux, puisque le cadre n'est jamais rechargé.
-  // UNE PASTILLE FAIT REVENIR LA BARRE AVANT TOUT AUTRE CHOSE (#1258). Quand
-  // la barre est rangee, le premier geste attendu est de la retrouver, pas de
-  // changer de page — embarquer le service ferait perdre ce qu'on regarde.
+  // UNE PASTILLE NE COMMANDE QUE SON FLUX (#1278). Si SA rangée est rangée, le
+  // premier geste attendu est de la retrouver — celle-là, pas toutes.
   document.getElementById('pastilles').addEventListener('click', e=>{
     const b=e.target.closest('.fpast'); if(!b) return;
-    if(replie){ plie(false); return; }
+    if(estRange(b.dataset.id)){ plie(b.dataset.id, false); return; }
     // Sur une vidéo, le geste attendu depuis la pastille est de la VOIR, pas
     // de changer de page : on agrandit.
-    const et=(flux.get(b.dataset.id)||{}).etat||{};
-    if(et.type==='video'){ commande(b.dataset.id,'zoom'); return; }
+    if(zoomable(b.dataset.id)){ commande(b.dataset.id,'zoom'); return; }
     if(typeof openService==='function') openService(b.dataset.id,'embed');
   });
 
   // `var` : plie() est appelee depuis dessine(), qui tourne pendant
   // l'evaluation du script. Une `let` resterait en zone morte — la panne deja
   // payee deux fois dans ce fichier (#1247, #1256).
-  var replie = false;
-  try { replie = localStorage.getItem('sbx.hall.dock.replie') === '1'; } catch(e) {}
-  function plie(v){
-    replie = !!v;
-    dock.classList.toggle('replie', replie);
-    const z = document.getElementById('pastilles');
-    if(z) z.classList.toggle('barre-repliee', replie);
-    try { localStorage.setItem('sbx.hall.dock.replie', replie ? '1' : '0'); } catch(e) {}
-    // La reserve basse suit : une barre rangee ne doit plus rien reserver.
-    document.documentElement.style.setProperty(
-      '--dock-h', (!replie && dock.dataset.ids) ? dock.offsetHeight + 'px' : '0px');
+  // LES RANGEES SONT INDEPENDANTES (#1278). Ranger la barre entiere quand on
+  // ne voulait cacher qu'un flux, puis la faire toute revenir au clic d'une
+  // seule pastille, c'etait traiter comme un bloc ce qui est une LISTE. On
+  // range flux par flux ; chaque pastille commande le sien.
+  //
+  // `var` : plie() est appelee depuis dessine(), qui tourne pendant
+  // l'evaluation du script. Une `let` resterait en zone morte — la panne deja
+  // payee trois fois dans ce fichier (#1247, #1256, #1268).
+  // AGRANDISSABLE ≠ VIDÉO (#1281). Une vidéo fait taire le reste ; un flux
+  // simplement agrandissable — la radio et ses clips — ne le fait pas. Les
+  // deux méritent le bouton, une seule mérite l'exclusivité.
+  function zoomable(id){
+    const e=(flux.get(id)||{}).etat||{};
+    return e.type==='video' || e.zoomable===true;
   }
-  // L'ETAT RETENU S'APPLIQUE, il ne se contente pas d'etre lu : sans cet appel
-  // la barre revenait depliee a chaque visite et le choix ne servait a rien.
-  plie(replie);
 
   // `input` et non `change` : le son doit suivre le doigt, pas attendre qu'on
   // le releve — regler un volume a l'aveugle n'est pas un reglage.
@@ -1471,7 +1535,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 
   dock.addEventListener('click', e=>{
     const b=e.target.closest('button[data-a]'); if(!b) return;
-    if(b.dataset.a==='plier'){ plie(true); return; }
+    if(b.dataset.a==='plier'){ plie(b.closest('.mrow').dataset.id, true); return; }
     if(b.dataset.a==='zoom'){ commande(b.closest('.mrow').dataset.id, 'zoom'); return; }
     if(b.dataset.a==='muet'){
       const r=b.closest('.mrow'), coupe=b.textContent==='🔊';

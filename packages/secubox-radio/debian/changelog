@@ -1,3 +1,25 @@
+secubox-radio (0.1.45-1~bookworm1) bookworm; urgency=medium
+
+  * LA RADIO S'AGRANDIT (#1281) : elle diffuse des clips, on veut pouvoir les
+    voir en grand. Elle s'annonce `zoomable` et NON `type: video` — la declarer
+    video la ferait taire toutes les autres sources, or une radio se superpose
+    volontiers a un podcast, c'est meme l'usage.
+  * Le plein ecran porte sur le CADRE et non sur la <video> nue : on garde la
+    pochette et le fond, au lieu d'un rectangle noir qui semble bloque quand la
+    piste n'a pas d'image.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:57:39 +0200
+
+secubox-radio (0.1.44-1~bookworm1) bookworm; urgency=medium
+
+  * `pause` n'est PAS `toggle` (#1276) : le Hall s'en sert pour faire taire une
+    seconde instance du meme service, ou pour laisser la place a une video. Une
+    bascule relancerait ce qui etait deja a l'arret. On ne touche pas a
+    l'intention de l'auditeur : la lecture reprendra si on revient a cette
+    instance.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:46:13 +0200
+
 secubox-radio (0.1.43-1~bookworm1) bookworm; urgency=medium
 
   * Volume et coupure pilotables depuis la barre du Hall (#1267). On repasse par

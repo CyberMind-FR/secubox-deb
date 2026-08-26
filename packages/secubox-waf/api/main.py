@@ -1429,6 +1429,47 @@ _MOTIFS_SESSION = ("session", "sess", "auth", "token", "sid", "login", "csrf",
                    "remember", "jwt", "sbx_", "oc_", "_mastodon", "connect")
 
 
+_JOIGNABLE_CACHE: dict[str, tuple[float, bool]] = {}
+_JOIGNABLE_TTL = 600.0
+
+
+async def _joignable(hote: str) -> bool:
+    """Le nom public répond-il encore ?
+
+    POURQUOI UNE SONDE ET PAS UN FICHIER. Un domaine abandonné garde longtemps
+    son certificat, son entrée de routage et son bloc `enabled = true` : sur
+    cette box, `mail.maegia.tv` et `git.maegia.tv` ont les trois, et pointent
+    même vers des conteneurs bien vivants — c'est le NOM PUBLIC qui est mort.
+    Aucun fichier ne le dit ; seule une connexion le montre.
+
+    Le résultat est gardé 10 minutes : la question ne change pas d'une seconde
+    à l'autre, et le menu ne doit pas ouvrir neuf connexions à chaque ouverture.
+    """
+    import time
+    vu = _JOIGNABLE_CACHE.get(hote)
+    if vu and (time.monotonic() - vu[0]) < _JOIGNABLE_TTL:
+        return vu[1]
+    # ON NE VERIFIE PAS LE CERTIFICAT : la question est « ce nom repond-il ? »,
+    # pas « son certificat est-il valide pour moi ? ». Une chaine interne ferait
+    # echouer la verification sur des services parfaitement vivants.
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ok = False
+    try:
+        fut = asyncio.open_connection(hote, 443, ssl=ctx, server_hostname=hote)
+        _, w = await asyncio.wait_for(fut, timeout=2.5)
+        w.close()
+        ok = True
+    except Exception:
+        # ECHEC = INJOIGNABLE, sans distinguer la cause : un nom qui ne resout
+        # pas, un port ferme ou une poignee de main refusee reviennent au meme
+        # pour la personne qui cliquerait dessus.
+        ok = False
+    _JOIGNABLE_CACHE[hote] = (time.monotonic(), ok)
+    return ok
+
+
 @app.get("/cookies")
 async def get_cookies():
     """Inventaire agrégé des témoins posés, par service.
@@ -1467,6 +1508,20 @@ async def get_cookies():
             t["samesite"] = e.get("samesite")
         if ts > s["vu"]:
             s["vu"] = ts
+
+    # On écarte les noms qui ne répondent plus : une identité sur un domaine
+    # mort n'est pas une identité, c'est un souvenir — et la lister invite à
+    # cliquer sur une porte murée.
+    noms = list(par_service)
+    # `return_exceptions=True` : sans lui, la PREMIERE sonde en echec fait
+    # echouer tout le rassemblement et l'inventaire revient vide — c'est
+    # exactement ce qui s'est produit. Et en cas de doute on GARDE le service :
+    # cacher une identite reelle est pire que d'en montrer une perimee.
+    vivants = await asyncio.gather(*[_joignable(v) for v in noms],
+                                   return_exceptions=True)
+    for nom_v, vivant in zip(noms, vivants):
+        if vivant is False:
+            par_service.pop(nom_v, None)
 
     services = []
     for s in par_service.values():

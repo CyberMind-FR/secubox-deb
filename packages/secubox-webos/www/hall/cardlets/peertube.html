@@ -102,7 +102,11 @@
 (function () {
   "use strict";
   // Relais de MEME ORIGINE poses par le vhost du Hall (voir hall.vhost.conf).
+  // L'API et les vignettes passent par le relais de MEME origine (la carte
+  // vit sous `connect-src 'self'` et `img-src 'self'`) ; le lecteur, lui,
+  // reste sur l'origine de PeerTube — voir lance().
   var API = '/pt/api/v1/videos?count=24&sort=-publishedAt&nsfw=false';
+  var PT_HOTE = 'peertube.gk2.secubox.in';
   var vids = [], i = 0, enPause = false, joue = false;
 
   var el = function (id) { return document.getElementById(id); };
@@ -138,12 +142,35 @@
   // LIRE ICI : le lecteur d'embarquement de PeerTube remplace la vignette. On
   // ne recopie pas un lecteur — celui de PeerTube sait deja lire ses formats,
   // ses sous-titres et son P2P.
+  var depart = 0;   // position à laquelle la prochaine lecture doit reprendre
+
   function lance(n) {
     var v = vids[n % vids.length];
     if (!v) return;
     i = n; joue = true;
-    var u = '/pt/videos/embed/' + encodeURIComponent(v.uuid)
-          + '?api=1&autoplay=1&title=0&warningTitle=0&peertubeLink=0';
+    // LE LECTEUR RESTE SUR SON ORIGINE, ET C'EST UNE CORRECTION (#1276).
+    // Relaye sous /pt/, il demandait ses propres ressources a la RACINE du
+    // Hall — /client/…, /plugins/… — qui n'existent pas ici : le Hall
+    // repondait sa page d'accueil, et le navigateur refusait des modules
+    // annonces en text/html. Relayer la moitie de PeerTube pour corriger cela
+    // aurait pollue l'espace de noms du Hall pour rien.
+    //
+    // Le CADRE, lui, n'a pas besoin d'etre de meme origine : seuls `fetch` et
+    // les images l'exigent, et ceux-la restent relayes. La politique de la
+    // carte nomme deja peertube dans `frame-src`, et HAProxy a reecrit son
+    // `frame-ancestors` pour nous laisser l'encadrer.
+    var u = 'https://' + PT_HOTE + '/videos/embed/' + encodeURIComponent(v.uuid)
+          + '?api=1&autoplay=1&title=0&warningTitle=0&peertubeLink=0'
+          // `start` n'est ajouté QUE si le lecteur nous a réellement donné une
+          // position : reprendre à une seconde inventée serait pire que de
+          // reprendre au début.
+          + (depart > 2 ? '&start=' + Math.floor(depart) + 's' : '');
+    depart = 0;
+    position = depart;
+    // ON NE RETIENT PAS ICI (#1280). Lancer n'est pas regarder : retenir des le
+    // clic faisait relancer la video a CHAQUE rafraichissement, meme quand on
+    // avait juste effleure le bouton avant de partir. On ne retient que ce que
+    // le lecteur nous dit LUI-MEME : voir l'ecoute plus bas.
     el('une').innerHTML = '<iframe id="cadre-pt" src="' + esc(u) + '"'
       + ' allow="autoplay; fullscreen" allowfullscreen title="' + esc(v.name) + '"></iframe>'
       + '<button class="zoom" id="zoom" type="button" title="Agrandir" aria-label="Agrandir">⤢</button>';
@@ -194,8 +221,12 @@
     // peut honorer sans l'API de fenetre du lecteur amont. On le dit plutot
     // que de faire semblant d'obeir aux autres.
     if (d.action === 'zoom') { agrandis(); return; }
-    if (d.action === 'stop') {
+    // `pause` est traite comme `stop` : sans l'API de fenetre du lecteur
+    // amont, on ne sait pas le mettre en pause — on sait le RETIRER. On le
+    // fait donc, plutot que d'ignorer l'ordre et de laisser deux sons.
+    if (d.action === 'stop' || d.action === 'pause') {
       joue = false;
+      oublie();
       el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
         + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'
         + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
@@ -206,6 +237,94 @@
 
   document.addEventListener('mouseenter', function () { enPause = true; }, true);
   document.addEventListener('mouseleave', function () { enPause = false; }, true);
+
+  // ── ÉTAT PERSISTANT (#1277) ───────────────────────────────────────────────
+  //
+  // La radio et le podcaster survivent au rafraîchissement ; la vidéo repartait
+  // de zéro — on rechargeait la page et le film avait disparu. On retient donc
+  // ce qui se regardait.
+  //
+  // CE QU'ON RETIENT, ET CE QU'ON NE PRÉTEND PAS SAVOIR. L'identité de la vidéo,
+  // oui. La POSITION, non : le lecteur amont ne la donne pas sans son API de
+  // fenêtre, et la déduire du temps écoulé serait fausse dès la première pause.
+  // On reprend donc la vidéo, pas la seconde — et on le dit plutôt que
+  // d'afficher une position inventée.
+  var CLEF = 'sbx.peertube.etat';
+  var position = 0;   // secondes, telles que le lecteur les annonce
+
+  function retiens(v) {
+    try {
+      localStorage.setItem(CLEF, JSON.stringify({
+        uuid: v.uuid, quand: Date.now(), pos: Math.floor(position) || 0
+      }));
+    } catch (e) {}
+  }
+
+  // ── ÉCOUTE DU LECTEUR AMONT (#1279) ───────────────────────────────────────
+  //
+  // Avec `api=1`, le lecteur de PeerTube parle par postMessage — protocole
+  // jschannel : une poignée de main `__ready`, puis des notifications dont
+  // `playbackStatusUpdate`, qui porte la position.
+  //
+  // ON ÉCOUTE, ON NE PILOTE PAS. Recevoir une position ne coûte rien et ne
+  // casse rien si le lecteur change de protocole : dans ce cas on ne reçoit
+  // simplement plus rien, et la reprise retombe sur l'identité seule — ce
+  // qu'elle faisait déjà. C'est pour cela qu'on lit DÉFENSIVEMENT, en
+  // acceptant plusieurs formes plutôt qu'une seule figée : mieux vaut ne rien
+  // comprendre que de croire comprendre.
+  function positionDe(d) {
+    if (!d || typeof d !== 'object') return null;
+    var p = d.params || d.data || d;
+    var v = (p && (p.position !== undefined ? p.position : p.currentTime));
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : null;
+  }
+  addEventListener('message', function (ev) {
+    var c = document.getElementById('cadre-pt');
+    if (!c || ev.source !== c.contentWindow) return;
+    var d = ev.data;
+    // Poignée de main : sans réponse, jschannel n'émet jamais ses
+    // notifications. On répond sans rien demander en retour.
+    if (d && d.method === '__ready') {
+      try { c.contentWindow.postMessage({ id: d.id, method: '__ready', params: 'pong' }, '*'); }
+      catch (e) {}
+      return;
+    }
+    var pos = positionDe(d);
+    if (pos !== null) {
+      position = pos;
+      // On écrit rarement : à chaque battement du lecteur, localStorage
+      // deviendrait un goulot pour rien. Cinq secondes suffisent à reprendre
+      // sans que la perte soit sensible.
+      if (!retiens._quand || Date.now() - retiens._quand > 5000) {
+        retiens._quand = Date.now();
+        var v = vids[i % (vids.length || 1)];
+        if (v) retiens(v);
+      }
+    }
+  });
+  function oublie() { try { localStorage.removeItem(CLEF); } catch (e) {} }
+  function reprend() {
+    var e = null;
+    try { e = JSON.parse(localStorage.getItem(CLEF) || 'null'); } catch (x) {}
+    // DEUX CONDITIONS, ET LES DEUX COMPTENT (#1280).
+    //
+    // `pos` prouve que le lecteur a REELLEMENT joué : sans lui, on n'a qu'un
+    // clic, et un clic ne justifie pas de relancer un film à chaque visite.
+    //
+    // Cinq minutes, pas six heures : un rafraîchissement pendant qu'on regarde
+    // se compte en secondes. Revenir une heure plus tard n'est pas une lecture
+    // interrompue, c'est une nouvelle visite — et elle mérite la vitrine, pas
+    // un film qui redémarre tout seul.
+    if (!e || !e.uuid || !e.pos) return false;
+    if ((Date.now() - (e.quand || 0)) > 3e5) { oublie(); return false; }
+    var n = -1, k;
+    for (k = 0; k < vids.length; k++) if (vids[k].uuid === e.uuid) { n = k; break; }
+    if (n < 0) return false;
+    depart = Number(e.pos) || 0;
+    position = depart;
+    lance(n);
+    return true;
+  }
 
   function charge() {
     fetch(API, { headers: { 'Accept': 'application/json' } })
@@ -218,6 +337,9 @@
           el('pouls').style.animation = 'none';
           return;
         }
+        // La reprise passe AVANT la vitrine : sinon la rotation démarrerait et
+        // on verrait défiler des vignettes par-dessus ce qu'on regardait.
+        if (reprend()) return;
         montre();
       })
       .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });

@@ -1,3 +1,101 @@
+secubox-webos (1.0.75-1~bookworm1) bookworm; urgency=medium
+
+  * LES PASTILLES AVAIENT DISPARU (#1282). L'etat du pli etait declare PLUS BAS
+    que ce qui s'en sert : `replies` valait encore `undefined` quand dessine()
+    s'executait pendant l'evaluation du script, `replies.has()` levait, et le
+    rendu s'arretait — emportant les pastilles avec lui.
+  * `var` hisse la DECLARATION, pas la VALEUR. C'est la quatrieme fois que ce
+    fichier le rappelle (#1247, #1256, #1268, #1280) : tout etat lu par une
+    fonction appelee au rendu doit etre pose AVANT elle, et le commentaire est
+    desormais sur place.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:59:19 +0200
+
+secubox-webos (1.0.74-1~bookworm1) bookworm; urgency=medium
+
+  * AGRANDISSABLE N'EST PAS VIDEO (#1281). Une video fait taire le reste ; un
+    flux simplement agrandissable — la radio et ses clips — ne le fait pas. Les
+    deux meritent le bouton ⤢, une seule merite l'exclusivite. Deux notions,
+    deux drapeaux : `type: 'video'` et `zoomable`.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:57:35 +0200
+
+secubox-webos (1.0.73-1~bookworm1) bookworm; urgency=medium
+
+  * LA VIDEO REDEMARRAIT A CHAQUE RAFRAICHISSEMENT (#1280), et la vitrine ne
+    revenait jamais. On retenait des le CLIC : lancer n'est pas regarder, et un
+    clic effleure avant de partir suffisait a relancer le film a chaque visite.
+  * On ne retient desormais que ce que le lecteur DIT lui-meme. Deux conditions
+    pour reprendre, et les deux comptent : une position REELLE — preuve que ca
+    a joue — et moins de cinq minutes d'interruption. Un rafraichissement
+    pendant qu'on regarde se compte en secondes ; revenir une heure plus tard
+    n'est pas une lecture interrompue mais une nouvelle visite, et elle merite
+    la vitrine.
+  * ECOUTE DU LECTEUR AMONT (#1279) : avec `api=1` il parle par postMessage,
+    protocole jschannel — poignee de main `__ready`, puis des notifications
+    portant la position. ON ECOUTE, ON NE PILOTE PAS : recevoir ne casse rien
+    si le protocole change, on ne recoit simplement plus rien et la reprise
+    retombe sur ce qu'elle faisait avant. La lecture est DEFENSIVE, acceptant
+    plusieurs formes plutot qu'une seule figee — mieux vaut ne rien comprendre
+    que de croire comprendre.
+  * `start` n'est ajoute que si une position a ete reellement recue : reprendre
+    a une seconde inventee serait pire que de reprendre au debut. Ecriture
+    limitee a une fois toutes les cinq secondes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:56:31 +0200
+
+secubox-webos (1.0.72-1~bookworm1) bookworm; urgency=medium
+
+  * LES RANGEES DE LA BARRE SONT INDEPENDANTES (#1278). Ranger la barre entiere
+    quand on ne voulait cacher qu'un flux, puis la faire toute revenir au clic
+    d'une seule pastille, c'etait traiter comme un BLOC ce qui est une LISTE.
+    On range flux par flux ; chaque pastille commande le sien, et porte
+    l'anneau quand SA rangee est rangee.
+  * La reserve basse suit ce qui RESTE visible : une rangee rangee ne reserve
+    plus rien, les autres si.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:54:00 +0200
+
+secubox-webos (1.0.71-1~bookworm1) bookworm; urgency=medium
+
+  * LA VIDEO SURVIT AU RAFRAICHISSEMENT (#1277), comme la radio et le
+    podcaster. On retient l'IDENTITE de ce qui se regardait — pas la position :
+    le lecteur amont ne la donne pas sans son API de fenetre, et la deduire du
+    temps ecoule serait fausse des la premiere pause. On reprend la video, pas
+    la seconde, et on le dit plutot que d'afficher une position inventee.
+  * Au-dela de six heures on oublie : relancer un film oublie la veille serait
+    une surprise, pas un service. La reprise passe AVANT la vitrine, sinon la
+    rotation ferait defiler des vignettes par-dessus ce qu'on regardait.
+  * PASTILLE VIDEO : icone propre (une pastille sans icone retombait sur 🔊, un
+    haut-parleur pour une video est un contresens — ce n'est pas le son qu'on
+    est venu voir), lisere distinct et curseur d'agrandissement, parce qu'elle
+    ne fait PAS la meme chose que les autres : elle agrandit au lieu de changer
+    de page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:50:42 +0200
+
+secubox-webos (1.0.70-1~bookworm1) bookworm; urgency=medium
+
+  * UNE SEULE INSTANCE PAR SERVICE (#1276). Un service peut exister DEUX fois
+    dans la page : sa carte a l'accueil, et son cadre embarque. Les deux
+    jouaient, et l'auditeur entendait le meme flux en double, legerement
+    decale. L'instance qui COMPTE est celle qu'on regarde — l'embarquee quand
+    elle existe : c'est elle que la barre commande, et c'est l'autre qu'on fait
+    taire.
+  * On met en PAUSE, pas en arret : l'autre instance reprendra si on revient a
+    elle. `pause` et non `toggle` — une bascule relancerait ce qui etait deja a
+    l'arret.
+  * Le cadre embarque porte desormais l'IDENTITE du service : sans elle, la
+    barre ne pouvait ni le reconnaitre ni le commander.
+  * LE LECTEUR PEERTUBE RESTE SUR SON ORIGINE. Relaye sous /pt/, il demandait
+    ses propres ressources a la RACINE du Hall — /client/…, /plugins/… — qui
+    n'existent pas ici : le Hall repondait sa page d'accueil et le navigateur
+    refusait des modules annonces en text/html. Relayer la moitie de PeerTube
+    aurait pollue l'espace de noms du Hall pour rien ; seuls `fetch` et les
+    images exigent la meme origine, et ceux-la restent relayes.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:46:10 +0200
+
 secubox-webos (1.0.69-1~bookworm1) bookworm; urgency=medium
 
   * LA LECTURE PEERTUBE NE DEMARRAIT PAS (#1275). `add_header` au niveau

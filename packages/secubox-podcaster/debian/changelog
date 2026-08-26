@@ -1,3 +1,10 @@
+secubox-podcaster (1.0.17-1~bookworm1) bookworm; urgency=medium
+
+  * `pause` n'est pas `toggle` (#1276) : le Hall s'en sert pour faire taire un
+    doublon ou laisser la place a une video.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:46:43 +0200
+
 secubox-podcaster (1.0.16-1~bookworm1) bookworm; urgency=medium
 
   * Volume et coupure pilotables depuis la barre du Hall (#1267), par les memes

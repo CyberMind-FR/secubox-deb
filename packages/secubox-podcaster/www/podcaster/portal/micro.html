@@ -281,6 +281,10 @@
     else if (d.action === 'next') joue(idx + 1);
     else if (d.action === 'prev') joue(idx - 1);
     else if (d.action === 'stop') { son.pause(); annonce(true); }
+    // `pause` n'est pas `toggle` (#1276) : le Hall s'en sert pour faire taire
+    // un doublon ou laisser la place a une video. Une bascule relancerait ce
+    // qui etait deja a l'arret.
+    else if (d.action === 'pause') { if (!son.paused) son.pause(); }
     // VOLUME ET COUPURE PILOTES PAR LA BARRE (#1267). Deux flux peuvent jouer
     // ensemble : sans reglage par flux, on ne peut pas baisser la radio pour
     // entendre le podcast. On repasse par les memes commandes locales, sinon
