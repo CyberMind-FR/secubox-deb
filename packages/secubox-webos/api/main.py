@@ -239,11 +239,23 @@ DUREE_JETON = 3600
 
 @router.post("/jeton")
 async def frappe_jeton(user=Depends(require_jwt)):
-    """Un jeton court, pour la personne DEJA authentifiee ici."""
+    """Un jeton court, pour la personne DEJA authentifiee ici.
+
+    ON REJOUE LA MEME SESSION, ON N'EN CREE PAS UNE AUTRE (#1306).
+    La validation exige qu'un `jti` nomme une session VIVANTE du magasin :
+    frapper un jeton avec un jti neuf produisait un jeton toujours refuse —
+    « Token invalide ou expire » — et rendait le relais inutile.
+
+    On reprend donc le jti de la session presentee. Trois consequences, toutes
+    souhaitables : le jeton relaye est la MEME session vue d'un autre domaine ;
+    se deconnecter le tue partout d'un coup ; et l'on n'ajoute aucune session a
+    revoquer, donc aucune surface de plus.
+    """
     sub = (user or {}).get("sub")
-    if not sub:
-        return {"ok": False, "detail": "identite absente"}
-    return {"ok": True, "jeton": create_token(sub, expires_in=DUREE_JETON),
+    jti = (user or {}).get("jti")
+    if not sub or not jti:
+        return {"ok": False, "detail": "session sans identite exploitable"}
+    return {"ok": True, "jeton": create_token(sub, expires_in=DUREE_JETON, jti=jti),
             "expire_dans": DUREE_JETON}
 
 

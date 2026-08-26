@@ -1,3 +1,23 @@
+secubox-webos (1.0.93-1~bookworm1) bookworm; urgency=medium
+
+  * LE JETON RELAYE ETAIT TOUJOURS REFUSE (#1306), et mon relais etait donc
+    inutile. La validation exige qu'un `jti` nomme une session VIVANTE du
+    magasin : frapper un jeton avec un jti neuf produisait « Token invalide ou
+    expire » a chaque fois.
+  * ON REJOUE LA MEME SESSION, ON N'EN CREE PAS UNE AUTRE. Le jeton reprend le
+    jti de la session presentee. Trois consequences, toutes souhaitables : le
+    jeton relaye EST la meme session vue d'un autre domaine ; se deconnecter le
+    tue partout d'un coup ; et l'on n'ajoute aucune session a revoquer, donc
+    aucune surface de plus.
+  * DEUX FAMILLES DE FLUX, ET ELLES NE S'ATTENDENT PAS PAREIL. Nextcloud fait
+    SCRUTER — on interroge jusqu'a l'approbation. Mastodon RAMENE — il redirige
+    avec un code, et il n'y a rien a scruter. Scruter quand meme affichait
+    « aucun flux en cours » : on croyait a une panne alors que tout allait bien.
+  * La page d'acces passe elle aussi par le relais quand le domaine ne porte
+    pas le temoin, et recolte le jeton du fragment.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:32:47 +0200
+
 secubox-webos (1.0.92-1~bookworm1) bookworm; urgency=medium
 
   * PASSAGE DE JETON ENTRE DEUX DOMAINES (#1305). Le temoin de session porte

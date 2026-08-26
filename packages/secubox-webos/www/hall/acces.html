@@ -100,6 +100,15 @@
 <script>
 (function () {
   "use strict";
+  // Le relais nous ramene avec `#sbx=<jeton>` : on le range et on efface le
+  // fragment, comme le fait le Hall (#1305).
+  (function () {
+    var m = (location.hash || '').match(/[#&]sbx=([^&]+)/);
+    if (!m) return;
+    try { localStorage.setItem('sbx_token', decodeURIComponent(m[1])); } catch (e) {}
+    try { history.replaceState({}, '', location.pathname + location.search); } catch (e) {}
+  })();
+
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
       return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
   var el = function (id) { return document.getElementById(id); };
@@ -141,9 +150,10 @@
             + 'SecuBox. Votre mot de passe se tape <b>sur la page de connexion '
             + 'de la box</b>, jamais ici — et jamais celui d\'un service.</p>'
             + '<button class="p" id="cnx">Connexion SecuBox…</button></div>'
-          : '<div class="c"><p class="expl">Votre session SecuBox ne vaut pas sur '
-            + 'ce domaine — un témoin ne franchit pas deux domaines distincts.</p>'
-            + '<button class="p" id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
+          : '<div class="c"><p class="expl">Ce domaine ne porte pas le témoin de '
+            + 'session — un témoin ne franchit pas deux domaines distincts. On '
+            + 'va chercher un jeton sur la box, et on revient ici.</p>'
+            + '<button class="p" id="bascule">Récupérer ma session…</button></div>';
         el('accordes').innerHTML = '';
         var b1 = el('cnx');
         if (b1) b1.addEventListener('click', function () {
@@ -156,7 +166,8 @@
         });
         var b2 = el('bascule');
         if (b2) b2.addEventListener('click', function () {
-          location.href = 'https://hall.gk2.secubox.in/acces.html';
+          location.href = 'https://hall.gk2.secubox.in/relais.html?retour='
+            + encodeURIComponent(location.origin + location.pathname);
         });
         return;
       }
@@ -218,10 +229,21 @@
         return;
       }
       z.hidden = false;
+      // DEUX FAMILLES DE FLUX, ET ELLES NE S'ATTENDENT PAS PAREIL (#1306).
+      //
+      // Nextcloud nous fait SCRUTER : on interroge jusqu'a ce que
+      // l'approbation ait eu lieu. Mastodon nous RAMENE : il redirige sur la
+      // page avec un code, et il n'y a rien a scruter — scruter quand meme
+      // affichait « aucun flux en cours », ce qui laissait croire a une panne
+      // alors que tout allait bien.
+      var ramene = !!d.retour;
       z.innerHTML = '<p class="expl">Ouvrez ce lien et approuvez <b>dans le service</b>. '
         + 'SecuBox attend, et ne verra jamais votre mot de passe.</p>'
         + '<a class="b" href="' + esc(d.login) + '" target="_blank" rel="noopener">Ouvrir la page d\'approbation ↗</a>'
-        + '<p class="msg" id="att-' + esc(svc) + '">En attente de votre approbation…</p>';
+        + '<p class="msg" id="att-' + esc(svc) + '">'
+        + (ramene ? 'Après approbation, ce service vous ramènera ici.'
+                  : 'En attente de votre approbation…') + '</p>';
+      if (ramene) return;
       // On interroge REGULIEREMENT plutot que d'attendre un signal : le
       // service n'a aucun moyen de nous prevenir, et il ne doit pas en avoir —
       // ce serait une porte ouverte vers nous.
