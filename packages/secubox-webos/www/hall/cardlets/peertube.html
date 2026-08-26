@@ -175,11 +175,32 @@
       + ' allow="autoplay; fullscreen" allowfullscreen title="' + esc(v.name) + '"></iframe>'
       + '<button class="zoom" id="zoom" type="button" title="Agrandir" aria-label="Agrandir">⤢</button>';
     annonce(v, true);
+    bat(v);
   }
 
   // La barre du Hall doit savoir ce qui joue. On n'a pas la position — le
   // lecteur de PeerTube ne la donne pas sans son API de fenetre — alors on ne
   // l'invente pas : titre et source, et rien d'autre.
+  // BATTEMENT (#1287). Le Hall retire un flux qui n'a rien dit depuis dix
+  // secondes — c'est ce qui fait disparaitre une rangee quand un service
+  // meurt. La carte n'annoncait qu'au lancement : dix secondes plus tard, la
+  // pastille s'evanouissait alors que la video jouait toujours.
+  //
+  // On ne peut pas savoir si le lecteur amont est en pause sans son API de
+  // fenetre ; on maintient donc l'annonce tant que le lecteur est POSE, et le
+  // `stop` de la carte est ce qui l'arrete. Mieux vaut une pastille presente
+  // pendant une pause qu'une pastille absente pendant la lecture.
+  var battement = null;
+  function bat(v) {
+    if (battement) clearInterval(battement);
+    battement = setInterval(function () {
+      if (!joue || !document.getElementById('cadre-pt')) {
+        clearInterval(battement); battement = null; return;
+      }
+      annonce(v, true);
+    }, 4000);
+  }
+
   function annonce(v, actif) {
     if (parent === window) return;
     try {
@@ -192,7 +213,11 @@
         type: 'video',
         titre: (v && v.name) || 'PeerTube',
         sous: (v && v.channel && v.channel.displayName) || 'PeerTube',
-        joue: !!actif, t: 0, d: (v && Number(v.duration)) || 0, fin: !actif
+        // `t` n'est plus toujours nul : quand le lecteur nous donne sa
+        // position, la barre peut la montrer. Quand il se tait, elle vaut 0 et
+        // la barre n'affiche rien — pas une position inventee.
+        joue: !!actif, t: position || 0,
+        d: (v && Number(v.duration)) || 0, fin: !actif
       }, '*');
     } catch (e) {}
   }
@@ -226,6 +251,7 @@
     // fait donc, plutot que d'ignorer l'ordre et de laisser deux sons.
     if (d.action === 'stop' || d.action === 'pause') {
       joue = false;
+      if (battement) { clearInterval(battement); battement = null; }
       oublie();
       el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
         + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'

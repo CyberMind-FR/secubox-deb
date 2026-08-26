@@ -1,3 +1,20 @@
+secubox-webos (1.0.78-1~bookworm1) bookworm; urgency=medium
+
+  * LA PASTILLE PEERTUBE S'EVANOUISSAIT (#1287). Le Hall retire un flux qui n'a
+    rien dit depuis dix secondes — c'est ce qui fait disparaitre une rangee
+    quand un service meurt. Mais la carte n'annoncait qu'au LANCEMENT : dix
+    secondes plus tard, la pastille disparaissait alors que la video jouait
+    toujours.
+  * Un battement toutes les quatre secondes tant que le lecteur est POSE. On ne
+    peut pas savoir si le lecteur amont est en pause sans son API de fenetre :
+    mieux vaut une pastille presente pendant une pause qu'une pastille absente
+    pendant la lecture. Le `stop` de la carte est ce qui l'arrete.
+  * La position connue voyage desormais dans l'annonce : quand le lecteur nous
+    la donne, la barre peut la montrer ; quand il se tait, elle vaut zero et la
+    barre n'affiche rien — pas une position inventee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:12:51 +0200
+
 secubox-webos (1.0.77-1~bookworm1) bookworm; urgency=medium
 
   * WIDGETS D'ACCES RAPIDE pour Torrent, YTSaS et le Depot (#1286). Ces
