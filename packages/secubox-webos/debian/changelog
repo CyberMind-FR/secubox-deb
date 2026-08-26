@@ -1,3 +1,26 @@
+secubox-webos (1.0.85-1~bookworm1) bookworm; urgency=medium
+
+  * SE CONNECTER DEPUIS LE HALL (#1296) — le blocage racine : sans point
+    d'entree, les cartes qui lisent vos services affichaient « connectez-vous »
+    sans aucun moyen de le faire.
+  * LE HALL NE DEMANDE PAS DE MOT DE PASSE. Il OUVRE la vraie page de
+    connexion, dans une fenetre a part dont la barre d'adresse est visible.
+    Meme regle que pour les cartes : on n'apprend a personne a taper son mot de
+    passe ailleurs que chez lui.
+  * IL NE DEVINE PAS SON ETAT, IL LE SONDE. Le Hall n'a pas de session propre,
+    il herite de celle de la box : une route protegee qui repond 200 est la
+    seule preuve qui vaille.
+  * Et le cookie porte `.gk2.secubox.in` : sur hall.gk2.net il n'arrivera
+    JAMAIS. Proposer « se connecter » la-bas enverrait la personne se connecter
+    pour rien — on l'amene d'abord sur le bon domaine, et le menu le dit.
+  * La fenetre est `noopener` : elle ne peut pas nous prevenir, et c'est voulu.
+    On resonde au retour du FOCUS — le geste de revenir sur le Hall EST le
+    signal.
+  * La deconnexion appartient a la box, pas au Hall : on l'ouvre la ou elle
+    est, plutot que d'effacer un cookie qu'on ne possede pas.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:57:42 +0200
+
 secubox-webos (1.0.84-1~bookworm1) bookworm; urgency=medium
 
   * LA PAGE D'ACCES REFUSAIT DE S'ENCADRER (#1294). Elle vit a la racine du

@@ -655,6 +655,14 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       <div class="who" id="who" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"
            title="Profil et réglages"><span class="av">🧙</span><span><b id="who-nom">Gandalf</b><i>● Identité locale</i></span>
         <div class="who-menu hidden" id="who-menu" role="menu">
+          <!-- SE CONNECTER, SANS DEMANDER LE MOT DE PASSE (#1296). Le Hall
+               n'a pas de formulaire : il OUVRE la vraie page de connexion,
+               dans une fenêtre à part dont la barre d'adresse est visible.
+               C'est la même règle que pour les cartes — on n'apprend à
+               personne à taper son mot de passe ailleurs que chez lui. -->
+          <button type="button" role="menuitem" id="who-session">Se connecter…</button>
+          <p class="who-note" id="who-etat">session non vérifiée</p>
+          <div class="who-sep"></div>
           <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
           <p class="who-note">Ordre des cartes et thème, pour ce profil.</p>
           <!-- OÙ SUIS-JE IDENTIFIÉ ? (#1272) On est connecté à une dizaine de
@@ -1609,6 +1617,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(e.target.closest('#who-menu')) return;   // un clic DANS le menu ne le referme pas
     const v=menu.classList.contains('hidden');
     ouvre(v);
+    if(v) sondeSession();
     // On interroge le registre A L'OUVERTURE et pas au chargement : lire 3 Mio
     // de journal pour un menu que personne n'ouvrira peut-être est du travail
     // fait pour rien. Le résultat est ensuite gardé pour la session.
@@ -1690,6 +1699,63 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     _identVues = liste;
     rendIdentites(_identVues);
   }
+  // ── SESSION (#1296) ──────────────────────────────────────────────────────
+  //
+  // Le Hall ne sait pas s'il est connecté : il n'a pas de session propre, il
+  // hérite de celle de la box. On la SONDE plutôt que de la deviner — une
+  // route protégée qui répond 200 est la seule preuve qui vaille.
+  //
+  // Et le cookie de session porte `.gk2.secubox.in` : sur hall.gk2.net il
+  // n'arrivera JAMAIS. Proposer « se connecter » là-bas enverrait la personne
+  // se connecter pour rien ; on l'amène d'abord sur le bon domaine.
+  const SBX_DOM = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+  var _moi = null;
+  async function sondeSession(){
+    try{
+      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
+      const r = await fetch('/api/v1/webos/acces', {headers: j
+        ? {'Accept':'application/json','Authorization':'Bearer '+j}
+        : {'Accept':'application/json'}});
+      _moi = r.ok ? ((await r.json()).qui || '') : null;
+    }catch(e){ _moi = null; }
+    const b = document.getElementById('who-session');
+    const e = document.getElementById('who-etat');
+    if(!b || !e) return;
+    if(!SBX_DOM){
+      b.textContent = 'Ouvrir sur gk2.secubox.in';
+      e.textContent = 'Votre session ne vaut pas sur ce domaine.';
+      return;
+    }
+    if(_moi){
+      b.textContent = 'Se déconnecter';
+      e.textContent = 'Connecté — ' + _moi;
+      const n=document.getElementById('who-nom'); if(n) n.textContent=_moi;
+    } else {
+      b.textContent = 'Se connecter…';
+      e.textContent = 'Non connecté : les cartes qui lisent vos services restent vides.';
+    }
+  }
+
+  document.getElementById('who-session').addEventListener('click', ()=>{
+    if(!SBX_DOM){ top.location.href='https://hall.gk2.secubox.in/'; return; }
+    if(_moi){
+      // La déconnexion appartient à la box, pas au Hall : on l'ouvre là où
+      // elle est, plutôt que d'effacer un cookie qu'on ne possède pas.
+      window.open('https://admin.gk2.secubox.in/login.html?deconnexion=1',
+                  'sbx-session', 'width=520,height=560,noopener');
+    } else {
+      window.open('https://admin.gk2.secubox.in/login.html',
+                  'sbx-session', 'width=520,height=560,noopener');
+    }
+    // La fenêtre est `noopener` : elle ne peut pas nous prévenir, et c'est
+    // voulu. On resonde au retour du focus — le geste de revenir sur le Hall
+    // EST le signal.
+    ouvre(false);
+    let n=0;
+    const t=setInterval(()=>{ sondeSession(); if(++n>20) clearInterval(t); }, 3000);
+    addEventListener('focus', ()=>sondeSession(), {once:true});
+  });
+
   document.getElementById('who-acces').addEventListener('click', ()=>{
     // Cadre du Hall, même origine : la page d'accès n'est pas un service, on
     // la pose donc directement plutôt que de passer par openService().
