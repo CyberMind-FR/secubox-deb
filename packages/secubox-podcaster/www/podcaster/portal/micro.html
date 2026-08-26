@@ -281,6 +281,19 @@
     else if (d.action === 'next') joue(idx + 1);
     else if (d.action === 'prev') joue(idx - 1);
     else if (d.action === 'stop') { son.pause(); annonce(true); }
+    // VOLUME ET COUPURE PILOTES PAR LA BARRE (#1267). Deux flux peuvent jouer
+    // ensemble : sans reglage par flux, on ne peut pas baisser la radio pour
+    // entendre le podcast. On repasse par les memes commandes locales, sinon
+    // le curseur de la carte cesse de dire la verite sur ce qu'on entend.
+    else if (d.action === 'vol' && typeof d.v === 'number') {
+      son.volume = Math.min(1, Math.max(0, d.v));
+      if (son.volume > 0) son.muted = false;
+      const c = el('vol'); if (c) c.value = String(son.volume);
+      el('muet').textContent = son.muted ? '🔇' : '🔊';
+    } else if (d.action === 'muet') {
+      son.muted = !!d.v;
+      el('muet').textContent = son.muted ? '🔇' : '🔊';
+    }
   });
 
   // ── ÉTAT PERSISTANT (#1242) ───────────────────────────────────────────────

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -58,6 +60,10 @@ type page struct {
 	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
 	PlayerFeed                          *PodFeed
 	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
+	// MicroJSON : les fils de la carte /micro, deja serialises. template.JS
+	// et non string : dans un <script>, html/template echapperait les
+	// guillemets et le JSON deviendrait illisible pour JSON.parse.
+	MicroJSON template.JS
 	// « Déposer une source » (#1056 stage 2) : l'adresse déposée et son type
 	// déduit, pour pré-remplir le composeur avec un aperçu.
 	SourceURL string
@@ -211,6 +217,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/invite/", s.invitation)
 	s.mux.HandleFunc("/media", s.media)
 	s.mux.HandleFunc("/media/archive/", s.mediaArchiver)
+	s.mux.HandleFunc("/micro", s.micro)
 	s.mux.HandleFunc("/player", s.player)
 	s.mux.HandleFunc("/article/", s.article)
 	s.mux.HandleFunc("/biblio", s.simple("biblio"))
@@ -1037,6 +1044,46 @@ func (s *Server) mediaArchiver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/t/"+itoa64(id), http.StatusSeeOther)
+}
+
+// micro (/micro) est la CARTE que le BBS sert au Hall (#1265).
+//
+// LE SERVICE SE RESUME LUI-MEME. Le Hall montrait la page complete reduite a la
+// taille d'une carte : lisible de loin, illisible de pres. Une carte RESUME,
+// elle ne retrecit pas.
+//
+// Huit fils, PUBLICS uniquement : la carte s'affiche a qui charge l'accueil,
+// sans qu'on sache encore qui c'est. Y laisser passer un fil prive serait une
+// fuite, et le cadre tiers ne transmet de toute facon pas la session.
+func (s *Server) micro(w http.ResponseWriter, r *http.Request) {
+	p, _ := s.base(r, "micro")
+	fils, _ := s.st.Recent(8, true)
+	type vue struct {
+		Titre    string `json:"titre"`
+		URL      string `json:"url"`
+		Auteur   string `json:"auteur"`
+		Posts    int    `json:"posts"`
+		MAJ      int64  `json:"maj"`
+		Vignette string `json:"vignette,omitempty"`
+	}
+	out := make([]vue, 0, len(fils))
+	for _, f := range fils {
+		v := vue{Titre: f.Title, URL: "/f/" + f.Slug, Auteur: f.Author,
+			Posts: f.Posts, MAJ: f.LastPostAt}
+		// Une vignette seulement si le media EST une image : l'URL d'un audio
+		// dans un <img> afficherait l'icone de fichier casse.
+		if f.MediaURL != "" && f.MediaKind == "image" {
+			v.Vignette = f.MediaURL
+		}
+		out = append(out, v)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		b = []byte("[]")
+	}
+	p.MicroJSON = template.JS(b)
+	p.Titre = "BBS"
+	s.rendDef(w, r, "micro", "micro", p)
 }
 
 // player (/player) est le LECTEUR DÉTACHÉ, destiné à une fenêtre séparée : il

@@ -161,6 +161,20 @@
     var t = new URLSearchParams(location.search).get('theme');
     if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
   })();
+
+  // RESTER DANS LE HALL (#1266). Un lien de cardlet en target="_top" REMPLACE
+  // le Hall par le service : on perd la mosaique, la barre media et tout ce
+  // qui joue. Encadre, on demande donc au Hall d'embarquer la page ; hors
+  // cadre, le lien fonctionne normalement — la carte reste une page valide,
+  // et c'est ce repli qui autorise a garder target="_top" dans le HTML.
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: 'metanews', url: a.href }, '*'); } catch (e) {}
+  }, true);
+
   addEventListener('message', function (ev) {
     var d = ev.data;
     if (!d || d.sbx !== 'theme') return;

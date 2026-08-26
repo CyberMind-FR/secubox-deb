@@ -1,3 +1,9 @@
+secubox-waf (1.10.7-1~bookworm1) bookworm; urgency=medium
+
+  * Un clic dans la carte n'emmene plus hors du Hall (#1266).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:57:10 +0200
+
 secubox-waf (1.10.6-1~bookworm1) bookworm; urgency=medium
 
   * CARTE MICRO — clair/sombre (#1249) : la carte s'en remettait a

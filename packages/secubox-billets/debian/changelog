@@ -1,3 +1,13 @@
+secubox-billets (0.8.15-1~bookworm1) bookworm; urgency=medium
+
+  * Un clic dans la carte n'emmene plus hors du Hall (#1266) : target="_top"
+    REMPLACAIT le Hall par le service — mosaique perdue, barre media coupee,
+    lecture interrompue. Encadree, la carte demande au Hall d'embarquer la
+    page ; hors cadre le lien fonctionne normalement, et c'est ce repli qui
+    autorise a garder target="_top" dans le HTML.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:56:31 +0200
+
 secubox-billets (0.8.14-1~bookworm1) bookworm; urgency=medium
 
   * CARTE MICRO SERVIE PAR LE SERVICE (#1261). Le Hall montrait la page

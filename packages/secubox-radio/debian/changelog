@@ -1,3 +1,12 @@
+secubox-radio (0.1.43-1~bookworm1) bookworm; urgency=medium
+
+  * Volume et coupure pilotables depuis la barre du Hall (#1267). On repasse par
+    les memes reglages que les commandes locales : deux chemins vers le meme
+    etat finiraient par diverger, et le curseur de la carte cesserait de dire la
+    verite sur ce qu'on entend. Le choix reste retenu d'une visite a l'autre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:02:10 +0200
+
 secubox-radio (0.1.42-1~bookworm1) bookworm; urgency=medium
 
   * ROTATION ANTENNE / PLAYLIST EN MICRO (#1263). Sous 520 px la carte n'a la

@@ -1,3 +1,16 @@
+secubox-bbs (0.30.27-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO SERVIE PAR LE SERVICE (#1265) : huit fils PUBLICS uniquement —
+    la carte s'affiche a qui charge l'accueil sans qu'on sache encore qui c'est,
+    et le cadre tiers ne transmet de toute facon pas la session. Elle TOURNE :
+    un fil fige ne dit rien d'un forum, ce qui compte c'est que ca vit.
+  * Les fils sont poses par le SERVEUR — le BBS n'a pas d'API JSON publique, et
+    en inventer une pour une carte serait une surface de plus a tenir.
+  * Vignette seulement si le media est une IMAGE : l'URL d'un audio dans un
+    <img> afficherait l'icone de fichier casse.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:55:54 +0200
+
 secubox-bbs (0.30.26-1~bookworm1) bookworm; urgency=medium
 
   * DOUBLON RADIO EN APERCU (#1260). Encadre, le BBS retirait `.rail.rr` pour

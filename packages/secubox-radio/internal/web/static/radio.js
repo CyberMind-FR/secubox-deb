@@ -230,6 +230,21 @@
         if (e && e.catch) e.catch(function () { armeRelance(); });
       } else ecran.pause();
     } else if (d.action === 'stop') { ecran.pause(); annonceHall(true); }
+    // VOLUME ET COUPURE PILOTES PAR LA BARRE (#1267). On passe par les memes
+    // fonctions que les commandes locales : deux chemins vers le meme reglage
+    // finiraient par diverger, et le curseur de la carte ne dirait plus la
+    // verite sur ce qu'on entend.
+    else if (d.action === 'vol' && typeof d.v === 'number') {
+      ecran.volume = Math.min(1, Math.max(0, d.v));
+      if (ecran.volume > 0) ecran.muted = false;
+      try { localStorage.setItem('sbx_radio_vol', String(ecran.volume)); } catch (e) {}
+      if (typeof iconeVol === 'function') iconeVol();
+      if (curseurVol) curseurVol.value = String(ecran.volume);
+    } else if (d.action === 'muet') {
+      ecran.muted = !!d.v;
+      try { localStorage.setItem('sbx_radio_muet', ecran.muted ? '1' : '0'); } catch (e) {}
+      if (typeof iconeVol === 'function') iconeVol();
+    }
     // prev / next : un direct ne se parcourt pas. On ne fait pas semblant.
   });
 

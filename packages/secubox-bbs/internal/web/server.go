@@ -341,6 +341,14 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	} else {
 		return nil, fmt.Errorf("gabarit mediatheque : %w", err)
 	}
+	// Carte /micro (#1265), gabarit autonome : la carte n'a ni entête de site
+	// ni navigation — elle EST la cardlet.
+	if t, err := template.New("micro.html").Funcs(fn).
+		ParseFS(assets, "templates/micro.html"); err == nil {
+		pages["micro"] = t
+	} else {
+		return nil, fmt.Errorf("gabarit micro : %w", err)
+	}
 	// Lecteur détaché (#1056), gabarit autonome pour la fenêtre pop-out.
 	if t, err := template.New("player.html").Funcs(fn).
 		ParseFS(assets, "templates/player.html"); err == nil {

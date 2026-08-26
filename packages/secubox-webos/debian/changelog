@@ -1,3 +1,31 @@
+secubox-webos (1.0.63-1~bookworm1) bookworm; urgency=medium
+
+  * VOLUME ET COUPURE PAR FLUX DANS LA BARRE (#1267). Deux flux peuvent jouer
+    ensemble : un volume global ne permettrait pas de baisser la radio pour
+    entendre le podcast. Chaque rangee porte donc le sien.
+  * Le curseur ecoute `input` et non `change` : le son doit suivre le doigt, pas
+    attendre qu'on le releve — regler un volume a l'aveugle n'est pas un
+    reglage.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:02:07 +0200
+
+secubox-webos (1.0.62-1~bookworm1) bookworm; urgency=medium
+
+  * BBS et SocialRelay servent desormais LEUR carte : sept services au total.
+  * ORDRE PAR DEFAUT — LES PLUS ABOUTIES D'ABORD (#1266). Trois degres, et
+    l'ordre les respecte : un service qui SERT sa carte a plus a montrer qu'un
+    apercu de sa page, qui en a lui-meme plus qu'un portrait generique. A la
+    reinitialisation c'est ce classement qu'on retrouve, et non l'ordre
+    d'ecriture du fichier, qui n'est l'avis de personne. Tri STABLE : a degre
+    egal l'ordre d'origine tient, on ne melange pas des cartes equivalentes.
+  * Le Hall accueille les demandes d'ouverture venues des cartes, et seulement
+    d'un cadre qu'il a lui-meme pose — sinon n'importe quelle page encadree
+    choisirait ce que le Hall affiche. Il embarque le service PUIS pointe le
+    cadre sur la page demandee : le lien cliquait un billet precis, pas une
+    racine.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:57:17 +0200
+
 secubox-webos (1.0.61-1~bookworm1) bookworm; urgency=medium
 
   * YTSaS et Torrent manquaient a la selection principale, alors que les deux

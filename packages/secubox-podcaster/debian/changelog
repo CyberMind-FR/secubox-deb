@@ -1,3 +1,11 @@
+secubox-podcaster (1.0.16-1~bookworm1) bookworm; urgency=medium
+
+  * Volume et coupure pilotables depuis la barre du Hall (#1267), par les memes
+    commandes que les boutons locaux — sinon le curseur de la carte cesserait de
+    dire la verite sur ce qu'on entend.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:02:45 +0200
+
 secubox-podcaster (1.0.15-1~bookworm1) bookworm; urgency=medium
 
   * A SUIVRE dans la carte (#1252) : elle disait ce qui joue et rien de ce qui

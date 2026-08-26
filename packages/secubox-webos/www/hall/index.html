@@ -442,7 +442,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mrow .mprog i{display:block;height:100%;width:0;background:var(--violet)}
 .mrow .mtime{font-family:"JetBrains Mono";font-size:.62rem;color:var(--dim);
   font-variant-numeric:tabular-nums;flex:0 0 auto}
-@media (max-width:700px){.mrow .mprog,.mrow .mtime{display:none}}
+/* VOLUME PAR FLUX (#1267). Deux flux peuvent jouer ensemble : un volume
+   global ne permettrait pas de baisser la radio pour entendre le podcast.
+   Chaque rangee porte donc le sien. */
+.mrow .mvol{flex:0 0 62px;height:4px;accent-color:var(--violet);cursor:pointer}
+@media (max-width:700px){.mrow .mprog,.mrow .mtime,.mrow .mvol{display:none}}
 
 /* PASTILLES (#1247). Rondes, et animées quand ça joue : un point fixe ne se
    distingue pas d'une icône décorative. Elles disparaissent quand rien ne joue —
@@ -732,7 +736,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // n'est pas (encore) dans le registre.
 const FEATURED = [
   {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", micro:"/micro", h:238},
-  {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in"},
+  {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro"},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
@@ -742,7 +746,7 @@ const FEATURED = [
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in"},
-  {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in"},
+  {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in"},
   {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in"},
@@ -764,6 +768,19 @@ const FEATURED = [
 const EMBEDDABLE = new Set(["metanews","kbin","socialrelay","bbs","radio","billets","depot",
                             "peertube","nextcloud","photoprism","mastodon","mail",
                             "ytsas","torrent"]);
+// ORDRE PAR DEFAUT — LES PLUS ABOUTIES D'ABORD (#1266).
+// Trois degres, et l'ordre les respecte : un service qui SERT sa carte a plus
+// a montrer qu'un apercu de sa page, qui en a lui-meme plus qu'un portrait
+// generique. A la reinitialisation, c'est ce classement qu'on retrouve — pas
+// l'ordre d'ecriture du fichier, qui n'est l'avis de personne.
+function degreCarte(f){
+  if(f.micro) return 0;
+  if(typeof EMBEDDABLE!=='undefined' && EMBEDDABLE.has(f.id)) return 1;
+  return 2;
+}
+// Tri STABLE : a degre egal, l'ordre d'origine est conserve. Array.sort l'est
+// depuis ES2019 — on ne melange donc pas gratuitement des cartes equivalentes.
+const FEATURED_ORDONNE = FEATURED.slice().sort((a,b)=>degreCarte(a)-degreCarte(b));
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [
   {id:"wall",name:"Muraille",icon:"🛡️"},{id:"mind",name:"Esprit",icon:"🧠"},
@@ -869,7 +886,9 @@ function render(data,src){
   rail.innerHTML=rh;
   // featured grid (principal)
   const fg=document.getElementById('featgrid'); let fh='';
-  FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
+  // L'ordre PAR DEFAUT met les cartes les plus abouties en tête ; l'ordre
+  // choisi par l'opérateur est réappliqué juste après par rangeCardlets().
+  FEATURED_ORDONNE.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
   fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.length+' services';
   // Les cadres viennent d'être posés : leur largeur est enfin mesurable.
   echelleApercus();
@@ -1249,10 +1268,10 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 
   function cadreDe(id){ return document.querySelector('iframe[data-micro="'+id+'"]'); }
 
-  function commande(id, action){
+  function commande(id, action, v){
     const f=flux.get(id); const c=(f&&f.cadre)||cadreDe(id);
     if(!c) return;
-    try{ c.contentWindow.postMessage({sbx:'cmd', action}, new URL(c.src).origin); }catch(e){}
+    try{ c.contentWindow.postMessage({sbx:'cmd', action, v}, new URL(c.src).origin); }catch(e){}
   }
 
   // Les pastilles disent la MÊME vérité que la barre, depuis la même source :
@@ -1292,6 +1311,9 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         +'<button data-a="next" title="Suivant">⏭</button>'
         +'<div class="minfo"><b></b><small></small></div>'
         +'<span class="mprog"><i></i></span><span class="mtime">0:00</span>'
+        +'<button data-a="muet" title="Couper le son">🔊</button>'
+        +'<input class="mvol" type="range" min="0" max="1" step="0.05" value="1"'
+        +' title="Volume" aria-label="Volume">'
         +'<button class="mplier" data-a="plier" title="Ranger la barre — les pastilles restent">⌄</button>'
         +'<button data-a="stop" title="Fermer le flux">✕</button></div>').join('');
     }
@@ -1311,6 +1333,30 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       r.querySelector('.mtime').textContent=mmss(e.t);
     });
   }
+
+  // UNE CARTE PEUT DEMANDER AU HALL D'EMBARQUER UNE PAGE (#1266). Sans cela
+  // ses liens partaient en target="_top" et REMPLAÇAIENT le Hall : mosaïque
+  // perdue, barre média coupée, lecture interrompue. On n'accepte la demande
+  // que d'un cadre qu'on a nous-mêmes posé — sinon n'importe quelle page
+  // encadrée choisirait ce que le Hall affiche.
+  addEventListener('message', ev=>{
+    const d=ev.data;
+    if(!d||d.sbx!=='ouvre'||!d.id) return;
+    const c=document.querySelector('iframe[data-micro="'+d.id+'"], iframe[data-apercu="'+d.id+'"]');
+    if(!c||c.contentWindow!==ev.source) return;
+    if(typeof openService==='function') openService(d.id,'embed');
+    // On embarque le SERVICE, puis on pointe le cadre sur la page demandée :
+    // openService ne connaît que la racine, et le lien cliqué désignait un
+    // billet, un fil ou un sujet précis.
+    if(d.url){
+      try{
+        const u=new URL(d.url);
+        if(u.origin===new URL(c.src).origin){
+          setTimeout(()=>{ const f=document.querySelector('#eb-frames iframe'); if(f) f.src=u.href; }, 0);
+        }
+      }catch(e){}
+    }
+  });
 
   addEventListener('message', ev=>{
     const d=ev.data;
@@ -1354,9 +1400,23 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // la barre revenait depliee a chaque visite et le choix ne servait a rien.
   plie(replie);
 
+  // `input` et non `change` : le son doit suivre le doigt, pas attendre qu'on
+  // le releve — regler un volume a l'aveugle n'est pas un reglage.
+  dock.addEventListener('input', e=>{
+    const c=e.target.closest('.mvol'); if(!c) return;
+    const id=c.closest('.mrow').dataset.id;
+    commande(id, 'vol', Number(c.value));
+  });
+
   dock.addEventListener('click', e=>{
     const b=e.target.closest('button[data-a]'); if(!b) return;
     if(b.dataset.a==='plier'){ plie(true); return; }
+    if(b.dataset.a==='muet'){
+      const r=b.closest('.mrow'), coupe=b.textContent==='🔊';
+      b.textContent = coupe ? '🔇' : '🔊';
+      commande(r.dataset.id, 'muet', coupe);
+      return;
+    }
     const id=b.closest('.mrow').dataset.id;
     if(b.dataset.a==='stop'){ commande(id,'stop'); flux.delete(id); dessine(); return; }
     commande(id, b.dataset.a);

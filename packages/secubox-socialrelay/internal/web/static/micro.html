@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1264 — vue MICRO de SocialRelay : la carte que le service sert
+  lui-même. Même raison que MetaNews : une passerelle qui agrège plusieurs
+  réseaux n'est pas visible dans un post figé, elle l'est dans le défilement.
+  On tourne, et chaque tour dit AUSSI de quel réseau vient ce qu'on lit.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SocialRelay — vue micro</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#1f7a58; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#4fc38f; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#4fc38f; }
+
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+
+  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .7rem; gap:.4rem; }
+  .tete { display:flex; align-items:baseline; gap:.4rem; }
+  .tete .ic { font-size:1rem; }
+  .tete b { font-size:.88rem; }
+  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
+             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .une { display:flex; gap:.5rem; text-decoration:none; color:inherit; }
+  .une .vign { width:56px; height:56px; border-radius:9px; object-fit:cover; flex:0 0 auto;
+               background:var(--border); transition:opacity .3s ease; }
+  .une .vign.cache { display:none; }
+  .une .txt { min-width:0; flex:1; }
+  .une .qui { display:flex; align-items:baseline; gap:.3rem; font-size:.62rem; color:var(--muted); }
+  .une .res { color:var(--accent); font-weight:650; }
+  .une .cps { font-size:.76rem; line-height:1.3; margin-top:.1rem;
+              display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .une:hover .cps { color:var(--accent); }
+
+  .top { display:flex; flex-direction:column; gap:.1rem; }
+  .top .tt { font-size:.55rem; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  .top a { display:flex; align-items:baseline; gap:.34rem; font-size:.69rem; line-height:1.3;
+           color:var(--texte); text-decoration:none; }
+  .top a:hover .nm { text-decoration:underline; color:var(--accent); }
+  .top .rs { flex:0 0 auto; font-size:.72rem; }
+  .top .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  .top .dt { flex:0 0 auto; font-size:.58rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); text-decoration:none; }
+  .pied .grow { flex:1; }
+  .pied:hover { color:var(--accent); }
+  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
+           animation:bat 2.4s ease-in-out infinite; }
+  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce) { .pouls { animation:none; opacity:.7 } }
+  .vide { font-size:.72rem; color:var(--muted); }
+</style>
+
+<div class="mw">
+  <div class="tete"><span class="ic">🔄</span><b>SocialRelay</b><span class="n" id="n">…</span></div>
+
+  <a class="une" id="une" href="/" target="_top">
+    <img class="vign cache" id="une-img" alt="">
+    <span class="txt">
+      <span class="qui"><span class="res" id="une-res"></span><span id="une-a"></span>
+        <span id="une-d"></span></span>
+      <span class="cps" id="une-c">lecture du relais…</span>
+    </span>
+  </a>
+
+  <div class="top" id="top"><div class="tt">↻ en rotation</div></div>
+
+  <a class="pied" href="/" target="_top"><span class="pouls" id="pouls"></span>
+    <span>passerelle sociale</span><span class="grow"></span><span id="rang"></span></a>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var API = '/api/v1/socialrelay/feed?limit=20';
+  var posts = [], i = 0, enPause = false;
+
+  var ICONE = { mastodon:'🐘', facebook:'📘', bluesky:'🦋', x:'✖️', instagram:'📸', rss:'📰' };
+  var esc = function (t) {
+    return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c];
+    });
+  };
+  var el = function (id) { return document.getElementById(id); };
+
+  function depuis(sec) {
+    var s = Math.max(0, Date.now() / 1000 - Number(sec || 0));
+    if (s < 3600) return Math.round(s / 60) + ' min';
+    if (s < 86400) return Math.round(s / 3600) + ' h';
+    return Math.round(s / 86400) + ' j';
+  }
+  // Une image seulement : la vidéo n'a pas de vignette exploitable ici, et
+  // poser son URL dans un <img> afficherait l'icône de fichier cassé.
+  function image(p) {
+    var m = (p.medias || []).filter(function (x) { return x && x.kind === 'image' && x.url; });
+    return m.length ? m[0].url : '';
+  }
+  function texte(p) {
+    return String(p.text || '').replace(/\s+/g, ' ').trim() || '(sans texte)';
+  }
+
+  function montre() {
+    if (!posts.length) return;
+    var p = posts[i % posts.length];
+    var img = el('une-img'), src = image(p);
+    if (src) { img.src = src; img.classList.remove('cache'); }
+    else { img.removeAttribute('src'); img.classList.add('cache'); }
+    el('une').href = p.url || '/';
+    el('une-res').textContent = (ICONE[p.network] || '🌐') + ' ' + (p.network || '');
+    el('une-a').textContent = '· ' + (p.author || '');
+    el('une-d').textContent = '· ' + depuis(p.published_at);
+    el('une-c').textContent = texte(p);
+
+    var suite = [], k;
+    for (k = 1; k <= 3 && k < posts.length; k++) suite.push(posts[(i + k) % posts.length]);
+    el('top').innerHTML = '<div class="tt">↻ en rotation</div>' + suite.map(function (q) {
+      return '<a href="' + esc(q.url || '/') + '" target="_top" title="' + esc(texte(q)) + '">'
+        + '<span class="rs">' + (ICONE[q.network] || '🌐') + '</span>'
+        + '<span class="nm">' + esc(texte(q)) + '</span>'
+        + '<span class="dt">' + esc(depuis(q.published_at)) + '</span></a>';
+    }).join('');
+    el('rang').textContent = ((i % posts.length) + 1) + '/' + posts.length;
+  }
+
+  document.addEventListener('mouseenter', function () { enPause = true; }, true);
+  document.addEventListener('mouseleave', function () { enPause = false; }, true);
+
+  function charge() {
+    fetch(API, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        posts = (d && d.posts) || [];
+        el('n').textContent = posts.length ? posts.length + ' billets' : '';
+        if (!posts.length) {
+          el('une-c').textContent = 'Aucun billet relayé';
+          el('pouls').style.animation = 'none';
+          return;
+        }
+        montre();
+      })
+      .catch(function () { el('une-c').textContent = 'SocialRelay injoignable'; });
+  }
+
+  charge();
+  setInterval(function () { if (!enPause && posts.length) { i++; montre(); } }, 7000);
+  setInterval(charge, 300000);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+
+  // RESTER DANS LE HALL (#1266). Un lien de cardlet en target="_top" REMPLACE
+  // le Hall par le service : on perd la mosaique, la barre media et tout ce
+  // qui joue. Encadre, on demande donc au Hall d'embarquer la page ; hors
+  // cadre, le lien fonctionne normalement — la carte reste une page valide,
+  // et c'est ce repli qui autorise a garder target="_top" dans le HTML.
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: 'socialrelay', url: a.href }, '*'); } catch (e) {}
+  }, true);
+
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>

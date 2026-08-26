@@ -1,3 +1,22 @@
+secubox-socialrelay (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * Un clic dans la carte n'emmene plus hors du Hall (#1266).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:57:10 +0200
+
+secubox-socialrelay (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO SERVIE PAR LE SERVICE (#1264). Une passerelle qui agrege
+    plusieurs reseaux n'est pas visible dans un post FIGE : elle l'est dans le
+    defilement. La carte tourne, et chaque tour dit AUSSI de quel reseau vient
+    ce qu'on lit — c'est la seule information que la carte peut donner et que
+    le post lui-meme ne porte pas.
+  * Le dernier billet avec sa vignette, puis les trois suivants ; le survol
+    suspend. Une IMAGE seulement : la video n'a pas de vignette exploitable
+    ici, et poser son URL dans un <img> afficherait l'icone de fichier casse.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:50:48 +0200
+
 secubox-socialrelay (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * MASQUE ACL REPOSE AVEC L'ENTREE (#1255). Une dizaine de paquets font

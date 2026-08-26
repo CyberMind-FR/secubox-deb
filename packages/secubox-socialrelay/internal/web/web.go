@@ -63,6 +63,7 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc("POST "+p+"/sources", s.jwt(s.sourceAdd))
 	s.mux.HandleFunc("PATCH "+p+"/sources/{id}", s.jwt(s.sourcePatch))
 	s.mux.HandleFunc("DELETE "+p+"/sources/{id}", s.jwt(s.sourceDelete))
+	s.mux.HandleFunc("GET /micro", s.micro)
 	s.mux.HandleFunc("GET /", s.ui)
 	s.mux.Handle("GET /static/", http.FileServer(http.FS(assets)))
 }
@@ -221,6 +222,22 @@ func (s *Serveur) sourceDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ecrire(w, 200, map[string]any{"ok": true})
+}
+
+// micro sert la carte que SocialRelay affiche dans le Hall (#1264).
+//
+// Une passerelle qui agrege plusieurs reseaux n'est pas visible dans un post
+// fige : elle l'est dans le DEFILEMENT. La carte tourne, et chaque tour dit
+// aussi de quel reseau vient ce qu'on lit.
+func (s *Serveur) micro(w http.ResponseWriter, r *http.Request) {
+	b, err := assets.ReadFile("static/micro.html")
+	if err != nil {
+		http.Error(w, "micro", 500)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(b)
 }
 
 func (s *Serveur) ui(w http.ResponseWriter, r *http.Request) {
