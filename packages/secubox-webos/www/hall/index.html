@@ -758,8 +758,10 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           <button type="button" role="menuitem" id="who-session">Connexion SecuBox…</button>
           <p class="who-note" id="who-etat">session non vérifiée</p>
           <div class="who-sep"></div>
+          <button type="button" role="menuitem" id="who-defaut">⭐ Ordre actuel = défaut</button>
+          <p class="who-note">Fixe la bande de favoris d'aujourd'hui comme repli de la réinitialisation.</p>
           <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
-          <p class="who-note">Ordre des cartes et thème, pour ce profil.</p>
+          <p class="who-note">Ordre des cartes et thème, pour ce profil. Les favoris reviennent au défaut fixé.</p>
           <!-- OÙ SUIS-JE IDENTIFIÉ ? (#1272) On est connecté à une dizaine de
                services à la fois sans aucun endroit où le voir. Le registre
                RGPD du pare-feu le sait déjà — il servait à l'audit, il sert
@@ -2046,9 +2048,29 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       const p='sbx.hall.'+profilCourant()+'.';
       Object.keys(localStorage).filter(k=>k.indexOf(p)===0).forEach(k=>localStorage.removeItem(k));
     }catch(e){}
+    // Les favoris VIVANTS partent aussi — mais PAS le defaut fixe. favoris()
+    // retombera dessus au rechargement : le reset revient a l'ordre choisi,
+    // pas a une bande vide.
+    try{ localStorage.removeItem('sbx.hall.favoris'); }catch(e){}
     root.removeAttribute('data-theme');
     ouvre(false);
     location.reload();
+  });
+
+  // « ORDRE ACTUEL = DEFAUT » (#1336). On fige la bande de favoris courante
+  // comme repli de la reinitialisation. C'est la reponse a « mon ordre en
+  // defaut » : l'operateur le pose depuis SA disposition, une fois, et chaque
+  // reset y revient — sans rien coder en dur pour une box en particulier.
+  const bd = document.getElementById('who-defaut');
+  if(bd) bd.addEventListener('click', ()=>{
+    try{
+      const cle='sbx.hall.favoris.defaut';
+      const actuel = localStorage.getItem('sbx.hall.favoris') || '[]';
+      localStorage.setItem(cle, actuel);
+      const n = (JSON.parse(actuel)||[]).length;
+      bd.textContent = n ? ('✓ '+n+' favori'+(n>1?'s':'')+' en défaut') : '✓ défaut vidé';
+      setTimeout(()=>{ bd.textContent='⭐ Ordre actuel = défaut'; }, 2200);
+    }catch(e){}
   });
 })();
 
@@ -2184,12 +2206,31 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // choisis : un favori unique serait un classement a une place. Le reste de
   // la mosaique garde l'ordre glisse-depose, intact, en dessous.
   const CLEF_FAVORIS = 'sbx.hall.favoris';
+  const CLEF_FAVORIS_DEFAUT = 'sbx.hall.favoris.defaut';
+
+  // Le defaut FIXE par l'operateur (« ordre actuel = defaut »). Il survit a la
+  // reinitialisation — c'est tout son interet : le reset y revient au lieu de
+  // vider la bande. C'est aussi la reponse a « mon ordre en defaut » sans avoir
+  // a l'ecrire dans le code : l'operateur le pose lui-meme, depuis sa propre
+  // disposition, et ca vaut pour cette box.
+  function favorisDefaut(){
+    try{
+      const v = JSON.parse(localStorage.getItem(CLEF_FAVORIS_DEFAUT) || 'null');
+      return Array.isArray(v) ? v : null;
+    }catch(e){ return null; }
+  }
 
   function favoris(){
     try{
-      const v = JSON.parse(localStorage.getItem(CLEF_FAVORIS) || '[]');
-      return Array.isArray(v) ? v : [];
-    }catch(e){ return []; }
+      const brut = localStorage.getItem(CLEF_FAVORIS);
+      if(brut !== null){
+        const v = JSON.parse(brut);
+        return Array.isArray(v) ? v : [];
+      }
+    }catch(e){}
+    // Rien de stocke : on retombe sur le defaut fixe, s'il y en a un.
+    const d = favorisDefaut();
+    return d || [];
   }
 
   function retiensFavoris(l){

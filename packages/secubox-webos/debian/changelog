@@ -1,3 +1,16 @@
+secubox-webos (1.0.108-1~bookworm1) bookworm; urgency=medium
+
+  * « ORDRE ACTUEL = DEFAUT » POUR LES FAVORIS (#1336). Nouveau bouton du menu
+    profil : il fige la bande de favoris courante comme repli de la
+    reinitialisation. C'est la reponse a « mettre mon ordre en defaut » sans
+    coder quoi que ce soit en dur pour une box : l'operateur le pose depuis SA
+    disposition, une fois, et chaque reset y revient.
+  * LE RESET REVIENT DESORMAIS AU DEFAUT FIXE plutot qu'a une bande vide : il
+    efface les favoris VIVANTS mais garde le defaut, et favoris() retombe
+    dessus au rechargement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:49:19 +0200
+
 secubox-webos (1.0.107-1~bookworm1) bookworm; urgency=medium
 
   * LA MEGABARRE ACCUEILLE LES SOURCES POUSSEES PAR UN SERVICE (#1194e). Un
