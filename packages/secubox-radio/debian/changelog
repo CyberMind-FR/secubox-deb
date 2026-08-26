@@ -1,3 +1,10 @@
+secubox-radio (0.1.35-1~bookworm1) bookworm; urgency=medium
+
+  * Ecoute du message de theme (#1243) : recharger le cadre pour changer une
+    couleur couperait le direct.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:35:43 +0200
+
 secubox-radio (0.1.34-1~bookworm1) bookworm; urgency=medium
 
   * Theme herite de l'hote en mode encadre (#1233). La feuille de style savait

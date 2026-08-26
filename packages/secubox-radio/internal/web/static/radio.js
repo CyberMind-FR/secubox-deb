@@ -32,6 +32,16 @@
         document.documentElement.setAttribute('data-theme', t);
       }
     } catch (e) { /* sans URLSearchParams, on garde le thème du système */ }
+
+    // Le Hall dit ensuite le thème par MESSAGE (#1243) : recharger le cadre
+    // pour changer une couleur couperait le direct. On applique sans recharger.
+    addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.sbx !== 'theme') return;
+      if (d.theme === 'dark' || d.theme === 'light') {
+        document.documentElement.setAttribute('data-theme', d.theme);
+      }
+    });
     if (document.body) pose();
     else document.addEventListener('DOMContentLoaded', pose);
   })();

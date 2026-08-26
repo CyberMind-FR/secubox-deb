@@ -609,14 +609,14 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // Cloud=nc, Mail=webmail, Outils=kbin. Chaque carte s'affiche même si le module
 // n'est pas (encore) dans le registre.
 const FEATURED = [
-  {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", micro:"/micro"},
+  {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", micro:"/micro", h:186},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in"},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro"},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in"},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in"},
-  {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html"},
+  {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:168},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in"},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in"},
@@ -1014,19 +1014,29 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // passe à l'ouverture, et de nouveau à chaque bascule — sans quoi le cadre
 // garderait le thème du chargement.
 (function(){
-  // Le THÈME est la seule chose que le Hall transmet aux vues embarquées
-  // (#1233) : elles décideraient sinon seules de leur clair/sombre et
-  // resteraient sombres sur un Hall clair. À l'ouverture ET à chaque bascule —
-  // sans le second, le cadre garderait le thème du chargement.
+  // LE THÈME SE DIT, IL NE SE RECHARGE PAS (#1243).
+  //
+  // La première version réécrivait le `src` du cadre pour y changer `?theme=`.
+  // Réécrire un src RECHARGE l'iframe — donc coupe le son, remet le lecteur au
+  // début, et perd tout ce qu'il avait en cours. Basculer clair/sombre suffisait
+  // à réinitialiser le podcaster : le remède était pire que le mal.
+  //
+  // On envoie donc un message. Le cadre applique la couleur sans rien recharger,
+  // et la lecture continue. L'origine est nommée, jamais '*' : un message de
+  // thème n'a pas à être lisible par n'importe quel document.
   const theme=()=>root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-  function applique(){
+  function dis(){
     document.querySelectorAll('iframe[data-micro]').forEach(f=>{
-      const u=f.src.replace(/([?&]theme=)[a-z]+/, '$1'+theme());
-      if(u!==f.src) f.src=u;
+      try{
+        const o=new URL(f.src).origin;
+        f.contentWindow.postMessage({sbx:'theme', theme:theme()}, o);
+      }catch(e){ /* cadre pas encore prêt : il lira ?theme= à son chargement */ }
     });
   }
-  new MutationObserver(applique).observe(root,{attributes:true,attributeFilter:['data-theme']});
+  new MutationObserver(dis).observe(root,{attributes:true,attributeFilter:['data-theme']});
+  // Un cadre qui vient de charger n'a pas entendu les messages précédents.
+  addEventListener('load', dis, true);
 })();
 
 // Le PARE-FEU sert désormais sa propre carte (#1237) : plus rien à nourrir

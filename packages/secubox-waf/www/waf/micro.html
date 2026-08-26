@@ -79,6 +79,17 @@
 </div>
 
 <script>
+  // Le Hall dit le thème par MESSAGE plutôt que de recharger le cadre (#1243) :
+  // recharger couperait le son et remettrait le lecteur au début. On applique
+  // sans rien recharger. Deux valeurs acceptées, comme pour le paramètre.
+  addEventListener("message", ev => {
+    const d = ev.data;
+    if (!d || d.sbx !== "theme") return;
+    if (d.theme === "dark" || d.theme === "light") {
+      document.documentElement.setAttribute("data-theme", d.theme);
+    }
+  });
+
   const API = '/api/v1/waf';
   const nb = n => (Number(n) || 0).toLocaleString('fr-FR');
 
