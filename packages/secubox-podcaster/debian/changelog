@@ -1,3 +1,33 @@
+secubox-podcaster (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * LE BOUTON DE LECTURE ETAIT INVISIBLE (#1241) : son fond etait var(--cyan),
+    non defini dans ce contexte, donc transparent — et le ▶ blanc devenait blanc
+    sur blanc. Une couleur litterale en secours desormais : jamais une variable
+    seule pour ce qui doit absolument se voir.
+  * Theme herite de l'hote. Encadree, la carte decidait seule de son
+    clair/sombre et restait BLANCHE sur un Hall sombre. Deux valeurs acceptees,
+    posees avant tout rendu — apres, la carte clignoterait du mauvais theme.
+  * Le pied colle en bas : le contenu flottait au milieu d'un grand vide et la
+    carte paraissait cassee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:30:23 +0200
+
+secubox-podcaster (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * Commandes completes dans la vue micro (#1238) : rafraichir, muet, volume et
+    detacher rejoignent lecture/pause et precedent/suivant — le MEME jeu que la
+    radio, plus les deux que le podcast exige. Une radio est un flux qu'on ne
+    parcourt pas ; une bibliotheque, si. Le reste est identique pour que le
+    geste soit le meme d'une carte a l'autre.
+  * L'icone du muet dit l'etat REEL, pas l'action : un bouton montrant
+    « couper » alors que le son est deja coupe induit en erreur au premier coup
+    d'oeil.
+  * Detacher transmet la POSITION. Un podcast est positionnel : le reprendre au
+    debut serait une perte. La radio n'en a pas besoin, elle rejoint le direct.
+    La fenetre detachee reprend l'episode ou on l'avait laisse.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:26:21 +0200
+
 secubox-podcaster (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * Vue MICRO du Podcaster (#1238) : la carte que le service sert LUI-MEME au

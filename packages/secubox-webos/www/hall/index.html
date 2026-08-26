@@ -261,7 +261,24 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .sec .rule{flex:1;height:1px;background:var(--line)} .sec .n{font-family:"JetBrains Mono";font-size:.7rem;color:var(--dim)}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px}
-.grid.feat{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+/* MOSAÏQUE (#1239) — les cartes n'ont PAS la même hauteur, et n'ont aucune
+   raison de l'avoir : une carte descriptive tient en trois lignes, un lecteur
+   demande 252 px. En grille, chaque rangée s'aligne sur la plus haute et laisse
+   des vides sous les autres — le regard lit le blanc au lieu du contenu.
+   `columns` les emboîte comme un puzzle : chacune prend la place qu'elle
+   demande, la suivante se cale dessous.
+   `break-inside:avoid` est indispensable — sans lui une carte se coupe en deux
+   au bas d'une colonne, et le lecteur d'un service se retrouve tranché. */
+/* La largeur minimale décide du nombre RÉEL de colonnes : à 340 px, un écran
+   de 1300 px n'en tient que trois. On la baisse pour que la quatrième existe
+   vraiment, et on laisse `columns` retomber à moins sur écran étroit. */
+.grid.feat{display:block;columns:262px 4;column-gap:16px}
+/* On garde le flex d'origine de .fcard : `inline-flex` glisserait des espaces
+   parasites entre les cartes, et l'écart deviendrait irrégulier. Seuls la
+   marge — `gap` ne s'applique pas en colonnes — et l'insécabilité changent. */
+.grid.feat > .fcard{break-inside:avoid;-webkit-column-break-inside:avoid;
+  margin:0 0 15px}
+@media (max-width:760px){.grid.feat{columns:1}}
 
 /* ── featured card (principal) ───────────────────────────── */
 .fcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
@@ -355,19 +372,19 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    entière : le cardlet radio est une iframe, un glisser posé sur toute la carte
    volerait les clics destinés au lecteur — on ne pourrait plus mettre en pause.
    Discrète au repos, franche au survol. */
-.cardlet{position:relative}
+.fcard{position:relative}
 .cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
   user-select:none}
-.cardlet:hover .cl-grip,.cl-grip:focus-visible{opacity:.85}
+.fcard:hover .cl-grip,.cl-grip:focus-visible{opacity:.85}
 .cl-grip:active{cursor:grabbing}
-.cardlet.cl-drag{opacity:.45}
-.cardlet.cl-cible{outline:2px dashed var(--violet);outline-offset:3px}
+.fcard.cl-drag{opacity:.45}
+.fcard.cl-cible{outline:2px dashed var(--violet);outline-offset:3px}
 /* PENDANT LE GLISSER, les iframes cessent de capter le pointeur : sans cela
    elles avalent les événements de survol et la carte survolée ne se signale
    jamais — on croit que le glisser ne marche pas. */
-.side.cl-encours iframe{pointer-events:none}
+.cl-encours iframe{pointer-events:none}
 @media (prefers-reduced-motion:reduce){.cl-grip{transition:none}}
 /* RADIO de référence (#1232) — le lecteur REMPLIT la cardlet, comme au BBS.
    `position:relative` sert uniquement d'ancrage ; on ne touche ni au padding ni
@@ -382,8 +399,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   -webkit-box-orient:vertical;overflow:hidden}
 .cardlet .msg button{padding:0 15px;border-radius:9px;border:none;background:var(--cyan);color:#fff;font-weight:600;font-size:.8rem}
 
-.accueil{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
-@media (max-width:1100px){.accueil{grid-template-columns:1fr}}
+/* Plus de colonne latérale (#1239) : la mosaïque occupe toute la largeur, et
+   gagne une colonne de cartes au passage. */
+.accueil{display:block}
+
 .side .info{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:15px 17px;margin-bottom:16px}
 .side .info h3{font-family:"Fraunces";margin:0 0 9px;font-size:1.05rem;display:flex;align-items:center;gap:7px}
 .side .info li{list-style:none;display:flex;align-items:center;gap:8px;padding:3px 0;font-size:.84rem;color:var(--dim)}
@@ -535,27 +554,11 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           <div class="sec"><h2 class="serif">Services principaux</h2><span class="rule"></span><span class="n" id="n-feat">—</span></div>
           <div class="grid feat" id="featgrid"></div>
         </div>
-        <aside class="side">
-          <!-- Le PARE-FEU n'est plus ici : sa carte de « Services principaux » EST
-               sa vue /micro (#1237). Deux endroits pour la même carte, ce sont
-               deux endroits à corriger et un seul qu'on pense à corriger. -->
-              </div></div>
-            <button class="cl-lien" id="wopen" type="button">📊 Tableau de bord ▦</button>
-          </div>
-
-          <!-- Le PODCASTER n'est plus ici : sa carte de « Services principaux » EST
-               sa vue /micro (#1238), commandes média comprises — ce qui manquait
-               à la carte composée par le Hall : on voyait, on ne pouvait pas
-               écouter. -->
-              </div></div>
-            <button class="cl-lien" id="popen" type="button">📚 Bibliothèque ▦</button>
-          </div>
-
-          <!-- La RADIO n'est plus ici : sa carte de « Services principaux » EST
-               désormais le lecteur (#1236). L'y laisser aussi ferait deux
-               iframes, donc deux flux pour la même officine — précisément ce
-               qu'on s'interdit. -->
-</aside>
+        <!-- La colonne latérale a disparu (#1239). Chaque service sert
+             désormais sa propre carte dans la mosaïque ; il ne restait ici que
+             des fragments de cardlets démontés et une liste de promesses. La
+             grille prend toute la largeur : c'est de la place rendue au
+             contenu, pas un vide de plus. -->
       </div>
     </section>
 
@@ -665,12 +668,14 @@ function featCardHTML(f,s){
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'">'
+      + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'
       + ' src="https://'+esc(h)+esc(f.micro)+'?theme='+th+'"'
       + ' title="'+esc(f.label)+'" allow="autoplay" loading="lazy"></iframe>'
       + '</article>';
   }
-  return '<article class="fcard clic" data-embed="'+esc(f.id)+'"><div class="hd">'
+  return '<article class="fcard clic" data-embed="'+esc(f.id)+'">'
+    +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span><div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
     +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
     +'<span class="state"><i class="led '+st+'"></i>'+STATE_FR[st]+'</span></div>'
@@ -704,6 +709,7 @@ function render(data,src){
   const fg=document.getElementById('featgrid'); let fh='';
   FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
   fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.length+' services';
+  if(window.rangeCardlets) rangeCardlets();   // #1234 : l'ordre choisi par l'opérateur
   vivifieCartes();   // #1231 : les cartes qui ont un cardlet prennent ses données
   // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
@@ -957,10 +963,29 @@ const root=document.documentElement;
   if(window.ResizeObserver) new ResizeObserver(pose).observe(mast);
   addEventListener('resize', pose);
 })();
-document.getElementById('theme').addEventListener('click',()=>{
-  const c=root.getAttribute('data-theme');
-  root.setAttribute('data-theme', c==='dark'?'light':(c==='light'?'dark':(matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark')));
-});
+// THÈME MÉMORISÉ (#1240). Il ne l'était pas : chaque visite repartait du
+// réglage système, et le choix fait la veille était perdu. On le retient, et on
+// le repose AVANT tout rendu — le reposer après ferait clignoter la page du
+// mauvais thème au bon, ce qu'on remarque et qui fait négligé.
+(function(){
+  const CLEF='sbx.hall.theme';
+  try{
+    const m=localStorage.getItem(CLEF);
+    if(m==='dark'||m==='light') root.setAttribute('data-theme', m);
+  }catch(e){}
+  const bouton=document.getElementById('theme');
+  if(!bouton) return;
+  bouton.addEventListener('click',()=>{
+    const c=root.getAttribute('data-theme');
+    // Sans choix explicite, on bascule par rapport à ce que le système montre :
+    // sinon le premier clic peut ne rien changer visuellement.
+    const suivant = c==='dark' ? 'light'
+                  : c==='light' ? 'dark'
+                  : (matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark');
+    root.setAttribute('data-theme', suivant);
+    try{ localStorage.setItem(CLEF, suivant); }catch(e){}
+  });
+})();
 // recherche → bascule sur Système et filtre les cartes
 const q=document.getElementById('q');
 if(q) q.addEventListener('input',e=>{
@@ -1020,36 +1045,43 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 //   - l'ordre est PERSISTÉ — un déplacement perdu au rafraîchissement rend le
 //     geste décevant, et on cesse de s'en servir.
 (function(){
-  const cote=document.querySelector('.side');
+  const cote=document.getElementById('featgrid');
   if(!cote) return;
   const CLEF='sbx.hall.cardlets';
   // Les classes TRANSITOIRES du glisser sont exclues : sans cela « cl-drag »
   // pourrait passer pour l'identité de la carte et l'ordre retenu serait faux
   // — une erreur qui ne se verrait qu'au rechargement suivant.
   const TRANSITOIRES=new Set(['drag','cible','grip','lien']);
-  const cle=c=>{
+  // L'identité d'une carte est son service, porté par data-embed : les classes
+  // ne la donnent plus depuis que les cartes sont celles de la mosaïque.
+  const cle=c=>c.getAttribute('data-embed')||(()=>{
     for(const n of c.classList){
       if(n.indexOf('cl-')===0){
         const k=n.slice(3);
         if(!TRANSITOIRES.has(k)) return k;
       }
     }
-    return c.classList.contains('radiowidget')?'radio':null;
-  };
+    return null;
+  })();
 
-  // Ordre retenu, appliqué au chargement. Une carte absente de l'ordre garde sa
-  // place d'origine : on ne perd jamais une carte nouvellement ajoutée.
-  try{
-    const ordre=JSON.parse(localStorage.getItem(CLEF)||'[]');
-    ordre.forEach(k=>{
-      const c=[...cote.querySelectorAll('.cardlet')].find(x=>cle(x)===k);
-      if(c) cote.appendChild(c);
-    });
-  }catch(e){}
+  // L'ordre retenu s'applique APRÈS le rendu de la grille, pas au chargement du
+  // script : à cet instant la grille est encore vide — le registre ne l'a pas
+  // remplie — et l'ordre se serait appliqué à rien. C'est le rendu qui appelle.
+  // Une carte absente de l'ordre garde sa place : on ne perd jamais une carte
+  // nouvellement ajoutée.
+  window.rangeCardlets=function(){
+    try{
+      const ordre=JSON.parse(localStorage.getItem(CLEF)||'[]');
+      ordre.forEach(k=>{
+        const c=[...cote.querySelectorAll('.fcard')].find(x=>cle(x)===k);
+        if(c) cote.appendChild(c);
+      });
+    }catch(e){}
+  };
 
   function retiens(){
     try{
-      const ordre=[...cote.querySelectorAll('.cardlet')].map(cle).filter(Boolean);
+      const ordre=[...cote.querySelectorAll('.fcard')].map(cle).filter(Boolean);
       localStorage.setItem(CLEF, JSON.stringify(ordre));
     }catch(e){}
   }
@@ -1057,7 +1089,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   let porte=null;
   cote.addEventListener('dragstart', e=>{
     const g=e.target.closest('.cl-grip'); if(!g) return;
-    porte=g.closest('.cardlet'); if(!porte) return;
+    porte=g.closest('.fcard'); if(!porte) return;
     porte.classList.add('cl-drag');
     cote.classList.add('cl-encours');
     e.dataTransfer.effectAllowed='move';
@@ -1067,7 +1099,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   cote.addEventListener('dragover', e=>{
     if(!porte) return;
     e.preventDefault();
-    const survolee=e.target.closest('.cardlet');
+    const survolee=e.target.closest('.fcard');
     cote.querySelectorAll('.cl-cible').forEach(x=>x.classList.remove('cl-cible'));
     if(!survolee || survolee===porte) return;
     survolee.classList.add('cl-cible');
@@ -1153,10 +1185,6 @@ const CARDLET_ICONES = {
 // Le cardlet EMBARQUE le tableau de bord au lieu d'ouvrir un onglet : c'est un
 // service du Hall comme un autre, et openService est le point d'entrée unique
 // (#1187). Un onglet séparé perdrait le fil de navigation et le thème.
-(function(){
-  const b=document.getElementById('wopen');
-  if(b) b.addEventListener('click', ()=>openService('waf','embed'));
-})();
 </script>
 </body>
 </html>

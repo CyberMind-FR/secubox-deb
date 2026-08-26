@@ -1,3 +1,53 @@
+secubox-webos (1.0.50-1~bookworm1) bookworm; urgency=medium
+
+  * Deplacabilite retablie (#1234). Les poignees n'etaient PAS emises : mon
+    insertion dans les deux fabriques de carte avait echoue en silence, faute
+    d'ancre exacte — sans poignee, rien a saisir. Elles sont la, dans les deux
+    formes de carte.
+  * L'ordre retenu s'applique APRES le rendu de la grille, pas au chargement du
+    script : a cet instant la grille est encore vide, le registre ne l'a pas
+    remplie, et l'ordre s'appliquait a rien.
+  * Quatrieme colonne reellement atteignable : c'est la largeur MINIMALE qui
+    decide du nombre reel, et 340 px n'en laissait tenir que trois sur un ecran
+    de 1300. Ramenee a 262 px.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:28:28 +0200
+
+secubox-webos (1.0.49-1~bookworm1) bookworm; urgency=medium
+
+  * Colonne laterale retiree (#1239) : chaque service servant desormais sa
+    propre carte, il n'y restait que des fragments de cardlets demontes et une
+    liste de promesses. La mosaique prend toute la largeur et gagne une colonne
+    de cartes — de la place rendue au contenu, pas un vide de plus.
+  * Le glisser vise la mosaique : les cartes SONT les cardlets maintenant, et
+    leur identite est leur service (data-embed) plutot qu'une classe.
+  * THEME MEMORISE (#1240). Il ne l'etait pas : chaque visite repartait du
+    reglage systeme et le choix de la veille etait perdu. Il est repose AVANT le
+    rendu — apres, la page clignoterait du mauvais theme au bon, ce qu'on
+    remarque et qui fait neglige. Sans choix explicite, la bascule se fait par
+    rapport a ce que le systeme montre, sinon le premier clic pouvait ne rien
+    changer visuellement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:26:21 +0200
+
+secubox-webos (1.0.48-1~bookworm1) bookworm; urgency=medium
+
+  * Services principaux en MOSAIQUE (#1239). Les cartes n'ont pas la meme
+    hauteur et n'ont aucune raison de l'avoir : une carte descriptive tient en
+    trois lignes, un lecteur demande 252 px. En grille, chaque rangee s'alignait
+    sur la plus haute et laissait des vides sous les autres — le regard lisait le
+    blanc au lieu du contenu. Les colonnes CSS les emboitent comme un puzzle :
+    chacune prend la place qu'elle demande, la suivante se cale dessous.
+  * `break-inside:avoid` est indispensable : sans lui une carte se coupe en deux
+    au bas d'une colonne, et le lecteur d'un service se retrouve tranche.
+  * Le flex d'origine des cartes est preserve — `inline-flex` glisserait des
+    espaces parasites entre elles et l'ecart deviendrait irregulier. Seules la
+    marge (le `gap` ne s'applique pas en colonnes) et l'insecabilite changent.
+  * Une seule colonne sous 760 px : emboiter n'a plus de sens quand il n'y a
+    qu'une file.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:23:34 +0200
+
 secubox-webos (1.0.47-1~bookworm1) bookworm; urgency=medium
 
   * Le podcaster sert sa propre carte (#1238), commandes media comprises. Son

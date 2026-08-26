@@ -22,22 +22,38 @@
 <link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden;
-               scrollbar-width: none; background: var(--bg-card, #fff); }
+               scrollbar-width: none; background: var(--bg-card, #fff); color: var(--text, #111); }
+  /* THÈME HÉRITÉ DE L'HÔTE. Encadrée, la carte décidait seule de son
+     clair/sombre et restait blanche sur un Hall sombre. */
+  :root[data-theme="dark"] { --bg-card:#14141c; --text:#e8e6d9; --muted:#6b6b7a;
+                             --border:#2a2a38; --cyan:#8b5cf6; }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) { --bg-card:#14141c; --text:#e8e6d9; --muted:#6b6b7a;
+                                      --border:#2a2a38; --cyan:#8b5cf6; }
+  }
   html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; display: none; }
 
   .mp { display: flex; flex-direction: column; height: 100%;
-        padding: .7rem .8rem; box-sizing: border-box; gap: .55rem; }
+        padding: .7rem .8rem; box-sizing: border-box; gap: .5rem; }
+  /* Le pied colle en bas : sans cela le contenu flottait au milieu d'un
+     grand vide, et la carte paraissait cassée. */
+  .prog { margin-top: auto; }
 
   .cmd { display: flex; align-items: center; gap: .45rem; }
   .cmd button { width: 30px; height: 30px; border-radius: 50%;
                 border: 1px solid var(--border); background: var(--bg-card);
                 color: var(--text); font-size: .78rem; line-height: 1; cursor: pointer; padding: 0; }
   .cmd button:hover { border-color: var(--cyan); }
+  /* Le bouton de lecture avait un fond var(--cyan) — non défini dans ce
+     contexte : le fond retombait sur transparent et le ▶ blanc devenait
+     INVISIBLE. Une couleur littérale en secours, jamais une variable seule
+     pour ce qui doit absolument se voir. */
   .cmd button.gros { width: 38px; height: 38px; font-size: .95rem;
-                     background: var(--cyan); border-color: var(--cyan); color: #fff; }
+                     background: var(--cyan, #7c3aed); border-color: var(--cyan, #7c3aed);
+                     color: #fff; }
   .cmd button:disabled { opacity: .35; cursor: default; }
-  .cmd .flux { margin-left: auto; font-family: 'Courier Prime', monospace;
-               font-size: .58rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .cmd .vol { flex: 1 1 auto; min-width: 34px; max-width: 76px; accent-color: var(--cyan); }
+  .cmd #detach { margin-left: auto; }
 
   .np { display: flex; gap: .55rem; min-height: 0; }
   .np .vign { width: 52px; height: 52px; border-radius: 9px; flex: 0 0 auto;
@@ -59,11 +75,19 @@
 </style>
 
 <div class="mp">
+  <!-- MÊME JEU DE COMMANDES QUE LA RADIO, plus les deux que le podcast exige :
+       précédent et suivant. Une radio est un flux qu'on ne parcourt pas ; une
+       bibliothèque, si. Le reste est identique pour que le geste soit le même
+       d'une carte à l'autre — c'est tout l'intérêt d'un gabarit commun. -->
   <div class="cmd">
+    <button id="rafr" type="button" title="Rafraîchir la bibliothèque" aria-label="Rafraîchir">⟳</button>
     <button id="prev" type="button" title="Épisode précédent" aria-label="Épisode précédent">⏮</button>
     <button id="pp" class="gros" type="button" title="Lecture / pause" aria-label="Lecture ou pause">▶</button>
     <button id="next" type="button" title="Épisode suivant" aria-label="Épisode suivant">⏭</button>
-    <span class="flux" id="flux">🎙️ podcaster</span>
+    <button id="muet" type="button" title="Couper le son" aria-label="Couper le son">🔊</button>
+    <input id="vol" class="vol" type="range" min="0" max="1" step="0.05" value="1"
+           title="Volume" aria-label="Volume">
+    <button id="detach" type="button" title="Détacher — continue en surfant" aria-label="Détacher">⧉</button>
   </div>
 
   <div class="np">
@@ -81,6 +105,14 @@
 <audio id="son" preload="none"></audio>
 
 <script>
+  // Le thème vient de l'hôte (#1241) : deux valeurs acceptées, pas davantage —
+  // une valeur libre venue de l'URL n'a rien à faire dans un attribut du
+  // document. Posé AVANT tout rendu, sinon la carte clignote du mauvais thème.
+  try {
+    const t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+
   const API = '/api/v1/podcaster';
   let eps = [], idx = 0;
   const son = document.getElementById('son');
@@ -140,6 +172,50 @@
     const r = ev.currentTarget.getBoundingClientRect();
     son.currentTime = ((ev.clientX - r.left) / r.width) * son.duration;
   });
+
+  // Rafraîchir : la bibliothèque s'enrichit en arrière-plan, rien ne le disait.
+  el('rafr').addEventListener('click', () => { charge(); });
+
+  // Muet et volume, comme à la radio. L'icône dit l'état RÉEL, pas l'action —
+  // un bouton qui montre « couper » alors que le son est déjà coupé induit en
+  // erreur au premier coup d'œil.
+  el('muet').addEventListener('click', () => {
+    son.muted = !son.muted;
+    el('muet').textContent = son.muted ? '🔇' : '🔊';
+  });
+  el('vol').addEventListener('input', ev => {
+    son.volume = Number(ev.target.value);
+    if (son.volume > 0 && son.muted) { son.muted = false; el('muet').textContent = '🔊'; }
+  });
+
+  // DÉTACHER. On passe la position : un podcast est positionnel, le reprendre
+  // au début serait une perte. La radio n'en a pas besoin, elle rejoint le
+  // direct.
+  el('detach').addEventListener('click', () => {
+    const e = eps[idx];
+    const u = new URL(location.href);
+    u.searchParams.set('ep', e ? e.id : '');
+    u.searchParams.set('t', Math.floor(son.currentTime || 0));
+    window.open(u.toString(), 'sbxpodcaster',
+      'width=380,height=340,menubar=no,toolbar=no,location=no,resizable=yes');
+  });
+
+  // Reprise après détachement : on rouvre où l'on en était.
+  (function reprise(){
+    try{
+      const q = new URLSearchParams(location.search);
+      const ep = q.get('ep'), t = Number(q.get('t') || 0);
+      if (!ep) return;
+      const attendre = setInterval(() => {
+        if (!eps.length) return;
+        clearInterval(attendre);
+        const i = eps.findIndex(x => String(x.id) === String(ep));
+        if (i < 0) return;
+        joue(i);
+        son.addEventListener('loadedmetadata', () => { son.currentTime = t; }, { once: true });
+      }, 200);
+    }catch(e){}
+  })();
 
   charge();
 </script>
