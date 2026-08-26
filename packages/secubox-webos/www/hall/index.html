@@ -780,12 +780,12 @@ const FEATURED = [
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:168},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
-  {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in"},
+  {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:130},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in"},
   {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
-  {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in"},
-  {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in"},
+  {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:130},
+  {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:130},
 ];
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
@@ -859,10 +859,17 @@ function featCardHTML(f,s){
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     const u = f.carte ? esc(f.carte) : 'https://'+esc(h)+esc(f.micro);
+    // `h` ETAIT DECLARE ET JAMAIS LU (#1286) : toutes les cartes prenaient les
+    // 252 px du CSS, y compris celles qui n'ont que trois chiffres a montrer.
+    // Une carte doit faire la taille de ce qu'elle dit.
+    const haut = f.h ? ' style="height:'+(Number(f.h)||252)+'px"' : '';
+    // Le chemin peut deja porter une requete (le widget generique prend son
+    // service en parametre) : le separateur en depend.
+    const sep = u.indexOf('?')>=0 ? '&' : '?';
     return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'">'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
-      + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'
-      + ' src="'+u+'?theme='+th+'"'
+      + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut
+      + ' src="'+u+sep+'theme='+th+'"'
       + ' title="'+esc(f.label)+'" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>'
       + '</article>';
   }

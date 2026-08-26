@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1286 — WIDGET D'ACCÈS RAPIDE.
+
+  POURQUOI CES TROIS-LÀ N'ONT PAS DE CARTE À EUX. Torrent, YTSaS et le Dépôt ne
+  se CONSULTENT pas : on y va pour faire quelque chose. Leur montrer une
+  vitrine défilante serait leur prêter une vie de publication qu'ils n'ont pas.
+  Ce qu'on veut d'eux tient en une ligne de chiffres — combien, combien en
+  cours, combien de place reste — et en un accès direct.
+
+  UN SEUL GABARIT POUR LES TROIS. Ils diffèrent par leurs chiffres, pas par
+  leur forme : trois fichiers presque identiques auraient été trois endroits où
+  corriger, et un seul qu'on pense à corriger.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accès rapide — vue micro</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#3c6e8f; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#6db3d9; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#6db3d9; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+
+  .mw { display:flex; flex-direction:column; height:100%; padding:.65rem .75rem; gap:.4rem;
+        position:relative; }
+  /* LES CHIFFRES SONT DANS LE TITRE, et c'est tout le propos : on doit
+     connaître l'état du service sans rien déplier. */
+  .tete { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+  .tete .ic { font-size:1.05rem; }
+  .tete b { font-size:.9rem; }
+  .tete .m { display:inline-flex; align-items:baseline; gap:.2rem; font-size:.68rem;
+             color:var(--muted); font-variant-numeric:tabular-nums; }
+  .tete .m b { font-size:.72rem; color:var(--texte); font-weight:650; }
+  .tete .m.actif b { color:var(--accent); }
+  .hote { font-size:.6rem; color:var(--muted); font-family:"JetBrains Mono";
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* LA SURCOUCHE reste rangée jusqu'au survol : un widget d'accès rapide qui
+     affiche en permanence ses six boutons n'est plus rapide, il est encombré. */
+  .acces { display:flex; flex-wrap:wrap; gap:5px; margin-top:auto; }
+  .acces a { flex:1 1 auto; text-align:center; padding:.3rem .45rem; border-radius:7px;
+             border:1px solid var(--border); background:none; color:var(--texte);
+             text-decoration:none; font-size:.68rem; white-space:nowrap; }
+  .acces a:hover { border-color:var(--accent); color:var(--accent); }
+  .acces a.p { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .acces a.p:hover { opacity:.9; color:#fff; }
+  .barre { height:4px; border-radius:3px; background:var(--border); overflow:hidden; }
+  .barre i { display:block; height:100%; background:var(--accent); width:0; }
+  .note { font-size:.6rem; color:var(--muted); }
+  .ko { font-size:.72rem; color:var(--muted); }
+</style>
+
+<div class="mw">
+  <div class="tete" id="tete"><span class="ic" id="ic">📦</span><b id="nom">…</b></div>
+  <div class="hote" id="hote"></div>
+  <div class="barre" id="barre" hidden><i id="jauge"></i></div>
+  <div class="note" id="note"></div>
+  <div class="acces" id="acces"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+  var el = function (id) { return document.getElementById(id); };
+
+  // Ce qui distingue les trois : leur nom, leur module d'API, et les chiffres
+  // qui MERITENT d'etre en titre. Le reste est commun.
+  var SVC = {
+    torrent: { ic:'🧲', nom:'Torrent', hote:'torrent.gk2.secubox.in', mod:'torrent',
+      chiffres:[['total','📦','au total'],['downloading','⬇','en cours'],
+                ['to_peertube','📹','vers PeerTube']],
+      acces:[['Ouvrir','/','p'],['Ajouter','/#add','']] },
+    ytsas: { ic:'🎬', nom:'YTSaS', hote:'ytsas.gk2.secubox.in', mod:'ytsas',
+      chiffres:[['total','🎞️','captures'],['jobs','⚙️','tâches'],
+                ['to_peertube','📹','vers PeerTube']],
+      acces:[['Ouvrir','/','p'],['Nouvelle capture','/#new','']] },
+    depot: { ic:'📦', nom:'Dépôt', hote:'depot.gk2.secubox.in', mod:'droplet',
+      chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
+      acces:[['Ouvrir','/','p'],['Déposer','/#depot','']] }
+  };
+
+  var id = new URLSearchParams(location.search).get('svc') || 'depot';
+  var c = SVC[id] || SVC.depot;
+
+  el('ic').textContent = c.ic;
+  el('nom').textContent = c.nom;
+  el('hote').textContent = c.hote;
+  el('acces').innerHTML = c.acces.map(function (a) {
+    return '<a class="' + a[2] + '" href="https://' + esc(c.hote) + esc(a[1])
+      + '" target="_top">' + esc(a[0]) + '</a>';
+  }).join('');
+
+  function octets(n) {
+    n = Number(n) || 0;
+    var u = ['o', 'Ko', 'Mo', 'Go', 'To'], i = 0;
+    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+    return (n >= 10 ? Math.round(n) : n.toFixed(1)) + ' ' + u[i];
+  }
+
+  function pose(d) {
+    var t = el('tete');
+    // On repart du pictogramme et du nom : réécrire tout le titre évite de
+    // faire diverger l'ordre des chiffres du contenu qu'ils annoncent.
+    t.innerHTML = '<span class="ic">' + esc(c.ic) + '</span><b>' + esc(c.nom) + '</b>'
+      + c.chiffres.map(function (m) {
+          var v = d[m[0]];
+          // Un chiffre absent n'est PAS un zéro : on ne l'affiche pas plutôt
+          // que d'annoncer « 0 » là où le service n'a rien dit.
+          if (v === undefined || v === null) return '';
+          var actif = (m[0] === 'downloading' || m[0] === 'jobs') && Number(v) > 0;
+          return '<span class="m' + (actif ? ' actif' : '') + '" title="' + esc(m[2]) + '">'
+            + esc(m[1]) + '<b>' + esc(v) + '</b></span>';
+        }).join('');
+
+    if (d.disk_free !== undefined) {
+      el('note').textContent = octets(d.disk_free) + ' libres';
+    }
+    if (d.active !== undefined && Number(d.active) > 0) {
+      el('barre').hidden = false;
+      el('jauge').style.width = '100%';
+    } else {
+      el('barre').hidden = true;
+    }
+  }
+
+  function charge() {
+    fetch('/adm/api/v1/' + c.mod + '/status', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) { el('note').innerHTML = '<span class="ko">état indisponible</span>'; return; }
+        pose(d);
+      })
+      .catch(function () { el('note').innerHTML = '<span class="ko">injoignable</span>'; });
+  }
+  charge();
+  // Ces chiffres bougent quand on agit, pas tout seuls : une minute suffit.
+  setInterval(charge, 60000);
+
+  // Rester dans le Hall (#1266).
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: id, url: a.href }, '*'); } catch (e) {}
+  }, true);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>

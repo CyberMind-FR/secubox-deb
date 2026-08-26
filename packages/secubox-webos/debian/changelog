@@ -1,3 +1,24 @@
+secubox-webos (1.0.77-1~bookworm1) bookworm; urgency=medium
+
+  * WIDGETS D'ACCES RAPIDE pour Torrent, YTSaS et le Depot (#1286). Ces
+    trois-la ne se CONSULTENT pas : on y va pour faire quelque chose. Leur
+    donner une vitrine defilante serait leur preter une vie de publication
+    qu'ils n'ont pas. Ce qu'on veut d'eux tient en une ligne de chiffres —
+    combien, combien en cours, combien de place reste — et en un acces direct.
+  * UN SEUL GABARIT POUR LES TROIS : ils different par leurs chiffres, pas par
+    leur forme. Trois fichiers presque identiques auraient ete trois endroits
+    ou corriger, et un seul qu'on pense a corriger.
+  * Un chiffre absent n'est PAS un zero : il n'est pas affiche, plutot que
+    d'annoncer « 0 » la ou le service n'a rien dit.
+  * `h` ETAIT DECLARE ET JAMAIS LU : toutes les cartes prenaient les 252 px du
+    CSS, y compris celles qui n'ont que trois chiffres a montrer. Une carte
+    doit faire la taille de ce qu'elle dit.
+  * Le relais des etats est FERME module par module, et seulement `/status`,
+    qui ne fait que lire. `^/adm/api/v1/.*` aurait ouvert toute l'API
+    d'administration sur le vhost du Hall — y compris ce qui ecrit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:11:24 +0200
+
 secubox-webos (1.0.76-1~bookworm1) bookworm; urgency=medium
 
   * EMBARQUER, C'EST PASSER DEVANT (#1283). Ouvrir un service embarque fait
