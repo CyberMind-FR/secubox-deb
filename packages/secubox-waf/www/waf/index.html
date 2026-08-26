@@ -399,6 +399,15 @@
                 </div>
             </div>
 
+            <!-- #1221 — quelle surface est attaquée, et par quel moteur -->
+            <div class="card" style="grid-column: span 2;">
+                <h2>🛰️ Surfaces surveillées
+                    <span class="muted" style="font-size:0.8rem;">— sbxwaf ne voit que le HTTP ; authwatch couvre le reste</span></h2>
+                <div id="surfaces" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin-top:.7rem">
+                    <div class="muted" style="padding:1rem">…</div>
+                </div>
+            </div>
+
             <!-- #1219 — origine géographique et noms demandés que la box ne sert pas -->
             <div class="card" style="grid-column: span 2;">
                 <h2>🌍 Origine des requêtes
@@ -799,6 +808,7 @@
             renderTopVhosts(d.top_vhosts);
 
             // #1219 — origine géographique et noms demandés que la box ne sert pas.
+            surfaces('surfaces', d.par_type, d.par_origine);
             camembertPays('paysCamembert', d.pays || d.top_countries);
             tableau2col('paysTable', d.pays || d.top_countries, 'Pays', 'Requêtes');
             tableau2col('nonServisTable', d.noms_non_routes, 'Nom demandé', 'Requêtes');
@@ -828,6 +838,54 @@
 
         function _esc(v) {
             return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+        }
+
+        // #1221 — surfaces surveillées. Le journal de menaces melange deux
+        // producteurs : sbxwaf, qui ne voit que le HTTP, et authwatch, qui
+        // couvre SSH, SMTP, IMAP et les leurres. Un total unique ne dirait plus
+        // de quelle surface vient la menace — d'ou cette ventilation.
+        const SURFACE_INFO = {
+            http:   ['🌐', 'HTTP',    'sbxwaf, devant les services'],
+            ssh:    ['🔑', 'SSH',     'échecs d\'authentification'],
+            smtp:   ['✉️', 'SMTP',    'SASL refusé sur postfix'],
+            imap:   ['📥', 'IMAP',    'connexions dovecot'],
+            leurre: ['🕳️', 'Leurres', 'services inexistants'],
+            autre:  ['❓', 'Autre',   'authwatch, type non classé']
+        };
+        function surfaces(cible, parType, parOrigine) {
+            const el = document.getElementById(cible);
+            if (!el) return;
+            const t = parType || {};
+            const cles = Object.keys(SURFACE_INFO).filter(k => (t[k] || 0) > 0);
+            if (!cles.length) {
+                el.innerHTML = '<div class="muted" style="padding:1rem;grid-column:1/-1">'
+                    + 'Aucun événement classé pour l\'instant. authwatch ne lit que ce qui '
+                    + 'survient après son démarrage : les premières lignes arriveront d\'elles-mêmes.'
+                    + '</div>';
+                return;
+            }
+            const total = cles.reduce((a, k) => a + t[k], 0) || 1;
+            el.innerHTML = cles.map(function (k) {
+                const [ico, nom, quoi] = SURFACE_INFO[k];
+                const n = t[k];
+                const pct = Math.round(n / total * 100);
+                return '<div style="background:var(--bg-card);padding:.9rem 1rem">'
+                    + '<div style="font-size:.62rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">'
+                    + ico + ' ' + _esc(nom) + '</div>'
+                    + '<div style="font-family:\'Courier Prime\',monospace;font-size:1.35rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">'
+                    + n.toLocaleString() + ' <span style="font-size:.72rem;color:var(--muted);font-weight:400">' + pct + ' %</span></div>'
+                    + '<div class="muted" style="font-size:.68rem;margin-top:.3rem">' + _esc(quoi) + '</div>'
+                    + '</div>';
+            }).join('') + (function () {
+                const o = parOrigine || {};
+                const w = o.waf || 0, a = o.authwatch || 0;
+                if (!w && !a) return '';
+                return '<div style="background:var(--bg-card);padding:.9rem 1rem">'
+                    + '<div style="font-size:.62rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">⚙️ Moteurs</div>'
+                    + '<div style="font-size:.75rem;line-height:1.7">'
+                    + 'sbxwaf <b style="color:var(--cyan)">' + w.toLocaleString() + '</b><br>'
+                    + 'authwatch <b style="color:var(--cyan)">' + a.toLocaleString() + '</b></div></div>';
+            })();
         }
 
         // Vrai camembert, pas des anneaux : on compare des PARTS d'un tout.

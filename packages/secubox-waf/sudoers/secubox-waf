@@ -36,6 +36,17 @@ Cmnd_Alias SBX_WAF_CSCLI = /usr/bin/cscli decisions add *, \
 # qu'un vhost refuse ou accepte les robots : une décision de charge,
 # réversible d'un clic, jamais une ouverture de la surface d'attaque.
 Cmnd_Alias SBX_WAF_PURGE = /usr/sbin/wafctl purge-cache
+# ── 4. Lecture des bannissements nft (#1221) ────────────────────────────────
+#
+# Le tableau de bord affichait « 0 ban actif » alors que le pare-feu en tenait
+# quatre-vingts : il interrogeait CrowdSec, retire du chemin de blocage. La
+# source de verite est l'ensemble nft du WAF. LECTURE SEULE, sur deux ensembles
+# nommes : ni ajout, ni suppression, ni acces au reste du jeu de regles.
+Cmnd_Alias SBX_WAF_NFTLIST = /usr/sbin/nft -j list set inet secubox waf_ban, \
+                             /usr/sbin/nft -j list set inet secubox waf_ban6, \
+                             /sbin/nft -j list set inet secubox waf_ban, \
+                             /sbin/nft -j list set inet secubox waf_ban6
+
 Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
@@ -43,6 +54,7 @@ Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
 secubox ALL=(root) NOPASSWD: SBX_WAF_CSCLI
 secubox ALL=(root) NOPASSWD: SBX_WAF_PURGE
 secubox ALL=(root) NOPASSWD: SBX_WAF_ROBOTS
+secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
 Defaults!SBX_WAF_PURGE !requiretty

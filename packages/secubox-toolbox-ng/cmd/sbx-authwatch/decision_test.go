@@ -75,7 +75,7 @@ func TestLeurreBannitDesLePremierContact(t *testing.T) {
 	ctx, annule := context.WithCancel(context.Background())
 	signaux := make(chan Signal, 1)
 	signaux <- sig
-	go traite(ctx, signaux, NewCompteur(time.Minute, 99, time.Minute), nil, b, j, lb, false)
+	go traite(ctx, signaux, NewCompteur(time.Minute, 99, time.Minute), nil, nil, b, j, lb, false)
 	time.Sleep(80 * time.Millisecond)
 	annule()
 
@@ -101,7 +101,7 @@ func TestJournalAttendLaRepetition(t *testing.T) {
 	sig := Signal{IP: "203.0.113.6", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
 		Severite: "high", Detail: "authentification SASL refusee"}
 	signaux <- sig // poids 2, seuil 6 : insuffisant
-	go traite(ctx, signaux, NewCompteur(time.Minute, 6, time.Minute), nil, b, j, lb, false)
+	go traite(ctx, signaux, NewCompteur(time.Minute, 6, time.Minute), nil, nil, b, j, lb, false)
 	time.Sleep(80 * time.Millisecond)
 
 	if len(fx.bannies) != 0 {
@@ -133,7 +133,7 @@ func TestListeBlancheJamaisBannieMaisTracee(t *testing.T) {
 		signaux <- Signal{IP: "203.0.113.7", Service: "rdp", Categorie: "leurre:rdp",
 			Severite: "high", Detail: "leurre"}
 	}
-	go traite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, b, j, lb, false)
+	go traite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, nil, b, j, lb, false)
 	time.Sleep(120 * time.Millisecond)
 	annule()
 
@@ -158,7 +158,7 @@ func TestSimulationNeBannitJamais(t *testing.T) {
 	signaux := make(chan Signal, 1)
 	signaux <- Signal{IP: "203.0.113.8", Service: "vnc", Categorie: "leurre:vnc",
 		Severite: "high", Detail: "leurre"}
-	go traite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, b, j, lb, true)
+	go traite(ctx, signaux, NewCompteur(time.Minute, 1, time.Minute), nil, nil, b, j, lb, true)
 	time.Sleep(80 * time.Millisecond)
 	annule()
 

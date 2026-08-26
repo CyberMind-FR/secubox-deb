@@ -1,3 +1,35 @@
+secubox-waf (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * « 0 ban actif » alors que le pare-feu en tenait quatre-vingts (#1221). Le
+    panneau interrogeait CrowdSec par cscli ; depuis que le WAF applique
+    lui-meme (#1218) et que CrowdSec est retire (#1210), cette source ne rend
+    plus rien. /bans lit desormais l'ensemble nft du WAF — celui-la meme que la
+    chaine waf_drop consulte : on affiche ce qui BLOQUE, pas ce qu'un tiers a
+    enregistre. L'echeance vient de nft, le motif du journal de menaces, le pays
+    de la base GeoIP ; un champ inconnu reste vide plutot qu'invente.
+  * sudoers : lecture seule sur les deux ensembles nommes. Ni ajout, ni
+    suppression, ni acces au reste du jeu de regles.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 07:26:22 +0200
+
+secubox-waf (1.6.0-1~bookworm1) bookworm; urgency=medium
+
+  * Surfaces surveillees (#1221). Le journal de menaces melange desormais deux
+    producteurs : sbxwaf, qui ne voit que le HTTP puisqu'il est derriere
+    HAProxy, et sbx-authwatch, qui couvre SSH, SMTP, IMAP et les leurres de
+    service. Un total unique ne disait plus de quelle surface vient la menace.
+    /stats expose `par_origine` (quel moteur) et `par_type` (quelle surface),
+    et le panneau les affiche. Une categorie inconnue reste rangee sous HTTP,
+    le cas historique : on ne devine pas.
+  * Relecture unique du journal a l'arrivee des compteurs, comme pour #1219 —
+    le lecteur est incremental et n'aurait vu que les lignes a venir.
+  * Onglet Visites : le LAN est ecarte de la repartition par pays. Il pesait
+    37 182 sur 37 700 — la carte n'affichait qu'une barre et les vrais pays
+    etaient invisibles. Le total general le compte toujours ; c'est la LECTURE
+    PAR PAYS qu'il rendait inutile.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 07:16:05 +0200
+
 secubox-waf (1.5.8-1~bookworm1) bookworm; urgency=medium
 
   * Camembert des pays d'origine (#1219). Un VRAI camembert et non les anneaux

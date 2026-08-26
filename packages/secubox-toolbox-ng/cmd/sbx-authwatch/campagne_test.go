@@ -85,7 +85,7 @@ func TestCampagneBannitDesLaPremiereTentative(t *testing.T) {
 	signaux := make(chan Signal, 16)
 	// Seuil du compteur volontairement inatteignable : seule la campagne peut
 	// declencher, ce qui prouve que c'est bien elle qui agit.
-	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), camp, b, j, lb, false)
+	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), camp, nil, b, j, lb, false)
 
 	for _, ip := range []string{"203.0.113.11", "203.0.113.12", "203.0.113.13", "203.0.113.14"} {
 		signaux <- Signal{IP: ip, Service: "smtp", Categorie: "auth_smtp:sasl_failed",

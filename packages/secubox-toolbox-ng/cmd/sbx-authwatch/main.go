@@ -55,6 +55,10 @@ func main() {
 		blanche  = flag.String("liste-blanche", "", "adresses et préfixes exemptés, séparés par des virgules")
 		blancheF = flag.String("liste-blanche-fichier", "/etc/secubox/authwatch/liste-blanche",
 			"fichier de liste blanche (absent = ignoré)")
+		comptesF = flag.String("comptes",
+			"/data/volumes/mail/config/users,/data/lxc/mail/rootfs/etc/postfix/vmailbox",
+			"fichier(s) listant les comptes RÉELS, séparés par des virgules — "+
+				"un échec sur un compte absent de cette liste est un signal certain")
 		campSeuil = flag.Int("campagne-sources", 5,
 			"nombre de sources distinctes visant un même compte établissant une campagne (0 = désactivé)")
 		campFen = flag.Duration("campagne-fenetre", time.Hour,
@@ -94,6 +98,18 @@ func main() {
 			}
 			log.Printf("sbx-authwatch: AVERTISSEMENT — %v (démarrage forcé)", err)
 		}
+	}
+
+	comptes, err := NewComptes(strings.Split(*comptesF, ","))
+	if err != nil {
+		log.Fatalf("sbx-authwatch: %v", err)
+	}
+	if comptes.Charge() {
+		log.Printf("sbx-authwatch: %d compte(s) réel(s) connus — un échec sur un compte "+
+			"absent de la liste sera traité comme certain", comptes.Taille())
+	} else {
+		log.Printf("sbx-authwatch: AUCUN compte réel connu (%s) — on reste patient, "+
+			"aucune certitude ne sera tirée du nom visé", *comptesF)
 	}
 
 	compteur := NewCompteur(*fenetre, *seuil, *repit)
@@ -164,15 +180,15 @@ func main() {
 		}
 	}()
 
-	traite(ctx, signaux, compteur, campagnes, banneur, journalMenaces, lb, *simule)
+	traite(ctx, signaux, compteur, campagnes, comptes, banneur, journalMenaces, lb, *simule)
 	log.Printf("sbx-authwatch: arrêt")
 }
 
 // traite est la boucle de decision. Isolee pour etre testable sans reseau ni
 // journalctl : les tests y injectent des signaux et observent les bannissements.
 func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
-	campagnes *Campagnes, banneur *Banneur, journal *JournalMenaces,
-	lb *ListeBlanche, simule bool) {
+	campagnes *Campagnes, comptes *Comptes, banneur *Banneur,
+	journal *JournalMenaces, lb *ListeBlanche, simule bool) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -191,6 +207,18 @@ func traite(ctx context.Context, signaux <-chan Signal, compteur *Compteur,
 				continue
 			}
 			maintenant := time.Now()
+
+			// COMPTE INEXISTANT : LE SIGNAL LE PLUS SUR. La box heberge une
+			// boite ; les campagnes en visent d'autres, qui n'existent pas.
+			// Personne ne peut se tromper de mot de passe sur une boite
+			// absente — il n'y a personne a tromper. On ne tire cette
+			// certitude que si une liste a EFFECTIVEMENT ete chargee.
+			if comptes.Inexistant(sig.Cible) {
+				sig.Severite = "high"
+				sig.Detail = sig.Detail + " — compte inexistant « " + sig.Cible + " »"
+				appliquer(ctx, sig, 1, banneur, journal, simule)
+				continue
+			}
 
 			// CAMPAGNE AVANT COMPTEUR. Une attaque distribuee ne repasse pas
 			// par la meme adresse : sur gk2, 339 sources sur 388 n'apparaissent

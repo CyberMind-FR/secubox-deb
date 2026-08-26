@@ -88,6 +88,9 @@ def _history_cached(max_age: int = 3600) -> dict:
 # the double-buffered cache.  Survives aggregator restart, populated
 # incrementally by the warm refresh loop.
 STATS_DISK_CACHE = "/var/lib/secubox/waf/stats-disk-cache.json"
+# Table nft ou sbxwaf tient ses bannissements (#1218) — source de verite
+# depuis que CrowdSec est retire du chemin de blocage.
+WAF_NFT_TABLE = "secubox"
 
 # Runtime state
 _compiled_patterns: Dict[str, List[dict]] = {}
@@ -312,45 +315,96 @@ def _unban_ip(ip: str):
         pass
 
 
-def _get_bans() -> List[dict]:
-    """Get active bans from CrowdSec, flattened for dashboard."""
+def _raison_du_ban(ip: str, cache: dict) -> str:
+    """Motif du bannissement, lu dans le journal de menaces.
+
+    Le set nft ne porte que l'adresse et son echeance — c'est un pare-feu, pas
+    une archive. Le « pourquoi » vit dans le journal : on y prend la derniere
+    ligne `banned` de cette adresse. Sans elle, on le dit plutot que d'inventer.
+    """
+    return cache.get(ip) or "waf"
+
+
+def _raisons_recentes(limite: int = 4000) -> dict:
+    """Derniere categorie ayant valu un bannissement, par adresse."""
+    out: Dict[str, str] = {}
     try:
-        result = subprocess.run([
-            "sudo", "cscli", "decisions", "list", "-o", "json"
-        ], capture_output=True, text=True, timeout=15)
-
-        if result.returncode == 0 and result.stdout:
-            raw = json.loads(result.stdout) or []
-            # Flatten nested structure for dashboard
-            bans = []
-            for item in raw:
-                decisions = item.get("decisions", [])
-                events = item.get("events", [])
-                # Extract metadata from first event
-                meta = {}
-                if events and events[0].get("meta"):
-                    for m in events[0]["meta"]:
-                        meta[m.get("key", "")] = m.get("value", "")
-
-                for d in decisions:
-                    bans.append({
-                        "ip": d.get("value", ""),
-                        "value": d.get("value", ""),
-                        "scenario": d.get("scenario", ""),
-                        "reason": d.get("scenario", ""),
-                        "duration": d.get("duration", ""),
-                        "type": d.get("type", "ban"),
-                        "origin": d.get("origin", ""),
-                        "id": d.get("id"),
-                        "created_at": item.get("created_at", ""),
-                        "country": meta.get("IsoCode", ""),
-                        "asn": meta.get("ASNNumber", ""),
-                        "asn_org": meta.get("ASNOrg", ""),
-                    })
-            return bans
+        lignes = _read_log_tail(Path(THREATS_LOG))
     except Exception:
-        pass
-    return []
+        return out
+    for ligne in lignes[-limite:]:
+        try:
+            d = json.loads(ligne)
+        except (ValueError, TypeError):
+            continue
+        if d.get("action") != "banned":
+            continue
+        ip = d.get("client_ip")
+        if ip and ip != "local":
+            out[ip] = d.get("category") or "waf"
+    return out
+
+
+def _get_bans() -> List[dict]:
+    """Bannissements ACTIFS, lus dans l'ensemble nft du WAF (#1221).
+
+    Cette fonction interrogeait CrowdSec. Depuis que le WAF applique lui-meme
+    (#1218) et que CrowdSec est retire (#1210), `cscli` ne rend plus rien : le
+    tableau de bord affichait « 0 ban actif » pendant que le pare-feu en tenait
+    quatre-vingts. La source de verite est desormais l'ensemble nft, celui-la
+    meme que la chaine waf_drop consulte — on lit donc ce qui BLOQUE vraiment,
+    et non ce qu'un tiers a enregistre.
+
+    L'echeance vient de nft (`expires`), le motif du journal de menaces, le pays
+    de la base GeoIP. Rien n'est invente : un champ inconnu reste vide.
+    """
+    bans: List[dict] = []
+    raisons = _raisons_recentes()
+    reader = _get_geoip_reader()
+    maintenant = int(time.time())
+
+    for ensemble in ("waf_ban", "waf_ban6"):
+        try:
+            r = subprocess.run(
+                ["sudo", "-n", "nft", "-j", "list", "set", "inet", WAF_NFT_TABLE, ensemble],
+                capture_output=True, text=True, timeout=10)
+            if r.returncode != 0 or not r.stdout:
+                continue
+            doc = json.loads(r.stdout)
+        except Exception:
+            continue
+
+        for bloc in doc.get("nftables", []):
+            jeu = bloc.get("set")
+            if not jeu:
+                continue
+            for elem in jeu.get("elem", []) or []:
+                e = elem.get("elem") if isinstance(elem, dict) else None
+                if isinstance(e, dict):
+                    ip, expire = e.get("val"), e.get("expires")
+                else:
+                    ip, expire = elem, None
+                if not isinstance(ip, str):
+                    continue
+                categorie = _raison_du_ban(ip, raisons)
+                bans.append({
+                    "ip": ip,
+                    "value": ip,
+                    "scenario": categorie,
+                    "reason": categorie,
+                    "duration": f"{int(expire)}s" if isinstance(expire, int) else "",
+                    "expires_in": int(expire) if isinstance(expire, int) else None,
+                    "type": "ban",
+                    "origin": "sbxwaf",
+                    "id": None,
+                    "created_at": "",
+                    "country": _lookup_country(ip, reader),
+                    "asn": "",
+                    "asn_org": "",
+                })
+    bans.sort(key=lambda b: b.get("expires_in") or 0, reverse=True)
+    _ = maintenant
+    return bans
 
 
 def _load_stats_disk_cache() -> dict:
@@ -385,6 +439,35 @@ def _save_stats_disk_cache(state: dict) -> None:
         pass
 
 
+# Classification par ORIGINE et par TYPE (#1221).
+#
+# Le journal de menaces melange desormais deux producteurs : sbxwaf, qui ne voit
+# que le HTTP, et sbx-authwatch, qui couvre ce que le HTTP ne montre pas — SSH,
+# SMTP, IMAP et les leurres de service. Sans distinction, le tableau de bord
+# affiche un total qui ne dit plus de quelle surface vient la menace.
+#
+# L'origine se lit dans `tool`, que authwatch renseigne ; le type se deduit du
+# prefixe de categorie. On ne devine rien : une categorie inconnue reste
+# rangee sous « http », qui est le cas historique.
+_TYPES_AUTHWATCH = {
+    "auth_ssh:": "ssh",
+    "auth_smtp:": "smtp",
+    "auth_imap:": "imap",
+    "leurre:": "leurre",
+}
+
+
+def _origine_et_type(entry: dict) -> tuple:
+    """Rend (origine, type) pour une ligne du journal de menaces."""
+    cat = str(entry.get("category") or "")
+    for prefixe, typ in _TYPES_AUTHWATCH.items():
+        if cat.startswith(prefixe):
+            return "authwatch", typ
+    if str(entry.get("tool") or "") == "authwatch":
+        return "authwatch", "autre"
+    return "waf", "http"
+
+
 def _get_threat_stats() -> dict:
     """Get threat statistics from log with GeoIP country lookup.
 
@@ -416,6 +499,9 @@ def _get_threat_stats() -> dict:
     # balayage, elle révèle les vhosts qui MANQUENT — un nom legacy encore
     # référencé ailleurs, un service jamais publié.
     noms_non_routes = defaultdict(int, counters.get("noms_non_routes", {}))
+    # #1221 : d'ou vient la menace, et sur quelle surface.
+    par_origine = defaultdict(int, counters.get("par_origine", {}))
+    par_type = defaultdict(int, counters.get("par_type", {}))
     total_threats = counters.get("total_threats", 0)
     threats_today = state.get("threats_today", 0)
     # detect-mode matches: seen and logged but NOT blocked — kept apart from the
@@ -433,6 +519,7 @@ def _get_threat_stats() -> dict:
             total_threats, threats_today, by_category, by_severity,
             top_ips, top_countries, top_vhosts, ip_countries,
             observed_threats, observed_today, noms_non_routes,
+            par_origine, par_type,
         )
 
     geoip_reader = _get_geoip_reader()
@@ -446,9 +533,10 @@ def _get_threat_stats() -> dict:
         # l'historique est déjà sur le disque. On relit donc le journal en
         # entier, une fois — et on repart de zéro pour TOUS les compteurs, faute
         # de quoi les anciens seraient comptés deux fois.
-        if "noms_non_routes" not in counters:
+        if "noms_non_routes" not in counters or "par_origine" not in counters:
             by_category.clear(); by_severity.clear(); top_ips.clear()
             top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
+            par_origine.clear(); par_type.clear()
             ip_countries.clear()
             total_threats = 0
             observed_threats = 0
@@ -504,6 +592,10 @@ def _get_threat_stats() -> dict:
 
                         # Un Host non routé : on garde le NOM demandé, pas la
                         # classe — c'est le nom qui dit s'il manque un vhost.
+                        _orig, _typ = _origine_et_type(entry)
+                        par_origine[_orig] += 1
+                        par_type[_typ] += 1
+
                         if str(entry.get("category", "")).startswith("host_anomaly"):
                             if vhost and vhost != "unknown":
                                 noms_non_routes[vhost] += 1
@@ -535,6 +627,8 @@ def _get_threat_stats() -> dict:
             "top_countries": dict(top_countries),
             "top_vhosts": dict(top_vhosts),
             "noms_non_routes": dict(noms_non_routes),
+            "par_origine": dict(par_origine),
+            "par_type": dict(par_type),
         },
         "ip_countries": ip_countries,
         "last_updated": int(time.time()),
@@ -544,6 +638,7 @@ def _get_threat_stats() -> dict:
         total_threats, threats_today, by_category, by_severity,
         top_ips, top_countries, top_vhosts, ip_countries,
         observed_threats, observed_today, noms_non_routes,
+        par_origine, par_type,
     )
 
 
@@ -552,7 +647,7 @@ def _finalize_stats(
     by_category, by_severity, top_ips, top_countries, top_vhosts,
     ip_countries: dict,
     observed_threats: int = 0, observed_today: int = 0,
-    noms_non_routes=None,
+    noms_non_routes=None, par_origine=None, par_type=None,
 ) -> dict:
     """Shape the dashboard-friendly result : top-10 lists + plain dicts."""
     top_ips_sorted = sorted(top_ips.items(), key=lambda x: -x[1])[:10]
@@ -584,6 +679,8 @@ def _finalize_stats(
         ),
         "noms_non_routes_total": sum((noms_non_routes or {}).values()),
         "noms_non_routes_distincts": len(noms_non_routes or {}),
+        "par_origine": dict(par_origine or {}),
+        "par_type": dict(par_type or {}),
     }
 
 
@@ -1040,7 +1137,14 @@ async def get_visits():
     top_ips = snap.get("top_ips") or {}
     by_country: Dict[str, int] = defaultdict(int)
     for ip, n in top_ips.items():
-        by_country[_lookup_country(ip, reader)] += int(n or 0)
+        pays = _lookup_country(ip, reader)
+        # Le LAN n'est pas une origine geographique (#1221). Il pesait 37 182
+        # sur 37 700 : la carte affichait une seule barre et les vrais pays
+        # etaient invisibles. On l'ecarte de la repartition — le total general
+        # le compte toujours, c'est la LECTURE PAR PAYS qu'il rendait inutile.
+        if pays in ("LAN", "??", "", None):
+            continue
+        by_country[pays] += int(n or 0)
     return {
         "available": True,
         "total": int(snap.get("total", 0)),
