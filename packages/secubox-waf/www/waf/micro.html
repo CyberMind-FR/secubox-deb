@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1237 — vue MICRO du pare-feu : la carte que le service sert lui-même.
+
+  POURQUOI ELLE EXISTE. Le Hall composait cette carte à sa place — il lisait
+  l'API, choisissait les libellés, dessinait les chiffres. C'est exactement ce
+  qu'on a corrigé pour la radio : le service sait s'afficher, le Hall n'a pas à
+  le redessiner. Une carte peinte par un tiers dérive de ce qu'elle représente,
+  et il faut la corriger à deux endroits.
+
+  ELLE TIENT DANS 252 px, la hauteur d'une carte de service, et rien de plus :
+  quatre chiffres, les origines, un état. Ce qui demande à être étudié vit dans
+  le tableau de bord, vers lequel elle mène.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pare-feu — vue micro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  /* Pas d'ascenseur : la vue est taillée pour tenir. Une barre le long du
+     liseré signalerait un débordement qu'on ne veut pas voir. */
+  html, body { scrollbar-width: none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; display: none; }
+
+  .mw { display: flex; flex-direction: column; height: 100%;
+        padding: .75rem .85rem; box-sizing: border-box; gap: .5rem; }
+  .tete { display: flex; align-items: baseline; gap: .45rem; }
+  .tete .ic { font-size: 1.05rem; }
+  .tete b { font-size: .92rem; }
+  .tete .etat { margin-left: auto; font-family: 'Courier Prime', monospace;
+                font-size: .58rem; letter-spacing: .09em; text-transform: uppercase;
+                color: var(--green, #0a7d2c); display: inline-flex; align-items: center; gap: 4px; }
+  .tete .led { width: 7px; height: 7px; border-radius: 50%;
+               background: var(--green, #0a7d2c); display: inline-block; }
+  .tete.ko .etat, .tete.ko .led { color: var(--red, #b7202c); background: initial; }
+  .tete.ko .led { background: var(--red, #b7202c); }
+
+  .drapeaux { font-size: 1.25rem; letter-spacing: .12em; line-height: 1; }
+  .drapeaux .vide { font-size: .78rem; letter-spacing: 0; color: var(--muted); }
+
+  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .6rem; margin-top: auto; }
+  .m { display: flex; align-items: baseline; gap: .35rem; font-size: .76rem; }
+  .m .n { font-family: 'Courier Prime', monospace; font-weight: 700;
+          font-variant-numeric: tabular-nums; color: var(--cyan); font-size: .95rem; }
+  .m .l { color: var(--muted); font-size: .66rem; }
+
+  .lien { display: block; text-align: center; font-family: 'Courier Prime', monospace;
+          font-size: .6rem; letter-spacing: .07em; text-transform: uppercase;
+          color: var(--muted); text-decoration: none; padding-top: .35rem;
+          border-top: 1px solid var(--border); }
+  .lien:hover { color: var(--cyan); }
+</style>
+
+<div class="mw">
+  <div class="tete" id="tete">
+    <span class="ic">🛡️</span><b>Pare-feu</b>
+    <span class="etat"><i class="led"></i><span id="etat">en veille</span></span>
+  </div>
+
+  <div class="drapeaux" id="origines"><span class="vide">origines en lecture…</span></div>
+
+  <div class="grille">
+    <div class="m"><span class="n" id="m-bans">—</span><span class="l">🚫 bannis</span></div>
+    <div class="m"><span class="n" id="m-jour">—</span><span class="l">🛡️ ce jour</span></div>
+    <div class="m"><span class="n" id="m-surf">—</span><span class="l">🛰️ surfaces</span></div>
+    <div class="m"><span class="n" id="m-det">—</span><span class="l">🧠 détections</span></div>
+  </div>
+
+  <a class="lien" href="/" target="_top">📊 Tableau de bord</a>
+</div>
+
+<script>
+  const API = '/api/v1/waf';
+  const nb = n => (Number(n) || 0).toLocaleString('fr-FR');
+
+  // Code ISO → drapeau. Un code inconnu rend le globe plutôt qu'une paire de
+  // caractères exotiques que personne ne reconnaît.
+  function drapeau(c) {
+    c = String(c || '').trim().toUpperCase();
+    if (c.length !== 2 || !/^[A-Z]{2}$/.test(c)) return '🌍';
+    return String.fromCodePoint(...[...c].map(l => 127397 + l.charCodeAt(0)));
+  }
+
+  async function json(chemin) {
+    try {
+      const r = await fetch(API + chemin, { headers: { 'Accept': 'application/json' } });
+      return r.ok ? await r.json() : null;
+    } catch (e) { return null; }
+  }
+
+  async function majour() {
+    const [stats, bans, detec] = await Promise.all([
+      json('/stats'), json('/bans'), json('/detections')
+    ]);
+    const tete = document.getElementById('tete');
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+
+    if (!stats) {
+      // On ne prétend rien : un tiret, jamais un zéro. « 0 banni » sans avoir
+      // pu demander rassurerait à tort.
+      tete.classList.add('ko');
+      set('etat', 'injoignable');
+      ['m-bans', 'm-jour', 'm-surf', 'm-det'].forEach(i => set(i, '—'));
+      return;
+    }
+    tete.classList.remove('ko');
+    set('etat', 'en veille');
+
+    const pays = Object.keys(stats.pays || {}).filter(p => p && p !== 'LAN' && p !== '??').slice(0, 3);
+    const org = document.getElementById('origines');
+    org.innerHTML = pays.length
+      ? pays.map(drapeau).join(' ')
+      : '<span class="vide">pas encore d\'origine</span>';
+
+    const detections = (detec && detec.detections) || [];
+    set('m-bans', bans ? nb(bans.total) : '—');
+    set('m-jour', nb(stats.threats_today));
+    set('m-surf', String(Object.keys(stats.par_type || {}).length));
+    set('m-det', detections.length ? detections.filter(d => d.actif).length : '—');
+  }
+
+  majour();
+  // Une posture bouge en dizaines de minutes : interroger plus souvent
+  // afficherait le même chiffre en chargeant la box.
+  setInterval(majour, 60000);
+</script>

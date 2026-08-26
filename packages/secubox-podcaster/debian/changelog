@@ -1,3 +1,18 @@
+secubox-podcaster (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Vue MICRO du Podcaster (#1238) : la carte que le service sert LUI-MEME au
+    Hall. Celle que le Hall composait a sa place manquait de l'essentiel — les
+    COMMANDES. On voyait un titre et des compteurs, on ne pouvait pas ecouter ;
+    un lecteur qu'on ne peut pas lancer n'est pas un lecteur.
+  * Lecture, pause, precedent, suivant, barre de progression CLIQUABLE — sans
+    quoi un episode d'une heure ne se parcourt pas et la barre n'est qu'une
+    decoration. Enchainement automatique en fin d'episode.
+  * UN SEUL FLUX PAR OFFICINE : la page tient une balise audio, jamais deux.
+    Lancer un episode remplace le precedent ; deux flux d'une meme officine se
+    couvriraient l'un l'autre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:21:21 +0200
+
 secubox-podcaster (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * Une URL YouTube dans « ajouter un flux » lance l'import yt-dlp (#1101).

@@ -536,43 +536,17 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           <div class="grid feat" id="featgrid"></div>
         </div>
         <aside class="side">
-          <div class="info">
-            <h3 class="serif">🧩 WebOS SBX</h3>
-            <ul style="margin:0;padding:0">
-              <li>Barre système injectée</li><li>Services unifiés et vivants</li>
-              <li>Cardlets interactifs</li><li>Identité locale & Session Bridge</li>
-              <li>Sécurité R5 intégrée</li>
-            </ul>
-          </div>
-          <div class="cardlet cl-waf">
-            <span class="cl-grip" draggable="true" title="Déplacer" aria-label="Déplacer cette carte">⠿</span>
-            <div class="clh serif">🛡️ Pare-feu <span class="tag">veille</span></div>
-            <div class="np"><div class="cover cover-waf">🛡️</div>
-              <div class="meta"><b class="serif" id="wtitle">Sous surveillance</b>
-                <div class="art" id="wsub">— lecture en cours —</div>
-                <span class="live"><i class="led"></i> <span id="wetat">actif</span></span>
-                <div class="counts">
-                  <span title="adresses actuellement écartées par le pare-feu">🚫 <b id="wbans">—</b></span>
-                  <span title="menaces bloquées aujourd'hui">🛡️ <b id="wjour">—</b></span>
-                  <span title="surfaces surveillées : HTTP, SSH, SMTP, IMAP, leurres">🛰️ <b id="wsurf">—</b></span>
-                  <span title="détections comportementales en service">🧠 <b id="wdet">—</b></span>
-                </div>
+          <!-- Le PARE-FEU n'est plus ici : sa carte de « Services principaux » EST
+               sa vue /micro (#1237). Deux endroits pour la même carte, ce sont
+               deux endroits à corriger et un seul qu'on pense à corriger. -->
               </div></div>
             <button class="cl-lien" id="wopen" type="button">📊 Tableau de bord ▦</button>
           </div>
 
-          <div class="cardlet cl-pod">
-            <span class="cl-grip" draggable="true" title="Déplacer" aria-label="Déplacer cette carte">⠿</span>
-            <div class="clh serif">🎙️ Podcaster <span class="tag">bibliothèque</span></div>
-            <div class="np"><div class="cover cover-pod">🎙️</div>
-              <div class="meta"><b class="serif" id="ptitle">Bibliothèque</b>
-                <div class="art" id="psub"></div>
-                <span class="live"><i class="led"></i> <span id="petat">à l'écoute</span></span>
-                <div class="counts">
-                  <span title="flux suivis">📡 <b id="pfeeds">—</b></span>
-                  <span title="épisodes en bibliothèque">🎧 <b id="peps">—</b></span>
-                  <span title="téléchargements en attente">⬇️ <b id="pqueue">—</b></span>
-                </div>
+          <!-- Le PODCASTER n'est plus ici : sa carte de « Services principaux » EST
+               sa vue /micro (#1238), commandes média comprises — ce qui manquait
+               à la carte composée par le Hall : on voyait, on ne pouvait pas
+               écouter. -->
               </div></div>
             <button class="cl-lien" id="popen" type="button">📚 Bibliothèque ▦</button>
           </div>
@@ -632,14 +606,14 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // Cloud=nc, Mail=webmail, Outils=kbin. Chaque carte s'affiche même si le module
 // n'est pas (encore) dans le registre.
 const FEATURED = [
-  {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in"},
+  {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", micro:"/micro"},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in"},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro"},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in"},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in"},
-  {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in"},
+  {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html"},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in"},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in"},
@@ -1030,34 +1004,9 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   new MutationObserver(applique).observe(root,{attributes:true,attributeFilter:['data-theme']});
 })();
 
-// Cardlet PARE-FEU (#1228) — même chemin que la Radio : le serveur lit le WAF
-// par sa socket, le client ne le contacte jamais. Rythme plus lent : une
-// posture bouge en dizaines de minutes, pas en secondes.
-function majWaf(){
-  fetch('/api/v1/webos/public/cardlets/waf',{headers:{'Accept':'application/json'}})
-    .then(r=>r.ok?r.json():Promise.reject()).then(c=>{
-      const ct=(c&&c.content)||{}; const m={};
-      ((c&&c.metrics)||[]).forEach(x=>m[x.id]=x.value);
-      const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
-      const carte=document.querySelector('.cl-waf');
-      const horsService=(c&&c.status)==='offline';
-      if(carte) carte.setAttribute('data-etat', horsService?'offline':'online');
-      set('wtitle', ct.title||'Sous surveillance');
-      set('wsub', ct.subtitle||'');
-      set('wetat', horsService?'injoignable':'en veille');
-      // Un tiret quand le chiffre manque, JAMAIS un zéro : afficher « 0 banni »
-      // sans avoir pu demander rassurerait à tort.
-      set('wbans', m.bans!=null?m.bans:'—');
-      set('wjour', m.jour!=null?m.jour:'—');
-      set('wsurf', m.surfaces!=null?m.surfaces:'—');
-      set('wdet',  m.detections!=null?m.detections:'—');
-    }).catch(()=>{
-      const carte=document.querySelector('.cl-waf');
-      if(carte) carte.setAttribute('data-etat','offline');
-      const el=document.getElementById('wetat'); if(el) el.textContent='injoignable';
-    });
-}
-majWaf(); setInterval(majWaf, 30000);
+// Le PARE-FEU sert désormais sa propre carte (#1237) : plus rien à nourrir
+// ici. Son point d'entrée cardlet reste servi — il alimente encore la
+// vivification des cartes sans vue embarquée.
 
 // ── #1234 · cardlets DÉPLAÇABLES ──────────────────────────────────────────
 //
@@ -1197,37 +1146,9 @@ const CARDLET_ICONES = {
   podcaster: {feeds:'📡', episodes:'🎧', queued:'⬇️'}
 };
 
-// Cardlet PODCASTER (#1230) — troisième du même gabarit. Rythme le plus lent
-// des trois : un épisode arrive toutes les heures au mieux.
-function majPod(){
-  fetch('/api/v1/webos/public/cardlets/podcaster',{headers:{'Accept':'application/json'}})
-    .then(r=>r.ok?r.json():Promise.reject()).then(c=>{
-      const ct=(c&&c.content)||{}; const m={};
-      ((c&&c.metrics)||[]).forEach(x=>m[x.id]=x.value);
-      const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
-      const carte=document.querySelector('.cl-pod');
-      const etat=(c&&c.status)||'offline';
-      if(carte) carte.setAttribute('data-etat', etat);
-      set('ptitle', ct.title||'Bibliothèque');
-      set('psub', ct.subtitle||'');
-      // Le travailleur à l'arrêt est un fait qui mérite d'être dit : les
-      // épisodes cessent d'arriver sans que rien d'autre ne change.
-      set('petat', etat==='offline' ? 'injoignable'
-                 : (c&&c.worker===false ? 'collecte arrêtée' : "à l'écoute"));
-      set('pfeeds', m.feeds!=null?m.feeds:'—');
-      set('peps',   m.episodes!=null?m.episodes:'—');
-      set('pqueue', m.queued!=null?m.queued:'—');
-    }).catch(()=>{
-      const carte=document.querySelector('.cl-pod');
-      if(carte) carte.setAttribute('data-etat','offline');
-      const el=document.getElementById('petat'); if(el) el.textContent='injoignable';
-    });
-}
-majPod(); setInterval(majPod, 45000);
-(function(){
-  const b=document.getElementById('popen');
-  if(b) b.addEventListener('click', ()=>openService('podcaster','embed'));
-})();
+// Le PODCASTER sert désormais sa propre carte (#1238) : plus rien à nourrir
+// ici. Son point d'entrée cardlet reste servi pour la vivification des cartes
+// sans vue embarquée.
 
 // Le cardlet EMBARQUE le tableau de bord au lieu d'ouvrir un onglet : c'est un
 // service du Hall comme un autre, et openService est le point d'entrée unique

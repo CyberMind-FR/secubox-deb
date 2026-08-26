@@ -1,3 +1,22 @@
+secubox-webos (1.0.47-1~bookworm1) bookworm; urgency=medium
+
+  * Le podcaster sert sa propre carte (#1238), commandes media comprises. Son
+    cardlet compose a la main est retire : la carte de « Services principaux »
+    EST desormais sa vue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:21:21 +0200
+
+secubox-webos (1.0.46-1~bookworm1) bookworm; urgency=medium
+
+  * Le pare-feu sert sa propre carte (#1237) : son cardlet compose a la main est
+    retire de la colonne, sa carte de « Services principaux » EST sa vue /micro.
+    Deux endroits pour la meme carte, ce sont deux endroits a corriger et un
+    seul qu'on pense a corriger.
+  * Bloc « WebOS SBX » retire de la colonne : une liste de promesses statiques
+    n'apprend rien a qui est deja devant l'ecran.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:19:08 +0200
+
 secubox-webos (1.0.45-1~bookworm1) bookworm; urgency=medium
 
   * UN SERVICE QUI SAIT S'AFFICHER REMPLACE SA CARTE (#1236). La carte statique

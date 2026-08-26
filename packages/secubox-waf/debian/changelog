@@ -1,3 +1,17 @@
+secubox-waf (1.10.3-1~bookworm1) bookworm; urgency=medium
+
+  * Vue MICRO du pare-feu (#1237) : la carte que le service sert LUI-MEME au
+    Hall, au lieu que le Hall la compose a sa place — meme regle que pour la
+    radio. Une carte peinte par un tiers derive de ce qu'elle represente, et il
+    faut la corriger a deux endroits.
+  * Elle tient dans 252 px et rien de plus : quatre chiffres, les origines en
+    drapeaux, un etat. Ce qui demande a etre etudie vit dans le tableau de bord,
+    vers lequel elle mene. Pas d'ascenseur : la vue est taillee pour tenir.
+  * Un tiret quand la donnee manque, jamais un zero : « 0 banni » sans avoir pu
+    demander rassurerait a tort.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:19:08 +0200
+
 secubox-waf (1.10.2-1~bookworm1) bookworm; urgency=medium
 
   * Le vhost du tableau de bord declarait `frame-ancestors 'none'` : il
