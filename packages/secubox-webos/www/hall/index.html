@@ -1275,6 +1275,38 @@ function loadCtx(id, cur){
     }).catch(()=>{});
 }
 
+// ── SOURCES POUSSEES DANS LA MEGABARRE (#1194e / SocialRelay) ───────────────
+//
+// loadCtx() peuple la nav contextuelle depuis un menu SERVEUR (les salons du
+// BBS). Mais MetaNews et SocialRelay ont des « sources » DYNAMIQUES que seule
+// leur page connait : elles ne peuvent pas venir d'un menu statique. Le service
+// embarque les POUSSE donc par message, et le Hall les affiche dans le meme
+// panneau — le bouton « Sources » du service devient une entree de la megabarre,
+// hors du cadre, ou le Hall porte deja le contexte.
+//
+// Un clic ne navigue pas (le Hall ne sait pas ce que « filtrer par source »
+// veut dire pour ce service) : il RENVOIE le choix au cadre, qui sait, lui.
+addEventListener('message', ev=>{
+  const d=ev.data;
+  if(!d || d.sbx!=='contexte' || !d.id) return;
+  // Seulement du service actuellement embarque : une carte en aperçu ne doit
+  // pas pouvoir peupler la nav d'un autre.
+  if(!_svc || _svc.id!==d.id) return;
+  poseContextePousse(d.id, d.titre, d.items||[]);
+});
+
+function poseContextePousse(id, titre, items){
+  const ctx=document.getElementById('ctx'), bt=document.getElementById('mnav-ctx');
+  if(!ctx || !bt || !_svc || _svc.id!==id) return;
+  document.getElementById('ctx-h').textContent = titre || 'Sources';
+  ctx.innerHTML = items.slice(0,40).map(it=>
+    rowHTML({attrs:'data-ctxpush="'+esc(it.cle||'')+'"',
+             icon: it.icon || (_svc&&_svc.icon) || '📡',
+             label: it.label || it.cle || '—',
+             count: (it.badge!=null ? it.badge : null)})).join('');
+  if(items.length){ bt.classList.remove('no-menu'); bt.setAttribute('data-menu','contexte'); }
+}
+
 // Menubar façon macOS : plusieurs menus (services / systeme), chacun déroulé
 // aligné SOUS son propre titre. setMenu(name) ouvre le panneau #menu-<name> ;
 // setMenu(false) ferme tout.
@@ -1332,6 +1364,12 @@ document.addEventListener('click',e=>{
   // Nav contextuelle du service actif (panneau droit) — salons BBS & co.
   const cx=e.target.closest('[data-ctx]');
   if(cx && _svc){ e.preventDefault(); openService(_svc.id, _mode, cx.dataset.ctx, cx.dataset.ctxt); setMenu(false); return; }
+  // Item POUSSE par le service : on ne navigue pas, on lui renvoie le choix.
+  const cp=e.target.closest('[data-ctxpush]');
+  if(cp && _svc){ e.preventDefault();
+    const f=document.querySelector('#eb-frames iframe, iframe[data-micro="'+_svc.id+'"]');
+    try{ if(f&&f.contentWindow) f.contentWindow.postMessage({sbx:'contexte-choix', cle:cp.dataset.ctxpush}, '*'); }catch(err){}
+    setMenu(false); return; }
   // Point d'entrée unique : menus plats, cartes principales et cartes du parc.
   const op=e.target.closest('[data-open]');
   if(op){ openService(op.dataset.open, op.dataset.mode||'embed'); setMenu(false); return; }

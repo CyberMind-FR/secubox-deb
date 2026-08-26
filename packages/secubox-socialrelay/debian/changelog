@@ -1,3 +1,13 @@
+secubox-socialrelay (0.1.15-1~bookworm1) bookworm; urgency=medium
+
+  * BANDEAU MASQUE EN EMBARQUE + SOURCES DANS LA MEGABARRE (#1194e). Meme
+    detection que billets/metanews (`?embed=1` ou presence d'un cadre). Le
+    logo, la marque et le bouton « Sources » du bandeau disparaissent — le Hall
+    porte le contexte. La liste des sources connectees est POUSSEE dans la
+    megabarre contextuelle du Hall ; un clic revele leur gestion dans le cadre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:32:36 +0200
+
 secubox-socialrelay (0.1.14-1~bookworm1) bookworm; urgency=medium
 
   * TOUS LES MEDIAS, PAS SEULEMENT LES IMAGES (#1313). Une video a une premiere

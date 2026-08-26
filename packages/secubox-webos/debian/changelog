@@ -1,3 +1,14 @@
+secubox-webos (1.0.107-1~bookworm1) bookworm; urgency=medium
+
+  * LA MEGABARRE ACCUEILLE LES SOURCES POUSSEES PAR UN SERVICE (#1194e). Un
+    service embarque peut desormais peupler la nav contextuelle par message
+    (`sbx:'contexte'`) : le Hall l'affiche dans le meme panneau que les salons
+    BBS, et renvoie un clic au cadre (`sbx:'contexte-choix'`). C'est ainsi que
+    le bouton « Sources » de MetaNews — et bientot de SocialRelay — vit dans la
+    barre du Hall plutot que dans le cadre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:31:31 +0200
+
 secubox-webos (1.0.106-1~bookworm1) bookworm; urgency=medium
 
   * TORRENT PERD SES DEUX BOUTONS DU BAS (#1332), comme YTSaS et le Depot.

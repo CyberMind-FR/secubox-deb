@@ -245,6 +245,33 @@ if(!viseHash()) charger();
 // remplace par le flux global — le bug d'origine, revenu par la porte de service.
 setInterval(()=>{ if(!location.hash) charger(); },60000);
 
+// ── SOURCES DANS LA MEGABARRE DU HALL (#1194e) ──────────────────────────────
+// En embarque, le bouton « Sources » du bandeau est masque (le Hall porte le
+// contexte). On POUSSE plutot la liste des flux dans la megabarre contextuelle
+// du Hall, et on reagit a un clic — le service sait ce que « ouvrir cette
+// source » veut dire, le Hall non.
+if(document.documentElement.classList.contains('sbx-embed')){
+  (async function(){
+    let d; try{ d=await fetch(`${API}/sources`).then(r=>r.json()); }catch(e){ return; }
+    const src=(d&&d.sources)||[];
+    const items=[{cle:'__gerer', label:'Gérer les flux', icon:'⚙'}].concat(
+      src.map(s=>({
+        cle:'src:'+s.id,
+        label:s.name,
+        badge:s.category||'',
+        icon: s.enabled ? (s.last_error?'⚠':'●') : '○'
+      })));
+    try{ parent.postMessage({sbx:'contexte', id:'metanews', titre:'Sources', items}, '*'); }catch(e){}
+  })();
+  window.addEventListener('message', ev=>{
+    const m=ev.data; if(!m || m.sbx!=='contexte-choix') return;
+    // Tout choix revele la gestion des flux — l'action du bouton « Sources »,
+    // desormais declenchee depuis la megabarre.
+    const admin=document.getElementById('admin');
+    if(admin){ admin.hidden=false; loadSources(); admin.scrollIntoView({block:'start'}); }
+  });
+}
+
 // ── Admin : gestion des flux ────────────────────────────────────────────────
 const gear=document.getElementById("gear"), admin=document.getElementById("admin");
 const gid=id=>document.getElementById(id);

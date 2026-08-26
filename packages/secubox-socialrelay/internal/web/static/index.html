@@ -176,7 +176,15 @@ body{margin:0;background:
 .fbcard a.jump{display:inline-block;margin-top:6px;font-family:var(--mono);font-size:.72rem;color:var(--cyan);word-break:break-all;text-decoration:none;border:1px solid var(--line2);border-radius:8px;padding:8px 10px}
 .fbnote{font-size:.76rem;color:var(--mut);line-height:1.5;margin-top:8px}
 .fbnote code{font-family:var(--mono);font-size:.7rem;color:var(--cyan);background:var(--bg);padding:1px 5px;border-radius:4px}
+html.sbx-embed .mast .logo, html.sbx-embed .mast .brand, html.sbx-embed .mast .gear{display:none}
+html.sbx-embed .mast{padding-top:6px;padding-bottom:0}
+html.sbx-embed .mast-row{min-height:0}
 </style></head><body>
+<script>
+  // MEME REGLE QUE BILLETS/METANEWS : `?embed=1` ou la presence d'un cadre.
+  try{ if(new URLSearchParams(location.search).get('embed')==='1' || window.top!==window.self)
+    document.documentElement.classList.add('sbx-embed'); }catch(e){}
+</script>
 <div class="mast">
   <div class="mast-row">
     <span class="logo">🌐</span>
@@ -327,6 +335,27 @@ async function fbStart(){
 fetch(`${API}/sources`).then(r=>r.json()).then(d=>rail(d.sources)).catch(()=>{});
 gid("gear").addEventListener("click",()=>{if(!gid("admin").hidden)fbStatus();});
 charger();setInterval(charger,60000);
+
+// ── SOURCES DANS LA MEGABARRE DU HALL (#1194e) ──────────────────────────────
+if(document.documentElement.classList.contains('sbx-embed')){
+  (async function(){
+    let d; try{ d=await fetch(`${API}/sources`).then(r=>r.json()); }catch(e){ return; }
+    const src=(d&&d.sources)||[];
+    const items=[{cle:'__gerer', label:'Gérer les sources', icon:'⚙'}].concat(
+      src.map(s=>({
+        cle:'src:'+s.id,
+        label:s.name,
+        badge:s.mode||'',
+        icon: s.last_error ? '⚠' : (s.enabled ? '●' : '○')
+      })));
+    try{ parent.postMessage({sbx:'contexte', id:'socialrelay', titre:'Sources', items}, '*'); }catch(e){}
+  })();
+  window.addEventListener('message', ev=>{
+    const m=ev.data; if(!m || m.sbx!=='contexte-choix') return;
+    const a=document.getElementById('admin');
+    if(a){ a.hidden=false; loadSources(); a.scrollIntoView({block:'start'}); }
+  });
+}
 </script>
 <script>
 // THEME HERITE DE L'HOTE (#1268). Encadree par le Hall, la page decidait seule
