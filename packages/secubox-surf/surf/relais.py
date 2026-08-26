@@ -263,8 +263,15 @@ _INJECTION = """
 ins.adsbygoogle,[id^="google_ads_"],[class*="advert" i],[class*="-ads" i],
 [class*="ad-slot" i],[class*="ad-container" i],[class*="ad-banner" i],
 [class*="sticky" i][class*="ad" i],[class*="floating" i][class*="video" i],
-[class*="pip" i][class*="player" i],[class*="outbrain" i],[class*="taboola" i],
-[class*="sponsored" i][class*="widget" i]{
+[class*="pip" i][class*="player" i],
+/* TABOOLA / OUTBRAIN — conteneurs entiers, par leur reseau (#1363). Le script
+   est deja coupe a la source, mais le conteneur vide garde son bandeau
+   « Taboola Feed », obscene. Aucun contenu legitime ne porte ces classes. */
+[id*="taboola" i],[class*="taboola" i],[id^="trc_" i],[class*="trc_" i],
+[class*="trc-" i],[id*="outbrain" i],[class*="outbrain" i],[class*="ob-widget" i],
+[class*="ob_" i],[class*="OUTBRAIN" i],[data-widget*="taboola" i],
+[class*="sponsored" i][class*="widget" i],[class*="sponsored" i][class*="content" i],
+[class*="partner" i][class*="content" i],[class*="reco" i][class*="ad" i]{
   display:none !important;visibility:hidden !important;height:0 !important;
 }
 html,body{overflow:auto !important}
