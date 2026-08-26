@@ -1,3 +1,17 @@
+secubox-billets (0.8.13-1~bookworm1) bookworm; urgency=medium
+
+  * BILLETS ACCEPTE D'ETRE ENCADRE PAR LE HALL (#1256). `frame-ancestors
+    'none'` interdisait TOUT cadrage : la carte du Hall restait vide et le Hall
+    retombait sur un portrait generique du service. Un module SecuBox est fait
+    pour etre affiche dans une carte — il nomme ses hotes, comme le BBS.
+  * La liste reste EXPLICITE. `frame-ancestors *` accepterait n'importe quel
+    site, ce qui est precisement l'attaque que cette directive existe pour
+    empecher. SECUBOX_FRAME_ANCESTORS permet d'en ajouter sur une autre box, et
+    refuse toute valeur contenant `;` ou un guillemet : ces caracteres
+    cloturent la directive et laisseraient injecter la suite de la politique.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:58:46 +0200
+
 secubox-billets (0.8.12-1~bookworm1) bookworm; urgency=medium
 
   * DEMARRAGE IMPOSSIBLE : un `import os` s'etait insere AVANT

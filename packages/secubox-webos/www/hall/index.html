@@ -375,6 +375,39 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    entière : le cardlet radio est une iframe, un glisser posé sur toute la carte
    volerait les clics destinés au lecteur — on ne pourrait plus mettre en pause.
    Discrète au repos, franche au survol. */
+/* APERÇU VIVANT (#1256) — le « smart embed ».
+   Beaucoup de services n'ont pas encore de vue /micro à servir. Jusqu'ici le
+   Hall peignait à leur place une carte statique : pictogramme, nom, une phrase
+   générique. C'est un PORTRAIT, et un portrait dérive de son modèle.
+   Là où le vhost accepte déjà d'être encadré, on montre le SERVICE RÉEL, mis à
+   l'échelle. Rien n'est inventé, et le jour où le service sert son /micro, il
+   remplace l'aperçu sans que le Hall ait à changer d'avis.
+   La mise à l'échelle rend une page de 1280 px lisible dans 250 : sans elle le
+   cadre n'afficherait qu'un coin de la page, ce qui ne dit rien du service. */
+.fcard.fcard-apercu{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.fcard-apercu .ap-tete{display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.fcard-apercu .ap-tete .ic{width:26px;height:26px;border-radius:8px;display:grid;
+  place-items:center;font-size:.9rem;flex:0 0 auto}
+.fcard-apercu .ap-tete .nm{min-width:0;flex:1}
+.fcard-apercu .ap-tete .nm b{display:block;font-size:.86rem;line-height:1.15}
+.fcard-apercu .ap-tete .nm .host{font-size:.6rem;color:var(--dim);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.fcard-apercu .ap-vue{position:relative;height:174px;overflow:hidden;
+  background:var(--panel)}
+/* pointer-events:none : sans cela le cadre avalerait la molette et le Hall ne
+   défilerait plus au survol d'un aperçu. La couche au-dessus reçoit le clic. */
+.fcard-apercu .ap-vue iframe{position:absolute;top:0;left:0;width:1280px;height:900px;
+  border:0;transform-origin:top left;pointer-events:none;background:var(--panel)}
+.fcard-apercu .ap-ouvre{position:absolute;inset:0;background:transparent;border:0;
+  cursor:pointer;padding:0;display:block}
+.fcard-apercu .ap-ouvre:hover{background:color-mix(in srgb,var(--violet) 9%,transparent)}
+.fcard-apercu .ap-ouvre:focus-visible{outline:2px solid var(--violet);outline-offset:-2px}
+.fcard-apercu .ap-pied{display:flex;align-items:center;gap:6px;padding:5px 10px;
+  border-top:1px solid var(--line);font-size:.58rem;color:var(--dim);
+  font-family:"JetBrains Mono";letter-spacing:.06em;text-transform:uppercase;flex:0 0 auto}
+.fcard-apercu .ap-pied .grow{flex:1}
+
 .fcard{position:relative}
 /* Menu PROFIL (#1245). Il n'y en avait pas : le bloc n'était qu'une étiquette.
    Ancré sous lui, à droite — il déborderait de la fenêtre s'il s'ouvrait vers
@@ -708,7 +741,13 @@ const FEATURED = [
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
 // n'autorise pas hall.gk2.secubox.in.
-const EMBEDDABLE = new Set(["metanews","kbin","socialrelay","bbs","radio"]);
+// Relevé sur la box le 2026-08-26 : en-têtes X-Frame-Options et
+// frame-ancestors interrogés service par service. billets et depot
+// acceptaient déjà d'être encadrés sans que la liste le sache.
+// Refusent, et gardent donc la carte classique : peertube (DENY),
+// nextcloud (SAMEORIGIN), photoprism et mastodon (frame-ancestors none),
+// webmail (sameorigin).
+const EMBEDDABLE = new Set(["metanews","kbin","socialrelay","bbs","radio","billets","depot"]);
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [
   {id:"wall",name:"Muraille",icon:"🛡️"},{id:"mind",name:"Esprit",icon:"🧠"},
@@ -755,6 +794,32 @@ function featCardHTML(f,s){
       + ' title="'+esc(f.label)+'" allow="autoplay" loading="lazy"></iframe>'
       + '</article>';
   }
+  // À DÉFAUT DE /micro, LE SERVICE LUI-MÊME (#1256). Tant qu'il n'a pas de vue
+  // à servir, on montre sa page réelle mise à l'échelle plutôt qu'un portrait
+  // générique. Réservé à ceux dont le vhost accepte déjà le cadrage : les
+  // autres afficheraient un cadre vide, ce qui serait pire que la carte.
+  if(EMBEDDABLE.has(f.id)){
+    const th=root.getAttribute('data-theme')
+      || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    return '<article class="fcard fcard-apercu" data-embed="'+esc(f.id)+'">'
+      + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
+      + '<div class="ap-tete">'
+      +   '<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
+      +   '<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
+      +   '<span class="state"><i class="led '+st+'"></i></span>'
+      + '</div>'
+      + '<div class="ap-vue">'
+      +   '<iframe data-apercu="'+esc(f.id)+'" scrolling="no" tabindex="-1" aria-hidden="true"'
+      +     ' src="https://'+esc(h)+'/?theme='+th+'&sbx=apercu"'
+      +     ' title="Aperçu de '+esc(f.label)+'" loading="lazy"></iframe>'
+      +   '<button class="ap-ouvre" type="button" data-ouvre="'+esc(f.id)+'"'
+      +     ' title="Ouvrir '+esc(f.label)+'" aria-label="Ouvrir '+esc(f.label)+'"></button>'
+      + '</div>'
+      + '<div class="ap-pied"><span>aperçu en direct</span><span class="grow"></span>'
+      +   '<span>'+esc(s.category||'')+'</span></div>'
+      + '</article>';
+  }
+
   return '<article class="fcard clic" data-embed="'+esc(f.id)+'">'
     +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span><div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
@@ -790,6 +855,8 @@ function render(data,src){
   const fg=document.getElementById('featgrid'); let fh='';
   FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
   fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.length+' services';
+  // Les cadres viennent d'être posés : leur largeur est enfin mesurable.
+  echelleApercus();
   if(window.rangeCardlets) rangeCardlets();   // #1234 : l'ordre choisi par l'opérateur
   vivifieCartes();   // #1231 : les cartes qui ont un cardlet prennent ses données
   // tiles + entête (vérité opérationnelle du registre)
@@ -1383,6 +1450,19 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // n'en a pas, elle garde sa description : on n'invente rien, et l'ajout d'un
 // cardlet suffit à vivifier sa carte sans toucher au Hall. La liste est
 // DÉCOUVERTE auprès du serveur, jamais écrite ici.
+// L'ÉCHELLE SE MESURE, ELLE NE SE DEVINE PAS (#1256). La largeur d'une carte
+// dépend du nombre de colonnes, donc de la fenêtre : une valeur écrite en dur
+// dans le CSS afficherait un coin de page sur un écran et une vignette perdue
+// sur l'autre. On la recalcule au rendu et à chaque redimensionnement.
+const LARGEUR_PAGE = 1280;
+function echelleApercus(){
+  document.querySelectorAll('.ap-vue > iframe[data-apercu]').forEach(f=>{
+    const l = f.parentElement.clientWidth;
+    if(l > 0) f.style.transform = 'scale(' + (l / LARGEUR_PAGE) + ')';
+  });
+}
+addEventListener('resize', echelleApercus);
+
 async function vivifieCartes(){
   try{
     if(_cardletsVus === null){

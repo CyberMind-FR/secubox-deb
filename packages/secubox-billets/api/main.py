@@ -79,6 +79,29 @@ def _frame_src(extra_hosts: tuple[str, ...] = ()) -> str:
     return " ".join(parts)
 
 
+def _ancetres() -> str:
+    """Qui a le droit d'encadrer Billets.
+
+    `'none'` interdisait TOUT cadrage, y compris par le Hall — la carte y
+    restait donc vide, et le Hall retombait sur un portrait générique du
+    service (#1256). Un module SecuBox est fait pour être affiché dans une
+    carte : il nomme ses hôtes plutôt que de fermer la porte à tout le monde,
+    exactement comme le BBS.
+
+    La liste reste EXPLICITE : `frame-ancestors *` accepterait n'importe quel
+    site, ce qui est précisément l'attaque que cette directive existe pour
+    empêcher. SECUBOX_FRAME_ANCESTORS permet d'en ajouter sur une autre box.
+    """
+    base = "'self' https://hall.gk2.secubox.in https://hall.gk2.net"
+    sup = os.environ.get("SECUBOX_FRAME_ANCESTORS", "").strip()
+    # Un `;` ou un guillemet dans la variable clôturerait la directive et
+    # laisserait injecter la suite de la politique : on refuse plutôt que de
+    # produire une CSP que le navigateur pourrait lire de travers.
+    if sup and not any(c in sup for c in ";'\""):
+        base += " " + sup
+    return base
+
+
 def _csp(frame_src: str, *, fonts: bool = False) -> str:
     # style-src allows 'unsafe-inline': the SecuBox health-banner is injected by
     # the WAF (sbxmitm sub_filter) and self-styles via a dynamic <style> element;
@@ -90,7 +113,7 @@ def _csp(frame_src: str, *, fonts: bool = False) -> str:
     return (
         "default-src 'self'; img-src 'self' https: data:; "
         f"{style_src}; script-src 'self'; base-uri 'none'; "
-        f"form-action 'self'; frame-ancestors 'none';{font_src} frame-src {frame_src}"
+        f"form-action 'self'; frame-ancestors {_ancetres()};{font_src} frame-src {frame_src}"
     )
 
 

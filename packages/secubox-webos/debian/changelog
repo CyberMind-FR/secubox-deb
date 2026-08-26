@@ -1,3 +1,25 @@
+secubox-webos (1.0.57-1~bookworm1) bookworm; urgency=medium
+
+  * APERCU VIVANT — le « smart embed » (#1256). Beaucoup de services n'ont pas
+    encore de vue /micro a servir, et le Hall peignait a leur place une carte
+    statique : pictogramme, nom, une phrase generique. C'est un PORTRAIT, et un
+    portrait derive de son modele. La ou le vhost accepte deja d'etre encadre,
+    on montre le SERVICE REEL, mis a l'echelle. Rien n'est invente, et le jour
+    ou le service sert son /micro, il remplace l'apercu sans que le Hall ait a
+    changer d'avis.
+  * L'echelle se MESURE : la largeur d'une carte depend du nombre de colonnes,
+    donc de la fenetre. Une valeur ecrite en dur afficherait un coin de page
+    sur un ecran et une vignette perdue sur l'autre.
+  * pointer-events:none sur le cadre : sans cela il avalerait la molette et le
+    Hall ne defilerait plus au survol d'un apercu. Une couche transparente
+    au-dessus recoit le clic et embarque le service.
+  * La liste des encadrables a ete RELEVEE sur la box, service par service :
+    billets et depot l'etaient deja sans que la liste le sache. Refusent, et
+    gardent donc la carte classique : peertube (DENY), nextcloud (SAMEORIGIN),
+    photoprism et mastodon (frame-ancestors none), webmail (sameorigin).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:58:50 +0200
+
 secubox-webos (1.0.56-1~bookworm1) bookworm; urgency=medium
 
   * Carte du pare-feu : 186 -> 238 px, la place exacte des trois dernieres
