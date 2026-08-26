@@ -737,6 +737,7 @@
                             ? (a.categories[0] + (a.categories.length > 1 ? ' +' + (a.categories.length - 1) : ''))
                             : (a.category || a.scenario || 'Unknown'),
                         severity: a.max_severity || a.severity || 'medium',
+                        dejaBanni: !!a.currently_banned,
                         timestamp: a.timestamp || a.created_at,
                         count: a.count || 1
                     });
@@ -787,10 +788,15 @@
             }
 
             tbody.innerHTML = events.slice(0, 15).map(e => {
-                const typeClass = e.type === 'ban' ? 'ban' : (e.type === 'blocked' ? 'blocked' : 'alert');
-                const typeLabel = e.type === 'ban' ? '🚫 BAN' : (e.type === 'blocked' ? '🛡️ BLOCK' : '⚠️ ALERT');
+                const typeClass = (e.type === 'ban' || e.dejaBanni) ? 'ban'
+                    : (e.type === 'blocked' ? 'blocked' : 'alert');
+                const typeLabel = (e.type === 'ban' || e.dejaBanni) ? '🚫 BANNI'
+                    : (e.type === 'blocked' ? '🛡️ BLOCK' : '⚠️ ALERTE');
                 const sevClass = (e.severity || 'medium').toLowerCase();
-                const actionBtn = e.type === 'ban'
+                // Une adresse DÉJÀ écartée par le pare-feu ne doit pas se voir
+                // proposer « Ban » : le bouton serait sans objet, et laisserait
+                // croire qu'elle passe encore. On offre la levée à la place.
+                const actionBtn = (e.type === 'ban' || e.dejaBanni)
                     ? '<button class="btn success sm" onclick="unbanIp(\'' + e.ip + '\')">Unban</button>'
                     : '<button class="btn danger sm" onclick="banIp(\'' + e.ip + '\')">Ban</button>';
                 return '<tr>' +

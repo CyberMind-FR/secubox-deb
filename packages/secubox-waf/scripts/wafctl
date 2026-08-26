@@ -312,6 +312,87 @@ cmd_anti_robots() {
     fi
 }
 
+NFT_TABLE="secubox"
+
+# cmd_ban / cmd_unban — bannissement MANUEL depuis le tableau de bord (#1225).
+#
+# Le bouton « Ban » du panneau passait par `cscli decisions add`. Depuis que
+# CrowdSec est retire (#1210), cette commande ne fait plus rien — et l'API
+# avalait l'echec (`except: pass`), si bien que le bouton annoncait un succes
+# sans que rien ne soit banni. On ecrit desormais dans l'ensemble nft du WAF,
+# celui que la chaine waf_drop consulte : le seul endroit qui bloque vraiment.
+#
+# GARDE-FOU identique a celui du moteur : jamais une adresse privee. Le drop est
+# reel ; bannir 192.168.x.x couperait l'administration de la box depuis la box.
+_valide_ip() {
+    local ip="$1"
+    python3 - "$ip" <<'PY' 2>/dev/null
+import ipaddress, sys
+# On refuse EXACTEMENT ce qui couperait l'administration : le RFC 1918, le
+# loopback, le lien-local, l'adresse nulle, et les ULA IPv6. PAS `is_private`
+# de Python, qui range aussi les plages de DOCUMENTATION (203.0.113.0/24,
+# 198.51.100.0/24, 192.0.2.0/24) parmi les privees : le garde devenait plus
+# large que son intention, et rendait l'outil intestable — le premier essai a
+# refuse une adresse de test parfaitement bannissable. Le moteur Go applique la
+# meme regle, ni plus ni moins.
+INTERDITS = [ipaddress.ip_network(r) for r in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+    "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/8",
+    "::1/128", "fe80::/10", "fc00::/7", "::/128",
+)]
+try:
+    a = ipaddress.ip_address(sys.argv[1])
+except ValueError:
+    sys.exit(1)
+for r in INTERDITS:
+    if a.version == r.version and a in r:
+        sys.exit(2)
+print(6 if a.version == 6 else 4)
+PY
+}
+
+cmd_ban() {
+    local ip="$1" duree="${2:-4h}" version
+    version=$(_valide_ip "$ip") || {
+        case $? in
+            2) error "Adresse privée refusée : $ip" ;;
+            *) error "Adresse invalide : $ip" ;;
+        esac
+        return 1
+    }
+    if ! [[ "$duree" =~ ^[0-9]+[smhd]$ ]]; then
+        error "Durée invalide : $duree (attendu 30m, 4h, 1d…)"
+        return 1
+    fi
+    local secondes unite nombre
+    nombre="${duree%[smhd]}"; unite="${duree: -1}"
+    case "$unite" in
+        s) secondes=$nombre ;;
+        m) secondes=$((nombre * 60)) ;;
+        h) secondes=$((nombre * 3600)) ;;
+        d) secondes=$((nombre * 86400)) ;;
+    esac
+    local ensemble="waf_ban"
+    [ "$version" = "6" ] && ensemble="waf_ban6"
+    if nft add element inet "$NFT_TABLE" "$ensemble" "{ $ip timeout ${secondes}s }" 2>/dev/null; then
+        log "ban $ip → $ensemble (${secondes}s)"
+    else
+        error "nft a refusé le bannissement de $ip"
+        return 1
+    fi
+}
+
+cmd_unban() {
+    local ip="$1" version
+    version=$(_valide_ip "$ip") || { error "Adresse invalide ou privée : $ip"; return 1; }
+    local ensemble="waf_ban"
+    [ "$version" = "6" ] && ensemble="waf_ban6"
+    # Retirer une adresse absente n'est pas une erreur : l'operateur veut
+    # qu'elle ne soit plus bannie, et c'est deja le cas.
+    nft delete element inet "$NFT_TABLE" "$ensemble" "{ $ip }" 2>/dev/null
+    log "unban $ip"
+}
+
 case "${1:-}" in
     status)     cmd_status ;;
     components) cmd_components ;;
@@ -325,6 +406,8 @@ case "${1:-}" in
     reload)     cmd_reload ;;
     purge-cache) cmd_purge_cache ;;
     anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
+    ban)        cmd_ban "${2:-}" "${3:-}" ;;
+    unban)      cmd_unban "${2:-}" ;;
     test)       cmd_test "$2" ;;
     *)
         cat << EOF

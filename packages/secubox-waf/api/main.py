@@ -290,30 +290,40 @@ def _should_autoban(threat: dict) -> bool:
     return threat_severity >= min_severity
 
 
-def _ban_ip(ip: str, duration: str = "4h", reason: str = "WAF auto-ban"):
-    """Ban IP via CrowdSec."""
+def _ban_ip(ip: str, duration: str = "4h", reason: str = "WAF auto-ban") -> tuple:
+    """Bannit une adresse dans l'ensemble nft du WAF (#1225).
+
+    Cette fonction passait par `cscli decisions add` et AVALAIT l'echec
+    (`except: pass`). Depuis le retrait de CrowdSec (#1210) la commande ne
+    faisait plus rien : le bouton « Ban » du tableau de bord annoncait un succes
+    sans que rien ne soit banni. Elle ecrit desormais dans l'ensemble que la
+    chaine waf_drop consulte — le seul endroit qui bloque vraiment — par le
+    verbe `wafctl ban`, qui valide l'adresse et refuse le prive.
+
+    Rend (succes, message). L'appelant DOIT propager l'echec : un bouton qui
+    ment est pire qu'un bouton absent.
+    """
+    _ = reason  # le motif vit dans le journal de menaces, pas dans le set nft
     try:
-        subprocess.run([
-            "sudo", "cscli", "decisions", "add",
-            "--ip", ip,
-            "--type", "ban",
-            "--duration", duration,
-            "--reason", reason
-        ], capture_output=True, timeout=10)
-    except Exception:
-        pass
+        r = subprocess.run(["sudo", "-n", "/usr/sbin/wafctl", "ban", ip, duration],
+                           capture_output=True, text=True, timeout=15)
+    except Exception as e:
+        return False, f"wafctl injoignable : {e}"
+    if r.returncode != 0:
+        return False, (r.stderr or r.stdout or "échec sans message").strip()
+    return True, (r.stdout or "").strip()
 
 
-def _unban_ip(ip: str):
-    """Remove IP ban via CrowdSec."""
+def _unban_ip(ip: str) -> tuple:
+    """Retire une adresse de l'ensemble nft. Rend (succes, message)."""
     try:
-        subprocess.run([
-            "sudo", "cscli", "decisions", "delete",
-            "--ip", ip
-        ], capture_output=True, timeout=10)
-    except Exception:
-        pass
-
+        r = subprocess.run(["sudo", "-n", "/usr/sbin/wafctl", "unban", ip],
+                           capture_output=True, text=True, timeout=15)
+    except Exception as e:
+        return False, f"wafctl injoignable : {e}"
+    if r.returncode != 0:
+        return False, (r.stderr or r.stdout or "échec sans message").strip()
+    return True, (r.stdout or "").strip()
 
 def _raison_du_ban(ip: str, cache: dict) -> str:
     """Motif du bannissement, lu dans le journal de menaces.
@@ -1404,6 +1414,9 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
     # Le lecteur GeoIP est ouvert UNE fois pour tout le lot : chaque appel a
     # _get_geoip_reader ouvrirait sinon la base par adresse agregee.
     _geo = _get_geoip_reader()
+    with _warm_lock:
+        _bans_chauds = _warm.get("bans")
+    _deja_bannies = {b.get("ip") for b in (_bans_chauds or []) if b.get("ip")}
     ip_groups: Dict[str, dict] = defaultdict(
         lambda: {"alerts": [], "count": 0, "categories": set(), "severities": set()}
     )
@@ -1427,6 +1440,10 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
         # un globe generique sur chaque ligne. On le resout ici, une fois par
         # adresse — la base GeoIP est deja ouverte pour le reste.
         aggregated.append({
+            # Deja banni ? Le tableau proposait « Ban » sur des adresses que le
+            # pare-feu ecartait deja : un bouton sans effet, et une lecture
+            # fausse de l'etat.
+            "currently_banned": ip in _deja_bannies,
             "country": _lookup_country(ip, _geo) if ip and ip != "local" else "",
             "client_ip": ip,
             "count": data["count"],
@@ -1568,18 +1585,27 @@ class BanRequest(BaseModel):
 
 @app.post("/ban", dependencies=[Depends(require_jwt)])
 async def ban_ip(req: BanRequest):
-    """Manually ban an IP."""
-    _ban_ip(req.ip, req.duration, req.reason)
-    stats_cache.invalidate()  # bans affect /stats top_ips + /alerts visibility
-    return {"success": True, "ip": req.ip, "duration": req.duration}
+    """Bannit manuellement une adresse. L'echec est PROPAGE : un bouton qui
+    annonce un succes sans rien faire est pire qu'un bouton absent."""
+    ok, message = _ban_ip(req.ip, req.duration, req.reason)
+    if not ok:
+        raise HTTPException(500, f"bannissement refusé : {message}")
+    stats_cache.invalidate()
+    with _warm_lock:
+        _warm["bans"] = None  # forcer la relecture de l'ensemble nft
+    return {"success": True, "ip": req.ip, "duration": req.duration, "message": message}
 
 
 @app.post("/unban/{ip}", dependencies=[Depends(require_jwt)])
 async def unban_ip(ip: str):
-    """Remove IP ban."""
-    _unban_ip(ip)
+    """Retire un bannissement. L'echec est propage."""
+    ok, message = _unban_ip(ip)
+    if not ok:
+        raise HTTPException(500, f"levée du ban refusée : {message}")
     stats_cache.invalidate()
-    return {"success": True, "ip": ip}
+    with _warm_lock:
+        _warm["bans"] = None
+    return {"success": True, "ip": ip, "message": message}
 
 
 class CheckRequest(BaseModel):

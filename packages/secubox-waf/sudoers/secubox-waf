@@ -47,6 +47,15 @@ Cmnd_Alias SBX_WAF_NFTLIST = /usr/sbin/nft -j list set inet secubox waf_ban, \
                              /sbin/nft -j list set inet secubox waf_ban, \
                              /sbin/nft -j list set inet secubox waf_ban6
 
+# ── 5. Bannissement manuel depuis le tableau de bord (#1225) ────────────────
+#
+# Le bouton « Ban » passait par cscli, retire du chemin de blocage : il
+# annoncait un succes sans rien bannir. Il ecrit desormais dans l'ensemble nft
+# du WAF, par un verbe unique qui valide l'adresse, refuse le prive et borne la
+# duree. `secubox` n'obtient pas nft : il obtient CE verbe.
+Cmnd_Alias SBX_WAF_BANMANUEL = /usr/sbin/wafctl ban *, \
+                               /usr/sbin/wafctl unban *
+
 Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
                             /usr/sbin/wafctl anti-robots on *, \
                             /usr/sbin/wafctl anti-robots off *
@@ -55,6 +64,7 @@ secubox ALL=(root) NOPASSWD: SBX_WAF_CSCLI
 secubox ALL=(root) NOPASSWD: SBX_WAF_PURGE
 secubox ALL=(root) NOPASSWD: SBX_WAF_ROBOTS
 secubox ALL=(root) NOPASSWD: SBX_WAF_NFTLIST
+secubox ALL=(root) NOPASSWD: SBX_WAF_BANMANUEL
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
 Defaults!SBX_WAF_PURGE !requiretty

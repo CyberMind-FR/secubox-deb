@@ -1,3 +1,29 @@
+secubox-waf (1.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * LE BOUTON « BAN » NE BANNISSAIT PLUS RIEN (#1225). Il passait par
+    `cscli decisions add` ; depuis le retrait de CrowdSec (#1210) la commande
+    ne fait plus rien — et _ban_ip avalait l'echec (`except: pass`). Le panneau
+    annoncait donc un succes sans qu'aucune adresse ne soit bannie. Le
+    bannissement manuel ecrit desormais dans l'ensemble nft du WAF, celui que
+    la chaine waf_drop consulte, par le nouveau verbe `wafctl ban` — qui valide
+    l'adresse, REFUSE le prive et borne la duree. `secubox` n'obtient pas nft :
+    il obtient ce verbe.
+  * L'echec est PROPAGE jusqu'a l'interface : un bouton qui annonce un succes
+    sans rien faire est pire qu'un bouton absent.
+  * Security Events proposait « Ban » sur des adresses que le pare-feu ecartait
+    DEJA — bouton sans objet, et lecture fausse de l'etat. L'agregat porte
+    maintenant `currently_banned` ; ces lignes s'affichent « BANNI » et offrent
+    la levee.
+  * Le garde d'adresse refusait EXACTEMENT ce qu'il ne fallait pas : il
+    s'appuyait sur `is_private` de Python, qui range aussi les plages de
+    DOCUMENTATION (203.0.113.0/24, 198.51.100.0/24, 192.0.2.0/24) parmi les
+    privees. Le garde etait donc plus large que son intention et rendait l'outil
+    intestable. Il enumere desormais ce qui couperait l'administration — RFC
+    1918, loopback, lien-local, adresse nulle, ULA — ni plus ni moins, comme le
+    moteur Go.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:03:44 +0200
+
 secubox-waf (1.8.1-1~bookworm1) bookworm; urgency=medium
 
   * Tableau de bord WAF (#1224), /waf/tableau.html. Le panneau repond a « que
