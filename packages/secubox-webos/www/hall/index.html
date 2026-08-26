@@ -1527,6 +1527,18 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // Une carte qui manque d'accès demande au Hall d'ouvrir la validation. On
   // l'ouvre en FENÊTRE À PART : l'accueil reste en place, la radio joue, la
   // vidéo continue. Rien de ce qui était en cours n'est interrompu.
+  // Une carte peut demander l'ouverture de la connexion (#1299) : c'est le
+  // Hall qui ouvre la fenêtre — une popup ouverte depuis un cadre peut être
+  // bloquée, et le Hall doit de toute façon savoir qu'il faudra se relire.
+  addEventListener('message', ev=>{
+    const d=ev.data;
+    if(!d||d.sbx!=='connexion') return;
+    const c=document.querySelector('iframe[data-micro]');
+    if(!c) return;
+    window.open('https://admin.gk2.secubox.in/login.html',
+                'sbx-session', 'width=520,height=560,noopener');
+  });
+
   addEventListener('message', ev=>{
     const d=ev.data;
     if(!d||d.sbx!=='valider'||!d.id) return;

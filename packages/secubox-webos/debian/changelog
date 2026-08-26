@@ -1,3 +1,27 @@
+secubox-webos (1.0.88-1~bookworm1) bookworm; urgency=medium
+
+  * CONSTATER NE SUFFIT PAS, IL FAUT PROPOSER (#1299). La page d'acces et les
+    cartes disaient « connectez-vous » sans donner le moyen de le faire :
+    envoyer chercher ailleurs ce qu'on pourrait regler ici. Les deux offrent
+    desormais le bouton — qui OUVRE la vraie page de connexion, jamais un
+    formulaire a nous.
+  * Sur un domaine qui ne porte pas le temoin de session, se connecter ne
+    servirait a rien : on nomme la vraie cause d'abord et on propose de
+    basculer, plutot que de faire tourner en rond.
+  * LA FENETRE S'OUVRE DEPUIS LE HALL, pas depuis le cadre : une popup ouverte
+    par un cadre peut etre bloquee, et le Hall doit de toute facon savoir
+    qu'une connexion est en cours pour se relire ensuite.
+  * UNE DEMANDE EN ATTENTE RESTE ACTIONNABLE (#1300) : « En attente… » grise
+    n'apprenait rien et ne menait nulle part, alors que c'est justement au
+    moment ou une demande attend qu'on veut la valider. Le bouton ouvre la
+    fenetre de validation, a cote.
+  * ↗ dans la liste des demandes et des acces : la meme validation, en fenetre
+    a part. Encadree dans le Hall la page est etroite ; la fenetre donne la
+    place, garde la barre d'adresse visible, et laisse l'accueil intact
+    derriere.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:09:43 +0200
+
 secubox-webos (1.0.87-1~bookworm1) bookworm; urgency=medium
 
   * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la

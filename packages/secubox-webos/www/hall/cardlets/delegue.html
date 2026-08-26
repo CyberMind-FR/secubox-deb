@@ -123,15 +123,30 @@
       // enregistrables distincts. Dire « connectez-vous » à quelqu'un qui
       // l'est déjà l'enverrait tourner en rond ; on nomme la vraie cause et
       // on donne le chemin.
+      // CONSTATER NE SUFFIT PAS, IL FAUT PROPOSER (#1299). Une carte qui dit
+      // « connectez-vous » sans donner le moyen de le faire envoie chercher
+      // ailleurs ce qu'on pourrait régler ici.
       var meme = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
       el('corps').innerHTML = meme
-        ? '<div class="sans"><p>Connectez-vous à la box pour voir '
-            + esc(c.quoi) + '.</p></div>'
-        : '<div class="sans"><p>Votre session SecuBox ne vaut pas sur ce '
-            + 'domaine.</p><button id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
+        ? '<div class="sans"><p>Connectez-vous pour voir ' + esc(c.quoi) + '.</p>'
+            + '<button id="cnx">Se connecter…</button></div>'
+        : '<div class="sans"><p>Votre session ne vaut pas sur ce domaine.</p>'
+            + '<button id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
       var t = el('bascule');
       if (t) t.addEventListener('click', function () {
         top.location.href = 'https://hall.gk2.secubox.in/';
+      });
+      var k = el('cnx');
+      if (k) k.addEventListener('click', function () {
+        // LA FENÊTRE S'OUVRE DEPUIS LE HALL, pas depuis le cadre : une popup
+        // ouverte par un cadre peut être bloquée, et surtout le Hall doit
+        // savoir qu'une connexion est en cours pour se relire ensuite.
+        if (parent !== window) {
+          try { parent.postMessage({ sbx: 'connexion' }, '*'); } catch (e) {}
+        } else {
+          window.open('https://admin.gk2.secubox.in/login.html',
+                      'sbx-session', 'width=520,height=560,noopener');
+        }
       });
       return;
     }
@@ -140,9 +155,21 @@
       + '<p>' + (att
           ? 'Demande déposée. Elle attend une validation.'
           : 'Cette carte peut afficher ' + esc(c.quoi) + ', avec votre accord.')
-      + '</p><button id="dem"' + (att ? ' disabled' : '') + '>'
-      + (att ? 'En attente…' : 'Demander l’accès') + '</button></div>';
+      + '</p><button id="dem">'
+      // UNE DEMANDE EN ATTENTE RESTE ACTIONNABLE (#1300). « En attente… »
+      // grisé n'apprend rien et ne mène nulle part : c'est justement au moment
+      // où une demande attend qu'on veut pouvoir la valider. Le bouton ouvre
+      // alors la fenêtre de validation, à côté.
+      + (att ? 'Valider maintenant ↗' : 'Demander l’accès') + '</button></div>';
     var b = el('dem');
+    if (b && att) b.addEventListener('click', function () {
+      if (parent !== window) {
+        try { parent.postMessage({ sbx: 'valider', id: id }, '*'); } catch (e) {}
+      } else {
+        window.open('/acces.html?svc=' + encodeURIComponent(id),
+                    'sbx-acces', 'width=560,height=600,noopener');
+      }
+    });
     if (b && !att) b.addEventListener('click', function () {
       b.disabled = true; b.textContent = '…';
       api('/acces/' + id + '/demande', { method: 'POST' }).then(function () {

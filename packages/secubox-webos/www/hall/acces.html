@@ -129,8 +129,35 @@
   function charge() {
     api('/acces').then(function (r) {
       if (r.code === 401 || r.code === 403) {
-        el('demandes').innerHTML = '<p class="vide">Connectez-vous à la box pour voir cette page.</p>';
+        // LA PAGE QUI CONSTATE DOIT AUSSI PROPOSER (#1299). Dire
+        // « connectez-vous » sans donner le moyen de le faire, c'est envoyer
+        // chercher ailleurs ce qu'on est venu régler ici.
+        //
+        // Et sur un domaine qui ne porte pas le cookie de session, se
+        // connecter ne servirait à rien : on nomme la vraie cause d'abord.
+        var meme = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+        el('demandes').innerHTML = meme
+          ? '<div class="c"><p class="expl">Cette page a besoin de votre session '
+            + 'SecuBox. Votre mot de passe se tape <b>sur la page de connexion '
+            + 'de la box</b>, jamais ici.</p>'
+            + '<button class="p" id="cnx">Se connecter…</button></div>'
+          : '<div class="c"><p class="expl">Votre session SecuBox ne vaut pas sur '
+            + 'ce domaine — un témoin ne franchit pas deux domaines distincts.</p>'
+            + '<button class="p" id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
         el('accordes').innerHTML = '';
+        var b1 = el('cnx');
+        if (b1) b1.addEventListener('click', function () {
+          window.open('https://admin.gk2.secubox.in/login.html',
+                      'sbx-session', 'width=520,height=560,noopener');
+          // `noopener` : la fenêtre ne peut pas nous prévenir, et c'est voulu.
+          // Le retour du focus est le signal — on relit alors.
+          var n = 0, t = setInterval(function () { charge(); if (++n > 20) clearInterval(t); }, 3000);
+          addEventListener('focus', function () { charge(); }, { once: true });
+        });
+        var b2 = el('bascule');
+        if (b2) b2.addEventListener('click', function () {
+          location.href = 'https://hall.gk2.secubox.in/acces.html';
+        });
         return;
       }
       var d = r.corps || {};
@@ -144,6 +171,10 @@
           + '<span class="h">' + esc(quand(x.quand)) + '</span>'
           + '<span class="grow"></span>'
           + '<button class="p" data-valider="' + esc(x.svc) + '">Valider</button>'
+          // ↗ OUVRE LA MÊME CHOSE, À CÔTÉ (#1300). Encadrée dans le Hall,
+          // cette page est étroite ; la fenêtre à part donne la place, garde
+          // la barre d'adresse visible, et laisse l'accueil intact derrière.
+          + '<button data-popup2="' + esc(x.svc) + '" title="Ouvrir dans une fenêtre">↗</button>'
           + '<button class="d" data-refuser="' + esc(x.svc) + '">Refuser</button>'
           + '</div><div class="flux" id="flux-' + esc(x.svc) + '" hidden></div></div>';
       }).join('') : '<p class="vide">Aucune demande. Une carte qui manque d\'accès en déposera une ici.</p>';
@@ -164,6 +195,7 @@
               ? '<button class="d" data-revoquer="' + esc(x.svc) + '">Oublier</button>'
               : (x.flux === 'nextcloud'
                   ? '<button class="p" data-valider="' + esc(x.svc) + '">Autoriser</button>'
+                    + '<button data-popup2="' + esc(x.svc) + '" title="Ouvrir dans une fenêtre">↗</button>'
                   : '<button data-manuel="' + esc(x.svc) + '">Identifiant dédié…</button>'))
           + '</div><div class="flux" id="flux-' + esc(x.svc) + '" hidden></div></div>';
       }).join('');
@@ -233,7 +265,7 @@
   }
 
   document.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-valider], button[data-refuser], button[data-revoquer], button[data-manuel], button[data-poser], button[data-popup]');
+    var b = e.target.closest('button[data-valider], button[data-refuser], button[data-revoquer], button[data-manuel], button[data-poser], button[data-popup], button[data-popup2]');
     if (!b) return;
     var d = b.dataset;
     if (d.popup) {
@@ -242,6 +274,11 @@
       // la barre d'adresse détruirait la seule garantie qu'on cherche ici.
       window.open('/acces.html?saisie=' + encodeURIComponent(d.popup),
                   'sbx-acces', 'width=520,height=460,noopener');
+      return;
+    }
+    if (d.popup2) {
+      window.open('/acces.html?svc=' + encodeURIComponent(d.popup2),
+                  'sbx-acces', 'width=560,height=600,noopener');
       return;
     }
     if (d.valider) { ouvreFlux(d.valider); return; }
