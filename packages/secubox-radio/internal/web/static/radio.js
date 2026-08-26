@@ -445,8 +445,18 @@
       return;
     }
     var vues = [];
-    precedents.forEach(function (p, i) { vues.push({ p: p, rel: -(precedents.length - i) }); });
-    if (courante) vues.push({ p: courante, rel: 0 });
+    // EN MICRO, LA LISTE NE REDIT PAS CE QUI EST DEJA AFFICHE (#1201).
+    //
+    // Le titre en cours occupe deja tout le haut de la carte, en grand, avec sa
+    // pochette et sa jauge. Le reprendre en tete de liste consommait une ligne
+    // sur cinq pour ne rien apprendre — et sur une carte qui n'a la place que
+    // d'un panneau, une ligne sur cinq est cher.
+    //
+    // Un seul precedent au lieu de deux, pour la meme raison : ce qui vient
+    // vaut mieux que ce qui est passe, et la place gagnee va aux suivants.
+    var arriere = estMicro ? precedents.slice(-1) : precedents;
+    arriere.forEach(function (p, i) { vues.push({ p: p, rel: -(arriere.length - i) }); });
+    if (courante && !estMicro) vues.push({ p: courante, rel: 0 });
     avenir.forEach(function (p, i) { vues.push({ p: p, rel: i + 1 }); });
     vues.forEach(function (it) {
       var p = it.p, rel = it.rel;
@@ -475,9 +485,10 @@
     });
     // MICRO : une seule ligne « prochain titre » (#1131u).
     if (estMicro && microNext) {
-      var nx = null;
-      for (var z = 0; z < vues.length; z++) { if (vues[z].rel === 1) { nx = vues[z].p; break; } }
-      if (!nx) for (var z2 = 0; z2 < vues.length; z2++) { if (vues[z2].rel > 0) { nx = vues[z2].p; break; } }
+      // On lit `avenir` et non `vues` : celui-la ne depend pas du filtrage
+      // ci-dessus, et la ligne « prochain titre » doit rester juste quelle que
+      // soit la facon dont la liste est reduite.
+      var nx = avenir.length ? avenir[0] : null;
       microNext.textContent = nx ? ('→ ' + (nx.titre || nx.source)) : '';
     }
 

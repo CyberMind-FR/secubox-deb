@@ -161,6 +161,8 @@ h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:1.75rem;margin
 
 /* ── chat ─────────────────────────────────────────────────────────────── */
 #chat{max-height:15rem;overflow:hidden;padding:.3rem 1.1rem}
+.antenne-messages{padding-top:.35rem}
+.antenne-messages:empty{display:none}
 .ph{padding:.35rem 0;font-size:13.5px;animation:phfade 15s ease-out forwards}
 @keyframes phfade{0%,18%{opacity:1}100%{opacity:.12}}
 @media (prefers-reduced-motion:reduce){.ph{animation:none}}
@@ -227,6 +229,14 @@ body.micro .wrap { padding: 0; }
   body.mini .wrap > .carte, body.micro .wrap > .carte { margin: 0; }
 }
 body.micro .carte:not(.lecteur):not(.antenne) { display: none; } /* lecteur + antenne */
+/* LES MESSAGES SONT LE SECOND VOLET DE L'ANTENNE (#1201). Detaches de la saisie
+   pour laisser la playlist se glisser entre les deux sur la page pleine, ils
+   restent solidaires d'elle en micro : la regle ci-dessus les garde par la
+   classe `antenne` qu'ils partagent, et celle-ci recolle leur mise en forme —
+   sans entete, sans marge propre, comme s'ils n'avaient jamais ete separes. */
+body.micro .antenne-messages { margin: 0; border-radius: 0 0 10px 10px;
+                               border-top: 0; }
+body.micro .antenne { border-radius: 10px 10px 0 0; }
 /* Mini-antenne sous le lecteur (#1131aj) : une ligne pour saisir, 2 dernières
    lignes de messages — le message unique du haut disparaît au profit de ça. */
 body.micro .antenne { margin: .35rem 0 0; border-radius: 10px; }
@@ -245,7 +255,8 @@ body.micro .microlast { display: none; }             /* plus de message unique e
    rotation n'a pas lieu d'etre : elle ferait disparaitre un panneau visible,
    ce qui serait une perte, pas un gain. */
 @media (max-width: 519.98px) {
-  body.micro.vue-playlist .carte.antenne { display: none; }
+  body.micro.vue-playlist .carte.antenne,
+  body.micro.vue-playlist .carte.antenne-messages { display: none; }
   body.micro.vue-playlist .carte.playlist { display: block; margin: .35rem 0 0; border-radius: 10px; }
   body.micro.vue-playlist .carte.playlist .entete { display: none; }
   body.micro.vue-playlist .carte.playlist ol,

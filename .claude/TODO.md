@@ -32,10 +32,19 @@
       statique, site applicatif (Nextcloud), SaaS moderne hostile.
       **Une origine par site**, jamais une seule partagée.
 
-### 🟠 Cartes — file énoncée
+### 🟠 Affinages SUR des cartes qui existent déjà
 
-- [ ] **Radio (#1201)** : playlist affichée → retirer le morceau en cours,
-      réduire de moitié le précédent (un back, le courant, deux next)
+*Les seize cartes sont faites et déployées. Ce qui suit sont des retouches sur
+ces cartes-là, pas des cartes à écrire — la formulation précédente
+(« les sept cartes restantes ») était fausse et prêtait à confusion.*
+
+- [x] **Radio (#1201)** — *fait, radio 0.1.47* : playlist entre la saisie et
+      les messages ; en micro la liste ne redit plus le morceau en cours (il
+      occupe déjà tout le haut de la carte) et garde un seul précédent.
+      **Reste dans #1201** : popups dimensionnables et même design imbriqué à
+      plusieurs échelles.
+- [x] **kbin (#1331)** — *fait, webos 1.0.105* : retiré de l'accueil. Reste
+      atteignable par SYSTÈME.
 - [ ] **BBS et SocialRelay** : vignettes et miniatures manquantes
 - [ ] **Podcaster** : sélection / diaporama des flux sources, deux derniers de
       chaque — livre audio *vs* nouveau podcast

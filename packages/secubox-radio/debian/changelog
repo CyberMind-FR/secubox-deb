@@ -1,3 +1,23 @@
+secubox-radio (0.1.47-1~bookworm1) bookworm; urgency=medium
+
+  * LA PLAYLIST PASSE ENTRE LA SAISIE ET LES MESSAGES (#1201). On parle en
+    haut ; ce qui vient ensuite est ce qui VA PASSER, pas ce qui a ete dit.
+    Les messages, ephemeres, ferment la colonne. La playlist reste SOEUR de
+    l'antenne et non imbriquee : la rotation du mode micro les echange l'une
+    pour l'autre, et une playlist rangee dans l'antenne aurait disparu avec
+    elle.
+  * EN MICRO, LA LISTE NE REDIT PLUS CE QUI EST DEJA AFFICHE. Le titre en cours
+    occupe deja tout le haut de la carte, en grand, avec sa pochette et sa
+    jauge : le reprendre en tete de liste consommait une ligne sur cinq pour
+    n'apprendre rien. Un seul precedent au lieu de deux, pour la meme raison —
+    ce qui vient vaut mieux que ce qui est passe, et la place gagnee va aux
+    suivants.
+  * La ligne « prochain titre » se lit desormais dans `avenir` et non dans la
+    liste affichee : elle doit rester juste quelle que soit la facon dont on
+    reduit celle-ci.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 16:29:08 +0200
+
 secubox-radio (0.1.46-1~bookworm1) bookworm; urgency=medium
 
   * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la

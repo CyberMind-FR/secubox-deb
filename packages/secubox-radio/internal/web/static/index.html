@@ -84,6 +84,25 @@
     <div class="rangee">
       <input id="dire" placeholder="Dire quelque chose…" maxlength="500" autocomplete="off">
     </div>
+  </section>
+
+  <!-- ═══ À VENIR — ENTRE LA SAISIE ET LES MESSAGES (#1201) ═══════════════
+       On parle en haut ; ce qui vient ensuite est ce qui VA PASSER, et non ce
+       qui a été dit. Les messages, éphémères, ferment la colonne.
+       La playlist reste SŒUR de l'antenne et non imbriquée : la rotation du
+       mode micro les échange l'une pour l'autre, et une playlist rangée dans
+       l'antenne aurait disparu avec elle. -->
+  <section class="carte playlist">
+    <h3 class="entete">🔁 Playlist — en rotation</h3>
+    <ol class="file" id="file"></ol>
+    <p class="pied">La playlist se répète — le tirage favorise les nouveautés et
+      ce que vous aimez, sans laisser un titre monopoliser l'antenne.</p>
+  </section>
+
+  <!-- Les MESSAGES, détachés de la saisie pour que la playlist puisse se
+       glisser entre les deux. Ils restent le second volet du panneau
+       « antenne » en micro — d'où la classe partagée. -->
+  <section class="carte antenne antenne-messages">
     <div id="chat"></div>
   </section>
 
@@ -93,14 +112,6 @@
     <ol class="attente" id="attente"></ol>
     <p class="pied">Chaque cœur pèse : le tirage favorise ce que vous soutenez.
       Un titre proposé passe à l'antenne quand le sysop le valide.</p>
-  </section>
-
-  <!-- ═══ À VENIR ════════════════════════════════════════════════════════ -->
-  <section class="carte playlist">
-    <h3 class="entete">🔁 Playlist — en rotation</h3>
-    <ol class="file" id="file"></ol>
-    <p class="pied">La playlist se répète — le tirage favorise les nouveautés et
-      ce que vous aimez, sans laisser un titre monopoliser l'antenne.</p>
   </section>
 
   <!-- ═══ PROPOSER ═══════════════════════════════════════════════════════ -->

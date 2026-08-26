@@ -900,7 +900,6 @@ const FEATURED = [
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
-  {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:196},
 ];
@@ -917,9 +916,11 @@ const FEATURED = [
 // desormais reecrit AU PROXY (#1257), une fois, plutot que dans cinq amonts
 // qu'on ne maitrise pas. Verifie sur la box : X-Frame-Options retire et
 // frame-ancestors nommant le Hall.
-// KBIN N'EST PLUS EMBARQUE (#1321) : un forum entier tasse dans une carte ne
-// montre rien qu'on puisse lire. Il garde sa carte — donc son acces — mais
-// s'ouvre en pleine page, la seule taille ou il dit quelque chose.
+// KBIN N'EST PLUS DU TOUT DANS L'ACCUEIL (#1321, puis #1331). D'abord retire de
+// l'embarquement — un forum entier tasse dans une carte ne montre rien qu'on
+// puisse lire — puis de la curation elle-meme : une carte qui n'apprend rien
+// occupe la place d'une qui aurait servi. Le service existe toujours et reste
+// atteignable par SYSTEME, ou tout le parc est liste.
 const EMBEDDABLE = new Set(["metanews","socialrelay","bbs","radio","billets","depot",
                             "peertube","nextcloud","photoprism","mastodon","mail",
                             "ytsas","torrent"]);

@@ -1,3 +1,13 @@
+secubox-webos (1.0.105-1~bookworm1) bookworm; urgency=medium
+
+  * KBIN QUITTE L'ACCUEIL (#1331). Retire d'abord de l'embarquement — un forum
+    entier tasse dans une carte ne montre rien qu'on puisse lire — puis de la
+    curation elle-meme : une carte qui n'apprend rien occupe la place d'une qui
+    aurait servi. Le service existe toujours et reste atteignable par SYSTEME,
+    ou tout le parc est liste.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 16:29:48 +0200
+
 secubox-webos (1.0.104-1~bookworm1) bookworm; urgency=medium
 
   * LA POIGNEE DE MAIN PEERTUBE, ENFIN CORRECTE (#1330). Le message « player is
