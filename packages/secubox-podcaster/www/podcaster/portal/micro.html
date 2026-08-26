@@ -54,6 +54,9 @@
   .cmd button:disabled { opacity: .35; cursor: default; }
   .cmd .vol { flex: 1 1 auto; min-width: 34px; max-width: 76px; accent-color: var(--cyan); }
   .cmd #detach { margin-left: auto; }
+  /* Le favori dit son ETAT, pas son action : plein quand il l'est, creux
+     sinon. Un cœur identique dans les deux cas ne renseigne sur rien. */
+  .cmd #fav[aria-pressed="true"] { color: #e0405f; border-color: #e0405f; }
 
   .np { display: flex; gap: .55rem; min-height: 0; }
   .np .vign { width: 52px; height: 52px; border-radius: 9px; flex: 0 0 auto;
@@ -84,6 +87,7 @@
     <button id="prev" type="button" title="Épisode précédent" aria-label="Épisode précédent">⏮</button>
     <button id="pp" class="gros" type="button" title="Lecture / pause" aria-label="Lecture ou pause">▶</button>
     <button id="next" type="button" title="Épisode suivant" aria-label="Épisode suivant">⏭</button>
+    <button id="fav" type="button" title="Marquer comme favori" aria-pressed="false" aria-label="Favori">♥</button>
     <button id="muet" type="button" title="Couper le son" aria-label="Couper le son">🔊</button>
     <input id="vol" class="vol" type="range" min="0" max="1" step="0.05" value="1"
            title="Volume" aria-label="Volume">
@@ -141,6 +145,7 @@
     el('src').textContent = e.feed || '';
     el('prev').disabled = idx <= 0;
     el('next').disabled = idx >= eps.length - 1;
+    montreFav();
   }
 
   function joue(i) {
@@ -171,6 +176,24 @@
     if (!son.duration) return;
     const r = ev.currentTarget.getBoundingClientRect();
     son.currentTime = ((ev.clientX - r.left) / r.width) * son.duration;
+  });
+
+  // FAVORIS. Retenus par épisode, côté navigateur : le service n'expose pas
+  // encore de point d'entrée pour cela, et inventer une écriture qu'il ne sait
+  // pas relire ferait un bouton qui ment. On garde donc localement, et le jour
+  // où l'API existera, cette liste s'y déversera.
+  const FAVS = 'sbx.podcaster.favoris';
+  const favs = () => { try { return JSON.parse(localStorage.getItem(FAVS) || '[]'); } catch (e) { return []; } };
+  function montreFav() {
+    const e = eps[idx];
+    el('fav').setAttribute('aria-pressed', String(!!e && favs().includes(e.id)));
+  }
+  el('fav').addEventListener('click', () => {
+    const e = eps[idx]; if (!e) return;
+    const l = favs(), i = l.indexOf(e.id);
+    if (i < 0) l.push(e.id); else l.splice(i, 1);
+    try { localStorage.setItem(FAVS, JSON.stringify(l)); } catch (err) {}
+    montreFav();
   });
 
   // Rafraîchir : la bibliothèque s'enrichit en arrière-plan, rien ne le disait.

@@ -1,3 +1,14 @@
+secubox-podcaster (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * Bouton FAVORI ajoute a la vue micro : il manquait au jeu de la radio.
+    Retenu par episode cote navigateur — le service n'expose pas encore de
+    point d'entree pour cela, et inventer une ecriture qu'il ne sait pas relire
+    ferait un bouton qui ment. Le jour ou l'API existera, la liste s'y deversera.
+  * Le coeur dit son ETAT, plein ou creux : identique dans les deux cas, il ne
+    renseignerait sur rien.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:31:11 +0200
+
 secubox-podcaster (1.0.9-1~bookworm1) bookworm; urgency=medium
 
   * LE BOUTON DE LECTURE ETAIT INVISIBLE (#1241) : son fond etait var(--cyan),
