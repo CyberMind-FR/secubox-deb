@@ -1,3 +1,15 @@
+secubox-webos (1.0.68-1~bookworm1) bookworm; urgency=medium
+
+  * LE HALL BLOQUAIT SA PROPRE CARTE (#1274). Sa politique declare
+    `frame-ancestors 'none'` — ce qui est juste, personne ne doit encadrer le
+    Hall. Mais la carte PeerTube est servie par CE MEME vhost, et le Hall
+    l'encadre : le navigateur la refusait, avec raison.
+  * `add_header` dans un `location` REMPLACE ceux herites, jamais ne les
+    complete : la politique est reecrite en entier pour /cardlets/, a un mot
+    pres. La page du Hall, elle, reste inencadrable.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:39:49 +0200
+
 secubox-webos (1.0.67-1~bookworm1) bookworm; urgency=medium
 
   * CARTE PEERTUBE (#1273). PeerTube est un logiciel AMONT : on ne lui ajoute
