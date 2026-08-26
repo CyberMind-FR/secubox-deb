@@ -14,66 +14,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Billets — vue micro</title>
-<style>
-  /* Palette locale à TROIS états. Le vhost ne sert pas /shared/, et une
-     feuille absente rend la carte en texte brut ; surtout, :root nu seul
-     laisserait du texte sombre sur une carte sombre. */
-  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#8a5a2b; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-      --border:#2a2a36; --accent:#d9a066; }
-  }
-  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
-    --border:#2a2a36; --accent:#d9a066; }
-
-  * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
-  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
-  body { background: var(--fond); color: var(--texte);
-         font-family: "Inter", system-ui, sans-serif; font-size:14px; line-height:1.45; }
-
-  .mw { display:flex; flex-direction:column; height:100%; padding:.7rem .8rem; gap:.45rem; }
-  .tete { display:flex; align-items:baseline; gap:.4rem; }
-  .tete .ic { font-size:1rem; }
-  .tete b { font-size:.88rem; }
-  .tete .n { margin-left:auto; font-size:.58rem; letter-spacing:.08em;
-             text-transform:uppercase; color:var(--muted); }
-
-  /* LE BILLET REMPLIT LA CARTE (#1285), et la carte TOURNE. Une vignette de
-     52 px à côté d'un titre n'apprenait rien, et un billet figé ne disait pas
-     qu'il y en avait d'autres. Même traitement que MetaNews et SocialRelay :
-     l'image occupe le fond, le texte passe dessus, et on tourne sur les
-     derniers. Sans image, le dégradé prend la place — jamais un cadre vide. */
-  .dernier { position:relative; display:block; height:98px; border-radius:10px;
-             overflow:hidden; text-decoration:none; color:inherit; flex:0 0 auto;
-             background:linear-gradient(135deg,var(--accent),var(--border)); }
-  .dernier .vign { position:absolute; inset:0; width:100%; height:100%;
-                   object-fit:cover; display:block; }
-  .dernier .vign.cache { display:none; }
-  .dernier .voile { position:absolute; inset:auto 0 0 0; padding:.35rem .45rem .3rem;
-                    background:linear-gradient(transparent, rgba(0,0,0,.86)); color:#fff; }
-  .dernier .t { display:block; font-weight:650; font-size:.8rem; line-height:1.22;
-                color:#fff;
-                display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-                overflow:hidden; }
-  .dernier .d { font-size:.58rem; color:rgba(255,255,255,.8); }
-
-  .suite { display:flex; flex-direction:column; gap:.12rem; margin-top:.1rem; }
-  .suite .tt { font-size:.56rem; letter-spacing:.09em; text-transform:uppercase;
-               color:var(--muted); }
-  .suite a { display:flex; align-items:baseline; gap:.34rem; font-size:.7rem;
-             color:var(--texte); text-decoration:none; line-height:1.3; }
-  .suite a:hover .nm { text-decoration:underline; color:var(--accent); }
-  .suite .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
-  .suite .dt { flex:0 0 auto; font-size:.6rem; color:var(--muted);
-               font-variant-numeric:tabular-nums; }
-
-  .pied { margin-top:auto; display:block; text-align:center; font-size:.58rem;
-          letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
-          text-decoration:none; padding-top:.3rem; border-top:1px solid var(--border); }
-  .pied:hover { color:var(--accent); }
-  .vide { font-size:.72rem; color:var(--muted); }
-</style>
+<link rel="stylesheet" href="/static/micro.css">
 
 <div class="mw">
   <div class="tete"><span class="ic">🎟️</span><b>Billets</b>
@@ -108,55 +49,4 @@
   <a class="pied" href="/" target="_top">🎟️ tous les billets</a>
 </div>
 
-<script>
-  // Le thème d'ARRIVÉE vient du paramètre ; les bascules ensuite arrivent par
-  // message, jamais par rechargement du cadre — recharger perdrait la position.
-  (function () {
-    var t = new URLSearchParams(location.search).get('theme');
-    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
-  })();
-
-  // RESTER DANS LE HALL (#1266). Un lien de cardlet en target="_top" REMPLACE
-  // le Hall par le service : on perd la mosaique, la barre media et tout ce
-  // qui joue. Encadre, on demande donc au Hall d'embarquer la page ; hors
-  // cadre, le lien fonctionne normalement — la carte reste une page valide,
-  // et c'est ce repli qui autorise a garder target="_top" dans le HTML.
-  document.addEventListener('click', function (ev) {
-    if (parent === window) return;
-    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
-    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
-    ev.preventDefault();
-    try { parent.postMessage({ sbx: 'ouvre', id: 'billets', url: a.href }, '*'); } catch (e) {}
-  }, true);
-
-  // ROTATION SUR LES DERNIERS (#1285). Un billet figé ne dit pas qu'il y en a
-  // d'autres ; c'est le défilement qui montre qu'un blog vit. Le survol
-  // suspend — on ne lit pas un titre qui s'échappe.
-  (function () {
-    var l = [];
-    try { l = JSON.parse(document.getElementById('rot').getAttribute('data-billets') || '[]'); }
-    catch (e) { return; }
-    if (l.length < 2) { pose(0); return; }
-    var i = 0, pause = false;
-    function pose(n) {
-      var b = l[n % l.length], img = document.getElementById('une-img');
-      document.getElementById('une').href = b.permalink;
-      document.getElementById('une-t').textContent = b.title;
-      document.getElementById('une-d').textContent = b.quand;
-      if (b.vignette) { img.src = b.vignette; img.classList.remove('cache'); }
-      else { img.removeAttribute('src'); img.classList.add('cache'); }
-    }
-    document.addEventListener('mouseenter', function () { pause = true; }, true);
-    document.addEventListener('mouseleave', function () { pause = false; }, true);
-    pose(0);
-    setInterval(function () { if (!pause) { i++; pose(i); } }, 7000);
-  })();
-
-  addEventListener('message', function (ev) {
-    var d = ev.data;
-    if (!d || d.sbx !== 'theme') return;
-    if (d.theme === 'dark' || d.theme === 'light') {
-      document.documentElement.setAttribute('data-theme', d.theme);
-    }
-  });
-</script>
+<script src="/static/micro.js" defer></script>

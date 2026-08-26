@@ -74,6 +74,16 @@ message. Le BBS en a fait les frais.
 > **Règle.** Feuille et script dans `/static/`, jamais en ligne. On ne relâche
 > pas `'unsafe-inline'` pour le site entier au bénéfice d'une carte.
 
+C'est arrivé **deux fois** — au BBS, puis à Billets — parce que la politique du
+service ne se voit pas quand on écrit la carte. Le contrôle tient en une
+commande : pour chaque `/micro`, compter les `<script>` en ligne et lire le
+`script-src` servi. Une carte en ligne sous politique stricte est une carte qui
+s'affichera en HTML brut, et le navigateur le signalera à **chaque** affichage.
+
+MetaNews et SocialRelay gardent aujourd'hui des blocs en ligne : ils ne servent
+aucune CSP. Le jour où ils en serviront une, ils casseront de la même façon —
+autant sortir leurs blocs avant.
+
 Et si la carte doit transporter des données rendues côté serveur, elles voyagent
 par un **attribut** (`data-…`), jamais par un bloc `<script type="application/json">` :
 sous `script-src 'self'`, un bloc de données dépend du bon vouloir du

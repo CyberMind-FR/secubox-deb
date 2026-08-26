@@ -1,3 +1,15 @@
+secubox-billets (0.8.18-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO : FEUILLE ET SCRIPT SORTIS DANS /static (#1295). Billets sert
+    `script-src 'self'; style-src 'self'` : le bloc en ligne de la carte etait
+    bloque, le navigateur le signalait a CHAQUE affichage, et la rotation ne
+    demarrait jamais. On sort les deux plutot que d'affaiblir la politique —
+    une carte ne vaut pas qu'on ouvre 'unsafe-inline' au site entier.
+  * Meme lecon que le BBS (#1271), et meme remede : la donnee voyage deja par
+    un ATTRIBUT, jamais par un bloc de script.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:54:30 +0200
+
 secubox-billets (0.8.17-1~bookworm1) bookworm; urgency=medium
 
   * LE BILLET REMPLIT LA CARTE, ET LA CARTE TOURNE (#1285). Une vignette de
