@@ -344,6 +344,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .cardlet.cl-pod[data-etat="offline"] .live,.cardlet.cl-pod[data-etat="degraded"] .live{color:var(--coral)}
 .cardlet.cl-pod[data-etat="offline"] .live .led{background:var(--coral);box-shadow:0 0 0 3px var(--coral-s)}
 .cardlet.cl-pod .art:empty{display:none}
+/* Une description VIVANTE se distingue d'une phrase de remplissage : elle
+   porte le contenu du service, pas sa notice. */
+.fcard .desc.vif{color:var(--ink);font-style:normal}
+/* RADIO de référence (#1232) — le lecteur REMPLIT la cardlet, comme au BBS.
+   `position:relative` sert uniquement d'ancrage ; on ne touche ni au padding ni
+   à l'overflow, ce qui avait rendu le widget invisible au BBS. 252 px est la
+   valeur d'origine : de quoi montrer barre média, vignette, titre sur deux ou
+   trois lignes, titre suivant et dernier message. */
+.cardlet.radiowidget{position:relative;padding:0;gap:0;overflow:hidden}
+.cardlet.radiowidget .radioframe{display:block;width:100%;height:252px;border:0;
+  border-radius:var(--r);background:var(--panel)}
 /* Un titre d'épisode est long : il tient sur deux lignes puis s'arrête. */
 .cardlet.cl-pod .meta b{font-size:.98rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;
   -webkit-box-orient:vertical;overflow:hidden}
@@ -542,19 +553,18 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
             <button class="cl-lien" id="popen" type="button">📚 Bibliothèque ▦</button>
           </div>
 
-          <div class="cardlet">
-            <div class="clh serif">✧ Cardlet actif — Radio <span class="tag">focus</span></div>
-            <div class="bar"><button title="Rafraîchir">⟳</button><button class="play" title="Lecture / pause">▶</button>
-              <button title="Favori">♥</button><button title="Son">🔊</button></div>
-            <div class="np"><div class="cover">🎧</div>
-              <div class="meta"><b class="serif" id="rtitle">Radio souveraine</b>
-                <div class="art" id="rart">— flux en continu —</div>
-                <span class="live"><i class="led"></i> en direct</span>
-                <div class="counts"><span>🎵 <b id="rlisten">—</b></span><span>👁 <b id="rview">—</b></span></div>
-              </div></div>
-            <div class="msg"><input placeholder="Dire quelque chose…" aria-label="Message radio"><button>G</button></div>
+          <!-- RADIO — cardlet de RÉFÉRENCE, à l'identique du BBS (#1232).
+               AUCUNE EN-TÊTE, AUCUN BOUTON PARENT : le lecteur /micro EST la
+               cardlet. Ses boutons média occupent la place que prenait ici
+               « ✧ Cardlet actif — Radio · focus », un bandeau qui annonçait la
+               carte au lieu de la servir. Le détachement ⧉ et les tailles
+               vivent DANS sa barre média, côté radio ; les redoubler ici
+               créerait deux commandes pour la même chose. -->
+          <div class="cardlet radiowidget">
+            <iframe class="radioframe" id="rframe" src="https://radio.gk2.secubox.in/micro"
+                    title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
           </div>
-        </aside>
+</aside>
       </div>
     </section>
 
@@ -688,6 +698,7 @@ function render(data,src){
   const fg=document.getElementById('featgrid'); let fh='';
   FEATURED.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
   fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.length+' services';
+  vivifieCartes();   // #1231 : les cartes qui ont un cardlet prennent ses données
   // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
   const degr=svc.filter(s=>s.health&&s.health.state==='degraded').length;
@@ -963,19 +974,9 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     render(d,'Registre <b>réel</b> · '+n+' modules · santé socket-aware. Principal = curation all.gk2.net ; tout le parc sous Système.');
   }).catch(()=>{});
 
-// Cardlet Radio VIVANTE : now-playing lu côté serveur (radio.sock), même origine.
-function majRadio(){
-  fetch('/api/v1/webos/public/cardlets/radio',{headers:{'Accept':'application/json'}})
-    .then(r=>r.ok?r.json():Promise.reject()).then(c=>{
-      const ct=(c&&c.content)||{}; const m={}; ((c&&c.metrics)||[]).forEach(x=>m[x.id]=x.value);
-      const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
-      set('rtitle', ct.title||'Radio souveraine');
-      set('rart', ct.subtitle||(c&&c.silence?'— silence —':'— flux en continu —'));
-      set('rlisten', m.listeners!=null?m.listeners:'—');
-      set('rview', m.tracks!=null?m.tracks:'—');
-    }).catch(()=>{});
-}
-majRadio(); setInterval(majRadio, 15000);
+// RADIO (#1232) — rien à piloter depuis le Hall : le lecteur /micro porte ses
+// propres commandes, tailles et détachement compris. Toute commande ajoutée ici
+// en doublerait une existante, et les deux finiraient par se contredire.
 
 // Cardlet PARE-FEU (#1228) — même chemin que la Radio : le serveur lit le WAF
 // par sa socket, le client ne le contacte jamais. Rythme plus lent : une
@@ -1005,6 +1006,64 @@ function majWaf(){
     });
 }
 majWaf(); setInterval(majWaf, 30000);
+
+// ── #1231 · les cartes de l'accueil prennent les données VIVANTES ──────────
+//
+// Les cartes de « Services principaux » affichaient une description figée —
+// « Service SecuBox souverain. » — la même pour tous. C'est une maquette, pas
+// un tableau de bord : elle ne donne aucune raison de revenir.
+//
+// Quand un service a un cardlet, sa carte prend le contenu du cardlet. Quand il
+// n'en a pas, elle garde sa description : on n'invente rien, et l'ajout d'un
+// cardlet suffit à vivifier sa carte sans toucher au Hall. La liste est
+// DÉCOUVERTE auprès du serveur, jamais écrite ici.
+let _cardletsVus = null;
+
+async function vivifieCartes(){
+  try{
+    if(_cardletsVus === null){
+      const r = await fetch('/api/v1/webos/public/cardlets',{headers:{'Accept':'application/json'}});
+      _cardletsVus = r.ok ? ((await r.json()).cardlets || []) : [];
+    }
+  }catch(e){ _cardletsVus = []; }
+
+  _cardletsVus.forEach(async id=>{
+    const carte = document.querySelector('.fcard[data-embed="'+id+'"]');
+    if(!carte) return;
+    try{
+      const r = await fetch('/api/v1/webos/public/cardlets/'+encodeURIComponent(id),
+                            {headers:{'Accept':'application/json'}});
+      if(!r.ok) return;
+      const c = await r.json();
+      const ct = (c && c.content) || {};
+      const m = {}; ((c && c.metrics) || []).forEach(x=>m[x.id]=x.value);
+
+      // Le titre du cardlet remplace la description générique. S'il est vide,
+      // on ne touche à rien : mieux vaut la phrase d'origine qu'un blanc.
+      const desc = carte.querySelector('.desc');
+      if(desc && ct.title){
+        desc.textContent = ct.title + (ct.subtitle ? ' · ' + ct.subtitle : '');
+        desc.classList.add('vif');
+      }
+      // Les chiffres du cardlet, en pied de carte. Aucun libellé : ce sont les
+      // mêmes icônes que dans le cardlet, l'œil les a déjà apprises.
+      const pied = carte.querySelector('.foot .state');
+      const ic = CARDLET_ICONES[id] || {};
+      const chiffres = Object.keys(m).filter(k=>ic[k]!==undefined)
+        .map(k=>ic[k]+' '+m[k]).join('  ');
+      if(pied && chiffres) pied.textContent = chiffres;
+    }catch(e){ /* une carte non vivifiée reste lisible : on ne casse rien */ }
+  });
+}
+
+// Les icônes de chaque mesure, par cardlet. Un identifiant absent d'ici n'est
+// pas affiché : on ne montre pas un nombre dont on ne sait pas dire ce qu'il
+// compte.
+const CARDLET_ICONES = {
+  radio:     {listeners:'🎵', tracks:'👁'},
+  waf:       {bans:'🚫', jour:'🛡️', surfaces:'🛰️', detections:'🧠'},
+  podcaster: {feeds:'📡', episodes:'🎧', queued:'⬇️'}
+};
 
 // Cardlet PODCASTER (#1230) — troisième du même gabarit. Rythme le plus lent
 // des trois : un épisode arrive toutes les heures au mieux.

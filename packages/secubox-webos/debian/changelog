@@ -1,3 +1,25 @@
+secubox-webos (1.0.42-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet RADIO ramenee a sa reference : celle du BBS (#1232). Le Hall en
+    portait une version faite main — bandeau « ✧ Cardlet actif — Radio · focus »,
+    boutons dessines, compteurs nourris a la main — qui n'avait ni l'aspect ni
+    la logique de l'originale. Le BBS le dit pourtant explicitement : AUCUNE
+    en-tete, AUCUN bouton parent, le lecteur /micro EST la cardlet. Ce sont ses
+    boutons media qui occupent la place que prenait le bandeau, lequel annoncait
+    la carte au lieu de la servir.
+  * Les tailles (mini / micro) et le detachement vivent DANS la barre media, cote
+    radio. Une premiere version ajoutait ces commandes cote Hall : elles
+    doublaient celles du lecteur, et deux commandes pour la meme chose finissent
+    par se contredire. Retirees.
+  * 252 px, la valeur d'origine du BBS : de quoi montrer barre media, vignette,
+    titre sur deux ou trois lignes, titre suivant et dernier message.
+  * Index /cardlets (#1231) : le Hall DECOUVRE les cardlets servis au lieu d'en
+    porter la liste en dur. Les cartes de « Services principaux » prennent le
+    contenu vivant quand un cardlet existe, et gardent leur description sinon —
+    ajouter un cardlet suffit desormais a vivifier sa carte sans toucher au Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:56:55 +0200
+
 secubox-webos (1.0.41-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet PODCASTER (#1230), troisieme du meme gabarit — radio, pare-feu,

@@ -115,6 +115,19 @@ async def cardlet_radio():
     return d
 
 
+# Cardlets DISPONIBLES (#1231). Le Hall demandait ses cardlets par une liste
+# ecrite en dur dans sa page : chaque nouveau cardlet obligeait a la modifier.
+# Il decouvre desormais ce qui existe. Ajouter un cardlet = une entree ici, et
+# l'accueil s'en saisit sans qu'on y touche.
+CARDLETS_DISPONIBLES = ["radio", "waf", "podcaster"]
+
+
+@public_router.get("/cardlets")
+async def cardlets_index():
+    """Liste des cardlets servis, pour que l'accueil les decouvre."""
+    return {"cardlets": CARDLETS_DISPONIBLES, "count": len(CARDLETS_DISPONIBLES)}
+
+
 _wc = {"d": None, "t": 0.0}
 
 
