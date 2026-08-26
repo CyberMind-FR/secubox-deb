@@ -1885,24 +1885,19 @@ addEventListener('message', ev=>{
     // La regle juste est symetrique : si de l'AUDIO tente de jouer alors qu'une
     // VIDEO joue deja, c'est l'AUDIO qui cede. La video n'est jamais coupee par
     // un flux audio — surtout pas par une reprise non sollicitee.
-    let etatFinal = d;
-    if(d.joue && d.type!=='video'){
-      let videoJoue=false;
-      flux.forEach((f,autre)=>{
-        if(autre!==d.id && f.etat && f.etat.joue && f.etat.type==='video') videoJoue=true;
-      });
-      if(videoJoue){
-        commande(d.id,'pause');
-        // On enregistre l'etat REEL (en pause) : marquer « joue » ferait
-        // clignoter la barre et relancerait l'arbitrage a chaque battement.
-        // `d` est une const (ev.data) : on ne la REASSIGNE pas — cela levait
-        // « invalid assignment to const 'd' » et cassait TOUT le handler de
-        // messages, donc l'arbitrage media et les clics du Hall. On ecrit un
-        // etat derive dans une variable a part.
-        etatFinal = Object.assign({}, d, {joue:false});
-      }
-    }
-    flux.set(d.id,{maj:Date.now(), cadre:c, etat:etatFinal});
+    // ── PLUS DE « L'AUDIO CEDE A LA VIDEO » (#1338 retire, #1356) ────────────
+    //
+    // Cette regle symetrique BLOQUAIT LA RADIO : un flux video qui traine
+    // (joue:true jamais retire, cardlet ferme sans fin propre) faisait mettre
+    // la radio en pause a CHAQUE annonce, indefiniment — « la radio ne joue
+    // plus, meme en full embed ». Le remede etait pire que le mal.
+    //
+    // On garde la seule regle sure : le DEMARRAGE d'une video fait taire les
+    // autres (bloc ci-dessus). Deux sources audio peuvent coexister, chacune
+    // avec son volume — c'est meme l'usage. Le bug d'origine (radio qui reprend
+    // seule et coupe la video) se traite dans le cardlet radio, pas en
+    // paralysant la radio ici.
+    flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
     dessine();
   });
 

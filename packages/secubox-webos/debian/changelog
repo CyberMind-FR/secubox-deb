@@ -1,3 +1,13 @@
+secubox-webos (1.0.118-1~bookworm1) bookworm; urgency=medium
+
+  * LA RADIO REJOUE (#1356). La regle symetrique « l'audio cede a la video »
+    la bloquait : un flux video qui traine (joue:true jamais retire) mettait
+    la radio en pause a chaque annonce, indefiniment — meme en full embed.
+    On la retire ; on garde la seule regle sure : le DEMARRAGE d'une video
+    fait taire les autres. Deux sources audio peuvent coexister.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:11:08 +0200
+
 secubox-webos (1.0.117-1~bookworm1) bookworm; urgency=medium
 
   * LES METRICS DE CAMOUFLAGE DANS LA BARRE LA PLUS HAUTE (#1354). La carte
