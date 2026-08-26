@@ -1,3 +1,19 @@
+secubox-radio (0.1.36-1~bookworm1) bookworm; urgency=medium
+
+  * DEUX COLONNES quand la largeur le permet, en mini comme en micro (#1244).
+    Encadre dans une carte etroite, le lecteur seul suffit ; mais des que le
+    cadre s'elargit — fenetre detachee, carte de mosaique large — il restait une
+    bande vide a droite, et deux blocs qui avaient tout a y gagner : l'antenne
+    et la playlist.
+  * La bascule se fait sur la largeur REELLE du document encadre, pas sur celle
+    de l'ecran : c'est la place dont le lecteur dispose qui decide, et elle n'a
+    rien a voir avec la taille du moniteur.
+  * La playlist est RENDUE au mode micro a cette occasion : elle y etait masquee
+    faute de place, ce qui n'est plus vrai au-dela de 520 px.
+  * Le lecteur garde toute la largeur : le couper en deux le rendrait illisible.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:39:27 +0200
+
 secubox-radio (0.1.35-1~bookworm1) bookworm; urgency=medium
 
   * Ecoute du message de theme (#1243) : recharger le cadre pour changer une

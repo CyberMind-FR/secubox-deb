@@ -1,3 +1,18 @@
+secubox-webos (1.0.52-1~bookworm1) bookworm; urgency=medium
+
+  * Menu PROFIL et remise a zero (#1245). Le bloc du coin n'etait qu'une
+    etiquette : il ouvre maintenant un menu, avec « Reinitialiser l'affichage ».
+  * Les reglages sont ranges PAR PROFIL. Ils l'etaient sous une clef unique :
+    deux personnes sur le meme navigateur se marchaient dessus — l'ordre des
+    cartes de l'une ecrasait celui de l'autre.
+  * L'identite vient de ce que la megabarre affiche. C'est modeste et c'est
+    assume : tant qu'aucune session n'est cablee ici, inventer un identifiant
+    donnerait une separation qui n'en est pas une.
+  * La remise a zero ne vide QUE les reglages de ce profil : effacer tout le
+    stockage emporterait ceux des autres, et ce qui n'appartient pas au Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:41:35 +0200
+
 secubox-webos (1.0.51-1~bookworm1) bookworm; urgency=medium
 
   * LE THEME SE DIT, IL NE SE RECHARGE PAS (#1243). La version precedente

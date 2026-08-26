@@ -204,6 +204,28 @@ body.mini .file li .vg { width: 2rem; height: 2rem; }
 html.micro, body.micro { scrollbar-width: none; -ms-overflow-style: none; }
 html.micro::-webkit-scrollbar, body.micro::-webkit-scrollbar { width: 0; height: 0; display: none; }
 body.micro .wrap { padding: 0; }
+
+/* ── DEUX COLONNES QUAND LA LARGEUR LE PERMET (#1244) ──────────────────────
+   Encadré dans une carte étroite, le lecteur seul suffit. Mais dès que le
+   cadre s'élargit — une fenêtre détachée, une carte de mosaïque large — il
+   reste une bande vide à droite, et deux blocs qui auraient tout à y gagner :
+   l'antenne et la playlist.
+
+   La bascule se fait sur la largeur RÉELLE du document encadré, pas sur celle
+   de l'écran : c'est la place dont le lecteur dispose qui décide, et elle n'a
+   rien à voir avec la taille du moniteur.
+
+   La playlist est RENDUE au mode micro à cette occasion : elle y était masquée
+   faute de place, ce qui n'est plus vrai. */
+@media (min-width: 520px) {
+  body.mini .wrap, body.micro .wrap {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; align-items: start;
+  }
+  /* Le lecteur garde toute la largeur : le couper en deux le rendrait illisible. */
+  body.mini .wrap > .carte.lecteur, body.micro .wrap > .carte.lecteur { grid-column: 1 / -1; }
+  body.micro .wrap > .carte.playlist { display: block; }
+  body.mini .wrap > .carte, body.micro .wrap > .carte { margin: 0; }
+}
 body.micro .carte:not(.lecteur):not(.antenne) { display: none; } /* lecteur + antenne */
 /* Mini-antenne sous le lecteur (#1131aj) : une ligne pour saisir, 2 dernières
    lignes de messages — le message unique du haut disparaît au profit de ça. */

@@ -373,6 +373,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    volerait les clics destinés au lecteur — on ne pourrait plus mettre en pause.
    Discrète au repos, franche au survol. */
 .fcard{position:relative}
+/* Menu PROFIL (#1245). Il n'y en avait pas : le bloc n'était qu'une étiquette.
+   Ancré sous lui, à droite — il déborderait de la fenêtre s'il s'ouvrait vers
+   la gauche depuis le coin. */
+.who{position:relative;cursor:pointer}
+.who-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:230px;
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--lift);padding:8px}
+.who-menu button{width:100%;text-align:left;padding:8px 10px;border:0;border-radius:8px;
+  background:none;color:var(--ink);font-size:.84rem;cursor:pointer}
+.who-menu button:hover{background:var(--soft)}
+.who-note{margin:6px 10px 2px;font-size:.68rem;color:var(--dim);line-height:1.35}
 .cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
@@ -511,7 +522,13 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
     </span>
     <div class="mast-actions">
       <button class="ibtn" id="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
-      <div class="who"><span class="av">🧙</span><span><b>Gandalf</b><i>● Identité locale</i></span></div>
+      <div class="who" id="who" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"
+           title="Profil et réglages"><span class="av">🧙</span><span><b id="who-nom">Gandalf</b><i>● Identité locale</i></span>
+        <div class="who-menu hidden" id="who-menu" role="menu">
+          <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
+          <p class="who-note">Ordre des cartes et thème, pour ce profil.</p>
+        </div>
+      </div>
     </div>
   </div>
 </header>
@@ -952,6 +969,20 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
 const root=document.documentElement;
+
+// RÉGLAGES PAR PROFIL (#1245). Ils étaient rangés sous une clef unique : deux
+// personnes sur le même navigateur se marchaient dessus — l'ordre des cartes de
+// l'une écrasait celui de l'autre. La clef porte donc le profil.
+//
+// L'identité vient de ce que la mégabarre affiche. C'est modeste, et c'est
+// assumé : tant qu'aucune session n'est câblée ici, inventer un identifiant
+// donnerait une séparation qui n'en est pas une.
+function profilCourant(){
+  const b=document.getElementById('who-nom');
+  const n=(b&&b.textContent||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  return n||'anonyme';
+}
+function cleProfil(quoi){ return 'sbx.hall.'+profilCourant()+'.'+quoi; }
 // Hauteur RÉELLE de la barre : elle change avec la largeur (les libellés
 // tombent en pictos sous 720px) et quand le contexte du service apparaît.
 // Un ResizeObserver vaut mieux qu'un événement resize : il voit aussi les
@@ -968,7 +999,7 @@ const root=document.documentElement;
 // le repose AVANT tout rendu — le reposer après ferait clignoter la page du
 // mauvais thème au bon, ce qu'on remarque et qui fait négligé.
 (function(){
-  const CLEF='sbx.hall.theme';
+  const CLEF=cleProfil('theme');
   try{
     const m=localStorage.getItem(CLEF);
     if(m==='dark'||m==='light') root.setAttribute('data-theme', m);
@@ -1043,6 +1074,34 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // ici. Son point d'entrée cardlet reste servi — il alimente encore la
 // vivification des cartes sans vue embarquée.
 
+// ── #1245 · menu PROFIL et remise à zéro ──────────────────────────────────
+(function(){
+  const bloc=document.getElementById('who'), menu=document.getElementById('who-menu');
+  if(!bloc||!menu) return;
+  const ouvre=v=>{ menu.classList.toggle('hidden',!v); bloc.setAttribute('aria-expanded',String(v)); };
+  bloc.addEventListener('click', e=>{
+    if(e.target.closest('#who-menu')) return;   // un clic DANS le menu ne le referme pas
+    ouvre(menu.classList.contains('hidden'));
+  });
+  bloc.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); ouvre(menu.classList.contains('hidden')); } });
+  // Un clic ailleurs referme : un menu qui reste ouvert derrière ce qu'on
+  // regarde est une gêne, pas une commodité.
+  addEventListener('click', e=>{ if(!bloc.contains(e.target)) ouvre(false); });
+  addEventListener('keydown', e=>{ if(e.key==='Escape') ouvre(false); });
+
+  document.getElementById('who-reset').addEventListener('click', ()=>{
+    // On ne vide QUE les réglages de ce profil : effacer tout le stockage
+    // emporterait ceux des autres, et ce qui n'appartient pas au Hall.
+    try{
+      const p='sbx.hall.'+profilCourant()+'.';
+      Object.keys(localStorage).filter(k=>k.indexOf(p)===0).forEach(k=>localStorage.removeItem(k));
+    }catch(e){}
+    root.removeAttribute('data-theme');
+    ouvre(false);
+    location.reload();
+  });
+})();
+
 // ── #1234 · cardlets DÉPLAÇABLES ──────────────────────────────────────────
 //
 // Ce sont des fenêtres, pas des blocs figés : on doit pouvoir les ranger. Trois
@@ -1057,7 +1116,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 (function(){
   const cote=document.getElementById('featgrid');
   if(!cote) return;
-  const CLEF='sbx.hall.cardlets';
+  const CLEF=cleProfil('cardlets');
   // Les classes TRANSITOIRES du glisser sont exclues : sans cela « cl-drag »
   // pourrait passer pour l'identité de la carte et l'ordre retenu serait faux
   // — une erreur qui ne se verrait qu'au rechargement suivant.
