@@ -1,3 +1,31 @@
+secubox-webos (1.0.84-1~bookworm1) bookworm; urgency=medium
+
+  * LA PAGE D'ACCES REFUSAIT DE S'ENCADRER (#1294). Elle vit a la racine du
+    Hall et heritait donc de `frame-ancestors 'none'` : le Hall refusait sa
+    propre page des qu'il l'affichait dans son cadre — d'ou l'erreur au clic
+    sur « gerer les acces ». Elle rejoint /cardlets/ dans l'exception : c'est la
+    MEME origine, et ce qu'on y consulte ne contient aucun secret. La saisie
+    d'un identifiant, elle, continue de refuser le cadre par elle-meme et
+    bascule en fenetre a part.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:46:59 +0200
+
+secubox-webos (1.0.83-1~bookworm1) bookworm; urgency=medium
+
+  * LES CARTES DELEGUEES RESTAIENT VIDES, et le bon diagnostic n'etait pas le
+    diagnostic facile (#1293). Le cookie de session SecuBox porte le domaine
+    .gk2.secubox.in : sur hall.gk2.net il n'est JAMAIS envoye — un cookie ne
+    franchit pas deux domaines enregistrables distincts. Dire
+    « connectez-vous » a quelqu'un qui l'est deja l'aurait envoye tourner en
+    rond. La carte nomme desormais la vraie cause et donne le chemin.
+  * LA CONSOLE SE TAIT. Un cadre pas encore charge est encore `about:blank`, et
+    un about:blank HERITE de notre origine : on lui adressait un message
+    destine a l'origine du service, le navigateur refusait et se plaignait a
+    chaque envoi. On marque le cadre a son chargement — seul moment ou l'on
+    sait que son document vient du service — et on ne diffuse qu'aux marques.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:43:17 +0200
+
 secubox-webos (1.0.82-1~bookworm1) bookworm; urgency=medium
 
   * LES CARTES QUI CONSOMMENT LA DELEGATION (#1291) : Cloud, Mail, Social et

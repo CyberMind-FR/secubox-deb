@@ -37,6 +37,20 @@ const widgetMaxBody = 4 << 20 // 4 MiB
 // request host matches a configured first-party suffix, and (c) the response is
 // text/html under the size cap. STRICTLY fail-open: any issue leaves the response
 // byte-identical. Called from the reverse-proxy ModifyResponse hook.
+// estVueCarte : la reponse est-elle une vue de cardlet ?
+//
+// On regarde le CHEMIN DE LA REQUETE et non le contenu : deviner d'apres le
+// HTML serait fragile, alors que le chemin est ce que le service a lui-meme
+// choisi de nommer /micro ou /mini.
+func estVueCarte(resp *http.Response) bool {
+	if resp == nil || resp.Request == nil || resp.Request.URL == nil {
+		return false
+	}
+	p := strings.TrimSuffix(resp.Request.URL.Path, "/")
+	return p == "/micro" || p == "/mini" || strings.HasSuffix(p, "/micro.html") ||
+		strings.HasPrefix(p, "/cardlets/")
+}
+
 func applyWidget(resp *http.Response, host string, origin string, hosts, exclus []string) {
 	if origin == "" || len(hosts) == 0 || resp == nil || resp.Body == nil {
 		return
@@ -45,6 +59,16 @@ func applyWidget(resp *http.Response, host string, origin string, hosts, exclus 
 		return
 	}
 	if widgetExcluded(host, exclus) {
+		return
+	}
+	// UNE CARTE N'EST PAS UNE PAGE (#1292). Les vues /micro et /mini sont des
+	// cardlets : elles tiennent dans 250 px et servent un seul propos. Y
+	// injecter le bandeau de sante n'a aucun sens visuel — et surtout, ces
+	// vues servent une CSP stricte avec l'empreinte de LEURS scripts. Le
+	// bandeau, qui change avec les origines qu'il annonce, n'y correspond
+	// jamais : le navigateur le bloquait, et laissait une erreur dans la
+	// console a chaque affichage de la carte.
+	if estVueCarte(resp) {
 		return
 	}
 	// Don't try to inject into a body we won't fully buffer.

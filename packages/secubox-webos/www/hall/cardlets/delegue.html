@@ -117,8 +117,22 @@
     // accès » à quelqu'un qui n'est simplement pas connecté l'enverrait
     // demander ce qu'il a peut-être déjà.
     if (code === 401 || code === 403) {
-      el('corps').innerHTML = '<div class="sans"><p>Connectez-vous à la box pour '
-        + 'voir ' + esc(c.quoi) + '.</p></div>';
+      // LE BON DIAGNOSTIC, PAS LE DIAGNOSTIC FACILE (#1293). Le cookie de
+      // session SecuBox porte le domaine .gk2.secubox.in : sur hall.gk2.net,
+      // il n'est JAMAIS envoyé — un cookie ne franchit pas deux domaines
+      // enregistrables distincts. Dire « connectez-vous » à quelqu'un qui
+      // l'est déjà l'enverrait tourner en rond ; on nomme la vraie cause et
+      // on donne le chemin.
+      var meme = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+      el('corps').innerHTML = meme
+        ? '<div class="sans"><p>Connectez-vous à la box pour voir '
+            + esc(c.quoi) + '.</p></div>'
+        : '<div class="sans"><p>Votre session SecuBox ne vaut pas sur ce '
+            + 'domaine.</p><button id="bascule">Ouvrir sur gk2.secubox.in</button></div>';
+      var t = el('bascule');
+      if (t) t.addEventListener('click', function () {
+        top.location.href = 'https://hall.gk2.secubox.in/';
+      });
       return;
     }
     var att = etat && etat.demande;

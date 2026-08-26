@@ -1,3 +1,18 @@
+secubox-toolbox-ng (0.3.2-1~bookworm1) bookworm; urgency=medium
+
+  * sbxwaf : LE BANDEAU DE SANTE N'EST PLUS INJECTE DANS UNE CARTE (#1292). Les
+    vues /micro et /mini sont des cardlets : elles tiennent dans 250 px et
+    servent un seul propos, ou un bandeau n'a aucun sens visuel. Surtout, ces
+    vues servent une CSP stricte portant l'empreinte de LEURS scripts — le
+    bandeau, qui change avec les origines qu'il annonce, n'y correspond jamais.
+    Le navigateur le bloquait et laissait une erreur dans la console a chaque
+    affichage de la carte.
+  * On regarde le CHEMIN de la requete et non le contenu : deviner d'apres le
+    HTML serait fragile, alors que le chemin est ce que le service a lui-meme
+    choisi de nommer /micro ou /mini.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:43:20 +0200
+
 secubox-toolbox-ng (0.3.1-1~bookworm1) bookworm; urgency=medium
 
   * Filtres d'authentification par service, DECLARATIFS (#1223). Les motifs

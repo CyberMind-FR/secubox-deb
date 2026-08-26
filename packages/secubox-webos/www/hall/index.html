@@ -1319,15 +1319,27 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     document.querySelectorAll(
       'iframe[data-micro], iframe[data-apercu], #eb-frames iframe'
     ).forEach(f=>{
+      // UN CADRE PAS ENCORE CHARGE EST ENCORE `about:blank`, et un about:blank
+      // HERITE de notre origine (#1293). On lui adressait alors un message
+      // destine a l'origine du service : le navigateur refusait et se
+      // plaignait a chaque envoi — une console pleine d'erreurs pour un cadre
+      // qui, de toute facon, lira ?theme= a son chargement.
+      if(f.dataset.pret!=='1') return;
       try{
         const o=new URL(f.src).origin;
         f.contentWindow.postMessage({sbx:'theme', theme:theme()}, o);
-      }catch(e){ /* cadre pas encore prêt : il lira ?theme= à son chargement */ }
+      }catch(e){}
     });
   }
   new MutationObserver(dis).observe(root,{attributes:true,attributeFilter:['data-theme']});
   // Un cadre qui vient de charger n'a pas entendu les messages précédents.
-  addEventListener('load', dis, true);
+  // On MARQUE le cadre au chargement, puis on diffuse : c'est le seul moment
+  // ou l'on sait que son document vient bien du service.
+  addEventListener('load', e=>{
+    const f=e.target;
+    if(f && f.tagName==='IFRAME') f.dataset.pret='1';
+    dis();
+  }, true);
 })();
 
 // Le PARE-FEU sert désormais sa propre carte (#1237) : plus rien à nourrir
