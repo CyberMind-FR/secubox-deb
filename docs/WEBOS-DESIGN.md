@@ -271,6 +271,32 @@ Le **compte invoqué est nommé** partout où l'accès apparaît. Savoir qu'un a
 existe ne suffit pas : il faut voir *laquelle* des identités il rejoue, sans
 quoi on ne peut ni la reconnaître ni la révoquer en connaissance de cause.
 
+### Où chaque service se situe
+
+| Service | Ce qu'il offre | Voie |
+|---|---|---|
+| **Nextcloud** | Login Flow v2 | délégation — approbation chez eux |
+| **Mastodon** | OAuth2 (`/api/v1/apps` + `/oauth/token`) | délégation — retour sur la page |
+| **PeerTube** | API publique suffisante | **aucune** — la carte lit sans identité |
+| **PhotoPrism** | `401` sans jeton, pas de flux | identifiant dédié |
+| **Gitea, Jellyfin** | jetons créés par l'opérateur | identifiant dédié |
+
+Deux détails d'OAuth2 qui se paient si on les oublie : l'enregistrement de
+l'application est un artefact de **box**, pas de personne — réenregistrer à
+chaque demande crée une application de plus à chaque clic chez Mastodon ; et le
+`state` doit porter le service **et** la personne, sans quoi le retour
+d'autorisation est anonyme.
+
+### La page d'accès s'encadre, sauf ce qui se tape
+
+Consulter, valider, ouvrir un flux : aucun secret ne transite, le Hall peut
+donc afficher la page dans son cadre.
+
+La **saisie d'un identifiant dédié** s'ouvre en **popup** — une fenêtre de
+premier niveau, avec sa barre d'adresse, donc vérifiable — et le Hall reste
+ouvert derrière. Jamais `location=no` : cacher la barre d'adresse détruirait la
+seule garantie qu'on cherche.
+
 Trois règles qui en découlent, et qu'il ne faut pas contourner :
 
 - **La validation ne se fait jamais dans un cadre.** Une confirmation qu'on ne

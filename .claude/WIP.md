@@ -57,7 +57,15 @@ SocialRelay dotés d'une palette claire.
 
 ### ⬜ Next
 
-0. **Cartes Mail et Nextcloud** : l'ossature de délégation est posée (#1288,
+0. **Cartes Mail, Nextcloud, Mastodon, PhotoPrism** : l'ossature de délégation
+   est **complète** (#1288 → #1290) — demande → file → validation → jeton
+   stocké, classée par personne, aucune route publique, compte nommé. Nextcloud
+   par Login Flow v2, Mastodon par OAuth2, les autres par identifiant dédié en
+   popup. **Reste à écrire les cartes qui la consomment** : bouton « demander
+   l'accès » quand il n'y en a pas, contenu quand il y en a un — OCS/WebDAV,
+   `/api/v1/timelines/home`, IMAP vers 10.100.0.10. Jamais de scraping.
+   *(ancienne note ci-dessous)*
+   L'ossature de délégation est posée (#1288,
    demande → file → validation → mot de passe d'application stocké). Reste à
    écrire les deux cartes qui l'utilisent — bouton « demander l'accès » quand
    il n'y en a pas, contenu quand il y en a un. Le contenu passera par OCS/

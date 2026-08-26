@@ -76,7 +76,14 @@ def qui_sur(sub: str) -> str:
 SERVICES: dict[str, dict[str, str]] = {
     "nextcloud": {"nom": "Cloud", "hote": "nc.gk2.secubox.in", "flux": "nextcloud"},
     "mail": {"nom": "Mail", "hote": "webmail.gk2.secubox.in", "flux": "manuel"},
+    "mastodon": {"nom": "Social", "hote": "social.gk2.secubox.in", "flux": "mastodon"},
+    "photoprism": {"nom": "Photos", "hote": "photoprism.gk2.secubox.in", "flux": "manuel"},
 }
+
+# Où Mastodon renvoie après approbation. Un `urn:…:oob` obligerait à recopier un
+# code à la main : recopier un secret est une occasion de le perdre, et une
+# invitation à le taper ailleurs.
+RETOUR = os.environ.get("SECUBOX_WEBOS_RETOUR", "https://hall.gk2.net/acces.html")
 
 # Au-delà, ce n'est plus une file d'attente mais un déni de service : la
 # demande est publique par nature — une carte doit pouvoir la déposer — donc
@@ -194,7 +201,11 @@ def revoque(qui: str, svc: str) -> dict:
 
 async def flux_demarre(qui: str, svc: str) -> dict:
     c = SERVICES.get(svc)
-    if not c or c["flux"] != "nextcloud":
+    if not c:
+        return {"ok": False, "detail": "service inconnu"}
+    if c["flux"] == "mastodon":
+        return await flux_mastodon(qui, svc)
+    if c["flux"] != "nextcloud":
         return {"ok": False, "detail": "pas de flux de delegation pour ce service"}
     url = "https://%s/index.php/login/v2" % c["hote"]
     try:
@@ -242,6 +253,101 @@ async def flux_sonde(qui: str, svc: str) -> dict:
     (RACINE / qui / (svc + ".flux.json")).unlink(missing_ok=True)
     retire(qui, svc)
     return {"ok": True, "compte": d.get("loginName")}
+
+
+# ── Mastodon : OAuth2 ───────────────────────────────────────────────────────
+#
+# L'ENREGISTREMENT DE L'APPLICATION EST UN ARTEFACT DE BOX, pas de personne :
+# `client_id` et `client_secret` identifient SecuBox auprès de Mastodon, et
+# valent pour tous les habitants. On les range donc à part, une seule fois —
+# réenregistrer à chaque demande créerait une application de plus à chaque clic
+# dans l'administration de Mastodon.
+
+async def _app_mastodon(hote: str) -> dict | None:
+    f = RACINE / ("app-" + hote + ".json")
+    d = _lit(f)
+    if d and d.get("client_id"):
+        return d
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=12) as cli:
+            r = await cli.post("https://%s/api/v1/apps" % hote, data={
+                "client_name": "SecuBox WebOS",
+                "redirect_uris": RETOUR,
+                "scopes": "read",
+                "website": "https://cybermind.fr",
+            })
+            r.raise_for_status()
+            d = r.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not d.get("client_id"):
+        return None
+    _ecrit(f, {"client_id": d["client_id"], "client_secret": d.get("client_secret"),
+               "hote": hote, "cree": int(time.time())}, 0o600)
+    return d
+
+
+async def flux_mastodon(qui: str, svc: str) -> dict:
+    c = SERVICES[svc]
+    app = await _app_mastodon(c["hote"])
+    if not app:
+        return {"ok": False, "detail": "enregistrement de l'application refuse"}
+    from urllib.parse import urlencode
+    q = urlencode({
+        "client_id": app["client_id"], "redirect_uri": RETOUR,
+        "response_type": "code", "scope": "read",
+        # `state` porte le service ET la personne : au retour, la page doit
+        # savoir quoi finir, et le serveur pour QUI. Sans lui, un retour
+        # d'autorisation serait anonyme.
+        "state": svc + ":" + qui,
+    })
+    return {"ok": True, "login": "https://%s/oauth/authorize?%s" % (c["hote"], q),
+            "retour": True}
+
+
+async def flux_echange(qui: str, svc: str, code: str) -> dict:
+    """Echanger le code d'autorisation contre un jeton.
+
+    LE CODE EST A USAGE UNIQUE et de courte vie : il ne vaut rien une fois
+    consomme, ce qui est precisement pourquoi Mastodon le fait transiter par
+    l'URL de retour plutot que de nous confier un mot de passe.
+    """
+    c = SERVICES.get(svc)
+    if not c or c["flux"] != "mastodon":
+        return {"ok": False, "detail": "pas de flux OAuth pour ce service"}
+    app = _lit(RACINE / ("app-" + c["hote"] + ".json"))
+    if not app:
+        return {"ok": False, "detail": "application non enregistree"}
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=12) as cli:
+            r = await cli.post("https://%s/oauth/token" % c["hote"], data={
+                "grant_type": "authorization_code", "code": code,
+                "client_id": app["client_id"], "client_secret": app.get("client_secret"),
+                "redirect_uri": RETOUR, "scope": "read",
+            })
+            r.raise_for_status()
+            d = r.json()
+    except (httpx.HTTPError, ValueError) as e:
+        return {"ok": False, "detail": "echange refuse : %s" % type(e).__name__}
+    jeton = d.get("access_token")
+    if not jeton:
+        return {"ok": False, "detail": "pas de jeton rendu"}
+    # On demande QUI l'on est devenu : un acces qu'on ne sait pas nommer ne se
+    # revoque pas en connaissance de cause.
+    compte = ""
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=10) as cli:
+            v = await cli.get("https://%s/api/v1/accounts/verify_credentials" % c["hote"],
+                              headers={"Authorization": "Bearer " + jeton})
+            if v.status_code == 200:
+                compte = (v.json() or {}).get("acct") or ""
+    except (httpx.HTTPError, ValueError):
+        compte = ""
+    _ecrit(_fichier(qui, svc), {"svc": svc, "qui": qui, "compte": compte,
+                                "secret": jeton, "cree": int(time.time()),
+                                "voie": "oauth2"}, 0o600)
+    retire(qui, svc)
+    return {"ok": True, "compte": compte}
 
 
 def pose_manuel(qui: str, svc: str, compte: str, secret: str) -> dict:

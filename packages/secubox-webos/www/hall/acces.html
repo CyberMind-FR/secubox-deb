@@ -5,11 +5,20 @@
 
   SecuBox #1288 — VALIDATION DES ACCÈS DÉLÉGUÉS.
 
-  CETTE PAGE N'EST PAS UNE CARTE, ET C'EST TOUT LE POINT. Elle s'ouvre en
-  PLEINE PAGE : la barre d'adresse est visible, le domaine est vérifiable, on
-  sait à qui l'on parle. Une validation qui se ferait dans un cadre serait
-  imitable par n'importe quelle page encadrée — et une confirmation qu'on ne
-  peut pas authentifier ne confirme rien.
+  ELLE S'ENCADRE, SAUF POUR CE QUI SE TAPE (#1290).
+
+  Consulter les accès, valider une demande, ouvrir un flux de délégation : rien
+  de tout cela ne fait transiter de secret, et le Hall peut donc l'afficher
+  dans son cadre — c'est de sa propre origine qu'il s'agit, et sa politique
+  `frame-src` est une liste fermée.
+
+  LA SAISIE D'UN IDENTIFIANT DÉDIÉ, elle, REFUSE le cadre. C'est le seul
+  endroit de cette page où l'on tape un secret, et dans un cadre la barre
+  d'adresse montre l'hôte, pas la page : on ne peut plus vérifier à qui l'on
+  parle. Le formulaire propose alors d'ouvrir en pleine page, et rien d'autre.
+
+  L'approbation Nextcloud, elle, part TOUJOURS dans un onglet réel : c'est chez
+  eux qu'on tape le mot de passe, sur leur vraie page, jamais chez nous.
 
   AUCUN MOT DE PASSE N'EST DEMANDÉ ICI POUR NEXTCLOUD. On ouvre son flux de
   délégation : la personne approuve dans Nextcloud, sur sa vraie page, et nous
@@ -201,6 +210,20 @@
   function ouvreManuel(svc) {
     var z = el('flux-' + svc);
     z.hidden = false;
+    // ENCADRÉ, ON NE SAISIT PAS. La barre d'adresse montre alors l'hôte et non
+    // cette page : on ne peut plus vérifier à qui l'on confie le secret. On
+    // propose la pleine page — c'est le seul geste honnête ici.
+    if (parent !== window) {
+      // UNE POPUP SUFFIT, et elle est préférable : c'est une fenêtre de
+      // PREMIER NIVEAU, avec sa propre barre d'adresse — la condition est
+      // remplie — et le Hall reste ouvert derrière, ce qu'une navigation en
+      // pleine page aurait perdu.
+      z.innerHTML = '<p class="expl">La saisie s\'ouvre dans une <b>fenêtre à '
+        + 'part</b> : sa barre d\'adresse prouve que c\'est bien SecuBox qui '
+        + 'demande. Dans un cadre, rien ne le prouverait.</p>'
+        + '<button class="p" data-popup="' + esc(svc) + '">Saisir l\'identifiant ↗</button>';
+      return;
+    }
     z.innerHTML = '<p class="expl">Ce service ne sait pas déléguer. Créez-lui un '
       + 'identifiant <b>dédié</b> — jamais le vôtre — et posez-le ici.</p>'
       + '<div class="l"><input id="c-' + esc(svc) + '" placeholder="compte" autocomplete="off">'
@@ -210,9 +233,17 @@
   }
 
   document.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-valider], button[data-refuser], button[data-revoquer], button[data-manuel], button[data-poser]');
+    var b = e.target.closest('button[data-valider], button[data-refuser], button[data-revoquer], button[data-manuel], button[data-poser], button[data-popup]');
     if (!b) return;
     var d = b.dataset;
+    if (d.popup) {
+      // `noopener` : la fenêtre ouverte ne doit pas pouvoir manipuler celle
+      // qui l'ouvre. Une taille modeste, mais jamais `location=no` — cacher
+      // la barre d'adresse détruirait la seule garantie qu'on cherche ici.
+      window.open('/acces.html?saisie=' + encodeURIComponent(d.popup),
+                  'sbx-acces', 'width=520,height=460,noopener');
+      return;
+    }
     if (d.valider) { ouvreFlux(d.valider); return; }
     if (d.manuel) { ouvreManuel(d.manuel); return; }
     if (d.refuser) {
@@ -239,6 +270,37 @@
       });
     }
   });
+
+  // ── RETOURS ──────────────────────────────────────────────────────────────
+  //
+  // Deux façons d'arriver ici autrement que par le menu : le retour
+  // d'autorisation de Mastodon (?code=&state=) et l'ouverture directe du
+  // formulaire de saisie (?saisie=). On les traite après le premier
+  // chargement, pour que la liste soit déjà en place.
+  (function () {
+    var q = new URLSearchParams(location.search);
+    var code = q.get('code'), etat = q.get('state') || '', saisie = q.get('saisie');
+
+    if (code && etat.indexOf(':') > 0) {
+      var svc = etat.split(':')[0];
+      api('/acces/' + encodeURIComponent(svc) + '/echange', {
+        method: 'POST', body: JSON.stringify({ code: code })
+      }).then(function (r) {
+        var x = r.corps || {};
+        // On efface le code de la barre d'adresse : il est a usage unique,
+        // mais le laisser dans l'historique n'apporte rien et le donne au
+        // prochain qui regarde par-dessus l'epaule.
+        history.replaceState({}, '', '/acces.html');
+        charge();
+        if (!x.ok) alert(x.detail || 'échange refusé');
+      });
+      return;
+    }
+    if (saisie) {
+      // Ouverture directe depuis la popup : on attend que la liste soit posée.
+      setTimeout(function () { ouvreManuel(saisie); }, 400);
+    }
+  })();
 
   charge();
 })();

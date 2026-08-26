@@ -667,11 +667,11 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           <div class="who-ident" id="who-ident">
             <p class="who-note">lecture du registre…</p>
           </div>
-          <!-- EN PLEINE PAGE, PAS DANS UN CADRE (#1288) : une validation
-               d'accès qui se ferait dans une carte serait imitable par
-               n'importe quelle page encadrée. `target="_top"` est ici
-               VOULU — c'est exactement ce qu'on veut. -->
-          <a class="who-lien" href="/acces.html" target="_top">🔑 Gérer les accès délégués…</a>
+          <!-- La page s'ouvre DANS le Hall (#1290) : consulter et valider ne
+               fait transiter aucun secret. Seule la saisie d'un identifiant
+               dédié refuse le cadre et renvoie en pleine page — c'est le seul
+               endroit où l'on tape quelque chose. -->
+          <button type="button" role="menuitem" id="who-acces">🔑 Gérer les accès délégués…</button>
         </div>
       </div>
     </div>
@@ -1678,6 +1678,19 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     _identVues = liste;
     rendIdentites(_identVues);
   }
+  document.getElementById('who-acces').addEventListener('click', ()=>{
+    // Cadre du Hall, même origine : la page d'accès n'est pas un service, on
+    // la pose donc directement plutôt que de passer par openService().
+    const box=document.getElementById('eb-frames');
+    if(box && typeof showView==='function'){
+      box.innerHTML='<iframe src="/acces.html" title="Accès délégués"></iframe>';
+      const n=document.getElementById('eb-name'); if(n) n.textContent='Accès délégués';
+      const i=document.getElementById('eb-ic'); if(i) i.textContent='🔑';
+      showView('embed');
+    } else { location.href='/acces.html'; }
+    ouvre(false);
+  });
+
   document.getElementById('who-ident').addEventListener('click', e=>{
     const b = e.target.closest('button[data-ident]'); if(!b) return;
     if(b.dataset.svc && typeof openService==='function'){ openService(b.dataset.svc,'embed'); }

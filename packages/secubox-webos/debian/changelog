@@ -1,3 +1,30 @@
+secubox-webos (1.0.81-1~bookworm1) bookworm; urgency=medium
+
+  * MASTODON CABLE EN OAuth2 (#1290). L'enregistrement de l'application est un
+    artefact de BOX et non de personne : client_id et client_secret
+    identifient SecuBox aupres de Mastodon et valent pour tous les habitants.
+    Reenregistrer a chaque demande creerait une application de plus a chaque
+    clic dans l'administration de Mastodon.
+  * PAS DE CODE A RECOPIER : Mastodon renvoie sur la page. Recopier un secret
+    est une occasion de le perdre, et une invitation a le taper ailleurs. Le
+    `state` porte le service ET la personne — sans lui, un retour
+    d'autorisation serait anonyme. Le code est efface de la barre d'adresse
+    apres usage : il est a usage unique, mais le laisser dans l'historique le
+    donne au prochain qui regarde par-dessus l'epaule.
+  * On demande a Mastodon QUI l'on est devenu : un acces qu'on ne sait pas
+    nommer ne se revoque pas en connaissance de cause.
+  * LA PAGE D'ACCES S'ENCADRE, SAUF CE QUI SE TAPE. Consulter, valider, ouvrir
+    un flux : aucun secret ne transite, le Hall peut donc l'afficher. La saisie
+    d'un identifiant dedie, elle, s'ouvre en POPUP — une fenetre de PREMIER
+    NIVEAU, avec sa barre d'adresse, donc verifiable — et le Hall reste ouvert
+    derriere, ce qu'une navigation en pleine page aurait perdu. Jamais
+    `location=no` : cacher la barre d'adresse detruirait la seule garantie
+    qu'on cherche ici.
+  * PhotoPrism ajoute a la liste, par la voie manuelle : son API rend 401 sans
+    jeton et il n'offre aucun flux de delegation.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:33:12 +0200
+
 secubox-webos (1.0.80-1~bookworm1) bookworm; urgency=medium
 
   * UN AVATAR RASSEMBLE PLUSIEURS IDENTITES (#1289) : les acces sont donc
