@@ -6,7 +6,135 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-21 (soir)*
+*Mis à jour : 2026-08-26*
+
+---
+
+## 2026-08-22 → 26 — Sortie de CrowdSec, WAF autonome, hors-HTTP, WebOS
+
+Marathon en trois mouvements : le WAF cesse de dépendre d'un tiers, il apprend à
+voir autre chose que HTTP, et l'accueil devient un bureau.
+
+### ✅ Fait — déployé sur gk2, paquets construits
+
+**Le WAF bannit vraiment (#1216, #1220)**
+- Cause du silence : `Ensure()` créait la table et les ensembles nft, **mais ni
+  chaîne ni règle**. `waf_ban` existait, plein, et *n'était référencé nulle
+  part* — bannir revenait à tenir une liste sans portier. Ajout de la chaîne
+  `waf_drop` (hook input, priorité -100) et des deux règles `@waf_ban` /
+  `@waf_ban6`. `flush chain` avant les `add rule` : `add rule` n'est pas
+  idempotent, sans cela chaque démarrage empilait un doublon.
+- Preuve mesurée aujourd'hui sur gk2 : **115 IPv4 + 2 IPv6 bannies**,
+  **12 545 paquets / 878 Ko jetés par le noyau**. La question posée en séance —
+  « ces 421 sont silencieux mais le WAF bloque-t-il les sources ? » — a
+  désormais une réponse chiffrée : oui.
+- Garde-fou sur les adresses privées dans `Ban()`. Les plages réellement
+  dangereuses sont énumérées plutôt que confiées à `is_private`, qui range
+  203.0.113.0/24 (réseau de documentation) parmi les privées et rendait l'outil
+  intestable.
+- Le bouton « Ban » du webui appelait `cscli` et **avalait ses erreurs** : il ne
+  faisait rien, en silence. Repointé sur `sudo -n wafctl ban|unban`, erreurs
+  propagées jusqu'à l'interface.
+
+**Anti-robots par vhost (#1216)**
+- 48 robots nommés (moteurs, moissonneurs d'IA, SEO) + motifs génériques.
+  `\b` ne convenait pas : « NewSpider » n'a pas de frontière avant « Spider »,
+  et les téléphones `CUBOT_X19` seraient passés pour des robots.
+- `/robots.txt`, `/favicon.ico` et `/.well-known/` restent toujours servis :
+  bloquer robots.txt empêche le robot d'apprendre qu'il n'est pas le bienvenu.
+
+**CrowdSec retiré du chemin**
+- Service arrêté, démarrage automatique désactivé. Les satellites
+  `secubox-blacklist-sync` et `secubox-threatmesh-bridge` sont liés par
+  `Requisite=` : sans CrowdSec ils ne partent pas, au lieu d'échouer en boucle.
+- Charge de la box : **15–22 → 5–7**.
+- Le paquet `crowdsec` reste installé mais inactif — dépose, pas purge.
+
+**Hors-HTTP : `sbx-authwatch` (première version)**
+- 9 modules, **43 tests**. Lit SSH, SMTP et IMAP — journal *et* fichiers —
+  et alimente **le même ensemble nft et le même journal de menaces** que le WAF :
+  c'est la corrélation perdue avec CrowdSec qui est reconstruite ici.
+- Motifs écrits depuis de **vraies lignes de gk2**, jamais depuis la
+  documentation amont. Le format passwd-file de dovecot impose de couper sur
+  `:` — sinon l'empreinte du mot de passe devient le nom du compte.
+- Détection de campagne (clé : le compte visé) et de compte inexistant. Les
+  tentatives sur `@gk2.net`, domaine dont l'exploitant ne se sert pas, sont donc
+  des agressions et non des erreurs de frappe.
+- **10 ports leurres**. Un leurre n'imite jamais le protocole : il note et se
+  tait. Imiter, c'est offrir une surface.
+- Filtres par service déclaratifs (`/etc/secubox/authwatch/services.json`) :
+  gitea et nextcloud actifs sur motifs vérifiés ; peertube et mastodon inactifs
+  avec `_pourquoi_inactif` écrit noir sur blanc, plutôt qu'un motif deviné.
+- Nextcloud journalisait l'IP du relais : `192.168.1.200` manquait dans
+  `trusted_proxies`. Sans ce correctif, le filtre n'aurait su bannir que la box
+  elle-même.
+
+**Tableau de bord WAF + vhost dédié (#1237)**
+- Page `waf.gk2.secubox.in`, LAN seulement : histogramme empilé et barres
+  d'efficacité en SVG inline, sans bibliothèque externe.
+- Métriques ajoutées : pays, **noms non résolus par les vhosts existants**,
+  détections comportementales, comptes visés, leurres touchés, efficacité.
+  Chacune avec une relecture complète unique à la migration.
+- Deux corrections d'honnêteté : « Unknown » partout venait de ce que
+  l'agrégat renvoie `categories` (une liste) là où l'interface lisait
+  `scenario` ; et `robots` affiché à 0 % d'efficacité venait de ma propre
+  métrique, qui comptait un refus 403 comme simple observation.
+
+**WebOS — l'accueil devient un bureau (#1234 → #1248)**
+- Chaque service **sert sa propre carte** (`/micro`) : le hall ne dessine plus
+  de maquette de ce qu'il ne connaît pas.
+- Mosaïque en colonnes (`break-inside:avoid`) : les cartes n'ont plus à
+  partager une hauteur commune.
+- Cartes déplaçables, mémorisées **par profil**, avec réinitialisation au menu.
+- Barre média persistante + **pastilles** dans la mégabarre : le son survit à la
+  navigation d'un service à l'autre.
+- Thème propagé **par `postMessage`**, jamais en réécrivant `iframe.src` : ma
+  première version rechargeait le cadre, ce qui coupait la lecture en cours.
+- **#1248 (aujourd'hui)** : la barre média, fixée en bas, recouvrait les
+  dernières cartes et le bas des services encadrés — rien ne pouvait les
+  dégager. Sa hauteur réelle est désormais mesurée et publiée en `--dock-h` ;
+  l'accueil l'ajoute à sa marge basse, la vue encadrée la retire de la hauteur
+  du cadre. `secubox-webos 1.0.55`, déployé.
+
+**Panneau Vhost corrigé**
+- Le fichier de routes avait déménagé : `/srv/mitmproxy/…` n'existait plus,
+  **281 routes disparaissaient en silence**.
+- URLs courtes fausses sur **91 vhosts sur 100** : `/access` utilisait
+  `conf_file.stem` au lieu du FQDN.
+- `depot` n'est pas `repo` : deviner d'après le nom l'aurait mal attribué. Sa
+  socket nginx a révélé une gouttière d'agrégation.
+
+### ⬜ TODO — file réelle, par ordre de coût
+
+1. **#1210 non clos.** Les appels `cscli` sont passés de 50 à 25 par 3 min,
+   mais `secubox-aggregator` en engendre encore et **son source ne contient
+   aucun `cscli`** : l'appelant n'est pas localisé. Neuf modules SecuBox
+   invoquent cscli, sept sont inactifs. Piste : un garde partagé
+   `crowdsec_actif()`.
+2. **BBS — audio ininterrompu.** Seule l'étape 1 est faite (dock extrait en un
+   `dock.html` unique, doublon déjà divergent supprimé). L'extraction du lecteur
+   depuis `newsroom.js` (~110 lignes, attaches spécifiques au newsroom) reste à
+   faire, puis navigation PJAX échangeant `<main class="feed">`.
+3. **`/micro` manquants** : bbs, peertube, nextcloud, photoprism, metanews,
+   mastodon, billets, depot.
+4. **MetaNews** : faire défiler le contenu des vignettes en bouclant sur les
+   sources agrégées (#1189, #1200).
+5. **Miroir du wiki GitHub → gitea** : gitea ne recopie que le code, le wiki est
+   un dépôt séparé.
+6. `repo.toml` ne déclare aucun `portal.domain`.
+7. ~26 tickets ouverts plus anciens (#1180 → #1215).
+
+### 📌 Historique — pourquoi CrowdSec est parti
+
+Ce n'est pas un rejet technique. CrowdSec a rendu service, et le dire compte :
+la détection communautaire a couvert des mois de production. Trois raisons ont
+fait pencher la balance — la dépendance à un tiers dans le chemin de décision,
+le coût en charge sur un ARM contraint, et le fait que la mutualisation n'était
+plus réciproque dans la durée. `sbxwaf` est plus efficace **et** plus modulaire :
+la règle vit dans le noyau, la politique dans un fichier lisible, et le hors-HTTP
+rejoint le même ensemble de bannissement au lieu d'un second système parallèle.
+
+Deux notes de séance rédigées : *Sortir de CrowdSec* et *Le WAF autonome*.
 
 ---
 

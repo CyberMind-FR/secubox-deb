@@ -91,7 +91,7 @@ Voir [[Installation-FR]] pour les instructions détaillées.
 | Stack | Description | Modules |
 |-------|-------------|---------|
 | 🟠 **AUTH** | Authentification, ZeroTrust, MFA | auth, portal, users, nac |
-| 🟡 **WALL** | Pare-feu, CrowdSec, WAF, IDS/IPS | crowdsec, waf, threats, ipblock |
+| 🟡 **WALL** | Pare-feu, WAF, IDS/IPS, veille d'authentification | waf, authwatch, threats, ipblock |
 | 🔴 **BOOT** | Déploiement, provisioning | cloner, vault, vm, rezapp |
 | 🟣 **MIND** | IA, analyse comportementale, DPI | dpi, netifyd, ai-insights, soc |
 | 🟢 **ROOT** | Système, CLI, durcissement | core, hub, system, console |
@@ -123,7 +123,8 @@ Voir [[Modules|MODULES-FR]] pour la documentation complète des modules.
 
 ## 🟡 WALL — Fonctionnalités de Sécurité
 
-- **CrowdSec** — IDS/IPS communautaire
+- **sbxwaf** — WAF souverain : motif détecté → bannissement noyau nftables
+- **sbx-authwatch** — SSH/SMTP/IMAP et leurres, vers le même ensemble de bannissement
 - **WAF** — 300+ règles ModSecurity
 - **nftables** — Politique DROP par défaut
 - **AI-Insights** — Détection ML des menaces

@@ -22,7 +22,7 @@ Les modules forment un graphe complet où chaque nœud est connecté à tous les
 | Module | Couleur | Hex | Fonction |
 |--------|---------|-----|----------|
 | **AUTH** | Terracotta | `#C04E24` | Authentification, ZeroTrust, MFA, portail captif |
-| **WALL** | Ocre | `#9A6010` | Firewall nftables, CrowdSec, WAF, IDS/IPS |
+| **WALL** | Ocre | `#9A6010` | Firewall nftables, WAF `sbxwaf`, IDS/IPS, `sbx-authwatch` |
 | **BOOT** | Brique | `#803018` | Déploiement, provisioning, clonage, vault |
 | **MIND** | Indigo | `#3D35A0` | IA, analyse comportementale, DPI, SOC |
 | **ROOT** | Vert profond | `#0A5840` | Système, CLI, hardening, hub central |
@@ -64,7 +64,7 @@ Les modules s'associent en paires complémentaires pour certaines fonctions :
 
 | Composant | Choix | Notes |
 |-----------|-------|-------|
-| IDS/IPS | Suricata + CrowdSec | Bouncers intégrés |
+| IDS/IPS | Suricata + `sbxwaf` | Bannissement nftables direct, sans tiers |
 | WAF | mitmproxy + ModSecurity rules | Inspection HTTPS |
 | DPI | nDPId + netifyd | Dual-stream via tc mirred |
 | DNS | Unbound | Vortex DNS + blocklists |

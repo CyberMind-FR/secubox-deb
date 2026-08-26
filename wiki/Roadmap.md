@@ -30,7 +30,7 @@ Les modules suivants sont fonctionnels et testés :
 | Stack | Modules |
 |-------|---------|
 | 🟠 AUTH | auth, portal, users, nac |
-| 🟡 WALL | crowdsec, waf, threats, ipblock, mitmproxy |
+| 🟡 WALL | waf, authwatch, threats, ipblock, mitmproxy |
 | 🔴 BOOT | cloner, vault, vm, rezapp |
 | 🟣 MIND | dpi, netifyd, ai-insights |
 | 🟢 ROOT | core, hub, system, console |

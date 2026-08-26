@@ -50,9 +50,9 @@ detection, WAF, and a suite of sovereign services, all behind one web dashboard.
 
 | | |
 |---|---|
-| 🛡️ **Firewall & WAF** | nftables + active enforcement — pattern detected → CrowdSec → kernel drop in ~12s |
+| 🛡️ **Firewall & WAF** | nftables + `sbxwaf` — pattern detected → kernel drop, no third-party service in the path |
 | 🔐 **VPN** | WireGuard with QR-code enrolment for phones |
-| 🚨 **Intrusion detection** | CrowdSec IDS/IPS with automatic blocking |
+| 🚨 **Intrusion detection** | HTTP, SSH, SMTP and IMAP watched together — `sbxwaf` + `sbx-authwatch` feed one ban set |
 | 📊 **Web dashboard** | One interface for the whole box, from any browser |
 | ☁️ **Sovereign services** | Nextcloud, mail, Gitea, Jellyfin, PeerTube, radio, forum… |
 | 🔄 **Automatic updates** | Security patches applied on their own |

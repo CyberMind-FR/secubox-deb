@@ -1,3 +1,19 @@
+secubox-webos (1.0.55-1~bookworm1) bookworm; urgency=medium
+
+  * BARRE MEDIA — reserve basse (#1248) : fixee en bas de fenetre, elle
+    recouvrait les dernieres cartes de l'accueil et le bas des services
+    encadres. Aucun defilement ne pouvait les degager : ce qui passe sous une
+    barre fixe y reste.
+  * La hauteur REELLE de la barre est mesuree a chaque changement de
+    composition et publiee en --dock-h. L'accueil l'ajoute a sa marge basse ;
+    la vue encadree la retire de la hauteur du cadre, pour que le service
+    encadre defile jusqu'a son propre bas. Deux rangees ne coutent pas la meme
+    reserve qu'une seule — d'ou la mesure plutot qu'une constante.
+  * Sans flux actif la reserve retombe a zero : la barre disparait alors, et
+    reserver de la place pour rien decalerait le pied de page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 09:57:18 +0200
+
 secubox-webos (1.0.54-1~bookworm1) bookworm; urgency=medium
 
   * PASTILLES des flux actifs dans la megabarre (#1247) : rondes, elles

@@ -240,7 +240,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .rail .bottom{margin-top:16px;padding-top:10px;border-top:1px solid var(--nav-line)}
 .rail .bottom a{color:var(--nav-dim);font-size:.82rem}
 
-.main{padding:20px 24px 60px;min-width:0}
+/* La barre média est fixe : sans réserve elle recouvre les dernières
+   cartes, qu'aucun défilement ne peut alors dégager. --fond est
+   recalculée par dessine() à chaque changement de composition. */
+.main{padding:20px 24px calc(60px + var(--dock-h,0px));min-width:0}
 
 /* ── stat tiles ──────────────────────────────────────────── */
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:20px}
@@ -508,7 +511,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .embed-wrap{border:1px solid var(--line);border-top:0;border-bottom:0;overflow:hidden;
   background:var(--panel);flex:1;min-height:0}
 body:has(#view-embed:not(.hidden)) .main{
-  padding:0;height:calc(100dvh - var(--mast-h,70px) - var(--sb-h));
+  padding:0;height:calc(100dvh - var(--mast-h,70px) - var(--sb-h) - var(--dock-h,0px));
   display:flex;flex-direction:column;min-height:0}
 body:has(#view-embed:not(.hidden)) .embed-hint{margin:6px 10px}
 /* La chaîne d'étirement doit être CONTINUE : le fils de .main est la <section>
@@ -1206,6 +1209,9 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         +'<span class="mprog"><i></i></span><span class="mtime">0:00</span>'
         +'<button data-a="stop" title="Fermer">✕</button></div>').join('');
     }
+    // La réserve suit la barre : 30px de barre d'état, plus les rangées.
+    document.documentElement.style.setProperty(
+      '--dock-h', (ids.length ? dock.offsetHeight : 0) + 'px');
     ids.forEach(id=>{
       const r=dock.querySelector('.mrow[data-id="'+id+'"]'); if(!r) return;
       const e=flux.get(id).etat||{};

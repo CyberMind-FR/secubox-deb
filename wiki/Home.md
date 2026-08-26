@@ -140,7 +140,7 @@ Voir **[[Hardware-Matrix]]** pour la matrice complète avec statuts de support.
 | Stack | Fonction | Modules principaux |
 |-------|----------|-------------------|
 | 🟠 AUTH | Authentification, ZeroTrust, MFA | auth, portal, users, nac |
-| 🟡 WALL | Firewall, CrowdSec, WAF, IDS/IPS | crowdsec, waf, threats, ipblock |
+| 🟡 WALL | Firewall, WAF, IDS/IPS, auth watch | waf, authwatch, threats, ipblock |
 | 🔴 BOOT | Déploiement, provisioning | cloner, vault, vm, rezapp |
 | 🟣 MIND | IA, analyse comportementale, DPI | dpi, netifyd, ai-insights, soc |
 | 🟢 ROOT | Système, CLI, hardening | core, hub, system, console |

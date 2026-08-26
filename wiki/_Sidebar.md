@@ -52,6 +52,7 @@
 * [[Anti-Track]] 🛡️ bloque · empoisonne · anonymise
 * [[Billets]] 📮 micro-blog gateway · média vignette zoomable
 * [[Metalogue]] 🕸️ OSINT suite · Maigret + SpiderFoot (Maltego-style)
+* [[WAF]] 🛡️ pare-feu applicatif autonome (nft direct, hors-HTTP) | [FR](WAF-FR)
 * [[ThreatMesh]] 🛰️ blocklist souveraine (feeds + mesh, sans CAPI) | [FR](ThreatMesh-FR)
 * [[Modules|MODULES-EN]] 🇬🇧
 * [[MODULES-FR]] 🇫🇷
