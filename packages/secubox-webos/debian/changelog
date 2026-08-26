@@ -1,3 +1,31 @@
+secubox-webos (1.0.103-1~bookworm1) bookworm; urgency=medium
+
+  * LA CARTE DU DEPOT SAIT ENFIN DEPOSER (#1328). Elle listait et retirait,
+    mais ne deposait pas : elle parlait d'un service sans savoir faire ce pour
+    quoi il existe. Trois gestes y menent — glisser un fichier sur la carte,
+    le coller, ou le choisir. Aucun n'est meilleur que les autres : on prend
+    celui qui tombe sous la main, et une carte qui n'en accepte qu'un force le
+    detour.
+  * Le glisser vise la CARTE ENTIERE, pas le seul cadre de 40 px : viser petit
+    avec un fichier au bout du curseur est un geste ingrat.
+  * Jauge de progression par XHR — `fetch` ne rend pas la progression, et sur
+    une archive de plusieurs dizaines de Mo un « envoi… » sans jauge ne se
+    distingue pas d'un blocage : on recommence pour rien.
+  * L'extension est verifiee AVANT l'envoi, des deux cotes. Televerser cent
+    megaoctets pour se faire dire non a l'arrivee est une perte evitable.
+  * Plafond de taille cote Hall : sans lui une carte pouvait faire tamponner
+    n'importe quel volume en memoire par l'API.
+  * La dependance multipart suit la convention des autres (`| python3-pip`) :
+    elle est installee par pip sur la box, et l'exiger en dpkg strict laissait
+    le paquet non configure.
+  * BANDE DES FAVORIS, HORIZONTALE (#1327). Les remonter en tete de mosaique
+    ne suffisait pas : celle-ci coule en COLONNES, et « en tete » y signifie
+    « en haut de la premiere colonne » — trois favoris s'empilaient a gauche,
+    l'inverse d'une rangee de priorite. Ils ont desormais leur bande, ou l'on
+    glisse pour entrer, sortir et reordonner, l'ordre etant relu du DOM.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 16:06:09 +0200
+
 secubox-webos (1.0.102-1~bookworm1) bookworm; urgency=medium
 
   * LE FAVORI NE CHANGE QUE L'ORDRE (#1326). Il elargissait la carte

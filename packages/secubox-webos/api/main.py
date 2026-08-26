@@ -8,7 +8,7 @@ import json
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, Depends, Request
+from fastapi import FastAPI, APIRouter, Depends, Request, File, Form, UploadFile
 
 from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
@@ -231,6 +231,24 @@ def _porteur(request: Request) -> str:
     """
     a = request.headers.get("authorization") or ""
     return a[7:].strip() if a[:7].lower() == "bearer " else ""
+
+
+# DECLAREE AVANT LA ROUTE GENERIQUE : `/actions/{module}/{action}` la
+# capturerait sinon, FastAPI retenant la premiere qui correspond. Elle est a
+# part parce que son trajet est multipart, ce que la voie generique — qui ne
+# decrit que du JSON — ne sait pas transporter.
+@router.post("/actions/droplet/deposer")
+async def action_depot(request: Request,
+                       fichier: UploadFile = File(...),
+                       nom: str = Form(""),
+                       user=Depends(require_jwt)):
+    """Publier un fichier au depot, depuis la carte."""
+    # On lit avec un octet de marge : si le fichier depasse, on le sait sans
+    # avoir a lui faire confiance sur sa taille annoncee.
+    contenu = await fichier.read(actions.DEPOT_MAX + 1)
+    return await actions.depose_fichier(
+        fichier.filename or "", contenu, fichier.content_type or "",
+        nom, _porteur(request))
 
 
 @router.get("/actions/{module}/{action}")

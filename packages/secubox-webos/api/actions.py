@@ -84,6 +84,16 @@ ACTIONS: dict[str, dict[str, tuple]] = {
 # trop large : un torrent est une empreinte hexadécimale, un média YTSaS porte
 # l'identifiant de la plateforme d'origine, qui admet lettres, chiffres, tiret
 # et souligné.
+# CE QUE LE DEPOT SAIT PUBLIER. La liste vient de sa propre docstring — page
+# HTML seule, archive ZIP ou TAR. Refuser ici, avec le motif, vaut mieux que
+# televerser cent megaoctets pour se faire dire non a l'arrivee.
+DEPOT_EXTENSIONS = (".html", ".htm", ".zip", ".tar.gz", ".tgz")
+
+# PLAFOND DE TAILLE, cote Hall. Le depot a le sien (`max_upload_mb`), mais il
+# ne le fait respecter qu'apres avoir tout recu : sans plafond ici, une carte
+# pourrait faire tamponner n'importe quel volume en memoire par l'API du Hall.
+DEPOT_MAX = 100 * 1024 * 1024
+
 _ID_HEX = "abcdef0123456789"
 _ID_MEDIA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 
@@ -154,6 +164,63 @@ async def agir(module: str, action: str, corps: dict | None = None,
     if r.status_code >= 400:
         # On rend le message du MODULE : c'est lui qui sait pourquoi il refuse,
         # et le réécrire ici en ferait une devinette.
+        detail = d.get("error") or d.get("detail") or ("refus %d" % r.status_code)
+        return {"ok": False, "detail": str(detail)[:200]}
+
+    return {"ok": True, "donnees": d}
+
+
+async def depose_fichier(nom_fichier: str, contenu: bytes, mime: str,
+                         nom: str = "", jeton: str = "") -> dict:
+    """Publier un fichier au depot — la fonction MEME du service.
+
+    La carte listait et retirait, mais ne deposait pas : elle parlait d'un
+    service sans savoir faire ce pour quoi il existe. Le trajet est
+    multipart, ce que `agir()` ne sait pas faire — d'ou cette fonction a part
+    plutot qu'une entree de plus dans ACTIONS, qui ne decrit que du JSON.
+    """
+    base = (nom_fichier or "").strip().lower()
+    if not base:
+        return {"ok": False, "detail": "fichier sans nom"}
+    if not base.endswith(DEPOT_EXTENSIONS):
+        return {"ok": False,
+                "detail": "le depot publie des pages et des archives : "
+                          + ", ".join(DEPOT_EXTENSIONS)}
+    if not contenu:
+        return {"ok": False, "detail": "fichier vide"}
+    if len(contenu) > DEPOT_MAX:
+        return {"ok": False,
+                "detail": "%d Mo — au-dela des %d Mo acceptes"
+                          % (len(contenu) // (1024 * 1024), DEPOT_MAX // (1024 * 1024))}
+
+    entetes = {"Host": HOTE_ADMIN, "Accept": "application/json"}
+    if jeton:
+        entetes["Authorization"] = "Bearer " + jeton
+
+    donnees = {}
+    # On ne transmet le nom que s'il a ete choisi : sans lui, le depot le
+    # derive du fichier, et il le fait mieux que nous ne le devinerions.
+    if nom.strip():
+        donnees["name"] = nom.strip()
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as cli:
+            r = await cli.post(
+                AMONT + "/api/v1/droplet/upload",
+                headers=entetes,
+                data=donnees,
+                files={"file": (nom_fichier, contenu,
+                                mime or "application/octet-stream")},
+            )
+    except httpx.HTTPError as e:
+        return {"ok": False, "detail": "depot injoignable : %s" % type(e).__name__}
+
+    try:
+        d = r.json()
+    except ValueError:
+        return {"ok": False, "detail": "reponse illisible (%d)" % r.status_code}
+
+    if r.status_code >= 400:
         detail = d.get("error") or d.get("detail") or ("refus %d" % r.status_code)
         return {"ok": False, "detail": str(detail)[:200]}
 
