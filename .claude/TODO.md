@@ -6,7 +6,65 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-08-21 (soir)*
+*Mis à jour : 2026-08-26 (soir)*
+
+---
+
+## 2026-08-26 (soir) — file SBXOS, par ordre décidé
+
+### 🔴 Demain, avec le POC
+
+- [ ] **#1216 — corréler les sessions de nos services, sans les cloisonner.**
+      Le lecteur PeerTube ne s'authentifie plus dans le Hall : contexte tiers,
+      stockage cloisonné, jar vide. **Corréler n'est pas cloisonner** — le
+      cloisonnement vise les traqueurs ; l'appliquer aux témoins nécessaires
+      de nos propres services casse notre SI. Garder les deux mécanismes
+      **séparés** : le proxy de surf exige une origine PAR site, la
+      corrélation exige l'inverse.
+      - [ ] Préalable : démêler les noms d'hôte `admin` / `gk2`, le nom du nœud
+      - [ ] Décider l'origine du lecteur — même origine (`/pt/`, au prix d'une
+            prise d'espace de noms : `/api/v1/{config,metrics,player-settings,`
+            `plugins,users,video-playlists,videos}` + `/api/v1/server`) ou même
+            site
+      - [ ] Jeton obtenu côté serveur depuis le secret délégué (`api/acces.py`),
+            semé dans le stockage de l'origine qui sert le lecteur
+- [ ] **POC proxy Tor + relais MITM** (WIP §0bis) — trois mesures : site
+      statique, site applicatif (Nextcloud), SaaS moderne hostile.
+      **Une origine par site**, jamais une seule partagée.
+
+### 🟠 Cartes — file énoncée
+
+- [ ] **Radio (#1201)** : playlist affichée → retirer le morceau en cours,
+      réduire de moitié le précédent (un back, le courant, deux next)
+- [ ] **BBS et SocialRelay** : vignettes et miniatures manquantes
+- [ ] **Podcaster** : sélection / diaporama des flux sources, deux derniers de
+      chaque — livre audio *vs* nouveau podcast
+- [ ] **BBS (#1198)** : liens YouTube attrapés et re-référencés vers PeerTube,
+      vignette embarquée
+- [ ] **SocialRelay (#1192)** : contenu du bouton « Sources » vers la mégabarre
+      de droite du Hall
+- [ ] **Torrent** : barre de progression en contour de l'item
+- [ ] **WAF embarqué** : clignotement clair/sombre du statut
+
+### 🟡 Dette relevée, non traitée
+
+- [ ] **`X-Forwarded-Proto` se perd entre HAProxy et l'application.** Posé aux
+      deux bouts, correct quand l'application est interrogée directement sur sa
+      socket — le maillon manquant n'est pas identifié.
+- [ ] **`secubox-meshtastic`** : pas d'entrée ACL sous `/etc/secubox/secrets`.
+      Le masque `---` neutralise toutes les entrées nommées ; une dizaine de
+      paquets font `install -d -m 0700` sur ce parent partagé.
+- [ ] **kbin sonde `example.com`** pour tester sa connectivité. Signalé,
+      délibérément laissé — c'est un choix de conception à trancher.
+- [ ] **#1209** : nuance de révocation à consigner.
+- [ ] **Radio, persistance** : sa cardlet n'a aucun `localStorage` — elle n'a
+      jamais repris après un rafraîchissement. Décider si on lui donne la même
+      reprise qu'à PeerTube.
+
+### 📄 Écrit ce soir
+
+- `docs/CARDLET-GUIDELINES.md` — ce qui a réellement cassé en construisant les
+  cartes, avec le symptôme de chacun et la liste de contrôle avant livraison.
 
 ---
 

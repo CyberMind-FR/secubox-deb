@@ -10,6 +10,110 @@
 
 ---
 
+## 2026-08-26 (soir) — SBXOS : les cartes AGISSENT, et le guide qui en sort
+
+### ✅ Fait — déployé sur gk2 (secubox-webos 1.0.99 → 1.0.104)
+
+**Le dépôt dépose pour de vrai** (#1328, corrigé #1329). La carte listait et
+retirait, mais ne déposait pas — elle parlait d'un service sans savoir faire ce
+pour quoi il existe. Elle était de surcroît câblée sur le **mauvais verbe** :
+`/upload` publie un site et demande un compte ; `/depot` **reçoit** un fichier,
+public, sans compte, et rien n'est publié. La carte porte désormais la phrase
+du service mot pour mot. Glisser, coller, choisir — trois gestes, un chemin ;
+la carte **entière** est la cible du glisser. Corps relayé **en flux** (2 Go
+acceptés : les tamponner tuerait l'API d'un seul envoi), **adresse d'origine
+transmise** pour que le limiteur du service compte encore par machine, plafonds
+**demandés** et non recopiés.
+
+**Le lecteur PeerTube ne plante plus** (#1324 puis #1330 — deux diagnostics, un
+seul vrai). Le message « player is not compatible with your web browser » ne
+parle pas du navigateur : le lecteur installe
+`window.onerror = displayIncompatibleBrowser`, donc **toute** erreur JS s'y
+affiche. On répondait `params:'pong'`, une chaîne, là où son jschannel lit
+`params.publish.length` — la réponse attendue est un objet
+`{type:'publish-reply', publish:[]}`. Trouvé en lisant le bundle servi, après
+deux hypothèses fausses fondées sur le seul message.
+
+**Ses assets sont servis à la racine** (#1322) : la page d'embarquement
+référence `/client/…` et `/plugins/…` en absolu, sans savoir qu'elle est servie
+sous `/pt/`. Ces requêtes tombaient dans le `location /` du Hall, **qui
+répondait 200 avec son index.html** — du HTML là où le navigateur attendait du
+JavaScript. Un 404 aurait été plus lisible qu'un 200 de la mauvaise nature.
+
+**Favoris** (#1323 → #1327), en **bande horizontale**. Deux versions jetées
+avant la bonne : élargir la carte (`column-span`) remettait son aperçu à
+l'échelle et le faisait paraître zoomé de travers ; la remonter « en tête »
+d'une mosaïque en **colonnes** l'empilait à gauche. Le favori ne change que
+l'**ordre**. On y glisse pour entrer, sortir et réordonner ; placer une carte à
+la main retire son favori, sinon les deux gestes se contredisent.
+
+**Le bandeau tient sur une ligne au téléphone** (#1325). La cause n'était pas
+le contenu mais un `flex-wrap:wrap` sous 960 px : la barre se **repliait** au
+lieu de s'alléger. Le repli est borné aux tablettes ; sous 720 px on **retire**
+— « SbX », que le médaillon dit déjà, et « Identité locale », dont la place est
+au menu profil. Les pastilles restent : c'est la seule information vivante du
+bandeau.
+
+**Divers** : YTSaS perd deux boutons qui menaient au même endroit en plus loin
+(#1320) ; kbin ne s'embarque plus (#1321) — un forum entier tassé dans 280 px
+ne montre rien qu'on puisse lire, il garde sa carte donc son accès ; le jeton
+de l'appelant est relayé aux modules qui protègent leurs routes de lecture
+(même personne, même box, même domaine d'authentification).
+
+### 📌 Ce que la journée a appris, et qui sert maintenant de règle
+
+- **Un message d'erreur tiers désigne rarement sa cause.** Un `window.onerror`
+  global les rend tous identiques. Lire le code qui lève avant de croire le
+  texte : ici un `grep` sur le bundle a tranché en une commande.
+- **Un 200 de la mauvaise nature est pire qu'un 404.** Le Hall rendait son
+  index.html à des requêtes de JavaScript ; c'est ce qui a rendu la panne
+  opaque.
+- **Ne pas inventer à un service des fonctions qu'il n'a pas** — ni lui en
+  retirer celle pour laquelle il existe.
+- **Éviter un rechargement d'iframe est un bon réflexe, pas au prix de
+  déformer la carte.** Quand les deux s'opposent, changer la fonctionnalité.
+
+### 📄 Documenté
+
+- **`docs/CARDLET-GUIDELINES.md` (NOUVEAU, ~370 lignes)** — non pas comment une
+  carte devrait marcher, mais **ce qui a réellement cassé** en la construisant,
+  le symptôme exact que ça produisait, et la règle qui en découle. Commence par
+  « ce service mérite-t-il une carte ? » et finit par une liste de contrôle en
+  16 lignes. Référencé depuis `MODULE-GUIDELINES.md` §8quater et
+  `WEBOS-DESIGN.md` §5bis.
+
+### ⬜ Next — demain, avec le POC
+
+1. **#1216 — corréler les sessions de nos propres services, sans les
+   cloisonner.** Le lecteur PeerTube ne s'authentifie plus dans le Hall :
+   contexte tiers, stockage cloisonné, jar vide. **Corréler n'est pas
+   cloisonner** — le cloisonnement vise les traqueurs, l'appliquer aux témoins
+   nécessaires de nos services casse notre propre SI. Les deux mécanismes
+   restent **séparés** : le proxy de surf exige une origine PAR site, la
+   corrélation exige l'inverse. Préalable : démêler les noms d'hôte entre
+   `admin` et `gk2`. À traiter **avec** le POC §0bis ci-dessous.
+2. **Radio (#1201)** : playlist affichée → retirer le morceau en cours de la
+   liste, réduire de moitié le précédent. Un back, le courant, deux next.
+3. **BBS et SocialRelay** : vignettes et miniatures manquantes.
+4. **Podcaster** : sélection ou diaporama des flux sources, deux derniers de
+   chaque — lecture de livre audio *vs* nouveau podcast.
+5. **BBS (#1198)** : liens YouTube attrapés et re-référencés vers PeerTube,
+   avec vignette embarquée. Les validations sont maintenant distribuées dans le
+   BBS, ce qui rend la chose utile.
+6. **SocialRelay (#1192)** : contenu du bouton « Sources » déplacé dans la
+   mégabarre de droite du Hall.
+7. **Torrent** : barre de progression en contour de l'item.
+8. **WAF embarqué** : corriger le clignotement clair/sombre du statut.
+
+### ❓ Question ouverte, posée et non tranchée
+
+**La radio ne persiste pas au rafraîchissement** — et n'a jamais persisté : sa
+cardlet ne contient aucun `localStorage`, vérifié sur le fichier servi par la
+box. C'est PeerTube qui retient sa position. Reste à décider si on lui donne la
+même reprise.
+
+---
+
 ## 2026-08-26 (après-midi) — SBXOS : les services habitent le Hall
 
 ### ✅ Fait — déployé sur gk2

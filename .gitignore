@@ -93,3 +93,4 @@ packages/*/.gopath/
 packages/*/.gocache/
 # Binaires construits déposés dans debian/ par dpkg-buildpackage.
 packages/*/debian/secubox-*d
+img/
