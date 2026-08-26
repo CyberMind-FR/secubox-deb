@@ -328,6 +328,25 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .cardlet .cl-lien{font-family:"JetBrains Mono";font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;
   color:var(--dim);text-decoration:none;align-self:flex-start;background:none;border:none;padding:0;cursor:pointer}
 .cardlet .cl-lien:hover{color:var(--ink)}
+/* Un sous-titre vide ne doit pas creuser un blanc dans une carte qu'on veut
+   compacte : il s'efface au lieu d'occuper sa ligne. */
+.cardlet.cl-waf .art:empty{display:none}
+/* Les drapeaux passent en titre : la serif étroite les rendrait mal, et ils
+   gagnent à respirer un peu. */
+.cardlet.cl-waf .meta b{font-size:1.3rem;letter-spacing:.06em}
+/* Cardlet PODCASTER — troisième du même gabarit. Teinte ambre : radio violet,
+   pare-feu menthe, podcaster ambre — trois cartes voisines doivent se
+   distinguer au premier regard, sans se lire comme un seul bloc. */
+.cardlet .cover-pod{background:linear-gradient(135deg,var(--amber,#c87832),var(--coral))}
+.cardlet.cl-pod .clh .tag{color:var(--amber,#c87832);background:color-mix(in srgb,var(--amber,#c87832) 14%,transparent)}
+.cardlet.cl-pod .live{color:var(--amber,#c87832)}
+.cardlet.cl-pod .live .led{background:var(--amber,#c87832);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber,#c87832) 30%,transparent)}
+.cardlet.cl-pod[data-etat="offline"] .live,.cardlet.cl-pod[data-etat="degraded"] .live{color:var(--coral)}
+.cardlet.cl-pod[data-etat="offline"] .live .led{background:var(--coral);box-shadow:0 0 0 3px var(--coral-s)}
+.cardlet.cl-pod .art:empty{display:none}
+/* Un titre d'épisode est long : il tient sur deux lignes puis s'arrête. */
+.cardlet.cl-pod .meta b{font-size:.98rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
 .cardlet .msg button{padding:0 15px;border-radius:9px;border:none;background:var(--cyan);color:#fff;font-weight:600;font-size:.8rem}
 
 .accueil{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
@@ -506,6 +525,21 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                 </div>
               </div></div>
             <button class="cl-lien" id="wopen" type="button">📊 Tableau de bord ▦</button>
+          </div>
+
+          <div class="cardlet cl-pod">
+            <div class="clh serif">🎙️ Podcaster <span class="tag">bibliothèque</span></div>
+            <div class="np"><div class="cover cover-pod">🎙️</div>
+              <div class="meta"><b class="serif" id="ptitle">Bibliothèque</b>
+                <div class="art" id="psub"></div>
+                <span class="live"><i class="led"></i> <span id="petat">à l'écoute</span></span>
+                <div class="counts">
+                  <span title="flux suivis">📡 <b id="pfeeds">—</b></span>
+                  <span title="épisodes en bibliothèque">🎧 <b id="peps">—</b></span>
+                  <span title="téléchargements en attente">⬇️ <b id="pqueue">—</b></span>
+                </div>
+              </div></div>
+            <button class="cl-lien" id="popen" type="button">📚 Bibliothèque ▦</button>
           </div>
 
           <div class="cardlet">
@@ -971,6 +1005,38 @@ function majWaf(){
     });
 }
 majWaf(); setInterval(majWaf, 30000);
+
+// Cardlet PODCASTER (#1230) — troisième du même gabarit. Rythme le plus lent
+// des trois : un épisode arrive toutes les heures au mieux.
+function majPod(){
+  fetch('/api/v1/webos/public/cardlets/podcaster',{headers:{'Accept':'application/json'}})
+    .then(r=>r.ok?r.json():Promise.reject()).then(c=>{
+      const ct=(c&&c.content)||{}; const m={};
+      ((c&&c.metrics)||[]).forEach(x=>m[x.id]=x.value);
+      const set=(id,v)=>{const el=document.getElementById(id); if(el) el.textContent=v;};
+      const carte=document.querySelector('.cl-pod');
+      const etat=(c&&c.status)||'offline';
+      if(carte) carte.setAttribute('data-etat', etat);
+      set('ptitle', ct.title||'Bibliothèque');
+      set('psub', ct.subtitle||'');
+      // Le travailleur à l'arrêt est un fait qui mérite d'être dit : les
+      // épisodes cessent d'arriver sans que rien d'autre ne change.
+      set('petat', etat==='offline' ? 'injoignable'
+                 : (c&&c.worker===false ? 'collecte arrêtée' : "à l'écoute"));
+      set('pfeeds', m.feeds!=null?m.feeds:'—');
+      set('peps',   m.episodes!=null?m.episodes:'—');
+      set('pqueue', m.queued!=null?m.queued:'—');
+    }).catch(()=>{
+      const carte=document.querySelector('.cl-pod');
+      if(carte) carte.setAttribute('data-etat','offline');
+      const el=document.getElementById('petat'); if(el) el.textContent='injoignable';
+    });
+}
+majPod(); setInterval(majPod, 45000);
+(function(){
+  const b=document.getElementById('popen');
+  if(b) b.addEventListener('click', ()=>openService('podcaster','embed'));
+})();
 
 // Le cardlet EMBARQUE le tableau de bord au lieu d'ouvrir un onglet : c'est un
 // service du Hall comme un autre, et openService est le point d'entrée unique

@@ -139,11 +139,12 @@ def waf_cardlet(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
     cats = stats.get("by_category") or {}
     tete = max(cats.items(), key=lambda kv: kv[1])[0] if cats else ""
 
-    # Les trois premieres origines, separees par un point median. « premiere
-    # origine : US » disait moins en trois fois plus de place ; trois codes
-    # pays tiennent sur la meme ligne et dessinent d'ou vient la pression.
+    # Les trois premieres origines, EN DRAPEAUX. Un code a deux lettres demande
+    # une traduction mentale ; un drapeau se reconnait sans lire. Le cardlet est
+    # fait pour le coup d'oeil depuis l'accueil, pas pour l'etude.
     pays = stats.get("pays") or {}
     tete_pays = [p for p in list(pays)[:3] if p and p not in ("LAN", "??")]
+    drapeaux = " · ".join(_drapeau(p) for p in tete_pays)
 
     metrics = [
         {"id": "bans", "value": int(bans.get("total", 0) or 0)},
@@ -157,14 +158,29 @@ def waf_cardlet(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
         "kind": "waf-posture",
         "status": "online",
         "content": {
-            "title": _phrase_waf(tete, bans.get("total", 0) or 0),
-            "subtitle": ("🌍 " + " · ".join(tete_pays)) if tete_pays else "",
+            # LE TITRE PORTE LES DRAPEAUX. La phrase de categorie occupait la
+            # ligne la plus visible pour un renseignement qu'on lit deja dans le
+            # tableau de bord ; l'origine geographique, elle, ne se lit nulle
+            # part ailleurs d'un coup d'oeil. Sans geolocalisation, on retombe
+            # sur un etat, jamais sur une ligne vide.
+            "title": drapeaux or "Sous surveillance",
+            "subtitle": "",
             "station": "Pare-feu applicatif",
         },
         "metrics": metrics,
         "categorie": tete,
         "silence": not cats,
     }
+
+
+def _drapeau(code: str) -> str:
+    """Code ISO a deux lettres -> drapeau. Un code inconnu rend le globe plutot
+    qu'une paire de caracteres exotiques : mieux vaut un signe neutre qu'un
+    symbole que personne ne reconnait."""
+    c = (code or "").strip().upper()
+    if len(c) != 2 or not c.isalpha():
+        return "🌍"
+    return "".join(chr(0x1F1E6 + ord(l) - ord("A")) for l in c)
 
 
 # Les catégories du moteur, dites en français et d'un mot. Un cardlet qui
@@ -217,4 +233,82 @@ def waf_cardlet_safe(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> d
             "content": {"title": "WAF injoignable", "subtitle": "",
                         "station": "Pare-feu applicatif"},
             "metrics": [], "categorie": "", "silence": False,
+        }
+
+
+PODCASTER_SOCK = "/run/secubox/podcaster.sock"
+
+
+def podcaster_cardlet(sock: str = PODCASTER_SOCK, _get: Optional[Callable] = None) -> dict:
+    """Bibliotheque du Podcaster → payload cardlet normalise (#1230).
+
+    TROISIEME CARDLET, meme gabarit : radio, pare-feu, podcaster. Le Hall n'a
+    toujours qu'un format a savoir afficher — ce sont les contenus qui different.
+    Une radio dit ce qu'elle joue, un pare-feu ce qu'il ecarte, une
+    bibliotheque ce qu'elle vient de recevoir.
+
+    LE DERNIER EPISODE EN TETE, pas un total. « 148 episodes » ne change pas
+    d'un jour a l'autre et ne donne aucune raison de revenir ; le titre qui
+    vient d'arriver, si. Les totaux restent, mais en petits chiffres.
+
+    Les chemins sont ceux de la SOCKET (/status, /public/library), pas ceux du
+    prefixe web /api/v1/podcaster/… : la socket sert l'application nue, et le
+    prefixe est ajoute par nginx en amont. S'y tromper rend un 404 silencieux
+    qui se lit comme un service vide.
+
+    /status et /public/library sont interroges separement : la bibliotheque
+    peut etre lourde, son absence ne doit pas emporter les compteurs.
+    """
+    get = _get or uds_get
+    st = get(sock, "/status") or {}
+
+    dernier, source = "", ""
+    try:
+        lib = get(sock, "/public/library") or {}
+        episodes = lib.get("episodes") or []
+        if episodes:
+            premier = episodes[0] or {}
+            dernier = (premier.get("title") or "").strip()
+            source = (premier.get("feed") or "").strip()
+    except Exception:
+        pass
+
+    feeds = int(st.get("feeds", 0) or 0)
+    episodes_n = int(st.get("episodes", 0) or 0)
+    en_file = int(st.get("queued", 0) or 0)
+
+    return {
+        "id": "podcaster",
+        "kind": "podcaster-library",
+        "status": "online" if st.get("service") == "active" else "degraded",
+        "content": {
+            # Un titre d'episode peut etre tres long : on le coupe ici plutot
+            # que de laisser la carte s'etirer ou le texte deborder.
+            "title": (dernier[:58] + "…") if len(dernier) > 59 else (dernier or "Bibliothèque"),
+            "subtitle": source,
+            "station": "Podcaster",
+        },
+        "metrics": [
+            {"id": "feeds", "value": feeds},
+            {"id": "episodes", "value": episodes_n},
+            {"id": "queued", "value": en_file},
+        ],
+        # Le travailleur a l'arret est un fait qui merite d'etre visible : les
+        # episodes cessent d'arriver sans que rien d'autre ne change.
+        "worker": bool(st.get("worker")),
+        "silence": episodes_n == 0,
+    }
+
+
+def podcaster_cardlet_safe(sock: str = PODCASTER_SOCK,
+                           _get: Optional[Callable] = None) -> dict:
+    """podcaster_cardlet() avec repli `offline` si le service est injoignable."""
+    try:
+        return podcaster_cardlet(sock, _get)
+    except Exception:
+        return {
+            "id": "podcaster", "kind": "podcaster-library", "status": "offline",
+            "content": {"title": "Podcaster injoignable", "subtitle": "",
+                        "station": "Podcaster"},
+            "metrics": [], "worker": False, "silence": False,
         }

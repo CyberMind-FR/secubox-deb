@@ -138,6 +138,24 @@ async def cardlet_waf():
     return d
 
 
+_pc = {"d": None, "t": 0.0}
+
+
+@public_router.get("/cardlets/podcaster")
+async def cardlet_podcaster():
+    """Cardlet Podcaster (bibliothèque) — lue via podcaster.sock, cache 30 s.
+
+    Cache le plus long des trois : un épisode arrive toutes les heures au mieux.
+    Interroger plus souvent afficherait le même titre en chargeant la box.
+    """
+    now = time.time()
+    if _pc["d"] and now - _pc["t"] < 30:
+        return _pc["d"]
+    d = await asyncio.to_thread(cardlets.podcaster_cardlet_safe)
+    _pc["d"], _pc["t"] = d, now
+    return d
+
+
 _mbbs = {"d": None, "t": 0.0}
 
 

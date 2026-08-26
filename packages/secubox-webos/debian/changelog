@@ -1,3 +1,39 @@
+secubox-webos (1.0.41-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet PODCASTER (#1230), troisieme du meme gabarit — radio, pare-feu,
+    podcaster. Le Hall n'a toujours qu'un format a savoir afficher ; ce sont les
+    contenus qui different : une radio dit ce qu'elle joue, un pare-feu ce
+    qu'il ecarte, une bibliotheque ce qu'elle vient de recevoir.
+  * LE DERNIER EPISODE EN TETE, pas un total. « 148 episodes » ne change pas
+    d'un jour a l'autre et ne donne aucune raison de revenir ; le titre qui
+    vient d'arriver, si. Les totaux restent, en petits chiffres.
+  * /status et /public/library sont interroges separement : la bibliotheque
+    peut etre lourde, son absence retire le titre sans emporter les compteurs.
+  * Le travailleur a l'arret est dit (« collecte arretee ») : les episodes
+    cessent d'arriver sans que rien d'autre ne change, et rien ne le signalait.
+  * Teinte ambre, distincte du violet de la radio et de la menthe du pare-feu :
+    trois cartes voisines doivent se distinguer au premier regard plutot que se
+    lire comme un seul bloc. Un titre d'episode tient sur deux lignes puis
+    s'arrete, au lieu d'etirer la carte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:52:55 +0200
+
+secubox-webos (1.0.40-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Pare-feu : les DRAPEAUX en titre, la phrase de categorie retiree
+    (#1228). Elle occupait la ligne la plus visible pour un renseignement qu'on
+    lit deja dans le tableau de bord ; l'origine geographique, elle, ne se lit
+    nulle part ailleurs d'un coup d'oeil. Un code a deux lettres demande une
+    traduction mentale, un drapeau se reconnait sans lire — et le cardlet est
+    fait pour le coup d'oeil depuis l'accueil, pas pour l'etude.
+  * Sans geolocalisation, on retombe sur un etat (« Sous surveillance »), jamais
+    sur une ligne vide. Un code ISO invalide rend le globe plutot qu'une paire
+    de caracteres exotiques que personne ne reconnait.
+  * La ligne de sous-titre s'efface quand elle est vide au lieu de creuser un
+    blanc dans une carte qu'on veut compacte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:50:35 +0200
+
 secubox-webos (1.0.39-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet Pare-feu plus compact (#1228). « Surtout : » occupait le tiers de la
