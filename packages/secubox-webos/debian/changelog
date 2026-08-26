@@ -1,3 +1,24 @@
+secubox-webos (1.0.90-1~bookworm1) bookworm; urgency=medium
+
+  * « TIMELINE REFUSEE (401) » — LA CAUSE ETAIT DANS LA PAGE (#1303). La
+    condition testait « est-ce Nextcloud ? » au lieu de « sait-il deleguer ? » :
+    Mastodon, qui sait pourtant le faire, se voyait proposer l'identifiant
+    manuel. Un mot de passe envoye en jeton se fait refuser, et le message
+    d'erreur ne disait rien de la cause.
+  * L'API REFUSE desormais un identifiant manuel pour un service qui sait
+    deleguer, et dit ou aller. Mieux vaut refuser tout de suite que d'accepter
+    un secret qui ne marchera jamais.
+  * CARTES REDESSINEES (#1302) : meme en-tete que les cartes classiques du Hall
+    — pastille de couleur, nom, hote. Une carte qui ne ressemble pas a ses
+    voisines se lit comme une erreur d'affichage, pas comme une variante. Les
+    trois familles (classique, deleguee, acces rapide) se ressemblent
+    desormais.
+  * OUVRIR RESTE TOUJOURS POSSIBLE. En passant a une carte deleguee, le service
+    avait perdu son bouton d'ouverture : la carte parlait de lui sans y mener.
+    Le pied porte une vraie action, presente quel que soit l'etat de l'acces.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:17:22 +0200
+
 secubox-webos (1.0.89-1~bookworm1) bookworm; urgency=medium
 
   * ON NOMME LA BOX, PAS LE SERVICE (#1301). « Se connecter » dans une carte

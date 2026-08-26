@@ -359,6 +359,14 @@ def pose_manuel(qui: str, svc: str, compte: str, secret: str) -> dict:
     """
     if svc not in SERVICES:
         return {"ok": False, "detail": "service inconnu"}
+    # UN SERVICE QUI SAIT DELEGUER NE DOIT PAS RECEVOIR DE MOT DE PASSE (#1303).
+    # Mastodon n'a aucune API qui accepte un mot de passe : le poser ici le
+    # ferait refuser a la premiere lecture, avec un « 401 » que personne ne
+    # sait relier a la cause. Mieux vaut refuser tout de suite et dire ou
+    # aller.
+    if SERVICES[svc]["flux"] != "manuel":
+        return {"ok": False,
+                "detail": "ce service sait deleguer : passez par « Autoriser »"}
     if not compte or not secret:
         return {"ok": False, "detail": "compte et secret requis"}
     _ecrit(_fichier(qui, svc), {"svc": svc, "qui": qui, "compte": compte,

@@ -193,7 +193,12 @@
           + '<span class="grow"></span>'
           + (x.acces
               ? '<button class="d" data-revoquer="' + esc(x.svc) + '">Oublier</button>'
-              : (x.flux === 'nextcloud'
+              // ON TESTE « SAIT-IL DELEGUER ? », PAS « EST-CE NEXTCLOUD ? »
+              // (#1303). Cette condition ne nommait qu'un service : Mastodon,
+              // qui sait pourtant deleguer, se voyait proposer l'identifiant
+              // manuel — et un mot de passe envoye en jeton se fait refuser,
+              // d'ou un « timeline refusee (401) » incomprehensible.
+              : (x.flux !== 'manuel'
                   ? '<button class="p" data-valider="' + esc(x.svc) + '">Autoriser</button>'
                     + '<button data-popup2="' + esc(x.svc) + '" title="Ouvrir dans une fenêtre">↗</button>'
                   : '<button data-manuel="' + esc(x.svc) + '">Identifiant dédié…</button>'))

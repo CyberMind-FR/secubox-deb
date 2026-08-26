@@ -34,10 +34,18 @@
   html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
   body { background:var(--fond); color:var(--texte);
          font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
-  .mw { display:flex; flex-direction:column; height:100%; padding:.62rem .72rem; gap:.35rem; }
-  .tete { display:flex; align-items:baseline; gap:.42rem; }
-  .tete .ic { font-size:1rem; } .tete b { font-size:.88rem; }
-  .tete .n { margin-left:auto; font-size:.58rem; letter-spacing:.07em;
+  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .7rem .5rem; gap:.4rem; }
+  /* MEME EN-TETE QUE LES CARTES CLASSIQUES du Hall : pastille de couleur,
+     nom, hote. Une carte qui ne ressemble pas a ses voisines se lit comme une
+     erreur d'affichage, pas comme une variante. */
+  .tete { display:flex; align-items:center; gap:.5rem; }
+  .tete .ic { width:30px; height:30px; border-radius:9px; display:grid; place-items:center;
+              font-size:.95rem; flex:0 0 auto; color:#fff; }
+  .tete .nm { min-width:0; flex:1; }
+  .tete .nm b { display:block; font-size:.86rem; line-height:1.15; }
+  .tete .nm .h { font-size:.6rem; color:var(--muted); font-family:"JetBrains Mono",monospace;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tete .n { flex:0 0 auto; font-size:.58rem; letter-spacing:.07em;
              text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
   .liste { display:flex; flex-direction:column; gap:.1rem; overflow:hidden; }
   .liste a { display:flex; align-items:baseline; gap:.36rem; font-size:.71rem;
@@ -57,27 +65,47 @@
   .sans button:hover { opacity:.9; }
   .sans button[disabled] { background:none; color:var(--muted); border-color:var(--border);
                            cursor:default; }
-  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
-          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
-          text-transform:uppercase; color:var(--muted); text-decoration:none; }
-  .pied .grow { flex:1; } .pied:hover { color:var(--accent); }
+  /* OUVRIR RESTE TOUJOURS POSSIBLE (#1302). En passant a une carte deleguee,
+     le service avait perdu son bouton d'ouverture : la carte parlait de lui
+     sans y mener. Le pied porte donc une vraie action, presente quel que soit
+     l'etat de l'acces. */
+  .pied { margin-top:auto; display:flex; align-items:center; gap:8px; padding-top:.42rem;
+          border-top:1px solid var(--border); }
+  .pied .ouvrir { flex:0 0 auto; padding:.26rem .7rem; border-radius:7px;
+                  border:1px solid var(--accent); color:var(--accent);
+                  background:none; font:inherit; font-size:.72rem; cursor:pointer;
+                  text-decoration:none; }
+  .pied .ouvrir:hover { background:var(--accent); color:#fff; }
+  .pied .grow { flex:1; }
+  .pied .etat { font-size:.57rem; letter-spacing:.07em; text-transform:uppercase;
+                color:var(--muted); }
 </style>
 
 <div class="mw">
-  <div class="tete"><span class="ic" id="ic">☁️</span><b id="nom">…</b><span class="n" id="res"></span></div>
+  <div class="tete">
+    <span class="ic" id="ic">☁️</span>
+    <span class="nm"><b id="nom">…</b><span class="h" id="hote"></span></span>
+    <span class="n" id="res"></span>
+  </div>
   <div id="corps"><p class="sans"><span>lecture…</span></p></div>
-  <a class="pied" id="pied" href="/" target="_top"><span id="pied-t"></span>
-    <span class="grow"></span><span id="cpt"></span></a>
+  <div class="pied">
+    <a class="ouvrir" id="pied" href="/" target="_top">Ouvrir</a>
+    <span class="grow"></span><span class="etat" id="cpt"></span>
+  </div>
 </div>
 
 <script>
 (function () {
   "use strict";
   var SVC = {
-    nextcloud:  { ic:'☁️', nom:'Cloud',  hote:'nc.gk2.secubox.in',        quoi:'vos fichiers' },
-    mail:       { ic:'📧', nom:'Mail',   hote:'webmail.gk2.secubox.in',   quoi:'votre courrier' },
-    mastodon:   { ic:'🐘', nom:'Social', hote:'social.gk2.secubox.in',    quoi:'votre fil' },
-    photoprism: { ic:'📷', nom:'Photos', hote:'photoprism.gk2.secubox.in',quoi:'vos photos' }
+    nextcloud:  { ic:'☁️', nom:'Cloud',  hote:'nc.gk2.secubox.in',
+                  quoi:'vos fichiers',  couleur:'#1655a0' },
+    mail:       { ic:'📧', nom:'Mail',   hote:'webmail.gk2.secubox.in',
+                  quoi:'votre courrier', couleur:'#c87832' },
+    mastodon:   { ic:'🐘', nom:'Social', hote:'social.gk2.secubox.in',
+                  quoi:'votre fil',     couleur:'#2e6da4' },
+    photoprism: { ic:'📷', nom:'Photos', hote:'photoprism.gk2.secubox.in',
+                  quoi:'vos photos',    couleur:'#1f7a58' }
   };
   var id = new URLSearchParams(location.search).get('svc') || 'nextcloud';
   var c = SVC[id] || SVC.nextcloud;
@@ -86,9 +114,11 @@
       return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[x]; }); };
   var el = function (i) { return document.getElementById(i); };
 
-  el('ic').textContent = c.ic; el('nom').textContent = c.nom;
+  el('ic').textContent = c.ic;
+  el('ic').style.background = c.couleur;
+  el('nom').textContent = c.nom;
+  el('hote').textContent = c.hote;
   el('pied').href = 'https://' + c.hote + '/';
-  el('pied-t').textContent = c.hote.split('.')[0];
 
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
   function api(chemin, opts) {

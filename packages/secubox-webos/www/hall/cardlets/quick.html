@@ -36,9 +36,13 @@
         position:relative; }
   /* LES CHIFFRES SONT DANS LE TITRE, et c'est tout le propos : on doit
      connaître l'état du service sans rien déplier. */
+  /* Meme en-tete que les cartes classiques et que les cartes deleguees
+     (#1302) : trois familles de cartes qui se ressemblent se lisent comme une
+     seule interface ; trois qui different se lisent comme un chantier. */
   .tete { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
-  .tete .ic { font-size:1.05rem; }
-  .tete b { font-size:.9rem; }
+  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid;
+              place-items:center; font-size:.9rem; color:#fff; flex:0 0 auto; }
+  .tete b { font-size:.88rem; }
   .tete .m { display:inline-flex; align-items:baseline; gap:.2rem; font-size:.68rem;
              color:var(--muted); font-variant-numeric:tabular-nums; }
   .tete .m b { font-size:.72rem; color:var(--texte); font-weight:650; }
@@ -80,14 +84,17 @@
   // qui MERITENT d'etre en titre. Le reste est commun.
   var SVC = {
     torrent: { ic:'🧲', nom:'Torrent', hote:'torrent.gk2.secubox.in', mod:'torrent',
+      couleur:'#3c6e8f',
       chiffres:[['total','📦','au total'],['downloading','⬇','en cours'],
                 ['to_peertube','📹','vers PeerTube']],
       acces:[['Ouvrir','/','p'],['Ajouter','/#add','']] },
     ytsas: { ic:'🎬', nom:'YTSaS', hote:'ytsas.gk2.secubox.in', mod:'ytsas',
+      couleur:'#b03030',
       chiffres:[['total','🎞️','captures'],['jobs','⚙️','tâches'],
                 ['to_peertube','📹','vers PeerTube']],
       acces:[['Ouvrir','/','p'],['Nouvelle capture','/#new','']] },
     depot: { ic:'📦', nom:'Dépôt', hote:'depot.gk2.secubox.in', mod:'droplet',
+      couleur:'#3d6b4a',
       chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
       acces:[['Ouvrir','/','p'],['Déposer','/#depot','']] }
   };
@@ -96,6 +103,7 @@
   var c = SVC[id] || SVC.depot;
 
   el('ic').textContent = c.ic;
+  el('ic').style.background = c.couleur;
   el('nom').textContent = c.nom;
   el('hote').textContent = c.hote;
   el('acces').innerHTML = c.acces.map(function (a) {
@@ -114,7 +122,8 @@
     var t = el('tete');
     // On repart du pictogramme et du nom : réécrire tout le titre évite de
     // faire diverger l'ordre des chiffres du contenu qu'ils annoncent.
-    t.innerHTML = '<span class="ic">' + esc(c.ic) + '</span><b>' + esc(c.nom) + '</b>'
+    t.innerHTML = '<span class="ic" style="background:' + esc(c.couleur) + '">'
+      + esc(c.ic) + '</span><b>' + esc(c.nom) + '</b>'
       + c.chiffres.map(function (m) {
           var v = d[m[0]];
           // Un chiffre absent n'est PAS un zéro : on ne l'affiche pas plutôt
