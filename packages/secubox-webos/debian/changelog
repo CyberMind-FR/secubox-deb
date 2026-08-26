@@ -1,3 +1,26 @@
+secubox-webos (1.0.101-1~bookworm1) bookworm; urgency=medium
+
+  * LE BANDEAU TIENT SUR UNE LIGNE AU TELEPHONE (#1325). Il en prenait deux, et
+    deux bandeaux empiles mangent un quart de l'ecran avant le premier service.
+    La cause n'etait pas le contenu mais un `flex-wrap:wrap` pose sous 960px :
+    la barre se REPLIAIT au lieu de s'alleger. Le repli est desormais borne aux
+    tablettes.
+  * SOUS 720px ON RETIRE, ON NE REPLIE PLUS : le mot « SbX », que le medaillon
+    dit deja et mieux ; « Identite locale », dont la place est dans le menu
+    profil, ou l'on va precisement quand on se demande qui l'on est. L'ancienne
+    regle cachait le NOM et laissait cette ligne-la — c'etait la longue.
+  * LES PASTILLES RESTENT, bornees a 32vw. C'est la seule chose du bandeau qui
+    change sans qu'on y touche : economiser sur l'indicateur de ce qui joue
+    aurait ete economiser sur la seule information vivante.
+  * LA BARRE DE STATUT NE PORTE PLUS QUE « OU SUIS-JE ». L'etat du registre et
+    le compte de modules y tenaient sur trois lignes et poussaient le dernier
+    service hors de l'ecran pour dire ce qu'on ne lit pas sur un telephone.
+  * UNE EXCEPTION ASSUMEE : quand un service est embarque, la barre porte en
+    plus son titre, son rechargement et ses trois modes. Une deuxieme ligne y
+    est honnete — mieux qu'un rang de boutons ecrases jusqu'a l'illisible.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:52:10 +0200
+
 secubox-webos (1.0.100-1~bookworm1) bookworm; urgency=medium
 
   * LE LECTEUR PEERTUBE NE PLANTE PLUS (#1324). On lui envoyait un `__ready`

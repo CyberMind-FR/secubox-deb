@@ -134,7 +134,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .mast-actions .who .av{width:30px;height:30px;border-radius:50%;background:var(--gold-s);display:grid;place-items:center;font-size:.95rem}
 .mast-actions .who b{font-size:.82rem}
 .mast-actions .who i{display:block;font-family:"JetBrains Mono";font-size:.54rem;color:var(--mint);font-style:normal}
-@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none} .mast-actions .who small,.mast-actions .who b{display:none}
+/* Elle cachait le NOM et laissait « ● Identite locale » : c'est la ligne
+   longue qui prenait la largeur, pas la courte. Le bloc telephone plus bas
+   retire le pave de texte entier. */
+@media(max-width:720px){.mast .drop{display:none} .logo-h{font-size:1.2rem} .logo .sub{display:none}
 }
 
 /* ── top nav ─────────────────────────────────────────────── */
@@ -163,7 +166,55 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .nav-embed{padding-left:8px;margin-left:2px;gap:6px}
 .mast-main{gap:8px}
 }
-@media(max-width:960px){.mast-main{flex-wrap:wrap} .mnav{order:3}}
+/* Le repli est reserve aux TABLETTES. Borne basse explicite : sans elle, la
+   regle s'appliquait aussi au telephone, ou l'on ne veut pas replier mais
+   alleger — voir le bloc suivant. */
+@media(min-width:721px) and (max-width:960px){.mast-main{flex-wrap:wrap} .mnav{order:3}}
+
+/* ── TELEPHONE : LE BANDEAU TIENT SUR UNE LIGNE (#1325) ───────────────────
+   Il en prenait DEUX, et deux bandeaux empiles mangent un quart de l'ecran
+   avant le premier service. La cause n'etait pas le contenu mais le
+   `flex-wrap:wrap` ci-dessus : la barre se REPLIAIT au lieu de s'alleger.
+   Sous 720px on ne replie plus, on RETIRE :
+     — le mot « SbX », que le medaillon dit deja, et mieux ;
+     — « Identite locale », dont la place est dans le menu profil, ou l'on va
+       precisement quand on se demande qui l'on est.
+   Ce qui reste est ce qui sert a chaque instant : le medaillon, les menus en
+   pictos, les pastilles de ce qui joue, le theme, l'avatar. */
+@media(max-width:720px){
+  .mast-main{flex-wrap:nowrap;gap:6px;padding:8px 10px}
+  .logo-t{display:none}
+  .mast-actions{gap:6px}
+  /* L'avatar redevient ce qu'il est : un bouton rond. */
+  .mast-actions .who{padding:3px;gap:0;border-radius:50%}
+  .mast-actions .who > span:not(.av){display:none}
+  .mast-actions .ibtn{width:34px;height:34px}
+  /* LES PASTILLES RESTENT. C'est la seule chose du bandeau qui change sans
+     qu'on y touche — retirer l'indicateur de ce qui joue pour gagner de la
+     place reviendrait a economiser sur la seule information vivante. On la
+     borne, on ne la supprime pas. */
+  .flux-pastilles{max-width:32vw;overflow:hidden;flex:0 1 auto}
+  /* La barre de statut ne porte plus que « ou suis-je ». L'etat du registre
+     et le compte de modules y tenaient sur trois lignes, et poussaient le
+     dernier service hors de l'ecran pour dire ce qu'on ne lit pas sur un
+     telephone. */
+  .statusbar > #sb-node, .statusbar > #sb-info, .statusbar > .sep{display:none}
+  .statusbar .sb-seg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* Les elements doivent pouvoir se COMPRIMER. Un enfant de flex a une
+     largeur minimale implicite egale a son contenu : sans `min-width:0` il
+     refuse de retrecir et pousse la barre hors de l'ecran — c'est ainsi que
+     le document etait passe a 619px pour un ecran de 390 (#1187). */
+  .mast-main > *{min-width:0}
+  .nav-embed{overflow:hidden}
+
+  /* UNE EXCEPTION, ET UNE SEULE : quand un service est embarque, la barre
+     porte en plus son titre, son rechargement et ses trois modes. La, il y a
+     vraiment davantage a montrer, et une deuxieme ligne est honnete — mieux
+     qu'un rang de boutons ecrases jusqu'a l'illisible. Sur l'accueil, qui est
+     ce que l'on regarde le plus souvent, une ligne suffit. */
+  .mast-main:has(#nav-embed:not(.hidden)){flex-wrap:wrap}
+}
 /* Contexte du service embarqué, greffé dans le headbar racine (barre unique). */
 .nav-embed{display:inline-flex;align-items:center;gap:9px;padding-left:13px;margin-left:4px;border-left:2px solid var(--line-2)}
 .nav-embed .ne-ic{font-size:1.15rem}
