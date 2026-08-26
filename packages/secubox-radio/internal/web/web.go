@@ -376,6 +376,11 @@ func (s *Serveur) miniPlayer(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// UNE CARTE EST UNE VUE VIVANTE (#1298). Sans en-tete de fraicheur, le
+	// navigateur lui applique son cache heuristique : le cadre gardait une
+	// version d'il y a des heures, et une correction deployee ne se voyait
+	// jamais — on croyait le correctif rate alors qu'il n'etait pas relu.
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Content-Security-Policy", s.politiqueMini())
 	w.Write(b)
 }

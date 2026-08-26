@@ -291,6 +291,11 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         # La carte est encadree par le Hall : meme politique que le reste du
         # module, frame-ancestors compris (#1256).
         resp.headers["Content-Security-Policy"] = _csp(_frame_src([]))
+        # UNE CARTE EST UNE VUE VIVANTE (#1298). Sans en-tete de fraicheur, le
+        # navigateur lui applique son cache heuristique : le cadre gardait une
+        # version d'il y a des heures, et un correctif deploye ne se voyait
+        # jamais — on croyait le correctif rate alors qu'il n'etait pas relu.
+        resp.headers["Cache-Control"] = "no-cache"
         return resp
 
     @app.get("/b/{slug}", response_class=HTMLResponse)

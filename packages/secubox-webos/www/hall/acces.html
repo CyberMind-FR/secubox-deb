@@ -296,6 +296,18 @@
       });
       return;
     }
+    // Ouverte depuis une carte : on met SON service en avant. Une liste où
+    // l'on doit chercher ce qu'on vient de demander rate son objet.
+    var vise = q.get('svc');
+    if (vise) {
+      setTimeout(function () {
+        var b = document.querySelector('[data-valider="' + vise + '"], [data-manuel="' + vise + '"]');
+        if (b) {
+          b.closest('.c').style.outline = '2px solid var(--accent)';
+          b.closest('.c').scrollIntoView({ block: 'center' });
+        }
+      }, 400);
+    }
     if (saisie) {
       // Ouverture directe depuis la popup : on attend que la liste soit posée.
       setTimeout(function () { ouvreManuel(saisie); }, 400);

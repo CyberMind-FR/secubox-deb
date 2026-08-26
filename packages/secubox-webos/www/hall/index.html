@@ -510,6 +510,13 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .who-lien{display:block;margin:6px 4px 2px;padding:6px 8px;border-radius:7px;
   font-size:.76rem;color:var(--sky);text-decoration:none}
 .who-lien:hover{background:var(--soft)}
+/* La pastille d'attente se pose SUR l'avatar : c'est le seul point de
+   l'interface qui reste visible quoi qu'on regarde. */
+.who{position:relative}
+.who-att{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;
+  border-radius:9px;background:var(--violet);color:#fff;font-size:.62rem;
+  line-height:17px;text-align:center;font-weight:700;padding:0 4px;
+  box-shadow:0 0 0 2px var(--panel)}
 .cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
@@ -1341,6 +1348,21 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   }
   new MutationObserver(dis).observe(root,{attributes:true,attributeFilter:['data-theme']});
   // Un cadre qui vient de charger n'a pas entendu les messages précédents.
+  // AU RETOUR, ON FAIT RELIRE LES CARTES (#1297). La fenêtre de validation est
+  // `noopener` : elle ne peut pas nous prévenir, et c'est voulu — on n'ouvre
+  // aucun canal. Le geste de revenir sur le Hall EST le signal, exactement
+  // comme pour la connexion.
+  //
+  // On demande de RELIRE, pas de recharger : un cadre rechargé perdrait ce
+  // qu'il tenait, et la moitié des cartes tiennent quelque chose.
+  addEventListener('focus', ()=>{
+    document.querySelectorAll('iframe[data-micro]').forEach(f=>{
+      if(f.dataset.pret!=='1') return;
+      try{ f.contentWindow.postMessage({sbx:'relis'}, new URL(f.src).origin); }catch(e){}
+    });
+    if(typeof sondeAttentes==='function') sondeAttentes();
+  });
+
   // On MARQUE le cadre au chargement, puis on diffuse : c'est le seul moment
   // ou l'on sait que son document vient bien du service.
   addEventListener('load', e=>{
@@ -1500,6 +1522,20 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // perdue, barre média coupée, lecture interrompue. On n'accepte la demande
   // que d'un cadre qu'on a nous-mêmes posé — sinon n'importe quelle page
   // encadrée choisirait ce que le Hall affiche.
+  // ── VALIDATION À CÔTÉ (#1297) ────────────────────────────────────────────
+  //
+  // Une carte qui manque d'accès demande au Hall d'ouvrir la validation. On
+  // l'ouvre en FENÊTRE À PART : l'accueil reste en place, la radio joue, la
+  // vidéo continue. Rien de ce qui était en cours n'est interrompu.
+  addEventListener('message', ev=>{
+    const d=ev.data;
+    if(!d||d.sbx!=='valider'||!d.id) return;
+    const c=document.querySelector('iframe[data-micro="'+d.id+'"]');
+    if(!c||c.contentWindow!==ev.source) return;
+    window.open('/acces.html?svc='+encodeURIComponent(d.id),
+                'sbx-acces', 'width=560,height=600,noopener');
+  });
+
   addEventListener('message', ev=>{
     const d=ev.data;
     if(!d||d.sbx!=='ouvre'||!d.id) return;
@@ -1735,6 +1771,35 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       e.textContent = 'Non connecté : les cartes qui lisent vos services restent vides.';
     }
   }
+
+  // UNE VALIDATION QUI ATTEND DOIT SE VOIR (#1297). Sans marque, la demande
+  // deposee par une carte dort dans une file que personne n'ouvre. La pastille
+  // se pose sur l'avatar — le seul endroit toujours visible — et ne dit qu'une
+  // chose : il y a quelque chose a decider.
+  async function sondeAttentes(){
+    let n = 0;
+    try{
+      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
+      const r = await fetch('/api/v1/webos/acces', {headers: j
+        ? {'Accept':'application/json','Authorization':'Bearer '+j}
+        : {'Accept':'application/json'}});
+      if(r.ok) n = ((await r.json()).demandes || []).length;
+    }catch(e){ n = 0; }
+    const w = document.getElementById('who');
+    if(!w) return;
+    let p = w.querySelector('.who-att');
+    if(!n){ if(p) p.remove(); return; }
+    if(!p){
+      p = document.createElement('span');
+      p.className = 'who-att';
+      p.title = 'Des accès attendent votre validation';
+      w.appendChild(p);
+    }
+    p.textContent = n;
+  }
+  sondeAttentes();
+  // Une demande vient d'une carte, donc d'un geste : inutile de sonder souvent.
+  setInterval(sondeAttentes, 120000);
 
   document.getElementById('who-session').addEventListener('click', ()=>{
     if(!SBX_DOM){ top.location.href='https://hall.gk2.secubox.in/'; return; }

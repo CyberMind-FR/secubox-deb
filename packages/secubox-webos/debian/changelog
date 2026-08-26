@@ -1,3 +1,34 @@
+secubox-webos (1.0.87-1~bookworm1) bookworm; urgency=medium
+
+  * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la
+    vue /micro. Sans en-tete de fraicheur, le navigateur lui applique son cache
+    HEURISTIQUE — le cadre gardait une version d'il y a des heures, et un
+    correctif deploye ne se voyait jamais. On croyait le correctif rate alors
+    qu'il n'etait simplement pas relu : c'est ce qui a fait croire a une erreur
+    de politique persistante apres qu'elle eut ete corrigee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:04:01 +0200
+
+secubox-webos (1.0.86-1~bookworm1) bookworm; urgency=medium
+
+  * LA VALIDATION SE FAIT A COTE, PAS A LA PLACE (#1297). Deposer une demande
+    puis laisser la personne la chercher, c'est l'obliger a interrompre ce
+    qu'elle faisait. La carte demande desormais au Hall d'ouvrir la validation
+    en FENETRE A PART : l'accueil reste, la radio joue, la video continue.
+  * AU RETOUR, LES CARTES RELISENT. La fenetre est `noopener` — elle ne peut
+    pas nous prevenir, et c'est voulu : on n'ouvre aucun canal. Le geste de
+    revenir sur le Hall EST le signal, comme pour la connexion. On demande de
+    RELIRE et non de recharger : un cadre recharge perdrait ce qu'il tenait, et
+    la moitie des cartes tiennent quelque chose.
+  * UNE VALIDATION QUI ATTEND DOIT SE VOIR : sans marque, la demande deposee
+    par une carte dort dans une file que personne n'ouvre. La pastille se pose
+    sur l'AVATAR — le seul point de l'interface qui reste visible quoi qu'on
+    regarde — et ne dit qu'une chose : il y a quelque chose a decider.
+  * Ouverte depuis une carte, la page met SON service en avant : une liste ou
+    l'on doit chercher ce qu'on vient de demander rate son objet.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:00:19 +0200
+
 secubox-webos (1.0.85-1~bookworm1) bookworm; urgency=medium
 
   * SE CONNECTER DEPUIS LE HALL (#1296) — le blocage racine : sans point

@@ -1,3 +1,14 @@
+secubox-metanews (0.1.10-1~bookworm1) bookworm; urgency=medium
+
+  * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la
+    vue /micro. Sans en-tete de fraicheur, le navigateur lui applique son cache
+    HEURISTIQUE — le cadre gardait une version d'il y a des heures, et un
+    correctif deploye ne se voyait jamais. On croyait le correctif rate alors
+    qu'il n'etait simplement pas relu : c'est ce qui a fait croire a une erreur
+    de politique persistante apres qu'elle eut ete corrigee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:02:41 +0200
+
 secubox-metanews (0.1.9-1~bookworm1) bookworm; urgency=medium
 
   * CLAIR / SOMBRE DANS LE CADRE (#1268). La page n'avait qu'une palette

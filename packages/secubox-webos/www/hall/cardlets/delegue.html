@@ -145,7 +145,16 @@
     var b = el('dem');
     if (b && !att) b.addEventListener('click', function () {
       b.disabled = true; b.textContent = '…';
-      api('/acces/' + id + '/demande', { method: 'POST' }).then(function () { charge(); });
+      api('/acces/' + id + '/demande', { method: 'POST' }).then(function () {
+        charge();
+        // EN PARALLELE, PAS A LA PLACE (#1297). Déposer une demande puis
+        // laisser la personne la chercher, c'est l'obliger à interrompre ce
+        // qu'elle faisait. On demande au Hall d'ouvrir la validation À CÔTÉ :
+        // l'accueil reste, la radio joue, la vidéo continue.
+        if (parent !== window) {
+          try { parent.postMessage({ sbx: 'valider', id: id }, '*'); } catch (e) {}
+        }
+      });
     });
   }
 
@@ -195,8 +204,12 @@
     var t = new URLSearchParams(location.search).get('theme');
     if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
   })();
+  // Le Hall nous dit quand quelque chose a pu changer — au retour d'une
+  // validation, typiquement. On se relit alors, sans rien recharger : le
+  // cadre reste en place, et avec lui tout ce qu'il tenait.
   addEventListener('message', function (ev) {
     var d = ev.data;
+    if (d && d.sbx === 'relis') { charge(); return; }
     if (!d || d.sbx !== 'theme') return;
     if (d.theme === 'dark' || d.theme === 'light') {
       document.documentElement.setAttribute('data-theme', d.theme);
