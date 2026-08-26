@@ -199,8 +199,15 @@
 
   // Le Hall demande de reculer (son ✕ / Echap). Si l'on ne peut plus, on le
   // dit — il fermera l'overlay.
+  // En overlay dans le Hall (chrome=hall), l'entete montre deja les metrics :
+  // on ne les DOUBLE pas dans la barre du cardlet. On les remonte quand meme.
+  var CHROME_HALL = false;
+  try { CHROME_HALL = new URLSearchParams(location.search).get('chrome') === 'hall'; } catch (e) {}
   function poseStats(S) {
     if (!S) return;
+    // On remonte toujours au Hall (l'entete de l'overlay).
+    try{ if(parent!==window) parent.postMessage({sbx:'surf-stats-up', stats:S}, '*'); }catch(e){}
+    if (CHROME_HALL) return;   // pas de doublon dans la barre du cardlet
     var z = document.getElementById('stats'); if (!z) return;
     var total = S.total || 0;
     var pct = total ? Math.round((S.trackers||0) / total * 100) : 0;
@@ -214,9 +221,6 @@
       + pic('🚫', S.popups,   'popups/popunders coupés')
       + '<span class="cam" title="part de pistage sur les ressources de la page">🛡️ '+pct+'% pisté</span>';
     z.classList.remove('hidden');
-    // On fait aussi REMONTER les stats au Hall : il les montre dans l'entete
-    // de l'overlay, la barre la plus haute (#1354).
-    try{ if(parent!==window) parent.postMessage({sbx:'surf-stats-up', stats:S}, '*'); }catch(e){}
   }
   addEventListener('message', function (ev) {
     var d = ev.data;

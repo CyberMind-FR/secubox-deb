@@ -1,3 +1,13 @@
+secubox-webos (1.0.122-1~bookworm1) bookworm; urgency=medium
+
+  * PLUS DE DOUBLON DE METRICS (#1354). Les metrics apparaissaient DEUX fois
+    dans l'overlay : l'entete ET la barre du cardlet. En overlay
+    (chrome=hall), le cardlet ne les affiche plus dans sa barre (il les
+    remonte a l'entete) : une seule ligne. La carte standalone garde sa
+    barre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:31:26 +0200
+
 secubox-webos (1.0.121-1~bookworm1) bookworm; urgency=medium
 
   * VOLUME ET MUET PERSISTANTS PAR FLUX (#1361). Le pli des rangees
