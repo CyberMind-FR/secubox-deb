@@ -22,7 +22,11 @@
 <title>WAF — évolution et efficacité</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
+<!-- LE SKIN PARTAGE EST RETIRE (#1310, revu #1334). /shared/hybrid-skin.css
+     forcait le fond et la couleur du corps en `!important` (195 regles) : c'est
+     lui, et lui seul, qui empechait le mode clair. Ce tableau n'utilise QUE ses
+     propres classes (.card, .grille, .tuile…) — verifie une par une — donc rien
+     ne dependait du skin. On le retire, et le clair devient possible. -->
 <style>
   /* PALETTE LOCALE À TROIS ÉTATS (#1308).
      Le tableau s'en remettait à /shared/hybrid-skin.css, qui ne définit AUCUN
@@ -39,17 +43,26 @@
      neons s'y ecrasaient. On inverse donc les miroirs, comme on l'a fait pour
      MetaNews et SocialRelay (#1268) : `:root` nu porte le SOMBRE, et c'est le
      clair qui se redefinit. */
+  /* PALETTE A TROIS ETATS (#1334). Le tableau reste SOMBRE PAR DEFAUT — c'est
+     son heritage, et le Hall lui impose de toute facon `data-theme`. Mais le
+     clair existe enfin : il s'applique sur choix explicite (`data-theme=light`)
+     ET pour l'etat « systeme » clair ou aucun attribut n'est pose. C'est le
+     retrait du skin force-sombre ci-dessus qui l'a rendu possible. */
   :root { --fond:#0a0a0f; --bg-card:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
           --border:#2a2a36; --cyan:#00d4ff; --purple:#b388ff; --orange:#e0b355;
           --red:#e8636f; --green:#4ade80; }
-  /* PAS DE MIROIR CLAIR, ET C'EST UN CHOIX ASSUME (#1310).
-     La feuille partagee /shared/hybrid-skin.css force le fond ET la couleur du
-     corps en `!important`, et compte 195 regles de ce genre. Un theme clair
-     devrait donc etre gagne 195 fois — et en attendant, mes jetons clairs
-     s'appliquaient aux CARTES pendant que le corps restait sombre : des
-     panneaux blancs sur un fond noir, pire que le probleme d'origine.
-     Ce tableau est sombre par nature. On le peint donc entierement, une bonne
-     fois, plutot que de livrer un clair a moitie gagne. */
+  /* Le clair, ecrit une fois, applique a deux etats. Accents assombris : le
+     cyan neon des ecrans ne tient pas sur du papier. */
+  :root[data-theme="light"] {
+          --fond:#f6f5f0; --bg-card:#ffffff; --ink:#1a1a22; --muted:#5b5b6a;
+          --border:#e2e0d6; --cyan:#0a7ea4; --purple:#6e40c9; --orange:#a1701a;
+          --red:#c0392b; --green:#1f9d55; }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+          --fond:#f6f5f0; --bg-card:#ffffff; --ink:#1a1a22; --muted:#5b5b6a;
+          --border:#e2e0d6; --cyan:#0a7ea4; --purple:#6e40c9; --orange:#a1701a;
+          --red:#c0392b; --green:#1f9d55; }
+  }
 
   /* Fond ET couleur EXPLICITES : un corps transparent emprunte celui de
      l'hôte, et la page finit peinte dans un thème que son texte ne suit pas. */
@@ -122,6 +135,32 @@
   </div>
 
   <div class="card">
+    <h2>🛰️ Surfaces surveillées</h2>
+    <p class="h2sous">sbxwaf ne voit que le HTTP ; authwatch couvre SSH, SMTP, IMAP et les leurres.</p>
+    <div id="surfaces" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <div class="muted" style="padding:1rem">chargement…</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.1rem;margin-top:1.1rem">
+      <div>
+        <h3 style="font-size:.82rem;margin:0 0 .4rem">🎯 Comptes visés
+          <span class="muted" style="font-size:.72rem;font-weight:400">— SSH, SMTP, IMAP</span></h3>
+        <div id="comptesVises"><span class="muted">chargement…</span></div>
+        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
+          Un compte tenté depuis des centaines de sources n'est pas un utilisateur qui se
+          trompe. S'il n'existe pas sur la box, c'est du ciblage.</p>
+      </div>
+      <div>
+        <h3 style="font-size:.82rem;margin:0 0 .4rem">🕳️ Leurres touchés
+          <span class="muted" style="font-size:.72rem;font-weight:400">— services inexistants</span></h3>
+        <div id="leurresTouches"><span class="muted">chargement…</span></div>
+        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
+          Ces ports n'offrent rien. Toute connexion y est un balayage, et vaut un
+          bannissement dès le premier contact.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>🧠 Ce qui protège</h2>
     <p class="h2sous">État mesuré, jamais supposé.</p>
     <div id="detections" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.6rem">
@@ -137,6 +176,61 @@
     return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   }
   function nb(n) { return (Number(n) || 0).toLocaleString('fr-FR'); }
+
+  // ── SURFACES SURVEILLEES (#1221, portee de l'admin dans le tableau) ────────
+  // Le journal de menaces melange DEUX producteurs : sbxwaf (HTTP seul) et
+  // authwatch (SSH, SMTP, IMAP, leurres). Un total unique ne dirait plus de
+  // quelle surface vient la menace — d'ou la ventilation par type.
+  var SURFACE_INFO = {
+    http:   ['🌐', 'HTTP',    'sbxwaf, devant les services'],
+    ssh:    ['🔑', 'SSH',     "échecs d'authentification"],
+    smtp:   ['✉️', 'SMTP',    'SASL refusé sur postfix'],
+    imap:   ['📥', 'IMAP',    'connexions dovecot'],
+    leurre: ['🕳️', 'Leurres', 'services inexistants'],
+    autre:  ['❓', 'Autre',   'authwatch, type non classé']
+  };
+  function surfaces(parType, parOrigine) {
+    var el = document.getElementById('surfaces'); if (!el) return;
+    var t = parType || {};
+    var cles = Object.keys(SURFACE_INFO).filter(function (k) { return (t[k] || 0) > 0; });
+    if (!cles.length) {
+      el.innerHTML = '<div class="muted" style="padding:1rem;grid-column:1/-1">'
+        + "Aucun événement classé pour l'instant." + '</div>';
+      return;
+    }
+    var total = cles.reduce(function (a, k) { return a + t[k]; }, 0) || 1;
+    el.innerHTML = cles.map(function (k) {
+      var d = SURFACE_INFO[k], n = t[k], pct = Math.round(n / total * 100);
+      return '<div style="background:var(--bg-card);padding:.85rem 1rem">'
+        + '<div style="font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">'
+        + d[0] + ' ' + esc(d[1]) + '</div>'
+        + '<div style="font-family:monospace;font-size:1.3rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums">'
+        + nb(n) + ' <span style="font-size:.7rem;color:var(--muted);font-weight:400">' + pct + ' %</span></div>'
+        + '<div class="muted" style="font-size:.66rem;margin-top:.3rem">' + esc(d[2]) + '</div></div>';
+    }).join('') + (function () {
+      var o = parOrigine || {}, w = o.waf || 0, a = o.authwatch || 0;
+      if (!w && !a) return '';
+      return '<div style="background:var(--bg-card);padding:.85rem 1rem">'
+        + '<div style="font-size:.6rem;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:.35rem">⚙️ Moteurs</div>'
+        + '<div style="font-size:.74rem;line-height:1.7">sbxwaf <b style="color:var(--cyan)">' + nb(w)
+        + '</b><br>authwatch <b style="color:var(--cyan)">' + nb(a) + '</b></div></div>';
+    })();
+  }
+
+  // Petit tableau une-colonne trie, pour comptes vises et leurres touches.
+  function table1(cible, obj, entete, videTexte) {
+    var el = document.getElementById(cible); if (!el) return;
+    var items = Object.entries(obj || {}).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
+    if (!items.length) { el.innerHTML = '<span class="muted">' + esc(videTexte) + '</span>'; return; }
+    el.innerHTML = '<div class="tableau"><table style="width:100%;border-collapse:collapse;font-size:.76rem">'
+      + '<thead><tr><th style="text-align:left;color:var(--muted);font-weight:600;padding:.3rem .5rem">' + esc(entete[0])
+      + '</th><th style="text-align:right;color:var(--muted);font-weight:600;padding:.3rem .5rem">' + entete[1] + '</th></tr></thead><tbody>'
+      + items.map(function (kv) {
+          return '<tr><td style="padding:.28rem .5rem;border-top:1px solid var(--border);font-family:monospace">'
+            + esc(kv[0]) + '</td><td style="padding:.28rem .5rem;border-top:1px solid var(--border);text-align:right;color:var(--cyan);font-variant-numeric:tabular-nums">'
+            + nb(kv[1]) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+  }
 
   async function api(chemin) {
     try {
@@ -365,6 +459,13 @@
     }
     if (hist) evolution(hist.jours);
     detections(detec && detec.detections);
+    if (stats) {
+      surfaces(stats.par_type, stats.par_origine);
+      table1('comptesVises', stats.comptes_vises, ['Compte', 'Tentatives'],
+        "Aucune tentative d'authentification pour l'instant.");
+      table1('leurresTouches', stats.leurres_touches, ['Service', 'Contacts'],
+        'Aucun leurre touché pour l\'instant.');
+    }
     tuiles(stats, bans, detec);
   }
 

@@ -21,6 +21,17 @@
   --rayon:16px;
   --ombre:0 1px 2px rgba(0,0,0,.5), 0 18px 40px -22px rgba(0,0,0,.9);
 }
+/* CLAIR EXPLICITE (#1334) — le Hall pose `data-theme="light"`, et aucun bloc
+   ne le captait : seul le clair SYSTEME (prefers-color-scheme) s'appliquait,
+   si bien qu'un choix « clair » dans le Hall restait sombre sur un OS sombre.
+   Meme palette, ecrite pour les deux etats. */
+:root[data-theme="light"]{
+  --paper:#eef3f7; --panel:#fff; --panel2:#f4f7fa; --line:#dbe3ea;
+  --text:#12212e; --dim:#5d7386;
+  --violet:#6d4aff; --violet-clair:#7c5cff; --violet-sourd:#ece7ff;
+  --mint:#0fa47a; --pink:#d8318a; --amber:#c07c00; --coral:#e0503c;
+  --ombre:0 1px 2px rgba(18,33,46,.07), 0 14px 34px -20px rgba(18,33,46,.35);
+}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
   --paper:#eef3f7; --panel:#fff; --panel2:#f4f7fa; --line:#dbe3ea;
   --text:#12212e; --dim:#5d7386;

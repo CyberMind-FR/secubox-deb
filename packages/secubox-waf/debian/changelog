@@ -1,3 +1,19 @@
+secubox-waf (1.10.15-1~bookworm1) bookworm; urgency=medium
+
+  * LE TABLEAU DU HALL GAGNE « SURFACES SURVEILLEES » (#1221). La vue existait
+    dans l'admin complet mais pas dans le tableau que le Hall embarque. Portee
+    telle quelle, palette sombre native : ventilation HTTP/SMTP/leurres/autre
+    (sbxwaf ne voit que le HTTP, authwatch couvre le reste), moteurs, comptes
+    vises (SSH/SMTP/IMAP) et leurres touches. Alimentee par /stats, deja
+    charge — aucune requete de plus.
+  * LE TABLEAU RESPECTE ENFIN LE CLAIR (#1334). C'etait /shared/hybrid-skin.css,
+    et lui seul, qui forcait le corps sombre en `!important` (195 regles). Le
+    tableau n'utilisant QUE ses propres classes — verifie une par une — on
+    retire le skin, et on ecrit une vraie palette a trois etats : sombre par
+    defaut, clair sur `data-theme=light` et sur systeme clair.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:40:57 +0200
+
 secubox-waf (1.10.14-1~bookworm1) bookworm; urgency=medium
 
   * LE JOURNAL DE MENACES S'OUVRE AU GROUPE (#1318). sbx-authwatch ecrit dans

@@ -1,3 +1,13 @@
+secubox-radio (0.1.50-1~bookworm1) bookworm; urgency=medium
+
+  * LE CARDLET RESPECTE LE CLAIR EXPLICITE (#1334). Il avait le clair SYSTEME
+    (prefers-color-scheme) mais pas le clair CHOISI : le Hall pose
+    `data-theme=light` et aucun bloc ne le captait, si bien qu'un choix clair
+    dans le Hall restait sombre sur un OS sombre. Meme palette, ecrite pour les
+    deux etats.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:41:02 +0200
+
 secubox-radio (0.1.49-1~bookworm1) bookworm; urgency=medium
 
   * LES DEUX NEXT REDUITS A MI-HAUTEUR (#1201). Une fois le back reduit et le
