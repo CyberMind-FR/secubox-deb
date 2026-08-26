@@ -477,6 +477,26 @@ _INJECTION_TETE = """
     }
   }catch(e){}
 
+  // NAVIGATIONS VERS UN PORTAIL DE CONSENTEMENT (#1365). location.assign /
+  // location.replace peuvent etre remplaces (contrairement au setter de
+  // location.href) : on y attrape l'URL COMPLETE d'un portail — first-id et
+  // consorts — et on la reecrit vers son origine surf, avant la navigation.
+  // Le relais fait alors le saut de portail (redirectHost+redirectUri).
+  try{
+    var _PORT=/(^|\.)((gate\.)?first-id\.fr|privacy-mgmt\.com|consent\.google\.com)$/i;
+    function _versSurf(u){
+      try{ var x=new URL(u, location.href);
+        if(_PORT.test(x.hostname) && x.hostname.indexOf("surf-")!==0){
+          var plat=x.hostname.toLowerCase().replace(/-/g,"--").replace(/\./g,"-");
+          return "https://surf-"+plat+".gk2.secubox.in"+x.pathname+x.search+x.hash;
+        }
+      }catch(e){}
+      return u;
+    }
+    var _asg=Location.prototype.assign, _rep=Location.prototype.replace;
+    if(_asg) Location.prototype.assign=function(u){ return _asg.call(this,_versSurf(u)); };
+    if(_rep) Location.prototype.replace=function(u){ return _rep.call(this,_versSurf(u)); };
+  }catch(e){}
   // POPUPS : window.open rendu inerte.
   try{
     var faux={closed:true,close:function(){},focus:function(){},blur:function(){},
