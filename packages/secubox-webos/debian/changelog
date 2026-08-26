@@ -1,3 +1,20 @@
+secubox-webos (1.0.54-1~bookworm1) bookworm; urgency=medium
+
+  * PASTILLES des flux actifs dans la megabarre (#1247) : rondes, elles
+    n'apparaissent que si quelque chose joue et donnent acces au lecteur sans
+    quitter ce qu'on regarde. Au survol, une bulle dit le titre et la source —
+    l'information sans le clic ; au clic, le service s'embarque, et le flux
+    survit puisque le cadre n'est jamais recharge.
+  * Elles disent la MEME verite que la barre, depuis la meme source : deux
+    comptages separes finiraient par diverger. Animees quand ca joue — un point
+    fixe ne se distingue pas d'une icone decorative.
+  * ReferenceError corrigee : render() appelait vivifieCartes() PENDANT
+    l'evaluation du script, avant la declaration `let _cardletsVus` — restee en
+    zone morte, elle levait une erreur qui arretait net la vivification des
+    cartes. `var` est hisse : c'est exactement le cas ou il vaut mieux.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:48:50 +0200
+
 secubox-webos (1.0.53-1~bookworm1) bookworm; urgency=medium
 
   * BARRE MEDIA MULTI-COUCHES (#1246) : une rangee par flux actif, empilees en

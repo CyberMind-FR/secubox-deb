@@ -19,8 +19,14 @@
 <title>Podcaster — vue micro</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/shared/hybrid-skin.css">
 <style>
+  /* PALETTE LOCALE. La feuille partagée /shared/hybrid-skin.css n'est PAS
+     servie par ce vhost : nginx rendait index.html à sa place, le navigateur
+     refusait le type MIME, et la carte s'affichait sans aucun style. On porte
+     donc les quelques variables dont on a besoin — une carte doit tenir debout
+     seule, elle est servie par son propre service. */
+  :root { --bg-card:#ffffff; --text:#111827; --muted:#6b7280;
+          --border:#e5e7eb; --cyan:#7c3aed; }
   html, body { margin: 0; height: 100%; overflow: hidden;
                scrollbar-width: none; background: var(--bg-card, #fff); color: var(--text, #111); }
   /* THÈME HÉRITÉ DE L'HÔTE. Encadrée, la carte décidait seule de son

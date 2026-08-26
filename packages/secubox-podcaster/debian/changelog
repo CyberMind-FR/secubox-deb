@@ -1,3 +1,13 @@
+secubox-podcaster (1.0.14-1~bookworm1) bookworm; urgency=medium
+
+  * La carte s'affichait SANS AUCUN STYLE : elle liait /shared/hybrid-skin.css,
+    que ce vhost ne sert pas — nginx rendait index.html a sa place et le
+    navigateur refusait le type MIME. Les quelques variables necessaires sont
+    portees dans la page : une carte servie par son propre service doit tenir
+    debout seule.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:48:50 +0200
+
 secubox-podcaster (1.0.13-1~bookworm1) bookworm; urgency=medium
 
   * Annonce a la barre du Hall et obeissance a ses commandes (#1246), avec un

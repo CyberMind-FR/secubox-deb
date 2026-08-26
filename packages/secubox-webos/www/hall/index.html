@@ -399,6 +399,31 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   font-variant-numeric:tabular-nums;flex:0 0 auto}
 @media (max-width:700px){.mrow .mprog,.mrow .mtime{display:none}}
 
+/* PASTILLES (#1247). Rondes, et animées quand ça joue : un point fixe ne se
+   distingue pas d'une icône décorative. Elles disparaissent quand rien ne joue —
+   une pastille éteinte en permanence n'apprend rien. */
+.flux-pastilles{display:flex;align-items:center;gap:6px}
+.flux-pastilles:empty{display:none}
+.fpast{position:relative;width:28px;height:28px;border-radius:50%;flex:0 0 auto;
+  border:1px solid var(--line-2);background:var(--panel);color:var(--ink);
+  display:grid;place-items:center;font-size:.82rem;cursor:pointer;padding:0}
+.fpast:hover{border-color:var(--violet)}
+.fpast[data-joue="1"]{border-color:var(--violet);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--violet) 22%,transparent)}
+@media (prefers-reduced-motion:no-preference){
+  .fpast[data-joue="1"]{animation:fpulse 2.4s ease-in-out infinite}
+  @keyframes fpulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,var(--violet) 10%,transparent)}}
+}
+/* L'INFO AU SURVOL : titre et source, sans clic. Ancrée à droite pour ne pas
+   déborder de la fenêtre depuis le coin. */
+.fpast .fbulle{position:absolute;top:calc(100% + 8px);right:0;z-index:70;
+  min-width:200px;max-width:290px;padding:8px 10px;border-radius:10px;
+  background:var(--panel);border:1px solid var(--line);box-shadow:var(--lift);
+  text-align:left;opacity:0;visibility:hidden;transition:opacity .14s;pointer-events:none}
+.fpast:hover .fbulle,.fpast:focus-visible .fbulle{opacity:1;visibility:visible}
+.fbulle b{display:block;font-size:.78rem;line-height:1.25}
+.fbulle small{display:block;font-size:.66rem;color:var(--dim);margin-top:2px}
+
 .who{position:relative;cursor:pointer}
 .who-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:60;min-width:230px;
   background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
@@ -544,6 +569,10 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       </span>
     </span>
     <div class="mast-actions">
+      <!-- PASTILLES DES FLUX ACTIFS (#1247) : elles n'apparaissent que si
+           quelque chose joue, et donnent accès au lecteur sans quitter ce
+           qu'on regarde. Rondes, discrètes, à côté du thème. -->
+      <div class="flux-pastilles" id="pastilles"></div>
       <button class="ibtn" id="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
       <div class="who" id="who" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"
            title="Profil et réglages"><span class="av">🧙</span><span><b id="who-nom">Gandalf</b><i>● Identité locale</i></span>
@@ -1001,6 +1030,11 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
 const root=document.documentElement;
+// `var` et non `let` : render() appelle vivifieCartes() PENDANT l'évaluation du
+// script, avant cette ligne. Une déclaration `let` reste alors en zone morte et
+// lève une ReferenceError qui arrête net la vivification des cartes. `var` est
+// hissé — c'est exactement le cas où il vaut mieux.
+var _cardletsVus = null;
 
 // RÉGLAGES PAR PROFIL (#1245). Ils étaient rangés sous une clef unique : deux
 // personnes sur le même navigateur se marchaient dessus — l'ordre des cartes de
@@ -1133,7 +1167,30 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     try{ c.contentWindow.postMessage({sbx:'cmd', action}, new URL(c.src).origin); }catch(e){}
   }
 
+  // Les pastilles disent la MÊME vérité que la barre, depuis la même source :
+  // deux comptages séparés finiraient par diverger.
+  function pastilles(){
+    const zone=document.getElementById('pastilles');
+    if(!zone) return;
+    const ids=[...flux.keys()];
+    if(zone.dataset.ids!==ids.join(',')){
+      zone.dataset.ids=ids.join(',');
+      zone.innerHTML=ids.map(id=>
+        '<button class="fpast" type="button" data-id="'+id+'" title="Ouvrir le lecteur">'
+        +(ICONES[id]||'🔊')
+        +'<span class="fbulle"><b></b><small></small></span></button>').join('');
+    }
+    ids.forEach(id=>{
+      const b=zone.querySelector('.fpast[data-id="'+id+'"]'); if(!b) return;
+      const e=flux.get(id).etat||{};
+      b.setAttribute('data-joue', e.joue?'1':'0');
+      b.querySelector('.fbulle b').textContent=e.titre||'—';
+      b.querySelector('.fbulle small').textContent=e.sous||'';
+    });
+  }
+
   function dessine(){
+    pastilles();
     const ids=[...flux.keys()];
     // On ne reconstruit que si la composition change : réécrire le HTML à
     // chaque seconde ferait clignoter le texte et perdrait le focus.
@@ -1170,6 +1227,13 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(d.joue===false && d.fin){ flux.delete(d.id); dessine(); return; }
     flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
     dessine();
+  });
+
+  // Un clic sur la pastille embarque le service : on revient au lecteur sans
+  // perdre le flux, puisque le cadre n'est jamais rechargé.
+  document.getElementById('pastilles').addEventListener('click', e=>{
+    const b=e.target.closest('.fpast'); if(!b) return;
+    if(typeof openService==='function') openService(b.dataset.id,'embed');
   });
 
   dock.addEventListener('click', e=>{
@@ -1313,8 +1377,6 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // n'en a pas, elle garde sa description : on n'invente rien, et l'ajout d'un
 // cardlet suffit à vivifier sa carte sans toucher au Hall. La liste est
 // DÉCOUVERTE auprès du serveur, jamais écrite ici.
-let _cardletsVus = null;
-
 async function vivifieCartes(){
   try{
     if(_cardletsVus === null){
