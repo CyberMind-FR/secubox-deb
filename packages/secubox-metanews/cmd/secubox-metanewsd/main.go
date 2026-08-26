@@ -61,6 +61,17 @@ func main() {
 
 	rss := linker.NewRSS(gardeReseau)
 	pipe := pipeline.New(st, rss, jr)
+	// NETTOYAGE UNIQUE, EN ARRIERE-PLAN (#1362b, corrige #1362c). Detache les
+	// articles mal rattaches par les anciennes regles. EN GOROUTINE : synchrone,
+	// il bloquait le demarrage du serveur (socket jamais ouvert, 502 partout).
+	// Idempotent — apres la premiere passe il ne trouve plus rien.
+	go func() {
+		if n, err := pipe.Reclasser(time.Now().Unix()); err != nil {
+			jr.Printf("reclasser : %v", err)
+		} else if n > 0 {
+			jr.Printf("reclasser : %d articles remis a leur place", n)
+		}
+	}()
 	srv := web.New(st, pipe, web.Options{JWTSecret: secret, BBSSocket: *bbsSock, BBSCat: *bbsCat}, jr, version)
 
 	// Boucle de sondage en arrière-plan (double-cache : la donnée peut être

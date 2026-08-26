@@ -1,3 +1,12 @@
+secubox-waf (1.10.16-1~bookworm1) bookworm; urgency=medium
+
+  * NOMS DEMANDES HORS REGISTRE, EN TOP-10 DANS LE TABLEAU (#1364). Les
+    hostnames que la box ne route pas, frappes en boucle (git.secubox.in en
+    tete = scan) : top-10 + total distincts/requetes. Donnee deja dans
+    /stats (noms_non_routes), rien de plus a interroger.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:49:21 +0200
+
 secubox-waf (1.10.15-1~bookworm1) bookworm; urgency=medium
 
   * LE TABLEAU DU HALL GAGNE « SURFACES SURVEILLEES » (#1221). La vue existait

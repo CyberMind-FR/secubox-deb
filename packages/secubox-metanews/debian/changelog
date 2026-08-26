@@ -1,3 +1,21 @@
+secubox-metanews (0.1.20-1~bookworm1) bookworm; urgency=medium
+
+  * RE-CLUSTERING EN ARRIERE-PLAN (#1362c). Lance synchrone, il bloquait le
+    demarrage du serveur (socket jamais ouvert -> 502 partout). Passe en
+    goroutine : le service ecoute tout de suite, le nettoyage tourne derriere.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:53:59 +0200
+
+secubox-metanews (0.1.19-1~bookworm1) bookworm; urgency=medium
+
+  * RE-CLUSTERING DES VIEUX SUJETS MAL FUSIONNES (#1362b). Nouvelle passe
+    Reclasser, lancee UNE fois au demarrage : pour chaque sujet, un article
+    qui ne ressemble a AUCUN autre du sujet (score < seuil pour tous) est
+    detache, puis re-groupe par sa ressemblance reelle. Nettoie d'un coup les
+    « tornade + preservatif » herites des anciennes regles. Idempotent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:51:56 +0200
+
 secubox-metanews (0.1.18-1~bookworm1) bookworm; urgency=medium
 
   * MOTS COMMUNS CAPITALISES EXCLUS DES ENTITES (#1362). Un jour, un mois, un

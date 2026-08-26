@@ -161,6 +161,13 @@
   </div>
 
   <div class="card">
+    <h2>🌐 Noms demandés que la box ne sert pas</h2>
+    <p class="h2sous">Un nom qu'on ne route pas, frappé en boucle, n'est pas une erreur : c'est un scan. Les plus vus, en tête.</p>
+    <div id="nomsNonRoutes"><span class="muted">chargement…</span></div>
+    <p class="muted" id="nomsResume" style="font-size:.7rem;margin:.5rem 0 0"></p>
+  </div>
+
+  <div class="card">
     <h2>🧠 Ce qui protège</h2>
     <p class="h2sous">État mesuré, jamais supposé.</p>
     <div id="detections" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.6rem">
@@ -465,6 +472,13 @@
         "Aucune tentative d'authentification pour l'instant.");
       table1('leurresTouches', stats.leurres_touches, ['Service', 'Contacts'],
         'Aucun leurre touché pour l\'instant.');
+      table1('nomsNonRoutes', stats.noms_non_routes, ['Nom demandé', 'Requêtes'],
+        'Aucun nom hors registre pour l\'instant.');
+      const rz = document.getElementById('nomsResume');
+      if (rz) {
+        const nd = stats.noms_non_routes_distincts || 0, tot = stats.noms_non_routes_total || 0;
+        rz.textContent = nd ? (nd + ' noms distincts · ' + nb(tot) + ' requêtes au total') : '';
+      }
     }
     tuiles(stats, bans, detec);
   }

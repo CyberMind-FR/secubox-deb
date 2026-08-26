@@ -149,6 +149,60 @@ func (p *Pipe) Regrouper(now int64) (int, error) {
 	return len(touches), nil
 }
 
+// Reclasser NETTOIE LES SUJETS DEJA FUSIONNES A TORT (#1362b). Les regles de
+// regroupement ont ete durcies, mais les sujets composes AVANT ne se defont pas
+// seuls (tornade + preservatif restent colles). Cette passe reevalue chaque
+// article de chaque sujet : s'il ne ressemble a AUCUN autre article du meme
+// sujet (score < seuil pour tous), il n'y a pas sa place — on le detache. Les
+// detaches sont re-groupes ensuite (par leur ressemblance reelle), et un sujet
+// vide de tout sauf un article isole redevient un sujet a une source.
+//
+// Idempotente : apres un premier nettoyage, plus rien a detacher.
+func (p *Pipe) Reclasser(now int64) (int, error) {
+	sujets, err := p.st.SujetsRecents(now - cluster.FenetreSec*8)
+	if err != nil {
+		return 0, err
+	}
+	detaches := 0
+	touches := map[string]bool{}
+	for _, t := range sujets {
+		arts, err := p.st.ArticlesDuSujet(t.ID)
+		if err != nil || len(arts) < 2 {
+			continue
+		}
+		for _, a := range arts {
+			meilleur := 0.0
+			for _, b := range arts {
+				if b.ID == a.ID {
+					continue
+				}
+				sc := cluster.Score(a.Title, a.Entities, a.PublishedAt,
+					b.Title, b.Entities, b.PublishedAt)
+				if sc > meilleur {
+					meilleur = sc
+				}
+			}
+			// Ne colle a AUCUN autre article du sujet : il n'a rien a y faire.
+			if meilleur < cluster.Seuil {
+				_ = p.st.SetArticleSujet(a.ID, "")
+				detaches++
+			}
+		}
+		touches[t.ID] = true
+	}
+	for id := range touches {
+		p.recomposer(id, now)
+	}
+	if detaches > 0 && p.jr != nil {
+		p.jr.Printf("reclasser : %d articles detaches des mauvais sujets", detaches)
+	}
+	// Les orphelins retrouvent (ou fondent) un sujet par leur ressemblance reelle.
+	if detaches > 0 {
+		_, _ = p.Regrouper(now)
+	}
+	return detaches, nil
+}
+
 // recomposer recalcule résumé, compteur d'ORIGINES (clones fondus), entités,
 // tags et importance d'un sujet.
 func (p *Pipe) recomposer(topicID string, now int64) {
