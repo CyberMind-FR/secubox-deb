@@ -42,14 +42,14 @@
   :root { --fond:#0a0a0f; --bg-card:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
           --border:#2a2a36; --cyan:#00d4ff; --purple:#b388ff; --orange:#e0b355;
           --red:#e8636f; --green:#4ade80; }
-  @media (prefers-color-scheme: light) {
-    :root:not([data-theme="dark"]) { --fond:#f7f8fa; --bg-card:#ffffff; --ink:#1a1a22;
-      --muted:#5b6b7a; --border:#e2e2ea; --cyan:#0d7f9e; --purple:#5b46b8;
-      --orange:#a1701a; --red:#b7202c; --green:#1f7a55; }
-  }
-  :root[data-theme="light"] { --fond:#f7f8fa; --bg-card:#ffffff; --ink:#1a1a22;
-    --muted:#5b6b7a; --border:#e2e2ea; --cyan:#0d7f9e; --purple:#5b46b8;
-    --orange:#a1701a; --red:#b7202c; --green:#1f7a55; }
+  /* PAS DE MIROIR CLAIR, ET C'EST UN CHOIX ASSUME (#1310).
+     La feuille partagee /shared/hybrid-skin.css force le fond ET la couleur du
+     corps en `!important`, et compte 195 regles de ce genre. Un theme clair
+     devrait donc etre gagne 195 fois — et en attendant, mes jetons clairs
+     s'appliquaient aux CARTES pendant que le corps restait sombre : des
+     panneaux blancs sur un fond noir, pire que le probleme d'origine.
+     Ce tableau est sombre par nature. On le peint donc entierement, une bonne
+     fois, plutot que de livrer un clair a moitie gagne. */
 
   /* Fond ET couleur EXPLICITES : un corps transparent emprunte celui de
      l'hôte, et la page finit peinte dans un thème que son texte ne suit pas. */
@@ -186,14 +186,10 @@
   // thèmes, pas seulement dans celui d'origine.
   const TEINTES_SOMBRE = ['#00d4ff', '#b388ff', '#e8636f', '#e0b355', '#4ade80', '#ff8c42',
                           '#4ecdc4', '#7cb342'];
-  const TEINTES_CLAIR  = ['#0d7f9e', '#5b46b8', '#b7202c', '#a1701a', '#1f7a55', '#b35a1f',
-                          '#137a72', '#4a7a1f'];
-  const estClair = () => {
-    const t = document.documentElement.getAttribute('data-theme');
-    if (t === 'light') return true;
-    if (t === 'dark') return false;
-    return matchMedia('(prefers-color-scheme: light)').matches;
-  };
+  // Un seul jeu : la page est sombre quel que soit le theme de l'hote, donc
+  // des teintes claires ne s'y poseraient jamais.
+  const TEINTES_CLAIR = TEINTES_SOMBRE;
+  const estClair = () => false;
   // Une FONCTION plutot qu'un proxy : le seul appel est `teinte(n)`, et une
   // indirection maligne dans un tableau de bord est une dette, pas une
   // elegance — la prochaine personne doit comprendre en une ligne.

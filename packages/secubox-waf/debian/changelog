@@ -1,3 +1,19 @@
+secubox-waf (1.10.13-1~bookworm1) bookworm; urgency=medium
+
+  * LE TABLEAU DE BORD EST SOMBRE PAR NATURE, ON CESSE DE PRETENDRE LE
+    CONTRAIRE (#1310). /shared/hybrid-skin.css force le fond ET la couleur du
+    corps en `!important`, et compte 195 regles de ce genre : un theme clair
+    devrait etre gagne 195 fois.
+  * En attendant, mes jetons clairs s'appliquaient aux CARTES pendant que le
+    corps restait sombre — des panneaux blancs sur un fond noir, pire que le
+    probleme d'origine. C'est ce qui a casse le clair apres que j'eus corrige
+    le sombre.
+  * On peint donc la page entierement, une bonne fois, plutot que de livrer un
+    clair a moitie gagne. Les jetons restent DEFINIS — c'etait le vrai defaut
+    initial, aucun d'eux ne l'etait — et un seul jeu de teintes suffit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:52:00 +0200
+
 secubox-waf (1.10.12-1~bookworm1) bookworm; urgency=medium
 
   * JE M'ETAIS TROMPE DE SENS (#1309). En corrigeant le sombre, j'ai pose le
