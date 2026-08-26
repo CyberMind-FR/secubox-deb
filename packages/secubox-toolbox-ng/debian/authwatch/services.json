@@ -1,0 +1,62 @@
+{
+  "_commentaire": "SecuBox #1223 — filtres d'authentification par service hébergé. Un service = une entrée : où lire, quoi reconnaître, comment le nommer. Ajouter un service ne demande pas une ligne de Go. Chaque motif DOIT capturer (?P<ip>…) ; le groupe facultatif (?P<cible>…) porte le compte visé, ce qui rend les campagnes lisibles. Les motifs sont appliqués APRÈS les motifs universels du binaire (SSH, SMTP, IMAP), pour qu'un service hébergé ne masque pas une ligne postfix mieux classée. Un motif invalide est refusé en le disant, sans condamner les autres.",
+
+  "services": [
+    {
+      "id": "gitea",
+      "nom": "Gitea",
+      "journal": "/data/lxc/gitea/rootfs/var/log/journal",
+      "actif": true,
+      "_releve": "Ligne réelle de gk2 : « modules/ssh/ssh.go:327:sshConnectionFailed() [W] Failed authentication attempt from 35.86.227.240:60106 »",
+      "motifs": [
+        {
+          "motif": "sshConnectionFailed.*Failed authentication attempt from\\s+(?P<ip>[0-9a-f.:]+):[0-9]+",
+          "categorie": "auth_gitea:ssh_failed",
+          "severite": "high",
+          "detail": "clé SSH refusée sur gitea"
+        },
+        {
+          "motif": "(?:invalid credentials|user does not exist|incorrect password).*(?:for|from)\\s+(?P<ip>[0-9]{1,3}(?:\\.[0-9]{1,3}){3})",
+          "categorie": "auth_gitea:web_failed",
+          "severite": "medium",
+          "detail": "identifiants refusés sur l'interface gitea"
+        }
+      ]
+    },
+
+    {
+      "id": "nextcloud",
+      "nom": "Nextcloud",
+      "fichier": "/data/volumes/nextcloud/data/nextcloud.log",
+      "actif": true,
+      "_releve": "Lignes réelles de gk2, DEUX formes — avec et sans apostrophes : « Login failed: 'admin' (Remote IP: '127.0.0.1') » et « Login failed: gk2 (Remote IP: 192.168.1.200) ». Le fichier est lu SUR PLACE, sans centralisation.",
+      "_prealable": "Nextcloud journalisait l'adresse du RELAIS et non celle du client : 192.168.1.200 manquait à trusted_proxies. Corrigé le 26/08/2026 — sans quoi ces motifs ne banniraient que la box elle-même.",
+      "motifs": [
+        {
+          "motif": "Login failed:\\s*'?(?P<cible>[^'()]*?)'?\\s*\\(Remote IP:\\s*'?(?P<ip>[0-9a-f.:]+)'?\\)",
+          "categorie": "auth_nextcloud:login_failed",
+          "severite": "medium",
+          "detail": "connexion refusée sur nextcloud"
+        }
+      ]
+    },
+
+    {
+      "id": "peertube",
+      "nom": "PeerTube",
+      "journal": "/data/lxc/peertube/rootfs/var/log/journal",
+      "actif": false,
+      "_pourquoi_inactif": "Aucun échec d'authentification trouvé dans son journal sur trois jours, et aucun journal applicatif accessible depuis l'hôte. Écrire un motif ici serait le deviner : il ne correspondrait à rien et donnerait une fausse assurance de couverture. À activer une fois une ligne réelle relevée.",
+      "motifs": []
+    },
+
+    {
+      "id": "mastodon",
+      "nom": "Mastodon",
+      "journal": "/data/lxc/mastodon/rootfs/var/log/journal",
+      "actif": false,
+      "_pourquoi_inactif": "Idem : rien d'exploitable relevé. Mastodon journalise ses échecs de connexion dans Rails ; le format reste à établir sur une ligne réelle avant d'écrire un motif.",
+      "motifs": []
+    }
+  ]
+}

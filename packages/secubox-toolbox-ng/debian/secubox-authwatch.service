@@ -14,6 +14,7 @@ ExecStart=/usr/sbin/sbx-authwatch \
     --journaux hote,mail:/data/lxc/mail/rootfs/var/log/journal \
     --leurres defaut \
     --comptes /data/volumes/mail/config/users \
+    --services /etc/secubox/authwatch/services.json \
     --seuil 6 \
     --fenetre 10m \
     --duree-ban 4h \

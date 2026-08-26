@@ -1,3 +1,38 @@
+secubox-toolbox-ng (0.3.1-1~bookworm1) bookworm; urgency=medium
+
+  * Filtres d'authentification par service, DECLARATIFS (#1223). Les motifs
+    SSH, SMTP et IMAP restent dans le binaire parce qu'ils sont universels :
+    tout postfix ecrit la meme ligne. Les services HEBERGES, non — gitea,
+    nextcloud, mastodon, peertube ont chacun leur formulation et leur
+    emplacement de journal, et la liste s'allonge a chaque service ajoute. Les
+    figer dans le code exigerait une recompilation pour couvrir un service de
+    plus. Un service = une entree : ou lire, quoi reconnaitre, comment le
+    nommer.
+  * DEUX SOURCES, parce que les deux existent : le journal systemd d'un
+    conteneur (gitea) et le FICHIER qu'un service ecrit lui-meme
+    (nextcloud.log). Le fichier est suivi SUR PLACE, sans centralisation, et on
+    repart de sa fin — rejouer un journal de plusieurs mois bannirait des
+    adresses parties depuis longtemps. La rotation est detectee par la taille
+    qui diminue.
+  * gitea et nextcloud sont ACTIFS, sur des motifs etablis a partir de lignes
+    prelevees sur gk2 et conservees verbatim dans les tests. peertube et
+    mastodon sont declares INACTIFS : rien d'exploitable n'a ete releve dans
+    leurs journaux sur trois jours, et ecrire un motif devine donnerait une
+    fausse assurance de couverture.
+  * Les motifs universels sont essayes AVANT les filtres declares : un service
+    heberge ne doit pas masquer une ligne postfix mieux classee.
+  * Un motif fautif est refuse EN LE DISANT, sans condamner les autres —
+    abandonner tout le fichier pour une virgule priverait de couverture des
+    services bien declares. Un motif qui ne capture pas (?P<ip>…) est refuse au
+    chargement, pas au premier usage : sans adresse, il n'y a personne a bannir.
+  * Une specification de journaux VIDE est acceptee : une configuration qui ne
+    surveille que des fichiers declares n'a aucune source journald a suivre, et
+    le service refusait de demarrer sur une configuration parfaitement valable.
+    C'est l'absence TOTALE de source, apres fusion avec les filtres, qui est
+    signalee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 07:45:02 +0200
+
 secubox-toolbox-ng (0.2.0-1~bookworm1) bookworm; urgency=medium
 
   * sbx-authwatch (#1220) : couverture hors HTTP. sbxwaf est place derriere

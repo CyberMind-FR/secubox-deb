@@ -55,6 +55,10 @@ func main() {
 		blanche  = flag.String("liste-blanche", "", "adresses et préfixes exemptés, séparés par des virgules")
 		blancheF = flag.String("liste-blanche-fichier", "/etc/secubox/authwatch/liste-blanche",
 			"fichier de liste blanche (absent = ignoré)")
+		filtresF = flag.String("services",
+			"/etc/secubox/authwatch/services.json",
+			"filtres d'authentification des services hébergés (gitea, nextcloud…) — "+
+				"déclaratif : ajouter un service ne demande pas de recompilation")
 		comptesF = flag.String("comptes",
 			"/data/volumes/mail/config/users,/data/lxc/mail/rootfs/etc/postfix/vmailbox",
 			"fichier(s) listant les comptes RÉELS, séparés par des virgules — "+
@@ -100,6 +104,19 @@ func main() {
 		}
 	}
 
+	filtres, err := ChargerFiltres(*filtresF)
+	if err != nil {
+		log.Fatalf("sbx-authwatch: %v", err)
+	}
+	for _, a := range filtres.Avertissements() {
+		// Un filtre refusé se DIT : silencieux, il ferait croire à une
+		// couverture qui n'existe pas.
+		log.Printf("sbx-authwatch: filtre refusé — %s", a)
+	}
+	if n := filtres.Nombre(); n > 0 {
+		log.Printf("sbx-authwatch: %d service(s) hébergé(s) surveillé(s)", n)
+	}
+
 	comptes, err := NewComptes(strings.Split(*comptesF, ","))
 	if err != nil {
 		log.Fatalf("sbx-authwatch: %v", err)
@@ -125,6 +142,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("sbx-authwatch: %v", err)
 	}
+	sources = append(sources, filtres.Sources()...)
+	if len(sources) == 0 {
+		log.Printf("sbx-authwatch: aucune source de journal — seuls les leurres " +
+			"pourront déclencher")
+	}
 	lignes := make(chan string, 512)
 	for _, s := range sources {
 		go Suivre(ctx, s, *depuis, lignes)
@@ -136,7 +158,13 @@ func main() {
 			case <-ctx.Done():
 				return
 			case l := <-lignes:
-				if sig, ok := Reconnaitre(l); ok {
+				// Les motifs UNIVERSELS d'abord : un filtre de service ne doit
+				// pas masquer une ligne postfix qui aurait été mieux classée.
+				sig, ok := Reconnaitre(l)
+				if !ok {
+					sig, ok = filtres.Reconnaitre(l)
+				}
+				if ok {
 					select {
 					case signaux <- sig:
 					case <-ctx.Done():
@@ -279,7 +307,11 @@ func analyseSources(spec string) ([]Source, error) {
 		out = append(out, Source{Nom: strings.TrimSpace(morceaux[0]),
 			Repertoire: strings.TrimSpace(morceaux[1])})
 	}
-	if len(out) == 0 {
+	// Une specification VIDE est legitime : une configuration qui ne surveille
+	// que des fichiers declares (nextcloud.log) n'a aucune source journald a
+	// suivre. C'est l'absence TOTALE de source, verifiee par l'appelant apres
+	// fusion avec les filtres, qui serait une erreur.
+	if len(out) == 0 && strings.TrimSpace(spec) != "" {
 		return nil, errSource(spec)
 	}
 	return out, nil
@@ -295,6 +327,9 @@ func (e erreurSource) Error() string {
 func errSource(s string) error { return erreurSource(s) }
 
 func suffixeRepertoire(s Source) string {
+	if s.Fichier != "" {
+		return " (fichier " + s.Fichier + ")"
+	}
 	if s.Repertoire == "" {
 		return ""
 	}

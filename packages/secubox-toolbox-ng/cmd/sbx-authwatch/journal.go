@@ -21,16 +21,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 )
 
-// Source est un journal a suivre.
+// Source est un journal a suivre. Deux formes, parce que les deux existent sur
+// la box : le journal systemd d'un conteneur (gitea, mastodon, peertube) et le
+// FICHIER texte que certains services ecrivent eux-memes (nextcloud.log). Ne
+// couvrir que journald laisserait dehors le service qui porte les documents.
 type Source struct {
 	Nom        string // pour les messages : "hote", "mail"…
-	Repertoire string // vide = journal local ; sinon --directory=
+	Repertoire string // repertoire journald ; vide = journal local
+	Fichier    string // fichier texte a suivre ; prioritaire sur Repertoire
 }
 
 // entreeJournal ne retient que ce qui sert. journalctl -o json rend beaucoup
@@ -53,7 +59,13 @@ func Suivre(ctx context.Context, s Source, depuis string, lignes chan<- string) 
 			return
 		default:
 		}
-		if err := suivreUneFois(ctx, s, depuis, lignes); err != nil && ctx.Err() == nil {
+		var err error
+		if s.Fichier != "" {
+			err = suivreFichier(ctx, s, lignes)
+		} else {
+			err = suivreUneFois(ctx, s, depuis, lignes)
+		}
+		if err != nil && ctx.Err() == nil {
 			log.Printf("sbx-authwatch: source %s interrompue (%v) — reprise dans 5s", s.Nom, err)
 		}
 		select {
@@ -103,4 +115,62 @@ func suivreUneFois(ctx context.Context, s Source, depuis string, lignes chan<- s
 	}
 	_ = cmd.Wait()
 	return sc.Err()
+}
+
+// suivreFichier suit un fichier texte, facon `tail -F`.
+//
+// On repart de la FIN a l'ouverture : rejouer un nextcloud.log de plusieurs
+// mois bannirait des adresses parties depuis longtemps. La rotation est
+// detectee par la taille qui diminue — on rouvre alors depuis le debut, car le
+// fichier est neuf.
+func suivreFichier(ctx context.Context, s Source, lignes chan<- string) error {
+	f, err := os.Open(s.Fichier)
+	if err != nil {
+		return fmt.Errorf("%s : %w", s.Fichier, err)
+	}
+	defer f.Close()
+
+	position, err := f.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	lecteur := bufio.NewReader(f)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+		ligne, err := lecteur.ReadString('\n')
+		if err == nil {
+			position += int64(len(ligne))
+			ligne = strings.TrimRight(ligne, "\r\n")
+			if ligne == "" {
+				continue
+			}
+			select {
+			case lignes <- ligne:
+			case <-ctx.Done():
+				return nil
+			}
+			continue
+		}
+		if err != io.EOF {
+			return err
+		}
+		// Fin de fichier : on attend, puis on regarde s'il a tourne.
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(time.Second):
+		}
+		st, errStat := os.Stat(s.Fichier)
+		if errStat != nil {
+			return errStat
+		}
+		if st.Size() < position {
+			return fmt.Errorf("%s : rotation détectée", s.Fichier)
+		}
+	}
 }

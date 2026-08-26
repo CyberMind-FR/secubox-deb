@@ -151,3 +151,10 @@ func Poids(sev string) int {
 	}
 	return 1
 }
+
+// estAdresse dit si une capture est une adresse exploitable. Partage avec les
+// filtres declares : mieux vaut manquer une ligne que bannir une chaine
+// quelconque capturee par un motif approximatif.
+func estAdresse(ip string) bool {
+	return net.ParseIP(strings.Trim(ip, "[]")) != nil
+}

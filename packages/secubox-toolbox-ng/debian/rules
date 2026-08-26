@@ -56,6 +56,9 @@ override_dh_auto_install:
 	install -d debian/secubox-toolbox-ng/etc/secubox/authwatch
 	install -m 0644 debian/authwatch/liste-blanche \
 	  debian/secubox-toolbox-ng/etc/secubox/authwatch/liste-blanche
+	# #1223 : filtres declaratifs des services heberges.
+	install -m 0644 debian/authwatch/services.json \
+	  debian/secubox-toolbox-ng/etc/secubox/authwatch/services.json
 	# #823 Sentinel: shipped base IOC/YARA content pack (read-only content).
 	install -d debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base
 	install -m 0644 packs/base/*.json debian/secubox-toolbox-ng/usr/share/secubox/sentinel/packs/base/
