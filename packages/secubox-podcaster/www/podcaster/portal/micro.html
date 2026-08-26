@@ -130,6 +130,7 @@
       const d = await r.json();
       eps = (d.episodes || []).slice(0, 40);
     } catch (e) { eps = []; }
+    if (eps.length && reprendEtat()) return;
     if (!eps.length) {
       el('titre').textContent = 'Bibliothèque vide';
       el('src').textContent = 'aucun épisode';
@@ -176,6 +177,65 @@
     if (!son.duration) return;
     const r = ev.currentTarget.getBoundingClientRect();
     son.currentTime = ((ev.clientX - r.left) / r.width) * son.duration;
+  });
+
+  // ── ÉTAT PERSISTANT (#1242) ───────────────────────────────────────────────
+  //
+  // Le lecteur mourait à chaque changement de page : on revenait, il était muet
+  // et au début. La radio, elle, garde son état — c'est ce qu'on attend d'un
+  // lecteur, et c'est ce qui manquait.
+  //
+  // On retient l'épisode, la position et l'intention de lecture. Au retour, on
+  // remet le tout en place. Ce n'est PAS le flux qui survit — un <audio> ne
+  // traverse pas un rechargement — mais la reprise est si proche qu'on ne fait
+  // pas la différence : à la seconde près, et le direct pour la radio.
+  //
+  // La position est enregistrée AU FIL de la lecture, pas à la fermeture : une
+  // page fermée brutalement ne prévient pas, et « beforeunload » n'est pas
+  // garanti sur mobile.
+  const ETAT = 'sbx.podcaster.etat';
+  let dernierEnr = 0;
+  function retiensEtat(){
+    const e = eps[idx]; if (!e) return;
+    try{
+      localStorage.setItem(ETAT, JSON.stringify({
+        ep: e.id, t: Math.floor(son.currentTime || 0), joue: !son.paused
+      }));
+    }catch(err){}
+  }
+  function reprendEtat(){
+    let d = null;
+    try{ d = JSON.parse(localStorage.getItem(ETAT) || 'null'); }catch(err){}
+    if (!d || !d.ep) return false;
+    const i = eps.findIndex(x => String(x.id) === String(d.ep));
+    if (i < 0) return false;
+    idx = i; montre();
+    son.src = API + '/media/' + eps[idx].id;
+    // La position se pose une fois les métadonnées lues : plus tôt, elle est
+    // ignorée en silence et l'épisode repart du début.
+    son.addEventListener('loadedmetadata', () => { son.currentTime = d.t || 0; }, { once: true });
+    // On ne relance PAS tout seul si le navigateur l'interdit : un bouton qui
+    // reste sur ▶ alors qu'on a demandé la lecture est trompeur.
+    if (d.joue) son.play().catch(() => { el('pp').textContent = '▶'; });
+    return true;
+  }
+  son.addEventListener('timeupdate', () => {
+    // Une écriture par seconde suffit : à chaque image, on écrirait soixante
+    // fois pour le même résultat.
+    const n = Date.now();
+    if (n - dernierEnr > 1000) { dernierEnr = n; retiensEtat(); }
+  });
+  ['play','pause','ended'].forEach(ev => son.addEventListener(ev, retiensEtat));
+
+  // UN SEUL FLUX PAR OFFICINE, MÊME ENTRE ONGLETS. Un second onglet qui lance
+  // la lecture met celui-ci en pause : deux fois le même podcast, décalés, ne
+  // s'écoutent pas.
+  addEventListener('storage', ev => {
+    if (ev.key !== ETAT || son.paused) return;
+    try{
+      const d = JSON.parse(ev.newValue || 'null');
+      if (d && d.joue) son.pause();
+    }catch(err){}
   });
 
   // FAVORIS. Retenus par épisode, côté navigateur : le service n'expose pas

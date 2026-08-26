@@ -1,3 +1,24 @@
+secubox-podcaster (1.0.11-1~bookworm1) bookworm; urgency=medium
+
+  * ETAT PERSISTANT du lecteur (#1242). Il mourait a chaque changement de page :
+    on revenait, il etait muet et au debut. La radio, elle, garde son etat —
+    c'est ce qu'on attend d'un lecteur, et c'est ce qui manquait.
+  * Ce n'est PAS le flux qui survit — un <audio> ne traverse pas un
+    rechargement — mais l'episode, la position et l'intention de lecture sont
+    retenus et remis en place au retour : la reprise est a la seconde pres, on
+    ne fait pas la difference.
+  * La position est enregistree AU FIL de la lecture, pas a la fermeture : une
+    page fermee brutalement ne previent pas, et `beforeunload` n'est pas garanti
+    sur mobile. Une ecriture par seconde suffit — a chaque image, on ecrirait
+    soixante fois pour le meme resultat.
+  * La position se pose une fois les metadonnees lues : plus tot, elle est
+    ignoree en silence et l'episode repart du debut.
+  * UN SEUL FLUX PAR OFFICINE, MEME ENTRE ONGLETS : un second onglet qui lance
+    la lecture met le premier en pause. Deux fois le meme podcast, decales, ne
+    s'ecoutent pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:33:28 +0200
+
 secubox-podcaster (1.0.10-1~bookworm1) bookworm; urgency=medium
 
   * Bouton FAVORI ajoute a la vue micro : il manquait au jeu de la radio.
