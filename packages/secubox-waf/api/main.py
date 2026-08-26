@@ -502,6 +502,11 @@ def _get_threat_stats() -> dict:
     # #1221 : d'ou vient la menace, et sur quelle surface.
     par_origine = defaultdict(int, counters.get("par_origine", {}))
     par_type = defaultdict(int, counters.get("par_type", {}))
+    # Ce qui etait VISE sur les surfaces hors HTTP (#1221). Un compte inexistant
+    # tente depuis des centaines de sources en dit plus long qu'un total : c'est
+    # la que se lit le ciblage.
+    comptes_vises = defaultdict(int, counters.get("comptes_vises", {}))
+    leurres_touches = defaultdict(int, counters.get("leurres_touches", {}))
     total_threats = counters.get("total_threats", 0)
     threats_today = state.get("threats_today", 0)
     # detect-mode matches: seen and logged but NOT blocked — kept apart from the
@@ -519,7 +524,7 @@ def _get_threat_stats() -> dict:
             total_threats, threats_today, by_category, by_severity,
             top_ips, top_countries, top_vhosts, ip_countries,
             observed_threats, observed_today, noms_non_routes,
-            par_origine, par_type,
+            par_origine, par_type, comptes_vises, leurres_touches,
         )
 
     geoip_reader = _get_geoip_reader()
@@ -533,10 +538,12 @@ def _get_threat_stats() -> dict:
         # l'historique est déjà sur le disque. On relit donc le journal en
         # entier, une fois — et on repart de zéro pour TOUS les compteurs, faute
         # de quoi les anciens seraient comptés deux fois.
-        if "noms_non_routes" not in counters or "par_origine" not in counters:
+        if ("noms_non_routes" not in counters or "par_origine" not in counters
+                or "comptes_vises" not in counters):
             by_category.clear(); by_severity.clear(); top_ips.clear()
             top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
             par_origine.clear(); par_type.clear()
+            comptes_vises.clear(); leurres_touches.clear()
             ip_countries.clear()
             total_threats = 0
             observed_threats = 0
@@ -595,6 +602,15 @@ def _get_threat_stats() -> dict:
                         _orig, _typ = _origine_et_type(entry)
                         par_origine[_orig] += 1
                         par_type[_typ] += 1
+                        if _typ in ("ssh", "smtp", "imap"):
+                            # authwatch porte le compte vise dans `path`.
+                            _cible = str(entry.get("path") or "").strip()
+                            if _cible:
+                                comptes_vises[_cible] += 1
+                        elif _typ == "leurre":
+                            _svc = str(entry.get("host") or "").strip()
+                            if _svc:
+                                leurres_touches[_svc] += 1
 
                         if str(entry.get("category", "")).startswith("host_anomaly"):
                             if vhost and vhost != "unknown":
@@ -629,6 +645,8 @@ def _get_threat_stats() -> dict:
             "noms_non_routes": dict(noms_non_routes),
             "par_origine": dict(par_origine),
             "par_type": dict(par_type),
+            "comptes_vises": dict(comptes_vises),
+            "leurres_touches": dict(leurres_touches),
         },
         "ip_countries": ip_countries,
         "last_updated": int(time.time()),
@@ -638,7 +656,7 @@ def _get_threat_stats() -> dict:
         total_threats, threats_today, by_category, by_severity,
         top_ips, top_countries, top_vhosts, ip_countries,
         observed_threats, observed_today, noms_non_routes,
-        par_origine, par_type,
+        par_origine, par_type, comptes_vises, leurres_touches,
     )
 
 
@@ -648,6 +666,7 @@ def _finalize_stats(
     ip_countries: dict,
     observed_threats: int = 0, observed_today: int = 0,
     noms_non_routes=None, par_origine=None, par_type=None,
+    comptes_vises=None, leurres_touches=None,
 ) -> dict:
     """Shape the dashboard-friendly result : top-10 lists + plain dicts."""
     top_ips_sorted = sorted(top_ips.items(), key=lambda x: -x[1])[:10]
@@ -681,6 +700,12 @@ def _finalize_stats(
         "noms_non_routes_distincts": len(noms_non_routes or {}),
         "par_origine": dict(par_origine or {}),
         "par_type": dict(par_type or {}),
+        "comptes_vises": dict(
+            sorted((comptes_vises or {}).items(), key=lambda x: -x[1])[:20]
+        ),
+        "leurres_touches": dict(
+            sorted((leurres_touches or {}).items(), key=lambda x: -x[1])[:15]
+        ),
     }
 
 
@@ -1041,6 +1066,169 @@ async def info():
     }
 
 
+@app.get("/detections")
+async def get_detections():
+    """Detections COMPORTEMENTALES, celles qui ne tiennent pas dans un fichier
+    de motifs (#1222).
+
+    Le panneau listait les 18 categories de waf-rules.json et rien d'autre. Or
+    plusieurs protections ne reposent sur aucun motif : elles jugent un
+    comportement — un hote qu'on ne sert pas, un robot qui s'annonce, une
+    authentification qui echoue, une connexion a un service inexistant. Elles
+    protegeaient sans figurer nulle part.
+
+    L'etat rendu est MESURE, jamais suppose : on lit le fichier de profils, on
+    interroge systemd, on compte les ports reellement en ecoute. Une detection
+    dont on ne peut pas etablir l'etat est rendue « inconnue » plutot
+    qu'affichee active.
+    """
+    detections = []
+
+    # ── Hotes non routes ──────────────────────────────────────────────────
+    detections.append({
+        "id": "host_anomaly",
+        "nom": "Hôtes non routés",
+        "emoji": "🚪",
+        "resume": "Un navigateur n'envoie jamais un nom qu'on ne publie pas",
+        "classes": ["hôte vide", "IP littérale", "nom généré (DGA)", "nom non servi"],
+        "actif": _unite_active("secubox-waf-ng"),
+        "detail": "4 classes, du signal certain au gradué",
+    })
+
+    # ── Anti-robots par vhost ─────────────────────────────────────────────
+    coches = []
+    try:
+        profils = json.loads(Path("/etc/secubox/waf/vhost_profiles.json").read_text())
+        coches = [str(v) for v in (profils.get("anti_robots") or [])]
+    except (OSError, ValueError, AttributeError):
+        coches = []
+    detections.append({
+        "id": "robots",
+        "nom": "Anti-robots",
+        "emoji": "🤖",
+        "resume": "48 robots nommés ; robots.txt reste servi",
+        "classes": coches,
+        "actif": bool(coches),
+        "detail": (f"{len(coches)} vhost(s) coché(s)" if coches
+                   else "aucun vhost coché — la case est dans le panneau Vhost"),
+    })
+
+    # ── authwatch : journaux hors HTTP ────────────────────────────────────
+    aw = _unite_active("secubox-authwatch")
+    detections.append({
+        "id": "authwatch_journaux",
+        "nom": "Authentification SSH / SMTP / IMAP",
+        "emoji": "🔑",
+        "resume": "Ce que le HTTP ne montre pas : sbxwaf est derrière HAProxy",
+        "classes": ["SSH", "SMTP (postfix)", "IMAP/POP3 (dovecot)"],
+        "actif": aw,
+        "detail": ("compte inexistant → banni au premier essai ; compte réel → patient"
+                   if aw else "service sbx-authwatch arrêté"),
+    })
+
+    # ── Leurres de service ────────────────────────────────────────────────
+    ports = _ports_leurres()
+    detections.append({
+        "id": "leurres",
+        "nom": "Leurres de service",
+        "emoji": "🕳️",
+        "resume": "Personne ne se connecte à un service qu'on n'offre pas",
+        "classes": ports,
+        "actif": bool(ports),
+        "detail": (f"{len(ports)} port(s) en écoute, bannissement au premier contact"
+                   if ports else "aucun leurre en écoute"),
+    })
+
+    return {"detections": detections, "count": len(detections)}
+
+
+def _unite_active(unite: str) -> bool:
+    """Etat REEL d'une unite systemd. Une erreur rend False : on n'affiche pas
+    « actif » sur une supposition."""
+    try:
+        r = subprocess.run(["systemctl", "is-active", unite],
+                           capture_output=True, text=True, timeout=5)
+        return r.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
+# Ports leurres declares par defaut dans sbx-authwatch. Sert de reference quand
+# l'unite ne les enumere pas explicitement (« --leurres defaut »).
+_LEURRES_DEFAUT = ["23", "445", "1433", "3306", "3389", "5432", "5900", "6379", "9200", "27017"]
+
+
+def _ports_leurres() -> List[str]:
+    """Ports leurres REELLEMENT en ecoute.
+
+    On n'identifie PAS le processus : l'API tourne sous `secubox` et `ss -lntp`
+    ne lui montre pas les noms de processus des autres comptes — le premier
+    essai affichait donc « aucun leurre » pendant que neuf ports ecoutaient. On
+    croise donc deux choses accessibles sans privilege : les ports que l'unite
+    declare, et les ports effectivement en ecoute (`ss -lnt`, sans -p).
+    """
+    if not _unite_active("secubox-authwatch"):
+        return []
+
+    candidats = list(_LEURRES_DEFAUT)
+    try:
+        r = subprocess.run(["systemctl", "show", "secubox-authwatch", "-p", "ExecStart"],
+                           capture_output=True, text=True, timeout=5)
+        ligne = r.stdout or ""
+        if "--leurres" in ligne:
+            apres = ligne.split("--leurres", 1)[1].strip()
+            spec = apres.split()[0] if apres.split() else ""
+            if spec and spec != "defaut":
+                explicites = []
+                for part in spec.split(","):
+                    port = part.split(":")[0].strip()
+                    if port.isdigit():
+                        explicites.append(port)
+                if explicites:
+                    candidats = explicites
+    except Exception:
+        pass
+
+    try:
+        r = subprocess.run(["ss", "-lnt"], capture_output=True, text=True, timeout=5)
+        ecoute = r.stdout if r.returncode == 0 else ""
+    except Exception:
+        return []
+
+    ouverts = set()
+    for ligne in ecoute.splitlines()[1:]:
+        champs = ligne.split()
+        if len(champs) < 4:
+            continue
+        adresse = champs[3]
+        if ":" in adresse:
+            ouverts.add(adresse.rsplit(":", 1)[-1])
+
+    # Un port declare ET en ecoute n'est pas forcement un LEURRE : sur gk2, le
+    # 445 est tenu par samba et authwatch a echoue a s'y lier. Le compte de
+    # service appartient au groupe systemd-journal : on lit donc les echecs de
+    # liaison du service et on les retire, plutot que d'annoncer une protection
+    # qui n'existe pas.
+    echoues = set()
+    try:
+        r = subprocess.run(
+            ["journalctl", "-u", "secubox-authwatch", "--since", "-1h",
+             "--no-pager", "-o", "cat"],
+            capture_output=True, text=True, timeout=8)
+        for ligne in (r.stdout or "").splitlines():
+            if "address already in use" not in ligne:
+                continue
+            marque = "port "
+            if marque in ligne:
+                port = ligne.split(marque, 1)[1].split(")", 1)[0].strip()
+                if port.isdigit():
+                    echoues.add(port)
+    except Exception:
+        pass
+
+    return [p for p in candidats if p in ouverts and p not in echoues]
+
+
 @app.get("/categories")
 async def get_categories():
     """List all WAF categories with stats (public)."""
@@ -1193,6 +1381,9 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
     if not aggregate:
         return {"alerts": alerts[:limit], "aggregated": False}
 
+    # Le lecteur GeoIP est ouvert UNE fois pour tout le lot : chaque appel a
+    # _get_geoip_reader ouvrirait sinon la base par adresse agregee.
+    _geo = _get_geoip_reader()
     ip_groups: Dict[str, dict] = defaultdict(
         lambda: {"alerts": [], "count": 0, "categories": set(), "severities": set()}
     )
@@ -1200,7 +1391,9 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
         ip = alert.get("client_ip", "unknown")
         ip_groups[ip]["alerts"].append(alert)
         ip_groups[ip]["count"] += 1
-        ip_groups[ip]["categories"].add(alert.get("category", ""))
+        _cat = alert.get("category") or ""
+        if _cat:
+            ip_groups[ip]["categories"].add(_cat)
         ip_groups[ip]["severities"].add(alert.get("severity", ""))
         if "first_seen" not in ip_groups[ip]:
             ip_groups[ip]["first_seen"] = alert.get("timestamp")
@@ -1210,7 +1403,11 @@ def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
     aggregated = []
     for ip, data in sorted(ip_groups.items(), key=lambda x: x[1]["count"], reverse=True)[:limit]:
         max_sev = max(data["severities"], key=lambda s: sev_order.get(s, 0), default="low")
+        # Le pays manquait a la forme agregee : la colonne du panneau affichait
+        # un globe generique sur chaque ligne. On le resout ici, une fois par
+        # adresse — la base GeoIP est deja ouverte pour le reste.
         aggregated.append({
+            "country": _lookup_country(ip, _geo) if ip and ip != "local" else "",
             "client_ip": ip,
             "count": data["count"],
             "categories": list(data["categories"]),

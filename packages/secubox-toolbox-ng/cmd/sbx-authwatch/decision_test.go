@@ -182,3 +182,29 @@ func TestAdressePriveeRefuseeParLeBanneur(t *testing.T) {
 		t.Fatalf("aucune commande nft ne doit partir, obtenu %v", fx.bannies)
 	}
 }
+
+// Le compte vise doit etre exploitable par le panneau : il est porte dans
+// `path`, ou une requete web mettrait ce qui etait demande. Meme question.
+func TestCompteVisePorteDansLeJournal(t *testing.T) {
+	b, _ := banneurTest(t)
+	j, chemin := journalTest(t)
+	lb, _ := NewListeBlanche("")
+	ctx, annule := context.WithCancel(context.Background())
+	signaux := make(chan Signal, 1)
+	signaux <- Signal{IP: "203.0.113.90", Service: "smtp", Categorie: "auth_smtp:sasl_failed",
+		Severite: "high", Detail: "SASL refusee", Cible: "gerald@gk2.net"}
+	go traite(ctx, signaux, NewCompteur(time.Hour, 999, time.Hour), nil, nil, b, j, lb, false)
+	time.Sleep(80 * time.Millisecond)
+	annule()
+
+	lignes := lignesJournal(t, chemin)
+	if len(lignes) != 1 {
+		t.Fatalf("une ligne attendue, obtenu %d", len(lignes))
+	}
+	if lignes[0]["path"] != "gerald@gk2.net" {
+		t.Errorf("path doit porter le compte visé, obtenu %v", lignes[0]["path"])
+	}
+	if lignes[0]["host"] != "smtp" {
+		t.Errorf("host doit porter le service, obtenu %v", lignes[0]["host"])
+	}
+}

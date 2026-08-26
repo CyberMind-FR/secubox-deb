@@ -265,6 +265,14 @@
 
             <!-- Category Pills with Emojis -->
             <div class="card">
+                <h2>🧠 Détections comportementales
+                    <span class="muted" style="font-size:0.8rem;">— celles qui ne tiennent pas dans un fichier de motifs</span></h2>
+                <div id="detections" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.7rem;margin-top:.7rem">
+                    <div class="muted">…</div>
+                </div>
+            </div>
+
+            <div class="card">
                 <h2>📁 Protection Categories</h2>
                 <div class="category-pills" id="categoryPills">Loading...</div>
             </div>
@@ -406,6 +414,26 @@
                 <div id="surfaces" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin-top:.7rem">
                     <div class="muted" style="padding:1rem">…</div>
                 </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;margin-top:1.1rem">
+                    <div>
+                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🎯 Comptes visés
+                            <span class="muted" style="font-size:.72rem;font-weight:400">— SSH, SMTP, IMAP</span></h3>
+                        <div class="table-wrap" id="comptesVises"><span class="muted">…</span></div>
+                        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
+                            Un compte tenté depuis des centaines de sources n'est pas un utilisateur
+                            qui se trompe. S'il n'existe pas sur la box, c'est du ciblage.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🕳️ Leurres touchés
+                            <span class="muted" style="font-size:.72rem;font-weight:400">— services inexistants</span></h3>
+                        <div class="table-wrap" id="leurresTouches"><span class="muted">…</span></div>
+                        <p class="muted" style="font-size:.7rem;margin:.5rem 0 0">
+                            Ces ports n'offrent rien. Toute connexion y est un balayage,
+                            et vaut un bannissement dès le premier contact.
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- #1219 — origine géographique et noms demandés que la box ne sert pas -->
@@ -458,7 +486,19 @@
         const headers = () => ({ 'Content-Type': 'application/json', ...(token() ? { 'Authorization': 'Bearer ' + token() } : {}) });
 
         // Category Emojis (substring-matched by getCatEmoji, exact-matched by loadTrackedAttackers)
+        // getCatEmoji fait une correspondance par SOUS-CHAINE, premier trouve :
+        // l'ordre est donc porteur de sens. Les clefs specifiques doivent
+        // preceder les generiques, sinon « cve_voip » tomberait sur « voip » et
+        // perdrait son identite de CVE.
         const CAT_EMOJI = {
+            // Surfaces hors HTTP (#1220) — sans elles, toutes ces categories
+            // retombaient sur le pictogramme par defaut, et le tableau
+            // affichait la meme icone sur chaque ligne.
+            'auth_ssh': '🔑', 'auth_smtp': '✉️', 'auth_imap': '📥',
+            'leurre': '🕳️',
+            'host_anomaly': '🚪',
+            'product_absent': '👻',
+            'robots': '🤖',
             'sqli': '💉', 'sql': '💉', 'injection': '💉',
             'xss': '🔥',
             'rce': '💥', 'command': '💥', 'dos': '💥',
@@ -469,6 +509,7 @@
             'api_abuse': '🎣', 'api': '🎣',
             'waf_fingerprint': '🖐️', 'fingerprint': '🖐️',
             'cve_2024': '🧬', 'cve': '🧬',
+            'voip': '📞', 'xmpp': '💬',
             'webmail': '📧', 'mail': '📧',
             'router': '📡',
             'default': '⚠️'
@@ -686,7 +727,15 @@
                         type: 'alert',
                         ip: a.client_ip || a.value,
                         country: a.country,
-                        category: a.scenario || a.category || 'Unknown',
+                        // L'agrégat rend `categories` (une LISTE) ; l'ancien code
+                        // ne lisait que `scenario`/`category`, absents de cette
+                        // forme — d'où « Unknown » sur chaque ligne, et l'icône
+                        // qui retombait sur le pictogramme par défaut. On prend
+                        // la catégorie dominante, et on signale s'il y en a
+                        // d'autres plutôt que de les taire.
+                        category: (Array.isArray(a.categories) && a.categories.length)
+                            ? (a.categories[0] + (a.categories.length > 1 ? ' +' + (a.categories.length - 1) : ''))
+                            : (a.category || a.scenario || 'Unknown'),
                         severity: a.max_severity || a.severity || 'medium',
                         timestamp: a.timestamp || a.created_at,
                         count: a.count || 1
@@ -806,9 +855,14 @@
 
             // Top Vhosts
             renderTopVhosts(d.top_vhosts);
+            loadDetections();
 
             // #1219 — origine géographique et noms demandés que la box ne sert pas.
             surfaces('surfaces', d.par_type, d.par_origine);
+            tableau1col('comptesVises', d.comptes_vises, 'Compte', 'Tentatives',
+                'Aucune tentative d\'authentification enregistrée pour l\'instant.');
+            tableau1col('leurresTouches', d.leurres_touches, 'Service', 'Contacts',
+                'Aucun leurre touché pour l\'instant.');
             camembertPays('paysCamembert', d.pays || d.top_countries);
             tableau2col('paysTable', d.pays || d.top_countries, 'Pays', 'Requêtes');
             tableau2col('nonServisTable', d.noms_non_routes, 'Nom demandé', 'Requêtes');
@@ -931,6 +985,55 @@
                 + '<svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="répartition des requêtes par pays">'
                 + arcs + '</svg>'
                 + '<div style="flex:1;min-width:200px">' + legende + '</div></div>';
+        }
+
+        // #1222 — détections comportementales. Elles jugent un COMPORTEMENT et
+        // non un motif : un hôte qu'on ne sert pas, un robot qui s'annonce, une
+        // authentification qui échoue, une connexion à un service inexistant.
+        // Elles protégeaient sans figurer nulle part dans le panneau.
+        async function loadDetections() {
+            const el = document.getElementById('detections');
+            if (!el) return;
+            const d = await api('/detections');
+            const liste = (d && d.detections) || [];
+            if (!liste.length) { el.innerHTML = '<div class="muted">indisponible</div>'; return; }
+            el.innerHTML = liste.map(function (x) {
+                const on = x.actif;
+                const bord = on ? 'var(--cyan)' : 'var(--muted)';
+                const etat = on ? '✓ ON' : '○ inactif';
+                const classes = (x.classes || []).slice(0, 6).map(c =>
+                    '<span style="display:inline-block;font-size:.62rem;padding:.05rem .35rem;margin:.1rem .18rem .1rem 0;'
+                    + 'border:1px solid var(--border);border-radius:2px;color:var(--muted)">' + _esc(c) + '</span>').join('');
+                const reste = (x.classes || []).length > 6
+                    ? '<span class="muted" style="font-size:.62rem"> +' + ((x.classes || []).length - 6) + '</span>' : '';
+                return '<div style="border:1px solid var(--border);border-left:3px solid ' + bord + ';padding:.7rem .85rem;background:var(--bg-card)">'
+                    + '<div style="font-weight:700;font-size:.86rem">' + x.emoji + ' ' + _esc(x.nom)
+                    + ' <span class="muted" style="font-size:.66rem;font-weight:400">' + etat + '</span></div>'
+                    + '<div class="muted" style="font-size:.72rem;margin:.25rem 0 .4rem;font-style:italic">' + _esc(x.resume) + '</div>'
+                    + '<div>' + classes + reste + '</div>'
+                    + '<div class="muted" style="font-size:.66rem;margin-top:.4rem">' + _esc(x.detail) + '</div>'
+                    + '</div>';
+            }).join('');
+        }
+
+        // Liste simple, même style que la table des attaquants suivis. Une seule
+        // colonne : ces listes sont courtes et vivent côte à côte.
+        function tableau1col(cible, obj, entete, enteteNb, siVide) {
+            const el = document.getElementById(cible);
+            if (!el) return;
+            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 15);
+            if (!entries.length) {
+                el.innerHTML = '<span class="muted" style="font-size:.78rem">' + _esc(siVide) + '</span>';
+                return;
+            }
+            el.innerHTML = '<table class="data-table"><thead><tr>'
+                + '<th>' + _esc(entete) + '</th>'
+                + '<th style="text-align:right">' + _esc(enteteNb) + '</th></tr></thead><tbody>'
+                + entries.map(function (kv) {
+                    return '<tr><td><code>' + _esc(kv[0]) + '</code></td>'
+                         + '<td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--cyan)">'
+                         + kv[1].toLocaleString() + '</td></tr>';
+                }).join('') + '</tbody></table>';
         }
 
         // Liste en DEUX colonnes, au style de la table des attaquants suivis.

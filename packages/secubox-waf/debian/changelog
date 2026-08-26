@@ -1,3 +1,55 @@
+secubox-waf (1.7.2-1~bookworm1) bookworm; urgency=medium
+
+  * Detections COMPORTEMENTALES dans le panneau (#1222). « Protection
+    Categories » listait les 18 categories de waf-rules.json et rien d'autre.
+    Or plusieurs protections ne reposent sur aucun motif : elles jugent un
+    comportement — un hote qu'on ne sert pas, un robot qui s'annonce, une
+    authentification qui echoue, une connexion a un service inexistant. Elles
+    protegeaient sans figurer nulle part. /detections les expose, et le panneau
+    leur donne leur propre carte.
+  * L'etat rendu est MESURE, jamais suppose : on lit le fichier de profils pour
+    les vhosts anti-robots, on interroge systemd pour les services, on compte
+    les ports reellement en ecoute pour les leurres. Une detection dont l'etat
+    ne peut pas etre etabli est rendue inactive plutot qu'affichee active.
+  * Les leurres s'affichaient inactifs alors que neuf ports ecoutaient : l'API
+    tourne sous `secubox` et `ss -lntp` ne lui montre pas les noms de processus
+    des autres comptes. On croise desormais deux choses accessibles sans
+    privilege — les ports que l'unite declare et les ports effectivement en
+    ecoute — au lieu d'identifier le processus. Les ports dont la liaison a
+    ECHOUE sont retires : sur gk2 le 445 est tenu par samba, l'annoncer comme
+    leurre serait annoncer une protection qui n'existe pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 07:35:20 +0200
+
+secubox-waf (1.6.4-1~bookworm1) bookworm; urgency=medium
+
+  * Metriques hors HTTP dans le panneau (#1221) : deux listes qui disent ce que
+    les totaux ne disent pas.
+    - COMPTES VISES sur SSH, SMTP et IMAP. Un compte tente depuis des centaines
+      de sources n'est pas un utilisateur qui se trompe ; s'il n'existe pas sur
+      la box, c'est du ciblage. authwatch porte le compte dans `path`, la ou une
+      requete web met ce qui etait demande — c'est la meme question.
+    - LEURRES TOUCHES, par service. Ces ports n'offrent rien : toute connexion
+      y est un balayage.
+  * Security Events : « Unknown » sur CHAQUE ligne, et donc la meme icone
+    partout. La forme agregee rend `categories` (une LISTE) ; le panneau ne
+    lisait que `scenario`/`category`, absents de cette forme. Il prend desormais
+    la categorie dominante et signale les autres au lieu de les taire.
+  * Colonne pays de la meme table : un globe generique sur chaque ligne, la
+    forme agregee ne portant aucun pays. Il est resolu cote serveur, une fois
+    par adresse.
+  * Table d'icones : aucune des categories de #1220 n'y figurait — host_anomaly,
+    auth_ssh, auth_smtp, auth_imap, leurre, product_absent — ni voip ni xmpp.
+    Toutes retombaient sur le pictogramme par defaut. Les 25 categories du
+    moteur ont maintenant une icone distincte. La correspondance se faisant par
+    SOUS-CHAINE au premier trouve, l'ordre est porteur de sens : les clefs
+    specifiques precedent les generiques, sans quoi « cve_voip » tomberait sur
+    « voip » et perdrait son identite de CVE.
+  * Les deux agregats sont persistes avec les autres compteurs et relus une fois
+    a leur arrivee, le lecteur du journal etant incremental.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 07:29:40 +0200
+
 secubox-waf (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * « 0 ban actif » alors que le pare-feu en tenait quatre-vingts (#1221). Le

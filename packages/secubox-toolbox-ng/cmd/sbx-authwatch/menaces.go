@@ -10,9 +10,16 @@
 // camembert des pays, les attaquants persistants et le rapport PDF envoye par
 // courriel se mettent a compter SSH, SMTP et IMAP au meme titre que le HTTP.
 //
-// Les champs propres au web (methode, chemin, agent) restent vides : les
-// remplir d'a-peu-pres rendrait le journal moins vrai. `host` porte le service
-// vise, ce qui donne au panneau une ventilation exploitable.
+// Les champs propres au web (methode, agent) restent vides : les remplir
+// d'a-peu-pres rendrait le journal moins vrai. Deux exceptions assumees, parce
+// qu'elles sont exactes et non approximatives :
+//
+//   - `host` porte le SERVICE vise (ssh, smtp, imap, ou le nom du leurre) ;
+//   - `path` porte le COMPTE vise. Pour une requete web, `path` est ce qui
+//     etait demande ; pour une tentative d'authentification, c'est le compte.
+//     C'est la meme question — « qu'est-ce qui etait visé ? » — et cela rend le
+//     champ exploitable par le panneau sans inventer une clef que les
+//     consommateurs existants ne sauraient pas lire.
 package main
 
 import (
@@ -74,6 +81,7 @@ func (j *JournalMenaces) Inscrit(s Signal, action string, total int) {
 		Timestamp: time.Now().Format(time.RFC3339),
 		ClientIP:  ip,
 		Host:      s.Service,
+		Path:      s.Cible,
 		Category:  s.Categorie,
 		Severity:  s.Severite,
 		RuleID:    fmt.Sprintf("%s/%d", s.Detail, total),
