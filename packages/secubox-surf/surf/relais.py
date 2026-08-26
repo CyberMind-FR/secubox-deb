@@ -270,8 +270,7 @@ ins.adsbygoogle,[id^="google_ads_"],[class*="advert" i],[class*="-ads" i],
 [id*="taboola" i],[class*="taboola" i],[id^="trc_" i],[class*="trc_" i],
 [class*="trc-" i],[id*="outbrain" i],[class*="outbrain" i],[class*="ob-widget" i],
 [class*="ob_" i],[class*="OUTBRAIN" i],[data-widget*="taboola" i],
-[class*="sponsored" i][class*="widget" i],[class*="sponsored" i][class*="content" i],
-[class*="partner" i][class*="content" i],[class*="reco" i][class*="ad" i]{
+[class*="sponsored" i][class*="widget" i]{
   display:none !important;visibility:hidden !important;height:0 !important;
 }
 html,body{overflow:auto !important}

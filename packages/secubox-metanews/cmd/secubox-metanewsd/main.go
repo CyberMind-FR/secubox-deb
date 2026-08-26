@@ -202,6 +202,8 @@ func seed(st *store.Store, jr *log.Logger) {
 		{Slug: "france-inter", Name: "France Inter", URL: "https://www.radiofrance.fr/franceinter/rss", Enabled: true, Category: "general"},
 		{Slug: "tv5monde", Name: "TV5Monde Info", URL: "https://information.tv5monde.com/rss.xml", Enabled: true, Category: "international"},
 		{Slug: "afp-factuel", Name: "AFP Factuel", URL: "https://factuel.afp.com/list/all/feed", Enabled: true, Category: "general"},
+		{Slug: "leparisien", Name: "Le Parisien", URL: "https://feeds.leparisien.fr/leparisien/rss", Enabled: true, Category: "general"},
+		{Slug: "ledauphine-une", Name: "Le Dauphiné — Une", URL: "https://www.ledauphine.com/rss", Enabled: true, Category: "general"},
 		// NB : Charlie Hebdo n'expose pas de flux RSS public fiable — non ajouté.
 	}
 	n := 0
