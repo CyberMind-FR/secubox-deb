@@ -1,3 +1,13 @@
+secubox-webos (1.0.106-1~bookworm1) bookworm; urgency=medium
+
+  * TORRENT PERD SES DEUX BOUTONS DU BAS (#1332), comme YTSaS et le Depot.
+    « Ouvrir » et « Ajouter » doublaient ce que la carte fait deja : la liste
+    des torrents avec pause/reprise, et le champ magnet juste dessous. Deux
+    boutons qui menaient au meme endroit, en plus loin. L'hote affiche devient
+    cliquable pour ne pas creer d'impasse.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 17:53:37 +0200
+
 secubox-webos (1.0.105-1~bookworm1) bookworm; urgency=medium
 
   * KBIN QUITTE L'ACCUEIL (#1331). Retire d'abord de l'embarquement — un forum

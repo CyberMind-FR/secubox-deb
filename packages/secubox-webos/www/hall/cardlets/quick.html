@@ -129,11 +129,15 @@
   // Ce qui distingue les trois : leur nom, leur module d'API, et les chiffres
   // qui MERITENT d'etre en titre. Le reste est commun.
   var SVC = {
+    // PAS DE BOUTONS DU BAS (#1332), comme YTSaS et le Dépôt. « Ouvrir » et
+    // « Ajouter » doublaient ce que la carte fait déjà : la liste des torrents
+    // avec pause/reprise, et le champ magnet juste dessous. Deux boutons qui
+    // menaient au même endroit, en plus loin.
     torrent: { ic:'🧲', nom:'Torrent', hote:'torrent.gk2.secubox.in', mod:'torrent',
       couleur:'#3c6e8f',
       chiffres:[['total','📦','au total'],['downloading','⬇','en cours'],
                 ['to_peertube','📹','vers PeerTube']],
-      acces:[['Ouvrir','/','p'],['Ajouter','/#add','']] },
+      acces:[] },
     // PAS DE BOUTONS (#1320) : la carte fait deja ce que le service fait —
     // une URL, un bouton de capture, et la liste des dernieres. « Ouvrir » et
     // « Nouvelle capture » ne menaient qu'a la meme chose, en plus loin.
