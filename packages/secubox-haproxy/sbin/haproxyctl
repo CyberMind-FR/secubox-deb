@@ -953,7 +953,16 @@ EOF
             # NB: use if/then/fi, not `[ ] && [ ] && { }` — under `set -e` a
             # short-circuited &&-chain (e.g. a non-SSL vhost) aborts generation.
             if [ "$enabled" = "1" ] && [ -n "$domain" ]; then
-                echo "    acl host_$name hdr(host) -i $domain"
+                # DOMAINE PREFIXE (#1217, POC Surf). Un `domain` finissant par
+                # `*` — « surf-* » — matche par DEBUT d'hote plutot qu'exact.
+                # Une seule entree route ainsi toutes les origines par-site du
+                # relais (surf-www-lemonde-fr, surf-img-lemde-fr, ...) sans les
+                # enumerer. Reserve a un vhost BYPASS : jamais vers l'inspection,
+                # un prefixe large avalerait des hotes non prevus.
+                case "$domain" in
+                  *\*) echo "    acl host_$name hdr_beg(host) -i ${domain%\*}" ;;
+                  *)   echo "    acl host_$name hdr(host) -i $domain" ;;
+                esac
                 # Redirection vers HTTPS (#988), conditionnee a ssl = true : un
                 # vhost sans certificat renverrait vers une page injoignable.
                 #
@@ -1051,7 +1060,16 @@ EOF
 
             # if/then/fi (not `&& { }`) — set -e safe for non-SSL vhosts.
             if [ "$enabled" = "1" ] && [ "$ssl" = "1" ] && [ -n "$domain" ]; then
-                echo "    acl host_$name hdr(host) -i $domain"
+                # DOMAINE PREFIXE (#1217, POC Surf). Un `domain` finissant par
+                # `*` — « surf-* » — matche par DEBUT d'hote plutot qu'exact.
+                # Une seule entree route ainsi toutes les origines par-site du
+                # relais (surf-www-lemonde-fr, surf-img-lemde-fr, ...) sans les
+                # enumerer. Reserve a un vhost BYPASS : jamais vers l'inspection,
+                # un prefixe large avalerait des hotes non prevus.
+                case "$domain" in
+                  *\*) echo "    acl host_$name hdr_beg(host) -i ${domain%\*}" ;;
+                  *)   echo "    acl host_$name hdr(host) -i $domain" ;;
+                esac
                 if [ "$cadrable" = "1" ]; then
                     # ACL SEPAREE, ET C'EST INDISPENSABLE. Dans une regle
                     # `http-response`, `hdr(host)` echantillonne l'en-tete de

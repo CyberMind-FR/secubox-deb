@@ -143,6 +143,39 @@ volume, Tor réservé aux annonces sensibles.
 
 ---
 
+## 5bis. Le relais VIVANT — lemonde.fr
+
+Le harnais mesurait ; `surf/serveur.py` **relaie**. Test réel sur la box :
+
+| | |
+|---|---|
+| `www.lemonde.fr` via le proxy | **200**, 1,0 Mo, **2582 URL réécrites** |
+| Sous-origines créées | `img-lemde-fr`, `www-lemonde-fr`, `jeux-lemonde-fr`… |
+| Fuites vers lemonde direct | 2 (dans du JSON/JS, résiduel) |
+
+Le serveur lit l'hôte cible dans son propre `Host`, va le chercher (direct ou
+Tor), réécrit HTML/CSS et en-têtes, coupe les pisteurs à la source, et sert
+sous l'origine proxy. Il tourne en `secubox-surf.service` sur `127.0.0.1:9082`,
+**hors de la chaîne d'inspection**.
+
+### Ce qui reste à câbler pour l'ouvrir dans un navigateur
+
+Le générateur HAProxy sait désormais router un **domaine préfixe** — un
+`domain = "surf-*"` émet `hdr_beg(host) -i surf-` au lieu d'un match exact, de
+sorte qu'**une seule entrée** route toutes les origines par-site
+(`surf-www-lemonde-fr`, `surf-img-lemde-fr`, …) vers nginx en **bypass**.
+Validé en dry-run. Reste, pour la démo publique :
+
+1. un `[vhosts.surf_poc]` `domain = "surf-*"`, `waf_bypass = true`, dans
+   `haproxy.toml`, et régénération ;
+2. un `server` nginx `surf-*.gk2.secubox.in` → `127.0.0.1:9082` ;
+3. le paquet `secubox-surf` (service + unit), aujourd'hui lancé à la main.
+
+L'URL sera alors `https://surf-www-lemonde-fr.gk2.secubox.in/`, et le même
+schéma branche les **sources de MetaNews** : réécrire chaque lien d'article
+`https://X/…` en `https://surf-X.gk2.secubox.in/…` le fait ouvrir tracker-
+strippé dans le cadre du Hall, sans que MetaNews sache rien du proxy.
+
 ## 6. Décision proposée
 
 1. **Ne pas** viser les SPA modernes de front. Le coût (réécrire du JS, proxy WS,

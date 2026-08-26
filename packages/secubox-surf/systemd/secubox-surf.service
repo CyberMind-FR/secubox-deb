@@ -1,0 +1,21 @@
+[Unit]
+Description=SecuBox Surf — relais MITM POC (hors chaîne d'inspection)
+After=network-online.target tor.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+Environment=SECUBOX_TOR_SOCKS=192.168.1.200:9050
+WorkingDirectory=/usr/lib/secubox/surf
+ExecStart=/usr/local/bin/uvicorn surf.serveur:app --host 127.0.0.1 --port 9082
+Restart=on-failure
+RestartSec=3
+# POC : durci a minima, mais isole. Il ne lit rien de la box, il relaie
+# l'externe — d'ou pas d'acces au systeme de fichiers en ecriture.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
