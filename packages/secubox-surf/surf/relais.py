@@ -291,8 +291,29 @@ html,body{overflow:auto !important}
     for(var k in t){document.cookie=k+"="+t[k]+";path=/;max-age=31536000";}
   }catch(e){}
   var ACC=/^(tout accepter|accepter( \\&|( et)? fermer)?|j'accepte( tout)?|accept all|accept|i agree|agree|ok,? tout accepter|continuer sans accepter|got it|allow all|autoriser|d'accord|accepter tout)$/i;
+  // ACCEPTER VIA L'API DU CMP LUI-MEME (#1367). On ne peut pas apprendre le
+  // cookie d'un portail que la box bloque (catch-22). Mais le CMP charge dans
+  // la page (Didomi, TCF) et EXPOSE une API pour tout accepter : on l'appelle.
+  // C'est le consentement donne « proprement », sans flux first-id ni cookie
+  // valide a fabriquer.
+  function cmp(){
+    try{
+      if(window.Didomi && typeof Didomi.setUserAgreeToAll==="function"){
+        try{ Didomi.setUserAgreeToAll(); }catch(e){}
+      }
+      // TCF v2 : agreer a tout ce que le CMP propose, s'il expose l'API.
+      if(typeof window.__tcfapi==="function"){
+        try{ __tcfapi("getTCData",2,function(d,ok){
+          if(ok && d && window.__cmp){ try{ __cmp("setConsentAll"); }catch(e){} }
+        }); }catch(e){}
+      }
+      // Sourcepoint / autres : bouton « accepter » deja clique par tiers().
+      if(window.__cmp && typeof __cmp==="function"){ try{ __cmp("acceptAll"); }catch(e){} }
+    }catch(e){}
+  }
   function pass(){
     try{
+      cmp();
       document.querySelectorAll("button,a,[role=button],input[type=button],input[type=submit]").forEach(function(b){
         var x=(b.textContent||b.value||"").trim();
         if(x&&ACC.test(x)){try{b.click();}catch(e){}}
