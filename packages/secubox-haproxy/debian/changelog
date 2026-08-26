@@ -1,3 +1,20 @@
+secubox-haproxy (1.8.8-1~bookworm1) bookworm; urgency=medium
+
+  * LE TEMOIN DU WEBMAIL SORTAIT AVEC CINQ `Secure` A LA SUITE (#1316), et le
+    navigateur le rejetait : la session etait perdue, et le webmail redemandait
+    la connexion a chaque clic depuis une carte.
+  * LA DECISION EST PROPRE AU VHOST, LES REGLES NE LE SONT PAS. Les regles de
+    reponse etaient emises A CHAQUE vhost marque, toutes conditionnees sur la
+    MEME variable de transaction : une reponse les traversait donc autant de
+    fois qu'il y a de vhosts marques — dix reecritures de Set-Cookie pour une
+    seule reponse.
+  * La boucle ne pose plus que la MARQUE ; les regles qui la lisent sont
+    ecrites une seule fois, apres elle. Et la reecriture ne s'applique plus si
+    l'en-tete porte deja SameSite=None, ce qui la rend idempotente meme si un
+    jour elle repassait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:15:23 +0200
+
 secubox-haproxy (1.8.6-1~bookworm1) bookworm; urgency=medium
 
   * `Partitioned` RETIRE des cookies tiers (#1270). Il cloisonne le cookie au

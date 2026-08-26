@@ -1054,37 +1054,16 @@ EOF
                 echo "    acl host_$name hdr(host) -i $domain"
                 if [ "$cadrable" = "1" ]; then
                     # ACL SEPAREE, ET C'EST INDISPENSABLE. Dans une regle
-                    # `http-response`, `hdr(host)` echantillonne l'en-tete de la
-                    # REPONSE — ou aucun `host` n'existe. La condition etait donc
-                    # toujours fausse et les trois regles ne s'appliquaient
-                    # jamais, en silence : la configuration restait valide et les
-                    # en-tetes ne bougeaient pas. `req.hdr()` nomme explicitement
-                    # la requete, seul endroit ou le vhost est connu.
+                    # `http-response`, `hdr(host)` echantillonne l'en-tete de
+                    # la REPONSE, ou aucun `host` n'existe : la condition etait
+                    # toujours fausse et rien ne s'appliquait, en silence.
+                    # `req.hdr()` nomme la requete, seul endroit ou le vhost
+                    # est connu.
+                    #
+                    # ON NE POSE QUE LA MARQUE : les regles qui la lisent sont
+                    # ecrites une seule fois, apres la boucle (#1316).
                     echo "    acl cadre_$name req.hdr(host) -i $domain"
-                    # LA DECISION SE PREND EN PHASE REQUETE, PAS EN REPONSE.
-                    # Conditionner directement un `http-response` sur une ACL
-                    # d'en-tete de requete NE MATCHE PAS sur cette version : les
-                    # regles etaient generees, la configuration valide, le
-                    # rechargement propre — et les en-tetes ne bougeaient pas,
-                    # sans un mot. On marque donc la transaction pendant la
-                    # requete, ou le vhost est connu, et la reponse relit la
-                    # marque. Verifie sur la box : X-Frame-Options disparait.
                     echo "    http-request set-var(txn.cadrable) int(1) if cadre_$name"
-                    # 1. X-Frame-Options n'a pas de valeur « liste d'origines » :
-                    #    il ne sait dire que DENY ou SAMEORIGIN. Impossible d'y
-                    #    nommer le Hall — on le retire et on s'en remet a la CSP,
-                    #    qui, elle, sait nommer.
-                    echo "    http-response del-header X-Frame-Options if { var(txn.cadrable) -m int 1 }"
-                    # 2. Politique DEJA presente : on REECRIT la directive. Ajouter
-                    #    un second en-tete ne servirait a rien — deux politiques
-                    #    s'INTERSECTENT, et un 'none' deja pose continuerait de
-                    #    tout bloquer.
-                    echo "    http-response replace-header Content-Security-Policy \"frame-ancestors[^;]*\" \"frame-ancestors $CADRE_ANCETRES\" if { var(txn.cadrable) -m int 1 }"
-                    # 3. Politique presente mais SANS frame-ancestors (Nextcloud) :
-                    #    la reecriture n'a rien trouve. Une directive absente ne
-                    #    restreint rien, donc un second en-tete qui ne porte QUE
-                    #    frame-ancestors ajoute la contrainte sans toucher au reste.
-                    echo "    http-response add-header Content-Security-Policy \"frame-ancestors $CADRE_ANCETRES\" if { var(txn.cadrable) -m int 1 } !{ res.hdr(Content-Security-Policy) -m sub frame-ancestors }"
                 fi
                 # COOKIES DU SERVICE TIERS, opt-in separe (#1259).
                 #
@@ -1116,9 +1095,11 @@ EOF
                 # cookies, et c'est le defaut.
                 local cookies_tiers=$(echo "$section" | grep -E '^cookies_tiers\s*=' | grep -q 'true' && echo "1" || echo "0")
                 if [ "$cookies_tiers" = "1" ]; then
+                    # ON NE POSE QUE LA MARQUE (#1316). Les regles de reponse
+                    # sont ecrites UNE fois, apres la boucle : les repeter par
+                    # vhost les faisait s'empiler sur une meme reponse, et le
+                    # temoin du webmail sortait avec cinq `Secure` a la suite.
                     echo "    http-request set-var(txn.cookies_tiers) int(1) if host_$name"
-                    echo "    http-response replace-header Set-Cookie \"(.*);[ ]*[Ss]ame[Ss]ite=[A-Za-z]+(.*)\" \"\\1\\2\" if { var(txn.cookies_tiers) -m int 1 }"
-                    echo "    http-response replace-header Set-Cookie \"(.*)\" \"\\1; SameSite=None; Secure\" if { var(txn.cookies_tiers) -m int 1 }"
                 fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"
@@ -1128,6 +1109,35 @@ EOF
             fi
         done >> "$out"
     fi
+
+    # LES REGLES DE REPONSE, UNE SEULE FOIS (#1316).
+    #
+    # Elles etaient emises A CHAQUE vhost marque, toutes conditionnees sur la
+    # MEME variable de transaction : une reponse les traversait donc autant de
+    # fois qu'il y a de vhosts marques. Le temoin du webmail sortait avec CINQ
+    # `Secure` a la suite, le navigateur le rejetait, et la session etait
+    # perdue — d'ou une demande de connexion a chaque clic depuis une carte.
+    #
+    # La decision reste propre au vhost (la marque, posee dans la boucle) ; les
+    # regles qui la lisent sont ecrites ici, une fois.
+    cat >> "$out" << EOF
+    # X-Frame-Options ne sait dire que DENY ou SAMEORIGIN, jamais nommer une
+    # origine : on le retire et l'on s'en remet a la CSP, qui sait.
+    http-response del-header X-Frame-Options if { var(txn.cadrable) -m int 1 }
+    # Politique deja presente : on REECRIT la directive. Ajouter un second
+    # en-tete ne servirait a rien — deux politiques s'INTERSECTENT, et un
+    # 'none' deja pose continuerait de tout bloquer.
+    http-response replace-header Content-Security-Policy "frame-ancestors[^;]*" "frame-ancestors $CADRE_ANCETRES" if { var(txn.cadrable) -m int 1 }
+    # Politique SANS frame-ancestors : une directive absente ne restreint rien,
+    # un second en-tete qui ne porte qu'elle ajoute donc la contrainte.
+    http-response add-header Content-Security-Policy "frame-ancestors $CADRE_ANCETRES" if { var(txn.cadrable) -m int 1 } !{ res.hdr(Content-Security-Policy) -m sub frame-ancestors }
+    # Temoins : on RETIRE l'attribut existant avant de poser le notre, sinon
+    # l'en-tete en porterait deux et le navigateur garderait le premier.
+    http-response replace-header Set-Cookie "(.*);[ ]*[Ss]ame[Ss]ite=[A-Za-z]+(.*)" "\\1\\2" if { var(txn.cookies_tiers) -m int 1 }
+    http-response replace-header Set-Cookie "(.*)" "\\1; SameSite=None; Secure" if { var(txn.cookies_tiers) -m int 1 } !{ res.hdr(Set-Cookie) -m sub SameSite=None }
+
+EOF
+
 
     cat >> "$out" << EOF
     default_backend mitmproxy_inspector
