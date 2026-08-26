@@ -307,7 +307,13 @@
       }).then(function (r) {
         var m = el('m-' + svc), x = r.corps || {};
         m.className = 'msg ' + (x.ok ? 'ok' : 'ko');
-        m.textContent = x.ok ? 'enregistré pour ' + x.compte : (x.detail || 'refusé');
+        // On traduit le protocole en situation : « Token Bearer ou session
+        // manquant » dit ce qui manque à la MACHINE, pas ce que la personne
+        // doit faire.
+        m.textContent = x.ok ? 'enregistré pour ' + x.compte
+          : ((r.code === 401 || r.code === 403)
+              ? 'Votre session SecuBox a expiré — reconnectez-vous.'
+              : (x.detail || 'refusé'));
         if (x.ok) charge();
       });
     }

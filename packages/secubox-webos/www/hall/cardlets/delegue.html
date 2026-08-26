@@ -143,6 +143,7 @@
   }
 
   function sansAcces(etat, code) {
+    etat = etat || {};
     // NON CONNECTÉ ≠ PAS D'ACCÈS. Deux causes, deux phrases : dire « aucun
     // accès » à quelqu'un qui n'est simplement pas connecté l'enverrait
     // demander ce qu'il a peut-être déjà.
@@ -242,6 +243,13 @@
       el('cpt').textContent = '';
       api('/acces/' + id + '/apercu').then(function (a) {
         var d = a.corps || {};
+        // UN MESSAGE D'API N'EST PAS UN MESSAGE POUR QUELQU'UN (#1304).
+        // « Token Bearer ou session manquant » decrit un protocole, pas une
+        // situation : il dit ce qui manque a la machine, pas ce que la
+        // personne doit faire. Une session perdue entre deux appels — elle
+        // expire, ou l'on se deconnecte ailleurs — renvoyait ce texte brut sur
+        // la carte. On repasse par l'etat, qui, lui, propose un geste.
+        if (a.code === 401 || a.code === 403) { sansAcces(null, a.code); return; }
         if (!d.ok) { el('corps').innerHTML =
           '<div class="sans"><p>' + esc(d.detail || 'lecture impossible') + '</p></div>'; return; }
         rend(d);

@@ -1,3 +1,15 @@
+secubox-webos (1.0.91-1~bookworm1) bookworm; urgency=medium
+
+  * UN MESSAGE D'API N'EST PAS UN MESSAGE POUR QUELQU'UN (#1304). « Token
+    Bearer ou session manquant » decrit un PROTOCOLE : il dit ce qui manque a
+    la machine, pas ce que la personne doit faire. Une session perdue entre
+    deux appels — elle expire, ou l'on se deconnecte ailleurs — renvoyait ce
+    texte brut sur la carte.
+  * La carte repasse desormais par son etat, qui propose un GESTE ; la page
+    traduit le 401 en « votre session SecuBox a expire — reconnectez-vous ».
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 14:20:56 +0200
+
 secubox-webos (1.0.90-1~bookworm1) bookworm; urgency=medium
 
   * « TIMELINE REFUSEE (401) » — LA CAUSE ETAIT DANS LA PAGE (#1303). La
