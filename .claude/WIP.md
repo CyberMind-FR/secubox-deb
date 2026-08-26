@@ -62,8 +62,9 @@ SocialRelay dotés d'une palette claire.
    une route webos **sous jeton** avec une **liste close** d'actions —
    l'API d'administration répond `400` et non `401` sans jeton, donc elle n'est
    pas authentifiée et la relayer aurait ouvert l'ajout à tout le LAN.
-   *Reste* : **YTSaS**, dont la route d'action demeure introuvable — aucun
-   bouton posé tant qu'elle l'est.
+   **YTSaS aussi (#1315)** : une URL, un bouton. Sa route n'était pas
+   introuvable, elle vit sur **son** vhost et non sur la console
+   d'administration — chaque module déclare désormais son hôte.
 
 0bis. **POC proxy Tor + relais MITM — le morceau qui compte.** L'objectif tel
    que posé : anti-censure, « SaaS inversé », gestion des traqueurs, blocage

@@ -1,3 +1,24 @@
+secubox-webos (1.0.97-1~bookworm1) bookworm; urgency=medium
+
+  * YTSaS AGIT : une URL, un bouton (#1315). Sa route etait introuvable parce
+    que je la cherchais sur la console d'administration — elle vit sur SON
+    vhost. Chaque module dit desormais son hote, et le rappel vaut d'etre
+    ecrit : tous ne servent pas leur API au meme endroit.
+  * La carte s'en tient a la seule fonction du service. Lui inventer des
+    options qu'il n'a pas serait promettre ce qu'il ne fait pas. Ce qu'il
+    capture alimente ensuite le podcaster et la radio, qui savent deja lire ce
+    qu'il depose — on ne refait pas ce chainage, on lui ajoute une porte.
+  * Entree vaut le bouton : coller une URL puis viser un bouton de 60 px est un
+    geste de trop pour la seule chose que cette carte sait faire.
+  * DEUX FAMILLES D'IDENTIFIANTS, et les confondre reviendrait a en accepter un
+    trop large : un torrent est une empreinte hexadecimale, un media YTSaS
+    porte l'identifiant de la plateforme d'origine.
+  * La liste lit les champs QUI EXISTENT — `name`/`complete` pour le torrent,
+    `title`/`kept` pour YTSaS — plutot que d'imposer un schema commun a des
+    services qui n'en ont jamais eu.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:12:39 +0200
+
 secubox-webos (1.0.96-1~bookworm1) bookworm; urgency=medium
 
   * LES WIDGETS D'ACCES RAPIDE AGISSENT (#1314). Ils n'affichaient que des

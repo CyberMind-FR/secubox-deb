@@ -41,6 +41,16 @@ HOTE_ADMIN = os.environ.get("SECUBOX_ADMIN_HOTE", "admin.gk2.secubox.in")
 # `(méthode, chemin, champs attendus)`. Le chemin peut porter `{id}`, remplacé
 # par un identifiant assaini — jamais interpolé tel quel : un identifiant venu
 # du réseau qui entre dans une URL est une traversée de chemin en puissance.
+#
+# CHAQUE MODULE DIT SON HÔTE. Tous ne vivent pas sur la console
+# d'administration : YTSaS sert la sienne sur son propre vhost, ce qui explique
+# pourquoi ses routes semblaient introuvables tant qu'on les cherchait ailleurs.
+HOTES: dict[str, str] = {
+    "torrent": HOTE_ADMIN,
+    "droplet": HOTE_ADMIN,
+    "ytsas":   os.environ.get("SECUBOX_YTSAS_HOTE", "ytsas.gk2.secubox.in"),
+}
+
 ACTIONS: dict[str, dict[str, tuple]] = {
     "torrent": {
         "liste":   ("GET",  "/api/v1/torrent/list", ()),
@@ -49,20 +59,33 @@ ACTIONS: dict[str, dict[str, tuple]] = {
         "reprise": ("POST", "/api/v1/torrent/{id}/resume", ()),
     },
     "ytsas": {
-        # Rien : sa route d'action n'a pas été trouvée, et un bouton qui ne
-        # fait rien est pire qu'un bouton absent.
+        # UNE SEULE FONCTION, ET C'EST ASSUMÉ : une URL, un bouton. La capture
+        # alimente ensuite le podcaster et la radio, qui savent déjà lire ce
+        # qu'elle dépose — on ne réinvente pas ce chaînage, on lui donne
+        # seulement une porte de plus.
+        "liste":     ("GET",  "/api/v1/ytsas/list", ()),
+        "ajouter":   ("POST", "/api/v1/ytsas/add", ("url",)),
+        "conserver": ("POST", "/api/v1/ytsas/conserve/{id}", ()),
     },
     "droplet": {
         "liste":   ("GET",  "/api/v1/droplet/list", ()),
     },
 }
 
-# Un identifiant de torrent est une empreinte : hexadécimal, rien d'autre.
-_ID_OK = "abcdef0123456789"
+# Deux familles d'identifiants, et les confondre reviendrait à en accepter un
+# trop large : un torrent est une empreinte hexadécimale, un média YTSaS porte
+# l'identifiant de la plateforme d'origine, qui admet lettres, chiffres, tiret
+# et souligné.
+_ID_HEX = "abcdef0123456789"
+_ID_MEDIA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 
 
-def _id_sur(v: str) -> str:
-    return "".join(c for c in str(v or "").lower() if c in _ID_OK)[:64]
+def _id_sur(v: str, module: str = "") -> str:
+    permis = _ID_MEDIA if module == "ytsas" else _ID_HEX
+    v = str(v or "")
+    if permis is _ID_HEX:
+        v = v.lower()
+    return "".join(c for c in v if c in permis)[:64]
 
 
 async def agir(module: str, action: str, corps: dict | None = None) -> dict:
@@ -78,7 +101,7 @@ async def agir(module: str, action: str, corps: dict | None = None) -> dict:
     corps = corps or {}
 
     if "{id}" in chemin:
-        ident = _id_sur(corps.get("id"))
+        ident = _id_sur(corps.get("id"), module)
         if not ident:
             return {"ok": False, "detail": "identifiant absent ou invalide"}
         chemin = chemin.replace("{id}", ident)
@@ -97,7 +120,8 @@ async def agir(module: str, action: str, corps: dict | None = None) -> dict:
         async with httpx.AsyncClient(timeout=20) as cli:
             r = await cli.request(
                 methode, AMONT + chemin,
-                headers={"Host": HOTE_ADMIN, "Accept": "application/json"},
+                headers={"Host": HOTES.get(module, HOTE_ADMIN),
+                         "Accept": "application/json"},
                 json=charge if methode == "POST" else None,
             )
     except httpx.HTTPError as e:

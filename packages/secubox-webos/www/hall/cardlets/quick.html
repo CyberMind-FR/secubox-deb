@@ -130,7 +130,15 @@
   // Quels widgets savent AGIR, et sous quel nom de module. YTSaS n'y figure
   // pas : sa route d'action reste introuvable, et un bouton qui ne fait rien
   // est pire qu'un bouton absent.
-  var ACTIONNABLE = { torrent: 'torrent', depot: 'droplet' };
+  var ACTIONNABLE = { torrent: 'torrent', depot: 'droplet', ytsas: 'ytsas' };
+
+  // Ce que chaque widget met dans son champ d'ajout. YTSaS n'a qu'UNE
+  // fonction — une URL, un bouton — et sa carte doit s'y tenir : lui inventer
+  // des options qu'il n'a pas serait promettre ce qu'il ne fait pas.
+  var AJOUT = {
+    torrent: { champ:'magnet', invite:'magnet:… ou URL', bouton:'Ajouter' },
+    ytsas:   { champ:'url',    invite:'URL de la vidéo', bouton:'Capturer' }
+  };
 
   var id = new URLSearchParams(location.search).get('svc') || 'depot';
   var c = SVC[id] || SVC.depot;
@@ -205,12 +213,24 @@
     var z = el('items');
     if (!l || !l.length) { z.innerHTML = ''; return; }
     z.innerHTML = l.slice(0, 3).map(function (x) {
+      // Chaque module nomme ses champs a sa facon : le torrent a un `name` et
+      // un `complete`, YTSaS un `title` et un etat de conservation. On lit ce
+      // qui existe plutot que d'imposer un schema commun a des services qui
+      // n'en ont jamais eu.
+      var titre = x.name || x.title || '—';
       var fini = String(x.complete) === '1' || x.complete === true;
+      var garde = String(x.kept) === '1' || x.kept === true;
+      var etat = (id === 'ytsas')
+        ? (garde ? 'conservé' : 'éphémère')
+        : (fini ? 'complet' : 'en cours');
+      var boutons = (id === 'ytsas')
+        ? (garde ? '' : '<button data-a="conserver" title="Conserver">★</button>')
+        : '<button data-a="pause" title="Mettre en pause">❚❚</button>'
+          + '<button data-a="reprise" title="Reprendre">▶</button>';
       return '<span class="it" data-id="' + esc(x.infohash || x.id || '') + '">'
-        + '<span class="nm" title="' + esc(x.name || '') + '">' + esc(x.name || '—') + '</span>'
-        + '<span class="et' + (fini ? ' ok' : '') + '">' + (fini ? 'complet' : 'en cours') + '</span>'
-        + '<button data-a="pause" title="Mettre en pause">❚❚</button>'
-        + '<button data-a="reprise" title="Reprendre">▶</button></span>';
+        + '<span class="nm" title="' + esc(titre) + '">' + esc(titre) + '</span>'
+        + '<span class="et' + ((fini || garde) ? ' ok' : '') + '">' + esc(etat) + '</span>'
+        + boutons + '</span>';
     }).join('');
   }
 
@@ -233,22 +253,31 @@
 
   // Le champ d'ajout n'existe que la ou une action d'ajout est declaree.
   function poseAjout() {
-    if (id !== 'torrent' || el('ajout')) return;
+    var cfg = AJOUT[id];
+    if (!cfg || el('ajout')) return;
     var d = document.createElement('div');
     d.className = 'ajout'; d.id = 'ajout';
-    d.innerHTML = '<input id="mag" placeholder="magnet:… ou URL" autocomplete="off">'
-      + '<button id="go">Ajouter</button>';
+    d.innerHTML = '<input id="mag" placeholder="' + esc(cfg.invite) + '" autocomplete="off">'
+      + '<button id="go">' + esc(cfg.bouton) + '</button>';
     el('items').parentNode.insertBefore(d, el('msg'));
-    el('go').addEventListener('click', function () {
+    function envoie() {
       var v = el('mag').value.trim();
       if (!v) return;
       dis('envoi…');
-      api('/actions/torrent/ajouter', { method: 'POST', body: JSON.stringify({ magnet: v }) })
+      var corps = {}; corps[cfg.champ] = v;
+      api('/actions/' + ACTIONNABLE[id] + '/ajouter',
+          { method: 'POST', body: JSON.stringify(corps) })
         .then(function (r) {
           var x = r.corps || {};
-          if (x.ok) { el('mag').value = ''; dis('ajouté'); chargeItems(); }
+          if (x.ok) { el('mag').value = ''; dis('accepté'); chargeItems(); }
           else dis(x.detail || 'refusé', true);
         });
+    }
+    el('go').addEventListener('click', envoie);
+    // Entrée vaut le bouton : coller une URL puis viser un bouton de 60 px,
+    // c'est un geste de trop pour la seule chose que cette carte sait faire.
+    el('mag').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); envoie(); }
     });
   }
 
