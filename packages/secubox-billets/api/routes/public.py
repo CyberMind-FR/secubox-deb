@@ -1,3 +1,4 @@
+import os
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Public write actions: emoji reactions (anonymous, signed visitor cookie) and
@@ -69,7 +70,7 @@ def register_public(app: FastAPI, templates: Jinja2Templates) -> None:
         else:
             resp = RedirectResponse(f"/b/{slug}#reactions", status_code=303)
         if new_token:
-            resp.set_cookie(VISITOR_COOKIE, new_token, httponly=True, samesite="lax",
+            resp.set_cookie(VISITOR_COOKIE, new_token, httponly=True, samesite=_samesite(request),
                             secure=_secure(request), max_age=31536000, path="/")
         return resp
 
@@ -115,3 +116,29 @@ def _now() -> str:
 
 def _secure(request: Request) -> bool:
     return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+
+
+def _samesite(request: Request) -> str:
+    """Politique SameSite d'un cookie SecuBox.
+
+    ENCADRE PAR LE HALL, UN SERVICE EST UN CONTEXTE TIERS. Le navigateur
+    rejette purement et simplement un cookie SameSite=Lax ou Strict pose la :
+    le service ne reconnait plus le visiteur et rend 401 sur ses propres
+    ressources — la panne exacte constatee sur la radio (#1251).
+
+    None exige Secure, donc HTTPS. En clair on retombe sur Lax : un cookie
+    premier-partie qui fonctionne vaut mieux qu'un cookie que le navigateur
+    jette.
+
+    L'operateur peut fermer la porte avec SECUBOX_COOKIE_SAMESITE=lax|strict —
+    au prix de l'affichage encadre, qui cessera de fonctionner.
+
+    Ce que SameSite ne protege PAS ici : le jeton anti-rejeu est verifie par
+    DOUBLE ENVOI (cookie contre champ de formulaire). Un site tiers ne peut pas
+    LIRE le cookie — c'est l'isolation d'origine, pas SameSite, qui l'en
+    empeche. La protection reste donc entiere.
+    """
+    force = os.environ.get("SECUBOX_COOKIE_SAMESITE", "").strip().lower()
+    if force in ("lax", "strict", "none"):
+        return force
+    return "none" if _secure(request) else "lax"

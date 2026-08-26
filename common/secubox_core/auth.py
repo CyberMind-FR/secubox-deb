@@ -50,6 +50,14 @@ _session_callback: Optional[Callable[[str, str, Dict[str, Any]], None]] = None
 _session_validator: Callable[[str], bool] = _sessions.is_valid
 
 
+
+def _samesite(secure: bool) -> str:
+    """Politique SameSite d'un cookie SecuBox. Voir #1251."""
+    force = os.environ.get("SECUBOX_COOKIE_SAMESITE", "").strip().lower()
+    if force in ("lax", "strict", "none"):
+        return force
+    return "none" if secure else "lax"
+
 def set_session_callback(cb: Callable[[str, str, Dict[str, Any]], None]) -> None:
     """Set callback fired on login_success / login_failed / etc."""
     global _session_callback
@@ -121,7 +129,13 @@ def set_session_cookie(response: Response, token: str, expires_in: int = 86400) 
         max_age=expires_in,
         httponly=True,
         secure=True,
-        samesite="lax",
+        # Encadre par le Hall, un service est un contexte TIERS : le
+        # navigateur rejette un cookie Lax ou Strict pose la, et le service
+        # ne reconnait plus le visiteur (#1251). None exige Secure ; en clair
+        # on retombe sur Lax plutot que de poser un cookie que le navigateur
+        # jettera. SECUBOX_COOKIE_SAMESITE ferme la porte si l'operateur le
+        # veut, au prix de l'affichage encadre.
+        samesite=_samesite(True),   # secure=True juste au-dessus
         domain=_cookie_domain(),
         path="/",
     )

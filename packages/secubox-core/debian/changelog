@@ -1,3 +1,17 @@
+secubox-core (1.3.4-1~bookworm1) bookworm; urgency=medium
+
+  * COOKIES UTILISABLES EN CADRE (#1251, guideline). Encadre par le Hall, un
+    module est un contexte TIERS : le navigateur rejette un cookie SameSite=Lax
+    ou Strict pose la, le service ne reconnait plus le visiteur et rend 401 sur
+    ses propres ressources. SameSite=None;Secure en TLS, Lax en clair.
+  * SECUBOX_COOKIE_SAMESITE=lax|strict laisse l'operateur refermer la porte, au
+    prix de l'affichage encadre. La valeur est surchargeable, pas figee.
+  * Le jeton anti-rejeu n'est pas affaibli : il est verifie par DOUBLE ENVOI,
+    et un site tiers ne peut pas LIRE le cookie — c'est l'isolation d'origine
+    qui l'en empeche, pas SameSite.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:39:28 +0200
+
 secubox-core (1.3.3-1~bookworm1) bookworm; urgency=medium
 
   * health: helper partagé systemd_batch()/parse_units() (batch santé secubox-*

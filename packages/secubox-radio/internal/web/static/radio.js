@@ -76,8 +76,36 @@
     var tiers = location.protocol === 'https:' ? ';SameSite=None;Secure' : ';SameSite=Lax';
     document.cookie = n + '=' + encodeURIComponent(v) + ';path=/;max-age=31536000' + tiers;
   }
-  if (!cookie('sbx_radio')) {
-    poseCookie('sbx_radio', String(Math.floor(Math.random() * 9e15) + 1e3));
+  // SAFARI/iOS BLOQUE LE COOKIE TIERS QUOI QU'ON FASSE (#1254).
+  //
+  // SameSite=None ne suffit pas : la prevention de pistage refuse purement et
+  // simplement les cookies tiers. Encadree dans le Hall depuis un iPhone ou
+  // une TV, la radio ne recevait donc plus son identifiant, et /media rendait
+  // 401 — un lecteur muet.
+  //
+  // CE QUE CET IDENTIFIANT EST REELLEMENT : un nombre que LA PAGE SE DONNE AU
+  // HASARD. Il n'authentifie rien, il ATTRIBUE des gestes entre gens qui se
+  // connaissent. Le porter en parametre plutot qu'en cookie ne retire donc
+  // aucune protection — c'est exactement la meme valeur, par un autre canal.
+  //
+  // On le garde aussi en localStorage : partitionne dans un cadre, il reste
+  // stable pour CE contexte, ce qui suffit a ne pas changer d'identite a
+  // chaque rechargement.
+  var monID = cookie('sbx_radio');
+  if (!monID) {
+    try { monID = localStorage.getItem('sbx_radio_id') || ''; } catch (e) { monID = ''; }
+  }
+  if (!monID) {
+    monID = String(Math.floor(Math.random() * 9e15) + 1e3);
+  }
+  poseCookie('sbx_radio', monID);
+  try { localStorage.setItem('sbx_radio_id', monID); } catch (e) {}
+
+  // avecID : joint l'identifiant a une URL du service. Utilise partout ou le
+  // cookie etait le seul porteur.
+  function avecID(url) {
+    if (!monID) return url;
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'a=' + encodeURIComponent(monID);
   }
   function nom() {
     var n = cookie('sbx_radio_nom');
@@ -226,7 +254,7 @@
     // requete inter-origines, alors que le cookie, lui, serait joint tout seul.
     opts.headers['X-Sbx-Radio'] = '1';
     if (opts.body) opts.headers['Content-Type'] = 'application/json';
-    return fetch(url, opts).then(function (r) {
+    return fetch(avecID(url), opts).then(function (r) {
       return r.json().catch(function () { return {}; })
         .then(function (d) { return { code: r.status, corps: d }; });
     });
@@ -273,7 +301,7 @@
       cible.innerHTML = '';
       cible.appendChild(img);
     };
-    img.src = '/vignette/' + p.id;
+    img.src = avecID('/vignette/' + p.id);
   }
 
   function pose(e) {
@@ -304,7 +332,7 @@
       duree.textContent = p.duree_ms ? mmss(p.duree_ms) : '--:--';
       ecran.classList.remove('muet');
       lecteur.classList.add('joue');
-      ecran.src = '/media/' + p.id;
+      ecran.src = avecID('/media/' + p.id);
       ecran.currentTime = offset;
       // On ne relance QUE si l'auditeur veut jouer (intention retenue). S'il a
       // mis en pause, on prépare la piste sans la lancer — l'état survit au

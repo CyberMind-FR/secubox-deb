@@ -682,6 +682,68 @@ they fit (`secubox_core.models.JobStatus`, etc.).
 
 ---
 
+## 8bis. Cookies — le module sera ENCADRÉ
+
+Tout module SecuBox est susceptible d'être affiché dans une carte du Hall
+(`/micro`). Encadré par `hall.gk2.net`, il est alors un **contexte tiers** : le
+navigateur **rejette purement et simplement** un cookie posé avec
+`SameSite=Lax` ou `Strict`. Le service ne reconnaît plus le visiteur et répond
+401 sur ses propres ressources — un lecteur muet, une page vide, et aucun
+message pour l'expliquer.
+
+C'est arrivé en production sur la radio (#1251). Le podcaster, lui, n'a jamais
+eu le problème : il n'a besoin d'aucun cookie. C'est ce contraste qui a mis sur
+la piste.
+
+**Règle.** Tout cookie qu'un module pose doit valoir `SameSite=None; Secure`
+dès que la connexion est en TLS, et retomber sur `Lax` en clair — un cookie
+premier-partie qui fonctionne vaut mieux qu'un cookie que le navigateur jette.
+
+```go
+// Go
+func (s *Server) sameSite() http.SameSite {
+    switch strings.ToLower(os.Getenv("SECUBOX_COOKIE_SAMESITE")) {
+    case "strict": return http.SameSiteStrictMode
+    case "lax":    return http.SameSiteLaxMode
+    case "none":   return http.SameSiteNoneMode
+    }
+    if s.opt.DerriereTLS { return http.SameSiteNoneMode }
+    return http.SameSiteLaxMode
+}
+```
+
+```python
+# Python
+def _samesite(request: Request) -> str:
+    force = os.environ.get("SECUBOX_COOKIE_SAMESITE", "").strip().lower()
+    if force in ("lax", "strict", "none"):
+        return force
+    return "none" if _secure(request) else "lax"
+```
+
+`SECUBOX_COOKIE_SAMESITE=lax|strict` permet à l'opérateur de refermer la porte,
+au prix de l'affichage encadré, qui cessera alors de fonctionner. La valeur est
+donc **surchargeable**, jamais figée dans le code.
+
+### Ce que cela ne coûte PAS, et ce que cela coûte
+
+`SameSite` n'est pas ce qui protège un jeton anti-rejeu. Un site tiers ne peut
+pas **lire** un cookie : c'est l'isolation d'origine qui l'en empêche. Tant que
+le module vérifie son jeton par **double envoi** — cookie comparé au champ de
+formulaire ou à l'en-tête — la protection reste entière après le passage à
+`None`. C'est le cas du BBS (`verifieCSRF`) et de Billets (`csrf: str = Form()`).
+
+En revanche, un module **sans aucune défense CSRF** ne doit PAS passer ses
+cookies d'authentification en `None` : `SameSite` y est la seule protection, et
+la lever ouvrirait une vraie CSRF. Dans ce cas, deux issues : implémenter le
+double envoi d'abord, ou ne pas encadrer le module. Vérifier avant de changer.
+
+### Services tiers (Nextcloud, PeerTube, Gitea…)
+
+Ils ne suivent pas ces conventions et n'ont pas à le faire. Pour eux, la
+réécriture se fait **au proxy** : `Set-Cookie` complété à la volée. Voir
+`secubox-haproxy`.
+
 ## 9. Tests
 
 ### CTL tests

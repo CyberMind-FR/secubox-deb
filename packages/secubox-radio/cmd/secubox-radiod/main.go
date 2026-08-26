@@ -183,6 +183,22 @@ func identite(r *http.Request) web.Visiteur {
 				v.Pseudo = propre(n.Value)
 			}
 		}
+	} else if id := entierSur(r.URL.Query().Get("a")); id > 0 {
+		// 3. LE MEME PSEUDONYME, PORTE PAR L'URL (#1254).
+		//
+		// Safari et iOS refusent les cookies tiers quoi qu'on fasse : encadree
+		// dans le Hall, la page n'a plus de cookie du tout, et /media rendait
+		// 401 -- un lecteur muet sur iPhone et sur TV.
+		//
+		// Ce n'est PAS un affaiblissement. Ce que le cookie portait est un
+		// nombre que la page se donne elle-meme au hasard : il n'authentifie
+		// rien, il attribue des gestes. La meme valeur par un autre canal
+		// vaut exactement la meme chose -- et le sysop, lui, se prouve par un
+		// secret d'en-tete, jamais par ce nombre.
+		v = web.Visiteur{ID: id, Connecte: true}
+		if n := propre(r.URL.Query().Get("n")); n != "" {
+			v.Pseudo = n
+		}
 	}
 	if v.Pseudo == "" && v.Connecte {
 		v.Pseudo = "anonyme"

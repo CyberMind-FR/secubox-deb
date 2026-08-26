@@ -23,6 +23,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -623,13 +624,45 @@ func (s *Server) csrfDe(r *http.Request) string {
 	return alea(24)
 }
 
+// sameSite : politique SameSite des cookies du BBS.
+//
+// ENCADRE PAR LE HALL, LE BBS EST UN CONTEXTE TIERS. Le navigateur rejette
+// purement et simplement un cookie Lax ou Strict pose la : le serveur ne
+// reconnait plus le visiteur et rend 401 sur ses propres ressources — la panne
+// exacte constatee sur la radio (#1251).
+//
+// None exige Secure, donc TLS. Sans TLS on retombe sur Lax : un cookie
+// premier-partie qui fonctionne vaut mieux qu'un cookie que le navigateur jette.
+//
+// Ce que SameSite ne protege PAS ici : verifieCSRF compare le cookie au champ
+// du formulaire (DOUBLE ENVOI). Un site tiers ne peut pas LIRE le cookie —
+// c'est l'isolation d'origine qui l'en empeche, pas SameSite. La protection
+// reste donc entiere.
+//
+// SECUBOX_COOKIE_SAMESITE=lax|strict ferme la porte, au prix de l'affichage
+// encadre qui cessera de fonctionner.
+func (s *Server) sameSite() http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("SECUBOX_COOKIE_SAMESITE"))) {
+	case "strict":
+		return http.SameSiteStrictMode
+	case "lax":
+		return http.SameSiteLaxMode
+	case "none":
+		return http.SameSiteNoneMode
+	}
+	if s.opt.DerriereTLS {
+		return http.SameSiteNoneMode
+	}
+	return http.SameSiteLaxMode
+}
+
 func (s *Server) poseCSRF(w http.ResponseWriter, jeton string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieCSRF, Value: jeton, Path: "/",
 		// PAS HttpOnly : ce cookie n'est pas un secret d'authentification, et
 		// une page peut avoir besoin de le relire pour un envoi asynchrone.
 		// Ce qu'il protege, c'est l'impossibilite pour un TIERS de le lire.
-		SameSite: http.SameSiteLaxMode, Secure: s.opt.DerriereTLS,
+		SameSite: s.sameSite(), Secure: s.opt.DerriereTLS,
 		MaxAge: 12 * 3600,
 	})
 }

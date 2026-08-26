@@ -1321,7 +1321,7 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: cookieSession, Value: jeton, Path: "/",
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, SameSite: s.sameSite(),   // #1251 : encadre = contexte tiers
 		Secure: s.opt.DerriereTLS, MaxAge: 30 * 24 * 3600,
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)

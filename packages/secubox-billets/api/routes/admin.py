@@ -1,3 +1,4 @@
+import os
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Admin surface: session login (argon2id + optional TOTP, rate-limited, CSRF)
@@ -52,13 +53,39 @@ def _csrf_token(request: Request) -> str:
 
 
 def _set_csrf(response, request: Request, token: str) -> None:
-    response.set_cookie(CSRF_COOKIE, token, httponly=True, samesite="lax",
+    response.set_cookie(CSRF_COOKIE, token, httponly=True, samesite=_samesite(request),
                         secure=_secure(request), path="/admin")
 
 
 def _secure(request: Request) -> bool:
     # Behind nginx TLS; honour X-Forwarded-Proto, default secure unless plain test.
     return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+
+
+def _samesite(request: Request) -> str:
+    """Politique SameSite d'un cookie SecuBox.
+
+    ENCADRE PAR LE HALL, UN SERVICE EST UN CONTEXTE TIERS. Le navigateur
+    rejette purement et simplement un cookie SameSite=Lax ou Strict pose la :
+    le service ne reconnait plus le visiteur et rend 401 sur ses propres
+    ressources — la panne exacte constatee sur la radio (#1251).
+
+    None exige Secure, donc HTTPS. En clair on retombe sur Lax : un cookie
+    premier-partie qui fonctionne vaut mieux qu'un cookie que le navigateur
+    jette.
+
+    L'operateur peut fermer la porte avec SECUBOX_COOKIE_SAMESITE=lax|strict —
+    au prix de l'affichage encadre, qui cessera de fonctionner.
+
+    Ce que SameSite ne protege PAS ici : le jeton anti-rejeu est verifie par
+    DOUBLE ENVOI (cookie contre champ de formulaire). Un site tiers ne peut pas
+    LIRE le cookie — c'est l'isolation d'origine, pas SameSite, qui l'en
+    empeche. La protection reste donc entiere.
+    """
+    force = os.environ.get("SECUBOX_COOKIE_SAMESITE", "").strip().lower()
+    if force in ("lax", "strict", "none"):
+        return force
+    return "none" if _secure(request) else "lax"
 
 
 async def _current_author(request: Request):
@@ -192,7 +219,7 @@ def register_admin(app: FastAPI, templates: Jinja2Templates) -> None:
         await eventlog.append_event(conn, "author.login", {"id": author["id"]}, ts=_now(request))
         resp = _redirect("/admin")
         resp.set_cookie(SESSION_COOKIE, sec.issue_session(request.app.state.secret, author["id"]),
-                        httponly=True, samesite="lax", secure=_secure(request),
+                        httponly=True, samesite=_samesite(request), secure=_secure(request),
                         max_age=sec.SESSION_MAX_AGE, path="/")
         return resp
 

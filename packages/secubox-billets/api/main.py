@@ -19,6 +19,7 @@ from fastapi.templating import Jinja2Templates
 
 from . import repo
 from .routes.admin import register_admin
+from .routes.public import _samesite
 from .routes.jwt_admin import register_jwt_admin
 from .routes.public import (PCSRF_COOKIE, VISITOR_COOKIE, reactions_context,
                             register_public, _visitor)
@@ -228,11 +229,11 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             "oembed_url": f"{base}/oembed?url={permalink_url}&format=json",
             "share": _share_intents(permalink_url, feeds.billet_title(row["body"])),
         })
-        resp.set_cookie(PCSRF_COOKIE, pcsrf, httponly=True, samesite="lax",
+        resp.set_cookie(PCSRF_COOKIE, pcsrf, httponly=True, samesite=_samesite(request),
                         secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
                         path="/")
         if new_vtoken:
-            resp.set_cookie(VISITOR_COOKIE, new_vtoken, httponly=True, samesite="lax",
+            resp.set_cookie(VISITOR_COOKIE, new_vtoken, httponly=True, samesite=_samesite(request),
                             secure=(request.headers.get("x-forwarded-proto", request.url.scheme) == "https"),
                             max_age=31536000, path="/")
         # A self-hosted embed (Mastodon/PeerTube) needs its instance host in

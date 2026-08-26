@@ -1,3 +1,20 @@
+secubox-radio (0.1.40-1~bookworm1) bookworm; urgency=medium
+
+  * RADIO MUETTE SUR iPHONE ET SUR TV (#1254). Safari et iOS refusent les
+    cookies TIERS quoi qu'on fasse : SameSite=None ne suffit pas, la prevention
+    de pistage les rejette. Encadree dans le Hall, la page n'avait donc plus
+    d'identifiant du tout et /media rendait 401.
+  * L'identifiant est desormais porte AUSSI par l'URL (?a=). Ce n'est pas un
+    affaiblissement : ce que le cookie portait est un nombre que la PAGE SE
+    DONNE AU HASARD — il n'authentifie rien, il attribue des gestes entre gens
+    qui se connaissent. La meme valeur par un autre canal vaut la meme chose.
+    Le sysop, lui, continue de se prouver par un secret d'en-tete.
+  * L'identifiant est aussi retenu en localStorage : partitionne dans un cadre,
+    il y reste stable, ce qui evite de changer d'identite a chaque
+    rechargement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:44:27 +0200
+
 secubox-radio (0.1.39-1~bookworm1) bookworm; urgency=medium
 
   * AUTOPLAY REFUSE : ON ARME, ON N'ACCUSE PAS (#1253). Firefox n'implemente
