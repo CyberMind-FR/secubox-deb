@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1288 — VALIDATION DES ACCÈS DÉLÉGUÉS.
+
+  CETTE PAGE N'EST PAS UNE CARTE, ET C'EST TOUT LE POINT. Elle s'ouvre en
+  PLEINE PAGE : la barre d'adresse est visible, le domaine est vérifiable, on
+  sait à qui l'on parle. Une validation qui se ferait dans un cadre serait
+  imitable par n'importe quelle page encadrée — et une confirmation qu'on ne
+  peut pas authentifier ne confirme rien.
+
+  AUCUN MOT DE PASSE N'EST DEMANDÉ ICI POUR NEXTCLOUD. On ouvre son flux de
+  délégation : la personne approuve dans Nextcloud, sur sa vraie page, et nous
+  recevons un mot de passe d'APPLICATION — révocable là-bas, sans nous.
+
+  Pour les services sans flux, l'identifiant dédié se saisit ici, dans une page
+  authentifiée qu'on a choisi d'ouvrir. C'est la différence entre confier une
+  clé et la laisser sur le paillasson.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SbX — Accès délégués</title>
+<style>
+  :root { --fond:#f7f8fa; --carte:#ffffff; --texte:#1a1a22; --muted:#6b6b7a;
+          --border:#e2e2ea; --accent:#5b46b8; --vert:#0a7d2c; --rouge:#b7202c; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#0e0e14; --carte:#14141c; --texte:#e8e6d9;
+      --muted:#8a8a99; --border:#2a2a36; --accent:#9d8bf0; --vert:#3fbf6a; --rouge:#e8636f; }
+  }
+  :root[data-theme="dark"] { --fond:#0e0e14; --carte:#14141c; --texte:#e8e6d9;
+    --muted:#8a8a99; --border:#2a2a36; --accent:#9d8bf0; --vert:#3fbf6a; --rouge:#e8636f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:15px; line-height:1.5; }
+  .page { max-width:760px; margin:0 auto; padding:28px 20px 60px; }
+  h1 { font-size:1.4rem; margin:0 0 .2rem; }
+  .sous { color:var(--muted); font-size:.9rem; margin:0 0 1.6rem; }
+  h2 { font-size:.72rem; letter-spacing:.09em; text-transform:uppercase;
+       color:var(--muted); margin:1.8rem 0 .6rem; font-family:"JetBrains Mono",monospace; }
+  .c { background:var(--carte); border:1px solid var(--border); border-radius:12px;
+       padding:14px 16px; margin-bottom:10px; }
+  .l { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .l .n { font-weight:650; }
+  .l .h { font-size:.72rem; color:var(--muted); font-family:"JetBrains Mono",monospace; }
+  .l .grow { flex:1; }
+  .et { font-size:.68rem; letter-spacing:.06em; text-transform:uppercase;
+        padding:2px 8px; border-radius:20px; border:1px solid var(--border); color:var(--muted); }
+  .et.ok { color:var(--vert); border-color:var(--vert); }
+  .et.att { color:var(--accent); border-color:var(--accent); }
+  button, .b { border:1px solid var(--border); background:none; color:var(--texte);
+       border-radius:8px; padding:.4rem .8rem; font-size:.82rem; cursor:pointer;
+       font-family:inherit; text-decoration:none; display:inline-block; }
+  button:hover, .b:hover { border-color:var(--accent); color:var(--accent); }
+  button.p { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.p:hover { opacity:.9; color:#fff; }
+  button.d { color:var(--rouge); border-color:var(--border); }
+  button.d:hover { border-color:var(--rouge); }
+  .expl { font-size:.8rem; color:var(--muted); margin:.5rem 0 0; }
+  .flux { margin-top:.7rem; padding-top:.7rem; border-top:1px dashed var(--border); }
+  .flux a { word-break:break-all; font-size:.78rem; color:var(--accent); }
+  input { font:inherit; font-size:.85rem; padding:.4rem .6rem; border-radius:8px;
+          border:1px solid var(--border); background:var(--fond); color:var(--texte); }
+  .msg { font-size:.82rem; margin-top:.5rem; }
+  .msg.ko { color:var(--rouge); } .msg.ok { color:var(--vert); }
+  .vide { color:var(--muted); font-size:.86rem; }
+  .avert { background:var(--carte); border:1px solid var(--border); border-left:3px solid var(--accent);
+           border-radius:10px; padding:12px 14px; font-size:.83rem; color:var(--muted); }
+</style>
+
+<div class="page">
+  <h1>🔑 Accès délégués</h1>
+  <p class="sous">Ce qu'une carte a le droit de lire, et qui l'a autorisé.</p>
+
+  <div class="avert">
+    <b>Votre mot de passe n'est jamais demandé ici.</b> Pour les services qui
+    savent déléguer, vous l'approuvez <b>chez eux</b>, sur leur vraie page, et
+    SecuBox ne reçoit qu'un mot de passe d'application — que vous pouvez leur
+    faire révoquer sans nous demander notre avis.
+  </div>
+
+  <h2>Demandes en attente</h2>
+  <div id="demandes"><p class="vide">Lecture…</p></div>
+
+  <h2>Accès</h2>
+  <div id="accordes"></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+  var el = function (id) { return document.getElementById(id); };
+
+  function jeton() {
+    try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; }
+  }
+  function api(chemin, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    var j = jeton();
+    if (j) opts.headers['Authorization'] = 'Bearer ' + j;
+    if (opts.body) opts.headers['Content-Type'] = 'application/json';
+    return fetch('/api/v1/webos' + chemin, opts).then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return { code: r.status, corps: d }; });
+    });
+  }
+
+  function quand(t) {
+    var s = Math.max(0, Date.now() / 1000 - Number(t || 0));
+    if (s < 3600) return 'il y a ' + Math.round(s / 60) + ' min';
+    if (s < 86400) return 'il y a ' + Math.round(s / 3600) + ' h';
+    return 'il y a ' + Math.round(s / 86400) + ' j';
+  }
+
+  function charge() {
+    api('/acces').then(function (r) {
+      if (r.code === 401 || r.code === 403) {
+        el('demandes').innerHTML = '<p class="vide">Connectez-vous à la box pour voir cette page.</p>';
+        el('accordes').innerHTML = '';
+        return;
+      }
+      var d = r.corps || {};
+      var dem = d.demandes || [];
+      el('demandes').innerHTML = dem.length ? dem.map(function (x) {
+        return '<div class="c"><div class="l">'
+          + '<span class="n">' + esc(x.nom || x.svc) + '</span>'
+          + '<span class="et att">en attente</span>'
+          + '<span class="h">' + esc(quand(x.quand)) + '</span>'
+          + '<span class="grow"></span>'
+          + '<button class="p" data-valider="' + esc(x.svc) + '">Valider</button>'
+          + '<button class="d" data-refuser="' + esc(x.svc) + '">Refuser</button>'
+          + '</div><div class="flux" id="flux-' + esc(x.svc) + '" hidden></div></div>';
+      }).join('') : '<p class="vide">Aucune demande. Une carte qui manque d\'accès en déposera une ici.</p>';
+
+      el('accordes').innerHTML = (d.accordes || []).map(function (x) {
+        return '<div class="c"><div class="l">'
+          + '<span class="n">' + esc(x.nom) + '</span>'
+          + '<span class="h">' + esc(x.hote) + '</span>'
+          + '<span class="et' + (x.acces ? ' ok' : '') + '">'
+          + (x.acces ? 'accordé' : 'aucun accès') + '</span>'
+          + '<span class="grow"></span>'
+          + (x.acces
+              ? '<button class="d" data-revoquer="' + esc(x.svc) + '">Oublier</button>'
+              : (x.flux === 'nextcloud'
+                  ? '<button class="p" data-valider="' + esc(x.svc) + '">Autoriser</button>'
+                  : '<button data-manuel="' + esc(x.svc) + '">Identifiant dédié…</button>'))
+          + '</div><div class="flux" id="flux-' + esc(x.svc) + '" hidden></div></div>';
+      }).join('');
+    });
+  }
+
+  var sondes = {};
+  function ouvreFlux(svc) {
+    var z = el('flux-' + svc);
+    api('/acces/' + encodeURIComponent(svc) + '/valider', { method: 'POST' }).then(function (r) {
+      var d = r.corps || {};
+      if (!d.ok) {
+        z.hidden = false;
+        z.innerHTML = '<span class="msg ko">' + esc(d.detail || 'flux indisponible') + '</span>';
+        return;
+      }
+      z.hidden = false;
+      z.innerHTML = '<p class="expl">Ouvrez ce lien et approuvez <b>dans le service</b>. '
+        + 'SecuBox attend, et ne verra jamais votre mot de passe.</p>'
+        + '<a class="b" href="' + esc(d.login) + '" target="_blank" rel="noopener">Ouvrir la page d\'approbation ↗</a>'
+        + '<p class="msg" id="att-' + esc(svc) + '">En attente de votre approbation…</p>';
+      // On interroge REGULIEREMENT plutot que d'attendre un signal : le
+      // service n'a aucun moyen de nous prevenir, et il ne doit pas en avoir —
+      // ce serait une porte ouverte vers nous.
+      if (sondes[svc]) clearInterval(sondes[svc]);
+      sondes[svc] = setInterval(function () {
+        api('/acces/' + encodeURIComponent(svc) + '/sonde', { method: 'POST' }).then(function (s) {
+          var e = s.corps || {};
+          if (e.ok) {
+            clearInterval(sondes[svc]); delete sondes[svc];
+            charge();
+            return;
+          }
+          if (!e.attente) {
+            var m = el('att-' + svc);
+            if (m) { m.className = 'msg ko'; m.textContent = e.detail || 'flux interrompu'; }
+            clearInterval(sondes[svc]); delete sondes[svc];
+          }
+        });
+      }, 3000);
+    });
+  }
+
+  function ouvreManuel(svc) {
+    var z = el('flux-' + svc);
+    z.hidden = false;
+    z.innerHTML = '<p class="expl">Ce service ne sait pas déléguer. Créez-lui un '
+      + 'identifiant <b>dédié</b> — jamais le vôtre — et posez-le ici.</p>'
+      + '<div class="l"><input id="c-' + esc(svc) + '" placeholder="compte" autocomplete="off">'
+      + '<input id="s-' + esc(svc) + '" type="password" placeholder="secret dédié" autocomplete="new-password">'
+      + '<button class="p" data-poser="' + esc(svc) + '">Enregistrer</button></div>'
+      + '<p class="msg" id="m-' + esc(svc) + '"></p>';
+  }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-valider], button[data-refuser], button[data-revoquer], button[data-manuel], button[data-poser]');
+    if (!b) return;
+    var d = b.dataset;
+    if (d.valider) { ouvreFlux(d.valider); return; }
+    if (d.manuel) { ouvreManuel(d.manuel); return; }
+    if (d.refuser) {
+      api('/acces/' + encodeURIComponent(d.refuser), { method: 'DELETE' }).then(charge);
+      return;
+    }
+    if (d.revoquer) {
+      api('/acces/' + encodeURIComponent(d.revoquer), { method: 'DELETE' }).then(function (r) {
+        charge();
+        alert((r.corps && r.corps.detail) || 'oublié ici');
+      });
+      return;
+    }
+    if (d.poser) {
+      var svc = d.poser;
+      api('/acces/' + encodeURIComponent(svc) + '/manuel', {
+        method: 'POST',
+        body: JSON.stringify({ compte: el('c-' + svc).value, secret: el('s-' + svc).value })
+      }).then(function (r) {
+        var m = el('m-' + svc), x = r.corps || {};
+        m.className = 'msg ' + (x.ok ? 'ok' : 'ko');
+        m.textContent = x.ok ? 'enregistré pour ' + x.compte : (x.detail || 'refusé');
+        if (x.ok) charge();
+      });
+    }
+  });
+
+  charge();
+})();
+</script>

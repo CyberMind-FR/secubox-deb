@@ -1,3 +1,33 @@
+secubox-webos (1.0.79-1~bookworm1) bookworm; urgency=medium
+
+  * DELEGATION D'ACCES POUR LES CARTES (#1288). Une carte sans acces depose une
+    DEMANDE ; la demande attend dans une page ouverte EN PLEINE PAGE, ou la
+    barre d'adresse est visible et ou l'on sait donc a qui l'on parle. Une
+    validation faite dans un cadre serait imitable par n'importe quelle page
+    encadree — et une confirmation qu'on ne peut pas authentifier ne confirme
+    rien.
+  * AUCUN MOT DE PASSE N'EST DEMANDE. Pour Nextcloud on ouvre son Login Flow
+    v2 : la personne approuve DANS Nextcloud, sur sa vraie page, et nous ne
+    recevons qu'un mot de passe d'APPLICATION — revocable la-bas, sans nous.
+    Pour les services sans flux, l'identifiant DEDIE se saisit dans la page
+    authentifiee, jamais depuis une vignette anonyme.
+  * ON NE CAPTURE NI NE REJOUE DE TEMOIN. Le registre RGPD du pare-feu ne garde
+    qu'une empreinte, et c'est ce qui le rend inoffensif : garder des valeurs
+    rejouables en ferait la cible la plus rentable de la box — un seul fichier,
+    toutes les sessions.
+  * Deux routes publiques a dessein — savoir si un acces existe, deposer une
+    demande — et elles ne revelent rien : deux booleens et une ligne dans une
+    file BORNEE, parce qu'une file publique non bornee est un deni de service.
+    Tout ce qui accorde, lit ou pose un secret est derriere le jeton.
+  * La revocation dit ce qu'elle fait : elle oublie de NOTRE cote. Le mot de
+    passe d'application reste valide dans le service tant que personne ne l'y
+    supprime — le dire vaut mieux que de laisser croire a une revocation
+    complete.
+  * Coffre en 0700 : un dossier de secrets qui se liste est deja a moitie
+    fouille. L'entree ACL est posee AVEC son masque (#1255).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:22:20 +0200
+
 secubox-webos (1.0.78-1~bookworm1) bookworm; urgency=medium
 
   * LA PASTILLE PEERTUBE S'EVANOUISSAIT (#1287). Le Hall retire un flux qui n'a

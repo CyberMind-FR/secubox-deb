@@ -506,6 +506,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    demanderait de lire, et ce menu se parcourt. */
 .who-ident .cle{flex:0 0 auto;font-size:.7rem}
 .who-ident .froid{opacity:.5}
+.who-lien{display:block;margin:6px 4px 2px;padding:6px 8px;border-radius:7px;
+  font-size:.76rem;color:var(--sky);text-decoration:none}
+.who-lien:hover{background:var(--soft)}
 .cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
@@ -663,6 +666,11 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           <div class="who-ident" id="who-ident">
             <p class="who-note">lecture du registre…</p>
           </div>
+          <!-- EN PLEINE PAGE, PAS DANS UN CADRE (#1288) : une validation
+               d'accès qui se ferait dans une carte serait imitable par
+               n'importe quelle page encadrée. `target="_top"` est ici
+               VOULU — c'est exactement ce qu'on veut. -->
+          <a class="who-lien" href="/acces.html" target="_top">🔑 Gérer les accès délégués…</a>
         </div>
       </div>
     </div>

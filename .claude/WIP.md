@@ -57,6 +57,12 @@ SocialRelay dotés d'une palette claire.
 
 ### ⬜ Next
 
+0. **Cartes Mail et Nextcloud** : l'ossature de délégation est posée (#1288,
+   demande → file → validation → mot de passe d'application stocké). Reste à
+   écrire les deux cartes qui l'utilisent — bouton « demander l'accès » quand
+   il n'y en a pas, contenu quand il y en a un. Le contenu passera par OCS/
+   WebDAV pour Nextcloud et par IMAP (Dovecot, conteneur 10.100.0.10) pour le
+   mail : **jamais de scraping**.
 1. ~~**PeerTube**~~ **fait (#1273)** : vignettes en rotation, « lire ici » qui
    pose le lecteur d'embarquement amont, relais de même origine pour l'API, les
    vignettes et le lecteur. Vérifié que seul le public est relayé — `users/me`

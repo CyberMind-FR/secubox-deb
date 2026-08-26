@@ -211,6 +211,57 @@ HAProxy pose l'en-tête sur ses deux frontends ; les vhosts nginx le
 > **Piège dpkg.** Les vhosts nginx sont des *conffiles* : `--force-confold`
 > conserve l'ancien. Après montée de version, comparer avec le `.dpkg-dist`.
 
+## 4bis. Une carte ne demande jamais de mot de passe
+
+Une carte vit dans un cadre. N'importe quelle page encadrée peut en dessiner
+une identique, et la personne qui regarde n'a **aucun moyen de vérifier qui
+demande**. Un champ mot de passe dans une carte, c'est un formulaire de
+hameçonnage avec notre logo dessus — et le jour où l'on habitue quelqu'un à y
+taper son mot de passe, on lui retire la seule défense qui lui restait : la
+surprise.
+
+On ne capture ni ne rejoue de témoin de session non plus. Le registre RGPD du
+pare-feu ne garde qu'une **empreinte**, et c'est précisément ce qui le rend
+inoffensif : voler `/var/log/secubox/cookie-audit/` ne donne rien. Le jour où
+il garderait des valeurs rejouables, il deviendrait la cible la plus rentable
+de la box — un seul fichier, toutes les sessions.
+
+### Ce qu'on fait à la place
+
+```
+carte sans accès  →  dépose une DEMANDE
+                     ↓
+        page EN PLEINE PAGE (barre d'adresse visible)
+                     ↓
+        l'opérateur valide, hors du cadre
+                     ↓
+   flux de délégation du service (Nextcloud : Login Flow v2)
+                     ↓
+   mot de passe d'APPLICATION, révocable chez eux, stocké 0600
+```
+
+Le mot de passe est tapé **dans le service**, sur sa vraie page. SecuBox ne le
+voit jamais.
+
+Pour un service sans flux de délégation (Roundcube, Dovecot), l'identifiant
+**dédié** se saisit dans la page authentifiée. Le secret transite alors une
+fois, vers une page que l'on a choisi d'ouvrir et dont on peut vérifier le
+domaine — et non depuis une vignette anonyme.
+
+> C'est la différence entre **confier une clé** et **la laisser sur le
+> paillasson**.
+
+Trois règles qui en découlent, et qu'il ne faut pas contourner :
+
+- **La validation ne se fait jamais dans un cadre.** Une confirmation qu'on ne
+  peut pas authentifier ne confirme rien.
+- **Les routes publiques ne révèlent rien** : savoir si un accès existe, et
+  déposer une demande. Deux booléens et une ligne dans une file **bornée** —
+  une file publique non bornée est un déni de service.
+- **La révocation dit ce qu'elle fait.** Elle oublie de notre côté ; le mot de
+  passe d'application reste valide dans le service tant que personne ne l'y
+  supprime. Le dire vaut mieux que de laisser croire à une révocation complète.
+
 ## 5. Ce qui reste ouvert
 
 - L'en-tête `X-Forwarded-Proto` se perd encore entre HAProxy et l'application ;

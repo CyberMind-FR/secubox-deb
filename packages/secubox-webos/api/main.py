@@ -8,12 +8,12 @@ import json
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, Depends
+from fastapi import FastAPI, APIRouter, Depends, Request
 
 from secubox_core.auth import require_jwt
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets
+from api import registry, flags, cardlets, acces
 
 _cache: dict = {"services": [], "computed_at": None}
 _flags: dict = flags.load_flags()
@@ -189,6 +189,65 @@ async def services(user=Depends(require_jwt)):
     if not _enabled():
         return {"services": [], "computed_at": _cache["computed_at"]}
     return {"services": _cache["services"], "computed_at": _cache["computed_at"]}
+
+
+# ── DÉLÉGATION D'ACCÈS (#1288) ─────────────────────────────────────────────
+#
+# Deux routes PUBLIQUES, et elles le sont a dessein : une carte doit pouvoir
+# demander si elle a un acces, et en deposer la demande. Ni l'une ni l'autre ne
+# revele quoi que ce soit — la premiere rend deux booleens, la seconde inscrit
+# une ligne dans une file bornee. Tout ce qui accorde, lit ou pose un secret est
+# derriere le jeton.
+
+@public_router.get("/acces/{svc}")
+async def acces_etat(svc: str):
+    return acces.etat(svc)
+
+
+@public_router.post("/acces/{svc}/demande")
+async def acces_demande(svc: str, request: Request):
+    # L'origine est notee pour que l'operateur sache d'ou vient la demande —
+    # une file qui ne dit pas qui a demande ne se valide pas serieusement.
+    return acces.depose(svc, request.headers.get("referer", ""))
+
+
+@router.get("/acces")
+async def acces_liste(user=Depends(require_jwt)):
+    """Ce que la console doit montrer : les demandes en attente, et les acces
+    deja accordes. JAMAIS les secrets."""
+    return {
+        "demandes": acces.demandes(),
+        "accordes": [
+            {"svc": k, "nom": v["nom"], "hote": v["hote"], "flux": v["flux"],
+             "acces": acces.a_acces(k)}
+            for k, v in acces.SERVICES.items()
+        ],
+    }
+
+
+@router.post("/acces/{svc}/valider")
+async def acces_valider(svc: str, user=Depends(require_jwt)):
+    """Demarre le flux de delegation et rend l'URL a ouvrir. Le mot de passe
+    sera tape DANS le service, jamais ici."""
+    return await acces.flux_demarre(svc)
+
+
+@router.post("/acces/{svc}/sonde")
+async def acces_sonde(svc: str, user=Depends(require_jwt)):
+    return await acces.flux_sonde(svc)
+
+
+@router.post("/acces/{svc}/manuel")
+async def acces_manuel(svc: str, corps: dict, user=Depends(require_jwt)):
+    """Identifiant dedie pour les services sans flux de delegation. Route sous
+    jeton : le secret ne transite que vers une page authentifiee."""
+    return acces.pose_manuel(svc, str(corps.get("compte") or ""),
+                             str(corps.get("secret") or ""))
+
+
+@router.delete("/acces/{svc}")
+async def acces_revoque(svc: str, user=Depends(require_jwt)):
+    return acces.revoque(svc)
 
 
 app.include_router(public_router)

@@ -5,6 +5,15 @@ if [ "$1" = "configure" ]; then
     if getent group secubox >/dev/null 2>&1 && id www-data >/dev/null 2>&1; then
         adduser www-data secubox >/dev/null 2>&1 || usermod -aG secubox www-data || true
     fi
+    # COFFRE DES ACCES DELEGUES (#1288). 0700 : le dossier lui-meme ne se
+    # liste pas — un secret dont on connait l'existence est deja a moitie
+    # trouve. Il vit sous /etc/secubox/secrets, dont le parent est deja
+    # restreint ; on pose donc AUSSI l'entree ACL et son MASQUE, sans quoi
+    # tout chmod d'un autre paquet neutraliserait l'entree en silence (#1255).
+    install -d -o secubox -g secubox -m 0700 /etc/secubox/secrets/webos-acces || true
+    if [ -d /etc/secubox/secrets ] && command -v setfacl >/dev/null 2>&1; then
+        setfacl -m u:secubox:--x,m::x /etc/secubox/secrets 2>/dev/null || true
+    fi
     systemctl daemon-reload || true
     systemctl enable --now secubox-webos.service || true
     # Recharge nginx seulement si la conf valide (le vhost hall.gk2.net est livré).
