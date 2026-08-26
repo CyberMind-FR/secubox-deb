@@ -124,6 +124,27 @@
     var plat = String(host || '').trim().toLowerCase().replace(/-/g, '--').replace(/\./g, '-');
     return 'surf-' + plat + '.gk2.secubox.in';
   }
+
+  // PORTAILS DE CONSENTEMENT NAVIGUES EN DUR (#1365). Certains sites (BFM →
+  // gate.first-id.fr) redirigent le cadre en JS vers l'URL ABSOLUE du portail.
+  // Le relais ne peut pas la reecrire (construite dynamiquement), et la CSP
+  // frame-src bloque la navigation hors-box — d'ou « bfm ko ». Mais la
+  // VIOLATION est un evenement : on l'attrape, et on recharge le cadre sur
+  // l'ORIGINE SURF du portail. Le relais fait alors le saut de portail
+  // (redirectHost+redirectUri) et renvoie a la vraie page.
+  addEventListener('securitypolicyviolation', function (e) {
+    try {
+      if (String(e.violatedDirective || '').indexOf('frame-src') < 0) return;
+      var b = e.blockedURI || '';
+      if (!/^https?:\/\//i.test(b)) return;
+      var u = new URL(b);
+      // Deja une origine surf ? on ne boucle pas.
+      if (u.hostname.indexOf('surf-') === 0) return;
+      var dest = 'https://' + surfOrigine(u.hostname) + u.pathname + u.search + u.hash;
+      var f = document.querySelector('#vue iframe');
+      if (f) f.src = dest;
+    } catch (err) {}
+  });
   // L'INVERSE, pour lire l'hote reel d'une adresse surf (navigation interne).
   function cibleDe(origine) {
     var h = String(origine || '').toLowerCase();

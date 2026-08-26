@@ -1,3 +1,14 @@
+secubox-webos (1.0.125-1~bookworm1) bookworm; urgency=medium
+
+  * PORTAILS DE CONSENTEMENT NAVIGUES EN DUR (#1365). BFM redirige le cadre
+    en JS vers l'URL ABSOLUE de gate.first-id.fr (construite dynamiquement,
+    non reecrivable) ; la CSP frame-src la bloquait -> bfm ko. On ecoute
+    l'evenement securitypolicyviolation : quand un portail est bloque, on
+    recharge le cadre sur son ORIGINE SURF, et le relais fait le saut de
+    portail (redirectHost+redirectUri) vers la vraie page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 21:03:07 +0200
+
 secubox-webos (1.0.124-1~bookworm1) bookworm; urgency=medium
 
   * STATUT INLINE (#1362). « host — relaye, pisteurs coupes » passe A DROITE
