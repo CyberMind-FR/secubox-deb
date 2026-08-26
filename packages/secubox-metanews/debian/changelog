@@ -1,3 +1,13 @@
+secubox-metanews (0.1.12-1~bookworm1) bookworm; urgency=medium
+
+  * PAS DE BANDEAU EN EMBARQUE (#1194c). Le Hall porte deja le titre et le
+    contexte ; le repeter dans le cadre volait une hauteur qui revient aux
+    news. Meme detection que billets : `?embed=1` ou la presence d'un cadre.
+    Le bouton Sources part avec — il rejoindra la megabarre contextuelle du
+    Hall (a faire cote Hall, avec le meme besoin cote SocialRelay).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:20:55 +0200
+
 secubox-metanews (0.1.11-1~bookworm1) bookworm; urgency=medium
 
   * LE LIEN DU CARDLET OUVRE ENFIN LA NEWS (#1194b). Il pointait vers `#<id>`,

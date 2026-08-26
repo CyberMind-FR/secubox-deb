@@ -88,6 +88,12 @@ header{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap}
 /* Carrousel des 10 dernières news (vignette + auto-rotation) */
 .carou{position:relative;margin:8px 0 14px;overflow:hidden;border-radius:14px}
 .cartrack{display:flex;gap:10px;transition:transform .55s ease;will-change:transform}
+/* EN EMBARQUE, PAS DE BANDEAU (#1194c). Le Hall porte deja le titre et le
+   contexte du service ; le repeter dans le cadre vole une hauteur qui doit
+   revenir aux news. Le bouton Sources part avec — il rejoindra la megabarre
+   contextuelle du Hall (a faire, cote Hall). */
+html.sbx-embed header{display:none}
+html.sbx-embed .wrap{padding-top:8px}
 .retour{margin:0 0 12px}
 .retour .btn{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
 .ccard-mn{flex:0 0 224px;position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
@@ -104,6 +110,16 @@ header{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap}
 </style>
 </head>
 <body>
+<script>
+  // MEME REGLE QUE BILLETS : `?embed=1` que le Hall pose, ou la simple presence
+  // d'un cadre — le parametre peut manquer sur un lien interne, le cadre non.
+  try {
+    var _q = new URLSearchParams(location.search).get('embed') === '1';
+    if (_q || window.top !== window.self) {
+      document.documentElement.classList.add('sbx-embed');
+    }
+  } catch (e) {}
+</script>
 <div class="wrap">
   <header><h1>📡 MetaNews</h1><span class="tagline">observer le monde</span>
     <button class="gear" id="gear" title="Gérer les flux / sources" aria-label="Sources">⚙ Sources</button></header>
