@@ -49,6 +49,17 @@
   .barre .barstats .s{display:inline-flex;align-items:center;gap:.15rem}
   .barre .barstats .s b{color:var(--ink)} .barre .barstats .s.z{opacity:.35}
   .barre .barstats .cam{color:var(--cyan);font-weight:700}
+  .jarpanel{padding:.5rem .6rem;background:var(--carte);border-bottom:1px solid var(--ligne)}
+  .jarpanel.hidden{display:none}
+  .jarpanel .jt{font-size:.66rem;color:var(--muted);line-height:1.4;margin-bottom:.35rem}
+  .jarpanel .jt code{font-family:"JetBrains Mono",ui-monospace,monospace;color:var(--cyan)}
+  .jarpanel textarea{width:100%;min-height:56px;resize:vertical;border-radius:7px;
+    border:1px solid var(--ligne);background:var(--fond);color:var(--ink);
+    font-family:"JetBrains Mono",ui-monospace,monospace;font-size:.66rem;padding:.4rem .5rem}
+  .jarpanel .jbtns{display:flex;gap:.4rem;margin-top:.4rem}
+  .jarpanel .jbtns button{border:none;border-radius:7px;cursor:pointer;font-size:.72rem;
+    font-weight:700;padding:.3rem .7rem;background:var(--cyan);color:#04222a}
+  .jarpanel .jbtns button.ghost{background:transparent;color:var(--muted);border:1px solid var(--ligne);font-weight:600}
   .barre .xbtn{font-weight:700}
   .barre .xbtn:hover{border-color:var(--coral);color:var(--coral)}
   @media(max-width:760px){.barre .barstats{display:none}}
@@ -90,10 +101,19 @@
            aria-label="Adresse à surfer">
     <button id="dos" class="ghost" type="button" title="Page précédente" hidden>◄</button>
     <button id="home" class="ghost" type="button" title="Accueil surf" hidden>🏠</button>
+    <button id="jar" class="ghost" type="button" title="Apprendre les cookies de ce site (les coller une fois, rejoués toujours)" hidden>🍪</button>
     <button id="go" type="button">Surfer</button>
     <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
     <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
     <button id="fermer" class="ghost xbtn" type="button" title="Fermer le surf" hidden>✕</button>
+  </div>
+  <div class="jarpanel hidden" id="jarpanel">
+    <div class="jt">🍪 Apprendre les cookies de <b id="jarhote"></b> — collez-les
+      (depuis un navigateur où le site marche : DevTools → Cookies, format
+      <code>nom=valeur; nom2=valeur2</code>). Rejoués perpétuellement, jamais partagés hors box.</div>
+    <textarea id="jarval" placeholder="didomi_token=…; euconsent-v2=…; …" spellcheck="false"></textarea>
+    <div class="jbtns"><button id="jarok" type="button">Apprendre & recharger</button>
+      <button id="jarno" class="ghost" type="button">Annuler</button></div>
   </div>
   <div class="stats hidden" id="stats" title="Ce que le relais a coupé ou masqué sur cette page"></div>
   <div class="etat" id="etat" hidden></div>
@@ -224,6 +244,9 @@
     $('etat').hidden = true;
     $('rech').hidden = true; $('onglet').hidden = true;
     $('home').hidden = true;
+    var jb=$('jar'); if(jb) jb.hidden = true;
+    var st=$('stats'); if(st) st.classList.add('hidden');
+    fermeJar();
     $('vue').innerHTML = ACCUEIL_HTML;
     document.querySelectorAll('.accueil .ex button').forEach(function (b) {
       b.addEventListener('click', function () { surfe(b.dataset.u); });

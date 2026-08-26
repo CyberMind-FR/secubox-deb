@@ -1,3 +1,13 @@
+secubox-webos (1.0.126-1~bookworm1) bookworm; urgency=medium
+
+  * BOUTON « APPRENDRE LES COOKIES » DANS LA BARRE SURF (#1366). Un 🍪 ouvre
+    un panneau ou coller les cookies d'une session reelle (consentement
+    franchi, login fait) ; POST no-cors vers l'origine surf, puis rechargement
+    — le relais les rejoue perpetuellement. C'est ainsi qu'on franchit un
+    portail (first-id/BFM) qui ne pose jamais son cookie via le proxy.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 21:13:44 +0200
+
 secubox-webos (1.0.125-1~bookworm1) bookworm; urgency=medium
 
   * PORTAILS DE CONSENTEMENT NAVIGUES EN DUR (#1365). BFM redirige le cadre
