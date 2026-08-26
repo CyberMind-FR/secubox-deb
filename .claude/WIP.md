@@ -106,6 +106,17 @@ voir autre chose que HTTP, et l'accueil devient un bureau.
 
 ### ⬜ TODO — file réelle, par ordre de coût
 
+0bis. **Exclusions WAF levées — à surveiller (#1257).** Les **sept**
+   `waf_bypass` sont passés à `false` : lyrion, torrent, jellyfin, ytsas,
+   matrix, photoprism, peertube passent désormais par sbxwaf. Quatre
+   répondaient 503 : ils étaient **absents de `haproxy-routes.json`**, jamais
+   ajoutés puisqu'ils n'y passaient pas — corrigé par
+   `secubox-publishctl waf-route`. Les sept répondent, **mais seule la page
+   d'accueil a été testée** : ces exclusions existaient pour les téléversements
+   volumineux, WebDAV, la diffusion média et la fédération. À éprouver sur un
+   gros téléversement PhotoPrism et une lecture Jellyfin soutenue. Sauvegarde :
+   `/etc/secubox/haproxy.toml.avant-waf-total`.
+
 0. **Masque ACL de `/etc/secubox/secrets` — à étendre (#1255).** Corrigé dans
    bbs, radio et socialrelay : leur postinst pose désormais `m::x` en même
    temps que l'entrée nommée. Le fond reste fragile — **une dizaine de paquets

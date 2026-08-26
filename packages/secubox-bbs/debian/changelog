@@ -1,3 +1,16 @@
+secubox-bbs (0.30.26-1~bookworm1) bookworm; urgency=medium
+
+  * DOUBLON RADIO EN APERCU (#1260). Encadre, le BBS retirait `.rail.rr` pour
+    empecher son lecteur radio imbrique de charger — mais `avradio` est
+    reutilise par `avrail` ET par le rail de l'accueil : une copie passait au
+    travers. Dans le Hall, ce second lecteur rejoint la MEME diffusion que la
+    cardlet radio, et l'auditeur entend deux fois le direct, legerement decale.
+  * On vise desormais le lecteur lui-meme (.radiowidget, iframe.radioframe) et
+    non son conteneur : viser le contenant, c'est dependre de l'endroit ou il
+    se trouve, et il s'est deplace.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:31:55 +0200
+
 secubox-bbs (0.30.25-1~bookworm1) bookworm; urgency=medium
 
   * MASQUE ACL REPOSE AVEC L'ENTREE (#1255). Une dizaine de paquets font

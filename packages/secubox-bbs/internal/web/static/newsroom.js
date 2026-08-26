@@ -26,6 +26,14 @@
       // authentifiés → cascade de 401 (cookies SameSite non transmis). Le retirer
       // stoppe net radio.js.
       var rr = document.querySelector('.rail.rr'); if (rr) rr.remove();
+      // ON VISE LE LECTEUR, PAS SON CONTENEUR (#1260). `avradio` est reutilise
+      // par `avrail` ET par le rail de l'accueil : retirer la seule colonne
+      // droite en laissait passer une copie. Encadre dans le Hall — surtout en
+      // apercu — ce second lecteur rejoint la meme diffusion que la cardlet
+      // radio, et l'auditeur entend DEUX FOIS le direct, legerement decale.
+      Array.prototype.slice.call(
+        document.querySelectorAll('.radiowidget, iframe.radioframe')
+      ).forEach(function (n) { n.remove(); });
     }
     var qt = new URLSearchParams(location.search).get('theme');
     if (qt === 'dark' || qt === 'light') {
