@@ -41,16 +41,19 @@
   .tete.ko .etat, .tete.ko .led { color: var(--red, #b7202c); background: initial; }
   .tete.ko .led { background: var(--red, #b7202c); }
 
-  .drapeaux { font-size: 1.25rem; letter-spacing: .12em; line-height: 1; }
+  .drapeaux { font-size: 1.25rem; letter-spacing: .12em; line-height: 1; margin-bottom: .15rem; }
   .drapeaux .vide { font-size: .78rem; letter-spacing: 0; color: var(--muted); }
 
-  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem .6rem; margin-top: auto; }
+  /* Le `margin-top:auto` était sur les chiffres : il les collait au bas et
+     creusait un vide au milieu de la carte. Il n'appartient qu'au lien, seul
+     élément qui doit rester en pied. */
+  .grille { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem .6rem; }
   .m { display: flex; align-items: baseline; gap: .35rem; font-size: .76rem; }
   .m .n { font-family: 'Courier Prime', monospace; font-weight: 700;
           font-variant-numeric: tabular-nums; color: var(--cyan); font-size: .95rem; }
   .m .l { color: var(--muted); font-size: .66rem; }
 
-  .lien { display: block; text-align: center; font-family: 'Courier Prime', monospace;
+  .lien { margin-top: auto; display: block; text-align: center; font-family: 'Courier Prime', monospace;
           font-size: .6rem; letter-spacing: .07em; text-transform: uppercase;
           color: var(--muted); text-decoration: none; padding-top: .35rem;
           border-top: 1px solid var(--border); }

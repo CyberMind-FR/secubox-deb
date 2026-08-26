@@ -1,3 +1,12 @@
+secubox-waf (1.10.4-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : un grand vide creusait le milieu de la carte. Le `margin-top:
+    auto` etait pose sur les CHIFFRES, qui se collaient donc au bas ; il
+    n'appartient qu'au lien, seul element qui doit rester en pied. Les chiffres
+    remontent sous les drapeaux et la carte se lit d'un bloc.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:34:10 +0200
+
 secubox-waf (1.10.3-1~bookworm1) bookworm; urgency=medium
 
   * Vue MICRO du pare-feu (#1237) : la carte que le service sert LUI-MEME au
