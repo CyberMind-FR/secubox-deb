@@ -1,3 +1,15 @@
+secubox-metanews (0.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * LE LIEN DU CARDLET OUVRE ENFIN LA NEWS (#1194b). Il pointait vers `#<id>`,
+    et le front n'en faisait RIEN : il rendait toujours le flux global, si bien
+    que le clic « tombait sur le frontend » au lieu du sujet. On lit desormais
+    le fragment, on va chercher LE sujet, on l'affiche seul et on ouvre ses
+    sources d'emblee — la news item, avec les liens vers les articles reels.
+  * Le rafraichissement periodique ne balaie plus une vue ciblee : sans garde,
+    un sujet ouvert depuis le Hall disparaissait au bout d'une minute.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:13:14 +0200
+
 secubox-metanews (0.1.10-1~bookworm1) bookworm; urgency=medium
 
   * UNE CARTE EST UNE VUE VIVANTE (#1298) : `Cache-Control: no-cache` sur la

@@ -1,3 +1,13 @@
+secubox-radio (0.1.49-1~bookworm1) bookworm; urgency=medium
+
+  * LES DEUX NEXT REDUITS A MI-HAUTEUR (#1201). Une fois le back reduit et le
+    courant retire, les deux lignes a venir restaient hautes et la carte
+    paraissait deux fois trop grande pour ce qu'elle dit. Compactees : meme
+    information, moitie moins de place, l'ensemble tient d'un regard. Elles
+    gardent leur pleine opacite — ce sont elles qu'on lit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:17:09 +0200
+
 secubox-radio (0.1.48-1~bookworm1) bookworm; urgency=medium
 
   * PLAYLIST EN MICRO, FINIE (#1201) : un back reduit de moitie, le courant

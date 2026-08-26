@@ -88,6 +88,8 @@ header{display:flex;align-items:baseline;gap:.6em;flex-wrap:wrap}
 /* Carrousel des 10 dernières news (vignette + auto-rotation) */
 .carou{position:relative;margin:8px 0 14px;overflow:hidden;border-radius:14px}
 .cartrack{display:flex;gap:10px;transition:transform .55s ease;will-change:transform}
+.retour{margin:0 0 12px}
+.retour .btn{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
 .ccard-mn{flex:0 0 224px;position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
 .ccard-mn img{width:100%;height:100%;object-fit:cover;display:block}
 .ccard-mn .ph{width:100%;height:100%;display:grid;place-items:center;font-size:2rem;opacity:.4}
@@ -147,6 +149,7 @@ function ilya(ts){if(!ts)return"";const s=Math.max(1,Math.floor(Date.now()/1000-
   return`il y a ${Math.floor(s/86400)} j`}
 function carte(t){
   const c=el(`<div class="card"></div>`);
+  c.id="sujet-"+t.id;   // ancre : le lien du cardlet vise #<id> (voir viseHash)
   const conf=Math.round((t.confidence||0)*100);
   const vign=t.vignette?`<img class="vign" src="${API}/img?u=${encodeURIComponent(t.vignette)}" alt="" loading="lazy">`:"";
   c.innerHTML=`
@@ -190,7 +193,41 @@ async function charger(){
   f.innerHTML="";ts.forEach(t=>f.appendChild(carte(t)));
 }
 let deb;document.getElementById("q").addEventListener("input",()=>{clearTimeout(deb);deb=setTimeout(charger,250)});
-tabs();charger();setInterval(charger,60000);
+// ── OUVRIR UN SUJET DEPUIS LE HALL (#1194b) ─────────────────────────────────
+// Le cardlet MetaNews pointe ses liens vers `#<id>`. Le front n'en faisait RIEN
+// — il rendait toujours le flux global, et le clic « tombait sur le frontend »
+// au lieu de la news. On lit donc le fragment : on va chercher LE sujet, on
+// l'affiche seul, et on ouvre ses sources d'emblee — la « news item » demandee,
+// avec les liens vers les articles reels.
+async function ouvreSujet(id){
+  const f=document.getElementById("flux");
+  let d;
+  try{ d=await fetch(`${API}/topics/${encodeURIComponent(id)}`).then(r=>r.json()); }
+  catch(e){ return false; }
+  if(!d||!d.ok||!d.topic) return false;
+  f.innerHTML="";
+  const bar=el(`<div class="retour"><button class="btn" id="btnretour">← tous les événements</button></div>`);
+  f.appendChild(bar);
+  const c=carte(d.topic); f.appendChild(c);
+  document.getElementById("btnretour").onclick=()=>{ history.replaceState(null,"","#"); location.hash=""; charger(); };
+  const b=c.querySelector(".bsrc"); if(b) b.click();   // sources ouvertes : la news
+  c.scrollIntoView({block:"start"});
+  return true;
+}
+function viseHash(){
+  const h=decodeURIComponent((location.hash||"").replace(/^#/,"")).trim();
+  if(h){ ouvreSujet(h); return true; }
+  return false;
+}
+window.addEventListener("hashchange",viseHash);
+
+tabs();
+// Au chargement : si un sujet est visé, on l'ouvre ; sinon le flux normal.
+if(!viseHash()) charger();
+// Le rafraichissement periodique NE DOIT PAS ecraser une vue ciblee : sans ce
+// garde, un sujet ouvert depuis le Hall disparaissait au bout d'une minute,
+// remplace par le flux global — le bug d'origine, revenu par la porte de service.
+setInterval(()=>{ if(!location.hash) charger(); },60000);
 
 // ── Admin : gestion des flux ────────────────────────────────────────────────
 const gear=document.getElementById("gear"), admin=document.getElementById("admin");

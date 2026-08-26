@@ -279,6 +279,16 @@ body.micro .microlast { display: none; }             /* plus de message unique e
     padding-top: 0; padding-bottom: 0; }
   body.micro.vue-playlist .carte.playlist li.passe .vg { width: 1.1rem; height: 1.1rem; }
   body.micro.vue-playlist .carte.playlist li.passe .dr { display: none; }
+
+  /* LES DEUX NEXT AUSSI, A MI-HAUTEUR (#1201). Une fois le back reduit et le
+     courant retire, les deux lignes a venir restaient hautes et la carte
+     paraissait deux fois trop grande pour ce qu'elle dit. On les compacte :
+     meme information, moitie moins de place, et l'ensemble tient d'un regard.
+     Elles gardent leur pleine opacite — ce sont elles qu'on lit. */
+  body.micro.vue-playlist .carte.playlist li.avenir { padding-top: .02rem;
+    padding-bottom: .02rem; line-height: 1.15; }
+  body.micro.vue-playlist .carte.playlist li.avenir .vg { width: 1.15rem; height: 1.15rem; }
+  body.micro.vue-playlist .carte.playlist li.avenir .nm b { font-size: .66rem; }
 }
 body.micro .lecteur { margin: 0; border-radius: 10px; }
 body.micro .lecteur .bloc { gap: .55rem; padding: .55rem .6rem; align-items: center; }

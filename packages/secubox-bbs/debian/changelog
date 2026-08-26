@@ -1,3 +1,13 @@
+secubox-bbs (0.30.30-1~bookworm1) bookworm; urgency=medium
+
+  * LE LIEN DU CARDLET NE FAIT PLUS 404 (#1333). Le micro construisait
+    `/f/<slug>` : doublement faux. `/f/` est la route des FICHIERS, pas des
+    fils ; et un fil se lit par ID NUMERIQUE (`/t/<id>`), pas par slug. Le clic
+    depuis le Hall menait donc systematiquement a « 404 page not found ».
+    Corrige en `/t/<id>` — verifie 200 sur la box.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:15:50 +0200
+
 secubox-bbs (0.30.29-1~bookworm1) bookworm; urgency=medium
 
   * CARTE /micro RENDUE SANS STYLE NI SCRIPT (#1271) : le BBS sert

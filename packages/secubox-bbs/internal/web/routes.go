@@ -1068,7 +1068,12 @@ func (s *Server) micro(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]vue, 0, len(fils))
 	for _, f := range fils {
-		v := vue{Titre: f.Title, URL: "/f/" + f.Slug, Auteur: f.Author,
+		// LE FIL S'OUVRE A /t/<ID>, PAS /f/<slug> (#1333). `/f/` est la route
+		// des FICHIERS ; y envoyer un slug de fil rendait 404. Et le fil se lit
+		// par ID numerique (idDe ne sait pas d'un slug), non par slug. Le
+		// cardlet menait donc doublement dans le mur — c'est ce qui donnait
+		// « 404 page not found » depuis le Hall.
+		v := vue{Titre: f.Title, URL: "/t/" + strconv.FormatInt(f.ID, 10), Auteur: f.Author,
 			Posts: f.Posts, MAJ: f.LastPostAt}
 		// Une vignette seulement si le media EST une image : l'URL d'un audio
 		// dans un <img> afficherait l'icone de fichier casse.
