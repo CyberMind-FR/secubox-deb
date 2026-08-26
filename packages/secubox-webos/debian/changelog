@@ -1,3 +1,22 @@
+secubox-webos (1.0.109-1~bookworm1) bookworm; urgency=medium
+
+  * NAVIGATEUR SURF DANS LE HALL (#1337). Une carte a barre d'adresse : ce
+    qu'on tape s'ouvre A TRAVERS le proxy de la box (origine par-site,
+    pisteurs coupes). Elle s'ouvre aussi en OVERLAY plein cadre, sans quitter
+    la mosaique ni couper ce qui joue.
+  * LES SOURCES EXTERNES DE METANEWS S'Y OUVRENT (#1337). Un lien d'article,
+    embarque, demande au Hall de l'ouvrir en surf plutot que dans un onglet nu.
+  * LA BARRE DE RECHERCHE DEVIENT BARRE D'ADRESSE (#1339). Ce qui commence par
+    http(s):// ou ressemble a un domaine, valide par Entree, se surfe au lieu
+    de filtrer les cartes.
+  * LA VIDEO GAGNE TOUJOURS SUR L'AUDIO (#1338). « Une video fait taire le
+    reste » ne protegeait que le DEMARRAGE d'une video. L'inverse arrivait : une
+    radio qui reprend seule (sa relance s'arme sur n'importe quel geste, un clic
+    sur la video compris) coupait le film. Regle desormais symetrique : si de
+    l'audio tente de jouer pendant qu'une video joue, c'est l'AUDIO qui cede.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:06:42 +0200
+
 secubox-webos (1.0.108-1~bookworm1) bookworm; urgency=medium
 
   * « ORDRE ACTUEL = DEFAUT » POUR LES FAVORIS (#1336). Nouveau bouton du menu

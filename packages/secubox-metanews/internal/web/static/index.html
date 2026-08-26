@@ -186,8 +186,8 @@ function carte(t){
   c.querySelector(".bsrc").onclick=async()=>{
     if(box.classList.contains("open")){box.classList.remove("open");return}
     const r=await fetch(`${API}/topics/${t.id}/sources`).then(r=>r.json());
-    box.innerHTML=(r.sources||[]).map(s=>`<a href="${esc(s.url)}" target="_blank" rel="noopener nofollow">
-      ${esc(s.name)} — <span class="t">${esc(s.title)}</span></a>`).join("")||`<span class="t">—</span>`;
+    box.innerHTML=(r.sources||[]).map(s=>`<a href="${esc(surfUrl(s.url))}" data-orig="${esc(s.url)}" target="_blank" rel="noopener nofollow" title="via le proxy SecuBox — ${esc(s.url)}">
+      🛰️ ${esc(s.name)} — <span class="t">${esc(s.title)}</span></a>`).join("")||`<span class="t">—</span>`;
     box.classList.add("open");
   };
   c.querySelector(".bdisc").onclick=async(e)=>{
@@ -200,6 +200,23 @@ function carte(t){
   return c;
 }
 function esc(s){return String(s??"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+
+// ── LIRE LES SOURCES A TRAVERS LE PROXY SURF (#1337) ────────────────────────
+// Un lien d'article externe part par le relais de la box : pisteurs coupes,
+// pubs retirees, contenu servi. On reecrit l'hote en son origine par-site
+// (meme aplatissement que relais.py : '-' double, '.' en '-'), pour TOUTES les
+// sources, pas seulement quelques-unes.
+function surfOrigine(host){
+  var plat = String(host||"").trim().toLowerCase().replace(/-/g,"--").replace(/\./g,"-");
+  return "surf-"+plat+".gk2.secubox.in";
+}
+function surfUrl(u){
+  try{
+    var url = new URL(u);
+    if(url.protocol!=="http:" && url.protocol!=="https:") return u;
+    return "https://"+surfOrigine(url.hostname)+url.pathname+url.search+url.hash;
+  }catch(e){ return u; }
+}
 async function charger(){
   const f=document.getElementById("flux");const q=document.getElementById("q").value.trim();
   let url=q?`${API}/search?q=${encodeURIComponent(q)}`:`${API}/topics?category=${cat}`;
@@ -236,6 +253,19 @@ function viseHash(){
   return false;
 }
 window.addEventListener("hashchange",viseHash);
+
+// LES SOURCES EXTERNES S'OUVRENT EN SURF, DANS LE HALL (#1337). Embarque, on ne
+// remplace pas le Hall (target=_blank ouvrirait un onglet nu) : on lui demande
+// d'ouvrir l'adresse a travers le proxy, en overlay. Autonome, le href surf
+// agit normalement.
+if(document.documentElement.classList.contains("sbx-embed")){
+  document.addEventListener("click", ev=>{
+    const a = ev.target.closest && ev.target.closest("a[data-orig]");
+    if(!a) return;
+    ev.preventDefault();
+    try{ parent.postMessage({sbx:"surf", url:a.dataset.orig}, "*"); }catch(e){}
+  }, true);
+}
 
 tabs();
 // Au chargement : si un sujet est visé, on l'ouvre ; sinon le flux normal.

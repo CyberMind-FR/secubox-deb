@@ -1,3 +1,13 @@
+secubox-metanews (0.1.15-1~bookworm1) bookworm; urgency=medium
+
+  * LES SOURCES EXTERNES PASSENT PAR LE PROXY SURF (#1337). Chaque lien
+    d'article — TOUTES les sources, pas seulement quelques-unes — vise l'origine
+    par-site du relais (pisteurs coupes, pubs retirees). Embarque dans le Hall,
+    le clic ouvre l'adresse en overlay surf plutot qu'un onglet nu ; autonome,
+    le lien surf agit directement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:06:45 +0200
+
 secubox-metanews (0.1.14-1~bookworm1) bookworm; urgency=medium
 
   * LES SOURCES PASSENT DANS LA MEGABARRE DU HALL (#1194e). En embarque, le

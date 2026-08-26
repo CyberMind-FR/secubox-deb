@@ -1,0 +1,166 @@
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SURF — un mini-navigateur dans le Hall (#1337).
+  Une barre d'adresse, et ce qu'on y tape s'ouvre A TRAVERS le proxy de la box :
+  pisteurs coupes, pubs retirees, contenu servi. On ne fabrique pas un vrai
+  navigateur — on genere l'origine par-site du relais et on la cadre.
+-->
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surf</title>
+<style>
+  :root{ --fond:#0a0a0f; --carte:#14141c; --ink:#e8e6d9; --muted:#8a8a99;
+         --ligne:#2a2a36; --cyan:#00d4ff; --violet:#6e40c9; }
+  @media (prefers-color-scheme:light){ :root:not([data-theme="dark"]){
+         --fond:#f6f5f0; --carte:#fff; --ink:#1a1a22; --muted:#5b5b6a;
+         --ligne:#e2e0d6; --cyan:#0a7ea4; --violet:#6e40c9; }}
+  :root[data-theme="light"]{ --fond:#f6f5f0; --carte:#fff; --ink:#1a1a22;
+         --muted:#5b5b6a; --ligne:#e2e0d6; --cyan:#0a7ea4; --violet:#6e40c9; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--fond);color:var(--ink);
+       font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+       display:flex;flex-direction:column}
+  .barre{display:flex;align-items:center;gap:.4rem;padding:.45rem .5rem;
+         background:var(--carte);border-bottom:1px solid var(--ligne);flex:0 0 auto}
+  .barre .ic{font-size:.95rem;flex:0 0 auto;opacity:.8}
+  .barre input{flex:1;min-width:0;padding:.42rem .6rem;border-radius:8px;
+         border:1px solid var(--ligne);background:var(--fond);color:var(--ink);
+         font-size:.8rem;font-family:"JetBrains Mono",ui-monospace,monospace}
+  .barre input:focus{outline:none;border-color:var(--cyan);
+         box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 22%,transparent)}
+  .barre button{flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;
+         background:var(--cyan);color:#04222a;font-weight:700;font-size:.78rem;
+         padding:.42rem .7rem}
+  .barre button.ghost{background:transparent;color:var(--muted);
+         border:1px solid var(--ligne);font-weight:600;padding:.42rem .55rem}
+  .barre button.ghost:hover{color:var(--ink);border-color:var(--cyan)}
+  .etat{font-size:.6rem;color:var(--muted);padding:.15rem .6rem;flex:0 0 auto;
+        background:var(--carte);border-bottom:1px solid var(--ligne);
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+        font-family:"JetBrains Mono",ui-monospace,monospace}
+  .vue{flex:1;position:relative;min-height:0;background:var(--fond)}
+  .vue iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .accueil{position:absolute;inset:0;display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:.7rem;text-align:center;
+        padding:1.2rem;color:var(--muted)}
+  .accueil .grand{font-size:1.7rem}
+  .accueil b{color:var(--ink)}
+  .accueil .ex{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-top:.3rem}
+  .accueil .ex button{border:1px solid var(--ligne);background:var(--carte);
+        color:var(--cyan);border-radius:20px;padding:.3rem .7rem;cursor:pointer;
+        font-size:.72rem;font-family:"JetBrains Mono",ui-monospace,monospace}
+  .accueil .ex button:hover{border-color:var(--cyan)}
+  .accueil small{font-size:.68rem;max-width:26rem;line-height:1.5}
+</style>
+</head>
+<body>
+  <div class="barre">
+    <span class="ic">🛰️</span>
+    <input id="adr" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+           placeholder="adresse à surfer — ex. www.lemonde.fr, mbasic.facebook.com…"
+           aria-label="Adresse à surfer">
+    <button id="go" type="button">Surfer</button>
+    <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
+    <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
+  </div>
+  <div class="etat" id="etat" hidden></div>
+  <div class="vue" id="vue">
+    <div class="accueil" id="accueil">
+      <div class="grand">🛰️</div>
+      <div>Tapez une adresse : elle s'ouvre <b>à travers la box</b>.</div>
+      <div class="ex">
+        <button data-u="mbasic.facebook.com">mbasic.facebook.com</button>
+        <button data-u="www.lemonde.fr">lemonde.fr</button>
+        <button data-u="lite.cnn.com">lite.cnn.com</button>
+        <button data-u="check.torproject.org">torproject</button>
+      </div>
+      <small>Pisteurs coupés, pubs retirées, contenu servi. C'est de la
+        <b>lecture</b> : les sites qui montent tout en JavaScript vivront mal —
+        visez leur version sobre (<b>mbasic</b>, <b>m.</b>, <b>lite</b>, RSS).</small>
+    </div>
+  </div>
+
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t)
+      .replace(/[&<>"]/g, function (c) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+
+  // MEME APLATISSEMENT QUE relais.py / MetaNews : '-' double, '.' en '-'. Une
+  // seule regle partout, sinon les origines divergent et le proxy ne route plus.
+  function surfOrigine(host) {
+    var plat = String(host || '').trim().toLowerCase().replace(/-/g, '--').replace(/\./g, '-');
+    return 'surf-' + plat + '.gk2.secubox.in';
+  }
+  function normalise(saisie) {
+    var v = String(saisie || '').trim();
+    if (!v) return null;
+    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;   // l'humain tape rarement le schema
+    try {
+      var u = new URL(v);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+      return { host: u.hostname,
+               surf: 'https://' + surfOrigine(u.hostname) + u.pathname + u.search + u.hash };
+    } catch (e) { return null; }
+  }
+
+  var courant = null;
+
+  function surfe(saisie) {
+    var n = normalise(saisie);
+    if (!n) { $('etat').hidden = false; $('etat').textContent = 'adresse invalide'; return; }
+    courant = n;
+    $('adr').value = n.host + (new URL(n.surf).pathname.replace(/^\/$/, '') || '');
+    var vue = $('vue');
+    // On REMPLACE le cadre plutot que de changer son src : un cadre reutilise
+    // garderait l'historique de l'origine precedente, et « recharger » ne
+    // ferait pas ce qu'on croit.
+    vue.innerHTML = '<iframe title="Surf" src="' + esc(n.surf)
+      + '" allow="fullscreen" referrerpolicy="no-referrer"></iframe>';
+    $('etat').hidden = false;
+    $('etat').textContent = '🛰️ ' + n.host + ' — relayé, pisteurs coupés';
+    $('rech').hidden = false;
+    $('onglet').hidden = false;
+  }
+
+  $('go').addEventListener('click', function () { surfe($('adr').value); });
+  $('adr').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); surfe($('adr').value); }
+  });
+  $('rech').addEventListener('click', function () { if (courant) surfe(courant.host + new URL(courant.surf).pathname); });
+  // « Ouvrir dans un onglet » vise l'origine SURF, pas le site direct : on ne
+  // sort pas discretement de la protection qu'on vient d'offrir.
+  $('onglet').addEventListener('click', function () {
+    if (courant) window.open(courant.surf, '_blank', 'noopener');
+  });
+  document.querySelectorAll('.accueil .ex button').forEach(function (b) {
+    b.addEventListener('click', function () { surfe(b.dataset.u); });
+  });
+
+  // Adresse de depart possible par le parametre ?u=, pour un lien direct.
+  try {
+    var u0 = new URLSearchParams(location.search).get('u');
+    if (u0) surfe(u0);
+  } catch (e) {}
+
+  // Theme herite du Hall — parametre d'arrivee, puis messages.
+  try {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (d && d.sbx === 'theme' && (d.theme === 'dark' || d.theme === 'light')) {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+</script>
+</body>
+</html>

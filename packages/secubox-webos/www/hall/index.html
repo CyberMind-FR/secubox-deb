@@ -618,6 +618,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    jamais — on croit que le glisser ne marche pas. */
 .cl-encours iframe{pointer-events:none}
 @media (prefers-reduced-motion:reduce){.cl-grip{transition:none}}
+/* OVERLAY SURF (#1337) */
+.surf-ov{position:fixed;inset:0;z-index:70;display:flex;flex-direction:column;
+  background:var(--bg);}
+.surf-ov.hidden{display:none}
+.surf-ov-tete{display:flex;align-items:center;gap:10px;padding:8px 12px;
+  background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto}
+.surf-ov-t{font-size:.82rem;color:var(--dim)} .surf-ov-t b{color:var(--ink);font-family:"JetBrains Mono";font-size:.78rem}
+.surf-ov-x{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);cursor:pointer;font-size:1rem}
+.surf-ov-x:hover{border-color:var(--coral);color:var(--coral)}
+.surf-ov iframe{flex:1;width:100%;border:0;min-height:0}
 /* RADIO de référence (#1232) — le lecteur REMPLIT la cardlet, comme au BBS.
    `position:relative` sert uniquement d'ancrage ; on ne touche ni au padding ni
    à l'overflow, ce qui avait rendu le widget invisible au BBS. 252 px est la
@@ -720,7 +731,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
       <button class="it" type="button" data-menu="systeme"><span>🗄️</span> Système <span class="ca">▾</span></button>
     </nav>
-    <div class="drop"><span class="ico" aria-hidden="true">⌕</span><input id="q" type="search" placeholder="chercher un service…" aria-label="Chercher un service"></div>
+    <div class="drop"><span class="ico" aria-hidden="true">⌕</span><input id="q" type="search" placeholder="chercher un service, ou surfer une adresse…" aria-label="Chercher un service ou surfer une adresse"></div>
     <!-- Contexte du service embarqué, GREFFÉ dans la barre unique (#1175). -->
     <span id="nav-embed" class="nav-embed hidden">
       <!-- #1187 — le TITRE du service EST le déclencheur de sa navigation :
@@ -904,6 +915,10 @@ const FEATURED = [
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
+  // SURF n'est pas un service de la box : c'est un navigateur de relais. Il
+  // sert sa propre carte (barre d'adresse + cadre), et s'ouvre aussi en overlay
+  // depuis les sources MetaNews ou la barre de recherche (#1337).
+  {id:"surf",       label:"Surf",      icon:"🛰️", color:"#5b46b8", url:"surf.gk2.secubox.in", carte:"/cardlets/surf.html", h:404},
 ];
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
@@ -1456,13 +1471,36 @@ function cleProfil(quoi){ return 'sbx.hall.'+profilCourant()+'.'+quoi; }
 })();
 // recherche → bascule sur Système et filtre les cartes
 const q=document.getElementById('q');
-if(q) q.addEventListener('input',e=>{
-  const v=e.target.value.trim().toLowerCase();
-  if(v) showView('systeme');
-  document.querySelectorAll('#sysboard .card').forEach(c=>{
-    c.style.display=(!v||c.dataset.name.indexOf(v)>=0)?'':'none';
+// UNE ADRESSE PLUTOT QU'UNE RECHERCHE (#1339). Ce qui commence par http(s):// —
+// ou ce qui ressemble a un domaine (« exemple.fr/... ») — n'est pas un service
+// a filtrer mais une adresse a SURFER. On ne le declenche qu'a « Entree » : a
+// la frappe, « lemonde.fr » passerait par mille etats intermediaires, et l'on
+// filtrerait les cartes pour rien.
+function ressembleAdresse(v){
+  if(/^https?:\/\//i.test(v)) return true;
+  // un point, pas d'espace, un TLD plausible en fin : « lemonde.fr », « m.x.io/a »
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+(\/.*)?$/i.test(v) && v.indexOf(' ')<0;
+}
+if(q){
+  q.addEventListener('input',e=>{
+    const v=e.target.value.trim().toLowerCase();
+    // Tant que ca ressemble a une adresse, on ne filtre pas les cartes : on
+    // attend Entree. Sinon, recherche classique.
+    if(ressembleAdresse(v)) return;
+    if(v) showView('systeme');
+    document.querySelectorAll('#sysboard .card').forEach(c=>{
+      c.style.display=(!v||c.dataset.name.indexOf(v)>=0)?'':'none';
+    });
   });
-});
+  q.addEventListener('keydown',e=>{
+    if(e.key!=='Enter') return;
+    const v=e.target.value.trim();
+    if(!ressembleAdresse(v.toLowerCase())) return;
+    e.preventDefault();
+    ouvreSurf(v);
+    e.target.value='';
+  });
+}
 
 // chargement
 render(MOCK,'Registre indisponible — <b>aperçu maquette</b>. Le Hall se remplit du registre réel dès activation.');
@@ -1708,7 +1746,41 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // Une carte peut demander l'ouverture de la connexion (#1299) : c'est le
   // Hall qui ouvre la fenêtre — une popup ouverte depuis un cadre peut être
   // bloquée, et le Hall doit de toute façon savoir qu'il faudra se relire.
-  addEventListener('message', ev=>{
+  // SURF EMBARQUE (#1337). Un service embarque (MetaNews...) demande d'ouvrir un
+// lien externe A TRAVERS le proxy, dans le Hall. On charge la carte Surf —
+// servie par le Hall, meme origine — avec l'adresse en parametre ; c'est elle
+// qui fabrique l'origine par-site et cadre le relais.
+function ouvreSurf(url){
+  if(!url) return;
+  const th = root.getAttribute('data-theme')
+    || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  const f = document.getElementById('surf-ov-f');
+  const ov = document.getElementById('surf-ov');
+  let hote = url;
+  try{ hote = new URL(/^https?:\/\//i.test(url)?url:'https://'+url).hostname; }catch(e){}
+  document.getElementById('surf-ov-h').textContent = hote;
+  f.src = '/cardlets/surf.html?theme='+th+'&u='+encodeURIComponent(url);
+  ov.classList.remove('hidden');
+}
+(function(){
+  const x=document.getElementById('surf-ov-x');
+  if(x) x.addEventListener('click', ()=>{
+    const ov=document.getElementById('surf-ov'), f=document.getElementById('surf-ov-f');
+    ov.classList.add('hidden'); f.src='about:blank';   // on coupe le relais en fermant
+  });
+  addEventListener('keydown', e=>{
+    if(e.key==='Escape'){ const ov=document.getElementById('surf-ov');
+      if(ov && !ov.classList.contains('hidden')){ ov.classList.add('hidden');
+        document.getElementById('surf-ov-f').src='about:blank'; } }
+  });
+})();
+addEventListener('message', ev=>{
+  const d=ev.data;
+  if(!d||d.sbx!=='surf'||!d.url) return;
+  ouvreSurf(d.url);
+});
+
+addEventListener('message', ev=>{
     const d=ev.data;
     if(!d||d.sbx!=='connexion') return;
     const c=document.querySelector('iframe[data-micro]');
@@ -1765,6 +1837,29 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       flux.forEach((f,autre)=>{
         if(autre!==d.id && f.etat && f.etat.joue) commande(autre,'pause');
       });
+    }
+    // ── LA VIDEO GAGNE TOUJOURS, DANS LES DEUX SENS (#1338) ──────────────────
+    //
+    // « Une video fait taire le reste » ne protegeait que le DEMARRAGE d'une
+    // video. Mais l'inverse arrivait : une radio qui reprend SEULE (sa relance
+    // s'arme sur n'importe quel geste de la page, y compris un clic sur la
+    // video) s'annoncait « joue », et l'on se retrouvait avec du son par-dessus
+    // le film. Pire, l'arbitrage finissait par mettre la video en pause.
+    //
+    // La regle juste est symetrique : si de l'AUDIO tente de jouer alors qu'une
+    // VIDEO joue deja, c'est l'AUDIO qui cede. La video n'est jamais coupee par
+    // un flux audio — surtout pas par une reprise non sollicitee.
+    if(d.joue && d.type!=='video'){
+      let videoJoue=false;
+      flux.forEach((f,autre)=>{
+        if(autre!==d.id && f.etat && f.etat.joue && f.etat.type==='video') videoJoue=true;
+      });
+      if(videoJoue){
+        commande(d.id,'pause');
+        // On enregistre l'etat REEL (en pause) : marquer « joue » ferait
+        // clignoter la barre et relancerait l'arbitrage a chaque battement.
+        d = Object.assign({}, d, {joue:false});
+      }
     }
     flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
     dessine();
@@ -2372,5 +2467,15 @@ const CARDLET_ICONES = {
 // service du Hall comme un autre, et openService est le point d'entrée unique
 // (#1187). Un onglet séparé perdrait le fil de navigation et le thème.
 </script>
+<!-- SURF EMBARQUE (#1337). Un lien externe — d'une source MetaNews, ou de la
+     carte Surf — s'ouvre A TRAVERS le proxy, DANS le Hall, sans quitter la
+     mosaique ni couper ce qui joue. Plein cadre, un bouton pour fermer. -->
+<div id="surf-ov" class="surf-ov hidden" role="dialog" aria-label="Navigation surf">
+  <div class="surf-ov-tete">
+    <span class="surf-ov-t">🛰️ Surf — <b id="surf-ov-h"></b></span>
+    <button class="surf-ov-x" id="surf-ov-x" type="button" title="Fermer" aria-label="Fermer">✕</button>
+  </div>
+  <iframe id="surf-ov-f" title="Surf" allow="fullscreen"></iframe>
+</div>
 </body>
 </html>
