@@ -1,3 +1,21 @@
+secubox-bbs (0.30.29-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE /micro RENDUE SANS STYLE NI SCRIPT (#1271) : le BBS sert
+    `style-src 'self'; script-src 'self'`, et mes blocs EN LIGNE etaient donc
+    purement et simplement bloques. La carte s'affichait en HTML brut — texte
+    serif, liens bleus soulignes — et la rotation ne demarrait jamais, d'ou
+    « aucun fil » alors que les fils etaient bien dans la page.
+  * La feuille et le script sortent dans /static/ plutot que d'affaiblir la
+    politique : une carte ne vaut pas qu'on ouvre 'unsafe-inline' au site
+    entier.
+  * La donnee voyage desormais par un ATTRIBUT et non par un bloc <script> :
+    sous `script-src 'self'`, un bloc de donnees en ligne depend du bon vouloir
+    du navigateur, alors qu'un attribut n'est jamais un script. Le champ
+    redevient une string simple — en template.JS, Go ne l'echapperait pas pour
+    un contexte attribut et le premier guillemet du JSON fermerait l'attribut.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:27:02 +0200
+
 secubox-bbs (0.30.28-1~bookworm1) bookworm; urgency=medium
 
   * CLAIR / SOMBRE : le parametre ne donnait que le theme d'ARRIVEE, et les

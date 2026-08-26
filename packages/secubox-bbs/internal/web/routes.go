@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"net/url"
@@ -60,10 +59,11 @@ type page struct {
 	// Lecteur détaché (#1056) : le pop-out qui continue en fenêtre séparée.
 	PlayerFeed                          *PodFeed
 	PlayerSrc, PlayerEp, PlayerT, PlayerTitle string
-	// MicroJSON : les fils de la carte /micro, deja serialises. template.JS
-	// et non string : dans un <script>, html/template echapperait les
-	// guillemets et le JSON deviendrait illisible pour JSON.parse.
-	MicroJSON template.JS
+	// MicroJSON : les fils de la carte /micro, deja serialises. STRING simple :
+	// la donnee voyage dans un ATTRIBUT, et c'est html/template qui doit
+	// l'echapper pour ce contexte. Un template.JS y passerait sans echappement
+	// et le premier guillemet du JSON fermerait l'attribut.
+	MicroJSON string
 	// « Déposer une source » (#1056 stage 2) : l'adresse déposée et son type
 	// déduit, pour pré-remplir le composeur avec un aperçu.
 	SourceURL string
@@ -1081,7 +1081,7 @@ func (s *Server) micro(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		b = []byte("[]")
 	}
-	p.MicroJSON = template.JS(b)
+	p.MicroJSON = string(b)
 	p.Titre = "BBS"
 	s.rendDef(w, r, "micro", "micro", p)
 }

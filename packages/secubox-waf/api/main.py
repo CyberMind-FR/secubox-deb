@@ -39,6 +39,13 @@ THREATS_LOG = os.environ.get("SECUBOX_WAF_THREATS_LOG") or next(
     "/var/log/secubox/waf/waf-threats.log",
 )
 STATS_CACHE = "/tmp/secubox/waf-stats.json"
+# Registre RGPD des témoins posés par les services, écrit par sbxwaf. Les
+# VALEURS n'y sont jamais : seulement une empreinte. C'est ce qui permet d'en
+# faire un inventaire sans en faire un vol.
+COOKIE_LEDGER = os.environ.get("SECUBOX_COOKIE_LEDGER") or next(
+    (p for p in ("/var/log/secubox/cookie-audit/server.jsonl",) if Path(p).exists()),
+    "/var/log/secubox/cookie-audit/server.jsonl",
+)
 
 # ── historique des menaces (#1062) : tendances multi-jours depuis les logs
 # TOURNÉS (gzip compris), agrégat de fond servi par /history. Scan complet et
@@ -1394,6 +1401,87 @@ async def get_visits():
                                key=lambda kv: -int(kv[1] or 0))[:10]),
         "updated_unix": int(snap.get("updated_unix", 0)),
     }
+
+
+def _fin_de_fichier(chemin: str, octets: int = 3_000_000) -> list[str]:
+    """Les dernières lignes d'un journal, sans le charger entier.
+
+    Le registre pèse 85 Mio et grossit : le relire en entier à chaque appel
+    coûterait plusieurs secondes de CPU sur une carte ARM, pour une réponse
+    qui n'a besoin que du présent. On lit la fin, et on jette la première
+    ligne — coupée en son milieu par le décalage, elle n'est pas du JSON.
+    """
+    p = Path(chemin)
+    if not p.exists():
+        return []
+    taille = p.stat().st_size
+    with p.open("rb") as f:
+        if taille > octets:
+            f.seek(taille - octets)
+            f.readline()
+        return f.read().decode("utf-8", "replace").splitlines()
+
+
+# Un nom de témoin ne dit pas toujours ce qu'il fait, mais ceux-là ne trompent
+# personne : ils portent une SESSION. C'est l'information qu'on cherche —
+# « où suis-je identifié ? » — et non l'inventaire complet des témoins.
+_MOTIFS_SESSION = ("session", "sess", "auth", "token", "sid", "login", "csrf",
+                   "remember", "jwt", "sbx_", "oc_", "_mastodon", "connect")
+
+
+@app.get("/cookies")
+async def get_cookies():
+    """Inventaire agrégé des témoins posés, par service.
+
+    POURQUOI CETTE ROUTE EXISTE. Un utilisateur du Hall est identifié sur une
+    dizaine de services à la fois, sans aucun endroit où le voir. Le registre
+    RGPD sait déjà tout cela — il servait à l'audit, il sert ici à la personne
+    concernée. Aucune valeur n'est rendue : le registre n'en contient pas.
+    """
+    par_service: dict[str, dict] = {}
+    for ligne in _fin_de_fichier(COOKIE_LEDGER):
+        ligne = ligne.strip()
+        if not ligne or not ligne.startswith("{"):
+            continue
+        try:
+            e = json.loads(ligne)
+        except (ValueError, TypeError):
+            continue
+        vhost = e.get("vhost") or ""
+        nom = e.get("name") or ""
+        if not vhost or not nom:
+            continue
+        s = par_service.setdefault(vhost, {"vhost": vhost, "temoins": {}, "vu": ""})
+        t = s["temoins"].setdefault(nom, {
+            "nom": nom, "vu": "", "secure": False, "httponly": False,
+            "samesite": None, "session": any(m in nom.lower() for m in _MOTIFS_SESSION),
+        })
+        ts = e.get("ts") or ""
+        # On garde le PLUS RÉCENT : un témoin posé hier puis reposé ce matin
+        # est un témoin d'aujourd'hui, et c'est la fraîcheur qui dit si la
+        # session est encore vivante.
+        if ts > t["vu"]:
+            t["vu"] = ts
+            t["secure"] = bool(e.get("secure"))
+            t["httponly"] = bool(e.get("httponly"))
+            t["samesite"] = e.get("samesite")
+        if ts > s["vu"]:
+            s["vu"] = ts
+
+    services = []
+    for s in par_service.values():
+        temoins = sorted(s["temoins"].values(), key=lambda t: (not t["session"], t["nom"]))
+        services.append({
+            "vhost": s["vhost"], "vu": s["vu"],
+            "total": len(temoins),
+            "sessions": sum(1 for t in temoins if t["session"]),
+            "temoins": temoins[:12],
+        })
+    # Les services où l'on est identifié d'abord, puis les plus récents : c'est
+    # l'ordre dans lequel la question « où suis-je connecté ? » se pose.
+    services.sort(key=lambda s: (-s["sessions"], s["vu"]), reverse=False)
+    services.sort(key=lambda s: (s["sessions"] > 0, s["vu"]), reverse=True)
+    return {"services": services, "registre": COOKIE_LEDGER}
 
 
 @app.get("/stats")

@@ -481,6 +481,25 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:none;color:var(--ink);font-size:.84rem;cursor:pointer}
 .who-menu button:hover{background:var(--soft)}
 .who-note{margin:6px 10px 2px;font-size:.68rem;color:var(--dim);line-height:1.35}
+.who-menu{max-width:320px}
+.who-sep{height:1px;background:var(--line);margin:8px 4px}
+.who-titre{margin:2px 10px 4px;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--dim);font-family:"JetBrains Mono";display:flex;gap:6px;align-items:baseline}
+.who-titre span{margin-left:auto;font-variant-numeric:tabular-nums}
+/* La liste peut être longue : on la borne et on la fait défiler plutôt que de
+   pousser « Réinitialiser » hors de l'écran. */
+.who-ident{max-height:230px;overflow-y:auto;padding:0 2px}
+.who-ident button{display:flex;align-items:baseline;gap:6px;width:100%;text-align:left;
+  padding:5px 8px;border:0;border-radius:7px;background:none;color:var(--ink);
+  font-size:.76rem;cursor:pointer}
+.who-ident button:hover{background:var(--soft)}
+.who-ident .h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.who-ident .n{flex:0 0 auto;font-size:.6rem;color:var(--dim);font-family:"JetBrains Mono";
+  font-variant-numeric:tabular-nums}
+/* La pastille dit « session ouverte ici » d'un coup d'œil : un chiffre seul
+   demanderait de lire, et ce menu se parcourt. */
+.who-ident .cle{flex:0 0 auto;font-size:.7rem}
+.who-ident .froid{opacity:.5}
 .cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
@@ -628,6 +647,16 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
         <div class="who-menu hidden" id="who-menu" role="menu">
           <button type="button" role="menuitem" id="who-reset">↺ Réinitialiser l'affichage</button>
           <p class="who-note">Ordre des cartes et thème, pour ce profil.</p>
+          <!-- OÙ SUIS-JE IDENTIFIÉ ? (#1272) On est connecté à une dizaine de
+               services à la fois sans aucun endroit où le voir. Le registre
+               RGPD du pare-feu le sait déjà — il servait à l'audit, il sert
+               ici à la personne concernée. Aucune valeur n'est montrée : le
+               registre n'en garde pas, seulement une empreinte. -->
+          <div class="who-sep"></div>
+          <p class="who-titre">🔑 Mes identités <span id="ident-n"></span></p>
+          <div class="who-ident" id="who-ident">
+            <p class="who-note">lecture du registre…</p>
+          </div>
         </div>
       </div>
     </div>
@@ -1450,13 +1479,74 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   const ouvre=v=>{ menu.classList.toggle('hidden',!v); bloc.setAttribute('aria-expanded',String(v)); };
   bloc.addEventListener('click', e=>{
     if(e.target.closest('#who-menu')) return;   // un clic DANS le menu ne le referme pas
-    ouvre(menu.classList.contains('hidden'));
+    const v=menu.classList.contains('hidden');
+    ouvre(v);
+    // On interroge le registre A L'OUVERTURE et pas au chargement : lire 3 Mio
+    // de journal pour un menu que personne n'ouvrira peut-être est du travail
+    // fait pour rien. Le résultat est ensuite gardé pour la session.
+    if(v) chargeIdentites();
   });
   bloc.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); ouvre(menu.classList.contains('hidden')); } });
   // Un clic ailleurs referme : un menu qui reste ouvert derrière ce qu'on
   // regarde est une gêne, pas une commodité.
   addEventListener('click', e=>{ if(!bloc.contains(e.target)) ouvre(false); });
   addEventListener('keydown', e=>{ if(e.key==='Escape') ouvre(false); });
+
+  // ── MES IDENTITÉS (#1272) ────────────────────────────────────────────────
+  //
+  // Le pare-feu tient le registre des témoins posés par chaque service. On
+  // n'en montre ni la valeur ni l'empreinte — seulement OÙ une session existe,
+  // et depuis quand. C'est la question qu'on se pose vraiment, et la seule à
+  // laquelle ce menu doit répondre.
+  //
+  // Un clic embarque le service : l'intérêt d'agréger les identités, c'est de
+  // pouvoir y aller, pas seulement de les compter.
+  var _identVues = null;
+  function delaiCourt(iso){
+    const t = Date.parse(iso); if(!t) return '';
+    const s = Math.max(0, (Date.now() - t) / 1000);
+    if(s < 3600) return Math.round(s/60) + ' min';
+    if(s < 86400) return Math.round(s/3600) + ' h';
+    return Math.round(s/86400) + ' j';
+  }
+  function rendIdentites(services){
+    const z = document.getElementById('who-ident');
+    const n = document.getElementById('ident-n');
+    if(!z) return;
+    if(!services || !services.length){
+      z.innerHTML = '<p class="who-note">Aucune identité relevée.</p>';
+      if(n) n.textContent = '';
+      return;
+    }
+    if(n) n.textContent = services.filter(s=>s.sessions>0).length + ' service(s)';
+    z.innerHTML = services.map(s=>{
+      // « froid » : plus de 24 h sans que le service ne repose son témoin. La
+      // session y est probablement expirée — on le montre sans l'affirmer.
+      const froid = (Date.now() - (Date.parse(s.vu)||0)) > 86400000;
+      const svc = FEATURED.find(f=>f.url === s.vhost);
+      return '<button type="button" data-ident="'+esc(s.vhost)+'"'
+        + (svc ? ' data-svc="'+esc(svc.id)+'"' : '')
+        + ' class="'+(froid?'froid':'')+'"'
+        + ' title="'+esc(s.temoins.map(t=>t.nom).join(', '))+'">'
+        + '<span class="cle">'+(s.sessions>0?'🔑':'🍪')+'</span>'
+        + '<span class="h">'+esc((svc&&svc.label)||s.vhost)+'</span>'
+        + '<span class="n">'+esc(delaiCourt(s.vu))+'</span></button>';
+    }).join('');
+  }
+  async function chargeIdentites(){
+    if(_identVues) { rendIdentites(_identVues); return; }
+    try{
+      const r = await fetch('/api/v1/waf/cookies', {headers:{'Accept':'application/json'}});
+      _identVues = r.ok ? ((await r.json()).services || []) : [];
+    }catch(e){ _identVues = []; }
+    rendIdentites(_identVues);
+  }
+  document.getElementById('who-ident').addEventListener('click', e=>{
+    const b = e.target.closest('button[data-ident]'); if(!b) return;
+    if(b.dataset.svc && typeof openService==='function'){ openService(b.dataset.svc,'embed'); }
+    else { window.open('https://'+b.dataset.ident+'/', '_blank', 'noopener'); }
+    ouvre(false);
+  });
 
   document.getElementById('who-reset').addEventListener('click', ()=>{
     // On ne vide QUE les réglages de ce profil : effacer tout le stockage

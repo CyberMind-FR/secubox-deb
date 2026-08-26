@@ -1,3 +1,25 @@
+secubox-webos (1.0.66-1~bookworm1) bookworm; urgency=medium
+
+  * MES IDENTITES au menu profil (#1272). On est connecte a une dizaine de
+    services a la fois sans aucun endroit ou le voir. Le registre RGPD du
+    pare-feu le sait deja : il servait a l'audit, il sert desormais aussi a la
+    personne concernee.
+  * On ne montre NI valeur NI empreinte — seulement OU une session existe et
+    depuis quand. C'est la question qu'on se pose vraiment, et la seule a
+    laquelle ce menu doit repondre. Un service muet depuis plus de 24 h est
+    grise : la session y est probablement expiree, on le montre sans
+    l'affirmer.
+  * Un clic embarque le service : l'interet d'agreger les identites, c'est de
+    pouvoir y aller, pas seulement de les compter.
+  * Le registre n'est interroge qu'A L'OUVERTURE du menu — lire 3 Mio de
+    journal pour un menu que personne n'ouvrira peut-etre est du travail fait
+    pour rien.
+  * Le vhost expose `= /api/v1/waf/cookies` et RIEN d'autre : un
+    `location /api/v1/waf/` ouvrirait bans, regles et detections sur le vhost
+    du Hall.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:31:20 +0200
+
 secubox-webos (1.0.65-1~bookworm1) bookworm; urgency=medium
 
   * LE PROTOCOLE VIENT DE HAPROXY, PAS DE NOUS (#1269). nginx est un hop

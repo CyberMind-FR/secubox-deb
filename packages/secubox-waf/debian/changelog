@@ -1,3 +1,22 @@
+secubox-waf (1.10.8-1~bookworm1) bookworm; urgency=medium
+
+  * INVENTAIRE DES TEMOINS, PAR SERVICE (#1272). Un utilisateur du Hall est
+    identifie sur une dizaine de services a la fois, sans aucun endroit ou le
+    voir. Le registre RGPD ecrit par sbxwaf sait deja tout cela : il servait a
+    l'audit, il sert desormais aussi a la personne concernee.
+  * AUCUNE VALEUR N'EST RENDUE — le registre n'en contient pas, seulement une
+    empreinte. C'est ce qui permet d'en faire un inventaire sans en faire un
+    vol.
+  * On lit la FIN du journal, pas le journal : il pese 85 Mio et grossit, le
+    relire en entier couterait plusieurs secondes de CPU sur cette carte pour
+    une reponse qui n'a besoin que du present. La premiere ligne lue est
+    jetee — coupee en son milieu par le decalage, ce n'est pas du JSON.
+  * On garde le PLUS RECENT de chaque temoin : pose hier puis repose ce matin,
+    c'est un temoin d'aujourd'hui, et c'est la fraicheur qui dit si la session
+    est encore vivante.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:29:02 +0200
+
 secubox-waf (1.10.7-1~bookworm1) bookworm; urgency=medium
 
   * Un clic dans la carte n'emmene plus hors du Hall (#1266).
