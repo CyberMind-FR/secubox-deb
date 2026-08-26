@@ -1,3 +1,12 @@
+secubox-webos (1.0.119-1~bookworm1) bookworm; urgency=medium
+
+  * METRICS SURF : retour visuel immediat (#1354). A l'ouverture d'une
+    adresse, l'entete affiche 'analyse...' puis se remplit des que la page
+    relayee poste ses chiffres. Un entete vide signale une page NON chargee
+    (ex. portail de consentement injoignable), pas un bug d'affichage.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:14:19 +0200
+
 secubox-webos (1.0.118-1~bookworm1) bookworm; urgency=medium
 
   * LA RADIO REJOUE (#1356). La regle symetrique « l'audio cede a la video »

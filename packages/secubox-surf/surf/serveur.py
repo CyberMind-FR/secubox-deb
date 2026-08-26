@@ -73,6 +73,16 @@ def _bannette(cible: str, message: str, code: int = 502) -> bytes:
         "<p>🛰️ <b>SecuBox Surf</b></p>"
         "<p>" + message + "</p>"
         "<p><small>" + cible + " · relais en lecture, pisteurs coupés</small></p>"
+        # UN BOUTON RETOUR, PAS UN CUL-DE-SAC (#1357). Beaucoup de « injoignable »
+        # viennent d'un portail de consentement (first-id.fr et consorts) que le
+        # DNS de la box bloque a dessein : ce n'est pas une panne, c'est une
+        # protection. On offre le retour au Hall plutot qu'un mur.
+        "<p style=\"margin-top:1.4rem\">"
+        "<button onclick=\"parent.postMessage({sbx:'surf-vide'},'*')\" "
+        "style=\"background:#00d4ff;color:#04222a;border:0;border-radius:8px;"
+        "padding:.5rem 1rem;font-weight:700;cursor:pointer\">← Revenir</button></p>"
+        "<p><small>Ce domaine est souvent un pisteur de consentement, "
+        "coupé par le pare-feu de la box.</small></p>"
         "</div>"
     ).encode()
 
