@@ -330,6 +330,14 @@ Trois règles qui en découlent, et qu'il ne faut pas contourner :
   WebSockets, et d'une surface d'attaque nouvelle. **À maquetter et mesurer
   avant toute inclusion.**
 
+## 5bis. Ce qu'on en a tiré pour la suite
+
+Les pièges rencontrés en construisant ces cartes — avec le symptôme exact que
+chacun produisait — sont consignés dans
+[`CARDLET-GUIDELINES.md`](CARDLET-GUIDELINES.md), qui sert de liste de contrôle
+aux prochains modules. Ce document-ci dit **pourquoi** une carte est faite ainsi ;
+l'autre dit **ce qui casse** quand on s'en écarte.
+
 ## 6. Où c'est écrit
 
 | | |

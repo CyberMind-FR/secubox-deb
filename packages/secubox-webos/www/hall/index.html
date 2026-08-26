@@ -574,25 +574,23 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   user-select:none}
 .fcard:hover .cl-grip,.cl-grip:focus-visible{opacity:.85}
 .cl-grip:active{cursor:grabbing}
-/* CARDLET VEDETTE (#1323). Une carte peut passer pleine largeur SANS QUITTER
-   SA PLACE : `column-span:all` traverse les colonnes la ou l'element se
-   trouve. C'est la raison du choix — deplacer le noeud dans le DOM aurait
-   RECHARGE son cadre, donc coupe une video en cours au moment precis ou l'on
-   demande a mieux la voir. Ici rien ne bouge : la carte s'elargit, le flux
-   continue.
-   Une seule vedette a la fois : deux vedettes n'en font aucune. */
-.grid.feat > .fcard.vedette{column-span:all;-webkit-column-span:all;
-  margin:2px 0 16px;box-shadow:var(--lift);border-color:var(--violet)}
-.fcard.vedette .fcard-cadre{height:var(--vedette-h,440px)}
-.fcard.vedette .ap-vue{height:380px}
+/* FAVORI (#1323, revu #1326). LE FAVORI NE CHANGE QUE L'ORDRE.
+   Il elargissait la carte (`column-span:all`) et forcait la hauteur de son
+   cadre : l'apercu, mis a l'echelle de sa nouvelle largeur, paraissait zoome
+   de travers, et la carte ne ressemblait plus a elle-meme. Mettre en favori
+   n'est pas agrandir — c'est dire « celle-la d'abord ».
+   Les favoris remontent donc en tete de mosaique, dans l'ordre ou on les a
+   choisis, et gardent exactement leur taille. Plusieurs sont permis : un
+   favori unique serait un classement a une place. */
+.grid.feat > .fcard.favori{border-color:var(--violet)}
 .cl-vedette{position:absolute;top:6px;right:32px;z-index:4;cursor:pointer;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
   user-select:none}
 .fcard:hover .cl-vedette,.cl-vedette:focus-visible{opacity:.85}
-/* La vedette garde son etoile visible : sans cela, rien ne dit comment la
-   rendre a la mosaique, et l'on cherche le geste inverse d'un geste invisible. */
-.fcard.vedette .cl-vedette{opacity:1;color:var(--violet);border-color:var(--violet)}
+/* Un favori garde son etoile VISIBLE : sans cela, rien ne dit comment le
+   retirer, et l'on cherche le geste inverse d'un geste invisible. */
+.fcard.favori .cl-vedette{opacity:1;color:var(--violet);border-color:var(--violet)}
 @media (prefers-reduced-motion:reduce){.cl-vedette{transition:none}}
 .fcard.cl-drag{opacity:.45}
 .fcard.cl-cible{outline:2px dashed var(--violet);outline-offset:3px}
@@ -1013,7 +1011,7 @@ function featCardHTML(f,s){
 // `const` declaree plus bas serait en ZONE MORTE au moment ou render() evalue
 // les cartes — la meme panne que `LARGEUR_PAGE` et `replies` avant elle.
 var ETOILE = '<span class="cl-vedette" role="button" tabindex="0"'
-  + ' title="Mettre en vedette — pleine largeur">★</span>';
+  + ' title="Favori — remonte en tête de mosaïque">★</span>';
 
 function compactHTML(s){
   const st=(s.health&&s.health.state)||"unknown";
@@ -1045,7 +1043,7 @@ function render(data,src){
   // Les cadres viennent d'être posés : leur largeur est enfin mesurable.
   echelleApercus();
   if(window.rangeCardlets) rangeCardlets();   // #1234 : l'ordre choisi par l'opérateur
-  if(window.rendVedette) rendVedette();      // #1323 : la carte mise en vedette
+  if(window.rendFavoris) rendFavoris();      // #1326 : les favoris, en tête
   vivifieCartes();   // #1231 : les cartes qui ont un cardlet prennent ses données
   // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
@@ -2068,6 +2066,15 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     cote.insertBefore(porte, avant?survolee:survolee.nextSibling);
   });
   const fin=()=>{
+    // PLACER UNE CARTE A LA MAIN RETIRE SON FAVORI. Sans cette regle les deux
+    // gestes se contredisent : on glisse un favori plus bas, il remonte au
+    // rechargement, et le glisser semble ne pas tenir. Le geste le plus
+    // explicite gagne — c'est celui qu'on vient de faire.
+    if(porte && porte.classList.contains('favori')){
+      porte.classList.remove('favori');
+      const l = favoris().filter(x => x !== porte.dataset.embed);
+      retiensFavoris(l);
+    }
     if(porte) porte.classList.remove('cl-drag');
     cote.classList.remove('cl-encours');
     cote.querySelectorAll('.cl-cible').forEach(x=>x.classList.remove('cl-cible'));
@@ -2077,42 +2084,54 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   cote.addEventListener('drop', e=>{ e.preventDefault(); fin(); });
   cote.addEventListener('dragend', fin);
 
-  // ── MISE EN VEDETTE (#1323) ────────────────────────────────────────────
+  // ── FAVORIS (#1323, revu #1326) ────────────────────────────────────────
   //
-  // Une carte prend toute la largeur. Rien de plus, et c'est voulu : la
-  // mosaique donne a chaque service la meme voix, ce qui est juste par defaut
-  // et faux quand on regarde quelque chose. La vedette est ce qu'on regarde.
+  // UN FAVORI NE CHANGE QUE L'ORDRE. Il elargissait la carte et forcait la
+  // hauteur de son cadre : l'apercu, remis a l'echelle de la nouvelle largeur,
+  // paraissait zoome de travers. Mettre en favori n'est pas agrandir — c'est
+  // dire « celle-la d'abord ».
   //
-  // On ne DEPLACE pas la carte — on lui pose une classe. Voir le CSS : sortir
-  // le noeud de son parent rechargerait son cadre, et l'on couperait le flux
-  // au moment de l'agrandir.
-  const CLEF_VEDETTE = 'sbx.hall.vedette';
+  // Plusieurs favoris sont permis, et leur ORDRE est celui ou on les a
+  // choisis : un favori unique serait un classement a une place. Le reste de
+  // la mosaique garde l'ordre glisse-depose, intact, en dessous.
+  const CLEF_FAVORIS = 'sbx.hall.favoris';
 
-  function vedetteChoisie(){
-    try { return localStorage.getItem(CLEF_VEDETTE) || ''; } catch(e){ return ''; }
+  function favoris(){
+    try{
+      const v = JSON.parse(localStorage.getItem(CLEF_FAVORIS) || '[]');
+      return Array.isArray(v) ? v : [];
+    }catch(e){ return []; }
   }
 
-  function poseVedette(id){
-    cote.querySelectorAll('.fcard.vedette').forEach(c=>c.classList.remove('vedette'));
-    if(id){
-      const c = cote.querySelector('.fcard[data-embed="'+CSS.escape(id)+'"]');
-      if(c) c.classList.add('vedette');
+  function retiensFavoris(l){
+    try{ localStorage.setItem(CLEF_FAVORIS, JSON.stringify(l)); }catch(e){}
+  }
+
+  // On remonte en tete, dans l'ordre choisi. `insertBefore` sur le PREMIER
+  // enfant, en parcourant la liste a l'envers, evite d'avoir a calculer une
+  // position pour chacun.
+  window.rendFavoris = function(){
+    const l = favoris();
+    cote.querySelectorAll('.fcard.favori').forEach(c=>c.classList.remove('favori'));
+    for(let i = l.length - 1; i >= 0; i--){
+      const c = cote.querySelector('.fcard[data-embed="'+CSS.escape(l[i])+'"]');
+      if(!c) continue;
+      c.classList.add('favori');
+      // Deplacer un noeud qui porte une iframe la RECHARGE. On ne bouge donc
+      // que ce qui n'est pas deja a sa place — au chargement, les favoris sont
+      // le plus souvent deja en tete, et rien ne se recharge.
+      if(cote.firstElementChild !== c) cote.insertBefore(c, cote.firstElementChild);
     }
-    try {
-      if(id) localStorage.setItem(CLEF_VEDETTE, id);
-      else localStorage.removeItem(CLEF_VEDETTE);
-    } catch(e){}
-    // Les apercus se mettent a l'echelle de LEUR largeur : elle vient de
-    // changer pour la vedette comme pour les colonnes qui se reserrent.
-    if(typeof echelleApercus==='function') echelleApercus();
-  }
-  window.poseVedette = poseVedette;
-  window.rendVedette = ()=>poseVedette(vedetteChoisie());
+  };
 
   function bascule(c){
     const id = c && c.dataset.embed;
     if(!id) return;
-    poseVedette(c.classList.contains('vedette') ? '' : id);
+    const l = favoris();
+    const i = l.indexOf(id);
+    if(i >= 0) l.splice(i, 1); else l.push(id);
+    retiensFavoris(l);
+    rendFavoris();
   }
 
   cote.addEventListener('click', e=>{

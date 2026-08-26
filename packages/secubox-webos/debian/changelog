@@ -1,3 +1,23 @@
+secubox-webos (1.0.102-1~bookworm1) bookworm; urgency=medium
+
+  * LE FAVORI NE CHANGE QUE L'ORDRE (#1326). Il elargissait la carte
+    (`column-span:all`) et forcait la hauteur de son cadre : l'apercu, remis a
+    l'echelle d'une largeur nouvelle, paraissait zoome de travers, et la carte
+    ne ressemblait plus a elle-meme. Mettre en favori n'est pas agrandir —
+    c'est dire « celle-la d'abord ».
+  * PLUSIEURS FAVORIS, DANS L'ORDRE OU ON LES CHOISIT. Un favori unique serait
+    un classement a une place. Ils remontent en tete de mosaique et gardent
+    exactement leur taille ; le reste garde son ordre glisse-depose, intact,
+    en dessous.
+  * PLACER UNE CARTE A LA MAIN RETIRE SON FAVORI : sans cette regle les deux
+    gestes se contredisent — on glisse un favori plus bas, il remonte au
+    rechargement, et le glisser semble ne pas tenir. Le geste le plus explicite
+    gagne.
+  * On ne deplace un noeud que s'il n'est pas deja en tete : reparenter une
+    iframe la recharge, et au chargement les favoris y sont deja.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:59:37 +0200
+
 secubox-webos (1.0.101-1~bookworm1) bookworm; urgency=medium
 
   * LE BANDEAU TIENT SUR UNE LIGNE AU TELEPHONE (#1325). Il en prenait deux, et

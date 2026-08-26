@@ -744,6 +744,18 @@ Ils ne suivent pas ces conventions et n'ont pas à le faire. Pour eux, la
 réécriture se fait **au proxy** : `Set-Cookie` complété à la volée. Voir
 `secubox-haproxy`.
 
+## 8quater. The module's cardlet — see the dedicated guide
+
+If the module serves a `/micro` card for the SBXOS hall, follow
+[`CARDLET-GUIDELINES.md`](CARDLET-GUIDELINES.md). It is a checklist of traps
+actually hit on `gk2` — inline scripts silently killed by CSP, heuristic
+caching replaying a fixed bug, third-party cookies refused outright on iOS,
+temporal-dead-zone errors taking down the whole render — each with the symptom
+it produced. Section 9 is the pre-ship checklist.
+
+Start with its §0: **not every service deserves a card.** If a service's
+summary fits in its name and its state, it needs a link, not a card.
+
 ## 8ter. Un module Go, plusieurs paquets — savoir où reconstruire
 
 Le parc n'a **qu'un seul module Go** : `packages/secubox-toolbox-ng/`
