@@ -262,6 +262,12 @@ html,body{overflow:auto !important}
 </style>
 <script id="sbx-surf-js">
 (function(){
+  // window.open est deja neutralise en tete (avant les scripts du site).
+  // Ici on rattrape juste les liens qui tenteraient une popup.
+  document.addEventListener("click",function(ev){
+    var a=ev.target&&ev.target.closest&&ev.target.closest("a[target=_blank]");
+    if(a){ a.setAttribute("target","_self"); }   // le lien reste dans le cadre
+  },true);
   try{
     var t={CookieConsent:"yes",cookieconsent_status:"dismiss",euconsent:"1",
       "euconsent-v2":"1",OptanonAlertBoxClosed:new Date().toISOString(),
@@ -315,6 +321,50 @@ html,body{overflow:auto !important}
 })();
 </script>
 """
+
+
+# INJECTION DE TETE (#1345) — posee au tout debut de <head>, avant les scripts
+# du site. Certaines protections (DataDome, etc.) posent leur cookie en JS avec
+# `domain=.site.fr` : sur NOTRE origine ce domaine est etranger, le navigateur
+# REFUSE le cookie, la verification ne « prend » jamais et la page BOUCLE
+# (« verification reussie » puis recommence). On reecrit donc les ecritures de
+# cookie pour retirer `domain=`, exactement comme on le fait cote serveur sur
+# Set-Cookie. C'est ce qui casse la boucle.
+_INJECTION_TETE = """
+<script id="sbx-surf-tete">
+(function(){
+  try{
+    var proto = Document.prototype;
+    var d = Object.getOwnPropertyDescriptor(proto, "cookie");
+    if(d && d.set && d.get){
+      Object.defineProperty(document, "cookie", {
+        configurable:true,
+        get:function(){ return d.get.call(document); },
+        set:function(v){ d.set.call(document, String(v).replace(/;\\s*domain=[^;]*/ig, "")); }
+      });
+    }
+  }catch(e){}
+  // window.open neutralise des le depart (popups/popunders).
+  try{
+    var faux={closed:true,close:function(){},focus:function(){},blur:function(){},
+      postMessage:function(){},moveTo:function(){},resizeTo:function(){},
+      location:{href:"",replace:function(){},assign:function(){}},
+      document:{write:function(){},close:function(){}}};
+    window.open=function(){return faux;};
+  }catch(e){}
+})();
+</script>
+"""
+
+
+def _injecte_tete(corps: str) -> str:
+    """Insere le script de tete juste apres <head> (ou au tout debut)."""
+    m = re.search(r'<head[^>]*>', corps, re.IGNORECASE)
+    if m:
+        i = m.end()
+        return corps[:i] + _INJECTION_TETE + corps[i:]
+    # Pas de <head> : on met avant <html>… en dernier recours au debut.
+    return _INJECTION_TETE + corps
 
 
 def _injecte(corps: str) -> str:
@@ -372,6 +422,13 @@ def reecris_html(corps: str, base: str, rap: Rapport, sur_hote) -> str:
     # META-REFRESH NEUTRALISE (#1344). Dans un cadre, il redirige la page
     # relayee — souvent vers un mur de consentement ou une version « app » —
     # et l'embarquement casse. On le retire : le lecteur reste ou il est.
+    # LES LIENS RESTENT DANS LE CADRE (#1345). `target="_blank"` tenterait une
+    # popup (bloquee par le sandbox, donc un clic mort) ; `_top`/`_parent`
+    # ferait echapper la page hors du Hall. On ramene tout a `_self` : le lien
+    # navigue le cadre, et notre historique le suit.
+    corps = re.sub(r'target\s*=\s*(["\']?)(_blank|_new|_top|_parent)\1',
+                   'target="_self"', corps, flags=re.IGNORECASE)
+
     n_ref = len(_RE_META_REFRESH.findall(corps))
     if n_ref:
         corps = _RE_META_REFRESH.sub('', corps)
@@ -381,7 +438,7 @@ def reecris_html(corps: str, base: str, rap: Rapport, sur_hote) -> str:
 
     # 3. Ce qu'on ne peut PAS suivre. On ne modifie rien — on compte.
     _recense_js(corps, rap, ou="html-inline")
-    return _injecte(corps)
+    return _injecte_tete(_injecte(corps))
 
 
 def _recense_js(texte: str, rap: Rapport, ou: str):

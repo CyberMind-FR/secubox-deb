@@ -1773,21 +1773,12 @@ function fermeSurf(){
 }
 (function(){
   const x=document.getElementById('surf-ov-x');
-  // LE ✕ RECULE D'ABORD (#1343). Fermer d'un coup une page ou l'on a suivi
-  // trois liens efface tout le fil. On demande donc au cadre de reculer ; il
-  // ne repond « surf-vide » que s'il n'a plus de page precedente, et c'est
-  // alors seulement qu'on ferme.
-  if(x) x.addEventListener('click', ()=>{
-    const f=document.getElementById('surf-ov-f');
-    try{ f.contentWindow.postMessage({sbx:'surf-back'}, '*'); }catch(e){ fermeSurf(); }
-  });
+  // LE ✕ FERME ET REVIENT A LA PAGE D'AVANT SURF (#1343 revu). Reculer dans
+  // l'historique surf, c'est le role du bouton ◄ de la barre ; le ✕, lui,
+  // QUITTE — on retrouve le Hall (ou la source MetaNews) tel qu'on l'a laisse.
+  if(x) x.addEventListener('click', fermeSurf);
   addEventListener('keydown', e=>{
-    if(e.key!=='Escape') return;
-    const ov=document.getElementById('surf-ov');
-    if(ov && !ov.classList.contains('hidden')){
-      const f=document.getElementById('surf-ov-f');
-      try{ f.contentWindow.postMessage({sbx:'surf-back'}, '*'); }catch(err){ fermeSurf(); }
-    }
+    if(e.key==='Escape') fermeSurf();
   });
 })();
 addEventListener('message', ev=>{

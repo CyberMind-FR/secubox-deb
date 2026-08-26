@@ -1,3 +1,16 @@
+secubox-webos (1.0.111-1~bookworm1) bookworm; urgency=medium
+
+  * LE ✕ FERME ET REVIENT A LA PAGE D'AVANT SURF (#1343 revu). Reculer dans
+    l'historique surf est le role du bouton ◄ ; le ✕ quitte l'overlay et rend
+    le Hall (ou la source MetaNews) tel qu'on l'a laisse.
+  * POPUPS BLOQUEES PAR SANDBOX (#1345). L'iframe surf est sandboxee sans
+    `allow-popups` (le navigateur coupe popups/popunders) ni
+    `allow-top-navigation` (la page relayee ne peut plus faire quitter le
+    Hall). `allow-same-origin` garde cookies et stockage — sans quoi le
+    correctif de boucle DataDome tomberait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:21:25 +0200
+
 secubox-webos (1.0.110-1~bookworm1) bookworm; urgency=medium
 
   * SURF : LA MEGABARRE RESTE VISIBLE (#1342). L'overlay commence sous le

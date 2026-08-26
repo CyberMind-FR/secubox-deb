@@ -146,8 +146,14 @@
     // On REMPLACE le cadre plutot que de changer son src : un cadre reutilise
     // garderait l'historique de l'origine precedente, et « recharger » ne
     // ferait pas ce qu'on croit.
+    // SANDBOX (#1345). Sans `allow-popups`, le navigateur bloque LUI-MEME les
+    // popups/popunders. Sans `allow-top-navigation`, la page relayee ne peut
+    // pas nous faire quitter le Hall. `allow-same-origin` est indispensable :
+    // sans lui, plus de cookies ni de stockage — et le correctif de boucle
+    // DataDome (cookies sur notre origine) tomberait avec.
     vue.innerHTML = '<iframe title="Surf" src="' + esc(n.surf)
-      + '" allow="fullscreen" referrerpolicy="no-referrer"></iframe>';
+      + '" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"'
+      + ' allow="fullscreen" referrerpolicy="no-referrer"></iframe>';
     $('etat').hidden = false;
     $('etat').textContent = '🛰️ ' + n.host + ' — relayé, pisteurs coupés';
     $('rech').hidden = false;
