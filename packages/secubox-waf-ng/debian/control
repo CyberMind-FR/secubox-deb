@@ -12,7 +12,16 @@ Architecture: any
 Depends: ${misc:Depends},
  adduser,
  apparmor
-Description: SecuBox-Deb — Go WAF reverse-proxy engine (host-native sbxwaf)
+Description: SecuBox-Deb — MOTEUR du pare-feu applicatif (sbxwaf, Go, natif hote)
+ LE MOTEUR. Il inspecte, decide et bannit ; l'interface qui le montre est
+ dans secubox-waf.
+ .
+ SA SOURCE N'EST PAS ICI : elle vit dans packages/secubox-toolbox-ng/cmd/sbxwaf
+ — un seul module Go pour tout le parc, un vendor/ partage. Ce paquet compile
+ depuis la et n'a aucun code propre. Modifier cmd/sbxwaf puis reconstruire
+ secubox-toolbox-ng ne deploie donc RIEN : c'est CE paquet qu'il faut
+ reconstruire.
+ .
  Host-native Go WAF reverse-proxy replacing mitmproxy/mitmdump for the
  SecuBox-DEB WAF layer (#744). Ships the standalone sbxwaf binary plus
  hardened systemd worker template units (secubox-waf-ng-worker@{1,2}).

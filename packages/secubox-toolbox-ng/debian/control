@@ -10,7 +10,12 @@ Rules-Requires-Root: no
 Package: secubox-toolbox-ng
 Architecture: arm64
 Depends: ${misc:Depends}
-Description: SecuBox-Deb — Go MITM engine (migration target, DARK)
+Description: SecuBox-Deb — outils Go du parc (sbxmitm, sbx-sentinel, sbx-authwatch)
+ LE MODULE GO DU PARC vit ici (go.mod, vendor/), et il porte QUATRE commandes :
+ sbxmitm, sbx-sentinel, sbx-authwatch — livrees par ce paquet — et sbxwaf, qui
+ ne l'est PAS : c'est secubox-waf-ng qui compile et livre le moteur du
+ pare-feu depuis cette meme source.
+ .
  Multi-core Go re-implementation of the R3 toolbox MITM engine (#662),
  ported off the GIL-bound Python mitmproxy worker fleet. Ships the
  standalone sbxmitm binary plus a DISABLED systemd template unit.

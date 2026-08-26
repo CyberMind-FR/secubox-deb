@@ -744,6 +744,40 @@ Ils ne suivent pas ces conventions et n'ont pas à le faire. Pour eux, la
 réécriture se fait **au proxy** : `Set-Cookie` complété à la volée. Voir
 `secubox-haproxy`.
 
+## 8ter. Un module Go, plusieurs paquets — savoir où reconstruire
+
+Le parc n'a **qu'un seul module Go** : `packages/secubox-toolbox-ng/`
+(`go.mod`, `vendor/`). C'est voulu — un `vendor/` partagé, une seule chaîne de
+compilation. Mais ses commandes sont livrées par **des paquets différents**,
+selon leur cycle de vie :
+
+| Commande | Source | Paquet qui la livre |
+|---|---|---|
+| `sbxmitm`, `sbx-sentinel`, `sbx-authwatch` | `toolbox-ng/cmd/…` | `secubox-toolbox-ng` |
+| `sbxwaf` | `toolbox-ng/cmd/sbxwaf` | **`secubox-waf-ng`** |
+
+> **Le piège.** Modifier `cmd/sbxwaf/*.go` puis reconstruire
+> `secubox-toolbox-ng` ne déploie **rien** : ce paquet ne compile même pas
+> `sbxwaf`. C'est `secubox-waf-ng` qu'il faut reconstruire — il compile depuis
+> `../secubox-toolbox-ng` et n'a aucun code propre.
+
+Et pour le pare-feu, trois paquets qu'il ne faut pas confondre :
+
+- **`secubox-waf-ng`** — le **moteur** : inspecte, décide, bannit.
+- **`secubox-waf`** — l'**API et l'interface** : montre et commande (`wafctl`).
+- **`secubox-toolbox-ng`** — les autres outils Go, **pas** le pare-feu.
+
+Les noms se lisent comme deux générations d'une même chose ; ce sont deux
+moitiés complémentaires qui cohabitent. Les descriptions des trois paquets le
+disent désormais, en tête.
+
+### Ne pas laisser traîner de binaire dans l'arbre
+
+Un `go build` manuel dépose son binaire à la racine du paquet. Il est dans
+`.gitignore`, donc **invisible à `git status`** — et il survit des heures en
+laissant croire que le paquet le livre. Nettoyer après un build à la main, ou
+utiliser `dpkg-buildpackage`, qui range.
+
 ## 9. Tests
 
 ### CTL tests

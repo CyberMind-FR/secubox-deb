@@ -10,16 +10,16 @@ Package: secubox-waf
 Architecture: all
 Depends: ${misc:Depends}, secubox-core (>= 1.0.0), lxc, jq, curl
 Recommends: crowdsec, secubox-crowdsec, secubox-haproxy
-Description: SecuBox Web Application Firewall (mitmproxy LXC)
- LXC-contained mitmproxy WAF for HTTP/HTTPS traffic inspection.
- All HAProxy traffic routes through mitmproxy for deep inspection.
+Description: SecuBox — API et interface du pare-feu applicatif (wafctl, tableau de bord)
+ LA MOITIE VISIBLE DU PARE-FEU. Ce paquet ne filtre rien : il MONTRE et il
+ COMMANDE. L'inspection et le bannissement sont l'affaire de secubox-waf-ng,
+ qui livre le moteur Go sbxwaf.
  .
- Features:
-  - LXC container isolation (mitmproxy in 10.100.0.60)
-  - Host-based routing via haproxy-routes.json
-  - X-SecuBox-WAF header tagging for inspected traffic
-  - 300+ threat detection rules across 14+ categories
-  - SQL injection, XSS, RCE, LFI detection
-  - wafctl control script (status/install/start/stop/routes)
-  - CrowdSec integration for centralized banning
-  - HAProxy reverse proxy integration
+ Contenu : l'API /api/v1/waf/* (statistiques, menaces, bannissements, pays,
+ detections comportementales, inventaire RGPD des temoins), le tableau de bord
+ et sa vue /micro, et l'outil wafctl par lequel l'interface fait bannir.
+ .
+ Ne pas confondre les trois paquets du pare-feu :
+  - secubox-waf-ng    le MOTEUR Go (sbxwaf) — inspecte, decide, bannit
+  - secubox-waf       l'API et l'interface — montre et commande
+  - secubox-toolbox-ng les autres outils Go du parc, PAS le pare-feu
