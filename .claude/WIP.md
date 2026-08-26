@@ -6,7 +6,67 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-26*
+*Mis à jour : 2026-08-26 (après-midi)*
+
+---
+
+## 2026-08-26 (après-midi) — SBXOS : les services habitent le Hall
+
+### ✅ Fait — déployé sur gk2
+
+**Sept services servent LEUR carte** (#1236 → #1265) : pare-feu, radio,
+podcaster, billets, MetaNews, BBS, SocialRelay. Les neuf autres affichent
+l'**aperçu vivant** — leur vraie page mise à l'échelle — plutôt qu'un portrait
+générique. Le Hall prend toujours le degré le plus élevé disponible et bascule
+seul quand un service apprend à se résumer.
+
+**Les services tiers acceptent le cadre** (#1257) : PeerTube, Nextcloud,
+PhotoPrism, Mastodon, webmail. En-têtes réécrits **au proxy**, opt-in par vhost
+(`cadrable`), cookies séparément (`cookies_tiers`). Le diagnostic le plus cher
+de la série : conditionner un `http-response` sur une ACL d'en-tête de *requête*
+ne matche pas — règles générées, config valide, rechargement propre, et rien ne
+bouge, sans un mot.
+
+**Aucune exclusion WAF ne subsiste** : les 7 `waf_bypass` sont à `false`.
+Quatre rendaient 503 — absents de `haproxy-routes.json`, jamais ajoutés
+puisqu'ils n'y passaient pas.
+
+**Mes identités** au menu profil (#1272) : où une session est ouverte, et depuis
+quand. Ni valeur ni empreinte — le registre RGPD n'en garde pas.
+
+**Divers** : barre média repliable en pastilles + volume par flux ; clic dans
+une carte qui reste dans le Hall ; ordre par défaut au degré de la carte ;
+YTSaS et Torrent ajoutés ; thème propagé à TOUS les cadres ; MetaNews et
+SocialRelay dotés d'une palette claire.
+
+### 📌 Trois pannes payées comptant
+
+- **`Partitioned`** cloisonnait la session au couple (Hall, service) : deux
+  sessions webmail, « non concordance de témoin ». Retiré.
+- **CSP du BBS** : `style-src 'self'` bloquait le `<style>` en ligne de la
+  carte — HTML brut, « aucun fil ». Feuille et script sortis dans `/static/`.
+- **`LARGEUR_PAGE` en `const`** après son appel : zone morte, `ReferenceError`,
+  et tout le rendu s'arrêtait — menus, barre média et pastilles disparus d'un
+  coup. **Troisième fois** dans ce fichier.
+
+### 📄 Documenté
+
+- `docs/WEBOS-DESIGN.md` — contrat d'une carte, les quatre pièges de
+  l'encadrement, ce qui reste ouvert.
+- `wiki/WebOS-FR.md` — page utilisateur.
+
+### ⬜ Next
+
+1. **PeerTube** : carte à vignettes + lecteur (son API REST est publique, aucune
+   identité requise — c'est le bon premier cas).
+2. **SocialRelay** : média occupant toute la carte, avec rotation.
+3. **Nextcloud / Roundcube** : *pas de scraping*. Nextcloud a OCS+WebDAV ;
+   Roundcube n'a pas d'API mais Dovecot **est** l'API. Le blocage n'est pas
+   l'accès aux données, c'est l'identité → coffre avatar.
+4. **Proxy navigateur + Tor onion** : rendrait tout même origine et
+   supprimerait les quatre pièges d'un coup. **À maquetter et mesurer avant
+   toute inclusion.**
+5. **Alpha 3** sur les releases GitHub.
 
 ---
 
