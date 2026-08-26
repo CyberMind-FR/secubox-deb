@@ -67,6 +67,8 @@
     <input id="adr" type="text" inputmode="url" autocomplete="off" spellcheck="false"
            placeholder="adresse à surfer — ex. www.lemonde.fr, mbasic.facebook.com…"
            aria-label="Adresse à surfer">
+    <button id="dos" class="ghost" type="button" title="Page précédente" hidden>◄</button>
+    <button id="home" class="ghost" type="button" title="Accueil surf" hidden>🏠</button>
     <button id="go" type="button">Surfer</button>
     <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
     <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
@@ -99,6 +101,13 @@
     var plat = String(host || '').trim().toLowerCase().replace(/-/g, '--').replace(/\./g, '-');
     return 'surf-' + plat + '.gk2.secubox.in';
   }
+  // L'INVERSE, pour lire l'hote reel d'une adresse surf (navigation interne).
+  function cibleDe(origine) {
+    var h = String(origine || '').toLowerCase();
+    if (h.indexOf('surf-') !== 0 || h.indexOf('.gk2.secubox.in') < 0) return null;
+    var plat = h.slice(5, h.indexOf('.gk2.secubox.in'));
+    return plat.replace(/--/g, '\x00').replace(/-/g, '.').replace(/\x00/g, '-');
+  }
   function normalise(saisie) {
     var v = String(saisie || '').trim();
     if (!v) return null;
@@ -112,11 +121,26 @@
   }
 
   var courant = null;
+  var pile = [];   // historique des adresses visitees, pour reculer
+  var ACCUEIL_HTML = $('vue').innerHTML;   // pour le bouton Home
 
-  function surfe(saisie) {
+  function majDos() {
+    var d = $('dos'); if (d) d.hidden = pile.length < 1;
+  }
+  // On previent le Hall de l'hote courant : son entete d'overlay le montre.
+  function diHote(h) {
+    if (parent === window) return;
+    try { parent.postMessage({ sbx: 'surf-hote', hote: h }, '*'); } catch (e) {}
+  }
+
+  function surfe(saisie, sansEmpiler) {
     var n = normalise(saisie);
     if (!n) { $('etat').hidden = false; $('etat').textContent = 'adresse invalide'; return; }
+    // On empile l'adresse QU'ON QUITTE, pour pouvoir y revenir.
+    if (!sansEmpiler && courant) pile.push(courant);
+    majDos();
     courant = n;
+    diHote(n.host);
     $('adr').value = n.host + (new URL(n.surf).pathname.replace(/^\/$/, '') || '');
     var vue = $('vue');
     // On REMPLACE le cadre plutot que de changer son src : un cadre reutilise
@@ -128,7 +152,65 @@
     $('etat').textContent = '🛰️ ' + n.host + ' — relayé, pisteurs coupés';
     $('rech').hidden = false;
     $('onglet').hidden = false;
+    $('home').hidden = false;
   }
+
+  // RECULER. On depile l'adresse precedente et on la recharge SANS l'empiler.
+  // Rend true si l'on a recule, false si la pile etait vide (le Hall fermera).
+  function recule() {
+    if (!pile.length) return false;
+    var p = pile.pop();
+    surfe(p.host + new URL(p.surf).pathname + new URL(p.surf).search, true);
+    majDos();
+    return true;
+  }
+  $('dos').addEventListener('click', recule);
+
+  // HOME : retour a l'ecran de depart. On coupe le relais (le cadre repart a
+  // vide) et on oublie l'historique — c'est un vrai retour au point de depart.
+  function accueil() {
+    courant = null; pile = []; majDos();
+    $('adr').value = '';
+    $('etat').hidden = true;
+    $('rech').hidden = true; $('onglet').hidden = true;
+    $('home').hidden = true;
+    $('vue').innerHTML = ACCUEIL_HTML;
+    document.querySelectorAll('.accueil .ex button').forEach(function (b) {
+      b.addEventListener('click', function () { surfe(b.dataset.u); });
+    });
+    if (parent !== window) { try { parent.postMessage({ sbx: 'surf-hote', hote: 'accueil' }, '*'); } catch (e) {} }
+  }
+  $('home').addEventListener('click', accueil);
+
+  // Le Hall demande de reculer (son ✕ / Echap). Si l'on ne peut plus, on le
+  // dit — il fermera l'overlay.
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d) return;
+    if (d.sbx === 'surf-back') {
+      if (!recule() && parent !== window) {
+        try { parent.postMessage({ sbx: 'surf-vide' }, '*'); } catch (e) {}
+      }
+      return;
+    }
+    // UN LIEN INTERNE A NAVIGUE (annonce par l'injection du relais). On empile
+    // la page qu'on quitte et on adopte la nouvelle — « precedent » marchera.
+    if (d.sbx === 'surf-nav' && d.href) {
+      try {
+        var u = new URL(d.href);
+        if (!courant || u.href.indexOf(new URL(courant.surf).host) < 0 ||
+            u.pathname !== new URL(courant.surf).pathname) {
+          var hote = cibleDe(u.hostname) || u.hostname;
+          if (courant && u.href !== courant.surf) pile.push(courant);
+          courant = { host: hote, surf: u.href };
+          $('adr').value = hote + (u.pathname.replace(/^\/$/, '') || '');
+          $('etat').textContent = '🛰️ ' + hote + ' — relayé, pisteurs coupés';
+          majDos(); diHote(hote);
+        }
+      } catch (e) {}
+      return;
+    }
+  });
 
   $('go').addEventListener('click', function () { surfe($('adr').value); });
   $('adr').addEventListener('keydown', function (e) {

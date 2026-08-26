@@ -45,15 +45,32 @@ TOR_SOCKS = "socks5://" + _TOR_HOTE
 
 # En-têtes de navigateur crédible. Un `User-Agent` de client HTTP se fait
 # reconnaître et éconduire par les gros SaaS avant même la première ligne utile.
+# EN-TETES DE NAVIGATION CREDIBLE (#1341). Un filtre anti-robot SIMPLE regarde
+# d'abord l'allure des en-tetes : un client HTTP nu se fait renvoyer avant la
+# premiere ligne utile. On imite une navigation Firefox reelle — User-Agent
+# COHERENT avec les Sec-CH-UA, et les Sec-Fetch d'une navigation de premier
+# niveau.
+#
+# CE QUE CELA NE FAIT PAS, ET IL FAUT LE DIRE : un challenge ACTIF — Cloudflare
+# « verification du navigateur », Turnstile, reCAPTCHA — execute du JavaScript
+# et mesure le vrai moteur. Aucun jeu d'en-tetes ne le passe : cote serveur, on
+# n'a pas de moteur a lui montrer. Et via Tor, la reputation du noeud de sortie
+# DECLENCHE souvent le challenge plutot que de l'eviter. On ameliore les
+# chances sur les filtres passifs ; on ne promet pas l'impossible.
 ENTETES_NAV = {
     "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) "
                    "Gecko/20100101 Firefox/128.0"),
     "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,"
                "image/avif,image/webp,*/*;q=0.8"),
-    "Accept-Language": "fr,en;q=0.7",
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.6,en;q=0.5",
     "Accept-Encoding": "gzip, deflate",
     "DNT": "1",
     "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Priority": "u=0, i",
 }
 
 

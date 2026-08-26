@@ -1,3 +1,16 @@
+secubox-webos (1.0.110-1~bookworm1) bookworm; urgency=medium
+
+  * SURF : LA MEGABARRE RESTE VISIBLE (#1342). L'overlay commence sous le
+    bandeau, mesure faite — on garde la barre d'adresse/recherche du Hall a
+    portee pendant qu'on surfe.
+  * LE ✕ RECULE D'ABORD (#1343). Fermer d'un coup une navigation ou l'on a
+    suivi des liens effacait tout le fil ; ✕ (et Echap) reculent page a page,
+    et ne ferment qu'une fois au depart. Les liens suivis DANS la page relayee
+    entrent aussi dans l'historique (annonces par l'injection du relais).
+  * BACK ET HOME dans la carte Surf, en cardlet comme en overlay.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:16:45 +0200
+
 secubox-webos (1.0.109-1~bookworm1) bookworm; urgency=medium
 
   * NAVIGATEUR SURF DANS LE HALL (#1337). Une carte a barre d'adresse : ce
