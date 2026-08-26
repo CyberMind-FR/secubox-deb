@@ -1,3 +1,23 @@
+secubox-webos (1.0.69-1~bookworm1) bookworm; urgency=medium
+
+  * LA LECTURE PEERTUBE NE DEMARRAIT PAS (#1275). `add_header` au niveau
+    `server` s'applique AUSSI aux reponses relayees : le lecteur recevait la
+    politique du Hall, qui ne declare pas `media-src`. `default-src 'self'` s'y
+    substituait et les flux `blob:` du lecteur — HLS, P2P — etaient bloques. La
+    vignette s'affichait, la lecture ne demarrait jamais. Le relais declare
+    desormais ce dont un LECTEUR a besoin, et rien de plus.
+  * UNE VIDEO FAIT TAIRE LE RESTE. Deux flux AUDIO peuvent cohabiter — c'est
+    meme pour cela que chaque rangee a son volume. Une video, non : on ne
+    regarde pas un film par-dessus la radio. On met en PAUSE, on n'arrete pas :
+    la rangee reste et un clic reprend ou on en etait.
+  * AGRANDIR : bouton sur le lecteur, bouton ⤢ sur la rangee video de la barre,
+    et un clic sur la pastille d'une video l'agrandit au lieu de changer de
+    page — c'est le geste attendu quand on regarde. Le plein ecran porte sur le
+    CONTENEUR et non sur le cadre : on garde le bouton de sortie et le fond, au
+    lieu d'un cadre nu qui semble bloque.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:43:24 +0200
+
 secubox-webos (1.0.68-1~bookworm1) bookworm; urgency=medium
 
   * LE HALL BLOQUAIT SA PROPRE CARTE (#1274). Sa politique declare

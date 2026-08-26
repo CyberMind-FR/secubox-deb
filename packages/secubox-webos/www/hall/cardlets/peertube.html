@@ -57,6 +57,14 @@
                     font-size:.9rem; transition:transform .12s ease, background .12s ease; }
   .une .lire:hover span { transform:scale(1.08); background:var(--accent); }
   .une iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  /* AGRANDIR (#1275). Une carte fait 250 px : regarder une video dedans est
+     une intention, pas une fatalite. Le bouton reste discret jusqu'au survol —
+     il ne doit pas manger l'image. */
+  .une .zoom { position:absolute; top:6px; right:6px; width:24px; height:24px;
+               border-radius:6px; border:1px solid rgba(255,255,255,.45);
+               background:rgba(0,0,0,.55); color:#fff; font-size:.72rem;
+               cursor:pointer; opacity:0; transition:opacity .15s; }
+  .une:hover .zoom, .une .zoom:focus-visible { opacity:1; }
 
   .top { display:flex; gap:5px; }
   /* Les suivantes en VIGNETTES et non en titres : sur une plateforme vidéo,
@@ -137,7 +145,8 @@
     var u = '/pt/videos/embed/' + encodeURIComponent(v.uuid)
           + '?api=1&autoplay=1&title=0&warningTitle=0&peertubeLink=0';
     el('une').innerHTML = '<iframe id="cadre-pt" src="' + esc(u) + '"'
-      + ' allow="autoplay; fullscreen" allowfullscreen title="' + esc(v.name) + '"></iframe>';
+      + ' allow="autoplay; fullscreen" allowfullscreen title="' + esc(v.name) + '"></iframe>'
+      + '<button class="zoom" id="zoom" type="button" title="Agrandir" aria-label="Agrandir">⤢</button>';
     annonce(v, true);
   }
 
@@ -149,6 +158,11 @@
     try {
       parent.postMessage({
         sbx: 'media', id: 'peertube',
+        // Le TYPE permet au Hall de traiter une video autrement qu'un flux
+        // audio : lui offrir l'agrandissement, et mettre le son en pause
+        // ailleurs — trois sources sonores a la fois ne sont pas un bureau,
+        // c'est un vacarme.
+        type: 'video',
         titre: (v && v.name) || 'PeerTube',
         sous: (v && v.channel && v.channel.displayName) || 'PeerTube',
         joue: !!actif, t: 0, d: (v && Number(v.duration)) || 0, fin: !actif
@@ -156,7 +170,16 @@
     } catch (e) {}
   }
 
+  // Le plein ecran porte sur le CONTENEUR et non sur le cadre : on garde ainsi
+  // le bouton de sortie et le fond, au lieu d'un cadre nu qui semble bloque.
+  function agrandis() {
+    var z = el('une');
+    if (!z) return;
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    if (z.requestFullscreen) z.requestFullscreen().catch(function () {});
+  }
   el('une').addEventListener('click', function (e) {
+    if (e.target.closest('#zoom')) { agrandis(); return; }
     if (e.target.closest('#lire')) lance(i);
   });
   el('top').addEventListener('click', function (e) {
@@ -170,6 +193,7 @@
     // `stop` rend la carte a son etat de vitrine : c'est le seul ordre qu'on
     // peut honorer sans l'API de fenetre du lecteur amont. On le dit plutot
     // que de faire semblant d'obeir aux autres.
+    if (d.action === 'zoom') { agrandis(); return; }
     if (d.action === 'stop') {
       joue = false;
       el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'

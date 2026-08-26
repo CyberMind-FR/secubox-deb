@@ -857,7 +857,7 @@ function featCardHTML(f,s){
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'
       + ' src="'+u+'?theme='+th+'"'
-      + ' title="'+esc(f.label)+'" allow="autoplay" loading="lazy"></iframe>'
+      + ' title="'+esc(f.label)+'" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>'
       + '</article>';
   }
   // À DÉFAUT DE /micro, LE SERVICE LUI-MÊME (#1256). Tant qu'il n'a pas de vue
@@ -1359,6 +1359,8 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         +'<button data-a="muet" title="Couper le son">🔊</button>'
         +'<input class="mvol" type="range" min="0" max="1" step="0.05" value="1"'
         +' title="Volume" aria-label="Volume">'
+        +(((flux.get(id)||{}).etat||{}).type==='video'
+            ? '<button data-a="zoom" title="Agrandir la vidéo">⤢</button>' : '')
         +'<button class="mplier" data-a="plier" title="Ranger la barre — les pastilles restent">⌄</button>'
         +'<button data-a="stop" title="Fermer le flux">✕</button></div>').join('');
     }
@@ -1411,6 +1413,16 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     const c=cadreDe(d.id);
     if(!c||c.contentWindow!==ev.source) return;
     if(d.joue===false && d.fin){ flux.delete(d.id); dessine(); return; }
+    // UNE VIDEO FAIT TAIRE LE RESTE (#1275). Deux flux AUDIO peuvent cohabiter
+    // — c'est même pour cela que chaque rangée a son volume. Une vidéo, non :
+    // on ne regarde pas un film par-dessus la radio. On met en pause, on
+    // n'arrête pas : la rangée reste, et un clic reprend où on en était.
+    const etaitEnLecture = ((flux.get(d.id)||{}).etat||{}).joue;
+    if(d.type==='video' && d.joue && !etaitEnLecture){
+      flux.forEach((f,autre)=>{
+        if(autre!==d.id && f.etat && f.etat.joue) commande(autre,'toggle');
+      });
+    }
     flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
     dessine();
   });
@@ -1423,6 +1435,10 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   document.getElementById('pastilles').addEventListener('click', e=>{
     const b=e.target.closest('.fpast'); if(!b) return;
     if(replie){ plie(false); return; }
+    // Sur une vidéo, le geste attendu depuis la pastille est de la VOIR, pas
+    // de changer de page : on agrandit.
+    const et=(flux.get(b.dataset.id)||{}).etat||{};
+    if(et.type==='video'){ commande(b.dataset.id,'zoom'); return; }
     if(typeof openService==='function') openService(b.dataset.id,'embed');
   });
 
@@ -1456,6 +1472,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   dock.addEventListener('click', e=>{
     const b=e.target.closest('button[data-a]'); if(!b) return;
     if(b.dataset.a==='plier'){ plie(true); return; }
+    if(b.dataset.a==='zoom'){ commande(b.closest('.mrow').dataset.id, 'zoom'); return; }
     if(b.dataset.a==='muet'){
       const r=b.closest('.mrow'), coupe=b.textContent==='🔊';
       b.textContent = coupe ? '🔇' : '🔊';
