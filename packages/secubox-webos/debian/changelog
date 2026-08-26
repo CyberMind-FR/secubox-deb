@@ -1,3 +1,10 @@
+secubox-webos (1.0.124-1~bookworm1) bookworm; urgency=medium
+
+  * STATUT INLINE (#1362). « host — relaye, pisteurs coupes » passe A DROITE
+    des metrics, sur la meme ligne. La ligne d'etat separee disparait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:37:34 +0200
+
 secubox-webos (1.0.123-1~bookworm1) bookworm; urgency=medium
 
   * SURF : BARRE UNIQUE, DOUBLE LIGNE, HAUTEUR D'UNE SEULE (#1362). L'entete

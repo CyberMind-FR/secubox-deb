@@ -59,7 +59,9 @@
   .stats.hidden{display:none}
   .stats .s{display:inline-flex;align-items:center;gap:.2rem}
   .stats .s b{color:var(--ink);font-weight:700}
-  .stats .cam{margin-left:auto;color:var(--cyan);font-weight:700}
+  .stats .cam{color:var(--cyan);font-weight:700}
+  .stats .etatr{margin-left:auto;color:var(--muted);white-space:nowrap;
+        overflow:hidden;text-overflow:ellipsis;min-width:0}
   .stats .s.z{opacity:.4}
   .etat{font-size:.6rem;color:var(--muted);padding:.15rem .6rem;flex:0 0 auto;
         background:var(--carte);border-bottom:1px solid var(--ligne);
@@ -248,8 +250,10 @@
       + pic('🍪', S.cookies,  'cookies réécrits (SameSite=None)')
       + pic('🔔', S.notifs,   'popups de notification bloquées')
       + pic('🚫', S.popups,   'popups/popunders coupés')
-      + '<span class="cam" title="part de pistage sur les ressources de la page">🛡️ '+pct+'% pisté</span>';
+      + '<span class="cam" title="part de pistage sur les ressources de la page">🛡️ '+pct+'% pisté</span>'
+      + '<span class="etatr">🛰️ ' + esc((courant && courant.host) || '') + ' — relayé, pisteurs coupés</span>';
     z.classList.remove('hidden');
+    var e2 = $('etat'); if (e2) e2.hidden = true;
   }
   addEventListener('message', function (ev) {
     var d = ev.data;

@@ -1,3 +1,10 @@
+secubox-metanews (0.1.17-1~bookworm1) bookworm; urgency=medium
+
+  * ENCORE DES FLUX (#1360) : AFP Factuel, TV5Monde Info, France Inter
+    (Radio France). Ajoutes par le seed idempotent au redemarrage.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:38:50 +0200
+
 secubox-metanews (0.1.16-1~bookworm1) bookworm; urgency=medium
 
   * PLUS DE FLUX, ET UN SEED IDEMPOTENT (#1360). Mediapart, Reporterre,

@@ -120,8 +120,28 @@ async def app(scope, receive, send):
     # laisser le site en carafe (« bfmtv perdu »), on SAUTE le portail : on
     # renvoie le navigateur directement a cette page, relayee. Sinon, 204.
     def _saut_portail():
-        """L'URL de retour d'un portail, relayee — ou None."""
-        for vals in parse_qs(qs).values():
+        """L'URL de retour d'un portail, relayee — ou None.
+
+        Deux formes : soit un parametre porte l'URL de retour COMPLETE, soit —
+        cas de first-id — l'hote et le chemin sont SEPARES (redirectHost +
+        redirectUri). On gere les deux.
+        """
+        q = parse_qs(qs)
+        # Forme separee : redirectHost + redirectUri.
+        hote_r, uri_r = None, ""
+        for k, v in q.items():
+            kl = k.lower()
+            if v and kl in ("redirecthost", "host", "returnhost"):
+                hote_r = unquote(v[0])
+            if v and kl in ("redirecturi", "uri", "returnuri", "path"):
+                uri_r = unquote(v[0])
+        if hote_r and hote_r.startswith(("http://", "https://")):
+            rp = relais.urlsplit(hote_r)
+            if rp.hostname and not relais.est_pisteur(rp.hostname):
+                chemin = uri_r if uri_r.startswith("/") else (rp.path or "/")
+                return "https://" + relais.origine_de(rp.hostname) + chemin
+        # Forme complete : une URL http(s) dans un parametre.
+        for vals in q.values():
             for cand in vals:
                 c = unquote(cand)
                 if c.startswith(("http://", "https://")):

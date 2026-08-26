@@ -519,6 +519,25 @@ def _injecte(corps: str) -> str:
     return corps + _INJECTION
 
 
+# PORTAILS DE CONSENTEMENT qui redirigent — cites en DUR dans le JS des sites
+# (BFM/Altice pointe « https://gate.first-id.fr/... »). Le relais reecrit les
+# href/src du HTML, pas les chaines du JS : ces URL absolues echappaient a la
+# reecriture, la navigation partait vers le vrai portail (bloque par la CSP et
+# le DNS de la box). On les remplace donc par leur origine surf DANS LE TEXTE
+# servi — la navigation passe alors par nous, et `_saut_portail` renvoie a la
+# page de retour.
+_PORTAILS_REDIR = (
+    "gate.first-id.fr", "first-id.fr", "cmp.first-id.fr",
+    "privacy-mgmt.com", "consent.google.com",
+)
+
+
+def reecris_portails(corps: str) -> str:
+    for g in _PORTAILS_REDIR:
+        corps = corps.replace("//" + g, "//" + origine_de(g))
+    return corps
+
+
 def reecris_html(corps: str, base: str, rap: Rapport, sur_hote) -> str:
     """Réécrit les URL d'un HTML et RECENSE ce qu'il n'a pas su suivre."""
     # 1. Ce qui se réécrit : attributs, srcset, url() inline.
@@ -582,7 +601,7 @@ def reecris_html(corps: str, base: str, rap: Rapport, sur_hote) -> str:
 
     # 3. Ce qu'on ne peut PAS suivre. On ne modifie rien — on compte.
     _recense_js(corps, rap, ou="html-inline")
-    return _injecte_tete(_injecte(corps))
+    return reecris_portails(_injecte_tete(_injecte(corps)))
 
 
 def _recense_js(texte: str, rap: Rapport, ou: str):
