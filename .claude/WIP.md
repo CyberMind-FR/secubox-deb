@@ -57,8 +57,12 @@ SocialRelay dotés d'une palette claire.
 
 ### ⬜ Next
 
-1. **PeerTube** : carte à vignettes + lecteur (son API REST est publique, aucune
-   identité requise — c'est le bon premier cas).
+1. ~~**PeerTube**~~ **fait (#1273)** : vignettes en rotation, « lire ici » qui
+   pose le lecteur d'embarquement amont, relais de même origine pour l'API, les
+   vignettes et le lecteur. Vérifié que seul le public est relayé — `users/me`
+   retombe sur la page du Hall. *Reste* : la position de lecture n'est pas
+   annoncée à la barre (le lecteur amont ne la donne pas sans son API de
+   fenêtre) ; `stop` est le seul ordre honoré.
 2. **SocialRelay** : média occupant toute la carte, avec rotation.
 3. **Nextcloud / Roundcube** : *pas de scraping*. Nextcloud a OCS+WebDAV ;
    Roundcube n'a pas d'API mais Dovecot **est** l'API. Le blocage n'est pas

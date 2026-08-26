@@ -1,3 +1,28 @@
+secubox-webos (1.0.67-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE PEERTUBE (#1273). PeerTube est un logiciel AMONT : on ne lui ajoute
+    pas de vue /micro, et la regle « le service sert sa carte » ne peut pas
+    s'appliquer. Sa carte vit donc dans le Hall — mais elle ne PEINT rien :
+    elle lit l'API REST PUBLIQUE de PeerTube, qui donne titres, vignettes,
+    durees et vues. Aucune donnee inventee, aucune identite requise.
+  * TOUT EST DE MEME ORIGINE. Le vhost relaie l'API, les vignettes et le
+    lecteur d'embarquement : la CSP du Hall impose `connect-src 'self'` et
+    `img-src 'self'`, et relacher ces deux directives pour une carte couterait
+    bien plus cher que ce relais. On ne relaie que le PUBLIC — pas
+    /api/v1/users, pas /api/v1/oauth.
+  * « Lire ici » remplace la vignette par le lecteur d'embarquement de
+    PeerTube : on ne recopie pas un lecteur qui sait deja lire ses formats, ses
+    sous-titres et son P2P.
+  * La barre du Hall recoit titre et source. La POSITION n'est pas annoncee :
+    le lecteur amont ne la donne pas sans son API de fenetre, et on ne
+    l'invente pas. `stop` rend la carte a son etat de vitrine — c'est le seul
+    ordre qu'on peut honorer, et on le dit plutot que de faire semblant
+    d'obeir aux autres.
+  * Les suivantes sont des VIGNETTES et non des titres : sur une plateforme
+    video, l'image renseigne plus vite que le nom du fichier.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:37:24 +0200
+
 secubox-webos (1.0.66-1~bookworm1) bookworm; urgency=medium
 
   * MES IDENTITES au menu profil (#1272). On est connecte a une dizaine de

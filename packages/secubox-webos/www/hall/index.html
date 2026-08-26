@@ -767,7 +767,7 @@ const FEATURED = [
   {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", micro:"/micro", h:238},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro"},
-  {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
+  {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:236},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in"},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:236},
@@ -803,7 +803,7 @@ const EMBEDDABLE = new Set(["metanews","kbin","socialrelay","bbs","radio","bille
 // generique. A la reinitialisation, c'est ce classement qu'on retrouve — pas
 // l'ordre d'ecriture du fichier, qui n'est l'avis de personne.
 function degreCarte(f){
-  if(f.micro) return 0;
+  if(f.micro || f.carte) return 0;
   if(typeof EMBEDDABLE!=='undefined' && EMBEDDABLE.has(f.id)) return 1;
   return 2;
 }
@@ -846,13 +846,17 @@ function featCardHTML(f,s){
   // — pictogramme, nom, une phrase — décrit le service ; le lecteur EST le
   // service. Là où une vue embarquable existe, on la sert telle quelle plutôt
   // que d'en peindre le portrait.
-  if(f.micro){
+  // `carte` : une carte servie par le HALL lui-même, pour un service AMONT
+  // auquel on n'ajoute pas de vue /micro (PeerTube). Elle ne peint rien — elle
+  // lit l'API publique du service à travers un relais de même origine.
+  if(f.micro || f.carte){
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    const u = f.carte ? esc(f.carte) : 'https://'+esc(h)+esc(f.micro);
     return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'">'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'
-      + ' src="https://'+esc(h)+esc(f.micro)+'?theme='+th+'"'
+      + ' src="'+u+'?theme='+th+'"'
       + ' title="'+esc(f.label)+'" allow="autoplay" loading="lazy"></iframe>'
       + '</article>';
   }
