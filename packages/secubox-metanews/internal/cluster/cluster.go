@@ -34,6 +34,21 @@ var motsVides = map[string]bool{
 	"the": true, "a2": true, "an": true, "of": true, "and": true, "or": true, "to": true, "in": true,
 	"on": true, "for": true, "by": true, "with": true, "is": true, "are": true, "as": true, "at": true,
 	"from": true, "that": true, "this": true, "it": true, "its": true, "be": true, "has": true, "have": true,
+	// MOTS COMMUNS CAPITALISES = FAUX AMIS (#1362). Un jour, un mois, un mot de
+	// debut de phrase (« Lundi », « Selon », « Nouveau ») se retrouve capitalise
+	// et devient une « entite » — un AIMANT qui rapproche des sujets sans
+	// rapport (« tornade » et « preservatif » partageaient « Lundi »). On les
+	// exclut : ce ne sont jamais des entites porteuses.
+	"lundi": true, "mardi": true, "mercredi": true, "jeudi": true, "vendredi": true, "samedi": true, "dimanche": true,
+	"janvier": true, "fevrier": true, "février": true, "mars": true, "avril": true, "mai": true, "juin": true,
+	"juillet": true, "aout": true, "août": true, "septembre": true, "octobre": true, "novembre": true, "decembre": true, "décembre": true,
+	"monday": true, "tuesday": true, "wednesday": true, "thursday": true, "friday": true, "saturday": true, "sunday": true,
+	"january": true, "february": true, "march": true, "april": true, "june": true, "july": true, "august": true,
+	"september": true, "october": true, "november": true, "december": true,
+	"selon": true, "apres": true, "après": true, "avant": true, "depuis": true, "pendant": true, "nouvelle": true,
+	"nouveau": true, "nouveaux": true, "video": true, "vidéo": true, "photos": true, "images": true, "info": true,
+	"comment": true, "pourquoi": true, "quand": true, "ainsi": true, "encore": true, "toujours": true, "aussi": true,
+	"notre": true, "votre": true, "leur": true, "leurs": true, "voici": true, "voila": true, "voilà": true,
 }
 
 // Tokens : minuscule, découpe, mots vides et tokens courts retirés.

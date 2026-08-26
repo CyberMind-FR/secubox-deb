@@ -1,3 +1,14 @@
+secubox-metanews (0.1.18-1~bookworm1) bookworm; urgency=medium
+
+  * MOTS COMMUNS CAPITALISES EXCLUS DES ENTITES (#1362). Un jour, un mois, un
+    mot de debut de phrase (« Lundi », « Selon », « Nouveau ») se retrouvait
+    capitalise et devenait une « entite » — un AIMANT rapprochant des sujets
+    sans rapport (tornade et preservatif partageaient « Lundi », vu au tag
+    #lundi). Jours, mois et une liste de mots generiques ne sont plus des
+    entites. NB : les sujets deja fusionnes a tort ne se defont pas seuls.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:41:41 +0200
+
 secubox-metanews (0.1.17-1~bookworm1) bookworm; urgency=medium
 
   * ENCORE DES FLUX (#1360) : AFP Factuel, TV5Monde Info, France Inter

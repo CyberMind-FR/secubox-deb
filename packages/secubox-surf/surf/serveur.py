@@ -202,10 +202,20 @@ async def app(scope, receive, send):
         corps = relais.reecris_html(r.text, base, rap, sur_hote).encode()
     elif "css" in ct:
         corps = relais.reecris_css(r.text, base, rap, sur_hote).encode()
+    elif "javascript" in ct or "ecmascript" in ct:
+        # ON NE REECRIT PAS LE JS EN GENERAL (indecidable), MAIS SI : les URL
+        # ABSOLUES DES PORTAILS DE CONSENTEMENT (#1362). BFM/Altice cite
+        # « https://gate.first-id.fr/... » en dur dans son bundle ; sans cette
+        # passe, la navigation partait vers le vrai portail (CSP + DNS de la box
+        # la bloquent) et le site restait coince. On remplace ces hotes-la, et
+        # eux seuls, par leur origine surf — le relais capte alors la redirection
+        # et renvoie a la page de retour.
+        try:
+            corps = relais.reecris_portails(r.text).encode()
+        except Exception:  # noqa: BLE001 — un JS binaire/exotique reste tel quel
+            corps = r.content
     else:
-        # Images, polices, JS, JSON : relayés tels quels. On ne réécrit pas le
-        # JS (indécidable) — d'où le mode « lecture » : ce qui a besoin du JS
-        # pour vivre vivra mal. C'est la mesure du POC, pas un défaut caché.
+        # Images, polices, JSON : relayés tels quels.
         corps = r.content
 
     sortie = [(k, v) for k, v in entetes_out.items()
