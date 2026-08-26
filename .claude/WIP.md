@@ -57,6 +57,14 @@ SocialRelay dotés d'une palette claire.
 
 ### ⬜ Next
 
+0quater. ~~**Actions réelles de Torrent et Dépôt**~~ **fait (#1314)** : la carte
+   Torrent liste, met en pause, reprend et accepte un magnet. Tout passe par
+   une route webos **sous jeton** avec une **liste close** d'actions —
+   l'API d'administration répond `400` et non `401` sans jeton, donc elle n'est
+   pas authentifiée et la relayer aurait ouvert l'ajout à tout le LAN.
+   *Reste* : **YTSaS**, dont la route d'action demeure introuvable — aucun
+   bouton posé tant qu'elle l'est.
+
 0bis. **POC proxy Tor + relais MITM — le morceau qui compte.** L'objectif tel
    que posé : anti-censure, « SaaS inversé », gestion des traqueurs, blocage
    transparent des publicités avec apprentissage, et pseudo-témoins rejoués

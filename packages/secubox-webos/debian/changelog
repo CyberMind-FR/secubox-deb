@@ -1,3 +1,25 @@
+secubox-webos (1.0.96-1~bookworm1) bookworm; urgency=medium
+
+  * LES WIDGETS D'ACCES RAPIDE AGISSENT (#1314). Ils n'affichaient que des
+    chiffres — une vitrine, alors que ce qu'on veut de Torrent et du Depot,
+    c'est agir. La carte Torrent liste ses transferts, les met en pause, les
+    reprend, et accepte un magnet.
+  * SOUS JETON, ET SOUS LISTE CLOSE. L'API d'administration repond `400` et non
+    `401` a un POST sans jeton : elle n'est PAS authentifiee, et la relayer
+    telle quelle aurait ouvert l'ajout de torrents a tout le reseau local, sur
+    un Hall joignable sans se connecter. L'autorisation est donc la NOTRE, et
+    un module ne peut se voir adresser que les actions ecrites dans le code.
+  * L'identifiant est ASSAINI avant d'entrer dans une URL — un identifiant venu
+    du reseau qui s'y interpole tel quel est une traversee de chemin en
+    puissance. On borne aussi la taille des champs : accepter un megaoctet ne
+    ferait que remplir le journal de quelqu'un d'autre.
+  * On rend le message du MODULE quand il refuse : c'est lui qui sait pourquoi,
+    et le reecrire ici en ferait une devinette.
+  * YTSaS n'a AUCUNE action declaree : sa route reste introuvable, et un bouton
+    qui ne fait rien est pire qu'un bouton absent.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:04:47 +0200
+
 secubox-webos (1.0.95-1~bookworm1) bookworm; urgency=medium
 
   * LA BASCULE CLAIR/SOMBRE NE REPRENAIT QU'APRES UN RAFRAICHISSEMENT FORCE

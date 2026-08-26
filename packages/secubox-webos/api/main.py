@@ -13,7 +13,7 @@ from fastapi import FastAPI, APIRouter, Depends, Request
 from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, acces
+from api import registry, flags, cardlets, acces, actions
 
 _cache: dict = {"services": [], "computed_at": None}
 _flags: dict = flags.load_flags()
@@ -214,6 +214,27 @@ async def services(user=Depends(require_jwt)):
 
 def _qui(user) -> str:
     return acces.qui_sur((user or {}).get("sub"))
+
+
+# ── ACTIONS DES MODULES (#1314) ────────────────────────────────────────────
+#
+# SOUS JETON, ET SOUS LISTE CLOSE. L'API d'administration repond `400` et non
+# `401` a un POST sans jeton : elle n'est pas authentifiee, et la relayer telle
+# quelle ouvrirait l'ajout de torrents a tout le reseau local, sur un Hall
+# joignable sans se connecter. L'autorisation est donc la NOTRE.
+
+@router.get("/actions/{module}/{action}")
+async def action_lecture(module: str, action: str, user=Depends(require_jwt)):
+    """Les actions de LECTURE — une liste, un etat detaille."""
+    return await actions.agir(module, action)
+
+
+@router.post("/actions/{module}/{action}")
+async def action_ecriture(module: str, action: str, corps: dict | None = None,
+                          user=Depends(require_jwt)):
+    """Les actions qui MODIFIENT. Le corps n'est lu que pour les champs que
+    l'action declare : ce qui n'est pas nomme n'est pas transmis."""
+    return await actions.agir(module, action, corps or {})
 
 
 # ── PASSAGE DE JETON ENTRE DEUX DOMAINES (#1305) ───────────────────────────

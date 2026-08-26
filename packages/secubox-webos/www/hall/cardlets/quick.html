@@ -59,6 +59,32 @@
   .acces a:hover { border-color:var(--accent); color:var(--accent); }
   .acces a.p { background:var(--accent); border-color:var(--accent); color:#fff; }
   .acces a.p:hover { opacity:.9; color:#fff; }
+  /* LA LISTE AGISSANTE (#1314). Un widget d'acces rapide qui ne fait
+     qu'afficher des chiffres est une vitrine ; ce qu'on veut de ces
+     trois-la, c'est agir. La liste n'apparait que si l'on est connecte —
+     sans identite, il n'y a rien a commander. */
+  .items { display:flex; flex-direction:column; gap:.14rem; margin:.1rem 0; }
+  .items .it { display:flex; align-items:center; gap:.36rem; font-size:.69rem;
+               line-height:1.3; }
+  .items .it .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+                   white-space:nowrap; }
+  .items .it button { flex:0 0 auto; width:20px; height:20px; border-radius:5px;
+                      border:1px solid var(--border); background:none;
+                      color:var(--muted); font-size:.6rem; line-height:1;
+                      cursor:pointer; padding:0; }
+  .items .it button:hover { border-color:var(--accent); color:var(--accent); }
+  .items .it .et { flex:0 0 auto; font-size:.58rem; color:var(--muted); }
+  .items .it .et.ok { color:var(--accent); }
+  .ajout { display:flex; gap:5px; margin-top:.15rem; }
+  .ajout input { flex:1; min-width:0; font:inherit; font-size:.68rem;
+                 padding:.24rem .4rem; border-radius:6px; color:var(--texte);
+                 border:1px solid var(--border); background:var(--fond); }
+  .ajout button { flex:0 0 auto; font:inherit; font-size:.68rem; padding:.24rem .55rem;
+                  border-radius:6px; border:1px solid var(--accent);
+                  background:var(--accent); color:#fff; cursor:pointer; }
+  .msg { font-size:.62rem; color:var(--muted); margin:.2rem 0 0; }
+  .msg.ko { color:#c0392b; }
+
   .barre { height:4px; border-radius:3px; background:var(--border); overflow:hidden; }
   .barre i { display:block; height:100%; background:var(--accent); width:0; }
   .note { font-size:.6rem; color:var(--muted); }
@@ -70,6 +96,8 @@
   <div class="hote" id="hote"></div>
   <div class="barre" id="barre" hidden><i id="jauge"></i></div>
   <div class="note" id="note"></div>
+  <div class="items" id="items"></div>
+  <p class="msg" id="msg"></p>
   <div class="acces" id="acces"></div>
 </div>
 
@@ -98,6 +126,11 @@
       chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
       acces:[['Ouvrir','/','p'],['Déposer','/#depot','']] }
   };
+
+  // Quels widgets savent AGIR, et sous quel nom de module. YTSaS n'y figure
+  // pas : sa route d'action reste introuvable, et un bouton qui ne fait rien
+  // est pire qu'un bouton absent.
+  var ACTIONNABLE = { torrent: 'torrent', depot: 'droplet' };
 
   var id = new URLSearchParams(location.search).get('svc') || 'depot';
   var c = SVC[id] || SVC.depot;
@@ -145,6 +178,94 @@
     }
   }
 
+  // ── AGIR (#1314) ─────────────────────────────────────────────────────────
+  //
+  // Tout passe par une route du Hall sous jeton : l'API du module n'est PAS
+  // authentifiee, et l'appeler directement depuis la carte ouvrirait l'action
+  // a qui charge la page.
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function api(chemin, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+    var j = jeton();
+    if (j) opts.headers['Authorization'] = 'Bearer ' + j;
+    if (opts.body) opts.headers['Content-Type'] = 'application/json';
+    return fetch('/api/v1/webos' + chemin, opts).then(function (r) {
+      return r.json().catch(function () { return {}; })
+        .then(function (d) { return { code: r.status, corps: d }; });
+    });
+  }
+  function dis(t, ko) {
+    var m = el('msg');
+    m.className = 'msg' + (ko ? ' ko' : '');
+    m.textContent = t || '';
+  }
+
+  function rendItems(l) {
+    var z = el('items');
+    if (!l || !l.length) { z.innerHTML = ''; return; }
+    z.innerHTML = l.slice(0, 3).map(function (x) {
+      var fini = String(x.complete) === '1' || x.complete === true;
+      return '<span class="it" data-id="' + esc(x.infohash || x.id || '') + '">'
+        + '<span class="nm" title="' + esc(x.name || '') + '">' + esc(x.name || '—') + '</span>'
+        + '<span class="et' + (fini ? ' ok' : '') + '">' + (fini ? 'complet' : 'en cours') + '</span>'
+        + '<button data-a="pause" title="Mettre en pause">❚❚</button>'
+        + '<button data-a="reprise" title="Reprendre">▶</button></span>';
+    }).join('');
+  }
+
+  function chargeItems() {
+    if (!ACTIONNABLE[id]) return;
+    api('/actions/' + ACTIONNABLE[id] + '/liste').then(function (r) {
+      if (r.code === 401 || r.code === 403) {
+        el('items').innerHTML = '';
+        el('ajout') && el('ajout').remove();
+        dis('Connectez-vous à la box pour agir.');
+        return;
+      }
+      var d = r.corps || {};
+      if (!d.ok) { dis(d.detail || '', true); return; }
+      dis('');
+      rendItems(d.donnees);
+      poseAjout();
+    });
+  }
+
+  // Le champ d'ajout n'existe que la ou une action d'ajout est declaree.
+  function poseAjout() {
+    if (id !== 'torrent' || el('ajout')) return;
+    var d = document.createElement('div');
+    d.className = 'ajout'; d.id = 'ajout';
+    d.innerHTML = '<input id="mag" placeholder="magnet:… ou URL" autocomplete="off">'
+      + '<button id="go">Ajouter</button>';
+    el('items').parentNode.insertBefore(d, el('msg'));
+    el('go').addEventListener('click', function () {
+      var v = el('mag').value.trim();
+      if (!v) return;
+      dis('envoi…');
+      api('/actions/torrent/ajouter', { method: 'POST', body: JSON.stringify({ magnet: v }) })
+        .then(function (r) {
+          var x = r.corps || {};
+          if (x.ok) { el('mag').value = ''; dis('ajouté'); chargeItems(); }
+          else dis(x.detail || 'refusé', true);
+        });
+    });
+  }
+
+  el('items').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-a]');
+    if (!b) return;
+    var it = b.closest('.it');
+    dis('…');
+    api('/actions/' + ACTIONNABLE[id] + '/' + b.dataset.a,
+        { method: 'POST', body: JSON.stringify({ id: it.dataset.id }) })
+      .then(function (r) {
+        var x = r.corps || {};
+        dis(x.ok ? 'fait' : (x.detail || 'refusé'), !x.ok);
+        if (x.ok) chargeItems();
+      });
+  });
+
   function charge() {
     fetch('/adm/api/v1/' + c.mod + '/status', { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -155,6 +276,7 @@
       .catch(function () { el('note').innerHTML = '<span class="ko">injoignable</span>'; });
   }
   charge();
+  chargeItems();
   // Ces chiffres bougent quand on agit, pas tout seuls : une minute suffit.
   setInterval(charge, 60000);
 
