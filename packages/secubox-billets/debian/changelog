@@ -1,3 +1,13 @@
+secubox-billets (0.8.16-1~bookworm1) bookworm; urgency=medium
+
+  * LE PROTOCOLE VIENT DE HAPROXY, PAS DE NOUS (#1269). nginx est un hop
+    INTERNE en clair : `$scheme` y vaut toujours « http », et le module en
+    concluait qu'il servait en clair — permaliens en http://, `_secure()` faux,
+    cookies retombes en SameSite=Lax au lieu de None. Le vhost transmet
+    desormais l'en-tete tel que HAProxy l'a pose.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:15:50 +0200
+
 secubox-billets (0.8.15-1~bookworm1) bookworm; urgency=medium
 
   * Un clic dans la carte n'emmene plus hors du Hall (#1266) : target="_top"

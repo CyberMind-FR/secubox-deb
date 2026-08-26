@@ -12,8 +12,33 @@
   --ink:#e6edf3; --mut:#7d8b99; --dim:#556472;
   --cyan:#28d3f0; --cyan-d:#0b93ac; --cyan-s:rgba(40,211,240,.10);
   --mint:#3ee08a; --amber:#e0b24a; --rose:#ec6a72; --violet:#9a7be6;
+  /* Les seules valeurs REDEFINIES plus bas sont ces couleurs : les polices et
+     les mesures ne changent pas avec le theme, et les repeter creerait deux
+     endroits a tenir en phase. */
   --mono:'Courier Prime',ui-monospace,SFMono-Regular,Menlo,monospace;
   --sans:'Space Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+
+/* DESIGN SOMBRE D'ABORD, ASSUME : :root nu reste la palette sombre. Mais
+   embarquee dans un Hall CLAIR, la page restait sombre au milieu d'une
+   interface claire (#1268). La requete media couvre l'etat « systeme », ou
+   aucun attribut n'est pose ; [data-theme] couvre le choix explicite, et doit
+   gagner dans les DEUX sens — sinon la bascule ne marche qu'a l'aller. */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f5f7f9; --bg2:#ffffff; --panel:#ffffff; --panel2:#f0f4f7;
+    --line:#dde5ec; --line2:#c3d0da;
+    --ink:#141d26; --mut:#5a6a78; --dim:#7c8b98;
+    --cyan:#0b7f96; --cyan-d:#06596a; --cyan-s:rgba(11,127,150,.10);
+    --mint:#1e9a5f; --amber:#9a7318; --rose:#c0343e; --violet:#6b4fc4;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f5f7f9; --bg2:#ffffff; --panel:#ffffff; --panel2:#f0f4f7;
+  --line:#dde5ec; --line2:#c3d0da;
+  --ink:#141d26; --mut:#5a6a78; --dim:#7c8b98;
+  --cyan:#0b7f96; --cyan-d:#06596a; --cyan-s:rgba(11,127,150,.10);
+  --mint:#1e9a5f; --amber:#9a7318; --rose:#c0343e; --violet:#6b4fc4;
 }
 *{box-sizing:border-box}
 body{margin:0;background:
@@ -302,4 +327,24 @@ async function fbStart(){
 fetch(`${API}/sources`).then(r=>r.json()).then(d=>rail(d.sources)).catch(()=>{});
 gid("gear").addEventListener("click",()=>{if(!gid("admin").hidden)fbStatus();});
 charger();setInterval(charger,60000);
-</script></body></html>
+</script>
+<script>
+// THEME HERITE DE L'HOTE (#1268). Encadree par le Hall, la page decidait seule
+// de son clair/sombre : un Hall clair affichait un cadre sombre en son milieu.
+// Le parametre donne le theme d'ARRIVEE, le message donne les bascules
+// SUIVANTES — et jamais par rechargement du cadre, qui perdrait la position.
+// On n'accepte que deux valeurs : une valeur libre venue de l'URL n'a rien a
+// faire dans un attribut du document.
+(function () {
+  var t = new URLSearchParams(location.search).get('theme');
+  if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>
+</body></html>

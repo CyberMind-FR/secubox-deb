@@ -1,3 +1,13 @@
+secubox-socialrelay (0.1.11-1~bookworm1) bookworm; urgency=medium
+
+  * CLAIR / SOMBRE DANS LE CADRE (#1268). Meme correction que MetaNews : la
+    page n'avait qu'une palette sombre et restait sombre au milieu d'un Hall
+    clair. Seules les COULEURS sont redefinies dans les blocs miroirs — les
+    polices et les mesures ne changent pas avec le theme, et les repeter
+    creerait deux endroits a tenir en phase.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:07:03 +0200
+
 secubox-socialrelay (0.1.10-1~bookworm1) bookworm; urgency=medium
 
   * Un clic dans la carte n'emmene plus hors du Hall (#1266).

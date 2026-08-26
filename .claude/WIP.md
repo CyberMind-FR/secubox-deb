@@ -106,6 +106,20 @@ voir autre chose que HTTP, et l'accueil devient un bureau.
 
 ### ⬜ TODO — file réelle, par ordre de coût
 
+0ter. **X-Forwarded-Proto : posé, mais perdu en route (#1269).** HAProxy le pose
+   désormais sur ses deux frontends (vérifié, lignes 40 et 375 de la config
+   générée) et les vhosts nginx le transmettent au lieu d'écraser avec
+   `$scheme`. **L'application est correcte** : interrogée directement sur sa
+   socket avec l'en-tête, Billets émet bien `https://`. Il se perd donc entre
+   HAProxy et nginx — le seul intermédiaire est **sbxwaf**, dont le
+   `NewSingleHostReverseProxy` devrait pourtant préserver l'en-tête. Non
+   élucidé. Conséquence résiduelle : les permaliens des cartes restent en
+   `http://`, donc le Hall embarque la racine du service au lieu de la page
+   exacte. Le reste (cookies `SameSite`) n'est plus affecté depuis que
+   `Partitioned` a été retiré.
+   *Attention* : les vhosts nginx sont des **conffiles**, et `--force-confold`
+   conserve l'ancien — après upgrade, comparer avec le `.dpkg-dist`.
+
 0bis. **Exclusions WAF levées — à surveiller (#1257).** Les **sept**
    `waf_bypass` sont passés à `false` : lyrion, torrent, jellyfin, ytsas,
    matrix, photoprism, peertube passent désormais par sbxwaf. Quatre

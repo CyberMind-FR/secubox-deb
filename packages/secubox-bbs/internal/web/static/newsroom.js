@@ -40,6 +40,18 @@
       r.setAttribute('data-theme', qt);
       try { localStorage.setItem('av-theme', qt); } catch (e) {}
     }
+    // Le parametre ne donne que le theme d'ARRIVEE. Les bascules SUIVANTES du
+    // Hall arrivaient sans etre entendues : le Hall passait en clair, le cadre
+    // restait sombre (#1268). On applique sans rien recharger — recharger
+    // couperait le son et remettrait la page au debut.
+    addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.sbx !== 'theme') return;
+      if (d.theme === 'dark' || d.theme === 'light') {
+        r.setAttribute('data-theme', d.theme);
+        try { localStorage.setItem('av-theme', d.theme); } catch (e) {}
+      }
+    });
   } catch (e) {}
 })();
 (function () {

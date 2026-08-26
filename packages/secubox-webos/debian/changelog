@@ -1,3 +1,25 @@
+secubox-webos (1.0.65-1~bookworm1) bookworm; urgency=medium
+
+  * LE PROTOCOLE VIENT DE HAPROXY, PAS DE NOUS (#1269). nginx est un hop
+    INTERNE en clair : `$scheme` y vaut toujours « http », et le module en
+    concluait qu'il servait en clair — permaliens en http://, `_secure()` faux,
+    cookies retombes en SameSite=Lax au lieu de None. Le vhost transmet
+    desormais l'en-tete tel que HAProxy l'a pose.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:15:56 +0200
+
+secubox-webos (1.0.64-1~bookworm1) bookworm; urgency=medium
+
+  * LE THEME PART VERS TOUS LES CADRES QUE NOUS AVONS POSES (#1268), et non
+    plus aux seules cartes. Les APERCUS et le service EMBARQUE gardaient le
+    theme de leur chargement : le Hall se retrouvait clair avec un cadre sombre
+    au milieu. Ils recevaient bien ?theme= a l'ouverture — c'est la bascule
+    ENSUITE qui leur echappait.
+  * La console admin recevait son URL SANS theme : embarquee dans un Hall
+    sombre, elle s'ouvrait en clair.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:08:20 +0200
+
 secubox-webos (1.0.63-1~bookworm1) bookworm; urgency=medium
 
   * VOLUME ET COUPURE PAR FLUX DANS LA BARRE (#1267). Deux flux peuvent jouer

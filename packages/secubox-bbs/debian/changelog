@@ -1,3 +1,12 @@
+secubox-bbs (0.30.28-1~bookworm1) bookworm; urgency=medium
+
+  * CLAIR / SOMBRE : le parametre ne donnait que le theme d'ARRIVEE, et les
+    bascules SUIVANTES du Hall passaient sans etre entendues — le Hall passait
+    en clair, le cadre restait sombre (#1268). On applique sans rien recharger :
+    recharger couperait le son et remettrait la page au debut.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:07:46 +0200
+
 secubox-bbs (0.30.27-1~bookworm1) bookworm; urgency=medium
 
   * CARTE MICRO SERVIE PAR LE SERVICE (#1265) : huit fils PUBLICS uniquement —

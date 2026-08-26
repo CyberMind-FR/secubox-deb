@@ -987,7 +987,12 @@ function svcDesc(id){
 }
 function modeURL(mode){
   if(!_svc) return 'about:blank';
-  if(mode==='admin') return 'https://'+ADMIN_HOST+_svc.path;
+  const thAdmin=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  // La console admin recevait l'URL SANS theme : embarquee dans un Hall
+  // sombre, elle s'ouvrait en clair. Le separateur depend du chemin, qui
+  // porte deja parfois une requete.
+  if(mode==='admin') return 'https://'+ADMIN_HOST+_svc.path
+    + (_svc.path.indexOf('?')>=0?'&':'?') + 'theme=' + thAdmin;
   const th=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   return 'https://'+_svc.url+(_sub||'/')+'?embed=1&theme='+th;
 }
@@ -1231,7 +1236,14 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   const theme=()=>root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   function dis(){
-    document.querySelectorAll('iframe[data-micro]').forEach(f=>{
+    // TOUS LES CADRES QUE NOUS AVONS POSES, pas seulement les cartes (#1268).
+    // La bascule clair/sombre ne partait qu'aux `data-micro` : les APERCUS et
+    // le service EMBARQUE gardaient le theme de leur chargement, et le Hall se
+    // retrouvait clair avec un cadre sombre au milieu. Ils recoivent bien
+    // ?theme= a l'ouverture — c'est la bascule ENSUITE qui leur echappait.
+    document.querySelectorAll(
+      'iframe[data-micro], iframe[data-apercu], #eb-frames iframe'
+    ).forEach(f=>{
       try{
         const o=new URL(f.src).origin;
         f.contentWindow.postMessage({sbx:'theme', theme:theme()}, o);

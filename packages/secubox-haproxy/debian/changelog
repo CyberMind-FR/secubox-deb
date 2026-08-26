@@ -1,3 +1,35 @@
+secubox-haproxy (1.8.6-1~bookworm1) bookworm; urgency=medium
+
+  * `Partitioned` RETIRE des cookies tiers (#1270). Il cloisonne le cookie au
+    couple (site encadrant, service) : le webmail ouvert dans le Hall et ouvert
+    directement se retrouvaient avec DEUX sessions distinctes, et Roundcube
+    rendait « non concordance de temoin ». L'authentification ne se perdait
+    pas — elle etait rangee ailleurs.
+  * Firefox annonce le rejet futur des cookies tiers depourvus de cet attribut.
+    On prefere une session qui marche aujourd'hui a une session cloisonnee qui
+    n'en est plus une. SameSite=None; Secure reste, et c'est lui qui permet le
+    cadrage.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:14:01 +0200
+
+secubox-haproxy (1.8.5-1~bookworm1) bookworm; urgency=medium
+
+  * X-FORWARDED-PROTO N'ETAIT POSE NULLE PART (#1269), et cela se payait loin
+    de la. HAProxy termine le TLS ; nginx ecoute en clair sur 9080 et
+    transmettait `$scheme`, c'est-a-dire « http ». TOUS les modules croyaient
+    donc servir en clair.
+  * Deux consequences constatees en production : les permaliens de Billets
+    sortaient en http:// — le Hall refusait alors de suivre le lien depuis une
+    carte, origine differente — et `_secure()` rendait faux, ce qui faisait
+    retomber les cookies sur SameSite=Lax au lieu de None. Le correctif du
+    cadrage (#1251) etait donc annule en silence par ce seul en-tete manquant.
+  * `set-header` et non `add-header` : la valeur du client est ECRASEE. Un
+    visiteur qui annoncerait « https » sur le port 80 ferait poser des cookies
+    Secure sur une connexion en clair.
+  * Le frontend en clair pose « http » explicitement, pour la meme raison.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:09:48 +0200
+
 secubox-haproxy (1.8.4-1~bookworm1) bookworm; urgency=medium
 
   * COOKIES DES SERVICES TIERS (#1259), opt-in SEPARE de `cadrable` via

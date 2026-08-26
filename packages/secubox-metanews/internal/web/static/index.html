@@ -9,9 +9,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MetaNews · observer le monde</title>
 <style>
+/* DESIGN SOMBRE D'ABORD, ET C'EST ASSUME : :root nu reste la palette sombre.
+   Mais embarquee dans un Hall CLAIR, la page restait sombre au milieu d'une
+   interface claire (#1268). On ajoute donc le miroir, avec la meme rigueur que
+   pour un design clair d'abord : la requete media couvre l'etat « systeme »
+   ou aucun attribut n'est pose, et [data-theme] couvre le choix explicite —
+   qui doit gagner dans les DEUX sens, sinon la bascule ne marche qu'a
+   l'aller. */
 :root{
   --bg:#0c1116; --panel:#131b22; --ink:#e8ecf0; --mut:#8b98a6; --line:#233039;
   --cyan:#2fd0f5; --cyan-s:rgba(47,208,245,.12); --mint:#4ade80; --amber:#e0b355;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f6f8fa; --panel:#ffffff; --ink:#16202a; --mut:#5b6b7a; --line:#dde5ec;
+    --cyan:#0d7f9e; --cyan-s:rgba(13,127,158,.10); --mint:#1f9d55; --amber:#a1701a;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f6f8fa; --panel:#ffffff; --ink:#16202a; --mut:#5b6b7a; --line:#dde5ec;
+  --cyan:#0d7f9e; --cyan-s:rgba(13,127,158,.10); --mint:#1f9d55; --amber:#a1701a;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
@@ -237,6 +254,26 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden){if(carTime
 gid("carprev").onclick=()=>{carGo(carIdx-1);carAuto()};
 gid("carnext").onclick=()=>{carGo(carIdx+1);carAuto()};
 loadCarou(); setInterval(loadCarou,120000);
+</script>
+
+<script>
+// THEME HERITE DE L'HOTE (#1268). Encadree par le Hall, la page decidait seule
+// de son clair/sombre : un Hall clair affichait un cadre sombre en son milieu.
+// Le parametre donne le theme d'ARRIVEE, le message donne les bascules
+// SUIVANTES — et jamais par rechargement du cadre, qui perdrait la position.
+// On n'accepte que deux valeurs : une valeur libre venue de l'URL n'a rien a
+// faire dans un attribut du document.
+(function () {
+  var t = new URLSearchParams(location.search).get('theme');
+  if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
 </script>
 </body>
 </html>

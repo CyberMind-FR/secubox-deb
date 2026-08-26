@@ -890,6 +890,10 @@ frontend stats
 frontend http-in
     bind *:${http_port}
     mode http
+    # Pendant du frontend TLS : ici la connexion EST en clair, et le dire
+    # explicitement empeche un client de pretendre le contraire.
+    http-request set-header X-Forwarded-Proto http
+
     # ACME HTTP-01 (#986) — les défis vont au serveur nginx dédié (:${acme_port}).
     #
     # ÉMIS EN PREMIER, avant toute règle de vhost : un défi arrive sur le
@@ -977,6 +981,20 @@ EOF
 frontend https-in
     bind *:${https_port} ssl crt $CERTS_DIR/
     mode http
+    # X-FORWARDED-PROTO, ET IL N'ETAIT POSE NULLE PART (#1269).
+    #
+    # HAProxy termine le TLS ; nginx ecoute en clair sur 9080 et transmettait
+    # `$scheme`, c'est-a-dire « http ». TOUS les modules croyaient donc servir
+    # en clair. Consequences constatees : les permaliens de Billets sortaient
+    # en http:// — le Hall refusait alors de suivre le lien, origine differente
+    # — et `_secure()` rendait faux, ce qui faisait retomber les cookies sur
+    # SameSite=Lax au lieu de None. Le correctif du cadrage etait donc annule
+    # en silence par ce seul en-tete manquant.
+    #
+    # `set-header` et non `add-header` : la valeur du client est ECRASEE. Un
+    # visiteur qui annoncerait « https » sur le port 80 ferait poser des
+    # cookies Secure sur une connexion en clair.
+    http-request set-header X-Forwarded-Proto https
 EOF
 
     if webui_regex=$(_fetch_webui_regex); then
@@ -1080,11 +1098,15 @@ EOF
                 # ajouter le notre sans cela laisserait deux SameSite dans le
                 # meme en-tete, et le navigateur garde le premier.
                 #
-                # `Partitioned` n'est pas decoratif : Firefox annonce deja le
-                # rejet des cookies tiers qui en sont depourvus. Il cloisonne le
-                # cookie au couple (site encadrant, service) — la session vue
-                # depuis le Hall devient distincte de celle d'une visite
-                # directe, ce qui est plus sur, pas moins.
+                # PAS DE `Partitioned` ICI, ET C'EST UNE CORRECTION (#1270).
+                # Il cloisonne le cookie au couple (site encadrant, service) :
+                # le webmail ouvert dans le Hall et ouvert directement se
+                # retrouvaient avec DEUX sessions distinctes, et Roundcube
+                # rendait « non concordance de temoin ». L'authentification
+                # semblait se perdre — elle etait simplement rangee ailleurs.
+                # Firefox annonce le rejet futur des cookies tiers sans cet
+                # attribut ; on prefere une session qui marche aujourd'hui a
+                # une session cloisonnee qui n'en est plus une.
                 #
                 # CE QUE CELA COUTE : SameSite etait une des protections CSRF de
                 # Nextcloud. Il lui reste son jeton `requesttoken`, verifie sur
@@ -1096,7 +1118,7 @@ EOF
                 if [ "$cookies_tiers" = "1" ]; then
                     echo "    http-request set-var(txn.cookies_tiers) int(1) if host_$name"
                     echo "    http-response replace-header Set-Cookie \"(.*);[ ]*[Ss]ame[Ss]ite=[A-Za-z]+(.*)\" \"\\1\\2\" if { var(txn.cookies_tiers) -m int 1 }"
-                    echo "    http-response replace-header Set-Cookie \"(.*)\" \"\\1; SameSite=None; Secure; Partitioned\" if { var(txn.cookies_tiers) -m int 1 }"
+                    echo "    http-response replace-header Set-Cookie \"(.*)\" \"\\1; SameSite=None; Secure\" if { var(txn.cookies_tiers) -m int 1 }"
                 fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
                     echo "    use_backend mitmproxy_inspector if host_$name"

@@ -1,3 +1,18 @@
+secubox-metanews (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * CLAIR / SOMBRE DANS LE CADRE (#1268). La page n'avait qu'une palette
+    SOMBRE : embarquee dans un Hall clair, elle restait sombre en son milieu.
+    Le design sombre d'abord est assume — :root nu ne bouge pas — mais le
+    miroir est ajoute avec la meme rigueur : la requete media couvre l'etat
+    « systeme » ou aucun attribut n'est pose, et [data-theme] couvre le choix
+    explicite, qui doit gagner dans les DEUX sens sinon la bascule ne marche
+    qu'a l'aller.
+  * Le parametre ?theme= donne le theme d'ARRIVEE, le message donne les
+    bascules SUIVANTES — jamais par rechargement du cadre, qui perdrait la
+    position.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 12:06:32 +0200
+
 secubox-metanews (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * Un clic dans la carte n'emmene plus hors du Hall (#1266).
