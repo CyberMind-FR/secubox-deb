@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1262 — vue MICRO de MetaNews : la carte que le service sert lui-même.
+
+  POURQUOI ELLE TOURNE. Une carte figée ne montre qu'un sujet sur soixante, et
+  ce sujet-là n'est pas plus important que le suivant : l'agrégation n'est
+  visible QUE dans le défilement. La vignette avance, et la liste avance avec
+  elle — deux rythmes séparés donneraient l'impression de deux fils sans
+  rapport, alors qu'ils disent la même chose.
+
+  Le survol met la rotation en pause : on ne lit pas un titre qui s'échappe.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MetaNews — vue micro</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea; --accent:#5b46b8; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#9d8bf0; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#9d8bf0; }
+
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+
+  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .7rem; gap:.4rem; }
+  .tete { display:flex; align-items:baseline; gap:.4rem; }
+  .tete .ic { font-size:1rem; }
+  .tete b { font-size:.88rem; }
+  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
+             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .une { position:relative; border-radius:10px; overflow:hidden; height:96px;
+         background:var(--border); flex:0 0 auto; display:block; text-decoration:none; }
+  .une img { width:100%; height:100%; object-fit:cover; display:block;
+             transition:opacity .35s ease; }
+  .une .voile { position:absolute; inset:auto 0 0 0; padding:.4rem .5rem .35rem;
+                background:linear-gradient(transparent, rgba(0,0,0,.82)); color:#fff; }
+  .une .t { font-size:.76rem; font-weight:650; line-height:1.22;
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .une .src { position:absolute; top:6px; right:6px; background:rgba(0,0,0,.62); color:#fff;
+              border-radius:20px; padding:1px 7px; font-size:.6rem;
+              font-variant-numeric:tabular-nums; }
+  .une.pas-d-image img { display:none; }
+  .une.pas-d-image { background:linear-gradient(135deg,var(--accent),var(--border)); }
+
+  .top { display:flex; flex-direction:column; gap:.1rem; }
+  .top .tt { font-size:.55rem; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); }
+  .top a { display:flex; align-items:baseline; gap:.34rem; font-size:.69rem; line-height:1.3;
+           color:var(--texte); text-decoration:none; }
+  .top a:hover .nm { text-decoration:underline; color:var(--accent); }
+  .top .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  .top .c { flex:0 0 auto; font-size:.6rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); text-decoration:none; }
+  .pied .grow { flex:1; }
+  .pied:hover { color:var(--accent); }
+  /* Le point de rotation dit que la carte est VIVANTE : sans lui, un contenu
+     qui change tout seul passe pour un bug d'affichage. */
+  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
+           animation:bat 2.4s ease-in-out infinite; }
+  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce) { .pouls { animation:none; opacity:.7 } }
+  .vide { font-size:.72rem; color:var(--muted); }
+</style>
+
+<div class="mw">
+  <div class="tete"><span class="ic">🗞️</span><b>MetaNews</b><span class="n" id="n">…</span></div>
+
+  <a class="une" id="une" href="/" target="_top">
+    <img id="une-img" alt="">
+    <span class="src" id="une-src"></span>
+    <span class="voile"><span class="t" id="une-t">lecture des sujets…</span></span>
+  </a>
+
+  <div class="top" id="top"><div class="tt">↻ en rotation</div></div>
+
+  <a class="pied" href="/" target="_top"><span class="pouls" id="pouls"></span>
+    <span id="pied-t">observer le monde</span><span class="grow"></span><span id="rang"></span></a>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var API = '/api/v1/metanews/topics?limit=24';
+  var sujets = [], i = 0, enPause = false;
+
+  var esc = function (t) {
+    return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c];
+    });
+  };
+  var el = function (id) { return document.getElementById(id); };
+
+  function lien(s) { return '/#' + encodeURIComponent(s.id || ''); }
+
+  function montre() {
+    if (!sujets.length) return;
+    var s = sujets[i % sujets.length];
+    var une = el('une'), img = el('une-img');
+    // On ne pose l'image QUE si elle existe : une source vide laisse le
+    // navigateur afficher l'icône de fichier cassé, ce qui salit la carte.
+    if (s.vignette) { une.classList.remove('pas-d-image'); img.src = s.vignette; }
+    else { une.classList.add('pas-d-image'); img.removeAttribute('src'); }
+    une.href = lien(s);
+    el('une-t').textContent = s.title || '—';
+    var n = Number(s.sources_count || 0);
+    el('une-src').textContent = n ? n + ' src' : '';
+
+    // La liste suit la vignette : elle montre CE QUI VIENT, pas le début du
+    // classement. Deux rythmes séparés donneraient deux fils sans rapport.
+    var suite = [], k;
+    for (k = 1; k <= 3 && k < sujets.length; k++) suite.push(sujets[(i + k) % sujets.length]);
+    el('top').innerHTML = '<div class="tt">↻ en rotation</div>' + suite.map(function (t) {
+      return '<a href="' + esc(lien(t)) + '" target="_top" title="' + esc(t.title) + '">'
+        + '<span class="nm">' + esc(t.title || '—') + '</span>'
+        + '<span class="c">' + (Number(t.sources_count || 0) || '') + '</span></a>';
+    }).join('');
+    el('rang').textContent = ((i % sujets.length) + 1) + '/' + sujets.length;
+  }
+
+  function tourne() { if (!enPause && sujets.length) { i++; montre(); } }
+
+  // Le survol suspend : on ne lit pas un titre qui s'échappe sous le curseur.
+  document.addEventListener('mouseenter', function () { enPause = true; }, true);
+  document.addEventListener('mouseleave', function () { enPause = false; }, true);
+
+  function charge() {
+    fetch(API, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        sujets = (d && d.topics) || [];
+        el('n').textContent = sujets.length ? sujets.length + ' sujets' : '';
+        if (!sujets.length) {
+          el('une-t').textContent = 'Aucun sujet agrégé';
+          el('pouls').style.animation = 'none';
+          return;
+        }
+        montre();
+      })
+      .catch(function () { el('une-t').textContent = 'MetaNews injoignable'; });
+  }
+
+  charge();
+  setInterval(tourne, 6000);
+  // Le fond bouge en dizaines de minutes : recharger plus souvent afficherait
+  // les mêmes sujets en chargeant la box.
+  setInterval(charge, 300000);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>

@@ -1,3 +1,14 @@
+secubox-webos (1.0.61-1~bookworm1) bookworm; urgency=medium
+
+  * YTSaS et Torrent manquaient a la selection principale, alors que les deux
+    tournent et acceptent d'etre encadres — releve sur la box, aucun en-tete de
+    refus. Ajoutes aux services et a frame-src.
+  * Billets et MetaNews servent desormais LEUR carte : l'apercu vivant leur
+    cede la place, comme prevu — le jour ou un service sait se resumer, il
+    remplace son portrait sans que le Hall ait a changer d'avis.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:43:25 +0200
+
 secubox-webos (1.0.60-1~bookworm1) bookworm; urgency=medium
 
   * L'avertissement « ce service n'autorise pas encore l'embarquement » est

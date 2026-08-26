@@ -138,6 +138,28 @@ _SECURITY_HEADERS = {
 }
 
 
+def _depuis(iso: str | None) -> str:
+    """Delai court et humain. Une date complete deborderait la ligne d'une
+    carte et n'apprendrait rien de plus a cette taille."""
+    if not iso:
+        return ""
+    from datetime import datetime, timezone
+    try:
+        t = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return ""
+    s = max(0.0, (datetime.now(timezone.utc) - t).total_seconds())
+    if s < 3600:
+        return "il y a %d min" % round(s / 60)
+    if s < 86400:
+        return "il y a %d h" % round(s / 3600)
+    if s < 2592000:
+        return "il y a %d j" % round(s / 86400)
+    return t.strftime("%d/%m/%y")
+
+
 def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None) -> dict:
     from urllib.parse import urlparse
     d = dict(row)
@@ -222,6 +244,44 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         # Embeds render inline in the feed too; allow any self-hosted embed hosts
         # of the shown billets in frame-src (static providers already covered).
         resp.headers["Content-Security-Policy"] = _csp(_frame_src(_extra_frame_hosts(rows)))
+        return resp
+
+    @app.get("/micro", response_class=HTMLResponse)
+    async def micro(request: Request):
+        """La carte que Billets sert au Hall (#1261).
+
+        POURQUOI LE SERVICE LA SERT LUI-MEME. Le Hall montrait jusqu'ici la
+        page complete reduite a la taille d'une carte : lisible de loin,
+        illisible de pres. Une carte RESUME, elle ne retrecit pas — et le
+        service est le seul a savoir ce qui, chez lui, merite le resume.
+
+        Quatre billets suffisent : le dernier en entier, les trois suivants en
+        titres. Au-dela la carte redevient un fil, et le fil a deja sa page.
+        """
+        rows, _ = await repo.list_published(app.state.conn, limit=4)
+        async with app.state.conn.execute(
+                "SELECT COUNT(*) FROM billet WHERE status = 'published'") as cur:
+            total = (await cur.fetchone())[0]
+        base = _base(request)
+        media_map = await repo.list_media_for(app.state.conn, [r["id"] for r in rows])
+        vues = [_billet_view(r, base, media_map.get(r["id"])) for r in rows]
+        for v in vues:
+            v["quand"] = _depuis(v.get("published_at") or v.get("created_at"))
+            # Une vignette seulement si le billet en a une : un cadre gris a la
+            # place d'une image absente ferait croire a un chargement en panne.
+            img = next((m for m in v.get("media", []) if str(m.get("mime", "")).startswith("image/")), None)
+            v["vignette"] = (img or {}).get("url") or None
+        resp = templates.TemplateResponse(request, "micro.html", {
+            "dernier": vues[0] if vues else None,
+            "suivants": vues[1:4],
+            # Le VRAI total, pas la longueur de la page : « 4 publiés »
+            # alors qu'il y en a trente serait un chiffre faux, et un chiffre
+            # faux vaut moins que pas de chiffre.
+            "total": total,
+        })
+        # La carte est encadree par le Hall : meme politique que le reste du
+        # module, frame-ancestors compris (#1256).
+        resp.headers["Content-Security-Policy"] = _csp(_frame_src([]))
         return resp
 
     @app.get("/b/{slug}", response_class=HTMLResponse)

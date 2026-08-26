@@ -1,3 +1,22 @@
+secubox-billets (0.8.14-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO SERVIE PAR LE SERVICE (#1261). Le Hall montrait la page
+    complete reduite a la taille d'une carte : lisible de loin, illisible de
+    pres. Une carte RESUME, elle ne retrecit pas — et le service est le seul a
+    savoir ce qui, chez lui, merite le resume.
+  * Le dernier billet en entier (vignette, titre, delai, chapo) puis les TROIS
+    suivants en titres. Au-dela la carte redevient un fil, et le fil a deja sa
+    page.
+  * Le compte affiche est le VRAI total des billets publies, pas la longueur de
+    la page : « 4 publies » alors qu'il y en a trente serait un chiffre faux,
+    et un chiffre faux vaut moins que pas de chiffre.
+  * Vignette seulement si le billet en a une : un cadre gris a la place d'une
+    image absente ferait croire a un chargement en panne.
+  * Palette locale a trois etats — le vhost ne sert pas /shared/, et :root nu
+    seul laisserait du texte sombre sur une carte sombre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:38:46 +0200
+
 secubox-billets (0.8.13-1~bookworm1) bookworm; urgency=medium
 
   * BILLETS ACCEPTE D'ETRE ENCADRE PAR LE HALL (#1256). `frame-ancestors

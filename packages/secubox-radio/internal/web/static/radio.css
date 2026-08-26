@@ -236,6 +236,22 @@ body.micro .antenne .rangee input { padding: .3rem .5rem; font-size: .72rem; }
 body.micro #chat { max-height: 2.9rem; overflow: hidden; padding: .1rem .55rem .35rem; }
 body.micro #chat .ph { font-size: .68rem; padding: .1rem 0; }
 body.micro .microlast { display: none; }             /* plus de message unique en haut */
+
+/* ROTATION ANTENNE / PLAYLIST (#1263).
+   Sous 520 px il n'y a de la place que pour UN panneau : la carte montrait
+   donc toujours l'antenne, et la playlist n'existait pas pour qui regarde
+   depuis l'accueil. On alterne — un temps ce qui se dit, un temps ce qui
+   vient. Au-dessus de 520 px les deux colonnes tiennent cote a cote et la
+   rotation n'a pas lieu d'etre : elle ferait disparaitre un panneau visible,
+   ce qui serait une perte, pas un gain. */
+@media (max-width: 519.98px) {
+  body.micro.vue-playlist .carte.antenne { display: none; }
+  body.micro.vue-playlist .carte.playlist { display: block; margin: .35rem 0 0; border-radius: 10px; }
+  body.micro.vue-playlist .carte.playlist .entete { display: none; }
+  body.micro.vue-playlist .carte.playlist ol,
+  body.micro.vue-playlist .carte.playlist ul { max-height: 3.6rem; overflow: hidden; }
+  body.micro.vue-playlist .carte.playlist li { font-size: .68rem; padding: .1rem .55rem; }
+}
 body.micro .lecteur { margin: 0; border-radius: 10px; }
 body.micro .lecteur .bloc { gap: .55rem; padding: .55rem .6rem; align-items: center; }
 body.micro .cadre { width: 3.4rem; height: 3.4rem; }

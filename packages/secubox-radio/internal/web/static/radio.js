@@ -134,6 +134,35 @@
   var file = $('file'), chat = $('chat'), dire = $('dire');
   var attente = $('attente');
   var estMicro = document.documentElement.classList.contains('micro');
+
+  // ROTATION ANTENNE / PLAYLIST EN MICRO (#1263).
+  //
+  // Sous 520 px la carte n'a la place que d'UN panneau : elle montrait donc
+  // toujours l'antenne, et la playlist n'existait pas pour qui regarde depuis
+  // l'accueil. On alterne — un temps ce qui se dit, un temps ce qui vient.
+  //
+  // Le SURVOL suspend : on ne lit pas une liste qui s'echappe, et on ne tape
+  // pas un message dans un champ qui va disparaitre. La saisie en cours
+  // suspend aussi, pour la meme raison, et c'est plus fort que le survol : on
+  // peut ecrire sans que le curseur reste sur la carte.
+  if (estMicro) (function () {
+    var vue = 'antenne', pause = false;
+    function pose() {
+      document.body.classList.toggle('vue-playlist', vue === 'playlist');
+      document.body.classList.toggle('vue-antenne', vue === 'antenne');
+    }
+    document.addEventListener('mouseenter', function () { pause = true; }, true);
+    document.addEventListener('mouseleave', function () { pause = false; }, true);
+    document.addEventListener('focusin', function () { pause = true; });
+    document.addEventListener('focusout', function () { pause = false; });
+    pose();
+    setInterval(function () {
+      var champ = document.activeElement;
+      if (pause || (champ && champ.tagName === 'INPUT')) return;
+      vue = (vue === 'antenne') ? 'playlist' : 'antenne';
+      pose();
+    }, 8000);
+  })();
   var microNext = $('micro-next'), microLast = $('micro-last'), microStatus = $('micro-status');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 

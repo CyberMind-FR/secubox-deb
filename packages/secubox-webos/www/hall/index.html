@@ -737,14 +737,16 @@ const FEATURED = [
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in"},
-  {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in"},
+  {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:236},
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:168},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
-  {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in"},
+  {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in"},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in"},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in"},
   {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
+  {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in"},
+  {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in"},
 ];
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
@@ -760,7 +762,8 @@ const FEATURED = [
 // qu'on ne maitrise pas. Verifie sur la box : X-Frame-Options retire et
 // frame-ancestors nommant le Hall.
 const EMBEDDABLE = new Set(["metanews","kbin","socialrelay","bbs","radio","billets","depot",
-                            "peertube","nextcloud","photoprism","mastodon","mail"]);
+                            "peertube","nextcloud","photoprism","mastodon","mail",
+                            "ytsas","torrent"]);
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [
   {id:"wall",name:"Muraille",icon:"🛡️"},{id:"mind",name:"Esprit",icon:"🧠"},

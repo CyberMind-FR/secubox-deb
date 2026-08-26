@@ -77,6 +77,7 @@ func (s *Serveur) routes() {
 	s.mux.HandleFunc("POST "+p+"/sources/{id}/test", s.jwt(s.sourceTest))
 	s.mux.HandleFunc("POST "+p+"/topics/{id}/discuss", s.jwt(s.discuss))
 	// UI.
+	s.mux.HandleFunc("GET /micro", s.micro)
 	s.mux.HandleFunc("GET /", s.ui)
 	s.mux.Handle("GET /static/", http.FileServer(http.FS(assets)))
 }
@@ -484,6 +485,23 @@ func dieze(tags []string) []string {
 		out = out[:6]
 	}
 	return out
+}
+
+// micro sert la carte que MetaNews affiche dans le Hall (#1262).
+//
+// LE SERVICE SE RESUME LUI-MEME. Le Hall montrait jusqu'ici la page complete
+// reduite a la taille d'une carte : lisible de loin, illisible de pres. Une
+// carte RESUME, elle ne retrecit pas — et une agregation ne se resume pas a un
+// sujet fige, elle se montre en TOURNANT.
+func (s *Serveur) micro(w http.ResponseWriter, r *http.Request) {
+	b, err := assets.ReadFile("static/micro.html")
+	if err != nil {
+		http.Error(w, "micro", 500)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(b)
 }
 
 func (s *Serveur) ui(w http.ResponseWriter, r *http.Request) {

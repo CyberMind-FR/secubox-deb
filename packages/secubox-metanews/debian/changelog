@@ -1,3 +1,24 @@
+secubox-metanews (0.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO SERVIE PAR LE SERVICE (#1262). Le Hall montrait la page
+    complete reduite a la taille d'une carte : lisible de loin, illisible de
+    pres. Une carte RESUME, elle ne retrecit pas.
+  * ELLE TOURNE, et c'est le fond du sujet : une carte figee ne montre qu'un
+    sujet sur soixante, et celui-la n'est pas plus important que le suivant.
+    L'agregation n'est visible QUE dans le defilement. La vignette avance et la
+    liste avance AVEC elle — deux rythmes separes donneraient l'impression de
+    deux fils sans rapport, alors qu'ils disent la meme chose.
+  * Le survol met la rotation en pause : on ne lit pas un titre qui s'echappe
+    sous le curseur. Le point de pouls dit que la carte est vivante — sans lui,
+    un contenu qui change tout seul passe pour un bug d'affichage.
+  * L'image n'est posee QUE si elle existe : une source vide laisse le
+    navigateur afficher l'icone de fichier casse, ce qui salit la carte.
+  * Rechargement du fond toutes les 5 minutes : le fond bouge en dizaines de
+    minutes, interroger plus souvent afficherait les memes sujets en chargeant
+    la box.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:41:54 +0200
+
 secubox-metanews (0.1.6-1~bookworm1) bookworm; urgency=medium
 
   * Carrousel des 10 dernières news (vignette + auto-rotation, pause survol/

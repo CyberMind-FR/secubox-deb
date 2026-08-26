@@ -1,3 +1,19 @@
+secubox-radio (0.1.42-1~bookworm1) bookworm; urgency=medium
+
+  * ROTATION ANTENNE / PLAYLIST EN MICRO (#1263). Sous 520 px la carte n'a la
+    place que d'UN panneau : elle montrait donc toujours l'antenne, et la
+    playlist n'existait pas pour qui regarde depuis l'accueil. On alterne — un
+    temps ce qui se dit, un temps ce qui vient.
+  * Au-dessus de 520 px les deux colonnes tiennent cote a cote et la rotation
+    n'a PAS lieu : elle ferait disparaitre un panneau deja visible, ce qui
+    serait une perte et non un gain.
+  * Le survol suspend — on ne lit pas une liste qui s'echappe. La saisie en
+    cours suspend aussi, et c'est plus fort que le survol : on doit pouvoir
+    ecrire un message sans garder le curseur sur la carte, et sans que le champ
+    disparaisse sous les doigts.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 11:44:39 +0200
+
 secubox-radio (0.1.41-1~bookworm1) bookworm; urgency=medium
 
   * MASQUE ACL REPOSE AVEC L'ENTREE (#1255). Une dizaine de paquets font
