@@ -1,3 +1,18 @@
+secubox-webos (1.0.115-1~bookworm1) bookworm; urgency=medium
+
+  * LE ✕ DE SURF FERME ENFIN (#1343 re-corrige). L'overlay est defini APRES le
+    script dans le HTML : l'ecouteur s'attachait a un bouton INEXISTANT
+    (getElementById -> null), et le ✕ ne repondait jamais. La nav et Echap
+    marchaient car ils cherchent l'element au moment du clic. On passe le ✕ en
+    DELEGATION sur le document — il cible le bouton au clic, quel que soit
+    l'ordre du DOM.
+  * BARRE DE CONFIDENTIALITE DANS SURF (#1351). La carte affiche, en pictos
+    reels postes par le relais : traqueurs, pubs cachees, contenus tiers,
+    cookies reecrits, popups de notification bloquees, popups/popunders coupes,
+    et le pourcentage de pistage des ressources.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:43:12 +0200
+
 secubox-webos (1.0.114-1~bookworm1) bookworm; urgency=medium
 
   * MINIATURES PEERTUBE QUI NE DISPARAISSENT PLUS (#1349). La strip etait

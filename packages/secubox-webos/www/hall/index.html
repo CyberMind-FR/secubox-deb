@@ -1778,16 +1778,17 @@ function fermeSurf(){
   ov.classList.add('hidden'); f.src='about:blank';   // on coupe le relais en fermant
 }
 window.fermeSurf = fermeSurf;
-(function(){
-  const x=document.getElementById('surf-ov-x');
-  // LE ✕ FERME ET REVIENT A LA PAGE D'AVANT SURF (#1343 revu). Reculer dans
-  // l'historique surf, c'est le role du bouton ◄ de la barre ; le ✕, lui,
-  // QUITTE — on retrouve le Hall (ou la source MetaNews) tel qu'on l'a laisse.
-  if(x) x.addEventListener('click', fermeSurf);
-  addEventListener('keydown', e=>{
-    if(e.key==='Escape') fermeSurf();
-  });
-})();
+// LE ✕ PAR DELEGATION (#1343 re-corrige). L'overlay est defini APRES ce script
+// dans le HTML : au moment ou l'on aurait attache l'ecouteur, le bouton
+// n'existait pas encore (getElementById -> null), et le ✕ ne repondait jamais.
+// On ecoute donc sur le document, qui existe deja, et on cible le bouton au
+// MOMENT du clic. C'est aussi pour ca que la nav et Echap marchaient, eux.
+document.addEventListener('click', e=>{
+  if(e.target && e.target.closest && e.target.closest('#surf-ov-x')){
+    e.preventDefault(); fermeSurf();
+  }
+});
+addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
 addEventListener('message', ev=>{
   const d=ev.data;
   if(!d) return;

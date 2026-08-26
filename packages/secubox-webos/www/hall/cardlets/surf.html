@@ -42,6 +42,14 @@
   .barre button.ghost{background:transparent;color:var(--muted);
          border:1px solid var(--ligne);font-weight:600;padding:.42rem .55rem}
   .barre button.ghost:hover{color:var(--ink);border-color:var(--cyan)}
+  .stats{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:.2rem .6rem;
+        background:var(--carte);border-bottom:1px solid var(--ligne);font-size:.62rem;
+        font-family:"JetBrains Mono",ui-monospace,monospace;color:var(--muted)}
+  .stats.hidden{display:none}
+  .stats .s{display:inline-flex;align-items:center;gap:.2rem}
+  .stats .s b{color:var(--ink);font-weight:700}
+  .stats .cam{margin-left:auto;color:var(--cyan);font-weight:700}
+  .stats .s.z{opacity:.4}
   .etat{font-size:.6rem;color:var(--muted);padding:.15rem .6rem;flex:0 0 auto;
         background:var(--carte);border-bottom:1px solid var(--ligne);
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -73,6 +81,7 @@
     <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
     <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
   </div>
+  <div class="stats hidden" id="stats" title="Ce que le relais a coupé ou masqué sur cette page"></div>
   <div class="etat" id="etat" hidden></div>
   <div class="vue" id="vue">
     <div class="accueil" id="accueil">
@@ -190,9 +199,26 @@
 
   // Le Hall demande de reculer (son ✕ / Echap). Si l'on ne peut plus, on le
   // dit — il fermera l'overlay.
+  function poseStats(S) {
+    if (!S) return;
+    var z = document.getElementById('stats'); if (!z) return;
+    var total = S.total || 0;
+    var pct = total ? Math.round((S.trackers||0) / total * 100) : 0;
+    function pic(ic, n, lib){ return '<span class="s'+((n||0)?'':' z')+'" title="'+lib+'">'+ic+' <b>'+(n||0)+'</b></span>'; }
+    z.innerHTML =
+        pic('🎯', S.trackers, 'traqueurs référencés')
+      + pic('📢', S.pubs,     'pubs cachées')
+      + pic('🧩', S.tiers,    'contenus tiers masqués')
+      + pic('🍪', S.cookies,  'cookies réécrits (SameSite=None)')
+      + pic('🔔', S.notifs,   'popups de notification bloquées')
+      + pic('🚫', S.popups,   'popups/popunders coupés')
+      + '<span class="cam" title="part de pistage sur les ressources de la page">🛡️ '+pct+'% pisté</span>';
+    z.classList.remove('hidden');
+  }
   addEventListener('message', function (ev) {
     var d = ev.data;
     if (!d) return;
+    if (d.sbx === 'surf-stats') { poseStats(d.stats); return; }
     if (d.sbx === 'surf-back') {
       if (!recule() && parent !== window) {
         try { parent.postMessage({ sbx: 'surf-vide' }, '*'); } catch (e) {}
