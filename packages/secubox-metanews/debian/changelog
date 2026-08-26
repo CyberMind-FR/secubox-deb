@@ -1,3 +1,28 @@
+secubox-metanews (0.1.13-1~bookworm1) bookworm; urgency=medium
+
+  * FIN DES AGREGATIONS ABSURDES — « tornade + preservatif » (#1194d). Deux
+    defauts de fond au regroupement :
+    - LA FRAICHEUR ETAIT ADDITIVE : 0.20 acquis des que deux articles etaient
+      recents, si bien qu'une similarite de contenu quasi nulle demarrait a
+      0.20 et qu'un seul token commun franchissait le seuil. Elle devient
+      MULTIPLICATIVE : elle module un score deja porte par le contenu (0.75 a
+      1.0), jamais ne l'invente. Un evenement recent SANS fond commun n'en est
+      pas un.
+    - GARDE DE CONTENU : pas de fusion sans une entite partagee OU un titre
+      tres proche. Entites disjointes + titres eloignes => sujets separes, meme
+      publies a la meme minute. Verifie : tornade/preservatif, sport/meteo,
+      Paris(manif)/Paris(fashion) tombent a 0.000.
+  * LES ACRONYMES EN TETE DE TITRE REDEVIENNENT DES ENTITES. On excluait le
+    premier mot en bloc (souvent capitalise par convention) — mais « BCE : … »,
+    « PSG : … » y perdaient leur entite porteuse, et des articles identiques ne
+    se regroupaient plus. On ne garde en tete que les acronymes (tout en
+    capitales) : jamais un « Le », toujours un « OTAN ». BCE regroupe de
+    nouveau (score 0.73).
+  * Seuil recalibre 0.42 -> 0.30 : la fraicheur ne dopant plus le score,
+    l'echelle a baisse d'autant.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 18:26:42 +0200
+
 secubox-metanews (0.1.12-1~bookworm1) bookworm; urgency=medium
 
   * PAS DE BANDEAU EN EMBARQUE (#1194c). Le Hall porte deja le titre et le

@@ -17,7 +17,7 @@ import (
 // Les titres du même événement partagent souvent PEU de mots (formulations
 // différentes) ; ce sont les ENTITÉS partagées qui portent le signal — d'où un
 // poids fort sur elles (§Score) et un seuil bas mais discriminant.
-const Seuil = 0.42
+const Seuil = 0.30
 
 // FenetreSec : deux articles à plus de 36 h l'un de l'autre ne sont pas le même
 // événement (garde temporelle du blocage).
@@ -49,6 +49,20 @@ func Tokens(s string) []string {
 		out = append(out, m)
 	}
 	return out
+}
+
+// toutEnCapitales : un acronyme — au moins deux lettres, toutes majuscules.
+func toutEnCapitales(s string) bool {
+	n := 0
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 0x00E0 && r <= 0x00FF {
+			return false
+		}
+		if r >= 'A' && r <= 'Z' || r >= 0x00C0 && r <= 0x00DE {
+			n++
+		}
+	}
+	return n >= 2
 }
 
 func ensemble(toks []string) map[string]bool {
@@ -111,7 +125,18 @@ func Entites(s string) []string {
 		}
 		r0 := []rune(net)[0]
 		capital := r0 >= 'A' && r0 <= 'Z' || r0 >= 0x00C0 && r0 <= 0x00DE
-		if !capital || i == 0 {
+		if !capital {
+			continue
+		}
+		// LE PREMIER MOT N'EST PLUS EXCLU AVEUGLÉMENT (#1194d). On l'écartait
+		// parce qu'un titre commence souvent par un mot capitalisé par
+		// convention (« Nouvelle », « Selon »). Mais c'est aussi là que se
+		// trouve l'entité qui PORTE le sujet — « BCE : … », « PSG : … » — et la
+		// perdre faisait rater le regroupement d'articles pourtant identiques.
+		// On ne garde en tête que les ACRONYMES (tout en capitales) : ce sont
+		// presque toujours de vraies entités (BCE, PSG, NASA, OTAN), jamais un
+		// « Le » ou un « Nouvelle » de début de phrase.
+		if i == 0 && !toutEnCapitales(net) {
 			continue
 		}
 		k := strings.ToLower(net)
@@ -143,7 +168,32 @@ func Score(titreA string, entA []string, pubA int64, titreT string, entT []strin
 	sTitre := SimTitres(titreA, titreT)
 	sEnt := Jaccard(ensemble(entA), ensemble(entT))
 	sRec := Recence(pubA - majT)
-	return 0.35*sTitre + 0.45*sEnt + 0.20*sRec
+
+	// HORS FENÊTRE, JAMAIS LE MÊME ÉVÉNEMENT (#1194d).
+	if sRec <= 0 {
+		return 0
+	}
+
+	// GARDE DE CONTENU — la correction du mélange « tornade + préservatif ».
+	//
+	// Le même événement partage forcément quelque chose de CONCRET : une entité
+	// (un lieu, une personne, une organisation) ou un titre très proche. Deux
+	// articles aux entités DISJOINTES et aux titres éloignés ne sont pas le même
+	// événement, même publiés à la même minute. Sans cette garde, deux sujets
+	// sans aucun rapport se rejoignaient sur une coïncidence de vocabulaire.
+	if sEnt == 0 && sTitre < 0.55 {
+		return 0
+	}
+
+	// LA FRAÎCHEUR MODULE, ELLE NE CRÉE PAS. C'était le défaut de fond : elle
+	// était ADDITIVE (0.20 acquis dès que deux articles étaient récents), si
+	// bien qu'une similarité de contenu quasi nulle démarrait déjà à 0.20 et
+	// qu'un seul token commun suffisait à franchir le seuil. Un événement récent
+	// ET partagé le reste ; un événement récent SANS fond commun ne l'est pas.
+	// On la passe donc en MULTIPLICATEUR : elle ne peut que réduire un score
+	// déjà porté par le contenu (0.75 à 1.0 sur la fenêtre), jamais l'inventer.
+	contenu := 0.35*sTitre + 0.65*sEnt
+	return contenu * (0.75 + 0.25*sRec)
 }
 
 // Fusion : union triée de deux listes d'entités/tags.
