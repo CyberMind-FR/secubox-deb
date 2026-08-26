@@ -115,6 +115,10 @@ PISTEURS = frozenset({
     "bounceexchange.com", "onesignal.com", "cdn.onesignal.com", "onaudience.com",
     "yandex.ru", "mc.yandex.ru", "matomo.cloud", "cookielaw.org", "onetrust.com",
     "cdn.cookielaw.org", "consensu.org", "usercentrics.eu", "app.usercentrics.eu",
+    # Portails de consentement / ID (redirigent la page, portent l'URL de retour)
+    "first-id.fr", "gate.first-id.fr", "id5-sync.com", "liveintent.com",
+    "sharedid.org", "pripsum.com", "consentframework.com", "sourcepoint.com",
+    "privacy-mgmt.com", "faktor.io", "trustarc.com", "sddan.com",
 })
 
 # DETECTION PAR MOTIF, en plus de la liste (#1340). « Attraper TOUS les

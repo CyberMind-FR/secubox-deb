@@ -30,6 +30,8 @@ from __future__ import annotations
 
 import httpx
 
+from urllib.parse import parse_qs, unquote
+
 from . import relais
 from . import egress
 
@@ -107,15 +109,35 @@ async def app(scope, receive, send):
                                "Cette adresse ne nomme aucun site à relayer.", 400))
         return
 
-    # ORIGINE DE PISTEUR : la seule réponse juste est « rien ». Le navigateur a
-    # suivi un lien qu'on avait laissé (on ne réécrit pas les pisteurs vers une
-    # origine), il tombe ici, et on ferme.
-    if relais.est_pisteur(cible):
-        await repond(204, [("content-type", "text/plain")], b"")
-        return
-
     chemin = scope.get("raw_path", scope["path"].encode()).decode()
     qs = scope.get("query_string", b"").decode()
+
+    # ORIGINE DE PISTEUR / PORTAIL DE CONSENTEMENT.
+    #
+    # On ne le relaie pas — mais avant de fermer, on regarde s'il porte une URL
+    # de RETOUR dans sa query (redirect=, return=, r=, url=...). Ces portails
+    # (first-id, etc.) y mettent toujours la page d'ou l'on vient. Plutot que de
+    # laisser le site en carafe (« bfmtv perdu »), on SAUTE le portail : on
+    # renvoie le navigateur directement a cette page, relayee. Sinon, 204.
+    def _saut_portail():
+        """L'URL de retour d'un portail, relayee — ou None."""
+        for vals in parse_qs(qs).values():
+            for cand in vals:
+                c = unquote(cand)
+                if c.startswith(("http://", "https://")):
+                    rp = relais.urlsplit(c)
+                    if rp.hostname and not relais.est_pisteur(rp.hostname):
+                        return ("https://" + relais.origine_de(rp.hostname)
+                                + (rp.path or "/") + (("?" + rp.query) if rp.query else ""))
+        return None
+
+    if relais.est_pisteur(cible):
+        dest = _saut_portail()
+        if dest:
+            await repond(302, [("location", dest)], b"")
+            return
+        await repond(204, [("content-type", "text/plain")], b"")
+        return
     base = "https://" + cible + "/"
     cible_url = "https://" + cible + chemin + (("?" + qs) if qs else "")
     mode = "tor" if egress._onion(cible) else "direct"
@@ -143,6 +165,12 @@ async def app(scope, receive, send):
         r = await _client(mode).request(methode, cible_url, headers=entetes_req,
                                         content=corps_req)
     except httpx.HTTPError as e:
+        # Un portail injoignable (DNS bloque par la box) porte souvent l'URL de
+        # retour : on saute le portail plutot que d'echouer.
+        dest = _saut_portail()
+        if dest:
+            await repond(302, [("location", dest)], b"")
+            return
         await repond(502, [("content-type", "text/html; charset=utf-8")],
                      _bannette(cible, "Injoignable (%s)." % type(e).__name__))
         return
