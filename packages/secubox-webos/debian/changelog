@@ -1,3 +1,22 @@
+secubox-webos (1.0.113-1~bookworm1) bookworm; urgency=medium
+
+  * ON NE RESTE PLUS COINCE SOUS LE SURF (#1348). Toute navigation du Hall —
+    Accueil, Services, Systeme, ouvrir un service — ferme desormais l'overlay
+    surf. Il restait par-dessus, et l'on croyait ne plus pouvoir revenir.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:30:47 +0200
+
+secubox-webos (1.0.112-1~bookworm1) bookworm; urgency=medium
+
+  * CORRECTION CRITIQUE : reassignation d'une const cassait TOUT (#1338 fix).
+    Dans le correctif « la video gagne », on reassignait `d` (ev.data), une
+    const — « invalid assignment to const 'd' ». L'exception jetait a CHAQUE
+    message media et cassait l'ecouteur entier : arbitrage media rompu, et les
+    clics du Hall (qui passent par des messages) « merdaient » pendant le surf.
+    On ecrit desormais l'etat derive dans une variable a part.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:25:46 +0200
+
 secubox-webos (1.0.111-1~bookworm1) bookworm; urgency=medium
 
   * LE ✕ FERME ET REVIENT A LA PAGE D'AVANT SURF (#1343 revu). Reculer dans

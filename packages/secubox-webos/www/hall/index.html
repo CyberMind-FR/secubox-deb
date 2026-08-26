@@ -1149,6 +1149,7 @@ function tile(cls,lbl,big,small,sub){
 // navigation vues (Accueil / Services principaux [embed] / Système / Aide)
 let _reg={};
 function showView(v){
+  if(typeof fermeSurf==='function') fermeSurf();   // #1348 : ne pas rester coince sous le surf
   ['accueil','embed','systeme','aide'].forEach(k=>{
     const el=document.getElementById('view-'+k); if(el) el.classList.toggle('hidden',k!==v);
   });
@@ -1237,6 +1238,7 @@ function setMode(mode){
 }
 // Point d'entrée UNIQUE — même logique pour tous les services (critère #1187).
 function openService(id, mode, sub, subLabel){
+  if(typeof fermeSurf==='function') fermeSurf();   // #1348 : ouvrir un service ferme le surf
   const d=svcDesc(id); if(!d) return;
   const s=_reg[id]||{}; const st=(s.health&&s.health.state)||'unknown';
   if(!_svc || _svc.id!==id || (sub||null)!==_sub){   // service ou rubrique changés
@@ -1771,6 +1773,7 @@ function fermeSurf(){
   if(!ov||ov.classList.contains('hidden')) return;
   ov.classList.add('hidden'); f.src='about:blank';   // on coupe le relais en fermant
 }
+window.fermeSurf = fermeSurf;
 (function(){
   const x=document.getElementById('surf-ov-x');
   // LE ✕ FERME ET REVIENT A LA PAGE D'AVANT SURF (#1343 revu). Reculer dans
@@ -1860,6 +1863,7 @@ addEventListener('message', ev=>{
     // La regle juste est symetrique : si de l'AUDIO tente de jouer alors qu'une
     // VIDEO joue deja, c'est l'AUDIO qui cede. La video n'est jamais coupee par
     // un flux audio — surtout pas par une reprise non sollicitee.
+    let etatFinal = d;
     if(d.joue && d.type!=='video'){
       let videoJoue=false;
       flux.forEach((f,autre)=>{
@@ -1869,10 +1873,14 @@ addEventListener('message', ev=>{
         commande(d.id,'pause');
         // On enregistre l'etat REEL (en pause) : marquer « joue » ferait
         // clignoter la barre et relancerait l'arbitrage a chaque battement.
-        d = Object.assign({}, d, {joue:false});
+        // `d` est une const (ev.data) : on ne la REASSIGNE pas — cela levait
+        // « invalid assignment to const 'd' » et cassait TOUT le handler de
+        // messages, donc l'arbitrage media et les clics du Hall. On ecrit un
+        // etat derive dans une variable a part.
+        etatFinal = Object.assign({}, d, {joue:false});
       }
     }
-    flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
+    flux.set(d.id,{maj:Date.now(), cadre:c, etat:etatFinal});
     dessine();
   });
 

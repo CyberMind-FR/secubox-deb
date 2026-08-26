@@ -309,10 +309,57 @@ html,body{overflow:auto !important}
       murs.forEach(function(m){ try{ m.remove(); }catch(e){} });
     }catch(e){}
   }
+  // PLACEHOLDERS « CONTENUS TIERS » (#1346). Beaucoup de sites FR remplacent un
+  // embed (video, tweet...) par un pave « nous avons bloque l'affichage de ce
+  // contenu, acceptez la categorie Contenus tiers ». On CLIQUE son bouton
+  // d'acceptation ; a defaut, on CACHE le pave — il ne dit rien qu'on veuille
+  // lire, et il coupe le fil de lecture.
+  function tiers(){
+    try{
+      var MARK=/contenus?\\s+tiers|d.p.t\\s+de\\s+cookies|bloqu.\\s+l.affichage|accepter\\s+la\\s+cat.gorie|third.party\\s+content|autoriser\\s+ce\\s+contenu|afficher\\s+ce\\s+contenu/i;
+      var BTN=/(accepter|autoriser|afficher|voir\\s+ce\\s+contenu|j.accepte|activer|cliquez\\s+ici)/i;
+      var vus=document.querySelectorAll("div,section,aside,figure,p,span");
+      for(var i=0;i<vus.length;i++){
+        var el=vus[i];
+        if(el.dataset&&el.dataset.sbxTiers) continue;
+        if(el.children.length>8) continue;
+        var t=(el.textContent||"").trim();
+        if(t.length<20 || t.length>600 || !MARK.test(t)) continue;
+        el.dataset&&(el.dataset.sbxTiers="1");
+        var b=el.querySelector("button,a,[role=button],input[type=button],input[type=submit]");
+        var ok=false;
+        if(b){ var bt=(b.textContent||b.value||"").trim(); if(BTN.test(bt)){ try{b.click();ok=true;}catch(e){} } }
+        if(!ok){ try{ el.style.display="none"; }catch(e){} }
+      }
+    }catch(e){}
+  }
+  // CONTENUS « SPONSORISE » (#1348). Les recommandations natives (Taboola,
+  // Outbrain et consorts) ne sont pas des <iframe> qu'on coupe a la source :
+  // ce sont des blocs INJECTES dans la page, etiquetes « Sponsorise ». On
+  // remonte du libelle a son item et on le cache. Prudence : seulement les
+  // libelles COURTS et EXPLICITES, pour ne pas emporter un vrai article.
+  function pub(){
+    try{
+      var ET=/^\|?\s*(sponsoris|sponsored|publicit|contenu sponsoris|pub\b|annonce\b)/i;
+      var noeuds=document.querySelectorAll("span,small,a,em,i,div,li");
+      for(var k=0;k<noeuds.length;k++){
+        var el=noeuds[k];
+        if(el.dataset&&el.dataset.sbxPub) continue;
+        var t=(el.textContent||"").trim();
+        if(t.length>26 || !ET.test(t)) continue;
+        var cible=el.closest&&el.closest("li,article,[class*=item i],[class*=card i],[class*=reco i],[class*=widget i],[class*=teaser i]");
+        cible=cible||el.parentElement||el;
+        if(cible.dataset) cible.dataset.sbxPub="1";
+        try{ cible.style.display="none"; }catch(e){}
+      }
+    }catch(e){}
+  }
   if(document.readyState!=="loading")pass();
   document.addEventListener("DOMContentLoaded",pass);
   document.addEventListener("DOMContentLoaded",antiMur);
-  var n=0,iv=setInterval(function(){pass();antiMur();if(++n>10)clearInterval(iv);},600);
+  document.addEventListener("DOMContentLoaded",tiers);
+  document.addEventListener("DOMContentLoaded",pub);
+  var n=0,iv=setInterval(function(){pass();antiMur();tiers();pub();if(++n>14)clearInterval(iv);},600);
   // ON ANNONCE LA NAVIGATION au cadre parent (la carte Surf) : un lien suivi
   // DANS la page relayee navigue l'iframe sans que la carte le sache. Grace a
   // ceci, « precedent » recule aussi sur les liens internes, pas seulement sur
@@ -505,15 +552,25 @@ def reecris_entetes(entetes: dict, base: str, rap: Rapport, sur_hote) -> dict:
             continue
 
         if bas == "set-cookie":
-            # Le témoin doit être posé sur NOTRE origine, pas sur `.facebook.com`
-            # (qui ne serait jamais renvoyé). On retire `Domain`, et `Secure`
-            # reste — on est en https.
+            # LE TEMOIN DOIT TENIR EN CONTEXTE TIERS (#1347). Le cadre surf est
+            # servi sous `surf-*.gk2.secubox.in`, un domaine DIFFERENT de celui
+            # du Hall (`gk2.net`) : pour le navigateur, c'est un contexte
+            # CROSS-SITE. Un cookie `SameSite=Lax/Strict` y est REJETE — c'est
+            # ce qui faisait boucler DataDome (« cookie datadome rejected »),
+            # et ce qui casse toute session sur un site relaye.
+            #
+            # On fait donc trois choses, dans l'ordre :
+            #   1. retirer `Domain` — il nommait le site d'origine, jamais le
+            #      notre, donc le cookie n'aurait pas ete renvoye ;
+            #   2. retirer un `SameSite` existant — sinon on en aurait deux ;
+            #   3. imposer `SameSite=None; Secure`, seul reglage accepte en
+            #      contexte tiers sous https.
             v = re.sub(r';\s*[Dd]omain=[^;]+', '', val)
+            v = re.sub(r';\s*SameSite=\w+', '', v, flags=re.IGNORECASE)
+            if "secure" not in v.lower():
+                v += "; Secure"
+            v += "; SameSite=None"
             out[cle] = v
-            rap.note("set-cookie", "note",
-                     "témoin réécrit : `Domain` retiré pour qu'il tienne sur "
-                     "l'origine proxy. C'est ici que se brancherait le rejeu de "
-                     "session (le « catcher »).")
             continue
 
         if bas == "content-security-policy":
