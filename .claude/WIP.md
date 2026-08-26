@@ -10,6 +10,67 @@
 
 ---
 
+
+## 2026-08-26 (nuit) — SBXOS : le BiB (Browser-in-Browser) et la matrice surf
+
+### ✅ Fait — déployé sur gk2
+
+**LE PROXY SURF EST EN LIGNE** (`secubox-surf`, hors chaîne d'inspection).
+- URL par site : `surf-<hôte-aplati>.gk2.secubox.in` (wildcard, HAProxy route
+  `surf-*` par `hdr_beg` en bypass, générateur #1217). Serveur ASGI 9082.
+- **Navigateur dans le Hall** (webos) : carte + overlay avec barre d'adresse,
+  ◄ back, 🏠 home, ⟳, ⧉, ✕. La barre de recherche du Hall surfe une adresse
+  (Entrée). Barre unique double-ligne, hauteur d'une seule, metrics + statut
+  inline.
+- **Confidentialité** : pisteurs coupés à la source (liste + motifs + labels
+  exacts), auto-consentement (didomi/OneTrust + clic « accepter »), contenus
+  « Sponsorisé » cachés, popups + **notifications** interceptées, cookies JS
+  forcés `SameSite=None` (contexte tiers), anti-adblock CIBLÉ (jamais global —
+  le clic global cassait tout), meta-refresh neutralisé, sandbox iframe.
+- **Saut de portail de consentement** : first-id.fr (bloqué par le DNS box)
+  redirige BFM → on lit l'URL de retour (`redirectHost`+`redirectUri`) et on
+  saute au bon chemin ; réécriture des portails dans le HTML **et le JS**.
+- **Barre de metrics** : 🎯 traqueurs · 📢 pubs · 🧩 tiers · 🍪 cookies · 🔔
+  notifs · 🚫 popups · 🛡️ % pisté.
+
+**LA MATRICE SBXOS** : dans le Hall, tout lien reste dans le Hall.
+- MetaNews : sources externes → surf (overlay). Liens du cartouche BBS → le
+  BON sujet (`#<id>`, plus global) et **restent embarqués** (`sbx:'ouvre-hote'`).
+- BBS embarqué : liens externes → surf, liens box → service embarqué ;
+  standalone → liens directs.
+
+**Divers** : miniatures PeerTube stables (réutilisation, plus de teardown) ;
+fin de vidéo retire rangée+pastille ; **vol/muet des barres média
+persistants** ; « ordre actuel = défaut » pour les favoris ; session Roundcube
+8 h ; carte Dépôt qui dépose (glisser/coller/choisir) ; Torrent/YTSaS sans
+boutons redondants ; bandeau Hall sur une ligne au téléphone.
+
+**MetaNews clustering** : fraîcheur multiplicative + garde de contenu +
+acronymes en tête + **jours/mois/mots communs exclus des entités** (l'aimant
+« Lundi » qui mêlait tornade et préservatif). Sources : 16 → 28 (Mediapart,
+Reporterre, Basta!, L'Huma, Le Point, Slate, Courrier Inter, France Culture,
+Alter-Éco, AFP Factuel, TV5Monde, France Inter).
+
+**Bug critique corrigé** : réassignation de `const d` (ev.data) dans
+l'arbitrage média cassait TOUT le handler de messages → clics du Hall « qui
+merdaient ». Et la règle « audio cède à la vidéo » bloquait la radio
+(retirée).
+
+### ⬜ Next
+1. **WAF — hostnames inconnus en top-10** (noms non routés) dans le tableau du
+   Hall. Demandé, non fait.
+2. **Re-clustering MetaNews** : les sujets DÉJÀ fusionnés à tort ne se défont
+   pas seuls ; écrire une passe qui réévalue le rattachement des articles avec
+   les nouvelles règles et détache ce qui ne colle plus.
+3. Guide cardlets : ajouter les leçons surf (portails, sandbox, injection,
+   clic global).
+
+### 📄 Documenté
+- `docs/POC-SURF.md` — mesures, murs, décision, montage vivant.
+- `docs/CARDLET-GUIDELINES.md` — inchangé cette nuit (à compléter, cf. Next 3).
+
+---
+
 ## 2026-08-26 (soir) — SBXOS : les cartes AGISSENT, et le guide qui en sort
 
 ### ✅ Fait — déployé sur gk2 (secubox-webos 1.0.99 → 1.0.104)
