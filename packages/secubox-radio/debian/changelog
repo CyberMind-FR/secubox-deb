@@ -1,3 +1,20 @@
+secubox-radio (0.1.39-1~bookworm1) bookworm; urgency=medium
+
+  * AUTOPLAY REFUSE : ON ARME, ON N'ACCUSE PAS (#1253). Firefox n'implemente
+    pas la delegation allow="autoplay" — il l'ecrit lui-meme dans la console —
+    donc encadree dans le Hall, la radio est jugee sur SA propre interaction,
+    qui n'a pas eu lieu. Le refus est normal, pas une panne : le podcaster ne
+    le rencontre jamais parce qu'il ne tente rien avant un clic.
+  * L'intention est retenue et la lecture relancee au PREMIER geste recu dans
+    le cadre, quel qu'il soit — c'est ce geste qui accorde l'autorisation. Le
+    bandeau ne s'affiche plus que si cette relance echoue a son tour :
+    avertir de ce qu'un simple clic va effacer, c'est inquieter pour rien.
+  * Meme traitement pour la commande venue de la barre du Hall : le geste a eu
+    lieu dans le Hall, Firefox ne le transmet pas au cadre. Sans cela, la barre
+    affichait « en lecture » devant un lecteur muet.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:34:43 +0200
+
 secubox-radio (0.1.38-1~bookworm1) bookworm; urgency=medium
 
   * LECTURE BLOQUEE DANS LE HALL, sur telephone et sur TV (#1251). Encadre par

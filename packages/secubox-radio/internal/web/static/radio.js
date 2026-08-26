@@ -109,6 +109,34 @@
   var microNext = $('micro-next'), microLast = $('micro-last'), microStatus = $('micro-status');
   var avert = $('avert'), bAime = $('aime'), bJouer = $('jouer');
 
+  // AUTOPLAY REFUSE : ON ARME, ON N'ACCUSE PAS (#1253).
+  //
+  // Firefox n'implemente pas la delegation `allow="autoplay"` — il le dit
+  // lui-meme dans la console — donc encadree dans le Hall, la radio est jugee
+  // sur SA propre interaction, qui n'a pas eu lieu. Le refus est normal, pas
+  // une panne : le podcaster ne le rencontre jamais parce qu'il ne tente rien
+  // avant un clic.
+  //
+  // On retient donc l'intention et on relance au PREMIER geste, quel qu'il
+  // soit — c'est ce geste qui accorde l'autorisation. Le bandeau ne s'affiche
+  // que si la relance echoue A SON TOUR : afficher un avertissement qu'un
+  // simple clic va effacer, c'est inquieter pour rien.
+  var relanceArmee = false;
+  function armeRelance() {
+    if (relanceArmee) return;
+    relanceArmee = true;
+    var geste = function () {
+      document.removeEventListener('pointerdown', geste, true);
+      document.removeEventListener('keydown', geste, true);
+      relanceArmee = false;
+      if (!veutJouer || !ecran.paused) return;
+      var e = ecran.play();
+      if (e && e.catch) e.catch(function () { avert.hidden = false; });
+    };
+    document.addEventListener('pointerdown', geste, true);
+    document.addEventListener('keydown', geste, true);
+  }
+
   // ── ANNONCE À LA BARRE DU HALL (#1246) ────────────────────────────────────
   //
   // Le Hall ne peut pas toucher notre média : origines différentes. On ANNONCE
@@ -136,8 +164,14 @@
     var d = ev.data;
     if (!d || d.sbx !== 'cmd' || !ecran) return;
     if (d.action === 'toggle') {
-      if (ecran.paused) { var e = ecran.play(); if (e && e.catch) e.catch(function () {}); }
-      else ecran.pause();
+      if (ecran.paused) {
+        // Le geste a eu lieu dans le HALL, pas ici : Firefox ne le transmet
+        // pas au cadre. On retient l'intention et on relance au premier geste
+        // recu de ce cote — sinon la barre repond « ❚❚ » a un lecteur muet.
+        veutJouer = true;
+        var e = ecran.play();
+        if (e && e.catch) e.catch(function () { armeRelance(); });
+      } else ecran.pause();
     } else if (d.action === 'stop') { ecran.pause(); annonceHall(true); }
     // prev / next : un direct ne se parcourt pas. On ne fait pas semblant.
   });
@@ -279,7 +313,7 @@
         // AUTOPLAY REFUSE = SILENCE INEXPLIQUE : on le DIT plutot que de laisser
         // un ecran noir.
         var essai = ecran.play();
-        if (essai && essai.catch) essai.catch(function () { avert.hidden = false; });
+        if (essai && essai.catch) essai.catch(function () { bJouer.textContent = '▶'; armeRelance(); });
       } else {
         bJouer.textContent = '▶'; bJouer.title = 'Écouter';
       }

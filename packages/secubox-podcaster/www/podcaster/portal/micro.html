@@ -81,6 +81,22 @@
   .bas .t { font-variant-numeric: tabular-nums; }
   .bas a { margin-left: auto; color: var(--muted); text-decoration: none; letter-spacing: .06em; text-transform: uppercase; }
   .bas a:hover { color: var(--cyan); }
+  /* À SUIVRE (#1252). La carte disait ce qui joue et rien de ce qui vient :
+     on ne pouvait ni anticiper, ni choisir sans ouvrir la bibliothèque. Trois
+     titres suffisent — au-delà, la carte redevient une bibliothèque, et la
+     bibliothèque a déjà sa page. Un clic saute directement à l'épisode. */
+  .suite { display: flex; flex-direction: column; gap: .1rem; margin: .3rem 0 .1rem; }
+  .suite .tt { font-size: .58rem; letter-spacing: .08em; text-transform: uppercase;
+               color: var(--muted); margin-bottom: .1rem; }
+  .suite button { display: flex; align-items: baseline; gap: .34rem; width: 100%;
+                  background: none; border: 0; padding: .1rem 0; cursor: pointer;
+                  font: inherit; font-size: .68rem; color: var(--text);
+                  text-align: left; line-height: 1.25; }
+  .suite button:hover .nm { text-decoration: underline; }
+  .suite .rg { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--muted);
+               font-size: .62rem; }
+  .suite .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .suite .vide { font-size: .66rem; color: var(--muted); }
 </style>
 
 <div class="mp">
@@ -106,6 +122,9 @@
   </div>
 
   <div class="prog" id="prog"><i id="barre"></i></div>
+
+  <div class="suite" id="suite"><div class="tt">⏭ à suivre</div><span class="vide">lecture de la bibliothèque…</span></div>
+
   <div class="bas">
     <span class="t" id="temps">0:00</span>
     <a href="/" target="_top">📚 bibliothèque</a>
@@ -152,6 +171,7 @@
       el('titre').textContent = 'Bibliothèque vide';
       el('src').textContent = 'aucun épisode';
       ['pp', 'prev', 'next'].forEach(i => el(i).disabled = true);
+      el('suite').innerHTML = '<div class="tt">⏭ à suivre</div><span class="vide">—</span>';
       return;
     }
     montre();
@@ -164,7 +184,41 @@
     el('prev').disabled = idx <= 0;
     el('next').disabled = idx >= eps.length - 1;
     montreFav();
+    montreSuite();
   }
+
+  // Ce qui vient APRÈS la piste courante, pas le début de la bibliothèque :
+  // une liste qui ne bouge pas quand on avance ne dit rien de la suite.
+  function montreSuite() {
+    const box = el('suite');
+    const a_venir = eps.slice(idx + 1, idx + 4);
+    let html = '<div class="tt">⏭ à suivre</div>';
+    if (!a_venir.length) {
+      html += '<span class="vide">fin de la bibliothèque</span>';
+    } else {
+      html += a_venir.map((e, i) =>
+        '<button type="button" data-i="' + (idx + 1 + i) + '" title="' + esc(e.title || '') + '">'
+        + '<span class="rg">' + (i + 1) + '</span>'
+        + '<span class="nm">' + esc(e.title || '—') + '</span></button>').join('');
+    }
+    box.innerHTML = html;
+  }
+
+  // DÉCLARATION DE FONCTION, pas `const` : montre() peut s'exécuter depuis une
+  // reprise d'état avant que la ligne ne soit évaluée, et une const encore en
+  // zone morte lève une ReferenceError — la panne exacte déjà rencontrée sur
+  // le Hall (#1247).
+  function esc(t) {
+    return String(t == null ? '' : t).replace(/[&<>"]/g,
+      c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  // Délégation : la liste est reconstruite à chaque piste, un écouteur par
+  // bouton fuirait à chaque rendu.
+  document.getElementById('suite').addEventListener('click', ev => {
+    const b = ev.target.closest('button[data-i]');
+    if (b) joue(Number(b.dataset.i));
+  });
 
   function joue(i) {
     if (i < 0 || i >= eps.length) return;

@@ -1,3 +1,18 @@
+secubox-podcaster (1.0.15-1~bookworm1) bookworm; urgency=medium
+
+  * A SUIVRE dans la carte (#1252) : elle disait ce qui joue et rien de ce qui
+    vient — on ne pouvait ni anticiper, ni choisir sans ouvrir la
+    bibliotheque. Trois titres, cliquables, qui sautent directement a
+    l'episode. Au-dela de trois la carte redevient une bibliotheque, et la
+    bibliotheque a deja sa page.
+  * La liste suit la piste COURANTE et non le debut de la collection : une
+    liste qui ne bouge pas quand on avance ne dit rien de la suite.
+  * `esc` passe en declaration de fonction : montre() peut s'executer depuis
+    une reprise d'etat avant l'evaluation de la ligne, et une const encore en
+    zone morte leve une ReferenceError — la panne exacte deja rencontree.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:35:24 +0200
+
 secubox-podcaster (1.0.14-1~bookworm1) bookworm; urgency=medium
 
   * La carte s'affichait SANS AUCUN STYLE : elle liait /shared/hybrid-skin.css,
