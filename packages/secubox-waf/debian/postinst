@@ -55,5 +55,48 @@ if [ "$1" = "configure" ]; then
     echo "  wafctl add-route <domain> <ip> <port>"
     echo "=============================================="
 fi
+
+# ── #1227 : vhost dedie du tableau de bord WAF ────────────────────────────
+#
+# Trois gestes, dans cet ordre, et l'ordre compte : semer le filtre
+# d'exposition AVANT d'activer le site. Activer d'abord exposerait la page —
+# et les points d'entree sans jeton qu'elle consomme — pendant l'intervalle.
+VHOST="waf.gk2.secubox.in"
+SNIP="/etc/nginx/snippets/exposure/${VHOST}.conf"
+SITE="/etc/nginx/sites-available/${VHOST}.conf"
+
+if [ -f "$SITE" ]; then
+    # 1. Le filtre, a « lan » — jamais ecrase s'il existe deja : l'operateur a
+    #    pu l'ouvrir volontairement, et le reinstaller le refermerait dans son
+    #    dos.
+    if [ ! -f "$SNIP" ]; then
+        mkdir -p "$(dirname "$SNIP")"
+        cat > "$SNIP" <<'EXPO'
+# Filtre d'exposition — semé à « lan » par secubox-waf (#1227).
+# Édité par le module secubox-exposure, qui fait autorité une fois le fichier
+# créé. Ce tableau de bord livre les adresses des attaquants, la liste des
+# bannis et l'état de chaque protection : ouvert au monde, c'est une carte du
+# dispositif offerte à qui l'attaque.
+allow 127.0.0.1;
+allow 10.0.0.0/8;
+allow 172.16.0.0/12;
+allow 192.168.0.0/16;
+deny all;
+EXPO
+    fi
+
+    # 2. L'activation.
+    ln -sf "$SITE" "/etc/nginx/sites-enabled/${VHOST}.conf"
+
+    # 3. Le rechargement, SEULEMENT si la configuration passe le test : une
+    #    conf fautive couperait tous les autres vhosts de la box.
+    if nginx -t >/dev/null 2>&1; then
+        systemctl reload nginx >/dev/null 2>&1 || true
+    else
+        echo "secubox-waf: nginx -t a echoue — vhost ${VHOST} depose mais non active" >&2
+        rm -f "/etc/nginx/sites-enabled/${VHOST}.conf"
+    fi
+fi
+
 #DEBHELPER#
 exit 0

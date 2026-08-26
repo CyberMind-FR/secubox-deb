@@ -40,6 +40,11 @@ override_dh_auto_install:
 	# Modular nginx config
 	install -d debian/secubox-waf/etc/nginx/secubox.d
 	[ -f nginx/waf.conf ] && cp nginx/waf.conf debian/secubox-waf/etc/nginx/secubox.d/ || true
+	# #1227 : vhost dedie du tableau de bord. Depose dans sites-available ;
+	# c'est le postinst qui l'active, apres avoir seme son filtre d'exposition.
+	install -d debian/secubox-waf/etc/nginx/sites-available
+	install -m 0644 nginx/waf-vhost.conf \
+	  debian/secubox-waf/etc/nginx/sites-available/waf.gk2.secubox.in.conf
 	# Example haproxy-routes.json
 	install -d debian/secubox-waf/usr/share/doc/secubox-waf/examples
 	[ -f config/haproxy-routes.json.example ] && cp config/haproxy-routes.json.example debian/secubox-waf/usr/share/doc/secubox-waf/examples/ || true

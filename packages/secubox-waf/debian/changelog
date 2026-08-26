@@ -1,3 +1,25 @@
+secubox-waf (1.10.0-1~bookworm1) bookworm; urgency=medium
+
+  * Vhost dedie du tableau de bord (#1227) : waf.gk2.secubox.in. Le certificat
+    generique *.gk2.secubox.in le couvre deja, et la zone DNS locale est en
+    redirection — il ne manquait que le site et la route.
+  * FERME AU RESEAU LOCAL PAR DEFAUT. Les points d'entree que la page consomme
+    — /stats, /bans, /detections, /visits — ne demandent PAS de jeton : sur
+    admin.gk2.secubox.in ils vivent derriere la porte du panneau. Sur un vhost a
+    part, ils livreraient a qui passe les adresses des attaquants, la liste des
+    bannis et l'etat exact de chaque protection : une carte du dispositif
+    offerte a qui l'attaque. Le filtre d'exposition est seme a « lan » ;
+    secubox-exposure en reste l'editeur.
+  * Le postinst seme le filtre AVANT d'activer le site — l'ordre compte, activer
+    d'abord exposerait la page pendant l'intervalle — et ne recharge nginx que
+    si `nginx -t` passe, une conf fautive coupant sinon tous les autres vhosts.
+    Un filtre existant n'est jamais ecrase : l'operateur a pu l'ouvrir
+    volontairement, et une reinstallation le refermerait dans son dos.
+  * X-Robots-Tag noindex : un tableau de bord de securite n'a rien a faire dans
+    l'index d'un moteur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 08:30:18 +0200
+
 secubox-waf (1.9.2-1~bookworm1) bookworm; urgency=medium
 
   * Un `sudo cscli` gaspille a chaque cycle de rafraichissement (#1226). Le
