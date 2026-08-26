@@ -1,3 +1,16 @@
+secubox-radio (0.1.48-1~bookworm1) bookworm; urgency=medium
+
+  * PLAYLIST EN MICRO, FINIE (#1201) : un back reduit de moitie, le courant
+    retire, deux next. Le back n'est la que pour le contexte — « ce qu'on vient
+    d'entendre » — et ne doit pas peser autant que ce qui vient : ecrase a
+    mi-hauteur et estompe, present mais en retrait, pour que les deux titres a
+    venir gardent le regard.
+  * Vignettes a l'echelle de la carte : 2,6 rem ecrasaient tout le reste sur
+    une carte qui n'a la place que de quelques lignes. Ramenees a 1,5 rem, et
+    1,1 rem pour le back.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 17:58:50 +0200
+
 secubox-radio (0.1.47-1~bookworm1) bookworm; urgency=medium
 
   * LA PLAYLIST PASSE ENTRE LA SAISIE ET LES MESSAGES (#1201). On parle en

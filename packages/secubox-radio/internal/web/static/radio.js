@@ -455,9 +455,14 @@
     // Un seul precedent au lieu de deux, pour la meme raison : ce qui vient
     // vaut mieux que ce qui est passe, et la place gagnee va aux suivants.
     var arriere = estMicro ? precedents.slice(-1) : precedents;
+    // MICRO : un back reduit, le courant retire, deux next (#1201). En grand,
+    // tout est montre. La regle « deux next » est celle du brief : ce qui vient
+    // juste apres est ce qui compte, le reste est du remplissage sur une carte
+    // qui n'a la place que de quelques lignes.
+    var devant = estMicro ? avenir.slice(0, 2) : avenir;
     arriere.forEach(function (p, i) { vues.push({ p: p, rel: -(arriere.length - i) }); });
     if (courante && !estMicro) vues.push({ p: courante, rel: 0 });
-    avenir.forEach(function (p, i) { vues.push({ p: p, rel: i + 1 }); });
+    devant.forEach(function (p, i) { vues.push({ p: p, rel: i + 1 }); });
     vues.forEach(function (it) {
       var p = it.p, rel = it.rel;
       var li = document.createElement('li');

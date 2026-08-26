@@ -260,8 +260,25 @@ body.micro .microlast { display: none; }             /* plus de message unique e
   body.micro.vue-playlist .carte.playlist { display: block; margin: .35rem 0 0; border-radius: 10px; }
   body.micro.vue-playlist .carte.playlist .entete { display: none; }
   body.micro.vue-playlist .carte.playlist ol,
-  body.micro.vue-playlist .carte.playlist ul { max-height: 3.6rem; overflow: hidden; }
-  body.micro.vue-playlist .carte.playlist li { font-size: .68rem; padding: .1rem .55rem; }
+  body.micro.vue-playlist .carte.playlist ul { max-height: none; overflow: hidden; }
+  body.micro.vue-playlist .carte.playlist li { font-size: .68rem; padding: .12rem .55rem;
+    gap: .45rem; }
+  /* Vignette a l'echelle de la carte : 2,6rem ecrasait tout le reste. */
+  body.micro.vue-playlist .carte.playlist li .vg { width: 1.5rem; height: 1.5rem;
+    border-radius: 5px; }
+  body.micro.vue-playlist .carte.playlist li .rg { width: .9rem; font-size: 10px; }
+  body.micro.vue-playlist .carte.playlist li .nm small { font-size: 9.5px; }
+  body.micro.vue-playlist .carte.playlist li .dr { font-size: 10px; }
+
+  /* LE BACK EST REDUIT DE MOITIE (#1201). Il n'est la que pour le contexte —
+     « ce qu'on vient d'entendre » — et ne doit pas peser autant que ce qui
+     vient. On l'ecrase a mi-hauteur et on l'estompe : present, mais en retrait,
+     pour que les deux titres a venir gardent le regard. */
+  body.micro.vue-playlist .carte.playlist li.passe { opacity: .5;
+    transform: scale(.82); transform-origin: left center;
+    padding-top: 0; padding-bottom: 0; }
+  body.micro.vue-playlist .carte.playlist li.passe .vg { width: 1.1rem; height: 1.1rem; }
+  body.micro.vue-playlist .carte.playlist li.passe .dr { display: none; }
 }
 body.micro .lecteur { margin: 0; border-radius: 10px; }
 body.micro .lecteur .bloc { gap: .55rem; padding: .55rem .6rem; align-items: center; }
