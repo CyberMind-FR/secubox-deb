@@ -1634,6 +1634,24 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   }
   function estRange(id){ return replies.has(id); }
 
+  // ── VOL / MUET PERSISTANTS PAR FLUX (#1361) ──────────────────────────────
+  // Le pli survivait deja au rafraichissement ; le volume et la coupure, non —
+  // ils repartaient a fond a chaque fois. On les retient par flux, et on les
+  // REAPPLIQUE (au slider, au bouton, ET au lecteur) quand le flux reparait.
+  const CLEF_MEDIA = 'sbx.hall.dock.media';
+  var etatsMedia = {};
+  try { const v = JSON.parse(localStorage.getItem(CLEF_MEDIA) || '{}'); if (v && typeof v==='object') etatsMedia = v; } catch(e){}
+  function sauveMedia(){ try { localStorage.setItem(CLEF_MEDIA, JSON.stringify(etatsMedia)); } catch(e){} }
+  function etatMedia(id){ return etatsMedia[id] || (etatsMedia[id] = {vol:1, muet:false}); }
+  // Applique l'etat retenu a une rangee : slider, bouton, et commande au flux.
+  function appliqueMedia(id){
+    const em = etatsMedia[id]; if(!em) return;
+    const r = dock.querySelector('.mrow[data-id="'+id+'"]'); if(!r) return;
+    const sl = r.querySelector('.mvol'), bt = r.querySelector('button[data-a="muet"]');
+    if(sl && em.vol!=null){ sl.value = em.vol; commande(id,'vol', Number(em.vol)); }
+    if(bt && em.muet!=null){ bt.textContent = em.muet ? '🔇' : '🔊'; commande(id,'muet', !!em.muet); }
+  }
+
   const dock=document.getElementById('mediadock');
   if(!dock) return;
   const flux=new Map();   // id -> {maj, cadre, etat}
@@ -1717,6 +1735,9 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         +(zoomable(id) ? '<button data-a="zoom" title="Agrandir">⤢</button>' : '')
         +'<button class="mplier" data-a="plier" title="Ranger CE flux — sa pastille reste">⌄</button>'
         +'<button data-a="stop" title="Fermer le flux">✕</button></div>').join('');
+      // La composition a change : on reapplique le vol/muet retenu a chaque
+      // rangee (le lecteur vient peut-etre de reparaitre apres un refresh).
+      ids.forEach(appliqueMedia);
     }
     // Chaque rangée porte SON pli, et chaque pastille dit l'état du sien.
     ids.forEach(id=>{
@@ -1957,6 +1978,7 @@ addEventListener('message', ev=>{
     const c=e.target.closest('.mvol'); if(!c) return;
     const id=c.closest('.mrow').dataset.id;
     commande(id, 'vol', Number(c.value));
+    etatMedia(id).vol = Number(c.value); sauveMedia();   // #1361
   });
 
   dock.addEventListener('click', e=>{
@@ -1967,6 +1989,7 @@ addEventListener('message', ev=>{
       const r=b.closest('.mrow'), coupe=b.textContent==='🔊';
       b.textContent = coupe ? '🔇' : '🔊';
       commande(r.dataset.id, 'muet', coupe);
+      etatMedia(r.dataset.id).muet = coupe; sauveMedia();   // #1361
       return;
     }
     const id=b.closest('.mrow').dataset.id;

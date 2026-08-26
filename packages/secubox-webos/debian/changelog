@@ -1,3 +1,12 @@
+secubox-webos (1.0.121-1~bookworm1) bookworm; urgency=medium
+
+  * VOLUME ET MUET PERSISTANTS PAR FLUX (#1361). Le pli des rangees
+    survivait deja au rafraichissement ; le volume et la coupure repartaient
+    a fond a chaque fois. On les retient par flux et on les reapplique — au
+    slider, au bouton et au lecteur — des que le flux reparait.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:29:20 +0200
+
 secubox-webos (1.0.120-1~bookworm1) bookworm; urgency=medium
 
   * OUVRE-HOTE : un service embarque peut en ouvrir un autre par son hote,
