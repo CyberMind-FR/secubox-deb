@@ -230,8 +230,8 @@
             <div class="card">
                 <h2>Virtual Hosts <button class="btn success sm" onclick="showAddVhost()">+ New</button></h2>
                 <table>
-                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Exposition</th><th>Status</th><th>Actions</th></tr></thead>
-                    <tbody id="vhost-list"><tr><td colspan="6">Loading...</td></tr></tbody>
+                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Refuser les robots d'indexation sur ce vhost">Robots</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody id="vhost-list"><tr><td colspan="7">Loading...</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -388,7 +388,7 @@
             const list = document.getElementById('vhost-list');
             const vhosts = d.vhosts || [];
             if (!vhosts.length) {
-                list.innerHTML = '<tr><td colspan="6" style="color:var(--dim)">No vhosts configured</td></tr>';
+                list.innerHTML = '<tr><td colspan="7" style="color:var(--dim)">No vhosts configured</td></tr>';
                 return;
             }
             list.innerHTML = vhosts.map(v => {
@@ -401,6 +401,10 @@
                 <td style="color:var(--dim);font-family:monospace;font-size:0.75rem">${esc(v.backend || '-')}</td>
                 <td>${v.ssl ? '<span class="badge ssl">' + esc(v.tls_mode || 'SSL') + '</span>' : '-'}</td>
                 <td><span class="badge ${reachClass}">${reachLabel}${exp.mesh ? ' 🕸️' : ''}</span></td>
+                <td style="text-align:center">
+                    <input type="checkbox" class="ar-box" data-domain="${dom}" ${v.anti_robots ? 'checked' : ''}
+                           title="Coché : les robots d'indexation reçoivent 403 sur ce vhost (robots.txt reste servi)">
+                </td>
                 <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? '✅ Enabled' : '⏸️ Disabled'}</span></td>
                 <td>
                     <button class="btn sm" onclick="toggleVhost('${dom}', ${!v.enabled})">${v.enabled ? 'Disable' : 'Enable'}</button>
@@ -408,6 +412,31 @@
                 </td>
             </tr>`;
             }).join('');
+            list.querySelectorAll('.ar-box').forEach(b => b.addEventListener('change', onAntiRobots));
+        }
+
+        // Case « refuser les robots » (#1216). Le WAF redémarre à chaque
+        // bascule : on désarme la case pendant l'appel pour qu'un double clic
+        // ne lance pas deux redémarrages. En cas d'échec la case revient à son
+        // état RÉEL — celui du serveur — jamais à l'état souhaité : une case
+        // cochée qui ne filtre rien serait pire que pas de case du tout.
+        //
+        // Pas d'alerte quand ça marche : la case elle-même est le retour.
+        async function onAntiRobots(ev) {
+            const box = ev.target;
+            const domain = box.dataset.domain;
+            const voulu = box.checked;
+            box.disabled = true;
+            const r = await api('/vhost/' + encodeURIComponent(domain) + '/anti-robots', {
+                method: 'POST',
+                body: JSON.stringify({ enabled: voulu })
+            });
+            box.disabled = false;
+            if (!r || r.anti_robots !== voulu) {
+                box.checked = !voulu;
+                alert('Anti-robots non appliqué sur ' + domain + '\n' +
+                      ((r && r.detail) || 'le WAF n\'a pas confirmé le changement'));
+            }
         }
 
         function certStatus(days) {

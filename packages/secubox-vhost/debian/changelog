@@ -1,3 +1,19 @@
+secubox-vhost (1.4.2-1~bookworm1) bookworm; urgency=medium
+
+  * Case « Robots » dans le tableau des vhosts (#1216) : coche/décoche le refus
+    des robots d'indexation pour un vhost.
+  * Point d'entrée dédié POST /vhost/{domain}/anti-robots, et non un champ de
+    PUT /vhost/{domain} : ce dernier régénère la configuration nginx, alors que
+    les vhosts visés en premier (gitea) sont servis par HAProxy et n'ont aucun
+    fichier nginx — un champ dans le PUT aurait échoué là où la case est utile.
+  * Lecture tolérante : fichier de profils absent, illisible ou sans la clé rend
+    une case décochée, jamais une erreur — le panneau doit s'afficher même sans
+    WAF installé.
+  * En cas d'échec la case revient à son état RÉEL, celui du serveur : une case
+    cochée qui ne filtrerait rien serait pire que pas de case du tout.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:30:07 +0200
+
 secubox-vhost (1.4.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

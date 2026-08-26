@@ -1,3 +1,18 @@
+secubox-waf (1.5.6-1~bookworm1) bookworm; urgency=medium
+
+  * wafctl anti-robots <list|on|off> (#1216) : seul point d'écriture de la liste
+    anti-robots. Valide le nom d'hôte avant jq (la valeur vient d'une API web),
+    écrit atomiquement, puis redémarre secubox-waf-ng — les profils étant lus au
+    démarrage, sans ce redémarrage la case cochée dans l'interface ne changerait
+    rien.
+  * sudoers : `secubox` obtient EXACTEMENT ces trois verbes, rien d'autre du
+    fichier n'étant atteignable. Au pire un vhost refuse ou accepte les robots :
+    une décision réversible d'un clic, pas une ouverture de surface d'attaque.
+  * vhost_profiles.json : gitea.gk2.secubox.in, git.gk2.secubox.in et
+    git.maegia.tv cochés d'origine.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:30:07 +0200
+
 secubox-waf (1.5.5-1~bookworm1) bookworm; urgency=medium
 
   * « Attaquants persistants » : le trafic INTERNE (loopback/privé/link-local,

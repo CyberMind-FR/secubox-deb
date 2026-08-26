@@ -242,6 +242,76 @@ cmd_purge_cache() {
     fi
 }
 
+PROFILS_VHOST="/etc/secubox/waf/vhost_profiles.json"
+
+# cmd_anti_robots — coche/décoche un vhost dans la liste anti-robots (#1216).
+#
+# Le fichier de profils est la SOURCE DE VÉRITÉ : déclaratif, versionné,
+# relisible. L'API du panneau Vhost tourne sous `secubox` et ne peut pas écrire
+# dans /etc/secubox/waf (root:secubox-waf) — elle passe donc par ce verbe, qui
+# est le SEUL point d'écriture et fait trois choses : valider, écrire
+# atomiquement, recharger le démon.
+#
+# La validation du nom d'hôte n'est pas décorative : la valeur vient d'une API
+# web et finit dans un filtre jq. Tout ce qui n'est pas un nom d'hôte est
+# refusé AVANT d'atteindre jq.
+cmd_anti_robots() {
+    local action="${1:-}" vhost="${2:-}"
+
+    if [ ! -f "$PROFILS_VHOST" ]; then
+        error "Fichier de profils absent : $PROFILS_VHOST"
+        return 1
+    fi
+
+    case "$action" in
+        list)
+            jq -r '(.anti_robots // [])[]' "$PROFILS_VHOST"
+            return 0
+            ;;
+        on|off) ;;
+        *)
+            error "Usage: wafctl anti-robots <list|on|off> [vhost]"
+            return 1
+            ;;
+    esac
+
+    if ! [[ "$vhost" =~ ^[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?)+$ ]]; then
+        error "Nom d'hôte invalide : $vhost"
+        return 1
+    fi
+
+    local filtre tmp
+    if [ "$action" = "on" ]; then
+        # unique : cocher deux fois ne doit pas dupliquer la ligne.
+        filtre='.anti_robots = ((.anti_robots // []) + [$h] | unique)'
+    else
+        filtre='.anti_robots = ((.anti_robots // []) - [$h])'
+    fi
+
+    tmp=$(mktemp "${PROFILS_VHOST}.XXXXXX")
+    # Écriture atomique : un fichier à moitié écrit ferait échouer le
+    # chargement au prochain démarrage, donc tomberait la Phase G ENTIÈRE.
+    if ! jq --arg h "$vhost" "$filtre" "$PROFILS_VHOST" > "$tmp"; then
+        rm -f "$tmp"; error "Édition JSON échouée"; return 1
+    fi
+    if ! jq -e . "$tmp" >/dev/null 2>&1; then
+        rm -f "$tmp"; error "Résultat JSON invalide — fichier laissé intact"; return 1
+    fi
+    chmod --reference="$PROFILS_VHOST" "$tmp" 2>/dev/null || chmod 0644 "$tmp"
+    chown --reference="$PROFILS_VHOST" "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$PROFILS_VHOST"
+    log "anti-robots $action : $vhost"
+
+    # Les profils sont lus au démarrage : sans rechargement, la case cochée
+    # dans l'interface ne changerait rien — exactement le mensonge silencieux
+    # qu'on veut éviter.
+    if systemctl is-active --quiet secubox-waf-ng.service 2>/dev/null; then
+        systemctl restart secubox-waf-ng.service && log "secubox-waf-ng rechargé"
+    else
+        log "secubox-waf-ng inactif — la liste prendra effet à son démarrage"
+    fi
+}
+
 case "${1:-}" in
     status)     cmd_status ;;
     components) cmd_components ;;
@@ -254,6 +324,7 @@ case "${1:-}" in
     add-route)  cmd_add_route "$2" "$3" "$4" ;;
     reload)     cmd_reload ;;
     purge-cache) cmd_purge_cache ;;
+    anti-robots) cmd_anti_robots "${2:-}" "${3:-}" ;;
     test)       cmd_test "$2" ;;
     *)
         cat << EOF

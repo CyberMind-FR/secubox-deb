@@ -1,3 +1,22 @@
+secubox-waf-ng (1.6.1-1~bookworm1) bookworm; urgency=medium
+
+  * Anti-robots par vhost (#1216) : sbxwaf refuse les robots d'indexation sur
+    les vhosts déclarés dans `anti_robots` de vhost_profiles.json. Ce n'est PAS
+    de la détection de menace — aucun bannissement, aucun signalement CrowdSec,
+    journalisé à part sous action:robot ; bannir Googlebot serait une faute.
+    C'est une décision de charge : les robots parcouraient les pages /compare de
+    gitea, dont chacune reconstruit un diff sur tout l'historique, jusqu'à faire
+    déborder le service de son plafond mémoire (dix morts, treize redémarrages,
+    des 504 pour les humains).
+  * Opt-in strict : liste vide ou clé absente = personne n'est filtré, un
+    vhost_profiles.json antérieur reste valide tel quel.
+  * /robots.txt, /favicon.ico et /.well-known/ restent servis même à un robot
+    refusé : c'est par là qu'un robot conforme apprend à ne plus revenir, et un
+    vhost ne doit jamais perdre son certificat ACME.
+  * Le réseau local est exempté : les sondes internes ne sont jamais refusées.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:30:07 +0200
+
 secubox-waf-ng (1.6.0-1~bookworm1) bookworm; urgency=medium
 
   * Architecture: any — construit aussi pour amd64 (GOARCH dérivé de la cible),

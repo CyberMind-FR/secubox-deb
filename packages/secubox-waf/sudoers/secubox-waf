@@ -26,11 +26,28 @@
 Cmnd_Alias SBX_WAF_CSCLI = /usr/bin/cscli decisions add *, \
                            /usr/bin/cscli decisions delete *, \
                            /usr/bin/cscli decisions list *
+# ── 3. Case anti-robots du panneau Vhost (#1216) ────────────────────────────
+#
+# Le fichier /etc/secubox/waf/vhost_profiles.json appartient à root et son
+# dossier est root:secubox-waf ; l'API du panneau Vhost tourne sous `secubox`
+# et ne peut donc pas l'écrire. Ce droit lui ouvre EXACTEMENT trois verbes :
+# lister, cocher, décocher — rien d'autre du fichier n'est atteignable, et
+# `wafctl` valide le nom d'hôte avant de toucher au JSON. Le pire cas est
+# qu'un vhost refuse ou accepte les robots : une décision de charge,
+# réversible d'un clic, jamais une ouverture de la surface d'attaque.
 Cmnd_Alias SBX_WAF_PURGE = /usr/sbin/wafctl purge-cache
+Cmnd_Alias SBX_WAF_ROBOTS = /usr/sbin/wafctl anti-robots list, \
+                            /usr/sbin/wafctl anti-robots on *, \
+                            /usr/sbin/wafctl anti-robots off *
 
 secubox ALL=(root) NOPASSWD: SBX_WAF_CSCLI
 secubox ALL=(root) NOPASSWD: SBX_WAF_PURGE
+secubox ALL=(root) NOPASSWD: SBX_WAF_ROBOTS
 
 # Déclenché depuis une minuterie (pas de terminal) et tracé.
 Defaults!SBX_WAF_PURGE !requiretty
 Defaults!SBX_WAF_PURGE log_output
+
+# Action d'opérateur passant par une API : on trace la sortie.
+Defaults!SBX_WAF_ROBOTS !requiretty
+Defaults!SBX_WAF_ROBOTS log_output

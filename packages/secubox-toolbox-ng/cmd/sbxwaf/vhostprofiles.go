@@ -55,6 +55,7 @@ type VhostProfiles struct {
 	hoteService  map[string]string         // hôte (minuscules, sans port) -> nom de service
 	services     map[string]serviceProfile // nom de service -> profil
 	supprimables map[string]bool           // id de catégorie -> supprimable
+	antirobots   map[string]bool           // hôte -> refuser les robots (#1216)
 }
 
 // fichierProfils est la forme JSON sur disque de vhost_profiles.json.
@@ -64,6 +65,10 @@ type fichierProfils struct {
 	} `json:"services"`
 	Vhosts             map[string]string `json:"vhosts"`
 	SuppressCategories []string          `json:"suppress_categories"`
+	// AntiRobots (#1216) : vhosts qui refusent les robots d'indexation.
+	// Clé ABSENTE = liste vide = personne n'est filtré : la case est
+	// opt-in, un fichier d'avant la fonctionnalité reste valide tel quel.
+	AntiRobots []string `json:"anti_robots"`
 }
 
 // chargerVhostProfiles lit et compile le fichier déclaratif. Une erreur de
@@ -86,6 +91,7 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 		hoteService:  make(map[string]string, len(f.Vhosts)),
 		services:     make(map[string]serviceProfile, len(f.Services)),
 		supprimables: make(map[string]bool, len(f.SuppressCategories)),
+		antirobots:   make(map[string]bool, len(f.AntiRobots)),
 	}
 	for nom, s := range f.Services {
 		prof := serviceProfile{nom: nom}
@@ -108,6 +114,12 @@ func chargerVhostProfilesDepuis(brut []byte) (*VhostProfiles, error) {
 	}
 	for _, cat := range f.SuppressCategories {
 		vp.supprimables[cat] = true
+	}
+	// Un hôte coché anti-robots n'a PAS besoin d'un profil de service : on
+	// peut vouloir épargner un site vitrine sans lui décrire de chemins
+	// légitimes. On normalise seulement, sans exiger d'appartenance.
+	for _, hote := range f.AntiRobots {
+		vp.antirobots[normaliserHote(hote)] = true
 	}
 	return vp, nil
 }
@@ -167,6 +179,18 @@ func (v *VhostProfiles) categoriesSupprimables() map[string]bool {
 		return nil
 	}
 	return v.supprimables
+}
+
+// antiRobots dit si ce vhost est coché « refuser les robots » (#1216).
+// Nil-safe et faux par défaut : sans fichier, sans clé, ou pour un hôte non
+// coché, on ne filtre rien.
+func (v *VhostProfiles) antiRobots(host string) bool {
+	if v == nil {
+		return false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	return v.antirobots[normaliserHote(host)]
 }
 
 // doitSupprimer combine les deux gardes : on n'annule un déclenchement que si

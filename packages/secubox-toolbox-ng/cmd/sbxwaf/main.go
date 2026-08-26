@@ -422,6 +422,36 @@ func (s *Server) handler() http.Handler {
 				rawPath = r.URL.Path
 			}
 
+			// Anti-robots par vhost (#1216). Placé ICI, avant la liste de
+			// contournement de la détection, et c'est délibéré : ce n'est pas
+			// une décision de menace mais de CHARGE. Un vhost coché refuse les
+			// robots même s'il est « de confiance » pour la détection, sinon
+			// la case serait cochée sans rien faire — un mensonge silencieux.
+			//
+			// Seule exemption : un client du réseau local. Les sondes internes
+			// et les clients de la maison ne sont jamais refusés ; le parcours
+			// qu'on veut arrêter vient du dehors.
+			if !privateCIDR(ip) {
+				if nom, refuse := s.vhostProfiles.doitRefuserRobot(r.Host, rawPath, r.Header.Get("User-Agent")); refuse {
+					if s.threatLog != nil {
+						s.threatLog.Record(ThreatRecord{
+							ClientIP: ip,
+							Host:     r.Host,
+							Method:   r.Method,
+							Path:     rawPath,
+							Category: "robots",
+							Severity: "info",
+							Action:   "robot",
+							UA:       r.Header.Get("User-Agent"),
+							Tool:     nom,
+							JA4:      s.lireJA4(r),
+						})
+					}
+					refuserRobot(w, nom)
+					return
+				}
+			}
+
 			// Static-asset PATHS are NOT fully skipped: a scanner probing a
 			// static-extension path (e.g. /global-protect/.../bootstrap.min.css on
 			// a box with no PAN-OS) must still be fingerprinted. On a static asset
@@ -540,7 +570,7 @@ func (s *Server) handler() http.Handler {
 							Action:   "detect",
 							UA:       r.Header.Get("User-Agent"),
 							Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
-							JA4:     s.lireJA4(r),
+							JA4:      s.lireJA4(r),
 						})
 					}
 					hit = false // fall through to the normal proxy path
@@ -610,7 +640,7 @@ func (s *Server) handler() http.Handler {
 							Action: action,
 							UA:     r.Header.Get("User-Agent"),
 							Tool:   étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
-							JA4:     s.lireJA4(r),
+							JA4:    s.lireJA4(r),
 						})
 					}
 
@@ -824,7 +854,7 @@ func (s *Server) recordHostAnomaly(r *http.Request, host string) {
 			Category: cat, Severity: cls.Sev, Action: action,
 			UA:   r.Header.Get("User-Agent"),
 			Tool: étiquetteOutil(r.Header.Get("User-Agent"), r.URL.Path),
-			JA4:     s.lireJA4(r),
+			JA4:  s.lireJA4(r),
 		})
 	}
 	if action == "banned" {
@@ -848,7 +878,7 @@ func (s *Server) logEscalate(r *http.Request, ip, rawPath, cat, sev, action stri
 		Action:   action,
 		UA:       r.Header.Get("User-Agent"),
 		Tool:     étiquetteOutil(r.Header.Get("User-Agent"), rawPath),
-		JA4:     s.lireJA4(r),
+		JA4:      s.lireJA4(r),
 	})
 }
 

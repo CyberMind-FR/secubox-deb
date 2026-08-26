@@ -24,6 +24,7 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from secubox_core.auth import require_jwt
 from secubox_core.config import get_config
+from api.antirobots import basculer_anti_robots, lire_anti_robots
 from api.exposure_read import read_exposure
 from api.exposure_seed import ensure_snippet
 
@@ -299,6 +300,9 @@ async def list_vhosts():
     vhosts = []
     routes = _load_haproxy_routes()
     seen = set()
+    # Lu une seule fois pour toute la liste : le fichier est petit mais la
+    # liste compte des centaines de vhosts.
+    anti_robots = lire_anti_robots()
 
     if NGINX_VHOST_DIR.exists():
         for conf_file in sorted(NGINX_VHOST_DIR.glob("*.conf")):
@@ -350,6 +354,7 @@ async def list_vhosts():
                 "source": "nginx",
                 "config_file": str(conf_file),
                 "exposure": read_exposure(domain),
+                "anti_robots": domain.lower() in anti_robots,
             })
 
     # Append HAProxy public vhosts with no nginx config (complete the list).
@@ -373,6 +378,7 @@ async def list_vhosts():
             "source": "haproxy",
             "config_file": None,
             "exposure": read_exposure(domain),
+            "anti_robots": domain.lower() in anti_robots,
         })
 
     vhosts.sort(key=lambda v: v["domain"])
@@ -432,6 +438,7 @@ async def get_vhost(domain: str):
         "enabled": enabled,
         "cert_info": cert_info if cert_info else None,
         "config_content": config_content,
+        "anti_robots": domain.lower() in lire_anti_robots(),
     }
 
 
@@ -585,6 +592,33 @@ async def update_vhost(domain: str, update: VHostUpdate):
             enabled_link.unlink()
 
     return {"success": True, "message": f"VHost {domain} updated", "reload_required": True}
+
+
+class AntiRobotsUpdate(BaseModel):
+    enabled: bool
+
+
+@app.post("/vhost/{domain}/anti-robots", dependencies=[Depends(require_jwt)])
+async def set_anti_robots(domain: str, req: AntiRobotsUpdate):
+    """Coche ou décoche « refuser les robots » pour ce vhost (#1216).
+
+    Point d'entrée DÉDIÉ, et non un champ de PUT /vhost/{domain} : ce dernier
+    régénère la configuration nginx, alors que la majorité des vhosts visés
+    (gitea en tête) sont servis par HAProxy et n'ont aucun fichier nginx. Un
+    champ dans le PUT aurait donc échoué précisément là où la case est utile.
+
+    L'écriture est déléguée à wafctl, qui valide le nom d'hôte, écrit
+    atomiquement et recharge le WAF ; sans ce rechargement la case cocherait
+    sans rien changer.
+    """
+    ok, message = basculer_anti_robots(domain, req.enabled)
+    if not ok:
+        raise HTTPException(500, f"anti-robots: {message}")
+    return {
+        "domain": domain,
+        "anti_robots": req.enabled,
+        "message": message or ("robots refusés" if req.enabled else "robots acceptés"),
+    }
 
 
 @app.delete("/vhost/{domain}", dependencies=[Depends(require_jwt)])

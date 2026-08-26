@@ -49,5 +49,12 @@
     "peertube.gk2.secubox.in": "peertube",
     "nc.gk2.secubox.in": "nextcloud"
   },
-  "suppress_categories": ["scanners", "recon_crawler", "product_absent_probes"]
+  "suppress_categories": ["scanners", "recon_crawler", "product_absent_probes"],
+
+  "_comment_anti_robots": "#1216 — vhosts qui refusent les robots d'indexation (case a cocher dans le panneau Vhost). Ce n'est PAS de la detection de menace : aucun bannissement, aucun signalement CrowdSec, journalise a part sous action:robot. Motif : un robot parcourant les pages couteuses d'un service (les /compare de gitea reconstruisent un diff sur tout l'historique) le fait deborder de son plafond memoire. /robots.txt reste toujours servi, c'est par la qu'un robot conforme apprend a s'arreter. Liste vide ou clef absente = personne n'est filtre.",
+  "anti_robots": [
+    "gitea.gk2.secubox.in",
+    "git.gk2.secubox.in",
+    "git.maegia.tv"
+  ]
 }
