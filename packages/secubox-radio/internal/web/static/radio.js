@@ -58,8 +58,23 @@
     var m = document.cookie.match(new RegExp('(^|; )' + n + '=([^;]*)'));
     return m ? decodeURIComponent(m[2]) : '';
   }
+  // SameSite=Lax REFUSAIT LE COOKIE DANS LE HALL, et c'est ce qui bloquait la
+  // lecture (#1251). Encadre par hall.gk2.net, le micro-lecteur est un contexte
+  // TIERS : le navigateur rejette purement et simplement un cookie Lax ou
+  // Strict pose la. Sans `sbx_radio`, le serveur ne reconnait plus l'auditeur
+  // et rend 401 sur /media et /vignette — un lecteur muet, sans message.
+  // Le podcaster passait parce qu'il n'a besoin d'aucun cookie : c'est ce
+  // contraste qui a mis sur la piste.
+  //
+  // Sur un poste ayant deja visite la radio en direct, Firefox accorde l'acces
+  // au stockage partitionne et la panne ne se voyait PAS — d'ou un defaut qui
+  // ne se manifestait que sur telephone et sur TV.
+  //
+  // None exige Secure, donc HTTPS. En clair on retombe sur Lax : mieux vaut un
+  // cookie premier-partie qui fonctionne qu'un cookie que le navigateur jette.
   function poseCookie(n, v) {
-    document.cookie = n + '=' + encodeURIComponent(v) + ';path=/;max-age=31536000;SameSite=Lax';
+    var tiers = location.protocol === 'https:' ? ';SameSite=None;Secure' : ';SameSite=Lax';
+    document.cookie = n + '=' + encodeURIComponent(v) + ';path=/;max-age=31536000' + tiers;
   }
   if (!cookie('sbx_radio')) {
     poseCookie('sbx_radio', String(Math.floor(Math.random() * 9e15) + 1e3));

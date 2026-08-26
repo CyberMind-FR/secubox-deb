@@ -1,3 +1,20 @@
+secubox-radio (0.1.38-1~bookworm1) bookworm; urgency=medium
+
+  * LECTURE BLOQUEE DANS LE HALL, sur telephone et sur TV (#1251). Encadre par
+    hall.gk2.net, le micro-lecteur est un contexte TIERS : le navigateur
+    rejette un cookie SameSite=Lax pose la. Sans `sbx_radio`, le serveur ne
+    reconnait plus l'auditeur et rend 401 sur /media et /vignette — un lecteur
+    muet, et aucun message pour le dire.
+  * Le cookie passe a SameSite=None;Secure en HTTPS, et reste Lax en clair : un
+    cookie premier-partie qui fonctionne vaut mieux qu'un cookie jete.
+  * Pourquoi cela ne se voyait pas au bureau : sur un poste ayant deja visite la
+    radio en direct, Firefox accorde l'acces au stockage partitionne. La panne
+    ne se manifestait donc que la ou cette visite n'avait jamais eu lieu.
+  * Le podcaster, lui, passait — il n'a besoin d'aucun cookie. C'est ce
+    contraste qui a mis sur la piste.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:26:31 +0200
+
 secubox-radio (0.1.37-1~bookworm1) bookworm; urgency=medium
 
   * Annonce a la barre du Hall et obeissance a ses commandes (#1246). Une radio
