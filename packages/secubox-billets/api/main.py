@@ -258,7 +258,7 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
         Quatre billets suffisent : le dernier en entier, les trois suivants en
         titres. Au-dela la carte redevient un fil, et le fil a deja sa page.
         """
-        rows, _ = await repo.list_published(app.state.conn, limit=4)
+        rows, _ = await repo.list_published(app.state.conn, limit=6)
         async with app.state.conn.execute(
                 "SELECT COUNT(*) FROM billet WHERE status = 'published'") as cur:
             total = (await cur.fetchone())[0]
@@ -271,9 +271,18 @@ def create_app(conn: aiosqlite.Connection | None = None, *, secret: str | None =
             # place d'une image absente ferait croire a un chargement en panne.
             img = next((m for m in v.get("media", []) if str(m.get("mime", "")).startswith("image/")), None)
             v["vignette"] = (img or {}).get("url") or None
+        import json as _json
         resp = templates.TemplateResponse(request, "micro.html", {
             "dernier": vues[0] if vues else None,
             "suivants": vues[1:4],
+            # LA ROTATION porte sur les cinq derniers : au-delà, une carte
+            # mettrait une minute à revenir au premier et rien ne s'imprimerait.
+            # C'est un carrousel, pas un archivage.
+            "rotation": _json.dumps([
+                {"title": v.get("title") or "", "permalink": v.get("permalink") or "/",
+                 "quand": v.get("quand") or "", "vignette": v.get("vignette") or ""}
+                for v in vues[:5]
+            ], ensure_ascii=False),
             # Le VRAI total, pas la longueur de la page : « 4 publiés »
             # alors qu'il y en a trente serait un chiffre faux, et un chiffre
             # faux vaut moins que pas de chiffre.

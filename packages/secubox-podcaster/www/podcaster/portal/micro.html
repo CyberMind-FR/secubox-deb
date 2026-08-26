@@ -65,9 +65,18 @@
   .cmd #fav[aria-pressed="true"] { color: #e0405f; border-color: #e0405f; }
 
   .np { display: flex; gap: .55rem; min-height: 0; }
+  /* LA POCHETTE DU FLUX, PAS UN PICTOGRAMME (#1284). 🎙️ disait « ceci est un
+     podcast » — ce qu'on savait déjà. La pochette dit LEQUEL, et c'est la
+     seule chose que la vignette pouvait apprendre. Le dégradé reste dessous :
+     il sert de fond le temps du chargement, et de repli quand le flux n'a pas
+     de pochette. */
   .np .vign { width: 52px; height: 52px; border-radius: 9px; flex: 0 0 auto;
               display: grid; place-items: center; font-size: 1.5rem; color: #fff;
+              overflow: hidden; position: relative;
               background: linear-gradient(135deg, #c87832, #e0654f); }
+  .np .vign img { position: absolute; inset: 0; width: 100%; height: 100%;
+                  object-fit: cover; display: none; }
+  .np .vign img.ok { display: block; }
   .np .txt { min-width: 0; }
   .np b { display: block; font-size: .82rem; line-height: 1.25;
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -117,7 +126,7 @@
   </div>
 
   <div class="np">
-    <div class="vign">🎙️</div>
+    <div class="vign" id="vign">🎙️<img id="pochette" alt=""></div>
     <div class="txt"><b id="titre">Bibliothèque</b><div class="src" id="src">—</div></div>
   </div>
 
@@ -185,10 +194,29 @@
     el('next').disabled = idx >= eps.length - 1;
     montreFav();
     montreSuite();
+    pochette(e);
   }
 
   // Ce qui vient APRÈS la piste courante, pas le début de la bibliothèque :
   // une liste qui ne bouge pas quand on avance ne dit rien de la suite.
+  // On ne remplace la pochette que si le FLUX change : la reposer a chaque
+  // rendu la ferait clignoter a chaque seconde de lecture.
+  function pochette(e) {
+    var img = el('pochette');
+    if (!img) return;
+    var fid = e && e.feed_id;
+    if (!fid) { img.classList.remove('ok'); img.removeAttribute('src'); return; }
+    if (img.dataset.fid === String(fid)) return;
+    img.dataset.fid = String(fid);
+    img.classList.remove('ok');
+    // `onload` avant `src` : une image en cache peut se charger avant que
+    // l'ecouteur ne soit pose. Et si elle echoue, on garde le degrade plutot
+    // que l'icone de fichier casse.
+    img.onload = function () { img.classList.add('ok'); };
+    img.onerror = function () { img.classList.remove('ok'); };
+    img.src = API + '/feeds/' + encodeURIComponent(fid) + '/cover';
+  }
+
   function montreSuite() {
     const box = el('suite');
     const a_venir = eps.slice(idx + 1, idx + 4);

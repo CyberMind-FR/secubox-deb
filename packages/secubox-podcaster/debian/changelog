@@ -1,3 +1,15 @@
+secubox-podcaster (1.0.18-1~bookworm1) bookworm; urgency=medium
+
+  * LA POCHETTE DU FLUX, PAS UN PICTOGRAMME (#1284). 🎙️ disait « ceci est un
+    podcast » — ce qu'on savait deja. La pochette dit LEQUEL, et c'est la seule
+    chose que la vignette pouvait apprendre. Le degrade reste dessous : fond le
+    temps du chargement, repli quand le flux n'a pas de pochette.
+  * Elle n'est reposee que si le FLUX change : la reposer a chaque rendu la
+    ferait clignoter a chaque seconde de lecture. `onload` est cable AVANT
+    `src` — une image en cache peut se charger avant l'ecouteur.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:04:11 +0200
+
 secubox-podcaster (1.0.17-1~bookworm1) bookworm; urgency=medium
 
   * `pause` n'est pas `toggle` (#1276) : le Hall s'en sert pour faire taire un

@@ -1,3 +1,15 @@
+secubox-billets (0.8.17-1~bookworm1) bookworm; urgency=medium
+
+  * LE BILLET REMPLIT LA CARTE, ET LA CARTE TOURNE (#1285). Une vignette de
+    52 px a cote d'un titre n'apprenait rien, et un billet fige ne disait pas
+    qu'il y en avait d'autres — c'est le defilement qui montre qu'un blog vit.
+    Meme traitement que MetaNews et SocialRelay : l'image occupe le fond, le
+    texte passe dessus, et on tourne sur les CINQ derniers.
+  * La rotation voyage par un ATTRIBUT : la politique du service interdit les
+    blocs de script en ligne, et un attribut n'est jamais un script.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:04:55 +0200
+
 secubox-billets (0.8.16-1~bookworm1) bookworm; urgency=medium
 
   * LE PROTOCOLE VIENT DE HAPROXY, PAS DE NOUS (#1269). nginx est un hop

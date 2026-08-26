@@ -1,3 +1,16 @@
+secubox-socialrelay (0.1.12-1~bookworm1) bookworm; urgency=medium
+
+  * LE MEDIA REMPLIT LA CARTE (#1285). Une vignette de 56 px a cote d'un texte,
+    c'est un timbre-poste : on ne distingue ni le visage ni la scene, et
+    l'image n'apprend rien. Elle occupe desormais le fond, le texte passe par
+    dessus — c'est ainsi qu'un reseau social se lit. Sans image, le degrade
+    prend la place plutot qu'un rectangle vide.
+  * CINQ billets en rotation, pas vingt : une carte qui parcourt vingt billets
+    met deux minutes a revenir au premier, on ne verrait jamais deux fois la
+    meme chose et rien ne s'imprimerait. C'est un carrousel, pas un archivage.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:04:14 +0200
+
 secubox-socialrelay (0.1.11-1~bookworm1) bookworm; urgency=medium
 
   * CLAIR / SOMBRE DANS LE CADRE (#1268). Meme correction que MetaNews : la
