@@ -1,4 +1,3 @@
-import os
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Public write actions: emoji reactions (anonymous, signed visitor cookie) and
@@ -6,6 +5,8 @@ moderated comments (honeypot + timed token + rate-limit). Both degrade
 gracefully without JS (plain POST → 303 redirect); a same-origin fetch swaps the
 reactions fragment when JS is on."""
 from __future__ import annotations
+
+import os
 
 import time
 

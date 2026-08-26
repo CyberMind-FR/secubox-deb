@@ -1,3 +1,24 @@
+secubox-bbs (0.30.25-1~bookworm1) bookworm; urgency=medium
+
+  * MASQUE ACL REPOSE AVEC L'ENTREE (#1255). Une dizaine de paquets font
+    `install -d -m 0700` sur /etc/secubox/secrets, dossier PARTAGE, et tout
+    chmod ecrase le masque ACL a `---` : chaque entree nommee devient alors
+    `#effective:---` et cesse d'agir, sans que rien ne le signale. Le service
+    ne peut plus traverser et refuse de demarrer — panne constatee en
+    production. Le postinst pose desormais `m::x` en meme temps que l'entree.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:51:50 +0200
+
+secubox-bbs (0.30.24-1~bookworm1) bookworm; urgency=medium
+
+  * GABARIT « dock » INTROUVABLE au rendu du newsroom : extrait dans son propre
+    fichier, il n'avait ete ajoute a AUCUN jeu ParseFS. Un {{template}} absent
+    fait echouer le RENDU et non le demarrage — la panne ne se voyait donc
+    qu'en production, en 500, et le build restait vert. Les onze jeux qui
+    chargent newsroom.html chargent desormais dock.html.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:48:12 +0200
+
 secubox-bbs (0.30.23-1~bookworm1) bookworm; urgency=medium
 
   * COOKIES UTILISABLES EN CADRE (#1251, guideline). Encadre par le Hall, un

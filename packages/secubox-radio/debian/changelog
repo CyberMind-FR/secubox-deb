@@ -1,3 +1,14 @@
+secubox-radio (0.1.41-1~bookworm1) bookworm; urgency=medium
+
+  * MASQUE ACL REPOSE AVEC L'ENTREE (#1255). Une dizaine de paquets font
+    `install -d -m 0700` sur /etc/secubox/secrets, dossier PARTAGE, et tout
+    chmod ecrase le masque ACL a `---` : chaque entree nommee devient alors
+    `#effective:---` et cesse d'agir, sans que rien ne le signale. Le service
+    ne peut plus traverser et refuse de demarrer — panne constatee en
+    production. Le postinst pose desormais `m::x` en meme temps que l'entree.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:52:26 +0200
+
 secubox-radio (0.1.40-1~bookworm1) bookworm; urgency=medium
 
   * RADIO MUETTE SUR iPHONE ET SUR TV (#1254). Safari et iOS refusent les

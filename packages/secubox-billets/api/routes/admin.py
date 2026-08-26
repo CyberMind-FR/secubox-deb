@@ -1,10 +1,11 @@
-import os
 # SPDX-License-Identifier: LicenseRef-CMSD-1.0
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 """Admin surface: session login (argon2id + optional TOTP, rate-limited, CSRF)
 and billet CRUD. Every mutation appends to the hash-chained event_log and
 commits a Gitea revision (content + style) off the event loop."""
 from __future__ import annotations
+
+import os
 
 import asyncio
 import base64

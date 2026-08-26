@@ -1,3 +1,11 @@
+secubox-billets (0.8.12-1~bookworm1) bookworm; urgency=medium
+
+  * DEMARRAGE IMPOSSIBLE : un `import os` s'etait insere AVANT
+    `from __future__ import annotations`, ce que Python refuse. Le service
+    sortait en boucle et le vhost rendait 502. L'import est remis a sa place.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 10:48:45 +0200
+
 secubox-billets (0.8.11-1~bookworm1) bookworm; urgency=medium
 
   * COOKIES UTILISABLES EN CADRE (#1251, guideline). Encadre par le Hall, un

@@ -250,7 +250,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// "newsroom"), sans "layout" ni bbs.css. On le compile à part — les autres
 	// pages gardent la coquille à trois colonnes intacte.
 	if t, err := template.New("newsroom.html").Funcs(fn).
-		ParseFS(assets, "templates/newsroom.html"); err == nil {
+		ParseFS(assets, "templates/newsroom.html", "templates/dock.html"); err == nil {
 		pages["newsroom"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit newsroom : %w", err)
@@ -260,7 +260,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// fil.html (la coquille newsroom du fil). Aucune collision de « corps » : seul
 	// thread.html le définit dans ce jeu.
 	if t, err := template.New("fil.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/thread.html", "templates/fil.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/thread.html", "templates/fil.html"); err == nil {
 		pages["fil"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit fil : %w", err)
@@ -270,7 +270,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// (le corps réutilisé) et coquillenr.html. layout.html fournit le partial
 	// "vignette". Aucune collision de « corps » : seul compte.html le définit ici.
 	if t, err := template.New("compte.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/compte.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/compte.html"); err == nil {
 		pages["compte"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit compte : %w", err)
@@ -279,7 +279,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// conversations. layout.html fournit "vignette" (avatars) ; mp.html fournit
 	// le corps. Jeu distinct de "compte" : chacun n'a qu'un seul "corps".
 	if t, err := template.New("mp.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mp.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/mp.html"); err == nil {
 		pages["mp"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit mp : %w", err)
@@ -289,7 +289,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// « sur sa propre page », pas dans la colonne des conversations). Le masthead
 	// newsroom remplace l'ancienne navbar de layout.html.
 	if t, err := template.New("annuaire.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/annuaire.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/annuaire.html"); err == nil {
 		pages["annuaire"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit annuaire : %w", err)
@@ -297,7 +297,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// /p/{id}/edit (#1091) dans le skin newsroom : coquille GÉNÉRIQUE (pagenr),
 	// masthead cohérent avec le reste. edition.html charge lui-même editeur.js.
 	if t, err := template.New("edition.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/edition.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/edition.html"); err == nil {
 		pages["edition"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit edition : %w", err)
@@ -307,25 +307,25 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// partagée que compte/annuaire/edition. Chacun ne définit que "corps" dans
 	// ce jeu, donc aucune collision.
 	if t, err := template.New("simple.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/simple.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/simple.html"); err == nil {
 		pages["simple"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit simple : %w", err)
 	}
 	if t, err := template.New("mastodon.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mastodon.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/mastodon.html"); err == nil {
 		pages["mastodon"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit mastodon : %w", err)
 	}
 	if t, err := template.New("nouveau.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/nouveau.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/nouveau.html"); err == nil {
 		pages["nouveau"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit nouveau : %w", err)
 	}
 	if t, err := template.New("sysop.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/sysop.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/sysop.html"); err == nil {
 		pages["sysop"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit sysop : %w", err)
@@ -336,7 +336,7 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 	// UNIQUEMENT pour que avmast/avrubriques/avacces (et `vignette`) résolvent
 	// depuis son propre gabarit (masthead médaillon + navbar partagée, #1114).
 	if t, err := template.New("mediatheque.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mediatheque.html"); err == nil {
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/dock.html", "templates/coquillenr.html", "templates/mediatheque.html"); err == nil {
 		pages["mediatheque"] = t
 	} else {
 		return nil, fmt.Errorf("gabarit mediatheque : %w", err)

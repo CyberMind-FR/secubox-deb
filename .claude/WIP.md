@@ -106,6 +106,18 @@ voir autre chose que HTTP, et l'accueil devient un bureau.
 
 ### ⬜ TODO — file réelle, par ordre de coût
 
+0. **Masque ACL de `/etc/secubox/secrets` — à étendre (#1255).** Corrigé dans
+   bbs, radio et socialrelay : leur postinst pose désormais `m::x` en même
+   temps que l'entrée nommée. Le fond reste fragile — **une dizaine de paquets
+   font `install -d -m 0700` sur ce dossier partagé**, et tout chmod écrase le
+   masque à `---`, ce qui rend chaque entrée nommée `#effective:---` sans que
+   rien ne le signale ; le service ne peut plus traverser et refuse de
+   démarrer. Reste à traiter : **`secubox-meshtastic`**, qui possède
+   `secrets/meshtastic/` mais n'a **aucune entrée ACL** — latent, le service
+   est inactif aujourd'hui. À vérifier pour tout module futur tournant sous
+   son propre utilisateur. Le correctif de fond serait `0710 root:secubox` sur
+   le parent, qui rend l'ACL inutile, mais touche une dizaine de postinst.
+
 1. **#1210 non clos.** Les appels `cscli` sont passés de 50 à 25 par 3 min,
    mais `secubox-aggregator` en engendre encore et **son source ne contient
    aucun `cscli`** : l'appelant n'est pas localisé. Neuf modules SecuBox

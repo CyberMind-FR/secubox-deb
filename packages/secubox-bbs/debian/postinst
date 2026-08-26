@@ -43,7 +43,14 @@ case "$1" in
     # sous `secubox` — ouvrirait les secrets des autres modules pour resoudre
     # un probleme qui ne concerne que le notre.
     if [ -d /etc/secubox/secrets ] && command -v setfacl >/dev/null 2>&1; then
-        setfacl -m u:secubox-bbs:--x /etc/secubox/secrets 2>/dev/null || \
+        # LE MASQUE, PAS SEULEMENT L'ENTREE (#1255). Une dizaine de paquets
+        # font `install -d -m 0700` sur ce dossier PARTAGE, et tout chmod
+        # ecrase le masque ACL a `---` : chaque entree nommee devient alors
+        # `#effective:---` et cesse d'agir, sans que rien ne le signale. Le
+        # service ne peut plus traverser et refuse de demarrer -- panne
+        # constatee en production sur le BBS. On repose donc explicitement le
+        # masque en meme temps que l'entree.
+        setfacl -m u:secubox-bbs:--x,m::x /etc/secubox/secrets 2>/dev/null || \
             echo "secubox-bbs : ACL de traversee non posee sur /etc/secubox/secrets"
     fi
     if [ -d /etc/secubox/secrets/bbs ]; then
