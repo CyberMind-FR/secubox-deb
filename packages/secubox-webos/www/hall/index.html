@@ -1083,6 +1083,21 @@ function openService(id, mode, sub, subLabel){
     document.getElementById('eb-frames').innerHTML=''; _frames={};
   }
   _svc=d; _sub=sub||null;
+  // EMBARQUER, C'EST PASSER DEVANT (#1283). Le service va exister deux fois :
+  // sa carte a l'accueil, et le cadre qu'on ouvre. La carte doit se taire —
+  // sinon on entend le meme flux en double, ou pire, deux contenus differents
+  // du meme service.
+  //
+  // On le fait ICI, sans attendre que le cadre s'annonce : PeerTube, Nextcloud
+  // ou le webmail ne parlent pas notre protocole et ne s'annonceront jamais.
+  // Attendre leur annonce, c'etait ne jamais faire taire la carte.
+  //
+  // PAUSE et non arret : on revient a l'accueil, un clic reprend.
+  try{
+    const carte=document.querySelector('iframe[data-micro="'+id+'"]');
+    if(carte) carte.contentWindow.postMessage(
+      {sbx:'cmd', action:'pause'}, new URL(carte.src).origin);
+  }catch(e){}
   document.getElementById('eb-ic').textContent=d.icon;
   document.getElementById('eb-name').textContent=d.label+(subLabel?' · '+subLabel:'');
   document.getElementById('eb-host').textContent=d.url;

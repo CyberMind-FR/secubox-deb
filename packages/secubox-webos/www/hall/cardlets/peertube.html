@@ -282,13 +282,29 @@
     var c = document.getElementById('cadre-pt');
     if (!c || ev.source !== c.contentWindow) return;
     var d = ev.data;
+    // JSCHANNEL POSTE DES CHAINES, PAS DES OBJETS (#1283). Sa mise en oeuvre
+    // sérialise chaque message : `ev.data` arrive en JSON textuel, et le test
+    // « est-ce un objet ? » le rejetait en silence. Aucune position n'était
+    // donc jamais reçue, et la reprise retombait toujours sur l'identité seule.
+    if (typeof d === 'string') {
+      try { d = JSON.parse(d); } catch (e) { return; }
+    }
     // Poignée de main : sans réponse, jschannel n'émet jamais ses
     // notifications. On répond sans rien demander en retour.
     if (d && d.method === '__ready') {
-      try { c.contentWindow.postMessage({ id: d.id, method: '__ready', params: 'pong' }, '*'); }
-      catch (e) {}
+      // On répond dans la MEME forme que l'on reçoit : jschannel n'accepte pas
+      // un objet là où il attend une chaîne.
+      var pong = { id: d.id, method: '__ready', params: 'pong' };
+      try {
+        c.contentWindow.postMessage(
+          (typeof ev.data === 'string') ? JSON.stringify(pong) : pong, '*');
+      } catch (e) {}
       return;
     }
+    // La notification est préfixée par son scope (`peertube::…`) : on regarde la
+    // fin du nom plutôt que son égalité, pour ne pas dépendre du scope choisi.
+    var nom = String((d && d.method) || '');
+    if (nom && nom.indexOf('playbackStatusUpdate') < 0 && nom.indexOf('__') === 0) return;
     var pos = positionDe(d);
     if (pos !== null) {
       position = pos;

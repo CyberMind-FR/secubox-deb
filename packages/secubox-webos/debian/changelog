@@ -1,3 +1,21 @@
+secubox-webos (1.0.76-1~bookworm1) bookworm; urgency=medium
+
+  * EMBARQUER, C'EST PASSER DEVANT (#1283). Ouvrir un service embarque fait
+    desormais TAIRE sa carte, sans attendre que le cadre s'annonce — PeerTube,
+    Nextcloud ou le webmail ne parlent pas notre protocole et ne s'annonceront
+    jamais. Attendre leur annonce, c'etait ne jamais faire taire la carte, et
+    entendre le meme flux en double — ou pire, deux contenus differents du meme
+    service. PAUSE et non arret : on revient a l'accueil, un clic reprend.
+  * JSCHANNEL POSTE DES CHAINES, PAS DES OBJETS. Sa mise en oeuvre serialise
+    chaque message : `ev.data` arrive en JSON textuel, et le test « est-ce un
+    objet ? » le rejetait EN SILENCE. Aucune position n'etait donc jamais
+    recue, et la reprise de la video retombait toujours sur l'identite seule.
+    On repond desormais dans la meme forme qu'on recoit, et on reconnait la
+    notification par la FIN de son nom plutot que par son egalite, pour ne pas
+    dependre du scope choisi.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:00:54 +0200
+
 secubox-webos (1.0.75-1~bookworm1) bookworm; urgency=medium
 
   * LES PASTILLES AVAIENT DISPARU (#1282). L'etat du pli etait declare PLUS BAS
