@@ -347,6 +347,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Une description VIVANTE se distingue d'une phrase de remplissage : elle
    porte le contenu du service, pas sa notice. */
 .fcard .desc.vif{color:var(--ink);font-style:normal}
+/* Carte VIVE (#1236) : le lecteur remplit la carte, sans cadre ni chrome
+   ajoutés — c'est le service qui s'affiche, pas le Hall qui le redessine. */
+.fcard.fcard-vive{padding:0;overflow:hidden;display:block}
+.fcard-cadre{display:block;width:100%;height:252px;border:0;background:var(--panel)}
 /* POIGNÉE de déplacement (#1234). Une poignée DISTINCTE, jamais la carte
    entière : le cardlet radio est une iframe, un glisser posé sur toute la carte
    volerait les clics destinés au lecteur — on ne pourrait plus mettre en pause.
@@ -573,19 +577,10 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
             <button class="cl-lien" id="popen" type="button">📚 Bibliothèque ▦</button>
           </div>
 
-          <!-- RADIO — cardlet de RÉFÉRENCE, à l'identique du BBS (#1232).
-               AUCUNE EN-TÊTE, AUCUN BOUTON PARENT : le lecteur /micro EST la
-               cardlet. Ses boutons média occupent la place que prenait ici
-               « ✧ Cardlet actif — Radio · focus », un bandeau qui annonçait la
-               carte au lieu de la servir. Le détachement ⧉ et les tailles
-               vivent DANS sa barre média, côté radio ; les redoubler ici
-               créerait deux commandes pour la même chose. -->
-          <div class="cardlet radiowidget">
-            <span class="cl-grip" draggable="true" title="Déplacer" aria-label="Déplacer cette carte">⠿</span>
-            <iframe class="radioframe" id="rframe" src="https://radio.gk2.secubox.in/micro"
-                    title="Radio SecuBox en direct" allow="autoplay" loading="lazy"
-                    scrolling="no"></iframe>
-          </div>
+          <!-- La RADIO n'est plus ici : sa carte de « Services principaux » EST
+               désormais le lecteur (#1236). L'y laisser aussi ferait deux
+               iframes, donc deux flux pour la même officine — précisément ce
+               qu'on s'interdit. -->
 </aside>
       </div>
     </section>
@@ -639,13 +634,15 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 const FEATURED = [
   {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in"},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in"},
-  {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in"},
+  {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro"},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in"},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in"},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in"},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in"},
   {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in"},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in"},
+  {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in"},
+  {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in"},
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in"},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in"},
   {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
@@ -686,6 +683,19 @@ function host(s){ return (s.urls&&(s.urls.wan||s.urls.lan)) || (s.id+".gk2.secub
 function featCardHTML(f,s){
   s=s||{}; const st=(s.health&&s.health.state)||"unknown";
   const h=f.url||host(s);
+  // UN SERVICE QUI SAIT S'AFFICHER REMPLACE SA CARTE (#1236). La carte statique
+  // — pictogramme, nom, une phrase — décrit le service ; le lecteur EST le
+  // service. Là où une vue embarquable existe, on la sert telle quelle plutôt
+  // que d'en peindre le portrait.
+  if(f.micro){
+    const th=root.getAttribute('data-theme')
+      || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'">'
+      + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'
+      + ' src="https://'+esc(h)+esc(f.micro)+'?theme='+th+'"'
+      + ' title="'+esc(f.label)+'" allow="autoplay" loading="lazy"></iframe>'
+      + '</article>';
+  }
   return '<article class="fcard clic" data-embed="'+esc(f.id)+'"><div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
     +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
@@ -1005,16 +1015,18 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // passe à l'ouverture, et de nouveau à chaque bascule — sans quoi le cadre
 // garderait le thème du chargement.
 (function(){
-  const cadre=document.getElementById('rframe');
-  if(!cadre) return;
+  // Le THÈME est la seule chose que le Hall transmet aux vues embarquées
+  // (#1233) : elles décideraient sinon seules de leur clair/sombre et
+  // resteraient sombres sur un Hall clair. À l'ouverture ET à chaque bascule —
+  // sans le second, le cadre garderait le thème du chargement.
   const theme=()=>root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   function applique(){
-    const u='https://radio.gk2.secubox.in/micro?theme='+theme();
-    if(cadre.src!==u) cadre.src=u;
+    document.querySelectorAll('iframe[data-micro]').forEach(f=>{
+      const u=f.src.replace(/([?&]theme=)[a-z]+/, '$1'+theme());
+      if(u!==f.src) f.src=u;
+    });
   }
-  applique();
-  // Le Hall stampe data-theme sur <html> : on suit ses changements.
   new MutationObserver(applique).observe(root,{attributes:true,attributeFilter:['data-theme']});
 })();
 

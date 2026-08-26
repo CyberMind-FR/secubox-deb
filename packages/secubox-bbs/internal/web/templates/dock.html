@@ -1,0 +1,19 @@
+{{/* ── LECTEUR MINI, gabarit UNIQUE (#1235) ──────────────────────────────────
+     Il vivait en double, recopié à l'identique dans « newsroom » et
+     « mediatheque ». Deux copies d'un même bloc, ce sont deux endroits où
+     corriger et un seul qu'on pense à corriger — la médiathèque avait déjà
+     divergé d'une ligne.
+
+     C'est aussi le premier pas vers un lecteur qui survit à la navigation :
+     tant que le dock est recopié dans chaque page, il ne peut pas être ce qui
+     RESTE quand la page change. */}}
+{{define "dock"}}<div class="dock"><div class="mplayer" id="mini">
+  <button class="ibtn tiny" type="button" data-act="prev" aria-label="Piste précédente">⏮</button>
+  <button class="play" type="button" data-act="mini" id="miniplay" aria-label="Lecture / pause">❚❚</button>
+  <button class="ibtn tiny" type="button" data-act="next" aria-label="Piste suivante">⏭</button>
+  <div class="info"><b id="mini-t">—</b><small id="mini-s">—</small></div>
+  <div class="prog"><i id="mini-prog"></i></div>
+  <span class="ptime mono" id="mini-time">0:00</span>
+  <button class="ibtn tiny" type="button" data-act="popout" aria-label="Lecteur en fenêtre séparée" title="Détacher — continue en surfant">⧉</button>
+  <button class="ibtn tiny" type="button" data-act="mini-close" aria-label="Fermer le lecteur">✕</button>
+</div></div>{{end}}

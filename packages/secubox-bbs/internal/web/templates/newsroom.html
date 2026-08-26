@@ -220,16 +220,7 @@
   </aside>
 </div>
 
-<div class="dock"><div class="mplayer" id="mini">
-  <button class="ibtn tiny" type="button" data-act="prev" aria-label="Piste précédente">⏮</button>
-  <button class="play" type="button" data-act="mini" id="miniplay" aria-label="Lecture / pause">❚❚</button>
-  <button class="ibtn tiny" type="button" data-act="next" aria-label="Piste suivante">⏭</button>
-  <div class="info"><b id="mini-t">—</b><small id="mini-s">—</small></div>
-  <div class="prog"><i id="mini-prog"></i></div>
-  <span class="ptime mono" id="mini-time">0:00</span>
-  <button class="ibtn tiny" type="button" data-act="popout" aria-label="Lecteur en fenêtre séparée" title="Détacher — continue en surfant">⧉</button>
-  <button class="ibtn tiny" type="button" data-act="mini-close" aria-label="Fermer le lecteur">✕</button>
-</div></div>
+{{template "dock" .}}
 {{if .V.Connecte}}<a class="fab" href="/nouveau"><span class="p">＋</span> Nouveau fil</a>{{end}}
 
 <script src="/static/newsroom.js?v={{.VCSS}}" defer></script>

@@ -1,3 +1,19 @@
+secubox-webos (1.0.45-1~bookworm1) bookworm; urgency=medium
+
+  * UN SERVICE QUI SAIT S'AFFICHER REMPLACE SA CARTE (#1236). La carte statique
+    — pictogramme, nom, une phrase — DECRIT le service ; le lecteur EST le
+    service. La carte « Radio » des services principaux devient donc le lecteur
+    lui-meme, la ou elle affichait un portrait.
+  * Le cardlet radio de la colonne laterale est retire : l'y laisser AUSSI
+    ferait deux iframes, donc deux flux pour la meme officine — precisement ce
+    qu'on s'interdit.
+  * Le theme est transmis a toute vue embarquee, a l'ouverture et a chaque
+    bascule (#1233), par un seul mecanisme au lieu d'un par cadre.
+  * Billets et Depot ajoutes aux services principaux : tous deux repondent, et
+    manquaient a la curation.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:14:57 +0200
+
 secubox-webos (1.0.44-1~bookworm1) bookworm; urgency=medium
 
   * Cardlets DEPLACABLES (#1234). Ce sont des fenetres, pas des blocs figes : on
