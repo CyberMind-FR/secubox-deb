@@ -1,3 +1,24 @@
+secubox-webos (1.0.44-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlets DEPLACABLES (#1234). Ce sont des fenetres, pas des blocs figes : on
+    doit pouvoir les ranger. Trois exigences, dont deux apprises en le faisant.
+  * Une POIGNEE, jamais la carte entiere : le cardlet radio est une iframe, et un
+    glisser pose sur toute la carte volerait les clics destines au lecteur — on
+    ne pourrait plus mettre en pause. Discrete au repos, franche au survol.
+  * Pendant le glisser, les iframes cessent de capter le pointeur. Sans cela
+    elles avalent les evenements de survol, la carte survolee ne se signale
+    jamais, et on croit que le glisser ne marche pas.
+  * L'ordre est PERSISTE. Un deplacement perdu au rafraichissement rend le geste
+    decevant, et on cesse de s'en servir. Une carte absente de l'ordre retenu
+    garde sa place d'origine : on ne perd jamais une carte nouvellement ajoutee.
+  * Les classes transitoires du glisser sont exclues de l'identite d'une carte —
+    sans quoi « cl-drag » passerait pour son nom et l'ordre retenu serait faux,
+    une erreur qui ne se verrait qu'au rechargement suivant.
+  * L'insertion se fait avant ou apres selon la moitie survolee : sans cela on
+    ne peut jamais deposer en derniere position.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:08:18 +0200
+
 secubox-webos (1.0.43-1~bookworm1) bookworm; urgency=medium
 
   * Le Hall transmet SON theme au cadre de la radio (#1233), a l'ouverture et a

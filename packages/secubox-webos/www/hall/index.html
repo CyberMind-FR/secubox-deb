@@ -347,6 +347,24 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Une description VIVANTE se distingue d'une phrase de remplissage : elle
    porte le contenu du service, pas sa notice. */
 .fcard .desc.vif{color:var(--ink);font-style:normal}
+/* POIGNÉE de déplacement (#1234). Une poignée DISTINCTE, jamais la carte
+   entière : le cardlet radio est une iframe, un glisser posé sur toute la carte
+   volerait les clics destinés au lecteur — on ne pourrait plus mettre en pause.
+   Discrète au repos, franche au survol. */
+.cardlet{position:relative}
+.cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
+  font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
+  padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
+  user-select:none}
+.cardlet:hover .cl-grip,.cl-grip:focus-visible{opacity:.85}
+.cl-grip:active{cursor:grabbing}
+.cardlet.cl-drag{opacity:.45}
+.cardlet.cl-cible{outline:2px dashed var(--violet);outline-offset:3px}
+/* PENDANT LE GLISSER, les iframes cessent de capter le pointeur : sans cela
+   elles avalent les événements de survol et la carte survolée ne se signale
+   jamais — on croit que le glisser ne marche pas. */
+.side.cl-encours iframe{pointer-events:none}
+@media (prefers-reduced-motion:reduce){.cl-grip{transition:none}}
 /* RADIO de référence (#1232) — le lecteur REMPLIT la cardlet, comme au BBS.
    `position:relative` sert uniquement d'ancrage ; on ne touche ni au padding ni
    à l'overflow, ce qui avait rendu le widget invisible au BBS. 252 px est la
@@ -523,6 +541,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
             </ul>
           </div>
           <div class="cardlet cl-waf">
+            <span class="cl-grip" draggable="true" title="Déplacer" aria-label="Déplacer cette carte">⠿</span>
             <div class="clh serif">🛡️ Pare-feu <span class="tag">veille</span></div>
             <div class="np"><div class="cover cover-waf">🛡️</div>
               <div class="meta"><b class="serif" id="wtitle">Sous surveillance</b>
@@ -539,6 +558,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           </div>
 
           <div class="cardlet cl-pod">
+            <span class="cl-grip" draggable="true" title="Déplacer" aria-label="Déplacer cette carte">⠿</span>
             <div class="clh serif">🎙️ Podcaster <span class="tag">bibliothèque</span></div>
             <div class="np"><div class="cover cover-pod">🎙️</div>
               <div class="meta"><b class="serif" id="ptitle">Bibliothèque</b>
@@ -561,6 +581,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                vivent DANS sa barre média, côté radio ; les redoubler ici
                créerait deux commandes pour la même chose. -->
           <div class="cardlet radiowidget">
+            <span class="cl-grip" draggable="true" title="Déplacer" aria-label="Déplacer cette carte">⠿</span>
             <iframe class="radioframe" id="rframe" src="https://radio.gk2.secubox.in/micro"
                     title="Radio SecuBox en direct" allow="autoplay" loading="lazy"
                     scrolling="no"></iframe>
@@ -1025,6 +1046,86 @@ function majWaf(){
     });
 }
 majWaf(); setInterval(majWaf, 30000);
+
+// ── #1234 · cardlets DÉPLAÇABLES ──────────────────────────────────────────
+//
+// Ce sont des fenêtres, pas des blocs figés : on doit pouvoir les ranger. Trois
+// exigences, apprises en le faisant :
+//
+//   - une POIGNÉE, jamais la carte entière — la radio est une iframe, et un
+//     glisser sur toute la carte volerait les clics du lecteur ;
+//   - les iframes cessent de capter le pointeur pendant le glisser, sinon elles
+//     avalent le survol et rien ne se signale ;
+//   - l'ordre est PERSISTÉ — un déplacement perdu au rafraîchissement rend le
+//     geste décevant, et on cesse de s'en servir.
+(function(){
+  const cote=document.querySelector('.side');
+  if(!cote) return;
+  const CLEF='sbx.hall.cardlets';
+  // Les classes TRANSITOIRES du glisser sont exclues : sans cela « cl-drag »
+  // pourrait passer pour l'identité de la carte et l'ordre retenu serait faux
+  // — une erreur qui ne se verrait qu'au rechargement suivant.
+  const TRANSITOIRES=new Set(['drag','cible','grip','lien']);
+  const cle=c=>{
+    for(const n of c.classList){
+      if(n.indexOf('cl-')===0){
+        const k=n.slice(3);
+        if(!TRANSITOIRES.has(k)) return k;
+      }
+    }
+    return c.classList.contains('radiowidget')?'radio':null;
+  };
+
+  // Ordre retenu, appliqué au chargement. Une carte absente de l'ordre garde sa
+  // place d'origine : on ne perd jamais une carte nouvellement ajoutée.
+  try{
+    const ordre=JSON.parse(localStorage.getItem(CLEF)||'[]');
+    ordre.forEach(k=>{
+      const c=[...cote.querySelectorAll('.cardlet')].find(x=>cle(x)===k);
+      if(c) cote.appendChild(c);
+    });
+  }catch(e){}
+
+  function retiens(){
+    try{
+      const ordre=[...cote.querySelectorAll('.cardlet')].map(cle).filter(Boolean);
+      localStorage.setItem(CLEF, JSON.stringify(ordre));
+    }catch(e){}
+  }
+
+  let porte=null;
+  cote.addEventListener('dragstart', e=>{
+    const g=e.target.closest('.cl-grip'); if(!g) return;
+    porte=g.closest('.cardlet'); if(!porte) return;
+    porte.classList.add('cl-drag');
+    cote.classList.add('cl-encours');
+    e.dataTransfer.effectAllowed='move';
+    // Firefox exige une donnée pour démarrer le glisser.
+    try{ e.dataTransfer.setData('text/plain', cle(porte)||'carte'); }catch(err){}
+  });
+  cote.addEventListener('dragover', e=>{
+    if(!porte) return;
+    e.preventDefault();
+    const survolee=e.target.closest('.cardlet');
+    cote.querySelectorAll('.cl-cible').forEach(x=>x.classList.remove('cl-cible'));
+    if(!survolee || survolee===porte) return;
+    survolee.classList.add('cl-cible');
+    // On insère avant ou après selon qu'on est dans la moitié haute ou basse :
+    // sans cela on ne peut jamais déposer en dernière position.
+    const r=survolee.getBoundingClientRect();
+    const avant=(e.clientY - r.top) < r.height/2;
+    cote.insertBefore(porte, avant?survolee:survolee.nextSibling);
+  });
+  const fin=()=>{
+    if(porte) porte.classList.remove('cl-drag');
+    cote.classList.remove('cl-encours');
+    cote.querySelectorAll('.cl-cible').forEach(x=>x.classList.remove('cl-cible'));
+    if(porte) retiens();
+    porte=null;
+  };
+  cote.addEventListener('drop', e=>{ e.preventDefault(); fin(); });
+  cote.addEventListener('dragend', fin);
+})();
 
 // ── #1231 · les cartes de l'accueil prennent les données VIVANTES ──────────
 //
