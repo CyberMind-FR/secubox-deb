@@ -134,11 +134,16 @@ _MOTIFS_PISTEURS = (
 # LABELS QUI, A EUX SEULS, DISENT LE PISTAGE. Un label DNS entier valant « ads »
 # ou « pixel » n'est jamais du contenu — c'est le sous-domaine de regie ou de
 # mesure. Match EXACT du label, donc « lespads.fr » n'est pas touche.
+# UNIQUEMENT DES LABELS SANS AMBIGUITE (#1353). La premiere version incluait
+# « ad », « log », « event(s) », « stat(s) », « measure », « collect » : ce sont
+# des sous-domaines COURANTS de sites legitimes (journal d'evenements live,
+# API de mesure interne, endpoint de log applicatif). Les couper cassait BFM,
+# franceinfo et consorts — leurs briques essentielles tombaient a 204. On ne
+# garde que ce qui NE sert qu'a pister ou a la pub.
 _LABELS_PISTEURS = frozenset({
-    "ads", "ad", "adserver", "adservers", "ADS", "pixel", "pixels", "beacon",
-    "beacons", "track", "tracker", "trackers", "tracking", "telemetry",
-    "metrics", "metric", "collect", "collector", "stats", "stat", "analytics",
-    "analytic", "log", "logs", "logger", "event", "events", "measure",
+    "ads", "adserver", "adservers", "adsystem", "pixel", "pixels",
+    "beacon", "beacons", "tracker", "trackers", "tracking", "telemetry",
+    "analytics", "doubleclick",
 })
 
 
