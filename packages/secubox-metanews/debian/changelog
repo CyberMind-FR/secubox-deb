@@ -1,3 +1,15 @@
+secubox-metanews (0.1.16-1~bookworm1) bookworm; urgency=medium
+
+  * PLUS DE FLUX, ET UN SEED IDEMPOTENT (#1360). Mediapart, Reporterre,
+    Basta!, L'Humanite, Le Point, Slate, Courrier International, France
+    Culture, Alternatives Economiques. Le seed n'ajoutait qu'au PREMIER
+    demarrage (aucune source) : un flux ajoute au code n'arrivait jamais sur
+    une box deja semee. Il ajoute desormais par SLUG ce qui manque, a chaque
+    demarrage, sans toucher aux reglages de l'operateur. (Charlie Hebdo n'a
+    pas de RSS public fiable.)
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:26:14 +0200
+
 secubox-metanews (0.1.15-1~bookworm1) bookworm; urgency=medium
 
   * LES SOURCES EXTERNES PASSENT PAR LE PROXY SURF (#1337). Chaque lien

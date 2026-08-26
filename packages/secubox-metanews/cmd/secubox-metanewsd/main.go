@@ -148,11 +148,18 @@ func jwtDepuisConf(chemin string) string {
 	return ""
 }
 
-// seed : au premier démarrage (aucune source), pose quelques flux publics FR/EN.
+// seed : pose les flux publics manquants. IDEMPOTENT (#1360) — il tournait
+// jadis « seulement si aucune source », si bien qu'ajouter un flux au code ne
+// l'ajoutait jamais a une box deja semee. Desormais il ajoute par SLUG ce qui
+// manque, a chaque demarrage, sans toucher a ce que l'operateur a regle.
 func seed(st *store.Store, jr *log.Logger) {
 	srcs, err := st.Sources()
-	if err != nil || len(srcs) > 0 {
+	if err != nil {
 		return
+	}
+	vus := make(map[string]bool, len(srcs))
+	for _, x := range srcs {
+		vus[x.Slug] = true
 	}
 	defauts := []store.Source{
 		// FR
@@ -171,11 +178,30 @@ func seed(st *store.Store, jr *log.Logger) {
 		{Slug: "zataz", Name: "ZATAZ", URL: "https://www.zataz.com/feed/", Enabled: true, Category: "cyber"},
 		// local (Savoie)
 		{Slug: "ledauphine-savoie", Name: "Le Dauphiné — Savoie", URL: "https://www.ledauphine.com/savoie/rss", Enabled: true, Category: "local"},
+		// FR — presse indépendante et d'enquête (#1360)
+		{Slug: "mediapart", Name: "Mediapart", URL: "https://www.mediapart.fr/articles/feed", Enabled: true, Category: "general"},
+		{Slug: "reporterre", Name: "Reporterre", URL: "https://reporterre.net/spip.php?page=backend", Enabled: true, Category: "general"},
+		{Slug: "basta", Name: "Basta!", URL: "https://basta.media/spip.php?page=backend", Enabled: true, Category: "general"},
+		{Slug: "humanite", Name: "L'Humanité", URL: "https://www.humanite.fr/rss/actu.rss", Enabled: true, Category: "general"},
+		{Slug: "lepoint", Name: "Le Point", URL: "https://www.lepoint.fr/rss.xml", Enabled: true, Category: "general"},
+		{Slug: "slate-fr", Name: "Slate", URL: "https://www.slate.fr/rss.xml", Enabled: true, Category: "general"},
+		{Slug: "courrier-inter", Name: "Courrier International", URL: "https://www.courrierinternational.com/feed/all/rss.xml", Enabled: true, Category: "international"},
+		{Slug: "france-culture", Name: "France Culture", URL: "https://www.radiofrance.fr/franceculture/rss", Enabled: true, Category: "general"},
+		{Slug: "alter-eco", Name: "Alternatives Économiques", URL: "https://www.alternatives-economiques.fr/rss.xml", Enabled: true, Category: "general"},
+		// NB : Charlie Hebdo n'expose pas de flux RSS public fiable — non ajouté.
 	}
-	for _, s := range defauts {
-		if _, err := st.AddSource(s); err != nil {
-			jr.Printf("seed %s : %v", s.Slug, err)
+	n := 0
+	for _, so := range defauts {
+		if vus[so.Slug] {
+			continue // deja present : on n'y touche pas
 		}
+		if _, err := st.AddSource(so); err != nil {
+			jr.Printf("seed %s : %v", so.Slug, err)
+			continue
+		}
+		n++
 	}
-	jr.Printf("seed : %d flux publics posés", len(defauts))
+	if n > 0 {
+		jr.Printf("seed : %d flux publics ajoutés", n)
+	}
 }
