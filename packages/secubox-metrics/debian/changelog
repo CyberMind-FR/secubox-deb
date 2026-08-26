@@ -1,3 +1,22 @@
+secubox-metrics (1.12.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rapport PDF envoye par courriel (#1219) : deux sections nouvelles, tirees
+    des compteurs du WAF.
+    - Origine des requetes vues par le WAF, en camembert. Le LAN et les
+      origines inconnues sont ecartes : ils ecrasaient la lecture (6799 sur
+      6930 requetes) sans rien apprendre sur la provenance reelle.
+    - Noms demandes que la box ne sert pas, du plus frequent au moins. Ces
+      noms recoivent un 421 ; entre le balayage, la liste designe les vhosts
+      qui MANQUENT — un nom encore reference ailleurs, un service jamais
+      publie.
+  * La liste affichee est tronquee, les totaux ne le sont pas : presenter un
+    decompte partiel comme un total serait trompeur.
+  * Lecture tolerante du cache du WAF : fichier absent, illisible ou sans la
+    cle donnent une section en moins, jamais une erreur — le rapport doit
+    partir meme sans WAF installe.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 06:02:16 +0200
+
 secubox-metrics (1.11.2-1~bookworm1) bookworm; urgency=medium
 
   * CAMEMBERT PAR PAYS et COURBE DES VISITES CUMULÉES, dans l'interface ET dans

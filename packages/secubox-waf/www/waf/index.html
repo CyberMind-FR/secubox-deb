@@ -399,6 +399,28 @@
                 </div>
             </div>
 
+            <!-- #1219 — origine géographique et noms demandés que la box ne sert pas -->
+            <div class="card">
+                <h2>🌍 Origines &amp; noms non servis
+                    <span class="muted" style="font-size:0.8rem;">— vu par le WAF sur l'ensemble du journal de menaces</span></h2>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-top:0.6rem">
+                    <div>
+                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🌍 Pays d'origine</h3>
+                        <div id="statsPays" class="vbars"><span class="muted">…</span></div>
+                    </div>
+                    <div>
+                        <h3 style="font-size:0.85rem;margin:0 0 .4rem;color:var(--text);">🕳️ Noms demandés, non servis
+                            <span class="muted" id="nonServisResume"></span></h3>
+                        <div id="statsNonServis" class="vbars"><span class="muted">…</span></div>
+                        <p class="muted" style="font-size:0.7rem;margin:.5rem 0 0">
+                            Ces noms reçoivent un 421 : aucun vhost ne les sert. Entre le balayage,
+                            la liste montre les vhosts qui <b>manquent</b> — un nom encore référencé
+                            ailleurs, un service jamais publié.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <!-- #1062 — historique des menaces depuis les logs tournés (onglet Historique) -->
             <div class="card" id="historyCard" style="grid-column: 1 / -1; display:none;">
                 <h2>📈 Historique des menaces <span class="muted" style="font-size:0.8rem;">— <b id="histDays">—</b> jours · <b id="histTotal">—</b> menaces bloquées sur toute la rétention</span></h2>
@@ -779,6 +801,16 @@
             // Top Vhosts
             renderTopVhosts(d.top_vhosts);
 
+            // #1219 — pays (liste, pas aperçu) et noms demandés que la box ne sert pas.
+            _vbars('statsPays', d.pays || d.top_countries, null, 25);
+            _vbars('statsNonServis', d.noms_non_routes, null, 40);
+            const resume = document.getElementById('nonServisResume');
+            if (resume) {
+                const nb = d.noms_non_routes_distincts || 0;
+                const tot = d.noms_non_routes_total || 0;
+                resume.textContent = nb ? ' — ' + nb + ' noms distincts, ' + tot.toLocaleString() + ' requêtes' : '';
+            }
+
             // Store stats globally and update eyemotes (double-cache pattern)
             window._wafStats = d;
             if (window._wafEvents) {
@@ -930,10 +962,10 @@
         // #747 — non-attacker visit statistics
         const _CT_EMOJI = { browser: '🌐', 'mobile-app': '📱', bot: '🤖', crawler: '🕷️', other: '❔' };
         const _OS_EMOJI = { Windows: '🪟', macOS: '🍎', Linux: '🐧', Android: '🤖', iOS: '📱', other: '❔' };
-        function _vbars(elId, obj, emoji) {
+        function _vbars(elId, obj, emoji, limite) {
             const el = document.getElementById(elId);
             if (!el) return;
-            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]).slice(0, limite || 10);
             if (!entries.length) { el.innerHTML = '<span class="muted">aucune donnée</span>'; return; }
             const max = entries[0][1] || 1;
             const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');

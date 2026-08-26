@@ -1,3 +1,20 @@
+secubox-waf (1.5.7-1~bookworm1) bookworm; urgency=medium
+
+  * Noms demandes que la box ne sert pas (#1219) : le moteur repond 421 et
+    journalise `host_anomaly:*`, mais ces requetes sont volontairement exclues
+    des statistiques de visite (elles n'atteignent aucun backend) — rien ne les
+    totalisait donc nulle part. L'agregateur les compte desormais et /stats les
+    expose, avec le nombre de noms distincts et le total des requetes. Entre le
+    balayage, la liste designe les vhosts qui MANQUENT.
+  * Reprise unique du journal a l'arrivee du compteur : le lecteur est
+    incremental, un compteur ajoute apres coup n'aurait vu que les lignes a
+    venir et serait reste vide pendant des jours alors que l'historique est
+    deja sur le disque. Tous les compteurs repartent de zero lors de cette
+    relecture, faute de quoi les anciens seraient comptes deux fois.
+  * Liste de pays portee a 25 entrees : un top-10 est un apercu, pas une liste.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 06:02:04 +0200
+
 secubox-waf (1.5.6-1~bookworm1) bookworm; urgency=medium
 
   * wafctl anti-robots <list|on|off> (#1216) : seul point d'écriture de la liste

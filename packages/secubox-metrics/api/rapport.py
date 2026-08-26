@@ -254,6 +254,9 @@ def _titre(pdf: _Page, texte: str) -> None:
 
 # ── bilan WAF (#1062) : menaces bloquées, depuis l'historique agrégé par sbxwaf ──
 WAF_HISTORIQUE = Path("/var/lib/secubox/waf/waf-history.json")
+# Cache de comptage du WAF : c'est lui qui porte les pays du journal de menaces
+# et les noms demandes que la box ne sert pas (#1219).
+WAF_STATS = Path("/var/lib/secubox/waf/stats-disk-cache.json")
 
 
 def _lire_waf_historique(chemin: Path = WAF_HISTORIQUE) -> Optional[dict]:
@@ -284,6 +287,30 @@ def _resume_waf(hist: Optional[dict], jours: int = 7) -> Optional[dict]:
         "categories": sorted(cats.items(), key=lambda x: -x[1])[:6],
         "top_ips": list((hist.get("top_ips") or {}).items())[:5],
     }
+
+
+def _lire_waf_stats(chemin: Path = WAF_STATS) -> dict:
+    """Compteurs cumules du WAF. Lecture tolerante : le rapport doit partir
+    meme sans WAF installe, avec une section en moins plutot qu'une erreur."""
+    try:
+        return json.loads(chemin.read_text()).get("counters", {}) or {}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def _noms_non_servis(counters: dict, limite: int = 20) -> tuple:
+    """Noms demandes auxquels aucun vhost ne repond, du plus frequent au moins.
+
+    Le WAF repond 421 et n'atteint aucun backend : ces requetes sont exclues des
+    statistiques de visite, si bien que rien ne les totalisait. La liste vaut
+    pourtant d'etre lue : entre le balayage, elle designe les vhosts qui
+    MANQUENT. Rend (liste, nombre de noms distincts, total des requetes).
+    """
+    bruts = counters.get("noms_non_routes") or {}
+    if not isinstance(bruts, dict):
+        return [], 0, 0
+    ordonnes = sorted(bruts.items(), key=lambda kv: -int(kv[1] or 0))
+    return ordonnes[:limite], len(bruts), sum(int(v or 0) for v in bruts.values())
 
 
 def _pays_de(source: dict) -> dict:
@@ -455,6 +482,34 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
                 pdf.cell(80, 5, _txt(ip))
                 pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
                          new_x="LMARGIN", new_y="NEXT")
+
+    # #1219 — origine geographique vue par le WAF, et noms demandes non servis.
+    _wstats = _lire_waf_stats()
+    _pays_waf = _wstats.get("top_countries") or {}
+    if _pays_waf:
+        _pays_waf = {k: v for k, v in _pays_waf.items() if k not in ("LAN", "??", "")}
+    if _pays_waf:
+        _titre(pdf, "Origine des requetes vues par le WAF")
+        pdf.image(io.BytesIO(_camembert(_pays_waf, "Requetes par pays (WAF)")), w=92)
+        pdf.ln(2)
+
+    _noms, _distincts, _total = _noms_non_servis(_wstats)
+    if _noms:
+        _titre(pdf, _txt(f"Noms demandes que la box ne sert pas - "
+                         f"{_distincts} noms distincts, {_total:,} requetes"
+                         ).replace(",", " "))
+        pdf.set_font("Helvetica", "", 7)
+        pdf.multi_cell(0, 4, _txt(
+            "Ces noms recoivent un 421 : aucun vhost ne leur repond. Entre le "
+            "balayage, la liste designe les vhosts qui manquent - un nom encore "
+            "reference ailleurs, un service jamais publie."),
+            new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+        pdf.set_font("Helvetica", "", 8)
+        for nom, n in _noms:
+            pdf.cell(120, 5, _txt(nom))
+            pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
+                     new_x="LMARGIN", new_y="NEXT")
 
     sortie = pdf.output()
     return bytes(sortie)

@@ -409,6 +409,13 @@ def _get_threat_stats() -> dict:
     top_ips = defaultdict(int, counters.get("top_ips", {}))
     top_countries = defaultdict(int, counters.get("top_countries", {}))
     top_vhosts = defaultdict(int, counters.get("top_vhosts", {}))
+    # Noms demandés que la box NE SERT PAS (#1219). Le moteur répond 421 et
+    # journalise `host_anomaly:*` ; ces requêtes sont volontairement exclues des
+    # statistiques de visite (elles n'atteignent aucun backend), si bien que
+    # rien ne les totalisait nulle part. Or la liste est parlante : entre le
+    # balayage, elle révèle les vhosts qui MANQUENT — un nom legacy encore
+    # référencé ailleurs, un service jamais publié.
+    noms_non_routes = defaultdict(int, counters.get("noms_non_routes", {}))
     total_threats = counters.get("total_threats", 0)
     threats_today = state.get("threats_today", 0)
     # detect-mode matches: seen and logged but NOT blocked — kept apart from the
@@ -425,7 +432,7 @@ def _get_threat_stats() -> dict:
         return _finalize_stats(
             total_threats, threats_today, by_category, by_severity,
             top_ips, top_countries, top_vhosts, ip_countries,
-            observed_threats, observed_today,
+            observed_threats, observed_today, noms_non_routes,
         )
 
     geoip_reader = _get_geoip_reader()
@@ -433,11 +440,25 @@ def _get_threat_stats() -> dict:
         size_now = log_path.stat().st_size
         byte_position = state.get("byte_position", 0)
 
+        # Reprise unique à l'arrivée d'un compteur (#1219). Le lecteur est
+        # incrémental : un compteur ajouté après coup ne verrait QUE les lignes
+        # à venir et afficherait une liste vide pendant des jours, alors que
+        # l'historique est déjà sur le disque. On relit donc le journal en
+        # entier, une fois — et on repart de zéro pour TOUS les compteurs, faute
+        # de quoi les anciens seraient comptés deux fois.
+        if "noms_non_routes" not in counters:
+            by_category.clear(); by_severity.clear(); top_ips.clear()
+            top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
+            ip_countries.clear()
+            total_threats = 0
+            observed_threats = 0
+            byte_position = 0
+
         # Log rotation / truncation : the file shrank since last read.
         # Drop accumulators ; we'll rebuild from the new (smaller) file.
         if size_now < byte_position:
             by_category.clear(); by_severity.clear(); top_ips.clear()
-            top_countries.clear(); top_vhosts.clear()
+            top_countries.clear(); top_vhosts.clear(); noms_non_routes.clear()
             total_threats = 0
             threats_today = 0
             observed_threats = 0
@@ -480,6 +501,12 @@ def _get_threat_stats() -> dict:
 
                         vhost = entry.get("host") or entry.get("vhost", "unknown")
                         top_vhosts[vhost] += 1
+
+                        # Un Host non routé : on garde le NOM demandé, pas la
+                        # classe — c'est le nom qui dit s'il manque un vhost.
+                        if str(entry.get("category", "")).startswith("host_anomaly"):
+                            if vhost and vhost != "unknown":
+                                noms_non_routes[vhost] += 1
                     except json.JSONDecodeError:
                         pass
                 byte_position = f.tell()
@@ -507,6 +534,7 @@ def _get_threat_stats() -> dict:
             "top_ips": dict(top_ips),
             "top_countries": dict(top_countries),
             "top_vhosts": dict(top_vhosts),
+            "noms_non_routes": dict(noms_non_routes),
         },
         "ip_countries": ip_countries,
         "last_updated": int(time.time()),
@@ -515,7 +543,7 @@ def _get_threat_stats() -> dict:
     return _finalize_stats(
         total_threats, threats_today, by_category, by_severity,
         top_ips, top_countries, top_vhosts, ip_countries,
-        observed_threats, observed_today,
+        observed_threats, observed_today, noms_non_routes,
     )
 
 
@@ -524,6 +552,7 @@ def _finalize_stats(
     by_category, by_severity, top_ips, top_countries, top_vhosts,
     ip_countries: dict,
     observed_threats: int = 0, observed_today: int = 0,
+    noms_non_routes=None,
 ) -> dict:
     """Shape the dashboard-friendly result : top-10 lists + plain dicts."""
     top_ips_sorted = sorted(top_ips.items(), key=lambda x: -x[1])[:10]
@@ -545,6 +574,16 @@ def _finalize_stats(
         "top_vhosts": dict(
             sorted(top_vhosts.items(), key=lambda x: -x[1])[:10]
         ),
+        # Liste de pays : 25 et non 10. Un top-10 est un aperçu ; pour juger
+        # d'où vient le trafic il faut voir la traîne.
+        "pays": dict(
+            sorted(top_countries.items(), key=lambda x: -x[1])[:25]
+        ),
+        "noms_non_routes": dict(
+            sorted((noms_non_routes or {}).items(), key=lambda x: -x[1])[:40]
+        ),
+        "noms_non_routes_total": sum((noms_non_routes or {}).values()),
+        "noms_non_routes_distincts": len(noms_non_routes or {}),
     }
 
 
