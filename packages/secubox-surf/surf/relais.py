@@ -345,15 +345,17 @@ html,body{overflow:auto !important}
   // libelles COURTS et EXPLICITES, pour ne pas emporter un vrai article.
   function pub(){
     try{
-      var ET=/^\|?\s*(sponsoris|sponsored|publicit|contenu sponsoris|pub\b|annonce\b)/i;
+      var ET=/^\s*(sponsoris|sponsored|publicité|contenu sponsoris|annonce publicitaire|paid partnership)\s*$/i;
       var noeuds=document.querySelectorAll("span,small,a,em,i,div,li");
       for(var k=0;k<noeuds.length;k++){
         var el=noeuds[k];
         if(el.dataset&&el.dataset.sbxPub) continue;
         var t=(el.textContent||"").trim();
         if(t.length>26 || !ET.test(t)) continue;
-        var cible=el.closest&&el.closest("li,article,[class*=item i],[class*=card i],[class*=reco i],[class*=widget i],[class*=teaser i]");
-        cible=cible||el.parentElement||el;
+        // On ne touche qu'un conteneur EXPLICITEMENT publicitaire — jamais un
+        // <article> ou un <li> de contenu, sous peine de vider la page.
+        var cible=el.closest&&el.closest("[class*=sponsor i],[class*=advert i],[class*=publicite i],[class*=-ad i],[class*=ad- i],[id*=sponsor i],[class*=outbrain i],[class*=taboola i]");
+        cible=cible||el;   // a defaut, on cache le seul libelle
         if(cible.dataset) cible.dataset.sbxPub="1";
         try{ cible.style.display="none"; }catch(e){}
       }

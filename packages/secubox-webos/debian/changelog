@@ -1,3 +1,12 @@
+secubox-webos (1.0.116-1~bookworm1) bookworm; urgency=medium
+
+  * SANDBOX SURF ASSOUPLI (#1353) : ajout de allow-modals et
+    allow-popups-to-escape-sandbox, pour ne pas casser les sites qui ouvrent
+    une modale ou dependent de ces comportements. Les popups restent coupees
+    par l'override window.open ; la navigation du top reste bloquee.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 19:51:18 +0200
+
 secubox-webos (1.0.115-1~bookworm1) bookworm; urgency=medium
 
   * LE ✕ DE SURF FERME ENFIN (#1343 re-corrige). L'overlay est defini APRES le

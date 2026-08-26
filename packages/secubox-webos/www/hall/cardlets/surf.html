@@ -161,7 +161,7 @@
     // sans lui, plus de cookies ni de stockage — et le correctif de boucle
     // DataDome (cookies sur notre origine) tomberait avec.
     vue.innerHTML = '<iframe title="Surf" src="' + esc(n.surf)
-      + '" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"'
+      + '" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals allow-popups-to-escape-sandbox"'
       + ' allow="fullscreen" referrerpolicy="no-referrer"></iframe>';
     $('etat').hidden = false;
     $('etat').textContent = '🛰️ ' + n.host + ' — relayé, pisteurs coupés';
