@@ -230,7 +230,7 @@
             <div class="card">
                 <h2>Virtual Hosts <button class="btn success sm" onclick="showAddVhost()">+ New</button></h2>
                 <table>
-                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Refuser les robots d'indexation sur ce vhost">Robots</th><th>Status</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Domain</th><th>Backend</th><th>TLS</th><th>Exposition</th><th title="Cochée = les robots d'indexation reçoivent 403 sur ce vhost. Décochée = ils passent.">Anti-robots</th><th>Status</th><th>Actions</th></tr></thead>
                     <tbody id="vhost-list"><tr><td colspan="7">Loading...</td></tr></tbody>
                 </table>
             </div>
@@ -403,9 +403,9 @@
                 <td><span class="badge ${reachClass}">${reachLabel}${exp.mesh ? ' 🕸️' : ''}</span></td>
                 <td style="text-align:center">
                     <input type="checkbox" class="ar-box" data-domain="${dom}" ${v.anti_robots ? 'checked' : ''}
-                           title="Coché : les robots d'indexation reçoivent 403 sur ce vhost (robots.txt reste servi)">
+                           title="Cochée : les robots d'indexation sont REFUSÉS (403) sur ce vhost. robots.txt reste servi. Décochée : ils passent normalement.">
                 </td>
-                <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}">${v.enabled ? '✅ Enabled' : '⏸️ Disabled'}</span></td>
+                <td><span class="badge ${v.enabled ? 'enabled' : 'disabled'}" title="${voieTitre(v)}">${v.enabled ? '✅ ' + voie(v) : '⏸️ Disabled'}</span></td>
                 <td>
                     <button class="btn sm" onclick="toggleVhost('${dom}', ${!v.enabled})">${v.enabled ? 'Disable' : 'Enable'}</button>
                     <button class="btn danger sm" onclick="deleteVhost('${dom}')">Delete</button>
@@ -437,6 +437,22 @@
                 alert('Anti-robots non appliqué sur ' + domain + '\n' +
                       ((r && r.detail) || 'le WAF n\'a pas confirmé le changement'));
             }
+        }
+
+        // Par où le vhost est joignable. Un site peut répondre sans être activé
+        // côté nginx : HAProxy le route alors directement. Le tableau affichait
+        // « Disabled » pour des sites qui fonctionnent — on nomme la voie réelle.
+        function voie(v) {
+            if (v.nginx_enabled && v.haproxy_routed) return 'Enabled';
+            if (v.haproxy_routed) return 'HAProxy';
+            return 'Enabled';
+        }
+        function voieTitre(v) {
+            if (!v.enabled) return 'Ni activé dans nginx, ni routé par HAProxy';
+            const voies = [];
+            if (v.nginx_enabled) voies.push('activé dans nginx');
+            if (v.haproxy_routed) voies.push('routé par HAProxy');
+            return 'Joignable : ' + voies.join(' + ');
         }
 
         function certStatus(days) {

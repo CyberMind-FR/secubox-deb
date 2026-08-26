@@ -254,7 +254,27 @@ class VHostUpdate(BaseModel):
     enabled: Optional[bool] = None
 
 
-HAPROXY_ROUTES_FILE = Path("/srv/mitmproxy/haproxy-routes.json")
+# Table de routage hôte -> [ip, port] du front. Elle a DÉMÉNAGÉ : le WAF Go
+# (sbxwaf, --routes) la lit dans /etc/secubox/waf, tandis que /srv/mitmproxy
+# était l'emplacement du temps de l'addon mitmproxy. Pointer sur l'ancien
+# chemin ne levait aucune erreur — _load_haproxy_routes rendait simplement {} —
+# et le panneau perdait EN SILENCE tous les vhosts servis par HAProxy sans
+# fichier nginx (anibal-amiot, entre autres), ainsi que les backends. On essaie
+# donc les emplacements connus, le courant d'abord.
+HAPROXY_ROUTES_CANDIDATS = (
+    Path("/etc/secubox/waf/haproxy-routes.json"),
+    Path("/srv/mitmproxy/haproxy-routes.json"),
+)
+
+
+def _fichier_routes() -> Path:
+    for p in HAPROXY_ROUTES_CANDIDATS:
+        if p.exists():
+            return p
+    return HAPROXY_ROUTES_CANDIDATS[0]
+
+
+HAPROXY_ROUTES_FILE = _fichier_routes()
 HAPROXY_CERTS_DIR = Path("/data/haproxy/certs")
 
 
@@ -281,7 +301,7 @@ def _server_name_fqdn(content: str):
 def _load_haproxy_routes() -> dict:
     """Public FQDN -> backend target from the HAProxy/mitmproxy route map."""
     try:
-        d = json.loads(HAPROXY_ROUTES_FILE.read_text())
+        d = json.loads(_fichier_routes().read_text())
         return {k: v for k, v in d.items() if _is_public_fqdn(k)}
     except Exception:
         return {}
@@ -309,7 +329,7 @@ async def list_vhosts():
             if conf_file.name.startswith("_") or conf_file.name == "default.conf":
                 continue
             stem = conf_file.stem
-            enabled = (NGINX_ENABLED_DIR / conf_file.name).exists()
+            nginx_actif = (NGINX_ENABLED_DIR / conf_file.name).exists()
             backend = ""
             websocket = False
             content = ""
@@ -327,6 +347,13 @@ async def list_vhosts():
             if not domain:
                 domain = next((k for k in routes if k.split(".")[0] == stem), None) or stem
 
+            if not backend and domain in routes:
+                cible = routes[domain]
+                if isinstance(cible, (list, tuple)) and len(cible) >= 2:
+                    backend = f"{cible[0]}:{cible[1]}"
+                else:
+                    backend = str(cible)
+
             is_public = _is_public_fqdn(domain)
             ssl = is_public  # HAProxy terminates TLS for every public vhost
             url = f"https://{domain}" if is_public else None
@@ -341,6 +368,12 @@ async def list_vhosts():
                     if success:
                         cert_expires = out.split("=")[-1].strip()
 
+            # Un vhost peut être joignable SANS être activé côté nginx : le front
+            # HAProxy le route alors directement vers son backend. Afficher
+            # « Disabled » pour un site qui répond (chess.ganimed.fr) était un
+            # mensonge du tableau ; on distingue donc les deux faits et l'état
+            # affiché devient « joignable par au moins un chemin ».
+            routee = domain in routes
             seen.add(domain)
             vhosts.append({
                 "domain": domain,
@@ -348,7 +381,9 @@ async def list_vhosts():
                 "tls_mode": tls_mode,
                 "ssl": ssl,
                 "websocket": websocket,
-                "enabled": enabled,
+                "enabled": nginx_actif or routee,
+                "nginx_enabled": nginx_actif,
+                "haproxy_routed": routee,
                 "cert_expires": cert_expires,
                 "url": url,
                 "source": "nginx",
@@ -373,6 +408,8 @@ async def list_vhosts():
             "ssl": True,
             "websocket": False,
             "enabled": True,
+            "nginx_enabled": False,
+            "haproxy_routed": True,
             "cert_expires": None,
             "url": f"https://{domain}",
             "source": "haproxy",

@@ -1,3 +1,36 @@
+secubox-vhost (1.5.0-1~bookworm1) bookworm; urgency=medium
+
+  * Table de routage : l'API lisait /srv/mitmproxy/haproxy-routes.json, chemin
+    de l'époque de l'addon mitmproxy, qui n'existe plus. Aucune erreur n'était
+    levée — _load_haproxy_routes rendait {} — et le panneau perdait EN SILENCE
+    tous les vhosts servis par HAProxy sans fichier nginx (anibal-amiot et ses
+    six routes, entre autres) ainsi que les backends. Elle est désormais
+    cherchée à son emplacement courant, /etc/secubox/waf/haproxy-routes.json,
+    l'ancien restant en repli.
+  * État « Disabled » mensonger (chess.ganimed.fr) : un vhost non activé dans
+    nginx mais routé par HAProxy répond parfaitement. L'état affiché est
+    maintenant « joignable par au moins un chemin », et l'infobulle nomme la
+    voie réelle. Les deux faits sont exposés séparément dans l'API
+    (nginx_enabled, haproxy_routed).
+  * Le backend d'un vhost nginx sans proxy_pass est complété depuis la table de
+    routage au lieu de rester vide.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:38:56 +0200
+
+secubox-vhost (1.4.4-1~bookworm1) bookworm; urgency=medium
+
+  * Colonne nommée « Anti-robots » (#1216).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:35:52 +0200
+
+secubox-vhost (1.4.3-1~bookworm1) bookworm; urgency=medium
+
+  * Colonne « Robots » renommée « Robots interdits » (#1216) : une case nommée
+    d'après ce qu'elle contrôle ne dit pas dans quel sens elle agit. Le nom dit
+    maintenant ce que fait la case COCHÉE — les robots sont refusés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 05:35:27 +0200
+
 secubox-vhost (1.4.2-1~bookworm1) bookworm; urgency=medium
 
   * Case « Robots » dans le tableau des vhosts (#1216) : coche/décoche le refus
