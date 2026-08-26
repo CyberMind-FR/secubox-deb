@@ -199,55 +199,76 @@ async def services(user=Depends(require_jwt)):
 # une ligne dans une file bornee. Tout ce qui accorde, lit ou pose un secret est
 # derriere le jeton.
 
-@public_router.get("/acces/{svc}")
-async def acces_etat(svc: str):
-    return acces.etat(svc)
+# AUCUNE DE CES ROUTES N'EST PUBLIQUE, ET C'EST UNE CORRECTION (#1289).
+#
+# La premiere version exposait l'etat et le depot de demande sans jeton. C'etait
+# un trou : le Hall est joignable sur le reseau local sans se connecter, donc
+# n'importe qui pouvait deposer des demandes — et, une fois un acces accorde,
+# n'importe qui aurait lu les donnees deleguees a travers la carte.
+#
+# UN AVATAR RASSEMBLE PLUSIEURS IDENTITES : encore faut-il savoir de QUEL
+# avatar il s'agit. Un profil annonce par la page serait declaratif — il suffit
+# de pretendre etre quelqu'un d'autre. La personne vient donc du JETON, seul
+# endroit ou elle est prouvee. Sans jeton, pas d'identite, donc rien a voir et
+# rien a demander : la carte affiche « connectez-vous », ce qui est la verite.
+
+def _qui(user) -> str:
+    return acces.qui_sur((user or {}).get("sub"))
 
 
-@public_router.post("/acces/{svc}/demande")
-async def acces_demande(svc: str, request: Request):
-    # L'origine est notee pour que l'operateur sache d'ou vient la demande —
-    # une file qui ne dit pas qui a demande ne se valide pas serieusement.
-    return acces.depose(svc, request.headers.get("referer", ""))
+@router.get("/acces/{svc}")
+async def acces_etat(svc: str, user=Depends(require_jwt)):
+    return acces.etat(_qui(user), svc)
+
+
+@router.post("/acces/{svc}/demande")
+async def acces_demande(svc: str, request: Request, user=Depends(require_jwt)):
+    # L'origine est notee pour que l'operateur sache D'OU vient la demande —
+    # une file qui ne dit pas qui a demande, ni depuis quelle page, ne se
+    # valide pas serieusement.
+    return acces.depose(_qui(user), svc, request.headers.get("referer", ""))
 
 
 @router.get("/acces")
 async def acces_liste(user=Depends(require_jwt)):
-    """Ce que la console doit montrer : les demandes en attente, et les acces
-    deja accordes. JAMAIS les secrets."""
-    return {
-        "demandes": acces.demandes(),
-        "accordes": [
-            {"svc": k, "nom": v["nom"], "hote": v["hote"], "flux": v["flux"],
-             "acces": acces.a_acces(k)}
-            for k, v in acces.SERVICES.items()
-        ],
-    }
+    """Ce que la console montre : les demandes en attente, et les acces
+    accordes A CETTE PERSONNE. Jamais les secrets — seulement le nom de compte,
+    qui permet de reconnaitre l'identite invoquee sans rien en reveler."""
+    qui = _qui(user)
+    accordes = []
+    for k, v in acces.SERVICES.items():
+        d = acces.secret_de(qui, k) or {}
+        accordes.append({"svc": k, "nom": v["nom"], "hote": v["hote"],
+                         "flux": v["flux"], "acces": bool(d.get("secret")),
+                         "compte": d.get("compte") or "", "voie": d.get("voie") or ""})
+    return {"qui": qui,
+            "demandes": [x for x in acces.demandes() if x.get("qui") == qui],
+            "accordes": accordes}
 
 
 @router.post("/acces/{svc}/valider")
 async def acces_valider(svc: str, user=Depends(require_jwt)):
     """Demarre le flux de delegation et rend l'URL a ouvrir. Le mot de passe
     sera tape DANS le service, jamais ici."""
-    return await acces.flux_demarre(svc)
+    return await acces.flux_demarre(_qui(user), svc)
 
 
 @router.post("/acces/{svc}/sonde")
 async def acces_sonde(svc: str, user=Depends(require_jwt)):
-    return await acces.flux_sonde(svc)
+    return await acces.flux_sonde(_qui(user), svc)
 
 
 @router.post("/acces/{svc}/manuel")
 async def acces_manuel(svc: str, corps: dict, user=Depends(require_jwt)):
     """Identifiant dedie pour les services sans flux de delegation. Route sous
     jeton : le secret ne transite que vers une page authentifiee."""
-    return acces.pose_manuel(svc, str(corps.get("compte") or ""),
+    return acces.pose_manuel(_qui(user), svc, str(corps.get("compte") or ""),
                              str(corps.get("secret") or ""))
 
 
 @router.delete("/acces/{svc}")
 async def acces_revoque(svc: str, user=Depends(require_jwt)):
-    return acces.revoque(svc)
+    return acces.revoque(_qui(user), svc)
 
 
 app.include_router(public_router)

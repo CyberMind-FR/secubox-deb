@@ -506,6 +506,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    demanderait de lire, et ce menu se parcourt. */
 .who-ident .cle{flex:0 0 auto;font-size:.7rem}
 .who-ident .froid{opacity:.5}
+.who-ident .cpt{color:var(--dim);font-size:.66rem}
 .who-lien{display:block;margin:6px 4px 2px;padding:6px 8px;border-radius:7px;
   font-size:.76rem;color:var(--sky);text-decoration:none}
 .who-lien:hover{background:var(--soft)}
@@ -1644,16 +1645,37 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         + ' class="'+(froid?'froid':'')+'"'
         + ' title="'+esc(s.temoins.map(t=>t.nom).join(', '))+'">'
         + '<span class="cle">'+(s.sessions>0?'🔑':'🍪')+'</span>'
-        + '<span class="h">'+esc((svc&&svc.label)||s.vhost)+'</span>'
+        + '<span class="h">'+esc((svc&&svc.label)||s.vhost)
+        // Le compte, quand on le connaît : un avatar rassemble plusieurs
+        // identités, et « connecté ici » ne dit pas SOUS QUEL NOM.
+        + (s.compte ? ' <span class="cpt">· '+esc(s.compte)+'</span>' : '')+'</span>'
         + '<span class="n">'+esc(delaiCourt(s.vu))+'</span></button>';
     }).join('');
   }
   async function chargeIdentites(){
     if(_identVues) { rendIdentites(_identVues); return; }
+    let liste = [];
     try{
       const r = await fetch('/api/v1/waf/cookies', {headers:{'Accept':'application/json'}});
-      _identVues = r.ok ? ((await r.json()).services || []) : [];
-    }catch(e){ _identVues = []; }
+      liste = r.ok ? ((await r.json()).services || []) : [];
+    }catch(e){ liste = []; }
+    // LE REGISTRE DIT « OU », LA DELEGATION DIT « SOUS QUEL NOM ». Le pare-feu
+    // voit passer des témoins mais ignore à qui ils appartiennent ; les accès
+    // délégués, eux, connaissent le compte. On croise les deux par l'hôte —
+    // c'est la seule clé que les deux partagent.
+    try{
+      const j = (function(){ try{ return localStorage.getItem('sbx_token')||''; }catch(e){ return ''; } })();
+      const r2 = await fetch('/api/v1/webos/acces', {headers: j
+        ? {'Accept':'application/json','Authorization':'Bearer '+j}
+        : {'Accept':'application/json'}});
+      if(r2.ok){
+        const d = await r2.json();
+        const par = {};
+        (d.accordes||[]).forEach(a=>{ if(a.acces && a.compte) par[a.hote]=a.compte; });
+        liste.forEach(s=>{ if(par[s.vhost]) s.compte = par[s.vhost]; });
+      }
+    }catch(e){ /* pas connecte : on garde ce que le registre sait */ }
+    _identVues = liste;
     rendIdentites(_identVues);
   }
   document.getElementById('who-ident').addEventListener('click', e=>{

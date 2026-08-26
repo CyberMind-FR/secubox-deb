@@ -71,7 +71,8 @@
 
 <div class="page">
   <h1>🔑 Accès délégués</h1>
-  <p class="sous">Ce qu'une carte a le droit de lire, et qui l'a autorisé.</p>
+  <p class="sous">Ce qu'une carte a le droit de lire, et qui l'a autorisé.
+    <span id="qui"></span></p>
 
   <div class="avert">
     <b>Votre mot de passe n'est jamais demandé ici.</b> Pour les services qui
@@ -124,6 +125,8 @@
         return;
       }
       var d = r.corps || {};
+      var q = el('qui');
+      if (q && d.qui) q.textContent = '— avatar « ' + d.qui + ' »';
       var dem = d.demandes || [];
       el('demandes').innerHTML = dem.length ? dem.map(function (x) {
         return '<div class="c"><div class="l">'
@@ -142,6 +145,11 @@
           + '<span class="h">' + esc(x.hote) + '</span>'
           + '<span class="et' + (x.acces ? ' ok' : '') + '">'
           + (x.acces ? 'accordé' : 'aucun accès') + '</span>'
+          // LE COMPTE INVOQUE EST NOMME. Un avatar rassemble plusieurs
+          // identites : savoir qu'un acces existe ne suffit pas, il faut voir
+          // LAQUELLE il rejoue — sans quoi on ne peut ni la reconnaitre ni la
+          // revoquer en connaissance de cause.
+          + (x.compte ? '<span class="h">↳ ' + esc(x.compte) + '</span>' : '')
           + '<span class="grow"></span>'
           + (x.acces
               ? '<button class="d" data-revoquer="' + esc(x.svc) + '">Oublier</button>'

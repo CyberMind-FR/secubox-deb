@@ -1,3 +1,27 @@
+secubox-webos (1.0.80-1~bookworm1) bookworm; urgency=medium
+
+  * UN AVATAR RASSEMBLE PLUSIEURS IDENTITES (#1289) : les acces sont donc
+    classes par PERSONNE et non par service. Deux habitants du meme foyer ont
+    chacun leur Nextcloud, et l'avatar de l'un ne rejoue pas l'identite de
+    l'autre.
+  * AUCUNE ROUTE D'ACCES N'EST PLUS PUBLIQUE, et c'est une CORRECTION. La
+    premiere version exposait l'etat et le depot de demande sans jeton : le
+    Hall est joignable sur le reseau local sans se connecter, donc n'importe
+    qui pouvait deposer des demandes — et, un acces une fois accorde, lire les
+    donnees deleguees a travers la carte. Sans jeton il n'y a pas d'identite,
+    donc rien a voir et rien a demander.
+  * LA PERSONNE VIENT DU JETON, JAMAIS DU CLIENT. Un profil annonce par la page
+    serait declaratif : il suffirait de pretendre etre quelqu'un d'autre pour
+    rejouer ses acces. Le nom de dossier est assaini — un identifiant venu d'un
+    jeton reste un identifiant venu du reseau.
+  * LE COMPTE INVOQUE EST NOMME, dans la page comme dans le menu profil.
+    Savoir qu'un acces existe ne suffit pas : il faut voir LAQUELLE des
+    identites il rejoue, sans quoi on ne peut ni la reconnaitre ni la revoquer
+    en connaissance de cause. Le registre du pare-feu dit « ou », la delegation
+    dit « sous quel nom » : on croise les deux par l'hote, seule cle commune.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 13:28:37 +0200
+
 secubox-webos (1.0.79-1~bookworm1) bookworm; urgency=medium
 
   * DELEGATION D'ACCES POUR LES CARTES (#1288). Une carte sans acces depose une

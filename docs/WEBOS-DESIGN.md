@@ -251,6 +251,26 @@ domaine — et non depuis une vignette anonyme.
 > C'est la différence entre **confier une clé** et **la laisser sur le
 > paillasson**.
 
+### Un avatar rassemble plusieurs identités
+
+Les accès sont rangés par **personne**, pas par service : `/<qui>/<svc>.json`.
+Deux habitants du même foyer ont chacun leur Nextcloud, et l'avatar de l'un ne
+rejoue pas l'identité de l'autre.
+
+**`qui` vient du jeton, jamais du client.** Un profil annoncé par la page est
+déclaratif : il suffirait de prétendre être quelqu'un d'autre pour rejouer ses
+accès. C'est pour cette raison qu'**aucune** route d'accès n'est publique — pas
+même celle qui dit « as-tu un accès ? ». Le Hall est joignable sur le réseau
+local sans se connecter : une route publique aurait laissé n'importe qui
+déposer des demandes, et lire les données déléguées à travers la carte.
+
+Sans jeton, il n'y a pas d'identité — donc rien à voir et rien à demander. La
+carte affiche « connectez-vous », ce qui est la vérité.
+
+Le **compte invoqué est nommé** partout où l'accès apparaît. Savoir qu'un accès
+existe ne suffit pas : il faut voir *laquelle* des identités il rejoue, sans
+quoi on ne peut ni la reconnaître ni la révoquer en connaissance de cause.
+
 Trois règles qui en découlent, et qu'il ne faut pas contourner :
 
 - **La validation ne se fait jamais dans un cadre.** Une confirmation qu'on ne
