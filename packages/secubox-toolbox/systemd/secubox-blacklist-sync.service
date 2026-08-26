@@ -3,7 +3,13 @@
 [Unit]
 Description=SecuBox blacklist enforcement sync (CrowdSec + threat-intel -> nft sets)
 Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/521
-After=nftables.service secubox-toolbox.service
+After=nftables.service secubox-toolbox.service crowdsec.service
+# Dependance CrowdSec (#1218). Ce service lit les decisions de CrowdSec via
+# cscli : sans le moteur, il tourne pour rien. Requisite echoue IMMEDIATEMENT si
+# crowdsec n'est pas deja actif, sans tenter de le demarrer — c'est la semantique
+# voulue : ne rien faire tant que CrowdSec n'est pas la, plutot que shell un
+# binaire qui rendra une liste vide ou une erreur a chaque declenchement.
+Requisite=crowdsec.service
 Wants=nftables.service
 
 [Service]

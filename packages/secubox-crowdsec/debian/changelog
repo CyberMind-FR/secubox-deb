@@ -1,3 +1,48 @@
+secubox-crowdsec (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * La vraie source des rafales etait la tache de fond de routers/status.py :
+    six `sudo cscli` LANCES EN PARALLELE toutes les 30 s — la salve d'une
+    seconde a 133 % de CPU decrite dans l'issue. Ces donnees (etat LAPI/CAPI,
+    bouncers, hub, metriques) changent en minutes, pas en secondes :
+    l'intervalle passe a 120 s.
+  * Deux de ces six commandes n'etaient PAS dans le sudoers : `cscli hub list
+    --output json` et `cscli metrics --output json`. Elles etaient refusees
+    toutes les trente secondes depuis toujours — 16 refus par 10 minutes,
+    journalises et jamais executes — et le tableau de bord affichait un hub et
+    des metriques vides sans dire pourquoi. Ce sont des lectures : elles sont
+    ajoutees au sudoers.
+  * Prechauffage retire : la tache de fond de status.py rafraichit deja ces
+    memes lectures. En ajouter une seconde aurait double le travail au lieu de
+    le reduire — l'inverse de ce que l'issue demande.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 06:20:51 +0200
+
+secubox-crowdsec (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * Rafales de cscli (#1210). Chaque `cscli` est un binaire Go qui charge sa
+    configuration et interroge l'API locale : environ 133 % de CPU le temps de
+    s'executer. Les points d'entree d'etat en enchainaient quatre ou cinq PAR
+    REQUETE et le tableau de bord les appelle en boucle — 50 invocations en
+    trois minutes, mesurees dans le journal sudo.
+  * Les neuf appels de LECTURE (`… status`, `… list`) passent derriere un cache
+    d'execution partage, TTL 45 s : la commande est lancee au plus une fois par
+    TTL, quel que soit le nombre d'appelants. Un verrou par cle evite la ruee —
+    sans lui, dix requetes simultanees sur un cache expire lanceraient dix
+    cscli, exactement la rafale qu'on supprime (verifie : 10 appelants
+    simultanes, 1 seule execution).
+  * Les commandes d'ACTION (add, delete, update, upgrade, reload, register) ne
+    sont PAS mises en cache — mettre en cache un effet de bord serait absurde —
+    et invalident au contraire le cache : l'etat vient de changer.
+  * Un echec est mis en cache comme un succes : un cscli qui echoue coute le
+    meme CPU, et le reessayer a chaque requete reproduirait la rafale au pire
+    moment, quand l'outil est deja en peine.
+  * Prechauffage de fond, serialise : sans lui la premiere requete apres
+    expiration paierait quatre cscli en serie — un tableau de bord lent une
+    fois par TTL, precisement quand on le regarde. En parallele, ce serait
+    deplacer la rafale hors du chemin de requete au lieu de la supprimer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 06:15:30 +0200
+
 secubox-crowdsec (1.1.1-1~bookworm2) bookworm; urgency=medium
 
   * L'unite retire sa socket perimee via `ExecStartPre=+/bin/rm`.

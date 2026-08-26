@@ -29,6 +29,7 @@ import subprocess
 import json
 import time
 import threading
+from types import SimpleNamespace
 import hashlib
 import hmac
 import httpx
@@ -141,6 +142,78 @@ class StatsCache:
 
 
 stats_cache = StatsCache(ttl_seconds=60)
+
+# ═══════════════════════════════════════════════════════════════════════
+# Exécution mise en cache de cscli (#1210)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# LE PROBLÈME. Chaque `cscli` est un binaire Go qui charge sa configuration et
+# interroge l'API locale : environ 133 % de CPU le temps de s'exécuter. Les
+# points d'entrée d'état en enchaînaient quatre ou cinq PAR REQUÊTE, et le
+# tableau de bord les appelle en boucle — mesuré, 48 invocations en trois
+# minutes, la charge de la box entre 15 et 22.
+#
+# LA PARADE, celle que CLAUDE.md prescrit déjà pour les tableaux de bord :
+# jamais un shell par requête. Une commande de LECTURE (`… status`, `… list`)
+# est exécutée au plus une fois par TTL, quel que soit le nombre d'appelants ;
+# les autres partagent le résultat.
+#
+# Les commandes d'ACTION (add, delete, update, upgrade, reload, register) ne
+# passent PAS par ici : mettre en cache un effet de bord serait absurde, et une
+# action doit au contraire invalider ce qui la précède.
+#
+# Le verrou par clé évite la ruée : sans lui, dix requêtes simultanées sur un
+# cache expiré lanceraient dix cscli — exactement la rafale qu'on supprime.
+CSCLI_TTL = 45
+_cscli_cache = StatsCache(ttl_seconds=CSCLI_TTL)
+_cscli_verrous: Dict[str, threading.Lock] = {}
+_cscli_verrous_garde = threading.Lock()
+
+
+def _cscli_verrou(cle: str) -> threading.Lock:
+    with _cscli_verrous_garde:
+        v = _cscli_verrous.get(cle)
+        if v is None:
+            v = threading.Lock()
+            _cscli_verrous[cle] = v
+        return v
+
+
+def cscli_lecture(args: List[str], timeout: int = 5, sudo: bool = False):
+    """Exécute une commande cscli de LECTURE, au plus une fois par TTL.
+
+    Rend un objet à l'interface de subprocess.CompletedProcess (returncode,
+    stdout, stderr) pour rester substituable aux appels existants sans changer
+    leur code alentour.
+
+    Un échec est mis en cache comme un succès : un cscli qui échoue coûte le
+    même CPU, et le réessayer à chaque requête reproduirait la rafale au pire
+    moment — quand l'outil est déjà en peine.
+    """
+    cmd = (["sudo", "cscli"] if sudo else ["cscli"]) + list(args)
+    cle = " ".join(cmd)
+    en_cache = _cscli_cache.get(cle)
+    if en_cache is not None:
+        return en_cache
+
+    with _cscli_verrou(cle):
+        # Un autre appelant a pu remplir le cache pendant l'attente du verrou.
+        en_cache = _cscli_cache.get(cle)
+        if en_cache is not None:
+            return en_cache
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            res = SimpleNamespace(returncode=r.returncode, stdout=r.stdout, stderr=r.stderr)
+        except Exception as e:
+            res = SimpleNamespace(returncode=127, stdout="", stderr=str(e))
+        _cscli_cache.set(cle, res)
+        return res
+
+
+def cscli_invalider():
+    """À appeler après toute commande qui MODIFIE l'état de CrowdSec."""
+    _cscli_cache.invalidate()
+
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -479,6 +552,7 @@ def capi_enroll(user=Depends(require_jwt)):
             ["sudo", "cscli", "capi", "register"],
             capture_output=True, text=True, timeout=30
         )
+        cscli_invalider()  # l'etat vient de changer (#1210)
         output = (result.stdout + result.stderr).lower()
         # Already enrolled scenarios
         if "already registered" in output or "already enrolled" in output:
@@ -524,10 +598,7 @@ async def health():
     except Exception as e:
         # Fallback: check if cscli lapi status succeeds (needs sudo)
         try:
-            result = subprocess.run(
-                ["sudo", "cscli", "lapi", "status"],
-                capture_output=True, text=True, timeout=5
-            )
+            result = cscli_lecture(["lapi", "status"], timeout=5, sudo=True)
             # Check if "successfully" appears in output
             checks["lapi_ok"] = result.returncode == 0 and "successfully" in result.stdout.lower()
         except Exception:
@@ -535,10 +606,7 @@ async def health():
 
     # Check bouncers registered (needs sudo for database access)
     try:
-        result = subprocess.run(
-            ["sudo", "cscli", "bouncers", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = cscli_lecture(["bouncers", "list", "-o", "json"], timeout=5, sudo=True)
         if result.returncode == 0 and result.stdout.strip():
             try:
                 bouncers = json.loads(result.stdout)
@@ -615,10 +683,7 @@ def doctor():
 
     # 2. Check LAPI
     try:
-        result = subprocess.run(
-            ["cscli", "lapi", "status"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = cscli_lecture(["lapi", "status"], timeout=5)
         if result.returncode != 0:
             issues.append({"type": "lapi_error", "repairable": True, "details": result.stderr[:200]})
     except Exception as e:
@@ -626,10 +691,7 @@ def doctor():
 
     # 3. Check CAPI (Central API) enrollment
     try:
-        result = subprocess.run(
-            ["cscli", "capi", "status"],
-            capture_output=True, text=True, timeout=10
-        )
+        result = cscli_lecture(["capi", "status"], timeout=10)
         if "not enrolled" in result.stdout.lower() or result.returncode != 0:
             issues.append({"type": "capi_not_enrolled", "repairable": False, "details": "Manual enrollment required"})
     except Exception:
@@ -637,10 +699,7 @@ def doctor():
 
     # 4. Check bouncers
     try:
-        result = subprocess.run(
-            ["cscli", "bouncers", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = cscli_lecture(["bouncers", "list", "-o", "json"], timeout=5)
         if result.returncode == 0:
             bouncers = json.loads(result.stdout) if result.stdout.strip() else []
             if len(bouncers) == 0:
@@ -672,10 +731,7 @@ def doctor():
 
     # 6. Check hub updates (renumbered from 5)
     try:
-        result = subprocess.run(
-            ["cscli", "hub", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=10
-        )
+        result = cscli_lecture(["hub", "list", "-o", "json"], timeout=10)
         if result.returncode == 0:
             hub_data = json.loads(result.stdout) if result.stdout.strip() else {}
             # Check for outdated collections
@@ -740,6 +796,7 @@ async def repair():
             ["cscli", "hub", "update"],
             capture_output=True, text=True, timeout=60
         )
+        cscli_invalider()  # l'etat vient de changer (#1210)
         repairs.append({
             "action": "hub_update",
             "status": "ok" if result.returncode == 0 else "warning",
@@ -756,6 +813,7 @@ async def repair():
             ["cscli", "hub", "upgrade"],
             capture_output=True, text=True, timeout=120
         )
+        cscli_invalider()  # l'etat vient de changer (#1210)
         repairs.append({
             "action": "hub_upgrade",
             "status": "ok" if result.returncode == 0 else "warning"
@@ -771,6 +829,7 @@ async def repair():
             ["cscli", "config", "reload"],
             capture_output=True, text=True, timeout=10
         )
+        cscli_invalider()  # l'etat vient de changer (#1210)
         repairs.append({
             "action": "config_reload",
             "status": "ok" if result.returncode == 0 else "error"
@@ -780,10 +839,7 @@ async def repair():
 
     # 6. Register HAProxy bouncer if missing
     try:
-        result = subprocess.run(
-            ["cscli", "bouncers", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = cscli_lecture(["bouncers", "list", "-o", "json"], timeout=5)
         bouncers = json.loads(result.stdout) if result.stdout.strip() else []
         bouncer_names = [b.get("name", "") for b in bouncers]
 
@@ -793,6 +849,7 @@ async def repair():
                 ["cscli", "bouncers", "add", "haproxy-bouncer", "-o", "raw"],
                 capture_output=True, text=True, timeout=10
             )
+            cscli_invalider()  # l'etat vient de changer (#1210)
             if result.returncode == 0:
                 repairs.append({"action": "add_haproxy_bouncer", "status": "ok", "key": result.stdout.strip()[:20] + "..."})
             else:
@@ -1259,10 +1316,7 @@ def decisions_stats():
     active_decisions = 0
     categories = {}
     try:
-        result = subprocess.run(
-            ["sudo", "cscli", "decisions", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=10
-        )
+        result = cscli_lecture(["decisions", "list", "-o", "json"], timeout=10, sudo=True)
         if result.returncode == 0 and result.stdout.strip():
             data = json.loads(result.stdout)
             for item in data or []:
@@ -1278,10 +1332,7 @@ def decisions_stats():
     # Get bouncer count
     bouncers = 0
     try:
-        result = subprocess.run(
-            ["sudo", "cscli", "bouncers", "list", "-o", "json"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = cscli_lecture(["bouncers", "list", "-o", "json"], timeout=5, sudo=True)
         if result.returncode == 0 and result.stdout.strip():
             data = json.loads(result.stdout)
             bouncers = len(data) if isinstance(data, list) else 0

@@ -274,8 +274,17 @@ def _release_lock():
         pass
 
 
+# Intervalle de rafraichissement (#1210). Etait 30 s : six `cscli` en parallele
+# toutes les demi-minutes, soit exactement la salve d'une seconde a 133 % de CPU
+# decrite dans l'issue — 50 invocations en trois minutes. Ces donnees (etat LAPI
+# et CAPI, bouncers, hub, metriques) changent en minutes, pas en secondes ; les
+# rafraichir quatre fois moins souvent ne fait rien perdre au tableau de bord et
+# divise d'autant le cout.
+INTERVALLE_RAFRAICHISSEMENT = 120
+
+
 async def _refresh_all_caches():
-    """Background task to refresh all caches every 30s.
+    """Tache de fond rafraichissant tous les caches.
 
     Protected against concurrent execution with lock file.
     """
@@ -285,7 +294,7 @@ async def _refresh_all_caches():
         # Guard against concurrent refresh
         if _refresh_running:
             log.debug("Skipping refresh - previous refresh still running")
-            await asyncio.sleep(30)
+            await asyncio.sleep(INTERVALLE_RAFRAICHISSEMENT)
             continue
 
         _refresh_running = True
@@ -335,7 +344,7 @@ async def _refresh_all_caches():
         finally:
             _refresh_running = False
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(INTERVALLE_RAFRAICHISSEMENT)
 
 
 def _load_cache_from_file(path: Path) -> Dict[str, Any]:

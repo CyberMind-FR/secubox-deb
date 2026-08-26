@@ -24,6 +24,14 @@ secubox ALL=(root) NOPASSWD: /usr/bin/cscli capi status
 secubox ALL=(root) NOPASSWD: /usr/bin/cscli decisions list -o json
 secubox ALL=(root) NOPASSWD: /usr/bin/cscli alerts list -o json
 secubox ALL=(root) NOPASSWD: /usr/bin/cscli console status
+
+# #1210 — deux lectures que la tache de fond appelait sans en avoir le droit.
+# Le refus etait silencieux cote application : sudo journalisait « command not
+# allowed » toutes les trente secondes, la commande n'etait jamais executee, et
+# le tableau de bord affichait un hub et des metriques vides sans dire pourquoi.
+# Ce sont des commandes de LECTURE, au meme titre que celles ci-dessus.
+secubox ALL=(root) NOPASSWD: /usr/bin/cscli hub list --output json
+secubox ALL=(root) NOPASSWD: /usr/bin/cscli metrics --output json
 secubox ALL=(root) NOPASSWD: /usr/sbin/nft list tables
 
 # Enrollment write-ops — crowdsec panel capi/enroll + console enroll/disable (2026-07-28)
