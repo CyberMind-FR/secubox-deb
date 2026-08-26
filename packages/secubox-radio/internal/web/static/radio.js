@@ -20,6 +20,18 @@
     };
     document.documentElement.classList.add('mini');
     if (micro) document.documentElement.classList.add('micro');
+
+    // THÈME HÉRITÉ DE L'HÔTE (#1233). Encadrée, la radio décidait seule de son
+    // clair/sombre : le cardlet du Hall restait en sombre sur un Hall clair.
+    // La feuille de style sait déjà répondre à data-theme ; il manquait
+    // seulement de le poser. On n'accepte que deux valeurs — une valeur libre
+    // venue de l'URL n'a rien à faire dans un attribut du document.
+    try {
+      var t = new URLSearchParams(location.search).get('theme');
+      if (t === 'dark' || t === 'light') {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    } catch (e) { /* sans URLSearchParams, on garde le thème du système */ }
     if (document.body) pose();
     else document.addEventListener('DOMContentLoaded', pose);
   })();

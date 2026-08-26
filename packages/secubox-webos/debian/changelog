@@ -1,3 +1,13 @@
+secubox-webos (1.0.43-1~bookworm1) bookworm; urgency=medium
+
+  * Le Hall transmet SON theme au cadre de la radio (#1233), a l'ouverture et a
+    chaque bascule — sans le second, le cadre garderait le theme du chargement.
+    C'est la seule chose que le Hall transmet : tout le reste (commandes,
+    tailles, detachement) appartient au lecteur.
+  * scrolling="no" sur le cadre, en complement du masquage cote radio.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:02:53 +0200
+
 secubox-webos (1.0.42-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet RADIO ramenee a sa reference : celle du BBS (#1232). Le Hall en

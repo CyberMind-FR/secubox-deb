@@ -1,3 +1,18 @@
+secubox-radio (0.1.34-1~bookworm1) bookworm; urgency=medium
+
+  * Theme herite de l'hote en mode encadre (#1233). La feuille de style savait
+    deja repondre a data-theme ; il manquait de le POSER. Encadree, la radio
+    decidait donc seule de son clair/sombre, et le cardlet du Hall restait
+    sombre sur un Hall clair. Le parametre ?theme= est lu, et seules deux
+    valeurs sont acceptees — une valeur libre venue de l'URL n'a rien a faire
+    dans un attribut du document.
+  * Plus d'ascenseur en mode micro. Encadre, le lecteur affichait une barre de
+    defilement le long de sa bordure : dans une cardlet de 252 px elle signale
+    un debordement qu'on ne veut pas voir et casse le lisere. Elle est masquee
+    sans empecher la molette, qui reste le recours si un texte long deborde.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 26 Aug 2026 09:02:53 +0200
+
 secubox-radio (0.1.33-1~bookworm1) bookworm; urgency=high
 
   * Une piste dont la source a disparu n'est plus redemandée sans fin. Le démon

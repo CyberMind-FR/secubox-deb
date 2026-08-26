@@ -196,6 +196,13 @@ body.mini .file li .vg { width: 2rem; height: 2rem; }
 /* ═══ MODE MICRO /micro (#1131o) : lecteur SEUL, taille d'une carte du
    carrousel (~170px), pour le widget du rail BBS. body.micro s'ajoute à
    body.mini : on ne garde que le lecteur et on le réduit à une cardlet. ═══ */
+/* PAS D'ASCENSEUR EN MICRO (#1233). Encadré, le lecteur affichait une barre de
+   défilement le long de sa bordure : dans une cardlet de 252 px, elle signale un
+   débordement qu'on ne veut pas voir et casse le liseré. Le contenu du mode
+   micro est taillé pour tenir ; la barre est donc masquée sans empêcher la
+   molette, qui reste le recours si une traduction longue déborde. */
+html.micro, body.micro { scrollbar-width: none; -ms-overflow-style: none; }
+html.micro::-webkit-scrollbar, body.micro::-webkit-scrollbar { width: 0; height: 0; display: none; }
 body.micro .wrap { padding: 0; }
 body.micro .carte:not(.lecteur):not(.antenne) { display: none; } /* lecteur + antenne */
 /* Mini-antenne sous le lecteur (#1131aj) : une ligne pour saisir, 2 dernières

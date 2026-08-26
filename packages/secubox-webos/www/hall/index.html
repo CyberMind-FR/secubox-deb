@@ -562,7 +562,8 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                créerait deux commandes pour la même chose. -->
           <div class="cardlet radiowidget">
             <iframe class="radioframe" id="rframe" src="https://radio.gk2.secubox.in/micro"
-                    title="Radio SecuBox en direct" allow="autoplay" loading="lazy"></iframe>
+                    title="Radio SecuBox en direct" allow="autoplay" loading="lazy"
+                    scrolling="no"></iframe>
           </div>
 </aside>
       </div>
@@ -974,9 +975,27 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     render(d,'Registre <b>réel</b> · '+n+' modules · santé socket-aware. Principal = curation all.gk2.net ; tout le parc sous Système.');
   }).catch(()=>{});
 
-// RADIO (#1232) — rien à piloter depuis le Hall : le lecteur /micro porte ses
+// RADIO (#1232) — rien à PILOTER depuis le Hall : le lecteur /micro porte ses
 // propres commandes, tailles et détachement compris. Toute commande ajoutée ici
 // en doublerait une existante, et les deux finiraient par se contredire.
+//
+// Une seule chose se transmet : le THÈME (#1233). Encadrée, la radio décidait
+// seule de son clair/sombre et restait en sombre sur un Hall clair. On le lui
+// passe à l'ouverture, et de nouveau à chaque bascule — sans quoi le cadre
+// garderait le thème du chargement.
+(function(){
+  const cadre=document.getElementById('rframe');
+  if(!cadre) return;
+  const theme=()=>root.getAttribute('data-theme')
+    || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  function applique(){
+    const u='https://radio.gk2.secubox.in/micro?theme='+theme();
+    if(cadre.src!==u) cadre.src=u;
+  }
+  applique();
+  // Le Hall stampe data-theme sur <html> : on suit ses changements.
+  new MutationObserver(applique).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();
 
 // Cardlet PARE-FEU (#1228) — même chemin que la Radio : le serveur lit le WAF
 // par sa socket, le client ne le contacte jamais. Rythme plus lent : une
