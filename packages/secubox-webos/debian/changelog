@@ -1,3 +1,12 @@
+secubox-webos (1.0.117-1~bookworm1) bookworm; urgency=medium
+
+  * LES METRICS DE CAMOUFLAGE DANS LA BARRE LA PLUS HAUTE (#1354). La carte
+    fait remonter ses stats au Hall, qui les affiche dans l'entete de
+    l'overlay surf (a cote du titre et du croix) : traqueurs, pubs, cookies
+    reecrits, notifications bloquees, popups coupees, part de pistage.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 20:00:22 +0200
+
 secubox-webos (1.0.116-1~bookworm1) bookworm; urgency=medium
 
   * SANDBOX SURF ASSOUPLI (#1353) : ajout de allow-modals et
