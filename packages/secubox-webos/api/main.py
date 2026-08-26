@@ -223,18 +223,30 @@ def _qui(user) -> str:
 # quelle ouvrirait l'ajout de torrents a tout le reseau local, sur un Hall
 # joignable sans se connecter. L'autorisation est donc la NOTRE.
 
+def _porteur(request: Request) -> str:
+    """Le jeton brut presente par l'appelant, s'il y en a un.
+
+    `require_jwt` rend la CHARGE du jeton, pas le jeton : pour le relayer a un
+    module qui protege ses propres routes, il faut la chaine d'origine.
+    """
+    a = request.headers.get("authorization") or ""
+    return a[7:].strip() if a[:7].lower() == "bearer " else ""
+
+
 @router.get("/actions/{module}/{action}")
-async def action_lecture(module: str, action: str, user=Depends(require_jwt)):
-    """Les actions de LECTURE — une liste, un etat detaille."""
-    return await actions.agir(module, action)
+async def action_lecture(module: str, action: str, request: Request,
+                         user=Depends(require_jwt)):
+    """Les actions de LECTURE — une liste, un historique, un etat."""
+    return await actions.agir(module, action, None, _porteur(request))
 
 
 @router.post("/actions/{module}/{action}")
-async def action_ecriture(module: str, action: str, corps: dict | None = None,
+async def action_ecriture(module: str, action: str, request: Request,
+                          corps: dict | None = None,
                           user=Depends(require_jwt)):
     """Les actions qui MODIFIENT. Le corps n'est lu que pour les champs que
     l'action declare : ce qui n'est pas nomme n'est pas transmis."""
-    return await actions.agir(module, action, corps or {})
+    return await actions.agir(module, action, corps or {}, _porteur(request))
 
 
 # ── PASSAGE DE JETON ENTRE DEUX DOMAINES (#1305) ───────────────────────────

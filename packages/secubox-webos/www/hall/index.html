@@ -523,6 +523,26 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   user-select:none}
 .fcard:hover .cl-grip,.cl-grip:focus-visible{opacity:.85}
 .cl-grip:active{cursor:grabbing}
+/* CARDLET VEDETTE (#1323). Une carte peut passer pleine largeur SANS QUITTER
+   SA PLACE : `column-span:all` traverse les colonnes la ou l'element se
+   trouve. C'est la raison du choix — deplacer le noeud dans le DOM aurait
+   RECHARGE son cadre, donc coupe une video en cours au moment precis ou l'on
+   demande a mieux la voir. Ici rien ne bouge : la carte s'elargit, le flux
+   continue.
+   Une seule vedette a la fois : deux vedettes n'en font aucune. */
+.grid.feat > .fcard.vedette{column-span:all;-webkit-column-span:all;
+  margin:2px 0 16px;box-shadow:var(--lift);border-color:var(--violet)}
+.fcard.vedette .fcard-cadre{height:var(--vedette-h,440px)}
+.fcard.vedette .ap-vue{height:380px}
+.cl-vedette{position:absolute;top:6px;right:32px;z-index:4;cursor:pointer;
+  font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
+  padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
+  user-select:none}
+.fcard:hover .cl-vedette,.cl-vedette:focus-visible{opacity:.85}
+/* La vedette garde son etoile visible : sans cela, rien ne dit comment la
+   rendre a la mosaique, et l'on cherche le geste inverse d'un geste invisible. */
+.fcard.vedette .cl-vedette{opacity:1;color:var(--violet);border-color:var(--violet)}
+@media (prefers-reduced-motion:reduce){.cl-vedette{transition:none}}
 .fcard.cl-drag{opacity:.45}
 .fcard.cl-cible{outline:2px dashed var(--violet);outline-offset:3px}
 /* PENDANT LE GLISSER, les iframes cessent de capter le pointeur : sans cela
@@ -808,7 +828,7 @@ const FEATURED = [
   {id:"socialrelay",label:"SocialRelay",icon:"🔄", color:"#1f7a58", url:"socialrelay.gk2.secubox.in", micro:"/micro", h:222},
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
   {id:"kbin",       label:"Kbin",      icon:"🔷", color:"#2e6da4", url:"kbin.gk2.secubox.in"},
-  {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:196},
+  {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:196},
 ];
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
@@ -824,7 +844,10 @@ const FEATURED = [
 // desormais reecrit AU PROXY (#1257), une fois, plutot que dans cinq amonts
 // qu'on ne maitrise pas. Verifie sur la box : X-Frame-Options retire et
 // frame-ancestors nommant le Hall.
-const EMBEDDABLE = new Set(["metanews","kbin","socialrelay","bbs","radio","billets","depot",
+// KBIN N'EST PLUS EMBARQUE (#1321) : un forum entier tasse dans une carte ne
+// montre rien qu'on puisse lire. Il garde sa carte — donc son acces — mais
+// s'ouvre en pleine page, la seule taille ou il dit quelque chose.
+const EMBEDDABLE = new Set(["metanews","socialrelay","bbs","radio","billets","depot",
                             "peertube","nextcloud","photoprism","mastodon","mail",
                             "ytsas","torrent"]);
 // ORDRE PAR DEFAUT — LES PLUS ABOUTIES D'ABORD (#1266).
@@ -892,6 +915,7 @@ function featCardHTML(f,s){
     const sep = u.indexOf('?')>=0 ? '&' : '?';
     return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'">'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
+      + ETOILE
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut
       + ' src="'+u+sep+'theme='+th+'"'
       + ' title="'+esc(f.label)+'" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>'
@@ -906,6 +930,7 @@ function featCardHTML(f,s){
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     return '<article class="fcard fcard-apercu" data-embed="'+esc(f.id)+'">'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
+      + ETOILE
       + '<div class="ap-tete">'
       +   '<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
       +   '<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
@@ -924,7 +949,7 @@ function featCardHTML(f,s){
   }
 
   return '<article class="fcard clic" data-embed="'+esc(f.id)+'">'
-    +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span><div class="hd">'
+    +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'+ETOILE+'<div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
     +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
     +'<span class="state"><i class="led '+st+'"></i>'+STATE_FR[st]+'</span></div>'
@@ -933,6 +958,12 @@ function featCardHTML(f,s){
     +'<a class="open" href="https://'+esc(h)+'/" target="_blank" rel="noopener">Ouvrir</a></div>'
     +'</article>';
 }
+// L'ETOILE DE MISE EN VEDETTE. En `var` et posee AVANT featCardHTML : une
+// `const` declaree plus bas serait en ZONE MORTE au moment ou render() evalue
+// les cartes — la meme panne que `LARGEUR_PAGE` et `replies` avant elle.
+var ETOILE = '<span class="cl-vedette" role="button" tabindex="0"'
+  + ' title="Mettre en vedette — pleine largeur">★</span>';
+
 function compactHTML(s){
   const st=(s.health&&s.health.state)||"unknown";
   // Clic → embarque la WEBUI ADMIN du module (admin.gk2.secubox.in<path>).
@@ -963,6 +994,7 @@ function render(data,src){
   // Les cadres viennent d'être posés : leur largeur est enfin mesurable.
   echelleApercus();
   if(window.rangeCardlets) rangeCardlets();   // #1234 : l'ordre choisi par l'opérateur
+  if(window.rendVedette) rendVedette();      // #1323 : la carte mise en vedette
   vivifieCartes();   // #1231 : les cartes qui ont un cardlet prennent ses données
   // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
@@ -1993,6 +2025,56 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   };
   cote.addEventListener('drop', e=>{ e.preventDefault(); fin(); });
   cote.addEventListener('dragend', fin);
+
+  // ── MISE EN VEDETTE (#1323) ────────────────────────────────────────────
+  //
+  // Une carte prend toute la largeur. Rien de plus, et c'est voulu : la
+  // mosaique donne a chaque service la meme voix, ce qui est juste par defaut
+  // et faux quand on regarde quelque chose. La vedette est ce qu'on regarde.
+  //
+  // On ne DEPLACE pas la carte — on lui pose une classe. Voir le CSS : sortir
+  // le noeud de son parent rechargerait son cadre, et l'on couperait le flux
+  // au moment de l'agrandir.
+  const CLEF_VEDETTE = 'sbx.hall.vedette';
+
+  function vedetteChoisie(){
+    try { return localStorage.getItem(CLEF_VEDETTE) || ''; } catch(e){ return ''; }
+  }
+
+  function poseVedette(id){
+    cote.querySelectorAll('.fcard.vedette').forEach(c=>c.classList.remove('vedette'));
+    if(id){
+      const c = cote.querySelector('.fcard[data-embed="'+CSS.escape(id)+'"]');
+      if(c) c.classList.add('vedette');
+    }
+    try {
+      if(id) localStorage.setItem(CLEF_VEDETTE, id);
+      else localStorage.removeItem(CLEF_VEDETTE);
+    } catch(e){}
+    // Les apercus se mettent a l'echelle de LEUR largeur : elle vient de
+    // changer pour la vedette comme pour les colonnes qui se reserrent.
+    if(typeof echelleApercus==='function') echelleApercus();
+  }
+  window.poseVedette = poseVedette;
+  window.rendVedette = ()=>poseVedette(vedetteChoisie());
+
+  function bascule(c){
+    const id = c && c.dataset.embed;
+    if(!id) return;
+    poseVedette(c.classList.contains('vedette') ? '' : id);
+  }
+
+  cote.addEventListener('click', e=>{
+    const b = e.target.closest('.cl-vedette'); if(!b) return;
+    e.preventDefault(); e.stopPropagation();
+    bascule(b.closest('.fcard'));
+  });
+  cote.addEventListener('keydown', e=>{
+    if(e.key!=='Enter' && e.key!==' ') return;
+    const b = e.target.closest('.cl-vedette'); if(!b) return;
+    e.preventDefault();
+    bascule(b.closest('.fcard'));
+  });
 })();
 
 // ── #1231 · les cartes de l'accueil prennent les données VIVANTES ──────────

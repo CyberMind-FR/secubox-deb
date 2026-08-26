@@ -68,7 +68,15 @@ ACTIONS: dict[str, dict[str, tuple]] = {
         "conserver": ("POST", "/api/v1/ytsas/conserve/{id}", ()),
     },
     "droplet": {
-        "liste":   ("GET",  "/api/v1/droplet/list", ()),
+        # Le dépôt a mieux que sa liste — souvent vide : son historique dit ce
+        # qui a été déposé, son stockage ce qu'il en reste. Ces deux routes
+        # sont AUTHENTIFIEES en amont, d'où le passage du jeton.
+        "liste":      ("GET",  "/api/v1/droplet/list", ()),
+        "stockage":   ("GET",  "/api/v1/droplet/storage", ()),
+        # SUPPRIMER EST DESTRUCTIF : la carte demande confirmation avant de
+        # l'appeler. On l'expose quand meme, parce qu'un depot ou l'on ne peut
+        # que deposer se remplit et ne se vide jamais.
+        "supprimer":  ("POST", "/api/v1/droplet/remove", ("name",)),
     },
 }
 
@@ -88,7 +96,8 @@ def _id_sur(v: str, module: str = "") -> str:
     return "".join(c for c in v if c in permis)[:64]
 
 
-async def agir(module: str, action: str, corps: dict | None = None) -> dict:
+async def agir(module: str, action: str, corps: dict | None = None,
+               jeton: str = "") -> dict:
     """Exécuter une action nommée, et rien d'autre."""
     m = ACTIONS.get(module)
     if not m:
@@ -116,12 +125,22 @@ async def agir(module: str, action: str, corps: dict | None = None) -> dict:
         # servirait qu'a remplir le journal de quelqu'un d'autre.
         charge[c] = str(v)[:2048]
 
+    entetes = {"Host": HOTES.get(module, HOTE_ADMIN), "Accept": "application/json"}
+    # ON TRANSMET LE JETON DE L'APPELANT quand il y en a un. Certains modules
+    # protègent leurs routes de lecture ; y aller anonymement rendrait un 401
+    # que la carte afficherait sans pouvoir rien y faire.
+    #
+    # Ce n'est PAS une élévation : c'est la même personne, sur la même box, dans
+    # le même domaine d'authentification. On ne fabrique aucun droit, on relaie
+    # celui qui a déjà été prouvé.
+    if jeton:
+        entetes["Authorization"] = "Bearer " + jeton
+
     try:
         async with httpx.AsyncClient(timeout=20) as cli:
             r = await cli.request(
                 methode, AMONT + chemin,
-                headers={"Host": HOTES.get(module, HOTE_ADMIN),
-                         "Accept": "application/json"},
+                headers=entetes,
                 json=charge if methode == "POST" else None,
             )
     except httpx.HTTPError as e:

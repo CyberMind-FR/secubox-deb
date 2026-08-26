@@ -75,6 +75,10 @@
   .items .it button:hover { border-color:var(--accent); color:var(--accent); }
   .items .it .et { flex:0 0 auto; font-size:.58rem; color:var(--muted); }
   .items .it .et.ok { color:var(--accent); }
+  .items .it a.nm { color:inherit; text-decoration:none; }
+  .items .it a.nm:hover { color:var(--accent); text-decoration:underline; }
+  .pied { font-size:.58rem; color:var(--muted); padding:.1rem .1rem 0;
+          font-variant-numeric:tabular-nums; }
   .ajout { display:flex; gap:5px; margin-top:.15rem; }
   .ajout input { flex:1; min-width:0; font:inherit; font-size:.68rem;
                  padding:.24rem .4rem; border-radius:6px; color:var(--texte);
@@ -116,15 +120,18 @@
       chiffres:[['total','📦','au total'],['downloading','⬇','en cours'],
                 ['to_peertube','📹','vers PeerTube']],
       acces:[['Ouvrir','/','p'],['Ajouter','/#add','']] },
+    // PAS DE BOUTONS (#1320) : la carte fait deja ce que le service fait —
+    // une URL, un bouton de capture, et la liste des dernieres. « Ouvrir » et
+    // « Nouvelle capture » ne menaient qu'a la meme chose, en plus loin.
     ytsas: { ic:'🎬', nom:'YTSaS', hote:'ytsas.gk2.secubox.in', mod:'ytsas',
       couleur:'#b03030',
       chiffres:[['total','🎞️','captures'],['jobs','⚙️','tâches'],
                 ['to_peertube','📹','vers PeerTube']],
-      acces:[['Ouvrir','/','p'],['Nouvelle capture','/#new','']] },
+      acces:[] },
     depot: { ic:'📦', nom:'Dépôt', hote:'depot.gk2.secubox.in', mod:'droplet',
       couleur:'#3d6b4a',
       chiffres:[['sites_count','🌐','sites'],['apps_count','🧩','applications']],
-      acces:[['Ouvrir','/','p'],['Déposer','/#depot','']] }
+      acces:[] }
   };
 
   // Quels widgets savent AGIR, et sous quel nom de module. YTSaS n'y figure
@@ -151,6 +158,17 @@
     return '<a class="' + a[2] + '" href="https://' + esc(c.hote) + esc(a[1])
       + '" target="_top">' + esc(a[0]) + '</a>';
   }).join('');
+  // SANS BOUTONS, LE SERVICE DOIT RESTER ATTEIGNABLE. On ne rajoute rien : on
+  // rend cliquable l'hôte, qui était déjà affiché. Une carte qui parle d'un
+  // service sans y mener est une impasse.
+  if (!c.acces.length) {
+    var h = el('hote');
+    if (h) {
+      h.innerHTML = '<a href="https://' + esc(c.hote) + '/" target="_top">'
+        + esc(c.hote) + '</a>';
+      h.querySelector('a').style.color = 'inherit';
+    }
+  }
 
   function octets(n) {
     n = Number(n) || 0;
@@ -209,6 +227,18 @@
     m.textContent = t || '';
   }
 
+  // Chaque module rend sa liste a sa facon : le torrent un tableau nu, le
+  // depot un objet `{droplets:[...]}`. Plutot que d'exiger d'eux un schema
+  // commun qu'ils n'ont jamais eu, on lit les deux formes ici.
+  function tableau(d) {
+    if (Array.isArray(d)) return d;
+    if (!d || typeof d !== 'object') return [];
+    var k = ['droplets', 'items', 'records', 'torrents', 'videos'];
+    for (var i = 0; i < k.length; i++)
+      if (Array.isArray(d[k[i]])) return d[k[i]];
+    return [];
+  }
+
   function rendItems(l) {
     var z = el('items');
     if (!l || !l.length) { z.innerHTML = ''; return; }
@@ -220,6 +250,26 @@
       var titre = x.name || x.title || '—';
       var fini = String(x.complete) === '1' || x.complete === true;
       var garde = String(x.kept) === '1' || x.kept === true;
+
+      // LE DEPOT : ce qu'il heberge est en ligne ou ne l'est pas, et son nom
+      // mene a son domaine. Un depot dont on ne peut pas ouvrir les sites
+      // n'affiche que des noms de dossiers.
+      if (id === 'depot') {
+        var sur = x.enabled === true || String(x.enabled) === '1';
+        var dom = x.domain || '';
+        var nom = dom
+          ? '<a class="nm" href="https://' + esc(dom) + '/" target="_top" title="'
+            + esc(dom) + '">' + esc(titre) + '</a>'
+          : '<span class="nm" title="' + esc(titre) + '">' + esc(titre) + '</span>';
+        return '<span class="it" data-id="' + esc(titre) + '">'
+          + nom
+          + '<span class="et' + (sur ? ' ok' : '') + '">'
+          + (x.type === 'streamlit' ? '🧩' : '🌐')
+          + ' ' + (sur ? 'en ligne' : 'arrêté') + '</span>'
+          + '<button data-a="supprimer" title="Retirer du dépôt">✕</button>'
+          + '</span>';
+      }
+
       var etat = (id === 'ytsas')
         ? (garde ? 'conservé' : 'éphémère')
         : (fini ? 'complet' : 'en cours');
@@ -246,8 +296,30 @@
       var d = r.corps || {};
       if (!d.ok) { dis(d.detail || '', true); return; }
       dis('');
-      rendItems(d.donnees);
+      var l = tableau(d.donnees);
+      rendItems(l);
+      if (id === 'depot' && !l.length) dis('Dépôt vide.');
       poseAjout();
+      if (id === 'depot') chargeStockage();
+    });
+  }
+
+  // CE QUE LE DEPOT A DE PLUS QUE SA LISTE : ce qu'il reste de place. La liste
+  // peut etre vide sans que le depot le soit, et c'est la seule mesure qui le
+  // dise. Cette route est authentifiee en amont — le jeton est relaye.
+  function chargeStockage() {
+    api('/actions/droplet/stockage').then(function (r) {
+      var d = (r.corps || {}).donnees;
+      if (!d || !d.total_human) return;
+      var z = el('items');
+      var p = document.createElement('div');
+      p.className = 'pied';
+      p.textContent = d.total_human + ' déposés · ' + (d.file_count || 0)
+        + ' fichier' + ((d.file_count || 0) > 1 ? 's' : '')
+        + ' · ' + (d.max_upload_mb || '?') + ' Mo par envoi';
+      var vieux = z.parentNode.querySelector('.pied');
+      if (vieux) vieux.remove();
+      z.parentNode.insertBefore(p, el('msg'));
     });
   }
 
@@ -285,9 +357,30 @@
     var b = e.target.closest('button[data-a]');
     if (!b) return;
     var it = b.closest('.it');
+
+    // SUPPRIMER NE SE FAIT PAS AU PREMIER CLIC. Retirer un site du depot est
+    // irreversible, et cette carte est petite : le pointeur y derape. Le
+    // premier clic arme, le second execute — et l'armement retombe seul.
+    if (b.dataset.a === 'supprimer' && b.dataset.arme !== '1') {
+      b.dataset.arme = '1';
+      b.textContent = '⚠';
+      b.title = 'Cliquer à nouveau pour retirer « ' + it.dataset.id + ' »';
+      dis('confirmer le retrait ?');
+      setTimeout(function () {
+        if (!b.parentNode) return;
+        b.dataset.arme = ''; b.textContent = '✕';
+        b.title = 'Retirer du dépôt'; dis('');
+      }, 4000);
+      return;
+    }
+
     dis('…');
+    // Le depot nomme sa cible `name`, les autres `id` : on envoie les deux,
+    // chaque module ne lisant que le champ qu'il declare.
+    var cible = (b.dataset.a === 'supprimer')
+      ? { name: it.dataset.id } : { id: it.dataset.id };
     api('/actions/' + ACTIONNABLE[id] + '/' + b.dataset.a,
-        { method: 'POST', body: JSON.stringify({ id: it.dataset.id }) })
+        { method: 'POST', body: JSON.stringify(cible) })
       .then(function (r) {
         var x = r.corps || {};
         dis(x.ok ? 'fait' : (x.detail || 'refusé'), !x.ok);

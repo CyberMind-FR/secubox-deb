@@ -1,3 +1,52 @@
+secubox-webos (1.0.100-1~bookworm1) bookworm; urgency=medium
+
+  * LE LECTEUR PEERTUBE NE PLANTE PLUS (#1324). On lui envoyait un `__ready`
+    NON SOLLICITE, porteur d'un `id`, douze fois de suite. Dans jschannel
+    `__ready` n'est pas une requete mais une salutation : elle n'arrive qu'une
+    fois. La deuxieme trouvait le canal deja ouvert et le renversait —
+    « can't access property "length", n.publish is undefined » — puis le
+    lecteur accusait le navigateur : « player is not compatible with your web
+    browser ». C'est nous qui le cassions. Le lecteur salue en premier ; on se
+    contente desormais de repondre, et une seule fois par cadre.
+  * LES ASSETS DU LECTEUR SONT SERVIS A LA RACINE (#1322). La page
+    d'embarquement reference ses scripts en chemin ABSOLU — `/client/…`,
+    `/plugins/…` — sans savoir qu'elle est servie sous `/pt/`. Ces requetes
+    tombaient dans le `location /` du Hall, qui rendait son index.html avec un
+    code 200 : du HTML la ou le navigateur attendait du JavaScript. Un 404 eut
+    ete plus lisible qu'un 200 de la mauvaise nature.
+  * LE DEPOT DEVIENT UNE VRAIE CARTE (#1320). Elle listait un objet la ou elle
+    attendait un tableau, et n'affichait donc jamais rien. Elle rend maintenant
+    ce que le depot heberge — nom, nature, en ligne ou non —, mene a chaque
+    site par son domaine, et dit la place occupee, seule mesure qui distingue
+    un depot vide d'une liste vide.
+  * ON PEUT Y RETIRER UN DEPOT, EN DEUX CLICS. Un depot ou l'on ne peut que
+    deposer se remplit et ne se vide jamais. Le geste est irreversible et la
+    carte est petite : le premier clic arme, le second execute, l'armement
+    retombe seul au bout de quatre secondes.
+  * LE JETON DE L'APPELANT EST RELAYE aux modules qui protegent leurs routes de
+    lecture. Ce n'est pas une elevation : meme personne, meme box, meme domaine
+    d'authentification — on relaie un droit deja prouve, on n'en fabrique pas.
+  * CARDLET VEDETTE (#1323) : une carte passe pleine largeur sans quitter sa
+    place, par `column-span`. Deplacer le noeud aurait recharge son cadre —
+    on aurait coupe la video au moment precis de demander a mieux la voir.
+  * KBIN NE S'EMBARQUE PLUS (#1321) : un forum entier tasse dans une carte ne
+    montre rien qu'on puisse lire. Il garde sa carte, donc son acces.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:43:10 +0200
+
+secubox-webos (1.0.99-1~bookworm1) bookworm; urgency=medium
+
+  * YTSaS PERD SES DEUX BOUTONS (#1320) : la carte fait deja ce que le service
+    fait — une URL, un bouton de capture, la liste des dernieres. « Ouvrir » et
+    « Nouvelle capture » ne menaient qu'a la meme chose, en plus loin.
+  * SANS BOUTONS, LE SERVICE DOIT RESTER ATTEIGNABLE : on ne rajoute rien, on
+    rend cliquable l'HOTE, qui etait deja affiche. Une carte qui parle d'un
+    service sans y mener est une impasse.
+  * Hauteur reduite d'autant : une carte doit faire la taille de ce qu'elle
+    dit, pas garder la place de ce qu'on lui a retire.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Wed, 26 Aug 2026 15:31:04 +0200
+
 secubox-webos (1.0.98-1~bookworm1) bookworm; urgency=medium
 
   * LA BARRE DE CHIFFRES EST RETIREE (#1319). Quatre grands nombres en tete

@@ -176,20 +176,20 @@
       + '<button class="zoom" id="zoom" type="button" title="Agrandir" aria-label="Agrandir">⤢</button>';
     annonce(v, true);
     bat(v);
-    // ON S'ANNONCE AUSSI. jschannel attend que les DEUX côtés se soient
-    // présentés : répondre à son « ping » ne suffit pas si l'on n'a jamais
-    // envoyé le nôtre. On le répète quelques fois — le cadre peut ne pas avoir
-    // fini de charger au premier essai, et un message posté trop tôt tombe
-    // dans le vide sans que personne ne le dise.
-    var essais = 0;
-    var salut = setInterval(function () {
-      var f = document.getElementById('cadre-pt');
-      if (!f || ++essais > 12) { clearInterval(salut); return; }
-      try {
-        f.contentWindow.postMessage(
-          JSON.stringify({ id: essais, method: 'peertube::__ready', params: 'ping' }), '*');
-      } catch (e) {}
-    }, 700);
+    // ON NE S'ANNONCE PLUS (#1324). C'ETAIT CE QUI TUAIT LE LECTEUR.
+    //
+    // On envoyait un `__ready` NON SOLLICITE, porteur d'un `id`, douze fois de
+    // suite. Or dans jschannel `__ready` n'est pas une requête mais une
+    // salutation : elle n'a pas d'`id`, et surtout elle n'arrive QU'UNE FOIS.
+    // La deuxième trouve le canal déjà ouvert et le fait tomber —
+    //   « Embed player crashed: can't access property "length",
+    //     n.publish is undefined »
+    // suivi d'une page noire et d'un « player is not compatible with your web
+    // browser » qui accusait le navigateur d'une panne qu'on causait nous-mêmes.
+    //
+    // C'est le lecteur qui salue en premier ; notre seul rôle est de répondre,
+    // ce que fait l'écouteur plus bas. Se présenter en plus n'ajoutait rien
+    // qu'on n'avait déjà.
   }
 
   // La barre du Hall doit savoir ce qui joue. On n'a pas la position — le
@@ -337,6 +337,11 @@
     // notification de position n'arrivait. On regarde donc la FIN du nom.
     var nomBrut = String((d && d.method) || '');
     if (nomBrut.slice(-7) === '__ready') {
+      // UNE SEULE FOIS PAR CADRE. Repondre deux fois a la salutation produit
+      // exactement la panne qu'on vient de retirer ci-dessus : le canal est
+      // deja ouvert, la seconde reponse le renverse.
+      if (c.dataset.salue === '1') return;
+      c.dataset.salue = '1';
       // On répond dans la MEME forme et sous le MEME nom que l'on reçoit :
       // jschannel n'accepte ni un objet là où il attend une chaîne, ni une
       // méthode d'une autre portée.
