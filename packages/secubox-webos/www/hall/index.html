@@ -1865,6 +1865,7 @@ function fermeSurf(){
   const zs=document.getElementById('surf-ov-stats'); if(zs) zs.innerHTML='';
 }
 window.fermeSurf = fermeSurf;
+window.ouvreSurf = ouvreSurf;   // #1350 : openService('surf') vit hors IIFE -> exposer au global sinon ReferenceError au clic menu
 // LE ✕ PAR DELEGATION (#1343 re-corrige). L'overlay est defini APRES ce script
 // dans le HTML : au moment ou l'on aurait attache l'ecouteur, le bouton
 // n'existait pas encore (getElementById -> null), et le ✕ ne repondait jamais.
