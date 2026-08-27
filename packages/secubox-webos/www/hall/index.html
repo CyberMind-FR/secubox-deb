@@ -1064,9 +1064,16 @@ function featCardHTML(f,s){
   // auquel on n'ajoute pas de vue /micro (PeerTube). Elle ne peint rien — elle
   // lit l'API publique du service à travers un relais de même origine.
   if(f.micro || f.carte){
+    // Services micro servis en MÊME ORIGINE via le Hall-proxy (#1239). On
+    // étend au fur et à mesure que chaque proxy /i/<id>/ est ajouté au vhost.
+    const SVC_PROXY = {radio:1};
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-    const u = f.carte ? esc(f.carte) : 'https://'+esc(h)+esc(f.micro);
+    // MÊME ORIGINE (#1239) : pour les services proxifiés par le Hall, on charge
+    // /i/<id>/<micro> au lieu de https://<host>/micro -> plus de cross-origine
+    // vers le LAN (fini le prompt Local Network Access de Firefox en privé).
+    const u = f.carte ? esc(f.carte)
+      : (SVC_PROXY[f.id] ? esc('/i/'+f.id+f.micro) : 'https://'+esc(h)+esc(f.micro));
     // `h` ETAIT DECLARE ET JAMAIS LU (#1286) : toutes les cartes prenaient les
     // 252 px du CSS, y compris celles qui n'ont que trois chiffres a montrer.
     // Une carte doit faire la taille de ce qu'elle dit.

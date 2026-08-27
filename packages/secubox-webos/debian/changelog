@@ -1,3 +1,12 @@
+secubox-webos (1.0.153-1~bookworm1) bookworm; urgency=medium
+
+  * feat: cardlets micro en MÊME ORIGINE (#1239, preuve radio) — proxy /i/radio/
+    dans le vhost Hall + sub_filter (/static/, /api/v1/radio/, /vignette/,
+    /media/) -> plus de cross-origine vers le LAN, fini le prompt Local Network
+    Access de Firefox en prive. Le Hall charge /i/radio/micro. A etendre aux 7.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:33:58 +0200
+
 secubox-webos (1.0.152-1~bookworm1) bookworm; urgency=medium
 
   * feat: resynchro du direct (#1237) — bouton ⟲ dans le direct + auto-resync a
