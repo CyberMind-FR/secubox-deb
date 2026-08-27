@@ -39,9 +39,20 @@ from pathlib import Path
 # État persistant. Le service tourne en ProtectSystem=strict ; ce chemin est
 # ouvert en écriture par `ReadWritePaths` dans l'unité systemd.
 CHEMIN = Path("/var/lib/secubox/surf/jarre.json")
+# LA JARRE D'ÉTAT (#1235). Pendant du bocal à cookies, pour le storage :
+# localStorage / sessionStorage. Les SSO et sessions modernes y rangent des
+# jetons, pas seulement dans les cookies ; et sous une origine surf-*, ce
+# storage est cloisonné (par origine) ET partitionné (contexte tiers), donc la
+# session posée à la vraie origine n'y est jamais. On le retient donc CÔTÉ
+# RELAIS, par domaine, et on le RÉINJECTE au chargement (inline, avant les
+# scripts du site). Même principe que les cookies : apprendre une fois,
+# rejouer toujours — mais pour le storage.
+CHEMIN_ETAT = Path("/var/lib/secubox/surf/etat.json")
+_MAX_ETAT = 512 * 1024   # garde-fou de taille par domaine
 
 _verrou = threading.Lock()
 _jarre: dict[str, dict[str, str]] = {}
+_etat: dict[str, dict] = {}
 _charge = False
 
 
@@ -65,6 +76,10 @@ def _assure():
         _jarre.update(json.loads(CHEMIN.read_text()))
     except (OSError, ValueError):
         pass
+    try:
+        _etat.update(json.loads(CHEMIN_ETAT.read_text()))
+    except (OSError, ValueError):
+        pass
     _charge = True
 
 
@@ -74,6 +89,16 @@ def _sauve():
         tmp = CHEMIN.with_suffix(".tmp")
         tmp.write_text(json.dumps(_jarre, ensure_ascii=False))
         tmp.replace(CHEMIN)
+    except OSError:
+        pass
+
+
+def _sauve_etat():
+    try:
+        CHEMIN_ETAT.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CHEMIN_ETAT.with_suffix(".tmp")
+        tmp.write_text(json.dumps(_etat, ensure_ascii=False))
+        tmp.replace(CHEMIN_ETAT)
     except OSError:
         pass
 
@@ -140,19 +165,66 @@ def pose_manuel(hote: str, cookies: dict[str, str]) -> int:
         return len(boc)
 
 
-def etat() -> dict[str, int]:
-    """Combien de cookies retenus, par domaine — pour l'inspection."""
-    with _verrou:
-        _assure()
-        return {d: len(c) for d, c in _jarre.items()}
+def apprend_etat(hote: str, local: dict | None, session: dict | None) -> int:
+    """Retient le storage d'un hôte, par domaine. Snapshot AUTORITAIRE : l'aire
+    fournie remplace celle qu'on avait (le navigateur porte l'état courant).
 
-
-def oublie(hote: str) -> bool:
+    Ce sont NOS clés, sur NOTRE box, pour NOTRE navigation — rien ne sort. Un
+    garde-fou de taille évite qu'un site nous fasse enfler ; on garde alors
+    `local` (souvent les jetons) et on lâche `session` (éphémère par nature)."""
     with _verrou:
         _assure()
         dom = _domaine(hote)
+        e = _etat.setdefault(dom, {})
+        if isinstance(local, dict):
+            e["local"] = {str(k): str(v) for k, v in local.items()}
+        if isinstance(session, dict):
+            e["session"] = {str(k): str(v) for k, v in session.items()}
+        try:
+            if len(json.dumps(e)) > _MAX_ETAT:
+                e.pop("session", None)
+            if len(json.dumps(e)) > _MAX_ETAT:
+                e["local"] = {}
+        except (TypeError, ValueError):
+            pass
+        _sauve_etat()
+        return len(e.get("local", {})) + len(e.get("session", {}))
+
+
+def etat_pour(hote: str) -> dict:
+    """L'état storage à RÉINJECTER pour cet hôte : {local:{…}, session:{…}}."""
+    with _verrou:
+        _assure()
+        e = _etat.get(_domaine(hote), {})
+        return {"local": dict(e.get("local", {})),
+                "session": dict(e.get("session", {}))}
+
+
+def etat() -> dict[str, dict]:
+    """Ce qu'on retient par domaine — cookies ET storage — pour l'inspection."""
+    with _verrou:
+        _assure()
+        out: dict[str, dict] = {}
+        for d, c in _jarre.items():
+            out.setdefault(d, {})["cookies"] = len(c)
+        for d, e in _etat.items():
+            out.setdefault(d, {})["storage"] = (
+                len(e.get("local", {})) + len(e.get("session", {})))
+        return out
+
+
+def oublie(hote: str) -> bool:
+    """Purge cookies ET storage d'un domaine — le droit à l'oubli du bocal."""
+    with _verrou:
+        _assure()
+        dom = _domaine(hote)
+        trouve = False
         if dom in _jarre:
             del _jarre[dom]
             _sauve()
-            return True
-        return False
+            trouve = True
+        if dom in _etat:
+            del _etat[dom]
+            _sauve_etat()
+            trouve = True
+        return trouve

@@ -128,6 +128,27 @@ async def app(scope, receive, send):
                          _json.dumps({"ok": True, "jarre": jarre.etat()}).encode())
         return
 
+    # ── JARRE D'ETAT (#1235) ────────────────────────────────────────────────
+    # `POST surf-<site>.../_sbx/etat` avec {local:{…}, session:{…}} retient le
+    # storage capture par le script de tete ; `GET` rend l'etat retenu. Le rejeu
+    # se fait par INJECTION inline dans la tete (voir reecris_html), pas ici.
+    if cible and chemin0.startswith("/_sbx/etat"):
+        import json as _json
+        if scope["method"] == "POST":
+            corps0 = await _lire_corps(receive)
+            try:
+                d = _json.loads(corps0 or b"{}")
+                n = jarre.apprend_etat(cible, d.get("local"), d.get("session"))
+                await repond(200, [("content-type", "application/json")],
+                             _json.dumps({"ok": True, "n": n}).encode())
+            except Exception as e:  # noqa: BLE001
+                await repond(400, [("content-type", "application/json")],
+                             ('{"ok":false,"detail":"%s"}' % type(e).__name__).encode())
+        else:
+            await repond(200, [("content-type", "application/json")],
+                         _json.dumps({"ok": True, "etat": jarre.etat_pour(cible)}).encode())
+        return
+
     # Origine mal formée : on ne devine pas une cible, on le dit.
     if not cible:
         await repond(400, [("content-type", "text/html; charset=utf-8")],
@@ -253,7 +274,16 @@ async def app(scope, receive, send):
     ct = r.headers.get("content-type", "").lower()
 
     if "text/html" in ct:
-        corps = relais.reecris_html(r.text, base, rap, sur_hote).encode()
+        # JARRE D'ETAT (#1235) : on REINJECTE le storage retenu pour cet hote,
+        # inline dans la tete, AVANT les scripts du site (pendant du Cookie
+        # rejoue pour les cookies). Le script de tete le pose dans
+        # localStorage/sessionStorage et capture ensuite les mutations.
+        import json as _json
+        etat_js = _json.dumps(jarre.etat_pour(cible), ensure_ascii=False)
+        etat_js = (etat_js.replace("<", "\\u003c").replace(">", "\\u003e")
+                          .replace("&", "\\u0026"))
+        corps = relais.reecris_html(r.text, base, rap, sur_hote,
+                                    etat_js=etat_js).encode()
     elif "css" in ct:
         corps = relais.reecris_css(r.text, base, rap, sur_hote).encode()
     elif "javascript" in ct or "ecmascript" in ct:

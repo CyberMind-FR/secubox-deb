@@ -478,6 +478,46 @@ _INJECTION_TETE = """
   window.__sbx={cookies:0,popups:0,notifs:0,pubs:0,tiers:0,trackers:0,total:0};
   var S=window.__sbx;
 
+  // JARRE D'ETAT (#1235). Le storage (localStorage/sessionStorage) est cloisonne
+  // par origine surf ET partitionne en contexte tiers : la session posee a la
+  // vraie origine n'y est pas, et ce qu'on ecrit ne survit pas. On le retient
+  // CÔTÉ RELAIS, par hote (pendant du bocal a cookies). Le serveur a injecte
+  // l'etat connu dans window.__sbx_etat (juste au-dessus) ; on le REPOSE ici,
+  // AVANT les scripts du site, puis on CAPTURE les mutations vers le serveur.
+  try{
+    var _E = window.__sbx_etat || {};
+    function _pose(aire, kv){
+      if(!kv) return;
+      for(var k in kv){ if(Object.prototype.hasOwnProperty.call(kv,k)){
+        try{ aire.setItem(k, kv[k]); }catch(e){} } }
+    }
+    try{ _pose(window.localStorage, _E.local); }catch(e){}
+    try{ _pose(window.sessionStorage, _E.session); }catch(e){}
+
+    function _snapshot(){
+      try{
+        var loc={}, ses={}, i, k;
+        try{ for(i=0;i<localStorage.length;i++){ k=localStorage.key(i); loc[k]=localStorage.getItem(k); } }catch(e){}
+        try{ for(i=0;i<sessionStorage.length;i++){ k=sessionStorage.key(i); ses[k]=sessionStorage.getItem(k); } }catch(e){}
+        var body=JSON.stringify({local:loc, session:ses});
+        if(navigator.sendBeacon){ navigator.sendBeacon("/_sbx/etat", new Blob([body],{type:"application/json"})); }
+        else{ fetch("/_sbx/etat",{method:"POST",body:body,headers:{"Content-Type":"application/json"},keepalive:true,credentials:"same-origin"}); }
+      }catch(e){}
+    }
+    var _tS=0;
+    function _planifie(){ try{ clearTimeout(_tS); }catch(e){} _tS=setTimeout(_snapshot, 1500); }
+    try{
+      var _SP=Storage.prototype, _si=_SP.setItem, _ri=_SP.removeItem, _cl=_SP.clear;
+      _SP.setItem=function(){ var r=_si.apply(this,arguments); _planifie(); return r; };
+      _SP.removeItem=function(){ var r=_ri.apply(this,arguments); _planifie(); return r; };
+      _SP.clear=function(){ var r=_cl.apply(this,arguments); _planifie(); return r; };
+    }catch(e){}
+    try{
+      addEventListener("pagehide", _snapshot, true);
+      addEventListener("visibilitychange", function(){ if(document.visibilityState==="hidden") _snapshot(); }, true);
+    }catch(e){}
+  }catch(e){}
+
   // COOKIES : on retire domain= (etranger a notre origine) ET on impose
   // SameSite=None (contexte tiers, sinon le navigateur rejette). Meme regle
   // que cote serveur sur Set-Cookie.
@@ -663,14 +703,23 @@ _INJECTION_TETE = """
 """
 
 
-def _injecte_tete(corps: str) -> str:
-    """Insere le script de tete juste apres <head> (ou au tout debut)."""
+def _injecte_tete(corps: str, etat_js: str = "") -> str:
+    """Insere le script de tete juste apres <head> (ou au tout debut).
+
+    L'etat storage retenu est pose AVANT le script de tete (dans
+    `window.__sbx_etat`), pour que la reinjection precede les scripts du site.
+    """
+    tete = ""
+    if etat_js and etat_js not in ('{"local": {}, "session": {}}',
+                                   '{"local":{},"session":{}}'):
+        tete = '<script id="sbx-surf-etat">window.__sbx_etat=%s;</script>' % etat_js
+    tete += _INJECTION_TETE
     m = re.search(r'<head[^>]*>', corps, re.IGNORECASE)
     if m:
         i = m.end()
-        return corps[:i] + _INJECTION_TETE + corps[i:]
+        return corps[:i] + tete + corps[i:]
     # Pas de <head> : on met avant <html>… en dernier recours au debut.
-    return _INJECTION_TETE + corps
+    return tete + corps
 
 
 def _injecte(corps: str) -> str:
@@ -700,8 +749,12 @@ def reecris_portails(corps: str) -> str:
     return corps
 
 
-def reecris_html(corps: str, base: str, rap: Rapport, sur_hote) -> str:
-    """Réécrit les URL d'un HTML et RECENSE ce qu'il n'a pas su suivre."""
+def reecris_html(corps: str, base: str, rap: Rapport, sur_hote,
+                 etat_js: str = "") -> str:
+    """Réécrit les URL d'un HTML et RECENSE ce qu'il n'a pas su suivre.
+
+    `etat_js` : le storage retenu pour cet hôte (JSON déjà échappé), réinjecté
+    inline dans la tête avant les scripts du site (jarre d'état, #1235)."""
     # 1. Ce qui se réécrit : attributs, srcset, url() inline.
     def _attr(m):
         v, ch = _map_url(m.group("v"), base, sur_hote)
@@ -763,7 +816,7 @@ def reecris_html(corps: str, base: str, rap: Rapport, sur_hote) -> str:
 
     # 3. Ce qu'on ne peut PAS suivre. On ne modifie rien — on compte.
     _recense_js(corps, rap, ou="html-inline")
-    return reecris_portails(_injecte_tete(_injecte(corps)))
+    return reecris_portails(_injecte_tete(_injecte(corps), etat_js))
 
 
 def _recense_js(texte: str, rap: Rapport, ou: str):

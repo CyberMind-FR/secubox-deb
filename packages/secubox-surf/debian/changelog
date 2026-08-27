@@ -1,3 +1,16 @@
+secubox-surf (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * feat: jarre d'etat — capture + rejeu du storage (#1235). Pendant du bocal a
+    cookies pour localStorage/sessionStorage : le serveur reinjecte l'etat
+    retenu inline dans la tete AVANT les scripts du site, et le script de tete
+    capture les mutations (setItem/removeItem/clear + snapshot au pagehide)
+    vers POST /_sbx/etat. Nouveau: jarre.apprend_etat/etat_pour, endpoint
+    /_sbx/etat, etat()/oublie() couvrent cookies ET storage. Debloque BFM/presse
+    et le surf en general (contexte tiers, storage partitionne), et fournit a
+    #1216 le vehicule pour semer l'etat de session.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 10:15:38 +0200
+
 secubox-surf (1.0.1-1~bookworm1) bookworm; urgency=medium
 
   * feat: pont postMessage entre origines relayees (#1235 A) — les cadres SSO
