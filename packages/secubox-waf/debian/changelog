@@ -1,3 +1,14 @@
+secubox-waf (1.10.18-1~bookworm1) bookworm; urgency=medium
+
+  * HTTPS PARTOUT AUSSI POUR waf.gk2.secubox.in (#1370). Ce vhost est servi en
+    direct par nginx (hors des vhosts geres par haproxyctl) et n'heritait donc
+    pas de la redirection clair->TLS de HAProxy. On la pose dans son bloc nginx,
+    conditionnee a X-Forwarded-Proto = http (le schema reel que HAProxy
+    transmet apres avoir termine le TLS). L'ACME, intercepte en amont par
+    HAProxy, n'atteint jamais ce bloc.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 08:55:00 +0200
+
 secubox-waf (1.10.17-1~bookworm1) bookworm; urgency=medium
 
   * ONGLETS DU WEBUI ADMIN REORGANISES (#1369). Les cartes debordaient sur tous
