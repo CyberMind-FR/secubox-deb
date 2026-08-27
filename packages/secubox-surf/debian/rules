@@ -11,6 +11,7 @@ override_dh_auto_install:
 	install -m 0644 surf/jarre.py    $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/jarre.py
 	install -m 0644 surf/mesure.py   $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/mesure.py
 	install -m 0644 surf/relais.py   $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/relais.py
+	install -m 0644 surf/rendu.py    $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/rendu.py
 	install -m 0644 surf/serveur.py  $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/serveur.py
 	install -d $(CURDIR)/debian/secubox-surf/etc/nginx/sites-available
 	install -m 0644 nginx/surf.conf  $(CURDIR)/debian/secubox-surf/etc/nginx/sites-available/surf.conf

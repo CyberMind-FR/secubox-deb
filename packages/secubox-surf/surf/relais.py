@@ -686,6 +686,49 @@ def reecris_portails(corps: str) -> str:
     return corps
 
 
+# ── LA COPIE CARBONE : figer un rendu headless ──────────────────────────────
+_RE_SCRIPT = re.compile(r'<script\b[^>]*>.*?</script>', re.IGNORECASE | re.DOTALL)
+_RE_SCRIPT_SEUL = re.compile(r'<script\b[^>]*/?>', re.IGNORECASE)
+_RE_NOSCRIPT = re.compile(r'</?noscript\b[^>]*>', re.IGNORECASE)
+_RE_ON = re.compile(r'\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)', re.IGNORECASE)
+_RE_PRELOAD_JS = re.compile(
+    r'<link\b[^>]*\bas\s*=\s*["\']?script["\']?[^>]*>', re.IGNORECASE)
+
+
+def fige(corps: str, base: str, sur_hote) -> str:
+    """FIGER une copie carbone (#1235). Le DOM vient d'un rendu headless : le JS
+    a deja tout materialise (consentement passe, contenu injecte, pisteurs
+    coupes). On RETIRE tout le JS pour que la page ne REJOUE pas son ballet
+    (consentement, redirection vers un portail, mur anti-bot) dans le navigateur
+    de l'utilisateur — le rendu est acquis. On garde le contenu, le style, les
+    images. On reecrit les URL BRUTES que le JS aurait ajoutees (lazy-load) vers
+    leur origine surf ; celles deja en surf sont laissees.
+    """
+    corps = _RE_SCRIPT.sub('', corps)
+    corps = _RE_SCRIPT_SEUL.sub('', corps)
+    corps = _RE_NOSCRIPT.sub('', corps)
+    corps = _RE_PRELOAD_JS.sub('', corps)
+    corps = _RE_ON.sub('', corps)            # handlers inline: plus de moteur
+
+    def _attr(m):
+        v, _ = _map_url(m.group("v"), base, sur_hote)
+        return f'{m.group("a")}={m.group("q")}{v}{m.group("q")}'
+    corps = _RE_ATTR.sub(_attr, corps)
+
+    def _srcset(m):
+        parts = []
+        for bout in m.group(2).split(","):
+            bout = bout.strip()
+            if not bout:
+                continue
+            mo = bout.split(None, 1)
+            v, _ = _map_url(mo[0], base, sur_hote)
+            parts.append(v + (" " + mo[1] if len(mo) > 1 else ""))
+        return 'srcset="%s"' % ", ".join(parts)
+    corps = _RE_SRCSET.sub(_srcset, corps)
+    return corps
+
+
 def reecris_html(corps: str, base: str, rap: Rapport, sur_hote,
                  etat_js: str = "") -> str:
     """Réécrit les URL d'un HTML et RECENSE ce qu'il n'a pas su suivre.

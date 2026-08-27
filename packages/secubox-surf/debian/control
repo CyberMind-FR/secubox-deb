@@ -13,7 +13,7 @@ Depends: ${misc:Depends},
          python3-httpx,
          python3-uvicorn | python3-pip,
          python3-socksio | python3-pip
-Recommends: tor, nginx
+Recommends: tor, nginx, chromium
 Description: SecuBox Surf — relais de navigation par-origine (le BiB)
  Le relais « Browser-in-Browser » de SBXOS : chaque site est servi sous sa
  propre origine surf-<hote>.gk2.secubox.in, hors de la chaine d'inspection WAF,

@@ -1,3 +1,16 @@
+secubox-surf (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * feat: copie carbone par rendu headless (#1218/#1221/#1235). Les sites lourds
+    (BFM/Altice) ne se rendent pas dans le contexte tiers de l'overlay (ballet
+    consentement/first-id -> ecran noir). Nouveau surf/rendu.py : Chromium
+    headless rend l'origine surf en TOP-LEVEL (passe le ballet, coupe les
+    pisteurs), on capture le DOM, on le FIGE (relais.fige : scripts retires,
+    URL brutes reecrites) et on le sert statique. Cache TTL 5min, verrou global
+    (un Chromium a la fois, arm64), garde anti-recursion par UA. Declenche par
+    _SITES_LOURDS={bfmtv.com} ou ?_sbxr. Rendu hors event loop (asyncio thread).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:13:18 +0200
+
 secubox-surf (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * feat: deblocage CMP Didomi via didomiOnReady (#1235). BFM/Altice rend son

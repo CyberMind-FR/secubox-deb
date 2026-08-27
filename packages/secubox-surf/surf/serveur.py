@@ -28,6 +28,8 @@ HAProxy, wildcard `*.gk2.secubox.in`).
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from urllib.parse import parse_qs, unquote
@@ -35,6 +37,13 @@ from urllib.parse import parse_qs, unquote
 from . import relais
 from . import egress
 from . import jarre
+from . import rendu
+
+# SITES LOURDS (#1235). Ceux qui ne se rendent pas dans le contexte tiers de
+# l'overlay (consentement/first-id qui n'aboutit pas). On les sert en copie
+# carbone : rendu headless top-level fige. Par domaine enregistrable. A terme,
+# declaratif (comme waf_bypass) ; pour l'instant, la liste connue + `?_sbxr`.
+_SITES_LOURDS = {"bfmtv.com"}
 
 
 # Un seul client async par mode, réutilisé : ouvrir une connexion par requête
@@ -246,6 +255,37 @@ async def app(scope, receive, send):
         if relais.est_pisteur(h):
             return None
         return relais.origine_de(h)
+
+    # ── COPIE CARBONE (#1235) : rendu headless figé pour les sites lourds ────
+    # BFM/Altice & co. ne se rendent pas dans le contexte tiers de l'overlay
+    # (ballet consentement/first-id qui n'aboutit pas -> écran noir). On les rend
+    # en headless TOP-LEVEL (qui passe le ballet et coupe les pisteurs comme
+    # d'habitude), on FIGE le DOM et on le sert statique. GET seulement. Le rendu
+    # headless requête lui-même le relais avec un UA marqué -> on ne re-déclenche
+    # pas de rendu (garde anti-récursion). Si le rendu manque/échoue, on retombe
+    # sur la voie légère normale.
+    ua = entetes_in.get("user-agent", "")
+    veut_carbone = ("_sbxr" in qs) or (jarre._domaine(cible) in _SITES_LOURDS)
+    if (methode == "GET" and veut_carbone
+            and rendu.MARQUEUR_UA not in ua and rendu.disponible()):
+        url_surf = "https://" + hote_proxy + chemin + (("?" + qs) if qs else "")
+        # Rendu headless = subprocess BLOQUANT (~15-40s) : hors de l'event loop,
+        # sinon il gèle tout le relais. Un thread, et le verrou global de rendu.py
+        # serialise les Chromium (un seul a la fois sur arm64).
+        dom = await asyncio.to_thread(rendu.rends, url_surf)
+        if dom:
+            corps = relais.fige(dom, base, sur_hote).encode()
+            sortie = [("content-type", "text/html; charset=utf-8"),
+                      ("content-length", str(len(corps))),
+                      ("x-surf-cible", cible), ("x-surf-rendu", "carbone")]
+            org = entetes_in.get("origin", "")
+            if org:
+                sortie += [("access-control-allow-origin", org),
+                           ("access-control-allow-credentials", "true"),
+                           ("vary", "Origin")]
+            await repond(200, sortie, corps)
+            return
+        # sinon : voie légère normale ci-dessous.
 
     try:
         r = await _client(mode).request(methode, cible_url, headers=entetes_req,
