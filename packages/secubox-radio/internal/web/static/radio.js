@@ -709,14 +709,11 @@
       });
   });
 
-  // COLLER une URL déplace directement le lien vers la file, sans même valider.
-  dire.addEventListener('paste', function (e) {
-    try {
-      var t = (e.clipboardData || window.clipboardData).getData('text');
-      var lien = extraitLien(t);
-      if (lien && !dire.value.trim()) { e.preventDefault(); proposeSource(lien); }
-    } catch (x) {}
-  });
+  // NB : on NE capte PAS l'evenement `paste` (#1374b). Intercepter le coller —
+  // meme conditionnellement — empechait de coller quoi que ce soit dans la
+  // saisie sur certains navigateurs (iOS Safari en tete). On colle donc
+  // normalement, le lien reste VISIBLE dans le champ, et c'est ENTREE qui
+  // l'envoie a la file. Un geste de plus, mais le coller n'est jamais casse.
 
   $('proposer').addEventListener('submit', function (e) {
     e.preventDefault();

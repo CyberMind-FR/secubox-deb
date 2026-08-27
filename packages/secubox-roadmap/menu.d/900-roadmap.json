@@ -1,9 +1,0 @@
-{
-  "id": "roadmap",
-  "name": "Migration Roadmap",
-  "icon": "🗺️",
-  "path": "/roadmap/",
-  "category": "mind",
-  "order": 900,
-  "description": "OpenWRT to Debian migration tracking"
-}

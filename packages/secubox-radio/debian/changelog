@@ -1,3 +1,13 @@
+secubox-radio (0.1.52-1~bookworm1) bookworm; urgency=medium
+
+  * NE PAS CAPTER L'EVENEMENT `paste` (#1374b). Le handler de coller ajoute en
+    0.1.51 empechait de coller quoi que ce soit dans la saisie du chat sur
+    certains navigateurs (iOS Safari) — « je ne peux pas coller ». On colle
+    desormais normalement, le lien reste visible, et c'est ENTREE qui l'envoie a
+    la file. Le coller n'est plus jamais casse.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 12:30:00 +0200
+
 secubox-radio (0.1.51-1~bookworm1) bookworm; urgency=medium
 
   * UN LIEN COLLÉ DANS LE CHAT VA À LA FILE (#1374). Coller une URL YouTube (ou
