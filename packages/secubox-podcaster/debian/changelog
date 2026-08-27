@@ -1,3 +1,16 @@
+secubox-podcaster (1.0.24-1~bookworm1) bookworm; urgency=medium
+
+  * PORTAIL PLEIN : INSCRIT AU BUS MEDIA DU HALL (#1238c). La page pleine jouait
+    son audio « a cru » : on pouvait lancer TOUS les podcasts a la fois, sans
+    pastille ni rangee dans la barre media, et elle coupait la radio sans
+    arbitrage. Elle s'inscrit desormais au bus comme le cardlet micro : UN seul
+    flux (un audio qui demarre met les autres en pause, et previent le cardlet),
+    annonce `sbx:'media'` (pastille + rangee + arbitrage radio/podcast/video),
+    et obeit aux commandes de la barre (toggle/pause/stop/vol/muet). Embarquee
+    uniquement ; autonome, la page garde ses lecteurs natifs.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 13:35:00 +0200
+
 secubox-podcaster (1.0.23-1~bookworm1) bookworm; urgency=medium
 
   * MEGABARRE PODCASTER : LA SELECTION SE VOIT (#1238b). Un clic dans le menu

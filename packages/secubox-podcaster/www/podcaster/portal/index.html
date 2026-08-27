@@ -153,6 +153,50 @@ function render(force){
       <a class="dl" href="${API}/media/${e.id}" download title="Download">⬇</a></div>`;
   }).join("");
 }
+// ── BUS MÉDIA DU HALL (#1238c) ─────────────────────────────────────────────
+// La page pleine jouait son audio « à cru » : pas de pastille, pas de rangée
+// dans la barre média, aucune coordination — elle coupait la radio sans
+// arbitrage. On l'inscrit au bus, comme le cardlet micro : elle ANNONCE ce
+// qu'elle joue (le Hall arbitre alors radio/podcast/vidéo), OBÉIT aux commandes
+// de la barre, et ne tient qu'UN flux à la fois. Embarquée uniquement.
+(function busMedia(){
+  if(parent===window) return;   // hors cadre, personne n'écoute
+  var actif=null;
+  function infos(a){
+    var ep=a&&a.closest?a.closest('.ep'):null;
+    var b=ep&&ep.querySelector('.meta b'), s=ep&&ep.querySelector('.meta span');
+    return { titre: b?b.textContent:'Podcaster', sous: s?s.textContent.split(' · ')[0]:'' };
+  }
+  function annonce(fin){
+    var a=actif, i=a?infos(a):{titre:'Podcaster',sous:''};
+    try{ parent.postMessage({ sbx:'media', id:'podcaster',
+      titre:i.titre, sous:i.sous, joue:!!(a&&!a.paused), t:a?a.currentTime||0:0,
+      d:a?a.duration||0:0, fin:!!fin }, '*'); }catch(e){}
+  }
+  // UN SEUL FLUX : quand un <audio> démarre, on met les autres en pause — et on
+  // prévient le cardlet micro (même clé d'état) pour qu'il se taise aussi.
+  document.addEventListener('play', function(e){
+    var a=e.target; if(!a||a.tagName!=='AUDIO') return;
+    document.querySelectorAll('audio').forEach(function(o){ if(o!==a && !o.paused) o.pause(); });
+    actif=a; annonce();
+    try{ localStorage.setItem('sbx.podcaster.etat', JSON.stringify({ep:(a.src||'').split('/').pop(),t:Math.floor(a.currentTime||0),joue:true})); }catch(x){}
+  }, true);
+  document.addEventListener('pause', function(e){ if(e.target===actif) annonce(); }, true);
+  document.addEventListener('ended', function(e){ if(e.target===actif) annonce(true); }, true);
+  // Un battement régulier tient la rangée vivante (sinon retirée au bout de ~10s).
+  setInterval(function(){ if(actif && !actif.paused) annonce(); }, 2000);
+  // Commandes de la barre du Hall.
+  addEventListener('message', function(ev){
+    var d=ev.data; if(!d || d.sbx!=='cmd') return;
+    var a=actif;
+    if(d.action==='toggle'){ if(a){ a.paused?a.play().catch(function(){}):a.pause(); } }
+    else if(d.action==='pause'){ if(a && !a.paused) a.pause(); }
+    else if(d.action==='stop'){ if(a){ a.pause(); annonce(true); } }
+    else if(d.action==='vol' && typeof d.v==='number'){ if(a){ a.volume=Math.min(1,Math.max(0,d.v)); if(a.volume>0) a.muted=false; } }
+    else if(d.action==='muet'){ if(a) a.muted=!!d.v; }
+  });
+})();
+
 load();setInterval(load,15000);
 </script>
 </body>
