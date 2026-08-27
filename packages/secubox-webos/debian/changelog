@@ -1,3 +1,13 @@
+secubox-webos (1.0.160-1~bookworm1) bookworm; urgency=medium
+
+  * feat: lecture PUBLIQUE des medias partages du parc (#1237) — depot, ytsas,
+    torrent : liste/stockage visibles SANS session (cardlets pleins meme en
+    invite) via /public/actions/<mod>/<lecture> (whitelist stricte). Agir (POST
+    ajouter/pause/…) reste protege par la session. quick.html lit la liste et le
+    stockage sur le chemin public.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:57:05 +0200
+
 secubox-webos (1.0.159-1~bookworm1) bookworm; urgency=medium
 
   * fix: sondeSession au chargement + header Invité/Connecté (#1237). sondeSession

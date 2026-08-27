@@ -304,7 +304,8 @@
 
   function chargeItems() {
     if (!ACTIONNABLE[id]) return;
-    api('/actions/' + ACTIONNABLE[id] + '/liste').then(function (r) {
+    // LISTE PUBLIQUE (#1237) : media partages du parc, visibles meme en invite.
+    api('/public/actions/' + ACTIONNABLE[id] + '/liste').then(function (r) {
       if (r.code === 401 || r.code === 403) {
         // PAS DE NAG (#1237) : ces cartes montrent deja leur resume PUBLIC (Go
         // libres, compteurs). La liste actionnable demande une session, mais un
@@ -330,7 +331,7 @@
   // peut etre vide sans que le depot le soit, et c'est la seule mesure qui le
   // dise. Cette route est authentifiee en amont — le jeton est relaye.
   function chargeStockage() {
-    api('/actions/droplet/stockage').then(function (r) {
+    api('/public/actions/droplet/stockage').then(function (r) {
       var d = (r.corps || {}).donnees;
       if (!d || !d.total_human) return;
       var z = el('items');

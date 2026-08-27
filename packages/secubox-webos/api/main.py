@@ -332,6 +332,21 @@ async def action_lecture(module: str, action: str, request: Request,
     return await actions.agir(module, action, None, _porteur(request))
 
 
+# LECTURE PUBLIQUE DES MEDIAS PARTAGES DU PARC (#1237). Le depot, ytsas et
+# torrent sont des medias PARTAGES : leur liste/etat se voient sans session
+# (cardlets pleins meme en invite). AGIR (POST) reste protege par la session.
+# Whitelist stricte : aucun autre module n'est expose sans auth.
+_LECTURE_PUBLIQUE = {"droplet", "ytsas", "torrent"}
+
+
+@public_router.get("/actions/{module}/{action}")
+async def action_lecture_publique(module: str, action: str, request: Request):
+    """Liste/etat sans session pour les modules media partages du parc."""
+    if module not in _LECTURE_PUBLIQUE:
+        return JSONResponse({"detail": "auth requise"}, status_code=401)
+    return await actions.agir(module, action, None, _porteur(request))
+
+
 @router.post("/actions/{module}/{action}")
 async def action_ecriture(module: str, action: str, request: Request,
                           corps: dict | None = None,
