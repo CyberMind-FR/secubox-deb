@@ -1,3 +1,13 @@
+secubox-webos (1.0.144-1~bookworm1) bookworm; urgency=medium
+
+  * fix: z-index broadcast/media/viewer (#1237). Pastille 📡 direct z-index
+    47->60 + bottom 40->96px : elle etait cachee sous la barre media et le
+    viewer -> invisible. Barre media (mediadock) 54->58 : au-dessus du viewer
+    pour controler la radio en regardant une video. Ordre final : surf 52 <
+    direct 53 < viewer 55 < media 58 < pastille 60.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:45:15 +0200
+
 secubox-webos (1.0.143-1~bookworm1) bookworm; urgency=medium
 
   * fix: broadcast (récepteur) — meme piege de chargement que le viewer (#1237).
