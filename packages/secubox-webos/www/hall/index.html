@@ -2135,6 +2135,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
         fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
         diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
+        // Reveil immediat de la pastille sur CE Hall (au lieu d'attendre le
+        // sonde a 5s) : le recepteur broadcast ecoute 'broadcast-on'. (#1237)
+        try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){}
       }
     });
     E('viewer-full').addEventListener('click',function(){

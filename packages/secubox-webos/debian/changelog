@@ -1,3 +1,11 @@
+secubox-webos (1.0.145-1~bookworm1) bookworm; urgency=medium
+
+  * feat: reveil immediat de la pastille 📡 au clic diffuser (#1237) — postMessage
+    'broadcast-on' -> le recepteur sonde tout de suite (300ms) au lieu d'attendre
+    le poll a 5s, sur le Hall du diffuseur.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:51:20 +0200
+
 secubox-webos (1.0.144-1~bookworm1) bookworm; urgency=medium
 
   * fix: z-index broadcast/media/viewer (#1237). Pastille 📡 direct z-index
