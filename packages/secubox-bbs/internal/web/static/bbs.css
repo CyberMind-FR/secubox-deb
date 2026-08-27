@@ -480,6 +480,23 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 .cadre-video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .lecteur-audio { width: 100%; }
 
+/* OBJET MÉDIA (#1227) — un lien média rendu dans un message devient un OBJET
+   cadré, relayé par la box, avec sa barre d'escalade (voir / garder souverain
+   ytsas / diffuser à venir). Première pierre du méta-objet. */
+.sbx-mediaobj { border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: var(--panel); margin: .5rem 0; max-width: 640px; }
+.sbx-mediaobj-vue { position: relative; aspect-ratio: 16/9; background: #000; }
+.sbx-mediaobj-vue iframe, .sbx-mediaobj-vue video { position: absolute; inset: 0;
+  width: 100%; height: 100%; border: 0; }
+.sbx-mediaobj-bar { display: flex; align-items: center; gap: .6rem; padding: .4rem .6rem;
+  font-size: .72rem; background: var(--soft); border-top: 1px solid var(--line); }
+.sbx-mediaobj-bar .mo-id { color: var(--dim); }
+.sbx-mediaobj-bar .mo-act { color: var(--violet); text-decoration: none;
+  border: 1px solid var(--line); border-radius: 7px; padding: .15rem .5rem; }
+.sbx-mediaobj-bar .mo-act:hover { border-color: var(--violet); }
+.sbx-mediaobj-bar .mo-ytsas { margin-left: auto; }
+.sbx-mediaobj-bar .mo-diff[aria-disabled="true"] { opacity: .5; cursor: default; }
+
 /* Le point de partage : l'adresse du fil, lisible et selectionnable, plus un
  * code QR pour passer sur un telephone sans la recopier. */
 .partage {

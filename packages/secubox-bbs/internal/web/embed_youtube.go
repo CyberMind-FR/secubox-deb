@@ -7,6 +7,7 @@ package web
 
 import (
 	"html"
+	"net/url"
 	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
@@ -45,8 +46,33 @@ func embedYouTubeURL(u string) (string, bool) {
 	if id == "" {
 		return "", false
 	}
-	return `<iframe class="sbx-embed sbx-embed-yt" src="https://www.youtube-nocookie.com/embed/` +
-		html.EscapeString(id) + `" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`, true
+	return objetMedia(id,
+		`<iframe class="sbx-embed sbx-embed-yt" src="https://www.youtube-nocookie.com/embed/`+
+			html.EscapeString(id)+`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`), true
+}
+
+// objetMedia enveloppe un lecteur embarque en OBJET MEDIA (#1227). Un lien nu
+// n'etait qu'un lecteur ; l'objet porte son identite (relaye par la box, la
+// matrice SBXOS) et sa barre d'ESCALADE : le voir (ephemere, deja la), le
+// GARDER souverain (ytsas — cache/miroir), et — a venir — le DIFFUSER au parc
+// (#1224). C'est la premiere pierre du meta-objet : il se materialise a
+// l'affichage, et gagnera plus tard de reecrire son propre message pour
+// historiser son evolution.
+//
+// Le lien « souverain » pointe l'origine ytsas de la box avec la video en
+// parametre : embarque, la coquille BBS le route vers le Hall (sbx:ouvre-hote)
+// qui l'ouvre en place ; autonome, c'est un lien direct vers un service de la
+// box. On ne quitte jamais la matrice.
+func objetMedia(id, lecteur string) string {
+	watch := "https://www.youtube.com/watch?v=" + html.EscapeString(id)
+	ytsas := "https://ytsas.gk2.secubox.in/?src=" + url.QueryEscape(watch)
+	return `<figure class="sbx-mediaobj" data-yt="` + html.EscapeString(id) + `">` +
+		`<div class="sbx-mediaobj-vue">` + lecteur + `</div>` +
+		`<figcaption class="sbx-mediaobj-bar">` +
+		`<span class="mo-id" title="Relayé à travers la box — pisteurs coupés">🛰️ relayé par la box</span>` +
+		`<a class="mo-act mo-ytsas" href="` + ytsas + `" title="Garder sur la box — version souveraine (ytsas)">⤓ souverain</a>` +
+		`<span class="mo-act mo-diff" title="Diffuser au parc — à venir (#1224)" aria-disabled="true">📡 diffuser</span>` +
+		`</figcaption></figure>`
 }
 
 // embedYouTube rend l'embed selon l'état du tuyau souverain — consommé par

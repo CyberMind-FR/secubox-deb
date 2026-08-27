@@ -1,3 +1,17 @@
+secubox-bbs (0.30.33-1~bookworm1) bookworm; urgency=medium
+
+  * EMBEDDER — UN LIEN MEDIA DEVIENT UN OBJET (#1227). Le lecteur YouTube
+    embarque dans un message n'est plus un iframe nu : il est cadre en OBJET
+    media, avec son identite (« relaye par la box », matrice SBXOS) et une barre
+    d'ESCALADE — voir (ephemere, deja la), garder souverain (ytsas), diffuser au
+    parc (a venir, #1224). Premiere pierre du meta-objet : il se materialise a
+    l'affichage et gagnera de reecrire son propre message pour historiser son
+    evolution. Le lien souverain porte la video en parametre vers l'origine
+    ytsas ; embarque, la coquille le route au Hall, autonome c'est un lien
+    direct — on ne quitte jamais la matrice.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 12:45:00 +0200
+
 secubox-bbs (0.30.32-1~bookworm1) bookworm; urgency=medium
 
   * LIENS METANEWS PAR SUJET, PLUS GLOBAUX (#1359). vitrineMetaNews donnait
