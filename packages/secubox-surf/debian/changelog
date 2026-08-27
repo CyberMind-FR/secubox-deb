@@ -1,3 +1,15 @@
+secubox-surf (1.0.16-1~bookworm1) bookworm; urgency=medium
+
+  * feat: images + suppression pub/sponsors dans la copie carbone (#1235).
+    chargeImages() promeut les images lazy (data-src -> src) via l'API DOM
+    pendant le rendu -> le DOM capture porte de vraies images (le navigateur
+    les affiche depuis les origines surf, pisteurs coupes). videPub() retire du
+    DOM les conteneurs publicitaires evidents (adsbygoogle, GPT, taboola,
+    outbrain, ad-slot/unit/container, iframes doubleclick) sans toucher au
+    contenu. Cables dans la boucle d'injection + DOMContentLoaded.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 12:29:06 +0200
+
 secubox-surf (1.0.15-1~bookworm1) bookworm; urgency=medium
 
   * fix: copie carbone aussi pour le contenu en IFRAME (#1235). Le contenu surf

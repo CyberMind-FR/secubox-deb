@@ -426,11 +426,39 @@ html,body{overflow:auto !important}
       }
     }catch(e){}
   }
+  // IMAGES LAZY (#1235). Le lazy-load pose la vraie URL dans data-src et attend
+  // un scroll/IntersectionObserver qui n'arrive jamais en headless (ni dans le
+  // fige, sans JS). On PROMEUT data-src -> src (via l'API DOM, propre), pour que
+  // le DOM capture porte de vraies images que le navigateur affichera.
+  function chargeImages(){
+    try{
+      var im=document.querySelectorAll("img[data-src],img[data-original],img[data-lazy-src],img[data-echo],source[data-srcset],img[data-srcset]");
+      for(var i=0;i<im.length;i++){ var e=im[i], d=e.dataset||{};
+        var s=d.src||d.original||d.lazySrc||d.echo;
+        if(s){ try{ e.setAttribute("src", s); }catch(_){} }
+        if(d.srcset){ try{ e.setAttribute("srcset", d.srcset); }catch(_){} }
+        try{ e.setAttribute("loading","eager"); e.removeAttribute("data-src"); }catch(_){}
+      }
+    }catch(e){}
+  }
+  // VIDER LES PUBS (#1235). pub() masque les libelles « sponsorise » ; ici on
+  // RETIRE du DOM les conteneurs publicitaires evidents (slots, reseaux) pour
+  // qu'ils ne laissent meme pas de trou dans la copie carbone. Selecteurs
+  // stricts : jamais un <article>/<main>/<section> de contenu.
+  function videPub(){
+    try{
+      var SEL="ins.adsbygoogle,[id^=google_ads_],[id^=div-gpt-ad],[class*=taboola i],[id*=taboola i],[class*=outbrain i],[id*=outbrain i],[class*=ob-widget i],[class*=ad-slot i],[class*=ad-unit i],[class*=ad-container i],[class*=ad-banner i],[class*=ad-placeholder i],[class*=advertisement i],[data-ad-slot],[class*=sponsored i][class*=widget i],iframe[src*=doubleclick i],iframe[src*=googlesyndication i],iframe[id^=google_ads_]";
+      var n=document.querySelectorAll(SEL);
+      for(var i=0;i<n.length;i++){ try{ n[i].remove(); }catch(_){} }
+    }catch(e){}
+  }
   if(document.readyState!=="loading")pass();
   document.addEventListener("DOMContentLoaded",pass);
   document.addEventListener("DOMContentLoaded",antiMur);
   document.addEventListener("DOMContentLoaded",tiers);
   document.addEventListener("DOMContentLoaded",pub);
+  document.addEventListener("DOMContentLoaded",chargeImages);
+  document.addEventListener("DOMContentLoaded",videPub);
   // TRACKERS REFERENCES dans la page : on compte les hotes de pistage cites
   // par les ressources (scripts/img/iframes). Reel, mesure sur le DOM.
   var TRK=/(doubleclick|googlesyndication|google-analytics|googletagmanager|adservice|adnxs|criteo|taboola|outbrain|scorecardresearch|quantserve|pubmatic|rubicon|analytics|tracking|telemetry|hotjar|amplitude|segment|\.ads?\.|adservers?)/i;
@@ -455,7 +483,7 @@ html,body{overflow:auto !important}
     scanTrackers(); compteMasques();
     try{ if(parent!==window) parent.postMessage({sbx:"surf-stats", stats:window.__sbx}, "*"); }catch(e){}
   }
-  var n=0,iv=setInterval(function(){pass();antiMur();tiers();pub();rapporte();if(++n>14)clearInterval(iv);},600);
+  var n=0,iv=setInterval(function(){pass();antiMur();tiers();pub();chargeImages();videPub();rapporte();if(++n>14)clearInterval(iv);},600);
   // Un dernier rapport plus tard, quand la page a fini de charger ses pubs.
   setTimeout(rapporte, 4000); setTimeout(rapporte, 9000);
   // ON ANNONCE LA NAVIGATION au cadre parent (la carte Surf) : un lien suivi
