@@ -1,3 +1,23 @@
+secubox-podcaster (1.0.26-1~bookworm1) bookworm; urgency=medium
+
+  * BILLETS AUTO-PUBLIES : LE VRAI TITRE DE L'EPISODE (#1238d). Le billet n'a pas
+    de colonne `title` — il est derive de la premiere ligne du body. Or celle-ci
+    etait la description YouTube, souvent un boilerplate identique pour toute une
+    serie (« Retrouvez l'integralite du podcast… ») : tous les billets
+    s'affichaient avec le MEME titre. On pose desormais le titre de l'episode en
+    tete du body (h1), et billet_title le reprend correctement.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 15:40:00 +0200
+
+secubox-podcaster (1.0.25-1~bookworm1) bookworm; urgency=medium
+
+  * LA PASTILLE SURVIT A LA PAUSE (#1238c). Un podcast mis en pause (ex. par le
+    demarrage d'un peertube) cessait de battre : le Hall le purgeait et sa
+    pastille disparaissait. On bat desormais meme en pause — la pastille reste,
+    on peut reprendre.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 13:55:00 +0200
+
 secubox-podcaster (1.0.24-1~bookworm1) bookworm; urgency=medium
 
   * PORTAIL PLEIN : INSCRIT AU BUS MEDIA DU HALL (#1238c). La page pleine jouait

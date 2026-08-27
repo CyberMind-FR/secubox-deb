@@ -162,7 +162,14 @@ def _add_billet(title, desc, source_url, pt_watch, pod_audio):
     now = datetime.now(timezone.utc).isoformat()
     bid = _ulid()
     slug = _slugify(title, bid[-6:].lower())
-    parts = [(desc or "").strip()[:4000], "\n\n---\n"]
+    # LE TITRE EN PREMIERE LIGNE (#1238d). Le billet n'a pas de colonne `title`
+    # — il est DERIVE de la premiere ligne du body (billet_title). Sans ce
+    # titre en tete, la premiere ligne etait la description YouTube, souvent un
+    # boilerplate identique pour toute une serie (« Retrouvez l'integralite du
+    # podcast… ») : tous les billets s'affichaient avec le MEME titre. On pose
+    # donc le vrai titre de l'episode en tete, comme un h1.
+    titre = (title or "").strip().replace("\n", " ")
+    parts = [f"# {titre}\n\n" if titre else "", (desc or "").strip()[:4000], "\n\n---\n"]
     if source_url:
         parts.append(f"\n🎬 **Source :** {source_url}\n")
     if pt_watch:
