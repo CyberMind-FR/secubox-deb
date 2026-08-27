@@ -306,9 +306,13 @@
     if (!ACTIONNABLE[id]) return;
     api('/actions/' + ACTIONNABLE[id] + '/liste').then(function (r) {
       if (r.code === 401 || r.code === 403) {
+        // PAS DE NAG (#1237) : ces cartes montrent deja leur resume PUBLIC (Go
+        // libres, compteurs). La liste actionnable demande une session, mais un
+        // invite n'a pas a etre harcele de « connectez-vous » : on masque juste
+        // la liste et le bouton d'ajout, le resume reste.
         el('items').innerHTML = '';
         el('ajout') && el('ajout').remove();
-        dis('Connectez-vous à la box pour agir.');
+        dis('');
         return;
       }
       var d = r.corps || {};

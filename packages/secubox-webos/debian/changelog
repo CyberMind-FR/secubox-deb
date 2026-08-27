@@ -1,3 +1,14 @@
+secubox-webos (1.0.157-1~bookworm1) bookworm; urgency=medium
+
+  * feat: masquer les cartes a auth reelle quand non connecte + quick.html sans
+    nag + retrait du cardlet surf (#1237). Cloud/Photos/Social/Mail (delegue)
+    marquees data-auth -> masquees pour un invite (classe .non-connecte via
+    sondeSession). Depot/YTSaS/Torrent (quick) ne harcelent plus « Connectez-vous
+    a la box pour agir » : leur resume public suffit. Carte surf (POC) retiree
+    du FEATURED — l'overlay surf reste (megabar).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:48:51 +0200
+
 secubox-webos (1.0.156-1~bookworm1) bookworm; urgency=medium
 
   * fix: 301 hall.gk2.net -> hall.gk2.secubox.in (#1239) — solution simple

@@ -338,6 +338,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .fcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
   padding:15px 16px;display:flex;flex-direction:column;gap:10px;transition:.18s}
 .fcard:hover{box-shadow:var(--lift);transform:translateY(-2px);border-color:var(--line-2)}
+/* NON CONNECTÉ (#1237) : on masque les cartes a auth reelle — inutile de
+   montrer « Récupérer ma session » a un invite. */
+.non-connecte .fcard[data-auth]{display:none}
 .fcard .hd{display:flex;align-items:center;gap:11px}
 .fcard .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:1.3rem;flex:0 0 auto;color:#fff}
 .fcard .nm{flex:1;min-width:0} .fcard .nm b{font-family:"Fraunces";font-size:1.12rem;display:block;line-height:1.1}
@@ -988,7 +991,6 @@ const FEATURED = [
   // SURF n'est pas un service de la box : c'est un navigateur de relais. Il
   // sert sa propre carte (barre d'adresse + cadre), et s'ouvre aussi en overlay
   // depuis les sources MetaNews ou la barre de recherche (#1337).
-  {id:"surf",       label:"Surf",      icon:"🛰️", color:"#5b46b8", url:"surf.gk2.secubox.in", carte:"/cardlets/surf.html", h:404},
 ];
 // Services dont le vhost autorise déjà l'embarquement (frame-ancestors ouvert).
 // Les autres afficheront un repli « ouvrir dans un onglet » tant que leur cadrage
@@ -1081,7 +1083,11 @@ function featCardHTML(f,s){
     // Le chemin peut deja porter une requete (le widget generique prend son
     // service en parametre) : le separateur en depend.
     const sep = u.indexOf('?')>=0 ? '&' : '?';
-    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'">'
+    // AUTH RÉELLE (#1237) : les cartes deleguees (Cloud/Photos/Social/Mail)
+    // exigent la session de la box. Marquees data-auth -> masquees pour un
+    // invite non connecte (inutile de montrer « Récupérer ma session »).
+    const auth = (f.carte && f.carte.indexOf('delegue')>=0) ? ' data-auth="1"' : '';
+    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'"'+auth+'>'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + ETOILE
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut
@@ -2537,6 +2543,8 @@ addEventListener('message', ev=>{
         : {'Accept':'application/json'}});
       _moi = r.ok ? ((await r.json()).qui || '') : null;
     }catch(e){ _moi = null; }
+    // NON CONNECTÉ -> on masque les cartes a auth reelle (#1237).
+    try{ document.documentElement.classList.toggle('non-connecte', !_moi); }catch(e){}
     const b = document.getElementById('who-session');
     const e = document.getElementById('who-etat');
     if(!b || !e) return;
