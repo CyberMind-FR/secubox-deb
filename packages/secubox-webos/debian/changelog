@@ -1,3 +1,11 @@
+secubox-webos (1.0.136-1~bookworm1) bookworm; urgency=medium
+
+  * data-nav="surf" ouvre l'OVERLAY (#1337) : `showView('surf')` cachait tout
+    sans rien ouvrir — un lien surf du menu ne cliquait pas. Special-case ->
+    ouvreSurf('').
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 16:35:00 +0200
+
 secubox-webos (1.0.135-1~bookworm1) bookworm; urgency=medium
 
   * LE BROADCASTER — MVP « 📡 direct » (#1224). Un flux courant propose au parc :

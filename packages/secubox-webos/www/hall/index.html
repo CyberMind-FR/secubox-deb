@@ -1456,7 +1456,11 @@ document.addEventListener('click',e=>{
   if(adm){ openService(adm.dataset.admin,'admin'); setMenu(false); return; }
   const emb=e.target.closest('[data-embed]');
   if(emb && !e.target.closest('.open')){ openService(emb.dataset.embed,'embed'); setMenu(false); return; }
-  const nav=e.target.closest('[data-nav]'); if(nav){ showView(nav.dataset.nav); setMenu(false); return; }
+  const nav=e.target.closest('[data-nav]'); if(nav){
+    // SURF n'est pas une VUE mais un overlay (#1337) : `showView('surf')`
+    // cachait tout sans rien ouvrir — « surf ne se clique pas depuis le menu ».
+    if(nav.dataset.nav==='surf'){ setMenu(false); if(typeof ouvreSurf==='function') ouvreSurf(''); return; }
+    showView(nav.dataset.nav); setMenu(false); return; }
   const tv=e.target.closest('.mnav .it[data-view]'); if(tv){ showView(tv.dataset.view); return; }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
