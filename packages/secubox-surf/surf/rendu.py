@@ -74,7 +74,7 @@ def _au_cache(url: str, html: str) -> None:
         pass
 
 
-def rends(url: str, budget_ms: int = 15000, timeout: float = 45.0) -> str | None:
+def rends(url: str, budget_ms: int = 9000, timeout: float = 90.0) -> str | None:
     """Le DOM abouti d'une URL (origine surf), via Chromium headless.
 
     Renvoie None si l'outil manque, si le rendu echoue, ou s'il est trop maigre.
@@ -102,6 +102,12 @@ def rends(url: str, budget_ms: int = 15000, timeout: float = 45.0) -> str | None
                  # seul /tmp est inscriptible : Chromium y pose son profil.
                  "--user-data-dir=/tmp/sbx-chromium",
                  "--disable-crash-reporter", "--no-first-run",
+                 # On veut le DOM, pas les pixels : couper images/polices
+                 # distantes accelere fortement le chargement (les `src`/`href`
+                 # restent dans le DOM, c'est tout ce qu'on capture). Cle sur
+                 # arm64 ou chaque sous-ressource relayee coute.
+                 "--blink-settings=imagesEnabled=false",
+                 "--disable-remote-fonts",
                  "--virtual-time-budget=%d" % budget_ms, "--dump-dom", url],
                 capture_output=True, text=True, timeout=timeout)
             dom = p.stdout or ""

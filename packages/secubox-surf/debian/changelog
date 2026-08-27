@@ -1,3 +1,32 @@
+secubox-surf (1.0.13-1~bookworm1) bookworm; urgency=medium
+
+  * fix: rendu carbone sous le plafond de timeout (#1235). nginx surf.conf
+    proxy_read_timeout 30->120s ; budget de temps virtuel Chromium 15->9s. Le
+    rendu reel (images coupees) tombe a ~18-20s, sous les 30s de HAProxy ->
+    plus de 504 sur les articles video lourds.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:34:40 +0200
+
+secubox-surf (1.0.12-1~bookworm1) bookworm; urgency=medium
+
+  * feat: repli figé quand le rendu carbone echoue (#1235). Sur un site lourd, si
+    le headless echoue (timeout, contention arm64), on ne sert plus la voie
+    legere BRUTE (dont le JS rejoue le ballet first-id -> ecran noir) : on FIGE
+    la voie legere (coquille SSR stylee, sans scripts). L'utilisateur ne voit
+    jamais first-id ; au pire un article sans son corps JS mais propre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:31:36 +0200
+
+secubox-surf (1.0.11-1~bookworm1) bookworm; urgency=medium
+
+  * fix: rendu carbone plus fiable et plus rapide (#1235). Timeout 45->90s (les
+    articles video prenaient ~56s -> None -> repli leger -> first-id). Coupe les
+    images et polices distantes au rendu (--blink-settings=imagesEnabled=false,
+    --disable-remote-fonts) : on capture le DOM, pas les pixels ; les src/href
+    restent. Accelere fortement sur arm64 ou chaque sous-ressource relayee coute.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:27:17 +0200
+
 secubox-surf (1.0.10-1~bookworm1) bookworm; urgency=medium
 
   * fix: fige() ne re-reecrit plus les origines DEJA surf (#1235). Le DOM rendu

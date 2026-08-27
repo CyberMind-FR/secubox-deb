@@ -274,6 +274,7 @@ async def app(scope, receive, send):
     accept = entetes_in.get("accept", "")
     est_document = (dest == "document") or (dest == "" and "text/html" in accept)
     veut_carbone = ("_sbxr" in qs) or (jarre._domaine(cible) in _SITES_LOURDS)
+    _figer_leger = False
     if (methode == "GET" and veut_carbone and est_document
             and rendu.MARQUEUR_UA not in ua and rendu.disponible()):
         url_surf = "https://" + hote_proxy + chemin + (("?" + qs) if qs else "")
@@ -303,7 +304,12 @@ async def app(scope, receive, send):
                            ("vary", "Origin")]
             await repond(200, sortie, corps)
             return
-        # sinon : voie légère normale ci-dessous.
+        # RENDU ECHOUE (timeout, contention arm64, page maigre) : on NE sert PAS
+        # la voie legere BRUTE — son JS rejouerait le ballet first-id -> écran
+        # noir. On FIGE la voie legere : la coquille SSR stylee, sans scripts,
+        # sans ballet. L'utilisateur ne voit jamais first-id ; au pire un article
+        # sans son corps JS (mais lisible et propre).
+        _figer_leger = True
 
     try:
         r = await _client(mode).request(methode, cible_url, headers=entetes_req,
@@ -331,7 +337,13 @@ async def app(scope, receive, send):
                                          origine_req=entetes_in.get("origin", ""))
     ct = r.headers.get("content-type", "").lower()
 
-    if "text/html" in ct:
+    if "text/html" in ct and _figer_leger:
+        # REPLI FIGÉ (#1235) : le rendu carbone a echoue, mais c'est un site
+        # lourd : on FIGE la voie legere (scripts retires) pour ne pas rejouer le
+        # ballet first-id. r.text est le HTML BRUT amont -> sur_hote normal
+        # (raw -> surf), pas de double-reecriture.
+        corps = relais.fige(r.text, base, sur_hote).encode()
+    elif "text/html" in ct:
         # JARRE D'ETAT (#1235) : on REINJECTE le storage retenu pour cet hote,
         # inline dans la tete, AVANT les scripts du site (pendant du Cookie
         # rejoue pour les cookies). Le script de tete le pose dans
