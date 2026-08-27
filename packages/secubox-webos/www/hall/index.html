@@ -1953,19 +1953,30 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var mast=document.querySelector('.mast');
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
     var id=ytid(courantUrl);
-    // SOUVERAIN (#1237) : un flux ytsas (ou un fichier media) se joue DIRECT dans
-    // l'iframe (le navigateur rend le mp4 nativement) -> le parc regarde depuis
-    // la box, sans YouTube, sans cookies/pub. YouTube -> nocookie en repli.
+    // SOUVERAIN (#1237) : un flux ytsas se joue dans un <VIDEO> (pas une iframe :
+    // le stream porte frame-ancestors 'none' -> iframe bloquee ; un element
+    // media n'y est PAS soumis). Le parc regarde depuis la box, sans YouTube.
+    // YouTube -> nocookie en repli (iframe).
     var direct = /^\/api\/v1\/ytsas\/stream\//.test(courantUrl) || /\.(mp4|webm|m3u8|ogg|ogv|mov|mkv)(\?|#|$)/i.test(courantUrl);
+    var v=ov.querySelector('video.tv-direct');
     if(id){
+      if(v){ try{ v.pause(); }catch(_){} v.remove(); }
+      f.style.display='';
       var e='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
       if(f.src!==e) f.src=e; ov.classList.remove('hidden');
     } else if(direct){
-      if(f.getAttribute('src')!==courantUrl) f.src=courantUrl;
+      f.style.display='none'; try{ f.src='about:blank'; }catch(_){}
+      if(!v){ v=document.createElement('video'); v.className='tv-direct'; v.controls=true;
+        v.autoplay=true; v.setAttribute('playsinline','');
+        v.style.cssText='flex:1;width:100%;min-height:0;background:#000;object-fit:contain';
+        ov.appendChild(v); }
+      if(v.getAttribute('src')!==courantUrl) v.src=courantUrl;
       ov.classList.remove('hidden');
     } else if(typeof ouvreSurf==='function'){ ouvreSurf(courantUrl); }
   }
-  function ferme(){ var ov=E('tv-ov'), f=E('tv-ov-f'); if(ov) ov.classList.add('hidden'); if(f) f.src='about:blank'; }
+  function ferme(){ var ov=E('tv-ov'), f=E('tv-ov-f');
+    var v=ov&&ov.querySelector('video.tv-direct'); if(v){ try{ v.pause(); }catch(_){} v.remove(); }
+    if(ov) ov.classList.add('hidden'); if(f){ f.style.display=''; f.src='about:blank'; } }
   function wire(){
     var x=E('tv-ov-x'); if(x) x.addEventListener('click', ferme);
     // ⏹ ARRETER pour le parc (#1237) : broadcast persistant -> arret explicite,

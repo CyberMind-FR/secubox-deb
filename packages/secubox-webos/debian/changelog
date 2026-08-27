@@ -1,3 +1,13 @@
+secubox-webos (1.0.151-1~bookworm1) bookworm; urgency=medium
+
+  * fix: direct souverain joue dans un <video>, pas une iframe (#1237). Le flux
+    ytsas /stream porte frame-ancestors 'none' -> l'iframe etait bloquee
+    (cspBlocked). Un element <video> n'y est pas soumis : le tv-ov cree un
+    <video> pour un flux ytsas/media (same-origin, sans YouTube), garde l'iframe
+    nocookie pour YouTube. ferme() arrete/retire le video.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:24:44 +0200
+
 secubox-webos (1.0.150-1~bookworm1) bookworm; urgency=medium
 
   * fix: /broadcast accepte les chemins RELATIFS (#1237) — le flux souverain
