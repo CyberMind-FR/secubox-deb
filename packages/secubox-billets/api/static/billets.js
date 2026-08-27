@@ -37,8 +37,19 @@
       // charge newsroom.css — la regle n'y etait pas, le bandeau « BILLETS /
       // gazette souveraine » restait sous celui du Hall. On l'injecte donc ici,
       // ou c'est garanti de s'appliquer.
+      // LARGEUR RESPONSIVE EN EMBED (#1307c). La grille 3 colonnes (rail 220 +
+      // feed + rail 310, max 1500) tasse le feed dans un cadre etroit. Embarque,
+      // le Hall porte deja la nav (megabarre) et les mots-cles : on masque les
+      // rails et on passe le feed en UNE colonne pleine largeur, qui suit le
+      // cadre. On retire aussi le grand padding bas (destine a la barre fixe du
+      // site autonome) et le clamp de padding lateral, pour gagner la largeur.
       var st = document.createElement('style');
-      st.textContent = 'html.sbx-embed .mast{display:none} html.sbx-embed .motscles{display:none} html.sbx-embed .pub{padding-top:8px}';
+      st.textContent =
+        'html.sbx-embed .mast{display:none}' +
+        'html.sbx-embed .motscles{display:none}' +
+        'html.sbx-embed .rail{display:none}' +
+        'html.sbx-embed .wrap{grid-template-columns:minmax(0,1fr);max-width:none;gap:0;padding:8px clamp(10px,2vw,18px) 24px}' +
+        'html.sbx-embed .pub{padding-top:8px}';
       (document.head || document.documentElement).appendChild(st);
     } catch (e) {}
     var pousseTags = function () {
