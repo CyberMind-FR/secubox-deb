@@ -832,7 +832,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       <div class="flux-pastilles" id="pastilles-direct"></div>
       <button class="ibtn" id="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
       <div class="who" id="who" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"
-           title="Profil et réglages"><span class="av">🧙</span><span><b id="who-nom">Gandalf</b><i>● Identité locale</i></span>
+           title="Profil et réglages"><span class="av">🧙</span><span><b id="who-nom">Invité</b><i id="who-ligne">○ Non connecté</i></span>
         <div class="who-menu hidden" id="who-menu" role="menu">
           <!-- SE CONNECTER, SANS DEMANDER LE MOT DE PASSE (#1296). Le Hall
                n'a pas de formulaire : il OUVRE la vraie page de connexion,
@@ -2554,17 +2554,22 @@ addEventListener('message', ev=>{
         + 'chercher un jeton sur la box.';
       return;
     }
+    const n=document.getElementById('who-nom'), lg=document.getElementById('who-ligne');
     if(_moi){
       b.textContent = 'Déconnexion SecuBox';
       e.textContent = 'Connecté — ' + _moi;
-      const n=document.getElementById('who-nom'); if(n) n.textContent=_moi;
+      if(n) n.textContent=_moi;
+      if(lg) lg.textContent='● Connecté';
     } else {
       b.textContent = 'Connexion SecuBox…';
       // On precise « SecuBox » : c'est la session de la BOX qui ouvre les
       // cartes, pas un compte de service.
       e.textContent = 'Non connecté à la box : les cartes qui lisent vos services sont masquées.';
+      if(n) n.textContent='Invité';
+      if(lg) lg.textContent='○ Non connecté';
     }
   }
+  sondeSession();   // AU CHARGEMENT (#1237) : masque les cartes a auth + fixe le header
 
   // UNE VALIDATION QUI ATTEND DOIT SE VOIR (#1297). Sans marque, la demande
   // deposee par une carte dort dans une file que personne n'ouvre. La pastille

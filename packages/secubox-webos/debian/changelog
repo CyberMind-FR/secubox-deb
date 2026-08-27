@@ -1,3 +1,14 @@
+secubox-webos (1.0.159-1~bookworm1) bookworm; urgency=medium
+
+  * fix: sondeSession au chargement + header Invité/Connecté (#1237). sondeSession
+    ne tournait qu'a l'ouverture du menu -> la classe .non-connecte n'etait
+    jamais posee, les cartes a auth restaient visibles en invite. On la sonde au
+    load. Le header par defaut devient « Invité · ○ Non connecté » (au lieu du
+    « Gandalf · Identité locale » hardcode trompeur) ; sondeSession met « <nom>
+    · ● Connecté » si session, sinon « Invité · ○ Non connecté ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:53:30 +0200
+
 secubox-webos (1.0.158-1~bookworm1) bookworm; urgency=medium
 
   * fix: texte profil « cartes … masquées » au lieu de « restent vides » (#1237)
