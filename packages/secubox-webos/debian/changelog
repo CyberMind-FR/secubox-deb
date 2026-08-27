@@ -1,3 +1,11 @@
+secubox-webos (1.0.131-1~bookworm1) bookworm; urgency=medium
+
+  * HAUTEUR DU PLAYER RADIO LEGEREMENT REDUITE (252 -> 236px). La carte radio
+    embarquee gagnait a etre un peu plus basse ; la liste de messages, deja
+    defilante, montre juste une ligne de moins.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 11:30:00 +0200
+
 secubox-webos (1.0.130-1~bookworm1) bookworm; urgency=medium
 
   * LE BOUTON 🍪 « APPRENDRE LES COOKIES » ETAIT INVISIBLE (#1366). Il restait
