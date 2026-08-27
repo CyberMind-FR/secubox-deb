@@ -1,3 +1,22 @@
+secubox-webos (1.0.142-1~bookworm1) bookworm; urgency=medium
+
+  * fix: retirer </script> des commentaires du viewer (#1237) — ils fermaient le
+    bloc script en plein milieu (« Unexpected end of input »), cassant tout le JS
+    du Hall. La 1.0.141 etait cassee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:31:44 +0200
+
+secubox-webos (1.0.141-1~bookworm1) bookworm; urgency=medium
+
+  * fix: viewer — routage megabar cassé (#1237). Les elements #viewer-ov & co.
+    sont APRES </script> : l'IIFE du viewer sortait tot (getElementById null) et
+    n'exposait jamais window.ouvreViewer/estMediaUrl -> la megabar retombait sur
+    ouvreSurf (« ca part sur surf »). On cherche les elements PARESSEUSEMENT (au
+    premier usage) et on cable les boutons a ce moment ; window.* expose
+    inconditionnellement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:30:52 +0200
+
 secubox-webos (1.0.140-1~bookworm1) bookworm; urgency=medium
 
   * fix: broadcast stoppable (#1237). Le broadcast est un etat persistant ; une

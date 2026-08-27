@@ -1982,10 +1982,17 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
 // /broadcast). Phase 2 (#1237) : le « sas » ytsas pour download+stream+cache
 // serveur sur les sources qui ne streament pas nativement.
 (function viewer(){
-  var ov=document.getElementById('viewer-ov'), media=document.getElementById('viewer-media'),
-      titreEl=document.getElementById('viewer-titre');
-  if(!ov||!media) return;
-  var courant=null, vid=null, ivSas=null;
+  // LES ELEMENTS DU VIEWER SONT APRES LA FIN DU SCRIPT (#1237) : on les cherche
+  // PARESSEUSEMENT (au premier usage). Sinon l'IIFE sortait ici (elements null)
+  // et n'exposait JAMAIS window.ouvreViewer/estMediaUrl -> la megabar retombait
+  // sur ouvreSurf. C'etait le bug « ca part sur surf ».
+  var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false;
+  function E(id){ return document.getElementById(id); }
+  function dom(){
+    if(!ov){ ov=E('viewer-ov'); media=E('viewer-media'); titreEl=E('viewer-titre');
+      if(ov && !cable){ wire(); cable=true; } }
+    return !!(ov && media);
+  }
   function ytid(u){
     try{ var url=new URL(u), h=url.hostname.replace(/^www\./,'').replace(/^m\./,'');
       if(h==='youtu.be') return url.pathname.slice(1,12);
@@ -2056,6 +2063,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     e=document.getElementById('viewer-prog'); if(e)e.style.width=(prog||0)+'%';
   }
   function ouvre(url){
+    if(!dom()) return;
     courant=url; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
     media.innerHTML=''; titreEl.textContent=url.slice(0,90);
     document.getElementById('viewer-fav').classList.remove('on');
@@ -2087,45 +2095,45 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var mast=document.querySelector('.mast');
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
   }
-  function ferme(){ ov.classList.add('hidden'); media.innerHTML=''; courant=null; vid=null;
+  function ferme(){ if(!ov) return; ov.classList.add('hidden'); media.innerHTML=''; courant=null; vid=null;
     if(ivSas){ clearInterval(ivSas); ivSas=null; } }
   window.ouvreViewer=ouvre; window.fermeViewer=ferme;
-  document.getElementById('viewer-x').addEventListener('click',ferme);
-  addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.classList.contains('hidden')) ferme(); });
-  document.getElementById('viewer-fav').addEventListener('click',function(){
-    if(!courant) return;
-    try{ var k='sbx_favoris', l=JSON.parse(localStorage.getItem(k)||'[]');
-      if(l.indexOf(courant)<0) l.push(courant);
-      localStorage.setItem(k,JSON.stringify(l));
-    }catch(e){}
-    // FAVORI SOUVERAIN (#1237/#1233) : si c'est passe par le sas, on CONSERVE —
-    // rapatriement permanent vers PeerTube, cardletisable ensuite.
-    if(vid){ fetch('/api/v1/ytsas/conserve/'+encodeURIComponent(vid),{method:'POST'}).catch(function(){}); }
-    this.classList.add('on');
-  });
-  document.getElementById('viewer-share').addEventListener('click',function(){
-    if(!courant) return;
-    try{ if(navigator.clipboard) navigator.clipboard.writeText(courant); }catch(e){}
-    this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
-  });
-  var diffuse=false;
-  document.getElementById('viewer-cast').addEventListener('click',function(){
-    if(!courant) return;
-    // TOGGLE (#1237) : diffuser puis ARRETER. Le broadcast est un etat persistant
-    // (le parc le voit) ; sans arret, il revenait a chaque refresh (« merde »).
-    if(diffuse){
-      fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:''})}).catch(function(){});
-      diffuse=false; this.classList.remove('on'); this.title='Diffuser au parc (📡 direct)';
-    } else {
-      fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
-      diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
-    }
-  });
-  document.getElementById('viewer-full').addEventListener('click',function(){
-    try{ var el=media.firstElementChild||ov; if(el.requestFullscreen) el.requestFullscreen(); }catch(e){}
-  });
+  // LES ECOUTEURS DE BOUTONS sont cables PARESSEUSEMENT (dom()), car les boutons
+  // vivent apres la fin du script. Sinon getElementById(...).addEventListener
+  // jetait au chargement et cassait l'IIFE.
+  function wire(){
+    E('viewer-x').addEventListener('click',ferme);
+    addEventListener('keydown',function(e){ if(e.key==='Escape'&&ov&&!ov.classList.contains('hidden')) ferme(); });
+    E('viewer-fav').addEventListener('click',function(){
+      if(!courant) return;
+      try{ var k='sbx_favoris', l=JSON.parse(localStorage.getItem(k)||'[]');
+        if(l.indexOf(courant)<0) l.push(courant);
+        localStorage.setItem(k,JSON.stringify(l));
+      }catch(e){}
+      if(vid){ fetch('/api/v1/ytsas/conserve/'+encodeURIComponent(vid),{method:'POST'}).catch(function(){}); }
+      this.classList.add('on');
+    });
+    E('viewer-share').addEventListener('click',function(){
+      if(!courant) return;
+      try{ if(navigator.clipboard) navigator.clipboard.writeText(courant); }catch(e){}
+      this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
+    });
+    E('viewer-cast').addEventListener('click',function(){
+      if(!courant) return;
+      if(diffuse){
+        fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({url:''})}).catch(function(){});
+        diffuse=false; this.classList.remove('on'); this.title='Diffuser au parc (📡 direct)';
+      } else {
+        fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
+        diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
+      }
+    });
+    E('viewer-full').addEventListener('click',function(){
+      try{ var el=media.firstElementChild||ov; if(el.requestFullscreen) el.requestFullscreen(); }catch(e){}
+    });
+  }
 })();
 
 // UN SERVICE EMBARQUE DEMANDE D'EN OUVRIR UN AUTRE, PAR SON HOTE (#1358). Le
