@@ -243,6 +243,7 @@
             <button class="waf-tab active" data-tab="overview" onclick="switchTab('overview')">🛡️ Menaces</button>
             <button class="waf-tab" data-tab="attackers" onclick="switchTab('attackers')">🎯 Attaquants suivis</button>
             <button class="waf-tab" data-tab="visits" onclick="switchTab('visits')">👁️ Visites</button>
+            <button class="waf-tab" data-tab="recon" onclick="switchTab('recon')">🛰️ Surfaces</button>
             <button class="waf-tab" data-tab="history" onclick="switchTab('history')">📈 Historique</button>
             <button class="waf-tab" data-tab="campaigns" onclick="switchTab('campaigns')">⚔️ Campagnes</button>
         </div>
@@ -278,7 +279,9 @@
             </div>
         </div>
 
-        <div class="grid-3">
+        <!-- Ces trois cartes ne concernent QUE les menaces : on les reserve a
+             l'onglet Menaces (#1369), elles debordaient sur tous les onglets. -->
+        <div class="grid-3 overview-only">
             <!-- Severity Donut -->
             <div class="card">
                 <h2>📊 By Severity</h2>
@@ -407,8 +410,9 @@
                 </div>
             </div>
 
-            <!-- #1221 — quelle surface est attaquée, et par quel moteur -->
-            <div class="card" style="grid-column: span 2;">
+            <!-- #1221 — quelle surface est attaquée, et par quel moteur.
+                 Regroupees dans l'onglet Surfaces (#1369). -->
+            <div class="card recon-card" style="grid-column: span 2; display:none;">
                 <h2>🛰️ Surfaces surveillées
                     <span class="muted" style="font-size:0.8rem;">— sbxwaf ne voit que le HTTP ; authwatch couvre le reste</span></h2>
                 <div id="surfaces" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);margin-top:.7rem">
@@ -437,14 +441,14 @@
             </div>
 
             <!-- #1219 — origine géographique et noms demandés que la box ne sert pas -->
-            <div class="card" style="grid-column: span 2;">
+            <div class="card recon-card" style="grid-column: span 2; display:none;">
                 <h2>🌍 Origine des requêtes
                     <span class="muted" style="font-size:0.8rem;">— sur l'ensemble du journal de menaces</span></h2>
                 <div id="paysCamembert" style="margin:.6rem 0"><span class="muted">…</span></div>
                 <div class="table-wrap" id="paysTable"></div>
             </div>
 
-            <div class="card" style="grid-column: span 2;">
+            <div class="card recon-card" style="grid-column: span 2; display:none;">
                 <h2>🕳️ Noms demandés, non servis
                     <span class="muted" style="font-size:0.8rem;" id="nonServisResume"></span></h2>
                 <p class="muted" style="font-size:0.72rem;margin:.2rem 0 .6rem">
@@ -1280,6 +1284,11 @@
             const overview = name === 'overview';
             show('.grid-2', overview);
             show('.eyemote-card', overview);
+            // By Severity / By Category / Top Attacked Sites : onglet Menaces seul (#1369).
+            show('.overview-only', overview);
+            // Surfaces surveillees, comptes vises, leurres, origine, noms non
+            // servis : regroupes dans l'onglet Surfaces (#1369).
+            show('.recon-card', name === 'recon');
             const tracked = document.getElementById('trackedAttackersCard');
             const visits = document.getElementById('visitsCard');
             if (tracked) tracked.style.display = (name === 'attackers') ? '' : 'none';
@@ -1292,6 +1301,9 @@
             if (name === 'attackers') loadTrackedAttackers();
             if (name === 'history') loadHistory();
             if (name === 'campaigns') loadCampaigns();
+            // L'onglet Surfaces se peuple depuis /stats (surfaces, comptes,
+            // leurres, pays, noms non servis) — on rafraichit a l'ouverture.
+            if (name === 'recon') loadStats();
         }
 
         // ⚔️ Campagnes d'attaque corrélées (#1070 phase D)

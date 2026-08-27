@@ -1,3 +1,15 @@
+secubox-waf (1.10.17-1~bookworm1) bookworm; urgency=medium
+
+  * ONGLETS DU WEBUI ADMIN REORGANISES (#1369). Les cartes debordaient sur tous
+    les onglets. « By Severity », « By Category » et « Top Attacked Sites » sont
+    desormais reservees a l'onglet Menaces (classe overview-only). Les panneaux
+    de reconnaissance — Surfaces surveillees, comptes vises, leurres touches,
+    origine des requetes (pays) et noms demandes non servis — sont regroupes
+    dans un nouvel onglet « Surfaces » (classe recon-card), rafraichi a
+    l'ouverture depuis /stats.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 07:45:00 +0200
+
 secubox-waf (1.10.16-1~bookworm1) bookworm; urgency=medium
 
   * NOMS DEMANDES HORS REGISTRE, EN TOP-10 DANS LE TABLEAU (#1364). Les
