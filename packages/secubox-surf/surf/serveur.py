@@ -272,7 +272,13 @@ async def app(scope, receive, send):
     # navigations : Sec-Fetch-Dest=document, ou a defaut un Accept qui veut du HTML.
     dest = entetes_in.get("sec-fetch-dest", "")
     accept = entetes_in.get("accept", "")
-    est_document = (dest == "document") or (dest == "" and "text/html" in accept)
+    # LE CONTENU SURF VIT DANS UNE IFRAME (l'overlay du Hall) : le navigateur
+    # envoie Sec-Fetch-Dest=iframe (ou frame), PAS document. Il faut donc les
+    # accepter, sinon la carbone ne se declenche jamais pour l'utilisateur (elle
+    # ne marchait qu'en acces direct). On EXCLUT les sous-ressources
+    # (style/script/image/font/empty) qui ne doivent jamais etre « rendues ».
+    est_document = (dest in ("document", "iframe", "frame", "nested-document")
+                    or (dest == "" and "text/html" in accept))
     veut_carbone = ("_sbxr" in qs) or (jarre._domaine(cible) in _SITES_LOURDS)
     _figer_leger = False
     if (methode == "GET" and veut_carbone and est_document

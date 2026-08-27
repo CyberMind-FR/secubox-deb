@@ -1,3 +1,15 @@
+secubox-surf (1.0.15-1~bookworm1) bookworm; urgency=medium
+
+  * fix: copie carbone aussi pour le contenu en IFRAME (#1235). Le contenu surf
+    vit dans l'iframe de l'overlay du Hall -> Sec-Fetch-Dest=iframe, pas
+    document. La condition n'acceptait que « document » -> la carbone ne se
+    declenchait JAMAIS depuis le navigateur (seulement en acces direct/curl).
+    On accepte iframe/frame/nested-document, on exclut toujours les
+    sous-ressources (style/script/image/font/empty). C'est LE correctif qui fait
+    marcher BFM dans le Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:39:29 +0200
+
 secubox-surf (1.0.14-1~bookworm1) bookworm; urgency=medium
 
   * fix: Cache-Control no-store sur la copie carbone (#1235). Sinon le navigateur
