@@ -1,3 +1,36 @@
+secubox-surf (1.0.10-1~bookworm1) bookworm; urgency=medium
+
+  * fix: fige() ne re-reecrit plus les origines DEJA surf (#1235). Le DOM rendu
+    par le headless porte deja des URL surf (le relais les a reecrites pour
+    Chromium) ; fige() les re-mappait -> surf-surf--www--bfmtv--com… -> CSS 404
+    -> page non stylee. On passe a fige un sur_hote qui laisse les hotes en
+    .gk2.secubox.in et ne rabat que les URL brutes ajoutees par le JS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:22:33 +0200
+
+secubox-surf (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * fix: copie carbone sur les DOCUMENTS seulement (#1235). Elle se declenchait
+    pour toutes les requetes bfmtv.com, CSS/JS/images inclus : Chromium
+    « rendait » un CSS et le servait en text/html -> Firefox le bloquait
+    (OpaqueResponseBlocking) -> page non stylee ; et un Chromium par
+    sous-ressource faisait exploser le cout (502). On restreint aux navigations
+    (Sec-Fetch-Dest=document, ou Accept text/html). Les sous-ressources passent
+    par la voie legere normale et gardent leur content-type.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:21:14 +0200
+
+secubox-surf (1.0.8-1~bookworm1) bookworm; urgency=medium
+
+  * fix: semer le cookie firstid (#1235). BFM/Altice redirige (location.href, non
+    hookable) vers gate.first-id.fr pour acquerir un id quand le cookie firstid
+    est absent -> NXDOMAIN cote navigateur, et le rendu headless suivait cette
+    redirection (echec du carbone). getFirstIdInfos() teste juste la presence du
+    cookie : on le seme dans l'injection de tete -> BFM ne redirige plus, le
+    headless rend l'article, le carbone le sert.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:18:27 +0200
+
 secubox-surf (1.0.7-1~bookworm1) bookworm; urgency=medium
 
   * feat: copie carbone par rendu headless (#1218/#1221/#1235). Les sites lourds

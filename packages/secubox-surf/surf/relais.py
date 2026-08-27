@@ -287,7 +287,12 @@ html,body{overflow:auto !important}
     var t={CookieConsent:"yes",cookieconsent_status:"dismiss",euconsent:"1",
       "euconsent-v2":"1",OptanonAlertBoxClosed:new Date().toISOString(),
       gdpr:"1",cookies_accepted:"1",cookie_notice_accepted:"true",
-      didomi_token:"accepted",axeptio_all_vendors:"true"};
+      didomi_token:"accepted",axeptio_all_vendors:"true",
+      // first-id (BFM/Altice, #1235) : BFM redirige vers gate.first-id.fr pour
+      // ACQUERIR un id quand le cookie `firstid` est absent (getFirstIdInfos le
+      // teste). On le seme -> BFM le croit deja acquis et NE redirige plus, ni
+      // en headless (qui suivait la redirection vers un NXDOMAIN) ni en leger.
+      firstid:"00000000-0000-4000-8000-000000000000"};
     for(var k in t){document.cookie=k+"="+t[k]+";path=/;max-age=31536000";}
   }catch(e){}
   var ACC=/^(tout accepter|accepter( \\&|( et)? fermer)?|j'accepte( tout)?|accept all|accept|i agree|agree|ok,? tout accepter|continuer sans accepter|got it|allow all|autoriser|d'accord|accepter tout)$/i;

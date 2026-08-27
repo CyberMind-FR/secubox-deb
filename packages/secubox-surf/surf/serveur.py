@@ -265,8 +265,16 @@ async def app(scope, receive, send):
     # pas de rendu (garde anti-récursion). Si le rendu manque/échoue, on retombe
     # sur la voie légère normale.
     ua = entetes_in.get("user-agent", "")
+    # DOCUMENTS SEULEMENT. La copie carbone ne vaut que pour la PAGE : l'appliquer
+    # aux sous-ressources (CSS/JS/images) les ferait « rendre » par Chromium et
+    # servir en text/html -> Firefox les bloque (OpaqueResponseBlocking), et un
+    # Chromium par sous-ressource ferait exploser le cout (502). On se limite aux
+    # navigations : Sec-Fetch-Dest=document, ou a defaut un Accept qui veut du HTML.
+    dest = entetes_in.get("sec-fetch-dest", "")
+    accept = entetes_in.get("accept", "")
+    est_document = (dest == "document") or (dest == "" and "text/html" in accept)
     veut_carbone = ("_sbxr" in qs) or (jarre._domaine(cible) in _SITES_LOURDS)
-    if (methode == "GET" and veut_carbone
+    if (methode == "GET" and veut_carbone and est_document
             and rendu.MARQUEUR_UA not in ua and rendu.disponible()):
         url_surf = "https://" + hote_proxy + chemin + (("?" + qs) if qs else "")
         # Rendu headless = subprocess BLOQUANT (~15-40s) : hors de l'event loop,
@@ -274,7 +282,17 @@ async def app(scope, receive, send):
         # serialise les Chromium (un seul a la fois sur arm64).
         dom = await asyncio.to_thread(rendu.rends, url_surf)
         if dom:
-            corps = relais.fige(dom, base, sur_hote).encode()
+            # Le DOM rendu porte DEJA des origines surf (le relais les a
+            # reecrites pour Chromium). fige() ne doit pas les re-reecrire
+            # (surf-surf--… casse le CSS) : on laisse les hotes deja surf, on ne
+            # rabat vers surf que les URL BRUTES ajoutees par le JS.
+            def sur_hote_fige(h):
+                if h.endswith("." + relais.SUFFIXE):
+                    return None
+                if relais.est_pisteur(h):
+                    return None
+                return relais.origine_de(h)
+            corps = relais.fige(dom, base, sur_hote_fige).encode()
             sortie = [("content-type", "text/html; charset=utf-8"),
                       ("content-length", str(len(corps))),
                       ("x-surf-cible", cible), ("x-surf-rendu", "carbone")]
