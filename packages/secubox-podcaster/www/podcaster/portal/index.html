@@ -105,17 +105,26 @@ async function load(){
 // des officines dans la mégabarre, et on réagit à un clic — le service sait ce
 // que « filtrer sur ce flux » veut dire, le Hall non. Même contrat que MetaNews.
 function estEmbed(){return document.documentElement.classList.contains('sbx-embed')}
+// L'item ACTIF prend un ✓ (le Hall ne marque pas seul l'item choisi d'un menu
+// pousse) : sans ce retour, un clic dans la megabarre « ne selectionne pas »
+// visiblement. On re-pousse apres chaque choix pour rafraichir la coche.
 function pousseMegabarre(feeds,compte){
   if(!estEmbed() || feeds.length<2) return;
-  const items=[{cle:'__all', label:'Tous les épisodes', icon:'🎧'}].concat(
-    feeds.map(f=>({cle:'feed:'+f, label:f, badge:String(compte[f]||''), icon:'📡'})));
+  const items=[{cle:'__all', label:'Tous les épisodes', icon: FILT===null?'✓':'🎧'}].concat(
+    feeds.map(f=>({cle:'feed:'+f, label:f, badge:String(compte[f]||''), icon: FILT===f?'✓':'📡'})));
   try{ parent.postMessage({sbx:'contexte', id:'podcaster', titre:'Officines', items}, '*'); }catch(e){}
+}
+function choixOfficine(cle){
+  if(cle==='__all') setF(null);
+  else if(cle.indexOf('feed:')===0) setF(cle.slice(5));
+  // Retour visuel : la coche suit la selection, et la liste a defile en haut.
+  pousseMegabarre(Object.keys(DATA.feeds||{}), DATA.feeds||{});
+  try{ document.getElementById('list').scrollIntoView({block:'start'}); }catch(e){}
 }
 if(document.documentElement.classList.contains('sbx-embed')){
   window.addEventListener('message', ev=>{
     const m=ev.data; if(!m || m.sbx!=='contexte-choix' || !m.cle) return;
-    if(m.cle==='__all') setF(null);
-    else if(m.cle.indexOf('feed:')===0) setF(m.cle.slice(5));
+    choixOfficine(m.cle);
   });
 }
 function setF(f){FILT=f;render(true)}

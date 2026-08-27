@@ -1,3 +1,13 @@
+secubox-podcaster (1.0.23-1~bookworm1) bookworm; urgency=medium
+
+  * MEGABARRE PODCASTER : LA SELECTION SE VOIT (#1238b). Un clic dans le menu
+    contextuel des officines filtrait bien mais sans retour visuel — « pas
+    actif ». L'item choisi prend desormais un ✓, le menu est re-pousse apres
+    chaque choix, et la liste defile en haut : la selection se voit comme un
+    vrai clic sur la page.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 13:05:00 +0200
+
 secubox-podcaster (1.0.22-1~bookworm1) bookworm; urgency=medium
 
   * PORTAIL EMBARQUE : EN-TETE RETIRE, OFFICINES DANS LA MEGABARRE (#1238b).
