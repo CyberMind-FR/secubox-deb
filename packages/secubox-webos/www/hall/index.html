@@ -1948,6 +1948,14 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function ferme(){ ov.classList.add('hidden'); f.src='about:blank'; }
   pill.addEventListener('click', ouvre);
   var x=document.getElementById('tv-ov-x'); if(x) x.addEventListener('click', ferme);
+  // ⏹ ARRETER pour le parc (#1237) : le broadcast est persistant ; sans arret
+  // explicite il revenait a chaque refresh. Toujours accessible via la pastille.
+  var stopb=document.getElementById('tv-ov-stop');
+  if(stopb) stopb.addEventListener('click', function(){
+    fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:''})}).catch(function(){});
+    ferme();
+  });
   addEventListener('keydown', function(e){ if(e.key==='Escape' && !ov.classList.contains('hidden')) ferme(); });
   addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on') setTimeout(sonde,300); });
   function sonde(){
@@ -2051,7 +2059,8 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     courant=url; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
     media.innerHTML=''; titreEl.textContent=url.slice(0,90);
     document.getElementById('viewer-fav').classList.remove('on');
-    document.getElementById('viewer-cast').classList.remove('on');
+    var cb=document.getElementById('viewer-cast'); cb.classList.remove('on');
+    cb.title='Diffuser au parc (📡 direct)'; diffuse=false;
     pose('—','—','—',0);
     var id=ytid(url);
     if(id){
@@ -2099,11 +2108,20 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     try{ if(navigator.clipboard) navigator.clipboard.writeText(courant); }catch(e){}
     this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
   });
+  var diffuse=false;
   document.getElementById('viewer-cast').addEventListener('click',function(){
     if(!courant) return;
-    fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
-    this.classList.add('on');
+    // TOGGLE (#1237) : diffuser puis ARRETER. Le broadcast est un etat persistant
+    // (le parc le voit) ; sans arret, il revenait a chaque refresh (« merde »).
+    if(diffuse){
+      fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:''})}).catch(function(){});
+      diffuse=false; this.classList.remove('on'); this.title='Diffuser au parc (📡 direct)';
+    } else {
+      fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
+      diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
+    }
   });
   document.getElementById('viewer-full').addEventListener('click',function(){
     try{ var el=media.firstElementChild||ov; if(el.requestFullscreen) el.requestFullscreen(); }catch(e){}
@@ -2872,6 +2890,7 @@ const CARDLET_ICONES = {
 <div id="tv-ov" class="tv-ov hidden" role="dialog" aria-label="Diffusion en direct">
   <div class="tv-ov-tete">
     <span class="tv-ov-t">📡 Direct — <b id="tv-ov-t"></b></span>
+    <button class="tv-ov-x" id="tv-ov-stop" type="button" title="Arrêter la diffusion (pour le parc)">⏹</button>
     <button class="tv-ov-x" id="tv-ov-x" type="button" title="Quitter le direct" aria-label="Fermer">✕</button>
   </div>
   <iframe id="tv-ov-f" title="Direct" allow="autoplay; fullscreen" allowfullscreen></iframe>

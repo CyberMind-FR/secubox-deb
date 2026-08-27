@@ -1,3 +1,13 @@
+secubox-webos (1.0.140-1~bookworm1) bookworm; urgency=medium
+
+  * fix: broadcast stoppable (#1237). Le broadcast est un etat persistant ; une
+    fois lance depuis le viewer il revenait a chaque refresh sans moyen d'arret
+    (« refresh fout la merde »). Le 📡 du viewer devient un TOGGLE (diffuser/
+    arreter) ; le direct (tv-ov) gagne un bouton ⏹ Arrêter, toujours accessible
+    via la pastille, qui coupe la diffusion pour le parc.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:18:27 +0200
+
 secubox-webos (1.0.139-1~bookworm1) bookworm; urgency=medium
 
   * feat: viewer phase 2 — branchement sur le sas ytsas (#1237/#1236). Une URL
