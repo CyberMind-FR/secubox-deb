@@ -1,3 +1,12 @@
+secubox-webos (1.0.155-1~bookworm1) bookworm; urgency=medium
+
+  * fix: proxy /api/v1/radio/ same-origin au Hall (#1239) — sub_filter ne
+    reecrit pas le JS radio (chunked), donc ses fetch /api/v1/radio/ tombaient
+    sur l'index ; on les proxifie directement vers radio. Le cardlet radio est
+    desormais fonctionnel en meme origine (plus de prompt LAN en prive).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:38:17 +0200
+
 secubox-webos (1.0.154-1~bookworm1) bookworm; urgency=medium
 
   * fix: sub_filter du proxy radio couvre text/javascript (#1239) — radio.js est
