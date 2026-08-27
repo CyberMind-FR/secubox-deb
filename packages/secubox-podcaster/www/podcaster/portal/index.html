@@ -183,8 +183,12 @@ function render(force){
   }, true);
   document.addEventListener('pause', function(e){ if(e.target===actif) annonce(); }, true);
   document.addEventListener('ended', function(e){ if(e.target===actif) annonce(true); }, true);
-  // Un battement régulier tient la rangée vivante (sinon retirée au bout de ~10s).
-  setInterval(function(){ if(actif && !actif.paused) annonce(); }, 2000);
+  // Un battement régulier tient la rangée vivante (sinon retirée au bout de
+  // ~10s). ON BAT MEME EN PAUSE (#1238c) : un flux mis en pause — par exemple
+  // par le demarrage d'un peertube — doit GARDER sa pastille pour qu'on puisse
+  // le reprendre. Sans battement en pause, le Hall le purgeait et la pastille
+  // disparaissait. On ne s'arrete qu'a la fin (fin:true) ou a la fermeture.
+  setInterval(function(){ if(actif) annonce(); }, 2000);
   // Commandes de la barre du Hall.
   addEventListener('message', function(ev){
     var d=ev.data; if(!d || d.sbx!=='cmd') return;

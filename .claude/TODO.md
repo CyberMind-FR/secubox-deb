@@ -25,8 +25,10 @@
 - [ ] **#1235 — MUST : first-login + apprentissage embarqué de cookies (learner mode).**
       L'utilisateur se connecte UNE fois au vrai site dans le surf (BFM,
       Google/YouTube, presse), la box apprend les cookies, puis REJOUE
-      (mode replay) anonymisé pour le broadcast/partage. Fondation présente
-      (`jarre.py` : apprend/pose_manuel/entete). Manque la complétude du
+      (mode replay) anonymisé pour le broadcast/partage. **Capture 100%
+      automatique** (`apprend()` à la volée depuis les Set-Cookie amont) —
+      PAS de dépôt manuel ; le 🍪 arme la capture, il n'ouvre pas de champ à
+      coller. Fondation présente (`jarre.py` : apprend/entete). Manque la complétude du
       relais pour le SSO : **CORS ACAO** sur sous-ressources cross-surf-origin
       (`egress.py`), **réécriture des frames imbriquées** (#1225), CSP
       `script-src` des origines surf. **Confiné & sécurisé** : cookies sur box
