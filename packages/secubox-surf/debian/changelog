@@ -1,0 +1,15 @@
+secubox-surf (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Premier empaquetage du relais surf (le BiB), jusque-la deploye a la main
+    en POC sous /usr/lib/secubox/surf. Rejoint la flotte dpkg (source de
+    verite). Contenu inchange : relais par-origine, coupe-pisteurs, bocal a
+    cookies, egress direct/Tor, saut des portails de consentement.
+  * feat: CORS entre origines relayees + preflight OPTIONS — une sous-ressource
+    d'un autre hote relaye (ex. JS de signin) n'est plus bloquee faute d'ACAO.
+    (ref #1235)
+  * feat: reecriture des frames imbriquees vers l'origine surf — un
+    <iframe>/<frame> pointant une URL brute (ex. accounts.google.com) est
+    reecrit vers surf-<hote>.gk2.secubox.in, sinon bloque par frame-src.
+    (ref #1235)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 09:56:54 +0200

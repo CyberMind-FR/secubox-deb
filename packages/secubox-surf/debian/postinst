@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+if [ "$1" = "configure" ]; then
+    # Etat du bocal / jarres : StateDirectory du service cree /var/lib/secubox/surf,
+    # mais on l'assure aussi ici pour un premier demarrage propre.
+    install -d -m 0750 /var/lib/secubox/surf || true
+
+    # VHOST NGINX : le relais ecoute les origines surf-*.gk2.secubox.in. On active
+    # le site (symlink) et on recharge nginx seulement si la conf valide.
+    if [ -f /etc/nginx/sites-available/surf.conf ]; then
+        ln -sf ../sites-available/surf.conf /etc/nginx/sites-enabled/surf.conf
+    fi
+    if [ -x /usr/sbin/nginx ] && nginx -t 2>/dev/null; then
+        systemctl reload nginx || true
+    fi
+fi
+#DEBHELPER#

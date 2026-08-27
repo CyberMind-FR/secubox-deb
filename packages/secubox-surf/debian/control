@@ -1,0 +1,22 @@
+Source: secubox-surf
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://secubox.in
+
+Package: secubox-surf
+Architecture: all
+Depends: ${misc:Depends},
+         python3,
+         python3-httpx,
+         python3-uvicorn | python3-pip,
+         python3-socksio | python3-pip
+Recommends: tor, nginx
+Description: SecuBox Surf — relais de navigation par-origine (le BiB)
+ Le relais « Browser-in-Browser » de SBXOS : chaque site est servi sous sa
+ propre origine surf-<hote>.gk2.secubox.in, hors de la chaine d'inspection WAF,
+ avec coupe-pisteurs, reecriture des liens/portails de consentement, bocal a
+ cookies (apprendre une fois, rejouer toujours) et egress commutable
+ (direct / Tor). Sert de source d'apprentissage pour le mode learner (#1235).

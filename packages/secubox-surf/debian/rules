@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_build:
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf
+	install -m 0644 surf/__init__.py $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/__init__.py
+	install -m 0644 surf/egress.py   $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/egress.py
+	install -m 0644 surf/jarre.py    $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/jarre.py
+	install -m 0644 surf/mesure.py   $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/mesure.py
+	install -m 0644 surf/relais.py   $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/relais.py
+	install -m 0644 surf/serveur.py  $(CURDIR)/debian/secubox-surf/usr/lib/secubox/surf/surf/serveur.py
+	install -d $(CURDIR)/debian/secubox-surf/etc/nginx/sites-available
+	install -m 0644 nginx/surf.conf  $(CURDIR)/debian/secubox-surf/etc/nginx/sites-available/surf.conf
+
+override_dh_installsystemd:
+	dh_installsystemd --name=secubox-surf --no-restart-after-upgrade

@@ -543,6 +543,44 @@ _INJECTION_TETE = """
       navigator.serviceWorker.register=function(){ S.notifs++; return Promise.reject(new Error("sbx: bloque")); };
     }
   }catch(e){}
+
+  // CADRES IMBRIQUES CREES AU RUNTIME (#1235). Les iframes STATIQUES sont deja
+  // reecrites cote serveur ; mais le JS du site (login Google, widgets d'embed)
+  // en cree DYNAMIQUEMENT vers l'origine BRUTE (ex. accounts.google.com), que
+  // la CSP frame-src 'self' *.gk2.secubox.in bloque. On reecrit .src et
+  // setAttribute('src'/'href') des cadres vers leur origine surf AVANT que le
+  // navigateur ne charge. Les pisteurs ne passent pas par ici : leurs scripts
+  // sont coupes a la source, donc un cadre cree au runtime vient du JS legitime.
+  try{
+    var _SUF="gk2.secubox.in";
+    function _fceOrig(h){ return "surf-"+h.toLowerCase().replace(/-/g,"--").replace(/\\./g,"-")+"."+_SUF; }
+    function _fceMap(u){
+      try{ if(u==null||u==="") return u; var a=new URL(String(u), location.href);
+        if(a.protocol!=="http:"&&a.protocol!=="https:") return u;
+        var h=a.hostname.toLowerCase();
+        if(h===location.hostname) return u;                       // deja nous
+        if(h.slice(-(_SUF.length+1))==="."+_SUF) return u;        // deja une origine surf
+        return "https://"+_fceOrig(h)+a.pathname+a.search+a.hash;
+      }catch(e){ return u; }
+    }
+    var _fsa=Element.prototype.setAttribute;
+    Element.prototype.setAttribute=function(n,v){
+      try{ if(v!=null && /^(src|href)$/i.test(String(n))){
+        var t=this.tagName; if(t==="IFRAME"||t==="FRAME"){ v=_fceMap(v); }
+      } }catch(e){}
+      return _fsa.call(this,n,v);
+    };
+    ["HTMLIFrameElement","HTMLFrameElement"].forEach(function(C){
+      try{ if(!window[C]) return;
+        var d=Object.getOwnPropertyDescriptor(window[C].prototype,"src");
+        if(!d||!d.set) return;
+        Object.defineProperty(window[C].prototype,"src",{
+          configurable:true, enumerable:d.enumerable, get:d.get,
+          set:function(v){ d.set.call(this, _fceMap(v)); }
+        });
+      }catch(e){}
+    });
+  }catch(e){}
 })();
 </script>
 """
