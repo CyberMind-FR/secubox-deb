@@ -11,11 +11,8 @@ if [ "$1" = "configure" ]; then
             echo "secubox-metrics: completion des vhosts a rejouer a la main" >&2
     fi
 
-    # try-restart et non restart : ne pas demarrer un service que
-    # l'administrateur a volontairement arrete.
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload || true
-        systemctl try-restart secubox-metrics.service || true
         # #1059 — activer le timer du rapport hebdomadaire (le .service est
         # oneshot, déclenché par le timer : on n'active QUE le timer). enable
         # --now le pose ET l'arme sans attendre un reboot.
@@ -26,4 +23,18 @@ if [ "$1" = "configure" ]; then
 fi
 
 #DEBHELPER#
+
+# ── LE SERVICE PRINCIPAL DOIT TOUJOURS ETRE ARME (#1368) ──────────────────────
+# secubox-metrics.service est l'API du tableau de bord : un service coeur, pas
+# un extra qu'on laisse a l'appreciation de l'admin. Le prerm l'arrete, et le
+# flux debhelper le laissait « disabled/inactive » sur cette box (registre
+# deb-systemd-helper desynchronise) — le tableau tombait apres chaque mise a
+# jour, et ne repartait pas au reboot. On force donc, APRES le bloc debhelper
+# (dernier mot), l'activation et le (re)demarrage. Place ici a dessein : rien
+# ne vient plus le desactiver ensuite.
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    systemctl enable secubox-metrics.service >/dev/null 2>&1 || true
+    systemctl restart secubox-metrics.service >/dev/null 2>&1 || true
+fi
+
 exit 0

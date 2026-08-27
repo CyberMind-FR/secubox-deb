@@ -118,6 +118,77 @@ def _histo_menaces(hist: dict, jours: int) -> bytes:
     return R._png(fig)
 
 
+# ── HELPERS DE MISE EN PAGE (#1368) ─────────────────────────────────────────
+# Le rapport WAF etait plus pauvre que le tableau du Hall : quelques categories
+# et des IP, la ou le Hall montre efficacite, surfaces, origines, comptes vises,
+# leurres touches, cibles internes. On lui donne les memes sections, depuis le
+# meme cache de comptage (`_lire_waf_stats`).
+
+def _tuiles_waf(pdf, R, cases) -> None:
+    """Bandeau de chiffres cles, en teinte menace (rouge pale)."""
+    largeur = 190 / max(1, len(cases))
+    haut = pdf.get_y()
+    for i, (k, v) in enumerate(cases):
+        x = 10 + i * largeur
+        pdf.set_xy(x, haut)
+        pdf.set_fill_color(250, 241, 241)
+        pdf.cell(largeur - 2, 17, "", fill=True, border=0)
+        pdf.set_xy(x + 3, haut + 2.5)
+        pdf.set_font("Helvetica", "", 7)
+        pdf.set_text_color(150, 92, 92)
+        pdf.cell(largeur - 6, 4, R._txt(str(k).upper()), new_x="LEFT", new_y="NEXT")
+        pdf.set_x(x + 3)
+        pdf.set_font("Helvetica", "B", 12)
+        pdf.set_text_color(26, 36, 48)
+        pdf.cell(largeur - 6, 7, R._txt(str(v)))
+    pdf.set_y(haut + 22)
+
+
+def _table_kv(pdf, R, titre, donnees, entete=None, n=15,
+              largeurs=(120, 30), suffixe="") -> None:
+    """Tableau {libelle: nombre} trie decroissant, chaque ligne d'un bloc."""
+    donnees = {k: v for k, v in (donnees or {}).items() if v}
+    if not donnees:
+        return
+    R._titre(pdf, titre)
+    if entete:
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.set_fill_color(244, 238, 238)
+        pdf.cell(largeurs[0], 6, R._txt(entete[0]), fill=True)
+        pdf.cell(largeurs[1], 6, R._txt(entete[1]), fill=True, align="R",
+                 new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "", 8)
+    for k, v in sorted(donnees.items(), key=lambda kv: -kv[1])[:n]:
+        R._garde(pdf, 5)
+        pdf.cell(largeurs[0], 5, R._txt(str(k))[:82])
+        pdf.cell(largeurs[1], 5, f"{v:,}".replace(",", " ") + suffixe, align="R",
+                 new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+
+def _table_efficacite(pdf, R, eff, n=18) -> None:
+    """Bannis vs simplement avertis, par categorie de detection."""
+    eff = {k: v for k, v in (eff or {}).items() if isinstance(v, dict)}
+    if not eff:
+        return
+    R._titre(pdf, "Efficacite par categorie (bannis / avertis)")
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_fill_color(244, 238, 238)
+    for l, w in (("Categorie", 110), ("Bannis", 35), ("Avertis", 35)):
+        pdf.cell(w, 6, R._txt(l), fill=True, align="L" if w == 110 else "R")
+    pdf.ln()
+    pdf.set_font("Helvetica", "", 8)
+    for k, v in sorted(eff.items(),
+                       key=lambda kv: -(kv[1].get("banned", 0)
+                                        + kv[1].get("warning", 0)))[:n]:
+        R._garde(pdf, 5)
+        pdf.cell(110, 5, R._txt(str(k))[:72])
+        pdf.cell(35, 5, f"{v.get('banned', 0):,}".replace(",", " "), align="R")
+        pdf.cell(35, 5, f"{v.get('warning', 0):,}".replace(",", " "), align="R",
+                 new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+
 def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
     """Assemble le PDF WAF. Bloquant (matplotlib) : à lancer dans un thread."""
     import rapport as R
@@ -139,6 +210,23 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
              new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
     pdf.set_text_color(26, 36, 48)
+
+    # Le cache de comptage du WAF (les memes chiffres que le tableau du Hall).
+    _wstats = R._lire_waf_stats()
+    _eff = _wstats.get("efficacite", {}) or {}
+    _bannis = sum(v.get("banned", 0) for v in _eff.values() if isinstance(v, dict))
+    _avertis = sum(v.get("warning", 0) for v in _eff.values() if isinstance(v, dict))
+    # CHIFFRES CLES, comme les tuiles du Hall : menaces vues au total, part
+    # bannie vs simplement avertie, nombre de surfaces surveillees, comptes et
+    # leurres vises. Un rapport doit se lire d'un coup d'oeil avant le detail.
+    _tuiles_waf(pdf, R, [
+        ("Menaces", f"{_wstats.get('total_threats', resume['total']):,}".replace(",", " ")),
+        ("Bannies", f"{_bannis:,}".replace(",", " ")),
+        ("Averties", f"{_avertis:,}".replace(",", " ")),
+        ("Surfaces", str(len(_wstats.get("par_type", {}) or {}))),
+        ("Leurres", str(len(_wstats.get("leurres_touches", {}) or {}))),
+        ("Comptes vises", str(len(_wstats.get("comptes_vises", {}) or {}))),
+    ])
 
     if hist.get("jours"):
         R._titre(pdf, "Menaces bloquees par jour (par categorie)")
@@ -163,12 +251,33 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
             pdf.cell(80, 5, R._txt(ip))
             pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+
+    # ── LES SECTIONS DU TABLEAU DU HALL (#1368) ───────────────────────────────
+    # Efficacite, surfaces surveillees, origines des detections, comptes vises,
+    # leurres touches et cibles internes : tout ce que le Hall montre, le
+    # rapport le porte aussi, pour qui lit le PDF plutot que l'ecran.
+    _table_efficacite(pdf, R, _eff)
+    _table_kv(pdf, R, "Surfaces surveillees",
+              _wstats.get("par_type"), ("Surface", "Requetes"),
+              largeurs=(120, 30))
+    _table_kv(pdf, R, "Origine des detections",
+              _wstats.get("par_origine"), ("Origine", "Detections"),
+              largeurs=(120, 30))
+    _table_kv(pdf, R, "Comptes vises (SSH / SMTP / IMAP)",
+              _wstats.get("comptes_vises"), ("Compte", "Tentatives"),
+              largeurs=(150, 30), n=20)
+    _table_kv(pdf, R, "Leurres touches",
+              _wstats.get("leurres_touches"), ("Service leurre", "Contacts"),
+              largeurs=(120, 30))
+    _table_kv(pdf, R, "Cibles internes les plus visees",
+              _wstats.get("top_vhosts"), ("Vhost", "Menaces"),
+              largeurs=(120, 30))
 
     # ── DONNEES VENUES DU RAPPORT DE VISITE (#1367) ───────────────────────────
     # L'origine geographique vue par le WAF et les noms scannes que la box ne
     # sert pas sont des donnees d'ATTAQUE : elles etaient dans le rapport de
-    # frequentation, leur place est ici. Lues depuis le cache de comptage WAF.
-    _wstats = R._lire_waf_stats()
+    # frequentation, leur place est ici. Lues depuis le meme cache de comptage.
     _pays_waf = _wstats.get("top_countries") or {}
     if _pays_waf:
         _pays_waf = {k: v for k, v in _pays_waf.items() if k not in ("LAN", "??", "")}

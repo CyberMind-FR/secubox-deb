@@ -1,3 +1,25 @@
+secubox-metrics (1.12.3-1~bookworm1) bookworm; urgency=medium
+
+  * LE SERVICE PRINCIPAL RESTE ARME APRES MISE A JOUR (#1368). secubox-metrics
+    (API du tableau de bord) retombait « disabled/inactive » apres chaque
+    dpkg : le postinst utilisait `try-restart` (ne demarre pas un service
+    arrete par le prerm) et n'activait jamais le service coeur. On force
+    desormais enable + restart APRES le bloc debhelper — le tableau remonte
+    seul et survit au reboot.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 07:20:00 +0200
+
+secubox-metrics (1.12.2-1~bookworm1) bookworm; urgency=medium
+
+  * RAPPORT WAF AUSSI COMPLET QUE LE TABLEAU DU HALL (#1368). Il ne portait que
+    quelques categories et des IP ; il gagne les memes sections que l'ecran :
+    bandeau de chiffres cles (menaces, bannies/averties, surfaces, leurres,
+    comptes vises), efficacite par categorie (bannis vs avertis), surfaces
+    surveillees, origine des detections, comptes vises, leurres touches et
+    cibles internes les plus visees. Meme source (cache de comptage du WAF).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 07:05:00 +0200
+
 secubox-metrics (1.12.1-1~bookworm1) bookworm; urgency=medium
 
   * LES DONNEES D'ATTAQUE QUITTENT LE RAPPORT DE VISITE (#1367). Le rapport de
