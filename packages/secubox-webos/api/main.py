@@ -139,7 +139,13 @@ async def set_broadcast(payload: dict):
     """Poser (ou couper) le flux courant. `url` vide = on coupe la diffusion."""
     global _broadcast
     url = str((payload or {}).get("url", "")).strip()
-    if not url or not url.lower().startswith(("http://", "https://")):
+    # ACCEPTER AUSSI LES CHEMINS RELATIFS (#1237) : le flux SOUVERAIN est
+    # /api/v1/ytsas/stream/<id>, servi en MEME ORIGINE par chaque Hall (pas de
+    # YouTube, pas de contexte tiers). On refuse juste le protocol-relative
+    # (//...) et javascript: — url vide = on coupe.
+    _ok = url.lower().startswith(("http://", "https://")) or (
+        url.startswith("/") and not url.startswith("//"))
+    if not url or not _ok:
         _broadcast = {"actif": False}
     else:
         _broadcast = {

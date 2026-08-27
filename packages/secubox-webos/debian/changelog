@@ -1,3 +1,13 @@
+secubox-webos (1.0.150-1~bookworm1) bookworm; urgency=medium
+
+  * fix: /broadcast accepte les chemins RELATIFS (#1237) — le flux souverain
+    /api/v1/ytsas/stream/<id> etait REJETE (validation http(s)://) -> le direct
+    souverain ne diffusait pas et retombait sur l'URL YouTube (erreur 153 en
+    prive). On accepte desormais les URL relatives (/...), servies en meme
+    origine par chaque Hall : pas de YouTube, pas de contexte tiers.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:22:39 +0200
+
 secubox-webos (1.0.149-1~bookworm1) bookworm; urgency=medium
 
   * fix: pastille 📡 direct dans un conteneur voisin #pastilles-direct (#1237).
