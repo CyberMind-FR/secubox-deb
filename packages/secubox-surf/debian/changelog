@@ -1,3 +1,14 @@
+secubox-surf (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix: revert du pont postMessage (#1235). Il reecrivait GLOBALEMENT les
+    origines des messages dans toutes les pages relayees ; le CMP in-page de
+    BFM (didomi) communique par postMessage -> la poignee de main du
+    consentement etait cassee -> BFM restait en attente, ecran noir. Le pont
+    ne servait que Google (abandonne). Retire. CORS, frames et jarre d'etat
+    conserves.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 10:53:06 +0200
+
 secubox-surf (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * fix: revert du forcage d'origine surf sur les portails en redirect HTTP
