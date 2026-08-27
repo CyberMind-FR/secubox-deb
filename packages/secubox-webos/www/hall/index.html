@@ -663,6 +663,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .viewer-ov{position:fixed;left:0;right:0;bottom:0;top:var(--mast-h,56px);z-index:55;
   display:flex;flex-direction:column;background:#000}
 .viewer-ov.hidden{display:none}
+/* MODE MINI (#1237) : petite fenetre flottante en bas-droite, le Hall reste
+   NAVIGABLE derriere (regarder en continuant a naviguer). */
+.viewer-ov.mini{top:auto;left:auto;right:14px;bottom:14px;width:min(46vw,520px);height:auto;
+  border-radius:12px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--lift)}
+.viewer-ov.mini .media{flex:none;aspect-ratio:16/9;height:auto}
 .viewer-ov .media{flex:1;min-height:0;display:flex;background:#000}
 .viewer-ov .media iframe,.viewer-ov .media video{flex:1;width:100%;height:100%;border:0;background:#000;object-fit:contain}
 .viewer-bar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:8px 12px;
@@ -2172,6 +2177,14 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     E('viewer-full').addEventListener('click',function(){
       try{ var el=media.firstElementChild||ov; if(el.requestFullscreen) el.requestFullscreen(); }catch(e){}
     });
+    // MODE MINI (#1237) : bascule plein cadre <-> mini flottant. En mini, le
+    // Hall reste navigable derriere -> on regarde en continuant a naviguer.
+    E('viewer-mini').addEventListener('click',function(){
+      if(!ov) return;
+      var mini=ov.classList.toggle('mini');
+      this.textContent = mini ? '▢' : '⧉';
+      this.title = mini ? 'Plein cadre' : 'Mini — regarder en naviguant';
+    });
   }
 })();
 
@@ -2957,6 +2970,7 @@ const CARDLET_ICONES = {
       <button id="viewer-fav" type="button" title="Favoriser">♥</button>
       <button id="viewer-share" type="button" title="Partager (lien sbx)">↗</button>
       <button id="viewer-cast" type="button" title="Diffuser au parc (📡 direct)">📡</button>
+      <button id="viewer-mini" type="button" title="Mini / plein cadre — regarder en naviguant">⧉</button>
       <button id="viewer-full" type="button" title="Plein écran">⛶</button>
       <button id="viewer-x" type="button" title="Fermer">✕</button>
     </span>

@@ -1,3 +1,12 @@
+secubox-webos (1.0.148-1~bookworm1) bookworm; urgency=medium
+
+  * feat: mode MINI du viewer (#1237) — bouton ⧉ bascule plein cadre <-> mini
+    flottant (bas-droite). En mini, le Hall reste navigable derriere : on
+    regarde en continuant a naviguer (non-interruption). Premier des modes
+    d'affichage (plein ecran / plein cadre / mini / a venir : popup, barre, cache).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:01:14 +0200
+
 secubox-webos (1.0.147-1~bookworm1) bookworm; urgency=medium
 
   * feat: pastille 📡 direct dans #pastilles (#1237) — la diffusion vit AVEC les
