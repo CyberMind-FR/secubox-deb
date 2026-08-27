@@ -410,12 +410,16 @@
             const kvmVMs = allVMs.filter(v => v.type === 'kvm');
             const lxcContainers = allVMs.filter(v => v.type === 'lxc');
 
-            allEl.innerHTML = allVMs.length ? allVMs.map(renderVMCard).join('') : '<p>No VMs found</p>';
-            kvmEl.innerHTML = kvmVMs.length ? kvmVMs.map(renderVMCard).join('') : '<p>No KVM VMs</p>';
-            // LES LXC EN LISTE, PAS EN CARTES (#1225) : 26 conteneurs en cartes
+            // LES LXC EN LISTE, PAS EN CARTES (#1225) : 27 conteneurs en cartes
             // noyaient l'ecran ; une ligne par conteneur avec des boutons
             // rapides (démarrer / veille / réveiller / arrêter / couper /
-            // autostart) se parcourt d'un coup d'oeil.
+            // autostart) se parcourt d'un coup d'oeil. On l'applique PARTOUT ou
+            // un LXC s'affiche — onglet « All » compris, celui qu'on voit en
+            // arrivant : un KVM (rare) garde sa carte, un LXC devient une ligne.
+            const rowOrCard = v => v.type === 'lxc' ? renderLxcRow(v) : renderVMCard(v);
+            allEl.className = 'lxc-list';
+            allEl.innerHTML = allVMs.length ? allVMs.map(rowOrCard).join('') : '<p>No VMs found</p>';
+            kvmEl.innerHTML = kvmVMs.length ? kvmVMs.map(renderVMCard).join('') : '<p>No KVM VMs</p>';
             lxcEl.className = 'lxc-list';
             lxcEl.innerHTML = lxcContainers.length
                 ? lxcContainers.map(renderLxcRow).join('')

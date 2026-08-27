@@ -1,3 +1,12 @@
+secubox-vm (1.2.2-1~bookworm1) bookworm; urgency=medium
+
+  * LISTE LXC AUSSI SUR L'ONGLET « ALL » (#1225). La liste ne s'appliquait qu'a
+    l'onglet « LXC Containers » ; l'onglet « All », celui qu'on voit en
+    arrivant, rendait encore les 27 conteneurs en cartes. Un LXC s'affiche
+    desormais en ligne partout ; un KVM garde sa carte.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 10:20:00 +0200
+
 secubox-vm (1.2.1-1~bookworm1) bookworm; urgency=medium
 
   * AUTOSTART : le helper derive lxc.lxcpath (#1225). Les conteneurs de cette
