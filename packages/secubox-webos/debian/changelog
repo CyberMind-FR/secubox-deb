@@ -1,3 +1,14 @@
+secubox-webos (1.0.146-1~bookworm1) bookworm; urgency=medium
+
+  * feat: diffusion SOUVERAINE + pastille dans la megabarre (#1237). Le 📡 du
+    viewer diffuse le flux ytsas cache (/api/v1/ytsas/stream/<id>) plutot que
+    l'URL YouTube quand le sas a rapatrie -> le parc regarde depuis la box, sans
+    YouTube ni cookies/pub (« youtube fait chier sinon »). Le recepteur tv-ov
+    joue un flux ytsas/media DIRECT dans l'iframe (mp4 natif). Pastille 📡 direct
+    repositionnee en haut-centre (sous la megabarre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:53:58 +0200
+
 secubox-webos (1.0.145-1~bookworm1) bookworm; urgency=medium
 
   * feat: reveil immediat de la pastille 📡 au clic diffuser (#1237) — postMessage

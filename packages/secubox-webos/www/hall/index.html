@@ -678,7 +678,7 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .viewer-bar button:hover{border-color:var(--cyan);color:var(--cyan)}
 .viewer-bar button.on{border-color:var(--coral);color:var(--coral)}
 /* La pastille « 📡 direct » : apparait quand une diffusion est en cours. */
-.tv-pill{position:fixed;right:14px;bottom:96px;z-index:60;display:inline-flex;align-items:center;gap:7px;
+.tv-pill{position:fixed;top:calc(var(--mast-h,56px) + 10px);left:50%;transform:translateX(-50%);z-index:60;display:inline-flex;align-items:center;gap:7px;
   padding:8px 13px;border-radius:999px;border:1px solid var(--coral);background:var(--panel);
   color:var(--coral);font-family:"JetBrains Mono";font-size:.72rem;font-weight:700;cursor:pointer;
   box-shadow:var(--lift)}
@@ -1938,12 +1938,18 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function ouvre(){
     if(!courantUrl) return;
     var ov=E('tv-ov'), f=E('tv-ov-f'); if(!ov||!f) return;
+    var mast=document.querySelector('.mast');
+    if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
     var id=ytid(courantUrl);
+    // SOUVERAIN (#1237) : un flux ytsas (ou un fichier media) se joue DIRECT dans
+    // l'iframe (le navigateur rend le mp4 nativement) -> le parc regarde depuis
+    // la box, sans YouTube, sans cookies/pub. YouTube -> nocookie en repli.
+    var direct = /^\/api\/v1\/ytsas\/stream\//.test(courantUrl) || /\.(mp4|webm|m3u8|ogg|ogv|mov|mkv)(\?|#|$)/i.test(courantUrl);
     if(id){
       var e='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
-      var mast=document.querySelector('.mast');
-      if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
-      if(f.src!==e) f.src=e;
+      if(f.src!==e) f.src=e; ov.classList.remove('hidden');
+    } else if(direct){
+      if(f.getAttribute('src')!==courantUrl) f.src=courantUrl;
       ov.classList.remove('hidden');
     } else if(typeof ouvreSurf==='function'){ ouvreSurf(courantUrl); }
   }
@@ -2132,8 +2138,12 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
           body:JSON.stringify({url:''})}).catch(function(){});
         diffuse=false; this.classList.remove('on'); this.title='Diffuser au parc (📡 direct)';
       } else {
+        // DIFFUSION SOUVERAINE (#1237) : si le sas a rapatrie la video (vid),
+        // on diffuse le FLUX YTSAS (cache local, sans pub/Google) plutot que
+        // l'URL YouTube -> le parc regarde souverain. Sinon l'URL d'origine.
+        var burl = vid ? ('/api/v1/ytsas/stream/'+vid) : courant;
         fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
+          body:JSON.stringify({url:burl,titre:titreEl.textContent})}).catch(function(){});
         diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
         // Reveil immediat de la pastille sur CE Hall (au lieu d'attendre le
         // sonde a 5s) : le recepteur broadcast ecoute 'broadcast-on'. (#1237)
