@@ -1,3 +1,12 @@
+secubox-webos (1.0.152-1~bookworm1) bookworm; urgency=medium
+
+  * feat: resynchro du direct (#1237) — bouton ⟲ dans le direct + auto-resync a
+    l'ouverture. Le broadcaster diffuse sa position (pos) + horodatage (ts) ;
+    le direct saute a live = pos + (now - ts) pour se caler au meme moment.
+    Vaut pour le flux souverain <video> (pas l'embed YouTube).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:29:05 +0200
+
 secubox-webos (1.0.151-1~bookworm1) bookworm; urgency=medium
 
   * fix: direct souverain joue dans un <video>, pas une iframe (#1237). Le flux

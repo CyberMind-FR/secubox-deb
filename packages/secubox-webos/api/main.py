@@ -148,11 +148,17 @@ async def set_broadcast(payload: dict):
     if not url or not _ok:
         _broadcast = {"actif": False}
     else:
+        # POS + TS (#1237) : position de lecture du broadcaster au moment ou il
+        # diffuse. Le direct s'y resynchronise : live = pos + (now - ts).
+        try:
+            pos = float(payload.get("pos", 0) or 0)
+        except (TypeError, ValueError):
+            pos = 0.0
         _broadcast = {
             "actif": True, "url": url[:2000],
             "titre": str(payload.get("titre", ""))[:200],
             "par": str(payload.get("par", ""))[:80],
-            "ts": int(time.time()),
+            "pos": max(0.0, pos), "ts": time.time(),
         }
     _sauve_broadcast()
     return _broadcast
