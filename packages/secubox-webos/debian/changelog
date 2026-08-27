@@ -1,3 +1,14 @@
+secubox-webos (1.0.156-1~bookworm1) bookworm; urgency=medium
+
+  * fix: 301 hall.gk2.net -> hall.gk2.secubox.in (#1239) — solution simple
+    (Gandalf). Depuis .net les cardlets *.gk2.secubox.in sont cross-site (Firefox
+    bloque : LNA + partitionnement) ; sur .secubox.in ils sont same-site et tout
+    marche, meme en prive. On retire la tuyauterie /i/radio/ (qui cassait radio
+    meme en authentifie) : les cardlets reprennent leur chargement cross-origine
+    normal, servi sur l'origine canonique.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:44:03 +0200
+
 secubox-webos (1.0.155-1~bookworm1) bookworm; urgency=medium
 
   * fix: proxy /api/v1/radio/ same-origin au Hall (#1239) — sub_filter ne

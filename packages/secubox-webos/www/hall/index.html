@@ -1066,7 +1066,7 @@ function featCardHTML(f,s){
   if(f.micro || f.carte){
     // Services micro servis en MÊME ORIGINE via le Hall-proxy (#1239). On
     // étend au fur et à mesure que chaque proxy /i/<id>/ est ajouté au vhost.
-    const SVC_PROXY = {radio:1};
+    const SVC_PROXY = {};   // #1239 resolu par un 301 hall.gk2.net -> hall.gk2.secubox.in
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     // MÊME ORIGINE (#1239) : pour les services proxifiés par le Hall, on charge
