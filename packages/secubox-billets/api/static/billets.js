@@ -26,6 +26,43 @@
         document.documentElement.setAttribute('data-theme', d.theme);
       }
     });
+
+    // ── MOTS-CLÉS DANS LA MÉGABARRE CONTEXTUELLE DU HALL (#1307b) ────────────
+    // Embarqué, la barre de mots-clés du HAUT fait doublon avec la mégabarre du
+    // Hall. On la masque, et on POUSSE les mots-clés au Hall (menu contextuel à
+    // droite), comme MetaNews et le podcaster. Un clic renvoie le choix, et on
+    // navigue vers la vue filtrée — le serveur re-rend le feed, la coche suit.
+    try {
+      var st = document.createElement('style');
+      st.textContent = 'html.sbx-embed .motscles{display:none}';
+      (document.head || document.documentElement).appendChild(st);
+    } catch (e) {}
+    var pousseTags = function () {
+      try {
+        var chips = [].slice.call(document.querySelectorAll('.tagbar .tag-chip'));
+        if (chips.length < 2) return;   // « tous » + au moins un tag
+        var actif = new URLSearchParams(location.search).get('tag') || null;
+        var items = chips.map(function (a) {
+          var href = a.getAttribute('href') || '/';
+          var m = href.match(/[?&]tag=([^&]+)/);
+          var slug = m ? decodeURIComponent(m[1]) : null;
+          var n = a.querySelector('.tag-n');
+          var emoji = (a.textContent.trim().split(/\s+/)[0]) || '🏷️';
+          var estActif = slug ? (slug === actif) : !actif;
+          return { cle: href, label: slug ? ('#' + slug) : 'tous',
+                   badge: n ? n.textContent.trim() : '', icon: estActif ? '✓' : emoji };
+        });
+        parent.postMessage({ sbx: 'contexte', id: 'billets', titre: 'Mots-clés', items: items }, '*');
+      } catch (e) {}
+    };
+    addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || d.sbx !== 'contexte-choix' || !d.cle) return;
+      // `cle` est l'URL de la vue filtrée : on y va, le serveur re-rend le feed.
+      try { location.href = d.cle; } catch (e) {}
+    });
+    if (document.readyState !== 'loading') pousseTags();
+    else document.addEventListener('DOMContentLoaded', pousseTags);
   } catch (e) {}
 })();
 

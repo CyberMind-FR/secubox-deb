@@ -1,3 +1,13 @@
+secubox-billets (0.8.21-1~bookworm1) bookworm; urgency=medium
+
+  * MOTS-CLES DANS LA MEGABARRE CONTEXTUELLE (#1307b). Embarque, la barre de
+    mots-cles du haut faisait doublon avec la megabarre du Hall : on la masque
+    et on pousse les mots-cles au menu contextuel de droite (comme MetaNews /
+    podcaster). Un clic navigue vers la vue filtree (/?tag=slug), la coche suit
+    le tag actif.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 14:30:00 +0200
+
 secubox-billets (0.8.20-1~bookworm1) bookworm; urgency=medium
 
   * ENCADRE, ON NE REDESSINE PAS LA BARRE DU HALL (#1307). Billets affichait SON
