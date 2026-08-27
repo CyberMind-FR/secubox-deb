@@ -204,6 +204,24 @@ try:
 except OSError:
     kernel_fs = set()
 
+import subprocess as _sp
+
+def _module_available(fs):
+    """Le module existe-t-il sur le disque, meme s'il n'est pas encore charge ?
+    C'est la MEME question que `_fs_support` en bash (modinfo) — sans quoi le
+    panneau (detect) et le montage se contredisaient : hfsplus n'est pas dans
+    /proc/filesystems tant qu'aucun support ne l'a fait charger, donc detect le
+    declarait « illisible » et masquait le bouton, alors que cmd_mount aurait
+    fait `modprobe hfsplus` et monte sans peine. On aligne : un module
+    disponible = montable."""
+    if not fs:
+        return False
+    try:
+        return _sp.run(["modinfo", "--", fs], stdout=_sp.DEVNULL,
+                       stderr=_sp.DEVNULL, timeout=5).returncode == 0
+    except Exception:
+        return False
+
 def fs_support(fs):
     """Verdict rendu AVANT le clic. Un bouton qui ne peut pas aboutir doit le
     dire — ce noyau n'a ni hfsplus ni exfat, et « montage refuse » sans motif
@@ -212,6 +230,10 @@ def fs_support(fs):
         return "unknown", "système de fichiers inconnu"
     if fs in kernel_fs:
         return "kernel", ""
+    # Module present mais pas encore charge (hfsplus, exfat natif...) : le
+    # montage le chargera. Meme ordre que le bash : kernel -> module -> fuse.
+    if _module_available(fs):
+        return "module", ""
     if fs in ("ntfs", "ntfs3") and have_ntfs3g:
         return "fuse", ""
     if fs in ("hfsplus", "hfs") and have_hfsfuse:

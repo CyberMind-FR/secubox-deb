@@ -1,3 +1,16 @@
+secubox-media (1.5.1-1~bookworm1) bookworm; urgency=medium
+
+  * SUPPORT « ILLISIBLE ICI » A TORT (#1373). Le panneau (detect) declarait un
+    systeme de fichiers non pris en charge des qu'il n'etait pas DEJA charge :
+    hfsplus n'apparait dans /proc/filesystems qu'apres qu'un montage l'a fait
+    charger, donc detect masquait le bouton alors que le montage aurait fait
+    `modprobe hfsplus` et reussi. Le verdict Python de detect s'aligne enfin sur
+    celui de cmd_mount (bash, via `modinfo`) : un module DISPONIBLE mais non
+    charge est desormais annonce « module » = montable. Le disque hfsplus
+    retrouve ses boutons Monter.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 09:20:00 +0200
+
 secubox-media (1.5.0-1~bookworm1) bookworm; urgency=high
 
   * Un pilote CHARGEABLE compte comme montable. `_fs_support` renvoyait
