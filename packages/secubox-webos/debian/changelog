@@ -1,3 +1,11 @@
+secubox-webos (1.0.147-1~bookworm1) bookworm; urgency=medium
+
+  * feat: pastille 📡 direct dans #pastilles (#1237) — la diffusion vit AVEC les
+    pastilles medias de droite, meme type (.fpast), animee, accent corail. Clic
+    -> rejoint le direct. Remplace la pastille flottante.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:58:44 +0200
+
 secubox-webos (1.0.146-1~bookworm1) bookworm; urgency=medium
 
   * feat: diffusion SOUVERAINE + pastille dans la megabarre (#1237). Le 📡 du

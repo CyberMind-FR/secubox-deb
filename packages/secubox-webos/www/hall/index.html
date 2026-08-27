@@ -489,6 +489,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    clic AGRANDIT au lieu de changer de page — alors elle ne leur ressemble pas
    tout à fait : un liseré, et le curseur qui annonce l'agrandissement. */
 #pastilles .fpast.video{box-shadow:0 0 0 2px var(--rose,#c0392b);cursor:zoom-in}
+/* PASTILLE DIRECT (#1237) : la diffusion vit avec les pastilles medias, accent corail. */
+#pastilles .fpast.direct{border-color:var(--coral);color:var(--coral)}
+#pastilles .fpast.direct[data-joue="1"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--coral) 26%,transparent)}
 .mrow{pointer-events:auto;display:flex;align-items:center;gap:9px;
   background:var(--panel);border:1px solid var(--line);border-radius:12px;
   box-shadow:var(--lift);padding:6px 10px;max-width:1100px;margin:0 auto;width:100%}
@@ -1938,6 +1941,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function ouvre(){
     if(!courantUrl) return;
     var ov=E('tv-ov'), f=E('tv-ov-f'); if(!ov||!f) return;
+    if(!cable){ wire(); cable=true; }
     var mast=document.querySelector('.mast');
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
     var id=ytid(courantUrl);
@@ -1955,10 +1959,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   }
   function ferme(){ var ov=E('tv-ov'), f=E('tv-ov-f'); if(ov) ov.classList.add('hidden'); if(f) f.src='about:blank'; }
   function wire(){
-    var pill=E('tv-pill'); if(pill) pill.addEventListener('click', ouvre);
     var x=E('tv-ov-x'); if(x) x.addEventListener('click', ferme);
     // ⏹ ARRETER pour le parc (#1237) : broadcast persistant -> arret explicite,
-    // toujours accessible via la pastille.
+    // toujours accessible via la pastille direct.
     var stopb=E('tv-ov-stop');
     if(stopb) stopb.addEventListener('click', function(){
       fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1967,20 +1970,36 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     });
     addEventListener('keydown', function(e){ var ov=E('tv-ov'); if(e.key==='Escape' && ov && !ov.classList.contains('hidden')) ferme(); });
   }
+  // LA PASTILLE 📡 DIRECT vit AVEC les pastilles medias de droite (#pastilles),
+  // meme type (.fpast), animee quand ca diffuse (#1237). Clic -> rejoint le direct.
+  function pastilleDirect(titre){
+    var zone=E('pastilles'); if(!zone) return;
+    var p=zone.querySelector('.fpast[data-direct]');
+    if(!p){
+      p=document.createElement('button');
+      p.className='fpast direct'; p.type='button'; p.setAttribute('data-direct','1');
+      p.textContent='📡'; p.addEventListener('click', ouvre);
+      zone.appendChild(p);
+    }
+    p.setAttribute('data-joue','1');
+    p.title='Diffusion en direct — rejoindre : '+String(titre||'').slice(0,60);
+  }
+  function retirePastilleDirect(){
+    var zone=E('pastilles'); if(!zone) return;
+    var p=zone.querySelector('.fpast[data-direct]'); if(p) p.remove();
+  }
   addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on') setTimeout(sonde,300); });
   function sonde(){
-    var pill=E('tv-pill'); if(!pill) return;   // pas encore dans le DOM
-    if(!cable){ wire(); cable=true; }
     var ov=E('tv-ov'), t=E('tv-ov-t');
     fetch('/api/v1/webos/public/broadcast', {headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); })
       .then(function(d){
         if(d && d.actif && d.url){
-          pill.classList.remove('hidden');
+          pastilleDirect(d.titre||d.url);
           if(t) t.textContent=String(d.titre||d.url).slice(0,60);
           if(courantUrl!==d.url){ courantUrl=d.url; if(ov && !ov.classList.contains('hidden')) ouvre(); }
         } else {
-          pill.classList.add('hidden');
+          retirePastilleDirect();
           if(courantUrl){ courantUrl=null; if(ov && !ov.classList.contains('hidden')) ferme(); }
         }
       }).catch(function(){});
