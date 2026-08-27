@@ -7,3 +7,10 @@ secubox ALL=(root) NOPASSWD: /usr/bin/lxc-ls *
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-info *
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-start *
 secubox ALL=(root) NOPASSWD: /usr/bin/lxc-stop *
+# Veille / reveil (#1225) : gele/relache les processus, RAM conservee. Meme
+# nature « lifecycle » que start/stop, aucune creation/destruction.
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-freeze *
+secubox ALL=(root) NOPASSWD: /usr/bin/lxc-unfreeze *
+# Autostart (#1225) : le helper edite UNIQUEMENT lxc.start.auto d'un conteneur
+# existant (verbe unique, borne), jamais un editeur ni un tee generiques.
+secubox ALL=(root) NOPASSWD: /usr/sbin/secubox-vm-autostart *

@@ -23,3 +23,6 @@ override_dh_auto_install:
 	# unprivileged `secubox` user the aggregator mounts this module as.
 	install -d $(CURDIR)/debian/secubox-vm/etc/sudoers.d
 	install -m 0440 debian/sudoers.d/secubox-vm $(CURDIR)/debian/secubox-vm/etc/sudoers.d/secubox-vm
+	# #1225 — helper privilegie qui bascule lxc.start.auto (verbe unique, borne).
+	install -d $(CURDIR)/debian/secubox-vm/usr/sbin
+	install -m 0755 sbin/secubox-vm-autostart $(CURDIR)/debian/secubox-vm/usr/sbin/secubox-vm-autostart

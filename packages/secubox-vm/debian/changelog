@@ -1,3 +1,32 @@
+secubox-vm (1.2.1-1~bookworm1) bookworm; urgency=medium
+
+  * AUTOSTART : le helper derive lxc.lxcpath (#1225). Les conteneurs de cette
+    box sont sous /data/lxc, pas /var/lib/lxc ; le helper ecrivait a cote et
+    l'autostart ne changeait pas. On demande le chemin a `lxc-config
+    lxc.lxcpath` plutot que de le supposer.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 10:05:00 +0200
+
+secubox-vm (1.2.0-1~bookworm1) bookworm; urgency=medium
+
+  * MANAGER LXC : LISTE A BOUTONS RAPIDES + VEILLE/REVEIL + AUTOSTART (#1225).
+    Les conteneurs s'affichaient en cartes (26 = un mur) et l'interface
+    n'offrait ni autostart, ni veille : un arret « ne tenait pas » (le
+    superviseur d'autoboot rallumait au reboot), et rien ne mettait en veille.
+  * UI : une LIGNE par conteneur (etat, nom, IP, RAM) avec boutons rapides
+    adaptes a l'etat — demarrer / veille (freeze) / reveiller / redemarrer /
+    arreter / COUPER (arret + autostart off) — et une pastille autostart
+    cliquable. FROZEN affiche « en veille ».
+  * Backend : endpoints /freeze (lxc-freeze), /unfreeze (lxc-unfreeze),
+    /autostart {on}, et /stop?hold=true qui coupe AUSSI l'autostart pour que
+    l'arret tienne. lxc-ls lit desormais AUTOSTART (aucune commande de plus).
+  * Autostart ecrit par un helper privilegie dedie (secubox-vm-autostart) qui
+    ne touche QUE lxc.start.auto d'un conteneur existant — least-privilege,
+    plutot qu'un editeur ou un tee generiques dans sudoers. Grant etendu a
+    lxc-freeze/lxc-unfreeze (meme nature lifecycle que start/stop).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 09:55:00 +0200
+
 secubox-vm (1.1.0-1~bookworm1) bookworm; urgency=medium
 
   * Installer la route nginx AUSSI dans /etc/nginx/secubox-routes.d/ : c'est

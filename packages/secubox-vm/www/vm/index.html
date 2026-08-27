@@ -181,6 +181,39 @@
             font-size: 0.85rem;
             color: #888;
         }
+        /* LISTE LXC (#1225) — une ligne par conteneur, boutons rapides. */
+        .lxc-list { display: flex; flex-direction: column; gap: 4px; }
+        .lxc-row {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--card-bg, #1a1a2e); border: 1px solid #2a2a40;
+            border-radius: 7px; padding: 7px 11px; font-size: 0.86rem;
+        }
+        .lxc-row.is-off { opacity: 0.62; }
+        .lxc-row:hover { border-color: #3a3a5a; }
+        .st-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+        .st-run { background: #27ae60; box-shadow: 0 0 0 3px rgba(39,174,96,0.18); }
+        .st-frozen { background: #4a9eff; box-shadow: 0 0 0 3px rgba(74,158,255,0.18); }
+        .st-stop { background: #666; }
+        .lxc-name { font-weight: 700; color: #e8e6f0; min-width: 120px; }
+        .lxc-state { color: #9a9ab0; font-size: 0.74rem; min-width: 78px; text-transform: capitalize; }
+        .lxc-ip { color: #7fd4ff; font-family: ui-monospace, monospace; font-size: 0.76rem; min-width: 108px; }
+        .lxc-mem { color: #888; font-size: 0.74rem; font-variant-numeric: tabular-nums; flex: 1; }
+        .lxc-actions { display: flex; align-items: center; gap: 5px; margin-left: auto; flex: 0 0 auto; }
+        .qb {
+            border: 1px solid #3a3a55; background: #22223a; color: #d8d8ea;
+            border-radius: 6px; cursor: pointer; font-size: 0.82rem; line-height: 1;
+            padding: 5px 8px; min-width: 30px;
+        }
+        .qb:hover { border-color: #4a9eff; }
+        .qb-go { color: #7fff7f; border-color: #2d5a27; }
+        .qb-stop { color: #ffcf7f; }
+        .qb-cut { color: #ff7f7f; border-color: #5a2727; }
+        .qb-auto { font-size: 0.64rem; letter-spacing: 0.05em; text-transform: uppercase; color: #777; }
+        .qb-auto.on { color: #7fff7f; border-color: #2d5a27; background: rgba(39,174,96,0.12); }
+        @media (max-width: 640px) {
+            .lxc-ip, .lxc-mem { display: none; }
+            .lxc-name { min-width: 0; }
+        }
     </style>
 </head>
 <body class="crt-light hybrid-dark">
@@ -379,7 +412,52 @@
 
             allEl.innerHTML = allVMs.length ? allVMs.map(renderVMCard).join('') : '<p>No VMs found</p>';
             kvmEl.innerHTML = kvmVMs.length ? kvmVMs.map(renderVMCard).join('') : '<p>No KVM VMs</p>';
-            lxcEl.innerHTML = lxcContainers.length ? lxcContainers.map(renderVMCard).join('') : '<p>No LXC containers</p>';
+            // LES LXC EN LISTE, PAS EN CARTES (#1225) : 26 conteneurs en cartes
+            // noyaient l'ecran ; une ligne par conteneur avec des boutons
+            // rapides (démarrer / veille / réveiller / arrêter / couper /
+            // autostart) se parcourt d'un coup d'oeil.
+            lxcEl.className = 'lxc-list';
+            lxcEl.innerHTML = lxcContainers.length
+                ? lxcContainers.map(renderLxcRow).join('')
+                : '<p>No LXC containers</p>';
+        }
+
+        // Une ligne LXC : etat, nom, IP, RAM, puis boutons rapides adaptes a
+        // l'etat courant, et une pastille autostart cliquable.
+        function renderLxcRow(vm) {
+            const state = (vm.state || 'unknown').toLowerCase();
+            const running = state === 'running';
+            const frozen = vm.frozen || state === 'frozen';
+            const stopped = !running && !frozen;
+            const dot = frozen ? 'st-frozen' : (running ? 'st-run' : 'st-stop');
+            const n = vm.name;
+            let actions = '';
+            if (stopped) {
+                actions = `<button class="qb qb-go" title="Démarrer" onclick="startVM('${n}')">▶</button>`;
+            } else if (frozen) {
+                actions =
+                    `<button class="qb qb-go" title="Réveiller" onclick="wakeVM('${n}')">☀️</button>` +
+                    `<button class="qb qb-stop" title="Arrêter" onclick="stopVM('${n}')">⏹</button>`;
+            } else { // running
+                actions =
+                    `<button class="qb" title="Mettre en veille (freeze)" onclick="freezeVM('${n}')">💤</button>` +
+                    `<button class="qb" title="Redémarrer" onclick="restartVM('${n}')">⭮</button>` +
+                    `<button class="qb qb-stop" title="Arrêter" onclick="stopVM('${n}')">⏹</button>` +
+                    `<button class="qb qb-cut" title="Couper pour de bon (arrêt + autostart off)" onclick="cutVM('${n}')">⏻</button>`;
+            }
+            const autoOn = !!vm.autostart;
+            const auto = `<button class="qb qb-auto ${autoOn ? 'on' : ''}" ` +
+                `title="Démarrage auto : ${autoOn ? 'activé — cliquer pour désactiver' : 'désactivé — cliquer pour activer'}" ` +
+                `onclick="toggleAutostart('${n}', ${autoOn ? 'false' : 'true'})">auto</button>`;
+            return `
+                <div class="lxc-row ${stopped ? 'is-off' : ''}" data-name="${n}">
+                    <span class="st-dot ${dot}" title="${state}"></span>
+                    <span class="lxc-name">${n}</span>
+                    <span class="lxc-state">${frozen ? 'en veille' : state}</span>
+                    <span class="lxc-ip">${vm.ip || ''}</span>
+                    <span class="lxc-mem">${vm.memory && vm.memory !== '0.00MB' ? vm.memory : ''}</span>
+                    <span class="lxc-actions">${auto}${actions}</span>
+                </div>`;
         }
 
         function renderVMCard(vm) {
@@ -439,6 +517,38 @@
             } catch (e) {
                 alert('Failed to restart VM');
             }
+        }
+
+        // VEILLE / RÉVEIL (#1225) : freeze garde la RAM, réveil instantané.
+        async function freezeVM(name) {
+            try {
+                await fetch(`${API}/vms/${name}/freeze`, { method: 'POST' });
+                loadVMs(); loadStatus();
+            } catch (e) { alert('Échec de la mise en veille'); }
+        }
+        async function wakeVM(name) {
+            try {
+                await fetch(`${API}/vms/${name}/unfreeze`, { method: 'POST' });
+                loadVMs(); loadStatus();
+            } catch (e) { alert('Échec du réveil'); }
+        }
+
+        // COUPER POUR DE BON : arrêt + autostart off, pour que le conteneur ne
+        // revienne pas au boot par le superviseur d'autoboot.
+        async function cutVM(name) {
+            if (!confirm(`Couper ${name} pour de bon ?\n\nLe conteneur est arrêté ET retiré du démarrage auto : il ne reviendra pas au prochain redémarrage tant que vous ne le réactivez pas.`)) return;
+            try {
+                await fetch(`${API}/vms/${name}/stop?hold=true`, { method: 'POST' });
+                loadVMs(); loadStatus();
+            } catch (e) { alert("Échec de l'arrêt"); }
+        }
+
+        // AUTOSTART : (dé)clarer le démarrage au boot.
+        async function toggleAutostart(name, on) {
+            try {
+                await fetch(`${API}/vms/${name}/autostart?on=${on ? 'true' : 'false'}`, { method: 'POST' });
+                loadVMs();
+            } catch (e) { alert("Échec du réglage de l'autostart"); }
         }
 
         async function deleteVM(name) {

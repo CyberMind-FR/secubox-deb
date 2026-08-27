@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# SecuBox VM :: bascule l'autostart d'un conteneur LXC (#1225).
+#
+# POURQUOI UN HELPER DEDIE. Le module VM tourne en `secubox` et n'ecrit pas
+# dans /var/lib/lxc/<name>/config, propriete de root. Plutot que d'accorder un
+# `sudo tee` ou un editeur libre — qui laisserait ecrire N'IMPORTE QUOI dans
+# N'IMPORTE QUEL fichier — on accorde CE seul verbe : mettre `lxc.start.auto`
+# a 0 ou 1 pour un conteneur EXISTANT. Least-privilege CSPN.
+#
+#   secubox-vm-autostart <nom> <0|1>
+set -euo pipefail
+
+name="${1:-}"
+val="${2:-}"
+
+# Le nom vient de l'API (donc d'une requete) : il compose un chemin, on le
+# borne strictement a ce qu'un nom de conteneur LXC peut etre.
+case "$name" in
+    ''|*[!A-Za-z0-9._-]*) echo "nom de conteneur invalide" >&2; exit 2 ;;
+esac
+case "$val" in
+    0|1) : ;;
+    *) echo "valeur attendue : 0 ou 1" >&2; exit 2 ;;
+esac
+
+# Le repertoire des conteneurs n'est PAS toujours /var/lib/lxc : cette box le
+# place en /data/lxc (lxc.lxcpath dans /etc/lxc/lxc.conf). On demande donc le
+# chemin a lxc lui-meme plutot que de le supposer — sinon le helper ecrivait a
+# cote et l'autostart ne bougeait jamais.
+base="$(lxc-config lxc.lxcpath 2>/dev/null)"
+[ -n "$base" ] || base="/var/lib/lxc"
+cfg="${base}/${name}/config"
+[ -f "$cfg" ] || { echo "config introuvable : $cfg" >&2; exit 3; }
+
+# On retire toute ligne lxc.start.auto existante (il peut y en avoir plusieurs,
+# commentees ou non), puis on pose la notre. Ecriture atomique par fichier
+# temporaire + rename, pour ne jamais laisser une config a moitie ecrite.
+tmp="$(mktemp "${cfg}.XXXXXX")"
+trap 'rm -f "$tmp"' EXIT
+grep -vE '^[[:space:]]*lxc\.start\.auto[[:space:]]*=' "$cfg" > "$tmp"
+printf 'lxc.start.auto = %s\n' "$val" >> "$tmp"
+chmod --reference="$cfg" "$tmp" 2>/dev/null || chmod 0644 "$tmp"
+chown --reference="$cfg" "$tmp" 2>/dev/null || true
+mv -f "$tmp" "$cfg"
+trap - EXIT
+
+echo "lxc.start.auto = ${val} (${name})"

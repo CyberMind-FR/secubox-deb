@@ -95,11 +95,19 @@ def get_virsh_vms() -> list:
 
 
 def get_lxc_containers() -> list:
-    """List all LXC containers."""
+    """List all LXC containers.
+
+    On lit aussi AUTOSTART (#1225) : sans lui, l'interface ne pouvait ni
+    montrer si un conteneur revient au boot, ni offrir un arret qui « tient ».
+    L'etat FROZEN (mise en veille par lxc-freeze) est distingue de RUNNING pour
+    que le bouton propose reveiller plutot que demarrer.
+    """
     containers = []
     # NB: the memory column key is `RAM` — `MEMORY` is rejected by lxc-ls
-    # ("Invalid key") and yields zero output (#601).
-    stdout, _, code = run_priv(["lxc-ls", "-f", "-F", "NAME,STATE,IPV4,RAM"])
+    # ("Invalid key") and yields zero output (#601). AUTOSTART s'ajoute a la
+    # meme requete, aucune commande de plus.
+    stdout, _, code = run_priv(
+        ["lxc-ls", "-f", "-F", "NAME,STATE,IPV4,RAM,AUTOSTART"])
 
     if code != 0:
         return containers
@@ -107,11 +115,15 @@ def get_lxc_containers() -> list:
     for line in stdout.strip().split('\n')[1:]:  # Skip header
         parts = line.split()
         if len(parts) >= 2:
+            state = parts[1].lower()
             containers.append({
                 "name": parts[0],
-                "state": parts[1].lower(),
+                "state": state,
+                "frozen": state == "frozen",
                 "ip": parts[2] if len(parts) > 2 and parts[2] != '-' else None,
                 "memory": parts[3] if len(parts) > 3 else None,
+                # AUTOSTART rend "1"/"0" ; absent sur les tres vieux lxc-ls.
+                "autostart": (len(parts) > 4 and parts[4] == "1"),
                 "type": "lxc"
             })
 
@@ -345,9 +357,22 @@ def start_vm(name: str):
     raise HTTPException(status_code=404, detail="VM not found")
 
 
+def _set_lxc_autostart(name: str, on: bool) -> tuple:
+    """Ecrit lxc.start.auto via le helper privilegie (edite la config root)."""
+    return run_priv(["/usr/sbin/secubox-vm-autostart", name, "1" if on else "0"])
+
+
 @app.post("/vms/{name}/stop")
-def stop_vm(name: str, force: bool = False):
-    """Stop a VM or container."""
+def stop_vm(name: str, force: bool = False, hold: bool = False):
+    """Stop a VM or container.
+
+    `hold` (#1225) : un arret qui TIENT. Un `lxc-stop` seul ne desactive pas
+    l'autostart — au prochain boot, `lxc.service` relance le conteneur, et
+    l'operateur croit son arret ignore « par un autre superviseur ». Avec
+    `hold`, on coupe AUSSI l'autostart : le conteneur reste eteint jusqu'a
+    decision explicite. On l'ecrit AVANT le stop, pour qu'une course avec un
+    superviseur ne le rallume pas dans l'intervalle.
+    """
     # Try KVM
     if is_libvirt_running():
         for vm in get_virsh_vms():
@@ -362,15 +387,63 @@ def stop_vm(name: str, force: bool = False):
     if is_lxc_available():
         for c in get_lxc_containers():
             if c["name"] == name:
+                if hold:
+                    _set_lxc_autostart(name, False)
                 cmd = ["lxc-stop", "-n", name]
                 if force:
                     cmd.append("-k")
                 stdout, stderr, code = run_priv(cmd)
                 if code != 0:
                     raise HTTPException(status_code=500, detail=f"Failed to stop: {stderr}")
-                return {"status": "stopped", "name": name}
+                return {"status": "stopped", "name": name, "held": hold}
 
     raise HTTPException(status_code=404, detail="VM not found")
+
+
+@app.post("/vms/{name}/freeze")
+def freeze_vm(name: str):
+    """Mettre en VEILLE un conteneur LXC (#1225) : lxc-freeze gele tous ses
+    processus — zero CPU, RAM conservee, reveil instantane par unfreeze. C'est
+    le pendant « sleep » que l'interface reclamait, sans perdre l'etat."""
+    if is_lxc_available():
+        for c in get_lxc_containers():
+            if c["name"] == name:
+                stdout, stderr, code = run_priv(["lxc-freeze", "-n", name])
+                if code != 0:
+                    raise HTTPException(status_code=500, detail=f"Failed to freeze: {stderr}")
+                return {"status": "frozen", "name": name}
+    raise HTTPException(status_code=404, detail="Container not found")
+
+
+@app.post("/vms/{name}/unfreeze")
+def unfreeze_vm(name: str):
+    """REVEILLER un conteneur en veille (#1225) : lxc-unfreeze relache les
+    processus geles. Instantane — la RAM n'a pas bouge."""
+    if is_lxc_available():
+        for c in get_lxc_containers():
+            if c["name"] == name:
+                stdout, stderr, code = run_priv(["lxc-unfreeze", "-n", name])
+                if code != 0:
+                    raise HTTPException(status_code=500, detail=f"Failed to wake: {stderr}")
+                return {"status": "running", "name": name}
+    raise HTTPException(status_code=404, detail="Container not found")
+
+
+@app.post("/vms/{name}/autostart")
+def set_autostart(name: str, on: bool = True):
+    """(Dé)clarer un conteneur en DEMARRAGE AUTO (#1225). Ecrit
+    `lxc.start.auto` dans sa config via un helper privilegie — le service
+    tourne en `secubox` et n'ecrit pas dans /var/lib/lxc sans cela. C'est ce
+    qui manquait pour que l'operateur decide qui revient au boot."""
+    if is_lxc_available():
+        for c in get_lxc_containers():
+            if c["name"] == name:
+                stdout, stderr, code = _set_lxc_autostart(name, on)
+                if code != 0:
+                    raise HTTPException(status_code=500,
+                                        detail=f"Failed to set autostart: {stderr}")
+                return {"status": "ok", "name": name, "autostart": on}
+    raise HTTPException(status_code=404, detail="Container not found")
 
 
 @app.post("/vms/{name}/restart")
