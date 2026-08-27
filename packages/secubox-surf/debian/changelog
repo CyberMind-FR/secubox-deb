@@ -1,3 +1,11 @@
+secubox-surf (1.0.14-1~bookworm1) bookworm; urgency=medium
+
+  * fix: Cache-Control no-store sur la copie carbone (#1235). Sinon le navigateur
+    garde une version (souvent la legere d'avant, avec son ballet first-id) et
+    ne re-fetche jamais la carbone -> l'utilisateur restait sur l'ancienne page.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 11:38:32 +0200
+
 secubox-surf (1.0.13-1~bookworm1) bookworm; urgency=medium
 
   * fix: rendu carbone sous le plafond de timeout (#1235). nginx surf.conf

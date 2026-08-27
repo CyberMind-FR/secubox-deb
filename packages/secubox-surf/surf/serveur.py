@@ -294,8 +294,12 @@ async def app(scope, receive, send):
                     return None
                 return relais.origine_de(h)
             corps = relais.fige(dom, base, sur_hote_fige).encode()
+            # NO-STORE (#1235) : sinon le navigateur garde une version (parfois la
+            # legere d'avant) et ne re-fetche pas la carbone. On veut toujours du
+            # frais pour un site lourd.
             sortie = [("content-type", "text/html; charset=utf-8"),
                       ("content-length", str(len(corps))),
+                      ("cache-control", "no-store, must-revalidate"),
                       ("x-surf-cible", cible), ("x-surf-rendu", "carbone")]
             org = entetes_in.get("origin", "")
             if org:
