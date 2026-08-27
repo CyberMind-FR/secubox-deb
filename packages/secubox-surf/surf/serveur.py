@@ -135,6 +135,22 @@ async def app(scope, receive, send):
                                "Cette adresse ne nomme aucun site à relayer.", 400))
         return
 
+    # PRÉFLIGHT CORS (#1235). Un fetch cross-origine entre hôtes relayés (avec
+    # identifiants ou en-tête non simple) déclenche un OPTIONS préalable : on y
+    # répond nous-mêmes, sans aller à l'amont — qui ne connaît pas nos origines
+    # `surf-*` et renverrait un refus.
+    if scope["method"] == "OPTIONS" and entetes_in.get("origin"):
+        acrh = entetes_in.get("access-control-request-headers", "*")
+        await repond(204, [
+            ("access-control-allow-origin", entetes_in["origin"]),
+            ("access-control-allow-credentials", "true"),
+            ("access-control-allow-methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS"),
+            ("access-control-allow-headers", acrh),
+            ("access-control-max-age", "600"),
+            ("vary", "Origin"),
+        ], b"")
+        return
+
     chemin = scope.get("raw_path", scope["path"].encode()).decode()
     qs = scope.get("query_string", b"").decode()
 
@@ -232,7 +248,8 @@ async def app(scope, receive, send):
         if sc:
             jarre.apprend(cible, [sc])
 
-    entetes_out = relais.reecris_entetes(dict(r.headers), base, rap, sur_hote)
+    entetes_out = relais.reecris_entetes(dict(r.headers), base, rap, sur_hote,
+                                         origine_req=entetes_in.get("origin", ""))
     ct = r.headers.get("content-type", "").lower()
 
     if "text/html" in ct:

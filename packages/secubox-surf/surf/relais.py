@@ -703,11 +703,28 @@ def reecris_css(corps: str, base: str, rap: Rapport, sur_hote) -> str:
 
 # ── LES EN-TÊTES ────────────────────────────────────────────────────────────
 
-def reecris_entetes(entetes: dict, base: str, rap: Rapport, sur_hote) -> dict:
-    """Réécrit ou retire les en-têtes qui trahiraient l'origine réelle."""
+def reecris_entetes(entetes: dict, base: str, rap: Rapport, sur_hote,
+                    origine_req: str = "") -> dict:
+    """Réécrit ou retire les en-têtes qui trahiraient l'origine réelle.
+
+    `origine_req` : l'en-tête `Origin` de la requête navigateur. Chaque site
+    est relayé sous SA propre origine `surf-<hôte>.gk2.secubox.in` (#1217) :
+    quand la page (`surf-accounts-google-com`) charge une sous-ressource d'un
+    AUTRE hôte relayé (`surf-www-gstatic-com`, le JS de signin), c'est une
+    requête CROSS-ORIGINE. Sans `Access-Control-Allow-Origin` en réponse, le
+    navigateur la bloque (« Access-Control-Allow-Origin manquant », observé sur
+    le login Google). On rejoue donc l'Origin demandeuse et on autorise les
+    identifiants — le relais est un bac à sable, toutes ces origines sont les
+    nôtres. (#1235)
+    """
     out = {}
     for cle, val in entetes.items():
         bas = cle.lower()
+
+        # Les en-têtes CORS de l'amont nomment SES origines, jamais les nôtres :
+        # on les retire pour poser les nôtres après la boucle.
+        if bas.startswith("access-control-"):
+            continue
 
         if bas == "location":
             v, _ = _map_url(val, base, sur_hote)
@@ -758,4 +775,15 @@ def reecris_entetes(entetes: dict, base: str, rap: Rapport, sur_hote) -> dict:
             continue  # recalculés par le serveur du proxy
 
         out[cle] = val
+
+    # CORS entre origines surf (#1235). Toutes les origines `surf-*` sont les
+    # nôtres : on autorise la sous-ressource à charger cross-origine. On rejoue
+    # l'Origin exacte (jamais `*`, incompatible avec `Allow-Credentials`) pour
+    # que les scripts `crossorigin`/modules chargés d'un autre hôte relayé
+    # passent. Sans Origin (navigation de premier niveau), rien à faire.
+    if origine_req:
+        out["Access-Control-Allow-Origin"] = origine_req
+        out["Access-Control-Allow-Credentials"] = "true"
+        out["Access-Control-Expose-Headers"] = "*"
+        out["Vary"] = "Origin"
     return out
