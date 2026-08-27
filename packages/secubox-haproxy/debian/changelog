@@ -1,3 +1,13 @@
+secubox-haproxy (1.8.11-1~bookworm1) bookworm; urgency=medium
+
+  * RETRAIT DU LEGACY « MIGRATION » (#1222). La migration OpenWrt->Debian est
+    terminee (et depassee) : on retire de la webui admin la section « Migration »
+    et « Import ... from OpenWrt SecuBox » — carte, modale, boutons, et le JS
+    showMigrate()/doMigrate() associe. L'endpoint API /migrate subsiste, sans
+    appelant UI (retrait cote API a prevoir dans un lot separe).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 08:25:00 +0200
+
 secubox-haproxy (1.8.10-1~bookworm1) bookworm; urgency=medium
 
   * HTTPS PARTOUT, PAR DEFAUT (#1370). La redirection clair->TLS n'etait emise

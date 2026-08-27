@@ -324,11 +324,6 @@
                 </div>
             </div>
             <div class="card">
-                <h2>Migration</h2>
-                <p style="margin-bottom:1rem;color:var(--p31-dim)">Import apps from OpenWrt SecuBox</p>
-                <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
-            </div>
-            <div class="card">
                 <h2>Gitea Integration</h2>
                 <p style="margin-bottom:1rem;color:var(--p31-dim)">Clone or push apps to Gitea repositories</p>
                 <button class="btn" onclick="showGiteaClone()">Clone from Gitea</button>
@@ -345,18 +340,6 @@
             <div class="form-actions">
                 <button class="btn" onclick="hideModal('deploy-modal')">Cancel</button>
                 <button class="btn success" onclick="confirmDeploy()">Deploy</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Migrate Modal -->
-    <div class="modal" id="migrate-modal">
-        <div class="modal-content">
-            <h3>Migrate from OpenWrt</h3>
-            <div class="form-group"><label>Source IP</label><input type="text" id="migrate-source" value="192.168.255.1"></div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
-                <button class="btn primary" onclick="doMigrate()">Start Migration</button>
             </div>
         </div>
     </div>
@@ -436,7 +419,7 @@
         }
 
         // Back-compat shim for the pre-existing English-language call sites
-        // below (deploy/migrate/gitea/power) — dispatches to toast()/errorToast().
+        // below (deploy/gitea/power) — dispatches to toast()/errorToast().
         function showToast(msg, type) { (type === 'error' ? errorToast : toast)(msg); }
 
         function showTab(name) {
@@ -458,7 +441,6 @@
         function showModal(id) { document.getElementById(id).classList.add('show'); }
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
         function showDeploy() { showModal('deploy-modal'); }
-        function showMigrate() { showModal('migrate-modal'); }
         function showGiteaClone() { showModal('gitea-modal'); }
 
         // ═══════════════════════════════════════════════════════════════
@@ -1016,14 +998,6 @@
             if (!confirm('Install Streamlit container? This may take several minutes.')) return;
             await api('/container/install', { method: 'POST' });
             showToast('Installation started in background. Check status in a few minutes.', 'info');
-        }
-
-        // Migration
-        async function doMigrate() {
-            const source = document.getElementById('migrate-source').value;
-            await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
-            hideModal('migrate-modal');
-            showToast('Migration started. Apps will appear shortly.', 'success');
         }
 
         // Gitea

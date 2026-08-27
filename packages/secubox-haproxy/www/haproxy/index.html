@@ -617,11 +617,6 @@
             <div id="actions" class="tab-content">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div style="background: var(--bg-dark); padding: 1rem; border-radius: 6px;">
-                        <h3 style="margin-bottom: 0.5rem;">Migration</h3>
-                        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">Import vhosts and certificates from OpenWrt SecuBox</p>
-                        <button class="btn" onclick="showMigrate()">Migrate from OpenWrt</button>
-                    </div>
-                    <div style="background: var(--bg-dark); padding: 1rem; border-radius: 6px;">
                         <h3 style="margin-bottom: 0.5rem;">Service Control</h3>
                         <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">Manage HAProxy service</p>
                         <div class="btn-group">
@@ -633,21 +628,6 @@
             </div>
         </div>
     </main>
-
-    <!-- Migrate Modal -->
-    <div id="migrate-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;">
-        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:1.5rem;min-width:400px;">
-            <h3 style="margin-bottom:1rem;">Migrate from OpenWrt</h3>
-            <div style="margin-bottom:1rem;">
-                <label style="display:block;margin-bottom:0.25rem;font-size:0.8rem;color:var(--text-dim);">Source IP</label>
-                <input type="text" id="migrate-source" value="192.168.255.1" style="width:100%;padding:0.5rem;border:1px solid var(--border);border-radius:4px;background:var(--bg-dark);color:var(--text);">
-            </div>
-            <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
-                <button class="btn" onclick="hideMigrate()">Cancel</button>
-                <button class="btn primary" onclick="doMigrate()">Start Migration</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Generic Modal -->
     <div id="modal" class="modal">
@@ -1545,21 +1525,6 @@
                     <a href="${url}" target="_blank" style="color:var(--primary)">${url}</a>
                 </div>`;
             }).join('');
-        }
-
-        function showMigrate() { document.getElementById('migrate-modal').style.display = 'flex'; }
-        function hideMigrate() { document.getElementById('migrate-modal').style.display = 'none'; }
-
-        async function doMigrate() {
-            const source = document.getElementById('migrate-source').value;
-            const d = await api('/migrate', { method: 'POST', body: JSON.stringify({ source }) });
-            hideMigrate();
-            if (d.success) {
-                alert(`Migration complete: ${d.vhosts || 0} vhosts, ${d.backends || 0} backends, ${d.certs || 0} certificates`);
-                refresh();
-            } else {
-                alert('Migration failed: ' + (d.error || 'Unknown error'));
-            }
         }
 
         async function restart() {

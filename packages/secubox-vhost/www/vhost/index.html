@@ -294,24 +294,6 @@
         </div>
     </div>
 
-    <!-- Migration Modal -->
-    <div class="modal" id="migrate-modal">
-        <div class="modal-content">
-            <h3>Migrate from OpenWrt</h3>
-            <p style="margin-bottom:1rem;color:var(--dim);font-size:0.8rem">
-                Import vhosts and certificates from existing SecuBox.
-            </p>
-            <div class="form-group">
-                <label>Source IP Address</label>
-                <input type="text" id="migrate-source" value="192.168.255.1">
-            </div>
-            <div class="form-actions">
-                <button class="btn" onclick="hideModal('migrate-modal')">Cancel</button>
-                <button class="btn warning" onclick="doMigrate()">Start Migration</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         const API = '/api/v1/vhost';
         const token = () => localStorage.getItem('sbx_token');
@@ -568,7 +550,6 @@
         function hideModal(id) { document.getElementById(id).classList.remove('show'); }
         function showAddVhost() { showModal('vhost-modal'); }
         function showRequestCert() { showModal('cert-modal'); }
-        function showMigrate() { showModal('migrate-modal'); }
 
         async function addVhost() {
             const domain = document.getElementById('new-domain').value.trim();
@@ -643,16 +624,6 @@
         async function testConfig() {
             const r = await api('/test', { method: 'POST' });
             alert(r.valid ? 'Configuration is valid' : 'Invalid: ' + r.message);
-        }
-
-        async function doMigrate() {
-            const source = document.getElementById('migrate-source').value;
-            const r = await api('/migrate', {
-                method: 'POST',
-                body: JSON.stringify({ source })
-            });
-            hideModal('migrate-modal');
-            alert(r.success ? 'Migration started' : 'Failed');
         }
 
         function refresh() { loadStatus(); loadVhosts(); loadCerts(); }

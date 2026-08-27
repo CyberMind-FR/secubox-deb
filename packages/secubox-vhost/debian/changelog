@@ -1,3 +1,13 @@
+secubox-vhost (1.6.2-1~bookworm1) bookworm; urgency=medium
+
+  * RETRAIT DU LEGACY « MIGRATION » (#1222). La migration OpenWrt->Debian est
+    terminee (et depassee) : on retire de la webui admin la section « Migration »
+    et « Import ... from OpenWrt SecuBox » — carte, modale, boutons, et le JS
+    showMigrate()/doMigrate() associe. L'endpoint API /migrate subsiste, sans
+    appelant UI (retrait cote API a prevoir dans un lot separe).
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 08:25:00 +0200
+
 secubox-vhost (1.6.1-1~bookworm1) bookworm; urgency=medium
 
   * Rattachement au module par le SOCKET vers lequel la configuration nginx
