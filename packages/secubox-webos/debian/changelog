@@ -1,3 +1,13 @@
+secubox-webos (1.0.130-1~bookworm1) bookworm; urgency=medium
+
+  * LE BOUTON 🍪 « APPRENDRE LES COOKIES » ETAIT INVISIBLE (#1366). Il restait
+    `hidden` du HTML et n'etait affiche NULLE PART : on ne pouvait donc pas s'en
+    servir, alors que c'est LE moyen de franchir un portail (BFM/first-id) qui
+    ne pose jamais son cookie via le proxy. On l'affiche des qu'un site est
+    relaye, et on renseigne l'hote du bocal.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 11:20:00 +0200
+
 secubox-webos (1.0.129-1~bookworm1) bookworm; urgency=medium
 
   * SAUT DE PORTAIL DIRECT + GARDE ANTI-BOUCLE DANS LE SURF (#1367). Le catcher

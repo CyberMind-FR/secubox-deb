@@ -269,6 +269,12 @@
     $('rech').hidden = false;
     $('onglet').hidden = false;
     $('home').hidden = false;
+    // 🍪 APPRENDRE LES COOKIES (#1366) : le bouton restait `hidden` du HTML —
+    // on ne l'affichait NULLE PART. Or c'est justement quand on surfe un site
+    // (BFM et son portail) qu'on en a besoin. On le montre des qu'un site est
+    // relaye, et on renseigne l'hote du bocal.
+    var jb = $('jar'); if (jb) jb.hidden = false;
+    var jh = $('jarhote'); if (jh) jh.textContent = n.host;
   }
 
   // RECULER. On depile l'adresse precedente et on la recharge SANS l'empiler.
