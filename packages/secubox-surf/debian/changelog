@@ -1,3 +1,15 @@
+secubox-surf (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * feat: pont postMessage entre origines relayees (#1235 A) — les cadres SSO
+    (Google) se parlent en postMessage(data, origine-brute) et verifient
+    event.origin contre l'origine brute ; sous surf-* le navigateur refusait la
+    livraison et les verifs echouaient. A l'envoi on reecrit la cible
+    brute -> surf ; a la reception on represente event.origin surf -> brut.
+    Best-effort (les envois vers un enfant cross-origine restent hors de portee
+    d'un WindowProxy natif).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 10:07:16 +0200
+
 secubox-surf (1.0.0-1~bookworm1) bookworm; urgency=medium
 
   * Premier empaquetage du relais surf (le BiB), jusque-la deploye a la main
