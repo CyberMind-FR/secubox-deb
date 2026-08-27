@@ -1,3 +1,12 @@
+secubox-webos (1.0.154-1~bookworm1) bookworm; urgency=medium
+
+  * fix: sub_filter du proxy radio couvre text/javascript (#1239) — radio.js est
+    servi en text/javascript (pas application/javascript) -> ses fetch
+    /api/v1/radio/ n'etaient pas reecrits -> tombaient sur l'index. Ajout du
+    type -> le cardlet radio est pleinement same-origin.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:35:15 +0200
+
 secubox-webos (1.0.153-1~bookworm1) bookworm; urgency=medium
 
   * feat: cardlets micro en MÊME ORIGINE (#1239, preuve radio) — proxy /i/radio/
