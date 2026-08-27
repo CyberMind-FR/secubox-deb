@@ -1,3 +1,12 @@
+secubox-webos (1.0.143-1~bookworm1) bookworm; urgency=medium
+
+  * fix: broadcast (récepteur) — meme piege de chargement que le viewer (#1237).
+    L'IIFE broadcast sortait tot (tv-pill/tv-ov apres la fin du script) -> le
+    sonde ne tournait jamais -> la pastille 📡 n'apparaissait pas (« la diffusion
+    ne fait rien »). Recherche paresseuse + cablage au premier sonde.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:37:41 +0200
+
 secubox-webos (1.0.142-1~bookworm1) bookworm; urgency=medium
 
   * fix: retirer </script> des commentaires du viewer (#1237) — ils fermaient le

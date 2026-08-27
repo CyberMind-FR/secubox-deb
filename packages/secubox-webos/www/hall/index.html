@@ -1920,10 +1920,11 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
 // les 5s ; YouTube s'embarque en youtube-nocookie (autorise dans la CSP), tout
 // autre lien se rejoint via le surf (origine par-site). Rien n'est stocke.
 (function broadcast(){
-  var pill=document.getElementById('tv-pill'), ov=document.getElementById('tv-ov'),
-      f=document.getElementById('tv-ov-f'), t=document.getElementById('tv-ov-t');
-  if(!pill||!ov||!f) return;
-  var courantUrl=null;
+  // Meme piege de chargement que le viewer (#1237) : tv-pill/tv-ov vivent apres
+  // la fin du script -> recherche PARESSEUSE. Sinon l'IIFE sortait ici et la
+  // pastille 📡 n'apparaissait jamais (« la diffusion ne fait rien »).
+  function E(id){ return document.getElementById(id); }
+  var courantUrl=null, cable=false;
   function ytid(u){
     try{ var url=new URL(u), h=url.hostname.replace(/^www\./,'').replace(/^m\./,'');
       if(h==='youtu.be') return url.pathname.slice(1,12);
@@ -1936,6 +1937,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   }
   function ouvre(){
     if(!courantUrl) return;
+    var ov=E('tv-ov'), f=E('tv-ov-f'); if(!ov||!f) return;
     var id=ytid(courantUrl);
     if(id){
       var e='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
@@ -1945,30 +1947,35 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       ov.classList.remove('hidden');
     } else if(typeof ouvreSurf==='function'){ ouvreSurf(courantUrl); }
   }
-  function ferme(){ ov.classList.add('hidden'); f.src='about:blank'; }
-  pill.addEventListener('click', ouvre);
-  var x=document.getElementById('tv-ov-x'); if(x) x.addEventListener('click', ferme);
-  // ⏹ ARRETER pour le parc (#1237) : le broadcast est persistant ; sans arret
-  // explicite il revenait a chaque refresh. Toujours accessible via la pastille.
-  var stopb=document.getElementById('tv-ov-stop');
-  if(stopb) stopb.addEventListener('click', function(){
-    fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({url:''})}).catch(function(){});
-    ferme();
-  });
-  addEventListener('keydown', function(e){ if(e.key==='Escape' && !ov.classList.contains('hidden')) ferme(); });
+  function ferme(){ var ov=E('tv-ov'), f=E('tv-ov-f'); if(ov) ov.classList.add('hidden'); if(f) f.src='about:blank'; }
+  function wire(){
+    var pill=E('tv-pill'); if(pill) pill.addEventListener('click', ouvre);
+    var x=E('tv-ov-x'); if(x) x.addEventListener('click', ferme);
+    // ⏹ ARRETER pour le parc (#1237) : broadcast persistant -> arret explicite,
+    // toujours accessible via la pastille.
+    var stopb=E('tv-ov-stop');
+    if(stopb) stopb.addEventListener('click', function(){
+      fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:''})}).catch(function(){});
+      ferme();
+    });
+    addEventListener('keydown', function(e){ var ov=E('tv-ov'); if(e.key==='Escape' && ov && !ov.classList.contains('hidden')) ferme(); });
+  }
   addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on') setTimeout(sonde,300); });
   function sonde(){
+    var pill=E('tv-pill'); if(!pill) return;   // pas encore dans le DOM
+    if(!cable){ wire(); cable=true; }
+    var ov=E('tv-ov'), t=E('tv-ov-t');
     fetch('/api/v1/webos/public/broadcast', {headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); })
       .then(function(d){
         if(d && d.actif && d.url){
           pill.classList.remove('hidden');
           if(t) t.textContent=String(d.titre||d.url).slice(0,60);
-          if(courantUrl!==d.url){ courantUrl=d.url; if(!ov.classList.contains('hidden')) ouvre(); }
+          if(courantUrl!==d.url){ courantUrl=d.url; if(ov && !ov.classList.contains('hidden')) ouvre(); }
         } else {
           pill.classList.add('hidden');
-          if(courantUrl){ courantUrl=null; if(!ov.classList.contains('hidden')) ferme(); }
+          if(courantUrl){ courantUrl=null; if(ov && !ov.classList.contains('hidden')) ferme(); }
         }
       }).catch(function(){});
   }
