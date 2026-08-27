@@ -1,3 +1,12 @@
+secubox-webos (1.0.149-1~bookworm1) bookworm; urgency=medium
+
+  * fix: pastille 📡 direct dans un conteneur voisin #pastilles-direct (#1237).
+    Le bus media reconstruit #pastilles (innerHTML) a chaque changement -> il
+    effacait la pastille direct (« plus de diffusion ni de pastille »). On la
+    met dans #pastilles-direct, meme rangee/style, que le bus ne touche pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:04:33 +0200
+
 secubox-webos (1.0.148-1~bookworm1) bookworm; urgency=medium
 
   * feat: mode MINI du viewer (#1237) — bouton ⧉ bascule plein cadre <-> mini
