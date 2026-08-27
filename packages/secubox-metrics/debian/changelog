@@ -1,3 +1,19 @@
+secubox-metrics (1.12.1-1~bookworm1) bookworm; urgency=medium
+
+  * LES DONNEES D'ATTAQUE QUITTENT LE RAPPORT DE VISITE (#1367). Le rapport de
+    frequentation par vhost melait visites et attaques : tuile « Sondes »,
+    sondes empilees sur l'histogramme, colonne « Sondes » du tableau, et tout
+    le bilan WAF (menaces, attaquants, pays vus par le WAF, noms scannes non
+    servis). Tout cela est deplace dans le rapport WAF dedie (rapport_waf) : le
+    rapport de visite ne parle que de frequentation, celui du WAF que de menaces.
+  * TABLEAUX PLUS COUPES PAR LES SAUTS DE PAGE (#1367). Le saut automatique de
+    fpdf2 ne deplacait qu'une cellule : une ligne multi-cellules tombait a
+    cheval sur deux pages, moitie invisible. Nouveau garde `_garde()` : chaque
+    ligne descend d'un bloc, chaque titre reserve sa place, et l'entete du
+    tableau « Detail par vhost » est re-tracee en haut de la page suivante.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 06:40:00 +0200
+
 secubox-metrics (1.12.0-1~bookworm1) bookworm; urgency=medium
 
   * Rapport PDF envoye par courriel (#1219) : deux sections nouvelles, tirees

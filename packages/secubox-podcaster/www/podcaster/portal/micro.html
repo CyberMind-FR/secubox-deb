@@ -44,11 +44,12 @@
   }
   html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; display: none; }
 
-  .mp { display: flex; flex-direction: column; height: 100%;
+  .mp { display: flex; flex-direction: column; min-height: 100%;
         padding: .7rem .8rem; box-sizing: border-box; gap: .5rem; }
-  /* Le pied colle en bas : sans cela le contenu flottait au milieu d'un
-     grand vide, et la carte paraissait cassée. */
-  .prog { margin-top: auto; }
+  /* La carte fait la taille de son contenu (#1238) : elle mesure et l'annonce
+     au Hall. Plus d'espaceur elastique qui poussait le pied en bas d'un cadre
+     trop grand — le contenu se tasse en haut, la carte se dimensionne dessus. */
+  .prog { margin-top: .35rem; }
 
   .cmd { display: flex; align-items: center; gap: .45rem; }
   .cmd button { width: 30px; height: 30px; border-radius: 50%;
@@ -87,6 +88,14 @@
           display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .np .src { font-size: .68rem; color: var(--muted); white-space: nowrap;
              overflow: hidden; text-overflow: ellipsis; }
+  /* DÉTAIL DU FLUX COURANT (#1238) : sous le nom du flux, une date miniature et
+     le rang dans la bibliothèque (rang/somme, ex. 3/40) — on sait quand la
+     piste est parue et où l'on en est dans la pile. */
+  .np .det { display: flex; align-items: baseline; gap: .4rem; margin-top: .12rem;
+             font-size: .62rem; color: var(--muted); }
+  .np .det .dt { font-variant-numeric: tabular-nums; }
+  .np .det .rg { margin-left: auto; font-variant-numeric: tabular-nums;
+                 letter-spacing: .02em; color: var(--cyan); }
 
   .prog { height: .3rem; border-radius: 3px; background: var(--border); overflow: hidden; cursor: pointer; }
   .prog i { display: block; height: 100%; width: 0; background: var(--cyan); }
@@ -111,8 +120,10 @@
                   font: inherit; font-size: .78rem; color: var(--text);
                   text-align: left; line-height: 1.3; }
   .suite button:hover .nm { text-decoration: underline; }
-  .suite .rg { flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--muted);
-               font-size: .72rem; }
+  /* À GAUCHE, LA DATE PLUTÔT QUE LE RANG (#1238) : un « 1 2 3 » n'apprenait
+     rien ; la date de parution situe chaque épisode à venir. */
+  .suite .rg { flex: 0 0 auto; color: var(--muted); font-size: .66rem;
+               min-width: 3.6em; }
   .suite .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .suite .vide { font-size: .74rem; color: var(--muted); }
 </style>
@@ -136,7 +147,8 @@
 
   <div class="np">
     <div class="vign" id="vign">🎙️<img id="pochette" alt=""></div>
-    <div class="txt"><b id="titre">Bibliothèque</b><div class="src" id="src">—</div></div>
+    <div class="txt"><b id="titre">Bibliothèque</b><div class="src" id="src">—</div>
+      <div class="det" id="det" hidden><span class="dt" id="date"></span><span class="rg" id="rang"></span></div></div>
   </div>
 
   <div class="prog" id="prog"><i id="barre"></i></div>
@@ -145,7 +157,7 @@
 
   <div class="bas">
     <span class="t" id="temps">0:00</span>
-    <a href="/" target="_top">📚 bibliothèque</a>
+    <a href="/" id="biblio" target="_top">📚 bibliothèque</a>
   </div>
 </div>
 
@@ -176,6 +188,18 @@
   const son = document.getElementById('son');
   const el = id => document.getElementById(id);
   const fmt = t => { t = Math.floor(t || 0); return Math.floor(t / 60) + ':' + ('0' + (t % 60)).slice(-2); };
+  // DATE MINIATURE (#1238). `pubdate` est un epoch en secondes ; 0 ou absent =
+  // pas de date connue, on rend une chaine vide plutot qu'un « 1970 » trompeur.
+  // Format compact « 12 aoû », l'annee seulement si ce n'est pas l'annee en
+  // cours — une date de podcast tient sur trois signes le plus souvent.
+  const AN = new Date().getFullYear();
+  function fmtDate(ts) {
+    ts = Number(ts) || 0; if (ts <= 0) return '';
+    const d = new Date(ts * 1000); if (isNaN(d.getTime())) return '';
+    const opt = d.getFullYear() === AN ? { day: 'numeric', month: 'short' }
+                                       : { day: 'numeric', month: 'short', year: '2-digit' };
+    return d.toLocaleDateString('fr-FR', opt).replace('.', '');
+  }
 
   async function charge() {
     try {
@@ -188,8 +212,10 @@
     if (!eps.length) {
       el('titre').textContent = 'Bibliothèque vide';
       el('src').textContent = 'aucun épisode';
+      el('det').hidden = true;
       ['pp', 'prev', 'next'].forEach(i => el(i).disabled = true);
       el('suite').innerHTML = '<div class="tt">⏭ à suivre</div><span class="vide">—</span>';
+      annonceHaut();
       return;
     }
     montre();
@@ -199,11 +225,19 @@
     const e = eps[idx] || {};
     el('titre').textContent = e.title || '—';
     el('src').textContent = e.feed || '';
+    // DÉTAIL DU FLUX COURANT : date de parution (miniature) + rang/somme dans
+    // la bibliothèque (ex. 3/40). On masque la ligne s'il n'y a rien a dire.
+    const dt = fmtDate(e.pubdate);
+    const rg = eps.length ? (idx + 1) + '/' + eps.length : '';
+    el('date').textContent = dt;
+    el('rang').textContent = rg;
+    el('det').hidden = !(dt || rg);
     el('prev').disabled = idx <= 0;
     el('next').disabled = idx >= eps.length - 1;
     montreFav();
     montreSuite();
     pochette(e);
+    annonceHaut();
   }
 
   // Ce qui vient APRÈS la piste courante, pas le début de la bibliothèque :
@@ -235,7 +269,9 @@
     } else {
       html += a_venir.map((e, i) =>
         '<button type="button" data-i="' + (idx + 1 + i) + '" title="' + esc(e.title || '') + '">'
-        + '<span class="rg">' + (i + 1) + '</span>'
+        // La DATE plutot que le rang : un « 1 2 3 » n'apprenait rien. Repli sur
+        // le rang si l'episode n'a pas de date connue.
+        + '<span class="rg">' + esc(fmtDate(e.pubdate) || String(i + 1)) + '</span>'
         + '<span class="nm">' + esc(e.title || '—') + '</span></button>').join('');
     }
     box.innerHTML = html;
@@ -286,6 +322,27 @@
     const r = ev.currentTarget.getBoundingClientRect();
     son.currentTime = ((ev.clientX - r.left) / r.width) * son.duration;
   });
+
+  // ── AUTO-HAUTEUR : LA CARTE FAIT LA TAILLE DE SON CONTENU (#1238) ──────────
+  //
+  // Une hauteur fixe rognait le bas (barre du bas invisible) ou laissait du
+  // vide selon le nombre d'episodes « a suivre ». On MESURE le contenu reel et
+  // on l'ANNONCE ; le Hall ajuste l'iframe. Le bas de la ligne `.bas` (dernier
+  // element) donne la hauteur reelle, independamment du cadre courant. Le Hall
+  // borne la valeur, donc un contenu casse ne peut pas faire exploser la carte.
+  function annonceHaut() {
+    if (parent === window) return;
+    try {
+      requestAnimationFrame(() => {
+        const bas = document.querySelector('.bas');
+        const h = Math.ceil((bas ? bas.getBoundingClientRect().bottom
+                                 : document.body.scrollHeight) + 12);
+        if (h > 0) parent.postMessage({ sbx: 'carte-haut', id: 'podcaster', h: h }, '*');
+      });
+    } catch (e) {}
+  }
+  addEventListener('load', annonceHaut);
+  addEventListener('resize', annonceHaut);
 
   // ── ANNONCE À LA BARRE DU HALL (#1246) ────────────────────────────────────
   //
@@ -394,6 +451,18 @@
       const d = JSON.parse(ev.newValue || 'null');
       if (d && d.joue) son.pause();
     }catch(err){}
+  });
+
+  // 📚 BIBLIOTHÈQUE — OUVRIR EMBARQUÉ DANS LE HALL (#1238). `target=_top`
+  // faisait sortir TOUT le Hall vers le site podcaster ; la matrice SBXOS veut
+  // qu'un lien de service de la box s'ouvre EMBARQUÉ dans le Hall, comme les
+  // autres cartes. On annonce donc `sbx:'ouvre'` au Hall (il fait
+  // openService('podcaster','embed')). Hors cadre — carte servie seule — on
+  // laisse le lien agir normalement (accès direct).
+  el('biblio').addEventListener('click', ev => {
+    if (parent === window) return;   // autonome : le lien direct convient
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: 'podcaster' }, '*'); } catch (e) {}
   });
 
   // FAVORIS. Retenus par épisode, côté navigateur : le service n'expose pas

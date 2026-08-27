@@ -149,6 +149,7 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
         R._titre(pdf, "Par categorie")
         pdf.set_font("Helvetica", "", 8)
         for c, n in resume["categories"]:
+            R._garde(pdf, 5)
             pdf.cell(80, 5, R._txt(c))
             pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
@@ -158,7 +159,40 @@ def construire_pdf_waf(hist: dict, jours: int = 7) -> bytes:
         R._titre(pdf, "Attaquants persistants")
         pdf.set_font("Helvetica", "", 8)
         for ip, n in resume["top_ips"]:
+            R._garde(pdf, 5)
             pdf.cell(80, 5, R._txt(ip))
+            pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
+                     new_x="LMARGIN", new_y="NEXT")
+
+    # ── DONNEES VENUES DU RAPPORT DE VISITE (#1367) ───────────────────────────
+    # L'origine geographique vue par le WAF et les noms scannes que la box ne
+    # sert pas sont des donnees d'ATTAQUE : elles etaient dans le rapport de
+    # frequentation, leur place est ici. Lues depuis le cache de comptage WAF.
+    _wstats = R._lire_waf_stats()
+    _pays_waf = _wstats.get("top_countries") or {}
+    if _pays_waf:
+        _pays_waf = {k: v for k, v in _pays_waf.items() if k not in ("LAN", "??", "")}
+    if _pays_waf:
+        R._titre(pdf, "Origine des requetes vues par le WAF")
+        pdf.image(io.BytesIO(R._camembert(_pays_waf, "Requetes par pays (WAF)")), w=92)
+        pdf.ln(2)
+
+    _noms, _distincts, _total = R._noms_non_servis(_wstats)
+    if _noms:
+        R._titre(pdf, R._txt(f"Noms demandes que la box ne sert pas - "
+                             f"{_distincts} noms distincts, {_total:,} requetes"
+                             ).replace(",", " "))
+        pdf.set_font("Helvetica", "", 7)
+        pdf.multi_cell(0, 4, R._txt(
+            "Ces noms recoivent un 421 : aucun vhost ne leur repond. Entre le "
+            "balayage, la liste designe les vhosts qui manquent - un nom encore "
+            "reference ailleurs, un service jamais publie."),
+            new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1)
+        pdf.set_font("Helvetica", "", 8)
+        for nom, n in _noms:
+            R._garde(pdf, 5)
+            pdf.cell(120, 5, R._txt(nom))
             pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
 

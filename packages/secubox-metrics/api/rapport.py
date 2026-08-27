@@ -81,13 +81,17 @@ def _png(fig) -> bytes:
 
 
 def _histogramme(serie: list[dict]) -> bytes:
-    """Visites par jour, sondes empilees dessous."""
+    """Visites par jour. Les VISITES seulement (#1367).
+
+    Les sondes (scans, tentatives) sont des ATTAQUES, pas de la frequentation :
+    empilees ici, elles gonflaient un graphe de visites avec du trafic hostile
+    et brouillaient la lecture. Elles ont leur place dans le rapport WAF dedie,
+    pas dans le rapport de visite d'un vhost.
+    """
     fig, ax = plt.subplots(figsize=(7.2, 2.4))
     jours = [s["jour"][5:] for s in serie]
     visites = [s["visites"] for s in serie]
-    sondes = [s.get("sondes", 0) for s in serie]
     ax.bar(jours, visites, color=CYAN, label="Visites", width=.62)
-    ax.bar(jours, sondes, bottom=visites, color=ROUGE, label="Sondes", width=.62)
     ax.set_ylabel("visites", fontsize=8, color=GRIS)
     ax.tick_params(labelsize=7, colors=GRIS)
     ax.legend(fontsize=7, frameon=False)
@@ -220,11 +224,12 @@ class _Page(FPDF):
 
 
 def _tuiles(pdf: _Page, t: dict) -> None:
+    # PAS DE « SONDES » ICI (#1367) : les sondes sont des attaques, elles vont
+    # au rapport WAF. Le rapport de visite ne compte que la frequentation.
     cases = [
         ("Visites", f"{t['visites']:,}".replace(",", " ")),
         ("Visiteurs", f"{t['visiteurs']:,}".replace(",", " ")),
         ("Requetes", f"{t['requetes']:,}".replace(",", " ")),
-        ("Sondes", f"{t['sondes']:,}".replace(",", " ")),
         ("Erreurs", f"{t['erreurs']:,}".replace(",", " ")),
     ]
     largeur = 190 / len(cases)
@@ -246,10 +251,34 @@ def _tuiles(pdf: _Page, t: dict) -> None:
 
 
 def _titre(pdf: _Page, texte: str) -> None:
+    # UN TITRE NE RESTE PAS ORPHELIN EN BAS DE PAGE (#1367). Sans garde, un
+    # titre de section s'imprimait au ras de la marge basse et sa table partait
+    # a la page suivante, coupee de son intitule. On reserve de quoi poser le
+    # titre + une premiere ligne, sinon on saute avant de l'ecrire.
+    _garde(pdf, 16)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_text_color(0, 120, 150)
     pdf.cell(0, 7, _txt(texte), new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(26, 36, 48)
+
+
+def _garde(pdf: _Page, besoin: float = 5.0) -> bool:
+    """Saute a la page suivante si `besoin` mm ne tiennent pas avant la marge.
+
+    LE BUG (#1367) : le saut de page AUTOMATIQUE de fpdf2 ne deplace que la
+    cellule qui deborde. Une LIGNE de tableau est faite de plusieurs cellules
+    posees l'une apres l'autre ; quand le saut tombe au milieu, les premieres
+    cellules restent en bas d'une page et les dernieres passent a la suivante,
+    decalees — la ligne, coupee en deux, devient illisible voire invisible.
+
+    On appelle donc `_garde` AVANT la premiere cellule de chaque ligne : la
+    ligne entiere descend d'un bloc. Rend True si un saut a eu lieu — utile pour
+    re-tracer l'entete d'un tableau qui continue sur la nouvelle page.
+    """
+    if pdf.get_y() + besoin > pdf.h - pdf.b_margin:
+        pdf.add_page()
+        return True
+    return False
 
 
 # ── bilan WAF (#1062) : menaces bloquées, depuis l'historique agrégé par sbxwaf ──
@@ -342,7 +371,7 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
 
     source = detail or vue.get("total", {})
     _tuiles(pdf, {k: source.get(k, 0) for k in
-                  ("visites", "visiteurs", "requetes", "sondes", "erreurs")})
+                  ("visites", "visiteurs", "requetes", "erreurs")})
 
     if detail and detail.get("serie"):
         _titre(pdf, "Frequentation jour par jour")
@@ -363,6 +392,10 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
         pdf.image(io.BytesIO(_camembert(pays)), w=92)
         pdf.ln(3)
 
+    # Poses en ABSOLU (x, y) : le saut de page automatique ne les voit pas. Sans
+    # garde, deux graphiques hauts places en bas de page debordaient hors du
+    # cadre. On reserve leur hauteur avant de figer l'ordonnee (#1367).
+    _garde(pdf, 62)
     y = pdf.get_y()
     # Les deux graphiques sont poses cote a cote a la meme ordonnee, donc le
     # curseur ne descend pas tout seul. On le replace sous le plus haut des
@@ -391,6 +424,7 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
             pdf.set_font("Helvetica", "", 8)
             total = sum(statuts.values()) or 1
             for code, n in sorted(statuts.items()):
+                _garde(pdf, 5)
                 pdf.cell(30, 5, _txt(code))
                 pdf.cell(40, 5, f"{n:,}".replace(",", " "), align="R")
                 pdf.cell(30, 5, f"{100 * n / total:.1f} %", align="R",
@@ -404,6 +438,7 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
             pdf.cell(0, 5, _txt("aucune page enregistree sur la periode"),
                      new_x="LMARGIN", new_y="NEXT")
         for e in chemins[:12]:
+            _garde(pdf, 5)
             pdf.cell(160, 5, _txt(e["chemin"])[:95])
             pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
@@ -420,6 +455,7 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
             pdf.cell(0, 5, _txt("aucun referent - trafic direct ou sans en-tete"),
                      new_x="LMARGIN", new_y="NEXT")
         for e in referents[:12]:
+            _garde(pdf, 5)
             pdf.cell(160, 5, _txt(e["hote"])[:95])
             pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
@@ -436,81 +472,49 @@ def construire_pdf(vue: dict, detail: Optional[dict] = None) -> bytes:
             pdf.cell(0, 5, _txt("aucun visiteur public geolocalise sur la periode"),
                      new_x="LMARGIN", new_y="NEXT")
         for e in pays[:15]:
+            _garde(pdf, 5)
             pdf.cell(30, 5, _txt(e.get("code") or "??"))
             pdf.cell(30, 5, f"{e['n']:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
     else:
         _titre(pdf, "Detail par vhost")
-        pdf.set_font("Helvetica", "B", 7.5)
-        pdf.set_fill_color(236, 244, 249)
-        for l, w in (("Domaine", 66), ("Visites", 24), ("Visiteurs", 24),
-                     ("Robots", 22), ("Sondes", 24), ("Erreurs", 30)):
-            pdf.cell(w, 6, _txt(l), fill=True, align="L" if w == 66 else "R")
-        pdf.ln()
-        pdf.set_font("Helvetica", "", 7.5)
+
+        # PLUS DE COLONNE « SONDES » (#1367) : une sonde est une attaque, pas
+        # une visite — elle appartient au rapport WAF. Le tableau de visite ne
+        # porte que la frequentation et sa qualite (robots, erreurs).
+        def _entete_vhost():
+            pdf.set_font("Helvetica", "B", 7.5)
+            pdf.set_fill_color(236, 244, 249)
+            for l, w in (("Domaine", 78), ("Visites", 28), ("Visiteurs", 28),
+                         ("Robots", 26), ("Erreurs", 30)):
+                pdf.cell(w, 6, _txt(l), fill=True, align="L" if w == 78 else "R")
+            pdf.ln()
+            pdf.set_font("Helvetica", "", 7.5)
+
+        _entete_vhost()
         for v in vue.get("vhosts", [])[:40]:
+            # La ligne descend d'un bloc si elle ne tient pas — et l'entete est
+            # RE-TRACEE en haut de la nouvelle page, sinon la suite du tableau
+            # arrivait sans colonnes, illisible (#1367).
+            if _garde(pdf, 5):
+                _entete_vhost()
             nom = v["vhost"]
             if v.get("membres") and len(v["membres"]) > 1:
                 nom += f"  ({len(v['membres'])} domaines)"
-            pdf.cell(66, 5, _txt(nom)[:44])
-            for val, w in ((v["visites"], 24), (v["visiteurs"], 24)):
+            pdf.cell(78, 5, _txt(nom)[:52])
+            for val, w in ((v["visites"], 28), (v["visiteurs"], 28)):
                 pdf.cell(w, 5, f"{val:,}".replace(",", " "), align="R")
-            pdf.cell(22, 5, f"{v['part_robots']} %", align="R")
-            pdf.cell(24, 5, f"{v['sondes']:,}".replace(",", " "), align="R")
+            pdf.cell(26, 5, f"{v['part_robots']} %", align="R")
             pdf.cell(30, 5, f"{v['erreurs']:,}".replace(",", " "), align="R",
                      new_x="LMARGIN", new_y="NEXT")
 
-    # #1062 — bilan des menaces WAF bloquées sur la période (board-wide).
-    _waf = _resume_waf(_lire_waf_historique(),
-                       7 if vue.get("periode") == "semaine" else
-                       30 if vue.get("periode") == "mois" else 1)
-    if _waf:
-        _titre(pdf, _txt(f"Menaces WAF bloquees - {_waf['total']:,} sur "
-                         f"{_waf['jours']} jour(s)").replace(",", " "))
-        pdf.set_font("Helvetica", "", 8)
-        for c, n in _waf["categories"]:
-            pdf.cell(80, 5, _txt(c))
-            pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
-                     new_x="LMARGIN", new_y="NEXT")
-        if _waf["top_ips"]:
-            pdf.ln(1)
-            pdf.set_font("Helvetica", "B", 8)
-            pdf.cell(0, 5, _txt("Attaquants persistants :"),
-                     new_x="LMARGIN", new_y="NEXT")
-            pdf.set_font("Helvetica", "", 8)
-            for ip, n in _waf["top_ips"]:
-                pdf.cell(80, 5, _txt(ip))
-                pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
-                         new_x="LMARGIN", new_y="NEXT")
-
-    # #1219 — origine geographique vue par le WAF, et noms demandes non servis.
-    _wstats = _lire_waf_stats()
-    _pays_waf = _wstats.get("top_countries") or {}
-    if _pays_waf:
-        _pays_waf = {k: v for k, v in _pays_waf.items() if k not in ("LAN", "??", "")}
-    if _pays_waf:
-        _titre(pdf, "Origine des requetes vues par le WAF")
-        pdf.image(io.BytesIO(_camembert(_pays_waf, "Requetes par pays (WAF)")), w=92)
-        pdf.ln(2)
-
-    _noms, _distincts, _total = _noms_non_servis(_wstats)
-    if _noms:
-        _titre(pdf, _txt(f"Noms demandes que la box ne sert pas - "
-                         f"{_distincts} noms distincts, {_total:,} requetes"
-                         ).replace(",", " "))
-        pdf.set_font("Helvetica", "", 7)
-        pdf.multi_cell(0, 4, _txt(
-            "Ces noms recoivent un 421 : aucun vhost ne leur repond. Entre le "
-            "balayage, la liste designe les vhosts qui manquent - un nom encore "
-            "reference ailleurs, un service jamais publie."),
-            new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(1)
-        pdf.set_font("Helvetica", "", 8)
-        for nom, n in _noms:
-            pdf.cell(120, 5, _txt(nom))
-            pdf.cell(30, 5, f"{n:,}".replace(",", " "), align="R",
-                     new_x="LMARGIN", new_y="NEXT")
-
+    # LES DONNEES D'ATTAQUE NE SONT PLUS ICI (#1367). Menaces WAF, attaquants
+    # persistants, origine des requetes vues par le WAF et noms scannes que la
+    # box ne sert pas ont quitte le rapport de VISITE pour le rapport du WAF
+    # (rapport_waf.construire_pdf_waf) : le rapport de frequentation ne parle
+    # que de frequentation, celui du WAF que de menaces. Les helpers restent
+    # (_resume_waf, _lire_waf_stats, _noms_non_servis, _lire_waf_historique) :
+    # c'est le rapport WAF qui les appelle desormais.
     sortie = pdf.output()
     return bytes(sortie)
 

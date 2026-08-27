@@ -1,3 +1,12 @@
+secubox-webos (1.0.128-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE PODCASTER AUTO-DIMENSIONNEE (#1238). Le /micro mesure son contenu et
+    l'annonce (message `carte-haut`) ; le Hall ajuste l'iframe, valeur bornee
+    [120..360]. Fini la hauteur fixe (168px) qui rognait la barre du bas apres
+    l'agrandissement du bloc « a suivre ». Repli a 236px si le JS ne tourne pas.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 06:20:00 +0200
+
 secubox-webos (1.0.127-1~bookworm1) bookworm; urgency=medium
 
   * BARRE MEDIA VISIBLE PENDANT LE SURF (#1246). L'overlay surf (.surf-ov,

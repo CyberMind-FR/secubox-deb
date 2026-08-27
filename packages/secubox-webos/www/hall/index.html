@@ -921,7 +921,7 @@ const FEATURED = [
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=photoprism", h:182},
   {id:"metanews",   label:"MetaNews",  icon:"🗞️", color:"#5b46b8", url:"metanews.gk2.secubox.in", micro:"/micro", h:236},
-  {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:168},
+  {id:"podcaster",  label:"Podcaster", icon:"🎙️", color:"#c87832", url:"podcaster.gk2.secubox.in", micro:"/micro.html", h:236},
   {id:"mastodon",   label:"Social",    icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mastodon", h:182},
   {id:"billets",    label:"Billets",   icon:"🎟️", color:"#8a5a2b", url:"billets.gk2.secubox.in", micro:"/micro", h:214},
   {id:"depot",      label:"Dépôt",     icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/quick.html?svc=depot", h:214},
@@ -1860,6 +1860,19 @@ addEventListener('message', ev=>{
       +pic('🍪',S.cookies,'cookies réécrits')+pic('🔔',S.notifs,'notifications bloquées')
       +pic('🚫',S.popups,'popups coupées')
       +'<span class="cam" title="part de pistage">🛡️ '+pct+'%</span>';
+    return;
+  }
+  // AUTO-HAUTEUR D'UNE CARTE MICRO (#1238). Une carte doit faire la taille de
+  // ce qu'elle montre : plutot qu'une hauteur fixe devinee dans SERVICES, le
+  // /micro mesure son contenu et l'annonce. Seul le cadre qui EMET peut fixer
+  // SA hauteur (contentWindow===source), et on borne pour qu'un contenu casse
+  // ne pousse pas une carte a une hauteur absurde.
+  if(d.sbx==='carte-haut' && d.id && d.h){
+    const c=document.querySelector('iframe[data-micro="'+d.id+'"]');
+    if(c && c.contentWindow===ev.source){
+      const px=Math.max(120,Math.min(360,Number(d.h)||0));
+      if(px) c.style.height=px+'px';
+    }
     return;
   }
 });

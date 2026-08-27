@@ -1,3 +1,26 @@
+secubox-podcaster (1.0.21-1~bookworm1) bookworm; urgency=medium
+
+  * BOUTON « BIBLIOTHEQUE » : OUVRIR EMBARQUE DANS LE HALL (#1238). Le lien
+    `target=_top` faisait sortir TOUT le Hall vers le site podcaster. La matrice
+    SBXOS veut qu'un lien de service de la box s'ouvre EMBARQUE dans le Hall,
+    comme les autres cartes : on annonce `sbx:'ouvre'` (le Hall fait
+    openService('podcaster','embed')). Hors cadre, le lien direct reste actif.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 06:45:00 +0200
+
+secubox-podcaster (1.0.20-1~bookworm1) bookworm; urgency=medium
+
+  * CARTE MICRO AUTO-DIMENSIONNEE (#1238) : elle mesure son contenu (bas de la
+    derniere ligne) et l'annonce au Hall (message `carte-haut`), qui ajuste
+    l'iframe — la carte fait la taille de ce qu'elle montre, quel que soit le
+    nombre d'episodes « a suivre ». Plus d'espaceur elastique.
+  * DATE ET RANG SUR L'ITEM EN COURS : sous le nom du flux, la date de parution
+    (miniature, compacte) et le rang/somme dans la bibliotheque (ex. 3/40).
+  * DATE A GAUCHE DES « A SUIVRE » : la date de parution remplace la
+    numerotation 1/2/3 qui n'apprenait rien ; repli sur le rang si pas de date.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 06:20:00 +0200
+
 secubox-podcaster (1.0.19-1~bookworm1) bookworm; urgency=medium
 
   * MEME POLICE QUE LA RADIO ET LES AUTRES CARTES (#1238). Le corps de la vue
