@@ -1977,7 +1977,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   var ov=document.getElementById('viewer-ov'), media=document.getElementById('viewer-media'),
       titreEl=document.getElementById('viewer-titre');
   if(!ov||!media) return;
-  var courant=null;
+  var courant=null, vid=null, ivSas=null;
   function ytid(u){
     try{ var url=new URL(u), h=url.hostname.replace(/^www\./,'').replace(/^m\./,'');
       if(h==='youtu.be') return url.pathname.slice(1,12);
@@ -1987,6 +1987,55 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       }
     }catch(e){}
     return null;
+  }
+  function nocookie(id){
+    var f=document.createElement('iframe');
+    f.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
+    f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
+    media.innerHTML=''; media.appendChild(f);
+  }
+  function flux(src, mime){
+    var v=document.createElement('video');
+    v.src=src; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
+    media.innerHTML=''; media.appendChild(v);
+    function maj(){
+      try{ var d=v.duration||0, cur=v.currentTime||0;
+        pose('✓ souverain', fmtT(cur)+(d?' / '+fmtT(d):''), '✓ cache', d?Math.round(cur/d*100):0);
+      }catch(e){}
+    }
+    v.addEventListener('timeupdate',maj); v.addEventListener('loadedmetadata',maj);
+  }
+  // LE SAS (#1237/#1236). ytsas rapatrie la video en souverain (sans pub, sans
+  // Google) puis la sert en cache local. On lit d'abord en nocookie (immediat),
+  // et des que le sas a fini, on BASCULE sur le flux souverain. La barre montre
+  // la progression du rapatriement.
+  function lanceSas(url, id){
+    if(ivSas){ clearInterval(ivSas); ivSas=null; }
+    pose('sas… 0%','▶','—',0);
+    fetch('/api/v1/ytsas/resolve?url='+encodeURIComponent(url),{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); }).then(function(d){
+        if(!d) return; vid=d.video_id||id;
+        if(d.state==='mirror' && d.peertube_url){ pose('miroir','▶','✓ PeerTube',100); }
+        else if(d.state==='cache' && d.stream_url){ flux(d.stream_url); }
+        else { sondeSas(); ivSas=setInterval(sondeSas, 3000); }
+      }).catch(function(){});
+  }
+  function sondeSas(){
+    if(!vid){ return; }
+    fetch('/api/v1/ytsas/list',{headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); }).then(function(rows){
+        if(!rows||!rows.length) return;
+        var row=null; for(var i=0;i<rows.length;i++){ if(rows[i].id===vid){ row=rows[i]; break; } }
+        if(!row) return;
+        var pc=Math.round(row.progress||0);
+        var pret=row.complete || row.job_status==='complete';
+        pose(pret?'✓ souverain':('sas… '+pc+'%'), '▶', pret?'✓ cache':(pc+'%'), pc);
+        if(pret){
+          if(ivSas){ clearInterval(ivSas); ivSas=null; }
+          // on bascule sur le flux souverain (cache local, sans pub/Google)
+          flux('/api/v1/ytsas/stream/'+vid);
+        }
+      }).catch(function(){});
   }
   function estVideoDirecte(u){ return /\.(mp4|webm|ogg|ogv|m3u8|mov|mkv)(\?|#|$)/i.test(u); }
   function estPeertube(u){ try{ return /(\/w\/|\/videos\/watch\/)/.test(new URL(u).pathname); }catch(e){ return false; } }
@@ -1999,16 +2048,15 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     e=document.getElementById('viewer-prog'); if(e)e.style.width=(prog||0)+'%';
   }
   function ouvre(url){
-    courant=url; media.innerHTML=''; titreEl.textContent=url.slice(0,90);
+    courant=url; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
+    media.innerHTML=''; titreEl.textContent=url.slice(0,90);
     document.getElementById('viewer-fav').classList.remove('on');
     document.getElementById('viewer-cast').classList.remove('on');
     pose('—','—','—',0);
     var id=ytid(url);
     if(id){
-      var f=document.createElement('iframe');
-      f.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
-      f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
-      media.appendChild(f); pose('direct','▶','—',100);
+      nocookie(id);          // vue immediate, le temps que le sas rapatrie
+      lanceSas(url, id);     // rapatriement souverain -> bascule quand pret
     } else if(estVideoDirecte(url)){
       var v=document.createElement('video');
       v.src=url; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
@@ -2030,7 +2078,8 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var mast=document.querySelector('.mast');
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
   }
-  function ferme(){ ov.classList.add('hidden'); media.innerHTML=''; courant=null; }
+  function ferme(){ ov.classList.add('hidden'); media.innerHTML=''; courant=null; vid=null;
+    if(ivSas){ clearInterval(ivSas); ivSas=null; } }
   window.ouvreViewer=ouvre; window.fermeViewer=ferme;
   document.getElementById('viewer-x').addEventListener('click',ferme);
   addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.classList.contains('hidden')) ferme(); });
@@ -2040,6 +2089,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       if(l.indexOf(courant)<0) l.push(courant);
       localStorage.setItem(k,JSON.stringify(l));
     }catch(e){}
+    // FAVORI SOUVERAIN (#1237/#1233) : si c'est passe par le sas, on CONSERVE —
+    // rapatriement permanent vers PeerTube, cardletisable ensuite.
+    if(vid){ fetch('/api/v1/ytsas/conserve/'+encodeURIComponent(vid),{method:'POST'}).catch(function(){}); }
     this.classList.add('on');
   });
   document.getElementById('viewer-share').addEventListener('click',function(){

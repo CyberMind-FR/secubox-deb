@@ -1,3 +1,15 @@
+secubox-webos (1.0.139-1~bookworm1) bookworm; urgency=medium
+
+  * feat: viewer phase 2 — branchement sur le sas ytsas (#1237/#1236). Une URL
+    YouTube lue dans le viewer lance ytsas /resolve (rapatriement souverain),
+    lecture immediate en nocookie, bascule sur le flux souverain
+    /api/v1/ytsas/stream quand pret ; la barre reflete la progression du sas
+    (download/cache). ♥ favoriser = /conserve (->PeerTube). Le vhost du Hall
+    proxifie /api/v1/ytsas/ vers le LXC (meme origine, sinon CSP connect-src
+    'self' bloque et /api/v1/ytsas tombe sur l'index).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:07:59 +0200
+
 secubox-webos (1.0.138-1~bookworm1) bookworm; urgency=medium
 
   * feat: cardlet VIEWER (#1237, phase 1). La barre de recherche capte un
