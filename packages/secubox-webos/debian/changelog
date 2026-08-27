@@ -1,3 +1,10 @@
+secubox-webos (1.0.158-1~bookworm1) bookworm; urgency=medium
+
+  * fix: texte profil « cartes … masquées » au lieu de « restent vides » (#1237)
+    — coherent avec le masquage des cartes a auth quand non connecte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 14:50:01 +0200
+
 secubox-webos (1.0.157-1~bookworm1) bookworm; urgency=medium
 
   * feat: masquer les cartes a auth reelle quand non connecte + quick.html sans
