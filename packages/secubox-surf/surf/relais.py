@@ -478,6 +478,20 @@ _INJECTION_TETE = """
   window.__sbx={cookies:0,popups:0,notifs:0,pubs:0,tiers:0,trackers:0,total:0};
   var S=window.__sbx;
 
+  // DEBLOCAGE CMP DIDOMI (#1235). Le contenu de BFM/Altice (et autres) est rendu
+  // APRES consentement Didomi ; sans accord, la page reste VIDE (ecran noir). Le
+  // polling cmp() peut rater la fenetre ou Didomi charge ; le hook OFFICIEL
+  // didomiOnReady est fiable — c'est un tableau que le site lui-meme repeuple en
+  // `||[]`, donc notre push survit a son propre code. On agree des que le CMP
+  // est pret. Les traqueurs restent coupes AU RESEAU : on dit « oui » pour que
+  // la page se RENDE, sans charger quoi que ce soit.
+  try{
+    window.didomiOnReady = window.didomiOnReady || [];
+    window.didomiOnReady.push(function(D){
+      try{ if(D && typeof D.setUserAgreeToAll==="function") D.setUserAgreeToAll(); }catch(e){}
+    });
+  }catch(e){}
+
   // JARRE D'ETAT (#1235). Le storage (localStorage/sessionStorage) est cloisonne
   // par origine surf ET partitionne en contexte tiers : la session posee a la
   // vraie origine n'y est pas, et ce qu'on ecrit ne survit pas. On le retient

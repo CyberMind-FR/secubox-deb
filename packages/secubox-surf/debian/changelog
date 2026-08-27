@@ -1,3 +1,15 @@
+secubox-surf (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * feat: deblocage CMP Didomi via didomiOnReady (#1235). BFM/Altice rend son
+    contenu APRES consentement Didomi ; sans accord la page reste noire. Le
+    polling cmp() ratait la fenetre de chargement de Didomi. On s'enregistre
+    sur le hook officiel window.didomiOnReady (tableau repeuple en ||[] par le
+    site, donc notre push survit) et on setUserAgreeToAll des que le CMP est
+    pret. Les traqueurs restent coupes au reseau : on consent pour RENDRE, pas
+    pour charger.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 10:59:19 +0200
+
 secubox-surf (1.0.5-1~bookworm1) bookworm; urgency=medium
 
   * fix: revert du pont postMessage (#1235). Il reecrivait GLOBALEMENT les
