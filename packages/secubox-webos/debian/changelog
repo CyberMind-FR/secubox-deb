@@ -1,3 +1,16 @@
+secubox-webos (1.0.135-1~bookworm1) bookworm; urgency=medium
+
+  * LE BROADCASTER — MVP « 📡 direct » (#1224). Un flux courant propose au parc :
+    depuis le surf, un bouton 📡 diffuse l'adresse reelle de la page ; l'API
+    webos garde ce POINTEUR (public GET/POST, no-retention), et une pastille
+    « 📡 direct » apparait dans le Hall pour qui veut REJOINDRE — l'overlay joue
+    le flux (YouTube en youtube-nocookie, autorise dans la CSP ; tout autre lien
+    via le surf). Inverse du BiB : un-vers-plusieurs.
+  * SERVICES LOCAUX (menu Services/railfeat) TRIES ALPHABETIQUEMENT (#1187b),
+    comme le menu Systeme ; la curation reste pour les cartes de l'accueil.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 16:10:00 +0200
+
 secubox-webos (1.0.134-1~bookworm1) bookworm; urgency=medium
 
   * SERVICES TRIES ALPHABETIQUEMENT dans la vue systeme ET le menu (#1187b) :

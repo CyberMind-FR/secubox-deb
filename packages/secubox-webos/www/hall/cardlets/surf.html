@@ -102,6 +102,7 @@
     <button id="dos" class="ghost" type="button" title="Page précédente" hidden>◄</button>
     <button id="home" class="ghost" type="button" title="Accueil surf" hidden>🏠</button>
     <button id="jar" class="ghost" type="button" title="Apprendre les cookies de ce site (les coller une fois, rejoués toujours)" hidden>🍪</button>
+    <button id="diff" class="ghost" type="button" title="Diffuser cette page au parc (📡 direct)" hidden>📡</button>
     <button id="go" type="button">Surfer</button>
     <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
     <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
@@ -275,7 +276,30 @@
     // relaye, et on renseigne l'hote du bocal.
     var jb = $('jar'); if (jb) jb.hidden = false;
     var jh = $('jarhote'); if (jh) jh.textContent = n.host;
+    var df = $('diff'); if (df) df.hidden = false;
   }
+
+  // 📡 DIFFUSER AU PARC (le Broadcaster, #1224). On envoie l'adresse REELLE de
+  // la page (pas l'origine surf) a l'etat de diffusion du Hall ; l'overlay
+  // « 📡 direct » la montre a tout le parc. C'est l'inverse du BiB : un-vers-
+  // plusieurs. Rien n'est stocke — on diffuse un pointeur.
+  var bDiff = $('diff');
+  if (bDiff) bDiff.addEventListener('click', function () {
+    var f = document.querySelector('#vue iframe'); if (!f) return;
+    var real;
+    try {
+      var u = new URL(f.src);
+      var host = cibleDe(u.hostname) || u.hostname;
+      real = 'https://' + host + u.pathname + u.search;
+    } catch (e) { return; }
+    fetch('/api/v1/webos/public/broadcast', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: real, titre: (($('surf-ov-h') || {}).textContent || host || '') })
+    }).then(function () {
+      var el = $('etat'); if (el) { el.hidden = false; el.textContent = '📡 diffusé au parc — visible dans « 📡 direct »'; }
+      try { parent.postMessage({ sbx: 'broadcast-on' }, '*'); } catch (e) {}
+    }).catch(function () {});
+  });
 
   // RECULER. On depile l'adresse precedente et on la recharge SANS l'empiler.
   // Rend true si l'on a recule, false si la pile etait vide (le Hall fermera).
@@ -297,6 +321,7 @@
     $('rech').hidden = true; $('onglet').hidden = true;
     $('home').hidden = true;
     var jb=$('jar'); if(jb) jb.hidden = true;
+    var df=$('diff'); if(df) df.hidden = true;
     var st=$('stats'); if(st) st.classList.add('hidden');
     fermeJar();
     $('vue').innerHTML = ACCUEIL_HTML;

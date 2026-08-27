@@ -643,6 +643,25 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:var(--panel);color:var(--ink);cursor:pointer;font-size:1rem}
 .surf-ov-x:hover{border-color:var(--coral);color:var(--coral)}
 .surf-ov iframe{flex:1;width:100%;border:0;min-height:0}
+/* 📡 DIRECT — l'overlay de diffusion du parc (le Broadcaster, #1224) */
+.tv-ov{position:fixed;left:0;right:0;bottom:0;z-index:53;display:flex;flex-direction:column;
+  background:#000;top:var(--mast-h,56px)}
+.tv-ov.hidden{display:none}
+.tv-ov-tete{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex:0 0 auto}
+.tv-ov-t{font-size:.82rem;color:var(--dim)} .tv-ov-t b{color:var(--coral);font-family:"JetBrains Mono"}
+.tv-ov-x{margin-left:auto;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);cursor:pointer;font-size:1rem}
+.tv-ov-x:hover{border-color:var(--coral);color:var(--coral)}
+.tv-ov iframe{flex:1;width:100%;border:0;min-height:0;background:#000}
+/* La pastille « 📡 direct » : apparait quand une diffusion est en cours. */
+.tv-pill{position:fixed;right:14px;bottom:40px;z-index:47;display:inline-flex;align-items:center;gap:7px;
+  padding:8px 13px;border-radius:999px;border:1px solid var(--coral);background:var(--panel);
+  color:var(--coral);font-family:"JetBrains Mono";font-size:.72rem;font-weight:700;cursor:pointer;
+  box-shadow:var(--lift)}
+.tv-pill.hidden{display:none}
+.tv-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--coral)}
+@media (prefers-reduced-motion:no-preference){.tv-pill .dot{animation:fpulse 1.6s ease-in-out infinite}}
 /* RADIO de référence (#1232) — le lecteur REMPLIT la cardlet, comme au BBS.
    `position:relative` sert uniquement d'ancrage ; on ne touche ni au padding ni
    à l'overflow, ce qui avait rendu le widget invisible au BBS. 252 px est la
@@ -1086,9 +1105,12 @@ function render(data,src){
   const svc=data.services||[]; const byId={}; svc.forEach(s=>byId[s.id]=s); _reg=byId;
   // sidebar featured
   const rail=document.getElementById('railfeat'); let rh='';
+  // Menu SERVICES (locaux/vedettes) trie alphabetiquement (#1187b) — comme le
+  // menu Systeme. L'ordre de curation reste pour les CARTES de l'accueil.
+  const FEATURED_ALPHA=FEATURED.slice().sort((a,b)=>String(a.label||'').localeCompare(String(b.label||''),'fr',{sensitivity:'base'}));
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
   // La nav propre au service descend dans le panneau contextuel (.ctx).
-  FEATURED.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
+  FEATURED_ALPHA.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
     rh+=rowHTML({attrs:'data-open="'+esc(f.id)+'"', icon:f.icon, label:f.label, state:st,
                  admin:f.id, tab:'https://'+f.url+'/'});
   });
@@ -1850,6 +1872,61 @@ document.addEventListener('click', e=>{
   }
 });
 addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
+
+// ── 📡 DIRECT — le Broadcaster (#1224 MVP a/overlay) ────────────────────────
+// Le parc diffuse UN flux courant (pose depuis le surf via 📡). La pastille
+// « 📡 direct » apparait quand une diffusion tourne ; l'overlay la joue pour
+// qui la rejoint. Inverse du BiB : un-vers-plusieurs. On sonde l'etat toutes
+// les 5s ; YouTube s'embarque en youtube-nocookie (autorise dans la CSP), tout
+// autre lien se rejoint via le surf (origine par-site). Rien n'est stocke.
+(function broadcast(){
+  var pill=document.getElementById('tv-pill'), ov=document.getElementById('tv-ov'),
+      f=document.getElementById('tv-ov-f'), t=document.getElementById('tv-ov-t');
+  if(!pill||!ov||!f) return;
+  var courantUrl=null;
+  function ytid(u){
+    try{ var url=new URL(u), h=url.hostname.replace(/^www\./,'').replace(/^m\./,'');
+      if(h==='youtu.be') return url.pathname.slice(1,12);
+      if(h==='youtube.com'||h==='youtube-nocookie.com'){
+        var v=url.searchParams.get('v'); if(v) return v.slice(0,11);
+        var m=url.pathname.match(/\/(?:embed|shorts|v)\/([A-Za-z0-9_-]{6,})/); if(m) return m[1].slice(0,11);
+      }
+    }catch(e){}
+    return null;
+  }
+  function ouvre(){
+    if(!courantUrl) return;
+    var id=ytid(courantUrl);
+    if(id){
+      var e='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
+      var mast=document.querySelector('.mast');
+      if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
+      if(f.src!==e) f.src=e;
+      ov.classList.remove('hidden');
+    } else if(typeof ouvreSurf==='function'){ ouvreSurf(courantUrl); }
+  }
+  function ferme(){ ov.classList.add('hidden'); f.src='about:blank'; }
+  pill.addEventListener('click', ouvre);
+  var x=document.getElementById('tv-ov-x'); if(x) x.addEventListener('click', ferme);
+  addEventListener('keydown', function(e){ if(e.key==='Escape' && !ov.classList.contains('hidden')) ferme(); });
+  addEventListener('message', function(ev){ if(ev.data && ev.data.sbx==='broadcast-on') setTimeout(sonde,300); });
+  function sonde(){
+    fetch('/api/v1/webos/public/broadcast', {headers:{'Accept':'application/json'}})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.actif && d.url){
+          pill.classList.remove('hidden');
+          if(t) t.textContent=String(d.titre||d.url).slice(0,60);
+          if(courantUrl!==d.url){ courantUrl=d.url; if(!ov.classList.contains('hidden')) ouvre(); }
+        } else {
+          pill.classList.add('hidden');
+          if(courantUrl){ courantUrl=null; if(!ov.classList.contains('hidden')) ferme(); }
+        }
+      }).catch(function(){});
+  }
+  sonde(); setInterval(sonde, 5000);
+})();
+
 // UN SERVICE EMBARQUE DEMANDE D'EN OUVRIR UN AUTRE, PAR SON HOTE (#1358). Le
 // BBS pointe vers metanews.gk2.secubox.in/#<id> : on reste dans le Hall, on
 // embarque metanews a cette adresse profonde plutot que de partir en onglet.
@@ -2604,6 +2681,17 @@ const CARDLET_ICONES = {
     <button class="surf-ov-x" id="surf-ov-x" type="button" title="Fermer" aria-label="Fermer">✕</button>
   </div>
   <iframe id="surf-ov-f" title="Surf" allow="fullscreen"></iframe>
+</div>
+
+<!-- 📡 DIRECT (#1224) : la pastille apparait quand le parc diffuse ; l'overlay
+     joue le flux courant pour qui la rejoint. Inverse du BiB : un-vers-plusieurs. -->
+<button id="tv-pill" class="tv-pill hidden" type="button" title="Une diffusion est en cours — rejoindre"><span class="dot"></span> 📡 direct</button>
+<div id="tv-ov" class="tv-ov hidden" role="dialog" aria-label="Diffusion en direct">
+  <div class="tv-ov-tete">
+    <span class="tv-ov-t">📡 Direct — <b id="tv-ov-t"></b></span>
+    <button class="tv-ov-x" id="tv-ov-x" type="button" title="Quitter le direct" aria-label="Fermer">✕</button>
+  </div>
+  <iframe id="tv-ov-f" title="Direct" allow="autoplay; fullscreen" allowfullscreen></iframe>
 </div>
 </body>
 </html>

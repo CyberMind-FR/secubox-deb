@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
             _cache.update(json.loads(_CACHE_FILE.read_text()))
         except Exception:
             pass
+    _charge_broadcast()   # #1224 : reprendre le flux courant apres redemarrage
     task = asyncio.create_task(_refresh_loop())
     yield
     task.cancel()
@@ -98,6 +99,57 @@ async def public_services():
         row["path"] = (s.get("urls") or {}).get("path") or ("/" + s["id"] + "/")
         out.append(row)
     return {"services": out, "computed_at": _cache["computed_at"]}
+
+
+# ── DIFFUSION PARTAGEE — le Broadcaster (#1224, MVP a/overlay) ───────────────
+# UN flux courant propose au parc : une URL (YouTube via le BiB/ytsas pour
+# l'instant), posee par un utilisateur, vue par TOUS dans l'overlay « 📡 direct »
+# du Hall. C'est l'inverse du BiB (un-vers-plusieurs). Etat en memoire + fichier
+# (survit au redemarrage). NO-RETENTION : on ne garde que le POINTEUR, jamais le
+# media. GET public (tout le parc regarde), POST public (le parc propose) — la
+# box est derriere le LAN/mesh ; l'authent fine viendra avec la queue #1224.
+_BROADCAST_FILE = Path("/var/cache/secubox/webos/broadcast.json")
+_broadcast: dict = {"actif": False}
+
+
+def _charge_broadcast() -> None:
+    global _broadcast
+    try:
+        _broadcast = json.loads(_BROADCAST_FILE.read_text())
+    except (OSError, ValueError):
+        _broadcast = {"actif": False}
+
+
+def _sauve_broadcast() -> None:
+    try:
+        _BROADCAST_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _BROADCAST_FILE.write_text(json.dumps(_broadcast))
+    except OSError:
+        pass
+
+
+@public_router.get("/broadcast")
+async def get_broadcast():
+    """Le flux courant du parc, ou {actif:false} si rien ne diffuse."""
+    return _broadcast
+
+
+@public_router.post("/broadcast")
+async def set_broadcast(payload: dict):
+    """Poser (ou couper) le flux courant. `url` vide = on coupe la diffusion."""
+    global _broadcast
+    url = str((payload or {}).get("url", "")).strip()
+    if not url or not url.lower().startswith(("http://", "https://")):
+        _broadcast = {"actif": False}
+    else:
+        _broadcast = {
+            "actif": True, "url": url[:2000],
+            "titre": str(payload.get("titre", ""))[:200],
+            "par": str(payload.get("par", ""))[:80],
+            "ts": int(time.time()),
+        }
+    _sauve_broadcast()
+    return _broadcast
 
 
 _rc = {"d": None, "t": 0.0}
