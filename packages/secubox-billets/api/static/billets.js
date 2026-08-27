@@ -33,8 +33,12 @@
     // droite), comme MetaNews et le podcaster. Un clic renvoie le choix, et on
     // navigue vers la vue filtrée — le serveur re-rend le feed, la coche suit.
     try {
+      // On masque AUSSI le bandeau (.mast) : billets.css le fait, mais la page
+      // charge newsroom.css — la regle n'y etait pas, le bandeau « BILLETS /
+      // gazette souveraine » restait sous celui du Hall. On l'injecte donc ici,
+      // ou c'est garanti de s'appliquer.
       var st = document.createElement('style');
-      st.textContent = 'html.sbx-embed .motscles{display:none}';
+      st.textContent = 'html.sbx-embed .mast{display:none} html.sbx-embed .motscles{display:none} html.sbx-embed .pub{padding-top:8px}';
       (document.head || document.documentElement).appendChild(st);
     } catch (e) {}
     var pousseTags = function () {

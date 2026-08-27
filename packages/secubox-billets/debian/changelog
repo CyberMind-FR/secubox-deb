@@ -1,3 +1,12 @@
+secubox-billets (0.8.22-1~bookworm1) bookworm; urgency=medium
+
+  * EN EMBED, LE BANDEAU « BILLETS » DISPARAIT (#1307b). billets.css masque bien
+    .mast en sbx-embed, mais la page charge newsroom.css (ou la regle n'etait
+    pas) : le bandeau restait sous celui du Hall. On l'injecte donc cote JS, ou
+    l'application est garantie.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 14:50:00 +0200
+
 secubox-billets (0.8.21-1~bookworm1) bookworm; urgency=medium
 
   * MOTS-CLES DANS LA MEGABARRE CONTEXTUELLE (#1307b). Embarque, la barre de
