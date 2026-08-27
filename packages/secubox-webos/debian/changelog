@@ -1,3 +1,13 @@
+secubox-webos (1.0.127-1~bookworm1) bookworm; urgency=medium
+
+  * BARRE MEDIA VISIBLE PENDANT LE SURF (#1246). L'overlay surf (.surf-ov,
+    z-index 52) remplit le bas de l'ecran jusqu'a bottom:0 et recouvrait la
+    barre media (z-index 45) : des qu'on surfait, plus aucune commande de
+    lecture — un overlay mal regle. La barre passe au-dessus (z-index 54) et
+    flotte sur le surf comme elle flotte deja sur le Hall.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 05:58:51 +0200
+
 secubox-webos (1.0.126-1~bookworm1) bookworm; urgency=medium
 
   * BOUTON « APPRENDRE LES COOKIES » DANS LA BARRE SURF (#1366). Un 🍪 ouvre

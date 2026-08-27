@@ -1,3 +1,16 @@
+secubox-podcaster (1.0.19-1~bookworm1) bookworm; urgency=medium
+
+  * MEME POLICE QUE LA RADIO ET LES AUTRES CARTES (#1238). Le corps de la vue
+    micro ne declarait aucune police : titre, source et « a suivre » retombaient
+    sur le serif du navigateur alors que la radio est en Courier Prime. On pose
+    Courier Prime sur le document — tout herite, la carte s'accorde aux autres.
+  * « A SUIVRE » DESCENDU D'UN CRAN ET AGRANDI. Le bloc etait tasse contre la
+    barre de progression et ecrit trop petit pour se lire d'un coup d'oeil : on
+    le decolle (margin-top) et on gonfle titres, rangs et items, plus la ligne
+    du bas, pour que la suite du programme et ses boutons soient lisibles.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 05:58:51 +0200
+
 secubox-podcaster (1.0.18-1~bookworm1) bookworm; urgency=medium
 
   * LA POCHETTE DU FLUX, PAS UN PICTOGRAMME (#1284). 🎙️ disait « ceci est un
