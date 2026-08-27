@@ -22,6 +22,18 @@
 
 ### 🔴 Reste (avec le POC de corrélation)
 
+- [ ] **#1235 — MUST : first-login + apprentissage embarqué de cookies (learner mode).**
+      L'utilisateur se connecte UNE fois au vrai site dans le surf (BFM,
+      Google/YouTube, presse), la box apprend les cookies, puis REJOUE
+      (mode replay) anonymisé pour le broadcast/partage. Fondation présente
+      (`jarre.py` : apprend/pose_manuel/entete). Manque la complétude du
+      relais pour le SSO : **CORS ACAO** sur sous-ressources cross-surf-origin
+      (`egress.py`), **réécriture des frames imbriquées** (#1225), CSP
+      `script-src` des origines surf. **Confiné & sécurisé** : cookies sur box
+      seulement (chmod 600), isolation par jarre, relais interne (identité SBX
+      jamais exposée au tiers #1234), journal des bascules, `oublie()` UI.
+      Google = best-effort (bot-detection) ; BFM/presse = faisable. Voir aussi
+      #1234 (deux modes), #1228 (passe d'apprentissage).
 - [ ] **#1216 — corréler les sessions de nos services, sans les cloisonner.**
       Le lecteur PeerTube ne s'authentifie plus dans le Hall : contexte tiers,
       stockage cloisonné, jar vide. **Corréler n'est pas cloisonner** — le
