@@ -895,22 +895,15 @@ def reecris_entetes(entetes: dict, base: str, rap: Rapport, sur_hote,
             continue
 
         if bas == "location":
-            # UN PORTAIL DE CONSENTEMENT EST AUSSI UN PISTEUR (#1235). sur_hote
-            # refuse de relayer un pisteur (None) -> _map_url laisse la cible
-            # BRUTE -> la CSP frame-src bloque la redirection, et le saut de
-            # portail n'a jamais lieu (« gate.first-id.fr bloque » sur BFM). On
-            # FORCE donc l'origine surf pour les portails a saut : le navigateur
-            # atteint le relais, qui lit redirectHost+redirectUri et renvoie a la
-            # page. Les autres Location suivent la voie normale.
-            _absl = urljoin(base, val)
-            _hl = (urlsplit(_absl).hostname or "").lower()
-            if any(_hl == g or _hl.endswith("." + g) for g in _PORTAILS_REDIR):
-                _pl = urlsplit(_absl)
-                out[cle] = urlunsplit(("https", origine_de(_hl), _pl.path,
-                                       _pl.query, _pl.fragment))
-            else:
-                v, _ = _map_url(val, base, sur_hote)
-                out[cle] = v
+            # NE PAS forcer l'origine surf pour un portail de consentement en
+            # redirect HTTP (#1235). Tente en 1.0.3, ca creait une BOUCLE : le
+            # saut de portail renvoie a la page, qui re-redirige vers le portail
+            # (consentement non satisfait cote serveur), etc. On laisse donc la
+            # voie normale : un portail-pisteur reste brut (bloque, inoffensif —
+            # l'auto-consentement de la tete gere le CMP), les autres Location
+            # sont relayees.
+            v, _ = _map_url(val, base, sur_hote)
+            out[cle] = v
             continue
 
         if bas == "set-cookie":

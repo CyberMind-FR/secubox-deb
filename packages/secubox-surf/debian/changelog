@@ -1,3 +1,14 @@
+secubox-surf (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * fix: revert du forcage d'origine surf sur les portails en redirect HTTP
+    (#1235). Le changement 1.0.3 creait une BOUCLE de redirection sur BFM
+    (saut de portail -> page -> re-redirection vers le portail -> ...). On
+    revient a la voie normale : un portail-pisteur reste brut (frame bloquee,
+    inoffensive, l'auto-consentement gere le CMP). Les autres fixes de la
+    serie (CORS, frames, postMessage, jarre d'etat) sont conserves.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 10:48:53 +0200
+
 secubox-surf (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * fix: portail de consentement en redirect HTTP (#1235). gate.first-id.fr est
