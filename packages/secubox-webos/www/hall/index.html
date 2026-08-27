@@ -654,6 +654,29 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:var(--panel);color:var(--ink);cursor:pointer;font-size:1rem}
 .tv-ov-x:hover{border-color:var(--coral);color:var(--coral)}
 .tv-ov iframe{flex:1;width:100%;border:0;min-height:0;background:#000}
+/* LE VIEWER (#1237). Coller une URL media -> on la regarde ici ; barre de
+   statut (download/time/cache) + icones media (broadcaster/favoriser/partager).
+   z-index 55 : au-dessus du surf (52) et du direct (53). */
+.viewer-ov{position:fixed;left:0;right:0;bottom:0;top:var(--mast-h,56px);z-index:55;
+  display:flex;flex-direction:column;background:#000}
+.viewer-ov.hidden{display:none}
+.viewer-ov .media{flex:1;min-height:0;display:flex;background:#000}
+.viewer-ov .media iframe,.viewer-ov .media video{flex:1;width:100%;height:100%;border:0;background:#000;object-fit:contain}
+.viewer-bar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:8px 12px;
+  background:var(--panel);border-top:1px solid var(--line)}
+.viewer-bar .titre{font-size:.82rem;color:var(--ink);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:34vw}
+.viewer-bar .etat{display:flex;align-items:center;gap:.7rem;font-family:"JetBrains Mono";
+  font-size:.68rem;color:var(--dim);flex-wrap:wrap}
+.viewer-bar .etat b{color:var(--ink)} .viewer-bar .etat .cache b{color:var(--cyan)}
+.viewer-bar .prog{flex:1;min-width:60px;height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.viewer-bar .prog i{display:block;height:100%;width:0;background:var(--cyan);transition:width .3s}
+.viewer-bar .actions{margin-left:auto;display:flex;gap:.35rem}
+.viewer-bar button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);cursor:pointer;font-size:1rem;display:inline-flex;
+  align-items:center;justify-content:center}
+.viewer-bar button:hover{border-color:var(--cyan);color:var(--cyan)}
+.viewer-bar button.on{border-color:var(--coral);color:var(--coral)}
 /* La pastille « 📡 direct » : apparait quand une diffusion est en cours. */
 .tv-pill{position:fixed;right:14px;bottom:40px;z-index:47;display:inline-flex;align-items:center;gap:7px;
   padding:8px 13px;border-radius:999px;border:1px solid var(--coral);background:var(--panel);
@@ -1563,8 +1586,20 @@ if(q){
     const v=e.target.value.trim();
     if(!ressembleAdresse(v.toLowerCase())) return;
     e.preventDefault();
-    ouvreSurf(v);
+    // URL MEDIA -> le VIEWER (#1237) ; sinon on surfe la page.
+    if(typeof estMediaUrl==='function' && estMediaUrl(v) && typeof ouvreViewer==='function'){ ouvreViewer(v); }
+    else ouvreSurf(v);
     e.target.value='';
+  });
+  // COLLER UNE URL MEDIA (#1237) : la saisie reste simple — on colle dans la
+  // recherche, et si c'est un media, le viewer s'ouvre tout de suite.
+  q.addEventListener('paste',e=>{
+    try{
+      const t=(e.clipboardData||window.clipboardData).getData('text').trim();
+      if(t && typeof estMediaUrl==='function' && estMediaUrl(t) && typeof ouvreViewer==='function'){
+        e.preventDefault(); ouvreViewer(t); q.value='';
+      }
+    }catch(_){}
   });
 }
 
@@ -1930,6 +1965,97 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       }).catch(function(){});
   }
   sonde(); setInterval(sonde, 5000);
+})();
+
+// LE VIEWER (#1237). Coller une URL media dans la barre -> on la regarde ici.
+// Pour une video directe, le <video> streame en progressif : on reflete
+// buffered=cache / currentTime=time / avancee du buffer=download dans la barre.
+// Icones : favoriser, partager (lien), diffuser au parc (📡, reutilise
+// /broadcast). Phase 2 (#1237) : le « sas » ytsas pour download+stream+cache
+// serveur sur les sources qui ne streament pas nativement.
+(function viewer(){
+  var ov=document.getElementById('viewer-ov'), media=document.getElementById('viewer-media'),
+      titreEl=document.getElementById('viewer-titre');
+  if(!ov||!media) return;
+  var courant=null;
+  function ytid(u){
+    try{ var url=new URL(u), h=url.hostname.replace(/^www\./,'').replace(/^m\./,'');
+      if(h==='youtu.be') return url.pathname.slice(1,12);
+      if(h==='youtube.com'||h==='youtube-nocookie.com'){
+        var v=url.searchParams.get('v'); if(v) return v.slice(0,11);
+        var m=url.pathname.match(/\/(?:embed|shorts|v)\/([A-Za-z0-9_-]{6,})/); if(m) return m[1].slice(0,11);
+      }
+    }catch(e){}
+    return null;
+  }
+  function estVideoDirecte(u){ return /\.(mp4|webm|ogg|ogv|m3u8|mov|mkv)(\?|#|$)/i.test(u); }
+  function estPeertube(u){ try{ return /(\/w\/|\/videos\/watch\/)/.test(new URL(u).pathname); }catch(e){ return false; } }
+  window.estMediaUrl=function(u){ return !!ytid(u)||estVideoDirecte(u)||estPeertube(u); };
+  function fmtT(s){ s=Math.max(0,Math.floor(s||0)); var m=Math.floor(s/60); return m+':'+('0'+(s%60)).slice(-2); }
+  function pose(dl,tm,ca,prog){
+    var e=document.getElementById('viewer-dl'); if(e)e.textContent=dl;
+    e=document.getElementById('viewer-tm'); if(e)e.textContent=tm;
+    e=document.getElementById('viewer-cache'); if(e)e.textContent=ca;
+    e=document.getElementById('viewer-prog'); if(e)e.style.width=(prog||0)+'%';
+  }
+  function ouvre(url){
+    courant=url; media.innerHTML=''; titreEl.textContent=url.slice(0,90);
+    document.getElementById('viewer-fav').classList.remove('on');
+    document.getElementById('viewer-cast').classList.remove('on');
+    pose('—','—','—',0);
+    var id=ytid(url);
+    if(id){
+      var f=document.createElement('iframe');
+      f.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
+      f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
+      media.appendChild(f); pose('direct','▶','—',100);
+    } else if(estVideoDirecte(url)){
+      var v=document.createElement('video');
+      v.src=url; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
+      media.appendChild(v);
+      function maj(){
+        try{ var d=v.duration||0, cur=v.currentTime||0, buf=0;
+          if(v.buffered&&v.buffered.length) buf=v.buffered.end(v.buffered.length-1);
+          var pc=d?Math.round(buf/d*100):0;
+          pose(d?pc+'%':'…', fmtT(cur)+(d?' / '+fmtT(d):''), d?pc+'%':'—', d?Math.round(cur/d*100):0);
+        }catch(e){}
+      }
+      v.addEventListener('timeupdate',maj); v.addEventListener('progress',maj);
+      v.addEventListener('durationchange',maj); v.addEventListener('loadedmetadata',maj);
+    } else {
+      // Peertube / page media : on passe par le surf (origine par-site).
+      if(typeof ouvreSurf==='function'){ ferme(); ouvreSurf(url); return; }
+    }
+    ov.classList.remove('hidden');
+    var mast=document.querySelector('.mast');
+    if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
+  }
+  function ferme(){ ov.classList.add('hidden'); media.innerHTML=''; courant=null; }
+  window.ouvreViewer=ouvre; window.fermeViewer=ferme;
+  document.getElementById('viewer-x').addEventListener('click',ferme);
+  addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.classList.contains('hidden')) ferme(); });
+  document.getElementById('viewer-fav').addEventListener('click',function(){
+    if(!courant) return;
+    try{ var k='sbx_favoris', l=JSON.parse(localStorage.getItem(k)||'[]');
+      if(l.indexOf(courant)<0) l.push(courant);
+      localStorage.setItem(k,JSON.stringify(l));
+    }catch(e){}
+    this.classList.add('on');
+  });
+  document.getElementById('viewer-share').addEventListener('click',function(){
+    if(!courant) return;
+    try{ if(navigator.clipboard) navigator.clipboard.writeText(courant); }catch(e){}
+    this.classList.add('on'); var b=this; setTimeout(function(){ b.classList.remove('on'); },900);
+  });
+  document.getElementById('viewer-cast').addEventListener('click',function(){
+    if(!courant) return;
+    fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:courant,titre:titreEl.textContent})}).catch(function(){});
+    this.classList.add('on');
+  });
+  document.getElementById('viewer-full').addEventListener('click',function(){
+    try{ var el=media.firstElementChild||ov; if(el.requestFullscreen) el.requestFullscreen(); }catch(e){}
+  });
 })();
 
 // UN SERVICE EMBARQUE DEMANDE D'EN OUVRIR UN AUTRE, PAR SON HOTE (#1358). Le
@@ -2697,6 +2823,26 @@ const CARDLET_ICONES = {
     <button class="tv-ov-x" id="tv-ov-x" type="button" title="Quitter le direct" aria-label="Fermer">✕</button>
   </div>
   <iframe id="tv-ov-f" title="Direct" allow="autoplay; fullscreen" allowfullscreen></iframe>
+</div>
+
+<div id="viewer-ov" class="viewer-ov hidden" role="dialog" aria-label="Lecteur média">
+  <div class="media" id="viewer-media"></div>
+  <div class="viewer-bar">
+    <span class="titre" id="viewer-titre">média</span>
+    <span class="etat" id="viewer-etat">
+      <span class="dl">⭳ <b id="viewer-dl">—</b></span>
+      <span class="tm"><b id="viewer-tm">—</b></span>
+      <span class="cache">▤ <b id="viewer-cache">—</b></span>
+    </span>
+    <span class="prog"><i id="viewer-prog"></i></span>
+    <span class="actions">
+      <button id="viewer-fav" type="button" title="Favoriser">♥</button>
+      <button id="viewer-share" type="button" title="Partager (lien sbx)">↗</button>
+      <button id="viewer-cast" type="button" title="Diffuser au parc (📡 direct)">📡</button>
+      <button id="viewer-full" type="button" title="Plein écran">⛶</button>
+      <button id="viewer-x" type="button" title="Fermer">✕</button>
+    </span>
+  </div>
 </div>
 </body>
 </html>

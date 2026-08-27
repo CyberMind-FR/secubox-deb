@@ -1,3 +1,15 @@
+secubox-webos (1.0.138-1~bookworm1) bookworm; urgency=medium
+
+  * feat: cardlet VIEWER (#1237, phase 1). La barre de recherche capte un
+    collage/entree d'URL media (YouTube/youtu.be, video directe mp4/webm/m3u8,
+    PeerTube) et ouvre un viewer overlay au lieu du surf. Lecteur
+    youtube-nocookie ou <video> progressif ; barre de statut download/time/cache
+    (buffered natif pour la video directe) ; icones favoriser (localStorage),
+    partager (presse-papier), diffuser au parc (📡 -> POST /broadcast, reutilise
+    le Broadcaster), plein ecran. Phase 2 : le sas ytsas download+stream+cache.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 13:00:33 +0200
+
 secubox-webos (1.0.137-1~bookworm1) bookworm; urgency=medium
 
   * fix: expose window.ouvreSurf — le clic Surf depuis le menu FEATURED
