@@ -1,3 +1,15 @@
+secubox-haproxy (1.8.10-1~bookworm1) bookworm; urgency=medium
+
+  * HTTPS PARTOUT, PAR DEFAUT (#1370). La redirection clair->TLS n'etait emise
+    que pour les vhosts declarant `ssl_redirect = true` (aucun, en pratique :
+    18 le declaraient, le champ etait ecrit `false` partout par `vhost add`).
+    Desormais tout vhost avec certificat (ssl = true) redirige le HTTP vers
+    HTTPS — posture ANSSI/CSPN. Un vhost sans TLS ne redirige pas (il pointerait
+    vers une page injoignable) ; `ssl_redirect` devient un no-op garde pour
+    compat. `!is_acme_challenge` preserve le renouvellement Let's Encrypt.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 08:05:00 +0200
+
 secubox-haproxy (1.8.9-1~bookworm1) bookworm; urgency=medium
 
   * ROUTAGE PAR DOMAINE PREFIXE (#1217, POC Surf). Un `domain` finissant par

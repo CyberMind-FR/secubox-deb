@@ -963,8 +963,16 @@ EOF
                   *\*) echo "    acl host_$name hdr_beg(host) -i ${domain%\*}" ;;
                   *)   echo "    acl host_$name hdr(host) -i $domain" ;;
                 esac
-                # Redirection vers HTTPS (#988), conditionnee a ssl = true : un
-                # vhost sans certificat renverrait vers une page injoignable.
+                # HTTPS PARTOUT, PAR DEFAUT (#1370). Tout vhost qui a un
+                # certificat (ssl = true) redirige le clair vers TLS : c'est la
+                # posture attendue (ANSSI/CSPN), plus une exception a declarer
+                # vhost par vhost. On ne conditionne donc PLUS a `ssl_redirect`
+                # (qui restait false partout et ne redirigeait rien) : la seule
+                # condition est d'avoir un certificat. Un vhost sans TLS
+                # (ssl = false) ne redirige pas — il renverrait vers une page
+                # injoignable. `ssl_redirect = false` devient un simple no-op,
+                # garde pour compat : forcer le clair sur un service a cert n'a
+                # pas de sens defendable.
                 #
                 # !is_acme_challenge n'est PAS optionnel. HAProxy evalue les
                 # regles `redirect` AVANT `use_backend` : sans cette exclusion,
@@ -972,7 +980,7 @@ EOF
                 # tete de frontend, les defis Let's Encrypt seraient renvoyes
                 # en HTTPS et le renouvellement echouerait — c'est-a-dire
                 # exactement la panne que #986 vient de reparer.
-                if [ "$ssl_redirect" = "1" ] && [ "$ssl" = "1" ]; then
+                if [ "$ssl" = "1" ]; then
                     echo "    redirect scheme https code 301 if host_$name !is_acme_challenge"
                 fi
                 if [ "$waf_enabled" = "1" ] && [ "$waf_bypass" != "1" ]; then
