@@ -657,8 +657,41 @@
       'width=380,height=580,menubar=no,toolbar=no,location=no,resizable=yes');
   });
 
+  // UN LIEN COLLÉ DANS LE CHAT VA À LA FILE, PAS AU CHAT (#1374). Dire « écoutez
+  // ça » avec une URL YouTube, c'est PROPOSER un titre — pas bavarder. On
+  // detecte donc l'adresse dans la saisie et on l'envoie a la file : le serveur
+  // la resout (titre, duree, pochette) et elle apparait en « ++ » a voter,
+  // enrichie de ses quick infos. Le message texte autour, s'il y en a, part
+  // quand meme au chat.
+  function extraitLien(s) {
+    var m = String(s || '').match(/https?:\/\/[^\s]+/i);
+    if (!m) return null;
+    return m[0].replace(/[.,;:!?)\]]+$/, '');   // la ponctuation finit la phrase, pas l'URL
+  }
+  function proposeSource(url, champ) {
+    nom(); // proposer, c'est signer
+    return json('/api/v1/radio/propositions', { method: 'POST', body: JSON.stringify({ source: url }) })
+      .then(function (r) {
+        var m = $('retour');
+        if (r.code === 409) { if (m) m.textContent = 'Cette piste a déjà été refusée.'; }
+        else if (r.code >= 400) { if (m) m.textContent = (r.corps && r.corps.error) || 'Refusé.'; }
+        else {
+          if (champ) champ.value = '';
+          if (m) m.textContent = (r.corps && r.corps.neuve)
+            ? 'Proposée — en attente de validation par le sysop.'
+            : 'Déjà connue : elle est dans la file ou à l’antenne.';
+          // Un mot dans le chat d'ambiance : « untel a glissé un titre ».
+          poseChat(['🎵 titre glissé dans la file']);
+          if (typeof sonde === 'function') sonde();   // la file se rafraîchit tout de suite
+        }
+      });
+  }
+
   dire.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || !dire.value.trim()) return;
+    // Une URL dans le message ? → à la file (avec ses quick infos), pas au chat.
+    var lien = extraitLien(dire.value);
+    if (lien) { dire.value = ''; proposeSource(lien); return; }
     nom(); // on ne se nomme qu'au moment de parler
     var corps = dire.value; dire.value = '';
     var options = { method: 'POST', body: JSON.stringify({ corps: corps }) };
@@ -676,23 +709,20 @@
       });
   });
 
+  // COLLER une URL déplace directement le lien vers la file, sans même valider.
+  dire.addEventListener('paste', function (e) {
+    try {
+      var t = (e.clipboardData || window.clipboardData).getData('text');
+      var lien = extraitLien(t);
+      if (lien && !dire.value.trim()) { e.preventDefault(); proposeSource(lien); }
+    } catch (x) {}
+  });
+
   $('proposer').addEventListener('submit', function (e) {
     e.preventDefault();
     var champ = $('source'), s = champ.value.trim();
     if (!s) return;
-    nom(); // proposer, c'est signer
-    json('/api/v1/radio/propositions', { method: 'POST', body: JSON.stringify({ source: s }) })
-      .then(function (r) {
-        var m = $('retour');
-        if (r.code === 409) m.textContent = 'Cette piste a déjà été refusée.';
-        else if (r.code >= 400) m.textContent = r.corps.error || 'Refusé.';
-        else {
-          champ.value = '';
-          m.textContent = r.corps.neuve
-            ? 'Proposée — en attente de validation par le sysop.'
-            : 'Déjà connue : elle est dans la file ou à l’antenne.';
-        }
-      });
+    proposeSource(s, champ);
   });
 
   sonde();

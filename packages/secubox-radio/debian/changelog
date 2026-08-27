@@ -1,3 +1,14 @@
+secubox-radio (0.1.51-1~bookworm1) bookworm; urgency=medium
+
+  * UN LIEN COLLÉ DANS LE CHAT VA À LA FILE (#1374). Coller une URL YouTube (ou
+    tout site supporté) dans « Dire quelque chose… » ne bavarde plus : le lien
+    part directement aux propositions, ou le serveur le resout en titre/duree/
+    pochette — il apparait en « ++ » a voter, enrichi de ses quick infos. Un
+    mot dans le chat d'ambiance signale le geste ; la file se rafraichit tout de
+    suite. Le formulaire « Proposer » et la saisie partagent le meme chemin.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 11:55:00 +0200
+
 secubox-radio (0.1.50-1~bookworm1) bookworm; urgency=medium
 
   * LE CARDLET RESPECTE LE CLAIR EXPLICITE (#1334). Il avait le clair SYSTEME
