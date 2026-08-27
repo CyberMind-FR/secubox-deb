@@ -1402,10 +1402,23 @@ document.addEventListener('click',e=>{
   const cx=e.target.closest('[data-ctx]');
   if(cx && _svc){ e.preventDefault(); openService(_svc.id, _mode, cx.dataset.ctx, cx.dataset.ctxt); setMenu(false); return; }
   // Item POUSSE par le service : on ne navigue pas, on lui renvoie le choix.
+  // ON L'ENVOIE A TOUS SES CADRES (#1238b). `querySelector('#eb-frames iframe,
+  // iframe[data-micro=…]')` rendait le PREMIER en ordre DOM — le cardlet micro,
+  // place avant #eb-frames — qui n'ecoute pas `contexte-choix` : le choix
+  // tombait dans le vide (« rien ne bouge »). La contexte vient du cadre PLEIN
+  // embarque ; on poste donc a tous les cadres candidats du service (embarque,
+  // #eb-frames, micro, apercu), dedupliques — celui qui l'ecoute agit.
   const cp=e.target.closest('[data-ctxpush]');
   if(cp && _svc){ e.preventDefault();
-    const f=document.querySelector('#eb-frames iframe, iframe[data-micro="'+_svc.id+'"]');
-    try{ if(f&&f.contentWindow) f.contentWindow.postMessage({sbx:'contexte-choix', cle:cp.dataset.ctxpush}, '*'); }catch(err){}
+    const cibles=[
+      document.querySelector('iframe[data-embarque="'+_svc.id+'"]'),
+      document.querySelector('#eb-frames iframe'),
+      document.querySelector('iframe[data-micro="'+_svc.id+'"]'),
+      document.querySelector('iframe[data-apercu="'+_svc.id+'"]')
+    ];
+    const vus=new Set();
+    cibles.forEach(f=>{ if(f && f.contentWindow && !vus.has(f)){ vus.add(f);
+      try{ f.contentWindow.postMessage({sbx:'contexte-choix', cle:cp.dataset.ctxpush}, '*'); }catch(err){} }});
     setMenu(false); return; }
   // Point d'entrée unique : menus plats, cartes principales et cartes du parc.
   const op=e.target.closest('[data-open]');

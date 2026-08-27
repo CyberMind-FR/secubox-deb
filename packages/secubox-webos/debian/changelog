@@ -1,3 +1,15 @@
+secubox-webos (1.0.132-1~bookworm1) bookworm; urgency=medium
+
+  * CHOIX DU MENU CONTEXTUEL ENVOYE AU BON CADRE (#1238b). Le Hall renvoyait le
+    choix d'un item pousse via `querySelector('#eb-frames iframe, iframe[data-
+    micro=…]')` — qui rend le PREMIER en ordre DOM, le cardlet micro (avant
+    #eb-frames), lequel n'ecoute pas `contexte-choix`. Le choix (ex. filtrer une
+    officine podcaster) tombait dans le vide, « rien ne bouge ». On poste
+    desormais a TOUS les cadres candidats du service (embarque, #eb-frames,
+    micro, apercu), dedupliques ; celui qui ecoute agit.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 13:20:00 +0200
+
 secubox-webos (1.0.131-1~bookworm1) bookworm; urgency=medium
 
   * HAUTEUR DU PLAYER RADIO LEGEREMENT REDUITE (252 -> 236px). La carte radio
