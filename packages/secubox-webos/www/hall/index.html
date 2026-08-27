@@ -688,7 +688,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* #1187 — déclencheur du menu contextuel : dans la barre du service, juste à
    gauche de ⟳. Il n'existe que si le service expose réellement une navigation. */
 .nav-embed .ctx-btn{display:inline-flex;align-items:center;gap:7px;padding:5px 11px}
-.nav-embed .ctx-btn b{font-family:"Fraunces";font-size:1rem}
+/* MEME FONT QUE LES MENUS SERVICES/SYSTEME (#1187c) : le bouton du menu
+   contextuel affichait le nom du service en Fraunces (serif), les autres menus
+   de la megabarre etant en Inter — deux typographies cote a cote. On aligne. */
+.nav-embed .ctx-btn b{font-family:inherit;font-weight:600;font-size:.82rem}
 .nav-embed .ctx-btn .ca{font-size:.62rem;opacity:.65}
 .nav-embed .ctx-btn.on{border-color:var(--sky);color:var(--sky)}
 /* Sans navigation exposée : simple titre, ni chevron ni interaction. */
@@ -1120,7 +1123,11 @@ function render(data,src){
   if(tz) tz.remove();
   // système : tous les modules par catégorie
   const sb=document.getElementById('sysboard'); let sh=''; let shown=0;
-  CATS.forEach(c=>{ const items=svc.filter(s=>s.category===c.id);
+  // Tri ALPHABETIQUE des services (#1187b) : dans chaque categorie, l'ordre du
+  // registre n'apprend rien ; A->Z se parcourt a l'oeil. Meme tri pour la vue
+  // systeme et le menu, pour qu'ils s'accordent.
+  const parNom=(a,b)=>String(a.name||a.id||'').localeCompare(String(b.name||b.id||''),'fr',{sensitivity:'base'});
+  CATS.forEach(c=>{ const items=svc.filter(s=>s.category===c.id).sort(parNom);
     if(!items.length) return; shown+=items.length;
     sh+='<div class="sec"><h2 class="serif" style="font-size:1.05rem">'+c.icon+' '+c.name+'</h2><span class="rule"></span><span class="n mono">'+items.length+'</span></div><div class="grid">';
     items.forEach(s=>sh+=compactHTML(s)); sh+='</div>';
@@ -1129,7 +1136,7 @@ function render(data,src){
   var sbi=document.getElementById('sb-info'); if(sbi) sbi.innerHTML=src;
   // Menu SYSTÈME : liste PLATE, catégories en simples intertitres (#1187).
   const sm=document.getElementById('sysmenu'); let smh='';
-  CATS.forEach(c=>{ const items=svc.filter(s2=>s2.category===c.id); if(!items.length) return;
+  CATS.forEach(c=>{ const items=svc.filter(s2=>s2.category===c.id).sort(parNom); if(!items.length) return;
     smh+='<div class="grp">'+c.icon+' '+esc(c.name)+'</div>';
     smh+=items.slice(0,24).map(s2=>{ const st=(s2.health&&s2.health.state)||'unknown';
         // Mosaïque sans bouton rapide : la tuile entière ouvre la console
@@ -1945,7 +1952,15 @@ addEventListener('message', ev=>{
     const etaitEnLecture = ((flux.get(d.id)||{}).etat||{}).joue;
     if(d.type==='video' && d.joue && !etaitEnLecture){
       flux.forEach((f,autre)=>{
-        if(autre!==d.id && f.etat && f.etat.joue) commande(autre,'pause');
+        // On ne met en pause que l'AUDIO : le DEMARRAGE d'une video fait taire
+        // la radio et les podcasts (« on ne regarde pas un film par-dessus la
+        // radio » — et l'utilisateur adore ca). Mais une video n'est JAMAIS
+        // coupee par une autre (#1338c) : deux videos, c'est un choix de
+        // l'utilisateur, pas au Hall de trancher — « my power rules ». Et une
+        // radio qui reprend ENSUITE ne declenche rien ici (elle s'annonce
+        // `zoomable`, pas `type:video`) : radio et video coexistent, la radio
+        // se relance sans interrompre le film.
+        if(autre!==d.id && f.etat && f.etat.joue && f.etat.type!=='video') commande(autre,'pause');
       });
     }
     // ── LA VIDEO GAGNE TOUJOURS, DANS LES DEUX SENS (#1338) ──────────────────

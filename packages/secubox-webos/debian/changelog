@@ -1,3 +1,23 @@
+secubox-webos (1.0.134-1~bookworm1) bookworm; urgency=medium
+
+  * SERVICES TRIES ALPHABETIQUEMENT dans la vue systeme ET le menu (#1187b) :
+    l'ordre du registre n'apprenait rien, A->Z se parcourt a l'oeil.
+  * FONT DU MENU CONTEXTUEL ALIGNEE (#1187c) : son bouton affichait le nom du
+    service en Fraunces (serif) alors que Services/Systeme sont en Inter — deux
+    typographies cote a cote. On aligne sur Inter.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 15:20:00 +0200
+
+secubox-webos (1.0.133-1~bookworm1) bookworm; urgency=medium
+
+  * RADIO ET VIDEO COEXISTENT (#1338c). Le demarrage d'une video fait taire
+    l'AUDIO (radio, podcasts) — voulu, apprecie — mais ne coupe JAMAIS une autre
+    video, et la radio qui reprend ENSUITE ne l'interrompt pas (elle s'annonce
+    `zoomable`, pas `type:video`). Deux videos = choix de l'utilisateur, pas au
+    Hall de trancher.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 13:56:00 +0200
+
 secubox-webos (1.0.132-1~bookworm1) bookworm; urgency=medium
 
   * CHOIX DU MENU CONTEXTUEL ENVOYE AU BON CADRE (#1238b). Le Hall renvoyait le
