@@ -1,3 +1,15 @@
+secubox-podcaster (1.0.22-1~bookworm1) bookworm; urgency=medium
+
+  * PORTAIL EMBARQUE : EN-TETE RETIRE, OFFICINES DANS LA MEGABARRE (#1238b).
+    Embarque dans le Hall, le grand en-tete (logo, RSS, copier) et la barre de
+    filtres faisaient doublon avec ce que le Hall porte deja. On les masque
+    (classe sbx-embed) et on POUSSE la liste des officines dans la megabarre
+    contextuelle du Hall (message `contexte`), avec reaction au clic
+    (`contexte-choix`) pour filtrer — meme contrat que MetaNews. Autonome, la
+    page garde son en-tete et ses filtres.
+
+ -- Gerald Kerma <devel@cybermind.fr>  Thu, 27 Aug 2026 10:45:00 +0200
+
 secubox-podcaster (1.0.21-1~bookworm1) bookworm; urgency=medium
 
   * BOUTON « BIBLIOTHEQUE » : OUVRIR EMBARQUE DANS LE HALL (#1238). Le lien

@@ -160,7 +160,53 @@
       var u = new URL(b);
       // Deja une origine surf ? on ne boucle pas.
       if (u.hostname.indexOf('surf-') === 0) return;
-      var dest = 'https://' + surfOrigine(u.hostname) + u.pathname + u.search + u.hash;
+
+      // SAUTER LE PORTAIL, DIRECTEMENT (#1367). Le portail (first-id) porte
+      // dans sa query l'adresse de RETOUR : redirectHost + redirectUri (formes
+      // separees) ou une URL http(s) complete. On l'extrait ICI et on saute
+      // DROIT a l'article relaye, sans repasser par l'origine surf du portail
+      // — ce detour renvoyait a l'article, dont le JS relancait le portail : une
+      // boucle, et l'erreur CSP a chaque tour. On coupe court.
+      var cible = null;
+      var q = u.searchParams;
+      var rh = q.get('redirectHost') || q.get('returnHost') || q.get('host');
+      var ru = q.get('redirectUri') || q.get('returnUri') || q.get('uri') || q.get('path') || '';
+      if (rh && /^https?:\/\//i.test(rh)) {
+        try {
+          var ph = new URL(rh);
+          cible = ph.hostname + (ru && ru.charAt(0) === '/' ? ru : (ph.pathname || '/'));
+        } catch (x) {}
+      }
+      if (!cible) {
+        // Forme « URL complete dans un parametre » (r=, url=, return=, redirect=).
+        q.forEach(function (v) {
+          if (!cible && /^https?:\/\//i.test(v)) {
+            try { var pu = new URL(v); if (pu.hostname.indexOf('first-id') < 0) cible = pu.hostname + pu.pathname + pu.search; } catch (x) {}
+          }
+        });
+      }
+      // A defaut d'adresse de retour, on tente quand meme l'origine surf du
+      // portail (le relais fera le saut cote serveur s'il le peut).
+      var host = cible ? cible.split('/')[0] : u.hostname;
+      var chemin = cible ? cible.slice(cible.indexOf('/') >= 0 ? cible.indexOf('/') : cible.length) : (u.pathname + u.search + u.hash);
+
+      // GARDE ANTI-BOUCLE : si on a deja saute vers CET article et qu'il
+      // re-declenche le portail, on ne relance pas indefiniment — on s'arrete
+      // et on le dit, plutot que de noyer la console d'erreurs CSP.
+      var cle = 'sbxjump:' + host + chemin;
+      var n = 0; try { n = (+sessionStorage.getItem(cle)) || 0; } catch (x) {}
+      if (n >= 2) {
+        try { sessionStorage.removeItem(cle); } catch (x) {}
+        var elE = document.getElementById('etat');
+        if (elE) {
+          elE.hidden = false;
+          elE.textContent = '🚧 ' + host + ' impose un portail de consentement (first-id) que la box coupe. Essayez la version mobile (m.' + host.replace(/^www\./, '') + '), le flux RSS, ou 🍪 pour apprendre les cookies.';
+        }
+        return;
+      }
+      try { sessionStorage.setItem(cle, String(n + 1)); } catch (x) {}
+
+      var dest = 'https://' + surfOrigine(host) + chemin;
       var f = document.querySelector('#vue iframe');
       if (f) f.src = dest;
     } catch (err) {}
