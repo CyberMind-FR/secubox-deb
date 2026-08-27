@@ -1,3 +1,14 @@
+secubox-surf (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * fix: portail de consentement en redirect HTTP (#1235). gate.first-id.fr est
+    a la fois un pisteur (sur_hote -> None) et un portail a saut : dans un
+    Location HTTP, _map_url le laissait BRUT -> CSP frame-src bloquait la
+    redirection BFM et le saut de portail n'avait jamais lieu. On force
+    desormais l'origine surf pour les hotes de _PORTAILS_REDIR dans la branche
+    Location ; le relais capte et renvoie a la page (redirectHost+redirectUri).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 27 Aug 2026 10:45:35 +0200
+
 secubox-surf (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * feat: jarre d'etat — capture + rejeu du storage (#1235). Pendant du bocal a
