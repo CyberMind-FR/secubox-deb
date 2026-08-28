@@ -1,3 +1,72 @@
+secubox-waf (1.10.25-1~bookworm1) bookworm; urgency=medium
+
+  * URGENT fix: waf-rules 1.4.2 — router-goform. Le pattern '/goform/.*\$\(|`|;'
+    parenthesait mal l'alternance : au niveau superieur, '`' et ';' matchaient
+    SEULS. Tout UA contenant ';' (iPhone;, Windows NT;, Android;) etait donc
+    classe router_botnet et bloque (SECURITY ALERT) puis banni. Groupe en
+    '/goform/.*(\$\(|`|;)'. 21 IP debannies.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 13:40:00 +0200
+
+secubox-waf (1.10.24-1~bookworm1) bookworm; urgency=medium
+
+  * URGENT fix: waf-rules.json 1.4.1 — mirai-scan `Mozi` -> `Mozi\\b`. `Mozi`
+    (botnet) matchait `Mozilla` : TOUS les navigateurs (et Googlebot) etaient
+    classes router_botnet, bloques, puis BANNIS au 3e coup. Faux positif majeur.
+  * fix(#1218): _get_crowdsec_alerts() ne lance plus `cscli`. CrowdSec est
+    desactive/retire ; l'appeler etait un appel mort. Les bans se lisent deja en
+    nft (_get_bans).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 09:35:00 +0200
+
+secubox-waf (1.10.23-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1243): carte « Empreintes de campagnes » — UNE ligne par campagne
+    (sequence tronquee horizontale, debordement en fondu), plus de pave de
+    chemins detailles.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 01:10:00 +0200
+
+secubox-waf (1.10.22-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1243): carte « Empreintes de campagnes » — chemins RACCOURCIS. Les
+    crawls git produisent des chemins interminables (/…/commit/…/fichier) qui
+    noyaient l'empreinte ; on garde debut+fin, chemin complet en infobulle.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 00:30:00 +0200
+
+secubox-waf (1.10.21-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1243): tableau WAF — carte « Empreintes de campagnes ». Chaque
+    campagne (attaquants au MEME workflow) affiche sa signature, l'outil deduit,
+    une barre (nb d'IP), les sondes, un badge 🔑 haute-valeur, et surtout sa
+    BANDE SEQUENTIELLE (exemple_sequence) : l'empreinte de workflow partagee.
+    Lu depuis /campaigns (deja produit par le correlateur). Rendu SVG-free,
+    theme-aware.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 23:45:00 +0200
+
+secubox-waf (1.10.20-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240): carte /micro — un petit DRAPEAU pays devant chaque IP de la
+    liste des activites recentes (geoloc GeoIP). /alerts (forme non-agregee,
+    lue par /micro) expose desormais `country` par alerte (copie, jamais muter
+    le cache chaud) ; micro.html prefixe l'IP du drapeau via drapeau(a.country).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 23:20:00 +0200
+
+secubox-waf (1.10.19-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240): waf-rules.json 1.4.0 — categorie product_absent_probes passee
+    en mode ESCALATE. Une sonde d'exploit vers un produit ABSENT de la box est
+    un signal a zero faux positif ; en escalate le WAF OBSERVE puis BANNIT le
+    scanner qui persiste (defaut 3 sondes / 24h). recon_crawler reste en detect
+    (il contient des chemins legitimes : robots.txt, favicon...).
+  * chore: undrift — la box tournait un seed 1.2.0 perime ; le fichier actif
+    /etc/secubox/waf/waf-rules.json est resynchronise sur les sources deb.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 20:00:00 +0200
+
 secubox-waf (1.10.18-1~bookworm1) bookworm; urgency=medium
 
   * HTTPS PARTOUT AUSSI POUR waf.gk2.secubox.in (#1370). Ce vhost est servi en

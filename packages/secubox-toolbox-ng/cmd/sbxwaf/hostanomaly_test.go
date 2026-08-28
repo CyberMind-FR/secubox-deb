@@ -64,3 +64,30 @@ func TestEstDGA_AttrapeLesNomsGeneres(t *testing.T) {
 		}
 	}
 }
+
+// #1266 : notre propre domaine n'est jamais banni comme host-anomaly. L'appli
+// Nextcloud iOS pointant sur nextcloud.gk2.secubox.in (non routé) ne doit pas
+// couper l'utilisateur — ni, en CGNAT mobile, tous ceux qui partagent son IP.
+func TestEstPremierePartie(t *testing.T) {
+	sfx := []string{"gk2.secubox.in", "secubox.in", "gk2.net", "cybermind.fr"}
+	cas := []struct {
+		host string
+		veut bool
+	}{
+		{"nextcloud.gk2.secubox.in", true},
+		{"nc.gk2.secubox.in", true},
+		{"gk2.secubox.in", true},
+		{"hall.gk2.net", true},
+		{"GK2.NET", true},
+		{"nextcloud.gk2.secubox.in:443", true},
+		{"evil.com", false},
+		{"notgk2.net", false},          // pas une frontière de label
+		{"gk2.secubox.in.evil.com", false},
+		{"", false},
+	}
+	for _, c := range cas {
+		if got := estPremierePartie(c.host, sfx); got != c.veut {
+			t.Errorf("estPremierePartie(%q) = %v, veut %v", c.host, got, c.veut)
+		}
+	}
+}

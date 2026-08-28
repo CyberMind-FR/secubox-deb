@@ -90,6 +90,29 @@
   th { font-size: .62rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
   tbody tr:last-child td { border-bottom: none; }
   code { font-family: 'Courier Prime', monospace; color: var(--cyan); }
+  /* #1243 — empreintes séquentielles de campagnes. */
+  /* Une campagne = UNE ligne (#1243). La sequence deborde a l'horizontale sans
+     jamais empiler de details. */
+  .camp1 { display: flex; align-items: center; gap: .5rem; padding: .42rem 0;
+           border-bottom: 1px solid var(--border); overflow: hidden; }
+  .camp1:last-child { border-bottom: 0; }
+  .campseq1 { flex: 1; min-width: 0; display: flex; align-items: center; gap: .15rem;
+              overflow: hidden; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg,#000 88%,transparent);
+              mask-image: linear-gradient(90deg,#000 88%,transparent); }
+  .camp { padding: .55rem 0; border-bottom: 1px solid var(--border); }
+  .camp:last-child { border-bottom: 0; }
+  .camptete { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .campsig { font-family: 'Courier Prime', monospace; color: var(--purple); font-size: .8rem; }
+  .camptool { font-size: .72rem; color: var(--orange); }
+  .campbar { flex: 1; min-width: 60px; height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; }
+  .campbar i { display: block; height: 100%; background: var(--cyan); }
+  .campnb { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .camphv { font-size: .72rem; color: var(--orange); font-variant-numeric: tabular-nums; }
+  .camphv.z { color: var(--muted); opacity: .5; }
+  .campseq { display: flex; align-items: center; gap: .15rem; flex-wrap: wrap; margin-top: .35rem; }
+  .seqchip { font-family: 'Courier Prime', monospace; font-size: .68rem; background: var(--border);
+             color: var(--ink); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+  .seqar { color: var(--muted); font-size: .66rem; }
   .enveloppe { overflow-x: auto; }
   .muted { color: var(--muted); }
 
@@ -132,6 +155,12 @@
     <h2>🎯 Attaquants persistants</h2>
     <p class="h2sous">Les adresses les plus vues, avec leur origine. « local » agrège tout le trafic interne : ce n'est pas un attaquant.</p>
     <div class="enveloppe" id="attaquants"><span class="muted">chargement…</span></div>
+  </div>
+
+  <div class="card">
+    <h2>🧬 Empreintes de campagnes</h2>
+    <p class="h2sous">Des attaquants distincts qui rejouent le MÊME enchaînement de sondes forment une campagne. La bande montre leur workflow — l'empreinte séquentielle partagée. 🔑 = sondes de secret/exécution.</p>
+    <div id="campagnes"><span class="muted">chargement…</span></div>
   </div>
 
   <div class="card">
@@ -456,15 +485,47 @@
     }).join('');
   }
 
+  // ── EMPREINTES SÉQUENTIELLES DE CAMPAGNES (#1243) ─────────────────────────
+  // Chemin RACCOURCI : les crawls git (git.gk2.secubox.in/…/commit/…) produisent
+  // des chemins interminables qui noient l'empreinte. On garde début et fin ;
+  // le chemin complet reste dans l'infobulle.
+  function court(p) { p = String(p || ''); return p.length > 28 ? p.slice(0, 18) + '…' + p.slice(-8) : p; }
+  function campagnes(data) {
+    const box = document.getElementById('campagnes');
+    if (!box) return;
+    const camps = (data && data.campagnes) || [];
+    if (!camps.length) {
+      box.innerHTML = '<span class="muted">Aucune campagne corrélée pour l\'instant.</span>';
+      return;
+    }
+    const maxA = camps.reduce(function (m, c) { return Math.max(m, c.nb_attaquants || 0); }, 1);
+    box.innerHTML = camps.slice(0, 12).map(function (c) {
+      const na = c.nb_attaquants || 0, hv = c.haute_valeur || 0;
+      // UNE SEULE LIGNE par campagne : la sequence tient a l'horizontale, tronquee
+      // (chemins deja raccourcis), et deborde en discret — pas de pave de details.
+      const seq = (c.exemple_sequence || []).slice(0, 5).map(function (p) {
+        return '<code class="seqchip" title="' + esc(p) + '">' + esc(court(p)) + '</code>';
+      }).join('<span class="seqar">→</span>');
+      return '<div class="camp1">'
+        + '<code class="campsig">' + esc((c.signature || '').slice(0, 8)) + '</code>'
+        + (c.outil ? '<span class="camptool">' + esc(c.outil) + '</span>' : '')
+        + '<span class="campnb">' + na + ' IP · ' + nb(c.sondes || 0) + '</span>'
+        + '<span class="camphv' + (hv ? '' : ' z') + '">🔑 ' + hv + '</span>'
+        + '<span class="campseq1">' + (seq || '<span class="muted">—</span>') + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
   async function charger() {
-    const [stats, hist, bans, detec] = await Promise.all([
-      api('/stats'), api('/history'), api('/bans'), api('/detections')
+    const [stats, hist, bans, detec, camps] = await Promise.all([
+      api('/stats'), api('/history'), api('/bans'), api('/detections'), api('/campaigns')
     ]);
     if (stats) {
       efficacite(stats.efficacite);
       attaquants(stats.top_ips, stats.top_ips_countries);
     }
     if (hist) evolution(hist.jours);
+    campagnes(camps);
     detections(detec && detec.detections);
     if (stats) {
       surfaces(stats.par_type, stats.par_origine);

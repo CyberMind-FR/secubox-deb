@@ -53,6 +53,13 @@ type AttackerProfile struct {
 	Sequence   []string `json:"sequence"`
 	Verdict    string   `json:"verdict"`
 	Signature  string   `json:"signature"`
+	// #1240 P0-A : intensité « negative space » de l'attaquant — combien de ses
+	// sondes visent des ressources qui n'existent sur aucune conf normale
+	// (Recon), dont combien de secrets/exécution/admin (HauteValeur). C'est
+	// l'évidence qui fait passer « 185.x GET /.env » à « reconnaissance
+	// automatisée ciblant des secrets exposés » (brief §21).
+	Recon       int `json:"recon"`
+	HauteValeur int `json:"haute_valeur"`
 }
 
 // Campaign — attaquants partageant la même signature de workflow.
@@ -62,6 +69,9 @@ type Campaign struct {
 	Attaquants []string `json:"attaquants"`
 	Sondes     int      `json:"sondes"`
 	Exemple    []string `json:"exemple_sequence"`
+	// #1240 : sondes haute-valeur cumulées de la campagne — sépare un balayage
+	// bruyant d'une campagne ciblant secrets/exécution.
+	HauteValeur int `json:"haute_valeur"`
 }
 
 // CorrelationSummary — vue d'ensemble, campagnes triées par volume.
@@ -103,6 +113,14 @@ func construireProfils(r io.Reader) map[string]*AttackerProfile {
 		ajouterDistinct(&p.Categories, e.Category)
 		if e.Tool != "" {
 			ajouterDistinct(&p.Outils, e.Tool)
+		}
+		// Intensité « negative space » (#1240) : l'étiquette est posée par le
+		// journal (threatlog.go) uniquement sur les sondes de reconnaissance.
+		if e.NegativeSpace != "" {
+			p.Recon++
+			if e.NegativeSpace == pathHighValueProbe {
+				p.HauteValeur++
+			}
 		}
 		if len(p.Sequence) < maxSequence {
 			p.Sequence = append(p.Sequence, normaliserChemin(e.Path))
@@ -155,6 +173,7 @@ func clusteriser(profs map[string]*AttackerProfile) []Campaign {
 		}
 		c.Attaquants = append(c.Attaquants, p.Key)
 		c.Sondes += p.Sondes
+		c.HauteValeur += p.HauteValeur
 		if c.Outil == "" && len(p.Outils) > 0 {
 			c.Outil = p.Outils[0]
 		}

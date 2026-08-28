@@ -211,7 +211,7 @@
       const ban = a.action === 'banned';
       return '<span class="rl' + (ban ? ' ban' : '') + '">'
         + '<span class="ic">' + (ban ? '🚫' : emoji(a.category)) + '</span>'
-        + '<span class="qui">' + esc(a.client_ip) + '</span>'
+        + '<span class="qui">' + (a.country ? drapeau(a.country) + ' ' : '') + esc(a.client_ip) + '</span>'
         + '<span class="quoi">' + esc(libelle(a.category)) + '</span>'
         + '<span class="quand">' + esc(delai(a.timestamp)) + '</span>'
         + '</span>';

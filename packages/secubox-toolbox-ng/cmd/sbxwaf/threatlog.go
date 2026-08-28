@@ -79,6 +79,10 @@ type logEntry struct {
 	UserAgent string `json:"user_agent"`
 	Tool      string `json:"tool,omitempty"`
 	JA4       string `json:"ja4,omitempty"`
+	// #1240 P0-A : étiquette « negative space » — known_negative | high_value_probe.
+	// Présente UNIQUEMENT pour les sondes de reconnaissance ; absente pour les
+	// attaques à charge utile (sqli, xss…) et les 404 anodines.
+	NegativeSpace string `json:"negative_space,omitempty"`
 }
 
 // Record appends one JSON line to the threat log for the given ThreatRecord.
@@ -109,6 +113,16 @@ func (l *ThreatLog) Record(rec ThreatRecord) {
 		UserAgent: rec.UA,
 		Tool:      rec.Tool,
 		JA4:       rec.JA4,
+	}
+
+	// LECTURE « NEGATIVE SPACE » (#1240, P0-A). On ÉTIQUETTE l'événement selon
+	// qu'il s'agit d'une sonde de reconnaissance (appât connu / sonde haute
+	// valeur) plutôt que d'une charge utile ou d'une 404 quelconque. Pure
+	// OBSERVATION : aucun ban, aucun blocage — c'est la matière première du
+	// profileur (caractérisation d'attaquants). `routed=false` : on ne
+	// journalise ici que des événements déjà retenus comme menace.
+	if v := classifyPath(rec.Path, false, rec.Category); v.Signal {
+		entry.NegativeSpace = v.Class
 	}
 
 	data, err := json.Marshal(entry)

@@ -881,7 +881,11 @@ def _get_crowdsec_alerts() -> List[dict]:
     n'est appelee que si le moteur n'a RIEN produit — moteur arrete, journal
     illisible. Elle reste pour ce cas-la, et pour un retour eventuel de
     CrowdSec. Best-effort : vide en cas d'echec."""
-    try:
+    # CROWDSEC N'EST PLUS INVOQUE (#1218/#1210). Il est desactive et destine a la
+    # desinstallation ; appeler `cscli` dessus etait un appel MORT (lent, sudo)
+    # sur un service arrete. sbxwaf ecrit deja un journal riche et bannit en nft.
+    return []
+    try:  # noqa: unreachable — conserve pour un retour eventuel de CrowdSec
         result = subprocess.run(
             ["sudo", "cscli", "alerts", "list", "-o", "json"],
             capture_output=True, text=True, timeout=15)
@@ -1569,7 +1573,17 @@ async def get_stats():
 def _slice_alerts(alerts: List[dict], limit: int, aggregate: bool) -> dict:
     """Slice and optionally aggregate the warm alerts list."""
     if not aggregate:
-        return {"alerts": alerts[:limit], "aggregated": False}
+        # #1240 : on ajoute le PAYS a chaque alerte — le /micro affiche un petit
+        # drapeau par ligne d'IP. Lecteur GeoIP ouvert UNE fois pour le lot ; on
+        # COPIE chaque alerte (jamais muter le cache chaud partage).
+        _geo = _get_geoip_reader()
+        out = []
+        for a in alerts[:limit]:
+            ip = a.get("client_ip", "")
+            a2 = dict(a)
+            a2["country"] = _lookup_country(ip, _geo) if ip and ip != "local" else ""
+            out.append(a2)
+        return {"alerts": out, "aggregated": False}
 
     # Le lecteur GeoIP est ouvert UNE fois pour tout le lot : chaque appel a
     # _get_geoip_reader ouvrirait sinon la base par adresse agregee.

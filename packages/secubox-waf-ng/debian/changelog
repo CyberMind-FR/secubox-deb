@@ -1,3 +1,50 @@
+secubox-waf-ng (1.7.6-1~bookworm1) bookworm; urgency=medium
+
+  * host-anomaly : NOTRE propre domaine n'est jamais banni (#1266). Un hote de
+    premiere partie (gk2.secubox.in, secubox.in, gk2.net, ...) non route est un
+    alias/lien non cable, pas un scanner : le classer host_anomaly:unrouted et
+    bannir coupait un vrai utilisateur — l'appli Nextcloud iOS pointant sur
+    nextcloud.gk2.secubox.in a fait bannir l'IP Free Mobile du telephone, et via
+    le CGNAT mobile son navigateur sur hall.gk2.net avec. Desormais action=detect
+    (journalise, jamais de ban) pour tout hote sous nos suffixes. gk2.net ajoute
+    a la liste de premiere partie. estPremierePartie() + test.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 20:40:00 +0200
+
+secubox-waf-ng (1.7.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1218): retrait de --crowdsec-url de l'ExecStart. CrowdSec est desactive
+    (destine a etre desinstalle) ; sbxwaf tentait quand meme de le joindre a
+    chaque ban (appel mort qui ralentissait le chemin). Le WAF reste AUTONOME
+    via --nft-ban. Plus aucune dependance CrowdSec.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 09:20:00 +0200
+
+secubox-waf-ng (1.7.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240): le profileur EXPLOITE l'etiquette « negative space ». Chaque
+    profil d'attaquant compte desormais ses sondes de reconnaissance (recon) et,
+    parmi elles, les sondes haute-valeur secret/exec/admin (haute_valeur) ; les
+    campagnes cumulent la haute-valeur. C'est l'evidence qui transforme « 185.x
+    GET /.env » en « reconnaissance ciblant des secrets exposes » (brief §21).
+    Nouveaux champs JSON dans campaigns.json (via --correlate) : profils.recon,
+    profils.haute_valeur, campagnes.haute_valeur. Lecture seule, aucun ban.
+    TDD : profiler_negativespace_test.go.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 19:15:00 +0200
+
+secubox-waf-ng (1.7.3-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240): lecture « negative space » (P0-A) en OBSERVATION pure. Le
+    journal de menaces etiquette chaque sonde de reconnaissance par sa classe
+    (known_negative | high_value_probe) via classifyPath() — matiere premiere du
+    profileur/caracterisation. AUCUN ban ni blocage nouveau : une 404 anodine
+    comme une attaque a charge utile (sqli/xss) ne recoit pas d'etiquette
+    (champ negative_space omitempty). Source : secubox-toolbox-ng/cmd/sbxwaf
+    (negativespace.go + cablage central dans threatlog.go). TDD : 18 cas verts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 18:30:00 +0200
+
 secubox-waf-ng (1.7.2-1~bookworm1) bookworm; urgency=medium
 
   * LE JOURNAL DE MENACES S'OUVRE AU GROUPE (#1318). sbx-authwatch ecrit dans

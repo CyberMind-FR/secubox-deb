@@ -839,11 +839,18 @@ func (s *Server) recordHostAnomaly(r *http.Request, host string) {
 	cls := classifyHost(host)
 	ip := clientIP(r)
 	lan := privateCIDR(ip)
+	// NOTRE PROPRE DOMAINE N'EST JAMAIS UN SCANNER (#1266). Un hôte de première
+	// partie non routé est un alias/lien qu'on n'a pas câblé (l'appli Nextcloud
+	// iOS sur nextcloud.gk2.secubox.in), pas une attaque. Le bannir a coupé un
+	// vrai utilisateur — et via le CGNAT mobile, son navigateur avec. On observe.
+	firstParty := estPremierePartie(host, s.widgetHosts)
 
 	action := "detect"
 	switch {
 	case lan:
 		action = "detect" // LAN : on observe, on ne bannit pas
+	case firstParty:
+		action = "detect" // notre domaine : jamais de ban (config à câbler, pas une attaque)
 	case cls.Strong:
 		action = "banned" // vide/IP/DGA : ban dès le premier coup
 	case s.ban != nil:
@@ -1002,8 +1009,9 @@ func main() {
 	visitsStats := flag.String("visits-stats", "/var/log/secubox/waf/visits-stats.json",
 		"path for the non-attacker visit-stats JSON snapshot (client type/OS/vhost/geo); empty disables")
 	// #747: WAF-injected SecuBox health banner on FIRST-PARTY sites (HTML only).
-	widgetHosts := flag.String("widget-hosts", "gk2.secubox.in,secubox.in,cybermind.fr,maegia.tv",
-		"comma-separated first-party host suffixes to inject the SecuBox health banner into; empty disables")
+	widgetHosts := flag.String("widget-hosts", "gk2.secubox.in,secubox.in,gk2.net,cybermind.fr,maegia.tv",
+		"comma-separated first-party host suffixes: bandeau santé + EXEMPTION de ban "+
+			"host-anomaly (notre propre domaine n'est jamais un scanner, #1266); empty disables")
 	widgetExclude := flag.String("widget-exclude", "",
 		"applications tierces dont on n'injecte pas le HTML (elles restent inspectees)")
 	bannerOrigin := flag.String("health-banner-origin", "https://admin.gk2.secubox.in",

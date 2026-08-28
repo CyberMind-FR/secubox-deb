@@ -104,15 +104,13 @@ ExecStart=/usr/sbin/sbxwaf \
   --cookie-audit-log /var/log/secubox/cookie-audit/server.jsonl \
   --media-cache-dir /var/cache/secubox/waf/media \
   --vhost-profiles /etc/secubox/waf/vhost_profiles.json \
-  --crowdsec-url http://10.100.0.1:8080 \
   --nft-ban
 
-# --crowdsec-url is the real CrowdSec LAPI (LXC-bridge gateway 10.100.0.1:8080),
-# NOT 127.0.0.1:8080 (the nft DNAT VIP that would self-loop into this proxy).
-#
-# Verifie le 2026-08-12 (#1017) : cette adresse repond bien (403, soit la LAPI
-# qui rejette une requete non authentifiee). L'adresse n'a jamais ete en cause
-# dans l'absence de bans — c'est l'execution de cscli qui l'etait.
+# CROWDSEC RETIRE (#1218) : --crowdsec-url a ete supprime. CrowdSec est desactive
+# et destine a etre desinstalle ; l'invoquer (POST /v1/alerts, ou cscli via le
+# bouncer) etait un appel mort qui ralentissait le chemin de ban. Le WAF est
+# AUTONOME via --nft-ban (set nft `inet secubox waf_ban{,6}`, persistant, retrait
+# differe par le timeout nft) — plus aucune dependance CrowdSec.
 
 Restart=on-failure
 RestartSec=5

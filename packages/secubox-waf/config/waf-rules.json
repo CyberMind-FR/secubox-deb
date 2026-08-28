@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "version": "1.3.0",
-    "updated": "2026-08-20",
-    "changelog": "Fixed false positives: lfi-001, rce-006, waf-fp-005, scan-004, recon_crawler, cred-002/006",
+    "version": "1.4.2",
+    "updated": "2026-08-29",
+    "changelog": "URGENT: router-goform '\\`|;' groupe -> (\\$\\(|\\`|;) : sans parentheses, l'alternance matchait tout UA contenant ';' (tous les navigateurs bloques en router_botnet). Voir aussi mirai-scan Mozi\\b.",
     "sources": [
       "OWASP Top 10",
       "CERT advisories",
@@ -633,7 +633,7 @@
         },
         {
           "id": "router-goform",
-          "pattern": "/goform/.*\\$\\(|`|;",
+          "pattern": "/goform/.*(\\$\\(|`|;)",
           "desc": "Router goform command injection"
         },
         {
@@ -663,7 +663,7 @@
         },
         {
           "id": "mirai-scan",
-          "pattern": "User-Agent:.*(Mirai|Hajime|Mozi|BotenaGo)",
+          "pattern": "User-Agent:.*(Mirai|Hajime|Mozi\\b|BotenaGo)",
           "desc": "Mirai-variant botnet scanner",
           "check": "user-agent"
         },
@@ -949,7 +949,7 @@
     "product_absent_probes": {
       "name": "Product-absent scanner probes (generated)",
       "severity": "high",
-      "mode": "detect",
+      "mode": "escalate",
       "generated": true,
       "generated_at": "2026-07-19T04:57:02Z",
       "patterns": [

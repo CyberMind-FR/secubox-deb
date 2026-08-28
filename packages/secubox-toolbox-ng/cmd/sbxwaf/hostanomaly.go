@@ -51,6 +51,31 @@ func classifyHost(host string) HostClass {
 	return HostClass{Name: "unrouted", Sev: "medium", Strong: false}
 }
 
+// estPremierePartie dit si `host` relève d'un de NOS suffixes de première partie
+// (les mêmes que le bandeau : gk2.secubox.in, secubox.in, …). Un hôte sous notre
+// propre domaine qui n'est pas routé n'est JAMAIS un scanner : c'est un alias ou
+// un lien que l'on n'a pas (encore) câblé — l'appli Nextcloud iOS pointant sur
+// `nextcloud.gk2.secubox.in`, un vieux marque-page. Le bannir coupe un vrai
+// utilisateur, et en CGNAT mobile tous ceux qui partagent son IP (#1266). On le
+// signale, on ne le bannit pas. Correspondance sur frontière de label : égal au
+// suffixe, ou s'y terminant par « .suffixe » — jamais un simple contains.
+func estPremierePartie(host string, suffixes []string) bool {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if i := strings.IndexByte(h, ':'); i >= 0 {
+		h = h[:i] // au cas où un port subsiste
+	}
+	for _, s := range suffixes {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		if h == s || strings.HasSuffix(h, "."+s) {
+			return true
+		}
+	}
+	return false
+}
+
 // estDGA juge l'étiquette la plus à gauche (le sous-domaine variable) d'un nom :
 // un nom généré par algorithme est long, pauvre en voyelles, souvent riche en
 // chiffres et en caractères distincts. Heuristique volontairement prudente
