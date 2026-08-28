@@ -1,3 +1,16 @@
+secubox-surf (1.0.17-1~bookworm1) bookworm; urgency=medium
+
+  * BiB/relais : ne plus casser le JS inline (#1266). reecris_html passait ses
+    reecritures d'URL (attributs, url() CSS) sur TOUT le corps, corps des
+    <script> compris : un `url("+x+")` concatene, un `src="..."` dans une chaine
+    JS etaient reecrits au petit bonheur -> « Uncaught SyntaxError: missing )
+    after argument list » sur les resultats Google et la page morte. On masque
+    desormais le CORPS des <script> pendant la reecriture HTML puis on le
+    restitue intact ; les balises restent visibles (src/integrity toujours
+    traites) et les URL du JS restent suivies a l'execution par les hooks de tete.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 18:10:00 +0200
+
 secubox-surf (1.0.16-1~bookworm1) bookworm; urgency=medium
 
   * feat: images + suppression pub/sponsors dans la copie carbone (#1235).

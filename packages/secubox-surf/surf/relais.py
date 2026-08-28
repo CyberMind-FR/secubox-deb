@@ -719,6 +719,14 @@ def reecris_portails(corps: str) -> str:
     return corps
 
 
+# CORPS d'un <script> capture a part de ses balises (#1266). Sert a PROTEGER le
+# JS inline des reecritures d'URL (attributs, url() CSS) qui, ecrites pour du
+# HTML/CSS, cassent la syntaxe JS si on les y laisse courir. Les balises
+# ouvrante/fermante restent visibles : `src`/`integrity` d'un <script> externe
+# sont donc toujours traites, seul le CORPS est mis de cote puis restitue.
+_RE_SCRIPT_CORPS = re.compile(r'(<script\b[^>]*>)(.*?)(</script\s*>)',
+                              re.IGNORECASE | re.DOTALL)
+
 # ── LA COPIE CARBONE : figer un rendu headless ──────────────────────────────
 _RE_SCRIPT = re.compile(r'<script\b[^>]*>.*?</script>', re.IGNORECASE | re.DOTALL)
 _RE_SCRIPT_SEUL = re.compile(r'<script\b[^>]*/?>', re.IGNORECASE)
@@ -768,6 +776,21 @@ def reecris_html(corps: str, base: str, rap: Rapport, sur_hote,
 
     `etat_js` : le storage retenu pour cet hôte (JSON déjà échappé), réinjecté
     inline dans la tête avant les scripts du site (jarre d'état, #1235)."""
+    # 0. PROTEGER LE JS INLINE (#1266). Les reecritures ci-dessous sont ecrites
+    #    pour du HTML/CSS. Passees sur le CORPS d'un <script>, elles cassent sa
+    #    syntaxe : `url\(...\)` attrape un `url("+x+")` concatene, un motif
+    #    `src="..."` dans une chaine JS est reecrit au petit bonheur — et toute
+    #    la page tombe (« missing ) after argument list », #1266). Or les URL du
+    #    JS sont suivies A L'EXECUTION par les hooks injectes en tete
+    #    (fetch/location/Worker...), jamais statiquement : il n'y a donc RIEN a
+    #    gagner a les toucher ici, et une classe entiere de casses a eviter. On
+    #    met le corps des <script> de cote, on reecrit le HTML, on le restitue.
+    _bouts_js: list[str] = []
+    def _masque_js(m):
+        _bouts_js.append(m.group(2))
+        return m.group(1) + ("\x00SBXJS%d\x00" % (len(_bouts_js) - 1)) + m.group(3)
+    corps = _RE_SCRIPT_CORPS.sub(_masque_js, corps)
+
     # 1. Ce qui se réécrit : attributs, srcset, url() inline.
     def _attr(m):
         v, ch = _map_url(m.group("v"), base, sur_hote)
@@ -826,6 +849,14 @@ def reecris_html(corps: str, base: str, rap: Rapport, sur_hote,
         rap.note("meta-refresh", "note",
                  "%d redirection(s) meta-refresh retiree(s) : elles emmenaient "
                  "le cadre ailleurs (consentement, version app)." % n_ref)
+
+    # RESTITUTION du JS inline, INTACT (#1266). On le remet avant de compter et
+    # d'injecter : `_recense_js` a besoin du vrai JS, et reecris_portails (un
+    # simple echange d'hote, sans risque de paren/quote) peut de nouveau courir
+    # sur tout le corps pour rerouter les portails de consentement cites en dur.
+    if _bouts_js:
+        corps = re.sub(r'\x00SBXJS(\d+)\x00',
+                       lambda m: _bouts_js[int(m.group(1))], corps)
 
     # 3. Ce qu'on ne peut PAS suivre. On ne modifie rien — on compte.
     _recense_js(corps, rap, ou="html-inline")
