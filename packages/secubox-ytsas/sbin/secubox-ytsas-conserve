@@ -122,6 +122,9 @@ for req in "$QDIR"/*.json; do
   id=$(jq -r '.id // empty' "$req" 2>/dev/null)
   name=$(jq -r '.name // .title // empty' "$req" 2>/dev/null)
   file=$(jq -r '.file // empty' "$req" 2>/dev/null)
+  # #1244 : l'URL source sert a publier un billet enrichi ; on la lit AVANT le
+  # rm du req.
+  srcurl=$(jq -r '.url // empty' "$req" 2>/dev/null)
   if [ -z "$id" ]; then
     rm -f "$req"; continue
   fi
@@ -155,6 +158,11 @@ for req in "$QDIR"/*.json; do
       if [ -n "$url" ]; then
         _result "$id" "$(printf '{"status":"done","url":"%s"}' "$url")"
         log "conserved $id -> peertube $url"
+        # #1244 : billet enrichi — source + PeerTube + flux souverain. Best-effort.
+        if command -v secubox-ytsas-billet >/dev/null 2>&1; then
+          secubox-ytsas-billet --id "$id" --title "$name" --source "$srcurl" \
+            --peertube "$url" >/dev/null 2>&1 || true
+        fi
       else
         _result "$id" '{"status":"error","error":"peertube upload failed"}'
         log "peertube upload FAILED for $id"
@@ -172,6 +180,10 @@ for req in "$QDIR"/*.json; do
         rm -f "$req"
         _result "$id" "$(printf '{"status":"done","library_path":"%s"}' "$libpath")"
         log "conserved $id -> lyrion $libpath"
+        # #1244 : billet enrichi pour l'audio conserve — source + flux souverain.
+        if command -v secubox-ytsas-billet >/dev/null 2>&1; then
+          secubox-ytsas-billet --id "$id" --title "$name" --source "$srcurl" >/dev/null 2>&1 || true
+        fi
       else
         # Lyrion absent/unreachable is treated as transient infra, not a
         # terminal failure: leave the request queued so the next timer tick

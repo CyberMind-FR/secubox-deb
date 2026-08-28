@@ -59,6 +59,9 @@
   .top a:hover .nm { text-decoration:underline; color:var(--accent); }
   .top .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
   .top .c { flex:0 0 auto; font-size:.6rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  /* La SUITE du texte de la news survolée, en place de la liste (#1240b). */
+  .top .apercu { font-size:.68rem; line-height:1.42; color:var(--texte); margin-top:.05rem;
+                 display:-webkit-box; -webkit-line-clamp:5; -webkit-box-orient:vertical; overflow:hidden; }
 
   .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
           border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
@@ -122,7 +125,8 @@
     var suite = [], k;
     for (k = 1; k <= 3 && k < sujets.length; k++) suite.push(sujets[(i + k) % sujets.length]);
     el('top').innerHTML = '<div class="tt">↻ en rotation</div>' + suite.map(function (t) {
-      return '<a href="' + esc(lien(t)) + '" target="_top" title="' + esc(t.title) + '">'
+      return '<a href="' + esc(lien(t)) + '" data-id="' + esc(t.id || '') + '" data-titre="'
+        + esc(t.title || '') + '" target="_top" title="' + esc(t.title) + '">'
         + '<span class="nm">' + esc(t.title || '—') + '</span>'
         + '<span class="c">' + (Number(t.sources_count || 0) || '') + '</span></a>';
     }).join('');
@@ -131,9 +135,75 @@
 
   function tourne() { if (!enPause && sujets.length) { i++; montre(); } }
 
-  // Le survol suspend : on ne lit pas un titre qui s'échappe sous le curseur.
-  document.addEventListener('mouseenter', function () { enPause = true; }, true);
-  document.addEventListener('mouseleave', function () { enPause = false; }, true);
+  // LE SURVOL SUSPEND L'AUTO-ROTATION (#1266). On ne lit pas un titre qui
+  // s'échappe sous le curseur — mais surtout, tant qu'on survole, la rotation
+  // automatique (tourne, 6 s) ne doit PAS refaire montre() : elle re-rendrait la
+  // liste et la vignette, effaçant l'aperçu manuel qu'on est en train de lire.
+  //
+  // On lie donc mouseenter/mouseleave à la RACINE `.mw`, SANS capture. C'est tout
+  // l'intérêt de ces deux événements : ils ne se déclenchent qu'en entrant ou
+  // sortant du cardlet ENTIER, en ignorant les passages d'un enfant à l'autre.
+  // L'ancienne écoute en capture sur `document` les captait pour CHAQUE enfant :
+  // en balayant la liste, `enPause` retombait à false entre deux liens et l'auto
+  // reprenait, parasitant justement la rotation manuelle qu'on voulait protéger.
+  var racine = document.querySelector('.mw');
+  if (racine) {
+    racine.addEventListener('mouseenter', function () { enPause = true; });
+    racine.addEventListener('mouseleave', function () { enPause = false; stopAp(); montre(); });
+  }
+
+  // ── APERÇU AU SURVOL D'UNE NEWS DE LA LISTE (#1240b) ──────────────────────
+  // Survoler une news de la liste fait ROTATIONNER la vignette et le titre sur
+  // SES sources (média + nom, source par source), et remplace la liste par la
+  // SUITE du texte de cette news (le résumé propre à la source affichée).
+  // L'agrégation se lit alors sans quitter la carte.
+  var apTimer = null, srcCache = {};
+  function stopAp() { if (apTimer) { clearInterval(apTimer); apTimer = null; } }
+  // rotationne la VIGNETTE + le TITRE sur les sources ; avecTexte=true remplace
+  // en plus la liste par la SUITE du texte (résumé de la source affichée).
+  function rotationne(srcs, titre, avecTexte) {
+    if (!srcs || !srcs.length) return;
+    var j = 0;
+    var pas = function () {
+      var s = srcs[j % srcs.length], une = el('une'), img = el('une-img');
+      if (s.image) { une.classList.remove('pas-d-image'); img.src = '/api/v1/metanews/img?u=' + encodeURIComponent(s.image); }
+      else { une.classList.add('pas-d-image'); img.removeAttribute('src'); }
+      el('une-t').textContent = s.title || titre;
+      el('une-src').textContent = s.name || '';
+      if (avecTexte) {
+        el('top').innerHTML = '<div class="tt">🛰️ ' + esc(s.name || 'source') + '</div>'
+          + '<div class="apercu">' + esc(String(s.summary || s.title || '—').slice(0, 240)) + '</div>';
+      }
+      j++;
+    };
+    pas();
+    if (srcs.length > 1) apTimer = setInterval(pas, 2200);   // rotation si plusieurs
+  }
+  function avecSources(id, cb) {
+    if (srcCache[id]) { cb(srcCache[id]); return; }
+    fetch('/api/v1/metanews/topics/' + encodeURIComponent(id) + '/sources',
+          { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { var s = (d && d.sources) || []; srcCache[id] = s; cb(s); })
+      .catch(function () {});
+  }
+  // VIGNETTE PRINCIPALE : aperçu COMPLET — vignette+titre rotationnés ET la SUITE
+  // du texte remplace la liste.
+  el('une').addEventListener('mouseenter', function () {
+    if (!sujets.length) return;
+    var s = sujets[i % sujets.length];
+    if (s && s.id) { stopAp(); avecSources(s.id, function (srcs) { rotationne(srcs, s.title || '', true); }); }
+  });
+  el('une').addEventListener('mouseleave', function () { stopAp(); montre(); });
+  // LIEN D'UNE NEWS « À SUIVRE » : preview de la VIGNETTE+TITRE seulement (rotation
+  // des sources si plusieurs), PAS le texte détaillé — la liste reste en place.
+  el('top').addEventListener('mouseover', function (ev) {
+    var a = ev.target.closest ? ev.target.closest('a[data-id]') : null;
+    if (!a || a === el('top')._h) return;
+    el('top')._h = a; stopAp();
+    avecSources(a.getAttribute('data-id'), function (srcs) { rotationne(srcs, a.getAttribute('data-titre') || '', false); });
+  });
+  el('top').addEventListener('mouseleave', function () { el('top')._h = null; stopAp(); montre(); });
 
   function charge() {
     fetch(API, { headers: { 'Accept': 'application/json' } })

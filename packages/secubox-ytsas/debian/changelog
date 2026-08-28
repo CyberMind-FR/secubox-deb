@@ -1,3 +1,22 @@
+secubox-ytsas (0.2.5-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1244): le backfill --repair DATE chaque billet du moment de la CAPTURE
+    (added_at) et non du backfill — sinon 91 billets tous a « maintenant »
+    noieraient le fil des billets.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 02:35:00 +0200
+
+secubox-ytsas (0.2.4-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1244): a la CONSERVE, ytsas publie un BILLET enrichi (multiliens),
+    comme le podcaster. Nouveau helper hote sbin/secubox-ytsas-billet (la DB
+    billets est cote hote, ytsas est en LXC) : titre + 🎬 source + 📺 PeerTube
+    (video) + ▶ flux SOUVERAIN /api/v1/ytsas/stream/<id>. Idempotent (ref_url).
+    Le drain de conserve l'appelle apres mirroir PeerTube (video) ou Lyrion
+    (audio). `--repair` : backfill des captures conservees deja presentes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 02:15:00 +0200
+
 secubox-ytsas (0.2.3-1~bookworm1) bookworm; urgency=medium
 
   * Coller une URL de PLAYLIST ajoute désormais TOUTES ses vidéos, bornées

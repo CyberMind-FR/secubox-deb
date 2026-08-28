@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+#
+# SecuBox-Deb :: secubox-ytsas-billet (#1244)
+#
+# ytsas -> billets : publie un BILLET enrichi (multiliens) pour une capture
+# CONSERVEE, exactement comme le podcaster le fait a l'import
+# (packages/secubox-podcaster/api/importer.py::_add_billet). Cote HOTE : ytsas
+# vit en LXC (pas d'acces a la DB billets), mais le drain de conserve
+# (secubox-ytsas-conserve) tourne sur l'hote — c'est lui qui appelle ce script,
+# apres avoir mirore la video vers PeerTube.
+#
+# Le billet porte : le titre (h1, dont derive le titre du billet), et les
+# multiliens 🎬 Source / 📺 PeerTube / ▶ Flux souverain (cache box, sans pub ni
+# Google — #1240). IDEMPOTENT : on ne recree pas si un billet reference deja
+# cette source (ref_url).
+#
+# --repair : backfill. Parcourt la liste ytsas et cree les billets manquants
+# des captures CONSERVEES (kept) et completes.
+
+import argparse
+import json
+import os
+import re
+import secrets
+import sqlite3
+import subprocess
+import time
+import urllib.request
+from datetime import datetime, timezone
+
+BILLETS_DB = os.environ.get("BILLETS_DB", "/var/lib/secubox/billets/billets.db")
+YTSAS_BASE = os.environ.get("YTSAS_PUBLIC_URL", "https://ytsas.gk2.secubox.in")
+YTSAS_LIST = os.environ.get("YTSAS_LIST_URL", "http://10.100.0.180:8091/api/v1/ytsas/list")
+
+_B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def _ulid() -> str:
+    t = int(time.time() * 1000)
+    ts = "".join(_B32[(t >> (10 * (5 - i))) & 0x1F] for i in range(6))
+    return ts + "".join(secrets.choice(_B32) for _ in range(20))
+
+
+def _slug(s: str, extra: str = "") -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", (s or "").lower()).strip("-")[:60] or "item"
+    return f"{base}-{extra}" if extra else base
+
+
+def _chown() -> None:
+    # ytsas-conserve tourne en root ; on rend la DB a secubox pour que billets
+    # puisse continuer d'ecrire.
+    for suf in ("", "-wal", "-shm"):
+        p = BILLETS_DB + suf
+        if os.path.exists(p):
+            subprocess.run(["chown", "secubox:secubox", p], check=False)
+
+
+def stream_url(vid: str) -> str:
+    return f"{YTSAS_BASE}/api/v1/ytsas/stream/{vid}"
+
+
+def _iso(unix) -> str:
+    """Horodatage ISO depuis un unix ts (added_at) — pour dater le billet du
+    moment de la CAPTURE, pas du backfill (sinon 91 billets tous a « maintenant »
+    noieraient le fil)."""
+    try:
+        return datetime.fromtimestamp(int(unix), tz=timezone.utc).isoformat()
+    except Exception:
+        return ""
+
+
+def creer(vid, title, source, stream, peertube=None, quand=None) -> str:
+    if not os.path.exists(BILLETS_DB):
+        return "no-db"
+    con = sqlite3.connect(BILLETS_DB, timeout=30)
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        # IDEMPOTENT : deja un billet pour cette source ?
+        if source and con.execute(
+                "SELECT 1 FROM billet WHERE ref_url=? LIMIT 1", (source,)).fetchone():
+            return "exists"
+        now = quand or datetime.now(timezone.utc).isoformat()
+        bid = _ulid()
+        slug = _slug(title, bid[-6:].lower())
+        titre = (title or "").strip().replace("\n", " ")
+        # Le titre en 1re ligne : le billet n'a pas de colonne title, il derive de
+        # la premiere ligne du corps (cf. podcaster #1238d).
+        parts = [f"# {titre}\n\n" if titre else "", "\n---\n"]
+        if source:
+            parts.append(f"\n🎬 **Source :** {source}\n")
+        if peertube:
+            parts.append(f"\n📺 **Vidéo (PeerTube) :** {peertube}\n")
+        if stream:
+            parts.append(f"\n▶ **Flux souverain (box) :** {stream}\n")
+        body = "".join(parts)
+        con.execute(
+            "INSERT INTO billet(id,created_at,updated_at,published_at,body,ref_url,"
+            "embed_url,slug,status,style) VALUES(?,?,?,?,?,?,?,?, 'published','default')",
+            (bid, now, now, now, body, source or None, peertube or None, slug))
+        con.commit()
+        return "created:" + slug
+    finally:
+        con.close()
+        _chown()
+
+
+def repair() -> None:
+    try:
+        with urllib.request.urlopen(YTSAS_LIST, timeout=15) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception as e:  # noqa: BLE001
+        print("repair: liste ytsas injoignable:", e)
+        return
+    rows = data if isinstance(data, list) else (data.get("items") or [])
+    n = 0
+    for it in rows:
+        if str(it.get("kept")) not in ("1", "True", "true"):
+            continue
+        if not it.get("complete"):
+            continue
+        vid = it.get("id")
+        if not vid:
+            continue
+        res = creer(vid, it.get("title") or vid, it.get("url"),
+                    stream_url(vid), it.get("peertube_url"),
+                    quand=_iso(it.get("added_at")) or None)
+        if str(res).startswith("created"):
+            n += 1
+    print(f"repair: {n} billet(s) cree(s)")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="ytsas -> billet enrichi (#1244)")
+    ap.add_argument("--repair", action="store_true", help="backfill des captures conservees")
+    ap.add_argument("--id")
+    ap.add_argument("--title")
+    ap.add_argument("--source")
+    ap.add_argument("--peertube")
+    ap.add_argument("--stream")
+    a = ap.parse_args()
+    if a.repair:
+        repair()
+        return
+    if not a.id:
+        ap.error("--id requis (ou --repair)")
+    print(creer(a.id, a.title or a.id, a.source, a.stream or stream_url(a.id), a.peertube))
+
+
+if __name__ == "__main__":
+    main()

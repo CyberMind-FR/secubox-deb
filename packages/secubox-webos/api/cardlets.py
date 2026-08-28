@@ -153,7 +153,51 @@ def waf_cardlet(sock: str = WAF_SOCK, _get: Optional[Callable] = None) -> dict:
         {"id": "detections", "value": actives},
     ]
 
+    # ── ACTIVITE RECENTE (#1240) : quelques IP externes, avec pays ────────────
+    # La meme liste que la carte /micro, pour la couche « Pare-feu » du cardlet
+    # Securite. On saute le trafic interne (« local »).
+    recent = []
+    try:
+        al = get(sock, "/alerts?limit=12") or {}
+        for a in (al.get("alerts") or []):
+            ip = str(a.get("client_ip") or "")
+            if not ip or ip in ("local", "127.0.0.1", "::1"):
+                continue
+            recent.append({
+                "ip": ip, "country": a.get("country") or "",
+                "categorie": a.get("category") or "", "action": a.get("action") or "",
+            })
+            if len(recent) >= 4:
+                break
+    except Exception:
+        pass
+
+    # ── TENDANCE DU JOUR (#1243) : plus ou moins d'activite qu'un jour NORMAL a
+    # cette heure. On compare le total du jour a ce qu'on aurait a la meme
+    # FRACTION d'un jour moyen (7 jours) — sinon le matin parait toujours calme.
+    trend = "flat"
+    try:
+        hj = (get(sock, "/history") or {}).get("jours") or {}
+        ds = sorted(hj)
+        if len(ds) >= 2:
+            import datetime as _dt
+            tot = int(hj[ds[-1]].get("total", 0) or 0)
+            prev = [int(hj[d].get("total", 0) or 0) for d in ds[:-1][-7:]]
+            avg = (sum(prev) / len(prev)) if prev else 0
+            n = _dt.datetime.now()
+            frac = (n.hour * 3600 + n.minute * 60 + n.second) / 86400 or 0.01
+            exp = avg * frac
+            if exp > 0:
+                if tot > exp * 1.2:
+                    trend = "up"
+                elif tot < exp * 0.8:
+                    trend = "down"
+    except Exception:
+        pass
+
     return {
+        "recent": recent,
+        "trend_jour": trend,
         "id": "waf",
         "kind": "waf-posture",
         "status": "online",

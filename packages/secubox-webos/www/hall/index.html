@@ -596,6 +596,15 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    choisis, et gardent exactement leur taille. Plusieurs sont permis : un
    favori unique serait un classement a une place. */
 .fcard.favori{border-color:var(--violet)}
+/* SERVICE EN ERREUR (#1266b) : poussé en bas de mosaïque ET grisé — un visiteur
+   ne doit pas tomber d'abord sur un service en panne (qui le tromperait). Le
+   survol le ravive pour rester utilisable. */
+.fcard.cl-erreur{opacity:.5;filter:grayscale(.45)}
+.fcard.cl-erreur:hover{opacity:.9;filter:none}
+/* AUTH REQUISE (#1266b) : au milieu (sous les services ouverts, au-dessus des
+   erreurs), à peine estompé — accessible, mais pas encore ouvert. */
+.fcard.cl-auth{opacity:.82}
+.fcard.cl-auth:hover{opacity:1}
 /* BANDE DES FAVORIS (#1327). Prioritaires, donc HORIZONTAUX. Les remonter en
    tete de la mosaique ne suffisait pas : celle-ci coule en COLONNES, et « en
    tete » y signifie « en haut de la premiere colonne ». Trois favoris
@@ -620,9 +629,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
   user-select:none}
 .fcard:hover .cl-vedette,.cl-vedette:focus-visible{opacity:.85}
-/* Un favori garde son etoile VISIBLE : sans cela, rien ne dit comment le
-   retirer, et l'on cherche le geste inverse d'un geste invisible. */
-.fcard.favori .cl-vedette{opacity:1;color:var(--violet);border-color:var(--violet)}
+/* MEME UN FAVORI CACHE SON ETOILE HORS SURVOL (#1242). L'etat favori se lit
+   deja au lisere VIOLET de la carte ; garder l'etoile pleine en permanence la
+   rendait trop presente. Elle suit donc la regle de base (opacity:0), et
+   reapparait au survol — en violet — pour offrir le geste de retrait. */
+.fcard.favori .cl-vedette{color:var(--violet);border-color:var(--violet)}
 @media (prefers-reduced-motion:reduce){.cl-vedette{transition:none}}
 .fcard.cl-drag{opacity:.45}
 .fcard.cl-cible{outline:2px dashed var(--violet);outline-offset:3px}
@@ -673,6 +684,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .viewer-ov.mini{top:auto;left:auto;right:14px;bottom:14px;width:min(46vw,520px);height:auto;
   border-radius:12px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--lift)}
 .viewer-ov.mini .media{flex:none;aspect-ratio:16/9;height:auto}
+/* LECTEUR DE SERVICE DANS LE VIEWER (#1266) : radio/podcaster embarqués. Leur
+   widget /micro est en PORTRAIT, pas en 16/9 : la fenêtre mini vidéo le
+   rognerait. On lui donne une fenêtre plus étroite et la hauteur propre du
+   widget, et l'iframe remplit (pas de letterbox noir autour d'une carte). */
+.viewer-ov.lecteur.mini{width:min(92vw,340px)}
+.viewer-ov.lecteur.mini .media{aspect-ratio:auto;height:300px}
+.viewer-ov.lecteur .media{background:var(--panel)}
+.viewer-ov.lecteur .media iframe{object-fit:fill;background:var(--panel)}
+/* Radio en mini « lecteur » : une pop-up radio se FERME, elle ne s'agrandit pas
+   (#1266). On retire le plein écran et la bascule mini — seule reste la croix. */
+.viewer-ov.lecteur #viewer-full, .viewer-ov.lecteur #viewer-mini{display:none}
 .viewer-ov .media{flex:1;min-height:0;display:flex;background:#000}
 .viewer-ov .media iframe,.viewer-ov .media video{flex:1;width:100%;height:100%;border:0;background:#000;object-fit:contain}
 .viewer-bar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:8px 12px;
@@ -902,7 +924,9 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       <div class="tiles" id="tiles"></div>
       <div class="accueil">
         <div>
-          <div class="sec"><h2 class="serif">Services principaux</h2><span class="rule"></span><span class="n" id="n-feat">—</span></div>
+          <!-- TITRE « Services principaux / N services » RETIRE (#1266) : une
+               barre pleine largeur pour un libelle que la mosaïque dit déjà
+               d'elle-même. On gagne la hauteur, la carte parle seule. -->
           <!-- BANDE DES FAVORIS (#1327) : voir le CSS. Dans une mosaïque en
                COLONNES, « en tête » veut dire « en haut de la première
                colonne » — les favoris s'empilaient donc à gauche au lieu de se
@@ -973,9 +997,13 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 // Cloud=nc, Mail=webmail, Outils=kbin. Chaque carte s'affiche même si le module
 // n'est pas (encore) dans le registre.
 const FEATURED = [
-  {id:"waf",        label:"Pare-feu",  icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", micro:"/micro", h:238},
+  {id:"securite",   label:"Sécurité",   icon:"🛡️", color:"#2e7d5b", url:"waf.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=securite", h:238, auth:true},
+  {id:"contenu",    label:"Contenu",    icon:"📦", color:"#3d6b4a", url:"depot.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=contenu", h:214},
+  {id:"cloud",      label:"Cloud",      icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=cloud", h:238, auth:true},
+  {id:"social",     label:"Social",     icon:"🐘", color:"#2e6da4", url:"social.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=social", h:264},
+  {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
-  {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro"},
+  {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro", h:284},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:236},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
   {id:"photoprism", label:"Photos",    icon:"📷", color:"#1f7a58", url:"photoprism.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=photoprism", h:182},
@@ -1023,9 +1051,22 @@ function degreCarte(f){
   if(typeof EMBEDDABLE!=='undefined' && EMBEDDABLE.has(f.id)) return 1;
   return 2;
 }
-// Tri STABLE : a degre egal, l'ordre d'origine est conserve. Array.sort l'est
-// depuis ES2019 — on ne melange donc pas gratuitement des cartes equivalentes.
-const FEATURED_ORDONNE = FEATURED.slice().sort((a,b)=>degreCarte(a)-degreCarte(b));
+// TETE DE MOSAIQUE CHOISIE (#1266) — ces quatre cardlets de contenu passent
+// devant tout le reste, dans cet ordre exact. Ce sont les plus abouties et
+// celles qu'on veut voir en premier a la reinitialisation. Le reste suit son
+// degre habituel. Un id absent de la liste retombe au rang neutre.
+const ORDRE_PREF = ['radio','metanews','podcaster','peertube'];
+function rangPref(f){ const i = ORDRE_PREF.indexOf(f.id); return i<0 ? ORDRE_PREF.length : i; }
+// Tri STABLE : a rang/degre egal, l'ordre d'origine est conserve. Array.sort
+// l'est depuis ES2019 — on ne melange donc pas gratuitement des cartes egales.
+// CARTES INDIVIDUELLES MASQUEES QUAND UNE CUMULATIVE LES PORTE (#1242). Ces
+// services sont embarqués dans une carte CUMULATIVE (Contenu, Cloud, Social,
+// Forums) : montrer EN PLUS leur carte individuelle ferait doublon. On les
+// retire donc de la mosaïque — le registre (santé, menu Système) et le menu
+// latéral les gardent, aucun accès n'est perdu. La liste doit suivre les
+// couches définies dans cardlets/cumul.html (GROUPES).
+const _CUMULES = new Set(['bbs','nextcloud','photoprism','mastodon','billets','depot','socialrelay','mail','ytsas','torrent']);
+const FEATURED_ORDONNE = FEATURED.filter(f=>!_CUMULES.has(f.id)).slice().sort((a,b)=>(rangPref(a)-rangPref(b)) || (degreCarte(a)-degreCarte(b)));
 const FEAT_IDS = FEATURED.map(f=>f.id);
 const CATS = [
   {id:"wall",name:"Muraille",icon:"🛡️"},{id:"mind",name:"Esprit",icon:"🧠"},
@@ -1086,7 +1127,9 @@ function featCardHTML(f,s){
     // AUTH RÉELLE (#1237) : les cartes deleguees (Cloud/Photos/Social/Mail)
     // exigent la session de la box. Marquees data-auth -> masquees pour un
     // invite non connecte (inutile de montrer « Récupérer ma session »).
-    const auth = (f.carte && f.carte.indexOf('delegue')>=0) ? ' data-auth="1"' : '';
+    // #1240 : une carte peut aussi se declarer `auth:true` (ex. « Qui frappe ? »,
+    // donnee de securite reservee a la session).
+    const auth = (f.auth || (f.carte && f.carte.indexOf('delegue')>=0)) ? ' data-auth="1"' : '';
     return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'"'+auth+'>'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + ETOILE
@@ -1149,12 +1192,23 @@ function compactHTML(s){
 }
 
 function render(data,src){
-  const svc=data.services||[]; const byId={}; svc.forEach(s=>byId[s.id]=s); _reg=byId;
+  const svc=data.services||[]; const byId={}; svc.forEach(s=>byId[s.id]=s); _reg=byId; window._reg=byId;
   // sidebar featured
   const rail=document.getElementById('railfeat'); let rh='';
   // Menu SERVICES (locaux/vedettes) trie alphabetiquement (#1187b) — comme le
   // menu Systeme. L'ordre de curation reste pour les CARTES de l'accueil.
-  const FEATURED_ALPHA=FEATURED.slice().sort((a,b)=>String(a.label||'').localeCompare(String(b.label||''),'fr',{sensitivity:'base'}));
+  //
+  // UN SERVICE PAR DESTINATION (#1266) : plusieurs entrees FEATURED visent la
+  // MEME url — l'agregat « Contenu » et le service « Dépôt » pointent tous deux
+  // sur depot.gk2 ; « Forums »/« BBS », les deux « Cloud », les deux « Social »
+  // de meme. Le menu les montrait cote a cote : deux lignes pour un seul lieu.
+  // On dedoublonne par url en gardant de preference l'entree AGREGEE (hors
+  // _CUMULES), celle que la mosaique affiche deja — puis on trie alpha.
+  const _parUrl={};
+  FEATURED.forEach(f=>{ const k=f.url||f.id; const cur=_parUrl[k];
+    if(!cur || (_CUMULES.has(cur.id) && !_CUMULES.has(f.id))) _parUrl[k]=f; });
+  const FEATURED_ALPHA=Object.keys(_parUrl).map(k=>_parUrl[k])
+    .sort((a,b)=>String(a.label||'').localeCompare(String(b.label||''),'fr',{sensitivity:'base'}));
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
   // La nav propre au service descend dans le panneau contextuel (.ctx).
   FEATURED_ALPHA.forEach(f=>{ const s2=byId[f.id]; const st=s2?((s2.health&&s2.health.state)||'unknown'):'unknown';
@@ -1167,11 +1221,14 @@ function render(data,src){
   // L'ordre PAR DEFAUT met les cartes les plus abouties en tête ; l'ordre
   // choisi par l'opérateur est réappliqué juste après par rangeCardlets().
   FEATURED_ORDONNE.forEach(f=>{ fh+=featCardHTML(f, byId[f.id]); });   // toujours affichées (curation)
-  fg.innerHTML=fh; document.getElementById('n-feat').textContent=FEATURED.length+' services';
+  fg.innerHTML=fh;
+  // #1266 : le compteur n-feat n'existe plus (titre retire) — garde defensif.
+  const nfeat=document.getElementById('n-feat'); if(nfeat) nfeat.textContent=FEATURED.length+' services';
   // Les cadres viennent d'être posés : leur largeur est enfin mesurable.
   echelleApercus();
   if(window.rangeCardlets) rangeCardlets();   // #1234 : l'ordre choisi par l'opérateur
   if(window.rendFavoris) rendFavoris();      // #1326 : les favoris, en tête
+  if(window.declasseErreurs) declasseErreurs();  // #1266b : les services en erreur, en bas
   vivifieCartes();   // #1231 : les cartes qui ont un cardlet prennent ses données
   // tiles + entête (vérité opérationnelle du registre)
   const online=svc.filter(s=>s.health&&s.health.state==='online').length;
@@ -1802,6 +1859,41 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     if(!c) return;
     try{ c.contentWindow.postMessage({sbx:'cmd', action, v}, new URL(c.src).origin); }catch(e){}
   }
+  // Le viewer se sert de `commande` pour rendre la main à la carte source à la
+  // fermeture d'un zoom (#1266). Exposé car viewer et dock sont deux IIFE.
+  window.dockCmd=commande;
+  // RENDRE LA MAIN À LA CARTE (#1266). À la fermeture d'un zoom « lecteur »
+  // (radio dans le viewer mini), le cadre embarqué du viewer vient d'être retiré
+  // du DOM : `flux[id].cadre` pointe donc sur un cadre MORT. On l'oublie, puis on
+  // relance la carte micro — seule instance restante, retrouvée par cadreDe — au
+  // lieu de poster dans le vide. La carte, en reprenant, réannonce et sa rangée
+  // revient d'elle-même, cette fois branchée sur le bon cadre.
+  window.dockRendreLaMain=function(id){
+    flux.delete(id); dessine();
+    const c=cadreDe(id);
+    if(c){ try{ c.contentWindow.postMessage({sbx:'cmd',action:'toggle'}, new URL(c.src).origin); }catch(e){} }
+  };
+
+  // ZOOM D'UN FLUX VERS LE VIEWER (#1266). Le geste « agrandir » ne se contente
+  // plus de mettre la carte en plein écran chez elle : il PROMEUT le flux dans le
+  // viewer du Hall, seule instance qui joue le temps du zoom.
+  //  · service audio (radio, podcaster) → on embarque son /micro dans le viewer
+  //    en MINI (`lecteur`), l'anti-doublon met la carte en pause : un seul son.
+  //  · vidéo (peertube) → le viewer joue la vidéo (à sa position `t`), et la
+  //    carte revient en vitrine (`stop`) : le flux est déplacé, jamais doublé.
+  // Faute d'URL ou de viewer, on retombe sur l'ancien `cmd zoom` (plein écran
+  // chez la carte) — aucun geste perdu.
+  function faireZoom(id){
+    const e=(flux.get(id)||{}).etat||{};
+    if(e.lecteur && typeof window.ouvreLecteurViewer==='function'){
+      window.ouvreLecteurViewer(id, e.lecteur, e.titre); return;
+    }
+    if(e.type==='video' && e.href && typeof window.ouvreViewer==='function'){
+      window.ouvreViewer(e.href, e.titre, e.t||0);
+      commande(id,'stop'); return;
+    }
+    commande(id,'zoom');
+  }
 
   // Les pastilles disent la MÊME vérité que la barre, depuis la même source :
   // deux comptages séparés finiraient par diverger.
@@ -2061,6 +2153,11 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // et n'exposait JAMAIS window.ouvreViewer/estMediaUrl -> la megabar retombait
   // sur ouvreSurf. C'etait le bug « ca part sur surf ».
   var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false;
+  // ZOOM D'UN FLUX DE LA BARRE (#1266). Quand on agrandit un flux du dock vers le
+  // viewer, on retient l'id de la carte SOURCE : à la fermeture, on lui rend la
+  // main (elle reprend là où elle jouait). Le flux ne joue jamais à deux endroits
+  // — le viewer devient l'instance unique le temps du zoom.
+  var zoomSource=null;
   function E(id){ return document.getElementById(id); }
   function dom(){
     if(!ov){ ov=E('viewer-ov'); media=E('viewer-media'); titreEl=E('viewer-titre');
@@ -2082,6 +2179,19 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     f.src='https://www.youtube-nocookie.com/embed/'+encodeURIComponent(id)+'?autoplay=1&rel=0';
     f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
     media.innerHTML=''; media.appendChild(f);
+  }
+  // ECRAN D'ATTENTE SOUVERAIN (#1236). Remplace l'embed nocookie casse : on
+  // patiente pendant qu'ytsas rapatrie (le % s'affiche dans la barre du viewer),
+  // puis lanceSas/sondeSas basculent sur le <video> du cache local.
+  function patiente(){
+    media.innerHTML='<div style="height:100%;min-height:180px;display:grid;place-items:center;'
+      +'text-align:center;gap:.55rem;color:#d0d0d8;padding:2rem;box-sizing:border-box">'
+      +'<div style="font-size:2.2rem">🛰️</div>'
+      +'<div style="font-weight:600;font-size:1rem">Rapatriement souverain…</div>'
+      +'<div style="font-size:.82rem;opacity:.7;max-width:24rem;line-height:1.4">'
+      +'La box récupère la vidéo avec les cookies ytsas, sans pub ni Google. '
+      +'La lecture démarre dès qu\'elle est prête — une capture déjà en cache démarre tout de suite.</div>'
+      +'</div>';
   }
   function flux(src, mime){
     var v=document.createElement('video');
@@ -2128,7 +2238,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   }
   function estVideoDirecte(u){ return /\.(mp4|webm|ogg|ogv|m3u8|mov|mkv)(\?|#|$)/i.test(u); }
   function estPeertube(u){ try{ return /(\/w\/|\/videos\/watch\/)/.test(new URL(u).pathname); }catch(e){ return false; } }
-  window.estMediaUrl=function(u){ return !!ytid(u)||estVideoDirecte(u)||estPeertube(u); };
+  // Un flux SOUVERAIN deja en cache sur la box (capture ytsas conservee) : la
+  // carte ytsas rend ses items en cache cliquables vers ce chemin (#1237).
+  function estFluxSouverain(u){ return /^\/api\/v1\/ytsas\/stream\//.test(String(u||'')); }
+  window.estMediaUrl=function(u){ return !!ytid(u)||estVideoDirecte(u)||estPeertube(u)||estFluxSouverain(u); };
   function fmtT(s){ s=Math.max(0,Math.floor(s||0)); var m=Math.floor(s/60); return m+':'+('0'+(s%60)).slice(-2); }
   function pose(dl,tm,ca,prog){
     var e=document.getElementById('viewer-dl'); if(e)e.textContent=dl;
@@ -2136,18 +2249,31 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     e=document.getElementById('viewer-cache'); if(e)e.textContent=ca;
     e=document.getElementById('viewer-prog'); if(e)e.style.width=(prog||0)+'%';
   }
-  function ouvre(url){
+  function ouvre(url, titre, depart){
     if(!dom()) return;
     courant=url; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
-    media.innerHTML=''; titreEl.textContent=url.slice(0,90);
+    zoomSource=null;   // une vidéo « attrapée » ne se rend pas à une carte (déplacement)
+    ov.classList.remove('lecteur');   // fenêtre vidéo 16/9, pas le portrait « lecteur »
+    depart=Number(depart)||0;
+    media.innerHTML=''; titreEl.textContent=titre||url.slice(0,90);
     document.getElementById('viewer-fav').classList.remove('on');
     var cb=document.getElementById('viewer-cast'); cb.classList.remove('on');
     cb.title='Diffuser au parc (📡 direct)'; diffuse=false;
     pose('—','—','—',0);
     var id=ytid(url);
-    if(id){
-      nocookie(id);          // vue immediate, le temps que le sas rapatrie
-      lanceSas(url, id);     // rapatriement souverain -> bascule quand pret
+    if(estFluxSouverain(url)){
+      // DEJA SOUVERAIN (#1237). La capture ytsas est en cache local : on la joue
+      // directement, sans repasser par le sas ni par Google. La barre montre
+      // « ✓ souverain ».
+      flux(url);
+    } else if(id){
+      // PLUS DE NOCOOKIE (#1236). L'embed youtube-nocookie ne joue plus — YouTube
+      // bloque l'embarquement. On s'appuie sur le player SOUVERAIN d'ytsas, qui
+      // rapatrie la video avec SES cookies Google (sans pub, sans Google chez le
+      // visiteur) : lecture IMMEDIATE si deja en cache, sinon un ecran d'attente
+      // pendant le rapatriement (la barre du viewer montre le %).
+      patiente();
+      lanceSas(url, id);     // resolve -> cache=flux direct, sinon sonde jusqu'a pret
     } else if(estVideoDirecte(url)){
       var v=document.createElement('video');
       v.src=url; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
@@ -2161,8 +2287,24 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       }
       v.addEventListener('timeupdate',maj); v.addEventListener('progress',maj);
       v.addEventListener('durationchange',maj); v.addEventListener('loadedmetadata',maj);
+    } else if(estPeertube(url)){
+      // PEERTUBE EMBARQUE (#1237). On ne passe plus par le surf : le lecteur
+      // NATIF de PeerTube sait lire ses formats, ses sous-titres et son P2P.
+      // On derive l'URL d'embed depuis l'URL de visionnage (/w/<id> ou
+      // /videos/watch/<id>) -> /videos/embed/<id>.
+      var pu=url;
+      try{
+        var U=new URL(url), m=U.pathname.match(/\/(?:w|videos\/watch)\/([^/?#]+)/);
+        if(m){ pu=U.origin+'/videos/embed/'+encodeURIComponent(m[1])
+          +'?api=1&autoplay=1&title=0&warningTitle=0&peertubeLink=0'
+          +(depart>2 ? '&start='+Math.floor(depart)+'s' : ''); }
+      }catch(e){}
+      var pf=document.createElement('iframe');
+      pf.src=pu; pf.setAttribute('allow','autoplay; fullscreen'); pf.setAttribute('allowfullscreen','');
+      media.appendChild(pf);
+      pose('embed','▶','peertube',0);
     } else {
-      // Peertube / page media : on passe par le surf (origine par-site).
+      // Autre page media : on passe par le surf (origine par-site).
       if(typeof ouvreSurf==='function'){ ferme(); ouvreSurf(url); return; }
     }
     ov.classList.remove('hidden');
@@ -2170,8 +2312,42 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
   }
   function ferme(){ if(!ov) return; ov.classList.add('hidden'); media.innerHTML=''; courant=null; vid=null;
-    if(ivSas){ clearInterval(ivSas); ivSas=null; } }
-  window.ouvreViewer=ouvre; window.fermeViewer=ferme;
+    if(ivSas){ clearInterval(ivSas); ivSas=null; }
+    // RENDRE LA MAIN À LA CARTE SOURCE (#1266). Le lecteur du viewer (data-embarque)
+    // vient d'être retiré ; sa carte d'origine était en pause (anti-doublon). On
+    // la relance pour qu'on reste à l'écoute là où on en était — la reprise
+    // promise. Pour une vidéo « déplacée » (carte remise en vitrine), il n'y a
+    // rien à reprendre : zoomSource vaut alors null.
+    if(zoomSource){ var s=zoomSource; zoomSource=null;
+      if(typeof window.dockRendreLaMain==='function') window.dockRendreLaMain(s); }
+  }
+  // OUVRIR UN LECTEUR DE SERVICE DANS LE VIEWER (#1266). Pour les flux « service »
+  // (radio, podcaster) : on embarque le /micro du service comme lecteur, en
+  // MODE MINI, avec `data-embarque` — l'anti-doublon du dock met alors la carte
+  // du même service en pause, si bien qu'UN SEUL son sort, synchronisé (les deux
+  // suivent le même direct serveur). C'est l'intégration « comme le viewer mini »
+  // demandée pour le pop-up radio, au lieu d'une fenêtre détachée.
+  function ouvreLecteur(id, src, titre){
+    if(!dom()) return;
+    courant=null; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
+    media.innerHTML=''; titreEl.textContent=titre||id;
+    E('viewer-fav').classList.remove('on');
+    var cb=E('viewer-cast'); if(cb){ cb.classList.remove('on'); cb.title='Diffuser au parc (📡 direct)'; }
+    diffuse=false; pose('lecteur','▶','',0);
+    var f=document.createElement('iframe');
+    f.src=src; f.setAttribute('allow','autoplay; fullscreen'); f.setAttribute('allowfullscreen','');
+    f.setAttribute('scrolling','no'); f.setAttribute('data-embarque', id);
+    media.appendChild(f);
+    zoomSource=id;
+    ov.classList.remove('hidden');
+    // Radio s'ouvre en MINI (pop-up flottant, Hall navigable derrière), et en
+    // mode « lecteur » (fenêtre portrait taillée pour le widget, pas 16/9).
+    ov.classList.add('mini'); ov.classList.add('lecteur');
+    var mb=E('viewer-mini'); if(mb){ mb.textContent='▢'; mb.title='Plein cadre'; }
+    var mast=document.querySelector('.mast');
+    if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
+  }
+  window.ouvreViewer=ouvre; window.fermeViewer=ferme; window.ouvreLecteurViewer=ouvreLecteur;
   // LES ECOUTEURS DE BOUTONS sont cables PARESSEUSEMENT (dom()), car les boutons
   // vivent apres la fin du script. Sinon getElementById(...).addEventListener
   // jetait au chargement et cassait l'IIFE.
@@ -2243,6 +2419,13 @@ addEventListener('message', ev=>{
   const d=ev.data;
   if(!d) return;
   if(d.sbx==='surf' && d.url){ ouvreSurf(d.url); return; }
+  // VOIR : une cardlet demande d'ouvrir un media dans le VIEWER (peertube,
+  // youtube, video directe). #1237 — le lien du bas de la carte peertube.
+  if(d.sbx==='voir' && d.url){
+    if(typeof estMediaUrl==='function' && estMediaUrl(d.url) && typeof ouvreViewer==='function'){ ouvreViewer(d.url, d.titre); }
+    else if(typeof ouvreSurf==='function'){ ouvreSurf(d.url); }
+    return;
+  }
   if(d.sbx==='ouvre-hote' && d.hote){ ouvreHote(d.hote, d.url); return; }
   // Le cadre dit qu'il ne peut plus reculer : on ferme.
   if(d.sbx==='surf-vide'){ fermeSurf(); return; }
@@ -2320,7 +2503,20 @@ addEventListener('message', ev=>{
     if(!c) return;
     // Celle qui joue prend la main ; l'autre se tait. On ne l'arrête pas —
     // elle reprendra si on revient à elle.
-    if(d.joue) tairAutres(d.id, c);
+    if(d.joue){
+      // ANTI-DOUBLON (#1237) : la vue PLEINE (embarque) et la CARTE (micro) du
+      // meme service jouent le meme flux. Si la vue pleine joue deja, une
+      // REPRISE AUTOMATIQUE de la carte ne doit pas se superposer : on la
+      // re-pause. La vue pleine reste seule maitre du son (comportement unique).
+      const embarque=document.querySelector('iframe[data-embarque="'+d.id+'"]');
+      const cur=flux.get(d.id);
+      if(c.getAttribute('data-micro')===d.id && embarque && embarque!==c
+         && cur && cur.cadre===embarque && cur.etat && cur.etat.joue){
+        try{ c.contentWindow.postMessage({sbx:'cmd',action:'pause'}, new URL(c.src).origin); }catch(e){}
+        return;
+      }
+      tairAutres(d.id, c);
+    }
     if(d.joue===false && d.fin){ flux.delete(d.id); dessine(); return; }
     // UNE VIDEO FAIT TAIRE LE RESTE (#1275). Deux flux AUDIO peuvent cohabiter
     // — c'est même pour cela que chaque rangée a son volume. Une vidéo, non :
@@ -2367,6 +2563,16 @@ addEventListener('message', ev=>{
     dessine();
   });
 
+  // UNE CARTE DEMANDE SON PROPRE ZOOM (#1266). Le bouton « détacher » de la radio
+  // ne détache plus dans une fenêtre : il demande au Hall de l'agrandir dans le
+  // viewer mini. Même chemin que le zoom du dock — source audio unique, synchro.
+  addEventListener('message', ev=>{
+    const d=ev.data; if(!d || d.sbx!=='zoom' || !d.id) return;
+    // On ne zoome qu'un flux connu du dock, et depuis un cadre qu'on a posé.
+    if(!cadresDe(d.id).some(f=>f.contentWindow===ev.source)) return;
+    faireZoom(d.id);
+  });
+
   // Un clic sur la pastille embarque le service : on revient au lecteur sans
   // perdre le flux, puisque le cadre n'est jamais rechargé.
   // UNE PASTILLE NE COMMANDE QUE SON FLUX (#1278). Si SA rangée est rangée, le
@@ -2376,7 +2582,7 @@ addEventListener('message', ev=>{
     if(estRange(b.dataset.id)){ plie(b.dataset.id, false); return; }
     // Sur une vidéo, le geste attendu depuis la pastille est de la VOIR, pas
     // de changer de page : on agrandit.
-    if(zoomable(b.dataset.id)){ commande(b.dataset.id,'zoom'); return; }
+    if(zoomable(b.dataset.id)){ faireZoom(b.dataset.id); return; }
     if(typeof openService==='function') openService(b.dataset.id,'embed');
   });
 
@@ -2411,7 +2617,7 @@ addEventListener('message', ev=>{
   dock.addEventListener('click', e=>{
     const b=e.target.closest('button[data-a]'); if(!b) return;
     if(b.dataset.a==='plier'){ plie(b.closest('.mrow').dataset.id, true); return; }
-    if(b.dataset.a==='zoom'){ commande(b.closest('.mrow').dataset.id, 'zoom'); return; }
+    if(b.dataset.a==='zoom'){ faireZoom(b.closest('.mrow').dataset.id); return; }
     if(b.dataset.a==='muet'){
       const r=b.closest('.mrow'), coupe=b.textContent==='🔊';
       b.textContent = coupe ? '🔇' : '🔊';
@@ -2734,6 +2940,37 @@ addEventListener('message', ev=>{
         const c=[...cote.querySelectorAll('.fcard')].find(x=>cle(x)===k);
         if(c) cote.appendChild(c);
       });
+    }catch(e){}
+    if(window.declasseErreurs) window.declasseErreurs();   // les erreurs restent en bas
+  };
+
+  // UNE CARTE EN ERREUR DESCEND EN BAS (#1266b). Un service HORS LIGNE ou
+  // DÉGRADÉ affiche au mieux une carte vide, au pire une page d'erreur : le
+  // laisser en tête TROMPE le visiteur sur l'état réel du parc. On le pousse
+  // donc en fin de mosaïque et on le grise. Neutre pour un cumul (absent du
+  // registre) ou un état inconnu — on ne déclasse que ce qui est prouvé en
+  // panne. Appelé APRÈS tout autre classement (curation, opérateur, favoris).
+  window.declasseErreurs=function(){
+    try{
+      if(!window._reg) return;
+      // TROIS ÉTAGES (#1266b) : services QUI MARCHENT en haut, ceux qui EXIGENT
+      // une authentification (data-auth, pas encore ouverts) au milieu, ceux en
+      // ERREUR (hors ligne/dégradé) tout en bas. On ne descend jamais un service
+      // ouvert et sain.
+      var cartes=[...cote.querySelectorAll('.fcard[data-embed]')];
+      cartes.forEach(function(c){
+        var s=window._reg[c.getAttribute('data-embed')];
+        var st=s&&s.health&&s.health.state;
+        var ko=(st==='offline'||st==='degraded');
+        var auth=(!ko && c.getAttribute('data-auth')==='1');
+        c.classList.toggle('cl-erreur', ko);
+        c.classList.toggle('cl-auth', auth);
+        c._rang = ko?2:(auth?1:0);
+      });
+      // On pousse d'abord l'étage AUTH, puis l'étage ERREUR : l'ordre final est
+      // donc sain → auth → erreur. Stable pour chaque étage.
+      cartes.filter(function(c){return c._rang===1;}).forEach(function(c){ cote.appendChild(c); });
+      cartes.filter(function(c){return c._rang===2;}).forEach(function(c){ cote.appendChild(c); });
     }catch(e){}
   };
 

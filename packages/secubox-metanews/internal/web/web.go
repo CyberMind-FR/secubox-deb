@@ -444,6 +444,9 @@ func (s *Serveur) sourcesDuSujet(topicID string) []map[string]any {
 		out = append(out, map[string]any{
 			"name": noms[a.SourceID], "title": a.Title, "url": a.URL,
 			"image": a.Image, "published_at": a.PublishedAt,
+			// Le resume PROPRE a la source : la vue detail l'affiche au survol du
+			// lien, pour comparer l'angle de chaque source sans quitter la page.
+			"summary": a.Summary,
 		})
 	}
 	return out

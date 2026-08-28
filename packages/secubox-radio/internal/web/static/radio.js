@@ -220,6 +220,11 @@
         // superpose volontiers a un podcast, c'est meme l'usage. Deux notions
         // distinctes, deux drapeaux distincts.
         zoomable: true,
+        // LECTEUR DE SERVICE (#1266). Le Hall sait ainsi qu'agrandir la radio,
+        // c'est embarquer SON /micro dans le viewer mini (source audio unique,
+        // anti-doublon), et non ouvrir une URL média. C'est l'intégration du
+        // pop-up radio « comme le viewer », au lieu d'une fenêtre détachée.
+        lecteur: location.origin + '/micro',
         titre: (titre && titre.textContent) || 'Radio', sous: (meta && meta.textContent) || '',
         joue: !ecran.paused, t: ecran.currentTime || 0, d: ecran.duration || 0,
         fin: !!fin
@@ -291,7 +296,12 @@
     // Le SILENCE aussi est RETENU d'une visite/refresh a l'autre (#radiofix) :
     // dans le BBS, le lecteur est un iframe qui recharge a chaque navigation ;
     // sans persistance, il se re-allumait tout seul.
-    ecran.muted = localStorage.getItem('sbx_radio_muet') === '1';
+    // MUET PAR DEFAUT A LA PREMIERE VISITE (#1266). Sans preference enregistree,
+    // on ouvre en SILENCE : on n'impose pas du son a qui arrive sur le Hall. Des
+    // que l'auditeur touche le son (curseur ou bouton muet), son choix est
+    // retenu et respecte aux visites suivantes.
+    var pref = localStorage.getItem('sbx_radio_muet');
+    ecran.muted = (pref === null) ? true : (pref === '1');
     iconeVol();
   })();
   curseurVol.addEventListener('input', function () {
@@ -300,6 +310,10 @@
     ecran.volume = v;
     if (v > 0) ecran.muted = false; // toucher le curseur, c'est vouloir entendre
     localStorage.setItem('sbx_radio_vol', String(v));
+    // On PERSISTE le choix d'entendre : sinon, faute de preference `muet`
+    // enregistree, la premiere visite re-couperait le son au prochain refresh
+    // (#1266) malgre le geste. Toucher le curseur vaut consentement durable.
+    localStorage.setItem('sbx_radio_muet', ecran.muted ? '1' : '0');
     iconeVol();
   });
   bMuet.addEventListener('click', function () {
@@ -649,10 +663,16 @@
   ecran.addEventListener('play', function () { bJouer.textContent = '❚❚'; bJouer.title = 'Pause'; });
   ecran.addEventListener('pause', function () { bJouer.textContent = '▶'; bJouer.title = 'Écouter'; });
 
-  // ⧉ DÉTACHER (#1131ae) : dans la barre média du micro-lecteur — ouvre le
-  // lecteur dans une fenêtre persistante, qui survit à la navigation BBS.
+  // ⧉ DÉTACHER (#1131ae, revu #1266). Dans le Hall, on n'ouvre plus une fenêtre
+  // détachée : on demande au Hall d'agrandir la radio dans SON viewer, en mode
+  // mini. Le Hall embarque alors notre /micro comme lecteur unique et met CETTE
+  // carte en pause (anti-doublon) : un seul son, synchronisé, le Hall navigable
+  // derrière. Hors Hall (page ouverte seule), on retombe sur la fenêtre.
   var bDetach = $('detach');
   if (bDetach) bDetach.addEventListener('click', function () {
+    if (parent !== window) {
+      try { parent.postMessage({ sbx: 'zoom', id: 'radio' }, '*'); return; } catch (e) {}
+    }
     window.open('/mini', 'sbxradio',
       'width=380,height=580,menubar=no,toolbar=no,location=no,resizable=yes');
   });
@@ -720,6 +740,18 @@
     var champ = $('source'), s = champ.value.trim();
     if (!s) return;
     proposeSource(s, champ);
+  });
+
+  // PROPOSER — BARRE MICRO (#1266). Meme geste que la carte pleine, mais depuis
+  // la cardlet du rail : on prend l'URL collee et on la propose. Absente hors
+  // micro dans le rendu, presente dans le DOM — d'ou le garde.
+  var proposMic = $('proposer-mic');
+  if (proposMic) proposMic.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var champ = $('source-mic'), s = (champ.value || '').trim();
+    if (!s) return;
+    var lien = extraitLien(s) || s;   // on tolere une URL noyee dans du texte
+    proposeSource(lien, champ);
   });
 
   sonde();

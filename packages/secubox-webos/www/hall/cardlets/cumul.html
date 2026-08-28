@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1242 — carte CUMULATIVE à couches rotatives.
+
+  UNE CARTE, PLUSIEURS COUCHES. Plutôt qu'une carte par service, une carte par
+  THÈME qui fait tourner le contenu de ses sous-composants — comme un pare-feu
+  qui alterne « suis-je couvert » et « qui frappe ». Chaque couche reste
+  responsable de SA donnée (endpoint dédié) ; la carte ne fait qu'orchestrer la
+  rotation et sommer ce qui mérite de l'être.
+
+  PILOTE : groupe « securite » = Pare-feu (posture) + Qui frappe ? (caractéri-
+  sation). Le paramètre ?groupe=<id> choisit la composition (voir GROUPES).
+
+  Données lues en SOUS-COUCHE PUBLIQUE côté serveur (comme /public/cardlets/waf) :
+  pas de jeton navigateur. La visibilité (masquage invité) est gérée par le Hall.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte cumulative — vue micro</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
+          --accent:#2e7d5b; --chaud:#c8791f; --alerte:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#5bbf8f; --chaud:#e0a45c; --alerte:#ef6b5c; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#5bbf8f; --chaud:#e0a45c; --alerte:#ef6b5c; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+  .mw { position:relative; display:flex; flex-direction:column; height:100%; padding:.6rem .72rem; gap:.45rem; }
+
+  .tete { display:flex; align-items:center; gap:.45rem; }
+  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
+  .tete b { font-size:.88rem; }
+  .tete .couche { margin-left:auto; font-size:.6rem; color:var(--muted); letter-spacing:.04em; }
+  /* Points de rotation : indiquent la couche courante et permettent de choisir.
+     Placés en bas à droite (dans le pied), près du coin — discrets mais à
+     portée du pouce. */
+  .dots { position:absolute; right:8px; bottom:7px; z-index:6; display:flex; gap:5px;
+          background:var(--fond); padding:3px 6px; border-radius:20px;
+          box-shadow:0 1px 5px rgba(0,0,0,.22); }
+  /* Mode EMBED : la carte EST le cardlet du service (avec SON en-tête). Pas de
+     chrome cumul (en-tête/pied doublaient et décalaient) — seule la pastille de
+     rotation flotte. */
+  .mw.embed { padding:0; }
+  .mw.embed .tete { display:none; }
+  /* LIGNE DU BAS PARTAGÉE (#1266). En embed, l'en-tête du cumul disparaît, mais
+     le PIED (le lien vers l'hôte du service de la couche) descend en pastille
+     flottante EN BAS À GAUCHE — sur la même ligne que les points de rotation à
+     droite. La carte embarquée masque, elle, son propre hôte / bouton « ouvrir »
+     (embed=1) : une seule barre du bas, l'URL de la tranche à gauche, le choix
+     de tranche à droite. */
+  .mw.embed .pied { position:absolute; left:8px; bottom:6px; right:auto; margin:0;
+    z-index:6; padding:2px 9px; max-width:62%;
+    background:color-mix(in srgb, var(--card,#fff) 80%, transparent);
+    border:1px solid var(--border); border-radius:999px; backdrop-filter:blur(3px);
+    -webkit-backdrop-filter:blur(3px); }
+  .mw.embed .pied .pouls, .mw.embed .pied .grow { display:none; }
+  .mw.embed .pied .pied-lien { font-size:.6rem; font-family:"JetBrains Mono"; }
+  .mw.embed .pied #pied-t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    max-width:100%; }
+  .dots button { width:7px; height:7px; padding:0; border-radius:50%; border:0; cursor:pointer;
+                 background:var(--border); transition:background .15s, transform .15s; }
+  .dots button.on { background:var(--accent); transform:scale(1.2); }
+  /* Point actif : BLEU = rotation AUTO en cours, VERT = mode MANUEL (figé). */
+  .dots.auto button.on { background:#3b82f6; }
+  .dots.manuel button.on { background:#22c55e; }
+
+  .corps { flex:1; min-height:0; display:flex; flex-direction:column; gap:.42rem; }
+
+  .kpis { display:flex; gap:.4rem; }
+  .kpis .k { flex:1; border:1px solid var(--border); border-radius:9px; padding:.4rem .3rem;
+             text-align:center; }
+  .kpis .v { font-size:1.12rem; font-weight:700; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .kpis .k.alerte .v { color:var(--alerte); }
+  .kpis .l { font-size:.52rem; letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
+             margin-top:.1rem; }
+  .sous { font-size:.6rem; color:var(--muted); }
+
+  .titre { font-size:.56rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+           margin:.05rem 0 -.05rem; }
+  .camps { display:flex; flex-direction:column; gap:.24rem; }
+  .camp { display:flex; align-items:center; gap:.4rem; font-size:.68rem; }
+  .camp .sig { font-family:"JetBrains Mono",monospace; font-size:.58rem; color:var(--muted);
+               flex:0 0 auto; width:52px; overflow:hidden; text-overflow:ellipsis; }
+  .camp .bar { flex:1; height:6px; border-radius:4px; background:var(--border); overflow:hidden; min-width:0; }
+  .camp .bar i { display:block; height:100%; background:var(--chaud); }
+  .camp .nb { flex:0 0 auto; font-variant-numeric:tabular-nums; font-size:.62rem; }
+  .camp .hv { flex:0 0 auto; font-size:.55rem; color:var(--alerte); font-variant-numeric:tabular-nums; }
+  .camp .hv.z { color:var(--muted); opacity:.5; }
+  .vide { color:var(--muted); font-size:.7rem; text-align:center; margin:auto 0; }
+
+  /* Tendance du jour, en picto sur le chiffre (#1243). */
+  .kpis .v .tr { font-size:.62rem; margin-left:.12rem; vertical-align:middle; }
+  .kpis .v .tr.up { color:var(--alerte); }
+  .kpis .v .tr.down { color:var(--accent); }
+  /* Liste d'IP recentes (#1240), comme la carte Pare-feu. */
+  .iplist { display:flex; flex-direction:column; gap:.14rem; margin-top:.1rem; }
+  .ipr { display:flex; align-items:center; gap:.35rem; font-size:.66rem; }
+  .ipr .ipa { font-family:"JetBrains Mono",monospace; font-size:.62rem; }
+  .ipr .ipc { margin-left:auto; color:var(--muted); font-size:.56rem; }
+  /* Couche ANALYSE : empreintes de workflow (#1243). UNE ligne par campagne. */
+  .anl1 { display:flex; align-items:center; gap:.4rem; padding:.16rem 0; overflow:hidden; }
+  .anl1 .sig2 { font-family:"JetBrains Mono",monospace; font-size:.58rem; color:var(--muted); flex:0 0 auto; }
+  .anl1 .anlnb { font-size:.62rem; flex:0 0 auto; }
+  .anl1 .anlhv { font-size:.56rem; color:var(--alerte); font-variant-numeric:tabular-nums; flex:0 0 auto; }
+  .anseq1 { flex:1; min-width:0; display:flex; align-items:center; gap:.1rem; overflow:hidden; white-space:nowrap;
+            -webkit-mask-image:linear-gradient(90deg,#000 85%,transparent); mask-image:linear-gradient(90deg,#000 85%,transparent); }
+  .anseq1 .sqc { font-family:"JetBrains Mono",monospace; font-size:.56rem; background:var(--border);
+                 color:var(--texte); padding:0 3px; border-radius:3px; white-space:nowrap; flex:0 0 auto; }
+  .anseq1 .sqa { color:var(--muted); font-size:.54rem; flex:0 0 auto; }
+
+  /* Couche MODULE (Dépôt / YTSaS / Torrent) — #1242. */
+  .modtete { display:flex; align-items:center; gap:.4rem; }
+  .modtete .modic { font-size:1rem; }
+  .modtete b { font-size:.84rem; }
+  .modtete .modn { margin-left:auto; font-size:.95rem; font-weight:700;
+                   font-variant-numeric:tabular-nums; color:var(--accent); }
+  .modlist { display:flex; flex-direction:column; gap:.16rem; margin-top:.25rem; }
+  .modit { font-size:.68rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+           color:var(--texte); }
+
+  /* Carte de service EMBARQUEE (#1242) : on INGERE son en-tete — le cadre est
+     décalé vers le haut de `crop` px (style inline) et le conteneur masque le
+     débordement. L'en-tete du cumul (groupe + couche) reste le seul. */
+  .embwrap { position:relative; height:100%; overflow:hidden; border-radius:6px; }
+  .embwrap .emb { position:absolute; left:0; top:0; width:100%; height:100%; border:0; display:block; }
+
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); }
+  .pied .grow { flex:1; }
+  .pied-lien { display:flex; align-items:center; gap:6px; color:var(--muted); text-decoration:none; }
+  .pied-lien:hover { color:var(--accent); }
+  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
+           animation:bat 2.4s ease-in-out infinite; }
+  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
+</style>
+
+<div class="mw" id="mw">
+  <div class="tete">
+    <span class="ic" id="ic">🛡️</span><b id="grp">Sécurité</b>
+    <span class="couche" id="couche-nom"></span>
+  </div>
+  <div class="corps" id="corps"></div>
+  <div class="pied">
+    <a class="pied-lien" id="pied" href="https://waf.gk2.secubox.in/"><span class="pouls"></span>
+      <span id="pied-t">tableau WAF</span></a>
+    <span class="grow"></span>
+  </div>
+  <!-- Pastille de rotation FLOTTANTE (coin bas-droite) : seule chrome cumul en
+       mode embed, où l'en-tête et le pied sont masqués. -->
+  <span class="dots" id="dots"></span>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var API = '/api/v1/webos/public';
+  var el = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+  function num(n) { return (n == null ? '–' : n); }
+  function drapeau(cc) {
+    cc = String(cc || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(cc)) return '🌐';
+    return String.fromCodePoint(0x1F1E6 + cc.charCodeAt(0) - 65, 0x1F1E6 + cc.charCodeAt(1) - 65);
+  }
+  // Chemin RACCOURCI : les crawls git produisent des chemins interminables qui
+  // rendent l'empreinte illisible. On garde le début et la fin (titre = complet).
+  function court(p) { p = String(p || ''); return p.length > 22 ? p.slice(0, 14) + '…' + p.slice(-6) : p; }
+
+  function jget(url) {
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  }
+
+  // ── COUCHE 1 : POSTURE DU PARE-FEU (« suis-je couvert ») ──────────────────
+  // RENDUE NATIVEMENT par la carte (#1242), PAS via un /micro embarqué : un
+  // /micro apportait son propre entête (« Pare-feu / en veille ») qui DOUBLAIT
+  // celui de la carte, et sa police/taille jurait avec la couche « Qui frappe ? ».
+  // On peint donc les MÊMES chiffres (endpoint /cardlets/waf, identique à la
+  // carte Pare-feu) avec la MÊME grille .kpis que « Qui frappe ? » : un seul
+  // entête, une seule fonte. La carte Pare-feu autonome devient obsolète.
+  function couchePosture(corps) {
+    return jget(API + '/cardlets/waf').then(function (d) {
+      if (!d) { corps.innerHTML = '<div class="vide">Pare-feu injoignable.</div>'; return; }
+      var m = {};
+      (d.metrics || []).forEach(function (x) { m[x.id] = x.value; });
+      var org = (d.content && d.content.title) || '';   // drapeaux des origines
+      var tr = d.trend_jour || 'flat';
+      var ips = (d.recent || []).map(function (a) {
+        return '<div class="ipr"><span>' + (a.country ? drapeau(a.country) : '🌐') + '</span>'
+          + '<span class="ipa">' + esc(a.ip) + '</span>'
+          + '<span class="ipc">' + esc(a.categorie || '') + '</span></div>';
+      }).join('');
+      corps.innerHTML =
+        '<div class="kpis">'
+        + kpi(m.bans, 'bannis', m.bans > 0)
+        + kpiT(m.jour, 'menaces / j', m.jour > 0, tr)
+        + kpi(m.surfaces, 'surfaces') + kpi(m.detections, 'détections')
+        + '</div>'
+        + (org ? '<div class="sous">Origines · ' + esc(org) + '</div>' : '')
+        + (ips ? '<div class="iplist">' + ips + '</div>' : '');
+    });
+  }
+  function kpi(v, l, alerte) {
+    return '<div class="k' + (alerte ? ' alerte' : '') + '"><div class="v">' + num(v)
+      + '</div><div class="l">' + l + '</div></div>';
+  }
+  // KPI avec picto de TENDANCE (#1243) : ▲ plus / ▼ moins qu'un jour normal.
+  function kpiT(v, l, alerte, tr) {
+    var p = tr === 'up' ? '<span class="tr up" title="plus qu\'un jour normal à cette heure">▲</span>'
+          : tr === 'down' ? '<span class="tr down" title="moins qu\'un jour normal à cette heure">▼</span>' : '';
+    return '<div class="k' + (alerte ? ' alerte' : '') + '"><div class="v">' + num(v) + p
+      + '</div><div class="l">' + l + '</div></div>';
+  }
+  // ── COUCHE 3 : ANALYSE — empreintes de workflow des campagnes (#1243) ──────
+  function coucheAnalyse(corps) {
+    return jget(API + '/waf/qui-frappe').then(function (d) {
+      if (!d || !d.ok) { corps.innerHTML = '<div class="vide">Aucune analyse.</div>'; return; }
+      var camps = (d.campagnes || []).filter(function (c) { return (c.sequence || []).length; }).slice(0, 3);
+      if (!camps.length) { corps.innerHTML = '<div class="vide">Pas encore d\'empreinte.</div>'; return; }
+      corps.innerHTML = '<div class="titre">Empreintes de workflow</div>' + camps.map(function (c) {
+        // UNE LIGNE par campagne : la sequence deborde a l'horizontale, sans pave.
+        var seq = (c.sequence || []).slice(0, 4).map(function (p) {
+          return '<code class="sqc" title="' + esc(p) + '">' + esc(court(p)) + '</code>';
+        }).join('<span class="sqa">→</span>');
+        return '<div class="anl1"><code class="sig2">' + esc(c.signature) + '</code>'
+          + '<span class="anlnb">' + c.attaquants + ' IP</span>'
+          + (c.haute_valeur ? '<span class="anlhv">🔑' + c.haute_valeur + '</span>' : '')
+          + '<span class="anseq1">' + seq + '</span></div>';
+      }).join('');
+    });
+  }
+
+  // ── COUCHE 2 : QUI FRAPPE ? (caractérisation) ─────────────────────────────
+  function coucheQuiFrappe(corps) {
+    return jget(API + '/waf/qui-frappe').then(function (d) {
+      if (!d || !d.ok) { corps.innerHTML = '<div class="vide">Aucune corrélation.</div>'; return; }
+      var camps = d.campagnes || [];
+      var maxS = camps.reduce(function (a, c) { return Math.max(a, c.sondes || 0); }, 1);
+      var rows = camps.slice(0, 3).map(function (c) {
+        var w = Math.max(4, Math.round((c.sondes || 0) / maxS * 100));
+        var hv = c.haute_valeur || 0;
+        var titre = (c.outil ? c.outil + ' · ' : '') + c.attaquants + ' IP · ' + c.sondes + ' sondes'
+          + (hv ? ' · ' + hv + ' haute valeur' : '');
+        return '<div class="camp" title="' + esc(titre) + '"><span class="sig">' + esc(c.signature)
+          + '</span><span class="bar"><i style="width:' + w + '%"></i></span>'
+          + '<span class="nb">' + (c.attaquants || 0) + '&#8239;IP</span>'
+          + '<span class="hv' + (hv ? '' : ' z') + '">🔑' + hv + '</span></div>';
+      }).join('');
+      corps.innerHTML =
+        '<div class="kpis">'
+        + kpi(d.attaquants, 'attaquants') + kpi(d.campagnes_total, 'campagnes')
+        + '<div class="k alerte"><div class="v">' + num(d.haute_valeur) + '</div><div class="l">haute valeur</div></div>'
+        + '</div>'
+        + (rows ? '<div class="titre">Top campagnes</div><div class="camps">' + rows + '</div>'
+                : '<div class="vide">Aucune campagne corrélée.</div>');
+    });
+  }
+
+  // ── COUCHE GENERIQUE D'UN MODULE (depot/ytsas/torrent) via /public/actions ──
+  function itemsDe(r) {
+    var dn = (r && r.donnees) || r;
+    if (Array.isArray(dn)) return dn;
+    if (dn && typeof dn === 'object') {
+      var ks = ['droplets', 'items', 'records', 'torrents', 'videos'];
+      for (var i = 0; i < ks.length; i++) if (Array.isArray(dn[ks[i]])) return dn[ks[i]];
+    }
+    return [];
+  }
+  function nomItem(x) { return x.title || x.name || x.domain || x.id || '—'; }
+  function coucheModule(mod, icon, label) {
+    return function (corps) {
+      return jget('/api/v1/webos/public/actions/' + mod + '/liste').then(function (r) {
+        var l = itemsDe(r);
+        corps.innerHTML =
+          '<div class="modtete"><span class="modic">' + icon + '</span><b>' + esc(label) + '</b>'
+          + '<span class="modn">' + l.length + '</span></div>'
+          + (l.length
+            ? '<div class="modlist">' + l.slice(0, 4).map(function (x) {
+                return '<div class="modit" title="' + esc(nomItem(x)) + '">' + esc(nomItem(x)) + '</div>';
+              }).join('') + '</div>'
+            : '<div class="vide">vide</div>');
+      });
+    };
+  }
+
+  // ── COUCHE QUI EMBARQUE UNE CARTE DE SERVICE EXISTANTE ────────────────────
+  // Pour les services qui ONT déjà une carte (delegue même-origine, ou /micro),
+  // on l'imbrique telle quelle : la couche EST la carte du service, aucune
+  // logique dupliquée. Le thème est transmis.
+  // crop = hauteur (px) de l'en-tete de la carte embarquee a INGERER (recouvrir
+  // sous l'en-tete du cumul), pour ne pas le dupliquer et gagner la place.
+  function coucheEmbed(src, crop) {
+    crop = crop || 0;
+    return function (corps) {
+      var t = document.documentElement.getAttribute('data-theme');
+      var sep = src.indexOf('?') >= 0 ? '&' : '?';
+      // #1266 : on SIGNALE l'embed à la carte (embed=1) pour qu'elle masque son
+      // propre hôte / bouton « ouvrir » — la barre du bas du cumul les reprend.
+      var q = sep + 'embed=1';
+      if (t === 'dark' || t === 'light') q += '&theme=' + t;
+      corps.innerHTML = '<div class="embwrap"><iframe class="emb" src="' + src + q
+        + '" scrolling="no" title="" style="top:-' + crop + 'px;height:calc(100% + '
+        + crop + 'px)"></iframe></div>';
+      return Promise.resolve();
+    };
+  }
+
+  // ── COMPOSITION DES GROUPES ───────────────────────────────────────────────
+  var GROUPES = {
+    securite: {
+      titre: 'Sécurité', icon: '🛡️',
+      couches: [
+        { nom: 'Pare-feu', host: 'waf.gk2.secubox.in', charge: couchePosture },
+        { nom: 'Qui frappe ?', host: 'waf.gk2.secubox.in', charge: coucheQuiFrappe },
+        { nom: 'Analyse', host: 'waf.gk2.secubox.in', charge: coucheAnalyse }
+      ]
+    },
+    // GROUPES « embed » : la couche EST la carte réelle du service, avec SON
+    // PROPRE en-tête/titre. On ne surajoute donc PAS d'en-tête cumul (qui
+    // doublait et décalait le rendu) — juste une pastille de rotation flottante.
+    contenu: {
+      titre: 'Contenu', icon: '📦', embed: true,
+      couches: [
+        { nom: 'Dépôt', host: 'depot.gk2.secubox.in', charge: coucheEmbed('/cardlets/quick.html?svc=depot') },
+        { nom: 'YTSaS', host: 'ytsas.gk2.secubox.in', charge: coucheEmbed('/cardlets/quick.html?svc=ytsas') },
+        { nom: 'Torrent', host: 'torrent.gk2.secubox.in', charge: coucheEmbed('/cardlets/quick.html?svc=torrent') }
+      ]
+    },
+    cloud: {
+      titre: 'Cloud', icon: '☁️', embed: true,
+      couches: [
+        { nom: 'Mail', host: 'webmail.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=mail') },
+        { nom: 'Cloud', host: 'nc.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=nextcloud') },
+        { nom: 'Photos', host: 'photoprism.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=photoprism') }
+      ]
+    },
+    social: {
+      titre: 'Social', icon: '🐘', embed: true,
+      couches: [
+        { nom: 'Mastodon', host: 'social.gk2.secubox.in', charge: coucheEmbed('/cardlets/delegue.html?svc=mastodon') },
+        { nom: 'Relay', host: 'socialrelay.gk2.secubox.in', charge: coucheEmbed('https://socialrelay.gk2.secubox.in/micro') }
+      ]
+    },
+    forums: {
+      titre: 'Forums', icon: '💬', embed: true,
+      couches: [
+        { nom: 'BBS', host: 'bbs.gk2.secubox.in', charge: coucheEmbed('https://bbs.gk2.secubox.in/micro') },
+        { nom: 'Billets', host: 'billets.gk2.secubox.in', charge: coucheEmbed('https://billets.gk2.secubox.in/micro') }
+      ]
+    }
+  };
+
+  var gid = new URLSearchParams(location.search).get('groupe') || 'securite';
+  var G = GROUPES[gid] || GROUPES.securite;
+  el('ic').textContent = G.icon;
+  el('grp').textContent = G.titre;
+  // Mode EMBED : on masque le chrome cumul (en-tête/pied), la carte du service
+  // porte le sien. Seule la pastille de rotation flotte.
+  if (G.embed) { var _mw = document.getElementById('mw'); if (_mw) _mw.classList.add('embed'); }
+
+  var couches = G.couches, N = couches.length, timer = null;
+  var reduit = false;
+  try { reduit = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+  // ── MODE DE ROTATION (#1242) : AUTO (point bleu, tourne) ou MANUEL (point
+  // vert, figé). PAS de pause au survol (un cardlet embarqué remplit la carte,
+  // et l'on est toujours dessus quand on l'utilise — la rotation paraissait
+  // alors morte). L'état est PERSISTÉ par groupe (localStorage) : il survit au
+  // rafraîchissement et à la navigation.
+  //   - clic sur un AUTRE point  -> on y va, en mode MANUEL (figé) ;
+  //   - reclic sur le point ACTIF -> bascule MANUEL <-> AUTO.
+  var CLEF = 'sbx.cumul.' + gid;
+  var etat = { auto: true, idx: 0 };
+  try { var _sv = JSON.parse(localStorage.getItem(CLEF) || 'null');
+        if (_sv) { etat.auto = _sv.auto !== false; etat.idx = ((_sv.idx | 0) % N + N) % N; } } catch (e) {}
+  function sauve() { try { localStorage.setItem(CLEF, JSON.stringify(etat)); } catch (e) {} }
+
+  // Points de rotation.
+  el('dots').innerHTML = couches.map(function (c, i) {
+    return '<button type="button" data-i="' + i + '" title="' + esc(c.nom) + '"></button>';
+  }).join('');
+  el('dots').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-i]'); if (!b) return;
+    var j = Number(b.dataset.i);
+    if (j === etat.idx) { etat.auto = !etat.auto; }    // reclic sur l'actif : bascule le mode
+    else { etat.auto = false; etat.idx = j; }           // autre point : va là, MANUEL
+    applique();                                          // réactif : effet immédiat
+  });
+
+  function montre(i) {
+    etat.idx = (i % N + N) % N;
+    el('couche-nom').textContent = couches[etat.idx].nom;
+    Array.prototype.forEach.call(el('dots').children, function (b, k) { b.classList.toggle('on', k === etat.idx); });
+    var h = couches[etat.idx].host, pd = el('pied');
+    // En embed, la pastille du bas montre l'URL (l'hôte) — c'est ce que l'invité
+    // veut voir et cliquer ; hors embed (Sécurité), le libellé de la couche.
+    if (pd && h) { pd.href = 'https://' + h + '/';
+      el('pied-t').textContent = G.embed ? h : couches[etat.idx].nom.toLowerCase(); }
+    couches[etat.idx].charge(el('corps'));
+    sauve();
+  }
+  function suivant() { montre(etat.idx + 1); }
+  // applique() rend l'état visible : couleur des points (bleu=auto, vert=manuel),
+  // couche affichée, et (re)démarre ou coupe le minuteur selon le mode.
+  function applique() {
+    if (timer) { clearInterval(timer); timer = null; }
+    var d = el('dots');
+    if (d) { d.classList.toggle('auto', etat.auto); d.classList.toggle('manuel', !etat.auto); }
+    montre(etat.idx);
+    if (etat.auto && !reduit && N > 1) timer = setInterval(suivant, 8000);
+  }
+
+  applique();
+  // Rafraîchit la couche visible régulièrement (posture/attaquants bougent lentement).
+  setInterval(function () { couches[etat.idx].charge(el('corps')); }, 60000);
+
+  // Rester dans le Hall : le pied ouvre le service de la couche, EMBARQUÉ, par
+  // son hôte (ouvre-hote, indépendant d'un id de service enregistré) — pas de
+  // navigation top.
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    var hote = ''; try { hote = new URL(a.href).host; } catch (e) {}
+    try { parent.postMessage({ sbx: 'ouvre-hote', hote: hote, url: a.href }, '*'); } catch (e) {}
+  }, true);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || !d.sbx) return;
+    // Thème venu du Hall : on l'applique ET on le transmet a la carte embarquee.
+    if (d.sbx === 'theme') {
+      if (d.theme === 'dark' || d.theme === 'light') {
+        document.documentElement.setAttribute('data-theme', d.theme);
+        var f = document.querySelector('#corps iframe');
+        if (f) { try { f.contentWindow.postMessage(d, '*'); } catch (e) {} }
+      }
+      return;
+    }
+    // Intentions des cartes EMBARQUEES (enfants) -> relayees au Hall : sinon
+    // leurs liens/boutons resteraient captifs de la carte cumulative.
+    if (parent !== window && ev.source !== parent) {
+      // 'ouvre' porte l'id du service (désormais MASQUÉ dans le Hall) : le
+      // contrôle source/id du Hall le rejetterait, et le lien « ne serait plus
+      // cliquable ». On le CONVERTIT donc en 'ouvre-hote' (ouverture par hôte,
+      // sans contrôle). Hôte = celui de l'URL si absolue, sinon la couche
+      // affichée.
+      if (d.sbx === 'ouvre' && d.url) {
+        var hote2 = (couches[etat.idx] && couches[etat.idx].host) || '';
+        try { var u2 = new URL(d.url); if (u2.host) hote2 = u2.host; } catch (e) {}
+        try { parent.postMessage({ sbx: 'ouvre-hote', hote: hote2, url: d.url }, '*'); } catch (e) {}
+        return;
+      }
+      if (['ouvre-hote', 'surf', 'surf-close', 'surf-vide', 'surf-hote',
+           'voir', 'valider', 'connexion', 'contexte'].indexOf(d.sbx) >= 0) {
+        try { parent.postMessage(d, '*'); } catch (e) {}
+      }
+    }
+  });
+})();
+</script>

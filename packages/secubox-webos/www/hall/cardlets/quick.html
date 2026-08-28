@@ -77,6 +77,11 @@
   .items .it .et.ok { color:var(--accent); }
   .items .it a.nm { color:inherit; text-decoration:none; }
   .items .it a.nm:hover { color:var(--accent); text-decoration:underline; }
+  /* UNE CAPTURE EN CACHE SOUVERAIN SE LIT D'UN CLIC (#1237). Elle est deja sur
+     la box : son titre devient un lien de lecture, distinct visuellement d'un
+     simple nom (accent + puce ▶). */
+  .items .it a.nm.lire { color:var(--accent); font-weight:600; cursor:pointer; }
+  .items .it a.nm.lire:hover { text-decoration:underline; }
   /* ZONE DE DEPOT (#1328). La carte listait et retirait, mais ne DEPOSAIT
      pas — elle parlait d'un service sans savoir faire ce pour quoi il existe.
      Trois gestes menent au meme endroit : glisser, coller, choisir. */
@@ -165,13 +170,19 @@
     ytsas:   { champ:'url',    invite:'URL de la vidéo', bouton:'Capturer' }
   };
 
-  var id = new URLSearchParams(location.search).get('svc') || 'depot';
+  var params = new URLSearchParams(location.search);
+  var id = params.get('svc') || 'depot';
   var c = SVC[id] || SVC.depot;
+  // EN TRANCHE DE CUMUL (#1266) : l'hôte du service est repris par la barre du
+  // bas du cumul (sur la ligne des points). On masque donc NOTRE ligne d'hôte
+  // pour ne pas la doubler — la tranche n'en montre qu'une, en bas.
+  var enEmbed = params.get('embed') === '1';
 
   el('ic').textContent = c.ic;
   el('ic').style.background = c.couleur;
   el('nom').textContent = c.nom;
   el('hote').textContent = c.hote;
+  if (enEmbed) { var _h = el('hote'); if (_h) _h.style.display = 'none'; }
   el('acces').innerHTML = c.acces.map(function (a) {
     return '<a class="' + a[2] + '" href="https://' + esc(c.hote) + esc(a[1])
       + '" target="_top">' + esc(a[0]) + '</a>';
@@ -295,8 +306,20 @@
         ? (garde ? '' : '<button data-a="conserver" title="Conserver">★</button>')
         : '<button data-a="pause" title="Mettre en pause">❚❚</button>'
           + '<button data-a="reprise" title="Reprendre">▶</button>';
-      return '<span class="it" data-id="' + esc(x.infohash || x.id || '') + '">'
-        + '<span class="nm" title="' + esc(titre) + '">' + esc(titre) + '</span>'
+      // ── CAPTURE YTSAS EN CACHE LOCAL : CLIQUABLE VERS LE VIEWER TV (#1237) ──
+      // Une capture COMPLETE (ou conservee) est deja dans le cache SOUVERAIN de
+      // la box : on peut la jouer sans repasser par YouTube ni Google. Son titre
+      // devient un lien de lecture qui ouvre le VIEWER sur le flux souverain
+      // /api/v1/ytsas/stream/<id>. Une capture encore EN COURS n'a pas de flux
+      // a jouer : elle reste un simple nom.
+      var vidY = x.id || x.video_id || '';
+      var enCacheY = (id === 'ytsas') && (fini || garde) && vidY;
+      var nmY = enCacheY
+        ? '<a class="nm lire" data-lire="' + esc(vidY) + '" data-titre="' + esc(titre)
+          + '" title="Lire dans le viewer (cache souverain) — ' + esc(titre) + '">▶ ' + esc(titre) + '</a>'
+        : '<span class="nm" title="' + esc(titre) + '">' + esc(titre) + '</span>';
+      return '<span class="it" data-id="' + esc(x.infohash || vidY) + '">'
+        + nmY
         + '<span class="et' + ((fini || garde) ? ' ok' : '') + '">' + esc(etat) + '</span>'
         + boutons + '</span>';
     }).join('');
@@ -568,6 +591,20 @@
   }
 
   el('items').addEventListener('click', function (e) {
+    // LIRE UNE CAPTURE EN CACHE DANS LE VIEWER TV (#1237). Le lien de lecture
+    // n'a pas de href (il n'echappe donc pas au Hall via le handler generique
+    // a[href]) : on demande au Hall d'ouvrir le VIEWER sur le flux souverain.
+    var lire = e.target.closest && e.target.closest('a.lire[data-lire]');
+    if (lire) {
+      e.preventDefault();
+      var sid = lire.getAttribute('data-lire');
+      if (sid && parent !== window) {
+        try { parent.postMessage({ sbx: 'voir',
+          url: '/api/v1/ytsas/stream/' + encodeURIComponent(sid),
+          titre: lire.getAttribute('data-titre') || '' }, '*'); } catch (x) {}
+      }
+      return;
+    }
     var b = e.target.closest('button[data-a]');
     if (!b) return;
     var it = b.closest('.it');

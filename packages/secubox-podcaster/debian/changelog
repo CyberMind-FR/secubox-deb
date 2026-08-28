@@ -1,3 +1,11 @@
+secubox-podcaster (1.0.27-1~bookworm1) bookworm; urgency=medium
+
+  * fix: carte /micro — police du corps corrigee en sans-serif systeme (comme la
+    radio), au lieu de 'Courier Prime' monospace qui deformait les glyphes de
+    commande media (prev/play/next/fav/mute/detach) et jurait a cote de la radio.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 10:40:00 +0200
+
 secubox-podcaster (1.0.26-1~bookworm1) bookworm; urgency=medium
 
   * BILLETS AUTO-PUBLIES : LE VRAI TITRE DE L'EPISODE (#1238d). Le billet n'a pas

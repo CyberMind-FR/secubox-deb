@@ -107,8 +107,14 @@
     photoprism: { ic:'📷', nom:'Photos', hote:'photoprism.gk2.secubox.in',
                   quoi:'vos photos',    couleur:'#1f7a58' }
   };
-  var id = new URLSearchParams(location.search).get('svc') || 'nextcloud';
+  var params = new URLSearchParams(location.search);
+  var id = params.get('svc') || 'nextcloud';
   var c = SVC[id] || SVC.nextcloud;
+  // EN TRANCHE DE CUMUL (#1266) : le bouton « Ouvrir » du pied est repris par la
+  // barre du bas du cumul (l'URL de la tranche, sur la ligne des points), qui
+  // ouvre le service embarqué au clic. On masque donc NOTRE pied pour ne pas le
+  // doubler — la tranche n'a qu'une seule action d'ouverture, en bas.
+  var enEmbed = params.get('embed') === '1';
 
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (x) {
       return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[x]; }); };
@@ -119,6 +125,7 @@
   el('nom').textContent = c.nom;
   el('hote').textContent = c.hote;
   el('pied').href = 'https://' + c.hote + '/';
+  if (enEmbed) { var _p = document.querySelector('.pied'); if (_p) _p.style.display = 'none'; }
 
   function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
   function api(chemin, opts) {

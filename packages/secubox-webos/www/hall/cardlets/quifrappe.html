@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1240 — carte « Qui frappe ? ».
+
+  ELLE NE PEINT RIEN QU'ELLE N'A OBSERVÉ. La carte Pare-feu répond « suis-je
+  couvert » ; celle-ci répond « QUI frappe, et comment ». Elle lit la synthèse
+  de campagnes que sbxwaf a DÉJÀ corrélée (campaigns.json, via --correlate),
+  enrichie de la lecture « negative space » : combien d'attaquants, regroupés en
+  combien de campagnes (même workflow depuis plusieurs IP), et combien de leurs
+  sondes visent des secrets/exécution (haute valeur). Aucune donnée inventée.
+
+  DONNÉE DE SÉCURITÉ : la carte exige la session (Bearer) et est masquée pour un
+  invité (data-auth côté Hall).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qui frappe ? — vue micro</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
+          --accent:#c0392b; --chaud:#c8791f; --ok:#3d6b4a; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#ef6b5c; --chaud:#e0a45c; --ok:#6db38a; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#ef6b5c; --chaud:#e0a45c; --ok:#6db38a; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.45; }
+  .mw { display:flex; flex-direction:column; height:100%; padding:.6rem .72rem; gap:.45rem; }
+  .tete { display:flex; align-items:center; gap:.45rem; }
+  .tete .ic { width:28px; height:28px; border-radius:8px; display:grid; place-items:center;
+              font-size:.9rem; color:#fff; background:var(--accent); flex:0 0 auto; }
+  .tete b { font-size:.88rem; }
+  .tete .n { margin-left:auto; font-size:.56rem; letter-spacing:.08em;
+             text-transform:uppercase; color:var(--muted); font-variant-numeric:tabular-nums; }
+
+  /* Trois chiffres, lus d'un coup d'œil. */
+  .chiffres { display:flex; gap:.4rem; }
+  .chiffres .c { flex:1; border:1px solid var(--border); border-radius:9px;
+                 padding:.4rem .3rem; text-align:center; }
+  .chiffres .v { font-size:1.15rem; font-weight:700; font-variant-numeric:tabular-nums;
+                 line-height:1.1; }
+  .chiffres .c.hv .v { color:var(--accent); }
+  .chiffres .l { font-size:.54rem; letter-spacing:.05em; text-transform:uppercase;
+                 color:var(--muted); margin-top:.1rem; }
+
+  .titre { font-size:.58rem; letter-spacing:.07em; text-transform:uppercase;
+           color:var(--muted); margin:.1rem 0 -.05rem; }
+  .camps { display:flex; flex-direction:column; gap:.26rem; overflow:hidden; }
+  .camp { display:flex; align-items:center; gap:.4rem; font-size:.7rem; }
+  .camp .sig { font-family:"JetBrains Mono",monospace; font-size:.6rem; color:var(--muted);
+               flex:0 0 auto; width:56px; overflow:hidden; text-overflow:ellipsis; }
+  .camp .bar { flex:1; height:6px; border-radius:4px; background:var(--border);
+               overflow:hidden; min-width:0; }
+  .camp .bar i { display:block; height:100%; background:var(--chaud); }
+  .camp .nb { flex:0 0 auto; font-variant-numeric:tabular-nums; color:var(--texte);
+              font-size:.64rem; }
+  .camp .hv { flex:0 0 auto; font-size:.56rem; color:var(--accent);
+              font-variant-numeric:tabular-nums; }
+  .camp .hv.z { color:var(--muted); opacity:.5; }
+
+  .vide { color:var(--muted); font-size:.72rem; text-align:center; margin:auto 0; }
+
+  .pied { margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem;
+          border-top:1px solid var(--border); font-size:.57rem; letter-spacing:.07em;
+          text-transform:uppercase; color:var(--muted); text-decoration:none; }
+  .pied .grow { flex:1; } .pied:hover { color:var(--accent); }
+  .pouls { width:5px; height:5px; border-radius:50%; background:var(--accent);
+           animation:bat 2.4s ease-in-out infinite; }
+  @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
+  @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
+</style>
+
+<div class="mw">
+  <div class="tete"><span class="ic">🎯</span><b>Qui frappe ?</b><span class="n" id="n"></span></div>
+  <div class="chiffres">
+    <div class="c"><div class="v" id="v-att">–</div><div class="l">attaquants</div></div>
+    <div class="c"><div class="v" id="v-camp">–</div><div class="l">campagnes</div></div>
+    <div class="c hv"><div class="v" id="v-hv">–</div><div class="l">haute&nbsp;valeur</div></div>
+  </div>
+  <div class="titre" id="t-camp" hidden>Top campagnes</div>
+  <div class="camps" id="camps"></div>
+  <div class="vide" id="vide" hidden>Aucune campagne corrélée pour l'instant.</div>
+  <a class="pied" href="https://waf.gk2.secubox.in/" title="Ouvrir le tableau de bord WAF">
+    <span class="pouls"></span><span>tableau WAF</span><span class="grow"></span><span id="rang"></span></a>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var el = function (id) { return document.getElementById(id); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[c]; }); };
+
+  function rend(d) {
+    if (!d || !d.ok) { el('vide').hidden = false; return; }
+    el('v-att').textContent = d.attaquants || 0;
+    el('v-camp').textContent = d.campagnes_total || 0;
+    el('v-hv').textContent = d.haute_valeur || 0;
+    el('n').textContent = (d.campagnes_total || 0) + ' clusters';
+
+    var camps = d.campagnes || [];
+    if (!camps.length) { el('vide').hidden = false; return; }
+    el('vide').hidden = true;
+    el('t-camp').hidden = false;
+    // La barre est proportionnelle au volume de sondes de la plus grosse
+    // campagne : on compare les campagnes entre elles, pas à un absolu inventé.
+    var maxS = camps.reduce(function (m, c) { return Math.max(m, c.sondes || 0); }, 1);
+    el('camps').innerHTML = camps.map(function (c) {
+      var w = Math.max(4, Math.round((c.sondes || 0) / maxS * 100));
+      var hv = c.haute_valeur || 0;
+      var titre = (c.outil ? c.outil + ' · ' : '') + c.attaquants + ' IP · ' + c.sondes + ' sondes'
+        + (hv ? ' · ' + hv + ' haute valeur' : '');
+      return '<div class="camp" title="' + esc(titre) + '">'
+        + '<span class="sig">' + esc(c.signature) + '</span>'
+        + '<span class="bar"><i style="width:' + w + '%"></i></span>'
+        + '<span class="nb">' + (c.attaquants || 0) + '&#8239;IP</span>'
+        + '<span class="hv' + (hv ? '' : ' z') + '">🔑' + hv + '</span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function charge() {
+    // Sous-couche PUBLIQUE, lue côté serveur (comme la carte Pare-feu) : pas de
+    // jeton navigateur. La visibilité de la carte est déjà gérée par le Hall
+    // (masquée pour un invité) ; ici on ne fait que la remplir.
+    fetch('/api/v1/webos/public/waf/qui-frappe', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(rend)
+      .catch(function () { el('vide').textContent = 'WAF injoignable.'; el('vide').hidden = false; });
+  }
+
+  charge();
+  setInterval(charge, 60000);   // la posture bouge lentement : une minute suffit.
+
+  // RESTER DANS LE HALL (#1240). Le lien du pied ne doit PAS emporter tout le
+  // Hall vers le WAF (target=_top) : on demande au Hall de l'ouvrir EMBARQUE,
+  // comme les autres cartes. La source etant la carte « quifrappe », le Hall
+  // embarque le service correspondant (url = waf.gk2.secubox.in).
+  document.addEventListener('click', function (ev) {
+    if (parent === window) return;
+    var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+    ev.preventDefault();
+    try { parent.postMessage({ sbx: 'ouvre', id: 'quifrappe', url: a.href }, '*'); } catch (e) {}
+  }, true);
+
+  (function () {
+    var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+  })();
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'theme') return;
+    if (d.theme === 'dark' || d.theme === 'light') {
+      document.documentElement.setAttribute('data-theme', d.theme);
+    }
+  });
+})();
+</script>

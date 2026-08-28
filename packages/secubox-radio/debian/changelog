@@ -1,3 +1,54 @@
+secubox-radio (0.1.57-1~bookworm1) bookworm; urgency=medium
+
+  * Detach ⧉ integre au viewer du Hall (#1266) : au lieu d'ouvrir une fenetre,
+    on demande au Hall d'agrandir la radio dans SON viewer en mini (postMessage
+    {sbx:'zoom'}). L'annonce media porte `lecteur` (URL /micro) pour que le Hall
+    embarque le bon lecteur, source audio unique (anti-doublon), synchro. Repli
+    fenetre hors Hall.
+  * Muet par defaut a la premiere visite (#1266) : sans preference enregistree,
+    la radio s'ouvre en silence ; le premier geste sur le son (curseur/bouton)
+    est retenu et respecte ensuite (le curseur persiste desormais aussi `muet`).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 19:00:00 +0200
+
+secubox-radio (0.1.56-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet micro (#1266) : partie messages optimisee, plus de vide. Le panneau
+    du milieu (messages en vue antenne, file en vue playlist) prend l'espace
+    libre et colle ses lignes au bas, juste au-dessus de la barre « Proposer » —
+    fini le trou mort sous une barre flottante. Interlignes des messages resserres
+    (.ph padding .04rem, line-height 1.25).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 16:15:00 +0200
+
+secubox-radio (0.1.55-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet micro (#1266) : barre « Proposer » ancree en bas (flex colonne +
+    marge haute auto) — saisie et bouton toujours alignes au meme endroit quel
+    que soit le panneau du dessus. Barre legerement agrandie (saisie/bouton plus
+    hauts). Titre borne a deux lignes avec ellipse (-webkit-line-clamp:2).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 15:40:00 +0200
+
+secubox-radio (0.1.54-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet micro : retrait des legendes decoratives (#1266). Les `.pied`
+    (« La playlist se repete… », note des propositions) se faisaient couper au
+    ras du liseré — texte estompé, tronqué — et repoussaient la barre
+    « Proposer » hors du champ. Masques en micro : la barre Proposer redevient
+    visible, le bas de la carte est net.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 15:05:00 +0200
+
+secubox-radio (0.1.53-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet micro : barre « Proposer » en bas (#1266). En micro, une saisie
+    d'URL + un bouton ➕ permettent de glisser un titre sans quitter le rail.
+    Meme chemin que la carte pleine (proposeSource) ; visible uniquement en
+    micro, le proposer plein restant data-mini-hide. CSS .proposer-micro.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 14:30:00 +0200
+
 secubox-radio (0.1.52-1~bookworm1) bookworm; urgency=medium
 
   * NE PAS CAPTER L'EVENEMENT `paste` (#1374b). Le handler de coller ajoute en

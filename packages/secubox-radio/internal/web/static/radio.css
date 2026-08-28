@@ -240,6 +240,19 @@ body.micro .wrap { padding: 0; }
   body.mini .wrap > .carte, body.micro .wrap > .carte { margin: 0; }
 }
 body.micro .carte:not(.lecteur):not(.antenne) { display: none; } /* lecteur + antenne */
+/* PROPOSER — BARRE MICRO (#1266). Cachee partout sauf en micro, ou elle ferme
+   la cardlet : une saisie d'URL + un bouton, pour glisser un titre sans quitter
+   le rail. La regle ci-dessus la masquerait (elle n'est ni lecteur ni antenne) ;
+   on la reactive ici, meme specificite mais posee apres, donc elle gagne. */
+.proposer-micro { display: none; }
+body.micro .wrap > .carte.proposer-micro { display: block; margin: .35rem 0 0;
+  border-radius: 10px; }
+body.micro .proposer-micro .rangee { padding: .45rem .55rem; border-bottom: 0;
+  display: flex; gap: .45rem; align-items: stretch; }
+body.micro .proposer-micro input { flex: 1 1 auto; min-width: 0; padding: .42rem .55rem;
+  font-size: .76rem; }
+body.micro .proposer-micro .btn { flex: 0 0 auto; padding: .42rem .7rem; font-size: .85rem;
+  line-height: 1; }
 /* LES MESSAGES SONT LE SECOND VOLET DE L'ANTENNE (#1201). Detaches de la saisie
    pour laisser la playlist se glisser entre les deux sur la page pleine, ils
    restent solidaires d'elle en micro : la regle ci-dessus les garde par la
@@ -254,9 +267,15 @@ body.micro .antenne { margin: .35rem 0 0; border-radius: 10px; }
 body.micro .antenne .entete { display: none; }
 body.micro .antenne .rangee { padding: .35rem .55rem; border-bottom: 0; }
 body.micro .antenne .rangee input { padding: .3rem .5rem; font-size: .72rem; }
-body.micro #chat { max-height: 2.9rem; overflow: hidden; padding: .1rem .55rem .35rem; }
-body.micro #chat .ph { font-size: .68rem; padding: .1rem 0; }
+body.micro #chat { max-height: 2.9rem; overflow: hidden; padding: .1rem .55rem .3rem; }
+body.micro #chat .ph { font-size: .68rem; padding: .04rem 0; line-height: 1.25; }
 body.micro .microlast { display: none; }             /* plus de message unique en haut */
+/* PAS DE LEGENDE DECORATIVE EN MICRO (#1266). Les `.pied` (« La playlist se
+   repete… », la note des propositions) n'apprennent rien dans une cardlet et,
+   faute de place, se font couper au ras du liseré — un texte estompé, tronqué,
+   qui salit le bas de la carte et repousse la barre « Proposer » hors du champ.
+   On les retire tous en micro : le geste (proposer) reste, la legende part. */
+body.micro .pied { display: none; }
 
 /* ROTATION ANTENNE / PLAYLIST (#1263).
    Sous 520 px il n'y a de la place que pour UN panneau : la carte montrait
@@ -266,6 +285,24 @@ body.micro .microlast { display: none; }             /* plus de message unique e
    rotation n'a pas lieu d'etre : elle ferait disparaitre un panneau visible,
    ce qui serait une perte, pas un gain. */
 @media (max-width: 519.98px) {
+  /* BARRE « PROPOSER » ANCREE EN BAS (#1266). La cardlet est une colonne : on
+     la met en flex vertical sur toute la hauteur du cadre, et la barre prend une
+     marge haute automatique. Quel que soit le panneau du dessus — antenne courte
+     ou playlist plus longue — la saisie et le bouton restent collés au bas,
+     toujours alignés au même endroit, au lieu de flotter sous un contenu de
+     hauteur variable. */
+  body.micro .wrap { display: flex; flex-direction: column; min-height: 100vh; }
+  body.micro .wrap > .carte.proposer-micro { margin: 0; }
+  /* PLUS DE VIDE ENTRE LES MESSAGES ET LA BARRE (#1266). Le panneau du milieu —
+     messages en vue antenne, file en vue playlist — prend tout l'espace libre au
+     lieu de le laisser en blanc sous une barre « Proposer » flottante. Les
+     messages se collent au BAS du panneau, juste au-dessus de la saisie d'URL :
+     le fil respire vers le haut comme une vraie messagerie, sans trou mort. */
+  body.micro .antenne-messages { flex: 1 1 auto; display: flex;
+    flex-direction: column; justify-content: flex-end; min-height: 0; }
+  body.micro #chat { max-height: none; }
+  body.micro.vue-playlist .carte.playlist { flex: 1 1 auto; }
+
   body.micro.vue-playlist .carte.antenne,
   body.micro.vue-playlist .carte.antenne-messages { display: none; }
   body.micro.vue-playlist .carte.playlist { display: block; margin: .35rem 0 0; border-radius: 10px; }
@@ -305,7 +342,12 @@ body.micro .lecteur { margin: 0; border-radius: 10px; }
 body.micro .lecteur .bloc { gap: .55rem; padding: .55rem .6rem; align-items: center; }
 body.micro .cadre { width: 3.4rem; height: 3.4rem; }
 body.micro .etiq, body.micro .barre, body.micro .tps, body.micro .derive { display: none; }
-body.micro .titre { font-size: .9rem; margin: 0; }
+/* TITRE : DEUX LIGNES AU PLUS, PUIS « … » (#1266). Un titre long poussait tout
+   le bloc vers le bas et decalait la mise en page ; on le borne a deux lignes et
+   on coupe proprement a l'ellipse. La hauteur du lecteur redevient previsible. */
+body.micro .titre { font-size: .9rem; margin: 0; display: -webkit-box;
+  -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; }
 body.micro .meta { font-size: .72rem; }
 body.micro .cmd { margin-top: .35rem; gap: .4rem; }
 body.micro .rond { width: 27px; height: 27px; font-size: 12px; }

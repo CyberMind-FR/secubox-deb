@@ -1,3 +1,67 @@
+secubox-metanews (0.1.28-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet micro (#1266) : l'auto-rotation (tourne, 6 s) ne parasite plus les
+    apercus manuels au survol. mouseenter/mouseleave lies a la RACINE .mw sans
+    capture au lieu de document en capture : enPause reste stable tant que le
+    pointeur est dans la carte, au lieu de retomber a false entre deux enfants et
+    de laisser l'auto refaire montre() en plein survol.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 16:40:00 +0200
+
+secubox-metanews (0.1.27-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240b): survol d'un lien « a suivre » = preview VIGNETTE+TITRE seulement
+    (rotation des sources si plusieurs), la liste reste ; survol de la VIGNETTE
+    principale = preview + SUITE du texte (remplace la liste). Les liens restent
+    cliquables.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 12:20:00 +0200
+
+secubox-metanews (0.1.26-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1240b): l'apercu (rotation sur les sources + suite du texte) ne se
+    declenche qu'au survol de la VIGNETTE PRINCIPALE, pas au survol des liens des
+    autres news « a suivre ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 11:50:00 +0200
+
+secubox-metanews (0.1.25-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240b): carte /micro — survoler une news de la liste fait ROTATIONNER
+    la vignette et le titre sur SES sources (media + nom, source par source) et
+    remplace la liste par la SUITE du texte de la news (resume de la source
+    affichee). L'agregation se lit sans quitter la carte ; retour au fil en
+    sortant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 11:30:00 +0200
+
+secubox-metanews (0.1.24-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240): la ligne de sources VISIBLE (noms sous le titre) devient la
+    surface de survol preferee — survoler un nom remplace titre/vignette/resume
+    par ceux de cette source, sans deplier la liste. La liste depliee garde le
+    survol. Tags survolables discrets (soulignes au survol).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 23:00:00 +0200
+
+secubox-metanews (0.1.23-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1237): vue detail — le survol d'une source change aussi le TITRE (h2)
+    de la carte pour le titre REEL de l'article survole (en plus de la vignette
+    et du resume). Restauration du titre de synthese en sortant.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 11:10:00 +0200
+
+secubox-metanews (0.1.22-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1237): vue detail — survoler un lien de source AGREGEE remplace la
+    vignette et le texte de synthese par l'IMAGE et le RESUME propres a cette
+    source (apercu de son angle), retour a la synthese commune en sortant. Le
+    JSON /topics/{id}/sources expose desormais `summary` par source ; le front
+    swap .vign et .dek au mouseenter/mouseleave. Titre et liste inchanges.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 10:30:00 +0200
+
 secubox-metanews (0.1.21-1~bookworm1) bookworm; urgency=medium
 
   * +Le Parisien, +Le Dauphine (Une) (#1360). Seed idempotent.

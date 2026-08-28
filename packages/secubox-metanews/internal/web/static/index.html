@@ -55,6 +55,8 @@ h1{font-size:1.5rem;margin:0;letter-spacing:.02em}
 .dek{color:var(--ink);margin:6px 0 10px}
 .tags{color:var(--cyan);font-family:ui-monospace,monospace;font-size:12px;margin-bottom:6px}
 .src{color:var(--mut);font-size:.85rem;margin-bottom:10px}
+.src .src-tag{cursor:default;transition:color .12s,border-color .12s;border-bottom:1px solid transparent}
+.src .src-tag:hover{color:var(--cyan);border-bottom-color:var(--cyan)}
 .foot{display:flex;gap:8px;flex-wrap:wrap}
 .btn{font:600 12px/1 ui-monospace,monospace;letter-spacing:.04em;padding:8px 12px;border-radius:8px;
   border:1px solid var(--line);background:transparent;color:var(--cyan);cursor:pointer;text-decoration:none}
@@ -174,7 +176,7 @@ function carte(t){
     <div class="meta"><span><b>${t.sources_count}</b> source(s)</span>
       <span>maj ${ilya(t.updated_at)}</span>
       <span>confiance <span class="conf"><i style="width:${conf}%"></i></span> ${conf}%</span></div>
-    ${t.summary?`<p class="dek">${esc(t.summary)}</p>`:""}
+    <p class="dek"${t.summary?"":" hidden"}>${esc(t.summary||"")}</p>
     ${(t.tags||[]).length?`<div class="tags">${t.tags.map(esc).join(" ")}</div>`:""}
     <div class="src">${(t.source_names||[]).map(esc).join(" · ")}</div>
     <div class="foot">
@@ -186,9 +188,40 @@ function carte(t){
   c.querySelector(".bsrc").onclick=async()=>{
     if(box.classList.contains("open")){box.classList.remove("open");return}
     const r=await fetch(`${API}/topics/${t.id}/sources`).then(r=>r.json());
-    box.innerHTML=(r.sources||[]).map(s=>`<a href="${esc(surfUrl(s.url))}" data-orig="${esc(s.url)}" target="_blank" rel="noopener nofollow" title="via le proxy SecuBox — ${esc(s.url)}">
+    const sources=(r.sources||[]);
+    box.innerHTML=sources.map(s=>`<a href="${esc(surfUrl(s.url))}" data-orig="${esc(s.url)}" data-img="${esc(s.image||"")}" data-titre="${esc(s.title||"")}" data-resume="${esc(s.summary||"")}" target="_blank" rel="noopener nofollow" title="via le proxy SecuBox — ${esc(s.url)}">
       🛰️ ${esc(s.name)} — <span class="t">${esc(s.title)}</span></a>`).join("")||`<span class="t">—</span>`;
     box.classList.add("open");
+    // ── SURVOL D'UNE SOURCE : APERCU DE SON ANGLE (#1237, etendu #1240) ───────
+    // Survoler une source remplace le TITRE, la VIGNETTE et le TEXTE de synthese
+    // par ceux PROPRES a cette source ; en sortant on revient a la synthese.
+    // ON PREFERE LA LIGNE DE SOURCES VISIBLE (les noms sous le titre) comme
+    // surface de survol : on compare les angles SANS deplier. La liste depliee
+    // garde aussi le survol.
+    const vignEl=c.querySelector(".vign"), dekEl=c.querySelector(".dek"), h2El=c.querySelector("h2");
+    const vignOrig=vignEl?vignEl.getAttribute("src"):null;
+    const dekOrig=dekEl?dekEl.textContent:"", dekHid=dekEl?dekEl.hidden:false;
+    const h2Orig=h2El?h2El.textContent:"";
+    const survol=(elt)=>{
+      elt.addEventListener("mouseenter",()=>{
+        const img=elt.getAttribute("data-img"), titre=elt.getAttribute("data-titre")||"";
+        if(vignEl && img){ vignEl.src=`${API}/img?u=${encodeURIComponent(img)}`; }
+        if(h2El && titre){ h2El.textContent=titre; }
+        if(dekEl){ const txt=elt.getAttribute("data-resume")||titre||""; if(txt){ dekEl.textContent=txt; dekEl.hidden=false; } }
+      });
+      elt.addEventListener("mouseleave",()=>{
+        if(vignEl && vignOrig){ vignEl.src=vignOrig; }
+        if(h2El){ h2El.textContent=h2Orig; }
+        if(dekEl){ dekEl.textContent=dekOrig; dekEl.hidden=dekHid; }
+      });
+    };
+    box.querySelectorAll("a").forEach(survol);
+    // La ligne de sources VISIBLE devient des tags survolables, source par source.
+    const srcLine=c.querySelector(".src");
+    if(srcLine && sources.length){
+      srcLine.innerHTML=sources.map(s=>`<span class="src-tag" data-img="${esc(s.image||"")}" data-titre="${esc(s.title||"")}" data-resume="${esc(s.summary||"")}" title="${esc(s.name)}">${esc(s.name)}</span>`).join(" · ");
+      srcLine.querySelectorAll(".src-tag").forEach(survol);
+    }
   };
   c.querySelector(".bdisc").onclick=async(e)=>{
     const tok=localStorage.getItem("sbx_token")||"";

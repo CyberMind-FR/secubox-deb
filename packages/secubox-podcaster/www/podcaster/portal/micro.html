@@ -33,7 +33,10 @@
      carte jurait à côté de la radio. On la pose sur le document — tout hérite. */
   html, body { margin: 0; height: 100%; overflow: hidden;
                scrollbar-width: none; background: var(--bg-card, #fff); color: var(--text, #111);
-               font-family: 'Courier Prime', ui-monospace, monospace; }
+               /* MÊME POLICE QUE LA RADIO (#1238, corrigé) : sans-serif système,
+                  pas Courier Prime — le monospace déformait les glyphes de
+                  commande média (⏮ ▶ ⏭ ♥ 🔊 ⧉) et jurait à côté de la radio. */
+               font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
   /* THÈME HÉRITÉ DE L'HÔTE. Encadrée, la carte décidait seule de son
      clair/sombre et restait blanche sur un Hall sombre. */
   :root[data-theme="dark"] { --bg-card:#14141c; --text:#e8e6d9; --muted:#6b6b7a;

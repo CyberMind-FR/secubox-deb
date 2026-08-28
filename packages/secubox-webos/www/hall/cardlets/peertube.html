@@ -94,7 +94,7 @@
     <span class="voile"><span class="t" id="une-t">lecture du catalogue…</span></span>
   </div>
   <div class="top" id="top"></div>
-  <a class="pied" href="/" target="_top"><span class="pouls" id="pouls"></span>
+  <a class="pied" id="pied" href="#" title="Ouvrir dans le viewer"><span class="pouls" id="pouls"></span>
     <span id="pied-t">vidéos</span><span class="grow"></span><span id="rang"></span></a>
 </div>
 
@@ -252,6 +252,11 @@
         // ailleurs — trois sources sonores a la fois ne sont pas un bureau,
         // c'est un vacarme.
         type: 'video',
+        // L'URL DE VISIONNAGE (#1266). Le Hall s'en sert pour ATTRAPER la video
+        // dans son viewer quand on l'agrandit (il en derive l'embed natif a la
+        // position `t`), et remet cette carte en vitrine : le flux est deplace,
+        // jamais joue a deux endroits.
+        href: (v && v.uuid) ? ('https://' + PT_HOTE + '/w/' + encodeURIComponent(v.uuid)) : '',
         titre: (v && v.name) || 'PeerTube',
         sous: (v && v.channel && v.channel.displayName) || 'PeerTube',
         // `t` n'est plus toujours nul : quand le lecteur nous donne sa
@@ -278,6 +283,16 @@
   el('top').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-i]');
     if (b) lance(Number(b.dataset.i));
+  });
+  // LE PIED OUVRE LA PAGE DU SERVICE PEERTUBE (#1237). Pas une video : LIRE une
+  // video se fait deja en cliquant une vignette (le lecteur natif remplace
+  // alors la vignette dans la carte). Le pied, lui, embarque le SITE peertube
+  // complet dans le Hall — comme n'importe quel autre service (openService) —
+  // pour naviguer le catalogue, les chaines, la recherche.
+  el('pied').addEventListener('click', function (e) {
+    e.preventDefault();
+    if (parent === window) return;
+    try { parent.postMessage({ sbx: 'ouvre', id: 'peertube' }, '*'); } catch (x) {}
   });
 
   addEventListener('message', function (ev) {

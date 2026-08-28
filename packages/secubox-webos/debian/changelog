@@ -1,3 +1,277 @@
+secubox-webos (1.0.186-1~bookworm1) bookworm; urgency=medium
+
+  * Tranches de cumul : LIGNE DU BAS PARTAGEE (#1266). En embed, le pied du cumul
+    (lien vers l'hote de la couche) descend en pastille flottante en bas a gauche,
+    sur la ligne des points de rotation ; il montre l'URL de la tranche et l'ouvre
+    au clic. Les cartes embarquees masquent alors leur propre chrome du bas
+    (embed=1) : quick.html cache sa ligne d'hote (torrent/depot/ytsas),
+    delegue.html cache son bouton « Ouvrir » (mail/cloud/photos/social). Fini le
+    doublon et le bas « pourri ».
+  * Viewer : radio en mini « lecteur » n'a plus de plein ecran ni de bascule mini
+    (#1266) — une pop-up radio se ferme (croix), elle ne s'agrandit pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 20:00:00 +0200
+
+secubox-webos (1.0.185-1~bookworm1) bookworm; urgency=medium
+
+  * Media unifie viewer <-> barre (#1266). « Agrandir » un flux de la barre le
+    PROMEUT dans le viewer, seule instance qui joue : plus de doublon.
+    - Service audio (radio) : /micro embarque dans le viewer MINI (mode
+      « lecteur », fenetre portrait) avec data-embarque -> l'anti-doublon met la
+      carte en pause, UN son, synchro ; a la fermeture la main revient a la carte.
+    - Video (peertube) : le viewer joue la video a sa position, la carte revient
+      en vitrine. ytsas passait deja par le viewer.
+    faireZoom() partage par le dock (pastille + bouton) et par {sbx:'zoom'} d'une
+    carte (detach radio). dockRendreLaMain()/ouvreLecteurViewer() exposes.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 19:02:00 +0200
+
+secubox-webos (1.0.184-1~bookworm1) bookworm; urgency=medium
+
+  * Hall (#1266) : titre « Services principaux / N services » retire de l'accueil
+    (barre pleine largeur pour un libelle que la mosaique dit deja) ; garde
+    defensif sur le compteur n-feat disparu.
+  * Menu megabarre Services : doublons retires. Plusieurs entrees FEATURED
+    visaient la meme url (Contenu/Dépôt, Forums/BBS, deux Cloud, deux Social) —
+    dedoublonnage par destination, l'entree agregee (hors _CUMULES) gardee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 17:05:00 +0200
+
+secubox-webos (1.0.183-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : cardlet radio agrandie (h:284) pour la barre « Proposer » ancree en
+    bas et le titre sur deux lignes (#1266).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 15:42:00 +0200
+
+secubox-webos (1.0.182-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : cardlet radio dimensionnee (h:262) pour loger la barre « Proposer »
+    ajoutee en micro cote radio (#1266).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 14:32:00 +0200
+
+secubox-webos (1.0.181-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : ordre par defaut de la mosaique revu (#1266). Les quatre cardlets de
+    contenu les plus abouties passent en tete dans cet ordre : radio, metanews,
+    podcaster, peertube. Le reste suit son degre habituel. ORDRE_PREF +
+    rangPref() en cle de tri primaire, degreCarte() en secondaire (tri stable).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 28 Aug 2026 14:10:00 +0200
+
+secubox-webos (1.0.180-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1242): rotation des cartes cumulatives — SUPPRESSION de la pause au
+    survol (un cardlet embarque remplit la carte, on est toujours dessus quand
+    on l'utilise : la rotation paraissait morte, meme sur Securite). Nouveau
+    modele explicite : mode AUTO (point BLEU, tourne) ou MANUEL (point VERT,
+    fige), PERSISTE par groupe (localStorage, survit au refresh/navigation).
+    Clic sur un autre point -> y va en MANUEL ; reclic sur l'actif -> bascule
+    AUTO<->MANUEL. Reactif au clic.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 13:10:00 +0200
+
+secubox-webos (1.0.179-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1242): le point actif de rotation des cartes cumulatives passe en BLEU
+    tant que la rotation AUTO tourne, et revient a l'accent en pause (survol /
+    interaction) — un indicateur clair de l'etat.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 12:40:00 +0200
+
+secubox-webos (1.0.178-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1242): cartes cumulatives de SERVICES en mode « embed » — plus d'en-tete
+    cumul qui doublait/decalait : la carte affiche l'en-tete PROPRE du cardlet
+    embarque, avec juste une pastille de rotation flottante (coin bas-droite).
+  * fix(#1242): les LIENS des cardlets embarques redeviennent cliquables — un
+    sbx:'ouvre' (id de service masque, rejete par le controle du Hall) est
+    converti en sbx:'ouvre-hote' (ouverture par hote).
+  * fix(#1242): la rotation s'arrete tant que le pointeur est sur la carte (y
+    compris l'iframe embarquee) et reprend en sortant — ecoute sur #mw et non
+    document (qui reprenait des l'entree dans l'iframe imbriquee).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 12:20:00 +0200
+
+secubox-webos (1.0.177-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1242): les cartes individuelles des services PORTES par une carte
+    cumulative (bbs, nextcloud, photoprism, mastodon, billets, depot,
+    socialrelay, mail, ytsas, torrent) sont masquees de la mosaique — plus de
+    doublon. Registre et menu lateral les gardent (aucun acces perdu).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 11:10:00 +0200
+
+secubox-webos (1.0.176-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1266b): classement a TROIS etages de la mosaique — services qui
+    MARCHENT en haut, ceux qui EXIGENT une authentification (data-auth, pas
+    encore ouverts) au milieu (a peine estompes), ceux en ERREUR (hors
+    ligne/degrade) tout en bas (grises). Ne trompe plus le visiteur sur l'etat
+    reel du parc.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 10:20:00 +0200
+
+secubox-webos (1.0.175-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1266b): une carte dont le service est HORS LIGNE ou DEGRADE descend en
+    bas de la mosaique et se grise (declasseErreurs) — un visiteur ne doit pas
+    tomber d'abord sur un service en panne. Applique apres tout classement.
+  * feat(#1242): cartes cumulatives de services — la couche EMBARQUE la carte
+    reelle (quick.html/delegue/micro) avec INGESTION de son en-tete (crop) pour
+    ne pas le dupliquer, + relais des actions (ouvre/surf/valider) vers le Hall
+    et transmission du theme. Contenu embarque desormais quick.html (boutons,
+    depot, capture — plus un simple resume).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 10:00:00 +0200
+
+secubox-webos (1.0.174-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1242): 3 nouvelles cartes cumulatives — Cloud (Mail+Cloud+Photos),
+    Social (Mastodon+SocialRelay), Forums (BBS+Billets). Chaque couche EMBARQUE
+    la carte existante du service (delegue meme-origine, ou /micro), donc aucune
+    fonctionnalite perdue : la carte cumulative fait tourner les cartes reelles.
+    Cloud masquee pour les invites (services prives). Les cartes individuelles
+    restent en place le temps de valider les embeds (retrait ensuite).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 03:00:00 +0200
+
+secubox-webos (1.0.173-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1242): 2e carte cumulative « Contenu » — Depot + YTSaS + Torrent en
+    couches rotatives (compteur + derniers elements de chaque, via les listes
+    publiques /actions/<mod>/liste). Le pied suit la couche et ouvre le service
+    affiche (ouvre-hote). Generalisation du pilote Securite.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 01:35:00 +0200
+
+secubox-webos (1.0.172-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1243): couche Analyse — UNE ligne par campagne (signature, IP, 🔑 et une
+    sequence tronquee a l'horizontale qui deborde en fondu), fini le pave de
+    chemins detailles.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 01:10:00 +0200
+
+secubox-webos (1.0.171-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1236): viewer YouTube — l'embed youtube-nocookie ne joue plus (YouTube
+    bloque l'embarquement). On l'abandonne au profit du player SOUVERAIN d'ytsas
+    (rapatriement avec SES cookies Google) : lecture immediate si la capture est
+    en cache, sinon un ecran d'attente pendant le rapatriement (barre = %). Fini
+    l'iframe morte ; la lecture reste souveraine, sans pub ni Google.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 00:50:00 +0200
+
+secubox-webos (1.0.170-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240/#1243): carte Securite — couche Pare-feu enrichie de la LISTE d'IP
+    recentes (drapeau pays) comme /micro, + picto de TENDANCE du jour (▲/▼) sur
+    « menaces/j » (plus/moins qu'un jour normal a cette heure). Nouvelle 3e
+    couche ANALYSE : empreintes de workflow des campagnes (chemins raccourcis).
+    Backend : /public/cardlets/waf expose recent+trend_jour ; qui-frappe expose
+    la sequence par campagne.
+  * chore(#1242): retrait de la carte « Pare-feu » autonome, devenue obsolete
+    (la carte Securite la couvre).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Fri, 29 Aug 2026 00:15:00 +0200
+
+secubox-webos (1.0.169-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1242): couche Pare-feu de la carte Securite RENDUE NATIVEMENT (mêmes
+    chiffres via /cardlets/waf) au lieu d'embarquer le /micro — ce dernier
+    doublait l'entête et jurait de police. Un seul entête, MÊME grille/fonte que
+    la couche « Qui frappe ? ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 22:45:00 +0200
+
+secubox-webos (1.0.168-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1242): carte Securite — la couche « Pare-feu » embarque desormais le
+    /micro du WAF (MEME contenu que la carte Pare-feu autonome, qui pourra donc
+    etre retiree). Points de rotation deplaces en bas a droite (dans le pied).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 22:25:00 +0200
+
+secubox-webos (1.0.167-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1242): l'etoile « mise en favori » d'une carte est desormais cachee
+    hors survol MEME quand la carte est favorite (elle suivait un opacity:1
+    permanent, trop present). L'etat favori reste lisible au lisere violet ;
+    l'etoile violette reapparait au survol pour le retrait.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 22:05:00 +0200
+
+secubox-webos (1.0.166-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1242): carte cumulative « Sécurité » a couches ROTATIVES (pilote) —
+    cardlets/cumul.html?groupe=securite alterne Pare-feu (posture) et Qui
+    frappe ? (caracterisation), rendus depuis les sous-couches PUBLIQUES cote
+    serveur. Points de rotation cliquables, pause au survol,
+    prefers-reduced-motion respecte. Remplace la carte autonome « Qui frappe ? »
+    (fondue comme couche). Premiere instance du pattern #1242.
+  * fix(#1240): carte « Qui frappe ? » — le lien du pied ouvre le WAF EMBARQUE
+    (sbx:'ouvre') au lieu de target=_top qui emportait tout le Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 21:45:00 +0200
+
+secubox-webos (1.0.165-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1240): carte « Qui frappe ? » affichait « Session requise » a un
+    utilisateur pourtant connecte — l'etat connecte du Hall n'est PAS un JWT en
+    localStorage, or l'endpoint exigeait un Bearer. On passe a la MEME sous-couche
+    que la carte Pare-feu : endpoint PUBLIC /api/v1/webos/public/waf/qui-frappe,
+    lu cote serveur (agregat de posture, pas de donnee nominative), sans jeton
+    navigateur. La carte reste masquee pour un invite (data-auth).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 21:15:00 +0200
+
+secubox-webos (1.0.164-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1240): carte Hall « Qui frappe ? » — caracterisation d'attaquants.
+    Nouvelle cardlet (cardlets/quifrappe.html) + endpoint authed
+    /api/v1/webos/waf/qui-frappe lisant la synthese campaigns.json de sbxwaf
+    (attaquants, campagnes = meme workflow depuis plusieurs IP, sondes
+    haute-valeur secret/exec). Donnee de securite : session requise (Bearer) et
+    carte masquee pour un invite (auth:true -> data-auth). Lecture seule, cache
+    30 s ; complemente la carte Pare-feu (posture) sans la dupliquer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 28 Aug 2026 20:45:00 +0200
+
+secubox-webos (1.0.163-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1237): peertube — le lien du bas de la carte embarque desormais la
+    PAGE DU SERVICE peertube (site complet via openService), et non plus une
+    video seule : lire une video se fait deja en cliquant une vignette. Le pied
+    poste sbx:'ouvre' id:'peertube'. (La branche viewer estPeertube et le
+    handler sbx:'voir' restent, utiles aux URLs peertube externes/recherche.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 Aug 2026 17:05:00 +0200
+
+secubox-webos (1.0.162-1~bookworm1) bookworm; urgency=medium
+
+  * feat(#1237): carte ytsas — les captures EN CACHE LOCAL (complete/conservee)
+    deviennent des liens de lecture. Un clic ouvre le VIEWER TV sur le flux
+    SOUVERAIN /api/v1/ytsas/stream/<id> (sans pub, sans Google). Le viewer
+    reconnait ce flux (estFluxSouverain) et le joue directement en <video>
+    (« ✓ souverain »). ouvre() accepte un titre (fini l'URL brute en entete).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 Aug 2026 16:45:00 +0200
+
+secubox-webos (1.0.161-1~bookworm1) bookworm; urgency=medium
+
+  * fix(#1237): radio — arbitrage COLLANT vue pleine/carte. Une reprise
+    AUTOMATIQUE de la carte micro (bug connu du cardlet radio) est re-pausee
+    tant que la vue embarquee du meme service joue : la vue pleine reste seule
+    maitre du son (comportement unique, plus de play en doublons).
+  * feat(#1237): peertube — le lien du bas de la carte ouvre desormais la video
+    COURANTE dans le VIEWER (lecteur NATIF PeerTube embarque via /videos/embed)
+    au lieu de naviguer le Hall vers /. Nouveau handler sbx:'voir' + branche
+    estPeertube dans ouvre() (fini le fallback surf pour peertube).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 27 Aug 2026 16:20:00 +0200
+
 secubox-webos (1.0.160-1~bookworm1) bookworm; urgency=medium
 
   * feat: lecture PUBLIQUE des medias partages du parc (#1237) — depot, ytsas,

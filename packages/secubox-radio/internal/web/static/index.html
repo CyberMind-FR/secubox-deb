@@ -126,6 +126,20 @@
       membres peuvent la soutenir d'un ♥ — les plus soutenues remontent.</p>
   </section>
 
+  <!-- ═══ PROPOSER — VERSION MICRO (#1266) ═══════════════════════════════
+       La cardlet du rail n'a pas de place pour la carte « Proposer » entière
+       (en-tête + note). On donne quand même le geste : une saisie d'URL et un
+       bouton, en bas. Elle ne s'affiche QU'EN micro (le proposer plein, lui,
+       est data-mini-hide) — les deux ne coexistent jamais. Même chemin que la
+       carte pleine : proposeSource(). -->
+  <section class="carte proposer-micro">
+    <form class="rangee" id="proposer-mic">
+      <input id="source-mic" placeholder="Coller une URL YouTube pour proposer un titre…"
+             autocomplete="off" spellcheck="false">
+      <button class="btn primaire" type="submit" title="Proposer ce titre">➕</button>
+    </form>
+  </section>
+
 </div>
 <script src="/static/radio.js"></script>
 </body>

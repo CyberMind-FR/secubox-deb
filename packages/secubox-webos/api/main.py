@@ -216,6 +216,67 @@ async def cardlet_waf():
     return d
 
 
+# ── « QUI FRAPPE ? » — caractérisation d'attaquants (#1240) ──────────────────
+# La carte Pare-feu dit « suis-je couvert ». Celle-ci dit « QUI frappe, et
+# comment » : elle lit la synthèse de campagnes produite par sbxwaf --correlate
+# (secubox-waf-campaigns.timer -> campaigns.json, world-readable), enrichie de la
+# lecture « negative space » (recon / sondes haute-valeur). Lecture seule ; on ne
+# recopie pas la logique du WAF, on affiche ce qu'il a déjà corrélé.
+_WAF_CAMPAIGNS = Path("/var/cache/secubox/waf/campaigns.json")
+_qf = {"d": None, "t": 0.0}
+
+
+def _lire_qui_frappe() -> dict:
+    """Résume campaigns.json pour la carte. Toute panne -> carte vide, jamais 500."""
+    try:
+        raw = json.loads(_WAF_CAMPAIGNS.read_text())
+    except Exception:
+        return {"ok": False, "attaquants": 0, "campagnes_total": 0,
+                "haute_valeur": 0, "campagnes": []}
+    camps = raw.get("campagnes") or []
+    # On met en TÊTE ce qui vise des secrets (haute valeur), pas le plus bruyant :
+    # un balayage de 10 000 sondes sans valeur intéresse moins qu'une campagne de
+    # 12 IP qui cherche des `.env`. À valeur égale, le volume départage.
+    top = sorted(camps, key=lambda c: (int(c.get("haute_valeur", 0) or 0),
+                                       int(c.get("sondes", 0) or 0)), reverse=True)[:5]
+
+    def norm(c: dict) -> dict:
+        return {
+            "signature": (c.get("signature") or "")[:8],
+            "outil": c.get("outil") or "",
+            "attaquants": len(c.get("attaquants") or []),
+            "sondes": int(c.get("sondes", 0) or 0),
+            "haute_valeur": int(c.get("haute_valeur", 0) or 0),
+            # #1243 : la sequence de sondes = empreinte de workflow (couche analyse).
+            "sequence": (c.get("exemple_sequence") or [])[:8],
+        }
+
+    return {
+        "ok": True,
+        "attaquants": int(raw.get("attaquants", 0) or 0),
+        "campagnes_total": len(camps),
+        "haute_valeur": sum(int(c.get("haute_valeur", 0) or 0) for c in camps),
+        "campagnes": [norm(c) for c in top],
+    }
+
+
+@public_router.get("/waf/qui-frappe")
+async def waf_qui_frappe():
+    """Caractérisation d'attaquants — MÊME sous-couche que la carte Pare-feu
+    (#1240). Lecture SERVEUR de campaigns.json (agrégat de posture : compteurs de
+    campagnes, pas de donnée nominative), sans jeton navigateur — car l'état
+    « connecté » du Hall n'est pas un JWT en localStorage, et exiger un Bearer
+    affichait « Session requise » à un utilisateur pourtant connecté. La carte
+    reste masquée pour un invité (data-auth) ; ce endpoint ne fait que la remplir
+    quand elle est visible, exactement comme /public/cardlets/waf."""
+    now = time.time()
+    if _qf["d"] and now - _qf["t"] < 30:
+        return _qf["d"]
+    d = await asyncio.to_thread(_lire_qui_frappe)
+    _qf["d"], _qf["t"] = d, now
+    return d
+
+
 _pc = {"d": None, "t": 0.0}
 
 

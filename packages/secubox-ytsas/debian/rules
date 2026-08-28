@@ -41,6 +41,7 @@ override_dh_auto_install:
 	# job holds the PeerTube creds (via peertubectl) and does the upload.
 	install -d debian/secubox-ytsas/usr/sbin
 	install -m 755 sbin/secubox-ytsas-conserve debian/secubox-ytsas/usr/sbin/secubox-ytsas-conserve
+	install -m 755 sbin/secubox-ytsas-billet debian/secubox-ytsas/usr/sbin/secubox-ytsas-billet
 	install -d debian/secubox-ytsas/usr/lib/systemd/system
 	install -m 644 systemd/secubox-ytsas-conserve.service debian/secubox-ytsas/usr/lib/systemd/system/
 	install -m 644 systemd/secubox-ytsas-conserve.timer debian/secubox-ytsas/usr/lib/systemd/system/
