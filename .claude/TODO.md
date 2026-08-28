@@ -6,7 +6,36 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-08-26 (soir)*
+*Mis à jour : 2026-08-28*
+
+---
+
+## 2026-08-28 — WAF anti-FP + routes, unification média, polish Hall (#1266)
+
+### ✅ Fait — déployé sur gk2
+
+- [x] WAF : première partie jamais bannie en host-anomaly (`secubox-waf-ng` 1.7.6).
+- [x] WAF : 21 routes `nginx_vhosts` manquantes synchronisées ; `nextcloud.gk2.secubox.in`
+      câblé (alias nginx + route WAF). router-goform undrift (waf-rules 1.4.2).
+- [x] Surf/BiB : plus de JS cassé (corps `<script>` masqué pendant la réécriture).
+- [x] Unification média viewer ↔ barre ; radio détach → viewer mini ; radio muette
+      par défaut à la 1ʳᵉ visite.
+- [x] Polish Hall : ordre mosaïque, mégabar dédoublonnée, titre retiré, tranches de
+      cumul (ligne du bas partagée), radio/metanews cardlets.
+
+### 🔴 Reste (non résolu)
+
+- [ ] **Routes WAF — dérive** : vérifier que `haproxyctl generate` / wafgen ré-émet
+      les 22 routes ajoutées à la main (sinon perdues au prochain regen). Idéal :
+      les porter dans la source TOML/inventaire.
+- [ ] **Podcaster → zoom-viewer** : ajouter le champ `lecteur` à son annonce média
+      (comme radio) pour l'agrandir dans le viewer mini.
+- [ ] **Reprise vidéo horodatée** : peertube n'expose pas sa position → « déplacement »
+      seulement à la fermeture. Câbler l'API iframe PeerTube pour une reprise exacte.
+- [ ] **`torrent/etat` public** : exposer le résumé chiffré (comme `liste`) sinon la
+      carte torrent reste sans chiffres en invité (`action non autorisée`).
+- [ ] 4 vhosts test (`wiztest2/3`, `shiptest`, `mail.maegia.tv`, backend
+      `mitmproxy_inspector`) laissés hors routes WAF — à trancher.
 
 ---
 

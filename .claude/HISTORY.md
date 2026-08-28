@@ -11,6 +11,41 @@
 ---
 
 
+## 2026-08-28 — WAF anti-FP + routes, unification média, polish Hall
+
+**WAF — un vrai visiteur ne se fait plus bannir (#1266).** Cause : l'appli
+Nextcloud iOS sur `nextcloud.gk2.secubox.in` (non routé) → `host_anomaly:unrouted`
+→ ban de l'IP Free Mobile du téléphone → CGNAT : navigateur collatéral
+(`ERR_CONNECTION_ABORTED`). Correctif `secubox-waf-ng` 1.7.6 : `estPremierePartie()`
+— un Host sous nos suffixes (`--widget-hosts`, défaut incl. `gk2.net`) n'est jamais
+banni en host-anomaly (`detect`). IP Free Mobile débannies. **Fix all routes** :
+21 vhosts `nginx_vhosts` présents dans HAProxy mais absents du WAF json ajoutés
+(→ `192.168.1.200:9080`) ; `nextcloud.gk2.secubox.in` câblé (alias nginx +route WAF,
+WebDAV 401). router-goform (waf-rules 1.4.2) : alternance groupée, undrift.
+
+**Surf/BiB (`secubox-surf` 1.0.17).** `reecris_html` ne réécrit plus le CORPS des
+`<script>` (masqué puis restitué) : fin du `url("+x+")` cassé (« missing ) after
+argument list » sur Google).
+
+**Unification média viewer ↔ barre (#1266)** (`secubox-webos` 1.0.185/186,
+`secubox-radio` 0.1.57). Zoom d'un flux → promotion dans le viewer, instance
+unique. Radio → `/micro` en viewer mini « lecteur » (`data-embarque`, anti-doublon,
+un son, synchro) ; détach ⧉ → viewer mini ; pop-up mini = croix, pas de plein écran ;
+radio muette par défaut à la 1ʳᵉ visite. Vidéo (peertube) → viewer à la position,
+carte en vitrine. `faireZoom()` partagé.
+
+**Polish Hall.** Ordre mosaïque radio/metanews/podcaster/peertube ; titre
+« Services principaux » retiré ; mégabar dédoublonnée ; tranches de cumul avec
+ligne du bas partagée (URL/Ouvrir sur la ligne des points, `embed=1`) ; radio
+cardlet (Proposer ancré, titre 2 lignes, boîte agrandie, messages resserrés) ;
+metanews (auto-rotation ne parasite plus l'aperçu au survol).
+
+Versions : secubox-waf 1.10.25 · secubox-waf-ng 1.7.6 · secubox-webos 1.0.186 ·
+secubox-radio 0.1.57 · secubox-metanews 0.1.28 · secubox-surf 1.0.17.
+
+---
+
+
 ## 2026-08-26 (nuit) — Le BiB (Browser-in-Browser) + matrice SBXOS
 
 **BiB en ligne** (`secubox-surf`, hors inspection) : navigateur de relais

@@ -69,3 +69,17 @@ fait replier trois groupes qui auraient marche.
 Verifier QUEL paquet livre le binaire : `dpkg -S`. Les sources de `sbxwaf`
 vivent dans `secubox-toolbox-ng` mais c'est `secubox-waf-ng` qui l'installe.
 J'ai construit le mauvais paquet deux fois.
+
+## Un vrai visiteur voit `ERR_CONNECTION_ABORTED`
+
+Ce n'est pas un 403 WAF (qui donnerait une page « SECURITY ALERT ») : le
+`waf_ban` nft est un `drop` qui reset le TLS. L'IP est bannie. Le piege : un
+**hote a NOUS non route** (l'appli Nextcloud iOS sur `nextcloud.gk2.secubox.in`)
+classe `host_anomaly:unrouted` et bannit l'IP — et en **CGNAT mobile** (Free,
+Orange…) tous ceux qui partagent cette IP publique tombent avec. Depuis 1.7.6,
+un Host sous nos suffixes (`--widget-hosts`) n'est jamais banni (`detect`).
+Chercher le vrai coupable dans `waf-threats.log` par UA navigateur/appli, pas par
+IP. Voir aussi : notre domaine non route = **route WAF manquante**, pas une
+attaque — comparer `grep 'hdr(host) -i' /etc/haproxy/haproxy.cfg` aux cles de
+`/etc/secubox/waf/haproxy-routes.json` (l'autorite, hot-reload ; PAS le
+`/srv/mitmproxy` legacy vide).

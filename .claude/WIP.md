@@ -6,7 +6,68 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-26 (après-midi)*
+*Mis à jour : 2026-08-28*
+
+---
+
+
+## 2026-08-28 — WAF anti-FP, routes, unification média viewer/barre, polish Hall
+
+### ✅ Fait — déployé sur gk2
+
+**WAF — un vrai visiteur ne se fait plus bannir (#1266).**
+- **Première partie jamais bannie** (`secubox-waf-ng` 1.7.6) : un Host sous NOS
+  suffixes (`gk2.secubox.in`, `secubox.in`, `gk2.net`, …) non routé → `detect`,
+  jamais de ban. Cause vécue : l'appli Nextcloud iOS sur `nextcloud.gk2.secubox.in`
+  (non routé) faisait bannir l'IP **Free Mobile** du téléphone → en CGNAT le
+  navigateur tombait avec (`ERR_CONNECTION_ABORTED` sur hall.gk2.net).
+  `estPremierePartie()` + test. IP Free Mobile débannies (nft + `unban` persistant).
+- **Fix all WAF routes** : 21 vhosts `nginx_vhosts` présents dans HAProxy mais
+  absents de `/etc/secubox/waf/haproxy-routes.json` → ajoutés → `192.168.1.200:9080`
+  (pdf/hermes/osint/… servent en 200 au lieu d'être host-anomaliés).
+- **`nextcloud.gk2.secubox.in` câblé** : alias `server_name` nginx + route WAF →
+  WebDAV 401 (défi d'auth attendu) au lieu de 421. L'appli iOS marche telle quelle.
+- **router-goform** (waf-rules 1.4.2) : alternance groupée `/goform/.*(\$\(|`|;)`
+  (sans parenthèses, `;` matchait tout UA → tous les navigateurs bannis). Undrift.
+
+**Surf/BiB — plus de JS cassé (#1266).** `reecris_html` passait ses réécritures
+d'URL sur le CORPS des `<script>` : un `url("+x+")` concaténé cassait la page
+(« missing ) after argument list » sur Google). On masque le corps des scripts
+pendant la réécriture HTML puis on le restitue intact (`secubox-surf` 1.0.17).
+
+**Unification média viewer ↔ barre (#1266)** (`secubox-webos` 1.0.185, `secubox-radio` 0.1.57).
+- « Agrandir » un flux de la barre le PROMEUT dans le viewer, seule instance qui
+  joue (plus de doublon). Radio (service audio) → `/micro` embarqué en viewer MINI
+  « lecteur » (`data-embarque` → anti-doublon met la carte en pause, un seul son,
+  synchro) ; à la fermeture, main rendue à la carte. Vidéo (peertube) → viewer joue
+  à la position, carte en vitrine. `faireZoom()` partagé (pastille/bouton/`{sbx:'zoom'}`).
+- Détach radio ⧉ → viewer mini au lieu d'une fenêtre. Pop-up radio mini : croix,
+  pas de plein écran. Radio **muette par défaut à la 1ʳᵉ visite** (préf. retenue ensuite).
+
+**Polish Hall (#1266)** (`secubox-webos` 1.0.186).
+- Ordre par défaut mosaïque : radio, metanews, podcaster, peertube, puis le reste.
+- Titre « Services principaux / N services » retiré. Menu mégabar dédoublonné
+  (une entrée par destination).
+- Tranches de cumul : ligne du bas partagée — l'URL de la couche (torrent/depot/ytsas)
+  et le bouton « Ouvrir » (mail/cloud/photos/social) descendent sur la ligne des
+  points ; les cartes embarquées masquent leur propre chrome bas (`embed=1`).
+- Radio cardlet : barre « Proposer » ancrée en bas, titre borné 2 lignes (ellipse),
+  boîte agrandie, zone messages resserrée. MetaNews : l'auto-rotation ne parasite
+  plus l'aperçu manuel au survol (`mouseenter`/`leave` sur `.mw`, sans capture).
+
+Versions : secubox-waf 1.10.25 · secubox-waf-ng 1.7.6 · secubox-webos 1.0.186 ·
+secubox-radio 0.1.57 · secubox-metanews 0.1.28 · secubox-surf 1.0.17.
+
+### ⬜ Non résolu (reporté) — voir TODO
+- Générateur de routes WAF : vérifier que `haproxyctl generate` / wafgen ré-émet
+  les 22 routes ajoutées à la main (sinon dérive au prochain regen).
+- Podcaster pas encore câblé au zoom-viewer (pas de champ `lecteur`).
+- 4 vhosts test backend `mitmproxy_inspector` (wiztest2/3, shiptest, mail.maegia.tv)
+  laissés hors routes WAF volontairement.
+- Reprise vidéo horodatée à la fermeture (peertube n'expose pas sa position) —
+  « déplacement » seulement ; radio a la reprise complète.
+- Endpoint public `torrent/etat`/stats (le résumé chiffré de la carte torrent est
+  `action non autorisée` en invité ; la liste, elle, est publique).
 
 ---
 
