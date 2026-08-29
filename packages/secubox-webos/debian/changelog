@@ -1,3 +1,12 @@
+secubox-webos (1.0.200-1~bookworm1) bookworm; urgency=medium
+
+  * Aide du Hall refondue (#1370b) : remplace l'aide minimale par un CATALOGUE
+    DES CARTES (une ligne par cardlet, table CARDLETS_INFO), une section « prise
+    en main » et une FAQ depliante. Meme source que le README de secubox-webos
+    et la page wiki « Cartes du Hall ».
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 20:40:00 +0200
+
 secubox-webos (1.0.199-1~bookworm1) bookworm; urgency=medium
 
   * Viewer PERSISTANT au refresh (#1266b) : un viewer actif survit au

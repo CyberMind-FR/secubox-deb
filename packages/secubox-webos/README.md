@@ -26,6 +26,31 @@ disponible et bascule seul quand un service apprend à se résumer.
 | **Menu profil** | identités détectées (registre RGPD), thème, « ordre actuel = défaut », connexion SecuBox |
 | **Le BiB** | voir ci-dessous |
 
+## Les cartes du Hall
+
+Chaque carte est un aperçu **vivant** d'un service — elle ne peint rien qu'elle
+n'ait lu, de même origine que le Hall. Ce catalogue est aussi rendu dans la vue
+**Aide** du Hall et sur le [wiki](https://github.com/CyberMind-FR/secubox-deb/wiki/Cartes-du-Hall).
+
+| Carte | En une ligne |
+|---|---|
+| 🧭 **Surf & Viewer** | Rappel en slices : favoris (se partage / se répète), propositions au parc (se propose / se cumule ×N), liens collés. |
+| 🛰️ **DevWatch** | Pouls d'un dépôt GitHub en temps réel : cadence, flèches d'efficience, temps cumulé, coût, carbone, campagne, évolutions des versions. |
+| 📹 **PeerTube** | Dernières vidéos du catalogue, lecture souveraine en place, agrandissement dans le viewer. |
+| 🎙️ **Podcaster** | Abonnements, épisodes téléchargés localement, lecteur intégré qui reprend au refresh. |
+| 📻 **Radio** | Flux en direct, lecteur souverain qui suit le thème et l'état du Hall. |
+| 💬 **BBS** | Derniers fils et salons ; les liens média deviennent un objet souverain (voir / garder / diffuser). |
+| 🎟️ **Billets** | Dernières publications ; objet média embarqué, titre et détails enrichis. |
+| 🗞️ **MetaNews** | Topics clusterisés et leurs sources, ouverts en profondeur dans le Hall. |
+| 🌐 **Surf (BiB)** | Navigateur de relais : surfe une adresse à travers la box, pisteurs coupés, 🎬 pour rapatrier un média croisé. |
+| ✋ **Qui frappe ?** | Tentatives d'accès en cours vues par le WAF — donnée de sécurité, session requise. |
+| ☁️ **Délégués** | Cloud, Photos, Social, Mail : aperçu authentifié + validation d'accès souveraine. |
+| 📊 **Cumul (groupe)** | Carte de groupe : santé et activité d'un ensemble de services (sécurité, contenu, cloud…) d'un coup d'œil. |
+| ⚡ **Accès rapide** | Saut direct vers un service (Dépôt, YTSaS, Torrent) avec son état en direct. |
+
+> Source unique : la liste vit dans `www/hall/index.html` (`CARDLETS_INFO`), reprise
+> ici et dans le wiki. Mettre à jour les trois ensemble en ajoutant une carte.
+
 ## Le BiB — *Browser in Browser*
 
 Le **BiB** est le navigateur de relais **surf** de SBXOS. On tape une adresse
