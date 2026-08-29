@@ -1,3 +1,12 @@
+secubox-devwatch (1.0.7-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet /micro en TRANCHES (#1370) : trop riche pour tout montrer d'un coup,
+    la carte defile en 5 tranches — 🫀 pouls · ⏱️ effort · 🏷️ versions · 🧩 modules
+    · 💛 campagne — navigables par des PASTILLES colorees (vert/bleu/…) en bas,
+    cliquables et en rotation auto (suspendue au survol). charset utf-8 present.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 08:30:00 +0200
+
 secubox-devwatch (1.0.6-1~bookworm1) bookworm; urgency=medium
 
   * Correctif ENCODAGE du tableau de bord (#1370) : index.html n'avait pas de

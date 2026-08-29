@@ -3,88 +3,135 @@
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 
-  SecuBox #1370 — carte /micro DevWatch (le Hall).
+  SecuBox #1370 — carte /micro DevWatch, en SLICES.
 
-  Le service SERT SA PROPRE CARTE (règle SBXOS). Elle ne peint rien qu'elle
-  n'ait lu : /api/v1/devwatch/summary, de MÊME origine (relayé par la box). Sous
-  `connect-src 'self'`, aucun appel à GitHub depuis le navigateur — la sonde
-  serveur-à-serveur s'en charge, et personne n'apprend à GitHub qui regarde.
+  La carte est trop riche pour tout montrer d'un coup : elle défile en tranches
+  (pouls · effort · versions · modules · campagne), navigables par des pastilles
+  en bas — cliquables, et en rotation automatique (suspendue au survol).
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DevWatch — vue micro</title>
 <style>
   :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --border:#e2e6f0;
-         --border-soft:#eef1f7; --cyan:#0784a8; --up:#0f9d54; --gold:#b7810a; --sunk:#eef1f7; --surf2:#f5f7fc; }
+         --border-soft:#eef1f7; --cyan:#0784a8; --up:#0f9d54; --gold:#b7810a; --violet:#6b46c9;
+         --sunk:#eef1f7; --surf2:#f5f7fc; }
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
     --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --border:#232b3b;
-    --border-soft:#1b2230; --cyan:#28d6ff; --up:#35d07f; --gold:#f0b429; --sunk:#0c1017; --surf2:#10151f; } }
+    --border-soft:#1b2230; --cyan:#28d6ff; --up:#35d07f; --gold:#f0b429; --violet:#a98bff;
+    --sunk:#0c1017; --surf2:#10151f; } }
   :root[data-theme="dark"]{ --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --border:#232b3b;
-    --border-soft:#1b2230; --cyan:#28d6ff; --up:#35d07f; --gold:#f0b429; --sunk:#0c1017; --surf2:#10151f; }
+    --border-soft:#1b2230; --cyan:#28d6ff; --up:#35d07f; --gold:#f0b429; --violet:#a98bff; --sunk:#0c1017; --surf2:#10151f; }
   *{box-sizing:border-box}
-  html,body{margin:0; height:100%; overflow:hidden; scrollbar-width:none}
+  html,body{margin:0;height:100%;overflow:hidden;scrollbar-width:none}
   html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
-  body{background:var(--fond); color:var(--texte); font-family:"IBM Plex Sans",Inter,system-ui,sans-serif; font-size:14px}
-  .num{font-variant-numeric:tabular-nums; letter-spacing:-.01em}
-  .mw{display:flex; flex-direction:column; height:100%; padding:.6rem .7rem; gap:.4rem}
-  .h{display:flex; align-items:center; gap:7px}
-  .h .ic{font-size:1rem} .h b{font-size:.86rem; letter-spacing:-.01em}
-  .h .live{margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:.56rem;
-    letter-spacing:.09em; text-transform:uppercase; color:var(--up); font-weight:700}
-  .dot{width:6px; height:6px; border-radius:50%; background:var(--up); animation:p 2.2s ease-out infinite}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
+  .num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .7rem .45rem;gap:.35rem}
+  .head{flex:0 0 auto}
+  .h{display:flex;align-items:center;gap:7px}
+  .h .ic{font-size:1rem} .h b{font-size:.86rem;letter-spacing:-.01em}
+  .h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.56rem;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--up);font-weight:700}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--up);animation:p 2.2s ease-out infinite}
   @keyframes p{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 55%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
-  .repo{font-family:"IBM Plex Mono",monospace; font-size:.6rem; color:var(--faint); margin-top:-2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .hero{display:flex; align-items:flex-end; gap:9px; padding:6px 0 8px; border-bottom:1px solid var(--border-soft)}
-  .hero .v{font-weight:800; font-size:2rem; line-height:.9}
-  .hero .meta{display:flex; flex-direction:column; gap:1px; padding-bottom:3px}
-  .hero .meta .l{font-size:.6rem; color:var(--faint); text-transform:uppercase; letter-spacing:.07em; font-weight:600}
-  .hero .meta .t{font-family:"IBM Plex Mono",monospace; font-size:.66rem; font-weight:600; color:var(--up)}
-  .mini{display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; margin:8px 0}
-  .mini .m{background:var(--surf2); border-radius:8px; padding:6px 5px; text-align:center}
-  .mini .m .e{font-size:.82rem} .mini .m .n{font-weight:700; font-size:.78rem; margin-top:1px}
-  .mini .m .g{font-size:.5rem; color:var(--faint); text-transform:uppercase; letter-spacing:.04em}
-  .mevo{display:flex; align-items:flex-end; gap:3px; height:24px; padding:2px 0 3px; border-bottom:1px solid var(--border-soft)}
-  .mevo i{flex:1; min-width:3px; border-radius:2px 2px 0 0; background:var(--muted); opacity:.5; transition:opacity .15s}
-  .mevo i.major{background:var(--cyan); opacity:.85} .mevo i.minor{background:var(--gold); opacity:.7}
-  .mevo i.latest{opacity:1; outline:1px solid var(--cyan); outline-offset:1px}
-  .commit{display:flex; align-items:center; gap:6px; font-family:"IBM Plex Mono",monospace; font-size:.64rem;
-    padding:6px 0 7px; border-top:1px solid var(--border-soft); color:var(--muted)}
-  .commit .sha{color:var(--cyan); font-weight:600} .commit .msg{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0}
-  .loop{display:flex; align-items:center; gap:9px; padding:7px 0 2px; border-top:1px solid var(--border-soft)}
-  .ring{width:32px; height:32px; border-radius:50%; flex:0 0 auto; position:relative; display:grid; place-items:center;
-    background:conic-gradient(var(--gold) calc(var(--p,2)*1%), color-mix(in srgb,var(--gold) 16%,transparent) 0); animation:spin 8s linear infinite}
-  .ring::after{content:""; width:23px; height:23px; border-radius:50%; background:var(--fond)}
-  .ring i{position:absolute; font-style:normal; font-size:.6rem}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .loop .txt b{font-size:.78rem; font-weight:800; color:var(--gold)} .loop .txt small{display:block; font-size:.56rem; color:var(--faint)}
-  .mmods{display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; padding:6px 0 2px; border-top:1px solid var(--border-soft)}
-  .mmods::-webkit-scrollbar{display:none}
-  .mmods span{flex:0 0 auto; display:inline-flex; align-items:baseline; gap:4px; padding:2px 7px; border-radius:6px;
-    background:var(--surf2); font-size:.58rem}
-  .mmods span b{font-weight:700} .mmods span i{font-style:normal; font-family:"IBM Plex Mono",monospace; color:var(--cyan)}
-  .pied{margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem; border-top:1px solid var(--border);
-    font-size:.56rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); text-decoration:none; cursor:pointer; background:none; border-left:0; border-right:0; border-bottom:0; width:100%; text-align:left}
+  .repo{font-family:"IBM Plex Mono",monospace;font-size:.6rem;color:var(--faint);margin-top:-2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* SCÈNE — une tranche visible à la fois */
+  .stage{flex:1;min-height:0;position:relative;display:flex;align-items:center}
+  .slice{width:100%;display:flex;flex-direction:column;gap:.4rem;animation:fade .3s ease}
+  .slice[hidden]{display:none}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .slice-t{font-size:.56rem;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);font-weight:700}
+
+  .hero{display:flex;align-items:flex-end;gap:9px}
+  .hero .v{font-weight:800;font-size:2.4rem;line-height:.85}
+  .hero .meta .l{font-size:.62rem;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+  .hero .meta .t{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;color:var(--up);margin-top:2px}
+
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .card2{background:var(--surf2);border-radius:9px;padding:10px 9px;text-align:center}
+  .card2 .e{font-size:1rem} .card2 .n{font-weight:800;font-size:1.15rem;margin-top:2px}
+  .card2 .g{font-size:.54rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+
+  .rel-big{display:flex;align-items:baseline;gap:8px}
+  .rel-big .tag{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.1rem;color:var(--cyan)}
+  .rel-big .l{font-size:.58rem;color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
+  .mevo{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:2px}
+  .mevo i{flex:1;min-width:3px;border-radius:2px 2px 0 0;background:var(--muted);opacity:.5}
+  .mevo i.major{background:var(--cyan);opacity:.9} .mevo i.minor{background:var(--gold);opacity:.7}
+  .mevo i.latest{opacity:1;outline:1px solid var(--cyan);outline-offset:1px}
+
+  .mlist{display:flex;flex-direction:column;gap:3px}
+  .mlist-row{display:flex;align-items:baseline;gap:7px;font-size:.68rem}
+  .mlist-row b{font-weight:700;flex:0 0 auto} .mlist-row i{font-style:normal;font-family:"IBM Plex Mono",monospace;color:var(--cyan);font-weight:600;flex:0 0 auto}
+  .mlist-row s{text-decoration:none;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+  .loop{display:flex;align-items:center;gap:10px}
+  .ring{width:38px;height:38px;border-radius:50%;flex:0 0 auto;position:relative;display:grid;place-items:center;
+    background:conic-gradient(var(--gold) calc(var(--p,2)*1%), color-mix(in srgb,var(--gold) 16%,transparent) 0)}
+  .ring::after{content:"";width:28px;height:28px;border-radius:50%;background:var(--fond)}
+  .ring i{position:absolute;font-style:normal;font-size:.7rem}
+  .loop .txt b{font-size:1rem;font-weight:800;color:var(--gold)} .loop .txt small{display:block;font-size:.58rem;color:var(--faint);margin-top:1px}
+  .commit{display:flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace;font-size:.63rem;color:var(--muted);margin-top:2px}
+  .commit .sha{color:var(--cyan);font-weight:600} .commit .msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+
+  /* PASTILLES DE NAVIGATION — gérer les tranches, en bas */
+  .dots{flex:0 0 auto;display:flex;justify-content:center;align-items:center;gap:6px;padding:5px 0 3px}
+  .dot-b{width:7px;height:7px;border-radius:50%;border:0;padding:0;cursor:pointer;
+    background:var(--c,var(--muted));opacity:.34;transition:opacity .2s ease,width .2s ease,border-radius .2s ease}
+  .dot-b:hover{opacity:.7}
+  .dot-b.on{opacity:1;width:17px;border-radius:4px}
+
+  .pied{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding-top:.25rem;border-top:1px solid var(--border);
+    font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-decoration:none;cursor:pointer;
+    background:none;border-left:0;border-right:0;border-bottom:0;width:100%;text-align:left}
   .pied:hover{color:var(--cyan)} .pied .grow{flex:1}
-  @media (prefers-reduced-motion: reduce){ .dot,.ring{animation:none} }
+  @media (prefers-reduced-motion: reduce){ .dot,.slice{animation:none} }
 </style>
 
 <div class="mw">
-  <div>
+  <div class="head">
     <div class="h"><span class="ic">🛰️</span><b>DevWatch</b><span class="live"><span class="dot"></span>direct</span></div>
     <div class="repo" id="repo">…</div>
   </div>
-  <div class="hero"><span class="v num" id="today">—</span>
-    <div class="meta"><span class="l">commits aujourd’hui</span><span class="t" id="trend"></span></div></div>
-  <div class="mini">
-    <div class="m"><div class="e">⏱️</div><div class="n num" id="hours">—</div><div class="g">cumulé</div></div>
-    <div class="m"><div class="e">🏷️</div><div class="n" id="rel">—</div><div class="g">release</div></div>
-    <div class="m"><div class="e">🌱</div><div class="n num" id="co2">—</div><div class="g">CO₂e</div></div>
+
+  <div class="stage" id="stage">
+    <!-- 0 · POULS -->
+    <section class="slice" data-s="0">
+      <div class="slice-t">🫀 Pouls</div>
+      <div class="hero"><span class="v num" id="today">—</span>
+        <div class="meta"><span class="l">commits aujourd'hui</span><span class="t" id="trend"></span></div></div>
+    </section>
+    <!-- 1 · EFFORT -->
+    <section class="slice" data-s="1" hidden>
+      <div class="slice-t">⏱️ Effort cumulé <span style="color:var(--faint)">· estimation</span></div>
+      <div class="duo">
+        <div class="card2"><div class="e">⏱️</div><div class="n num" id="hours">—</div><div class="g">temps cumulé</div></div>
+        <div class="card2"><div class="e">🌱</div><div class="n num" id="co2">—</div><div class="g">CO₂e</div></div>
+      </div>
+    </section>
+    <!-- 2 · VERSIONS -->
+    <section class="slice" data-s="2" hidden>
+      <div class="slice-t">🏷️ Versions</div>
+      <div class="rel-big"><span class="tag" id="rel">—</span><span class="l">dernière release</span></div>
+      <div class="mevo" id="mevo" title="Évolution des versions"></div>
+    </section>
+    <!-- 3 · MODULES -->
+    <section class="slice" data-s="3" hidden>
+      <div class="slice-t">🧩 Modules · dernières révisions</div>
+      <div class="mlist" id="mmods"></div>
+    </section>
+    <!-- 4 · CAMPAGNE -->
+    <section class="slice" data-s="4" hidden>
+      <div class="slice-t">💛 Campagne perpétuelle</div>
+      <div class="loop"><div class="ring" id="ring"><i>💶</i></div>
+        <div class="txt"><b id="pct">—</b><small id="fund"></small></div></div>
+      <div class="commit" id="commit" hidden><span class="sha" id="csha"></span><span class="msg" id="cmsg"></span></div>
+    </section>
   </div>
-  <div class="mevo" id="mevo" title="Évolution des versions"></div>
-  <div class="commit" id="commit" hidden><span class="sha" id="csha"></span><span class="msg" id="cmsg"></span></div>
-  <div class="loop"><div class="ring" id="ring"><i>💶</i></div>
-    <div class="txt"><b id="pct">—</b><small id="fund"></small></div></div>
-  <div class="mmods" id="mmods" title="Dernières révisions des modules"></div>
+
+  <div class="dots" id="dots" role="tablist" aria-label="Tranches"></div>
   <button class="pied" id="pied" type="button"><span class="grow">le suivi complet</span><span id="quota"></span> ↗</button>
 </div>
 
@@ -105,33 +152,53 @@
     el('hours').textContent=n((e.time||{}).hours)+' h';
     el('rel').textContent=esc(r?r.tag:'—');
     el('co2').textContent=((e.carbon||{}).co2_t!=null?nf.format(e.carbon.co2_t):'—')+' t';
-    // Mini bargraphe d'évolution des versions (dernières releases).
-    var ev=(s.evolutions||[]).slice(-9);
-    el('mevo').innerHTML = ev.map(function(x){
-      var h=Math.max(20,(x.weight||26))+'%';
-      var cls=(x.type==='major'?'major':x.type==='minor'?'minor':'')+(x.latest?' latest':'');
-      return '<i class="'+cls.trim()+'" style="height:'+h+'" title="'+esc(x.tag||'')+'"></i>';
-    }).join('');
     if(lc){ el('csha').textContent=lc.sha; el('cmsg').textContent=lc.message; el('commit').hidden=false; }
     var pct=Math.max(0,Math.min(100,f.pct||0));
     el('ring').style.setProperty('--p', Math.max(2,pct));
     el('pct').textContent=n(pct)+' %'; el('pct').style.color=f.seeking?'var(--gold)':'';
     el('fund').textContent='campagne · '+n(f.sponsor_recu)+' € / '+n(f.depenses_cumulees)+' €'+(f.seeking?' · sponsor ?':'');
     var m=s.meta||{}; el('quota').textContent = m.rate_left!=null?('quota '+m.rate_left):'';
-    // Derniers modules révisés (name vX), du plus récent.
+    // évolution des versions (mini-barres)
+    var ev=(s.evolutions||[]).slice(-9);
+    el('mevo').innerHTML = ev.map(function(x){
+      var h=Math.max(20,(x.weight||26))+'%';
+      var cls=(x.type==='major'?'major':x.type==='minor'?'minor':'')+(x.latest?' latest':'');
+      return '<i class="'+cls.trim()+'" style="height:'+h+'" title="'+esc(x.tag||'')+'"></i>';
+    }).join('');
+    // modules récents (liste)
     var mods=(s.modules&&s.modules.modules)||[];
-    el('mmods').innerHTML = mods.slice(0,7).map(function(x){
-      return '<span title="'+esc(x.dev||'')+'"><b>'+esc(x.name)+'</b><i>'+esc(x.version)+'</i></span>';
+    el('mmods').innerHTML = mods.slice(0,6).map(function(x){
+      return '<div class="mlist-row"><b>'+esc(x.name)+'</b><i>'+esc(x.version)+'</i><s>'+esc(x.dev||'')+'</s></div>';
     }).join('');
   }
+
+  // ── CARROUSEL DE TRANCHES + PASTILLES ────────────────────────────────────
+  var slices=[].slice.call(document.querySelectorAll('.slice'));
+  var COL=['var(--up)','var(--cyan)','var(--violet)','var(--cyan)','var(--gold)'];  // vert · bleu · …
+  var cur=0, auto=null, pause=false;
+  function dots(){
+    el('dots').innerHTML=slices.map(function(_,i){
+      return '<button class="dot-b'+(i===cur?' on':'')+'" data-s="'+i+'" role="tab" aria-selected="'+(i===cur)+'" style="--c:'+COL[i%COL.length]+'" aria-label="Tranche '+(i+1)+'"></button>';
+    }).join('');
+  }
+  function montre(i){
+    cur=(i%slices.length+slices.length)%slices.length;
+    slices.forEach(function(sl,k){ sl.hidden = k!==cur; });
+    dots();
+  }
+  function relance(){ if(auto) clearInterval(auto); auto=setInterval(function(){ if(!pause) montre(cur+1); }, 5200); }
+  el('dots').addEventListener('click', function(ev){ var b=ev.target.closest('[data-s]'); if(b){ montre(+b.dataset.s); relance(); } });
+  var mw=document.querySelector('.mw');
+  mw.addEventListener('mouseenter', function(){ pause=true; });
+  mw.addEventListener('mouseleave', function(){ pause=false; });
+  montre(0); relance();
+
   function charge(){
     fetch(API+'/summary',{headers:{'Accept':'application/json'}})
       .then(function(r){return r.ok?r.json():null;}).then(function(s){ if(s) render(s); }).catch(function(){});
   }
   charge(); setInterval(charge, 120000);
 
-  // Clic : ouvrir le suivi complet. Embarqué -> on demande au Hall (sbx:'ouvre');
-  // autonome -> navigation directe vers le tableau de bord.
   el('pied').addEventListener('click', function(){
     if(parent!==window){ try{ parent.postMessage({sbx:'ouvre', id:'devwatch'}, '*'); return; }catch(e){} }
     location.href='/devwatch/';
