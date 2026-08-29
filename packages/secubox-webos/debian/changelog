@@ -1,3 +1,14 @@
+secubox-webos (1.0.205-1~bookworm1) bookworm; urgency=medium
+
+  * Play SOUVERAIN d'une video en MIROIR (#1237) : lanceSas recevait
+    state=mirror + peertube_url mais ne posait qu'un libelle « miroir » sans rien
+    lire — « pas de play souverain », « le lien sbx n'est pas peertube ». On JOUE
+    desormais le lecteur natif PeerTube (helper jouePeertube, reprise &start),
+    partage avec la branche PeerTube directe. La branche cache passe aussi la
+    position (departVoulu). Controles play/stop natifs de l'iframe/video.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 09:10:00 +0200
+
 secubox-webos (1.0.204-1~bookworm1) bookworm; urgency=medium
 
   * Carte DevWatch h 250 -> 288 pour loger la strip des dernieres revisions de

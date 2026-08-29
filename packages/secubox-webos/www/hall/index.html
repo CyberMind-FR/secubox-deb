@@ -2382,14 +2382,40 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // Google) puis la sert en cache local. On lit d'abord en nocookie (immediat),
   // et des que le sas a fini, on BASCULE sur le flux souverain. La barre montre
   // la progression du rapatriement.
+  // JOUE LE MIROIR PEERTUBE (#1237). Le lecteur NATIF de PeerTube lit ses formats,
+  // sous-titres et P2P. On dérive l'embed depuis /w/ ou /videos/watch/ (ou on
+  // garde une URL /videos/embed/ déjà prête), avec reprise (&start). C'est LE play
+  // souverain d'une vidéo déjà rapatriée sur notre instance.
+  function jouePeertube(u, depart){
+    var pu=u;
+    try{
+      var U=new URL(u, location.origin);
+      if(U.pathname.indexOf('/videos/embed/')<0){
+        var m=U.pathname.match(/\/(?:w|videos\/watch)\/([^/?#]+)/);
+        if(m) pu=U.origin+'/videos/embed/'+encodeURIComponent(m[1]);
+      }
+      pu += (pu.indexOf('?')<0?'?':'&')
+        + 'api=1&autoplay=1&title=0&warningTitle=0&peertubeLink=0'
+        + ((depart&&depart>2) ? '&start='+Math.floor(depart)+'s' : '');
+    }catch(e){}
+    var pf=document.createElement('iframe');
+    pf.className='sbx-embed';
+    pf.src=pu; pf.setAttribute('allow','autoplay; fullscreen'); pf.setAttribute('allowfullscreen','');
+    media.innerHTML=''; media.appendChild(pf);
+    pose('✓ souverain','▶','✓ PeerTube',100);
+  }
+
   function lanceSas(url, id){
     if(ivSas){ clearInterval(ivSas); ivSas=null; }
     pose('sas… 0%','▶','—',0);
     fetch('/api/v1/ytsas/resolve?url='+encodeURIComponent(url),{headers:{'Accept':'application/json'}})
       .then(function(r){ return r.json(); }).then(function(d){
         if(!d) return; vid=d.video_id||id;
-        if(d.state==='mirror' && d.peertube_url){ pose('miroir','▶','✓ PeerTube',100); }
-        else if(d.state==='cache' && d.stream_url){ flux(d.stream_url); }
+        // MIROIR : la vidéo vit déjà sur NOTRE PeerTube -> on JOUE le lecteur
+        // natif (avant, on ne posait qu'un libellé « miroir » sans rien lire —
+        // « pas de play souverain », « le lien sbx n'est pas peertube »).
+        if(d.state==='mirror' && d.peertube_url){ jouePeertube(d.peertube_url, departVoulu); }
+        else if(d.state==='cache' && d.stream_url){ flux(d.stream_url, null, departVoulu); }
         else { sondeSas(); ivSas=setInterval(sondeSas, 3000); }
       }).catch(function(){});
   }
@@ -2464,21 +2490,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       v.addEventListener('timeupdate',maj); v.addEventListener('progress',maj);
       v.addEventListener('durationchange',maj); v.addEventListener('loadedmetadata',maj);
     } else if(estPeertube(url)){
-      // PEERTUBE EMBARQUE (#1237). On ne passe plus par le surf : le lecteur
-      // NATIF de PeerTube sait lire ses formats, ses sous-titres et son P2P.
-      // On derive l'URL d'embed depuis l'URL de visionnage (/w/<id> ou
-      // /videos/watch/<id>) -> /videos/embed/<id>.
-      var pu=url;
-      try{
-        var U=new URL(url), m=U.pathname.match(/\/(?:w|videos\/watch)\/([^/?#]+)/);
-        if(m){ pu=U.origin+'/videos/embed/'+encodeURIComponent(m[1])
-          +'?api=1&autoplay=1&title=0&warningTitle=0&peertubeLink=0'
-          +(depart>2 ? '&start='+Math.floor(depart)+'s' : ''); }
-      }catch(e){}
-      var pf=document.createElement('iframe');
-      pf.src=pu; pf.setAttribute('allow','autoplay; fullscreen'); pf.setAttribute('allowfullscreen','');
-      media.appendChild(pf);
-      pose('embed','▶','peertube',0);
+      // PEERTUBE EMBARQUE (#1237) : lecteur natif via le même helper que le
+      // miroir souverain (dérive l'embed, reprend à &start).
+      jouePeertube(url, depart);
     } else {
       // Autre page media : on passe par le surf (origine par-site).
       if(typeof ouvreSurf==='function'){ ferme(); ouvreSurf(url); return; }
