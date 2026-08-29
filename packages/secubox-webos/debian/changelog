@@ -1,3 +1,13 @@
+secubox-webos (1.0.199-1~bookworm1) bookworm; urgency=medium
+
+  * Viewer PERSISTANT au refresh (#1266b) : un viewer actif survit au
+    rechargement de la page. On sauve l'URL, le titre, la position et l'etat
+    mini (toutes les 5 s + a la fermeture de page), et on rouvre au chargement
+    si c'est recent (<= 6 h). flux()/video directe se recalent a la seconde
+    sauvegardee ; PeerTube reprend via &start=. Fermer le viewer oublie l'etat.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 20:05:00 +0200
+
 secubox-webos (1.0.198-1~bookworm1) bookworm; urgency=medium
 
   * Correctif LIENS LOCAUX du rappel (#1266b) : un chemin relatif (/api/v1/…,

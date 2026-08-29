@@ -2237,7 +2237,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // PARESSEUSEMENT (au premier usage). Sinon l'IIFE sortait ici (elements null)
   // et n'exposait JAMAIS window.ouvreViewer/estMediaUrl -> la megabar retombait
   // sur ouvreSurf. C'etait le bug « ca part sur surf ».
-  var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false;
+  var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false, ivVue=null;
   // ZOOM D'UN FLUX DE LA BARRE (#1266). Quand on agrandit un flux du dock vers le
   // viewer, on retient l'id de la carte SOURCE : à la fermeture, on lui rend la
   // main (elle reprend là où elle jouait). Le flux ne joue jamais à deux endroits
@@ -2278,10 +2278,12 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       +'La lecture démarre dès qu\'elle est prête — une capture déjà en cache démarre tout de suite.</div>'
       +'</div>';
   }
-  function flux(src, mime){
+  function flux(src, mime, depart){
     var v=document.createElement('video');
     v.src=src; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
     media.innerHTML=''; media.appendChild(v);
+    // REPRISE AU REFRESH (#1266b) : on se recale à la seconde sauvegardée.
+    if(depart && depart>2){ v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=depart; }catch(e){} }, {once:true}); }
     function maj(){
       try{ var d=v.duration||0, cur=v.currentTime||0;
         pose('✓ souverain', fmtT(cur)+(d?' / '+fmtT(d):''), '✓ cache', d?Math.round(cur/d*100):0);
@@ -2350,7 +2352,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       // DEJA SOUVERAIN (#1237). La capture ytsas est en cache local : on la joue
       // directement, sans repasser par le sas ni par Google. La barre montre
       // « ✓ souverain ».
-      flux(url);
+      flux(url, null, depart);
     } else if(id){
       // PLUS DE NOCOOKIE (#1236). L'embed youtube-nocookie ne joue plus — YouTube
       // bloque l'embarquement. On s'appuie sur le player SOUVERAIN d'ytsas, qui
@@ -2363,6 +2365,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       var v=document.createElement('video');
       v.src=url; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
       media.appendChild(v);
+      if(depart && depart>2){ v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=depart; }catch(e){} }, {once:true}); }
       function maj(){
         try{ var d=v.duration||0, cur=v.currentTime||0, buf=0;
           if(v.buffered&&v.buffered.length) buf=v.buffered.end(v.buffered.length-1);
@@ -2395,8 +2398,38 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     ov.classList.remove('hidden');
     var mast=document.querySelector('.mast');
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
+    // PERSISTANCE (#1266b) : on retient CE qui joue, et on rafraîchit la position
+    // toutes les 5 s, pour rouvrir le viewer là où on en était après un refresh.
+    if(ivVue) clearInterval(ivVue); ivVue=setInterval(sauveVue,5000); sauveVue();
+  }
+  // ── VIEWER PERSISTANT AU REFRESH (#1266b) ────────────────────────────────
+  // Le viewer actif survit au rechargement : on sauve l'URL, le titre, la
+  // position et l'état mini ; on rouvre au chargement si c'est récent (≤ 6 h —
+  // au-delà c'est une nouvelle visite, pas un refresh).
+  var CLEF_VUE='sbx.viewer.actif';
+  function sauveVue(){
+    if(!courant) return;
+    try{
+      var v=media && media.querySelector('video');
+      localStorage.setItem(CLEF_VUE, JSON.stringify({
+        url:courant, titre:(titreEl&&titreEl.textContent)||'',
+        pos: v? Math.floor(v.currentTime||0):0,
+        mini: !!(ov&&ov.classList.contains('mini')),
+        t: Date.now()
+      }));
+    }catch(e){}
+  }
+  function oublieVue(){ try{ localStorage.removeItem(CLEF_VUE); }catch(e){} }
+  function reprendVue(){
+    var e=null; try{ e=JSON.parse(localStorage.getItem(CLEF_VUE)||'null'); }catch(x){}
+    if(!e||!e.url){ return; }
+    if((Date.now()-(e.t||0)) > 6*3600*1000){ oublieVue(); return; }
+    ouvre(e.url, e.titre, e.pos||0);
+    if(e.mini && ov){ ov.classList.add('mini');
+      var mb=document.getElementById('viewer-mini'); if(mb){ mb.textContent='▢'; mb.title='Plein cadre'; } }
   }
   function ferme(){ if(!ov) return; ov.classList.add('hidden'); media.innerHTML=''; courant=null; vid=null;
+    if(ivVue){ clearInterval(ivVue); ivVue=null; } oublieVue();
     if(ivSas){ clearInterval(ivSas); ivSas=null; }
     // RENDRE LA MAIN À LA CARTE SOURCE (#1266). Le lecteur du viewer (data-embarque)
     // vient d'être retiré ; sa carte d'origine était en pause (anti-doublon). On
@@ -2486,6 +2519,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       var mini=ov.classList.toggle('mini');
       this.textContent = mini ? '▢' : '⧉';
       this.title = mini ? 'Plein cadre' : 'Mini — regarder en naviguant';
+      sauveVue();   // l'état mini/plein fait partie de ce qu'on restaure
     });
     // BASE DU VIEWER (#1266b) : voir une URL (média → lecteur + capture ytsas
     // souveraine) ou surfer (page → BiB), + historique des liens vus, gardés le
@@ -2590,6 +2624,14 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){}
   }
   window.rendViewerDiffusions=diffRend;
+
+  // REPRISE DU VIEWER ACTIF au chargement (#1266b), et sauvegarde d'ultime
+  // position juste avant de quitter/rafraîchir la page.
+  function amorceReprise(){ setTimeout(reprendVue, 400); }
+  if(document.readyState==='loading') addEventListener('DOMContentLoaded', amorceReprise);
+  else amorceReprise();
+  addEventListener('beforeunload', function(){ try{ sauveVue(); }catch(e){} });
+  addEventListener('pagehide', function(){ try{ sauveVue(); }catch(e){} });
 })();
 
 // UN SERVICE EMBARQUE DEMANDE D'EN OUVRIR UN AUTRE, PAR SON HOTE (#1358). Le
