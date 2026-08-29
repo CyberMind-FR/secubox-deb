@@ -43,6 +43,10 @@
   .mini .m{background:var(--surf2); border-radius:8px; padding:6px 5px; text-align:center}
   .mini .m .e{font-size:.82rem} .mini .m .n{font-weight:700; font-size:.78rem; margin-top:1px}
   .mini .m .g{font-size:.5rem; color:var(--faint); text-transform:uppercase; letter-spacing:.04em}
+  .mevo{display:flex; align-items:flex-end; gap:3px; height:24px; padding:2px 0 3px; border-bottom:1px solid var(--border-soft)}
+  .mevo i{flex:1; min-width:3px; border-radius:2px 2px 0 0; background:var(--muted); opacity:.5; transition:opacity .15s}
+  .mevo i.major{background:var(--cyan); opacity:.85} .mevo i.minor{background:var(--gold); opacity:.7}
+  .mevo i.latest{opacity:1; outline:1px solid var(--cyan); outline-offset:1px}
   .commit{display:flex; align-items:center; gap:6px; font-family:"IBM Plex Mono",monospace; font-size:.64rem;
     padding:6px 0 7px; border-top:1px solid var(--border-soft); color:var(--muted)}
   .commit .sha{color:var(--cyan); font-weight:600} .commit .msg{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0}
@@ -71,6 +75,7 @@
     <div class="m"><div class="e">🏷️</div><div class="n" id="rel">—</div><div class="g">release</div></div>
     <div class="m"><div class="e">🌱</div><div class="n num" id="co2">—</div><div class="g">CO₂e</div></div>
   </div>
+  <div class="mevo" id="mevo" title="Évolution des versions"></div>
   <div class="commit" id="commit" hidden><span class="sha" id="csha"></span><span class="msg" id="cmsg"></span></div>
   <div class="loop"><div class="ring" id="ring"><i>💶</i></div>
     <div class="txt"><b id="pct">—</b><small id="fund"></small></div></div>
@@ -94,6 +99,13 @@
     el('hours').textContent=n((e.time||{}).hours)+' h';
     el('rel').textContent=esc(r?r.tag:'—');
     el('co2').textContent=((e.carbon||{}).co2_t!=null?nf.format(e.carbon.co2_t):'—')+' t';
+    // Mini bargraphe d'évolution des versions (dernières releases).
+    var ev=(s.evolutions||[]).slice(-9);
+    el('mevo').innerHTML = ev.map(function(x){
+      var h=Math.max(20,(x.weight||26))+'%';
+      var cls=(x.type==='major'?'major':x.type==='minor'?'minor':'')+(x.latest?' latest':'');
+      return '<i class="'+cls.trim()+'" style="height:'+h+'" title="'+esc(x.tag||'')+'"></i>';
+    }).join('');
     if(lc){ el('csha').textContent=lc.sha; el('cmsg').textContent=lc.message; el('commit').hidden=false; }
     var pct=Math.max(0,Math.min(100,f.pct||0));
     el('ring').style.setProperty('--p', Math.max(2,pct));

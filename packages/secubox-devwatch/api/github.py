@@ -188,14 +188,22 @@ class GitHub:
             else:
                 out["contributors"] = None
 
-            # 5) Releases (compte + dernière).
-            r = await self._get(cli, base + "/releases", per_page=5)
-            rel_count, latest_rel = None, None
+            # 5) Releases (compte + dernière + LISTE récente pour l'évolution).
+            r = await self._get(cli, base + "/releases", per_page=12)
+            rel_count, latest_rel, recent = None, None, []
             if r is not None and r.status_code == 200:
                 rel_count = _last_page(r)
                 arr = r.json()
                 if rel_count is None:
                     rel_count = len(arr)
+                for x in arr:
+                    recent.append({
+                        "tag": x.get("tag_name", ""),
+                        "name": x.get("name") or x.get("tag_name", ""),
+                        "published_at": x.get("published_at", ""),
+                        "url": x.get("html_url", ""),
+                        "prerelease": bool(x.get("prerelease")),
+                    })
                 if arr:
                     x = arr[0]
                     latest_rel = {
@@ -207,6 +215,7 @@ class GitHub:
                     }
             out["releases_total"] = rel_count
             out["latest_release"] = latest_rel
+            out["releases_recent"] = recent  # plus récente en tête
 
             # 6) Tags (compte).
             r = await self._get(cli, base + "/tags", per_page=1)

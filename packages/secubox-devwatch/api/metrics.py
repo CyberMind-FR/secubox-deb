@@ -20,8 +20,80 @@ Deux origines de données, jamais confondues :
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+# Poids d'IMPORTANCE par type de saut sémantique — pour la hauteur des barres.
+# Un majeur pèse ; un correctif de pré-version, peu. C'est ce qui « met en avant
+# les plus importants » sans rien inventer : le type se lit dans le tag.
+_POIDS = {"major": 100, "minor": 60, "patch": 34, "pre": 20, "?": 26}
+
+
+def _semver(tag: str):
+    """(major, minor, patch, prerelease?) depuis un tag — tolérant (v1.2.3-rc1)."""
+    t = re.sub(r"^[vV]", "", (tag or "").strip())
+    pre = "-" in t or bool(re.search(r"(alpha|beta|rc|dev|pre)", t, re.I))
+    core = t.split("-", 1)[0]
+    nums = []
+    for p in core.split(".")[:3]:
+        m = re.match(r"\d+", p)
+        nums.append(int(m.group()) if m else 0)
+    while len(nums) < 3:
+        nums.append(0)
+    return nums[0], nums[1], nums[2], pre
+
+
+def _saut(prev, cur) -> str:
+    """Type de saut entre deux versions (majeur/mineur/correctif)."""
+    if cur[3]:
+        return "pre"
+    if prev is None:
+        # Sans précédent : on déduit du niveau (x.0.0 = majeur, x.y.0 = mineur).
+        return "major" if cur[1] == 0 and cur[2] == 0 else "minor" if cur[2] == 0 else "patch"
+    if cur[0] > prev[0]:
+        return "major"
+    if cur[1] > prev[1]:
+        return "minor"
+    if cur[2] > prev[2]:
+        return "patch"
+    return "?"
+
+
+def evolutions(raw: dict) -> list:
+    """Évolution des VERSIONS pour le bargraphe comparatif (#1370).
+
+    Une barre par release récente, en ordre chronologique ; hauteur = importance
+    du saut sémantique ; écart en jours depuis la précédente ; la dernière et les
+    majeures sont marquées pour la mise en avant. Purement dérivé des tags/dates.
+    """
+    rec = list(raw.get("releases_recent") or [])
+    if not rec:
+        return []
+    # GitHub rend la plus récente en tête : on remet en ordre chronologique.
+    rec = list(reversed(rec))
+    out, prev_ver, prev_dt = [], None, None
+    for x in rec:
+        ver = _semver(x.get("tag", ""))
+        typ = _saut(prev_ver, ver)
+        dt = _iso(x.get("published_at", ""))
+        gap = None
+        if dt and prev_dt:
+            gap = max(0, round((dt - prev_dt).total_seconds() / 86400.0))
+        out.append({
+            "tag": x.get("tag", ""),
+            "name": x.get("name", ""),
+            "date": x.get("published_at", ""),
+            "url": x.get("url", ""),
+            "type": typ,
+            "weight": _POIDS.get(typ, 26),
+            "gap_days": gap,
+            "prerelease": x.get("prerelease", False),
+        })
+        prev_ver, prev_dt = ver, dt
+    if out:
+        out[-1]["latest"] = True
+    return out
 
 
 def _iso(s: str) -> Optional[datetime]:
@@ -189,6 +261,7 @@ def compute(raw: dict, cfg: dict, flows: dict) -> dict:
         "fund": fund,
         "latest_commits": raw.get("latest_commits", []),
         "latest_release": raw.get("latest_release"),
+        "evolutions": evolutions(raw),
         "issues": issues,
         "meta": {
             "fetched_at": raw.get("fetched_at"),

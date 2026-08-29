@@ -269,6 +269,14 @@ a{color:inherit}
 .wbar i{display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--cyan),color-mix(in srgb,var(--cyan) 55%,var(--violet)))}
 .wfoot{display:flex; align-items:center; justify-content:space-between; font-size:.66rem; color:var(--faint)}
 .wfoot .mono{font-size:.64rem}
+/* EVO — bargraphe comparatif des versions/releases */
+.evo{padding:18px; margin-bottom:26px}
+.evo-leg{display:flex; gap:11px; font-size:.62rem; color:var(--muted); flex-wrap:wrap}
+.evo-leg span{display:inline-flex; align-items:center; gap:4px}
+.evo-leg i{width:9px; height:9px; border-radius:2px; display:inline-block}
+.evo-graph{overflow-x:auto; scrollbar-width:thin}
+.evo-graph svg{display:block; height:auto; min-width:100%}
+.evo-graph .note{padding:8px 2px}
 
 .foot-note{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); font-size:.72rem; color:var(--faint);
   display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; text-align:center}
@@ -340,6 +348,11 @@ a.witem .wt{min-height:2.6em}
       </div>
       <p class="note">↑ rendu ~280 px, tel qu'il apparaîtrait dans le Hall</p>
     </div>
+  </section>
+
+  <section class="card evo">
+    <div class="sec-h"><span class="k">Évolutions · versions &amp; releases</span><span class="rule"></span><span class="evo-leg" id="evo-leg"></span></div>
+    <div class="evo-graph" id="evo-graph"></div>
   </section>
 
   <section class="card eman">
@@ -517,6 +530,47 @@ a.witem .wt{min-height:2.6em}
     }).join('');
   }
 
+  // ÉVOLUTIONS · bargraphe comparatif des versions/releases. Hauteur = importance
+  // du saut (majeur > mineur > correctif > pré) ; la dernière et les majeures
+  // sont mises en avant. Purement dérivé des tags/dates (aucune donnée inventée).
+  var EVO_COL={major:'var(--cyan)', minor:'var(--violet)', patch:'var(--muted)', pre:'var(--gold)', '?':'var(--muted)'};
+  var EVO_LAB={major:'majeur', minor:'mineur', patch:'correctif', pre:'pré-version'};
+  function evo(s){
+    var ev=s.evolutions||[]; var g=el('evo-graph'), leg=el('evo-leg');
+    if(!ev.length){ g.innerHTML='<div class="note">pas encore de release publiée</div>'; if(leg) leg.innerHTML=''; return; }
+    // Légende + comptes par type.
+    var cnt={}; ev.forEach(function(x){ cnt[x.type]=(cnt[x.type]||0)+1; });
+    if(leg) leg.innerHTML=['major','minor','patch','pre'].filter(function(k){return cnt[k];}).map(function(k){
+      return '<span><i style="background:'+EVO_COL[k]+'"></i>'+EVO_LAB[k]+' ('+cnt[k]+')</span>';
+    }).join('');
+    var step=Math.max(52, Math.min(96, 720/ev.length)), barW=Math.min(34, step*0.5);
+    var W=Math.max(600, Math.round(ev.length*step)), H=210, base=150, top=16;
+    var bars='';
+    ev.forEach(function(x,i){
+      var cx=Math.round(i*step+step/2), w=x.weight||26, h=Math.max(8, w/100*(base-top)), y=base-h;
+      var col=EVO_COL[x.type]||'var(--muted)', latest=!!x.latest;
+      // barre
+      bars+='<rect x="'+(cx-barW/2)+'" y="'+y.toFixed(1)+'" width="'+barW+'" height="'+h.toFixed(1)+'" rx="4" fill="'+col+'"'
+        + (latest? '' : ' opacity="'+(x.type==='patch'?0.55:x.type==='pre'?0.5:0.82)+'"')+'/>';
+      if(latest){
+        // mise en avant du DERNIER : halo + marqueur ▲ dernier
+        bars+='<rect x="'+(cx-barW/2-3)+'" y="'+(y-3).toFixed(1)+'" width="'+(barW+6)+'" height="'+(h+3).toFixed(1)+'" rx="6" fill="none" stroke="'+col+'" stroke-width="1.5" opacity="0.6"/>';
+        bars+='<text x="'+cx+'" y="'+(y-6).toFixed(1)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+col+'">▲ dernier</text>';
+      } else if(x.type==='major'){
+        bars+='<text x="'+cx+'" y="'+(y-5).toFixed(1)+'" text-anchor="middle" font-size="8.5" fill="'+col+'">majeur</text>';
+      } else if(x.gap_days!=null && x.gap_days>0){
+        bars+='<text x="'+cx+'" y="'+(y-5).toFixed(1)+'" text-anchor="middle" font-size="8" fill="var(--faint)">+'+x.gap_days+'j</text>';
+      }
+      // tag (tronqué), cliquable via <a>
+      var tag=esc(String(x.tag||'').replace(/^v/,'').slice(0,12));
+      bars+='<a href="'+esc(x.url)+'" target="_blank" rel="noopener">'
+        +'<text x="'+cx+'" y="'+(base+16)+'" text-anchor="middle" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="'+(latest?col:'var(--muted)')+'" font-weight="'+(latest?700:500)+'">'+tag+'</text></a>';
+    });
+    g.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Évolution des versions">'
+      +'<line x1="0" y1="'+base+'" x2="'+W+'" y2="'+base+'" stroke="var(--line)"/>'
+      +bars+'</svg>';
+  }
+
   function commits(s){
     var cs=s.latest_commits||[];
     if(!cs.length){ el('clist').innerHTML='<div class="note">pas de commit récent</div>'; return; }
@@ -569,7 +623,7 @@ a.witem .wt{min-height:2.6em}
     var full=(s.repo&&s.repo.full)||'—';
     el('repo-owner').textContent=(full.split('/')[0]||'')+'/';
     el('repo-name').textContent=full.split('/')[1]||'';
-    hero(s); cadence(s); eman(s); work(s); commits(s); release(s); miniCardlet(s);
+    hero(s); cadence(s); evo(s); eman(s); work(s); commits(s); release(s); miniCardlet(s);
     var m=s.meta||{};
     el('meta-note').textContent = m.rate_left!=null ? (' · quota GitHub '+m.rate_left) : '';
     if(m.error){ el('live-t').textContent='rafraîchi (quota bas)'; }

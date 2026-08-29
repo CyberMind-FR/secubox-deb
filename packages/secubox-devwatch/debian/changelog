@@ -1,3 +1,13 @@
+secubox-devwatch (1.0.3-1~bookworm1) bookworm; urgency=medium
+
+  * Slice Evolutions (#1370) : bargraphe comparatif des versions/releases. La
+    sonde rend la LISTE des releases recentes ; metrics en derive le type de saut
+    semantique (majeur/mineur/correctif/pre), un poids d'importance (hauteur de
+    barre), l'ecart en jours, et met en avant la DERNIERE + les majeures. Ajoute
+    au tableau de bord (grand bargraphe) et au cardlet /micro (mini-barres).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 19:10:00 +0200
+
 secubox-devwatch (1.0.2-1~bookworm1) bookworm; urgency=medium
 
   * Reprise cadence ECONOME (#1370) : quand /stats/commit_activity reste en 202
