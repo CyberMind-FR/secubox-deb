@@ -76,17 +76,18 @@
   .commit{display:flex;align-items:center;gap:6px;font-family:"IBM Plex Mono",monospace;font-size:.63rem;color:var(--muted);margin-top:2px}
   .commit .sha{color:var(--cyan);font-weight:600} .commit .msg{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 
-  /* PASTILLES DE NAVIGATION — gérer les tranches, en bas */
-  .dots{flex:0 0 auto;display:flex;justify-content:center;align-items:center;gap:6px;padding:5px 0 3px}
+  /* BARRE DU BAS : pastilles de navigation + « suivi complet » sur UNE ligne */
+  .footbar{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding-top:.3rem;border-top:1px solid var(--border)}
+  .dots{display:flex;align-items:center;gap:6px;flex:0 0 auto}
   .dot-b{width:7px;height:7px;border-radius:50%;border:0;padding:0;cursor:pointer;
     background:var(--c,var(--muted));opacity:.34;transition:opacity .2s ease,width .2s ease,border-radius .2s ease}
   .dot-b:hover{opacity:.7}
   .dot-b.on{opacity:1;width:17px;border-radius:4px}
 
-  .pied{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding-top:.25rem;border-top:1px solid var(--border);
+  .pied{flex:1;min-width:0;display:flex;align-items:center;gap:6px;
     font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-decoration:none;cursor:pointer;
-    background:none;border-left:0;border-right:0;border-bottom:0;width:100%;text-align:left}
-  .pied:hover{color:var(--cyan)} .pied .grow{flex:1}
+    background:none;border:0;padding:0;text-align:left}
+  .pied:hover{color:var(--cyan)} .pied .grow{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   @media (prefers-reduced-motion: reduce){ .dot,.slice{animation:none} }
 </style>
 
@@ -131,8 +132,10 @@
     </section>
   </div>
 
-  <div class="dots" id="dots" role="tablist" aria-label="Tranches"></div>
-  <button class="pied" id="pied" type="button"><span class="grow">le suivi complet</span><span id="quota"></span> ↗</button>
+  <div class="footbar">
+    <div class="dots" id="dots" role="tablist" aria-label="Tranches"></div>
+    <button class="pied" id="pied" type="button"><span class="grow">le suivi complet</span><span id="quota"></span> ↗</button>
+  </div>
 </div>
 
 <script>
