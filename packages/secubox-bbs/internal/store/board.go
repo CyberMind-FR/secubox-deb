@@ -374,6 +374,18 @@ func (s *Store) UpsertSourcedMedia(catID, authorID int64, title, body string,
 	return cree, maj, err
 }
 
+// PoserMediaFil attache un média jouable à un fil PAR SON ID (#1266b) — pour les
+// fils du content-spine (créés par NewThread, sans source/source_ref) : la liste
+// des dossiers montre alors la lecture/vignette au lieu d'un simple titre.
+func (s *Store) PoserMediaFil(topicID int64, media, kind string) error {
+	if media == "" {
+		return nil
+	}
+	_, err := s.db.Exec(`UPDATE threads SET media_url = ?, media_kind = ? WHERE id = ?`,
+		media, kind, topicID)
+	return err
+}
+
 func (s *Store) upsertSourced(catID, authorID int64, title, body string,
 	vis Visibility, source, ref string, date int64) (bool, bool, error) {
 

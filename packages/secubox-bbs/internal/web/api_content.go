@@ -206,10 +206,37 @@ func (s *Server) apiContentTopic(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(corps) == "" {
 		corps = id
 	}
+	// L'URL SOURCE DANS LE PREMIER MESSAGE (#1266b). Le rendu du BBS transforme
+	// une URL YouTube en OBJET MÉDIA (lecteur + escalade souveraine) : sans elle,
+	// le fil n'avait qu'un titre (souvent « yt:<id> »), aucune vidéo jouable. On
+	// normalise la clé interne « yt:<id> » en vraie URL de visionnage au passage.
+	mediaSrc := ""
+	if prov, e := s.st.ProvenanceDe(o.ID); e == nil {
+		for _, p := range prov {
+			src := strings.TrimSpace(p.SourceURL)
+			if !p.Original || src == "" {
+				continue
+			}
+			if v := strings.TrimPrefix(src, "yt:"); v != src {
+				src = "https://www.youtube.com/watch?v=" + v
+			}
+			mediaSrc = src
+			corps = strings.TrimSpace(o.Title) + "\n\n" + src
+			break
+		}
+	}
 	topicID, err := s.st.NewThread(cat, auteur, o.Title, corps, store.VisPublic)
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	// La LISTE des dossiers montre la lecture/vignette via media_url (#1266b).
+	if mediaSrc != "" {
+		kind := "video"
+		if o.Type == "audio" {
+			kind = "audio"
+		}
+		_ = s.st.PoserMediaFil(topicID, mediaSrc, kind)
 	}
 	if err := s.st.LierTopic(id, topicID); err != nil {
 		jsonErr(w, http.StatusInternalServerError, err.Error())

@@ -1,3 +1,19 @@
+secubox-bbs (0.30.38-1~bookworm1) bookworm; urgency=medium
+
+  * Fils de contenu : media_url posé sur le fil (#1266b) -> la LISTE des dossiers
+    montre la lecture/vignette au lieu d'un simple titre. PoserMediaFil(topicID).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 10:40:00 +0200
+
+secubox-bbs (0.30.37-1~bookworm1) bookworm; urgency=medium
+
+  * Fils de contenu (passerelle) : le PREMIER MESSAGE porte l'URL source (#1266b)
+    -> le rendu en fait un OBJET MEDIA (lecteur + escalade souveraine). Avant, un
+    fil issu d'une piste radio n'avait qu'un titre (souvent « yt:<id> »), aucune
+    video jouable. Normalisation « yt:<id> » -> URL de visionnage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 10:20:00 +0200
+
 secubox-bbs (0.30.36-1~bookworm1) bookworm; urgency=medium
 
   * Menu contextuel de la megabar (#1266b) : embarque dans le Hall, le BBS PUBLIE
