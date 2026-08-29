@@ -1,3 +1,13 @@
+secubox-webos (1.0.203-1~bookworm1) bookworm; urgency=medium
+
+  * Le logo revient a l'accueil EN DOUCEUR (#1266b) : il portait href="/", donc
+    un clic rechargeait la page — la barre media disparaissait et la video du
+    viewer (PeerTube, dont la position vit dans une iframe) repartait a zero. Il
+    bascule desormais la vue cote client ; ce qui joue continue de jouer. href
+    reste comme repli sans JS.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 22:10:00 +0200
+
 secubox-webos (1.0.202-1~bookworm1) bookworm; urgency=medium
 
   * Reprise viewer au refresh : la video YouTube reprenait a 0 (#1266b). Le

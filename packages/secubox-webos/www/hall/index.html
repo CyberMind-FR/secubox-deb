@@ -1657,6 +1657,22 @@ document.addEventListener('click',e=>{
     showView(nav.dataset.nav); setMenu(false); return; }
   const tv=e.target.closest('.mnav .it[data-view]'); if(tv){ showView(tv.dataset.view); return; }
 });
+// LE LOGO REVIENT À L'ACCUEIL EN DOUCEUR (#1266b). Il portait href="/", donc un
+// clic RECHARGEAIT la page : la barre média disparaissait et la vidéo du viewer
+// (PeerTube surtout, dont la position vit dans une iframe qu'on ne relit pas)
+// repartait à zéro. On bascule la vue côté client — ce qui joue continue de
+// jouer. href="/" reste comme repli sans JS / hors du Hall.
+(function(){
+  var logo=document.querySelector('.logo');
+  if(!logo) return;
+  logo.addEventListener('click', function(e){
+    if(e.metaKey||e.ctrlKey||e.shiftKey||e.button) return;   // ouvrir dans un onglet : on n'intercepte pas
+    e.preventDefault();
+    if(typeof fermeSurf==='function') fermeSurf();
+    if(typeof showView==='function') showView('accueil');
+    try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(_){ window.scrollTo(0,0); }
+  });
+})();
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') setMenu(false); });
 // ── JETON REÇU D'UN AUTRE DOMAINE (#1305) ──────────────────────────────────
 //
