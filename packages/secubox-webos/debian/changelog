@@ -1,3 +1,15 @@
+secubox-webos (1.0.198-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif LIENS LOCAUX du rappel (#1266b) : un chemin relatif (/api/v1/…,
+    /media/…) etait passe au surf qui le prefixait en 'https://<chemin>' — hote
+    vide, lien mort. voirOuSurfer garde desormais le relatif pour le viewer
+    (joue de meme origine) et ouvre un onglet local pour un non-media ;
+    ouvreSurf resout tout relatif sur l'origine de la box ; sbx:'voir' passe par
+    viewerVoir. Le cardlet Surf & Viewer donne un RETOUR visible a chaque clic
+    (proposition « ✓ propose au parc », lien « ▶ ouverture… »).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 19:40:00 +0200
+
 secubox-webos (1.0.197-1~bookworm1) bookworm; urgency=medium
 
   * Modele de rappel affine (#1266b) : diffuser = PROPOSER, et ca se CUMULE.

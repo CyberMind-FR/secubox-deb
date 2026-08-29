@@ -2069,6 +2069,11 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
 // servie par le Hall, meme origine — avec l'adresse en parametre ; c'est elle
 // qui fabrique l'origine par-site et cadre le relais.
 function ouvreSurf(url){
+  // GARDE LIEN LOCAL (#1266b) : un chemin relatif n'est pas une page à surfer —
+  // le préfixe 'https://' donnait un hôte vide. On le résout sur l'origine de la
+  // box pour au moins produire une URL valide (le viewer intercepte déjà les
+  // médias locaux en amont ; ici c'est un filet de sécurité).
+  if(url && String(url).charAt(0)==='/') url = location.origin + url;
   const th = root.getAttribute('data-theme')
     || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   const f = document.getElementById('surf-ov-f');
@@ -2506,6 +2511,17 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // Voir dans le lecteur si c'est un média (et le RAPATRIER, souverain), sinon
   // surfer la page dans le BiB. Le lien vu entre dans l'historique.
   function voirOuSurfer(u){
+    u=String(u||'').trim(); if(!u) return;
+    // LIEN LOCAL (#1266b) : un chemin relatif (/api/…, /media/…, /stream…) est une
+    // ressource DE LA BOX, pas une page externe. Le surf le préfixait en
+    // 'https://<chemin>' — hôte vide, lien mort. On le garde RELATIF pour le
+    // viewer (il joue de même origine : estFluxSouverain teste bien /api/v1/…),
+    // et pour un local non-média on ouvre un onglet sur l'origine de la box.
+    if(u.charAt(0)==='/'){
+      if(estMediaUrl(u)){ ouvre(u); histAjoute(u); }
+      else { try{ window.open(location.origin+u,'_blank','noopener'); }catch(e){ location.href=location.origin+u; } histAjoute(u); }
+      return;
+    }
     if(estMediaUrl(u)){ ouvre(u); histAjoute(u); capterYtsas(u); }
     else if(typeof ouvreSurf==='function'){ ouvreSurf(u); }
   }
@@ -2595,7 +2611,11 @@ addEventListener('message', ev=>{
   // VOIR : une cardlet demande d'ouvrir un media dans le VIEWER (peertube,
   // youtube, video directe). #1237 — le lien du bas de la carte peertube.
   if(d.sbx==='voir' && d.url){
-    if(typeof estMediaUrl==='function' && estMediaUrl(d.url) && typeof ouvreViewer==='function'){ ouvreViewer(d.url, d.titre); }
+    // Passe par viewerVoir (voirOuSurfer) : il gère les LIENS LOCAUX (#1266b) —
+    // média de la box joué de même origine, non-média local ouvert en onglet —
+    // là où ouvreSurf seul cassait sur un chemin relatif.
+    if(typeof window.viewerVoir==='function'){ window.viewerVoir(d.url); }
+    else if(typeof estMediaUrl==='function' && estMediaUrl(d.url) && typeof ouvreViewer==='function'){ ouvreViewer(d.url, d.titre); }
     else if(typeof ouvreSurf==='function'){ ouvreSurf(d.url); }
     return;
   }

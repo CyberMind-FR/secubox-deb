@@ -124,17 +124,26 @@
     el('vide').hidden = total>0;
   }
 
-  // Clics délégués sur les trois strips.
+  function flash(b, txt){
+    var old=b.innerHTML, oc=b.style.color;
+    b.textContent=txt; b.style.color='var(--up)';
+    setTimeout(function(){ if(b.innerHTML===''||b.textContent===txt){ b.innerHTML=old; b.style.color=oc; } }, 1100);
+  }
+  // Clics délégués sur les trois strips. Un clic donne toujours un RETOUR visible
+  // (sinon « le lien ne fait rien »). Les liens LOCAUX (/api/…, /media/…) sont
+  // résolus côté Hall par viewerVoir — plus de https://<chemin> mort.
   el('slices').addEventListener('click', function(e){
     var b=e.target.closest('[data-u]'); if(!b) return;
     var u=b.getAttribute('data-u'), act=b.getAttribute('data-act'), titre=b.getAttribute('data-titre')||'';
     if(act==='share'){
       try{ if(navigator.clipboard) navigator.clipboard.writeText(u); }catch(x){}
-      b.textContent='✓'; setTimeout(function(){ b.textContent='⤴'; }, 900);
+      b.textContent='✓ copié'; setTimeout(function(){ b.textContent='⤴'; }, 900);
     } else if(act==='diffuse'){
       post({sbx:'diffuser', url:u, titre:titre});   // le Hall re-diffuse ET cumule
+      flash(b, '✓ proposé au parc');
     } else {
       post({sbx:'voir', url:u, titre:titre});        // le Hall ouvre le viewer / surf
+      flash(b, '▶ ouverture…');
     }
   });
 
