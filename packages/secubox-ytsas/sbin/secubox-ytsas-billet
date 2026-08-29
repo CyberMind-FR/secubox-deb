@@ -22,6 +22,7 @@
 # des captures CONSERVEES (kept) et completes.
 
 import argparse
+import html
 import json
 import os
 import re
@@ -29,6 +30,7 @@ import secrets
 import sqlite3
 import subprocess
 import time
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 
@@ -63,6 +65,77 @@ def stream_url(vid: str) -> str:
     return f"{YTSAS_BASE}/api/v1/ytsas/stream/{vid}"
 
 
+def _ytid(u: str) -> str:
+    m = re.search(r"(?:v=|youtu\.be/|/embed/|/shorts/)([A-Za-z0-9_-]{6,})", u or "")
+    return m.group(1)[:11] if m else ""
+
+
+def _peertube_embed(u: str) -> str:
+    """Dérive l'URL d'INTÉGRATION PeerTube (/videos/embed/<id>) — les pages
+    /w/ et /videos/watch/ refusent le cadrage (X-Frame-Options)."""
+    for seg in ("/videos/watch/", "/w/"):
+        i = (u or "").find(seg)
+        if i >= 0:
+            return u[:i] + "/videos/embed/" + u[i + len(seg):]
+    return u or ""
+
+
+def _embed(source: str, peertube: str, vid: str):
+    """L'ITEM EMBARQUABLE SÛR (#1244) : le billet doit PORTER un lecteur, pas
+    seulement des liens en texte. PeerTube souverain si miroité, sinon
+    youtube-nocookie (première vue). Rend (embed_html, provider, embed_url)."""
+    if peertube:
+        return (
+            '<iframe class="sbx-embed" src="%s" allowfullscreen loading="lazy"></iframe>'
+            % html.escape(_peertube_embed(peertube)),
+            "peertube", peertube)
+    yid = _ytid(source) or (vid if re.fullmatch(r"[A-Za-z0-9_-]{6,}", vid or "") else "")
+    if yid:
+        return (
+            '<iframe class="sbx-embed" src="https://www.youtube-nocookie.com/embed/%s"'
+            ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope;'
+            ' picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin"'
+            ' allowfullscreen loading="lazy"></iframe>' % html.escape(yid),
+            "youtube", source or ("https://www.youtube.com/watch?v=" + yid))
+    return ("", "", peertube or source or "")
+
+
+def _fmt_duree(sec) -> str:
+    try:
+        s = int(sec)
+    except Exception:
+        return ""
+    if s <= 0:
+        return ""
+    h, r = divmod(s, 3600)
+    m, s = divmod(r, 60)
+    return (f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}")
+
+
+def _details_peertube(peertube_url: str) -> dict:
+    """DETAILS DU MEDIA DEPUIS PEERTUBE (#1244), source SOUVERAINE (box-interne,
+    aucun contact YouTube). Le billet est créé APRÈS le miroir : PeerTube porte
+    déjà titre, description, durée, chaîne. Best-effort : jamais d'échec dur."""
+    m = re.search(r"/(?:w|videos/watch)/([^/?#]+)", peertube_url or "")
+    if not m:
+        return {}
+    uuid = m.group(1)
+    origin = re.split(r"/(?:w|videos/watch)/", peertube_url, 1)[0]
+    try:
+        req = urllib.request.Request(
+            origin + "/api/v1/videos/" + urllib.parse.quote(uuid),
+            headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode("utf-8"))
+        return {
+            "description": (d.get("description") or "").strip(),
+            "duree": _fmt_duree(d.get("duration")),
+            "chaine": ((d.get("channel") or {}).get("displayName") or "").strip(),
+        }
+    except Exception:  # noqa: BLE001 — best-effort
+        return {}
+
+
 def _iso(unix) -> str:
     """Horodatage ISO depuis un unix ts (added_at) — pour dater le billet du
     moment de la CAPTURE, pas du backfill (sinon 91 billets tous a « maintenant »
@@ -87,9 +160,22 @@ def creer(vid, title, source, stream, peertube=None, quand=None) -> str:
         bid = _ulid()
         slug = _slug(title, bid[-6:].lower())
         titre = (title or "").strip().replace("\n", " ")
+        # DETAILS DU MEDIA (#1244), comme le podcaster : chaîne, durée, et la
+        # description — depuis PeerTube (souverain) quand la vidéo est miroitée.
+        det = _details_peertube(peertube) if peertube else {}
         # Le titre en 1re ligne : le billet n'a pas de colonne title, il derive de
-        # la premiere ligne du corps (cf. podcaster #1238d).
-        parts = [f"# {titre}\n\n" if titre else "", "\n---\n"]
+        # la premiere ligne du corps (cf. podcaster #1238d). La description suit.
+        parts = [f"# {titre}\n\n" if titre else ""]
+        if det.get("description"):
+            parts.append(det["description"][:4000] + "\n\n")
+        meta = []
+        if det.get("chaine"):
+            meta.append(f"👤 {det['chaine']}")
+        if det.get("duree"):
+            meta.append(f"⏱ {det['duree']}")
+        parts.append("\n---\n")
+        if meta:
+            parts.append("\n" + " · ".join(meta) + "\n")
         if source:
             parts.append(f"\n🎬 **Source :** {source}\n")
         if peertube:
@@ -97,10 +183,15 @@ def creer(vid, title, source, stream, peertube=None, quand=None) -> str:
         if stream:
             parts.append(f"\n▶ **Flux souverain (box) :** {stream}\n")
         body = "".join(parts)
+        # L'ITEM EMBARQUABLE (#1244) : le billet PORTE un lecteur (PeerTube souverain
+        # si miroité, sinon youtube-nocookie), pas seulement des liens texte.
+        emb_html, emb_provider, emb_url = _embed(source, peertube, vid)
         con.execute(
             "INSERT INTO billet(id,created_at,updated_at,published_at,body,ref_url,"
-            "embed_url,slug,status,style) VALUES(?,?,?,?,?,?,?,?, 'published','default')",
-            (bid, now, now, now, body, source or None, peertube or None, slug))
+            "embed_url,embed_html,embed_provider,slug,status,style) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?, 'published','default')",
+            (bid, now, now, now, body, source or None,
+             emb_url or None, emb_html or None, emb_provider or None, slug))
         con.commit()
         return "created:" + slug
     finally:

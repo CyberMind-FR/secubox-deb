@@ -1,3 +1,22 @@
+secubox-ytsas (0.2.7-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-ytsas-billet : DETAILS du media dans le billet (#1244), comme le
+    podcaster. Le billet est cree apres le miroir : on lit titre/description/
+    duree/chaine depuis l'API PeerTube (souveraine, box-interne, aucun contact
+    YouTube) et on les pose — description en tete, « 👤 chaine · ⏱ duree » sous
+    le trait. Best-effort : jamais d'echec dur si PeerTube ne repond pas.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 06:20:00 +0200
+
+secubox-ytsas (0.2.6-1~bookworm1) bookworm; urgency=medium
+
+  * secubox-ytsas-billet : le billet PORTE desormais un lecteur embarquable
+    (#1244/#1227) — PeerTube souverain si miroite, sinon youtube-nocookie. Pose
+    embed_url + embed_html + embed_provider (avant : seulement titre + liens
+    texte, aucun embed). Le billet montre donc la video, pas qu'un titre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 06:00:00 +0200
+
 secubox-ytsas (0.2.5-1~bookworm1) bookworm; urgency=medium
 
   * fix(#1244): le backfill --repair DATE chaque billet du moment de la CAPTURE
