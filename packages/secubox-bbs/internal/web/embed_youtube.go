@@ -8,6 +8,7 @@ package web
 import (
 	"html"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/CyberMind-FR/secubox-deb/secubox-bbs/internal/gateway"
@@ -46,9 +47,27 @@ func embedYouTubeURL(u string) (string, bool) {
 	if id == "" {
 		return "", false
 	}
-	return objetMedia(id,
+	return objetMedia(id, "", []string{u},
 		`<iframe class="sbx-embed sbx-embed-yt" src="https://www.youtube-nocookie.com/embed/`+
 			html.EscapeString(id)+`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`), true
+}
+
+// compteSources dédoublonne origine + répliques pour dire la RICHESSE de l'objet
+// (combien d'endroits connaissent ce média : l'original + ses miroirs/caches).
+// Le join reste par video_id ailleurs ; ici on ne fait que compter des adresses.
+func compteSources(sources []string, origine string) int {
+	vu := map[string]bool{}
+	ajoute := func(s string) {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			vu[s] = true
+		}
+	}
+	ajoute(origine)
+	for _, s := range sources {
+		ajoute(s)
+	}
+	return len(vu)
 }
 
 // objetMedia enveloppe un lecteur embarque en OBJET MEDIA (#1227). Un lien nu
@@ -63,15 +82,27 @@ func embedYouTubeURL(u string) (string, bool) {
 // parametre : embarque, la coquille BBS le route vers le Hall (sbx:ouvre-hote)
 // qui l'ouvre en place ; autonome, c'est un lien direct vers un service de la
 // box. On ne quitte jamais la matrice.
-func objetMedia(id, lecteur string) string {
-	watch := "https://www.youtube.com/watch?v=" + html.EscapeString(id)
-	ytsas := "https://ytsas.gk2.secubox.in/?src=" + url.QueryEscape(watch)
+func objetMedia(id, titre string, sources []string, lecteur string) string {
+	watchBrut := "https://www.youtube.com/watch?v=" + id // non-échappé : pour les URL
+	watch := html.EscapeString(watchBrut)
+	ytsas := "https://ytsas.gk2.secubox.in/?src=" + url.QueryEscape(watchBrut)
+	t := html.EscapeString(titre)
+	// Compte de sources : l'original + ses répliques (miroir/cache). >1 = l'objet
+	// vit à plusieurs endroits ; on le dit, discrètement.
+	src := ""
+	if n := compteSources(sources, watchBrut); n > 1 {
+		src = `<span class="mo-src" title="` + strconv.Itoa(n) + ` sources connues pour ce média">· ` + strconv.Itoa(n) + ` sources</span>`
+	}
 	return `<figure class="sbx-mediaobj" data-yt="` + html.EscapeString(id) + `">` +
 		`<div class="sbx-mediaobj-vue">` + lecteur + `</div>` +
 		`<figcaption class="sbx-mediaobj-bar">` +
-		`<span class="mo-id" title="Relayé à travers la box — pisteurs coupés">🛰️ relayé par la box</span>` +
-		`<a class="mo-act mo-ytsas" href="` + ytsas + `" title="Garder sur la box — version souveraine (ytsas)">⤓ souverain</a>` +
-		`<span class="mo-act mo-diff" title="Diffuser au parc — à venir (#1224)" aria-disabled="true">📡 diffuser</span>` +
+		`<span class="mo-id" title="Relayé à travers la box — pisteurs coupés">🛰️ relayé</span>` + src +
+		// ▢ voir : promotion dans le lecteur du Hall (souverain, re-résolu), instance unique.
+		`<a class="mo-act mo-voir" href="` + watch + `" data-voir data-titre="` + t + `" title="Voir en grand dans le lecteur du Hall (souverain)">▢ voir</a>` +
+		// ⤓ souverain : ouvre ytsas embarqué ET déclenche add+conserve ; l'objet montera de lui-même aux vues suivantes.
+		`<a class="mo-act mo-ytsas" href="` + ytsas + `" title="Garder sur la box — version souveraine (ytsas → PeerTube)">⤓ souverain</a>` +
+		// 📡 diffuser (#1224) : le média vu devient un flux diffusé au parc.
+		`<a class="mo-act mo-diff" href="` + watch + `" data-diff data-titre="` + t + `" title="Diffuser au parc (📡 direct)">📡 diffuser</a>` +
 		`</figcaption></figure>`
 }
 
@@ -79,7 +110,14 @@ func objetMedia(id, lecteur string) string {
 // l'upgrade côté serveur (Task 8) quand ytsas a répondu. mirror → PeerTube
 // (souverain) ; cache → <video> locale (souverain) ; sinon youtube-nocookie.
 func embedYouTube(c gateway.Contenu) string {
-	id := html.EscapeString(c.Metadonnees["video_id"])
+	rawID := c.Metadonnees["video_id"]
+	return objetMedia(rawID, c.Titre, sourcesDe(c), lecteurSelonEtat(c, html.EscapeString(rawID)))
+}
+
+// lecteurSelonEtat rend le LECTEUR nu selon l'état du tuyau souverain : mirror →
+// PeerTube, cache → <video> ytsas, sinon youtube-nocookie (première vue). Séparé
+// de l'enveloppe pour que l'objet média la porte de façon uniforme.
+func lecteurSelonEtat(c gateway.Contenu, id string) string {
 	switch c.Metadonnees["etat"] {
 	case "mirror":
 		for _, r := range c.Repliques {
@@ -98,4 +136,17 @@ func embedYouTube(c gateway.Contenu) string {
 		return `<iframe class="sbx-embed" src="https://www.youtube-nocookie.com/embed/` + id +
 			`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`
 	}
+}
+
+// sourcesDe rassemble le jeu de sources d'un contenu : l'original (failover,
+// jamais jeté) + ses répliques (miroir PeerTube, archive…). Sert le compte de
+// l'objet média — le join reste par video_id ailleurs.
+func sourcesDe(c gateway.Contenu) []string {
+	out := []string{c.SourceURL}
+	for _, r := range c.Repliques {
+		if r.CibleURL != "" {
+			out = append(out, r.CibleURL)
+		}
+	}
+	return out
 }

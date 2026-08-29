@@ -73,3 +73,14 @@ body::before{content:"";position:fixed;left:0;top:0;bottom:0;width:6px;
 .communique .ref-chip{display:inline-block;font-family:var(--c-mono);font-size:11px;
   color:var(--c-mesh);border:1px solid var(--c-border);padding:3px 8px;margin:4px 0}
 @media (max-width:560px){.communique{padding:16px 4px 4px}}
+
+/* OBJET MEDIA (#1227) — barre d'actions d'un embed vidéo (voir/diffuser),
+   parité avec le BBS. Peau communiqué : mono, sobre, sous le cadre. */
+.sbx-mediaobj-bar { display: flex; align-items: center; gap: .6rem;
+  padding: .5rem .2rem 0; font-family: "JetBrains Mono", monospace;
+  font-size: .74rem; flex-wrap: wrap; }
+.sbx-mediaobj-bar .mo-id { color: #8a8a99; }
+.sbx-mediaobj-bar .mo-act { color: #c9a84c; text-decoration: none;
+  border: 1px solid rgba(201,168,76,.35); border-radius: 7px; padding: .18rem .6rem; }
+.sbx-mediaobj-bar .mo-act:hover { border-color: #c9a84c; background: rgba(201,168,76,.08); }
+.sbx-mediaobj-bar .mo-voir { margin-left: auto; }

@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/static/billets-communique.css?v=2">
+<link rel="stylesheet" href="/static/billets-communique.css?v=3">
 {% if og %}
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="{{ site_title }}">
@@ -51,7 +51,7 @@
 
   {% if billet.embed_html %}
     {% if billet.embed_snapshot_url %}
-    <div class="frame comm-embed">
+    <div class="frame comm-embed"{% if billet.embed_is_video %} data-media-url="{{ billet.embed_url }}"{% endif %}>
       <span class="frame-legend">TRANSMISSION · CANAL PUBLIC</span>
       <button type="button" class="comm-vignette-btn" data-load-embed
               aria-label="Charger la transmission en direct">
@@ -62,10 +62,22 @@
       <template class="comm-embed-html">{{ billet.embed_html|safe }}</template>
     </div>
     {% else %}
-    <div class="frame comm-embed">
+    <div class="frame comm-embed"{% if billet.embed_is_video %} data-media-url="{{ billet.embed_url }}"{% endif %}>
       <span class="frame-legend">TRANSMISSION · CANAL PUBLIC</span>
       {{ billet.embed_html|safe }}
     </div>
+    {% endif %}
+    {# OBJET MEDIA (#1227) : un embed VIDEO gagne les actions du Hall, comme le BBS.
+       voir → lecteur (souverain), diffuser → parc. Le proxy ytsas (⤓ souverain)
+       est offert pour les sources YouTube. billets.js relaie au Hall. #}
+    {% if billet.embed_is_video and billet.embed_url %}
+    <figcaption class="sbx-mediaobj-bar" data-media-url="{{ billet.embed_url }}">
+      <span class="mo-id" title="Relayé à travers la box — pisteurs coupés">🛰️ relayé</span>
+      <a class="mo-act mo-voir" href="{{ billet.embed_url }}" data-voir data-titre="{{ billet.title }}"
+         title="Voir en grand dans le lecteur du Hall (souverain)">▢ voir</a>
+      <a class="mo-act mo-diff" href="{{ billet.embed_url }}" data-diff data-titre="{{ billet.title }}"
+         title="Diffuser au parc (📡 direct)">📡 diffuser</a>
+    </figcaption>
     {% endif %}
   {% endif %}
 

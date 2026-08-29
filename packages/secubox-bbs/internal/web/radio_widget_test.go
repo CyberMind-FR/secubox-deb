@@ -20,7 +20,7 @@ func TestWidgetRadioConditionnelAuRadioBase(t *testing.T) {
 		"vignette":    func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage":    func(n int) string { return "" }, "urlembed": func(s string) string { return s },
 	}
-	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html")
+	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}

@@ -20,7 +20,7 @@ func TestNewsroomExecute(t *testing.T) {
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s },
 	}
-	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html")
+	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}
@@ -76,7 +76,7 @@ func TestMediathequeExecute(t *testing.T) {
 		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s },
 	}
 	tpl, err := template.New("mediatheque.html").Funcs(fn).
-		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mediatheque.html")
+		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mediatheque.html", "templates/dock.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}
@@ -214,7 +214,7 @@ func TestNewsroomTamponsTroisEtats(t *testing.T) {
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
 		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s },
 	}
-	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html")
+	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}

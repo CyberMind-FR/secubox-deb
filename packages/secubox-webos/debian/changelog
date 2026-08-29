@@ -1,3 +1,12 @@
+secubox-webos (1.0.187-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : handler sbx:'diffuser' (#1224/#1227) — un objet media d'un billet/BBS
+    diffuse au parc. Resout d'abord vers la source SOUVERAINE (ytsas /resolve ->
+    peertube/stream) pour ne pas envoyer le parc taper YouTube, puis broadcast
+    (meme endpoint que le 📡 du viewer) + reveil pastille. sbx:'voir' deja gere.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 05:05:00 +0200
+
 secubox-webos (1.0.186-1~bookworm1) bookworm; urgency=medium
 
   * Tranches de cumul : LIGNE DU BAS PARTAGEE (#1266). En embed, le pied du cumul

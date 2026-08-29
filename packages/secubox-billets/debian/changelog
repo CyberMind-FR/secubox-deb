@@ -1,3 +1,12 @@
+secubox-billets (0.8.24-1~bookworm1) bookworm; urgency=medium
+
+  * Objet media (#1227) : un billet dont l'embed est une VIDEO (youtube/peertube/
+    vimeo) gagne la barre d'actions du Hall — ▢ voir (lecteur souverain) et 📡
+    diffuser (au parc) — en vue par defaut ET communique. embed_is_video calcule
+    cote serveur ; billets.js relaie voir/diffuser au Hall quand embarque.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 06:02:00 +0200
+
 secubox-billets (0.8.23-1~bookworm1) bookworm; urgency=medium
 
   * LARGEUR RESPONSIVE EN EMBED (#1307c). La grille 3 colonnes tassait le feed

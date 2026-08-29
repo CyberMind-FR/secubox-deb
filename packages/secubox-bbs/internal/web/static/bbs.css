@@ -491,10 +491,13 @@ td.num{font-variant-numeric:tabular-nums;text-align:right}
 .sbx-mediaobj-bar { display: flex; align-items: center; gap: .6rem; padding: .4rem .6rem;
   font-size: .72rem; background: var(--soft); border-top: 1px solid var(--line); }
 .sbx-mediaobj-bar .mo-id { color: var(--dim); }
+.sbx-mediaobj-bar .mo-src { color: var(--dim); font-size: .82em; }
 .sbx-mediaobj-bar .mo-act { color: var(--violet); text-decoration: none;
   border: 1px solid var(--line); border-radius: 7px; padding: .15rem .5rem; }
 .sbx-mediaobj-bar .mo-act:hover { border-color: var(--violet); }
-.sbx-mediaobj-bar .mo-ytsas { margin-left: auto; }
+/* Le groupe d'actions (voir · souverain · diffuser) est poussé à droite ; la
+   première action porte la marge auto. #1227. */
+.sbx-mediaobj-bar .mo-voir { margin-left: auto; }
 .sbx-mediaobj-bar .mo-diff[aria-disabled="true"] { opacity: .5; cursor: default; }
 
 /* Le point de partage : l'adresse du fil, lisible et selectionnable, plus un

@@ -166,6 +166,27 @@
   });
 })();
 
+// OBJET MEDIA (#1227) : les actions « voir » / « diffuser » d'un embed vidéo
+// pilotent le Hall (lecteur souverain / broadcast), comme le BBS. Elles ne
+// valent qu'EMBARQUÉ dans le Hall (parent ≠ window) ; en permalien autonome,
+// elles restent des liens ordinaires vers la source.
+(function () {
+  "use strict";
+  if (parent === window) return;   // hors Hall : rien à relayer
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[data-voir],a[data-diff]");
+    if (!a) return;
+    e.preventDefault();
+    try {
+      parent.postMessage({
+        sbx: a.hasAttribute("data-voir") ? "voir" : "diffuser",
+        url: a.getAttribute("href") || "",
+        titre: a.getAttribute("data-titre") || ""
+      }, "*");
+    } catch (err) {}
+  }, true);
+})();
+
 // Communiqué embed: the poster shows a still snapshot vignette; clicking it
 // swaps in the real (already-sanitized) embed iframe held in a <template>. CSP
 // is script-src 'self' — this delegated handler lives here, no inline JS. With

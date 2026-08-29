@@ -27,7 +27,7 @@ func funcsNewsroom() template.FuncMap {
 // en fond, texte par-dessus — et PAS en liste « Tous les dossiers ». Le média,
 // une couverture déjà relayée same-origin (/media-vignette), devient le fond.
 func TestNewsroomMurReseaux(t *testing.T) {
-	tpl, err := template.New("newsroom.html").Funcs(funcsNewsroom()).ParseFS(assets, "templates/newsroom.html")
+	tpl, err := template.New("newsroom.html").Funcs(funcsNewsroom()).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}
@@ -72,7 +72,7 @@ func TestNewsroomMurReseaux(t *testing.T) {
 // dossiers » et ne produit AUCUNE grille de mur. Sans quoi le test ci-dessus
 // pourrait passer sur un gabarit qui rend toujours le mur.
 func TestNewsroomSansMur(t *testing.T) {
-	tpl, err := template.New("newsroom.html").Funcs(funcsNewsroom()).ParseFS(assets, "templates/newsroom.html")
+	tpl, err := template.New("newsroom.html").Funcs(funcsNewsroom()).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {
 		t.Fatalf("parse : %v", err)
 	}

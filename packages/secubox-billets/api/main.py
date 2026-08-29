@@ -180,6 +180,15 @@ def _billet_view(row: aiosqlite.Row, base: str = "", media_rows=None, tags=None)
     d["style"] = d.get("style") or "default"
     snap = d.get("embed_snapshot")
     d["embed_snapshot_url"] = f"/media/{snap}" if snap else None
+    # OBJET MEDIA (#1227) : un embed VIDEO (youtube/peertube/vimeo…) gagne la
+    # barre d'actions du Hall (voir dans le lecteur, diffuser au parc). Les embeds
+    # non-video (mastodon, bsky, soundcloud…) gardent leur embed nu.
+    _eu = d.get("embed_url") or ""
+    _eh = (urlparse(_eu).hostname or "").lower() if _eu else ""
+    _VID = ("youtube.com", "youtu.be", "youtube-nocookie.com", "vimeo.com", "dailymotion.com")
+    d["embed_is_video"] = bool(_eh) and (
+        any(_eh == h or _eh.endswith("." + h) for h in _VID)
+        or "peertube" in _eh or _eh.startswith("tube.") or _eh.endswith(".tv"))
     return d
 
 

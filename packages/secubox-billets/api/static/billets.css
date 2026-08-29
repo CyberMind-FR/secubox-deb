@@ -206,3 +206,12 @@ button.danger,.danger{border-color:var(--brique);color:var(--brique)}
 html.sbx-embed .mast { display: none; }
 html.sbx-embed .pub-footer { display: none; }
 html.sbx-embed .pub { padding-top: 0; }
+
+/* OBJET MEDIA (#1227) — barre d'actions d'un embed vidéo (voir/diffuser). */
+.sbx-mediaobj-bar { display: flex; align-items: center; gap: .6rem; margin: .5rem 0 0;
+  font-size: .8rem; flex-wrap: wrap; }
+.sbx-mediaobj-bar .mo-id { color: var(--muted, #8a8a99); }
+.sbx-mediaobj-bar .mo-act { color: var(--accent, #6e40c9); text-decoration: none;
+  border: 1px solid rgba(110,64,201,.35); border-radius: 7px; padding: .16rem .55rem; }
+.sbx-mediaobj-bar .mo-act:hover { border-color: var(--accent, #6e40c9); }
+.sbx-mediaobj-bar .mo-voir { margin-left: auto; }

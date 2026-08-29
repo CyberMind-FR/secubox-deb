@@ -42,9 +42,27 @@
   // et hors du Hall il n'y a pas de gateway surf a qui parler.
   if (r.classList.contains('sbx-embed')) {
     var _BOX = /(^|\.)(gk2\.secubox\.in|gk2\.net|secubox\.in)$/i;
+    // OBJET MEDIA (#1227) : « voir » et « diffuser » ne partent PAS au surf — ils
+    // pilotent le Hall (lecteur / broadcast). On les laisse au handler dédié
+    // ci-dessous ; le « souverain » (href ytsas) reste, lui, capté plus bas comme
+    // n'importe quel service de la box (→ sbx:ouvre-hote).
+    document.addEventListener('click', function (e) {
+      var mo = e.target && e.target.closest ? e.target.closest('a[data-voir],a[data-diff]') : null;
+      if (!mo) return;
+      e.preventDefault();
+      var url = mo.getAttribute('href') || '';
+      var titre = mo.getAttribute('data-titre') || '';
+      try {
+        parent.postMessage({
+          sbx: mo.hasAttribute('data-voir') ? 'voir' : 'diffuser',
+          url: url, titre: titre
+        }, '*');
+      } catch (err) {}
+    }, true);
     document.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
       if (!a) return;
+      if (a.hasAttribute('data-voir') || a.hasAttribute('data-diff')) return; // objet média → handler dédié
       var href = a.getAttribute('href') || '';
       if (!/^https?:\/\//i.test(href)) return;        // relatif = interne
       var u; try { u = new URL(href, location.href); } catch (err) { return; }

@@ -2426,6 +2426,24 @@ addEventListener('message', ev=>{
     else if(typeof ouvreSurf==='function'){ ouvreSurf(d.url); }
     return;
   }
+  // DIFFUSER (#1224/#1227) : un objet média d'un billet/BBS demande de diffuser
+  // au parc. On RÉSOUT d'abord vers la source SOUVERAINE (ytsas) — sans quoi le
+  // parc entier irait taper YouTube, ce qui tue la souveraineté — puis on pousse
+  // le broadcast (même endpoint que le 📡 du viewer) et on réveille la pastille.
+  if(d.sbx==='diffuser' && d.url){
+    const pousse=(u,t)=>{ fetch('/api/v1/webos/public/broadcast',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({url:u,titre:t||d.titre||''})}).catch(()=>{});
+      try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){} };
+    fetch('/api/v1/ytsas/resolve?url='+encodeURIComponent(d.url),{headers:{'Accept':'application/json'}})
+      .then(r=>r.ok?r.json():null)
+      .then(j=>{
+        if(j && j.state==='mirror' && j.peertube_url) pousse(j.peertube_url, j.title);
+        else if(j && j.video_id) pousse('/api/v1/ytsas/stream/'+j.video_id, j.title); // cache ou pending (se remplit)
+        else pousse(d.url, d.titre);   // non résolu : au pire l'original
+      }).catch(()=>pousse(d.url, d.titre));
+    return;
+  }
   if(d.sbx==='ouvre-hote' && d.hote){ ouvreHote(d.hote, d.url); return; }
   // Le cadre dit qu'il ne peut plus reculer : on ferme.
   if(d.sbx==='surf-vide'){ fermeSurf(); return; }
