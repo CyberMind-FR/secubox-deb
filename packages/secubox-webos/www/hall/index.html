@@ -2477,6 +2477,19 @@ addEventListener('message', ev=>{
       }).catch(()=>pousse(d.url, d.titre));
     return;
   }
+  // SOUVERAIN (#1227) : un objet média d'un BBS/billet demande de RAPATRIER la
+  // vidéo sur la box. On enfile la capture (ytsas /add → flux CACHE souverain) et
+  // on tente le miroir (/conserve/<vid> → PeerTube ; 409 tant que le download
+  // n'est pas fini, sans gravité). L'objet, re-résolu aux vues suivantes, montre
+  // de lui-même la source montée. Aucune fenêtre : c'est un déclencheur de fond.
+  if(d.sbx==='souverain' && d.url){
+    fetch('/api/v1/ytsas/add',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:d.url})}).catch(()=>{});
+    const m=String(d.url).match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{6,})/);
+    const vid=m?m[1].slice(0,11):'';
+    if(vid){ fetch('/api/v1/ytsas/conserve/'+encodeURIComponent(vid),{method:'POST'}).catch(()=>{}); }
+    return;
+  }
   if(d.sbx==='ouvre-hote' && d.hote){ ouvreHote(d.hote, d.url); return; }
   // Le cadre dit qu'il ne peut plus reculer : on ferme.
   if(d.sbx==='surf-vide'){ fermeSurf(); return; }

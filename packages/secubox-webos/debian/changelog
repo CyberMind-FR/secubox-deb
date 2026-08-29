@@ -1,3 +1,10 @@
+secubox-webos (1.0.191-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : handler sbx:'souverain' (#1227) — rapatrie une video sur la box en
+    tache de fond (ytsas /add cache + /conserve miroir best-effort), sans fenetre.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 09:42:00 +0200
+
 secubox-webos (1.0.190-1~bookworm1) bookworm; urgency=medium
 
   * Barre media : un cadre INACTIF ne vole plus le suivi a un cadre qui joue

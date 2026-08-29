@@ -99,8 +99,11 @@ func objetMedia(id, titre string, sources []string, lecteur string) string {
 		`<span class="mo-id" title="Relayé à travers la box — pisteurs coupés">🛰️ relayé</span>` + src +
 		// ▢ voir : promotion dans le lecteur du Hall (souverain, re-résolu), instance unique.
 		`<a class="mo-act mo-voir" href="` + watch + `" data-voir data-titre="` + t + `" title="Voir en grand dans le lecteur du Hall (souverain)">▢ voir</a>` +
-		// ⤓ souverain : ouvre ytsas embarqué ET déclenche add+conserve ; l'objet montera de lui-même aux vues suivantes.
-		`<a class="mo-act mo-ytsas" href="` + ytsas + `" title="Garder sur la box — version souveraine (ytsas → PeerTube)">⤓ souverain</a>` +
+		// ⤓ souverain : DÉCLENCHE le rapatriement (ytsas add+conserve) en tâche de
+		// fond — l'objet, re-résolu aux vues suivantes, montrera de lui-même la
+		// source souveraine (cache puis miroir PeerTube). `data-souverain` porte
+		// l'URL source ; hors Hall (href), le lien ouvre ytsas comme repli.
+		`<a class="mo-act mo-ytsas" href="` + ytsas + `" data-souverain="` + watch + `" title="Rapatrier sur la box — version souveraine (ytsas → PeerTube)">⤓ souverain</a>` +
 		// 📡 diffuser (#1224) : le média vu devient un flux diffusé au parc.
 		`<a class="mo-act mo-diff" href="` + watch + `" data-diff data-titre="` + t + `" title="Diffuser au parc (📡 direct)">📡 diffuser</a>` +
 		`</figcaption></figure>`

@@ -1,3 +1,21 @@
+secubox-bbs (0.30.36-1~bookworm1) bookworm; urgency=medium
+
+  * Menu contextuel de la megabar (#1266b) : embarque dans le Hall, le BBS PUBLIE
+    sa nav (Forums/Media/Bibliotheque/Messages/Billets/Reseaux) au menu contextuel
+    (sbx:'contexte'), comme un vhost embarque ; le choix du Hall (contexte-choix)
+    navigue le cadre. Fin de la nav BBS captive de son rail en embarque.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 10:00:00 +0200
+
+secubox-bbs (0.30.35-1~bookworm1) bookworm; urgency=medium
+
+  * Objet media : ⤓ souverain DECLENCHE le rapatriement (#1227) au lieu d'ouvrir
+    ytsas. data-souverain -> sbx:'souverain' au Hall (add cache + conserve miroir
+    best-effort), retour visuel « rapatriement… ». L'objet montre la source montee
+    aux vues suivantes (re-resolution). Repli lien ytsas hors Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 09:40:00 +0200
+
 secubox-bbs (0.30.34-1~bookworm1) bookworm; urgency=medium
 
   * Objet media multi-sources (#1227). objetMedia porte desormais 4 actions :

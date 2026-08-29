@@ -47,22 +47,29 @@
     // ci-dessous ; le « souverain » (href ytsas) reste, lui, capté plus bas comme
     // n'importe quel service de la box (→ sbx:ouvre-hote).
     document.addEventListener('click', function (e) {
-      var mo = e.target && e.target.closest ? e.target.closest('a[data-voir],a[data-diff]') : null;
+      var mo = e.target && e.target.closest ? e.target.closest('a[data-voir],a[data-diff],a[data-souverain]') : null;
       if (!mo) return;
       e.preventDefault();
-      var url = mo.getAttribute('href') || '';
       var titre = mo.getAttribute('data-titre') || '';
       try {
-        parent.postMessage({
-          sbx: mo.hasAttribute('data-voir') ? 'voir' : 'diffuser',
-          url: url, titre: titre
-        }, '*');
+        if (mo.hasAttribute('data-souverain')) {
+          // RAPATRIEMENT SOUVERAIN (#1227) : on demande au Hall d'enfiler la
+          // capture (ytsas add+conserve). Retour visuel discret ; l'objet
+          // montrera la source montée aux vues suivantes (re-résolution).
+          parent.postMessage({ sbx: 'souverain', url: mo.getAttribute('data-souverain') || '', titre: titre }, '*');
+          mo.textContent = '⤓ rapatriement…'; mo.setAttribute('aria-disabled', 'true');
+        } else {
+          parent.postMessage({
+            sbx: mo.hasAttribute('data-voir') ? 'voir' : 'diffuser',
+            url: mo.getAttribute('href') || '', titre: titre
+          }, '*');
+        }
       } catch (err) {}
     }, true);
     document.addEventListener('click', function (e) {
       var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
       if (!a) return;
-      if (a.hasAttribute('data-voir') || a.hasAttribute('data-diff')) return; // objet média → handler dédié
+      if (a.hasAttribute('data-voir') || a.hasAttribute('data-diff') || a.hasAttribute('data-souverain')) return; // objet média → handler dédié
       var href = a.getAttribute('href') || '';
       if (!/^https?:\/\//i.test(href)) return;        // relatif = interne
       var u; try { u = new URL(href, location.href); } catch (err) { return; }
@@ -93,6 +100,45 @@
   document.addEventListener('keydown', function (e) {
     var tag = (e.target && e.target.tagName) || '';
     if (e.key === 't' && tag !== 'INPUT' && tag !== 'TEXTAREA') theme();
+  });
+})();
+
+// ── MENU CONTEXTUEL DE LA MÉGABAR (#1266b) ─────────────────────────────────────
+// Embarqué dans le Hall, le BBS PUBLIE sa nav (Forums, Média, Bibliothèque…) au
+// menu contextuel de la mégabar, comme le fait un vhost embarqué — sinon la
+// navigation du service restait captive de son rail. Le Hall renvoie le choix
+// (`contexte-choix`), on y navigue. Rien hors Hall (parent === window).
+(function () {
+  if (parent === window) return;
+  function publie() {
+    var navs = document.querySelectorAll('.rail a.nav, #rail a.nav');
+    if (!navs.length) navs = document.querySelectorAll('a.nav');
+    var items = [];
+    Array.prototype.forEach.call(navs, function (a) {
+      var href = a.getAttribute('href') || '';
+      if (!href || href.charAt(0) === '#') return;
+      var ic = a.querySelector('.ic'), n = a.querySelector('.n');
+      var label = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      if (ic && ic.textContent) label = label.replace(ic.textContent, '').trim();
+      if (n && n.textContent) label = label.split(n.textContent).join('').trim();
+      items.push({
+        cle: href, label: label || href,
+        icon: (ic && ic.textContent ? ic.textContent.trim() : '💬'),
+        badge: (n && n.textContent ? n.textContent.trim() : '')
+      });
+    });
+    if (items.length) {
+      try { parent.postMessage({ sbx: 'contexte', id: 'bbs', titre: 'BBS', items: items }, '*'); } catch (e) {}
+    }
+  }
+  // La nav est rendue côté serveur : présente au chargement. On publie une fois
+  // le DOM prêt (et re-publie à chaque page, le BBS naviguant en pleine page).
+  if (document.readyState !== 'loading') publie();
+  else document.addEventListener('DOMContentLoaded', publie);
+  addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (!d || d.sbx !== 'contexte-choix' || !d.cle) return;
+    try { location.href = d.cle; } catch (e) {}
   });
 })();
 
