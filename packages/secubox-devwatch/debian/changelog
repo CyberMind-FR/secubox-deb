@@ -1,0 +1,36 @@
+secubox-devwatch (1.0.2-1~bookworm1) bookworm; urgency=medium
+
+  * Reprise cadence ECONOME (#1370) : quand /stats/commit_activity reste en 202
+    (GitHub calcule l'agregat hebdo, parfois plusieurs minutes au tout premier
+    appel), on ne rejoue plus TOUTE la collecte — une tache de fond bornee ne
+    retente que CET appel (1 requete / 90 s, ~15 fois), preservant le quota
+    anonyme (60/h). Une fois calcule, l'agregat est cache et rendu en 200.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 17:20:00 +0200
+
+secubox-devwatch (1.0.1-1~bookworm1) bookworm; urgency=medium
+
+  * Cadence : la sonde repasse sur le 202 de /stats/commit_activity (GitHub
+    calcule l'agrégat hebdo en tâche de fond) — jusqu'a 4 essais dans la passe,
+    puis re-passe a 1 min tant qu'il est en attente. Sans quoi la serie
+    quotidienne restait vide et « aujourd'hui » a 0 au premier demarrage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 17:00:00 +0200
+
+secubox-devwatch (1.0.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau service DevWatch (#1370) : suivi de développement temps réel d'un
+    dépôt GitHub amont, cardlet Hall + tableau de bord vhost.
+    - Sonde GitHub PUBLIQUE (sans token, ~60/h) serveur-à-serveur ; le
+      navigateur ne parle qu'à la box. Patron double-cache : une tâche de fond
+      dépose un résumé prêt-à-servir, les endpoints ne touchent jamais le réseau.
+    - Métriques : cadence + flèches d'efficience, temps cumulé, derniers commits,
+      dernière release, chantiers ouverts (évolutions résiduelles).
+    - Émancipation (estimations étiquetées) : coût de reconstruction, empreinte
+      carbone. Campagne perpétuelle sur FLUX STATIQUES saisis par l'admin
+      (dépenses cumulées, soutien reçu, abonnements) via un panneau JWT.
+    - Réglable par TOML + surcharges admin (dépôt, tarif, min/commit, carbone).
+    - API sur /api/v1/devwatch/ (socket Unix), vhost /devwatch/, enregistré au
+      registre (menu.d). Personnel mais mutualisable pour tout dépôt.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 16:30:00 +0200

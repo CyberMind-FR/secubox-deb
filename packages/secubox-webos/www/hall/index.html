@@ -1043,6 +1043,11 @@ const FEATURED = [
   {id:"mail",       label:"Mail",      icon:"📧", color:"#c87832", url:"webmail.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=mail", h:182},
   {id:"ytsas",      label:"YTSaS",     icon:"🎬", color:"#b03030", url:"ytsas.gk2.secubox.in", carte:"/cardlets/quick.html?svc=ytsas", h:174},
   {id:"torrent",    label:"Torrent",   icon:"🧲", color:"#3c6e8f", url:"torrent.gk2.secubox.in", carte:"/cardlets/quick.html?svc=torrent", h:174},
+  // DevWatch (#1370) : suivi de dev GitHub amont. Pas de vhost dédié — le service
+  // vit sous admin.gk2…/devwatch/ ; on met le CHEMIN dans `url` pour que les trois
+  // modes (embarqué /devwatch/?embed=1, admin, onglet) visent la bonne page. La
+  // carte /micro se sert de MÊME origine (admin autorisé dans frame-src du Hall).
+  {id:"devwatch",   label:"DevWatch",  icon:"🛰️", color:"#0784a8", url:"admin.gk2.secubox.in/devwatch", micro:"/micro.html", h:250},
   // SURF n'est pas un service de la box : c'est un navigateur de relais. Il
   // sert sa propre carte (barre d'adresse + cadre), et s'ouvre aussi en overlay
   // depuis les sources MetaNews ou la barre de recherche (#1337).

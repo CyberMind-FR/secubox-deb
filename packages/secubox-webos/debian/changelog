@@ -1,3 +1,12 @@
+secubox-webos (1.0.195-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : carte DevWatch au strip vedette (#1370). Entree FEATURED pointant
+    admin.gk2.secubox.in/devwatch (chemin dans `url` -> les 3 modes visent la
+    bonne page) ; la carte /micro se sert de meme origine (admin deja autorise
+    dans frame-src). Le service est aussi dans le registre Systeme.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 17:45:00 +0200
+
 secubox-webos (1.0.194-1~bookworm1) bookworm; urgency=medium
 
   * Catch depuis le surf (#1266b) : quand la page surfee EST un media (YouTube,

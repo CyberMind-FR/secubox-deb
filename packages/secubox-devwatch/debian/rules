@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	# API files (service WorkingDirectory = /usr/share/secubox/devwatch)
+	install -d debian/secubox-devwatch/usr/share/secubox/devwatch/
+	cp -r api debian/secubox-devwatch/usr/share/secubox/devwatch/
+	# Static www files (vhost dashboard + Hall cardlet + admin)
+	install -d debian/secubox-devwatch/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-devwatch/usr/share/secubox/www/ || true
+	# Menu definitions (Système registry)
+	install -d debian/secubox-devwatch/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-devwatch/usr/share/secubox/menu.d/ || true
+	# Config template (installed by postinst on first install only)
+	[ -f conf/devwatch.toml ] && cp conf/devwatch.toml debian/secubox-devwatch/usr/share/secubox/devwatch/ || true
+	# nginx route — ship to the ACTIVE include (secubox-routes.d) AND legacy secubox.d
+	install -d debian/secubox-devwatch/etc/nginx/secubox-routes.d
+	install -d debian/secubox-devwatch/etc/nginx/secubox.d
+	[ -f nginx/devwatch.conf ] && cp nginx/devwatch.conf debian/secubox-devwatch/etc/nginx/secubox-routes.d/ || true
+	[ -f nginx/devwatch.conf ] && cp nginx/devwatch.conf debian/secubox-devwatch/etc/nginx/secubox.d/ || true
+	# Systemd unit
+	install -d debian/secubox-devwatch/usr/lib/systemd/system
+	cp systemd/secubox-devwatch.service debian/secubox-devwatch/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	# Handled manually in postinst (respect operator masking).
+	true

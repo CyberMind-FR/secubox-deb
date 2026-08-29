@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# Source-Disclosed License — All rights reserved except as expressly granted.
+# See LICENCE-CMSD-1.0.md for terms.
+
+# /etc/secubox/devwatch.toml — SecuBox DevWatch
+# Restart secubox-devwatch after editing (or use the admin panel, which writes
+# JSON overrides on top of this file without a restart).
+
+# ── Dépôt suivi (mutualisable : n'importe quel dépôt public) ────────────────
+owner = "CyberMind-FR"
+repo  = "secubox-deb"
+
+# API GitHub PUBLIQUE par défaut (anonyme, ~60 requêtes/heure — le cache absorbe).
+# Pour 5000/h + trafic/clones + dépôts privés, poser un jeton — JAMAIS ici en
+# clair : le mettre dans /etc/secubox/secrets/ et le référencer, ou le saisir via
+# l'admin (il reste en mémoire, jamais journalisé, jamais renvoyé au client).
+token = ""
+
+# Fréquence de rafraîchissement de la sonde (minutes ; plancher 5).
+refresh_minutes = 20
+
+# ── Paramètres d'ESTIMATION (vulgarisation — jamais des faits) ──────────────
+# Chaque valeur dérivée est étiquetée « estimation » dans l'interface.
+min_par_commit  = 22       # minutes de travail imputées par commit
+tarif_horaire   = 65       # €/h — coût de reconstruction (TJM)
+co2_kg_par_heure = 0.17    # kg CO2e / heure (CI + calcul + poste de travail)
+km_par_kg_co2   = 5.3      # km en voiture thermique par kg CO2e (vulgarisation)
+
+# ── Flux STATIQUES d'exploitation (saisis) ──────────────────────────────────
+# Ce que GitHub ne connaît pas. Éditables ici OU via le panneau admin (webmin).
+[financement]
+depenses_cumulees  = 2200  # € — dépenses cumulées du projet à ce jour
+sponsor_recu       = 0      # € — soutien externe reçu (encore 0 : cherche sponsor)
+abonnement_mensuel = 120    # €/mois — coûts récurrents (abonnements, hébergement)
+note = ""

@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-devwatch.service 2>/dev/null || true
+    systemctl disable secubox-devwatch.service 2>/dev/null || true
+    ;;
+esac
+
+#DEBHELPER#
+exit 0

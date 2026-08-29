@@ -1,0 +1,37 @@
+[Unit]
+Description=SecuBox DevWatch API (live upstream-GitHub development watch) [#1370]
+After=network-online.target secubox-runtime.service
+Wants=network-online.target
+Requires=secubox-runtime.service
+Documentation=https://github.com/CyberMind-FR/secubox-deb/issues/1370
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+WorkingDirectory=/usr/share/secubox/devwatch
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONUNBUFFERED=1"
+
+# /run/secubox est PARTAGE et colle (1777) : on n'y delie que ce qu'on possede.
+# Le prefixe `+` execute en root malgre User= — sinon la ligne echouerait comme
+# le demon si une socket morte appartenait a un autre utilisateur.
+ExecStartPre=+/bin/rm -f /run/secubox/devwatch.sock
+ExecStart=/usr/bin/python3 -m uvicorn api.main:app --uds /run/secubox/devwatch.sock --workers 1 --log-level warning
+# nginx (www-data, membre du groupe secubox) doit joindre la socket : on la rend
+# lisible/ecrivable au groupe des qu'uvicorn l'a posee. On sonde jusqu'a ~15 s
+# plutot qu'un sleep fixe (le bind UDS peut trainer).
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 150); do [ -S /run/secubox/devwatch.sock ] && break; sleep 0.1; done; chmod 660 /run/secubox/devwatch.sock'
+Restart=on-failure
+RestartSec=5
+
+# Hardening : lecture seule du systeme, tmp prive. Le service n'ecrit que son
+# cache et sa config d'exploitation ; il sort en HTTPS vers api.github.com.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run/secubox /var/lib/secubox /var/log/secubox
+
+[Install]
+WantedBy=multi-user.target

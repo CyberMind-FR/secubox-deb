@@ -1,0 +1,9 @@
+{
+  "id": "devwatch",
+  "name": "DevWatch",
+  "icon": "🛰️",
+  "path": "/devwatch/",
+  "category": "systeme",
+  "order": 690,
+  "description": "Suivi de développement GitHub temps réel — cadence, coût, carbone, campagne"
+}

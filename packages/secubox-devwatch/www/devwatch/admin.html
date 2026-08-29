@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1370 — panneau admin DevWatch (webmin).
+  Saisie des FLUX STATIQUES (financement) que GitHub ne connaît pas, + réglage
+  du dépôt suivi et des paramètres d'estimation. Écritures protégées par JWT
+  (secubox_core.auth : Bearer OU cookie de session SSO-lite).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevWatch — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#0a0f16; --panel:#0f1826; --panel-2:#0c1420; --line:#1c2a3d; --line-soft:#152131;
+    --ink:#d7e6f2; --muted:#6f8199; --faint:#4d6076;
+    --cyan:#28d6ff; --cyan-dim:#0e9dc4; --gold:#f0b429; --up:#35d07f; --down:#ff5d6c;
+    --glow:rgba(40,214,255,.14);
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:15px; line-height:1.5;
+    background-image:radial-gradient(900px 500px at 85% -8%,var(--glow),transparent 70%);}
+  .mono,.k{font-family:"Courier Prime",ui-monospace,monospace}
+  .wrap{max-width:760px; margin:0 auto; padding:28px 20px 60px}
+  h1{font-family:"Courier Prime"; font-weight:700; font-size:1.4rem; margin:0; letter-spacing:-.01em}
+  h1 .c{color:var(--cyan)}
+  .sub{color:var(--muted); font-size:.85rem; margin:4px 0 22px}
+  .head{display:flex; align-items:center; gap:12px; margin-bottom:6px}
+  .sat{width:40px; height:40px; border-radius:11px; display:grid; place-items:center; font-size:1.15rem;
+    background:linear-gradient(150deg,color-mix(in srgb,var(--cyan) 24%,var(--panel)),var(--panel)); border:1px solid var(--line)}
+  .spacer{flex:1}
+  a.back{color:var(--muted); font-size:.8rem; text-decoration:none; font-family:"Courier Prime"}
+  a.back:hover{color:var(--cyan)}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:18px;
+    box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .card h2{font-family:"Courier Prime"; font-size:.78rem; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan);
+    margin:0 0 4px}
+  .card .hint{font-size:.78rem; color:var(--muted); margin:0 0 16px}
+  .card .hint b{color:var(--gold)}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .f{display:flex; flex-direction:column; gap:5px}
+  .f.full{grid-column:1 / -1}
+  .f label{font-size:.72rem; color:var(--muted); font-weight:600; display:flex; align-items:center; gap:6px}
+  .f label .u{color:var(--faint); font-weight:400; font-family:"Courier Prime"; font-size:.7rem}
+  .f label .tag{margin-left:auto; font-size:.56rem; letter-spacing:.1em; text-transform:uppercase; color:var(--gold);
+    border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line)); border-radius:5px; padding:1px 6px}
+  .f label .tag.est{color:var(--cyan); border-color:color-mix(in srgb,var(--cyan) 40%,var(--line))}
+  input,textarea{background:var(--panel-2); border:1px solid var(--line); border-radius:9px; color:var(--ink);
+    font-family:"Courier Prime",monospace; font-size:.92rem; padding:10px 12px; width:100%; transition:border-color .12s}
+  input:focus,textarea:focus{outline:none; border-color:var(--cyan); box-shadow:0 0 0 3px var(--glow)}
+  textarea{resize:vertical; min-height:52px; font-family:"IBM Plex Sans",sans-serif}
+  .row-btn{display:flex; align-items:center; gap:12px; margin-top:16px}
+  button.save{font-family:"Courier Prime"; font-weight:700; letter-spacing:.03em; background:var(--cyan); color:#04121a;
+    border:0; border-radius:10px; padding:11px 20px; cursor:pointer; font-size:.86rem; transition:transform .12s, box-shadow .12s}
+  button.save:hover{transform:translateY(-1px); box-shadow:0 6px 20px var(--glow)}
+  button.ghost{background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:10px;
+    padding:11px 16px; cursor:pointer; font-family:"Courier Prime"; font-size:.82rem}
+  button.ghost:hover{color:var(--cyan); border-color:var(--cyan)}
+  .msg{font-family:"Courier Prime"; font-size:.8rem; min-height:1.2em}
+  .msg.ok{color:var(--up)} .msg.err{color:var(--down)}
+  .preview{display:flex; gap:16px; flex-wrap:wrap; align-items:baseline; font-family:"Courier Prime"; font-size:.82rem;
+    color:var(--muted); padding:12px 14px; background:var(--panel-2); border:1px solid var(--line-soft); border-radius:10px; margin-top:6px}
+  .preview b{color:var(--gold); font-size:1.05rem}
+  .preview .pc{color:var(--cyan)}
+  #gate{max-width:380px; margin:8vh auto 0}
+  #app{display:none}
+  .whoami{font-family:"Courier Prime"; font-size:.72rem; color:var(--up); display:flex; align-items:center; gap:6px}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--up)}
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <div class="sat">🛰️</div>
+    <div><h1>Dev<span class="c">Watch</span> · <span class="k">admin</span></h1>
+      <div class="sub" id="repo-sub">flux statiques &amp; réglages — écritures protégées (JWT)</div></div>
+    <span class="spacer"></span>
+    <a class="back" href="index.html">← tableau de bord</a>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="gate" class="card">
+    <h2>🔒 Authentification</h2>
+    <p class="hint">Connexion SecuBox requise pour modifier les flux.</p>
+    <div class="grid">
+      <div class="f full"><label>Utilisateur</label><input id="u" autocomplete="username"></div>
+      <div class="f full"><label>Mot de passe</label><input id="p" type="password" autocomplete="current-password"></div>
+    </div>
+    <div class="row-btn"><button class="save" id="login">Se connecter</button>
+      <span class="msg" id="login-msg"></span></div>
+  </div>
+
+  <!-- APP -->
+  <div id="app">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span class="whoami"><span class="dot"></span><span id="who">connecté</span></span>
+        <span class="spacer" style="flex:1"></span>
+        <button class="ghost" id="logout">Se déconnecter</button>
+      </div>
+      <div class="preview" id="preview"></div>
+    </div>
+
+    <!-- FINANCEMENT (flux statiques) -->
+    <div class="card">
+      <h2>💛 Financement · flux statiques</h2>
+      <p class="hint">Ce que GitHub ne connaît pas : <b>dépenses cumulées</b>, soutien reçu, coûts récurrents.
+        Exemple : abonnements à <b>120 €/mois</b>. Enregistré sans redémarrage.</p>
+      <div class="grid">
+        <div class="f"><label>Dépenses cumulées <span class="u">€</span><span class="tag">✎ saisi</span></label>
+          <input id="depenses_cumulees" inputmode="decimal"></div>
+        <div class="f"><label>Soutien reçu <span class="u">€</span><span class="tag">✎ saisi</span></label>
+          <input id="sponsor_recu" inputmode="decimal"></div>
+        <div class="f"><label>Abonnements <span class="u">€/mois</span><span class="tag">✎ saisi</span></label>
+          <input id="abonnement_mensuel" inputmode="decimal"></div>
+        <div class="f full"><label>Note (facultatif)</label><textarea id="note" placeholder="ex. hébergement PeerTube + nom de domaine"></textarea></div>
+      </div>
+      <div class="row-btn"><button class="save" data-save="flows">💾 Enregistrer le financement</button>
+        <span class="msg" id="flows-msg"></span></div>
+    </div>
+
+    <!-- DÉPÔT & ESTIMATIONS -->
+    <div class="card">
+      <h2>⚙️ Dépôt &amp; estimations</h2>
+      <p class="hint">Le dépôt suivi (mutualisable) et les heuristiques de vulgarisation.
+        Les valeurs dérivées portent <b style="color:var(--cyan)">◇ estimation</b> dans l'interface.</p>
+      <div class="grid">
+        <div class="f"><label>Propriétaire (owner)</label><input id="owner"></div>
+        <div class="f"><label>Dépôt (repo)</label><input id="repo"></div>
+        <div class="f"><label>Rafraîchissement <span class="u">min</span></label><input id="refresh_minutes" inputmode="numeric"></div>
+        <div class="f"><label>Minutes / commit <span class="tag est">◇ est.</span></label><input id="min_par_commit" inputmode="decimal"></div>
+        <div class="f"><label>Tarif horaire <span class="u">€/h</span><span class="tag est">◇ est.</span></label><input id="tarif_horaire" inputmode="decimal"></div>
+        <div class="f"><label>Carbone <span class="u">kg CO₂e/h</span><span class="tag est">◇ est.</span></label><input id="co2_kg_par_heure" inputmode="decimal"></div>
+      </div>
+      <div class="row-btn"><button class="save" data-save="config">💾 Enregistrer les réglages</button>
+        <button class="ghost" id="refresh">↻ Forcer une passe GitHub</button>
+        <span class="msg" id="config-msg"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/devwatch', nf=new Intl.NumberFormat('fr-FR');
+  var el=function(id){return document.getElementById(id);};
+  var TOKEN='';
+  function hdr(json){ var h={}; if(json) h['Content-Type']='application/json'; if(TOKEN) h['Authorization']='Bearer '+TOKEN; return h; }
+  function num(id){ var v=parseFloat(String(el(id).value).replace(',','.')); return isNaN(v)?null:v; }
+  function msg(id,txt,ok){ var m=el(id); m.textContent=txt; m.className='msg '+(ok?'ok':'err'); if(ok) setTimeout(function(){ if(m.textContent===txt){m.textContent='';m.className='msg';} },3500); }
+
+  function preview(){
+    var dep=num('depenses_cumulees')||0, rec=num('sponsor_recu')||0, ab=num('abonnement_mensuel')||0;
+    var pct=dep>0?Math.round(rec/dep*100):0;
+    el('preview').innerHTML='Campagne <b>'+pct+' %</b> · <span class="pc">'+nf.format(rec)+' €</span> / '
+      +nf.format(dep)+' € · abonnements '+nf.format(ab)+' €/mois'
+      +(rec<dep?' · <span style="color:var(--gold)">cherche sponsor</span>':'');
+  }
+  ['depenses_cumulees','sponsor_recu','abonnement_mensuel'].forEach(function(id){ el(id).addEventListener('input',preview); });
+
+  function fill(cfg,flows){
+    if(flows){ ['depenses_cumulees','sponsor_recu','abonnement_mensuel'].forEach(function(k){ if(flows[k]!=null) el(k).value=flows[k]; }); if(flows.note!=null) el('note').value=flows.note; }
+    if(cfg){ ['owner','repo','refresh_minutes','min_par_commit','tarif_horaire','co2_kg_par_heure'].forEach(function(k){ if(cfg[k]!=null) el(k).value=cfg[k]; }); }
+    if(cfg&&cfg.owner){ el('repo-sub').textContent='dépôt suivi : '+cfg.owner+'/'+cfg.repo; el('who').textContent='connecté · '+cfg.owner+'/'+cfg.repo; }
+    preview();
+  }
+
+  function loadAll(){
+    // Config (JWT) + flows (public). Puis on montre l'app.
+    Promise.all([
+      fetch(API+'/config',{headers:hdr(false),credentials:'include'}).then(function(r){return r.ok?r.json():null;}),
+      fetch(API+'/flows',{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;})
+    ]).then(function(res){
+      fill(res[0],res[1]); el('gate').style.display='none'; el('app').style.display='block';
+    });
+  }
+
+  // Déjà authentifié via cookie SSO ? On tente /config directement.
+  fetch(API+'/config',{credentials:'include'}).then(function(r){
+    if(r.ok){ loadAll(); }
+  }).catch(function(){});
+
+  el('login').addEventListener('click', function(){
+    var u=el('u').value.trim(), p=el('p').value;
+    if(!u||!p){ msg('login-msg','identifiants requis',false); return; }
+    fetch(API+'/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+      body:JSON.stringify({username:u,password:p})})
+      .then(function(r){ if(!r.ok) throw new Error('401'); return r.json(); })
+      .then(function(j){ TOKEN=j.access_token||''; msg('login-msg','',true); loadAll(); })
+      .catch(function(){ msg('login-msg','identifiants incorrects',false); });
+  });
+  el('p').addEventListener('keydown',function(e){ if(e.key==='Enter') el('login').click(); });
+
+  el('logout').addEventListener('click', function(){
+    fetch(API+'/auth/logout',{method:'POST',headers:hdr(false),credentials:'include'}).catch(function(){});
+    TOKEN=''; el('app').style.display='none'; el('gate').style.display='block';
+  });
+
+  document.addEventListener('click', function(e){
+    var b=e.target.closest('[data-save]'); if(!b) return;
+    var which=b.dataset.save;
+    if(which==='flows'){
+      var body={depenses_cumulees:num('depenses_cumulees'), sponsor_recu:num('sponsor_recu'),
+        abonnement_mensuel:num('abonnement_mensuel'), note:el('note').value};
+      fetch(API+'/flows',{method:'POST',headers:hdr(true),credentials:'include',body:JSON.stringify(body)})
+        .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+        .then(function(){ msg('flows-msg','✓ financement enregistré — carte recalculée',true); })
+        .catch(function(){ msg('flows-msg','échec (session expirée ?)',false); });
+    } else if(which==='config'){
+      var body={owner:el('owner').value.trim(), repo:el('repo').value.trim(),
+        refresh_minutes:num('refresh_minutes'), min_par_commit:num('min_par_commit'),
+        tarif_horaire:num('tarif_horaire'), co2_kg_par_heure:num('co2_kg_par_heure')};
+      fetch(API+'/config',{method:'POST',headers:hdr(true),credentials:'include',body:JSON.stringify(body)})
+        .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+        .then(function(){ msg('config-msg','✓ réglages enregistrés',true); })
+        .catch(function(){ msg('config-msg','échec (session expirée ?)',false); });
+    }
+  });
+
+  el('refresh').addEventListener('click', function(){
+    msg('config-msg','↻ passe en cours…',true);
+    fetch(API+'/refresh',{method:'POST',headers:hdr(false),credentials:'include'})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){ msg('config-msg', j.ok?'✓ dépôt rafraîchi':'passe incomplète (quota ?)', j.ok); })
+      .catch(function(){ msg('config-msg','échec du rafraîchissement',false); });
+  });
+})();
+</script>
