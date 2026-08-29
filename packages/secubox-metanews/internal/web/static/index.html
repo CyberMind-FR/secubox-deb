@@ -176,9 +176,9 @@ function carte(t){
     <div class="meta"><span><b>${t.sources_count}</b> source(s)</span>
       <span>maj ${ilya(t.updated_at)}</span>
       <span>confiance <span class="conf"><i style="width:${conf}%"></i></span> ${conf}%</span></div>
-    <p class="dek"${t.summary?"":" hidden"}>${esc(t.summary||"")}</p>
     ${(t.tags||[]).length?`<div class="tags">${t.tags.map(esc).join(" ")}</div>`:""}
     <div class="src">${(t.source_names||[]).map(esc).join(" · ")}</div>
+    <p class="dek"${t.summary?"":" hidden"}>${esc(t.summary||"")}</p>
     <div class="foot">
       <button class="btn bsrc">Sources ${t.sources_count}</button>
       <button class="btn bdisc">💬 Discuter${t.bbs_thread_id?" ✓":""}</button>
