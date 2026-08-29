@@ -827,7 +827,8 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
   <div class="mast-main">
     <a class="logo" href="/"><span class="medaillon anime n6"><img class="medaille" src="hall-logo.svg" alt="SbX" width="46" height="46"><img class="mface" src="medaillons/01-communaute.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/02-bibliotheque.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/03-noeud.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/04-maillage.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/05-publication.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"><img class="mface" src="medaillons/06-securite.webp" alt="" aria-hidden="true" loading="lazy" width="46" height="46"></span><span class="logo-t"><span class="serif logo-h">SbX</span></span></a>
     <nav class="mnav" aria-label="Menus">
-      <button class="it" type="button" data-nav="accueil"><span>🏠</span> Accueil</button>
+      <!-- Bouton « Accueil » retiré (#1266) : le logo mène déjà à l'accueil,
+           c'était un doublon. -->
       <button class="it" type="button" data-menu="services"><span>🗂️</span> Services <span class="ca">▾</span></button>
       <button class="it" type="button" data-menu="systeme"><span>🗄️</span> Système <span class="ca">▾</span></button>
     </nav>
@@ -1208,11 +1209,13 @@ function render(data,src){
   // MEME url — l'agregat « Contenu » et le service « Dépôt » pointent tous deux
   // sur depot.gk2 ; « Forums »/« BBS », les deux « Cloud », les deux « Social »
   // de meme. Le menu les montrait cote a cote : deux lignes pour un seul lieu.
-  // On dedoublonne par url en gardant de preference l'entree AGREGEE (hors
-  // _CUMULES), celle que la mosaique affiche deja — puis on trie alpha.
+  // On dedoublonne par url en gardant de preference le SERVICE REEL (l'entree
+  // individuelle, _CUMULES) plutot que l'alias de groupe cumulatif : le menu
+  // Services mene au service (BBS, Dépôt, Cloud…), pas a la carte cumulative
+  // (#1266b — « BBS a disparu du menu »). Puis on trie alpha.
   const _parUrl={};
   FEATURED.forEach(f=>{ const k=f.url||f.id; const cur=_parUrl[k];
-    if(!cur || (_CUMULES.has(cur.id) && !_CUMULES.has(f.id))) _parUrl[k]=f; });
+    if(!cur || (!_CUMULES.has(cur.id) && _CUMULES.has(f.id))) _parUrl[k]=f; });
   const FEATURED_ALPHA=Object.keys(_parUrl).map(k=>_parUrl[k])
     .sort((a,b)=>String(a.label||'').localeCompare(String(b.label||''),'fr',{sensitivity:'base'}));
   // #1187 — sélection d'apps PLATE : une ligne = un service, aucun sous-menu.
@@ -2607,6 +2610,14 @@ addEventListener('message', ev=>{
     // avec son volume — c'est meme l'usage. Le bug d'origine (radio qui reprend
     // seule et coupe la video) se traite dans le cardlet radio, pas en
     // paralysant la radio ici.
+    // UN CADRE INACTIF NE VOLE PAS LE SUIVI À UN CADRE QUI JOUE (#1266b). Ouvrir
+    // la vue pleine (embarque) d'un service dont la carte micro JOUE : la vue,
+    // fraîche et muette, s'annonçait joue:false et devenait le cadre suivi — la
+    // barre pilotait alors une instance idle et la carte semblait orpheline. On
+    // ignore une annonce joue:false venue d'un AUTRE cadre tant que le cadre
+    // suivi joue (l'instance active reste maîtresse jusqu'à un vrai relais).
+    const _cur=flux.get(d.id);
+    if(!d.joue && _cur && _cur.cadre && _cur.cadre!==c && _cur.etat && _cur.etat.joue){ return; }
     flux.set(d.id,{maj:Date.now(), cadre:c, etat:d});
     dessine();
   });

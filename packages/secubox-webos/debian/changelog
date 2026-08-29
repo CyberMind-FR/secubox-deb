@@ -1,3 +1,23 @@
+secubox-webos (1.0.190-1~bookworm1) bookworm; urgency=medium
+
+  * Barre media : un cadre INACTIF ne vole plus le suivi a un cadre qui joue
+    (#1266b). Ouvrir la vue pleine d'un service dont la carte joue ne detourne
+    plus la barre vers l'instance idle ; l'instance active reste maitresse
+    jusqu'a un vrai relais (joue:true).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 09:02:00 +0200
+
+secubox-webos (1.0.189-1~bookworm1) bookworm; urgency=medium
+
+  * Megabar : BBS reparait dans le menu Services (#1266b). Le dedoublonnage par
+    destination gardait l'alias de GROUPE cumulatif (« Forums ») au lieu du
+    SERVICE reel (« BBS ») : on inverse — le menu Services mene au service, pas
+    a la carte cumulative. Idem Dépôt/Cloud/Social.
+  * Bouton « Accueil » retire de la megabar (doublon du logo, qui mene deja a
+    l'accueil).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 08:30:00 +0200
+
 secubox-webos (1.0.188-1~bookworm1) bookworm; urgency=medium
 
   * Barre media : VIGNETTE de source par flux (#1266b). La rangee et la pastille

@@ -190,6 +190,27 @@ function render(force){
   // disparaissait. On ne s'arrete qu'a la fin (fin:true) ou a la fermeture.
   setInterval(function(){ if(actif) annonce(); }, 2000);
   // Commandes de la barre du Hall.
+  // REPRISE DEPUIS LA CARTE MICRO (#1266b). Ouvrir la vue pleine ne doit plus
+  // COUPER le podcast : le micro a enregistré (même origine) l'épisode + la
+  // position ; on les relit et on REPREND exactement là. Si l'autoplay est
+  // accordé (le clic d'ouverture vaut geste), la reprise est transparente et la
+  // barre bascule sur la vue pleine (anti-doublon) sans blanc ; sinon l'épisode
+  // est prêt et calé, et la CARTE continue de jouer — dans les deux cas, plus de
+  // silence à l'ouverture.
+  (function reprend(){
+    var raw; try{ raw=localStorage.getItem('sbx.podcaster.etat'); }catch(e){ return; }
+    var st; try{ st=JSON.parse(raw||'null'); }catch(e){ return; }
+    if(!st || !st.ep || !st.joue) return;
+    var essais=0, iv=setInterval(function(){
+      var a=document.querySelector('audio[src*="/media/'+st.ep+'"]');
+      if(a){
+        clearInterval(iv);
+        var lance=function(){ try{ if(st.t) a.currentTime=st.t; }catch(e){} a.play().catch(function(){}); };
+        if(a.readyState>=1){ lance(); }
+        else { a.preload='metadata'; a.addEventListener('loadedmetadata', lance, {once:true}); try{ a.load(); }catch(e){} }
+      } else if(++essais>40){ clearInterval(iv); }   // ~10 s d'attente du rendu
+    }, 250);
+  })();
   addEventListener('message', function(ev){
     var d=ev.data; if(!d || d.sbx!=='cmd') return;
     var a=actif;

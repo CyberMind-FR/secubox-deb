@@ -310,13 +310,28 @@
   });
   el('prev').addEventListener('click', () => joue(idx - 1));
   el('next').addEventListener('click', () => joue(idx + 1));
-  son.addEventListener('play',  () => el('pp').textContent = '❚❚');
-  son.addEventListener('pause', () => el('pp').textContent = '▶');
+  // CONTINUITÉ MICRO → VUE PLEINE (#1266b). On ENREGISTRE ce qu'on joue (épisode
+  // + position + intention) : la vue pleine, MÊME ORIGINE, le relira au montage
+  // et reprendra EXACTEMENT là — ouvrir l'embed ne coupe plus le podcast, il
+  // continue. Sans ça, la vue pleine démarrait vide, la barre passait sur elle
+  // (anti-doublon) et la carte, orpheline, se taisait.
+  function sauveEtat() {
+    try {
+      localStorage.setItem('sbx.podcaster.etat', JSON.stringify({
+        ep: (eps[idx] || {}).id || '', t: Math.floor(son.currentTime || 0),
+        joue: !son.paused, quand: Date.now()
+      }));
+    } catch (e) {}
+  }
+  son.addEventListener('play',  () => { el('pp').textContent = '❚❚'; sauveEtat(); });
+  son.addEventListener('pause', () => { el('pp').textContent = '▶'; sauveEtat(); });
   son.addEventListener('ended', () => joue(idx + 1));
+  var _dernSauve = 0;
   son.addEventListener('timeupdate', () => {
     const d = son.duration || 0;
     el('barre').style.width = (d ? son.currentTime / d * 100 : 0) + '%';
     el('temps').textContent = fmt(son.currentTime);
+    var n = Date.now(); if (n - _dernSauve > 5000) { _dernSauve = n; sauveEtat(); }
   });
   // Se déplacer dans l'épisode : sans cela, un épisode d'une heure ne se
   // parcourt pas, et la barre n'est qu'une décoration.
