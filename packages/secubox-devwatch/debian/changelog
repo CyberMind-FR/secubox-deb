@@ -1,3 +1,21 @@
+secubox-devwatch (1.0.6-1~bookworm1) bookworm; urgency=medium
+
+  * Correctif ENCODAGE du tableau de bord (#1370) : index.html n'avait pas de
+    <meta charset="utf-8"> (il venait de la maquette, ou le wrapper l'ajoutait).
+    Le navigateur devinait Latin-1 -> emojis et accents en mojibake
+    (🛰️ -> ðŸ›°, é -> Ã©, — -> â€"). Ajout de <!DOCTYPE html> + charset en tete.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 23:15:00 +0200
+
+secubox-devwatch (1.0.5-1~bookworm1) bookworm; urgency=medium
+
+  * Slice « Propagande » (#1370) : appel a soutien souverain avec la DERNIERE
+    release en lien SOURCE GitHub (code source ↗), bouton Star du depot et
+    « Devenir sponsor » (wiki Sponsor-a-Port), jauge de campagne (cherche
+    sponsor). Rendu depuis latest_release + fund du resume.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 23:00:00 +0200
+
 secubox-devwatch (1.0.4-1~bookworm1) bookworm; urgency=medium
 
   * Slice « Modules · dernieres revisions » (#1370) : etat de revision LOCAL des

@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
 <title>DevWatch</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -291,6 +293,36 @@ a{color:inherit}
 .mods-row .nm{font-family:"Chivo";font-weight:700;font-size:.84rem;flex:0 0 auto}
 .mods-row .v{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--cyan-ink);font-weight:600;flex:0 0 auto}
 .mods-row .dev{color:var(--muted);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+/* PROPAGANDE — appel à soutien + release GitHub */
+.propa{padding:0;margin-bottom:26px;overflow:hidden;position:relative;
+  background:linear-gradient(135deg, color-mix(in srgb,var(--cyan) 16%, var(--surface)), var(--surface) 60%, color-mix(in srgb,var(--gold) 12%, var(--surface)));
+  border-color:color-mix(in srgb,var(--cyan) 30%,var(--line))}
+.propa-in{display:flex;gap:22px;align-items:center;padding:22px 24px;flex-wrap:wrap}
+.propa-main{flex:1;min-width:260px}
+.propa-eyebrow{font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-ink);font-weight:700;margin-bottom:8px}
+.propa-h{font-size:1.5rem;line-height:1.1;margin:0 0 8px;text-wrap:balance;letter-spacing:-.02em}
+.propa-sub{color:var(--muted);font-size:.9rem;margin:0 0 16px;max-width:52ch}
+.propa-sub b{color:var(--ink-soft);font-weight:600}
+.propa-cta{display:flex;gap:10px;flex-wrap:wrap}
+.propa-btn{display:inline-flex;align-items:center;gap:7px;padding:10px 15px;border-radius:11px;text-decoration:none;
+  font-family:"Chivo";font-weight:700;font-size:.84rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  transition:transform .12s ease, box-shadow .12s ease}
+.propa-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.propa-btn b{font-family:"IBM Plex Mono";font-weight:600}
+.propa-btn.primary{background:var(--ink);color:var(--bg);border:0}
+:root[data-theme="dark"] .propa-btn.primary, :root:not([data-theme="light"]) .propa-btn.primary{background:var(--cyan);color:#04121a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .propa-btn.primary{background:var(--cyan);color:#04121a}}
+.propa-btn.gold{border-color:color-mix(in srgb,var(--gold) 50%,var(--line));color:var(--gold)}
+.propa-btn.gold:hover{background:color-mix(in srgb,var(--gold) 12%,var(--surface))}
+.propa-gauge{flex:0 0 auto;min-width:180px;text-align:center;padding:14px 18px;border-radius:14px;
+  background:var(--surface);border:1px solid color-mix(in srgb,var(--gold) 32%,var(--line))}
+.propa-gauge .pg-v{font-family:"Chivo";font-weight:800;font-size:2rem;color:var(--gold);line-height:1}
+.propa-gauge .pg-seek{display:inline-block;margin-top:6px;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--gold);font-weight:700;border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line));border-radius:999px;padding:3px 10px}
+.propa-gauge .pg-bar{height:7px;border-radius:999px;background:color-mix(in srgb,var(--gold) 16%,transparent);overflow:hidden;margin:12px 0 8px}
+.propa-gauge .pg-bar i{display:block;height:100%;border-radius:999px;background:repeating-linear-gradient(90deg,var(--gold),var(--gold) 4px,transparent 4px,transparent 9px)}
+.propa-gauge .pg-foot{font-size:.68rem;color:var(--muted);font-variant-numeric:tabular-nums}
+@media(max-width:640px){.propa-h{font-size:1.25rem}.propa-gauge{width:100%}}
 
 .foot-note{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); font-size:.72rem; color:var(--faint);
   display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; text-align:center}
@@ -384,6 +416,22 @@ a.witem .wt{min-height:2.6em}
         <code>tarif_horaire</code> <code>min_par_commit</code> <code>facteur_carbone</code></span>
       <span class="lg"><span class="est saisi-b">✎ saisi</span> flux statiques entrés dans l'admin (webmin) —
         ex. <code>abonnements = 120 €/mois</code>, dons récurrents, hébergement</span>
+    </div>
+  </section>
+
+  <section class="card propa">
+    <div class="propa-in">
+      <div class="propa-main">
+        <div class="propa-eyebrow">◆ Logiciel souverain · appel à soutien</div>
+        <h2 class="propa-h">Le code est public. La souveraineté, elle, se soutient.</h2>
+        <p class="propa-sub">SecuBox est une box de cybersécurité <b>libre &amp; auto-hébergée</b> — chaque commit est ouvert, chaque module vérifiable. Embarquez la dernière version, ou financez la suite.</p>
+        <div class="propa-cta">
+          <a class="propa-btn primary" id="propa-rel" href="#" target="_blank" rel="noopener">🏷️ <b>—</b> · code source ↗</a>
+          <a class="propa-btn" id="propa-repo" href="#" target="_blank" rel="noopener">⭐ Star le dépôt</a>
+          <a class="propa-btn gold" id="propa-sponsor" href="#" target="_blank" rel="noopener">💛 Devenir sponsor</a>
+        </div>
+      </div>
+      <div class="propa-gauge" id="propa-gauge"></div>
     </div>
   </section>
 
@@ -607,6 +655,24 @@ a.witem .wt{min-height:2.6em}
     }).join('');
   }
 
+  // PROPAGANDE : la dernière release + lien source GitHub, et l'appel à sponsor.
+  function propa(s){
+    var repo=s.repo||{}, r=s.latest_release, f=s.fund||{};
+    var relEl=el('propa-rel');
+    if(r && r.url){ relEl.href=r.url; relEl.querySelector('b').textContent=r.tag||'release'; }
+    else { relEl.href=(repo.html_url||'#')+'/releases'; relEl.querySelector('b').textContent='releases'; }
+    var t=s.totals||{};
+    el('propa-repo').href=repo.html_url||'#';
+    el('propa-repo').innerHTML='⭐ Star le dépôt'+(t.stars!=null?' <b>'+n(t.stars)+'</b>':'');
+    el('propa-sponsor').href=(repo.html_url||'https://github.com/CyberMind-FR/secubox-deb')+'/wiki/Sponsor-a-Port';
+    var pct=Math.max(0,Math.min(100,f.pct||0));
+    el('propa-gauge').innerHTML=
+      '<div class="pg-v">'+n(pct)+' %</div>'
+      +(f.seeking?'<div class="pg-seek">cherche sponsor</div>':'')
+      +'<div class="pg-bar"><i style="width:'+Math.max(2,pct)+'%"></i></div>'
+      +'<div class="pg-foot">'+n(f.sponsor_recu)+' € / '+n(f.depenses_cumulees)+' €</div>';
+  }
+
   function commits(s){
     var cs=s.latest_commits||[];
     if(!cs.length){ el('clist').innerHTML='<div class="note">pas de commit récent</div>'; return; }
@@ -659,7 +725,7 @@ a.witem .wt{min-height:2.6em}
     var full=(s.repo&&s.repo.full)||'—';
     el('repo-owner').textContent=(full.split('/')[0]||'')+'/';
     el('repo-name').textContent=full.split('/')[1]||'';
-    hero(s); cadence(s); evo(s); mods(s); eman(s); work(s); commits(s); release(s); miniCardlet(s);
+    hero(s); cadence(s); evo(s); mods(s); eman(s); propa(s); work(s); commits(s); release(s); miniCardlet(s);
     var m=s.meta||{};
     el('meta-note').textContent = m.rate_left!=null ? (' · quota GitHub '+m.rate_left) : '';
     if(m.error){ el('live-t').textContent='rafraîchi (quota bas)'; }
