@@ -2302,7 +2302,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   // PARESSEUSEMENT (au premier usage). Sinon l'IIFE sortait ici (elements null)
   // et n'exposait JAMAIS window.ouvreViewer/estMediaUrl -> la megabar retombait
   // sur ouvreSurf. C'etait le bug « ca part sur surf ».
-  var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false, ivVue=null;
+  var ov, media, titreEl, courant=null, vid=null, ivSas=null, diffuse=false, cable=false, ivVue=null, departVoulu=0;
   // ZOOM D'UN FLUX DE LA BARRE (#1266). Quand on agrandit un flux du dock vers le
   // viewer, on retient l'id de la carte SOURCE : à la fermeture, on lui rend la
   // main (elle reprend là où elle jouait). Le flux ne joue jamais à deux endroits
@@ -2347,8 +2347,14 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var v=document.createElement('video');
     v.src=src; v.controls=true; v.autoplay=true; v.setAttribute('playsinline','');
     media.innerHTML=''; media.appendChild(v);
-    // REPRISE AU REFRESH (#1266b) : on se recale à la seconde sauvegardée.
-    if(depart && depart>2){ v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=depart; }catch(e){} }, {once:true}); }
+    // REPRISE AU REFRESH (#1266b) : on se recale à la seconde sauvegardée. La
+    // position peut venir de l'appelant (flux souverain direct) OU de la reprise
+    // via le sas YouTube, qui ne peut pas la passer en argument — elle attend
+    // alors dans departVoulu. On la consomme une seule fois (sinon relancer le
+    // même flux rejouerait au point de reprise).
+    var d0 = (typeof depart==='number' && depart>2) ? depart : (departVoulu>2 ? departVoulu : 0);
+    if(d0>2){ v.addEventListener('loadedmetadata', function(){ try{ v.currentTime=d0; }catch(e){} }, {once:true}); }
+    departVoulu=0;
     function maj(){
       try{ var d=v.duration||0, cur=v.currentTime||0;
         pose('✓ souverain', fmtT(cur)+(d?' / '+fmtT(d):''), '✓ cache', d?Math.round(cur/d*100):0);
@@ -2407,6 +2413,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     zoomSource=null;   // une vidéo « attrapée » ne se rend pas à une carte (déplacement)
     ov.classList.remove('lecteur');   // fenêtre vidéo 16/9, pas le portrait « lecteur »
     depart=Number(depart)||0;
+    departVoulu=depart;   // reprise : le sas (YouTube) lira ceci quand il jouera le flux
     media.innerHTML=''; titreEl.textContent=titre||url.slice(0,90);
     document.getElementById('viewer-fav').classList.remove('on');
     var cb=document.getElementById('viewer-cast'); cb.classList.remove('on');

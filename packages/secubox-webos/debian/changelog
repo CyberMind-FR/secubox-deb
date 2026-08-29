@@ -1,3 +1,13 @@
+secubox-webos (1.0.202-1~bookworm1) bookworm; urgency=medium
+
+  * Reprise viewer au refresh : la video YouTube reprenait a 0 (#1266b). Le
+    `courant` etant l'URL YouTube, la reprise passe par le sas ytsas qui jouait
+    le flux cache SANS position. On porte la seconde sauvegardee dans departVoulu,
+    consomme une seule fois par flux() — le flux souverain reprend au bon endroit,
+    comme la video directe et PeerTube (&start).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 21:55:00 +0200
+
 secubox-webos (1.0.201-1~bookworm1) bookworm; urgency=medium
 
   * Carte MetaNews plus haute (h 236 -> 300) pour loger les parties du sujet
