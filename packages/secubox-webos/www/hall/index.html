@@ -2562,6 +2562,15 @@ addEventListener('message', ev=>{
     if(vid){ fetch('/api/v1/ytsas/conserve/'+encodeURIComponent(vid),{method:'POST'}).catch(()=>{}); }
     return;
   }
+  // CATCH DEPUIS LE SURF (#1266b) : on surfait une page, elle est en fait un
+  // média — le surf remonte son adresse réelle. On l'ouvre dans le lecteur
+  // SOUVERAIN (viewerVoir : rapatrie via ytsas, historise, garde le temps du
+  // cache), et on ferme le surf pour laisser la place au lecteur.
+  if(d.sbx==='surf-catch' && d.url){
+    if(typeof window.viewerVoir==='function'){ window.viewerVoir(d.url); if(typeof fermeSurf==='function') fermeSurf(); }
+    else if(typeof estMediaUrl==='function' && estMediaUrl(d.url) && typeof ouvreViewer==='function'){ ouvreViewer(d.url, d.titre); }
+    return;
+  }
   if(d.sbx==='ouvre-hote' && d.hote){ ouvreHote(d.hote, d.url); return; }
   // Le cadre dit qu'il ne peut plus reculer : on ferme.
   if(d.sbx==='surf-vide'){ fermeSurf(); return; }

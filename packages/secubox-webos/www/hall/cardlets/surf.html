@@ -103,6 +103,7 @@
     <button id="home" class="ghost" type="button" title="Accueil surf" hidden>🏠</button>
     <button id="jar" class="ghost" type="button" title="Apprendre les cookies de ce site (les coller une fois, rejoués toujours)" hidden>🍪</button>
     <button id="diff" class="ghost" type="button" title="Diffuser cette page au parc (📡 direct)" hidden>📡</button>
+    <button id="voir" class="ghost" type="button" title="Voir en souverain dans le lecteur du Hall (rapatrie + garde le temps de son cache)" hidden>🎬</button>
     <button id="go" type="button">Surfer</button>
     <button id="rech" class="ghost" type="button" title="Recharger" hidden>⟳</button>
     <button id="onglet" class="ghost" type="button" title="Ouvrir dans un onglet réel" hidden>⧉</button>
@@ -219,6 +220,21 @@
     var plat = h.slice(5, h.indexOf('.gk2.secubox.in'));
     return plat.replace(/--/g, '\x00').replace(/-/g, '.').replace(/\x00/g, '-');
   }
+  // estMediaSurf : l'adresse REELLE (pas l'origine surf) pointe-t-elle un média
+  // qu'on saurait rapatrier et jouer en souverain (#1266b) ? YouTube, notre
+  // PeerTube, ou un fichier vidéo direct. Le Hall a le detecteur complet ; ici
+  // on n'en veut qu'assez pour DECIDER d'offrir le bouton 🎬 « Voir souverain ».
+  function estMediaSurf(realUrl) {
+    var u = String(realUrl || '');
+    return /(?:youtube\.com\/(?:watch|shorts|embed|v)|youtu\.be\/)/i.test(u)
+        || /\/videos\/watch\/|\/w\//.test(u)   // aligné sur estPeertube du Hall
+        || /\.(mp4|webm|m3u8|ogg|ogv|mov|mkv)(\?|#|$)/i.test(u);
+  }
+  // L'URL REELLE de ce qu'on surfe (hote cible + chemin), pas l'origine surf-…
+  function urlReelle(n) {
+    try { var s = new URL(n.surf); return 'https://' + n.host + s.pathname + s.search + s.hash; }
+    catch (e) { return 'https://' + n.host; }
+  }
   function normalise(saisie) {
     var v = String(saisie || '').trim();
     if (!v) return null;
@@ -277,6 +293,10 @@
     var jb = $('jar'); if (jb) jb.hidden = false;
     var jh = $('jarhote'); if (jh) jh.textContent = n.host;
     var df = $('diff'); if (df) df.hidden = false;
+    // 🎬 VOIR SOUVERAIN (#1266b) : offert seulement quand l'adresse relayée EST
+    // un média. On le RAPATRIE et on le joue dans le lecteur du Hall, où il
+    // entre à l'historique et reste le temps de son cache ytsas.
+    var vb = $('voir'); if (vb) vb.hidden = !estMediaSurf(urlReelle(n));
   }
 
   // 📡 DIFFUSER AU PARC (le Broadcaster, #1224). On envoie l'adresse REELLE de
@@ -301,6 +321,18 @@
     }).catch(function () {});
   });
 
+  // 🎬 VOIR SOUVERAIN (#1266b). On remonte au Hall l'adresse REELLE de la page
+  // média courante ; c'est lui qui ouvre son lecteur souverain (rapatrie via
+  // ytsas, historise, garde le temps du cache). Le catch depuis le surf.
+  var bVoir = $('voir');
+  if (bVoir) bVoir.addEventListener('click', function () {
+    if (!courant) return;
+    var real = urlReelle(courant);
+    if (!estMediaSurf(real)) return;
+    try { parent.postMessage({ sbx: 'surf-catch', url: real, titre: courant.host }, '*'); } catch (e) {}
+    var el = $('etat'); if (el) { el.hidden = false; el.textContent = '🎬 ' + courant.host + ' — rapatrié dans le lecteur souverain'; }
+  });
+
   // RECULER. On depile l'adresse precedente et on la recharge SANS l'empiler.
   // Rend true si l'on a recule, false si la pile etait vide (le Hall fermera).
   function recule() {
@@ -322,6 +354,7 @@
     $('home').hidden = true;
     var jb=$('jar'); if(jb) jb.hidden = true;
     var df=$('diff'); if(df) df.hidden = true;
+    var vb=$('voir'); if(vb) vb.hidden = true;
     var st=$('stats'); if(st) st.classList.add('hidden');
     fermeJar();
     $('vue').innerHTML = ACCUEIL_HTML;
@@ -399,6 +432,9 @@
           $('adr').value = hote + (u.pathname.replace(/^\/$/, '') || '');
           $('etat').textContent = '🛰️ ' + hote + ' — relayé, pisteurs coupés';
           majDos(); diHote(hote);
+          // Le 🎬 « Voir souverain » suit la navigation interne (#1266b) : il
+          // apparaît/disparaît selon que la nouvelle page est un média.
+          var vb = $('voir'); if (vb) vb.hidden = !estMediaSurf(urlReelle(courant));
         }
       } catch (e) {}
       return;

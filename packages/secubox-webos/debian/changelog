@@ -1,3 +1,14 @@
+secubox-webos (1.0.194-1~bookworm1) bookworm; urgency=medium
+
+  * Catch depuis le surf (#1266b) : quand la page surfee EST un media (YouTube,
+    notre PeerTube, video directe), un bouton 🎬 « Voir souverain » apparait
+    dans la barre du surf. Il remonte l'adresse REELLE au Hall (sbx:'surf-catch')
+    qui l'ouvre dans le lecteur souverain via viewerVoir — rapatrie via ytsas,
+    historise, garde le temps de son cache — et ferme le surf. Le bouton suit la
+    navigation interne (surf-nav) : il apparait/disparait selon la page.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 15:15:00 +0200
+
 secubox-webos (1.0.193-1~bookworm1) bookworm; urgency=medium
 
   * Menu contextuel : le Hall REDEMANDE la nav au service embarque a chaque
