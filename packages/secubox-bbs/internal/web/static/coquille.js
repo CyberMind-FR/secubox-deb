@@ -131,12 +131,20 @@
       try { parent.postMessage({ sbx: 'contexte', id: 'bbs', titre: 'BBS', items: items }, '*'); } catch (e) {}
     }
   }
-  // La nav est rendue côté serveur : présente au chargement. On publie une fois
-  // le DOM prêt (et re-publie à chaque page, le BBS naviguant en pleine page).
-  if (document.readyState !== 'loading') publie();
-  else document.addEventListener('DOMContentLoaded', publie);
+  // La nav est rendue côté serveur : présente à chaque page (le BBS navigue en
+  // PLEINE page). On RE-PUBLIE de façon fiable — DOMContentLoaded, pageshow
+  // (retour bfcache), et deux relances courtes : cliquer un lien INTERNE recharge
+  // le cadre, et sans ces relances le menu contextuel de la mégabar restait vide
+  // le temps que la nav se re-rende (#1266b — « le clic dans le BBS perd le menu »).
+  function publieBis() { publie(); }
+  if (document.readyState !== 'loading') publieBis();
+  else document.addEventListener('DOMContentLoaded', publieBis);
+  addEventListener('pageshow', publieBis);
+  setTimeout(publieBis, 400);
+  setTimeout(publieBis, 1500);
   addEventListener('message', function (ev) {
     var d = ev.data;
+    if (d && d.sbx === 'contexte-demande') { publie(); return; } // le Hall (re)demande la nav
     if (!d || d.sbx !== 'contexte-choix' || !d.cle) return;
     try { location.href = d.cle; } catch (e) {}
   });

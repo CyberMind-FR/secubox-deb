@@ -206,10 +206,10 @@ func (s *Server) apiContentTopic(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(corps) == "" {
 		corps = id
 	}
-	// L'URL SOURCE DANS LE PREMIER MESSAGE (#1266b). Le rendu du BBS transforme
-	// une URL YouTube en OBJET MÉDIA (lecteur + escalade souveraine) : sans elle,
-	// le fil n'avait qu'un titre (souvent « yt:<id> »), aucune vidéo jouable. On
-	// normalise la clé interne « yt:<id> » en vraie URL de visionnage au passage.
+	// SOURCE MÉDIA (#1266b). L'objet média (lecteur + escalade souveraine) est
+	// rendu EN TÊTE du fil depuis media_url (objetMediaURL dans fil.html), pas
+	// injecté dans le premier message — un seul point de vérité, valable pour les
+	// fils existants comme neufs. Normalise « yt:<id> » en URL de visionnage.
 	mediaSrc := ""
 	if prov, e := s.st.ProvenanceDe(o.ID); e == nil {
 		for _, p := range prov {
@@ -221,7 +221,6 @@ func (s *Server) apiContentTopic(w http.ResponseWriter, r *http.Request) {
 				src = "https://www.youtube.com/watch?v=" + v
 			}
 			mediaSrc = src
-			corps = strings.TrimSpace(o.Title) + "\n\n" + src
 			break
 		}
 	}

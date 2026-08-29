@@ -52,6 +52,47 @@ func embedYouTubeURL(u string) (string, bool) {
 			html.EscapeString(id)+`" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>`), true
 }
 
+// embedMediaURL rend l'OBJET MÉDIA d'une URL vidéo, quelle que soit sa source.
+// C'est le point d'entrée du rendu « en tête de fil » (objetMediaURL) : les fils
+// passerelle portent aussi bien du YouTube (première vue, à rapatrier) que du
+// PeerTube DÉJÀ SOUVERAIN (mirroir de la box). PUR : aucun réseau.
+func embedMediaURL(u string) (string, bool) {
+	if h, ok := embedYouTubeURL(u); ok {
+		return h, true
+	}
+	if estPeertube(u) {
+		return objetMediaPeertube(u), true
+	}
+	return "", false
+}
+
+// estPeertube reconnaît une URL de NOTRE instance PeerTube (visionnage ou embed).
+// On ne borne pas l'hôte ici — le rendu ne fait qu'un <iframe> vers l'URL fournie,
+// déjà écrite par la passerelle depuis nos propres répliques.
+func estPeertube(u string) bool {
+	return strings.Contains(u, "/videos/embed/") ||
+		strings.Contains(u, "/videos/watch/") ||
+		strings.Contains(u, "/w/")
+}
+
+// objetMediaPeertube enveloppe un lecteur PeerTube en objet média DÉJÀ SOUVERAIN
+// (#1266b) : la vidéo vit sur l'instance de la box, il n'y a donc rien à
+// rapatrier — pas de « ⤓ souverain ». Reste la barre : relayé (souverain), le
+// VOIR en grand dans le Hall, le DIFFUSER au parc. La source « voir/diffuser »
+// est l'URL PeerTube elle-même, que le lecteur du Hall sait cadrer.
+func objetMediaPeertube(u string) string {
+	embed := peertubeEmbedURL(u)
+	src := html.EscapeString(embed)
+	return `<figure class="sbx-mediaobj" data-pt="` + src + `">` +
+		`<div class="sbx-mediaobj-vue"><iframe class="sbx-embed" src="` + src +
+		`" allowfullscreen loading="lazy"></iframe></div>` +
+		`<figcaption class="sbx-mediaobj-bar">` +
+		`<span class="mo-id" title="Hébergé et relayé par la box — déjà souverain">🛰️ souverain</span>` +
+		`<a class="mo-act mo-voir" href="` + src + `" data-voir title="Voir en grand dans le lecteur du Hall">▢ voir</a>` +
+		`<a class="mo-act mo-diff" href="` + src + `" data-diff title="Diffuser au parc (📡 direct)">📡 diffuser</a>` +
+		`</figcaption></figure>`
+}
+
 // compteSources dédoublonne origine + répliques pour dire la RICHESSE de l'objet
 // (combien d'endroits connaissent ce média : l'original + ses miroirs/caches).
 // Le join reste par video_id ailleurs ; ici on ne fait que compter des adresses.

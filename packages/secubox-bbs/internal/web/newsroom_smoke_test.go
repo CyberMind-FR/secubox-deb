@@ -18,7 +18,7 @@ func TestNewsroomExecute(t *testing.T) {
 	fn := template.FuncMap{
 		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
-		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" },
+		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" }, "objetMediaURL": func(string) string { return "" },
 	}
 	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {
@@ -73,7 +73,7 @@ func TestMediathequeExecute(t *testing.T) {
 	fn := template.FuncMap{
 		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
-		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" },
+		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" }, "objetMediaURL": func(string) string { return "" },
 	}
 	tpl, err := template.New("mediatheque.html").Funcs(fn).
 		ParseFS(assets, "templates/layout.html", "templates/newsroom.html", "templates/coquillenr.html", "templates/mediatheque.html", "templates/dock.html")
@@ -175,7 +175,7 @@ func TestPlayerExecute(t *testing.T) {
 	fn := template.FuncMap{
 		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
-		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" },
+		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" }, "objetMediaURL": func(string) string { return "" },
 	}
 	tpl, err := template.New("player.html").Funcs(fn).ParseFS(assets, "templates/player.html")
 	if err != nil {
@@ -212,7 +212,7 @@ func TestNewsroomTamponsTroisEtats(t *testing.T) {
 	fn := template.FuncMap{
 		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets, "glypheSalon": func(string, int) string { return "◆" },
 		"vignette": func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
-		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" },
+		"decalage": func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" }, "objetMediaURL": func(string) string { return "" },
 	}
 	tpl, err := template.New("newsroom.html").Funcs(fn).ParseFS(assets, "templates/newsroom.html", "templates/dock.html")
 	if err != nil {

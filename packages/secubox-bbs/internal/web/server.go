@@ -193,6 +193,15 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		// vignetteVideo : miniature de source (relayée par la box) pour une URL
 		// média vidéo — l'avatar de source des fils passerelle (#1266b). Vide sinon.
 		"vignetteVideo": vignetteMediaVideo,
+		// objetMediaURL : rend l'OBJET MÉDIA (lecteur + barre d'escalade) d'une URL
+		// vidéo, en tête d'un fil qui en porte une (media_url) — sans réécrire le
+		// premier message. Couvre les fils passerelle existants ET nouveaux (#1266b).
+		"objetMediaURL": func(u string) template.HTML {
+			if h, ok := embedMediaURL(u); ok {
+				return template.HTML(h)
+			}
+			return ""
+		},
 		// glypheSalon : une émoji STABLE et distincte par salon (#1114), dérivée
 		// du slug — plus joli que le ◆ générique, et un sous-salon garde le ↳.
 		"glypheSalon": func(slug string, profondeur int) string {

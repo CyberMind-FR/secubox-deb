@@ -25,6 +25,10 @@
     {{template "avacces" .}}
   </aside>
   <main class="feed">
+    {{/* OBJET MÉDIA en tête du fil (#1266b) : lecteur + barre d'escalade
+         souveraine, rendu depuis media_url sans réécrire le premier message.
+         Couvre les fils passerelle existants comme neufs. Vide si pas de média. */}}
+    {{if .T.MediaURL}}{{objetMediaURL .T.MediaURL}}{{end}}
     {{template "corps" .}}
   </main>
   <aside class="rail rr">

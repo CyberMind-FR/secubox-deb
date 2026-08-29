@@ -1,3 +1,26 @@
+secubox-bbs (0.30.42-1~bookworm1) bookworm; urgency=medium
+
+  * Objet media en TETE de fil (#1266b) : le lecteur + la barre d'escalade
+    sont rendus depuis media_url via objetMediaURL, sans reecrire le premier
+    message (qui reste le titre). UN SEUL point de verite : media_url -> objet
+    media, valable pour les fils passerelle existants comme neufs. On ne
+    reinjecte plus l'URL dans le corps a la creation (evite le double rendu).
+  * embedMediaURL couvre les DEUX sources des fils : YouTube (premiere vue, a
+    rapatrier) ET PeerTube deja souverain (miroir de la box) — la majorite des
+    fils. objetMediaPeertube : barre sans « souverain » (deja chez nous),
+    garde voir + diffuser. (110 fils PeerTube + 20 YouTube couverts.)
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 14:30:00 +0200
+
+secubox-bbs (0.30.41-1~bookworm1) bookworm; urgency=medium
+
+  * Menu contextuel megabar : re-publication FIABLE apres navigation interne
+    (#1266b). Cliquer un lien dans le BBS embarque vidait le menu de droite ; on
+    republie sur DOMContentLoaded + pageshow + relances, et on repond a
+    sbx:'contexte-demande' du Hall (qui la redemande a chaque (re)chargement).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 12:00:00 +0200
+
 secubox-bbs (0.30.40-1~bookworm1) bookworm; urgency=medium
 
   * Relais /yt-vignette (#1266b) : miniature YouTube par ID, cible FIXE
