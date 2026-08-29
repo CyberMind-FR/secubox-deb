@@ -37,6 +37,7 @@ from secubox_core.logger import get_logger
 
 from .github import GitHub
 from . import metrics
+from . import modules
 
 log = get_logger("devwatch")
 
@@ -110,6 +111,15 @@ _TOML_CFG, _TOML_FLOWS = _load_toml()
 CFG = _load_json(CONFIG_OVR, _TOML_CFG)
 FLOWS = _load_json(FLOWS_FILE, _TOML_FLOWS)
 SUMMARY: dict[str, Any] = {}
+MODULES: dict[str, Any] = {"total": 0, "modules": []}  # révisions locales des paquets
+
+
+def _scan_modules() -> None:
+    global MODULES
+    try:
+        MODULES = modules.scan(limit=24)
+    except Exception as e:  # défensif : un échec de scan ne casse rien
+        log.error(f"scan modules: {e}")
 
 
 def _recompute_from_cache() -> None:
@@ -183,6 +193,7 @@ async def _refresher() -> None:
     # Petite latence de démarrage : laisser le socket se poser avant le réseau.
     await asyncio.sleep(3)
     while True:
+        _scan_modules()   # LOCAL (dpkg + changelogs) : indépendant du quota GitHub
         try:
             await _poll_once()
             raw = SUMMARY.get("_raw") if SUMMARY else None
@@ -209,6 +220,7 @@ async def _startup() -> None:
             SUMMARY = json.loads(CACHE_FILE.read_text())
         except Exception as e:
             log.error(f"cache initial illisible: {e}")
+    _scan_modules()   # révisions locales dispo dès la première requête
     asyncio.create_task(_refresher())
 
 
@@ -224,9 +236,18 @@ async def health() -> dict:
 async def summary() -> JSONResponse:
     if not SUMMARY:
         return JSONResponse({"ok": False, "warming": True,
-                             "repo": {"full": f"{CFG['owner']}/{CFG['repo']}"}})
-    # On ne renvoie pas `_raw` (volumineux, interne).
-    return JSONResponse({k: v for k, v in SUMMARY.items() if k != "_raw"})
+                             "repo": {"full": f"{CFG['owner']}/{CFG['repo']}"},
+                             "modules": MODULES})
+    # On ne renvoie pas `_raw` (volumineux, interne). On joint les révisions
+    # LOCALES des modules (indépendantes du quota GitHub).
+    out = {k: v for k, v in SUMMARY.items() if k != "_raw"}
+    out["modules"] = MODULES
+    return JSONResponse(out)
+
+
+@router.get("/modules")
+async def get_modules() -> JSONResponse:
+    return JSONResponse(MODULES)
 
 
 @router.get("/flows")

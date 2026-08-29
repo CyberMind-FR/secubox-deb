@@ -1,3 +1,13 @@
+secubox-devwatch (1.0.4-1~bookworm1) bookworm; urgency=medium
+
+  * Slice « Modules · dernieres revisions » (#1370) : etat de revision LOCAL des
+    paquets secubox-* installes — version + dernier developpement (1re puce du
+    changelog), du plus recemment construit au plus ancien. Lu sur disque (dpkg
+    + changelogs), sans reseau ni quota. Endpoint /modules + joint a /summary.
+    Rendu au tableau de bord (chips + liste) et au cardlet /micro (strip).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 22:35:00 +0200
+
 secubox-devwatch (1.0.3-1~bookworm1) bookworm; urgency=medium
 
   * Slice Evolutions (#1370) : bargraphe comparatif des versions/releases. La

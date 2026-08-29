@@ -1,3 +1,10 @@
+secubox-webos (1.0.204-1~bookworm1) bookworm; urgency=medium
+
+  * Carte DevWatch h 250 -> 288 pour loger la strip des dernieres revisions de
+    modules (#1370).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 22:36:00 +0200
+
 secubox-webos (1.0.203-1~bookworm1) bookworm; urgency=medium
 
   * Le logo revient a l'accueil EN DOUCEUR (#1266b) : il portait href="/", donc

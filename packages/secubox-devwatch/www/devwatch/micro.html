@@ -57,6 +57,11 @@
   .ring i{position:absolute; font-style:normal; font-size:.6rem}
   @keyframes spin{to{transform:rotate(360deg)}}
   .loop .txt b{font-size:.78rem; font-weight:800; color:var(--gold)} .loop .txt small{display:block; font-size:.56rem; color:var(--faint)}
+  .mmods{display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; padding:6px 0 2px; border-top:1px solid var(--border-soft)}
+  .mmods::-webkit-scrollbar{display:none}
+  .mmods span{flex:0 0 auto; display:inline-flex; align-items:baseline; gap:4px; padding:2px 7px; border-radius:6px;
+    background:var(--surf2); font-size:.58rem}
+  .mmods span b{font-weight:700} .mmods span i{font-style:normal; font-family:"IBM Plex Mono",monospace; color:var(--cyan)}
   .pied{margin-top:auto; display:flex; align-items:center; gap:6px; padding-top:.3rem; border-top:1px solid var(--border);
     font-size:.56rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); text-decoration:none; cursor:pointer; background:none; border-left:0; border-right:0; border-bottom:0; width:100%; text-align:left}
   .pied:hover{color:var(--cyan)} .pied .grow{flex:1}
@@ -79,6 +84,7 @@
   <div class="commit" id="commit" hidden><span class="sha" id="csha"></span><span class="msg" id="cmsg"></span></div>
   <div class="loop"><div class="ring" id="ring"><i>💶</i></div>
     <div class="txt"><b id="pct">—</b><small id="fund"></small></div></div>
+  <div class="mmods" id="mmods" title="Dernières révisions des modules"></div>
   <button class="pied" id="pied" type="button"><span class="grow">le suivi complet</span><span id="quota"></span> ↗</button>
 </div>
 
@@ -112,6 +118,11 @@
     el('pct').textContent=n(pct)+' %'; el('pct').style.color=f.seeking?'var(--gold)':'';
     el('fund').textContent='campagne · '+n(f.sponsor_recu)+' € / '+n(f.depenses_cumulees)+' €'+(f.seeking?' · sponsor ?':'');
     var m=s.meta||{}; el('quota').textContent = m.rate_left!=null?('quota '+m.rate_left):'';
+    // Derniers modules révisés (name vX), du plus récent.
+    var mods=(s.modules&&s.modules.modules)||[];
+    el('mmods').innerHTML = mods.slice(0,7).map(function(x){
+      return '<span title="'+esc(x.dev||'')+'"><b>'+esc(x.name)+'</b><i>'+esc(x.version)+'</i></span>';
+    }).join('');
   }
   function charge(){
     fetch(API+'/summary',{headers:{'Accept':'application/json'}})

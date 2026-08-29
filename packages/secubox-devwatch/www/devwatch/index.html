@@ -277,6 +277,20 @@ a{color:inherit}
 .evo-graph{overflow-x:auto; scrollbar-width:thin}
 .evo-graph svg{display:block; height:auto; min-width:100%}
 .evo-graph .note{padding:8px 2px}
+/* MODULES — révisions locales */
+.mods{padding:18px; margin-bottom:26px}
+.mods-n{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--muted)}
+.mods-strip{display:flex;gap:7px;overflow-x:auto;scrollbar-width:thin;padding-bottom:8px;margin-bottom:6px}
+.mods-chip{flex:0 0 auto;display:inline-flex;align-items:baseline;gap:6px;padding:6px 11px;border-radius:9px;
+  background:var(--surface-2);border:1px solid var(--line-soft)}
+.mods-chip b{font-family:"Chivo";font-size:.8rem}
+.mods-chip .v{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--cyan-ink);font-weight:600}
+.mods-chip.fresh{border-color:color-mix(in srgb,var(--cyan) 45%,var(--line))}
+.mods-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:4px}
+.mods-row{display:flex;align-items:baseline;gap:9px;padding:9px 11px;border:1px solid var(--line-soft);border-radius:10px;background:var(--surface-2)}
+.mods-row .nm{font-family:"Chivo";font-weight:700;font-size:.84rem;flex:0 0 auto}
+.mods-row .v{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--cyan-ink);font-weight:600;flex:0 0 auto}
+.mods-row .dev{color:var(--muted);font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
 
 .foot-note{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); font-size:.72rem; color:var(--faint);
   display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:center; text-align:center}
@@ -353,6 +367,12 @@ a.witem .wt{min-height:2.6em}
   <section class="card evo">
     <div class="sec-h"><span class="k">Évolutions · versions &amp; releases</span><span class="rule"></span><span class="evo-leg" id="evo-leg"></span></div>
     <div class="evo-graph" id="evo-graph"></div>
+  </section>
+
+  <section class="card mods">
+    <div class="sec-h"><span class="k">Modules · dernières révisions</span><span class="rule"></span><span class="mods-n" id="mods-n"></span></div>
+    <div class="mods-strip" id="mods-strip"></div>
+    <div class="mods-list" id="mods-list"></div>
   </section>
 
   <section class="card eman">
@@ -571,6 +591,22 @@ a.witem .wt{min-height:2.6em}
       +bars+'</svg>';
   }
 
+  // MODULES · révisions locales des paquets secubox-* (dpkg + changelog),
+  // du plus récemment construit au plus ancien. Une slice de chips + une liste.
+  function mods(s){
+    var m=(s.modules&&s.modules.modules)||[], tot=(s.modules&&s.modules.total)||m.length;
+    el('mods-n').textContent = tot ? (tot+' modules installés') : '';
+    if(!m.length){ el('mods-strip').innerHTML='<div class="note">révisions indisponibles</div>'; el('mods-list').innerHTML=''; return; }
+    el('mods-strip').innerHTML = m.slice(0,10).map(function(x,i){
+      return '<span class="mods-chip'+(i<3?' fresh':'')+'"><b>'+esc(x.name)+'</b><span class="v">'+esc(x.version)+'</span></span>';
+    }).join('');
+    el('mods-list').innerHTML = m.map(function(x){
+      return '<div class="mods-row" title="'+esc(x.dev||'')+(x.date?' — '+esc(x.date):'')+'">'
+        +'<span class="nm">'+esc(x.name)+'</span><span class="v">'+esc(x.version)+'</span>'
+        +'<span class="dev">'+esc(x.dev||'—')+'</span></div>';
+    }).join('');
+  }
+
   function commits(s){
     var cs=s.latest_commits||[];
     if(!cs.length){ el('clist').innerHTML='<div class="note">pas de commit récent</div>'; return; }
@@ -623,7 +659,7 @@ a.witem .wt{min-height:2.6em}
     var full=(s.repo&&s.repo.full)||'—';
     el('repo-owner').textContent=(full.split('/')[0]||'')+'/';
     el('repo-name').textContent=full.split('/')[1]||'';
-    hero(s); cadence(s); evo(s); eman(s); work(s); commits(s); release(s); miniCardlet(s);
+    hero(s); cadence(s); evo(s); mods(s); eman(s); work(s); commits(s); release(s); miniCardlet(s);
     var m=s.meta||{};
     el('meta-note').textContent = m.rate_left!=null ? (' · quota GitHub '+m.rate_left) : '';
     if(m.error){ el('live-t').textContent='rafraîchi (quota bas)'; }
