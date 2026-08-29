@@ -712,6 +712,13 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .vb-saisie button{width:30px;height:26px;border-radius:7px;border:1px solid var(--line);
   background:var(--panel);color:var(--ink);cursor:pointer;flex:0 0 auto}
 .vb-saisie button:hover{border-color:var(--cyan);color:var(--cyan)}
+.vb-slices{display:flex;flex-direction:column;gap:5px}
+.vb-slice{display:flex;align-items:center;gap:8px;min-width:0}
+.vb-slice:has(.vb-strip:empty){display:none}
+.vb-lab{flex:0 0 auto;width:20px;text-align:center;font-size:.82rem;opacity:.7}
+.vb-strip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+.vb-strip::-webkit-scrollbar{display:none}
+.vb-strip:empty{display:none}
 .vb-hist{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
 .vb-hist::-webkit-scrollbar{display:none}
 .vb-hist:empty{display:none}
@@ -719,8 +726,9 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--dim);
   font-size:.7rem;padding:3px 10px;cursor:pointer;font-family:"JetBrains Mono"}
 .vb-h:hover{border-color:var(--cyan);color:var(--cyan)}
+.vb-n{font-variant-numeric:tabular-nums;font-weight:700;color:var(--cyan);opacity:.9}
 .viewer-ov.mini .viewer-base{padding:6px 8px}
-.viewer-ov.mini .vb-hist{display:none}
+.viewer-ov.mini .vb-slices{display:none}
 .viewer-ov .media{flex:1;min-height:0;display:flex;background:#000}
 .viewer-ov .media iframe,.viewer-ov .media video{flex:1;width:100%;height:100%;border:0;background:#000;object-fit:contain}
 .viewer-bar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:8px 12px;
@@ -1048,6 +1056,10 @@ const FEATURED = [
   // modes (embarqué /devwatch/?embed=1, admin, onglet) visent la bonne page. La
   // carte /micro se sert de MÊME origine (admin autorisé dans frame-src du Hall).
   {id:"devwatch",   label:"DevWatch",  icon:"🛰️", color:"#0784a8", url:"admin.gk2.secubox.in/devwatch", micro:"/micro.html", h:250},
+  // Surf & Viewer (#1266b) : rappel EN SLICES des favoris (partage/répète),
+  // propositions au parc (propose/cumule ×N) et liens collés. Carte servie par
+  // le Hall — MÊME origine que le viewer, donc même localStorage.
+  {id:"surfviewer", label:"Surf & Viewer", icon:"🧭", color:"#3c6e8f", carte:"/cardlets/surfviewer.html", h:250},
   // SURF n'est pas un service de la box : c'est un navigateur de relais. Il
   // sert sa propre carte (barre d'adresse + cadre), et s'ouvre aussi en overlay
   // depuis les sources MetaNews ou la barre de recherche (#1337).
@@ -2430,6 +2442,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       }catch(e){}
       if(vid){ fetch('/api/v1/ytsas/conserve/'+encodeURIComponent(vid),{method:'POST'}).catch(function(){}); }
       this.classList.add('on');
+      favRend();   // le favori rejoint la slice ⭐ aussitot
     });
     E('viewer-share').addEventListener('click',function(){
       if(!courant) return;
@@ -2451,6 +2464,7 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
         var vel = media.querySelector('video'); var pos = vel ? (vel.currentTime||0) : 0;
         fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({url:burl,titre:titreEl.textContent,pos:pos})}).catch(function(){});
+        journalDiffusion(burl, titreEl.textContent);   // trace dans la slice 📡
         diffuse=true; this.classList.add('on'); this.title='Arrêter la diffusion';
         // Reveil immediat de la pastille sur CE Hall (au lieu d'attendre le
         // sonde a 5s) : le recepteur broadcast ecoute 'broadcast-on'. (#1237)
@@ -2478,12 +2492,16 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       if(!/^https?:\/\//i.test(u) && /\.[a-z]{2,}/i.test(u)) u='https://'+u; // domaine nu → https
       voirOuSurfer(u); champ.value='';
     });
-    var zh=E('viewer-hist');
-    if(zh) zh.addEventListener('click', function(e){
+    // RECALL EN SLICES (#1266b) : un seul écouteur délégué sur les trois bandes.
+    // Un chip « diffusion » RE-DIFFUSE au parc ; un favori / lien collé se VOIT.
+    var recall=E('viewer-recall');
+    if(recall) recall.addEventListener('click', function(e){
       var b=e.target.closest('[data-u]'); if(!b) return;
-      voirOuSurfer(b.getAttribute('data-u'));
+      var u=b.getAttribute('data-u');
+      if(b.getAttribute('data-act')==='diffuse') reDiffuse(u, b.getAttribute('data-titre')||'');
+      else voirOuSurfer(u);
     });
-    histRend();
+    histRend(); favRend(); diffRend();
   }
   // Voir dans le lecteur si c'est un média (et le RAPATRIER, souverain), sinon
   // surfer la page dans le BiB. Le lien vu entre dans l'historique.
@@ -2508,9 +2526,54 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     var z=E('viewer-hist'); if(!z) return;
     z.innerHTML=histLire().map(function(x){
       var lbl=String(x.u).replace(/^https?:\/\//,'').slice(0,42);
-      return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" title="'+esc(x.u)+'">▶ '+esc(lbl)+'</button>';
+      return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-act="view" title="'+esc(x.u)+'">▶ '+esc(lbl)+'</button>';
     }).join('');
   }
+  // ── FAVORIS (#1266b) : la meme reserve que le bouton ⭐ (sbx_favoris). On la
+  //    montre en slice pour la rappeler d'un clic dans le viewer.
+  function favLire(){ try{ return JSON.parse(localStorage.getItem('sbx_favoris')||'[]'); }catch(e){ return []; } }
+  function favRend(){
+    var z=E('vb-fav'); if(!z) return;
+    z.innerHTML=favLire().slice().reverse().slice(0,20).map(function(u){
+      var lbl=String(u).replace(/^https?:\/\//,'').slice(0,42);
+      return '<button class="vb-h" type="button" data-u="'+esc(u)+'" data-act="view" title="'+esc(u)+'">⭐ '+esc(lbl)+'</button>';
+    }).join('');
+  }
+  window.rendViewerFavoris=favRend;   // le bouton ⭐ le rappelle apres ajout
+  // ── DIFFUSIONS (#1266b) : journal local de ce qu'on a envoye au parc. Aucun
+  //    stockage n'existait — la diffusion ne laissait pas de trace. Un clic
+  //    RE-DIFFUSE le flux (souverain quand c'est un /stream ytsas).
+  function diffLire(){ try{ return JSON.parse(localStorage.getItem('sbx.broadcast.hist')||'[]'); }catch(e){ return []; } }
+  function journalDiffusion(u, titre){
+    u=String(u||'').trim(); if(!u) return;
+    // DIFFUSER = PROPOSER, ET ÇA SE CUMULE (#1266b) : proposer la même chose au
+    // parc n'ajoute pas une ligne — ça incrémente son compteur. La proposition
+    // « pèse » ce qu'on l'a proposée de fois.
+    var prev=null;
+    var h=diffLire().filter(function(x){ if(x.u===u){ prev=x; return false; } return true; });
+    var n=(prev&&prev.n)?prev.n+1:1;
+    h.unshift({u:u, titre:String(titre||(prev&&prev.titre)||''), n:n, t:Date.now()});
+    h=h.slice(0,12);
+    try{ localStorage.setItem('sbx.broadcast.hist', JSON.stringify(h)); }catch(e){}
+    diffRend();
+  }
+  window.journalDiffusion=journalDiffusion;   // les autres emetteurs (surf, objets) s'en servent
+  function diffRend(){
+    var z=E('vb-diff'); if(!z) return;
+    z.innerHTML=diffLire().map(function(x){
+      var lbl=(x.titre||String(x.u).replace(/^https?:\/\//,'')).slice(0,40);
+      var n=x.n||1;
+      return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×) : '+esc(x.titre||x.u)+'">📡 '+esc(lbl)+(n>1?' <span class="vb-n">×'+n+'</span>':'')+'</button>';
+    }).join('');
+  }
+  function reDiffuse(u, titre){
+    if(!u) return;
+    fetch('/api/v1/webos/public/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:u,titre:titre||''})}).catch(function(){});
+    journalDiffusion(u, titre);
+    try{ postMessage({sbx:'broadcast-on'},'*'); }catch(e){}
+  }
+  window.rendViewerDiffusions=diffRend;
 })();
 
 // UN SERVICE EMBARQUE DEMANDE D'EN OUVRIR UN AUTRE, PAR SON HOTE (#1358). Le
@@ -2541,6 +2604,9 @@ addEventListener('message', ev=>{
   // parc entier irait taper YouTube, ce qui tue la souveraineté — puis on pousse
   // le broadcast (même endpoint que le 📡 du viewer) et on réveille la pastille.
   if(d.sbx==='diffuser' && d.url){
+    // Trace dans la slice 📡 du viewer (#1266b) : on journalise l'ORIGINE
+    // demandée (ce que l'humain a diffusé), pas l'URL souveraine résolue.
+    if(typeof window.journalDiffusion==='function'){ try{ window.journalDiffusion(d.url, d.titre); }catch(e){} }
     const pousse=(u,t)=>{ fetch('/api/v1/webos/public/broadcast',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({url:u,titre:t||d.titre||''})}).catch(()=>{});
@@ -3428,7 +3494,13 @@ const CARDLET_ICONES = {
              aria-label="Voir une URL ou surfer une adresse">
       <button type="submit" id="viewer-go" title="Voir / surfer">▶</button>
     </form>
-    <div class="vb-hist" id="viewer-hist"></div>
+    <!-- RECALL EN SLICES (#1266b) : trois bandes horizontales — favoris,
+         liens collés/vus, diffusions passées. Chaque slice se masque si vide. -->
+    <div class="vb-slices" id="viewer-recall">
+      <div class="vb-slice" id="vb-slice-fav"><span class="vb-lab" title="Favoris">⭐</span><div class="vb-strip" id="vb-fav"></div></div>
+      <div class="vb-slice" id="vb-slice-hist"><span class="vb-lab" title="Liens collés / vus">🔗</span><div class="vb-strip vb-hist" id="viewer-hist"></div></div>
+      <div class="vb-slice" id="vb-slice-diff"><span class="vb-lab" title="Diffusions au parc">📡</span><div class="vb-strip" id="vb-diff"></div></div>
+    </div>
   </div>
 </div>
 </body>

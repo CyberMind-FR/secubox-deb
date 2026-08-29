@@ -1,3 +1,29 @@
+secubox-webos (1.0.197-1~bookworm1) bookworm; urgency=medium
+
+  * Modele de rappel affine (#1266b) : diffuser = PROPOSER, et ca se CUMULE.
+    Le journal sbx.broadcast.hist compte les re-propositions (xN) au lieu
+    d'empiler des lignes ; la slice 📡 affiche le compteur.
+  * Nouveau cardlet Hall « Surf & Viewer » (/cardlets/surfviewer.html) : rappel
+    EN SLICES de MEME origine que le viewer (meme localStorage) — ⭐ favoris
+    (se partage : bouton copie ; se repete : re-vu), 📡 propositions (se propose
+    & se cumule, xN, re-diffuse au clic), 🔗 liens colles. + champ coller-un-lien.
+    Entree FEATURED associee.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 18:45:00 +0200
+
+secubox-webos (1.0.196-1~bookworm1) bookworm; urgency=medium
+
+  * Viewer : rappel EN SLICES (#1266b). La barre du viewer montre trois bandes
+    horizontales — ⭐ favoris (sbx_favoris), 🔗 liens collés/vus (sbx.viewer.hist),
+    📡 diffusions. Chaque slice se masque si vide. Un clic favori/lien VOIT ;
+    un clic diffusion RE-DIFFUSE au parc.
+  * Journal de diffusion (nouveau) : chaque envoi au parc (bouton 📡 du viewer ET
+    sbx:'diffuser' d'un service/objet) est trace dans sbx.broadcast.hist —
+    jusque-la la diffusion ne laissait aucune trace. window.journalDiffusion
+    expose pour les autres emetteurs.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 18:15:00 +0200
+
 secubox-webos (1.0.195-1~bookworm1) bookworm; urgency=medium
 
   * Hall : carte DevWatch au strip vedette (#1370). Entree FEATURED pointant

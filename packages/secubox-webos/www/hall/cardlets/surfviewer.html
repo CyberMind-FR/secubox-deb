@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1266b — carte « Surf & Viewer » : rappel EN SLICES.
+
+  Trois primitives, trois bandes :
+    ⭐ FAVORI      — se PARTAGE et se RÉPÈTE : keep personnel, re-vu d'un clic,
+                     partageable (copie du lien).
+    📡 PROPOSITION — se PROPOSE et se CUMULE : diffuser au parc EST proposer ;
+                     re-proposer n'ajoute pas une ligne, ça incrémente le ×N.
+    🔗 LIEN COLLÉ  — l'historique neutre de ce qu'on a collé/vu.
+
+  De MÊME ORIGINE que le Hall : elle lit le MÊME localStorage que le viewer
+  (sbx_favoris, sbx.viewer.hist, sbx.broadcast.hist) et n'invente rien. Les
+  actions passent au Hall par postMessage (sbx:'voir' / sbx:'diffuser').
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Surf &amp; Viewer — rappel</title>
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --line-soft:#eef1f7; --cyan:#0784a8; --gold:#b7810a; --up:#0f9d54; --surf2:#f5f7fc; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --line-soft:#1b2230; --cyan:#28d6ff; --gold:#f0b429; --up:#35d07f; --surf2:#10151f; } }
+  :root[data-theme="dark"]{ --fond:#141a26; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --line-soft:#1b2230; --cyan:#28d6ff; --gold:#f0b429; --up:#35d07f; --surf2:#10151f; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;scrollbar-width:none}
+  html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.4rem}
+  .h{display:flex;align-items:center;gap:7px}
+  .h .ic{font-size:1rem} .h b{font-size:.84rem}
+  .h .n{margin-left:auto;font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  form.paste{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;
+    padding:5px 8px;background:var(--surf2)}
+  form.paste .pic{color:var(--faint);font-size:.85rem}
+  form.paste input{flex:1;min-width:0;border:0;background:none;color:var(--texte);font-size:.78rem;outline:none}
+  form.paste button{width:26px;height:22px;border-radius:6px;border:1px solid var(--line);background:none;
+    color:var(--muted);cursor:pointer;font-size:.72rem}
+  form.paste button:hover{border-color:var(--cyan);color:var(--cyan)}
+  .slices{display:flex;flex-direction:column;gap:6px;overflow-y:auto;scrollbar-width:none;flex:1;min-height:0}
+  .slices::-webkit-scrollbar{display:none}
+  .slice{display:flex;flex-direction:column;gap:3px}
+  .slice.empty{display:none}
+  .slab{display:flex;align-items:center;gap:5px;font-size:.56rem;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--faint);font-weight:700}
+  .slab .mut{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
+  .slab .c{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .strip{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+  .strip::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);
+    border-radius:8px;overflow:hidden;background:var(--surf2)}
+  .chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.68rem;
+    padding:4px 8px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip button.act:hover{color:var(--cyan)}
+  .chip .mini{padding:4px 6px;border-left:1px solid var(--line);color:var(--faint);font-size:.66rem}
+  .chip .mini:hover{color:var(--gold)}
+  .chip .cnt{font-variant-numeric:tabular-nums;font-weight:700;color:var(--cyan)}
+  .empty-all{color:var(--faint);font-size:.72rem;text-align:center;padding:14px 4px}
+  .pied{margin-top:auto;display:flex;align-items:center;gap:6px;padding-top:.3rem;border-top:1px solid var(--line);
+    font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .pied .grow{flex:1}
+</style>
+
+<div class="mw">
+  <div class="h"><span class="ic">🧭</span><b>Surf &amp; Viewer</b><span class="n" id="tot"></span></div>
+  <form class="paste" id="paste"><span class="pic">⌕</span>
+    <input id="pu" type="search" autocomplete="off" spellcheck="false" placeholder="coller un lien à voir / surfer…" aria-label="Coller un lien">
+    <button type="submit" title="Voir / surfer">▶</button></form>
+  <div class="slices" id="slices">
+    <div class="slice" id="s-fav"><div class="slab">⭐ Favoris <span class="mut">· se partage &amp; se répète</span><span class="c" id="c-fav"></span></div><div class="strip" id="st-fav"></div></div>
+    <div class="slice" id="s-diff"><div class="slab">📡 Propositions <span class="mut">· se propose &amp; se cumule</span><span class="c" id="c-diff"></span></div><div class="strip" id="st-diff"></div></div>
+    <div class="slice" id="s-hist"><div class="slab">🔗 Liens collés<span class="c" id="c-hist"></span></div><div class="strip" id="st-hist"></div></div>
+    <div class="empty-all" id="vide" hidden>Rien encore — collez un lien, mettez en favori (⭐) ou proposez au parc (📡).</div>
+  </div>
+  <div class="pied"><span class="grow">rappel du viewer · même origine</span><span>SBXOS</span></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  function lire(k){ try{ return JSON.parse(localStorage.getItem(k)||'[]'); }catch(e){ return []; } }
+  function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
+  function bref(u){ return String(u).replace(/^https?:\/\//,'').replace(/^www\./,''); }
+
+  function chip(u, titre, act, extra){
+    var lbl=esc((titre||bref(u)).slice(0,40));
+    var main='<button class="act" type="button" data-u="'+esc(u)+'" data-titre="'+esc(titre||'')+'" data-act="'+act+'" title="'+esc(titre||u)+'">'+lbl+'</button>';
+    return '<span class="chip">'+main+(extra||'')+'</span>';
+  }
+
+  function rend(){
+    var fav=lire('sbx_favoris');                 // [url]
+    var diff=lire('sbx.broadcast.hist');         // [{u,titre,n,t}]
+    var hist=lire('sbx.viewer.hist');            // [{u,t}]
+
+    // ⭐ Favoris : re-vu (répète) + partage (copie).
+    el('st-fav').innerHTML = fav.slice().reverse().slice(0,20).map(function(u){
+      var share='<button class="mini" type="button" data-u="'+esc(u)+'" data-act="share" title="Partager (copier le lien)">⤴</button>';
+      return chip(u, null, 'view', share);
+    }).join('');
+    // 📡 Propositions : re-proposer (cumule) — badge ×N.
+    el('st-diff').innerHTML = diff.map(function(x){
+      var n=x.n||1, badge=n>1?' <span class="cnt">×'+n+'</span>':'';
+      return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+esc((x.titre||bref(x.u)).slice(0,36))+badge+'</button></span>';
+    }).join('');
+    // 🔗 Liens collés : re-vu.
+    el('st-hist').innerHTML = hist.map(function(x){ return chip(x.u, null, 'view', ''); }).join('');
+
+    el('c-fav').textContent = fav.length||'';
+    el('c-diff').textContent = diff.length||'';
+    el('c-hist').textContent = hist.length||'';
+    el('s-fav').classList.toggle('empty', !fav.length);
+    el('s-diff').classList.toggle('empty', !diff.length);
+    el('s-hist').classList.toggle('empty', !hist.length);
+    var total=fav.length+diff.length+hist.length;
+    el('tot').textContent = total? (total+' items') : '';
+    el('vide').hidden = total>0;
+  }
+
+  // Clics délégués sur les trois strips.
+  el('slices').addEventListener('click', function(e){
+    var b=e.target.closest('[data-u]'); if(!b) return;
+    var u=b.getAttribute('data-u'), act=b.getAttribute('data-act'), titre=b.getAttribute('data-titre')||'';
+    if(act==='share'){
+      try{ if(navigator.clipboard) navigator.clipboard.writeText(u); }catch(x){}
+      b.textContent='✓'; setTimeout(function(){ b.textContent='⤴'; }, 900);
+    } else if(act==='diffuse'){
+      post({sbx:'diffuser', url:u, titre:titre});   // le Hall re-diffuse ET cumule
+    } else {
+      post({sbx:'voir', url:u, titre:titre});        // le Hall ouvre le viewer / surf
+    }
+  });
+
+  // Coller un lien → le Hall le VOIT (média → lecteur) ou le SURFE.
+  el('paste').addEventListener('submit', function(e){
+    e.preventDefault();
+    var u=(el('pu').value||'').trim(); if(!u) return;
+    if(!/^https?:\/\//i.test(u) && /\.[a-z]{2,}/i.test(u)) u='https://'+u;
+    post({sbx:'voir', url:u}); el('pu').value='';
+  });
+
+  // Le viewer écrit dans le MÊME localStorage (autre document, même origine) :
+  // l'évènement 'storage' nous prévient. Filet de sécurité : rafraîchi périodique.
+  addEventListener('storage', function(ev){
+    if(!ev.key || ev.key==='sbx_favoris' || ev.key==='sbx.viewer.hist' || ev.key==='sbx.broadcast.hist') rend();
+  });
+  setInterval(rend, 4000);
+  rend();
+
+  (function(){ var t=new URLSearchParams(location.search).get('theme');
+    if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
+  addEventListener('message', function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+})();
+</script>
