@@ -1,3 +1,20 @@
+secubox-webos (1.0.193-1~bookworm1) bookworm; urgency=medium
+
+  * Menu contextuel : le Hall REDEMANDE la nav au service embarque a chaque
+    (re)chargement (sbx:'contexte-demande') et ne vide plus le menu sur une
+    publication vide (#1266b) — le clic dans le BBS embarque garde son menu.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 12:02:00 +0200
+
+secubox-webos (1.0.192-1~bookworm1) bookworm; urgency=medium
+
+  * Viewer : BARRE D'ADRESSE en base (#1266b) — coller une URL la VOIT (média →
+    lecteur souverain + capture ytsas /add) ou la SURFE (page → BiB) ; historique
+    des liens vus (localStorage), gardes le temps de leur cache. window.viewerVoir
+    exposé pour le catch depuis le surf.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 11:45:00 +0200
+
 secubox-webos (1.0.191-1~bookworm1) bookworm; urgency=medium
 
   * Hall : handler sbx:'souverain' (#1227) — rapatrie une video sur la box en

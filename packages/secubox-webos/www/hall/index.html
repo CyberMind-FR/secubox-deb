@@ -701,6 +701,26 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* Radio en mini « lecteur » : une pop-up radio se FERME, elle ne s'agrandit pas
    (#1266). On retire le plein écran et la bascule mini — seule reste la croix. */
 .viewer-ov.lecteur #viewer-full, .viewer-ov.lecteur #viewer-mini{display:none}
+/* BASE DU VIEWER (#1266b) : barre d'adresse (voir/surfer) + historique des liens. */
+.viewer-base{flex:0 0 auto;display:flex;flex-direction:column;gap:6px;padding:8px 12px;
+  background:var(--panel);border-top:1px solid var(--line)}
+.vb-saisie{display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+  border-radius:9px;background:var(--bg);padding:4px 8px}
+.vb-saisie .vb-ic{color:var(--dim);font-size:.9rem}
+.vb-saisie input{flex:1;min-width:0;border:0;background:none;color:var(--ink);
+  font-family:inherit;font-size:.82rem;outline:none}
+.vb-saisie button{width:30px;height:26px;border-radius:7px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);cursor:pointer;flex:0 0 auto}
+.vb-saisie button:hover{border-color:var(--cyan);color:var(--cyan)}
+.vb-hist{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.vb-hist::-webkit-scrollbar{display:none}
+.vb-hist:empty{display:none}
+.vb-h{flex:0 0 auto;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--dim);
+  font-size:.7rem;padding:3px 10px;cursor:pointer;font-family:"JetBrains Mono"}
+.vb-h:hover{border-color:var(--cyan);color:var(--cyan)}
+.viewer-ov.mini .viewer-base{padding:6px 8px}
+.viewer-ov.mini .vb-hist{display:none}
 .viewer-ov .media{flex:1;min-height:0;display:flex;background:#000}
 .viewer-ov .media iframe,.viewer-ov .media video{flex:1;width:100%;height:100%;border:0;background:#000;object-fit:contain}
 .viewer-bar{flex:0 0 auto;display:flex;align-items:center;gap:.5rem;padding:8px 12px;
@@ -1477,6 +1497,10 @@ addEventListener('message', ev=>{
 function poseContextePousse(id, titre, items){
   const ctx=document.getElementById('ctx'), bt=document.getElementById('mnav-ctx');
   if(!ctx || !bt || !_svc || _svc.id!==id) return;
+  // UNE PUBLICATION VIDE NE VIDE PAS LE MENU (#1266b) : pendant une navigation
+  // interne, la page peut republier sans items un instant ; on garde alors la
+  // nav précédente plutôt que d'effacer le menu contextuel.
+  if(!items || !items.length) return;
   document.getElementById('ctx-h').textContent = titre || 'Sources';
   ctx.innerHTML = items.slice(0,40).map(it=>
     rowHTML({attrs:'data-ctxpush="'+esc(it.cle||'')+'"',
@@ -1771,6 +1795,12 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   addEventListener('load', e=>{
     const f=e.target;
     if(f && f.tagName==='IFRAME') f.dataset.pret='1';
+    // Un service EMBARQUÉ qui (re)charge — clic sur un lien interne compris — doit
+    // republier sa nav au menu contextuel : on la LUI REDEMANDE (#1266b). Sans
+    // cela, naviguer dans le BBS embarqué vidait le menu de droite de la mégabar.
+    if(f && f.tagName==='IFRAME' && f.closest && f.closest('#eb-frames')){
+      try{ f.contentWindow.postMessage({sbx:'contexte-demande'}, new URL(f.src).origin); }catch(e){}
+    }
     dis();
   }, true);
 })();
@@ -2433,6 +2463,48 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
       this.textContent = mini ? '▢' : '⧉';
       this.title = mini ? 'Plein cadre' : 'Mini — regarder en naviguant';
     });
+    // BASE DU VIEWER (#1266b) : voir une URL (média → lecteur + capture ytsas
+    // souveraine) ou surfer (page → BiB), + historique des liens vus, gardés le
+    // temps de leur cache.
+    var saisie=E('viewer-saisie'), champ=E('viewer-url');
+    if(saisie) saisie.addEventListener('submit', function(e){
+      e.preventDefault();
+      var u=(champ.value||'').trim(); if(!u) return;
+      if(!/^https?:\/\//i.test(u) && /\.[a-z]{2,}/i.test(u)) u='https://'+u; // domaine nu → https
+      voirOuSurfer(u); champ.value='';
+    });
+    var zh=E('viewer-hist');
+    if(zh) zh.addEventListener('click', function(e){
+      var b=e.target.closest('[data-u]'); if(!b) return;
+      voirOuSurfer(b.getAttribute('data-u'));
+    });
+    histRend();
+  }
+  // Voir dans le lecteur si c'est un média (et le RAPATRIER, souverain), sinon
+  // surfer la page dans le BiB. Le lien vu entre dans l'historique.
+  function voirOuSurfer(u){
+    if(estMediaUrl(u)){ ouvre(u); histAjoute(u); capterYtsas(u); }
+    else if(typeof ouvreSurf==='function'){ ouvreSurf(u); }
+  }
+  function capterYtsas(u){
+    var v=ytid(u);
+    if(v){ fetch('/api/v1/ytsas/add',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:u})}).catch(function(){}); }
+  }
+  window.viewerVoir=voirOuSurfer;   // le catch depuis le surf s'en sert
+  function histLire(){ try{ return JSON.parse(localStorage.getItem('sbx.viewer.hist')||'[]'); }catch(e){ return []; } }
+  function histAjoute(u){
+    var h=histLire().filter(function(x){ return x.u!==u; });
+    h.unshift({u:u, t:Date.now()}); h=h.slice(0,12);
+    try{ localStorage.setItem('sbx.viewer.hist', JSON.stringify(h)); }catch(e){}
+    histRend();
+  }
+  function histRend(){
+    var z=E('viewer-hist'); if(!z) return;
+    z.innerHTML=histLire().map(function(x){
+      var lbl=String(x.u).replace(/^https?:\/\//,'').slice(0,42);
+      return '<button class="vb-h" type="button" data-u="'+esc(x.u)+'" title="'+esc(x.u)+'">▶ '+esc(lbl)+'</button>';
+    }).join('');
   }
 })();
 
@@ -3330,6 +3402,19 @@ const CARDLET_ICONES = {
       <button id="viewer-full" type="button" title="Plein écran">⛶</button>
       <button id="viewer-x" type="button" title="Fermer">✕</button>
     </span>
+  </div>
+  <!-- BASE DU VIEWER (#1266b) : une barre d'adresse pour VOIR une URL (média →
+       lecteur souverain + capture ytsas) ou SURFER (page → BiB), et l'historique
+       des liens vus/streamés (gardés le temps de leur cache ytsas). -->
+  <div class="viewer-base">
+    <form class="vb-saisie" id="viewer-saisie">
+      <span class="vb-ic" aria-hidden="true">⌕</span>
+      <input id="viewer-url" type="search" autocomplete="off" spellcheck="false"
+             placeholder="coller une URL à voir (vidéo → lecteur), ou surfer une adresse…"
+             aria-label="Voir une URL ou surfer une adresse">
+      <button type="submit" id="viewer-go" title="Voir / surfer">▶</button>
+    </form>
+    <div class="vb-hist" id="viewer-hist"></div>
   </div>
 </div>
 </body>
