@@ -15,6 +15,7 @@ Runs OFF the event loop (the caller uses asyncio.to_thread). Single job at a
 time; live progress in the module-level `JOB` dict. PeerTube credentials are
 read from a root-only secret, never hard-coded.
 """
+import html
 import json
 import os
 import re
@@ -177,13 +178,23 @@ def _add_billet(title, desc, source_url, pt_watch, pod_audio):
     if pod_audio:
         parts.append(f"\n🎧 **Audio (Podcaster) :** {pod_audio}\n")
     body = "".join(parts)
+    # L'ITEM EMBARQUABLE (#1244/#1227) : le billet PORTE un lecteur PeerTube
+    # souverain (embed), pas seulement des liens texte — parité avec ytsas.
+    emb_html = None
+    if pt_watch:
+        seg = "/videos/watch/" if "/videos/watch/" in pt_watch else ("/w/" if "/w/" in pt_watch else "")
+        emb = pt_watch.replace(seg, "/videos/embed/") if seg else pt_watch
+        emb_html = ('<iframe class="sbx-embed" src="%s" allowfullscreen loading="lazy">'
+                    "</iframe>" % html.escape(emb))
     con = sqlite3.connect(BILLETS_DB, timeout=30)
     try:
         con.execute("PRAGMA journal_mode=WAL")
         con.execute(
             "INSERT INTO billet(id,created_at,updated_at,published_at,body,ref_url,embed_url,"
-            "slug,status,style) VALUES(?,?,?,?,?,?,?,?, 'published','default')",
-            (bid, now, now, now, body, source_url or None, pt_watch or None, slug))
+            "embed_html,embed_provider,slug,status,style) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?, 'published','default')",
+            (bid, now, now, now, body, source_url or None, pt_watch or None,
+             emb_html, ("peertube" if pt_watch else None), slug))
         con.commit()
     finally:
         con.close()

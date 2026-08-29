@@ -1,3 +1,11 @@
+secubox-podcaster (1.0.28-1~bookworm1) bookworm; urgency=medium
+
+  * billets d'import : le billet PORTE un lecteur PeerTube souverain (embed_html
+    + embed_provider), pas seulement des liens texte (#1244/#1227) — parite avec
+    ytsas et fin du billet « titre seul » sans video jouable.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 06:45:00 +0200
+
 secubox-podcaster (1.0.27-1~bookworm1) bookworm; urgency=medium
 
   * fix: carte /micro — police du corps corrigee en sans-serif systeme (comme la
