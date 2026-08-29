@@ -1,3 +1,10 @@
+secubox-webos (1.0.201-1~bookworm1) bookworm; urgency=medium
+
+  * Carte MetaNews plus haute (h 236 -> 300) pour loger les parties du sujet
+    sous le titre (hashtags, sources, metriques, source courante) — #1262b.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 21:16:00 +0200
+
 secubox-webos (1.0.200-1~bookworm1) bookworm; urgency=medium
 
   * Aide du Hall refondue (#1370b) : remplace l'aide minimale par un CATALOGUE

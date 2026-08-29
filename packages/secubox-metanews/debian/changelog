@@ -1,3 +1,12 @@
+secubox-metanews (0.1.29-1~bookworm1) bookworm; urgency=medium
+
+  * Carte /micro : les PARTIES du sujet sous le titre (#1262b) — hashtags,
+    sources agregees (dedoublonnees) + metriques (nb de sources, importance),
+    et la SOURCE COURANTE pendant la rotation. Ce que la vue principale montrait
+    deja, desormais aussi dans le cardlet du Hall.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 21:15:00 +0200
+
 secubox-metanews (0.1.28-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet micro (#1266) : l'auto-rotation (tourne, 6 s) ne parasite plus les
