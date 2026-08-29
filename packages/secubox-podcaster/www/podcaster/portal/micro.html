@@ -359,6 +359,10 @@
     try {
       parent.postMessage({
         sbx: 'media', id: 'podcaster',
+        // VIGNETTE DE SOURCE (#1266b) : la pochette du flux courant, pour que la
+        // barre média montre CE podcast — distincte selon l'épisode. URL absolue
+        // (origine podcaster) car c'est le Hall qui l'affichera.
+        vignette: (e && e.feed_id) ? (location.origin + API + '/feeds/' + encodeURIComponent(e.feed_id) + '/cover') : '',
         titre: e.title || 'Bibliothèque', sous: e.feed || '',
         joue: !son.paused, t: son.currentTime || 0, d: son.duration || 0,
         fin: !!fin

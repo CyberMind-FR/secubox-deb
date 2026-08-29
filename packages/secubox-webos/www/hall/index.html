@@ -501,6 +501,12 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   background:var(--panel);border:1px solid var(--line);border-radius:12px;
   box-shadow:var(--lift);padding:6px 10px;max-width:1100px;margin:0 auto;width:100%}
 .mrow .mic{font-size:.95rem;flex:0 0 auto}
+/* VIGNETTE DE SOURCE (#1266b) : la miniature du média à la place de l'icône,
+   propre à chaque flux. Rangée = petite tuile ; pastille = ronde, plein cadre. */
+.mrow .mic.vig{width:24px;height:24px;border-radius:5px;object-fit:cover;display:block}
+.fpast .fpico.vig{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;
+  object-fit:cover;display:block}
+.fpast .fpico{display:inline-flex;align-items:center;justify-content:center}
 .mrow button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-2);
   background:var(--panel);color:var(--ink);font-size:.68rem;line-height:1;cursor:pointer;padding:0;flex:0 0 auto}
 .mrow button:hover{border-color:var(--violet)}
@@ -1830,6 +1836,30 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   // Une pastille sans icône propre retombe sur 🔊 — un haut-parleur pour une
   // VIDÉO serait un contresens : ce n'est pas le son qu'on est venu voir.
   const ICONES={radio:'📻', podcaster:'🎙️', peertube:'📹'};
+  // LE VISUEL D'UN FLUX (#1266b) : la VIGNETTE de la source quand le cardlet en
+  // annonce une (pochette radio, miniature peertube…), DIFFÉRENTE pour chaque
+  // flux ; sinon l'icône du service. Un `error` délégué ramène à l'icône si
+  // l'image ne charge pas (vignette privée/404) — jamais d'image cassée.
+  function iconeDe(id){ const e=(flux.get(id)||{}).etat||{}; return ICONES[id]||(e.type==='video'?'🎬':'🔊'); }
+  function visuel(id, cls){
+    const e=(flux.get(id)||{}).etat||{}, ic=iconeDe(id);
+    if(e.vignette) return '<img class="'+cls+' vig" data-ic="'+esc(ic)+'" src="'+esc(e.vignette)+'" alt="">';
+    return '<span class="'+cls+'">'+ic+'</span>';
+  }
+  // `error` ne bulle pas → capture. Une vignette qui échoue (privée/404) est
+  // remplacée par l'icône du service : jamais d'image cassée dans la barre.
+  ['mediadock','pastilles'].forEach(function(pid){
+    var el=document.getElementById(pid); if(!el) return;
+    el.addEventListener('error', function(ev){
+      var im=ev.target;
+      if(im && im.tagName==='IMG' && im.classList && im.classList.contains('vig')){
+        var sp=document.createElement('span');
+        sp.className=(im.className||'').replace('vig','').trim();
+        sp.textContent=im.getAttribute('data-ic')||'🔊';
+        im.replaceWith(sp);
+      }
+    }, true);
+  });
 
   // UNE SEULE INSTANCE PAR SERVICE (#1276). Le service peut exister DEUX fois
   // dans la page : sa carte à l'accueil, et son cadre embarqué. Les deux
@@ -1907,7 +1937,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
         '<button class="fpast'+(zoomable(id)?' video':'')
         +'" type="button" data-id="'+id+'" title="'
         +(zoomable(id)?'Agrandir':'Ouvrir le lecteur')+'">'
-        +(ICONES[id]||((((flux.get(id)||{}).etat||{}).type==='video')?'🎬':'🔊'))
+        +visuel(id,'fpico')
         +'<span class="fbulle"><b></b><small></small></span></button>').join('');
     }
     ids.forEach(id=>{
@@ -1928,7 +1958,7 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
       dock.dataset.ids=ids.join(',');
       dock.innerHTML=ids.map(id=>
         '<div class="mrow" data-id="'+id+'">'
-        +'<span class="mic">'+(ICONES[id]||'🔊')+'</span>'
+        +visuel(id,'mic')
         +'<button data-a="prev" title="Précédent">⏮</button>'
         +'<button class="mplay" data-a="toggle" title="Lecture / pause">❚❚</button>'
         +'<button data-a="next" title="Suivant">⏭</button>'

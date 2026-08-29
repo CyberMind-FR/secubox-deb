@@ -259,6 +259,10 @@
         href: (v && v.uuid) ? ('https://' + PT_HOTE + '/w/' + encodeURIComponent(v.uuid)) : '',
         titre: (v && v.name) || 'PeerTube',
         sous: (v && v.channel && v.channel.displayName) || 'PeerTube',
+        // VIGNETTE DE SOURCE (#1266b) : la miniature de CETTE video, pour que la
+        // barre média la montre — différente pour chaque flux. URL /pt de MÊME
+        // origine (proxy du Hall), donc chargeable par la barre.
+        vignette: vign(v),
         // `t` n'est plus toujours nul : quand le lecteur nous donne sa
         // position, la barre peut la montrer. Quand il se tait, elle vaut 0 et
         // la barre n'affiche rien — pas une position inventee.

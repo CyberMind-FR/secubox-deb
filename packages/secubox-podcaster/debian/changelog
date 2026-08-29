@@ -1,3 +1,10 @@
+secubox-podcaster (1.0.29-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet micro : annonce la VIGNETTE (pochette du flux) a la barre media du
+    Hall (#1266b), pour une miniature distincte par podcast au lieu d'une icone.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 07:22:00 +0200
+
 secubox-podcaster (1.0.28-1~bookworm1) bookworm; urgency=medium
 
   * billets d'import : le billet PORTE un lecteur PeerTube souverain (embed_html

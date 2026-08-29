@@ -1,3 +1,12 @@
+secubox-webos (1.0.188-1~bookworm1) bookworm; urgency=medium
+
+  * Barre media : VIGNETTE de source par flux (#1266b). La rangee et la pastille
+    montrent la miniature du media (peertube: /pt thumbnail) au lieu d'une icone
+    generique, differente pour chaque flux ; repli sur l'icone du service si la
+    vignette ne charge pas (privee/404). visuel()/iconeDe() + handler error delegue.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 07:20:00 +0200
+
 secubox-webos (1.0.187-1~bookworm1) bookworm; urgency=medium
 
   * Hall : handler sbx:'diffuser' (#1224/#1227) — un objet media d'un billet/BBS
