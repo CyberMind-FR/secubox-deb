@@ -202,6 +202,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/", s.accueil)
 	ConfigurerFiches(s.opt.MediaOrigines)
 	s.mux.HandleFunc("/media-vignette", s.servirMediaVignette)
+	s.mux.HandleFunc("/yt-vignette", s.servirYtVignette)
 	s.mux.HandleFunc("/mn-vignette", s.servirMNVignette)
 	s.mux.HandleFunc("/media-cover/", s.servirCover)
 	s.mux.HandleFunc("/media-fiche", s.servirMediaFiche)
@@ -612,6 +613,25 @@ func (s *Server) backfillPiecesPubliques() {
 	if err := s.st.MarqueFichiersPublics(ids); err != nil {
 		log.Printf("bbs: backfill pièces publiques : %v", err)
 	}
+}
+
+// vignetteMediaVideo dérive une MINIATURE de source pour une URL média vidéo :
+// la miniature YouTube est calculable depuis l'id (pas d'API), et on la sert
+// RELAYÉE par la box (/media-vignette, même origine — le navigateur ne contacte
+// jamais i.ytimg directement). Sert d'« avatar de source » aux fils passerelle
+// (#1266b). Vide si l'URL n'est pas une vidéo YouTube reconnue.
+var reVideoID = regexp.MustCompile(`(?:v=|youtu\.be/|/embed/|/shorts/|/live/)([A-Za-z0-9_-]{6,})`)
+
+func vignetteMediaVideo(mediaURL string) string {
+	m := reVideoID.FindStringSubmatch(mediaURL)
+	if m == nil {
+		return ""
+	}
+	vid := m[1]
+	if len(vid) > 11 {
+		vid = vid[:11]
+	}
+	return "/yt-vignette?v=" + url.QueryEscape(vid)
 }
 
 // NewsItem : une entrée de la rédaction — SOIT un fil (discussion / source),
@@ -1082,6 +1102,10 @@ func (s *Server) micro(w http.ResponseWriter, r *http.Request) {
 		// dans un <img> afficherait l'icone de fichier casse.
 		if f.MediaURL != "" && f.MediaKind == "image" {
 			v.Vignette = f.MediaURL
+		} else if t := vignetteMediaVideo(f.MediaURL); t != "" {
+			// Fil VIDÉO (piste radio…) : la miniature de la source (relayée par la
+			// box) sert d'avatar, distincte pour chaque fil (#1266b).
+			v.Vignette = t
 		}
 		out = append(out, v)
 	}

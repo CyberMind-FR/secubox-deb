@@ -1,3 +1,21 @@
+secubox-bbs (0.30.40-1~bookworm1) bookworm; urgency=medium
+
+  * Relais /yt-vignette (#1266b) : miniature YouTube par ID, cible FIXE
+    (i.ytimg/vi/<id>), serveur-a-serveur (le navigateur ne contacte jamais
+    Google) — sert l'avatar de source. vignetteMediaVideo pointe dessus (au lieu
+    de /media-vignette, borne a NOS services).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 11:20:00 +0200
+
+secubox-bbs (0.30.39-1~bookworm1) bookworm; urgency=medium
+
+  * Avatar de SOURCE pour les fils passerelle (#1266b) : la miniature du media
+    (relayee par la box via /media-vignette, meme origine) remplace la mascotte
+    zanimalos generique dans la liste des dossiers ET le cardlet micro —
+    distincte pour chaque fil video. vignetteMediaVideo() + func de gabarit.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sat, 29 Aug 2026 11:00:00 +0200
+
 secubox-bbs (0.30.38-1~bookworm1) bookworm; urgency=medium
 
   * Fils de contenu : media_url posé sur le fil (#1266b) -> la LISTE des dossiers

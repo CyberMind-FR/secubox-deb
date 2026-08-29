@@ -190,6 +190,9 @@ func New(st *store.Store, yt *connectors.YouTube, opt Options) (*Server, error) 
 		// (/w/… → /videos/embed/…) pour un <iframe> — PeerTube refuse le cadrage
 		// de ses pages /w/ (#1131b). Toute autre URL passe inchangée.
 		"urlembed": peertubeEmbedURL,
+		// vignetteVideo : miniature de source (relayée par la box) pour une URL
+		// média vidéo — l'avatar de source des fils passerelle (#1266b). Vide sinon.
+		"vignetteVideo": vignetteMediaVideo,
 		// glypheSalon : une émoji STABLE et distincte par salon (#1114), dérivée
 		// du slug — plus joli que le ◆ générique, et un sous-salon garde le ↳.
 		"glypheSalon": func(slug string, profondeur int) string {

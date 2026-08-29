@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -111,6 +112,51 @@ func (s *Server) servirMediaVignette(w http.ResponseWriter, r *http.Request) {
 	// PUBLIC, pas `private` : aucun en-tete du visiteur n'est transmis en amont,
 	// la vignette rendue est identique pour tous. Autoriser le cache partage
 	// (nginx / cache media du WAF) est ce qui borne vraiment l'amplification.
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(corps)
+}
+
+// reYtIDStrict : un id de vidéo YouTube, rien d'autre — la cible du relais est
+// FIXE, jamais fournie par l'appelant.
+var reYtIDStrict = regexp.MustCompile(`^[A-Za-z0-9_-]{6,15}$`)
+
+// servirYtVignette relaie la MINIATURE YouTube d'une vidéo PAR SON ID (#1266b),
+// pour l'avatar de source des fils passerelle. Distinct de servirMediaVignette
+// (borné à NOS services) : ici la cible est FIXE — i.ytimg.com/vi/<id>/… — jamais
+// une URL arbitraire, donc PAS un relais ouvert. Serveur-à-serveur, aucun en-tête
+// du membre transmis : le navigateur ne contacte jamais Google. Cache partagé.
+func (s *Server) servirYtVignette(w http.ResponseWriter, r *http.Request) {
+	vid := r.URL.Query().Get("v")
+	if !reYtIDStrict.MatchString(vid) {
+		http.NotFound(w, r)
+		return
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet,
+		"https://i.ytimg.com/vi/"+vid+"/hqdefault.jpg", nil)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	req.Header.Set("Accept", "image/*") // aucun cookie/referer/UA du membre.
+	res, err := (&http.Client{Timeout: mediaDelai}).Do(req)
+	if err != nil {
+		http.Error(w, "vignette indisponible", http.StatusBadGateway)
+		return
+	}
+	defer res.Body.Close()
+	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(res.Header.Get("Content-Type"), ";", 2)[0]))
+	if res.StatusCode != http.StatusOK || !mediaTypes[ct] {
+		http.NotFound(w, r)
+		return
+	}
+	corps, err := io.ReadAll(io.LimitReader(res.Body, mediaMax+1))
+	if err != nil || len(corps) > mediaMax {
+		http.Error(w, "vignette trop volumineuse", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", ct)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	_, _ = w.Write(corps)
 }

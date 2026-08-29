@@ -19,7 +19,7 @@ func funcsNewsroom() template.FuncMap {
 		"rendu": Render, "lien": LienApercu, "date": humain, "taille": octets,
 		"glypheSalon": func(string, int) string { return "◆" },
 		"vignette":    func(a int64, i string) map[string]any { return map[string]any{"A": a, "I": i} },
-		"decalage":    func(n int) string { return "" }, "urlembed": func(s string) string { return s },
+		"decalage":    func(n int) string { return "" }, "urlembed": func(s string) string { return s }, "vignetteVideo": func(string) string { return "" },
 	}
 }
 

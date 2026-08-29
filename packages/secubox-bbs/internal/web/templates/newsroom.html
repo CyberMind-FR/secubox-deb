@@ -156,7 +156,12 @@
       {{/* Mascotte zanimalos AUTO selon le type de fil (#1131aa) : vidéo/film=Tikko,
            audio/podcast=Gazou, livre=Néri, conférence=Wodi, lien=Peek, sinon Lyra. */}}
       {{$z := "07_LYRA"}}{{if or (eq .MediaKind "video") (eq .Source "video") (eq .Source "film")}}{{$z = "14_TIKKO"}}{{else if or (eq .MediaKind "audio") (eq .Source "podcast")}}{{$z = "25_GAZOU"}}{{else if eq .Source "livre"}}{{$z = "15_NERI"}}{{else if eq .Source "conference"}}{{$z = "16_WODI"}}{{else if .Source}}{{$z = "01_PEEK"}}{{end}}
-      <img class="zani-stamp" src="/static/stickers/zanimalos/{{$z}}.png" alt="" width="56" height="56" loading="lazy">
+      {{/* AVATAR DE SOURCE (#1266b) : la miniature du média (relayée par la box)
+           quand le fil porte une vidéo — distincte pour chaque source ; sinon la
+           mascotte zanimalos selon le type. */}}
+      {{$vig := ""}}{{if .MediaURL}}{{$vig = vignetteVideo .MediaURL}}{{end}}
+      {{if $vig}}<img class="zani-stamp src-vig" src="{{$vig}}" alt="" width="56" height="56" loading="lazy">
+      {{else}}<img class="zani-stamp" src="/static/stickers/zanimalos/{{$z}}.png" alt="" width="56" height="56" loading="lazy">{{end}}
       <div class="src">
         <div class="kind">
           {{if eq .MediaKind "audio"}}<span class="em">🎧</span><span class="lb">podcast</span>
