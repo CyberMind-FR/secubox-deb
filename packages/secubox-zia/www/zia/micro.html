@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1245 — carte /micro ZIA : chat local avec l'IA du Hall.
+  Elle parle à /api/v1/zia/v1/chat (même origine), rend les objets du bus (sbx://)
+  et leurs actions. Le modèle n'invente rien : les objets viennent des outils.
+  Polices système (CSP font-src 'self' dans le Hall) — l'identité tient au style.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZIA — chat</title>
+<style>
+  :root{ --fond:#faf5ea; --texte:#232a5e; --muted:#6a6f92; --faint:#948c73; --line:#ded2b6; --line-soft:#eae0c8;
+    --surf2:#f3ecda; --blue:#2e3f9e; --teal:#0a93a6; --teal-ink:#0a7d8e; --fox:#d0622c; --purple:#6a54ad; --coral:#d24f65; --leaf:#3c8f66; }
+  @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+    --fond:#181f4c; --texte:#efe8d6; --muted:#9aa0c4; --faint:#6d7398; --line:#28306e; --line-soft:#202760;
+    --surf2:#141b42; --blue:#6076de; --teal:#3fd0e0; --teal-ink:#7fe4f0; --fox:#f2854c; --purple:#a98bff; --coral:#ff6c7e; --leaf:#5fc98a; } }
+  :root[data-theme="dark"]{ --fond:#181f4c; --texte:#efe8d6; --muted:#9aa0c4; --faint:#6d7398; --line:#28306e; --line-soft:#202760;
+    --surf2:#141b42; --blue:#6076de; --teal:#3fd0e0; --teal-ink:#7fe4f0; --fox:#f2854c; --purple:#a98bff; --coral:#ff6c7e; --leaf:#5fc98a; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{background:var(--fond);color:var(--texte);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45}
+  .mw{display:flex;flex-direction:column;height:100%}
+  .h{display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line-soft);
+    background:linear-gradient(90deg,color-mix(in srgb,var(--fox) 9%,var(--fond)),var(--fond))}
+  .h .fox{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:1rem;
+    background:radial-gradient(circle at 40% 35%,color-mix(in srgb,var(--fox) 30%,var(--fond)),var(--fond));border:1px solid color-mix(in srgb,var(--fox) 34%,var(--line))}
+  .h b{font-weight:800;font-size:.92rem;letter-spacing:-.01em}
+  .h .mdl{font-size:.56rem;color:var(--muted);background:var(--surf2);border:1px solid var(--line-soft);border-radius:6px;padding:1px 6px;font-family:ui-monospace,monospace}
+  .h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--leaf);font-weight:700}
+  .h .dot{width:6px;height:6px;border-radius:50%;background:var(--leaf);animation:pulse 2.4s ease-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--leaf) 55%,transparent)}60%{box-shadow:0 0 0 6px transparent}}
+  .stream{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:9px;padding:11px}
+  .msg{display:flex;gap:7px;max-width:92%}
+  .msg .av{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center;font-size:.75rem}
+  .msg.zia .av{background:radial-gradient(circle at 40% 35%,color-mix(in srgb,var(--fox) 28%,var(--fond)),var(--fond));border:1px solid color-mix(in srgb,var(--fox) 32%,var(--line))}
+  .msg.me{align-self:flex-end;flex-direction:row-reverse}
+  .msg.me .av{background:color-mix(in srgb,var(--blue) 20%,var(--fond));border:1px solid color-mix(in srgb,var(--blue) 32%,var(--line))}
+  .bub{border-radius:13px;padding:8px 11px;font-size:.85rem;line-height:1.4}
+  .msg.zia .bub{background:var(--surf2);border:1px solid var(--line-soft);border-top-left-radius:4px;color:var(--texte)}
+  .msg.me .bub{background:color-mix(in srgb,var(--teal) 14%,var(--fond));border:1px solid color-mix(in srgb,var(--teal) 28%,var(--line));border-top-right-radius:4px}
+  .bub b{color:var(--blue)} .bub .hh{color:var(--coral)}
+  .trace{align-self:center;display:inline-flex;align-items:center;gap:6px;font-family:ui-monospace,monospace;font-size:.62rem;color:var(--muted);
+    background:var(--surf2);border:1px dashed var(--line);border-radius:999px;padding:3px 10px}
+  .trace b{color:var(--teal-ink)}
+  .obj{margin-top:7px;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--fond)}
+  .obj-b{padding:8px 10px}
+  .obj-b .svc{font-family:ui-monospace,monospace;font-size:.56rem;color:#fff;background:var(--blue);border-radius:5px;padding:1px 6px}
+  .obj-b .ot{font-weight:600;font-size:.8rem;line-height:1.25;margin-top:5px}
+  .obj-b .om{font-family:ui-monospace,monospace;font-size:.56rem;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .obj-a{display:flex;gap:5px;padding:0 10px 9px}
+  .obj-a button{flex:1;font:inherit;font-size:.68rem;font-weight:600;padding:5px 4px;border-radius:8px;border:1px solid var(--line);color:var(--texte);background:var(--surf2);cursor:pointer}
+  .obj-a button.pri{background:var(--teal);color:#04252a;border:0}
+  .deleg{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:.7rem;color:var(--purple);font-weight:600;margin-left:29px;
+    background:color-mix(in srgb,var(--purple) 10%,var(--fond));border:1px solid color-mix(in srgb,var(--purple) 30%,var(--line));border-radius:999px;padding:4px 10px}
+  .sugg{display:flex;gap:5px;flex-wrap:wrap;padding:0 11px 6px}
+  .sugg button{font:inherit;font-size:.66rem;color:var(--teal-ink);background:none;border:1px solid var(--line);border-radius:999px;padding:3px 9px;cursor:pointer}
+  .sugg button:hover{border-color:var(--teal)}
+  form.in{display:flex;align-items:center;gap:7px;padding:9px 11px;border-top:1px solid var(--line-soft);background:var(--surf2)}
+  form.in input{flex:1;min-width:0;border:1px solid var(--line);border-radius:11px;padding:8px 12px;background:var(--fond);color:var(--texte);font:inherit;font-size:.85rem}
+  form.in input:focus{outline:none;border-color:var(--teal)}
+  form.in button{width:34px;height:34px;border-radius:10px;background:var(--teal);color:#04252a;border:0;font-size:1rem;cursor:pointer;flex:0 0 auto}
+  .foot{padding:6px 11px;font-size:.56rem;color:var(--faint);text-align:center;border-top:1px solid var(--line-soft);background:var(--fond)}
+  .foot b{color:var(--teal-ink)}
+  @media (prefers-reduced-motion:reduce){ .h .dot{animation:none} }
+</style>
+
+<div class="mw">
+  <div class="h"><span class="fox">🦊</span><b>ZIA</b><span class="mdl" id="mdl">local</span>
+    <span class="live"><span class="dot"></span><span id="eng">local</span></span></div>
+  <div class="stream" id="stream"></div>
+  <div class="sugg" id="sugg"></div>
+  <form class="in" id="form" autocomplete="off"><input id="q" placeholder="demande à ZIA…" aria-label="Message à ZIA"><button type="submit" title="Envoyer">➤</button></form>
+  <div class="foot">🦊 100 % local · le <b>bus</b> reste la source de vérité</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var API='/api/v1/zia';
+  var el=function(id){return document.getElementById(id);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+  function md(t){ return esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/❤/g,'<span class="hh">❤</span>'); }
+  var stream=el('stream');
+  function scroll(){ stream.scrollTop=stream.scrollHeight; }
+
+  function addMe(t){ stream.insertAdjacentHTML('beforeend','<div class="msg me"><div class="av">🙂</div><div class="bub">'+esc(t)+'</div></div>'); scroll(); }
+  function addZia(html){ var d=document.createElement('div'); d.className='msg zia'; d.innerHTML='<div class="av">🦊</div><div class="bub">'+html+'</div>'; stream.appendChild(d); scroll(); return d; }
+  function addTrace(tr){ (tr||[]).forEach(function(t){ stream.insertAdjacentHTML('beforeend','<div class="trace">🧰 <b>'+esc(t.tool)+'</b>( '+esc(Object.values(t.args||{}).filter(Boolean).join(', '))+' )</div>'); }); scroll(); }
+
+  function objHTML(o){
+    var acts=(o.actions||[]).map(function(a,i){
+      var lbl={open:'⬚ Ouvrir',play:'▶ Lire',discuss:'💬 Discuter'}[a]||a;
+      return '<button class="'+(i===0?'pri':'')+'" data-act="'+esc(a)+'" data-svc="'+esc(o.service)+'" data-uri="'+esc(o.uri||'')+'" data-title="'+esc(o.title||'')+'">'+lbl+'</button>';
+    }).join('');
+    return '<div class="obj"><div class="obj-b"><span class="svc">'+esc(o.service)+'</span>'
+      +'<div class="ot">'+esc(o.title||'—')+'</div>'
+      +'<div class="om">'+esc(o.uri||'')+'</div></div>'
+      +'<div class="obj-a">'+acts+'</div></div>';
+  }
+
+  function render(r){
+    var d=addZia(md(r.text||'…'));
+    (r.objects||[]).forEach(function(o){ d.querySelector('.bub').insertAdjacentHTML('beforeend', objHTML(o)); });
+    if(r.delegate && r.delegate.to){ stream.insertAdjacentHTML('beforeend','<div class="deleg">🦝 délègue à <b style="color:var(--texte)">ZIA · '+esc(r.delegate.to)+'</b> →</div>'); }
+    if(r.engine){ el('eng').textContent = r.engine==='llm'?'modèle':'local'; }
+    scroll();
+  }
+
+  function envoie(m){
+    m=(m||'').trim(); if(!m) return;
+    addMe(m); addTrace([]);   // trace ajoutée après réponse
+    var pending=addZia('<span style="opacity:.6">…</span>');
+    fetch(API+'/v1/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:m})})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(res){
+        pending.remove();
+        if(!res){ addZia('Service ZIA injoignable.'); return; }
+        addTrace(res.trace); render(res);
+      }).catch(function(){ pending.remove(); addZia('Oups, réseau.'); });
+  }
+
+  // Clic sur une action d'objet → on demande au Hall d'ouvrir le service porteur.
+  // (P3+ : résoudre sbx:// en lien profond ; ici on ouvre le service.)
+  stream.addEventListener('click', function(e){
+    var b=e.target.closest('[data-act]'); if(!b) return;
+    var svc=b.getAttribute('data-svc'), act=b.getAttribute('data-act');
+    if(parent!==window){ try{ parent.postMessage({sbx:'ouvre', id:svc}, '*'); }catch(x){} }
+    b.textContent='✓'; setTimeout(function(){ /* laissé */ }, 600);
+  });
+
+  el('form').addEventListener('submit', function(e){ e.preventDefault(); envoie(el('q').value); el('q').value=''; });
+
+  var SUG=['la dernière vidéo sur le WAF','les podcasts','les sujets récents','aide'];
+  el('sugg').innerHTML=SUG.map(function(s){ return '<button type="button">'+esc(s)+'</button>'; }).join('');
+  el('sugg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(b){ envoie(b.textContent); el('sugg').style.display='none'; } });
+
+  // Salutation d'accueil (santé + modèle).
+  fetch(API+'/health',{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;}).then(function(h){
+    if(h){ el('mdl').textContent=h.model||'local'; el('eng').textContent=h.engine==='llm'?'modèle':'local'; }
+    addZia('Salut ! 🦊 Je connais ton Hall — demande-moi un média, un doc, un sujet.');
+  }).catch(function(){ addZia('Salut ! 🦊 (hors ligne)'); });
+
+  (function(){ var t=new URLSearchParams(location.search).get('theme'); if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
+  addEventListener('message',function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+})();
+</script>

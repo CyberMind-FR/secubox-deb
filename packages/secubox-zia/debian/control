@@ -1,0 +1,20 @@
+Source: secubox-zia
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-zia
+Architecture: all
+Depends: ${misc:Depends}, secubox-core (>= 1.0), python3, python3-uvicorn | python3-pip, python3-httpx | python3-pip
+Description: ZIA Hall — local ARM64 AI, interface to the Hall object bus (POC)
+ ZIA is AletheiaVox/SBXOS's local AI: the human interface to the Hall's object bus.
+ It does not own the data — it interprets and orchestrates objects already exposed
+ by SecuBox (the bus stays the source of truth and applies the ACL). Always local
+ (level 1); delegates to a VHOST (level 2) or optional remote (level 3) when needed.
+ .
+ POC / P1: FastAPI on a Unix socket (/api/v1/zia/), a heuristic responder that calls
+ read-first bus tools (search_objects, get_object, list_recent, open, delegate) so it
+ never invents an object, plus a Chat cardlet for the Hall. A llama.cpp GGUF model
+ (chosen after benchmark on the MOCHAbin) plugs into the same interface later.

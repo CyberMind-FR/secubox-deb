@@ -1,0 +1,22 @@
+secubox-zia (0.1.1-1~bookworm1) bookworm; urgency=medium
+
+  * Repondeur : « liste » vs « recherche » (#1245). Les mots generiques (sujets,
+    objets, videos, podcasts, neuf...) declenchent une LISTE (par type si connu)
+    au lieu de chercher le mot litteral. « les sujets recents » -> topics MetaNews.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 11:20:00 +0200
+
+secubox-zia (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * Nouveau service ZIA Hall (#1245) — P1 + P3. IA locale, interface du bus d'objets.
+    - Daemon FastAPI (socket Unix) : POST /v1/chat, GET /health, GET /metrics.
+    - Repondeur HEURISTIQUE (intention + outils du bus) : n'invente jamais d'objet.
+      Hook llama-server (llm_url) pour brancher un GGUF plus tard, meme interface.
+    - Outils LECTURE d'abord : search_objects, get_object, list_recent, open, delegate.
+    - Bus d'objets : seed deterministe + adapter MetaNews (topics, via socket) ;
+      contrat normalise ; visibilite/ACL appliquee HORS modele (policy).
+    - Cardlet Chat SBXOS : www/zia/{index,micro}.html — rend le texte, les objets
+      sbx:// et leurs actions ; delegation VHOST affichee.
+    - Le LLM n'est jamais une autorite ; contenus recuperes = donnees, pas instructions.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 11:00:00 +0200

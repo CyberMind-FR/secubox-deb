@@ -1,0 +1,21 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-zia/usr/share/secubox/zia/
+	cp -r api debian/secubox-zia/usr/share/secubox/zia/
+	install -d debian/secubox-zia/usr/share/secubox/www
+	[ -d www ] && cp -r www/. debian/secubox-zia/usr/share/secubox/www/ || true
+	install -d debian/secubox-zia/usr/share/secubox/menu.d
+	[ -d menu.d ] && cp -r menu.d/. debian/secubox-zia/usr/share/secubox/menu.d/ || true
+	[ -f conf/zia.toml ] && cp conf/zia.toml debian/secubox-zia/usr/share/secubox/zia/ || true
+	install -d debian/secubox-zia/etc/nginx/secubox-routes.d
+	install -d debian/secubox-zia/etc/nginx/secubox.d
+	[ -f nginx/zia.conf ] && cp nginx/zia.conf debian/secubox-zia/etc/nginx/secubox-routes.d/ || true
+	[ -f nginx/zia.conf ] && cp nginx/zia.conf debian/secubox-zia/etc/nginx/secubox.d/ || true
+	install -d debian/secubox-zia/usr/lib/systemd/system
+	cp systemd/secubox-zia.service debian/secubox-zia/usr/lib/systemd/system/
+
+override_dh_installsystemd:
+	true

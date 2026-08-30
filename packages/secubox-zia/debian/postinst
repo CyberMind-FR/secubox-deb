@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 0750 /var/lib/secubox/zia
+    if [ ! -f /etc/secubox/zia.toml ]; then
+      if [ -f /usr/share/secubox/zia/zia.toml ]; then
+        install -o secubox -g secubox -m 0640 /usr/share/secubox/zia/zia.toml /etc/secubox/zia.toml
+      fi
+    fi
+    systemctl daemon-reload 2>/dev/null || true
+    if [ "$(systemctl is-enabled secubox-zia.service 2>/dev/null)" != "masked" ]; then
+      systemctl enable secubox-zia.service 2>/dev/null || true
+      systemctl restart secubox-zia.service 2>/dev/null || true
+    fi
+    if command -v nginx >/dev/null 2>&1 && nginx -t 2>/dev/null; then
+      systemctl reload nginx 2>/dev/null || true
+    fi
+    ;;
+esac
+#DEBHELPER#
+exit 0

@@ -1,0 +1,9 @@
+{
+  "id": "zia",
+  "name": "ZIA",
+  "icon": "🦊",
+  "path": "/zia/",
+  "category": "systeme",
+  "order": 695,
+  "description": "IA locale du Hall — chat, recherche d'objets, délégation"
+}

@@ -1096,6 +1096,10 @@ const FEATURED = [
   // modes (embarqué /devwatch/?embed=1, admin, onglet) visent la bonne page. La
   // carte /micro se sert de MÊME origine (admin autorisé dans frame-src du Hall).
   {id:"devwatch",   label:"DevWatch",  icon:"🛰️", color:"#0784a8", url:"admin.gk2.secubox.in/devwatch", micro:"/micro.html", h:288},
+  // ZIA (#1245) : l'IA locale du Hall, interface du bus d'objets. Carte /micro de
+  // chat, servie sous admin.gk2…/zia/ (autorisé dans frame-src) ; les 3 modes
+  // visent /zia/. Chat + recherche d'objets + délégation.
+  {id:"zia",        label:"ZIA",       icon:"🦊", color:"#0a93a6", url:"admin.gk2.secubox.in/zia", micro:"/micro.html", h:340},
   // Surf & Viewer (#1266b) : rappel EN SLICES des favoris (partage/répète),
   // propositions au parc (propose/cumule ×N) et liens collés. Carte servie par
   // le Hall — MÊME origine que le viewer, donc même localStorage.

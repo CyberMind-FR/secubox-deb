@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# See LICENCE-CMSD-1.0.md for terms.
+
+# /etc/secubox/zia.toml — SecuBox ZIA Hall
+# Redemarrer secubox-zia apres edition.
+
+# Nom du modele affiche dans la carte (« TinyLlama · Q4 » une fois branche).
+model_name = "heuristique"
+
+# llama-server (llama.cpp) — vide = repondeur HEURISTIQUE (P1). Quand un GGUF tourne
+# sur la MOCHAbin (P0), pointer ici, ex. "http://127.0.0.1:8080". Les OBJETS viennent
+# toujours des outils du bus, jamais de la generation.
+llm_url = ""
+n_predict = 120
+llm_timeout_s = 20
+
+# Adapters du bus.
+metanews_sock = "/run/secubox/metanews.sock"
+bus_cache_s = 45
+
+# Role du demandeur tant que l'auth n'est pas branchee (guest|registered|member|admin).
+default_role = "guest"
+
+# Niveau 3 (remote) — DESACTIVE par defaut, soumis a politique.
+remote_enabled = false
+remote_role_min = "admin"

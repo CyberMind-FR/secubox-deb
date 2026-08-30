@@ -1,3 +1,11 @@
+secubox-webos (1.0.206-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : carte ZIA au strip vedette (#1245) — l'IA locale du Hall (chat +
+    recherche d'objets + delegation). Carte /micro servie sous admin.gk2…/zia/
+    (autorise dans frame-src), h 340.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 11:30:00 +0200
+
 secubox-webos (1.0.205-1~bookworm1) bookworm; urgency=medium
 
   * Play SOUVERAIN d'une video en MIROIR (#1237) : lanceSas recevait
