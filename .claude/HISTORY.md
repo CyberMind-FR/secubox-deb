@@ -11,6 +11,35 @@
 ---
 
 
+## 2026-08-30 — Cluster Hall/DevWatch + design ZIA (préparation)
+
+**DevWatch (nouveau, `secubox-devwatch` 1.0.0→1.0.8).** Service de suivi GitHub temps réel
++ tableau de bord vhost + cardlet Hall + panneau admin (flux statiques). Sonde publique
+serveur-à-serveur (double-cache), cadence + flèches d'efficience, temps cumulé/coût/carbone,
+campagne (cherche sponsor), **évolutions des versions** (bargraphe), **modules · révisions**
+(dpkg + changelogs, 158 modules), slice **propagande** (release GitHub + sponsor). Cardlet en
+**tranches** avec pastilles de navigation. Fix charset (mojibake). Registre + FEATURED Hall.
+
+**Hall/viewer (`secubox-webos` 1.0.194→1.0.205).** Rappel **Surf & Viewer en slices** (favoris
+se partage/répète, propositions se propose/cumule ×N, liens collés) + cardlet dédié ;
+**viewer persistant au refresh** (position, mini) ; **play souverain PeerTube** pour les
+vidéos en miroir (helper `jouePeertube`) ; logo → accueil **sans recharger** (barre média +
+viewer préservés) ; correctif **liens locaux** du rappel. **Aide du Hall** refondue : catalogue
+des cartes (`CARDLETS_INFO`) + prise en main + FAQ, repris au README webos et au wiki
+[[Cartes-du-Hall]].
+
+**MetaNews (`secubox-metanews` 0.1.29→0.1.30).** Parties du sujet sous le titre dans le cardlet
+(hashtags, sources dédoublonnées + métriques, source courante) ; ordre méta → #tags → sources
+→ résumé dans la vue principale.
+
+**ZIA Hall — design & préparation (#1245).** Conçu l'IA locale d'AletheiaVox/SBXOS (interface
+du bus d'objets, 3 niveaux Lite/VHOST/Remote). Livré : issue #1245, `docs/design/ZIA-HALL-POC.md`
+(+FAQ), design visuel `zia-hall.html`, maquette cardlet `zia-chat-cardlet.html`, wiki [[ZIA-Hall]],
+README paquet `secubox-zia`, découpage P0–P5 dans TODO/WIP. **Implémentation à venir.**
+
+---
+
+
 ## 2026-08-28 — WAF anti-FP + routes, unification média, polish Hall
 
 **WAF — un vrai visiteur ne se fait plus bannir (#1266).** Cause : l'appli

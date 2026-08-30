@@ -6,7 +6,47 @@
 -->
 
 # TODO — SecuBox-DEB Backlog
-*Mis à jour : 2026-08-28*
+*Mis à jour : 2026-08-30*
+
+---
+
+## 2026-08-30 — ZIA Hall — POC IA locale, interface du bus d'objets (#1245)
+
+Design validé (`docs/design/ZIA-HALL-POC.md`, wiki [[ZIA-Hall]], README paquet). Découpage
+de la grosse session d'implémentation `secubox-zia` :
+
+### P1 — Daemon local + outils (sans matériel, prioritaire)
+- [ ] Scaffolder `packages/secubox-zia` (patron `secubox-devwatch` : FastAPI, socket Unix).
+- [ ] `api/main.py` : `POST /v1/chat`, `GET /health`, `GET /metrics` sur `/run/secubox/zia.sock`.
+- [ ] `api/runtime.py` : répondeur **heuristique** (intention + tool routing) ; hook llama-server.
+- [ ] `api/tools.py` : schémas + dispatch — `search_objects`, `get_object`, `list_recent`, `open`, `delegate`.
+- [ ] `api/bus.py` : bus **mock** (seed d'objets) normalisé au contrat ; `api/policy.py` : visibilité.
+- [ ] Réponse `/chat` = `{text, objects[], actions[], delegate?}`. Test : tool routing correct.
+
+### P3 — Cardlet Chat SBXOS (en parallèle de P1)
+- [ ] `www/zia/index.html` (chat plein cadre) + `www/zia/micro.html` (carte Hall), depuis la maquette.
+- [ ] Branchement `/api/v1/zia/v1/chat` ; rendu objets `sbx://` + actions (▶ Lire · ⬚ Ouvrir · 💬 Discuter).
+- [ ] Entrée FEATURED Hall (webos) ; ouverture d'objets via viewer/embed existants.
+
+### Packaging
+- [ ] debian (control/rules/changelog/postinst/prerm), systemd (`User=secubox`), nginx (`/zia/` + `/api/v1/zia/`), menu.d, `conf/zia.toml`.
+- [ ] Build `.deb` + déploiement gk2 (dpkg) + vérif health/chat.
+
+### P2 — Objets réels
+- [ ] Adapters : MetaNews (topics), PeerTube (vidéos), BBS (fils), Radio, Billets → objets `sbx://`.
+- [ ] 20–50 objets réels ; QA « sans inventer d'objet » ; ACL/visibilité respectées.
+
+### P0 — Runtime modèle (sur MOCHAbin)
+- [ ] llama.cpp ARM64 + GGUF ultra-lite (Qwen/TinyLlama…) ; benchmark RAM/CPU/tokens·s/°C.
+- [ ] Brancher `runtime.py` sur `llama-server` ; choix du modèle mesuré, pas supposé.
+
+### P4 / P5 — Escalade
+- [ ] P4 : délégation VHOST (bascule explicite, ZIA·service).
+- [ ] P5 : remote optionnel — politique explicite, rédaction secrets, timeout/budget, fallback local.
+
+### Garde-fous (transverses)
+- [ ] Le LLM n'est jamais une autorité ; ACL hors modèle ; appels validés (schéma + liste blanche).
+- [ ] Contenus récupérés = données, jamais instructions. Outils **lecture d'abord**.
 
 ---
 

@@ -6,7 +6,49 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-28*
+*Mis à jour : 2026-08-30*
+
+---
+
+
+## 2026-08-30 — ZIA Hall : préparation de la grosse session d'implémentation (#1245)
+
+### ✅ Fait — design & préparation
+
+**ZIA** = l'IA locale d'AletheiaVox/SBXOS, interface humaine du **bus d'objets** du Hall.
+Elle ne possède pas les données : elle interprète et orchestre les objets déjà exposés
+(le bus reste la source de vérité). Trois niveaux : Lite (local) / VHOST (spécialisé) /
+Remote (escalade optionnelle). **Design validé, prêt à implémenter.**
+
+- **Issue #1245** créée (roadmap P0–P5 en checklist).
+- **Docs** : `docs/design/ZIA-HALL-POC.md` (référence + FAQ), `docs/design/zia-hall.html`
+  (visuel AletheiaVox), `docs/design/zia-chat-cardlet.html` (maquette cardlet Chat P3).
+- **Wiki** : page [[ZIA-Hall]] + entrée Sidebar (section MIND).
+- **README paquet** : `packages/secubox-zia/README.md` (structure cible, interfaces,
+  runtime, roadmap, DoD).
+- **Maquettes artefacts** validées : ZIA Hall (référence) + ZIA Chat cardlet (P3).
+
+### ⬜ Next Up — grosse session d'implémentation `secubox-zia`
+
+Ordre conseillé (commencer minuscule, sans enfermer l'archi) :
+
+1. **P1 d'abord (sans matériel)** — daemon FastAPI `api/main.py` : `POST /v1/chat`,
+   `GET /health`, `GET /metrics` sur socket `/run/secubox/zia.sock` (patron secubox,
+   comme `secubox-devwatch`). `runtime.py` = **répondeur heuristique** (intention +
+   appels d'outils) tant qu'aucun GGUF n'est chargé. `tools.py` (schémas + dispatch),
+   `bus.py` (mock puis adapters), `policy.py` (visibilité).
+2. **P3 en parallèle** — cardlet `www/zia/{index,micro}.html` (rendre la maquette réelle),
+   branchée sur `/v1/chat`, rendu des objets `sbx://` + actions. Entrée FEATURED Hall.
+3. **Packaging** — debian/systemd/nginx/menu.d/conf (modèle `secubox-devwatch`).
+4. **P2** — adapters réels (MetaNews, PeerTube, BBS, Radio) → 20–50 objets, QA sans
+   inventer d'objet.
+5. **P0** — sur MOCHAbin : llama.cpp ARM64 + GGUF, benchmark (RAM/CPU/tokens·s), brancher
+   `runtime.py` sur `llama-server`.
+6. **P4/P5** — délégation VHOST ; remote optionnel sous politique + fallback.
+
+> ⚠️ Le **modèle** se choisit APRÈS benchmark MOCHAbin (P0). D'ici là, le répondeur
+> heuristique appelle quand même le bus → « pas d'objet inventé ». Outils **lecture
+> d'abord** ; écriture après validation des permissions. Le LLM n'est jamais une autorité.
 
 ---
 

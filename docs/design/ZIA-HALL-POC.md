@@ -9,7 +9,7 @@
 
 **Design de référence — v0.1 · 30 août 2026 · SecuBox-Deb / SBXOS**
 
-> Suivi : [issue #1245](https://github.com/CyberMind-FR/secubox-deb/issues/1245) · version visuelle : [`zia-hall.html`](zia-hall.html)
+> Suivi : [issue #1245](https://github.com/CyberMind-FR/secubox-deb/issues/1245) · design visuel : [`zia-hall.html`](zia-hall.html) · maquette cardlet Chat : [`zia-chat-cardlet.html`](zia-chat-cardlet.html)
 
 ZIA est l'IA locale d'**AletheiaVox / SBXOS** : l'**interface humaine du bus d'objets** du
 Hall, connectée en ARM64, avec délégation vers les VHOST et recours remote optionnel.
@@ -148,3 +148,46 @@ dans SBXOS et délègue proprement ce qu'elle ne sait pas traiter.
 _Décision : architecture cohérente avec Hall/SBXOS — IA locale très légère comme interface du
 bus, intelligence spécialisée dans les VHOST, remote seulement comme extension. On peut
 commencer minuscule sans enfermer l'architecture._
+
+## FAQ
+
+**ZIA connaît-elle mes données ?**
+Non. Elle ne mémorise ni Nextcloud, ni PeerTube, ni la Radio dans ses poids. Elle reçoit un
+**contexte court** et appelle des outils déclarés. Les données restent dans les services ;
+le bus les expose sous ACL.
+
+**Est-ce que ça marche sans internet ?**
+Oui. Les niveaux 1 (Lite) et 2 (VHOST) sont **100 % locaux**. Le niveau 3 (remote) est
+désactivé par défaut et n'est utilisé que sous politique explicite.
+
+**Quel modèle ?**
+À choisir **après benchmark sur la MOCHAbin** (P0). On vise d'abord un GGUF ultra-lite
+(~0.5–1.5B Q4) pour l'intention/l'aide/les outils. Tant qu'aucun modèle n'est chargé, ZIA
+répond via un **répondeur heuristique** qui appelle quand même le bus — donc « pas d'objet
+inventé ».
+
+**ZIA peut-elle modifier mes fichiers / poster à ma place ?**
+Pas au POC : les outils sont en **lecture d'abord** (`search_objects`, `get_object`,
+`list_recent`, `open`, `delegate`). L'écriture n'arrive **qu'après** validation du modèle de
+permissions.
+
+**Peut-elle contourner les droits d'un service ?**
+Non. Le LLM n'accède jamais aux bases ni aux VHOST. Le **bus** applique authentification,
+droits et filtrage **avant** de retourner un objet. Le LLM n'est jamais une autorité.
+
+**Un contenu récupéré peut-il « donner des ordres » à ZIA (prompt injection) ?**
+Les contenus récupérés sont traités comme des **données**, jamais comme des instructions. Les
+appels d'outils sont validés par schéma et liste blanche.
+
+**Pourquoi séparer Lite / VHOST / Remote ?**
+Pour éviter qu'un gros modèle devienne à la fois moteur de chat, moteur de recherche, ACL,
+indexeur et passerelle réseau. Chaque étage a un rôle net ; on peut commencer minuscule.
+
+**Comment ZIA « ouvre » un résultat dans le Hall ?**
+Chaque objet porte une URI `sbx://service/type/id` et ses `actions`. Le cardlet Chat les rend
+comme de vraies cardlets cliquables — la lecture/ouverture passe par les mécanismes SBXOS
+existants (viewer, embed), pas par le modèle.
+
+**Et la vie privée ?**
+Local First, Privacy by Design : traitement local priorisé, aucune donnée sensible envoyée,
+contrôle d'accès fin (rôles/ACL), audit et logs locaux.

@@ -9,6 +9,17 @@
 
 Les questions qui reviennent, avec la reponse verifiee.
 
+> ZIA / IA locale : la FAQ **produit** (données, modèle, sécurité, délégation…) vit dans
+> `docs/design/ZIA-HALL-POC.md` et le wiki [ZIA-Hall]. Ici, ce sont les pièges de dev/ops.
+
+## Une page HTML servie en mojibake (🛰️ → ðŸ›°, é → Ã©, — → â€")
+
+Le fichier n'a **pas** de `<meta charset="utf-8">`. Piège vécu quand une page vient d'une
+**maquette/artefact** : l'artefact ajoute le charset via son wrapper, mais le fichier copié
+dans le paquet ne l'a plus, et nginx laisse le navigateur deviner (Latin-1). Parade : mettre
+`<!DOCTYPE html>` + `<meta charset="utf-8">` en **tête** de chaque HTML servi (comme
+`micro.html`/`admin.html`). Vérifier : `curl … | head -2`.
+
 ## Un service redemarre en boucle sans rien dire
 
 Regarder `systemctl show <u> -p NRestarts --value`. Si le compteur est enorme,
