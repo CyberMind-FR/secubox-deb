@@ -1,3 +1,9 @@
+## 2026-08-30 — Nextcloud Super Cardlet + mégabarre invité (webos 1.0.207)
+
+- **Nextcloud Super Cardlet** (perso, Hall) : `/cardlets/nextcloud-super.html` + `api/nc_super.py`. Onglets Fichiers (navigateur WebDAV), Activité, Partages ; jauge quota ; actions partager (lien public)/supprimer/téléverser. Via le broker `acces.py` — le mot de passe d'app reste dans la box. Routes `require_jwt` `/api/v1/webos/acces/nextcloud/{tableau,fichiers,partages,partager,supprimer,televerser}`. Dép. `python3-multipart`. FEATURED `nextcloud-super` (auth:true).
+- **Mégabarre** : bouton + menu « Système » masqués pour l'invité (`.non-connecte`) — le parc complet relève de la session de la box. « Services » reste public.
+- Vérifié gk2 : cardlet 200 (22 Ko), routes 401 sans JWT, service sain.
+
 ## 2026-08-30 — ZIA webui admin + fix génération + adapters réels
 
 - **ZIA 0.1.9** : webui admin `/zia/admin.html` (hybrid-dark/Courier Prime/cyan/JWT) — moteur (llm_url, modèle, n_predict, timeout, test), accès (rôle, cache bus, PeerTube, sockets), remote niveau 3. Config à chaud via `GET/POST /api/v1/zia/config` (surcouche JSON `/var/lib/secubox/zia`), `POST /llm/test`. Roue ⚙ sur la cardlet en accès direct.
