@@ -1,3 +1,13 @@
+secubox-zia (0.1.4-1~bookworm1) bookworm; urgency=medium
+
+  * Heuristique 100% REELLE & UTILISABLE (#1245). Plus de seed factice : le bus
+    ne montre que du reel — MetaNews (topics) + Billets (JSON Feed public) +
+    Registre (services). Chaque objet porte une URL ouvrable. Le cardlet OUVRE
+    vraiment : media -> viewer (sbx:'voir'), page -> embarquee (sbx:'ouvre-hote'),
+    service -> ouvert (sbx:'ouvre'). ZIA trouve ET donne acces, sans rien inventer.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 13:15:00 +0200
+
 secubox-zia (0.1.3-1~bookworm1) bookworm; urgency=medium
 
   * P0 turnkey (#1245) : outillage pour brancher un modele GGUF sur la MOCHAbin,

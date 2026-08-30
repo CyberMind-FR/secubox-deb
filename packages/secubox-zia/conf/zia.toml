@@ -18,6 +18,7 @@ llm_timeout_s = 20
 # Adapters du bus (sockets des services, lecture publique).
 metanews_sock = "/run/secubox/metanews.sock"
 webos_sock = "/run/secubox/webos.sock"
+billets_sock = "/run/secubox/billets.sock"
 bus_cache_s = 45
 
 # Role du demandeur tant que l'auth n'est pas branchee (guest|registered|member|admin).

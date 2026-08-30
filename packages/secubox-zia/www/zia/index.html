@@ -96,10 +96,19 @@
   function addTrace(tr){ (tr||[]).forEach(function(t){ stream.insertAdjacentHTML('beforeend','<div class="trace">🧰 <b>'+esc(t.tool)+'</b>( '+esc(Object.values(t.args||{}).filter(Boolean).join(', '))+' )</div>'); }); scroll(); }
   function objHTML(o){
     var acts=(o.actions||[]).map(function(a,i){ var lbl={open:'⬚ Ouvrir',play:'▶ Lire',discuss:'💬 Discuter'}[a]||a;
-      return '<button class="'+(i===0?'pri':'')+'" data-act="'+esc(a)+'" data-svc="'+esc(o.service)+'">'+lbl+'</button>'; }).join('');
+      return '<button class="'+(i===0?'pri':'')+'" data-act="'+esc(a)+'" data-svc="'+esc(o.service)+'" data-type="'+esc(o.type||'')+'" data-url="'+esc(o.url||'')+'" data-title="'+esc(o.title||'')+'">'+lbl+'</button>'; }).join('');
     return '<div class="obj"><div class="obj-b"><span class="svc">'+esc(o.service)+'</span>'
       +'<div class="ot">'+esc(o.title||'—')+'</div>'+(o.summary?'<div class="os">'+esc(o.summary)+'</div>':'')
       +'<div class="om">'+esc(o.uri||'')+'</div></div><div class="obj-a">'+acts+'</div></div>';
+  }
+  function ouvreObjet(svc, type, url, titre){
+    if(parent===window){ if(url) location.href=url; else location.href='/'+svc+'/'; return; }
+    try{
+      if(type==='service' || !url){ parent.postMessage({sbx:'ouvre', id:svc}, '*'); return; }
+      if(/^media\./.test(type)){ parent.postMessage({sbx:'voir', url:url, titre:titre}, '*'); return; }
+      var hote=''; try{ hote=new URL(url).hostname; }catch(e){}
+      parent.postMessage({sbx:'ouvre-hote', hote:hote, url:url}, '*');
+    }catch(x){}
   }
   function render(r){
     var d=addZia(md(r.text||'…'));
@@ -114,7 +123,8 @@
       .then(function(r){return r.ok?r.json():null;}).then(function(res){ p.remove(); if(!res){addZia('Service ZIA injoignable.');return;} addTrace(res.trace); render(res); })
       .catch(function(){ p.remove(); addZia('Oups, réseau.'); }); }
   stream.addEventListener('click', function(e){ var b=e.target.closest('[data-act]'); if(!b) return;
-    var svc=b.getAttribute('data-svc'); if(parent!==window){ try{ parent.postMessage({sbx:'ouvre', id:svc}, '*'); }catch(x){} } else { location.href='/'+svc+'/'; } });
+    ouvreObjet(b.getAttribute('data-svc'), b.getAttribute('data-type'), b.getAttribute('data-url'), b.getAttribute('data-title'));
+    var old=b.textContent; b.textContent='✓'; setTimeout(function(){ b.textContent=old; }, 700); });
   el('form').addEventListener('submit', function(e){ e.preventDefault(); envoie(el('q').value); el('q').value=''; });
   var SUG=['la dernière vidéo sur le WAF','les podcasts','les sujets récents','que sais-tu faire ?'];
   el('sugg').innerHTML=SUG.map(function(s){return '<button type="button">'+esc(s)+'</button>';}).join('');

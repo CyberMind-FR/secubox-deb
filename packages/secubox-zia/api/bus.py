@@ -22,33 +22,18 @@ import httpx
 
 from . import policy
 
-# ── Socle « seed » : représentatif, toujours disponible (P1) ────────────────────
-_SEED: list[dict] = [
-    {"id": "peertube:video:9NHwh", "type": "media.video", "service": "peertube",
-     "title": "WAF autonome : nft direct, hors-HTTP", "summary": "Le pare-feu applicatif qui agit au niveau paquet, sans passer par HTTP.",
-     "uri": "sbx://peertube/video/9NHwh", "visibility": "member",
-     "actions": ["open", "play", "discuss"], "tags": ["waf", "sécurité", "nftables", "vidéo"]},
-    {"id": "radio:item:live", "type": "media.audio", "service": "radio",
-     "title": "Émission du jour", "summary": "Le direct de la radio souveraine du Hall.",
-     "uri": "sbx://radio/item/live", "visibility": "guest",
-     "actions": ["open", "play"], "tags": ["radio", "audio", "direct"]},
-    {"id": "bbs:thread:waf", "type": "forum.thread", "service": "bbs",
-     "title": "Régler le WAF sans se bannir soi-même", "summary": "Retours d'expérience sur les faux positifs et les routes.",
-     "uri": "sbx://bbs/thread/waf", "visibility": "registered",
-     "actions": ["open", "discuss"], "tags": ["waf", "forum", "faux positifs"]},
-    {"id": "nextcloud:file:cspn", "type": "document", "service": "nextcloud",
-     "title": "Notes CSPN — séparation des privilèges", "summary": "Document de travail sur les exigences ANSSI.",
-     "uri": "sbx://nextcloud/file/cspn", "visibility": "member",
-     "actions": ["open"], "tags": ["cspn", "anssi", "document", "sécurité"]},
-    {"id": "podcaster:ep:12328", "type": "media.audio", "service": "podcaster",
-     "title": "Souveraineté numérique — épisode", "summary": "Un épisode rapatrié en local par le podcaster.",
-     "uri": "sbx://podcaster/ep/12328", "visibility": "guest",
-     "actions": ["open", "play"], "tags": ["podcast", "souveraineté", "audio"]},
-    {"id": "billets:post:hall", "type": "post", "service": "billets",
-     "title": "Le Hall réunit vos services vivants", "summary": "Un billet sur le bureau web SBXOS.",
-     "uri": "sbx://billets/post/hall", "visibility": "guest",
-     "actions": ["open", "discuss"], "tags": ["hall", "sbxos", "billet"]},
-]
+# PLUS DE « seed » factice (#1245) : ZIA ne montre QUE des objets RÉELS, tirés des
+# adapters ci-dessous. Hors ligne, elle le dit — elle n'invente jamais de contenu.
+_SEED: list[dict] = []
+
+# Domaines des services (pour fabriquer une URL ouvrable, `url`, à côté de `sbx://`).
+_DOMAIN = {
+    "metanews": "metanews.gk2.secubox.in",
+    "billets": "billets.gk2.secubox.in",
+    "peertube": "peertube.gk2.secubox.in",
+    "bbs": "bbs.gk2.secubox.in",
+    "radio": "radio.gk2.secubox.in",
+}
 
 
 class Bus:
@@ -78,9 +63,38 @@ class Bus:
                     out.append({
                         "id": f"metanews:topic:{tid}", "type": "news.topic", "service": "metanews",
                         "title": t.get("title", ""), "summary": (t.get("summary") or "")[:220],
-                        "uri": f"sbx://metanews/topic/{tid}", "visibility": "guest",
+                        "uri": f"sbx://metanews/topic/{tid}",
+                        "url": f"https://{_DOMAIN['metanews']}/#{tid}", "visibility": "guest",
                         "actions": ["open", "discuss"],
                         "tags": [str(x).lstrip("#") for x in (t.get("tags") or [])][:8],
+                    })
+        except Exception:
+            return out
+        return out
+
+    async def _billets(self) -> list[dict]:
+        """Adapter BILLETS : le JSON Feed public (/feed.json) -> objets post réels."""
+        sock = self.cfg.get("billets_sock", "/run/secubox/billets.sock")
+        out: list[dict] = []
+        try:
+            tr = httpx.AsyncHTTPTransport(uds=sock)
+            async with httpx.AsyncClient(transport=tr, timeout=4.0) as cli:
+                r = await cli.get("http://x/feed.json", headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    return out
+                for it in (r.json().get("items") or []):
+                    u = str(it.get("url") or it.get("id") or "")
+                    m = re.search(r"/b/([^/?#]+)", u)
+                    slug = m.group(1) if m else ""
+                    if not slug:
+                        continue
+                    txt = re.sub(r"<[^>]+>", " ", str(it.get("content_html") or "")).strip()
+                    out.append({
+                        "id": f"billets:post:{slug}", "type": "post", "service": "billets",
+                        "title": it.get("title", ""), "summary": txt[:200],
+                        "uri": f"sbx://billets/post/{slug}",
+                        "url": f"https://{_DOMAIN['billets']}/b/{slug}", "visibility": "guest",
+                        "actions": ["open", "discuss"], "tags": ["billet"],
                     })
         except Exception:
             return out
@@ -122,8 +136,9 @@ class Bus:
         now = time.time()
         if force or not self._cache or (now - self._ts) > self.ttl:
             news = await self._metanews()
+            posts = await self._billets()
             svcs = await self._registry()
-            self._cache = list(_SEED) + news + svcs
+            self._cache = list(_SEED) + news + posts + svcs
             self._ts = now
         return policy.filtre(self._cache, role)
 
