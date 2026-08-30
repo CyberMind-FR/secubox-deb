@@ -28,9 +28,25 @@ Remote (escalade optionnelle). **Design validé, prêt à implémenter.**
   runtime, roadmap, DoD).
 - **Maquettes artefacts** validées : ZIA Hall (référence) + ZIA Chat cardlet (P3).
 
-### ⬜ Next Up — grosse session d'implémentation `secubox-zia`
+### ✅ Livré — `secubox-zia` P1–P5 (30/08, déployé gk2)
 
-Ordre conseillé (commencer minuscule, sans enfermer l'archi) :
+**`secubox-zia` 0.1.2 + `secubox-webos` 1.0.206.** Le daemon FastAPI (`/v1/chat`,
+`/health`, `/metrics`) tourne en local : répondeur **heuristique** (n'invente jamais
+d'objet) + hook `llm_url` pour brancher un GGUF. Outils lecture d'abord ; bus =
+seed + adapters **MetaNews** (topics) et **Registre** (services) → **186 objets** réels
+sur gk2 ; policy/ACL hors modèle. Cardlet Chat (`www/zia/{index,micro}.html`) + entrée
+FEATURED Hall + registre Système (online). **P4** : délégation exécutée (bascule ZIA·X +
+objets liés). **P5** : `remote.py` sous politique + budget + timeout + circuit breaker +
+rédaction des secrets + repli local (désactivé par défaut). Vérifié : recherche vidéo WAF,
+liste des topics MetaNews, délégation WAF, objets service ouvrables.
+
+### ⬜ Reste — P0 (matériel MOCHAbin)
+
+- [ ] **P0** — llama.cpp ARM64 + GGUF ultra-lite (Qwen/TinyLlama) ; benchmark
+  RAM/CPU/tokens·s/°C ; pointer `llm_url` vers `llama-server`. Le hook est déjà là ;
+  les objets viennent toujours des outils.
+
+_Historique de l'ordre suivi (commencer minuscule, sans enfermer l'archi) :_
 
 1. **P1 d'abord (sans matériel)** — daemon FastAPI `api/main.py` : `POST /v1/chat`,
    `GET /health`, `GET /metrics` sur socket `/run/secubox/zia.sock` (patron secubox,

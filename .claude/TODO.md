@@ -15,6 +15,10 @@
 Design validé (`docs/design/ZIA-HALL-POC.md`, wiki [[ZIA-Hall]], README paquet). Découpage
 de la grosse session d'implémentation `secubox-zia` :
 
+> **✅ P1–P5 LIVRÉS (30/08, `secubox-zia` 0.1.2 + webos 1.0.206, déployé gk2).** Daemon,
+> outils, bus (186 objets réels : MetaNews + registre), cardlet Chat + FEATURED, délégation
+> exécutée, remote sous politique. **Reste P0 (matériel MOCHAbin : llama.cpp GGUF + bench).**
+
 ### P1 — Daemon local + outils (sans matériel, prioritaire)
 - [ ] Scaffolder `packages/secubox-zia` (patron `secubox-devwatch` : FastAPI, socket Unix).
 - [ ] `api/main.py` : `POST /v1/chat`, `GET /health`, `GET /metrics` sur `/run/secubox/zia.sock`.
