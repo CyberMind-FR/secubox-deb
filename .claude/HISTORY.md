@@ -1,3 +1,10 @@
+## 2026-08-30 — ZIA webui admin + fix génération + adapters réels
+
+- **ZIA 0.1.9** : webui admin `/zia/admin.html` (hybrid-dark/Courier Prime/cyan/JWT) — moteur (llm_url, modèle, n_predict, timeout, test), accès (rôle, cache bus, PeerTube, sockets), remote niveau 3. Config à chaud via `GET/POST /api/v1/zia/config` (surcouche JSON `/var/lib/secubox/zia`), `POST /llm/test`. Roue ⚙ sur la cardlet en accès direct.
+- **ZIA 0.1.8** : fix génération — `/v1/chat/completions` (gabarit ChatML) ; `/completion` nu ne continuait pas le prompt instruct.
+- **ZIA 0.1.7** : adapter PeerTube (vidéos réelles jouables), RAG par VHOST (`api/vhost.py`, changelog déployé), voix modèle élargie aux listes/délégations.
+- **DevWatch** : diagnostic « métriques cadence à zéro » = famine de quota GitHub (60/h non authentifié, IP publique partagée) ; la passe meurt en 403 avant `/stats/commit_activity`. Correctif = PAT lecture seule (→ 5000/h). Branchement token déjà présent.
+
 <!--
   SPDX-License-Identifier: LicenseRef-CMSD-1.0
   Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
