@@ -105,6 +105,23 @@
       <div class="preview" id="preview"></div>
     </div>
 
+    <!-- GITHUB · QUOTA (le token qui remplit la cadence) -->
+    <div class="card">
+      <h2>🔑 GitHub · quota &amp; cadence</h2>
+      <p class="hint">Sans token, l'API publique plafonne à <b>60 requêtes/h par IP</b> — partagée par toute
+        la box. La passe meurt en <b>403</b> avant <span class="k">/stats/commit_activity</span>, donc
+        <b>today / last7 / le bargraphe</b> restent à zéro. Un <b>PAT lecture seule</b> passe à <b>5000/h</b> :
+        la cadence se remplit à la passe suivante. Stocké en secret <span class="k">0600</span>, jamais réaffiché.</p>
+      <div class="preview" id="quota" style="margin-bottom:14px">quota : …</div>
+      <div class="grid">
+        <div class="f full"><label>Personal Access Token <span class="u">read-only</span><span class="tag" id="tok-state">—</span></label>
+          <input id="token" type="password" autocomplete="off" placeholder="ghp_… (laisser vide pour retirer et revenir à l'API publique)"></div>
+      </div>
+      <div class="row-btn"><button class="save" id="save-token">💾 Enregistrer le token</button>
+        <button class="ghost" id="clear-token">Retirer</button>
+        <span class="msg" id="token-msg"></span></div>
+    </div>
+
     <!-- FINANCEMENT (flux statiques) -->
     <div class="card">
       <h2>💛 Financement · flux statiques</h2>
@@ -166,7 +183,27 @@
     if(flows){ ['depenses_cumulees','sponsor_recu','abonnement_mensuel'].forEach(function(k){ if(flows[k]!=null) el(k).value=flows[k]; }); if(flows.note!=null) el('note').value=flows.note; }
     if(cfg){ ['owner','repo','refresh_minutes','min_par_commit','tarif_horaire','co2_kg_par_heure'].forEach(function(k){ if(cfg[k]!=null) el(k).value=cfg[k]; }); }
     if(cfg&&cfg.owner){ el('repo-sub').textContent='dépôt suivi : '+cfg.owner+'/'+cfg.repo; el('who').textContent='connecté · '+cfg.owner+'/'+cfg.repo; }
+    if(cfg){ tokState(!!cfg.has_token); }
     preview();
+  }
+
+  function tokState(has){
+    var t=el('tok-state');
+    t.textContent = has ? '✓ posé' : 'API publique';
+    t.style.color = has ? 'var(--up)' : 'var(--gold)';
+    t.style.borderColor = has ? 'color-mix(in srgb,var(--up) 40%,var(--line))' : 'color-mix(in srgb,var(--gold) 40%,var(--line))';
+  }
+
+  function quota(){
+    fetch(API+'/health',{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;})
+      .then(function(h){
+        if(!h){ el('quota').textContent='quota : indisponible'; return; }
+        var rl=h.rate_left, when=h.fetched_at?new Date(h.fetched_at).toLocaleTimeString('fr-FR'):'—';
+        var col = rl===0 ? 'var(--down)' : (rl!=null && rl<10 ? 'var(--gold)' : 'var(--up)');
+        el('quota').innerHTML='quota GitHub restant : <b style="color:'+col+'">'+(rl!=null?rl:'?')
+          +'</b> · dernière passe '+when
+          +(rl===0?' · <span style="color:var(--down)">famine — cadence gelée</span>':'');
+      }).catch(function(){});
   }
 
   function loadAll(){
@@ -175,7 +212,7 @@
       fetch(API+'/config',{headers:hdr(false),credentials:'include'}).then(function(r){return r.ok?r.json():null;}),
       fetch(API+'/flows',{headers:{'Accept':'application/json'}}).then(function(r){return r.ok?r.json():null;})
     ]).then(function(res){
-      fill(res[0],res[1]); el('gate').style.display='none'; el('app').style.display='block';
+      fill(res[0],res[1]); el('gate').style.display='none'; el('app').style.display='block'; quota();
     });
   }
 
@@ -220,6 +257,21 @@
         .catch(function(){ msg('config-msg','échec (session expirée ?)',false); });
     }
   });
+
+  function saveToken(tok){
+    el('token-msg').textContent=''; msg('token-msg', tok?'🔑 pose du token, passe en cours…':'retrait, passe en cours…', true);
+    fetch(API+'/config/token',{method:'POST',headers:hdr(true),credentials:'include',body:JSON.stringify({token:tok})})
+      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
+      .then(function(j){
+        tokState(j.has_token); el('token').value='';
+        if(j.ok){ msg('token-msg','✓ '+(j.has_token?'token posé':'token retiré')+' — cadence rafraîchie (quota '+(j.rate_left!=null?j.rate_left:'?')+')', true); }
+        else { msg('token-msg','enregistré, mais la passe a échoué : '+(j.error||'?')+(j.has_token?' (token invalide ?)':''), false); }
+        quota();
+      })
+      .catch(function(){ msg('token-msg','échec (session expirée ?)',false); });
+  }
+  el('save-token').addEventListener('click', function(){ saveToken(el('token').value.trim()); });
+  el('clear-token').addEventListener('click', function(){ if(confirm('Retirer le token et revenir à l\'API publique (60/h) ?')) saveToken(''); });
 
   el('refresh').addEventListener('click', function(){
     msg('config-msg','↻ passe en cours…',true);

@@ -1,3 +1,15 @@
+secubox-devwatch (1.0.9-1~bookworm1) bookworm; urgency=medium
+
+  * Admin : champ PAT GitHub (#1370). Sans token, l'API publique plafonne à 60 req/h
+    par IP (partagée par la box) : la passe meurt en 403 avant /stats/commit_activity
+    et la cadence (today/last7/bargraphe) reste à zéro. Le panneau pose un PAT
+    lecture seule (→ 5000/h) en SECRET 0600 dans /var/lib/secubox/devwatch/github-token
+    (jamais dans config.json, jamais réaffiché), l'applique à chaud et FORCE une passe :
+    la cadence se remplit aussitôt. Bouton « Retirer » = retour à l'API publique.
+    Affichage live du quota restant. API : POST /config/token, has_token dans /config.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 17:50:00 +0200
+
 secubox-devwatch (1.0.8-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet /micro : pastilles de navigation et « suivi complet » rassembles sur

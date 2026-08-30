@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,11 @@ STATE_DIR = Path("/var/lib/secubox/devwatch")
 CACHE_FILE = STATE_DIR / "cache.json"      # dernier résumé calculé
 FLOWS_FILE = STATE_DIR / "flows.json"      # flux statiques saisis (admin)
 CONFIG_OVR = STATE_DIR / "config.json"     # surcharges d'estimation (admin)
+# Le PAT GitHub est un SECRET : jamais dans config.json (qui exclut « token »),
+# jamais renvoyé par l'API. Fichier dédié 0600 dans l'état RW du service — le
+# durcissement systemd (ProtectSystem=strict) rend /etc/secubox/secrets non
+# inscriptible par le service ; l'état /var/lib/secubox l'est. Non versionné.
+TOKEN_FILE = STATE_DIR / "github-token"
 
 DEFAULT_CONFIG = {
     "owner": "CyberMind-FR",
@@ -106,9 +112,45 @@ def _save_json(path: Path, data: dict) -> None:
     tmp.replace(path)  # échange atomique — jamais de fichier à moitié écrit
 
 
+def _load_token() -> str:
+    """Le secret l'emporte sur le TOML. Absent/illisible = API publique (60/h)."""
+    try:
+        if TOKEN_FILE.exists():
+            return TOKEN_FILE.read_text().strip()
+    except Exception as e:
+        log.error(f"token illisible: {e}")
+    return ""
+
+
+def _write_token(tok: str) -> None:
+    """Écrit (0600) ou retire le secret. Vide = retour à l'API publique."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tok = (tok or "").strip()
+    if not tok:
+        try:
+            TOKEN_FILE.unlink(missing_ok=True)
+        except Exception as e:
+            log.error(f"suppression token: {e}")
+        return
+    tmp = TOKEN_FILE.with_suffix(".tmp")
+    tmp.write_text(tok)
+    try:
+        os.chmod(tmp, 0o600)
+    except Exception:
+        pass
+    tmp.replace(TOKEN_FILE)
+    try:
+        os.chmod(TOKEN_FILE, 0o600)
+    except Exception:
+        pass
+
+
 # État vivant.
 _TOML_CFG, _TOML_FLOWS = _load_toml()
 CFG = _load_json(CONFIG_OVR, _TOML_CFG)
+_sec = _load_token()
+if _sec:
+    CFG["token"] = _sec          # le secret sur disque prime sur le TOML
 FLOWS = _load_json(FLOWS_FILE, _TOML_FLOWS)
 SUMMARY: dict[str, Any] = {}
 MODULES: dict[str, Any] = {"total": 0, "modules": []}  # révisions locales des paquets
@@ -287,8 +329,31 @@ class Params(BaseModel):
 
 @router.get("/config", dependencies=[Depends(require_jwt)])
 async def get_config() -> dict:
-    # Le token n'est JAMAIS renvoyé (secret).
-    return {k: v for k, v in CFG.items() if k != "token"}
+    # Le token n'est JAMAIS renvoyé (secret) — on expose seulement s'il est présent.
+    out = {k: v for k, v in CFG.items() if k != "token"}
+    out["has_token"] = bool(CFG.get("token"))
+    return out
+
+
+class Token(BaseModel):
+    token: str = ""      # PAT lecture seule ; vide = retour à l'API publique (60/h)
+
+
+@router.post("/config/token", dependencies=[Depends(require_jwt)])
+async def set_token(body: Token) -> dict:
+    """Pose/retire le PAT GitHub (secret 0600). 60/h → 5000/h : la cadence se remplit.
+
+    On l'applique à chaud puis on FORCE une passe : si le quota était la cause du
+    « cadence à zéro », le bargraphe et today/last7 reviennent tout de suite.
+    """
+    tok = (body.token or "").strip()
+    _write_token(tok)
+    CFG["token"] = tok
+    await _poll_once()
+    ok = bool(SUMMARY.get("ok"))
+    m = SUMMARY.get("meta", {}) if SUMMARY else {}
+    return {"ok": ok, "has_token": bool(tok), "rate_left": m.get("rate_left"),
+            "error": m.get("error"), "fetched_at": m.get("fetched_at")}
 
 
 @router.post("/config", dependencies=[Depends(require_jwt)])
