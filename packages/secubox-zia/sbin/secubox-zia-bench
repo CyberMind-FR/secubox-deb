@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-zia-bench — mesure P0 d'un GGUF sur le materiel REEL (pas suppose).
+set -euo pipefail
+LLAMA="${LLAMA:-/data/zia/llama-cli}"
+MODEL="${1:-$(ls -1 /data/models/*.gguf 2>/dev/null | head -1)}"
+THREADS="${ZIA_THREADS:-$(nproc)}"; CTX="${ZIA_CTX:-2048}"; NPRED="${NPRED:-128}"
+PROMPT="Tu es ZIA, assistant local du Hall. Reponds en une phrase."
+[ -x "$LLAMA" ] || { echo "❌ llama-cli absent ($LLAMA) — lancer secubox-zia-p0-install"; exit 1; }
+[ -f "$MODEL" ] || { echo "❌ aucun modele GGUF (/data/models/*.gguf)"; exit 1; }
+echo "🦊 ZIA bench — modele: $(basename "$MODEL") · threads: $THREADS · ctx: $CTX"
+echo "   RAM dispo avant: $(free -m | awk '/Mem:/{print $7"Mi"}')"
+START=$(date +%s.%N)
+# -t threads, -c ctx, -n predict ; on capture timings de llama.cpp (stderr).
+"$LLAMA" -m "$MODEL" -t "$THREADS" -c "$CTX" -n "$NPRED" -p "$PROMPT" 2>/tmp/zia-bench.err || true
+END=$(date +%s.%N)
+echo "── mesures ─────────────────────────────────────────────"
+grep -iE "load time|prompt eval time|eval time|tokens per second|total time" /tmp/zia-bench.err || true
+echo "   mur total: $(echo "$END - $START" | bc)s"
+echo "   RAM dispo apres: $(free -m | awk '/Mem:/{print $7"Mi"}')"
+echo "   -> reporter tokens/s, RSS, 1er token dans .claude/HISTORY.md (P0)."

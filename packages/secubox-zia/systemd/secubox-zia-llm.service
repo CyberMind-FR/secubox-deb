@@ -1,0 +1,29 @@
+[Unit]
+Description=SecuBox ZIA — llama.cpp server (GGUF local, P0) [#1245]
+After=network.target
+# Ne DEMARRE que si un binaire ET un modele existent : sans quoi ZIA reste en
+# repondeur heuristique (le service ne tourne simplement pas).
+ConditionPathExists=/data/zia/llama-server
+ConditionPathExistsGlob=/data/models/*.gguf
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+# Reglages passes par l'environnement (ecrit par secubox-zia-p0-install).
+EnvironmentFile=-/etc/secubox/zia-llm.env
+Environment="ZIA_MODEL=/data/models/model.gguf"
+Environment="ZIA_THREADS=4"
+Environment="ZIA_CTX=2048"
+Environment="ZIA_PORT=8091"
+ExecStart=/data/zia/llama-server -m ${ZIA_MODEL} -t ${ZIA_THREADS} -c ${ZIA_CTX} \
+    --host 127.0.0.1 --port ${ZIA_PORT} --no-webui
+Restart=on-failure
+RestartSec=5
+# RAM bornee : sur une box chargee (~1 Go dispo), on protege le reste du parc.
+MemoryMax=1400M
+MemoryHigh=1100M
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

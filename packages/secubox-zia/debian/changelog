@@ -1,3 +1,17 @@
+secubox-zia (0.1.3-1~bookworm1) bookworm; urgency=medium
+
+  * P0 turnkey (#1245) : outillage pour brancher un modele GGUF sur la MOCHAbin,
+    sans changer le code (hook llm_url deja en place).
+    - secubox-zia-llm.service : llama-server local (127.0.0.1), MemoryMax=1400M pour
+      proteger le parc ; ne demarre que si binaire + modele presents (sinon ZIA
+      reste en repondeur heuristique).
+    - /usr/sbin/secubox-zia-p0-install : build llama.cpp ARM64 + telechargement GGUF
+      ultra-lite + branchement + benchmark + pointe ZIA dessus.
+    - /usr/sbin/secubox-zia-bench : mesure RAM/tokens-s sur le materiel reel.
+    Contrainte mesuree (gk2) : ~1 Go RAM dispo -> ultra-lite ~0.5B Q4 seulement.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 12:45:00 +0200
+
 secubox-zia (0.1.2-1~bookworm1) bookworm; urgency=medium
 
   * P2 — adapter REGISTRE : chaque service du Hall devient un objet ouvrable

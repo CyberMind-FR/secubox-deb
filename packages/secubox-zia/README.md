@@ -107,6 +107,25 @@ fallback local.
 - **P4** délégation VHOST (bascule explicite)
 - **P5** remote optionnel (politique + fallback)
 
+## P0 — brancher un modèle (sur la MOCHAbin)
+
+Livré **turnkey** (le hook `llm_url` est déjà là ; les objets viennent toujours des outils) :
+
+```bash
+# 1) installer llama.cpp (ARM64, build) + un GGUF ULTRA-LITE Q4, brancher llama-server,
+#    benchmarker, et pointer ZIA dessus. RAM serrée sur box chargée -> ultra-lite only.
+sudo MODEL_URL="https://…/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf" secubox-zia-p0-install
+# 2) mesurer à part si besoin
+secubox-zia-bench /data/models/model.gguf
+```
+
+- `secubox-zia-llm.service` — llama-server local (127.0.0.1:8091), `MemoryMax=1400M` pour
+  protéger le parc ; ne démarre que si `/data/zia/llama-server` **et** un `/data/models/*.gguf`
+  existent (sinon ZIA reste en répondeur heuristique).
+- L'installateur écrit `llm_url` dans `/etc/secubox/zia.toml` et redémarre `secubox-zia`.
+- **Contrainte réelle** (gk2, 30/08) : ~1 Go RAM dispo → un ~0.5 B Q4 seulement ; libérer de
+  la RAM ou viser l'ultra-lite. À mesurer, jamais supposer.
+
 ## Definition of Done
 
 La MOCHAbin fait tourner la ZIA locale de façon stable, répond aux demandes simples,
