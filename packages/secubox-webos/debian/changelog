@@ -1,3 +1,16 @@
+secubox-webos (1.0.208-1~bookworm1) bookworm; urgency=medium
+
+  * Menu invité : les IDENTITÉS sont camouflées ET indisponibles hors session.
+    Le Hall démarre `<html class="non-connecte">` (dévoilé seulement quand la
+    sonde prouve la session) : plus de flash des éléments réservés au chargement.
+    Le bloc « Mes identités » + « Gérer les accès délégués » (#who-identites) est
+    masqué pour l'invité, et surtout `chargeIdentites()` NE LIT PLUS le registre
+    (/api/v1/waf/cookies) tant qu'aucun compte SecuBox n'est connecté ; le cache
+    des identités est vidé à la déconnexion. Un invité ne voit ni ne déclenche la
+    lecture des identités.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 19:20:00 +0200
+
 secubox-webos (1.0.207-1~bookworm1) bookworm; urgency=medium
 
   * Nextcloud « Super Cardlet » (#1245) : carte PERSONNELLE du Cloud dans le Hall,
