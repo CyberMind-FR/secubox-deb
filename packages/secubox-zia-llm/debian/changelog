@@ -1,0 +1,12 @@
+secubox-zia-llm (0.1.0-1~bookworm1) bookworm; urgency=medium
+
+  * llama.cpp arm64 STATIQUE prebuilt (#1245), cross-compile HORS box (le build
+    sur la MOCHAbin saturait la RAM). Aucune dependance glibc -> tourne tel quel.
+    - /usr/lib/secubox/zia-llm/{llama-server,llama-cli}
+    - secubox-zia-llm.service : llama-server local 127.0.0.1:8091, MemoryMax=1400M,
+      ne demarre que si un modele /data/models/*.gguf est present.
+    - /usr/sbin/secubox-zia-getmodel : telecharge un GGUF (pas de build), demarre
+      le serveur, mesure la RAM, et pointe llm_url de ZIA dessus.
+    - build-arm64.sh reproduit les binaires.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 14:30:00 +0200

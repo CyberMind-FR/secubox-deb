@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_install:
+	install -d debian/secubox-zia-llm/usr/lib/secubox/zia-llm
+	install -m0755 bin/llama-server bin/llama-cli debian/secubox-zia-llm/usr/lib/secubox/zia-llm/
+	install -d debian/secubox-zia-llm/usr/lib/systemd/system
+	cp systemd/secubox-zia-llm.service debian/secubox-zia-llm/usr/lib/systemd/system/
+	install -d debian/secubox-zia-llm/usr/sbin
+	install -m0755 sbin/* debian/secubox-zia-llm/usr/sbin/
+
+override_dh_installsystemd:
+	true
+# Binaires prebuilt : pas de strip/relocation debhelper.
+override_dh_strip:
+	true
+override_dh_shlibdeps:
+	true

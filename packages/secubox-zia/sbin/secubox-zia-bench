@@ -3,7 +3,7 @@
 # Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
 # secubox-zia-bench — mesure P0 d'un GGUF sur le materiel REEL (pas suppose).
 set -euo pipefail
-LLAMA="${LLAMA:-/data/zia/llama-cli}"
+LLAMA="${LLAMA:-/usr/lib/secubox/zia-llm/llama-cli}"
 MODEL="${1:-$(ls -1 /data/models/*.gguf 2>/dev/null | head -1)}"
 THREADS="${ZIA_THREADS:-$(nproc)}"; CTX="${ZIA_CTX:-2048}"; NPRED="${NPRED:-128}"
 PROMPT="Tu es ZIA, assistant local du Hall. Reponds en une phrase."

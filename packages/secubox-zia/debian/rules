@@ -16,9 +16,8 @@ override_dh_auto_install:
 	[ -f nginx/zia.conf ] && cp nginx/zia.conf debian/secubox-zia/etc/nginx/secubox.d/ || true
 	install -d debian/secubox-zia/usr/lib/systemd/system
 	cp systemd/secubox-zia.service debian/secubox-zia/usr/lib/systemd/system/
-	# P0 (matériel) : unité llama-server (ne démarre que si binaire+modèle présents).
-	[ -f systemd/secubox-zia-llm.service ] && cp systemd/secubox-zia-llm.service debian/secubox-zia/usr/lib/systemd/system/ || true
-	# Outils P0 : bench + installateur (llama.cpp ARM64 + GGUF), à lancer sur la MOCHAbin.
+	# Le runtime llama.cpp (unité + binaires) vit dans le paquet secubox-zia-llm
+	# (arm64, cross-compilé hors box). Ici on ne garde que le bench.
 	install -d debian/secubox-zia/usr/sbin
 	[ -d sbin ] && install -m0755 sbin/* debian/secubox-zia/usr/sbin/ || true
 

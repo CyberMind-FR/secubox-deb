@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+case "$1" in
+  remove|deconfigure)
+    systemctl stop secubox-zia-llm.service 2>/dev/null || true
+    systemctl disable secubox-zia-llm.service 2>/dev/null || true
+    ;;
+esac
+#DEBHELPER#
+exit 0

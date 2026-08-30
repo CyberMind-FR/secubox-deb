@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+case "$1" in
+  configure)
+    install -d -o secubox -g secubox -m 0750 /data/models 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+    # On NE demarre PAS : pas de modele encore. secubox-zia-getmodel s'en charge.
+    ;;
+esac
+#DEBHELPER#
+exit 0

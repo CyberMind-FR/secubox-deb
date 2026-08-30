@@ -1,0 +1,20 @@
+Source: secubox-zia-llm
+Section: web
+Priority: optional
+Maintainer: Gerald KERMA <devel@cybermind.fr>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+
+Package: secubox-zia-llm
+Architecture: arm64
+Depends: ${misc:Depends}, secubox-zia
+Description: ZIA Hall — local llama.cpp runtime (prebuilt static arm64)
+ Ships a statically-linked aarch64 llama.cpp (llama-server + llama-cli),
+ cross-compiled OFF the box (building on the MOCHAbin exhausts RAM). No glibc
+ dependency, so it runs on Debian bookworm arm64 as-is. With a GGUF model under
+ /data/models, ZIA switches from its heuristic responder to real local generation
+ over the same tools — the objects still come from the bus, never from the model.
+ .
+ Fetch a model with `secubox-zia-getmodel <url.gguf>`; the llama-server unit is
+ memory-capped (1.4G) to protect the rest of the parc, and only starts once a
+ model is present. Rebuild the binaries with build-arm64.sh.

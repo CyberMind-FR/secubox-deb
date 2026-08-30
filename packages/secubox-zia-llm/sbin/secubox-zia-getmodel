@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+# secubox-zia-getmodel <url.gguf> — telecharge un modele (PAS de build), demarre
+# llama-server (capé), mesure la RAM, et pointe ZIA dessus. Ultra-lite conseille.
+set -euo pipefail
+URL="${1:-${MODEL_URL:-}}"
+PORT="${ZIA_PORT:-8091}"; THREADS="${ZIA_THREADS:-3}"; CTX="${ZIA_CTX:-1024}"
+[ "$(id -u)" = 0 ] || { echo "root requis"; exit 1; }
+[ -n "$URL" ] || { echo "usage: secubox-zia-getmodel <url .gguf ultra-lite Q4>"; exit 1; }
+[ -x /usr/lib/secubox/zia-llm/llama-server ] || { echo "binaire absent — installer secubox-zia-llm"; exit 1; }
+install -d -o secubox -g secubox -m0750 /data/models
+AV=$(free -m | awk '/Mem:/{print $7}')
+echo "🦊 RAM dispo: ${AV}Mi (ultra-lite ~0.5B conseille si < 1500)"
+echo "── telechargement du modele ──"
+curl -fL "$URL" -o /data/models/model.gguf
+chown secubox:secubox /data/models/model.gguf
+echo "   modele: $(du -h /data/models/model.gguf | cut -f1)"
+cat > /etc/secubox/zia-llm.env <<ENV
+ZIA_MODEL=/data/models/model.gguf
+ZIA_THREADS=$THREADS
+ZIA_CTX=$CTX
+ZIA_PORT=$PORT
+ENV
+echo "── demarrage llama-server (capé 1.2G) ──"
+systemctl daemon-reload; systemctl enable --now secubox-zia-llm.service
+# On attend que le serveur reponde (chargement du modele).
+for i in $(seq 1 40); do
+  curl -s "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && break; sleep 2
+done
+if curl -s "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+  echo "✅ llama-server up. RAM dispo maintenant: $(free -m | awk '/Mem:/{print $7"Mi"}')"
+  # Pointer ZIA sur le serveur local.
+  grep -q '^llm_url' /etc/secubox/zia.toml \
+    && sed -i 's#^llm_url = .*#llm_url = "http://127.0.0.1:'"$PORT"'"#' /etc/secubox/zia.toml \
+    || echo "llm_url = \"http://127.0.0.1:$PORT\"" >> /etc/secubox/zia.toml
+  sed -i 's#^model_name = .*#model_name = "GGUF local"#' /etc/secubox/zia.toml || true
+  systemctl restart secubox-zia
+  echo "✅ ZIA branchee sur le modele. Test : curl --unix-socket /run/secubox/zia.sock http://x/api/v1/zia/health"
+else
+  echo "⚠️ llama-server n'a pas repondu (RAM ? logs: journalctl -u secubox-zia-llm). ZIA reste en heuristique."
+  systemctl status secubox-zia-llm --no-pager -l | tail -8 || true
+fi

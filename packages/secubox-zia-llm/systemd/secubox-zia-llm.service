@@ -1,0 +1,28 @@
+[Unit]
+Description=SecuBox ZIA — llama.cpp server (GGUF local, arm64 statique) [#1245]
+After=network.target
+# Ne DEMARRE que si un modele existe (le binaire est fourni par ce paquet).
+ConditionPathExistsGlob=/data/models/*.gguf
+
+[Service]
+Type=simple
+User=secubox
+Group=secubox
+EnvironmentFile=-/etc/secubox/zia-llm.env
+Environment="ZIA_MODEL=/data/models/model.gguf"
+Environment="ZIA_THREADS=3"
+Environment="ZIA_CTX=1024"
+Environment="ZIA_PORT=8091"
+ExecStart=/usr/lib/secubox/zia-llm/llama-server -m ${ZIA_MODEL} -t ${ZIA_THREADS} -c ${ZIA_CTX} \
+    --host 127.0.0.1 --port ${ZIA_PORT}
+Restart=on-failure
+RestartSec=8
+# RAM BORNEE : la box est chargee (~1 Go dispo). Si le serveur deborde, systemd le
+# tue LUI, pas le reste du parc. ctx court (1024) + 3 threads pour laisser respirer.
+MemoryMax=1200M
+MemoryHigh=950M
+Nice=10
+CPUWeight=30
+
+[Install]
+WantedBy=multi-user.target

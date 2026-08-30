@@ -1,3 +1,12 @@
+secubox-zia (0.1.6-1~bookworm1) bookworm; urgency=medium
+
+  * Le runtime llama.cpp (unite + binaires) part dans le paquet secubox-zia-llm
+    (arm64, cross-compile HORS box) — le build sur la MOCHAbin saturait la RAM.
+    On retire secubox-zia-llm.service et secubox-zia-p0-install d'ici ; le bench
+    pointe le binaire du nouveau paquet.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 14:35:00 +0200
+
 secubox-zia (0.1.5-1~bookworm1) bookworm; urgency=medium
 
   * P0 installateur : parallelisme de build BORNE (ZIA_BUILD_JOBS, defaut 2) pour
