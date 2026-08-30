@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+
+  SecuBox #1245 — NEXTCLOUD « SUPER CARDLET ».
+
+  La carte personnelle du Cloud dans le Hall. Le broker (acces.py) garde le mot
+  de passe d'application DANS la box ; cette carte ne parle qu'à /api/v1/webos
+  (même origine, CSP connect-src 'self') et n'y reçoit que des titres, des
+  chiffres et le résultat de SES actions — jamais la clé.
+
+  Trois onglets : Fichiers (navigateur WebDAV, récents en tête), Activité,
+  Partages. Actions gérables : partager (lien public), supprimer, téléverser.
+  Sans accès, elle ne s'affiche pas vide : elle propose le seul geste possible.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud — super carte</title>
+<style>
+  :root { --fond:#ffffff; --texte:#1a1a22; --muted:#6b6b7a; --border:#e2e2ea;
+          --accent:#1655a0; --accent-d:#0f3c72; --ligne:#eef0f4; --ok:#1f9d55; --danger:#c0392b; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+      --border:#2a2a36; --accent:#6ea8e8; --accent-d:#9cc4f0; --ligne:#20202a; --ok:#3ecf7f; --danger:#e06666; }
+  }
+  :root[data-theme="dark"] { --fond:#14141c; --texte:#e8e6d9; --muted:#8a8a99;
+    --border:#2a2a36; --accent:#6ea8e8; --accent-d:#9cc4f0; --ligne:#20202a; --ok:#3ecf7f; --danger:#e06666; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; scrollbar-width:none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { width:0; display:none; }
+  body { background:var(--fond); color:var(--texte);
+         font-family:"Inter",system-ui,-apple-system,sans-serif; font-size:14px; line-height:1.4; }
+  .mw { display:flex; flex-direction:column; height:100%; padding:.55rem .65rem .45rem; gap:.4rem; }
+  .tete { display:flex; align-items:center; gap:.5rem; }
+  .tete .ic { width:30px; height:30px; border-radius:9px; display:grid; place-items:center;
+              font-size:.95rem; flex:0 0 auto; color:#fff; background:var(--accent); }
+  .tete .nm { min-width:0; flex:1; }
+  .tete .nm b { display:block; font-size:.86rem; line-height:1.15; }
+  .tete .nm .h { font-size:.58rem; color:var(--muted); font-family:"JetBrains Mono",ui-monospace,monospace;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* Jauge de quota — un chiffre nu ne dit pas « bientôt plein » ; une barre si. */
+  .jauge { flex:0 0 auto; width:74px; text-align:right; }
+  .jauge .pct { font-size:.62rem; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .jauge .bar { height:5px; border-radius:3px; background:var(--ligne); overflow:hidden; margin-top:2px; }
+  .jauge .bar i { display:block; height:100%; width:0; background:var(--accent);
+                  transition:width .4s; border-radius:3px; }
+  .jauge .bar i.plein { background:var(--danger); }
+  .onglets { display:flex; gap:.15rem; border-bottom:1px solid var(--border); }
+  .onglets button { flex:1; border:0; background:none; color:var(--muted); font:inherit;
+                    font-size:.68rem; letter-spacing:.02em; padding:.28rem .2rem .34rem; cursor:pointer;
+                    border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .onglets button.on { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .onglets button .cpt { font-variant-numeric:tabular-nums; opacity:.7; }
+  .corps { flex:1; min-height:0; overflow-y:auto; scrollbar-width:none; }
+  .corps::-webkit-scrollbar { width:0; }
+  /* fil d'ariane */
+  .fil { display:flex; align-items:center; gap:.2rem; font-size:.63rem; color:var(--muted);
+         padding:.2rem 0 .28rem; flex-wrap:wrap; }
+  .fil a { color:var(--accent); text-decoration:none; cursor:pointer; }
+  .fil a:hover { text-decoration:underline; }
+  .fil span.sep { opacity:.5; }
+  /* lignes de fichiers/activité/partages */
+  .rangee { display:flex; align-items:center; gap:.4rem; padding:.24rem .15rem; border-radius:6px;
+            font-size:.73rem; }
+  .rangee:hover { background:var(--ligne); }
+  .rangee .g { width:16px; text-align:center; flex:0 0 auto; }
+  .rangee .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+               cursor:pointer; }
+  .rangee .t:hover { color:var(--accent); text-decoration:underline; }
+  .rangee .s { flex:0 0 auto; font-size:.6rem; color:var(--muted); font-variant-numeric:tabular-nums;
+               white-space:nowrap; }
+  .rangee .act { flex:0 0 auto; display:flex; gap:.1rem; opacity:0; transition:opacity .12s; }
+  .rangee:hover .act { opacity:1; }
+  .rangee .act button { border:0; background:none; cursor:pointer; font-size:.72rem; padding:.05rem .18rem;
+                        border-radius:5px; color:var(--muted); }
+  .rangee .act button:hover { background:var(--fond); color:var(--accent); }
+  .rangee .act button.sup:hover { color:var(--danger); }
+  .vide { color:var(--muted); font-size:.72rem; padding:.6rem .2rem; text-align:center; }
+  /* sans accès */
+  .sans { display:flex; flex-direction:column; gap:.45rem; align-items:flex-start; margin:auto 0; padding:.4rem; }
+  .sans p { margin:0; font-size:.75rem; color:var(--muted); }
+  .sans button { border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:8px;
+                 padding:.34rem .74rem; font:inherit; font-size:.74rem; cursor:pointer; }
+  .sans button:hover { opacity:.92; }
+  /* pied : ouvrir + téléverser + compte */
+  .pied { margin-top:auto; display:flex; align-items:center; gap:.4rem; padding-top:.4rem;
+          border-top:1px solid var(--border); }
+  .pied .b { flex:0 0 auto; padding:.26rem .62rem; border-radius:7px; border:1px solid var(--accent);
+             color:var(--accent); background:none; font:inherit; font-size:.7rem; cursor:pointer;
+             text-decoration:none; }
+  .pied .b:hover { background:var(--accent); color:#fff; }
+  .pied .grow { flex:1; }
+  .pied .cpt { font-size:.57rem; letter-spacing:.05em; color:var(--muted); white-space:nowrap;
+               overflow:hidden; text-overflow:ellipsis; max-width:44%; }
+  /* toast */
+  .toast { position:fixed; left:50%; bottom:8px; transform:translateX(-50%); max-width:92%;
+           background:var(--texte); color:var(--fond); font-size:.68rem; padding:.34rem .6rem;
+           border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:9;
+           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .toast.on { opacity:.96; }
+  .toast.err { background:var(--danger); color:#fff; }
+</style>
+
+<div class="mw">
+  <div class="tete">
+    <span class="ic">☁️</span>
+    <span class="nm"><b>Cloud</b><span class="h" id="hote">nc.gk2.secubox.in</span></span>
+    <span class="jauge" id="jauge" style="display:none">
+      <span class="pct" id="pct"></span>
+      <span class="bar"><i id="barre"></i></span>
+    </span>
+  </div>
+  <div class="onglets" id="onglets" style="display:none">
+    <button data-t="fichiers" class="on">📁 Fichiers</button>
+    <button data-t="activite">🕓 Activité</button>
+    <button data-t="partages">🔗 Partages <span class="cpt" id="cpt-p"></span></button>
+  </div>
+  <div class="corps" id="corps"><div class="vide">lecture…</div></div>
+  <div class="pied" id="pied" style="display:none">
+    <a class="b" id="ouvrir" href="#" target="_top">Ouvrir</a>
+    <button class="b" id="up" title="Téléverser dans ce dossier">⬆ Envoyer</button>
+    <span class="grow"></span><span class="cpt" id="compte"></span>
+  </div>
+</div>
+<input type="file" id="picker" style="display:none">
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var HOTE = 'nc.gk2.secubox.in', ID = 'nextcloud';
+  var el = function (i) { return document.getElementById(i); };
+  var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (x) {
+      return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' })[x]; }); };
+  var etat = { onglet:'fichiers', chemin:'/', compte:'', partages:0 };
+
+  function jeton() { try { return localStorage.getItem('sbx_token') || ''; } catch (e) { return ''; } }
+  function api(chemin, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'Accept':'application/json' }, opts.headers || {});
+    var j = jeton(); if (j) opts.headers['Authorization'] = 'Bearer ' + j;
+    if (opts.body && typeof opts.body === 'string') opts.headers['Content-Type'] = 'application/json';
+    return fetch('/api/v1/webos' + chemin, opts).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { code:r.status, corps:d }; });
+    });
+  }
+  var _tt;
+  function toast(m, err) {
+    var t = el('toast'); t.textContent = m; t.className = 'toast on' + (err ? ' err' : '');
+    clearTimeout(_tt); _tt = setTimeout(function () { t.className = 'toast'; }, err ? 4200 : 2600);
+  }
+  function delai(s) {
+    var t = Date.parse(s); if (!t) return '';
+    var d = Math.max(0, (Date.now() - t) / 1000);
+    if (d < 3600) return Math.round(d/60) + ' min';
+    if (d < 86400) return Math.round(d/3600) + ' h';
+    return Math.round(d/86400) + ' j';
+  }
+  function ouvre(url) {
+    if (parent !== window) { try { parent.postMessage({ sbx:'ouvre', id:ID, url:url }, '*'); } catch (e) {} }
+    else top.location.href = url;
+  }
+
+  // ── SANS ACCÈS : session box manquante, ou accès non accordé ───────────────
+  function sansAcces(etatSvc, code) {
+    el('onglets').style.display = 'none'; el('jauge').style.display = 'none'; el('pied').style.display = 'none';
+    if (code === 401 || code === 403) {
+      var meme = /(^|\.)gk2\.secubox\.in$/.test(location.hostname);
+      el('corps').innerHTML = meme
+        ? '<div class="sans"><p>Il manque votre session <b>SecuBox</b> pour voir vos fichiers.</p>'
+          + '<button id="cnx">Connexion SecuBox…</button></div>'
+        : '<div class="sans"><p>Ce domaine ne porte pas le témoin de session.</p>'
+          + '<button id="bascule">Récupérer ma session…</button></div>';
+      var b = el('bascule'); if (b) b.addEventListener('click', function () {
+        top.location.href = 'https://hall.gk2.secubox.in/relais.html?retour=' + encodeURIComponent(top.location.origin + '/'); });
+      var k = el('cnx'); if (k) k.addEventListener('click', function () {
+        if (parent !== window) { try { parent.postMessage({ sbx:'connexion' }, '*'); } catch (e) {} }
+        else window.open('https://admin.gk2.secubox.in/login.html', 'sbx-session', 'width=520,height=560,noopener'); });
+      return;
+    }
+    var att = etatSvc && etatSvc.demande;
+    el('corps').innerHTML = '<div class="sans"><p>' + (att
+        ? 'Demande déposée. Elle attend une validation.'
+        : 'Cette carte peut afficher <b>vos fichiers</b>, gérer partages et envois — avec votre accord.')
+      + '</p><button id="dem">' + (att ? 'Valider maintenant ↗' : 'Demander l’accès') + '</button></div>';
+    var d = el('dem');
+    if (d && att) d.addEventListener('click', function () {
+      if (parent !== window) { try { parent.postMessage({ sbx:'valider', id:ID }, '*'); } catch (e) {} }
+      else window.open('/acces.html?svc=' + ID, 'sbx-acces', 'width=560,height=600,noopener'); });
+    if (d && !att) d.addEventListener('click', function () {
+      d.disabled = true; d.textContent = '…';
+      api('/acces/' + ID + '/demande', { method:'POST' }).then(function () {
+        demarre();
+        if (parent !== window) { try { parent.postMessage({ sbx:'valider', id:ID }, '*'); } catch (e) {} } }); });
+  }
+
+  // ── EN-TÊTE (quota) via /tableau ───────────────────────────────────────────
+  function majQuota(q) {
+    if (!q || q.pct == null) { el('jauge').style.display = 'none'; return; }
+    el('jauge').style.display = 'block';
+    el('pct').textContent = (q.utilise_h && q.total_h) ? (q.utilise_h + ' / ' + q.total_h) : (q.pct + ' %');
+    var i = el('barre'); i.style.width = Math.min(100, q.pct) + '%';
+    i.className = q.pct >= 90 ? 'plein' : '';
+  }
+
+  // ── ONGLET FICHIERS (navigateur WebDAV) ────────────────────────────────────
+  function icone(e) { return e.dossier ? '📁' : ({
+      'application/pdf':'📕','text/plain':'📄','image/':'🖼️','video/':'🎞️','audio/':'🎵',
+      'application/zip':'🗜️' }[e.type] || (/^image\//.test(e.type)?'🖼️':/^video\//.test(e.type)?'🎞️':
+      /^audio\//.test(e.type)?'🎵':'📄')); }
+
+  function fil(chemin) {
+    var segs = chemin.split('/').filter(Boolean), h = '<a data-go="/">racine</a>', acc = '';
+    segs.forEach(function (s) { acc += '/' + s;
+      h += '<span class="sep">›</span><a data-go="' + esc(acc) + '">' + esc(s) + '</a>'; });
+    return '<div class="fil">' + h + '</div>';
+  }
+
+  function rendFichiers(d) {
+    var h = fil(d.chemin), e = d.entrees || [];
+    if (!e.length) { h += '<div class="vide">Dossier vide.</div>'; el('corps').innerHTML = h; brancheFil(); return; }
+    h += e.map(function (x) {
+      var sous = x.dossier ? (x.modifie ? delai(x.modifie) : '') : [x.taille_h, delai(x.modifie)].filter(Boolean).join(' · ');
+      return '<div class="rangee" data-chemin="' + esc(x.chemin) + '" data-dossier="' + (x.dossier?1:0)
+        + '" data-vue="' + esc(x.vue) + '">'
+        + '<span class="g">' + icone(x) + '</span>'
+        + '<span class="t">' + esc(x.nom) + '</span>'
+        + '<span class="s">' + esc(sous) + '</span>'
+        + '<span class="act">'
+        +   '<button class="par" title="Créer un lien de partage">🔗</button>'
+        +   '<button class="sup" title="Supprimer">🗑</button>'
+        + '</span></div>';
+    }).join('');
+    el('corps').innerHTML = h; brancheFil(); brancheRangees();
+  }
+  function brancheFil() {
+    Array.prototype.forEach.call(el('corps').querySelectorAll('[data-go]'), function (a) {
+      a.addEventListener('click', function () { etat.chemin = a.getAttribute('data-go'); chargeFichiers(); }); });
+  }
+  function brancheRangees() {
+    Array.prototype.forEach.call(el('corps').querySelectorAll('.rangee'), function (r) {
+      var chemin = r.getAttribute('data-chemin'), dossier = r.getAttribute('data-dossier') === '1',
+          vue = r.getAttribute('data-vue');
+      r.querySelector('.t').addEventListener('click', function () {
+        if (dossier) { etat.chemin = chemin; chargeFichiers(); } else ouvre(vue); });
+      r.querySelector('.par').addEventListener('click', function (ev) { ev.stopPropagation(); partager(chemin); });
+      r.querySelector('.sup').addEventListener('click', function (ev) { ev.stopPropagation(); supprimer(chemin, r); });
+    });
+  }
+  function chargeFichiers() {
+    api('/acces/' + ID + '/fichiers?chemin=' + encodeURIComponent(etat.chemin)).then(function (r) {
+      if (r.code === 401 || r.code === 403) { sansAcces(null, r.code); return; }
+      var d = r.corps || {};
+      if (!d.ok) { el('corps').innerHTML = '<div class="vide">' + esc(d.detail || 'lecture impossible') + '</div>'; return; }
+      etat.chemin = d.chemin || '/'; rendFichiers(d);
+    });
+  }
+
+  // ── ONGLET ACTIVITÉ ────────────────────────────────────────────────────────
+  function rendActivite(a) {
+    if (!a.length) { el('corps').innerHTML = '<div class="vide">Aucune activité récente.</div>'; return; }
+    el('corps').innerHTML = a.map(function (x) {
+      return '<div class="rangee" data-url="' + esc(x.url || '') + '">'
+        + '<span class="g">•</span><span class="t">' + esc(x.titre) + '</span>'
+        + '<span class="s">' + esc(x.sous || delai(x.quand)) + '</span></div>'; }).join('');
+    Array.prototype.forEach.call(el('corps').querySelectorAll('.rangee'), function (r) {
+      var u = r.getAttribute('data-url'); if (u) r.querySelector('.t').addEventListener('click', function () { ouvre(u); }); });
+  }
+
+  // ── ONGLET PARTAGES ────────────────────────────────────────────────────────
+  function chargePartages() {
+    api('/acces/' + ID + '/partages').then(function (r) {
+      if (r.code === 401 || r.code === 403) { sansAcces(null, r.code); return; }
+      var d = r.corps || {}, e = (d.ok && d.entrees) || [];
+      etat.partages = e.length; el('cpt-p').textContent = e.length ? '(' + e.length + ')' : '';
+      if (!d.ok) { el('corps').innerHTML = '<div class="vide">' + esc(d.detail || 'lecture impossible') + '</div>'; return; }
+      if (!e.length) { el('corps').innerHTML = '<div class="vide">Aucun partage.</div>'; return; }
+      el('corps').innerHTML = e.map(function (x) {
+        return '<div class="rangee" data-url="' + esc(x.url || '') + '">'
+          + '<span class="g">' + (x.public ? '🔗' : (x.dossier ? '📁' : '👤')) + '</span>'
+          + '<span class="t">' + esc(x.nom) + '</span>'
+          + '<span class="s">' + esc(x.public ? 'lien' : (x.avec || x.type)) + '</span>'
+          + (x.public && x.url ? '<span class="act"><button class="cop" title="Copier le lien">⧉</button></span>' : '')
+          + '</div>'; }).join('');
+      Array.prototype.forEach.call(el('corps').querySelectorAll('.rangee'), function (r) {
+        var u = r.getAttribute('data-url'), cop = r.querySelector('.cop');
+        if (u) r.querySelector('.t').addEventListener('click', function () { ouvre(u); });
+        if (cop) cop.addEventListener('click', function (ev) { ev.stopPropagation(); copier(u); }); });
+    });
+  }
+
+  // ── ACTIONS ────────────────────────────────────────────────────────────────
+  function copier(t) {
+    try { navigator.clipboard.writeText(t).then(function () { toast('Lien copié'); },
+      function () { toast(t); }); } catch (e) { toast(t); }
+  }
+  function partager(chemin) {
+    toast('Création du lien…');
+    api('/acces/' + ID + '/partager', { method:'POST', body: JSON.stringify({ chemin:chemin }) }).then(function (r) {
+      var d = r.corps || {};
+      if (d.ok && d.url) { copier(d.url); toast('Lien public créé — copié'); if (etat.onglet === 'partages') chargePartages(); }
+      else toast(d.detail || 'partage refusé', true); });
+  }
+  function supprimer(chemin, rangee) {
+    var nom = chemin.split('/').filter(Boolean).pop() || chemin;
+    if (!confirm('Supprimer « ' + nom + ' » ?\nCette action est irréversible.')) return;
+    api('/acces/' + ID + '/supprimer', { method:'POST', body: JSON.stringify({ chemin:chemin }) }).then(function (r) {
+      var d = r.corps || {};
+      if (d.ok) { if (rangee) rangee.remove(); toast('Supprimé'); }
+      else toast(d.detail || 'suppression refusée', true); });
+  }
+  function envoyer(fichier) {
+    var fd = new FormData(); fd.append('chemin', etat.chemin); fd.append('fichier', fichier);
+    toast('Envoi de « ' + fichier.name +' »…');
+    var opts = { method:'POST', body: fd, headers:{ 'Accept':'application/json' } };
+    var j = jeton(); if (j) opts.headers['Authorization'] = 'Bearer ' + j;
+    fetch('/api/v1/webos/acces/' + ID + '/televerser', opts)
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
+        if (d.ok) { toast('Envoyé'); if (etat.onglet === 'fichiers') chargeFichiers(); }
+        else toast(d.detail || 'envoi refusé', true); })
+      .catch(function () { toast('envoi impossible', true); });
+  }
+
+  // ── ORCHESTRATION ──────────────────────────────────────────────────────────
+  function onglet(t) {
+    etat.onglet = t;
+    Array.prototype.forEach.call(el('onglets').children, function (b) {
+      b.classList.toggle('on', b.getAttribute('data-t') === t); });
+    el('up').style.display = (t === 'fichiers') ? '' : 'none';
+    el('corps').innerHTML = '<div class="vide">lecture…</div>';
+    if (t === 'fichiers') chargeFichiers();
+    else if (t === 'partages') chargePartages();
+    else api('/acces/' + ID + '/tableau').then(function (r) {
+      var d = r.corps || {}; rendActivite((d.ok && d.activite) || []); });
+  }
+
+  function connecte(tab) {
+    el('onglets').style.display = 'flex'; el('pied').style.display = 'flex';
+    el('ouvrir').href = 'https://' + HOTE + '/';
+    // En-tête quota (une lecture, réutilisée par l'onglet Activité).
+    api('/acces/' + ID + '/tableau').then(function (r) {
+      var d = r.corps || {};
+      if (d.ok) { majQuota(d.quota); etat.compte = d.compte || ''; el('compte').textContent = d.compte || ''; }
+    });
+    // Compte de partages, pour la pastille de l'onglet.
+    api('/acces/' + ID + '/partages').then(function (r) {
+      var e = (r.corps && r.corps.ok && r.corps.entrees) || [];
+      el('cpt-p').textContent = e.length ? '(' + e.length + ')' : ''; });
+    onglet(tab || 'fichiers');
+  }
+
+  function demarre() {
+    api('/acces/' + ID).then(function (r) {
+      if (r.code !== 200 || !r.corps.acces) { sansAcces(r.corps, r.code); return; }
+      connecte(etat.onglet);
+    });
+  }
+
+  el('onglets').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-t]'); if (b) onglet(b.getAttribute('data-t')); });
+  el('ouvrir').addEventListener('click', function (ev) { ev.preventDefault(); ouvre('https://' + HOTE + '/'); });
+  el('up').addEventListener('click', function () { el('picker').click(); });
+  el('picker').addEventListener('change', function () { if (this.files && this.files[0]) { envoyer(this.files[0]); this.value = ''; } });
+
+  (function () { var t = new URLSearchParams(location.search).get('theme');
+    if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); })();
+  addEventListener('message', function (ev) {
+    var d = ev.data; if (!d) return;
+    if (d.sbx === 'relis') { demarre(); return; }
+    if (d.sbx === 'theme' && (d.theme === 'dark' || d.theme === 'light'))
+      document.documentElement.setAttribute('data-theme', d.theme);
+  });
+
+  demarre();
+})();
+</script>

@@ -8,13 +8,13 @@ import json
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, APIRouter, Depends, Request
+from fastapi import FastAPI, APIRouter, Depends, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
 from secubox_core.auth import require_jwt, create_token
 from secubox_core.health import systemd_batch
 from api.models import Service
-from api import registry, flags, cardlets, acces, actions
+from api import registry, flags, cardlets, acces, actions, nc_super
 
 _cache: dict = {"services": [], "computed_at": None}
 _flags: dict = flags.load_flags()
@@ -529,6 +529,47 @@ async def acces_manuel(svc: str, corps: dict, user=Depends(require_jwt)):
 @router.delete("/acces/{svc}")
 async def acces_revoque(svc: str, user=Depends(require_jwt)):
     return acces.revoque(_qui(user), svc)
+
+
+# ── Nextcloud « Super Cardlet » : lecture + actions AU NOM de la personne ─────
+# Le secret ne quitte jamais la box (nc_super lit acces.secret_de côté serveur).
+# La carte reçoit des titres, des chiffres et le résultat de SES actions.
+
+@router.get("/acces/nextcloud/tableau")
+async def nc_tableau(user=Depends(require_jwt)):
+    return await nc_super.tableau(_qui(user))
+
+
+@router.get("/acces/nextcloud/fichiers")
+async def nc_fichiers(chemin: str = "/", user=Depends(require_jwt)):
+    return await nc_super.fichiers(_qui(user), chemin)
+
+
+@router.get("/acces/nextcloud/partages")
+async def nc_partages(user=Depends(require_jwt)):
+    return await nc_super.partages(_qui(user))
+
+
+@router.post("/acces/nextcloud/partager")
+async def nc_partager(corps: dict, user=Depends(require_jwt)):
+    return await nc_super.partager(_qui(user), str(corps.get("chemin") or ""))
+
+
+@router.post("/acces/nextcloud/supprimer")
+async def nc_supprimer(corps: dict, user=Depends(require_jwt)):
+    return await nc_super.supprimer(_qui(user), str(corps.get("chemin") or ""))
+
+
+# Borne de téléversement : au-delà, on refuse tôt (mémoire du service partagé).
+_MAX_TELEVERSE = 64 * 1024 * 1024      # 64 Mo
+
+@router.post("/acces/nextcloud/televerser")
+async def nc_televerser(chemin: str = Form("/"), fichier: UploadFile = File(...),
+                        user=Depends(require_jwt)):
+    data = await fichier.read(_MAX_TELEVERSE + 1)
+    if len(data) > _MAX_TELEVERSE:
+        return {"ok": False, "detail": "fichier trop volumineux (> 64 Mo)"}
+    return await nc_super.televerser(_qui(user), chemin, fichier.filename or "sans-nom", data)
 
 
 app.include_router(public_router)

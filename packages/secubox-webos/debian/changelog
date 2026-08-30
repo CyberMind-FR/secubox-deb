@@ -1,3 +1,20 @@
+secubox-webos (1.0.207-1~bookworm1) bookworm; urgency=medium
+
+  * Nextcloud « Super Cardlet » (#1245) : carte PERSONNELLE du Cloud dans le Hall,
+    servie même origine (/cardlets/nextcloud-super.html). Onglets Fichiers
+    (navigateur WebDAV, récents en tête), Activité, Partages + jauge de quota.
+    Actions gérables : créer un lien public, supprimer, téléverser. Le broker
+    (api/nc_super.py) lit et agit AU NOM de la personne — le mot de passe
+    d'application ne quitte jamais la box ; la carte ne reçoit que titres,
+    chiffres et résultats de SES actions. Routes require_jwt sous
+    /api/v1/webos/acces/nextcloud/{tableau,fichiers,partages,partager,supprimer,
+    televerser}. Dépendance python3-multipart (téléversement).
+  * Mégabarre : bouton ET menu « Système » masqués tant qu'aucun compte SecuBox
+    n'est connecté (classe .non-connecte) — le parc complet relève de la session
+    de la box, pas de l'invité ; « Services » reste public.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 18:40:00 +0200
+
 secubox-webos (1.0.206-1~bookworm1) bookworm; urgency=medium
 
   * Hall : carte ZIA au strip vedette (#1245) — l'IA locale du Hall (chat +
