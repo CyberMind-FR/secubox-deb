@@ -24,6 +24,8 @@ from typing import Any, Optional
 
 import httpx
 
+from . import vhost
+
 # Vocabulaire minimal → type d'objet et service (français).
 _TYPES = [
     (r"vid[ée]o|film|peertube", "media.video"),
@@ -70,20 +72,41 @@ def _mots_cles(msg: str) -> str:
 
 
 async def _llm_text(cfg: dict, prompt: str) -> Optional[str]:
-    """Formulation par llama-server si disponible — sinon None (repli heuristique)."""
+    """Formulation par llama-server si disponible — sinon None (repli heuristique).
+
+    On passe par l'endpoint OpenAI-compat `/v1/chat/completions` : il applique le
+    GABARIT DE CHAT du modèle (ChatML pour Qwen). Sans lui, `/completion` reçoit un
+    prompt nu que le modèle instruct ne sait pas continuer (il rend un espace).
+    """
     url = str(cfg.get("llm_url", "") or "").strip()
     if not url:
         return None
     try:
         async with httpx.AsyncClient(timeout=float(cfg.get("llm_timeout_s", 20))) as cli:
-            r = await cli.post(url.rstrip("/") + "/completion",
-                               json={"prompt": prompt, "n_predict": int(cfg.get("n_predict", 120)),
-                                     "temperature": 0.3, "stop": ["\n\n"]})
+            r = await cli.post(url.rstrip("/") + "/v1/chat/completions",
+                               json={"messages": [{"role": "user", "content": prompt}],
+                                     "temperature": 0.3, "max_tokens": int(cfg.get("n_predict", 120))})
             if r.status_code == 200:
-                return (r.json().get("content") or "").strip() or None
+                j = r.json()
+                txt = (((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+                return txt or None
     except Exception:
         return None
     return None
+
+
+async def _intro(cfg: dict, titres: list, defaut: str) -> str:
+    """Phrase d'intro FORMULÉE par le modèle (si présent) devant une liste d'objets.
+
+    Élargit la « voix modèle » aux listes/délégations, pas seulement aux recherches.
+    Les objets restent inchangés — le modèle n'habille que le texte.
+    """
+    if not cfg.get("llm_url") or not titres:
+        return defaut
+    g = await _llm_text(cfg, "Tu es ZIA, l'assistant local du Hall. En UNE phrase amicale et "
+                             "courte (français), introduis ces résultats à l'utilisateur, sans "
+                             "citer d'autre élément : " + " ; ".join(str(t) for t in titres[:5]))
+    return g or defaut
 
 
 async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dict:
@@ -113,19 +136,22 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
         res = await tools.call("delegate", {"service": service,
                                             "reason": "question approfondie — RAG du service"}, role)
         deleg = res.get("result") if res.get("ok") else {"to": service, "reason": ""}
-        # BASCULE EXPLICITE (P4) : on ne se contente pas d'annoncer — on ramène ce que
-        # le bus sait DÉJÀ sur ce service (objets liés), et le Hall ouvrira la ZIA du
-        # service via le clic. Tant que la ZIA·VHOST n'existe pas, c'est le meilleur
-        # relais utile : contexte + point d'entrée, jamais d'invention.
+        # NIVEAU 2 (RAG VHOST) : la ZIA du service RÉPOND vraiment — RAG local sur son
+        # histoire de développement (changelog déployé) + génération ancrée. On ramène
+        # aussi les objets liés du bus (point d'entrée cliquable). Jamais d'invention.
+        va = await vhost.answer(service, msg, cfg, _llm_text)
         trace.append({"tool": "search_objects", "args": {"query": service}})
         sres = await tools.call("search_objects", {"query": service}, role)
-        objs = (sres.get("result") or [])[:5]
-        return {"text": f"C'est pointu — je passe la main à **ZIA · {service}** (le RAG du "
-                        f"service répondra mieux). 🦝 En attendant, voici ce que je vois :"
-                        if objs else
-                        f"C'est pointu — je passe la main à **ZIA · {service}** (le RAG du "
-                        f"service répondra mieux). 🦝",
-                "objects": objs, "trace": trace, "delegate": deleg, "engine": engine}
+        objs = (sres.get("result") or [])[:4]
+        if va.get("ok"):
+            txt = f"🦝 **ZIA · {service}** — " + va["text"]
+            eng = "llm" if (va.get("grounded") and cfg.get("llm_url")) else engine
+            deleg = dict(deleg or {}, sources=va.get("sources", []))
+        else:
+            txt = (f"Je passe la main à **ZIA · {service}** 🦝 — mais je n'ai pas encore sa "
+                   f"documentation locale à citer.")
+            eng = engine
+        return {"text": txt, "objects": objs, "trace": trace, "delegate": deleg, "engine": eng}
 
     # Sinon : RECHERCHE ou LISTE. On extrait type + mots-clés.
     type_ = _type_de(low)
@@ -143,12 +169,16 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
                     "news.topic": "sujets", "forum.thread": "fils", "post": "billets"}.get(type_, "objets")
             txt = (f"Voici les **{len(objs)} {quoi}**" + (" les plus récents" if recent else "") + " :") if objs \
                 else f"Aucun {quoi[:-1] if quoi.endswith('s') else quoi} visible pour toi."
+            if objs:
+                txt = await _intro(cfg, [o.get("title") for o in objs], txt)
             return {"text": txt, "objects": objs, "trace": trace, "delegate": None, "engine": engine}
         # Rien de précis : liste récente tous types.
         trace.append({"tool": "list_recent", "args": {"limit": 6}})
         res = await tools.call("list_recent", {"limit": 6}, role)
         objs = res.get("result") or []
         txt = f"Voici ce qui est récent — **{len(objs)} objets** :" if objs else "Rien à montrer pour l'instant."
+        if objs:
+            txt = await _intro(cfg, [o.get("title") for o in objs], txt)
         return {"text": txt, "objects": objs, "trace": trace, "delegate": None, "engine": engine}
 
     trace.append({"tool": "search_objects", "args": {"query": query, "type": type_}})
@@ -171,12 +201,7 @@ async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dic
                         "engine": "remote"}
         txt = ("Je n'ai rien trouvé de **visible** pour toi là-dessus. "
                "Essaie d'autres mots, ou demande « les sujets récents ».")
-    # Formulation optionnelle par le modèle (si présent), objets inchangés.
-    if cfg.get("llm_url") and objs:
-        titres = "; ".join(o.get("title", "") for o in objs[:5])
-        better = await _llm_text(cfg, f"Tu es ZIA, l'assistant local du Hall. En une phrase "
-                                      f"amicale, présente ces résultats à l'utilisateur (ne cite "
-                                      f"pas d'autre objet) : {titres}")
-        if better:
-            txt = better
+    # Formulation par le modèle (si présent), objets inchangés — même voix que les listes.
+    if objs:
+        txt = await _intro(cfg, [o.get("title") for o in objs], txt)
     return {"text": txt, "objects": objs, "trace": trace, "delegate": None, "engine": engine}

@@ -1,3 +1,26 @@
+secubox-zia (0.1.8-1~bookworm1) bookworm; urgency=medium
+
+  * Generation modele : passage a /v1/chat/completions (OpenAI-compat) qui applique
+    le GABARIT DE CHAT (ChatML Qwen). /completion recevait un prompt nu que le
+    modele instruct ne continuait pas (il rendait un espace). Formulation des
+    listes/recherches et generation RAG des VHOST desormais effectives.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 16:00:00 +0200
+
+secubox-zia (0.1.7-1~bookworm1) bookworm; urgency=medium
+
+  * Adapter PeerTube (#1245) : vidos publiques relles -> objets media.video
+    JOUABLES (`/w/<id>` lu par le viewer souverain). « trouve une vido » ramne
+    du rel lisible d'un clic. (API HTTPS interne, verify off, serveur--serveur.)
+  * RAG par VHOST (niveau 2) : nouvelle ZIA du service (api/vhost.py). La
+    dlgation « explique X en dtail » INVOQUE ZIA·X qui rpond par RAG local sur
+    l'histoire du service (changelog dploy) + gnration ancre (modle), sinon
+    restitue les passages. Jamais d'invention.
+  * Voix modle largie : les LISTES et la DLGATION sont aussi formules par le
+    modle (helper _intro), plus seulement les recherches. Objets inchangs.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 15:30:00 +0200
+
 secubox-zia (0.1.6-1~bookworm1) bookworm; urgency=medium
 
   * Le runtime llama.cpp (unite + binaires) part dans le paquet secubox-zia-llm

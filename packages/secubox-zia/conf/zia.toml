@@ -19,6 +19,7 @@ llm_timeout_s = 20
 metanews_sock = "/run/secubox/metanews.sock"
 webos_sock = "/run/secubox/webos.sock"
 billets_sock = "/run/secubox/billets.sock"
+peertube_url = "https://peertube.gk2.secubox.in"
 bus_cache_s = 45
 
 # Role du demandeur tant que l'auth n'est pas branchee (guest|registered|member|admin).

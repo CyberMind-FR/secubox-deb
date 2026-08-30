@@ -131,14 +131,49 @@ class Bus:
             return out
         return out
 
+    async def _peertube(self) -> list[dict]:
+        """Adapter PEERTUBE : vidéos publiques réelles -> objets media.video JOUABLES.
+
+        La box résout peertube.gk2… vers elle-même ; on interroge l'API publique en
+        HTTPS (cert interne -> verify off, serveur-à-serveur). L'URL de visionnage
+        `/w/<id>` est justement ce que le viewer du Hall sait jouer en SOUVERAIN
+        (estPeertube). « Trouve une vidéo » ramène donc du réel, lisible d'un clic.
+        """
+        base = str(self.cfg.get("peertube_url", "https://peertube.gk2.secubox.in")).rstrip("/")
+        out: list[dict] = []
+        try:
+            async with httpx.AsyncClient(verify=False, timeout=5.0) as cli:
+                r = await cli.get(base + "/api/v1/videos",
+                                  params={"count": 25, "sort": "-publishedAt", "nsfw": "false"},
+                                  headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    return out
+                for v in (r.json().get("data") or []):
+                    sid = v.get("shortUUID") or v.get("uuid")
+                    if not sid:
+                        continue
+                    chan = (v.get("channel") or {}).get("displayName", "")
+                    out.append({
+                        "id": f"peertube:video:{sid}", "type": "media.video", "service": "peertube",
+                        "title": v.get("name", ""), "summary": (v.get("description") or chan or "")[:200],
+                        "uri": f"sbx://peertube/video/{sid}",
+                        "url": f"{base}/w/{sid}", "visibility": "guest",
+                        "actions": ["play", "open", "discuss"],
+                        "tags": [t for t in [chan.lower(), "vidéo", "peertube"] if t],
+                    })
+        except Exception:
+            return out
+        return out
+
     async def objets(self, role: str = "guest", force: bool = False) -> list[dict]:
         """Tous les objets visibles pour ce rôle (cache court, adapters best-effort)."""
         now = time.time()
         if force or not self._cache or (now - self._ts) > self.ttl:
             news = await self._metanews()
             posts = await self._billets()
+            vids = await self._peertube()
             svcs = await self._registry()
-            self._cache = list(_SEED) + news + posts + svcs
+            self._cache = list(_SEED) + news + posts + vids + svcs
             self._ts = now
         return policy.filtre(self._cache, role)
 
