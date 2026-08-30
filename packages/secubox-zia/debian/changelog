@@ -1,3 +1,15 @@
+secubox-zia (0.1.2-1~bookworm1) bookworm; urgency=medium
+
+  * P2 — adapter REGISTRE : chaque service du Hall devient un objet ouvrable
+    (webos public), reel et actionnable, en plus des topics MetaNews.
+  * P4 — delegation EXECUTEE : « explique X en detail » -> bascule ZIA·X ET
+    ramene les objets lies du bus (contexte + point d'entree), sans rien inventer.
+  * P5 — escalade REMOTE (niveau 3) : module remote.py sous politique (role) +
+    budget horaire + timeout + circuit breaker + REDACTION des secrets (jetons,
+    JWT, emails, IP privees) + repli local systematique. Desactive par defaut.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 12:10:00 +0200
+
 secubox-zia (0.1.1-1~bookworm1) bookworm; urgency=medium
 
   * Repondeur : « liste » vs « recherche » (#1245). Les mots generiques (sujets,

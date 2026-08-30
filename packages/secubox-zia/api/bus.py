@@ -86,12 +86,44 @@ class Bus:
             return out
         return out
 
+    async def _registry(self) -> list[dict]:
+        """Adapter REGISTRE : chaque service du Hall devient un objet ouvrable.
+
+        Source publique (webos), donc réel et actionnable : « ouvre le cloud »,
+        « quels services de sécurité ». Le path du registre porte le lien profond.
+        """
+        sock = self.cfg.get("webos_sock", "/run/secubox/webos.sock")
+        out: list[dict] = []
+        try:
+            tr = httpx.AsyncHTTPTransport(uds=sock)
+            async with httpx.AsyncClient(transport=tr, timeout=4.0) as cli:
+                r = await cli.get("http://x/api/v1/webos/public/services",
+                                  headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    return out
+                for s in (r.json().get("services") or []):
+                    sid = s.get("id")
+                    if not sid:
+                        continue
+                    path = s.get("path") or f"/{sid}/"
+                    out.append({
+                        "id": f"service:{sid}", "type": "service", "service": sid,
+                        "title": s.get("name", sid), "summary": s.get("description", ""),
+                        "uri": f"sbx://{sid}{path}", "visibility": "guest",
+                        "actions": ["open"],
+                        "tags": [s.get("category", ""), sid, "service"],
+                    })
+        except Exception:
+            return out
+        return out
+
     async def objets(self, role: str = "guest", force: bool = False) -> list[dict]:
         """Tous les objets visibles pour ce rôle (cache court, adapters best-effort)."""
         now = time.time()
         if force or not self._cache or (now - self._ts) > self.ttl:
-            live = await self._metanews()
-            self._cache = list(_SEED) + live
+            news = await self._metanews()
+            svcs = await self._registry()
+            self._cache = list(_SEED) + news + svcs
             self._ts = now
         return policy.filtre(self._cache, role)
 

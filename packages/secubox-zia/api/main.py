@@ -31,6 +31,7 @@ from secubox_core.logger import get_logger
 
 from .bus import Bus
 from .tools import Tools
+from .remote import Remote
 from . import runtime
 
 log = get_logger("zia")
@@ -42,10 +43,15 @@ DEFAULT_CONFIG = {
     "n_predict": 120,
     "llm_timeout_s": 20,
     "metanews_sock": "/run/secubox/metanews.sock",
+    "webos_sock": "/run/secubox/webos.sock",
     "bus_cache_s": 45,
     "default_role": "guest",         # rôle du demandeur tant que l'auth n'est pas branchée
-    "remote_enabled": False,         # niveau 3 désactivé par défaut (politique)
+    # Niveau 3 (remote) — DÉSACTIVÉ par défaut ; soumis à politique + budget.
+    "remote_enabled": False,
     "remote_role_min": "admin",
+    "remote_url": "",                # endpoint distant (vide = jamais d'escalade)
+    "remote_timeout_s": 15,
+    "remote_budget": 20,             # nb max d'escalades / heure (garde-fou)
 }
 
 
@@ -65,6 +71,7 @@ def load_config() -> dict:
 CFG = load_config()
 BUS = Bus(CFG)
 TOOLS = Tools(BUS)
+REMOTE = Remote()
 _M = {"chats": 0, "ms_total": 0.0, "started": time.time()}
 
 app = FastAPI(title="secubox-zia", version="0.1.0", root_path="/api/v1/zia")
@@ -103,7 +110,7 @@ async def chat(body: ChatIn) -> JSONResponse:
     role = (body.role or CFG.get("default_role") or "guest").strip().lower()
     t0 = time.time()
     try:
-        out = await runtime.respond(body.message, role, TOOLS, CFG)
+        out = await runtime.respond(body.message, role, TOOLS, CFG, REMOTE)
     except Exception as e:  # jamais d'exception nue vers le client
         log.error(f"chat: {e}")
         out = {"text": "Désolé, j'ai buté sur cette demande. Réessaie autrement ?",

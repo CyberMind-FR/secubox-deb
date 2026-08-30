@@ -86,7 +86,7 @@ async def _llm_text(cfg: dict, prompt: str) -> Optional[str]:
     return None
 
 
-async def respond(message: str, role: str, tools, cfg: dict) -> dict:
+async def respond(message: str, role: str, tools, cfg: dict, remote=None) -> dict:
     msg = (message or "").strip()
     low = msg.lower()
     trace: list[dict] = []
@@ -113,9 +113,19 @@ async def respond(message: str, role: str, tools, cfg: dict) -> dict:
         res = await tools.call("delegate", {"service": service,
                                             "reason": "question approfondie — RAG du service"}, role)
         deleg = res.get("result") if res.get("ok") else {"to": service, "reason": ""}
+        # BASCULE EXPLICITE (P4) : on ne se contente pas d'annoncer — on ramène ce que
+        # le bus sait DÉJÀ sur ce service (objets liés), et le Hall ouvrira la ZIA du
+        # service via le clic. Tant que la ZIA·VHOST n'existe pas, c'est le meilleur
+        # relais utile : contexte + point d'entrée, jamais d'invention.
+        trace.append({"tool": "search_objects", "args": {"query": service}})
+        sres = await tools.call("search_objects", {"query": service}, role)
+        objs = (sres.get("result") or [])[:5]
         return {"text": f"C'est pointu — je passe la main à **ZIA · {service}** (le RAG du "
-                        f"service saura mieux répondre). 🦝",
-                "objects": [], "trace": trace, "delegate": deleg, "engine": engine}
+                        f"service répondra mieux). 🦝 En attendant, voici ce que je vois :"
+                        if objs else
+                        f"C'est pointu — je passe la main à **ZIA · {service}** (le RAG du "
+                        f"service répondra mieux). 🦝",
+                "objects": objs, "trace": trace, "delegate": deleg, "engine": engine}
 
     # Sinon : RECHERCHE ou LISTE. On extrait type + mots-clés.
     type_ = _type_de(low)
@@ -149,6 +159,16 @@ async def respond(message: str, role: str, tools, cfg: dict) -> dict:
                 "news.topic": "sujet(s)", "forum.thread": "fil(s)"}.get(type_, "objet(s)")
         txt = f"J'ai trouvé **{len(objs)} {quoi}**" + (f" sur « {query} »" if query else "") + " :"
     else:
+        # ESCALADE REMOTE (P5, niveau 3) — dernier recours, sous politique + budget.
+        # Rien localement ? Si (et seulement si) le remote est autorisé et configuré,
+        # on tente ; sinon on reste local, sans jamais bloquer.
+        if remote is not None:
+            trace.append({"tool": "delegate", "args": {"service": "remote"}})
+            esc = await remote.escalate(msg, cfg, role)
+            if esc and esc.get("text"):
+                return {"text": esc["text"], "objects": [], "trace": trace,
+                        "delegate": {"to": "remote", "reason": "escalade sous politique"},
+                        "engine": "remote"}
         txt = ("Je n'ai rien trouvé de **visible** pour toi là-dessus. "
                "Essaie d'autres mots, ou demande « les sujets récents ».")
     # Formulation optionnelle par le modèle (si présent), objets inchangés.

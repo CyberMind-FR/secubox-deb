@@ -15,13 +15,19 @@ llm_url = ""
 n_predict = 120
 llm_timeout_s = 20
 
-# Adapters du bus.
+# Adapters du bus (sockets des services, lecture publique).
 metanews_sock = "/run/secubox/metanews.sock"
+webos_sock = "/run/secubox/webos.sock"
 bus_cache_s = 45
 
 # Role du demandeur tant que l'auth n'est pas branchee (guest|registered|member|admin).
 default_role = "guest"
 
-# Niveau 3 (remote) — DESACTIVE par defaut, soumis a politique.
+# Niveau 3 (remote) — DESACTIVE par defaut. Tente SEULEMENT si autorise (role) ET
+# qu'un endpoint est configure ; contexte minimal + secrets rediges + budget + timeout
+# + circuit breaker ; repli local systematique. Ce n'est jamais une dependance.
 remote_enabled = false
 remote_role_min = "admin"
+remote_url = ""            # ex. "https://zia-remote.example" (endpoint /v1/chat)
+remote_timeout_s = 15
+remote_budget = 20         # escalades max / heure
