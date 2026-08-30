@@ -1,3 +1,17 @@
+secubox-zia (0.1.9-1~bookworm1) bookworm; urgency=medium
+
+  * Webui admin ZIA (#1245) : panneau /zia/admin.html (charte hybrid-dark, Courier
+    Prime, cyan, JWT). Règle le MOTEUR (llm_url/heuristique, n_predict, timeout,
+    nom du modèle) avec un bouton « Tester le modèle » (ping /health + /props),
+    l'ACCÈS (rôle par défaut, cache du bus, PeerTube, sockets avancés) et le
+    NIVEAU 3 REMOTE (activation, endpoint, rôle mini, timeout, budget). Aperçu
+    live des métriques (moteur, objets au bus, échanges, latence).
+  * API : GET/POST /api/v1/zia/config (require_jwt) — surcouche JSON persistée dans
+    /var/lib/secubox/zia, appliquée À CHAUD (CFG partagé par bus/outils/runtime) ;
+    POST /api/v1/zia/llm/test. Roue ⚙ discrète sur la cardlet en accès direct.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 17:20:00 +0200
+
 secubox-zia (0.1.8-1~bookworm1) bookworm; urgency=medium
 
   * Generation modele : passage a /v1/chat/completions (OpenAI-compat) qui applique

@@ -73,7 +73,10 @@
     <div><b>ZIA <i>Hall</i></b><div class="sub">l'IA locale, interface du bus d'objets</div></div>
     <span class="mdl" id="mdl">local</span>
     <span class="live"><span class="dot"></span><span id="eng">local</span></span>
+    <a id="adm" href="admin.html" title="Réglages ZIA" style="display:none;margin-left:8px;color:inherit;opacity:.5;text-decoration:none;font-size:.95em">⚙</a>
   </div>
+  <script>/* Roue de réglages : accès direct seulement (jamais dans le Hall embarqué). */
+  try{ if(window.top===window.self){ var _a=document.getElementById('adm'); if(_a) _a.style.display='inline'; } }catch(e){}</script>
   <div class="panel">
     <div class="stream" id="stream"></div>
     <div class="sugg" id="sugg"></div>

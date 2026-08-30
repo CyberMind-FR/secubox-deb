@@ -17,6 +17,7 @@ d'abord). Le modèle GGUF (llama.cpp) se branche plus tard sans changer l'interf
 """
 from __future__ import annotations
 
+import json
 import time
 import tomllib
 from pathlib import Path
@@ -25,6 +26,8 @@ from typing import Any, Optional
 from fastapi import FastAPI, APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+import httpx
 
 from secubox_core.auth import router as auth_router, require_jwt
 from secubox_core.logger import get_logger
@@ -57,6 +60,12 @@ DEFAULT_CONFIG = {
 }
 
 
+# État admin : surcouche de config saisie via la webui (JSON), qui l'emporte sur le
+# TOML livré. Même esprit que DevWatch — modifiable sans toucher au fichier système.
+STATE_DIR = Path("/var/lib/secubox/zia")
+CONFIG_OVR = STATE_DIR / "config.json"
+
+
 def load_config() -> dict:
     cfg = dict(DEFAULT_CONFIG)
     try:
@@ -67,7 +76,28 @@ def load_config() -> dict:
                     cfg[k] = t[k]
     except Exception as e:  # défensif : un TOML cassé ne doit pas tuer le service
         log.error(f"config illisible: {e}")
+    # Surcouche admin (webui) par-dessus le TOML.
+    try:
+        if CONFIG_OVR.exists():
+            ov = json.loads(CONFIG_OVR.read_text())
+            for k in DEFAULT_CONFIG:
+                if k in ov:
+                    cfg[k] = ov[k]
+    except Exception as e:
+        log.error(f"surcouche config illisible: {e}")
     return cfg
+
+
+def _save_overlay(cfg: dict) -> None:
+    """Persiste la config admin (les clés connues), pour survie au redémarrage."""
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        data = {k: cfg[k] for k in DEFAULT_CONFIG if k in cfg}
+        tmp = CONFIG_OVR.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+        tmp.replace(CONFIG_OVR)
+    except Exception as e:
+        log.error(f"écriture surcouche config: {e}")
 
 
 CFG = load_config()
@@ -84,6 +114,40 @@ router = APIRouter()
 class ChatIn(BaseModel):
     message: str
     role: Optional[str] = None      # guest|registered|member|admin (défaut config)
+
+
+class Params(BaseModel):
+    """Réglages admin de ZIA (tous facultatifs — on ne met à jour que ce qui vient)."""
+    model_name: Optional[str] = None
+    llm_url: Optional[str] = None
+    n_predict: Optional[int] = None
+    llm_timeout_s: Optional[float] = None
+    default_role: Optional[str] = None
+    bus_cache_s: Optional[float] = None
+    peertube_url: Optional[str] = None
+    metanews_sock: Optional[str] = None
+    webos_sock: Optional[str] = None
+    billets_sock: Optional[str] = None
+    remote_enabled: Optional[bool] = None
+    remote_role_min: Optional[str] = None
+    remote_url: Optional[str] = None
+    remote_timeout_s: Optional[float] = None
+    remote_budget: Optional[int] = None
+
+
+def _apply_config(upd: dict) -> None:
+    """Applique une mise à jour EN PLACE : CFG est partagé par le bus/outils/runtime.
+
+    On mute le dict global (le bus tient la même référence) et on rafraîchit les
+    quelques valeurs dérivées à l'init (TTL du cache). llm_url, rôles, endpoints et
+    politique remote sont relus à chaud à chaque requête — rien d'autre à recharger.
+    """
+    CFG.update(upd)
+    try:
+        BUS.ttl = float(CFG.get("bus_cache_s", 45))
+        BUS._ts = 0.0                      # invalide le cache : la prochaine vue relit les adapters
+    except Exception:
+        pass
 
 
 @router.get("/health")
@@ -122,6 +186,54 @@ async def chat(body: ChatIn) -> JSONResponse:
     _M["ms_total"] += dt
     out["meta"] = {"role": role, "ms": round(dt, 1)}
     return JSONResponse(out)
+
+
+@router.get("/config", dependencies=[Depends(require_jwt)])
+async def get_config() -> dict:
+    """Config courante (TOML + surcouche admin). Pas de secret dans ZIA au P1."""
+    return {k: CFG.get(k) for k in DEFAULT_CONFIG}
+
+
+@router.post("/config", dependencies=[Depends(require_jwt)])
+async def set_config(body: Params) -> dict:
+    """Réglage admin de ZIA — appliqué à chaud et persisté (surcouche JSON)."""
+    upd = {k: v for k, v in body.model_dump().items() if v is not None}
+    # Garde-fous simples : rôles connus, nombres positifs.
+    roles = {"guest", "registered", "member", "admin"}
+    if "default_role" in upd and upd["default_role"] not in roles:
+        upd.pop("default_role")
+    if "remote_role_min" in upd and upd["remote_role_min"] not in roles:
+        upd.pop("remote_role_min")
+    _apply_config(upd)
+    _save_overlay(CFG)
+    log.info(f"config ZIA mise à jour: {list(upd)}")
+    return {"ok": True, "engine": "llm" if CFG.get("llm_url") else "heuristique",
+            "config": {k: CFG.get(k) for k in DEFAULT_CONFIG}}
+
+
+@router.post("/llm/test", dependencies=[Depends(require_jwt)])
+async def llm_test() -> dict:
+    """Ping du llama-server configuré (health + modèle) — pour valider llm_url."""
+    url = str(CFG.get("llm_url", "") or "").strip()
+    if not url:
+        return {"ok": False, "reason": "llm_url vide — moteur heuristique"}
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as cli:
+            r = await cli.get(url.rstrip("/") + "/health")
+            h = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+            # /props expose le modèle chargé (llama.cpp) — best-effort.
+            model = None
+            try:
+                p = await cli.get(url.rstrip("/") + "/props")
+                if p.status_code == 200:
+                    model = (p.json() or {}).get("default_generation_settings", {}).get("model") \
+                        or (p.json() or {}).get("model_path")
+            except Exception:
+                pass
+            ok = r.status_code == 200 and (h.get("status") in (None, "ok") or True)
+            return {"ok": ok, "status": h.get("status", r.status_code), "model": model, "url": url}
+    except Exception as e:
+        return {"ok": False, "reason": f"injoignable : {e.__class__.__name__}", "url": url}
 
 
 # Outils protégés à venir (écriture) : dependencies=[Depends(require_jwt)].
