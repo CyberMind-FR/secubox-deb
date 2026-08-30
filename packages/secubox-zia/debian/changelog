@@ -1,3 +1,10 @@
+secubox-zia (0.1.5-1~bookworm1) bookworm; urgency=medium
+
+  * P0 installateur : parallelisme de build BORNE (ZIA_BUILD_JOBS, defaut 2) pour
+    ne pas faire deborder la RAM d'une box chargee pendant la compilation llama.cpp.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Sun, 30 Aug 2026 13:35:00 +0200
+
 secubox-zia (0.1.4-1~bookworm1) bookworm; urgency=medium
 
   * Heuristique 100% REELLE & UTILISABLE (#1245). Plus de seed factice : le bus
