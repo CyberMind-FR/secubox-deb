@@ -1,0 +1,415 @@
+<title>ZIA Hall</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#ece3cf; --surface:#faf5ea; --surface-2:#f3ecda; --sunk:#e7ddc4;
+  --ink:#232a5e; --ink-soft:#3c4788; --muted:#6a6f92; --faint:#948c73;
+  --line:#ded2b6; --line-soft:#eae0c8;
+  --blue:#2e3f9e; --teal:#0a93a6; --teal-ink:#0a7d8e; --purple:#6a54ad; --fox:#d0622c;
+  --gold:#bd8620; --coral:#d24f65; --leaf:#3c8f66;
+  --bubble:rgba(15,159,178,.09);
+  --shadow:0 1px 2px rgba(30,40,90,.05),0 10px 26px rgba(30,40,90,.09);
+  --shadow-lg:0 3px 8px rgba(30,40,90,.08),0 22px 50px rgba(30,40,90,.14);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1538; --surface:#18205020; --surface:#181f4c; --surface-2:#141b42; --sunk:#0c1230;
+  --ink:#efe8d6; --ink-soft:#d0cbb8; --muted:#9aa0c4; --faint:#6d7398;
+  --line:#28306e; --line-soft:#202760;
+  --blue:#6076de; --teal:#3fd0e0; --teal-ink:#7fe4f0; --purple:#a98bff; --fox:#f2854c;
+  --gold:#e8b23a; --coral:#ff6c7e; --leaf:#5fc98a;
+  --bubble:rgba(63,208,224,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.4);
+  --shadow-lg:0 3px 10px rgba(0,0,0,.5),0 26px 60px rgba(0,0,0,.55);
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1538; --surface:#181f4c; --surface-2:#141b42; --sunk:#0c1230;
+  --ink:#efe8d6; --ink-soft:#d0cbb8; --muted:#9aa0c4; --faint:#6d7398;
+  --line:#28306e; --line-soft:#202760;
+  --blue:#6076de; --teal:#3fd0e0; --teal-ink:#7fe4f0; --purple:#a98bff; --fox:#f2854c;
+  --gold:#e8b23a; --coral:#ff6c7e; --leaf:#5fc98a;
+  --bubble:rgba(63,208,224,.10);
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 30px rgba(0,0,0,.4);
+  --shadow-lg:0 3px 10px rgba(0,0,0,.5),0 26px 60px rgba(0,0,0,.55);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 480px at 88% -8%,var(--bubble),transparent 70%),radial-gradient(700px 420px at 6% 12%,var(--bubble),transparent 70%);
+  background-attachment:fixed}
+.wrap{max-width:1120px;margin:0 auto;padding:26px 22px 70px}
+h1,h2,h3,.disp{font-family:"Baloo 2",system-ui,sans-serif;margin:0;letter-spacing:.005em}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+a{color:var(--teal-ink)}
+
+/* MASTHEAD */
+.mast{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:18px}
+.amark{width:52px;height:52px;border-radius:16px;flex:0 0 auto;display:grid;place-items:center;position:relative;overflow:hidden;
+  background:linear-gradient(150deg,color-mix(in srgb,var(--teal) 26%,var(--surface)),var(--surface));border:1px solid var(--line);box-shadow:var(--shadow)}
+.amark b{font-family:"Baloo 2";font-weight:800;font-size:1.7rem;color:var(--blue);line-height:1}
+.amark::after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:var(--teal);opacity:.22;top:6px;right:6px}
+.brand h1{font-size:1.55rem;font-weight:800;line-height:1;color:var(--blue)}
+.brand h1 i{font-style:normal;color:var(--teal-ink)}
+.brand .tl{font-size:.72rem;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.spacer{flex:1 1 30px}
+.zchip{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);font-weight:700;font-family:"Baloo 2";font-size:.9rem}
+.zchip .fx{font-size:1.05rem}
+.poc{font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--purple);border:1px dashed color-mix(in srgb,var(--purple) 45%,var(--line));border-radius:999px;padding:5px 11px;font-weight:700;background:var(--surface)}
+.tgl{cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:.72rem;color:var(--muted);font-weight:600;box-shadow:var(--shadow)}
+.tgl:hover{color:var(--ink)}
+
+/* HERO */
+.hero{display:grid;grid-template-columns:1.1fr 1fr;gap:20px;align-items:center;margin:6px 0 30px;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--blue) 12%,var(--surface)),var(--surface) 60%,color-mix(in srgb,var(--teal) 10%,var(--surface)));
+  border:1px solid var(--line);border-radius:24px;padding:26px 28px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.hero .bub{position:absolute;border-radius:50%;background:var(--bubble);pointer-events:none}
+.hero .bub.b1{width:120px;height:120px;top:-30px;right:20%}
+.hero .bub.b2{width:60px;height:60px;bottom:16px;right:8%}
+.hero .bub.b3{width:34px;height:34px;top:40%;right:4%}
+.hero-txt h2{font-size:2.05rem;font-weight:800;line-height:1.05;color:var(--blue);text-wrap:balance;margin-bottom:10px}
+.hero-txt h2 em{font-style:normal;color:var(--teal-ink)}
+.hero-txt p{color:var(--ink-soft);font-size:1rem;margin:0 0 8px;max-width:46ch}
+.hero-txt .lead{color:var(--muted);font-size:.92rem}
+.hero-say{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px}
+.bubble-say{background:var(--surface);border:1px solid var(--line);border-radius:20px 20px 20px 6px;padding:16px 18px;box-shadow:var(--shadow);
+  font-family:"Baloo 2";font-weight:600;font-size:1.02rem;color:var(--ink);line-height:1.4;position:relative;text-align:center;max-width:320px}
+.bubble-say .hh{color:var(--coral)}
+.fox{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;font-size:3rem;
+  background:radial-gradient(circle at 40% 35%,color-mix(in srgb,var(--fox) 28%,var(--surface)),var(--surface));
+  border:2px solid color-mix(in srgb,var(--fox) 40%,var(--line));box-shadow:var(--shadow)}
+.chat-glow{position:absolute;bottom:-6px;right:calc(50% - 78px);width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:1.2rem;
+  background:var(--teal);color:#04252a;box-shadow:0 0 0 6px color-mix(in srgb,var(--teal) 22%,transparent);animation:pulse 2.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 5px color-mix(in srgb,var(--teal) 20%,transparent)}50%{box-shadow:0 0 0 11px transparent}}
+
+/* PRINCIPLE banner */
+.principle{display:flex;gap:12px;align-items:flex-start;background:color-mix(in srgb,var(--blue) 8%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--blue) 22%,var(--line));border-left:4px solid var(--blue);border-radius:14px;padding:15px 18px;margin-bottom:30px}
+.principle .k{font-size:1.3rem}
+.principle p{margin:0;font-size:.96rem;color:var(--ink-soft)}
+.principle b{color:var(--ink)}
+
+/* section heads */
+.sh{display:flex;align-items:baseline;gap:12px;margin:0 0 15px}
+.sh h3{font-size:1.15rem;font-weight:700;color:var(--ink)}
+.sh .n{font-family:"IBM Plex Mono";font-size:.72rem;color:var(--teal-ink);font-weight:600}
+.sh .rule{flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--line),transparent)}
+section.blk{margin-bottom:32px}
+
+/* 3 LEVELS */
+.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.lvl{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.lvl .tag{position:absolute;top:14px;right:14px;font-family:"IBM Plex Mono";font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.lvl .av{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.7rem;margin-bottom:10px}
+.lvl h4{font-family:"Baloo 2";font-weight:800;font-size:1.12rem;margin:0 0 2px}
+.lvl .sub{font-size:.74rem;color:var(--muted);font-weight:600;margin-bottom:12px}
+.lvl ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+.lvl li{font-size:.85rem;color:var(--ink-soft);display:flex;gap:8px;align-items:flex-start}
+.lvl li::before{content:"◆";color:var(--c);font-size:.7rem;margin-top:.28em}
+.lvl.lite{--c:var(--teal)} .lvl.lite .av{background:color-mix(in srgb,var(--teal) 18%,var(--surface))}
+.lvl.vhost{--c:var(--purple)} .lvl.vhost .av{background:color-mix(in srgb,var(--purple) 18%,var(--surface))}
+.lvl.remote{--c:var(--blue)} .lvl.remote .av{background:color-mix(in srgb,var(--blue) 18%,var(--surface))}
+.lvl .lk{margin-top:12px;font-family:"IBM Plex Mono";font-size:.66rem;color:var(--muted);border-top:1px solid var(--line-soft);padding-top:9px}
+
+/* FLOW */
+.flow{display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:8px 18px;box-shadow:var(--shadow)}
+.step{display:flex;align-items:center;gap:14px;padding:11px 0;border-top:1px solid var(--line-soft)}
+.step:first-child{border-top:0}
+.step .no{width:26px;height:26px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;font-family:"Baloo 2";font-weight:800;font-size:.8rem;color:#fff;background:var(--blue)}
+.step .who{font-family:"Baloo 2";font-weight:700;font-size:.92rem;flex:0 0 128px;color:var(--ink)}
+.step .what{font-size:.86rem;color:var(--muted)}
+.flow-ex{margin-top:12px;font-size:.85rem;color:var(--ink-soft);background:color-mix(in srgb,var(--teal) 7%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--teal) 20%,var(--line));border-radius:12px;padding:12px 15px}
+.flow-ex b{color:var(--teal-ink)}
+
+/* CONTRACT split */
+.split{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
+.codecard{background:#0f1430;border:1px solid #26306a;border-radius:16px;padding:16px 18px;overflow-x:auto;box-shadow:var(--shadow)}
+.codecard pre{margin:0;font-family:"IBM Plex Mono";font-size:.78rem;line-height:1.65;color:#cdd6f4;white-space:pre}
+.codecard .ky{color:#8fd0e0} .codecard .st{color:#c3e88d} .codecard .pn{color:#f5a97f} .codecard .cm{color:#6b7394}
+.tools{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow)}
+.tools h4{font-family:"Baloo 2";font-size:.95rem;margin:0 0 10px}
+.tools .t{display:flex;align-items:baseline;gap:9px;padding:8px 0;border-top:1px solid var(--line-soft);font-size:.85rem}
+.tools .t:first-of-type{border-top:0}
+.tools .t code{font-family:"IBM Plex Mono";font-size:.78rem;color:var(--teal-ink);font-weight:600;flex:0 0 auto}
+.tools .t span{color:var(--muted)}
+.tools .note{margin-top:12px;font-size:.74rem;color:var(--faint);border-top:1px dashed var(--line);padding-top:10px}
+
+/* UNIVERSE: sources + bus + objects */
+.univ{display:grid;grid-template-columns:1fr;gap:14px}
+.pipes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pipe{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 12px;box-shadow:var(--shadow)}
+.pipe .e{font-size:1.25rem;flex:0 0 auto}
+.pipe b{font-family:"Baloo 2";font-size:.9rem;display:block;line-height:1.1}
+.pipe small{color:var(--muted);font-size:.72rem}
+.busbar{background:linear-gradient(90deg,color-mix(in srgb,var(--blue) 16%,var(--surface)),color-mix(in srgb,var(--purple) 14%,var(--surface)));
+  border:1px solid color-mix(in srgb,var(--blue) 26%,var(--line));border-radius:14px;padding:13px 18px;text-align:center;box-shadow:var(--shadow)}
+.busbar b{font-family:"Baloo 2";font-weight:800;font-size:1.02rem;color:var(--blue);letter-spacing:.04em}
+.busbar span{display:block;font-size:.72rem;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+.objs{display:grid;grid-template-columns:repeat(8,1fr);gap:8px}
+.obj{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:11px 6px;text-align:center;box-shadow:var(--shadow)}
+.obj .e{font-size:1.4rem} .obj small{display:block;font-size:.64rem;color:var(--muted);margin-top:4px;font-weight:600}
+
+/* RUNTIME table */
+.tblwrap{overflow-x:auto;border-radius:16px;border:1px solid var(--line);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;background:var(--surface);min-width:520px}
+th,td{text-align:left;padding:11px 14px;font-size:.85rem;border-top:1px solid var(--line-soft)}
+thead th{background:color-mix(in srgb,var(--blue) 12%,var(--surface));color:var(--ink);font-family:"Baloo 2";font-weight:700;font-size:.78rem;letter-spacing:.03em;border-top:0}
+tbody td:first-child{font-family:"Baloo 2";font-weight:700;color:var(--ink)}
+td .badge{font-family:"IBM Plex Mono";font-size:.68rem;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--teal) 14%,transparent);color:var(--teal-ink);font-weight:600}
+td .badge.pri{background:color-mix(in srgb,var(--leaf) 16%,transparent);color:var(--leaf)}
+td .badge.opt{background:color-mix(in srgb,var(--muted) 16%,transparent);color:var(--muted)}
+.bench{margin-top:12px;background:#0f1430;border:1px solid #26306a;border-radius:12px;padding:12px 15px;overflow-x:auto}
+.bench pre{margin:0;font-family:"IBM Plex Mono";font-size:.76rem;color:#cdd6f4;white-space:pre}
+.bench .cm{color:#6b7394}
+
+/* ROADMAP */
+.road{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.rc{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:14px 15px;box-shadow:var(--shadow);position:relative}
+.rc .p{font-family:"Baloo 2";font-weight:800;color:#fff;background:var(--purple);border-radius:8px;padding:2px 9px;font-size:.72rem;display:inline-block}
+.rc h5{font-family:"Baloo 2";font-weight:700;font-size:.92rem;margin:9px 0 4px}
+.rc p{margin:0;font-size:.78rem;color:var(--muted)}
+.rc .ok{margin-top:8px;font-size:.72rem;color:var(--leaf);font-weight:600}
+.rc:nth-child(1) .p{background:var(--teal)} .rc:nth-child(2) .p{background:var(--blue)}
+.rc:nth-child(4) .p{background:var(--fox)} .rc:nth-child(5) .p{background:var(--gold)} .rc:nth-child(6) .p{background:var(--leaf)}
+
+/* PILLARS */
+.pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.pl{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:15px;box-shadow:var(--shadow)}
+.pl .e{font-size:1.4rem}
+.pl b{font-family:"Baloo 2";display:block;font-size:.92rem;margin:6px 0 3px}
+.pl small{color:var(--muted);font-size:.78rem;line-height:1.4}
+.secnote{margin-top:14px;display:flex;gap:12px;align-items:flex-start;background:color-mix(in srgb,var(--coral) 8%,var(--surface));
+  border:1px solid color-mix(in srgb,var(--coral) 24%,var(--line));border-radius:14px;padding:14px 16px}
+.secnote .k{font-size:1.25rem}
+.secnote p{margin:0;font-size:.9rem;color:var(--ink-soft)} .secnote b{color:var(--ink)}
+
+/* FOOTER */
+.foot{margin-top:34px;text-align:center;color:var(--faint);font-size:.78rem}
+.foot .say{display:inline-block;background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 18px 6px;padding:12px 18px;
+  font-family:"Baloo 2";font-weight:600;color:var(--ink-soft);box-shadow:var(--shadow);margin-bottom:12px}
+.foot .say .hh{color:var(--coral)}
+
+@media (max-width:880px){
+  .hero{grid-template-columns:1fr} .levels{grid-template-columns:1fr} .split{grid-template-columns:1fr}
+  .pipes{grid-template-columns:1fr 1fr} .objs{grid-template-columns:repeat(4,1fr)} .road{grid-template-columns:1fr}
+  .pillars{grid-template-columns:1fr 1fr}
+}
+@media (max-width:520px){ .objs{grid-template-columns:repeat(2,1fr)} .pipes{grid-template-columns:1fr} .step .who{flex-basis:96px} }
+@media (prefers-reduced-motion:reduce){ .chat-glow{animation:none} }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="amark"><b>A</b></div>
+    <div class="brand"><h1>Aletheia<i>Vox</i></h1><div class="tl">Réseau libre · Services vivants · Souveraineté numérique</div></div>
+    <span class="spacer"></span>
+    <span class="zchip"><span class="fx">🦊</span> ZIA · l'IA du Hall</span>
+    <span class="poc">◇ POC · v0.1</span>
+    <span class="tgl" id="tgl">◐ thème</span>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <span class="bub b1"></span><span class="bub b2"></span><span class="bub b3"></span>
+    <div class="hero-txt">
+      <h2>ZIA — l'IA locale qui <em>parle au bus</em>, pas à ta place.</h2>
+      <p>Une intelligence légère, toujours locale, qui connaît ton Hall — tes objets, tes médias, tes services — et t'aide à t'y retrouver.</p>
+      <p class="lead">Des zanimalos, des objets, un Bus. Une intelligence au service du vrai, sur ton matériel ARM64.</p>
+    </div>
+    <div class="hero-say">
+      <div class="bubble-say">Salut !<br>Je connais ton Hall, tes objets, tes médias — et je peux t'aider. <span class="hh">❤</span></div>
+      <div class="fox">🦊</div>
+      <div class="chat-glow">💬</div>
+    </div>
+  </section>
+
+  <div class="principle">
+    <span class="k">🗝️</span>
+    <p><b>L'IA ne possède pas les données</b> : elle interprète et orchestre les objets déjà exposés par SecuBox. Le Hall fournit le contexte, <b>le bus reste la source de vérité</b>, et chaque service garde son autonomie.</p>
+  </div>
+
+  <!-- 3 LEVELS -->
+  <section class="blk">
+    <div class="sh"><span class="n">01</span><h3>Trois niveaux, une même matrice</h3><span class="rule"></span></div>
+    <div class="levels">
+      <div class="lvl lite">
+        <span class="tag">niveau 1</span>
+        <div class="av">🦊</div>
+        <h4>ZIA Hall Lite</h4>
+        <div class="sub">Toujours locale · le socle</div>
+        <ul>
+          <li>Chat, intention, reformulation, petits résumés</li>
+          <li>Recherche d'objets & aide contextuelle</li>
+          <li>Appels d'outils du bus</li>
+          <li>Contexte court et borné</li>
+        </ul>
+        <div class="lk">bus + objets + médias</div>
+      </div>
+      <div class="lvl vhost">
+        <span class="tag">niveau 2</span>
+        <div class="av">🦝</div>
+        <h4>ZIA VHOST / Full</h4>
+        <div class="sub">Spécialisée par service</div>
+        <ul>
+          <li>Modèles plus puissants, contexte élargi</li>
+          <li>RAG avancé & index propre au service</li>
+          <li>Outils, agents, connecteurs VHOST</li>
+          <li>Facultative, activée à la demande</li>
+        </ul>
+        <div class="lk">RAG + outils du service</div>
+      </div>
+      <div class="lvl remote">
+        <span class="tag">niveau 3</span>
+        <div class="av">🐻</div>
+        <h4>Remote / Cloud</h4>
+        <div class="sub">Escalade contrôlée · optionnel</div>
+        <ul>
+          <li>Gros modèles pour cas difficiles</li>
+          <li>Désactivé par défaut, soumis à politique</li>
+          <li>Seul le contexte nécessaire est transmis</li>
+          <li>Le 100 % local reste toujours possible</li>
+        </ul>
+        <div class="lk">liaison sécurisée · mTLS / JWT · ZIA-Bridge</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <section class="blk">
+    <div class="sh"><span class="n">02</span><h3>Le flux d'une requête</h3><span class="rule"></span></div>
+    <div class="flow">
+      <div class="step"><span class="no">1</span><span class="who">Hall</span><span class="what">message + session</span></div>
+      <div class="step"><span class="no">2</span><span class="who">Policy</span><span class="what">scope, droits, remote autorisé ?</span></div>
+      <div class="step"><span class="no">3</span><span class="who">ZIA Lite</span><span class="what">intention + choix d'outil</span></div>
+      <div class="step"><span class="no">4</span><span class="who">Bus</span><span class="what">objets autorisés uniquement (ACL appliquées)</span></div>
+      <div class="step"><span class="no">5</span><span class="who">ZIA Lite</span><span class="what">réponse + références</span></div>
+      <div class="step"><span class="no">6</span><span class="who">Routeur</span><span class="what">VHOST puis remote si nécessaire</span></div>
+      <div class="step"><span class="no">7</span><span class="who">Hall</span><span class="what">texte + cardlets / actions</span></div>
+    </div>
+    <div class="flow-ex">🎬 <b>« Trouve la dernière vidéo sur le WAF »</b> — ZIA appelle le bus, qui retourne les objets PeerTube <b>visibles</b>, puis le Hall affiche la réponse et la cardlet vidéo. Le modèle n'a jamais eu à connaître l'API interne de PeerTube.</div>
+  </section>
+
+  <!-- CONTRACT -->
+  <section class="blk">
+    <div class="sh"><span class="n">03</span><h3>Le contrat d'objet & les outils</h3><span class="rule"></span></div>
+    <div class="split">
+      <div class="codecard"><pre><span class="cm">// le LLM n'accède jamais aux bases ni aux VHOST —</span>
+<span class="cm">// le bus authentifie, filtre, applique les droits.</span>
+{
+  <span class="ky">"id"</span>: <span class="st">"radio:item:123"</span>,
+  <span class="ky">"type"</span>: <span class="st">"media.audio"</span>,
+  <span class="ky">"service"</span>: <span class="st">"radio"</span>,
+  <span class="ky">"title"</span>: <span class="st">"Émission du jour"</span>,
+  <span class="ky">"summary"</span>: <span class="st">"…"</span>,
+  <span class="ky">"uri"</span>: <span class="st">"sbx://radio/item/123"</span>,
+  <span class="ky">"visibility"</span>: <span class="st">"guest|registered|member|admin"</span>,
+  <span class="ky">"actions"</span>: [<span class="st">"open"</span>,<span class="st">"play"</span>,<span class="st">"discuss"</span>]
+}</pre></div>
+      <div class="tools">
+        <h4>🧰 Outils POC (lecture d'abord)</h4>
+        <div class="t"><code>hall.search_objects()</code><span>chercher dans le Hall</span></div>
+        <div class="t"><code>hall.get_object()</code><span>un objet par id</span></div>
+        <div class="t"><code>hall.list_recent()</code><span>le fil récent</span></div>
+        <div class="t"><code>hall.open()</code><span>ouvrir dans SBXOS</span></div>
+        <div class="t"><code>hall.delegate()</code><span>passer la main (VHOST / remote)</span></div>
+        <div class="note">✍️ Les outils d'<b>écriture</b> viendront après validation du modèle de permissions. Appels validés par schéma, liste blanche et droits.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- UNIVERSE -->
+  <section class="blk">
+    <div class="sh"><span class="n">04</span><h3>L'univers du Hall — sources, bus, objets</h3><span class="rule"></span></div>
+    <div class="univ">
+      <div class="pipes">
+        <div class="pipe"><span class="e">🐰</span><div><b>Peers / VHOSTs</b><small>services de la box</small></div></div>
+        <div class="pipe"><span class="e">📹</span><div><b>PeerTube</b><small>vidéos souveraines</small></div></div>
+        <div class="pipe"><span class="e">☁️</span><div><b>Nextcloud</b><small>fichiers & agenda</small></div></div>
+        <div class="pipe"><span class="e">🌐</span><div><b>Web / APIs</b><small>via le relais surf</small></div></div>
+        <div class="pipe"><span class="e">📡</span><div><b>Capteurs / IoT</b><small>événements du réel</small></div></div>
+        <div class="pipe"><span class="e">🐱</span><div><b>Utilisateurs</b><small>identités & droits</small></div></div>
+      </div>
+      <div class="busbar"><b>🚌 BUS D'OBJETS SBXOS</b><span>événements · commandes · métadonnées</span></div>
+      <div class="objs">
+        <div class="obj"><div class="e">🎬</div><small>Médias</small></div>
+        <div class="obj"><div class="e">📄</div><small>Documents</small></div>
+        <div class="obj"><div class="e">👤</div><small>Contacts</small></div>
+        <div class="obj"><div class="e">✅</div><small>Tâches</small></div>
+        <div class="obj"><div class="e">📅</div><small>Événements</small></div>
+        <div class="obj"><div class="e">💬</div><small>Discussions</small></div>
+        <div class="obj"><div class="e">🌡️</div><small>Capteurs</small></div>
+        <div class="obj"><div class="e">🧩</div><small>Autres</small></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RUNTIME -->
+  <section class="blk">
+    <div class="sh"><span class="n">05</span><h3>Runtime ARM64 & choix du modèle</h3><span class="rule"></span></div>
+    <div class="tblwrap"><table>
+      <thead><tr><th>Profil</th><th>Ordre de grandeur</th><th>Usage POC</th><th>Priorité</th></tr></thead>
+      <tbody>
+        <tr><td>Ultra-lite</td><td class="mono">~0.5–1.5B · Q4</td><td>intent, aide, outils, résumé</td><td><span class="badge pri">prioritaire</span></td></tr>
+        <tr><td>Lite+</td><td class="mono">~1.5–3B · Q4</td><td>QA / RAG plus confortable</td><td><span class="badge">à tester</span></td></tr>
+        <tr><td>Full local</td><td class="mono">&gt; 3B</td><td>raisonnement plus riche</td><td><span class="badge opt">non prioritaire</span></td></tr>
+        <tr><td>Remote</td><td class="mono">externe</td><td>cas difficiles</td><td><span class="badge opt">optionnel</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="bench"><pre><span class="cm"># llama.cpp GGUF quantifié · à benchmarker sur la MOCHAbin réelle</span>
+./llama-cli -m /data/models/model.gguf -t 4 -c 2048 -n 128 \
+  -p "Tu es ZIA, assistant local du Hall. Réponds en une phrase."
+<span class="cm"># mesurer : chargement, RSS, tokens/s, CPU, °C, 1er token, qualité (30 Q)</span></pre></div>
+  </section>
+
+  <!-- ROADMAP -->
+  <section class="blk">
+    <div class="sh"><span class="n">06</span><h3>POC exécutable · P0 → P5</h3><span class="rule"></span></div>
+    <div class="road">
+      <div class="rc"><span class="p">P0</span><h5>llama.cpp ARM64 + GGUF</h5><p>Le daemon tourne sur la MOCHAbin.</p><div class="ok">✓ RAM / CPU / tokens·s mesurés</div></div>
+      <div class="rc"><span class="p">P1</span><h5>/chat + 3 outils</h5><p>API locale, routage d'outils.</p><div class="ok">✓ tool routing correct</div></div>
+      <div class="rc"><span class="p">P2</span><h5>20–50 objets réels</h5><p>Recherche dans le vrai Hall.</p><div class="ok">✓ QA sans inventer d'objet</div></div>
+      <div class="rc"><span class="p">P3</span><h5>Cardlet Chat SBXOS</h5><p>ZIA habite le Hall.</p><div class="ok">✓ texte + ouverture sbx://</div></div>
+      <div class="rc"><span class="p">P4</span><h5>Délégation VHOST</h5><p>Passer la main proprement.</p><div class="ok">✓ bascule explicite</div></div>
+      <div class="rc"><span class="p">P5</span><h5>Remote optionnel</h5><p>Escalade sous politique.</p><div class="ok">✓ politique + fallback local</div></div>
+    </div>
+  </section>
+
+  <!-- SECURITY + PILLARS -->
+  <section class="blk">
+    <div class="sh"><span class="n">07</span><h3>Sécurité & souveraineté</h3><span class="rule"></span></div>
+    <div class="pillars">
+      <div class="pl"><span class="e">❤️</span><b>Local First</b><small>Ton matériel, ton contrôle. Traitement local priorisé.</small></div>
+      <div class="pl"><span class="e">🗝️</span><b>Privacy by Design</b><small>Moins d'exposition, plus de liberté. Aucune donnée sensible envoyée.</small></div>
+      <div class="pl"><span class="e">🧩</span><b>Modulaire</b><small>Active ce dont tu as besoin, désactive le reste.</small></div>
+      <div class="pl"><span class="e">🌐</span><b>Ouvert & interopérable</b><small>Standards ouverts, liberté totale.</small></div>
+    </div>
+    <div class="secnote">
+      <span class="k">🛡️</span>
+      <p><b>Le LLM n'est jamais une autorité.</b> Les ACL vivent hors modèle ; les appels d'outils sont validés par schéma, liste blanche et permissions. Les contenus récupérés sont traités comme des <b>données</b>, jamais comme des instructions. Remote : politique explicite, rédaction des secrets, audit, timeout, budget, circuit breaker et fallback local.</p>
+    </div>
+  </section>
+
+  <div class="foot">
+    <div class="say">AletheiaVox — les zanimalos veillent. Ta vie privée est sacrée, ton univers t'appartient. <span class="hh">❤</span></div>
+    <div>Design de référence POC · v0.1 · SecuBox-Deb / SBXOS · cible MOCHAbin · Linux ARM64</div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  var order=['','dark','light'], root=document.documentElement;
+  function cur(){ try{ return localStorage.getItem('zia.theme')||''; }catch(e){ return ''; } }
+  function apply(t){ if(t) root.setAttribute('data-theme',t); else root.removeAttribute('data-theme'); }
+  apply(cur());
+  var b=document.getElementById('tgl');
+  if(b) b.addEventListener('click',function(){
+    var i=order.indexOf(cur()), n=order[(i+1)%order.length];
+    try{ localStorage.setItem('zia.theme',n); }catch(e){}
+    apply(n); b.textContent = n==='dark'?'☾ sombre':n==='light'?'☀ clair':'◐ système';
+  });
+})();
+</script>
