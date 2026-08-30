@@ -40,11 +40,14 @@ objets liés). **P5** : `remote.py` sous politique + budget + timeout + circuit 
 rédaction des secrets + repli local (désactivé par défaut). Vérifié : recherche vidéo WAF,
 liste des topics MetaNews, délégation WAF, objets service ouvrables.
 
-### ⬜ Reste — P0 (matériel MOCHAbin)
+### ✅ P0 RÉSOLU — off-box (30/08)
 
-- [ ] **P0** — llama.cpp ARM64 + GGUF ultra-lite (Qwen/TinyLlama) ; benchmark
-  RAM/CPU/tokens·s/°C ; pointer `llm_url` vers `llama-server`. Le hook est déjà là ;
-  les objets viennent toujours des outils.
+Le **build** llama.cpp sur la box la saturait (OOM du parc). Écarté : paquet
+**`secubox-zia-llm`** (arm64) livre un llama.cpp **statique cross-compilé hors box**
+(aucune dépendance glibc). `secubox-zia-getmodel` télécharge **Qwen2.5-0.5B Q4** (pas de
+build) et démarre le serveur capé. **Mesuré sur gk2** : `llama-server` **~331 Mo RSS**,
+box **1429 Mo libres**, load qui redescend, parc intact — ZIA en `engine: llm`.
+**Le POC ZIA P0–P5 est COMPLET et tourne sur le modèle local.**
 
 _Historique de l'ordre suivi (commencer minuscule, sans enfermer l'archi) :_
 

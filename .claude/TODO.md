@@ -17,7 +17,7 @@ de la grosse session d'implémentation `secubox-zia` :
 
 > **✅ P1–P5 LIVRÉS (30/08, `secubox-zia` 0.1.2 + webos 1.0.206, déployé gk2).** Daemon,
 > outils, bus (186 objets réels : MetaNews + registre), cardlet Chat + FEATURED, délégation
-> exécutée, remote sous politique. **Reste P0 (matériel MOCHAbin : llama.cpp GGUF + bench).**
+> exécutée, remote sous politique. **P0 RÉSOLU off-box (secubox-zia-llm, arm64 statique) : llama-server ~331 Mo RSS, ZIA en engine:llm. POC COMPLET.**
 
 ### P1 — Daemon local + outils (sans matériel, prioritaire)
 - [ ] Scaffolder `packages/secubox-zia` (patron `secubox-devwatch` : FastAPI, socket Unix).

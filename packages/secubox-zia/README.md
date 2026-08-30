@@ -126,17 +126,14 @@ secubox-zia-bench /data/models/model.gguf
 - **Contrainte réelle** (gk2, 30/08) : ~1 Go RAM dispo → un ~0.5 B Q4 seulement ; libérer de
   la RAM ou viser l'ultra-lite. À mesurer, jamais supposer.
 
-> **⚠️ Mesure réelle (gk2, 30/08).** Lancé `secubox-zia-p0-install` (Qwen2.5-0.5B Q4). Le
-> **build llama.cpp sur la box** (même `-j2`) a saturé la MOCHAbin (4 cœurs, ~1,2 Go dispo,
-> ~120 services + conteneurs LXC) : **OOM-kill d'un apache2 dans le conteneur Nextcloud**,
-> load monté à 13. Annulé + nettoyé (aucun artefact ; ZIA reste en heuristique, saine).
-> **Conclusion** : pas de marge pour *construire* ni faire tourner confortablement un LLM
-> local sur cette box telle qu'elle est chargée. **Voie recommandée** : **cross-compiler
-> llama.cpp pour arm64 HORS box** (ou binaire pré-construit) et ne livrer que le binaire +
-> le GGUF — le *build* est ce qui a fait mal ; le *runtime* 0.5 B (~700 Mo, capé 1,4 Go)
-> reste à tester une fois le build écarté. Sinon : fenêtre dédiée avec services non
-> essentiels arrêtés, ou carte compagnon. **L'heuristique (210 objets réels) est la voie de
-> prod ; le modèle est un bonus conditionné à la marge matérielle.**
+> **✅ P0 RÉSOLU — off-box (gk2, 30/08).** Le **build** llama.cpp *sur la box* la saturait
+> (OOM du parc, load 13). On l'a écarté : le paquet **`secubox-zia-llm`** livre un
+> llama.cpp **arm64 STATIQUE cross-compilé hors box** (aucune dépendance glibc → tourne tel
+> quel). `secubox-zia-getmodel <url.gguf>` télécharge **Qwen2.5-0.5B Q4** (469 Mo, *pas de
+> build*) et démarre le serveur capé.
+> **Résultat mesuré** : `llama-server` **~331 Mo RSS**, box **1429 Mo libres**, load qui
+> **redescend**, parc intact — ZIA passe en `engine: llm`. Le *build* était le seul
+> problème ; le *runtime* 0.5 B est léger. Voir `packages/secubox-zia-llm/`.
 
 ## Definition of Done
 
