@@ -395,3 +395,13 @@ body.micro .cadre { width: 6rem; height: 6rem; }
 
 /* Ligne de STATUT emoji dans l'espace libre du micro (#1131ag). */
 body.micro .microstatus { color: var(--mint); font-size: .68rem; }
+
+/* SPICY (#1360) — filet dégradé sous l'en-tête + aide reverse-design. */
+.tete{position:relative}
+.tete::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,#e07d82,#28d6ff,#f0b429);opacity:.85}
+.sbxaide-ring{position:absolute;border:2px solid #e07d82;border-radius:8px;z-index:41;
+  box-shadow:0 0 0 3px color-mix(in srgb,#e07d82 22%,transparent);pointer-events:none;transition:.18s}
+.sbxaide-pin{position:absolute;transform:translate(-50%,-50%);min-width:18px;height:18px;border-radius:10px;z-index:42;
+  background:#e07d82;color:#2a0d0e;font-weight:800;font-size:.66rem;display:grid;place-items:center;padding:0 5px;
+  box-shadow:0 2px 6px rgba(0,0,0,.45);pointer-events:none}

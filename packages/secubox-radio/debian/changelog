@@ -1,3 +1,10 @@
+secubox-radio (0.1.58-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy (filet dégradé) + aide reverse-design
+    contextuelle (anneaux + pastilles + bulle Hall).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:08:49 +0200
+
 secubox-radio (0.1.57-1~bookworm1) bookworm; urgency=medium
 
   * Detach ⧉ integre au viewer du Hall (#1266) : au lieu d'ouvrir une fenetre,
