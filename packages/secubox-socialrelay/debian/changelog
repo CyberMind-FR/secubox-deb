@@ -1,3 +1,9 @@
+secubox-socialrelay (0.1.16-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy + aide reverse-design contextuelle (inline).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:20:10 +0200
+
 secubox-socialrelay (0.1.15-1~bookworm1) bookworm; urgency=medium
 
   * BANDEAU MASQUE EN EMBARQUE + SOURCES DANS LA MEGABARRE (#1194e). Meme

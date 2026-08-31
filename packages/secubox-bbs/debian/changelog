@@ -1,3 +1,9 @@
+secubox-bbs (0.30.43-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy + aide reverse-design contextuelle (inline).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:19:31 +0200
+
 secubox-bbs (0.30.42-1~bookworm1) bookworm; urgency=medium
 
   * Objet media en TETE de fil (#1266b) : le lecteur + la barre d'escalade
