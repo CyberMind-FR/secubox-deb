@@ -930,6 +930,26 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 .bienv-aide:hover{color:var(--ink);border-color:var(--ink)}
 .bienv-note{font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim);margin-left:auto}
 .bienv-note b{color:var(--mint)}
+
+/* ── #1352 · VISITE GUIDÉE — projecteur réutilisable ───────────────────────
+   Un pas = un élément mis en lumière (trou dans un voile) + une bulle. Le même
+   moteur (lanceVisite) servira les aides de cartes. */
+.tour{position:fixed;inset:0;z-index:82;display:none}
+.tour.on{display:block}
+.tour-hole{position:absolute;border-radius:12px;transition:.28s cubic-bezier(.2,.8,.3,1);
+  pointer-events:none;box-shadow:0 0 0 9999px color-mix(in srgb,var(--ink) 55%,transparent)}
+.tour-tip{position:absolute;width:min(300px,82vw);background:var(--panel);border:1px solid var(--line);
+  border-radius:14px;box-shadow:var(--lift);padding:15px 16px;transition:.28s}
+.tour-tip .k{font-family:"JetBrains Mono";font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--sky)}
+.tour-tip b{display:block;font-size:.95rem;margin:5px 0 4px}
+.tour-tip p{font-size:.82rem;color:var(--dim);margin:0}
+.tour-tip .nav{display:flex;align-items:center;gap:10px;margin-top:13px}
+.tour-tip .dots{display:flex;gap:5px;margin-right:auto}
+.tour-tip .dot{width:6px;height:6px;border-radius:50%;background:var(--line-2)}
+.tour-tip .dot.on{background:var(--sky);width:16px;border-radius:4px}
+.tour-tip .sk{border:none;background:none;color:var(--dim);font-size:.78rem;cursor:pointer}
+.tour-tip .nx{border:none;background:var(--sky);color:#fff;border-radius:9px;padding:7px 15px;font-size:.82rem;font-weight:600;cursor:pointer}
+@media(prefers-reduced-motion:reduce){.tour-hole,.tour-tip{transition:none}}
 </style>
 
 </head>
@@ -989,6 +1009,8 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
           <div class="who-sep"></div>
           <button type="button" role="menuitem" id="who-accueil">👋 Revoir l'accueil</button>
           <p class="who-note">Le premier abord : ce qu'est le Hall et les gestes des cartes.</p>
+          <button type="button" role="menuitem" id="who-aide">❔ Aide du Hall</button>
+          <p class="who-note">Le guide complet : les cartes, la prise en main, la FAQ.</p>
           <!-- OÙ SUIS-JE IDENTIFIÉ ? (#1272) On est connecté à une dizaine de
                services à la fois sans aucun endroit où le voir. Le registre
                RGPD du pare-feu le sait déjà — il servait à l'audit, il sert
@@ -3721,11 +3743,69 @@ const CARDLET_ICONES = {
     var b2=document.getElementById('bienv-aide');   if(b2) b2.addEventListener('click', function(){ ferme(true); if(typeof showView==='function') showView('aide'); });
     scrim.addEventListener('click', function(e){ if(e.target===scrim) ferme(true); });
     document.addEventListener('keydown', function(e){ if(e.key==='Escape' && !scrim.classList.contains('hidden')) ferme(true); });
-    var rv=document.getElementById('who-accueil');
-    if(rv) rv.addEventListener('click', function(){
+    function fermeMenuProfil(){
       var wm=document.getElementById('who-menu'); if(wm) wm.classList.add('hidden');
       var wb=document.getElementById('who'); if(wb) wb.setAttribute('aria-expanded','false');
-      ouvre();
+    }
+    var rv=document.getElementById('who-accueil');
+    if(rv) rv.addEventListener('click', function(){ fermeMenuProfil(); ouvre(); });
+    var ai=document.getElementById('who-aide');
+    if(ai) ai.addEventListener('click', function(){ fermeMenuProfil(); if(typeof showView==='function') showView('aide'); });
+  });
+})();
+
+// ── #1352 · VISITE GUIDÉE — moteur de projecteur RÉUTILISABLE ──────────────
+// window.lanceVisite(steps) : steps = [{sel,k,t,p}]. Met en lumière chaque cible
+// (1er match visible de `sel`), saute les absentes/invisibles, place la bulle.
+// Le MÊME moteur servira les aides de cartes (❓) — d'où l'exposition globale.
+(function(){
+  function pret(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  pret(function(){
+    var tour=document.getElementById('tour'); if(!tour) return;
+    var hole=document.getElementById('tour-hole'), tip=document.getElementById('tour-tip');
+    var steps=[], i=0;
+    function visible(n){ if(!n) return false; var r=n.getBoundingClientRect();
+      return r.width>2 && r.height>2 && getComputedStyle(n).visibility!=='hidden'; }
+    function cible(sel){ try{ var L=sel.split(',');
+      for(var k=0;k<L.length;k++){ var n=document.querySelector(L[k].trim()); if(visible(n)) return n; } }catch(e){} return null; }
+    function dots(){ var d=''; for(var k=0;k<steps.length;k++) d+='<span class="dot'+(k===i?' on':'')+'"></span>';
+      document.getElementById('tour-dots').innerHTML=d; }
+    function place(){
+      var s=steps[i], node=s&&cible(s.sel);
+      if(!node){ suite(); return; }
+      var r=node.getBoundingClientRect(), pad=8;
+      hole.style.left=(r.left-pad)+'px'; hole.style.top=(r.top-pad)+'px';
+      hole.style.width=(r.width+pad*2)+'px'; hole.style.height=(r.height+pad*2)+'px';
+      document.getElementById('tour-k').textContent=s.k||'Étape';
+      document.getElementById('tour-t').textContent=s.t||'';
+      document.getElementById('tour-p').textContent=s.p||'';
+      document.getElementById('tour-next').textContent=(i===steps.length-1)?'Terminer':'Suivant';
+      dots();
+      var tw=Math.min(300,innerWidth*0.82), th=tip.offsetHeight||160;
+      var top=r.bottom+14; if(top+th>innerHeight-12) top=Math.max(12,r.top-th-14);
+      var left=r.left; if(left+tw>innerWidth-12) left=innerWidth-12-tw; if(left<12) left=12;
+      tip.style.top=top+'px'; tip.style.left=left+'px';
+    }
+    function suite(){ i++; if(i>=steps.length){ fin(); return; } place(); }
+    function fin(){ tour.classList.remove('on'); }
+    window.lanceVisite=function(pas){ steps=(pas&&pas.length)?pas:[]; if(!steps.length) return; i=0; tour.classList.add('on'); place(); };
+    document.getElementById('tour-next').addEventListener('click', suite);
+    document.getElementById('tour-skip').addEventListener('click', fin);
+    addEventListener('resize', function(){ if(tour.classList.contains('on')) place(); });
+    addEventListener('keydown', function(e){ if(e.key==='Escape' && tour.classList.contains('on')) fin(); });
+
+    // Pas par défaut du Hall (cibles réelles ; absentes = sautées).
+    var VISITE_HALL=[
+      {sel:'.mast .drop, #q', k:'Mégabarre', t:'Chercher — ou surfer', p:"Un mot cherche un service. Une adresse s'ouvre à travers la box, pisteurs coupés."},
+      {sel:'.favbande .fcard, #featgrid .fcard', k:'Une carte', t:'Ranger & épingler', p:"Survolez une carte : la poignée ⠿ la déplace, l'étoile ★ la met en favori. L'ordre est gardé."},
+      {sel:'#mediadock', k:'Barre média', t:'Le son vous suit', p:"Ce qui joue reste ici — volume et pli persistants d'une carte à l'autre."},
+      {sel:'#who', k:'Profil', t:'Réglages & aide', p:"Thème, réinitialiser, revoir l'accueil, et l'aide complète du Hall."}
+    ];
+    var bv=document.getElementById('bienv-visite');
+    if(bv) bv.addEventListener('click', function(){
+      var sc=document.getElementById('bienvenue');
+      if(sc){ sc.classList.add('hidden'); try{ localStorage.setItem((typeof cleProfil==='function')?cleProfil('accueil-vu'):'sbx.hall.accueil-vu','1'); }catch(e){} }
+      setTimeout(function(){ window.lanceVisite(VISITE_HALL); }, 60);
     });
   });
 })();
@@ -3856,10 +3936,26 @@ const CARDLET_ICONES = {
     </div>
     <div class="bienv-ft">
       <button type="button" class="bienv-entrer" id="bienv-entrer">Entrer dans le Hall →</button>
+      <button type="button" class="bienv-aide" id="bienv-visite">Visite guidée</button>
       <button type="button" class="bienv-aide" id="bienv-aide">Ouvrir l'Aide</button>
       <span class="bienv-note">Aucun compte requis · <b>rien n'est pisté</b></span>
     </div>
   </section>
+</div>
+
+<!-- ── #1352 · VISITE GUIDÉE — projecteur (moteur partagé lanceVisite) ──────── -->
+<div class="tour" id="tour">
+  <div class="tour-hole" id="tour-hole"></div>
+  <div class="tour-tip" id="tour-tip">
+    <span class="k" id="tour-k">Étape</span>
+    <b id="tour-t"></b>
+    <p id="tour-p"></p>
+    <div class="nav">
+      <div class="dots" id="tour-dots"></div>
+      <button type="button" class="sk" id="tour-skip">Passer</button>
+      <button type="button" class="nx" id="tour-next">Suivant</button>
+    </div>
+  </div>
 </div>
 
 </body>

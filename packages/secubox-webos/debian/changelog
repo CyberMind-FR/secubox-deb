@@ -1,3 +1,12 @@
+secubox-webos (1.0.210-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — VISITE GUIDÉE (projecteur réutilisable window.lanceVisite) : bouton
+    « Visite guidée » de la carte de bienvenue ; met en lumière mégabarre,
+    cartes, barre média, profil (cibles absentes sautées). Base des futures
+    aides de cartes (❓).
+  * Menu profil de la mégabarre : entrée « ❔ Aide du Hall » → vue Aide.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 06:25:09 +0200
 secubox-webos (1.0.209-1~bookworm1) bookworm; urgency=medium
 
   * Hall — carte de BIENVENUE (premier abord) au premier chargement : thèse du
