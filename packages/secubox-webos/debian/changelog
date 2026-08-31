@@ -1,3 +1,13 @@
+secubox-webos (1.0.209-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — carte de BIENVENUE (premier abord) au premier chargement : thèse du
+    Hall, 4 gestes, section Explorer (menu Services, survol, puces, aide ❓),
+    encart BiB. Vue une fois (localStorage par profil), ré-ouvrable via
+    « Revoir l'accueil » du menu profil.
+  * surfviewer — puces média : émoji de source + nom lisible au lieu des URLs.
+  * Barre de slices partagée « double bullet » (slicebar.css/js) ; cumul aligné.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 06:17:43 +0200
 secubox-webos (1.0.208-1~bookworm1) bookworm; urgency=medium
 
   * Menu invité : les IDENTITÉS sont camouflées ET indisponibles hors session.
