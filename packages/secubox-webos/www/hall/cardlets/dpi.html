@@ -157,18 +157,54 @@
     risques(el('s-risk'), d.risk);
   }
 
-  // Lecture best-effort. Les endpoints DPI vivent sur l'origine du service ; s'ils
-  // ne répondent pas en JSON (collecteur au repos, autre origine), on garde la démo.
+  // ── LECTURE VIVANTE via sbxdpi (nDPI 5.x) ──────────────────────────────────
+  // /api/v1/dpi/stats est servi par sbxdpi (couche Go au-dessus de nDPId) :
+  // compteurs agrégés, sans PII. On mappe sa forme sur l'affichage ; si le
+  // socket dort ou ne répond pas en JSON, la démo étiquetée reste.
+  function emProto(n){ n=String(n||'').toUpperCase();
+    var M={TLS:'🔒',QUIC:'⚡',HTTP:'🌐','HTTP2':'🌐',HTTPS:'🔒',DNS:'📡',MDNS:'📡',
+      BITTORRENT:'🧲',WIREGUARD:'🛡️',OPENVPN:'🛡️',SSH:'🔑',SMTPS:'✉️',SMTP:'✉️',
+      IMAPS:'✉️',NTP:'🕰️',ICMP:'📶',ICMPV6:'📶',SOCKS:'🧦',TELEGRAM:'✈️',
+      TAILSCALE:'🕸️',STUN:'📞',SIP:'📞',RTP:'🎙️',QUICKTIME:'🎬',UNKNOWN:'❔'};
+    return M[n]||'📦'; }
+  function emApp(n){ var s=String(n||'').toLowerCase();
+    if(s.indexOf('youtube')>=0)return '▶️'; if(s.indexOf('netflix')>=0)return '🎬';
+    if(s.indexOf('google')>=0)return '🔎'; if(s.indexOf('cloudflare')>=0)return '☁️';
+    if(s.indexOf('github')>=0)return '🐙'; if(s.indexOf('microsoft')>=0||s.indexOf('windows')>=0)return '🪟';
+    if(s.indexOf('amazon')>=0||s.indexOf('aws')>=0)return '📦'; if(s.indexOf('apple')>=0)return '🍎';
+    if(s.indexOf('facebook')>=0||s.indexOf('meta')>=0)return '📘'; if(s.indexOf('spotify')>=0)return '🎵';
+    if(s.indexOf('tls')>=0)return '🔒'; return '🧩'; }
+  function sev3(s){ s=String(s||'').toLowerCase();
+    if(/crit|severe|high|emerg|error/.test(s)) return 'hi';
+    if(/med|warn|moderat|notice/.test(s)) return 'md'; return 'lo'; }
+  // « 192.168.1.24 → 1.2.3.4 » : on garde les derniers octets, lisibles en étroit.
+  function shortTalk(n){ return String(n||'').replace(/(\d+)\.(\d+)\.(\d+)\.(\d+)/g,
+    function(_,a,b,c,d){ return '·'+d; }); }
+
+  var lastBytes=null, lastTs=null;
   function tente(){
-    fetch('/api/v1/dpi/summary',{headers:{'Accept':'application/json'}})
+    fetch('/api/v1/dpi/stats',{headers:{'Accept':'application/json'}})
       .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
       .then(function(j){
-        // Adaptation souple : on ne peint que ce qu'on a lu.
-        var d={demo:false,
-          flows:j.active_flows!=null?j.active_flows:(j.flows!=null?j.flows:DEMO.flows),
-          bw:j.mbps!=null?j.mbps:DEMO.bw, risks:(j.risks!=null?j.risks:DEMO.risks),
-          proto:DEMO.proto, apps:DEMO.apps, talk:DEMO.talk, risk:DEMO.risk};
-        rend(d);
+        if(!j || j.total_flows==null) throw 0;
+        // Débit instantané : dérivé du cumul d'octets entre deux sondes (Mb/s).
+        var bw=null, now=(j.updated_at||Math.floor(Date.now()/1000));
+        if(lastBytes!=null && now>lastTs){
+          bw=Math.max(0,((j.total_bytes-lastBytes)*8)/((now-lastTs)*1e6));
+          bw=Math.round(bw*10)/10;
+        }
+        lastBytes=j.total_bytes; lastTs=now;
+        function rows(arr,n,em){ return (arr||[]).slice(0,n).map(function(x){
+          return [em(x.name), x.name, Math.max(1,Math.round(x.pct||0))]; }); }
+        var proto=rows(j.protocols,7,emProto), apps=rows(j.apps,6,emApp);
+        var talk=(j.talkers||[]).slice(0,5).map(function(x){
+          return ['💻', shortTalk(x.name), Math.max(1,Math.round(x.pct||0))]; });
+        var risk=(j.risks||[]).slice(0,5).map(function(x){
+          return [sev3(x.severity), x.name, (x.count||0)+'×']; });
+        rend({demo:false,
+          flows:j.total_flows, bw:(bw!=null?bw:'…'), risks:(j.risks?j.risks.length:0),
+          proto:proto.length?proto:DEMO.proto, apps:apps.length?apps:DEMO.apps,
+          talk:talk.length?talk:DEMO.talk, risk:risk.length?risk:DEMO.risk});
       })
       .catch(function(){ /* démo déjà affichée */ });
   }

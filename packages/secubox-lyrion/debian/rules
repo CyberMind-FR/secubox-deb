@@ -36,3 +36,8 @@ override_dh_auto_install:
 	install -d debian/secubox-lyrion/usr/lib/systemd/system
 	install -m 0644 debian/secubox-lyrion-version-check.service debian/secubox-lyrion/usr/lib/systemd/system/
 	install -m 0644 debian/secubox-lyrion-version-check.timer debian/secubox-lyrion/usr/lib/systemd/system/
+	# Lecteur web : squeezelite headless (vrai client LMS, -o null) ; le
+	# navigateur écoute le flux LMS natif (/stream.mp3?player=MAC).
+	install -m 0644 debian/sbx-lyrion-webplayer.service debian/secubox-lyrion/usr/lib/systemd/system/
+	install -d debian/secubox-lyrion/etc/secubox
+	install -m 0644 debian/lyrion-webplayer.env debian/secubox-lyrion/etc/secubox/lyrion-webplayer.env

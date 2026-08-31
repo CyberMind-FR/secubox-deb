@@ -620,6 +620,11 @@ async def nc_partages(user=Depends(require_jwt)):
     return await nc_super.partages(_qui(user))
 
 
+@router.get("/acces/nextcloud/agenda")
+async def nc_agenda(user=Depends(require_jwt)):
+    return await nc_super.agenda(_qui(user))
+
+
 @router.post("/acces/nextcloud/partager")
 async def nc_partager(corps: dict, user=Depends(require_jwt)):
     return await nc_super.partager(_qui(user), str(corps.get("chemin") or ""))

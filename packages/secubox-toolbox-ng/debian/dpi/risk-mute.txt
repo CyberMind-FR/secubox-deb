@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: sbxdpi — RISK mute list (dpkg conffile, hot-reloaded)
+#
+# One entry per line: an nDPI flow-risk name or numeric id that should NOT be
+# surfaced in the DPI cardlet's risk panel (false-positive / expected-on-this-
+# -network control). Ships empty (comments only). Case-insensitive.
+#
+# Example (uncomment to mute self-signed certs on an internal-only box):
+# Self-signed Certificate

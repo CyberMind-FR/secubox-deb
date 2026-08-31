@@ -84,6 +84,39 @@
            animation:bat 2.4s ease-in-out infinite; }
   @keyframes bat { 0%,100%{opacity:.28} 50%{opacity:1} }
   @media (prefers-reduced-motion: reduce){ .pouls{animation:none;opacity:.7} }
+
+  /* ── SLICER « expanded & spicy » : Récentes / Populaires / Catégories /
+     Playlists — barre à bullets doubles, fixée en bas, pilule active en
+     dégradé qui vit. Même langage que la radio. */
+  .mw { padding-bottom:34px; }
+  .pt-slbar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+              display:flex; align-items:center; gap:8px; padding:7px 12px;
+              font-size:.6rem; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+              background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 6%,var(--fond)),var(--fond));
+              border-top:2px solid transparent;
+              border-image:linear-gradient(90deg,var(--accent),#f0b429,#28d6ff) 1;
+              box-shadow:0 -8px 20px -14px rgba(0,0,0,.55); }
+  .pt-slbar .dots { display:flex; align-items:center; gap:5px; }
+  .pt-slbar .dots button { width:8px; height:8px; padding:0; border:0; border-radius:50%;
+              background:var(--border); cursor:pointer;
+              transition:width .22s ease, background .22s ease, box-shadow .22s ease; }
+  .pt-slbar .dots button.on { width:20px; border-radius:6px;
+              background:linear-gradient(90deg,var(--accent),#f0b429);
+              box-shadow:0 0 10px -1px var(--accent); }
+  .pt-slbar .dots.manuel button.on { background:linear-gradient(90deg,#28d6ff,var(--accent));
+              box-shadow:0 0 10px -1px #28d6ff; }
+  .pt-slbar .lab { margin-left:2px; font-weight:700; letter-spacing:.08em; color:var(--accent); }
+
+  /* ── Pop-in helper : survol d'une vignette → titre + chaîne + conseil. */
+  .ptpop { position:fixed; z-index:40; max-width:230px; padding:8px 10px; border-radius:10px;
+           background:var(--fond); color:var(--texte); font-size:12px; line-height:1.4;
+           border:1px solid color-mix(in srgb,var(--accent) 40%,var(--border));
+           box-shadow:0 12px 30px -12px rgba(0,0,0,.7),0 0 0 1px color-mix(in srgb,var(--accent) 16%,transparent);
+           opacity:0; transform:translateY(4px); pointer-events:none; transition:.15s; overflow:hidden; }
+  .ptpop.on { opacity:1; transform:none; }
+  .ptpop::before { content:""; position:absolute; left:0; right:0; top:0; height:2px;
+           background:linear-gradient(90deg,var(--accent),#f0b429,#28d6ff); }
+  .ptpop b { color:var(--accent); } .ptpop .adv { display:block; color:var(--muted); margin-top:4px; font-size:11px; }
 </style>
 
 <div class="mw">
@@ -106,8 +139,21 @@
   // L'API et les vignettes passent par le relais de MEME origine (la carte
   // vit sous `connect-src 'self'` et `img-src 'self'`) ; le lecteur, lui,
   // reste sur l'origine de PeerTube — voir lance().
-  var API = '/pt/api/v1/videos?count=24&sort=-publishedAt&nsfw=false';
   var PT_HOTE = 'peertube.gk2.secubox.in';
+  // SLICES (#peertube-slices) : plusieurs sources pour la MÊME carte, choisies
+  // par la barre à bullets en bas — comme la radio. Récentes/Populaires sont
+  // deux tris de l'API vidéos ; Catégories parcourt le catalogue par genre ;
+  // Playlists liste les listes de lecture. Rien n'est inventé : tout vient de
+  // l'API REST publique relayée en même origine.
+  var VUES = [
+    { k:'recentes',   lab:'🆕 Récentes',   url:'/pt/api/v1/videos?count=24&sort=-publishedAt&nsfw=false', kind:'video' },
+    { k:'populaires', lab:'🔥 Populaires', url:'/pt/api/v1/videos?count=24&sort=-views&nsfw=false',        kind:'video' },
+    { k:'categories', lab:'📂 Catégories', url:null,                                                       kind:'category' },
+    { k:'chaines',    lab:'📺 Chaînes',    url:'/pt/api/v1/video-channels?count=18&sort=-createdAt',       kind:'channel' },
+    { k:'playlists',  lab:'🎞️ Playlists',  url:'/pt/api/v1/video-playlists?count=18&sort=-updatedAt',      kind:'playlist' }
+  ];
+  var vue = 0;                  // index de la vue courante
+  var cats = null, catIdx = 0;  // {id:nom} des catégories + rotation interne
   var vids = [], i = 0, enPause = false, joue = false;
 
   var el = function (id) { return document.getElementById(id); };
@@ -129,7 +175,7 @@
       img.onerror = function () { this.style.display = 'none'; };
     } else { img.style.display = 'none'; }
     el('une-t').textContent = v.name || '—';
-    el('une-dur').textContent = mmss(v.duration);
+    el('une-dur').textContent = v._playlist ? '≡ liste' : v._channel ? '📺 chaîne' : mmss(v.duration);
     el('rang').textContent = ((i % vids.length) + 1) + '/' + vids.length;
     el('pied-t').textContent = (v.channel && v.channel.displayName) || 'vidéos';
 
@@ -175,6 +221,12 @@
   function lance(n) {
     var v = vids[n % vids.length];
     if (!v) return;
+    // UNE LISTE OU UNE CHAÎNE N'EST PAS UNE VIDÉO : on n'embarque pas un lecteur,
+    // on ouvre PeerTube pour parcourir (catalogue complet dans le Hall).
+    if (v._browse) {
+      if (parent !== window) { try { parent.postMessage({ sbx: 'ouvre', id: 'peertube' }, '*'); } catch (e) {} }
+      return;
+    }
     i = n; joue = true;
     // LE LECTEUR RESTE SUR SON ORIGINE, ET C'EST UNE CORRECTION (#1276).
     // Relaye sous /pt/, il demandait ses propres ressources a la RACINE du
@@ -472,24 +524,153 @@
     return true;
   }
 
+  // Playlists & chaînes prennent la forme d'un item pour réutiliser montre()/le
+  // carrousel. `_browse` = un clic ouvre PeerTube (pas un lecteur embarqué).
+  function mapPlaylist(p) {
+    return {
+      name: p.displayName || p.name || 'Liste',
+      thumbnailPath: p.thumbnailPath || '',
+      duration: 0, uuid: p.uuid, _playlist: true, _browse: true,
+      channel: { displayName: (p.videosLength != null ? (p.videosLength + ' vidéos') : 'Playlist') }
+    };
+  }
+  function mapChannel(c) {
+    var img = (c.banners && c.banners[0] && c.banners[0].path)
+           || (c.avatars && c.avatars[0] && c.avatars[0].path)
+           || (c.avatar && c.avatar.path) || '';
+    return {
+      name: c.displayName || c.name || 'Chaîne',
+      thumbnailPath: img,
+      duration: 0, uuid: c.name, _channel: true, _browse: true,
+      channel: { displayName: (c.followersCount != null ? (c.followersCount + ' abonnés') : 'Chaîne') }
+    };
+  }
+
+  // Catégories : on découvre les genres une fois, puis on en montre un à la fois
+  // (catIdx tourne à chaque entrée dans la vue), en filtrant l'API vidéos.
+  function chargeCategorie() {
+    function pick() {
+      var ids = Object.keys(cats || {});
+      if (!ids.length) { vids = []; el('une-t').textContent = 'Pas de catégorie'; return; }
+      catIdx = ((catIdx % ids.length) + ids.length) % ids.length;
+      var id = ids[catIdx], nom = cats[id];
+      if (slLab) slLab.textContent = '📂 ' + nom;
+      fetch('/pt/api/v1/videos?count=24&categoryOneOf=' + encodeURIComponent(id) + '&sort=-publishedAt&nsfw=false',
+        { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          vids = (d && d.data) || [];
+          el('n').textContent = nom;
+          if (!vids.length) { catIdx++; if (catIdx < Object.keys(cats).length) return pick();
+            el('une-t').textContent = 'Catégorie vide'; return; }
+          el('pouls').style.animation = ''; i = 0; montre();
+        })
+        .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
+    }
+    if (cats) { pick(); return; }
+    fetch('/pt/api/v1/videos/categories', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { cats = d || {}; pick(); })
+      .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
+  }
+
   function charge() {
-    fetch(API, { headers: { 'Accept': 'application/json' } })
+    var V = VUES[vue];
+    if (V.kind === 'category') { chargeCategorie(); return; }
+    fetch(V.url, { headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        vids = (d && d.data) || [];
-        el('n').textContent = d && d.total ? d.total + ' vidéos' : '';
+        var data = (d && d.data) || [];
+        vids = (V.kind === 'playlist') ? data.map(mapPlaylist)
+             : (V.kind === 'channel')  ? data.map(mapChannel) : data;
+        el('n').textContent = d && d.total
+          ? d.total + ' ' + (V.kind === 'playlist' ? 'listes' : V.kind === 'channel' ? 'chaînes' : 'vidéos') : '';
         if (!vids.length) {
-          el('une-t').textContent = 'Aucune vidéo';
+          el('une-t').textContent = (V.kind === 'playlist') ? 'Aucune liste'
+            : (V.kind === 'channel') ? 'Aucune chaîne' : 'Aucune vidéo';
           el('pouls').style.animation = 'none';
           return;
         }
-        // La reprise passe AVANT la vitrine : sinon la rotation démarrerait et
-        // on verrait défiler des vignettes par-dessus ce qu'on regardait.
-        if (reprend()) return;
-        montre();
+        el('pouls').style.animation = '';
+        // La reprise (position gardée) ne vaut que pour le flux vidéo « récentes ».
+        if (V.kind === 'video' && vue === 0 && reprend()) return;
+        i = 0; montre();
       })
       .catch(function () { el('une-t').textContent = 'PeerTube injoignable'; });
   }
+
+  // ── BARRE À BULLETS (slicer) ──────────────────────────────────────────────
+  // Click-only (pas d'auto-rotation entre vues : chaque vue refait un fetch —
+  // on ne martèle pas l'API). Le carrousel de vignettes, lui, tourne DANS la
+  // vue courante.
+  var slDots = null, slLab = null;
+  (function buildSlicer() {
+    var bar = document.createElement('div'); bar.className = 'pt-slbar';
+    slDots = document.createElement('div'); slDots.className = 'dots';
+    slLab = document.createElement('span'); slLab.className = 'lab';
+    VUES.forEach(function (v, k) {
+      var b = document.createElement('button'); b.type = 'button';
+      b.title = v.lab; b.setAttribute('aria-label', v.lab);
+      b.addEventListener('click', function () { changeVue(k); });
+      slDots.appendChild(b);
+    });
+    bar.appendChild(slDots); bar.appendChild(slLab);
+    (document.querySelector('.mw') || document.body).appendChild(bar);
+    poseSlice();
+  })();
+  function poseSlice() {
+    if (!slDots) return;
+    Array.prototype.forEach.call(slDots.children, function (d, k) { d.classList.toggle('on', k === vue); });
+    slLab.textContent = VUES[vue].lab;
+  }
+  function changeVue(k) {
+    if (k === vue && VUES[k].kind !== 'category') return;  // déjà là (sauf catégories : on avance)
+    if (VUES[k].kind === 'category') catIdx++;              // un genre différent à chaque entrée
+    vue = k; poseSlice();
+    // Changer de vue arrête une lecture en cours et revient à la vitrine.
+    if (joue) {
+      joue = false; if (battement) { clearInterval(battement); battement = null; }
+      oublie();
+      el('une').innerHTML = '<img id="une-img" alt=""><span class="dur" id="une-dur"></span>'
+        + '<button class="lire" id="lire" type="button" title="Lire ici" aria-label="Lire">'
+        + '<span>▶</span></button><span class="voile"><span class="t" id="une-t"></span></span>';
+      try { parent.postMessage({ sbx: 'media', id: 'peertube', joue: false, fin: true }, '*'); } catch (e) {}
+    }
+    charge();
+  }
+
+  // ── POP-IN HELPER : survol d'une vignette → titre + chaîne + conseil. ───────
+  (function () {
+    var pop = document.createElement('div'); pop.className = 'ptpop'; document.body.appendChild(pop);
+    function at(r) {
+      var w = pop.offsetWidth, h = pop.offsetHeight, m = 6;
+      var top = r.top - h - m; if (top < m) top = r.bottom + m;
+      var left = r.left; if (left + w > innerWidth - m) left = innerWidth - m - w; if (left < m) left = m;
+      pop.style.left = left + 'px'; pop.style.top = top + 'px';
+    }
+    function show(html, elm) { pop.innerHTML = html; pop.classList.add('on'); at(elm.getBoundingClientRect()); }
+    function hide() { pop.classList.remove('on'); }
+    function infoDe(idx) {
+      var v = vids[idx]; if (!v) return null;
+      var ch = (v.channel && v.channel.displayName) || 'PeerTube';
+      var adv = v._playlist ? 'Liste de lecture — un clic ouvre PeerTube pour la parcourir.'
+        : v._channel ? 'Chaîne — un clic ouvre PeerTube sur ses vidéos.'
+        : 'Un clic lit ici (lecteur souverain PeerTube) ; ⤢ agrandit dans le viewer.';
+      var meta = v._browse ? ch : (ch + (v.duration ? (' · ' + mmss(v.duration)) : '')
+        + (v.views != null ? (' · ' + v.views + ' vues') : ''));
+      return '<b>' + esc(v.name || 'Vidéo') + '</b>' + (meta ? (' · ' + esc(meta)) : '')
+        + '<span class="adv">' + adv + '</span>';
+    }
+    document.addEventListener('mouseover', function (e) {
+      var b = e.target.closest && e.target.closest('.top button[data-i]');
+      if (b) { var h = infoDe(Number(b.dataset.i)); if (h) show(h, b); return; }
+      var une = e.target.closest && e.target.closest('.une');
+      if (une && !joue) { var h2 = infoDe(i % (vids.length || 1)); if (h2) show(h2, une); return; }
+    });
+    document.addEventListener('mouseout', function (e) {
+      if (e.target.closest && (e.target.closest('.top button') || e.target.closest('.une'))) hide();
+    });
+  })();
 
   charge();
   setInterval(function () { if (!enPause && !joue && vids.length) { i++; montre(); } }, 7000);

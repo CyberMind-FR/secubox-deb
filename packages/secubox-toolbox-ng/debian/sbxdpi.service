@@ -1,0 +1,55 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: toolbox-ng — sbxdpi emancipated DPI aggregator
+#
+# ── DISABLED BY DESIGN (DARK, mirrors sbx-sentinel) ──────────────────────────
+# Installed into the unit catalogue but NOT enabled/started by the maintainer
+# scripts. sbxdpi is the Go-level layer over nDPId: it DIALS nDPIsrvd's
+# distributor unix socket (read-only consumer), applies our declarative
+# go-level filtering, and serves aggregate DPI stats on its own /run/secubox/dpi-live.sock
+# for the Hall DPI cardlet (fronted by nginx + FastAPI JWT).
+#
+# Enable at cutover (after secubox-dpi-engine's nDPIsrvd+nDPId are up):
+#   systemctl enable --now sbxdpi.service
+#
+# Runs as secubox-toolbox (same user as the other toolbox daemons) so it can
+# create its socket in the shared /run/secubox without a cross-user dance.
+
+[Unit]
+Description=SecuBox sbxdpi — emancipated DPI aggregator (nDPId → go-level filter → /api/v1/dpi)
+Documentation=https://github.com/CyberMind-FR/secubox-deb
+After=network.target nDPIsrvd.service
+Wants=nDPIsrvd.service
+
+[Service]
+Type=simple
+User=secubox-toolbox
+Group=secubox-toolbox
+
+# DPI_* config conffile; leading "-": absent file → built-in defaults apply.
+EnvironmentFile=-/etc/secubox/dpi.env
+
+ExecStart=/usr/sbin/sbxdpi
+Restart=on-failure
+RestartSec=5
+
+# Own /run/secubox WITHOUT wiping it on restart — NEVER declare
+# RuntimeDirectory=secubox here: /run/secubox is shared by ~95 units and
+# systemd wipes a RuntimeDirectory's contents on restart, taking every
+# sibling's socket with it (project memory: cascading 502s). The parent stays
+# root:root 1777, created outside any unit.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadOnlyPaths=/etc/secubox
+# The aggregator socket lives in /run/secubox; the stats snapshot cache lives
+# under /var/cache/secubox/dpi (pre-created 0750 secubox-toolbox by tmpfiles).
+ReadWritePaths=/run/secubox
+# Le snapshot va sur le SSD /data (jamais l'eMMC racine).
+ReadWritePaths=/data/secubox/sbxdpi
+MemoryHigh=96M
+MemoryMax=128M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

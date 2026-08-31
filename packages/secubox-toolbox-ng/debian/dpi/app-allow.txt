@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-CMSD-1.0
+# SecuBox-Deb :: sbxdpi — ALLOW pins (dpkg conffile, hot-reloaded)
+#
+# One entry per line. A pin OVERRIDES the deny list: a flow whose app, master
+# protocol, or hostname matches here is always kept in the stats even if a
+# deny-list rule would otherwise drop it. Ships empty (comments only).
+# Case-insensitive.

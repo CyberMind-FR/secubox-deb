@@ -10,11 +10,18 @@ Rules-Requires-Root: no
 Package: secubox-toolbox-ng
 Architecture: arm64
 Depends: ${misc:Depends}
-Description: SecuBox-Deb — outils Go du parc (sbxmitm, sbx-sentinel, sbx-authwatch)
- LE MODULE GO DU PARC vit ici (go.mod, vendor/), et il porte QUATRE commandes :
- sbxmitm, sbx-sentinel, sbx-authwatch — livrees par ce paquet — et sbxwaf, qui
- ne l'est PAS : c'est secubox-waf-ng qui compile et livre le moteur du
- pare-feu depuis cette meme source.
+Description: SecuBox-Deb — outils Go du parc (sbxmitm, sbx-sentinel, sbx-authwatch, sbxdpi)
+ LE MODULE GO DU PARC vit ici (go.mod, vendor/), et il porte CINQ commandes :
+ sbxmitm, sbx-sentinel, sbx-authwatch, sbxdpi — livrees par ce paquet — et
+ sbxwaf, qui ne l'est PAS : c'est secubox-waf-ng qui compile et livre le moteur
+ du pare-feu depuis cette meme source.
+ .
+ sbxdpi est la couche Go qui emancipe nDPId : il consomme le flux JSON du
+ distributeur nDPIsrvd (moteur C libre, nDPI 5.x), applique le filtrage
+ declaratif du parc (exemption premiere partie, listes deny/allow, mise en
+ sourdine des risques — memes conffiles *.txt que sbx-sentinel), agrege les
+ stats DPI et les sert en lecture seule sur /run/secubox/aggregator.sock
+ (/api/v1/dpi/) pour la cardlet DPI du Hall, derriere nginx + JWT FastAPI.
  .
  Multi-core Go re-implementation of the R3 toolbox MITM engine (#662),
  ported off the GIL-bound Python mitmproxy worker fleet. Ships the

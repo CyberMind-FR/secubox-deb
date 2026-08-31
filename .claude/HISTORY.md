@@ -1,3 +1,64 @@
+## 2026-08-31 — DPI vivant (sbxdpi), sweep « spicy », Lyrion, Agenda NC, notifs profil
+
+Grosse session Hall/parc. Tout déployé live sur gk2 (root@192.168.1.200).
+
+### DPI VIVANT — nDPId émancipé en Go (fin du mode démo)
+- **nDPI 5.x** compilé des sources amont (`utoni/nDPId`, `BUILD_NDPI=ON` — le
+  libndpi 4.2 du système était trop vieux). Paquet **`secubox-dpi-engine`**
+  (nDPId + nDPIsrvd, construit natif arm64 sur la box) : capture eth2 → nDPIsrvd.
+  Piège : nDPId/nDPIsrvd tombent par défaut sur l'utilisateur `nobody` → `-u/-g`.
+- **`sbxdpi`** : nouveau daemon Go dans `secubox-toolbox-ng` (0.3.x, `cmd/sbxdpi/`,
+  5 fichiers calqués sur sbx-sentinel). Dial du distributeur nDPIsrvd (cadrage
+  préfixe 5 chiffres = **longueur du corps**), filtrage go-level déclaratif
+  (`/etc/secubox/dpi/*.txt`, exemption 1ʳᵉ partie via haproxy-routes.json),
+  agrégation plafonnée, snapshot atomique **sur le SSD /data** (jamais l'eMMC),
+  API RO `/api/v1/dpi/*` sur `dpi-live.sock`. Relais nginx Hall → carte DPI
+  **vivante** (protocoles/apps/talkers/risques réels, débit dérivé). ⚠️
+  `aggregator.sock` = passerelle API maîtresse, PAS un socket DPI.
+- **Piège disque** : le build nDPId laisse `/opt/nDPId` ≈ 1,1 Go sur l'eMMC (15 Go)
+  → racine 100 % → SQLite des modules (metanews…) en « disk I/O error », cascade.
+  Nettoyé (2,2 Go libérés), 4 services relancés. Voir memory `dpi-live-sbxdpi`.
+
+### SWEEP « SPICY » + SLICERS
+- **Radio** (0.1.62) : skin spicy (filets dégradés, halos, badge direct, pilules
+  de slice « expanded », pop-in accentué).
+- **PeerTube** (webos) : barre à bullets 5 vues — Récentes / Populaires /
+  Catégories / **Chaînes** / Playlists — + pop-in au survol ; relais `/pt/`
+  étendu à `video-playlists`.
+- **MetaNews** (0.1.32) : slicer « double bullet » par section (🌍 Une + top
+  catégories de l'API `/categories`, filtre `?category=`).
+
+### NEXTCLOUD — onglet AGENDA (CalDAV)
+- `nc_super.agenda()` : PROPFIND des calendriers + REPORT calendar-query 30 j,
+  parsing iCalendar sans dépendance ; route `…/nextcloud/agenda`. Onglet
+  📅 Agenda dans la super-cardlet (lecture seule, prochains évènements).
+
+### LYRION — carte client + agent
+- Carte **Lyrion** (client Squeezebox/LMS) : now-playing, sélecteur de lecteur,
+  transport/volume/power via `secubox-lyrion` relayé `/api/v1/lyrion/`.
+- **Cast** (agent) : `POST /player/{id}/play-url` (LMS `playlist play`) — le Hall
+  diffuse SON audio (bouton 📡) vers la Squeezebox physique.
+- **Lecteur web** (« SBX-Web ») : squeezelite headless `-o null` = **vrai client
+  LMS** (MAC fixe) ; le navigateur écoute le flux LMS natif
+  `/stream.mp3?player=MAC` (abandon d'un premier essai ALSA loopback + ffmpeg +
+  icecast, trop fragile). Unité `sbx-lyrion-webplayer`. ⚠️ Dernier maillon
+  (cast→flux navigateur pour le player à MAC fixe) à finir — l'archi est prouvée.
+
+### NOTIFICATIONS / BUS MÉDIA
+- **Viewer sur le bus média** : la pastille du viewer ne s'évanouit plus au clic
+  (flux LOCAL `dockLocal`, `window.viewerCmd`) — reste en place tant qu'il joue.
+- **Notif du parc** : la bulle reste fixe tant que le curseur est dessus (15 s,
+  suspendu au survol).
+- **Diffusions dans le menu profil** : broadcasts gardés PAR PROFIL, listés au
+  survol (`who-diff`), + **badge** de non-vues sur l'avatar.
+- **Carte sans vhost = pseudo /mega** : DPI · Trafic et Surf & Viewer
+  s'agrandissent en leur propre cardlet (drapeau `noVhost` dans `svcDesc`) au
+  lieu d'un `https://undefined/` bloqué par la CSP.
+
+### Idées notées (memory) : cardlet SqueezeRadio/Lyrion émulateur, accès Zigbee.
+
+---
+
 ## 2026-08-31 — Hall : bienvenue, libellés média, « double bullet » (webos)
 
 - **Bienvenue (premier abord)** : carte d'accueil au premier chargement du visiteur (`www/hall/index.html`) — thèse du Hall, **4 gestes** (ranger/épingler/voir/surfer), section **Explorer** (menu Services, survol/dynamisme, puces des cartes, aide ❓), encart **BiB** souverain. Vue une fois via drapeau `localStorage` par profil (`cleProfil('accueil-vu')`) ; ré-ouvrable par « 👋 Revoir l'accueil » du menu profil ; route vers l'Aide. Aucune animation d'entrée (elle se relançait en boucle et laissait l'overlay à opacity 0 — bug attrapé au rendu). Vérifié clair/nuit (Chromium).

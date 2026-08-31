@@ -6,7 +6,32 @@
 -->
 
 # WIP — Work In Progress
-*Mis à jour : 2026-08-30*
+*Mis à jour : 2026-08-31*
+
+---
+
+## 2026-08-31 — DPI vivant, sweep spicy, Lyrion, Agenda NC (déployé gk2)
+
+### ✅ Fait — déployé live
+- **DPI vivant** : `secubox-dpi-engine` (nDPId+nDPIsrvd, nDPI 5.x) + **`sbxdpi`**
+  (daemon Go dans secubox-toolbox-ng) → carte DPI réelle (fin du démo). Snapshot
+  **sur SSD /data** (pas l'eMMC). Voir memory `dpi-live-sbxdpi`, README `cmd/sbxdpi/`.
+- **Spicy + slicers** : Radio (0.1.62), PeerTube (5 vues + Chaînes/Playlists),
+  MetaNews (0.1.32, slicer par section via `/categories`).
+- **Nextcloud** : onglet 📅 Agenda (CalDAV : PROPFIND+REPORT, parsing iCal maison).
+- **Lyrion** : carte client (télécommande) + **cast** `📡 play-url` (Hall→Squeezebox).
+- **Bus média** : pastille du viewer qui reste (dockLocal/viewerCmd) ; diffusions
+  persistées dans le menu profil (survol) + badge de non-vues sur l'avatar ;
+  carte sans vhost → pseudo /mega (drapeau `noVhost`).
+
+### ⬜ Next Up — à finir
+- **Lyrion lecteur web** : squeezelite `-o null` = vrai client LMS (OK, unité
+  `sbx-lyrion-webplayer`) ; **finir le dernier maillon** cast→flux navigateur
+  (`/stream.mp3?player=MAC` pour le player à MAC fixe — l'archi est prouvée avec
+  le MAC auto).
+- **secubox-dpi-engine** : le formaliser en paquet source cross-build (aujourd'hui
+  construit natif sur la box) ; nettoyer `/opt/nDPId` après build.
+- Idées notées (memory) : cardlet SqueezeRadio/Lyrion émulateur, accès Zigbee.
 
 ---
 

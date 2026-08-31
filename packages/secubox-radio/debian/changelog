@@ -1,3 +1,14 @@
+secubox-radio (0.1.62-1~bookworm1) bookworm; urgency=medium
+
+  * SKIN SPICY POUR LA RADIO. Filet dégradé sous chaque en-tête, halo sur le
+    titre et la jauge, badge « en direct » en dégradé, gros bouton lecture
+    halo-dégradé, piste en cours liserée. La barre à bullets micro passe en
+    version « expanded » : plus haute, bord haut dégradé, pastille active en
+    pilule dégradée avec halo (auto=violet, manuel=menthe), libellé en dégradé.
+    Pop-in helper accentué (liseré dégradé + halo violet). 100% thème-aware.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 10:19:40 +0200
+
 secubox-radio (0.1.61-1~bookworm1) bookworm; urgency=medium
 
   * Micro : plus de place sous les bullets (padding) + IN-POP HELP au survol des

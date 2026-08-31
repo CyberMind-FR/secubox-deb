@@ -20,6 +20,7 @@ Depends: ${misc:Depends},
          python3-toml,
          python3-yaml,
          openssl,
+         squeezelite,
          curl,
          jq
 Recommends: secubox-mitmproxy

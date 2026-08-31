@@ -593,6 +593,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    demanderait de lire, et ce menu se parcourt. */
 .who-ident .cle{flex:0 0 auto;font-size:.7rem}
 .who-ident .froid{opacity:.5}
+/* DIFFUSIONS (#diffusions-profil) : la liste est REPLIÉE, et se déroule
+   seulement QUAND LA SOURIS EST DESSUS (survol de la section). */
+#diff-n{font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;color:var(--sky)}
+.who-diff{max-height:0;overflow:hidden;transition:max-height .22s ease;padding:0 2px}
+#who-diffusions:hover .who-diff,#who-diffusions:focus-within .who-diff{max-height:230px;overflow-y:auto}
+.who-diff button{display:flex;align-items:baseline;gap:6px;width:100%;text-align:left;
+  padding:5px 8px;border:0;border-radius:7px;background:none;color:var(--ink);font-size:.76rem;cursor:pointer}
+.who-diff button:hover{background:var(--soft)}
+.who-diff .ic{flex:0 0 auto;font-size:.72rem}
+.who-diff .h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.who-diff .n{flex:0 0 auto;font-size:.6rem;color:var(--dim);font-family:"JetBrains Mono";font-variant-numeric:tabular-nums}
 .who-ident .cpt{color:var(--dim);font-size:.66rem}
 .who-lien{display:block;margin:6px 4px 2px;padding:6px 8px;border-radius:7px;
   font-size:.76rem;color:var(--sky);text-decoration:none}
@@ -604,6 +615,17 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   border-radius:9px;background:var(--violet);color:#fff;font-size:.62rem;
   line-height:17px;text-align:center;font-weight:700;padding:0 4px;
   box-shadow:0 0 0 2px var(--panel)}
+/* NOTIFICATION DIFFUSIONS (#notif-profil) : le compte des diffusions non vues,
+   posé sur l'avatar (coin BAS-droit, pour ne pas heurter la pastille d'attente
+   en haut). Corail + halo qui bat : le parc a diffusé, le menu profil les liste. */
+.who-notif{position:absolute;bottom:-3px;right:-3px;min-width:16px;height:16px;
+  border-radius:8px;background:var(--coral,#ff7a63);color:#fff;font-size:.6rem;
+  line-height:16px;text-align:center;font-weight:800;padding:0 4px;z-index:5;
+  box-shadow:0 0 0 2px var(--panel),0 0 8px -1px var(--coral,#ff7a63);
+  animation:notifbat 2.2s ease-in-out infinite}
+@keyframes notifbat{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+@media(prefers-reduced-motion:reduce){.who-notif{animation:none}}
+.who-notif.hidden{display:none}
 .cl-grip{position:absolute;top:6px;right:6px;z-index:4;cursor:grab;
   font-size:.72rem;line-height:1;color:var(--dim);opacity:0;transition:opacity .15s;
   padding:3px 5px;border-radius:5px;background:var(--panel);border:1px solid var(--line);
@@ -1053,7 +1075,7 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
       <div class="flux-pastilles" id="pastilles-direct"></div>
       <button class="ibtn" id="theme" title="Papier / nuit" aria-label="Basculer le thème">◐</button>
       <div class="who" id="who" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false"
-           title="Profil et réglages"><span class="av">🧙</span><span><b id="who-nom">Invité</b><i id="who-ligne">○ Non connecté</i></span>
+           title="Profil et réglages"><span class="av">🧙</span><span class="who-notif hidden" id="who-notif" aria-label="Diffusions non vues"></span><span><b id="who-nom">Invité</b><i id="who-ligne">○ Non connecté</i></span>
         <div class="who-menu hidden" id="who-menu" role="menu">
           <!-- SE CONNECTER, SANS DEMANDER LE MOT DE PASSE (#1296). Le Hall
                n'a pas de formulaire : il OUVRE la vraie page de connexion,
@@ -1089,6 +1111,14 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
             <div class="who-ident" id="who-ident">
               <p class="who-note">lecture du registre…</p>
             </div>
+          </div>
+          <!-- DIFFUSIONS & PARTAGES (#diffusions-profil) : les broadcasts reçus
+               du parc, gardés PAR PROFIL, révélés au survol. Un lien sbx partagé
+               ou une diffusion s'y empile ; un clic la rouvre. -->
+          <div id="who-diffusions">
+            <div class="who-sep"></div>
+            <p class="who-titre">📡 Diffusions <span id="diff-n"></span></p>
+            <div class="who-diff" id="who-diff"><p class="who-note">Survolez pour dérouler les diffusions reçues.</p></div>
           </div>
         </div>
       </div>
@@ -1235,7 +1265,8 @@ const FEATURED = [
   {id:"forums",     label:"Forums",     icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", carte:"/cardlets/cumul.html?groupe=forums", h:264},
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro", h:330},
-  {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:236},
+  {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:300},
+  {id:"lyrion",     label:"Lyrion",    icon:"🎚️", color:"#128a6f", url:"lyrion.gk2.secubox.in", carte:"/cardlets/lyrion.html", h:230},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
   // SUPER CARDLET (#1245) : la carte PERSONNELLE du Cloud — fichiers (WebDAV),
   // quota, activité, partages ET actions (partager/supprimer/envoyer), au nom de
@@ -1589,11 +1620,26 @@ let _svc=null, _mode='embed', _sub=null, _frames={};
 
 function svcDesc(id){
   const f=FEATURED.find(x=>x.id===id)||null; const s=_reg[id]||{};
+  // CARDLET SANS VHOST (DPI, Surf & Viewer) : entrée FEATURED avec `carte` mais
+  // SANS `url`. `host(s)` retombait alors sur « dpi.gk2.secubox.in » — un hôte
+  // inexistant que la CSP frame-src BLOQUE → cadre vide. On le marque pour que
+  // modeURL/plainURL agrandissent la cardlet elle-même au lieu d'un vhost fantôme.
+  const noVhost = !!(f && f.carte && !f.url);
   return {id:id, label:(f&&f.label)||s.name||id, icon:(f&&f.icon)||icon(s.icon),
-          url:(f&&f.url)||host(s), path:s.path||('/'+id+'/')};
+          url:(f&&f.url)||host(s), path:s.path||('/'+id+'/'),
+          carte:(f&&f.carte)||null, noVhost:noVhost};
 }
 function modeURL(mode){
   if(!_svc) return 'about:blank';
+  const thAll=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  // CARDLET SANS VHOST = PSEUDO /mega (DPI, Surf & Viewer) : ni service distant,
+  // ni WebUI admin. `https://undefined/…` (embarqué) et `admin…/dpi/` (⚙️)
+  // ouvraient une page vide. QUEL QUE SOIT le mode, on agrandit la cardlet
+  // elle-même, servie de même origine par le Hall — sa version « mega ».
+  if(_svc.noVhost && _svc.carte){
+    var sepC = _svc.carte.indexOf('?')>=0 ? '&' : '?';
+    return _svc.carte + sepC + 'embed=1&mega=1&theme=' + thAll;
+  }
   const thAdmin=root.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
   // La console admin recevait l'URL SANS theme : embarquee dans un Hall
   // sombre, elle s'ouvrait en clair. Le separateur depend du chemin, qui
@@ -1609,6 +1655,8 @@ function modeURL(mode){
 function plainURL(){
   if(!_svc) return '/';
   if(_mode==='admin') return 'https://'+ADMIN_HOST+_svc.path;
+  // Cardlet sans vhost : l'onglet réel ouvre la cardlet elle-même (même origine).
+  if(_svc.noVhost && _svc.carte) return location.origin+_svc.carte;
   return 'https://'+_svc.url+(_sub||'/');
 }
 function frameFor(mode){
@@ -1673,7 +1721,7 @@ function openService(id, mode, sub, subLabel){
   }catch(e){}
   document.getElementById('eb-ic').textContent=d.icon;
   document.getElementById('eb-name').textContent=d.label+(subLabel?' · '+subLabel:'');
-  document.getElementById('eb-host').textContent=d.url;
+  document.getElementById('eb-host').textContent=d.noVhost?(location.host+' · carte vivante'):d.url;
   document.getElementById('eb-led').className='led '+st;
   document.getElementById('eb-reload').onclick=()=>{ const f=_frames[_mode]; if(f) f.src=modeURL(_mode); };
   var l=document.getElementById('sb-loc'); if(l) l.textContent=d.label+(subLabel?' · '+subLabel:'');
@@ -2190,7 +2238,11 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
   }
 
   function commande(id, action, v){
-    const f=flux.get(id); const c=(f&&f.cadre)||cadreDe(id);
+    const f=flux.get(id);
+    // FLUX LOCAL (le viewer sur le bus, cadre:null) : il n'a pas de cadre à qui
+    // poster — ses contrôles vont au viewer directement (#viewer-bus).
+    if(f&&f.local){ if(typeof window.viewerCmd==='function') window.viewerCmd(action, v); return; }
+    const c=(f&&f.cadre)||cadreDe(id);
     if(!c) return;
     try{ c.contentWindow.postMessage({sbx:'cmd', action, v}, new URL(c.src).origin); }catch(e){}
   }
@@ -2207,6 +2259,28 @@ fetch('/api/v1/webos/public/services',{headers:{'Accept':'application/json'}})
     flux.delete(id); dessine();
     const c=cadreDe(id);
     if(c){ try{ c.contentWindow.postMessage({sbx:'cmd',action:'toggle'}, new URL(c.src).origin); }catch(e){} }
+  };
+
+  // ── LE VIEWER SUR LE BUS MÉDIA (#viewer-bus) ─────────────────────────────
+  // Le viewer du Hall n'est pas un /micro et ne s'annonce pas par postMessage.
+  // Mais quand il « attrape » une vidéo, la carte source est ARRÊTÉE (le flux
+  // est déplacé, pas doublé) — et sa pastille partait avec elle : le média
+  // semblait s'évanouir au clic. Le viewer s'inscrit donc ici comme un flux
+  // LOCAL (cadre:null) : une pastille + une rangée qui RESTENT en place, à
+  // l'endroit du show et des barres média, tant qu'il joue. `commande` route
+  // ses boutons vers window.viewerCmd, et le balayage des flux morts épargne
+  // les flux locaux — le viewer les retire lui-même en se fermant.
+  window.dockLocal={
+    annonce:function(etat){
+      const id=(etat&&etat.id)||'viewer';
+      flux.set(id,{maj:Date.now(), cadre:null, local:true, etat:etat||{}});
+      dessine();
+    },
+    maj:function(id, patch){
+      const f=flux.get(id||'viewer'); if(!f||!f.local) return;
+      Object.assign(f.etat, patch||{}); f.maj=Date.now(); dessine();
+    },
+    ferme:function(id){ if(flux.delete(id||'viewer')) dessine(); }
   };
 
   // ZOOM D'UN FLUX VERS LE VIEWER (#1266). Le geste « agrandir » ne se contente
@@ -2622,6 +2696,10 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     e=document.getElementById('viewer-tm'); if(e)e.textContent=tm;
     e=document.getElementById('viewer-cache'); if(e)e.textContent=ca;
     e=document.getElementById('viewer-prog'); if(e)e.style.width=(prog||0)+'%';
+    // La rangée/pastille du viewer sur le bus suit la même vérité que la barre.
+    if(window.dockLocal&&window.dockLocal.maj) window.dockLocal.maj('viewer',{
+      titre:(titreEl&&titreEl.textContent)||undefined, sous:tm
+    });
   }
   function ouvre(url, titre, depart){
     if(!dom()) return;
@@ -2677,6 +2755,12 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     // PERSISTANCE (#1266b) : on retient CE qui joue, et on rafraîchit la position
     // toutes les 5 s, pour rouvrir le viewer là où on en était après un refresh.
     if(ivVue) clearInterval(ivVue); ivVue=setInterval(sauveVue,5000); sauveVue();
+    // LE VIEWER PREND SA PLACE SUR LE BUS (#viewer-bus) : une pastille + une
+    // rangée qui restent tant qu'il joue, là où la carte source s'est effacée.
+    if(window.dockLocal) window.dockLocal.annonce({
+      id:'viewer', titre:(titre||url||'').slice(0,90), sous:'viewer souverain',
+      joue:true, type:'video'
+    });
   }
   // ── VIEWER PERSISTANT AU REFRESH (#1266b) ────────────────────────────────
   // Le viewer actif survit au rechargement : on sauve l'URL, le titre, la
@@ -2707,6 +2791,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function ferme(){ if(!ov) return; ov.classList.add('hidden'); media.innerHTML=''; courant=null; vid=null;
     if(ivVue){ clearInterval(ivVue); ivVue=null; } oublieVue();
     if(ivSas){ clearInterval(ivSas); ivSas=null; }
+    // Le viewer quitte le bus média : sa pastille/rangée partent AVEC lui (et
+    // seulement avec lui — un flux local ne se fait pas balayer tout seul).
+    if(window.dockLocal) window.dockLocal.ferme('viewer');
     // RENDRE LA MAIN À LA CARTE SOURCE (#1266). Le lecteur du viewer (data-embarque)
     // vient d'être retiré ; sa carte d'origine était en pause (anti-doublon). On
     // la relance pour qu'on reste à l'écoute là où on en était — la reprise
@@ -2724,6 +2811,9 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
   function ouvreLecteur(id, src, titre){
     if(!dom()) return;
     courant=null; vid=null; if(ivSas){ clearInterval(ivSas); ivSas=null; }
+    // Un lecteur de service (radio…) porte SA propre pastille : on retire le
+    // flux « viewer » local s'il traînait, sinon deux pastilles pour un son.
+    if(window.dockLocal) window.dockLocal.ferme('viewer');
     media.innerHTML=''; titreEl.textContent=titre||id;
     E('viewer-fav').classList.remove('on');
     var cb=E('viewer-cast'); if(cb){ cb.classList.remove('on'); cb.title='Diffuser au parc (📡 direct)'; }
@@ -2742,6 +2832,28 @@ addEventListener('keydown', e=>{ if(e.key==='Escape') fermeSurf(); });
     if(mast) document.documentElement.style.setProperty('--mast-h', Math.round(mast.getBoundingClientRect().height)+'px');
   }
   window.ouvreViewer=ouvre; window.fermeViewer=ferme; window.ouvreLecteurViewer=ouvreLecteur;
+  // CONTRÔLES DU VIEWER DEPUIS LE BUS (#viewer-bus). Les boutons de la rangée et
+  // le clic de la pastille du flux « viewer » arrivent ici via commande(). Sur
+  // un <video> souverain on agit vraiment (lecture/pause/son/volume) ; un embed
+  // iframe (PeerTube/YouTube) n'expose pas d'élément — seul « fermer » agit, ce
+  // qui suffit à ne PLUS faire disparaître la pastille au moindre clic.
+  window.viewerCmd=function(action, v){
+    var vd = media && media.querySelector('video');
+    if(action==='stop'){ ferme(); return; }
+    if(action==='toggle'){
+      if(vd){ if(vd.paused) vd.play(); else vd.pause();
+        if(window.dockLocal&&window.dockLocal.maj) window.dockLocal.maj('viewer',{joue:!vd.paused}); }
+      return;
+    }
+    if(action==='muet'){ if(vd) vd.muted = (v!==undefined? !!v : !vd.muted); return; }
+    if(action==='vol'){ if(vd){ var n=Number(v); if(!isNaN(n)) vd.volume=Math.max(0,Math.min(1,n)); } return; }
+    if(action==='zoom'){
+      if(ov){ var m=ov.classList.toggle('mini'); var mb=E('viewer-mini');
+        if(mb){ mb.textContent=m?'▢':'▁'; mb.title=m?'Plein cadre':'Réduire'; } }
+      return;
+    }
+    // prev / next / plier : sans objet pour le viewer.
+  };
   // LES ECOUTEURS DE BOUTONS sont cables PARESSEUSEMENT (dom()), car les boutons
   // vivent apres la fin du script. Sinon getElementById(...).addEventListener
   // jetait au chargement et cassait l'IIFE.
@@ -3196,7 +3308,9 @@ addEventListener('message', ev=>{
   // partir. Une rangée figée ferait croire à un flux vivant.
   setInterval(()=>{
     const n=Date.now(); let bouge=false;
-    flux.forEach((v,id)=>{ if(n-v.maj>10000){ flux.delete(id); bouge=true; } });
+    // Les flux LOCAUX (le viewer) ne s'annoncent pas — ils ne vieillissent
+    // donc jamais ; c'est le viewer qui les retire en se fermant.
+    flux.forEach((v,id)=>{ if(v.local) return; if(n-v.maj>10000){ flux.delete(id); bouge=true; } });
     if(bouge) dessine();
   }, 5000);
 })();
@@ -4132,20 +4246,81 @@ const CARDLET_ICONES = {
     var bulle=document.getElementById('notif-bulle'); if(!bulle) return;
     var CLEF=(typeof cleProfil==='function') ? cleProfil('notif-bc-ts') : 'sbx.hall.notif-bc-ts';
     var last=0; try{ last=parseFloat(localStorage.getItem(CLEF)||'0')||0; }catch(e){}
-    var t=null, premier=true;
+    var t=null, premier=true, survol=false;
+    // FIXE TANT QU'ON EST DESSUS (#1360b). La bulle ne DOIT PAS s'évanouir sous
+    // le curseur : tant que le pointeur est au-dessus (ou dedans), le compte à
+    // rebours est suspendu — elle reste en place. Il ne repart qu'en quittant.
+    function armeFuite(){ clearTimeout(t); if(survol) return;
+      t=setTimeout(function(){ bulle.classList.remove('on'); }, 15000); }
     function montre(b){
       document.getElementById('notif-t').textContent=b.titre||b.url||'';
-      bulle.classList.add('on'); clearTimeout(t); t=setTimeout(function(){ bulle.classList.remove('on'); }, 9000);
+      bulle.classList.add('on'); armeFuite();
     }
-    document.getElementById('notif-x').addEventListener('click', function(e){ e.stopPropagation(); bulle.classList.remove('on'); });
-    bulle.addEventListener('click', function(){ bulle.classList.remove('on');
+    bulle.addEventListener('mouseenter', function(){ survol=true; clearTimeout(t); });
+    bulle.addEventListener('mouseleave', function(){ survol=false; armeFuite(); });
+    document.getElementById('notif-x').addEventListener('click', function(e){ e.stopPropagation(); clearTimeout(t); bulle.classList.remove('on'); });
+    bulle.addEventListener('click', function(){ clearTimeout(t); bulle.classList.remove('on');
       var p=document.querySelector('#pastilles-direct .fpast'); if(p){ try{ p.click(); }catch(e){} } });
+    // ── DIFFUSIONS PERSISTÉES DANS LE MENU PROFIL (#diffusions-profil) ─────────
+    // Chaque broadcast reçu est GARDÉ par profil et listé dans le vrai menu
+    // profil (déroulé au survol). Un clic le rouvre : média → viewer, sinon surf.
+    var CLEF_DIFF=(typeof cleProfil==='function')?cleProfil('diffusions'):'sbx.hall.diffusions';
+    function litDiff(){ try{ return JSON.parse(localStorage.getItem(CLEF_DIFF)||'[]')||[]; }catch(e){ return []; } }
+    function ecritDiff(l){ try{ localStorage.setItem(CLEF_DIFF, JSON.stringify(l.slice(0,30))); }catch(e){} }
+    function pousseDiff(b){
+      if(!b || !b.url) return;
+      var l=litDiff().filter(function(x){ return x.url!==b.url; });   // dédoublonne par url
+      l.unshift({url:b.url, titre:b.titre||b.url, par:b.par||'', ts:b.ts||(Date.now()/1000)});
+      ecritDiff(l); rendDiff(); majBadge();
+    }
+    function delaiDiff(ts){ var s=Math.max(0,(Date.now()/1000)-(ts||0));
+      if(s<3600) return Math.round(s/60)+' min'; if(s<86400) return Math.round(s/3600)+' h'; return Math.round(s/86400)+' j'; }
+    function rendDiff(){
+      var z=document.getElementById('who-diff'), n=document.getElementById('diff-n'); if(!z) return;
+      var l=litDiff();
+      if(n) n.textContent=l.length?('('+l.length+')'):'';
+      if(!l.length){ z.innerHTML='<p class="who-note">Aucune diffusion reçue pour l’instant.</p>'; return; }
+      z.innerHTML=l.map(function(x){
+        var media=(typeof estMediaUrl==='function' && estMediaUrl(x.url));
+        return '<button type="button" data-url="'+esc(x.url)+'" title="'+esc(x.titre)+(x.par?(' — '+esc(x.par)):'')+'">'
+          +'<span class="ic">'+(media?'🎬':'🔗')+'</span>'
+          +'<span class="h">'+esc(x.titre)+'</span>'
+          +'<span class="n">'+esc(delaiDiff(x.ts))+'</span></button>';
+      }).join('');
+      Array.prototype.forEach.call(z.querySelectorAll('button[data-url]'), function(b){
+        b.addEventListener('click', function(){ var u=b.getAttribute('data-url');
+          if(typeof estMediaUrl==='function' && estMediaUrl(u) && typeof ouvreViewer==='function') ouvreViewer(u);
+          else if(typeof ouvreSurf==='function') ouvreSurf(u); });
+      });
+    }
+    // ── BADGE « diffusions non vues » SUR L'AVATAR (#notif-profil) ────────────
+    // Le compte des diffusions plus récentes que la dernière ouverture du menu
+    // profil se pose sur l'avatar (corail, pulse). Ouvrir le menu = « vu » : le
+    // badge s'efface, la liste reste.
+    var CLEF_VU=(typeof cleProfil==='function')?cleProfil('diff-vu'):'sbx.hall.diff-vu';
+    function litVu(){ try{ return parseFloat(localStorage.getItem(CLEF_VU)||'0')||0; }catch(e){ return 0; } }
+    function ecritVu(ts){ try{ localStorage.setItem(CLEF_VU, String(ts)); }catch(e){} }
+    function majBadge(){
+      var b=document.getElementById('who-notif'); if(!b) return;
+      var vu=litVu(), n=litDiff().filter(function(x){ return (x.ts||0) > vu + 0.5; }).length;
+      if(n>0){ b.textContent=(n>9?'9+':String(n)); b.classList.remove('hidden'); }
+      else b.classList.add('hidden');
+    }
+    function marqueVu(){ var l=litDiff(); if(l.length) ecritVu(l[0].ts||(Date.now()/1000)); majBadge(); }
+    majBadge();
+    rendDiff();
+    // À l'ouverture du menu profil : on repeuple (le « il y a N min » bouge) ET
+    // on marque les diffusions comme vues — le badge s'éteint.
+    var whoBloc=document.getElementById('who');
+    if(whoBloc) whoBloc.addEventListener('click', function(){ setTimeout(function(){ rendDiff(); marqueVu(); }, 0); });
+
     function verifie(){
       fetch('/api/v1/webos/public/broadcast',{headers:{'Accept':'application/json'}})
         .then(function(r){ return r.ok?r.json():null; }).then(function(b){
           if(!b || !b.actif || !b.ts) return;
           if(b.ts > last + 0.5){
             last=b.ts; try{ localStorage.setItem(CLEF, String(last)); }catch(e){}
+            pousseDiff(b);            // persiste TOUJOURS — l'historique se construit
             // au tout premier passage on mémorise sans notifier (évite la bulle
             // pour un flux déjà en cours quand on arrive) ; ensuite, on notifie.
             if(!premier) montre(b);

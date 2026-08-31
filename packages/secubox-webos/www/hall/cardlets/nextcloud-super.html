@@ -114,6 +114,7 @@
   </div>
   <div class="onglets" id="onglets" style="display:none">
     <button data-t="fichiers" class="on">📁 Fichiers</button>
+    <button data-t="agenda">📅 Agenda</button>
     <button data-t="activite">🕓 Activité</button>
     <button data-t="partages">🔗 Partages <span class="cpt" id="cpt-p"></span></button>
   </div>
@@ -269,6 +270,27 @@
       var u = r.getAttribute('data-url'); if (u) r.querySelector('.t').addEventListener('click', function () { ouvre(u); }); });
   }
 
+  // ── ONGLET AGENDA (CalDAV, lecture seule) ──────────────────────────────────
+  function rendAgenda(evs) {
+    if (!evs.length) { el('corps').innerHTML = '<div class="vide">Rien de prévu (30 jours).</div>'; return; }
+    el('corps').innerHTML = evs.map(function (x) {
+      var quand = x.quand || '—';
+      var sous = x.jour ? (quand + ' · journée') : quand;
+      return '<div class="rangee" title="' + esc(x.titre) + (x.lieu ? (' — ' + esc(x.lieu)) : '') + '">'
+        + '<span class="g">' + (x.jour ? '📆' : '📅') + '</span>'
+        + '<span class="t">' + esc(x.titre) + (x.lieu ? ' <span style="color:var(--muted)">· ' + esc(x.lieu) + '</span>' : '') + '</span>'
+        + '<span class="s">' + esc(sous) + '</span></div>';
+    }).join('');
+  }
+  function chargeAgenda() {
+    api('/acces/' + ID + '/agenda').then(function (r) {
+      if (r.code === 401 || r.code === 403) { sansAcces(null, r.code); return; }
+      var d = r.corps || {};
+      if (!d.ok) { el('corps').innerHTML = '<div class="vide">' + esc(d.detail || 'agenda indisponible') + '</div>'; return; }
+      rendAgenda(d.events || []);
+    });
+  }
+
   // ── ONGLET PARTAGES ────────────────────────────────────────────────────────
   function chargePartages() {
     api('/acces/' + ID + '/partages').then(function (r) {
@@ -332,6 +354,7 @@
     el('up').style.display = (t === 'fichiers') ? '' : 'none';
     el('corps').innerHTML = '<div class="vide">lecture…</div>';
     if (t === 'fichiers') chargeFichiers();
+    else if (t === 'agenda') chargeAgenda();
     else if (t === 'partages') chargePartages();
     else api('/acces/' + ID + '/tableau').then(function (r) {
       var d = r.corps || {}; rendActivite((d.ok && d.activite) || []); });
