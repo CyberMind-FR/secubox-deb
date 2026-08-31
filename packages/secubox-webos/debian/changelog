@@ -1,3 +1,10 @@
+secubox-webos (1.0.214-1~bookworm1) bookworm; urgency=medium
+
+  * Aides de cartes — MODE INSPECT : quand le ❓ est épinglé, survoler une zone
+    de la carte (poignée, étoile, aperçu, ouvrir, identité, état…) détaille
+    cette zone dans la bulle. Documentation « quick user » par carte.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:11:53 +0200
 secubox-webos (1.0.213-1~bookworm1) bookworm; urgency=medium
 
   * Carte DPI « Trafic vivant » (cardlets/dpi.html, FEATURED dpi) : slicée

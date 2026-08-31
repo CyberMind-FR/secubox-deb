@@ -3894,6 +3894,26 @@ const CARDLET_ICONES = {
       "<b>Clic</b> — ouvre le service en grand, embarqué dans le Hall.",
       "<b>Les puces</b> — chaque ligne est un élément réel, cliquable pour l'ouvrir en place."
     ];
+    // ZONES d'une carte, pour le MODE INSPECT (❓ épinglé → survol du contenu =
+    // la partie détaillée dans la bulle). Ordre = du plus spécifique au général.
+    var PARTS=[
+      ['.cl-grip','Poignée',"Glissez pour ranger la carte ; l'ordre est gardé."],
+      ['.cl-vedette','Étoile',"Épingle la carte en favori — elle remonte en tête de mosaïque."],
+      ['.cl-aide','Aide',"Ce que vous lisez. Cliquez pour épingler, puis survolez les zones."],
+      ['.ap-pied','Pied',"État de l'aperçu et catégorie du service."],
+      ['.ap-ouvre,.open,.foot','Ouvrir',"Embarque le service en grand, dans le Hall."],
+      ['.ap-vue,.fcard-cadre,iframe','Aperçu vivant',"Le service réel, mis à l'échelle — cliquez pour l'ouvrir. Son intérieur vit dans le service."],
+      ['.desc','Résumé',"Ce que fait le service, en une phrase."],
+      ['.state,.led','État',"Santé en direct : en ligne, dégradé, ou hors ligne."],
+      ['.ic','Icône',"La marque du service."],
+      ['.nm,.ap-tete,.hd','Identité',"Nom du service et son hôte (l'adresse réelle)."]
+    ];
+    function partDe(node, card){
+      if(!node||!node.closest) return null;
+      for(var k=0;k<PARTS.length;k++){ var m=node.closest(PARTS[k][0]); if(m && card.contains(m)) return PARTS[k]; }
+      return null;
+    }
+    var lastPart=null;
     function norm(s){ return String(s||'').toLowerCase(); }
     // Groupes principaux (cartes cumul.html = MULTI-cartes).
     var GROUPES={securite:1,contenu:1,cloud:1,social:1,forums:1};
@@ -3961,6 +3981,7 @@ const CARDLET_ICONES = {
       elSpec.textContent=specDe(card);
       var gen=GEN.slice();
       if(estFavori(card)) gen=gen.concat(["<b>★ En tête (favori)</b> — rangée prioritaire ; retirez d'un clic sur l'étoile."]);
+      if(mode==='pin') gen=["<b>🖱️ Inspecter</b> — survolez une zone de la carte pour la détailler."].concat(gen);
       elGen.innerHTML=gen.map(function(g){return '<li>'+g+'</li>';}).join('');
     }
     function nettoie(){
@@ -3973,12 +3994,15 @@ const CARDLET_ICONES = {
     // Affiche la bulle pour une carte, dans un mode donné : 'hover' (aperçu au
     // survol, se referme quand on sort) ou 'pin' (épinglée au clic, reste).
     function affiche(card, m){
-      annuleHide(); mode=m; courante=card; contenu(card);
+      annuleHide(); mode=m; courante=card; lastPart=null; contenu(card);
       elDots.innerHTML='';
-      if(m==='pin'){ elNav.style.display=''; btnX.style.display=''; btnX.textContent='Fermer'; btnNx.style.display='none'; }
+      if(m==='pin'){ elNav.style.display=''; btnX.style.display=''; btnX.textContent='Fermer'; btnNx.style.display='none';
+        card.classList.add('cl-phare'); }   // repère : c'est CETTE carte qu'on inspecte
       else { elNav.style.display='none'; }   // hover = aperçu nu
       bulle.classList.add('on'); place(card);
     }
+    // MODE INSPECT : survoler une zone de la carte épinglée détaille cette zone.
+    function montrePart(part){ elType.innerHTML='<b>Zone · '+part[1]+'</b>'; elType.classList.remove('hide'); elSpec.textContent=part[2]; }
     function planifieHide(){ annuleHide(); hideTmr=setTimeout(function(){ if(mode==='hover') close(); }, 220); }
 
     // ── Auto-guide « par carte » ──
@@ -4030,6 +4054,17 @@ const CARDLET_ICONES = {
       if(mode!=='pin') return;
       if(e.target.closest && (e.target.closest('#carte-bulle') || e.target.closest('.cl-aide'))) return;
       close();
+    });
+    // INSPECT : survol du contenu de la carte épinglée = zone détaillée.
+    // (Un cadre cross-origin n'émet pas de survol au parent — les zones internes
+    // d'un aperçu iframe restent opaques ; le chrome et l'aperçu se détaillent.)
+    document.addEventListener('mousemove', function(e){
+      if(mode!=='pin' || !courante) return;
+      if(!(courante.contains && courante.contains(e.target))){
+        if(lastPart!==null){ lastPart=null; contenu(courante); } return; }
+      var part=partDe(e.target, courante), key=part?part[1]:'__def';
+      if(key===lastPart) return; lastPart=key;
+      if(part) montrePart(part); else contenu(courante);
     });
 
     bulle.addEventListener('mouseenter', annuleHide);
