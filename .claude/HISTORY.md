@@ -4,6 +4,7 @@
 - **surfviewer** : les puces des 3 slices affichent un **émoji de source + un nom lisible** (▶️ YouTube · id, 📹 PeerTube · slug, 🎬 Vimeo, 👽 Reddit, 🐘, 🖼️/🎵/🎞️/📄…) au lieu des URLs brutes ; titre utilisé s'il existe.
 - **« Double bullet »** : barre de slices partagée `www/hall/slicebar.{css,js}` (puces rondes au repos, **pilule allongée** pour la slice active, auto=bleu/manuel=vert, pastille d'hôte cliquable). `cumul` aligné sur ce style. Prochaine passe : radio + podcaster (`/micro`).
 - **Aide dans le menu profil** (mégabarre) : « ❔ Aide du Hall » → vue Aide.
+- **Carte DPI « Trafic vivant »** (`cardlets/dpi.html`, FEATURED `dpi`) : slicée (🌐 Protocoles · 📱 Applications · 🗣️ Talkers · ⚠️ Risques) via la barre à bullets, KPIs (flux/débit/risques), style « spicy » (dégradé, pouls, barres animées). Données best-effort `/api/v1/dpi/*` + jeu de démo étiqueté (collecteur au repos ; endpoints hors origine Hall). À suivre : couche DPI du groupe Sécurité + rapport.
 - **Visite guidée + aides de cartes** : un **❓ par carte** ouvre une **bulle animée** (comportements **génériques** — aperçu vivant, ⠿ ranger / ★ favori, clic = ouvrir, puces cliquables — + **spécifiques** au service). La « Visite guidée » de la bienvenue enchaîne les cartes (allume le ❓, pose la bulle, avance auto/pause au survol/Suivant). Moteur projecteur `window.lanceVisite` conservé en repli (mégabarre/profil). Corrige « Suivant saute à la fin » (l'ancien parcours sautait les cibles absentes hors accueil).
 
 ## 2026-08-30 — Nextcloud Super Cardlet + mégabarre invité (webos 1.0.207)

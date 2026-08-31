@@ -1244,6 +1244,10 @@ const FEATURED = [
   // modes (embarqué /devwatch/?embed=1, admin, onglet) visent la bonne page. La
   // carte /micro se sert de MÊME origine (admin autorisé dans frame-src du Hall).
   {id:"devwatch",   label:"DevWatch",  icon:"🛰️", color:"#0784a8", url:"admin.gk2.secubox.in/devwatch", micro:"/micro.html", h:288},
+  // DPI (#1360) : trafic vivant (nDPId/netifyd), carte SLICÉE (protocoles, apps,
+  // talkers, risques). Carte-only pour l'instant (données best-effort + démo) ;
+  // aussi agrégée en couche du groupe Sécurité (cumul.html).
+  {id:"dpi",        label:"DPI · Trafic", icon:"🔬", color:"#d64545", carte:"/cardlets/dpi.html", h:262},
   // ZIA (#1245) : l'IA locale du Hall, interface du bus d'objets. Carte /micro de
   // chat, servie sous admin.gk2…/zia/ (autorisé dans frame-src) ; les 3 modes
   // visent /zia/. Chat + recherche d'objets + délégation.
@@ -3905,6 +3909,7 @@ const CARDLET_ICONES = {
       mastodon:"Social fédéré (Mastodon) : aperçu authentifié de votre fil.",
       socialrelay:"Relais de fédération sociale (ActivityPub) entre instances.",
       devwatch:"Le pouls d'un dépôt GitHub en direct : cadence, temps cumulé, coût, carbone, campagnes, versions.",
+      dpi:"Trafic vivant (DPI nDPId/netifyd) : protocoles, applications, talkers, risques — slices qui tournent seules. Agrégé aussi au groupe Sécurité.",
       surfviewer:"Rappel du viewer en slices : ⭐ favoris (partage/répète), 📡 propositions (×N), 🔗 liens collés. Collez un lien pour le voir ou le surfer.",
       depot:"Dépôt APT — saut direct, état du service en direct.",
       ytsas:"YTSaS — rapatriement média souverain, sans pub ni Google.",

@@ -1,3 +1,10 @@
+secubox-webos (1.0.213-1~bookworm1) bookworm; urgency=medium
+
+  * Carte DPI « Trafic vivant » (cardlets/dpi.html, FEATURED dpi) : slicée
+    (Protocoles/Applications/Talkers/Risques) via la barre à bullets, KPIs,
+    style « spicy ». Données best-effort /api/v1/dpi/* + démo étiquetée.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:04:28 +0200
 secubox-webos (1.0.212-1~bookworm1) bookworm; urgency=medium
 
   * Aides de cartes : survol du ❓ = APERÇU (se referme en sortant), clic =

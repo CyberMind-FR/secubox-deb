@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: LicenseRef-CMSD-1.0
+  Copyright (c) 2026 CyberMind — Gérald Kerma <devel@cybermind.fr>
+  Source-Disclosed License — All rights reserved except as expressly granted.
+  See LICENCE-CMSD-1.0.md for terms.
+
+  SecuBox #1360 — carte DPI « Trafic vivant » (nDPId / netifyd).
+
+  SLICÉE (barre à bullets « double bullet ») : 🌐 Protocoles · 📱 Applications ·
+  🗣️ Talkers · ⚠️ Risques. Lit best-effort /api/v1/dpi/* ; à défaut, jeu de
+  DÉMO clairement étiqueté (comme le reste du Hall quand le registre dort). La
+  même lecture nourrit la couche DPI du groupe Sécurité (agrégation WAF).
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPI — Trafic vivant</title>
+<link rel="stylesheet" href="../slicebar.css">
+<style>
+  :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
+         --line-2:#c5cfd7; --panel:#ffffff; --soft:#f5f7fc; --cyan:#0784a8; --up:#0f9d54;
+         --hot:#d64545; --warn:#c87832; --grape:#6e40c9; --sky:#1655a0; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779; --line:#232b3b;
+    --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --up:#35d07f;
+    --hot:#ff6a6a; --warn:#e0b46a; --grape:#a88bff; --sky:#6aa8e6; } }
+  :root[data-theme="dark"]{ --fond:#0f1520; --texte:#e7ebf4; --muted:#8791a6; --faint:#5e6779;
+    --line:#232b3b; --line-2:#2d3a4e; --panel:#141a26; --soft:#10151f; --cyan:#28d6ff; --up:#35d07f;
+    --hot:#ff6a6a; --warn:#e0b46a; --grape:#a88bff; --sky:#6aa8e6; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;scrollbar-width:none}
+  html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
+  body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem}
+  /* En-tête « spicy » : filet dégradé + pouls. */
+  .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px}
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--hot),var(--warn),var(--cyan),var(--grape))}
+  .h .ic{font-size:1.05rem} .h b{font-size:.9rem;letter-spacing:.02em}
+  .h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.54rem;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--hot);font-weight:700}
+  .h .live i{width:7px;height:7px;border-radius:50%;background:var(--hot);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--hot) 26%,transparent);animation:pl 1.8s infinite}
+  @keyframes pl{50%{opacity:.35}} @media(prefers-reduced-motion:reduce){.h .live i{animation:none}}
+  .h .demo{margin-left:auto;font-size:.52rem;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+    border:1px solid var(--line);border-radius:20px;padding:1px 7px}
+  .kpis{display:flex;gap:6px}
+  .kpi{flex:1;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:0}
+  .kpi .v{font-family:"JetBrains Mono",monospace;font-size:1rem;font-weight:700;line-height:1;
+    display:flex;align-items:baseline;gap:3px}
+  .kpi .v small{font-size:.6rem;font-weight:400;color:var(--muted)}
+  .kpi .l{font-size:.54rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+  .kpi.hot .v{color:var(--hot)} .kpi.cy .v{color:var(--cyan)} .kpi.up .v{color:var(--up)}
+  .vue{flex:1;min-height:0;overflow:hidden;position:relative}
+  .slice{position:absolute;inset:0;display:none;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:none}
+  .slice::-webkit-scrollbar{display:none}
+  .slice.actif{display:flex}
+  /* Une ligne = un item + une barre proportionnelle (animée). */
+  .row{display:flex;align-items:center;gap:8px;padding:4px 2px;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:none}
+  .row .e{font-size:.9rem;flex:0 0 auto;width:18px;text-align:center}
+  .row .nm{flex:0 0 40%;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.8rem}
+  .row .bar{flex:1;height:8px;border-radius:5px;background:var(--soft);overflow:hidden;border:1px solid var(--line)}
+  .row .bar i{display:block;height:100%;width:0;border-radius:5px;transition:width .6s cubic-bezier(.2,.8,.3,1);
+    background:linear-gradient(90deg,var(--cyan),var(--sky))}
+  .row.a2 .bar i{background:linear-gradient(90deg,var(--up),var(--cyan))}
+  .row.a3 .bar i{background:linear-gradient(90deg,var(--grape),var(--sky))}
+  .row .n{flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.7rem;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  /* Risques : pastilles de sévérité. */
+  .risk{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px dashed var(--line)}
+  .risk:last-child{border-bottom:none}
+  .risk .sev{flex:0 0 auto;width:9px;height:9px;border-radius:50%}
+  .risk.hi .sev{background:var(--hot);box-shadow:0 0 0 3px color-mix(in srgb,var(--hot) 24%,transparent)}
+  .risk.md .sev{background:var(--warn)} .risk.lo .sev{background:var(--cyan)}
+  .risk .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.8rem}
+  .risk .n{flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--muted)}
+</style>
+
+<div class="mw">
+  <div class="h"><span class="ic">🔬</span><b>DPI · Trafic vivant</b>
+    <span class="live" id="live"><i></i> live</span>
+    <span class="demo" id="demo" hidden>démo</span></div>
+  <div class="kpis">
+    <div class="kpi cy"><div class="v" id="k-flows">—</div><div class="l">flux actifs</div></div>
+    <div class="kpi up"><div class="v" id="k-bw">—<small>Mb/s</small></div><div class="l">débit</div></div>
+    <div class="kpi hot"><div class="v" id="k-risk">—</div><div class="l">risques</div></div>
+  </div>
+  <div class="vue">
+    <div class="slice actif" id="s-proto"></div>
+    <div class="slice" id="s-apps"></div>
+    <div class="slice" id="s-talk"></div>
+    <div class="slice" id="s-risk"></div>
+  </div>
+  <div id="slbar"></div>
+</div>
+
+<script src="../slicebar.js"></script>
+<script>
+(function(){
+  "use strict";
+  var el=function(id){return document.getElementById(id);};
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c];});}
+
+  // Jeu de DÉMO (nDPI plausible) — remplacé dès que /api/v1/dpi/* répond en JSON.
+  var DEMO={
+    demo:true, flows:1284, bw:47.3, risks:6,
+    proto:[["🔒","TLS 1.3",38],["⚡","QUIC",24],["🌐","HTTP/2",12],["📡","DNS",9],["🧲","BitTorrent",7],["🛡️","WireGuard",5],["✉️","SMTPS",3]],
+    apps:[["▶️","YouTube",29],["🎬","Netflix",18],["☁️","Cloudflare",14],["🐙","GitHub",9],["🎵","Spotify",7],["🪟","Windows Update",6]],
+    talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
+    risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
+  };
+
+  function barres(cont, rows, cls){
+    var max=rows.reduce(function(m,r){return Math.max(m,r[2]);},1);
+    cont.innerHTML=rows.map(function(r){
+      return '<div class="row '+(cls||'')+'"><span class="e">'+r[0]+'</span>'
+        +'<span class="nm" title="'+esc(r[1])+'">'+esc(r[1])+'</span>'
+        +'<span class="bar"><i style="width:'+Math.round(r[2]/max*100)+'%"></i></span>'
+        +'<span class="n">'+r[2]+'%</span></div>';
+    }).join('');
+  }
+  function risques(cont, rows){
+    cont.innerHTML=rows.map(function(r){
+      return '<div class="risk '+r[0]+'"><span class="sev"></span>'
+        +'<span class="nm" title="'+esc(r[1])+'">'+esc(r[1])+'</span><span class="n">'+esc(r[2])+'</span></div>';
+    }).join('');
+  }
+  function rend(d){
+    el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';
+    el('k-flows').textContent=d.flows!=null?d.flows:'—';
+    el('k-bw').innerHTML=(d.bw!=null?d.bw:'—')+'<small>Mb/s</small>';
+    el('k-risk').textContent=d.risks!=null?d.risks:'—';
+    barres(el('s-proto'), d.proto, '');
+    barres(el('s-apps'),  d.apps,  'a2');
+    barres(el('s-talk'),  d.talk,  'a3');
+    risques(el('s-risk'), d.risk);
+  }
+
+  // Lecture best-effort. Les endpoints DPI vivent sur l'origine du service ; s'ils
+  // ne répondent pas en JSON (collecteur au repos, autre origine), on garde la démo.
+  function tente(){
+    fetch('/api/v1/dpi/summary',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        // Adaptation souple : on ne peint que ce qu'on a lu.
+        var d={demo:false,
+          flows:j.active_flows!=null?j.active_flows:(j.flows!=null?j.flows:DEMO.flows),
+          bw:j.mbps!=null?j.mbps:DEMO.bw, risks:(j.risks!=null?j.risks:DEMO.risks),
+          proto:DEMO.proto, apps:DEMO.apps, talk:DEMO.talk, risk:DEMO.risk};
+        rend(d);
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  rend(DEMO); tente(); setInterval(tente, 15000);
+
+  // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
+  var slices=[el('s-proto'),el('s-apps'),el('s-talk'),el('s-risk')];
+  function montre(i){ for(var k=0;k<slices.length;k++){ slices[k].classList.toggle('actif',k===i); } }
+  if(window.SBXSliceBar){
+    SBXSliceBar(el('slbar'), {autoMs:5000, onShow:montre,
+      slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🗣️ Talkers'},{label:'⚠️ Risques'}]});
+  } else { montre(0); }
+
+  (function(){ var t=new URLSearchParams(location.search).get('theme');
+    if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();
+  addEventListener('message', function(ev){ var d=ev.data; if(d&&d.sbx==='theme'&&(d.theme==='dark'||d.theme==='light')) document.documentElement.setAttribute('data-theme',d.theme); });
+})();
+</script>
