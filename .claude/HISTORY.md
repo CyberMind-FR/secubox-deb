@@ -3,6 +3,8 @@
 - **Bienvenue (premier abord)** : carte d'accueil au premier chargement du visiteur (`www/hall/index.html`) — thèse du Hall, **4 gestes** (ranger/épingler/voir/surfer), section **Explorer** (menu Services, survol/dynamisme, puces des cartes, aide ❓), encart **BiB** souverain. Vue une fois via drapeau `localStorage` par profil (`cleProfil('accueil-vu')`) ; ré-ouvrable par « 👋 Revoir l'accueil » du menu profil ; route vers l'Aide. Aucune animation d'entrée (elle se relançait en boucle et laissait l'overlay à opacity 0 — bug attrapé au rendu). Vérifié clair/nuit (Chromium).
 - **surfviewer** : les puces des 3 slices affichent un **émoji de source + un nom lisible** (▶️ YouTube · id, 📹 PeerTube · slug, 🎬 Vimeo, 👽 Reddit, 🐘, 🖼️/🎵/🎞️/📄…) au lieu des URLs brutes ; titre utilisé s'il existe.
 - **« Double bullet »** : barre de slices partagée `www/hall/slicebar.{css,js}` (puces rondes au repos, **pilule allongée** pour la slice active, auto=bleu/manuel=vert, pastille d'hôte cliquable). `cumul` aligné sur ce style. Prochaine passe : radio + podcaster (`/micro`).
+- **Aide dans le menu profil** (mégabarre) : « ❔ Aide du Hall » → vue Aide.
+- **Visite guidée + aides de cartes** : un **❓ par carte** ouvre une **bulle animée** (comportements **génériques** — aperçu vivant, ⠿ ranger / ★ favori, clic = ouvrir, puces cliquables — + **spécifiques** au service). La « Visite guidée » de la bienvenue enchaîne les cartes (allume le ❓, pose la bulle, avance auto/pause au survol/Suivant). Moteur projecteur `window.lanceVisite` conservé en repli (mégabarre/profil). Corrige « Suivant saute à la fin » (l'ancien parcours sautait les cibles absentes hors accueil).
 
 ## 2026-08-30 — Nextcloud Super Cardlet + mégabarre invité (webos 1.0.207)
 

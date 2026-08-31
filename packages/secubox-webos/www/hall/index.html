@@ -660,6 +660,45 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
    jamais — on croit que le glisser ne marche pas. */
 .cl-encours iframe{pointer-events:none}
 @media (prefers-reduced-motion:reduce){.cl-grip{transition:none}}
+
+/* ── #1352 · AIDE DE CARTE (❓) + bulle animée + auto-guide « par carte » ──── */
+.cl-aide{position:absolute;top:6px;right:58px;z-index:5;width:20px;height:20px;cursor:pointer;
+  display:grid;place-items:center;font-family:"JetBrains Mono";font-size:.72rem;font-weight:700;line-height:1;
+  color:var(--dim);background:var(--panel);border:1px solid var(--line);border-radius:50%;user-select:none;
+  opacity:0;transition:opacity .15s,color .15s,border-color .15s,box-shadow .2s}
+.fcard:hover .cl-aide,.cl-aide:focus-visible{opacity:.85}
+.cl-aide:hover{opacity:1;color:var(--cyan);border-color:var(--cyan)}
+.cl-aide.phare{opacity:1;color:var(--cyan);border-color:var(--cyan);box-shadow:0 0 0 4px var(--cyan-s);
+  animation:aidePulse 1.6s ease-in-out infinite}
+@keyframes aidePulse{50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--cyan) 12%,transparent)}}
+.fcard.cl-phare{outline:2px solid var(--cyan);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.cl-aide{transition:none}.cl-aide.phare{animation:none}}
+/* La bulle : un calque animé, positionné près de la carte. Transition (pas
+   d'animation en boucle) → jamais bloquée à opacity 0 comme l'ex-overlay. */
+.carte-bulle{position:fixed;z-index:83;width:min(322px,86vw);background:var(--panel);
+  border:1px solid var(--line);border-radius:14px;box-shadow:var(--lift);padding:14px 15px;
+  opacity:0;transform:translateY(8px) scale(.98);pointer-events:none;
+  transition:opacity .2s ease,transform .2s cubic-bezier(.2,.8,.3,1)}
+.carte-bulle.on{opacity:1;transform:none;pointer-events:auto}
+@media (prefers-reduced-motion:reduce){.carte-bulle{transition:opacity .12s}}
+.carte-bulle .cb-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.carte-bulle .cb-ic{font-size:1.15rem}
+.carte-bulle .cb-nom{font-family:"Fraunces",Georgia,serif;font-size:1rem;font-weight:700;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.carte-bulle .cb-k{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sky)}
+.carte-bulle .cb-spec{font-size:.82rem;color:var(--ink);margin:6px 0 9px;line-height:1.42}
+.carte-bulle ul{margin:0;padding-left:16px;list-style:none}
+.carte-bulle li{position:relative;font-size:.78rem;color:var(--dim);line-height:1.4;margin:4px 0}
+.carte-bulle li::before{content:"›";position:absolute;left:-14px;color:var(--cyan);font-weight:700}
+.carte-bulle li b{color:var(--ink)}
+.carte-bulle .cb-nav{display:flex;align-items:center;gap:9px;margin-top:12px}
+.carte-bulle .cb-dots{display:flex;gap:5px;margin-right:auto;flex-wrap:wrap;max-width:60%}
+.carte-bulle .cb-dot{width:6px;height:6px;border-radius:50%;background:var(--line-2)}
+.carte-bulle .cb-dot.on{background:var(--sky);width:15px;border-radius:4px}
+.carte-bulle .cb-x{border:1px solid var(--line-2);background:none;color:var(--dim);border-radius:8px;padding:6px 12px;font-size:.78rem;cursor:pointer}
+.carte-bulle .cb-x:hover{color:var(--ink);border-color:var(--ink)}
+.carte-bulle .cb-nx{border:none;background:var(--sky);color:#fff;border-radius:8px;padding:6px 14px;font-size:.8rem;font-weight:600;cursor:pointer}
+.carte-bulle .cb-nx:hover{background:var(--nav)}
 /* OVERLAY SURF (#1337) */
 .surf-ov{position:fixed;left:0;right:0;bottom:0;z-index:52;display:flex;flex-direction:column;
   background:var(--bg);top:var(--mast-h,56px)}
@@ -1319,9 +1358,9 @@ function featCardHTML(f,s){
     // #1240 : une carte peut aussi se declarer `auth:true` (ex. « Qui frappe ? »,
     // donnee de securite reservee a la session).
     const auth = (f.auth || (f.carte && f.carte.indexOf('delegue')>=0)) ? ' data-auth="1"' : '';
-    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'"'+auth+'>'
+    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'"'+auth+'>'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
-      + ETOILE
+      + ETOILE + AIDE
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut
       + ' src="'+u+sep+'theme='+th+'"'
       + ' title="'+esc(f.label)+'" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>'
@@ -1334,9 +1373,9 @@ function featCardHTML(f,s){
   if(EMBEDDABLE.has(f.id)){
     const th=root.getAttribute('data-theme')
       || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
-    return '<article class="fcard fcard-apercu" data-embed="'+esc(f.id)+'">'
+    return '<article class="fcard fcard-apercu" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'">'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
-      + ETOILE
+      + ETOILE + AIDE
       + '<div class="ap-tete">'
       +   '<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
       +   '<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
@@ -1354,8 +1393,8 @@ function featCardHTML(f,s){
       + '</article>';
   }
 
-  return '<article class="fcard clic" data-embed="'+esc(f.id)+'">'
-    +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'+ETOILE+'<div class="hd">'
+  return '<article class="fcard clic" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'">'
+    +'<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'+ETOILE+AIDE+'<div class="hd">'
     +'<div class="ic" style="background:'+f.color+'">'+f.icon+'</div>'
     +'<div class="nm"><b>'+esc(f.label)+'</b><div class="host mono">'+esc(h)+'</div></div>'
     +'<span class="state"><i class="led '+st+'"></i>'+STATE_FR[st]+'</span></div>'
@@ -1369,6 +1408,11 @@ function featCardHTML(f,s){
 // les cartes — la meme panne que `LARGEUR_PAGE` et `replies` avant elle.
 var ETOILE = '<span class="cl-vedette" role="button" tabindex="0"'
   + ' title="Favori — remonte en tête de mosaïque">★</span>';
+// AIDE DE CARTE (#1352) — même logique de hoisting que ETOILE (var, posé avant
+// featCardHTML). Le « ? » ouvre la bulle d'aide de la carte ; l'auto-guide les
+// enchaîne carte par carte.
+var AIDE = '<span class="cl-aide" role="button" tabindex="0"'
+  + ' title="Aide de cette carte" aria-label="Aide de cette carte">?</span>';
 
 function compactHTML(s){
   const st=(s.health&&s.health.state)||"unknown";
@@ -3805,8 +3849,136 @@ const CARDLET_ICONES = {
     if(bv) bv.addEventListener('click', function(){
       var sc=document.getElementById('bienvenue');
       if(sc){ sc.classList.add('hidden'); try{ localStorage.setItem((typeof cleProfil==='function')?cleProfil('accueil-vu'):'sbx.hall.accueil-vu','1'); }catch(e){} }
-      setTimeout(function(){ window.lanceVisite(VISITE_HALL); }, 60);
+      // Auto-guide « par carte » (bulles). Repli : projecteur mégabarre/profil.
+      setTimeout(function(){
+        if(typeof window.lanceVisiteCartes==='function' && window.lanceVisiteCartes()) return;
+        window.lanceVisite(VISITE_HALL);
+      }, 120);
     });
+  });
+})();
+
+// ── #1352 · AIDES DE CARTES — bulle animée + AUTO-GUIDE « par carte » ───────
+// Un ❓ par carte ouvre sa bulle (comportements génériques + spécifiques). La
+// « Visite guidée » enchaîne les cartes : elle allume le ❓ et pose la bulle,
+// carte après carte, avec avance auto (pause au survol) ou « Suivant ».
+(function(){
+  function pret(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  pret(function(){
+    var bulle=document.createElement('div'); bulle.className='carte-bulle'; bulle.id='carte-bulle';
+    bulle.innerHTML='<div class="cb-h"><span class="cb-ic"></span><span class="cb-nom"></span></div>'
+      +'<div class="cb-k">Aide de carte</div><p class="cb-spec"></p><ul class="cb-gen"></ul>'
+      +'<div class="cb-nav"><span class="cb-dots"></span>'
+      +'<button type="button" class="cb-x"></button><button type="button" class="cb-nx"></button></div>';
+    document.body.appendChild(bulle);
+    var elIc=bulle.querySelector('.cb-ic'), elNom=bulle.querySelector('.cb-nom'),
+        elSpec=bulle.querySelector('.cb-spec'), elGen=bulle.querySelector('.cb-gen'),
+        elDots=bulle.querySelector('.cb-dots'), btnX=bulle.querySelector('.cb-x'), btnNx=bulle.querySelector('.cb-nx');
+
+    var GEN=[
+      "<b>Aperçu vivant</b> — de même origine que le Hall, rien d'inventé ; se met à jour tout seul.",
+      "<b>⠿ Ranger · ★ Favori</b> — glissez la poignée pour l'ordre, l'étoile pour l'épingler en tête.",
+      "<b>Clic</b> — ouvre le service en grand, embarqué dans le Hall.",
+      "<b>Les puces</b> — chaque ligne est un élément réel, cliquable pour l'ouvrir en place."
+    ];
+    function norm(s){ return String(s||'').toLowerCase(); }
+    var SPEC={
+      devwatch:"Le pouls d'un dépôt GitHub en direct : cadence, temps cumulé, coût, carbone.",
+      peertube:"Dernières vidéos du catalogue, lecture souveraine en place.",
+      podcaster:"Abonnements et épisodes locaux ; le lecteur reprend au rafraîchissement.",
+      radio:"Flux en direct ; le lecteur suit le thème et l'état du Hall.",
+      bbs:"Derniers fils et salons ; les liens média deviennent souverains (voir/garder/diffuser).",
+      billets:"Dernières publications ; média embarqué, titre et détails enrichis.",
+      metanews:"Topics clusterisés et leurs sources, ouverts en profondeur.",
+      surf:"Navigateur de relais : surfe une adresse à travers la box, pisteurs coupés.",
+      waf:"Tentatives d'accès vues par le WAF — donnée de sécurité, session requise.",
+      quifrappe:"Qui frappe ? — tentatives d'accès en cours (session requise).",
+      cumul:"Carte de groupe : santé et activité d'un ensemble de services, d'un coup d'œil.",
+      depot:"Dépôt APT — accès rapide, état en direct.",
+      ytsas:"YTSaS — rapatriement média souverain.",
+      torrent:"Torrent — accès rapide, état en direct.",
+      nextcloud:"Cloud souverain : fichiers, activité, partages, quota.",
+      nc:"Cloud souverain : fichiers, activité, partages, quota.",
+      photoprism:"Photos : aperçu authentifié, validation d'accès souveraine.",
+      mastodon:"Social fédéré : aperçu authentifié.",
+      social:"Social fédéré : aperçu authentifié.",
+      socialrelay:"Relais social : passerelle de fédération.",
+      webmail:"Mail : aperçu authentifié, accès souverain.",
+      zia:"Assistant local : demande-lui un média, un doc, un sujet — le bus reste la source de vérité."
+    };
+    function specDe(card){
+      var id=norm(card.getAttribute('data-embed')); if(SPEC[id]) return SPEC[id];
+      var lab=norm(card.getAttribute('data-label'));
+      for(var k in SPEC){ if(lab.indexOf(k)>=0) return SPEC[k]; }
+      var d=card.querySelector('.desc'); if(d && d.textContent.trim()) return d.textContent.trim();
+      return "Un service souverain du Hall.";
+    }
+    function nomDe(card){ return card.getAttribute('data-label') || (card.querySelector('.nm b')||{}).textContent || card.getAttribute('data-embed') || 'Carte'; }
+    function icDe(card){ var i=card.querySelector('.ic, .ap-tete .ic'); var t=i?(i.textContent||'').trim():''; return t||'🃏'; }
+
+    var courante=null;
+    function place(card){
+      if(!card) return;
+      var r=card.getBoundingClientRect(), bw=bulle.offsetWidth||322, bh=bulle.offsetHeight||210, m=12;
+      var left=r.right+m; if(left+bw>innerWidth-m) left=r.left-bw-m;
+      if(left<m) left=Math.min(Math.max(m,r.left), Math.max(m,innerWidth-bw-m));
+      var top=r.top; if(top+bh>innerHeight-m) top=Math.max(m, innerHeight-bh-m); if(top<m) top=m;
+      bulle.style.left=left+'px'; bulle.style.top=top+'px';
+    }
+    function contenu(card){
+      elIc.textContent=icDe(card); elNom.textContent=nomDe(card);
+      elSpec.textContent=specDe(card);
+      elGen.innerHTML=GEN.map(function(g){return '<li>'+g+'</li>';}).join('');
+    }
+
+    var seq=[], qi=0, enGuide=false, tmr=null;
+    function nettoie(){
+      var ph=document.querySelectorAll('.fcard.cl-phare'); Array.prototype.forEach.call(ph,function(c){c.classList.remove('cl-phare');});
+      var pa=document.querySelectorAll('.cl-aide.phare'); Array.prototype.forEach.call(pa,function(a){a.classList.remove('phare');});
+    }
+    function ferme(){ bulle.classList.remove('on'); nettoie(); enGuide=false; courante=null; if(tmr){clearTimeout(tmr);tmr=null;} }
+    function ouvreSimple(card){
+      if(tmr){clearTimeout(tmr);tmr=null;} enGuide=false; nettoie(); courante=card;
+      contenu(card); elDots.innerHTML=''; btnX.textContent='Fermer'; btnNx.style.display='none';
+      bulle.classList.add('on'); place(card);
+    }
+    function auto(){ if(tmr) clearTimeout(tmr); tmr=setTimeout(function(){ if(enGuide) montre(qi+1); }, 5200); }
+    function montre(i){
+      if(i<0||i>=seq.length){ ferme(); return; }
+      qi=i; nettoie(); courante=seq[qi];
+      try{ courante.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+      courante.classList.add('cl-phare');
+      var a=courante.querySelector('.cl-aide'); if(a) a.classList.add('phare');
+      contenu(courante);
+      elDots.innerHTML=seq.map(function(_,k){return '<span class="cb-dot'+(k===qi?' on':'')+'"></span>';}).join('');
+      btnX.textContent='Passer'; btnNx.style.display=''; btnNx.textContent=(qi===seq.length-1)?'Terminer':'Suivant';
+      bulle.classList.add('on');
+      setTimeout(function(){ place(courante); }, 300);
+      auto();
+    }
+    bulle.addEventListener('mouseenter', function(){ if(tmr){clearTimeout(tmr);tmr=null;} });
+    bulle.addEventListener('mouseleave', function(){ if(enGuide) auto(); });
+    btnNx.addEventListener('click', function(){ if(enGuide) montre(qi+1); });
+    btnX.addEventListener('click', ferme);
+    addEventListener('keydown', function(e){ if(e.key==='Escape' && bulle.classList.contains('on')) ferme(); });
+    addEventListener('resize', function(){ if(bulle.classList.contains('on')) place(courante); });
+    addEventListener('scroll', function(){ if(bulle.classList.contains('on')) place(courante); }, true);
+
+    // ❓ d'une carte → bulle simple (capture : couper avant l'ouverture du service).
+    document.addEventListener('click', function(e){
+      var a=e.target.closest && e.target.closest('.cl-aide'); if(!a) return;
+      e.preventDefault(); e.stopPropagation();
+      var card=a.closest('.fcard'); if(card) ouvreSimple(card);
+    }, true);
+
+    // Auto-guide « par carte » — renvoie false si aucune carte (repli projecteur).
+    window.lanceVisiteCartes=function(){
+      var cards=Array.prototype.slice.call(
+        document.querySelectorAll('#featgrid .fcard[data-embed], #favbande .fcard[data-embed], .favbande .fcard[data-embed]')
+      ).filter(function(c){ var r=c.getBoundingClientRect(); return r.width>2 && r.height>2; });
+      if(!cards.length) return false;
+      enGuide=true; seq=cards; montre(0); return true;
+    };
   });
 })();
 </script>

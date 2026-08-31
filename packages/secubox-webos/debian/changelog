@@ -1,3 +1,11 @@
+secubox-webos (1.0.211-1~bookworm1) bookworm; urgency=medium
+
+  * Hall — AIDES DE CARTES : un ❓ par carte ouvre une bulle animée (comportements
+    génériques + spécifiques au service). La « Visite guidée » enchaîne les cartes
+    (allume le ❓, pose la bulle, avance auto / pause au survol / Suivant).
+    Corrige « Suivant saute à la fin ». Projecteur mégabarre/profil en repli.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 06:37:09 +0200
 secubox-webos (1.0.210-1~bookworm1) bookworm; urgency=medium
 
   * Hall — VISITE GUIDÉE (projecteur réutilisable window.lanceVisite) : bouton
