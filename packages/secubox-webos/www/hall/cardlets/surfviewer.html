@@ -83,6 +83,7 @@
     <div class="slice" id="s-fav"><div class="slab">⭐ Favoris <span class="mut">· se partage &amp; se répète</span><span class="c" id="c-fav"></span></div><div class="strip" id="st-fav"></div></div>
     <div class="slice" id="s-diff"><div class="slab">📡 Propositions <span class="mut">· se propose &amp; se cumule</span><span class="c" id="c-diff"></span></div><div class="strip" id="st-diff"></div></div>
     <div class="slice" id="s-hist"><div class="slab">🔗 Liens collés<span class="c" id="c-hist"></span></div><div class="strip" id="st-hist"></div></div>
+    <div class="slice" id="s-global"><div class="slab">🌍 Global <span class="mut">· diffusé au parc, ♥ en tops</span><span class="c" id="c-global"></span></div><div class="strip" id="st-global"></div></div>
     <div class="empty-all" id="vide" hidden>Rien encore — collez un lien, mettez en favori (⭐) ou proposez au parc (📡).</div>
   </div>
   <div id="slbar" class="slbar"></div>
@@ -183,6 +184,12 @@
   // (sinon « le lien ne fait rien »). Les liens LOCAUX (/api/…, /media/…) sont
   // résolus côté Hall par viewerVoir — plus de https://<chemin> mort.
   el('slices').addEventListener('click', function(e){
+    // ♥ GLOBAL (#1360) : un like sur un broadcast du parc (historique partagé).
+    var lk=e.target.closest('[data-like]');
+    if(lk){ var lu=lk.getAttribute('data-like');
+      fetch('/api/v1/webos/public/broadcast/like',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:lu})})
+        .then(function(r){return r.ok?r.json():null;}).then(function(){ rendGlobal(); }).catch(function(){});
+      return; }
     var b=e.target.closest('[data-u]'); if(!b) return;
     var u=b.getAttribute('data-u'), act=b.getAttribute('data-act'), titre=b.getAttribute('data-titre')||'';
     if(act==='share'){
@@ -216,12 +223,33 @@
   // SLICÉ (#1352) : la barre du bas (bullets « double bullet ») choisit la slice
   // visible — ⭐ Favoris · 📡 Propositions · 🔗 Liens collés. Manuel (pas de
   // rotation auto : le contenu ne bouge pas sous les yeux).
-  var _slices=[el('s-fav'), el('s-diff'), el('s-hist')];
-  function montreSlice(i){ for(var k=0;k<_slices.length;k++){ if(_slices[k]) _slices[k].classList.toggle('actif', k===i); } }
+  var _slices=[el('s-fav'), el('s-diff'), el('s-hist'), el('s-global')];
+  function montreSlice(i){ for(var k=0;k<_slices.length;k++){ if(_slices[k]) _slices[k].classList.toggle('actif', k===i); }
+    if(i===3) rendGlobal(); }
   if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'), {autoMs:0, onShow:function(i){ montreSlice(i); },
-      slices:[{label:'⭐ Favoris'},{label:'📡 Propositions'},{label:'🔗 Liens collés'}]});
+      slices:[{label:'⭐ Favoris'},{label:'📡 Propositions'},{label:'🔗 Liens collés'},{label:'🌍 Global'}]});
   } else { montreSlice(0); }
+
+  // 🌍 GLOBAL (#1360) : l'historique des broadcasts du PARC (partagé, backend),
+  // tops par ♥ puis récents. Chaque item : ▶ voir · ♥ liker.
+  function rendGlobal(){
+    fetch('/api/v1/webos/public/broadcasts',{headers:{'Accept':'application/json'}})
+      .then(function(r){return r.ok?r.json():null;}).then(function(g){ if(!g) return;
+        var tops=g.tops||[], rec=g.recents||[];
+        var seen={}, items=[];
+        tops.concat(rec).forEach(function(x){ if(x&&x.url&&!seen[x.url]){ seen[x.url]=1; items.push(x); } });
+        items=items.slice(0,20);
+        el('c-global').textContent=g.total||'';
+        el('st-global').innerHTML=items.map(function(x){
+          var n=x.likes||0, badge=n?(' <span class="cnt">'+n+'</span>'):'';
+          return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.url)+'" data-titre="'+esc(x.titre||'')+'" data-act="view" title="'+esc(x.titre||x.url)+'">'+joli(x.url,x.titre)+'</button>'
+            +'<button class="mini" type="button" data-like="'+esc(x.url)+'" title="J\'aime">♥'+badge+'</button></span>';
+        }).join('');
+        el('s-global').classList.toggle('empty', !items.length);
+      }).catch(function(){});
+  }
+  setInterval(function(){ if(el('s-global').classList.contains('actif')) rendGlobal(); }, 10000);
 
   (function(){ var t=new URLSearchParams(location.search).get('theme');
     if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();

@@ -979,6 +979,19 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
 .bienv-note{font-family:"JetBrains Mono";font-size:.64rem;color:var(--dim);margin-left:auto}
 .bienv-note b{color:var(--mint)}
 
+/* ── #1360 · NOTIFICATION broadcast — bulle en haut à droite ───────────────── */
+.notif-bulle{position:fixed;top:calc(var(--mast-h,56px) + 10px);right:16px;z-index:75;max-width:320px;
+  display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+  border-left:3px solid var(--coral);border-radius:12px;box-shadow:var(--lift);padding:10px 12px;cursor:pointer;
+  transform:translateX(24px);opacity:0;transition:.28s;pointer-events:none}
+.notif-bulle.on{transform:none;opacity:1;pointer-events:auto}
+.notif-bulle .ic{font-size:1.1rem;flex:none}
+.notif-bulle b{font-size:.85rem;display:block;line-height:1.2}
+.notif-bulle small{font-size:.72rem;color:var(--dim);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
+.notif-bulle .x{margin-left:auto;border:none;background:none;color:var(--dim);font-size:.9rem;cursor:pointer;flex:none}
+.notif-bulle .x:hover{color:var(--coral)}
+@media(prefers-reduced-motion:reduce){.notif-bulle{transition:opacity .15s}}
+
 /* ── #1352 · VISITE GUIDÉE — projecteur réutilisable ───────────────────────
    Un pas = un élément mis en lumière (trou dans un voile) + une bulle. Le même
    moteur (lanceVisite) servira les aides de cartes. */
@@ -4108,6 +4121,41 @@ const CARDLET_ICONES = {
     addEventListener('scroll', function(){ if(bulle.classList.contains('on')) place(courante); }, true);
   });
 })();
+
+// ── #1360 · NOTIFICATION broadcast ─────────────────────────────────────────
+// Le Hall veille /api/v1/webos/public/broadcast ; un `ts` plus récent que le
+// dernier vu = un NOUVEAU flux au parc → bulle en haut à droite. Le dernier ts
+// vu est gardé par profil, pour ne pas re-notifier à chaque rechargement.
+(function(){
+  function pret(fn){ if(document.readyState!=='loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+  pret(function(){
+    var bulle=document.getElementById('notif-bulle'); if(!bulle) return;
+    var CLEF=(typeof cleProfil==='function') ? cleProfil('notif-bc-ts') : 'sbx.hall.notif-bc-ts';
+    var last=0; try{ last=parseFloat(localStorage.getItem(CLEF)||'0')||0; }catch(e){}
+    var t=null, premier=true;
+    function montre(b){
+      document.getElementById('notif-t').textContent=b.titre||b.url||'';
+      bulle.classList.add('on'); clearTimeout(t); t=setTimeout(function(){ bulle.classList.remove('on'); }, 9000);
+    }
+    document.getElementById('notif-x').addEventListener('click', function(e){ e.stopPropagation(); bulle.classList.remove('on'); });
+    bulle.addEventListener('click', function(){ bulle.classList.remove('on');
+      var p=document.querySelector('#pastilles-direct .fpast'); if(p){ try{ p.click(); }catch(e){} } });
+    function verifie(){
+      fetch('/api/v1/webos/public/broadcast',{headers:{'Accept':'application/json'}})
+        .then(function(r){ return r.ok?r.json():null; }).then(function(b){
+          if(!b || !b.actif || !b.ts) return;
+          if(b.ts > last + 0.5){
+            last=b.ts; try{ localStorage.setItem(CLEF, String(last)); }catch(e){}
+            // au tout premier passage on mémorise sans notifier (évite la bulle
+            // pour un flux déjà en cours quand on arrive) ; ensuite, on notifie.
+            if(!premier) montre(b);
+          }
+          premier=false;
+        }).catch(function(){ premier=false; });
+    }
+    verifie(); setInterval(verifie, 15000);
+  });
+})();
 </script>
 <!-- SURF EMBARQUE (#1337). Un lien externe — d'une source MetaNews, ou de la
      carte Surf — s'ouvre A TRAVERS le proxy, DANS le Hall, sans quitter la
@@ -4255,6 +4303,13 @@ const CARDLET_ICONES = {
       <button type="button" class="nx" id="tour-next">Suivant</button>
     </div>
   </div>
+</div>
+
+<!-- ── #1360 · NOTIFICATION broadcast — le parc diffuse quelque chose de nouveau. -->
+<div class="notif-bulle" id="notif-bulle" role="status">
+  <span class="ic">🔴</span>
+  <div><b>En direct au parc</b><small id="notif-t"></small></div>
+  <button type="button" class="x" id="notif-x" aria-label="Fermer">✕</button>
 </div>
 
 </body>

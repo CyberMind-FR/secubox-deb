@@ -1,3 +1,11 @@
+secubox-webos (1.0.221-1~bookworm1) bookworm; urgency=medium
+
+  * Broadcast : historique GLOBAL + likes (api /broadcasts, /broadcast/like).
+  * Surf & Viewer : slice 🌍 Global (tops par ♥ + récents du parc, ♥ pour liker).
+  * Notification : bulle en haut à droite quand un NOUVEAU broadcast arrive.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 09:03:55 +0200
+
 secubox-webos (1.0.220-1~bookworm1) bookworm; urgency=medium
 
   * Carte Radio : hauteur portée à 330 (place pour la barre à bullets).
