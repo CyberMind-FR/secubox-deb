@@ -1,3 +1,9 @@
+secubox-billets (0.8.25-1~bookworm1) bookworm; urgency=medium
+
+  * Vue micro : habillage spicy + aide reverse-design contextuelle (inline).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:24:27 +0200
+
 secubox-billets (0.8.24-1~bookworm1) bookworm; urgency=medium
 
   * Objet media (#1227) : un billet dont l'embed est une VIDEO (youtube/peertube/
