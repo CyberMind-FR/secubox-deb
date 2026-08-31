@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
             pass
     _charge_broadcast()   # #1224 : reprendre le flux courant apres redemarrage
     _charge_hist()        # #1360 : historique global des broadcasts + likes
+    if _broadcast.get("actif"):   # le flux courant entre dans l'historique global
+        _hist_ajoute(_broadcast)
     task = asyncio.create_task(_refresh_loop())
     yield
     task.cancel()

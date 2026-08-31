@@ -1,3 +1,9 @@
+secubox-webos (1.0.222-1~bookworm1) bookworm; urgency=medium
+
+  * Broadcast global : le flux courant entre dans l historique au demarrage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 09:05:22 +0200
+
 secubox-webos (1.0.221-1~bookworm1) bookworm; urgency=medium
 
   * Broadcast : historique GLOBAL + likes (api /broadcasts, /broadcast/like).
