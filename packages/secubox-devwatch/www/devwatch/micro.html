@@ -29,8 +29,11 @@
   .num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
   .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .7rem .45rem;gap:.35rem}
   .head{flex:0 0 auto}
-  .h{display:flex;align-items:center;gap:7px}
-  .h .ic{font-size:1rem} .h b{font-size:.86rem;letter-spacing:-.01em}
+  .h{display:flex;align-items:center;gap:7px;position:relative;padding-bottom:6px}
+  /* Filet dégradé « spicy » (#1360) — même langage que la carte DPI. */
+  .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
+    background:linear-gradient(90deg,var(--up),var(--cyan),var(--violet),var(--gold))}
+  .h .ic{font-size:1.05rem} .h b{font-size:.88rem;letter-spacing:-.01em}
   .h .live{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:.56rem;
     letter-spacing:.09em;text-transform:uppercase;color:var(--up);font-weight:700}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--up);animation:p 2.2s ease-out infinite}
@@ -45,21 +48,26 @@
   .slice-t{font-size:.56rem;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);font-weight:700}
 
   .hero{display:flex;align-items:flex-end;gap:9px}
-  .hero .v{font-weight:800;font-size:2.4rem;line-height:.85}
+  .hero .v{font-weight:800;font-size:2.7rem;line-height:.82;color:var(--cyan);
+    text-shadow:0 0 18px color-mix(in srgb,var(--cyan) 42%,transparent)}
   .hero .meta .l{font-size:.62rem;color:var(--faint);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
   .hero .meta .t{display:block;font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:600;color:var(--up);margin-top:2px}
 
   .duo{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-  .card2{background:var(--surf2);border-radius:9px;padding:10px 9px;text-align:center}
-  .card2 .e{font-size:1rem} .card2 .n{font-weight:800;font-size:1.15rem;margin-top:2px}
+  .card2{background:linear-gradient(160deg,var(--surf2),color-mix(in srgb,var(--cyan) 9%,var(--surf2)));
+    border:1px solid var(--border);border-radius:11px;padding:10px 9px;text-align:center}
+  .card2 .e{font-size:1.05rem} .card2 .n{font-weight:800;font-size:1.2rem;margin-top:2px}
+  .duo .card2:first-child .n{color:var(--cyan)} .duo .card2:last-child .n{color:var(--up)}
   .card2 .g{font-size:.54rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
 
   .rel-big{display:flex;align-items:baseline;gap:8px}
-  .rel-big .tag{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.1rem;color:var(--cyan)}
+  .rel-big .tag{font-family:"IBM Plex Mono",monospace;font-weight:700;font-size:1.25rem;color:var(--cyan);
+    text-shadow:0 0 12px color-mix(in srgb,var(--cyan) 45%,transparent)}
   .rel-big .l{font-size:.58rem;color:var(--faint);text-transform:uppercase;letter-spacing:.07em}
   .mevo{display:flex;align-items:flex-end;gap:3px;height:40px;margin-top:2px}
-  .mevo i{flex:1;min-width:3px;border-radius:2px 2px 0 0;background:var(--muted);opacity:.5}
-  .mevo i.major{background:var(--cyan);opacity:.9} .mevo i.minor{background:var(--gold);opacity:.7}
+  .mevo i{flex:1;min-width:3px;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--muted),transparent);opacity:.5;transition:height .5s cubic-bezier(.2,.8,.3,1)}
+  .mevo i.major{background:linear-gradient(180deg,var(--cyan),var(--violet));opacity:1}
+  .mevo i.minor{background:linear-gradient(180deg,var(--gold),transparent);opacity:.8}
   .mevo i.latest{opacity:1;outline:1px solid var(--cyan);outline-offset:1px}
 
   .mlist{display:flex;flex-direction:column;gap:3px}
