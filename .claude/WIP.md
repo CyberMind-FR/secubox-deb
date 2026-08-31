@@ -19,16 +19,18 @@
 - **Spicy + slicers** : Radio (0.1.62), PeerTube (5 vues + Chaînes/Playlists),
   MetaNews (0.1.32, slicer par section via `/categories`).
 - **Nextcloud** : onglet 📅 Agenda (CalDAV : PROPFIND+REPORT, parsing iCal maison).
-- **Lyrion** : carte client (télécommande) + **cast** `📡 play-url` (Hall→Squeezebox).
+- **Lyrion** : carte client (télécommande) + **cast** `📡 play-url` (Hall→Squeezebox)
+  + **lecteur web 🎧 OK** : squeezelite `-o null` (vrai client LMS « SBX-Web »,
+    MAC fixe) → flux LMS natif `/stream.mp3?player=MAC` relayé `/lyrion-stream.mp3`
+    → `<audio>` du navigateur. Bout-en-bout vérifié (audio réel, 235 Ko/6 s via
+    le relais Hall). ⚠️ L'ancien LMS s'était **planté** (runaway, 6 h CPU) sous
+    la charge de mes tests de flux — service `lyrionmusicserver` DANS le conteneur
+    `lyrion`, redémarré, stable (2 lecteurs).
 - **Bus média** : pastille du viewer qui reste (dockLocal/viewerCmd) ; diffusions
   persistées dans le menu profil (survol) + badge de non-vues sur l'avatar ;
   carte sans vhost → pseudo /mega (drapeau `noVhost`).
 
 ### ⬜ Next Up — à finir
-- **Lyrion lecteur web** : squeezelite `-o null` = vrai client LMS (OK, unité
-  `sbx-lyrion-webplayer`) ; **finir le dernier maillon** cast→flux navigateur
-  (`/stream.mp3?player=MAC` pour le player à MAC fixe — l'archi est prouvée avec
-  le MAC auto).
 - **secubox-dpi-engine** : le formaliser en paquet source cross-build (aujourd'hui
   construit natif sur la box) ; nettoyer `/opt/nDPId` après build.
 - Idées notées (memory) : cardlet SqueezeRadio/Lyrion émulateur, accès Zigbee.
