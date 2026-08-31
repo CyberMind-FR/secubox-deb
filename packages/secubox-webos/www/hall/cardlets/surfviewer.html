@@ -60,6 +60,8 @@
   .chip .mini{padding:4px 6px;border-left:1px solid var(--line);color:var(--faint);font-size:.66rem}
   .chip .mini:hover{color:var(--gold)}
   .chip .cnt{font-variant-numeric:tabular-nums;font-weight:700;color:var(--cyan)}
+  .chip .src{font-size:.78rem;line-height:1;margin-right:1px;vertical-align:-1px}
+  .chip .det{color:var(--faint);font-weight:400;margin-left:3px}
   .empty-all{color:var(--faint);font-size:.72rem;text-align:center;padding:14px 4px}
   .pied{margin-top:auto;display:flex;align-items:center;gap:6px;padding-top:.3rem;border-top:1px solid var(--line);
     font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -89,8 +91,49 @@
   function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
   function bref(u){ return String(u).replace(/^https?:\/\//,'').replace(/^www\./,''); }
 
+  // Un lien média se lit par son NOM, pas par son URL. À défaut de titre (les
+  // favoris et l'historique n'en gardent pas), on compose un libellé humain :
+  // un émoji de SOURCE + le service + un identifiant court (id vidéo, slug).
+  function hote(u){ try{ return new URL(/^https?:\/\//i.test(u)?u:'https://'+u).host.replace(/^www\./,''); }catch(e){ return bref(u).split('/')[0]; } }
+  function source(u){
+    var h=hote(u);
+    if(/youtube|youtu\.be/.test(h)) return {e:'▶️', s:'YouTube'};
+    if(/peertube|\.tube$/.test(h))  return {e:'📹', s:'PeerTube'};
+    if(/vimeo/.test(h))             return {e:'🎬', s:'Vimeo'};
+    if(/twitch/.test(h))            return {e:'🟣', s:'Twitch'};
+    if(/reddit/.test(h))            return {e:'👽', s:'Reddit'};
+    if(/soundcloud|bandcamp/.test(h)) return {e:'🎧', s:h.split('.')[0]};
+    if(/(^|\.)x\.com$|twitter|nitter/.test(h)) return {e:'🐦', s:'X'};
+    if(/mastodon|social\./.test(h)) return {e:'🐘', s:'Mastodon'};
+    if(/\.(jpe?g|png|gif|webp|avif|svg)(\?|$)/i.test(u)) return {e:'🖼️', s:'Image'};
+    if(/\.(mp3|ogg|flac|wav|m4a|aac)(\?|$)/i.test(u))    return {e:'🎵', s:'Audio'};
+    if(/\.(mp4|webm|mkv|mov|m3u8)(\?|$)/i.test(u))       return {e:'🎞️', s:'Vidéo'};
+    if(/\.pdf(\?|$)/i.test(u))      return {e:'📄', s:'PDF'};
+    return {e:'🔗', s:h};
+  }
+  function ident(u){
+    try{
+      var url=new URL(/^https?:\/\//i.test(u)?u:'https://'+u), h=url.host.replace(/^www\./,'');
+      if(/youtube|youtu\.be/.test(h)){
+        var v=url.searchParams.get('v') || (h.indexOf('youtu.be')>=0?url.pathname.slice(1):'') ||
+              ((url.pathname.match(/\/(?:embed|shorts|v)\/([^/?#]+)/)||[])[1]||'');
+        return v?v.slice(0,11):'';
+      }
+      var seg=url.pathname.split('/').filter(Boolean).pop()||'';
+      seg=seg.replace(/\.[a-z0-9]{1,5}$/i,'').replace(/[-_]+/g,' ');
+      return seg.slice(0,22);
+    }catch(e){ return ''; }
+  }
+  // Libellé riche (émoji + nom), échappé — à insérer en innerHTML.
+  function joli(u, titre){
+    if(titre && titre.trim() && !/^https?:\/\//i.test(titre.trim()))
+      return esc(titre.trim().slice(0,42));
+    var s=source(u), id=ident(u);
+    return '<span class="src">'+s.e+'</span>'+esc(s.s)+(id?' <span class="det">'+esc(id)+'</span>':'');
+  }
+
   function chip(u, titre, act, extra){
-    var lbl=esc((titre||bref(u)).slice(0,40));
+    var lbl=joli(u, titre);
     var main='<button class="act" type="button" data-u="'+esc(u)+'" data-titre="'+esc(titre||'')+'" data-act="'+act+'" title="'+esc(titre||u)+'">'+lbl+'</button>';
     return '<span class="chip">'+main+(extra||'')+'</span>';
   }
@@ -108,7 +151,7 @@
     // 📡 Propositions : re-proposer (cumule) — badge ×N.
     el('st-diff').innerHTML = diff.map(function(x){
       var n=x.n||1, badge=n>1?' <span class="cnt">×'+n+'</span>':'';
-      return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+esc((x.titre||bref(x.u)).slice(0,36))+badge+'</button></span>';
+      return '<span class="chip"><button class="act" type="button" data-u="'+esc(x.u)+'" data-titre="'+esc(x.titre||'')+'" data-act="diffuse" title="Re-proposer au parc ('+n+'×)">'+joli(x.u,x.titre)+badge+'</button></span>';
     }).join('');
     // 🔗 Liens collés : re-vu.
     el('st-hist').innerHTML = hist.map(function(x){ return chip(x.u, null, 'view', ''); }).join('');
