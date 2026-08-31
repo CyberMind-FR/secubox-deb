@@ -1,3 +1,11 @@
+secubox-webos (1.0.218-1~bookworm1) bookworm; urgency=medium
+
+  * Habillage « spicy » partagé (www/hall/spicy.css) : filet dégradé sous
+    l'en-tête, chiffres à halo, barres en dégradé, pastilles de slice vives.
+    Posé sur surfviewer/cumul/quick/delegue/quifrappe/nextcloud-super/surf
+    (DPI et DevWatch gardent leur spicy dédié).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:50:57 +0200
 secubox-webos (1.0.217-1~bookworm1) bookworm; urgency=medium
 
   * Reverse-design LES DEUX à la fois : clic sur ❓ → anneaux + pastilles
