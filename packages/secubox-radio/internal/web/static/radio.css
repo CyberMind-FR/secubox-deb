@@ -405,3 +405,25 @@ body.micro .microstatus { color: var(--mint); font-size: .68rem; }
 .sbxaide-pin{position:absolute;transform:translate(-50%,-50%);min-width:18px;height:18px;border-radius:10px;z-index:42;
   background:#e07d82;color:#2a0d0e;font-weight:800;font-size:.66rem;display:grid;place-items:center;padding:0 5px;
   box-shadow:0 2px 6px rgba(0,0,0,.45);pointer-events:none}
+
+/* SLICER 3 vues micro (#1360) : Messages / Playlist / Propositions + barre à bullets. */
+.radio-slbar{display:none}
+body.micro .radio-slbar{display:flex;align-items:center;gap:8px;padding:5px 10px;margin-top:.35rem;
+  border-top:1px solid var(--line);font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.radio-slbar .sbx-dots{display:flex;align-items:center;gap:5px}
+.radio-slbar .sbx-dots button{width:7px;height:7px;padding:0;border:0;border-radius:50%;cursor:pointer;
+  background:var(--line);transition:width .2s ease,background .2s ease}
+.radio-slbar .sbx-dots button.on{width:17px;border-radius:5px}
+.radio-slbar .sbx-dots.auto button.on{background:var(--violet-clair,#28d6ff)}
+.radio-slbar .sbx-dots.manuel button.on{background:var(--up,#35d07f)}
+.radio-slbar .radio-sllab{margin-left:2px}
+/* Messages : cacher playlist + propositions. */
+body.micro.vue-messages .carte.playlist,
+body.micro.vue-messages .sl-prop{display:none!important}
+/* Propositions : révéler la carte d'attente, cacher messages + playlist. */
+body.micro.vue-proposals .carte.playlist,
+body.micro.vue-proposals .carte.antenne-messages,
+body.micro.vue-proposals .carte.antenne:not(.antenne-messages){display:none!important}
+body.micro.vue-proposals .sl-prop{display:block!important;margin:.35rem 0 0;border-radius:10px}
+body.micro.vue-proposals .sl-prop .entete,body.micro.vue-proposals .sl-prop .pied{display:none}
+body.micro.vue-proposals .sl-prop .attente{max-height:none;overflow:hidden}

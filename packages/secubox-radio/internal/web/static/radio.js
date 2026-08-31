@@ -146,11 +146,32 @@
   // suspend aussi, pour la meme raison, et c'est plus fort que le survol : on
   // peut ecrire sans que le curseur reste sur la carte.
   if (estMicro) (function () {
-    var vue = 'antenne', pause = false;
+    // SLICER 3 vues (#1360) : Messages / Playlist / Propositions, en bas une
+    // barre à bullets « double bullet » — clic = choisir (manuel), sinon la
+    // rotation continue (auto). Remplace l'ancien va-et-vient antenne↔playlist.
+    var VUES = ['messages', 'playlist', 'proposals'], i = 0, pause = false;
+    var LAB = ['💬 Messages', '🔁 Playlist', '🗳️ Propositions'];
+    var bar = document.createElement('div'); bar.className = 'radio-slbar';
+    var dots = document.createElement('div'); dots.className = 'sbx-dots auto';
+    var lab = document.createElement('span'); lab.className = 'radio-sllab';
+    VUES.forEach(function (v, k) {
+      var b = document.createElement('button'); b.type = 'button';
+      b.title = LAB[k]; b.setAttribute('aria-label', LAB[k]);
+      b.addEventListener('click', function () { dots.className = 'sbx-dots manuel'; manuel(k); });
+      dots.appendChild(b);
+    });
+    bar.appendChild(dots); bar.appendChild(lab);
+    var wrap = document.querySelector('.wrap'); if (wrap) wrap.appendChild(bar);
     function pose() {
-      document.body.classList.toggle('vue-playlist', vue === 'playlist');
-      document.body.classList.toggle('vue-antenne', vue === 'antenne');
+      var v = VUES[i];
+      document.body.classList.toggle('vue-messages', v === 'messages');
+      document.body.classList.toggle('vue-playlist', v === 'playlist');
+      document.body.classList.toggle('vue-proposals', v === 'proposals');
+      document.body.classList.toggle('vue-antenne', v === 'messages'); // compat CSS existant
+      Array.prototype.forEach.call(dots.children, function (d, k) { d.classList.toggle('on', k === i); });
+      lab.textContent = LAB[i];
     }
+    function manuel(k) { i = k; pause = true; setTimeout(function () { pause = false; }, 15000); pose(); }
     document.addEventListener('mouseenter', function () { pause = true; }, true);
     document.addEventListener('mouseleave', function () { pause = false; }, true);
     document.addEventListener('focusin', function () { pause = true; });
@@ -159,8 +180,7 @@
     setInterval(function () {
       var champ = document.activeElement;
       if (pause || (champ && champ.tagName === 'INPUT')) return;
-      vue = (vue === 'antenne') ? 'playlist' : 'antenne';
-      pose();
+      dots.className = 'sbx-dots auto'; i = (i + 1) % VUES.length; pose();
     }, 8000);
   })();
   var microNext = $('micro-next'), microLast = $('micro-last'), microStatus = $('micro-status');
