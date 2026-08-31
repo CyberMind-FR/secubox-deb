@@ -3966,7 +3966,7 @@ const CARDLET_ICONES = {
     function nomDe(card){ return card.getAttribute('data-label') || (card.querySelector('.nm b')||{}).textContent || card.getAttribute('data-embed') || 'Carte'; }
     function icDe(card){ var i=card.querySelector('.ic, .ap-tete .ic'); var t=i?(i.textContent||'').trim():''; return t||'🃏'; }
 
-    var courante=null, mode=null, hideTmr=null, autoTmr=null, enGuide=false, seq=[], qi=0, diagIfr=null;
+    var courante=null, mode=null, hideTmr=null, autoTmr=null, enGuide=false, seq=[], qi=0, diagIfr=null, diagTimer=null;
     function place(card){
       if(!card) return;
       var r=card.getBoundingClientRect(), bw=bulle.offsetWidth||322, bh=bulle.offsetHeight||210, m=12;
@@ -4052,13 +4052,35 @@ const CARDLET_ICONES = {
       // lui-même (par slice) ; on lui envoie le signal. Sinon (carte descriptive
       // sans iframe), on retombe sur la bulle texte + inspect.
       var ifr=card.querySelector('iframe');
-      if(ifr){ close(); courante=card; mode='pin'; card.classList.add('cl-phare'); diagIfr=ifr;
-        try{ ifr.contentWindow.postMessage({sbx:'aide',on:true},'*'); }catch(e){} return; }
-      affiche(card,'pin');
+      if(ifr){ montreDiag(card); return; }   // carte iframe → bulle de LÉGENDES (contenu non touché)
+      affiche(card,'pin');                    // carte descriptive → texte + inspect
     }, true);
-    // Le cardlet a fermé son aide (croix interne) → on referme côté Hall.
-    addEventListener('message', function(ev){ var d=ev.data;
-      if(d && d.sbx==='aide-ferme' && mode==='pin'){ diagIfr=null; close(); } });
+    function esc0(t){ return String(t==null?'':t).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
+    // Reverse-design (#1360) : la carte NE CHANGE PAS ; la bulle dédiée liste les
+    // zones que la cardlette rapporte (sbx:aide-zones), rafraîchies par slice.
+    function montreDiag(card){
+      close(); courante=card; mode='pin'; card.classList.add('cl-phare'); diagIfr=card.querySelector('iframe');
+      elIc.textContent=icDe(card); elNom.textContent=nomDe(card);
+      elType.innerHTML='<b>Reverse-design</b>'; elType.classList.remove('hide');
+      elSpec.textContent='La carte, zone par zone…'; elGen.innerHTML='<li>lecture des zones…</li>';
+      elDots.innerHTML=''; elNav.style.display=''; btnX.style.display=''; btnX.textContent='Fermer'; btnNx.style.display='none';
+      bulle.classList.add('on'); place(card);
+      if(diagIfr){ try{ diagIfr.contentWindow.postMessage({sbx:'aide',on:true},'*'); diagIfr.contentWindow.postMessage({sbx:'aide?'},'*'); }catch(e){} }
+      // Repli : cardlet sans rapporteur → au bout d'un instant, aide générique.
+      clearTimeout(diagTimer); diagTimer=setTimeout(function(){
+        if(mode==='pin' && courante===card && /lecture des zones/.test(elGen.innerHTML)) contenu(card);
+      }, 1300);
+    }
+    addEventListener('message', function(ev){ var d=ev.data; if(!d) return;
+      if(d.sbx==='aide-ferme' && mode==='pin'){ diagIfr=null; close(); return; }
+      if(d.sbx==='aide-zones' && mode==='pin' && diagIfr && ev.source===diagIfr.contentWindow){
+        clearTimeout(diagTimer);
+        elType.innerHTML='<b>Reverse-design'+(d.slice?(' · '+esc0(d.slice)):'')+'</b>'; elType.classList.remove('hide');
+        elSpec.textContent='Ce que montre chaque zone :';
+        var Z=d.zones||[]; elGen.innerHTML = Z.length ? Z.map(function(z){return '<li>'+esc0(z.label)+'</li>';}).join('') : '<li>—</li>';
+        place(courante);
+      }
+    });
     // Clic AILLEURS quand épinglée → referme.
     document.addEventListener('click', function(e){
       if(mode!=='pin') return;

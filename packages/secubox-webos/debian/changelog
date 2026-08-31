@@ -1,3 +1,11 @@
+secubox-webos (1.0.217-1~bookworm1) bookworm; urgency=medium
+
+  * Reverse-design LES DEUX à la fois : clic sur ❓ → anneaux + pastilles
+    numérotées IN-CARD (sans voile, contenu visible) ET bulle de LÉGENDES
+    dédiée côté Hall, mêmes numéros, rafraîchie par slice. Helper partagé
+    www/hall/aide.js posé sur toutes les cartes (auto-détection des zones).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:47:12 +0200
 secubox-webos (1.0.216-1~bookworm1) bookworm; urgency=medium
 
   * Reverse-design (pilote DPI) : clic sur le ❓ d'une carte en iframe déclenche
