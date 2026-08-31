@@ -1,3 +1,9 @@
+secubox-webos (1.0.215-1~bookworm1) bookworm; urgency=medium
+
+  * Surf & Viewer : items EN LISTE (un par ligne, pleine largeur) au lieu de la
+    bande horizontale — plus lisible dans la slice active.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:21:23 +0200
 secubox-webos (1.0.214-1~bookworm1) bookworm; urgency=medium
 
   * Aides de cartes — MODE INSPECT : quand le ❓ est épinglé, survoler une zone

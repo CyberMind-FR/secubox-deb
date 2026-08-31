@@ -52,12 +52,15 @@
     color:var(--faint);font-weight:700}
   .slab .mut{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
   .slab .c{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
-  .strip{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:1px}
+  /* EN LISTE (#1352) : un item par ligne, pleine largeur (au lieu d'une bande
+     horizontale à faire défiler). */
+  .strip{display:flex;flex-direction:column;gap:4px;overflow-y:auto;scrollbar-width:none}
   .strip::-webkit-scrollbar{display:none}
-  .chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:0;border:1px solid var(--line);
+  .chip{display:flex;width:100%;align-items:center;gap:0;border:1px solid var(--line);
     border-radius:8px;overflow:hidden;background:var(--surf2)}
-  .chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.68rem;
-    padding:4px 8px;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip button.act{flex:1;min-width:0;text-align:left}
+  .chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:.72rem;
+    padding:5px 9px;max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chip button.act:hover{color:var(--cyan)}
   .chip .mini{padding:4px 6px;border-left:1px solid var(--line);color:var(--faint);font-size:.66rem}
   .chip .mini:hover{color:var(--gold)}
