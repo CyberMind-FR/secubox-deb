@@ -574,6 +574,11 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 .who-titre{margin:2px 10px 4px;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;
   color:var(--dim);font-family:"JetBrains Mono";display:flex;gap:6px;align-items:baseline}
 .who-titre span{margin-left:auto;font-variant-numeric:tabular-nums}
+/* #1352 — « Gérer les accès » remonte EN TITRE des identités (au lieu d'un
+   bouton tout en bas du menu, trop loin). */
+.who-gerer{margin-left:8px;background:none;border:1px solid var(--line-2);border-radius:7px;
+  padding:2px 8px;font-size:.62rem;color:var(--sky);cursor:pointer;text-transform:none;letter-spacing:0;font-family:inherit}
+.who-gerer:hover{border-color:var(--sky);background:var(--sky-s)}
 /* La liste peut être longue : on la borne et on la fait défiler plutôt que de
    pousser « Réinitialiser » hors de l'écran. */
 .who-ident{max-height:230px;overflow-y:auto;padding:0 2px}
@@ -687,6 +692,10 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .carte-bulle .cb-k{font-family:"JetBrains Mono";font-size:.54rem;letter-spacing:.12em;text-transform:uppercase;color:var(--sky)}
 .carte-bulle .cb-spec{font-size:.82rem;color:var(--ink);margin:6px 0 9px;line-height:1.42}
+.carte-bulle .cb-type{font-size:.76rem;line-height:1.4;margin:2px 0 9px;padding:7px 9px;border-radius:9px;
+  background:var(--cyan-s);border:1px solid color-mix(in srgb,var(--cyan) 30%,var(--line));color:var(--ink)}
+.carte-bulle .cb-type b{color:var(--cyan)}
+.carte-bulle .cb-type.hide{display:none}
 .carte-bulle ul{margin:0;padding-left:16px;list-style:none}
 .carte-bulle li{position:relative;font-size:.78rem;color:var(--dim);line-height:1.4;margin:4px 0}
 .carte-bulle li::before{content:"›";position:absolute;left:-14px;color:var(--cyan);font-weight:700}
@@ -1059,15 +1068,14 @@ body:has(#view-embed:not(.hidden)) #view-embed{flex:1;min-height:0;display:flex;
                .non-connecte #who-identites, et registre non lu hors session). -->
           <div id="who-identites">
             <div class="who-sep"></div>
-            <p class="who-titre">🔑 Mes identités <span id="ident-n"></span></p>
+            <!-- « Gérer les accès » vit dans le TITRE des identités (#1352) : la
+                 page s'ouvre DANS le Hall, consulter/valider ne fait transiter
+                 aucun secret ; seule la saisie d'un identifiant dédié repart en
+                 pleine page. -->
+            <p class="who-titre">🔑 Mes identités <span id="ident-n"></span><button type="button" role="menuitem" id="who-acces" class="who-gerer">Gérer les accès…</button></p>
             <div class="who-ident" id="who-ident">
               <p class="who-note">lecture du registre…</p>
             </div>
-            <!-- La page s'ouvre DANS le Hall (#1290) : consulter et valider ne
-                 fait transiter aucun secret. Seule la saisie d'un identifiant
-                 dédié refuse le cadre et renvoie en pleine page — c'est le seul
-                 endroit où l'on tape quelque chose. -->
-            <button type="button" role="menuitem" id="who-acces">🔑 Gérer les accès délégués…</button>
           </div>
         </div>
       </div>
@@ -3867,12 +3875,13 @@ const CARDLET_ICONES = {
   pret(function(){
     var bulle=document.createElement('div'); bulle.className='carte-bulle'; bulle.id='carte-bulle';
     bulle.innerHTML='<div class="cb-h"><span class="cb-ic"></span><span class="cb-nom"></span></div>'
-      +'<div class="cb-k">Aide de carte</div><p class="cb-spec"></p><ul class="cb-gen"></ul>'
+      +'<div class="cb-k">Aide de carte</div><p class="cb-type hide"></p><p class="cb-spec"></p><ul class="cb-gen"></ul>'
       +'<div class="cb-nav"><span class="cb-dots"></span>'
       +'<button type="button" class="cb-x"></button><button type="button" class="cb-nx"></button></div>';
     document.body.appendChild(bulle);
     var elIc=bulle.querySelector('.cb-ic'), elNom=bulle.querySelector('.cb-nom'),
-        elSpec=bulle.querySelector('.cb-spec'), elGen=bulle.querySelector('.cb-gen'),
+        elType=bulle.querySelector('.cb-type'), elSpec=bulle.querySelector('.cb-spec'),
+        elGen=bulle.querySelector('.cb-gen'), elNav=bulle.querySelector('.cb-nav'),
         elDots=bulle.querySelector('.cb-dots'), btnX=bulle.querySelector('.cb-x'), btnNx=bulle.querySelector('.cb-nx');
 
     var GEN=[
@@ -3882,29 +3891,37 @@ const CARDLET_ICONES = {
       "<b>Les puces</b> — chaque ligne est un élément réel, cliquable pour l'ouvrir en place."
     ];
     function norm(s){ return String(s||'').toLowerCase(); }
+    // Groupes principaux (cartes cumul.html = MULTI-cartes).
+    var GROUPES={securite:1,contenu:1,cloud:1,social:1,forums:1};
+    // Conseils RÉELS par carte (clé = data-embed).
     var SPEC={
-      devwatch:"Le pouls d'un dépôt GitHub en direct : cadence, temps cumulé, coût, carbone.",
-      peertube:"Dernières vidéos du catalogue, lecture souveraine en place.",
-      podcaster:"Abonnements et épisodes locaux ; le lecteur reprend au rafraîchissement.",
-      radio:"Flux en direct ; le lecteur suit le thème et l'état du Hall.",
-      bbs:"Derniers fils et salons ; les liens média deviennent souverains (voir/garder/diffuser).",
-      billets:"Dernières publications ; média embarqué, titre et détails enrichis.",
-      metanews:"Topics clusterisés et leurs sources, ouverts en profondeur.",
-      surf:"Navigateur de relais : surfe une adresse à travers la box, pisteurs coupés.",
-      waf:"Tentatives d'accès vues par le WAF — donnée de sécurité, session requise.",
-      quifrappe:"Qui frappe ? — tentatives d'accès en cours (session requise).",
-      cumul:"Carte de groupe : santé et activité d'un ensemble de services, d'un coup d'œil.",
-      depot:"Dépôt APT — accès rapide, état en direct.",
-      ytsas:"YTSaS — rapatriement média souverain.",
-      torrent:"Torrent — accès rapide, état en direct.",
-      nextcloud:"Cloud souverain : fichiers, activité, partages, quota.",
-      nc:"Cloud souverain : fichiers, activité, partages, quota.",
-      photoprism:"Photos : aperçu authentifié, validation d'accès souveraine.",
-      mastodon:"Social fédéré : aperçu authentifié.",
-      social:"Social fédéré : aperçu authentifié.",
-      socialrelay:"Relais social : passerelle de fédération.",
-      webmail:"Mail : aperçu authentifié, accès souverain.",
-      zia:"Assistant local : demande-lui un média, un doc, un sujet — le bus reste la source de vérité."
+      // services
+      bbs:"Derniers fils et salons. Un lien média y devient souverain : voir, garder, ou diffuser au parc (📡). Invitations gérées dans la vue pleine.",
+      radio:"Flux en direct. Le lecteur porte ses commandes et suit le thème ; le son vit dans la barre média (volume/pli persistants).",
+      peertube:"Dernières vidéos du catalogue. « Lire ici » joue en place, « Agrandir » ouvre le viewer souverain.",
+      podcaster:"Abonnements et épisodes téléchargés localement ; le lecteur reprend là où vous étiez, même au rafraîchissement.",
+      metanews:"Topics clusterisés + leurs sources. Une puce = un cluster (N sources) à ouvrir en profondeur.",
+      billets:"Dernières publications ; le média embarqué se joue dans la carte, titre et détails enrichis.",
+      mastodon:"Social fédéré (Mastodon) : aperçu authentifié de votre fil.",
+      socialrelay:"Relais de fédération sociale (ActivityPub) entre instances.",
+      devwatch:"Le pouls d'un dépôt GitHub en direct : cadence, temps cumulé, coût, carbone, campagnes, versions.",
+      surfviewer:"Rappel du viewer en slices : ⭐ favoris (partage/répète), 📡 propositions (×N), 🔗 liens collés. Collez un lien pour le voir ou le surfer.",
+      depot:"Dépôt APT — saut direct, état du service en direct.",
+      ytsas:"YTSaS — rapatriement média souverain, sans pub ni Google.",
+      torrent:"Torrent — saut direct, état en direct.",
+      nextcloud:"Cloud souverain : fichiers, activité, partages — aperçu authentifié.",
+      photoprism:"Photos : aperçu authentifié ; validez l'accès souverain d'abord.",
+      mail:"Mail : aperçu authentifié, accès souverain.",
+      zia:"Assistant 100 % local : demande-lui un média, un doc, un sujet — le bus reste la source de vérité.",
+      toolbox:"Boîte à outils du parc — accès direct.",
+      // super-carte
+      "nextcloud-super":"Super-carte Cloud : plusieurs onglets d'un même service — Fichiers (WebDAV), Activité, Partages, jauge de quota ; partager (lien public), téléverser, supprimer, sans quitter le Hall.",
+      // cartes de GROUPE (multi)
+      securite:"Groupe Sécurité : pare-feu (WAF), « Qui frappe ? », analyse — plusieurs services en une carte.",
+      contenu:"Groupe Contenu : Dépôt, YTSaS, Torrent — plusieurs services en une carte.",
+      cloud:"Groupe Cloud : Cloud, Photos, Mail — plusieurs services en une carte.",
+      social:"Groupe Social : Mastodon, Relais et réseaux — plusieurs services en une carte.",
+      forums:"Groupe Forums : BBS, Billets — plusieurs services en une carte."
     };
     function specDe(card){
       var id=norm(card.getAttribute('data-embed')); if(SPEC[id]) return SPEC[id];
@@ -3913,10 +3930,18 @@ const CARDLET_ICONES = {
       var d=card.querySelector('.desc'); if(d && d.textContent.trim()) return d.textContent.trim();
       return "Un service souverain du Hall.";
     }
+    // Note de TYPE (super / multi-groupe) — sinon ''.
+    function typeDe(card){
+      var id=norm(card.getAttribute('data-embed'));
+      if(id.indexOf('super')>=0) return "<b>Super-carte</b> — un même service décliné en plusieurs onglets et actions.";
+      if(GROUPES[id]) return "<b>Carte de groupe (multi)</b> — plusieurs services en une. Les puces « double bullet » en bas font tourner les tranches : clic = choisir, sinon ça tourne seul ; la pastille ouvre le service de la tranche.";
+      return "";
+    }
+    function estFavori(card){ return card.classList.contains('favori') || !!(card.closest && card.closest('.favbande')); }
     function nomDe(card){ return card.getAttribute('data-label') || (card.querySelector('.nm b')||{}).textContent || card.getAttribute('data-embed') || 'Carte'; }
     function icDe(card){ var i=card.querySelector('.ic, .ap-tete .ic'); var t=i?(i.textContent||'').trim():''; return t||'🃏'; }
 
-    var courante=null;
+    var courante=null, mode=null, hideTmr=null, autoTmr=null, enGuide=false, seq=[], qi=0;
     function place(card){
       if(!card) return;
       var r=card.getBoundingClientRect(), bw=bulle.offsetWidth||322, bh=bulle.offsetHeight||210, m=12;
@@ -3927,58 +3952,88 @@ const CARDLET_ICONES = {
     }
     function contenu(card){
       elIc.textContent=icDe(card); elNom.textContent=nomDe(card);
+      var t=typeDe(card); elType.innerHTML=t; elType.classList.toggle('hide', !t);
       elSpec.textContent=specDe(card);
-      elGen.innerHTML=GEN.map(function(g){return '<li>'+g+'</li>';}).join('');
+      var gen=GEN.slice();
+      if(estFavori(card)) gen=gen.concat(["<b>★ En tête (favori)</b> — rangée prioritaire ; retirez d'un clic sur l'étoile."]);
+      elGen.innerHTML=gen.map(function(g){return '<li>'+g+'</li>';}).join('');
     }
-
-    var seq=[], qi=0, enGuide=false, tmr=null;
     function nettoie(){
       var ph=document.querySelectorAll('.fcard.cl-phare'); Array.prototype.forEach.call(ph,function(c){c.classList.remove('cl-phare');});
       var pa=document.querySelectorAll('.cl-aide.phare'); Array.prototype.forEach.call(pa,function(a){a.classList.remove('phare');});
     }
-    function ferme(){ bulle.classList.remove('on'); nettoie(); enGuide=false; courante=null; if(tmr){clearTimeout(tmr);tmr=null;} }
-    function ouvreSimple(card){
-      if(tmr){clearTimeout(tmr);tmr=null;} enGuide=false; nettoie(); courante=card;
-      contenu(card); elDots.innerHTML=''; btnX.textContent='Fermer'; btnNx.style.display='none';
+    function annuleHide(){ if(hideTmr){clearTimeout(hideTmr);hideTmr=null;} }
+    function close(){ bulle.classList.remove('on'); nettoie(); mode=null; courante=null; enGuide=false;
+      annuleHide(); if(autoTmr){clearTimeout(autoTmr);autoTmr=null;} }
+    // Affiche la bulle pour une carte, dans un mode donné : 'hover' (aperçu au
+    // survol, se referme quand on sort) ou 'pin' (épinglée au clic, reste).
+    function affiche(card, m){
+      annuleHide(); mode=m; courante=card; contenu(card);
+      elDots.innerHTML='';
+      if(m==='pin'){ elNav.style.display=''; btnX.style.display=''; btnX.textContent='Fermer'; btnNx.style.display='none'; }
+      else { elNav.style.display='none'; }   // hover = aperçu nu
       bulle.classList.add('on'); place(card);
     }
-    function auto(){ if(tmr) clearTimeout(tmr); tmr=setTimeout(function(){ if(enGuide) montre(qi+1); }, 5200); }
+    function planifieHide(){ annuleHide(); hideTmr=setTimeout(function(){ if(mode==='hover') close(); }, 220); }
+
+    // ── Auto-guide « par carte » ──
+    function auto(){ if(autoTmr) clearTimeout(autoTmr); autoTmr=setTimeout(function(){ if(enGuide) montre(qi+1); }, 5200); }
     function montre(i){
-      if(i<0||i>=seq.length){ ferme(); return; }
-      qi=i; nettoie(); courante=seq[qi];
+      if(i<0||i>=seq.length){ close(); return; }
+      qi=i; nettoie(); mode='guide'; enGuide=true; courante=seq[qi];
       try{ courante.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
       courante.classList.add('cl-phare');
       var a=courante.querySelector('.cl-aide'); if(a) a.classList.add('phare');
       contenu(courante);
+      elNav.style.display=''; btnX.style.display=''; btnNx.style.display='';
       elDots.innerHTML=seq.map(function(_,k){return '<span class="cb-dot'+(k===qi?' on':'')+'"></span>';}).join('');
-      btnX.textContent='Passer'; btnNx.style.display=''; btnNx.textContent=(qi===seq.length-1)?'Terminer':'Suivant';
+      btnX.textContent='Passer'; btnNx.textContent=(qi===seq.length-1)?'Terminer':'Suivant';
       bulle.classList.add('on');
       setTimeout(function(){ place(courante); }, 300);
       auto();
     }
-    bulle.addEventListener('mouseenter', function(){ if(tmr){clearTimeout(tmr);tmr=null;} });
-    bulle.addEventListener('mouseleave', function(){ if(enGuide) auto(); });
-    btnNx.addEventListener('click', function(){ if(enGuide) montre(qi+1); });
-    btnX.addEventListener('click', ferme);
-    addEventListener('keydown', function(e){ if(e.key==='Escape' && bulle.classList.contains('on')) ferme(); });
-    addEventListener('resize', function(){ if(bulle.classList.contains('on')) place(courante); });
-    addEventListener('scroll', function(){ if(bulle.classList.contains('on')) place(courante); }, true);
-
-    // ❓ d'une carte → bulle simple (capture : couper avant l'ouverture du service).
-    document.addEventListener('click', function(e){
-      var a=e.target.closest && e.target.closest('.cl-aide'); if(!a) return;
-      e.preventDefault(); e.stopPropagation();
-      var card=a.closest('.fcard'); if(card) ouvreSimple(card);
-    }, true);
-
-    // Auto-guide « par carte » — renvoie false si aucune carte (repli projecteur).
     window.lanceVisiteCartes=function(){
       var cards=Array.prototype.slice.call(
         document.querySelectorAll('#featgrid .fcard[data-embed], #favbande .fcard[data-embed], .favbande .fcard[data-embed]')
       ).filter(function(c){ var r=c.getBoundingClientRect(); return r.width>2 && r.height>2; });
       if(!cards.length) return false;
-      enGuide=true; seq=cards; montre(0); return true;
+      close(); seq=cards; montre(0); return true;
     };
+
+    // Survol du ❓ : APERÇU ; on quitte → se referme (sauf si épinglé/guidé).
+    document.addEventListener('mouseover', function(e){
+      var a=e.target.closest && e.target.closest('.cl-aide'); if(!a) return;
+      if(enGuide || mode==='pin') { annuleHide(); return; }
+      var card=a.closest('.fcard'); if(!card) return;
+      if(mode==='hover' && courante===card){ annuleHide(); return; }
+      affiche(card,'hover');
+    });
+    document.addEventListener('mouseout', function(e){
+      var a=e.target.closest && e.target.closest('.cl-aide'); if(!a) return;
+      if(mode==='hover') planifieHide();
+    });
+    // Clic sur le ❓ : ÉPINGLE (bascule). Capture → couper l'ouverture du service.
+    document.addEventListener('click', function(e){
+      var a=e.target.closest && e.target.closest('.cl-aide'); if(!a) return;
+      e.preventDefault(); e.stopPropagation();
+      var card=a.closest('.fcard'); if(!card) return;
+      if(mode==='pin' && courante===card){ close(); return; }   // re-clic = referme
+      affiche(card,'pin');
+    }, true);
+    // Clic AILLEURS quand épinglée → referme.
+    document.addEventListener('click', function(e){
+      if(mode!=='pin') return;
+      if(e.target.closest && (e.target.closest('#carte-bulle') || e.target.closest('.cl-aide'))) return;
+      close();
+    });
+
+    bulle.addEventListener('mouseenter', annuleHide);
+    bulle.addEventListener('mouseleave', function(){ if(mode==='hover') planifieHide(); });
+    btnNx.addEventListener('click', function(){ if(enGuide) montre(qi+1); });
+    btnX.addEventListener('click', close);
+    addEventListener('keydown', function(e){ if(e.key==='Escape' && bulle.classList.contains('on')) close(); });
+    addEventListener('resize', function(){ if(bulle.classList.contains('on')) place(courante); });
+    addEventListener('scroll', function(){ if(bulle.classList.contains('on')) place(courante); }, true);
   });
 })();
 </script>

@@ -19,6 +19,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Surf &amp; Viewer — rappel</title>
+<link rel="stylesheet" href="../slicebar.css">
 <style>
   :root{ --fond:#ffffff; --texte:#131722; --muted:#5b6478; --faint:#8a93a6; --line:#e2e6f0;
          --line-soft:#eef1f7; --cyan:#0784a8; --gold:#b7810a; --up:#0f9d54; --surf2:#f5f7fc; }
@@ -44,8 +45,9 @@
   form.paste button:hover{border-color:var(--cyan);color:var(--cyan)}
   .slices{display:flex;flex-direction:column;gap:6px;overflow-y:auto;scrollbar-width:none;flex:1;min-height:0}
   .slices::-webkit-scrollbar{display:none}
-  .slice{display:flex;flex-direction:column;gap:3px}
-  .slice.empty{display:none}
+  /* SLICÉ (#1352) : une seule slice à la fois, choisie par la barre à bullets du bas. */
+  .slice{display:none;flex-direction:column;gap:3px}
+  .slice.actif{display:flex}
   .slab{display:flex;align-items:center;gap:5px;font-size:.56rem;letter-spacing:.09em;text-transform:uppercase;
     color:var(--faint);font-weight:700}
   .slab .mut{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
@@ -79,8 +81,9 @@
     <div class="slice" id="s-hist"><div class="slab">🔗 Liens collés<span class="c" id="c-hist"></span></div><div class="strip" id="st-hist"></div></div>
     <div class="empty-all" id="vide" hidden>Rien encore — collez un lien, mettez en favori (⭐) ou proposez au parc (📡).</div>
   </div>
-  <div class="pied"><span class="grow">rappel du viewer · même origine</span><span>SBXOS</span></div>
+  <div id="slbar" class="slbar"></div>
 </div>
+<script src="../slicebar.js"></script>
 
 <script>
 (function(){
@@ -205,6 +208,16 @@
   });
   setInterval(rend, 4000);
   rend();
+
+  // SLICÉ (#1352) : la barre du bas (bullets « double bullet ») choisit la slice
+  // visible — ⭐ Favoris · 📡 Propositions · 🔗 Liens collés. Manuel (pas de
+  // rotation auto : le contenu ne bouge pas sous les yeux).
+  var _slices=[el('s-fav'), el('s-diff'), el('s-hist')];
+  function montreSlice(i){ for(var k=0;k<_slices.length;k++){ if(_slices[k]) _slices[k].classList.toggle('actif', k===i); } }
+  if(window.SBXSliceBar){
+    SBXSliceBar(el('slbar'), {autoMs:0, onShow:function(i){ montreSlice(i); },
+      slices:[{label:'⭐ Favoris'},{label:'📡 Propositions'},{label:'🔗 Liens collés'}]});
+  } else { montreSlice(0); }
 
   (function(){ var t=new URLSearchParams(location.search).get('theme');
     if(t==='dark'||t==='light') document.documentElement.setAttribute('data-theme',t); })();

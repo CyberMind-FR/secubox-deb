@@ -1,3 +1,13 @@
+secubox-webos (1.0.212-1~bookworm1) bookworm; urgency=medium
+
+  * Aides de cartes : survol du ❓ = APERÇU (se referme en sortant), clic =
+    ÉPINGLE (bascule), clic ailleurs = referme ; conseils RÉELS par carte +
+    note de TYPE (super-carte / carte de groupe multi) + note favori.
+  * Surf & Viewer : les 3 types (⭐/📡/🔗) deviennent des SLICES, choisies par
+    une barre à bullets « double bullet » en bas.
+  * Menu profil : « Gérer les accès… » remonte dans le titre des identités.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 06:55:24 +0200
 secubox-webos (1.0.211-1~bookworm1) bookworm; urgency=medium
 
   * Hall — AIDES DE CARTES : un ❓ par carte ouvre une bulle animée (comportements
