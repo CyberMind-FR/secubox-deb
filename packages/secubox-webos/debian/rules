@@ -19,6 +19,8 @@ override_dh_auto_install:
 	install -m 0644 www/hall/relais.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/relais.html
 	install -m 0644 www/hall/hall-logo.svg $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/hall-logo.svg
 	install -m 0644 www/hall/render-ref.html $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/render-ref.html
+	install -m 0644 www/hall/slicebar.css $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/slicebar.css
+	install -m 0644 www/hall/slicebar.js $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/slicebar.js
 	install -d $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/medaillons
 	install -m 0644 www/hall/medaillons/*.webp $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/medaillons/
 	install -m 0644 www/hall/fonts/*.woff2 $(CURDIR)/debian/secubox-webos/usr/share/secubox/www/hall/fonts/

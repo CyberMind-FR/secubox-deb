@@ -67,12 +67,15 @@
   .mw.embed .pied .pied-lien { font-size:.6rem; font-family:"JetBrains Mono"; }
   .mw.embed .pied #pied-t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
     max-width:100%; }
+  /* « DOUBLE BULLET » (#1352) — puces rondes au repos, PILULE allongée pour la
+     slice active. Style partagé par tous les cardlets à slices (cf. slicebar.css). */
   .dots button { width:7px; height:7px; padding:0; border-radius:50%; border:0; cursor:pointer;
-                 background:var(--border); transition:background .15s, transform .15s; }
-  .dots button.on { background:var(--accent); transform:scale(1.2); }
+                 background:var(--border); transition:width .22s ease, background .22s ease; }
+  .dots button.on { background:var(--accent); width:17px; border-radius:5px; }
   /* Point actif : BLEU = rotation AUTO en cours, VERT = mode MANUEL (figé). */
   .dots.auto button.on { background:#3b82f6; }
   .dots.manuel button.on { background:#22c55e; }
+  @media (prefers-reduced-motion:reduce){ .dots button { transition:none; } }
 
   .corps { flex:1; min-height:0; display:flex; flex-direction:column; gap:.42rem; }
 
