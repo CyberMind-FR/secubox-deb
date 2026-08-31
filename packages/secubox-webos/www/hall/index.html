@@ -3966,7 +3966,7 @@ const CARDLET_ICONES = {
     function nomDe(card){ return card.getAttribute('data-label') || (card.querySelector('.nm b')||{}).textContent || card.getAttribute('data-embed') || 'Carte'; }
     function icDe(card){ var i=card.querySelector('.ic, .ap-tete .ic'); var t=i?(i.textContent||'').trim():''; return t||'🃏'; }
 
-    var courante=null, mode=null, hideTmr=null, autoTmr=null, enGuide=false, seq=[], qi=0;
+    var courante=null, mode=null, hideTmr=null, autoTmr=null, enGuide=false, seq=[], qi=0, diagIfr=null;
     function place(card){
       if(!card) return;
       var r=card.getBoundingClientRect(), bw=bulle.offsetWidth||322, bh=bulle.offsetHeight||210, m=12;
@@ -3989,7 +3989,8 @@ const CARDLET_ICONES = {
       var pa=document.querySelectorAll('.cl-aide.phare'); Array.prototype.forEach.call(pa,function(a){a.classList.remove('phare');});
     }
     function annuleHide(){ if(hideTmr){clearTimeout(hideTmr);hideTmr=null;} }
-    function close(){ bulle.classList.remove('on'); nettoie(); mode=null; courante=null; enGuide=false;
+    function diagOff(){ if(diagIfr){ try{ diagIfr.contentWindow.postMessage({sbx:'aide',on:false},'*'); }catch(e){} diagIfr=null; } }
+    function close(){ bulle.classList.remove('on'); nettoie(); diagOff(); mode=null; courante=null; enGuide=false;
       annuleHide(); if(autoTmr){clearTimeout(autoTmr);autoTmr=null;} }
     // Affiche la bulle pour une carte, dans un mode donné : 'hover' (aperçu au
     // survol, se referme quand on sort) ou 'pin' (épinglée au clic, reste).
@@ -4047,8 +4048,17 @@ const CARDLET_ICONES = {
       e.preventDefault(); e.stopPropagation();
       var card=a.closest('.fcard'); if(!card) return;
       if(mode==='pin' && courante===card){ close(); return; }   // re-clic = referme
+      // CLIC = DIAGRAMME reverse-design (#1360). Un cardlet en iframe s'annote
+      // lui-même (par slice) ; on lui envoie le signal. Sinon (carte descriptive
+      // sans iframe), on retombe sur la bulle texte + inspect.
+      var ifr=card.querySelector('iframe');
+      if(ifr){ close(); courante=card; mode='pin'; card.classList.add('cl-phare'); diagIfr=ifr;
+        try{ ifr.contentWindow.postMessage({sbx:'aide',on:true},'*'); }catch(e){} return; }
       affiche(card,'pin');
     }, true);
+    // Le cardlet a fermé son aide (croix interne) → on referme côté Hall.
+    addEventListener('message', function(ev){ var d=ev.data;
+      if(d && d.sbx==='aide-ferme' && mode==='pin'){ diagIfr=null; close(); } });
     // Clic AILLEURS quand épinglée → referme.
     document.addEventListener('click', function(e){
       if(mode!=='pin') return;

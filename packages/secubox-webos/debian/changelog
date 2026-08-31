@@ -1,3 +1,11 @@
+secubox-webos (1.0.216-1~bookworm1) bookworm; urgency=medium
+
+  * Reverse-design (pilote DPI) : clic sur le ❓ d'une carte en iframe déclenche
+    son AUTO-ANNOTATION in-card (anneaux + pastilles + légende), DYNAMIQUE par
+    slice. Survol du ❓ = bulle texte (inchangé). Cardlet DPI : self-annotate +
+    report des zones (pour la grande bulle, à venir).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 07:32:04 +0200
 secubox-webos (1.0.215-1~bookworm1) bookworm; urgency=medium
 
   * Surf & Viewer : items EN LISTE (un par ligne, pleine largeur) au lieu de la

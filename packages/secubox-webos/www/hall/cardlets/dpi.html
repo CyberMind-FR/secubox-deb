@@ -31,7 +31,23 @@
   html,body{margin:0;height:100%;overflow:hidden;scrollbar-width:none}
   html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
   body{background:var(--fond);color:var(--texte);font-family:"IBM Plex Sans",Inter,system-ui,sans-serif;font-size:14px}
-  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem}
+  .mw{display:flex;flex-direction:column;height:100%;padding:.55rem .65rem;gap:.45rem;position:relative}
+  /* REVERSE-DESIGN (#1360) — la carte s'annote elle-même, par slice. */
+  .aide-lay{position:absolute;inset:0;z-index:20;display:none}
+  .aide-lay.on{display:block}
+  .aide-scrim{position:absolute;inset:0;background:color-mix(in srgb,#000 30%,transparent)}
+  .aide-ring{position:absolute;border:2px solid var(--cyan);border-radius:8px;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--cyan) 22%,transparent);transition:.2s}
+  .aide-pin{position:absolute;transform:translate(-50%,-50%);min-width:19px;height:19px;border-radius:11px;
+    background:var(--cyan);color:#052430;font-weight:800;font-size:.68rem;display:grid;place-items:center;padding:0 5px;
+    box-shadow:0 2px 6px rgba(0,0,0,.45)}
+  .aide-leg{position:absolute;left:6px;right:6px;bottom:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:7px 9px;font-size:.68rem;line-height:1.32;box-shadow:0 8px 22px rgba(0,0,0,.5)}
+  .aide-leg .lt{font-family:"JetBrains Mono",monospace;font-size:.54rem;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:3px}
+  .aide-leg ol{margin:0;padding-left:17px} .aide-leg li{margin:1px 0;color:var(--texte)}
+  .aide-x{position:absolute;top:6px;right:6px;border:1px solid var(--line);background:var(--panel);color:var(--texte);
+    border-radius:7px;font-size:.66rem;padding:2px 7px;cursor:pointer}
+  @media(prefers-reduced-motion:reduce){.aide-ring{transition:none}}
   /* En-tête « spicy » : filet dégradé + pouls. */
   .h{display:flex;align-items:center;gap:8px;position:relative;padding-bottom:6px}
   .h::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;border-radius:2px;
@@ -93,6 +109,13 @@
     <div class="slice" id="s-risk"></div>
   </div>
   <div id="slbar"></div>
+
+  <!-- Calque d'aide reverse-design (rempli par le script, par slice). -->
+  <div class="aide-lay" id="aidelay">
+    <div class="aide-scrim"></div>
+    <button class="aide-x" id="aidex" type="button">Aide ✕</button>
+    <div class="aide-leg"><div class="lt">Reverse-design · <span id="aideslice"></span></div><ol id="aideol"></ol></div>
+  </div>
 </div>
 
 <script src="../slicebar.js"></script>
@@ -157,7 +180,53 @@
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
   var slices=[el('s-proto'),el('s-apps'),el('s-talk'),el('s-risk')];
-  function montre(i){ for(var k=0;k<slices.length;k++){ slices[k].classList.toggle('actif',k===i); } }
+  var curSlice=0;
+
+  // ── REVERSE-DESIGN : la carte s'annote elle-même, PAR SLICE ─────────────────
+  // In-card (anneaux + pastilles numérotées + légende) au message {sbx:'aide'} ;
+  // report des zones {sbx:'aide-zones'} pour la grande bulle côté Hall. Défini
+  // AVANT l'init de la barre (montre() y appelle posteZones dès onShow(0)).
+  var aideOn=false, mw=document.querySelector('.mw'), lay=el('aidelay');
+  var SNOM=['Protocoles','Applications','Talkers','Risques'];
+  function post(m){ if(parent!==window){ try{ parent.postMessage(m,'*'); }catch(e){} } }
+  function zones(){
+    var det=['Protocoles — la barre = part du trafic','Applications — top usage',
+             'Talkers — appareils les plus bavards','Risques nDPI — pastille = sévérité'][curSlice];
+    return [
+      {el:el('k-flows').closest('.kpis'), t:'KPIs — flux actifs · débit · risques'},
+      {el:slices[curSlice], t:det},
+      {el:el('slbar'), t:'Slices — tournent seules ; bullets pour choisir'}
+    ];
+  }
+  function dessineAide(){
+    if(!mw||!lay) return;
+    [].slice.call(lay.querySelectorAll('.aide-ring,.aide-pin')).forEach(function(n){n.remove();});
+    var mr=mw.getBoundingClientRect(), Z=zones();
+    el('aideslice').textContent=SNOM[curSlice]||'';
+    el('aideol').innerHTML=Z.map(function(x){return '<li>'+x.t+'</li>';}).join('');
+    Z.forEach(function(x,i){
+      if(!x.el) return; var r=x.el.getBoundingClientRect();
+      var ring=document.createElement('div'); ring.className='aide-ring';
+      ring.style.left=(r.left-mr.left-2)+'px'; ring.style.top=(r.top-mr.top-2)+'px';
+      ring.style.width=(r.width+4)+'px'; ring.style.height=(r.height+4)+'px'; lay.appendChild(ring);
+      var pin=document.createElement('div'); pin.className='aide-pin'; pin.textContent=(i+1);
+      pin.style.left=(r.left-mr.left+10)+'px'; pin.style.top=(r.top-mr.top)+'px'; lay.appendChild(pin);
+    });
+  }
+  function aide(on){ aideOn=on; lay.classList.toggle('on',on); if(on) dessineAide(); }
+  function posteZones(){
+    if(!mw) return; var mr=mw.getBoundingClientRect();
+    post({sbx:'aide-zones', slice:SNOM[curSlice]||'', vw:mr.width, vh:mr.height,
+      zones:zones().map(function(x){ if(!x.el) return null; var r=x.el.getBoundingClientRect();
+        return {label:x.t, x:r.left-mr.left, y:r.top-mr.top, w:r.width, h:r.height}; }).filter(Boolean)});
+  }
+  function montre(i){ curSlice=i; for(var k=0;k<slices.length;k++){ slices[k].classList.toggle('actif',k===i); }
+    if(aideOn) dessineAide(); posteZones(); }
+  el('aidex').addEventListener('click', function(){ aide(false); post({sbx:'aide-ferme'}); });
+  addEventListener('message', function(ev){ var d=ev.data; if(!d) return;
+    if(d.sbx==='aide') aide(!!d.on); else if(d.sbx==='aide?') posteZones(); });
+  addEventListener('resize', function(){ if(aideOn) dessineAide(); });
+
   if(window.SBXSliceBar){
     SBXSliceBar(el('slbar'), {autoMs:5000, onShow:montre,
       slices:[{label:'🌐 Protocoles'},{label:'📱 Applications'},{label:'🗣️ Talkers'},{label:'⚠️ Risques'}]});
