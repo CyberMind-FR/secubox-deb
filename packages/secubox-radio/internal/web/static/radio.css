@@ -408,8 +408,10 @@ body.micro .microstatus { color: var(--mint); font-size: .68rem; }
 
 /* SLICER 3 vues micro (#1360) : Messages / Playlist / Propositions + barre à bullets. */
 .radio-slbar{display:none}
-body.micro .radio-slbar{display:flex;align-items:center;gap:8px;padding:5px 10px;margin-top:.35rem;
-  border-top:1px solid var(--line);font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+body.micro .radio-slbar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;gap:8px;
+  padding:5px 10px;background:var(--paper);border-top:1px solid var(--line);
+  font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+body.micro .wrap{padding-bottom:30px}   /* place pour la barre à bullets fixée en bas */
 .radio-slbar .sbx-dots{display:flex;align-items:center;gap:5px}
 .radio-slbar .sbx-dots button{width:7px;height:7px;padding:0;border:0;border-radius:50%;cursor:pointer;
   background:var(--line);transition:width .2s ease,background .2s ease}
