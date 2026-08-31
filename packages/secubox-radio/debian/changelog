@@ -1,3 +1,10 @@
+secubox-radio (0.1.61-1~bookworm1) bookworm; urgency=medium
+
+  * Micro : plus de place sous les bullets (padding) + IN-POP HELP au survol des
+    items (playlist / propositions / messages) : détail + conseil d usage.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:56:11 +0200
+
 secubox-radio (0.1.60-1~bookworm1) bookworm; urgency=medium
 
   * Micro slicer : barre à bullets FIXÉE en bas de la carte (visible dans les

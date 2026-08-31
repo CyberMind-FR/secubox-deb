@@ -411,7 +411,7 @@ body.micro .microstatus { color: var(--mint); font-size: .68rem; }
 body.micro .radio-slbar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;gap:8px;
   padding:5px 10px;background:var(--paper);border-top:1px solid var(--line);
   font-size:.55rem;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
-body.micro .wrap{padding-bottom:30px}   /* place pour la barre à bullets fixée en bas */
+body.micro .wrap{padding-bottom:36px}   /* place pour la barre à bullets fixée en bas */
 .radio-slbar .sbx-dots{display:flex;align-items:center;gap:5px}
 .radio-slbar .sbx-dots button{width:7px;height:7px;padding:0;border:0;border-radius:50%;cursor:pointer;
   background:var(--line);transition:width .2s ease,background .2s ease}
@@ -429,3 +429,10 @@ body.micro.vue-proposals .carte.antenne:not(.antenne-messages){display:none!impo
 body.micro.vue-proposals .sl-prop{display:block!important;margin:.35rem 0 0;border-radius:10px}
 body.micro.vue-proposals .sl-prop .entete,body.micro.vue-proposals .sl-prop .pied{display:none}
 body.micro.vue-proposals .sl-prop .attente{max-height:none;overflow:hidden}
+
+/* IN-POP HELP (#1360) : survol d'un item (playlist / proposition / message) → détail + conseil. */
+.radiopop{position:fixed;z-index:30;max-width:220px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;box-shadow:var(--ombre);padding:8px 10px;font-size:12px;line-height:1.4;color:var(--text);
+  opacity:0;transform:translateY(4px);pointer-events:none;transition:.15s}
+.radiopop.on{opacity:1;transform:none}
+.radiopop b{color:var(--violet-clair)} .radiopop .adv{display:block;color:var(--dim);margin-top:4px;font-size:11px}

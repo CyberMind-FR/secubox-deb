@@ -1,3 +1,9 @@
+secubox-webos (1.0.220-1~bookworm1) bookworm; urgency=medium
+
+  * Carte Radio : hauteur portée à 330 (place pour la barre à bullets).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 31 Aug 2026 08:56:38 +0200
+
 secubox-webos (1.0.219-1~bookworm1) bookworm; urgency=medium
 
   * PeerTube : ajout du skin spicy partagé (spicy.css) — cohérent avec les
