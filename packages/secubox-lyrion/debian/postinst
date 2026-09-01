@@ -27,14 +27,15 @@ case "$1" in
 
         systemctl daemon-reload
 
-        # LECTEUR WEB : squeezelite headless (vrai client LMS, -o null). Le
-        # navigateur ecoute le flux LMS natif (/stream.mp3?player=MAC), relaye
-        # en /lyrion-stream.mp3. On coupe une eventuelle instance manuelle, et
-        # on retire les anciennes unites ALSA/icecast si elles trainent.
+        # LECTEUR WEB « SBX-Web » DECOMMISSIONNE. La brique lecteur web du Hall
+        # (bouton 🎧 « Ecouter ici », flux /lyrion-stream.mp3) est retiree ; on
+        # coupe les unites/instances qui trainent sur les box deja deployees.
+        # Le controle des lecteurs Squeezebox/Squeezelite et le cast 📡 restent.
+        systemctl disable --now sbx-lyrion-webplayer.service 2>/dev/null || true
         systemctl disable --now sbx-lyrion-webplayer-icy.service 2>/dev/null || true
+        rm -f /usr/lib/systemd/system/sbx-lyrion-webplayer.service 2>/dev/null || true
         pkill -f 'squeezelite -n SBX-Web' 2>/dev/null || true
-        sleep 1
-        systemctl enable --now sbx-lyrion-webplayer.service 2>/dev/null || true
+        systemctl daemon-reload 2>/dev/null || true
 
     # Releve de version : savoir qu'une mise a jour existe, sans jamais
     # l'appliquer seul (#993).

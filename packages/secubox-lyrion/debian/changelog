@@ -1,3 +1,13 @@
+secubox-lyrion (1.6.7-1~bookworm1) bookworm; urgency=medium
+
+  * DÉCOMMISSIONNE le lecteur web « SBX-Web » (ref #1247) : suppression de
+    l'unité sbx-lyrion-webplayer.service, du conffile lyrion-webplayer.env,
+    de la dépendance squeezelite et du relais nginx /lyrion-stream.mp3 (Hall).
+    Le postinst coupe et désinstalle l'unité résiduelle sur les box déjà
+    déployées. Contrôle des lecteurs Squeezebox/Squeezelite et cast 📡 conservés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 01 Sep 2026 08:00:00 +0200
+
 secubox-lyrion (1.6.6-1~bookworm1) bookworm; urgency=medium
 
   * FIX lecteur web : MAC en dur dans ExecStart (systemd disloquait ${PLAYER_MAC}

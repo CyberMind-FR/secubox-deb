@@ -1,3 +1,22 @@
+## 2026-09-01 — Lyrion : retrait du lecteur web « SBX-Web » (ref #1247)
+
+Décommissionnement de la brique lecteur web SBX-Web, cardlet **et** backend
+(la partie 🎧 « Écouter ici »). Contrôle des lecteurs Squeezebox/Squeezelite et
+cast 📡 conservés. Branche `feature/hall-cardlet-ux`.
+
+- **Cardlet** `secubox-webos/www/hall/cardlets/lyrion.html` : suppression du
+  bouton 🎧 `#listen`, de `<audio id="wa">`, du CSS `.tete .ecoute`, du helper
+  `webIdx()`, du flux `/lyrion-stream.mp3` et des branches d'annonce/commande
+  propres à l'écoute web (bus média, `sbx:'cmd'`).
+- **Hall nginx** `secubox-webos/nginx/hall.vhost.conf` : retrait du `location =
+  /lyrion-stream.mp3` (relais du flux LMS natif).
+- **secubox-lyrion** : suppression de l'unité `sbx-lyrion-webplayer.service`, du
+  conffile `lyrion-webplayer.env`, de la dépendance `squeezelite` (control),
+  de leur install (rules). Le `postinst` coupe/désinstalle l'unité résiduelle
+  sur les box déjà déployées. Changelog `1.6.7-1~bookworm1`. Backend LMS de
+  contrôle (`api/main.py`, slimproto 3483) inchangé.
+- Idée mémoire `idee-cardlet-squeezeradio-lyrion` : sans objet pour cette brique.
+
 ## 2026-08-31 — DPI vivant (sbxdpi), sweep « spicy », Lyrion, Agenda NC, notifs profil
 
 Grosse session Hall/parc. Tout déployé live sur gk2 (root@192.168.1.200).

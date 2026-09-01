@@ -19,13 +19,14 @@
 - **Spicy + slicers** : Radio (0.1.62), PeerTube (5 vues + Chaînes/Playlists),
   MetaNews (0.1.32, slicer par section via `/categories`).
 - **Nextcloud** : onglet 📅 Agenda (CalDAV : PROPFIND+REPORT, parsing iCal maison).
-- **Lyrion** : carte client (télécommande) + **cast** `📡 play-url` (Hall→Squeezebox)
-  + **lecteur web 🎧 OK** : squeezelite `-o null` (vrai client LMS « SBX-Web »,
-    MAC fixe) → flux LMS natif `/stream.mp3?player=MAC` relayé `/lyrion-stream.mp3`
-    → `<audio>` du navigateur. Bout-en-bout vérifié (audio réel, 235 Ko/6 s via
-    le relais Hall). ⚠️ L'ancien LMS s'était **planté** (runaway, 6 h CPU) sous
-    la charge de mes tests de flux — service `lyrionmusicserver` DANS le conteneur
-    `lyrion`, redémarré, stable (2 lecteurs).
+- **Lyrion** : carte client (télécommande) + **cast** `📡 play-url` (Hall→Squeezebox).
+  ⚠️ L'ancien LMS s'était **planté** (runaway, 6 h CPU) sous la charge de mes
+  tests de flux — service `lyrionmusicserver` DANS le conteneur `lyrion`,
+  redémarré, stable (2 lecteurs).
+  - **2026-09-01 — lecteur web 🎧 « SBX-Web » RETIRÉ** (ref #1247, `feature/hall-cardlet-ux`) :
+    cardlet + backend décommissionnés (unité `sbx-lyrion-webplayer.service`,
+    conffile `lyrion-webplayer.env`, dép. `squeezelite`, relais nginx
+    `/lyrion-stream.mp3`). Contrôle des lecteurs + cast 📡 conservés.
 - **Bus média** : pastille du viewer qui reste (dockLocal/viewerCmd) ; diffusions
   persistées dans le menu profil (survol) + badge de non-vues sur l'avatar ;
   carte sans vhost → pseudo /mega (drapeau `noVhost`).
