@@ -1,3 +1,14 @@
+secubox-webos (1.0.239-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : RETRAIT de la cardlet Lyrion (ref #1247) — entrée de registre
+    {id:"lyrion"}, fichier cardlets/lyrion.html, relais nginx orphelin
+    location /api/v1/lyrion/ et token CSP lyrion.gk2.secubox.in (frame-src).
+    Le paquet/vhost secubox-lyrion (LMS) n'est pas touché.
+  * DPI en /mega : page classique sans slicer (ref #1360) — cardlets/dpi.html
+    détecte mega=1 et empile toutes les sections dans une page qui défile.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 01 Sep 2026 08:30:00 +0200
+
 secubox-webos (1.0.238-1~bookworm1) bookworm; urgency=medium
 
   * Relais /lyrion-stream.mp3 : pointe désormais sur le flux LMS natif
