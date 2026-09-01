@@ -1,4 +1,13 @@
-## 2026-09-01 — Lyrion : retrait du lecteur web « SBX-Web » (ref #1247)
+## 2026-09-01 — Lyrion : cardlet retirée du Hall + lecteur web décommissionné (ref #1247)
+
+Puis (2e passe) **retrait complet de la cardlet Lyrion du Hall** : entrée
+`{id:"lyrion"}` du registre `index.html`, fichier `cardlets/lyrion.html`, relais
+nginx orphelin `location /api/v1/lyrion/` et token CSP `lyrion.gk2.secubox.in`
+(3 lignes frame-src). Le paquet/vhost `secubox-lyrion` lui-même n'est pas touché.
+
+DPI en /mega : page classique sans slicer (ref #1360) — `cardlets/dpi.html`
+détecte `mega=1`, empile les 4 sections dans une page qui défile (plus de
+slicebar ni rotation), caps de lignes relevés.
 
 Décommissionnement de la brique lecteur web SBX-Web, cardlet **et** backend
 (la partie 🎧 « Écouter ici »). Contrôle des lecteurs Squeezebox/Squeezelite et
