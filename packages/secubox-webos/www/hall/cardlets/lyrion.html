@@ -39,11 +39,6 @@
                font-family:inherit; cursor:pointer; max-width:52%; text-align:right;
                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tete .sel:hover { color:var(--accent); }
-  .tete .ecoute { margin-left:auto; border:1px solid var(--border); background:var(--fond); color:var(--muted);
-                  border-radius:8px; width:26px; height:22px; font-size:.72rem; cursor:pointer; padding:0; }
-  .tete .ecoute:hover { border-color:var(--accent); color:var(--accent); }
-  .tete .ecoute.on { border-color:var(--accent); color:var(--accent); box-shadow:0 0 8px -2px var(--accent); }
-  .tete .ecoute + .sel { margin-left:6px; }
 
   /* Now-playing : la pièce maîtresse. */
   .np { flex:0 0 auto; display:flex; gap:.6rem; align-items:center; min-height:64px; }
@@ -95,9 +90,7 @@
 
 <div class="mw">
   <div class="tete"><span class="ic">🎚️</span><b>Lyrion</b><span class="dot" id="dot"></span>
-    <button class="ecoute" id="listen" type="button" title="Écouter le lecteur web ici" hidden>🎧</button>
     <button class="sel" id="sel" type="button" title="Changer de lecteur"></button></div>
-  <audio id="wa" preload="none"></audio>
 
   <div class="np">
     <div class="art" id="art">🎵</div>
@@ -139,8 +132,6 @@
     return fetch(API + p, o).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
   }
   function pid() { var p = players[cur % (players.length || 1)]; return p && p.id; }
-  function webIdx() { for (var k = 0; k < players.length; k++) {
-    if (players[k].model === 'SqueezeLite' || players[k].name === 'SBX-Web') return k; } return -1; }
 
   function chargePlayers() {
     getj('/players').then(function (d) {
@@ -150,9 +141,6 @@
       el('sel').textContent = p ? (p.name + (players.length > 1 ? ' ▾' : '')) : 'aucun lecteur';
       el('dot').className = 'dot' + (p && p.power ? ' ok' : '');
       el('pw').classList.toggle('on', !!(p && p.power));
-      // Le lecteur WEB du parc (squeezelite « SBX-Web ») : quand il existe, on
-      // peut l'écouter DANS le navigateur (son flux passe par l'icecast local).
-      var lb = el('listen'); if (lb) lb.hidden = (webIdx() < 0);
       if (!players.length) { el('tt').textContent = 'Aucun lecteur'; el('ss').textContent = ''; el('badge').textContent = ''; }
     });
   }
@@ -173,12 +161,7 @@
         el('tt').textContent = p ? (p.power ? 'À l’arrêt' : 'Éteint') : 'Aucun lecteur';
         el('ss').textContent = p ? (p.model || '') : '';
         el('badge').textContent = '';
-        // Si on ÉCOUTE le lecteur web dans le navigateur, la pastille/rangée du
-        // Hall doit RESTER (même quand LMS n'annonce rien à lire).
-        var wa = el('wa');
-        if (wa && !wa.paused) { el('badge').textContent = '🎧 écoute web';
-          annonce({ title:'Lyrion — SBX-Web', artist:'lecteur web' }, true); }
-        else annonce(null, false);
+        annonce(null, false);
       }
     });
   }
@@ -247,22 +230,6 @@
   el('pied').addEventListener('click', function () {
     if (parent !== window) { try { parent.postMessage({ sbx:'ouvre', id:'lyrion' }, '*'); } catch (e) {} }
   });
-  // 🎧 ÉCOUTER ICI : le lecteur web (SBX-Web) est un VRAI client LMS ; son audio
-  // sort par l'icecast local, relayé de même origine (/lyrion-stream.mp3). On le
-  // sélectionne (les contrôles le visent) et on joue son flux dans le navigateur.
-  el('listen').addEventListener('click', function () {
-    var wa = el('wa'), lb = el('listen'); if (!wa) return;
-    if (wa.paused) {
-      var wi = webIdx(); if (wi >= 0) { cur = wi; chargePlayers(); chargeNow(); }
-      wa.src = '/lyrion-stream.mp3?_=' + Date.now();
-      wa.play().then(function () { lb.classList.add('on'); toast('🎧 Écoute du lecteur web');
-        try { parent.postMessage({ sbx:'media', id:'lyrion', type:'audio', titre:'Lyrion — SBX-Web', sous:'lecteur web', joue:true }, '*'); } catch (e) {}
-      }).catch(function () { toast('lecture refusée — touchez à nouveau ▶', true); });
-    } else {
-      wa.pause(); wa.removeAttribute('src'); wa.load(); lb.classList.remove('on');
-      try { parent.postMessage({ sbx:'media', id:'lyrion', joue:false, fin:true }, '*'); } catch (e) {}
-    }
-  });
 
   function tick() { chargePlayers(); chargeNow(); majCast(); }
   tick();
@@ -272,14 +239,6 @@
   addEventListener('message', function (ev) {
     var d = ev.data; if (!d) return;
     if (d.sbx === 'cmd') {
-      var wa = el('wa');
-      // La barre média commande AUSSI l'écoute web (pause/stop coupent le flux).
-      if ((d.action === 'stop' || d.action === 'pause' || d.action === 'toggle') && wa && !wa.paused) {
-        wa.pause(); wa.removeAttribute('src'); wa.load();
-        var lb = el('listen'); if (lb) lb.classList.remove('on');
-        try { parent.postMessage({ sbx:'media', id:'lyrion', joue:false, fin:true }, '*'); } catch (e) {}
-        if (d.action !== 'toggle') return;
-      }
       var id = pid(); if (!id) return;
       if (d.action === 'toggle') post('/player/' + encodeURIComponent(id) + '/action/' + (jouePP ? 'pause' : 'play')).then(chargeNow);
       else if (d.action === 'stop' || d.action === 'pause') post('/player/' + encodeURIComponent(id) + '/action/pause').then(chargeNow);
