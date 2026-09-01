@@ -17,11 +17,21 @@
 <!-- Par défaut CAMOUFLÉ : on démarre « non-connecté » et l'on ne DÉVOILE qu'une
      fois la session prouvée (sondeSession). Ainsi rien de réservé (cartes à auth,
      menu Système, identités) n'apparaît le temps que la sonde réponde. -->
-<html lang="fr" class="non-connecte">
+<!-- non-lan : CAMOUFLÉ par défaut aussi pour le LAN — une carte marquée `lan`
+     (ex. Lyrion) reste cachée aux clients WAN du Hall. nginx retire `non-lan`
+     quand $lan_client=1 (flag injecté, cf. SBX_LAN_FLAG plus bas). Fail-closed :
+     sans le flag, la carte LAN-only n'apparaît pas. -->
+<html lang="fr" class="non-connecte non-lan">
 <head>
 <meta charset="utf-8">
 <title>SecuBox Hall</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- FLAG LAN (#1247) : nginx (hall.vhost.conf, sub_filter) remplace le marqueur
+     ci-dessous par un petit script qui retire `non-lan` de <html> quand le
+     client est LAN ($lan_client=1). Les cartes marquées `lan` (Lyrion) restent
+     donc cachées aux clients WAN. Hors nginx (fichier ouvert seul), le marqueur
+     reste inerte → fail-closed. -->
+<!--SBX_LAN_FLAG-->
 <!-- Le WAF injecte un bandeau de santé dans les pages HTML, en chargeant son
      script depuis https://admin.gk2… — une origine TIERCE. Or la CSP du Hall
      est `script-src 'self' 'unsafe-inline'` : le navigateur bloquait donc le
@@ -344,6 +354,8 @@ a{color:inherit;text-decoration:none} button{font-family:inherit;cursor:pointer}
 /* NON CONNECTÉ (#1237) : on masque les cartes a auth reelle — inutile de
    montrer « Récupérer ma session » a un invite. */
 .non-connecte .fcard[data-auth]{display:none}
+/* Carte LAN-only (Lyrion) : cachée du Hall pour les clients WAN (#1247). */
+.non-lan .fcard[data-lan]{display:none}
 /* NON CONNECTÉ : le menu SYSTÈME expose TOUT le parc — territoire de la session
    de la box, pas de l'invité. On masque donc son bouton dans la mégabarre ET son
    panneau, tant qu'aucun compte SecuBox n'est ouvert. Services reste public. */
@@ -1266,6 +1278,9 @@ const FEATURED = [
   {id:"bbs",        label:"BBS",       icon:"💬", color:"#5b46b8", url:"bbs.gk2.secubox.in", micro:"/micro", h:222},
   {id:"radio",      label:"Radio",     icon:"📻", color:"#a73d42", url:"radio.gk2.secubox.in", micro:"/micro", h:330},
   {id:"peertube",   label:"PeerTube",  icon:"📹", color:"#c0392b", url:"peertube.gk2.secubox.in", carte:"/cardlets/peertube.html", h:300},
+  // Lyrion : LAN-only (#1247). `lan:true` → carte cachée aux clients WAN du Hall
+  // (data-lan + .non-lan). Le service LMS et son admin restent accessibles en LAN.
+  {id:"lyrion",     label:"Lyrion",    icon:"🎚️", color:"#128a6f", url:"lyrion.gk2.secubox.in", carte:"/cardlets/lyrion.html", h:230, lan:true},
   {id:"nextcloud",  label:"Cloud",     icon:"☁️", color:"#1655a0", url:"nc.gk2.secubox.in", carte:"/cardlets/delegue.html?svc=nextcloud", h:182},
   // SUPER CARDLET (#1245) : la carte PERSONNELLE du Cloud — fichiers (WebDAV),
   // quota, activité, partages ET actions (partager/supprimer/envoyer), au nom de
@@ -1413,7 +1428,9 @@ function featCardHTML(f,s){
     // #1240 : une carte peut aussi se declarer `auth:true` (ex. « Qui frappe ? »,
     // donnee de securite reservee a la session).
     const auth = (f.auth || (f.carte && f.carte.indexOf('delegue')>=0)) ? ' data-auth="1"' : '';
-    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'"'+auth+'>'
+    // LAN-only (#1247) : data-lan -> .non-lan la cache pour les clients WAN.
+    const lanOnly = f.lan ? ' data-lan="1"' : '';
+    return '<article class="fcard fcard-vive" data-embed="'+esc(f.id)+'" data-label="'+esc(f.label)+'"'+auth+lanOnly+'>'
       + '<span class="cl-grip" draggable="true" title="Déplacer">⠿</span>'
       + ETOILE + AIDE
       + '<iframe class="fcard-cadre" data-micro="'+esc(f.id)+'" scrolling="no"'+haut

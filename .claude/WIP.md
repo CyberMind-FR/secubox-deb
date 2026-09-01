@@ -22,9 +22,11 @@
 - **Lyrion** : ⚠️ L'ancien LMS s'était **planté** (runaway, 6 h CPU) sous la
   charge de mes tests de flux — service `lyrionmusicserver` DANS le conteneur
   `lyrion`, redémarré, stable (2 lecteurs).
-  - **2026-09-01 — CARDLET LYRION RETIRÉE DU HALL** (ref #1247, `feature/hall-cardlet-ux`) :
-    entrée registre + `cardlets/lyrion.html` + relais nginx `/api/v1/lyrion/` +
-    token CSP `lyrion.gk2`. Paquet/vhost `secubox-lyrion` intact.
+  - **2026-09-01 — CARDLET LYRION RESTAURÉE mais LAN-ONLY** (ref #1247, `feature/hall-cardlet-ux`) :
+    après un retrait complet (trop large), remise avec `lan:true` → cachée aux
+    clients WAN (`.non-lan .fcard[data-lan]`), flag injecté par `sub_filter`
+    nginx selon `$lan_client` ; relais `/api/v1/lyrion/` gaté LAN (403 sinon).
+    Paquet/vhost + admin `secubox-lyrion` intacts.
   - Avant ça, lecteur web 🎧 « SBX-Web » décommissionné (cardlet + backend :
     unité `sbx-lyrion-webplayer.service`, conffile `lyrion-webplayer.env`, dép.
     `squeezelite`, relais nginx `/lyrion-stream.mp3`).

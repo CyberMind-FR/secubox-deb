@@ -1,3 +1,14 @@
+secubox-webos (1.0.240-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : cardlet Lyrion RESTAURÉE mais LAN-only (ref #1247) — correction du
+    retrait 1.0.239, trop large. `lan:true` + `.non-lan .fcard[data-lan]` la
+    cachent aux clients WAN ; un `sub_filter` nginx retire `non-lan` quand
+    $lan_client=1 (secubox-lan-geo.conf). Relais /api/v1/lyrion/ restauré mais
+    gaté LAN (403 hors LAN) ; token CSP lyrion.gk2 restauré. Le lecteur web
+    SBX-Web reste retiré. Service/vhost/admin secubox-lyrion inchangés.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Mon, 01 Sep 2026 09:15:00 +0200
+
 secubox-webos (1.0.239-1~bookworm1) bookworm; urgency=medium
 
   * Hall : RETRAIT de la cardlet Lyrion (ref #1247) — entrée de registre

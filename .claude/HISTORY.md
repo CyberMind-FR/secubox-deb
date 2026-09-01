@@ -1,3 +1,21 @@
+## 2026-09-01 — Lyrion : cardlet RESTAURÉE mais LAN-only (correction, ref #1247)
+
+Correction de tir : le retrait complet de la cardlet était trop large — le
+service LMS + admin devaient rester (ils n'ont jamais été touchés) et la carte
+devait juste être **cachée aux clients WAN**, pas supprimée. Cardlet restaurée
+(version sans SBX-Web) et gatée LAN :
+
+- `index.html` : entrée `{id:"lyrion", …, lan:true}` restaurée ; `<html>` porte
+  `non-lan` par défaut (fail-closed) ; CSS `.non-lan .fcard[data-lan]{display:none}` ;
+  le filtre ajoute `data-lan="1"` ; marqueur `<!--SBX_LAN_FLAG-->` dans le head.
+- `hall.vhost.conf` : relais `location /api/v1/lyrion/` restauré mais **gaté
+  `if ($lan_client = 0) return 403`** ; token CSP `lyrion.gk2` restauré (3 lignes) ;
+  `sub_filter` (portée serveur) remplace SBX_LAN_FLAG par un script qui retire
+  `non-lan` quand `$lan_client=1` (map de secubox-lan-geo.conf, secubox-hub).
+- `cardlets/lyrion.html` : restauré depuis 22826a3c3 (SANS SBX-Web).
+- Le lecteur web SBX-Web (cardlet + backend secubox-lyrion 1.6.7) reste
+  décommissionné — ça, c'était bien voulu.
+
 ## 2026-09-01 — Lyrion : cardlet retirée du Hall + lecteur web décommissionné (ref #1247)
 
 Puis (2e passe) **retrait complet de la cardlet Lyrion du Hall** : entrée
