@@ -1710,7 +1710,13 @@ async def wg_profile_new(request: Request) -> Response:
         from . import wg as _wg
     except ImportError:
         raise HTTPException(503, "WG module not available (Phase 6 not provisioned)")
-    profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+    # Nom d'appareil HUMAIN optionnel (?name=… ou ?hostname=…) : quand fourni,
+    # il prime sur le label (User-Agent) pour l'affichage DPI (vue Clients).
+    dev_name = (request.query_params.get("name")
+                or request.query_params.get("hostname") or "").strip()[:40]
+    profile = _wg.generate_client_profile(
+        client_label=request.headers.get("user-agent", "")[:60],
+        client_name=dev_name or None)
 
     # Register the freshly generated peer in the clients table so all
     # downstream consumers (store.get_client_level, _aggregate_session,
@@ -1938,7 +1944,13 @@ async def wg_profile_new_nmconnection(request: Request) -> Response:
         from . import wg as _wg
     except ImportError:
         raise HTTPException(503, "WG module not available (Phase 6 not provisioned)")
-    profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+    # Nom d'appareil HUMAIN optionnel (?name=… ou ?hostname=…) : quand fourni,
+    # il prime sur le label (User-Agent) pour l'affichage DPI (vue Clients).
+    dev_name = (request.query_params.get("name")
+                or request.query_params.get("hostname") or "").strip()[:40]
+    profile = _wg.generate_client_profile(
+        client_label=request.headers.get("user-agent", "")[:60],
+        client_name=dev_name or None)
 
     import hashlib as _h
     wg_hash = _h.sha256(profile["client_pubkey"].encode()).hexdigest()[:16]
@@ -1966,7 +1978,13 @@ async def wg_qr(request: Request) -> Response:
         from . import wg as _wg
     except ImportError:
         raise HTTPException(503, "WG module not available")
-    profile = _wg.generate_client_profile(client_label=request.headers.get("user-agent", "")[:60])
+    # Nom d'appareil HUMAIN optionnel (?name=… ou ?hostname=…) : quand fourni,
+    # il prime sur le label (User-Agent) pour l'affichage DPI (vue Clients).
+    dev_name = (request.query_params.get("name")
+                or request.query_params.get("hostname") or "").strip()[:40]
+    profile = _wg.generate_client_profile(
+        client_label=request.headers.get("user-agent", "")[:60],
+        client_name=dev_name or None)
     return Response(
         content=_qr_png(profile["conf_text"], size=6, border=2),
         media_type="image/png",

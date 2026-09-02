@@ -1,3 +1,13 @@
+secubox-toolbox (2.9.1-1~bookworm1) bookworm; urgency=medium
+
+  * Provisionnement WG : /wg/profile/new (et .nmconnection, qr.png) acceptent un
+    NOM D'APPAREIL humain optionnel via ?name=… (ou ?hostname=…). Stocké dans
+    wg-peers.json sous `name` (en plus du `label`/UA). Le collector DPI le
+    préfère pour l'affichage de la vue Clients (« iPhone de Gérald » plutôt que
+    « iPhone · .204 »). Rétro-compatible : sans ?name=, comportement inchangé.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 12:20:00 +0200
+
 secubox-toolbox (2.9.0-1~bookworm1) bookworm; urgency=medium
 
   * Excision complète de Python mitmproxy (#1054). La chaîne d'inspection est

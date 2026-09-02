@@ -274,6 +274,7 @@ func loadDeviceMap() map[string]string {
 		Peers map[string]struct {
 			IP    string `json:"ip"`
 			Label string `json:"label"`
+			Name  string `json:"name"` // nom d'appareil humain (optionnel), prioritaire
 		} `json:"peers"`
 	}
 	if json.Unmarshal(b, &doc) != nil {
@@ -284,7 +285,14 @@ func loadDeviceMap() map[string]string {
 			sum := sha256.Sum256([]byte(pk))
 			h := hex.EncodeToString(sum[:])[:16]
 			m[meta.IP] = h
-			deviceLabels[h] = prettyLabel(meta.Label, meta.IP)
+			if n := strings.TrimSpace(meta.Name); n != "" {
+				if len(n) > 32 {
+					n = n[:32]
+				}
+				deviceLabels[h] = n // nom humain fourni au provisionnement — tel quel
+			} else {
+				deviceLabels[h] = prettyLabel(meta.Label, meta.IP)
+			}
 		}
 	}
 	return m

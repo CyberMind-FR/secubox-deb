@@ -73,7 +73,8 @@ def _ca_pem() -> str:
     return ""
 
 
-def generate_client_profile(client_label: str | None = None) -> dict:
+def generate_client_profile(client_label: str | None = None,
+                            client_name: str | None = None) -> dict:
     """Generate a new WG client profile.
 
     Returns :
@@ -94,11 +95,16 @@ def generate_client_profile(client_label: str | None = None) -> dict:
     octet = peers.get("next_ip_octet", 2)
     client_ip = f"{CLIENT_SUBNET_BASE}.{octet}"
     peers["next_ip_octet"] = (octet + 1) if octet < 254 else 2
-    peers.setdefault("peers", {})[pub] = {
+    peer_entry = {
         "ip": client_ip,
         "label": client_label or "anonymous",
         "created_at": int(_now_ts()),
     }
+    # Nom d'appareil humain optionnel : prime sur le label (UA) pour l'affichage
+    # DPI. Le collector préfère `name` s'il est présent (cf. prettyLabel).
+    if client_name:
+        peer_entry["name"] = client_name
+    peers.setdefault("peers", {})[pub] = peer_entry
     _save_peers(peers)
 
     # Register the peer with the running wg interface

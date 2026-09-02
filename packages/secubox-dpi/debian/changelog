@@ -1,3 +1,12 @@
+secubox-dpi (1.4.13-1~bookworm1) bookworm; urgency=medium
+
+  * Collector : un NOM D'APPAREIL HUMAIN (champ `name` du peer wg-peers.json,
+    fourni au provisionnement) prime désormais sur le label/UA — utilisé tel
+    quel (borné 32 car.), sinon repli sur prettyLabel(label, ip). Complète le
+    provisionnement /wg/profile/new?name=… de secubox-toolbox.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Thu, 03 Sep 2026 12:20:00 +0200
+
 secubox-dpi (1.4.12-1~bookworm1) bookworm; urgency=medium
 
   * Collector prettyLabel : noms de terminaux plus robustes pour les labels
