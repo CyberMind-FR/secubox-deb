@@ -139,8 +139,15 @@ gh issue close 42 --comment "Validated and deployed"
 
 #### Règles strictes
 
-1. **Jamais de fermeture automatique** — Seul le user peut valider et fermer
-2. **Référencer dans les commits** — `feat: Add X (ref #42)` ou `fix: Y (closes #42)` si user a pré-validé
+1. **Fermeture pilotée par marqueur** — une issue se ferme quand elle est
+   **terminée ET déployée**, enregistrée par un marqueur MACHINE-LISIBLE dans
+   `.claude/HISTORY.md` ou `.claude/WIP.md` : `closes #N` / `fixes #N` /
+   `FERMÉ #N` / `RÉSOLU #N`. Ne PAS écrire ces marqueurs pour des issues
+   « filed for later » ou « ouvertes » (HISTORY en journalise aussi). Le
+   nettoyage se fait avec `scripts/sync-issues.sh` (`--dry-run` puis `--apply`),
+   qui ferme les `#N` marquées encore ouvertes. Le texte libre ne ferme jamais.
+2. **Référencer dans les commits** — `feat: X (ref #42)` en cours ; `closes #42`
+   seulement une fois déployé.
 3. **Synchroniser WIP.md** — Chaque issue ouverte doit apparaître dans WIP.md
 4. **Snapshot avant clôture** — Commit + tag si feature majeure
 5. **Issues publiques** — Workflow open source, traçabilité maximale
