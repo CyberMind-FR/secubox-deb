@@ -33,6 +33,13 @@
     var slices = opts.slices || [];
     var i = 0, mode = "auto", timer = null;
 
+    // Mémoire du mode entre rafraîchissements ET visites (localStorage, par
+    // cardlet). Une PAUSE manuelle (puce figée) doit survivre ; le survol, non.
+    var KEY = "sbx-slice:" + (opts.key || (location && location.pathname) || "");
+    function persist() {
+      try { localStorage.setItem(KEY, JSON.stringify({ mode: mode, i: i })); } catch (e) {}
+    }
+
     var bar  = E("div", "sbx-bar");
     var dots = E("div", "sbx-dots auto");
     var lab  = E("span", "sbx-lab");
@@ -65,7 +72,17 @@
       if (typeof opts.onShow === "function") opts.onShow(i, s);
     }
     function show(k) { if (!slices.length) return; i = ((k % slices.length) + slices.length) % slices.length; paint(); }
-    function manual(k) { mode = "manuel"; dots.className = "sbx-dots manuel"; stop(); show(k); }
+    // Un clic sur une puce FIGE le choix (MANUEL, puces vertes) et met la
+    // rotation en PAUSE. Recliquer sur la MÊME puce déjà sélectionnée REPREND la
+    // rotation auto. Le mode (et la slice figée) est mémorisé (persist()).
+    function manual(k) {
+      if (mode === "manuel" && k === i) { reprendreAuto(); return; }
+      mode = "manuel"; dots.className = "sbx-dots manuel"; stop(); show(k); persist();
+    }
+    function reprendreAuto() {
+      mode = "auto"; dots.className = "sbx-dots auto"; persist();
+      if (!hovered) start();
+    }
     function tick() { if (mode === "auto" && !hovered) show(i + 1); }
     // Rotation RALENTIE (défaut 9 s) et jamais sous prefers-reduced-motion.
     var reduce = false;
@@ -95,7 +112,16 @@
     });
 
     container.appendChild(bar);
-    show(0); start();
+    // Restauration : une PAUSE manuelle survit aux refresh et aux visites. On
+    // reprend la slice figée sans relancer la rotation ; sinon, mode auto normal.
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) {}
+    if (saved && saved.mode === "manuel" && typeof saved.i === "number"
+        && saved.i >= 0 && saved.i < slices.length) {
+      mode = "manuel"; dots.className = "sbx-dots manuel"; show(saved.i);
+    } else {
+      show(0); start();
+    }
 
     return {
       el: bar,

@@ -1,3 +1,14 @@
+secubox-webos (1.0.249-1~bookworm1) bookworm; urgency=medium
+
+  * Slicer partagé (slicebar.js) : un clic sur une puce fige la slice (mode
+    manuel, puce « bubbleisée ») ET met la rotation auto en PAUSE ; ce mode
+    survit désormais aux rafraîchissements et aux visites (localStorage, par
+    cardlet). On dé-pause en recliquant sur la MÊME puce déjà sélectionnée
+    (retour à la rotation auto). S'applique à toutes les cardlets à slices
+    (dpi, surfviewer).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Wed, 02 Sep 2026 20:00:00 +0200
+
 secubox-webos (1.0.248-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI : le relais Hall /api/v1/dpi/ pointe désormais sur le routeur
