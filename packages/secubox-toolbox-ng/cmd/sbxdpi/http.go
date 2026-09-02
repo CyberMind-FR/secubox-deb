@@ -19,11 +19,12 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 const defaultTopLimit = 12
 
-func newDPIMux(agg *aggregator, filt *filter, enr *enricher) *http.ServeMux {
+func newDPIMux(agg *aggregator, filt *filter, enr *enricher, sess *sessionTracker) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Liveness + connection state to nDPIsrvd + filter sizes.
@@ -101,6 +102,13 @@ func newDPIMux(agg *aggregator, filt *filter, enr *enricher) *http.ServeMux {
 			return
 		}
 		writeJSON(w, suggestFromUnknown(enr.report(agg.snapshot().Hosts).Unknown))
+	})
+	// SESSIONS d'usage (#DPI-sémantique L3) : flux corrélés par device+usage+fenêtre.
+	mux.HandleFunc("/api/v1/dpi/sessions", func(w http.ResponseWriter, r *http.Request) {
+		if !getOnly(w, r) {
+			return
+		}
+		writeJSON(w, sess.snapshot(time.Now().Unix()))
 	})
 	mux.HandleFunc("/api/v1/dpi/risks", func(w http.ResponseWriter, r *http.Request) {
 		if !getOnly(w, r) {

@@ -117,7 +117,7 @@ func (e *dpiEvent) outbound() bool { return isLocalIP(e.SrcIP) && !isLocalIP(e.D
 // consumeDistributor dials the nDPIsrvd distributor socket and feeds every
 // framed flow event through the filter into the aggregator, reconnecting with
 // backoff on any dial/read error until ctx is cancelled.
-func consumeDistributor(ctx context.Context, cfg Config, agg *aggregator, filt *filter) {
+func consumeDistributor(ctx context.Context, cfg Config, agg *aggregator, filt *filter, sess *sessionTracker) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -142,7 +142,7 @@ func consumeDistributor(ctx context.Context, cfg Config, agg *aggregator, filt *
 			_ = conn.Close()
 		}()
 
-		readFrames(conn, agg, filt)
+		readFrames(conn, agg, filt, sess)
 		_ = conn.Close()
 		agg.setConnected(false)
 
@@ -162,7 +162,7 @@ func consumeDistributor(ctx context.Context, cfg Config, agg *aggregator, filt *
 // or EOFs. A single malformed frame is fatal to the connection (the stream is
 // byte-aligned — a bad length desyncs everything after it), so we return and
 // let consumeDistributor reconnect from a clean state.
-func readFrames(conn net.Conn, agg *aggregator, filt *filter) {
+func readFrames(conn net.Conn, agg *aggregator, filt *filter, sess *sessionTracker) {
 	br := bufio.NewReaderSize(conn, 64*1024)
 	hdr := make([]byte, frameDigits)
 	for {
@@ -190,7 +190,7 @@ func readFrames(conn net.Conn, agg *aggregator, filt *filter) {
 			// message, keep the (still byte-aligned) stream.
 			continue
 		}
-		ingest(agg, filt, &ev)
+		ingest(agg, filt, sess, &ev)
 	}
 }
 
@@ -198,7 +198,7 @@ func readFrames(conn net.Conn, agg *aggregator, filt *filter) {
 // counted once at detection (immediate liveness); bytes are attributed at flow
 // end (accurate final volume); risks are surfaced whenever present and not
 // muted.
-func ingest(agg *aggregator, filt *filter, ev *dpiEvent) {
+func ingest(agg *aggregator, filt *filter, sess *sessionTracker, ev *dpiEvent) {
 	switch ev.FlowEventName {
 	case "detected", "detection-update", "guessed":
 		d := filt.classify(ev)
@@ -215,6 +215,8 @@ func ingest(agg *aggregator, filt *filter, ev *dpiEvent) {
 		}
 		agg.recordBytes(ev)
 		agg.recordRisks(ev, filt)
+		// Corrélation en session (L3) : au flow-end, octets connus.
+		sess.observe(ev, time.Now().Unix())
 	}
 }
 

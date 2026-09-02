@@ -1,3 +1,11 @@
+secubox-webos (1.0.247-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet DPI /mega : section 🎓 Learning (suggestions du learner via
+    /api/v1/dpi/suggestions, pleine largeur, repli démo). Lecture seule —
+    l'ACCEPT se fait dans l'admin sous JWT. Complète Infra + Non classifié.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 15:00:00 +0200
+
 secubox-webos (1.0.246-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI /mega : branche la vue ENRICHIE (DPI sémantique L2) via

@@ -116,6 +116,81 @@ async def exfil_history(device: str = "", days: int = 14):
     return {"device": "", "days": days_sorted[-days:]}
 
 
+# ── RÈGLES D'ENRICHISSEMENT DPI (#DPI-sémantique) — écriture JWT ─────────────
+# Le learner (sbxdpi, GET) PROPOSE ; l'ACCEPT est un acte HUMAIN, écrit ici sous
+# JWT dans /etc/secubox/dpi/rules.json — que sbxdpi recharge à chaud (mtime,
+# internal/reload). sbxdpi ne s'écrit jamais lui-même (GET only). Séparation
+# lecture (LAN, sbxdpi) / écriture (JWT, ici) conforme au reste du DPI.
+DPI_RULES_FILE = Path("/etc/secubox/dpi/rules.json")
+DPI_IGNORE_FILE = Path("/etc/secubox/dpi/learn-ignore.txt")
+
+
+class _RuleMatch(BaseModel):
+    domain_suffix: List[str] = Field(default_factory=list)
+    ndpi: List[str] = Field(default_factory=list)
+    port: List[int] = Field(default_factory=list)
+
+
+class _RuleIn(BaseModel):
+    id: str
+    application: Optional[str] = None
+    usage: Optional[str] = None
+    content: Optional[str] = None
+    infra: Optional[str] = None
+    infra_role: Optional[str] = None
+    confidence: int = 50
+    match: _RuleMatch
+
+
+def _dpi_load_ruleset() -> dict:
+    try:
+        return json.loads(DPI_RULES_FILE.read_text())
+    except Exception:
+        return {"_meta": {"version": "0.0.0"}, "rules": []}
+
+
+def _dpi_save_ruleset(rs: dict) -> None:
+    DPI_RULES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = DPI_RULES_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(rs, ensure_ascii=False, indent=2))
+    tmp.replace(DPI_RULES_FILE)  # swap atomique — sbxdpi ne voit jamais un demi-fichier
+
+
+@app.get("/rules")
+def dpi_rules(user=Depends(require_jwt)):
+    """Règles d'enrichissement DPI actives (rules.json)."""
+    return _dpi_load_ruleset()
+
+
+@app.post("/rules/accept")
+def dpi_rules_accept(rule: _RuleIn, user=Depends(require_jwt)):
+    """ACCEPT : matérialise une suggestion du learner en règle. Garde-fous : au
+    moins un signal de match, id unique. sbxdpi recharge à chaud."""
+    m = rule.match
+    if not (m.domain_suffix or m.ndpi or m.port):
+        raise HTTPException(400, "règle sans signal de match (domain_suffix/ndpi/port)")
+    rs = _dpi_load_ruleset()
+    rules = rs.setdefault("rules", [])
+    if any(r.get("id") == rule.id for r in rules):
+        raise HTTPException(409, f"règle {rule.id!r} déjà présente")
+    rules.append(rule.dict(exclude_none=True))
+    rs.setdefault("_meta", {})["updated"] = datetime.utcnow().strftime("%Y-%m-%d")
+    _dpi_save_ruleset(rs)
+    return {"ok": True, "id": rule.id, "count": len(rules)}
+
+
+@app.post("/rules/ignore")
+def dpi_rules_ignore(domain: str, user=Depends(require_jwt)):
+    """IGNORE : note un domaine à ne plus suggérer (learn-ignore.txt)."""
+    d = (domain or "").strip().lower()
+    if not d:
+        raise HTTPException(400, "domaine vide")
+    DPI_IGNORE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with DPI_IGNORE_FILE.open("a") as f:
+        f.write(d + "\n")
+    return {"ok": True, "ignored": d}
+
+
 app.include_router(auth_router, prefix="/auth")
 router = APIRouter()
 log = get_logger("dpi")

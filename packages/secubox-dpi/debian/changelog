@@ -1,3 +1,12 @@
+secubox-dpi (1.4.1-1~bookworm1) bookworm; urgency=medium
+
+  * FastAPI : ACCEPT du learner DPI (#DPI-sémantique). GET /rules, POST
+    /rules/accept (JWT, garde-fous : signal requis, id unique, écriture atomique
+    de rules.json → sbxdpi recharge à chaud), POST /rules/ignore. sbxdpi ne
+    s'écrit jamais lui-même (lecture LAN / écriture JWT).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 15:00:00 +0200
+
 secubox-dpi (1.4.0-1~bookworm1) bookworm; urgency=medium
 
   * Architecture: any — construit aussi pour amd64 (GOARCH dérivé de la cible),

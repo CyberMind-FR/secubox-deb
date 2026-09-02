@@ -1,3 +1,13 @@
+secubox-toolbox-ng (0.3.11-1~bookworm1) bookworm; urgency=medium
+
+  * sbxdpi L3 (DPI sémantique) : corrélation multi-flux → SESSIONS d'usage.
+    Les flux SORTANTS d'un même device (IP source) et même famille d'usage dans
+    une fenêtre de 5 min forment UNE session (pas une liste de sockets).
+    Endpoint /api/v1/dpi/sessions. Classif per-flow via l'enrichisseur. Tests
+    (corrélation + split fenêtre) verts.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 15:00:00 +0200
+
 secubox-toolbox-ng (0.3.10-1~bookworm1) bookworm; urgency=medium
 
   * sbxdpi L1-fin (DPI sémantique) : propage JA4 (fingerprints[]), ports

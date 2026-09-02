@@ -151,6 +151,7 @@ func run(ctx context.Context, cfg Config) error {
 
 	filt := newFilter(cfg)
 	enr := newEnricher(cfg.RulesFile, cfg.ReloadEvery)
+	sess := newSessionTracker(enr)
 
 	var wg sync.WaitGroup
 
@@ -158,7 +159,7 @@ func run(ctx context.Context, cfg Config) error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		consumeDistributor(ctx, cfg, agg, filt)
+		consumeDistributor(ctx, cfg, agg, filt, sess)
 	}()
 
 	// 2) Periodic atomic snapshot flush.
@@ -178,7 +179,7 @@ func run(ctx context.Context, cfg Config) error {
 		log.Printf("sbxdpi: chmod %q: %v (continuing)", cfg.APISock, err)
 	}
 	srv := &http.Server{
-		Handler:           newDPIMux(agg, filt, enr),
+		Handler:           newDPIMux(agg, filt, enr, sess),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	wg.Add(1)

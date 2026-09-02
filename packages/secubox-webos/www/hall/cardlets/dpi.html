@@ -122,8 +122,14 @@
   html.mega .slice{overflow:visible;flex:none}
   html.mega .sec-t{display:flex;align-items:center;gap:6px;margin:0 0 .35rem;padding-bottom:.4rem;
     border-bottom:1px solid var(--line);font-size:.66rem}
-  /* Risques et Non classifié (listes) prennent toute la largeur en bas. */
-  html.mega #d-risk,html.mega #d-unknown{grid-column:1/-1}
+  /* Risques, Non classifié et Learning (listes) prennent toute la largeur. */
+  html.mega #d-risk,html.mega #d-unknown,html.mega #d-learning{grid-column:1/-1}
+  .sug{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px dashed var(--line)}
+  .sug:last-child{border-bottom:none}
+  .sug .dom{font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--cyan);flex:0 0 auto;max-width:42%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sug .why{flex:1;min-width:0;font-size:.72rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sug .cf{flex:0 0 auto;font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--up);font-weight:600}
   html.mega #slbar,html.mega .aide-lay{display:none!important}
   html.mega .h b{font-size:1.05rem}
   html.mega .kpis{max-width:1100px}
@@ -145,6 +151,7 @@
     <div class="dsec" id="d-talk"><div class="sec-t">🗣️ Talkers</div><div class="slice" id="s-talk"></div></div>
     <div class="dsec" id="d-infra"><div class="sec-t">🏢 Infrastructure</div><div class="slice" id="s-infra"></div></div>
     <div class="dsec" id="d-unknown"><div class="sec-t">❔ Non classifié</div><div class="slice" id="s-unknown"></div></div>
+    <div class="dsec" id="d-learning"><div class="sec-t">🎓 Learning — suggestions</div><div class="slice" id="s-learning"></div></div>
     <div class="dsec" id="d-risk"><div class="sec-t">⚠️ Risques</div><div class="slice" id="s-risk"></div></div>
   </div>
   <div id="slbar"></div>
@@ -175,6 +182,7 @@
     usage:[["🎬","Streaming",44],["🌐","Navigation",21],["🎮","Jeu",13],["☁️","Cloud",9],["⬇️","Mises à jour",7],["💬","Social",6]],
     infra:[["🔎","Google",34],["🎬","Netflix OpenConnect",26],["☁️","Cloudflare",12],["🪟","Microsoft",10],["📦","Akamai / Steam",9]],
     unknown:[["rr5---sn.googlevideo.com","2.1 Go · co-occurrent YouTube ×47"],["edge-telemetry.example","40 Mo · beaconing 30 s"],["occ-0-2774.1.nflxso.net","1.8 Go · gros downstream"],["*.gvt2.com","petit · périodique"]],
+    learning:[["googlevideo.com","2 sous-domaines non classifiés, 4.0 Go",98],["gvt2.com","6 terminaux, périodique",91],["edge-telemetry.example","beaconing régulier — à examiner",54]],
     talk:[["💻","desktop-lan · .24",34],["📱","pixel · .51",22],["📺","tv-salon · .77",17],["🖥️","nas · .10",14],["🎮","console · .63",8]],
     risk:[["hi","Identifiants en clair (HTTP)","3×"],["hi","Certificat auto-signé","2×"],["md","Proto connu sur port non-std","5×"],["md","TLS obsolète (1.0)","1×"],["lo","Paquet malformé","4×"]]
   };
@@ -201,6 +209,14 @@
         +'<span class="n" style="flex:1;text-align:right;color:var(--faint)">'+esc(r[1])+'</span></div>';
     }).join('') || '<div class="vide" style="color:var(--faint);font-size:.72rem">Rien d’inconnu — tout est classé.</div>';
   }
+  // Suggestions du learner (lecture seule ici — l'ACCEPT se fait dans l'admin,
+  // sous JWT). Chaque ligne : domaine proposé + pourquoi + confiance.
+  function apprend(cont, rows){
+    cont.innerHTML=(rows||[]).map(function(r){
+      return '<div class="sug"><span class="dom" title="'+esc(r[0])+'">'+esc(r[0])+'</span>'
+        +'<span class="why">'+esc(r[1])+'</span><span class="cf">'+(r[2]||0)+' %</span></div>';
+    }).join('') || '<div class="vide" style="color:var(--faint);font-size:.72rem">Aucune suggestion — rien de neuf à apprendre.</div>';
+  }
   function rend(d){
     el('demo').hidden=!d.demo; el('live').style.display=d.demo?'none':'';
     el('k-flows').textContent=d.flows!=null?d.flows:'—';
@@ -213,6 +229,7 @@
     risques(el('s-risk'), d.risk);
     if(d.infra) barres(el('s-infra'), d.infra, 'a2');
     if(d.unknown) inconnus(el('s-unknown'), d.unknown);
+    if(d.learning) apprend(el('s-learning'), d.learning);
   }
   // Volume lisible : octets → Ko/Mo/Go.
   function humain(o){ o=Number(o)||0; if(o>=1e9)return (o/1e9).toFixed(1)+' Go';
@@ -309,7 +326,21 @@
       .catch(function(){ /* démo déjà affichée */ });
   }
 
-  rend(DEMO); tente(); tenteUsage(); setInterval(tente, 15000); setInterval(tenteUsage, 20000);
+  // Suggestions du learner (#DPI-sémantique L5) — lecture seule.
+  function tenteSug(){
+    fetch('/api/v1/dpi/suggestions',{headers:{'Accept':'application/json'}})
+      .then(function(r){ var ct=r.headers.get('content-type')||''; if(!r.ok||ct.indexOf('json')<0) throw 0; return r.json(); })
+      .then(function(j){
+        if(!Array.isArray(j)) throw 0;
+        var rows=j.slice(0,MEGA?40:6).map(function(s){
+          return [s.domain, (s.reason||''), Math.max(0,Math.round(s.confidence||0))]; });
+        if(rows.length) apprend(el('s-learning'), rows);
+      })
+      .catch(function(){ /* démo déjà affichée */ });
+  }
+
+  rend(DEMO); tente(); tenteUsage(); tenteSug();
+  setInterval(tente, 15000); setInterval(tenteUsage, 20000); setInterval(tenteSug, 30000);
 
   // SLICÉ : la barre à bullets choisit la vue. Auto-rotation (le trafic est vivant).
   var slices=[el('d-proto'),el('d-apps'),el('d-usage'),el('d-talk'),el('d-risk')];
