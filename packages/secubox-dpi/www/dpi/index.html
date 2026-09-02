@@ -176,6 +176,11 @@
         </div>
 
         <div class="card">
+            <div class="card-header"><h2>🧭 Sessions d'usage <span class="sub">— flux corrélés par terminal + usage (sbxdpi)</span></h2></div>
+            <div id="dpi-sessions"><p class="empty">Loading…</p></div>
+        </div>
+
+        <div class="card">
             <div class="card-header"><h2>🎓 Learning <span class="sub">— suggestions de règles DPI (learner) · valider = créer la règle (hot-reload)</span></h2></div>
             <div id="dpi-learning"><p class="empty">Loading…</p></div>
         </div>
@@ -524,15 +529,37 @@
             });
         }
 
+        // ── SESSIONS D'USAGE (#DPI-sémantique L3) : device → usage → app → volume·durée
+        const USAGE_ICON = { streaming:'🎬', gaming:'🎮', cloud:'☁️', social:'💬', updates:'⬇️', web:'🌐', development:'🐙', advertising:'📢', mail:'✉️' };
+        function durStr(a, b) { const s = Math.max(0, (b||0) - (a||0)); if (s < 90) return s + 's'; if (s < 5400) return Math.round(s/60) + ' min'; return (s/3600).toFixed(1) + ' h'; }
+        async function loadSessions() {
+            const box = document.getElementById('dpi-sessions'); if (!box) return;
+            const ss = await apiAuthed(API + '/sessions');
+            if (!Array.isArray(ss) || !ss.length) { box.innerHTML = '<p class="empty">Aucune session — sbxdpi inactif ou pas de trafic classifié.</p>'; return; }
+            box.innerHTML = ss.map(function (s) {
+                const ic = USAGE_ICON[s.usage] || '🧭';
+                const hosts = (s.hosts || []).slice(0, 3).map(esc).join(' · ');
+                return `<div class="app-item" style="align-items:center;gap:10px;">
+                    <span style="font-family:monospace;color:var(--text-dim);flex:0 0 auto;">${esc(shortDev(s.device))}</span>
+                    <span style="flex:0 0 auto;">${ic}</span>
+                    <span style="flex:1;min-width:0;"><b>${esc(s.application || s.usage)}</b>
+                        <span style="color:var(--text-dim);font-size:.78rem;"> ${esc(s.usage)}${s.infra ? ' · ' + esc(s.infra) : ''}</span>
+                        <div style="color:var(--text-dim);font-size:.7rem;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hosts}</div></span>
+                    <span style="font-family:monospace;text-align:right;flex:0 0 auto;"><b style="color:var(--cyber-cyan);">${formatBytes(s.bytes)}</b>
+                        <div style="color:var(--text-dim);font-size:.7rem;">${durStr(s.start, s.last)} · ${s.flows||0} flux</div></span></div>`;
+            }).join('');
+        }
+
         function refreshAll() {
             loadExfil();       // engine status + devices + stats + top apps/protocols/bw/flows + service cats
             loadMediaTypes();
             loadMediaBuffer();
             loadTimeline();
+            loadSessions();
             loadLearning();
         }
         refreshAll();
-        setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); }, 10000);
+        setInterval(() => { loadExfil(); loadMediaTypes(); loadTimeline(); loadSessions(); }, 10000);
         setInterval(loadMediaBuffer, 15000);
         setInterval(loadLearning, 30000);
     </script>
