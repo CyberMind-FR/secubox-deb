@@ -59,6 +59,7 @@ type dpiEvent struct {
 		ProtoID  string `json:"proto_id"` // "91.126"
 		Category string `json:"category"` // "Web", "Cloud", ...
 		Hostname string `json:"hostname"` // SNI / DNS name
+		JA4      string `json:"ja4"`      // empreinte TLS client (activée côté nDPId)
 		FlowRisk map[string]struct {
 			Risk     string `json:"risk"`
 			Severity string `json:"severity"`
@@ -103,6 +104,15 @@ func (e *dpiEvent) bytes() uint64 { return e.SrcBytes + e.DstBytes }
 func (e *dpiEvent) host() string {
 	return strings.ToLower(strings.TrimSpace(e.NDPI.Hostname))
 }
+
+// L1-fin (#DPI-sémantique) : signaux additionnels propagés en additif.
+// ja4 = empreinte TLS client (pivot du fingerprinting device + learner).
+func (e *dpiEvent) ja4() string { return strings.TrimSpace(e.NDPI.JA4) }
+
+// outbound : trafic sortant = source locale (LAN/loopback) vers une destination
+// publique. Dérive la DIRECTION que nDPId n'émet pas en littéral. isLocalIP est
+// défini dans filter.go.
+func (e *dpiEvent) outbound() bool { return isLocalIP(e.SrcIP) && !isLocalIP(e.DstIP) }
 
 // consumeDistributor dials the nDPIsrvd distributor socket and feeds every
 // framed flow event through the filter into the aggregator, reconnecting with

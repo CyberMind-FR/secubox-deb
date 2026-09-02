@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -42,11 +43,15 @@ type aggregator struct {
 	categories map[string]*counter // "Web", "Cloud"
 	talkers    map[string]*counter // "src->dst"
 	hosts      map[string]*counter // SNI/DNS hostname (pivot des règles usage/CDN)
+	ports      map[string]*counter // port destinataire (service)
+	fps        map[string]*counter // empreinte JA4 (fingerprint device/learner)
 	risks      map[string]*riskCounter
 	firstParty map[string]bool // apps seen as first-party (our own vhosts)
 
 	totalFlows uint64
 	totalBytes uint64
+	outBytes   uint64 // trafic sortant (source locale → destination publique)
+	inBytes    uint64 // trafic entrant
 	filtered   uint64
 
 	connected atomic.Bool
@@ -64,6 +69,8 @@ func newAggregator() *aggregator {
 		categories: map[string]*counter{},
 		talkers:    map[string]*counter{},
 		hosts:      map[string]*counter{},
+		ports:      map[string]*counter{},
+		fps:        map[string]*counter{},
 		risks:      map[string]*riskCounter{},
 		firstParty: map[string]bool{},
 	}
@@ -96,6 +103,12 @@ func (a *aggregator) recordFlow(ev *dpiEvent, firstParty bool) {
 	if h := ev.host(); h != "" {
 		bump(a.hosts, h, 1, 0)
 	}
+	if j := ev.ja4(); j != "" {
+		bump(a.fps, j, 1, 0)
+	}
+	if ev.DstPort > 0 {
+		bump(a.ports, strconv.Itoa(ev.DstPort), 1, 0)
+	}
 	if firstParty {
 		if len(a.firstParty) < mapCap {
 			a.firstParty[ev.app()] = true
@@ -117,6 +130,17 @@ func (a *aggregator) recordBytes(ev *dpiEvent) {
 	bump(a.talkers, ev.SrcIP+" → "+ev.DstIP, 0, b)
 	if h := ev.host(); h != "" {
 		bump(a.hosts, h, 0, b)
+	}
+	if j := ev.ja4(); j != "" {
+		bump(a.fps, j, 0, b)
+	}
+	if ev.DstPort > 0 {
+		bump(a.ports, strconv.Itoa(ev.DstPort), 0, b)
+	}
+	if ev.outbound() {
+		a.outBytes += b
+	} else {
+		a.inBytes += b
 	}
 	a.mu.Unlock()
 }
@@ -174,14 +198,18 @@ type snapshot struct {
 	Connected   bool     `json:"connected"`
 	TotalFlows  uint64   `json:"total_flows"`
 	TotalBytes  uint64   `json:"total_bytes"`
+	OutBytes    uint64   `json:"out_bytes"` // direction (#DPI-sémantique, additif)
+	InBytes     uint64   `json:"in_bytes"`
 	Filtered    uint64   `json:"filtered"`
 	FirstPartyN int      `json:"first_party_apps"`
 	Protocols   []kv     `json:"protocols"`
 	Apps        []kv     `json:"apps"`
 	Categories  []kv     `json:"categories"`
-	Talkers     []kv     `json:"talkers"`
-	Hosts       []kv     `json:"hosts"` // SNI/DNS destinations (#DPI-sémantique, additif)
-	Risks       []riskKV `json:"risks"`
+	Talkers      []kv     `json:"talkers"`
+	Hosts        []kv     `json:"hosts"`        // SNI/DNS destinations (#DPI-sémantique, additif)
+	Ports        []kv     `json:"ports"`        // ports destinataires (services)
+	Fingerprints []kv     `json:"fingerprints"` // empreintes JA4
+	Risks        []riskKV `json:"risks"`
 }
 
 // rank sorts a counter map into a bytes-desc (flows-desc tiebreak) slice, with
@@ -219,16 +247,20 @@ func (a *aggregator) snapshot() snapshot {
 	return snapshot{
 		UpdatedAt:   time.Now().Unix(),
 		Connected:   a.connected.Load(),
-		TotalFlows:  tf,
-		TotalBytes:  tb,
-		Filtered:    a.filtered,
-		FirstPartyN: len(a.firstParty),
-		Protocols:   rank(a.protocols, tb, tf),
-		Apps:        rank(a.apps, tb, tf),
-		Categories:  rank(a.categories, tb, tf),
-		Talkers:     rank(a.talkers, tb, tf),
-		Hosts:       rank(a.hosts, tb, tf),
-		Risks:       risks,
+		TotalFlows:   tf,
+		TotalBytes:   tb,
+		OutBytes:     a.outBytes,
+		InBytes:      a.inBytes,
+		Filtered:     a.filtered,
+		FirstPartyN:  len(a.firstParty),
+		Protocols:    rank(a.protocols, tb, tf),
+		Apps:         rank(a.apps, tb, tf),
+		Categories:   rank(a.categories, tb, tf),
+		Talkers:      rank(a.talkers, tb, tf),
+		Hosts:        rank(a.hosts, tb, tf),
+		Ports:        rank(a.ports, tb, tf),
+		Fingerprints: rank(a.fps, tb, tf),
+		Risks:        risks,
 	}
 }
 

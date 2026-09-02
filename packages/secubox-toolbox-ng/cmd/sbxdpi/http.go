@@ -93,6 +93,15 @@ func newDPIMux(agg *aggregator, filt *filter, enr *enricher) *http.ServeMux {
 		}
 		writeJSON(w, enr.report(agg.snapshot().Hosts))
 	})
+	// LEARNER (#DPI-sémantique L5) : suggestions de règles issues des inconnus
+	// (regroupés par domaine racine). OBSERVE→CORRELATE→SUGGEST ; l'ACCEPT (écrit
+	// une règle) est un acte humain via la FastAPI JWT, jamais ici.
+	mux.HandleFunc("/api/v1/dpi/suggestions", func(w http.ResponseWriter, r *http.Request) {
+		if !getOnly(w, r) {
+			return
+		}
+		writeJSON(w, suggestFromUnknown(enr.report(agg.snapshot().Hosts).Unknown))
+	})
 	mux.HandleFunc("/api/v1/dpi/risks", func(w http.ResponseWriter, r *http.Request) {
 		if !getOnly(w, r) {
 			return
