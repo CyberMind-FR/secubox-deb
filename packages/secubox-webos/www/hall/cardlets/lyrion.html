@@ -133,9 +133,21 @@
   }
   function pid() { var p = players[cur % (players.length || 1)]; return p && p.id; }
 
+  // Le lecteur web « SBX-Web » a été décommissionné (#1247). LMS garde toutefois
+  // des sessions web-player fantômes (« Mozilla de 02:42:53:42:57:01?_=… »,
+  // model « Web Client » / « SqueezeLite »). On ne pilote que de VRAIS lecteurs :
+  // on écarte ces clients logiciels de la liste.
+  function estWebClient(p) {
+    var m = String((p && p.model) || '').toLowerCase();
+    var n = String((p && p.name) || '');
+    var id = String((p && p.id) || '');
+    return m === 'web client' || m === 'squeezelite'
+      || /^SBX-Web/i.test(n) || /^Mozilla de/i.test(n)
+      || id.indexOf('02:42:53:42:57:01') === 0;
+  }
   function chargePlayers() {
     getj('/players').then(function (d) {
-      players = (d && d.players) || [];
+      players = ((d && d.players) || []).filter(function (p) { return !estWebClient(p); });
       el('rang').textContent = players.length ? players.length + ' lecteur' + (players.length > 1 ? 's' : '') : '';
       var p = players[cur % (players.length || 1)];
       el('sel').textContent = p ? (p.name + (players.length > 1 ? ' ▾' : '')) : 'aucun lecteur';

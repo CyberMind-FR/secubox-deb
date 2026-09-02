@@ -1,3 +1,12 @@
+secubox-webos (1.0.241-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet Lyrion : masque les lecteurs web-client fantômes (ref #1247). LMS
+    garde des sessions « Web Client » / « Mozilla de 02:42:53:42:57:01?_=… »
+    (SBX-Web décommissionné) ; le cardlet les écarte et ne pilote que les vrais
+    lecteurs (Squeezebox matérielles).
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 08:00:00 +0200
+
 secubox-webos (1.0.240-1~bookworm1) bookworm; urgency=medium
 
   * Hall : cardlet Lyrion RESTAURÉE mais LAN-only (ref #1247) — correction du
