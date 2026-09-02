@@ -342,7 +342,18 @@
 
   charge();
   initSlicer();
-  setInterval(tourne, 6000);
+  // Auto-rotation RALENTIE (12 s au lieu de 6) et jamais sous reduced-motion.
+  var lent = 12000;
+  try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) lent = 0; } catch (e) {}
+  if (lent) setInterval(tourne, lent);
+  // PAUSE « AU-DESSUS » (#1266) : le Hall signale le survol de la carte dans la
+  // grille (souris au-dessus, hors iframe) par postMessage — on suspend comme
+  // au survol direct.
+  addEventListener('message', function (ev) {
+    var d = ev && ev.data; if (!d || !d.sbx) return;
+    if (d.sbx === 'survol' || d.sbx === 'pause') enPause = true;
+    else if (d.sbx === 'quitte' || d.sbx === 'reprend') { enPause = false; stopAp(); montre(); }
+  });
   // Le fond bouge en dizaines de minutes : recharger plus souvent afficherait
   // les mêmes sujets en chargeant la box.
   setInterval(charge, 300000);

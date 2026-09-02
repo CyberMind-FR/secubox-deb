@@ -1,3 +1,11 @@
+secubox-webos (1.0.245-1~bookworm1) bookworm; urgency=medium
+
+  * Hall : PAUSE « au-dessus » — survoler une carte dans la grille suspend
+    l'auto-rotation de son cardlet (postMessage survol/quitte vers l'iframe),
+    même sans entrer dans l'iframe. Complète la pause au survol direct.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 13:00:00 +0200
+
 secubox-webos (1.0.244-1~bookworm1) bookworm; urgency=medium
 
   * Cardlet DPI /mega : rendu MULTICOLONNES — chaque section (Protocoles,

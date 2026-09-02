@@ -43,8 +43,17 @@
     }
     document.addEventListener('mouseenter', function () { pause = true; }, true);
     document.addEventListener('mouseleave', function () { pause = false; }, true);
+    // Pause « au-dessus » : le Hall signale le survol de la carte dans la grille.
+    addEventListener('message', function (ev) {
+      var d = ev && ev.data; if (!d || !d.sbx) return;
+      if (d.sbx === 'survol' || d.sbx === 'pause') pause = true;
+      else if (d.sbx === 'quitte' || d.sbx === 'reprend') pause = false;
+    });
     pose(0);
-    setInterval(function () { if (!pause) { i++; pose(i); } }, 7000);
+    // Rotation RALENTIE (7s→12s) et jamais sous prefers-reduced-motion.
+    var lent = 12000;
+    try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) lent = 0; } catch (e) {}
+    if (lent) setInterval(function () { if (!pause) { i++; pose(i); } }, lent);
   })();
 
   addEventListener('message', function (ev) {

@@ -1,3 +1,11 @@
+secubox-metanews (0.1.33-1~bookworm1) bookworm; urgency=medium
+
+  * Cardlet /micro : auto-rotation RALENTIE (6s→12s), stoppée sous
+    prefers-reduced-motion, et pause « au-dessus » (survol de la carte depuis
+    le Hall via postMessage). Moins de titres qui s'échappent sous les yeux.
+
+ -- Gerald KERMA <devel@cybermind.fr>  Tue, 02 Sep 2026 13:00:00 +0200
+
 secubox-metanews (0.1.32-1~bookworm1) bookworm; urgency=medium
 
   * SLICER « double bullet » DANS LA CARTE MICRO. Une barre à bullets fixée en

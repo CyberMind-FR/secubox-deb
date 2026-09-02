@@ -4503,5 +4503,32 @@ const CARDLET_ICONES = {
   <button type="button" class="x" id="notif-x" aria-label="Fermer">✕</button>
 </div>
 
+<script>
+// PAUSE « AU-DESSUS » (#1266) : quand la souris survole une carte de la grille,
+// on prévient SON iframe (survol/quitte) pour suspendre l'auto-rotation du
+// cardlet — même si la souris n'est pas ENTRÉE dans l'iframe. Les cardlets
+// (slicebar, metanews, bbs, billets…) écoutent {sbx:'survol'|'quitte'}.
+// Cross-origin toléré (targetOrigin '*') : on n'envoie qu'un signal d'UI.
+(function(){
+  var cur=null;
+  function envoie(card,type){
+    var f=card&&card.querySelector('iframe'); if(!f||!f.contentWindow) return;
+    try{ f.contentWindow.postMessage({sbx:type},'*'); }catch(e){}
+  }
+  document.addEventListener('mouseover',function(e){
+    var card=e.target.closest&&e.target.closest('.fcard[data-embed]');
+    if(!card||card===cur) return;
+    if(cur) envoie(cur,'quitte');
+    cur=card; envoie(card,'survol');
+  });
+  document.addEventListener('mouseout',function(e){
+    if(!cur) return;
+    // On ne « quitte » que si la souris sort RÉELLEMENT de la carte courante.
+    if(e.relatedTarget && cur.contains(e.relatedTarget)) return;
+    envoie(cur,'quitte'); cur=null;
+  });
+})();
+</script>
+
 </body>
 </html>
